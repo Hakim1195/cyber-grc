@@ -12,7 +12,7 @@ const ExportExcelService = (() => {
 
         try {
             const wb = XLSX.utils.book_new();
-            
+
             // Récupérer le contexte
             const currentClient = localStorage.getItem("cyber-context") || "global";
             const clients = DataStore.getClients();
@@ -89,7 +89,7 @@ const ExportExcelService = (() => {
             const dateStr = new Date().toISOString().split('T')[0];
             const safeContext = contextLabel.replace(/[^a-z0-9]/gi, '_').toLowerCase();
             const fileName = `Export_Cyber_${safeContext}_${dateStr}.xlsx`;
-            
+
             XLSX.writeFile(wb, fileName);
 
             if (window.showToast) window.showToast(`Export généré pour le périmètre : ${contextLabel}`, "success");

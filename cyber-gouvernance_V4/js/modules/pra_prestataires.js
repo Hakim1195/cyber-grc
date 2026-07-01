@@ -17,7 +17,7 @@ const PraPrestatairesModule = (() => {
                 </td>
                 <td><strong>${p.societe}</strong></td>
                 <td><span class="badge" style="background:#eee; color:#333;">${p.type}</span></td>
-                <td>📞 ${p.phone || "-"}<br>📧 ${p.email || "-"}</td>
+                <td>${p.phone || "-"}<br>${p.email || "-"}</td>
                 <td style="font-size:0.85rem; color:var(--text-muted);">${p.notes ? p.notes.substring(0,60)+"..." : "-"}</td>
             </tr>
         `).join("");
@@ -26,17 +26,17 @@ const PraPrestatairesModule = (() => {
             <section class="page">
                 <div class="dashboard-header no-print">
                     <div>
-                        <h1>📞 Prestataires & Tiers</h1>
+                        <h1>Prestataires & Tiers</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Annuaire d'urgence et d'escalade</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">🗑️ Supprimer sélection (<span id="selectedCount">0</span>)</button>
-                        <button id="addBtn" style="background-color: var(--primary);">➕ Nouveau Contact</button>
+                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
+                        <button id="addBtn" style="background-color: var(--primary);">Nouveau Contact</button>
                     </div>
                 </div>
 
                 <div class="synthese-message info" style="font-size:0.9rem; padding:10px;">
-                    💡 <strong>Annuaire de crise :</strong> Enregistrez ici les contacts vitaux en cas d'incident majeur (Hébergeur Cloud, Assureur Cyber, Fournisseur réseau, ANSSI, CNIL...). Pensez à l'imprimer !
+                    <strong>Annuaire de crise :</strong> Enregistrez ici les contacts vitaux en cas d'incident majeur (Hébergeur Cloud, Assureur Cyber, Fournisseur réseau, ANSSI, CNIL...). Pensez à l'imprimer !
                 </div>
 
                 <table class="data-table">
@@ -89,7 +89,7 @@ const PraPrestatairesModule = (() => {
         if (bulkDeleteBtn) {
             bulkDeleteBtn.addEventListener("click", () => {
                 const checkedIds = Array.from(document.querySelectorAll(".row-cb:checked")).map(cb => cb.dataset.id);
-                if (confirm(`⚠️ Confirmer la suppression de ${checkedIds.length} contact(s) ?`)) {
+                if (confirm(`Confirmer la suppression de ${checkedIds.length} contact(s) ?`)) {
                     checkedIds.forEach(id => DataStore.deletePrestataire(id));
                     if (window.showToast) window.showToast(`${checkedIds.length} contact(s) supprimé(s).`, "success");
                     renderList();
@@ -142,19 +142,19 @@ const PraPrestatairesModule = (() => {
                         <textarea id="notes" placeholder="Ex: Avoir le numéro de contrat sous la main avant d'appeler. Contrat N° XXXX." style="min-height:80px;"></textarea>
                     </div>
                     <div style="margin-top: 20px;">
-                        <button id="saveBtn" style="background:var(--color-success);">💾 Enregistrer le contact</button>
-                        <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">❌ Annuler</button>
+                        <button id="saveBtn" style="background:var(--color-success);">Enregistrer le contact</button>
+                        <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                     </div>
                 </div>
             </section>
         `;
-        
+
         document.getElementById("cancelBtn").onclick = () => Router.navigateTo("/prestataires");
-        
+
         document.getElementById("saveBtn").onclick = () => {
             const soc = document.getElementById("societe").value.trim();
             if (!soc) return alert("Le nom de la société est obligatoire.");
-            
+
             DataStore.addPrestataire({
                 id: "PREST-" + Date.now(),
                 societe: soc,
@@ -163,7 +163,7 @@ const PraPrestatairesModule = (() => {
                 email: document.getElementById("email").value.trim(),
                 notes: document.getElementById("notes").value.trim()
             });
-            
+
             if(window.showToast) window.showToast("Contact ajouté à l'annuaire.", "success");
             Router.navigateTo("/prestataires");
         };
@@ -175,13 +175,13 @@ const PraPrestatairesModule = (() => {
     function renderDetail(id) {
         const c = DataStore.getPrestataires().find(x => x.id === id);
         if(!c) return Router.navigateTo("/prestataires");
-        
+
         const app = document.getElementById("app");
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <h1>📞 Édition : ${c.societe}</h1>
-                    <button id="delBtn" style="background:var(--color-danger);">🗑️ Supprimer</button>
+                    <h1>Édition : ${c.societe}</h1>
+                    <button id="delBtn" style="background:var(--color-danger);">Supprimer</button>
                 </div>
                 <div class="dashboard-card" style="max-width:600px;">
                     <div class="form-group">
@@ -213,15 +213,15 @@ const PraPrestatairesModule = (() => {
                         <textarea id="notes" style="min-height:80px;">${c.notes || ""}</textarea>
                     </div>
                     <div style="margin-top: 20px;">
-                        <button id="saveBtn" style="background:var(--color-success);">💾 Mettre à jour</button>
-                        <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">❌ Annuler</button>
+                        <button id="saveBtn" style="background:var(--color-success);">Mettre à jour</button>
+                        <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                     </div>
                 </div>
             </section>
         `;
-        
+
         document.getElementById("cancelBtn").onclick = () => Router.navigateTo("/prestataires");
-        
+
         document.getElementById("saveBtn").onclick = () => {
             const soc = document.getElementById("societe").value.trim();
             if (!soc) return alert("Le nom de la société est obligatoire.");
@@ -231,16 +231,16 @@ const PraPrestatairesModule = (() => {
             c.phone = document.getElementById("phone").value.trim();
             c.email = document.getElementById("email").value.trim();
             c.notes = document.getElementById("notes").value.trim();
-            
+
             DataStore.updatePrestataire(c);
             if(window.showToast) window.showToast("Contact mis à jour.", "success");
             Router.navigateTo("/prestataires");
         };
-        
+
         document.getElementById("delBtn").onclick = () => {
-            if(confirm("Confirmer la suppression de ce contact de l'annuaire ?")) { 
-                DataStore.deletePrestataire(id); 
-                Router.navigateTo("/prestataires"); 
+            if(confirm("Confirmer la suppression de ce contact de l'annuaire ?")) {
+                DataStore.deletePrestataire(id);
+                Router.navigateTo("/prestataires");
             }
         };
     }

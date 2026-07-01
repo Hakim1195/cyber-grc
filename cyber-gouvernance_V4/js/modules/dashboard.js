@@ -33,7 +33,7 @@ const DashboardModule = (() => {
         let actions = tousActions;
         if (currentClient !== "global") {
             const clientExigencesIds = exigences.map(e => e.id);
-            actions = tousActions.filter(a => 
+            actions = tousActions.filter(a =>
                 a.exigence_id ? clientExigencesIds.includes(a.exigence_id) : true
             );
         }
@@ -95,12 +95,12 @@ const DashboardModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>📊 Tableau de bord</h1>
+                        <h1>Tableau de bord</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre d'analyse : <strong>${contextName}</strong></p>
                     </div>
                     <div class="dashboard-actions no-print">
-                        <button id="exportExcelBtn" style="margin-right: 10px;">📤 Export Data (Excel)</button>
-                        <button id="exportPdfBtn">🖨️ Imprimer Rapport (PDF)</button>
+                        <button id="exportExcelBtn" style="margin-right: 10px;">Export Data (Excel)</button>
+                        <button id="exportPdfBtn">Imprimer Rapport (PDF)</button>
                     </div>
                 </div>
 
@@ -135,7 +135,7 @@ const DashboardModule = (() => {
 
                     <div class="dashboard-card alert-card clickable-card" onclick="Router.navigateTo('/risques')" style="cursor:pointer;" title="Aller au registre des risques">
                         <h3>Profil de Risque (Résiduel)</h3>
-                        
+
                         <div class="mini-kpi-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 1.5rem;">
                             <div class="risk" style="color: var(--color-danger);">
                                 <strong>${risquesTresCritiques}</strong>
@@ -150,19 +150,19 @@ const DashboardModule = (() => {
                                 <span>Non critiques<br>(< 3)</span>
                             </div>
                         </div>
-                        
+
                         <div style="margin-top: 1.5rem; text-align: center; padding-top: 1rem; border-top: 1px solid var(--border);">
                             <span style="font-size: 0.9rem; color: var(--text-muted);">Score d'exposition globale : <strong style="font-size: 1.1rem; color: var(--text-main);">${expositionGlobale}</strong></span>
                         </div>
                     </div>
 
                     <div class="dashboard-card wide-card" style="display: flex; gap: 2rem;">
-                        
+
                         <div style="flex: 1;">
-                            <h3>🔥 Top 5 des menaces internes</h3>
+                            <h3>Top 5 des menaces internes</h3>
                             ${
                                 topRisques.length === 0
-                                    ? "<p style='color: var(--color-success); margin-top: 1rem;'>✅ Aucun risque identifié dans le SI.</p>"
+                                    ? "<p style='color: var(--color-success); margin-top: 1rem;'>Aucun risque identifié dans le SI.</p>"
                                     : `
                                         <ul style="margin-top: 1rem;">
                                             ${topRisques.map(r => {
@@ -182,7 +182,7 @@ const DashboardModule = (() => {
                         </div>
 
                         <div style="flex: 1; border-left: 1px solid var(--border); padding-left: 2rem;">
-                            <h3>💻 Inventaire SI & OT</h3>
+                            <h3>Inventaire SI & OT</h3>
                             <div style="display: flex; gap: 1rem; margin-top: 1rem;">
                                 <div style="background: var(--bg-body); padding: 1rem; border-radius: var(--radius); flex: 1; text-align: center;">
                                     <div style="font-size: 2rem; font-weight: bold; color: var(--primary);">${actifs.length}</div>

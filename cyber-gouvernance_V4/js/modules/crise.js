@@ -31,8 +31,8 @@ const CriseModule = (() => {
                 </td>
                 <td><strong style="color: var(--primary);">${m.role}</strong></td>
                 <td><strong>${m.nom}</strong></td>
-                <td>📞 ${m.telephone || "-"}</td>
-                <td>${m.email ? `📧 <a href="mailto:${m.email}" onclick="event.stopPropagation();">${m.email}</a>` : "-"}</td>
+                <td>${m.telephone || "-"}</td>
+                <td>${m.email ? `<a href="mailto:${m.email}" onclick="event.stopPropagation();">${m.email}</a>` : "-"}</td>
                 <td style="font-size: 0.85rem; color: var(--text-muted);">${m.suppleant || "Aucun"}</td>
             </tr>
         `).join("");
@@ -41,18 +41,18 @@ const CriseModule = (() => {
             <section class="page">
                 <div class="dashboard-header no-print">
                     <div>
-                        <h1>🚨 Annuaire de la Cellule de Crise</h1>
+                        <h1>Annuaire de la Cellule de Crise</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (Continuité d'activité)</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">🗑️ Supprimer sélection (<span id="selectedCount">0</span>)</button>
-                        <button class="no-print" onclick="window.print()" style="background-color: var(--primary);">🖨️ Imprimer l'annuaire</button>
-                        <button id="addMembreBtn">➕ Ajouter un membre</button>
+                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
+                        <button class="no-print" onclick="window.print()" style="background-color: var(--primary);">Imprimer l'annuaire</button>
+                        <button id="addMembreBtn">Ajouter un membre</button>
                     </div>
                 </div>
 
                 <div class="synthese-message warning no-print" style="font-size: 0.9rem; padding: 10px; margin-bottom: 20px;">
-                    💡 <strong>En cas de crise majeure (Ransomware, Incendie) :</strong> Le SI peut être indisponible. Pensez à imprimer régulièrement cet annuaire et à le conserver dans un lieu sécurisé (ex: Coffre-fort, ou au domicile du Directeur de crise).
+                    <strong>En cas de crise majeure (Ransomware, Incendie) :</strong> Le SI peut être indisponible. Pensez à imprimer régulièrement cet annuaire et à le conserver dans un lieu sécurisé (ex: Coffre-fort, ou au domicile du Directeur de crise).
                 </div>
 
                 <div class="dashboard-card" style="padding: 0; overflow: hidden;">
@@ -100,7 +100,7 @@ const CriseModule = (() => {
         if (bulkDeleteBtn) {
             bulkDeleteBtn.addEventListener("click", () => {
                 const checkedIds = Array.from(document.querySelectorAll(".row-cb:checked")).map(cb => cb.dataset.id);
-                if (confirm(`⚠️ Confirmer la suppression de ${checkedIds.length} membre(s) de la cellule de crise ?`)) {
+                if (confirm(`Confirmer la suppression de ${checkedIds.length} membre(s) de la cellule de crise ?`)) {
                     checkedIds.forEach(id => DataStore.deleteCriseMembre(id));
                     if (window.showToast) window.showToast(`${checkedIds.length} membre(s) retiré(s).`, "success");
                     renderList();
@@ -163,8 +163,8 @@ const CriseModule = (() => {
                     </div>
 
                     <div style="margin-top: 20px;">
-                        <button id="saveBtn">💾 Ajouter à l'annuaire</button>
-                        <button id="cancelBtn" style="margin-left: 10px;">❌ Annuler</button>
+                        <button id="saveBtn">Ajouter à l'annuaire</button>
+                        <button id="cancelBtn" style="margin-left: 10px;">Annuler</button>
                     </div>
                 </div>
             </section>
@@ -206,8 +206,8 @@ const CriseModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <h1>🚨 Fiche Contact : ${membre.nom}</h1>
-                    <button id="deleteBtn" style="background-color: var(--color-danger);">🗑️ Retirer le membre</button>
+                    <h1>Fiche Contact : ${membre.nom}</h1>
+                    <button id="deleteBtn" style="background-color: var(--color-danger);">Retirer le membre</button>
                 </div>
 
                 <div class="dashboard-card" style="max-width: 800px;">
@@ -250,7 +250,7 @@ const CriseModule = (() => {
                     </div>
 
                     <div style="margin-top: 20px;">
-                        <button id="saveBtn">💾 Mettre à jour</button>
+                        <button id="saveBtn">Mettre à jour</button>
                     </div>
                 </div>
             </section>
@@ -273,7 +273,7 @@ const CriseModule = (() => {
         };
 
         document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("⚠️ Confirmer le retrait de ce membre de la cellule de crise ?")) {
+            if (confirm("Confirmer le retrait de ce membre de la cellule de crise ?")) {
                 DataStore.deleteCriseMembre(membre.id);
                 Router.navigateTo("/crise");
             }

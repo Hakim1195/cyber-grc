@@ -34,18 +34,18 @@ const BiaModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>⏱️ Business Impact Analysis (BIA)</h1>
+                        <h1>Business Impact Analysis (BIA)</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (Continuité d'activité)</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">🗑️ Supprimer sélection (<span id="selectedCount">0</span>)</button>
-                        <button id="addProcessusBtn">➕ Déclarer un Processus</button>
+                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
+                        <button id="addProcessusBtn">Déclarer un Processus</button>
                     </div>
                 </div>
 
                 <details class="synthese-message info" style="font-size: 0.9rem; padding: 10px; cursor: pointer; outline: none; margin-bottom: 20px;">
                     <summary style="font-weight: bold; outline: none;">
-                        💡 <strong>Guide BIA :</strong> Identifiez les processus vitaux de l'entreprise et fixez les objectifs de reprise (Cliquez pour lire).
+                        <strong>Guide BIA :</strong> Identifiez les processus vitaux de l'entreprise et fixez les objectifs de reprise (Cliquez pour lire).
                     </summary>
                     <div style="margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 10px; line-height: 1.6;">
                         <ul>
@@ -98,7 +98,7 @@ const BiaModule = (() => {
         if (bulkDeleteBtn) {
             bulkDeleteBtn.addEventListener("click", () => {
                 const checkedIds = Array.from(document.querySelectorAll(".row-cb:checked")).map(cb => cb.dataset.id);
-                if (confirm(`⚠️ Confirmer la suppression de ${checkedIds.length} processus ?`)) {
+                if (confirm(`Confirmer la suppression de ${checkedIds.length} processus ?`)) {
                     checkedIds.forEach(id => DataStore.deleteProcessus(id));
                     if (window.showToast) window.showToast(`${checkedIds.length} processus supprimé(s).`, "success");
                     renderList();
@@ -170,8 +170,8 @@ const BiaModule = (() => {
                     </div>
 
                     <div style="margin-top: 20px;">
-                        <button id="saveBtn">💾 Enregistrer</button>
-                        <button id="cancelBtn" style="margin-left: 10px;">❌ Annuler</button>
+                        <button id="saveBtn">Enregistrer</button>
+                        <button id="cancelBtn" style="margin-left: 10px;">Annuler</button>
                     </div>
                 </div>
             </section>
@@ -230,15 +230,15 @@ const BiaModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <h1>⏱️ ${processus.nom}</h1>
-                    <button id="deleteBtn" style="background-color: var(--color-danger);">🗑️ Supprimer</button>
+                    <h1>${processus.nom}</h1>
+                    <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
                 </div>
 
                 <div class="dashboard-grid">
                     <div class="dashboard-card" style="grid-column: span 2;">
                         <h3>Informations BIA</h3>
                         <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${processus.nom}" required /></div>
-                        
+
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                             <div class="form-group">
                                 <label>Criticité Métier</label>
@@ -273,7 +273,7 @@ const BiaModule = (() => {
 
                         <div class="form-group"><label>Responsable</label><input id="responsable" value="${processus.responsable || ""}" /></div>
                         <div class="form-group"><label>Impacts (Interruption)</label><textarea id="description">${processus.description || ""}</textarea></div>
-                        <button id="saveBtn">💾 Mettre à jour</button>
+                        <button id="saveBtn">Mettre à jour</button>
                     </div>
 
                     <div class="dashboard-card">
@@ -305,7 +305,7 @@ const BiaModule = (() => {
         };
 
         document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("⚠️ Confirmer la suppression ?")) {
+            if (confirm("Confirmer la suppression ?")) {
                 DataStore.deleteProcessus(processus.id);
                 Router.navigateTo("/bia");
             }

@@ -26,12 +26,12 @@ const ClientsModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <h1>🏢 Donneurs d'ordre (Clients)</h1>
-                    <button id="addClientBtn">➕ Ajouter un client</button>
+                    <h1>Donneurs d'ordre (Clients)</h1>
+                    <button id="addClientBtn">Ajouter un client</button>
                 </div>
 
                 <div class="synthese-message info" style="font-size: 0.9rem; padding: 10px;">
-                    💡 Gérez ici vos différents donneurs d'ordre ou périmètres. Vous pourrez ensuite importer et rattacher des exigences spécifiques à chacun d'eux.
+                    Gérez ici vos différents donneurs d'ordre ou périmètres. Vous pourrez ensuite importer et rattacher des exigences spécifiques à chacun d'eux.
                 </div>
 
                 <table class="data-table">
@@ -79,8 +79,8 @@ const ClientsModule = (() => {
                     </div>
 
                     <div style="margin-top: 20px;">
-                        <button id="save">💾 Créer le client</button>
-                        <button id="cancel" style="margin-left: 10px;">❌ Annuler</button>
+                        <button id="save">Créer le client</button>
+                        <button id="cancel" style="margin-left: 10px;">Annuler</button>
                     </div>
                 </div>
             </section>
@@ -130,14 +130,14 @@ const ClientsModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <h1>🏢 ${client.nom}</h1>
-                    <button id="deleteBtn" style="background-color: var(--color-danger);">🗑️ Supprimer</button>
+                    <h1>${client.nom}</h1>
+                    <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
                 </div>
 
                 <div class="dashboard-grid">
                     <div class="dashboard-card">
                         <h3>Détails du Donneur d'ordre</h3>
-                        
+
                         <div class="form-group">
                             <label>Nom <span style="color:red">*</span></label>
                             <input id="nom" value="${client.nom}" required />
@@ -148,7 +148,7 @@ const ClientsModule = (() => {
                             <input id="secteur" value="${client.secteur || ""}" />
                         </div>
 
-                        <button id="saveBtn">💾 Mettre à jour</button>
+                        <button id="saveBtn">Mettre à jour</button>
                     </div>
 
                     <div class="dashboard-card">
@@ -182,7 +182,7 @@ const ClientsModule = (() => {
 
         /* ===== Supprimer ===== */
         document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("⚠️ ATTENTION : Supprimer ce client supprimera également TOUTES les exigences qui lui sont rattachées. Continuer ?")) {
+            if (confirm("ATTENTION : Supprimer ce client supprimera également TOUTES les exigences qui lui sont rattachées. Continuer ?")) {
                 DataStore.deleteClient(client.id);
                 if (window.showToast) window.showToast("Client et exigences liées supprimés.", "success");
                 Router.navigateTo("/clients");

@@ -54,14 +54,14 @@ const RisquesModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>⚠️ Registre des Risques (Méthode FxGxM)</h1>
+                        <h1>Registre des Risques (Méthode FxGxM)</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (SI global)</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">🗑️ Supprimer sélection (<span id="selectedCount">0</span>)</button>
+                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
                         <input type="file" id="importRisqueInput" accept=".xlsx, .xls, .csv" style="display: none;" />
-                        <button id="importRisqueBtn" style="background-color: var(--color-success);">📥 Importer Analyse</button>
-                        <button id="addRisqueBtn">➕ Déclarer un risque</button>
+                        <button id="importRisqueBtn" style="background-color: var(--color-success);">Importer Analyse</button>
+                        <button id="addRisqueBtn">Déclarer un risque</button>
                     </div>
                 </div>
 
@@ -97,7 +97,7 @@ const RisquesModule = (() => {
 
                 if (typeof ImportExcelService !== "undefined") {
                     ImportExcelService.importRisques(file, (imported, skipped) => {
-                        let msg = `✅ ${imported} risque(s) importé(s) et évalué(s) (F x G x M).`;
+                        let msg = `${imported} risque(s) importé(s) et évalué(s) (F x G x M).`;
                         if (skipped > 0) msg += ` (${skipped} doublons ignorés).`;
                         alert(msg);
                         Router.navigateTo("/risques");
@@ -138,7 +138,7 @@ const RisquesModule = (() => {
         if (bulkDeleteBtn) {
             bulkDeleteBtn.addEventListener("click", () => {
                 const checkedIds = Array.from(document.querySelectorAll(".row-cb:checked")).map(cb => cb.dataset.id);
-                if (confirm(`⚠️ Confirmer la suppression définitive de ${checkedIds.length} risque(s) ?`)) {
+                if (confirm(`Confirmer la suppression définitive de ${checkedIds.length} risque(s) ?`)) {
                     checkedIds.forEach(id => DataStore.deleteRisque(id));
                     if (window.showToast) window.showToast(`${checkedIds.length} risque(s) supprimé(s).`, "success");
                     renderList(); // Recharger la vue
@@ -161,9 +161,9 @@ const RisquesModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <h1>Nouveau scénario de risque</h1>
-                
+
                 <div class="synthese-message info" style="margin-bottom: 20px; font-size: 0.9rem;">
-                    <strong>📘 Guide de cotation EBIOS (F x G x M) :</strong><br>
+                    <strong>Guide de cotation EBIOS (F x G x M) :</strong><br>
                     <ul style="margin-top: 5px; padding-left: 20px; margin-bottom: 0;">
                         <li><strong>Score Brut</strong> = Fréquence (1 à 4) × Gravité (1 à 4). <em>C'est le risque inhérent (impact théorique).</em></li>
                         <li><strong>Score Résiduel</strong> = Score Brut × Niveau de maîtrise. <em>C'est le risque réel après application de vos mesures.</em></li>
@@ -173,7 +173,7 @@ const RisquesModule = (() => {
 
                 <div class="dashboard-card" style="max-width: 800px;">
                     <div class="form-group"><label>Nom du risque <span style="color:red">*</span></label><input id="nom" required /></div>
-                    
+
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                         <div class="form-group">
                             <label>Fréquence (F)</label>
@@ -212,10 +212,10 @@ const RisquesModule = (() => {
                     </div>
 
                     <div class="form-group"><label>Description / Détails</label><textarea id="description"></textarea></div>
-                    
+
                     <div style="margin-top: 20px;">
-                        <button id="save">💾 Créer le risque</button>
-                        <button id="cancel" style="margin-left: 10px;">❌ Annuler</button>
+                        <button id="save">Créer le risque</button>
+                        <button id="cancel" style="margin-left: 10px;">Annuler</button>
                     </div>
                 </div>
             </section>
@@ -304,20 +304,20 @@ const RisquesModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <h1>${risque.nom}</h1>
-                    <button id="deleteBtn" style="background-color: var(--color-danger);">🗑️ Supprimer</button>
+                    <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
                 </div>
 
                 <div class="dashboard-grid">
                     <div class="dashboard-card" style="grid-column: span 2;">
                         <h3>Évaluation du risque (F x G x M)</h3>
-                        
+
                         <div class="synthese-message info" style="margin-bottom: 20px; font-size: 0.9rem;">
-                            <strong>📘 Rappel de cotation :</strong> Brut = (F × G). Résiduel = Brut × M.<br>
+                            <strong>Rappel de cotation :</strong> Brut = (F × G). Résiduel = Brut × M.<br>
                             <em>Maîtrise (M) : 0.05 (Excellent) / 0.3 (Bon) / 0.7 (Faible) / 1 (Inexistant).</em>
                         </div>
 
                         <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${risque.nom}" required /></div>
-                        
+
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                             <div class="form-group">
                                 <label>Fréquence (F)</label>
@@ -353,16 +353,16 @@ const RisquesModule = (() => {
                                 Score Brut: <strong>${currentF * currentG}</strong> | Score Résiduel: <strong style="color: ${getRiskColor(currentRes)};">${currentRes.toFixed(2)} (${getLabel(currentRes)})</strong>
                             </div>
                         </div>
-                        
+
                         <div class="form-group"><label>Description</label><textarea id="description">${risque.description || ""}</textarea></div>
-                        <button id="saveBtn">💾 Mettre à jour</button>
+                        <button id="saveBtn">Mettre à jour</button>
                     </div>
 
                     <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                         <div class="dashboard-card">
                             <h3>Plan de traitement (Actions)</h3>
                             <ul style="margin-bottom: 15px;">${actionsHtml || "<li><span style='color: var(--text-muted);'>Aucune action</span></li>"}</ul>
-                            <button id="addActionBtn" style="font-size: 0.85rem;">➕ Planifier une action interne</button>
+                            <button id="addActionBtn" style="font-size: 0.85rem;">Planifier une action interne</button>
                         </div>
                         <div class="dashboard-card">
                             <h3>Exigences applicables (Mitigation)</h3>
@@ -414,7 +414,7 @@ const RisquesModule = (() => {
         };
 
         document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("⚠️ Confirmer la suppression ?")) {
+            if (confirm("Confirmer la suppression ?")) {
                 DataStore.deleteRisque(risque.id);
                 Router.navigateTo("/risques");
             }
@@ -441,8 +441,8 @@ const RisquesModule = (() => {
                     <div class="form-group"><label>Échéance</label><input type="date" id="echeance" /></div>
                     <div class="form-group"><label>Commentaire</label><textarea id="commentaire"></textarea></div>
                     <div style="margin-top: 20px;">
-                        <button id="saveAction">💾 Créer l'action</button>
-                        <button id="cancelAction" style="margin-left: 10px;">❌ Annuler</button>
+                        <button id="saveAction">Créer l'action</button>
+                        <button id="cancelAction" style="margin-left: 10px;">Annuler</button>
                     </div>
                 </div>
             </section>
@@ -464,7 +464,7 @@ const RisquesModule = (() => {
             });
             Router.navigateTo(`/risques/${risque.id}`);
         };
-        
+
         document.getElementById("cancelAction").onclick = () => Router.navigateTo(`/risques/${risque.id}`);
     }
 

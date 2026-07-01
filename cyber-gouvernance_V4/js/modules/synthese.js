@@ -17,7 +17,7 @@ const SyntheseModule = (() => {
         let actions = tousActions;
         if (currentClient !== "global") {
             const clientExigencesIds = exigences.map(e => e.id);
-            actions = tousActions.filter(a => 
+            actions = tousActions.filter(a =>
                 a.exigence_id ? clientExigencesIds.includes(a.exigence_id) : true
             );
         }
@@ -81,12 +81,12 @@ const SyntheseModule = (() => {
 
                 <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid var(--primary); padding-bottom: 10px; margin-bottom: 2rem;">
                     <div>
-                        <h1 style="margin-bottom: 5px; color: var(--primary);">📑 Note de Synthèse</h1>
+                        <h1 style="margin-bottom: 5px; color: var(--primary);">Note de Synthèse</h1>
                         <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">Périmètre d'analyse : <strong>${contextName}</strong></p>
                     </div>
                     <div style="text-align: right; font-size: 0.9rem;">
                         <strong>Date :</strong> ${dateJour}<br>
-                        <button class="no-print" onclick="window.print()" style="margin-top: 10px; padding: 4px 10px; font-size: 0.8rem; background: var(--primary);">🖨️ Imprimer</button>
+                        <button class="no-print" onclick="window.print()" style="margin-top: 10px; padding: 4px 10px; font-size: 0.8rem; background: var(--primary);">Imprimer</button>
                     </div>
                 </div>
 
@@ -95,7 +95,7 @@ const SyntheseModule = (() => {
                 </div>
 
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 2.5rem;">
-                    
+
                     <div class="dashboard-card" style="text-align: center; border-top: 4px solid var(--accent);">
                         <h3 style="font-size: 1rem; color: var(--text-muted); text-transform: uppercase;">Conformité</h3>
                         <div class="big-kpi" style="font-size: 3rem; margin: 10px 0;">${tauxConformite}<span style="font-size: 1.5rem;">%</span></div>
@@ -106,7 +106,7 @@ const SyntheseModule = (() => {
                         <h3 style="font-size: 1rem; color: var(--text-muted); text-transform: uppercase;">Exposition SI</h3>
                         <div class="big-kpi" style="font-size: 3rem; margin: 10px 0; color: var(--color-danger);">${risquesTresCritiques.length + risquesCritiques.length}</div>
                         <div style="font-size: 0.8rem; color: var(--text-muted);">
-                            <span style="color:var(--color-danger); font-weight:bold;">${risquesTresCritiques.length}</span> Très critiques | 
+                            <span style="color:var(--color-danger); font-weight:bold;">${risquesTresCritiques.length}</span> Très critiques |
                             <span style="color:var(--color-warning); font-weight:bold;">${risquesCritiques.length}</span> Critiques
                         </div>
                     </div>
@@ -120,36 +120,36 @@ const SyntheseModule = (() => {
                 </div>
 
                 <div>
-                    <h2 style="border-bottom: 1px solid var(--border); padding-bottom: 5px; color: var(--primary);">🎯 Arbitrages attendus</h2>
+                    <h2 style="border-bottom: 1px solid var(--border); padding-bottom: 5px; color: var(--primary);">Arbitrages attendus</h2>
                     <ul style="list-style-type: none; padding-left: 0;">
-                        ${risquesTresCritiques.length > 0 
+                        ${risquesTresCritiques.length > 0
                             ? `<li style="margin-bottom: 10px; padding-left: 20px; position: relative;">
-                                 <span style="position: absolute; left: 0; color: var(--color-danger);">🔴</span>
+                                 <span style="position: absolute; left: 0; color: var(--color-danger); font-weight: bold;">&#9642;</span>
                                  <strong>Validation immédiate</strong> des budgets ou ressources pour le traitement des risques très critiques (Plans de continuité obligatoires).
-                               </li>` 
+                               </li>`
                             : ""}
-                        
-                        ${risquesCritiques.length > 0 
+
+                        ${risquesCritiques.length > 0
                             ? `<li style="margin-bottom: 10px; padding-left: 20px; position: relative;">
-                                 <span style="position: absolute; left: 0; color: var(--color-warning);">🟠</span>
+                                 <span style="position: absolute; left: 0; color: var(--color-warning); font-weight: bold;">&#9642;</span>
                                  <strong>Suivi managérial semestriel</strong> des plans d'actions liés aux risques critiques identifiés.
-                               </li>` 
+                               </li>`
                             : ""}
-                        
-                        ${actionsOuvertes > 0 
+
+                        ${actionsOuvertes > 0
                             ? `<li style="margin-bottom: 10px; padding-left: 20px; position: relative;">
-                                 <span style="position: absolute; left: 0; color: var(--color-info);">🔵</span>
+                                 <span style="position: absolute; left: 0; color: var(--color-info); font-weight: bold;">&#9642;</span>
                                  <strong>Soutien opérationnel</strong> pour l'exécution du plan d'actions (${actionsOuvertes} actions ouvertes).
-                               </li>` 
+                               </li>`
                             : ""}
-                        
-                        ${tauxConformite < 100 
+
+                        ${tauxConformite < 100
                             ? `<li style="margin-bottom: 10px; padding-left: 20px; position: relative;">
-                                 <span style="position: absolute; left: 0; color: var(--color-info);">🔵</span>
+                                 <span style="position: absolute; left: 0; color: var(--color-info); font-weight: bold;">&#9642;</span>
                                  <strong>Acceptation formelle</strong> des risques liés aux non-conformités restantes sur les exigences applicables.
-                               </li>` 
+                               </li>`
                             : `<li style="margin-bottom: 10px; padding-left: 20px; position: relative;">
-                                 <span style="position: absolute; left: 0; color: var(--color-success);">🟢</span>
+                                 <span style="position: absolute; left: 0; color: var(--color-success); font-weight: bold;">&#9642;</span>
                                  Maintien en condition de sécurité (Amélioration continue).
                                </li>`}
                     </ul>

@@ -5,7 +5,7 @@ const DataStore = (() => {
     const STORAGE_KEY = "cyber-gouvernance-data";
 
     let data = {
-        clients: [], 
+        clients: [],
         exigences: [],
         actions: [],
         risques: [],
@@ -25,14 +25,14 @@ const DataStore = (() => {
             if (saved) {
                 const parsed = JSON.parse(saved);
                 data = { ...data, ...parsed };
-                
+
                 // Garantir l'existence des tableaux pour la stabilité
                 data.clients = Array.isArray(data.clients) ? data.clients : [];
                 data.exigences = Array.isArray(data.exigences) ? data.exigences : [];
                 data.actions = Array.isArray(data.actions) ? data.actions : [];
                 data.risques = Array.isArray(data.risques) ? data.risques : [];
                 data.actifs = Array.isArray(data.actifs) ? data.actifs : [];
-                
+
                 // Initialisation des nouveaux tableaux si d'anciennes sauvegardes sont chargées
                 data.processus = Array.isArray(data.processus) ? data.processus : [];
                 data.crise = Array.isArray(data.crise) ? data.crise : [];
@@ -216,13 +216,13 @@ const DataStore = (() => {
        SAUVEGARDE & RESTAURATION (SNAPSHOT)
     ========================== */
     function exportSnapshot() {
-        return JSON.stringify(data, null, 2); 
+        return JSON.stringify(data, null, 2);
     }
 
     function importSnapshot(jsonString) {
         try {
             const parsed = JSON.parse(jsonString);
-            
+
             if (parsed && typeof parsed === 'object' && Array.isArray(parsed.exigences)) {
                 data = {
                     clients: Array.isArray(parsed.clients) ? parsed.clients : [],
@@ -240,7 +240,7 @@ const DataStore = (() => {
                 save();
                 return true;
             } else {
-                return false; 
+                return false;
             }
         } catch (e) {
             console.error("Erreur lors de l'importation du snapshot :", e);
@@ -255,7 +255,7 @@ const DataStore = (() => {
         getActions, getActionById, getActionsByExigence, getActionsByRisque, addAction, updateAction, deleteAction,
         getRisques, getRisqueById, addRisque, updateRisque, deleteRisque,
         getActifs, getActifById, addActif, updateActif, deleteActif,
-        
+
         // Export des nouvelles fonctions Résilience
         getProcessus, getProcessusById, addProcessus, updateProcessus, deleteProcessus,
         getCriseMembres, getCriseMembreById, addCriseMembre, updateCriseMembre, deleteCriseMembre,
@@ -263,7 +263,7 @@ const DataStore = (() => {
         getTestsPra, getTestPraById, addTestPra, updateTestPra, deleteTestPra,
         getPrestataires, addPrestataire, updatePrestataire, deletePrestataire,
         getMcoActions, addMcoAction, updateMcoAction, deleteMcoAction,
-        
+
         exportSnapshot,
         importSnapshot
     };

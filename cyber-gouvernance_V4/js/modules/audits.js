@@ -34,17 +34,17 @@ const AuditsModule = (() => {
             <section class="page">
                 <div class="dashboard-header no-print">
                     <div>
-                        <h1>🔍 Contrôles & Audits (Amélioration continue)</h1>
+                        <h1>Contrôles & Audits (Amélioration continue)</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Pilotage stratégique et vérification de la conformité</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button id="addBtn" style="background-color: var(--primary);">➕ Nouvel Élément</button>
+                        <button id="addBtn" style="background-color: var(--primary);">Nouvel Élément</button>
                     </div>
                 </div>
 
                 <div class="no-print" style="display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 2px solid var(--border);">
-                    <button class="tab-btn ${currentTab === 'audits' ? 'active-tab' : ''}" data-tab="audits">📋 Audits Internes</button>
-                    <button class="tab-btn ${currentTab === 'revues' ? 'active-tab' : ''}" data-tab="revues">👔 Revues de Direction</button>
+                    <button class="tab-btn ${currentTab === 'audits' ? 'active-tab' : ''}" data-tab="audits">Audits Internes</button>
+                    <button class="tab-btn ${currentTab === 'revues' ? 'active-tab' : ''}" data-tab="revues">Revues de Direction</button>
                 </div>
 
                 <div id="tab-content">
@@ -60,7 +60,7 @@ const AuditsModule = (() => {
                 .tab-btn { background: none; color: var(--text-muted); border: none; padding: 10px 20px; cursor: pointer; border-radius: 0; font-weight: normal; font-size: 1rem; }
                 .tab-btn:hover { background: rgba(0,0,0,0.05); }
                 .active-tab { color: var(--accent); border-bottom: 3px solid var(--accent); font-weight: bold; }
-                
+
                 .badge-constat { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; }
                 .c-fort { background: #2e7d32; }
                 .c-pa { background: #1565c0; }
@@ -69,20 +69,20 @@ const AuditsModule = (() => {
 
                 @media print {
                     /* Masquer les éléments perturbateurs */
-                    body.printing-audit .sidebar, 
+                    body.printing-audit .sidebar,
                     body.printing-audit #toast-container { display: none !important; }
-                    
+
                     /* Masquer tout dans la page sauf la modale d'impression */
                     body.printing-audit .page > *:not(#print-modal) { display: none !important; }
-                    
+
                     /* Réinitialiser les marges pour l'impression pleine page */
                     body.printing-audit .main-content { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; }
                     body.printing-audit .page { margin: 0 !important; padding: 0 !important; }
-                    
+
                     /* Afficher la modale proprement */
                     #print-modal { position: relative !important; display: block !important; padding: 0 !important; overflow: visible !important; height: auto !important; background: white !important; }
                     .print-container { max-width: 100% !important; margin: 0 !important; padding: 20px !important; border: none !important; box-shadow: none !important; }
-                    
+
                     /* Forcer les couleurs des badges */
                     .badge-constat { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                 }
@@ -111,7 +111,7 @@ const AuditsModule = (() => {
         if (currentTab === "audits") {
             return `
                 <div class="synthese-message info" style="font-size:0.9rem; padding:10px;">
-                    💡 <strong>ISO 27001 - Clause 9.2 :</strong> Planifiez et réalisez vos audits internes pour vérifier que le SMSI est conforme aux exigences de l'entreprise et à la norme.
+                    <strong>ISO 27001 - Clause 9.2 :</strong> Planifiez et réalisez vos audits internes pour vérifier que le SMSI est conforme aux exigences de l'entreprise et à la norme.
                 </div>
                 <table class="data-table">
                     <thead>
@@ -135,7 +135,7 @@ const AuditsModule = (() => {
         if (currentTab === "revues") {
             return `
                 <div class="synthese-message info" style="font-size:0.9rem; padding:10px;">
-                    💡 <strong>ISO 27001 - Clause 9.3 :</strong> La direction doit revoir le SMSI à des intervalles planifiés pour s'assurer qu'il demeure pertinent, adéquat et efficace.
+                    <strong>ISO 27001 - Clause 9.3 :</strong> La direction doit revoir le SMSI à des intervalles planifiés pour s'assurer qu'il demeure pertinent, adéquat et efficace.
                 </div>
                 <table class="data-table">
                     <thead>
@@ -174,24 +174,24 @@ const AuditsModule = (() => {
         document.getElementById("app").innerHTML = `
             <section class="page">
                 <div class="dashboard-header no-print">
-                    <h1>${isEdit ? "📋 Édition de l'Audit" : "🆕 Nouvel Audit Interne"}</h1>
+                    <h1>${isEdit ? "Édition de l'Audit" : "Nouvel Audit Interne"}</h1>
                     <div style="display:flex; gap:10px;">
-                        ${isEdit ? `<button id="printAuditBtn" style="background:#0073ea;">🖨️ Générer le Rapport (PDF)</button>` : ""}
-                        ${isEdit ? `<button id="delBtn" style="background:var(--color-danger);">🗑️ Supprimer</button>` : ""}
+                        ${isEdit ? `<button id="printAuditBtn" style="background:#0073ea;">Générer le Rapport (PDF)</button>` : ""}
+                        ${isEdit ? `<button id="delBtn" style="background:var(--color-danger);">Supprimer</button>` : ""}
                     </div>
                 </div>
 
                 <div class="dashboard-grid no-print">
                     <div class="dashboard-card">
-                        <h3>📌 Informations Générales</h3>
+                        <h3>Informations Générales</h3>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-top:15px;">
                             <div class="form-group"><label>Référence / Titre <span style="color:red">*</span></label><input id="a-ref" value="${editingItem.ref}" required /></div>
                             <div class="form-group">
                                 <label>Statut</label>
                                 <select id="a-statut">
-                                    <option value="Planifié" ${editingItem.statut === 'Planifié' ? 'selected' : ''}>📅 Planifié</option>
-                                    <option value="En cours" ${editingItem.statut === 'En cours' ? 'selected' : ''}>⏳ En cours</option>
-                                    <option value="Réalisé" ${editingItem.statut === 'Réalisé' ? 'selected' : ''}>✅ Réalisé</option>
+                                    <option value="Planifié" ${editingItem.statut === 'Planifié' ? 'selected' : ''}>Planifié</option>
+                                    <option value="En cours" ${editingItem.statut === 'En cours' ? 'selected' : ''}>En cours</option>
+                                    <option value="Réalisé" ${editingItem.statut === 'Réalisé' ? 'selected' : ''}>Réalisé</option>
                                 </select>
                             </div>
                             <div class="form-group"><label>Date de l'audit</label><input type="date" id="a-date" value="${editingItem.date}" /></div>
@@ -201,28 +201,28 @@ const AuditsModule = (() => {
                         </div>
                     </div>
                     <div class="dashboard-card">
-                        <h3>📝 Synthèse Globale de l'Auditeur</h3>
+                        <h3>Synthèse Globale de l'Auditeur</h3>
                         <textarea id="a-synthese" style="min-height:200px; margin-top:15px;" placeholder="Avis général, niveau de maturité constaté...">${editingItem.synthese}</textarea>
                     </div>
                 </div>
 
                 <div class="dashboard-card no-print" style="margin-top: 20px; border-top: 4px solid #784bd1;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="margin:0; color:#784bd1;">🔎 Grille des Constats (Preuves d'audit)</h3>
-                        <button id="addConstatBtn" style="background:#784bd1; font-size:0.8rem; padding:5px 10px;">➕ Ajouter un constat</button>
+                        <h3 style="margin:0; color:#784bd1;">Grille des Constats (Preuves d'audit)</h3>
+                        <button id="addConstatBtn" style="background:#784bd1; font-size:0.8rem; padding:5px 10px;">Ajouter un constat</button>
                     </div>
                     <div id="constats-container"></div>
                 </div>
 
                 <div class="no-print" style="margin-top: 20px; text-align: right; background: white; padding: 15px; border-radius: 8px;">
-                    <button id="cancelBtn" style="background:var(--color-gray); color:white; padding:10px 15px;">❌ Annuler</button>
-                    <button id="saveBtn" style="padding: 10px 20px; background:var(--color-success); margin-left:10px;">💾 Enregistrer l'Audit</button>
+                    <button id="cancelBtn" style="background:var(--color-gray); color:white; padding:10px 15px;">Annuler</button>
+                    <button id="saveBtn" style="padding: 10px 20px; background:var(--color-success); margin-left:10px;">Enregistrer l'Audit</button>
                 </div>
 
                 <div id="print-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#f0f2f5; z-index:2000; overflow-y:auto; padding:40px;">
                     <div class="no-print" style="display:flex; justify-content:space-between; margin-bottom:20px; max-width: 900px; margin: 0 auto 20px auto;">
-                        <button id="closePrintBtn" style="background:#676879; padding:10px 20px;">⬅️ Fermer l'aperçu</button>
-                        <button onclick="window.print()" style="background:#0073ea; padding:10px 20px;">🖨️ Imprimer / PDF</button>
+                        <button id="closePrintBtn" style="background:#676879; padding:10px 20px;">Fermer l'aperçu</button>
+                        <button onclick="window.print()" style="background:#0073ea; padding:10px 20px;">Imprimer / PDF</button>
                     </div>
                     <div id="print-content" class="print-container" style="max-width: 900px; margin: 0 auto; background: white; padding: 50px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid #ccc; font-family: Arial, sans-serif;"></div>
                 </div>
@@ -233,7 +233,7 @@ const AuditsModule = (() => {
 
         document.getElementById("cancelBtn").onclick = () => Router.navigateTo("/audits");
         document.getElementById("addConstatBtn").onclick = () => addConstat();
-        
+
         if (isEdit) {
             document.getElementById("printAuditBtn").onclick = renderPrintAudit;
             document.getElementById("delBtn").onclick = () => {
@@ -254,7 +254,7 @@ const AuditsModule = (() => {
             editingItem.auditeur = document.getElementById("a-auditeur").value.trim();
             editingItem.audite = document.getElementById("a-audite").value.trim();
             editingItem.synthese = document.getElementById("a-synthese").value.trim();
-            
+
             // Sauvegarde des constats
             const constats = [];
             document.querySelectorAll(".constat-row").forEach(row => {
@@ -283,16 +283,16 @@ const AuditsModule = (() => {
                 <div style="flex:1; display:flex; flex-direction:column; gap:10px;">
                     <div style="display:flex; gap:10px;">
                         <select class="c-type" style="padding:8px; border-radius:4px; border:1px solid #ccc; font-weight:bold; width:200px;">
-                            <option value="Point fort" ${c.type==='Point fort'?'selected':''}>🌟 Point fort</option>
-                            <option value="PA" ${c.type==='PA'?'selected':''}>💡 Piste d'amélioration</option>
-                            <option value="Mineure" ${c.type==='Mineure'?'selected':''}>⚠️ Non-conformité Mineure</option>
-                            <option value="Majeure" ${c.type==='Majeure'?'selected':''}>🚨 Non-conformité Majeure</option>
+                            <option value="Point fort" ${c.type==='Point fort'?'selected':''}>Point fort</option>
+                            <option value="PA" ${c.type==='PA'?'selected':''}>Piste d'amélioration</option>
+                            <option value="Mineure" ${c.type==='Mineure'?'selected':''}>Non-conformité Mineure</option>
+                            <option value="Majeure" ${c.type==='Majeure'?'selected':''}>Non-conformité Majeure</option>
                         </select>
                         <input class="c-exigence" value="${(c.exigence||'').replace(/"/g, '&quot;')}" placeholder="Exigence visée (Ex: ISO 27001 - A.8.1)" style="flex:1; padding:8px;" />
                     </div>
                     <textarea class="c-desc" placeholder="Description du constat / Preuve d'audit..." style="min-height:60px;">${c.desc||''}</textarea>
                 </div>
-                <button onclick="this.closest('.constat-row').remove()" style="background:none; color:red; border:none; font-size:1.5rem; cursor:pointer;" title="Supprimer">🗑️</button>
+                <button onclick="this.closest('.constat-row').remove()" style="background:none; color:red; border:none; font-size:1.5rem; cursor:pointer;" title="Supprimer"></button>
             </div>
         `).join("") || `<p style="text-align:center; color:gray; padding:20px;">Aucun constat saisi.</p>`;
     }
@@ -317,10 +317,10 @@ const AuditsModule = (() => {
         document.getElementById("app").innerHTML = `
             <section class="page">
                 <div class="dashboard-header no-print">
-                    <h1>${isEdit ? "👔 Édition de la Revue" : "🆕 Nouvelle Revue de Direction"}</h1>
+                    <h1>${isEdit ? "Édition de la Revue" : "Nouvelle Revue de Direction"}</h1>
                     <div style="display:flex; gap:10px;">
-                        ${isEdit ? `<button id="printRevueBtn" style="background:#0073ea;">🖨️ Générer le PV (PDF)</button>` : ""}
-                        ${isEdit ? `<button id="delBtn" style="background:var(--color-danger);">🗑️ Supprimer</button>` : ""}
+                        ${isEdit ? `<button id="printRevueBtn" style="background:#0073ea;">Générer le PV (PDF)</button>` : ""}
+                        ${isEdit ? `<button id="delBtn" style="background:var(--color-danger);">Supprimer</button>` : ""}
                     </div>
                 </div>
 
@@ -329,29 +329,29 @@ const AuditsModule = (() => {
                         <div class="form-group"><label>Date de la Revue <span style="color:red">*</span></label><input type="date" id="r-date" value="${editingItem.date}" required /></div>
                         <div class="form-group"><label>Participants (Nom et Fonction)</label><textarea id="r-participants" style="min-height:50px;">${editingItem.participants}</textarea></div>
                     </div>
-                    
+
                     <div class="form-group" style="margin-top:20px;">
-                        <label style="color:#1565c0; font-weight:bold;">📥 Données d'entrée (Sujets abordés / ISO 27001 - 9.3.2)</label>
+                        <label style="color:#1565c0; font-weight:bold;">Données d'entrée (Sujets abordés / ISO 27001 - 9.3.2)</label>
                         <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0;">Résumez les éléments présentés à la direction.</p>
                         <textarea id="r-inputs" style="min-height:150px;">${editingItem.inputs}</textarea>
                     </div>
 
                     <div class="form-group" style="margin-top:20px;">
-                        <label style="color:#2e7d32; font-weight:bold;">📤 Données de sortie (Décisions & Budgets / ISO 27001 - 9.3.3)</label>
+                        <label style="color:#2e7d32; font-weight:bold;">Données de sortie (Décisions & Budgets / ISO 27001 - 9.3.3)</label>
                         <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0;">Décisions relatives à l'amélioration continue, modifications du SMSI et besoins en ressources.</p>
                         <textarea id="r-outputs" style="min-height:150px;">${editingItem.outputs}</textarea>
                     </div>
                 </div>
 
                 <div class="no-print" style="margin-top: 20px; text-align: right; background: white; padding: 15px; border-radius: 8px;">
-                    <button id="cancelBtn" style="background:var(--color-gray); color:white; padding:10px 15px;">❌ Annuler</button>
-                    <button id="saveBtn" style="padding: 10px 20px; background:var(--color-success); margin-left:10px;">💾 Enregistrer le PV</button>
+                    <button id="cancelBtn" style="background:var(--color-gray); color:white; padding:10px 15px;">Annuler</button>
+                    <button id="saveBtn" style="padding: 10px 20px; background:var(--color-success); margin-left:10px;">Enregistrer le PV</button>
                 </div>
 
                 <div id="print-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#f0f2f5; z-index:2000; overflow-y:auto; padding:40px;">
                     <div class="no-print" style="display:flex; justify-content:space-between; margin-bottom:20px; max-width: 900px; margin: 0 auto 20px auto;">
-                        <button id="closePrintBtn" style="background:#676879; padding:10px 20px;">⬅️ Fermer l'aperçu</button>
-                        <button onclick="window.print()" style="background:#0073ea; padding:10px 20px;">🖨️ Imprimer / PDF</button>
+                        <button id="closePrintBtn" style="background:#676879; padding:10px 20px;">Fermer l'aperçu</button>
+                        <button onclick="window.print()" style="background:#0073ea; padding:10px 20px;">Imprimer / PDF</button>
                     </div>
                     <div id="print-content" class="print-container" style="max-width: 900px; margin: 0 auto; background: white; padding: 50px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid #ccc; font-family: Arial, sans-serif;"></div>
                 </div>
@@ -359,7 +359,7 @@ const AuditsModule = (() => {
         `;
 
         document.getElementById("cancelBtn").onclick = () => Router.navigateTo("/audits");
-        
+
         if (isEdit) {
             document.getElementById("printRevueBtn").onclick = renderPrintRevue;
             document.getElementById("delBtn").onclick = () => {
@@ -377,7 +377,7 @@ const AuditsModule = (() => {
             editingItem.participants = document.getElementById("r-participants").value.trim();
             editingItem.inputs = document.getElementById("r-inputs").value.trim();
             editingItem.outputs = document.getElementById("r-outputs").value.trim();
-            
+
             if (!editingItem.date) return alert("La date est obligatoire.");
 
             if (isEdit) DataStore.updateRevue(editingItem);
@@ -488,12 +488,12 @@ const AuditsModule = (() => {
                 ${(editingItem.participants||'-').replace(/\n/g, '<br>')}
             </p>
 
-            <h3 style="color:#1565c0; border-bottom:1px solid #eee; padding-bottom:5px;">📥 Éléments d'entrée abordés (Bilan)</h3>
+            <h3 style="color:#1565c0; border-bottom:1px solid #eee; padding-bottom:5px;">Éléments d'entrée abordés (Bilan)</h3>
             <p style="margin-bottom:30px; line-height:1.6; text-align:justify;">
                 ${(editingItem.inputs||'-').replace(/\n/g, '<br>')}
             </p>
 
-            <h3 style="color:#2e7d32; border-bottom:1px solid #eee; padding-bottom:5px;">📤 Décisions actées et besoins (Sorties)</h3>
+            <h3 style="color:#2e7d32; border-bottom:1px solid #eee; padding-bottom:5px;">Décisions actées et besoins (Sorties)</h3>
             <p style="margin-bottom:50px; line-height:1.6; text-align:justify;">
                 ${(editingItem.outputs||'-').replace(/\n/g, '<br>')}
             </p>

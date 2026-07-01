@@ -9,7 +9,7 @@ const ActionsModule = (() => {
     function renderList() {
         const currentClient = localStorage.getItem("cyber-context") || "global";
         const exigencesClient = DataStore.getExigencesByClient(currentClient);
-        const toutesExigences = DataStore.getExigences(); 
+        const toutesExigences = DataStore.getExigences();
         const toutesActions = DataStore.getActions();
         const risques = DataStore.getRisques();
         const clients = DataStore.getClients();
@@ -20,7 +20,7 @@ const ActionsModule = (() => {
         ========================== */
         let actions = toutesActions;
         let contextName = "Vue Globale (Tous périmètres)";
-        
+
         if (currentClient !== "global") {
             const c = clients.find(cl => cl.id === currentClient);
             if (c) contextName = `Spécifiques à : ${c.nom} + Risques Internes`;
@@ -28,7 +28,7 @@ const ActionsModule = (() => {
             const exIds = exigencesClient.map(e => e.id);
             actions = toutesActions.filter(a => {
                 if (a.exigence_id) return exIds.includes(a.exigence_id);
-                return true; 
+                return true;
             });
         }
 
@@ -39,7 +39,7 @@ const ActionsModule = (() => {
             if (a.exigence_id) {
                 const ex = toutesExigences.find(e => e.id === a.exigence_id);
                 if (ex) {
-                    liaison = `📜 Exigence : ${ex.code}`;
+                    liaison = `Exigence : ${ex.code}`;
                     if (ex.client_id) {
                         origineClient = clients.find(c => c.id === ex.client_id)?.nom || "Inconnu";
                     }
@@ -48,7 +48,7 @@ const ActionsModule = (() => {
                 }
             } else if (a.risque_id) {
                 const r = risques.find(risk => risk.id === a.risque_id);
-                liaison = r ? `⚠️ Risque : ${r.nom}` : "Risque introuvable";
+                liaison = r ? `Risque : ${r.nom}` : "Risque introuvable";
             }
 
             let statusClass = "status-non-applicable";
@@ -83,16 +83,16 @@ const ActionsModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>🚀 Plan d'actions</h1>
+                        <h1>Plan d'actions</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre affiché : <strong>${contextName}</strong></p>
                     </div>
                     <div>
-                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">🗑️ Supprimer sélection (<span id="selectedCount">0</span>)</button>
+                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
                     </div>
                 </div>
 
                 <div class="synthese-message info" style="font-size: 0.9rem; padding: 10px;">
-                    💡 Pour garantir la traçabilité, une nouvelle action doit être créée directement depuis la fiche d'une <strong>Exigence</strong> ou d'un <strong>Risque</strong>.
+                    Pour garantir la traçabilité, une nouvelle action doit être créée directement depuis la fiche d'une <strong>Exigence</strong> ou d'un <strong>Risque</strong>.
                 </div>
 
                 <table class="data-table">
@@ -146,7 +146,7 @@ const ActionsModule = (() => {
         if (bulkDeleteBtn) {
             bulkDeleteBtn.addEventListener("click", () => {
                 const checkedIds = Array.from(document.querySelectorAll(".row-cb:checked")).map(cb => cb.dataset.id);
-                if (confirm(`⚠️ Confirmer la suppression définitive de ${checkedIds.length} action(s) ?`)) {
+                if (confirm(`Confirmer la suppression définitive de ${checkedIds.length} action(s) ?`)) {
                     checkedIds.forEach(id => DataStore.deleteAction(id));
                     if (window.showToast) window.showToast(`${checkedIds.length} action(s) supprimée(s).`, "success");
                     renderList(); // Recharger la vue
@@ -164,7 +164,7 @@ const ActionsModule = (() => {
     ========================== */
     function renderDetail(id) {
         const action = DataStore.getActionById(id);
-        const exigences = DataStore.getExigences(); 
+        const exigences = DataStore.getExigences();
         const risques = DataStore.getRisques();
         const clients = DataStore.getClients();
         const app = document.getElementById("app");
@@ -189,9 +189,9 @@ const ActionsModule = (() => {
                     const c = clients.find(cl => cl.id === ex.client_id);
                     if (c) contextTag = `Client : ${c.nom}`;
                 }
-                
+
                 liaisonHtml = `
-                    <p><strong>Liée à l'exigence (${contextTag}) :</strong><br> 
+                    <p><strong>Liée à l'exigence (${contextTag}) :</strong><br>
                         <a href="#/exigences/${ex.id}" style="color: var(--accent); text-decoration: underline;">
                             ${ex.code} — ${ex.intitule}
                         </a>
@@ -201,7 +201,7 @@ const ActionsModule = (() => {
             const r = risques.find(risk => risk.id === action.risque_id);
             if (r) {
                 liaisonHtml = `
-                    <p><strong>Liée au risque (Interne) :</strong><br> 
+                    <p><strong>Liée au risque (Interne) :</strong><br>
                         <a href="#/risques/${r.id}" style="color: var(--accent); text-decoration: underline;">
                             ${r.nom} (${r.niveau})
                         </a>
@@ -213,7 +213,7 @@ const ActionsModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <h1>${action.titre}</h1>
-                    <button id="deleteBtn" style="background-color: var(--color-danger);">🗑️ Supprimer</button>
+                    <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
                 </div>
 
                 <div class="dashboard-card">
@@ -263,7 +263,7 @@ const ActionsModule = (() => {
                     </div>
 
                     <div style="margin-top: 20px;">
-                        <button id="saveBtn">💾 Mettre à jour</button>
+                        <button id="saveBtn">Mettre à jour</button>
                     </div>
                 </div>
             </section>
@@ -286,7 +286,7 @@ const ActionsModule = (() => {
         };
 
         document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("⚠️ Êtes-vous sûr de vouloir supprimer cette action ?")) {
+            if (confirm("Êtes-vous sûr de vouloir supprimer cette action ?")) {
                 DataStore.deleteAction(action.id);
                 if (window.showToast) window.showToast("Action supprimée.", "success");
                 Router.navigateTo("/actions");

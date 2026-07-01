@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
     Router.init({
         "/dashboard": () => DashboardModule.render(),
         "/synthese": () => SyntheseModule.render(),
-        
+
         "/clients": () => { if (typeof ClientsModule !== "undefined") ClientsModule.renderList(); },
         "/clients/:id": (id) => { if (typeof ClientsModule !== "undefined") ClientsModule.renderDetail(id); },
 
@@ -57,7 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         "/prestataires": () => { if (typeof PraPrestatairesModule !== "undefined") PraPrestatairesModule.renderList(); },
         "/prestataires/:id": (id) => { if (typeof PraPrestatairesModule !== "undefined") PraPrestatairesModule.renderDetail(id); },
-	
+
 	"/audits": () => { if (typeof AuditsModule !== "undefined") AuditsModule.renderList(); },
 	"/audits/:id": (id) => { if (typeof AuditsModule !== "undefined") AuditsModule.renderAuditDetail(id); },
 
@@ -87,9 +87,9 @@ window.renderContextSelector = function() {
     const container = document.createElement("div");
     container.id = "context-selector-container";
 
-    let optionsHtml = `<option value="global" style="color: #333; background: #fff;" ${currentContext === "global" ? "selected" : ""}>🌍 Vue Globale (Interne + Tous clients)</option>`;
+    let optionsHtml = `<option value="global" style="color: #333; background: #fff;" ${currentContext === "global" ? "selected" : ""}>Vue Globale (Interne + Tous clients)</option>`;
     clients.forEach(c => {
-        optionsHtml += `<option value="${c.id}" style="color: #333; background: #fff;" ${currentContext === c.id ? "selected" : ""}>🏢 ${c.nom}</option>`;
+        optionsHtml += `<option value="${c.id}" style="color: #333; background: #fff;" ${currentContext === c.id ? "selected" : ""}>${c.nom}</option>`;
     });
 
     container.innerHTML = `
@@ -134,13 +134,8 @@ window.showToast = function(message, type = "success") {
 
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
-    
-    let icon = "✅";
-    if (type === "error") icon = "❌";
-    if (type === "info") icon = "ℹ️";
-    if (type === "warning") icon = "⚠️";
 
-    toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+    toast.innerHTML = `<span>${message}</span>`;
     container.appendChild(toast);
 
     setTimeout(() => {

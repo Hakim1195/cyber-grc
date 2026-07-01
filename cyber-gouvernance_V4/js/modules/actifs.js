@@ -24,18 +24,18 @@ const ActifsModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>💻 Actifs du Système d'Information</h1>
+                        <h1>Actifs du Système d'Information</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (Commun à tous les clients)</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <input type="file" id="importActifsFile" accept=".xlsx, .xls, .csv" style="display: none;" />
-                        <button id="importActifsBtn" style="background: var(--color-info); color: white;">📥 Importer (Excel)</button>
-                        <button id="addActifBtn">➕ Déclarer un actif</button>
+                        <button id="importActifsBtn" style="background: var(--color-info); color: white;">Importer (Excel)</button>
+                        <button id="addActifBtn">Déclarer un actif</button>
                     </div>
                 </div>
 
                 <div class="synthese-message info" style="font-size: 0.9rem; padding: 10px; margin-bottom: 20px;">
-                    💡 <strong>Format d'import :</strong> Créez un fichier Excel avec les colonnes : <em>Nom, Type, Criticité, Responsable, Description</em>.
+                    <strong>Format d'import :</strong> Créez un fichier Excel avec les colonnes : <em>Nom, Type, Criticité, Responsable, Description</em>.
                 </div>
 
                 <table class="data-table">
@@ -70,13 +70,13 @@ const ActifsModule = (() => {
                 ImportExcelService.importActifs(file, (imported, skipped) => {
                     let msg = `${imported} actif(s) importé(s) avec succès.`;
                     if (skipped > 0) msg += `\n${skipped} actif(s) ignoré(s) car le nom existait déjà.`;
-                    
+
                     alert(msg);
                     if (window.showToast) window.showToast("Import des actifs terminé", "success");
-                    
+
                     renderList(); // Recharger la vue
                 });
-                
+
                 // Réinitialiser l'input pour permettre de réimporter le même fichier si besoin
                 importFile.value = '';
             };
@@ -93,9 +93,9 @@ const ActifsModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <h1>Nouvel actif</h1>
-                
+
                 <div class="synthese-message info" style="margin-bottom: 20px; padding: 10px;">
-                    💡 Les actifs représentent l'infrastructure interne de votre entreprise. Ils sont indépendants des donneurs d'ordre.
+                    Les actifs représentent l'infrastructure interne de votre entreprise. Ils sont indépendants des donneurs d'ordre.
                 </div>
 
                 <div class="dashboard-card">
@@ -137,8 +137,8 @@ const ActifsModule = (() => {
                     </div>
 
                     <div style="margin-top: 20px;">
-                        <button id="save">💾 Enregistrer</button>
-                        <button id="cancel" style="margin-left: 10px;">❌ Annuler</button>
+                        <button id="save">Enregistrer</button>
+                        <button id="cancel" style="margin-left: 10px;">Annuler</button>
                     </div>
                 </div>
             </section>
@@ -186,15 +186,15 @@ const ActifsModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <h1>💻 ${actif.nom}</h1>
-                    <button id="deleteBtn" style="background-color: var(--color-danger);">🗑️ Supprimer</button>
+                    <h1>${actif.nom}</h1>
+                    <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
                 </div>
 
                 <div class="dashboard-grid">
                     <div class="dashboard-card">
                         <h3>Détails de l'actif</h3>
                         <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${actif.nom}" required /></div>
-                        
+
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                             <div class="form-group">
                                 <label>Type</label>
@@ -219,7 +219,7 @@ const ActifsModule = (() => {
 
                         <div class="form-group"><label>Responsable</label><input id="responsable" value="${actif.responsable || ""}" /></div>
                         <div class="form-group"><label>Description</label><textarea id="description">${actif.description || ""}</textarea></div>
-                        <button id="saveBtn">💾 Mettre à jour</button>
+                        <button id="saveBtn">Mettre à jour</button>
                     </div>
 
                     <div class="dashboard-card">
@@ -250,7 +250,7 @@ const ActifsModule = (() => {
         };
 
         document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("⚠️ Confirmer la suppression de cet actif ?")) {
+            if (confirm("Confirmer la suppression de cet actif ?")) {
                 DataStore.deleteActif(actif.id);
                 Router.navigateTo("/actifs");
             }

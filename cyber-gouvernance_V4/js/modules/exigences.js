@@ -39,14 +39,14 @@ const ExigencesModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>📜 Exigences de sécurité</h1>
+                        <h1>Exigences de sécurité</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre affiché : <strong>${contextName}</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">🗑️ Supprimer sélection (<span id="selectedCount">0</span>)</button>
+                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
                         <input type="file" id="importExcelInput" accept=".xlsx, .xls, .csv" style="display: none;" />
-                        <button id="importBtn" style="background-color: var(--color-success);">📥 Importer Excel</button>
-                        <button id="addExigenceBtn" style="background-color: var(--primary);">➕ Saisie Manuelle</button>
+                        <button id="importBtn" style="background-color: var(--color-success);">Importer Excel</button>
+                        <button id="addExigenceBtn" style="background-color: var(--primary);">Saisie Manuelle</button>
                     </div>
                 </div>
 
@@ -85,9 +85,9 @@ const ExigencesModule = (() => {
 
                 if (typeof ImportExcelService !== "undefined") {
                     ImportExcelService.importExigences(file, currentClient, (imported, skipped) => {
-                        let msg = `✅ Import terminé : ${imported} ajoutées.`;
+                        let msg = `Import terminé : ${imported} ajoutées.`;
                         if (skipped > 0) msg += ` (${skipped} doublons ignorés).`;
-                        
+
                         alert(msg);
                         Router.navigateTo("/exigences");
                     });
@@ -129,7 +129,7 @@ const ExigencesModule = (() => {
         if (bulkDeleteBtn) {
             bulkDeleteBtn.addEventListener("click", () => {
                 const checkedIds = Array.from(document.querySelectorAll(".row-cb:checked")).map(cb => cb.dataset.id);
-                if (confirm(`⚠️ Confirmer la suppression de ${checkedIds.length} exigence(s) ? Les actions associées seront également supprimées.`)) {
+                if (confirm(`Confirmer la suppression de ${checkedIds.length} exigence(s) ? Les actions associées seront également supprimées.`)) {
                     checkedIds.forEach(id => DataStore.deleteExigence(id));
                     if (window.showToast) window.showToast(`${checkedIds.length} exigence(s) supprimée(s).`, "success");
                     renderList(); // Recharger la vue
@@ -195,8 +195,8 @@ const ExigencesModule = (() => {
                     </div>
 
                     <div style="margin-top: 20px;">
-                        <button id="save">💾 Enregistrer</button>
-                        <button id="cancel" style="margin-left: 10px;">❌ Annuler</button>
+                        <button id="save">Enregistrer</button>
+                        <button id="cancel" style="margin-left: 10px;">Annuler</button>
                     </div>
                 </div>
             </section>
@@ -267,13 +267,13 @@ const ExigencesModule = (() => {
                         <h1>${exigence.code}</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Origine : <strong>${clientNom}</strong></p>
                     </div>
-                    <button id="deleteBtn" style="background-color: var(--color-danger);">🗑️ Supprimer</button>
+                    <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
                 </div>
 
                 <div class="dashboard-grid">
                     <div class="dashboard-card" style="grid-column: span 2;">
                         <h3>Détails de l'exigence</h3>
-                        
+
                         <div class="form-group">
                             <label>Intitulé <span style="color:red">*</span></label>
                             <input id="intitule" value="${exigence.intitule}" required />
@@ -291,14 +291,14 @@ const ExigencesModule = (() => {
 
                         <div class="form-group"><label>Responsable</label><input id="responsable" value="${exigence.responsable || ""}" /></div>
                         <div class="form-group"><label>Commentaire</label><textarea id="commentaire">${exigence.commentaire || ""}</textarea></div>
-                        <button id="saveBtn">💾 Mettre à jour</button>
+                        <button id="saveBtn">Mettre à jour</button>
                     </div>
 
                     <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                         <div class="dashboard-card">
                             <h3>Actions liées</h3>
                             <ul style="margin-bottom: 15px;">${actionsHtml || "<li><span style='color: var(--text-muted);'>Aucune action planifiée</span></li>"}</ul>
-                            <button id="addActionBtn" style="font-size: 0.85rem;">➕ Planifier une action</button>
+                            <button id="addActionBtn" style="font-size: 0.85rem;">Planifier une action</button>
                         </div>
 
                         <div class="dashboard-card">
@@ -326,7 +326,7 @@ const ExigencesModule = (() => {
         };
 
         document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("⚠️ Êtes-vous sûr de vouloir supprimer cette exigence ? Les actions associées seront également supprimées.")) {
+            if (confirm("Êtes-vous sûr de vouloir supprimer cette exigence ? Les actions associées seront également supprimées.")) {
                 DataStore.deleteExigence(exigence.id);
                 Router.navigateTo("/exigences");
             }
@@ -348,7 +348,7 @@ const ExigencesModule = (() => {
                 <div class="synthese-message info" style="margin-bottom: 20px; padding: 10px;"><strong>Liée à l'exigence :</strong> ${exigence.code}</div>
                 <div class="dashboard-card">
                     <div class="form-group"><label>Titre de l'action <span style="color:red">*</span></label><input id="titre" required /></div>
-                    
+
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div class="form-group">
                             <label>Priorité</label>
@@ -367,10 +367,10 @@ const ExigencesModule = (() => {
 
                     <div class="form-group"><label>Responsable</label><input id="responsable" /></div>
                     <div class="form-group"><label>Commentaire</label><textarea id="commentaire"></textarea></div>
-                    
+
                     <div style="margin-top: 20px;">
-                        <button id="saveAction">💾 Créer l'action</button>
-                        <button id="cancelAction" style="margin-left: 10px;">❌ Annuler</button>
+                        <button id="saveAction">Créer l'action</button>
+                        <button id="cancelAction" style="margin-left: 10px;">Annuler</button>
                     </div>
                 </div>
             </section>

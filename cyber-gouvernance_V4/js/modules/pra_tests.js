@@ -25,7 +25,7 @@ const PraTestsModule = (() => {
                 <td>${t.date ? new Date(t.date).toLocaleDateString('fr-FR') : "Non définie"}</td>
                 <td><strong>${getNomScen(t.scenario_id)}</strong></td>
                 <td>${t.type_test}</td>
-                <td><span class="status ${t.succes === 'Oui' ? 'status-conforme' : 'status-non-conforme'}">${t.succes === 'Oui' ? '🟢 Succès' : '🔴 Échec'}</span></td>
+                <td><span class="status ${t.succes === 'Oui' ? 'status-conforme' : 'status-non-conforme'}">${t.succes === 'Oui' ? 'Succès' : 'Échec'}</span></td>
             </tr>
         `).join("");
 
@@ -33,17 +33,17 @@ const PraTestsModule = (() => {
             <section class="page">
                 <div class="dashboard-header no-print">
                     <div>
-                        <h1>🧪 Historique des Tests</h1>
+                        <h1>Historique des Tests</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Suivi des exercices et entraînements de crise</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">🗑️ Supprimer sélection (<span id="selectedCount">0</span>)</button>
-                        <button id="addBtn" style="background-color: var(--primary);">➕ Historiser un Test</button>
+                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
+                        <button id="addBtn" style="background-color: var(--primary);">Historiser un Test</button>
                     </div>
                 </div>
 
                 <div class="synthese-message info" style="font-size:0.9rem; padding:10px;">
-                    💡 <strong>Amélioration continue :</strong> Un PRA qui n'est pas testé régulièrement est un PRA qui ne fonctionnera pas le jour J. Historisez ici vos exercices sur table ou vos simulations techniques réelles.
+                    <strong>Amélioration continue :</strong> Un PRA qui n'est pas testé régulièrement est un PRA qui ne fonctionnera pas le jour J. Historisez ici vos exercices sur table ou vos simulations techniques réelles.
                 </div>
 
                 <table class="data-table">
@@ -96,7 +96,7 @@ const PraTestsModule = (() => {
         if (bulkDeleteBtn) {
             bulkDeleteBtn.addEventListener("click", () => {
                 const checkedIds = Array.from(document.querySelectorAll(".row-cb:checked")).map(cb => cb.dataset.id);
-                if (confirm(`⚠️ Confirmer la suppression de ${checkedIds.length} test(s) de l'historique ?`)) {
+                if (confirm(`Confirmer la suppression de ${checkedIds.length} test(s) de l'historique ?`)) {
                     checkedIds.forEach(id => DataStore.deleteTestPra(id));
                     if (window.showToast) window.showToast(`${checkedIds.length} test(s) supprimé(s).`, "success");
                     renderList();
@@ -121,7 +121,7 @@ const PraTestsModule = (() => {
                 <section class="page">
                     <h1>Historiser un Test PRA</h1>
                     <div class="synthese-message warning">
-                        ⚠️ Vous devez d'abord créer au moins un "Playbook PCA/PRA" avant de pouvoir historiser un test.
+                        Vous devez d'abord créer au moins un "Playbook PCA/PRA" avant de pouvoir historiser un test.
                     </div>
                     <button onclick="Router.navigateTo('/tests')" style="margin-top: 20px;">Retour</button>
                 </section>
@@ -149,8 +149,8 @@ const PraTestsModule = (() => {
                         <div class="form-group">
                             <label>Résultat global</label>
                             <select id="succes">
-                                <option value="Oui">🟢 Succès (Objectifs atteints)</option>
-                                <option value="Non">🔴 Échec (À revoir)</option>
+                                <option value="Oui">Succès (Objectifs atteints)</option>
+                                <option value="Non">Échec (À revoir)</option>
                             </select>
                         </div>
                     </div>
@@ -167,22 +167,22 @@ const PraTestsModule = (() => {
                         <textarea id="bilan" placeholder="Ce qui a bien fonctionné, ce qui a bloqué, les durées réelles constatées..." style="min-height:100px;"></textarea>
                     </div>
                     <div style="margin-top: 20px;">
-                        <button id="saveBtn" style="background:var(--color-success);">💾 Historiser le Test</button>
-                        <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">❌ Annuler</button>
+                        <button id="saveBtn" style="background:var(--color-success);">Historiser le Test</button>
+                        <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                     </div>
                 </div>
             </section>
         `;
-        
+
         // Mettre la date du jour par défaut
         document.getElementById("date").valueAsDate = new Date();
 
         document.getElementById("cancelBtn").onclick = () => Router.navigateTo("/tests");
-        
+
         document.getElementById("saveBtn").onclick = () => {
             const dateStr = document.getElementById("date").value;
             if (!dateStr) return alert("La date est obligatoire.");
-            
+
             DataStore.addTestPra({
                 id: "TEST-" + Date.now(),
                 scenario_id: document.getElementById("scenario_id").value,
@@ -191,7 +191,7 @@ const PraTestsModule = (() => {
                 type_test: document.getElementById("type_test").value,
                 bilan: document.getElementById("bilan").value.trim()
             });
-            
+
             if(window.showToast) window.showToast("Test historisé.", "success");
             Router.navigateTo("/tests");
         };
@@ -204,13 +204,13 @@ const PraTestsModule = (() => {
         const t = DataStore.getTestsPra().find(x => x.id === id);
         const scenarios = DataStore.getScenariosPra();
         if(!t) return Router.navigateTo("/tests");
-        
+
         const app = document.getElementById("app");
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <h1>🧪 Édition du Bilan</h1>
-                    <button id="delBtn" style="background:var(--color-danger);">🗑️ Supprimer</button>
+                    <h1>Édition du Bilan</h1>
+                    <button id="delBtn" style="background:var(--color-danger);">Supprimer</button>
                 </div>
                 <div class="dashboard-card" style="max-width:600px;">
                     <div class="form-group">
@@ -228,8 +228,8 @@ const PraTestsModule = (() => {
                         <div class="form-group">
                             <label>Résultat global</label>
                             <select id="succes">
-                                <option value="Oui" ${t.succes === "Oui" ? "selected" : ""}>🟢 Succès (Objectifs atteints)</option>
-                                <option value="Non" ${t.succes === "Non" ? "selected" : ""}>🔴 Échec (À revoir)</option>
+                                <option value="Oui" ${t.succes === "Oui" ? "selected" : ""}>Succès (Objectifs atteints)</option>
+                                <option value="Non" ${t.succes === "Non" ? "selected" : ""}>Échec (À revoir)</option>
                             </select>
                         </div>
                     </div>
@@ -246,15 +246,15 @@ const PraTestsModule = (() => {
                         <textarea id="bilan" style="min-height:100px;">${t.bilan || ""}</textarea>
                     </div>
                     <div style="margin-top: 20px;">
-                        <button id="saveBtn" style="background:var(--color-success);">💾 Mettre à jour</button>
-                        <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">❌ Annuler</button>
+                        <button id="saveBtn" style="background:var(--color-success);">Mettre à jour</button>
+                        <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                     </div>
                 </div>
             </section>
         `;
-        
+
         document.getElementById("cancelBtn").onclick = () => Router.navigateTo("/tests");
-        
+
         document.getElementById("saveBtn").onclick = () => {
             const dateStr = document.getElementById("date").value;
             if (!dateStr) return alert("La date est obligatoire.");
@@ -264,16 +264,16 @@ const PraTestsModule = (() => {
             t.succes = document.getElementById("succes").value;
             t.type_test = document.getElementById("type_test").value;
             t.bilan = document.getElementById("bilan").value.trim();
-            
+
             DataStore.updateTestPra(t);
             if(window.showToast) window.showToast("Bilan de test mis à jour.", "success");
             Router.navigateTo("/tests");
         };
-        
+
         document.getElementById("delBtn").onclick = () => {
-            if(confirm("Confirmer la suppression de cet historique de test ?")) { 
-                DataStore.deleteTestPra(id); 
-                Router.navigateTo("/tests"); 
+            if(confirm("Confirmer la suppression de cet historique de test ?")) {
+                DataStore.deleteTestPra(id);
+                Router.navigateTo("/tests");
             }
         };
     }

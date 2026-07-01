@@ -58,13 +58,13 @@ const MatriceModule = (() => {
                     const cellRisks = matrixData[g][f];
                     const count = cellRisks.length;
                     const colorClass = getCellColorClass(f, g);
-                    
+
                     return `
-                    <td class="matrix-cell ${colorClass}" 
+                    <td class="matrix-cell ${colorClass}"
                         style="cursor: ${count > 0 ? 'pointer' : 'default'};"
                         ${count > 0 ? `onclick="MatriceModule.selectCell(${f}, ${g})"` : ""}
                         title="${count > 0 ? `Cliquer pour voir les ${count} risques` : 'Aucun risque'}">
-                        
+
                         <div class="cell-content center-bubble">
                             ${count > 0 ? `
                                 <div class="risk-count-bubble">${count}</div>
@@ -80,14 +80,14 @@ const MatriceModule = (() => {
             <section class="page">
                 <div class="dashboard-header no-print">
                     <div>
-                        <h1>🧮 Matrice de Criticité (Bulle de compte)</h1>
+                        <h1>Matrice de Criticité (Bulle de compte)</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (SI global)</strong> - Méthode Brute (FxG)</p>
                     </div>
                 </div>
 
                 <details class="synthese-message info no-print" style="font-size: 0.9rem; padding: 10px; cursor: pointer; outline: none; transition: all 0.3s ease;">
                     <summary style="font-weight: bold; outline: none;">
-                        💡 Cette matrice cartographie <strong>${risques.length} scénario(s)</strong>. Cliquez sur une case pour le détail, ou déroulez ici pour voir le <strong>Guide de Cotation EBIOS</strong>.
+                        Cette matrice cartographie <strong>${risques.length} scénario(s)</strong>. Cliquez sur une case pour le détail, ou déroulez ici pour voir le <strong>Guide de Cotation EBIOS</strong>.
                     </summary>
                     <div style="margin-top: 15px; border-top: 1px dashed var(--border); padding-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; cursor: default;">
                         <div>
@@ -112,9 +112,9 @@ const MatriceModule = (() => {
                 </details>
 
                 <div class="dashboard-grid">
-                    
+
                     <div class="dashboard-card" style="overflow-x: auto; padding: 1.5rem;">
-                        
+
                         <div style="display: flex; justify-content: center; margin-bottom: 15px; font-weight: bold; font-size: 1.1rem; color: var(--primary); text-transform: uppercase; letter-spacing: 1px;">
                             Fréquence d'exposition ➔
                         </div>
@@ -123,7 +123,7 @@ const MatriceModule = (() => {
                             <div style="writing-mode: vertical-rl; transform: rotate(180deg); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; padding-right: 15px;">
                                 Gravité (Impact) ➔
                             </div>
-                            
+
                             <table class="risk-matrix" style="flex: 1; border-collapse: collapse;">
                                 <thead>
                                     <tr>
@@ -158,13 +158,13 @@ const MatriceModule = (() => {
             style.innerHTML = `
                 .matrix-cell { border: 2px solid #fff; width: 20%; height: 100px; transition: filter 0.2s; }
                 .matrix-cell:hover { filter: brightness(1.1); }
-                
+
                 .matrix-green { background-color: #43a047; }
                 .matrix-yellow { background-color: #ffb300; }
                 .matrix-red { background-color: #e53935; }
-                
+
                 .cell-content.center-bubble { display: flex; align-items: center; justify-content: center; height: 100%; }
-                
+
                 .risk-count-bubble {
                     width: 60px; height: 60px;
                     background: rgba(255,255,255,0.9);
@@ -188,7 +188,7 @@ const MatriceModule = (() => {
                 .matrix-axis { color: white; }
                 .axis-x { background: #555; }
                 .axis-y { background: #555; text-align: right; }
-                
+
                 /* Style personnalisé pour l'accordéon natif */
                 details > summary { list-style-type: none; }
                 details > summary::-webkit-details-marker { display: none; }
@@ -196,7 +196,7 @@ const MatriceModule = (() => {
             document.head.appendChild(style);
         }
 
-        window.matrixData_Internal = matrixData; 
+        window.matrixData_Internal = matrixData;
     }
 
     /* =========================

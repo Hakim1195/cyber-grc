@@ -1,5 +1,5 @@
 // ==========================================
-// 📁 router.js (CORRIGÉ - Bug du menu actif)
+// router.js (CORRIGÉ - Bug du menu actif)
 // ==========================================
 const Router = (() => {
     let routes = {};
@@ -36,7 +36,7 @@ const Router = (() => {
 
         window.scrollTo(0, 0);
 
-        // ✅ Correction : Mise à jour du menu déclenchée de l'intérieur du routeur
+        // Correction : Mise à jour du menu déclenchée de l'intérieur du routeur
         if (typeof window.updateActiveNav === "function") {
             window.updateActiveNav(path);
         }
@@ -66,7 +66,7 @@ const Router = (() => {
 
         app.innerHTML = `
             <section class="page" style="text-align: center; margin-top: 10vh;">
-                <div style="font-size: 4rem; margin-bottom: 20px;">🧭</div>
+                <div style="font-size: 4rem; margin-bottom: 20px;"></div>
                 <h1>Page introuvable</h1>
                 <p style="color: var(--text-muted); margin-bottom: 20px;">La page que vous recherchez n'existe pas ou a été déplacée.</p>
                 <button onclick="Router.navigateTo('/dashboard')" style="background-color: var(--primary);">
