@@ -30,11 +30,13 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
   - **ISO/IEC 27002:2022** — 93 mesures en 4 thèmes (organisationnel, humain, physique, technologique).
   - **NIS2 (art. 21)** — 10 mesures de gestion des risques, regroupées en 4 thèmes.
   - **DORA** — 5 piliers de résilience opérationnelle numérique (15 mesures de synthèse).
-  - **AirCyber (préparation)** — auto-positionnement indicatif filière aéronautique
-    (Bronze/Silver/Gold), **contenu original** ne remplaçant pas l'évaluation officielle BoostAerospace.
-- Reformulations originales courtes + aide pédagogique ; **aucun texte de norme copié**
-  (identifiants de clauses « 5.1 » + intitulés paraphrasés uniquement).
-- Le catalogue compte désormais **5 référentiels (174 mesures)** ; carte d'accroche orientée
+  - **AirCyber (BoostAerospace)** — questionnaire de maturité de la filière aéronautique,
+    **234 questions** en 10 domaines, importé depuis l'export officiel du questionnaire
+    (les questions d'inventaire d'outils « quel outil utilisez-vous » sont écartées car
+    non auto-évaluables). *Généré fidèlement depuis le CSV fourni.*
+- Reformulations originales courtes + aide pédagogique pour ISO/NIS2/DORA ; **aucun texte
+  de norme copié** (identifiants de clauses « 5.1 » + intitulés paraphrasés uniquement).
+- Le catalogue compte désormais **5 référentiels (394 mesures)** ; carte d'accroche orientée
   vers le pivot « Mesure de sécurité » (couverture croisée à venir).
 
 ### Itération 5 — Pivot « Mesure de sécurité » (zéro double saisie)

@@ -81,8 +81,9 @@ cyber-gouvernance_V4/
   **evaluations** (auto-évaluations de référentiels), **mesures** (pivot « Mesure de sécurité »)
   et **incidents** (registre des incidents de sécurité).
 - Référentiels : catalogue **statique** (registre `js/data/referentiels.js` + fichiers `ref_*.js`),
-  hors `data`. Livrés : ANSSI (42), ISO 27002 (93), NIS2 (10), DORA (15), AirCyber prépa (14).
+  hors `data`. Livrés : ANSSI (42), ISO 27002 (93), NIS2 (10), DORA (15), AirCyber/BoostAerospace (234).
   Ne pas embarquer le texte des normes (reformulations originales + identifiants de clauses).
+  AirCyber = questionnaire réel (généré depuis un CSV via un script du scratchpad, non versionné).
 - Export fichier : enveloppe **`grc-backup`** `{ format, version, encrypted, createdAt, app, payload|kdf+cipher }`.
 
 ## 5. Lancer & tester (important)
