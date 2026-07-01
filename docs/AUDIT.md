@@ -74,31 +74,16 @@ synchrone). Toute l'UI est en **français**.
 ## 4. Risques majeurs (synthèse)
 | # | Risque | Gravité | Statut |
 |---|--------|---------|--------|
-| R1 | Perte de données (purge navigateur) | Critique | **Atténué** (IndexedDB + historique) |
-| R2 | Fuite de l'export JSON en clair (données sensibles) | Élevé | **Ouvert** (chiffrement à faire) |
-| R3 | XSS stocké via import | Élevé | Ouvert |
-| R4 | Import corrompu écrase la base | Élevé | Ouvert (validation à faire) |
-| R5 | Collision d'ID | Moyen | Ouvert |
+| R1 | Perte de données (purge navigateur) | Critique | **Atténué** (IndexedDB + `persist()` + historique versionné) |
+| R2 | Fuite de l'export JSON en clair (données sensibles) | Élevé | **Fermé** (export chiffré AES-256 + chiffrement au repos opt-in) |
+| R3 | XSS stocké via import | Élevé | **Ouvert** (généraliser `escapeHtml` — chantier 9) |
+| R4 | Import corrompu écrase la base | Élevé | **Fermé** (validation + aperçu + Remplacer/Fusionner + backup) |
+| R5 | Collision d'ID | Moyen | Ouvert (chantier 9) |
 
 ## 5. Plan d'amélioration priorisé
 
-**Déjà livré cette session** (voir CHANGELOG) : décompression, charte Dedienne,
-retrait des emojis + icônes SVG, **refonte du stockage (IndexedDB + historique)**.
+➡️ **Le plan détaillé avec statuts vit désormais dans [`PLAN.md`](PLAN.md)** (source unique).
 
-**À réaliser (ordre proposé, aligné sur le brief) :**
-1. **Sauvegarde — finalisation (Priorité 1)** : chiffrement AES-256-GCM
-   (PBKDF2 ≥ 600k) de l'export *et* au repos (accès optionnel par mot de passe) ;
-   enveloppe `grc-backup` versionnée ; rappel d'export + date visible ; import
-   « Remplacer/Fusionner » avec validation stricte et migrations `v1→v2`.
-2. **Design tokens + harmonisation** (direction à valider : Dedienne actuel vs
-   Egerie-like bleu-marine + accent maîtrisé + couleurs sémantiques strictes).
-3. **Bibliothèque de référentiels + mapping croisé** (ISO 27002, NIS2, DORA,
-   AirCyber, ANSSI) via entité pivot « Mesure de sécurité ».
-4. **Registre des incidents** (lien risque↔incident).
-5. **Gestion documentaire** (cycle de vie, alertes de revue).
-6. **Registre RGPD** (art. 30 simplifié).
-7. **Tableau de bord direction** consolidé + export PDF soigné.
-8. **Améliorations modules** (matrice PNG/SVG, cohérence brut/résiduel, fiches
-   crise imprimables, risque fournisseur).
-9. **Durcissement transverse** : `escapeHtml` partout, IDs anti-collision,
-   factorisation, accessibilité, pédagogie systématique (tooltips ⓘ).
+Résumé : Chantier 1 **Sauvegarde** ✅ terminé · Chantier 2 **Design system** ✅ fondations ·
+Chantier 3 **Référentiels + mapping croisé** 🔜 prochain · puis incidents, gestion documentaire,
+RGPD, tableau de bord direction, améliorations modules, durcissement transverse (dont XSS/IDs).

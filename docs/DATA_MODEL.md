@@ -15,10 +15,25 @@ Base `cyber-grc-db` (voir `js/core/persistence.js`), deux object stores :
 
 | Store | Clé | Contenu |
 |-------|-----|---------|
-| `kv` | chaîne | `"current"` → instantané complet des données ; `"meta"` → `{ schemaVersion, updatedAt }` |
+| `kv` | chaîne | `"current"` → **enveloppe** de l'instantané ; `"meta"` → `{ schemaVersion, updatedAt, encrypted }` |
 | `backups` | `id` auto-incrément | points de restauration versionnés (index `ts`, `type`) |
 
-Un enregistrement `backups` : `{ id, ts, type: "auto"|"manual", label, schemaVersion, data }`.
+**Enveloppe de stockage** (`current` et champ des backups) :
+- Non chiffré : `{ enc: false, data: <objet> }`
+- Chiffré (protection active) : `{ enc: true, iv, ct }` (AES-256-GCM)
+
+Un enregistrement `backups` : `{ id, ts, type: "auto"|"manual", label, schemaVersion, sig, (enc/iv/ct | data) }`
+(`sig` = empreinte du contenu clair, pour dédupliquer sans déchiffrer).
+
+**Chiffrement au repos (opt-in)** : quand une protection par mot de passe est active
+(`js/core/vault.js`), `data`/backups sont chiffrés ; le miroir localStorage en clair est désactivé.
+
+**Fichier d'export** (`grc-backup`) :
+```jsonc
+{ "format":"grc-backup", "version":2, "encrypted":false, "createdAt":"ISO",
+  "app":"cyber-grc-dedienne", "payload": <objet data> }
+// chiffré : "encrypted":true, "kdf":{salt,iterations,hash}, "cipher":{iv,ct} (payload absent)
+```
 
 ### 1.2 localStorage (secours + petits réglages)
 - `cyber-gouvernance-data` : ancienne base (migrée automatiquement vers IndexedDB au 1er chargement) + miroir de secours anti-crash.
@@ -162,3 +177,19 @@ Crise, Prestataire, McoAction : autonomes
 Cascades implémentées : `deleteClient`→exigences→actions ; `deleteExigence`→délie
 risques + supprime actions liées ; `deleteRisque`→délie actifs + supprime actions liées.
 > ⚠️ Orphelins possibles : `TestPra.scenario_id` vers un scénario supprimé (non nettoyé).
+
+---
+
+## 4. Entités à venir (chantier Référentiels — cf. PLAN.md)
+
+> Bump prévu `SCHEMA_VERSION` → 3 (+ migration `migratePayload` v2→v3 : créer les tableaux).
+
+- **Référentiel** (catalogue **statique**, non stocké dans `data`) :
+  `{ id, nom, description, aide, domaines: [{ id, nom, mesures: [{ code, titre, aide }] }] }`
+  Fichier de données par référentiel (schéma commun). Ne pas embarquer le texte des normes.
+- **Mesure de sécurité** (`mesures`, pivot, données utilisateur) :
+  `{ id, nom, description, statut, maturite, responsable, exigences_couvertes: [{ ref_id, code }] }`
+- **Évaluation** (`evaluations`, par exigence de référentiel) :
+  `{ id, ref_id, code, statut, maturite (0-5), commentaire, preuves, mesure_id?, action_ids[] }`
+- Statuts conformité (réutiliser l'enum existant) : `conforme | partiellement conforme | non conforme | non applicable`.
+- Évaluer une **Mesure** propage le statut à toutes les exigences mappées (zéro double saisie).
