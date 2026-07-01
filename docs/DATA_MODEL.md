@@ -315,6 +315,12 @@ de données par référentiel (`js/data/ref_anssi.js`, …), au schéma commun :
 référentiel** » (`{code, titre, aide}`). À ne pas confondre avec l'entité utilisateur
 « **Mesure de sécurité** » (`mesures`), le pivot qui **couvre** ces exigences.
 
+Une exigence peut porter des **attributs optionnels** (utilisés par AirCyber) : `niveau`
+(`bronze`/`silver`/`gold`), `priorite` (`high`/`medium`/`low`), `cl` (`CL0`…`CL6`). Le
+référentiel peut aussi porter `clLabels` (libellés des domaines CL). Les référentiels qui
+n'en ont pas n'affichent ni badges, ni filtres, ni panneau « préparation au label ».
+
 Livré : référentiel **ANSSI** + auto-évaluation + radar (it. 4) ; **pivot Mesure de
-sécurité** `/mesures` + propagation (it. 5).
-À venir (4c) : mapping croisé, ISO 27002 / NIS2 / DORA / AirCyber + génération de SoA.
+sécurité** `/mesures` + propagation (it. 5) ; ISO 27002 / NIS2 / DORA / **AirCyber réel**
++ **import CSV** des réponses + **niveaux Bronze/Argent/Or, priorité, CL0–CL6** (it. 6, 13, 14) ;
+couverture croisée + génération SoA (it. 7).

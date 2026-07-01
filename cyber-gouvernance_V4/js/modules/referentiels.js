@@ -39,6 +39,72 @@ const ReferentielsModule = (() => {
     ];
     const MATURITE_AIDE = "Niveau de maîtrise de la mesure, de 0 (rien en place) à 5 (processus optimisé et amélioré en continu). Échelle inspirée du CMMI.";
 
+    // Métadonnées AirCyber (niveau de label, priorité). Attributs statiques par question.
+    const NIVEAUX = [
+        { v: "bronze", label: "Bronze", cls: "niv-bronze" },
+        { v: "silver", label: "Argent", cls: "niv-silver" },
+        { v: "gold",   label: "Or",     cls: "niv-gold" }
+    ];
+    function niveauMeta(v) { return NIVEAUX.find(n => n.v === v) || null; }
+    const PRIOS = {
+        high:   { label: "Haute",   cls: "prio-high" },
+        medium: { label: "Moyenne", cls: "prio-medium" },
+        low:    { label: "Basse",   cls: "prio-low" }
+    };
+    // Un référentiel porte-t-il des niveaux de label (AirCyber) ?
+    function hasNiveaux(ref) {
+        return (ref.domaines || []).some(d => (d.exigences || []).some(e => e.niveau));
+    }
+    function clLabelOf(ref, cl) { return (ref.clLabels && ref.clLabels[cl]) ? `${cl} — ${ref.clLabels[cl]}` : cl; }
+
+    // Conformité par niveau de label (Bronze/Argent/Or) : « suis-je prêt pour ce label ? ».
+    function computeNiveauReadiness(ref) {
+        const res = {};
+        NIVEAUX.forEach(n => res[n.v] = { total: 0, applicable: 0, conformes: 0, evaluated: 0 });
+        (ref.domaines || []).forEach(d => (d.exigences || []).forEach(ex => {
+            if (!ex.niveau || !res[ex.niveau]) return;
+            const r = res[ex.niveau]; r.total++;
+            const ev = DataStore.getEvaluation(ref.id, ex.code);
+            const statut = ev ? (ev.statut || "") : "";
+            if (statut) r.evaluated++;
+            if (statut === "non applicable") return;
+            r.applicable++;
+            if (statut === "conforme") r.conformes++;
+        }));
+        NIVEAUX.forEach(n => { const r = res[n.v]; r.conformite = r.applicable ? Math.round(r.conformes / r.applicable * 100) : null; });
+        return res;
+    }
+
+    function niveauReadinessHtml(readiness) {
+        const rows = NIVEAUX.map(n => {
+            const r = readiness[n.v]; const pct = r.conformite;
+            const col = pct === null ? "var(--color-gray)" : (pct >= 90 ? "var(--color-success)" : pct >= 50 ? "var(--color-warning)" : "var(--color-danger)");
+            return `<div class="ref-niv-row">
+                <span class="niv-badge ${n.cls}">${n.label}</span>
+                <div class="progress-bar small" style="flex:1; margin:0 10px;"><div class="progress-fill" style="width:${pct === null ? 0 : pct}%; background:${col};"></div></div>
+                <span class="ref-niv-pct" style="color:${col};">${pct === null ? "—" : pct + "%"}</span>
+                <span class="ref-niv-cnt">${r.conformes}/${r.applicable}</span>
+            </div>`;
+        }).join("");
+        return `<div class="ref-readiness">
+            <h4 style="margin:16px 0 8px;">Préparation au label ${Help.tip("Part des questions conformes pour chaque niveau AirCyber (Bronze, Argent, Or). Vous êtes « prêt » pour un niveau quand toutes ses questions applicables sont conformes.")}</h4>
+            ${rows}
+        </div>`;
+    }
+
+    function filterBarHtml(ref) {
+        const nivBtns = `<button class="ref-filter-niv active" data-niv="">Tous</button>` +
+            NIVEAUX.map(n => `<button class="ref-filter-niv" data-niv="${n.v}">${n.label}</button>`).join("");
+        const clOpts = `<option value="">Tous domaines CL</option>` +
+            Object.keys(ref.clLabels || {}).map(k => `<option value="${escapeHtml(k)}">${escapeHtml(clLabelOf(ref, k))}</option>`).join("");
+        return `<div class="ref-filters" id="ref-filters">
+            <span class="ref-filters__lbl">Filtrer par niveau :</span>
+            <div class="ref-filter-nivs">${nivBtns}</div>
+            <select id="ref-filter-cl" aria-label="Filtrer par domaine CL">${clOpts}</select>
+            <span class="ref-filter-count" id="ref-filter-count"></span>
+        </div>`;
+    }
+
     /* =========================
        CALCUL DES SCORES
     ========================== */
@@ -197,6 +263,9 @@ const ReferentielsModule = (() => {
         }
 
         const sc = computeScores(ref);
+        const showNiv = hasNiveaux(ref);
+        const readinessHtml = showNiv ? niveauReadinessHtml(computeNiveauReadiness(ref)) : "";
+        const filtersHtml = showNiv ? filterBarHtml(ref) : "";
 
         const domainSections = ref.domaines.map((d, di) => {
             const dsc = sc.domaines[di];
@@ -263,9 +332,11 @@ const ReferentielsModule = (() => {
                             </div>
                         </div>
                         <p style="font-size:0.82rem; color:var(--text-muted); margin-top:14px;">Renseignez chaque mesure ci-dessous : le statut et la maturité mettent à jour le radar en temps réel. Ouvrez le <strong>Détail</strong> d'une mesure pour ajouter un commentaire, des preuves et des actions correctives.</p>
+                        ${readinessHtml}
                     </div>
                 </div>
 
+                ${filtersHtml}
                 <div id="ref-domains">${domainSections}</div>
             </section>`;
 
@@ -283,10 +354,18 @@ const ReferentielsModule = (() => {
         const statutOpts = STATUTS.map(s => `<option value="${s.v}" ${s.v === statut ? "selected" : ""}>${s.label}</option>`).join("");
         const matOpts = MATURITES.map(m => `<option value="${m.v}" ${m.v === mat ? "selected" : ""}>${m.v}</option>`).join("");
 
+        // Badges de métadonnées (AirCyber) : niveau de label, priorité, domaine CL.
+        const badges = [];
+        const nm = ex.niveau ? niveauMeta(ex.niveau) : null;
+        if (nm) badges.push(`<span class="niv-badge ${nm.cls}" title="Niveau de label AirCyber">${nm.label}</span>`);
+        if (ex.priorite && PRIOS[ex.priorite]) badges.push(`<span class="prio-badge ${PRIOS[ex.priorite].cls}" title="Priorité">${PRIOS[ex.priorite].label}</span>`);
+        if (ex.cl) badges.push(`<span class="cl-badge" title="${escapeHtml(clLabelOf(ref, ex.cl))}">${escapeHtml(ex.cl)}</span>`);
+        const badgesHtml = badges.length ? ` <span class="ref-badges">${badges.join("")}</span>` : "";
+
         return `
-            <tr class="ref-row" data-code="${ex.code}">
+            <tr class="ref-row" data-code="${ex.code}" data-niveau="${escapeHtml(ex.niveau || "")}" data-cl="${escapeHtml(ex.cl || "")}">
                 <td><strong>${escapeHtml(ex.code)}</strong></td>
-                <td>${escapeHtml(ex.titre)} ${ex.aide ? Help.tip(ex.aide) : ""}</td>
+                <td>${escapeHtml(ex.titre)} ${ex.aide ? Help.tip(ex.aide) : ""}${badgesHtml}</td>
                 <td><select class="ref-statut sel-${meta.cls}" data-code="${ex.code}" aria-label="Statut de la mesure ${escapeHtml(ex.code)}">${statutOpts}</select></td>
                 <td style="text-align:center;"><select class="ref-mat" data-code="${ex.code}" aria-label="Maturité de la mesure ${escapeHtml(ex.code)}">${matOpts}</select></td>
                 <td style="text-align:center;"><button class="ref-toggle" data-toggle="${ex.code}" aria-expanded="false" title="Ouvrir le détail">Détail${actionsCount ? ` <span class="ref-badge-count">${actionsCount}</span>` : ""}</button></td>
@@ -505,6 +584,40 @@ const ReferentielsModule = (() => {
                 reader.readAsText(file);
                 csvInput.value = "";
             };
+        }
+
+        // Filtres par niveau de label / domaine CL (AirCyber).
+        const filters = document.getElementById("ref-filters");
+        if (filters) {
+            const applyFilters = () => {
+                const activeBtn = filters.querySelector(".ref-filter-niv.active");
+                const niv = activeBtn ? (activeBtn.dataset.niv || "") : "";
+                const clSel = document.getElementById("ref-filter-cl");
+                const cl = clSel ? clSel.value : "";
+                const rootEl = document.getElementById("ref-domains");
+                rootEl.querySelectorAll("tr.ref-detail-row").forEach(dr => dr.hidden = true);
+                rootEl.querySelectorAll(".ref-toggle").forEach(t => t.setAttribute("aria-expanded", "false"));
+                let shown = 0;
+                rootEl.querySelectorAll("details.ref-domain").forEach(det => {
+                    let vis = 0;
+                    det.querySelectorAll("tr.ref-row").forEach(row => {
+                        const ok = (!niv || row.dataset.niveau === niv) && (!cl || row.dataset.cl === cl);
+                        row.style.display = ok ? "" : "none";
+                        if (ok) { vis++; shown++; }
+                    });
+                    det.style.display = vis ? "" : "none";
+                    if (vis && (niv || cl)) det.open = true;
+                });
+                const cnt = document.getElementById("ref-filter-count");
+                if (cnt) cnt.textContent = (niv || cl) ? `${shown} question(s) affichée(s)` : "";
+            };
+            filters.querySelectorAll(".ref-filter-niv").forEach(btn => btn.addEventListener("click", () => {
+                filters.querySelectorAll(".ref-filter-niv").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                applyFilters();
+            }));
+            const clSel = document.getElementById("ref-filter-cl");
+            if (clSel) clSel.addEventListener("change", applyFilters);
         }
     }
 

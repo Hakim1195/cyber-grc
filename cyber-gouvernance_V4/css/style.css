@@ -749,6 +749,33 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
 .decl-na { background: var(--tint-na); color: var(--color-na); }
 .inc-actifs { display: flex; flex-wrap: wrap; gap: 8px; }
 .inc-checkbox { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-body); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 0.9rem; cursor: pointer; }
+
+/* --- Métadonnées AirCyber : niveau de label, priorité, domaine CL --- */
+.ref-badges { display: inline-flex; gap: 5px; vertical-align: middle; flex-wrap: wrap; }
+.niv-badge, .prio-badge, .cl-badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+.niv-bronze { background: #f0ddc8; color: #8a5320; }
+.niv-silver { background: #e5e7eb; color: #4b5563; }
+.niv-gold   { background: #fbeec2; color: #9a7209; }
+.prio-badge { font-weight: 600; }
+.prio-high   { background: var(--tint-crit); color: var(--color-crit); }
+.prio-medium { background: var(--tint-warn); color: var(--color-warn); }
+.prio-low    { background: var(--tint-na);   color: var(--color-na); }
+.cl-badge { background: #e7effa; color: #2059A6; font-weight: 600; }
+
+.ref-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 10px 14px; margin-bottom: 1rem; }
+.ref-filters__lbl { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
+.ref-filter-nivs { display: inline-flex; gap: 4px; }
+.ref-filter-niv { background: transparent; color: var(--text-main); border: 1px solid var(--border); padding: 5px 12px; font-size: 0.82rem; border-radius: 20px; }
+.ref-filter-niv.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.ref-filter-niv:hover { border-color: var(--primary); }
+#ref-filter-cl { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; font-size: 0.85rem; }
+.ref-filter-count { font-size: 0.8rem; color: var(--text-muted); margin-left: auto; }
+
+.ref-readiness { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 6px; }
+.ref-readiness h4 { font-size: 0.95rem; }
+.ref-niv-row { display: flex; align-items: center; margin-bottom: 8px; font-size: 0.85rem; }
+.ref-niv-pct { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 42px; text-align: right; }
+.ref-niv-cnt { color: var(--text-muted); font-size: 0.75rem; min-width: 48px; text-align: right; margin-left: 8px; }
 @media print {
     .soa-print-head { display: block !important; }
     .soa-summary > div { box-shadow: none; }

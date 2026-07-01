@@ -49,6 +49,8 @@ Sous-itérations :
 - ✅ **4c₁ — Autres référentiels** : ISO 27002:2022 (93), NIS2 art.21 (10), DORA (15),
       **AirCyber/BoostAerospace réel (234 q)** au schéma commun (1 fichier par référentiel). *(Itérations 6, 13)*
       + **import des réponses AirCyber** depuis CSV (Oui/Non → statut, maturité de départ). *(Itération 13)*
+      + **niveaux Bronze/Argent/Or, priorité, domaines CL0–CL6** (badges + filtres + panneau
+      « préparation au label »), issus du fichier de suivi BoostAerospace (156/234 questions). *(Itération 14)*
 - ✅ **4c₂ — Couverture croisée & SoA** : vue de **couverture croisée** (matrice mesures × référentiels,
       part de chaque référentiel adossée à une mesure) ; **génération de la déclaration d'applicabilité
       (SoA)** imprimable. *(Itération 7)*

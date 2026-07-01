@@ -85,7 +85,9 @@ cyber-gouvernance_V4/
   hors `data`. Livrés : ANSSI (42), ISO 27002 (93), NIS2 (10), DORA (15), AirCyber/BoostAerospace (234).
   Ne pas embarquer le texte des normes (reformulations originales + identifiants de clauses).
   AirCyber = questionnaire réel (généré depuis un CSV via un script du scratchpad, non versionné) ;
-  import in-app des réponses (bouton sur la fiche AirCyber, parsing SheetJS, mapping Oui/Non→statut).
+  import in-app des réponses (bouton sur la fiche AirCyber, parsing SheetJS, mapping Oui/Non→statut) ;
+  métadonnées par question **niveau Bronze/Argent/Or + priorité + domaine CL0–CL6** (badges,
+  filtres, panneau « préparation au label »), champs optionnels `niveau`/`priorite`/`cl` + `clLabels`.
 - Export fichier : enveloppe **`grc-backup`** `{ format, version, encrypted, createdAt, app, payload|kdf+cipher }`.
 
 ## 5. Lancer & tester (important)

@@ -5,6 +5,20 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 14 — AirCyber : niveaux de label, priorité & domaines CL0–CL6
+- **Métadonnées par question** (issues du fichier de suivi BoostAerospace, 156/234
+  questions) : **niveau de label Bronze / Argent / Or**, **priorité** (haute / moyenne /
+  basse) et **domaine de classification CL0–CL6** (Governance, Security event management,
+  Malwares, Protect end user devices, Secure network architecture, Identity & access
+  management, Data protection). Affichés en **badges** sur chaque question.
+- **Filtres** sur la fiche AirCyber : par **niveau** (Tous / Bronze / Argent / Or) et par
+  **domaine CL**, avec compteur de questions affichées.
+- **Panneau « Préparation au label »** : taux de conformité par niveau (Bronze / Argent /
+  Or) — répond à « suis-je prêt pour ce label ? ». Alimenté par l'auto-évaluation / l'import.
+- Générique et sans régression : les référentiels sans niveaux (ANSSI, ISO…) n'affichent
+  ni badges, ni filtres, ni panneau. Schéma référentiel étendu (champs optionnels
+  `niveau` / `priorite` / `cl` par exigence + `clLabels`).
+
 ### Itération 13 — Import des réponses AirCyber (CSV)
 - **Import des réponses** depuis l'export CSV du questionnaire AirCyber, sur la fiche
   du référentiel (bouton « Importer mes réponses (CSV) »). Mappe automatiquement
