@@ -9,6 +9,7 @@ const CriseModule = (() => {
     function renderList() {
         const membres = DataStore.getCriseMembres();
         const app = document.getElementById("app");
+        const dateJour = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
 
         // Tri par ordre d'importance (simplifié)
         const roleOrder = {
@@ -26,7 +27,7 @@ const CriseModule = (() => {
 
         const rows = sortedMembres.map(m => `
             <tr class="clickable-row" data-id="${m.id}">
-                <td style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
+                <td class="no-print" style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
                     <input type="checkbox" class="row-cb" data-id="${m.id}">
                 </td>
                 <td><strong style="color: var(--primary);">${m.role}</strong></td>
@@ -39,6 +40,11 @@ const CriseModule = (() => {
 
         app.innerHTML = `
             <section class="page">
+                <div class="print-head">
+                    <h1>Annuaire de la Cellule de Crise</h1>
+                    <p>Dedienne Aerospace · Continuité d'activité · Édité le ${dateJour}</p>
+                </div>
+
                 <div class="dashboard-header no-print">
                     <div>
                         <h1>Annuaire de la Cellule de Crise</h1>

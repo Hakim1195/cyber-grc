@@ -5,6 +5,23 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Import des actifs & correctifs d'export PDF
+- **Import des actifs abouti** : nouveau bouton **« Télécharger le modèle »** générant un
+  fichier Excel prêt à remplir (`modele_import_actifs.xlsx`), avec les colonnes exactes
+  attendues (`Nom, Type, Criticité, Responsable, Description`) et des lignes d'exemple
+  couvrant chaque type/criticité. Le générateur est co-localisé avec le parseur
+  (`ImportExcelService`) pour garder le format synchronisé. Message d'aide et garde-fous
+  (`ImportExcelService` chargé) alignés sur les modules Exigences/Risques.
+- **Export PDF — Cellule de crise** : le **titre du document réapparaît à l'impression**
+  (en-tête dédié `.print-head` : titre + marque Dedienne + date) et la **colonne des cases
+  à cocher est masquée** au print (la case du corps de tableau n'était pas `no-print`, ce
+  qui décalait les colonnes et laissait « Suppléant » sans en-tête).
+- **Export PDF — Prestataires & Tiers** : ajout du **bouton « Imprimer l'annuaire »**
+  (absent auparavant), en-tête d'impression dédié, **cases à cocher masquées** au print
+  (en-tête + corps) et **bandeau pédagogique retiré** de l'impression (`no-print`).
+- **Nouveau motif réutilisable `.print-head`** (dans `css/style.css`) : en-tête masqué à
+  l'écran, révélé uniquement à l'impression — généralise le procédé déjà utilisé pour la SoA.
+
 ### Itération 14 — AirCyber : niveaux de label, priorité & domaines CL0–CL6
 - **Métadonnées par question** (issues du fichier de suivi BoostAerospace, 156/234
   questions) : **niveau de label Bronze / Argent / Or**, **priorité** (haute / moyenne /

@@ -9,10 +9,11 @@ const PraPrestatairesModule = (() => {
     function renderList() {
         const prestataires = DataStore.getPrestataires();
         const app = document.getElementById("app");
+        const dateJour = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
 
         const rows = prestataires.map(p => `
             <tr class="clickable-row" data-id="${p.id}">
-                <td style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
+                <td class="no-print" style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
                     <input type="checkbox" class="row-cb" data-id="${p.id}">
                 </td>
                 <td><strong>${p.societe}</strong></td>
@@ -24,6 +25,11 @@ const PraPrestatairesModule = (() => {
 
         app.innerHTML = `
             <section class="page">
+                <div class="print-head">
+                    <h1>Prestataires & Tiers — Annuaire d'urgence</h1>
+                    <p>Dedienne Aerospace · Contacts d'escalade en cas d'incident · Édité le ${dateJour}</p>
+                </div>
+
                 <div class="dashboard-header no-print">
                     <div>
                         <h1>Prestataires & Tiers</h1>
@@ -31,18 +37,19 @@ const PraPrestatairesModule = (() => {
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
-                        <button id="addBtn" style="background-color: var(--primary);">Nouveau Contact</button>
+                        <button onclick="window.print()" style="background-color: var(--primary);">Imprimer l'annuaire</button>
+                        <button id="addBtn" style="background-color: var(--color-success);">Nouveau Contact</button>
                     </div>
                 </div>
 
-                <div class="synthese-message info" style="font-size:0.9rem; padding:10px;">
+                <div class="synthese-message info no-print" style="font-size:0.9rem; padding:10px;">
                     <strong>Annuaire de crise :</strong> Enregistrez ici les contacts vitaux en cas d'incident majeur (Hébergeur Cloud, Assureur Cyber, Fournisseur réseau, ANSSI, CNIL...). Pensez à l'imprimer !
                 </div>
 
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllCb"></th>
+                            <th class="no-print" style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllCb"></th>
                             <th>Société / Entité</th>
                             <th>Type de contact</th>
                             <th>Contact Urgence</th>
