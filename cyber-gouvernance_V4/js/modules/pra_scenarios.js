@@ -32,8 +32,8 @@ const PraScenariosModule = (() => {
 
                         return `
                         <div class="dashboard-card clickable-row" data-id="${s.id}" style="cursor:pointer; border-left: 4px solid var(--primary);">
-                            <h3>${s.nom}</h3>
-                            <p style="font-size:0.85rem; color:var(--text-muted); margin: 10px 0;">${s.description || 'Pas de description'}</p>
+                            <h3>${escapeHtml(s.nom)}</h3>
+                            <p style="font-size:0.85rem; color:var(--text-muted); margin: 10px 0;">${escapeHtml(s.description) || 'Pas de description'}</p>
                             <div style="font-size:0.8rem; background:#f8f9fa; padding:10px; border-radius:4px;">
                                 <div style="margin-bottom:5px;"><strong>PCA :</strong> ${s.etapes_pca?.length || 0} étapes</div>
                                 <div><strong>PRA :</strong> ${s.etapes_pra?.length || 0} étapes
@@ -127,11 +127,11 @@ const PraScenariosModule = (() => {
                 <div class="dashboard-card no-print" style="margin-bottom: 20px;">
                     <div class="form-group">
                         <label>Nom du Scénario <span style="color:red">*</span></label>
-                        <input id="scen-nom" value="${editingScenario.nom}" placeholder="Ex: Ransomware, Incendie..." required />
+                        <input id="scen-nom" value="${escapeHtml(editingScenario.nom)}" placeholder="Ex: Ransomware, Incendie..." required />
                     </div>
                     <div class="form-group">
                         <label>Description / Déclencheur</label>
-                        <textarea id="scen-desc" style="min-height:60px;">${editingScenario.description || ""}</textarea>
+                        <textarea id="scen-desc" style="min-height:60px;">${escapeHtml(editingScenario.description || "")}</textarea>
                     </div>
                 </div>
 
@@ -225,22 +225,22 @@ const PraScenariosModule = (() => {
         const raciContent = document.getElementById("raci-content");
 
         const renderRaciCells = (s) => `
-            <td class="raci-cell">${s.realisateur ? '<span class="raci-badge raci-r" title="Réalisateur">R</span><br><small>'+s.realisateur+'</small>' : '-'}</td>
-            <td class="raci-cell">${s.responsable ? '<span class="raci-badge raci-a" title="Approbateur">A</span><br><small>'+s.responsable+'</small>' : '-'}</td>
-            <td class="raci-cell">${s.consulte ? '<span class="raci-badge raci-c" title="Consulté">C</span><br><small>'+s.consulte+'</small>' : '-'}</td>
-            <td class="raci-cell">${s.informe ? '<span class="raci-badge raci-i" title="Informé">I</span><br><small>'+s.informe+'</small>' : '-'}</td>
+            <td class="raci-cell">${s.realisateur ? '<span class="raci-badge raci-r" title="Réalisateur">R</span><br><small>'+escapeHtml(s.realisateur)+'</small>' : '-'}</td>
+            <td class="raci-cell">${s.responsable ? '<span class="raci-badge raci-a" title="Approbateur">A</span><br><small>'+escapeHtml(s.responsable)+'</small>' : '-'}</td>
+            <td class="raci-cell">${s.consulte ? '<span class="raci-badge raci-c" title="Consulté">C</span><br><small>'+escapeHtml(s.consulte)+'</small>' : '-'}</td>
+            <td class="raci-cell">${s.informe ? '<span class="raci-badge raci-i" title="Informé">I</span><br><small>'+escapeHtml(s.informe)+'</small>' : '-'}</td>
         `;
 
         const pcaRows = editingScenario.etapes_pca.map(s => `
             <tr>
-                <td><span class="badge" style="background:#e8f5e9; color:#2e7d32;">PCA</span> <strong>${s.titre}</strong></td>
+                <td><span class="badge" style="background:#e8f5e9; color:#2e7d32;">PCA</span> <strong>${escapeHtml(s.titre)}</strong></td>
                 ${renderRaciCells(s)}
             </tr>
         `).join("");
 
         const praRows = editingScenario.etapes_pra.map(s => `
             <tr>
-                <td><span class="badge" style="background:#e3f2fd; color:#1565c0;">PRA</span> <strong>${s.titre}</strong></td>
+                <td><span class="badge" style="background:#e3f2fd; color:#1565c0;">PRA</span> <strong>${escapeHtml(s.titre)}</strong></td>
                 ${renderRaciCells(s)}
             </tr>
         `).join("");
@@ -248,7 +248,7 @@ const PraScenariosModule = (() => {
         raciContent.innerHTML = `
             <div style="text-align:left; margin-bottom: 40px; border-left: 5px solid #784bd1; padding-left: 20px;">
                 <h1 style="font-size:2.5rem; margin-bottom:5px; color:#333;">Matrice des Responsabilités (RACI)</h1>
-                <p style="font-size:1.1rem; color:#676879;">Scénario : <strong>${editingScenario.nom}</strong></p>
+                <p style="font-size:1.1rem; color:#676879;">Scénario : <strong>${escapeHtml(editingScenario.nom)}</strong></p>
             </div>
 
             <table class="raci-table">
@@ -291,11 +291,11 @@ const PraScenariosModule = (() => {
             return steps.map((s, idx) => `
                 <div class="step-row" style="display:flex; align-items:center; justify-content:space-between; padding:12px; border:1px solid #eee; margin-bottom:8px; border-radius:4px; background:#fff; cursor:pointer;" onclick="PraScenariosModule.openStepEditor(${idx}, '${type}')">
                     <div style="flex:1;">
-                        <div style="font-weight:bold; font-size:0.95rem;">${s.titre || 'Nouvelle étape'}</div>
-                        <div style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">R: ${s.realisateur || '-'} | A: ${s.responsable || '-'} | ${s.duree || 0} min</div>
+                        <div style="font-weight:bold; font-size:0.95rem;">${escapeHtml(s.titre) || 'Nouvelle étape'}</div>
+                        <div style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">R: ${escapeHtml(s.realisateur) || '-'} | A: ${escapeHtml(s.responsable) || '-'} | ${escapeHtml(s.duree || 0)} min</div>
                     </div>
                     <div style="display:flex; gap:12px; align-items:center;">
-                         <span class="status" style="font-size:0.7rem; padding:3px 8px; background:#f1f3f5;">${s.statut}</span>
+                         <span class="status" style="font-size:0.7rem; padding:3px 8px; background:#f1f3f5;">${escapeHtml(s.statut)}</span>
                          <button style="background:none; color:var(--color-danger); border:none; font-size:1.1rem; padding:5px;" onclick="event.stopPropagation(); PraScenariosModule.deleteStep(${idx}, '${type}')"></button>
                     </div>
                 </div>
@@ -321,19 +321,19 @@ const PraScenariosModule = (() => {
         document.getElementById("modal-title").innerText = isNew ? "Ajouter une étape" : "Édition de l'étape";
 
         modalBody.innerHTML = `
-            <div class="form-group"><label>Action / Titre <span style="color:red">*</span></label><input id="m-titre" value="${(step.titre||'').replace(/"/g, '&quot;')}" required /></div>
+            <div class="form-group"><label>Action / Titre <span style="color:red">*</span></label><input id="m-titre" value="${escapeHtml(step.titre||'')}" required /></div>
 
             <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 15px;">
                 <h4 style="margin-top:0; margin-bottom: 15px; color: #784bd1;">Matrice RACI</h4>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
-                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-r" style="width:18px;height:18px;line-height:18px;font-size:0.6rem;margin-right:5px;">R</span> Réalisateur</label><input id="m-real" value="${(step.realisateur||'').replace(/"/g, '&quot;')}" /></div>
-                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-a" style="width:18px;height:18px;line-height:18px;font-size:0.6rem;margin-right:5px;">A</span> Approbateur</label><input id="m-resp" value="${(step.responsable||'').replace(/"/g, '&quot;')}" /></div>
-                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-c" style="width:18px;height:18px;line-height:18px;font-size:0.6rem;margin-right:5px;color:#333;">C</span> Consulté</label><input id="m-consulte" value="${(step.consulte||'').replace(/"/g, '&quot;')}" /></div>
-                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-i" style="width:18px;height:18px;line-height:18px;font-size:0.6rem;margin-right:5px;">I</span> Informé</label><input id="m-informe" value="${(step.informe||'').replace(/"/g, '&quot;')}" /></div>
+                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-r" style="width:18px;height:18px;line-height:18px;font-size:0.6rem;margin-right:5px;">R</span> Réalisateur</label><input id="m-real" value="${escapeHtml(step.realisateur||'')}" /></div>
+                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-a" style="width:18px;height:18px;line-height:18px;font-size:0.6rem;margin-right:5px;">A</span> Approbateur</label><input id="m-resp" value="${escapeHtml(step.responsable||'')}" /></div>
+                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-c" style="width:18px;height:18px;line-height:18px;font-size:0.6rem;margin-right:5px;color:#333;">C</span> Consulté</label><input id="m-consulte" value="${escapeHtml(step.consulte||'')}" /></div>
+                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-i" style="width:18px;height:18px;line-height:18px;font-size:0.6rem;margin-right:5px;">I</span> Informé</label><input id="m-informe" value="${escapeHtml(step.informe||'')}" /></div>
                 </div>
             </div>
 
-            <div class="form-group"><label>Actifs impactés</label><input id="m-actifs" value="${(step.actifs||'').replace(/"/g, '&quot;')}" /></div>
+            <div class="form-group"><label>Actifs impactés</label><input id="m-actifs" value="${escapeHtml(step.actifs||'')}" /></div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                 <div class="form-group"><label>Durée (min)</label><input type="number" id="m-duree" value="${step.duree}" min="0" /></div>
                 <div class="form-group">

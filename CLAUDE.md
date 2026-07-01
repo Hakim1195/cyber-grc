@@ -121,7 +121,7 @@ CSV des réponses**) + **couverture croisée** + **génération SoA** ; **Regist
 (v4, déclarations NIS2/RGPD) ; **Gestion documentaire** (v5, politiques + alertes de revue +
 canevas) ; **Registre RGPD** (v6, traitements art. 30, mesures reliées au pivot, registre
 imprimable) ; **Tableau de bord** enrichi (cockpit GRC 360°, graphes SVG maison) ;
-**Durcissement** partiel (escapeHtml partagé + XSS exigences/risques ; IDs anti-collision).
+**Durcissement** (escapeHtml partagé + IDs anti-collision).
 
 **Fait (Chantier 8 — améliorations modules)** : **Matrice EBIOS** export image PNG/SVG (SVG
 autonome → PNG via canvas, sans dépendance) + alerte cohérence brut/résiduel ; **Fiches réflexes
@@ -129,7 +129,11 @@ de crise imprimables** (`/crise-fiches` : cartes d'action par rôle + réflexes 
 d'urgence) ; **Risque fournisseur & chaîne d'appro NIS2/DORA** (criticité × accès → niveau
 inhérent + checklist exigences + couverture). Durcissement XSS des modules Crise et Prestataires.
 
-**Prochain** : fin du durcissement (Chantier 9 — XSS modules restants : actifs, clients, bia,
-pra_scenarios/tests/mco, audits ; cascade/orphelins ; factorisation des helpers ;
-`QuotaExceededError` à l'import) ; mapping pré-rempli inter-référentiels ; restes du Chantier 7
-(historisation des tendances, docs à réviser au tableau de bord).
+**Fait (Chantier 9 — durcissement)** : **XSS soldé sur tous les modules de saisie** (escapeHtml
+généralisé : exigences, risques, crise, prestataires, actifs, clients, bia, pra_scenarios/tests/mco,
+audits — vues d'impression et matrice RACI incluses ; correctifs injection HTML des rapports d'audit
+et échappements incomplets ; tests Playwright par entité). IDs anti-collision généralisés.
+
+**Prochain** : suite du Chantier 9 (cascade/orphelins `tests_pra.scenario_id` ; factorisation des
+helpers dupliqués ; `QuotaExceededError` à l'import Excel ; i18n) ; mapping pré-rempli
+inter-référentiels ; restes du Chantier 7 (historisation des tendances, docs à réviser au tableau de bord).

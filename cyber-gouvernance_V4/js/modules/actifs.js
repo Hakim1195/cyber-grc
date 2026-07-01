@@ -9,14 +9,14 @@ const ActifsModule = (() => {
 
         const rows = actifs.map(a => `
             <tr class="clickable-row" data-id="${a.id}">
-                <td><strong>${a.nom}</strong></td>
-                <td>${a.type}</td>
+                <td><strong>${escapeHtml(a.nom)}</strong></td>
+                <td>${escapeHtml(a.type)}</td>
                 <td>
                     <span class="status" style="background: ${a.criticite === 'critique' ? 'var(--risk-critical)' : a.criticite === 'élevée' ? 'var(--risk-high)' : a.criticite === 'modérée' ? 'var(--risk-medium)' : 'var(--risk-low)'}; color: white;">
-                        ${a.criticite}
+                        ${escapeHtml(a.criticite)}
                     </span>
                 </td>
-                <td>${a.responsable || "-"}</td>
+                <td>${escapeHtml(a.responsable) || "-"}</td>
             </tr>
         `).join("");
 
@@ -195,21 +195,21 @@ const ActifsModule = (() => {
         const risquesHtml = tousRisques.map(r => `
             <label class="checkbox-line">
                 <input type="checkbox" class="risque-cb" value="${r.id}" ${actif.risques_lies.includes(r.id) ? "checked" : ""}>
-                <strong>${r.nom}</strong> <span style="font-size:0.8rem; color:var(--text-muted);">(${r.niveau})</span>
+                <strong>${escapeHtml(r.nom)}</strong> <span style="font-size:0.8rem; color:var(--text-muted);">(${escapeHtml(r.niveau)})</span>
             </label>
         `).join("");
 
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <h1>${actif.nom}</h1>
+                    <h1>${escapeHtml(actif.nom)}</h1>
                     <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
                 </div>
 
                 <div class="dashboard-grid">
                     <div class="dashboard-card">
                         <h3>Détails de l'actif</h3>
-                        <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${actif.nom}" required /></div>
+                        <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${escapeHtml(actif.nom)}" required /></div>
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                             <div class="form-group">
@@ -233,8 +233,8 @@ const ActifsModule = (() => {
                             </div>
                         </div>
 
-                        <div class="form-group"><label>Responsable</label><input id="responsable" value="${actif.responsable || ""}" /></div>
-                        <div class="form-group"><label>Description</label><textarea id="description">${actif.description || ""}</textarea></div>
+                        <div class="form-group"><label>Responsable</label><input id="responsable" value="${escapeHtml(actif.responsable || "")}" /></div>
+                        <div class="form-group"><label>Description</label><textarea id="description">${escapeHtml(actif.description || "")}</textarea></div>
                         <button id="saveBtn">Mettre à jour</button>
                     </div>
 

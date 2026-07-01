@@ -5,6 +5,26 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 9 — Durcissement XSS : fin de l'échappement des modules
+- **Échappement généralisé** (`escapeHtml`) de toutes les données utilisateur injectées en DOM
+  dans les 7 modules restants : **Actifs, Donneurs d'ordre, BIA, Scénarios PCA/PRA, Tests PRA,
+  MCO, Contrôles & Audits** (listes, fiches, formulaires, options, matrice RACI et **vues
+  d'impression**). La dette XSS transverse est désormais **soldée** sur les modules de saisie.
+- **Correctifs de sécurité notables** :
+  - **Audits — injection HTML** : les rapports/PV imprimés faisaient `…replace(/\n/g, '<br>')`
+    **sans échappement préalable** (rendu HTML de texte libre : synthèse, audité, participants,
+    entrées/sorties, constats). Désormais **échappement d'abord, puis** conversion des sauts de
+    ligne — un contenu comme `<script>…` s'affiche en texte, plus en HTML actif.
+  - **Scénarios & Audits — échappement incomplet** : plusieurs champs n'échappaient que le
+    guillemet (`replace(/"/g, '&quot;')`), laissant passer `<`, `>`, `&`. Remplacé par
+    `escapeHtml` complet.
+  - Champs auparavant oubliés désormais couverts : **bilan** d'un test PRA, **titres d'étapes**
+    de la matrice RACI, champ **actifs** d'une étape, **noms des risques** liés à un actif.
+- **Tests dédiés (Playwright)** : injection de charges utiles (`"><img onerror…>` et
+  `<script>` multi-lignes) dans **chaque entité**, puis parcours listes + fiches + **vues
+  d'impression** + **matrice RACI** — vérification qu'aucune balise n'est créée ni exécutée
+  (payloads rendus en texte échappé), **0 erreur console**, aucune régression.
+
 ### Chantier 8 — Tiers : risque fournisseur & chaîne d'approvisionnement (NIS2/DORA)
 - **Évaluation du risque fournisseur** sur le module Prestataires & Tiers : deux critères
   **Criticité** (impact si défaillance : faible → vitale) et **Accès au SI / aux données**

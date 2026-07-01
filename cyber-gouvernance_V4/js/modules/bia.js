@@ -21,11 +21,11 @@ const BiaModule = (() => {
                 <td style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
                     <input type="checkbox" class="row-cb" data-id="${p.id}">
                 </td>
-                <td><strong>${p.nom}</strong></td>
-                <td><strong style="color: ${prioColor};">${p.criticite}</strong></td>
-                <td><span class="badge" style="background: #e3f2fd; color: #0d47a1;">RTO: ${p.rto}</span></td>
-                <td><span class="badge" style="background: #f3e5f5; color: #4a148c;">RPO: ${p.rpo}</span></td>
-                <td>${p.responsable || "-"}</td>
+                <td><strong>${escapeHtml(p.nom)}</strong></td>
+                <td><strong style="color: ${prioColor};">${escapeHtml(p.criticite)}</strong></td>
+                <td><span class="badge" style="background: #e3f2fd; color: #0d47a1;">RTO: ${escapeHtml(p.rto)}</span></td>
+                <td><span class="badge" style="background: #f3e5f5; color: #4a148c;">RPO: ${escapeHtml(p.rpo)}</span></td>
+                <td>${escapeHtml(p.responsable) || "-"}</td>
             </tr>
             `;
         }).join("");
@@ -219,10 +219,10 @@ const BiaModule = (() => {
             <label class="checkbox-line" style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <input type="checkbox" class="actif-cb" value="${a.id}" ${processus.actifs_lies.includes(a.id) ? "checked" : ""}>
-                    <strong>${a.nom}</strong> — <span style="font-size: 0.8rem; color: var(--text-muted);">${a.type}</span>
+                    <strong>${escapeHtml(a.nom)}</strong> — <span style="font-size: 0.8rem; color: var(--text-muted);">${escapeHtml(a.type)}</span>
                 </div>
                 <span class="badge" style="background: ${a.criticite === 'critique' ? 'var(--color-danger)' : '#eee'}; color: ${a.criticite === 'critique' ? 'white' : '#333'};">
-                    Criticité IT: ${a.criticite}
+                    Criticité IT: ${escapeHtml(a.criticite)}
                 </span>
             </label>
         `).join("");
@@ -230,14 +230,14 @@ const BiaModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <h1>${processus.nom}</h1>
+                    <h1>${escapeHtml(processus.nom)}</h1>
                     <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
                 </div>
 
                 <div class="dashboard-grid">
                     <div class="dashboard-card" style="grid-column: span 2;">
                         <h3>Informations BIA</h3>
-                        <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${processus.nom}" required /></div>
+                        <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${escapeHtml(processus.nom)}" required /></div>
 
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                             <div class="form-group">
@@ -271,8 +271,8 @@ const BiaModule = (() => {
                             </div>
                         </div>
 
-                        <div class="form-group"><label>Responsable</label><input id="responsable" value="${processus.responsable || ""}" /></div>
-                        <div class="form-group"><label>Impacts (Interruption)</label><textarea id="description">${processus.description || ""}</textarea></div>
+                        <div class="form-group"><label>Responsable</label><input id="responsable" value="${escapeHtml(processus.responsable || "")}" /></div>
+                        <div class="form-group"><label>Impacts (Interruption)</label><textarea id="description">${escapeHtml(processus.description || "")}</textarea></div>
                         <button id="saveBtn">Mettre à jour</button>
                     </div>
 

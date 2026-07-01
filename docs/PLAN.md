@@ -99,10 +99,12 @@ du pivot ; registre **imprimable**. Schéma v6.
       Durcissement XSS du module au passage. *(Itération 17)*
 
 ## Chantier 9 — Durcissement transverse — 🟡 en cours (en continu)
-- ✅ **XSS** : `escapeHtml` partagé (`window.escapeHtml`) + appliqué aux modules **Exigences** et
-      **Risques** (test XSS dédié). *(Itération 12)* + module **Crise** (annuaire, fiche, fiches réflexes).
-      *(Itération 16)* + module **Prestataires & Tiers** *(Itération 17)* — reste : actifs,
-      clients, bia, pra_scenarios / pra_tests / pra_mco, audits.
+- ✅ **XSS — dette soldée sur les modules de saisie** : `escapeHtml` partagé (`window.escapeHtml`)
+      appliqué à **Exigences, Risques** *(it. 12)*, **Crise** *(it. 16)*, **Prestataires & Tiers**
+      *(it. 17)*, puis **Actifs, Donneurs d'ordre, BIA, Scénarios PCA/PRA, Tests PRA, MCO, Audits**
+      *(it. 18)* — y compris **vues d'impression** et **matrice RACI**. Correctifs notables : injection
+      HTML des rapports/PV d'audit (`replace(\n,<br>)` sans échappement) et échappements incomplets
+      (`replace(/"/g,…)`). Tests Playwright dédiés par entité (payloads `<img>`/`<script>`).
 - ✅ **IDs anti-collision** (suffixe aléatoire) généralisés à tous les modules. *(Itération 12)*
 - Cascade/orphelins (`tests_pra.scenario_id`), cohérence métier.
 - Factorisation des helpers dupliqués (suppression groupée, badges, confirmations, collecte de formulaire).

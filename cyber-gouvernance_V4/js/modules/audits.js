@@ -120,11 +120,11 @@ const AuditsModule = (() => {
                     <tbody>
                         ${audits.map(a => `
                             <tr class="clickable-row" data-id="${a.id}">
-                                <td><strong>${a.ref}</strong></td>
+                                <td><strong>${escapeHtml(a.ref)}</strong></td>
                                 <td>${a.date ? new Date(a.date).toLocaleDateString('fr-FR') : "-"}</td>
-                                <td>${a.perimetre || "-"}</td>
-                                <td>${a.auditeur || "-"}</td>
-                                <td><span class="status ${a.statut === 'Réalisé' ? 'status-conforme' : 'status-non-conforme'}">${a.statut}</span></td>
+                                <td>${escapeHtml(a.perimetre) || "-"}</td>
+                                <td>${escapeHtml(a.auditeur) || "-"}</td>
+                                <td><span class="status ${a.statut === 'Réalisé' ? 'status-conforme' : 'status-non-conforme'}">${escapeHtml(a.statut)}</span></td>
                             </tr>
                         `).join("") || "<tr><td colspan='5' style='text-align:center;'>Aucun audit enregistré.</td></tr>"}
                     </tbody>
@@ -148,7 +148,7 @@ const AuditsModule = (() => {
                             return `
                             <tr class="clickable-row" data-id="${r.id}">
                                 <td><strong>${r.date ? new Date(r.date).toLocaleDateString('fr-FR') : "-"}</strong></td>
-                                <td>${(r.participants || "").substring(0, 80)}...</td>
+                                <td>${escapeHtml((r.participants || "").substring(0, 80))}...</td>
                                 <td>${nbDecisions} décision(s) actée(s)</td>
                             </tr>
                             `;
@@ -185,7 +185,7 @@ const AuditsModule = (() => {
                     <div class="dashboard-card">
                         <h3>Informations Générales</h3>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-top:15px;">
-                            <div class="form-group"><label>Référence / Titre <span style="color:red">*</span></label><input id="a-ref" value="${editingItem.ref}" required /></div>
+                            <div class="form-group"><label>Référence / Titre <span style="color:red">*</span></label><input id="a-ref" value="${escapeHtml(editingItem.ref)}" required /></div>
                             <div class="form-group">
                                 <label>Statut</label>
                                 <select id="a-statut">
@@ -195,14 +195,14 @@ const AuditsModule = (() => {
                                 </select>
                             </div>
                             <div class="form-group"><label>Date de l'audit</label><input type="date" id="a-date" value="${editingItem.date}" /></div>
-                            <div class="form-group"><label>Périmètre audité</label><input id="a-perimetre" value="${editingItem.perimetre}" placeholder="Ex: Processus RH, Site de Paris..." /></div>
-                            <div class="form-group"><label>Auditeur(s)</label><input id="a-auditeur" value="${editingItem.auditeur}" placeholder="Ex: Audit interne, cabinet externe..." /></div>
-                            <div class="form-group"><label>Audité(s) (Interlocuteurs)</label><input id="a-audite" value="${editingItem.audite}" placeholder="Ex: DSI, RSSI" /></div>
+                            <div class="form-group"><label>Périmètre audité</label><input id="a-perimetre" value="${escapeHtml(editingItem.perimetre)}" placeholder="Ex: Processus RH, Site de Paris..." /></div>
+                            <div class="form-group"><label>Auditeur(s)</label><input id="a-auditeur" value="${escapeHtml(editingItem.auditeur)}" placeholder="Ex: Audit interne, cabinet externe..." /></div>
+                            <div class="form-group"><label>Audité(s) (Interlocuteurs)</label><input id="a-audite" value="${escapeHtml(editingItem.audite)}" placeholder="Ex: DSI, RSSI" /></div>
                         </div>
                     </div>
                     <div class="dashboard-card">
                         <h3>Synthèse Globale de l'Auditeur</h3>
-                        <textarea id="a-synthese" style="min-height:200px; margin-top:15px;" placeholder="Avis général, niveau de maturité constaté...">${editingItem.synthese}</textarea>
+                        <textarea id="a-synthese" style="min-height:200px; margin-top:15px;" placeholder="Avis général, niveau de maturité constaté...">${escapeHtml(editingItem.synthese)}</textarea>
                     </div>
                 </div>
 
@@ -288,9 +288,9 @@ const AuditsModule = (() => {
                             <option value="Mineure" ${c.type==='Mineure'?'selected':''}>Non-conformité Mineure</option>
                             <option value="Majeure" ${c.type==='Majeure'?'selected':''}>Non-conformité Majeure</option>
                         </select>
-                        <input class="c-exigence" value="${(c.exigence||'').replace(/"/g, '&quot;')}" placeholder="Exigence visée (Ex: ISO 27001 - A.8.1)" style="flex:1; padding:8px;" />
+                        <input class="c-exigence" value="${escapeHtml(c.exigence||'')}" placeholder="Exigence visée (Ex: ISO 27001 - A.8.1)" style="flex:1; padding:8px;" />
                     </div>
-                    <textarea class="c-desc" placeholder="Description du constat / Preuve d'audit..." style="min-height:60px;">${c.desc||''}</textarea>
+                    <textarea class="c-desc" placeholder="Description du constat / Preuve d'audit..." style="min-height:60px;">${escapeHtml(c.desc||'')}</textarea>
                 </div>
                 <button onclick="this.closest('.constat-row').remove()" style="background:none; color:red; border:none; font-size:1.5rem; cursor:pointer;" title="Supprimer"></button>
             </div>
@@ -327,19 +327,19 @@ const AuditsModule = (() => {
                 <div class="dashboard-card no-print">
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                         <div class="form-group"><label>Date de la Revue <span style="color:red">*</span></label><input type="date" id="r-date" value="${editingItem.date}" required /></div>
-                        <div class="form-group"><label>Participants (Nom et Fonction)</label><textarea id="r-participants" style="min-height:50px;">${editingItem.participants}</textarea></div>
+                        <div class="form-group"><label>Participants (Nom et Fonction)</label><textarea id="r-participants" style="min-height:50px;">${escapeHtml(editingItem.participants)}</textarea></div>
                     </div>
 
                     <div class="form-group" style="margin-top:20px;">
                         <label style="color:#1565c0; font-weight:bold;">Données d'entrée (Sujets abordés / ISO 27001 - 9.3.2)</label>
                         <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0;">Résumez les éléments présentés à la direction.</p>
-                        <textarea id="r-inputs" style="min-height:150px;">${editingItem.inputs}</textarea>
+                        <textarea id="r-inputs" style="min-height:150px;">${escapeHtml(editingItem.inputs)}</textarea>
                     </div>
 
                     <div class="form-group" style="margin-top:20px;">
                         <label style="color:#2e7d32; font-weight:bold;">Données de sortie (Décisions & Budgets / ISO 27001 - 9.3.3)</label>
                         <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0;">Décisions relatives à l'amélioration continue, modifications du SMSI et besoins en ressources.</p>
-                        <textarea id="r-outputs" style="min-height:150px;">${editingItem.outputs}</textarea>
+                        <textarea id="r-outputs" style="min-height:150px;">${escapeHtml(editingItem.outputs)}</textarea>
                     </div>
                 </div>
 
@@ -407,8 +407,8 @@ const AuditsModule = (() => {
         const constatsHtml = editingItem.constats.map(c => `
             <tr>
                 <td style="padding:10px; border:1px solid #ddd; width:20%;">${getBadge(c.type)}</td>
-                <td style="padding:10px; border:1px solid #ddd; width:30%; font-weight:bold;">${c.exigence}</td>
-                <td style="padding:10px; border:1px solid #ddd; width:50%;">${(c.desc||'').replace(/\n/g, '<br>')}</td>
+                <td style="padding:10px; border:1px solid #ddd; width:30%; font-weight:bold;">${escapeHtml(c.exigence)}</td>
+                <td style="padding:10px; border:1px solid #ddd; width:50%;">${escapeHtml(c.desc||'').replace(/\n/g, '<br>')}</td>
             </tr>
         `).join("") || "<tr><td colspan='3' style='padding:10px; border:1px solid #ddd; text-align:center;'>Aucun constat.</td></tr>";
 
@@ -416,31 +416,31 @@ const AuditsModule = (() => {
             <div style="border-bottom: 2px solid #0073ea; padding-bottom: 15px; margin-bottom: 30px; display:flex; justify-content:space-between; align-items:flex-end;">
                 <div>
                     <h1 style="margin:0; color:#333; font-size:2rem;">RAPPORT D'AUDIT INTERNE</h1>
-                    <h3 style="margin:5px 0 0 0; color:#666;">Réf : ${editingItem.ref}</h3>
+                    <h3 style="margin:5px 0 0 0; color:#666;">Réf : ${escapeHtml(editingItem.ref)}</h3>
                 </div>
                 <div style="text-align:right; font-size:0.9rem; color:#666;">
                     Date : ${editingItem.date ? new Date(editingItem.date).toLocaleDateString('fr-FR') : "Non définie"}<br>
-                    Statut : <strong>${editingItem.statut}</strong>
+                    Statut : <strong>${escapeHtml(editingItem.statut)}</strong>
                 </div>
             </div>
 
             <table style="width:100%; border-collapse:collapse; margin-bottom:30px;">
                 <tr>
                     <td style="padding:10px; background:#f8f9fa; border:1px solid #ddd; font-weight:bold; width:25%;">Périmètre audité</td>
-                    <td style="padding:10px; border:1px solid #ddd;">${editingItem.perimetre || '-'}</td>
+                    <td style="padding:10px; border:1px solid #ddd;">${escapeHtml(editingItem.perimetre) || '-'}</td>
                 </tr>
                 <tr>
                     <td style="padding:10px; background:#f8f9fa; border:1px solid #ddd; font-weight:bold;">Auditeur(s)</td>
-                    <td style="padding:10px; border:1px solid #ddd;">${editingItem.auditeur || '-'}</td>
+                    <td style="padding:10px; border:1px solid #ddd;">${escapeHtml(editingItem.auditeur) || '-'}</td>
                 </tr>
                 <tr>
                     <td style="padding:10px; background:#f8f9fa; border:1px solid #ddd; font-weight:bold;">Audité(s)</td>
-                    <td style="padding:10px; border:1px solid #ddd;">${(editingItem.audite||'-').replace(/\n/g, '<br>')}</td>
+                    <td style="padding:10px; border:1px solid #ddd;">${escapeHtml(editingItem.audite||'-').replace(/\n/g, '<br>')}</td>
                 </tr>
             </table>
 
             <h3 style="color:#0073ea; border-bottom:1px solid #eee; padding-bottom:5px;">Synthèse globale</h3>
-            <p style="margin-bottom:30px; line-height:1.6;">${(editingItem.synthese||'Aucune synthèse saisie.').replace(/\n/g, '<br>')}</p>
+            <p style="margin-bottom:30px; line-height:1.6;">${escapeHtml(editingItem.synthese||'Aucune synthèse saisie.').replace(/\n/g, '<br>')}</p>
 
             <h3 style="color:#0073ea; border-bottom:1px solid #eee; padding-bottom:5px;">Grille des constats d'audit</h3>
             <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
@@ -485,17 +485,17 @@ const AuditsModule = (() => {
 
             <h3 style="color:#784bd1; border-bottom:1px solid #eee; padding-bottom:5px;">Participants présents</h3>
             <p style="margin-bottom:30px; line-height:1.6; padding:15px; background:#f8f9fa; border:1px solid #ddd;">
-                ${(editingItem.participants||'-').replace(/\n/g, '<br>')}
+                ${escapeHtml(editingItem.participants||'-').replace(/\n/g, '<br>')}
             </p>
 
             <h3 style="color:#1565c0; border-bottom:1px solid #eee; padding-bottom:5px;">Éléments d'entrée abordés (Bilan)</h3>
             <p style="margin-bottom:30px; line-height:1.6; text-align:justify;">
-                ${(editingItem.inputs||'-').replace(/\n/g, '<br>')}
+                ${escapeHtml(editingItem.inputs||'-').replace(/\n/g, '<br>')}
             </p>
 
             <h3 style="color:#2e7d32; border-bottom:1px solid #eee; padding-bottom:5px;">Décisions actées et besoins (Sorties)</h3>
             <p style="margin-bottom:50px; line-height:1.6; text-align:justify;">
-                ${(editingItem.outputs||'-').replace(/\n/g, '<br>')}
+                ${escapeHtml(editingItem.outputs||'-').replace(/\n/g, '<br>')}
             </p>
 
             <div style="margin-top:50px; text-align:right;">

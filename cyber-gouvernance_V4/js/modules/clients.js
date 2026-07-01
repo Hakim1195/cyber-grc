@@ -16,8 +16,8 @@ const ClientsModule = (() => {
             const nbExigences = exigences.filter(e => e.client_id === c.id).length;
             return `
                 <tr class="clickable-row" data-id="${c.id}">
-                    <td><strong>${c.nom}</strong></td>
-                    <td>${c.secteur || "-"}</td>
+                    <td><strong>${escapeHtml(c.nom)}</strong></td>
+                    <td>${escapeHtml(c.secteur) || "-"}</td>
                     <td><span class="badge" style="background: var(--primary); color: white;">${nbExigences} Exigence(s)</span></td>
                 </tr>
             `;
@@ -130,7 +130,7 @@ const ClientsModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <h1>${client.nom}</h1>
+                    <h1>${escapeHtml(client.nom)}</h1>
                     <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
                 </div>
 
@@ -140,12 +140,12 @@ const ClientsModule = (() => {
 
                         <div class="form-group">
                             <label>Nom <span style="color:red">*</span></label>
-                            <input id="nom" value="${client.nom}" required />
+                            <input id="nom" value="${escapeHtml(client.nom)}" required />
                         </div>
 
                         <div class="form-group">
                             <label>Secteur / Description</label>
-                            <input id="secteur" value="${client.secteur || ""}" />
+                            <input id="secteur" value="${escapeHtml(client.secteur || "")}" />
                         </div>
 
                         <button id="saveBtn">Mettre à jour</button>

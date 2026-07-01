@@ -23,8 +23,8 @@ const PraTestsModule = (() => {
                     <input type="checkbox" class="row-cb" data-id="${t.id}">
                 </td>
                 <td>${t.date ? new Date(t.date).toLocaleDateString('fr-FR') : "Non définie"}</td>
-                <td><strong>${getNomScen(t.scenario_id)}</strong></td>
-                <td>${t.type_test}</td>
+                <td><strong>${escapeHtml(getNomScen(t.scenario_id))}</strong></td>
+                <td>${escapeHtml(t.type_test)}</td>
                 <td><span class="status ${t.succes === 'Oui' ? 'status-conforme' : 'status-non-conforme'}">${t.succes === 'Oui' ? 'Succès' : 'Échec'}</span></td>
             </tr>
         `).join("");
@@ -138,7 +138,7 @@ const PraTestsModule = (() => {
                     <div class="form-group">
                         <label>Scénario Testé / Playbook <span style="color:red">*</span></label>
                         <select id="scenario_id">
-                            ${scenarios.map(s => `<option value="${s.id}">${s.nom}</option>`).join("")}
+                            ${scenarios.map(s => `<option value="${s.id}">${escapeHtml(s.nom)}</option>`).join("")}
                         </select>
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
@@ -216,7 +216,7 @@ const PraTestsModule = (() => {
                     <div class="form-group">
                         <label>Scénario Testé / Playbook <span style="color:red">*</span></label>
                         <select id="scenario_id">
-                            ${scenarios.map(s => `<option value="${s.id}" ${t.scenario_id === s.id ? "selected" : ""}>${s.nom}</option>`).join("")}
+                            ${scenarios.map(s => `<option value="${s.id}" ${t.scenario_id === s.id ? "selected" : ""}>${escapeHtml(s.nom)}</option>`).join("")}
                             ${!scenarios.find(s => s.id === t.scenario_id) ? `<option value="${t.scenario_id}" selected>Scénario supprimé (ID: ${t.scenario_id})</option>` : ""}
                         </select>
                     </div>
@@ -243,7 +243,7 @@ const PraTestsModule = (() => {
                     </div>
                     <div class="form-group">
                         <label>Bilan et Leçons apprises (REX)</label>
-                        <textarea id="bilan" style="min-height:100px;">${t.bilan || ""}</textarea>
+                        <textarea id="bilan" style="min-height:100px;">${escapeHtml(t.bilan || "")}</textarea>
                     </div>
                     <div style="margin-top: 20px;">
                         <button id="saveBtn" style="background:var(--color-success);">Mettre à jour</button>

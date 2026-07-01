@@ -15,8 +15,8 @@ const PraMcoModule = (() => {
                 <td style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
                     <input type="checkbox" class="row-cb" data-id="${m.id}">
                 </td>
-                <td><strong>${m.titre}</strong></td>
-                <td>${m.frequence}</td>
+                <td><strong>${escapeHtml(m.titre)}</strong></td>
+                <td>${escapeHtml(m.frequence)}</td>
                 <td>${m.date ? new Date(m.date).toLocaleDateString('fr-FR') : "Jamais"}</td>
                 <td><span class="status ${m.etat === 'OK' ? 'status-conforme' : 'status-non-conforme'}">${m.etat === 'OK' ? 'OK' : 'KO'}</span></td>
             </tr>
@@ -177,7 +177,7 @@ const PraMcoModule = (() => {
                     <button id="delBtn" style="background:var(--color-danger);">Supprimer</button>
                 </div>
                 <div class="dashboard-card" style="max-width:600px;">
-                    <div class="form-group"><label>Titre <span style="color:red">*</span></label><input id="titre" value="${m.titre}" required /></div>
+                    <div class="form-group"><label>Titre <span style="color:red">*</span></label><input id="titre" value="${escapeHtml(m.titre)}" required /></div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                         <div class="form-group">
                             <label>Fréquence</label>
@@ -197,7 +197,7 @@ const PraMcoModule = (() => {
                         </div>
                     </div>
                     <div class="form-group"><label>Date de la dernière vérification</label><input type="date" id="date" value="${m.date||""}" /></div>
-                    <div class="form-group"><label>Notes & Résultat</label><textarea id="notes">${m.notes||""}</textarea></div>
+                    <div class="form-group"><label>Notes & Résultat</label><textarea id="notes">${escapeHtml(m.notes||"")}</textarea></div>
                     <div style="margin-top: 20px;">
                         <button id="saveBtn">Mettre à jour</button>
                         <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
