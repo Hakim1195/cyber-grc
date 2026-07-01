@@ -1,12 +1,13 @@
 // Emplacement : js/app.js
 // Nom du fichier : app.js
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
 
     /* =========================
        INITIALISATION DES DONNÉES
+       (asynchrone : chargement depuis IndexedDB avant le premier rendu)
     ========================== */
-    DataStore.init();
+    await DataStore.init();
 
     /* =========================
        SÉLECTEUR DE CONTEXTE (CLIENT)

@@ -1,56 +1,260 @@
 // Emplacement : js/core/datastore.js
 // Nom du fichier : datastore.js
+//
+// Source de vérité en mémoire (API 100% synchrone pour les modules) + persistance
+// durable via IndexedDB (voir persistence.js). Repli localStorage anti-crash.
+// L'API publique (getX / addX / updateX / deleteX) est INCHANGÉE : les modules
+// n'ont pas besoin d'être modifiés.
 
 const DataStore = (() => {
-    const STORAGE_KEY = "cyber-gouvernance-data";
+    const STORAGE_KEY = "cyber-gouvernance-data";   // ancienne clé localStorage (migration)
+    const LEGACY_AUDITS_KEY = "cyber-audits";
+    const LEGACY_REVUES_KEY = "cyber-revues";
+    const SCHEMA_VERSION = 2;
 
-    let data = {
-        clients: [],
-        exigences: [],
-        actions: [],
-        risques: [],
-        actifs: [],
-        // NOUVEAUX BLOCS : CONTINUITÉ & RÉSILIENCE
-        processus: [],     // Pour le BIA (RTO/RPO)
-        crise: [],         // Pour la cellule de crise
-        scenarios_pra: [], // Fiches réflexes PRA
-        tests_pra: [],     // Suivi des tests et maintien en condition
-        prestataires: [],  // Contacts externes / fournisseurs
-        mco_actions: []    // Actions préalables (Maintien en Condition Opérationnelle)
-    };
+    const ARRAY_FIELDS = [
+        "clients", "exigences", "actions", "risques", "actifs",
+        "processus", "crise", "scenarios_pra", "tests_pra", "prestataires", "mco_actions",
+        "audits", "revues"
+    ];
 
-    function init() {
+    const AUTOSAVE_DEBOUNCE_MS = 500;
+    const AUTO_BACKUP_INTERVAL_MS = 10 * 60 * 1000; // un point auto au maximum toutes les 10 min
+    const AUTO_BACKUP_KEEP = 20;                     // nombre de points auto conservés
+
+    function emptyData() {
+        const d = { schemaVersion: SCHEMA_VERSION };
+        ARRAY_FIELDS.forEach(f => { d[f] = []; });
+        return d;
+    }
+
+    let data = emptyData();
+    let flushTimer = null;
+    let lastSavedAt = 0;
+    let lastAutoBackupTs = 0;
+    let idbHealthy = true;
+
+    function deepCopy(obj) {
+        return JSON.parse(JSON.stringify(obj));
+    }
+
+    function normalize(d) {
+        const out = Object.assign(emptyData(), d || {});
+        ARRAY_FIELDS.forEach(f => {
+            out[f] = Array.isArray(out[f]) ? out[f] : [];
+        });
+        out.schemaVersion = SCHEMA_VERSION;
+        return out;
+    }
+
+    function isEmpty(d) {
+        return ARRAY_FIELDS.every(f => !Array.isArray(d[f]) || d[f].length === 0);
+    }
+
+    function safeParse(str) {
+        try { return str ? JSON.parse(str) : null; } catch (e) { return null; }
+    }
+
+    /* =========================
+       MIGRATION DEPUIS localStorage
+    ========================== */
+    function migrateFromLegacy() {
+        const base = safeParse(localStorage.getItem(STORAGE_KEY));
+        const audits = safeParse(localStorage.getItem(LEGACY_AUDITS_KEY));
+        const revues = safeParse(localStorage.getItem(LEGACY_REVUES_KEY));
+        if (!base && !audits && !revues) return null;
+
+        const merged = base || {};
+        if (Array.isArray(audits) && !Array.isArray(merged.audits)) merged.audits = audits;
+        if (Array.isArray(revues) && !Array.isArray(merged.revues)) merged.revues = revues;
+        return merged;
+    }
+
+    /* =========================
+       CHARGEMENT / INITIALISATION (async)
+    ========================== */
+    async function init() {
         try {
-            const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                data = { ...data, ...parsed };
+            let loaded = null;
 
-                // Garantir l'existence des tableaux pour la stabilité
-                data.clients = Array.isArray(data.clients) ? data.clients : [];
-                data.exigences = Array.isArray(data.exigences) ? data.exigences : [];
-                data.actions = Array.isArray(data.actions) ? data.actions : [];
-                data.risques = Array.isArray(data.risques) ? data.risques : [];
-                data.actifs = Array.isArray(data.actifs) ? data.actifs : [];
-
-                // Initialisation des nouveaux tableaux si d'anciennes sauvegardes sont chargées
-                data.processus = Array.isArray(data.processus) ? data.processus : [];
-                data.crise = Array.isArray(data.crise) ? data.crise : [];
-                data.scenarios_pra = Array.isArray(data.scenarios_pra) ? data.scenarios_pra : [];
-                data.tests_pra = Array.isArray(data.tests_pra) ? data.tests_pra : [];
-                data.prestataires = Array.isArray(data.prestataires) ? data.prestataires : [];
-                data.mco_actions = Array.isArray(data.mco_actions) ? data.mco_actions : [];
+            if (Persistence.idbAvailable()) {
+                try {
+                    loaded = await Persistence.kvGet("current");
+                } catch (e) {
+                    console.error("Lecture IndexedDB échouée", e);
+                    idbHealthy = false;
+                }
             } else {
-                save();
+                idbHealthy = false;
+            }
+
+            // Aucun enregistrement durable → tenter la migration depuis localStorage
+            if (!loaded) {
+                loaded = migrateFromLegacy();
+            }
+
+            data = normalize(loaded || data);
+
+            // Persister l'état normalisé (finalise la migration le cas échéant)
+            await flushNow();
+
+            // Rendre le stockage persistant + point de restauration d'ouverture
+            if (idbHealthy) {
+                Persistence.requestPersistent();
+                await maybeAutoBackup("Ouverture de session", true, true);
             }
         } catch (e) {
-            console.error("Erreur de lecture du DataStore", e);
-            save();
+            console.error("Erreur d'initialisation du DataStore", e);
+            data = normalize(data);
+        }
+
+        // Filet de sécurité : flush avant fermeture / onglet caché
+        try {
+            window.addEventListener("beforeunload", () => { mirrorToLocalStorage(); flushNow(); });
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === "hidden") { mirrorToLocalStorage(); flushNow(); }
+            });
+        } catch (e) { /* ignore */ }
+    }
+
+    /* =========================
+       ENREGISTREMENT
+    ========================== */
+    // Point d'entrée synchrone appelé par tous les modules.
+    function save() {
+        data.updatedAt = Date.now();
+        mirrorToLocalStorage();   // secours synchrone anti-crash
+        scheduleFlush();          // persistance durable IndexedDB (débounce)
+    }
+
+    function scheduleFlush() {
+        if (flushTimer) clearTimeout(flushTimer);
+        flushTimer = setTimeout(() => { flushNow(); }, AUTOSAVE_DEBOUNCE_MS);
+    }
+
+    // Miroir localStorage (best-effort) : utile si l'onglet se ferme avant le flush
+    // IndexedDB. Peut échouer (quota) sur de très grosses bases — IndexedDB reste
+    // alors la source durable.
+    function mirrorToLocalStorage() {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        } catch (e) {
+            // Quota dépassé ou indisponible : on n'insiste pas.
         }
     }
 
-    function save() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    async function flushNow() {
+        if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+        if (!Persistence.idbAvailable() || !idbHealthy) {
+            mirrorToLocalStorage();
+            return false;
+        }
+        try {
+            await Persistence.kvSet("current", deepCopy(data));
+            await Persistence.kvSet("meta", { schemaVersion: SCHEMA_VERSION, updatedAt: Date.now() });
+            lastSavedAt = Date.now();
+            idbHealthy = true;
+            maybeAutoBackup(undefined, false, true); // throttlé + dédupliqué
+            return true;
+        } catch (e) {
+            console.error("Échec d'écriture IndexedDB, repli sur localStorage", e);
+            idbHealthy = false;
+            mirrorToLocalStorage();
+            return false;
+        }
+    }
+
+    /* =========================
+       POINTS DE RESTAURATION (HISTORIQUE)
+    ========================== */
+    async function maybeAutoBackup(label, force, dedup) {
+        if (!Persistence.idbAvailable() || !idbHealthy) return;
+        if (isEmpty(data)) return;   // rien à sauvegarder
+        const now = Date.now();
+        if (!force && (now - lastAutoBackupTs < AUTO_BACKUP_INTERVAL_MS)) return;
+        // Déduplication : ne pas recréer un point identique au plus récent
+        if (dedup) {
+            try {
+                const list = await Persistence.listBackups();
+                if (list.length && JSON.stringify(list[0].data) === JSON.stringify(data)) return;
+            } catch (e) { /* on sauvegarde quand même en cas de doute */ }
+        }
+        lastAutoBackupTs = now;
+        try {
+            await Persistence.addBackup({
+                ts: now,
+                type: "auto",
+                label: label || "Sauvegarde automatique",
+                schemaVersion: SCHEMA_VERSION,
+                data: deepCopy(data)
+            });
+            await Persistence.pruneBackups("auto", AUTO_BACKUP_KEEP);
+        } catch (e) {
+            console.error("Point de restauration automatique impossible", e);
+        }
+    }
+
+    async function createManualBackup(label) {
+        if (!Persistence.idbAvailable()) return false;
+        try {
+            await Persistence.addBackup({
+                ts: Date.now(),
+                type: "manual",
+                label: (label && label.trim()) || "Point de restauration manuel",
+                schemaVersion: SCHEMA_VERSION,
+                data: deepCopy(data)
+            });
+            return true;
+        } catch (e) {
+            console.error("Création du point de restauration impossible", e);
+            return false;
+        }
+    }
+
+    function listBackups() {
+        if (!Persistence.idbAvailable()) return Promise.resolve([]);
+        return Persistence.listBackups().catch(() => []);
+    }
+
+    async function restoreBackup(id) {
+        if (!Persistence.idbAvailable()) return false;
+        const b = await Persistence.getBackup(id);
+        if (!b || !b.data) return false;
+        // Instantané de sécurité de l'état courant AVANT de restaurer (annulable)
+        await maybeAutoBackup("Avant restauration", true);
+        data = normalize(b.data);
+        mirrorToLocalStorage();
+        await flushNow();
+        return true;
+    }
+
+    function deleteBackup(id) {
+        if (!Persistence.idbAvailable()) return Promise.resolve(false);
+        return Persistence.deleteBackup(id).then(() => true).catch(() => false);
+    }
+
+    /* =========================
+       INFOS STOCKAGE
+    ========================== */
+    async function getStorageInfo() {
+        const json = exportSnapshot();
+        const bytes = new Blob([json]).size;
+        const estimate = Persistence.idbAvailable() ? await Persistence.estimate() : null;
+        let backupCount = 0;
+        if (Persistence.idbAvailable()) {
+            try { backupCount = (await Persistence.listBackups()).length; } catch (e) { /* ignore */ }
+        }
+        const counts = {};
+        ARRAY_FIELDS.forEach(f => { counts[f] = data[f].length; });
+        return {
+            engine: (Persistence.idbAvailable() && idbHealthy) ? "IndexedDB" : "localStorage (secours)",
+            bytes,
+            estimate,
+            backupCount,
+            lastSavedAt,
+            counts,
+            updatedAt: data.updatedAt || null
+        };
     }
 
     /* =========================
@@ -213,35 +417,58 @@ const DataStore = (() => {
     function deleteMcoAction(id) { data.mco_actions = data.mco_actions.filter(x => x.id !== id); save(); }
 
     /* =========================
-       SAUVEGARDE & RESTAURATION (SNAPSHOT)
+       AUDITS & REVUES DE DIRECTION
+       (désormais intégrés à la sauvegarde unifiée ; audits.js les utilise via
+       le garde `if (!DataStore.getAudits)` et n'a donc pas besoin de changer)
+    ========================== */
+    function getAudits() { return data.audits; }
+    function addAudit(a) { data.audits.push(a); save(); }
+    function updateAudit(a) {
+        const i = data.audits.findIndex(x => x.id === a.id);
+        if (i !== -1) { data.audits[i] = a; save(); }
+    }
+    function deleteAudit(id) { data.audits = data.audits.filter(x => x.id !== id); save(); }
+
+    function getRevues() { return data.revues; }
+    function addRevue(r) { data.revues.push(r); save(); }
+    function updateRevue(r) {
+        const i = data.revues.findIndex(x => x.id === r.id);
+        if (i !== -1) { data.revues[i] = r; save(); }
+    }
+    function deleteRevue(id) { data.revues = data.revues.filter(x => x.id !== id); save(); }
+
+    /* =========================
+       EXPORT / IMPORT (FICHIER .json)
     ========================== */
     function exportSnapshot() {
-        return JSON.stringify(data, null, 2);
+        return JSON.stringify({
+            app: "cyber-grc-dedienne",
+            schemaVersion: SCHEMA_VERSION,
+            exportedAt: new Date().toISOString(),
+            data: data
+        }, null, 2);
     }
 
-    function importSnapshot(jsonString) {
+    // Accepte le nouveau format encapsulé { schemaVersion, data:{...} }
+    // ET l'ancien format plat { exigences:[...], ... } pour compatibilité.
+    async function importSnapshot(jsonString) {
         try {
             const parsed = JSON.parse(jsonString);
-
-            if (parsed && typeof parsed === 'object' && Array.isArray(parsed.exigences)) {
-                data = {
-                    clients: Array.isArray(parsed.clients) ? parsed.clients : [],
-                    exigences: Array.isArray(parsed.exigences) ? parsed.exigences : [],
-                    actions: Array.isArray(parsed.actions) ? parsed.actions : [],
-                    risques: Array.isArray(parsed.risques) ? parsed.risques : [],
-                    actifs: Array.isArray(parsed.actifs) ? parsed.actifs : [],
-                    processus: Array.isArray(parsed.processus) ? parsed.processus : [],
-                    crise: Array.isArray(parsed.crise) ? parsed.crise : [],
-                    scenarios_pra: Array.isArray(parsed.scenarios_pra) ? parsed.scenarios_pra : [],
-                    tests_pra: Array.isArray(parsed.tests_pra) ? parsed.tests_pra : [],
-                    prestataires: Array.isArray(parsed.prestataires) ? parsed.prestataires : [],
-                    mco_actions: Array.isArray(parsed.mco_actions) ? parsed.mco_actions : []
-                };
-                save();
-                return true;
-            } else {
-                return false;
+            let incoming = null;
+            if (parsed && parsed.data && Array.isArray(parsed.data.exigences)) {
+                incoming = parsed.data;                 // nouveau format
+            } else if (parsed && Array.isArray(parsed.exigences)) {
+                incoming = parsed;                      // ancien format
             }
+            if (!incoming) return false;
+
+            // Sécurité : point de restauration de l'état courant avant écrasement
+            await maybeAutoBackup("Avant import de fichier", true);
+
+            data = normalize(incoming);
+            mirrorToLocalStorage();
+            await flushNow();
+            return true;
         } catch (e) {
             console.error("Erreur lors de l'importation du snapshot :", e);
             return false;
@@ -250,13 +477,13 @@ const DataStore = (() => {
 
     return {
         init,
+
         getClients, getClientById, addClient, updateClient, deleteClient,
         getExigences, getExigencesByClient, getExigenceById, addExigence, updateExigence, deleteExigence,
         getActions, getActionById, getActionsByExigence, getActionsByRisque, addAction, updateAction, deleteAction,
         getRisques, getRisqueById, addRisque, updateRisque, deleteRisque,
         getActifs, getActifById, addActif, updateActif, deleteActif,
 
-        // Export des nouvelles fonctions Résilience
         getProcessus, getProcessusById, addProcessus, updateProcessus, deleteProcessus,
         getCriseMembres, getCriseMembreById, addCriseMembre, updateCriseMembre, deleteCriseMembre,
         getScenariosPra, getScenarioPraById, addScenarioPra, updateScenarioPra, deleteScenarioPra,
@@ -264,7 +491,12 @@ const DataStore = (() => {
         getPrestataires, addPrestataire, updatePrestataire, deletePrestataire,
         getMcoActions, addMcoAction, updateMcoAction, deleteMcoAction,
 
-        exportSnapshot,
-        importSnapshot
+        // Audits & revues (intégrés à la sauvegarde)
+        getAudits, addAudit, updateAudit, deleteAudit,
+        getRevues, addRevue, updateRevue, deleteRevue,
+
+        // Sauvegarde / restauration
+        exportSnapshot, importSnapshot,
+        getStorageInfo, listBackups, restoreBackup, deleteBackup, createManualBackup
     };
 })();
