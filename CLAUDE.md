@@ -27,10 +27,10 @@ sensibiliser → chaque concept doit avoir une **note pédagogique** (`Help.tip(
 | Multi-« Donneurs d'ordre » | **Conservé** (pertinent pour un sous-traitant aéro), libellés génériques. |
 | Full frontend | **Strict** : aucun backend, CDN runtime, ni service tiers. Libs embarquées localement. |
 
-### Décisions RECOMMANDÉES mais NON confirmées (à valider au prochain chat)
-- **Référentiels** : démarrer par **Hygiène ANSSI (42 mesures)** puis ISO 27002 / NIS2 / DORA / AirCyber.
+### Décisions Référentiels — VALIDÉES & LIVRÉES (chantier 4a/4b)
+- **Référentiels** : démarré par **Hygiène ANSSI (42 mesures)** ; suite ISO 27002 / NIS2 / DORA / AirCyber (4c).
 - **Architecture conformité** : entité pivot **« Mesure de sécurité »** reliée n-n aux
-  exigences des référentiels (évaluer une mesure propage le statut → zéro double saisie).
+  exigences des référentiels (évaluer une mesure propage le statut → zéro double saisie). **Livré.**
 
 ## 3. Architecture technique
 
@@ -75,9 +75,12 @@ cyber-gouvernance_V4/
 
 - IndexedDB `cyber-grc-db` : store `kv` (`current` = instantané, chiffré si protection active ;
   `meta`), store `backups` (points de restauration versionnés, auto + manuels).
-- `SCHEMA_VERSION = 2` dans `datastore.js`. Migrations à l'import via `migratePayload`.
+- `SCHEMA_VERSION = 3` dans `datastore.js`. Migrations à l'import via `migratePayload`.
 - Entités (tableaux) : clients, exigences, actions, risques, actifs, processus, crise,
-  scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues.
+  scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
+  **evaluations** (auto-évaluations de référentiels) et **mesures** (pivot « Mesure de sécurité »).
+- Référentiels : catalogue **statique** (registre `js/data/referentiels.js` + fichiers `ref_*.js`),
+  hors `data`. ANSSI livré (42 mesures). Ne pas embarquer le texte des normes.
 - Export fichier : enveloppe **`grc-backup`** `{ format, version, encrypted, createdAt, app, payload|kdf+cipher }`.
 
 ## 5. Lancer & tester (important)
@@ -102,8 +105,10 @@ cyber-gouvernance_V4/
 **Sauvegarde complète** (IndexedDB + historique versionné + migration ; enveloppe grc-backup ;
 export chiffré PBKDF2 600k ; import validé Remplacer/Fusionner ; rappel d'export ;
 protection opt-in + chiffrement au repos) • Phase 0 audit • **Design system** (tokens,
-tooltip ⓘ, fil d'Ariane, responsive, a11y).
+tooltip ⓘ, fil d'Ariane, responsive, a11y) • **Référentiels 4a/4b** (schéma v3
+`evaluations`/`mesures` ; référentiel **ANSSI 42 mesures** ; auto-évaluation + **radar de
+maturité** SVG ; pivot **« Mesure de sécurité »** + propagation « zéro double saisie »).
 
-**Prochain** : Chantier 4 — **Référentiels + mapping croisé** (commencer par l'ossature :
-modèle `evaluations`/`mesures` + référentiel ANSSI + auto-évaluation + radar), puis
-incidents, gestion documentaire, RGPD, tableau de bord direction, améliorations modules, durcissement.
+**Prochain** : Référentiels **4c** — autres référentiels (ISO 27002 / NIS2 / DORA / AirCyber)
++ **mapping croisé** + génération SoA ; puis incidents, gestion documentaire, RGPD,
+tableau de bord direction, améliorations modules, durcissement.

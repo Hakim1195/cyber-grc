@@ -715,3 +715,12 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
 .ref-action-form__row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .ref-action-form__row .ref-act-titre { flex: 1 1 240px; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .ref-action-form__row select, .ref-action-form__row input[type="date"] { padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+
+/* --- Lien vers une mesure de sécurité (pivot) --- */
+.ref-mesure-row { border-top: 1px dashed var(--border); padding-top: 0.9rem; margin-bottom: 0.9rem; }
+.ref-mesure-row > label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; }
+.ref-mesure-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ref-mesure-controls select { flex: 1 1 240px; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; }
+.ref-new-mesure { background: transparent; color: var(--accent); border: 1px solid var(--border); padding: 7px 12px; border-radius: var(--radius-sm); font-size: 0.85rem; white-space: nowrap; }
+.ref-new-mesure:hover { background: var(--primary-tint); border-color: var(--primary); color: var(--primary-dark); }
+.ref-mesure-link { color: var(--accent); font-size: 0.85rem; white-space: nowrap; }

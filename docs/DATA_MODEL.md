@@ -265,6 +265,6 @@ de données par référentiel (`js/data/ref_anssi.js`, …), au schéma commun :
 référentiel** » (`{code, titre, aide}`). À ne pas confondre avec l'entité utilisateur
 « **Mesure de sécurité** » (`mesures`), le pivot qui **couvre** ces exigences.
 
-Livré (itération 4) : référentiel **ANSSI** + auto-évaluation + radar de maturité.
-À venir (4b/4c) : module `/mesures` (propagation), mapping croisé, ISO 27002 / NIS2 /
-DORA / AirCyber + génération de SoA.
+Livré : référentiel **ANSSI** + auto-évaluation + radar (it. 4) ; **pivot Mesure de
+sécurité** `/mesures` + propagation (it. 5).
+À venir (4c) : mapping croisé, ISO 27002 / NIS2 / DORA / AirCyber + génération de SoA.

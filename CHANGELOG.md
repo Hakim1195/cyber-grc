@@ -5,6 +5,19 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 5 — Pivot « Mesure de sécurité » (zéro double saisie)
+- **Nouveau module Mesures de sécurité** (`js/modules/mesures.js`, routes `/mesures`
+  et `/mesures/:id`) : catalogue des contrôles de sécurité (MFA, sauvegardes,
+  cloisonnement…), entité **pivot** reliée n-n aux exigences des référentiels.
+- **Liaison depuis une exigence** : dans le détail d'une mesure de référentiel, un
+  sélecteur « Couverte par la mesure de sécurité » permet de relier (ou créer à la
+  volée) une mesure. La couverture est visible sur la fiche de la mesure.
+- **Propagation** : un clic recopie le statut et la maturité de la mesure sur toutes
+  les exigences qu'elle couvre — évaluer une fois, appliquer partout (fondation du
+  mapping croisé multi-référentiels à venir).
+- Suppression d'une mesure : les exigences liées sont **déliées** (leurs évaluations
+  sont conservées). Correctif : réaffichage des preuves à la réouverture d'une mesure.
+
 ### Itération 4 — Référentiels : ossature + Hygiène ANSSI + auto-évaluation
 - **Nouveau module Référentiels** (`js/modules/referentiels.js`, routes `/referentiels`
   et `/referentiels/:id`) : auto-évaluation de la conformité par rapport à un

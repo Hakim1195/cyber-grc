@@ -299,6 +299,12 @@ const ReferentielsModule = (() => {
     function detailPanelHtml(ref, ex, ev) {
         const commentaire = ev ? (ev.commentaire || "") : "";
         const preuves = ev ? (ev.preuves || "") : "";
+        const mesureId = ev ? (ev.mesure_id || "") : "";
+        const mesures = DataStore.getMesures();
+        const linked = mesureId ? DataStore.getMesureById(mesureId) : null;
+        const mesureOpts = `<option value="">— Aucune —</option>` +
+            mesures.map(m => `<option value="${m.id}" ${m.id === mesureId ? "selected" : ""}>${escapeHtml(m.nom)}</option>`).join("");
+
         return `
             <div class="ref-detail-panel">
                 <div class="ref-detail-grid2">
@@ -308,13 +314,33 @@ const ReferentielsModule = (() => {
                     </div>
                     <div class="form-group" style="margin:0;">
                         <label>Preuves ${Help.tip("Références des éléments justifiant l'évaluation : procédure, capture, ticket, nom de document… (l'application ne stocke pas les fichiers).")}</label>
-                        <textarea class="ref-preuves" data-code="${ex.code}" placeholder="Ex : PSSI §4.2, export AD du 12/03, ticket #1240…"></textarea>
+                        <textarea class="ref-preuves" data-code="${ex.code}" placeholder="Ex : PSSI §4.2, export AD du 12/03, ticket #1240…">${escapeHtml(preuves)}</textarea>
                     </div>
                 </div>
+
+                <div class="ref-mesure-row">
+                    <label>Couverte par la mesure de sécurité ${Help.tip("Reliez cette exigence à une « mesure de sécurité » transverse. En évaluant la mesure puis en la propageant, vous mettez à jour d'un coup toutes les exigences qu'elle couvre (zéro double saisie).")}</label>
+                    <div class="ref-mesure-controls">
+                        <select class="ref-mesure" data-code="${ex.code}" aria-label="Mesure de sécurité couvrant l'exigence ${escapeHtml(ex.code)}">${mesureOpts}</select>
+                        <button type="button" class="ref-new-mesure" data-code="${ex.code}">＋ Nouvelle</button>
+                        ${linked ? `<a href="#/mesures/${linked.id}" class="ref-mesure-link">Ouvrir la fiche →</a>` : ""}
+                    </div>
+                </div>
+
                 <div class="ref-actions-block" data-code="${ex.code}">
                     ${actionsBlockHtml(ref, ex.code)}
                 </div>
             </div>`;
+    }
+
+    // Re-rend le panneau de détail d'une mesure (après lien/création de mesure).
+    function refreshPanel(ref, code) {
+        const root = document.getElementById("ref-domains");
+        const cell = root && root.querySelector(`tr.ref-detail-row[data-detail="${cssEsc(code)}"] > td`);
+        if (!cell) return;
+        const ex = (typeof Referentiels !== "undefined") ? Referentiels.findExigence(ref, code) : { code };
+        const ev = DataStore.getEvaluation(ref.id, code);
+        cell.innerHTML = detailPanelHtml(ref, ex || { code }, ev);
     }
 
     // Bloc « actions correctives » d'une mesure (liste + formulaire de création).
@@ -390,6 +416,13 @@ const ReferentielsModule = (() => {
                 persist(code);
                 updateRowBadge(code);
                 refreshScores(ref);
+            } else if (el.classList.contains("ref-mesure")) {
+                // Lien vers une mesure de sécurité (pivot) → enregistre mesure_id.
+                const code = el.dataset.code;
+                const state = readRowState(ref, code, root);
+                state.mesure_id = el.value || null;
+                DataStore.upsertEvaluation(state);
+                refreshPanel(ref, code);
             }
         });
 
@@ -423,6 +456,21 @@ const ReferentielsModule = (() => {
             const saveBtn = e.target.closest(".ref-act-save");
             if (saveBtn) {
                 createActionFor(ref, saveBtn.dataset.code, root);
+                return;
+            }
+            const newMes = e.target.closest(".ref-new-mesure");
+            if (newMes) {
+                const code = newMes.dataset.code;
+                const nom = prompt("Nom de la nouvelle mesure de sécurité :");
+                if (nom && nom.trim()) {
+                    const mid = "MESURE-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+                    DataStore.addMesure({ id: mid, nom: nom.trim(), description: "", statut: "", maturite: 0, responsable: "", updatedAt: Date.now() });
+                    const state = readRowState(ref, code, root);
+                    state.mesure_id = mid;
+                    DataStore.upsertEvaluation(state);
+                    if (window.showToast) window.showToast("Mesure créée et liée.", "success");
+                    refreshPanel(ref, code);
+                }
                 return;
             }
         });

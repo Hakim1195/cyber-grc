@@ -13,8 +13,8 @@ Légende : ✅ fait · 🔜 prochain · ⏳ à faire · 💤 en attente de déci
 
 ## Décisions validées (chantier Référentiels)
 - ✅ **Référentiel de démarrage** : **Hygiène ANSSI (42 mesures)** — livré.
-- ✅ **Architecture conformité** : **pivot « Mesure de sécurité »** (n-n, propagation auto) — validé,
-  socle de données livré (tableau `mesures` + `evaluations[].mesure_id`), module en cours (4b).
+- ✅ **Architecture conformité** : **pivot « Mesure de sécurité »** (n-n, propagation auto) — livré
+  (module `/mesures` + propagation ; `mesures` + `evaluations[].mesure_id`).
 
 ---
 
@@ -43,12 +43,13 @@ Sous-itérations :
       originales courtes + aide) ; module `/referentiels` (liste + détail auto-évaluation :
       statut, maturité 0-5, commentaire, preuves, actions correctives tracées) ;
       **score + radar par domaine** (SVG maison, temps réel). *(Itération 4)*
-- 🔜 **4b — Pivot & mapping** : module `/mesures` (entité **« Mesure de sécurité »** n-n vers les
-      exigences de référentiels) ; **propagation du statut** aux évaluations liées (zéro double saisie) ;
-      lien évaluation↔mesure dans le détail ; mapping pré-rempli (ISO 27002 ↔ NIS2 ↔ ANSSI) éditable ;
-      vue **couverture croisée**. *(Socle de données déjà en place.)*
-- ⏳ **4c — Autres référentiels** : ISO 27002:2022 (93 mesures) + **génération SoA** ; NIS2 (art. 21) ;
-      DORA ; AirCyber (Bronze/Silver/Gold). Chaque référentiel = 1 fichier de données au schéma commun.
+- ✅ **4b — Pivot « Mesure de sécurité »** : module `/mesures` (CRUD) ; **entité pivot** n-n vers les
+      exigences de référentiels (`evaluations[].mesure_id`) ; lien / création à la volée depuis le détail
+      d'une exigence ; **propagation** du statut + maturité aux évaluations couvertes (zéro double saisie). *(Itération 5)*
+- ⏳ **4c — Mapping croisé & autres référentiels** : ISO 27002:2022 (93 mesures) + **génération SoA** ;
+      NIS2 (art. 21) ; DORA ; AirCyber (Bronze/Silver/Gold) au schéma commun ; **mapping pré-rempli**
+      (ISO ↔ NIS2 ↔ ANSSI) éditable ; vue **couverture croisée** (une mesure → plusieurs référentiels).
+      Chaque référentiel = 1 fichier de données au schéma commun.
 > ⚠️ NE PAS embarquer le texte intégral des normes (ISO payant/protégé). Reformulations originales +
 > identifiants de clauses (« A.5.1 ») + titre court uniquement.
 
