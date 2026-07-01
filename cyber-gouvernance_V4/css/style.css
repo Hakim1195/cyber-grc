@@ -5,20 +5,21 @@
 :root {
     /* =========================================
        CHARTE DEDIENNE AEROSPACE
-       Orange dominant (action/marque) + Bleu marine (structure)
+       Couleurs échantillonnées sur le logo officiel :
+       Orange #E9631B (avion) + Bleu #2059A6 (texte/ellipse)
        ========================================= */
-    --primary: #EE7A00;          /* Orange Dedienne : couleur d'action dominante */
-    --primary-light: #FF9838;
-    --primary-dark: #C96400;     /* Hover / états pressés */
-    --primary-tint: #FFF3E8;     /* Fond orangé très clair */
+    --primary: #E9631B;          /* Orange Dedienne : couleur d'action dominante */
+    --primary-light: #F2803F;
+    --primary-dark: #C4530F;     /* Hover / états pressés */
+    --primary-tint: #FDEFE4;     /* Fond orangé très clair */
 
-    --accent: #1C6BB0;           /* Bleu Dedienne : couleur secondaire (liens, info) */
-    --accent-hover: #14528A;
+    --accent: #2059A6;           /* Bleu Dedienne : couleur secondaire (liens, info) */
+    --accent-hover: #17457F;
 
-    /* Structure (barre latérale) */
-    --sidebar-bg: #0F3557;       /* Bleu marine profond Dedienne */
-    --sidebar-bg-2: #0B2A46;
-    --sidebar-text: rgba(255,255,255,0.82);
+    /* Structure (barre latérale) — bleu du logo */
+    --sidebar-bg: #2059A6;       /* Bleu Dedienne */
+    --sidebar-bg-2: #16457C;     /* Dégradé plus profond en bas */
+    --sidebar-text: rgba(255,255,255,0.85);
 
     --bg-body: #f5f6f8;
     --bg-card: #ffffff;
@@ -30,7 +31,7 @@
     --color-success: #27ae60;
     --color-warning: #f39c12;
     --color-danger: #e74c3c;
-    --color-info: #1C6BB0;
+    --color-info: #2059A6;
     --color-gray: #95a5a6;
 
     /* Risk Levels */
@@ -99,13 +100,18 @@ a { text-decoration: none; color: inherit; }
     flex-shrink: 0; /* Empêche le header de s'écraser au scroll */
 }
 
-.brand-link { display: block; }
+.brand-link {
+    display: block;
+    background: #ffffff;
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 0.9rem;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
 .brand-logo {
     width: 100%;
-    max-width: 210px;
     height: auto;
     display: block;
-    margin-bottom: 0.6rem;
 }
 
 .sidebar-header h2 { font-size: 1.4rem; margin-bottom: 0.5rem; }
