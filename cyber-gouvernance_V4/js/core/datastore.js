@@ -439,40 +439,139 @@ const DataStore = (() => {
 
     /* =========================
        EXPORT / IMPORT (FICHIER .json)
+       Enveloppe standard :
+       { format:"grc-backup", version, encrypted, createdAt, app, payload|kdf+cipher }
     ========================== */
-    function exportSnapshot() {
-        return JSON.stringify({
+    const BACKUP_FORMAT = "grc-backup";
+    const EXPORT_ITERATIONS = 600000;   // PBKDF2 pour l'export chiffré (brief §3.2)
+
+    function buildEnvelope(extra) {
+        return Object.assign({
+            format: BACKUP_FORMAT,
+            version: SCHEMA_VERSION,
             app: "cyber-grc-dedienne",
-            schemaVersion: SCHEMA_VERSION,
-            exportedAt: new Date().toISOString(),
-            data: data
-        }, null, 2);
+            createdAt: new Date().toISOString()
+        }, extra);
     }
 
-    // Accepte le nouveau format encapsulé { schemaVersion, data:{...} }
-    // ET l'ancien format plat { exigences:[...], ... } pour compatibilité.
-    async function importSnapshot(jsonString) {
-        try {
-            const parsed = JSON.parse(jsonString);
-            let incoming = null;
-            if (parsed && parsed.data && Array.isArray(parsed.data.exigences)) {
-                incoming = parsed.data;                 // nouveau format
-            } else if (parsed && Array.isArray(parsed.exigences)) {
-                incoming = parsed;                      // ancien format
+    // Export en clair (interopérabilité / lisible).
+    function exportSnapshot() {
+        return JSON.stringify(buildEnvelope({ encrypted: false, payload: data }), null, 2);
+    }
+
+    // Export chiffré : payload protégé par mot de passe (AES-256-GCM,
+    // clé dérivée par PBKDF2 avec un sel propre au fichier → portable entre postes).
+    async function exportEncrypted(password) {
+        if (!CryptoService || !CryptoService.available()) {
+            throw new Error("Web Crypto indisponible (contexte non sécurisé).");
+        }
+        const saltB64 = CryptoService.newSalt();
+        const key = await CryptoService.deriveKey(password, saltB64, EXPORT_ITERATIONS, ["encrypt", "decrypt"]);
+        const env = await CryptoService.encryptString(key, JSON.stringify(data));
+        return JSON.stringify(buildEnvelope({
+            encrypted: true,
+            kdf: { algo: "PBKDF2", hash: "SHA-256", iterations: EXPORT_ITERATIONS, salt: saltB64 },
+            cipher: { algo: "AES-GCM", iv: env.iv, ct: env.ct }
+        }), null, 2);
+    }
+
+    // Valide qu'un payload ressemble à une base Cyber GRC.
+    function validatePayload(payload) {
+        if (!payload || typeof payload !== "object") return { valid: false };
+        // au moins un champ connu, et tout champ présent doit être un tableau
+        let known = 0;
+        for (const f of ARRAY_FIELDS) {
+            if (payload[f] !== undefined) {
+                if (!Array.isArray(payload[f])) return { valid: false };
+                known++;
             }
-            if (!incoming) return false;
+        }
+        if (known === 0) return { valid: false };
+        const summary = {};
+        ARRAY_FIELDS.forEach(f => { summary[f] = Array.isArray(payload[f]) ? payload[f].length : 0; });
+        return { valid: true, summary };
+    }
 
-            // Sécurité : point de restauration de l'état courant avant écrasement
-            await maybeAutoBackup("Avant import de fichier", true);
+    // Migrations de schéma ascendantes (v1 → v2 → …). `normalize` garantit ensuite
+    // la présence de tous les tableaux.
+    function migratePayload(payload, fromVersion) {
+        let p = payload;
+        const v = Number(fromVersion) || 1;
+        // v1 : audits/revues étaient hors du snapshot → normalize crée les tableaux.
+        // (Ajouter ici les futures migrations : if (v < 3) { ... })
+        return p;
+    }
 
-            data = normalize(incoming);
+    // Analyse un fichier importé sans l'appliquer. Retourne un diagnostic :
+    // { ok, needPassword, badPassword, invalid, payload, meta, summary }.
+    async function parseImport(jsonString, password) {
+        let parsed;
+        try { parsed = JSON.parse(jsonString); }
+        catch (e) { return { ok: false, invalid: true }; }
+
+        let payload = null;
+        let version = SCHEMA_VERSION;
+        let encrypted = false;
+        let createdAt = null;
+
+        if (parsed && parsed.format === BACKUP_FORMAT) {
+            version = parsed.version || 1;
+            createdAt = parsed.createdAt || null;
+            if (parsed.encrypted) {
+                encrypted = true;
+                if (!password) return { ok: false, needPassword: true };
+                if (!CryptoService || !CryptoService.available()) return { ok: false, invalid: true };
+                try {
+                    const iters = (parsed.kdf && parsed.kdf.iterations) || EXPORT_ITERATIONS;
+                    const key = await CryptoService.deriveKey(password, parsed.kdf.salt, iters, ["encrypt", "decrypt"]);
+                    const pt = await CryptoService.decryptString(key, { iv: parsed.cipher.iv, ct: parsed.cipher.ct });
+                    payload = JSON.parse(pt);
+                } catch (e) {
+                    return { ok: false, badPassword: true };
+                }
+            } else {
+                payload = parsed.payload;
+            }
+        } else if (parsed && parsed.data && Array.isArray(parsed.data.exigences)) {
+            payload = parsed.data;                       // ancien format encapsulé
+            version = parsed.schemaVersion || 1;
+        } else if (parsed && Array.isArray(parsed.exigences)) {
+            payload = parsed;                            // très ancien format plat
+            version = 1;
+        }
+
+        const check = validatePayload(payload);
+        if (!check.valid) return { ok: false, invalid: true };
+
+        payload = migratePayload(payload, version);
+        return { ok: true, payload, encrypted, meta: { version, createdAt }, summary: check.summary };
+    }
+
+    // Applique un payload validé. mode: "replace" (défaut) ou "merge".
+    async function applyImport(payload, mode) {
+        // Sécurité : point de restauration de l'état courant avant modification
+        await maybeAutoBackup("Avant import de fichier", true);
+
+        if (mode === "merge") {
+            const incoming = normalize(payload);
+            const added = {};
+            ARRAY_FIELDS.forEach(f => {
+                const existingIds = new Set(data[f].map(x => x && x.id));
+                const toAdd = incoming[f].filter(x => x && !existingIds.has(x.id));
+                data[f] = data[f].concat(toAdd);
+                added[f] = toAdd.length;
+            });
+            data.schemaVersion = SCHEMA_VERSION;
             mirrorToLocalStorage();
             await flushNow();
-            return true;
-        } catch (e) {
-            console.error("Erreur lors de l'importation du snapshot :", e);
-            return false;
+            return { ok: true, added };
         }
+
+        // Remplacement
+        data = normalize(payload);
+        mirrorToLocalStorage();
+        await flushNow();
+        return { ok: true };
     }
 
     return {
@@ -496,7 +595,7 @@ const DataStore = (() => {
         getRevues, addRevue, updateRevue, deleteRevue,
 
         // Sauvegarde / restauration
-        exportSnapshot, importSnapshot,
+        exportSnapshot, exportEncrypted, parseImport, applyImport,
         getStorageInfo, listBackups, restoreBackup, deleteBackup, createManualBackup
     };
 })();

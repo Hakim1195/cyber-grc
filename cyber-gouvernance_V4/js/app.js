@@ -70,6 +70,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     ========================== */
     const initialRoute = location.hash ? location.hash.replace(/^#/, "") : "/dashboard";
     Router.navigateTo(initialRoute, false);
+
+    /* =========================
+       RAPPEL DE SAUVEGARDE
+    ========================== */
+    if (typeof BackupService !== "undefined") BackupService.renderReminder();
 });
 
 /* =========================

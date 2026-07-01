@@ -412,6 +412,54 @@ button:active { transform: translateY(0); }
 .toast.warning { border-left: 5px solid var(--color-warning); }
 
 /* =========================================
+   BANDEAU DE RAPPEL (SAUVEGARDE)
+   ========================================= */
+#global-banner:empty { display: none; }
+.reminder-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+}
+.reminder-banner .reminder-ico {
+    flex-shrink: 0;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-weight: 800;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.reminder-banner .reminder-text { flex: 1; }
+.reminder-banner .reminder-btn {
+    background: var(--primary); color: #fff;
+    padding: 7px 14px; font-size: 0.85rem; flex-shrink: 0;
+}
+.reminder-banner .reminder-close {
+    background: transparent; color: #9a3412;
+    font-size: 1.3rem; line-height: 1; padding: 2px 8px; flex-shrink: 0;
+}
+
+/* =========================================
+   ENCART PÉDAGOGIQUE (aide contextuelle)
+   ========================================= */
+.help-note {
+    background: var(--primary-tint, #fdefe4);
+    border-left: 3px solid var(--primary);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    color: var(--text-main);
+    line-height: 1.5;
+}
+
+/* =========================================
    PRINT / PDF STYLES
    ========================================= */
 @media print {

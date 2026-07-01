@@ -5,6 +5,20 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 1 — Stratégie de sauvegarde (fichier)
+- **Enveloppe de sauvegarde standard** `grc-backup` versionnée
+  (`{ format, version, encrypted, createdAt, app, payload|kdf+cipher }`).
+- **Export chiffré** optionnel et recommandé : AES-256-GCM, clé dérivée par
+  **PBKDF2 (600 000 itérations)**, sel + IV aléatoires par fichier (portable).
+  Export en clair toujours possible (avec avertissement pédagogique).
+- **Import robuste** : détection auto du chiffrement (demande le mot de passe),
+  validation stricte du contenu, aperçu chiffré, choix **Remplacer / Fusionner**,
+  point de restauration créé avant toute modification, compat. anciens formats.
+- **Migrations de schéma** ascendantes (registre `migratePayload`).
+- **Rappel d'export** non intrusif (bandeau, seuil paramétrable, défaut 7 j) +
+  date du dernier export affichée. Statut du **stockage persistant** dans les paramètres.
+- Encarts pédagogiques (pourquoi chiffrer) intégrés au design.
+
 ### Phase 0 — Audit
 - Ajout de `docs/DATA_MODEL.md` (schéma de données de référence).
 - Ajout de `docs/AUDIT.md` (état des lieux, dette technique, plan priorisé).
