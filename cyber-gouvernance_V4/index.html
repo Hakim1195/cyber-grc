@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber GRC | HM IT Consulting</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="toast-container" class="no-print"></div>
+
+    <nav class="sidebar no-print">
+        <div class="sidebar-header">
+            <h2><a href="https://google.com">🛡️ Cyber GRC </a></h2>
+            <span class="badge">V4.1 - SaaS</span>
+        </div>
+        <ul class="main-nav">
+            <li class="sidebar-divider" style="margin-top: 0;">Gouvernance & Risques</li>
+            <li><a href="#/dashboard" data-route="/dashboard">📊 Tableau de bord</a></li>
+            <li><a href="#/synthese" data-route="/synthese">📑 Synthèse Direction</a></li>
+            <li><a href="#/clients" data-route="/clients">🏢 Donneurs d'ordre</a></li>
+            <li><a href="#/actifs" data-route="/actifs">💻 Actifs critiques</a></li>
+            <li><a href="#/risques" data-route="/risques">⚠️ Risques (EBIOS)</a></li>
+            <li><a href="#/matrice" data-route="/matrice">🧮 Matrice des risques</a></li>
+            <li><a href="#/exigences" data-route="/exigences">📜 Exigences (ISO/NIS2)</a></li>
+            <li><a href="#/actions" data-route="/actions">🚀 Plan d'actions</a></li>
+
+            <li class="sidebar-divider">Continuité (ISO 22301)</li>
+            <li><a href="#/bia" data-route="/bia">⏱️ BIA (Impact Métier)</a></li>
+            <li><a href="#/crise" data-route="/crise">🚨 Cellule de Crise</a></li>
+            <li><a href="#/pra" data-route="/pra">📋 Scénarios PCA/PRA</a></li>
+            <li><a href="#/mco" data-route="/mco">🛠️ Actions Préalables (MCO)</a></li>
+            <li><a href="#/tests" data-route="/tests">🧪 Historique des Tests</a></li>
+            <li><a href="#/prestataires" data-route="/prestataires">📞 Prestataires & Tiers</a></li>
+	    <li><a href="#/audits" data-route="/audits">🔍 Contrôles & Audits</a></li>
+
+            <li class="sidebar-divider">Administration</li>
+            <li><a href="#/settings" data-route="/settings">⚙️ Paramètres & Data</a></li>
+        </ul>
+    </nav>
+
+    <main id="app" class="main-content">
+        </main>
+
+    <script src="js/lib/xlsx.full.min.js"></script>
+
+    <script src="js/core/datastore.js"></script>
+    <script src="js/core/router.js"></script>
+
+    <script src="js/modules/clients.js"></script> 
+    <script src="js/modules/dashboard.js"></script>
+    <script src="js/modules/synthese.js"></script>
+    <script src="js/modules/actifs.js"></script>
+    <script src="js/modules/risques.js"></script>
+    <script src="js/modules/matrice.js"></script>
+    <script src="js/modules/exigences.js"></script>
+    <script src="js/modules/actions.js"></script>
+    
+    <script src="js/modules/bia.js"></script>
+    <script src="js/modules/crise.js"></script>
+    <script src="js/modules/pra_scenarios.js"></script>
+    <script src="js/modules/pra_mco.js"></script>
+    <script src="js/modules/pra_tests.js"></script>
+    <script src="js/modules/pra_prestataires.js"></script>
+    <script src="js/modules/audits.js"></script>
+
+    <script src="js/modules/settings.js"></script>
+
+    <script src="js/services/exportExcel.js"></script>
+    <script src="js/services/exportPDF.js"></script>
+    <script src="js/services/importExcel.js"></script>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
