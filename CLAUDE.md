@@ -161,5 +161,10 @@ selon le sens « meilleur » ; bouton « Effacer l'historique ». Tests Playwrig
 (revue échue/proche ou statut « à réviser »/« obsolète », compteur d'alerte) et **conformité
 comparative par donneur d'ordre** (barres triées interne + clients). Listes cliquables. Tests Playwright.
 
-**Prochain** : Chantier 9 (factorisation des helpers dupliqués — suppression groupée, badges,
-confirmations, collecte de formulaire ; `QuotaExceededError` à l'import Excel ; i18n).
+**Fait (Chantier 9 — Quota de stockage)** : détection de la **saturation du stockage** (plus d'échec
+silencieux) — `DataStore.flush()` renvoie `{ ok, quota }`, observateur `onQuotaExceeded` → **bandeau
+d'alerte** dédié ; l'**import Excel** force un enregistrement et prévient si le stockage est plein.
+Tests Playwright (simulation de quota).
+
+**Prochain** : suite du Chantier 9 — factorisation des helpers dupliqués (suppression groupée, badges,
+confirmations, collecte de formulaire) ; i18n (chaînes centralisées, sans sur-ingénierie).

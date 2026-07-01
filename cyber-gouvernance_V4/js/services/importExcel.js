@@ -60,7 +60,7 @@ const ImportExcelService = (() => {
                 importedCount++;
                 existingCodes.push(code.toLowerCase());
             }
-            if (onSuccess) onSuccess(importedCount, skippedCount);
+            _finish(importedCount, skippedCount, onSuccess);
         });
     }
 
@@ -125,7 +125,7 @@ const ImportExcelService = (() => {
                 importedCount++;
                 existingRisques.push(nom.toLowerCase());
             }
-            if (onSuccess) onSuccess(importedCount, skippedCount);
+            _finish(importedCount, skippedCount, onSuccess);
         });
     }
 
@@ -195,7 +195,7 @@ const ImportExcelService = (() => {
                 importedCount++;
                 existingActifs.push(nom.toLowerCase());
             }
-            if (onSuccess) onSuccess(importedCount, skippedCount);
+            _finish(importedCount, skippedCount, onSuccess);
         });
     }
 
@@ -227,6 +227,23 @@ const ImportExcelService = (() => {
     /* =========================
        OUTILS INTERNES
     ========================== */
+    // Termine un import : force l'enregistrement durable puis prévient l'utilisateur
+    // si le stockage est saturé (quota) — sinon l'échec serait silencieux et les
+    // lignes importées (en mémoire) seraient perdues au prochain chargement.
+    function _finish(importedCount, skippedCount, onSuccess) {
+        const done = () => { if (onSuccess) onSuccess(importedCount, skippedCount); };
+        if (importedCount > 0 && DataStore.flush) {
+            DataStore.flush().then(res => {
+                if (res && res.quota && window.showToast) {
+                    window.showToast("Stockage saturé : l'import risque de ne pas être enregistré durablement. Exportez une sauvegarde et libérez de l'espace (Paramètres → Sauvegardes).", "error");
+                }
+                done();
+            }).catch(done);
+        } else {
+            done();
+        }
+    }
+
     function _processExcel(file, callback) {
         const reader = new FileReader();
         reader.onload = (e) => {

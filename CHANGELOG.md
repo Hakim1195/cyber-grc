@@ -5,6 +5,22 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 9 — Durcissement : gestion de la saturation du stockage (quota)
+- **Fin des échecs silencieux** : quand une écriture durable échoue faute de place
+  (`QuotaExceededError` sur IndexedDB, le miroir localStorage ou un point de restauration), l'appli
+  le **détecte** et **prévient l'utilisateur** au lieu de perdre les données sans un mot.
+- **Bandeau d'alerte dédié** (« Stockage saturé ») : conteneur propre, indépendant du rappel de
+  sauvegarde, avec accès direct aux Paramètres (export + suppression d'anciens points de restauration
+  pour libérer de l'espace) et fermeture manuelle.
+- **Import Excel** : en fin d'import, un **enregistrement est forcé** et un message d'alerte s'affiche
+  si le stockage est plein (les lignes importées restent en mémoire pour la session, mais l'utilisateur
+  sait qu'elles ne sont pas encore persistées).
+- **DataStore** : `isQuotaError`, observateur `onQuotaExceeded(cb)`, et `flush()` async renvoyant
+  `{ ok, quota }`. Détection branchée sur `flushNow`, le miroir localStorage et l'auto-sauvegarde.
+- **Tests headless (Playwright)** : simulation d'un quota (monkey-patch d'IndexedDB) → `flush()` signale
+  `quota:true`, bandeau affiché (sans doublon, cohabite avec le rappel), import Excel alerté, fermeture
+  et rétablissement ; **0 erreur console inattendue**.
+
 ### Chantier 7 — Tableau de bord : suivi, échéances & comparatif par donneur d'ordre
 - **Incidents récents** : nouvelle liste (5 derniers incidents par date de détection, du plus récent
   au plus ancien) avec gravité, type, statut et **badge « À déclarer »** quand une déclaration

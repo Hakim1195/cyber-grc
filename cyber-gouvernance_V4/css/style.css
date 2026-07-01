@@ -893,6 +893,23 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
 .trend-hint { font-size: 0.8rem; color: var(--text-muted); margin: 12px 0 0; }
 
 /* =========================================
+   BANDEAU D'ALERTE : STOCKAGE SATURÉ (quota)
+   ========================================= */
+.quota-banner {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--tint-crit); border: 1px solid #eab8bd; color: #7a1f18;
+    border-radius: var(--radius); padding: 10px 14px; margin-bottom: 1.5rem; font-size: 0.9rem;
+}
+.quota-banner .quota-ico {
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--color-danger); color: #fff; font-weight: 800;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.quota-banner .quota-text { flex: 1; }
+.quota-banner .reminder-btn { background: var(--color-danger); color: #fff; padding: 7px 14px; font-size: 0.85rem; flex-shrink: 0; }
+.quota-banner .reminder-close { background: transparent; color: #7a1f18; font-size: 1.3rem; line-height: 1; padding: 2px 8px; flex-shrink: 0; }
+
+/* =========================================
    TABLEAU DE BORD ENRICHI — COCKPIT GRC
    (bandeau posture, KPI strip, donut/bars/heatmap SVG,
     liste de veille, tuiles de couverture du dispositif)

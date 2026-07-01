@@ -56,6 +56,24 @@ const DataStore = (() => {
     // Active/désactive le chiffrement au repos (appelée par app.js / Vault).
     function setKey(key) { dek = key; }
 
+    /* =========================
+       DÉTECTION DE SATURATION DU STOCKAGE (quota)
+       Les écritures durables (IndexedDB / localStorage) peuvent échouer si le quota
+       du navigateur est atteint (typiquement à l'import d'un gros volume). On le
+       signale explicitement au lieu d'échouer en silence (risque de perte de données).
+    ========================== */
+    let quotaListeners = [];
+    let quotaHitLast = false;   // le DERNIER flush a-t-il buté sur le quota ?
+    function isQuotaError(e) {
+        if (!e) return false;
+        return e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" || e.code === 22 || e.code === 1014;
+    }
+    function notifyQuota(source) {
+        quotaListeners.forEach(cb => { try { cb(source); } catch (err) { /* ignore */ } });
+    }
+    // Enregistre un observateur appelé quand une écriture échoue faute de place.
+    function onQuotaExceeded(cb) { if (typeof cb === "function") quotaListeners.push(cb); }
+
     function deepCopy(obj) {
         return JSON.parse(JSON.stringify(obj));
     }
@@ -196,12 +214,15 @@ const DataStore = (() => {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         } catch (e) {
-            // Quota dépassé ou indisponible : on n'insiste pas.
+            // Quota dépassé ou indisponible : le miroir est best-effort, mais on
+            // signale la saturation (le stockage durable risque d'échouer aussi).
+            if (isQuotaError(e)) notifyQuota("localStorage");
         }
     }
 
     async function flushNow() {
         if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+        quotaHitLast = false;
         try {
             const payload = await encodePayload();   // chiffré si une clé est présente
             if (Persistence.idbAvailable() && idbHealthy) {
@@ -214,10 +235,18 @@ const DataStore = (() => {
             maybeAutoBackup(undefined, false, true); // throttlé + dédupliqué
             return true;
         } catch (e) {
+            if (isQuotaError(e)) { quotaHitLast = true; notifyQuota("indexedDB"); }
             console.error("Échec de l'enregistrement", e);
             if (Persistence.idbAvailable()) idbHealthy = false;
             return false;
         }
+    }
+
+    // Force un enregistrement immédiat et renvoie l'état (dont la saturation de
+    // quota) — utile après un import en masse pour prévenir l'utilisateur.
+    async function flush() {
+        const ok = await flushNow();
+        return { ok, quota: quotaHitLast };
     }
 
     /* =========================
@@ -254,6 +283,7 @@ const DataStore = (() => {
             await Persistence.addBackup(await makeBackupRecord(label || "Sauvegarde automatique", "auto"));
             await Persistence.pruneBackups("auto", AUTO_BACKUP_KEEP);
         } catch (e) {
+            if (isQuotaError(e)) notifyQuota("backup");
             console.error("Point de restauration automatique impossible", e);
         }
     }
@@ -904,6 +934,7 @@ const DataStore = (() => {
 
     return {
         init, setKey, isEncrypted, enableEncryption, disableEncryption,
+        flush, onQuotaExceeded,
 
         getClients, getClientById, addClient, updateClient, deleteClient,
         getExigences, getExigencesByClient, getExigenceById, addExigence, updateExigence, deleteExigence,

@@ -102,6 +102,13 @@ async function startApp() {
     if (typeof BackupService !== "undefined") BackupService.renderReminder();
 
     /* =========================
+       ALERTE SATURATION DU STOCKAGE (quota)
+    ========================== */
+    if (typeof DataStore.onQuotaExceeded === "function") {
+        DataStore.onQuotaExceeded(() => showQuotaBanner());
+    }
+
+    /* =========================
        AIDE PÉDAGOGIQUE + MENU MOBILE
     ========================== */
     if (typeof Help !== "undefined") Help.init();
@@ -124,6 +131,35 @@ function setupMobileMenu() {
     backdrop.onclick = close;
     // Fermer après un clic sur un lien de navigation (mobile)
     sidebar.querySelectorAll("a[href^='#/']").forEach(a => a.addEventListener("click", close));
+}
+
+/* =========================
+   BANDEAU D'ALERTE : STOCKAGE SATURÉ (quota)
+   Conteneur dédié (indépendant du rappel de sauvegarde de #global-banner) pour ne
+   pas s'écraser mutuellement. Alerte critique : risque de perte des données.
+========================= */
+function showQuotaBanner() {
+    let host = document.getElementById("quota-banner-host");
+    if (!host) {
+        host = document.createElement("div");
+        host.id = "quota-banner-host";
+        host.className = "no-print";
+        const gb = document.getElementById("global-banner");
+        if (gb && gb.parentNode) gb.parentNode.insertBefore(host, gb);
+        else { const mc = document.querySelector(".main-content"); if (mc) mc.prepend(host); }
+    }
+    if (host.querySelector(".quota-banner")) return;   // déjà affiché
+    host.innerHTML = `
+        <div class="quota-banner" role="alert">
+            <span class="quota-ico">!</span>
+            <span class="quota-text"><b>Stockage saturé.</b> Vos dernières modifications ne peuvent pas être enregistrées durablement. Exportez une sauvegarde, puis libérez de l'espace (supprimez d'anciens points de restauration dans Paramètres&nbsp;→&nbsp;Sauvegardes).</span>
+            <button id="quota-settings" class="reminder-btn">Ouvrir les paramètres</button>
+            <button id="quota-dismiss" class="reminder-close" title="Masquer" aria-label="Masquer">&times;</button>
+        </div>`;
+    const s = document.getElementById("quota-settings");
+    if (s) s.onclick = () => Router.navigateTo("/settings");
+    const d = document.getElementById("quota-dismiss");
+    if (d) d.onclick = () => { host.innerHTML = ""; };
 }
 
 /* =========================

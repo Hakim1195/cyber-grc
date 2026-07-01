@@ -120,9 +120,13 @@ du pivot ; registre **imprimable**. Schéma v6.
 - ✅ **Cascade/orphelins** (`tests_pra.scenario_id`) : suppression d'un scénario → cascade sur ses
       tests (confirmation chiffrée) ; détection + nettoyage des tests orphelins hérités (bandeau +
       badge). Helpers DataStore `getTestsByScenario`/`getOrphanTests`/`deleteOrphanTests`. *(Itération 19)*
-- Factorisation des helpers dupliqués (suppression groupée, badges, confirmations, collecte de formulaire).
-- Gestion `QuotaExceededError` à l'import Excel.
-- i18n : chaînes centralisées (structure, sans sur-ingénierie).
+- ✅ **Gestion `QuotaExceededError`** *(it. 23)* : détection de la **saturation du stockage** (IndexedDB /
+      localStorage / points de restauration) — plus d'échec silencieux. `DataStore.flush()` renvoie
+      l'état (dont `quota`), observateur `onQuotaExceeded` → **bandeau d'alerte** dédié (export + libération
+      d'espace) ; l'**import Excel** force un enregistrement en fin de traitement et **prévient** si le
+      stockage est plein. Tests Playwright (simulation de quota, import, bandeau).
+- ⏳ Factorisation des helpers dupliqués (suppression groupée, badges, confirmations, collecte de formulaire).
+- ⏳ i18n : chaînes centralisées (structure, sans sur-ingénierie).
 
 ---
 
