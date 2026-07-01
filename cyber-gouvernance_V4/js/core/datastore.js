@@ -10,6 +10,7 @@ const DataStore = (() => {
     const STORAGE_KEY = "cyber-gouvernance-data";   // ancienne clé localStorage (migration)
     const LEGACY_AUDITS_KEY = "cyber-audits";
     const LEGACY_REVUES_KEY = "cyber-revues";
+    const LOCAL_CURRENT_KEY = "cyber-current";      // repli (chiffré si clé) si IndexedDB indisponible
     const SCHEMA_VERSION = 2;
 
     const ARRAY_FIELDS = [
@@ -33,9 +34,43 @@ const DataStore = (() => {
     let lastSavedAt = 0;
     let lastAutoBackupTs = 0;
     let idbHealthy = true;
+    let dek = null;   // clé de chiffrement au repos (null = mode non chiffré). Fournie par le Vault.
+
+    // Active/désactive le chiffrement au repos (appelée par app.js / Vault).
+    function setKey(key) { dek = key; }
 
     function deepCopy(obj) {
         return JSON.parse(JSON.stringify(obj));
+    }
+
+    // Empreinte rapide (djb2) pour dédupliquer les points de restauration sans déchiffrer.
+    function quickHash(str) {
+        let h = 5381;
+        for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+        return (h >>> 0).toString(16);
+    }
+
+    // Encapsule l'état pour le stockage (chiffré si une clé est présente).
+    async function encodePayload() {
+        const plaintext = JSON.stringify(data);
+        if (dek && typeof CryptoService !== "undefined" && CryptoService.available()) {
+            const env = await CryptoService.encryptString(dek, plaintext);
+            return { enc: true, iv: env.iv, ct: env.ct };
+        }
+        return { enc: false, data: JSON.parse(plaintext) };
+    }
+
+    // Décode un enregistrement stocké (chiffré, encapsulé clair, ou ancien objet direct).
+    async function decodePayload(payload) {
+        if (!payload) return null;
+        if (payload.enc) {
+            if (!dek) return null;
+            try { return JSON.parse(await CryptoService.decryptString(dek, payload)); }
+            catch (e) { console.error("Déchiffrement du stockage impossible", e); return null; }
+        }
+        if (payload.data && typeof payload.data === "object") return payload.data;
+        if (Array.isArray(payload.exigences) || Array.isArray(payload.clients)) return payload; // ancien format direct
+        return null;
     }
 
     function normalize(d) {
@@ -75,11 +110,11 @@ const DataStore = (() => {
     ========================== */
     async function init() {
         try {
-            let loaded = null;
+            let payload = null;
 
             if (Persistence.idbAvailable()) {
                 try {
-                    loaded = await Persistence.kvGet("current");
+                    payload = await Persistence.kvGet("current");
                 } catch (e) {
                     console.error("Lecture IndexedDB échouée", e);
                     idbHealthy = false;
@@ -88,14 +123,19 @@ const DataStore = (() => {
                 idbHealthy = false;
             }
 
-            // Aucun enregistrement durable → tenter la migration depuis localStorage
+            // Repli : instantané stocké dans localStorage (si IndexedDB KO)
+            if (!payload) payload = safeParse(localStorage.getItem(LOCAL_CURRENT_KEY));
+
+            let loaded = payload ? await decodePayload(payload) : null;
+
+            // Aucun enregistrement durable → tenter la migration depuis l'ancien localStorage
             if (!loaded) {
                 loaded = migrateFromLegacy();
             }
 
             data = normalize(loaded || data);
 
-            // Persister l'état normalisé (finalise la migration le cas échéant)
+            // (Re)chiffre/persiste l'état normalisé (finalise migration ou activation du chiffrement)
             await flushNow();
 
             // Rendre le stockage persistant + point de restauration d'ouverture
@@ -123,8 +163,8 @@ const DataStore = (() => {
     // Point d'entrée synchrone appelé par tous les modules.
     function save() {
         data.updatedAt = Date.now();
-        mirrorToLocalStorage();   // secours synchrone anti-crash
-        scheduleFlush();          // persistance durable IndexedDB (débounce)
+        mirrorToLocalStorage();   // secours synchrone anti-crash (uniquement en mode non chiffré)
+        scheduleFlush();          // persistance durable (débounce)
     }
 
     function scheduleFlush() {
@@ -132,10 +172,10 @@ const DataStore = (() => {
         flushTimer = setTimeout(() => { flushNow(); }, AUTOSAVE_DEBOUNCE_MS);
     }
 
-    // Miroir localStorage (best-effort) : utile si l'onglet se ferme avant le flush
-    // IndexedDB. Peut échouer (quota) sur de très grosses bases — IndexedDB reste
-    // alors la source durable.
+    // Miroir localStorage synchrone (anti-crash) — désactivé quand le chiffrement
+    // au repos est actif (on n'écrit jamais de données en clair dans ce cas).
     function mirrorToLocalStorage() {
+        if (dek) return;
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         } catch (e) {
@@ -145,21 +185,20 @@ const DataStore = (() => {
 
     async function flushNow() {
         if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
-        if (!Persistence.idbAvailable() || !idbHealthy) {
-            mirrorToLocalStorage();
-            return false;
-        }
         try {
-            await Persistence.kvSet("current", deepCopy(data));
-            await Persistence.kvSet("meta", { schemaVersion: SCHEMA_VERSION, updatedAt: Date.now() });
+            const payload = await encodePayload();   // chiffré si une clé est présente
+            if (Persistence.idbAvailable() && idbHealthy) {
+                await Persistence.kvSet("current", payload);
+                await Persistence.kvSet("meta", { schemaVersion: SCHEMA_VERSION, updatedAt: Date.now(), encrypted: !!dek });
+            } else {
+                localStorage.setItem(LOCAL_CURRENT_KEY, JSON.stringify(payload));
+            }
             lastSavedAt = Date.now();
-            idbHealthy = true;
             maybeAutoBackup(undefined, false, true); // throttlé + dédupliqué
             return true;
         } catch (e) {
-            console.error("Échec d'écriture IndexedDB, repli sur localStorage", e);
-            idbHealthy = false;
-            mirrorToLocalStorage();
+            console.error("Échec de l'enregistrement", e);
+            if (Persistence.idbAvailable()) idbHealthy = false;
             return false;
         }
     }
@@ -167,27 +206,35 @@ const DataStore = (() => {
     /* =========================
        POINTS DE RESTAURATION (HISTORIQUE)
     ========================== */
+    // Construit un enregistrement de point de restauration (chiffré si une clé est
+    // présente). `sig` = empreinte du contenu clair, pour dédupliquer sans déchiffrer.
+    async function makeBackupRecord(label, type) {
+        const plaintext = JSON.stringify(data);
+        const rec = { ts: Date.now(), type, label, schemaVersion: SCHEMA_VERSION, sig: quickHash(plaintext) };
+        if (dek && typeof CryptoService !== "undefined" && CryptoService.available()) {
+            const env = await CryptoService.encryptString(dek, plaintext);
+            rec.enc = true; rec.iv = env.iv; rec.ct = env.ct;
+        } else {
+            rec.enc = false; rec.data = JSON.parse(plaintext);
+        }
+        return rec;
+    }
+
     async function maybeAutoBackup(label, force, dedup) {
         if (!Persistence.idbAvailable() || !idbHealthy) return;
         if (isEmpty(data)) return;   // rien à sauvegarder
         const now = Date.now();
         if (!force && (now - lastAutoBackupTs < AUTO_BACKUP_INTERVAL_MS)) return;
-        // Déduplication : ne pas recréer un point identique au plus récent
+        // Déduplication : ne pas recréer un point identique au plus récent (via l'empreinte)
         if (dedup) {
             try {
                 const list = await Persistence.listBackups();
-                if (list.length && JSON.stringify(list[0].data) === JSON.stringify(data)) return;
+                if (list.length && list[0].sig === quickHash(JSON.stringify(data))) return;
             } catch (e) { /* on sauvegarde quand même en cas de doute */ }
         }
         lastAutoBackupTs = now;
         try {
-            await Persistence.addBackup({
-                ts: now,
-                type: "auto",
-                label: label || "Sauvegarde automatique",
-                schemaVersion: SCHEMA_VERSION,
-                data: deepCopy(data)
-            });
+            await Persistence.addBackup(await makeBackupRecord(label || "Sauvegarde automatique", "auto"));
             await Persistence.pruneBackups("auto", AUTO_BACKUP_KEEP);
         } catch (e) {
             console.error("Point de restauration automatique impossible", e);
@@ -197,13 +244,7 @@ const DataStore = (() => {
     async function createManualBackup(label) {
         if (!Persistence.idbAvailable()) return false;
         try {
-            await Persistence.addBackup({
-                ts: Date.now(),
-                type: "manual",
-                label: (label && label.trim()) || "Point de restauration manuel",
-                schemaVersion: SCHEMA_VERSION,
-                data: deepCopy(data)
-            });
+            await Persistence.addBackup(await makeBackupRecord((label && label.trim()) || "Point de restauration manuel", "manual"));
             return true;
         } catch (e) {
             console.error("Création du point de restauration impossible", e);
@@ -219,10 +260,12 @@ const DataStore = (() => {
     async function restoreBackup(id) {
         if (!Persistence.idbAvailable()) return false;
         const b = await Persistence.getBackup(id);
-        if (!b || !b.data) return false;
+        if (!b) return false;
+        const restored = await decodePayload(b);   // gère backups chiffrés et anciens
+        if (!restored) return false;
         // Instantané de sécurité de l'état courant AVANT de restaurer (annulable)
         await maybeAutoBackup("Avant restauration", true);
-        data = normalize(b.data);
+        data = normalize(restored);
         mirrorToLocalStorage();
         await flushNow();
         return true;
@@ -233,12 +276,45 @@ const DataStore = (() => {
         return Persistence.deleteBackup(id).then(() => true).catch(() => false);
     }
 
+    async function deleteAllBackups() {
+        if (!Persistence.idbAvailable()) return;
+        try {
+            const list = await Persistence.listBackups();
+            for (const b of list) await Persistence.deleteBackup(b.id);
+        } catch (e) { /* ignore */ }
+    }
+
+    /* =========================
+       CHIFFREMENT AU REPOS (OPT-IN)
+    ========================== */
+    function isEncrypted() { return !!dek; }
+
+    // Active le chiffrement : la clé chiffre la base, on purge toute trace en clair
+    // (miroir localStorage + anciens points de restauration) puis on repart chiffré.
+    async function enableEncryption(key) {
+        setKey(key);
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+        await deleteAllBackups();                 // les points existants étaient en clair
+        await flushNow();                         // écrit l'instantané chiffré
+        await maybeAutoBackup("Protection activée", true);
+        return true;
+    }
+
+    // Désactive le chiffrement : on réécrit tout en clair et on repart des points en clair.
+    async function disableEncryption() {
+        setKey(null);
+        await deleteAllBackups();                 // les points existants étaient chiffrés
+        try { localStorage.removeItem(LOCAL_CURRENT_KEY); } catch (e) { /* ignore */ }
+        await flushNow();
+        await maybeAutoBackup("Protection désactivée", true);
+        return true;
+    }
+
     /* =========================
        INFOS STOCKAGE
     ========================== */
     async function getStorageInfo() {
-        const json = exportSnapshot();
-        const bytes = new Blob([json]).size;
+        const bytes = new Blob([JSON.stringify(data)]).size;
         const estimate = Persistence.idbAvailable() ? await Persistence.estimate() : null;
         let backupCount = 0;
         if (Persistence.idbAvailable()) {
@@ -248,6 +324,7 @@ const DataStore = (() => {
         ARRAY_FIELDS.forEach(f => { counts[f] = data[f].length; });
         return {
             engine: (Persistence.idbAvailable() && idbHealthy) ? "IndexedDB" : "localStorage (secours)",
+            encrypted: !!dek,
             bytes,
             estimate,
             backupCount,
@@ -575,7 +652,7 @@ const DataStore = (() => {
     }
 
     return {
-        init,
+        init, setKey, isEncrypted, enableEncryption, disableEncryption,
 
         getClients, getClientById, addClient, updateClient, deleteClient,
         getExigences, getExigencesByClient, getExigenceById, addExigence, updateExigence, deleteExigence,

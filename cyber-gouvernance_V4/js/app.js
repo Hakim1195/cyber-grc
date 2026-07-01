@@ -1,13 +1,17 @@
 // Emplacement : js/app.js
 // Nom du fichier : app.js
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
+    // Coffre optionnel : si une protection par mot de passe est active, l'app ne
+    // démarre qu'après déverrouillage. Sinon, démarrage immédiat (clé nulle).
+    Vault.boot(async (dek) => {
+        DataStore.setKey(dek);
+        await DataStore.init();
+        await startApp();
+    });
+});
 
-    /* =========================
-       INITIALISATION DES DONNÉES
-       (asynchrone : chargement depuis IndexedDB avant le premier rendu)
-    ========================== */
-    await DataStore.init();
+async function startApp() {
 
     /* =========================
        SÉLECTEUR DE CONTEXTE (CLIENT)
@@ -75,7 +79,7 @@ document.addEventListener("DOMContentLoaded", async () => {
        RAPPEL DE SAUVEGARDE
     ========================== */
     if (typeof BackupService !== "undefined") BackupService.renderReminder();
-});
+}
 
 /* =========================
    GESTION DU SÉLECTEUR DE CLIENT

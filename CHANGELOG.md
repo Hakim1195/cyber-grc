@@ -5,6 +5,19 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 2 — Protection par mot de passe (opt-in) & chiffrement au repos
+- **Coffre optionnel** (`js/core/vault.js`) : protection par mot de passe
+  activable dans les Paramètres, désactivée par défaut (accessible aux non-experts).
+- **Chiffrement au repos** AES-256-GCM des données IndexedDB *et* des points de
+  restauration lorsque la protection est active. Aucune donnée en clair (miroir
+  localStorage désactivé en mode chiffré).
+- **Chiffrement à enveloppe** : clé de données (DEK) emballée par une clé dérivée
+  du mot de passe (PBKDF2 600k) → changement de mot de passe sans re-chiffrement massif.
+- **Écran de déverrouillage** à la charte Dedienne + **auto-verrouillage** après
+  15 min d'inactivité + verrouillage manuel.
+- Activation / changement / désactivation du mot de passe dans les Paramètres,
+  avec purge des traces en clair et re-création des points de restauration.
+
 ### Itération 1 — Stratégie de sauvegarde (fichier)
 - **Enveloppe de sauvegarde standard** `grc-backup` versionnée
   (`{ format, version, encrypted, createdAt, app, payload|kdf+cipher }`).

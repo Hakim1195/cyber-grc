@@ -56,6 +56,12 @@ const SettingsModule = (() => {
                     <div id="quota-wrap" style="margin-top: 1rem;"></div>
                 </div>
 
+                <!-- SÉCURITÉ & CHIFFREMENT -->
+                <div class="dashboard-card" style="border-top: 4px solid var(--primary); margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Sécurité & chiffrement</h3>
+                    <div id="security-body"><div style="color: var(--text-muted);">Chargement…</div></div>
+                </div>
+
                 <div class="dashboard-grid" style="margin-bottom: 1.5rem;">
                     <!-- EXPORT -->
                     <div class="dashboard-card" style="border-top: 4px solid var(--color-success);">
@@ -125,6 +131,86 @@ const SettingsModule = (() => {
 
         loadStorageInfo();
         loadBackups();
+        renderSecurity();
+    }
+
+    /* ===== Sécurité & chiffrement (opt-in) ===== */
+    function renderSecurity() {
+        const el = document.getElementById("security-body");
+        if (!el) return;
+        const cryptoOk = typeof CryptoService !== "undefined" && CryptoService.available();
+        const vaultReady = typeof Vault !== "undefined";
+
+        if (!cryptoOk || !vaultReady) {
+            el.innerHTML = `<div class="help-note">Chiffrement indisponible dans ce contexte. Ouvrez l'application via <strong>https</strong>, <strong>localhost</strong> ou un fichier local pour activer la protection par mot de passe.</div>`;
+            return;
+        }
+
+        if (!Vault.isConfigured()) {
+            el.innerHTML = `
+                <div class="help-note" style="margin-bottom: 15px;">
+                    Par défaut, vos données sont stockées <strong>en clair</strong> dans ce navigateur. Activez une protection par mot de passe pour les <strong>chiffrer (AES-256)</strong> et exiger un déverrouillage à l'ouverture.
+                    <br>Le mot de passe n'est jamais enregistré et <strong>ne peut pas être récupéré</strong>.
+                </div>
+                <button id="sec-enable" style="background: var(--primary);">Activer la protection par mot de passe</button>`;
+            document.getElementById("sec-enable").onclick = enableProtection;
+        } else {
+            el.innerHTML = `
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
+                    <span class="status" style="background:#e6f4ea; color:var(--color-success);">Protection activée</span>
+                    <span style="color: var(--text-muted); font-size: 0.9rem;">Données chiffrées au repos (AES-256), auto-verrouillage après 15 min.</span>
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button id="sec-lock" style="background: var(--primary);">Verrouiller maintenant</button>
+                    <button id="sec-change" style="background: var(--accent);">Changer le mot de passe</button>
+                    <button id="sec-disable" style="background: var(--color-gray);">Désactiver la protection</button>
+                </div>`;
+            document.getElementById("sec-lock").onclick = () => Vault.lock();
+            document.getElementById("sec-change").onclick = changeProtection;
+            document.getElementById("sec-disable").onclick = disableProtection;
+        }
+    }
+
+    async function enableProtection() {
+        const p1 = prompt("Choisissez un mot de passe pour protéger l'application :");
+        if (p1 === null) return;
+        if (p1.length < 8) { alert("8 caractères minimum."); return; }
+        const p2 = prompt("Confirmez le mot de passe :");
+        if (p2 === null) return;
+        if (p1 !== p2) { alert("Les mots de passe ne correspondent pas."); return; }
+        try {
+            const dek = await Vault.setup(p1);
+            await DataStore.enableEncryption(dek);
+            alert("Protection activée. Vos données sont désormais chiffrées.");
+            window.location.reload();
+        } catch (e) {
+            alert("Échec de l'activation : " + e.message);
+        }
+    }
+
+    async function changeProtection() {
+        const oldP = prompt("Mot de passe actuel :");
+        if (oldP === null) return;
+        const p1 = prompt("Nouveau mot de passe :");
+        if (p1 === null) return;
+        if (p1.length < 8) { alert("8 caractères minimum."); return; }
+        const p2 = prompt("Confirmez le nouveau mot de passe :");
+        if (p2 === null) return;
+        if (p1 !== p2) { alert("Les mots de passe ne correspondent pas."); return; }
+        const ok = await Vault.changePassphrase(oldP, p1);
+        alert(ok ? "Mot de passe modifié." : "Mot de passe actuel incorrect.");
+    }
+
+    async function disableProtection() {
+        const pass = prompt("Confirmez votre mot de passe pour désactiver la protection :");
+        if (pass === null) return;
+        const ok = await Vault.verify(pass);
+        if (!ok) { alert("Mot de passe incorrect."); return; }
+        if (!confirm("Désactiver la protection ? Les données seront réécrites EN CLAIR dans ce navigateur.")) return;
+        await DataStore.disableEncryption();
+        Vault.removeVault();
+        alert("Protection désactivée.");
+        window.location.reload();
     }
 
     /* ===== Export ===== */
@@ -240,6 +326,7 @@ const SettingsModule = (() => {
 
             el.innerHTML = `
                 ${statBox("Moteur", escapeHtml(info.engine))}
+                ${statBox("Chiffrement", info.encrypted ? "Activé (AES-256)" : "Désactivé")}
                 ${statBox("Taille de la base", formatBytes(info.bytes))}
                 ${statBox("Enregistrements", totalItems + " éléments")}
                 ${statBox("Stockage persistant", persisted === null ? "Inconnu" : (persisted ? "Accordé" : "Non accordé"))}
