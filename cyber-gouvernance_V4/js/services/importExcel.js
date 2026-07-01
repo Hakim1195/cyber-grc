@@ -200,6 +200,31 @@ const ImportExcelService = (() => {
     }
 
     /* =========================
+       MODÈLE D'IMPORT DES ACTIFS
+       (colonnes strictement alignées sur importActifs ci-dessus)
+    ========================== */
+    function downloadActifsTemplate() {
+        if (typeof XLSX === "undefined") {
+            alert("La bibliothèque Excel (SheetJS) n'est pas chargée.");
+            return;
+        }
+        const data = [
+            ["Nom", "Type", "Criticité", "Responsable", "Description"],
+            ["Serveur ERP", "Logiciel", "critique", "DSI", "Progiciel de gestion — cœur de production"],
+            ["Baie de stockage SAN", "Matériel", "élevée", "IT Ops", "Stockage centralisé (salle serveur)"],
+            ["Base clients", "Donnée", "critique", "DPO", "Données à caractère personnel"],
+            ["Messagerie Microsoft 365", "Service", "modérée", "IT", "Service cloud (SaaS)"],
+            ["Astreinte infogérance", "Humain", "faible", "Direction", "Prestataire externe"]
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        ws["!cols"] = [{ wch: 28 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 42 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Actifs");
+        XLSX.writeFile(wb, "modele_import_actifs.xlsx");
+        if (window.showToast) window.showToast("Modèle d'import des actifs téléchargé.", "success");
+    }
+
+    /* =========================
        OUTILS INTERNES
     ========================== */
     function _processExcel(file, callback) {
@@ -224,5 +249,5 @@ const ImportExcelService = (() => {
         return "critique";                   // Très critique (Rouge)
     }
 
-    return { importExigences, importRisques, importActifs };
+    return { importExigences, importRisques, importActifs, downloadActifsTemplate };
 })();

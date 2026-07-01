@@ -594,6 +594,10 @@ button:active { transform: translateY(0); }
 /* =========================================
    PRINT / PDF STYLES
    ========================================= */
+/* En-tête de document réservé à l'impression : masqué à l'écran, révélé au print.
+   Sert aux annuaires imprimables (cellule de crise, prestataires & tiers). */
+.print-head { display: none; }
+
 @media print {
     @page {
         size: A4;
@@ -642,6 +646,16 @@ button:active { transform: translateY(0); }
         max-width: 100% !important;
         margin: 0 !important;
     }
+
+    /* En-tête de document imprimé (titre + marque + date) */
+    .print-head {
+        display: block !important;
+        border-bottom: 2px solid var(--primary);
+        padding-bottom: 8px;
+        margin-bottom: 1.2rem;
+    }
+    .print-head h1 { margin: 0 0 4px; font-size: 18pt; }
+    .print-head p { margin: 0; color: #555; font-size: 10pt; }
 }
 
 /* =========================================

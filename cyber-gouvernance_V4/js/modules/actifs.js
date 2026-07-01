@@ -29,13 +29,14 @@ const ActifsModule = (() => {
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <input type="file" id="importActifsFile" accept=".xlsx, .xls, .csv" style="display: none;" />
+                        <button id="templateActifsBtn" style="background: var(--color-gray); color: white;">Télécharger le modèle</button>
                         <button id="importActifsBtn" style="background: var(--color-info); color: white;">Importer (Excel)</button>
                         <button id="addActifBtn">Déclarer un actif</button>
                     </div>
                 </div>
 
                 <div class="synthese-message info" style="font-size: 0.9rem; padding: 10px; margin-bottom: 20px;">
-                    <strong>Format d'import :</strong> Créez un fichier Excel avec les colonnes : <em>Nom, Type, Criticité, Responsable, Description</em>.
+                    <strong>Format d'import :</strong> fichier Excel/CSV avec les colonnes <em>Nom, Type, Criticité, Responsable, Description</em>. Cliquez sur <strong>« Télécharger le modèle »</strong> pour partir d'un fichier prêt à remplir. Les actifs déjà présents (même nom) sont ignorés.
                 </div>
 
                 <table class="data-table">
@@ -57,6 +58,15 @@ const ActifsModule = (() => {
         const addBtn = document.getElementById("addActifBtn");
         if (addBtn) addBtn.onclick = renderCreate;
 
+        // Téléchargement du modèle d'import
+        const templateBtn = document.getElementById("templateActifsBtn");
+        if (templateBtn) {
+            templateBtn.onclick = () => {
+                if (typeof ImportExcelService !== "undefined") ImportExcelService.downloadActifsTemplate();
+                else alert("Le service d'importation n'est pas chargé.");
+            };
+        }
+
         // Gestion de l'import Excel
         const importBtn = document.getElementById("importActifsBtn");
         const importFile = document.getElementById("importActifsFile");
@@ -66,6 +76,12 @@ const ActifsModule = (() => {
             importFile.onchange = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
+
+                if (typeof ImportExcelService === "undefined") {
+                    alert("Le service d'importation n'est pas chargé.");
+                    importFile.value = '';
+                    return;
+                }
 
                 ImportExcelService.importActifs(file, (imported, skipped) => {
                     let msg = `${imported} actif(s) importé(s) avec succès.`;
