@@ -11,9 +11,10 @@ Légende : ✅ fait · 🔜 prochain · ⏳ à faire · 💤 en attente de déci
 - Design **orange dominant** (Option B), structure bleue, sémantique stricte.
 - Marque **Dedienne** conservée. Chiffrement **opt-in**. Multi-« Donneurs d'ordre » **conservé**.
 
-## Décisions à confirmer (recommandations proposées)
-- 💤 **Référentiel de démarrage** : recommandé **Hygiène ANSSI (42 mesures)**.
-- 💤 **Architecture conformité** : recommandé **pivot « Mesure de sécurité »** (n-n, propagation auto).
+## Décisions validées (chantier Référentiels)
+- ✅ **Référentiel de démarrage** : **Hygiène ANSSI (42 mesures)** — livré.
+- ✅ **Architecture conformité** : **pivot « Mesure de sécurité »** (n-n, propagation auto) — validé,
+  socle de données livré (tableau `mesures` + `evaluations[].mesure_id`), module en cours (4b).
 
 ---
 
@@ -35,14 +36,17 @@ Légende : ✅ fait · 🔜 prochain · ⏳ à faire · 💤 en attente de déci
 - ⏳ **Restant** : appliquer les tooltips ⓘ **partout** (systématiser, fil rouge) ; harmoniser
       progressivement chaque module (tableaux denses, KPI, heatmap matrice, radars) au fil des touches.
 
-## Chantier 3 — Référentiels + mapping croisé (§4) — 🔜 PROCHAIN
-Sous-itérations proposées :
-- 🔜 **4a — Ossature** : modèle données `evaluations` (+ `mesures` pour le pivot) ; bump `SCHEMA_VERSION`→3
-      (+ migration) ; registre `Referentiels` ; **référentiel ANSSI** (42 mesures, reformulations
-      originales courtes, groupées par domaine) ; module `/referentiels` (liste + détail auto-évaluation :
-      statut, maturité 0-5, commentaire, preuves, lien actions) ; **score + radar par domaine** (SVG).
-- ⏳ **4b — Pivot & mapping** : entité **« Mesure de sécurité »** n-n vers exigences ; propagation du statut ;
-      mapping pré-rempli (ISO 27002 ↔ NIS2 ↔ ANSSI) éditable ; vue **couverture croisée**.
+## Chantier 3 — Référentiels + mapping croisé (§4) — 🔜 EN COURS
+Sous-itérations :
+- ✅ **4a — Ossature** : modèle données `evaluations` (+ `mesures`) ; `SCHEMA_VERSION`→3 (+ migration) ;
+      registre `Referentiels` ; **référentiel ANSSI** (42 mesures / 10 familles, reformulations
+      originales courtes + aide) ; module `/referentiels` (liste + détail auto-évaluation :
+      statut, maturité 0-5, commentaire, preuves, actions correctives tracées) ;
+      **score + radar par domaine** (SVG maison, temps réel). *(Itération 4)*
+- 🔜 **4b — Pivot & mapping** : module `/mesures` (entité **« Mesure de sécurité »** n-n vers les
+      exigences de référentiels) ; **propagation du statut** aux évaluations liées (zéro double saisie) ;
+      lien évaluation↔mesure dans le détail ; mapping pré-rempli (ISO 27002 ↔ NIS2 ↔ ANSSI) éditable ;
+      vue **couverture croisée**. *(Socle de données déjà en place.)*
 - ⏳ **4c — Autres référentiels** : ISO 27002:2022 (93 mesures) + **génération SoA** ; NIS2 (art. 21) ;
       DORA ; AirCyber (Bronze/Silver/Gold). Chaque référentiel = 1 fichier de données au schéma commun.
 > ⚠️ NE PAS embarquer le texte intégral des normes (ISO payant/protégé). Reformulations originales +

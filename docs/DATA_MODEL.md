@@ -4,7 +4,9 @@
 > Application **100 % frontend** : toutes les données vivent dans le navigateur
 > (IndexedDB, avec repli localStorage). Aucune donnée ne quitte le poste.
 
-Version de schéma courante : **`SCHEMA_VERSION = 2`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 3`** (défini dans `js/core/datastore.js`).
+> v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`
+> (migration transparente — `normalize` crée les tableaux vides à la volée).
 
 ---
 
@@ -44,12 +46,13 @@ Un enregistrement `backups` : `{ id, ts, type: "auto"|"manual", label, schemaVer
 ### 1.3 Instantané complet (objet `data`)
 ```jsonc
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "updatedAt": 1730000000000,
   "clients": [],        "exigences": [],   "actions": [],
   "risques": [],        "actifs": [],      "processus": [],
   "crise": [],          "scenarios_pra": [], "tests_pra": [],
-  "prestataires": [],   "mco_actions": [], "audits": [],  "revues": []
+  "prestataires": [],   "mco_actions": [], "audits": [],  "revues": [],
+  "evaluations": [],    "mesures": []       // v3 — chantier Référentiels
 }
 ```
 
@@ -91,8 +94,9 @@ Suppression en cascade → supprime les `exigences` rattachées (et leurs `actio
 | `responsable` | string | |
 | `echeance` | date (ISO) | |
 | `priorite` | string | optionnel |
-| `exigence_id` | string | **OU** `risque_id` — une action est liée à l'un ou l'autre |
+| `exigence_id` | string | une action est liée à **l'un** de : exigence, risque ou évaluation |
 | `risque_id` | string | |
+| `evaluation_id` | string | lien vers une évaluation de référentiel (v3) |
 
 ### Risque (inspiré EBIOS RM, méthode F×G×M) — `risques`
 | Champ | Type | Notes |
@@ -155,6 +159,45 @@ Constat : `{ type, exigence, desc }`
 ### Revue de direction — `revues`
 `{ id, date, participants, inputs, outputs }`
 
+### Évaluation de référentiel — `evaluations`
+Auto-évaluation d'**une exigence d'un référentiel** (voir §5). Clé métier unique
+`(ref_id, code)` ; l'enregistrement est créé à la première évaluation (une exigence
+sans enregistrement = « non évaluée »).
+
+| Champ | Type | Notes |
+|-------|------|-------|
+| `id` | `"EVAL-..."` | |
+| `ref_id` | string | id du référentiel (ex. `anssi-hygiene`) |
+| `code` | string | code de l'exigence dans le référentiel (ex. `22`) |
+| `statut` | enum | `conforme` \| `partiellement conforme` \| `non conforme` \| `non applicable` \| `""` (non évalué) |
+| `maturite` | number | 0-5 (échelle type CMMI) |
+| `commentaire` | string | |
+| `preuves` | string | références (l'app ne stocke pas les fichiers) |
+| `mesure_id` | string \| null | lien vers la **Mesure de sécurité** pivot (v3, 4b) |
+| `updatedAt` | number | |
+
+Les **actions correctives** pointent vers l'évaluation via `action.evaluation_id`.
+`deleteEvaluation` supprime en cascade les actions liées ; `deleteEvaluationsByRef`
+réinitialise un référentiel entier.
+
+### Mesure de sécurité (pivot) — `mesures`
+Contrôle mis en œuvre par l'organisation, **couvrant n-n plusieurs exigences** de
+référentiels (le lien est porté par `evaluations[].mesure_id`). Évaluer la mesure
+**propage** son statut/maturité à toutes ses évaluations liées (zéro double saisie).
+
+| Champ | Type | Notes |
+|-------|------|-------|
+| `id` | `"MESURE-..."` | |
+| `nom` | string | |
+| `description` | string | |
+| `statut` | enum | même enum de conformité |
+| `maturite` | number | 0-5 |
+| `responsable` | string | |
+| `updatedAt` | number | |
+
+`deleteMesure` délie les évaluations (`mesure_id` → null). `propagateMesure(id)`
+recopie statut + maturité sur les évaluations liées.
+
 ---
 
 ## 3. Graphe des relations
@@ -180,16 +223,48 @@ risques + supprime actions liées ; `deleteRisque`→délie actifs + supprime ac
 
 ---
 
-## 4. Entités à venir (chantier Référentiels — cf. PLAN.md)
+## 4. Graphe des relations — Référentiels
 
-> Bump prévu `SCHEMA_VERSION` → 3 (+ migration `migratePayload` v2→v3 : créer les tableaux).
+```
+Référentiel (statique) ──1:N──> Exigence de référentiel (code)
+                                     │ 1:1 (clé ref_id+code)
+                                     ▼
+                                 Évaluation ──N:1──> Mesure de sécurité (pivot)
+                                     │ 1:N               │ (propage statut+maturité)
+                                     ▼                   ▼
+                                  Action ............ (couvre N évaluations, multi-référentiels)
+```
 
-- **Référentiel** (catalogue **statique**, non stocké dans `data`) :
-  `{ id, nom, description, aide, domaines: [{ id, nom, mesures: [{ code, titre, aide }] }] }`
-  Fichier de données par référentiel (schéma commun). Ne pas embarquer le texte des normes.
-- **Mesure de sécurité** (`mesures`, pivot, données utilisateur) :
-  `{ id, nom, description, statut, maturite, responsable, exigences_couvertes: [{ ref_id, code }] }`
-- **Évaluation** (`evaluations`, par exigence de référentiel) :
-  `{ id, ref_id, code, statut, maturite (0-5), commentaire, preuves, mesure_id?, action_ids[] }`
-- Statuts conformité (réutiliser l'enum existant) : `conforme | partiellement conforme | non conforme | non applicable`.
-- Évaluer une **Mesure** propage le statut à toutes les exigences mappées (zéro double saisie).
+Cascades : `deleteEvaluation` → supprime ses actions ; `deleteEvaluationsByRef` →
+réinitialise un référentiel ; `deleteMesure` → délie ses évaluations (`mesure_id`→null).
+
+---
+
+## 5. Référentiels (catalogue statique)
+
+Les référentiels sont un **catalogue statique** chargé au démarrage (registre
+`Referentiels`, `js/data/referentiels.js`), **non stocké** dans `data`. Un fichier
+de données par référentiel (`js/data/ref_anssi.js`, …), au schéma commun :
+
+```jsonc
+{
+  "id": "anssi-hygiene", "nom": "...", "editeur": "ANSSI", "version": "42 mesures",
+  "description": "...", "aide": "...",
+  "domaines": [
+    { "id": "...", "nom": "...", "court": "...", "aide": "...",
+      "exigences": [ { "code": "1", "titre": "...", "aide": "..." } ] }
+  ]
+}
+```
+
+> ⚠️ **Ne jamais embarquer le texte intégral des normes** (ISO payant/protégé).
+> Reformulations originales courtes + identifiant de clause + titre court uniquement.
+> ANSSI (guide public) inclus en reformulations maison.
+
+**Terminologie** : au sein d'un référentiel, un item est une « **exigence de
+référentiel** » (`{code, titre, aide}`). À ne pas confondre avec l'entité utilisateur
+« **Mesure de sécurité** » (`mesures`), le pivot qui **couvre** ces exigences.
+
+Livré (itération 4) : référentiel **ANSSI** + auto-évaluation + radar de maturité.
+À venir (4b/4c) : module `/mesures` (propagation), mapping croisé, ISO 27002 / NIS2 /
+DORA / AirCyber + génération de SoA.

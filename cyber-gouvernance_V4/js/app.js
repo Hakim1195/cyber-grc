@@ -41,6 +41,9 @@ async function startApp() {
         "/exigences": () => ExigencesModule.renderList(),
         "/exigences/:id": (id) => ExigencesModule.renderDetail(id),
 
+        "/referentiels": () => { if (typeof ReferentielsModule !== "undefined") ReferentielsModule.renderList(); },
+        "/referentiels/:id": (id) => { if (typeof ReferentielsModule !== "undefined") ReferentielsModule.renderDetail(id); },
+
         "/actions": () => ActionsModule.renderList(),
         "/actions/:id": (id) => ActionsModule.renderDetail(id),
 
@@ -116,6 +119,7 @@ const ROUTE_META = {
     "/matrice":      { s: "Risques",    t: "Matrice des risques" },
     "/actifs":       { s: "Risques",    t: "Actifs critiques" },
     "/exigences":    { s: "Conformité", t: "Exigences (ISO/NIS2)" },
+    "/referentiels": { s: "Conformité", t: "Référentiels" },
     "/clients":      { s: "Conformité", t: "Donneurs d'ordre" },
     "/audits":       { s: "Conformité", t: "Contrôles & Audits" },
     "/bia":          { s: "Continuité", t: "BIA (Impact Métier)" },

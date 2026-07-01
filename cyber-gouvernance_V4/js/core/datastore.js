@@ -11,12 +11,15 @@ const DataStore = (() => {
     const LEGACY_AUDITS_KEY = "cyber-audits";
     const LEGACY_REVUES_KEY = "cyber-revues";
     const LOCAL_CURRENT_KEY = "cyber-current";      // repli (chiffré si clé) si IndexedDB indisponible
-    const SCHEMA_VERSION = 2;
+    const SCHEMA_VERSION = 3;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
         "processus", "crise", "scenarios_pra", "tests_pra", "prestataires", "mco_actions",
-        "audits", "revues"
+        "audits", "revues",
+        // v3 — Chantier Référentiels : auto-évaluations par exigence de référentiel
+        // + pivot « Mesure de sécurité » (voir DATA_MODEL.md §Référentiels).
+        "evaluations", "mesures"
     ];
 
     const AUTOSAVE_DEBOUNCE_MS = 500;
@@ -383,6 +386,7 @@ const DataStore = (() => {
     function getActionById(id) { return data.actions.find(a => a.id === id); }
     function getActionsByExigence(exigenceId) { return data.actions.filter(a => a.exigence_id === exigenceId); }
     function getActionsByRisque(risqueId) { return data.actions.filter(a => a.risque_id === risqueId); }
+    function getActionsByEvaluation(evaluationId) { return data.actions.filter(a => a.evaluation_id === evaluationId); }
     function addAction(action) { data.actions.push(action); save(); }
     function updateAction(action) {
         const i = data.actions.findIndex(a => a.id === action.id);
@@ -515,6 +519,90 @@ const DataStore = (() => {
     function deleteRevue(id) { data.revues = data.revues.filter(x => x.id !== id); save(); }
 
     /* =========================
+       ÉVALUATIONS DE RÉFÉRENTIELS (auto-évaluation par exigence de référentiel)
+       Clé métier : (ref_id, code) unique. L'enregistrement est créé à la première
+       évaluation ; une exigence sans enregistrement = « non évaluée ».
+       { id, ref_id, code, statut, maturite (0-5), commentaire, preuves, mesure_id, updatedAt }
+    ========================== */
+    function getEvaluations() { return data.evaluations; }
+    function getEvaluationById(id) { return data.evaluations.find(e => e.id === id); }
+    function getEvaluationsByRef(refId) { return data.evaluations.filter(e => e.ref_id === refId); }
+    function getEvaluation(refId, code) { return data.evaluations.find(e => e.ref_id === refId && e.code === code); }
+
+    // Crée ou met à jour l'évaluation d'une exigence de référentiel (clé ref_id + code).
+    // Les champs absents de `ev` sont conservés (mise à jour partielle).
+    function upsertEvaluation(ev) {
+        if (!ev || !ev.ref_id || !ev.code) return null;
+        const existing = getEvaluation(ev.ref_id, ev.code);
+        if (existing) {
+            Object.assign(existing, ev, { id: existing.id, updatedAt: Date.now() });
+            save();
+            return existing;
+        }
+        const rec = Object.assign(
+            { statut: "non conforme", maturite: 0, commentaire: "", preuves: "", mesure_id: null },
+            ev,
+            { id: "EVAL-" + Date.now() + "-" + Math.floor(Math.random() * 1000), updatedAt: Date.now() }
+        );
+        data.evaluations.push(rec);
+        save();
+        return rec;
+    }
+
+    function deleteEvaluation(id) {
+        data.evaluations = data.evaluations.filter(e => e.id !== id);
+        data.actions = data.actions.filter(a => a.evaluation_id !== id);   // cascade des actions liées
+        save();
+    }
+
+    // Réinitialise un référentiel : supprime toutes ses évaluations et leurs actions.
+    function deleteEvaluationsByRef(refId) {
+        const ids = new Set(data.evaluations.filter(e => e.ref_id === refId).map(e => e.id));
+        data.evaluations = data.evaluations.filter(e => e.ref_id !== refId);
+        data.actions = data.actions.filter(a => !ids.has(a.evaluation_id));
+        save();
+    }
+
+    /* =========================
+       MESURES DE SÉCURITÉ (entité pivot n-n vers les exigences de référentiels)
+       { id, nom, description, statut, maturite (0-5), responsable, updatedAt }
+       Le lien vers les exigences couvertes est porté par evaluations[].mesure_id :
+       une mesure couvre N évaluations, éventuellement dans plusieurs référentiels
+       (évaluer la mesure propage le statut → zéro double saisie).
+    ========================== */
+    function getMesures() { return data.mesures; }
+    function getMesureById(id) { return data.mesures.find(m => m.id === id); }
+    function getEvaluationsByMesure(mesureId) { return data.evaluations.filter(e => e.mesure_id === mesureId); }
+    function addMesure(m) { data.mesures.push(m); save(); }
+    function updateMesure(m) {
+        const i = data.mesures.findIndex(x => x.id === m.id);
+        if (i !== -1) { data.mesures[i] = m; save(); }
+    }
+    function deleteMesure(id) {
+        data.mesures = data.mesures.filter(m => m.id !== id);
+        data.evaluations.forEach(e => { if (e.mesure_id === id) e.mesure_id = null; });   // délie les évaluations
+        save();
+    }
+
+    // Propage le statut et la maturité d'une mesure à toutes ses évaluations liées.
+    // Retourne le nombre d'évaluations mises à jour.
+    function propagateMesure(id) {
+        const m = getMesureById(id);
+        if (!m) return 0;
+        let n = 0;
+        data.evaluations.forEach(e => {
+            if (e.mesure_id === id) {
+                e.statut = m.statut;
+                e.maturite = m.maturite;
+                e.updatedAt = Date.now();
+                n++;
+            }
+        });
+        if (n > 0) save();
+        return n;
+    }
+
+    /* =========================
        EXPORT / IMPORT (FICHIER .json)
        Enveloppe standard :
        { format:"grc-backup", version, encrypted, createdAt, app, payload|kdf+cipher }
@@ -575,7 +663,9 @@ const DataStore = (() => {
         let p = payload;
         const v = Number(fromVersion) || 1;
         // v1 : audits/revues étaient hors du snapshot → normalize crée les tableaux.
-        // (Ajouter ici les futures migrations : if (v < 3) { ... })
+        // v2 → v3 : ajout de `evaluations` (auto-évaluations de référentiels) et
+        //           `mesures` (pivot) → normalize crée les tableaux vides.
+        // (Ajouter ici les futures migrations : if (v < 4) { ... })
         return p;
     }
 
@@ -656,7 +746,7 @@ const DataStore = (() => {
 
         getClients, getClientById, addClient, updateClient, deleteClient,
         getExigences, getExigencesByClient, getExigenceById, addExigence, updateExigence, deleteExigence,
-        getActions, getActionById, getActionsByExigence, getActionsByRisque, addAction, updateAction, deleteAction,
+        getActions, getActionById, getActionsByExigence, getActionsByRisque, getActionsByEvaluation, addAction, updateAction, deleteAction,
         getRisques, getRisqueById, addRisque, updateRisque, deleteRisque,
         getActifs, getActifById, addActif, updateActif, deleteActif,
 
@@ -670,6 +760,12 @@ const DataStore = (() => {
         // Audits & revues (intégrés à la sauvegarde)
         getAudits, addAudit, updateAudit, deleteAudit,
         getRevues, addRevue, updateRevue, deleteRevue,
+
+        // Référentiels : auto-évaluations + pivot « Mesure de sécurité »
+        getEvaluations, getEvaluationById, getEvaluationsByRef, getEvaluation,
+        upsertEvaluation, deleteEvaluation, deleteEvaluationsByRef,
+        getMesures, getMesureById, getEvaluationsByMesure,
+        addMesure, updateMesure, deleteMesure, propagateMesure,
 
         // Sauvegarde / restauration
         exportSnapshot, exportEncrypted, parseImport, applyImport,

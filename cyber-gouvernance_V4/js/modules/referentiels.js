@@ -1,0 +1,529 @@
+// Emplacement : js/modules/referentiels.js
+// Nom du fichier : referentiels.js
+//
+// Module RÉFÉRENTIELS : auto-évaluation de la conformité par rapport à un
+// référentiel de sécurité (à ce stade : Hygiène ANSSI, 42 mesures).
+//   - /referentiels        → liste des référentiels + profil de maturité (radar)
+//   - /referentiels/:id    → auto-évaluation détaillée (statut, maturité 0-5,
+//                            commentaire, preuves, actions correctives) par domaine.
+// Les évaluations sont persistées dans DataStore (`evaluations`, clé ref_id + code).
+
+const ReferentielsModule = (() => {
+
+    function escapeHtml(str) {
+        return String(str == null ? "" : str).replace(/[&<>"']/g, ch => ({
+            "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+        }[ch]));
+    }
+
+    /* =========================
+       RÉFÉRENCES MÉTIER (statuts, maturité)
+    ========================== */
+    const STATUTS = [
+        { v: "",                        label: "Non évalué",              cls: "status-non-evaluee" },
+        { v: "conforme",                label: "Conforme",                cls: "status-conforme" },
+        { v: "partiellement conforme",  label: "Partiellement conforme",  cls: "status-partiellement-conforme" },
+        { v: "non conforme",            label: "Non conforme",            cls: "status-non-conforme" },
+        { v: "non applicable",          label: "Non applicable",          cls: "status-non-applicable" }
+    ];
+    function statutMeta(v) { return STATUTS.find(s => s.v === (v || "")) || STATUTS[0]; }
+
+    // Échelle de maturité inspirée des modèles CMMI (0 à 5).
+    const MATURITES = [
+        { v: 0, label: "0 — Néant" },
+        { v: 1, label: "1 — Initial (informel)" },
+        { v: 2, label: "2 — Reproductible" },
+        { v: 3, label: "3 — Défini (documenté)" },
+        { v: 4, label: "4 — Maîtrisé (mesuré)" },
+        { v: 5, label: "5 — Optimisé" }
+    ];
+    const MATURITE_AIDE = "Niveau de maîtrise de la mesure, de 0 (rien en place) à 5 (processus optimisé et amélioré en continu). Échelle inspirée du CMMI.";
+
+    /* =========================
+       CALCUL DES SCORES
+    ========================== */
+    // Agrège les évaluations d'un référentiel : maturité moyenne (0-5), taux de
+    // conformité (%) et avancement de l'évaluation, au global et par domaine.
+    // Règles : « non applicable » exclu des moyennes ; « non évalué » compte comme
+    // maturité 0 et non conforme (mais reste dans le dénominateur applicable).
+    function computeScores(ref) {
+        const g = { total: 0, evaluated: 0, applicable: 0, conformes: 0, partiels: 0, matSum: 0 };
+        const domaines = ref.domaines.map(d => {
+            const dd = { id: d.id, nom: d.nom, court: d.court || d.nom, total: 0, evaluated: 0, applicable: 0, conformes: 0, partiels: 0, matSum: 0 };
+            d.exigences.forEach(ex => {
+                const ev = DataStore.getEvaluation(ref.id, ex.code);
+                const statut = ev ? (ev.statut || "") : "";
+                const mat = ev ? (Number(ev.maturite) || 0) : 0;
+                dd.total++; g.total++;
+                if (statut && statut !== "") { dd.evaluated++; g.evaluated++; }
+                if (statut === "non applicable") return;
+                dd.applicable++; g.applicable++;
+                dd.matSum += mat; g.matSum += mat;
+                if (statut === "conforme") { dd.conformes++; g.conformes++; }
+                if (statut === "partiellement conforme") { dd.partiels++; g.partiels++; }
+            });
+            dd.maturite = dd.applicable ? (dd.matSum / dd.applicable) : 0;
+            dd.conformite = dd.applicable ? Math.round((dd.conformes / dd.applicable) * 100) : null;
+            return dd;
+        });
+        g.maturite = g.applicable ? (g.matSum / g.applicable) : 0;
+        g.conformite = g.applicable ? Math.round((g.conformes / g.applicable) * 100) : null;
+        return { global: g, domaines };
+    }
+
+    function maturiteColor(m) {   // m sur 5 — teinte indicative (non sémantique de statut)
+        if (m >= 4) return "var(--color-success)";
+        if (m >= 2.5) return "var(--color-warning)";
+        if (m > 0) return "var(--color-danger)";
+        return "var(--color-gray)";
+    }
+
+    /* =========================
+       RADAR SVG (maturité par domaine)
+    ========================== */
+    function radarSvg(axes) {
+        const n = axes.length;
+        if (!n) return "";
+        const W = 520, H = 430, cx = 260, cy = 205, R = 140;
+        const rings = [0.25, 0.5, 0.75, 1];
+        const ang = i => (-90 + i * 360 / n) * Math.PI / 180;
+        const pt = (i, r) => [cx + Math.cos(ang(i)) * R * r, cy + Math.sin(ang(i)) * R * r];
+        const fmt = ([x, y]) => x.toFixed(1) + "," + y.toFixed(1);
+
+        const grid = rings.map(r =>
+            `<polygon points="${axes.map((_, i) => fmt(pt(i, r))).join(" ")}" fill="none" stroke="var(--border)" stroke-width="1"/>`
+        ).join("");
+        const spokes = axes.map((_, i) => {
+            const [x, y] = pt(i, 1);
+            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`;
+        }).join("");
+        const dataPts = axes.map((a, i) => fmt(pt(i, Math.max(0, Math.min(1, a.value))))).join(" ");
+        const dataPoly = `<polygon points="${dataPts}" fill="var(--primary)" fill-opacity="0.18" stroke="var(--primary)" stroke-width="2"/>`;
+        const dots = axes.map((a, i) => {
+            const [x, y] = pt(i, Math.max(0, Math.min(1, a.value)));
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="var(--primary)"/>`;
+        }).join("");
+        const labels = axes.map((a, i) => {
+            const [x, y] = pt(i, 1.14);
+            const cosA = Math.cos(ang(i)), sinA = Math.sin(ang(i));
+            const anchor = cosA > 0.3 ? "start" : (cosA < -0.3 ? "end" : "middle");
+            const dy = sinA > 0.5 ? 12 : (sinA < -0.5 ? -6 : 4);
+            return `<text x="${x.toFixed(1)}" y="${(y + dy).toFixed(1)}" text-anchor="${anchor}" font-size="11" fill="var(--text-muted)">${escapeHtml(a.label)}</text>`;
+        }).join("");
+
+        return `<svg viewBox="0 0 ${W} ${H}" class="ref-radar-svg" role="img" aria-label="Radar de maturité par domaine">${grid}${spokes}${dataPoly}${dots}${labels}</svg>`;
+    }
+
+    /* =========================
+       LISTE DES RÉFÉRENTIELS
+    ========================== */
+    function renderList() {
+        const app = document.getElementById("app");
+        const refs = (typeof Referentiels !== "undefined") ? Referentiels.all() : [];
+
+        const cards = refs.map(ref => {
+            const sc = computeScores(ref);
+            const axes = sc.domaines.map(d => ({ label: d.court, value: d.maturite / 5 }));
+            const pctEval = sc.global.total ? Math.round((sc.global.evaluated / sc.global.total) * 100) : 0;
+            const conf = sc.global.conformite;
+            return `
+                <div class="dashboard-card ref-card">
+                    <div class="ref-card__head">
+                        <div>
+                            <h3 style="margin:0;">${escapeHtml(ref.nom)}</h3>
+                            <p style="color:var(--text-muted); font-size:0.85rem; margin:4px 0 0;">${escapeHtml(ref.editeur)} · ${escapeHtml(ref.version)}</p>
+                        </div>
+                        <span class="badge">${sc.global.total} mesures</span>
+                    </div>
+                    <p style="color:var(--text-muted); font-size:0.9rem; margin:10px 0 14px;">${escapeHtml(ref.description)}</p>
+
+                    <div class="ref-kpis">
+                        <div class="ref-kpi">
+                            <div class="ref-kpi__val" style="color:${maturiteColor(sc.global.maturite)};">${sc.global.maturite.toFixed(1)}<span>/5</span></div>
+                            <div class="ref-kpi__lbl">Maturité moyenne ${Help.tip(MATURITE_AIDE)}</div>
+                        </div>
+                        <div class="ref-kpi">
+                            <div class="ref-kpi__val">${conf === null ? "—" : conf + "<span>%</span>"}</div>
+                            <div class="ref-kpi__lbl">Conformité ${Help.tip("Part des mesures applicables jugées « conformes » (les mesures non applicables sont exclues).")}</div>
+                        </div>
+                        <div class="ref-kpi">
+                            <div class="ref-kpi__val">${sc.global.evaluated}<span>/${sc.global.total}</span></div>
+                            <div class="ref-kpi__lbl">Mesures évaluées</div>
+                        </div>
+                    </div>
+                    <div class="progress-bar small" style="margin:6px 0 16px;"><div class="progress-fill" style="width:${pctEval}%; background:var(--accent);"></div></div>
+
+                    <div class="ref-radar">${radarSvg(axes)}</div>
+
+                    <button class="ref-open" data-id="${ref.id}" style="width:100%; justify-content:center; background:var(--primary);">Évaluer ce référentiel</button>
+                </div>`;
+        }).join("");
+
+        const bientot = ["ISO/IEC 27002:2022", "NIS2 (article 21)", "DORA", "AirCyber (Bronze / Silver / Gold)"];
+
+        app.innerHTML = `
+            <section class="page">
+                <div class="dashboard-header">
+                    <div>
+                        <h1>Référentiels de sécurité</h1>
+                        <p style="color:var(--text-muted); margin-top:5px;">Auto-évaluez votre conformité et suivez votre maturité par domaine. ${Help.tip("Un référentiel est un ensemble structuré de bonnes pratiques (ANSSI, ISO 27002, NIS2…). L'auto-évaluation situe votre organisation et alimente le plan d'actions.")}</p>
+                    </div>
+                </div>
+
+                ${refs.length === 0
+                    ? `<div class="empty-state"><h3>Aucun référentiel chargé</h3><p>Le catalogue de référentiels n'a pas pu être chargé.</p></div>`
+                    : `<div class="ref-grid">${cards}</div>`}
+
+                <div class="dashboard-card" style="margin-top:1.5rem;">
+                    <h3 style="margin-top:0;">Bientôt disponibles</h3>
+                    <p style="color:var(--text-muted); font-size:0.9rem;">Les référentiels suivants seront ajoutés au même modèle d'auto-évaluation, avec un <strong>mapping croisé</strong> évitant la double saisie (une même « mesure de sécurité » couvre plusieurs référentiels) :</p>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                        ${bientot.map(b => `<span class="badge badge--na">${escapeHtml(b)}</span>`).join("")}
+                    </div>
+                </div>
+            </section>`;
+
+        app.querySelectorAll(".ref-open").forEach(btn => {
+            btn.onclick = () => Router.navigateTo("/referentiels/" + btn.dataset.id);
+        });
+    }
+
+    /* =========================
+       DÉTAIL / AUTO-ÉVALUATION D'UN RÉFÉRENTIEL
+    ========================== */
+    function renderDetail(id) {
+        const app = document.getElementById("app");
+        const ref = (typeof Referentiels !== "undefined") ? Referentiels.get(id) : null;
+
+        if (!ref) {
+            app.innerHTML = `<section class="page"><h1>Référentiel introuvable</h1><p>Ce référentiel n'existe pas ou n'est plus disponible.</p><button onclick="Router.navigateTo('/referentiels')">Retour aux référentiels</button></section>`;
+            return;
+        }
+
+        const sc = computeScores(ref);
+
+        const domainSections = ref.domaines.map((d, di) => {
+            const dsc = sc.domaines[di];
+            const rows = d.exigences.map(ex => rowHtml(ref, ex)).join("");
+            return `
+                <details class="ref-domain" ${di === 0 ? "open" : ""}>
+                    <summary>
+                        <span class="ref-domain__name">${escapeHtml(d.nom)} ${d.aide ? Help.tip(d.aide) : ""}</span>
+                        <span class="ref-domain__score">
+                            <span class="ref-domain__mat" data-dom="${d.id}" style="color:${maturiteColor(dsc.maturite)};">${dsc.maturite.toFixed(1)}/5</span>
+                            <span class="ref-domain__count" data-dom="${d.id}">${dsc.evaluated}/${dsc.total} évaluées</span>
+                        </span>
+                    </summary>
+                    <table class="data-table ref-table">
+                        <thead>
+                            <tr>
+                                <th style="width:52px;">N°</th>
+                                <th>Mesure</th>
+                                <th style="width:200px;">Statut</th>
+                                <th style="width:96px; text-align:center;">Maturité ${Help.tip(MATURITE_AIDE)}</th>
+                                <th style="width:90px; text-align:center;">Détail</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </details>`;
+        }).join("");
+
+        app.innerHTML = `
+            <section class="page">
+                <div class="dashboard-header">
+                    <div>
+                        <h1>${escapeHtml(ref.nom)}</h1>
+                        <p style="color:var(--text-muted); margin-top:5px;">${escapeHtml(ref.editeur)} · ${escapeHtml(ref.version)} — <a href="#/referentiels" style="color:var(--accent);">tous les référentiels</a></p>
+                    </div>
+                    <button id="resetRefBtn" style="background:transparent; color:var(--text-muted); border:1px solid var(--border);">Réinitialiser</button>
+                </div>
+
+                <div class="synthese-message info" style="padding:10px; font-size:0.9rem;">${escapeHtml(ref.aide)}</div>
+
+                <div class="dashboard-grid ref-detail-grid">
+                    <div class="dashboard-card ref-scorecard">
+                        <h3 style="margin-top:0;">Profil de maturité par domaine</h3>
+                        <div class="ref-radar" id="ref-radar">${radarSvg(sc.domaines.map(d => ({ label: d.court, value: d.maturite / 5 })))}</div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3 style="margin-top:0;">Synthèse</h3>
+                        <div class="ref-kpis ref-kpis--stack">
+                            <div class="ref-kpi">
+                                <div class="ref-kpi__val" id="kpi-mat" style="color:${maturiteColor(sc.global.maturite)};">${sc.global.maturite.toFixed(1)}<span>/5</span></div>
+                                <div class="ref-kpi__lbl">Maturité moyenne</div>
+                            </div>
+                            <div class="ref-kpi">
+                                <div class="ref-kpi__val" id="kpi-conf">${sc.global.conformite === null ? "—" : sc.global.conformite + "<span>%</span>"}</div>
+                                <div class="ref-kpi__lbl">Conformité</div>
+                            </div>
+                            <div class="ref-kpi">
+                                <div class="ref-kpi__val" id="kpi-eval">${sc.global.evaluated}<span>/${sc.global.total}</span></div>
+                                <div class="ref-kpi__lbl">Mesures évaluées</div>
+                            </div>
+                        </div>
+                        <p style="font-size:0.82rem; color:var(--text-muted); margin-top:14px;">Renseignez chaque mesure ci-dessous : le statut et la maturité mettent à jour le radar en temps réel. Ouvrez le <strong>Détail</strong> d'une mesure pour ajouter un commentaire, des preuves et des actions correctives.</p>
+                    </div>
+                </div>
+
+                <div id="ref-domains">${domainSections}</div>
+            </section>`;
+
+        wireDetail(ref);
+    }
+
+    // Ligne d'une mesure (2 <tr> : la ligne principale + une ligne de détail repliable).
+    function rowHtml(ref, ex) {
+        const ev = DataStore.getEvaluation(ref.id, ex.code);
+        const statut = ev ? (ev.statut || "") : "";
+        const mat = ev ? (Number(ev.maturite) || 0) : 0;
+        const meta = statutMeta(statut);
+        const actionsCount = ev ? DataStore.getActionsByEvaluation(ev.id).length : 0;
+
+        const statutOpts = STATUTS.map(s => `<option value="${s.v}" ${s.v === statut ? "selected" : ""}>${s.label}</option>`).join("");
+        const matOpts = MATURITES.map(m => `<option value="${m.v}" ${m.v === mat ? "selected" : ""}>${m.v}</option>`).join("");
+
+        return `
+            <tr class="ref-row" data-code="${ex.code}">
+                <td><strong>${escapeHtml(ex.code)}</strong></td>
+                <td>${escapeHtml(ex.titre)} ${ex.aide ? Help.tip(ex.aide) : ""}</td>
+                <td><select class="ref-statut sel-${meta.cls}" data-code="${ex.code}" aria-label="Statut de la mesure ${escapeHtml(ex.code)}">${statutOpts}</select></td>
+                <td style="text-align:center;"><select class="ref-mat" data-code="${ex.code}" aria-label="Maturité de la mesure ${escapeHtml(ex.code)}">${matOpts}</select></td>
+                <td style="text-align:center;"><button class="ref-toggle" data-toggle="${ex.code}" aria-expanded="false" title="Ouvrir le détail">Détail${actionsCount ? ` <span class="ref-badge-count">${actionsCount}</span>` : ""}</button></td>
+            </tr>
+            <tr class="ref-detail-row" data-detail="${ex.code}" hidden>
+                <td colspan="5">${detailPanelHtml(ref, ex, ev)}</td>
+            </tr>`;
+    }
+
+    function detailPanelHtml(ref, ex, ev) {
+        const commentaire = ev ? (ev.commentaire || "") : "";
+        const preuves = ev ? (ev.preuves || "") : "";
+        return `
+            <div class="ref-detail-panel">
+                <div class="ref-detail-grid2">
+                    <div class="form-group" style="margin:0;">
+                        <label>Commentaire / justification</label>
+                        <textarea class="ref-comment" data-code="${ex.code}" placeholder="État des lieux, écarts constatés, décisions…">${escapeHtml(commentaire)}</textarea>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label>Preuves ${Help.tip("Références des éléments justifiant l'évaluation : procédure, capture, ticket, nom de document… (l'application ne stocke pas les fichiers).")}</label>
+                        <textarea class="ref-preuves" data-code="${ex.code}" placeholder="Ex : PSSI §4.2, export AD du 12/03, ticket #1240…"></textarea>
+                    </div>
+                </div>
+                <div class="ref-actions-block" data-code="${ex.code}">
+                    ${actionsBlockHtml(ref, ex.code)}
+                </div>
+            </div>`;
+    }
+
+    // Bloc « actions correctives » d'une mesure (liste + formulaire de création).
+    function actionsBlockHtml(ref, code) {
+        const ev = DataStore.getEvaluation(ref.id, code);
+        const actions = ev ? DataStore.getActionsByEvaluation(ev.id) : [];
+        const list = actions.length
+            ? `<ul class="ref-actions-list">${actions.map(a => `
+                    <li>
+                        <a href="#/actions/${a.id}" style="color:var(--accent);">${escapeHtml(a.titre)}</a>
+                        <span class="status ${statutClassForAction(a.statut)}" style="margin-left:8px;">${escapeHtml(a.statut)}</span>
+                    </li>`).join("")}</ul>`
+            : `<p style="color:var(--text-muted); font-size:0.85rem; margin:4px 0;">Aucune action corrective planifiée.</p>`;
+
+        return `
+            <div class="ref-actions-head">
+                <strong>Actions correctives ${Help.tip("Planifiez une action pour combler un écart. Elle apparaît dans le plan d'actions global, tracée jusqu'à cette mesure du référentiel.")}</strong>
+                <button class="ref-add-action" data-code="${code}" style="font-size:0.8rem; padding:4px 10px;">Planifier une action</button>
+            </div>
+            ${list}
+            <form class="ref-action-form" data-code="${code}" hidden>
+                <div class="ref-action-form__row">
+                    <input class="ref-act-titre" placeholder="Intitulé de l'action *" />
+                    <select class="ref-act-prio">
+                        <option value="Basse">Basse</option>
+                        <option value="Moyenne" selected>Moyenne</option>
+                        <option value="Haute">Haute</option>
+                        <option value="Critique">Critique</option>
+                    </select>
+                    <input type="date" class="ref-act-echeance" />
+                    <button type="button" class="ref-act-save" data-code="${code}">Créer</button>
+                </div>
+            </form>`;
+    }
+
+    function statutClassForAction(statut) {
+        const s = String(statut).toLowerCase();
+        if (s === "terminée") return "status-conforme";
+        if (s === "en cours") return "status-partiellement-conforme";
+        return "status-non-conforme";
+    }
+
+    /* =========================
+       INTERACTIONS (délégation)
+    ========================== */
+    function wireDetail(ref) {
+        const root = document.getElementById("ref-domains");
+        if (!root) return;
+
+        // Lit l'état complet d'une ligne dans le DOM (pour un upsert cohérent).
+        function readRow(code) {
+            const q = sel => root.querySelector(`${sel}[data-code="${cssEsc(code)}"]`);
+            const statutEl = q("select.ref-statut");
+            const matEl = q("select.ref-mat");
+            const comEl = q("textarea.ref-comment");
+            const preEl = q("textarea.ref-preuves");
+            return {
+                ref_id: ref.id, code,
+                statut: statutEl ? statutEl.value : "",
+                maturite: matEl ? (Number(matEl.value) || 0) : 0,
+                commentaire: comEl ? comEl.value.trim() : "",
+                preuves: preEl ? preEl.value.trim() : ""
+            };
+        }
+
+        function persist(code) { return DataStore.upsertEvaluation(readRow(code)); }
+
+        // Changement de statut ou de maturité → persiste + rafraîchit scores/badges.
+        root.addEventListener("change", (e) => {
+            const el = e.target;
+            if (el.classList.contains("ref-statut") || el.classList.contains("ref-mat")) {
+                const code = el.dataset.code;
+                persist(code);
+                updateRowBadge(code);
+                refreshScores(ref);
+            }
+        });
+
+        // Commentaire / preuves : persistance à la perte de focus.
+        root.addEventListener("blur", (e) => {
+            const el = e.target;
+            if (el.classList.contains("ref-comment") || el.classList.contains("ref-preuves")) {
+                persist(el.dataset.code);
+            }
+        }, true);
+
+        // Clics : repli/détail, ouverture du formulaire d'action, création d'action.
+        root.addEventListener("click", (e) => {
+            const toggle = e.target.closest(".ref-toggle");
+            if (toggle) {
+                const code = toggle.dataset.toggle;
+                const row = root.querySelector(`tr.ref-detail-row[data-detail="${cssEsc(code)}"]`);
+                if (row) {
+                    const nowHidden = !row.hidden;
+                    row.hidden = nowHidden;
+                    toggle.setAttribute("aria-expanded", String(!nowHidden));
+                }
+                return;
+            }
+            const addBtn = e.target.closest(".ref-add-action");
+            if (addBtn) {
+                const form = root.querySelector(`form.ref-action-form[data-code="${cssEsc(addBtn.dataset.code)}"]`);
+                if (form) { form.hidden = !form.hidden; if (!form.hidden) { const i = form.querySelector(".ref-act-titre"); if (i) i.focus(); } }
+                return;
+            }
+            const saveBtn = e.target.closest(".ref-act-save");
+            if (saveBtn) {
+                createActionFor(ref, saveBtn.dataset.code, root);
+                return;
+            }
+        });
+
+        document.getElementById("resetRefBtn").onclick = () => {
+            const n = DataStore.getEvaluationsByRef(ref.id).length;
+            if (n === 0) { if (window.showToast) window.showToast("Aucune évaluation à réinitialiser.", "info"); return; }
+            if (confirm(`Réinitialiser l'évaluation de « ${ref.nom} » ?\n${n} évaluation(s) et leurs actions correctives seront supprimées.`)) {
+                DataStore.deleteEvaluationsByRef(ref.id);
+                if (window.showToast) window.showToast("Évaluation réinitialisée.", "success");
+                renderDetail(ref.id);
+            }
+        };
+    }
+
+    function createActionFor(ref, code, root) {
+        const form = root.querySelector(`form.ref-action-form[data-code="${cssEsc(code)}"]`);
+        if (!form) return;
+        const titre = form.querySelector(".ref-act-titre").value.trim();
+        if (!titre) { alert("L'intitulé de l'action est obligatoire."); return; }
+
+        // Garantit l'existence de l'évaluation (pour disposer d'un evaluation_id).
+        const ev = DataStore.upsertEvaluation(readRowState(ref, code, root));
+        DataStore.addAction({
+            id: "ACT-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+            titre,
+            priorite: form.querySelector(".ref-act-prio").value,
+            statut: "à faire",
+            responsable: "",
+            echeance: form.querySelector(".ref-act-echeance").value,
+            commentaire: "",
+            exigence_id: null,
+            risque_id: null,
+            evaluation_id: ev.id
+        });
+        if (window.showToast) window.showToast("Action corrective créée et liée à la mesure.", "success");
+
+        // Rafraîchit le bloc actions + le compteur de la ligne.
+        const block = root.querySelector(`.ref-actions-block[data-code="${cssEsc(code)}"]`);
+        if (block) block.innerHTML = actionsBlockHtml(ref, code);
+        updateActionsCount(code, ref);
+    }
+
+    function readRowState(ref, code, root) {
+        const q = sel => root.querySelector(`${sel}[data-code="${cssEsc(code)}"]`);
+        const statutEl = q("select.ref-statut"), matEl = q("select.ref-mat");
+        const comEl = q("textarea.ref-comment"), preEl = q("textarea.ref-preuves");
+        return {
+            ref_id: ref.id, code,
+            statut: statutEl ? statutEl.value : "",
+            maturite: matEl ? (Number(matEl.value) || 0) : 0,
+            commentaire: comEl ? comEl.value.trim() : "",
+            preuves: preEl ? preEl.value.trim() : ""
+        };
+    }
+
+    // Met à jour le compteur d'actions affiché sur le bouton « Détail ».
+    function updateActionsCount(code, ref) {
+        const root = document.getElementById("ref-domains");
+        const btn = root && root.querySelector(`.ref-toggle[data-toggle="${cssEsc(code)}"]`);
+        if (!btn) return;
+        const ev = DataStore.getEvaluation(ref.id, code);
+        const n = ev ? DataStore.getActionsByEvaluation(ev.id).length : 0;
+        btn.innerHTML = "Détail" + (n ? ` <span class="ref-badge-count">${n}</span>` : "");
+    }
+
+    // Met à jour la pastille de statut d'une ligne (couleur du <select>).
+    function updateRowBadge(code) {
+        const root = document.getElementById("ref-domains");
+        const sel = root && root.querySelector(`select.ref-statut[data-code="${cssEsc(code)}"]`);
+        if (!sel) return;
+        STATUTS.forEach(s => sel.classList.remove("sel-" + (s.cls || "")));
+        sel.classList.add("sel-" + statutMeta(sel.value).cls);
+    }
+
+    // Recalcule et réinjecte KPIs, radar et scores par domaine (sans re-render global).
+    function refreshScores(ref) {
+        const sc = computeScores(ref);
+        const setHtml = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+        setHtml("kpi-mat", sc.global.maturite.toFixed(1) + "<span>/5</span>");
+        const kpiMat = document.getElementById("kpi-mat"); if (kpiMat) kpiMat.style.color = maturiteColor(sc.global.maturite);
+        setHtml("kpi-conf", sc.global.conformite === null ? "—" : sc.global.conformite + "<span>%</span>");
+        setHtml("kpi-eval", sc.global.evaluated + "<span>/" + sc.global.total + "</span>");
+
+        const radar = document.getElementById("ref-radar");
+        if (radar) radar.innerHTML = radarSvg(sc.domaines.map(d => ({ label: d.court, value: d.maturite / 5 })));
+
+        sc.domaines.forEach(d => {
+            const matEl = document.querySelector(`.ref-domain__mat[data-dom="${cssEsc(d.id)}"]`);
+            if (matEl) { matEl.textContent = d.maturite.toFixed(1) + "/5"; matEl.style.color = maturiteColor(d.maturite); }
+            const cntEl = document.querySelector(`.ref-domain__count[data-dom="${cssEsc(d.id)}"]`);
+            if (cntEl) cntEl.textContent = d.evaluated + "/" + d.total + " évaluées";
+        });
+    }
+
+    // Échappe une valeur pour un sélecteur d'attribut CSS (les codes sont numériques,
+    // mais on reste robuste).
+    function cssEsc(v) {
+        if (window.CSS && CSS.escape) return CSS.escape(v);
+        return String(v).replace(/["\\\]]/g, "\\$&");
+    }
+
+    return { renderList, renderDetail };
+})();

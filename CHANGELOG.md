@@ -5,6 +5,25 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 4 — Référentiels : ossature + Hygiène ANSSI + auto-évaluation
+- **Nouveau module Référentiels** (`js/modules/referentiels.js`, routes `/referentiels`
+  et `/referentiels/:id`) : auto-évaluation de la conformité par rapport à un
+  référentiel de sécurité, avec **profil de maturité en radar** (SVG maison, sans
+  dépendance) et score par domaine mis à jour **en temps réel**.
+- **Référentiel Hygiène informatique ANSSI** (`js/data/ref_anssi.js`) : les
+  **42 mesures** réparties en **10 familles**, en reformulations originales courtes
+  + **aide pédagogique** par mesure (aucun texte de norme copié). Registre extensible
+  `Referentiels` (`js/data/referentiels.js`) prêt pour ISO 27002 / NIS2 / DORA / AirCyber.
+- **Auto-évaluation par mesure** : statut (conforme / partiel / non conforme / non
+  applicable / non évalué), **maturité 0-5** (échelle type CMMI), commentaire, preuves,
+  et **actions correctives** tracées jusqu'à la mesure (visibles dans le plan d'actions).
+- **Modèle de données v3** (`SCHEMA_VERSION` 2 → 3, migration transparente) : nouveaux
+  tableaux `evaluations` (auto-évaluations, clé `ref_id` + `code`) et `mesures` (socle
+  de l'entité pivot « Mesure de sécurité »). API DataStore synchrone étendue
+  (`upsertEvaluation`, `getEvaluationsByRef`, `getActionsByEvaluation`…).
+- **Traçabilité** : une action créée depuis une mesure affiche son origine
+  (« ANSSI n°… ») dans le plan d'actions et pointe vers le référentiel.
+
 ### Itération 3 — Fondations du design system
 - **Design tokens unifiés** (`css/tokens.css`) : source unique de vérité (marque
   orange dominante + bleu structurel, couleurs sémantiques strictes réservées aux

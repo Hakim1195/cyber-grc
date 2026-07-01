@@ -49,6 +49,14 @@ const ActionsModule = (() => {
             } else if (a.risque_id) {
                 const r = risques.find(risk => risk.id === a.risque_id);
                 liaison = r ? `Risque : ${r.nom}` : "Risque introuvable";
+            } else if (a.evaluation_id) {
+                const ev = DataStore.getEvaluationById ? DataStore.getEvaluationById(a.evaluation_id) : null;
+                if (ev) {
+                    const refNom = (typeof Referentiels !== "undefined" && Referentiels.get(ev.ref_id)) ? Referentiels.get(ev.ref_id).editeur : "Référentiel";
+                    liaison = `${refNom} n°${ev.code}`;
+                } else {
+                    liaison = "Mesure introuvable";
+                }
             }
 
             let statusClass = "status-non-applicable";
@@ -204,6 +212,19 @@ const ActionsModule = (() => {
                     <p><strong>Liée au risque (Interne) :</strong><br>
                         <a href="#/risques/${r.id}" style="color: var(--accent); text-decoration: underline;">
                             ${r.nom} (${r.niveau})
+                        </a>
+                    </p>`;
+            }
+        } else if (action.evaluation_id) {
+            const ev = DataStore.getEvaluationById ? DataStore.getEvaluationById(action.evaluation_id) : null;
+            if (ev) {
+                const ref = (typeof Referentiels !== "undefined") ? Referentiels.get(ev.ref_id) : null;
+                const exi = ref ? Referentiels.findExigence(ref, ev.code) : null;
+                contextTag = "Référentiel";
+                liaisonHtml = `
+                    <p><strong>Liée à une mesure de référentiel :</strong><br>
+                        <a href="#/referentiels/${ev.ref_id}" style="color: var(--accent); text-decoration: underline;">
+                            ${ref ? ref.nom : ev.ref_id} — n°${ev.code}${exi ? " : " + exi.titre : ""}
                         </a>
                     </p>`;
             }
