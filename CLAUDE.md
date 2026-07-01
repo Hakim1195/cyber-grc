@@ -166,5 +166,13 @@ silencieux) — `DataStore.flush()` renvoie `{ ok, quota }`, observateur `onQuot
 d'alerte** dédié ; l'**import Excel** force un enregistrement et prévient si le stockage est plein.
 Tests Playwright (simulation de quota).
 
-**Prochain** : suite du Chantier 9 — factorisation des helpers dupliqués (suppression groupée, badges,
-confirmations, collecte de formulaire) ; i18n (chaînes centralisées, sans sur-ingénierie).
+**Fait (Chantier 9 — Factorisation helpers UI)** : nouveau module partagé **`js/core/ui.js`**
+(`window.UI`, chargé après `help.js`). **`UI.wireBulkDelete({remove,confirm,toast,onDone})`** remplace
+la logique de **suppression groupée recopiée dans 8 modules** (Exigences, Risques, Actions, Crise, BIA,
+Tests PRA, MCO, Prestataires — ~250 lignes dédupliquées). **`UI.badge` / `UI.mappedBadge`** factorisent
+les **badges de statut** (`<span class="status …">`) — appliqués à Incidents & Documents. Aucun
+changement fonctionnel/schéma ; échappement XSS conservé. Tests Playwright (20 assertions + smoke 8
+modules, 0 erreur console).
+
+**Prochain** : suite du Chantier 9 — factoriser **confirmations** et **collecte de formulaire**
+(hétérogène → prudence) ; i18n (chaînes centralisées, sans sur-ingénierie).

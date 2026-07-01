@@ -28,9 +28,8 @@ const DocumentsModule = (() => {
 
     function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : "—"; }
     function statutBadge(s) {
-        const cls = { "en vigueur": "status-conforme", "à réviser": "status-partiellement-conforme",
-            "brouillon": "status-non-applicable", "obsolète": "status-non-conforme" }[s] || "status-non-applicable";
-        return `<span class="status ${cls}">${escapeHtml(s || "—")}</span>`;
+        return UI.mappedBadge(s, { "en vigueur": "status-conforme", "à réviser": "status-partiellement-conforme",
+            "brouillon": "status-non-applicable", "obsolète": "status-non-conforme" }, "status-non-applicable");
     }
 
     // État de revue à partir de la date de prochaine revue.

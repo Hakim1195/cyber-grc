@@ -107,44 +107,13 @@ const RisquesModule = (() => {
             };
         }
 
-        // Logique de sélection multiple
-        const selectAllCb = document.getElementById("selectAllCb");
-        const rowCbs = document.querySelectorAll(".row-cb");
-        const bulkDeleteBtn = document.getElementById("bulkDeleteBtn");
-        const selectedCountSpan = document.getElementById("selectedCount");
-
-        function updateBulkDeleteUI() {
-            const checkedCount = document.querySelectorAll(".row-cb:checked").length;
-            if (checkedCount > 0) {
-                bulkDeleteBtn.style.display = "inline-block";
-                selectedCountSpan.textContent = checkedCount;
-            } else {
-                bulkDeleteBtn.style.display = "none";
-            }
-            if (selectAllCb) selectAllCb.checked = checkedCount === rowCbs.length && rowCbs.length > 0;
-        }
-
-        if (selectAllCb) {
-            selectAllCb.addEventListener("change", (e) => {
-                rowCbs.forEach(cb => cb.checked = e.target.checked);
-                updateBulkDeleteUI();
-            });
-        }
-
-        rowCbs.forEach(cb => {
-            cb.addEventListener("change", updateBulkDeleteUI);
+        // Sélection multiple + suppression groupée (helper partagé, cf. js/core/ui.js).
+        UI.wireBulkDelete({
+            remove: (id) => DataStore.deleteRisque(id),
+            confirm: (n) => `Confirmer la suppression définitive de ${n} risque(s) ?`,
+            toast: (n) => `${n} risque(s) supprimé(s).`,
+            onDone: () => renderList()
         });
-
-        if (bulkDeleteBtn) {
-            bulkDeleteBtn.addEventListener("click", () => {
-                const checkedIds = Array.from(document.querySelectorAll(".row-cb:checked")).map(cb => cb.dataset.id);
-                if (confirm(`Confirmer la suppression définitive de ${checkedIds.length} risque(s) ?`)) {
-                    checkedIds.forEach(id => DataStore.deleteRisque(id));
-                    if (window.showToast) window.showToast(`${checkedIds.length} risque(s) supprimé(s).`, "success");
-                    renderList(); // Recharger la vue
-                }
-            });
-        }
 
         // Redirection au clic sur la ligne (sauf checkbox)
         document.querySelectorAll(".clickable-row").forEach(row => {

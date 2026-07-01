@@ -22,18 +22,15 @@ const IncidentsModule = (() => {
     const DECLARATIONS = ["non requise", "à déclarer", "déclarée"];
 
     function graviteBadge(g) {
-        const cls = { "faible": "status-non-applicable", "moyenne": "status-partiellement-conforme",
-            "élevée": "status-non-conforme", "critique": "status-critique" }[g] || "status-non-applicable";
-        return `<span class="status ${cls}">${escapeHtml(g || "—")}</span>`;
+        return UI.mappedBadge(g, { "faible": "status-non-applicable", "moyenne": "status-partiellement-conforme",
+            "élevée": "status-non-conforme", "critique": "status-critique" }, "status-non-applicable");
     }
     function statutBadge(s) {
-        const cls = { "nouveau": "status-non-conforme", "en cours": "status-partiellement-conforme",
-            "résolu": "status-conforme", "clôturé": "status-non-applicable" }[s] || "status-non-applicable";
-        return `<span class="status ${cls}">${escapeHtml(s || "—")}</span>`;
+        return UI.mappedBadge(s, { "nouveau": "status-non-conforme", "en cours": "status-partiellement-conforme",
+            "résolu": "status-conforme", "clôturé": "status-non-applicable" }, "status-non-applicable");
     }
     function declarationBadge(v) {
-        const cls = { "déclarée": "decl-ok", "à déclarer": "decl-todo", "non requise": "decl-na" }[v] || "decl-na";
-        return `<span class="status ${cls}">${escapeHtml(v || "non requise")}</span>`;
+        return UI.mappedBadge(v || "non requise", { "déclarée": "decl-ok", "à déclarer": "decl-todo", "non requise": "decl-na" }, "decl-na");
     }
     function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : "—"; }
 

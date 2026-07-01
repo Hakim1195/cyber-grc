@@ -188,44 +188,13 @@ const PraPrestatairesModule = (() => {
 
         document.getElementById("addBtn").onclick = renderCreate;
 
-        // Logique de sélection multiple
-        const selectAllCb = document.getElementById("selectAllCb");
-        const rowCbs = document.querySelectorAll(".row-cb");
-        const bulkDeleteBtn = document.getElementById("bulkDeleteBtn");
-        const selectedCountSpan = document.getElementById("selectedCount");
-
-        function updateBulkDeleteUI() {
-            const checkedCount = document.querySelectorAll(".row-cb:checked").length;
-            if (checkedCount > 0) {
-                bulkDeleteBtn.style.display = "inline-block";
-                selectedCountSpan.textContent = checkedCount;
-            } else {
-                bulkDeleteBtn.style.display = "none";
-            }
-            if (selectAllCb) selectAllCb.checked = checkedCount === rowCbs.length && rowCbs.length > 0;
-        }
-
-        if (selectAllCb) {
-            selectAllCb.addEventListener("change", (e) => {
-                rowCbs.forEach(cb => cb.checked = e.target.checked);
-                updateBulkDeleteUI();
-            });
-        }
-
-        rowCbs.forEach(cb => {
-            cb.addEventListener("change", updateBulkDeleteUI);
+        // Sélection multiple + suppression groupée (helper partagé, cf. js/core/ui.js).
+        UI.wireBulkDelete({
+            remove: (id) => DataStore.deletePrestataire(id),
+            confirm: (n) => `Confirmer la suppression de ${n} contact(s) ?`,
+            toast: (n) => `${n} contact(s) supprimé(s).`,
+            onDone: () => renderList()
         });
-
-        if (bulkDeleteBtn) {
-            bulkDeleteBtn.addEventListener("click", () => {
-                const checkedIds = Array.from(document.querySelectorAll(".row-cb:checked")).map(cb => cb.dataset.id);
-                if (confirm(`Confirmer la suppression de ${checkedIds.length} contact(s) ?`)) {
-                    checkedIds.forEach(id => DataStore.deletePrestataire(id));
-                    if (window.showToast) window.showToast(`${checkedIds.length} contact(s) supprimé(s).`, "success");
-                    renderList();
-                }
-            });
-        }
 
         document.querySelectorAll(".clickable-row").forEach(row => {
             row.onclick = () => Router.navigateTo(`/prestataires/${row.dataset.id}`);

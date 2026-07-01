@@ -5,6 +5,25 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 9 — Durcissement : factorisation des helpers d'interface dupliqués
+- **Nouveau module partagé `js/core/ui.js`** (`window.UI`) : source unique pour les fragments
+  d'UI recopiés d'un module à l'autre. Un seul endroit à maintenir, un comportement homogène.
+- **Suppression groupée factorisée** : la logique de sélection multiple (case « tout cocher »,
+  cases de ligne, bouton « Supprimer sélection » + compteur, confirmation, suppression, toast,
+  re-rendu) était **recopiée à l'identique dans 8 modules** (Exigences, Risques, Actions, Crise,
+  BIA, Tests PRA, MCO, Prestataires). Elle passe par un unique `UI.wireBulkDelete({ remove, confirm,
+  toast, onDone })` — chaque module ne conserve que ses libellés propres. ~250 lignes dupliquées retirées.
+- **Badges de statut factorisés** : la forme récurrente `<span class="status …">libellé échappé</span>`
+  et les tables de correspondance valeur→classe deviennent `UI.badge(label, cls)` /
+  `UI.mappedBadge(value, map, fallback)` (appliqués à Incidents : gravité/statut/déclarations, et
+  Documents : statut). Échappement XSS conservé (repli défensif si `escapeHtml` indisponible).
+- **Aucun changement fonctionnel ni de schéma** : comportement, messages de confirmation et couleurs
+  de badges rigoureusement identiques. *(Restent à factoriser ultérieurement : collecte de formulaire
+  — hétérogène — et confirmations.)*
+- **Tests headless (Playwright)** : 20 assertions sur `/risques` (sélection, compteur, tout-cocher,
+  suppression groupée avec confirmation, cohérence DataStore), badges Incidents/Documents en situation
+  réelle et anti-XSS, + smoke test des 8 modules (rendu, wiring actif) ; **0 erreur console**.
+
 ### Chantier 9 — Durcissement : gestion de la saturation du stockage (quota)
 - **Fin des échecs silencieux** : quand une écriture durable échoue faute de place
   (`QuotaExceededError` sur IndexedDB, le miroir localStorage ou un point de restauration), l'appli
