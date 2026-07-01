@@ -134,6 +134,12 @@ généralisé : exigences, risques, crise, prestataires, actifs, clients, bia, p
 audits — vues d'impression et matrice RACI incluses ; correctifs injection HTML des rapports d'audit
 et échappements incomplets ; tests Playwright par entité). IDs anti-collision généralisés.
 
-**Prochain** : suite du Chantier 9 (cascade/orphelins `tests_pra.scenario_id` ; factorisation des
-helpers dupliqués ; `QuotaExceededError` à l'import Excel ; i18n) ; mapping pré-rempli
-inter-référentiels ; restes du Chantier 7 (historisation des tendances, docs à réviser au tableau de bord).
+**Fait (Chantier 9 — suite)** : **Cascade/orphelins `tests_pra.scenario_id`** — suppression d'un
+scénario PCA/PRA en cascade sur ses tests (confirmation indiquant le nombre impacté) ; détection +
+nettoyage des tests orphelins hérités (badge « Orphelin » + bandeau) ; helpers DataStore
+`getTestsByScenario`/`getOrphanTests`/`deleteOrphanTests`.
+
+**Prochain** : suite du Chantier 9 (factorisation des helpers dupliqués — suppression groupée,
+badges, confirmations, collecte de formulaire ; `QuotaExceededError` à l'import Excel ; i18n) ;
+mapping pré-rempli inter-référentiels ; restes du Chantier 7 (historisation des tendances,
+docs à réviser au tableau de bord).

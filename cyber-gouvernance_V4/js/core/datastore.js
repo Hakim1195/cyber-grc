@@ -475,7 +475,12 @@ const DataStore = (() => {
         const i = data.scenarios_pra.findIndex(s => s.id === scenario.id);
         if (i !== -1) { data.scenarios_pra[i] = scenario; save(); }
     }
-    function deleteScenarioPra(id) { data.scenarios_pra = data.scenarios_pra.filter(s => s.id !== id); save(); }
+    function deleteScenarioPra(id) {
+        data.scenarios_pra = data.scenarios_pra.filter(s => s.id !== id);
+        // Cascade : on retire les tests rattachés (sinon ils deviennent orphelins).
+        data.tests_pra = data.tests_pra.filter(t => t.scenario_id !== id);
+        save();
+    }
 
     /* =========================
        TESTS PRA (MAINTIEN EN CONDITION)
@@ -488,6 +493,20 @@ const DataStore = (() => {
         if (i !== -1) { data.tests_pra[i] = test; save(); }
     }
     function deleteTestPra(id) { data.tests_pra = data.tests_pra.filter(t => t.id !== id); save(); }
+    function getTestsByScenario(scenarioId) { return data.tests_pra.filter(t => t.scenario_id === scenarioId); }
+    // Tests dont le scénario n'existe plus (orphelins hérités d'anciennes suppressions).
+    function getOrphanTests() {
+        const ids = new Set(data.scenarios_pra.map(s => s.id));
+        return data.tests_pra.filter(t => !ids.has(t.scenario_id));
+    }
+    function deleteOrphanTests() {
+        const ids = new Set(data.scenarios_pra.map(s => s.id));
+        const before = data.tests_pra.length;
+        data.tests_pra = data.tests_pra.filter(t => ids.has(t.scenario_id));
+        const removed = before - data.tests_pra.length;
+        if (removed > 0) save();
+        return removed;
+    }
 
     /* =========================
        PRESTATAIRES & CONTACTS EXTERNES
@@ -825,6 +844,7 @@ const DataStore = (() => {
         getCriseMembres, getCriseMembreById, addCriseMembre, updateCriseMembre, deleteCriseMembre,
         getScenariosPra, getScenarioPraById, addScenarioPra, updateScenarioPra, deleteScenarioPra,
         getTestsPra, getTestPraById, addTestPra, updateTestPra, deleteTestPra,
+        getTestsByScenario, getOrphanTests, deleteOrphanTests,
         getPrestataires, addPrestataire, updatePrestataire, deletePrestataire,
         getMcoActions, addMcoAction, updateMcoAction, deleteMcoAction,
 

@@ -208,7 +208,11 @@ const PraScenariosModule = (() => {
 
         if (isEdit) {
             document.getElementById("delScenarioBtn").onclick = () => {
-                if (confirm("Supprimer définitivement ce scénario ?")) {
+                const nbTests = DataStore.getTestsByScenario(editingScenario.id).length;
+                const avert = nbTests > 0
+                    ? `\n\nAttention : ${nbTests} test(s) d'exercice rattaché(s) à ce scénario seront également supprimés.`
+                    : "";
+                if (confirm("Supprimer définitivement ce scénario ?" + avert)) {
                     DataStore.deleteScenarioPra(editingScenario.id);
                     Router.navigateTo("/pra");
                 }

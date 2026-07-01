@@ -106,7 +106,9 @@ du pivot ; registre **imprimable**. Schéma v6.
       HTML des rapports/PV d'audit (`replace(\n,<br>)` sans échappement) et échappements incomplets
       (`replace(/"/g,…)`). Tests Playwright dédiés par entité (payloads `<img>`/`<script>`).
 - ✅ **IDs anti-collision** (suffixe aléatoire) généralisés à tous les modules. *(Itération 12)*
-- Cascade/orphelins (`tests_pra.scenario_id`), cohérence métier.
+- ✅ **Cascade/orphelins** (`tests_pra.scenario_id`) : suppression d'un scénario → cascade sur ses
+      tests (confirmation chiffrée) ; détection + nettoyage des tests orphelins hérités (bandeau +
+      badge). Helpers DataStore `getTestsByScenario`/`getOrphanTests`/`deleteOrphanTests`. *(Itération 19)*
 - Factorisation des helpers dupliqués (suppression groupée, badges, confirmations, collecte de formulaire).
 - Gestion `QuotaExceededError` à l'import Excel.
 - i18n : chaînes centralisées (structure, sans sur-ingénierie).

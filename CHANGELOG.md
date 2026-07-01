@@ -5,6 +5,19 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 9 — Intégrité des données : cascade & tests PRA orphelins
+- **Suppression en cascade** : supprimer un **scénario PCA/PRA** supprime désormais aussi les
+  **tests d'exercice** qui lui étaient rattachés (`tests_pra.scenario_id`) — plus de tests
+  pointant vers un scénario inexistant. La **confirmation de suppression** indique le nombre de
+  tests impactés avant validation.
+- **Détection & nettoyage des orphelins hérités** : les tests dont le scénario a été supprimé
+  avant ce correctif sont **repérés** (badge « Orphelin » sur la ligne + **bandeau d'alerte**
+  avec compteur) et **nettoyables en un clic** (« Supprimer les tests orphelins »).
+- **DataStore** : `deleteScenarioPra` cascade vers `tests_pra` ; nouveaux helpers
+  `getTestsByScenario`, `getOrphanTests`, `deleteOrphanTests`.
+- Tests headless : cascade vérifiée (les tests du scénario supprimé disparaissent, l'orphelin
+  d'origine subsiste puis est nettoyé), message de confirmation, bandeau ; 0 erreur console.
+
 ### Chantier 9 — Durcissement XSS : fin de l'échappement des modules
 - **Échappement généralisé** (`escapeHtml`) de toutes les données utilisateur injectées en DOM
   dans les 7 modules restants : **Actifs, Donneurs d'ordre, BIA, Scénarios PCA/PRA, Tests PRA,

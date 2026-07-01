@@ -11,6 +11,11 @@ const PraTestsModule = (() => {
         const scenarios = DataStore.getScenariosPra();
         const app = document.getElementById("app");
 
+        // Détection des orphelins : test dont le scénario n'existe plus.
+        const scenIds = new Set(scenarios.map(s => s.id));
+        const isOrphan = (t) => !scenIds.has(t.scenario_id);
+        const orphans = tests.filter(isOrphan);
+
         // Utilitaire pour récupérer le nom du scénario
         const getNomScen = (id) => {
             const s = scenarios.find(x => x.id === id);
@@ -23,7 +28,7 @@ const PraTestsModule = (() => {
                     <input type="checkbox" class="row-cb" data-id="${t.id}">
                 </td>
                 <td>${t.date ? new Date(t.date).toLocaleDateString('fr-FR') : "Non définie"}</td>
-                <td><strong>${escapeHtml(getNomScen(t.scenario_id))}</strong></td>
+                <td><strong>${escapeHtml(getNomScen(t.scenario_id))}</strong>${isOrphan(t) ? ` <span class="badge" style="background:var(--color-warning); color:#fff;" title="Le scénario lié n'existe plus">Orphelin</span>` : ""}</td>
                 <td>${escapeHtml(t.type_test)}</td>
                 <td><span class="status ${t.succes === 'Oui' ? 'status-conforme' : 'status-non-conforme'}">${t.succes === 'Oui' ? 'Succès' : 'Échec'}</span></td>
             </tr>
@@ -46,6 +51,12 @@ const PraTestsModule = (() => {
                     <strong>Amélioration continue :</strong> Un PRA qui n'est pas testé régulièrement est un PRA qui ne fonctionnera pas le jour J. Historisez ici vos exercices sur table ou vos simulations techniques réelles.
                 </div>
 
+                ${orphans.length ? `
+                <div class="synthese-message warning no-print" role="alert" style="font-size:0.9rem; padding:12px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <span><strong>${orphans.length} test(s) orphelin(s)</strong> — le scénario associé a été supprimé. Ces enregistrements ne sont plus rattachés à un playbook.</span>
+                    <button id="cleanOrphansBtn" style="background:var(--color-warning); white-space:nowrap;">Supprimer les tests orphelins</button>
+                </div>` : ""}
+
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -64,6 +75,18 @@ const PraTestsModule = (() => {
         `;
 
         document.getElementById("addBtn").onclick = renderCreate;
+
+        // Nettoyage des tests orphelins (scénario supprimé)
+        const cleanOrphansBtn = document.getElementById("cleanOrphansBtn");
+        if (cleanOrphansBtn) {
+            cleanOrphansBtn.onclick = () => {
+                if (confirm(`Supprimer définitivement ${orphans.length} test(s) orphelin(s) ?`)) {
+                    const removed = DataStore.deleteOrphanTests();
+                    if (window.showToast) window.showToast(`${removed} test(s) orphelin(s) supprimé(s).`, "success");
+                    renderList();
+                }
+            };
+        }
 
         // Logique de sélection multiple
         const selectAllCb = document.getElementById("selectAllCb");

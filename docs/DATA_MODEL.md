@@ -152,6 +152,10 @@ Suppression en cascade → supprime les `exigences` rattachées (et leurs `actio
 
 ### Test PRA — `tests_pra`
 `{ id, scenario_id, date, succes: "Oui"|"Non", type_test, bilan }`
+- `scenario_id` → id d'un `scenarios_pra`. **Suppression en cascade** : supprimer un scénario
+  supprime ses tests (`deleteScenarioPra`). Les tests dont le scénario n'existe plus (orphelins
+  hérités d'anciennes suppressions) sont détectés via `getOrphanTests()` et nettoyables via
+  `deleteOrphanTests()` (bandeau dédié dans la liste des tests).
 
 ### MCO (maintien en condition) — `mco_actions`
 `{ id, titre, frequence, etat: "OK"|"KO", date, notes }`
