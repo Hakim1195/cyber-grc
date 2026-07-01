@@ -123,6 +123,13 @@ canevas) ; **Registre RGPD** (v6, traitements art. 30, mesures reliées au pivot
 imprimable) ; **Tableau de bord** enrichi (cockpit GRC 360°, graphes SVG maison) ;
 **Durcissement** partiel (escapeHtml partagé + XSS exigences/risques ; IDs anti-collision).
 
-**Prochain** : Chantier 8 — améliorations modules (export image matrice EBIOS ; fiches réflexes
-de crise imprimables ; risque fournisseur / chaîne d'appro) ; fin du durcissement (XSS modules
-restants, orphelins, factorisation, `QuotaExceededError`) ; mapping pré-rempli inter-référentiels.
+**Fait (Chantier 8 — améliorations modules)** : **Matrice EBIOS** export image PNG/SVG (SVG
+autonome → PNG via canvas, sans dépendance) + alerte cohérence brut/résiduel ; **Fiches réflexes
+de crise imprimables** (`/crise-fiches` : cartes d'action par rôle + réflexes communs + contacts
+d'urgence) ; **Risque fournisseur & chaîne d'appro NIS2/DORA** (criticité × accès → niveau
+inhérent + checklist exigences + couverture). Durcissement XSS des modules Crise et Prestataires.
+
+**Prochain** : fin du durcissement (Chantier 9 — XSS modules restants : actifs, clients, bia,
+pra_scenarios/tests/mco, audits ; cascade/orphelins ; factorisation des helpers ;
+`QuotaExceededError` à l'import) ; mapping pré-rempli inter-référentiels ; restes du Chantier 7
+(historisation des tendances, docs à réviser au tableau de bord).

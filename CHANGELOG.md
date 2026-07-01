@@ -5,6 +5,22 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 8 — Tiers : risque fournisseur & chaîne d'approvisionnement (NIS2/DORA)
+- **Évaluation du risque fournisseur** sur le module Prestataires & Tiers : deux critères
+  **Criticité** (impact si défaillance : faible → vitale) et **Accès au SI / aux données**
+  (aucun → étendu) produisent un **niveau de risque inhérent** (Faible / Modéré / Élevé /
+  Critique) affiché en badge sémantique, recalculé en direct dans le formulaire.
+- **Exigences de sécurité de la chaîne d'approvisionnement** : checklist de 6 points de
+  vigilance contractuels et opérationnels (clause de sécurité, notification des incidents,
+  droit d'audit & preuves de conformité, localisation des données & sous-traitance, plan de
+  réversibilité, continuité & résilience testée), chacun rattaché à sa **référence NIS2 /
+  DORA**. Taux de **couverture** (X/6) affiché par tiers.
+- **Liste enrichie** : nouvelle colonne « Risque fournisseur » (niveau + couverture) et
+  **bandeau de synthèse** (nombre de tiers, évalués, à risque élevé/critique, couverture
+  moyenne de la chaîne d'appro) pour une lecture direction immédiate.
+- Champs `criticite` / `acces` / `supplyChain` **optionnels et rétrocompatibles** (aucun bump
+  de schéma). **Durcissement XSS** du module au passage (société, type, contacts, notes).
+
 ### Chantier 8 — PCA/PRA : fiches réflexes de crise imprimables
 - **Nouvelle vue `/crise-fiches`** accessible depuis l'annuaire de la Cellule de Crise
   (bouton **« Fiches réflexes »**) : des **cartes d'action par rôle** décrivant les gestes

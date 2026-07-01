@@ -157,7 +157,14 @@ Suppression en cascade → supprime les `exigences` rattachées (et leurs `actio
 `{ id, titre, frequence, etat: "OK"|"KO", date, notes }`
 
 ### Prestataire / tiers — `prestataires`
-`{ id, societe, type, phone, email, notes }`
+`{ id, societe, type, phone, email, notes,`
+` criticite?, acces?, supplyChain? }`
+- Champs d'évaluation du **risque fournisseur** (optionnels, rétrocompatibles — pas de bump de schéma) :
+  - `criticite` : `""|"faible"|"moyenne"|"forte"|"vitale"` (impact si défaillance).
+  - `acces` : `""|"aucun"|"limite"|"etendu"` (accès au SI / aux données).
+  - Risque inhérent = poids(criticité) × poids(accès) → Faible / Modéré / Élevé / Critique.
+  - `supplyChain` : objet de booléens (exigences chaîne d'appro NIS2/DORA) — clés
+    `clause, notif, audit, donnees, reversibilite, continuite`.
 
 ### Audit interne (ISO 27001 §9.2) — `audits`
 `{ id, ref, statut: "Planifié"|"En cours"|"Réalisé", date, perimetre, auditeur, audite, synthese, constats[] }`
