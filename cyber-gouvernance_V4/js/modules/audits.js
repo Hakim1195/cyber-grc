@@ -168,7 +168,7 @@ const AuditsModule = (() => {
             const original = DataStore.getAudits().find(x => x.id === id);
             editingItem = JSON.parse(JSON.stringify(original));
         } else {
-            editingItem = { id: "AUD-" + Date.now(), ref: "AUD-202X-XX", statut: "Planifié", date: "", perimetre: "", auditeur: "", audite: "", synthese: "", constats: [] };
+            editingItem = { id: "AUD-" + Date.now() + "-" + Math.floor(Math.random() * 1000), ref: "AUD-202X-XX", statut: "Planifié", date: "", perimetre: "", auditeur: "", audite: "", synthese: "", constats: [] };
         }
 
         document.getElementById("app").innerHTML = `
@@ -311,7 +311,7 @@ const AuditsModule = (() => {
             const original = DataStore.getRevues().find(x => x.id === id);
             editingItem = JSON.parse(JSON.stringify(original));
         } else {
-            editingItem = { id: "REV-" + Date.now(), date: "", participants: "", inputs: "1. État des actions des revues précédentes :\n2. Changements dans les enjeux externes/internes :\n3. Retour d'information sur la performance de la sécurité :\n4. Retours des parties intéressées :\n5. Résultats de l'appréciation des risques :", outputs: "- " };
+            editingItem = { id: "REV-" + Date.now() + "-" + Math.floor(Math.random() * 1000), date: "", participants: "", inputs: "1. État des actions des revues précédentes :\n2. Changements dans les enjeux externes/internes :\n3. Retour d'information sur la performance de la sécurité :\n4. Retours des parties intéressées :\n5. Résultats de l'appréciation des risques :", outputs: "- " };
         }
 
         document.getElementById("app").innerHTML = `

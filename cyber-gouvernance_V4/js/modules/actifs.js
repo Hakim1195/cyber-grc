@@ -149,7 +149,7 @@ const ActifsModule = (() => {
             if (!nom) return alert("Le nom de l'actif est obligatoire.");
 
             DataStore.addActif({
-                id: "ACTIF-" + Date.now(),
+                id: "ACTIF-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
                 nom: nom,
                 type: document.getElementById("type").value,
                 criticite: document.getElementById("criticite").value,

@@ -182,7 +182,7 @@ const BiaModule = (() => {
             if (!nom) return alert("Le nom du processus est obligatoire.");
 
             DataStore.addProcessus({
-                id: "BIA-" + Date.now(),
+                id: "BIA-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
                 nom: nom,
                 criticite: document.getElementById("criticite").value,
                 rto: document.getElementById("rto").value,

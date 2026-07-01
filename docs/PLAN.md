@@ -90,9 +90,10 @@ du pivot ; registre **imprimable**. Schéma v6.
 - PCA/PRA : fiches réflexes de crise **imprimables** (note : en crise le navigateur peut être indispo).
 - Tiers : niveau de risque fournisseur + lien exigences NIS2/DORA chaîne d'appro.
 
-## Chantier 9 — Durcissement transverse — ⏳ (en continu)
-- **XSS** : généraliser `escapeHtml` à tous les `innerHTML` avec données utilisateur (~10 points, cf. AUDIT §3.1).
-- **IDs anti-collision** (suffixe aléatoire).
+## Chantier 9 — Durcissement transverse — 🟡 en cours (en continu)
+- ✅ **XSS** : `escapeHtml` partagé (`window.escapeHtml`) + appliqué aux modules **Exigences** et
+      **Risques** (test XSS dédié). *(Itération 12)* — reste : actifs, clients, bia, crise, pra_*, audits.
+- ✅ **IDs anti-collision** (suffixe aléatoire) généralisés à tous les modules. *(Itération 12)*
 - Cascade/orphelins (`tests_pra.scenario_id`), cohérence métier.
 - Factorisation des helpers dupliqués (suppression groupée, badges, confirmations, collecte de formulaire).
 - Gestion `QuotaExceededError` à l'import Excel.

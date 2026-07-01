@@ -149,7 +149,7 @@ const PraMcoModule = (() => {
             if (!titre) return alert("Le titre est obligatoire.");
 
             DataStore.addMcoAction({
-                id: "MCO-" + Date.now(),
+                id: "MCO-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
                 titre: titre,
                 frequence: document.getElementById("frequence").value,
                 etat: document.getElementById("etat").value,

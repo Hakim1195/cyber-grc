@@ -23,15 +23,15 @@ const ExigencesModule = (() => {
                 <td style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
                     <input type="checkbox" class="row-cb" data-id="${e.id}">
                 </td>
-                <td><strong>${e.code}</strong></td>
-                <td>${e.intitule}</td>
+                <td><strong>${escapeHtml(e.code)}</strong></td>
+                <td>${escapeHtml(e.intitule)}</td>
                 <td>
                     <span class="status status-${(e.statut_conformite || '').replace(/\s+/g, "-")}">
-                        ${e.statut_conformite}
+                        ${escapeHtml(e.statut_conformite)}
                     </span>
                 </td>
-                <td>${e.responsable || "-"}</td>
-                ${currentClient === "global" ? `<td style="font-size:0.8rem; color:var(--text-muted);">${e.client_id ? (clients.find(c => c.id === e.client_id)?.nom || "Inconnu") : "Interne"}</td>` : ""}
+                <td>${escapeHtml(e.responsable) || "-"}</td>
+                ${currentClient === "global" ? `<td style="font-size:0.8rem; color:var(--text-muted);">${e.client_id ? escapeHtml(clients.find(c => c.id === e.client_id)?.nom || "Inconnu") : "Interne"}</td>` : ""}
             </tr>
         `).join("");
 
@@ -212,7 +212,7 @@ const ExigencesModule = (() => {
             }
 
             DataStore.addExigence({
-                id: "EX-" + Date.now(),
+                id: "EX-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
                 client_id: currentClient === "global" ? null : currentClient,
                 code: code,
                 intitule: intitule,
@@ -250,13 +250,13 @@ const ExigencesModule = (() => {
             Array.isArray(r.exigences_liees) && r.exigences_liees.includes(exigence.id)
         ).map(r => `
             <li class="matrix-risk clickable-risk" data-id="${r.id}" style="margin-bottom: 8px;">
-                <strong>${r.nom}</strong> — Niveau: <span style="text-transform: capitalize;">${r.niveau}</span>
+                <strong>${escapeHtml(r.nom)}</strong> — Niveau: <span style="text-transform: capitalize;">${escapeHtml(r.niveau)}</span>
             </li>
         `).join("");
 
         const actionsHtml = actions.map(a => `
             <li class="clickable-action" data-id="${a.id}" style="padding: 8px; background: #f9f9f9; border-radius: 4px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid var(--accent);">
-                <strong>${a.titre}</strong> — Statut: <em>${a.statut}</em>
+                <strong>${escapeHtml(a.titre)}</strong> — Statut: <em>${escapeHtml(a.statut)}</em>
             </li>
         `).join("");
 
@@ -264,8 +264,8 @@ const ExigencesModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>${exigence.code}</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Origine : <strong>${clientNom}</strong></p>
+                        <h1>${escapeHtml(exigence.code)}</h1>
+                        <p style="color: var(--text-muted); margin-top: 5px;">Origine : <strong>${escapeHtml(clientNom)}</strong></p>
                     </div>
                     <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
                 </div>
@@ -276,7 +276,7 @@ const ExigencesModule = (() => {
 
                         <div class="form-group">
                             <label>Intitulé <span style="color:red">*</span></label>
-                            <input id="intitule" value="${exigence.intitule}" required />
+                            <input id="intitule" value="${escapeHtml(exigence.intitule)}" required />
                         </div>
 
                         <div class="form-group">
@@ -289,8 +289,8 @@ const ExigencesModule = (() => {
                             </select>
                         </div>
 
-                        <div class="form-group"><label>Responsable</label><input id="responsable" value="${exigence.responsable || ""}" /></div>
-                        <div class="form-group"><label>Commentaire</label><textarea id="commentaire">${exigence.commentaire || ""}</textarea></div>
+                        <div class="form-group"><label>Responsable</label><input id="responsable" value="${escapeHtml(exigence.responsable || "")}" /></div>
+                        <div class="form-group"><label>Commentaire</label><textarea id="commentaire">${escapeHtml(exigence.commentaire || "")}</textarea></div>
                         <button id="saveBtn">Mettre à jour</button>
                     </div>
 
@@ -345,7 +345,7 @@ const ExigencesModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <h1>Nouvelle action</h1>
-                <div class="synthese-message info" style="margin-bottom: 20px; padding: 10px;"><strong>Liée à l'exigence :</strong> ${exigence.code}</div>
+                <div class="synthese-message info" style="margin-bottom: 20px; padding: 10px;"><strong>Liée à l'exigence :</strong> ${escapeHtml(exigence.code)}</div>
                 <div class="dashboard-card">
                     <div class="form-group"><label>Titre de l'action <span style="color:red">*</span></label><input id="titre" required /></div>
 
@@ -381,7 +381,7 @@ const ExigencesModule = (() => {
             if (!titre) return alert("Le titre de l'action est obligatoire.");
 
             DataStore.addAction({
-                id: "ACT-" + Date.now(),
+                id: "ACT-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
                 titre: titre,
                 priorite: document.getElementById("priorite").value,
                 statut: "à faire",

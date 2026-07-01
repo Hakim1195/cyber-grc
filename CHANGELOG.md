@@ -5,6 +5,15 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 12 — Durcissement (XSS & identifiants)
+- **Échappement HTML partagé** exposé (`window.escapeHtml` via `help.js`) et appliqué
+  aux modules à fort trafic **Exigences** et **Risques** : toute donnée utilisateur
+  injectée en `innerHTML` (intitulés, noms, descriptions, commentaires, valeurs de
+  formulaire) est désormais échappée. Vérifié par un test XSS dédié (charges neutralisées).
+- **Identifiants anti-collision** : suffixe aléatoire ajouté à tous les identifiants
+  générés (`"<PREFIXE>-" + Date.now() + "-" + aléatoire`) dans l'ensemble des modules,
+  supprimant le risque de collision lors de créations dans la même milliseconde.
+
 ### Itération 11 — Registre des traitements RGPD (article 30)
 - **Nouveau module Registre RGPD** (`/rgpd`) : registre des activités de traitement
   (finalité, **base légale**, personnes concernées, catégories de données, **données

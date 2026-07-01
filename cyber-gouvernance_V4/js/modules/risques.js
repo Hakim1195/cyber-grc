@@ -38,7 +38,7 @@ const RisquesModule = (() => {
                 <td style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
                     <input type="checkbox" class="row-cb" data-id="${r.id}">
                 </td>
-                <td><strong>${r.nom || "Sans nom"}</strong></td>
+                <td><strong>${escapeHtml(r.nom) || "Sans nom"}</strong></td>
                 <td>
                     <span class="status" style="background: ${getRiskColor(scoreRes)}; color: white;">
                         ${getLabel(scoreRes)}
@@ -46,7 +46,7 @@ const RisquesModule = (() => {
                 </td>
                 <td><span class="badge" style="background: #eee; color: #333;">Brut: ${r.score_brut || "-"}</span></td>
                 <td><span class="badge" style="background: #e3f2fd; color: #0d47a1; font-weight: bold;">Résiduel: ${scoreRes.toFixed(2)}</span></td>
-                <td>${r.description ? String(r.description).substring(0, 50) + "..." : "-"}</td>
+                <td>${r.description ? escapeHtml(String(r.description).substring(0, 50)) + "..." : "-"}</td>
             </tr>
         `}).join("");
 
@@ -245,7 +245,7 @@ const RisquesModule = (() => {
             const scoreResiduel = scoreBrut * m;
 
             DataStore.addRisque({
-                id: "RISK-" + Date.now(),
+                id: "RISK-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
                 nom: nom,
                 f_frequence: f,
                 g_gravite: g,
@@ -288,22 +288,22 @@ const RisquesModule = (() => {
             <label class="checkbox-line" style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <input type="checkbox" class="exigence-cb" value="${e.id}" ${risque.exigences_liees.includes(e.id) ? "checked" : ""}>
-                    <strong>${e.code}</strong> — ${e.intitule.substring(0, 40)}...
+                    <strong>${escapeHtml(e.code)}</strong> — ${escapeHtml(String(e.intitule || "").substring(0, 40))}...
                 </div>
-                <span class="badge" style="font-size: 0.7rem; background: #eee; color: #666;">${clientNom}</span>
+                <span class="badge" style="font-size: 0.7rem; background: #eee; color: #666;">${escapeHtml(clientNom)}</span>
             </label>
         `}).join("");
 
         const actionsHtml = actions.map(a => `
             <li class="clickable-action" data-id="${a.id}" style="padding: 8px; background: #f9f9f9; border-radius: 4px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid var(--accent);">
-                <strong>${a.titre}</strong> — Statut: <em>${a.statut}</em>
+                <strong>${escapeHtml(a.titre)}</strong> — Statut: <em>${escapeHtml(a.statut)}</em>
             </li>
         `).join("");
 
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <h1>${risque.nom}</h1>
+                    <h1>${escapeHtml(risque.nom)}</h1>
                     <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
                 </div>
 
@@ -316,7 +316,7 @@ const RisquesModule = (() => {
                             <em>Maîtrise (M) : 0.05 (Excellent) / 0.3 (Bon) / 0.7 (Faible) / 1 (Inexistant).</em>
                         </div>
 
-                        <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${risque.nom}" required /></div>
+                        <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${escapeHtml(risque.nom)}" required /></div>
 
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                             <div class="form-group">
@@ -354,7 +354,7 @@ const RisquesModule = (() => {
                             </div>
                         </div>
 
-                        <div class="form-group"><label>Description</label><textarea id="description">${risque.description || ""}</textarea></div>
+                        <div class="form-group"><label>Description</label><textarea id="description">${escapeHtml(risque.description || "")}</textarea></div>
                         <button id="saveBtn">Mettre à jour</button>
                     </div>
 
@@ -433,7 +433,7 @@ const RisquesModule = (() => {
             <section class="page">
                 <h1>Nouvelle action de remédiation</h1>
                 <div class="synthese-message warning" style="margin-bottom: 20px; padding: 10px;">
-                    <strong>Pour traiter le risque :</strong> ${risque.nom}
+                    <strong>Pour traiter le risque :</strong> ${escapeHtml(risque.nom)}
                 </div>
                 <div class="dashboard-card">
                     <div class="form-group"><label>Titre <span style="color:red">*</span></label><input id="titre" required /></div>
@@ -453,7 +453,7 @@ const RisquesModule = (() => {
             if (!titre) return alert("Le titre est obligatoire.");
 
             DataStore.addAction({
-                id: "ACT-" + Date.now(),
+                id: "ACT-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
                 titre: titre,
                 statut: "à faire",
                 responsable: document.getElementById("responsable").value.trim(),

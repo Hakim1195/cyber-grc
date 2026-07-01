@@ -95,7 +95,7 @@ const ClientsModule = (() => {
             }
 
             DataStore.addClient({
-                id: "CLI-" + Date.now(),
+                id: "CLI-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
                 nom: nom,
                 secteur: document.getElementById("secteur").value.trim()
             });

@@ -37,8 +37,11 @@ const Help = (() => {
         });
     }
 
-    return { tip, init };
+    return { tip, init, escapeHtml };
 })();
 
-// Alias pratique pour les templates.
+// Alias pratiques pour les templates.
 window.helpTip = Help.tip;
+// Échappement HTML partagé (durcissement XSS) : à utiliser pour toute donnée
+// utilisateur injectée en innerHTML. Fallback si un module le définit déjà en local.
+window.escapeHtml = Help.escapeHtml;
