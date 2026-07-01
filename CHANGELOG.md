@@ -5,6 +5,19 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 6 — Référentiels 4c : ISO 27002, NIS2, DORA, AirCyber
+- **Quatre nouveaux référentiels** ajoutés au catalogue, au même modèle d'auto-évaluation
+  (radar de maturité, statuts, maturité 0-5, actions correctives, pivot) :
+  - **ISO/IEC 27002:2022** — 93 mesures en 4 thèmes (organisationnel, humain, physique, technologique).
+  - **NIS2 (art. 21)** — 10 mesures de gestion des risques, regroupées en 4 thèmes.
+  - **DORA** — 5 piliers de résilience opérationnelle numérique (15 mesures de synthèse).
+  - **AirCyber (préparation)** — auto-positionnement indicatif filière aéronautique
+    (Bronze/Silver/Gold), **contenu original** ne remplaçant pas l'évaluation officielle BoostAerospace.
+- Reformulations originales courtes + aide pédagogique ; **aucun texte de norme copié**
+  (identifiants de clauses « 5.1 » + intitulés paraphrasés uniquement).
+- Le catalogue compte désormais **5 référentiels (174 mesures)** ; carte d'accroche orientée
+  vers le pivot « Mesure de sécurité » (couverture croisée à venir).
+
 ### Itération 5 — Pivot « Mesure de sécurité » (zéro double saisie)
 - **Nouveau module Mesures de sécurité** (`js/modules/mesures.js`, routes `/mesures`
   et `/mesures/:id`) : catalogue des contrôles de sécurité (MFA, sauvegardes,

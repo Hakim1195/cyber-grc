@@ -159,8 +159,6 @@ const ReferentielsModule = (() => {
                 </div>`;
         }).join("");
 
-        const bientot = ["ISO/IEC 27002:2022", "NIS2 (article 21)", "DORA", "AirCyber (Bronze / Silver / Gold)"];
-
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
@@ -175,11 +173,8 @@ const ReferentielsModule = (() => {
                     : `<div class="ref-grid">${cards}</div>`}
 
                 <div class="dashboard-card" style="margin-top:1.5rem;">
-                    <h3 style="margin-top:0;">Bientôt disponibles</h3>
-                    <p style="color:var(--text-muted); font-size:0.9rem;">Les référentiels suivants seront ajoutés au même modèle d'auto-évaluation, avec un <strong>mapping croisé</strong> évitant la double saisie (une même « mesure de sécurité » couvre plusieurs référentiels) :</p>
-                    <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                        ${bientot.map(b => `<span class="badge badge--na">${escapeHtml(b)}</span>`).join("")}
-                    </div>
+                    <h3 style="margin-top:0;">Éviter la double saisie : le pivot « Mesure de sécurité »</h3>
+                    <p style="color:var(--text-muted); font-size:0.9rem;">Une même <strong>mesure de sécurité</strong> (MFA, sauvegardes, cloisonnement…) couvre souvent des exigences de <em>plusieurs</em> référentiels. Reliez vos exigences à une <a href="#/mesures" style="color:var(--accent);">mesure de sécurité</a>, évaluez-la une fois puis <strong>propagez</strong> : le statut s'applique partout. La vue de <strong>couverture croisée</strong> arrive prochainement.</p>
                 </div>
             </section>`;
 

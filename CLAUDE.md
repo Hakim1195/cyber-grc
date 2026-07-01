@@ -80,7 +80,8 @@ cyber-gouvernance_V4/
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
   **evaluations** (auto-évaluations de référentiels) et **mesures** (pivot « Mesure de sécurité »).
 - Référentiels : catalogue **statique** (registre `js/data/referentiels.js` + fichiers `ref_*.js`),
-  hors `data`. ANSSI livré (42 mesures). Ne pas embarquer le texte des normes.
+  hors `data`. Livrés : ANSSI (42), ISO 27002 (93), NIS2 (10), DORA (15), AirCyber prépa (14).
+  Ne pas embarquer le texte des normes (reformulations originales + identifiants de clauses).
 - Export fichier : enveloppe **`grc-backup`** `{ format, version, encrypted, createdAt, app, payload|kdf+cipher }`.
 
 ## 5. Lancer & tester (important)
