@@ -70,7 +70,7 @@ const ClientsModule = (() => {
                 <div class="dashboard-card" style="max-width: 600px;">
                     <div class="form-group">
                         <label>Nom du client / périmètre <span style="color:red">*</span></label>
-                        <input id="nom" placeholder="Ex: Airbus, Thales, Safran..." required />
+                        <input id="nom" placeholder="Ex: nom du donneur d'ordre / périmètre" required />
                     </div>
 
                     <div class="form-group">

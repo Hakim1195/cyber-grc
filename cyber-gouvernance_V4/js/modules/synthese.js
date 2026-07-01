@@ -156,7 +156,7 @@ const SyntheseModule = (() => {
                 </div>
 
                 <div style="margin-top: 40px; padding-top: 20px; border-top: 1px dashed var(--border); display: flex; justify-content: space-between; color: var(--text-muted); font-size: 0.8rem;">
-                    <span>Généré par HM IT Consulting - Gouvernance Cyber</span>
+                    <span>Dedienne Aerospace — Gouvernance & Sécurité de l'Information</span>
                     <span>Document Confidentiel</span>
                 </div>
 
