@@ -47,7 +47,8 @@ Sous-itérations :
       exigences de référentiels (`evaluations[].mesure_id`) ; lien / création à la volée depuis le détail
       d'une exigence ; **propagation** du statut + maturité aux évaluations couvertes (zéro double saisie). *(Itération 5)*
 - ✅ **4c₁ — Autres référentiels** : ISO 27002:2022 (93), NIS2 art.21 (10), DORA (15),
-      AirCyber préparation (14) au schéma commun (1 fichier par référentiel). *(Itération 6)*
+      **AirCyber/BoostAerospace réel (234 q)** au schéma commun (1 fichier par référentiel). *(Itérations 6, 13)*
+      + **import des réponses AirCyber** depuis CSV (Oui/Non → statut, maturité de départ). *(Itération 13)*
 - ✅ **4c₂ — Couverture croisée & SoA** : vue de **couverture croisée** (matrice mesures × référentiels,
       part de chaque référentiel adossée à une mesure) ; **génération de la déclaration d'applicabilité
       (SoA)** imprimable. *(Itération 7)*

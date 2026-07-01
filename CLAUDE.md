@@ -84,7 +84,8 @@ cyber-gouvernance_V4/
 - Référentiels : catalogue **statique** (registre `js/data/referentiels.js` + fichiers `ref_*.js`),
   hors `data`. Livrés : ANSSI (42), ISO 27002 (93), NIS2 (10), DORA (15), AirCyber/BoostAerospace (234).
   Ne pas embarquer le texte des normes (reformulations originales + identifiants de clauses).
-  AirCyber = questionnaire réel (généré depuis un CSV via un script du scratchpad, non versionné).
+  AirCyber = questionnaire réel (généré depuis un CSV via un script du scratchpad, non versionné) ;
+  import in-app des réponses (bouton sur la fiche AirCyber, parsing SheetJS, mapping Oui/Non→statut).
 - Export fichier : enveloppe **`grc-backup`** `{ format, version, encrypted, createdAt, app, payload|kdf+cipher }`.
 
 ## 5. Lancer & tester (important)
@@ -113,9 +114,13 @@ tooltip ⓘ, fil d'Ariane, responsive, a11y) • **Référentiels 4a/4b** (sché
 `evaluations`/`mesures` ; référentiel **ANSSI 42 mesures** ; auto-évaluation + **radar de
 maturité** SVG ; pivot **« Mesure de sécurité »** + propagation « zéro double saisie »).
 
-**Fait (suite)** : Référentiels **4c** (ISO 27002, NIS2, DORA, **AirCyber réel 234 q**) + **couverture
-croisée** + **génération SoA** ; **Registre des incidents** (v4, déclarations NIS2/RGPD) ;
-**Gestion documentaire** (v5, politiques + alertes de revue + canevas) ; **Registre RGPD**
-(v6, traitements art. 30, mesures reliées au pivot, registre imprimable).
+**Fait (suite)** : Référentiels **4c** (ISO 27002, NIS2, DORA, **AirCyber réel 234 q** + **import
+CSV des réponses**) + **couverture croisée** + **génération SoA** ; **Registre des incidents**
+(v4, déclarations NIS2/RGPD) ; **Gestion documentaire** (v5, politiques + alertes de revue +
+canevas) ; **Registre RGPD** (v6, traitements art. 30, mesures reliées au pivot, registre
+imprimable) ; **Tableau de bord** enrichi (cockpit GRC 360°, graphes SVG maison) ;
+**Durcissement** partiel (escapeHtml partagé + XSS exigences/risques ; IDs anti-collision).
 
-**Prochain** : tableau de bord direction consolidé, améliorations modules, durcissement transverse.
+**Prochain** : Chantier 8 — améliorations modules (export image matrice EBIOS ; fiches réflexes
+de crise imprimables ; risque fournisseur / chaîne d'appro) ; fin du durcissement (XSS modules
+restants, orphelins, factorisation, `QuotaExceededError`) ; mapping pré-rempli inter-référentiels.

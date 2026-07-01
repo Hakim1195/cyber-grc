@@ -5,6 +5,14 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 13 — Import des réponses AirCyber (CSV)
+- **Import des réponses** depuis l'export CSV du questionnaire AirCyber, sur la fiche
+  du référentiel (bouton « Importer mes réponses (CSV) »). Mappe automatiquement
+  Oui → conforme, Non → non conforme, N/A → non applicable, Partiellement → partiel,
+  avec une maturité de départ (CMMI) ; les questions d'inventaire d'outils et les codes
+  hors référentiel sont ignorés. Parsing via SheetJS (déjà embarqué), aucune donnée
+  ne quitte le navigateur. Validé sur un export réel : 231/234 réponses appliquées.
+
 ### Itération 12 — Durcissement (XSS & identifiants)
 - **Échappement HTML partagé** exposé (`window.escapeHtml` via `help.js`) et appliqué
   aux modules à fort trafic **Exigences** et **Risques** : toute donnée utilisateur

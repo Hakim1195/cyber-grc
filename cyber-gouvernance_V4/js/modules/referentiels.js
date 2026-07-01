@@ -233,6 +233,7 @@ const ReferentielsModule = (() => {
                         <p style="color:var(--text-muted); margin-top:5px;">${escapeHtml(ref.editeur)} · ${escapeHtml(ref.version)} — <a href="#/referentiels" style="color:var(--accent);">tous les référentiels</a></p>
                     </div>
                     <div style="display:flex; gap:10px; align-items:center;">
+                        ${ref.id === "aircyber" ? `<input type="file" id="aircyberCsv" accept=".csv" hidden><button id="importCsvBtn" class="btn-secondary" title="Importer vos réponses depuis l'export CSV du questionnaire AirCyber">Importer mes réponses (CSV)</button>` : ""}
                         <a href="#/soa/${escapeHtml(ref.id)}" class="btn-secondary">Déclaration d'applicabilité (SoA)</a>
                         <button id="resetRefBtn" style="background:transparent; color:var(--text-muted); border:1px solid var(--border);">Réinitialiser</button>
                     </div>
@@ -483,6 +484,69 @@ const ReferentielsModule = (() => {
                 renderDetail(ref.id);
             }
         };
+
+        // Import des réponses depuis un export CSV (AirCyber).
+        const importBtn = document.getElementById("importCsvBtn");
+        const csvInput = document.getElementById("aircyberCsv");
+        if (importBtn && csvInput) {
+            importBtn.onclick = () => {
+                if (!confirm("Importer vos réponses écrasera l'évaluation actuelle de ce référentiel pour les questions concernées (Oui → conforme, Non → non conforme, N/A → non applicable). Continuer ?")) return;
+                csvInput.click();
+            };
+            csvInput.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    const res = importAnswersFromCsv(ref, ev.target.result);
+                    if (window.showToast) window.showToast(`Import terminé : ${res.imported} réponse(s) appliquée(s)${res.skipped ? `, ${res.skipped} ignorée(s)` : ""}.`, res.imported ? "success" : "info");
+                    renderDetail(ref.id);
+                };
+                reader.readAsText(file);
+                csvInput.value = "";
+            };
+        }
+    }
+
+    // Mappe les réponses d'un export CSV (Numéro ; Question ; Réponse) vers des
+    // évaluations. Les questions d'inventaire d'outils et les codes hors référentiel
+    // sont ignorés. Barème : Oui→conforme(3), Non→non conforme(1), N/A→non applicable(0),
+    // Partiellement→partiel(2). Les autres réponses (noms d'outils, vide) sont ignorées.
+    function importAnswersFromCsv(ref, text) {
+        let rows;
+        try {
+            const clean = String(text || "").replace(/^﻿/, "");
+            const wb = XLSX.read(clean, { type: "string", raw: true, FS: ";" });
+            rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, blankrows: false });
+        } catch (e) { console.error("Lecture CSV impossible", e); return { imported: 0, skipped: 0 }; }
+        if (!rows || rows.length < 2) return { imported: 0, skipped: 0 };
+
+        const header = rows[0].map(h => String(h || "").toLowerCase());
+        let repCol = header.findIndex(h => h.indexOf("répon") >= 0 || h.indexOf("repon") >= 0);
+        if (repCol < 0) repCol = rows[0].length - 1;
+        const isTool = q => /^\s*quel(le)?s?\s+(outils?|solutions?)/i.test(String(q || ""));
+        const MAP = {
+            "oui": { statut: "conforme", maturite: 3 },
+            "non": { statut: "non conforme", maturite: 1 },
+            "partiellement conforme": { statut: "partiellement conforme", maturite: 2 }
+        };
+
+        let imported = 0, skipped = 0;
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i]; if (!row) continue;
+            const code = String(row[0] == null ? "" : row[0]).trim();
+            const question = row[1];
+            const ans = String(row[repCol] == null ? "" : row[repCol]).trim();
+            if (!code || isTool(question)) continue;
+            if (!Referentiels.findExigence(ref, code)) continue;   // code absent (ex : tool-picker exclu)
+            const al = ans.toLowerCase();
+            let mapped = MAP[al];
+            if (!mapped && al.indexOf("n/a") === 0) mapped = { statut: "non applicable", maturite: 0 };
+            if (!mapped) { skipped++; continue; }                  // réponse vide ou non interprétable
+            DataStore.upsertEvaluation({ ref_id: ref.id, code, statut: mapped.statut, maturite: mapped.maturite });
+            imported++;
+        }
+        return { imported, skipped };
     }
 
     function createActionFor(ref, code, root) {
