@@ -4,10 +4,11 @@
 > Application **100 % frontend** : toutes les données vivent dans le navigateur
 > (IndexedDB, avec repli localStorage). Aucune donnée ne quitte le poste.
 
-Version de schéma courante : **`SCHEMA_VERSION = 5`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 6`** (défini dans `js/core/datastore.js`).
 > v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`.
 > v4 (chantier Incidents) : ajout du tableau `incidents`.
 > v5 (chantier Documentaire) : ajout du tableau `documents`.
+> v6 (chantier RGPD) : ajout du tableau `traitements`.
 > Migrations transparentes — `normalize` crée les tableaux vides à la volée.
 
 ---
@@ -56,7 +57,8 @@ Un enregistrement `backups` : `{ id, ts, type: "auto"|"manual", label, schemaVer
   "prestataires": [],   "mco_actions": [], "audits": [],  "revues": [],
   "evaluations": [],    "mesures": [],      // v3 — chantier Référentiels
   "incidents": [],      // v4 — chantier Incidents
-  "documents": []       // v5 — chantier Documentaire
+  "documents": [],      // v5 — chantier Documentaire
+  "traitements": []     // v6 — chantier RGPD (article 30)
 }
 ```
 
@@ -233,6 +235,18 @@ actions ; `deleteRisque`/`deleteActif` nettoient les références (`risque_id`, 
 | `emplacement` | string | localisation du fichier (**non stocké** par l'app) |
 | `referentiels` | string[] | ids de référentiels couverts |
 | `notes` | string | plan / sommaire (canevas disponibles) |
+
+### Traitement RGPD — `traitements` (v6, article 30)
+| Champ | Type | Notes |
+|-------|------|-------|
+| `id` | `"TRT-..."` | |
+| `nom`, `finalite` | string | |
+| `base_legale` | enum | consentement, contrat, obligation légale, intérêt légitime… |
+| `responsable` | string | |
+| `personnes_concernees`, `categories_donnees` | string | |
+| `donnees_sensibles` | bool | catégories particulières (art. 9) |
+| `destinataires`, `transfert_hors_ue`, `duree_conservation` | string | |
+| `mesures_ids` | string[] | **réutilise le pivot** `mesures` (`deleteMesure` délie) |
 
 ---
 

@@ -66,8 +66,10 @@ Module `/documents` : registre (PSSI, charte…), version, propriétaire, **date
 revue** (alertes en retard/à venir), statut, lien référentiels, emplacement (ne stocke pas les
 fichiers), **canevas de plans**. Schéma v5. *(À venir : remontée des alertes au tableau de bord direction.)*
 
-## Chantier 6 — Registre des traitements RGPD (§5.3) — ⏳
-Article 30 simplifié ; mesures de sécurité = mêmes entités « Mesure » que le mapping croisé.
+## Chantier 6 — Registre des traitements RGPD (§5.3) — ✅ FAIT *(Itération 11)*
+Module `/rgpd` : article 30 simplifié (finalité, base légale, données/sensibles,
+destinataires, transfert hors UE, conservation) ; mesures de sécurité = entités **« Mesure »**
+du pivot ; registre **imprimable**. Schéma v6.
 
 ## Chantier 7 — Tableau de bord direction consolidé (§5.4) — 🟡 en grande partie *(it. 10)*
 - ✅ **Cockpit GRC 360°** (`js/modules/dashboard.js`) : bandeau de posture direction,

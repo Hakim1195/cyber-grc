@@ -56,6 +56,9 @@ async function startApp() {
         "/documents": () => { if (typeof DocumentsModule !== "undefined") DocumentsModule.renderList(); },
         "/documents/:id": (id) => { if (typeof DocumentsModule !== "undefined") DocumentsModule.renderDetail(id); },
 
+        "/rgpd": () => { if (typeof RgpdModule !== "undefined") RgpdModule.renderList(); },
+        "/rgpd/:id": (id) => { if (typeof RgpdModule !== "undefined") RgpdModule.renderDetail(id); },
+
         "/actions": () => ActionsModule.renderList(),
         "/actions/:id": (id) => ActionsModule.renderDetail(id),
 
@@ -129,6 +132,7 @@ const ROUTE_META = {
     "/actions":      { s: "Pilotage",   t: "Plan d'actions" },
     "/incidents":    { s: "Risques",    t: "Incidents" },
     "/documents":    { s: "Conformité", t: "Gestion documentaire" },
+    "/rgpd":         { s: "Conformité", t: "Registre RGPD" },
     "/risques":      { s: "Risques",    t: "Risques (EBIOS)" },
     "/matrice":      { s: "Risques",    t: "Matrice des risques" },
     "/actifs":       { s: "Risques",    t: "Actifs critiques" },

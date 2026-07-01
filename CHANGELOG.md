@@ -5,6 +5,15 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 11 — Registre des traitements RGPD (article 30)
+- **Nouveau module Registre RGPD** (`/rgpd`) : registre des activités de traitement
+  (finalité, **base légale**, personnes concernées, catégories de données, **données
+  sensibles** art. 9, destinataires, transfert hors UE, durée de conservation).
+- **Mesures de sécurité réutilisent le pivot** : chaque traitement relie les
+  « mesures de sécurité » qui le protègent (zéro double saisie).
+- **Registre imprimable** (art. 30) + repères pédagogiques (bases légales, données sensibles).
+- **Modèle v6** (`SCHEMA_VERSION` 5 → 6) : tableau `traitements` ; `deleteMesure` délie les traitements.
+
 ### Itération 10 — Tableau de bord enrichi (cockpit GRC 360°)
 - **Refonte du tableau de bord** (`js/modules/dashboard.js`) en véritable cockpit de
   pilotage agrégeant l'ensemble des domaines GRC, avec des **graphiques maison en

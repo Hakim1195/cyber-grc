@@ -11,7 +11,7 @@ const DataStore = (() => {
     const LEGACY_AUDITS_KEY = "cyber-audits";
     const LEGACY_REVUES_KEY = "cyber-revues";
     const LOCAL_CURRENT_KEY = "cyber-current";      // repli (chiffré si clé) si IndexedDB indisponible
-    const SCHEMA_VERSION = 5;
+    const SCHEMA_VERSION = 6;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -23,7 +23,9 @@ const DataStore = (() => {
         // v4 — Chantier Incidents : registre des incidents de sécurité.
         "incidents",
         // v5 — Chantier Documentaire : registre des politiques/documents.
-        "documents"
+        "documents",
+        // v6 — Chantier RGPD : registre des traitements (article 30).
+        "traitements"
     ];
 
     const AUTOSAVE_DEBOUNCE_MS = 500;
@@ -593,6 +595,9 @@ const DataStore = (() => {
     function deleteMesure(id) {
         data.mesures = data.mesures.filter(m => m.id !== id);
         data.evaluations.forEach(e => { if (e.mesure_id === id) e.mesure_id = null; });   // délie les évaluations
+        data.traitements.forEach(t => {                                                   // délie les traitements RGPD
+            if (Array.isArray(t.mesures_ids)) t.mesures_ids = t.mesures_ids.filter(mid => mid !== id);
+        });
         save();
     }
 
@@ -648,6 +653,22 @@ const DataStore = (() => {
         if (idx !== -1) { data.documents[idx] = doc; save(); }
     }
     function deleteDocument(id) { data.documents = data.documents.filter(d => d.id !== id); save(); }
+
+    /* =========================
+       TRAITEMENTS RGPD — Registre article 30 (v6)
+       { id, nom, finalite, base_legale, responsable, personnes_concernees,
+         categories_donnees, donnees_sensibles, destinataires, transfert_hors_ue,
+         duree_conservation, mesures_ids[], notes, updatedAt }
+       Les mesures de sécurité réutilisent l'entité pivot `mesures`.
+    ========================== */
+    function getTraitements() { return data.traitements; }
+    function getTraitementById(id) { return data.traitements.find(t => t.id === id); }
+    function addTraitement(t) { data.traitements.push(t); save(); }
+    function updateTraitement(t) {
+        const idx = data.traitements.findIndex(x => x.id === t.id);
+        if (idx !== -1) { data.traitements[idx] = t; save(); }
+    }
+    function deleteTraitement(id) { data.traitements = data.traitements.filter(t => t.id !== id); save(); }
 
     /* =========================
        EXPORT / IMPORT (FICHIER .json)
@@ -714,7 +735,8 @@ const DataStore = (() => {
         //           `mesures` (pivot) → normalize crée les tableaux vides.
         // v3 → v4 : ajout de `incidents` → normalize crée le tableau vide.
         // v4 → v5 : ajout de `documents` → normalize crée le tableau vide.
-        // (Ajouter ici les futures migrations : if (v < 6) { ... })
+        // v5 → v6 : ajout de `traitements` (RGPD) → normalize crée le tableau vide.
+        // (Ajouter ici les futures migrations : if (v < 7) { ... })
         return p;
     }
 
@@ -821,6 +843,9 @@ const DataStore = (() => {
 
         // Documents / politiques
         getDocuments, getDocumentById, addDocument, updateDocument, deleteDocument,
+
+        // Traitements RGPD (registre art. 30)
+        getTraitements, getTraitementById, addTraitement, updateTraitement, deleteTraitement,
 
         // Sauvegarde / restauration
         exportSnapshot, exportEncrypted, parseImport, applyImport,
