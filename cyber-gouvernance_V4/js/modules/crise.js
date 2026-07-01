@@ -4,6 +4,192 @@
 const CriseModule = (() => {
 
     /* =========================
+       FICHES RÉFLEXES DE CRISE
+       Contenu générique et pédagogique (le public inclut des non-experts) :
+       les gestes prioritaires à effectuer immédiatement, rôle par rôle.
+    ========================== */
+    const FICHES = [
+        {
+            role: "Directeur de crise (Décisionnel)",
+            short: "Directeur de crise",
+            actions: [
+                "Activer officiellement la cellule de crise et consigner l'heure de déclenchement.",
+                "Réunir les membres via un canal de secours (téléphone / SMS) si la messagerie est indisponible.",
+                "Qualifier la gravité et décider du périmètre à isoler ou à arrêter.",
+                "Arbitrer la communication (interne, clients, presse) et les déclarations réglementaires.",
+                "Décider de l'activation du PRA, du recours aux prestataires et à l'assurance cyber.",
+                "Faire tenir une main courante horodatée de toutes les décisions."
+            ]
+        },
+        {
+            role: "Responsable IT / SSI (Opérationnel)",
+            short: "Responsable IT / SSI",
+            actions: [
+                "Isoler du réseau les systèmes touchés (débrancher le câble, couper Wi-Fi / VPN) SANS les éteindre — préserver la mémoire et les preuves.",
+                "Préserver les preuves : journaux, images disque ; ne rien supprimer ni réinstaller dans l'urgence.",
+                "Identifier le point d'entrée (hameçonnage, faille, compte compromis) et stopper la propagation.",
+                "Réinitialiser les comptes à privilèges, révoquer sessions, clés et secrets exposés.",
+                "Vérifier l'intégrité et l'isolement des sauvegardes AVANT toute restauration.",
+                "Rendre compte de l'état technique au Directeur de crise à intervalles réguliers."
+            ]
+        },
+        {
+            role: "Responsable Communication",
+            short: "Responsable Communication",
+            actions: [
+                "Préparer des éléments de langage validés par la Direction et le Juridique.",
+                "Diffuser des consignes internes (ne pas parler à la presse, vigilance e-mails et pièces jointes).",
+                "Centraliser les sollicitations presse et clients via un point de contact unique.",
+                "Ne communiquer que des informations confirmées ; éviter tout détail technique exploitable."
+            ]
+        },
+        {
+            role: "Responsable Juridique / RH",
+            short: "Juridique / RH",
+            actions: [
+                "Évaluer les obligations de notification : CERT-FR / ANSSI (NIS2, alerte sous 24 h) ; CNIL (RGPD, sous 72 h si données personnelles).",
+                "Préparer l'information des personnes concernées en cas de risque élevé (RGPD).",
+                "Conserver les preuves à valeur probante et envisager le dépôt de plainte.",
+                "Mobiliser l'assurance cyber et vérifier les obligations contractuelles envers les clients."
+            ]
+        },
+        {
+            role: "Expert technique (Interne/Externe)",
+            short: "Expert technique",
+            actions: [
+                "Mener l'analyse : recherche du patient zéro et des indicateurs de compromission (IOC).",
+                "Contenir puis éradiquer la menace ; assainir avant toute remise en service.",
+                "Documenter les IOC et les partager pour renforcer la surveillance."
+            ]
+        },
+        {
+            role: "Autre",
+            short: "Logistique / Sécurité physique",
+            actions: [
+                "Sécuriser les locaux et les accès physiques si nécessaire.",
+                "Assurer la logistique de la cellule (salle de repli, moyens de secours, intendance)."
+            ]
+        }
+    ];
+
+    // Contacts d'urgence : références publiques + champs à compléter par l'organisation.
+    const CONTACTS_URGENCE = [
+        ["CERT-FR / ANSSI (déclaration d'incident)", "cert.ssi.gouv.fr"],
+        ["CNIL (violation de données, sous 72 h)", "cnil.fr — notifier une violation"],
+        ["Assistance cybermalveillance", "cybermalveillance.gouv.fr"],
+        ["Forces de l'ordre / dépôt de plainte", "17 (police-secours)"],
+        ["Assurance cyber (police n° ____)", "______________________"],
+        ["Infogérant / Hébergeur", "______________________"],
+        ["Prestataire réponse à incident", "______________________"]
+    ];
+
+    function injectFichesStyles() {
+        if (document.getElementById("crise-fiches-styles")) return;
+        const style = document.createElement("style");
+        style.id = "crise-fiches-styles";
+        style.textContent = `
+            .fiches-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 1.2rem; }
+            .fiche-span { grid-column: 1 / -1; }
+            .fiche-reflexe { border-top: 4px solid var(--primary); }
+            .fiche-role { font-size: 1.05rem; font-weight: 700; color: var(--primary); margin-bottom: 8px; }
+            .fiche-label { text-transform: uppercase; font-size: 0.72rem; letter-spacing: 1px; color: var(--text-muted); font-weight: 700; margin: 12px 0 4px; }
+            .fiche-holder { padding: 3px 0; }
+            .fiche-supp { font-size: 0.85rem; color: var(--text-muted); }
+            .fiche-empty { color: var(--text-muted); font-style: italic; }
+            .fiche-actions { margin: 4px 0 0; padding-left: 20px; line-height: 1.5; }
+            .fiche-actions li { margin-bottom: 6px; }
+            .fiche-commun { border-top-color: var(--color-warning); }
+            .fiche-commun .fiche-role { color: #e65100; }
+            .fiche-contacts { border-top-color: var(--color-danger); }
+            .fiche-contacts .fiche-role { color: var(--color-danger); }
+            .fiche-contacts table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 6px; }
+            .fiche-contacts td { padding: 6px 4px; border-bottom: 1px dashed var(--border); }
+            .fiche-contacts td:first-child { font-weight: 600; width: 55%; }
+            @media print {
+                .fiches-grid { grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+                .fiche-reflexe { font-size: 10pt; border: 1px solid #ddd !important; border-top: 3px solid var(--primary) !important; page-break-inside: avoid; break-inside: avoid; }
+                .fiche-role { font-size: 12pt; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function renderFiches() {
+        const membres = DataStore.getCriseMembres();
+        const app = document.getElementById("app");
+        const esc = window.escapeHtml || (s => String(s == null ? "" : s));
+        const dateJour = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+
+        // Rattache les titulaires de l'annuaire à chaque fiche (par rôle).
+        const byRole = {};
+        membres.forEach(m => { (byRole[m.role] = byRole[m.role] || []).push(m); });
+
+        const roleCards = FICHES.map(f => {
+            const titulaires = byRole[f.role] || [];
+            const holders = titulaires.length
+                ? titulaires.map(m => `
+                    <div class="fiche-holder">
+                        <strong>${esc(m.nom) || "Sans nom"}</strong>${m.telephone ? ` — ${esc(m.telephone)}` : ""}
+                        ${m.suppleant ? `<div class="fiche-supp">Suppléant : ${esc(m.suppleant)}</div>` : ""}
+                    </div>`).join("")
+                : `<div class="fiche-holder fiche-empty">Titulaire à désigner</div>`;
+            return `
+            <div class="dashboard-card fiche-reflexe">
+                <div class="fiche-role">${esc(f.short)}</div>
+                <div class="fiche-label">Titulaire(s)</div>
+                ${holders}
+                <div class="fiche-label">Réflexes immédiats</div>
+                <ol class="fiche-actions">${f.actions.map(a => `<li>${esc(a)}</li>`).join("")}</ol>
+            </div>`;
+        }).join("");
+
+        const contactsRows = CONTACTS_URGENCE.map(c => `<tr><td>${esc(c[0])}</td><td>${esc(c[1])}</td></tr>`).join("");
+
+        app.innerHTML = `
+            <section class="page">
+                <div class="print-head">
+                    <h1>Fiches réflexes de crise</h1>
+                    <p>Dedienne Aerospace · Gestion de crise cyber · Édité le ${esc(dateJour)}</p>
+                </div>
+
+                <div class="dashboard-header no-print">
+                    <div>
+                        <h1>Fiches réflexes de crise</h1>
+                        <p style="color: var(--text-muted); margin-top: 5px;">Que faire dans les premières minutes, rôle par rôle. ${Help.tip("Une fiche réflexe est une carte d'action synthétique : les gestes prioritaires à effectuer immédiatement, sans avoir à réfléchir dans l'urgence.")}</p>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="no-print" onclick="Router.navigateTo('/crise')" style="background: var(--bg-body); color: var(--text-main); border: 1px solid var(--border);">Retour à l'annuaire</button>
+                        <button class="no-print" onclick="window.print()" style="background-color: var(--primary);">Imprimer les fiches</button>
+                    </div>
+                </div>
+
+                <div class="synthese-message warning no-print" style="font-size: 0.9rem; padding: 10px; margin-bottom: 20px;">
+                    <strong>À imprimer et conserver hors ligne :</strong> en cas de crise majeure (rançongiciel, incendie), le SI et cette application peuvent être indisponibles. Gardez une copie papier à jour dans un lieu sécurisé.
+                </div>
+
+                <div class="fiches-grid">
+                    <div class="dashboard-card fiche-reflexe fiche-commun fiche-span">
+                        <div class="fiche-role">Réflexes communs à tous</div>
+                        <ul class="fiche-actions">
+                            <li>Rester calme et méthodique ; ne payer aucune rançon sans décision de la cellule.</li>
+                            <li>Utiliser les canaux de secours (téléphone, hors SI compromis) ; considérer la messagerie professionnelle comme compromise.</li>
+                            <li>Tout horodater dans une main courante unique (heure, fait, décision, auteur).</li>
+                            <li>Ne rien communiquer à l'extérieur sans validation du Directeur de crise.</li>
+                        </ul>
+                    </div>
+                    ${roleCards}
+                    <div class="dashboard-card fiche-reflexe fiche-contacts fiche-span">
+                        <div class="fiche-role">Contacts d'urgence <span style="font-weight:400; font-size:0.85rem; color:var(--text-muted);">(à compléter et vérifier régulièrement)</span></div>
+                        <table><tbody>${contactsRows}</tbody></table>
+                    </div>
+                </div>
+            </section>
+        `;
+
+        injectFichesStyles();
+    }
+
+    /* =========================
        LISTE DES MEMBRES (CELLULE DE CRISE)
     ========================== */
     function renderList() {
@@ -25,16 +211,17 @@ const CriseModule = (() => {
             return (roleOrder[a.role] || 99) - (roleOrder[b.role] || 99);
         });
 
+        const esc = window.escapeHtml || (s => String(s == null ? "" : s));
         const rows = sortedMembres.map(m => `
             <tr class="clickable-row" data-id="${m.id}">
                 <td class="no-print" style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
                     <input type="checkbox" class="row-cb" data-id="${m.id}">
                 </td>
-                <td><strong style="color: var(--primary);">${m.role}</strong></td>
-                <td><strong>${m.nom}</strong></td>
-                <td>${m.telephone || "-"}</td>
-                <td>${m.email ? `<a href="mailto:${m.email}" onclick="event.stopPropagation();">${m.email}</a>` : "-"}</td>
-                <td style="font-size: 0.85rem; color: var(--text-muted);">${m.suppleant || "Aucun"}</td>
+                <td><strong style="color: var(--primary);">${esc(m.role)}</strong></td>
+                <td><strong>${esc(m.nom)}</strong></td>
+                <td>${esc(m.telephone) || "-"}</td>
+                <td>${m.email ? `<a href="mailto:${esc(m.email)}" onclick="event.stopPropagation();">${esc(m.email)}</a>` : "-"}</td>
+                <td style="font-size: 0.85rem; color: var(--text-muted);">${esc(m.suppleant) || "Aucun"}</td>
             </tr>
         `).join("");
 
@@ -52,6 +239,7 @@ const CriseModule = (() => {
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
+                        <button class="no-print" onclick="Router.navigateTo('/crise-fiches')" style="background: var(--bg-body); color: var(--text-main); border: 1px solid var(--border);" title="Cartes d'action par rôle, à imprimer et conserver hors ligne">Fiches réflexes</button>
                         <button class="no-print" onclick="window.print()" style="background-color: var(--primary);">Imprimer l'annuaire</button>
                         <button id="addMembreBtn">Ajouter un membre</button>
                     </div>
@@ -209,10 +397,11 @@ const CriseModule = (() => {
             return;
         }
 
+        const esc = window.escapeHtml || (s => String(s == null ? "" : s));
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <h1>Fiche Contact : ${membre.nom}</h1>
+                    <h1>Fiche Contact : ${esc(membre.nom)}</h1>
                     <button id="deleteBtn" style="background-color: var(--color-danger);">Retirer le membre</button>
                 </div>
 
@@ -231,28 +420,28 @@ const CriseModule = (() => {
 
                     <div class="form-group">
                         <label>Nom & Prénom <span style="color:red">*</span></label>
-                        <input id="nom" value="${membre.nom}" required />
+                        <input id="nom" value="${esc(membre.nom)}" required />
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div class="form-group">
                             <label>Téléphone (Urgence / Portable)</label>
-                            <input id="telephone" type="tel" value="${membre.telephone || ""}" />
+                            <input id="telephone" type="tel" value="${esc(membre.telephone || "")}" />
                         </div>
                         <div class="form-group">
                             <label>Email de secours</label>
-                            <input id="email" type="email" value="${membre.email || ""}" />
+                            <input id="email" type="email" value="${esc(membre.email || "")}" />
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label>Suppléant (Qui appeler si cette personne est injoignable ?)</label>
-                        <input id="suppleant" value="${membre.suppleant || ""}" />
+                        <input id="suppleant" value="${esc(membre.suppleant || "")}" />
                     </div>
 
                     <div class="form-group">
                         <label>Notes (Responsabilités spécifiques)</label>
-                        <textarea id="notes">${membre.notes || ""}</textarea>
+                        <textarea id="notes">${esc(membre.notes || "")}</textarea>
                     </div>
 
                     <div style="margin-top: 20px;">
@@ -286,5 +475,5 @@ const CriseModule = (() => {
         };
     }
 
-    return { renderList, renderDetail };
+    return { renderList, renderDetail, renderFiches };
 })();

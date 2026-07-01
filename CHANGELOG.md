@@ -5,6 +5,24 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 8 — PCA/PRA : fiches réflexes de crise imprimables
+- **Nouvelle vue `/crise-fiches`** accessible depuis l'annuaire de la Cellule de Crise
+  (bouton **« Fiches réflexes »**) : des **cartes d'action par rôle** décrivant les gestes
+  prioritaires à effectuer dans les premières minutes (Directeur de crise, Responsable
+  IT/SSI, Communication, Juridique/RH, Expert technique, Logistique). Contenu **générique et
+  pédagogique** (le public inclut des non-experts).
+- **Titulaires rattachés automatiquement** depuis l'annuaire (par rôle) ; les rôles non
+  pourvus affichent « Titulaire à désigner ». Ajout d'un bloc **« Réflexes communs à tous »**
+  et d'un tableau **« Contacts d'urgence »** (CERT-FR/ANSSI, CNIL, cybermalveillance.gouv.fr,
+  forces de l'ordre + champs à compléter : assurance cyber, infogérant, prestataire réponse).
+- **Optimisé impression** (le SI peut être indisponible en pleine crise) : en-tête de
+  document (`.print-head`), sidebar masquée, cartes sans coupure de page, bandeau de rappel
+  « à conserver hors ligne ». Item de menu « Cellule de Crise » maintenu actif ; fil d'Ariane
+  et route dédiés.
+- **Durcissement XSS du module Crise** (dette Chantier 9) : échappement de toutes les données
+  saisies (rôle, nom, téléphone, e-mail, suppléant, notes) dans l'annuaire, la fiche contact
+  et les fiches réflexes.
+
 ### Chantier 8 — Matrice EBIOS : export image & cohérence brut/résiduel
 - **Export image de la matrice de criticité** : deux boutons **« Exporter en PNG »** et
   **« Exporter en SVG »** sur la fiche `/matrice`. Génération d'un **SVG autonome** (titre,

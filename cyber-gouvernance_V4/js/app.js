@@ -67,6 +67,7 @@ async function startApp() {
         "/bia/:id": (id) => { if (typeof BiaModule !== "undefined") BiaModule.renderDetail(id); },
 
         "/crise": () => { if (typeof CriseModule !== "undefined") CriseModule.renderList(); },
+        "/crise-fiches": () => { if (typeof CriseModule !== "undefined") CriseModule.renderFiches(); },
         "/crise/:id": (id) => { if (typeof CriseModule !== "undefined") CriseModule.renderDetail(id); },
 
         "/pra": () => { if (typeof PraScenariosModule !== "undefined") PraScenariosModule.renderList(); },
@@ -145,6 +146,7 @@ const ROUTE_META = {
     "/audits":       { s: "Conformité", t: "Contrôles & Audits" },
     "/bia":          { s: "Continuité", t: "BIA (Impact Métier)" },
     "/crise":        { s: "Continuité", t: "Cellule de Crise" },
+    "/crise-fiches": { s: "Continuité", t: "Fiches réflexes de crise" },
     "/pra":          { s: "Continuité", t: "Scénarios PCA/PRA" },
     "/mco":          { s: "Continuité", t: "Actions Préalables (MCO)" },
     "/tests":        { s: "Continuité", t: "Historique des Tests" },
@@ -205,7 +207,9 @@ window.renderContextSelector = function() {
 ========================= */
 window.updateActiveNav = function(route) {
     const segments = route.split("/").filter(Boolean);
-    const baseRoute = "/" + (segments[0] || "dashboard");
+    let baseRoute = "/" + (segments[0] || "dashboard");
+    // Les fiches réflexes sont une sous-vue de la Cellule de Crise : garder l'item actif.
+    if (baseRoute === "/crise-fiches") baseRoute = "/crise";
 
     document.querySelectorAll(".main-nav a[data-route]").forEach(link => {
         const linkRoute = link.getAttribute("data-route");
