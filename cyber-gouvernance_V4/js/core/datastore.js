@@ -11,7 +11,7 @@ const DataStore = (() => {
     const LEGACY_AUDITS_KEY = "cyber-audits";
     const LEGACY_REVUES_KEY = "cyber-revues";
     const LOCAL_CURRENT_KEY = "cyber-current";      // repli (chiffré si clé) si IndexedDB indisponible
-    const SCHEMA_VERSION = 4;
+    const SCHEMA_VERSION = 5;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -21,7 +21,9 @@ const DataStore = (() => {
         // + pivot « Mesure de sécurité » (voir DATA_MODEL.md §Référentiels).
         "evaluations", "mesures",
         // v4 — Chantier Incidents : registre des incidents de sécurité.
-        "incidents"
+        "incidents",
+        // v5 — Chantier Documentaire : registre des politiques/documents.
+        "documents"
     ];
 
     const AUTOSAVE_DEBOUNCE_MS = 500;
@@ -633,6 +635,21 @@ const DataStore = (() => {
     }
 
     /* =========================
+       DOCUMENTS / POLITIQUES (v5)
+       { id, titre, type, version, proprietaire, statut, date_revue, emplacement,
+         referentiels[], notes, updatedAt }
+       Ne stocke PAS les fichiers : référence leur emplacement.
+    ========================== */
+    function getDocuments() { return data.documents; }
+    function getDocumentById(id) { return data.documents.find(d => d.id === id); }
+    function addDocument(doc) { data.documents.push(doc); save(); }
+    function updateDocument(doc) {
+        const idx = data.documents.findIndex(x => x.id === doc.id);
+        if (idx !== -1) { data.documents[idx] = doc; save(); }
+    }
+    function deleteDocument(id) { data.documents = data.documents.filter(d => d.id !== id); save(); }
+
+    /* =========================
        EXPORT / IMPORT (FICHIER .json)
        Enveloppe standard :
        { format:"grc-backup", version, encrypted, createdAt, app, payload|kdf+cipher }
@@ -696,7 +713,8 @@ const DataStore = (() => {
         // v2 → v3 : ajout de `evaluations` (auto-évaluations de référentiels) et
         //           `mesures` (pivot) → normalize crée les tableaux vides.
         // v3 → v4 : ajout de `incidents` → normalize crée le tableau vide.
-        // (Ajouter ici les futures migrations : if (v < 5) { ... })
+        // v4 → v5 : ajout de `documents` → normalize crée le tableau vide.
+        // (Ajouter ici les futures migrations : if (v < 6) { ... })
         return p;
     }
 
@@ -800,6 +818,9 @@ const DataStore = (() => {
 
         // Incidents de sécurité
         getIncidents, getIncidentById, addIncident, updateIncident, deleteIncident,
+
+        // Documents / politiques
+        getDocuments, getDocumentById, addDocument, updateDocument, deleteDocument,
 
         // Sauvegarde / restauration
         exportSnapshot, exportEncrypted, parseImport, applyImport,

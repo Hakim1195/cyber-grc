@@ -5,6 +5,15 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 9 — Gestion documentaire des politiques
+- **Nouveau module Documents** (`/documents`) : registre des politiques et documents
+  (PSSI, charte, procédures…) avec **version, propriétaire, statut, date de prochaine
+  revue, emplacement** (l'application **ne stocke pas** les fichiers) et lien aux référentiels.
+- **Alertes de revue** : badge « en retard / dans N j » dans la liste, bannière sur la fiche,
+  KPI « revue à prévoir ».
+- **Canevas de plans** (PSSI, charte, PCA/PRA) pré-remplissant le sommaire.
+- **Modèle v5** (`SCHEMA_VERSION` 4 → 5) : tableau `documents`.
+
 ### Itération 8 — Registre des incidents de sécurité
 - **Nouveau module Incidents** (`/incidents`) : journal des incidents avec type, gravité,
   statut, dates de détection/résolution, description, actions immédiates, cause racine,

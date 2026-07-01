@@ -61,9 +61,10 @@ actions immédiates, cause racine, actions correctives (liées au plan d'action 
 `incident_id`), statut, déclarations ANSSI/CNIL avec **rappel des délais** (NIS2 24 h/72 h,
 RGPD 72 h). Lien croisé **incident ↔ risque EBIOS**. Schéma v4.
 
-## Chantier 5 — Gestion documentaire des politiques (§5.2) — ⏳
-Registre (PSSI, charte…), version, propriétaire, **date de prochaine revue**, statut, lien référentiels.
-Alertes de revue (tableau de bord). Ne stocke pas les fichiers (référence la localisation). Canevas de plans.
+## Chantier 5 — Gestion documentaire des politiques (§5.2) — ✅ FAIT *(Itération 9)*
+Module `/documents` : registre (PSSI, charte…), version, propriétaire, **date de prochaine
+revue** (alertes en retard/à venir), statut, lien référentiels, emplacement (ne stocke pas les
+fichiers), **canevas de plans**. Schéma v5. *(À venir : remontée des alertes au tableau de bord direction.)*
 
 ## Chantier 6 — Registre des traitements RGPD (§5.3) — ⏳
 Article 30 simplifié ; mesures de sécurité = mêmes entités « Mesure » que le mapping croisé.

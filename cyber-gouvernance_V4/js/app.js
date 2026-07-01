@@ -53,6 +53,9 @@ async function startApp() {
         "/incidents": () => { if (typeof IncidentsModule !== "undefined") IncidentsModule.renderList(); },
         "/incidents/:id": (id) => { if (typeof IncidentsModule !== "undefined") IncidentsModule.renderDetail(id); },
 
+        "/documents": () => { if (typeof DocumentsModule !== "undefined") DocumentsModule.renderList(); },
+        "/documents/:id": (id) => { if (typeof DocumentsModule !== "undefined") DocumentsModule.renderDetail(id); },
+
         "/actions": () => ActionsModule.renderList(),
         "/actions/:id": (id) => ActionsModule.renderDetail(id),
 
@@ -125,6 +128,7 @@ const ROUTE_META = {
     "/synthese":     { s: "Pilotage",   t: "Synthèse Direction" },
     "/actions":      { s: "Pilotage",   t: "Plan d'actions" },
     "/incidents":    { s: "Risques",    t: "Incidents" },
+    "/documents":    { s: "Conformité", t: "Gestion documentaire" },
     "/risques":      { s: "Risques",    t: "Risques (EBIOS)" },
     "/matrice":      { s: "Risques",    t: "Matrice des risques" },
     "/actifs":       { s: "Risques",    t: "Actifs critiques" },
