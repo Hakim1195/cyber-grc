@@ -79,7 +79,64 @@ async function startApp() {
        RAPPEL DE SAUVEGARDE
     ========================== */
     if (typeof BackupService !== "undefined") BackupService.renderReminder();
+
+    /* =========================
+       AIDE PÉDAGOGIQUE + MENU MOBILE
+    ========================== */
+    if (typeof Help !== "undefined") Help.init();
+    setupMobileMenu();
 }
+
+/* =========================
+   MENU MOBILE (off-canvas)
+========================= */
+function setupMobileMenu() {
+    const toggle = document.getElementById("menu-toggle");
+    const sidebar = document.querySelector(".sidebar");
+    const backdrop = document.getElementById("sidebar-backdrop");
+    if (!toggle || !sidebar || !backdrop) return;
+
+    const open = () => { sidebar.classList.add("open"); backdrop.classList.add("show"); };
+    const close = () => { sidebar.classList.remove("open"); backdrop.classList.remove("show"); };
+
+    toggle.onclick = () => { sidebar.classList.contains("open") ? close() : open(); };
+    backdrop.onclick = close;
+    // Fermer après un clic sur un lien de navigation (mobile)
+    sidebar.querySelectorAll("a[href^='#/']").forEach(a => a.addEventListener("click", close));
+}
+
+/* =========================
+   FIL D'ARIANE
+========================= */
+const ROUTE_META = {
+    "/dashboard":    { s: "Pilotage",   t: "Tableau de bord" },
+    "/synthese":     { s: "Pilotage",   t: "Synthèse Direction" },
+    "/actions":      { s: "Pilotage",   t: "Plan d'actions" },
+    "/risques":      { s: "Risques",    t: "Risques (EBIOS)" },
+    "/matrice":      { s: "Risques",    t: "Matrice des risques" },
+    "/actifs":       { s: "Risques",    t: "Actifs critiques" },
+    "/exigences":    { s: "Conformité", t: "Exigences (ISO/NIS2)" },
+    "/clients":      { s: "Conformité", t: "Donneurs d'ordre" },
+    "/audits":       { s: "Conformité", t: "Contrôles & Audits" },
+    "/bia":          { s: "Continuité", t: "BIA (Impact Métier)" },
+    "/crise":        { s: "Continuité", t: "Cellule de Crise" },
+    "/pra":          { s: "Continuité", t: "Scénarios PCA/PRA" },
+    "/mco":          { s: "Continuité", t: "Actions Préalables (MCO)" },
+    "/tests":        { s: "Continuité", t: "Historique des Tests" },
+    "/prestataires": { s: "Continuité", t: "Prestataires & Tiers" },
+    "/settings":     { s: "Administration", t: "Paramètres & Sauvegardes" }
+};
+
+window.renderBreadcrumb = function(route) {
+    const el = document.getElementById("breadcrumb");
+    if (!el) return;
+    const segs = route.split("/").filter(Boolean);
+    const base = "/" + (segs[0] || "dashboard");
+    const meta = ROUTE_META[base];
+    if (!meta) { el.innerHTML = ""; return; }
+    const detail = segs.length > 1 ? " / <b>Fiche</b>" : "";
+    el.innerHTML = `${meta.s} / <b>${meta.t}</b>${detail}`;
+};
 
 /* =========================
    GESTION DU SÉLECTEUR DE CLIENT
@@ -133,6 +190,8 @@ window.updateActiveNav = function(route) {
             link.classList.remove("active");
         }
     });
+
+    if (window.renderBreadcrumb) window.renderBreadcrumb(route);
 };
 
 /* =========================

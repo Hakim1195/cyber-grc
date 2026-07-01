@@ -1,50 +1,5 @@
 /* Emplacement : css/style.css */
-/* =========================================
-   VARIABLES & DESIGN SYSTEM
-   ========================================= */
-:root {
-    /* =========================================
-       CHARTE DEDIENNE AEROSPACE
-       Couleurs échantillonnées sur le logo officiel :
-       Orange #E9631B (avion) + Bleu #2059A6 (texte/ellipse)
-       ========================================= */
-    --primary: #E9631B;          /* Orange Dedienne : couleur d'action dominante */
-    --primary-light: #F2803F;
-    --primary-dark: #C4530F;     /* Hover / états pressés */
-    --primary-tint: #FDEFE4;     /* Fond orangé très clair */
-
-    --accent: #2059A6;           /* Bleu Dedienne : couleur secondaire (liens, info) */
-    --accent-hover: #17457F;
-
-    /* Structure (barre latérale) — bleu du logo */
-    --sidebar-bg: #2059A6;       /* Bleu Dedienne */
-    --sidebar-bg-2: #16457C;     /* Dégradé plus profond en bas */
-    --sidebar-text: rgba(255,255,255,0.85);
-
-    --bg-body: #f5f6f8;
-    --bg-card: #ffffff;
-    --text-main: #1f2d3d;
-    --text-muted: #6b7a8d;
-    --border: #e2e6ea;
-
-    /* Status Colors */
-    --color-success: #27ae60;
-    --color-warning: #f39c12;
-    --color-danger: #e74c3c;
-    --color-info: #2059A6;
-    --color-gray: #95a5a6;
-
-    /* Risk Levels */
-    --risk-low: #27ae60;
-    --risk-medium: #f1c40f;
-    --risk-high: #e67e22;
-    --risk-critical: #c0392b;
-
-    --sidebar-width: 260px;
-    --shadow: 0 4px 6px rgba(0,0,0,0.05);
-    --radius: 8px;
-    --transition: all 0.3s ease;
-}
+/* Les design tokens (variables) sont définis dans css/tokens.css (chargé avant). */
 
 /* =========================================
    RESET & BASE
@@ -56,12 +11,22 @@
 }
 
 body {
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: var(--font-sans);
     background-color: var(--bg-body);
     color: var(--text-main);
     display: flex;
     min-height: 100vh;
     line-height: 1.6;
+}
+
+/* Chiffres alignés (tableaux, KPI) */
+.data-table td, .dashboard-value, .big-kpi, .mini-kpi-grid strong { font-variant-numeric: tabular-nums; }
+
+/* Accessibilité : focus clavier visible */
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
 }
 
 h1, h2, h3 { margin-bottom: 1rem; font-weight: 600; }
@@ -495,6 +460,135 @@ button:active { transform: translateY(0); }
     font-size: 0.85rem;
     color: var(--text-main);
     line-height: 1.5;
+}
+
+/* =========================================
+   TOOLTIP PÉDAGOGIQUE (ⓘ)
+   ========================================= */
+.help-tip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px; height: 16px;
+    margin-left: 5px;
+    border-radius: 50%;
+    border: 1px solid var(--text-muted);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-style: italic;
+    font-weight: 700;
+    cursor: help;
+    vertical-align: middle;
+    flex-shrink: 0;
+    background: var(--bg-card);
+}
+.help-tip:hover, .help-tip:focus-visible { border-color: var(--primary); color: var(--primary); outline: none; }
+.help-tip__pop {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 260px;
+    background: #1f2d3d;
+    color: #fff;
+    text-align: left;
+    font-size: 0.78rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 1.45;
+    padding: 8px 10px;
+    border-radius: 6px;
+    box-shadow: var(--shadow-md);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease;
+    z-index: 500;
+    pointer-events: none;
+}
+.help-tip__pop::after {
+    content: "";
+    position: absolute;
+    top: 100%; left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #1f2d3d;
+}
+.help-tip:hover .help-tip__pop,
+.help-tip:focus-visible .help-tip__pop,
+.help-tip.open .help-tip__pop { opacity: 1; visibility: visible; }
+
+/* =========================================
+   BADGES SÉMANTIQUES (statuts)
+   ========================================= */
+.badge--ok   { background: var(--tint-ok);   color: var(--color-ok); }
+.badge--warn { background: var(--tint-warn); color: var(--color-warn); }
+.badge--crit { background: var(--tint-crit); color: var(--color-crit); }
+.badge--na   { background: var(--tint-na);   color: var(--color-na); }
+
+/* =========================================
+   FIL D'ARIANE
+   ========================================= */
+.breadcrumb {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+.breadcrumb b { color: var(--text-main); }
+#breadcrumb:empty { display: none; }
+
+/* =========================================
+   ÉTAT VIDE
+   ========================================= */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    color: var(--text-muted);
+}
+.empty-state h3 { color: var(--text-main); margin-bottom: 0.5rem; }
+.empty-state p { margin-bottom: 1.2rem; }
+
+/* =========================================
+   BOUTON MENU MOBILE + RESPONSIVE
+   ========================================= */
+.menu-toggle {
+    display: none;
+    position: fixed;
+    top: 12px; left: 12px;
+    z-index: 200;
+    width: 42px; height: 42px;
+    padding: 0;
+    background: var(--sidebar-bg);
+    color: #fff;
+    border-radius: var(--radius);
+    align-items: center;
+    justify-content: center;
+}
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 99;
+}
+
+@media (max-width: 900px) {
+    .menu-toggle { display: inline-flex; }
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        box-shadow: var(--shadow-md);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-backdrop.show { display: block; }
+    .main-content {
+        margin-left: 0;
+        max-width: 100vw;
+        padding: 3.5rem 1rem 1.5rem;
+    }
+    .dashboard-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .dashboard-grid { grid-template-columns: 1fr; }
 }
 
 /* =========================================

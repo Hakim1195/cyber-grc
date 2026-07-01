@@ -5,6 +5,18 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 3 — Fondations du design system
+- **Design tokens unifiés** (`css/tokens.css`) : source unique de vérité (marque
+  orange dominante + bleu structurel, couleurs sémantiques strictes réservées aux
+  statuts, espacements, rayons, ombres, typographie).
+- **Composant tooltip pédagogique** (`js/core/help.js`, `Help.tip(...)`) : icône ⓘ
+  accessible (clavier + lecteur d'écran), bulle au survol/tap, sans déclencher la
+  navigation des cartes cliquables. Appliqué en démonstration au tableau de bord.
+- **Fil d'Ariane** dynamique (section / page) sur toutes les routes.
+- **Responsive** : barre latérale off-canvas + bouton menu sur mobile/tablette.
+- **Accessibilité** : focus clavier visible, `prefers-reduced-motion`, chiffres
+  tabulaires ; badges sémantiques (`.badge--ok/warn/crit/na`) et états vides normalisés.
+
 ### Itération 2 — Protection par mot de passe (opt-in) & chiffrement au repos
 - **Coffre optionnel** (`js/core/vault.js`) : protection par mot de passe
   activable dans les Paramètres, désactivée par défaut (accessible aux non-experts).

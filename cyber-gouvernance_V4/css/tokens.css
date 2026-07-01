@@ -1,0 +1,81 @@
+/* Emplacement : css/tokens.css
+   =========================================================================
+   DESIGN TOKENS — source unique de vérité de l'identité visuelle.
+   Charte Dedienne Aerospace (orange dominant + bleu structurel).
+   Les couleurs sémantiques (vert/orange/rouge/gris) sont RÉSERVÉES aux statuts
+   et ne servent jamais à la décoration.
+   ========================================================================= */
+:root {
+    /* ----- Marque ----- */
+    --primary: #E9631B;            /* Orange Dedienne : action / marque (dominant) */
+    --primary-light: #F2803F;
+    --primary-dark: #C4530F;       /* hover / pressé */
+    --primary-tint: #FDEFE4;       /* fond orangé très clair */
+
+    --accent: #2059A6;             /* Bleu Dedienne : secondaire (liens, info) */
+    --accent-hover: #17457F;
+
+    /* ----- Structure (barre latérale) ----- */
+    --sidebar-bg: #2059A6;
+    --sidebar-bg-2: #16457C;
+    --sidebar-text: rgba(255,255,255,0.85);
+    --sidebar-width: 260px;
+
+    /* ----- Surfaces & texte ----- */
+    --bg-body: #f5f6f8;            /* fond de contenu (gris très pâle, pas blanc pur) */
+    --bg-card: #ffffff;
+    --text-main: #1f2d3d;
+    --text-muted: #6b7a8d;
+    --border: #e2e6ea;
+
+    /* ----- Couleurs sémantiques (STATUTS UNIQUEMENT) ----- */
+    --color-success: #27ae60;      /* conforme / maîtrisé */
+    --color-warning: #e08a00;      /* partiel / à surveiller */
+    --color-danger:  #c0392b;      /* critique / non conforme */
+    --color-info:    #2059A6;      /* information */
+    --color-gray:    #94a3b8;      /* non applicable */
+    /* alias explicites */
+    --color-ok:   var(--color-success);
+    --color-warn: var(--color-warning);
+    --color-crit: var(--color-danger);
+    --color-na:   var(--color-gray);
+
+    /* teintes claires (fonds de badges) */
+    --tint-ok:   #e6f4ea;
+    --tint-warn: #fff4e0;
+    --tint-crit: #fbe9e7;
+    --tint-na:   #eef1f5;
+
+    /* ----- Niveaux de risque (heatmap / matrice) ----- */
+    --risk-low: var(--color-success);
+    --risk-medium: #f1c40f;
+    --risk-high: #e67e22;
+    --risk-critical: var(--color-danger);
+
+    /* ----- Espacements ----- */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+
+    /* ----- Rayons ----- */
+    --radius-sm: 4px;
+    --radius: 8px;
+    --radius-lg: 12px;
+
+    /* ----- Ombres ----- */
+    --shadow: 0 1px 3px rgba(16,32,60,0.08);
+    --shadow-md: 0 4px 12px rgba(16,32,60,0.10);
+
+    /* ----- Typographie ----- */
+    --font-sans: 'Segoe UI', system-ui, Roboto, Helvetica, Arial, sans-serif;
+
+    /* ----- Mouvement ----- */
+    --transition: all 0.25s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root { --transition: none; }
+}

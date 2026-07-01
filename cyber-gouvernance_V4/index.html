@@ -5,10 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cyber GRC — Dedienne Aerospace</title>
     <link rel="icon" type="image/svg+xml" href="assets/logo/favicon.svg">
+    <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div id="toast-container" class="no-print"></div>
+
+    <button id="menu-toggle" class="menu-toggle no-print" aria-label="Ouvrir le menu" title="Menu">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div id="sidebar-backdrop" class="sidebar-backdrop no-print"></div>
 
     <nav class="sidebar no-print">
         <div class="sidebar-header">
@@ -43,6 +49,7 @@
     </nav>
 
     <main class="main-content">
+        <div id="breadcrumb" class="no-print"></div>
         <div id="global-banner" class="no-print"></div>
         <div id="app"></div>
     </main>
@@ -54,6 +61,7 @@
     <script src="js/core/vault.js"></script>
     <script src="js/core/datastore.js"></script>
     <script src="js/core/router.js"></script>
+    <script src="js/core/help.js"></script>
 
     <script src="js/modules/clients.js"></script>
     <script src="js/modules/dashboard.js"></script>

@@ -107,7 +107,7 @@ const DashboardModule = (() => {
                 <div class="dashboard-grid">
 
                     <div class="dashboard-card highlight-card clickable-card" onclick="Router.navigateTo('/exigences')" style="cursor:pointer;" title="Aller aux exigences">
-                        <h3>Conformité globale</h3>
+                        <h3>Conformité globale ${Help.tip("Part des exigences applicables jugées conformes. Les exigences « non applicables » sont exclues du calcul.")}</h3>
                         <div class="dashboard-value">${tauxConformite} %</div>
                         <div class="progress-bar">
                             <div class="progress-fill" style="width:${tauxConformite}%; background-color: ${tauxConformite > 80 ? 'var(--color-success)' : tauxConformite > 50 ? 'var(--color-warning)' : 'var(--color-danger)'};"></div>
@@ -121,7 +121,7 @@ const DashboardModule = (() => {
                     </div>
 
                     <div class="dashboard-card clickable-card" onclick="Router.navigateTo('/actions')" style="cursor:pointer;" title="Aller au plan d'actions">
-                        <h3>Plan d'actions</h3>
+                        <h3>Plan d'actions ${Help.tip("Avancement des actions de remédiation : part des actions terminées sur le total.")}</h3>
                         <div class="dashboard-value" style="color: var(--text-main);">${avancementActions} %</div>
                         <div class="progress-bar small">
                             <div class="progress-fill success" style="width:${avancementActions}%"></div>
@@ -134,7 +134,7 @@ const DashboardModule = (() => {
                     </div>
 
                     <div class="dashboard-card alert-card clickable-card" onclick="Router.navigateTo('/risques')" style="cursor:pointer;" title="Aller au registre des risques">
-                        <h3>Profil de Risque (Résiduel)</h3>
+                        <h3>Profil de Risque (Résiduel) ${Help.tip("Risque résiduel = risque brut × coefficient de maîtrise. C'est le risque qui subsiste après les mesures de sécurité en place.")}</h3>
 
                         <div class="mini-kpi-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 1.5rem;">
                             <div class="risk" style="color: var(--color-danger);">
