@@ -47,6 +47,9 @@ async function startApp() {
         "/mesures": () => { if (typeof MesuresModule !== "undefined") MesuresModule.renderList(); },
         "/mesures/:id": (id) => { if (typeof MesuresModule !== "undefined") MesuresModule.renderDetail(id); },
 
+        "/couverture": () => { if (typeof ConformiteModule !== "undefined") ConformiteModule.renderCouverture(); },
+        "/soa/:id": (id) => { if (typeof ConformiteModule !== "undefined") ConformiteModule.renderSoa(id); },
+
         "/actions": () => ActionsModule.renderList(),
         "/actions/:id": (id) => ActionsModule.renderDetail(id),
 
@@ -124,6 +127,8 @@ const ROUTE_META = {
     "/exigences":    { s: "Conformité", t: "Exigences (ISO/NIS2)" },
     "/referentiels": { s: "Conformité", t: "Référentiels" },
     "/mesures":      { s: "Conformité", t: "Mesures de sécurité" },
+    "/couverture":   { s: "Conformité", t: "Couverture croisée" },
+    "/soa":          { s: "Conformité", t: "Déclaration d'applicabilité" },
     "/clients":      { s: "Conformité", t: "Donneurs d'ordre" },
     "/audits":       { s: "Conformité", t: "Contrôles & Audits" },
     "/bia":          { s: "Continuité", t: "BIA (Impact Métier)" },

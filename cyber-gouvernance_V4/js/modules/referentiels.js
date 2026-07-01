@@ -166,6 +166,7 @@ const ReferentielsModule = (() => {
                         <h1>Référentiels de sécurité</h1>
                         <p style="color:var(--text-muted); margin-top:5px;">Auto-évaluez votre conformité et suivez votre maturité par domaine. ${Help.tip("Un référentiel est un ensemble structuré de bonnes pratiques (ANSSI, ISO 27002, NIS2…). L'auto-évaluation situe votre organisation et alimente le plan d'actions.")}</p>
                     </div>
+                    <a href="#/couverture" class="btn-secondary" style="align-self:center;">Couverture croisée →</a>
                 </div>
 
                 ${refs.length === 0
@@ -231,7 +232,10 @@ const ReferentielsModule = (() => {
                         <h1>${escapeHtml(ref.nom)}</h1>
                         <p style="color:var(--text-muted); margin-top:5px;">${escapeHtml(ref.editeur)} · ${escapeHtml(ref.version)} — <a href="#/referentiels" style="color:var(--accent);">tous les référentiels</a></p>
                     </div>
-                    <button id="resetRefBtn" style="background:transparent; color:var(--text-muted); border:1px solid var(--border);">Réinitialiser</button>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <a href="#/soa/${escapeHtml(ref.id)}" class="btn-secondary">Déclaration d'applicabilité (SoA)</a>
+                        <button id="resetRefBtn" style="background:transparent; color:var(--text-muted); border:1px solid var(--border);">Réinitialiser</button>
+                    </div>
                 </div>
 
                 <div class="synthese-message info" style="padding:10px; font-size:0.9rem;">${escapeHtml(ref.aide)}</div>

@@ -724,3 +724,26 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
 .ref-new-mesure { background: transparent; color: var(--accent); border: 1px solid var(--border); padding: 7px 12px; border-radius: var(--radius-sm); font-size: 0.85rem; white-space: nowrap; }
 .ref-new-mesure:hover { background: var(--primary-tint); border-color: var(--primary); color: var(--primary-dark); }
 .ref-mesure-link { color: var(--accent); font-size: 0.85rem; white-space: nowrap; }
+
+/* =========================================
+   CONFORMITÉ TRANSVERSE (couverture croisée + SoA)
+   ========================================= */
+.btn-secondary { background: transparent; color: var(--accent); border: 1px solid var(--border); padding: 8px 14px; border-radius: var(--radius-sm); text-decoration: none; font-size: 0.9rem; display: inline-block; }
+.btn-secondary:hover { background: var(--primary-tint); border-color: var(--primary); color: var(--primary-dark); }
+
+.cov-cell { display: inline-block; min-width: 22px; padding: 2px 7px; background: var(--primary-tint); color: var(--primary-dark); border-radius: 10px; font-weight: 600; font-size: 0.82rem; }
+.cov-cell--multi { background: var(--accent); color: #fff; }
+.cov-matrix th, .cov-matrix td { padding: 0.6rem 0.8rem; }
+
+.soa-summary { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0 1.4rem; }
+.soa-summary > div { flex: 1; min-width: 110px; text-align: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow); }
+.soa-summary strong { display: block; font-size: 1.6rem; color: var(--text-main); font-variant-numeric: tabular-nums; }
+.soa-summary span { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.soa-table th, .soa-table td { padding: 0.5rem 0.7rem; font-size: 0.9rem; }
+.soa-domain-row td { background: var(--bg-body); font-size: 0.9rem; }
+@media print {
+    .soa-print-head { display: block !important; }
+    .soa-summary > div { box-shadow: none; }
+    .soa-table { font-size: 0.75rem; box-shadow: none; }
+    .soa-table th, .soa-table td { padding: 4px 6px; }
+}

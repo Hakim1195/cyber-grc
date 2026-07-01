@@ -36,7 +36,7 @@ Légende : ✅ fait · 🔜 prochain · ⏳ à faire · 💤 en attente de déci
 - ⏳ **Restant** : appliquer les tooltips ⓘ **partout** (systématiser, fil rouge) ; harmoniser
       progressivement chaque module (tableaux denses, KPI, heatmap matrice, radars) au fil des touches.
 
-## Chantier 3 — Référentiels + mapping croisé (§4) — 🔜 EN COURS
+## Chantier 3 — Référentiels + mapping croisé (§4) — ✅ FAIT (reste : mapping pré-rempli optionnel)
 Sous-itérations :
 - ✅ **4a — Ossature** : modèle données `evaluations` (+ `mesures`) ; `SCHEMA_VERSION`→3 (+ migration) ;
       registre `Referentiels` ; **référentiel ANSSI** (42 mesures / 10 familles, reformulations
@@ -48,9 +48,10 @@ Sous-itérations :
       d'une exigence ; **propagation** du statut + maturité aux évaluations couvertes (zéro double saisie). *(Itération 5)*
 - ✅ **4c₁ — Autres référentiels** : ISO 27002:2022 (93), NIS2 art.21 (10), DORA (15),
       AirCyber préparation (14) au schéma commun (1 fichier par référentiel). *(Itération 6)*
-- 🔜 **4c₂ — Mapping croisé & SoA** : **mapping pré-rempli** (ISO ↔ NIS2 ↔ ANSSI) éditable ;
-      vue **couverture croisée** (une mesure → plusieurs référentiels) ;
-      **génération de la déclaration d'applicabilité (SoA)**.
+- ✅ **4c₂ — Couverture croisée & SoA** : vue de **couverture croisée** (matrice mesures × référentiels,
+      part de chaque référentiel adossée à une mesure) ; **génération de la déclaration d'applicabilité
+      (SoA)** imprimable. *(Itération 7)*
+- ⏳ **Optionnel** : mapping **pré-rempli** d'équivalences inter-référentiels (ISO ↔ NIS2 ↔ ANSSI) éditable.
 > ⚠️ NE PAS embarquer le texte intégral des normes (ISO payant/protégé). Reformulations originales +
 > identifiants de clauses (« A.5.1 ») + titre court uniquement.
 

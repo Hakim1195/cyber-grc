@@ -5,6 +5,15 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 7 — Couverture croisée & Déclaration d'applicabilité (SoA)
+- **Vue Couverture croisée** (`/couverture`) : part de chaque référentiel adossée à une
+  mesure de sécurité + **matrice mesures × référentiels** mettant en évidence les mesures
+  « transverses » (couvrant plusieurs cadres) — la concrétisation du « zéro double saisie ».
+- **Génération de la déclaration d'applicabilité (SoA)** (`/soa/:id`) : tableau **imprimable
+  (PDF)** de toutes les mesures d'un référentiel — applicabilité, mise en œuvre, maturité,
+  mesure de sécurité liée, justification —, livrable clé d'un audit ISO 27001. Accessible
+  depuis la liste des référentiels et le détail de chaque référentiel.
+
 ### Itération 6 — Référentiels 4c : ISO 27002, NIS2, DORA, AirCyber
 - **Quatre nouveaux référentiels** ajoutés au catalogue, au même modèle d'auto-évaluation
   (radar de maturité, statuts, maturité 0-5, actions correctives, pivot) :
