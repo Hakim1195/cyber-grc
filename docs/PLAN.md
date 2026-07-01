@@ -69,10 +69,19 @@ fichiers), **canevas de plans**. Schéma v5. *(À venir : remontée des alertes 
 ## Chantier 6 — Registre des traitements RGPD (§5.3) — ⏳
 Article 30 simplifié ; mesures de sécurité = mêmes entités « Mesure » que le mapping croisé.
 
-## Chantier 7 — Tableau de bord direction consolidé (§5.4) — ⏳
-Score de maturité global + radar par domaine, historisation à chaque snapshot, top risques,
-actions en retard, incidents récents, conformité par référentiel/donneur d'ordre, docs à réviser,
-**export PDF/impression soigné** (livrable COMEX).
+## Chantier 7 — Tableau de bord direction consolidé (§5.4) — 🟡 en grande partie *(it. 10)*
+- ✅ **Cockpit GRC 360°** (`js/modules/dashboard.js`) : bandeau de posture direction,
+      indicateurs clés (KPI), **conformité** (donut), **maturité globale + par référentiel**
+      (barres), **profil de risque** résiduel (donut) + **cartographie F×G** (heatmap SVG),
+      **plan d'actions** avec **actions en retard** et **liste de veille** (échéances),
+      **actifs par criticité** et **couverture du dispositif** (BIA/PRA/tests/MCO/crise/
+      audits/prestataires/mesures/**incidents**). Graphiques maison (SVG/HTML, aucune dépendance).
+      Export/impression PDF déjà branché (`ExportPdfService`).
+- ✅ **Incidents intégrés** *(it. 10)* : tuile de couverture (ouverts + gravité) et **alerte
+      de posture** sur les **déclarations réglementaires en attente** (NIS2/RGPD).
+- ⏳ **Reste** : historisation à chaque snapshot (courbes de tendance), **docs à réviser**
+      (dépend du chantier 5), conformité **par donneur d'ordre** en vue comparative,
+      et une **liste des incidents récents** détaillée sur le tableau de bord.
 
 ## Chantier 8 — Améliorations modules existants (§5.5) — ⏳
 - Matrice EBIOS : export image (PNG/SVG) ; cohérence brut/résiduel (avertir si résiduel > brut).

@@ -5,6 +5,35 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 10 — Tableau de bord enrichi (cockpit GRC 360°)
+- **Refonte du tableau de bord** (`js/modules/dashboard.js`) en véritable cockpit de
+  pilotage agrégeant l'ensemble des domaines GRC, avec des **graphiques maison en
+  SVG/HTML** (aucune librairie, 100 % frontend) : anneaux (donut), barres horizontales
+  et **cartographie des risques** (matrice Fréquence × Gravité colorée).
+- **Bandeau de posture direction** : synthèse automatique colorée (maîtrisée /
+  vigilance / arbitrage immédiat) déduite des risques très critiques, **déclarations
+  réglementaires en attente** (NIS2/RGPD), retards d'actions et taux de conformité.
+- **Bandeau d'indicateurs clés (KPI)** : conformité, maturité moyenne des référentiels,
+  exposition résiduelle, actions en retard et actifs cartographiés — lecture en un coup d'œil.
+- **Conformité** : anneau de répartition des statuts (conforme / partiel / non conforme /
+  non applicable / non évalué) + taux sur exigences applicables.
+- **Maturité par référentiel** : maturité globale (échelle CMMI 0-5) et barre par
+  référentiel, couvrant automatiquement **les 5 référentiels du catalogue** (ANSSI, ISO
+  27002, NIS2, DORA, AirCyber) — chaque cadre ajouté apparaît sans modifier le dashboard.
+- **Risques** : anneau du profil résiduel (très critiques / critiques / non critiques),
+  score d'exposition, **cartographie F×G** cliquable vers la matrice, et Top 5 résiduel.
+- **Plan d'actions** : avancement, ventilation par statut, **actions en retard** et
+  **échéances ≤ 30 j** ; nouvelle **liste de veille** (retards + échéances proches triés
+  par urgence, badges « Retard Xj » / « J-x », pastille de priorité).
+- **Actifs par criticité** (barres) et **Couverture du dispositif GRC** : 11 tuiles
+  cliquables (BIA, mesures, exigences évaluées, PCA/PRA, tests — avec dernier résultat,
+  MCO, cellule de crise, audits + non-conformités ouvertes, prestataires, risques et
+  **incidents** — ouverts + déclarations réglementaires en attente).
+- **État vide pédagogique** : bandeau d'amorçage quand aucune donnée n'est saisie ;
+  tous les graphiques dégradent proprement (messages d'aide). Sécurité XSS : toutes les
+  données utilisateur injectées sont échappées (`escapeHtml`). Nouveaux styles cockpit
+  dans `css/style.css` (tokens uniquement, couleurs sémantiques respectées).
+
 ### Itération 9 — Gestion documentaire des politiques
 - **Nouveau module Documents** (`/documents`) : registre des politiques et documents
   (PSSI, charte, procédures…) avec **version, propriétaire, statut, date de prochaine

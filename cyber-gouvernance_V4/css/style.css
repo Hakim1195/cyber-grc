@@ -755,3 +755,105 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
     .soa-table { font-size: 0.75rem; box-shadow: none; }
     .soa-table th, .soa-table td { padding: 4px 6px; }
 }
+
+/* =========================================
+   TABLEAU DE BORD ENRICHI — COCKPIT GRC
+   (bandeau posture, KPI strip, donut/bars/heatmap SVG,
+    liste de veille, tuiles de couverture du dispositif)
+   ========================================= */
+
+/* --- Sous-titres de section --- */
+.dash-section-title {
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-muted); font-weight: 700;
+    margin: 2.2rem 0 0.9rem; display: flex; align-items: center; gap: 8px;
+}
+.dash-section-title::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+/* --- Bandeau de posture (lecture direction immédiate) --- */
+.posture-banner {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 18px; border-radius: var(--radius); margin-bottom: 1.5rem;
+    box-shadow: var(--shadow); background: var(--bg-card);
+    border-left: 5px solid var(--color-info);
+}
+.posture-banner .pb-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; background: var(--color-info); }
+.posture-banner h2 { font-size: 1.05rem; margin: 0 0 3px; color: var(--text-main); }
+.posture-banner p { margin: 0; color: var(--text-muted); font-size: 0.9rem; line-height: 1.4; }
+.posture-banner.is-danger  { border-left-color: var(--color-danger);  background: linear-gradient(90deg, var(--tint-crit), var(--bg-card) 55%); }
+.posture-banner.is-danger  .pb-dot { background: var(--color-danger); }
+.posture-banner.is-warning { border-left-color: var(--color-warning); background: linear-gradient(90deg, var(--tint-warn), var(--bg-card) 55%); }
+.posture-banner.is-warning .pb-dot { background: var(--color-warning); }
+.posture-banner.is-success { border-left-color: var(--color-success); background: linear-gradient(90deg, var(--tint-ok), var(--bg-card) 55%); }
+.posture-banner.is-success .pb-dot { background: var(--color-success); }
+
+/* --- Bandeau d'indicateurs clés (KPI strip) --- */
+.kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.kpi-tile { background: var(--bg-card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 0.9rem 1.1rem; border-left: 4px solid var(--primary); }
+.kpi-tile .kt-val { font-size: 1.85rem; font-weight: bold; line-height: 1.1; color: var(--text-main); font-variant-numeric: tabular-nums; }
+.kpi-tile .kt-val small { font-size: 1rem; font-weight: 600; color: var(--text-muted); }
+.kpi-tile .kt-lbl { font-size: 0.74rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
+.kpi-tile .kt-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
+.kpi-tile.is-danger  { border-left-color: var(--color-danger); }
+.kpi-tile.is-danger  .kt-val { color: var(--color-danger); }
+.kpi-tile.is-warning { border-left-color: var(--color-warning); }
+.kpi-tile.is-warning .kt-val { color: var(--color-warning); }
+.kpi-tile.is-success { border-left-color: var(--color-success); }
+.kpi-tile.is-success .kt-val { color: var(--color-success); }
+
+/* --- Titres de cartes graphiques --- */
+.chart-card h3 { margin-top: 0; display: flex; align-items: center; gap: 6px; }
+.chart-empty { color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 1.5rem 0.5rem; }
+
+/* --- Donut (SVG) + légende --- */
+.donut-card { display: flex; gap: 1.2rem; align-items: center; flex-wrap: wrap; }
+.dash-donut { display: block; flex-shrink: 0; margin: 0 auto; }
+.donut-legend { display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 140px; }
+.lg-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+.lg-dot { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+.lg-lbl { color: var(--text-muted); flex: 1; }
+.lg-val { font-weight: bold; font-variant-numeric: tabular-nums; }
+
+/* --- Barres horizontales (HTML) --- */
+.hbar { margin-bottom: 12px; }
+.hbar:last-child { margin-bottom: 0; }
+.hbar-top { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; margin-bottom: 4px; }
+.hbar-lbl { color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hbar-val { font-weight: bold; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.hbar-track { background: #eef1f5; height: 9px; border-radius: 5px; overflow: hidden; }
+.hbar-fill { height: 100%; border-radius: 5px; transition: width 0.9s ease; }
+.hbar-cap { font-size: 0.72rem; color: var(--text-muted); margin-top: 3px; }
+
+/* --- Heatmap risques (SVG matrice F×G) --- */
+.heat-wrap { text-align: center; cursor: pointer; }
+.dash-heat-svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+.heat-cap { font-size: 0.74rem; color: var(--text-muted); margin-top: 8px; }
+
+/* --- Liste de veille (actions en retard / à échéance) --- */
+.watch-list { list-style: none; padding: 0; margin: 0.6rem 0 0; }
+.watch-item { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.watch-item:last-child { border-bottom: none; }
+.watch-item:hover { background: #f8f9fa; }
+.wi-prio { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.wi-body { flex: 1; min-width: 0; }
+.wi-title { display: block; font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wi-meta { font-size: 0.75rem; color: var(--text-muted); }
+.wi-badge { font-size: 0.72rem; font-weight: bold; padding: 3px 9px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+.wi-badge.late { background: var(--tint-crit); color: var(--color-danger); }
+.wi-badge.soon { background: var(--tint-warn); color: var(--color-warn); }
+
+/* --- Tuiles de couverture du dispositif GRC --- */
+.cov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 0.4rem; }
+.cov-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; background: var(--bg-body); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; cursor: pointer; text-align: left; color: inherit; font: inherit; transition: var(--transition); }
+.cov-tile:hover { background: #fff; transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--primary-light); }
+.cov-val { font-size: 1.5rem; font-weight: bold; line-height: 1; font-variant-numeric: tabular-nums; color: var(--text-main); }
+.cov-lbl { font-size: 0.8rem; color: var(--text-main); font-weight: 600; }
+.cov-sub { font-size: 0.72rem; color: var(--text-muted); }
+
+/* --- Cartes larges à deux colonnes (responsive) --- */
+.split-card { display: flex; gap: 2rem; flex-wrap: wrap; }
+.split-card > .split-col { flex: 1 1 300px; min-width: 0; }
+.split-card > .split-col + .split-col { border-left: 1px solid var(--border); padding-left: 2rem; }
+@media (max-width: 720px) {
+    .split-card > .split-col + .split-col { border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 1.2rem; }
+}
