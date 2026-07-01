@@ -88,10 +88,11 @@ du pivot ; registre **imprimable**. Schéma v6.
       (dépend du chantier 5), conformité **par donneur d'ordre** en vue comparative,
       et une **liste des incidents récents** détaillée sur le tableau de bord.
 
-## Chantier 8 — Améliorations modules existants (§5.5) — ⏳
-- Matrice EBIOS : export image (PNG/SVG) ; cohérence brut/résiduel (avertir si résiduel > brut).
-- PCA/PRA : fiches réflexes de crise **imprimables** (note : en crise le navigateur peut être indispo).
-- Tiers : niveau de risque fournisseur + lien exigences NIS2/DORA chaîne d'appro.
+## Chantier 8 — Améliorations modules existants (§5.5) — 🟡 en cours
+- ✅ **Matrice EBIOS** : **export image (PNG/SVG)** (SVG autonome → PNG via canvas, sans dépendance)
+      + **cohérence brut/résiduel** (bandeau d'alerte listant les risques où résiduel > brut, M > 1). *(Itération 15)*
+- ⏳ PCA/PRA : fiches réflexes de crise **imprimables** (note : en crise le navigateur peut être indispo).
+- ⏳ Tiers : niveau de risque fournisseur + lien exigences NIS2/DORA chaîne d'appro.
 
 ## Chantier 9 — Durcissement transverse — 🟡 en cours (en continu)
 - ✅ **XSS** : `escapeHtml` partagé (`window.escapeHtml`) + appliqué aux modules **Exigences** et

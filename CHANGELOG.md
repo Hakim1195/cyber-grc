@@ -5,6 +5,22 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 8 — Matrice EBIOS : export image & cohérence brut/résiduel
+- **Export image de la matrice de criticité** : deux boutons **« Exporter en PNG »** et
+  **« Exporter en SVG »** sur la fiche `/matrice`. Génération d'un **SVG autonome** (titre,
+  marque Dedienne, axes Fréquence × Gravité, grille 4×4 colorée avec bulles de compte,
+  légende) rendu **sans aucune dépendance** ; le PNG est produit en interne en dessinant ce
+  SVG sur un `<canvas>` (×2 pour la netteté) — aucun service tiers, aucune ressource externe
+  (canvas non « tainted »). Utile pour insérer la cartographie dans un rapport ou un COMEX.
+- **Alerte de cohérence brut / résiduel** : bandeau d'avertissement listant les risques dont
+  le **score résiduel dépasse le score brut** (niveau de maîtrise M > 1, incohérent — une
+  mesure de maîtrise ne peut pas augmenter le risque). Cause typique : import Excel avec un M
+  mal saisi (« 50 » au lieu de « 0.5 »). Chaque risque signalé est **cliquable** (lien vers
+  sa fiche) pour correction immédiate.
+- **Refactorisation sans régression** : le regroupement des risques dans la grille est
+  factorisé (`buildMatrixData`) et partagé entre l'affichage et l'export ; l'interaction
+  existante (clic sur cellule, panneau de détail) est inchangée.
+
 ### Import des actifs & correctifs d'export PDF
 - **Import des actifs abouti** : nouveau bouton **« Télécharger le modèle »** générant un
   fichier Excel prêt à remplir (`modele_import_actifs.xlsx`), avec les colonnes exactes
