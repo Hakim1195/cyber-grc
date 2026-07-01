@@ -89,7 +89,10 @@ const ConformiteModule = (() => {
                         <h1>Couverture croisée</h1>
                         <p style="color:var(--text-muted); margin-top:5px;">Comment vos mesures de sécurité couvrent les différents référentiels. ${Help.tip("Une mesure de sécurité bien conçue satisfait des exigences de plusieurs cadres à la fois (ANSSI, ISO, NIS2…). Cette vue met en évidence ces recouvrements et les zones encore non couvertes.")}</p>
                     </div>
-                    <a href="#/referentiels" class="btn-secondary" style="align-self:center;">← Référentiels</a>
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <a href="#/mapping" class="btn-secondary">Correspondances →</a>
+                        <a href="#/referentiels" class="btn-secondary">← Référentiels</a>
+                    </div>
                 </div>
 
                 <div class="dashboard-card">

@@ -36,7 +36,7 @@ Légende : ✅ fait · 🔜 prochain · ⏳ à faire · 💤 en attente de déci
 - ⏳ **Restant** : appliquer les tooltips ⓘ **partout** (systématiser, fil rouge) ; harmoniser
       progressivement chaque module (tableaux denses, KPI, heatmap matrice, radars) au fil des touches.
 
-## Chantier 3 — Référentiels + mapping croisé (§4) — ✅ FAIT (reste : mapping pré-rempli optionnel)
+## Chantier 3 — Référentiels + mapping croisé (§4) — ✅ FAIT
 Sous-itérations :
 - ✅ **4a — Ossature** : modèle données `evaluations` (+ `mesures`) ; `SCHEMA_VERSION`→3 (+ migration) ;
       registre `Referentiels` ; **référentiel ANSSI** (42 mesures / 10 familles, reformulations
@@ -54,7 +54,12 @@ Sous-itérations :
 - ✅ **4c₂ — Couverture croisée & SoA** : vue de **couverture croisée** (matrice mesures × référentiels,
       part de chaque référentiel adossée à une mesure) ; **génération de la déclaration d'applicabilité
       (SoA)** imprimable. *(Itération 7)*
-- ⏳ **Optionnel** : mapping **pré-rempli** d'équivalences inter-référentiels (ISO ↔ NIS2 ↔ ANSSI) éditable.
+- ✅ **Mapping pré-rempli & éditable** : module `/mapping` (« Correspondances »). **Catalogue statique**
+      de 28 groupes d'équivalences (ANSSI ↔ ISO 27002 ↔ NIS2 ↔ DORA, `js/data/mappings.js`) +
+      **surcouche éditable** `data.mappings` (créer / modifier / masquer / réinitialiser ; schéma **v7**).
+      **Propagation** : relier tout un groupe à une « mesure de sécurité » (préserve « non évalué ») ou
+      appliquer un même statut d'un coup → accélère la couverture croisée et la SoA. Badges de clause
+      colorés selon l'évaluation, cartographie par référentiel. *(Itération 20)*
 > ⚠️ NE PAS embarquer le texte intégral des normes (ISO payant/protégé). Reformulations originales +
 > identifiants de clauses (« A.5.1 ») + titre court uniquement.
 

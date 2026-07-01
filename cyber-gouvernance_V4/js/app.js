@@ -50,6 +50,8 @@ async function startApp() {
         "/couverture": () => { if (typeof ConformiteModule !== "undefined") ConformiteModule.renderCouverture(); },
         "/soa/:id": (id) => { if (typeof ConformiteModule !== "undefined") ConformiteModule.renderSoa(id); },
 
+        "/mapping": () => { if (typeof MappingModule !== "undefined") MappingModule.render(); },
+
         "/incidents": () => { if (typeof IncidentsModule !== "undefined") IncidentsModule.renderList(); },
         "/incidents/:id": (id) => { if (typeof IncidentsModule !== "undefined") IncidentsModule.renderDetail(id); },
 
@@ -141,6 +143,7 @@ const ROUTE_META = {
     "/referentiels": { s: "Conformité", t: "Référentiels" },
     "/mesures":      { s: "Conformité", t: "Mesures de sécurité" },
     "/couverture":   { s: "Conformité", t: "Couverture croisée" },
+    "/mapping":      { s: "Conformité", t: "Correspondances inter-référentiels" },
     "/soa":          { s: "Conformité", t: "Déclaration d'applicabilité" },
     "/clients":      { s: "Conformité", t: "Donneurs d'ordre" },
     "/audits":       { s: "Conformité", t: "Contrôles & Audits" },

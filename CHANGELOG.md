@@ -5,6 +5,34 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 3 — Correspondances inter-référentiels (mapping pré-rempli & éditable)
+- **Nouvelle vue `/mapping`** (« Correspondances ») : un **catalogue pré-rempli** d'équivalences
+  entre les exigences des référentiels, regroupées par **thème de sécurité** (28 groupes couvrant
+  ANSSI ↔ ISO 27002 ↔ NIS2 ↔ DORA : gouvernance, MFA, sauvegardes, incidents, chaîne d'appro…).
+  Objectif : **accélérer** la couverture croisée et la génération de SoA, dans l'esprit « zéro
+  double saisie ».
+- **Propagation en un geste** (le cœur de la fonctionnalité) :
+  - **Relier tout un groupe à une mesure de sécurité** (existante ou créée à la volée) : toutes les
+    exigences équivalentes pointent vers la même mesure ; évaluez la mesure une fois puis propagez.
+    Relier **préserve** l'état « non évalué » (aucun statut fabriqué).
+  - **Appliquer un même statut + maturité** à toutes les exigences d'un groupe.
+- **Statut en direct** : chaque code de clause est un badge **coloré selon son évaluation**
+  (conforme / partiel / non conforme / non applicable / non évalué), avec **anneau** si l'exigence
+  est déjà reliée à une mesure ; clic → ouvre le référentiel. **Conformité du groupe** affichée.
+- **Entièrement éditable** : créer une correspondance **personnalisée**, **modifier** un groupe du
+  catalogue (surcouche « Modifiée »), **masquer** un groupe, et **réinitialiser** le catalogue par
+  défaut. **Cartographie** en tête : part des exigences de chaque référentiel reliée à au moins une
+  correspondance.
+- **Modèle de données (schéma v7)** : nouveau tableau **`mappings`** = surcouche utilisateur
+  (ajouts, overrides par id, masquages `_deleted`) fusionnée avec le **catalogue statique**
+  (`js/data/mappings.js`). API DataStore `getMappings` / `getMappingById` / `upsertMapping` /
+  `deleteMapping` / `resetMappings`. Migration transparente (les anciens backups v6 restent
+  importables). Liens croisés ajoutés depuis Référentiels et Couverture croisée.
+- **Tests headless (Playwright)** : rendu des 28 groupes, propagation statut (conformité → 100 %),
+  reliaison à une mesure (préservation « non évalué »), création/modification/masquage/réinitialisation,
+  **export/import round-trip v7** + compat v6 ; **0 erreur console**, aucune régression sur
+  `/couverture` et `/referentiels`.
+
 ### Chantier 9 — Intégrité des données : cascade & tests PRA orphelins
 - **Suppression en cascade** : supprimer un **scénario PCA/PRA** supprime désormais aussi les
   **tests d'exercice** qui lui étaient rattachés (`tests_pra.scenario_id`) — plus de tests

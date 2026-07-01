@@ -11,7 +11,7 @@ const DataStore = (() => {
     const LEGACY_AUDITS_KEY = "cyber-audits";
     const LEGACY_REVUES_KEY = "cyber-revues";
     const LOCAL_CURRENT_KEY = "cyber-current";      // repli (chiffré si clé) si IndexedDB indisponible
-    const SCHEMA_VERSION = 6;
+    const SCHEMA_VERSION = 7;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -25,7 +25,10 @@ const DataStore = (() => {
         // v5 — Chantier Documentaire : registre des politiques/documents.
         "documents",
         // v6 — Chantier RGPD : registre des traitements (article 30).
-        "traitements"
+        "traitements",
+        // v7 — Chantier 3 : surcouche utilisateur des correspondances inter-référentiels
+        // (ajouts, modifications d'un groupe du catalogue, ou masquage via `_deleted`).
+        "mappings"
     ];
 
     const AUTOSAVE_DEBOUNCE_MS = 500;
@@ -690,6 +693,28 @@ const DataStore = (() => {
     function deleteTraitement(id) { data.traitements = data.traitements.filter(t => t.id !== id); save(); }
 
     /* =========================
+       CORRESPONDANCES INTER-RÉFÉRENTIELS — surcouche utilisateur (v7)
+       Le catalogue par défaut est STATIQUE (js/data/mappings.js). Ce tableau ne
+       stocke QUE la surcouche : groupes ajoutés par l'utilisateur, groupes du
+       catalogue modifiés (même id → override) ou masqués (`_deleted: true`).
+       { id, theme, aide, refs: { <refId>: [codes...] }, _deleted? }
+    ========================== */
+    function getMappings() { return data.mappings; }
+    function getMappingById(id) { return data.mappings.find(m => m.id === id); }
+    // Crée ou remplace (par id) une entrée de surcouche.
+    function upsertMapping(m) {
+        if (!m || !m.id) return null;
+        const i = data.mappings.findIndex(x => x.id === m.id);
+        if (i !== -1) data.mappings[i] = m; else data.mappings.push(m);
+        save();
+        return m;
+    }
+    function deleteMapping(id) { data.mappings = data.mappings.filter(m => m.id !== id); save(); }
+    // Réinitialise la surcouche : restaure le catalogue par défaut (retire ajouts,
+    // modifications et masquages).
+    function resetMappings() { data.mappings = []; save(); }
+
+    /* =========================
        EXPORT / IMPORT (FICHIER .json)
        Enveloppe standard :
        { format:"grc-backup", version, encrypted, createdAt, app, payload|kdf+cipher }
@@ -755,7 +780,8 @@ const DataStore = (() => {
         // v3 → v4 : ajout de `incidents` → normalize crée le tableau vide.
         // v4 → v5 : ajout de `documents` → normalize crée le tableau vide.
         // v5 → v6 : ajout de `traitements` (RGPD) → normalize crée le tableau vide.
-        // (Ajouter ici les futures migrations : if (v < 7) { ... })
+        // v6 → v7 : ajout de `mappings` (surcouche des correspondances) → normalize crée le tableau vide.
+        // (Ajouter ici les futures migrations : if (v < 8) { ... })
         return p;
     }
 
@@ -866,6 +892,9 @@ const DataStore = (() => {
 
         // Traitements RGPD (registre art. 30)
         getTraitements, getTraitementById, addTraitement, updateTraitement, deleteTraitement,
+
+        // Correspondances inter-référentiels (surcouche utilisateur)
+        getMappings, getMappingById, upsertMapping, deleteMapping, resetMappings,
 
         // Sauvegarde / restauration
         exportSnapshot, exportEncrypted, parseImport, applyImport,

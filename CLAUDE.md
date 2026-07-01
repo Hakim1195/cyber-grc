@@ -75,15 +75,18 @@ cyber-gouvernance_V4/
 
 - IndexedDB `cyber-grc-db` : store `kv` (`current` = instantané, chiffré si protection active ;
   `meta`), store `backups` (points de restauration versionnés, auto + manuels).
-- `SCHEMA_VERSION = 6` dans `datastore.js`. Migrations à l'import via `migratePayload`.
+- `SCHEMA_VERSION = 7` dans `datastore.js`. Migrations à l'import via `migratePayload`.
 - Entités (tableaux) : clients, exigences, actions, risques, actifs, processus, crise,
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
   **evaluations** (auto-évaluations de référentiels), **mesures** (pivot « Mesure de sécurité »),
-  **incidents** (registre des incidents), **documents** (registre des politiques)
-  et **traitements** (registre RGPD art. 30, mesures reliées au pivot).
+  **incidents** (registre des incidents), **documents** (registre des politiques),
+  **traitements** (registre RGPD art. 30, mesures reliées au pivot)
+  et **mappings** (v7, surcouche des correspondances inter-référentiels ; catalogue par défaut statique).
 - Référentiels : catalogue **statique** (registre `js/data/referentiels.js` + fichiers `ref_*.js`),
   hors `data`. Livrés : ANSSI (42), ISO 27002 (93), NIS2 (10), DORA (15), AirCyber/BoostAerospace (234).
   Ne pas embarquer le texte des normes (reformulations originales + identifiants de clauses).
+  **Correspondances** inter-référentiels : catalogue statique `js/data/mappings.js` (`MappingCatalog`,
+  28 groupes ANSSI↔ISO↔NIS2↔DORA) + surcouche éditable `data.mappings` (module `/mapping`).
   AirCyber = questionnaire réel (généré depuis un CSV via un script du scratchpad, non versionné) ;
   import in-app des réponses (bouton sur la fiche AirCyber, parsing SheetJS, mapping Oui/Non→statut) ;
   métadonnées par question **niveau Bronze/Argent/Or + priorité + domaine CL0–CL6** (badges,
@@ -139,7 +142,14 @@ scénario PCA/PRA en cascade sur ses tests (confirmation indiquant le nombre imp
 nettoyage des tests orphelins hérités (badge « Orphelin » + bandeau) ; helpers DataStore
 `getTestsByScenario`/`getOrphanTests`/`deleteOrphanTests`.
 
-**Prochain** : suite du Chantier 9 (factorisation des helpers dupliqués — suppression groupée,
-badges, confirmations, collecte de formulaire ; `QuotaExceededError` à l'import Excel ; i18n) ;
-mapping pré-rempli inter-référentiels ; restes du Chantier 7 (historisation des tendances,
-docs à réviser au tableau de bord).
+**Fait (Chantier 3 — Correspondances inter-référentiels)** : module **`/mapping`** (« Correspondances »)
+— **catalogue pré-rempli** de 28 groupes d'équivalences (ANSSI↔ISO 27002↔NIS2↔DORA) **éditable**
+(créer/modifier/masquer/réinitialiser, surcouche `data.mappings`, schéma **v7**) ; **propagation**
+(relier tout un groupe à une mesure — préserve « non évalué » — ou appliquer un statut d'un coup) ;
+badges de clause colorés selon l'évaluation + cartographie par référentiel ; liens croisés
+Référentiels/Couverture. Tests Playwright (0 erreur, round-trip v7 + compat v6).
+
+**Prochain** : restes du Chantier 7 (historisation des tendances, docs à réviser au tableau de bord,
+conformité par donneur d'ordre, incidents récents) ; suite du Chantier 9 (factorisation des helpers
+dupliqués — suppression groupée, badges, confirmations, collecte de formulaire ; `QuotaExceededError`
+à l'import Excel ; i18n).

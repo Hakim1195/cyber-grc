@@ -4,11 +4,12 @@
 > Application **100 % frontend** : toutes les données vivent dans le navigateur
 > (IndexedDB, avec repli localStorage). Aucune donnée ne quitte le poste.
 
-Version de schéma courante : **`SCHEMA_VERSION = 6`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 7`** (défini dans `js/core/datastore.js`).
 > v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`.
 > v4 (chantier Incidents) : ajout du tableau `incidents`.
 > v5 (chantier Documentaire) : ajout du tableau `documents`.
 > v6 (chantier RGPD) : ajout du tableau `traitements`.
+> v7 (chantier 3 Correspondances) : ajout du tableau `mappings` (surcouche des correspondances inter-référentiels).
 > Migrations transparentes — `normalize` crée les tableaux vides à la volée.
 
 ---
@@ -58,7 +59,8 @@ Un enregistrement `backups` : `{ id, ts, type: "auto"|"manual", label, schemaVer
   "evaluations": [],    "mesures": [],      // v3 — chantier Référentiels
   "incidents": [],      // v4 — chantier Incidents
   "documents": [],      // v5 — chantier Documentaire
-  "traitements": []     // v6 — chantier RGPD (article 30)
+  "traitements": [],    // v6 — chantier RGPD (article 30)
+  "mappings": []        // v7 — chantier 3 (surcouche des correspondances inter-référentiels)
 }
 ```
 
@@ -258,6 +260,28 @@ actions ; `deleteRisque`/`deleteActif` nettoient les références (`risque_id`, 
 | `donnees_sensibles` | bool | catégories particulières (art. 9) |
 | `destinataires`, `transfert_hors_ue`, `duree_conservation` | string | |
 | `mesures_ids` | string[] | **réutilise le pivot** `mesures` (`deleteMesure` délie) |
+
+### Correspondance inter-référentiels — `mappings` (v7, surcouche)
+Le **catalogue par défaut** des correspondances (équivalences entre exigences de
+plusieurs référentiels) est **statique** (`js/data/mappings.js`, exposé par
+`MappingCatalog`) et **non stocké**. Le tableau `mappings` ne contient que la
+**surcouche utilisateur**, fusionnée à l'affichage par `MappingModule` :
+
+| Champ | Type | Notes |
+|-------|------|-------|
+| `id` | `"MAP-..."` \| id du catalogue | un id du catalogue (`map-…`) → **override** du groupe correspondant ; un id `MAP-…` → groupe **personnalisé** |
+| `theme` | string | intitulé du thème de sécurité |
+| `aide` | string | note pédagogique |
+| `refs` | objet | `{ <ref_id>: [codes...] }` — exigences équivalentes par référentiel |
+| `_deleted` | bool | si `true` sur un id du catalogue : groupe **masqué** (tombstone) |
+
+Règles de fusion (dans le module) : un groupe du catalogue est remplacé si un
+enregistrement de même `id` existe (override), masqué si `_deleted`, sinon affiché
+tel quel ; les enregistrements dont l'`id` n'est pas dans le catalogue sont des
+groupes personnalisés. `resetMappings()` vide la surcouche (retour au catalogue).
+La **propagation** relie toutes les exigences d'un groupe à une même `mesure`
+(`evaluations[].mesure_id`) ou leur applique un même statut (`upsertEvaluation`) —
+d'où l'accélération de la couverture croisée et de la SoA.
 
 ---
 

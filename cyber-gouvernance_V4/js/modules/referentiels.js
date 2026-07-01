@@ -232,7 +232,10 @@ const ReferentielsModule = (() => {
                         <h1>Référentiels de sécurité</h1>
                         <p style="color:var(--text-muted); margin-top:5px;">Auto-évaluez votre conformité et suivez votre maturité par domaine. ${Help.tip("Un référentiel est un ensemble structuré de bonnes pratiques (ANSSI, ISO 27002, NIS2…). L'auto-évaluation situe votre organisation et alimente le plan d'actions.")}</p>
                     </div>
-                    <a href="#/couverture" class="btn-secondary" style="align-self:center;">Couverture croisée →</a>
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <a href="#/mapping" class="btn-secondary">Correspondances →</a>
+                        <a href="#/couverture" class="btn-secondary">Couverture croisée →</a>
+                    </div>
                 </div>
 
                 ${refs.length === 0
@@ -241,7 +244,7 @@ const ReferentielsModule = (() => {
 
                 <div class="dashboard-card" style="margin-top:1.5rem;">
                     <h3 style="margin-top:0;">Éviter la double saisie : le pivot « Mesure de sécurité »</h3>
-                    <p style="color:var(--text-muted); font-size:0.9rem;">Une même <strong>mesure de sécurité</strong> (MFA, sauvegardes, cloisonnement…) couvre souvent des exigences de <em>plusieurs</em> référentiels. Reliez vos exigences à une <a href="#/mesures" style="color:var(--accent);">mesure de sécurité</a>, évaluez-la une fois puis <strong>propagez</strong> : le statut s'applique partout. La vue de <strong>couverture croisée</strong> arrive prochainement.</p>
+                    <p style="color:var(--text-muted); font-size:0.9rem;">Une même <strong>mesure de sécurité</strong> (MFA, sauvegardes, cloisonnement…) couvre souvent des exigences de <em>plusieurs</em> référentiels. Reliez vos exigences à une <a href="#/mesures" style="color:var(--accent);">mesure de sécurité</a>, évaluez-la une fois puis <strong>propagez</strong> : le statut s'applique partout. Voyez les recouvrements dans la <a href="#/couverture" style="color:var(--accent);">couverture croisée</a> et gagnez du temps avec les <a href="#/mapping" style="color:var(--accent);">correspondances inter-référentiels</a> (relier tout un thème à une mesure d'un clic).</p>
                 </div>
             </section>`;
 
