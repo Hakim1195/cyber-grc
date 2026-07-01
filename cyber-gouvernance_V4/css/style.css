@@ -741,6 +741,14 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
 .soa-summary span { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
 .soa-table th, .soa-table td { padding: 0.5rem 0.7rem; font-size: 0.9rem; }
 .soa-domain-row td { background: var(--bg-body); font-size: 0.9rem; }
+
+/* --- Incidents --- */
+.status-critique { background: #a5281b; color: #fff; }
+.decl-ok { background: var(--tint-ok); color: var(--color-ok); }
+.decl-todo { background: var(--tint-warn); color: var(--color-warn); }
+.decl-na { background: var(--tint-na); color: var(--color-na); }
+.inc-actifs { display: flex; flex-wrap: wrap; gap: 8px; }
+.inc-checkbox { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-body); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 0.9rem; cursor: pointer; }
 @media print {
     .soa-print-head { display: block !important; }
     .soa-summary > div { box-shadow: none; }

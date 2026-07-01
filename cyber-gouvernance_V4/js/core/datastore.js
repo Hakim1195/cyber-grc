@@ -11,7 +11,7 @@ const DataStore = (() => {
     const LEGACY_AUDITS_KEY = "cyber-audits";
     const LEGACY_REVUES_KEY = "cyber-revues";
     const LOCAL_CURRENT_KEY = "cyber-current";      // repli (chiffré si clé) si IndexedDB indisponible
-    const SCHEMA_VERSION = 3;
+    const SCHEMA_VERSION = 4;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -19,7 +19,9 @@ const DataStore = (() => {
         "audits", "revues",
         // v3 — Chantier Référentiels : auto-évaluations par exigence de référentiel
         // + pivot « Mesure de sécurité » (voir DATA_MODEL.md §Référentiels).
-        "evaluations", "mesures"
+        "evaluations", "mesures",
+        // v4 — Chantier Incidents : registre des incidents de sécurité.
+        "incidents"
     ];
 
     const AUTOSAVE_DEBOUNCE_MS = 500;
@@ -387,6 +389,7 @@ const DataStore = (() => {
     function getActionsByExigence(exigenceId) { return data.actions.filter(a => a.exigence_id === exigenceId); }
     function getActionsByRisque(risqueId) { return data.actions.filter(a => a.risque_id === risqueId); }
     function getActionsByEvaluation(evaluationId) { return data.actions.filter(a => a.evaluation_id === evaluationId); }
+    function getActionsByIncident(incidentId) { return data.actions.filter(a => a.incident_id === incidentId); }
     function addAction(action) { data.actions.push(action); save(); }
     function updateAction(action) {
         const i = data.actions.findIndex(a => a.id === action.id);
@@ -412,6 +415,7 @@ const DataStore = (() => {
             }
         });
         data.actions = data.actions.filter(a => a.risque_id !== id);
+        data.incidents.forEach(inc => { if (inc.risque_id === id) inc.risque_id = null; });   // délie les incidents
         save();
     }
 
@@ -425,7 +429,13 @@ const DataStore = (() => {
         const i = data.actifs.findIndex(a => a.id === actif.id);
         if (i !== -1) { data.actifs[i] = actif; save(); }
     }
-    function deleteActif(id) { data.actifs = data.actifs.filter(a => a.id !== id); save(); }
+    function deleteActif(id) {
+        data.actifs = data.actifs.filter(a => a.id !== id);
+        data.incidents.forEach(inc => {
+            if (Array.isArray(inc.actifs_touches)) inc.actifs_touches = inc.actifs_touches.filter(aid => aid !== id);
+        });
+        save();
+    }
 
     /* =========================
        PROCESSUS (BIA)
@@ -603,6 +613,26 @@ const DataStore = (() => {
     }
 
     /* =========================
+       INCIDENTS DE SÉCURITÉ (v4)
+       { id, titre, type, gravite, statut, date_detection, date_resolution,
+         description, actions_immediates, cause_racine, actifs_touches[], risque_id,
+         declaration_anssi, declaration_cnil, updatedAt }
+       Les actions correctives pointent vers l'incident via action.incident_id.
+    ========================== */
+    function getIncidents() { return data.incidents; }
+    function getIncidentById(id) { return data.incidents.find(i => i.id === id); }
+    function addIncident(inc) { data.incidents.push(inc); save(); }
+    function updateIncident(inc) {
+        const idx = data.incidents.findIndex(x => x.id === inc.id);
+        if (idx !== -1) { data.incidents[idx] = inc; save(); }
+    }
+    function deleteIncident(id) {
+        data.incidents = data.incidents.filter(i => i.id !== id);
+        data.actions = data.actions.filter(a => a.incident_id !== id);   // cascade des actions liées
+        save();
+    }
+
+    /* =========================
        EXPORT / IMPORT (FICHIER .json)
        Enveloppe standard :
        { format:"grc-backup", version, encrypted, createdAt, app, payload|kdf+cipher }
@@ -665,7 +695,8 @@ const DataStore = (() => {
         // v1 : audits/revues étaient hors du snapshot → normalize crée les tableaux.
         // v2 → v3 : ajout de `evaluations` (auto-évaluations de référentiels) et
         //           `mesures` (pivot) → normalize crée les tableaux vides.
-        // (Ajouter ici les futures migrations : if (v < 4) { ... })
+        // v3 → v4 : ajout de `incidents` → normalize crée le tableau vide.
+        // (Ajouter ici les futures migrations : if (v < 5) { ... })
         return p;
     }
 
@@ -746,7 +777,7 @@ const DataStore = (() => {
 
         getClients, getClientById, addClient, updateClient, deleteClient,
         getExigences, getExigencesByClient, getExigenceById, addExigence, updateExigence, deleteExigence,
-        getActions, getActionById, getActionsByExigence, getActionsByRisque, getActionsByEvaluation, addAction, updateAction, deleteAction,
+        getActions, getActionById, getActionsByExigence, getActionsByRisque, getActionsByEvaluation, getActionsByIncident, addAction, updateAction, deleteAction,
         getRisques, getRisqueById, addRisque, updateRisque, deleteRisque,
         getActifs, getActifById, addActif, updateActif, deleteActif,
 
@@ -766,6 +797,9 @@ const DataStore = (() => {
         upsertEvaluation, deleteEvaluation, deleteEvaluationsByRef,
         getMesures, getMesureById, getEvaluationsByMesure,
         addMesure, updateMesure, deleteMesure, propagateMesure,
+
+        // Incidents de sécurité
+        getIncidents, getIncidentById, addIncident, updateIncident, deleteIncident,
 
         // Sauvegarde / restauration
         exportSnapshot, exportEncrypted, parseImport, applyImport,

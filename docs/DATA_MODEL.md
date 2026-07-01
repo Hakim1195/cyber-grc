@@ -4,9 +4,10 @@
 > Application **100 % frontend** : toutes les données vivent dans le navigateur
 > (IndexedDB, avec repli localStorage). Aucune donnée ne quitte le poste.
 
-Version de schéma courante : **`SCHEMA_VERSION = 3`** (défini dans `js/core/datastore.js`).
-> v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`
-> (migration transparente — `normalize` crée les tableaux vides à la volée).
+Version de schéma courante : **`SCHEMA_VERSION = 4`** (défini dans `js/core/datastore.js`).
+> v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`.
+> v4 (chantier Incidents) : ajout du tableau `incidents`.
+> Migrations transparentes — `normalize` crée les tableaux vides à la volée.
 
 ---
 
@@ -52,7 +53,8 @@ Un enregistrement `backups` : `{ id, ts, type: "auto"|"manual", label, schemaVer
   "risques": [],        "actifs": [],      "processus": [],
   "crise": [],          "scenarios_pra": [], "tests_pra": [],
   "prestataires": [],   "mco_actions": [], "audits": [],  "revues": [],
-  "evaluations": [],    "mesures": []       // v3 — chantier Référentiels
+  "evaluations": [],    "mesures": [],      // v3 — chantier Référentiels
+  "incidents": []       // v4 — chantier Incidents
 }
 ```
 
@@ -94,9 +96,10 @@ Suppression en cascade → supprime les `exigences` rattachées (et leurs `actio
 | `responsable` | string | |
 | `echeance` | date (ISO) | |
 | `priorite` | string | optionnel |
-| `exigence_id` | string | une action est liée à **l'un** de : exigence, risque ou évaluation |
+| `exigence_id` | string | une action est liée à **l'un** de : exigence, risque, évaluation ou incident |
 | `risque_id` | string | |
 | `evaluation_id` | string | lien vers une évaluation de référentiel (v3) |
+| `incident_id` | string | lien vers un incident de sécurité (v4) |
 
 ### Risque (inspiré EBIOS RM, méthode F×G×M) — `risques`
 | Champ | Type | Notes |
@@ -197,6 +200,23 @@ référentiels (le lien est porté par `evaluations[].mesure_id`). Évaluer la m
 
 `deleteMesure` délie les évaluations (`mesure_id` → null). `propagateMesure(id)`
 recopie statut + maturité sur les évaluations liées.
+
+### Incident de sécurité — `incidents` (v4)
+| Champ | Type | Notes |
+|-------|------|-------|
+| `id` | `"INC-..."` | |
+| `titre` | string | |
+| `type` | enum | hameçonnage, rançongiciel, intrusion, fuite de données, DoS, perte/vol, erreur, malveillance… |
+| `gravite` | enum | `faible` \| `moyenne` \| `élevée` \| `critique` |
+| `statut` | enum | `nouveau` \| `en cours` \| `résolu` \| `clôturé` |
+| `date_detection` / `date_resolution` | date ISO | |
+| `description`, `actions_immediates`, `cause_racine` | string | |
+| `actifs_touches` | string[] | ids d'`actifs` |
+| `risque_id` | string \| null | lien vers un `risque` EBIOS (le risque qui se matérialise) |
+| `declaration_anssi` / `declaration_cnil` | enum | `non requise` \| `à déclarer` \| `déclarée` (aide délais NIS2 24 h/72 h, RGPD 72 h) |
+
+Actions correctives via `action.incident_id`. `deleteIncident` supprime en cascade ses
+actions ; `deleteRisque`/`deleteActif` nettoient les références (`risque_id`, `actifs_touches`).
 
 ---
 

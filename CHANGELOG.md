@@ -5,6 +5,16 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Itération 8 — Registre des incidents de sécurité
+- **Nouveau module Incidents** (`/incidents`) : journal des incidents avec type, gravité,
+  statut, dates de détection/résolution, description, actions immédiates, cause racine,
+  actifs touchés, lien vers un **risque EBIOS**, et déclarations **ANSSI/CNIL**.
+- **Rappel des délais réglementaires** : bannière d'alerte (NIS2 24 h/72 h, RGPD 72 h)
+  lorsqu'une déclaration est en attente, avec le temps écoulé depuis la détection.
+- **Actions correctives** tracées jusqu'à l'incident (visibles dans le plan d'actions).
+- **Modèle v4** (`SCHEMA_VERSION` 3 → 4, migration transparente) : tableau `incidents`,
+  champ `action.incident_id`, cascades de nettoyage (risque / actif supprimés).
+
 ### Itération 7 — Couverture croisée & Déclaration d'applicabilité (SoA)
 - **Vue Couverture croisée** (`/couverture`) : part de chaque référentiel adossée à une
   mesure de sécurité + **matrice mesures × référentiels** mettant en évidence les mesures

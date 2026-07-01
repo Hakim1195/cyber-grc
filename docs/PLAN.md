@@ -55,10 +55,11 @@ Sous-itérations :
 > ⚠️ NE PAS embarquer le texte intégral des normes (ISO payant/protégé). Reformulations originales +
 > identifiants de clauses (« A.5.1 ») + titre court uniquement.
 
-## Chantier 4 — Registre des incidents (§5.1) — ⏳
-Champs : détection/résolution, type, gravité, actifs touchés, description, actions immédiates,
-cause racine, actions correctives (liées au plan d'action), statut, déclaration ANSSI/CNIL.
-Lien croisé incident ↔ risque EBIOS. Aide : délais NIS2 (24 h/72 h) & RGPD (72 h).
+## Chantier 4 — Registre des incidents (§5.1) — ✅ FAIT *(Itération 8)*
+Module `/incidents` : détection/résolution, type, gravité, actifs touchés, description,
+actions immédiates, cause racine, actions correctives (liées au plan d'action via
+`incident_id`), statut, déclarations ANSSI/CNIL avec **rappel des délais** (NIS2 24 h/72 h,
+RGPD 72 h). Lien croisé **incident ↔ risque EBIOS**. Schéma v4.
 
 ## Chantier 5 — Gestion documentaire des politiques (§5.2) — ⏳
 Registre (PSSI, charte…), version, propriétaire, **date de prochaine revue**, statut, lien référentiels.

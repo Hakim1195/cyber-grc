@@ -75,10 +75,11 @@ cyber-gouvernance_V4/
 
 - IndexedDB `cyber-grc-db` : store `kv` (`current` = instantané, chiffré si protection active ;
   `meta`), store `backups` (points de restauration versionnés, auto + manuels).
-- `SCHEMA_VERSION = 3` dans `datastore.js`. Migrations à l'import via `migratePayload`.
+- `SCHEMA_VERSION = 4` dans `datastore.js`. Migrations à l'import via `migratePayload`.
 - Entités (tableaux) : clients, exigences, actions, risques, actifs, processus, crise,
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
-  **evaluations** (auto-évaluations de référentiels) et **mesures** (pivot « Mesure de sécurité »).
+  **evaluations** (auto-évaluations de référentiels), **mesures** (pivot « Mesure de sécurité »)
+  et **incidents** (registre des incidents de sécurité).
 - Référentiels : catalogue **statique** (registre `js/data/referentiels.js` + fichiers `ref_*.js`),
   hors `data`. Livrés : ANSSI (42), ISO 27002 (93), NIS2 (10), DORA (15), AirCyber prépa (14).
   Ne pas embarquer le texte des normes (reformulations originales + identifiants de clauses).
@@ -110,6 +111,8 @@ tooltip ⓘ, fil d'Ariane, responsive, a11y) • **Référentiels 4a/4b** (sché
 `evaluations`/`mesures` ; référentiel **ANSSI 42 mesures** ; auto-évaluation + **radar de
 maturité** SVG ; pivot **« Mesure de sécurité »** + propagation « zéro double saisie »).
 
-**Prochain** : Référentiels **4c** — autres référentiels (ISO 27002 / NIS2 / DORA / AirCyber)
-+ **mapping croisé** + génération SoA ; puis incidents, gestion documentaire, RGPD,
-tableau de bord direction, améliorations modules, durcissement.
+**Fait (suite)** : Référentiels **4c** (ISO 27002, NIS2, DORA, AirCyber) + **couverture croisée**
++ **génération SoA** ; **Registre des incidents** (schéma v4, déclarations NIS2/RGPD).
+
+**Prochain** : gestion documentaire (politiques), RGPD (registre art. 30), tableau de bord
+direction consolidé, améliorations modules, durcissement transverse.

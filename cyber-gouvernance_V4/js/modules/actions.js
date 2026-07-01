@@ -57,6 +57,9 @@ const ActionsModule = (() => {
                 } else {
                     liaison = "Mesure introuvable";
                 }
+            } else if (a.incident_id) {
+                const inc = DataStore.getIncidentById ? DataStore.getIncidentById(a.incident_id) : null;
+                liaison = inc ? `Incident : ${inc.titre}` : "Incident introuvable";
             }
 
             let statusClass = "status-non-applicable";
@@ -225,6 +228,17 @@ const ActionsModule = (() => {
                     <p><strong>Liée à une mesure de référentiel :</strong><br>
                         <a href="#/referentiels/${ev.ref_id}" style="color: var(--accent); text-decoration: underline;">
                             ${ref ? ref.nom : ev.ref_id} — n°${ev.code}${exi ? " : " + exi.titre : ""}
+                        </a>
+                    </p>`;
+            }
+        } else if (action.incident_id) {
+            const inc = DataStore.getIncidentById ? DataStore.getIncidentById(action.incident_id) : null;
+            if (inc) {
+                contextTag = "Incident";
+                liaisonHtml = `
+                    <p><strong>Liée à un incident de sécurité :</strong><br>
+                        <a href="#/incidents/${inc.id}" style="color: var(--accent); text-decoration: underline;">
+                            ${inc.titre}
                         </a>
                     </p>`;
             }
