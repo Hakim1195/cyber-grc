@@ -5,6 +5,27 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 7 — Tableau de bord : historisation & courbes de tendance
+- **Nouvelle section « Évolution dans le temps »** sur le tableau de bord : les indicateurs clés
+  sont **historisés** et affichés en **courbes de tendance** (sparklines SVG maison, aucune
+  dépendance).
+- **Capture automatique** d'un **instantané global une fois par jour** (à l'ouverture du tableau
+  de bord), dédupliqué par date (un point par jour, le point du jour reste vivant). Les indicateurs
+  sont **toujours calculés sur le périmètre global** (indépendants du sélecteur de donneur d'ordre)
+  pour une série stable ; conservation bornée à 180 jours.
+- **6 tendances suivies** : conformité, maturité des référentiels, exposition résiduelle, risques
+  critiques, actions en retard, avancement des actions. Chaque tuile affiche la **valeur courante**,
+  la **mini-courbe** et la **variation** (dernier vs premier point) **colorée selon le sens
+  « meilleur »** (hausse verte pour la conformité, baisse verte pour l'exposition, etc.).
+- **Effacer l'historique** (bouton dédié, avec confirmation) — n'affecte pas les données GRC ;
+  un nouveau point est recapturé le jour même.
+- **Modèle de données (schéma v8)** : nouveau tableau **`history`** (`{ id, ts, date, metrics }`).
+  API DataStore `getHistory` / `recordDailySnapshot` (upsert du jour, sans réécriture si inchangé) /
+  `clearHistory`. Migration transparente (les backups v7 restent importables).
+- **Tests headless (Playwright)** : auto-capture au 1er rendu, injection d'un historique multi-jours
+  → 6 courbes tracées, variation colorée cohérente (hausse conformité verte, baisse exposition verte),
+  effacement (données GRC préservées), **export/import round-trip v8** ; **0 erreur console**.
+
 ### Chantier 3 — Correspondances inter-référentiels (mapping pré-rempli & éditable)
 - **Nouvelle vue `/mapping`** (« Correspondances ») : un **catalogue pré-rempli** d'équivalences
   entre les exigences des référentiels, regroupées par **thème de sécurité** (28 groupes couvrant

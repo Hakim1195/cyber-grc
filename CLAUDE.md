@@ -75,13 +75,14 @@ cyber-gouvernance_V4/
 
 - IndexedDB `cyber-grc-db` : store `kv` (`current` = instantané, chiffré si protection active ;
   `meta`), store `backups` (points de restauration versionnés, auto + manuels).
-- `SCHEMA_VERSION = 7` dans `datastore.js`. Migrations à l'import via `migratePayload`.
+- `SCHEMA_VERSION = 8` dans `datastore.js`. Migrations à l'import via `migratePayload`.
 - Entités (tableaux) : clients, exigences, actions, risques, actifs, processus, crise,
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
   **evaluations** (auto-évaluations de référentiels), **mesures** (pivot « Mesure de sécurité »),
   **incidents** (registre des incidents), **documents** (registre des politiques),
-  **traitements** (registre RGPD art. 30, mesures reliées au pivot)
-  et **mappings** (v7, surcouche des correspondances inter-référentiels ; catalogue par défaut statique).
+  **traitements** (registre RGPD art. 30, mesures reliées au pivot),
+  **mappings** (v7, surcouche des correspondances inter-référentiels ; catalogue par défaut statique)
+  et **history** (v8, indicateurs historisés — un point par jour pour les courbes de tendance).
 - Référentiels : catalogue **statique** (registre `js/data/referentiels.js` + fichiers `ref_*.js`),
   hors `data`. Livrés : ANSSI (42), ISO 27002 (93), NIS2 (10), DORA (15), AirCyber/BoostAerospace (234).
   Ne pas embarquer le texte des normes (reformulations originales + identifiants de clauses).
@@ -149,7 +150,13 @@ nettoyage des tests orphelins hérités (badge « Orphelin » + bandeau) ; helpe
 badges de clause colorés selon l'évaluation + cartographie par référentiel ; liens croisés
 Référentiels/Couverture. Tests Playwright (0 erreur, round-trip v7 + compat v6).
 
-**Prochain** : restes du Chantier 7 (historisation des tendances, docs à réviser au tableau de bord,
-conformité par donneur d'ordre, incidents récents) ; suite du Chantier 9 (factorisation des helpers
-dupliqués — suppression groupée, badges, confirmations, collecte de formulaire ; `QuotaExceededError`
-à l'import Excel ; i18n).
+**Fait (Chantier 7 — Historisation des tendances)** : **courbes d'évolution** sur le tableau de bord
+(section « Évolution dans le temps ») — **instantané global capturé une fois par jour** (`history`,
+schéma **v8**, dédup par date, conservation 180 j) ; 6 sparklines SVG maison (conformité, maturité,
+exposition résiduelle, risques critiques, actions en retard, avancement) avec **variation colorée**
+selon le sens « meilleur » ; bouton « Effacer l'historique ». Tests Playwright (0 erreur, round-trip v8).
+
+**Prochain** : restes du Chantier 7 (docs à réviser au tableau de bord, conformité par donneur
+d'ordre en vue comparative, liste des incidents récents) ; suite du Chantier 9 (factorisation des
+helpers dupliqués — suppression groupée, badges, confirmations, collecte de formulaire ;
+`QuotaExceededError` à l'import Excel ; i18n).

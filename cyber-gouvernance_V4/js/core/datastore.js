@@ -11,7 +11,7 @@ const DataStore = (() => {
     const LEGACY_AUDITS_KEY = "cyber-audits";
     const LEGACY_REVUES_KEY = "cyber-revues";
     const LOCAL_CURRENT_KEY = "cyber-current";      // repli (chiffré si clé) si IndexedDB indisponible
-    const SCHEMA_VERSION = 7;
+    const SCHEMA_VERSION = 8;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -28,8 +28,13 @@ const DataStore = (() => {
         "traitements",
         // v7 — Chantier 3 : surcouche utilisateur des correspondances inter-référentiels
         // (ajouts, modifications d'un groupe du catalogue, ou masquage via `_deleted`).
-        "mappings"
+        "mappings",
+        // v8 — Chantier 7 : historique des indicateurs (un instantané par jour) pour les
+        // courbes de tendance du tableau de bord.
+        "history"
     ];
+
+    const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
 
     const AUTOSAVE_DEBOUNCE_MS = 500;
     const AUTO_BACKUP_INTERVAL_MS = 10 * 60 * 1000; // un point auto au maximum toutes les 10 min
@@ -715,6 +720,45 @@ const DataStore = (() => {
     function resetMappings() { data.mappings = []; save(); }
 
     /* =========================
+       HISTORIQUE DES INDICATEURS — courbes de tendance (v8)
+       Un instantané par jour (clé `date` = "YYYY-MM-DD"). Le point du jour est mis à
+       jour tant que la journée court ; les points passés sont figés.
+       { id, ts, date, metrics: { conformite, maturite, expo, risques_crit,
+         actions_retard, avancement, incidents_ouverts } }
+    ========================== */
+    function dayKey(d) {
+        d = d || new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    }
+    // Historique trié par date croissante (pour l'affichage des courbes).
+    function getHistory() {
+        return data.history.slice().sort((a, b) => (a.date < b.date ? -1 : (a.date > b.date ? 1 : 0)));
+    }
+    // Enregistre/actualise l'instantané du jour. Ne réécrit rien si les indicateurs
+    // sont inchangés (évite des sauvegardes inutiles à chaque visite du tableau de bord).
+    function recordDailySnapshot(metrics) {
+        if (!metrics || typeof metrics !== "object") return null;
+        const date = dayKey();
+        const existing = data.history.find(h => h.date === date);
+        if (existing) {
+            if (JSON.stringify(existing.metrics) === JSON.stringify(metrics)) return existing;
+            existing.metrics = metrics; existing.ts = Date.now();
+        } else {
+            data.history.push({ id: "HIST-" + Date.now() + "-" + Math.floor(Math.random() * 1000), ts: Date.now(), date, metrics });
+            if (data.history.length > HISTORY_KEEP) {
+                data.history.sort((a, b) => (a.date < b.date ? -1 : 1));
+                data.history = data.history.slice(data.history.length - HISTORY_KEEP);
+            }
+        }
+        save();
+        return existing || data.history[data.history.length - 1];
+    }
+    function clearHistory() { data.history = []; save(); }
+
+    /* =========================
        EXPORT / IMPORT (FICHIER .json)
        Enveloppe standard :
        { format:"grc-backup", version, encrypted, createdAt, app, payload|kdf+cipher }
@@ -781,7 +825,8 @@ const DataStore = (() => {
         // v4 → v5 : ajout de `documents` → normalize crée le tableau vide.
         // v5 → v6 : ajout de `traitements` (RGPD) → normalize crée le tableau vide.
         // v6 → v7 : ajout de `mappings` (surcouche des correspondances) → normalize crée le tableau vide.
-        // (Ajouter ici les futures migrations : if (v < 8) { ... })
+        // v7 → v8 : ajout de `history` (indicateurs historisés) → normalize crée le tableau vide.
+        // (Ajouter ici les futures migrations : if (v < 9) { ... })
         return p;
     }
 
@@ -895,6 +940,9 @@ const DataStore = (() => {
 
         // Correspondances inter-référentiels (surcouche utilisateur)
         getMappings, getMappingById, upsertMapping, deleteMapping, resetMappings,
+
+        // Historique des indicateurs (courbes de tendance)
+        getHistory, recordDailySnapshot, clearHistory,
 
         // Sauvegarde / restauration
         exportSnapshot, exportEncrypted, parseImport, applyImport,

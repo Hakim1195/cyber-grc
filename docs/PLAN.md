@@ -89,9 +89,13 @@ du pivot ; registre **imprimable**. Schéma v6.
       Export/impression PDF déjà branché (`ExportPdfService`).
 - ✅ **Incidents intégrés** *(it. 10)* : tuile de couverture (ouverts + gravité) et **alerte
       de posture** sur les **déclarations réglementaires en attente** (NIS2/RGPD).
-- ⏳ **Reste** : historisation à chaque snapshot (courbes de tendance), **docs à réviser**
-      (dépend du chantier 5), conformité **par donneur d'ordre** en vue comparative,
-      et une **liste des incidents récents** détaillée sur le tableau de bord.
+- ✅ **Historisation & courbes de tendance** *(it. 21)* : section « Évolution dans le temps » —
+      **instantané global capturé une fois par jour** (`history`, schéma **v8**, dédup par date,
+      conservation 180 j) ; 6 **sparklines SVG maison** (conformité, maturité, exposition résiduelle,
+      risques critiques, actions en retard, avancement) avec **variation colorée** selon le sens
+      « meilleur » ; bouton « Effacer l'historique » (n'affecte pas les données GRC).
+- ⏳ **Reste** : **docs à réviser** (dépend du chantier 5), conformité **par donneur d'ordre**
+      en vue comparative, et une **liste des incidents récents** détaillée sur le tableau de bord.
 
 ## Chantier 8 — Améliorations modules existants (§5.5) — ✅ FAIT
 - ✅ **Matrice EBIOS** : **export image (PNG/SVG)** (SVG autonome → PNG via canvas, sans dépendance)

@@ -876,6 +876,23 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
 .map-edit-actions { display: flex; gap: 10px; }
 
 /* =========================================
+   TABLEAU DE BORD — TENDANCES (courbes d'évolution)
+   ========================================= */
+.trend-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.trend-clear { background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 5px 12px; font-size: 0.8rem; border-radius: var(--radius-sm); }
+.trend-clear:hover { color: var(--color-danger); border-color: var(--color-danger); background: var(--tint-crit); }
+.trend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+.trend-tile { background: var(--bg-body); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+.trend-tile__lbl { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
+.trend-tile__val { font-size: 1.7rem; font-weight: 700; color: var(--text-main); font-variant-numeric: tabular-nums; margin: 4px 0 8px; line-height: 1.1; }
+.trend-tile__val small { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-left: 1px; }
+.trend-delta { font-size: 0.78rem; font-weight: 700; margin-left: 6px; white-space: nowrap; }
+.trend-tile__spark { height: 54px; }
+.trend-spark { width: 100%; height: 54px; display: block; }
+.trend-empty { font-size: 0.75rem; color: var(--text-muted); font-style: italic; display: block; padding-top: 16px; }
+.trend-hint { font-size: 0.8rem; color: var(--text-muted); margin: 12px 0 0; }
+
+/* =========================================
    TABLEAU DE BORD ENRICHI — COCKPIT GRC
    (bandeau posture, KPI strip, donut/bars/heatmap SVG,
     liste de veille, tuiles de couverture du dispositif)

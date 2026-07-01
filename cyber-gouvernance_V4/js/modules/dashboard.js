@@ -125,6 +125,57 @@ const DashboardModule = (() => {
         return `<svg viewBox="0 0 ${W} ${H}" class="dash-heat-svg" role="img" aria-label="Cartographie des risques par fréquence et gravité">${cells}${yLbl}${xLbl}${xCap}</svg>`;
     }
 
+    // Mini-courbe (sparkline) SVG à partir d'une série de valeurs. Échelle auto
+    // (min/max de la série) ; aire légère + ligne + point final.
+    function sparklineSvg(values, color) {
+        const W = 240, H = 54, pad = 5;
+        const n = values.length;
+        if (n < 2) return "";
+        let min = Math.min.apply(null, values), max = Math.max.apply(null, values);
+        if (min === max) { min -= 1; max += 1; }               // série plate → ligne centrée
+        const x = i => pad + i * (W - 2 * pad) / (n - 1);
+        const y = v => H - pad - (v - min) / (max - min) * (H - 2 * pad);
+        const pts = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+        const area = `${pad.toFixed(1)},${(H - pad).toFixed(1)} ${pts} ${(W - pad).toFixed(1)},${(H - pad).toFixed(1)}`;
+        const last = values[n - 1];
+        return `<svg viewBox="0 0 ${W} ${H}" class="trend-spark" role="img" aria-label="Courbe de tendance">
+            <polygon points="${area}" fill="${color}" fill-opacity="0.10"/>
+            <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+            <circle cx="${x(n - 1).toFixed(1)}" cy="${y(last).toFixed(1)}" r="3" fill="${color}"/>
+        </svg>`;
+    }
+
+    // Tuile de tendance : valeur courante + variation (colorée selon le sens
+    // « meilleur ») + mini-courbe. cfg = { label, values[], higherIsBetter, unit,
+    // decimals, help, color }.
+    function trendTile(cfg) {
+        const vals = (cfg.values || []).map(v => Number(v) || 0);
+        const n = vals.length;
+        const cur = n ? vals[n - 1] : 0;
+        const dec = cfg.decimals || 0;
+        const unit = cfg.unit || "";
+        const color = cfg.color || "var(--accent)";
+
+        let deltaHtml = "";
+        if (n >= 2) {
+            const delta = cur - vals[0];
+            if (Math.abs(delta) < Math.pow(10, -dec) / 2) {
+                deltaHtml = `<span class="trend-delta" style="color:var(--text-muted);">→ stable</span>`;
+            } else {
+                const good = cfg.higherIsBetter ? delta > 0 : delta < 0;
+                const arrow = delta > 0 ? "▲" : "▼";
+                const col = good ? "var(--color-success)" : "var(--color-danger)";
+                deltaHtml = `<span class="trend-delta" style="color:${col};">${arrow} ${Math.abs(delta).toFixed(dec)}${unit}</span>`;
+            }
+        }
+        const spark = sparklineSvg(vals, color);
+        return `<div class="trend-tile">
+            <div class="trend-tile__lbl">${escapeHtml(cfg.label)} ${cfg.help ? Help.tip(cfg.help) : ""}</div>
+            <div class="trend-tile__val">${cur.toFixed(dec)}${unit ? `<small>${escapeHtml(unit)}</small>` : ""} ${deltaHtml}</div>
+            <div class="trend-tile__spark">${spark || `<span class="trend-empty">La courbe apparaît dès le 2ᵉ point.</span>`}</div>
+        </div>`;
+    }
+
     // Tuile de couverture cliquable (valeur, libellé, sous-texte, route, teinte).
     function covTile(value, label, sub, route, tone) {
         return `
@@ -171,6 +222,42 @@ const DashboardModule = (() => {
                 conformite: gApp ? Math.round((gConf / gApp) * 100) : null
             }
         };
+    }
+
+    /* =========================
+       INSTANTANÉ GLOBAL (pour l'historique des tendances)
+       Toujours calculé sur le périmètre GLOBAL (indépendant du sélecteur de client)
+       pour une série temporelle stable.
+    ========================== */
+    function computeGlobalSnapshot() {
+        const norm = s => String(s || "").toLowerCase();
+
+        const exAll = DataStore.getExigences();
+        const nApplic = exAll.filter(e => e.statut_conformite !== "non applicable").length;
+        const nConf = exAll.filter(e => e.statut_conformite === "conforme").length;
+        const conformite = nApplic ? Math.round((nConf / nApplic) * 100) : 0;
+
+        const ref = computeReferentiels();
+        const maturite = Number((ref.global.maturite || 0).toFixed(2));
+
+        const risques = DataStore.getRisques();
+        const expo = Number(risques.reduce((a, r) => a + (r.score_residuel || 0), 0).toFixed(2));
+        const risques_crit = risques.filter(r => (r.score_residuel || 0) >= 3).length;
+
+        const actions = DataStore.getActions();
+        const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+        const actions_retard = actions.filter(a => {
+            if (norm(a.statut) === "terminée" || !a.echeance) return false;
+            const d = new Date(a.echeance); d.setHours(0, 0, 0, 0);
+            return d.getTime() < t0.getTime();
+        }).length;
+        const termine = actions.filter(a => norm(a.statut) === "terminée").length;
+        const avancement = actions.length ? Math.round((termine / actions.length) * 100) : 0;
+
+        const incidents = (typeof DataStore.getIncidents === "function") ? DataStore.getIncidents() : [];
+        const incidents_ouverts = incidents.filter(i => { const s = norm(i.statut); return s === "nouveau" || s === "en cours"; }).length;
+
+        return { conformite, maturite, expo, risques_crit, actions_retard, avancement, incidents_ouverts };
     }
 
     /* =========================
@@ -257,6 +344,12 @@ const DashboardModule = (() => {
         /* ---- Référentiels (maturité) ---- */
         const ref = computeReferentiels();
 
+        /* ---- Historisation des tendances (un instantané GLOBAL par jour) ---- */
+        if (typeof DataStore.recordDailySnapshot === "function") {
+            DataStore.recordDailySnapshot(computeGlobalSnapshot());
+        }
+        const history = (typeof DataStore.getHistory === "function") ? DataStore.getHistory() : [];
+
         /* ---- Couverture du dispositif ---- */
         const processusCritiques = processus.filter(p => norm(p.criticite) === "critique").length;
         const testsSorted = [...tests].filter(t => t.date).sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -338,6 +431,30 @@ const DashboardModule = (() => {
                     <div class="kt-lbl">Actifs cartographiés</div>
                     <div class="kt-sub">${actifsCritiques} critique(s)</div>
                 </div>
+            </div>`;
+
+        // -- Carte Tendances (courbes d'évolution) --
+        const hSeries = key => history.map(h => (h.metrics && h.metrics[key] != null) ? Number(h.metrics[key]) : 0);
+        const nDays = history.length;
+        const trendTiles = [
+            trendTile({ label: "Conformité", values: hSeries("conformite"), higherIsBetter: true, unit: "%", decimals: 0, color: "var(--color-success)", help: "Part des exigences applicables jugées conformes, sur l'ensemble des périmètres." }),
+            trendTile({ label: "Maturité référentiels", values: hSeries("maturite"), higherIsBetter: true, unit: "/5", decimals: 1, color: "var(--primary)", help: "Maturité moyenne (CMMI 0-5) des mesures applicables auto-évaluées." }),
+            trendTile({ label: "Exposition résiduelle", values: hSeries("expo"), higherIsBetter: false, decimals: 1, color: "var(--color-danger)", help: "Somme des scores de risque résiduel — plus c'est bas, mieux c'est." }),
+            trendTile({ label: "Risques critiques", values: hSeries("risques_crit"), higherIsBetter: false, decimals: 0, color: "var(--color-warning)", help: "Nombre de risques au résiduel ≥ 3 (critiques et très critiques)." }),
+            trendTile({ label: "Actions en retard", values: hSeries("actions_retard"), higherIsBetter: false, decimals: 0, color: "var(--color-danger)", help: "Actions non terminées dont l'échéance est dépassée." }),
+            trendTile({ label: "Avancement actions", values: hSeries("avancement"), higherIsBetter: true, unit: "%", decimals: 0, color: "var(--accent)", help: "Part des actions terminées sur le total." })
+        ].join("");
+        const trendsHint = nDays < 2
+            ? `L'historique se constitue automatiquement (un point par jour). Les courbes s'afficheront dès le 2ᵉ jour — actuellement <strong>${nDays}</strong> point${nDays > 1 ? "s" : ""}.`
+            : `Évolution sur <strong>${nDays}</strong> jour(s) d'historique — la variation compare le dernier point au premier de la série.`;
+        const trendsCard = `
+            <div class="dashboard-card wide-card">
+                <div class="trend-head">
+                    <h3 style="margin:0;">Tendances ${Help.tip("Évolution des indicateurs clés dans le temps. Un instantané global est capturé automatiquement une fois par jour, à l'ouverture du tableau de bord.")}</h3>
+                    <button id="clearHistoryBtn" class="trend-clear no-print" title="Effacer l'historique des tendances (n'affecte pas vos données GRC)">Effacer l'historique</button>
+                </div>
+                <div class="trend-grid">${trendTiles}</div>
+                <p class="trend-hint">${trendsHint}</p>
             </div>`;
 
         // -- Carte Conformité (donut) --
@@ -567,6 +684,11 @@ const DashboardModule = (() => {
 
                 ${kpiStrip}
 
+                <div class="dash-section-title">Évolution dans le temps</div>
+                <div class="dashboard-grid">
+                    ${trendsCard}
+                </div>
+
                 <div class="dash-section-title">Conformité &amp; maturité</div>
                 <div class="dashboard-grid">
                     ${confCard}
@@ -601,6 +723,19 @@ const DashboardModule = (() => {
         app.querySelectorAll(".watch-item").forEach(li => {
             li.onclick = () => Router.navigateTo(`/actions/${li.dataset.id}`);
         });
+
+        const clearHistBtn = document.getElementById("clearHistoryBtn");
+        if (clearHistBtn) {
+            clearHistBtn.onclick = () => {
+                const n = (typeof DataStore.getHistory === "function") ? DataStore.getHistory().length : 0;
+                if (!n) { if (window.showToast) window.showToast("Aucun historique à effacer.", "info"); return; }
+                if (confirm(`Effacer l'historique des tendances ?\n${n} point(s) de mesure seront supprimés. Vos données GRC ne sont pas affectées ; un nouveau point sera recréé aujourd'hui.`)) {
+                    DataStore.clearHistory();
+                    if (window.showToast) window.showToast("Historique des tendances effacé.", "success");
+                    render();
+                }
+            };
+        }
 
         const excelBtn = document.getElementById("exportExcelBtn");
         if (excelBtn) {

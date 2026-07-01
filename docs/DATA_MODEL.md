@@ -4,12 +4,13 @@
 > Application **100 % frontend** : toutes les données vivent dans le navigateur
 > (IndexedDB, avec repli localStorage). Aucune donnée ne quitte le poste.
 
-Version de schéma courante : **`SCHEMA_VERSION = 7`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 8`** (défini dans `js/core/datastore.js`).
 > v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`.
 > v4 (chantier Incidents) : ajout du tableau `incidents`.
 > v5 (chantier Documentaire) : ajout du tableau `documents`.
 > v6 (chantier RGPD) : ajout du tableau `traitements`.
 > v7 (chantier 3 Correspondances) : ajout du tableau `mappings` (surcouche des correspondances inter-référentiels).
+> v8 (chantier 7 Tendances) : ajout du tableau `history` (indicateurs historisés, un point par jour).
 > Migrations transparentes — `normalize` crée les tableaux vides à la volée.
 
 ---
@@ -60,7 +61,8 @@ Un enregistrement `backups` : `{ id, ts, type: "auto"|"manual", label, schemaVer
   "incidents": [],      // v4 — chantier Incidents
   "documents": [],      // v5 — chantier Documentaire
   "traitements": [],    // v6 — chantier RGPD (article 30)
-  "mappings": []        // v7 — chantier 3 (surcouche des correspondances inter-référentiels)
+  "mappings": [],       // v7 — chantier 3 (surcouche des correspondances inter-référentiels)
+  "history": []         // v8 — chantier 7 (indicateurs historisés : courbes de tendance)
 }
 ```
 
@@ -282,6 +284,25 @@ groupes personnalisés. `resetMappings()` vide la surcouche (retour au catalogue
 La **propagation** relie toutes les exigences d'un groupe à une même `mesure`
 (`evaluations[].mesure_id`) ou leur applique un même statut (`upsertEvaluation`) —
 d'où l'accélération de la couverture croisée et de la SoA.
+
+### Point d'historique — `history` (v8, courbes de tendance)
+Instantané **global** des indicateurs clés, **un enregistrement par jour** (clé
+`date`). Alimente les courbes de tendance du tableau de bord. Le point du jour est
+actualisé tant que la journée court ; les points passés sont figés. Conservation
+bornée (`HISTORY_KEEP = 180` jours, les plus récents).
+
+| Champ | Type | Notes |
+|-------|------|-------|
+| `id` | `"HIST-..."` | |
+| `ts` | number | horodatage de la dernière écriture du point |
+| `date` | string | `"YYYY-MM-DD"` (clé métier, un point par jour) |
+| `metrics` | objet | `{ conformite (%), maturite (0-5), expo, risques_crit, actions_retard, avancement (%), incidents_ouverts }` |
+
+Écriture via `recordDailySnapshot(metrics)` (upsert du jour, **sans réécriture si
+inchangé**), lecture triée via `getHistory()`, remise à zéro via `clearHistory()`.
+Les indicateurs sont **toujours calculés sur le périmètre global** (indépendants du
+sélecteur de donneur d'ordre) pour une série stable. Effacer l'historique n'affecte
+pas les données GRC.
 
 ---
 
