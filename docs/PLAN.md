@@ -79,7 +79,7 @@ Module `/rgpd` : article 30 simplifié (finalité, base légale, données/sensib
 destinataires, transfert hors UE, conservation) ; mesures de sécurité = entités **« Mesure »**
 du pivot ; registre **imprimable**. Schéma v6.
 
-## Chantier 7 — Tableau de bord direction consolidé (§5.4) — 🟡 en grande partie *(it. 10)*
+## Chantier 7 — Tableau de bord direction consolidé (§5.4) — ✅ FAIT *(it. 10, 21, 22)*
 - ✅ **Cockpit GRC 360°** (`js/modules/dashboard.js`) : bandeau de posture direction,
       indicateurs clés (KPI), **conformité** (donut), **maturité globale + par référentiel**
       (barres), **profil de risque** résiduel (donut) + **cartographie F×G** (heatmap SVG),
@@ -94,8 +94,10 @@ du pivot ; registre **imprimable**. Schéma v6.
       conservation 180 j) ; 6 **sparklines SVG maison** (conformité, maturité, exposition résiduelle,
       risques critiques, actions en retard, avancement) avec **variation colorée** selon le sens
       « meilleur » ; bouton « Effacer l'historique » (n'affecte pas les données GRC).
-- ⏳ **Reste** : **docs à réviser** (dépend du chantier 5), conformité **par donneur d'ordre**
-      en vue comparative, et une **liste des incidents récents** détaillée sur le tableau de bord.
+- ✅ **Suivi & échéances + comparatif** *(it. 22)* : **liste des incidents récents** (5 derniers,
+      badge « À déclarer » NIS2/RGPD), **documents à réviser** (revue échue/proche ou statut « à
+      réviser »/« obsolète », compteur d'alerte) et **conformité comparative par donneur d'ordre**
+      (barres triées interne + clients). Listes cliquables vers les fiches.
 
 ## Chantier 8 — Améliorations modules existants (§5.5) — ✅ FAIT
 - ✅ **Matrice EBIOS** : **export image (PNG/SVG)** (SVG autonome → PNG via canvas, sans dépendance)

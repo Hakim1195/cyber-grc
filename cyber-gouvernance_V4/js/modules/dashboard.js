@@ -359,6 +359,37 @@ const DashboardModule = (() => {
         const constatsNC = audits.reduce((n, a) => n + (Array.isArray(a.constats) ? a.constats.filter(c => c.type === "Mineure" || c.type === "Majeure").length : 0), 0);
         const mesuresConformes = mesures.filter(m => m.statut === "conforme").length;
 
+        /* ---- Conformité par donneur d'ordre (comparatif) ---- */
+        const confOf = exs => {
+            const applic = exs.filter(e => e.statut_conformite !== "non applicable").length;
+            const conf = exs.filter(e => e.statut_conformite === "conforme").length;
+            return { pct: applic ? Math.round((conf / applic) * 100) : null, conf, applic, total: exs.length };
+        };
+        const allExig = DataStore.getExigences();
+        const clientConfRows = [];
+        const internes = allExig.filter(e => !e.client_id);
+        if (internes.length) clientConfRows.push(Object.assign({ nom: "Exigences internes", id: null }, confOf(internes)));
+        clients.forEach(c => {
+            const exs = allExig.filter(e => e.client_id === c.id);
+            if (exs.length) clientConfRows.push(Object.assign({ nom: c.nom, id: c.id }, confOf(exs)));
+        });
+        clientConfRows.sort((a, b) => (b.pct == null ? -1 : b.pct) - (a.pct == null ? -1 : a.pct));
+
+        /* ---- Incidents récents (5 derniers, par date de détection) ---- */
+        const incidentsRecents = incidents.filter(i => i.date_detection)
+            .slice().sort((a, b) => new Date(b.date_detection) - new Date(a.date_detection)).slice(0, 5);
+
+        /* ---- Documents à réviser (revue échue/proche, ou statut à réviser/obsolète) ---- */
+        const documents = (typeof DataStore.getDocuments === "function") ? DataStore.getDocuments() : [];
+        const docsRevision = documents.map(d => {
+            let days = null;
+            if (d.date_revue) { const dd = new Date(d.date_revue); dd.setHours(0, 0, 0, 0); days = Math.round((dd - today) / DAY); }
+            return Object.assign({}, d, { _days: days });
+        }).filter(d => norm(d.statut) === "à réviser" || norm(d.statut) === "obsolète" || (d._days !== null && d._days <= 30))
+            .sort((a, b) => (a._days == null ? 99999 : a._days) - (b._days == null ? 99999 : b._days))
+            .slice(0, 5);
+        const docsAlertCount = docsRevision.filter(d => norm(d.statut) === "à réviser" || norm(d.statut) === "obsolète" || (d._days !== null && d._days < 0)).length;
+
         /* ---- Contexte + état vide ---- */
         let contextName = "Vue globale (tous périmètres)";
         if (currentClient !== "global") {
@@ -585,7 +616,7 @@ const DashboardModule = (() => {
                         ? `<span class="wi-badge late">Retard ${Math.abs(a._days)} j</span>`
                         : `<span class="wi-badge soon">${a._days === 0 ? "Aujourd'hui" : "J-" + a._days}</span>`;
                     const ech = a.echeance ? new Date(a.echeance).toLocaleDateString("fr-FR") : "—";
-                    return `<li class="watch-item" data-id="${escapeHtml(a.id)}">
+                    return `<li class="watch-item dash-action-item" data-id="${escapeHtml(a.id)}">
                         <span class="wi-prio" style="background:${prioColor(a.priorite || "Moyenne")};" title="Priorité ${escapeHtml(a.priorite || "Moyenne")}"></span>
                         <span class="wi-body">
                             <span class="wi-title" title="${escapeHtml(a.titre || "")}">${escapeHtml(a.titre || "(sans titre)")}</span>
@@ -643,6 +674,67 @@ const DashboardModule = (() => {
                 </div>
             </div>`;
 
+        // -- Carte Conformité par donneur d'ordre (comparatif) --
+        const clientConfCard = clientConfRows.length ? `
+            <div class="dashboard-card wide-card">
+                <h3 style="margin-top:0;">Conformité par donneur d'ordre ${Help.tip("Comparaison du taux de conformité (exigences conformes / applicables) entre vos donneurs d'ordre et vos exigences internes. Utile pour un sous-traitant multi-clients.")}</h3>
+                ${clientConfRows.map(r => hbar(
+                    r.nom,
+                    r.pct == null ? 0 : r.pct, 100,
+                    r.pct == null ? "var(--color-gray)" : (r.pct >= 80 ? "var(--color-success)" : r.pct >= 50 ? "var(--color-warning)" : "var(--color-danger)"),
+                    r.pct == null ? "—" : r.pct + "%",
+                    `${r.conf}/${r.applic} conforme(s)${r.total !== r.applic ? " · " + (r.total - r.applic) + " N/A" : ""}`
+                )).join("")}
+            </div>` : "";
+
+        // -- Carte large : Incidents récents + Documents à réviser --
+        const gravColor = g => { g = norm(g); return g === "critique" ? "var(--color-danger)" : g === "élevée" ? "var(--color-warning)" : g === "moyenne" ? "var(--color-info)" : "var(--color-gray)"; };
+        const incidentsRecentsHtml = incidentsRecents.length === 0
+            ? `<p class="chart-empty">Aucun incident enregistré.</p>`
+            : `<ul class="watch-list">${incidentsRecents.map(i => {
+                const decl = norm(i.declaration_anssi) === "à déclarer" || norm(i.declaration_cnil) === "à déclarer";
+                const date = i.date_detection ? new Date(i.date_detection).toLocaleDateString("fr-FR") : "—";
+                return `<li class="watch-item dash-incident-item" data-id="${escapeHtml(i.id)}">
+                    <span class="wi-prio" style="background:${gravColor(i.gravite)};" title="Gravité ${escapeHtml(i.gravite || "")}"></span>
+                    <span class="wi-body">
+                        <span class="wi-title" title="${escapeHtml(i.titre || "")}">${escapeHtml(i.titre || "(sans titre)")}</span>
+                        <span class="wi-meta">${escapeHtml(i.type || "incident")} · détecté le ${date} · ${escapeHtml(i.statut || "")}</span>
+                    </span>
+                    ${decl ? `<span class="wi-badge late">À déclarer</span>` : ""}
+                </li>`;
+            }).join("")}</ul>`;
+        const docsRevisionHtml = docsRevision.length === 0
+            ? `<p class="chart-empty">Aucune revue documentaire en attente. 👍</p>`
+            : `<ul class="watch-list">${docsRevision.map(d => {
+                const late = d._days !== null && d._days < 0;
+                const soon = d._days !== null && d._days >= 0 && d._days <= 30;
+                const dotColor = late ? "var(--color-danger)" : soon ? "var(--color-warning)" : "var(--color-info)";
+                let badge = "";
+                if (late) badge = `<span class="wi-badge late">Retard ${Math.abs(d._days)} j</span>`;
+                else if (soon) badge = `<span class="wi-badge soon">${d._days === 0 ? "Aujourd'hui" : "J-" + d._days}</span>`;
+                else if (norm(d.statut) === "à réviser" || norm(d.statut) === "obsolète") badge = `<span class="wi-badge late">${escapeHtml(d.statut)}</span>`;
+                const rev = d.date_revue ? new Date(d.date_revue).toLocaleDateString("fr-FR") : "—";
+                return `<li class="watch-item dash-doc-item" data-id="${escapeHtml(d.id)}">
+                    <span class="wi-prio" style="background:${dotColor};" title="${escapeHtml(d.statut || "")}"></span>
+                    <span class="wi-body">
+                        <span class="wi-title" title="${escapeHtml(d.titre || "")}">${escapeHtml(d.titre || "(sans titre)")}</span>
+                        <span class="wi-meta">${escapeHtml(d.type || "document")}${d.version ? " · v" + escapeHtml(d.version) : ""} · revue ${rev}</span>
+                    </span>
+                    ${badge}
+                </li>`;
+            }).join("")}</ul>`;
+        const suiviCard = `
+            <div class="dashboard-card wide-card split-card">
+                <div class="split-col">
+                    <h3 style="margin-top:0;">Incidents récents ${Help.tip("Les derniers incidents de sécurité déclarés, du plus récent au plus ancien. « À déclarer » signale une obligation réglementaire en attente (NIS2/RGPD).")}</h3>
+                    ${incidentsRecentsHtml}
+                </div>
+                <div class="split-col">
+                    <h3 style="margin-top:0;">Documents à réviser ${Help.tip("Politiques et documents dont la revue est échue ou proche (≤ 30 jours), ou marqués « à réviser » / « obsolète ».")}${docsAlertCount ? ` <span class="badge" style="background:var(--color-danger); color:#fff;">${docsAlertCount}</span>` : ""}</h3>
+                    ${docsRevisionHtml}
+                </div>
+            </div>`;
+
         // -- État vide (onboarding) --
         const emptyHint = aucuneDonnee ? `
             <div class="posture-banner is-warning" style="margin-bottom:1.5rem;">
@@ -694,6 +786,7 @@ const DashboardModule = (() => {
                     ${confCard}
                     ${refCard}
                 </div>
+                ${clientConfCard ? `<div class="dashboard-grid" style="margin-top:1.5rem;">${clientConfCard}</div>` : ""}
 
                 <div class="dash-section-title">Risques &amp; plan d'actions</div>
                 <div class="dashboard-grid">
@@ -705,6 +798,11 @@ const DashboardModule = (() => {
                 </div>
                 <div class="dashboard-grid" style="margin-top:1.5rem;">
                     ${watchCard}
+                </div>
+
+                <div class="dash-section-title">Suivi &amp; échéances</div>
+                <div class="dashboard-grid">
+                    ${suiviCard}
                 </div>
 
                 <div class="dash-section-title">Dispositif &amp; continuité</div>
@@ -720,8 +818,14 @@ const DashboardModule = (() => {
         app.querySelectorAll(".clickable-risk").forEach(li => {
             li.onclick = () => Router.navigateTo(`/risques/${li.dataset.id}`);
         });
-        app.querySelectorAll(".watch-item").forEach(li => {
+        app.querySelectorAll(".dash-action-item").forEach(li => {
             li.onclick = () => Router.navigateTo(`/actions/${li.dataset.id}`);
+        });
+        app.querySelectorAll(".dash-incident-item").forEach(li => {
+            li.onclick = () => Router.navigateTo(`/incidents/${li.dataset.id}`);
+        });
+        app.querySelectorAll(".dash-doc-item").forEach(li => {
+            li.onclick = () => Router.navigateTo(`/documents/${li.dataset.id}`);
         });
 
         const clearHistBtn = document.getElementById("clearHistoryBtn");

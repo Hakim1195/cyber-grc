@@ -156,7 +156,10 @@ schéma **v8**, dédup par date, conservation 180 j) ; 6 sparklines SVG maison (
 exposition résiduelle, risques critiques, actions en retard, avancement) avec **variation colorée**
 selon le sens « meilleur » ; bouton « Effacer l'historique ». Tests Playwright (0 erreur, round-trip v8).
 
-**Prochain** : restes du Chantier 7 (docs à réviser au tableau de bord, conformité par donneur
-d'ordre en vue comparative, liste des incidents récents) ; suite du Chantier 9 (factorisation des
-helpers dupliqués — suppression groupée, badges, confirmations, collecte de formulaire ;
-`QuotaExceededError` à l'import Excel ; i18n).
+**Fait (Chantier 7 — Suivi & échéances + comparatif → chantier 7 COMPLET)** : sur le tableau de bord,
+**liste des incidents récents** (5 derniers, badge « À déclarer » NIS2/RGPD), **documents à réviser**
+(revue échue/proche ou statut « à réviser »/« obsolète », compteur d'alerte) et **conformité
+comparative par donneur d'ordre** (barres triées interne + clients). Listes cliquables. Tests Playwright.
+
+**Prochain** : Chantier 9 (factorisation des helpers dupliqués — suppression groupée, badges,
+confirmations, collecte de formulaire ; `QuotaExceededError` à l'import Excel ; i18n).

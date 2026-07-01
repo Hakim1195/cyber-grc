@@ -5,6 +5,20 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 7 — Tableau de bord : suivi, échéances & comparatif par donneur d'ordre
+- **Incidents récents** : nouvelle liste (5 derniers incidents par date de détection, du plus récent
+  au plus ancien) avec gravité, type, statut et **badge « À déclarer »** quand une déclaration
+  réglementaire (NIS2/RGPD) est en attente. Chaque ligne ouvre la fiche incident.
+- **Documents à réviser** : remontée des alertes de la gestion documentaire (chantier 5) — documents
+  dont la **revue est échue ou proche** (≤ 30 j) ou au statut « à réviser » / « obsolète », triés par
+  urgence, avec badges (retard / J-n) et **compteur d'alerte** dans le titre. Lignes cliquables.
+- **Conformité par donneur d'ordre** : vue **comparative** (barres triées) du taux de conformité de
+  chaque donneur d'ordre et des exigences internes — pertinent pour un sous-traitant multi-clients.
+- Regroupées dans une nouvelle section **« Suivi & échéances »** ; aucun changement de schéma.
+- **Tests headless (Playwright)** : ordre des incidents, badge « À déclarer », filtrage/compteur des
+  documents, taux par client (Alpha 50 %, Beta/interne 100 %), navigation vers les fiches ;
+  **0 erreur console**. → **Chantier 7 complet**.
+
 ### Chantier 7 — Tableau de bord : historisation & courbes de tendance
 - **Nouvelle section « Évolution dans le temps »** sur le tableau de bord : les indicateurs clés
   sont **historisés** et affichés en **courbes de tendance** (sparklines SVG maison, aucune
