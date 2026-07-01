@@ -79,8 +79,6 @@ const SyntheseModule = (() => {
         app.innerHTML = `
             <section class="page synthese-page" style="max-width: 900px; margin: auto;">
 
-                <img src="assets/logo/logo-dedienne.png" alt="Dedienne Aerospace" style="height: 46px; margin-bottom: 18px;" />
-
                 <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid var(--primary); padding-bottom: 10px; margin-bottom: 2rem;">
                     <div>
                         <h1 style="margin-bottom: 5px; color: var(--primary);">Note de Synthèse</h1>

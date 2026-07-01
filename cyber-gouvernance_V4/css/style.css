@@ -145,13 +145,26 @@ a { text-decoration: none; color: inherit; }
 .main-nav li { margin-bottom: 0.5rem; }
 
 .main-nav a {
-    display: block;
-    padding: 0.8rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0.7rem 1rem;
     border-radius: var(--radius);
     transition: var(--transition);
     font-size: 0.95rem;
-    opacity: 0.8;
+    color: var(--sidebar-text);
+    opacity: 1;
 }
+
+.nav-icon {
+    width: 19px;
+    height: 19px;
+    flex-shrink: 0;
+    opacity: 0.9;
+}
+
+.main-nav a:hover .nav-icon,
+.main-nav a.active .nav-icon { opacity: 1; }
 
 .main-nav a:hover, .main-nav a.active {
     background-color: var(--primary);
