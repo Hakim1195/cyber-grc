@@ -109,7 +109,7 @@ const DocumentsModule = (() => {
         document.getElementById("save").onclick = () => {
             const doc = collectForm();
             if (!doc) return;
-            doc.id = "DOC-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+            doc.id = UI.genId("DOC");
             doc.updatedAt = Date.now();
             DataStore.addDocument(doc);
             if (window.showToast) window.showToast("Document enregistré.", "success");

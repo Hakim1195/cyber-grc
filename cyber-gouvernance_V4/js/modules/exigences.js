@@ -181,7 +181,7 @@ const ExigencesModule = (() => {
             }
 
             DataStore.addExigence({
-                id: "EX-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+                id: UI.genId("EX"),
                 client_id: currentClient === "global" ? null : currentClient,
                 code: code,
                 intitule: intitule,
@@ -349,7 +349,7 @@ const ExigencesModule = (() => {
             if (!titre) return alert("Le titre de l'action est obligatoire.");
 
             DataStore.addAction({
-                id: "ACT-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+                id: UI.genId("ACT"),
                 titre: titre,
                 priorite: document.getElementById("priorite").value,
                 statut: "à faire",

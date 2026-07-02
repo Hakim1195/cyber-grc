@@ -125,12 +125,13 @@ du pivot ; registre **imprimable**. Schéma v6.
       l'état (dont `quota`), observateur `onQuotaExceeded` → **bandeau d'alerte** dédié (export + libération
       d'espace) ; l'**import Excel** force un enregistrement en fin de traitement et **prévient** si le
       stockage est plein. Tests Playwright (simulation de quota, import, bandeau).
-- 🟡 **Factorisation des helpers dupliqués** — module partagé **`js/core/ui.js`** (`window.UI`). Faits :
-      **suppression groupée** (`UI.wireBulkDelete`, 8 modules dédupliqués — ~250 lignes retirées),
-      **badges de statut** (`UI.badge` / `UI.mappedBadge`, Incidents & Documents) et **confirmations de
-      suppression** (`UI.wireDelete`, motif « supprimer depuis la fiche » factorisé sur 16 modules /
-      17 boutons). Restant : **collecte de formulaire** (hétérogène → à traiter prudemment).
-      Tests Playwright (0 erreur).
+- ✅ **Factorisation des helpers dupliqués** — module partagé **`js/core/ui.js`** (`window.UI`) :
+      **suppression groupée** (`UI.wireBulkDelete`, 8 modules — ~250 lignes retirées), **badges de statut**
+      (`UI.badge` / `UI.mappedBadge`, Incidents & Documents), **confirmations de suppression**
+      (`UI.wireDelete`, « supprimer depuis la fiche » — 16 modules / 17 boutons) et **génération d'ID**
+      (`UI.genId`, 23 sites / 17 modules — dette « collisions » soldée). La **collecte de formulaire**
+      (lecture de champs) reste volontairement en ligne (hétérogène + locale → factoriser n'apporterait
+      pas de gain net). Tests Playwright (50 assertions, 0 erreur).
 - ⏳ i18n : chaînes centralisées (structure, sans sur-ingénierie).
 
 ---

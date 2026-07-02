@@ -545,7 +545,7 @@ const ReferentielsModule = (() => {
                 const code = newMes.dataset.code;
                 const nom = prompt("Nom de la nouvelle mesure de sécurité :");
                 if (nom && nom.trim()) {
-                    const mid = "MESURE-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+                    const mid = UI.genId("MESURE");
                     DataStore.addMesure({ id: mid, nom: nom.trim(), description: "", statut: "", maturite: 0, responsable: "", updatedAt: Date.now() });
                     const state = readRowState(ref, code, root);
                     state.mesure_id = mid;
@@ -674,7 +674,7 @@ const ReferentielsModule = (() => {
         // Garantit l'existence de l'évaluation (pour disposer d'un evaluation_id).
         const ev = DataStore.upsertEvaluation(readRowState(ref, code, root));
         DataStore.addAction({
-            id: "ACT-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+            id: UI.genId("ACT"),
             titre,
             priorite: form.querySelector(".ref-act-prio").value,
             statut: "à faire",

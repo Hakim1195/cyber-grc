@@ -124,7 +124,7 @@ const IncidentsModule = (() => {
         document.getElementById("save").onclick = () => {
             const inc = collectForm();
             if (!inc) return;
-            inc.id = "INC-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+            inc.id = UI.genId("INC");
             inc.updatedAt = Date.now();
             DataStore.addIncident(inc);
             if (window.showToast) window.showToast("Incident enregistré.", "success");
@@ -200,7 +200,7 @@ const IncidentsModule = (() => {
             const titre = document.getElementById("actTitre").value.trim();
             if (!titre) { alert("L'intitulé de l'action est obligatoire."); return; }
             DataStore.addAction({
-                id: "ACT-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+                id: UI.genId("ACT"),
                 titre, priorite: document.getElementById("actPrio").value, statut: "à faire",
                 responsable: "", echeance: document.getElementById("actEcheance").value, commentaire: "",
                 exigence_id: null, risque_id: null, evaluation_id: null, incident_id: inc.id

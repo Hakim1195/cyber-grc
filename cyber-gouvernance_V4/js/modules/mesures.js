@@ -137,7 +137,7 @@ const MesuresModule = (() => {
         document.getElementById("save").onclick = () => {
             const nom = document.getElementById("nom").value.trim();
             if (!nom) { alert("Le nom de la mesure est obligatoire."); return; }
-            const id = "MESURE-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+            const id = UI.genId("MESURE");
             DataStore.addMesure({
                 id, nom,
                 description: document.getElementById("description").value.trim(),

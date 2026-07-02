@@ -5,6 +5,23 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 9 — Durcissement : centralisation de la génération d'identifiants
+- **`UI.genId(prefix)`** (ajouté à `js/core/ui.js`) : centralise la convention d'identifiant
+  anti-collision `"<PRÉFIXE>-<timestamp>-<aléa>"` qui était **recopiée sur 23 sites / 17 modules**
+  (Actifs, Audits ×2, BIA, Donneurs d'ordre, Crise, Documents, Exigences ×2, Incidents ×2,
+  Correspondances ×2, Mesures, MCO, Prestataires, Scénarios, Tests PRA, Référentiels ×2, RGPD, Risques ×2).
+  **Solde la dette « collisions »** notée dans le CLAUDE.md : un seul endroit à faire évoluer (p. ex.
+  future migration vers `crypto.randomUUID`).
+- **Comportement identique** : `UI.genId("INC")` produit exactement `"INC-<timestamp>-<aléa>"` comme avant.
+  Les horodatages `updatedAt: Date.now()` (10 sites) **ne sont pas touchés** (ce ne sont pas des id).
+- **Collecte de formulaire** : après analyse, la lecture des champs (`getElementById(...).value`) reste
+  **volontairement en ligne** — hétérogène (trim, cases à cocher, coercition numérique) et locale à
+  chaque formulaire, sa factorisation ajouterait de l'indirection sans gain réel (principe « sans
+  sur-ingénierie »).
+- **Tests headless (Playwright)** : `UI.genId` (format, préfixe par défaut, unicité) + **création
+  réelle d'un incident via le formulaire** (id généré au bon format) ; non-régression des suites
+  bulk/badges (20), smoke (8) et suppression fiche (16) ; **0 erreur console**.
+
 ### Chantier 9 — Durcissement : factorisation des confirmations de suppression
 - **`UI.wireDelete({button, confirm, remove, toast, redirect})`** (ajouté à `js/core/ui.js`) :
   factorise le motif **« supprimer un élément depuis sa fiche »** — confirmation → suppression →

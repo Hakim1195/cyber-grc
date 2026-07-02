@@ -399,7 +399,7 @@ const MappingModule = (() => {
         const anyCode = Object.keys(refs).some(k => Array.isArray(refs[k]) && refs[k].length);
         if (!anyCode) { alert("Sélectionnez au moins une exigence dans un référentiel."); return; }
 
-        const id = (editing && editing !== "__new__") ? editing : ("MAP-" + Date.now() + "-" + Math.floor(Math.random() * 1000));
+        const id = (editing && editing !== "__new__") ? editing : (UI.genId("MAP"));
         DataStore.upsertMapping({ id, theme, aide, refs });
         editing = null;
         if (window.showToast) window.showToast(existing ? "Correspondance enregistrée." : "Correspondance créée.", "success");
@@ -452,7 +452,7 @@ const MappingModule = (() => {
     function propagateNewMesure(id) {
         const nom = prompt("Nom de la nouvelle mesure de sécurité :");
         if (!nom || !nom.trim()) return;
-        const mid = "MESURE-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+        const mid = UI.genId("MESURE");
         DataStore.addMesure({ id: mid, nom: nom.trim(), description: "", statut: "", maturite: 0, responsable: "", updatedAt: Date.now() });
         propagateMesure(id, mid);
     }

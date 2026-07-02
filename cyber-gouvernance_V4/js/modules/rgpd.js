@@ -94,7 +94,7 @@ const RgpdModule = (() => {
             </section>`;
         document.getElementById("save").onclick = () => {
             const t = collectForm(); if (!t) return;
-            t.id = "TRT-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+            t.id = UI.genId("TRT");
             t.updatedAt = Date.now();
             DataStore.addTraitement(t);
             if (window.showToast) window.showToast("Traitement enregistré.", "success");

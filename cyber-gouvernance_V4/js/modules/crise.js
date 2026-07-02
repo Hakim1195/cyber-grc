@@ -346,7 +346,7 @@ const CriseModule = (() => {
             if (!nom) return alert("Le nom est obligatoire.");
 
             DataStore.addCriseMembre({
-                id: "CRISE-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+                id: UI.genId("CRISE"),
                 role: document.getElementById("role").value,
                 nom: nom,
                 telephone: document.getElementById("telephone").value.trim(),

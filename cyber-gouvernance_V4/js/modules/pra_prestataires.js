@@ -258,7 +258,7 @@ const PraPrestatairesModule = (() => {
             if (!soc) return alert("Le nom de la société est obligatoire.");
 
             DataStore.addPrestataire(Object.assign({
-                id: "PREST-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+                id: UI.genId("PREST"),
                 societe: soc,
                 type: document.getElementById("type").value,
                 phone: document.getElementById("phone").value.trim(),

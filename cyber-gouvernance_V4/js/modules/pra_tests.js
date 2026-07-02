@@ -176,7 +176,7 @@ const PraTestsModule = (() => {
             if (!dateStr) return alert("La date est obligatoire.");
 
             DataStore.addTestPra({
-                id: "TEST-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+                id: UI.genId("TEST"),
                 scenario_id: document.getElementById("scenario_id").value,
                 date: dateStr,
                 succes: document.getElementById("succes").value,

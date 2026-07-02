@@ -132,5 +132,15 @@ window.UI = (function () {
         });
     }
 
-    return { badge, mappedBadge, wireBulkDelete, wireDelete };
+    /* =========================================================================
+       IDENTIFIANT ANTI-COLLISION
+       Convention historique : "<PRÉFIXE>-<timestamp>-<aléa>". Centralisée ici
+       pour solder la dette « collisions » (un seul endroit à faire évoluer, ex.
+       migration vers crypto.randomUUID). genId("ACT") → "ACT-1720000000000-482".
+    ========================================================================= */
+    function genId(prefix) {
+        return (prefix || "ID") + "-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+    }
+
+    return { badge, mappedBadge, wireBulkDelete, wireDelete, genId };
 })();

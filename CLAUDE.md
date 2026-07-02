@@ -173,9 +173,11 @@ Tests PRA, MCO, Prestataires — ~250 lignes dédupliquées). **`UI.badge` / `UI
 les **badges de statut** (`<span class="status …">`) — appliqués à Incidents & Documents.
 **`UI.wireDelete({button,confirm,remove,toast,redirect})`** factorise la **suppression depuis la fiche**
 (confirm → delete → toast → navigation) recopiée dans **16 modules / 17 boutons** (message statique ou
-dynamique — avertissements de cascade préservés ; ids `deleteBtn`/`delBtn`/`delScenarioBtn`). Aucun
-changement fonctionnel/schéma ; échappement XSS conservé. Tests Playwright (bulk 20 + smoke 8 +
-suppression fiche 16, 0 erreur console).
+dynamique — avertissements de cascade préservés ; ids `deleteBtn`/`delBtn`/`delScenarioBtn`).
+**`UI.genId(prefix)`** centralise la convention d'id anti-collision `"<PRÉFIXE>-<ts>-<aléa>"`
+(23 sites / 17 modules — dette « collisions » soldée ; `updatedAt` non touchés). La **collecte de
+formulaire** reste en ligne à dessein (hétérogène + locale). Aucun changement fonctionnel/schéma ;
+échappement XSS conservé. Tests Playwright (bulk 20 + smoke 8 + suppression fiche 16 + genId 6, 0 erreur).
 
-**Prochain** : suite du Chantier 9 — factoriser la **collecte de formulaire** (hétérogène → prudence) ;
-i18n (chaînes centralisées, sans sur-ingénierie).
+**Prochain** : Chantier 9 — **i18n** (chaînes centralisées, sans sur-ingénierie) ; sinon reprise du
+Chantier 2 (systématiser les tooltips ⓘ, harmoniser les modules).

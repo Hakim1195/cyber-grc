@@ -214,7 +214,7 @@ const RisquesModule = (() => {
             const scoreResiduel = scoreBrut * m;
 
             DataStore.addRisque({
-                id: "RISK-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+                id: UI.genId("RISK"),
                 nom: nom,
                 f_frequence: f,
                 g_gravite: g,
@@ -421,7 +421,7 @@ const RisquesModule = (() => {
             if (!titre) return alert("Le titre est obligatoire.");
 
             DataStore.addAction({
-                id: "ACT-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+                id: UI.genId("ACT"),
                 titre: titre,
                 statut: "à faire",
                 responsable: document.getElementById("responsable").value.trim(),

@@ -108,7 +108,7 @@ const PraScenariosModule = (() => {
             if (!original) return Router.navigateTo("/pra");
             editingScenario = JSON.parse(JSON.stringify(original));
         } else {
-            editingScenario = { id: "SCEN-" + Date.now() + "-" + Math.floor(Math.random() * 1000), nom: "", description: "", etapes_pca: [], etapes_pra: [] };
+            editingScenario = { id: UI.genId("SCEN"), nom: "", description: "", etapes_pca: [], etapes_pra: [] };
         }
 
         editingScenario.etapes_pca = normalizeSteps(editingScenario.etapes_pca);
