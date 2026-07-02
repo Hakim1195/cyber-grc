@@ -5,6 +5,24 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Correction — le référentiel « ISO 27002 » devient « ISO/IEC 27001:2022 »
+- **Notion corrigée** : le référentiel des 93 mesures était présenté comme *ISO/IEC 27002:2022*.
+  Or ces mesures sont celles de l'**Annexe A d'ISO/IEC 27001:2022**, la norme **certifiable** du
+  SMSI, et c'est bien contre l'ISO 27001 qu'on établit la **déclaration d'applicabilité (SoA)**
+  générée par l'application. Le détail de mise en œuvre de ces mesures, lui, relève de l'ISO 27002.
+- **Corrigé partout où c'est visible** : nom, version (« Annexe A · 93 mesures »), description et
+  aide du référentiel (`ref_iso27002.js`) ; étiquette de colonne et infobulles du module
+  **Correspondances** (`mapping.js`), tooltip **Référentiels** (`referentiels.js`), note de la
+  **Synthèse** (`synthese.js`), commentaires du catalogue de correspondances (`mappings.js`) et
+  documentation (`CLAUDE.md`, `docs/PLAN.md`, `docs/DATA_MODEL.md`).
+- **Sans impact sur les données** : l'**identifiant technique reste `iso-27002-2022`** (et le nom
+  de fichier `ref_iso27002.js` est inchangé). Cet id est la **clé** des évaluations
+  (`evaluations[].ref_id`) et des correspondances (`data.mappings[].refs`) déjà enregistrées dans
+  le navigateur ; le chargement depuis IndexedDB n'appliquant aucune migration de contenu, le
+  renommer aurait rendu ces données orphelines. Aucune évolution de schéma.
+- **Non touché** : le texte d'une question du questionnaire **AirCyber** cite « ISO 27001/27002 »
+  comme exemples de cadres — contenu réel du référentiel, conservé tel quel.
+
 ### Synthèse Direction — refonte en tableau d'arbitrage (KPI / KRI + rapport)
 - **Refonte complète du module `/synthese`** : d'une note à 3 chiffres vers un véritable
   **support de décision pour la direction** (COMEX / conseil), pensé pour *arbitrer* et pas

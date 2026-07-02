@@ -3,7 +3,7 @@
 //
 // Module CORRESPONDANCES INTER-RÉFÉRENTIELS (/mapping).
 // Affiche un catalogue PRÉ-REMPLI et ÉDITABLE d'équivalences entre les exigences de
-// plusieurs référentiels (ANSSI ↔ ISO 27002 ↔ NIS2 ↔ DORA). But : accélérer la
+// plusieurs référentiels (ANSSI ↔ ISO 27001 ↔ NIS2 ↔ DORA). But : accélérer la
 // couverture croisée et la SoA en reliant, d'un seul geste, toutes les exigences
 // équivalentes à une même « mesure de sécurité » (zéro double saisie), ou en leur
 // appliquant un même statut.
@@ -31,7 +31,7 @@ const MappingModule = (() => {
     // Libellés courts pour les étiquettes de colonnes (les `editeur` de NIS2/DORA
     // sont des références réglementaires trop longues à afficher).
     const SHORT_LABELS = {
-        "anssi-hygiene": "ANSSI", "iso-27002-2022": "ISO 27002",
+        "anssi-hygiene": "ANSSI", "iso-27002-2022": "ISO 27001",   // clé = id technique ; libellé corrigé
         "nis2-art21": "NIS2", "dora": "DORA", "aircyber": "AirCyber"
     };
 
@@ -295,7 +295,7 @@ const MappingModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>Correspondances inter-référentiels</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">Les exigences équivalentes d'un référentiel à l'autre, regroupées par thème. ${Help.tip("Une même mesure (MFA, sauvegardes, cloisonnement…) satisfait souvent des exigences de plusieurs cadres (ANSSI, ISO 27002, NIS2, DORA). Reliez tout un groupe à une « mesure de sécurité » : évaluez une fois, appliquez partout.")}</p>
+                        <p style="color:var(--text-muted); margin-top:5px;">Les exigences équivalentes d'un référentiel à l'autre, regroupées par thème. ${Help.tip("Une même mesure (MFA, sauvegardes, cloisonnement…) satisfait souvent des exigences de plusieurs cadres (ANSSI, ISO 27001, NIS2, DORA). Reliez tout un groupe à une « mesure de sécurité » : évaluez une fois, appliquez partout.")}</p>
                     </div>
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                         <a href="#/couverture" class="btn-secondary">Couverture croisée →</a>

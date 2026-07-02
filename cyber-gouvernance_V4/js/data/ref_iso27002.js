@@ -1,11 +1,19 @@
 // Emplacement : js/data/ref_iso27002.js
 // Nom du fichier : ref_iso27002.js
 //
-// Référentiel ISO/IEC 27002:2022 — 93 mesures de sécurité en 4 thèmes.
+// Référentiel ISO/IEC 27001:2022 (Annexe A) — 93 mesures de sécurité en 4 thèmes.
+// Ce sont les mesures de l'Annexe A d'ISO/IEC 27001:2022, la norme certifiable du
+// SMSI (leur détail de mise en œuvre est fourni par l'ISO/IEC 27002:2022).
 // Contenu = REFORMULATIONS ORIGINALES COURTES + aide pédagogique (le texte de la
 // norme ISO est protégé et N'EST PAS reproduit ; seuls l'identifiant de clause
 // « 5.1 » et un intitulé court paraphrasé sont fournis). La norme officielle reste
-// la référence : ISO/IEC 27002:2022.
+// la référence : ISO/IEC 27001:2022.
+//
+// NB : l'identifiant technique reste « iso-27002-2022 » (et le nom de fichier est
+// inchangé) pour NE PAS rendre orphelines les données déjà enregistrées — les
+// évaluations (evaluations[].ref_id) et les correspondances (data.mappings[].refs)
+// sont indexées par cet id, et le chargement depuis IndexedDB n'applique aucune
+// migration de contenu. Seule la « notion » affichée est corrigée en ISO/IEC 27001:2022.
 //
 // S'auto-enregistre dans le registre `Referentiels`.
 
@@ -13,12 +21,12 @@
     if (typeof Referentiels === "undefined") return;
 
     Referentiels.register({
-        id: "iso-27002-2022",
-        nom: "ISO/IEC 27002:2022",
+        id: "iso-27002-2022",   // id technique conservé (clé de données) — cf. en-tête
+        nom: "ISO/IEC 27001:2022",
         editeur: "ISO/IEC",
-        version: "93 mesures",
-        description: "Recueil de référence des mesures de sécurité de l'information, support du système de management ISO 27001. Structurées en 4 thèmes (organisationnel, humain, physique, technologique).",
-        aide: "ISO 27002 détaille les bonnes pratiques (« mesures ») que l'on sélectionne pour traiter les risques identifiés. C'est le socle d'une démarche de certification ISO 27001. Intitulés reformulés — se référer à la norme officielle pour le texte exact.",
+        version: "Annexe A · 93 mesures",
+        description: "Mesures de sécurité de l'Annexe A d'ISO/IEC 27001:2022, la norme certifiable du système de management de la sécurité de l'information (SMSI). Structurées en 4 thèmes (organisationnel, humain, physique, technologique).",
+        aide: "ISO/IEC 27001 est la norme certifiable du SMSI. Son Annexe A liste 93 mesures parmi lesquelles on sélectionne, via la déclaration d'applicabilité (SoA), celles qui s'appliquent pour traiter les risques identifiés. Intitulés reformulés — se référer à la norme officielle pour le texte exact.",
         domaines: [
             {
                 id: "org", nom: "Mesures organisationnelles", court: "Organisationnel",

@@ -635,7 +635,7 @@ const SyntheseModule = (() => {
                 <thead><tr><th>Référentiel</th><th>Évaluées</th><th>Conformité</th><th>Détail</th><th>Posture</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>
-            <p class="sd-hint">Lecture d'obligation : NIS2 & DORA sont des obligations réglementaires ; ANSSI (hygiène) et ISO 27002 structurent le socle ; AirCyber conditionne la relation donneur d'ordre aéronautique.</p>
+            <p class="sd-hint">Lecture d'obligation : NIS2 & DORA sont des obligations réglementaires ; ANSSI (hygiène) et ISO 27001 structurent le socle ; AirCyber conditionne la relation donneur d'ordre aéronautique.</p>
         </div>`;
     }
 

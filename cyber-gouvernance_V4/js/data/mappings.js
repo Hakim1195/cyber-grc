@@ -3,7 +3,7 @@
 //
 // Catalogue STATIQUE de CORRESPONDANCES (équivalences) inter-référentiels.
 // Chaque groupe rassemble les exigences qui traitent d'un même thème de sécurité
-// dans plusieurs référentiels (ANSSI ↔ ISO 27002 ↔ NIS2 ↔ DORA). Il sert de socle
+// dans plusieurs référentiels (ANSSI ↔ ISO 27001 ↔ NIS2 ↔ DORA). Il sert de socle
 // « pré-rempli » : l'utilisateur peut ensuite l'enrichir/le corriger (ses ajouts et
 // modifications vivent dans DataStore, tableau `mappings`, en surcouche).
 //
@@ -17,6 +17,8 @@
 const MappingCatalog = (() => {
 
     // Référentiels affichés par défaut en colonnes (les correspondances portent sur eux).
+    // NB : « iso-27002-2022 » est l'id technique (conservé pour la compatibilité des
+    // données) du référentiel affiché « ISO/IEC 27001:2022 » (mesures de l'Annexe A).
     const CORE_REFS = ["anssi-hygiene", "iso-27002-2022", "nis2-art21", "dora"];
 
     // Un groupe : { id, theme, aide, refs: { <refId>: [codes...] } }

@@ -384,6 +384,6 @@ niveau de label, et le champ `maturite` des évaluations n'est ni saisi ni inter
 préservé s'il existe, mais exclu des moyennes CMMI du tableau de bord).
 
 Livré : référentiel **ANSSI** + auto-évaluation + radar (it. 4) ; **pivot Mesure de
-sécurité** `/mesures` + propagation (it. 5) ; ISO 27002 / NIS2 / DORA / **AirCyber réel**
+sécurité** `/mesures` + propagation (it. 5) ; ISO 27001 (Annexe A) / NIS2 / DORA / **AirCyber réel**
 + **import CSV** des réponses + **niveaux Bronze/Argent/Or, priorité, CL0–CL6** (it. 6, 13, 14) ;
 couverture croisée + génération SoA (it. 7).

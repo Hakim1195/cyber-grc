@@ -29,7 +29,7 @@ sensibiliser → chaque concept doit avoir une **note pédagogique** (`Help.tip(
 | Full frontend | **Strict** : aucun backend, CDN runtime, ni service tiers. Libs embarquées localement. |
 
 ### Décisions Référentiels — VALIDÉES & LIVRÉES (chantier 4a/4b)
-- **Référentiels** : démarré par **Hygiène ANSSI (42 mesures)** ; suite ISO 27002 / NIS2 / DORA / AirCyber (4c).
+- **Référentiels** : démarré par **Hygiène ANSSI (42 mesures)** ; suite ISO 27001 (Annexe A) / NIS2 / DORA / AirCyber (4c).
 - **Architecture conformité** : entité pivot **« Mesure de sécurité »** reliée n-n aux
   exigences des référentiels (évaluer une mesure propage le statut → zéro double saisie). **Livré.**
 
@@ -85,7 +85,8 @@ cyber-gouvernance_V4/
   **mappings** (v7, surcouche des correspondances inter-référentiels ; catalogue par défaut statique)
   et **history** (v8, indicateurs historisés — un point par jour pour les courbes de tendance).
 - Référentiels : catalogue **statique** (registre `js/data/referentiels.js` + fichiers `ref_*.js`),
-  hors `data`. Livrés : ANSSI (42), ISO 27002 (93), NIS2 (10), DORA (15), AirCyber/BoostAerospace (234).
+  hors `data`. Livrés : ANSSI (42), ISO 27001 Annexe A (93, id technique conservé `iso-27002-2022`),
+  NIS2 (10), DORA (15), AirCyber/BoostAerospace (234).
   Ne pas embarquer le texte des normes (reformulations originales + identifiants de clauses).
   **Correspondances** inter-référentiels : catalogue statique `js/data/mappings.js` (`MappingCatalog`,
   28 groupes ANSSI↔ISO↔NIS2↔DORA) + surcouche éditable `data.mappings` (module `/mapping`).
@@ -127,7 +128,7 @@ tooltip ⓘ, fil d'Ariane, responsive, a11y) • **Référentiels 4a/4b** (sché
 `evaluations`/`mesures` ; référentiel **ANSSI 42 mesures** ; auto-évaluation + **radar de
 maturité** SVG ; pivot **« Mesure de sécurité »** + propagation « zéro double saisie »).
 
-**Fait (suite)** : Référentiels **4c** (ISO 27002, NIS2, DORA, **AirCyber réel 234 q** + **import
+**Fait (suite)** : Référentiels **4c** (ISO 27001, NIS2, DORA, **AirCyber réel 234 q** + **import
 CSV des réponses**) + **couverture croisée** + **génération SoA** ; **Registre des incidents**
 (v4, déclarations NIS2/RGPD) ; **Gestion documentaire** (v5, politiques + alertes de revue +
 canevas) ; **Registre RGPD** (v6, traitements art. 30, mesures reliées au pivot, registre
@@ -151,7 +152,7 @@ nettoyage des tests orphelins hérités (badge « Orphelin » + bandeau) ; helpe
 `getTestsByScenario`/`getOrphanTests`/`deleteOrphanTests`.
 
 **Fait (Chantier 3 — Correspondances inter-référentiels)** : module **`/mapping`** (« Correspondances »)
-— **catalogue pré-rempli** de 28 groupes d'équivalences (ANSSI↔ISO 27002↔NIS2↔DORA) **éditable**
+— **catalogue pré-rempli** de 28 groupes d'équivalences (ANSSI↔ISO 27001↔NIS2↔DORA) **éditable**
 (créer/modifier/masquer/réinitialiser, surcouche `data.mappings`, schéma **v7**) ; **propagation**
 (relier tout un groupe à une mesure — préserve « non évalué » — ou appliquer un statut d'un coup) ;
 badges de clause colorés selon l'évaluation + cartographie par référentiel ; liens croisés

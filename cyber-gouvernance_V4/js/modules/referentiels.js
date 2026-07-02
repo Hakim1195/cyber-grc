@@ -379,7 +379,7 @@ const ReferentielsModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>Référentiels de sécurité</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">Auto-évaluez votre conformité et suivez votre maturité par domaine. ${Help.tip("Un référentiel est un ensemble structuré de bonnes pratiques (ANSSI, ISO 27002, NIS2…). L'auto-évaluation situe votre organisation et alimente le plan d'actions.")}</p>
+                        <p style="color:var(--text-muted); margin-top:5px;">Auto-évaluez votre conformité et suivez votre maturité par domaine. ${Help.tip("Un référentiel est un ensemble structuré de bonnes pratiques (ANSSI, ISO 27001, NIS2…). L'auto-évaluation situe votre organisation et alimente le plan d'actions.")}</p>
                     </div>
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                         <a href="#/mapping" class="btn-secondary">Correspondances →</a>

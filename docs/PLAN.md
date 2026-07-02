@@ -50,7 +50,7 @@ Sous-itérations :
 - ✅ **4b — Pivot « Mesure de sécurité »** : module `/mesures` (CRUD) ; **entité pivot** n-n vers les
       exigences de référentiels (`evaluations[].mesure_id`) ; lien / création à la volée depuis le détail
       d'une exigence ; **propagation** du statut + maturité aux évaluations couvertes (zéro double saisie). *(Itération 5)*
-- ✅ **4c₁ — Autres référentiels** : ISO 27002:2022 (93), NIS2 art.21 (10), DORA (15),
+- ✅ **4c₁ — Autres référentiels** : ISO/IEC 27001:2022 Annexe A (93), NIS2 art.21 (10), DORA (15),
       **AirCyber/BoostAerospace réel (234 q)** au schéma commun (1 fichier par référentiel). *(Itérations 6, 13)*
       + **import des réponses AirCyber** depuis CSV (Oui/Non → statut, maturité de départ). *(Itération 13)*
       + **niveaux Bronze/Argent/Or, priorité, domaines CL0–CL6** (badges + filtres + panneau
@@ -62,7 +62,7 @@ Sous-itérations :
       part de chaque référentiel adossée à une mesure) ; **génération de la déclaration d'applicabilité
       (SoA)** imprimable. *(Itération 7)*
 - ✅ **Mapping pré-rempli & éditable** : module `/mapping` (« Correspondances »). **Catalogue statique**
-      de 28 groupes d'équivalences (ANSSI ↔ ISO 27002 ↔ NIS2 ↔ DORA, `js/data/mappings.js`) +
+      de 28 groupes d'équivalences (ANSSI ↔ ISO 27001 ↔ NIS2 ↔ DORA, `js/data/mappings.js`) +
       **surcouche éditable** `data.mappings` (créer / modifier / masquer / réinitialiser ; schéma **v7**).
       **Propagation** : relier tout un groupe à une « mesure de sécurité » (préserve « non évalué ») ou
       appliquer un même statut d'un coup → accélère la couverture croisée et la SoA. Badges de clause
