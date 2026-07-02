@@ -5,6 +5,27 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Référentiels — AirCyber : profil de maturité par domaine de classification (CL)
+- Le **radar « Profil de maturité par domaine »** du référentiel AirCyber est désormais construit
+  sur les **domaines de classification CL existants** (CL0 Governance, CL1 Security event
+  management, CL2 Malwares, CL3 Protect end user devices, CL4 Secure network architecture,
+  CL5 Identity & access management, CL6 Data protection and classification), **avec le nom du
+  domaine** sur chaque axe — au lieu des chapitres thématiques du questionnaire.
+- Chaque axe **agrège toutes les questions portant ce code CL** (quel que soit leur chapitre),
+  avec les **mêmes règles de calcul** que les scores existants (« non applicable » exclu,
+  « non évalué » compte 0). Les questions **sans domaine CL connu** (78/234) ne sont pas
+  représentées dans le radar — une **note explicative** l'indique sous le graphique — mais elles
+  restent comptées dans la synthèse, les scores par chapitre et la conformité.
+- **Rien d'autre ne change** : les autres référentiels (ANSSI, ISO 27002, NIS2, DORA) conservent
+  leur radar par domaines thématiques ; chapitres, filtres, panneau « préparation au label »,
+  import CSV et mise à jour temps réel inchangés. Techniquement : axes calculés par
+  `computeClAxes()` (activé par la présence de `clLabels`), étiquettes **multi-lignes** dans le
+  SVG (viewBox élargie pour AirCyber uniquement).
+- **Tests headless (Playwright)** : 22 assertions — 7 axes CL nommés (liste + fiche), géométrie
+  exacte (domaine CL2 évalué 5/5 → sommet au bord du radar), exclusion des questions sans CL,
+  rafraîchissement temps réel, non-régression ANSSI (axes et viewBox inchangés) ;
+  **0 erreur console**.
+
 ### Chantier 2 — Pédagogie : tooltips ⓘ sur les concepts techniques
 - **25 notes pédagogiques `Help.tip(ⓘ)`** ajoutées sur les modules techniques qui n'en avaient
   aucune, pour rendre le jargon GRC accessible aux non-experts (fil rouge du produit) :

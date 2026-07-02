@@ -55,6 +55,9 @@ Sous-itérations :
       + **import des réponses AirCyber** depuis CSV (Oui/Non → statut, maturité de départ). *(Itération 13)*
       + **niveaux Bronze/Argent/Or, priorité, domaines CL0–CL6** (badges + filtres + panneau
       « préparation au label »), issus du fichier de suivi BoostAerospace (156/234 questions). *(Itération 14)*
+      + **radar de maturité par domaines CL** : les axes du profil de maturité AirCyber = les
+      domaines de classification CL0–CL6 **nommés** (agrégation trans-chapitres, questions sans CL
+      hors radar avec note explicative ; autres référentiels inchangés). *(Itération 29)*
 - ✅ **4c₂ — Couverture croisée & SoA** : vue de **couverture croisée** (matrice mesures × référentiels,
       part de chaque référentiel adossée à une mesure) ; **génération de la déclaration d'applicabilité
       (SoA)** imprimable. *(Itération 7)*

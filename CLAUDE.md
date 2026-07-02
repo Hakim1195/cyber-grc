@@ -91,7 +91,9 @@ cyber-gouvernance_V4/
   AirCyber = questionnaire réel (généré depuis un CSV via un script du scratchpad, non versionné) ;
   import in-app des réponses (bouton sur la fiche AirCyber, parsing SheetJS, mapping Oui/Non→statut) ;
   métadonnées par question **niveau Bronze/Argent/Or + priorité + domaine CL0–CL6** (badges,
-  filtres, panneau « préparation au label »), champs optionnels `niveau`/`priorite`/`cl` + `clLabels`.
+  filtres, panneau « préparation au label »), champs optionnels `niveau`/`priorite`/`cl` + `clLabels` ;
+  **radar de maturité par domaines CL** (axes CL0–CL6 nommés, `computeClAxes` activé par `clLabels`,
+  questions sans CL hors radar mais comptées ailleurs ; autres référentiels : radar thématique inchangé).
 - Export fichier : enveloppe **`grc-backup`** `{ format, version, encrypted, createdAt, app, payload|kdf+cipher }`.
 
 ## 5. Lancer & tester (important)
@@ -186,6 +188,15 @@ constats), **MCO**, **Tests PRA** (type d'exercice), **Exigences** (statut de co
 Conformité/SoA déjà couvert. Icônes accessibles, aucune donnée/schéma touché. Tests Playwright
 (présence sur 11 vues, contenu des bulles, ouverture au clic sans navigation ; 0 erreur). i18n
 **écartée** (app monolingue, décision utilisateur).
+
+**Fait (AirCyber — radar par domaines CL)** : le **profil de maturité par domaine** d'AirCyber est
+construit sur les **domaines de classification CL0–CL6 nommés** (axes = code + nom, étiquettes
+multi-lignes, viewBox élargie pour AirCyber seul) au lieu des chapitres du questionnaire.
+`computeClAxes()`/`radarAxesFor()` dans `referentiels.js`, activés par la présence de `clLabels` ;
+mêmes règles de moyenne que `computeScores`. Les 78 questions sans CL sont hors radar (note
+explicative sous le graphique) mais comptées partout ailleurs. Autres référentiels inchangés.
+Tests Playwright (22 assertions : axes nommés liste+fiche, géométrie exacte, exclusion sans-CL,
+refresh temps réel, non-régression ANSSI ; 0 erreur).
 
 **Prochain** : poursuivre le Chantier 2 — harmoniser tableaux denses / KPI / radars ; tooltips restants
 sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches.

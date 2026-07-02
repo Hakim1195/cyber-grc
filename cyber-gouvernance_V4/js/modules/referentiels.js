@@ -145,12 +145,63 @@ const ReferentielsModule = (() => {
     }
 
     /* =========================
+       AXES DU RADAR
+    ========================== */
+    // Par défaut : un axe par domaine thématique (libellé court). Pour un
+    // référentiel doté de domaines de classification (`clLabels`, ex. AirCyber
+    // CL0-CL6), le profil de maturité est calculé PAR DOMAINE CL : chaque axe
+    // agrège toutes les questions portant ce code CL, quel que soit leur thème.
+    // Mêmes règles que computeScores (« non applicable » exclu ; « non évalué »
+    // compte 0 dans le dénominateur applicable). Les questions sans code CL ne
+    // sont pas représentées (elles restent comptées partout ailleurs).
+    function computeClAxes(ref) {
+        if (!ref.clLabels) return null;
+        const codes = Object.keys(ref.clLabels).sort();
+        const acc = {};
+        codes.forEach(c => { acc[c] = { total: 0, applicable: 0, matSum: 0 }; });
+        ref.domaines.forEach(d => d.exigences.forEach(ex => {
+            if (!ex.cl || !acc[ex.cl]) return;
+            acc[ex.cl].total++;
+            const ev = DataStore.getEvaluation(ref.id, ex.code);
+            const statut = ev ? (ev.statut || "") : "";
+            if (statut === "non applicable") return;
+            acc[ex.cl].applicable++;
+            acc[ex.cl].matSum += ev ? (Number(ev.maturite) || 0) : 0;
+        }));
+        return codes.filter(c => acc[c].total > 0).map(c => ({
+            label: wrapLabel(c + " · " + ref.clLabels[c]),
+            value: (acc[c].applicable ? acc[c].matSum / acc[c].applicable : 0) / 5
+        }));
+    }
+
+    // Coupe un libellé long en 2 lignes max (coupure aux mots, ~22 caractères).
+    function wrapLabel(txt) {
+        if (txt.length <= 22) return txt;
+        const words = txt.split(" ");
+        const lines = [""];
+        words.forEach(w => {
+            const cur = lines[lines.length - 1];
+            if (cur && (cur + " " + w).length > 22) lines.push(w);
+            else lines[lines.length - 1] = cur ? cur + " " + w : w;
+        });
+        if (lines.length > 2) lines.splice(2, lines.length - 2, lines.slice(2).join(" "));
+        return lines;
+    }
+
+    // Axes du radar d'un référentiel : domaines CL si définis, sinon thématiques.
+    function radarAxesFor(ref, sc) {
+        return computeClAxes(ref) || sc.domaines.map(d => ({ label: d.court, value: d.maturite / 5 }));
+    }
+
+    /* =========================
        RADAR SVG (maturité par domaine)
     ========================== */
     function radarSvg(axes) {
         const n = axes.length;
         if (!n) return "";
-        const W = 520, H = 430, cx = 260, cy = 205, R = 140;
+        // Libellés multi-lignes (domaines CL) → viewBox élargie pour éviter la coupe.
+        const isMulti = axes.some(a => Array.isArray(a.label));
+        const W = isMulti ? 600 : 520, H = 430, cx = W / 2, cy = 205, R = 140;
         const rings = [0.25, 0.5, 0.75, 1];
         const ang = i => (-90 + i * 360 / n) * Math.PI / 180;
         const pt = (i, r) => [cx + Math.cos(ang(i)) * R * r, cy + Math.sin(ang(i)) * R * r];
@@ -170,11 +221,19 @@ const ReferentielsModule = (() => {
             return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="var(--primary)"/>`;
         }).join("");
         const labels = axes.map((a, i) => {
+            const lines = Array.isArray(a.label) ? a.label : [a.label];
             const [x, y] = pt(i, 1.14);
             const cosA = Math.cos(ang(i)), sinA = Math.sin(ang(i));
             const anchor = cosA > 0.3 ? "start" : (cosA < -0.3 ? "end" : "middle");
-            const dy = sinA > 0.5 ? 12 : (sinA < -0.5 ? -6 : 4);
-            return `<text x="${x.toFixed(1)}" y="${(y + dy).toFixed(1)}" text-anchor="${anchor}" font-size="11" fill="var(--text-muted)">${escapeHtml(a.label)}</text>`;
+            let dy = sinA > 0.5 ? 12 : (sinA < -0.5 ? -6 : 4);
+            // Bloc multi-ligne : au-dessus du radar il s'étend vers le haut,
+            // sur les côtés il se centre verticalement.
+            if (sinA < -0.5) dy -= (lines.length - 1) * 12;
+            else if (sinA <= 0.5) dy -= (lines.length - 1) * 6;
+            const tspans = lines.map((l, k) =>
+                `<tspan x="${x.toFixed(1)}" dy="${k === 0 ? 0 : 12}">${escapeHtml(l)}</tspan>`
+            ).join("");
+            return `<text x="${x.toFixed(1)}" y="${(y + dy).toFixed(1)}" text-anchor="${anchor}" font-size="11" fill="var(--text-muted)">${tspans}</text>`;
         }).join("");
 
         return `<svg viewBox="0 0 ${W} ${H}" class="ref-radar-svg" role="img" aria-label="Radar de maturité par domaine">${grid}${spokes}${dataPoly}${dots}${labels}</svg>`;
@@ -189,7 +248,7 @@ const ReferentielsModule = (() => {
 
         const cards = refs.map(ref => {
             const sc = computeScores(ref);
-            const axes = sc.domaines.map(d => ({ label: d.court, value: d.maturite / 5 }));
+            const axes = radarAxesFor(ref, sc);
             const pctEval = sc.global.total ? Math.round((sc.global.evaluated / sc.global.total) * 100) : 0;
             const conf = sc.global.conformite;
             return `
@@ -316,7 +375,8 @@ const ReferentielsModule = (() => {
                 <div class="dashboard-grid ref-detail-grid">
                     <div class="dashboard-card ref-scorecard">
                         <h3 style="margin-top:0;">Profil de maturité par domaine</h3>
-                        <div class="ref-radar" id="ref-radar">${radarSvg(sc.domaines.map(d => ({ label: d.court, value: d.maturite / 5 })))}</div>
+                        <div class="ref-radar" id="ref-radar">${radarSvg(radarAxesFor(ref, sc))}</div>
+                        ${ref.clLabels ? `<p style="font-size:0.78rem; color:var(--text-muted); margin:10px 0 0;">Axes : domaines de classification (${escapeHtml(Object.keys(ref.clLabels).sort().join(", "))}) ${Help.tip("Chaque axe agrège toutes les questions du domaine de classification (CL), indépendamment du chapitre du questionnaire. Les questions sans domaine CL connu ne sont pas représentées dans le radar mais restent comptées dans la synthèse et les scores par chapitre.")}</p>` : ""}
                     </div>
                     <div class="dashboard-card">
                         <h3 style="margin-top:0;">Synthèse</h3>
@@ -735,7 +795,7 @@ const ReferentielsModule = (() => {
         setHtml("kpi-eval", sc.global.evaluated + "<span>/" + sc.global.total + "</span>");
 
         const radar = document.getElementById("ref-radar");
-        if (radar) radar.innerHTML = radarSvg(sc.domaines.map(d => ({ label: d.court, value: d.maturite / 5 })));
+        if (radar) radar.innerHTML = radarSvg(radarAxesFor(ref, sc));
 
         sc.domaines.forEach(d => {
             const matEl = document.querySelector(`.ref-domain__mat[data-dom="${cssEsc(d.id)}"]`);
