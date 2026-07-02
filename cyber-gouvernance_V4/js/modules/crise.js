@@ -444,12 +444,11 @@ const CriseModule = (() => {
             Router.navigateTo("/crise");
         };
 
-        document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("Confirmer le retrait de ce membre de la cellule de crise ?")) {
-                DataStore.deleteCriseMembre(membre.id);
-                Router.navigateTo("/crise");
-            }
-        };
+        UI.wireDelete({
+            confirm: "Confirmer le retrait de ce membre de la cellule de crise ?",
+            remove: () => DataStore.deleteCriseMembre(membre.id),
+            redirect: "/crise"
+        });
     }
 
     return { renderList, renderDetail, renderFiches };

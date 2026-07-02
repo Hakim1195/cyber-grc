@@ -281,12 +281,11 @@ const BiaModule = (() => {
             Router.navigateTo("/bia");
         };
 
-        document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("Confirmer la suppression ?")) {
-                DataStore.deleteProcessus(processus.id);
-                Router.navigateTo("/bia");
-            }
-        };
+        UI.wireDelete({
+            confirm: "Confirmer la suppression ?",
+            remove: () => DataStore.deleteProcessus(processus.id),
+            redirect: "/bia"
+        });
     }
 
     return { renderList, renderDetail };

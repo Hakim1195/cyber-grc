@@ -189,12 +189,12 @@ const PraMcoModule = (() => {
             Router.navigateTo("/mco");
         };
 
-        document.getElementById("delBtn").onclick = () => {
-            if(confirm("Confirmer la suppression de cette action de MCO ?")) {
-                DataStore.deleteMcoAction(id);
-                Router.navigateTo("/mco");
-            }
-        };
+        UI.wireDelete({
+            button: "delBtn",
+            confirm: "Confirmer la suppression de cette action de MCO ?",
+            remove: () => DataStore.deleteMcoAction(id),
+            redirect: "/mco"
+        });
     }
 
     return { renderList, renderDetail };

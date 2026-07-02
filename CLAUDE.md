@@ -170,9 +170,12 @@ Tests Playwright (simulation de quota).
 (`window.UI`, chargé après `help.js`). **`UI.wireBulkDelete({remove,confirm,toast,onDone})`** remplace
 la logique de **suppression groupée recopiée dans 8 modules** (Exigences, Risques, Actions, Crise, BIA,
 Tests PRA, MCO, Prestataires — ~250 lignes dédupliquées). **`UI.badge` / `UI.mappedBadge`** factorisent
-les **badges de statut** (`<span class="status …">`) — appliqués à Incidents & Documents. Aucun
-changement fonctionnel/schéma ; échappement XSS conservé. Tests Playwright (20 assertions + smoke 8
-modules, 0 erreur console).
+les **badges de statut** (`<span class="status …">`) — appliqués à Incidents & Documents.
+**`UI.wireDelete({button,confirm,remove,toast,redirect})`** factorise la **suppression depuis la fiche**
+(confirm → delete → toast → navigation) recopiée dans **16 modules / 17 boutons** (message statique ou
+dynamique — avertissements de cascade préservés ; ids `deleteBtn`/`delBtn`/`delScenarioBtn`). Aucun
+changement fonctionnel/schéma ; échappement XSS conservé. Tests Playwright (bulk 20 + smoke 8 +
+suppression fiche 16, 0 erreur console).
 
-**Prochain** : suite du Chantier 9 — factoriser **confirmations** et **collecte de formulaire**
-(hétérogène → prudence) ; i18n (chaînes centralisées, sans sur-ingénierie).
+**Prochain** : suite du Chantier 9 — factoriser la **collecte de formulaire** (hétérogène → prudence) ;
+i18n (chaînes centralisées, sans sur-ingénierie).

@@ -236,9 +236,12 @@ const AuditsModule = (() => {
 
         if (isEdit) {
             document.getElementById("printAuditBtn").onclick = renderPrintAudit;
-            document.getElementById("delBtn").onclick = () => {
-                if (confirm("Supprimer cet audit ?")) { DataStore.deleteAudit(id); Router.navigateTo("/audits"); }
-            };
+            UI.wireDelete({
+                button: "delBtn",
+                confirm: "Supprimer cet audit ?",
+                remove: () => DataStore.deleteAudit(id),
+                redirect: "/audits"
+            });
         }
 
         document.getElementById("closePrintBtn").onclick = () => {
@@ -362,9 +365,12 @@ const AuditsModule = (() => {
 
         if (isEdit) {
             document.getElementById("printRevueBtn").onclick = renderPrintRevue;
-            document.getElementById("delBtn").onclick = () => {
-                if (confirm("Supprimer cette revue ?")) { DataStore.deleteRevue(id); Router.navigateTo("/audits"); }
-            };
+            UI.wireDelete({
+                button: "delBtn",
+                confirm: "Supprimer cette revue ?",
+                remove: () => DataStore.deleteRevue(id),
+                redirect: "/audits"
+            });
         }
 
         document.getElementById("closePrintBtn").onclick = () => {

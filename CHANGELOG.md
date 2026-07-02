@@ -5,6 +5,23 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 9 — Durcissement : factorisation des confirmations de suppression
+- **`UI.wireDelete({button, confirm, remove, toast, redirect})`** (ajouté à `js/core/ui.js`) :
+  factorise le motif **« supprimer un élément depuis sa fiche »** — confirmation → suppression →
+  toast optionnel → navigation vers la liste — qui était recopié dans **16 modules / 17 boutons**
+  (Exigences, Risques, Actifs, Incidents, Documents, Actions, BIA, RGPD, Crise, Donneurs d'ordre,
+  Mesures, Prestataires, Tests PRA, MCO, Scénarios PCA/PRA, Audits ×2).
+- **Souplesse** : id de bouton paramétrable (`deleteBtn` par défaut, aussi `delBtn` /
+  `delScenarioBtn`), message **statique ou dynamique** (fonction évaluée au clic — préserve les
+  avertissements de cascade, ex. « N test(s) rattaché(s) seront supprimés » des scénarios, ou le
+  nom de la mesure), toast optionnel, redirection vers la liste.
+- **Aucun changement fonctionnel** : messages de confirmation, toasts et routes de redirection
+  rigoureusement identiques ; le refus de la confirmation n'entraîne aucune suppression.
+- **Tests headless (Playwright)** : suppression de bout en bout sur 6 modules représentatifs
+  (sans/avec toast, message dynamique, cascade, `delBtn`/`delScenarioBtn`), vérification du
+  message de confirmation et de la redirection, + chemin « annuler » ; non-régression des tests
+  bulk-delete/badges (20) et smoke (8) ; **0 erreur console**.
+
 ### Chantier 9 — Durcissement : factorisation des helpers d'interface dupliqués
 - **Nouveau module partagé `js/core/ui.js`** (`window.UI`) : source unique pour les fragments
   d'UI recopiés d'un module à l'autre. Un seul endroit à maintenir, un comportement homogène.

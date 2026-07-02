@@ -207,16 +207,18 @@ const PraScenariosModule = (() => {
         };
 
         if (isEdit) {
-            document.getElementById("delScenarioBtn").onclick = () => {
-                const nbTests = DataStore.getTestsByScenario(editingScenario.id).length;
-                const avert = nbTests > 0
-                    ? `\n\nAttention : ${nbTests} test(s) d'exercice rattaché(s) à ce scénario seront également supprimés.`
-                    : "";
-                if (confirm("Supprimer définitivement ce scénario ?" + avert)) {
-                    DataStore.deleteScenarioPra(editingScenario.id);
-                    Router.navigateTo("/pra");
-                }
-            };
+            UI.wireDelete({
+                button: "delScenarioBtn",
+                confirm: () => {
+                    const nbTests = DataStore.getTestsByScenario(editingScenario.id).length;
+                    const avert = nbTests > 0
+                        ? `\n\nAttention : ${nbTests} test(s) d'exercice rattaché(s) à ce scénario seront également supprimés.`
+                        : "";
+                    return "Supprimer définitivement ce scénario ?" + avert;
+                },
+                remove: () => DataStore.deleteScenarioPra(editingScenario.id),
+                redirect: "/pra"
+            });
         }
     }
 

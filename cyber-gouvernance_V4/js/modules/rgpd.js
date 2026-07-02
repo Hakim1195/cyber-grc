@@ -128,13 +128,12 @@ const RgpdModule = (() => {
             if (window.showToast) window.showToast("Traitement mis à jour.", "success");
             renderDetail(t.id);
         };
-        document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("Supprimer ce traitement du registre ?")) {
-                DataStore.deleteTraitement(t.id);
-                if (window.showToast) window.showToast("Traitement supprimé.", "success");
-                Router.navigateTo("/rgpd");
-            }
-        };
+        UI.wireDelete({
+            confirm: "Supprimer ce traitement du registre ?",
+            remove: () => DataStore.deleteTraitement(t.id),
+            toast: "Traitement supprimé.",
+            redirect: "/rgpd"
+        });
     }
 
     /* =========================

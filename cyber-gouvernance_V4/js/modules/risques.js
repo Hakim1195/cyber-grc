@@ -382,12 +382,11 @@ const RisquesModule = (() => {
             Router.navigateTo("/risques");
         };
 
-        document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("Confirmer la suppression ?")) {
-                DataStore.deleteRisque(risque.id);
-                Router.navigateTo("/risques");
-            }
-        };
+        UI.wireDelete({
+            confirm: "Confirmer la suppression ?",
+            remove: () => DataStore.deleteRisque(risque.id),
+            redirect: "/risques"
+        });
 
         document.getElementById("addActionBtn").onclick = () => renderCreateAction(risque);
         document.querySelectorAll(".clickable-action").forEach(li => li.onclick = () => Router.navigateTo(`/actions/${li.dataset.id}`));

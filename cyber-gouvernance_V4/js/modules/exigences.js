@@ -294,12 +294,11 @@ const ExigencesModule = (() => {
             Router.navigateTo("/exigences");
         };
 
-        document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("Êtes-vous sûr de vouloir supprimer cette exigence ? Les actions associées seront également supprimées.")) {
-                DataStore.deleteExigence(exigence.id);
-                Router.navigateTo("/exigences");
-            }
-        };
+        UI.wireDelete({
+            confirm: "Êtes-vous sûr de vouloir supprimer cette exigence ? Les actions associées seront également supprimées.",
+            remove: () => DataStore.deleteExigence(exigence.id),
+            redirect: "/exigences"
+        });
 
         document.getElementById("addActionBtn").onclick = () => renderCreateAction(exigence);
         document.querySelectorAll(".clickable-risk").forEach(li => li.onclick = () => Router.navigateTo(`/risques/${li.dataset.id}`));

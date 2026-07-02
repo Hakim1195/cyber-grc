@@ -150,13 +150,12 @@ const DocumentsModule = (() => {
             if (window.showToast) window.showToast("Document mis à jour.", "success");
             renderDetail(doc.id);
         };
-        document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("Supprimer ce document du registre ?")) {
-                DataStore.deleteDocument(doc.id);
-                if (window.showToast) window.showToast("Document supprimé.", "success");
-                Router.navigateTo("/documents");
-            }
-        };
+        UI.wireDelete({
+            confirm: "Supprimer ce document du registre ?",
+            remove: () => DataStore.deleteDocument(doc.id),
+            toast: "Document supprimé.",
+            redirect: "/documents"
+        });
     }
 
     /* =========================

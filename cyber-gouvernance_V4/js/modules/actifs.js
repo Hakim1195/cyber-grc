@@ -265,12 +265,11 @@ const ActifsModule = (() => {
             Router.navigateTo("/actifs");
         };
 
-        document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("Confirmer la suppression de cet actif ?")) {
-                DataStore.deleteActif(actif.id);
-                Router.navigateTo("/actifs");
-            }
-        };
+        UI.wireDelete({
+            confirm: "Confirmer la suppression de cet actif ?",
+            remove: () => DataStore.deleteActif(actif.id),
+            redirect: "/actifs"
+        });
     }
 
     return { renderList, renderDetail };

@@ -243,13 +243,12 @@ const MesuresModule = (() => {
             renderDetail(m.id);
         };
 
-        document.getElementById("deleteBtn").onclick = () => {
-            if (confirm(`Supprimer la mesure « ${m.nom} » ?\nLes exigences liées seront simplement déliées (leurs évaluations sont conservées).`)) {
-                DataStore.deleteMesure(m.id);
-                if (window.showToast) window.showToast("Mesure supprimée.", "success");
-                Router.navigateTo("/mesures");
-            }
-        };
+        UI.wireDelete({
+            confirm: () => `Supprimer la mesure « ${m.nom} » ?\nLes exigences liées seront simplement déliées (leurs évaluations sont conservées).`,
+            remove: () => DataStore.deleteMesure(m.id),
+            toast: "Mesure supprimée.",
+            redirect: "/mesures"
+        });
     }
 
     return { renderList, renderCreate, renderDetail };

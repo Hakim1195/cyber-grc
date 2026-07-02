@@ -99,5 +99,38 @@ window.UI = (function () {
         return refresh;
     }
 
-    return { badge, mappedBadge, wireBulkDelete };
+    /* =========================================================================
+       SUPPRESSION D'UN ÉLÉMENT UNIQUE (fiche détail)
+       Motif recopié dans la plupart des modules : un bouton → confirmation →
+       suppression → toast optionnel → navigation vers la liste.
+
+       options :
+         button    — id du bouton (défaut "deleteBtn") ;
+         confirm   — message (chaîne) ou fonction () => message (évaluée au clic,
+                     utile pour un avertissement dynamique de cascade) ;
+         remove()  — suppression réelle (capture l'id via closure) ;
+         toast     — message de succès (chaîne/fonction ; omis → aucun toast) ;
+         redirect  — route de destination après suppression (ex. "/risques") ;
+         onDone()  — alternative à redirect (ex. re-rendre la fiche en place).
+    ========================================================================= */
+    function wireDelete(options) {
+        const opts = options || {};
+        const btn = document.getElementById(opts.button || "deleteBtn");
+        if (!btn) return;
+        btn.addEventListener("click", () => {
+            const message = typeof opts.confirm === "function"
+                ? opts.confirm()
+                : (opts.confirm || "Confirmer la suppression ?");
+            if (!confirm(message)) return;
+            if (typeof opts.remove === "function") opts.remove();
+            if (opts.toast && window.showToast) {
+                const msg = typeof opts.toast === "function" ? opts.toast() : opts.toast;
+                if (msg) window.showToast(msg, "success");
+            }
+            if (opts.redirect) Router.navigateTo(opts.redirect);
+            else if (typeof opts.onDone === "function") opts.onDone();
+        });
+    }
+
+    return { badge, mappedBadge, wireBulkDelete, wireDelete };
 })();

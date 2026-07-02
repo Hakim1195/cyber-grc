@@ -126,10 +126,11 @@ du pivot ; registre **imprimable**. Schéma v6.
       d'espace) ; l'**import Excel** force un enregistrement en fin de traitement et **prévient** si le
       stockage est plein. Tests Playwright (simulation de quota, import, bandeau).
 - 🟡 **Factorisation des helpers dupliqués** — module partagé **`js/core/ui.js`** (`window.UI`). Faits :
-      **suppression groupée** (`UI.wireBulkDelete`, 8 modules dédupliqués : Exigences, Risques, Actions,
-      Crise, BIA, Tests PRA, MCO, Prestataires — ~250 lignes retirées) et **badges de statut**
-      (`UI.badge` / `UI.mappedBadge`, appliqués à Incidents & Documents). Restants : **confirmations**
-      et **collecte de formulaire** (hétérogène → à traiter prudemment). Tests Playwright (0 erreur).
+      **suppression groupée** (`UI.wireBulkDelete`, 8 modules dédupliqués — ~250 lignes retirées),
+      **badges de statut** (`UI.badge` / `UI.mappedBadge`, Incidents & Documents) et **confirmations de
+      suppression** (`UI.wireDelete`, motif « supprimer depuis la fiche » factorisé sur 16 modules /
+      17 boutons). Restant : **collecte de formulaire** (hétérogène → à traiter prudemment).
+      Tests Playwright (0 erreur).
 - ⏳ i18n : chaînes centralisées (structure, sans sur-ingénierie).
 
 ---

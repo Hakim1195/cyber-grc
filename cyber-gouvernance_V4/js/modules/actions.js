@@ -289,13 +289,12 @@ const ActionsModule = (() => {
             Router.navigateTo("/actions");
         };
 
-        document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("Êtes-vous sûr de vouloir supprimer cette action ?")) {
-                DataStore.deleteAction(action.id);
-                if (window.showToast) window.showToast("Action supprimée.", "success");
-                Router.navigateTo("/actions");
-            }
-        };
+        UI.wireDelete({
+            confirm: "Êtes-vous sûr de vouloir supprimer cette action ?",
+            remove: () => DataStore.deleteAction(action.id),
+            toast: "Action supprimée.",
+            redirect: "/actions"
+        });
     }
 
     return {

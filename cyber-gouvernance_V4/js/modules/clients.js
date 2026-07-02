@@ -181,13 +181,12 @@ const ClientsModule = (() => {
         };
 
         /* ===== Supprimer ===== */
-        document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("ATTENTION : Supprimer ce client supprimera également TOUTES les exigences qui lui sont rattachées. Continuer ?")) {
-                DataStore.deleteClient(client.id);
-                if (window.showToast) window.showToast("Client et exigences liées supprimés.", "success");
-                Router.navigateTo("/clients");
-            }
-        };
+        UI.wireDelete({
+            confirm: "ATTENTION : Supprimer ce client supprimera également TOUTES les exigences qui lui sont rattachées. Continuer ?",
+            remove: () => DataStore.deleteClient(client.id),
+            toast: "Client et exigences liées supprimés.",
+            redirect: "/clients"
+        });
     }
 
     return {

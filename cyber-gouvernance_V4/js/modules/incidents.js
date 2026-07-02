@@ -186,13 +186,12 @@ const IncidentsModule = (() => {
             if (window.showToast) window.showToast("Incident mis à jour.", "success");
             renderDetail(inc.id);
         };
-        document.getElementById("deleteBtn").onclick = () => {
-            if (confirm("Supprimer cet incident ? Les actions correctives liées seront également supprimées.")) {
-                DataStore.deleteIncident(inc.id);
-                if (window.showToast) window.showToast("Incident supprimé.", "success");
-                Router.navigateTo("/incidents");
-            }
-        };
+        UI.wireDelete({
+            confirm: "Supprimer cet incident ? Les actions correctives liées seront également supprimées.",
+            remove: () => DataStore.deleteIncident(inc.id),
+            toast: "Incident supprimé.",
+            redirect: "/incidents"
+        });
 
         // Actions correctives
         const form = document.getElementById("actionForm");

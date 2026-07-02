@@ -345,12 +345,12 @@ const PraPrestatairesModule = (() => {
             Router.navigateTo("/prestataires");
         };
 
-        document.getElementById("delBtn").onclick = () => {
-            if (confirm("Confirmer la suppression de ce contact de l'annuaire ?")) {
-                DataStore.deletePrestataire(id);
-                Router.navigateTo("/prestataires");
-            }
-        };
+        UI.wireDelete({
+            button: "delBtn",
+            confirm: "Confirmer la suppression de ce contact de l'annuaire ?",
+            remove: () => DataStore.deletePrestataire(id),
+            redirect: "/prestataires"
+        });
 
         updateRiskPreview();
     }

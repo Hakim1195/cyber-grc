@@ -262,12 +262,12 @@ const PraTestsModule = (() => {
             Router.navigateTo("/tests");
         };
 
-        document.getElementById("delBtn").onclick = () => {
-            if(confirm("Confirmer la suppression de cet historique de test ?")) {
-                DataStore.deleteTestPra(id);
-                Router.navigateTo("/tests");
-            }
-        };
+        UI.wireDelete({
+            button: "delBtn",
+            confirm: "Confirmer la suppression de cet historique de test ?",
+            remove: () => DataStore.deleteTestPra(id),
+            redirect: "/tests"
+        });
     }
 
     return { renderList, renderDetail };
