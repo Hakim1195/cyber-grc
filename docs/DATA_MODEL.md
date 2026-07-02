@@ -191,8 +191,8 @@ sans enregistrement = « non évaluée »).
 | `id` | `"EVAL-..."` | |
 | `ref_id` | string | id du référentiel (ex. `anssi-hygiene`) |
 | `code` | string | code de l'exigence dans le référentiel (ex. `22`) |
-| `statut` | enum | `conforme` \| `partiellement conforme` \| `non conforme` \| `non applicable` \| `""` (non évalué) |
-| `maturite` | number | 0-5 (échelle type CMMI) |
+| `statut` | enum | `conforme` \| `partiellement conforme` \| `non conforme` \| `non applicable` \| `""` (non évalué) — questionnaires (`scoring: "conformite"`, ex. AirCyber) : mêmes valeurs, affichées Oui / Non / N-A, sans « partiellement » |
+| `maturite` | number | 0-5 (échelle type CMMI) — non utilisé pour les questionnaires (préservé mais ignoré) |
 | `commentaire` | string | |
 | `preuves` | string | références (l'app ne stocke pas les fichiers) |
 | `mesure_id` | string \| null | lien vers la **Mesure de sécurité** pivot (v3, 4b) |
@@ -375,6 +375,13 @@ Une exigence peut porter des **attributs optionnels** (utilisés par AirCyber) :
 (`bronze`/`silver`/`gold`), `priorite` (`high`/`medium`/`low`), `cl` (`CL0`…`CL6`). Le
 référentiel peut aussi porter `clLabels` (libellés des domaines CL). Les référentiels qui
 n'en ont pas n'affichent ni badges, ni filtres, ni panneau « préparation au label ».
+
+Un référentiel peut enfin déclarer **`scoring: "conformite"`** (AirCyber) : questionnaire à
+réponses **Oui / Non / N-A** (mêmes valeurs de données `conforme` / `non conforme` /
+`non applicable`), **sans échelle de maturité CMMI**. Score = « Oui » ÷ questions applicables
+(N/A exclues ; non répondu = « Non ») ; le radar affiche ce taux par domaine CL, filtrable par
+niveau de label, et le champ `maturite` des évaluations n'est ni saisi ni interprété (il est
+préservé s'il existe, mais exclu des moyennes CMMI du tableau de bord).
 
 Livré : référentiel **ANSSI** + auto-évaluation + radar (it. 4) ; **pivot Mesure de
 sécurité** `/mesures` + propagation (it. 5) ; ISO 27002 / NIS2 / DORA / **AirCyber réel**

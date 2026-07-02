@@ -776,6 +776,13 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
 .prio-low    { background: var(--tint-na);   color: var(--color-na); }
 .cl-badge { background: #e7effa; color: #2059A6; font-weight: 600; }
 
+/* Sélecteur de niveau du radar AirCyber (Global / Bronze / Argent / Or).
+   Le bouton actif prend la teinte du niveau, comme le tracé du radar. */
+.ref-radar-levels { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 0 0 10px; }
+.ref-radar-levels .ref-filter-niv.active[data-niv="bronze"] { background: #8a5320; border-color: #8a5320; }
+.ref-radar-levels .ref-filter-niv.active[data-niv="silver"] { background: #4b5563; border-color: #4b5563; }
+.ref-radar-levels .ref-filter-niv.active[data-niv="gold"]   { background: #9a7209; border-color: #9a7209; }
+
 .ref-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 10px 14px; margin-bottom: 1rem; }
 .ref-filters__lbl { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
 .ref-filter-nivs { display: inline-flex; gap: 4px; }

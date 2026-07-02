@@ -7,6 +7,12 @@
 //   - /referentiels/:id    → auto-évaluation détaillée (statut, maturité 0-5,
 //                            commentaire, preuves, actions correctives) par domaine.
 // Les évaluations sont persistées dans DataStore (`evaluations`, clé ref_id + code).
+//
+// Cas particulier : un référentiel « questionnaire » (`scoring: "conformite"`,
+// ex. AirCyber) se répond en Oui / Non / N-A, sans échelle de maturité CMMI.
+// Son score = réponses « Oui » ÷ questions applicables (les N/A sont exclues,
+// une question non répondue compte comme « Non ») ; son radar peut être filtré
+// par niveau de label (Global / Bronze / Argent / Or).
 
 const ReferentielsModule = (() => {
 
@@ -39,6 +45,39 @@ const ReferentielsModule = (() => {
     ];
     const MATURITE_AIDE = "Niveau de maîtrise de la mesure, de 0 (rien en place) à 5 (processus optimisé et amélioré en continu). Échelle inspirée du CMMI.";
 
+    // Référentiel « questionnaire » (AirCyber) : réponses Oui / Non / N-A, score en
+    // taux de conformité, sans échelle de maturité CMMI (inadaptée à ce format).
+    function isQuestionnaire(ref) { return !!(ref && ref.scoring === "conformite"); }
+
+    // Mêmes VALEURS de statut que STATUTS (compatibilité pivot « Mesure de sécurité »,
+    // correspondances, SoA), mais libellées comme les réponses du questionnaire.
+    // « Partiellement conforme » n'est pas proposé ; une évaluation héritée portant
+    // ce statut reste affichée (option injectée dans rowHtml).
+    const STATUTS_QUESTIONNAIRE = [
+        { v: "",               label: "Non évalué", cls: "status-non-evaluee" },
+        { v: "conforme",       label: "Oui",        cls: "status-conforme" },
+        { v: "non conforme",   label: "Non",        cls: "status-non-conforme" },
+        { v: "non applicable", label: "N/A",        cls: "status-non-applicable" }
+    ];
+    function statutsFor(ref) { return isQuestionnaire(ref) ? STATUTS_QUESTIONNAIRE : STATUTS; }
+
+    const SCORE_AIDE = "Score = réponses « Oui » ÷ questions applicables. Les questions N/A sont exclues du calcul ; une question non répondue compte comme « Non ». Pas d'échelle de maturité CMMI pour ce questionnaire.";
+
+    function scoreColor(pct) {   // pct 0-100 ou null — teinte indicative du score
+        if (pct === null) return "var(--color-gray)";
+        if (pct >= 90) return "var(--color-success)";
+        if (pct >= 50) return "var(--color-warning)";
+        return "var(--color-danger)";
+    }
+
+    // Présentation du score d'un agrégat { evaluated, conformite } de questionnaire :
+    // « — » tant que rien n'est répondu, « N/A » si tout est exclu, sinon « xx % ».
+    function scoreOf(agg) {
+        if (!agg.evaluated) return { html: "—", txt: "—", col: "var(--color-gray)" };
+        if (agg.conformite === null) return { html: "N/A", txt: "N/A", col: "var(--color-gray)" };
+        return { html: agg.conformite + "<span>%</span>", txt: agg.conformite + " %", col: scoreColor(agg.conformite) };
+    }
+
     // Métadonnées AirCyber (niveau de label, priorité). Attributs statiques par question.
     const NIVEAUX = [
         { v: "bronze", label: "Bronze", cls: "niv-bronze" },
@@ -46,6 +85,8 @@ const ReferentielsModule = (() => {
         { v: "gold",   label: "Or",     cls: "niv-gold" }
     ];
     function niveauMeta(v) { return NIVEAUX.find(n => n.v === v) || null; }
+    // Teinte du tracé du radar quand il est restreint à un niveau (mêmes tons que les badges).
+    const NIVEAU_COLORS = { bronze: "#8a5320", silver: "#4b5563", gold: "#9a7209" };
     const PRIOS = {
         high:   { label: "Haute",   cls: "prio-high" },
         medium: { label: "Moyenne", cls: "prio-medium" },
@@ -149,28 +190,35 @@ const ReferentielsModule = (() => {
     ========================== */
     // Par défaut : un axe par domaine thématique (libellé court). Pour un
     // référentiel doté de domaines de classification (`clLabels`, ex. AirCyber
-    // CL0-CL6), le profil de maturité est calculé PAR DOMAINE CL : chaque axe
-    // agrège toutes les questions portant ce code CL, quel que soit leur thème.
-    // Mêmes règles que computeScores (« non applicable » exclu ; « non évalué »
-    // compte 0 dans le dénominateur applicable). Les questions sans code CL ne
-    // sont pas représentées (elles restent comptées partout ailleurs).
-    function computeClAxes(ref) {
+    // CL0-CL6), le profil est calculé PAR DOMAINE CL : chaque axe agrège toutes
+    // les questions portant ce code CL, quel que soit leur thème. Mêmes règles
+    // que computeScores (« non applicable » exclu ; « non évalué » compte 0 dans
+    // le dénominateur applicable). Les questions sans code CL ne sont pas
+    // représentées (elles restent comptées partout ailleurs).
+    // Valeur d'un axe : taux de « Oui » pour un questionnaire, maturité/5 sinon.
+    // `niveau` (optionnel) restreint le calcul aux questions de ce niveau de label.
+    function computeClAxes(ref, niveau) {
         if (!ref.clLabels) return null;
+        const quest = isQuestionnaire(ref);
         const codes = Object.keys(ref.clLabels).sort();
         const acc = {};
-        codes.forEach(c => { acc[c] = { total: 0, applicable: 0, matSum: 0 }; });
+        codes.forEach(c => { acc[c] = { total: 0, applicable: 0, matSum: 0, oui: 0 }; });
         ref.domaines.forEach(d => d.exigences.forEach(ex => {
             if (!ex.cl || !acc[ex.cl]) return;
+            if (niveau && ex.niveau !== niveau) return;
             acc[ex.cl].total++;
             const ev = DataStore.getEvaluation(ref.id, ex.code);
             const statut = ev ? (ev.statut || "") : "";
             if (statut === "non applicable") return;
             acc[ex.cl].applicable++;
             acc[ex.cl].matSum += ev ? (Number(ev.maturite) || 0) : 0;
+            if (statut === "conforme") acc[ex.cl].oui++;
         }));
         return codes.filter(c => acc[c].total > 0).map(c => ({
             label: wrapLabel(c + " · " + ref.clLabels[c]),
-            value: (acc[c].applicable ? acc[c].matSum / acc[c].applicable : 0) / 5
+            value: quest
+                ? (acc[c].applicable ? acc[c].oui / acc[c].applicable : 0)
+                : (acc[c].applicable ? acc[c].matSum / acc[c].applicable : 0) / 5
         }));
     }
 
@@ -189,14 +237,42 @@ const ReferentielsModule = (() => {
     }
 
     // Axes du radar d'un référentiel : domaines CL si définis, sinon thématiques.
-    function radarAxesFor(ref, sc) {
-        return computeClAxes(ref) || sc.domaines.map(d => ({ label: d.court, value: d.maturite / 5 }));
+    // `niveau` ne concerne que les référentiels à domaines CL (AirCyber).
+    function radarAxesFor(ref, sc, niveau) {
+        return computeClAxes(ref, niveau) || sc.domaines.map(d => ({ label: d.court, value: d.maturite / 5 }));
+    }
+
+    /* =========================
+       SÉLECTEUR DE NIVEAU DU RADAR (questionnaire AirCyber)
+    ========================== */
+    // État du rendu courant de la fiche : "" = global, sinon bronze/silver/gold.
+    let radarNiveau = "";
+
+    function radarLevelsHtml() {
+        const btns = [{ v: "", label: "Global" }].concat(NIVEAUX.map(n => ({ v: n.v, label: n.label })));
+        return `<div class="ref-radar-levels" id="ref-radar-levels" role="group" aria-label="Niveau de label affiché dans le radar">
+            ${btns.map(b => `<button type="button" class="ref-filter-niv ${radarNiveau === b.v ? "active" : ""}" data-niv="${b.v}">${b.label}</button>`).join("")}
+            ${Help.tip("Affichez le profil par domaine au global ou restreint aux seules questions d'un niveau de label (Bronze, Argent, Or) : une vue granulaire pour préparer le niveau visé.")}
+        </div>`;
+    }
+
+    function radarColor() { return NIVEAU_COLORS[radarNiveau] || ""; }
+
+    // Note sous le radar : nombre de questions représentées par la vue courante.
+    function radarNoteText(ref) {
+        let n = 0;
+        ref.domaines.forEach(d => d.exigences.forEach(ex => {
+            if (ex.cl && (!radarNiveau || ex.niveau === radarNiveau)) n++;
+        }));
+        const nm = niveauMeta(radarNiveau);
+        return nm ? `${n} question(s) de niveau ${nm.label}.` : `${n} questions rattachées à un domaine CL.`;
     }
 
     /* =========================
        RADAR SVG (maturité par domaine)
     ========================== */
-    function radarSvg(axes) {
+    function radarSvg(axes, color, ariaLabel) {
+        const col = color || "var(--primary)";
         const n = axes.length;
         if (!n) return "";
         // Libellés multi-lignes (domaines CL) → viewBox élargie pour éviter la coupe.
@@ -215,10 +291,10 @@ const ReferentielsModule = (() => {
             return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`;
         }).join("");
         const dataPts = axes.map((a, i) => fmt(pt(i, Math.max(0, Math.min(1, a.value))))).join(" ");
-        const dataPoly = `<polygon points="${dataPts}" fill="var(--primary)" fill-opacity="0.18" stroke="var(--primary)" stroke-width="2"/>`;
+        const dataPoly = `<polygon points="${dataPts}" fill="${col}" fill-opacity="0.18" stroke="${col}" stroke-width="2"/>`;
         const dots = axes.map((a, i) => {
             const [x, y] = pt(i, Math.max(0, Math.min(1, a.value)));
-            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="var(--primary)"/>`;
+            return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${col}"/>`;
         }).join("");
         const labels = axes.map((a, i) => {
             const lines = Array.isArray(a.label) ? a.label : [a.label];
@@ -236,7 +312,7 @@ const ReferentielsModule = (() => {
             return `<text x="${x.toFixed(1)}" y="${(y + dy).toFixed(1)}" text-anchor="${anchor}" font-size="11" fill="var(--text-muted)">${tspans}</text>`;
         }).join("");
 
-        return `<svg viewBox="0 0 ${W} ${H}" class="ref-radar-svg" role="img" aria-label="Radar de maturité par domaine">${grid}${spokes}${dataPoly}${dots}${labels}</svg>`;
+        return `<svg viewBox="0 0 ${W} ${H}" class="ref-radar-svg" role="img" aria-label="${ariaLabel || "Radar de maturité par domaine"}">${grid}${spokes}${dataPoly}${dots}${labels}</svg>`;
     }
 
     /* =========================
@@ -251,6 +327,33 @@ const ReferentielsModule = (() => {
             const axes = radarAxesFor(ref, sc);
             const pctEval = sc.global.total ? Math.round((sc.global.evaluated / sc.global.total) * 100) : 0;
             const conf = sc.global.conformite;
+            const isQ = isQuestionnaire(ref);
+            const s = scoreOf(sc.global);
+            const kpis = isQ
+                ? `<div class="ref-kpi">
+                        <div class="ref-kpi__val" style="color:${s.col};">${s.html}</div>
+                        <div class="ref-kpi__lbl">Score de conformité ${Help.tip(SCORE_AIDE)}</div>
+                    </div>
+                    <div class="ref-kpi">
+                        <div class="ref-kpi__val">${sc.global.conformes}<span>/${sc.global.applicable}</span></div>
+                        <div class="ref-kpi__lbl">Réponses « Oui » ${Help.tip("Questions répondues « Oui » sur le total des questions applicables (les N/A sont exclues).")}</div>
+                    </div>
+                    <div class="ref-kpi">
+                        <div class="ref-kpi__val">${sc.global.evaluated}<span>/${sc.global.total}</span></div>
+                        <div class="ref-kpi__lbl">Questions évaluées</div>
+                    </div>`
+                : `<div class="ref-kpi">
+                        <div class="ref-kpi__val" style="color:${maturiteColor(sc.global.maturite)};">${sc.global.maturite.toFixed(1)}<span>/5</span></div>
+                        <div class="ref-kpi__lbl">Maturité moyenne ${Help.tip(MATURITE_AIDE)}</div>
+                    </div>
+                    <div class="ref-kpi">
+                        <div class="ref-kpi__val">${conf === null ? "—" : conf + "<span>%</span>"}</div>
+                        <div class="ref-kpi__lbl">Conformité ${Help.tip("Part des mesures applicables jugées « conformes » (les mesures non applicables sont exclues).")}</div>
+                    </div>
+                    <div class="ref-kpi">
+                        <div class="ref-kpi__val">${sc.global.evaluated}<span>/${sc.global.total}</span></div>
+                        <div class="ref-kpi__lbl">Mesures évaluées</div>
+                    </div>`;
             return `
                 <div class="dashboard-card ref-card">
                     <div class="ref-card__head">
@@ -258,27 +361,14 @@ const ReferentielsModule = (() => {
                             <h3 style="margin:0;">${escapeHtml(ref.nom)}</h3>
                             <p style="color:var(--text-muted); font-size:0.85rem; margin:4px 0 0;">${escapeHtml(ref.editeur)} · ${escapeHtml(ref.version)}</p>
                         </div>
-                        <span class="badge">${sc.global.total} mesures</span>
+                        <span class="badge">${sc.global.total} ${isQ ? "questions" : "mesures"}</span>
                     </div>
                     <p style="color:var(--text-muted); font-size:0.9rem; margin:10px 0 14px;">${escapeHtml(ref.description)}</p>
 
-                    <div class="ref-kpis">
-                        <div class="ref-kpi">
-                            <div class="ref-kpi__val" style="color:${maturiteColor(sc.global.maturite)};">${sc.global.maturite.toFixed(1)}<span>/5</span></div>
-                            <div class="ref-kpi__lbl">Maturité moyenne ${Help.tip(MATURITE_AIDE)}</div>
-                        </div>
-                        <div class="ref-kpi">
-                            <div class="ref-kpi__val">${conf === null ? "—" : conf + "<span>%</span>"}</div>
-                            <div class="ref-kpi__lbl">Conformité ${Help.tip("Part des mesures applicables jugées « conformes » (les mesures non applicables sont exclues).")}</div>
-                        </div>
-                        <div class="ref-kpi">
-                            <div class="ref-kpi__val">${sc.global.evaluated}<span>/${sc.global.total}</span></div>
-                            <div class="ref-kpi__lbl">Mesures évaluées</div>
-                        </div>
-                    </div>
+                    <div class="ref-kpis">${kpis}</div>
                     <div class="progress-bar small" style="margin:6px 0 16px;"><div class="progress-fill" style="width:${pctEval}%; background:var(--accent);"></div></div>
 
-                    <div class="ref-radar">${radarSvg(axes)}</div>
+                    <div class="ref-radar">${radarSvg(axes, "", isQ ? "Radar de conformité par domaine" : "")}</div>
 
                     <button class="ref-open" data-id="${ref.id}" style="width:100%; justify-content:center; background:var(--primary);">Évaluer ce référentiel</button>
                 </div>`;
@@ -325,19 +415,22 @@ const ReferentielsModule = (() => {
         }
 
         const sc = computeScores(ref);
+        const isQ = isQuestionnaire(ref);
+        radarNiveau = "";   // la fiche s'ouvre toujours sur le profil global
         const showNiv = hasNiveaux(ref);
         const readinessHtml = showNiv ? niveauReadinessHtml(computeNiveauReadiness(ref)) : "";
         const filtersHtml = showNiv ? filterBarHtml(ref) : "";
 
         const domainSections = ref.domaines.map((d, di) => {
             const dsc = sc.domaines[di];
+            const ds = scoreOf(dsc);
             const rows = d.exigences.map(ex => rowHtml(ref, ex)).join("");
             return `
                 <details class="ref-domain" ${di === 0 ? "open" : ""}>
                     <summary>
                         <span class="ref-domain__name">${escapeHtml(d.nom)} ${d.aide ? Help.tip(d.aide) : ""}</span>
                         <span class="ref-domain__score">
-                            <span class="ref-domain__mat" data-dom="${d.id}" style="color:${maturiteColor(dsc.maturite)};">${dsc.maturite.toFixed(1)}/5</span>
+                            <span class="ref-domain__mat" data-dom="${d.id}" style="color:${isQ ? ds.col : maturiteColor(dsc.maturite)};">${isQ ? ds.txt : dsc.maturite.toFixed(1) + "/5"}</span>
                             <span class="ref-domain__count" data-dom="${d.id}">${dsc.evaluated}/${dsc.total} évaluées</span>
                         </span>
                     </summary>
@@ -345,9 +438,9 @@ const ReferentielsModule = (() => {
                         <thead>
                             <tr>
                                 <th style="width:52px;">N°</th>
-                                <th>Mesure</th>
-                                <th style="width:200px;">Statut</th>
-                                <th style="width:96px; text-align:center;">Maturité ${Help.tip(MATURITE_AIDE)}</th>
+                                <th>${isQ ? "Question" : "Mesure"}</th>
+                                <th style="width:200px;">${isQ ? `Réponse ${Help.tip("Oui : la pratique est en place. Non : elle ne l'est pas. N/A : la question ne s'applique pas à votre contexte (exclue du score).")}` : "Statut"}</th>
+                                ${isQ ? "" : `<th style="width:96px; text-align:center;">Maturité ${Help.tip(MATURITE_AIDE)}</th>`}
                                 <th style="width:90px; text-align:center;">Détail</th>
                             </tr>
                         </thead>
@@ -374,13 +467,23 @@ const ReferentielsModule = (() => {
 
                 <div class="dashboard-grid ref-detail-grid">
                     <div class="dashboard-card ref-scorecard">
-                        <h3 style="margin-top:0;">Profil de maturité par domaine</h3>
-                        <div class="ref-radar" id="ref-radar">${radarSvg(radarAxesFor(ref, sc))}</div>
-                        ${ref.clLabels ? `<p style="font-size:0.78rem; color:var(--text-muted); margin:10px 0 0;">Axes : domaines de classification (${escapeHtml(Object.keys(ref.clLabels).sort().join(", "))}) ${Help.tip("Chaque axe agrège toutes les questions du domaine de classification (CL), indépendamment du chapitre du questionnaire. Les questions sans domaine CL connu ne sont pas représentées dans le radar mais restent comptées dans la synthèse et les scores par chapitre.")}</p>` : ""}
+                        <h3 style="margin-top:0;">${isQ ? "Profil de conformité par domaine" : "Profil de maturité par domaine"}</h3>
+                        ${showNiv && ref.clLabels ? radarLevelsHtml() : ""}
+                        <div class="ref-radar" id="ref-radar">${radarSvg(radarAxesFor(ref, sc, radarNiveau), radarColor(), isQ ? "Radar de conformité par domaine" : "")}</div>
+                        ${ref.clLabels ? `<p style="font-size:0.78rem; color:var(--text-muted); margin:10px 0 0;">Axes : domaines de classification (${escapeHtml(Object.keys(ref.clLabels).sort().join(", "))}) — <span id="ref-radar-note">${escapeHtml(radarNoteText(ref))}</span> ${Help.tip(isQ ? "Chaque axe agrège toutes les questions du domaine de classification (CL), indépendamment du chapitre du questionnaire. Valeur de l'axe : part de réponses « Oui » parmi les questions applicables (N/A exclues ; une question non répondue compte comme « Non »). Les questions sans domaine CL connu ne sont pas représentées dans le radar mais restent comptées dans la synthèse et les scores par chapitre." : "Chaque axe agrège toutes les questions du domaine de classification (CL), indépendamment du chapitre du questionnaire. Les questions sans domaine CL connu ne sont pas représentées dans le radar mais restent comptées dans la synthèse et les scores par chapitre.")}</p>` : ""}
                     </div>
                     <div class="dashboard-card">
                         <h3 style="margin-top:0;">Synthèse</h3>
                         <div class="ref-kpis ref-kpis--stack">
+                            ${isQ ? `
+                            <div class="ref-kpi">
+                                <div class="ref-kpi__val" id="kpi-score" style="color:${scoreOf(sc.global).col};">${scoreOf(sc.global).html}</div>
+                                <div class="ref-kpi__lbl">Score de conformité ${Help.tip(SCORE_AIDE)}</div>
+                            </div>
+                            <div class="ref-kpi">
+                                <div class="ref-kpi__val" id="kpi-oui">${sc.global.conformes}<span>/${sc.global.applicable}</span></div>
+                                <div class="ref-kpi__lbl">Réponses « Oui » ${Help.tip("Questions répondues « Oui » sur le total des questions applicables (les N/A sont exclues).")}</div>
+                            </div>` : `
                             <div class="ref-kpi">
                                 <div class="ref-kpi__val" id="kpi-mat" style="color:${maturiteColor(sc.global.maturite)};">${sc.global.maturite.toFixed(1)}<span>/5</span></div>
                                 <div class="ref-kpi__lbl">Maturité moyenne</div>
@@ -388,14 +491,16 @@ const ReferentielsModule = (() => {
                             <div class="ref-kpi">
                                 <div class="ref-kpi__val" id="kpi-conf">${sc.global.conformite === null ? "—" : sc.global.conformite + "<span>%</span>"}</div>
                                 <div class="ref-kpi__lbl">Conformité</div>
-                            </div>
+                            </div>`}
                             <div class="ref-kpi">
                                 <div class="ref-kpi__val" id="kpi-eval">${sc.global.evaluated}<span>/${sc.global.total}</span></div>
-                                <div class="ref-kpi__lbl">Mesures évaluées</div>
+                                <div class="ref-kpi__lbl">${isQ ? "Questions évaluées" : "Mesures évaluées"}</div>
                             </div>
                         </div>
-                        <p style="font-size:0.82rem; color:var(--text-muted); margin-top:14px;">Renseignez chaque mesure ci-dessous : le statut et la maturité mettent à jour le radar en temps réel. Ouvrez le <strong>Détail</strong> d'une mesure pour ajouter un commentaire, des preuves et des actions correctives.</p>
-                        ${readinessHtml}
+                        <p style="font-size:0.82rem; color:var(--text-muted); margin-top:14px;">${isQ
+                            ? `Répondez <strong>Oui / Non / N-A</strong> à chaque question ci-dessous : le score et le radar se mettent à jour en temps réel. Ouvrez le <strong>Détail</strong> d'une question pour ajouter un commentaire, des preuves et des actions correctives.`
+                            : `Renseignez chaque mesure ci-dessous : le statut et la maturité mettent à jour le radar en temps réel. Ouvrez le <strong>Détail</strong> d'une mesure pour ajouter un commentaire, des preuves et des actions correctives.`}</p>
+                        <div id="ref-readiness-box">${readinessHtml}</div>
                     </div>
                 </div>
 
@@ -408,13 +513,18 @@ const ReferentielsModule = (() => {
 
     // Ligne d'une mesure (2 <tr> : la ligne principale + une ligne de détail repliable).
     function rowHtml(ref, ex) {
+        const isQ = isQuestionnaire(ref);
         const ev = DataStore.getEvaluation(ref.id, ex.code);
         const statut = ev ? (ev.statut || "") : "";
         const mat = ev ? (Number(ev.maturite) || 0) : 0;
         const meta = statutMeta(statut);
         const actionsCount = ev ? DataStore.getActionsByEvaluation(ev.id).length : 0;
 
-        const statutOpts = STATUTS.map(s => `<option value="${s.v}" ${s.v === statut ? "selected" : ""}>${s.label}</option>`).join("");
+        // Statut hérité hors liste (ex : « partiellement conforme » propagé sur un
+        // questionnaire) : on l'injecte pour ne pas masquer la valeur enregistrée.
+        const statuts = statutsFor(ref).slice();
+        if (statut && !statuts.some(s => s.v === statut)) statuts.push(statutMeta(statut));
+        const statutOpts = statuts.map(s => `<option value="${s.v}" ${s.v === statut ? "selected" : ""}>${s.label}</option>`).join("");
         const matOpts = MATURITES.map(m => `<option value="${m.v}" ${m.v === mat ? "selected" : ""}>${m.v}</option>`).join("");
 
         // Badges de métadonnées (AirCyber) : niveau de label, priorité, domaine CL.
@@ -429,12 +539,12 @@ const ReferentielsModule = (() => {
             <tr class="ref-row" data-code="${ex.code}" data-niveau="${escapeHtml(ex.niveau || "")}" data-cl="${escapeHtml(ex.cl || "")}">
                 <td><strong>${escapeHtml(ex.code)}</strong></td>
                 <td>${escapeHtml(ex.titre)} ${ex.aide ? Help.tip(ex.aide) : ""}${badgesHtml}</td>
-                <td><select class="ref-statut sel-${meta.cls}" data-code="${ex.code}" aria-label="Statut de la mesure ${escapeHtml(ex.code)}">${statutOpts}</select></td>
-                <td style="text-align:center;"><select class="ref-mat" data-code="${ex.code}" aria-label="Maturité de la mesure ${escapeHtml(ex.code)}">${matOpts}</select></td>
+                <td><select class="ref-statut sel-${meta.cls}" data-code="${ex.code}" aria-label="${isQ ? "Réponse à la question" : "Statut de la mesure"} ${escapeHtml(ex.code)}">${statutOpts}</select></td>
+                ${isQ ? "" : `<td style="text-align:center;"><select class="ref-mat" data-code="${ex.code}" aria-label="Maturité de la mesure ${escapeHtml(ex.code)}">${matOpts}</select></td>`}
                 <td style="text-align:center;"><button class="ref-toggle" data-toggle="${ex.code}" aria-expanded="false" title="Ouvrir le détail">Détail${actionsCount ? ` <span class="ref-badge-count">${actionsCount}</span>` : ""}</button></td>
             </tr>
             <tr class="ref-detail-row" data-detail="${ex.code}" hidden>
-                <td colspan="5">${detailPanelHtml(ref, ex, ev)}</td>
+                <td colspan="${isQ ? 4 : 5}">${detailPanelHtml(ref, ex, ev)}</td>
             </tr>`;
     }
 
@@ -533,22 +643,7 @@ const ReferentielsModule = (() => {
         if (!root) return;
 
         // Lit l'état complet d'une ligne dans le DOM (pour un upsert cohérent).
-        function readRow(code) {
-            const q = sel => root.querySelector(`${sel}[data-code="${cssEsc(code)}"]`);
-            const statutEl = q("select.ref-statut");
-            const matEl = q("select.ref-mat");
-            const comEl = q("textarea.ref-comment");
-            const preEl = q("textarea.ref-preuves");
-            return {
-                ref_id: ref.id, code,
-                statut: statutEl ? statutEl.value : "",
-                maturite: matEl ? (Number(matEl.value) || 0) : 0,
-                commentaire: comEl ? comEl.value.trim() : "",
-                preuves: preEl ? preEl.value.trim() : ""
-            };
-        }
-
-        function persist(code) { return DataStore.upsertEvaluation(readRow(code)); }
+        function persist(code) { return DataStore.upsertEvaluation(readRowState(ref, code, root)); }
 
         // Changement de statut ou de maturité → persiste + rafraîchit scores/badges.
         root.addEventListener("change", (e) => {
@@ -632,7 +727,7 @@ const ReferentielsModule = (() => {
         const csvInput = document.getElementById("aircyberCsv");
         if (importBtn && csvInput) {
             importBtn.onclick = () => {
-                if (!confirm("Importer vos réponses écrasera l'évaluation actuelle de ce référentiel pour les questions concernées (Oui → conforme, Non → non conforme, N/A → non applicable). Continuer ?")) return;
+                if (!confirm("Importer vos réponses écrasera les réponses actuelles de ce questionnaire pour les questions concernées (Oui, Non ou N/A selon le fichier). Continuer ?")) return;
                 csvInput.click();
             };
             csvInput.onchange = (e) => {
@@ -647,6 +742,16 @@ const ReferentielsModule = (() => {
                 reader.readAsText(file);
                 csvInput.value = "";
             };
+        }
+
+        // Sélecteur de niveau du radar (Global / Bronze / Argent / Or — AirCyber).
+        const radarLevels = document.getElementById("ref-radar-levels");
+        if (radarLevels) {
+            radarLevels.querySelectorAll(".ref-filter-niv").forEach(btn => btn.addEventListener("click", () => {
+                radarNiveau = btn.dataset.niv || "";
+                radarLevels.querySelectorAll(".ref-filter-niv").forEach(b => b.classList.toggle("active", b === btn));
+                refreshRadar(ref);
+            }));
         }
 
         // Filtres par niveau de label / domaine CL (AirCyber).
@@ -686,8 +791,10 @@ const ReferentielsModule = (() => {
 
     // Mappe les réponses d'un export CSV (Numéro ; Question ; Réponse) vers des
     // évaluations. Les questions d'inventaire d'outils et les codes hors référentiel
-    // sont ignorés. Barème : Oui→conforme(3), Non→non conforme(1), N/A→non applicable(0),
-    // Partiellement→partiel(2). Les autres réponses (noms d'outils, vide) sont ignorées.
+    // sont ignorés. Barème : Oui→conforme, Non→non conforme, N/A→non applicable,
+    // Partiellement→partiel (héritage). Les autres réponses (noms d'outils, vide)
+    // sont ignorées. La maturité CMMI n'est pas renseignée (sans objet pour un
+    // questionnaire Oui/Non ; le score se calcule sur le statut seul).
     function importAnswersFromCsv(ref, text) {
         let rows;
         try {
@@ -702,9 +809,9 @@ const ReferentielsModule = (() => {
         if (repCol < 0) repCol = rows[0].length - 1;
         const isTool = q => /^\s*quel(le)?s?\s+(outils?|solutions?)/i.test(String(q || ""));
         const MAP = {
-            "oui": { statut: "conforme", maturite: 3 },
-            "non": { statut: "non conforme", maturite: 1 },
-            "partiellement conforme": { statut: "partiellement conforme", maturite: 2 }
+            "oui": { statut: "conforme" },
+            "non": { statut: "non conforme" },
+            "partiellement conforme": { statut: "partiellement conforme" }
         };
 
         let imported = 0, skipped = 0;
@@ -717,9 +824,9 @@ const ReferentielsModule = (() => {
             if (!Referentiels.findExigence(ref, code)) continue;   // code absent (ex : tool-picker exclu)
             const al = ans.toLowerCase();
             let mapped = MAP[al];
-            if (!mapped && al.indexOf("n/a") === 0) mapped = { statut: "non applicable", maturite: 0 };
+            if (!mapped && al.indexOf("n/a") === 0) mapped = { statut: "non applicable" };
             if (!mapped) { skipped++; continue; }                  // réponse vide ou non interprétable
-            DataStore.upsertEvaluation({ ref_id: ref.id, code, statut: mapped.statut, maturite: mapped.maturite });
+            DataStore.upsertEvaluation({ ref_id: ref.id, code, statut: mapped.statut });
             imported++;
         }
         return { imported, skipped };
@@ -757,13 +864,16 @@ const ReferentielsModule = (() => {
         const q = sel => root.querySelector(`${sel}[data-code="${cssEsc(code)}"]`);
         const statutEl = q("select.ref-statut"), matEl = q("select.ref-mat");
         const comEl = q("textarea.ref-comment"), preEl = q("textarea.ref-preuves");
-        return {
+        const state = {
             ref_id: ref.id, code,
             statut: statutEl ? statutEl.value : "",
-            maturite: matEl ? (Number(matEl.value) || 0) : 0,
             commentaire: comEl ? comEl.value.trim() : "",
             preuves: preEl ? preEl.value.trim() : ""
         };
+        // Questionnaire : pas de sélecteur de maturité — le champ est omis pour ne
+        // pas écraser une valeur stockée (upsertEvaluation est une mise à jour partielle).
+        if (matEl) state.maturite = Number(matEl.value) || 0;
+        return state;
     }
 
     // Met à jour le compteur d'actions affiché sur le bouton « Détail ».
@@ -785,21 +895,42 @@ const ReferentielsModule = (() => {
         sel.classList.add("sel-" + statutMeta(sel.value).cls);
     }
 
+    // Recalcule et réinjecte le radar (vue de niveau courante) + sa note.
+    function refreshRadar(ref, sc) {
+        const radar = document.getElementById("ref-radar");
+        if (!radar) return;
+        const isQ = isQuestionnaire(ref);
+        radar.innerHTML = radarSvg(radarAxesFor(ref, sc || computeScores(ref), radarNiveau), radarColor(), isQ ? "Radar de conformité par domaine" : "");
+        const note = document.getElementById("ref-radar-note");
+        if (note) note.textContent = radarNoteText(ref);
+    }
+
     // Recalcule et réinjecte KPIs, radar et scores par domaine (sans re-render global).
     function refreshScores(ref) {
         const sc = computeScores(ref);
+        const isQ = isQuestionnaire(ref);
         const setHtml = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
-        setHtml("kpi-mat", sc.global.maturite.toFixed(1) + "<span>/5</span>");
-        const kpiMat = document.getElementById("kpi-mat"); if (kpiMat) kpiMat.style.color = maturiteColor(sc.global.maturite);
-        setHtml("kpi-conf", sc.global.conformite === null ? "—" : sc.global.conformite + "<span>%</span>");
+        if (isQ) {
+            const s = scoreOf(sc.global);
+            setHtml("kpi-score", s.html);
+            const kpiScore = document.getElementById("kpi-score"); if (kpiScore) kpiScore.style.color = s.col;
+            setHtml("kpi-oui", sc.global.conformes + "<span>/" + sc.global.applicable + "</span>");
+        } else {
+            setHtml("kpi-mat", sc.global.maturite.toFixed(1) + "<span>/5</span>");
+            const kpiMat = document.getElementById("kpi-mat"); if (kpiMat) kpiMat.style.color = maturiteColor(sc.global.maturite);
+            setHtml("kpi-conf", sc.global.conformite === null ? "—" : sc.global.conformite + "<span>%</span>");
+        }
         setHtml("kpi-eval", sc.global.evaluated + "<span>/" + sc.global.total + "</span>");
+        if (hasNiveaux(ref)) setHtml("ref-readiness-box", niveauReadinessHtml(computeNiveauReadiness(ref)));
 
-        const radar = document.getElementById("ref-radar");
-        if (radar) radar.innerHTML = radarSvg(radarAxesFor(ref, sc));
+        refreshRadar(ref, sc);
 
         sc.domaines.forEach(d => {
             const matEl = document.querySelector(`.ref-domain__mat[data-dom="${cssEsc(d.id)}"]`);
-            if (matEl) { matEl.textContent = d.maturite.toFixed(1) + "/5"; matEl.style.color = maturiteColor(d.maturite); }
+            if (matEl) {
+                if (isQ) { const ds = scoreOf(d); matEl.textContent = ds.txt; matEl.style.color = ds.col; }
+                else { matEl.textContent = d.maturite.toFixed(1) + "/5"; matEl.style.color = maturiteColor(d.maturite); }
+            }
             const cntEl = document.querySelector(`.ref-domain__count[data-dom="${cssEsc(d.id)}"]`);
             if (cntEl) cntEl.textContent = d.evaluated + "/" + d.total + " évaluées";
         });

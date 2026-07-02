@@ -120,6 +120,9 @@ const ConformiteModule = (() => {
             return;
         }
 
+        // Questionnaire Oui/Non (AirCyber) : pas d'échelle de maturité CMMI → colonne « Mat. » omise.
+        const showMat = ref.scoring !== "conformite";
+        const nbCols = showMat ? 7 : 6;
         let applicables = 0, exclues = 0, conformes = 0, evaluees = 0, total = 0;
         const sections = ref.domaines.map(d => {
             const rows = d.exigences.map(ex => {
@@ -139,12 +142,12 @@ const ConformiteModule = (() => {
                     <td>${escapeHtml(ex.titre)}</td>
                     <td style="text-align:center;">${applicable ? "Oui" : "<span style='color:var(--text-muted);'>Non</span>"}</td>
                     <td><span class="status ${meta.cls}">${meta.label}</span></td>
-                    <td style="text-align:center;">${mat}/5</td>
+                    ${showMat ? `<td style="text-align:center;">${mat}/5</td>` : ""}
                     <td>${mesure ? escapeHtml(mesure.nom) : "<span style='color:var(--text-muted);'>—</span>"}</td>
                     <td style="font-size:0.85rem;">${escapeHtml(justif) || "<span style='color:var(--text-muted);'>—</span>"}</td>
                 </tr>`;
             }).join("");
-            return `<tr class="soa-domain-row"><td colspan="7"><strong>${escapeHtml(d.nom)}</strong></td></tr>${rows}`;
+            return `<tr class="soa-domain-row"><td colspan="${nbCols}"><strong>${escapeHtml(d.nom)}</strong></td></tr>${rows}`;
         }).join("");
 
         const dateJour = new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -175,7 +178,7 @@ const ConformiteModule = (() => {
                 <table class="data-table soa-table">
                     <thead><tr>
                         <th>Réf.</th><th>Mesure</th><th style="text-align:center;">Applicable</th>
-                        <th>Mise en œuvre</th><th style="text-align:center;">Mat.</th><th>Mesure de sécurité</th><th>Justification</th>
+                        <th>Mise en œuvre</th>${showMat ? `<th style="text-align:center;">Mat.</th>` : ""}<th>Mesure de sécurité</th><th>Justification</th>
                     </tr></thead>
                     <tbody>${sections}</tbody>
                 </table>

@@ -5,6 +5,37 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Référentiels — AirCyber : radar par niveau de label + score Oui/Non (sans CMMI)
+- **Radar granulaire par niveau de label** : sur la fiche AirCyber, des boutons
+  **Global / Bronze / Argent / Or** au-dessus du radar restreignent le profil par domaine CL
+  aux seules questions du niveau choisi (« suis-je prêt pour le label Bronze ? »). Le tracé
+  prend la **teinte du niveau** (bronze, argent, or ; bleu structure pour Global), le bouton
+  actif aussi, et une note sous le graphique indique le nombre de questions représentées
+  (66 Bronze, 57 Argent, 33 Or, 156 au global). La vue de niveau est **conservée** lors des
+  mises à jour temps réel ; la fiche s'ouvre toujours sur Global.
+- **Fin des scores CMMI pour AirCyber** (`scoring: "conformite"` dans le catalogue) : le
+  questionnaire se répond désormais uniquement par **Oui / Non / N-A** (colonnes « Question »
+  / « Réponse », colonne et sélecteur **Maturité supprimés** pour ce seul référentiel).
+  **Score de conformité = réponses « Oui » ÷ questions applicables** : les **N/A sont exclues
+  du calcul**, une question non répondue compte comme « Non » (même règle que le panneau
+  « préparation au label »). KPIs adaptés (Score de conformité, Réponses « Oui », Questions
+  évaluées), scores par chapitre en **%** au lieu de x/5, axes du radar = taux de « Oui ».
+- **Cohérence transverse** : la **SoA** AirCyber n'affiche plus la colonne « Mat. » ; sur le
+  **tableau de bord**, AirCyber est **exclu de la moyenne de maturité CMMI** (KPI, tendance,
+  synthèse de posture) et sa barre « Maturité par référentiel » affiche son **score %** avec la
+  légende « score Oui/Non (sans échelle CMMI) ». L'**import CSV** ne pose plus de maturité
+  heuristique (statuts seuls). La saisie ne touche plus au champ `maturite` stocké (préservé
+  mais ignoré) ; un statut hérité « partiellement conforme » (propagation pivot/correspondances)
+  reste affiché sans être proposé, et compte comme « pas Oui » dans le score. Le panneau
+  « préparation au label » se **rafraîchit désormais en direct** à chaque réponse.
+- **Les autres référentiels ne changent pas** : ANSSI, ISO 27002, NIS2 et DORA conservent les
+  5 statuts, l'échelle de maturité CMMI 0-5, leurs KPIs et leur radar.
+- **Tests headless (Playwright)** : 64 assertions — colonnes/réponses/KPIs du questionnaire,
+  géométrie exacte du radar par niveau (Bronze CL1 4/4 → sommet au bord), teintes par niveau,
+  score et préparation au label recalculés en direct (vue de niveau conservée), maturité héritée
+  préservée, statut hérité affiché, import CSV sans maturité, non-régression ANSSI (statuts,
+  CMMI, radar 10 axes), SoA 6/7 colonnes, tableau de bord ; **0 erreur console**.
+
 ### Référentiels — AirCyber : profil de maturité par domaine de classification (CL)
 - Le **radar « Profil de maturité par domaine »** du référentiel AirCyber est désormais construit
   sur les **domaines de classification CL existants** (CL0 Governance, CL1 Security event

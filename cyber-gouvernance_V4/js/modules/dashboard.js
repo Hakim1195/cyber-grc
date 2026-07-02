@@ -34,6 +34,14 @@ const DashboardModule = (() => {
         return "var(--color-gray)";
     }
 
+    // Teinte indicative d'un score de conformité (0-100 ou null) — questionnaires Oui/Non.
+    function scoreColor(pct) {
+        if (pct === null) return "var(--color-gray)";
+        if (pct >= 90) return "var(--color-success)";
+        if (pct >= 50) return "var(--color-warning)";
+        return "var(--color-danger)";
+    }
+
     /* =========================
        GRAPHIQUES MAISON (SVG / HTML)
     ========================== */
@@ -189,12 +197,16 @@ const DashboardModule = (() => {
     /* =========================
        AGRÉGATION MATURITÉ RÉFÉRENTIELS
        (réplique la sémantique de referentiels.js : moyenne sur les exigences
-        applicables ; « non applicable » exclu ; « non évalué » = maturité 0.)
+        applicables ; « non applicable » exclu ; « non évalué » = maturité 0.
+        Les questionnaires Oui/Non — `scoring: "conformite"`, ex. AirCyber — n'ont
+        pas d'échelle CMMI : exclus de la moyenne de maturité, `maturite: null`
+        par référentiel ; ils restent comptés dans conformité et avancement.)
     ========================== */
     function computeReferentiels() {
         const refs = (typeof Referentiels !== "undefined") ? Referentiels.all() : [];
-        let gMat = 0, gApp = 0, gConf = 0, gEval = 0, gTot = 0;
+        let gMat = 0, gMatApp = 0, gApp = 0, gConf = 0, gEval = 0, gTot = 0;
         const perRef = refs.map(ref => {
+            const quest = ref.scoring === "conformite";
             const flat = Referentiels.flatExigences(ref);
             let matSum = 0, app = 0, conf = 0, evalue = 0;
             flat.forEach(ex => {
@@ -206,11 +218,12 @@ const DashboardModule = (() => {
                 app++; matSum += mat;
                 if (statut === "conforme") conf++;
             });
-            gMat += matSum; gApp += app; gConf += conf; gEval += evalue; gTot += flat.length;
+            if (!quest) { gMat += matSum; gMatApp += app; }
+            gApp += app; gConf += conf; gEval += evalue; gTot += flat.length;
             return {
-                id: ref.id, nom: ref.nom, editeur: ref.editeur,
+                id: ref.id, nom: ref.nom, editeur: ref.editeur, questionnaire: quest,
                 total: flat.length, evaluated: evalue,
-                maturite: app ? matSum / app : 0,
+                maturite: quest ? null : (app ? matSum / app : 0),
                 conformite: app ? Math.round((conf / app) * 100) : null
             };
         });
@@ -218,7 +231,7 @@ const DashboardModule = (() => {
             perRef,
             global: {
                 total: gTot, evaluated: gEval,
-                maturite: gApp ? gMat / gApp : 0,
+                maturite: gMatApp ? gMat / gMatApp : 0,
                 conformite: gApp ? Math.round((gConf / gApp) * 100) : null
             }
         };
@@ -404,7 +417,8 @@ const DashboardModule = (() => {
         let postureTitle = "Posture de sécurité maîtrisée";
         let postureMsg = "Aucune alerte critique sur le périmètre. Poursuivez l'amélioration continue et le maintien en condition de sécurité.";
         const facts = [];
-        if (ref.global.evaluated > 0) facts.push(`maturité ${ref.global.maturite.toFixed(1)}/5`);
+        // Maturité CMMI : uniquement si au moins un référentiel hors questionnaire est évalué.
+        if (ref.perRef.some(r => !r.questionnaire && r.evaluated > 0)) facts.push(`maturité ${ref.global.maturite.toFixed(1)}/5`);
         facts.push(`conformité ${tauxConformite}%`);
         if (declarationsEnAttente > 0) {
             postureTone = "is-danger";
@@ -469,7 +483,7 @@ const DashboardModule = (() => {
         const nDays = history.length;
         const trendTiles = [
             trendTile({ label: "Conformité", values: hSeries("conformite"), higherIsBetter: true, unit: "%", decimals: 0, color: "var(--color-success)", help: "Part des exigences applicables jugées conformes, sur l'ensemble des périmètres." }),
-            trendTile({ label: "Maturité référentiels", values: hSeries("maturite"), higherIsBetter: true, unit: "/5", decimals: 1, color: "var(--primary)", help: "Maturité moyenne (CMMI 0-5) des mesures applicables auto-évaluées." }),
+            trendTile({ label: "Maturité référentiels", values: hSeries("maturite"), higherIsBetter: true, unit: "/5", decimals: 1, color: "var(--primary)", help: "Maturité moyenne (CMMI 0-5) des mesures applicables auto-évaluées (hors questionnaires Oui/Non comme AirCyber)." }),
             trendTile({ label: "Exposition résiduelle", values: hSeries("expo"), higherIsBetter: false, decimals: 1, color: "var(--color-danger)", help: "Somme des scores de risque résiduel — plus c'est bas, mieux c'est." }),
             trendTile({ label: "Risques critiques", values: hSeries("risques_crit"), higherIsBetter: false, decimals: 0, color: "var(--color-warning)", help: "Nombre de risques au résiduel ≥ 3 (critiques et très critiques)." }),
             trendTile({ label: "Actions en retard", values: hSeries("actions_retard"), higherIsBetter: false, decimals: 0, color: "var(--color-danger)", help: "Actions non terminées dont l'échéance est dépassée." }),
@@ -513,18 +527,27 @@ const DashboardModule = (() => {
             </div>`;
 
         // -- Carte Maturité par référentiel (barres) --
+        // Questionnaire Oui/Non (AirCyber) : pas de CMMI → barre = score de conformité (%).
         const refBars = ref.perRef.length === 0
             ? `<p class="chart-empty">Catalogue de référentiels indisponible.</p>`
-            : ref.perRef.map(r => hbar(
-                r.nom,
-                r.maturite, 5,
-                maturiteColor(r.maturite),
-                r.maturite.toFixed(1) + "/5",
-                `${r.evaluated}/${r.total} évaluées${r.conformite === null ? "" : " · conformité " + r.conformite + "%"}`
-            )).join("");
+            : ref.perRef.map(r => r.questionnaire
+                ? hbar(
+                    r.nom,
+                    r.conformite === null ? 0 : r.conformite, 100,
+                    scoreColor(r.evaluated ? r.conformite : null),
+                    r.evaluated && r.conformite !== null ? r.conformite + "%" : "—",
+                    `${r.evaluated}/${r.total} évaluées · score Oui/Non (sans échelle CMMI)`
+                )
+                : hbar(
+                    r.nom,
+                    r.maturite, 5,
+                    maturiteColor(r.maturite),
+                    r.maturite.toFixed(1) + "/5",
+                    `${r.evaluated}/${r.total} évaluées${r.conformite === null ? "" : " · conformité " + r.conformite + "%"}`
+                )).join("");
         const refCard = `
             <div class="dashboard-card chart-card clickable-card" onclick="Router.navigateTo('/referentiels')" style="cursor:pointer;" title="Aller aux référentiels">
-                <h3>Maturité par référentiel ${Help.tip("Niveau de maîtrise moyen (échelle CMMI 0-5) par référentiel de sécurité, calculé sur les mesures applicables auto-évaluées.")}</h3>
+                <h3>Maturité par référentiel ${Help.tip("Niveau de maîtrise moyen (échelle CMMI 0-5) par référentiel de sécurité, calculé sur les mesures applicables auto-évaluées. Le questionnaire AirCyber, répondu en Oui/Non, affiche son score de conformité (%) et n'entre pas dans la moyenne CMMI.")}</h3>
                 <div style="display:flex; align-items:baseline; gap:8px; margin:2px 0 14px;">
                     <span style="font-size:2rem; font-weight:bold; color:${maturiteColor(ref.global.maturite)};">${ref.global.maturite.toFixed(1)}</span>
                     <span style="color:var(--text-muted);">/5 — maturité globale</span>

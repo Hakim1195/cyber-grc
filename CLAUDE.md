@@ -14,7 +14,8 @@ ne quittent jamais votre machine ». Public : RSSI/consultants **et** non-expert
 sensibiliser → chaque concept doit avoir une **note pédagogique** (`Help.tip(...)`).
 
 - **Racine applicative** : `cyber-gouvernance_V4/`
-- **Branche de travail** : `claude/decompress-zip-folder-230woc` (pousser dessus)
+- **Branche de travail** : `main` UNIQUEMENT (consigne utilisateur du 02/07/2026 :
+  ne **jamais** créer d'autres branches, tout pousser sur `main`).
 - **Marque** : Dedienne Aerospace (à conserver).
 
 ## 2. Décisions structurantes (VALIDÉES — ne pas re-débattre)
@@ -92,8 +93,12 @@ cyber-gouvernance_V4/
   import in-app des réponses (bouton sur la fiche AirCyber, parsing SheetJS, mapping Oui/Non→statut) ;
   métadonnées par question **niveau Bronze/Argent/Or + priorité + domaine CL0–CL6** (badges,
   filtres, panneau « préparation au label »), champs optionnels `niveau`/`priorite`/`cl` + `clLabels` ;
-  **radar de maturité par domaines CL** (axes CL0–CL6 nommés, `computeClAxes` activé par `clLabels`,
-  questions sans CL hors radar mais comptées ailleurs ; autres référentiels : radar thématique inchangé).
+  **radar par domaines CL** (axes CL0–CL6 nommés, `computeClAxes` activé par `clLabels`,
+  questions sans CL hors radar mais comptées ailleurs ; autres référentiels : radar thématique inchangé),
+  **filtrable par niveau de label** (boutons Global/Bronze/Argent/Or, tracé teinté par niveau) ;
+  **`scoring: "conformite"`** : AirCyber se répond **Oui/Non/N-A sans maturité CMMI** — score =
+  « Oui » ÷ applicables (N/A exclues, non répondu = Non), mêmes valeurs de `statut` en base,
+  `maturite` préservée mais ignorée (exclue aussi des moyennes CMMI du dashboard et de la SoA).
 - Export fichier : enveloppe **`grc-backup`** `{ format, version, encrypted, createdAt, app, payload|kdf+cipher }`.
 
 ## 5. Lancer & tester (important)
@@ -197,6 +202,17 @@ mêmes règles de moyenne que `computeScores`. Les 78 questions sans CL sont hor
 explicative sous le graphique) mais comptées partout ailleurs. Autres référentiels inchangés.
 Tests Playwright (22 assertions : axes nommés liste+fiche, géométrie exacte, exclusion sans-CL,
 refresh temps réel, non-régression ANSSI ; 0 erreur).
+
+**Fait (AirCyber — radar par niveau de label + score Oui/Non sans CMMI)** : radar de la fiche
+**filtrable Global/Bronze/Argent/Or** (`radarNiveau`, tracé + bouton actif teintés par niveau,
+note « n questions », vue conservée au refresh, retour à Global à l'ouverture) ; **AirCyber scoré
+sans CMMI** (`scoring: "conformite"` dans `ref_aircyber.js`) — réponses **Oui/Non/N-A** (mêmes
+valeurs `statut`, « partiellement » hérité affiché mais non proposé), colonne Maturité supprimée,
+**score = Oui ÷ applicables** (N/A exclues, non répondu = Non), KPIs/chapitres en %, axes radar =
+taux de Oui, panneau « préparation au label » rafraîchi en direct, `maturite` stockée préservée
+mais ignorée (saisie et import CSV ne la touchent plus). SoA sans colonne « Mat. » ; dashboard :
+moyenne CMMI hors AirCyber, barre AirCyber en % « score Oui/Non ». Autres référentiels inchangés.
+Tests Playwright (64 assertions ; 0 erreur).
 
 **Prochain** : poursuivre le Chantier 2 — harmoniser tableaux denses / KPI / radars ; tooltips restants
 sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches.

@@ -6,6 +6,10 @@
 // niveau (Bronze/Argent/Or) / priorité / domaine CL0-CL6 (fichier de suivi fourni).
 // Questions d'inventaire d'outils écartées (67). 234 questions dont 156 avec niveau/priorité/CL.
 //
+// `scoring: "conformite"` : questionnaire à réponses Oui / Non / N-A — le score est
+// le taux de « Oui » sur les questions applicables (N/A exclues), SANS échelle de
+// maturité CMMI (réservée aux autres référentiels).
+//
 // S'auto-enregistre dans le registre `Referentiels`.
 
 (function () {
@@ -17,6 +21,7 @@
     "version": "234 questions",
     "description": "Questionnaire de maturité cybersécurité de la filière aéronautique (programme AirCyber / BoostAerospace). Auto-évaluation des pratiques, avec niveau de labellisation (Bronze / Argent / Or), priorité et domaine de classification (CL0-CL6).",
     "aide": "Questionnaire utilisé dans la supply chain aéronautique. Chaque question porte, quand elle est connue, son niveau de label (Bronze/Argent/Or), sa priorité et son domaine CL0-CL6. Les questions d'inventaire d'outils ne sont pas reprises. Le mapping niveau/priorité/CL couvre 156 des 234 questions.",
+    "scoring": "conformite",
     "clLabels": {
         "CL0": "Governance",
         "CL1": "Security event management",
