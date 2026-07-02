@@ -44,7 +44,7 @@ const ActifsModule = (() => {
                         <tr>
                             <th>Nom de l'actif</th>
                             <th>Type</th>
-                            <th>Criticité (CIA)</th>
+                            <th>Criticité (CIA) ${Help.tip("Criticité de l'actif selon les 3 critères de sécurité : Confidentialité, Intégrité, Disponibilité (CIA, ou DICP en français). Plus un actif est critique, plus il justifie des protections renforcées.")}</th>
                             <th>Responsable</th>
                         </tr>
                     </thead>
@@ -132,7 +132,7 @@ const ActifsModule = (() => {
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Criticité Globale (CIA)</label>
+                            <label>Criticité Globale (CIA) ${Help.tip("Criticité de l'actif selon les 3 critères de sécurité : Confidentialité, Intégrité, Disponibilité (CIA, ou DICP en français). Plus un actif est critique, plus il justifie des protections renforcées.")}</label>
                             <select id="criticite">
                                 <option value="faible">Faible</option>
                                 <option value="modérée">Modérée</option>

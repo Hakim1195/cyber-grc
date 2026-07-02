@@ -54,7 +54,7 @@ const RisquesModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>Registre des Risques (Méthode FxGxM)</h1>
+                        <h1>Registre des Risques (Méthode FxGxM) ${Help.tip("Méthode d'appréciation du risque : Score brut = Fréquence × Gravité (risque inhérent), puis Score résiduel = Score brut × Niveau de maîtrise (risque réel après vos mesures).")}</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (SI global)</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
@@ -145,7 +145,7 @@ const RisquesModule = (() => {
 
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                         <div class="form-group">
-                            <label>Fréquence (F)</label>
+                            <label>Fréquence (F) ${Help.tip("Vraisemblance de l'événement redouté, de 1 (rare/improbable) à 4 (très fréquent). Dans EBIOS, c'est la probabilité que le scénario survienne.")}</label>
                             <select id="f">
                                 <option value="1">1 - Rare/improbable</option>
                                 <option value="2">2 - Peu fréquent</option>
@@ -154,7 +154,7 @@ const RisquesModule = (() => {
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Gravité (G)</label>
+                            <label>Gravité (G) ${Help.tip("Ampleur des conséquences si le risque se réalise, de 1 (très faible) à 4 (très grave) : impacts financier, juridique, image, ou sur la sécurité des personnes.")}</label>
                             <select id="g">
                                 <option value="1">1 - Très faible</option>
                                 <option value="2">2 - Modéré</option>
@@ -163,7 +163,7 @@ const RisquesModule = (() => {
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Niveau de maîtrise (M)</label>
+                            <label>Niveau de maîtrise (M) ${Help.tip("Coefficient reflétant l'efficacité de vos mesures de sécurité : de 0,05 (risque globalement maîtrisé) à 1 (aucune maîtrise). Il réduit le score brut pour obtenir le score résiduel.")}</label>
                             <select id="m">
                                 <option value="0.05">0.05 - Globalement maîtrisé</option>
                                 <option value="0.3">0.30 - Assez maîtrisé</option>
@@ -289,7 +289,7 @@ const RisquesModule = (() => {
 
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                             <div class="form-group">
-                                <label>Fréquence (F)</label>
+                                <label>Fréquence (F) ${Help.tip("Vraisemblance de l'événement redouté, de 1 (rare/improbable) à 4 (très fréquent). Dans EBIOS, c'est la probabilité que le scénario survienne.")}</label>
                                 <select id="f">
                                     <option value="1" ${currentF == 1 ? "selected" : ""}>1 - Rare/improbable</option>
                                     <option value="2" ${currentF == 2 ? "selected" : ""}>2 - Peu fréquent</option>
@@ -298,7 +298,7 @@ const RisquesModule = (() => {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>Gravité (G)</label>
+                                <label>Gravité (G) ${Help.tip("Ampleur des conséquences si le risque se réalise, de 1 (très faible) à 4 (très grave) : impacts financier, juridique, image, ou sur la sécurité des personnes.")}</label>
                                 <select id="g">
                                     <option value="1" ${currentG == 1 ? "selected" : ""}>1 - Très faible</option>
                                     <option value="2" ${currentG == 2 ? "selected" : ""}>2 - Modéré</option>
@@ -307,7 +307,7 @@ const RisquesModule = (() => {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>Niveau de maîtrise (M)</label>
+                                <label>Niveau de maîtrise (M) ${Help.tip("Coefficient reflétant l'efficacité de vos mesures de sécurité : de 0,05 (risque globalement maîtrisé) à 1 (aucune maîtrise). Il réduit le score brut pour obtenir le score résiduel.")}</label>
                                 <select id="m">
                                     <option value="0.05" ${currentM == 0.05 ? "selected" : ""}>0.05 - Globalement maîtrisé</option>
                                     <option value="0.3" ${currentM == 0.3 ? "selected" : ""}>0.30 - Assez maîtrisé</option>

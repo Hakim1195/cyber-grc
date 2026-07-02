@@ -106,7 +106,7 @@ const BiaModule = (() => {
 
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                         <div class="form-group">
-                            <label>Criticité Métier</label>
+                            <label>Criticité Métier ${Help.tip("Importance du processus pour l'activité, de Faible à Critique (vital). Elle priorise les efforts de continuité et guide le choix des objectifs RTO/RPO.")}</label>
                             <select id="criticite">
                                 <option value="Faible">Faible</option>
                                 <option value="Modérée">Modérée</option>
@@ -115,7 +115,7 @@ const BiaModule = (() => {
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>RTO (Objectif de Temps de Reprise)</label>
+                            <label>RTO (Objectif de Temps de Reprise) ${Help.tip("Recovery Time Objective : durée maximale d'interruption admissible avant que l'arrêt ne devienne inacceptable. Ex. : le site doit repartir en moins de 4 h.")}</label>
                             <select id="rto">
                                 <option value="0h (Immédiat - PRA Actif)">0h (Immédiat - Haute Dispo)</option>
                                 <option value="4 heures">4 heures</option>
@@ -126,7 +126,7 @@ const BiaModule = (() => {
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>RPO (Objectif de Point de Perte)</label>
+                            <label>RPO (Objectif de Point de Perte) ${Help.tip("Recovery Point Objective : quantité de données que l'on accepte de perdre, exprimée en temps. Ex. : un RPO de 24 h impose une sauvegarde au moins quotidienne.")}</label>
                             <select id="rpo">
                                 <option value="0h (Zéro perte - Synchro)">0h (Zéro perte - Réplication)</option>
                                 <option value="4 heures">4 heures</option>
@@ -218,7 +218,7 @@ const BiaModule = (() => {
 
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                             <div class="form-group">
-                                <label>Criticité Métier</label>
+                                <label>Criticité Métier ${Help.tip("Importance du processus pour l'activité, de Faible à Critique (vital). Elle priorise les efforts de continuité et guide le choix des objectifs RTO/RPO.")}</label>
                                 <select id="criticite">
                                     <option value="Faible" ${processus.criticite === "Faible" ? "selected" : ""}>Faible</option>
                                     <option value="Modérée" ${processus.criticite === "Modérée" ? "selected" : ""}>Modérée</option>
@@ -227,7 +227,7 @@ const BiaModule = (() => {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>RTO</label>
+                                <label>RTO ${Help.tip("Recovery Time Objective : durée maximale d'interruption admissible avant que l'arrêt ne devienne inacceptable. Ex. : le site doit repartir en moins de 4 h.")}</label>
                                 <select id="rto">
                                     <option value="0h (Immédiat - PRA Actif)" ${processus.rto === "0h (Immédiat - PRA Actif)" ? "selected" : ""}>0h (Immédiat - Haute Dispo)</option>
                                     <option value="4 heures" ${processus.rto === "4 heures" ? "selected" : ""}>4 heures</option>
@@ -238,7 +238,7 @@ const BiaModule = (() => {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>RPO</label>
+                                <label>RPO ${Help.tip("Recovery Point Objective : quantité de données que l'on accepte de perdre, exprimée en temps. Ex. : un RPO de 24 h impose une sauvegarde au moins quotidienne.")}</label>
                                 <select id="rpo">
                                     <option value="0h (Zéro perte - Synchro)" ${processus.rpo === "0h (Zéro perte - Synchro)" ? "selected" : ""}>0h (Zéro perte - Réplication)</option>
                                     <option value="4 heures" ${processus.rpo === "4 heures" ? "selected" : ""}>4 heures</option>

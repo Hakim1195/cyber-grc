@@ -208,7 +208,7 @@ const AuditsModule = (() => {
 
                 <div class="dashboard-card no-print" style="margin-top: 20px; border-top: 4px solid #784bd1;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="margin:0; color:#784bd1;">Grille des Constats (Preuves d'audit)</h3>
+                        <h3 style="margin:0; color:#784bd1;">Grille des Constats (Preuves d'audit) ${Help.tip("Résultats de l'audit classés par gravité : Point fort (bonne pratique), Point d'amélioration, Non-conformité Mineure (écart isolé) et Non-conformité Majeure (défaillance systémique exigeant une action corrective).")}</h3>
                         <button id="addConstatBtn" style="background:#784bd1; font-size:0.8rem; padding:5px 10px;">Ajouter un constat</button>
                     </div>
                     <div id="constats-container"></div>

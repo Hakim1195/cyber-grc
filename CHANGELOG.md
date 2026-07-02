@@ -5,6 +5,23 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Chantier 2 — Pédagogie : tooltips ⓘ sur les concepts techniques (risque & continuité)
+- **20 notes pédagogiques `Help.tip(ⓘ)`** ajoutées sur les modules techniques qui n'en avaient
+  aucune, pour rendre le jargon GRC accessible aux non-experts (fil rouge du produit) :
+  - **Risques (EBIOS)** : Fréquence (F), Gravité (G), Niveau de maîtrise (M) — sur les formulaires
+    de création ET de détail — plus un rappel de la méthode FxGxM sur l'en-tête de liste.
+  - **BIA** : Criticité métier, RTO (Recovery Time Objective), RPO (Recovery Point Objective).
+  - **Actifs** : Criticité CIA/DICP (Confidentialité, Intégrité, Disponibilité).
+  - **Matrice EBIOS** : lecture de la cartographie Fréquence × Gravité.
+  - **Scénarios PCA/PRA** : distinction Continuité (PCA) vs Reprise (PRA).
+  - **Audits** : typologie des constats (Point fort, Point d'amélioration, Non-conformité
+    Mineure / Majeure).
+- Aucune donnée ni schéma modifié : uniquement des icônes d'aide accessibles (clavier + lecteur
+  d'écran) déjà stylées par le design system ; la bulle s'ouvre au clic/survol sans navigation.
+- **Tests headless (Playwright)** : présence des ⓘ sur 8 vues (listes + fiches), contenu
+  pédagogique des bulles, ouverture au clic sans navigation parasite ; non-régression des suites
+  de factorisation (50 assertions) ; **0 erreur console**.
+
 ### Chantier 9 — Durcissement : centralisation de la génération d'identifiants
 - **`UI.genId(prefix)`** (ajouté à `js/core/ui.js`) : centralise la convention d'identifiant
   anti-collision `"<PRÉFIXE>-<timestamp>-<aléa>"` qui était **recopiée sur 23 sites / 17 modules**

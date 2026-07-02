@@ -33,8 +33,12 @@ Légende : ✅ fait · 🔜 prochain · ⏳ à faire · 💤 en attente de déci
 - ✅ Composant tooltip pédagogique `Help.tip` (accessible, sans navigation parasite)
 - ✅ Fil d'Ariane, responsive (sidebar off-canvas), a11y (focus, reduced-motion, tabular-nums)
 - ✅ Badges sémantiques, états vides
-- ⏳ **Restant** : appliquer les tooltips ⓘ **partout** (systématiser, fil rouge) ; harmoniser
-      progressivement chaque module (tableaux denses, KPI, heatmap matrice, radars) au fil des touches.
+- 🟡 **Tooltips ⓘ — systématisation en cours** : couverts les modules techniques les plus « jargonneux »
+      qui n'en avaient aucun — **Risques (EBIOS F/G/M)**, **BIA (RTO/RPO/criticité)**, **Actifs (CIA/DICP)**,
+      **Matrice EBIOS**, **Scénarios PCA/PRA**, **Audits (typologie des constats)** — soit 20 notes
+      pédagogiques (tests Playwright, 0 erreur). Restent à couvrir au fil de l'eau : Exigences/Conformité,
+      Actions, Donneurs d'ordre, MCO, Tests PRA.
+- ⏳ **Restant** : harmoniser progressivement chaque module (tableaux denses, KPI, radars) au fil des touches.
 
 ## Chantier 3 — Référentiels + mapping croisé (§4) — ✅ FAIT
 Sous-itérations :

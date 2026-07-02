@@ -221,7 +221,7 @@ const MatriceModule = (() => {
             <section class="page">
                 <div class="dashboard-header no-print">
                     <div>
-                        <h1>Matrice de Criticité (Bulle de compte)</h1>
+                        <h1>Matrice de Criticité (Bulle de compte) ${Help.tip("Cartographie EBIOS croisant la Fréquence (probabilité) et la Gravité (impact) des risques. Chaque bulle compte les scénarios d'une case ; le coin en haut à droite (fréquent × grave) concentre les risques prioritaires.")}</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (SI global)</strong> - Méthode Brute (FxG)</p>
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center;">

@@ -179,5 +179,12 @@ dynamique — avertissements de cascade préservés ; ids `deleteBtn`/`delBtn`/`
 formulaire** reste en ligne à dessein (hétérogène + locale). Aucun changement fonctionnel/schéma ;
 échappement XSS conservé. Tests Playwright (bulk 20 + smoke 8 + suppression fiche 16 + genId 6, 0 erreur).
 
-**Prochain** : Chantier 9 — **i18n** (chaînes centralisées, sans sur-ingénierie) ; sinon reprise du
-Chantier 2 (systématiser les tooltips ⓘ, harmoniser les modules).
+**Fait (Chantier 2 — Tooltips pédagogiques)** : **20 notes `Help.tip(ⓘ)`** ajoutées sur les modules
+techniques sans aucune aide — **Risques** (EBIOS F/G/M + méthode FxGxM), **BIA** (criticité, RTO, RPO),
+**Actifs** (CIA/DICP), **Matrice EBIOS**, **Scénarios PCA/PRA** (PCA vs PRA), **Audits** (typologie des
+constats). Icônes accessibles, aucune donnée/schéma touché. Tests Playwright (présence sur 8 vues,
+contenu des bulles, ouverture au clic sans navigation ; 0 erreur). i18n **écartée** (app monolingue,
+décision utilisateur).
+
+**Prochain** : poursuivre le Chantier 2 — étendre les tooltips ⓘ aux modules restants (Exigences/
+Conformité, Actions, Donneurs d'ordre, MCO, Tests PRA) et harmoniser tableaux denses / KPI / radars.

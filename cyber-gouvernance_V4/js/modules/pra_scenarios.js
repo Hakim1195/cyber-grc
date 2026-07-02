@@ -17,7 +17,7 @@ const PraScenariosModule = (() => {
             <section class="page">
                 <div class="dashboard-header no-print">
                     <div>
-                        <h1>Scénarios PCA/PRA</h1>
+                        <h1>Scénarios PCA/PRA ${Help.tip("PCA = maintenir les activités essentielles PENDANT le sinistre ; PRA = REDÉMARRER le système d'information après le sinistre. Chaque scénario décrit les étapes de continuité (PCA) puis de reprise (PRA).")}</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Plans de continuité et de reprise technique</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
@@ -138,7 +138,7 @@ const PraScenariosModule = (() => {
                 <div class="dashboard-grid no-print">
                     <div class="dashboard-card" style="border-top:4px solid var(--color-success);">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                            <h3 style="margin:0; color:var(--color-success);">Continuité (PCA)</h3>
+                            <h3 style="margin:0; color:var(--color-success);">Continuité (PCA) ${Help.tip("Plan de Continuité d'Activité : mesures pour MAINTENIR les activités essentielles pendant un sinistre (solutions de repli, modes dégradés), afin de ne pas tout arrêter.")}</h3>
                             <button id="addStepPca" style="background:var(--color-success); font-size:0.8rem; padding:5px 10px;">Étape</button>
                         </div>
                         <div id="pca-list-container"></div>
@@ -146,7 +146,7 @@ const PraScenariosModule = (() => {
 
                     <div class="dashboard-card" style="border-top:4px solid var(--color-info);">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                            <h3 style="margin:0; color:var(--color-info);">Reprise (PRA)</h3>
+                            <h3 style="margin:0; color:var(--color-info);">Reprise (PRA) ${Help.tip("Plan de Reprise d'Activité : procédures pour REDÉMARRER le système d'information après un sinistre (restauration, bascule), en respectant les objectifs RTO/RPO.")}</h3>
                             <button id="addStepPra" style="background:var(--color-info); font-size:0.8rem; padding:5px 10px;">Étape</button>
                         </div>
                         <div id="rto-banner" style="background:white; padding:10px; border-radius:4px; margin-bottom:15px; text-align:center; font-weight:bold; border: 1px dashed var(--color-info); color:var(--color-info);">
