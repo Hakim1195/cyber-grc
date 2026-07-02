@@ -5,6 +5,40 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Synthèse Direction — refonte en tableau d'arbitrage (KPI / KRI + rapport)
+- **Refonte complète du module `/synthese`** : d'une note à 3 chiffres vers un véritable
+  **support de décision pour la direction** (COMEX / conseil), pensé pour *arbitrer* et pas
+  seulement observer. Aucune évolution de schéma (lecture seule du DataStore).
+- **Indice de posture cyber (0-100)** : note composite avec **jauge** et bande de lecture
+  (Critique → Optimale) = moyenne pondérée des composantes disponibles (**conformité 30 %,
+  maturité 20 %, maîtrise du risque 25 %, avancement 10 %, couverture 15 %**), renormalisée sur
+  les composantes présentes, **moins des pénalités** (risques très critiques, déclarations
+  réglementaires en attente). Décomposition affichée + note de méthode via `Help.tip`.
+- **Bandeau d'orientation exécutive** : titre + message de synthèse priorisé (déclaration
+  réglementaire › risque très critique › retards › risques critiques › conformité). En base
+  vierge, message **honnête** « Démarche GRC à initialiser » (plus de « posture maîtrisée » trompeuse).
+- **6 KPI** (performance) avec **variation de tendance** colorée : conformité, maturité CMMI,
+  avancement du plan d'actions, couverture du dispositif (12 capacités GRC), audits réalisés /
+  NC ouvertes, documentation à jour.
+- **8 KRI** (risque) avec **seuils d'alerte** (pastille verte/orange/rouge + statut « Sous
+  contrôle / À surveiller / Seuil d'alerte ») : exposition résiduelle, risques très critiques,
+  risques critiques, actions en retard (avec retard max), incidents ouverts/graves, **déclarations
+  NIS2/RGPD en attente**, tiers à risque élevé (criticité × accès), non-conformités.
+- **Sections d'aide à la décision** : courbes d'**évolution** (historique quotidien partagé avec
+  le tableau de bord), **conformité réglementaire par référentiel** (ANSSI/ISO/NIS2/DORA/AirCyber
+  avec posture d'obligation), **Top 5 risques résiduels** + état de traitement, **comparatif par
+  donneur d'ordre**, **arbitrages & décisions attendus** générés depuis les données (budget,
+  acceptation de risque, tiers, continuité, maturité…), **points de vigilance & échéances**.
+- **Impression & téléchargement du rapport** : impression PDF native (mise en page dédiée) **et**
+  **téléchargement d'un rapport HTML autonome** (hors-ligne, sans dépendance, marque Dedienne,
+  bulles d'aide masquées) — le module **embarque sa propre feuille de style** (portée `.syndir`)
+  pour un rendu identique à l'écran, à l'impression et dans le fichier exporté.
+- **Graphiques 100 % maison** (jauge, anneau, sparklines, barres) en SVG/HTML sans librairie.
+- **Tests headless (Playwright)** : jeu de données riche (jauge, 6 KPI, 8 KRI, 5 référentiels,
+  Top 5 risques, 8 décisions, vigilance) + **téléchargement du rapport** (fichier valide, autonome,
+  sans boutons de navigation, rendu dans un onglet neuf sans erreur) + **état vide** (bandeau
+  honnête, aucune division par zéro) + **rendu impression** ; **0 erreur console**.
+
 ### Référentiels — AirCyber : radar par niveau de label + score Oui/Non (sans CMMI)
 - **Radar granulaire par niveau de label** : sur la fiche AirCyber, des boutons
   **Global / Bronze / Argent / Or** au-dessus du radar restreignent le profil par domaine CL
