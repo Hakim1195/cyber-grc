@@ -33,11 +33,11 @@ Légende : ✅ fait · 🔜 prochain · ⏳ à faire · 💤 en attente de déci
 - ✅ Composant tooltip pédagogique `Help.tip` (accessible, sans navigation parasite)
 - ✅ Fil d'Ariane, responsive (sidebar off-canvas), a11y (focus, reduced-motion, tabular-nums)
 - ✅ Badges sémantiques, états vides
-- 🟡 **Tooltips ⓘ — systématisation en cours** : couverts les modules techniques les plus « jargonneux »
-      qui n'en avaient aucun — **Risques (EBIOS F/G/M)**, **BIA (RTO/RPO/criticité)**, **Actifs (CIA/DICP)**,
-      **Matrice EBIOS**, **Scénarios PCA/PRA**, **Audits (typologie des constats)** — soit 20 notes
-      pédagogiques (tests Playwright, 0 erreur). Restent à couvrir au fil de l'eau : Exigences/Conformité,
-      Actions, Donneurs d'ordre, MCO, Tests PRA.
+- 🟡 **Tooltips ⓘ — systématisation en cours** : couverts les modules techniques les plus « jargonneux » —
+      **Risques (EBIOS F/G/M)**, **BIA (RTO/RPO/criticité)**, **Actifs (CIA/DICP)**, **Matrice EBIOS**,
+      **Scénarios PCA/PRA**, **Audits (typologie des constats)**, **MCO**, **Tests PRA (type d'exercice)**,
+      **Exigences (statut de conformité)** — soit 25 notes pédagogiques ; **Conformité/SoA** déjà couvert.
+      Tests Playwright (0 erreur). Restent au fil de l'eau : Actions, Donneurs d'ordre (peu de jargon).
 - ⏳ **Restant** : harmoniser progressivement chaque module (tableaux denses, KPI, radars) au fil des touches.
 
 ## Chantier 3 — Référentiels + mapping croisé (§4) — ✅ FAIT

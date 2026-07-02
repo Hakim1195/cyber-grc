@@ -26,7 +26,7 @@ const PraMcoModule = (() => {
             <section class="page">
                 <div class="dashboard-header no-print">
                     <div>
-                        <h1>Actions Préalables (MCO)</h1>
+                        <h1>Actions Préalables (MCO) ${Help.tip("Maintien en Condition Opérationnelle : actions récurrentes qui garantissent que le PRA reste efficace dans le temps (tests d'onduleurs, mise à jour des procédures, vérification des sauvegardes).")}</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Maintien en Condition Opérationnelle du PRA</p>
                     </div>
                     <div style="display: flex; gap: 10px;">

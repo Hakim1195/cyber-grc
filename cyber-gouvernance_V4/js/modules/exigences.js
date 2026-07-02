@@ -144,7 +144,7 @@ const ExigencesModule = (() => {
                     </div>
 
                     <div class="form-group">
-                        <label>Statut de conformité</label>
+                        <label>Statut de conformité ${Help.tip("Niveau de respect de l'exigence : Conforme, Partiellement conforme, Non conforme ou Non applicable. Il alimente le taux de conformité et la déclaration d'applicabilité (SoA).")}</label>
                         <select id="statut">
                             <option value="non conforme">Non conforme</option>
                             <option value="partiellement conforme">Partiellement conforme</option>
@@ -249,7 +249,7 @@ const ExigencesModule = (() => {
                         </div>
 
                         <div class="form-group">
-                            <label>Statut de conformité</label>
+                            <label>Statut de conformité ${Help.tip("Niveau de respect de l'exigence : Conforme, Partiellement conforme, Non conforme ou Non applicable. Il alimente le taux de conformité et la déclaration d'applicabilité (SoA).")}</label>
                             <select id="statut">
                                 <option value="non conforme" ${exigence.statut_conformite === "non conforme" ? "selected" : ""}>Non conforme</option>
                                 <option value="partiellement conforme" ${exigence.statut_conformite === "partiellement conforme" ? "selected" : ""}>Partiellement conforme</option>

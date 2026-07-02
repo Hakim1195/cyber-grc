@@ -147,7 +147,7 @@ const PraTestsModule = (() => {
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Type d'exercice</label>
+                        <label>Type d'exercice ${Help.tip("Nature du test : exercice sur table (revue théorique en réunion), simulation partielle, ou bascule technique réelle. Plus le test est réaliste, plus il valide concrètement le PRA.")}</label>
                         <select id="type_test">
                             <option value="Théorique (Sur table)">Théorique (Sur table / Walkthrough)</option>
                             <option value="Technique (Simulation)">Technique (Simulation partielle)</option>
@@ -226,7 +226,7 @@ const PraTestsModule = (() => {
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Type d'exercice</label>
+                        <label>Type d'exercice ${Help.tip("Nature du test : exercice sur table (revue théorique en réunion), simulation partielle, ou bascule technique réelle. Plus le test est réaliste, plus il valide concrètement le PRA.")}</label>
                         <select id="type_test">
                             <option value="Théorique (Sur table)" ${t.type_test === "Théorique (Sur table)" ? "selected" : ""}>Théorique (Sur table / Walkthrough)</option>
                             <option value="Technique (Simulation)" ${t.type_test === "Technique (Simulation)" ? "selected" : ""}>Technique (Simulation partielle)</option>
