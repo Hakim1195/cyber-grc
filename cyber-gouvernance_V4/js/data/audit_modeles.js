@@ -24,8 +24,13 @@
 // depuis le registre `Referentiels` (zéro double saisie des titres).
 
 const AuditModeles = (() => {
-    const catalog = {};   // ref_id -> { code -> [ { ctrl, preuve }, ... ] }
+    const catalog = {};        // ref_id -> { code -> [ { ctrl, preuve }, ... ] }
     const order = [];
+    // Modèles COMPOSITES : un modèle « virtuel » qui concatène plusieurs modèles
+    // sources (ex. « ISO 27001 complet » = système de management + Annexe A). Permet
+    // d'auditer en une seule grille des exigences réparties sur plusieurs référentiels.
+    const composites = {};     // modelId -> { nom, sources: [refId...] }
+    const compositeOrder = [];
 
     function register(refId, points) {
         if (!refId || !points || typeof points !== "object") return;
@@ -34,12 +39,30 @@ const AuditModeles = (() => {
         catalog[refId] = Object.assign(catalog[refId] || {}, points);
     }
 
+    // Enregistre un modèle composite. `def` = { nom, sources: [refId...] }.
+    function registerComposite(modelId, def) {
+        if (!modelId || !def || !Array.isArray(def.sources)) return;
+        if (!composites[modelId]) compositeOrder.push(modelId);
+        composites[modelId] = { nom: def.nom || modelId, sources: def.sources.slice() };
+    }
+
     function get(refId) { return catalog[refId] || null; }
-    function has(refId) { return !!catalog[refId]; }
+    function has(refId) { return !!catalog[refId] || !!composites[refId]; }
+    function isComposite(id) { return !!composites[id]; }
     function all() { return order.slice(); }
 
-    // Nombre total de points de contrôle d'un modèle.
+    // Nom lisible d'un modèle : composite, sinon référentiel, sinon l'id brut.
+    function nameOf(id) {
+        if (composites[id]) return composites[id].nom;
+        const ref = (typeof Referentiels !== "undefined") ? Referentiels.get(id) : null;
+        return ref ? ref.nom : id;
+    }
+
+    // Nombre total de points de contrôle d'un modèle (résout les composites).
     function countPoints(refId) {
+        if (composites[refId]) {
+            return composites[refId].sources.reduce((n, s) => n + countPoints(s), 0);
+        }
         const p = catalog[refId];
         if (!p) return 0;
         return Object.keys(p).reduce((n, code) => n + (Array.isArray(p[code]) ? p[code].length : 0), 0);
@@ -51,6 +74,12 @@ const AuditModeles = (() => {
     //   { code, domaine, intitule, aide, ctrl, preuve, type:"", constat:"" }
     // (`type` et `constat` vides = à renseigner par l'auditeur).
     function buildGrid(refId) {
+        // Composite : concatène les grilles des modèles sources disponibles.
+        if (composites[refId]) {
+            let grid = [];
+            composites[refId].sources.forEach(src => { grid = grid.concat(buildGrid(src)); });
+            return grid;
+        }
         const points = catalog[refId];
         if (!points) return [];
         const ref = (typeof Referentiels !== "undefined") ? Referentiels.get(refId) : null;
@@ -83,14 +112,15 @@ const AuditModeles = (() => {
         return grid;
     }
 
-    // Liste des référentiels disposant d'un modèle d'audit (pour alimenter un menu) :
-    // [ { id, nom, points } ], dans l'ordre d'enregistrement.
+    // Liste des modèles d'audit disponibles (pour alimenter un menu) :
+    // [ { id, nom, points, composite? } ] — modèles simples puis composites.
     function available() {
-        return order.map(refId => {
-            const ref = (typeof Referentiels !== "undefined") ? Referentiels.get(refId) : null;
-            return { id: refId, nom: ref ? ref.nom : refId, points: countPoints(refId) };
-        });
+        const simple = order.map(refId => ({ id: refId, nom: nameOf(refId), points: countPoints(refId) }));
+        const comp = compositeOrder
+            .filter(id => composites[id].sources.some(s => catalog[s]))   // au moins une source dispo
+            .map(id => ({ id, nom: nameOf(id), points: countPoints(id), composite: true }));
+        return simple.concat(comp);
     }
 
-    return { register, get, has, all, countPoints, buildGrid, available };
+    return { register, registerComposite, get, has, isComposite, all, nameOf, countPoints, buildGrid, available };
 })();

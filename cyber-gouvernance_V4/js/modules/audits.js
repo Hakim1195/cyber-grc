@@ -56,8 +56,7 @@ const AuditsModule = (() => {
     function auditCoverage(a) {
         if (!a.items || !a.items.length) return { ref: "Audit libre", txt: "" };
         const s = computeAuditStats(a.items);
-        const refObj = a.ref_id && typeof Referentiels !== "undefined" ? Referentiels.get(a.ref_id) : null;
-        const ref = refObj ? refObj.nom : (a.ref_id || "Référentiel");
+        const ref = a.ref_id && typeof AuditModeles !== "undefined" ? AuditModeles.nameOf(a.ref_id) : (a.ref_id || "Référentiel");
         const txt = `${s.evalues}/${s.total} évalués` + (s.taux !== null ? ` · ${s.taux}% conf.` : "");
         return { ref, txt };
     }
@@ -572,8 +571,7 @@ const AuditsModule = (() => {
         const items = editingItem.items || [];
         if (!items.length) return "";
         const s = computeAuditStats(items);
-        const refObj = editingItem.ref_id && typeof Referentiels !== "undefined" ? Referentiels.get(editingItem.ref_id) : null;
-        const refName = refObj ? refObj.nom : (editingItem.ref_id || "");
+        const refName = editingItem.ref_id && typeof AuditModeles !== "undefined" ? AuditModeles.nameOf(editingItem.ref_id) : (editingItem.ref_id || "");
 
         const summary = `
             <h3 style="color:#0073ea; border-bottom:1px solid #eee; padding-bottom:5px;">Grille d'audit${refName ? " — " + escapeHtml(refName) : ""}</h3>

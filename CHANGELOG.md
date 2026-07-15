@@ -5,6 +5,26 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Audits — modèle ISO/IEC 27001:2022 (système de management + Annexe A) + composites
+- **Nouveau référentiel « ISO/IEC 27001:2022 — Système de management » (chap. 4-10)** :
+  `js/data/ref_iso27001_smsi.js`, **30 exigences** du SMSI réparties en 7 chapitres (contexte,
+  leadership, planification, support, fonctionnement, évaluation, amélioration). Comble un manque :
+  l'app ne représentait qu'**l'Annexe A** ; or un audit clause 9.2 vérifie d'abord ces exigences de
+  management. Référentiel « normal » : browsable, auto-évaluable, radar, SoA, couverture, mapping.
+  Gardé **séparé** de l'Annexe A (les chapitres 4-10 sont obligatoires — pas d'applicabilité à déclarer).
+- **Modèles d'audit ISO livrés** : `audit_iso27001_smsi.js` (**31 points de contrôle** pour le SMSI)
+  et `audit_iso27002.js` (**93 points**, un par mesure de l'Annexe A).
+- **Modèles d'audit COMPOSITES** : nouveau mécanisme `AuditModeles.registerComposite(id, {nom, sources})`
+  — un modèle « virtuel » qui concatène plusieurs modèles sources. Premier composite livré :
+  **« ISO/IEC 27001:2022 — Audit complet (SMSI + Annexe A) » = 124 points de contrôle** en une seule
+  grille (les 30 exigences de management + les 93 mesures de l'Annexe A, l'intégralité de la norme).
+  `buildGrid` / `countPoints` / `available` / `nameOf` résolvent les composites.
+- **Fidélité** : reformulations maison, texte ISO **non reproduit** (norme protégée). Les 124 points
+  couvrent l'ensemble des exigences ; le découpage « 236 » de certains guides est une décomposition
+  plus fine (chaque « shall » isolé) — la couverture, elle, est complète.
+- Tests Playwright : SMSI 16 assertions + ISO complet 13 assertions, **0 erreur** (référentiel chargé,
+  grilles 31/93/124, composite, rendu UI, persistance, intégration section Référentiels).
+
 ### Audits — modèles d'audit générés depuis les référentiels (ANSSI)
 - **Nouveau : grille d'audit sur référentiel** dans le module `/audits`. À la création/édition d'un
   audit interne, un sélecteur permet de choisir un référentiel puis de **générer une grille de points

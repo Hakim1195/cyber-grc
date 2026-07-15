@@ -395,7 +395,7 @@ niveau de label, et le champ `maturite` des évaluations n'est ni saisi ni inter
 préservé s'il existe, mais exclu des moyennes CMMI du tableau de bord).
 
 Livré : référentiel **ANSSI** + auto-évaluation + radar (it. 4) ; **pivot Mesure de
-sécurité** `/mesures` + propagation (it. 5) ; ISO 27001 (Annexe A) / NIS2 / DORA / **AirCyber réel**
+sécurité** `/mesures` + propagation (it. 5) ; ISO 27001 (Annexe A **et système de management chap. 4-10**) / NIS2 / DORA / **AirCyber réel**
 + **import CSV** des réponses + **niveaux Bronze/Argent/Or, priorité, CL0–CL6** (it. 6, 13, 14) ;
 couverture croisée + génération SoA (it. 7).
 
@@ -422,10 +422,21 @@ AuditModeles.register("<ref_id>", {
   `{ code, domaine, intitule, aide, ctrl, preuve, type:"", constat:"" }`, ordonnée comme le référentiel.
 - Le module `/audits` **copie** cette grille dans `audit.items[]` (instantané autoportant, cf. §2) et
   y ajoute les constats de l'auditeur. Le catalogue peut donc évoluer sans altérer les audits passés.
-- `available()` liste les référentiels disposant d'un modèle (pour le sélecteur) ; `countPoints(ref_id)`
-  donne le volume de contrôles.
+- `available()` liste les modèles disponibles (pour le sélecteur) ; `countPoints(id)` donne le volume
+  de contrôles ; `nameOf(id)` le libellé lisible.
+- **Modèles composites** : `registerComposite(modelId, { nom, sources: [refId...] })` crée un modèle
+  « virtuel » dont `buildGrid` **concatène** les grilles des sources — pour auditer en une seule passe
+  des exigences réparties sur plusieurs référentiels. Ex. `iso27001-complet` = `iso27001-smsi` +
+  `iso-27002-2022`. `available()` place les composites après les modèles simples ; `has`/`isComposite`
+  /`countPoints`/`nameOf` les prennent en charge.
 - ⚠️ **Reformulations maison uniquement** (même règle que les référentiels : ne jamais embarquer le
   texte intégral des normes).
 
-Livré : **ANSSI** (42 mesures → 46 points de contrôle). Prévu : ISO 27001 (chapitres 4–10 du système
-de management + Annexe A), NIS2, DORA, AirCyber.
+Livré :
+- **ANSSI** — Hygiène (42 mesures → 46 points de contrôle).
+- **ISO/IEC 27001:2022 — Système de management** (`iso27001-smsi`, nouveau référentiel, 30 exigences
+  chap. 4-10 → 31 points de contrôle).
+- **ISO/IEC 27001:2022 — Annexe A** (`iso-27002-2022`, 93 mesures → 93 points).
+- **Composite « ISO 27001 complet »** (`iso27001-complet`) = SMSI + Annexe A → **124 points**.
+
+Prévu : NIS2, DORA, AirCyber.
