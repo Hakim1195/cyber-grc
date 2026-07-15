@@ -369,7 +369,11 @@ const DashboardModule = (() => {
         const lastTest = testsSorted[0] || null;
         const mcoKo = mco.filter(m => String(m.etat).toUpperCase() === "KO").length;
         const auditsRealises = audits.filter(a => a.statut === "Réalisé").length;
-        const constatsNC = audits.reduce((n, a) => n + (Array.isArray(a.constats) ? a.constats.filter(c => c.type === "Mineure" || c.type === "Majeure").length : 0), 0);
+        const constatsNC = audits.reduce((n, a) => {
+            const libres = Array.isArray(a.constats) ? a.constats.filter(c => c.type === "Mineure" || c.type === "Majeure").length : 0;
+            const grille = Array.isArray(a.items) ? a.items.filter(c => c.type === "mineure" || c.type === "majeure").length : 0;
+            return n + libres + grille;
+        }, 0);
         const mesuresConformes = mesures.filter(m => m.statut === "conforme").length;
 
         /* ---- Conformité par donneur d'ordre (comparatif) ---- */

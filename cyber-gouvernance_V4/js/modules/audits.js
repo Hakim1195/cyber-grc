@@ -23,6 +23,46 @@ const AuditsModule = (() => {
     }
 
     /* =========================
+       MODÈLES D'AUDIT (grille de points de contrôle générée depuis un référentiel)
+    ========================== */
+    // Typologie des constats d'un point de contrôle : valeur stockée + libellé + classe couleur.
+    const FINDINGS = [
+        { v: "",         label: "— À évaluer —",         cls: "",           col: "#cccccc" },
+        { v: "conforme", label: "Conforme",              cls: "c-conforme", col: "#2e7d32" },
+        { v: "fort",     label: "Point fort",            cls: "c-fort",     col: "#2e7d32" },
+        { v: "pa",       label: "Piste d'amélioration",  cls: "c-pa",       col: "#1565c0" },
+        { v: "mineure",  label: "NC mineure",            cls: "c-ncm",      col: "#ed6c02" },
+        { v: "majeure",  label: "NC majeure",            cls: "c-ncmaj",    col: "#d32f2f" },
+        { v: "na",       label: "Non applicable",        cls: "c-na",       col: "#757575" }
+    ];
+    function findingMeta(v) { return FINDINGS.find(f => f.v === v) || FINDINGS[0]; }
+
+    // Statistiques de couverture / conformité d'une grille d'audit.
+    function computeAuditStats(items) {
+        const s = { total: items.length, evalues: 0, conformes: 0, nc: 0, na: 0, taux: null };
+        items.forEach(it => {
+            if (!it.type) return;
+            s.evalues++;
+            if (it.type === "na") { s.na++; return; }
+            if (it.type === "conforme" || it.type === "fort") s.conformes++;
+            else if (it.type === "mineure" || it.type === "majeure") s.nc++;
+        });
+        const applicables = s.evalues - s.na;   // N/A exclues du taux
+        s.taux = applicables > 0 ? Math.round((s.conformes / applicables) * 100) : null;
+        return s;
+    }
+
+    // Résumé court d'un audit pour la liste (référentiel de base + couverture).
+    function auditCoverage(a) {
+        if (!a.items || !a.items.length) return { ref: "Audit libre", txt: "" };
+        const s = computeAuditStats(a.items);
+        const refObj = a.ref_id && typeof Referentiels !== "undefined" ? Referentiels.get(a.ref_id) : null;
+        const ref = refObj ? refObj.nom : (a.ref_id || "Référentiel");
+        const txt = `${s.evalues}/${s.total} évalués` + (s.taux !== null ? ` · ${s.taux}% conf.` : "");
+        return { ref, txt };
+    }
+
+    /* =========================
        LISTE PRINCIPALE (ONGLETS)
     ========================== */
     function renderList() {
@@ -62,10 +102,31 @@ const AuditsModule = (() => {
                 .active-tab { color: var(--accent); border-bottom: 3px solid var(--accent); font-weight: bold; }
 
                 .badge-constat { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; }
+                .c-conforme { background: #2e7d32; }
                 .c-fort { background: #2e7d32; }
                 .c-pa { background: #1565c0; }
                 .c-ncm { background: #ed6c02; }
                 .c-ncmaj { background: #d32f2f; }
+                .c-na { background: #757575; }
+
+                /* Grille de points de contrôle (audit sur référentiel) */
+                .audit-dom-head { background: var(--accent, #2059A6); color:#fff; padding:8px 12px; border-radius:4px; margin:18px 0 8px; font-weight:bold; font-size:0.9rem; }
+                .item-row { display:flex; gap:15px; padding:14px; border:1px solid #eee; border-left:3px solid #ccc; margin-bottom:8px; background:#fbfbfb; border-radius:4px; }
+                .item-main { flex:1.4; min-width:0; }
+                .item-title { font-weight:bold; margin-bottom:6px; }
+                .item-code { display:inline-block; background:var(--accent, #2059A6); color:#fff; border-radius:3px; padding:1px 6px; font-size:0.75rem; margin-right:6px; }
+                .item-ctrl { font-size:0.9rem; color:#333; }
+                .item-preuve { font-size:0.82rem; color:var(--text-muted, #666); margin-top:6px; }
+                .item-eval { flex:1; display:flex; flex-direction:column; gap:8px; }
+                .item-eval .it-type { padding:8px; border-radius:4px; border:1px solid #ccc; font-weight:bold; }
+                .item-eval .it-constat { min-height:70px; padding:8px; border-radius:4px; border:1px solid #ccc; resize:vertical; font-family:inherit; }
+                @media (max-width: 720px) { .item-row { flex-direction:column; } }
+                .audit-kpi-row { display:flex; gap:16px; flex-wrap:wrap; align-items:center; font-size:0.9rem; padding:10px; background:#f8f9fa; border-radius:4px; }
+                .audit-kpi-row .k-ok { color:#2e7d32; font-weight:bold; }
+                .audit-kpi-row .k-nc { color:#d32f2f; font-weight:bold; }
+                .audit-kpi-row .k-na { color:#757575; }
+                .audit-kpi-bar { height:8px; background:#eee; border-radius:4px; margin-top:8px; overflow:hidden; }
+                .audit-kpi-bar > div { height:100%; background:var(--primary, #E9631B); transition:width 0.2s; }
 
                 @media print {
                     /* Masquer les éléments perturbateurs */
@@ -115,18 +176,21 @@ const AuditsModule = (() => {
                 </div>
                 <table class="data-table">
                     <thead>
-                        <tr><th>Réf. Audit</th><th>Date</th><th>Périmètre audité</th><th>Auditeur</th><th>Statut</th></tr>
+                        <tr><th>Réf. Audit</th><th>Date</th><th>Périmètre audité</th><th>Modèle (couverture)</th><th>Auditeur</th><th>Statut</th></tr>
                     </thead>
                     <tbody>
-                        ${audits.map(a => `
+                        ${audits.map(a => {
+                            const cov = auditCoverage(a);
+                            return `
                             <tr class="clickable-row" data-id="${a.id}">
                                 <td><strong>${escapeHtml(a.ref)}</strong></td>
                                 <td>${a.date ? new Date(a.date).toLocaleDateString('fr-FR') : "-"}</td>
                                 <td>${escapeHtml(a.perimetre) || "-"}</td>
+                                <td>${escapeHtml(cov.ref)}${cov.txt ? `<br><span style="color:var(--text-muted); font-size:0.8rem;">${escapeHtml(cov.txt)}</span>` : ""}</td>
                                 <td>${escapeHtml(a.auditeur) || "-"}</td>
                                 <td><span class="status ${a.statut === 'Réalisé' ? 'status-conforme' : 'status-non-conforme'}">${escapeHtml(a.statut)}</span></td>
                             </tr>
-                        `).join("") || "<tr><td colspan='5' style='text-align:center;'>Aucun audit enregistré.</td></tr>"}
+                        `;}).join("") || "<tr><td colspan='6' style='text-align:center;'>Aucun audit enregistré.</td></tr>"}
                     </tbody>
                 </table>
             `;
@@ -168,8 +232,17 @@ const AuditsModule = (() => {
             const original = DataStore.getAudits().find(x => x.id === id);
             editingItem = JSON.parse(JSON.stringify(original));
         } else {
-            editingItem = { id: UI.genId("AUD"), ref: "AUD-202X-XX", statut: "Planifié", date: "", perimetre: "", auditeur: "", audite: "", synthese: "", constats: [] };
+            editingItem = { id: UI.genId("AUD"), ref: "AUD-202X-XX", statut: "Planifié", date: "", perimetre: "", auditeur: "", audite: "", synthese: "", ref_id: null, items: [], constats: [] };
         }
+        // Rétrocompatibilité : anciens audits sans grille de référentiel.
+        if (!Array.isArray(editingItem.items)) editingItem.items = [];
+        if (editingItem.ref_id === undefined) editingItem.ref_id = null;
+        if (!Array.isArray(editingItem.constats)) editingItem.constats = [];
+
+        // Référentiels disposant d'un modèle d'audit (pour le sélecteur de génération).
+        const models = (typeof AuditModeles !== "undefined") ? AuditModeles.available() : [];
+        const modelOpts = `<option value="">— Choisir un référentiel —</option>` +
+            models.map(m => `<option value="${escapeHtml(m.id)}" ${editingItem.ref_id === m.id ? "selected" : ""}>${escapeHtml(m.nom)} (${m.points} points)</option>`).join("");
 
         document.getElementById("app").innerHTML = `
             <section class="page">
@@ -206,9 +279,22 @@ const AuditsModule = (() => {
                     </div>
                 </div>
 
+                <div class="dashboard-card no-print" style="margin-top: 20px; border-top: 4px solid var(--primary, #E9631B);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:5px;">
+                        <h3 style="margin:0; color:var(--primary, #E9631B);">Grille d'audit sur référentiel ${Help.tip("Génère une grille de points de contrôle détaillés (ce qu'il faut vérifier + les preuves à demander) couvrant les exigences du référentiel choisi. Évaluez chaque point : conforme, point fort, piste d'amélioration ou non-conformité (mineure / majeure). La couverture et le taux de conformité se calculent automatiquement.")}</h3>
+                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                            <select id="a-refmodel" style="padding:8px; border-radius:4px; border:1px solid #ccc;">${modelOpts}</select>
+                            <button id="genGridBtn" style="background:var(--primary, #E9631B); font-size:0.85rem; padding:8px 12px;">Générer la grille</button>
+                        </div>
+                    </div>
+                    <p style="font-size:0.82rem; color:var(--text-muted); margin:0 0 12px;">Choisissez un référentiel puis générez une grille de contrôles prête à l'emploi. Vous pouvez compléter par des constats libres ci-dessous.</p>
+                    <div id="audit-kpi"></div>
+                    <div id="items-container" style="margin-top:10px;"></div>
+                </div>
+
                 <div class="dashboard-card no-print" style="margin-top: 20px; border-top: 4px solid #784bd1;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="margin:0; color:#784bd1;">Grille des Constats (Preuves d'audit) ${Help.tip("Résultats de l'audit classés par gravité : Point fort (bonne pratique), Point d'amélioration, Non-conformité Mineure (écart isolé) et Non-conformité Majeure (défaillance systémique exigeant une action corrective).")}</h3>
+                        <h3 style="margin:0; color:#784bd1;">Constats libres (hors grille) ${Help.tip("Résultats d'audit non rattachés à un point de la grille, classés par gravité : Point fort (bonne pratique), Piste d'amélioration, Non-conformité Mineure (écart isolé) et Non-conformité Majeure (défaillance systémique exigeant une action corrective).")}</h3>
                         <button id="addConstatBtn" style="background:#784bd1; font-size:0.8rem; padding:5px 10px;">Ajouter un constat</button>
                     </div>
                     <div id="constats-container"></div>
@@ -230,9 +316,27 @@ const AuditsModule = (() => {
         `;
 
         refreshConstats();
+        refreshItems();
 
         document.getElementById("cancelBtn").onclick = () => Router.navigateTo("/audits");
         document.getElementById("addConstatBtn").onclick = () => addConstat();
+
+        document.getElementById("genGridBtn").onclick = () => {
+            const refId = document.getElementById("a-refmodel").value;
+            if (!refId) { alert("Choisissez d'abord un référentiel."); return; }
+            if (!AuditModeles.has(refId)) { alert("Aucun modèle d'audit disponible pour ce référentiel."); return; }
+            if (editingItem.items.length && !confirm("Régénérer la grille remplacera les points de contrôle et les constats déjà saisis. Continuer ?")) return;
+            const grid = AuditModeles.buildGrid(refId);
+            if (!grid.length) { alert("Modèle vide pour ce référentiel."); return; }
+            editingItem.ref_id = refId;
+            editingItem.items = grid;
+            // Suggestion de périmètre si le champ est vide
+            const ref = (typeof Referentiels !== "undefined") ? Referentiels.get(refId) : null;
+            const perim = document.getElementById("a-perimetre");
+            if (ref && perim && !perim.value.trim()) perim.value = "Conformité " + ref.nom;
+            refreshItems();
+            if (window.showToast) window.showToast(grid.length + " points de contrôle générés.");
+        };
 
         if (isEdit) {
             document.getElementById("printAuditBtn").onclick = renderPrintAudit;
@@ -303,6 +407,74 @@ const AuditsModule = (() => {
     function addConstat() {
         editingItem.constats.push({ type: "PA", exigence: "", desc: "" });
         refreshConstats();
+    }
+
+    /* =========================
+       GRILLE DE POINTS DE CONTRÔLE (générée depuis un référentiel)
+    ========================== */
+    function applyRowColor(row, type) {
+        row.style.borderLeftColor = findingMeta(type).col;
+    }
+
+    function refreshItems() {
+        const container = document.getElementById("items-container");
+        if (!container) return;
+        const items = editingItem.items || [];
+        if (!items.length) {
+            container.innerHTML = `<p style="text-align:center; color:gray; padding:20px;">Aucune grille générée. Choisissez un référentiel puis cliquez « Générer la grille ».</p>`;
+            renderAuditKpi();
+            return;
+        }
+        let html = "";
+        let lastDom = null;
+        items.forEach((it, idx) => {
+            if (it.domaine !== lastDom) {
+                lastDom = it.domaine;
+                html += `<div class="audit-dom-head">${escapeHtml(it.domaine || "Autres")}</div>`;
+            }
+            const opts = FINDINGS.map(f => `<option value="${f.v}" ${it.type === f.v ? "selected" : ""}>${f.label}</option>`).join("");
+            html += `
+                <div class="item-row" data-idx="${idx}">
+                    <div class="item-main">
+                        <div class="item-title"><span class="item-code">${escapeHtml(it.code)}</span>${escapeHtml(it.intitule)}</div>
+                        <div class="item-ctrl">${escapeHtml(it.ctrl)}</div>
+                        ${it.preuve ? `<div class="item-preuve"><strong>Preuves à demander :</strong> ${escapeHtml(it.preuve)}</div>` : ""}
+                    </div>
+                    <div class="item-eval">
+                        <select class="it-type">${opts}</select>
+                        <textarea class="it-constat" placeholder="Constat / preuve observée…">${escapeHtml(it.constat || "")}</textarea>
+                    </div>
+                </div>`;
+        });
+        container.innerHTML = html;
+
+        container.querySelectorAll(".item-row").forEach(row => {
+            const idx = Number(row.dataset.idx);
+            const sel = row.querySelector(".it-type");
+            const ta = row.querySelector(".it-constat");
+            applyRowColor(row, editingItem.items[idx].type);
+            sel.onchange = () => { editingItem.items[idx].type = sel.value; applyRowColor(row, sel.value); renderAuditKpi(); };
+            ta.oninput = () => { editingItem.items[idx].constat = ta.value; };
+        });
+        renderAuditKpi();
+    }
+
+    function renderAuditKpi() {
+        const el = document.getElementById("audit-kpi");
+        if (!el) return;
+        const items = editingItem.items || [];
+        if (!items.length) { el.innerHTML = ""; return; }
+        const s = computeAuditStats(items);
+        const pct = s.total ? Math.round((s.evalues / s.total) * 100) : 0;
+        el.innerHTML = `
+            <div class="audit-kpi-row">
+                <span><strong>${s.evalues}/${s.total}</strong> points évalués (${pct}%)</span>
+                <span class="k-ok">${s.conformes} conforme(s)</span>
+                <span class="k-nc">${s.nc} non-conformité(s)</span>
+                <span class="k-na">${s.na} N/A</span>
+                <span>Taux de conformité&nbsp;: <strong>${s.taux === null ? "—" : s.taux + "%"}</strong></span>
+            </div>
+            <div class="audit-kpi-bar"><div style="width:${pct}%;"></div></div>`;
     }
 
     /* =========================
@@ -394,6 +566,58 @@ const AuditsModule = (() => {
         };
     }
 
+    // Construit le HTML de la grille de points de contrôle pour le rapport imprimable
+    // (résumé de conformité + tableau groupé par domaine). Vide si pas de grille.
+    function auditGridPrintHtml() {
+        const items = editingItem.items || [];
+        if (!items.length) return "";
+        const s = computeAuditStats(items);
+        const refObj = editingItem.ref_id && typeof Referentiels !== "undefined" ? Referentiels.get(editingItem.ref_id) : null;
+        const refName = refObj ? refObj.nom : (editingItem.ref_id || "");
+
+        const summary = `
+            <h3 style="color:#0073ea; border-bottom:1px solid #eee; padding-bottom:5px;">Grille d'audit${refName ? " — " + escapeHtml(refName) : ""}</h3>
+            <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:0.85rem;">
+                <tr>
+                    <td style="padding:8px; border:1px solid #ddd; background:#f8f9fa;"><strong>${s.evalues}/${s.total}</strong> points évalués</td>
+                    <td style="padding:8px; border:1px solid #ddd;">Conformes : <strong>${s.conformes}</strong></td>
+                    <td style="padding:8px; border:1px solid #ddd;">Non-conformités : <strong>${s.nc}</strong></td>
+                    <td style="padding:8px; border:1px solid #ddd;">N/A : <strong>${s.na}</strong></td>
+                    <td style="padding:8px; border:1px solid #ddd;">Taux de conformité : <strong>${s.taux === null ? "—" : s.taux + "%"}</strong></td>
+                </tr>
+            </table>`;
+
+        let rows = "";
+        let lastDom = null;
+        items.forEach(it => {
+            if (it.domaine !== lastDom) {
+                lastDom = it.domaine;
+                rows += `<tr><td colspan="3" style="padding:8px; background:#eef2fb; border:1px solid #ddd; font-weight:bold;">${escapeHtml(it.domaine || "Autres")}</td></tr>`;
+            }
+            const m = findingMeta(it.type);
+            const badge = it.type ? `<span class="badge-constat ${m.cls}">${m.label}</span>` : `<span style="color:#999;">Non évalué</span>`;
+            rows += `
+                <tr>
+                    <td style="padding:8px; border:1px solid #ddd; vertical-align:top; width:40%;">
+                        <strong>${escapeHtml(it.code)} — ${escapeHtml(it.intitule)}</strong>
+                        <div style="color:#555; font-size:0.82rem; margin-top:4px;">${escapeHtml(it.ctrl)}</div>
+                    </td>
+                    <td style="padding:8px; border:1px solid #ddd; vertical-align:top; width:15%;">${badge}</td>
+                    <td style="padding:8px; border:1px solid #ddd; vertical-align:top; width:45%;">${escapeHtml(it.constat || "").replace(/\n/g, "<br>") || "<span style='color:#999;'>—</span>"}</td>
+                </tr>`;
+        });
+
+        return summary + `
+            <table style="width:100%; border-collapse:collapse; font-size:0.85rem; margin-bottom:30px;">
+                <thead><tr style="background:#f8f9fa;">
+                    <th style="padding:8px; border:1px solid #ddd; text-align:left;">Point de contrôle</th>
+                    <th style="padding:8px; border:1px solid #ddd; text-align:left;">Constat</th>
+                    <th style="padding:8px; border:1px solid #ddd; text-align:left;">Preuve observée / commentaire</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    }
+
     /* =========================
        GÉNÉRATION PDF (AUDIT)
     ========================== */
@@ -448,7 +672,10 @@ const AuditsModule = (() => {
             <h3 style="color:#0073ea; border-bottom:1px solid #eee; padding-bottom:5px;">Synthèse globale</h3>
             <p style="margin-bottom:30px; line-height:1.6;">${escapeHtml(editingItem.synthese||'Aucune synthèse saisie.').replace(/\n/g, '<br>')}</p>
 
-            <h3 style="color:#0073ea; border-bottom:1px solid #eee; padding-bottom:5px;">Grille des constats d'audit</h3>
+            ${auditGridPrintHtml()}
+
+            ${editingItem.constats && editingItem.constats.length ? `
+            <h3 style="color:#784bd1; border-bottom:1px solid #eee; padding-bottom:5px;">Constats libres (hors grille)</h3>
             <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
                 <thead>
                     <tr style="background:#f8f9fa;">
@@ -460,7 +687,7 @@ const AuditsModule = (() => {
                 <tbody>
                     ${constatsHtml}
                 </tbody>
-            </table>
+            </table>` : ""}
 
             <div style="margin-top:50px; text-align:right;">
                 <p>Signature de l'auditeur :</p>

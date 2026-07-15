@@ -271,7 +271,11 @@ const SyntheseModule = (() => {
         const documents = (typeof DataStore.getDocuments === "function") ? DataStore.getDocuments() : [];
         const traitements = (typeof DataStore.getTraitements === "function") ? DataStore.getTraitements() : [];
         const auditsRealises = audits.filter(a => a.statut === "Réalisé").length;
-        const constatsNC = audits.reduce((n, a) => n + (Array.isArray(a.constats) ? a.constats.filter(c => c.type === "Mineure" || c.type === "Majeure").length : 0), 0);
+        const constatsNC = audits.reduce((n, a) => {
+            const libres = Array.isArray(a.constats) ? a.constats.filter(c => c.type === "Mineure" || c.type === "Majeure").length : 0;
+            const grille = Array.isArray(a.items) ? a.items.filter(c => c.type === "mineure" || c.type === "majeure").length : 0;
+            return n + libres + grille;
+        }, 0);
         const lastTest = [...tests].filter(t => t.date).sort((a, b) => new Date(b.date) - new Date(a.date))[0] || null;
 
         // Documents à réviser (revue échue/proche ou statut à réviser/obsolète)

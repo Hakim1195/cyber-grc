@@ -175,8 +175,19 @@ Suppression en cascade → supprime les `exigences` rattachées (et leurs `actio
     `clause, notif, audit, donnees, reversibilite, continuite`.
 
 ### Audit interne (ISO 27001 §9.2) — `audits`
-`{ id, ref, statut: "Planifié"|"En cours"|"Réalisé", date, perimetre, auditeur, audite, synthese, constats[] }`
-Constat : `{ type, exigence, desc }`
+`{ id, ref, statut: "Planifié"|"En cours"|"Réalisé", date, perimetre, auditeur, audite, synthese,`
+` constats[], ref_id?, items[]? }`
+- Constat (libre) : `{ type: "Point fort"|"PA"|"Mineure"|"Majeure", exigence, desc }`
+- `ref_id` (optionnel) : id du référentiel sur lequel l'audit est bâti (ex. `anssi-hygiene`), `null` = audit libre.
+- `items[]` (optionnel) : **grille de points de contrôle** générée depuis un modèle d'audit
+  (`AuditModeles.buildGrid(ref_id)`, catalogue statique — voir §6). Chaque point est un **instantané**
+  autoportant (le texte est figé au moment de la génération, gage d'intégrité de l'audit) :
+  `{ code, domaine, intitule, aide, ctrl, preuve, type, constat }` où `type` ∈
+  `""` (à évaluer) | `conforme` | `fort` | `pa` | `mineure` | `majeure` | `na`, `ctrl` = ce qu'il faut
+  vérifier, `preuve` = preuves à demander, `constat` = preuve observée par l'auditeur.
+- Taux de conformité = points `conforme`/`fort` ÷ points évalués applicables (`na` exclus).
+- Champs optionnels **rétrocompatibles** (pas d'évolution de schéma) ; le tableau de bord et la
+  Synthèse comptent les NC de la grille (`mineure`/`majeure`) en plus des constats libres.
 
 ### Revue de direction — `revues`
 `{ id, date, participants, inputs, outputs }`
@@ -387,3 +398,34 @@ Livré : référentiel **ANSSI** + auto-évaluation + radar (it. 4) ; **pivot Me
 sécurité** `/mesures` + propagation (it. 5) ; ISO 27001 (Annexe A) / NIS2 / DORA / **AirCyber réel**
 + **import CSV** des réponses + **niveaux Bronze/Argent/Or, priorité, CL0–CL6** (it. 6, 13, 14) ;
 couverture croisée + génération SoA (it. 7).
+
+---
+
+## 6. Modèles d'audit (catalogue statique)
+
+Surcouche **statique** (non stockée dans `data`) qui transforme un référentiel en **grille d'audit
+prête à l'emploi**. Registre `AuditModeles` (`js/data/audit_modeles.js`) + un fichier de contenu par
+référentiel qui s'auto-enregistre (`js/data/audit_anssi.js`, …), sur le modèle du registre
+`Referentiels`.
+
+```jsonc
+// audit_<ref>.js
+AuditModeles.register("<ref_id>", {
+  "<code d'exigence>": [
+    { "ctrl": "point de contrôle / vérification à mener", "preuve": "preuves à demander" }
+  ]
+});
+```
+
+- `AuditModeles.buildGrid(ref_id)` **croise** ces points de contrôle avec le registre `Referentiels`
+  (domaine + intitulé + aide de chaque exigence) et renvoie la grille à plat
+  `{ code, domaine, intitule, aide, ctrl, preuve, type:"", constat:"" }`, ordonnée comme le référentiel.
+- Le module `/audits` **copie** cette grille dans `audit.items[]` (instantané autoportant, cf. §2) et
+  y ajoute les constats de l'auditeur. Le catalogue peut donc évoluer sans altérer les audits passés.
+- `available()` liste les référentiels disposant d'un modèle (pour le sélecteur) ; `countPoints(ref_id)`
+  donne le volume de contrôles.
+- ⚠️ **Reformulations maison uniquement** (même règle que les référentiels : ne jamais embarquer le
+  texte intégral des normes).
+
+Livré : **ANSSI** (42 mesures → 46 points de contrôle). Prévu : ISO 27001 (chapitres 4–10 du système
+de management + Annexe A), NIS2, DORA, AirCyber.

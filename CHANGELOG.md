@@ -5,6 +5,32 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Audits — modèles d'audit générés depuis les référentiels (ANSSI)
+- **Nouveau : grille d'audit sur référentiel** dans le module `/audits`. À la création/édition d'un
+  audit interne, un sélecteur permet de choisir un référentiel puis de **générer une grille de points
+  de contrôle détaillés** couvrant l'intégralité de ses exigences : pour chaque point, *ce que
+  l'auditeur doit vérifier* + *les preuves à demander*. L'auditeur qualifie chaque point (Conforme,
+  Point fort, Piste d'amélioration, NC mineure, NC majeure, N/A) et saisit la preuve observée.
+- **Premier modèle livré : Hygiène informatique ANSSI (42 mesures → 46 points de contrôle)**,
+  reformulations maison fidèles à l'intention du guide public (aucun texte de norme recopié).
+- **Catalogue statique extensible** : nouveau registre `js/data/audit_modeles.js` (`AuditModeles`,
+  `register` / `buildGrid` / `available`) + un fichier de contenu par référentiel (`audit_anssi.js`).
+  La grille est **croisée à la volée** avec le registre `Referentiels` (domaine + intitulé + aide) —
+  zéro double saisie des titres. Suite prévue : ISO 27001, NIS2, DORA, AirCyber.
+- **Couverture & conformité en direct** : KPI dans la fiche (X/N points évalués, conformes, NC, N/A,
+  **taux de conformité** = conformes ÷ applicables, N/A exclues) + barre de progression ; colonne
+  **Modèle (couverture)** dans la liste des audits.
+- **Rapport PDF enrichi** : le rapport imprimable inclut un tableau de synthèse de conformité puis la
+  grille **groupée par domaine** (badges colorés + preuves observées). Les **constats libres**
+  historiques restent disponibles (section dédiée, hors grille).
+- **Cockpit tenu à jour** : le tableau de bord et la Synthèse comptent désormais les non-conformités
+  issues de la grille (mineure/majeure) en plus des constats libres.
+- **Rétrocompatible, sans évolution de schéma** : deux champs optionnels sur l'entité `audits`
+  (`ref_id`, `items[]`), portés par la sauvegarde unifiée (IndexedDB, chiffrement, export/import,
+  points de restauration). Les audits existants restent des « audits libres ». Échappement XSS
+  conservé. Tests Playwright (19 assertions, 0 erreur : génération 46 points, saisie, persistance
+  après rechargement, rapport PDF).
+
 ### Correction — le référentiel « ISO 27002 » devient « ISO/IEC 27001:2022 »
 - **Notion corrigée** : le référentiel des 93 mesures était présenté comme *ISO/IEC 27002:2022*.
   Or ces mesures sont celles de l'**Annexe A d'ISO/IEC 27001:2022**, la norme **certifiable** du
