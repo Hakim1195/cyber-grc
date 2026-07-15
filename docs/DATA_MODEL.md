@@ -429,14 +429,19 @@ AuditModeles.register("<ref_id>", {
   des exigences réparties sur plusieurs référentiels. Ex. `iso27001-complet` = `iso27001-smsi` +
   `iso-27002-2022`. `available()` place les composites après les modèles simples ; `has`/`isComposite`
   /`countPoints`/`nameOf` les prennent en charge.
+- **Modèles dérivés** : `registerDerived(refId, { ctrl?(exigence)->string, preuve? })` génère un point
+  de contrôle **par exigence** du référentiel — pour les questionnaires déjà détaillés (AirCyber, 234
+  questions) où réécrire les points à la main n'apporte rien. La question devient le point de contrôle
+  (consigne d'audit + invite de preuve). `has`/`countPoints`/`buildGrid` les prennent en charge.
 - ⚠️ **Reformulations maison uniquement** (même règle que les référentiels : ne jamais embarquer le
   texte intégral des normes).
 
-Livré :
+Livré (7 modèles au sélecteur) :
 - **ANSSI** — Hygiène (42 mesures → 46 points de contrôle).
 - **ISO/IEC 27001:2022 — Système de management** (`iso27001-smsi`, nouveau référentiel, 30 exigences
   chap. 4-10 → 31 points de contrôle).
 - **ISO/IEC 27001:2022 — Annexe A** (`iso-27002-2022`, 93 mesures → 93 points).
 - **Composite « ISO 27001 complet »** (`iso27001-complet`) = SMSI + Annexe A → **124 points**.
-
-Prévu : NIS2, DORA, AirCyber.
+- **NIS2** (`nis2-art21`, 10 mesures art. 21 + gouvernance art. 20 → 11 points).
+- **DORA** (`dora`, 5 piliers → 15 points).
+- **AirCyber** (`aircyber`, modèle **dérivé** des 234 questions → 234 points).

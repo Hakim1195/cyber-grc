@@ -31,10 +31,14 @@ const AuditModeles = (() => {
     // d'auditer en une seule grille des exigences réparties sur plusieurs référentiels.
     const composites = {};     // modelId -> { nom, sources: [refId...] }
     const compositeOrder = [];
+    // Modèles DÉRIVÉS : pour les questionnaires déjà détaillés (ex. AirCyber, 234
+    // questions), on n'écrit pas de points à la main — chaque exigence du référentiel
+    // devient un point de contrôle (la question = ce qu'il faut vérifier + invite de preuve).
+    const derived = {};        // refId -> { ctrl?(exigence)->string, preuve? }
 
     function register(refId, points) {
         if (!refId || !points || typeof points !== "object") return;
-        if (!catalog[refId]) order.push(refId);
+        if (!catalog[refId] && !derived[refId]) order.push(refId);
         // Fusion : permet de répartir le contenu d'un même référentiel sur plusieurs fichiers.
         catalog[refId] = Object.assign(catalog[refId] || {}, points);
     }
@@ -46,8 +50,16 @@ const AuditModeles = (() => {
         composites[modelId] = { nom: def.nom || modelId, sources: def.sources.slice() };
     }
 
+    // Enregistre un modèle DÉRIVÉ des exigences du référentiel (un point par exigence).
+    // `opts` = { ctrl?(exigence)->string, preuve? }.
+    function registerDerived(refId, opts) {
+        if (!refId) return;
+        if (!catalog[refId] && !derived[refId]) order.push(refId);
+        derived[refId] = opts || {};
+    }
+
     function get(refId) { return catalog[refId] || null; }
-    function has(refId) { return !!catalog[refId] || !!composites[refId]; }
+    function has(refId) { return !!catalog[refId] || !!composites[refId] || !!derived[refId]; }
     function isComposite(id) { return !!composites[id]; }
     function all() { return order.slice(); }
 
@@ -58,10 +70,14 @@ const AuditModeles = (() => {
         return ref ? ref.nom : id;
     }
 
-    // Nombre total de points de contrôle d'un modèle (résout les composites).
+    // Nombre total de points de contrôle d'un modèle (résout composites et dérivés).
     function countPoints(refId) {
         if (composites[refId]) {
             return composites[refId].sources.reduce((n, s) => n + countPoints(s), 0);
+        }
+        if (derived[refId]) {
+            const ref = (typeof Referentiels !== "undefined") ? Referentiels.get(refId) : null;
+            return ref ? Referentiels.countExigences(ref) : 0;
         }
         const p = catalog[refId];
         if (!p) return 0;
@@ -79,6 +95,22 @@ const AuditModeles = (() => {
             let grid = [];
             composites[refId].sources.forEach(src => { grid = grid.concat(buildGrid(src)); });
             return grid;
+        }
+        // Dérivé : un point de contrôle par exigence du référentiel (questionnaire déjà détaillé).
+        if (derived[refId]) {
+            const d = derived[refId];
+            const refD = (typeof Referentiels !== "undefined") ? Referentiels.get(refId) : null;
+            const flatD = refD ? Referentiels.flatExigences(refD) : [];
+            const defaultPreuve = "Documentation, configuration ou enregistrement démontrant la mise en œuvre, cohérent avec la réponse déclarée au questionnaire.";
+            return flatD.map(e => ({
+                code: e.code,
+                domaine: e.domaineNom || "",
+                intitule: e.titre || "",
+                aide: e.aide || "",
+                ctrl: (typeof d.ctrl === "function") ? d.ctrl(e) : ("Vérifier que l'exigence est satisfaite et étayée par des preuves : « " + (e.titre || "") + " »."),
+                preuve: d.preuve || defaultPreuve,
+                type: "", constat: ""
+            }));
         }
         const points = catalog[refId];
         if (!points) return [];
@@ -122,5 +154,5 @@ const AuditModeles = (() => {
         return simple.concat(comp);
     }
 
-    return { register, registerComposite, get, has, isComposite, all, nameOf, countPoints, buildGrid, available };
+    return { register, registerComposite, registerDerived, get, has, isComposite, all, nameOf, countPoints, buildGrid, available };
 })();

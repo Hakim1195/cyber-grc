@@ -5,6 +5,20 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Audits — modèles NIS2, DORA et AirCyber (modèles d'audit sur tous les référentiels)
+- **NIS2** (`audit_nis2.js`) : **11 points de contrôle** couvrant les 10 mesures de l'article 21
+  (a→j) + un point sur la responsabilité de l'organe de direction (art. 20). Rappelle les délais
+  de notification NIS2 (24 h / 72 h / 1 mois).
+- **DORA** (`audit_dora.js`) : **15 points de contrôle**, un par mesure des 5 piliers (gestion du
+  risque TIC, incidents, tests de résilience, risque lié aux tiers, partage d'information).
+- **AirCyber** (`audit_aircyber.js`) : **234 points de contrôle**. AirCyber étant déjà un
+  questionnaire d'audit détaillé, le modèle est **dérivé automatiquement** de ses 234 questions
+  (nouveau mécanisme `AuditModeles.registerDerived`) : chaque question devient un point de contrôle
+  avec une consigne d'audit et une invite de preuve — pas de double saisie.
+- **Tous les référentiels de l'app disposent désormais d'un modèle d'audit** : ANSSI, ISO 27001
+  (management + Annexe A + composite complet), NIS2, DORA, AirCyber — soit **7 modèles** au menu
+  de génération. Tests Playwright (11 assertions, 0 erreur ; grilles 11/15/234, rendu UI).
+
 ### Audits — modèle ISO/IEC 27001:2022 (système de management + Annexe A) + composites
 - **Nouveau référentiel « ISO/IEC 27001:2022 — Système de management » (chap. 4-10)** :
   `js/data/ref_iso27001_smsi.js`, **30 exigences** du SMSI réparties en 7 chapitres (contexte,
