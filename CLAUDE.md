@@ -54,7 +54,7 @@ cyber-gouvernance_V4/
 │   ├── backup.js              export/import fichier + bandeau de rappel
 │   ├── importExcel.js, exportExcel.js, exportPDF.js
 ├── js/modules/                1 module = 1 domaine (IIFE `XxxModule.renderList/renderDetail`)
-│   └── dashboard, synthese, clients, actifs, risques, matrice, exigences,
+│   └── dashboard, synthese, clients, actifs, cartographie, risques, matrice, exigences,
 │       actions, bia, crise, pra_scenarios, pra_mco, pra_tests,
 │       pra_prestataires, audits, settings
 ├── js/lib/xlsx.full.min.js    SheetJS (embarqué)
@@ -76,7 +76,7 @@ cyber-gouvernance_V4/
 
 - IndexedDB `cyber-grc-db` : store `kv` (`current` = instantané, chiffré si protection active ;
   `meta`), store `backups` (points de restauration versionnés, auto + manuels).
-- `SCHEMA_VERSION = 8` dans `datastore.js`. Migrations à l'import via `migratePayload`.
+- `SCHEMA_VERSION = 9` dans `datastore.js`. Migrations à l'import via `migratePayload`.
 - Entités (tableaux) : clients, exigences, actions, risques, actifs, processus, crise,
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
   **evaluations** (auto-évaluations de référentiels), **mesures** (pivot « Mesure de sécurité »),
@@ -84,6 +84,8 @@ cyber-gouvernance_V4/
   **traitements** (registre RGPD art. 30, mesures reliées au pivot),
   **mappings** (v7, surcouche des correspondances inter-référentiels ; catalogue par défaut statique)
   et **history** (v8, indicateurs historisés — un point par jour pour les courbes de tendance).
+  Les **actifs** portent en plus un champ **`dependances[]`** (v9, liens typés actif→actif :
+  `dep`/`hosted`/`flux`/`backup` — module Cartographie & analyse d'impact).
 - Référentiels : catalogue **statique** (registre `js/data/referentiels.js` + fichiers `ref_*.js`),
   hors `data`. Livrés : ANSSI (42), ISO 27001 Annexe A (93, id technique conservé `iso-27002-2022`),
   NIS2 (10), DORA (15), AirCyber/BoostAerospace (234).
@@ -214,6 +216,17 @@ taux de Oui, panneau « préparation au label » rafraîchi en direct, `maturite
 mais ignorée (saisie et import CSV ne la touchent plus). SoA sans colonne « Mat. » ; dashboard :
 moyenne CMMI hors AirCyber, barre AirCyber en % « score Oui/Non ». Autres référentiels inchangés.
 Tests Playwright (64 assertions ; 0 erreur).
+
+**Fait (Chantier Cartographie — dépendances entre actifs, schéma v9)** : module **`/cartographie`**
+(entrée menu « Cartographie » après « Actifs critiques ») — **graphe SVG maison** des actifs et de leurs
+**dépendances typées** (`dep`/`hosted`/`flux`/`backup`), édité depuis la **fiche de chaque actif** (champ
+`actif.dependances[]`, rétrocompatible). **Layout en couches** (métier en haut → socle en bas, robuste aux
+cycles). **Analyse d'impact Niveau 3** : clic → **rayon d'impact** par propagation transitive (actifs +
+processus BIA en aval, dont critiques, RTO) + **détection SPOF** (≥ 2 processus critiques dépendants) ; le
+lien **sauvegardé par ne propage pas** une panne (dépendances typées). **Filtres** (type, criticité,
+recherche, processus, isolés) ; **export PNG/SVG** (même recette que la matrice). Cascade `deleteActif`
+étendue (purge des liens entrants). Tests Playwright (rendu, SPOF exact, impact, filtres, export,
+round-trip v9, cascade, édition fiche ; 0 erreur).
 
 **Prochain** : poursuivre le Chantier 2 — harmoniser tableaux denses / KPI / radars ; tooltips restants
 sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches.

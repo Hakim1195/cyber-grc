@@ -4,14 +4,15 @@
 > Application **100 % frontend** : toutes les données vivent dans le navigateur
 > (IndexedDB, avec repli localStorage). Aucune donnée ne quitte le poste.
 
-Version de schéma courante : **`SCHEMA_VERSION = 8`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 9`** (défini dans `js/core/datastore.js`).
 > v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`.
 > v4 (chantier Incidents) : ajout du tableau `incidents`.
 > v5 (chantier Documentaire) : ajout du tableau `documents`.
 > v6 (chantier RGPD) : ajout du tableau `traitements`.
 > v7 (chantier 3 Correspondances) : ajout du tableau `mappings` (surcouche des correspondances inter-référentiels).
 > v8 (chantier 7 Tendances) : ajout du tableau `history` (indicateurs historisés, un point par jour).
-> Migrations transparentes — `normalize` crée les tableaux vides à la volée.
+> v9 (chantier Cartographie) : ajout du champ `dependances[]` (liens typés actif→actif) sur les actifs.
+> Migrations transparentes — `normalize` crée les tableaux vides à la volée (et garantit `dependances`).
 
 ---
 
@@ -135,6 +136,21 @@ Suppression en cascade → supprime les `exigences` rattachées (et leurs `actio
 | `responsable` | string | |
 | `description` | string | |
 | `risques_lies` | string[] | ids de `risques` |
+| `dependances` | objet[] | **v9** — liens typés vers d'autres actifs : `{ to: <id d'actif>, type }`. Une arête A→B = « A a besoin de B » pour tous les `type` **sauf `backup`** (voir ci-dessous). |
+
+**Types de dépendance** (`dependances[].type`, module Cartographie) :
+
+| `type` | Libellé | Propage une panne ? |
+|--------|---------|:---:|
+| `dep` | Dépend de | oui |
+| `hosted` | Hébergé sur | oui |
+| `flux` | Alimenté par (flux de données) | oui |
+| `backup` | Sauvegardé par | **non** (porte la restauration, pas la disponibilité) |
+
+L'**analyse d'impact** (module `/cartographie`) calcule le **rayon d'impact** = fermeture transitive
+inverse sur les liens propageants (`dep`/`hosted`/`flux`) + l'usage des processus (`processus.actifs_lies`).
+Un actif dont **≥ 2 processus critiques** dépendent est signalé **SPOF** (point de défaillance unique).
+`deleteActif(id)` **purge** les `dependances` des autres actifs pointant vers `id` (pas d'arête orpheline).
 
 ### Processus / BIA (ISO 22301) — `processus`
 | Champ | Type | Notes |
@@ -327,6 +343,7 @@ Client ──1:N──> Exigence ──1:N──> Action
                    ▲ N:M (exigences_liees)
                    │
 Actif ──N:M──> Risque (risques_lies)
+Actif ──N:M──> Actif (dependances[] : liens typés, v9 — cartographie)
 
 Processus(BIA) ──N:M──> Actif (actifs_lies)
 ScenarioPra ──1:N──> TestPra (scenario_id)
@@ -335,7 +352,8 @@ Crise, Prestataire, McoAction : autonomes
 ```
 
 Cascades implémentées : `deleteClient`→exigences→actions ; `deleteExigence`→délie
-risques + supprime actions liées ; `deleteRisque`→délie actifs + supprime actions liées.
+risques + supprime actions liées ; `deleteRisque`→délie actifs + supprime actions liées ;
+`deleteActif`→délie incidents (`actifs_touches`) + **purge les `dependances` pointant vers l'actif** (v9).
 > ⚠️ Orphelins possibles : `TestPra.scenario_id` vers un scénario supprimé (non nettoyé).
 
 ---

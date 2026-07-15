@@ -5,6 +5,30 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Cartographie du SI & dépendances entre actifs (schéma v9)
+- **Nouveau module `/cartographie`** (entrée menu « Cartographie », après « Actifs critiques ») :
+  graphe SVG « fait maison » (même recette que la matrice EBIOS : formes + texte, **export PNG/SVG**
+  via canvas, sans dépendance) représentant les actifs et leurs **dépendances typées**.
+- **Lien actif → actif** (seul ajout au modèle : champ `actif.dependances[] = { to, type }`,
+  rétrocompatible, **schéma v9** — `normalize` garantit le tableau, aucune transformation de données).
+  **4 types de liens** : `dépend de`, `hébergé sur`, `alimenté par` (flux de données), `sauvegardé par`.
+  Édités depuis la **fiche de chaque actif** (formulaire type + cible, liste retirable, colonne
+  « en dépendent »), enregistrés avec « Mettre à jour ».
+- **Layout en couches déterministe** (rang = profondeur de dépendance ; processus métier BIA en haut,
+  socle/infrastructure en bas ; robuste aux cycles) — pas de moteur de physique, rendu reproductible
+  et exportable proprement.
+- **Niveau 3 — analyse d'impact** : clic sur un nœud → **rayon d'impact** par propagation transitive
+  (actifs + processus en aval, dont critiques, RTO), et **détection des SPOF** (points de défaillance
+  unique : ≥ 2 processus critiques en dépendent → badge + panneau). Le lien **sauvegardé par NE propage
+  PAS** une panne de disponibilité (dépendances typées).
+- **Filtres** : recherche, type d'actif, criticité, affichage des processus, masquage des actifs isolés.
+- **Cascade** : `deleteActif` purge désormais aussi les `dependances` des autres actifs pointant vers
+  l'actif supprimé (plus d'arêtes orphelines).
+- Conventions respectées : tokens Dedienne, `escapeHtml` sur toute donnée, `Help.tip` (SPOF, propagation,
+  types de liens), périmètre global. Tests Playwright : rendu (11 nœuds / 12 arêtes), SPOF exact
+  `[ERP, BDD, AD]`, impact AD (4 actifs / 3 processus / 2 critiques), filtres, export SVG, **round-trip v9**,
+  **cascade**, édition depuis la fiche (ajout/retrait/persistance) — **0 erreur**.
+
 ### Audits — modèles NIS2, DORA et AirCyber (modèles d'audit sur tous les référentiels)
 - **NIS2** (`audit_nis2.js`) : **11 points de contrôle** couvrant les 10 mesures de l'article 21
   (a→j) + un point sur la responsabilité de l'organe de direction (art. 20). Rappelle les délais
