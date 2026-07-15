@@ -33,6 +33,7 @@ async function startApp() {
 
         "/actifs": () => ActifsModule.renderList(),
         "/actifs/:id": (id) => ActifsModule.renderDetail(id),
+        "/cartographie": () => { if (typeof CartographieModule !== "undefined") CartographieModule.render(); },
 
         "/risques": () => RisquesModule.renderList(),
         "/risques/:id": (id) => RisquesModule.renderDetail(id),

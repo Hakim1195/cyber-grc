@@ -11,7 +11,7 @@ const DataStore = (() => {
     const LEGACY_AUDITS_KEY = "cyber-audits";
     const LEGACY_REVUES_KEY = "cyber-revues";
     const LOCAL_CURRENT_KEY = "cyber-current";      // repli (chiffré si clé) si IndexedDB indisponible
-    const SCHEMA_VERSION = 8;
+    const SCHEMA_VERSION = 9;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -112,6 +112,12 @@ const DataStore = (() => {
         const out = Object.assign(emptyData(), d || {});
         ARRAY_FIELDS.forEach(f => {
             out[f] = Array.isArray(out[f]) ? out[f] : [];
+        });
+        // v9 — Cartographie : chaque actif porte un tableau `dependances` (liens typés
+        // actif→actif : { to, type }). On le garantit à la volée (migration transparente,
+        // même principe que la création des tableaux d'entités absents).
+        out.actifs.forEach(a => {
+            if (a && !Array.isArray(a.dependances)) a.dependances = [];
         });
         out.schemaVersion = SCHEMA_VERSION;
         return out;
@@ -475,6 +481,11 @@ const DataStore = (() => {
         data.actifs = data.actifs.filter(a => a.id !== id);
         data.incidents.forEach(inc => {
             if (Array.isArray(inc.actifs_touches)) inc.actifs_touches = inc.actifs_touches.filter(aid => aid !== id);
+        });
+        // Cartographie (v9) : purge les dépendances des autres actifs qui pointaient
+        // vers l'actif supprimé (évite les arêtes orphelines dans le graphe).
+        data.actifs.forEach(a => {
+            if (Array.isArray(a.dependances)) a.dependances = a.dependances.filter(dep => dep && dep.to !== id);
         });
         save();
     }
@@ -856,7 +867,9 @@ const DataStore = (() => {
         // v5 → v6 : ajout de `traitements` (RGPD) → normalize crée le tableau vide.
         // v6 → v7 : ajout de `mappings` (surcouche des correspondances) → normalize crée le tableau vide.
         // v7 → v8 : ajout de `history` (indicateurs historisés) → normalize crée le tableau vide.
-        // (Ajouter ici les futures migrations : if (v < 9) { ... })
+        // v8 → v9 : ajout du champ `dependances[]` (liens typés actif→actif) sur les actifs →
+        //           normalize garantit le tableau sur chaque actif (aucune transformation de données).
+        // (Ajouter ici les futures migrations : if (v < 10) { ... })
         return p;
     }
 
