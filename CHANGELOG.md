@@ -26,21 +26,22 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
   l'app ne représentait qu'**l'Annexe A** ; or un audit clause 9.2 vérifie d'abord ces exigences de
   management. Référentiel « normal » : browsable, auto-évaluable, radar, SoA, couverture, mapping.
   Gardé **séparé** de l'Annexe A (les chapitres 4-10 sont obligatoires — pas d'applicabilité à déclarer).
-- **Modèles d'audit ISO livrés** : `audit_iso27001_smsi.js` (**84 points de contrôle** pour le SMSI —
-  chaque clause est éclatée en **sous-exigences fines** `4.1a`, `4.1b`… au niveau de chaque « shall »
-  de la norme) et `audit_iso27002.js` (**93 points**, un par mesure de l'Annexe A).
+- **Modèles d'audit ISO livrés** : `audit_iso27001_smsi.js` (**143 points de contrôle** pour le SMSI —
+  chaque clause est éclatée en **sous-exigences fines** `4.1a`… `6.1.2j`… au niveau de chaque « shall »
+  et sous-alinéa de la norme) et `audit_iso27002.js` (**93 points**, un par mesure de l'Annexe A).
 - **Granularité portée par l'audit** : `buildGrid` accepte un **sous-code / intitulé par point**
   (`{ code, intitule, ctrl, preuve }`) ; le référentiel `iso27001-smsi` reste, lui, au niveau des 30
   clauses (auto-évaluation lisible), tandis que l'audit descend au « shall ». Rétrocompatible.
 - **Modèles d'audit COMPOSITES** : nouveau mécanisme `AuditModeles.registerComposite(id, {nom, sources})`
   — un modèle « virtuel » qui concatène plusieurs modèles sources. Premier composite livré :
-  **« ISO/IEC 27001:2022 — Audit complet (SMSI + Annexe A) » = 177 points de contrôle** en une seule
-  grille (84 sous-exigences de management + 93 mesures de l'Annexe A, l'intégralité de la norme).
-  `buildGrid` / `countPoints` / `available` / `nameOf` résolvent les composites.
-- **Fidélité** : reformulations maison, texte ISO **non reproduit** (norme protégée). Les 177 points
-  couvrent l'ensemble des exigences au niveau du « shall » ; le compte « 236 » de certains guides
-  découpe encore plus finement (chaque sous-alinéa) — la couverture, elle, est complète.
-- Tests Playwright : SMSI 16 assertions + ISO complet 13 assertions, **0 erreur** (référentiel chargé,
+  **« ISO/IEC 27001:2022 — Audit complet (SMSI + Annexe A) » = 236 points de contrôle** en une seule
+  grille (143 sous-exigences de management + 93 mesures de l'Annexe A) — soit **les 236 exigences**
+  de la norme, à la maille des guides de référence. `buildGrid` / `countPoints` / `available` /
+  `nameOf` résolvent les composites.
+- **Fidélité** : reformulations maison, texte ISO **non reproduit** (norme protégée). Les 143
+  sous-exigences de management décomposent chaque « shall » et sous-alinéa des chapitres 4 à 10 ;
+  avec les 93 mesures de l'Annexe A, la couverture atteint **236 exigences**, sans rien omettre.
+- Tests Playwright : SMSI 17 assertions + ISO complet 13 assertions, **0 erreur** (référentiel chargé,
   grilles 31/93/124, composite, rendu UI, persistance, intégration section Référentiels).
 
 ### Audits — modèles d'audit générés depuis les référentiels (ANSSI)

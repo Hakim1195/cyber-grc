@@ -441,9 +441,11 @@ AuditModeles.register("<ref_id>", {
 Livré (7 modèles au sélecteur) :
 - **ANSSI** — Hygiène (42 mesures → 46 points de contrôle).
 - **ISO/IEC 27001:2022 — Système de management** (`iso27001-smsi`, nouveau référentiel de 30 clauses
-  chap. 4-10 ; l'audit éclate chaque clause en **sous-exigences fines** `4.1a`, `4.1b`… → **84 points**).
+  chap. 4-10 ; l'audit éclate chaque clause en **sous-exigences fines** `4.1a`… `6.1.2j`… au niveau de
+  chaque « shall » et sous-alinéa → **143 points**).
 - **ISO/IEC 27001:2022 — Annexe A** (`iso-27002-2022`, 93 mesures → 93 points).
-- **Composite « ISO 27001 complet »** (`iso27001-complet`) = SMSI + Annexe A → **177 points**.
+- **Composite « ISO 27001 complet »** (`iso27001-complet`) = SMSI + Annexe A → **236 points** (= les
+  236 exigences de la norme, à la maille des guides de référence).
 - **NIS2** (`nis2-art21`, 10 mesures art. 21 + gouvernance art. 20 → 11 points).
 - **DORA** (`dora`, 5 piliers → 15 points).
 - **AirCyber** (`aircyber`, modèle **dérivé** des 234 questions → 234 points).
