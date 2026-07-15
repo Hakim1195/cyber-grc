@@ -129,11 +129,14 @@ const AuditModeles = (() => {
         codes.forEach(code => {
             const ctx = byCode[code] || {};
             (points[code] || []).forEach(pt => {
+                // Un point peut porter son propre sous-code / intitulé (décomposition
+                // fine d'une clause en sous-exigences, ex. « 4.1a »). À défaut, il hérite
+                // du code, du domaine et de l'intitulé de l'exigence du référentiel.
                 grid.push({
-                    code: code,
-                    domaine: ctx.domaineNom || "",
-                    intitule: ctx.titre || "",
-                    aide: ctx.aide || "",
+                    code: pt.code || code,
+                    domaine: pt.domaine || ctx.domaineNom || "",
+                    intitule: pt.intitule || ctx.titre || "",
+                    aide: pt.aide || ctx.aide || "",
                     ctrl: pt.ctrl || "",
                     preuve: pt.preuve || "",
                     type: "",

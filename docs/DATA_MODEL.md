@@ -420,6 +420,8 @@ AuditModeles.register("<ref_id>", {
 - `AuditModeles.buildGrid(ref_id)` **croise** ces points de contrôle avec le registre `Referentiels`
   (domaine + intitulé + aide de chaque exigence) et renvoie la grille à plat
   `{ code, domaine, intitule, aide, ctrl, preuve, type:"", constat:"" }`, ordonnée comme le référentiel.
+  Un point peut **surcharger** son `code` / `intitule` (sous-exigence fine, ex. `4.1a`) — c'est ainsi que
+  l'audit ISO SMSI descend au « shall » alors que le référentiel reste au niveau des 30 clauses.
 - Le module `/audits` **copie** cette grille dans `audit.items[]` (instantané autoportant, cf. §2) et
   y ajoute les constats de l'auditeur. Le catalogue peut donc évoluer sans altérer les audits passés.
 - `available()` liste les modèles disponibles (pour le sélecteur) ; `countPoints(id)` donne le volume
@@ -438,10 +440,10 @@ AuditModeles.register("<ref_id>", {
 
 Livré (7 modèles au sélecteur) :
 - **ANSSI** — Hygiène (42 mesures → 46 points de contrôle).
-- **ISO/IEC 27001:2022 — Système de management** (`iso27001-smsi`, nouveau référentiel, 30 exigences
-  chap. 4-10 → 31 points de contrôle).
+- **ISO/IEC 27001:2022 — Système de management** (`iso27001-smsi`, nouveau référentiel de 30 clauses
+  chap. 4-10 ; l'audit éclate chaque clause en **sous-exigences fines** `4.1a`, `4.1b`… → **84 points**).
 - **ISO/IEC 27001:2022 — Annexe A** (`iso-27002-2022`, 93 mesures → 93 points).
-- **Composite « ISO 27001 complet »** (`iso27001-complet`) = SMSI + Annexe A → **124 points**.
+- **Composite « ISO 27001 complet »** (`iso27001-complet`) = SMSI + Annexe A → **177 points**.
 - **NIS2** (`nis2-art21`, 10 mesures art. 21 + gouvernance art. 20 → 11 points).
 - **DORA** (`dora`, 5 piliers → 15 points).
 - **AirCyber** (`aircyber`, modèle **dérivé** des 234 questions → 234 points).
