@@ -4,7 +4,7 @@
 > Application **100 % frontend** : toutes les données vivent dans le navigateur
 > (IndexedDB, avec repli localStorage). Aucune donnée ne quitte le poste.
 
-Version de schéma courante : **`SCHEMA_VERSION = 9`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 10`** (défini dans `js/core/datastore.js`).
 > v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`.
 > v4 (chantier Incidents) : ajout du tableau `incidents`.
 > v5 (chantier Documentaire) : ajout du tableau `documents`.
@@ -12,7 +12,10 @@ Version de schéma courante : **`SCHEMA_VERSION = 9`** (défini dans `js/core/da
 > v7 (chantier 3 Correspondances) : ajout du tableau `mappings` (surcouche des correspondances inter-référentiels).
 > v8 (chantier 7 Tendances) : ajout du tableau `history` (indicateurs historisés, un point par jour).
 > v9 (chantier Cartographie) : ajout du champ `dependances[]` (liens typés actif→actif) sur les actifs.
-> Migrations transparentes — `normalize` crée les tableaux vides à la volée (et garantit `dependances`).
+> v10 (chantier MCO) : refonte des `mco_actions` — passage du modèle « vérification récurrente »
+>     (`etat`/`date`/`notes`) au modèle de suivi d'action planifiée (`statut`/`avancement`/dates + responsable).
+> Migrations transparentes — `normalize` crée les tableaux vides à la volée (et garantit
+>     `dependances` ainsi que la conversion des anciennes actions MCO).
 
 ---
 
@@ -178,7 +181,20 @@ Un actif dont **≥ 2 processus critiques** dépendent est signalé **SPOF** (po
   `deleteOrphanTests()` (bandeau dédié dans la liste des tests).
 
 ### MCO (maintien en condition) — `mco_actions`
-`{ id, titre, frequence, etat: "OK"|"KO", date, notes }`
+`{ id, titre, description, responsable,`
+` frequence: "Ponctuelle"|"Hebdomadaire"|"Mensuelle"|"Trimestrielle"|"Semestrielle"|"Annuelle",`
+` priorite: "Basse"|"Moyenne"|"Haute"|"Critique",`
+` datePrevue, dateReelle, dateCloture,`
+` statut: "À planifier"|"En cours"|"Réalisée"|"Annulée",`
+` avancement: 0-100, commentaire }`
+- `titre` = définition courte de l'action (libellé de la liste) ; `description` = détail.
+- **« En retard »** : indicateur *dérivé* (non stocké) — `datePrevue` dépassée alors que le statut
+  n'est ni `Réalisée` ni `Annulée`. Calculé par `PraMcoModule.isEnRetard(m)` (source unique,
+  réutilisée par le tableau de bord). Passer au statut `Réalisée` force `avancement = 100` et
+  complète `dateReelle`/`dateCloture` à la date du jour si vides.
+- **Migration v9 → v10** (dans `normalize`, transparente et idempotente) : `etat:"OK"` → `statut:"Réalisée"`
+  + `avancement:100` ; `etat:"KO"` → `statut:"En cours"` ; `date` → `dateReelle` ; `notes` → `commentaire` ;
+  les anciennes clés `etat`/`date`/`notes` sont purgées après recopie.
 
 ### Prestataire / tiers — `prestataires`
 `{ id, societe, type, phone, email, notes,`

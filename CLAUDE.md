@@ -76,7 +76,7 @@ cyber-gouvernance_V4/
 
 - IndexedDB `cyber-grc-db` : store `kv` (`current` = instantané, chiffré si protection active ;
   `meta`), store `backups` (points de restauration versionnés, auto + manuels).
-- `SCHEMA_VERSION = 9` dans `datastore.js`. Migrations à l'import via `migratePayload`.
+- `SCHEMA_VERSION = 10` dans `datastore.js`. Migrations à l'import via `migratePayload`.
 - Entités (tableaux) : clients, exigences, actions, risques, actifs, processus, crise,
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
   **evaluations** (auto-évaluations de référentiels), **mesures** (pivot « Mesure de sécurité »),
@@ -86,6 +86,11 @@ cyber-gouvernance_V4/
   et **history** (v8, indicateurs historisés — un point par jour pour les courbes de tendance).
   Les **actifs** portent en plus un champ **`dependances[]`** (v9, liens typés actif→actif :
   `dep`/`hosted`/`flux`/`backup` — module Cartographie & analyse d'impact).
+  Les **`mco_actions`** suivent (v10) un modèle de **suivi d'action planifiée** :
+  `{ titre, description, responsable, frequence, priorite, datePrevue, dateReelle, dateCloture,
+  statut ("À planifier"|"En cours"|"Réalisée"|"Annulée"), avancement 0–100, commentaire }` —
+  « en retard » est *dérivé* via `PraMcoModule.isEnRetard` (réutilisé par le dashboard). Migration
+  transparente de l'ancien `{ etat, date, notes }` dans `normalize`.
 - Référentiels : catalogue **statique** (registre `js/data/referentiels.js` + fichiers `ref_*.js`),
   hors `data`. Livrés : ANSSI (42), ISO 27001 Annexe A (93, id technique conservé `iso-27002-2022`),
   NIS2 (10), DORA (15), AirCyber/BoostAerospace (234).
@@ -227,6 +232,19 @@ lien **sauvegardé par ne propage pas** une panne (dépendances typées). **Filt
 recherche, processus, isolés) ; **export PNG/SVG** (même recette que la matrice). Cascade `deleteActif`
 étendue (purge des liens entrants). Tests Playwright (rendu, SPOF exact, impact, filtres, export,
 round-trip v9, cascade, édition fiche ; 0 erreur).
+
+**Fait (Chantier MCO — suivi d'action planifiée, schéma v10)** : refonte des champs du module
+**`/mco`** (Actions Préalables) — de l'ancien modèle « vérification récurrente » (`etat` OK/KO, `date`,
+`notes`) vers un **modèle de suivi d'action planifiée** : **Définition**, **Description**, **Responsable**,
+**Priorité**, **Fréquence**, **Statut** (À planifier/En cours/Réalisée/Annulée), **Date programmée**,
+**Date de réalisation**, **Date de clôture**, **Avancement %** (curseur), **Commentaire**. Indicateur
+**« en retard »** *dérivé* (`PraMcoModule.isEnRetard`, source unique **réutilisée par le dashboard** :
+tuile « N en retard » / « Planning tenu » au lieu du décompte OK/KO) → badge liste + bandeau + entête de
+fiche. Automatismes (statut « Réalisée » → 100 % + dates du jour ; curseur synchronisé). **Migration
+transparente v9→v10** dans `normalize` (OK→Réalisée/100 %, KO→En cours, date→dateReelle, notes→commentaire,
+purge des clés obsolètes ; sans perte de donnée). Correctif CSS `.status` (`white-space: nowrap`).
+Tests Playwright (44 assertions : migration backup v9, round-trip v10, CRUD UI, auto-complétion, retard,
+dashboard ; 0 erreur).
 
 **Prochain** : poursuivre le Chantier 2 — harmoniser tableaux denses / KPI / radars ; tooltips restants
 sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches.

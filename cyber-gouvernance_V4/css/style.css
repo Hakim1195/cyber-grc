@@ -272,6 +272,7 @@ button:active { transform: translateY(0); }
     font-size: 0.8rem;
     font-weight: 600;
     text-transform: capitalize;
+    white-space: nowrap;
 }
 
 .status-conforme { background: #d4edda; color: #155724; }

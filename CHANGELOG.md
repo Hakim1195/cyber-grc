@@ -5,6 +5,32 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Actions Préalables (MCO) — modèle de suivi d'action planifiée (schéma v10)
+- **Refonte des champs** du module `/mco` : passage de l'ancien modèle « vérification récurrente »
+  (`etat` OK/KO, `date`, `notes`) à un **modèle de suivi d'action planifiée**, inspiré d'un tableau
+  de suivi d'actions et optimisé. Nouveaux champs de saisie :
+  **Définition de l'action** (libellé), **Description détaillée**, **Responsable**, **Priorité**
+  (Basse→Critique), **Fréquence** (Ponctuelle / Hebdo → Annuelle), **Statut**
+  (À planifier / En cours / Réalisée / Annulée), **Date programmée**, **Date de réalisation**,
+  **Date de clôture**, **Avancement %** (curseur) et **Commentaire / suivi**.
+- **Indicateur « En retard » dérivé** (non stocké) : date programmée dépassée alors que l'action
+  n'est ni réalisée ni annulée → badge rouge dans la liste, bandeau d'alerte, badge dans l'entête
+  de la fiche. Source unique `PraMcoModule.isEnRetard(m)`, **réutilisée par le tableau de bord**
+  (la tuile « Actions MCO » affiche désormais *« N en retard »* / *« Planning tenu »* au lieu de
+  l'ancien décompte OK/KO).
+- **Automatismes de cohérence** : passer au statut « Réalisée » force l'avancement à 100 % et
+  complète les dates de réalisation/clôture (à la date du jour si vides) ; le curseur d'avancement
+  se synchronise en direct avec son étiquette.
+- **Migration transparente v9 → v10** (dans `normalize`, idempotente) : `etat:"OK"` → `Réalisée`
+  + 100 % ; `etat:"KO"` → `En cours` ; `date` → `dateReelle` ; `notes` → `commentaire` ; anciennes
+  clés purgées. **Aucune perte de donnée** (vérifié par import d'un ancien fichier de sauvegarde).
+- Conventions respectées : tokens Dedienne, `escapeHtml` sur toute donnée, `Help.tip` (concept MCO,
+  date programmée vs réelle, statut, avancement, fréquence), helpers partagés `UI.*`. Correctif CSS :
+  les pastilles `.status` ne passent plus à la ligne (`white-space: nowrap`).
+- Tests Playwright (**44 assertions, 0 erreur**) : migration depuis un backup v9, round-trip v10
+  idempotent, création/édition/suppression via l'UI, auto-complétion « Réalisée », logique et rendu
+  « en retard », mise à jour de la tuile du tableau de bord.
+
 ### Cartographie du SI & dépendances entre actifs (schéma v9)
 - **Nouveau module `/cartographie`** (entrée menu « Cartographie », après « Actifs critiques ») :
   graphe SVG « fait maison » (même recette que la matrice EBIOS : formes + texte, **export PNG/SVG**

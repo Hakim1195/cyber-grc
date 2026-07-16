@@ -11,7 +11,7 @@ const DataStore = (() => {
     const LEGACY_AUDITS_KEY = "cyber-audits";
     const LEGACY_REVUES_KEY = "cyber-revues";
     const LOCAL_CURRENT_KEY = "cyber-current";      // repli (chiffré si clé) si IndexedDB indisponible
-    const SCHEMA_VERSION = 9;
+    const SCHEMA_VERSION = 10;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -118,6 +118,30 @@ const DataStore = (() => {
         // même principe que la création des tableaux d'entités absents).
         out.actifs.forEach(a => {
             if (a && !Array.isArray(a.dependances)) a.dependances = [];
+        });
+        // v10 — Actions MCO : bascule de l'ancien modèle « vérification récurrente »
+        // ({ etat: OK|KO, date, notes }) vers un modèle de suivi d'action planifiée
+        // ({ statut, avancement, datePrevue, dateReelle, dateCloture, responsable,
+        //   description, priorite }). Migration transparente et idempotente.
+        out.mco_actions.forEach(m => {
+            if (!m || typeof m !== "object") return;
+            if (m.statut === undefined) {
+                if (m.etat === "OK") { m.statut = "Réalisée"; if (m.avancement === undefined) m.avancement = 100; }
+                else if (m.etat === "KO") { m.statut = "En cours"; }
+                else { m.statut = "À planifier"; }
+            }
+            if (m.dateReelle === undefined && m.date !== undefined) m.dateReelle = m.date;
+            if (m.commentaire === undefined && m.notes !== undefined) m.commentaire = m.notes;
+            if (m.avancement === undefined) m.avancement = (m.statut === "Réalisée" ? 100 : 0);
+            if (m.description === undefined) m.description = "";
+            if (m.responsable === undefined) m.responsable = "";
+            if (m.priorite === undefined) m.priorite = "Moyenne";
+            if (m.frequence === undefined) m.frequence = "Ponctuelle";
+            if (m.datePrevue === undefined) m.datePrevue = "";
+            if (m.dateReelle === undefined) m.dateReelle = "";
+            if (m.dateCloture === undefined) m.dateCloture = "";
+            // Purge des clés obsolètes une fois recopiées (idempotent).
+            delete m.etat; delete m.date; delete m.notes;
         });
         out.schemaVersion = SCHEMA_VERSION;
         return out;
@@ -869,7 +893,10 @@ const DataStore = (() => {
         // v7 → v8 : ajout de `history` (indicateurs historisés) → normalize crée le tableau vide.
         // v8 → v9 : ajout du champ `dependances[]` (liens typés actif→actif) sur les actifs →
         //           normalize garantit le tableau sur chaque actif (aucune transformation de données).
-        // (Ajouter ici les futures migrations : if (v < 10) { ... })
+        // v9 → v10 : Actions MCO — ancien modèle { etat, date, notes } converti en modèle de
+        //           suivi { statut, avancement, datePrevue, dateReelle, dateCloture, ... } par
+        //           normalize (OK→Réalisée/100 %, KO→En cours, date→dateReelle, notes→commentaire).
+        // (Ajouter ici les futures migrations : if (v < 11) { ... })
         return p;
     }
 

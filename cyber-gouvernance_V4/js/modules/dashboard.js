@@ -367,7 +367,9 @@ const DashboardModule = (() => {
         const processusCritiques = processus.filter(p => norm(p.criticite) === "critique").length;
         const testsSorted = [...tests].filter(t => t.date).sort((a, b) => new Date(b.date) - new Date(a.date));
         const lastTest = testsSorted[0] || null;
-        const mcoKo = mco.filter(m => String(m.etat).toUpperCase() === "KO").length;
+        // Actions MCO en retard : date programmée dépassée sans réalisation (source unique dans PraMcoModule).
+        const mcoRetardFn = (typeof PraMcoModule !== "undefined" && PraMcoModule.isEnRetard) ? PraMcoModule.isEnRetard : () => false;
+        const mcoEnRetard = mco.filter(mcoRetardFn).length;
         const auditsRealises = audits.filter(a => a.statut === "Réalisé").length;
         const constatsNC = audits.reduce((n, a) => {
             const libres = Array.isArray(a.constats) ? a.constats.filter(c => c.type === "Mineure" || c.type === "Majeure").length : 0;
@@ -692,7 +694,7 @@ const DashboardModule = (() => {
                     ${covTile(`${ref.global.evaluated}<small style="font-size:1rem; color:var(--text-muted);">/${ref.global.total}</small>`, "Exigences évaluées", `${ref.global.maturite.toFixed(1)}/5 maturité`, "/referentiels", "var(--accent)")}
                     ${covTile(scenarios.length, "Scénarios PCA/PRA", scenarios.length ? "Plans définis" : "À définir", "/pra", "var(--accent)")}
                     ${covTile(tests.length, "Tests PRA", lastTestSub, "/tests", "var(--accent)")}
-                    ${covTile(mco.length, "Actions MCO", mcoKo > 0 ? `<span style="color:var(--color-danger); font-weight:600;">${mcoKo} en anomalie</span>` : "Tous conformes", "/mco", mcoKo > 0 ? "var(--color-danger)" : "var(--color-success)")}
+                    ${covTile(mco.length, "Actions MCO", mcoEnRetard > 0 ? `<span style="color:var(--color-danger); font-weight:600;">${mcoEnRetard} en retard</span>` : (mco.length ? "Planning tenu" : "À définir"), "/mco", mcoEnRetard > 0 ? "var(--color-danger)" : (mco.length ? "var(--color-success)" : "var(--accent)"))}
                     ${covTile(crise.length, "Cellule de crise", crise.length ? "Opérationnelle" : "À constituer", "/crise", crise.length ? "var(--color-success)" : "var(--color-warning)")}
                     ${covTile(`${auditsRealises}<small style="font-size:1rem; color:var(--text-muted);">/${audits.length}</small>`, "Audits réalisés", constatsNC > 0 ? `<span style="color:var(--color-danger); font-weight:600;">${constatsNC} NC ouverte(s)</span>` : "Aucune NC", "/audits", "var(--primary)")}
                     ${covTile(prestataires.length, "Prestataires & tiers", "Chaîne de sous-traitance", "/prestataires", "var(--accent)")}
