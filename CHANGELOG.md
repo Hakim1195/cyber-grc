@@ -5,6 +5,31 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Échéancier — vue consolidée de toutes les échéances du logiciel
+- **Nouveau module `/echeances`** (« Échéancier », entrée de menu dans la section *Pilotage*, après
+  « Synthèse Direction ») : **vue transversale** qui recense en un seul endroit toutes les obligations
+  datées du dispositif, jusqu'ici éparpillées dans 6 modules.
+- **Sources agrégées** : échéances du **plan d'actions** (actions non terminées), **actions MCO**
+  (date programmée), **revues documentaires** (prochaine revue, ou statut « à réviser »/« obsolète »),
+  **déclarations d'incidents** (délai réglementaire NIS2/RGPD = détection + 72 h), **audits** planifiés
+  ou en cours, et **revues de direction** à venir.
+- **Regroupement par urgence** : *En retard · Aujourd'hui · Cette semaine · Ce mois-ci · Plus tard ·
+  Sans date*, avec pastilles de couleur sémantique (rouge = en retard, orange = proche) et **compteurs**
+  en tête (en retard / sous 7 jours / ce mois-ci / total).
+- **Chaque ligne renvoie vers sa fiche d'origine** (traçabilité) ; **filtres** par type d'échéance,
+  case « urgents seulement (≤ 7 j) » et **recherche** ; **impression** (feuille datée dédiée).
+- **Vue rapide *partout*** : un **badge compteur** d'échéances en retard s'affiche sur l'entrée
+  « Échéancier » de la barre latérale, **visible depuis n'importe quelle page** (rafraîchi à chaque
+  navigation).
+- **Aucun changement de schéma** : nouveau **service en lecture seule** `js/services/echeances.js`
+  (`window.Echeances`) qui ne fait que **lire** le DataStore et **dériver** les échéances des dates
+  existantes — les règles « en retard / proche » reproduisent celles déjà en place (MCO, revues
+  documentaires, délais d'incidents). 100 % frontend, tokens, `escapeHtml`, `Help.tip`, responsive.
+- Tests Playwright (**34 assertions, 0 erreur**) : agrégation des 6 sources (exclusions comprises :
+  action terminée, MCO réalisée, audit réalisé, revue passée), calcul du délai incident +72 h,
+  compteurs et regroupement par urgence, badge de la barre latérale, filtres type/urgents/recherche,
+  navigation d'une ligne vers sa fiche.
+
 ### Actions Préalables (MCO) — modèle de suivi d'action planifiée (schéma v10)
 - **Refonte des champs** du module `/mco` : passage de l'ancien modèle « vérification récurrente »
   (`etat` OK/KO, `date`, `notes`) à un **modèle de suivi d'action planifiée**, inspiré d'un tableau

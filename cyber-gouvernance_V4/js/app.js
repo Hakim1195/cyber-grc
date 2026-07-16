@@ -27,6 +27,7 @@ async function startApp() {
     Router.init({
         "/dashboard": () => DashboardModule.render(),
         "/synthese": () => SyntheseModule.render(),
+        "/echeances": () => { if (typeof EcheancesModule !== "undefined") EcheancesModule.render(); },
 
         "/clients": () => { if (typeof ClientsModule !== "undefined") ClientsModule.renderList(); },
         "/clients/:id": (id) => { if (typeof ClientsModule !== "undefined") ClientsModule.renderDetail(id); },
@@ -169,6 +170,7 @@ function showQuotaBanner() {
 const ROUTE_META = {
     "/dashboard":    { s: "Pilotage",   t: "Tableau de bord" },
     "/synthese":     { s: "Pilotage",   t: "Synthèse Direction" },
+    "/echeances":    { s: "Pilotage",   t: "Échéancier" },
     "/actions":      { s: "Pilotage",   t: "Plan d'actions" },
     "/incidents":    { s: "Risques",    t: "Incidents" },
     "/documents":    { s: "Conformité", t: "Gestion documentaire" },
@@ -261,6 +263,25 @@ window.updateActiveNav = function(route) {
     });
 
     if (window.renderBreadcrumb) window.renderBreadcrumb(route);
+    if (window.refreshEcheancesBadge) window.refreshEcheancesBadge();
+};
+
+/* =========================
+   BADGE « ÉCHÉANCES EN RETARD » (barre latérale)
+   Rafraîchi à chaque navigation (updateActiveNav) → toujours à jour depuis n'importe quelle page.
+========================= */
+window.refreshEcheancesBadge = function() {
+    const el = document.getElementById("echeancesBadge");
+    if (!el || typeof Echeances === "undefined") return;
+    let n = 0;
+    try { n = Echeances.overdueCount(); } catch (e) { n = 0; }
+    if (n > 0) {
+        el.textContent = n;
+        el.hidden = false;
+        el.setAttribute("title", n + " échéance(s) en retard");
+    } else {
+        el.hidden = true;
+    }
 };
 
 /* =========================

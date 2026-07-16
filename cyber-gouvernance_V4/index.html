@@ -27,6 +27,7 @@
             <li class="sidebar-divider" style="margin-top: 0;">Gouvernance & Risques</li>
             <li><a href="#/dashboard" data-route="/dashboard"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Tableau de bord</span></a></li>
             <li><a href="#/synthese" data-route="/synthese"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span>Synthèse Direction</span></a></li>
+            <li><a href="#/echeances" data-route="/echeances"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Échéancier</span><span class="nav-badge" id="echeancesBadge" hidden>0</span></a></li>
             <li><a href="#/clients" data-route="/clients"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><span>Donneurs d'ordre</span></a></li>
             <li><a href="#/actifs" data-route="/actifs"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg><span>Actifs critiques</span></a></li>
             <li><a href="#/cartographie" data-route="/cartographie"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><line x1="6.9" y1="7.6" x2="10.4" y2="15.8"/><line x1="17.1" y1="7.6" x2="13.6" y2="15.8"/><line x1="7.5" y1="6" x2="16.5" y2="6"/></svg><span>Cartographie</span></a></li>
@@ -70,6 +71,7 @@
     <script src="js/core/router.js"></script>
     <script src="js/core/help.js"></script>
     <script src="js/core/ui.js"></script>
+    <script src="js/services/echeances.js"></script>
 
     <!-- Référentiels (catalogue statique : registre + fichiers de données) -->
     <script src="js/data/referentiels.js"></script>
@@ -93,6 +95,7 @@
     <script src="js/modules/clients.js"></script>
     <script src="js/modules/dashboard.js"></script>
     <script src="js/modules/synthese.js"></script>
+    <script src="js/modules/echeances.js"></script>
     <script src="js/modules/actifs.js"></script>
     <script src="js/modules/cartographie.js"></script>
     <script src="js/modules/risques.js"></script>

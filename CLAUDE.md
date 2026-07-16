@@ -53,8 +53,9 @@ cyber-gouvernance_V4/
 ├── js/services/
 │   ├── backup.js              export/import fichier + bandeau de rappel
 │   ├── importExcel.js, exportExcel.js, exportPDF.js
+│   ├── echeances.js           AGRÉGATEUR d'échéances (lecture seule) `window.Echeances`
 ├── js/modules/                1 module = 1 domaine (IIFE `XxxModule.renderList/renderDetail`)
-│   └── dashboard, synthese, clients, actifs, cartographie, risques, matrice, exigences,
+│   └── dashboard, synthese, echeances, clients, actifs, cartographie, risques, matrice, exigences,
 │       actions, bia, crise, pra_scenarios, pra_mco, pra_tests,
 │       pra_prestataires, audits, settings
 ├── js/lib/xlsx.full.min.js    SheetJS (embarqué)
@@ -246,5 +247,18 @@ purge des clés obsolètes ; sans perte de donnée). Correctif CSS `.status` (`w
 Tests Playwright (44 assertions : migration backup v9, round-trip v10, CRUD UI, auto-complétion, retard,
 dashboard ; 0 erreur).
 
+**Fait (Chantier Échéancier — vue consolidée des échéances)** : nouveau module **`/echeances`**
+(« Échéancier », menu *Pilotage* après « Synthèse Direction ») — **vue transversale** qui agrège en un
+seul endroit toutes les obligations datées du logiciel (plan d'actions, MCO, revues documentaires,
+déclarations d'incidents NIS2/RGPD = détection + 72 h, audits planifiés, revues de direction à venir),
+**regroupées par urgence** (En retard / Aujourd'hui / Cette semaine / Ce mois-ci / Plus tard / Sans date),
+compteurs, filtres (type, « urgents ≤ 7 j », recherche), **lignes cliquables vers la fiche d'origine**,
+impression. **Badge compteur d'échéances en retard** sur l'entrée de menu, **visible depuis toute page**
+(rafraîchi via `updateActiveNav`). **Aucun changement de schéma** : nouveau service **lecture seule**
+`js/services/echeances.js` (`window.Echeances.collect/counts/overdueCount`) qui dérive les échéances des
+seules dates existantes (règles alignées sur MCO/documents/incidents). Tests Playwright (34 assertions :
+agrégation + exclusions, délai incident +72 h, compteurs/regroupement, badge, filtres, navigation ; 0 erreur).
+
 **Prochain** : poursuivre le Chantier 2 — harmoniser tableaux denses / KPI / radars ; tooltips restants
-sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches.
+sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches. Extensions possibles de
+l'Échéancier : vue calendrier mensuel, export Excel/.ICS, panneau condensé sur le tableau de bord.

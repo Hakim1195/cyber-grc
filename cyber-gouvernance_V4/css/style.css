@@ -1018,3 +1018,52 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
 @media (max-width: 720px) {
     .split-card > .split-col + .split-col { border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 1.2rem; }
 }
+
+/* =========================================================================
+   ÉCHÉANCIER (module /echeances) + badge de la barre latérale
+========================================================================= */
+.nav-badge {
+    display: inline-block;
+    min-width: 18px;
+    margin-left: auto;
+    padding: 0 6px;
+    background: var(--color-danger);
+    color: #fff;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+}
+
+.ech-counters { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 18px; }
+.ech-counter { flex: 1 1 120px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; }
+.ech-counter .n { font-size: 1.7rem; font-weight: 700; line-height: 1; }
+.ech-counter .l { font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; }
+
+.ech-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+.ech-fbtn { background: transparent; color: var(--accent); border: 1px solid var(--border); padding: 5px 12px; border-radius: var(--radius-sm); font-size: 0.82rem; cursor: pointer; }
+.ech-fbtn:hover { border-color: var(--accent); }
+.ech-fbtn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.ech-group { margin-bottom: 20px; }
+.ech-group-h { font-size: 0.95rem; margin: 0 0 10px; padding-left: 10px; }
+.ech-count { display: inline-block; background: var(--border); color: var(--text-main); border-radius: 10px; padding: 0 8px; font-size: 0.78rem; margin-left: 6px; font-weight: 600; }
+
+.ech-row { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 7px; text-decoration: none; color: var(--text-main); background: #fff; transition: background 0.15s, border-color 0.15s; }
+.ech-row:hover { background: #f5f8fc; border-color: var(--accent); }
+.ech-urg { flex: 0 0 auto; min-width: 108px; }
+.ech-main { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+.ech-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ech-sub { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ech-date { flex: 0 0 auto; font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; }
+@media (max-width: 720px) {
+    .ech-date { display: none; }
+    .ech-urg { min-width: 92px; }
+}
+.print-only { display: none; }
+@media print {
+    .print-only { display: block !important; }
+    .ech-row, .ech-group { break-inside: avoid; }
+    .ech-row { border-color: #ccc; }
+}
