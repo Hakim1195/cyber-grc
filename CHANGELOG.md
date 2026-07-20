@@ -5,6 +5,23 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Échéancier — extensions : calendrier, exports Excel/.ICS, panneau tableau de bord
+- **Vue calendrier mensuel** : bascule **Liste / Calendrier** dans l'Échéancier. Grille du mois
+  (semaine débutant le lundi) où chaque échéance datée apparaît sous forme de **pastille colorée par
+  urgence** sur son jour, cliquable vers sa fiche ; navigation mois précédent / suivant / « Aujourd'hui »,
+  cellule du jour mise en évidence, mention des échéances sans date (visibles en liste).
+- **Export Excel (.xlsx)** : bouton « Excel » — classeur d'une feuille « Échéancier » (Type, Intitulé,
+  Détail, Échéance, Jours restants, Urgence, Statut) via SheetJS déjà embarqué.
+- **Export Agenda (.ICS)** : bouton « Agenda (.ics) » — génère un fichier iCalendar (un événement
+  « journée » par échéance datée, `SUMMARY` typé) importable dans Outlook / Google Agenda.
+- **Panneau « Prochaines échéances » sur le tableau de bord** : dans la section *Suivi & échéances*,
+  une carte condensée liste les 7 échéances datées les plus urgentes (tous modules), avec badge
+  « N en retard » et bouton « Voir tout l'échéancier ». Réutilise le même agrégateur `window.Echeances`.
+- Tests Playwright (**28 assertions, 0 erreur**) : panneau du dashboard (items, badge, navigation),
+  calendrier (grille, jour courant, pastilles, navigation de mois), exports (`buildRows` = 10 lignes,
+  `buildICS` = 1 VEVENT par échéance datée, génération Excel via SheetJS). Non-régression Échéancier
+  (34) et MCO (44).
+
 ### Échéancier — vue consolidée de toutes les échéances du logiciel
 - **Nouveau module `/echeances`** (« Échéancier », entrée de menu dans la section *Pilotage*, après
   « Synthèse Direction ») : **vue transversale** qui recense en un seul endroit toutes les obligations

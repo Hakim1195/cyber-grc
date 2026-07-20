@@ -259,6 +259,12 @@ impression. **Badge compteur d'échéances en retard** sur l'entrée de menu, **
 seules dates existantes (règles alignées sur MCO/documents/incidents). Tests Playwright (34 assertions :
 agrégation + exclusions, délai incident +72 h, compteurs/regroupement, badge, filtres, navigation ; 0 erreur).
 
+**Fait (Chantier Échéancier — extensions)** : **vue calendrier mensuel** (bascule Liste/Calendrier,
+pastilles colorées par urgence sur chaque jour, navigation de mois, jour courant mis en évidence),
+**export Excel** (`buildRows` → SheetJS) et **export Agenda `.ICS`** (`buildICS`, un événement journée
+par échéance datée, importable Outlook/Google), et **panneau « Prochaines échéances » sur le tableau de
+bord** (section *Suivi & échéances*, top 7 tous modules + badge « N en retard », réutilise `Echeances`).
+Tests Playwright (28 assertions ; 0 erreur ; non-régression Échéancier 34 + MCO 44).
+
 **Prochain** : poursuivre le Chantier 2 — harmoniser tableaux denses / KPI / radars ; tooltips restants
-sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches. Extensions possibles de
-l'Échéancier : vue calendrier mensuel, export Excel/.ICS, panneau condensé sur le tableau de bord.
+sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches.

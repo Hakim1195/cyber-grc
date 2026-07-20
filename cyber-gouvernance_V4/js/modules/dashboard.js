@@ -764,6 +764,35 @@ const DashboardModule = (() => {
                 </div>
             </div>`;
 
+        // -- Carte : Prochaines échéances (consolidé, tous modules — cf. service Echeances) --
+        const echAll = (typeof Echeances !== "undefined") ? Echeances.collect() : [];
+        const echCounts = (typeof Echeances !== "undefined") ? Echeances.counts(echAll) : { retard: 0, total: 0 };
+        const echTop = echAll.filter(it => it.jours !== null).slice(0, 7);
+        const echHtml = echTop.length === 0
+            ? `<p class="chart-empty">Aucune échéance datée à venir. 👍</p>`
+            : `<ul class="watch-list">${echTop.map(it => {
+                const late = it.jours < 0, soon = it.jours >= 0 && it.jours <= 7;
+                const dot = late ? "var(--color-danger)" : soon ? "var(--color-warning)" : "var(--color-info)";
+                const badge = late ? `<span class="wi-badge late">Retard ${-it.jours} j</span>`
+                    : it.jours === 0 ? `<span class="wi-badge late">Aujourd'hui</span>`
+                    : `<span class="wi-badge soon">J-${it.jours}</span>`;
+                const dstr = it.date ? new Date(it.date + "T00:00:00").toLocaleDateString("fr-FR") : "—";
+                return `<li class="watch-item dash-ech-item" data-route="${escapeHtml(it.route.replace(/^#/, ""))}">
+                    <span class="wi-prio" style="background:${dot};"></span>
+                    <span class="wi-body">
+                        <span class="wi-title" title="${escapeHtml(it.titre || "")}">${escapeHtml(it.titre || "(sans intitulé)")}</span>
+                        <span class="wi-meta">${escapeHtml(it.typeLabel)} · ${dstr}</span>
+                    </span>
+                    ${badge}
+                </li>`;
+            }).join("")}</ul>`;
+        const echeancierCard = `
+            <div class="dashboard-card wide-card">
+                <h3 style="margin-top:0;">Prochaines échéances ${Help.tip("Les obligations datées les plus urgentes, tous modules confondus (plan d'actions, MCO, revues documentaires, incidents à déclarer, audits, revues de direction). Ouvrez l'Échéancier pour la vue complète et le calendrier.")}${echCounts.retard ? ` <span class="badge" style="background:var(--color-danger); color:#fff;">${echCounts.retard} en retard</span>` : ""}</h3>
+                ${echHtml}
+                <button onclick="Router.navigateTo('/echeances')" style="width:100%; margin-top:1rem; justify-content:center; background:#fff; color:var(--primary); border:1px solid var(--border);">Voir tout l'échéancier</button>
+            </div>`;
+
         // -- État vide (onboarding) --
         const emptyHint = aucuneDonnee ? `
             <div class="posture-banner is-warning" style="margin-bottom:1.5rem;">
@@ -831,6 +860,9 @@ const DashboardModule = (() => {
 
                 <div class="dash-section-title">Suivi &amp; échéances</div>
                 <div class="dashboard-grid">
+                    ${echeancierCard}
+                </div>
+                <div class="dashboard-grid">
                     ${suiviCard}
                 </div>
 
@@ -852,6 +884,9 @@ const DashboardModule = (() => {
         });
         app.querySelectorAll(".dash-incident-item").forEach(li => {
             li.onclick = () => Router.navigateTo(`/incidents/${li.dataset.id}`);
+        });
+        app.querySelectorAll(".dash-ech-item").forEach(li => {
+            li.onclick = () => { const r = li.dataset.route; if (r) Router.navigateTo(r); };
         });
         app.querySelectorAll(".dash-doc-item").forEach(li => {
             li.onclick = () => Router.navigateTo(`/documents/${li.dataset.id}`);
