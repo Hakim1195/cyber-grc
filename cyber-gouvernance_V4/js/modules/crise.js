@@ -287,6 +287,21 @@ const CriseModule = (() => {
     /* =========================
        CRÉATION
     ========================== */
+    // Lien annuaire → cellule de crise : quand on choisit une personne connue de l'annuaire
+    // dans le champ Nom, on pré-remplit téléphone/email (seulement s'ils sont vides).
+    function wireNomAutofill() {
+        const nomEl = document.getElementById("nom");
+        if (!nomEl || !window.UI || !UI.findPersonneByNom) return;
+        nomEl.addEventListener("change", () => {
+            const p = UI.findPersonneByNom(nomEl.value);
+            if (!p) return;
+            const tel = document.getElementById("telephone");
+            const mail = document.getElementById("email");
+            if (tel && !tel.value.trim() && p.telephone) tel.value = p.telephone;
+            if (mail && !mail.value.trim() && p.email) mail.value = p.email;
+        });
+    }
+
     function renderCreate() {
         const app = document.getElementById("app");
 
@@ -309,7 +324,7 @@ const CriseModule = (() => {
 
                     <div class="form-group">
                         <label>Nom & Prénom <span style="color:red">*</span></label>
-                        <input id="nom" placeholder="Ex: Jean DUPONT" required />
+                        <input id="nom" list="personnes-list" placeholder="Ex: Jean DUPONT" required />
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
@@ -360,6 +375,7 @@ const CriseModule = (() => {
         };
 
         document.getElementById("cancelBtn").onclick = () => Router.navigateTo("/crise");
+        wireNomAutofill();
     }
 
     /* =========================
@@ -397,7 +413,7 @@ const CriseModule = (() => {
 
                     <div class="form-group">
                         <label>Nom & Prénom <span style="color:red">*</span></label>
-                        <input id="nom" value="${esc(membre.nom)}" required />
+                        <input id="nom" list="personnes-list" value="${esc(membre.nom)}" required />
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
@@ -443,6 +459,8 @@ const CriseModule = (() => {
             if(window.showToast) window.showToast("Fiche contact mise à jour.", "success");
             Router.navigateTo("/crise");
         };
+
+        wireNomAutofill();
 
         UI.wireDelete({
             confirm: "Confirmer le retrait de ce membre de la cellule de crise ?",

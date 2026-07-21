@@ -5,6 +5,22 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Personnel — Phase 2 : champs multi-personnes + lien Cellule de crise
+- **Champ multi-personnes réutilisable** (`UI.multiPersonHtml` / `wireMultiPerson` / `getMultiPerson`) :
+  sélecteur en **chips**, adossé à l'annuaire (autocomplétion) et acceptant la saisie libre. Appliqué
+  aux **Participants d'une revue de direction** (auparavant une zone de texte). **Stockage inchangé**
+  (une personne par ligne) → rétrocompatible : les anciens participants se reconstituent en chips à
+  l'ouverture, doublons ignorés (insensible à la casse).
+- **Lien annuaire ↔ Cellule de crise** : le champ **Nom** d'un membre de la cellule est branché sur
+  l'annuaire (autocomplétion) et **pré-remplit téléphone/email** depuis la fiche annuaire quand on
+  choisit une personne connue (sans écraser une valeur déjà saisie).
+- **Fiche personne enrichie** : la section « Affectations » liste désormais aussi l'**appartenance à la
+  Cellule de crise** (avec le rôle) et la **participation aux revues de direction**.
+- Tests Playwright (**16 assertions, 0 erreur**) : widget multi-personnes (ajout/retrait/dédoublonnage/
+  enregistrement/réouverture), autocomplétion + auto-remplissage crise (sans surcharge), affectations
+  crise + revue. Non-régression : Personnel (17) + statut création (12) + Mesure↔action (20) + MCO (44)
+  + Échéancier (34) + extensions (28).
+
 ### Personnel — annuaire des personnes/rôles réutilisé partout (schéma v11, Phase 1)
 - **Nouveau module `/personnel`** (« Personnel », entrée de menu après « Donneurs d'ordre ») : annuaire
   CRUD des personnes/rôles (**nom, fonction, service, email, téléphone, notes**). Nouvelle entité

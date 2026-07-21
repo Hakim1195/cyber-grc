@@ -1093,3 +1093,15 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
     .ech-row, .ech-group, .ech-cal-cell { break-inside: avoid; }
     .ech-row { border-color: #ccc; }
 }
+
+/* =========================================================================
+   CHAMP MULTI-PERSONNES (chips) — cf. UI.multiPersonHtml (v11)
+========================================================================= */
+.mp-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.mp-chip { display: inline-flex; align-items: center; gap: 4px; background: #e7effa; color: var(--accent); border: 1px solid var(--border); border-radius: 14px; padding: 3px 6px 3px 12px; font-size: 0.85rem; }
+.mp-remove { background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 1.05rem; line-height: 1; padding: 0 3px; }
+.mp-remove:hover { color: var(--color-danger); }
+.mp-add { display: flex; gap: 8px; }
+.mp-add .mp-input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.9rem; }
+.mp-add .mp-addbtn { background: transparent; color: var(--accent); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+.mp-add .mp-addbtn:hover { border-color: var(--accent); }

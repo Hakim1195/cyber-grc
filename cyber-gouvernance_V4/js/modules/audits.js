@@ -501,7 +501,7 @@ const AuditsModule = (() => {
                 <div class="dashboard-card no-print">
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                         <div class="form-group"><label>Date de la Revue <span style="color:red">*</span></label><input type="date" id="r-date" value="${editingItem.date}" required /></div>
-                        <div class="form-group"><label>Participants (Nom et Fonction)</label><textarea id="r-participants" style="min-height:50px;">${escapeHtml(editingItem.participants)}</textarea></div>
+                        <div class="form-group"><label>Participants ${Help.tip("Personnes présentes à la revue. Choisissez-les dans l'annuaire (autocomplétion) ou saisissez un nom, puis « Ajouter ».")}</label>${UI.multiPersonHtml("r-participants", editingItem.participants)}</div>
                     </div>
 
                     <div class="form-group" style="margin-top:20px;">
@@ -533,6 +533,7 @@ const AuditsModule = (() => {
         `;
 
         document.getElementById("cancelBtn").onclick = () => Router.navigateTo("/audits");
+        UI.wireMultiPerson("r-participants");
 
         if (isEdit) {
             document.getElementById("printRevueBtn").onclick = renderPrintRevue;
@@ -551,7 +552,7 @@ const AuditsModule = (() => {
 
         document.getElementById("saveBtn").onclick = () => {
             editingItem.date = document.getElementById("r-date").value;
-            editingItem.participants = document.getElementById("r-participants").value.trim();
+            editingItem.participants = UI.getMultiPerson("r-participants");
             editingItem.inputs = document.getElementById("r-inputs").value.trim();
             editingItem.outputs = document.getElementById("r-outputs").value.trim();
 

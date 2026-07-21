@@ -157,5 +157,71 @@ window.UI = (function () {
         dl.innerHTML = names.map(function (n) { return '<option value="' + esc(n) + '"></option>'; }).join("");
     }
 
-    return { badge, mappedBadge, wireBulkDelete, wireDelete, genId, refreshPersonnesDatalist };
+    // Personne de l'annuaire par nom (insensible à la casse) — pour l'auto-remplissage (ex. crise).
+    function findPersonneByNom(nom) {
+        var key = String(nom == null ? "" : nom).trim().toLowerCase();
+        if (!key || typeof DataStore === "undefined" || !DataStore.getPersonnes) return null;
+        return DataStore.getPersonnes().find(function (p) { return String(p.nom || "").trim().toLowerCase() === key; }) || null;
+    }
+
+    /* =========================================================================
+       CHAMP MULTI-PERSONNES (chips) — réutilisable (v11, Phase 2)
+       Sélecteur multiple adossé au <datalist> de l'annuaire (autocomplétion) tout en
+       acceptant la saisie libre. Stocké comme une CHAÎNE « une personne par ligne »
+       (rétrocompatible avec les champs texte existants, ex. participants d'une revue).
+         - multiPersonHtml(fieldId, valeur) → markup (conteneur d'id `fieldId`)
+         - wireMultiPerson(fieldId)         → interactions (ajout/retrait, Entrée)
+         - getMultiPerson(fieldId)          → chaîne « un nom par ligne » (à l'enregistrement)
+    ========================================================================= */
+    function parsePersons(str) {
+        return String(str == null ? "" : str).split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+    function personChipHtml(nom) {
+        return '<span class="mp-chip"><span class="mp-label">' + esc(nom) + '</span>' +
+            '<button type="button" class="mp-remove" aria-label="Retirer">&times;</button></span>';
+    }
+    function multiPersonHtml(fieldId, valueString) {
+        var chips = parsePersons(valueString).map(personChipHtml).join("");
+        return '<div class="mp-field" id="' + fieldId + '">' +
+            '<div class="mp-chips">' + chips + '</div>' +
+            '<div class="mp-add">' +
+                '<input type="text" class="mp-input" list="personnes-list" placeholder="Ajouter une personne…">' +
+                '<button type="button" class="mp-addbtn">Ajouter</button>' +
+            '</div></div>';
+    }
+    function wireMultiPerson(fieldId) {
+        var root = document.getElementById(fieldId);
+        if (!root) return;
+        var chips = root.querySelector(".mp-chips");
+        var input = root.querySelector(".mp-input");
+        var addBtn = root.querySelector(".mp-addbtn");
+        function addChip() {
+            var v = (input.value || "").trim();
+            if (!v) return;
+            var exists = Array.prototype.some.call(chips.querySelectorAll(".mp-label"), function (el) {
+                return el.textContent.trim().toLowerCase() === v.toLowerCase();
+            });
+            if (!exists) chips.insertAdjacentHTML("beforeend", personChipHtml(v));
+            input.value = "";
+            input.focus();
+        }
+        if (addBtn) addBtn.addEventListener("click", addChip);
+        if (input) input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); addChip(); } });
+        if (chips) chips.addEventListener("click", function (e) {
+            var rm = e.target.closest(".mp-remove");
+            if (rm) { var chip = rm.closest(".mp-chip"); if (chip) chip.remove(); }
+        });
+    }
+    function getMultiPerson(fieldId) {
+        var root = document.getElementById(fieldId);
+        if (!root) return "";
+        return Array.prototype.map.call(root.querySelectorAll(".mp-chips .mp-label"), function (el) {
+            return el.textContent.trim();
+        }).filter(Boolean).join("\n");
+    }
+
+    return {
+        badge, mappedBadge, wireBulkDelete, wireDelete, genId, refreshPersonnesDatalist,
+        findPersonneByNom, multiPersonHtml, wireMultiPerson, getMultiPerson
+    };
 })();

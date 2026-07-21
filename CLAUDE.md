@@ -289,8 +289,16 @@ appelé depuis `updateActiveNav`) branche l'annuaire sur **tous les champs « Re
 → rétrocompatible, saisie libre conservée, **rien de cassé**. **Fiche personne = « où c'est affecté »**
 (agrégation par correspondance de nom, lecture seule). **Suppression non destructive** (retire la suggestion,
 conserve les noms saisis). Tests Playwright (17 assertions ; migration v10→v11 + round-trip ; 0 erreur ;
-non-régression statut création 12 + Mesure↔action 20 + MCO 44 + Échéancier 34 + extensions 28). **Phase 2
-possible** : champs multi-personnes (Participants), lien Cellule de crise.
+non-régression statut création 12 + Mesure↔action 20 + MCO 44 + Échéancier 34 + extensions 28).
+
+**Fait (Chantier Personnel — Phase 2 : multi-personnes + Cellule de crise)** : **champ multi-personnes
+réutilisable** (`UI.multiPersonHtml`/`wireMultiPerson`/`getMultiPerson`, chips + autocomplétion annuaire,
+saisie libre acceptée, stockage « un nom par ligne » rétrocompatible) appliqué aux **Participants d'une
+revue de direction**. **Lien Cellule de crise ↔ annuaire** : champ Nom autocomplété + **pré-remplissage
+téléphone/email** depuis l'annuaire (sans écraser une valeur saisie). **Affectations** de la fiche personne
+enrichies (appartenance à la Cellule de crise avec rôle, participation aux revues). Tests Playwright
+(16 assertions ; 0 erreur ; non-régression Personnel 17 + statut 12 + Mesure↔action 20 + MCO 44 +
+Échéancier 34 + extensions 28).
 
 **Prochain** : poursuivre le Chantier 2 — harmoniser tableaux denses / KPI / radars ; tooltips restants
 sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches.

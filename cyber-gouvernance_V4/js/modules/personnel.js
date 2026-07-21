@@ -34,6 +34,12 @@ const PersonnelModule = (() => {
             if (match(a.audite)) add("Audit (audité)", a.ref || "Audit", "#/audits/" + a.id);
         });
         if (DataStore.getTraitements) (DataStore.getTraitements() || []).forEach(t => { if (match(t.responsable)) add("Traitement RGPD", t.nom || t.finalite || "Traitement", "#/rgpd/" + t.id); });
+        if (DataStore.getCriseMembres) (DataStore.getCriseMembres() || []).forEach(m => { if (match(m.nom)) add("Cellule de crise", m.role || m.nom, "#/crise/" + m.id); });
+        // Participants d'une revue de direction (champ multi-personnes, une personne par ligne).
+        if (DataStore.getRevues) (DataStore.getRevues() || []).forEach(r => {
+            const parts = String(r.participants || "").split(/\r?\n/).map(s => s.trim().toLowerCase());
+            if (parts.indexOf(key) !== -1) add("Revue de direction (participant)", "Revue du " + (r.date || "—"), "#/audits");
+        });
         return out;
     }
 
