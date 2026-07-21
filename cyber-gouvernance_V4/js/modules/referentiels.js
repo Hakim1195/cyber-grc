@@ -551,28 +551,29 @@ const ReferentielsModule = (() => {
     function detailPanelHtml(ref, ex, ev) {
         const commentaire = ev ? (ev.commentaire || "") : "";
         const preuves = ev ? (ev.preuves || "") : "";
-        const mesureId = ev ? (ev.mesure_id || "") : "";
+        const mesureIds = (ev && Array.isArray(ev.mesure_ids)) ? ev.mesure_ids : [];
         const mesures = DataStore.getMesures();
-        const linked = mesureId ? DataStore.getMesureById(mesureId) : null;
-        const mesureOpts = `<option value="">— Aucune —</option>` +
-            mesures.map(m => `<option value="${m.id}" ${m.id === mesureId ? "selected" : ""}>${escapeHtml(m.nom)}</option>`).join("");
+        const linkedMesures = mesureIds.map(id => DataStore.getMesureById(id)).filter(Boolean);
+        const available = mesures.filter(m => mesureIds.indexOf(m.id) === -1);
+        const addOpts = `<option value="">＋ Ajouter une mesure…</option>` +
+            available.map(m => `<option value="${m.id}">${escapeHtml(m.nom)}</option>`).join("");
+        const chipsHtml = linkedMesures.length
+            ? linkedMesures.map(m => `<span class="mp-chip"><a href="#/mesures/${m.id}" style="color:var(--accent); text-decoration:none;">${escapeHtml(m.nom)}</a><button type="button" class="ref-mesure-remove mp-remove" data-code="${ex.code}" data-mid="${m.id}" aria-label="Retirer">&times;</button></span>`).join("")
+            : `<span style="color:var(--text-muted); font-size:0.85rem;">Aucune mesure liée pour l'instant.</span>`;
 
-        // Plan d'action porté par la mesure liée (lecture seule ici : géré depuis la fiche mesure,
-        // il couvre toutes les exigences que la mesure porte). Rend la chaîne exigence→mesure→action visible.
+        // Plan d'action porté par CHAQUE mesure liée (lecture seule ici : géré depuis la fiche mesure).
+        // Rend la chaîne exigence→mesures→actions visible.
         let mesureActionsHtml = "";
-        if (linked) {
-            const mActions = DataStore.getActionsByMesure(linked.id);
-            const mList = mActions.length
-                ? `<ul class="ref-actions-list">${mActions.map(a => `
-                        <li>
-                            <a href="#/actions/${a.id}" style="color:var(--accent);">${escapeHtml(a.titre)}</a>
-                            <span class="status ${statutClassForAction(a.statut)}" style="margin-left:8px;">${escapeHtml(a.statut)}</span>
-                        </li>`).join("")}</ul>`
-                : `<p style="color:var(--text-muted); font-size:0.85rem; margin:4px 0;">Aucune action sur cette mesure. <a href="#/mesures/${linked.id}" style="color:var(--accent);">Planifier depuis la fiche mesure →</a></p>`;
+        if (linkedMesures.length) {
             mesureActionsHtml = `
-                <div class="ref-mesure-actions" style="margin:10px 0; padding:10px 0; border-top:1px dashed var(--border);">
-                    <strong style="font-size:0.9rem;">Plan d'action de la mesure « ${escapeHtml(linked.nom)} » ${Help.tip("Actions de remédiation portées par la mesure de sécurité qui couvre cette exigence. Elles se gèrent depuis la fiche de la mesure et valent pour toutes les exigences qu'elle porte.")}</strong>
-                    ${mList}
+                <div class="ref-mesure-actions" style="margin:10px 0 0; padding:10px 0 0; border-top:1px dashed var(--border);">
+                    ${linkedMesures.map(m => {
+                        const acts = DataStore.getActionsByMesure(m.id);
+                        const list = acts.length
+                            ? `<ul class="ref-actions-list">${acts.map(a => `<li><a href="#/actions/${a.id}" style="color:var(--accent);">${escapeHtml(a.titre)}</a> <span class="status ${statutClassForAction(a.statut)}" style="margin-left:6px;">${escapeHtml(a.statut)}</span></li>`).join("")}</ul>`
+                            : `<p style="color:var(--text-muted); font-size:0.85rem; margin:2px 0;">Aucune action. <a href="#/mesures/${m.id}" style="color:var(--accent);">Planifier →</a></p>`;
+                        return `<div style="margin-bottom:8px;"><strong style="font-size:0.85rem;">Plan d'action — ${escapeHtml(m.nom)}</strong>${list}</div>`;
+                    }).join("")}
                 </div>`;
         }
 
@@ -590,11 +591,11 @@ const ReferentielsModule = (() => {
                 </div>
 
                 <div class="ref-mesure-row">
-                    <label>Couverte par la mesure de sécurité ${Help.tip("Reliez cette exigence à une « mesure de sécurité » transverse. En évaluant la mesure puis en la propageant, vous mettez à jour d'un coup toutes les exigences qu'elle couvre (zéro double saisie).")}</label>
+                    <label>Couverte par la/les mesure(s) de sécurité ${Help.tip("Reliez cette exigence à une ou PLUSIEURS « mesures de sécurité » transverses. En les évaluant puis en propageant, l'exigence prend le statut le plus défavorable de ses mesures (conforme seulement si toutes le sont) et la maturité la plus basse.")}</label>
+                    <div class="mp-chips" style="margin:6px 0;">${chipsHtml}</div>
                     <div class="ref-mesure-controls">
-                        <select class="ref-mesure" data-code="${ex.code}" aria-label="Mesure de sécurité couvrant l'exigence ${escapeHtml(ex.code)}">${mesureOpts}</select>
+                        <select class="ref-mesure-add" data-code="${ex.code}" aria-label="Ajouter une mesure de sécurité à l'exigence ${escapeHtml(ex.code)}">${addOpts}</select>
                         <button type="button" class="ref-new-mesure" data-code="${ex.code}">＋ Nouvelle</button>
-                        ${linked ? `<a href="#/mesures/${linked.id}" class="ref-mesure-link">Ouvrir la fiche →</a>` : ""}
                     </div>
                     ${mesureActionsHtml}
                 </div>
@@ -678,13 +679,15 @@ const ReferentielsModule = (() => {
                 persist(code);
                 updateRowBadge(code);
                 refreshScores(ref);
-            } else if (el.classList.contains("ref-mesure")) {
-                // Lien vers une mesure de sécurité (pivot) → enregistre mesure_id.
+            } else if (el.classList.contains("ref-mesure-add")) {
+                // Ajout d'une mesure à la COUVERTURE de l'exigence (lien n-n, v12).
                 const code = el.dataset.code;
-                const state = readRowState(ref, code, root);
-                state.mesure_id = el.value || null;
-                DataStore.upsertEvaluation(state);
-                refreshPanel(ref, code);
+                const mid = el.value;
+                if (mid) {
+                    persist(code);                                   // préserve l'état de la ligne
+                    DataStore.addMesureToEvaluation(ref.id, code, mid);
+                    refreshPanel(ref, code);
+                }
             }
         });
 
@@ -720,6 +723,13 @@ const ReferentielsModule = (() => {
                 createActionFor(ref, saveBtn.dataset.code, root);
                 return;
             }
+            const rmMes = e.target.closest(".ref-mesure-remove");
+            if (rmMes) {
+                // Retire une mesure de la couverture de l'exigence (lien n-n, v12).
+                DataStore.removeMesureFromEvaluation(ref.id, rmMes.dataset.code, rmMes.dataset.mid);
+                refreshPanel(ref, rmMes.dataset.code);
+                return;
+            }
             const newMes = e.target.closest(".ref-new-mesure");
             if (newMes) {
                 const code = newMes.dataset.code;
@@ -727,9 +737,8 @@ const ReferentielsModule = (() => {
                 if (nom && nom.trim()) {
                     const mid = UI.genId("MESURE");
                     DataStore.addMesure({ id: mid, nom: nom.trim(), description: "", statut: "", maturite: 0, responsable: "", updatedAt: Date.now() });
-                    const state = readRowState(ref, code, root);
-                    state.mesure_id = mid;
-                    DataStore.upsertEvaluation(state);
+                    persist(code);                                   // préserve l'état de la ligne
+                    DataStore.addMesureToEvaluation(ref.id, code, mid);
                     if (window.showToast) window.showToast("Mesure créée et liée.", "success");
                     refreshPanel(ref, code);
                 }

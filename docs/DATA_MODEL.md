@@ -4,7 +4,7 @@
 > Application **100 % frontend** : toutes les données vivent dans le navigateur
 > (IndexedDB, avec repli localStorage). Aucune donnée ne quitte le poste.
 
-Version de schéma courante : **`SCHEMA_VERSION = 11`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 12`** (défini dans `js/core/datastore.js`).
 > v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`.
 > v4 (chantier Incidents) : ajout du tableau `incidents`.
 > v5 (chantier Documentaire) : ajout du tableau `documents`.
@@ -17,8 +17,11 @@ Version de schéma courante : **`SCHEMA_VERSION = 11`** (défini dans `js/core/d
 > v11 (chantier Personnel) : ajout du tableau `personnes` (annuaire) → normalize crée le tableau vide.
 >     Les noms de responsables restent stockés en texte dans les entités (rétrocompatible) ; l'annuaire
 >     alimente l'autocomplétion des champs « Responsable » et la fiche « affectations ».
+> v12 (chantier Référentiels n-n) : une exigence peut être couverte par PLUSIEURS mesures — le lien
+>     `evaluations[].mesure_id` (unique) devient `evaluations[].mesure_ids[]` ; normalize convertit
+>     l'ancienne valeur en tableau à 1 élément. Propagation « au plus défavorable ».
 > Migrations transparentes — `normalize` crée les tableaux vides à la volée (et garantit
->     `dependances` ainsi que la conversion des anciennes actions MCO).
+>     `dependances`, la conversion des anciennes actions MCO et de `mesure_id`→`mesure_ids[]`).
 
 ---
 
@@ -263,7 +266,7 @@ sans enregistrement = « non évaluée »).
 | `maturite` | number | 0-5 (échelle type CMMI) — non utilisé pour les questionnaires (préservé mais ignoré) |
 | `commentaire` | string | |
 | `preuves` | string | références (l'app ne stocke pas les fichiers) |
-| `mesure_id` | string \| null | lien vers la **Mesure de sécurité** pivot (v3, 4b) |
+| `mesure_ids` | string[] | **v12** — mesures de sécurité couvrant cette exigence (**plusieurs** possibles). Ancien champ unique `mesure_id` migré en tableau. `addMesureToEvaluation`/`removeMesureFromEvaluation` ; `getEvaluationsByMesure` filtre sur l'appartenance au tableau. |
 | `updatedAt` | number | |
 
 Les **actions correctives** pointent vers l'évaluation via `action.evaluation_id`.
@@ -272,8 +275,9 @@ réinitialise un référentiel entier.
 
 ### Mesure de sécurité (pivot) — `mesures`
 Contrôle mis en œuvre par l'organisation, **couvrant n-n plusieurs exigences** de
-référentiels (le lien est porté par `evaluations[].mesure_id`). Évaluer la mesure
-**propage** son statut/maturité à toutes ses évaluations liées (zéro double saisie).
+référentiels (le lien est porté par `evaluations[].mesure_ids[]` — et une exigence peut
+être couverte par **plusieurs** mesures, v12). Évaluer la mesure puis **propager** recalcule
+ses évaluations liées **« au plus défavorable »** de toutes leurs mesures (zéro double saisie).
 
 | Champ | Type | Notes |
 |-------|------|-------|
@@ -285,8 +289,10 @@ référentiels (le lien est porté par `evaluations[].mesure_id`). Évaluer la m
 | `responsable` | string | |
 | `updatedAt` | number | |
 
-`deleteMesure` délie les évaluations (`mesure_id` → null). `propagateMesure(id)`
-recopie statut + maturité sur les évaluations liées.
+`deleteMesure` délie les évaluations (retire l'id de `mesure_ids[]`). `propagateMesure(id)`
+recalcule chaque évaluation couverte **au plus défavorable** de TOUTES ses mesures
+(`aggregateFromMesures` : statut le plus faible — conforme seulement si toutes le sont —,
+maturité la plus basse ; « non applicable » neutre ; « non évalué » ignoré).
 
 ### Incident de sécurité — `incidents` (v4)
 | Champ | Type | Notes |
@@ -350,8 +356,9 @@ enregistrement de même `id` existe (override), masqué si `_deleted`, sinon aff
 tel quel ; les enregistrements dont l'`id` n'est pas dans le catalogue sont des
 groupes personnalisés. `resetMappings()` vide la surcouche (retour au catalogue).
 La **propagation** relie toutes les exigences d'un groupe à une même `mesure`
-(`evaluations[].mesure_id`) ou leur applique un même statut (`upsertEvaluation`) —
-d'où l'accélération de la couverture croisée et de la SoA.
+(ajout dans `evaluations[].mesure_ids[]` via `addMesureToEvaluation`, sans écraser les
+mesures déjà liées) ou leur applique un même statut — d'où l'accélération de la couverture
+croisée et de la SoA.
 
 ### Point d'historique — `history` (v8, courbes de tendance)
 Instantané **global** des indicateurs clés, **un enregistrement par jour** (clé
@@ -405,14 +412,14 @@ risques + supprime actions liées ; `deleteRisque`→délie actifs + supprime ac
 Référentiel (statique) ──1:N──> Exigence de référentiel (code)
                                      │ 1:1 (clé ref_id+code)
                                      ▼
-                                 Évaluation ──N:1──> Mesure de sécurité (pivot)
-                                     │ 1:N               │ (propage statut+maturité)
+                                 Évaluation ──N:N──> Mesure de sécurité (pivot)
+                                     │ 1:N               │ (propage au plus défavorable)
                                      ▼                   ▼
                                   Action ............ (couvre N évaluations, multi-référentiels)
 ```
 
 Cascades : `deleteEvaluation` → supprime ses actions ; `deleteEvaluationsByRef` →
-réinitialise un référentiel ; `deleteMesure` → délie ses évaluations (`mesure_id`→null).
+réinitialise un référentiel ; `deleteMesure` → délie ses évaluations (retire l'id de `mesure_ids[]`).
 
 ---
 

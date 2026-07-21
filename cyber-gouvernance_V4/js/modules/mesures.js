@@ -285,8 +285,8 @@ const MesuresModule = (() => {
                     </div>
 
                     <div class="dashboard-card">
-                        <h3 style="margin-top:0;">Propagation ${Help.tip("Recopie le statut et la maturité de cette mesure sur toutes les exigences de référentiels qu'elle couvre. C'est le cœur du « zéro double saisie ».")}</h3>
-                        <p style="font-size:0.85rem; color:var(--text-muted);">Applique le statut <strong>${statutMeta(m.statut).label}</strong> et la maturité <strong>${Number(m.maturite) || 0}/5</strong> aux <strong>${cov.length}</strong> exigence(s) couverte(s).</p>
+                        <h3 style="margin-top:0;">Propagation ${Help.tip("Recalcule le statut et la maturité des exigences couvertes, au plus défavorable de TOUTES leurs mesures (une exigence n'est conforme que si toutes ses mesures le sont). Cœur du « zéro double saisie ».")}</h3>
+                        <p style="font-size:0.85rem; color:var(--text-muted);">Recalcule les <strong>${cov.length}</strong> exigence(s) couverte(s) « au plus défavorable » de leurs mesures (une exigence peut être couverte par plusieurs mesures).</p>
                         <button id="propagateBtn" style="width:100%; justify-content:center; background:var(--accent);" ${cov.length === 0 ? "disabled title='Aucune exigence liée'" : ""}>Propager aux exigences liées</button>
                     </div>
                 </div>

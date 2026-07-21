@@ -77,7 +77,7 @@ cyber-gouvernance_V4/
 
 - IndexedDB `cyber-grc-db` : store `kv` (`current` = instantané, chiffré si protection active ;
   `meta`), store `backups` (points de restauration versionnés, auto + manuels).
-- `SCHEMA_VERSION = 11` dans `datastore.js`. Migrations à l'import via `migratePayload`.
+- `SCHEMA_VERSION = 12` dans `datastore.js`. Migrations à l'import via `migratePayload`.
 - Entités (tableaux) : clients, exigences, actions, risques, actifs, processus, crise,
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
   **evaluations** (auto-évaluations de référentiels), **mesures** (pivot « Mesure de sécurité »),
@@ -299,6 +299,17 @@ téléphone/email** depuis l'annuaire (sans écraser une valeur saisie). **Affec
 enrichies (appartenance à la Cellule de crise avec rôle, participation aux revues). Tests Playwright
 (16 assertions ; 0 erreur ; non-régression Personnel 17 + statut 12 + Mesure↔action 20 + MCO 44 +
 Échéancier 34 + extensions 28).
+
+**Fait (Chantier Référentiels — plusieurs mesures par exigence, schéma v12)** : le lien exigence→mesure
+passe de la **référence unique** `evaluation.mesure_id` au **tableau** `evaluation.mesure_ids[]` — une
+exigence (typiquement une question AirCyber) peut être couverte par **plusieurs mesures**. UI référentiel :
+`<select>` unique → **chips** (mesures liées retirables) + « Ajouter » / « Nouvelle », plan d'action de
+chaque mesure affiché. **Propagation « au plus défavorable »** (`propagateMesure`→`aggregateFromMesures` :
+statut le plus faible — conforme seulement si toutes le sont —, maturité la plus basse ; N/A neutre ;
+non-évalué ignoré). Helpers `addMesureToEvaluation`/`removeMesureFromEvaluation` (ajout sans écraser,
+dédoublonné) ; `getEvaluationsByMesure`/`deleteMesure`/Couverture/SoA/Correspondances adaptés. **Migration
+transparente v11→v12** (valeur unique → tableau à 1 élément). Tests Playwright (16 assertions ; 0 erreur ;
+non-régression Mesure↔action 20 + Personnel 17+16 + statut 12 + MCO 44 + Échéancier 34 + extensions 28).
 
 **Prochain** : poursuivre le Chantier 2 — harmoniser tableaux denses / KPI / radars ; tooltips restants
 sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches.

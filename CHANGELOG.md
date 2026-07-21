@@ -5,6 +5,26 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Référentiels — plusieurs mesures de sécurité par exigence (schéma v12)
+- **Une exigence peut désormais être couverte par PLUSIEURS mesures** (ex. une question AirCyber = MFA
+  **+** IAM **+** journalisation). Le lien unique `evaluation.mesure_id` devient un tableau
+  **`evaluation.mesure_ids[]`**. **Migration transparente** (l'ancienne valeur → tableau à 1 élément),
+  round-trip vérifié → **rien de cassé**.
+- **UI référentiel** : le `<select>` mesure unique devient une **liste de chips** (mesures liées, retirables)
+  + « ＋ Ajouter une mesure… » + « ＋ Nouvelle ». Le plan d'action de **chaque** mesure liée s'affiche.
+- **Propagation « au plus défavorable »** (`propagateMesure` → `aggregateFromMesures`) : une exigence
+  couverte par plusieurs mesures prend le **statut le plus faible** (conforme **seulement si toutes**
+  ses mesures le sont) et la **maturité la plus basse**. « Non applicable » est neutre (retenu seulement
+  si toutes le sont) ; « non évalué » est ignoré.
+- **Intégrité** : `addMesureToEvaluation`/`removeMesureFromEvaluation` (ajout sans écraser, dédoublonné) ;
+  `getEvaluationsByMesure` teste l'appartenance au tableau ; `deleteMesure` retire l'id de tous les
+  `mesure_ids[]`. Couverture croisée, SoA et module Correspondances adaptés (relier un groupe **ajoute**
+  la mesure sans remplacer les mesures déjà liées).
+- Tests Playwright (**16 assertions, 0 erreur**) : migration v11→v12 + round-trip, helpers n-n, dédoublonnage,
+  **5 cas de propagation au plus défavorable** (A+B, A+C, A+N/A, N/A seul, A seul), `deleteMesure`, UI
+  ajout/retrait de chips, couverture. Non-régression : Mesure↔action (20) + Personnel (17+16) + statut
+  création (12) + MCO (44) + Échéancier (34) + extensions (28).
+
 ### Personnel — Phase 2 : champs multi-personnes + lien Cellule de crise
 - **Champ multi-personnes réutilisable** (`UI.multiPersonHtml` / `wireMultiPerson` / `getMultiPerson`) :
   sélecteur en **chips**, adossé à l'annuaire (autocomplétion) et acceptant la saisie libre. Appliqué

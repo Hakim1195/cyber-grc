@@ -38,7 +38,7 @@ const ConformiteModule = (() => {
         const perRef = allRefs.map(r => {
             const total = Referentiels.countExigences(r);
             const evs = DataStore.getEvaluationsByRef(r.id);
-            const couvertes = evs.filter(e => e.mesure_id).length;
+            const couvertes = evs.filter(e => Array.isArray(e.mesure_ids) && e.mesure_ids.length).length;
             return { ref: r, total, couvertes, pct: total ? Math.round((couvertes / total) * 100) : 0 };
         });
 
@@ -129,7 +129,9 @@ const ConformiteModule = (() => {
                 const ev = DataStore.getEvaluation(ref.id, ex.code);
                 const statut = ev ? (ev.statut || "") : "";
                 const mat = ev ? (Number(ev.maturite) || 0) : 0;
-                const mesure = (ev && ev.mesure_id) ? DataStore.getMesureById(ev.mesure_id) : null;
+                const mesureNoms = (ev && Array.isArray(ev.mesure_ids))
+                    ? ev.mesure_ids.map(id => { const m = DataStore.getMesureById(id); return m ? m.nom : null; }).filter(Boolean).join(", ")
+                    : "";
                 const applicable = statut !== "non applicable";
                 const justif = ev ? (ev.commentaire || "") : "";
                 total++;
@@ -143,7 +145,7 @@ const ConformiteModule = (() => {
                     <td style="text-align:center;">${applicable ? "Oui" : "<span style='color:var(--text-muted);'>Non</span>"}</td>
                     <td><span class="status ${meta.cls}">${meta.label}</span></td>
                     ${showMat ? `<td style="text-align:center;">${mat}/5</td>` : ""}
-                    <td>${mesure ? escapeHtml(mesure.nom) : "<span style='color:var(--text-muted);'>—</span>"}</td>
+                    <td>${mesureNoms ? escapeHtml(mesureNoms) : "<span style='color:var(--text-muted);'>—</span>"}</td>
                     <td style="font-size:0.85rem;">${escapeHtml(justif) || "<span style='color:var(--text-muted);'>—</span>"}</td>
                 </tr>`;
             }).join("");

@@ -11,7 +11,7 @@ const DataStore = (() => {
     const LEGACY_AUDITS_KEY = "cyber-audits";
     const LEGACY_REVUES_KEY = "cyber-revues";
     const LOCAL_CURRENT_KEY = "cyber-current";      // repli (chiffré si clé) si IndexedDB indisponible
-    const SCHEMA_VERSION = 11;
+    const SCHEMA_VERSION = 12;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -146,6 +146,16 @@ const DataStore = (() => {
             if (m.dateCloture === undefined) m.dateCloture = "";
             // Purge des clés obsolètes une fois recopiées (idempotent).
             delete m.etat; delete m.date; delete m.notes;
+        });
+        // v12 — Référentiels : une exigence peut être couverte par PLUSIEURS mesures.
+        // Le lien unique `mesure_id` devient un tableau `mesure_ids[]` (l'ancienne valeur
+        // unique → tableau à 1 élément). Migration transparente et idempotente.
+        out.evaluations.forEach(e => {
+            if (!e || typeof e !== "object") return;
+            if (!Array.isArray(e.mesure_ids)) {
+                e.mesure_ids = (e.mesure_id != null && e.mesure_id !== "") ? [e.mesure_id] : [];
+            }
+            delete e.mesure_id;
         });
         out.schemaVersion = SCHEMA_VERSION;
         return out;
@@ -633,7 +643,8 @@ const DataStore = (() => {
        ÉVALUATIONS DE RÉFÉRENTIELS (auto-évaluation par exigence de référentiel)
        Clé métier : (ref_id, code) unique. L'enregistrement est créé à la première
        évaluation ; une exigence sans enregistrement = « non évaluée ».
-       { id, ref_id, code, statut, maturite (0-5), commentaire, preuves, mesure_id, updatedAt }
+       { id, ref_id, code, statut, maturite (0-5), commentaire, preuves, mesure_ids[], updatedAt }
+       mesure_ids[] (v12) : plusieurs mesures de sécurité peuvent couvrir une même exigence.
     ========================== */
     function getEvaluations() { return data.evaluations; }
     function getEvaluationById(id) { return data.evaluations.find(e => e.id === id); }
@@ -651,7 +662,7 @@ const DataStore = (() => {
             return existing;
         }
         const rec = Object.assign(
-            { statut: "non conforme", maturite: 0, commentaire: "", preuves: "", mesure_id: null },
+            { statut: "non conforme", maturite: 0, commentaire: "", preuves: "", mesure_ids: [] },
             ev,
             { id: "EVAL-" + Date.now() + "-" + Math.floor(Math.random() * 1000), updatedAt: Date.now() }
         );
@@ -674,16 +685,37 @@ const DataStore = (() => {
         save();
     }
 
+    // Ajoute/retire une mesure à la COUVERTURE d'une exigence (v12, lien n-n `mesure_ids[]`).
+    // À l'ajout, crée l'évaluation « non évaluée » (statut "") si besoin, pour ne pas fausser le score.
+    function addMesureToEvaluation(refId, code, mesureId) {
+        if (!refId || !code || !mesureId) return null;
+        let ev = getEvaluation(refId, code);
+        if (!ev) ev = upsertEvaluation({ ref_id: refId, code: code, statut: "", maturite: 0 });
+        if (!Array.isArray(ev.mesure_ids)) ev.mesure_ids = [];
+        if (ev.mesure_ids.indexOf(mesureId) === -1) { ev.mesure_ids.push(mesureId); ev.updatedAt = Date.now(); save(); }
+        return ev;
+    }
+    function removeMesureFromEvaluation(refId, code, mesureId) {
+        const ev = getEvaluation(refId, code);
+        if (!ev || !Array.isArray(ev.mesure_ids)) return ev;
+        const before = ev.mesure_ids.length;
+        ev.mesure_ids = ev.mesure_ids.filter(id => id !== mesureId);
+        if (ev.mesure_ids.length !== before) { ev.updatedAt = Date.now(); save(); }
+        return ev;
+    }
+
     /* =========================
        MESURES DE SÉCURITÉ (entité pivot n-n vers les exigences de référentiels)
        { id, nom, description, statut, maturite (0-5), responsable, updatedAt }
-       Le lien vers les exigences couvertes est porté par evaluations[].mesure_id :
-       une mesure couvre N évaluations, éventuellement dans plusieurs référentiels
-       (évaluer la mesure propage le statut → zéro double saisie).
+       Le lien vers les exigences couvertes est porté par evaluations[].mesure_ids[] :
+       une mesure couvre N évaluations, une exigence peut être couverte par plusieurs
+       mesures (v12). Propager une mesure recalcule le statut des exigences liées « au plus
+       défavorable » à partir de TOUTES leurs mesures (une exigence ne vaut que par sa mesure
+       la plus faible → zéro double saisie).
     ========================== */
     function getMesures() { return data.mesures; }
     function getMesureById(id) { return data.mesures.find(m => m.id === id); }
-    function getEvaluationsByMesure(mesureId) { return data.evaluations.filter(e => e.mesure_id === mesureId); }
+    function getEvaluationsByMesure(mesureId) { return data.evaluations.filter(e => Array.isArray(e.mesure_ids) && e.mesure_ids.indexOf(mesureId) !== -1); }
     function addMesure(m) { data.mesures.push(m); save(); }
     function updateMesure(m) {
         const i = data.mesures.findIndex(x => x.id === m.id);
@@ -691,7 +723,7 @@ const DataStore = (() => {
     }
     function deleteMesure(id) {
         data.mesures = data.mesures.filter(m => m.id !== id);
-        data.evaluations.forEach(e => { if (e.mesure_id === id) e.mesure_id = null; });   // délie les évaluations
+        data.evaluations.forEach(e => { if (Array.isArray(e.mesure_ids)) e.mesure_ids = e.mesure_ids.filter(mid => mid !== id); });   // délie les évaluations
         data.actions.forEach(a => { if (a.mesure_id === id) a.mesure_id = null; });        // délie les actions (conservées dans le plan)
         data.traitements.forEach(t => {                                                   // délie les traitements RGPD
             if (Array.isArray(t.mesures_ids)) t.mesures_ids = t.mesures_ids.filter(mid => mid !== id);
@@ -699,16 +731,40 @@ const DataStore = (() => {
         save();
     }
 
-    // Propage le statut et la maturité d'une mesure à toutes ses évaluations liées.
-    // Retourne le nombre d'évaluations mises à jour.
+    // Agrège plusieurs mesures « au plus défavorable » (v12) : statut = le plus faible parmi
+    // les mesures évaluées (conforme seulement si TOUTES le sont), maturité = la plus basse.
+    // « non applicable » n'entre pas dans le pire cas (neutre) ; retenu seulement si toutes le sont.
+    // « non évalué » ("") est ignoré. Aucune mesure évaluée → statut "" (non évalué).
+    function aggregateFromMesures(mesureIds) {
+        const RANK = { "non conforme": 0, "partiellement conforme": 1, "conforme": 2 };
+        let worst = null, worstRank = 99, minMat = null, anyNA = false;
+        (mesureIds || []).forEach(mid => {
+            const m = getMesureById(mid);
+            if (!m) return;
+            const s = m.statut || "";
+            if (s === "non applicable") { anyNA = true; return; }
+            if (s in RANK) {
+                if (RANK[s] < worstRank) { worstRank = RANK[s]; worst = s; }
+                const mat = Number(m.maturite) || 0;
+                if (minMat === null || mat < minMat) minMat = mat;
+            }
+        });
+        if (worst !== null) return { statut: worst, maturite: minMat === null ? 0 : minMat };
+        if (anyNA) return { statut: "non applicable", maturite: 0 };
+        return { statut: "", maturite: 0 };
+    }
+
+    // Propage vers les exigences couvertes par la mesure `id` : chaque exigence est recalculée
+    // « au plus défavorable » à partir de TOUTES ses mesures liées. Retourne le nombre d'exigences maj.
     function propagateMesure(id) {
         const m = getMesureById(id);
         if (!m) return 0;
         let n = 0;
         data.evaluations.forEach(e => {
-            if (e.mesure_id === id) {
-                e.statut = m.statut;
-                e.maturite = m.maturite;
+            if (Array.isArray(e.mesure_ids) && e.mesure_ids.indexOf(id) !== -1) {
+                const agg = aggregateFromMesures(e.mesure_ids);
+                e.statut = agg.statut;
+                e.maturite = agg.maturite;
                 e.updatedAt = Date.now();
                 n++;
             }
@@ -930,7 +986,9 @@ const DataStore = (() => {
         //           normalize (OK→Réalisée/100 %, KO→En cours, date→dateReelle, notes→commentaire).
         // v10 → v11 : ajout de `personnes` (annuaire) → normalize crée le tableau vide. Les noms
         //           de responsables restent en texte dans les entités (aucune transformation).
-        // (Ajouter ici les futures migrations : if (v < 12) { ... })
+        // v11 → v12 : évaluations — `mesure_id` (lien unique) devient `mesure_ids[]` (plusieurs
+        //           mesures par exigence) ; normalize convertit l'ancienne valeur en tableau.
+        // (Ajouter ici les futures migrations : if (v < 13) { ... })
         return p;
     }
 
@@ -1031,6 +1089,7 @@ const DataStore = (() => {
         // Référentiels : auto-évaluations + pivot « Mesure de sécurité »
         getEvaluations, getEvaluationById, getEvaluationsByRef, getEvaluation,
         upsertEvaluation, deleteEvaluation, deleteEvaluationsByRef,
+        addMesureToEvaluation, removeMesureFromEvaluation,
         getMesures, getMesureById, getEvaluationsByMesure,
         addMesure, updateMesure, deleteMesure, propagateMesure,
 

@@ -114,7 +114,7 @@ const MappingModule = (() => {
             if (statut) s.evaluated++;
             if (statut !== "non applicable") s.applicable++;
             if (statut === "conforme") s.conforme++;
-            if (ev && ev.mesure_id) { s.linked++; s.mesures.add(ev.mesure_id); }
+            if (ev && Array.isArray(ev.mesure_ids) && ev.mesure_ids.length) { s.linked++; ev.mesure_ids.forEach(mid => s.mesures.add(mid)); }
         });
         s.conformite = s.applicable ? Math.round((s.conforme / s.applicable) * 100) : null;
         return s;
@@ -142,8 +142,8 @@ const MappingModule = (() => {
         const meta = statutMeta(statut);
         const titre = clauseTitre(refId, code);
         const exists = titre !== null;
-        const linked = !!(ev && ev.mesure_id);
-        const tip = `${code}${exists ? " — " + titre : " — (code inconnu dans ce référentiel)"}${statut ? " · " + meta.label : " · non évalué"}${linked ? " · reliée à une mesure" : ""}`;
+        const linked = !!(ev && Array.isArray(ev.mesure_ids) && ev.mesure_ids.length);
+        const tip = `${code}${exists ? " — " + titre : " — (code inconnu dans ce référentiel)"}${statut ? " · " + meta.label : " · non évalué"}${linked ? " · reliée à une/des mesure(s)" : ""}`;
         const cls = `map-clause ${meta.cls}${linked ? " map-clause--linked" : ""}${exists ? "" : " map-clause--unknown"}`;
         return `<a class="${cls}" href="#/referentiels/${esc(refId)}" title="${esc(tip)}">${esc(code)}</a>`;
     }
@@ -437,13 +437,11 @@ const MappingModule = (() => {
         if (!mesureId) { if (window.showToast) window.showToast("Choisissez d'abord une mesure de sécurité.", "info"); return; }
         const m = DataStore.getMesureById(mesureId);
         const pairs = validPairs(g);
-        // Relier ne doit PAS fabriquer un statut : on préserve l'existant et on garde
-        // « non évalué » pour les exigences encore vierges (sinon l'upsert les passe
-        // par défaut à « non conforme »).
+        // Relier ne doit PAS fabriquer un statut : addMesureToEvaluation préserve l'existant
+        // et crée « non évalué » (statut "") pour les exigences encore vierges. Lien n-n (v12) :
+        // on AJOUTE la mesure à la couverture sans écraser les mesures déjà liées.
         pairs.forEach(({ refId, code }) => {
-            const existing = DataStore.getEvaluation(refId, code);
-            if (existing) DataStore.upsertEvaluation({ ref_id: refId, code, mesure_id: mesureId });
-            else DataStore.upsertEvaluation({ ref_id: refId, code, mesure_id: mesureId, statut: "", maturite: 0 });
+            DataStore.addMesureToEvaluation(refId, code, mesureId);
         });
         if (window.showToast) window.showToast(`${pairs.length} exigence(s) reliée(s) à « ${m ? m.nom : "la mesure"} ».`, "success");
         render();
