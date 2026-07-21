@@ -32,6 +32,9 @@ async function startApp() {
         "/clients": () => { if (typeof ClientsModule !== "undefined") ClientsModule.renderList(); },
         "/clients/:id": (id) => { if (typeof ClientsModule !== "undefined") ClientsModule.renderDetail(id); },
 
+        "/personnel": () => { if (typeof PersonnelModule !== "undefined") PersonnelModule.renderList(); },
+        "/personnel/:id": (id) => { if (typeof PersonnelModule !== "undefined") PersonnelModule.renderDetail(id); },
+
         "/actifs": () => ActifsModule.renderList(),
         "/actifs/:id": (id) => ActifsModule.renderDetail(id),
         "/cartographie": () => { if (typeof CartographieModule !== "undefined") CartographieModule.render(); },
@@ -185,6 +188,7 @@ const ROUTE_META = {
     "/mapping":      { s: "Conformité", t: "Correspondances inter-référentiels" },
     "/soa":          { s: "Conformité", t: "Déclaration d'applicabilité" },
     "/clients":      { s: "Conformité", t: "Donneurs d'ordre" },
+    "/personnel":    { s: "Conformité", t: "Personnel" },
     "/audits":       { s: "Conformité", t: "Contrôles & Audits" },
     "/bia":          { s: "Continuité", t: "BIA (Impact Métier)" },
     "/crise":        { s: "Continuité", t: "Cellule de Crise" },
@@ -264,6 +268,7 @@ window.updateActiveNav = function(route) {
 
     if (window.renderBreadcrumb) window.renderBreadcrumb(route);
     if (window.refreshEcheancesBadge) window.refreshEcheancesBadge();
+    if (window.UI && UI.refreshPersonnesDatalist) UI.refreshPersonnesDatalist();
 };
 
 /* =========================

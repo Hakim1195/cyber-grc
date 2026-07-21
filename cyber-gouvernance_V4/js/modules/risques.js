@@ -405,7 +405,7 @@ const RisquesModule = (() => {
                 </div>
                 <div class="dashboard-card">
                     <div class="form-group"><label>Titre <span style="color:red">*</span></label><input id="titre" required /></div>
-                    <div class="form-group"><label>Responsable</label><input id="responsable" /></div>
+                    <div class="form-group"><label>Responsable</label><input id="responsable" list="personnes-list" /></div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                         <div class="form-group"><label>Statut</label><select id="statut"><option value="à faire" selected>À faire</option><option value="en cours">En cours</option><option value="terminée">Terminée</option></select></div>
                         <div class="form-group"><label>Échéance</label><input type="date" id="echeance" /></div>

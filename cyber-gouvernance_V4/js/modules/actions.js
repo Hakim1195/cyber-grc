@@ -267,7 +267,7 @@ const ActionsModule = (() => {
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div class="form-group">
                             <label>Responsable</label>
-                            <input id="responsable" value="${action.responsable || ""}" />
+                            <input id="responsable" list="personnes-list" value="${action.responsable || ""}" />
                         </div>
                         <div class="form-group">
                             <label>Échéance</label>

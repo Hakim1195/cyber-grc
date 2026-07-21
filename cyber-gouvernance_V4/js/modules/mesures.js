@@ -126,7 +126,7 @@ const MesuresModule = (() => {
                         <div class="form-group"><label>Statut</label>${statutSelect("statut", "")}</div>
                         <div class="form-group"><label>Maturité (0-5) ${Help.tip(MATURITE_AIDE)}</label>${maturiteSelect("maturite", 0)}</div>
                     </div>
-                    <div class="form-group"><label>Responsable</label><input id="responsable" placeholder="Nom ou fonction" /></div>
+                    <div class="form-group"><label>Responsable</label><input id="responsable" list="personnes-list" placeholder="Nom ou fonction" /></div>
                     <div style="margin-top:20px;">
                         <button id="save">Enregistrer</button>
                         <button id="cancel" style="margin-left:10px; background:var(--color-gray);">Annuler</button>
@@ -187,7 +187,7 @@ const MesuresModule = (() => {
                     <div class="form-group" style="margin:0; flex:2 1 240px;"><label>Intitulé <span style="color:red">*</span></label><input id="mesActTitre" placeholder="Ex : Déployer le MFA sur tous les comptes à privilèges" /></div>
                     <div class="form-group" style="margin:0; flex:1 1 120px;"><label>Priorité</label><select id="mesActPrio"><option value="Basse">Basse</option><option value="Moyenne" selected>Moyenne</option><option value="Haute">Haute</option><option value="Critique">Critique</option></select></div>
                     <div class="form-group" style="margin:0; flex:1 1 120px;"><label>Statut</label><select id="mesActStatut"><option value="à faire" selected>À faire</option><option value="en cours">En cours</option><option value="terminée">Terminée</option></select></div>
-                    <div class="form-group" style="margin:0; flex:1 1 140px;"><label>Responsable</label><input id="mesActResp" placeholder="Nom / fonction" /></div>
+                    <div class="form-group" style="margin:0; flex:1 1 140px;"><label>Responsable</label><input id="mesActResp" list="personnes-list" placeholder="Nom / fonction" /></div>
                     <div class="form-group" style="margin:0; flex:1 1 140px;"><label>Échéance</label><input type="date" id="mesActEch" /></div>
                     <button type="button" id="mesActSave" style="flex:0 0 auto;">Créer</button>
                 </div>
@@ -280,7 +280,7 @@ const MesuresModule = (() => {
                             <div class="form-group"><label>Statut</label>${statutSelect("statut", m.statut)}</div>
                             <div class="form-group"><label>Maturité (0-5) ${Help.tip(MATURITE_AIDE)}</label>${maturiteSelect("maturite", m.maturite)}</div>
                         </div>
-                        <div class="form-group"><label>Responsable</label><input id="responsable" value="${escapeHtml(m.responsable || "")}" /></div>
+                        <div class="form-group"><label>Responsable</label><input id="responsable" list="personnes-list" value="${escapeHtml(m.responsable || "")}" /></div>
                         <button id="saveBtn">Mettre à jour</button>
                     </div>
 

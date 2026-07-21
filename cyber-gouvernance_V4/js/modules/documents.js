@@ -177,7 +177,7 @@ const DocumentsModule = (() => {
                 <div class="form-group"><label>Statut</label><select id="statut">${statutOpts}</select></div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
-                <div class="form-group"><label>Propriétaire</label><input id="proprietaire" value="${escapeHtml(doc.proprietaire || "")}" placeholder="Nom ou fonction" /></div>
+                <div class="form-group"><label>Propriétaire</label><input id="proprietaire" list="personnes-list" value="${escapeHtml(doc.proprietaire || "")}" placeholder="Nom ou fonction" /></div>
                 <div class="form-group"><label>Prochaine revue ${Help.tip("Date à laquelle le document devra être revu. Une alerte apparaît à l'approche ou au dépassement de l'échéance.")}</label><input type="date" id="date_revue" value="${escapeHtml(doc.date_revue || "")}" /></div>
             </div>
             <div class="form-group"><label>Emplacement ${Help.tip("Où trouver le document (chemin réseau, GED, URL interne…). L'application ne stocke pas le fichier lui-même.")}</label><input id="emplacement" value="${escapeHtml(doc.emplacement || "")}" placeholder="Ex : \\\\serveur\\qualite\\PSSI_v1.pdf" /></div>

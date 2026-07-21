@@ -11,7 +11,7 @@ const DataStore = (() => {
     const LEGACY_AUDITS_KEY = "cyber-audits";
     const LEGACY_REVUES_KEY = "cyber-revues";
     const LOCAL_CURRENT_KEY = "cyber-current";      // repli (chiffré si clé) si IndexedDB indisponible
-    const SCHEMA_VERSION = 10;
+    const SCHEMA_VERSION = 11;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -31,7 +31,11 @@ const DataStore = (() => {
         "mappings",
         // v8 — Chantier 7 : historique des indicateurs (un instantané par jour) pour les
         // courbes de tendance du tableau de bord.
-        "history"
+        "history",
+        // v11 — Chantier Personnel : annuaire des personnes/rôles réutilisé partout où l'on
+        // saisit un responsable (autocomplétion). Le nom reste stocké en texte dans les entités
+        // (rétrocompatible) ; l'annuaire alimente les suggestions et la fiche « affectations ».
+        "personnes"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
@@ -714,6 +718,32 @@ const DataStore = (() => {
     }
 
     /* =========================
+       PERSONNEL / ANNUAIRE (v11)
+       { id, nom, fonction, service, email, telephone, notes }
+       Annuaire réutilisé pour l'autocomplétion des champs « responsable ». Les entités
+       continuent de stocker le NOM en texte (rétrocompatible) ; l'annuaire ne fait
+       qu'alimenter les suggestions et la fiche « affectations » (correspondance par nom).
+    ========================== */
+    function getPersonnes() { return data.personnes; }
+    function getPersonneById(id) { return data.personnes.find(p => p.id === id); }
+    function addPersonne(p) { data.personnes.push(p); save(); }
+    function updatePersonne(p) {
+        const idx = data.personnes.findIndex(x => x.id === p.id);
+        if (idx !== -1) { data.personnes[idx] = p; save(); }
+    }
+    function deletePersonne(id) { data.personnes = data.personnes.filter(p => p.id !== id); save(); }
+    // Noms distincts, triés, pour l'autocomplétion (datalist partagé).
+    function getPersonneNames() {
+        const seen = new Set();
+        const out = [];
+        data.personnes.forEach(p => {
+            const nom = (p && p.nom || "").trim();
+            if (nom && !seen.has(nom.toLowerCase())) { seen.add(nom.toLowerCase()); out.push(nom); }
+        });
+        return out.sort((a, b) => a.localeCompare(b, "fr"));
+    }
+
+    /* =========================
        INCIDENTS DE SÉCURITÉ (v4)
        { id, titre, type, gravite, statut, date_detection, date_resolution,
          description, actions_immediates, cause_racine, actifs_touches[], risque_id,
@@ -898,7 +928,9 @@ const DataStore = (() => {
         // v9 → v10 : Actions MCO — ancien modèle { etat, date, notes } converti en modèle de
         //           suivi { statut, avancement, datePrevue, dateReelle, dateCloture, ... } par
         //           normalize (OK→Réalisée/100 %, KO→En cours, date→dateReelle, notes→commentaire).
-        // (Ajouter ici les futures migrations : if (v < 11) { ... })
+        // v10 → v11 : ajout de `personnes` (annuaire) → normalize crée le tableau vide. Les noms
+        //           de responsables restent en texte dans les entités (aucune transformation).
+        // (Ajouter ici les futures migrations : if (v < 12) { ... })
         return p;
     }
 
@@ -1001,6 +1033,9 @@ const DataStore = (() => {
         upsertEvaluation, deleteEvaluation, deleteEvaluationsByRef,
         getMesures, getMesureById, getEvaluationsByMesure,
         addMesure, updateMesure, deleteMesure, propagateMesure,
+
+        // Personnel / annuaire (v11)
+        getPersonnes, getPersonneById, addPersonne, updatePersonne, deletePersonne, getPersonneNames,
 
         // Incidents de sécurité
         getIncidents, getIncidentById, addIncident, updateIncident, deleteIncident,

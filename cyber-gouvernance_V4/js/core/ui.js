@@ -142,5 +142,20 @@ window.UI = (function () {
         return (prefix || "ID") + "-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
     }
 
-    return { badge, mappedBadge, wireBulkDelete, wireDelete, genId };
+    /* =========================================================================
+       ANNUAIRE « PERSONNEL » — autocomplétion partagée (v11)
+       Un unique <datalist id="personnes-list"> vit dans index.html (hors #app, donc
+       persistant entre les rendus). On le (re)peuple depuis l'annuaire du DataStore ;
+       tout <input list="personnes-list"> propose alors les personnes enregistrées, tout
+       en acceptant une saisie libre (rétrocompatible). Appelé à chaque navigation.
+    ========================================================================= */
+    function refreshPersonnesDatalist() {
+        var dl = document.getElementById("personnes-list");
+        if (!dl || typeof DataStore === "undefined" || !DataStore.getPersonneNames) return;
+        var names;
+        try { names = DataStore.getPersonneNames(); } catch (e) { names = []; }
+        dl.innerHTML = names.map(function (n) { return '<option value="' + esc(n) + '"></option>'; }).join("");
+    }
+
+    return { badge, mappedBadge, wireBulkDelete, wireDelete, genId, refreshPersonnesDatalist };
 })();

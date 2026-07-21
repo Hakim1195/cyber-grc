@@ -5,6 +5,28 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Personnel — annuaire des personnes/rôles réutilisé partout (schéma v11, Phase 1)
+- **Nouveau module `/personnel`** (« Personnel », entrée de menu après « Donneurs d'ordre ») : annuaire
+  CRUD des personnes/rôles (**nom, fonction, service, email, téléphone, notes**). Nouvelle entité
+  `personnes` (**schéma v11**, `normalize` crée le tableau vide, rétrocompatible).
+- **Autocomplétion partout** : un `<datalist>` partagé (`#personnes-list`, peuplé à chaque navigation)
+  branche les personnes de l'annuaire sur **tous les champs « Responsable »/« Propriétaire »/«  Auditeur »**
+  du logiciel — Actions, Mesures, Exigences, Actifs, BIA, MCO, RGPD, Risques, Documents (propriétaire),
+  Audits (auditeur/audité). **On peut toujours saisir un nom hors annuaire** : les entités continuent de
+  stocker le nom en **texte** → **aucune rupture** avec les données existantes.
+- **Fiche personne = « où c'est affecté »** : la fiche agrège, par correspondance de nom, **tout ce à quoi
+  la personne est rattachée** (actions, mesures, exigences, actifs, processus, MCO, documents, audits,
+  traitements RGPD), avec liens cliquables → on la retrouve partout.
+- **Suppression non destructive** : retirer une personne de l'annuaire **ne modifie pas** les responsables
+  déjà saisis dans les fiches (ce sont des chaînes) ; seule la suggestion disparaît.
+- 100 % frontend, tokens, `escapeHtml`, `Help.tip`, helpers `UI.*`. Tests Playwright (**17 assertions,
+  0 erreur**) : entité + `getPersonneNames` trié, migration v10→v11 + round-trip v11, module liste/création,
+  datalist peuplé après navigation, champs Responsable/Propriétaire reliés (mesure, MCO, document),
+  affectations (action + mesure), suppression non destructive. Non-régression : statut création (12),
+  Mesure↔action (20), MCO (44), Échéancier (34), extensions (28).
+- **Phase 2 possible** (non incluse) : champs multi-personnes (Participants de revue), lien vers la
+  Cellule de crise, éventuel passage optionnel à des identifiants.
+
 ### Plan d'actions — statut sélectionnable dès la création (cohérent sur tous les formulaires)
 - Le **statut** de l'action (À faire / En cours / Terminée) était déjà visible et modifiable partout
   (badge dans les blocs, sélecteur sur la fiche action) **mais figé à « à faire » à la création**.

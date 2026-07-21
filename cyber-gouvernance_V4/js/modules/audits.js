@@ -268,8 +268,8 @@ const AuditsModule = (() => {
                             </div>
                             <div class="form-group"><label>Date de l'audit</label><input type="date" id="a-date" value="${editingItem.date}" /></div>
                             <div class="form-group"><label>Périmètre audité</label><input id="a-perimetre" value="${escapeHtml(editingItem.perimetre)}" placeholder="Ex: Processus RH, Site de Paris..." /></div>
-                            <div class="form-group"><label>Auditeur(s)</label><input id="a-auditeur" value="${escapeHtml(editingItem.auditeur)}" placeholder="Ex: Audit interne, cabinet externe..." /></div>
-                            <div class="form-group"><label>Audité(s) (Interlocuteurs)</label><input id="a-audite" value="${escapeHtml(editingItem.audite)}" placeholder="Ex: DSI, RSSI" /></div>
+                            <div class="form-group"><label>Auditeur(s)</label><input id="a-auditeur" list="personnes-list" value="${escapeHtml(editingItem.auditeur)}" placeholder="Ex: Audit interne, cabinet externe..." /></div>
+                            <div class="form-group"><label>Audité(s) (Interlocuteurs)</label><input id="a-audite" list="personnes-list" value="${escapeHtml(editingItem.audite)}" placeholder="Ex: DSI, RSSI" /></div>
                         </div>
                     </div>
                     <div class="dashboard-card">

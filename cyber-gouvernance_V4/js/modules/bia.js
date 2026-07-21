@@ -138,7 +138,7 @@ const BiaModule = (() => {
 
                     <div class="form-group">
                         <label>Responsable Métier (Propriétaire)</label>
-                        <input id="responsable" placeholder="Nom ou Fonction (ex: Directeur RH)" />
+                        <input id="responsable" list="personnes-list" placeholder="Nom ou Fonction (ex: Directeur RH)" />
                     </div>
 
                     <div class="form-group">
@@ -248,7 +248,7 @@ const BiaModule = (() => {
                             </div>
                         </div>
 
-                        <div class="form-group"><label>Responsable</label><input id="responsable" value="${escapeHtml(processus.responsable || "")}" /></div>
+                        <div class="form-group"><label>Responsable</label><input id="responsable" list="personnes-list" value="${escapeHtml(processus.responsable || "")}" /></div>
                         <div class="form-group"><label>Impacts (Interruption)</label><textarea id="description">${escapeHtml(processus.description || "")}</textarea></div>
                         <button id="saveBtn">Mettre à jour</button>
                     </div>

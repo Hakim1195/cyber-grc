@@ -155,7 +155,7 @@ const ExigencesModule = (() => {
 
                     <div class="form-group">
                         <label>Responsable</label>
-                        <input id="responsable" placeholder="Nom ou fonction" />
+                        <input id="responsable" list="personnes-list" placeholder="Nom ou fonction" />
                     </div>
 
                     <div class="form-group">
@@ -258,7 +258,7 @@ const ExigencesModule = (() => {
                             </select>
                         </div>
 
-                        <div class="form-group"><label>Responsable</label><input id="responsable" value="${escapeHtml(exigence.responsable || "")}" /></div>
+                        <div class="form-group"><label>Responsable</label><input id="responsable" list="personnes-list" value="${escapeHtml(exigence.responsable || "")}" /></div>
                         <div class="form-group"><label>Commentaire</label><textarea id="commentaire">${escapeHtml(exigence.commentaire || "")}</textarea></div>
                         <button id="saveBtn">Mettre à jour</button>
                     </div>
@@ -341,7 +341,7 @@ const ExigencesModule = (() => {
                         </div>
                     </div>
 
-                    <div class="form-group"><label>Responsable</label><input id="responsable" /></div>
+                    <div class="form-group"><label>Responsable</label><input id="responsable" list="personnes-list" /></div>
                     <div class="form-group"><label>Commentaire</label><textarea id="commentaire"></textarea></div>
 
                     <div style="margin-top: 20px;">

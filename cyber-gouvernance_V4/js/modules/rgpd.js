@@ -151,7 +151,7 @@ const RgpdModule = (() => {
             <div class="form-group"><label>Finalité ${Help.tip("À quoi sert le traitement, l'objectif poursuivi (ex : verser les salaires).")}</label><textarea id="finalite" placeholder="Objectif du traitement">${escapeHtml(t.finalite || "")}</textarea></div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                 <div class="form-group"><label>Base légale ${Help.tip("Ce qui autorise le traitement au sens du RGPD : consentement, contrat, obligation légale, intérêt légitime…")}</label><select id="base_legale">${baseOpts}</select></div>
-                <div class="form-group"><label>Responsable / service</label><input id="responsable" value="${escapeHtml(t.responsable || "")}" /></div>
+                <div class="form-group"><label>Responsable / service</label><input id="responsable" list="personnes-list" value="${escapeHtml(t.responsable || "")}" /></div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                 <div class="form-group"><label>Personnes concernées</label><input id="personnes_concernees" value="${escapeHtml(t.personnes_concernees || "")}" placeholder="Ex : salariés, candidats" /></div>

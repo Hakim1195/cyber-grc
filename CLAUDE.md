@@ -55,7 +55,7 @@ cyber-gouvernance_V4/
 │   ├── importExcel.js, exportExcel.js, exportPDF.js
 │   ├── echeances.js           AGRÉGATEUR d'échéances (lecture seule) `window.Echeances`
 ├── js/modules/                1 module = 1 domaine (IIFE `XxxModule.renderList/renderDetail`)
-│   └── dashboard, synthese, echeances, clients, actifs, cartographie, risques, matrice, exigences,
+│   └── dashboard, synthese, echeances, clients, personnel, actifs, cartographie, risques, matrice, exigences,
 │       actions, bia, crise, pra_scenarios, pra_mco, pra_tests,
 │       pra_prestataires, audits, settings
 ├── js/lib/xlsx.full.min.js    SheetJS (embarqué)
@@ -77,14 +77,16 @@ cyber-gouvernance_V4/
 
 - IndexedDB `cyber-grc-db` : store `kv` (`current` = instantané, chiffré si protection active ;
   `meta`), store `backups` (points de restauration versionnés, auto + manuels).
-- `SCHEMA_VERSION = 10` dans `datastore.js`. Migrations à l'import via `migratePayload`.
+- `SCHEMA_VERSION = 11` dans `datastore.js`. Migrations à l'import via `migratePayload`.
 - Entités (tableaux) : clients, exigences, actions, risques, actifs, processus, crise,
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
   **evaluations** (auto-évaluations de référentiels), **mesures** (pivot « Mesure de sécurité »),
   **incidents** (registre des incidents), **documents** (registre des politiques),
   **traitements** (registre RGPD art. 30, mesures reliées au pivot),
-  **mappings** (v7, surcouche des correspondances inter-référentiels ; catalogue par défaut statique)
-  et **history** (v8, indicateurs historisés — un point par jour pour les courbes de tendance).
+  **mappings** (v7, surcouche des correspondances inter-référentiels ; catalogue par défaut statique),
+  **history** (v8, indicateurs historisés — un point par jour pour les courbes de tendance)
+  et **personnes** (v11, annuaire — autocomplétion des champs « Responsable » ; le nom reste stocké en
+  texte dans les entités, saisie libre conservée).
   Les **actifs** portent en plus un champ **`dependances[]`** (v9, liens typés actif→actif :
   `dep`/`hosted`/`flux`/`backup` — module Cartographie & analyse d'impact).
   Les **`mco_actions`** suivent (v10) un modèle de **suivi d'action planifiée** :
@@ -276,6 +278,19 @@ affiche le plan d'action de la mesure, en plus du bloc « Actions correctives »
 **Traçabilité** dans le plan d'actions (colonne + fiche : « Mesure : … »). `getActionsByMesure` ;
 `deleteMesure` **délie** les actions (`mesure_id → null`, conservées), comme les évaluations. Tests
 Playwright (20 assertions ; 0 erreur ; non-régression MCO 44 + Échéancier 34 + extensions 28).
+
+**Fait (Chantier Personnel — annuaire réutilisé partout, schéma v11, Phase 1)** : nouveau module
+**`/personnel`** (« Personnel », menu après « Donneurs d'ordre ») — annuaire CRUD des personnes/rôles
+(nom, fonction, service, email, téléphone, notes ; entité **`personnes`**, v11). **Autocomplétion partout** :
+un `<datalist id="personnes-list">` partagé (peuplé par `UI.refreshPersonnesDatalist()` à chaque navigation,
+appelé depuis `updateActiveNav`) branche l'annuaire sur **tous les champs « Responsable »/« Propriétaire »/
+« Auditeur »** (Actions, Mesures, Exigences, Actifs, BIA, MCO, RGPD, Risques, Documents, Audits). **Choix
+« annuaire + autocomplétion » (pas de clé étrangère)** : les entités **stockent toujours le nom en texte**
+→ rétrocompatible, saisie libre conservée, **rien de cassé**. **Fiche personne = « où c'est affecté »**
+(agrégation par correspondance de nom, lecture seule). **Suppression non destructive** (retire la suggestion,
+conserve les noms saisis). Tests Playwright (17 assertions ; migration v10→v11 + round-trip ; 0 erreur ;
+non-régression statut création 12 + Mesure↔action 20 + MCO 44 + Échéancier 34 + extensions 28). **Phase 2
+possible** : champs multi-personnes (Participants), lien Cellule de crise.
 
 **Prochain** : poursuivre le Chantier 2 — harmoniser tableaux denses / KPI / radars ; tooltips restants
 sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches.

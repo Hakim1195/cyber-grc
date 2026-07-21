@@ -29,6 +29,7 @@
             <li><a href="#/synthese" data-route="/synthese"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span>Synthèse Direction</span></a></li>
             <li><a href="#/echeances" data-route="/echeances"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Échéancier</span><span class="nav-badge" id="echeancesBadge" hidden>0</span></a></li>
             <li><a href="#/clients" data-route="/clients"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><span>Donneurs d'ordre</span></a></li>
+            <li><a href="#/personnel" data-route="/personnel"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Personnel</span></a></li>
             <li><a href="#/actifs" data-route="/actifs"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg><span>Actifs critiques</span></a></li>
             <li><a href="#/cartographie" data-route="/cartographie"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><line x1="6.9" y1="7.6" x2="10.4" y2="15.8"/><line x1="17.1" y1="7.6" x2="13.6" y2="15.8"/><line x1="7.5" y1="6" x2="16.5" y2="6"/></svg><span>Cartographie</span></a></li>
             <li><a href="#/risques" data-route="/risques"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>Risques (EBIOS)</span></a></li>
@@ -62,6 +63,10 @@
         <div id="app"></div>
     </main>
 
+    <!-- Annuaire « Personnel » : suggestions partagées pour les champs Responsable (v11).
+         Peuplé par UI.refreshPersonnesDatalist() à chaque navigation ; persistant hors #app. -->
+    <datalist id="personnes-list"></datalist>
+
     <script src="js/lib/xlsx.full.min.js"></script>
 
     <script src="js/core/persistence.js"></script>
@@ -93,6 +98,7 @@
     <script src="js/data/audit_aircyber.js"></script>
 
     <script src="js/modules/clients.js"></script>
+    <script src="js/modules/personnel.js"></script>
     <script src="js/modules/dashboard.js"></script>
     <script src="js/modules/synthese.js"></script>
     <script src="js/modules/echeances.js"></script>

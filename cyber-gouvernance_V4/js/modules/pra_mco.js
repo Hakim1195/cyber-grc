@@ -179,7 +179,7 @@ const PraMcoModule = (() => {
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                 <div class="form-group">
                     <label>Responsable de l'action</label>
-                    <input id="responsable" value="${escapeHtml(m.responsable || "")}" placeholder="Nom / fonction" />
+                    <input id="responsable" list="personnes-list" value="${escapeHtml(m.responsable || "")}" placeholder="Nom / fonction" />
                 </div>
                 <div class="form-group">
                     <label>Priorité</label>

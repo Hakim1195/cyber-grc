@@ -4,7 +4,7 @@
 > Application **100 % frontend** : toutes les données vivent dans le navigateur
 > (IndexedDB, avec repli localStorage). Aucune donnée ne quitte le poste.
 
-Version de schéma courante : **`SCHEMA_VERSION = 10`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 11`** (défini dans `js/core/datastore.js`).
 > v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`.
 > v4 (chantier Incidents) : ajout du tableau `incidents`.
 > v5 (chantier Documentaire) : ajout du tableau `documents`.
@@ -14,6 +14,9 @@ Version de schéma courante : **`SCHEMA_VERSION = 10`** (défini dans `js/core/d
 > v9 (chantier Cartographie) : ajout du champ `dependances[]` (liens typés actif→actif) sur les actifs.
 > v10 (chantier MCO) : refonte des `mco_actions` — passage du modèle « vérification récurrente »
 >     (`etat`/`date`/`notes`) au modèle de suivi d'action planifiée (`statut`/`avancement`/dates + responsable).
+> v11 (chantier Personnel) : ajout du tableau `personnes` (annuaire) → normalize crée le tableau vide.
+>     Les noms de responsables restent stockés en texte dans les entités (rétrocompatible) ; l'annuaire
+>     alimente l'autocomplétion des champs « Responsable » et la fiche « affectations ».
 > Migrations transparentes — `normalize` crée les tableaux vides à la volée (et garantit
 >     `dependances` ainsi que la conversion des anciennes actions MCO).
 
@@ -87,6 +90,27 @@ Un enregistrement `backups` : `{ id, ts, type: "auto"|"manual", label, schemaVer
 | `secteur` | string | secteur / description |
 
 Suppression en cascade → supprime les `exigences` rattachées (et leurs `actions`).
+
+### Personne (annuaire) — `personnes` (v11)
+| Champ | Type | Notes |
+|-------|------|-------|
+| `id` | `"PERS-..."` | |
+| `nom` | string | requis |
+| `fonction` | string | rôle (RSSI, DPO, Responsable IT…) |
+| `service` | string | équipe / département |
+| `email` | string | |
+| `telephone` | string | |
+| `notes` | string | |
+
+Annuaire réutilisé pour l'**autocomplétion** de tous les champs « Responsable »/« Propriétaire »/
+« Auditeur » du logiciel (via le `<datalist id="personnes-list">` partagé, peuplé par
+`UI.refreshPersonnesDatalist()` à chaque navigation). **Les entités continuent de stocker le NOM en
+texte** (rétrocompatible, saisie libre toujours possible) : `personnes` n'est qu'une source de
+suggestions. La **fiche personne** agrège ses « affectations » par **correspondance de nom** (module
+`/personnel`, lecture seule sur actions, mesures, exigences, actifs, processus, MCO, documents, audits,
+traitements). **Supprimer une personne** de l'annuaire **ne touche pas** les responsables déjà saisis
+dans les fiches (ce sont des chaînes) — cela retire seulement la suggestion. `getPersonneNames()` fournit
+les noms distincts triés.
 
 ### Exigence — `exigences`
 | Champ | Type | Notes |

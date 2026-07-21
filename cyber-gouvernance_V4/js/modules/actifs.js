@@ -144,7 +144,7 @@ const ActifsModule = (() => {
 
                     <div class="form-group">
                         <label>Responsable de l'actif</label>
-                        <input id="responsable" placeholder="Propriétaire métier ou IT" />
+                        <input id="responsable" list="personnes-list" placeholder="Propriétaire métier ou IT" />
                     </div>
 
                     <div class="form-group">
@@ -247,7 +247,7 @@ const ActifsModule = (() => {
                             </div>
                         </div>
 
-                        <div class="form-group"><label>Responsable</label><input id="responsable" value="${escapeHtml(actif.responsable || "")}" /></div>
+                        <div class="form-group"><label>Responsable</label><input id="responsable" list="personnes-list" value="${escapeHtml(actif.responsable || "")}" /></div>
                         <div class="form-group"><label>Description</label><textarea id="description">${escapeHtml(actif.description || "")}</textarea></div>
                         <button id="saveBtn">Mettre à jour</button>
                     </div>
