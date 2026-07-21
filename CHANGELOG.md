@@ -5,6 +5,27 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Référentiels ↔ Plan d'actions — chaînon manquant : plan d'action sur le pivot « Mesure »
+- **Nouveau lien `action.mesure_id`** (champ optionnel, rétrocompatible, aucun changement de schéma) :
+  une action du plan d'actions peut désormais être **rattachée directement à une mesure de sécurité**
+  (le pivot). Une action sur la mesure vaut pour **toutes les exigences** que la mesure couvre — même
+  esprit « zéro double saisie » que la propagation.
+- **Bloc « Plan d'action » sur la fiche Mesure** (`/mesures/:id`) : liste des actions de remédiation
+  + formulaire *« Planifier une action »* (intitulé, priorité, responsable, échéance). L'action rejoint
+  le plan d'actions global, tracée jusqu'à la mesure.
+- **Chaîne rendue visible côté exigence** : dans le **Détail** d'une exigence reliée à une mesure, le
+  plan d'action **de la mesure** s'affiche (lecture seule + lien vers la fiche mesure), à côté du bloc
+  « Actions correctives » par-exigence déjà existant (conservé pour les exigences sans mesure).
+- **Traçabilité dans le plan d'actions** : la colonne « Traçabilité » et la fiche action affichent
+  désormais *« Mesure : … »* avec lien, comme pour exigence / risque / incident.
+- **Intégrité** : `DataStore.getActionsByMesure(id)` ; à la **suppression d'une mesure**, les actions
+  liées sont **déliées** (`mesure_id → null`) et **conservées** dans le plan (non destructif), exactement
+  comme le sont déjà les évaluations.
+- Tests Playwright (**20 assertions, 0 erreur**) : `getActionsByMesure`, bloc Plan d'action (affichage +
+  création UI avec champs), traçabilité liste/fiche action, chaîne exigence→mesure→action dans le Détail
+  du référentiel (bloc par-exigence conservé), délien à la suppression. Non-régression MCO (44) +
+  Échéancier (34) + extensions (28).
+
 ### Échéancier — extensions : calendrier, exports Excel/.ICS, panneau tableau de bord
 - **Vue calendrier mensuel** : bascule **Liste / Calendrier** dans l'Échéancier. Grille du mois
   (semaine débutant le lundi) où chaque échéance datée apparaît sous forme de **pastille colorée par

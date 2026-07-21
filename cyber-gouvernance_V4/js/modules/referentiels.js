@@ -557,6 +557,25 @@ const ReferentielsModule = (() => {
         const mesureOpts = `<option value="">— Aucune —</option>` +
             mesures.map(m => `<option value="${m.id}" ${m.id === mesureId ? "selected" : ""}>${escapeHtml(m.nom)}</option>`).join("");
 
+        // Plan d'action porté par la mesure liée (lecture seule ici : géré depuis la fiche mesure,
+        // il couvre toutes les exigences que la mesure porte). Rend la chaîne exigence→mesure→action visible.
+        let mesureActionsHtml = "";
+        if (linked) {
+            const mActions = DataStore.getActionsByMesure(linked.id);
+            const mList = mActions.length
+                ? `<ul class="ref-actions-list">${mActions.map(a => `
+                        <li>
+                            <a href="#/actions/${a.id}" style="color:var(--accent);">${escapeHtml(a.titre)}</a>
+                            <span class="status ${statutClassForAction(a.statut)}" style="margin-left:8px;">${escapeHtml(a.statut)}</span>
+                        </li>`).join("")}</ul>`
+                : `<p style="color:var(--text-muted); font-size:0.85rem; margin:4px 0;">Aucune action sur cette mesure. <a href="#/mesures/${linked.id}" style="color:var(--accent);">Planifier depuis la fiche mesure →</a></p>`;
+            mesureActionsHtml = `
+                <div class="ref-mesure-actions" style="margin:10px 0; padding:10px 0; border-top:1px dashed var(--border);">
+                    <strong style="font-size:0.9rem;">Plan d'action de la mesure « ${escapeHtml(linked.nom)} » ${Help.tip("Actions de remédiation portées par la mesure de sécurité qui couvre cette exigence. Elles se gèrent depuis la fiche de la mesure et valent pour toutes les exigences qu'elle porte.")}</strong>
+                    ${mList}
+                </div>`;
+        }
+
         return `
             <div class="ref-detail-panel">
                 <div class="ref-detail-grid2">
@@ -577,6 +596,7 @@ const ReferentielsModule = (() => {
                         <button type="button" class="ref-new-mesure" data-code="${ex.code}">＋ Nouvelle</button>
                         ${linked ? `<a href="#/mesures/${linked.id}" class="ref-mesure-link">Ouvrir la fiche →</a>` : ""}
                     </div>
+                    ${mesureActionsHtml}
                 </div>
 
                 <div class="ref-actions-block" data-code="${ex.code}">

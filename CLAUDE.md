@@ -266,5 +266,16 @@ par échéance datée, importable Outlook/Google), et **panneau « Prochaines é
 bord** (section *Suivi & échéances*, top 7 tous modules + badge « N en retard », réutilise `Echeances`).
 Tests Playwright (28 assertions ; 0 erreur ; non-régression Échéancier 34 + MCO 44).
 
+**Fait (Chantier Référentiels ↔ Plan d'actions — plan d'action sur le pivot « Mesure »)** : comblement
+du chaînon manquant entre l'évaluation d'un référentiel et le plan d'actions. Nouveau lien **optionnel**
+`action.mesure_id` (rétrocompatible, sans changement de schéma) → une action peut être rattachée
+**directement à une mesure de sécurité** (le pivot), et vaut pour toutes les exigences qu'elle couvre.
+**Bloc « Plan d'action » sur la fiche Mesure** (`/mesures/:id` : liste + « Planifier une action »
+intitulé/priorité/responsable/échéance). **Chaîne visible côté exigence** (le Détail d'une exigence reliée
+affiche le plan d'action de la mesure, en plus du bloc « Actions correctives » par-exigence conservé).
+**Traçabilité** dans le plan d'actions (colonne + fiche : « Mesure : … »). `getActionsByMesure` ;
+`deleteMesure` **délie** les actions (`mesure_id → null`, conservées), comme les évaluations. Tests
+Playwright (20 assertions ; 0 erreur ; non-régression MCO 44 + Échéancier 34 + extensions 28).
+
 **Prochain** : poursuivre le Chantier 2 — harmoniser tableaux denses / KPI / radars ; tooltips restants
 sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches.

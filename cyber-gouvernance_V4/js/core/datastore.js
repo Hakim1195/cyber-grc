@@ -462,6 +462,7 @@ const DataStore = (() => {
     function getActionsByRisque(risqueId) { return data.actions.filter(a => a.risque_id === risqueId); }
     function getActionsByEvaluation(evaluationId) { return data.actions.filter(a => a.evaluation_id === evaluationId); }
     function getActionsByIncident(incidentId) { return data.actions.filter(a => a.incident_id === incidentId); }
+    function getActionsByMesure(mesureId) { return data.actions.filter(a => a.mesure_id === mesureId); }
     function addAction(action) { data.actions.push(action); save(); }
     function updateAction(action) {
         const i = data.actions.findIndex(a => a.id === action.id);
@@ -687,6 +688,7 @@ const DataStore = (() => {
     function deleteMesure(id) {
         data.mesures = data.mesures.filter(m => m.id !== id);
         data.evaluations.forEach(e => { if (e.mesure_id === id) e.mesure_id = null; });   // délie les évaluations
+        data.actions.forEach(a => { if (a.mesure_id === id) a.mesure_id = null; });        // délie les actions (conservées dans le plan)
         data.traitements.forEach(t => {                                                   // délie les traitements RGPD
             if (Array.isArray(t.mesures_ids)) t.mesures_ids = t.mesures_ids.filter(mid => mid !== id);
         });
@@ -978,7 +980,7 @@ const DataStore = (() => {
 
         getClients, getClientById, addClient, updateClient, deleteClient,
         getExigences, getExigencesByClient, getExigenceById, addExigence, updateExigence, deleteExigence,
-        getActions, getActionById, getActionsByExigence, getActionsByRisque, getActionsByEvaluation, getActionsByIncident, addAction, updateAction, deleteAction,
+        getActions, getActionById, getActionsByExigence, getActionsByRisque, getActionsByEvaluation, getActionsByIncident, getActionsByMesure, addAction, updateAction, deleteAction,
         getRisques, getRisqueById, addRisque, updateRisque, deleteRisque,
         getActifs, getActifById, addActif, updateActif, deleteActif,
 

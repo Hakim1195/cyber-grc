@@ -60,6 +60,9 @@ const ActionsModule = (() => {
             } else if (a.incident_id) {
                 const inc = DataStore.getIncidentById ? DataStore.getIncidentById(a.incident_id) : null;
                 liaison = inc ? `Incident : ${inc.titre}` : "Incident introuvable";
+            } else if (a.mesure_id) {
+                const mes = DataStore.getMesureById ? DataStore.getMesureById(a.mesure_id) : null;
+                liaison = mes ? `Mesure : ${escapeHtml(mes.nom)}` : "Mesure introuvable";
             }
 
             let statusClass = "status-non-applicable";
@@ -208,6 +211,17 @@ const ActionsModule = (() => {
                     <p><strong>Liée à un incident de sécurité :</strong><br>
                         <a href="#/incidents/${inc.id}" style="color: var(--accent); text-decoration: underline;">
                             ${inc.titre}
+                        </a>
+                    </p>`;
+            }
+        } else if (action.mesure_id) {
+            const mes = DataStore.getMesureById ? DataStore.getMesureById(action.mesure_id) : null;
+            if (mes) {
+                contextTag = "Mesure de sécurité";
+                liaisonHtml = `
+                    <p><strong>Liée à une mesure de sécurité :</strong><br>
+                        <a href="#/mesures/${mes.id}" style="color: var(--accent); text-decoration: underline;">
+                            ${escapeHtml(mes.nom)}
                         </a>
                     </p>`;
             }

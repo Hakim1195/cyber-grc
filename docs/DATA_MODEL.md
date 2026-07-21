@@ -108,10 +108,11 @@ Suppression en cascade → supprime les `exigences` rattachées (et leurs `actio
 | `responsable` | string | |
 | `echeance` | date (ISO) | |
 | `priorite` | string | optionnel |
-| `exigence_id` | string | une action est liée à **l'un** de : exigence, risque, évaluation ou incident |
+| `exigence_id` | string | une action est liée à **l'un** de : exigence, risque, évaluation, incident ou mesure |
 | `risque_id` | string | |
 | `evaluation_id` | string | lien vers une évaluation de référentiel (v3) |
 | `incident_id` | string | lien vers un incident de sécurité (v4) |
+| `mesure_id` | string \| null | lien vers une **Mesure de sécurité** pivot (optionnel, rétrocompatible). Plan d'action porté directement par la mesure → couvre toutes les exigences qu'elle porte. `getActionsByMesure(id)` ; `deleteMesure` **délie** les actions (`mesure_id → null`, conservées), comme il délie déjà les évaluations. |
 
 ### Risque (inspiré EBIOS RM, méthode F×G×M) — `risques`
 | Champ | Type | Notes |

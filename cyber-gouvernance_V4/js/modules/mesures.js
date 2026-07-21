@@ -153,6 +153,83 @@ const MesuresModule = (() => {
     }
 
     /* =========================
+       PLAN D'ACTION DE LA MESURE
+       Une mesure (pivot) porte ses propres actions de remédiation (action.mesure_id).
+       L'action rejoint le plan d'actions global, tracée jusqu'à la mesure — et couvre
+       d'un coup toutes les exigences que la mesure porte (esprit « zéro double saisie »).
+    ========================== */
+    function statutClassForAction(statut) {
+        const s = String(statut).toLowerCase();
+        if (s === "terminée") return "status-conforme";
+        if (s === "en cours") return "status-partiellement-conforme";
+        return "status-non-conforme";
+    }
+
+    function actionsPanelHtml(m) {
+        const actions = DataStore.getActionsByMesure(m.id);
+        const list = actions.length
+            ? `<ul class="ref-actions-list">${actions.map(a => `
+                    <li>
+                        <a href="#/actions/${a.id}" style="color:var(--accent);">${escapeHtml(a.titre)}</a>
+                        ${a.priorite ? `<span style="color:var(--text-muted); font-size:0.8rem; margin-left:6px;">${escapeHtml(a.priorite)}</span>` : ""}
+                        <span class="status ${statutClassForAction(a.statut)}" style="margin-left:8px;">${escapeHtml(a.statut)}</span>
+                        ${a.echeance ? `<span style="color:var(--text-muted); font-size:0.8rem; margin-left:6px;">échéance ${new Date(a.echeance + "T00:00:00").toLocaleDateString('fr-FR')}</span>` : ""}
+                    </li>`).join("")}</ul>`
+            : `<p style="color:var(--text-muted); font-size:0.9rem; margin:4px 0;">Aucune action de remédiation planifiée pour cette mesure.</p>`;
+        return `
+            <div class="ref-actions-head">
+                <strong>Plan d'action ${Help.tip("Planifiez ici les actions de remédiation de cette mesure. Elles apparaissent dans le plan d'actions global, tracées jusqu'à cette mesure — et couvrent d'un coup toutes les exigences qu'elle porte.")}</strong>
+                <button id="mesAddAction" style="font-size:0.85rem;">Planifier une action</button>
+            </div>
+            ${list}
+            <form id="mesActionForm" hidden style="margin-top:10px;">
+                <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end;">
+                    <div class="form-group" style="margin:0; flex:2 1 240px;"><label>Intitulé <span style="color:red">*</span></label><input id="mesActTitre" placeholder="Ex : Déployer le MFA sur tous les comptes à privilèges" /></div>
+                    <div class="form-group" style="margin:0; flex:1 1 120px;"><label>Priorité</label><select id="mesActPrio"><option value="Basse">Basse</option><option value="Moyenne" selected>Moyenne</option><option value="Haute">Haute</option><option value="Critique">Critique</option></select></div>
+                    <div class="form-group" style="margin:0; flex:1 1 140px;"><label>Responsable</label><input id="mesActResp" placeholder="Nom / fonction" /></div>
+                    <div class="form-group" style="margin:0; flex:1 1 140px;"><label>Échéance</label><input type="date" id="mesActEch" /></div>
+                    <button type="button" id="mesActSave" style="flex:0 0 auto;">Créer</button>
+                </div>
+            </form>`;
+    }
+
+    function createActionForMesure(m) {
+        const titre = document.getElementById("mesActTitre").value.trim();
+        if (!titre) { alert("L'intitulé de l'action est obligatoire."); return; }
+        DataStore.addAction({
+            id: UI.genId("ACT"),
+            titre: titre,
+            priorite: document.getElementById("mesActPrio").value,
+            statut: "à faire",
+            responsable: document.getElementById("mesActResp").value.trim(),
+            echeance: document.getElementById("mesActEch").value,
+            commentaire: "",
+            exigence_id: null,
+            risque_id: null,
+            evaluation_id: null,
+            incident_id: null,
+            mesure_id: m.id
+        });
+        if (window.showToast) window.showToast("Action de remédiation créée et liée à la mesure.", "success");
+        refreshActionsPanel(m);
+    }
+
+    function wireActionsPanel(m) {
+        const addBtn = document.getElementById("mesAddAction");
+        const form = document.getElementById("mesActionForm");
+        const saveBtn = document.getElementById("mesActSave");
+        if (addBtn && form) addBtn.onclick = () => { form.hidden = !form.hidden; if (!form.hidden) { const i = document.getElementById("mesActTitre"); if (i) i.focus(); } };
+        if (saveBtn) saveBtn.onclick = () => createActionForMesure(m);
+    }
+
+    function refreshActionsPanel(m) {
+        const block = document.getElementById("mesActionsBlock");
+        if (!block) return;
+        block.innerHTML = actionsPanelHtml(m);
+        wireActionsPanel(m);
+    }
+
+    /* =========================
        DÉTAIL / ÉDITION + PROPAGATION
     ========================== */
     function renderDetail(id) {
@@ -214,6 +291,10 @@ const MesuresModule = (() => {
                 </div>
 
                 <div class="dashboard-card" style="margin-top:1.5rem;">
+                    <div id="mesActionsBlock">${actionsPanelHtml(m)}</div>
+                </div>
+
+                <div class="dashboard-card" style="margin-top:1.5rem;">
                     <h3 style="margin-top:0;">Exigences couvertes ${Help.tip("Les exigences de référentiels reliées à cette mesure. La liaison se fait depuis le détail d'une exigence.")}</h3>
                     ${coverageHtml}
                 </div>
@@ -243,8 +324,10 @@ const MesuresModule = (() => {
             renderDetail(m.id);
         };
 
+        wireActionsPanel(m);
+
         UI.wireDelete({
-            confirm: () => `Supprimer la mesure « ${m.nom} » ?\nLes exigences liées seront simplement déliées (leurs évaluations sont conservées).`,
+            confirm: () => `Supprimer la mesure « ${m.nom} » ?\nLes exigences et actions liées seront simplement déliées (elles sont conservées).`,
             remove: () => DataStore.deleteMesure(m.id),
             toast: "Mesure supprimée.",
             redirect: "/mesures"
