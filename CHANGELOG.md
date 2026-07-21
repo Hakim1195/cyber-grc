@@ -5,6 +5,19 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Plan d'actions — statut sélectionnable dès la création (cohérent sur tous les formulaires)
+- Le **statut** de l'action (À faire / En cours / Terminée) était déjà visible et modifiable partout
+  (badge dans les blocs, sélecteur sur la fiche action) **mais figé à « à faire » à la création**.
+  Il est désormais **choisissable dès la création** — utile pour consigner une action déjà lancée
+  ou déjà réalisée.
+- Ajouté de façon **homogène sur les 5 formulaires de création d'action**, pour éviter toute
+  incohérence : bloc **Plan d'action** de la fiche Mesure, bloc **Actions correctives** d'une exigence
+  de référentiel, fiche **Exigence**, fiche **Risque**, fiche **Incident**. Même jeu de valeurs
+  (`à faire` / `en cours` / `terminée`), **défaut « À faire »** conservé.
+- Aucun changement de schéma. Tests Playwright (**12 assertions, 0 erreur**) : présence du sélecteur
+  et statut correctement enregistré sur les 5 formulaires + défaut « à faire » préservé.
+  Non-régression Mesure↔action (20) + MCO (44) + Échéancier (34) + extensions (28).
+
 ### Référentiels ↔ Plan d'actions — chaînon manquant : plan d'action sur le pivot « Mesure »
 - **Nouveau lien `action.mesure_id`** (champ optionnel, rétrocompatible, aucun changement de schéma) :
   une action du plan d'actions peut désormais être **rattachée directement à une mesure de sécurité**

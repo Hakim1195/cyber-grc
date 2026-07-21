@@ -317,7 +317,7 @@ const ExigencesModule = (() => {
                 <div class="dashboard-card">
                     <div class="form-group"><label>Titre de l'action <span style="color:red">*</span></label><input id="titre" required /></div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
                         <div class="form-group">
                             <label>Priorité</label>
                             <select id="priorite">
@@ -325,6 +325,14 @@ const ExigencesModule = (() => {
                                 <option value="Moyenne" selected>Moyenne</option>
                                 <option value="Haute">Haute</option>
                                 <option value="Critique">Critique</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Statut</label>
+                            <select id="statut">
+                                <option value="à faire" selected>À faire</option>
+                                <option value="en cours">En cours</option>
+                                <option value="terminée">Terminée</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -352,7 +360,7 @@ const ExigencesModule = (() => {
                 id: UI.genId("ACT"),
                 titre: titre,
                 priorite: document.getElementById("priorite").value,
-                statut: "à faire",
+                statut: document.getElementById("statut").value,
                 responsable: document.getElementById("responsable").value.trim(),
                 echeance: document.getElementById("echeance").value,
                 commentaire: document.getElementById("commentaire").value.trim(),

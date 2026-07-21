@@ -186,6 +186,7 @@ const MesuresModule = (() => {
                 <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end;">
                     <div class="form-group" style="margin:0; flex:2 1 240px;"><label>Intitulé <span style="color:red">*</span></label><input id="mesActTitre" placeholder="Ex : Déployer le MFA sur tous les comptes à privilèges" /></div>
                     <div class="form-group" style="margin:0; flex:1 1 120px;"><label>Priorité</label><select id="mesActPrio"><option value="Basse">Basse</option><option value="Moyenne" selected>Moyenne</option><option value="Haute">Haute</option><option value="Critique">Critique</option></select></div>
+                    <div class="form-group" style="margin:0; flex:1 1 120px;"><label>Statut</label><select id="mesActStatut"><option value="à faire" selected>À faire</option><option value="en cours">En cours</option><option value="terminée">Terminée</option></select></div>
                     <div class="form-group" style="margin:0; flex:1 1 140px;"><label>Responsable</label><input id="mesActResp" placeholder="Nom / fonction" /></div>
                     <div class="form-group" style="margin:0; flex:1 1 140px;"><label>Échéance</label><input type="date" id="mesActEch" /></div>
                     <button type="button" id="mesActSave" style="flex:0 0 auto;">Créer</button>
@@ -200,7 +201,7 @@ const MesuresModule = (() => {
             id: UI.genId("ACT"),
             titre: titre,
             priorite: document.getElementById("mesActPrio").value,
-            statut: "à faire",
+            statut: document.getElementById("mesActStatut").value,
             responsable: document.getElementById("mesActResp").value.trim(),
             echeance: document.getElementById("mesActEch").value,
             commentaire: "",

@@ -642,6 +642,11 @@ const ReferentielsModule = (() => {
                         <option value="Haute">Haute</option>
                         <option value="Critique">Critique</option>
                     </select>
+                    <select class="ref-act-statut">
+                        <option value="à faire" selected>À faire</option>
+                        <option value="en cours">En cours</option>
+                        <option value="terminée">Terminée</option>
+                    </select>
                     <input type="date" class="ref-act-echeance" />
                     <button type="button" class="ref-act-save" data-code="${code}">Créer</button>
                 </div>
@@ -864,7 +869,7 @@ const ReferentielsModule = (() => {
             id: UI.genId("ACT"),
             titre,
             priorite: form.querySelector(".ref-act-prio").value,
-            statut: "à faire",
+            statut: (form.querySelector(".ref-act-statut") || {}).value || "à faire",
             responsable: "",
             echeance: form.querySelector(".ref-act-echeance").value,
             commentaire: "",

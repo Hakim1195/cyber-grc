@@ -171,6 +171,7 @@ const IncidentsModule = (() => {
                         <div class="ref-action-form__row">
                             <input id="actTitre" class="ref-act-titre" placeholder="Intitulé de l'action *" />
                             <select id="actPrio"><option>Basse</option><option selected>Moyenne</option><option>Haute</option><option>Critique</option></select>
+                            <select id="actStatut"><option value="à faire" selected>À faire</option><option value="en cours">En cours</option><option value="terminée">Terminée</option></select>
                             <input type="date" id="actEcheance" />
                             <button type="button" id="actSave">Créer</button>
                         </div>
@@ -201,7 +202,7 @@ const IncidentsModule = (() => {
             if (!titre) { alert("L'intitulé de l'action est obligatoire."); return; }
             DataStore.addAction({
                 id: UI.genId("ACT"),
-                titre, priorite: document.getElementById("actPrio").value, statut: "à faire",
+                titre, priorite: document.getElementById("actPrio").value, statut: document.getElementById("actStatut").value,
                 responsable: "", echeance: document.getElementById("actEcheance").value, commentaire: "",
                 exigence_id: null, risque_id: null, evaluation_id: null, incident_id: inc.id
             });

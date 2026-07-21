@@ -406,7 +406,10 @@ const RisquesModule = (() => {
                 <div class="dashboard-card">
                     <div class="form-group"><label>Titre <span style="color:red">*</span></label><input id="titre" required /></div>
                     <div class="form-group"><label>Responsable</label><input id="responsable" /></div>
-                    <div class="form-group"><label>Échéance</label><input type="date" id="echeance" /></div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                        <div class="form-group"><label>Statut</label><select id="statut"><option value="à faire" selected>À faire</option><option value="en cours">En cours</option><option value="terminée">Terminée</option></select></div>
+                        <div class="form-group"><label>Échéance</label><input type="date" id="echeance" /></div>
+                    </div>
                     <div class="form-group"><label>Commentaire</label><textarea id="commentaire"></textarea></div>
                     <div style="margin-top: 20px;">
                         <button id="saveAction">Créer l'action</button>
@@ -423,7 +426,7 @@ const RisquesModule = (() => {
             DataStore.addAction({
                 id: UI.genId("ACT"),
                 titre: titre,
-                statut: "à faire",
+                statut: document.getElementById("statut").value,
                 responsable: document.getElementById("responsable").value.trim(),
                 echeance: document.getElementById("echeance").value,
                 commentaire: document.getElementById("commentaire").value.trim(),
