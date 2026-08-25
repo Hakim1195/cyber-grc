@@ -1,0 +1,48 @@
+{
+  // Configuration TypeScript du serveur Cyber GRC.
+  // Cible : Node.js 22 LTS, modules ES natifs, compilation par `tsc` seul
+  // (aucun empaqueteur : le code déployé reste lisible et traçable en audit).
+  "compilerOptions": {
+    // ── Cible d'exécution ───────────────────────────────────────────────
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+
+    // ── Disposition des fichiers ────────────────────────────────────────
+    "rootDir": "src",
+    "outDir": "dist",
+    "sourceMap": true,
+    "declaration": false,
+    "removeComments": false,
+    "newLine": "lf",
+
+    // ── Rigueur ─────────────────────────────────────────────────────────
+    // `strict` est non négociable sur un outil de sécurité : une valeur
+    // potentiellement absente doit être traitée, pas supposée.
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    // `exactOptionalPropertyTypes` reste désactivé : il rend pénible le
+    // passage d'options facultatives aux bibliothèques tierces (pg, fastify)
+    // sans rien apporter à la sûreté du code métier.
+    "exactOptionalPropertyTypes": false,
+
+    // ── Modules ─────────────────────────────────────────────────────────
+    // `verbatimModuleSyntax` impose `import type` pour les types : ce qui est
+    // écrit est ce qui est émis, sans réécriture implicite des imports.
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}

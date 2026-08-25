@@ -1,0 +1,29 @@
+{
+  "name": "cyber-grc-serveur",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Serveur applicatif Cyber GRC Groupe — API REST multi-filiales (Node.js + TypeScript + PostgreSQL). Lot L0 : socle d'infrastructure.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "dist/serveur.js",
+  "engines": {
+    "node": ">=22.11.0 <25"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:continu": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "start": "node dist/serveur.js",
+    "dev": "node --env-file=.env --watch dist/serveur.js",
+    "verifier-types": "tsc -p tsconfig.json --noEmit",
+    "nettoyer": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "fastify": "^5.12.1",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/pg": "^8.23.1",
+    "typescript": "^5.9.3"
+  }
+}
