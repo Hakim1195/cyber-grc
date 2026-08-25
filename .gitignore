@@ -1,0 +1,22 @@
+# Dépendances et artefacts de compilation du backend
+backend/node_modules/
+backend/dist/
+
+# Secrets et configuration locale — jamais dans le dépôt.
+# Seul backend/.env.example, qui ne contient aucune valeur réelle, est versionné.
+.env
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Magasin de pièces jointes (données client, hors arborescence web)
+backend/var/
+backend/pieces-jointes/
+
+# Journaux
+*.log
+npm-debug.log*
+
+# Divers systèmes
+.DS_Store
+Thumbs.db
