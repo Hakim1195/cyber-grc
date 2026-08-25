@@ -1,0 +1,92 @@
+# Emplacement cible : /etc/systemd/system/cyber-grc.service
+#
+# Service applicatif Cyber GRC Groupe — Debian 13, SANS conteneur.
+# Le durcissement ci-dessous remplace l'isolation qu'aurait apportée un conteneur ;
+# il est volontairement explicite, car il constitue une preuve d'audit ISO 27001.
+#
+# Installation :
+#   cp cyber-grc.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now cyber-grc
+
+[Unit]
+Description=Cyber GRC Groupe — serveur applicatif
+Documentation=file:/opt/cyber-grc/backend/README.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+
+# ---- Identité : utilisateur dédié, sans shell, sans domicile ----
+User=cyber-grc
+Group=cyber-grc
+
+# ---- Application ----
+WorkingDirectory=/opt/cyber-grc/backend
+ExecStart=/usr/bin/node /opt/cyber-grc/backend/dist/serveur.js
+# Les secrets vivent hors du dépôt, lisibles du seul compte de service (chmod 600).
+EnvironmentFile=/etc/cyber-grc/serveur.env
+
+# ---- Cycle de vie ----
+Restart=on-failure
+RestartSec=5s
+# Le serveur intercepte SIGTERM et draine ses connexions (voir SERVEUR_DELAI_ARRET).
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+
+# ---- Durcissement : système de fichiers ----
+# Tout le système est en lecture seule, sauf les trois chemins de données.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/cyber-grc /var/log/cyber-grc
+# Le magasin de pièces jointes n'est accessible qu'ici — jamais par Apache.
+InaccessiblePaths=/etc/cyber-grc/ldap-service.key
+
+# ---- Durcissement : privilèges ----
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+# Aucune capacité : le service écoute sur 3001, pas sur un port privilégié.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# ---- Durcissement : réseau ----
+# Le service ne parle qu'à PostgreSQL (local), l'AD (LDAPS) et le relais SMTP.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+# À COMPLÉTER À L'INSTALLATION : sous-réseaux des contrôleurs de domaine,
+# et du relais SMTP si les notifications sont activées.
+# IPAddressAllow=10.0.0.0/8
+
+# ---- Durcissement : appels système ----
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# ---- Journalisation ----
+# Le journal d'audit métier vit en base (table journal_audit, en ajout seul).
+# Ici, seuls les journaux techniques.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cyber-grc
+
+# ---- Limites ----
+LimitNOFILE=8192
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

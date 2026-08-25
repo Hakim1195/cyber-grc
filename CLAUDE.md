@@ -2,21 +2,38 @@
 
 > Fichier de mémoire projet, lu automatiquement au démarrage d'une session Claude Code.
 > But : permettre de **reprendre le travail sans perte de contexte** dans un nouveau chat.
-> Compléments : `docs/PLAN.md` (plan d'action + statuts), `docs/AUDIT.md`,
-> `docs/DATA_MODEL.md`, `CHANGELOG.md`.
+> Compléments : **`docs/PLAN_SERVEUR.md` (chantier en cours — fait autorité)**,
+> `docs/PLAN.md` (historique frontend), `docs/AUDIT.md`, `docs/DATA_MODEL.md`, `CHANGELOG.md`.
+
+> ## ⚠️ CHANGEMENT DE PARADIGME — LIRE EN PREMIER
+>
+> Le projet est **passé d'une application 100 % navigateur à une application
+> client/serveur multi-filiales**, déployée sur site chez un groupe industriel
+> (20+ filiales, acquisitions régulières, sites en France et à l'étranger).
+>
+> **Le plan de référence est [`docs/PLAN_SERVEUR.md`](docs/PLAN_SERVEUR.md).** Il est
+> validé point par point avec l'utilisateur et le client final. Ne pas le re-débattre :
+> l'appliquer. Les sections 2 à 7 ci-dessous décrivent l'**application frontend
+> existante**, qui reste la base de code à faire évoluer — pas la cible d'architecture.
+>
+> **Reprise de travail** : lire `docs/PLAN_SERVEUR.md`, puis `backend/README.md` §8
+> (« Avancement ») pour l'état réel des lots, puis reprendre au premier lot non livré.
 
 ## 1. Le produit
 
-Logiciel de **gouvernance, risques et conformité (GRC) cyber**, **100 % frontend**
-(HTML/CSS/JS, sans backend, sans framework, sans build). Toutes les données restent
-dans le navigateur (IndexedDB + repli localStorage). Argument central : « vos données
-ne quittent jamais votre machine ». Public : RSSI/consultants **et** non-experts à
-sensibiliser → chaque concept doit avoir une **note pédagogique** (`Help.tip(...)`).
+Logiciel de **gouvernance, risques et conformité (GRC) cyber**. Public :
+RSSI/consultants **et** non-experts à sensibiliser → chaque concept doit avoir une
+**note pédagogique** (`Help.tip(...)`).
 
-- **Racine applicative** : `cyber-gouvernance_V4/`
-- **Branche de travail** : `main` UNIQUEMENT (consigne utilisateur du 02/07/2026 :
-  ne **jamais** créer d'autres branches, tout pousser sur `main`).
-- **Marque** : Dedienne Aerospace (à conserver).
+- **Frontend** : `cyber-gouvernance_V4/` — SPA maison (HTML/CSS/JS, sans framework,
+  sans build). ~17 100 lignes. Conservée telle quelle : seule sa couche de
+  persistance bascule vers le serveur (voir `PLAN_SERVEUR` §1.3).
+- **Backend** : `backend/` — Node.js 22 + TypeScript + PostgreSQL, Debian 13,
+  **sans conteneur**, Apache2 en frontal. En construction.
+- **Branche de travail** : `claude/backend-saas-feasibility-8l7e8h`.
+  ⚠️ L'ancienne consigne « tout pousser sur `main` » ne s'applique plus à ce chantier.
+- **Marque** : Dedienne Aerospace pour le frontend actuel ; la cible serveur rend
+  **logo et raison sociale configurables par filiale** (`PLAN_SERVEUR` §6).
 
 ## 2. Décisions structurantes (VALIDÉES — ne pas re-débattre)
 
@@ -26,7 +43,7 @@ sensibiliser → chaque concept doit avoir une **note pédagogique** (`Help.tip(
 | Marque | **Garder Dedienne Aerospace** (logo `assets/logo/logo-dedienne.png`). |
 | Chiffrement | **Opt-in** (désactivé par défaut, activable dans Paramètres). |
 | Multi-« Donneurs d'ordre » | **Conservé** (pertinent pour un sous-traitant aéro), libellés génériques. |
-| Full frontend | **Strict** : aucun backend, CDN runtime, ni service tiers. Libs embarquées localement. |
+| ~~Full frontend~~ | ⚠️ **CADUC depuis le chantier serveur.** Valait pour le produit local. La cible est désormais client/serveur (`docs/PLAN_SERVEUR.md`). Reste vrai : **aucun CDN runtime ni service tiers**, libs embarquées localement. |
 
 ### Décisions Référentiels — VALIDÉES & LIVRÉES (chantier 4a/4b)
 - **Référentiels** : démarré par **Hygiène ANSSI (42 mesures)** ; suite ISO 27001 (Annexe A) / NIS2 / DORA / AirCyber (4c).
@@ -125,7 +142,9 @@ cyber-gouvernance_V4/
 
 - Travailler **par itérations** : une fonctionnalité = une livraison testable, commit + push, montrer le résultat.
 - **Mettre à jour `CHANGELOG.md`** à chaque itération et `DATA_MODEL.md` si le schéma change.
-- Commits en français, descriptifs. Pousser sur `claude/decompress-zip-folder-230woc`.
+- Commits en français, descriptifs. Pousser sur **`claude/backend-saas-feasibility-8l7e8h`**
+  (branche du chantier serveur). Les anciennes consignes de branche de ce fichier
+  — `main`, puis `claude/decompress-zip-folder-230woc` — sont **caduques**.
 - Ne PAS ouvrir de PR sans demande explicite.
 
 ## 7. État d'avancement (voir docs/PLAN.md pour le détail)
@@ -311,5 +330,78 @@ dédoublonné) ; `getEvaluationsByMesure`/`deleteMesure`/Couverture/SoA/Correspo
 transparente v11→v12** (valeur unique → tableau à 1 élément). Tests Playwright (16 assertions ; 0 erreur ;
 non-régression Mesure↔action 20 + Personnel 17+16 + statut 12 + MCO 44 + Échéancier 34 + extensions 28).
 
-**Prochain** : poursuivre le Chantier 2 — harmoniser tableaux denses / KPI / radars ; tooltips restants
-sur les modules à faible jargon (Actions, Donneurs d'ordre) au fil des touches.
+---
+
+## 8. CHANTIER EN COURS — Édition Groupe client/serveur
+
+> **Plan de référence : [`docs/PLAN_SERVEUR.md`](docs/PLAN_SERVEUR.md)** — cadrage clos,
+> validé avec l'utilisateur et le client. **Ne pas re-débattre, appliquer.**
+> État détaillé des lots : **[`backend/README.md`](backend/README.md) §8**.
+
+### Contexte client (rappel court)
+
+Groupe industriel, **20+ filiales** (acquisitions régulières, France et étranger).
+L'outil devient le support **officiel** de leur gouvernance cyber : il servira de
+preuve en audit ISO 27001. Déploiement **sur site**, VM Debian 13 sous Proxmox,
+accès par VPN uniquement, **sans conteneur** (contrainte client), authentification
+sur l'**Active Directory** du groupe.
+
+### Décisions structurantes du chantier (validées)
+
+| Sujet | Décision |
+|---|---|
+| Cible | Client/serveur. **La version 100 % locale est abandonnée.** |
+| Backend | Node.js 22 + TypeScript (réutilise la logique métier déjà en JS) |
+| Base | PostgreSQL, relationnel, cloisonnement par **Row Level Security** |
+| Cloisonnement | **Par filiale**, strict. Plus une **vision Groupe** consolidée pour la direction |
+| Droits | **3 axes** : périmètre × profil métier × domaine. Pilotés par groupes AD. **Export = permission distincte** |
+| Principe directeur | **La façade `DataStore` synchrone est préservée** : les modules frontend ne sont PAS réécrits (voir `PLAN_SERVEUR` §1.3) |
+| Concurrence | **Verrouillage optimiste par enregistrement** — le risque n°1 du projet (P1) |
+| Langues | FR + EN obligatoires, ES souhaitable |
+| Import | **Généralisé à tous les modules** (critère décisif client) |
+| Pièces jointes | Intégrées, chaîne antimalware ClamAV, empreinte SHA-256 |
+| Journal d'audit | **Inaltérable** (ajout seul, chaîné par empreinte), rétention 3 ans |
+
+### Pièges à ne pas rouvrir
+
+- **`mesures` doit être scindé** en `mesure_catalogue` (niveau Groupe : la définition
+  du contrôle) et `mesure_mise_en_oeuvre` (niveau Filiale : statut, maturité,
+  responsable). Ne pas reproduire l'entité unique actuelle — sinon les filiales ne
+  sont plus comparables et la vision Groupe perd son sens.
+- **Activation d'un référentiel par filiale ≠ « non applicable » par exigence.** Les
+  deux mécanismes coexistent. Voir `PLAN_SERVEUR` §2.2.
+- **JSONB uniquement** pour les documents figés (grille et constats d'audit, étapes
+  RACI des scénarios PRA, `supplyChain` des prestataires, `metrics` de l'historique).
+  Tout le reste est relationnel, avec de vraies contraintes.
+- **Identifiants texte conservés** (`"RISK-<ts>-<alea>"`), pas d'UUID : c'est ce qui
+  rend l'import d'un export `grc-backup` exact au round-trip.
+- **Le périmètre de session vient du serveur**, jamais d'une valeur transmise par le
+  navigateur (`cyber-context` en `localStorage` est à retirer côté frontend).
+
+### Avancement au 25/08/2026
+
+| Lot | État |
+|---|---|
+| **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache, `install.sh` idempotent, `backend/README.md` |
+| **L1 — Schéma relationnel** | 🟡 **partiel** — `001_socle.sql` (16 tables) écrit et **vérifié en exécution** ; inaltérabilité du journal **prouvée** (`UPDATE`/`DELETE` refusés par la base) |
+| L2 → L15 | ⬜ à faire — voir `PLAN_SERVEUR` §7 |
+
+**Reprendre ici** — reste à écrire pour clore L1 :
+`db/migrations/002_metier.sql` (21 entités + liaisons n-n, scission des mesures,
+découpage Groupe/Filiale/Mixte) · `db/migrations/003_rls.sql` (rôles, RLS sur toutes
+les tables à `filiale_id`, `FORCE ROW LEVEL SECURITY`) · `db/migrate.mjs`
+(**référencé par `install.sh` mais pas encore écrit**) · `db/verifier_cloisonnement.sql`.
+
+Conventions de schéma à respecter : **`backend/db/CONVENTIONS.md`**.
+
+### Vérifications à mener au démarrage du projet (côté client)
+
+- Accès sortant de la VM vers Microsoft 365 (conditionne les notifications, lot L12).
+- Existence d'une version anglaise officielle du questionnaire AirCyber (allégerait
+  L11 d'un sixième du volume de traduction).
+- **Validation formelle du découpage Groupe/Filiale par le RSSI groupe — avant L1.**
+
+### Historique frontend
+
+Le chantier 2 (harmonisation des tableaux denses, KPI, radars ; tooltips restants sur
+Actions et Donneurs d'ordre) reste en suspens, sans priorité face au chantier serveur.
