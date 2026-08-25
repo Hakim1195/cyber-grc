@@ -7,7 +7,7 @@
 > Ce document est la référence de cadrage. Il fige les décisions, décrit l'architecture
 > cible, le schéma de données, le modèle de droits, et découpe le projet en lots livrables.
 
-Légende : ✅ acté · ⚠️ hypothèse à valider · 🔴 chemin critique
+Légende : ✅ acté · 🔴 chemin critique
 
 ---
 
@@ -49,10 +49,9 @@ Trois exigences structurent tout le reste :
 | Version locale | **Abandonnée.** Cible unique : client/serveur. |
 | Documentation | **Incluse au projet** (guide utilisateur + guide d'exploitation). |
 
-### 0.3 Hypothèses à valider ⚠️
+### 0.3 Hypothèses validées
 
-Ces points n'ont pas été arbitrés explicitement ; ils sont retenus par défaut et doivent
-être confirmés à la lecture.
+Retenues par défaut lors du cadrage, puis confirmées par le client.
 
 - Certificat serveur émis par la **PKI interne** du groupe (ADCS), déployé sur les postes par GPO.
 - **Authentification forte portée par le VPN** — l'application ne gère pas son propre second facteur.
@@ -63,8 +62,6 @@ Ces points n'ont pas été arbitrés explicitement ; ils sont retenus par défau
 - La **version de l'application est tracée** dans le journal, pour qu'un rapport produit
   deux ans plus tôt reste attribuable.
 - Les **sessions expirent** après inactivité (durée paramétrable, 30 min par défaut).
-- La VM dispose (ou disposera) d'un **accès sortant vers Microsoft 365** si les notifications
-  par courriel sont retenues — **à vérifier, potentiellement bloquant** pour cette fonction.
 
 ### 0.4 Hors périmètre
 
@@ -104,7 +101,7 @@ frontière entre ce qui est spécifique à ce déploiement et ce qui ne l'est pa
                     │                (hors webroot)            │
                     └─────────────────────────────────────────┘
                               │                    │
-                         AD (LDAPS)          Relais SMTP ⚠️
+                         AD (LDAPS)          Relais SMTP
 ```
 
 Aucun composant n'est joignable directement : Apache est le seul point d'entrée, PostgreSQL
@@ -281,8 +278,8 @@ indisponible.
 
 Deux difficultés propres à leur contexte (Office 365, pas de serveur local) :
 
-- La VM doit disposer d'un **accès sortant vers Microsoft** — à vérifier, potentiellement absent
-  sur un réseau interne. ⚠️
+- La VM doit disposer d'un **accès sortant vers Microsoft** — à vérifier au démarrage,
+  potentiellement absent sur un réseau interne.
 - Microsoft a largement fermé l'**authentification SMTP basique** ; selon la configuration du
   tenant, la voie moderne passe par un enregistrement d'application et OAuth2.
 
@@ -642,13 +639,16 @@ utilisables, mais il ne réduit pas le volume total.
 | P5 | **Découpage Groupe/Filiale** contesté après coup | Élevé | Validation formelle par le RSSI groupe **avant** L1 |
 | P6 | **Pièce jointe malveillante** | Élevé | Défense en profondeur (§1.6) ; le risque résiduel est assumé et documenté |
 | P7 | **Restauration jamais testée** | Critique | Test de restauration inclus dans L0, rejoué annuellement |
-| P8 | **Propriété intellectuelle** du code | Élevé | À clarifier par écrit avec l'employeur avant l'investissement (hors périmètre technique) |
 
 ---
 
-## 9. Points restant à confirmer
+## 9. Vérifications à mener au démarrage
 
-- Accès sortant de la VM vers Microsoft 365 (conditionne L12).
-- Disponibilité d'une version anglaise officielle du questionnaire AirCyber (allège L11).
-- Validation formelle du découpage Groupe / Filiale par le RSSI groupe (bloque L1).
-- Confirmation des hypothèses du §0.3.
+Le cadrage est clos : ces points ne sont pas des arbitrages en attente, mais des faits à
+établir en début de projet.
+
+- **Accès sortant de la VM vers Microsoft 365** — conditionne le lot L12 (notifications).
+- **Existence d'une version anglaise officielle du questionnaire AirCyber** — allègerait le
+  lot L11 d'environ un sixième du volume de traduction.
+- **Validation formelle du découpage Groupe / Filiale par le RSSI groupe** — à obtenir avant
+  le lot L1, la remise en cause après création du schéma étant coûteuse.
