@@ -123,12 +123,6 @@ const Sync = (() => {
     const propagations = new Map();     // mesureId -> Set(evaluationId) à propager côté serveur
     const derives = new Set();          // "collection:id" recalculables, jamais saisis
 
-    // Le lot L2 a d'abord accepté un identifiant proposé par le client ; la porte
-    // S2 (constat M-3) en a fait un oracle d'existence inter-filiales, et le
-    // serveur le refuse désormais. Le client s'adapte au contrat qu'il trouve :
-    // il propose, et si on lui refuse, il adopte l'identifiant rendu — et ne
-    // repropose plus rien de la session.
-    let identifiantImposeParLeServeur = false;
     let bandeauReduit = false;       // la croix réduit le détail, elle n'éteint rien
     let panneReseau = false;
     let dernierEnregistrement = 0;
@@ -421,24 +415,31 @@ const Sync = (() => {
     }
 
     /**
-     * Crée en proposant l'identifiant local, et se replie sur un identifiant
-     * imposé par le serveur si celui-ci refuse la proposition. Le repli n'a lieu
-     * qu'une fois par session : ensuite, plus rien n'est proposé.
+     * Crée un enregistrement **sans proposer d'identifiant**.
+     *
+     * ── Pourquoi, et ce que cela coûte ───────────────────────────────────────
+     *
+     * Le lot L2 laissait le client choisir l'identifiant : c'est ce qui rendait
+     * l'import d'un export `grc-backup` exact au round-trip, et idempotent. La
+     * porte S2 (constat M-3) a montré que ce même choix donnait un **oracle
+     * d'existence inter-filiales** en une requête — « cet identifiant existe-t-il
+     * dans une filiale que je ne vois pas ? » — et le serveur refuse désormais
+     * qu'on lui en propose un.
+     *
+     * Ne rien proposer fonctionne des deux côtés de ce changement : l'ancienne
+     * comme la nouvelle version du serveur engendrent l'identifiant quand il est
+     * absent. Le client adopte donc celui qui lui revient et **réécrit toutes les
+     * références** qui visaient l'identifiant local (voir `renommer`).
+     *
+     * Ce qui est perdu, et qu'il faut porter au rapport plutôt que le taire :
+     * **la reprise d'un export `grc-backup` ne conserve plus les identifiants**,
+     * et réimporter deux fois le même fichier duplique son contenu. Le rétablir
+     * suppose un chemin de reprise côté serveur — c'est le lot L7, et le moteur
+     * d'accès l'a déjà prévu (`OptionsCreation.identifiantImpose`, qu'aucune
+     * route n'expose).
      */
-    async function creerAdaptatif(collection, id, champs) {
-        if (!identifiantImposeParLeServeur) {
-            try {
-                return await Api.creer(collection, id, champs);
-            } catch (e) {
-                const refusDeForme = e instanceof Api.ErreurApi && e.statut === 400;
-                if (!refusDeForme) throw e;
-                const reponse = await Api.creer(collection, null, champs);
-                identifiantImposeParLeServeur = true;
-                console.info("Le serveur impose ses identifiants : les identifiants locaux sont adoptés à la création.");
-                return reponse;
-            }
-        }
-        return await Api.creer(collection, null, champs);
+    async function creerAdaptatif(collection, _id, champs) {
+        return Api.creer(collection, null, champs);
     }
 
     /* =====================================================================

@@ -1573,9 +1573,9 @@ comment on policy pol_import_erreurs_lecture on import_erreurs is
 -- CE QUI RESTE OUVERT, ET POURQUOI C'EST ÉCRIT ICI ET NON AILLEURS. Les trois tables de
 -- session sont écrites, par construction, par la couche qui n'a pas encore de périmètre :
 -- ce sont elles qui le PRODUISENT. Leur fermeture est REPORTÉE AU LOT L3, dont c'est la
--- matière — voir le commentaire posé à l'endroit exact, plus bas. Les deux tables de
--- correspondances restent ouvertes aussi, pour de tout autres raisons, arbitrées et
--- écrites au même endroit.
+-- matière — voir le commentaire posé à l'endroit exact, plus bas. **C'est désormais la
+-- seule chose qui reste ouverte** : les deux tables de correspondances, qui l'étaient
+-- aussi, ont rejoint la configuration au premier passage de la porte S2 (constat M-4).
 do $$
 declare
     -- (a) Écriture ouverte au rôle applicatif.
@@ -1594,33 +1594,7 @@ declare
         --     le rôle applicatif permettrait de forger une session et son périmètre. La
         --     parade actuelle est le contrôle S5 — requêtes intégralement paramétrées,
         --     vérifié à la porte S1. Cette dette est une CONDITION D'ENTRÉE du lot L3.
-        'sessions', 'session_filiales', 'session_domaines',
-        -- ── mappings / mapping_exigences : ARBITRÉ, et voici la décision ──────────────
-        -- Le second passage de la porte S1 a demandé que ce cas soit tranché par écrit
-        -- plutôt que déduit. Ces deux tables RESTENT ouvertes en écriture, pour trois
-        -- raisons qui ne valent QUE pour elles :
-        --   1. leur contenu n'est pas une donnée de filiale et n'en devient jamais une :
-        --      une correspondance « ANSSI 12 ↔ ISO A.8.7 » est vraie partout, ne cite
-        --      aucune donnée métier, et sa divulgation n'apprend rien sur personne ;
-        --   2. c'est un contenu ÉDITÉ EN FONCTIONNEMENT COURANT. Le module
-        --      « Correspondances » du produit (js/modules/mapping.js) permet de créer,
-        --      modifier, masquer et réinitialiser cette surcouche ; la réserver à
-        --      l'administration Groupe supprimerait une fonctionnalité livrée, sans que
-        --      personne l'ait arbitré. La différence avec « filiales », « profils » ou
-        --      « utilisateurs » est là : celles-là ne sont pas écrites au fil de l'eau ;
-        --   3. aucun chemin d'intégrité ne les relie à une table de niveau filiale —
-        --      mapping_exigences ne référence que mappings, et l'autre extrémité est le
-        --      couple (ref_id, code) d'un catalogue statique hors base. La pathologie du
-        --      constat B-1 (une suppression ici modifiant les lignes d'une filiale) est
-        --      donc structurellement impossible, et le balayage du banc d'essai le
-        --      vérifie.
-        -- CE QUI RESTE VRAI, ET QUI DOIT ÊTRE DIT : une filiale peut modifier, pour les
-        -- dix-neuf autres, un catalogue partagé. C'est un enjeu de GOUVERNANCE, pas de
-        -- cloisonnement, et sa réponse est le domaine fonctionnel « correspondances » du
-        -- modèle de droits à trois axes (PLAN_SERVEUR §3.2), à réserver à un profil de
-        -- niveau Groupe au lot L3. Un test épingle cette décision : il tombera le jour où
-        -- quelqu'un la changera sans la réécrire ici.
-        'mappings', 'mapping_exigences'
+        'sessions', 'session_filiales', 'session_domaines'
     ];
     -- (b) Écriture réservée à l'administration Groupe (CONVENTIONS §17.4).
     v_configuration constant text[] := array[
@@ -1647,7 +1621,57 @@ declare
         -- (active / archivee / sortie — lot L13, purges RGPD), et surtout elle DÉFINIT LA
         -- FRONTIÈRE de tout le cloisonnement. Elle est au moins autant une table de
         -- paramétrage que les quatre ci-dessus.
-        'filiales'
+        'filiales',
+        -- ── mappings / mapping_exigences : déplacées ici au premier passage de la porte
+        --    S2 (constat M-4). L'ARBITRAGE EST RENDU, et il renverse le précédent ───────
+        --
+        -- Le cinquième passage de S1 les avait maintenues OUVERTES, par écrit, avec trois
+        -- raisons. Deux tiennent encore et méritent d'être redites, parce qu'elles disent
+        -- ce que ce déplacement ne prétend PAS corriger : le contenu n'est pas une donnée
+        -- de filiale (une correspondance « ANSSI 12 ↔ ISO A.8.7 » est vraie partout et sa
+        -- divulgation n'apprend rien sur personne), et aucun chemin d'intégrité ne les
+        -- relie à une table de niveau filiale — mapping_exigences ne référence que
+        -- mappings, et son autre extrémité est le couple (ref_id, code) d'un catalogue
+        -- statique hors base. Ce n'est donc PAS une brèche de cloisonnement en lecture, et
+        -- ce n'était pas la pathologie du constat B-1.
+        --
+        -- LA TROISIÈME RAISON EST TOMBÉE, et c'est elle qui décidait. Elle disait : « c'est
+        -- un contenu édité en fonctionnement courant, le réserver à l'administration Groupe
+        -- supprimerait une fonctionnalité livrée sans que personne l'ait arbitré ». Le
+        -- premier passage de la porte S2 a rejoué la conséquence depuis une session FIL-A
+        -- ordinaire, sans aucun privilège : création d'une correspondance forgée, visible
+        -- des vingt filiales, puis suppression — la table entière est réinscriptible par
+        -- n'importe laquelle d'entre elles. Et deux filiales qui éditent la même
+        -- correspondance se renvoient des conflits GRC03 provoqués par quelqu'un qu'elles
+        -- ne peuvent pas voir.
+        --
+        -- Le §17.6 avait coûté un constat bloquant à S1 pour empêcher la situation
+        -- SYMÉTRIQUE — « une action de portée Groupe ne doit pas modifier les données d'une
+        -- filiale à son insu ». Ici le rayon va dans l'autre sens, et rien ne le tenait :
+        -- une action de filiale modifie, pour vingt filiales, une référence commune.
+        --
+        -- LA CONSÉQUENCE FONCTIONNELLE EST RÉELLE ET ASSUMÉE, et elle est écrite ici pour
+        -- qu'on ne la redécouvre pas en recette : **éditer une correspondance devient un
+        -- acte d'administration Groupe**. Le module « Correspondances » (js/modules/
+        -- mapping.js) — créer, modifier, masquer, réinitialiser la surcouche — ne
+        -- fonctionnera plus depuis une session de filiale ordinaire ; il rendra 42501. Ce
+        -- n'est pas une régression subie mais l'application du PLAN_SERVEUR §2.2, qui range
+        -- les correspondances au niveau Groupe précisément parce qu'elles sont définies
+        -- UNE FOIS POUR TOUTES et valent pour tout le groupe. Le lot L3 rendra l'accès plus
+        -- fin par le domaine fonctionnel « correspondances » du modèle à trois axes
+        -- (PLAN_SERVEUR §3.2) ; jusque-là, le drapeau d'administration Groupe est la
+        -- granularité disponible, et c'est la bonne valeur par défaut : refuser plutôt
+        -- qu'accorder.
+        --
+        -- CE QUE CE DÉPLACEMENT NE FAIT PAS, et le §17.4 le dit déjà pour les cinq autres :
+        -- « grc.administration_groupe » est une DÉCLARATION QUE LA SESSION FAIT SUR
+        -- ELLE-MÊME, pas un privilège. Il protège contre la faute de programmation — une
+        -- écriture Groupe par un chemin qui ne l'a pas déclarée — et pas contre un rôle
+        -- applicatif compromis. La barrière réelle reste le modèle de droits du lot L3.
+        -- Un contrôle du service a été posé en TypeScript par ailleurs : il est une défense
+        -- en profondeur, pas la barrière — un filet dont la seule maille est dans le code
+        -- qu'il est censé rattraper (CONVENTIONS.md §17.9). Celui-ci, lui, est dans la base.
+        'mappings', 'mapping_exigences'
     ];
     t text;
 begin
