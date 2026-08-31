@@ -72,8 +72,8 @@ périmètre** et signale au lieu de corriger ce qui appartient à un autre.
 | **SECU** | Revue adversariale — **lecture seule** | `docs/securite/RAPPORT_*.md` uniquement |
 | **DOC** | Exploitation et traçabilité | `backend/README.md`, `CHANGELOG.md`, `docs/DATA_MODEL.md`, `CLAUDE.md` |
 
-Trois fichiers sont **partagés et donc réservés à l'orchestrateur** : ce document,
-`backend/package.json` et `backend/.env.example`. Un agent qui a besoin d'une dépendance ou
+Quatre fichiers sont **partagés et donc réservés à l'orchestrateur** : ce document,
+`backend/db/CONVENTIONS.md`, `backend/package.json` et `backend/.env.example`. Un agent qui a besoin d'une dépendance ou
 d'une variable de configuration la demande dans son rapport ; il ne l'ajoute pas lui-même.
 
 ---
@@ -238,7 +238,7 @@ L3, L6 et L12 se recettent sur des doublures, et cela doit être écrit dans leu
 | Vague | Lots | État | Porte |
 |---|---|---|---|
 | — | L0 socle d'infrastructure | ✅ livré | — |
-| **V1** | L1 schéma relationnel | 🟡 en cours | S1 |
+| **V1** | L1 schéma relationnel | 🟡 livré, **porte S1 refusée** — correctifs en cours | S1 |
 | V2 | L2 API et bascule | ⬜ | S2 |
 | V3 | L3 authentification, L5 journal | ⬜ | S3 |
 | V4 | L4 multi-filiales, L6 pièces jointes | ⬜ | S4 |
@@ -249,3 +249,17 @@ L3, L6 et L12 se recettent sur des doublures, et cela doit être écrit dans leu
 
 **Jalon de mise en service pilote** : V1 à V4 (soit L0 → L6) sur **une filiale**, avec la vue
 Groupe, avant généralisation aux vingt (`PLAN_SERVEUR` §7).
+
+### Portes franchies
+
+| Porte | Date | Verdict | Rapport |
+|---|---|---|---|
+| **S1** | 31/08/2026 | ❌ **refusée** — 1 bloquant, 3 majeurs, 6 mineurs | [`securite/RAPPORT_S1.md`](securite/RAPPORT_S1.md) |
+
+Le bloquant mérite d'être retenu, parce qu'il justifie à lui seul le dispositif : sept clés
+étrangères directes traversaient la frontière de filiale, si bien qu'une suppression ordinaire
+dans une filiale détruisait des lignes d'une autre. Le raisonnement correct était écrit dans la
+migration elle-même et appliqué aux tables de liaison — mais pas à ces sept clés. Ni le banc
+d'essai ni la démonstration d'audit ne couvraient ce chemin : **le défaut serait parti en
+production sous 28 contrôles verts**. C'est exactement le cas qu'une revue repoussée en L15
+aurait découvert trop tard.

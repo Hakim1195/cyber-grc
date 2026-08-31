@@ -15,7 +15,8 @@ Sommaire : [1. Généralités](#1-généralités) · [2. Identifiants](#2-identi
 [10. Fonctions du socle](#10-fonctions-partagées-du-socle) · [11. RLS](#11-row-level-security) ·
 [12. Journal](#12-journal-daudit--règles-particulières) · [13. Migrations](#13-migrations) ·
 [14. Rôles et privilèges](#14-rôles-et-privilèges) · [15. Codes d'erreur](#15-codes-derreur-applicatifs) ·
-[16. Découpage L1](#16-découpage-du-lot-l1--décisions-figées)
+[16. Découpage L1](#16-découpage-du-lot-l1--décisions-figées) ·
+[17. Décisions porte S1](#17-décisions-issues-de-la-porte-de-sécurité-s1--31082026)
 
 ---
 
@@ -586,3 +587,78 @@ est de niveau Groupe ou mixte.
 | `risque_exigences`, `actif_risques`, `processus_actifs`, `actif_dependances`, `incident_actifs` | **non** | Les deux extrémités sont cloisonnées ; la RLS s'applique par jointure |
 | `evaluation_mesures`, `traitement_mesures` | **oui** | `mesure_catalogue` est mixte |
 | `document_referentiels` | **oui** | `documents` est mixte, et `ref_id` désigne un catalogue statique hors base (pas de clé étrangère) |
+
+---
+
+## 17. Décisions issues de la porte de sécurité S1 — 31/08/2026
+
+> Rapport d'audit : [`../../docs/securite/RAPPORT_S1.md`](../../docs/securite/RAPPORT_S1.md).
+> Ce paragraphe fige ce qui est corrigé, ce qui est reporté, et **à quelle échéance**.
+> Un report assumé et daté est acceptable ; un silence ne l'est pas.
+
+### 17.1 Toute clé étrangère entre deux tables cloisonnées est composite
+
+**Règle, sans exception** : quand l'enfant et le parent portent tous deux un `filiale_id` non nul,
+la clé étrangère porte **`(colonne_reference, filiale_id)`** et vise une unicité
+`uq_<parent>_id_filiale (id, filiale_id)`.
+
+Le motif était déjà appliqué aux tables de liaison, avec le bon raisonnement en commentaire, mais
+sept clés étrangères directes y avaient échappé. La conséquence, reproduite à la porte S1 : une
+suppression parfaitement ordinaire dans une filiale **détruit des lignes d'une autre filiale**, et
+inscrit l'identité de son auteur dans une ligne qu'il ne peut même pas lire.
+
+**Ce n'est pas une fuite de confidentialité** — la RLS tient en lecture — mais une brèche
+d'intégrité et de disponibilité entre filiales. Les contrôles d'intégrité référentielle de
+PostgreSQL **contournent délibérément la RLS** : une clé étrangère simple est donc satisfaite par
+une ligne invisible. C'est le point à retenir, et il vaut pour toute entité future.
+
+### 17.2 Toute fonction fige son `search_path`
+
+**Règle** : `set search_path = pg_catalog, public` sur **chaque** fonction, `security invoker`
+comprises.
+
+PostgreSQL consulte implicitement `pg_temp` **avant** le `search_path`, y compris quand celui-ci
+est fixé à `public` — ce que fait pourtant le pool. Un rôle disposant du privilège `temporary`
+peut donc masquer une table du schéma et détourner une fonction. Démontré à la porte S1 : forge
+d'une entrée de journal au chaînage rompu, désarmement du déclencheur de cohérence des mesures, et
+garde-fou de couverture RLS rendu aveugle.
+
+Corollaire d'exploitation : **le privilège `temporary` est retiré au rôle applicatif** sur toute
+base, développement et recette compris. La production le refusait déjà, mais par accident.
+
+### 17.3 `id_metier` n'admet ni virgule ni espace en tête ou en fin
+
+Le périmètre de session transite en chaîne jointe par virgules (`grc.filiales`). Un identifiant de
+filiale contenant une virgule scinderait le périmètre et accorderait la lecture de deux filiales.
+
+Aucun chemin ne permet aujourd'hui à un utilisateur de choisir un identifiant de filiale : c'est
+une mesure de **défense en profondeur**, fermée maintenant parce que le domaine est en train
+d'être figé et qu'un `alter domain` sur une base peuplée coûte bien davantage.
+
+Le domaine reste par ailleurs **volontairement permissif** (§2) : la reprise d'exports anciens en
+dépend. On ferme un caractère précis, on ne durcit pas le format.
+
+### 17.4 Report explicite à L3 — les tables du substrat d'authentification
+
+`sessions`, `session_filiales` et `session_domaines` **restent écrivables sans condition** par le
+rôle applicatif. C'est circulaire, et c'est assumé : ces tables *produisent* la décision
+d'autorisation, elles sont lues avant que le périmètre existe.
+
+| Table | Décision |
+|---|---|
+| `utilisateurs`, `profils`, `profil_domaines`, `groupes_ad` | **Corrigé en V1-bis** : écriture réservée à l'administration Groupe. Ce sont des tables de configuration, elles n'ont pas de raison d'être écrites en fonctionnement courant. |
+| `sessions`, `session_filiales`, `session_domaines` | **Reporté au lot L3**, dont c'est la matière. La couche d'authentification posera un réglage `grc.authentification` pour sa **seule** transaction d'ouverture de session — provisionnement d'un compte inconnu compris (`PLAN_SERVEUR` §1.5) — et les politiques d'écriture s'y adosseront. |
+
+**Risque assumé dans l'intervalle** : une injection SQL dans le rôle applicatif permettrait de
+forger une session et son périmètre. La parade actuelle est le contrôle S5 — requêtes
+intégralement paramétrées, vérifié à la porte S1. **Cette dette est une condition d'entrée du lot
+L3, pas une intention.**
+
+### 17.5 Le garde-fou de couverture RLS dit ce qu'il fait, et pas plus
+
+`f_verifier_couverture_rls()` détecte une politique **littéralement** `true`. Une politique non
+cloisonnante mais non triviale lui échappe — éprouvé par mutation à la porte S1.
+
+Le filet existe, il est simplement ailleurs : ce sont les **tests de comportement** qui mordent.
+La règle qui en découle vaut pour tout garde-fou : **son commentaire ne lui prête pas plus de
+portée qu'il n'en a**, faute de quoi il endort la vigilance au lieu de l'entretenir.
