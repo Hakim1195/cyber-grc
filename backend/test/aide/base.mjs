@@ -23,6 +23,10 @@
  *  5. Nettoie **systématiquement** : `fermer()` ferme les connexions puis supprime la
  *     base, et l'ouverture elle-même supprime ce qu'elle vient de créer si les
  *     migrations échouent — sans quoi une base orpheline resterait derrière.
+ *  6. Fournit un **jeu d'essai partagé** (`semerJeuEssai`) — deux filiales, un socle de
+ *     Groupe, et au moins une ligne dans chacune des 35 tables cloisonnées — et de quoi
+ *     éprouver la **concurrence réelle** (`pidSession`, `suivre`, `attendreBlocage`),
+ *     ajoutés pour le lot L2 et son risque projet P1 (écrasement silencieux).
  *
  * ── Pourquoi le nom porte un jeton unique ────────────────────────────────────
  *
@@ -61,6 +65,21 @@
  *         await c.query('insert into …');   // annulé en fin de bloc par défaut
  *       });
  *     });
+ *
+ * Et pour un test qui a besoin de DONNÉES et de DEUX écrivains simultanés (lot L2) :
+ *
+ *     const applicatif = await base.connexion('app');
+ *     await semerJeuEssai(base, applicatif);            // validé, pas annulé
+ *     const t1 = await base.nouvelleConnexion('app');   // deux connexions RÉELLES,
+ *     const t2 = await base.nouvelleConnexion('app');   // pas deux transactions simulées
+ *
+ * ── Ce que le périmètre pose, et pourquoi les QUATRE réglages ────────────────
+ *
+ * `avecPerimetre` pose les quatre réglages de session lus par les politiques —
+ * `grc.utilisateur`, `grc.filiale_id`, `grc.filiales`, `grc.administration_groupe` —
+ * **sans condition et à chaque transaction**, exactement comme `appliquerPerimetre()`
+ * de `src/db/pool.ts`. Un réglage omis n'est pas un réglage absent : il vaut ce que la
+ * transaction précédente y a laissé (constat N-4 de la porte S1).
  *
  * ── Configuration ────────────────────────────────────────────────────────────
  *
@@ -204,12 +223,18 @@ function nomJetableOuEchec(nom) {
  * @param {string} utilisateur identifiant tracé dans `cree_par` / `modifie_par`
  * @param {string|null} filialeId filiale ACTIVE — la seule où l'on écrit
  * @param {string[]} [filiales] périmètre de LECTURE ; par défaut, la seule filiale active
+ * @param {boolean} [administrationGroupe] la transaction écrit-elle des lignes de PORTÉE
+ *        GROUPE (les lignes à `filiale_id` nul des tables mixtes, et les tables de
+ *        configuration) ? Quatrième réglage de session, `grc.administration_groupe`.
+ *        Ce n'est **pas un privilège** : la session le déclare sur elle-même
+ *        (`CONVENTIONS.md` §17.4), et il n'élargit jamais la lecture.
  */
-export function perimetre(utilisateur, filialeId = null, filiales = undefined) {
+export function perimetre(utilisateur, filialeId = null, filiales = undefined, administrationGroupe = false) {
   return {
     utilisateur,
     filialeId,
     filiales: filiales ?? (filialeId === null ? [] : [filialeId]),
+    administrationGroupe,
   };
 }
 
@@ -291,7 +316,8 @@ export async function ouvrirBaseEssai(urlFichierTest, options = {}) {
      * `{ annuler: false }` pour valider.
      *
      * @param {import('pg').Client} client
-     * @param {{utilisateur: string, filialeId: string|null, filiales: string[]}} p
+     * @param {{utilisateur: string, filialeId: string|null, filiales: string[],
+     *          administrationGroupe?: boolean}} p
      * @param {(client: import('pg').Client) => Promise<any>} travail
      * @param {{annuler?: boolean}} [options]
      */
@@ -301,11 +327,26 @@ export async function ouvrirBaseEssai(urlFichierTest, options = {}) {
       try {
         // `set_config(…, true)` = `set local` : la valeur meurt au commit ou au
         // rollback. C'est ce qui rend le cloisonnement compatible avec un pool.
+        //
+        // LES QUATRE RÉGLAGES, ET SANS CONDITION — comme `appliquerPerimetre()` de
+        // `src/db/pool.ts`, dont cette fonction se réclame. Elle n'en posait que
+        // trois : `grc.administration_groupe` était laissé à ce que la transaction
+        // précédente y avait mis. Sans conséquence tant que les tests le posaient
+        // eux-mêmes en portée transaction, mais c'est exactement le motif du constat
+        // N-4 de la porte S1 (« un réglage simplement omis est un réglage hérité »),
+        // et un banc d'essai qui ne reproduit pas le geste de production ne prouve
+        // rien de la production.
         await client.query(
-          `select set_config('grc.utilisateur', $1, true),
-                  set_config('grc.filiale_id',  $2, true),
-                  set_config('grc.filiales',    $3, true)`,
-          [p.utilisateur, p.filialeId ?? '', (p.filiales ?? []).join(',')],
+          `select set_config('grc.utilisateur',           $1, true),
+                  set_config('grc.filiale_id',            $2, true),
+                  set_config('grc.filiales',              $3, true),
+                  set_config('grc.administration_groupe', $4, true)`,
+          [
+            p.utilisateur,
+            p.filialeId ?? '',
+            (p.filiales ?? []).join(','),
+            p.administrationGroupe === true ? 'oui' : '',
+          ],
         );
         const resultat = await travail(client);
         await client.query(annuler ? 'rollback' : 'commit');
@@ -374,6 +415,295 @@ export async function erreurAttendue(promesseOuFonction) {
   }
   throw new Error("Aucune erreur levée alors qu'une erreur était attendue.");
 }
+
+/* =====================================================================
+ *  Jeu d'essai partagé — deux filiales, toutes les tables cloisonnées
+ * ===================================================================== */
+
+/** Filiale « depuis laquelle on regarde ». */
+export const FILIALE_A = 'FIL-ESSAI-A';
+/** Filiale voisine — celle dont rien ne doit jamais remonter. */
+export const FILIALE_B = 'FIL-ESSAI-B';
+
+/**
+ * Tables de NIVEAU FILIALE semées dans les deux filiales (`CONVENTIONS.md` §4).
+ * Exposée parce qu'un test de chargement doit pouvoir dire ce qu'il a réellement
+ * couvert : un balayage qui ne trouve rien passe pour vert.
+ */
+export const TABLES_FILIALE = Object.freeze([
+  'actifs', 'actions', 'approbations', 'audits', 'clients', 'crise',
+  'evaluation_mesures', 'evaluations', 'exigences', 'history', 'imports',
+  'incidents', 'mco_actions', 'mesure_mise_en_oeuvre', 'pieces_jointes',
+  'prestataires', 'processus', 'referentiels_actifs', 'revues', 'risques',
+  'scenarios_pra', 'tests_pra', 'traitement_mesures', 'traitements',
+]);
+
+/** Tables MIXTES : une ligne de portée Groupe ET une ligne locale par filiale (§4, §16). */
+export const TABLES_MIXTES = Object.freeze([
+  'document_referentiels', 'documents', 'mesure_catalogue', 'parametres', 'personnes',
+]);
+
+/** Liaisons et tables filles SANS `filiale_id` — l'angle mort du §7. */
+export const TABLES_LIAISON = Object.freeze([
+  'actif_dependances', 'actif_risques', 'import_erreurs', 'incident_actifs',
+  'processus_actifs', 'risque_exigences',
+]);
+
+/**
+ * Empreinte factice au format du domaine `empreinte_sha256`, DIFFÉRENTE par filiale :
+ * `pieces_jointes.chemin_stockage` porte une unicité délibérément GLOBALE (déduplication
+ * du stockage), et deux filiales qui déposeraient le même contenu se heurteraient.
+ */
+const empreinte = (suffixe) => (suffixe === 'A' ? 'a' : 'b').repeat(64);
+
+/**
+ * Sème un jeu d'essai complet et **le valide** : deux filiales, un socle de Groupe, et
+ * au moins une ligne dans **chacune** des 35 tables cloisonnées (24 de niveau filiale,
+ * 5 mixtes, 6 liaisons) — plus deux entrées de journal d'audit.
+ *
+ * Trois choix, et chacun a une raison :
+ *
+ *  1. **Semé par le COMPTE APPLICATIF, sous périmètre.** Un jeu d'essai posé par le
+ *     propriétaire contournerait la RLS : il prouverait que les données existent, pas
+ *     qu'elles sont écrivables par celui qui les écrira en production.
+ *  2. **Validé** (`annuler: false`), parce que la concurrence se joue à plusieurs
+ *     connexions : une donnée restée dans une transaction ouverte n'existe pour
+ *     personne d'autre.
+ *  3. **Exhaustif sur les tables cloisonnées**, parce que le lot L2 charge le jeu de
+ *     données d'une filiale ENTIER. Un balayage de fuite ne vaut que sur des tables
+ *     qui contiennent quelque chose : semer dix-huit tables et balayer trente-cinq,
+ *     c'est déclarer vertes dix-sept tables vides.
+ *
+ * @param {Awaited<ReturnType<typeof ouvrirBaseEssai>>} base
+ * @param {import('pg').Client} client connexion du compte **applicatif**
+ * @param {{filialeA?: string, filialeB?: string, utilisateur?: string}} [options]
+ * @returns {Promise<{a: string, b: string, suffixe: (f: string) => string}>}
+ */
+export async function semerJeuEssai(base, client, options = {}) {
+  const a = options.filialeA ?? FILIALE_A;
+  const b = options.filialeB ?? FILIALE_B;
+  const utilisateur = options.utilisateur ?? 'semeur';
+
+  await base.avecPerimetre(
+    client,
+    perimetre(utilisateur, a, [a, b], true),
+    async (c) => {
+      // ── Socle de niveau Groupe. Son écriture EXIGE grc.administration_groupe,
+      //    déjà posé par le périmètre ci-dessus (§17.4).
+      await c.query(
+        `insert into filiales (id, code, raison_sociale, pays) values
+             ($1, 'ZZESSA', 'Essai Toulouse',  'FR'),
+             ($2, 'ZZESSB', 'Essai Allemagne', 'DE')`,
+        [a, b],
+      );
+      await c.query("insert into mesure_catalogue (id, nom)   values ('MESURE-G', 'Chiffrement des postes')");
+      await c.query("insert into personnes        (id, nom)   values ('PERS-G',   'RSSI groupe')");
+      await c.query("insert into documents        (id, titre) values ('DOC-G',    'PSSI du groupe')");
+      await c.query("insert into parametres       (id, cle)   values ('PARAM-G',  'essai.groupe')");
+      await c.query("insert into document_referentiels (document_id, ref_id) values ('DOC-G', 'anssi')");
+      // Deux comptes, dont la CLÉ PRIMAIRE diffère de l'identifiant de connexion : le
+      // §18.3 exige qu'un test provisionne ce cas, sans quoi il valide une coïncidence
+      // plutôt qu'une propriété.
+      await c.query(
+        `insert into utilisateurs (id, identifiant, nom_affichage) values
+             ('USER-A', 'rssi.toulouse',  'RSSI Toulouse'),
+             ('USER-B', 'rssi.allemagne', 'RSSI Allemagne')`,
+      );
+
+      // ── Puis les deux filiales, à égalité de traitement : ce qui est vrai de A doit
+      //    l'être de B, sans quoi une asymétrie du semis passerait pour une propriété.
+      await c.query("select set_config('grc.administration_groupe', '', true)");
+      for (const [filiale, s] of [[a, 'A'], [b, 'B']]) {
+        // On n'écrit que dans la filiale ACTIVE : elle bascule à chaque tour.
+        await c.query("select set_config('grc.filiale_id', $1, true)", [filiale]);
+        const f = [filiale];
+
+        await c.query(`insert into clients      (id, filiale_id, nom) values ('CLI-${s}',   $1, 'Donneur d''ordre')`, f);
+        await c.query(`insert into exigences    (id, filiale_id, code, intitule) values ('EX-${s}', $1, 'A.5.1', 'Politique de sécurité')`, f);
+        await c.query(`insert into risques      (id, filiale_id, nom) values ('RISK-${s}',  $1, 'Rançongiciel')`, f);
+        await c.query(`insert into risques      (id, filiale_id, nom) values ('RISK2-${s}', $1, 'Fuite de données')`, f);
+        await c.query(`insert into actifs       (id, filiale_id, nom) values ('ACTIF-${s}', $1, 'ERP')`, f);
+        await c.query(`insert into actifs       (id, filiale_id, nom) values ('ACTIF2-${s}',$1, 'Serveur de fichiers')`, f);
+        await c.query(`insert into processus    (id, filiale_id, nom) values ('BIA-${s}',   $1, 'Expédition')`, f);
+        await c.query(`insert into incidents    (id, filiale_id, titre) values ('INC-${s}', $1, 'Hameçonnage')`, f);
+        await c.query(`insert into traitements  (id, filiale_id, nom) values ('TRT-${s}',   $1, 'Paie')`, f);
+        await c.query(`insert into evaluations  (id, filiale_id, ref_id, code) values ('EVAL-${s}', $1, 'anssi', 'M1')`, f);
+        await c.query(`insert into scenarios_pra(id, filiale_id, nom) values ('SCEN-${s}',  $1, 'Perte du site')`, f);
+        await c.query(`insert into tests_pra    (id, filiale_id, scenario_id) values ('TEST-${s}', $1, 'SCEN-${s}')`, f);
+        await c.query(`insert into actions      (id, filiale_id, titre) values ('ACT-${s}', $1, 'Chiffrer les portables')`, f);
+        await c.query(`insert into audits       (id, filiale_id, reference) values ('AUD-${s}', $1, 'AUDIT-2026-01')`, f);
+        await c.query(`insert into crise        (id, filiale_id, role) values ('CRISE-${s}', $1, 'Directeur de crise')`, f);
+        await c.query(`insert into history      (id, filiale_id, date_point, metrics) values ('HIST-${s}', $1, date '2026-01-15', '{"conformite": 42}'::jsonb)`, f);
+        await c.query(`insert into mco_actions  (id, filiale_id, titre) values ('MCO-${s}', $1, 'Tester les sauvegardes')`, f);
+        await c.query(`insert into prestataires (id, filiale_id, societe) values ('PRES-${s}', $1, 'Infogérance SA')`, f);
+        await c.query(`insert into revues       (id, filiale_id, date_revue) values ('REV-${s}', $1, date '2026-03-01')`, f);
+        await c.query(`insert into imports      (id, filiale_id, entite, source, nom_fichier) values ('IMP-${s}', $1, 'risques', 'excel', 'r.xlsx')`, f);
+        await c.query(`insert into import_erreurs (import_id, ligne, message) values ('IMP-${s}', 12, 'colonne absente')`);
+        await c.query(`insert into approbations (id, filiale_id, objet_type, objet_id, etape) values ('APPRO-${s}', $1, 'risque', 'RISK-${s}', 'acceptation')`, f);
+        await c.query(
+          `insert into pieces_jointes (id, filiale_id, entite_type, entite_id, nom_fichier, type_mime,
+                                       taille_octets, sha256, chemin_stockage)
+               values ('PJ-${s}', $1, 'risques', 'RISK-${s}', 'analyse.pdf', 'application/pdf', 4096, $2, $3)`,
+          // Deux paramètres pour la même empreinte : réutiliser $2 des deux côtés ferait
+          // déduire à PostgreSQL deux types incompatibles pour un seul paramètre
+          // (« text versus empreinte_sha256 », 42P08).
+          [filiale, empreinte(s), `ab/${empreinte(s)}`],
+        );
+        await c.query(`insert into referentiels_actifs (id, filiale_id, ref_id, origine) values ('RA-${s}', $1, 'anssi', 'ajout_local')`, f);
+
+        // Tables mixtes, versant LOCAL (le versant Groupe est semé plus haut).
+        await c.query(`insert into mesure_catalogue (id, filiale_id, nom)   values ('MESURE-${s}', $1, 'Mesure locale')`, f);
+        await c.query(`insert into personnes        (id, filiale_id, nom)   values ('PERS-${s}',   $1, 'Responsable de site')`, f);
+        await c.query(`insert into documents        (id, filiale_id, titre) values ('DOC-${s}',    $1, 'Procédure locale')`, f);
+        await c.query(`insert into parametres       (id, filiale_id, cle)   values ('PARAM-${s}',  $1, 'essai.local')`, f);
+        await c.query(`insert into document_referentiels (document_id, ref_id, filiale_id) values ('DOC-${s}', 'anssi', $1)`, f);
+
+        // Le pivot « mesure », des deux côtés du §16.2 : la mise en œuvre est locale,
+        // le catalogue est le socle.
+        await c.query(`insert into mesure_mise_en_oeuvre (id, filiale_id, mesure_id) values ('MMO-${s}', $1, 'MESURE-${s}')`, f);
+        await c.query(`insert into evaluation_mesures (evaluation_id, mesure_id, filiale_id) values ('EVAL-${s}', 'MESURE-${s}', $1)`, f);
+        await c.query(`insert into traitement_mesures (traitement_id, mesure_id, filiale_id) values ('TRT-${s}', 'MESURE-${s}', $1)`, f);
+
+        // Les liaisons sans filiale_id : leur politique est leur seule défense (§7).
+        await c.query(`insert into risque_exigences  (risque_id, exigence_id)   values ('RISK-${s}', 'EX-${s}')`);
+        await c.query(`insert into actif_risques     (actif_id, risque_id)      values ('ACTIF-${s}', 'RISK-${s}')`);
+        await c.query(`insert into processus_actifs  (processus_id, actif_id)   values ('BIA-${s}', 'ACTIF-${s}')`);
+        await c.query(`insert into incident_actifs   (incident_id, actif_id)    values ('INC-${s}', 'ACTIF-${s}')`);
+        await c.query(`insert into actif_dependances (actif_id, actif_cible_id, type) values ('ACTIF-${s}', 'ACTIF2-${s}', 'hosted')`);
+
+        // Le substrat d'authentification (L3) : une session résolue par filiale. Ces
+        // tables sont, à ce stade, écrivables sans condition par le rôle applicatif et
+        // LISIBLES DE TOUS — dérogation explicite du §17.4, condition d'entrée du lot
+        // L3. Les semer est ce qui permet à un test de chargement de RÉCLAMER cette
+        // dérogation au lieu de l'ignorer.
+        await c.query(
+          `insert into sessions (id, jeton_empreinte, utilisateur_id, filiale_active_id, perimetre, expire_le)
+               values ($1, $2, $3, $4, 'filiale', now() + interval '1 hour')`,
+          [`SESS-${s}`, (s === 'A' ? 'c' : 'd').repeat(64), `USER-${s}`, filiale],
+        );
+        await c.query('insert into session_filiales (session_id, filiale_id) values ($1, $2)', [`SESS-${s}`, filiale]);
+
+        // Une entrée de journal PAR FILIALE. Elle n'est pas là par symétrie : la
+        // lecture du journal n'est délibérément PAS cloisonnée (dérogation qu'impose
+        // le chaînage par empreinte, resserrement ferme du lot L5). Un test de fuite
+        // doit pouvoir RÉCLAMER cette dérogation au lieu de l'inscrire dans une liste
+        // d'exclusions muette.
+        await c.query(
+          `insert into journal_audit (filiale_id, action, resume) values ($1, 'export', 'entrée d''essai ' || $2)`,
+          [filiale, s],
+        );
+      }
+    },
+    { annuler: false },
+  );
+
+  return { a, b, suffixe: (filiale) => (filiale === a ? 'A' : 'B') };
+}
+
+/* =====================================================================
+ *  Concurrence — deux transactions réellement simultanées
+ * ===================================================================== */
+
+/** Numéro de processus PostgreSQL servant cette connexion (pour observer ses attentes). */
+export async function pidSession(client) {
+  const resultat = await client.query('select pg_backend_pid() as pid');
+  return resultat.rows[0].pid;
+}
+
+/**
+ * Suit une promesse **sans l'attendre**, et expose un drapeau lisible à tout instant.
+ *
+ * Indispensable pour prouver qu'une écriture concurrente est réellement BLOQUÉE : sans
+ * ce drapeau, un test qui `await` la seconde écriture ne distingue pas « elle a attendu
+ * son tour » de « elle est passée devant ».
+ *
+ * @template T
+ * @param {Promise<T>} promesse
+ * @returns {{etat: {terminee: boolean, valeur?: T, erreur?: Error}, promesse: Promise<T>}}
+ */
+export function suivre(promesse) {
+  /** @type {{terminee: boolean, valeur?: any, erreur?: Error}} */
+  const etat = { terminee: false };
+  const suivie = promesse.then(
+    (valeur) => {
+      etat.terminee = true;
+      etat.valeur = valeur;
+      return valeur;
+    },
+    (erreur) => {
+      etat.terminee = true;
+      etat.erreur = erreur;
+      throw erreur;
+    },
+  );
+  // Sans ce puits, un rejet observé plus tard par le test serait d'abord signalé par
+  // Node comme « unhandled rejection » — et ferait tomber une suite pour la mauvaise
+  // raison.
+  suivie.catch(() => {});
+  return { etat, promesse: suivie };
+}
+
+/**
+ * Attend que le processus `pid` soit effectivement **en attente d'un verrou**, et rend
+ * la main dès que c'est le cas.
+ *
+ * Une temporisation fixe (« dors 100 ms, ce doit être bloqué ») rendrait le banc d'essai
+ * dépendant de la charge de la machine : trop courte elle donne des verdicts faux, trop
+ * longue elle ralentit tout le monde. On interroge donc `pg_stat_activity`, qui dit la
+ * vérité, et on échoue avec un message qui NOMME ce qu'on attendait.
+ *
+ * @param {Awaited<ReturnType<typeof ouvrirBaseEssai>>} base
+ * @param {import('pg').Client} observateur connexion TIERCE (ni l'une ni l'autre des
+ *        transactions en lice), typiquement celle du propriétaire
+ * @param {number} pid
+ * @param {{delaiMs?: number}} [options]
+ */
+export async function attendreBlocage(base, observateur, pid, options = {}) {
+  const delaiMs = options.delaiMs ?? 3000;
+  const echeance = Date.now() + delaiMs;
+  let dernier = 'aucun verrou en attente';
+  while (Date.now() < echeance) {
+    // `pg_locks` et non `pg_stat_activity` : cette dernière masque `state` et
+    // `wait_event` des sessions appartenant à un AUTRE rôle (ici, le compte applicatif
+    // observé depuis le compte propriétaire), et l'observateur conclurait
+    // éternellement « rien à signaler » sur une session pourtant bloquée. `pg_locks`
+    // est lisible de tous et dit exactement ce qu'on cherche : un verrou demandé et
+    // NON accordé.
+    const lignes = await base.lignes(
+      observateur,
+      `select locktype, mode from pg_locks where pid = $1 and not granted`,
+      [pid],
+    );
+    if (lignes.length > 0) {
+      dernier = lignes.map((l) => `${l.locktype}/${l.mode}`).join(' + ');
+      return dernier;
+    }
+    await pause(20);
+  }
+  throw new Error(
+    `Le processus ${pid} n'attend aucun verrou après ${delaiMs} ms (${dernier}). ` +
+      "Si l'écriture concurrente n'est plus bloquée, c'est la propriété qui a changé, pas le délai.",
+  );
+}
+
+/* =====================================================================
+ *  Appel de l'API — ce qui est ici, et ce qui n'y est pas
+ * ---------------------------------------------------------------------
+ *  Aucune aide d'appel HTTP n'est fournie, et c'est un choix, pas un oubli.
+ *
+ *  La couche d'accès du lot L2 est arrivée sur le disque pendant l'écriture de ce
+ *  banc d'essai (`src/entites/`, `src/erreurs/`, `src/api/`), et
+ *  `test/api/depot-contrat.test.mjs` l'éprouve — au niveau du DÉPÔT, en montant un
+ *  vrai `creerPool()` sur la base d'essai. Il porte sa propre plomberie (compilation
+ *  de `dist/` à la demande, construction du pool) plutôt que de la déposer ici :
+ *  tant que les routes bougent, une aide partagée figerait une forme qui n'est pas
+ *  encore stable, et un contrat figé trop tôt est un contrat qu'on cesse de
+ *  questionner.
+ *
+ *  Quand les routes seront arrêtées, l'aide d'appel HTTP a sa place ici — et ce
+ *  fichier est l'endroit où la mettre, pas un quatrième client recopié dans un
+ *  cinquième fichier de test.
+ * ===================================================================== */
 
 /* =====================================================================
  *  Cycle de vie de la base — détails d'implémentation
