@@ -5,6 +5,20 @@ Application 100 % frontend (HTML/CSS/JS, sans backend).
 
 ## [Non publié]
 
+### Outillage — skill Claude Code `ui-ux-pro-max`
+- Installation de la skill **`ui-ux-pro-max` v2.13.0** (MIT) dans `.claude/skills/ui-ux-pro-max/` :
+  base de connaissances UI/UX **locale et interrogeable** (119 règles UX/accessibilité, 79 styles,
+  192 palettes, 74 appariements typographiques, 105 icônes, 25 types de graphiques, 22 stacks).
+- **Aucune dépendance et aucun accès réseau** : moteur de recherche BM25 en Python pur (stdlib),
+  données en CSV embarquées → compatible avec la contrainte « full frontend, rien ne sort de la machine ».
+  Le code de la skill est un outil d'aide à la décision pour l'agent ; il ne modifie pas l'application.
+- Adaptation à une installation « skill projet » : les chemins d'appel de `scripts/search.py`
+  documentés dans `SKILL.md` (variable `${CLAUDE_PLUGIN_ROOT}`, propre au mode plugin) sont remplacés
+  par le chemin relatif à la racine du dépôt. Fixtures de test amont non embarquées.
+- Vérifié : recherche par domaine (`ux`), par stack (`html-tailwind`), mode `--design-system`
+  et `validate_data.py` (12 fichiers de domaine + 22 fichiers de stack OK).
+- Documentation : mode d'emploi et garde-fous (charte Dedienne prioritaire) dans `CLAUDE.md` §5.
+
 ### Référentiels — plusieurs mesures de sécurité par exigence (schéma v12)
 - **Une exigence peut désormais être couverte par PLUSIEURS mesures** (ex. une question AirCyber = MFA
   **+** IAM **+** journalisation). Le lien unique `evaluation.mesure_id` devient un tableau

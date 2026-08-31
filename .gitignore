@@ -1,0 +1,14 @@
+# Réglages locaux Claude Code (machine de l'utilisateur, non partagés)
+.claude/settings.local.json
+.claude/session-state/
+
+# Python (caches générés par les scripts de la skill ui-ux-pro-max)
+__pycache__/
+*.py[cod]
+
+# Sorties générées par la skill (--design-system --persist)
+design-system/
+
+# OS
+.DS_Store
+Thumbs.db
