@@ -14,7 +14,8 @@ Sommaire : [1. Généralités](#1-généralités) · [2. Identifiants](#2-identi
 [8. Cascades](#8-cascades-de-suppression) · [9. Nommage](#9-nommage-des-objets) ·
 [10. Fonctions du socle](#10-fonctions-partagées-du-socle) · [11. RLS](#11-row-level-security) ·
 [12. Journal](#12-journal-daudit--règles-particulières) · [13. Migrations](#13-migrations) ·
-[14. Rôles et privilèges](#14-rôles-et-privilèges) · [15. Codes d'erreur](#15-codes-derreur-applicatifs)
+[14. Rôles et privilèges](#14-rôles-et-privilèges) · [15. Codes d'erreur](#15-codes-derreur-applicatifs) ·
+[16. Découpage L1](#16-découpage-du-lot-l1--décisions-figées)
 
 ---
 
@@ -71,6 +72,10 @@ id id_metier primary key
   `GRPAD`, `PROFIL`, `LOG` (journal), `PJ` (pièces jointes), `APPRO`, `REFACT`
   (référentiels activés), `IMP`, `PARAM`.
 
+  Préfixe créé par la scission des mesures (§16) : `MMO` (`mesure_mise_en_oeuvre`). C'est le
+  **seul** identifiant du modèle qui n'existe dans aucun export `grc-backup` — il est engendré
+  à la reprise, jamais lu depuis un fichier.
+
 ---
 
 ## 3. Colonnes obligatoires de toute table métier
@@ -123,11 +128,10 @@ Toute table de **niveau filiale** porte :
 - Index systématique : `filiale_id` en tête de tout index de liste
   (`create index ix_<table>_filiale on <table>(filiale_id, …)`).
 - **Tables de niveau Groupe** (pas de `filiale_id`) : `filiales`, `utilisateurs`,
-  `profils`, `profil_domaines`, `groupes_ad`, et le catalogue de mesures après sa scission
-  en L4 (§2.2 du plan).
+  `profils`, `profil_domaines`, `groupes_ad`, `mappings`.
 - **Tables mixtes** (`filiale_id` **nullable**, `null` = portée Groupe) : `parametres`,
-  et plus tard `documents` et `personnes`. Le caractère nullable est alors **commenté dans
-  le SQL** avec la justification.
+  `documents`, `personnes` et `mesure_catalogue` (§16). Le caractère nullable est alors
+  **commenté dans le SQL** avec la justification.
 - `sessions`, `groupes_ad` et `journal_audit` portent un `filiale_id` nullable pour une
   autre raison : l'événement peut précéder la résolution du périmètre (échec de connexion)
   ou être transversal (groupe AD `GRC-EXPORT`, démarrage du service).
@@ -470,3 +474,85 @@ poste de développement.
 | `GRC02` | Étape d'approbation franchie : décision irréversible | Base |
 | `GRC03` | Conflit de version (verrouillage optimiste) — « modifié entre-temps » | API (`0 ligne` sur `update … and version = $2`) |
 | `GRC04` | Périmètre non positionné : `grc.filiale_id` absent alors que la RLS l'exige | Base (L1 partie 3) |
+
+---
+
+## 16. Découpage du lot L1 — décisions figées
+
+> Ces arbitrages ferment les ambiguïtés du `PLAN_SERVEUR` §2.2 avant écriture des migrations.
+> Ils sont **normatifs** : trois migrations écrites en parallèle doivent s'accorder sans se lire.
+
+### 16.1 Les fichiers et leur ordre
+
+| Fichier | Contenu | Dépend de |
+|---|---|---|
+| `001_socle.sql` | 16 tables du socle, domaines partagés, fonctions, journal chaîné | — (livré) |
+| `002_metier_noyau.sql` | `clients`, `personnes`, `exigences`, `mesure_catalogue`, `mesure_mise_en_oeuvre`, `evaluations`, `risques`, `actifs`, `processus` + liaisons `risque_exigences`, `actif_risques`, `processus_actifs`, `actif_dependances`, `evaluation_mesures` | `001` |
+| `003_metier_operations.sql` | `actions`, `incidents`, `crise`, `scenarios_pra`, `tests_pra`, `mco_actions`, `prestataires`, `audits`, `revues`, `documents`, `traitements`, `mappings`, `history` + liaisons `incident_actifs`, `traitement_mesures`, `document_referentiels` | `002` |
+| `004_rls.sql` | Rôles, privilèges, politiques RLS, garde-fou de couverture | `003` |
+
+Le graphe des clés étrangères est **acyclique dans cet ordre** : rien dans `002` ne référence
+`003`. `actions` est en `003` parce qu'elle référence `incidents`, alors qu'elle référence
+aussi `exigences`, `risques`, `evaluations` et `mesure_catalogue` — elle doit donc venir après
+les deux groupes.
+
+### 16.2 Scission des mesures
+
+`mesures` devient deux tables, conformément au `PLAN_SERVEUR` §2.2.
+
+| Table | Niveau | Rôle | Identifiant |
+|---|---|---|---|
+| `mesure_catalogue` | **Mixte** — `filiale_id` **nullable** : `null` = socle imposé par le Groupe, renseigné = mesure **locale** à une filiale | *Définition* du contrôle : référence, nom, description, domaine | `MESURE-…` — **celui de l'export `grc-backup`**, inchangé |
+| `mesure_mise_en_oeuvre` | **Filiale** — `filiale_id` non nul | *Évaluation* du contrôle dans une filiale : statut, maturité, responsable, commentaire | `MMO-…` — engendré, absent des exports |
+
+Unicité `uq_mesure_mise_en_oeuvre_filiale_mesure` sur `(filiale_id, mesure_id)` : une filiale
+n'évalue un contrôle qu'une fois.
+
+**Le nullable de `mesure_catalogue.filiale_id` est la condition des deux besoins à la fois** :
+un socle commun (sans quoi la vision Groupe additionne des grandeurs incomparables) et la
+possibilité pour une filiale d'ajouter ses propres contrôles.
+
+### 16.3 Où pointent les références à « une mesure »
+
+Les trois liens que le modèle actuel porte vers `mesures` visent **le catalogue**, jamais la
+mise en œuvre :
+
+| Lien | Cible | Motif |
+|---|---|---|
+| `evaluation_mesures.mesure_id` | `mesure_catalogue` | La liaison dit « cette exigence est couverte par ce contrôle » |
+| `actions.mesure_id` | `mesure_catalogue` | `on delete set null` — l'action survit à la mesure (§8) |
+| `traitement_mesures.mesure_id` | `mesure_catalogue` | Idem |
+
+**Pourquoi le catalogue et non la mise en œuvre** : c'est ce qui rend le round-trip
+`grc-backup` exact. L'identifiant écrit dans le fichier est celui du catalogue ; s'il fallait
+le traduire vers un `MMO-…` propre à la filiale, la reprise exigerait une table de
+correspondance — exactement ce que le §2 interdit.
+
+La mise en œuvre concernée se déduit sans ambiguïté du couple **(`filiale_id` de la ligne
+porteuse, `mesure_id`)**, puisque `mesure_mise_en_oeuvre` est unique sur ce couple.
+
+La **propagation « au plus défavorable »** (statut le plus faible, maturité la plus basse)
+s'applique donc ainsi : pour une évaluation de la filiale F, agréger les
+`mesure_mise_en_oeuvre` **de F** correspondant aux `mesure_catalogue` liés à cette évaluation.
+
+### 16.4 Niveau de chaque table métier
+
+| Niveau | Tables |
+|---|---|
+| **Groupe** (pas de `filiale_id`) | `mappings` |
+| **Mixte** (`filiale_id` nullable) | `personnes`, `documents`, `mesure_catalogue` |
+| **Filiale** (`filiale_id` non nul) | toutes les autres, `history` comprise |
+
+`history` reste de niveau filiale : **l'agrégat Groupe est calculé, jamais stocké**. Stocker
+un agrégat obligerait à le recalculer à chaque entrée ou sortie de filiale, et il divergerait.
+
+### 16.5 Liaisons n-n et `filiale_id`
+
+Rappel du §7, appliqué : une liaison ne porte un `filiale_id` que si l'une de ses extrémités
+est de niveau Groupe ou mixte.
+
+| Liaison | `filiale_id` | Motif |
+|---|---|---|
+| `risque_exigences`, `actif_risques`, `processus_actifs`, `actif_dependances`, `incident_actifs` | **non** | Les deux extrémités sont cloisonnées ; la RLS s'applique par jointure |
+| `evaluation_mesures`, `traitement_mesures` | **oui** | `mesure_catalogue` est mixte |
+| `document_referentiels` | **oui** | `documents` est mixte, et `ref_id` désigne un catalogue statique hors base (pas de clé étrangère) |
