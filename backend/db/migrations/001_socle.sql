@@ -473,7 +473,14 @@ begin
                    and t.tgname = 'trg_' || c.relname || '_creation') as fonction,
                (select t.tgenabled from pg_trigger t
                  where t.tgrelid = c.oid and not t.tgisinternal
-                   and t.tgname = 'trg_' || c.relname || '_creation') as armement
+                   and t.tgname = 'trg_' || c.relname || '_creation') as armement,
+               -- Un déclencheur présent, bien nommé, armé « always » — et assorti d'une
+               -- clause « when » qui ne se déclenche jamais — serait un décor. tgqual est
+               -- non nul dès qu'une condition existe : le déclencheur de traçabilité n'en
+               -- a aucune, et ne doit jamais en avoir.
+               (select t.tgqual is not null from pg_trigger t
+                 where t.tgrelid = c.oid and not t.tgisinternal
+                   and t.tgname = 'trg_' || c.relname || '_creation') as conditionnel
           from pg_class c
           join pg_namespace n on n.oid = c.relnamespace
          where n.nspname = 'public' and c.relkind in ('r', 'p')
@@ -498,6 +505,11 @@ begin
         elsif r.armement <> 'A' then
             anomalie := 'creation_desarmable';
             detail   := 'déclencheur armé en « origin » : un réglage de session le désarmerait';
+            return next;
+        elsif r.conditionnel then
+            anomalie := 'creation_conditionnelle';
+            detail   := 'le déclencheur porte une clause « when » : il peut ne pas se déclencher, '
+                        'et la traçabilité redevient alors celle que l''appelant fournit';
             return next;
         end if;
     end loop;

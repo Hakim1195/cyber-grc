@@ -1126,6 +1126,12 @@ declare
                'select set_config(''grc.administration_groupe'', ''oui'', true);'
                || 'update mesure_catalogue set statut = ''archivee'' where id = ''MESURE-DEMO-G3''',
                '23514',
+        -- T-7 : l'action référentielle contourne la politique d'écriture de « filiales ».
+        -- Le logo de FIL-DEMO-A vient d'être posé par le contrôle précédent ; supprimer le
+        -- fichier incrémentait la version de la fiche, sans le drapeau d'administration.
+        'C85', 'Supprimer la pièce jointe qui sert de LOGO à sa propre filiale',
+               'delete from pieces_jointes where id = ''PJ-DEMO-A''',
+               '23503',
         -- N-10
         'C72', 'Lien de portée GROUPE désignant un document LOCAL d''une autre filiale',
                'select set_config(''grc.administration_groupe'', ''oui'', true);'
@@ -1679,10 +1685,11 @@ begin
     select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
       into v_ligne
       from (
+        -- « r » ET « p » : une table partitionnée est une table (constat T-11).
         select 'C27', 'Tables du schéma public sans RLS active et forcée', '0', count(*)::text,
                case when count(*) = 0 then 'OK' else 'ÉCHEC' end
           from pg_class c join pg_namespace n on n.oid = c.relnamespace
-         where n.nspname = 'public' and c.relkind = 'r'
+         where n.nspname = 'public' and c.relkind in ('r', 'p')
            and not (c.relrowsecurity and c.relforcerowsecurity)
       ) as x (numero, controle, attendu, obtenu, verdict);
     -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
@@ -1739,6 +1746,49 @@ select count(*) filter (where relrowsecurity)        as "RLS active",
        (select count(*) from pg_policies where schemaname = 'public') as "politiques"
   from pg_class c join pg_namespace n on n.oid = c.relnamespace
  where n.nspname = 'public' and c.relkind = 'r';
+
+-- --- T-10 : pg_temp nommé EN DERNIER sur chaque fonction, constaté directement ---------
+-- Le contrôle C50 s'en remet à f_verifier_chemin_recherche(). Celui-ci constate la
+-- PROPRIÉTÉ elle-même, sans passer par le garde-fou : un garde-fou qui se vérifierait par
+-- lui-même ne prouverait rien (§17.5). Il ne peut pas, en revanche, éprouver le garde-fou
+-- — la démonstration tourne sous un rôle qui ne crée aucun objet ; c'est le banc d'essai
+-- qui s'en charge.
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array('C86',
+               format('Fonctions et procédures dont le chemin ne finit pas par pg_temp (%s balayées)',
+                      count(*)),
+               '0',
+               coalesce(string_agg(p.proname::text, ', ' order by p.proname)
+                        filter (where coalesce(
+                            btrim(split_part(
+                                (select c from unnest(coalesce(p.proconfig, array[]::text[])) as c
+                                  where c like 'search_path=%' limit 1),
+                                ',',
+                                array_length(string_to_array(
+                                    (select c from unnest(coalesce(p.proconfig, array[]::text[])) as c
+                                      where c like 'search_path=%' limit 1), ','), 1))),
+                            '(aucun)') <> 'pg_temp'), '0'),
+               case when count(*) filter (where coalesce(
+                            btrim(split_part(
+                                (select c from unnest(coalesce(p.proconfig, array[]::text[])) as c
+                                  where c like 'search_path=%' limit 1),
+                                ',',
+                                array_length(string_to_array(
+                                    (select c from unnest(coalesce(p.proconfig, array[]::text[])) as c
+                                      where c like 'search_path=%' limit 1), ','), 1))),
+                            '(aucun)') <> 'pg_temp') = 0
+                    then 'OK' else 'ÉCHEC' end)
+      into v_ligne
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.prokind in ('f', 'p');
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
 -- =====================================================================================
 -- VERDICT

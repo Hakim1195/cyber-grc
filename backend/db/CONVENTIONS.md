@@ -879,9 +879,16 @@ clé primaire est un `USER-…`, **toutes** les entrées basculent silencieuseme
 « acteur inconnu » : la chaîne reste intacte, les empreintes restent valides, et l'identité
 affichée redevient celle que le client a fournie.
 
-**Règle** : la résolution se fait sur le **login** (`utilisateurs.login`), et un test doit
-provisionner un compte dont l'identifiant **diffère** du login — sans quoi il valide une
-coïncidence, pas une propriété.
+**Règle** : la résolution se fait sur le login, soit la colonne **`utilisateurs.identifiant`**,
+comparée en minuscules des deux côtés — c'est la forme de son unicité. Et un test doit
+provisionner un compte dont la **clé primaire** diffère de son identifiant : sans quoi il valide
+une coïncidence, pas une propriété.
+
+Reste ouvert, et c'est une décision du lot L3 et non du schéma : distinguer « pas d'acteur »
+(légitime — une migration, un timer, un échec de connexion sur un login inconnu, précisément
+l'événement que le `PLAN_SERVEUR` §1.7 tient à voir tracé) de « acteur non résolu » (défaut de
+programmation). Le schéma ne peut pas trancher sans connaître la liste des actions antérieures à
+l'authentification.
 
 ### 18.4 Un garde-fou que rien n'appelle est un commentaire
 
@@ -920,3 +927,17 @@ raison d'être, et le message d'échec des garde-fous le cite.
 **La limite à ne pas oublier** (§17.5) : les fonctions lisent du texte. Une politique qui nomme
 la bonne fonction de périmètre en s'en servant mal leur échappe. Ce qui mord sur le sens, ce sont
 les tests de comportement — le banc d'essai et ce script. **Aucun des deux ne remplace l'autre.**
+
+### 18.6 Une table à colonne engendrée s'insère en nommant ses colonnes
+
+`documents` et `document_referentiels` portent une colonne **engendrée** (`portee_groupe`), qui
+entre dans une clé étrangère. PostgreSQL refuse qu'on lui donne une valeur.
+
+Conséquence pour tout code qui écrit ces tables — la reprise, l'import, l'export et le
+round-trip `grc-backup` en particulier : **l'insertion nomme ses colonnes**. Un
+`insert into documents values (…)` positionnel, ou un aller-retour naïf qui relit une ligne
+entière puis la réinsère, échoue.
+
+Ce n'est pas un défaut de conception : c'est le prix de la seule forme **déclarative** qui
+épingle le `filiale_id` d'une liaison dont l'une des extrémités est mixte — un déclencheur
+`security invoker` n'aurait pas vu la ligne d'une autre filiale, et aurait conclu à tort.

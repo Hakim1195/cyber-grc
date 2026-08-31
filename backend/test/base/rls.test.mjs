@@ -2691,14 +2691,15 @@ describe('Traçabilité imposée à l’insertion (CONVENTIONS §18.1)', () => {
          from pg_class c
          join pg_namespace n on n.oid = c.relnamespace
          left join lateral (
-              select p.proname::text as fonction, t.tgenabled::text as armement
+              select p.proname::text as fonction, t.tgenabled::text as armement,
+                     t.tgqual is not null as conditionnel
                 from pg_trigger t join pg_proc p on p.oid = t.tgfoid
                where t.tgrelid = c.oid and not t.tgisinternal
                  and t.tgname = 'trg_' || c.relname || '_creation') x on true
         where n.nspname = 'public' and c.relkind in ('r', 'p')
           and exists (select 1 from pg_attribute a where a.attrelid = c.oid
                        and a.attname = 'cree_par' and a.attnum > 0 and not a.attisdropped)
-          and (x.fonction is null or x.armement <> 'A'
+          and (x.fonction is null or x.armement <> 'A' or x.conditionnel
                or x.fonction <> case
                     when exists (select 1 from pg_attribute a where a.attrelid = c.oid
                                   and a.attname = 'version' and a.attnum > 0 and not a.attisdropped)
