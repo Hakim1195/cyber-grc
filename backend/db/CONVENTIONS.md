@@ -17,7 +17,8 @@ Sommaire : [1. Généralités](#1-généralités) · [2. Identifiants](#2-identi
 [14. Rôles et privilèges](#14-rôles-et-privilèges) · [15. Codes d'erreur](#15-codes-derreur-applicatifs) ·
 [16. Découpage L1](#16-découpage-du-lot-l1--décisions-figées) ·
 [17. Décisions porte S1](#17-décisions-issues-de-la-porte-de-sécurité-s1--31082026) ·
-[18. Décisions 3ᵉ passage](#18-décisions-issues-du-troisième-passage-de-la-porte-s1)
+[18. Décisions 3ᵉ passage](#18-décisions-issues-du-troisième-passage-de-la-porte-s1) ·
+[19. Décisions 4ᵉ passage](#19-décisions-issues-du-quatrième-passage-de-la-porte-s1)
 
 ---
 
@@ -941,3 +942,73 @@ entière puis la réinsère, échoue.
 Ce n'est pas un défaut de conception : c'est le prix de la seule forme **déclarative** qui
 épingle le `filiale_id` d'une liaison dont l'une des extrémités est mixte — un déclencheur
 `security invoker` n'aurait pas vu la ligne d'une autre filiale, et aurait conclu à tort.
+
+---
+
+## 19. Décisions issues du quatrième passage de la porte S1
+
+### 19.1 Les contrôles d'unicité contournent la RLS, exactement comme les clés étrangères
+
+Le §17.1 ne parlait que des clés étrangères. **La règle vaut pour toute contrainte d'unicité** :
+une unicité posée sur une table cloisonnée **inclut `filiale_id`**, faute de quoi une filiale
+occupe un identifiant dans l'espace d'une autre.
+
+Le cas démontré est irréversible et vise le cœur du produit : une filiale pose une étape
+d'approbation nommant le risque d'une autre ; l'étape est irrévocable par construction (`GRC02`,
+déclencheur `enable always`) ; la filiale visée ne peut **jamais** ouvrir son acceptation de
+risque résiduel — celle que l'ISO 27001 exige explicitement — et reçoit un « doublon » sans
+détail sur une ligne qu'elle ne peut pas lire.
+
+**Règle générale, qui subsume §17.1 et §18.2** : *tout contrôle que PostgreSQL applique en
+dehors des politiques — clé étrangère, unicité, exclusion — doit porter `filiale_id`.* Ce n'est
+pas la RLS qui protège ces chemins, elle ne les voit pas.
+
+### 19.2 L'identifiant du compte système est réservé
+
+`f_utilisateur_courant()` rend `'systeme'` en l'absence de réglage : migrations, timers, démarrage
+du service, échecs de connexion. Rien n'empêchait de **créer un compte portant cet identifiant** —
+et le provisionnement automatique depuis l'AD (`PLAN_SERVEUR` §1.5) suffirait à le faire.
+
+Tous les événements système seraient alors attribués à une personne nommée, dans un journal
+**scellé et chaîné dont la vérification ne signalerait rien**. C'est la pathologie du §17.8
+atteinte par l'autre bout : au lieu de déclarer l'acteur, on capture la sentinelle.
+
+**Règle** : `utilisateurs.identifiant` refuse `'systeme'`, en minuscules comme en majuscules —
+la résolution du journal comparant déjà en minuscules, un contrôle sensible à la casse serait
+contournable par `Systeme`.
+
+### 19.3 Une démonstration se joue sur une base réelle, pas seulement sur une base vierge
+
+`verifier_cloisonnement.sql` comptait les lignes de portée Groupe **sans filtrer sur ses propres
+données de démonstration**, et attendait un nombre exact. Une seule ligne de socle préexistante
+suffisait à lui faire annoncer « cloisonnement en défaut, ne pas mettre en service ».
+
+Un contrôle qui crie au loup sur une base normale ne sera pas joué deux fois — et c'est la pièce
+qu'on montre à l'auditeur. **Règle** : tout prédicat d'un script de démonstration ne porte que sur
+les données qu'il a lui-même semées, et il est **joué au moins une fois sur une base peuplée**
+avant d'être considéré comme bon.
+
+### 19.4 Un garde-fou neuf se branche dans le même commit qu'il naît
+
+Le contrôle **S16** venait d'être ajouté à la grille parce qu'un garde-fou existait sans être
+appelé. Le commit qui a branché deux garde-fous sur le déploiement a été **immédiatement suivi**
+de celui qui en écrivait un troisième — sans toucher aux fichiers de déploiement. Le défaut s'est
+donc reproduit sous le contrôle créé pour lui, en deux commits.
+
+**Règle** : la migration qui crée un contrôle du schéma pose **dans le même changement** son appel
+depuis `migrate.mjs` et depuis `install.sh`. Un point d'appel unique et agrégeant
+(`f_verifier_schema()`) rend cette règle tenable : les chemins de déploiement appellent **une**
+fonction, et un contrôle neuf s'y ajoute sans les toucher.
+
+C'est la seule forme qui résiste à l'oubli, parce qu'elle supprime l'occasion de l'oubli.
+
+### 19.5 Une liste de tables écrite à la main est une omission qui attend
+
+`v_liaisons` énumérait six tables sans `filiale_id` ; il y en avait sept. La septième échappait
+donc au garde-fou de couverture, et sa politique de lecture pouvait être ramenée à `true` sans
+qu'une seule anomalie soit remontée.
+
+C'est la troisième fois que ce motif produit un défaut — les sept clés étrangères de B-1, les
+déclencheurs d'insertion, cette liste. **Règle** : un garde-fou **découvre** son périmètre dans le
+catalogue ; il ne le récite pas. Une liste écrite à la main n'est admise que si le garde-fou
+**vérifie qu'elle est complète**.
