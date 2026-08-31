@@ -158,8 +158,8 @@ const CriseModule = (() => {
                         <p style="color: var(--text-muted); margin-top: 5px;">Que faire dans les premières minutes, rôle par rôle. ${Help.tip("Une fiche réflexe est une carte d'action synthétique : les gestes prioritaires à effectuer immédiatement, sans avoir à réfléchir dans l'urgence.")}</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button class="no-print" onclick="Router.navigateTo('/crise')" style="background: var(--bg-body); color: var(--text-main); border: 1px solid var(--border);">Retour à l'annuaire</button>
-                        <button class="no-print" onclick="window.print()" style="background-color: var(--primary);">Imprimer les fiches</button>
+                        <button type="button" id="backToCriseBtn" class="no-print" style="background: var(--bg-body); color: var(--text-main); border: 1px solid var(--border);">Retour à l'annuaire</button>
+                        <button type="button" id="printFichesBtn" class="no-print" style="background-color: var(--primary);">Imprimer les fiches</button>
                     </div>
                 </div>
 
@@ -187,6 +187,8 @@ const CriseModule = (() => {
         `;
 
         injectFichesStyles();
+        document.getElementById("backToCriseBtn").addEventListener("click", () => Router.navigateTo("/crise"));
+        document.getElementById("printFichesBtn").addEventListener("click", () => window.print());
     }
 
     /* =========================
@@ -214,13 +216,13 @@ const CriseModule = (() => {
         const esc = window.escapeHtml || (s => String(s == null ? "" : s));
         const rows = sortedMembres.map(m => `
             <tr class="clickable-row" data-id="${m.id}">
-                <td class="no-print" style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
+                <td class="no-print stop-row-click" style="text-align: center; width: 40px;">
                     <input type="checkbox" class="row-cb" data-id="${m.id}">
                 </td>
                 <td><strong style="color: var(--primary);">${esc(m.role)}</strong></td>
                 <td><strong>${esc(m.nom)}</strong></td>
                 <td>${esc(m.telephone) || "-"}</td>
-                <td>${m.email ? `<a href="mailto:${esc(m.email)}" onclick="event.stopPropagation();">${esc(m.email)}</a>` : "-"}</td>
+                <td>${m.email ? `<a href="mailto:${esc(m.email)}" class="stop-row-click">${esc(m.email)}</a>` : "-"}</td>
                 <td style="font-size: 0.85rem; color: var(--text-muted);">${esc(m.suppleant) || "Aucun"}</td>
             </tr>
         `).join("");
@@ -239,8 +241,8 @@ const CriseModule = (() => {
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
-                        <button class="no-print" onclick="Router.navigateTo('/crise-fiches')" style="background: var(--bg-body); color: var(--text-main); border: 1px solid var(--border);" title="Cartes d'action par rôle, à imprimer et conserver hors ligne">Fiches réflexes</button>
-                        <button class="no-print" onclick="window.print()" style="background-color: var(--primary);">Imprimer l'annuaire</button>
+                        <button type="button" id="fichesReflexesBtn" class="no-print" style="background: var(--bg-body); color: var(--text-main); border: 1px solid var(--border);" title="Cartes d'action par rôle, à imprimer et conserver hors ligne">Fiches réflexes</button>
+                        <button type="button" id="printAnnuaireBtn" class="no-print" style="background-color: var(--primary);">Imprimer l'annuaire</button>
                         <button id="addMembreBtn">Ajouter un membre</button>
                     </div>
                 </div>
@@ -270,6 +272,11 @@ const CriseModule = (() => {
         `;
 
         document.getElementById("addMembreBtn").onclick = renderCreate;
+        document.getElementById("fichesReflexesBtn").addEventListener("click", () => Router.navigateTo("/crise-fiches"));
+        document.getElementById("printAnnuaireBtn").addEventListener("click", () => window.print());
+        // Case à cocher et lien courriel : ne pas ouvrir la fiche du membre.
+        document.querySelectorAll(".stop-row-click").forEach(el =>
+            el.addEventListener("click", (e) => e.stopPropagation()));
 
         // Sélection multiple + suppression groupée (helper partagé, cf. js/core/ui.js).
         UI.wireBulkDelete({
@@ -386,7 +393,8 @@ const CriseModule = (() => {
         const app = document.getElementById("app");
 
         if (!membre) {
-            app.innerHTML = `<section class="page"><h1>Erreur</h1><p>Membre introuvable.</p><button onclick="Router.navigateTo('/crise')">Retour</button></section>`;
+            app.innerHTML = `<section class="page"><h1>Erreur</h1><p>Membre introuvable.</p><button type="button" id="backBtn">Retour</button></section>`;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/crise"));
             return;
         }
 

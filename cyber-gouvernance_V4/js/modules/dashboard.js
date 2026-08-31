@@ -187,7 +187,7 @@ const DashboardModule = (() => {
     // Tuile de couverture cliquable (valeur, libellé, sous-texte, route, teinte).
     function covTile(value, label, sub, route, tone) {
         return `
-            <button class="cov-tile" onclick="Router.navigateTo('${route}')" title="Ouvrir : ${escapeHtml(label)}">
+            <button type="button" class="cov-tile dash-nav" data-route="${escapeHtml(route)}" title="Ouvrir : ${escapeHtml(label)}">
                 <div class="cov-val" ${tone ? `style="color:${tone};"` : ""}>${value}</div>
                 <div class="cov-lbl">${escapeHtml(label)}</div>
                 ${sub ? `<div class="cov-sub">${sub}</div>` : ""}
@@ -517,7 +517,7 @@ const DashboardModule = (() => {
             { value: nonEvaluees, color: "#d7dde5" }
         ];
         const confCard = `
-            <div class="dashboard-card chart-card highlight-card clickable-card" onclick="Router.navigateTo('/exigences')" style="cursor:pointer;" title="Aller aux exigences">
+            <div class="dashboard-card chart-card highlight-card clickable-card dash-nav" data-route="/exigences" style="cursor:pointer;" title="Aller aux exigences">
                 <h3>Conformité ${Help.tip("Part des exigences applicables jugées conformes. Les exigences « non applicables » sont exclues du taux ; l'anneau montre la répartition complète.")}</h3>
                 ${totalExigences === 0
                     ? `<p class="chart-empty">Aucune exigence sur ce périmètre.<br>Ajoutez des exigences pour suivre la conformité.</p>`
@@ -552,7 +552,7 @@ const DashboardModule = (() => {
                     `${r.evaluated}/${r.total} évaluées${r.conformite === null ? "" : " · conformité " + r.conformite + "%"}`
                 )).join("");
         const refCard = `
-            <div class="dashboard-card chart-card clickable-card" onclick="Router.navigateTo('/referentiels')" style="cursor:pointer;" title="Aller aux référentiels">
+            <div class="dashboard-card chart-card clickable-card dash-nav" data-route="/referentiels" style="cursor:pointer;" title="Aller aux référentiels">
                 <h3>Maturité par référentiel ${Help.tip("Niveau de maîtrise moyen (échelle CMMI 0-5) par référentiel de sécurité, calculé sur les mesures applicables auto-évaluées. Le questionnaire AirCyber, répondu en Oui/Non, affiche son score de conformité (%) et n'entre pas dans la moyenne CMMI.")}</h3>
                 <div style="display:flex; align-items:baseline; gap:8px; margin:2px 0 14px;">
                     <span style="font-size:2rem; font-weight:bold; color:${maturiteColor(ref.global.maturite)};">${ref.global.maturite.toFixed(1)}</span>
@@ -568,7 +568,7 @@ const DashboardModule = (() => {
             { value: risquesNonCritiques, color: "var(--color-success)" }
         ];
         const riskCard = `
-            <div class="dashboard-card chart-card alert-card clickable-card" onclick="Router.navigateTo('/risques')" style="cursor:pointer;" title="Aller au registre des risques">
+            <div class="dashboard-card chart-card alert-card clickable-card dash-nav" data-route="/risques" style="cursor:pointer;" title="Aller au registre des risques">
                 <h3>Profil de risque résiduel ${Help.tip("Risque résiduel = risque brut (F×G) × coefficient de maîtrise. C'est le risque subsistant après les mesures en place.")}</h3>
                 ${risques.length === 0
                     ? `<p class="chart-empty">Aucun risque identifié.<br>Constituez le registre des risques (méthode EBIOS).</p>`
@@ -587,7 +587,7 @@ const DashboardModule = (() => {
 
         // -- Carte Plan d'actions --
         const actionsCard = `
-            <div class="dashboard-card chart-card clickable-card" onclick="Router.navigateTo('/actions')" style="cursor:pointer;" title="Aller au plan d'actions">
+            <div class="dashboard-card chart-card clickable-card dash-nav" data-route="/actions" style="cursor:pointer;" title="Aller au plan d'actions">
                 <h3>Plan d'actions ${Help.tip("Avancement des actions de remédiation : part des actions terminées sur le total du périmètre.")}</h3>
                 <div class="dashboard-value" style="color:var(--text-main);">${avancementActions} %</div>
                 <div class="progress-bar small"><div class="progress-fill success" style="width:${avancementActions}%;"></div></div>
@@ -624,7 +624,7 @@ const DashboardModule = (() => {
                     <h3 style="margin-top:0;">Cartographie des risques ${Help.tip("Matrice Fréquence × Gravité (méthode EBIOS). La couleur traduit la criticité brute F×G ; le nombre indique combien de risques occupent la case.")}</h3>
                     ${risques.length === 0
                         ? `<p class="chart-empty">Aucun risque à cartographier.</p>`
-                        : `<div class="heat-wrap" onclick="Router.navigateTo('/matrice')" title="Ouvrir la matrice des risques">
+                        : `<div class="heat-wrap dash-nav" data-route="/matrice" title="Ouvrir la matrice des risques">
                             ${heatmapSvg(risques)}
                             <div class="heat-cap">Couleur = criticité brute (F×G) · bulle = nombre de risques. Cliquez pour la matrice détaillée.</div>
                            </div>`}
@@ -671,7 +671,7 @@ const DashboardModule = (() => {
                 <div class="split-col">
                     <h3 style="margin-top:0;">Actifs par criticité ${Help.tip("Répartition de l'inventaire des actifs (SI & OT) selon leur criticité pour l'organisation.")}</h3>
                     ${actifsBars}
-                    <button onclick="Router.navigateTo('/actifs')" style="width:100%; margin-top:1rem; justify-content:center; background:#fff; color:var(--primary); border:1px solid var(--border);">Gérer les actifs</button>
+                    <button type="button" class="dash-nav" data-route="/actifs" style="width:100%; margin-top:1rem; justify-content:center; background:#fff; color:var(--primary); border:1px solid var(--border);">Gérer les actifs</button>
                 </div>
             </div>`;
 
@@ -790,7 +790,7 @@ const DashboardModule = (() => {
             <div class="dashboard-card wide-card">
                 <h3 style="margin-top:0;">Prochaines échéances ${Help.tip("Les obligations datées les plus urgentes, tous modules confondus (plan d'actions, MCO, revues documentaires, incidents à déclarer, audits, revues de direction). Ouvrez l'Échéancier pour la vue complète et le calendrier.")}${echCounts.retard ? ` <span class="badge" style="background:var(--color-danger); color:#fff;">${echCounts.retard} en retard</span>` : ""}</h3>
                 ${echHtml}
-                <button onclick="Router.navigateTo('/echeances')" style="width:100%; margin-top:1rem; justify-content:center; background:#fff; color:var(--primary); border:1px solid var(--border);">Voir tout l'échéancier</button>
+                <button type="button" class="dash-nav" data-route="/echeances" style="width:100%; margin-top:1rem; justify-content:center; background:#fff; color:var(--primary); border:1px solid var(--border);">Voir tout l'échéancier</button>
             </div>`;
 
         // -- État vide (onboarding) --
@@ -890,6 +890,12 @@ const DashboardModule = (() => {
         });
         app.querySelectorAll(".dash-doc-item").forEach(li => {
             li.onclick = () => Router.navigateTo(`/documents/${li.dataset.id}`);
+        });
+        // Cartes et tuiles de navigation : la route voyage en `data-route` (même
+        // convention que .dash-ech-item ci-dessus) et n'est jamais interpolée dans
+        // un attribut de gestionnaire — que la CSP de production refuserait.
+        app.querySelectorAll(".dash-nav").forEach(el => {
+            el.addEventListener("click", () => { const r = el.dataset.route; if (r) Router.navigateTo(r); });
         });
 
         const clearHistBtn = document.getElementById("clearHistoryBtn");

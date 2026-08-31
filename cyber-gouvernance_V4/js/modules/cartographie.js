@@ -370,10 +370,19 @@ const CartographieModule = (() => {
             </div>
             <div class="carto-actions">
                 ${n.kind === "asset"
-                    ? `<button class="carto-btn-primary" onclick="Router.navigateTo('/actifs/${encodeURIComponent(n.id)}')">Ouvrir la fiche actif</button>`
-                    : `<button class="carto-btn-primary" onclick="Router.navigateTo('/bia/${encodeURIComponent(n.id)}')">Ouvrir le processus</button>`}
-                <button class="carto-btn-ghost" onclick="CartographieModule.clearSelection()">Désélectionner</button>
+                    ? `<button type="button" class="carto-btn-primary" id="carto-open">Ouvrir la fiche actif</button>`
+                    : `<button type="button" class="carto-btn-primary" id="carto-open">Ouvrir le processus</button>`}
+                <button type="button" class="carto-btn-ghost" id="carto-deselect">Désélectionner</button>
             </div>`;
+
+        // Gestionnaires du panneau : réinstallés à chaque rendu du panneau, car son
+        // contenu est remplacé en entier. La route est capturée par la fermeture —
+        // aucune donnée n'est interpolée dans un attribut.
+        const route = (n.kind === "asset" ? "/actifs/" : "/bia/") + encodeURIComponent(n.id);
+        const ouvrir = document.getElementById("carto-open");
+        if (ouvrir) ouvrir.addEventListener("click", () => Router.navigateTo(route));
+        const deselect = document.getElementById("carto-deselect");
+        if (deselect) deselect.addEventListener("click", () => clearSelection());
     }
 
     /* =========================
@@ -503,15 +512,17 @@ const CartographieModule = (() => {
                     <div class="dashboard-header"><h1>Cartographie du SI</h1></div>
                     <div class="dashboard-card" style="text-align:center; padding:40px;">
                         <p style="color:var(--text-muted); margin-bottom:16px;">Aucun actif déclaré : la cartographie a besoin d'actifs pour tracer les dépendances.</p>
-                        <button onclick="Router.navigateTo('/actifs')">Déclarer des actifs</button>
+                        <button type="button" id="carto-goto-actifs">Déclarer des actifs</button>
                     </div>
                 </section>`;
+            const versActifs = document.getElementById("carto-goto-actifs");
+            if (versActifs) versActifs.addEventListener("click", () => Router.navigateTo("/actifs"));
             return;
         }
         const spof = computeSpof(model);
 
-        const typeBtns = ALL_TYPES.map(t => `<button class="carto-fbtn" data-ftype="${t}" aria-pressed="true" onclick="CartographieModule.toggleType('${t}')">${t}</button>`).join("");
-        const critBtns = ALL_CRITS.map(c => `<button class="carto-fbtn" data-fcrit="${c}" aria-pressed="true" onclick="CartographieModule.toggleCrit('${c}')"><span class="carto-cdot" style="background:${CRIT_COLOR[c]}"></span>${c}</button>`).join("");
+        const typeBtns = ALL_TYPES.map(t => `<button type="button" class="carto-fbtn" data-ftype="${esc(t)}" aria-pressed="true">${esc(t)}</button>`).join("");
+        const critBtns = ALL_CRITS.map(c => `<button type="button" class="carto-fbtn" data-fcrit="${esc(c)}" aria-pressed="true"><span class="carto-cdot" style="background:${CRIT_COLOR[c]}"></span>${esc(c)}</button>`).join("");
 
         const legend = DEP_ORDER.map(tp => `<span class="carto-lg"><span class="carto-ln" style="border-color:${DEP_TYPES[tp].color};${DEP_TYPES[tp].dash ? "border-style:dashed" : ""}"></span>${DEP_TYPES[tp].short}</span>`).join("")
             + `<span class="carto-lg"><span class="carto-ln" style="border-color:${USE_COLOR};border-style:dotted"></span>usage (processus ↔ actif)</span>`;
@@ -524,8 +535,8 @@ const CartographieModule = (() => {
                         <p style="color:var(--text-muted); margin-top:5px;">Périmètre : <strong>Interne (SI global)</strong> — les dépendances s'ajoutent depuis la fiche de chaque actif.</p>
                     </div>
                     <div style="display:flex; gap:10px; align-items:center;">
-                        <button onclick="CartographieModule.exportPNG()" title="Télécharger la cartographie au format image PNG">Exporter en PNG</button>
-                        <button onclick="CartographieModule.exportSVG()" style="background:var(--bg-body); color:var(--text-main); border:1px solid var(--border);" title="Télécharger au format vectoriel SVG">SVG</button>
+                        <button type="button" id="carto-export-png" title="Télécharger la cartographie au format image PNG">Exporter en PNG</button>
+                        <button type="button" id="carto-export-svg" style="background:var(--bg-body); color:var(--text-main); border:1px solid var(--border);" title="Télécharger au format vectoriel SVG">SVG</button>
                     </div>
                 </div>
 
@@ -537,11 +548,11 @@ const CartographieModule = (() => {
                 </div>
 
                 <div class="carto-toolbar no-print">
-                    <input type="search" id="carto-search" class="carto-input" placeholder="Rechercher un actif…" oninput="CartographieModule.setSearch(this.value)" />
+                    <input type="search" id="carto-search" class="carto-input" placeholder="Rechercher un actif…" />
                     <div class="carto-fgroup" role="group" aria-label="Filtrer par type">${typeBtns}</div>
                     <div class="carto-fgroup" role="group" aria-label="Filtrer par criticité">${critBtns}</div>
-                    <label class="carto-check"><input type="checkbox" checked onchange="CartographieModule.setShowProc(this.checked)"> Processus</label>
-                    <label class="carto-check"><input type="checkbox" onchange="CartographieModule.setHideIsolated(this.checked)"> Masquer les isolés</label>
+                    <label class="carto-check"><input type="checkbox" id="carto-show-proc" checked> Processus</label>
+                    <label class="carto-check"><input type="checkbox" id="carto-hide-isolated"> Masquer les isolés</label>
                 </div>
 
                 <div class="carto-grid">
@@ -559,8 +570,29 @@ const CartographieModule = (() => {
                 </div>
             </section>`;
 
+        wireToolbar();
         renderGraph(model, spof);
         renderPanel(model, spof);
+    }
+
+    /* Branchement de la barre d'outils (une fois par rendu de la vue). */
+    function wireToolbar() {
+        const png = document.getElementById("carto-export-png");
+        if (png) png.addEventListener("click", exportPNG);
+        const svg = document.getElementById("carto-export-svg");
+        if (svg) svg.addEventListener("click", exportSVG);
+        const recherche = document.getElementById("carto-search");
+        if (recherche) recherche.addEventListener("input", (e) => setSearch(e.target.value));
+        const proc = document.getElementById("carto-show-proc");
+        if (proc) proc.addEventListener("change", (e) => setShowProc(e.target.checked));
+        const isoles = document.getElementById("carto-hide-isolated");
+        if (isoles) isoles.addEventListener("change", (e) => setHideIsolated(e.target.checked));
+        // Les filtres portent leur valeur en `data-` : elle est lue au clic, jamais
+        // interpolée dans un attribut de gestionnaire.
+        document.querySelectorAll("[data-ftype]").forEach(b =>
+            b.addEventListener("click", () => toggleType(b.dataset.ftype)));
+        document.querySelectorAll("[data-fcrit]").forEach(b =>
+            b.addEventListener("click", () => toggleCrit(b.dataset.fcrit)));
     }
 
     function injectStyles() {
