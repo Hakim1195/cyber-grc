@@ -36,6 +36,15 @@
  *
  *  6. **Aucun secret en sortie.** Ni mot de passe, ni chaîne de connexion complète.
  *
+ *  7. **Les garde-fous du schéma sont joués, et font échouer.** `f_verifier_couverture_rls()`
+ *     et `f_verifier_chemin_recherche()` étaient écrites, testées, correctes — et appelées
+ *     par aucun chemin de déploiement. Une base sabotée passait au vert pendant qu'une
+ *     filiale lisait les données de la voisine. Elles sont donc jouées ici **après
+ *     application, et aussi quand il n'y a rien à appliquer** : c'est le cas d'une base à
+ *     jour, c'est-à-dire chaque ré-exécution de `install.sh`, et c'est précisément là que
+ *     le sabotage passait inaperçu. Un garde-fou que rien n'appelle est un commentaire
+ *     (CONVENTIONS.md §18.4).
+ *
  * ── Utilisation ──────────────────────────────────────────────────────────────
  *
  *     node db/migrate.mjs                  applique ce qui manque
@@ -57,6 +66,8 @@
  *     4   divergence d'empreinte : une migration appliquée a été modifiée depuis
  *     5   répertoire de migrations invalide (nom hors convention, numéro en double)
  *     6   échec d'application d'une migration
+ *     7   schéma NON CONFORME : les migrations sont passées, mais un garde-fou de la
+ *         base remonte une anomalie (couverture RLS, chemin de recherche)
  *    10   --verifier : des migrations restent à appliquer (informatif, pas une panne)
  *
  * Aucune dépendance ajoutée : `pg` est déjà au `package.json`, la bibliothèque
@@ -82,6 +93,11 @@ export const CODES = Object.freeze({
   DIVERGENCE: 4,
   REPERTOIRE: 5,
   MIGRATION: 6,
+  // Distinct de MIGRATION à dessein : « les migrations se sont appliquées, et le schéma
+  // obtenu n'est pas conforme » n'appelle pas le même geste que « une migration a échoué ».
+  // Dans le premier cas la base a changé et il faut la regarder ; dans le second elle est
+  // restée où elle était.
+  CONFORMITE: 7,
   EN_RETARD: 10,
 });
 
@@ -170,9 +186,13 @@ Configuration lue dans l'environnement (mêmes noms que le serveur, voir .env.ex
 Le compte propriétaire est obligatoire : les migrations ne s'appliquent jamais avec le
 compte applicatif (backend/db/CONVENTIONS.md §12 et §14).
 
+Après application — et aussi quand il n'y a rien à appliquer — les garde-fous de la base
+sont joués : f_verifier_couverture_rls() et f_verifier_chemin_recherche(). Toute anomalie
+fait sortir en erreur (code 7). Un schéma sain ne renvoie aucune ligne.
+
 Codes de sortie : 0 à jour · 1 usage · 2 configuration · 3 connexion ·
                   4 empreinte divergente · 5 répertoire invalide · 6 migration en échec ·
-                  10 (--verifier) migrations en attente
+                  7 schéma non conforme · 10 (--verifier) migrations en attente
 `;
 
 /* =====================================================================
@@ -458,6 +478,160 @@ async function appliquerUne(client, migration, registreAvecEmpreinte) {
 }
 
 /* =====================================================================
+ *  Conformité du schéma — brancher les garde-fous sur un chemin réel
+ * ===================================================================== */
+
+/**
+ * Les garde-fous que la base porte elle-même. Ils sont écrits par les migrations,
+ * éprouvés par `test/base/rls.test.mjs`, montrés à l'auditeur par
+ * `db/verifier_cloisonnement.sql` — et, jusqu'ici, appelés par aucun chemin de
+ * déploiement. C'est le constat T-4 de la porte S1 : « un garde-fou que rien n'appelle
+ * est un commentaire » (CONVENTIONS.md §18.4).
+ *
+ * Convention commune aux deux : **un schéma sain ne renvoie AUCUNE ligne**, même idiome
+ * que `f_journal_audit_verifier()`.
+ *
+ * PORTÉE, à ne pas surestimer (CONVENTIONS §17.5) : `f_verifier_couverture_rls()` lit le
+ * TEXTE des prédicats, pas leur sens, et `f_verifier_chemin_recherche()` lit une
+ * déclaration, pas un comportement. Ce contrôle attrape une table ouverte en grand ou
+ * oubliée ; ce qui mord vraiment sur le sens, ce sont les tests de comportement.
+ */
+const GARDE_FOUS = Object.freeze([
+  Object.freeze({
+    nom: 'f_verifier_couverture_rls',
+    sujet: 'couverture RLS',
+    posePar: '004_rls.sql',
+    consequence:
+      'une table sans « force row level security » ou sans politique consultant le ' +
+      'périmètre se lit d\'une filiale à l\'autre (CONVENTIONS.md §11)',
+  }),
+  Object.freeze({
+    nom: 'f_verifier_chemin_recherche',
+    sujet: 'chemin de recherche des fonctions',
+    posePar: '001_socle.sql',
+    consequence:
+      'une fonction dont le chemin de recherche ne relègue pas pg_temp est détournable ' +
+      'par masquage d\'une table du schéma (CONVENTIONS.md §17.2)',
+  }),
+]);
+
+/**
+ * Joue les garde-fous du schéma et rend ce qu'ils disent, sans rien décider.
+ *
+ * Les deux fonctions sont `stable` et ne lisent que des catalogues : l'appel n'écrit
+ * rien, et reste donc légitime sous `--verifier`, qui promet « aucune écriture ».
+ *
+ * Une fonction ABSENTE n'est pas une anomalie : sur une base antérieure à la migration
+ * qui la pose, il n'y a rien à interroger. C'est un avertissement, pas un échec — sans
+ * quoi ce contrôle empêcherait de migrer les bases qu'il est censé protéger.
+ *
+ * Le nom de fonction interpolé vient de la constante figée ci-dessus, jamais d'une
+ * entrée : rien d'extérieur n'atteint cette requête.
+ *
+ * @returns {Promise<{anomalies: {fonction: string, objet: string, anomalie: string,
+ *                                detail: string}[],
+ *                    absents: string[], injouables: {fonction: string, raison: string}[]}>}
+ */
+export async function verifierConformite(client) {
+  const anomalies = [];
+  const absents = [];
+  const injouables = [];
+
+  for (const garde of GARDE_FOUS) {
+    const presence = await client.query(
+      'select to_regprocedure($1) is not null as existe',
+      [`public.${garde.nom}()`],
+    );
+    if (!presence.rows[0].existe) {
+      absents.push(garde.nom);
+      continue;
+    }
+
+    let lignes;
+    try {
+      lignes = await client.query(
+        `select objet, anomalie, detail from public.${garde.nom}() order by 1, 2`,
+      );
+    } catch (erreur) {
+      // Un garde-fou qu'on n'a PAS pu jouer ne vaut pas un garde-fou muet : on ne
+      // conclut pas « conforme » d'une question restée sans réponse.
+      injouables.push({ fonction: garde.nom, raison: erreur.message });
+      continue;
+    }
+
+    for (const ligne of lignes.rows) {
+      anomalies.push({
+        fonction: garde.nom,
+        objet: ligne.objet,
+        anomalie: ligne.anomalie,
+        detail: ligne.detail,
+      });
+    }
+  }
+
+  return { anomalies, absents, injouables };
+}
+
+/**
+ * Joue les garde-fous, écrit le verdict, et rend le code de sortie.
+ *
+ * @param {import('pg').Client} client
+ * @param {number} codeSiConforme code à rendre si le schéma est conforme
+ * @returns {Promise<number>}
+ */
+async function conclureSurLaConformite(client, codeSiConforme) {
+  const { anomalies, absents, injouables } = await verifierConformite(client);
+
+  for (const nom of absents) {
+    const garde = GARDE_FOUS.find((g) => g.nom === nom);
+    journal.alerte(
+      `${nom}() est absente de cette base : le contrôle « ${garde.sujet} » n'a pas pu être ` +
+        `joué. Cette fonction est posée par ${garde.posePar} ; une base qui ne l'a pas est ` +
+        'antérieure à ce garde-fou.',
+    );
+  }
+
+  if (injouables.length > 0) {
+    journal.echec(
+      'Un garde-fou du schéma n\'a pas pu être joué :\n' +
+        injouables.map((i) => `        ${i.fonction}() : ${i.raison}`).join('\n') +
+        '\n      Le schéma n\'est donc pas déclaré conforme : une question sans réponse ' +
+        'n\'est pas une réponse rassurante.',
+    );
+    return CODES.CONFORMITE;
+  }
+
+  if (anomalies.length > 0) {
+    journal.titre('Garde-fous du schéma — anomalies :');
+    for (const a of anomalies) {
+      journal.ligne(`  ${a.objet} → ${a.anomalie}`);
+      journal.ligne(`      ${a.detail}`);
+    }
+    // Le message nomme la conséquence du garde-fou qui a RÉELLEMENT parlé : expliquer une
+    // anomalie de chemin de recherche par une fuite entre filiales enverrait l'exploitant
+    // chercher au mauvais endroit.
+    const parlants = GARDE_FOUS.filter((g) => anomalies.some((a) => a.fonction === g.nom));
+    journal.echec(
+      `Schéma NON CONFORME : ${anomalies.length} anomalie(s) remontée(s) par ` +
+        `${parlants.map((g) => `${g.nom}()`).join(' et ')}.\n` +
+        '      Les migrations sont passées ; le schéma obtenu ne l\'est pas.\n' +
+        parlants.map((g) => `      — ${g.sujet} : ${g.consequence}`).join('\n') +
+        '\n      À rejouer après correction : ' +
+        `${parlants.map((g) => `select * from ${g.nom}();`).join(' ')}`,
+    );
+    return CODES.CONFORMITE;
+  }
+
+  const joues = GARDE_FOUS.filter((g) => !absents.includes(g.nom));
+  if (joues.length > 0) {
+    journal.ligne(
+      `  garde-fous du schéma : ${joues.map((g) => g.sujet).join(', ')} — aucune anomalie.`,
+    );
+  }
+  return codeSiConforme;
+}
+
+/* =====================================================================
  *  Programme principal
  * ===================================================================== */
 
@@ -627,10 +801,19 @@ async function deroulement(client, migrations, options) {
     }
     if (aAppliquer.length === 0) {
       journal.titre(`Schéma à jour : ${migrations.length} migration(s), rien à appliquer.`);
-      return CODES.SUCCES;
+      // « Rien à appliquer » n'est PAS « rien à vérifier » : c'est exactement l'état d'une
+      // base à jour qu'on a sabotée depuis, et l'angle mort qu'a exploité le constat T-4.
+      // Les garde-fous sont `stable` : les jouer ici ne rompt pas la promesse de --verifier.
+      return await conclureSurLaConformite(client, CODES.SUCCES);
     }
     journal.titre(
       `${aAppliquer.length} migration(s) à appliquer : ${aAppliquer.map((m) => m.nom).join(', ')}.`,
+    );
+    // Schéma volontairement incomplet : les garde-fous remonteraient des tables que la
+    // migration suivante doit encore couvrir. On ne les joue pas, et on le dit.
+    journal.alerte(
+      'Garde-fous du schéma non joués : des migrations restent à appliquer, le schéma est ' +
+        'incomplet par construction. Ils le seront à l\'application.',
     );
     return CODES.EN_RETARD;
   }
@@ -700,6 +883,12 @@ async function deroulement(client, migrations, options) {
       `Arrêt à la migration ${options.jusquA} comme demandé : ${appliquees} appliquée(s), ` +
         `${restantes} restante(s).`,
     );
+    // Même raison qu'en mode vérification : un schéma arrêté en chemin n'est pas censé
+    // être conforme, et le déclarer non conforme n'apprendrait rien à personne.
+    journal.alerte(
+      'Garde-fous du schéma non joués : arrêt demandé avant la fin, le schéma est ' +
+        'volontairement incomplet.',
+    );
     return CODES.SUCCES;
   }
 
@@ -708,7 +897,14 @@ async function deroulement(client, migrations, options) {
       ? `Schéma à jour : ${migrations.length} migration(s), rien à appliquer.`
       : `Schéma à jour : ${appliquees} migration(s) appliquée(s) sur ${migrations.length}.`,
   );
-  return CODES.SUCCES;
+
+  // Les deux cas comptent, et le second plus encore que le premier :
+  //   - « appliquées »       : une migration a pu créer une table sans politique ;
+  //   - « rien à appliquer » : la base est à jour, les migrations ne sont PAS rejouées,
+  //                            leur propre garde-fou de fin ne s'exécute donc jamais.
+  // C'est ce second cas — chaque ré-exécution de install.sh, et le chemin
+  // --reprendre-propriete — qui laissait passer un schéma saboté (T-4).
+  return await conclureSurLaConformite(client, CODES.SUCCES);
 }
 
 /* =====================================================================
