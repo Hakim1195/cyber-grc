@@ -8,14 +8,18 @@
  * seulement par le code : un oubli de filtre dans une requête ne peut pas
  * provoquer de fuite entre filiales. Pour que la politique RLS ait de quoi
  * décider, chaque transaction commence par déclarer son périmètre au moyen de
- * trois paramètres de session, conformément à `backend/db/CONVENTIONS.md` §11 :
+ * QUATRE paramètres de session, conformément à `backend/db/CONVENTIONS.md`
+ * §11 et §17.4 :
  *
- *     grc.utilisateur    identifiant de l'utilisateur de la transaction
- *     grc.filiale_id     filiale ACTIVE — la seule dans laquelle on écrit
- *     grc.filiales       périmètre de LECTURE résolu, séparé par des virgules
+ *     grc.utilisateur             identifiant de l'utilisateur de la transaction
+ *     grc.filiale_id              filiale ACTIVE — la seule dans laquelle on écrit
+ *     grc.filiales                périmètre de LECTURE résolu, séparé par des virgules
+ *     grc.administration_groupe   'oui' si la transaction écrit des lignes de portée
+ *                                 Groupe ; chaîne vide sinon
  *
- * Ils sont lus côté base par `f_utilisateur_courant()`, `f_filiale_courante()`
- * et `f_filiales_autorisees()`, créées par la migration `001_socle.sql`.
+ * Ils sont lus côté base par `f_utilisateur_courant()`, `f_filiale_courante()`,
+ * `f_filiales_autorisees()` (migration `001_socle.sql`) et
+ * `f_administration_groupe()` (migration `004_rls.sql`).
  *
  * Deux règles absolues :
  *
@@ -25,11 +29,36 @@
  *     laquelle `avecTransaction` exige un objet `PerimetreSession` construit par
  *     la couche d'authentification, et refuse un périmètre vide.
  *
- *  2. **Le réglage est local à la transaction** (`set_config(..., true)`, soit
- *     l'équivalent paramétrable de `set local`). Il meurt au `commit` ou au
- *     `rollback` : une connexion rendue au pool ne peut pas emporter le
- *     périmètre de l'utilisateur précédent. C'est le point qui rend le
- *     cloisonnement compatible avec un pool de connexions.
+ *  2. **Chacun des quatre réglages est local à la transaction**
+ *     (`set_config(..., true)`, soit l'équivalent paramétrable de `set local`),
+ *     et **chacun des quatre est posé à chaque transaction**, y compris avec la
+ *     valeur vide. Il meurt au `commit` ou au `rollback` : une connexion rendue
+ *     au pool ne peut pas emporter le périmètre de l'utilisateur précédent.
+ *     C'est le point qui rend le cloisonnement compatible avec un pool de
+ *     connexions.
+ *
+ *     Les deux moitiés de cette règle comptent autant l'une que l'autre, et
+ *     c'est la seconde qui manquait. Le pool `pg` n'émet **aucun** `DISCARD` en
+ *     reprenant une connexion : un réglage qu'`appliquerPerimetre` ne pose pas
+ *     n'est pas pour autant absent — il vaut ce que la transaction précédente y
+ *     a laissé si elle l'a posé en portée session. Un réglage simplement omis
+ *     ici est donc un réglage **hérité**. Tant que `grc.administration_groupe`
+ *     n'était pas écrasé à chaque transaction, un `set` employé à la place d'un
+ *     `set_config(…, true)` — ou un `set_config(…, false)` oublié après une mise
+ *     au point — élevait silencieusement les privilèges de tous les utilisateurs
+ *     servis ensuite par la même connexion (porte de sécurité S1, constat N-4 ;
+ *     éprouvé par `test/base/pool.test.mjs`). Poser les quatre réglages sans
+ *     condition rend la propriété vraie **par construction** : ajouter un
+ *     cinquième réglage à `appliquerPerimetre` sans l'y poser toujours ferait
+ *     réapparaître le même défaut.
+ *
+ *     Portée exacte de la garantie, à ne pas surestimer : elle couvre le travail
+ *     fait **dans** `avecTransaction`, parce que c'est là que les quatre réglages
+ *     sont écrasés. Une requête passée directement par `pool.query()` s'exécute
+ *     avec ce que la connexion porte encore, réglages de session compris. C'est
+ *     acceptable pour la seule requête qui emprunte ce chemin (`verifierBase`,
+ *     un `select 1` qui ne lit aucune donnée métier) et cela doit le rester :
+ *     toute lecture ou écriture de donnée métier passe par `avecTransaction`.
  *
  * Le rôle applicatif (`grc_app`) n'a pas `bypassrls` et n'est pas propriétaire
  * des tables : il ne peut ni contourner ni désactiver les politiques.
@@ -59,11 +88,34 @@ export interface PerimetreSession {
   readonly filiales: readonly string[];
   /**
    * Information applicative : le périmètre couvre-t-il le Groupe entier ?
-   * La base ne voit **que** les trois paramètres décrits en tête de fichier —
-   * un périmètre Groupe est simplement un `filiales` contenant toutes les
-   * filiales actives. Aucun drapeau ne permet de contourner la RLS.
+   * Ce champ n'est **pas** transmis à la base : un périmètre Groupe y est
+   * simplement un `filiales` contenant toutes les filiales actives. Aucun
+   * réglage de session n'élargit la LECTURE au-delà de cette liste.
    */
   readonly perimetreGroupe: boolean;
+  /**
+   * La transaction écrit-elle des lignes de **portée Groupe** (les lignes à
+   * `filiale_id` nul des tables mixtes, et les tables de configuration
+   * `utilisateurs`, `profils`, `profil_domaines`, `groupes_ad`, `filiales`) ?
+   *
+   * Transmis à la base dans `grc.administration_groupe` ('oui' ou chaîne vide),
+   * où `f_administration_groupe()` le lit. Il n'élargit **jamais** la lecture :
+   * il n'apparaît dans aucune politique de `select`, et la migration `004_rls`
+   * refuse de s'appliquer s'il venait à y apparaître.
+   *
+   * ⚠️ Ce n'est **pas un privilège** : c'est une déclaration que la session fait
+   * sur elle-même (`CONVENTIONS.md` §17.4). Le rôle applicatif peut la poser
+   * lui-même, et rien dans la base ne l'en empêche. Elle protège donc de la
+   * **faute de programmation** — une écriture Groupe faite par un chemin qui ne
+   * l'a pas déclarée — et pas du tout d'un rôle applicatif compromis, qui la
+   * poserait avant d'écrire.
+   *
+   * La barrière réelle est **côté serveur** : c'est le modèle de droits à trois
+   * axes du lot L3 qui décide si la session a le profil *Administration* et le
+   * périmètre *Groupe*, donc si ce champ peut valoir `true`. Ne pas lire cette
+   * ligne comme un contrôle que la base arbitrerait : elle ne l'arbitre pas.
+   */
+  readonly administrationGroupe: boolean;
 }
 
 /**
@@ -75,12 +127,18 @@ export interface PerimetreSession {
  * donc les politiques de lecture ne renvoient rien. Les opérations qui doivent
  * traverser les filiales (consolidation Groupe, purges) passent par le compte
  * propriétaire et des procédures dédiées, pas par ce périmètre.
+ *
+ * `administrationGroupe` y vaut **faux**, et le vaut explicitement plutôt que par
+ * omission : `'systeme'` n'est personne, et une écriture de portée Groupe doit
+ * être attribuable à quelqu'un. Une tâche planifiée qui devrait en faire une
+ * déclarera son propre périmètre, sous un identifiant qui la nomme.
  */
 export const PERIMETRE_SYSTEME: PerimetreSession = Object.freeze({
   utilisateurId: 'systeme',
   filialeId: null,
   filiales: Object.freeze([]) as readonly string[],
   perimetreGroupe: false,
+  administrationGroupe: false,
 });
 
 /** Périmètre inutilisable : programmation fautive, jamais une erreur d'utilisateur. */
@@ -128,8 +186,15 @@ export function creerPool(base: ConfigurationBase, journal?: JournalMinimal): Po
     max: base.poolMax,
     connectionTimeoutMillis: base.delaiConnexionMs,
     idleTimeoutMillis: base.delaiInactiviteMs,
-    // `search_path` est figé à `public` : le schéma unique est une décision de
-    // conception (backend/db/CONVENTIONS.md §1), pas un réglage d'exploitation.
+    // `search_path` est figé à `public` parce que le schéma unique est une
+    // décision de conception (backend/db/CONVENTIONS.md §1), pas un réglage
+    // d'exploitation. Ce n'est **pas** une mesure de sécurité, et il ne faut pas
+    // compter dessus : PostgreSQL consulte `pg_temp` AVANT le `search_path`,
+    // qu'il vaille `public` ou non. Ce qui protège, c'est que chaque fonction
+    // fige le sien (`CONVENTIONS.md` §17.2, constats M-1 et N-7 de la porte S1)
+    // et que `PUBLIC` n'a pas le privilège `temporary` sur la base — deux
+    // propriétés qui vivent dans les migrations et dans `deploy/install.sh`,
+    // pas ici.
     options: [
       'search_path=public',
       `statement_timeout=${base.delaiRequeteMs}`,
@@ -222,17 +287,33 @@ export async function avecTransaction<T>(
 }
 
 /**
- * Positionne les trois paramètres lus par les politiques RLS.
+ * Positionne les quatre paramètres lus par les politiques RLS.
  *
  * `set_config(..., true)` est l'équivalent paramétrable de `set local` : la
  * valeur passe par le protocole étendu, jamais par concaténation de chaîne.
+ *
+ * **Les quatre sont posés sans condition**, y compris avec la valeur vide. Un
+ * réglage que cette fonction n'écrase pas n'est pas absent : le pool `pg`
+ * n'émet aucun `DISCARD` en reprenant une connexion, donc il vaut ce que la
+ * transaction précédente y a laissé (règle 2 de l'entête, constat N-4 de la
+ * porte S1). Une valeur vide n'est pas une omission — c'est une remise à zéro,
+ * et c'est elle qui rend le réglage local à la transaction par construction.
+ *
+ * Comparaison stricte à `'oui'` côté base (`f_administration_groupe()`, migration
+ * `004_rls.sql`) : toute autre valeur, chaîne vide comprise, vaut non.
  */
 async function appliquerPerimetre(client: PoolClient, perimetre: PerimetreSession): Promise<void> {
   await client.query(
-    `select set_config('grc.utilisateur', $1, true),
-            set_config('grc.filiale_id',  $2, true),
-            set_config('grc.filiales',    $3, true)`,
-    [perimetre.utilisateurId, perimetre.filialeId ?? '', perimetre.filiales.join(',')],
+    `select set_config('grc.utilisateur',           $1, true),
+            set_config('grc.filiale_id',            $2, true),
+            set_config('grc.filiales',              $3, true),
+            set_config('grc.administration_groupe', $4, true)`,
+    [
+      perimetre.utilisateurId,
+      perimetre.filialeId ?? '',
+      perimetre.filiales.join(','),
+      perimetre.administrationGroupe ? 'oui' : '',
+    ],
   );
 }
 
