@@ -35,6 +35,12 @@
 --       une filiale ne pose pas son fichier comme logo d'une autre (constat N-2) ; un
 --       contrôle du socle indestructible S'ARCHIVE (N-6) ; l'acteur du journal vient de
 --       la session (N-5) ; les déclencheurs de cohérence sont armés en « always » (N-11) ;
+--   §8f CE QU'UNE FILIALE PEUT EMPÊCHER CHEZ UNE AUTRE — une étape d'approbation posée
+--       par Toulouse ne bloque plus l'acceptation de risque résiduel de l'Allemagne, et
+--       aucune unicité de table cloisonnée n'ignore filiale_id (constat Q-2) ; la
+--       sentinelle « systeme » ne se provisionne pas (Q-3) ; les erreurs d'import suivent
+--       la filiale de leur import, et la liste des tables NON cloisonnées est montrée
+--       plutôt qu'affirmée (Q-5) ;
 --   §9  LE RÔLE APPLICATIF — ni BYPASSRLS, ni SUPERUSER, propriétaire de rien ;
 --   §10 COUVERTURE — les 47 tables sous « enable » et « force row level security », et le
 --       chemin de recherche figé sur chaque fonction (constat M-1).
@@ -60,6 +66,24 @@
 -- une raison de le rendre : c'est exactement ce qu'il ne faut pas. Les résultats
 -- s'accumulent donc dans un réglage de session local à la transaction (« demo.resultats »,
 -- du JSON), que tout rôle peut poser.
+--
+-- ── Il ne porte que sur SES données, et il tourne sur une base PEUPLÉE ───────────────
+--
+-- Tout prédicat de ce script est borné aux lignes qu'il a lui-même semées, et toute ligne
+-- qu'il sème porte une identité que la production ne peut pas revendiquer : identifiants
+-- en « …-DEMO-… », codes de filiale et de profil en « ZZ… », comptes en « zzdemo-… ».
+--
+-- Ce n'était pas vrai. Le contrôle C04 comptait les lignes de portée Groupe de TOUTE la
+-- base — celles-là, à la différence de toutes les autres, sont visibles depuis n'importe
+-- quel périmètre — et en attendait exactement huit : une seule mesure de socle
+-- préexistante suffisait à faire rendre « CLOISONNEMENT EN DÉFAUT, ne pas mettre en
+-- service » (constat Q-4). Deux comptes semés portaient par ailleurs des identifiants
+-- vraisemblables (« jdupont », « login-demo ») dont l'unicité insensible à la casse
+-- aurait interrompu la démonstration sur une base réelle.
+--
+-- Une alarme qui se déclenche à tort sur la pièce dont toute la valeur est d'être crue
+-- est pire qu'une alarme absente. CONVENTIONS.md §19.3 : la démonstration se joue au
+-- moins une fois sur une base PEUPLÉE avant d'être déclarée bonne.
 --
 -- ── Il ne laisse RIEN derrière lui ───────────────────────────────────────────────────
 --
@@ -146,7 +170,7 @@ $$;
 \echo
 \echo '§2 — Jeu d''essai : Toulouse (FIL-DEMO-A) et Allemagne (FIL-DEMO-B)'
 
-select set_config('grc.utilisateur', 'demonstration', true),
+select set_config('grc.utilisateur', 'zzdemo-demonstration', true),
        set_config('grc.filiales',    'FIL-DEMO-A,FIL-DEMO-B', true),
        set_config('grc.filiale_id',  'FIL-DEMO-A', true) \gset _rebut
 
@@ -334,6 +358,23 @@ order by 1;
 -- quatre mesures MESURE-DEMO-G2 à G5 servent au §6 quater — chacune n'est référencée que par
 -- l'Allemagne, par l'un des quatre chemins possibles, et ce sont ces lignes invisibles qui
 -- protègent le socle de la suppression. MESURE-DEMO-G6, elle, n'est utilisée par personne.
+--
+-- ── « id like '%-DEMO-%' » N'EST PAS DE L'ORNEMENT (CONVENTIONS.md §19.3) ─────────────
+-- Constat Q-4 du quatrième passage de la porte S1, et le seul contrôle du script qui en
+-- souffrait. Il comptait TOUTES les lignes de portée Groupe, sans borner le comptage à ce
+-- que le script avait lui-même semé, et attendait le nombre exact 8. Or les lignes de
+-- portée Groupe sont, par construction, visibles depuis N'IMPORTE QUEL périmètre : le
+-- périmètre de la session ne les borne pas, à la différence de tout le reste du script.
+-- UNE SEULE ligne de socle préexistante — une mesure de catalogue Groupe, c'est-à-dire
+-- exactement ce que le socle contient en service — faisait donc rendre « attendu 8, obtenu
+-- 9 », un code de sortie non nul et la phrase « CLOISONNEMENT EN DÉFAUT — ne pas mettre en
+-- service ».
+--
+-- C'est la pièce qu'on montre à l'auditeur ISO 27001. Une alarme qui se déclenche à tort
+-- sur l'artefact dont toute la valeur est d'être cru est pire qu'une alarme absente : la
+-- seconde fois, on ne la lit plus. Tout prédicat de ce script ne porte donc que sur les
+-- données qu'il a lui-même semées, et il est joué au moins une fois sur une base PEUPLÉE
+-- avant d'être déclaré bon.
 do $$
 declare v_ligne jsonb;
 begin
@@ -342,9 +383,12 @@ begin
       from (
         select 'C04', 'Tables mixtes : le socle de Groupe est lisible (6 mesures, personne, document)',
                '8', v.n::text, case when v.n = 8 then 'OK' else 'ÉCHEC' end
-          from (select (select count(*) from mesure_catalogue where filiale_id is null)
-                     + (select count(*) from personnes        where filiale_id is null)
-                     + (select count(*) from documents        where filiale_id is null) as n) v
+          from (select (select count(*) from mesure_catalogue
+                         where filiale_id is null and id like '%-DEMO-%')
+                     + (select count(*) from personnes
+                         where filiale_id is null and id like '%-DEMO-%')
+                     + (select count(*) from documents
+                         where filiale_id is null and id like '%-DEMO-%') as n) v
       ) as x (numero, controle, attendu, obtenu, verdict);
     -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
     if v_ligne is not null then
@@ -1233,7 +1277,7 @@ declare v_ligne jsonb;
 begin
     perform set_config('grc.administration_groupe', 'oui', true);
     insert into utilisateurs (id, identifiant, nom_affichage)
-    values ('demonstration', 'demonstration', 'Compte de démonstration')
+    values ('zzdemo-demonstration', 'zzdemo-demonstration', 'Compte de démonstration')
     on conflict (id) do nothing;
     perform set_config('grc.administration_groupe', '', true);
 
@@ -1248,7 +1292,7 @@ begin
         perform set_config('demo.resultats',
             (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
             'C75', 'Journal : l''acteur vient de la SESSION, le libellé reste celui du client',
-            'demonstration / bruno',
+            'zzdemo-demonstration / bruno',
             format('l''acteur fourni par le client a été CONSERVÉ (%s)', sqlstate),
             'ÉCHEC')))::text, true);
         return;
@@ -1259,9 +1303,10 @@ begin
       from (
         select 'C75',
                'Journal : l''acteur vient de la SESSION, le libellé reste celui du client',
-               'demonstration / bruno',
+               'zzdemo-demonstration / bruno',
                coalesce(j.utilisateur_id, '(nul)') || ' / ' || coalesce(j.utilisateur_libelle, '(nul)'),
-               case when j.utilisateur_id = 'demonstration' and j.utilisateur_libelle = 'bruno'
+               case when j.utilisateur_id = 'zzdemo-demonstration'
+                     and j.utilisateur_libelle = 'bruno'
                     then 'OK' else 'ÉCHEC' end
           from journal_audit j where j.resume = 'acteur declare par le client'
       ) as x (numero, controle, attendu, obtenu, verdict);
@@ -1343,7 +1388,7 @@ begin
       from (
         select 'C77',
                'Création : version, cree_par et cree_le fournis par le client sont IGNORÉS',
-               'v1 / demonstration / aujourd''hui / non modifié',
+               'v1 / zzdemo-demonstration / aujourd''hui / non modifié',
                case when v_refus <> 'AUCUN REFUS' then 'REFUSÉE (' || v_refus || ')'
                     else format('v%s / %s / %s / %s', r.version, r.cree_par,
                                 case when r.cree_le::date = current_date then 'aujourd''hui'
@@ -1352,7 +1397,7 @@ begin
                                      else 'modifie_par = ' || r.modifie_par end)
                end,
                case when v_refus = 'AUCUN REFUS' and r.version = 1
-                     and r.cree_par = 'demonstration' and r.cree_le::date = current_date
+                     and r.cree_par = 'zzdemo-demonstration' and r.cree_le::date = current_date
                      and r.modifie_par is null and r.modifie_le is null
                     then 'OK' else 'ÉCHEC' end
           from risques r where r.id = 'RISK-DEMO-USURPE'
@@ -1361,7 +1406,7 @@ begin
     if v_ligne is null then
         v_ligne := jsonb_build_array('C77',
             'Création : version, cree_par et cree_le fournis par le client sont IGNORÉS',
-            'v1 / demonstration / aujourd''hui / non modifié',
+            'v1 / zzdemo-demonstration / aujourd''hui / non modifié',
             'la ligne n''a pas été créée (' || v_refus || ')', 'ÉCHEC');
     end if;
     perform set_config('demo.resultats',
@@ -1431,7 +1476,7 @@ begin
     perform set_config('grc.filiales', 'FIL-DEMO-A,FIL-DEMO-B', true);
     perform set_config('grc.administration_groupe', 'oui', true);
     insert into utilisateurs (id, identifiant, nom_affichage)
-    values ('USR-DEMO-1', 'login-demo', 'Compte de démonstration');
+    values ('USR-DEMO-1', 'zzdemo-login', 'Compte de démonstration');
     perform set_config('grc.administration_groupe', '', true);
 
     -- Une fiche d'annuaire de chaque côté, rattachée au même compte.
@@ -1518,24 +1563,24 @@ declare v_ligne jsonb;
 begin
     perform set_config('grc.administration_groupe', 'oui', true);
     insert into utilisateurs (id, identifiant, nom_affichage)
-    values ('USR-1720000000000-482', 'jdupont', 'Jean Dupont');
+    values ('USR-DEMO-1720000000000-482', 'zzdemo-jdupont', 'Jean Dupont');
     perform set_config('grc.administration_groupe', '', true);
-    perform set_config('grc.utilisateur', 'jdupont', true);
+    perform set_config('grc.utilisateur', 'zzdemo-jdupont', true);
 
     insert into journal_audit (filiale_id, utilisateur_id, utilisateur_libelle, action, resume)
     values ('FIL-DEMO-A', 'USR-USURPE', 'bruno', 'creation', 'acteur resolu sur le login');
 
     select jsonb_build_array('C83',
                'Journal : le LOGIN de session est résolu vers la clé du compte (id <> identifiant)',
-               'USR-1720000000000-482 / bruno',
+               'USR-DEMO-1720000000000-482 / bruno',
                coalesce(j.utilisateur_id, '(NUL)') || ' / ' || coalesce(j.utilisateur_libelle, '(nul)'),
-               case when j.utilisateur_id = 'USR-1720000000000-482'
+               case when j.utilisateur_id = 'USR-DEMO-1720000000000-482'
                      and j.utilisateur_libelle = 'bruno'
                     then 'OK' else 'ÉCHEC' end)
       into v_ligne
       from journal_audit j where j.resume = 'acteur resolu sur le login';
 
-    perform set_config('grc.utilisateur', 'demonstration', true);
+    perform set_config('grc.utilisateur', 'zzdemo-demonstration', true);
     if v_ligne is not null then
         perform set_config('demo.resultats',
             (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
@@ -1555,6 +1600,198 @@ begin
                case when count(*) = 0 then 'OK' else 'ÉCHEC' end)
       into v_ligne
       from f_verifier_schema() v;
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+-- =====================================================================================
+-- §8 sexies — CE QU'UNE FILIALE PEUT EMPÊCHER CHEZ UNE AUTRE  (quatrième passage S1)
+-- -------------------------------------------------------------------------------------
+-- Les §3 à §8 montrent que Toulouse ne LIT pas et n'ÉCRIT pas chez l'Allemagne. Ils ne
+-- disaient rien de ce que Toulouse peut EMPÊCHER chez elle — et c'est par là qu'est passé
+-- le constat le plus grave des quatre passages de la porte.
+-- =====================================================================================
+
+\echo
+\echo '§8 sexies — Unicités, sentinelle systeme, erreurs d''import'
+
+-- --- Q-2 : une étape d'approbation posée par Toulouse ne bloque plus l'Allemagne -------
+-- L'unicité s'écrivait « (objet_type, objet_id, etape, ordre) », sans la filiale, et
+-- PostgreSQL évalue une unicité EN DEHORS des politiques. Toulouse posait donc l'étape
+-- « acceptation n°1 du risque RISK-DEMO-B » — objet_id n'a pas de clé étrangère —, et
+-- l'Allemagne ne pouvait PLUS JAMAIS ouvrir l'acceptation de son propre risque résiduel,
+-- celle que l'ISO 27001 exige nommément. L'étape de Toulouse étant irrévocable (GRC02),
+-- le blocage était définitif, et le « doublon » rendu à l'Allemagne ne citait rien
+-- puisqu'elle ne voyait pas la ligne. CONVENTIONS.md §19.1.
+do $$
+declare
+    v_obtenu text;
+begin
+    perform set_config('grc.filiales', 'FIL-DEMO-A,FIL-DEMO-B', true);
+
+    -- Toulouse pose SON étape, en nommant le risque de l'Allemagne.
+    insert into approbations (id, filiale_id, objet_type, objet_id, etape, ordre)
+    values ('APPRO-DEMO-A', 'FIL-DEMO-A', 'risque', 'RISK-DEMO-B', 'acceptation', 1);
+
+    -- L'Allemagne ouvre l'acceptation de SON risque, à la même étape et au même rang.
+    perform set_config('grc.filiale_id', 'FIL-DEMO-B', true);
+    begin
+        insert into approbations (id, filiale_id, objet_type, objet_id, etape, ordre)
+        values ('APPRO-DEMO-B', 'FIL-DEMO-B', 'risque', 'RISK-DEMO-B', 'acceptation', 1);
+        v_obtenu := 'AUCUN REFUS';
+    exception when others then
+        v_obtenu := sqlstate;
+    end;
+
+    perform set_config('grc.filiale_id', 'FIL-DEMO-A', true);
+    perform set_config('grc.filiales',   'FIL-DEMO-A', true);
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C87', 'L''Allemagne ouvre SON acceptation de risque après que Toulouse a posé la même étape',
+        'AUCUN REFUS', v_obtenu,
+        case when v_obtenu = 'AUCUN REFUS' then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- --- Q-2, le balayage : aucune unicité de table cloisonnée n'ignore la filiale ---------
+-- Le cas ci-dessus prouve l'état d'aujourd'hui ; celui-ci protège de demain. Il balaie
+-- TOUTES les contraintes d'unicité, TOUTES les contraintes d'exclusion et TOUS les index
+-- uniques — contrainte ou non — des tables portant un filiale_id.
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array('C88',
+               'Unicités et exclusions de tables cloisonnées qui n''incluent pas filiale_id',
+               '0',
+               coalesce(string_agg(v.objet || ' (' || v.anomalie || ')', ', ' order by v.objet), '0'),
+               case when count(*) = 0 then 'OK' else 'ÉCHEC' end)
+      into v_ligne
+      from f_verifier_unicite_cloisonnee() v;
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+-- --- Q-3 : l'identifiant de la sentinelle système ne se provisionne pas ----------------
+-- f_utilisateur_courant() rend « systeme » hors session. Créer un compte portant cet
+-- identifiant — ce que le provisionnement automatique depuis l'AD suffisait à faire —
+-- aurait attribué TOUS les événements système à une personne nommée, dans un journal
+-- scellé dont la vérification n'aurait rien signalé. CONVENTIONS.md §19.2.
+do $$
+declare
+    v_cas constant text[] := array[
+        'C89', 'Provisionner un compte dont l''identifiant EST la sentinelle « systeme »',
+               'systeme',
+        'C90', 'Le même, écrit « SysTeme » : le refus ne dépend pas de la casse',
+               'SysTeme'
+    ];
+    i        int := 1;
+    v_obtenu text;
+begin
+    perform set_config('grc.administration_groupe', 'oui', true);
+    while i <= array_length(v_cas, 1) loop
+        begin
+            insert into utilisateurs (id, identifiant, nom_affichage)
+            values ('USR-DEMO-SENTINELLE-' || i, v_cas[i + 2], 'Compte forgé');
+            v_obtenu := 'AUCUN REFUS';
+        exception when others then
+            v_obtenu := sqlstate;
+        end;
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+            v_cas[i], v_cas[i + 1], '23514', v_obtenu,
+            case when v_obtenu = '23514' then 'OK' else 'ÉCHEC' end)))::text, true);
+        i := i + 3;
+    end loop;
+    perform set_config('grc.administration_groupe', '', true);
+end;
+$$;
+
+-- --- Q-5 : les erreurs d'import suivent la filiale de leur import ----------------------
+-- import_erreurs ne porte pas de filiale_id : seule sa politique la rattache à une
+-- filiale, et elle échappait ENTIÈREMENT au garde-fou de couverture, dont la liste des
+-- « six tables de liaison » en oubliait une septième. Or une ligne d'erreur cite le
+-- contenu du fichier importé : un import de l'annuaire ou du registre RGPD y dépose des
+-- noms et des adresses verbatim. CONVENTIONS.md §19.5.
+do $$
+declare
+    v_hors bigint;
+    v_sien bigint;
+begin
+    perform set_config('grc.filiales', 'FIL-DEMO-A,FIL-DEMO-B', true);
+
+    perform set_config('grc.filiale_id', 'FIL-DEMO-B', true);
+    insert into imports (id, filiale_id, entite, source, nom_fichier)
+    values ('IMP-DEMO-B', 'FIL-DEMO-B', 'personnes', 'excel', 'mitarbeiter-deu.xlsx');
+    insert into import_erreurs (import_id, ligne, colonne, valeur, message)
+    values ('IMP-DEMO-B', 12, 'email', 'hans.mueller@exemple.de', 'adresse non conforme');
+
+    perform set_config('grc.filiale_id', 'FIL-DEMO-A', true);
+    insert into imports (id, filiale_id, entite, source, nom_fichier)
+    values ('IMP-DEMO-A', 'FIL-DEMO-A', 'personnes', 'excel', 'annuaire-tls.xlsx');
+    insert into import_erreurs (import_id, ligne, colonne, valeur, message)
+    values ('IMP-DEMO-A', 7, 'email', 'jean.durand@exemple.fr', 'adresse non conforme');
+
+    -- Retour au seul périmètre de Toulouse : c'est de là que la question se pose.
+    perform set_config('grc.filiales', 'FIL-DEMO-A', true);
+    select count(*) into v_hors from import_erreurs where import_id = 'IMP-DEMO-B';
+    select count(*) into v_sien from import_erreurs where import_id = 'IMP-DEMO-A';
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(
+            jsonb_build_array(
+                'C91', 'Les lignes d''erreur de l''import allemand sont invisibles de Toulouse',
+                '0', v_hors::text, case when v_hors = 0 then 'OK' else 'ÉCHEC' end),
+            jsonb_build_array(
+                'C92', 'Toulouse voit bien les siennes (contrôle symétrique)',
+                '1', v_sien::text, case when v_sien = 1 then 'OK' else 'ÉCHEC' end)
+        ))::text, true);
+end;
+$$;
+
+-- --- Q-5, le balayage : quelles tables ne sont PAS cloisonnées, et sont-ce les bonnes ? -
+-- Constaté depuis le catalogue, sans passer par le garde-fou : celui-ci se vérifierait
+-- lui-même (§17.5). La liste attendue est celle des tables de niveau Groupe et des tables
+-- de session ; toute autre table sans filiale_id qui viendrait s'y ajouter — comme
+-- import_erreurs le faisait — apparaît ici, sous les yeux de l'auditeur.
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array('C93',
+               format('Tables sans filiale_id dont la lecture n''est PAS cloisonnée (%s balayées)',
+                      (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                        where n.nspname = 'public' and c.relkind in ('r', 'p')
+                          and not exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                                           and a.attname = 'filiale_id' and a.attnum > 0
+                                           and not a.attisdropped))),
+               'filiales, mapping_exigences, mappings, migrations_schema, profil_domaines, '
+               'profils, session_domaines, sessions, utilisateurs',
+               coalesce(string_agg(t.nom, ', ' order by t.nom), '(aucune)'),
+               case when coalesce(string_agg(t.nom, ', ' order by t.nom), '') =
+                         'filiales, mapping_exigences, mappings, migrations_schema, '
+                         'profil_domaines, profils, session_domaines, sessions, utilisateurs'
+                    then 'OK' else 'ÉCHEC' end)
+      into v_ligne
+      from (
+        select c.relname::text as nom
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relkind in ('r', 'p')
+           and not exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                            and a.attname = 'filiale_id' and a.attnum > 0
+                            and not a.attisdropped)
+           and exists (
+               select 1 from pg_policy p
+                where p.polrelid = c.oid and p.polpermissive and p.polcmd in ('r', '*')
+                  and coalesce(pg_get_expr(p.polqual, p.polrelid), 'true')
+                      !~ '(f_filiales_lecture|f_filiales_autorisees)')
+      ) t;
     if v_ligne is not null then
         perform set_config('demo.resultats',
             (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);

@@ -803,18 +803,49 @@ describe('Couverture RLS et garde-fou (004 §8)', () => {
         'politique_lecture_absente',
       ]);
 
+      // ── CE QUI A CHANGÉ ICI, ET POURQUOI CE N'EST PAS UN ASSOUPLISSEMENT ──────────
+      // Avant le constat Q-5, une table SANS filiale_id n'était soumise au contrôle de
+      // cloisonnement que si elle figurait dans une liste de six noms écrite à la main.
+      // Une table neuve — comme celle-ci, comme import_erreurs qui manquait à la liste —
+      // pouvait donc s'ouvrir « using (true) » sans qu'une seule anomalie soit rendue.
+      // Le sens de lecture est inversé (CONVENTIONS.md §19.5) : toute table est soumise,
+      // seules les exemptions sont nommées. Les deux assertions qui suivent en attendent
+      // donc PLUS qu'avant, pas moins — c'est le garde-fou qui mord davantage.
       await proprietaire.query(
         'create policy pol_essai_lecture on essai_table_sans_politique for select using (true)',
       );
-      assert.deepEqual(await anomalies(), ['politique_ecriture_absente']);
+      assert.deepEqual(await anomalies(), ['lecture_non_cloisonnee', 'politique_ecriture_absente']);
 
       await proprietaire.query(
         'create policy pol_essai_ajout on essai_table_sans_politique for insert with check (true)',
       );
       assert.deepEqual(
         await anomalies(),
+        ['ecriture_non_cloisonnee', 'lecture_non_cloisonnee'],
+        'Une table sans filiale_id NON DÉCLARÉE de niveau Groupe doit être réclamée.',
+      );
+
+      // Et le contrôle symétrique, sans lequel le précédent ne prouverait rien : une
+      // table sans filiale_id dont les politiques CONSULTENT le périmètre — la forme
+      // exacte des six liaisons — ne déclenche rien.
+      await proprietaire.query('drop policy pol_essai_lecture on essai_table_sans_politique');
+      await proprietaire.query('drop policy pol_essai_ajout on essai_table_sans_politique');
+      await proprietaire.query(
+        `create policy pol_essai_lecture on essai_table_sans_politique for select
+             using (exists (select 1 from risques r
+                             where r.id = essai_table_sans_politique.id
+                               and r.filiale_id = any (f_filiales_autorisees())))`,
+      );
+      await proprietaire.query(
+        `create policy pol_essai_ajout on essai_table_sans_politique for insert
+             with check (exists (select 1 from risques r
+                                  where r.id = essai_table_sans_politique.id
+                                    and r.filiale_id = f_filiale_ecriture()))`,
+      );
+      assert.deepEqual(
+        await anomalies(),
         [],
-        'Une table SANS filiale_id, couverte, ne doit plus rien déclencher.',
+        'Une liaison cloisonnée par sa politique ne doit rien déclencher.',
       );
     } finally {
       await proprietaire.query('drop table essai_table_sans_politique');
@@ -3214,5 +3245,507 @@ describe('Refus silencieux sur les tables de configuration (constat T-6)', () =>
       return { ajout: ajout.code, modif, suppr };
     });
     assert.deepEqual(observe, { ajout: '42501', modif: 0, suppr: 0 });
+  });
+});
+
+/* =====================================================================
+ *  §19.1 — Une unicité contourne la RLS exactement comme une clé étrangère
+ * =====================================================================
+ *
+ *  Constat Q-2 du quatrième passage de la porte S1, le plus grave des quatre passages,
+ *  et il vise le cœur du produit. Le §17.1 énonçait une vérité générale — PostgreSQL
+ *  applique ses contrôles d'intégrité EN DEHORS des politiques — et ne l'appliquait
+ *  qu'aux clés étrangères. Les unicités la subissent à l'identique.
+ *
+ *  Ce qui en découle n'est pas une fuite mais un EMPÊCHEMENT, et c'est une catégorie que
+ *  la grille de la porte ne demandait nulle part : « B ne voit pas les lignes de A » ne
+ *  dit rien de « A ne peut rien empêcher chez B ».
+ */
+
+describe('Unicités et cloisonnement (CONVENTIONS §19.1)', () => {
+  test('Q-2 : une étape d’approbation de Toulouse ne bloque plus celle de l’Allemagne', async () => {
+    // approbations.objet_id est un rattachement POLYMORPHE, sans clé étrangère : rien
+    // n'oblige l'objet visé à appartenir à la filiale qui écrit. Toulouse pose donc
+    // « acceptation n°1 du risque RISK-B » en la rattachant à SA filiale — parfaitement
+    // valide de son point de vue — et l'Allemagne se retrouvait dans l'impossibilité
+    // DÉFINITIVE d'ouvrir l'acceptation de son propre risque résiduel, celle que
+    // l'ISO 27001 exige nommément. L'étape de Toulouse est irrévocable (GRC02).
+    const etape = (id, filiale) =>
+      `insert into approbations (id, filiale_id, objet_type, objet_id, etape, ordre)
+           values ('${id}', '${filiale}', 'risque', 'RISK-B', 'acceptation', 1)`;
+
+    const observe = await base.avecPerimetre(applicatif, rssiGroupe(A), async (c) => {
+      await c.query(etape('APPRO-Q2-A', A));
+      await c.query("select set_config('grc.filiale_id', $1, true)", [B]);
+      try {
+        await c.query(etape('APPRO-Q2-B', B));
+        return 'AUCUN REFUS';
+      } catch (erreur) {
+        return erreur.code;
+      }
+    });
+    assert.equal(
+      observe,
+      'AUCUN REFUS',
+      'L’Allemagne doit pouvoir ouvrir SON acceptation de risque résiduel.',
+    );
+  });
+
+  test('LE CORRECTIF MORD : sans filiale_id dans l’unicité, l’Allemagne est bloquée', async () => {
+    // Contrôle de morsure : on remet l'unicité dans sa forme d'origine et on rejoue le
+    // scénario. Sans ce contrôle, le test précédent passerait aussi bien sur une base
+    // où rien n'a été corrigé — c'est un test qui doit prouver un CHANGEMENT.
+    await proprietaire.query('alter table approbations drop constraint uq_approbations_etape');
+    await proprietaire.query(
+      'alter table approbations add constraint uq_approbations_etape '
+        + 'unique (objet_type, objet_id, etape, ordre)',
+    );
+    try {
+      const observe = await base.avecPerimetre(applicatif, rssiGroupe(A), async (c) => {
+        await c.query(
+          `insert into approbations (id, filiale_id, objet_type, objet_id, etape, ordre)
+               values ('APPRO-Q2-A', $1, 'risque', 'RISK-B', 'acceptation', 1)`,
+          [A],
+        );
+        await c.query("select set_config('grc.filiale_id', $1, true)", [B]);
+        try {
+          await c.query(
+            `insert into approbations (id, filiale_id, objet_type, objet_id, etape, ordre)
+                 values ('APPRO-Q2-B', $1, 'risque', 'RISK-B', 'acceptation', 1)`,
+            [B],
+          );
+          return 'AUCUN REFUS';
+        } catch (erreur) {
+          // Le « detail » est supprimé par PostgreSQL : la ligne en conflit n'est pas
+          // visible sous RLS. L'Allemagne reçoit un doublon qui ne montre rien.
+          return `${erreur.code}/${erreur.detail ?? 'sans detail'}`;
+        }
+      });
+      assert.equal(observe, '23505/sans detail');
+    } finally {
+      await proprietaire.query('alter table approbations drop constraint uq_approbations_etape');
+      await proprietaire.query(
+        'alter table approbations add constraint uq_approbations_etape '
+          + 'unique (filiale_id, objet_type, objet_id, etape, ordre)',
+      );
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('le balayage du catalogue ne signale rien — et il balaie vraiment', async () => {
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_unicite_cloisonnee()'), []);
+
+    // Le contrôle ne vaut que si le balayage a de la matière : on compte ce qu'il voit.
+    const { n } = (await base.lignes(
+      proprietaire,
+      `select count(*)::int as n
+         from pg_index ix
+         join pg_class c on c.oid = ix.indrelid
+         join pg_namespace ns on ns.oid = c.relnamespace
+         left join pg_constraint con on con.conindid = ix.indexrelid and con.contype in ('u','p','x')
+        where ns.nspname = 'public' and c.relkind in ('r','p')
+          and (ix.indisunique or con.contype = 'x') and not ix.indisprimary
+          and exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                       and a.attname = 'filiale_id' and a.attnum > 0 and not a.attisdropped)`,
+    ))[0];
+    assert.ok(n >= 20, `Balayage suspect : ${n} unicité(s) seulement sur les tables cloisonnées.`);
+  });
+
+  test('LE BALAYAGE MORD : unicité, index unique nu, et contrainte d’EXCLUSION', async () => {
+    // Trois formes, parce que trois formes existent et que le §19.1 les nomme toutes.
+    // La troisième — l'exclusion — n'a aujourd'hui aucun représentant dans le schéma :
+    // le filet ne doit pas attendre le premier.
+    const vues = async () =>
+      (await base.lignes(
+        proprietaire,
+        "select objet, anomalie from f_verifier_unicite_cloisonnee() where objet like '%essai%' order by 1",
+      )).map((l) => `${l.objet}/${l.anomalie}`);
+
+    await proprietaire.query('alter table clients add constraint uq_essai_q2 unique (secteur)');
+    await proprietaire.query('create unique index uq_essai_q2_nu on risques (description)');
+    await proprietaire.query(
+      'alter table risques add constraint xq_essai_q2 exclude using btree (niveau with =)',
+    );
+    try {
+      assert.deepEqual(await vues(), [
+        'clients.uq_essai_q2/unicite_transfrontaliere',
+        'risques.uq_essai_q2_nu/unicite_transfrontaliere',
+        'risques.xq_essai_q2/unicite_transfrontaliere',
+      ]);
+
+      // Et elles remontent par le POINT D'APPEL, pas seulement par appel direct : c'est
+      // la leçon T-4, rejouée sur un garde-fou qui n'existait pas quand elle a été écrite.
+      const parLePoint = await base.lignes(
+        proprietaire,
+        "select distinct controle from f_verifier_schema() where objet like '%essai_q2%'",
+      );
+      assert.deepEqual(parLePoint.map((l) => l.controle), ['unicite_cloisonnee']);
+
+      // Contrôle symétrique : la même unicité, avec filiale_id, ne déclenche rien.
+      await proprietaire.query('alter table clients drop constraint uq_essai_q2');
+      await proprietaire.query(
+        'alter table clients add constraint uq_essai_q2 unique (filiale_id, secteur)',
+      );
+      assert.deepEqual(await vues(), [
+        'risques.uq_essai_q2_nu/unicite_transfrontaliere',
+        'risques.xq_essai_q2/unicite_transfrontaliere',
+      ]);
+    } finally {
+      await proprietaire.query('alter table clients drop constraint if exists uq_essai_q2');
+      await proprietaire.query('drop index if exists uq_essai_q2_nu');
+      await proprietaire.query('alter table risques drop constraint if exists xq_essai_q2');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('une exemption devenue introuvable est RÉCLAMÉE, pas oubliée', async () => {
+    // Cinq unicités sont délibérément globales et nommées dans la fonction. Une liste
+    // écrite à la main n'est admise que si le garde-fou vérifie qu'elle reste juste
+    // (CONVENTIONS §19.5) : sinon la dérogation couvrirait, en silence, la prochaine
+    // contrainte qui reprendrait ce nom.
+    await proprietaire.query('alter table pieces_jointes drop constraint uq_pieces_jointes_chemin');
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select objet, anomalie from f_verifier_unicite_cloisonnee() where anomalie = 'exemption_obsolete'",
+      );
+      assert.deepEqual(anomalies, [
+        { objet: 'uq_pieces_jointes_chemin', anomalie: 'exemption_obsolete' },
+      ]);
+    } finally {
+      await proprietaire.query(
+        'alter table pieces_jointes add constraint uq_pieces_jointes_chemin unique (chemin_stockage)',
+      );
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('les CLÉS PRIMAIRES sont hors périmètre, et c’est une décision épinglée ici', async () => {
+    // Elles portent l'identifiant métier seul, globalement unique par construction, et
+    // c'est ce qui rend l'import d'un « grc-backup » exact au round-trip et le
+    // rattachement polymorphe possible. Les rendre composites casserait les deux.
+    // Ce qui subsiste est l'oracle d'existence (constats T-8 puis O-4), reporté au lot L2.
+    // Ce test tombera le jour où quelqu'un élargira le balayage sans arbitrer ce report.
+    const { n } = (await base.lignes(
+      proprietaire,
+      `select count(*)::int as n
+         from pg_constraint con
+         join pg_class c on c.oid = con.conrelid
+         join pg_namespace ns on ns.oid = c.relnamespace
+        where ns.nspname = 'public' and con.contype = 'p'
+          and exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                       and a.attname = 'filiale_id' and a.attnum > 0 and not a.attisdropped)
+          and not exists (select 1 from unnest(con.conkey) k(att)
+                           join pg_attribute a on a.attrelid = c.oid and a.attnum = k.att
+                          where a.attname = 'filiale_id')`,
+    ))[0];
+    assert.ok(n >= 24, `Balayage suspect : ${n} clé(s) primaire(s) globale(s).`);
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_unicite_cloisonnee()'), []);
+  });
+});
+
+/* =====================================================================
+ *  §19.2 — L'identifiant de la sentinelle système est réservé
+ * =====================================================================
+ *
+ *  Constat Q-3. `f_utilisateur_courant()` rend « systeme » hors session : migrations,
+ *  timers, démarrage du service, échec d'authentification. Rien n'empêchait de créer un
+ *  COMPTE portant cet identifiant — et le provisionnement automatique depuis l'AD suffit
+ *  à le faire sans qu'aucun humain le décide.
+ */
+
+describe('La sentinelle « systeme » est réservée (CONVENTIONS §19.2)', () => {
+  test('elle est refusée, quelle que soit la casse et les espaces de bordure', async () => {
+    const observe = {};
+    await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+      let i = 0;
+      for (const forme of ['systeme', 'SYSTEME', 'SysTeme', '  systeme  ', 'systeme2']) {
+        i += 1;
+        await c.query('savepoint avant_compte');
+        try {
+          await c.query(
+            'insert into utilisateurs (id, identifiant, nom_affichage) values ($1, $2, $3)',
+            [`USR-Q3-${i}`, forme, 'Compte forgé'],
+          );
+          observe[forme] = 'AUCUN REFUS';
+        } catch (erreur) {
+          observe[forme] = erreur.code;
+        }
+        await c.query('rollback to savepoint avant_compte');
+      }
+    });
+    assert.deepEqual(observe, {
+      systeme: '23514',
+      SYSTEME: '23514',
+      SysTeme: '23514',
+      '  systeme  ': '23514',
+      // Contrôle symétrique : sans lui, une contrainte qui refuserait TOUT passerait.
+      systeme2: 'AUCUN REFUS',
+    });
+  });
+
+  test('la sentinelle et la contrainte disent le MÊME mot', async () => {
+    // La contrainte porte un littéral ; la sentinelle est écrite dans une autre fonction,
+    // dans une autre section du même fichier. Changer l'une sans l'autre rouvrirait la
+    // capture en silence : ce test relie les deux.
+    const sentinelle = await base.avecPerimetre(
+      applicatif,
+      { utilisateur: '', filialeId: A, filiales: [A] },
+      async (c) => (await c.query('select f_utilisateur_courant() as v')).rows[0].v,
+    );
+    assert.equal(sentinelle, 'systeme');
+
+    const definition = await base.valeur(
+      proprietaire,
+      `select pg_get_constraintdef(oid) from pg_constraint
+        where conrelid = 'utilisateurs'::regclass
+          and conname = 'ck_utilisateurs_identifiant_reserve'`,
+    );
+    assert.ok(
+      definition && definition.includes(`'${sentinelle}'`),
+      `La contrainte doit réserver exactement la sentinelle « ${sentinelle} » : ${definition}`,
+    );
+  });
+
+  test('LE CORRECTIF MORD : sans la contrainte, le journal attribue le système à une personne', async () => {
+    // Le scénario complet, joué. C'est la pathologie du §17.8 atteinte par l'autre bout :
+    // au lieu de DÉCLARER l'acteur, on CAPTURE la sentinelle — et le journal reste
+    // parfaitement chaîné, sa vérification ne signale rien, l'imputation seule est fausse.
+    await proprietaire.query(
+      'alter table utilisateurs drop constraint ck_utilisateurs_identifiant_reserve',
+    );
+    try {
+      const capture = await base.avecPerimetre(
+        applicatif,
+        { utilisateur: '', filialeId: A, filiales: [A] },
+        async (c) => {
+          await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+          await c.query(
+            `insert into utilisateurs (id, identifiant, nom_affichage)
+                 values ('USR-Q3-CAPTURE', 'systeme', 'Marc Dupuis (DG)')`,
+          );
+          await c.query("select set_config('grc.administration_groupe', '', true)");
+          await c.query(
+            `insert into journal_audit (filiale_id, action, resume)
+                 values ($1, 'demarrage', 'evenement du service, sans session')`,
+            [A],
+          );
+          const r = await c.query(
+            "select utilisateur_id from journal_audit where resume = 'evenement du service, sans session'",
+          );
+          return r.rows[0].utilisateur_id;
+        },
+      );
+      assert.equal(
+        capture,
+        'USR-Q3-CAPTURE',
+        'Sans la contrainte, tout événement système est attribué au compte qui a capté la sentinelle.',
+      );
+    } finally {
+      await proprietaire.query(
+        "alter table utilisateurs add constraint ck_utilisateurs_identifiant_reserve "
+          + "check (lower(btrim(identifiant)) <> 'systeme')",
+      );
+    }
+  });
+});
+
+/* =====================================================================
+ *  §19.5 — Un garde-fou DÉCOUVRE son périmètre, il ne le récite pas
+ * =====================================================================
+ *
+ *  Constat Q-5. `f_verifier_couverture_rls()` n'exigeait un prédicat cloisonnant d'une
+ *  table sans filiale_id que si elle figurait dans une liste de SIX noms. Il y en avait
+ *  sept : `import_erreurs` échappait entièrement au garde-fou, et sa politique de lecture
+ *  ramenée à « true » ne remontait aucune anomalie. Troisième défaut produit par une
+ *  liste écrite à la main, après les sept clés de B-1 et les déclencheurs d'insertion.
+ */
+
+describe('Le garde-fou de couverture découvre son périmètre (CONVENTIONS §19.5)', () => {
+  test('Q-5 : import_erreurs est bien cloisonnée, et Toulouse ne voit pas celles de l’Allemagne', async () => {
+    const vues = await compter(
+      applicatif,
+      rssiSite(A),
+      "select count(*)::int as n from import_erreurs where import_id = 'IMP-B'",
+    );
+    assert.equal(vues, 0);
+    const siennes = await compter(
+      applicatif,
+      rssiSite(A),
+      "select count(*)::int as n from import_erreurs where import_id = 'IMP-A'",
+    );
+    assert.equal(siennes, 1, 'Contrôle symétrique : Toulouse voit bien les siennes.');
+  });
+
+  test('LE GARDE-FOU MORD DÉSORMAIS SUR ELLE : la mutation qui passait est signalée', async () => {
+    // La mutation exacte du quatrième passage : elle rendait « 0 anomalie » sur une table
+    // que toutes les filiales lisaient. Or 003 dit d'elle qu'« une ligne d'erreur cite le
+    // contenu du fichier importé » — un import de l'annuaire ou du registre RGPD y dépose
+    // des noms et des adresses verbatim.
+    await proprietaire.query('drop policy pol_import_erreurs_lecture on import_erreurs');
+    await proprietaire.query(
+      'create policy pol_import_erreurs_lecture on import_erreurs for select using (true)',
+    );
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select anomalie from f_verifier_couverture_rls() where objet = 'import_erreurs' order by 1",
+      );
+      assert.deepEqual(anomalies.map((l) => l.anomalie), ['lecture_non_cloisonnee']);
+    } finally {
+      await proprietaire.query('drop policy pol_import_erreurs_lecture on import_erreurs');
+      await proprietaire.query(
+        `create policy pol_import_erreurs_lecture on import_erreurs for select
+             using (exists (select 1 from imports i
+                             where i.id = import_erreurs.import_id
+                               and i.filiale_id = any (f_filiales_autorisees())))`,
+      );
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('une exemption renommée est réclamée, ET la table renommée est soumise', async () => {
+    // Une seule mutation, deux propriétés : la liste des exemptions ne se périme pas en
+    // silence, et ce qui en sort tombe aussitôt sous le régime commun.
+    await proprietaire.query('alter table session_domaines rename to session_domaines_essai');
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        `select objet, anomalie from f_verifier_couverture_rls()
+          where objet like 'session_domaines%' order by 1, 2`,
+      );
+      assert.deepEqual(anomalies, [
+        { objet: 'session_domaines', anomalie: 'exemption_obsolete' },
+        { objet: 'session_domaines_essai', anomalie: 'ecriture_non_cloisonnee' },
+        { objet: 'session_domaines_essai', anomalie: 'lecture_non_cloisonnee' },
+      ]);
+    } finally {
+      await proprietaire.query('alter table session_domaines_essai rename to session_domaines');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('la liste des tables NON cloisonnées est exactement celle qui est arbitrée', async () => {
+    // Constaté depuis le catalogue, sans passer par le garde-fou : celui-ci se
+    // vérifierait lui-même (§17.5). Toute table sans filiale_id qui viendrait s'ajouter —
+    // comme import_erreurs le faisait — fait tomber ce test, et c'est le but.
+    const ouvertes = await base.lignes(
+      proprietaire,
+      `select c.relname as nom
+         from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind in ('r', 'p')
+          and not exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                           and a.attname = 'filiale_id' and a.attnum > 0 and not a.attisdropped)
+          and exists (select 1 from pg_policy p
+                       where p.polrelid = c.oid and p.polpermissive and p.polcmd in ('r', '*')
+                         and coalesce(pg_get_expr(p.polqual, p.polrelid), 'true')
+                             !~ '(f_filiales_lecture|f_filiales_autorisees)')
+        order by 1`,
+    );
+    assert.deepEqual(ouvertes.map((l) => l.nom), [
+      'filiales',
+      'mapping_exigences',
+      'mappings',
+      'migrations_schema',
+      'profil_domaines',
+      'profils',
+      'session_domaines',
+      'sessions',
+      'utilisateurs',
+    ]);
+  });
+});
+
+/* =====================================================================
+ *  §19.4 — Le point d'appel DÉCOUVRE ses contrôles
+ * =====================================================================
+ *
+ *  Constat Q-1, et sa leçon de forme : tant que le branchement est une liste à maintenir,
+ *  il se désynchronise. `f_verifier_schema()` énumérait trois fonctions ; le présent
+ *  correctif en ajoute une quatrième. Elle est découverte dans le catalogue.
+ *
+ *  (La part « déploiement » — `migrate.mjs`, `install.sh` — est hors de ce fichier.)
+ */
+
+describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4)', () => {
+  test('les quatre garde-fous du dépôt sont découverts', async () => {
+    // La découverte protège de l'omission d'un contrôle NEUF ; elle ne protège pas de la
+    // disparition d'un contrôle existant, qui s'effacerait sans bruit de l'agrégation.
+    // C'est ici que cette seconde moitié est tenue.
+    const controles = await base.lignes(
+      proprietaire,
+      `select substring(p.proname::text from '^f_verifier_(.+)$') as controle
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.prokind = 'f'
+          and p.proname::text like 'f\\_verifier\\_%' and p.pronargs = 0
+          and pg_get_function_result(p.oid) = 'TABLE(objet text, anomalie text, detail text)'
+        order by 1`,
+    );
+    assert.deepEqual(controles.map((l) => l.controle), [
+      'chemin_recherche',
+      'couverture_rls',
+      'tracabilite',
+      'unicite_cloisonnee',
+    ]);
+  });
+
+  test('un garde-fou NEUF est branché sans qu’aucun fichier change', async () => {
+    // C'est toute la propriété : respecter la convention d'écriture suffit à être joué,
+    // par le déploiement comme par la recette. Aucune liste à retoucher, donc aucune
+    // occasion d'oublier.
+    await proprietaire.query(
+      `create function f_verifier_essai_q1() returns table (objet text, anomalie text, detail text)
+           language plpgsql stable set search_path = pg_catalog, public, pg_temp as $x$
+       begin
+           objet := 'objet_d_essai'; anomalie := 'anomalie_d_essai'; detail := 'inventée';
+           return next;
+       end; $x$`,
+    );
+    try {
+      const vues = await base.lignes(
+        proprietaire,
+        "select controle, objet, anomalie from f_verifier_schema() where objet = 'objet_d_essai'",
+      );
+      assert.deepEqual(vues, [
+        { controle: 'essai_q1', objet: 'objet_d_essai', anomalie: 'anomalie_d_essai' },
+      ]);
+    } finally {
+      await proprietaire.query('drop function if exists f_verifier_essai_q1()');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('un point d’appel qui ne trouve PLUS RIEN le dit, au lieu de rassurer', async () => {
+    // Le pire résultat possible pour un garde-fou : rendre « aucune anomalie » sur une
+    // base entièrement sabotée. On renomme les quatre contrôles hors de la convention.
+    const noms = [
+      'f_verifier_chemin_recherche',
+      'f_verifier_tracabilite',
+      'f_verifier_couverture_rls',
+      'f_verifier_unicite_cloisonnee',
+    ];
+    for (const nom of noms) {
+      await proprietaire.query(`alter function ${nom}() rename to z_essai_${nom}`);
+    }
+    try {
+      const vues = await base.lignes(
+        proprietaire,
+        'select controle, objet, anomalie from f_verifier_schema()',
+      );
+      assert.deepEqual(vues, [
+        {
+          controle: 'point_appel',
+          objet: 'f_verifier_schema',
+          anomalie: 'aucun_controle_decouvert',
+        },
+      ]);
+    } finally {
+      for (const nom of noms) {
+        await proprietaire.query(`alter function z_essai_${nom}() rename to ${nom}`);
+      }
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
   });
 });

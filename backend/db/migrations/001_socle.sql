@@ -2019,13 +2019,13 @@ declare
     v_nombre    integer;
 begin
     select string_agg(format('  - [%s] %s : %s (%s)', controle, objet, anomalie, detail),
-                      E'\\n' order by controle, objet, anomalie),
+                      E'\n' order by controle, objet, anomalie),
            count(*)
       into v_anomalies, v_nombre
       from f_verifier_schema();
 
     if v_nombre > 0 then
-        raise exception E'Vérification du schéma en défaut — % anomalie(s) :\\n%',
+        raise exception E'Vérification du schéma en défaut — % anomalie(s) :\n%',
                         v_nombre, v_anomalies
             using errcode = '42501',
                   hint = 'chemin_recherche : ajoutez « set search_path = pg_catalog, public, '

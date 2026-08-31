@@ -220,8 +220,11 @@ comment on column personnes.filiale_id is
     'rattachée à une filiale. Voir la justification du caractère nullable ci-dessus.';
 comment on column personnes.utilisateur_id is
     'Compte applicatif correspondant, quand la personne en a un. Alimenté par le '
-    'provisionnement AD (PLAN_SERVEUR §1.5). "on delete set null" : la fiche annuaire '
-    'survit à la suppression du compte, comme cree_par survit à celle de son auteur.';
+    'provisionnement AD (PLAN_SERVEUR §1.5). "on delete restrict" depuis le constat T-2 '
+    '(CONVENTIONS.md §18.2) : la fiche d''annuaire survit à la suppression du compte parce '
+    'que cette suppression est REFUSÉE tant qu''une fiche le cite — et non parce que la '
+    'colonne serait remise à null, ce qui aurait modifié la ligne d''une AUTRE filiale. '
+    'Délier est un geste explicite, et il se fait filiale par filiale.';
 comment on column personnes.fonction is 'Rôle tenu : RSSI, DPO, Responsable IT…';
 comment on column personnes.service is  'Équipe ou département de rattachement.';
 

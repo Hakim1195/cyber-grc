@@ -541,33 +541,55 @@ returns table (objet text, anomalie text, detail text)
     set search_path = pg_catalog, public, pg_temp as
 $$
 declare
-    -- Les six tables de liaison sans filiale_id, nommées explicitement : elles sont
-    -- l'angle mort du lot (CONVENTIONS §7, avertissement), et leur politique est leur
-    -- SEULE défense contre un lien inter-filiales. Les nommer ici fait échouer la
-    -- vérification si l'une d'elles disparaissait ou était renommée sans être retraitée.
-    v_liaisons constant text[] := array[
-        'risque_exigences', 'actif_risques', 'processus_actifs',
-        'actif_dependances', 'incident_actifs', 'mapping_exigences'];
+    -- ── LA LISTE EST INVERSÉE DEPUIS LE CONSTAT Q-5 (CONVENTIONS.md §19.5) ───────────
+    --
+    -- Elle énumérait « les six tables de liaison sans filiale_id » qui devaient être
+    -- cloisonnées par leur seule politique. Il y en avait SEPT : import_erreurs manquait
+    -- à l'appel, et échappait donc entièrement au garde-fou. Rejoué à la porte S1 : sa
+    -- politique de lecture ramenée à « using (true) » ne remontait AUCUNE anomalie, sur
+    -- une table dont la migration 003 dit elle-même qu'« une ligne d'erreur cite le
+    -- contenu du fichier importé, c'est donc de la donnée de filiale » — un import de
+    -- l'annuaire des personnes ou du registre RGPD y dépose des noms verbatim.
+    --
+    -- C'était la troisième fois qu'une liste écrite à la main produisait un défaut. Le
+    -- sens de lecture est donc renversé : le garde-fou DÉCOUVRE dans le catalogue les
+    -- tables qui ne portent pas de filiale_id, et EXIGE de chacune un prédicat
+    -- cloisonnant, SAUF si elle figure nommément ci-dessous. Une table future oubliée est
+    -- désormais réclamée bruyamment au lieu d'être exemptée en silence : le défaut par
+    -- défaut est fermé, plus ouvert.
+    --
+    -- Les tables sans filiale_id dont l'absence de cloisonnement est LÉGITIME et motivée.
+    -- Elles sont de niveau Groupe, ou lues avant que le périmètre existe (§6).
+    v_sans_filiale_admises constant text[] := array[
+        'filiales',           -- définit la frontière elle-même ; lue avant tout périmètre
+        'utilisateurs',       -- identités ; lues pour RÉSOUDRE le périmètre
+        'profils',            -- définition des profils métier (niveau Groupe)
+        'profil_domaines',    -- droits d'un profil par domaine (niveau Groupe)
+        'migrations_schema',  -- registre technique ; écriture fermée par les privilèges
+        'sessions',           -- produit le périmètre ; fermeture reportée au lot L3
+        'session_domaines',   -- idem ; report L3 écrit au §6
+        'mappings',           -- catalogue de correspondances, niveau Groupe (§16.4)
+        -- mapping_exigences : n'est PAS cloisonnable, et la traiter comme les six
+        -- liaisons serait une erreur de fait. Son parent (mappings) est de niveau GROUPE,
+        -- et son autre extrémité est le couple (ref_id, code) du catalogue statique de
+        -- référentiels, qui n'est pas en base. Aucune de ses deux extrémités n'appartient
+        -- à une filiale : elle ne peut, par construction, porter aucun lien
+        -- inter-filiales. Dérogée EN CONNAISSANCE DE CAUSE, et son ouverture en écriture
+        -- est arbitrée par écrit au §6.
+        'mapping_exigences'
+    ];
 
-    -- Dérogations documentées à l'exigence « prédicat non trivial » (voir §6). Toute
-    -- AUTRE table porteuse d'un filiale_id dont la politique dirait « true » fait échouer
-    -- la vérification : c'est ce qui interdit à une migration future d'ouvrir une table
-    -- en grand par inadvertance.
+    -- Dérogations documentées à l'exigence « prédicat non trivial » pour des tables qui
+    -- PORTENT, elles, un filiale_id (voir §6). Toute AUTRE table porteuse d'un filiale_id
+    -- dont la politique dirait « true » fait échouer la vérification : c'est ce qui
+    -- interdit à une migration future d'ouvrir une table en grand par inadvertance.
     v_derogations constant text[] := array[
         'groupes_ad',       -- aiguillage de l'authentification, lu AVANT tout périmètre
         'journal_audit',    -- chaînage : la numérotation exige de voir la chaîne entière
-        'session_filiales', -- c'est la table qui PRODUIT le périmètre ; le filtrer par
+        'session_filiales'  -- c'est la table qui PRODUIT le périmètre ; le filtrer par
                             -- lui-même rendrait toute connexion impossible
-        -- mapping_exigences figure dans la liste des six liaisons ci-dessus, et doit
-        -- donc EXISTER et être couverte ; mais elle n'est pas cloisonnable, et la
-        -- traiter comme les cinq autres serait une erreur de fait : son parent
-        -- (mappings) est de niveau GROUPE (CONVENTIONS §16.4) et son autre extrémité
-        -- est le couple (ref_id, code) du catalogue statique de référentiels, qui n'est
-        -- pas en base. Aucune de ses deux extrémités n'appartient à une filiale : elle
-        -- ne peut, par construction, porter aucun lien inter-filiales. Elle est donc
-        -- rangée en famille 4 (§6), et dérogée ici EN CONNAISSANCE DE CAUSE.
-        'mapping_exigences'
     ];
+    v_nom text;
     r record;
 begin
     for r in
@@ -639,7 +661,12 @@ begin
         -- une filiale. La détection ne compare plus le prédicat au littéral « true » : elle
         -- exige qu'il MENTIONNE la fonction de périmètre correspondante. Voir la portée
         -- exacte, et ses limites, dans le commentaire de la fonction.
-        if (r.porte_filiale or r.nom = any (v_liaisons)) and not (r.nom = any (v_derogations)) then
+        -- Une table est SOUMISE au cloisonnement si elle porte un filiale_id, ou si elle
+        -- n'en porte pas SANS figurer dans la liste des exemptions motivées. Le second
+        -- membre est la découverte : ce n'est plus une liste de tables à couvrir, c'est
+        -- une liste de tables à NE PAS couvrir, et tout le reste l'est d'office.
+        if (r.porte_filiale or not (r.nom = any (v_sans_filiale_admises)))
+           and not (r.nom = any (v_derogations)) then
             if exists (
                 select 1 from pg_policy p
                  where p.polrelid = r.oid and p.polpermissive and p.polcmd in ('r', '*')
@@ -649,7 +676,9 @@ begin
                 anomalie := 'lecture_non_cloisonnee';
                 detail   := 'une politique de lecture ne consulte pas le périmètre de la session '
                             '(ni f_filiales_lecture, ni f_filiales_autorisees) sur une table '
-                            'cloisonnée : toutes les filiales se lisent entre elles';
+                            'cloisonnée : toutes les filiales se lisent entre elles. Si la table '
+                            'ne porte pas de filiale_id et relève réellement du niveau Groupe, '
+                            'elle doit être DÉCLARÉE dans v_sans_filiale_admises, avec son motif';
                 return next;
             end if;
 
@@ -667,19 +696,25 @@ begin
                 anomalie := 'ecriture_non_cloisonnee';
                 detail   := 'une politique d''écriture ne consulte pas la filiale ACTIVE '
                             '(f_filiale_ecriture) sur une table cloisonnée : une filiale peut '
-                            'écrire chez une autre';
+                            'écrire chez une autre. Si la table ne porte pas de filiale_id et '
+                            'relève réellement du niveau Groupe, elle doit être DÉCLARÉE dans '
+                            'v_sans_filiale_admises, avec son motif';
                 return next;
             end if;
         end if;
     end loop;
 
-    -- Les six liaisons doivent EXISTER : leur disparition silencieuse ferait passer la
-    -- vérification pour une bonne nouvelle.
-    foreach objet in array v_liaisons loop
-        if to_regclass('public.' || objet) is null then
-            anomalie := 'liaison_absente';
-            detail   := 'table de liaison attendue par CONVENTIONS §16.5 introuvable : '
-                        'la vérification du cloisonnement des liens ne porte plus sur rien';
+    -- Les deux listes écrites à la main ne désignent que des EXEMPTIONS ; le §19.5
+    -- n'admet une liste écrite que si le garde-fou vérifie qu'elle reste juste. Une
+    -- exemption qui ne désigne plus rien — table supprimée, table renommée — dispenserait
+    -- silencieusement de cloisonnement la prochaine table qui reprendrait ce nom.
+    foreach v_nom in array v_sans_filiale_admises || v_derogations loop
+        if to_regclass('public.' || quote_ident(v_nom)) is null then
+            objet    := v_nom;
+            anomalie := 'exemption_obsolete';
+            detail   := 'table dispensée de cloisonnement par f_verifier_couverture_rls(), '
+                        'mais introuvable dans le schéma : la dérogation ne porte plus sur '
+                        'rien et couvrirait toute table future qui reprendrait ce nom';
             return next;
         end if;
     end loop;
@@ -692,11 +727,14 @@ comment on function f_verifier_couverture_rls() is
     'Vérifie que TOUTE table du schéma public — ordinaire ou partitionnée — porte « enable » et '
     '« force row level security », '
     'au moins une politique de lecture et une d''écriture, qu''aucune politique de lecture ne '
-    'dépend d''un réglage d''administration, et que toute table cloisonnée hors dérogation a des '
-    'prédicats qui MENTIONNENT les fonctions de périmètre (f_filiales_lecture ou '
-    'f_filiales_autorisees en lecture, f_filiale_ecriture en écriture). Un schéma sain ne '
-    'renvoie AUCUNE ligne. À appeler par toute migration future qui crée une table : sans '
-    'politique, elle doit échouer au déploiement, pas fuir en silence. '
+    'dépend d''un réglage d''administration, et que ses prédicats MENTIONNENT les fonctions de '
+    'périmètre (f_filiales_lecture ou f_filiales_autorisees en lecture, f_filiale_ecriture en '
+    'écriture). Le périmètre de cette dernière exigence est DÉCOUVERT dans le catalogue et non '
+    'récité (CONVENTIONS.md §19.5) : toute table est soumise, et seules les tables NOMMÉMENT '
+    'exemptées — niveau Groupe, ou lues avant que le périmètre existe — y échappent ; une '
+    'exemption devenue introuvable est signalée. Un schéma sain ne renvoie AUCUNE ligne. À '
+    'appeler par toute migration future qui crée une table : sans politique, elle doit échouer '
+    'au déploiement, pas fuir en silence. '
     'PORTÉE EXACTE, À NE PAS SURESTIMER (CONVENTIONS.md §17.5) : ce garde-fou lit le TEXTE des '
     'prédicats, pas leur sens. Il attrape une politique qui ne consulte pas le périmètre — '
     '« true », « filiale_id is not null », un prédicat sur une autre colonne — mais il ne peut '
@@ -704,6 +742,165 @@ comment on function f_verifier_couverture_rls() is
     '« f_filiales_lecture() is not null ». Ce qui mord vraiment là, ce sont les tests de '
     'comportement de test/base/rls.test.mjs et db/verifier_cloisonnement.sql. Un garde-fou '
     'auquel on prête plus de portée qu''il n''en a endort la vigilance au lieu de l''entretenir.';
+
+-- -------------------------------------------------------------------------------------
+-- §2 bis — LES CONTRÔLES D'UNICITÉ CONTOURNENT LA RLS, EXACTEMENT COMME LES CLÉS
+--          ÉTRANGÈRES  (constat Q-2 du quatrième passage, CONVENTIONS.md §19.1)
+-- -------------------------------------------------------------------------------------
+-- Le §17.1 énonçait une vérité générale — PostgreSQL applique ses contrôles d'intégrité
+-- EN DEHORS des politiques de sécurité de niveau ligne — et ne l'appliquait qu'aux clés
+-- étrangères. Les contraintes d'unicité la subissent à l'identique, et les contraintes
+-- d'exclusion aussi : l'index est parcouru en entier, quelle que soit la session.
+--
+-- La conséquence n'est pas une fuite, c'est un EMPÊCHEMENT : une filiale occupe une
+-- valeur dans l'espace d'une autre, qui ne peut plus l'employer et reçoit un « doublon »
+-- sans détail sur une ligne qu'elle ne peut pas lire. Le cas démontré à la porte S1 est
+-- irréversible et vise le cœur du produit — l'acceptation de risque résiduel exigée par
+-- l'ISO 27001 ; il est raconté en entier au §11 de la migration 001.
+--
+-- CE QUE CE GARDE-FOU BALAIE, et pourquoi il balaie au lieu de réciter (§19.5) : toutes
+-- les contraintes d'unicité, toutes les contraintes d'exclusion et tous les index uniques
+-- — y compris ceux qui ne sont adossés à aucune contrainte, forme la plus discrète — des
+-- tables du schéma public qui portent un filiale_id. Chacun doit avoir filiale_id parmi
+-- ses colonnes de CLÉ (les colonnes « include » d'un index ne contraignent rien).
+--
+-- CE QU'IL NE BALAIE PAS, et il faut le dire plutôt que de le laisser croire :
+--
+--   - LES CLÉS PRIMAIRES. Elles portent l'identifiant métier seul, globalement unique par
+--     construction (« <PRÉFIXE>-<horodatage>-<aléa> », CONVENTIONS §3) : c'est ce qui rend
+--     l'import d'un export « grc-backup » exact au round-trip, et ce qui permet le
+--     rattachement polymorphe de approbations et de pieces_jointes. Les rendre composites
+--     casserait les deux. Ce qui subsiste est un ORACLE D'EXISTENCE — deviner un
+--     identifiant, tenter l'insertion, lire le refus — signalé comme tel à la porte S1
+--     (constats T-8 puis O-4) et reporté au lot L2 : PostgreSQL supprime déjà le DETAIL
+--     qui citerait la ligne en conflit lorsqu'elle n'est pas visible, l'oracle répond
+--     « oui / non » et ne montre rien.
+--
+--   - LES TABLES DE LIAISON SANS filiale_id (risque_exigences, actif_risques,
+--     processus_actifs, actif_dependances, incident_actifs, import_erreurs). Elles ne
+--     PEUVENT pas porter la colonne ; leur unicité est faite d'identifiants d'entités
+--     eux-mêmes globalement uniques, et leur rattachement à une filiale est le fait de
+--     leur politique seule (§5). C'est f_verifier_couverture_rls() qui les couvre.
+--
+-- Un schéma sain ne renvoie AUCUNE ligne — même idiome que les autres garde-fous. Nommée
+-- « f_verifier_<x>() », sans argument, rendant (objet, anomalie, detail) : elle est donc
+-- découverte et jouée par f_verifier_schema() sans qu'aucun fichier de déploiement change
+-- (CONVENTIONS §19.4).
+-- -------------------------------------------------------------------------------------
+create or replace function f_verifier_unicite_cloisonnee()
+returns table (objet text, anomalie text, detail text)
+    language plpgsql stable
+    set search_path = pg_catalog, public, pg_temp as
+$$
+declare
+    -- Les unicités DÉLIBÉRÉMENT globales sur une table cloisonnée. Cinq, chacune motivée
+    -- par une raison qui ne vaut que pour elle. Toute autre est une anomalie : la liste
+    -- ne dispense pas du balayage, elle en est la seule sortie de secours, et le bloc
+    -- final vérifie qu'aucune de ces cinq n'a disparu — une exemption périmée élargirait
+    -- la dérogation en silence (§19.5).
+    v_globales constant text[] := array[
+        -- Numérotation de la chaîne d'audit : elle est GROUPE par construction. Le
+        -- chaînage par empreinte relie toutes les entrées entre elles, filiales
+        -- comprises ; une numérotation par filiale ne serait plus une chaîne (§12).
+        'uq_journal_audit_numero',
+        -- Chemin de stockage d'une pièce jointe : c'est un chemin de SYSTÈME DE FICHIERS,
+        -- unique sur le disque par nature. Le nom est engendré par le serveur et opaque
+        -- (§17.1 de la migration 001) : une filiale ne peut pas le deviner pour occuper
+        -- celui d'une autre, et le collisionner par hasard n'arrive pas.
+        'uq_pieces_jointes_chemin',
+        -- (id, portee_groupe) sur documents : id est DÉJÀ la clé primaire, cette unicité
+        -- n'interdit donc rien de plus qu'elle. Elle n'existe que pour être la cible de
+        -- la clé étrangère composite de document_referentiels (constat N-10, §17.10).
+        'uq_documents_id_portee',
+        -- Référence d'une mesure de catalogue de portée GROUPE : index PARTIEL, borné à
+        -- « filiale_id is null ». Il ne porte donc que sur des lignes du socle commun,
+        -- que seule l'administration Groupe écrit. Le pendant local
+        -- (uq_mesure_catalogue_reference_locale) porte bien filiale_id, lui.
+        'uq_mesure_catalogue_reference_groupe',
+        -- Nom d'un groupe AD : l'unicité n'est pas la nôtre, c'est celle de l'annuaire.
+        -- Deux filiales ne peuvent pas revendiquer le même groupe AD, et c'est le but.
+        'uq_groupes_ad_nom'
+    ];
+    r record;
+    v_nom text;
+begin
+    for r in
+        select c.relname::text                             as tbl,
+               coalesce(con.conname::text, i.relname::text) as nom,
+               case con.contype
+                   when 'x' then 'contrainte d''exclusion'
+                   when 'u' then 'contrainte d''unicité'
+                   else 'index unique sans contrainte'
+               end                                          as genre,
+               pg_get_indexdef(ix.indexrelid)               as definition,
+               exists (
+                   select 1
+                     from unnest(ix.indkey) with ordinality k(att, pos)
+                     join pg_attribute a on a.attrelid = c.oid and a.attnum = k.att
+                    where a.attname = 'filiale_id'
+                      and k.pos <= ix.indnkeyatts)          as porte_filiale
+          from pg_index ix
+          join pg_class     i   on i.oid = ix.indexrelid
+          join pg_class     c   on c.oid = ix.indrelid
+          join pg_namespace n   on n.oid = c.relnamespace
+          left join pg_constraint con
+                 on con.conindid = ix.indexrelid and con.contype in ('u', 'p', 'x')
+         where n.nspname = 'public'
+           and c.relkind in ('r', 'p')
+           -- unicité (index seul ou contrainte) ET exclusion : l'index d'une contrainte
+           -- d'exclusion n'est pas « unique », il faut donc l'attraper par la contrainte.
+           and (ix.indisunique or con.contype = 'x')
+           and not ix.indisprimary
+           -- « cloisonnée » a un sens précis et un seul dans ce dépôt : la table porte
+           -- une colonne filiale_id (CONVENTIONS §4).
+           and exists (select 1 from pg_attribute a
+                        where a.attrelid = c.oid and a.attname = 'filiale_id'
+                          and a.attnum > 0 and not a.attisdropped)
+         order by c.relname, 2
+    loop
+        if r.porte_filiale or r.nom = any (v_globales) then
+            continue;
+        end if;
+
+        objet    := r.tbl || '.' || r.nom;
+        anomalie := 'unicite_transfrontaliere';
+        detail   := format(
+            '%s sur une table cloisonnée, sans filiale_id parmi ses colonnes de clé : une '
+            'filiale occupe une valeur dans l''espace d''une autre, qui ne peut plus '
+            'l''employer et reçoit un doublon sans détail sur une ligne invisible '
+            '(CONVENTIONS.md §19.1). Définition : %s', r.genre, r.definition);
+        return next;
+    end loop;
+
+    -- Une exemption qui ne désigne plus rien élargit la dérogation à la prochaine
+    -- contrainte qui reprendrait ce nom, et ne se voit pas. On la réclame.
+    foreach v_nom in array v_globales loop
+        if to_regclass('public.' || quote_ident(v_nom)) is null then
+            objet    := v_nom;
+            anomalie := 'exemption_obsolete';
+            detail   := 'unicité déclarée délibérément globale dans '
+                        'f_verifier_unicite_cloisonnee(), mais introuvable : la dérogation '
+                        'ne porte plus sur rien et couvrirait toute contrainte future qui '
+                        'reprendrait ce nom';
+            return next;
+        end if;
+    end loop;
+
+    return;
+end;
+$$;
+
+comment on function f_verifier_unicite_cloisonnee() is
+    'Vérifie que TOUTE contrainte d''unicité, TOUTE contrainte d''exclusion et TOUT index '
+    'unique — contrainte ou non — d''une table portant filiale_id inclut filiale_id parmi ses '
+    'colonnes de clé (CONVENTIONS.md §19.1). Cinq unicités délibérément globales sont dérogées '
+    'nommément, et leur disparition est signalée. Hors périmètre, à dessein : les clés '
+    'primaires (identifiants métier globalement uniques par construction ; l''oracle d''existence '
+    'qui subsiste est le constat O-4, reporté au lot L2) et les tables de liaison sans '
+    'filiale_id (couvertes par f_verifier_couverture_rls). Un schéma sain ne renvoie AUCUNE '
+    'ligne. Constat Q-2 du quatrième passage de la porte S1 : une filiale posait une étape '
+    'd''approbation IRRÉVOCABLE sur le risque d''une autre, bloquant à jamais son acceptation '
+    'de risque résiduel.';
 
 -- =====================================================================================
 -- §3 — FAMILLE 1 : LES 24 TABLES DE NIVEAU FILIALE
