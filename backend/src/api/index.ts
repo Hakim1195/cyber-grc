@@ -327,6 +327,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     contexteErreurs = {
       nomsInternes: new Set(catalogue.tables.keys()),
       unicites: catalogue.unicites,
+      validations: catalogue.validations,
     };
     instance.log.info(
       { tables: catalogue.tables.size, entites: listerEntites().length },

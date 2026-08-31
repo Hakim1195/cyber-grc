@@ -196,6 +196,14 @@ export interface ContexteTraduction {
    * ligne en cause est **forcément lisible** par l'appelant.
    */
   readonly unicites?: ReadonlyMap<string, { readonly porteFiliale: boolean }>;
+  /**
+   * Contraintes de validation et leurs colonnes. Sert à ne **pas inventer** un
+   * nom de champ quand le sujet d'un `check` n'en est pas un.
+   */
+  readonly validations?: ReadonlyMap<
+    string,
+    { readonly table: string; readonly colonnes: readonly string[] }
+  >;
 }
 
 /** Reconnaît une `ErreurEntite` sans importer sa classe (voir l'entête). */
@@ -491,7 +499,7 @@ export function traduireErreurPostgres(
       return new ErreurApplicative({
         code: 'donnee_invalide',
         statut: 400,
-        message: messageDeContrainte(erreur.constraint),
+        message: messageDeContrainte(erreur.constraint, contexte),
         detailJournal,
       });
 
@@ -573,14 +581,41 @@ export function traduireErreurPostgres(
  * garde que le **sujet**, qui est un mot du vocabulaire métier — jamais la
  * table.
  */
-function messageDeContrainte(contrainte: string): string {
+function messageDeContrainte(contrainte: string, contexte: ContexteTraduction): string {
   const morceaux = contrainte.split('_');
   const sujet = morceaux.length >= 3 ? morceaux[morceaux.length - 1] : undefined;
+  const colonnes = contexte.validations?.get(contrainte)?.colonnes ?? [];
 
-  if (morceaux[0] === 'ck' && sujet !== undefined && /^[a-z0-9]+$/.test(sujet)) {
+  if (morceaux[0] !== 'ck' || sujet === undefined || !/^[a-z0-9]+$/.test(sujet)) {
+    return "Une valeur de l'enregistrement n'est pas admise.";
+  }
+
+  // ── Le sujet d'un « check » n'est pas toujours une colonne ────────────
+  // La convention `ck_<table>_<sujet>` donne un SUJET, pas nécessairement un
+  // champ : `ck_actions_rattachement` en est l'exemple, et il n'existe aucun
+  // champ « rattachement ». Annoncer « la valeur du champ rattachement » à un
+  // utilisateur, c'est le renvoyer chercher un champ qui n'existe pas — un
+  // message faux vaut moins qu'un message vague.
+  //
+  // On tranche avec ce que le catalogue sait : si le sujet EST une colonne
+  // portée par la contrainte, on le nomme ; sinon on dit qu'une règle porte
+  // sur PLUSIEURS champs, et on nomme ceux-là — ce sont les noms que
+  // l'appelant a lui-même envoyés, et qui figurent déjà dans `/api/modele`.
+  const nommees = colonnes.filter((c) => /^[a-z_][a-z0-9_]{0,62}$/.test(c));
+
+  // Le catalogue prime sur la convention de nommage : quand il donne LA
+  // colonne, on la nomme elle, et pas le sujet du nom de contrainte — les deux
+  // diffèrent souvent (`ck_exigences_statut` porte `statut_conformite`).
+  if (nommees.length === 1) {
+    return `La valeur du champ « ${String(nommees[0])} » n'est pas admise pour cet enregistrement.`;
+  }
+  if (nommees.length === 0) {
     return `La valeur du champ « ${sujet} » n'est pas admise pour cet enregistrement.`;
   }
-  return "Une valeur de l'enregistrement n'est pas admise.";
+  return (
+    "Cet enregistrement enfreint une règle de cohérence entre plusieurs de ses champs " +
+    `(${nommees.join(', ')}). Vérifiez qu'ils ne se contredisent pas.`
+  );
 }
 
 /**
