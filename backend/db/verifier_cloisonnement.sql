@@ -85,6 +85,23 @@
 -- est pire qu'une alarme absente. CONVENTIONS.md §19.3 : la démonstration se joue au
 -- moins une fois sur une base PEUPLÉE avant d'être déclarée bonne.
 --
+-- Le cinquième passage a resserré le dernier de ces prédicats (constat Q5-7). Il bornait
+-- son comptage à « id like '%-DEMO-%' » — une recherche de SOUS-CHAÎNE sur une donnée que
+-- le schéma déclare volontairement permissive. Les identifiants ENGENDRÉS ne peuvent pas
+-- contenir « -DEMO- », mais la reprise d'un export « grc-backup » conserve les
+-- identifiants VERBATIM : un export fabriqué, ou une base historique où quelqu'un a saisi
+-- un identifiant à la main, y déposerait une ligne intruse. Le comptage porte désormais
+-- sur « cree_par », que le déclencheur de traçabilité écrit LUI-MÊME depuis le réglage de
+-- session — vrai par construction pour toute ligne née dans cette transaction, faux pour
+-- tout le reste, et hors de portée de l'appelant (001 §5).
+--
+-- ── CE QUE CE SCRIPT PREND COMME VERROU, ET QU'UN EXPLOITANT DOIT SAVOIR ──────────────
+-- Il écrit au journal d'audit, et f_journal_audit_chainage() prend un verrou consultatif
+-- de transaction qui vit jusqu'au « rollback » final. Joué sur la base de PRODUCTION, il
+-- SÉRIALISE donc toutes les écritures au journal du groupe pendant sa durée — une à deux
+-- secondes. Ce n'est pas un défaut, c'est le prix du chaînage ; mais la recette reste le
+-- bon endroit pour une démonstration devant témoin.
+--
 -- ── Il ne laisse RIEN derrière lui ───────────────────────────────────────────────────
 --
 -- Tout se joue dans UNE transaction, close par un « rollback » : les deux filiales
@@ -214,7 +231,7 @@ insert into actif_risques    (actif_id,  risque_id)      values ('ACTIF-DEMO-A',
 insert into pieces_jointes (id, filiale_id, entite_type, entite_id, nom_fichier, type_mime,
                             taille_octets, sha256, chemin_stockage)
     values ('PJ-DEMO-A', 'FIL-DEMO-A', 'filiales', 'FIL-DEMO-A', 'logo-toulouse.png',
-            'image/png', 4096, repeat('a', 64), '/magasin/demo/pj-demo-a');
+            'image/png', 4096, repeat('a', 64), 'de/' || repeat('a', 64));
 
 -- Toulouse rattache SA mesure locale : de quoi éprouver le cas 1 du CONVENTIONS §17.6
 -- (délier, puis supprimer, dans la même transaction).
@@ -359,7 +376,7 @@ order by 1;
 -- l'Allemagne, par l'un des quatre chemins possibles, et ce sont ces lignes invisibles qui
 -- protègent le socle de la suppression. MESURE-DEMO-G6, elle, n'est utilisée par personne.
 --
--- ── « id like '%-DEMO-%' » N'EST PAS DE L'ORNEMENT (CONVENTIONS.md §19.3) ─────────────
+-- ── LE PRÉDICAT NE PORTE QUE SUR CE QUE LE SCRIPT A SEMÉ (CONVENTIONS.md §19.3) ──────
 -- Constat Q-4 du quatrième passage de la porte S1, et le seul contrôle du script qui en
 -- souffrait. Il comptait TOUTES les lignes de portée Groupe, sans borner le comptage à ce
 -- que le script avait lui-même semé, et attendait le nombre exact 8. Or les lignes de
@@ -384,11 +401,11 @@ begin
         select 'C04', 'Tables mixtes : le socle de Groupe est lisible (6 mesures, personne, document)',
                '8', v.n::text, case when v.n = 8 then 'OK' else 'ÉCHEC' end
           from (select (select count(*) from mesure_catalogue
-                         where filiale_id is null and id like '%-DEMO-%')
+                         where filiale_id is null and cree_par = 'zzdemo-demonstration')
                      + (select count(*) from personnes
-                         where filiale_id is null and id like '%-DEMO-%')
+                         where filiale_id is null and cree_par = 'zzdemo-demonstration')
                      + (select count(*) from documents
-                         where filiale_id is null and id like '%-DEMO-%') as n) v
+                         where filiale_id is null and cree_par = 'zzdemo-demonstration') as n) v
       ) as x (numero, controle, attendu, obtenu, verdict);
     -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
     if v_ligne is not null then
@@ -1800,6 +1817,235 @@ end;
 $$;
 
 -- =====================================================================================
+-- §8 septies — LE POINT D'APPEL, LE VERROU, LE SECRET  (cinquième passage S1)
+-- -------------------------------------------------------------------------------------
+-- Trois majeurs, et aucun n'est une brèche de cloisonnement : ils portent sur ce qui
+-- GARDE le cloisonnement, sur le risque projet n° 1, et sur une COLONNE — la dimension
+-- que quatre passages avaient laissée de côté, tous ayant raisonné en lignes.
+-- =====================================================================================
+
+\echo
+\echo '§8 septies — Point d''appel, verrouillage optimiste, secret d''authentification'
+
+-- --- Q5-1 : qui peut planter un faux garde-fou, et avec quels droits serait-il joué ? --
+-- f_verifier_schema() ne LIT pas les fonctions qu'elle découvre, elle les EXÉCUTE : la
+-- convention de nommage est un contrat d'exécution de code. Deux faits le bornent, et ce
+-- sont eux qu'on montre — la fermeture du schéma, et l'abaissement de privilège.
+do $$
+declare
+    v_ouvert text;
+    v_ligne  jsonb;
+begin
+    select coalesce(string_agg(nom, ', ' order by nom), 'personne')
+      into v_ouvert
+      from (
+        select coalesce((select rolname from pg_roles where oid = g.grantee), 'PUBLIC') as nom
+          from (select (aclexplode(coalesce(n.nspacl, acldefault('n', n.nspowner)))).*
+                  from pg_namespace n where n.nspname = 'public') g
+         where g.privilege_type = 'CREATE'
+           and g.grantee <> (select datdba from pg_database where datname = current_database())
+           and not exists (select 1 from pg_roles rr
+                            where rr.oid = g.grantee
+                              and (rr.rolsuper or rr.rolname = 'pg_database_owner'))
+      ) t;
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C94', 'Rôles pouvant CRÉER dans le schéma public (donc y planter un faux garde-fou)',
+        'personne', v_ouvert,
+        case when v_ouvert = 'personne' then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+do $$
+declare
+    v_etat  text;
+    v_public boolean;
+begin
+    select exists (select 1 from (select (aclexplode(p.proacl)).* from pg_proc p
+                                   where p.oid = to_regprocedure('public.f_verifier_schema()')) g
+                    where g.grantee = 0 and g.privilege_type = 'EXECUTE')
+      into v_public;
+
+    select format('%s / %s / %s',
+                  case when p.prosecdef then 'security definer' else 'security INVOKER' end,
+                  pg_get_userbyid(p.proowner),
+                  case when v_public then 'exécution PUBLIQUE' else 'exécution nominative' end)
+      into v_etat
+      from pg_proc p where p.oid = to_regprocedure('public.f_verifier_schema()');
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C95', 'Le point d''appel unique s''exécute sous le PROPRIÉTAIRE, jamais sous le superutilisateur',
+        format('security definer / %s / exécution nominative',
+               (select pg_get_userbyid(datdba) from pg_database where datname = current_database())),
+        v_etat,
+        case when v_etat = format('security definer / %s / exécution nominative',
+                                  (select pg_get_userbyid(datdba) from pg_database
+                                    where datname = current_database()))
+             then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- --- Q5-2 : le verrouillage optimiste, et le gel de la traçabilité en MODIFICATION -----
+-- Le §18.1 avait couvert l'INSERTION. Rien n'exigeait le déclencheur de MISE À JOUR, qui
+-- porte pourtant l'incrément de « version » — le risque P1 du PLAN_SERVEUR — et le gel de
+-- cree_le / cree_par. Sans lui, deux écritures qui portent encore « version = 1 »
+-- réussissent toutes les deux, et la seconde écrase la première en silence.
+--
+-- La démonstration est SÉQUENTIELLE, et il faut le dire : elle établit que « version »
+-- bouge et que la seconde écriture ne trouve plus sa ligne. La concurrence RÉELLE — deux
+-- connexions, la seconde bloquée sur le verrou de ligne jusqu'au « commit » de la
+-- première — est exercée par le banc d'essai (test/base/rls.test.mjs).
+do $$
+declare
+    v_v1      integer;
+    v_v2      integer;
+    v_perdues integer;
+    v_trace   text;
+begin
+    insert into risques (id, filiale_id, nom) values ('RISK-DEMO-P1', 'FIL-DEMO-A', 'Concurrence');
+    select version into v_v1 from risques where id = 'RISK-DEMO-P1';
+
+    -- Première écriture : elle connaît la version en cours, elle passe.
+    update risques set nom = 'écriture d''Alice' where id = 'RISK-DEMO-P1' and version = v_v1;
+    select version into v_v2 from risques where id = 'RISK-DEMO-P1';
+
+    -- Seconde écriture, qui croit encore à la version d'avant : elle ne doit RIEN trouver.
+    update risques set nom = 'écriture de Mallory, qui écrase'
+     where id = 'RISK-DEMO-P1' and version = v_v1;
+    get diagnostics v_perdues = row_count;
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C96', 'Verrouillage optimiste : l''écriture qui porte une version périmée n''affecte rien',
+        'v1 -> v2, puis 0 ligne',
+        format('v%s -> v%s, puis %s ligne', v_v1, v_v2, v_perdues),
+        case when v_v1 = 1 and v_v2 = 2 and v_perdues = 0 then 'OK' else 'ÉCHEC' end)))::text, true);
+
+    -- Et la traçabilité d'une ligne DÉJÀ EN BASE : antidater et signer du nom d'un autre.
+    update risques
+       set nom = 'réécriture', cree_par = 'directeur general', cree_le = '2019-01-01'
+     where id = 'RISK-DEMO-P1';
+    select format('%s / %s / %s', r.cree_par, r.cree_le::date,
+                  coalesce(r.modifie_par, '(nul)'))
+      into v_trace from risques r where r.id = 'RISK-DEMO-P1';
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C97', 'Modification : cree_par et cree_le d''une ligne existante sont IGNORÉS s''ils sont fournis',
+        format('zzdemo-demonstration / %s / zzdemo-demonstration', current_date),
+        v_trace,
+        case when v_trace = format('zzdemo-demonstration / %s / zzdemo-demonstration', current_date)
+             then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- --- Q5-3 : le seul secret que ce schéma stocke ---------------------------------------
+-- Quatre passages ont raisonné en LIGNES. « utilisateurs » est légitimement de niveau
+-- Groupe — on la lit pour RÉSOUDRE le périmètre — et elle portait, lisible de toute
+-- session de filiale ET du compte de supervision, l'empreinte du mot de passe du compte
+-- d'administration de SECOURS. Le contrôle porte les deux sens : le secret est fermé, et
+-- le reste de la table est resté ouvert.
+do $$
+declare v_etat text;
+begin
+    select format('secret lu par : %s / identifiant lu par : %s',
+                  coalesce(nullif(concat_ws(' + ',
+                      case when has_column_privilege('grc_app', 'utilisateurs',
+                                                     'mot_de_passe_hash', 'SELECT')
+                           then 'grc_app' end,
+                      case when has_column_privilege('grc_lecture', 'utilisateurs',
+                                                     'mot_de_passe_hash', 'SELECT')
+                           then 'grc_lecture' end), ''), 'personne'),
+                  concat_ws(' + ',
+                      case when has_column_privilege('grc_app', 'utilisateurs',
+                                                     'identifiant', 'SELECT')
+                           then 'grc_app' end,
+                      case when has_column_privilege('grc_lecture', 'utilisateurs',
+                                                     'identifiant', 'SELECT')
+                           then 'grc_lecture' end))
+      into v_etat;
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C98', 'L''empreinte du mot de passe du compte de secours n''est lisible d''aucun rôle de connexion',
+        'secret lu par : personne / identifiant lu par : grc_app + grc_lecture', v_etat,
+        case when v_etat = 'secret lu par : personne / identifiant lu par : grc_app + grc_lecture'
+             then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- --- Q5-4 et Q5-8 : l'armement de TOUS les déclencheurs, les DEUX rôles de connexion ---
+-- Les 42 déclencheurs d'insertion étaient armés « always » et leurs 32 miroirs de mise à
+-- jour ne l'étaient pas — l'artefact de deux listes tenues à la main. Et le contrôle
+-- d'attributs ne regardait que grc_app, alors que grc_lecture détient « select » sur les
+-- 47 tables : un BYPASSRLS posé sur lui donnerait les vingt filiales.
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array('C99',
+               format('Déclencheurs non internes armés autrement qu''en « always » (%s balayés)',
+                      count(*)),
+               '0',
+               coalesce(string_agg(c.relname || '.' || t.tgname, ', ' order by c.relname, t.tgname)
+                        filter (where t.tgenabled <> 'A'), '0'),
+               case when count(*) filter (where t.tgenabled <> 'A') = 0 then 'OK' else 'ÉCHEC' end)
+      into v_ligne
+      from pg_trigger t
+      join pg_class c on c.oid = t.tgrelid
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relkind in ('r', 'p') and not t.tgisinternal;
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array('C100',
+               'Rôles de CONNEXION porteurs de SUPERUSER ou BYPASSRLS (grc_app ET grc_lecture)',
+               '0',
+               coalesce(string_agg(rolname, ', ' order by rolname), '0'),
+               case when count(*) = 0 then 'OK' else 'ÉCHEC' end)
+      into v_ligne
+      from pg_roles
+     where rolname in ('grc_app', 'grc_lecture') and (rolsuper or rolbypassrls);
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+-- --- Q5-5 : un chemin de magasin devinable est refusé ----------------------------------
+-- La dérogation d'unicité de pieces_jointes.chemin_stockage reposait sur une promesse de
+-- code non écrit (« nom aléatoire opaque »). Elle repose désormais sur une contrainte.
+do $$
+declare v_obtenu text;
+begin
+    begin
+        insert into pieces_jointes (id, filiale_id, entite_type, entite_id, nom_fichier,
+                                    type_mime, taille_octets, sha256, chemin_stockage)
+             values ('PJ-DEMO-DEVINABLE', 'FIL-DEMO-A', 'risques', 'RISK-DEMO-A', 'rapport.pdf',
+                     'application/pdf', 1024, repeat('b', 64), '../magasin/RISK-DEMO-A/rapport.pdf');
+        v_obtenu := 'AUCUN REFUS';
+    exception when others then
+        v_obtenu := sqlstate;
+    end;
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C101', 'Chemin de magasin devinable — et remontant d''un répertoire — refusé',
+        '23514', v_obtenu,
+        case when v_obtenu = '23514' then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- =====================================================================================
 -- §9 — LE RÔLE APPLICATIF
 -- -------------------------------------------------------------------------------------
 -- Toutes les politiques du monde ne valent rien au-dessus d'un rôle qui porte BYPASSRLS,
@@ -2039,7 +2285,8 @@ $$;
 select r ->> 0 as "n°", r ->> 1 as "contrôle", r ->> 2 as "attendu",
        r ->> 3 as "obtenu", r ->> 4 as "verdict"
   from jsonb_array_elements(current_setting('demo.resultats')::jsonb) as r
- order by 1;
+ -- Tri NUMÉRIQUE, pas alphabétique : « C100 » se rangerait sinon entre C10 et C11.
+ order by (substring(r ->> 0 from 2))::integer;
 
 select count(*)                                              as "contrôles",
        count(*) filter (where r ->> 4 like 'OK%')            as "réussis",
@@ -2052,7 +2299,8 @@ declare
     v_nombre int;
 begin
     select string_agg(format('  %s — %s (attendu %s, obtenu %s)',
-                             r ->> 0, r ->> 1, r ->> 2, r ->> 3), E'\n' order by r ->> 0),
+                             r ->> 0, r ->> 1, r ->> 2, r ->> 3), E'\n'
+                      order by (substring(r ->> 0 from 2))::integer),
            count(*)
       into v_echecs, v_nombre
       from jsonb_array_elements(current_setting('demo.resultats')::jsonb) as r

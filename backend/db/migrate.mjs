@@ -515,6 +515,11 @@ async function appliquerUne(client, migration, registreAvecEmpreinte) {
 const GARDE_FOU = Object.freeze({
   nom: 'f_verifier_schema',
   posePar: '001_socle.sql',
+  // Borne de temps du SEUL appel au point d'appel unique (constat Q5-6). La connexion est
+  // ouverte sans borne — c'est le bon choix pour une migration longue, et le mauvais pour
+  // un contrôle. Soixante secondes : très au-delà du coût réel (quelques millisecondes sur
+  // 47 tables), très en deçà d'un déploiement suspendu sans message.
+  borneMs: '60s',
 });
 
 /** Conséquence lisible par contrôle rendu. Purement explicative : elle enrichit le
@@ -529,14 +534,55 @@ const CONSEQUENCES = Object.freeze({
     'par masquage d\'une table du schéma (CONVENTIONS.md §17.2)',
   tracabilite:
     'sans déclencheur « before insert », l\'appelant fixe lui-même version, cree_le et ' +
-    'cree_par — et le gel opéré ensuite rend la valeur forgée définitive (CONVENTIONS.md §18.1)',
+    'cree_par ; sans « before update », « version » cesse d\'être un compteur et deux ' +
+    'écritures concurrentes sur la même version passent toutes les deux (CONVENTIONS.md §18.1)',
+  armement:
+    'un déclencheur armé en « origin » est neutralisé par « set session_replication_role = ' +
+    'replica », et la garantie qu\'il porte avec lui (CONVENTIONS.md §19.4)',
+  portee_figee:
+    'une table mixte sans déclencheur de portée laisse une ligne du socle Groupe basculer ' +
+    'dans une filiale, transition qu\'aucune politique RLS ne peut voir (CONVENTIONS.md §17.6)',
+  privileges:
+    'un rôle qui peut créer dans « public » peut y planter un faux garde-fou, et une ' +
+    'colonne de secret lisible expose l\'empreinte du compte de secours (CONVENTIONS.md §19.4)',
+  unicite_cloisonnee:
+    'une unicité sans filiale_id laisse une filiale occuper une valeur dans l\'espace ' +
+    'd\'une autre, qui reçoit un doublon sur une ligne invisible (CONVENTIONS.md §19.1)',
+  point_appel:
+    'une fonction porte le nom d\'un garde-fou sans en avoir les propriétés : elle n\'est ' +
+    'pas jouée, et sa présence est déjà l\'anomalie (CONVENTIONS.md §19.4)',
 });
 
 /**
  * Joue le point d'appel unique et rend ce qu'il dit, sans rien décider.
  *
- * La fonction est `stable` et ne lit que des catalogues : l'appel n'écrit rien, et reste
- * donc légitime sous `--verifier`, qui promet « aucune écriture ».
+ * ── POURQUOI CET APPEL EST ENCADRÉ (constat Q5-1 du cinquième passage) ───────────────
+ *
+ * Ce commentaire affirmait : « la fonction est `stable` et ne lit que des catalogues :
+ * l'appel n'écrit rien, et reste donc légitime sous `--verifier`, qui promet "aucune
+ * écriture" ». **C'était faux**, et l'auditeur l'a démontré : `f_verifier_schema()`
+ * n'énumère pas ses contrôles, elle les DÉCOUVRE et les EXÉCUTE. Une fonction plantée qui
+ * respectait la convention de nommage — déclarée `volatile` — a retiré `force row level
+ * security` d'une table cloisonnée et forgé une entrée du registre des migrations, sous
+ * `--verifier`, en annonçant « aucune anomalie ».
+ *
+ * Ce qui est vrai, et qu'il faut écrire exactement : la volatilité DÉCLARÉE d'une
+ * fonction n'engage pas le SQL dynamique d'un `execute`… mais PostgreSQL, lui, refuse
+ * toute écriture DANS une fonction non volatile (« INSERT is not allowed in a non-volatile
+ * function », SQLSTATE 0A000). La migration 001 s'appuie sur ce refus : la découverte ne
+ * joue QUE des fonctions déclarées non volatiles, et signale les autres au lieu de les
+ * exécuter.
+ *
+ * Ici, deux garde-corps de plus, parce qu'une promesse d'outil se tient dans l'outil :
+ *
+ *   - TRANSACTION EN LECTURE SEULE. `begin; set transaction read only;` refuse l'écriture
+ *     quoi que fasse la fonction appelée, y compris si quelqu'un relâchait un jour le
+ *     filtre de volatilité. C'est ce qui rend VRAIE la promesse de `--verifier`.
+ *   - BORNE DE TEMPS (constat Q5-6). La connexion est ouverte avec `statement_timeout=0`,
+ *     ce qui est le bon choix pour de longues migrations et le mauvais pour un contrôle :
+ *     un garde-fou qui boucle ou qui attend un verrou suspendrait indéfiniment le
+ *     déploiement, sans message, au pire moment — l'installation d'une mise à jour. La
+ *     borne est posée en `set local`, donc rendue avec la transaction.
  *
  * Une fonction ABSENTE n'est pas une anomalie : sur une base antérieure à la migration
  * qui la pose, il n'y a rien à interroger. C'est un avertissement, pas un échec — sans
@@ -555,13 +601,19 @@ export async function verifierConformite(client) {
   if (!presence.rows[0].existe) return { anomalies: [], absente: true, injouable: null };
 
   try {
+    await client.query('begin');
+    await client.query('set transaction read only');
+    await client.query(`set local statement_timeout = '${GARDE_FOU.borneMs}'`);
     // Les colonnes sont nommées : la fonction peut en gagner d'autres sans casser ceci.
     const lignes = await client.query(
       `select controle, objet, anomalie, detail from public.${GARDE_FOU.nom}()
         order by controle, objet, anomalie`,
     );
+    await client.query('rollback');
     return { anomalies: lignes.rows, absente: false, injouable: null };
   } catch (erreur) {
+    // La transaction est perdue de toute façon : on la referme sans masquer l'erreur.
+    await client.query('rollback').catch(() => {});
     return { anomalies: [], absente: false, injouable: erreur.message };
   }
 }
@@ -800,7 +852,9 @@ async function deroulement(client, migrations, options) {
       journal.titre(`Schéma à jour : ${migrations.length} migration(s), rien à appliquer.`);
       // « Rien à appliquer » n'est PAS « rien à vérifier » : c'est exactement l'état d'une
       // base à jour qu'on a sabotée depuis, et l'angle mort qu'a exploité le constat T-4.
-      // Les garde-fous sont `stable` : les jouer ici ne rompt pas la promesse de --verifier.
+      // La promesse « aucune écriture » de --verifier est tenue par la TRANSACTION EN
+      // LECTURE SEULE de verifierConformite(), pas par la volatilité déclarée des
+      // fonctions jouées : c'est le constat Q5-1, et l'ancienne rédaction était fausse.
       return await conclureSurLaConformite(client, CODES.SUCCES);
     }
     journal.titre(

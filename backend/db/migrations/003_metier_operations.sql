@@ -1068,10 +1068,17 @@ comment on column history.metrics is
 -- =====================================================================================
 
 do $$
-declare v_poses integer;
+declare
+    v_poses  integer;
+    v_armes  integer;
 begin
     v_poses := f_poser_tracabilite_insertion();
-    raise notice 'Traçabilité d''insertion : % déclencheur(s) posé(s).', v_poses;
+    -- Puis armer TOUT déclencheur non interne encore en « origin » : ceux que ce fichier
+    -- vient de créer à la main, et ceux qu'une migration antérieure aurait laissés
+    -- désarmés (constat Q5-4). Découvert dans le catalogue, jamais énuméré.
+    v_armes := f_armer_declencheurs();
+    raise notice 'Traçabilité d''insertion : % déclencheur(s) posé(s) ; % (ré)armé(s) en « always ».',
+                 v_poses, v_armes;
 end;
 $$;
 

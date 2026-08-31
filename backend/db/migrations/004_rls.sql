@@ -128,31 +128,43 @@ $$;
 -- pas été passé), le contrôle est sans objet et le dit : c'est la posture déjà retenue
 -- par 001_socle.sql §0, qui reste jouable sans les rôles.
 -- -------------------------------------------------------------------------------------
+-- LES DEUX RÔLES DE CONNEXION, pas seulement le premier (constat Q5-8 du cinquième
+-- passage). Ce bloc — et la démonstration de recette — n'interrogeaient que grc_app. Or
+-- grc_lecture est lui aussi un rôle de CONNEXION, et il détient « select » sur les 47
+-- tables : un BYPASSRLS posé sur lui, le geste le plus tentant qui soit (« c'est un compte
+-- de lecture, quel risque ? »), lui donnerait les vingt filiales d'un coup. deploy/
+-- install.sh contrôlait bien les deux ; le trou était dans les deux contrôles censés le
+-- doubler.
 do $$
 declare
     r          record;
+    v_fautifs  text;
     v_possede  text;
 begin
-    select rolsuper, rolbypassrls, rolreplication
-      into r
-      from pg_roles where rolname = 'grc_app';
-
-    if not found then
+    if not exists (select 1 from pg_roles where rolname in ('grc_app', 'grc_lecture')) then
         raise notice
-            'Rôle grc_app absent : contrôle des attributs SANS OBJET sur cette base. '
-            'Le cloisonnement n''est réellement éprouvé qu''avec les trois rôles du §14 '
+            'Rôles grc_app / grc_lecture absents : contrôle des attributs SANS OBJET sur cette '
+            'base. Le cloisonnement n''est réellement éprouvé qu''avec les trois rôles du §14 '
             '(bash db/dev/preparer_base_dev.sh).';
         return;
     end if;
 
-    if r.rolsuper or r.rolbypassrls then
+    select string_agg(format('%s (%s)', rr.rolname,
+                             concat_ws(' ', case when rr.rolsuper then 'SUPERUSER' end,
+                                            case when rr.rolbypassrls then 'BYPASSRLS' end)),
+                      ', ' order by rr.rolname)
+      into v_fautifs
+      from pg_roles rr
+     where rr.rolname in ('grc_app', 'grc_lecture')
+       and (rr.rolsuper or rr.rolbypassrls);
+
+    if v_fautifs is not null then
         raise exception
-            'Le rôle applicatif grc_app porte % : la Row Level Security posée par cette '
-            'migration serait décorative.',
-            case when r.rolsuper then 'SUPERUSER ' else '' end
-            || case when r.rolbypassrls then 'BYPASSRLS' else '' end
+            'Rôle de connexion porteur d''un attribut interdit — % : la Row Level Security '
+            'posée par cette migration serait décorative.', v_fautifs
             using errcode = '42501',
-                  hint = 'Corrigez avant de rejouer : alter role grc_app nosuperuser nobypassrls;';
+                  hint = 'Corrigez avant de rejouer : '
+                         'alter role <rôle> nosuperuser nobypassrls;';
     end if;
 
     -- Couche 4 de la garantie d'ajout seul du journal (CONVENTIONS §12) : seul le
@@ -174,7 +186,8 @@ begin
                          'alter table <table> owner to grc_proprietaire;';
     end if;
 
-    raise notice 'grc_app : ni SUPERUSER, ni BYPASSRLS, propriétaire d''aucun objet — conforme.';
+    raise notice 'grc_app et grc_lecture : ni SUPERUSER, ni BYPASSRLS ; grc_app propriétaire '
+                 'd''aucun objet — conforme.';
 end;
 $$;
 
@@ -522,10 +535,132 @@ end;
 $$;
 
 comment on function f_interdit_changement_portee() is
-    'Déclencheur des cinq tables MIXTES : refuse (SQLSTATE 23514) tout « update » qui change '
+    'Déclencheur des tables MIXTES : refuse (SQLSTATE 23514) tout « update » qui change '
     'filiale_id, dans un sens comme dans l''autre. Ferme le franchissement de la frontière '
     'Groupe / filiale que les politiques RLS, évaluées séparément sur l''ancienne et la '
     'nouvelle ligne, ne peuvent pas voir. Constat M-3 de la porte de sécurité S1.';
+
+-- ── POSE ET VÉRIFICATION DE LA PORTÉE FIGÉE, PILOTÉES PAR LE CATALOGUE (Q5-4) ───────
+--
+-- Ce déclencheur était posé par CINQ « create trigger » recopiés. La liste était juste —
+-- le cinquième passage l'a recomptée — mais rien ne la tenait : une sixième table mixte
+-- ajoutée au lot L4 ou L7 recevrait ses politiques (f_verifier_couverture_rls les
+-- réclamerait) SANS son déclencheur de portée, et aucun contrôle ne le dirait. Le rayon
+-- d'une telle omission est le constat M-3 rouvert : une ligne du socle Groupe basculée
+-- dans une filiale, ou l'inverse, sous les pieds des dix-neuf autres.
+--
+-- Le périmètre se DÉCOUVRE : une table mixte est une table dont la colonne « filiale_id »
+-- existe et accepte le nul. Deux tables la portent nullable sans être mixtes, et le §17.7
+-- dit pourquoi — leur nul est chronologique ou technique, il ne désigne pas une PORTÉE.
+-- Elles sont donc nommées, et le garde-fou vérifie que ces noms désignent toujours
+-- quelque chose (§19.5).
+create or replace function f_tables_mixtes() returns table (nom text)
+    language sql stable
+    set search_path = pg_catalog, public, pg_temp as
+$$
+    select c.relname::text
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      join pg_attribute a on a.attrelid = c.oid and a.attname = 'filiale_id'
+     where n.nspname = 'public' and c.relkind in ('r', 'p')
+       and a.attnum > 0 and not a.attisdropped and not a.attnotnull
+       and c.relname::text <> all (array['journal_audit', 'groupes_ad'])
+     order by 1;
+$$;
+
+comment on function f_tables_mixtes() is
+    'Les tables MIXTES du schéma, découvertes dans le catalogue : filiale_id présent et '
+    'nullable, moins les deux tables que le §17.7 déclare « nullables sans être mixtes » '
+    '(journal_audit, groupes_ad). Source unique du périmètre de f_poser_portee_figee() et de '
+    'f_verifier_portee_figee(). Remplace la liste de cinq noms recopiée (constat Q5-4).';
+
+create or replace function f_poser_portee_figee() returns integer
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
+$$
+declare
+    r      record;
+    v_pose integer := 0;
+begin
+    for r in select m.nom from f_tables_mixtes() m loop
+        if not exists (select 1 from pg_trigger t
+                        where t.tgrelid = to_regclass('public.' || quote_ident(r.nom))
+                          and not t.tgisinternal
+                          and t.tgname = 'trg_' || r.nom || '_portee_figee')
+        then
+            execute format(
+                'create trigger %I before update on %I for each row execute function '
+                'f_interdit_changement_portee()', 'trg_' || r.nom || '_portee_figee', r.nom);
+            v_pose := v_pose + 1;
+        end if;
+    end loop;
+    -- L'armement est celui de tout le schéma : f_armer_declencheurs(), en fin de migration.
+    return v_pose;
+end;
+$$;
+
+comment on function f_poser_portee_figee() is
+    'Pose sur toute table MIXTE qui n''en a pas le déclencheur « before update » de portée '
+    'figée (CONVENTIONS.md §17.6 et §19.5). Idempotente, pilotée par f_tables_mixtes() : à '
+    'appeler dans toute migration qui crée une table mixte. Rend le nombre de déclencheurs '
+    'posés.';
+
+create or replace function f_verifier_portee_figee()
+returns table (objet text, anomalie text, detail text)
+    language plpgsql stable
+    set search_path = pg_catalog, public, pg_temp as
+$$
+declare
+    v_exemptions constant text[] := array['journal_audit', 'groupes_ad'];
+    r     record;
+    v_nom text;
+begin
+    for r in
+        select m.nom,
+               (select p.proname::text from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+                 where t.tgrelid = to_regclass('public.' || quote_ident(m.nom))
+                   and not t.tgisinternal and t.tgname = 'trg_' || m.nom || '_portee_figee')
+                   as fonction
+          from f_tables_mixtes() m
+    loop
+        if r.fonction is null then
+            objet    := r.nom;
+            anomalie := 'portee_non_figee';
+            detail   := 'table MIXTE (filiale_id nullable) sans déclencheur de portée figée : '
+                        'une ligne du socle Groupe peut basculer dans une filiale, ou l''inverse, '
+                        'et les politiques RLS ne peuvent pas voir cette transition '
+                        '(CONVENTIONS.md §17.6, constat M-3)';
+            return next;
+        elsif r.fonction <> 'f_interdit_changement_portee' then
+            objet    := r.nom;
+            anomalie := 'portee_mal_figee';
+            detail   := format('le déclencheur de portée appelle « %s » et non '
+                               'f_interdit_changement_portee', r.fonction);
+            return next;
+        end if;
+    end loop;
+
+    -- Les deux exemptions du §17.7 ne doivent pas se périmer : une table renommée ou
+    -- supprimée laisserait une dispense qui couvrirait la prochaine du même nom.
+    foreach v_nom in array v_exemptions loop
+        if to_regclass('public.' || quote_ident(v_nom)) is null then
+            objet    := v_nom;
+            anomalie := 'exemption_obsolete';
+            detail   := 'table déclarée « filiale_id nullable sans être mixte » (§17.7) mais '
+                        'introuvable : la dispense ne porte plus sur rien';
+            return next;
+        end if;
+    end loop;
+
+    return;
+end;
+$$;
+
+comment on function f_verifier_portee_figee() is
+    'Vérifie que TOUTE table mixte — découverte, jamais récitée — porte son déclencheur de '
+    'portée figée (CONVENTIONS.md §17.6 et §19.5, constat Q5-4). Un schéma sain ne renvoie '
+    'AUCUNE ligne. Sans ce filet, une table mixte ajoutée par une migration future recevrait '
+    'ses politiques sans son déclencheur, et le constat M-3 se rouvrirait en silence.';
 
 -- -------------------------------------------------------------------------------------
 -- Vérification de la couverture RLS. Créée en fonction, et pas seulement jouée en fin de
@@ -1732,72 +1867,34 @@ create trigger trg_traitement_mesures_coherence_mesure
     before insert or update on traitement_mesures
     for each row execute function f_coherence_mesure_catalogue();
 
--- --- (b) les cinq tables MIXTES : une ligne ne change pas de portée --------------------
--- Mêmes cinq tables que la famille 2 (§4), et dans le même ordre : la liste doit se
--- relire d'un fichier à l'autre sans effort. Corrigé à la porte S1 (constat M-3).
---
--- La liste s'arrête là, et c'est le §17.7 qui dit pourquoi : « nullable » n'est pas
--- « mixte ». journal_audit, groupes_ad et sessions portent un filiale_id nullable pour une
--- raison chronologique ou technique, pas parce que leurs lignes auraient une PORTÉE. Elles
--- n'ont donc pas de déclencheur ici. Le banc d'essai balaie le catalogue avec exactement
--- cette exclusion (test/base/rls.test.mjs).
-create trigger trg_parametres_portee_figee
-    before update on parametres
-    for each row execute function f_interdit_changement_portee();
-
-create trigger trg_mesure_catalogue_portee_figee
-    before update on mesure_catalogue
-    for each row execute function f_interdit_changement_portee();
-
-create trigger trg_personnes_portee_figee
-    before update on personnes
-    for each row execute function f_interdit_changement_portee();
-
-create trigger trg_document_referentiels_portee_figee
-    before update on document_referentiels
-    for each row execute function f_interdit_changement_portee();
-
-create trigger trg_documents_portee_figee
-    before update on documents
-    for each row execute function f_interdit_changement_portee();
-
--- --- (c) les neuf déclencheurs du §7 sont armés en « always » ------------------------
--- Constat N-11 du second passage de la porte S1 : ils étaient armés en « origin », alors
--- que les trois du journal d'audit (001 §9) sont en « always ». Sans effet aujourd'hui —
--- « session_replication_role » est refusé au rôle applicatif, vérifié aux deux passages,
--- et le propriétaire de la base est hors modèle de menace (CONVENTIONS §12) — mais ces
--- neuf déclencheurs portent désormais des garanties de CLOISONNEMENT opposables : la
--- cohérence du catalogue de mesures et la portée figée des tables mixtes. Ce qui porte une
--- garantie opposable s'arme comme tel, et l'écart avec le journal n'a pas de raison d'être.
---
--- Portée exacte, à ne pas surestimer : « always » ne change rien pour un attaquant qui ne
--- peut déjà pas poser le réglage. Il ferme le cas du jour où une réplication logique, un
--- outil de migration de données ou une reprise en masse basculerait la session en mode
--- « replica » — et désarmerait alors, silencieusement, tout ce qui n'est pas « always ».
+-- --- (b) les tables MIXTES : une ligne ne change pas de portée -------------------------
+-- Cinq « create trigger » recopiés jusqu'au cinquième passage, remplacés par la pose
+-- pilotée par le catalogue (§2, constat Q5-4). Ce que la liste disait, f_tables_mixtes()
+-- le DÉCOUVRE : filiale_id présent et nullable, moins les deux tables que le §17.7 déclare
+-- « nullables sans être mixtes » — leur nul est chronologique ou technique, il ne désigne
+-- pas une portée. Une sixième table mixte ajoutée en L4 ou L7 recevra donc son déclencheur
+-- sans que ce fichier change, et f_verifier_portee_figee() le réclamerait si elle ne
+-- l'avait pas.
 do $$
-declare
-    v_declencheurs constant text[] := array[
-        'mesure_mise_en_oeuvre:trg_mesure_mise_en_oeuvre_coherence_mesure',
-        'evaluation_mesures:trg_evaluation_mesures_coherence_mesure',
-        'actions:trg_actions_coherence_mesure',
-        'traitement_mesures:trg_traitement_mesures_coherence_mesure',
-        'parametres:trg_parametres_portee_figee',
-        'mesure_catalogue:trg_mesure_catalogue_portee_figee',
-        'personnes:trg_personnes_portee_figee',
-        'document_referentiels:trg_document_referentiels_portee_figee',
-        'documents:trg_documents_portee_figee'
-    ];
-    d text;
+declare v_poses integer;
 begin
-    foreach d in array v_declencheurs loop
-        execute format('alter table %I enable always trigger %I',
-                       split_part(d, ':', 1), split_part(d, ':', 2));
-    end loop;
-
-    raise notice 'Déclencheurs de cohérence et de portée : % armés en « always ».',
-                 array_length(v_declencheurs, 1);
+    v_poses := f_poser_portee_figee();
+    raise notice 'Portée figée : % déclencheur(s) posé(s) sur les tables mixtes (%).',
+                 v_poses, (select string_agg(nom, ', ' order by nom) from f_tables_mixtes());
 end;
 $$;
+
+-- --- (c) l'armement ------------------------------------------------------------------
+-- Il n'y a plus de liste ici. Le constat N-11 avait fait armer NEUF déclencheurs en
+-- « always », énumérés à la main — et le cinquième passage a compté que leurs 32 miroirs
+-- de MISE À JOUR, dont ceux qui portent le verrouillage optimiste, étaient restés en
+-- « origin » : l'artefact de deux listes tenues à la main, l'une complétée, l'autre
+-- oubliée (constat Q5-4).
+--
+-- La règle est désormais générale et vaut pour le schéma entier : TOUT déclencheur non
+-- interne s'arme en « always ». C'est f_armer_declencheurs() (001 §5) qui la pose, en fin
+-- de chacune des quatre migrations, et f_verifier_armement() qui la tient. Une règle
+-- générale ne se désynchronise pas.
 
 -- =====================================================================================
 -- §8 — GARDE-FOU DE COUVERTURE
@@ -1857,10 +1954,17 @@ $$;
 -- hors de ce fichier.
 -- -------------------------------------------------------------------------------------
 do $$
-declare v_poses integer;
+declare
+    v_poses  integer;
+    v_armes  integer;
 begin
     v_poses := f_poser_tracabilite_insertion();
-    raise notice 'Traçabilité d''insertion : % déclencheur(s) posé(s).', v_poses;
+    -- Puis armer TOUT déclencheur non interne encore en « origin » : ceux que ce fichier
+    -- vient de créer à la main, et ceux qu'une migration antérieure aurait laissés
+    -- désarmés (constat Q5-4). Découvert dans le catalogue, jamais énuméré.
+    v_armes := f_armer_declencheurs();
+    raise notice 'Traçabilité d''insertion : % déclencheur(s) posé(s) ; % (ré)armé(s) en « always ».',
+                 v_poses, v_armes;
 end;
 $$;
 

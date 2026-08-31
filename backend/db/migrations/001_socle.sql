@@ -455,6 +455,96 @@ comment on function f_poser_tracabilite_insertion() is
     'catalogue : à appeler en fin de TOUTE migration qui crée des tables. Rend le nombre de '
     'déclencheurs posés.';
 
+-- ── ARMEMENT : « always », POUR TOUS, ET DÉCOUVERT (constat Q5-4) ───────────────────
+--
+-- Le constat N-11 avait fait armer NEUF déclencheurs en « always », énumérés à la main
+-- dans 004. Le cinquième passage a compté ce que le catalogue disait vraiment : les 42
+-- déclencheurs d'INSERTION étaient armés « always », et leurs 32 miroirs de MODIFICATION
+-- restaient en « origin ». L'asymétrie n'était ni voulue ni écrite — c'est l'artefact de
+-- deux listes tenues à la main, l'une complétée, l'autre oubliée.
+--
+-- Or f_maj_tracabilite() porte le VERROUILLAGE OPTIMISTE (risque P1 du PLAN_SERVEUR) et
+-- le gel de cree_le / cree_par. Le motif de N-11 — « ce qui porte une garantie opposable
+-- s'arme comme tel » — vaut au moins autant pour lui que pour les neuf autres.
+--
+-- La règle est donc générale et il n'y a plus de liste : DANS CE SCHÉMA, TOUT DÉCLENCHEUR
+-- EST ARMÉ « always ». Aucun déclencheur d'ici n'existe pour autre chose que porter une
+-- garantie, et aucun ne doit céder à « session_replication_role = replica » — un réglage
+-- SUSET, hors de portée du rôle applicatif comme du propriétaire, mais que la reprise en
+-- masse du lot L7 est exactement le scénario à poser. Une règle générale ne se
+-- désynchronise pas ; une liste de neuf noms, si.
+create or replace function f_armer_declencheurs() returns integer
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
+$$
+declare
+    r      record;
+    v_pose integer := 0;
+begin
+    for r in
+        select c.relname::text as table_nom, t.tgname::text as declencheur
+          from pg_trigger t
+          join pg_class c on c.oid = t.tgrelid
+          join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public'
+           and c.relkind in ('r', 'p')
+           -- Les déclencheurs INTERNES sont ceux que PostgreSQL pose lui-même pour les
+           -- clés étrangères et les contraintes différables : ils ne nous appartiennent
+           -- pas, et « alter table … enable always » les refuserait.
+           and not t.tgisinternal
+           and t.tgenabled <> 'A'
+         order by c.relname, t.tgname
+    loop
+        execute format('alter table %I enable always trigger %I', r.table_nom, r.declencheur);
+        v_pose := v_pose + 1;
+    end loop;
+
+    return v_pose;
+end;
+$$;
+
+comment on function f_armer_declencheurs() is
+    'Arme en « always » TOUT déclencheur non interne du schéma public qui ne l''est pas déjà '
+    '(CONVENTIONS.md §19.4, constat Q5-4). Idempotente, pilotée par le catalogue, à appeler '
+    'en fin de TOUTE migration : un déclencheur de ce schéma porte toujours une garantie '
+    'opposable, et rien n''y justifie qu''un réglage de session le désarme. Rend le nombre de '
+    'déclencheurs (ré)armés. Remplace l''énumération de neuf noms qui avait laissé les 32 '
+    'déclencheurs de MISE À JOUR en « origin » pendant que leurs miroirs d''insertion '
+    'étaient armés.';
+
+create or replace function f_verifier_armement()
+returns table (objet text, anomalie text, detail text)
+    language plpgsql stable
+    set search_path = pg_catalog, public, pg_temp as
+$$
+begin
+    return query
+        select (c.relname || '.' || t.tgname)::text,
+               'declencheur_desarmable'::text,
+               format('déclencheur armé en « %s » : « set session_replication_role = replica » '
+                      'le neutraliserait, et la garantie qu''il porte avec lui. Tout '
+                      'déclencheur de ce schéma s''arme en « always » (CONVENTIONS.md §19.4). '
+                      'Rétablir : alter table %I enable always trigger %I;',
+                      case t.tgenabled when 'O' then 'origin' when 'D' then 'disabled'
+                                       when 'R' then 'replica' else t.tgenabled::text end,
+                      c.relname, t.tgname)
+          from pg_trigger t
+          join pg_class c on c.oid = t.tgrelid
+          join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relkind in ('r', 'p')
+           and not t.tgisinternal and t.tgenabled <> 'A'
+         order by 1;
+    return;
+end;
+$$;
+
+comment on function f_verifier_armement() is
+    'Vérifie qu''AUCUN déclencheur non interne du schéma public n''est armé autrement qu''en '
+    '« always » (CONVENTIONS.md §19.4, constat Q5-4). Un schéma sain ne renvoie AUCUNE ligne. '
+    'Découvre son périmètre dans le catalogue : c''est ce qui a manqué à l''énumération de '
+    'neuf noms, qui laissait 32 déclencheurs de mise à jour désarmables — dont ceux qui '
+    'portent le verrouillage optimiste.';
+
 create or replace function f_verifier_tracabilite()
 returns table (objet text, anomalie text, detail text)
     language plpgsql stable
@@ -514,15 +604,98 @@ begin
         end if;
     end loop;
 
+    -- ── ET L'OPÉRATION SYMÉTRIQUE ? (constat Q5-2 du cinquième passage) ─────────────
+    --
+    -- Le §18.1 est né de ce que « f_maj_tracabilite() protégeait l'update, et l'insert
+    -- n'était protégé par rien ». Le correctif a couvert l'insertion — et rien, ni ce
+    -- garde-fou, ni le banc d'essai, ni la démonstration, n'exigeait plus l'existence du
+    -- déclencheur de MODIFICATION. Le motif est celui que ce dépôt a produit quatre fois :
+    -- le garde-fou couvre la moitié où le défaut a été trouvé.
+    --
+    -- Ce que porte cette moitié-là n'est pas accessoire :
+    --
+    --     new.version     := old.version + 1;   -- LE VERROUILLAGE OPTIMISTE, risque P1
+    --     new.cree_le     := old.cree_le;       -- non réinscriptible
+    --     new.cree_par    := old.cree_par;      -- non réinscriptible
+    --
+    -- Sans lui, « version » ne bouge plus : deux écritures concurrentes portant
+    -- « where version = 1 » réussissent TOUTES LES DEUX, et la seconde écrase la première
+    -- en silence — pendant que les quatre chemins de contrôle restent verts. Et
+    -- « cree_par » / « cree_le » d'une ligne DÉJÀ EN BASE redeviennent réinscriptibles :
+    -- le §18.1 atteint par l'autre bout, sur une ligne qui a une histoire.
+    --
+    -- Le marqueur est ici « modifie_par » : une table qui garde une trace de modification
+    -- doit avoir le déclencheur qui la pose. La forme attendue se déduit du type de la
+    -- colonne « version » — un COMPTEUR entier appelle f_maj_tracabilite, tout le reste
+    -- f_maj_horodatage. C'est ce qui range naturellement migrations_schema, dont la
+    -- colonne « version » est un numéro de migration en texte, du bon côté : aucune
+    -- exception écrite à la main n'est nécessaire (CONVENTIONS.md §19.5).
+    for r in
+        select c.relname::text as nom,
+               exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                        and a.attname = 'version' and a.attnum > 0 and not a.attisdropped
+                        and a.atttypid = 'integer'::regtype)                    as a_compteur,
+               (select p.proname::text from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+                 where t.tgrelid = c.oid and not t.tgisinternal
+                   and t.tgname = 'trg_' || c.relname || '_maj')                as fonction,
+               (select t.tgenabled from pg_trigger t
+                 where t.tgrelid = c.oid and not t.tgisinternal
+                   and t.tgname = 'trg_' || c.relname || '_maj')                as armement,
+               (select t.tgqual is not null from pg_trigger t
+                 where t.tgrelid = c.oid and not t.tgisinternal
+                   and t.tgname = 'trg_' || c.relname || '_maj')                as conditionnel
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relkind in ('r', 'p')
+           and exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                        and a.attname = 'modifie_par' and a.attnum > 0 and not a.attisdropped)
+         order by c.relname
+    loop
+        objet := r.nom;
+
+        if r.fonction is null then
+            anomalie := 'modification_non_tracee';
+            detail   := 'la table porte « modifie_par » mais aucun déclencheur « before update » : '
+                        'version ne s''incrémente plus — deux écritures concurrentes sur la même '
+                        'version réussissent toutes les deux et la seconde écrase la première '
+                        '(risque P1) — et cree_le / cree_par redeviennent réinscriptibles';
+            return next;
+        elsif r.fonction <> (case when r.a_compteur then 'f_maj_tracabilite'
+                                  else 'f_maj_horodatage' end) then
+            anomalie := 'modification_mal_tracee';
+            detail   := format('déclencheur « %s » sur une table dont la forme en appelle un '
+                               'autre : une table portant un COMPTEUR « version » entier doit '
+                               'passer par f_maj_tracabilite, qui l''incrémente', r.fonction);
+            return next;
+        elsif r.armement <> 'A' then
+            anomalie := 'modification_desarmable';
+            detail   := 'déclencheur armé en « origin » : un réglage de session le désarmerait, '
+                        'et le verrouillage optimiste avec lui';
+            return next;
+        elsif r.conditionnel then
+            anomalie := 'modification_conditionnelle';
+            detail   := 'le déclencheur porte une clause « when » : il peut ne pas se déclencher, '
+                        'et « version » cesse alors d''être un compteur fiable';
+            return next;
+        end if;
+    end loop;
+
     return;
 end;
 $$;
 
 comment on function f_verifier_tracabilite() is
-    'Vérifie que TOUTE table portant "cree_par" a le déclencheur "before insert" adapté à sa '
-    'forme, armé en « always » (CONVENTIONS.md §18.1). Un schéma sain ne renvoie AUCUNE ligne. '
-    'Sans ce déclencheur, l''appelant fixe lui-même version, cree_le et cree_par — et le gel '
-    'opéré ensuite par f_maj_tracabilite() rend la valeur forgée définitive.';
+    'Vérifie LES DEUX MOITIÉS de la traçabilité (CONVENTIONS.md §18.1, et §19.4 pour la '
+    'seconde). À l''INSERTION : toute table portant "cree_par" a le déclencheur "before insert" '
+    'adapté à sa forme. À la MODIFICATION : toute table portant "modifie_par" a le déclencheur '
+    '"before update" adapté — f_maj_tracabilite quand "version" est un compteur entier, '
+    'f_maj_horodatage sinon. Dans les deux cas : armé « always », sans clause "when". '
+    'Un schéma sain ne renvoie AUCUNE ligne. Sans le premier, l''appelant fixe lui-même version, '
+    'cree_le et cree_par ; sans le second, "version" cesse d''être un compteur — le verrouillage '
+    'optimiste du risque P1 disparaît, deux écritures concurrentes sur la même version passent '
+    'toutes les deux, et cree_par d''une ligne existante redevient réinscriptible. '
+    'La question qui a produit quatre constats de cette porte est toujours la même : '
+    'ET L''OPÉRATION SYMÉTRIQUE ?';
 
 -- ── UN GARDE-FOU QUE RIEN N'APPELLE EST UN COMMENTAIRE (CONVENTIONS.md §18.4) ───────
 --
@@ -555,10 +728,55 @@ comment on function f_verifier_tracabilite() is
 --   - ne prend AUCUN argument ;
 --   - et rend exactement « table (objet text, anomalie text, detail text) ».
 --
--- Ces trois conditions sont la CONVENTION D'ÉCRITURE d'un garde-fou de schéma. Les
--- respecter suffit à être branché — sur le déploiement comme sur la recette — sans
--- toucher à ce fichier, ni à db/migrate.mjs, ni à deploy/install.sh. C'est la seule forme
--- qui résiste à l'oubli, parce qu'elle en supprime l'occasion.
+-- Ces conditions sont la CONVENTION D'ÉCRITURE d'un garde-fou de schéma. Les respecter
+-- suffit à être branché — sur le déploiement comme sur la recette — sans toucher à ce
+-- fichier, ni à db/migrate.mjs, ni à deploy/install.sh. C'est la seule forme qui résiste à
+-- l'oubli, parce qu'elle en supprime l'occasion.
+--
+-- ── MAIS DÉCOUVRIR, C'EST EXÉCUTER (constat Q5-1 du cinquième passage) ───────────────
+--
+-- Ce point d'appel ne LIT pas les fonctions découvertes : il les EXÉCUTE. La convention
+-- de nommage est donc un CONTRAT D'EXÉCUTION DE CODE, et le mécanisme qui supprime
+-- l'occasion de l'oubli crée du même geste un point unique où tout converge. L'auditeur
+-- du cinquième passage y a planté une fonction qui respectait la convention : elle a
+-- retiré « force row level security » d'une table cloisonnée et forgé une entrée du
+-- registre des migrations — sous « migrate.mjs --verifier », qui promet de n'écrire nulle
+-- part — puis, jouée par le chemin réel de l'installation, obtenu « superuser » et
+-- l'exécution d'une commande hors de la base par « COPY … TO PROGRAM ».
+--
+-- Trois défenses INDÉPENDANTES, parce qu'aucune ne suffit seule :
+--
+--  1. QUI PEUT PLANTER. Créer une fonction dans « public » exige le droit CREATE sur le
+--     schéma. Vérifié dans le catalogue plutôt que supposé : PostgreSQL 15+ ne l'accorde
+--     plus à PUBLIC, et ni grc_app ni grc_lecture ne l'ont. Le préalable est donc la
+--     compromission du COMPTE PROPRIÉTAIRE — dont le mot de passe vit dans le fichier
+--     d'environnement lu par le service. Rien ne GARANTIT que ce droit reste fermé : un
+--     « grant create on schema public » posé un jour par commodité rouvrirait la porte
+--     sans que personne le voie. C'est f_verifier_privileges() qui le tient (§15 ter).
+--
+--  2. CE QUI EST EXÉCUTÉ. La découverte n'exécute que ce qui est LÉGITIME, et signale le
+--     reste au lieu de le jouer : fonction appartenant au propriétaire de la base, sans
+--     « security definer », déclarée non volatile, au chemin de recherche figé. Une
+--     fonction qui porte le nom sans les propriétés devient un CONSTAT — anomalie
+--     « controle_non_conforme » — et le déploiement échoue dessus.
+--
+--  3. AVEC QUELS DROITS. « security definer », et c'est ici un ABAISSEMENT de privilège,
+--     pas une élévation — l'usage est inhabituel, donc il faut le dire. Le seul appelant
+--     de ce point qui détienne PLUS que le propriétaire est deploy/install.sh, qui joue
+--     son SQL par « su postgres », c'est-à-dire le superutilisateur du cluster : sans
+--     « security definer », une fonction découverte s'exécute avec CES droits-là, et sort
+--     de PostgreSQL. Avec, le corps s'exécute comme grc_proprietaire quel que soit
+--     l'appelant — « alter role … superuser » et « COPY … TO PROGRAM » redeviennent des
+--     refus. Ce que cela accorde en retour est nul : les fonctions jouées sont celles du
+--     dépôt, elles ne lisent que des catalogues, et un attaquant capable d'en planter une
+--     détient déjà le compte propriétaire. Le chemin de recherche est figé, et le droit
+--     d'exécution est retiré à PUBLIC puis accordé nommément (§15 quater).
+--
+-- Ce que ces trois défenses NE FONT PAS : empêcher le compte propriétaire d'écrire dans
+-- SA base par ce chemin — « stable » ne l'interdit pas, PostgreSQL n'applique pas la
+-- volatilité au SQL dynamique d'un « execute ». La parade est du côté des appelants, qui
+-- jouent ce point dans une transaction « read only » (db/migrate.mjs), et elle est écrite
+-- là-bas.
 --
 -- La forme du résultat exclut d'elle-même cette fonction-ci (quatre colonnes) : pas de
 -- récursion. Elle exclut aussi f_journal_audit_verifier(), qui vérifie des DONNÉES et non
@@ -578,6 +796,7 @@ comment on function f_verifier_tracabilite() is
 create or replace function f_verifier_schema()
 returns table (controle text, objet text, anomalie text, detail text)
     language plpgsql stable
+    security definer
     set search_path = pg_catalog, public, pg_temp as
 $$
 declare
@@ -588,16 +807,48 @@ declare
 begin
     for r in
         select p.proname::text                                     as fonction,
-               substring(p.proname::text from '^f_verifier_(.+)$') as controle
+               substring(p.proname::text from '^f_verifier_(.+)$') as controle,
+               -- Les quatre propriétés qui séparent un garde-fou d'une greffe. Elles sont
+               -- calculées ici, et le corps de la boucle décide : jouer, ou constater.
+               (p.proowner = d.datdba)                             as au_proprietaire,
+               p.prosecdef                                         as definisseur,
+               (p.provolatile = 'v')                               as volatile,
+               -- Chemin FIGÉ et pg_temp relégué en dernier : la propriété du §17.2,
+               -- constatée ici plutôt que comparée à un littéral (une écriture
+               -- équivalente mais différemment espacée reste légitime).
+               exists (
+                   select 1 from unnest(coalesce(p.proconfig, array[]::text[])) as c
+                    where c like 'search\_path=%'
+                      and btrim(btrim(split_part(
+                              c, ',', array_length(string_to_array(c, ','), 1))), '"')
+                          = 'pg_temp')                             as chemin_fige
           from pg_proc p
           join pg_namespace n on n.oid = p.pronamespace
+         cross join pg_database d
          where n.nspname = 'public'
+           and d.datname = current_database()
            and p.prokind = 'f'
            and p.proname::text like 'f\_verifier\_%'
            and p.pronargs = 0
            and pg_get_function_result(p.oid) = v_forme
          order by p.proname
     loop
+        -- On ne joue pas ce qu'on ne reconnaît pas. Le refus est BRUYANT : la fonction
+        -- devient une anomalie, donc un échec de déploiement, au lieu d'un exécutant.
+        if not r.au_proprietaire or r.definisseur or r.volatile or not r.chemin_fige then
+            controle := 'point_appel';
+            objet    := r.fonction;
+            anomalie := 'controle_non_conforme';
+            detail   := format(
+                'une fonction porte le nom d''un garde-fou de schéma sans en avoir les '
+                'propriétés — elle n''est PAS jouée (CONVENTIONS.md §19.4, constat Q5-1) : '
+                'propriétaire de la base = %s, security definer = %s, volatile = %s, '
+                'chemin de recherche figé = %s',
+                r.au_proprietaire, r.definisseur, r.volatile, r.chemin_fige);
+            return next;
+            continue;
+        end if;
+
         v_joues := v_joues + 1;
         return query execute format(
             'select %L::text, v.objet, v.anomalie, v.detail from public.%I() v',
@@ -624,11 +875,37 @@ comment on function f_verifier_schema() is
     'Point d''appel UNIQUE des vérifications automatiques du schéma (CONVENTIONS.md §18.4 et '
     '§19.4). Il DÉCOUVRE ses contrôles dans le catalogue au lieu de les énumérer : toute '
     'fonction « public.f_verifier_<x>() », sans argument, rendant (objet, anomalie, detail), '
-    'est jouée — et un garde-fou neuf qui respecte cette convention est donc branché sur le '
-    'déploiement ET sur la recette sans qu''aucun fichier change. Un schéma sain ne renvoie '
-    'AUCUNE ligne. À appeler en fin de TOUTE migration, et à faire échouer le déploiement sur '
-    'la moindre ligne rendue : écrire le contrôle est la moitié du travail, le brancher est '
-    'l''autre moitié — et l''énumérer était l''occasion de l''oublier.';
+    'appartenant au propriétaire de la base, sans « security definer », non volatile et au '
+    'chemin de recherche figé, est jouée — et un garde-fou neuf qui respecte cette convention '
+    'est donc branché sur le déploiement ET sur la recette sans qu''aucun fichier change. '
+    'Une fonction qui porte le nom sans les propriétés n''est PAS jouée : elle devient '
+    'l''anomalie « controle_non_conforme » (constat Q5-1). '
+    '« SECURITY DEFINER » EST ICI UN ABAISSEMENT DE PRIVILÈGE, pas une élévation : le seul '
+    'appelant qui détienne plus que le propriétaire est deploy/install.sh, qui joue son SQL '
+    'sous « su postgres » — sans cela, une fonction découverte s''exécuterait avec les droits '
+    'du superutilisateur du cluster et sortirait de PostgreSQL. '
+    'Un schéma sain ne renvoie AUCUNE ligne. À appeler en fin de TOUTE migration, et à faire '
+    'échouer le déploiement sur la moindre ligne rendue : écrire le contrôle est la moitié du '
+    'travail, le brancher est l''autre moitié — et l''énumérer était l''occasion de l''oublier. '
+    'Les appelants le jouent dans une transaction « read only » : la volatilité déclarée '
+    'n''interdit rien au SQL dynamique.';
+
+-- Le droit d'exécution d'une fonction « security definer » ne se laisse pas à PUBLIC.
+-- Accordé nommément aux deux rôles qui en ont l'usage : le compte applicatif joue la
+-- démonstration de recette (db/verifier_cloisonnement.sql, contrôle C84), le compte de
+-- supervision peut vouloir la rejouer. Le propriétaire et le superutilisateur n'ont
+-- besoin d'aucun « grant ».
+revoke execute on function f_verifier_schema() from public;
+do $$
+begin
+    if exists (select 1 from pg_roles where rolname = 'grc_app') then
+        execute 'grant execute on function f_verifier_schema() to grc_app';
+    end if;
+    if exists (select 1 from pg_roles where rolname = 'grc_lecture') then
+        execute 'grant execute on function f_verifier_schema() to grc_lecture';
+    end if;
+end;
+$$;
 
 -- Garde générique d'ajout seul. Utilisée par journal_audit (§9).
 -- Un déclencheur plutôt qu'une « rule … do instead nothing » : une règle transforme la
@@ -973,9 +1250,9 @@ comment on column utilisateurs.filiale_defaut_id is
 comment on column utilisateurs.compte_secours is
     'Compte administrateur de secours applicatif, hors AD, pour le cas où le compte de service '
     'serait bloqué (expiration de mot de passe, verrouillage). Son usage est journalisé.';
-comment on column utilisateurs.mot_de_passe_hash is
-    'Empreinte du mot de passe du SEUL compte de secours (algorithme à mémoire, type Argon2id). '
-    'Aucun autre compte n''en porte : ck_utilisateurs_secours l''interdit.';
+-- Le commentaire de « mot_de_passe_hash » est posé au §15 ter, avec le retrait du
+-- privilège de lecture qu'il décrit : les deux vivent au même endroit, et ne peuvent donc
+-- pas diverger.
 comment on column utilisateurs.verrouille_jusqu_a is
     'Verrouillage temporaire après tentatives répétées (PLAN_SERVEUR §1.9).';
 
@@ -1541,6 +1818,29 @@ create table pieces_jointes (
     constraint fk_pieces_jointes_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
     constraint ck_pieces_jointes_nom     check (nom_fichier <> ''),
+    -- ── LA DÉROGATION D'UNICITÉ N'EST PLUS UNE PROMESSE (constat Q5-5) ──────────────
+    -- uq_pieces_jointes_chemin est l'une des cinq unicités délibérément GLOBALES sur une
+    -- table cloisonnée (§19.1), et son motif écrit était : « le nom est engendré par le
+    -- serveur et opaque, une filiale ne peut pas le deviner pour occuper celui d'une
+    -- autre ». Des cinq, c'était la seule vraie PAR PROMESSE et non par construction : le
+    -- code qui engendre le chemin appartient au lot L6, qui n'est pas écrit, et rien
+    -- n'empêchait un chemin devinable — la démonstration elle-même en insérait un.
+    --
+    -- Or un générateur qui incorporerait l'identifiant de l'entité ou le nom du fichier
+    -- d'origine — l'implémentation spontanée, et elle a de bonnes raisons — rendrait le
+    -- chemin PRÉDICTIBLE : la filiale A poserait chez elle le chemin que B obtiendra pour
+    -- son prochain envoi, et B recevrait un « doublon » sans détail sur une ligne qu'elle
+    -- ne peut pas lire. C'est littéralement le constat Q-2, un lot plus loin.
+    --
+    -- La contrainte rend la promesse VRAIE, et elle en tient une seconde au passage : le
+    -- chemin est RELATIF (pas de « / » de tête) et ne contient aucun « .. » — la traversée
+    -- de répertoire est fermée par le schéma avant que L6 ait écrit une ligne. Forme
+    -- imposée : d'éventuels répertoires de répartition en deux caractères hexadécimaux,
+    -- puis un nom de 64 caractères hexadécimaux, c'est-à-dire 256 bits d'aléa. La table
+    -- est vide : le coût est nul aujourd'hui, et il faudrait déplacer des fichiers sur le
+    -- disque après la mise en service.
+    constraint ck_pieces_jointes_chemin  check (
+        chemin_stockage ~ '^([0-9a-f]{2}/)*[0-9a-f]{64}$'),
     constraint ck_pieces_jointes_taille  check (taille_octets > 0),
     constraint ck_pieces_jointes_etat    check (etat_analyse in (
         'en_attente', 'en_cours', 'saine', 'infectee', 'erreur')),
@@ -1574,8 +1874,12 @@ comment on column pieces_jointes.sha256 is
     'une pièce jointe en preuve vérifiable — un auditeur peut s''assurer qu''un rapport de test PRA '
     'n''a pas été remplacé après coup.';
 comment on column pieces_jointes.chemin_stockage is
-    'Nom aléatoire opaque, hors arborescence web. Apache ne sert jamais ces fichiers ; '
-    'l''application les délivre après contrôle des droits.';
+    'Chemin RELATIF à la racine du magasin, hors arborescence web. Apache ne sert jamais ces '
+    'fichiers ; l''application les délivre après contrôle des droits. La forme est IMPOSÉE par '
+    'ck_pieces_jointes_chemin — répertoires de répartition hexadécimaux puis 64 caractères '
+    'hexadécimaux, soit 256 bits d''aléa : c''est ce qui rend vraie la dérogation d''unicité '
+    'globale du §19.1 (une filiale ne peut pas deviner le chemin d''une autre pour l''occuper) '
+    'et ce qui ferme la traversée de répertoire avant que le lot L6 ait écrit une ligne.';
 comment on column pieces_jointes.derniere_reanalyse is
     'Ré-analyse périodique du stock : un fichier propre aujourd''hui peut être détecté dans six '
     'mois — décisif sur trois ans de rétention.';
@@ -1993,6 +2297,275 @@ end;
 $$;
 
 -- =====================================================================================
+-- §15 ter — LE SEUL SECRET QUE CE SCHÉMA STOCKE  (constat Q5-3 du cinquième passage)
+-- -------------------------------------------------------------------------------------
+-- Quatre passages de la porte S1 ont raisonné en LIGNES. La RLS est un mécanisme de
+-- lignes, les garde-fous lisent des politiques de lignes, la démonstration compte des
+-- lignes. Personne n'avait regardé les COLONNES.
+--
+-- « utilisateurs » est légitimement de niveau Groupe : sa politique de lecture est
+-- ouverte, parce qu'on la lit pour RÉSOUDRE le périmètre, avant que le périmètre existe.
+-- Le motif est juste. Mais cette table porte « mot_de_passe_hash », qui est — de l'aveu
+-- du §6 ci-dessus — « le SEUL cas où l'application détient un secret d'authentification » :
+-- l'empreinte du compte administrateur de SECOURS, hors AD, périmètre Groupe, profil
+-- d'administration, celui qui sert précisément quand l'Active Directory ne répond plus.
+--
+-- Constaté avant correction : toute session de filiale la lisait, et grc_lecture aussi —
+-- le compte de supervision, qui ne peut lire AUCUN risque faute de périmètre, lisait
+-- l'empreinte du mot de passe de l'administrateur Groupe.
+--
+-- Le contraste avec « parametres » est ce qui rend le défaut parlant : cette table porte
+-- un booléen « secret » et une contrainte qui INTERDIT de ranger la valeur en base
+-- (ck_parametres_secret). Le schéma savait épingler cette promesse ; il ne l'avait pas
+-- fait pour le seul secret qu'il stocke réellement.
+--
+-- LA FORME RETENUE, et pourquoi celle-là. Trois étaient possibles : privilège de colonne,
+-- table dédiée, fonction de comparaison « security definer ». C'est le PRIVILÈGE DE
+-- COLONNE qui est posé ici, pour trois raisons :
+--   - il ne déplace pas le schéma : une table dédiée demanderait ses propres politiques,
+--     sa place dans le décompte des 47, ses exemptions de garde-fou — beaucoup de pièces
+--     mobiles pour une colonne, et il faudrait DE TOUTE FAÇON le même « revoke », puisque
+--     « grant … on all tables in schema public » atteint toute table de public ;
+--   - il se CONSTATE dans le catalogue (has_column_privilege), donc il peut porter un
+--     garde-fou — et c'est le garde-fou, pas le « revoke », qui le fait tenir dans le
+--     temps ;
+--   - l'ÉCRITURE reste entière. Poser et faire tourner le secret est un droit du service ;
+--     le lire n'en est pas un. Une colonne qu'on écrit sans pouvoir la relire est
+--     exactement ce qu'est une empreinte de mot de passe.
+--
+-- La comparaison dont le lot L3 aura besoin — « ce mot de passe est-il le bon ? » sans
+-- jamais rendre l'empreinte — s'écrira alors en fonction « security definer » appartenant
+-- au propriétaire. Elle n'est pas écrite ici : elle appartient à L3, et une fonction
+-- d'authentification écrite en avance de son lot serait une supposition, pas un socle.
+--
+-- CE QUI N'EST PAS RETIRÉ, et pourquoi : « mot_de_passe_modifie_le » reste lisible. Ce
+-- n'est pas un secret — c'est l'âge du mot de passe, une donnée d'exploitation utile
+-- (relance de rotation) dont la divulgation n'apprend rien d'exploitable.
+--
+-- LA LISTE DES COLONNES ACCORDÉES EST CONSTRUITE PAR LE CATALOGUE, jamais recopiée : une
+-- énumération se serait périmée au premier ajout de colonne (§19.5). Et le garde-fou
+-- vérifie LES DEUX SENS — le secret reste illisible, et tout le reste reste lisible —,
+-- faute de quoi une colonne ajoutée plus tard serait silencieusement invisible au service.
+-- =====================================================================================
+
+do $$
+declare
+    v_colonnes text;
+    v_role     text;
+begin
+    -- Toutes les colonnes SAUF le secret. Reconstruit à chaque exécution depuis le
+    -- catalogue : la liste ne peut pas diverger de la table.
+    select string_agg(quote_ident(a.attname), ', ' order by a.attnum)
+      into v_colonnes
+      from pg_attribute a
+     where a.attrelid = 'utilisateurs'::regclass and a.attnum > 0 and not a.attisdropped
+       and a.attname <> 'mot_de_passe_hash';
+
+    foreach v_role in array array['grc_app', 'grc_lecture'] loop
+        if exists (select 1 from pg_roles where rolname = v_role) then
+            -- Le privilège de TABLE prime sur celui de colonne : il faut le retirer
+            -- d'abord, sinon le « revoke select (colonne) » ne fait rien du tout.
+            execute format('revoke select on utilisateurs from %I', v_role);
+            execute format('grant select (%s) on utilisateurs to %I', v_colonnes, v_role);
+        end if;
+    end loop;
+
+    -- L'écriture n'est pas touchée : le service pose et fait tourner le secret. Le
+    -- « revoke select » ci-dessus n'a retiré que la lecture, mais on repose explicitement
+    -- les trois autres verbes pour que la ligne se lise sans avoir à raisonner.
+    if exists (select 1 from pg_roles where rolname = 'grc_app') then
+        execute 'grant insert, update, delete on utilisateurs to grc_app';
+    end if;
+end;
+$$;
+
+comment on column utilisateurs.mot_de_passe_hash is
+    'Empreinte du mot de passe du SEUL compte de secours (algorithme à mémoire, type Argon2id). '
+    'Aucun autre compte n''en porte : ck_utilisateurs_secours l''interdit. '
+    'COLONNE EN ÉCRITURE SEULE pour le service (§15 ter, constat Q5-3) : le privilège de '
+    'lecture est retiré à grc_app et à grc_lecture, et f_verifier_privileges() fait échouer le '
+    'déploiement s''il revient. La comparaison « ce mot de passe est-il le bon ? » se fera au '
+    'lot L3 par une fonction « security definer » du propriétaire, qui ne rend jamais '
+    'l''empreinte.';
+
+-- ── LE GARDE-FOU DES PRIVILÈGES ─────────────────────────────────────────────────────
+--
+-- Trois questions qu'aucun garde-fou ne posait, et qui ont chacune produit un constat du
+-- cinquième passage. Elles tiennent ensemble parce qu'elles portent toutes sur ce que le
+-- catalogue des PRIVILÈGES dit, là où les autres garde-fous lisent des politiques, des
+-- contraintes ou des déclencheurs :
+--
+--   1. QUI PEUT CRÉER DANS « public » (Q5-1). La découverte de f_verifier_schema() est un
+--      contrat d'exécution de code : y planter une fonction demande le droit CREATE sur le
+--      schéma. PostgreSQL 15+ ne l'accorde plus à PUBLIC, et l'installation ne l'accorde à
+--      personne — mais RIEN NE LE GARANTISSAIT. Un « grant create on schema public to
+--      grc_app » posé un jour par commodité aurait ramené le préalable de l'attaque du
+--      compte propriétaire au compte du service, sans que personne le voie.
+--
+--   2. QUI PEUT LIRE UN SECRET (Q5-3). Voir le pavé du §15 ter. Le contrôle porte les DEUX
+--      sens : le secret reste illisible, et tout le reste reste lisible — une colonne
+--      ajoutée plus tard sans « grant » rendrait le service aveugle en production, et le
+--      correctif aurait créé un défaut en fermant l'autre.
+--
+--   3. QUELS ATTRIBUTS PORTENT LES RÔLES (Q5-8). Le contrôle d'attributs de 004 §1 et la
+--      démonstration n'interrogeaient que grc_app. grc_lecture est pourtant un rôle de
+--      CONNEXION qui détient « select » sur les 47 tables : un « bypassrls » posé sur lui —
+--      le geste le plus tentant qui soit, « c'est un compte de lecture, quel risque ? » —
+--      lui donnerait les vingt filiales d'un coup.
+--
+-- LA PART IRRÉDUCTIBLE. « Cette colonne est-elle un secret ? » est un jugement de sens :
+-- le catalogue ne le dira jamais. Un balayage par motif de nom l'a montré — sur les dix
+-- colonnes du schéma dont le nom évoque un secret, huit sont des empreintes d'INTÉGRITÉ
+-- qui DOIVENT être lisibles (le chaînage du journal, l'empreinte des migrations, la clé
+-- d'idempotence d'un import). La liste ci-dessous est donc écrite, et le §19.5 l'admet à
+-- une condition, qui est tenue : le garde-fou vérifie qu'elle reste JUSTE (la colonne
+-- existe toujours) et il vérifie le sens inverse (aucune autre colonne n'est fermée par
+-- accident). Ce qu'il ne peut pas faire, c'est deviner qu'une colonne future est un
+-- secret ; c'est écrit ici plutôt que sous-entendu.
+create or replace function f_verifier_privileges()
+returns table (objet text, anomalie text, detail text)
+    language plpgsql stable
+    set search_path = pg_catalog, public, pg_temp as
+$$
+declare
+    -- Les colonnes qui portent un SECRET D'AUTHENTIFICATION, sous la forme
+    -- « table.colonne ». Aucun rôle autre que le propriétaire de la base ne les lit.
+    v_secrets constant text[] := array['utilisateurs.mot_de_passe_hash'];
+    v_proprietaire constant oid := (select d.datdba from pg_database d
+                                     where d.datname = current_database());
+    r      record;
+    v_nom  text;
+begin
+    -- 1. Le droit de CRÉER dans « public » (Q5-1).
+    for r in
+        select g.grantee::text as role_nom
+          from (select (aclexplode(coalesce(n.nspacl, acldefault('n', n.nspowner)))).*
+                  from pg_namespace n where n.nspname = 'public') g
+         where g.privilege_type = 'CREATE'
+           and g.grantee <> 0                      -- 0 = PUBLIC, traité juste après
+           and g.grantee <> v_proprietaire
+           and not exists (select 1 from pg_roles rr
+                            where rr.oid = g.grantee and (rr.rolsuper or rr.rolname = 'pg_database_owner'))
+         order by 1
+    loop
+        objet    := 'schema public';
+        anomalie := 'creation_schema_ouverte';
+        detail   := format('le rôle « %s » peut créer des objets dans le schéma public : il peut '
+                           'donc y planter une fonction « f_verifier_<x>() », que le point d''appel '
+                           'unique exécuterait (CONVENTIONS.md §19.4, constat Q5-1). '
+                           'Corriger : revoke create on schema public from %I;',
+                           (select rolname from pg_roles where oid = r.role_nom::oid),
+                           (select rolname from pg_roles where oid = r.role_nom::oid));
+        return next;
+    end loop;
+
+    if exists (select 1
+                 from (select (aclexplode(coalesce(n.nspacl, acldefault('n', n.nspowner)))).*
+                         from pg_namespace n where n.nspname = 'public') g
+                where g.privilege_type = 'CREATE' and g.grantee = 0)
+    then
+        objet    := 'schema public';
+        anomalie := 'creation_schema_ouverte';
+        detail   := 'PUBLIC peut créer des objets dans le schéma public : tout rôle capable de '
+                    'se connecter peut y planter une fonction que le point d''appel unique '
+                    'exécuterait. Corriger : revoke create on schema public from public;';
+        return next;
+    end if;
+
+    -- 2. Les secrets, dans les deux sens.
+    foreach v_nom in array v_secrets loop
+        if to_regclass('public.' || quote_ident(split_part(v_nom, '.', 1))) is null
+           or not exists (select 1 from pg_attribute a
+                           where a.attrelid = to_regclass('public.' || quote_ident(split_part(v_nom, '.', 1)))
+                             and a.attname = split_part(v_nom, '.', 2)
+                             and a.attnum > 0 and not a.attisdropped)
+        then
+            objet    := v_nom;
+            anomalie := 'secret_declare_introuvable';
+            detail   := 'colonne déclarée « secret d''authentification » dans '
+                        'f_verifier_privileges() mais introuvable : la protection ne porte plus '
+                        'sur rien, et elle couvrirait toute colonne future qui reprendrait ce nom';
+            return next;
+            continue;
+        end if;
+
+        for r in
+            select rr.rolname::text as role_nom
+              from pg_roles rr
+             where not rr.rolsuper and rr.oid <> v_proprietaire and rr.rolcanlogin
+               and has_column_privilege(rr.oid, split_part(v_nom, '.', 1),
+                                        split_part(v_nom, '.', 2), 'SELECT')
+             order by 1
+        loop
+            objet    := v_nom;
+            anomalie := 'secret_lisible';
+            detail   := format('le rôle « %s » peut LIRE un secret d''authentification. Cette '
+                               'colonne s''écrit, elle ne se lit pas (§15 ter, constat Q5-3). '
+                               'Corriger : revoke select on %I from %I; puis rendre les autres '
+                               'colonnes par un « grant select (…) ».',
+                               r.role_nom, split_part(v_nom, '.', 1), r.role_nom);
+            return next;
+        end loop;
+    end loop;
+
+    -- Le sens inverse : une colonne NON secrète devenue illisible au compte du service
+    -- est un défaut d'exploitation que ce même correctif aurait pu créer.
+    if exists (select 1 from pg_roles where rolname = 'grc_app') then
+        for r in
+            select (c.relname || '.' || a.attname)::text as colonne
+              from pg_class c
+              join pg_namespace n on n.oid = c.relnamespace
+              join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+             where n.nspname = 'public' and c.relkind in ('r', 'p')
+               and not ((c.relname || '.' || a.attname) = any (v_secrets))
+               and not has_column_privilege('grc_app', c.oid, a.attnum, 'SELECT')
+             order by 1
+        loop
+            objet    := r.colonne;
+            anomalie := 'colonne_illisible_au_service';
+            detail   := 'le compte du service ne peut pas lire cette colonne, qui n''est pas '
+                        'déclarée secrète : une colonne ajoutée après le « grant select (…) » '
+                        'nominatif reste invisible, et le défaut ne se voit qu''en production';
+            return next;
+        end loop;
+    end if;
+
+    -- 3. Les attributs des DEUX rôles de connexion (Q5-8).
+    for r in
+        select rr.rolname::text as role_nom,
+               concat_ws(', ', case when rr.rolsuper then 'SUPERUSER' end,
+                               case when rr.rolbypassrls then 'BYPASSRLS' end,
+                               case when rr.rolcreaterole then 'CREATEROLE' end,
+                               case when rr.rolcreatedb then 'CREATEDB' end) as attributs
+          from pg_roles rr
+         where rr.rolname in ('grc_app', 'grc_lecture')
+           and (rr.rolsuper or rr.rolbypassrls or rr.rolcreaterole or rr.rolcreatedb)
+         order by 1
+    loop
+        objet    := r.role_nom;
+        anomalie := 'attribut_de_role_interdit';
+        detail   := format('le rôle porte : %s. BYPASSRLS suffit à rendre tout le cloisonnement '
+                           'décoratif, et grc_lecture détient « select » sur les 47 tables. '
+                           'Corriger : alter role %I nosuperuser nobypassrls nocreaterole '
+                           'nocreatedb;', r.attributs, r.role_nom);
+        return next;
+    end loop;
+
+    return;
+end;
+$$;
+
+comment on function f_verifier_privileges() is
+    'Vérifie ce que le catalogue des PRIVILÈGES dit, là où les autres garde-fous lisent des '
+    'politiques ou des déclencheurs (CONVENTIONS.md §19.4) : nul autre que le propriétaire de '
+    'la base ne peut CRÉER dans le schéma public — sans quoi le contrat d''exécution de '
+    'f_verifier_schema() devient une surface d''attaque (constat Q5-1) ; aucun rôle de connexion '
+    'ne peut LIRE une colonne déclarée « secret d''authentification », ni se voir refuser une '
+    'colonne qui ne l''est pas (constat Q5-3, dans les deux sens) ; ni grc_app ni grc_lecture ne '
+    'portent SUPERUSER, BYPASSRLS, CREATEROLE ou CREATEDB (constat Q5-8, qui ne contrôlait que '
+    'le premier des deux). Un schéma sain ne renvoie AUCUNE ligne.';
+
+-- =====================================================================================
 -- §15 bis — TRAÇABILITÉ D'INSERTION, PUIS GARDE-FOU DE SCHÉMA
 -- -------------------------------------------------------------------------------------
 -- Deux instructions, dans cet ordre, et le même couple clôt les quatre migrations
@@ -2006,10 +2579,17 @@ $$;
 -- =====================================================================================
 
 do $$
-declare v_poses integer;
+declare
+    v_poses  integer;
+    v_armes  integer;
 begin
     v_poses := f_poser_tracabilite_insertion();
-    raise notice 'Traçabilité d''insertion : % déclencheur(s) posé(s).', v_poses;
+    -- Puis armer TOUT déclencheur non interne encore en « origin » : ceux que ce fichier
+    -- vient de créer à la main, et ceux qu'une migration antérieure aurait laissés
+    -- désarmés (constat Q5-4). Découvert dans le catalogue, jamais énuméré.
+    v_armes := f_armer_declencheurs();
+    raise notice 'Traçabilité d''insertion : % déclencheur(s) posé(s) ; % (ré)armé(s) en « always ».',
+                 v_poses, v_armes;
 end;
 $$;
 

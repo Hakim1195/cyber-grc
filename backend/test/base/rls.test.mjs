@@ -2190,7 +2190,7 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
           `insert into pieces_jointes (id, filiale_id, entite_type, entite_id, nom_fichier,
                                        type_mime, taille_octets, sha256, chemin_stockage)
                values ('PJ-A-LOGO', $1, 'filiales', $1, 'logo.png', 'image/png', 12,
-                       repeat('a', 64), '/magasin/pj-a-logo')`,
+                       repeat('a', 64), 'aa/' || repeat('1', 64))`,
           [A],
         );
         await c.query('update filiales set logo_piece_jointe_id = $1 where id = $2', ['PJ-A-LOGO', B]);
@@ -2206,7 +2206,7 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
         `insert into pieces_jointes (id, filiale_id, entite_type, entite_id, nom_fichier,
                                      type_mime, taille_octets, sha256, chemin_stockage)
              values ('PJ-A-LOGO2', $1, 'filiales', $1, 'logo.png', 'image/png', 12,
-                     repeat('c', 64), '/magasin/pj-a-logo2')`,
+                     repeat('c', 64), 'bb/' || repeat('2', 64))`,
         [A],
       );
       return (await c.query(
@@ -2960,7 +2960,7 @@ describe('Actions référentielles bornées (CONVENTIONS §18.2, constat T-2)', 
           `insert into pieces_jointes (id, filiale_id, entite_type, entite_id, nom_fichier,
                                        type_mime, taille_octets, sha256, chemin_stockage)
                values ('PJ-T7', $1, 'filiales', $1, 'logo.png', 'image/png', 12,
-                       repeat('7', 64), '/magasin/pj-t7')`,
+                       repeat('7', 64), 'cc/' || repeat('3', 64))`,
           [A],
         );
         await c.query("select set_config('grc.administration_groupe', 'oui', true)");
@@ -3670,7 +3670,7 @@ describe('Le garde-fou de couverture découvre son périmètre (CONVENTIONS §19
  */
 
 describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4)', () => {
-  test('les quatre garde-fous du dépôt sont découverts', async () => {
+  test('les garde-fous du dépôt sont TOUS découverts', async () => {
     // La découverte protège de l'omission d'un contrôle NEUF ; elle ne protège pas de la
     // disparition d'un contrôle existant, qui s'effacerait sans bruit de l'agrégation.
     // C'est ici que cette seconde moitié est tenue.
@@ -3683,9 +3683,15 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
           and pg_get_function_result(p.oid) = 'TABLE(objet text, anomalie text, detail text)'
         order by 1`,
     );
+    // Ils étaient quatre au cinquième correctif, sept au sixième : les trois neufs — armement,
+    // portee_figee, privileges — se sont branchés SANS qu'un fichier de déploiement change.
+    // C'est la propriété du §19.4, constatée plutôt qu'affirmée.
     assert.deepEqual(controles.map((l) => l.controle), [
+      'armement',
       'chemin_recherche',
       'couverture_rls',
+      'portee_figee',
+      'privileges',
       'tracabilite',
       'unicite_cloisonnee',
     ]);
@@ -3720,12 +3726,17 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
   test('un point d’appel qui ne trouve PLUS RIEN le dit, au lieu de rassurer', async () => {
     // Le pire résultat possible pour un garde-fou : rendre « aucune anomalie » sur une
     // base entièrement sabotée. On renomme les quatre contrôles hors de la convention.
-    const noms = [
-      'f_verifier_chemin_recherche',
-      'f_verifier_tracabilite',
-      'f_verifier_couverture_rls',
-      'f_verifier_unicite_cloisonnee',
-    ];
+    // La liste des noms est DÉCOUVERTE, pas recopiée : un huitième garde-fou n'obligera
+    // pas à retoucher ce test, et son oubli ne le ferait pas passer à tort.
+    const noms = (await base.lignes(
+      proprietaire,
+      `select p.proname as nom
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.prokind = 'f' and p.pronargs = 0
+          and p.proname::text like 'f\\_verifier\\_%'
+          and pg_get_function_result(p.oid) = 'TABLE(objet text, anomalie text, detail text)'`,
+    )).map((l) => l.nom);
+    assert.ok(noms.length >= 4, `Balayage suspect : ${noms.length} garde-fou(x).`);
     for (const nom of noms) {
       await proprietaire.query(`alter function ${nom}() rename to z_essai_${nom}`);
     }
@@ -3747,5 +3758,604 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       }
     }
     assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+});
+
+/* =====================================================================
+ *  Q5-1 — Découvrir, c'est exécuter : le contrat de nommage est borné
+ * =====================================================================
+ *
+ *  Le mécanisme de découverte livré au cinquième correctif est la bonne réponse au
+ *  constat Q-1 : il supprime l'occasion de l'oubli. Mais il crée, du même geste, un point
+ *  unique où tout converge — et `f_verifier_schema()` n'y LIT pas les fonctions
+ *  découvertes, elle les EXÉCUTE. Le seul appelant qui détienne plus que le propriétaire
+ *  est `deploy/install.sh`, qui joue son SQL sous `su postgres` : sans borne, une fonction
+ *  plantée sortait de PostgreSQL avec les droits du compte UNIX `postgres`.
+ */
+
+describe('Le point d’appel n’exécute que ce qui est légitime (CONVENTIONS §19.4, Q5-1)', () => {
+  /** Anomalies rendues par le point d'appel pour un objet donné. */
+  const vues = async (objet) =>
+    (await base.lignes(
+      proprietaire,
+      'select controle, anomalie from f_verifier_schema() where objet = $1 order by 1, 2',
+      [objet],
+    )).map((l) => `${l.controle}/${l.anomalie}`);
+
+  test('une fonction VOLATILE qui porte le nom n’est pas jouée — et n’écrit donc rien', async () => {
+    // Le scénario exact du cinquième passage : la greffe retirait « force row level
+    // security » d'une table cloisonnée et forgeait une entrée du registre des migrations,
+    // sous « migrate.mjs --verifier », en annonçant « aucune anomalie ».
+    await proprietaire.query(
+      `create function f_verifier_essai_q51() returns table (objet text, anomalie text, detail text)
+           language plpgsql volatile set search_path = pg_catalog, public, pg_temp as $x$
+       begin
+           execute 'alter table public.risques no force row level security';
+           return;
+       end; $x$`,
+    );
+    try {
+      assert.deepEqual(await vues('f_verifier_essai_q51'), ['point_appel/controle_non_conforme']);
+      const forcee = await base.valeur(
+        proprietaire,
+        "select relforcerowsecurity from pg_class where relname = 'risques'",
+      );
+      assert.equal(forcee, true, 'La greffe ne doit pas avoir été exécutée.');
+    } finally {
+      await proprietaire.query('drop function if exists f_verifier_essai_q51()');
+    }
+  });
+
+  test('les propriétés sont exigées SÉPARÉMENT : volatile, definer, chemin non figé', async () => {
+    // Trois mutations, une par propriété. La quatrième — l'appartenance au propriétaire de
+    // la base — ne peut pas être jouée ici : ni grc_app ni grc_lecture ne peuvent posséder
+    // une fonction de « public » (ils n'y ont pas CREATE), et le banc d'essai n'ouvre
+    // aucune connexion superutilisateur. C'est f_verifier_privileges() qui la tient, en
+    // interdisant à quiconque d'autre de créer dans le schéma.
+    const formes = {
+      'language plpgsql volatile set search_path = pg_catalog, public, pg_temp': 'volatile',
+      'language plpgsql stable security definer set search_path = pg_catalog, public, pg_temp':
+        'definer',
+      'language plpgsql stable set search_path = pg_catalog, public': 'chemin',
+    };
+    for (const [entete, quoi] of Object.entries(formes)) {
+      await proprietaire.query(
+        `create function f_verifier_essai_q51() returns table (objet text, anomalie text, detail text)
+             ${entete} as $x$ begin return; end; $x$`,
+      );
+      try {
+        assert.deepEqual(
+          await vues('f_verifier_essai_q51'),
+          ['point_appel/controle_non_conforme'],
+          `La propriété « ${quoi} » doit à elle seule écarter la fonction.`,
+        );
+      } finally {
+        await proprietaire.query('drop function if exists f_verifier_essai_q51()');
+      }
+    }
+    // Contrôle symétrique : la forme conforme, elle, est bel et bien JOUÉE.
+    await proprietaire.query(
+      `create function f_verifier_essai_q51() returns table (objet text, anomalie text, detail text)
+           language plpgsql stable set search_path = pg_catalog, public, pg_temp as $x$
+       begin objet := 'temoin'; anomalie := 'jouee'; detail := ''; return next; return; end; $x$`,
+    );
+    try {
+      assert.deepEqual(await vues('temoin'), ['essai_q51/jouee']);
+    } finally {
+      await proprietaire.query('drop function if exists f_verifier_essai_q51()');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('« security definer » : le corps s’exécute sous le PROPRIÉTAIRE, pas sous l’appelant', async () => {
+    // C'est l'abaissement de privilège qui ferme l'élévation hors de la base. Le banc
+    // d'essai ne peut l'observer que dans le sens qui lui est accessible — le compte
+    // applicatif appelle, et le corps s'exécute sous grc_proprietaire. Le sens qui compte
+    // vraiment (« su postgres » redescendu au propriétaire) est le même mécanisme.
+    await proprietaire.query(
+      `create function f_verifier_essai_q51() returns table (objet text, anomalie text, detail text)
+           language plpgsql stable set search_path = pg_catalog, public, pg_temp as $x$
+       begin objet := current_user; anomalie := 'acteur'; detail := session_user;
+             return next; return; end; $x$`,
+    );
+    try {
+      const ligne = (await base.lignes(
+        applicatif,
+        "select objet, detail from f_verifier_schema() where anomalie = 'acteur'",
+      ))[0];
+      assert.equal(ligne.objet, 'grc_proprietaire', 'Le corps doit s’exécuter sous le propriétaire.');
+      assert.equal(ligne.detail, 'grc_app', 'La session, elle, reste celle de l’appelant.');
+    } finally {
+      await proprietaire.query('drop function if exists f_verifier_essai_q51()');
+    }
+  });
+
+  test('l’exécution du point d’appel n’est PAS accordée à PUBLIC', async () => {
+    // Une fonction « security definer » exécutable par tout le monde serait le contraire
+    // d'un abaissement de privilège.
+    const publique = await base.valeur(
+      proprietaire,
+      `select exists (
+           select 1 from (select (aclexplode(p.proacl)).* from pg_proc p
+                           where p.oid = to_regprocedure('public.f_verifier_schema()')) g
+            where g.grantee = 0 and g.privilege_type = 'EXECUTE')`,
+    );
+    assert.equal(publique, false);
+    // Et les deux rôles qui en ont l'usage l'ont bien.
+    for (const role of ['grc_app', 'grc_lecture']) {
+      assert.equal(
+        await base.valeur(
+          proprietaire,
+          "select has_function_privilege($1, 'public.f_verifier_schema()', 'EXECUTE')",
+          [role],
+        ),
+        true,
+        `${role} doit pouvoir jouer la démonstration de recette.`,
+      );
+    }
+  });
+
+  test('nul autre que le propriétaire ne peut CRÉER dans « public » — et le garde-fou le tient', async () => {
+    for (const role of ['grc_app', 'grc_lecture']) {
+      assert.equal(
+        await base.valeur(proprietaire, "select has_schema_privilege($1, 'public', 'CREATE')", [role]),
+        false,
+        `${role} ne doit pas pouvoir planter une fonction dans public.`,
+      );
+    }
+    // Contrôle de morsure : la porte rouverte doit être RÉCLAMÉE, pas constatée un jour
+    // par hasard. PostgreSQL 15+ la ferme par défaut — rien ne garantissait qu'elle le reste.
+    await proprietaire.query('grant create on schema public to grc_app');
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select anomalie, detail from f_verifier_privileges() where objet = 'schema public'",
+      );
+      assert.deepEqual(anomalies.map((l) => l.anomalie), ['creation_schema_ouverte']);
+      assert.match(anomalies[0].detail, /grc_app/);
+    } finally {
+      await proprietaire.query('revoke create on schema public from grc_app');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('db/migrate.mjs joue le garde-fou en transaction LECTURE SEULE', async () => {
+    // La promesse de « --verifier » (« aucune écriture ») était fausse : elle reposait sur
+    // la volatilité DÉCLARÉE des fonctions jouées. Une fonction déclarée « stable » qui
+    // appelle une fonction volatile écrit quand même — PostgreSQL vérifie la volatilité de
+    // la fonction COURANTE, pas de la pile. Ce test plante exactement ce contournement et
+    // exige que l'outil, lui, refuse.
+    await proprietaire.query(
+      `create function zz_essai_q51_aide() returns void language plpgsql volatile
+           set search_path = pg_catalog, public, pg_temp as $x$
+       begin execute 'alter table public.risques no force row level security'; end; $x$`,
+    );
+    await proprietaire.query(
+      `create function f_verifier_essai_q51() returns table (objet text, anomalie text, detail text)
+           language plpgsql stable set search_path = pg_catalog, public, pg_temp as $x$
+       begin perform zz_essai_q51_aide(); return; end; $x$`,
+    );
+    try {
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const { dirname, join } = await import('node:path');
+      const { fileURLToPath } = await import('node:url');
+      const racine = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+      const resultat = await promisify(execFile)(
+        process.execPath,
+        [join(racine, 'db', 'migrate.mjs'), '--verifier'],
+        {
+          // Mêmes valeurs par défaut que `test/aide/base.mjs` : le banc d'essai tourne sans
+          // que ces variables soient posées, l'outil, lui, les exige.
+          env: {
+            ...process.env,
+            BASE_NOM: base.nom,
+            BASE_HOTE: process.env.BASE_HOTE ?? '127.0.0.1',
+            BASE_PORT: process.env.BASE_PORT ?? '5432',
+            BASE_UTILISATEUR_PROPRIETAIRE:
+              process.env.BASE_UTILISATEUR_PROPRIETAIRE ?? 'grc_proprietaire',
+            BASE_MOT_DE_PASSE_PROPRIETAIRE:
+              process.env.BASE_MOT_DE_PASSE_PROPRIETAIRE ?? 'dev',
+          },
+          cwd: racine,
+        },
+      ).catch((erreur) => erreur);
+
+      const sortie = `${resultat.stdout ?? ''}${resultat.stderr ?? ''}`;
+      assert.match(sortie, /read-only transaction/, `Sortie inattendue :\n${sortie}`);
+      const forcee = await base.valeur(
+        proprietaire,
+        "select relforcerowsecurity from pg_class where relname = 'risques'",
+      );
+      assert.equal(forcee, true, '« --verifier » ne doit avoir écrit nulle part.');
+    } finally {
+      await proprietaire.query('drop function if exists f_verifier_essai_q51()');
+      await proprietaire.query('drop function if exists zz_essai_q51_aide()');
+      await proprietaire.query('alter table risques force row level security');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+});
+
+/* =====================================================================
+ *  Q5-2 — L'autre moitié de la traçabilité, et le risque projet n° 1
+ * =====================================================================
+ *
+ *  Le §18.1 est né de ce que « f_maj_tracabilite() protégeait l'update, et l'insert
+ *  n'était protégé par rien ». Le correctif a couvert l'insertion — et rien n'exigeait
+ *  plus l'existence du déclencheur de MODIFICATION, qui porte le verrouillage optimiste.
+ *  Trois déclencheurs retirés, et les quatre chemins de contrôle restaient verts pendant
+ *  que deux écritures concurrentes sur la même version réussissaient toutes les deux.
+ */
+
+describe('Traçabilité en modification et verrouillage optimiste (§18.1, Q5-2)', () => {
+  /**
+   * Joue la concurrence RÉELLE : deux connexions, la seconde bloquée sur le verrou de
+   * ligne jusqu'au « commit » de la première. Rend les deux nombres de lignes affectées.
+   */
+  async function ecrituresConcurrentes(id) {
+    const a = await base.nouvelleConnexion('app');
+    const b = await base.nouvelleConnexion('app');
+    connexionsJetables.push(a, b);
+    const poser = async (c) => {
+      await c.query('begin');
+      await c.query(
+        `select set_config('grc.utilisateur', 'alice', true),
+                set_config('grc.filiale_id',  $1, true),
+                set_config('grc.filiales',    $1, true)`,
+        [A],
+      );
+    };
+    try {
+      await poser(a);
+      await poser(b);
+      // A modifie et garde le verrou. B tente la même version : il BLOQUE.
+      const rA = (await a.query(
+        "update actions set titre = 'écriture d’Alice' where id = $1 and version = 1", [id],
+      )).rowCount;
+      const attenteB = b.query(
+        "update actions set titre = 'écriture de Mallory' where id = $1 and version = 1", [id],
+      );
+      await a.query('commit');
+      const rB = (await attenteB).rowCount;
+      await b.query('commit');
+      return { a: rA, b: rB };
+    } finally {
+      await a.query('rollback').catch(() => {});
+      await b.query('rollback').catch(() => {});
+    }
+  }
+
+  test('deux écritures CONCURRENTES sur la même version : une seule passe', async () => {
+    await base.avecPerimetre(
+      applicatif, rssiSite(A),
+      async (c) => c.query(
+        "insert into actions (id, filiale_id, titre) values ('ACT-P1-OK', $1, 'Chiffrer les postes')",
+        [A],
+      ),
+      { annuler: false },
+    );
+    try {
+      const { a, b } = await ecrituresConcurrentes('ACT-P1-OK');
+      assert.deepEqual({ a, b }, { a: 1, b: 0 },
+        'La seconde écriture porte une version périmée : elle ne doit affecter aucune ligne.');
+      const version = await base.avecPerimetre(applicatif, rssiSite(A), async (c) =>
+        (await c.query("select version from actions where id = 'ACT-P1-OK'")).rows[0].version);
+      assert.equal(version, 2);
+    } finally {
+      await base.avecPerimetre(
+        applicatif, rssiSite(A),
+        async (c) => c.query("delete from actions where id = 'ACT-P1-OK'"),
+        { annuler: false },
+      );
+    }
+  });
+
+  test('LE CORRECTIF MORD : sans le déclencheur de mise à jour, LES DEUX passent', async () => {
+    // C'est la démonstration du constat, rejouée. Sans ce test, le précédent passerait
+    // aussi bien sur une base où rien n'oblige le déclencheur à exister.
+    await proprietaire.query('drop trigger trg_actions_maj on actions');
+    await base.avecPerimetre(
+      applicatif, rssiSite(A),
+      async (c) => c.query(
+        "insert into actions (id, filiale_id, titre) values ('ACT-P1-KO', $1, 'Chiffrer les postes')",
+        [A],
+      ),
+      { annuler: false },
+    );
+    try {
+      const { a, b } = await ecrituresConcurrentes('ACT-P1-KO');
+      assert.deepEqual({ a, b }, { a: 1, b: 1 },
+        'Sans le déclencheur, la seconde écriture écrase la première en silence (risque P1).');
+
+      // Et le garde-fou, lui, doit le DIRE — c'est la moitié qui manquait.
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select anomalie from f_verifier_tracabilite() where objet = 'actions'",
+      );
+      assert.deepEqual(anomalies.map((l) => l.anomalie), ['modification_non_tracee']);
+      const parLePoint = await base.lignes(
+        proprietaire,
+        "select controle from f_verifier_schema() where objet = 'actions'",
+      );
+      assert.deepEqual(parLePoint.map((l) => l.controle), ['tracabilite']);
+    } finally {
+      await base.avecPerimetre(
+        applicatif, rssiSite(A),
+        async (c) => c.query("delete from actions where id = 'ACT-P1-KO'"),
+        { annuler: false },
+      );
+      await proprietaire.query(
+        'create trigger trg_actions_maj before update on actions '
+          + 'for each row execute function f_maj_tracabilite()',
+      );
+      await proprietaire.query('alter table actions enable always trigger trg_actions_maj');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('cree_par et cree_le d’une ligne EXISTANTE ne se réécrivent pas', async () => {
+    // Le §18.1 atteint par l'autre bout : l'insertion est protégée, et la modification
+    // rendait l'antidatage possible — sur une ligne qui a déjà une histoire.
+    const observe = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      await c.query(
+        "insert into actions (id, filiale_id, titre) values ('ACT-ANTIDATE', $1, 'x')", [A],
+      );
+      await c.query(
+        `update actions set titre = 'réécriture', cree_par = 'directeur general',
+                            cree_le = '2019-01-01' where id = 'ACT-ANTIDATE'`,
+      );
+      return (await c.query(
+        `select cree_par, cree_le::date::text as jour, modifie_par, version
+           from actions where id = 'ACT-ANTIDATE'`,
+      )).rows[0];
+    });
+    assert.equal(observe.cree_par, 'rssi-site');
+    assert.equal(observe.jour, new Date().toISOString().slice(0, 10));
+    assert.equal(observe.modifie_par, 'rssi-site');
+    assert.equal(observe.version, 2);
+  });
+
+  test('le balayage exige les DEUX moitiés, sur les 42 et les 32 tables concernées', async () => {
+    const { insertion, modification } = (await base.lignes(
+      proprietaire,
+      `select count(*) filter (where a.attname = 'cree_par')::int    as insertion,
+              count(*) filter (where a.attname = 'modifie_par')::int as modification
+         from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+         join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+        where n.nspname = 'public' and c.relkind in ('r', 'p')
+          and a.attname in ('cree_par', 'modifie_par')`,
+    ))[0];
+    assert.ok(insertion >= 42, `Balayage suspect à l’insertion : ${insertion}.`);
+    assert.ok(modification >= 32, `Balayage suspect à la modification : ${modification}.`);
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_tracabilite()'), []);
+  });
+});
+
+/* =====================================================================
+ *  Q5-3 — La dimension que quatre passages avaient laissée : les colonnes
+ * ===================================================================== */
+
+describe('Le seul secret que le schéma stocke (§15 ter, Q5-3)', () => {
+  test('aucun rôle de connexion ne lit l’empreinte du compte de secours', async () => {
+    for (const role of ['grc_app', 'grc_lecture']) {
+      assert.equal(
+        await base.valeur(
+          proprietaire,
+          "select has_column_privilege($1, 'utilisateurs', 'mot_de_passe_hash', 'SELECT')",
+          [role],
+        ),
+        false,
+        `${role} ne doit pas lire un secret d’authentification.`,
+      );
+      // Contrôle symétrique : le reste de la table est resté ouvert. Fermer le secret ne
+      // doit pas avoir rendu la table inutilisable.
+      assert.equal(
+        await base.valeur(
+          proprietaire,
+          "select has_column_privilege($1, 'utilisateurs', 'identifiant', 'SELECT')",
+          [role],
+        ),
+        true,
+      );
+    }
+    // L'ÉCRITURE reste entière : poser et faire tourner le secret est un droit du service.
+    assert.equal(
+      await base.valeur(
+        proprietaire,
+        "select has_column_privilege('grc_app', 'utilisateurs', 'mot_de_passe_hash', 'UPDATE')",
+      ),
+      true,
+    );
+  });
+
+  test('en exécution : la colonne est refusée, la table reste lisible', async () => {
+    const observe = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      await c.query('savepoint avant_secret');
+      const refus = await erreurAttendue(c.query('select mot_de_passe_hash from utilisateurs'));
+      await c.query('rollback to savepoint avant_secret');
+      const etoile = await erreurAttendue(c.query('select * from utilisateurs'));
+      await c.query('rollback to savepoint avant_secret');
+      const nommees = (await c.query('select id, identifiant from utilisateurs')).rowCount;
+      return { refus: refus.code, etoile: etoile.code, nommees };
+    });
+    assert.equal(observe.refus, '42501');
+    // « select * » développe TOUTES les colonnes, secret compris : il est refusé aussi, et
+    // c'est une conséquence qu'un développeur de L2 doit connaître.
+    assert.equal(observe.etoile, '42501');
+    assert.ok(observe.nommees >= 0);
+  });
+
+  test('LE GARDE-FOU MORD, dans les DEUX sens', async () => {
+    // Sens 1 : le secret redevient lisible.
+    await proprietaire.query('grant select on utilisateurs to grc_lecture');
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select objet, anomalie from f_verifier_privileges() where anomalie = 'secret_lisible'",
+      );
+      assert.deepEqual(anomalies, [
+        { objet: 'utilisateurs.mot_de_passe_hash', anomalie: 'secret_lisible' },
+      ]);
+    } finally {
+      await proprietaire.query('revoke select on utilisateurs from grc_lecture');
+    }
+
+    // Sens 2 : une colonne ORDINAIRE devenue illisible au service. C'est le défaut que ce
+    // correctif aurait pu créer en fermant l'autre — une colonne ajoutée plus tard sans
+    // « grant » resterait invisible, et ne se verrait qu'en production.
+    await proprietaire.query('revoke select (identifiant) on utilisateurs from grc_app');
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select objet, anomalie from f_verifier_privileges() "
+          + "where anomalie = 'colonne_illisible_au_service'",
+      );
+      assert.deepEqual(anomalies, [
+        { objet: 'utilisateurs.identifiant', anomalie: 'colonne_illisible_au_service' },
+      ]);
+    } finally {
+      await proprietaire.query('grant select (identifiant) on utilisateurs to grc_app');
+    }
+
+    // Sens 3 : la déclaration elle-même ne doit pas se périmer.
+    await proprietaire.query('alter table utilisateurs rename column mot_de_passe_hash to zz_essai');
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select anomalie from f_verifier_privileges() where anomalie = 'secret_declare_introuvable'",
+      );
+      assert.deepEqual(anomalies.map((l) => l.anomalie), ['secret_declare_introuvable']);
+    } finally {
+      await proprietaire.query('alter table utilisateurs rename column zz_essai to mot_de_passe_hash');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+});
+
+/* =====================================================================
+ *  Q5-4 et Q5-5 — Les deux listes tenues à la main, et la promesse sans code
+ * ===================================================================== */
+
+describe('Armement, portée figée, chemin de magasin (§19.4 et §19.1, Q5-4 et Q5-5)', () => {
+  test('TOUS les déclencheurs non internes sont armés « always »', async () => {
+    const { total, desarmes } = (await base.lignes(
+      proprietaire,
+      `select count(*)::int as total,
+              count(*) filter (where t.tgenabled <> 'A')::int as desarmes
+         from pg_trigger t
+         join pg_class c on c.oid = t.tgrelid
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind in ('r','p') and not t.tgisinternal`,
+    ))[0];
+    // 42 à l'insertion, 32 à la modification, plus les déclencheurs de cohérence, de
+    // portée et du journal : le balayage doit avoir de la matière.
+    assert.ok(total >= 74, `Balayage suspect : ${total} déclencheur(s).`);
+    assert.equal(desarmes, 0);
+  });
+
+  test('LE GARDE-FOU MORD : un déclencheur ramené en « origin » est réclamé', async () => {
+    // C'est l'état dans lequel se trouvaient les 32 déclencheurs de mise à jour, dont ceux
+    // qui portent le verrouillage optimiste, pendant que leurs miroirs d'insertion étaient
+    // armés. Aucun contrôle ne le disait.
+    await proprietaire.query('alter table risques enable replica trigger trg_risques_maj');
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select objet, anomalie from f_verifier_armement()",
+      );
+      assert.deepEqual(anomalies, [
+        { objet: 'risques.trg_risques_maj', anomalie: 'declencheur_desarmable' },
+      ]);
+    } finally {
+      await proprietaire.query('alter table risques enable always trigger trg_risques_maj');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('les tables MIXTES sont découvertes, et chacune porte son déclencheur de portée', async () => {
+    const mixtes = (await base.lignes(proprietaire, 'select nom from f_tables_mixtes() order by 1'))
+      .map((l) => l.nom);
+    assert.deepEqual(mixtes, [
+      'document_referentiels', 'documents', 'mesure_catalogue', 'parametres', 'personnes',
+    ]);
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_portee_figee()'), []);
+  });
+
+  test('LE GARDE-FOU MORD : une table mixte NEUVE est réclamée, sans qu’un fichier change', async () => {
+    // Le rayon exact du constat M-3, rouvert par une sixième table mixte ajoutée en L4 ou
+    // L7 : elle recevrait ses politiques (f_verifier_couverture_rls les réclamerait) sans
+    // son déclencheur de portée, et rien ne le disait.
+    await proprietaire.query(
+      'create table essai_mixte (id text primary key, filiale_id text)',
+    );
+    try {
+      assert.deepEqual(
+        (await base.lignes(
+          proprietaire,
+          "select objet, anomalie from f_verifier_portee_figee() where objet = 'essai_mixte'",
+        )),
+        [{ objet: 'essai_mixte', anomalie: 'portee_non_figee' }],
+      );
+      // Et la pose, elle aussi pilotée par le catalogue, la couvre sans qu'on la nomme.
+      await proprietaire.query('select f_poser_portee_figee()');
+      await proprietaire.query('select f_armer_declencheurs()');
+      assert.deepEqual(
+        await base.lignes(
+          proprietaire,
+          "select objet from f_verifier_portee_figee() where objet = 'essai_mixte'",
+        ),
+        [],
+      );
+    } finally {
+      await proprietaire.query('drop table if exists essai_mixte');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('une exemption du §17.7 devenue introuvable est réclamée', async () => {
+    await proprietaire.query('alter table groupes_ad rename to groupes_ad_essai');
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select objet, anomalie from f_verifier_portee_figee() where anomalie = 'exemption_obsolete'",
+      );
+      assert.deepEqual(anomalies, [{ objet: 'groupes_ad', anomalie: 'exemption_obsolete' }]);
+    } finally {
+      await proprietaire.query('alter table groupes_ad_essai rename to groupes_ad');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('Q5-5 : un chemin de magasin devinable est refusé, un chemin opaque passe', async () => {
+    const essai = async (chemin) =>
+      base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+        await c.query('savepoint avant_chemin');
+        try {
+          await c.query(
+            `insert into pieces_jointes (id, filiale_id, entite_type, entite_id, nom_fichier,
+                                         type_mime, taille_octets, sha256, chemin_stockage)
+                 values ('PJ-Q55', $1, 'risques', 'RISK-A', 'r.pdf', 'application/pdf', 10,
+                         repeat('d', 64), $2)`,
+            [A, chemin],
+          );
+          await c.query('rollback to savepoint avant_chemin');
+          return 'AUCUN REFUS';
+        } catch (erreur) {
+          await c.query('rollback to savepoint avant_chemin');
+          return erreur.code;
+        }
+      });
+
+    // La dérogation d'unicité globale de chemin_stockage reposait sur la promesse d'un
+    // code non écrit (lot L6). Elle repose désormais sur une contrainte — qui ferme aussi
+    // la traversée de répertoire, avant que L6 ait écrit une ligne.
+    assert.equal(await essai(`magasin/RISK-A/${'rapport.pdf'}`), '23514');
+    assert.equal(await essai('../magasin/x'), '23514');
+    assert.equal(await essai(`/${'a'.repeat(64)}`), '23514');
+    assert.equal(await essai('a'.repeat(64)), 'AUCUN REFUS');
+    assert.equal(await essai(`ab/cd/${'e'.repeat(64)}`), 'AUCUN REFUS');
   });
 });

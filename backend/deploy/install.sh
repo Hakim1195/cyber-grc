@@ -692,7 +692,8 @@ alter default privileges for role $ROLE_PROPRIETAIRE in schema public
 -- rien ; un « revoke » de moins rend le garde-fou d'empreinte décoratif.
 do \$\$
 declare
-    declencheur text;
+    declencheur   text;
+    role_lecteur  text;
 begin
     if to_regclass('public.journal_audit') is not null then
         execute 'revoke all on journal_audit from public';
@@ -721,6 +722,29 @@ begin
         execute format(
             'revoke insert, update, delete, truncate on migrations_schema from %I', '$ROLE_APP');
         execute format('grant select on migrations_schema to %I', '$ROLE_APP');
+    end if;
+
+    -- Le secret du compte d'administration de secours. Le « grant … on all tables »
+    -- ci-dessus rouvre en lecture TOUTES les colonnes, celle-ci comprise, alors que
+    -- 004_rls.sql l'avait fermée : quatre passages de la porte S1 ont raisonné en
+    -- lignes, et le secret était lisible de toute session de filiale (Q5-3).
+    --
+    -- La liste des colonnes rendues est CONSTRUITE PAR LE CATALOGUE, jamais recopiée :
+    -- une colonne ajoutée demain est lisible sans que personne ait à y penser, et le
+    -- secret reste fermé. C'est la troisième fois sur ce chantier qu'une liste écrite
+    -- à la main produit un défaut ; on ne la réintroduit pas ici (CONVENTIONS §19.5).
+    if to_regclass('public.utilisateurs') is not null then
+        for role_lecteur in select unnest(array['$ROLE_APP', '$ROLE_LECTURE']) loop
+            execute format('revoke select on utilisateurs from %I', role_lecteur);
+            execute format(
+                'grant select (%s) on utilisateurs to %I',
+                (select string_agg(quote_ident(attname), ', ' order by attnum)
+                   from pg_attribute
+                  where attrelid = 'public.utilisateurs'::regclass
+                    and attnum > 0 and not attisdropped
+                    and attname <> 'mot_de_passe_hash'),
+                role_lecteur);
+        end loop;
     end if;
 end
 \$\$;
@@ -1078,9 +1102,22 @@ else
   # « set -e » ne protège pas d'une substitution de commande : si la fonction échoue,
   # ANOMALIES_SCHEMA serait vide et le contrôle passerait pour vert. On teste donc le
   # code de sortie à part — c'est exactement le piège d'un contrôle qui n'échoue pas.
+  # Transaction EN LECTURE SEULE, et ce n'est pas une précaution de style. Le point
+  # d'appel exécute des fonctions qu'il DÉCOUVRE : c'est un contrat d'exécution de
+  # code, et ce chemin-ci est le seul joué sous « su postgres ». Une fonction greffée
+  # respectant la convention de nommage écrirait donc avec les droits du
+  # superutilisateur. La fonction est « security definer » et rabaisse déjà l'appelant
+  # au propriétaire — l'escalade HORS de la base est fermée ; le « read only » ferme
+  # l'écriture DANS la base. Les garde-fous ne lisent que des catalogues : la
+  # contrainte ne les gêne pas, elle ne gêne que ce qui n'a rien à faire là.
+  # Le délai de garde borne une fonction greffée qui traînerait (porte S1, Q5-1/Q5-6).
   if ! ANOMALIES_SCHEMA="$(sql_admin_base <<SQL
+begin;
+set transaction read only;
+set local statement_timeout = '60s';
 select controle || ' · ' || objet || ' → ' || anomalie
   from $GARDE_FOU_SCHEMA() order by controle, objet, anomalie;
+rollback;
 SQL
 )"; then
     echec "Le garde-fou $GARDE_FOU_SCHEMA() n'a pas pu être joué sur « $BASE_NOM ».
