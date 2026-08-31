@@ -31,30 +31,25 @@
 --
 -- ── Comment le jouer ─────────────────────────────────────────────────────────────────
 --
---   PGPASSWORD=… psql -h 127.0.0.1 -U grc_proprietaire -d cyber_grc \
---       -v ON_ERROR_STOP=1 -f backend/db/verifier_cloisonnement.sql
---
--- POURQUOI LE COMPTE PROPRIÉTAIRE, ET POURQUOI CE N'EST PAS UN AFFAIBLISSEMENT. Ce script
--- range ses résultats dans une table TEMPORAIRE, et le privilège « temporary » est
--- désormais RETIRÉ au compte de l'application sur toute base (CONVENTIONS.md §17.2 : sans
--- ce retrait, le rôle applicatif masque une table du schéma par une table temporaire et
--- détourne les fonctions qui la lisent). Le compte de l'application ne peut donc plus
--- jouer ce script sur une base durcie — et c'est une bonne nouvelle, pas une gêne.
---
--- La démonstration sous le propriétaire est même PLUS forte : « force row level security »
--- soumet le propriétaire des tables aux mêmes politiques que tout le monde, et c'est
--- précisément ce que le §10 vérifie. Quant aux quatre contrôles qui parlent du compte
--- applicatif lui-même (§9 : BYPASSRLS, propriété des tables, privilèges), ce sont des
--- requêtes sur le catalogue : leur réponse ne dépend pas du compte qui les pose.
---
--- Sur une base de DÉVELOPPEMENT où « temporary » n'aurait pas encore été retiré, le
--- script se joue aussi tel quel avec le compte de l'application :
+-- De préférence AVEC LE COMPTE DE L'APPLICATION — c'est de lui que parle la question
+-- d'audit, et c'est le compte le plus contraint du dispositif :
 --
 --   PGPASSWORD=… psql -h 127.0.0.1 -U grc_app -d cyber_grc \
 --       -v ON_ERROR_STOP=1 -f backend/db/verifier_cloisonnement.sql
 --
--- Il commence par dire quel compte le joue, et s'arrête avec un message explicite si ce
--- compte n'a pas de quoi créer sa table de résultats.
+-- Sous le compte propriétaire (grc_proprietaire), la démonstration reste valable et même
+-- PLUS forte : « force row level security » soumet le propriétaire des tables aux mêmes
+-- politiques. Le §9 le vérifie et l'affiche, quel que soit le compte employé.
+--
+-- CE SCRIPT N'EXIGE AUCUN PRIVILÈGE PARTICULIER, et c'est délibéré. Il rangeait autrefois
+-- ses résultats dans une table TEMPORAIRE ; il ne le fait plus, parce que le privilège
+-- « temporary » est désormais retiré au compte applicatif sur TOUTE base — développement
+-- et banc d'essai compris (CONVENTIONS.md §17.2 : sans ce retrait, le rôle applicatif
+-- masque une table du schéma par une table temporaire et détourne les fonctions qui la
+-- lisent). Une démonstration qui aurait réclamé « temporary » pour tourner aurait donné
+-- une raison de le rendre : c'est exactement ce qu'il ne faut pas. Les résultats
+-- s'accumulent donc dans un réglage de session local à la transaction (« demo.resultats »,
+-- du JSON), que tout rôle peut poser.
 --
 -- ── Il ne laisse RIEN derrière lui ───────────────────────────────────────────────────
 --
@@ -77,35 +72,17 @@
 
 begin;
 
--- Garde préalable : dire ce qui manque, plutôt que de laisser un « permission denied to
--- create temporary tables » que rien n'explique. Le retrait du privilège « temporary » au
--- compte applicatif est VOULU (CONVENTIONS.md §17.2) : c'est ce qui ferme le masquage de
--- table par pg_temp. Un script de démonstration ne doit pas donner de raison de le rendre.
-do $$
-begin
-    if not has_database_privilege(current_user, current_database(), 'temp') then
-        raise exception
-            'Le compte « % » ne peut pas créer de table temporaire dans « % » : ce script y '
-            'range ses résultats.', current_user, current_database()
-            using hint = 'Jouez la démonstration avec le compte PROPRIÉTAIRE de la base '
-                         '(grc_proprietaire) : « force row level security » le soumet aux mêmes '
-                         'politiques, la démonstration est donc au moins aussi forte. '
-                         'N''accordez PAS « temporary » au compte applicatif pour contourner ce '
-                         'message : ce privilège est retiré à dessein (CONVENTIONS.md §17.2), '
-                         'il rouvrirait le détournement de fonction par masquage pg_temp.';
-    end if;
-end;
-$$;
-
--- La table de résultats est TEMPORAIRE : elle vit dans le schéma pg_temp, hors de
--- « public », et n'apparaît donc pas au balayage de couverture du §10.
-create temporary table demo_resultat (
-    numero   text primary key,
-    controle text not null,
-    attendu  text not null,
-    obtenu   text not null,
-    verdict  text not null
-);
+-- LE REGISTRE DES RÉSULTATS — un réglage de session, pas une table.
+--
+-- « demo.resultats » est un réglage personnalisé contenant un tableau JSON de quintuplets
+-- [numéro, contrôle, attendu, obtenu, verdict]. Trois propriétés en font le bon support
+-- ici, là où une table temporaire échouait :
+--   - il ne demande AUCUN privilège : tout rôle peut poser un réglage à nom pointé, si
+--     bien que la démonstration tourne avec le compte le plus contraint du dispositif ;
+--   - posé en LOCAL (troisième argument « true »), il meurt avec la transaction, exactement
+--     comme le reste de ce script — rien ne survit au « rollback » final ;
+--   - il ne crée aucun objet, donc rien qui pourrait apparaître au balayage du §10.
+select set_config('demo.resultats', '[]', true) \gset _rebut
 
 \set QUIET off
 \echo
@@ -140,9 +117,10 @@ begin
     exception when others then
         v_obtenu := sqlstate;
     end;
-    insert into demo_resultat values (
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
         'C01', 'Lire une table cloisonnée sans avoir déclaré grc.filiales',
-        'GRC04', v_obtenu, case when v_obtenu = 'GRC04' then 'OK' else 'ÉCHEC' end);
+        'GRC04', v_obtenu, case when v_obtenu = 'GRC04' then 'OK' else 'ÉCHEC' end))))::text, true);
 end;
 $$;
 
@@ -263,11 +241,12 @@ begin
         end if;
     end loop;
 
-    insert into demo_resultat values (
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
         'C02',
         format('Lignes d''une autre filiale visibles depuis Toulouse (%s tables balayées)', v_tables),
         '0', coalesce(v_coupable, v_total::text),
-        case when v_total = 0 then 'OK' else 'ÉCHEC' end);
+        case when v_total = 0 then 'OK' else 'ÉCHEC' end))))::text, true);
 end;
 $$;
 
@@ -404,9 +383,10 @@ begin
         perform set_config('grc.filiale_id', 'FIL-DEMO-A', true);
         perform set_config('grc.administration_groupe', '', true);
 
-        insert into demo_resultat values (
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
             v_cas[i], v_cas[i + 1], v_cas[i + 3], v_obtenu,
-            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end);
+            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end))))::text, true);
         i := i + 4;
     end loop;
 end;
@@ -429,13 +409,14 @@ begin
     exception when others then
         v_obtenu := sqlstate;
     end;
-    insert into demo_resultat values (
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
         'C20', 'Modifier le journal d''audit — ajout seul (CONVENTIONS §12)',
         'GRC01 ou 42501',
         v_obtenu || case v_obtenu when '42501' then ' (couche 1 : privilèges)'
                                   when 'GRC01' then ' (couche 2 : déclencheur)'
                                   else '' end,
-        case when v_obtenu in ('GRC01', '42501') then 'OK' else 'ÉCHEC' end);
+        case when v_obtenu in ('GRC01', '42501') then 'OK' else 'ÉCHEC' end))))::text, true);
 end;
 $$;
 
@@ -456,11 +437,12 @@ begin
     end;
     perform set_config('grc.filiales', 'FIL-DEMO-A', true);
 
-    insert into demo_resultat values (
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
         'C21', 'Périmètre posé mais VIDE : aucune ligne, et aucune erreur',
         '0 ligne / aucune erreur',
         format('%s ligne(s) / erreur : %s', v_visibles, v_erreur),
-        case when v_visibles = 0 and v_erreur = 'aucune' then 'OK' else 'ÉCHEC' end);
+        case when v_visibles = 0 and v_erreur = 'aucune' then 'OK' else 'ÉCHEC' end))))::text, true);
 end;
 $$;
 
@@ -547,9 +529,10 @@ begin
         exception when others then
             v_obtenu := sqlstate;
         end;
-        insert into demo_resultat values (
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
             v_cas[i], v_cas[i + 1], v_cas[i + 3], v_obtenu,
-            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end);
+            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end))))::text, true);
         i := i + 4;
     end loop;
 end;
@@ -594,12 +577,13 @@ begin
       into v_fautives, v_nombre, v_total
       from liens;
 
-    insert into demo_resultat values (
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
         'C39',
         format('Clés étrangères SIMPLES entre deux tables cloisonnées (%s clés balayées)',
                coalesce(v_total, 0)),
         '0', coalesce(v_fautives, coalesce(v_nombre, 0)::text),
-        case when coalesce(v_nombre, 0) = 0 then 'OK' else 'ÉCHEC' end);
+        case when coalesce(v_nombre, 0) = 0 then 'OK' else 'ÉCHEC' end))))::text, true);
 end;
 $$;
 
@@ -666,9 +650,10 @@ begin
             v_obtenu := sqlstate;
         end;
         perform set_config('grc.administration_groupe', '', true);
-        insert into demo_resultat values (
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
             v_cas[i], v_cas[i + 1], v_cas[i + 3], v_obtenu,
-            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end);
+            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end))))::text, true);
         i := i + 4;
     end loop;
 end;
@@ -686,9 +671,10 @@ begin
     select count(*) into v_reste from mesure_mise_en_oeuvre where id = 'MMO-DEMO-B';
     perform set_config('grc.filiales', 'FIL-DEMO-A', true);
 
-    insert into demo_resultat values (
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
         'C48', 'La mise en oeuvre de l''Allemagne a survécu à la tentative de Toulouse',
-        '1', v_reste::text, case when v_reste = 1 then 'OK' else 'ÉCHEC' end);
+        '1', v_reste::text, case when v_reste = 1 then 'OK' else 'ÉCHEC' end))))::text, true);
 end;
 $$;
 
@@ -719,9 +705,10 @@ begin
     end;
     perform set_config('grc.filiales', 'FIL-DEMO-A', true);
 
-    insert into demo_resultat values (
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
         'C49', 'Périmètre Groupe : écrire au journal d''une filiale LUE mais non active',
-        '42501', v_obtenu, case when v_obtenu = '42501' then 'OK' else 'ÉCHEC' end);
+        '42501', v_obtenu, case when v_obtenu = '42501' then 'OK' else 'ÉCHEC' end))))::text, true);
 end;
 $$;
 
