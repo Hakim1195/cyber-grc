@@ -529,8 +529,14 @@ class JournalAnomalies {
   private readonly compteurs: Record<GraviteAnomalie, number> = { avertissement: 0, information: 0 };
   private readonly dejaSignalees = new Set<string>();
   private tronque = false;
+  // Champ déclaré explicitement plutôt qu'en propriété de paramètre : le mode
+  // « strip-only » de Node (qui exécute le TypeScript sans le transpiler) refuse
+  // `constructor(private x)`, et les tests de ce lot s'exécutent sur la source.
+  private readonly plafond: number;
 
-  constructor(private readonly plafond: number) {}
+  constructor(plafond: number) {
+    this.plafond = plafond;
+  }
 
   public signaler(
     code: CodeAnomalie,

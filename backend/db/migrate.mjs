@@ -434,11 +434,15 @@ async function appliquerUne(client, migration, registreAvecEmpreinte) {
   ]);
   if (enregistree.rowCount === 0) {
     const echec = new Error(
-      `${migration.nom} s'est appliquée mais ne s'est pas enregistrée dans migrations_schema. ` +
+      'le fichier s\'est appliqué mais ne s\'est pas enregistré dans migrations_schema. ' +
         'Ajoutez le « insert into migrations_schema … on conflict do nothing » final ' +
         '(CONVENTIONS.md §13).',
     );
     echec.codeSortie = CODES.MIGRATION;
+    // Marqueur : ici, contrairement à une erreur SQL, la migration A ÉTÉ VALIDÉE par
+    // son propre « commit ». Dire l'inverse enverrait l'exploitant chercher au mauvais
+    // endroit — et lui ferait rejouer un fichier déjà appliqué.
+    echec.migrationValidee = true;
     throw echec;
   }
 
@@ -667,14 +671,19 @@ async function deroulement(client, migrations, options) {
       // Le fichier porte sa propre transaction : elle a été annulée par PostgreSQL,
       // la base est restée dans l'état précédant la migration. On s'arrête ici — les
       // migrations suivantes supposent celle-ci appliquée.
+      const suite = erreur.migrationValidee === true
+        ? '\n      Le schéma A ÉTÉ modifié : le fichier porte son propre « commit ». Corrigez le ' +
+          'fichier, enregistrez la migration à la main, ou repartez d\'une base neuve. ' +
+          'Les migrations suivantes n\'ont pas été tentées.'
+        : '\n      La transaction du fichier a été annulée : la base est restée dans son état ' +
+          'antérieur. Les migrations suivantes n\'ont pas été tentées.';
       journal.echec(
         `${migration.nom} : ${erreur.message}` +
           (erreur.position ? `\n      position ${erreur.position}` : '') +
           (erreur.detail ? `\n      détail : ${erreur.detail}` : '') +
           (erreur.hint ? `\n      indication : ${erreur.hint}` : '') +
           (erreur.code ? `\n      SQLSTATE ${erreur.code}` : '') +
-          '\n      La transaction du fichier a été annulée : la base est restée dans son état ' +
-          'antérieur. Les migrations suivantes n\'ont pas été tentées.',
+          suite,
       );
       return erreur.codeSortie ?? CODES.MIGRATION;
     }

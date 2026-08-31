@@ -58,9 +58,15 @@ after(async () => {
  */
 async function refus(client, instruction) {
   await client.query('begin');
-  const erreur = await erreurAttendue(client.query(instruction));
-  await client.query('rollback');
-  return erreur;
+  try {
+    return await erreurAttendue(client.query(instruction));
+  } finally {
+    // `finally` et non une simple ligne suivante : si l'instruction attendue en échec
+    // réussissait, `erreurAttendue` lèverait — et la connexion resterait dans une
+    // transaction ouverte, qui avalerait le DDL des tests suivants. Un banc d'essai
+    // qui se sabote ainsi rend des verdicts faux, ce qui est pire qu'un test absent.
+    await client.query('rollback');
+  }
 }
 
 /** Insère `nombre` entrées de journal validées, et renvoie leur nombre total en base. */

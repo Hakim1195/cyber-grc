@@ -386,8 +386,21 @@ Chaque entrée porte :
   strictement les insertions jusqu'au `commit`.
 - `empreinte_precedente` — l'`empreinte` de l'entrée `numero - 1` (`null` pour la genèse).
 - `empreinte` — `sha256` de la sérialisation canonique de **tous** les champs de l'entrée,
-  `empreinte_precedente` comprise. Toute retouche d'une ligne invalide son empreinte **et**
-  toutes les suivantes.
+  `empreinte_precedente` comprise.
+
+Les deux mécanismes sont **complémentaires**, et il faut être précis sur ce que chacun
+attrape — `empreinte_precedente` est *stockée*, pas recalculée à la lecture :
+
+| Ce que fait l'attaquant | Ce qui le trahit |
+|---|---|
+| Retoucher le contenu d'une ligne | `empreinte_invalide` **sur cette ligne** (son empreinte ne correspond plus à son contenu) |
+| Retoucher le contenu **et** recalculer l'empreinte | `chainage_rompu` **sur la ligne suivante** (dont l'`empreinte_precedente` figée ne correspond plus) |
+| Supprimer une ligne | `numero_manquant` **et** `chainage_rompu` |
+
+Autrement dit : falsifier une entrée sans se faire voir exigerait de **réécrire toute la
+chaîne jusqu'à la dernière entrée**, en ayant désactivé les déclencheurs — ce que seul le
+propriétaire de la base peut faire, et ce que `f_journal_audit_verifier()` révèle dès qu'un
+maillon manque à l'appel.
 
 Le client **ne fournit ni `numero`, ni `empreinte`, ni `empreinte_precedente`, ni
 `horodatage`** : le déclencheur écrase ce qu'il aurait envoyé. Il n'y a donc aucun moyen de
