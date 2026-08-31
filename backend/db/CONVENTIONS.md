@@ -18,7 +18,8 @@ Sommaire : [1. Généralités](#1-généralités) · [2. Identifiants](#2-identi
 [16. Découpage L1](#16-découpage-du-lot-l1--décisions-figées) ·
 [17. Décisions porte S1](#17-décisions-issues-de-la-porte-de-sécurité-s1--31082026) ·
 [18. Décisions 3ᵉ passage](#18-décisions-issues-du-troisième-passage-de-la-porte-s1) ·
-[19. Décisions 4ᵉ passage](#19-décisions-issues-du-quatrième-passage-de-la-porte-s1)
+[19. Décisions 4ᵉ passage](#19-décisions-issues-du-quatrième-passage-de-la-porte-s1) ·
+[20. Porte S1 franchie](#20-décisions-issues-des-cinquième-et-sixième-passages--porte-s1-franchie)
 
 ---
 
@@ -788,10 +789,13 @@ relèvent donc ni des politiques de la famille 2, ni du déclencheur de portée 
 |---|---|
 | `journal_audit` | L'événement peut précéder la résolution du périmètre (échec de connexion) ou être transversal (démarrage du service). |
 | `groupes_ad` | Un groupe peut être transversal (`GRC-EXPORT`, `GRC-ADMIN`). |
-| `sessions` | La session existe avant que son périmètre soit résolu. |
+| `sessions` | **Ne relève pas de ce tableau** : elle ne porte aucune colonne `filiale_id`, mais une `filiale_active_id`, qui est la filiale de travail de la session et non sa portée. Elle est citée ici parce que trois passages de la porte S1 l'ont crue mixte. |
 
 **Une table mixte est une table métier dont une ligne a une portée** — Groupe ou filiale. Une
 colonne nullable pour une raison chronologique ou technique n'en fait pas une.
+
+Les exemptions réellement portées par le code sont donc **deux** : `journal_audit` et
+`groupes_ad`. `f_tables_mixtes()` les découvre dans le catalogue et n'exempte qu'elles.
 
 ### 17.8 L'acteur d'une entrée de journal n'est pas fourni par le client
 
@@ -1012,3 +1016,56 @@ C'est la troisième fois que ce motif produit un défaut — les sept clés étr
 déclencheurs d'insertion, cette liste. **Règle** : un garde-fou **découvre** son périmètre dans le
 catalogue ; il ne le récite pas. Une liste écrite à la main n'est admise que si le garde-fou
 **vérifie qu'elle est complète**.
+
+---
+
+## 20. Décisions issues des cinquième et sixième passages — porte S1 franchie
+
+> Rapports : [`RAPPORT_S1_QUINQUIES.md`](../../docs/securite/RAPPORT_S1_QUINQUIES.md) (franchie,
+> 3 majeurs) et [`RAPPORT_S1_SEXIES.md`](../../docs/securite/RAPPORT_S1_SEXIES.md) (confirmée,
+> 0 majeur). **La vague 2 peut s'ouvrir.**
+
+### 20.1 Une découverte automatique est un contrat d'exécution de code
+
+C'est la leçon la plus utile du chantier, et elle est générale : **le remède au motif « liste
+écrite à la main » ouvre son propre chemin.** Faire découvrir ses contrôles à un garde-fou revient
+à exécuter tout ce qui respecte une convention de nommage — et son appelant le plus puissant est
+l'installateur, sous le compte PostgreSQL.
+
+Ce qui referme, sans réintroduire de liste, ce sont **quatre propriétés que le catalogue expose** :
+la fonction appartient au propriétaire de la base, n'est pas `security definer`, n'est pas
+volatile, et fige son chemin de recherche. Tout le reste devient une anomalie — donc un échec de
+déploiement — plutôt qu'un exécutant.
+
+Deux choses s'y ajoutent, et aucune n'est facultative :
+
+- **Le point d'appel est `security definer`**, ce qui est ici un **abaissement** de privilège :
+  son seul appelant détenant plus que le propriétaire est le script d'installation.
+- **Les deux chemins de déploiement encadrent leur appel d'une transaction en lecture seule**,
+  avec délai de garde. Nécessaire, et mesuré : *une fonction déclarée non volatile qui en appelle
+  une volatile écrit quand même* — PostgreSQL ne vérifie que la volatilité de la fonction
+  courante, jamais celle de la pile.
+
+### 20.2 Un garde-fou se vérifie dans les deux sens
+
+Fermer une porte crée l'occasion d'en fermer une qui devait rester ouverte. Le privilège de
+lecture retiré sur la colonne du secret devait s'accompagner du contrôle **inverse** : toute autre
+colonne reste lisible du service. Sans lui, une colonne ajoutée plus tard aurait été aveugle au
+service, et le défaut ne se serait vu qu'en production.
+
+**Règle** : un garde-fou qui restreint vérifie aussi que ce qui doit rester permis l'est. Et il le
+vérifie **pour chaque rôle concerné** — le sixième passage a relevé que le contrôle ne regardait
+que le compte applicatif, laissant le compte d'exportation hors de vue.
+
+### 20.3 Ce que le chantier a appris sur le dispositif lui-même
+
+Six passages, six auditeurs indépendants, cinq d'entre eux ayant trouvé un défaut que les
+précédents avaient manqué. Ce qu'il faut en retenir pour les portes S2 à S8 :
+
+| Constat | Conséquence pratique |
+|---|---|
+| Chaque auditeur a regardé ailleurs que le précédent | **Un auditeur unique aurait trouvé le sixième des défauts.** Ne pas réduire le nombre de passages pour aller plus vite. |
+| Le document normatif s'est trompé **huit fois** | Une convention n'est pas une preuve. L'auditeur vérifie **aussi** que le texte normatif dit vrai. |
+| Les correctifs passaient avec une suite verte | La suite restait verte **parce que rien n'exerçait le chemin corrigé**. Sans le test, le correctif ne compte pas. |
+| Une liste écrite à la main a produit **quatre** défauts | La parade est la découverte dans le catalogue — appliquée pour finir au dispositif de contrôle lui-même (§20.1). |
+| Le remède crée son propre chemin | Un correctif s'attaque **pour lui-même** au passage suivant, jamais présumé sûr. |
