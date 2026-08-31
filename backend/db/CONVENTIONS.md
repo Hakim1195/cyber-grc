@@ -691,13 +691,29 @@ d'autorisation, elles sont lues avant que le périmètre existe.
 
 | Table | Décision |
 |---|---|
-| `utilisateurs`, `profils`, `profil_domaines`, `groupes_ad` | **Corrigé en V1-bis** : écriture réservée à l'administration Groupe. Ce sont des tables de configuration, elles n'ont pas de raison d'être écrites en fonctionnement courant. |
+| `utilisateurs`, `profils`, `profil_domaines`, `groupes_ad`, `filiales` | **Corrigé en V1-bis** : écriture conditionnée au drapeau d'administration Groupe. Ce sont des tables de configuration, elles n'ont pas de raison d'être écrites en fonctionnement courant. |
 | `sessions`, `session_filiales`, `session_domaines` | **Reporté au lot L3**, dont c'est la matière. La couche d'authentification posera un réglage `grc.authentification` pour sa **seule** transaction d'ouverture de session — provisionnement d'un compte inconnu compris (`PLAN_SERVEUR` §1.5) — et les politiques d'écriture s'y adosseront. |
 
 **Risque assumé dans l'intervalle** : une injection SQL dans le rôle applicatif permettrait de
 forger une session et son périmètre. La parade actuelle est le contrôle S5 — requêtes
 intégralement paramétrées, vérifié à la porte S1. **Cette dette est une condition d'entrée du lot
 L3, pas une intention.**
+
+#### ⚠️ Ce que le drapeau d'administration est, et ce qu'il n'est pas
+
+`grc.administration_groupe` est une **déclaration que la session fait sur elle-même**, pas un
+privilège. Le rôle applicatif le pose lui-même : `set local grc.administration_groupe = 'oui'`
+suffit, et rien dans la base ne l'en empêche.
+
+Il protège donc contre **la faute de programmation** — une écriture Groupe faite par un chemin
+qui ne l'a pas déclarée — et **pas du tout** contre un rôle applicatif compromis, qui poserait le
+drapeau avant d'écrire. Cette distinction est celle du §17.5 : un garde-fou ne se voit pas prêter
+plus de portée qu'il n'en a, faute de quoi il endort la vigilance.
+
+La barrière réelle est ailleurs, et elle est côté serveur : c'est le modèle de droits à trois axes
+du lot **L3**, qui décide si la session a le profil *Administration* et le périmètre *Groupe*
+**avant** de poser le drapeau. La porte S3 ne doit donc pas hériter d'une protection qu'elle
+croirait acquise.
 
 ### 17.5 Le garde-fou de couverture RLS dit ce qu'il fait, et pas plus
 
@@ -733,12 +749,21 @@ pathologie exacte du constat bloquant B-1.
 |---|---|
 | Mesure **locale** à une filiale | Supprimable par sa filiale, après avoir délié ses liens **dans la même transaction**. Le rayon ne quitte pas la filiale. |
 | Mesure du **socle Groupe**, non utilisée | Supprimable par l'administration Groupe. |
-| Mesure du **socle Groupe**, mise en œuvre ou référencée quelque part | **Refusée.** Un contrôle que des filiales ont évalué ne disparaît pas : il s'archive. |
+| Mesure du **socle Groupe**, mise en œuvre ou référencée quelque part | **Refusée.** Un contrôle que des filiales ont évalué ne disparaît pas : il s'archive (voir ci-dessous). |
 
 Ce que l'utilisateur voit ne change pas — la couche applicative délie puis supprime, en une
 transaction, exactement comme aujourd'hui. Ce qui change, c'est qu'un contrôle partagé et déjà
 évalué ne peut plus s'évaporer : c'est aussi ce qu'attend un auditeur ISO 27001, pour qui la
 disparition sans trace d'un contrôle du référentiel est un constat.
+
+**« Il s'archive » suppose un mécanisme d'archivage**, et le dire sans l'avoir écrit laisse à
+l'administration Groupe un refus sans issue : ni supprimer, ni retirer du service. `mesure_catalogue`
+porte donc un **état de cycle de vie** (`active` / `archivee`), avec sa date. Une mesure archivée
+reste lisible et reste rattachée à tout ce qui la référence — c'est le point : la preuve
+historique survit — mais elle n'est plus proposée pour de nouvelles évaluations.
+
+C'est la seule issue qui satisfasse les deux exigences à la fois : ne rien détruire chez les
+filiales, et permettre au Groupe de faire évoluer son socle de contrôles.
 
 ### 17.7 Ce que le §16.4 ne disait pas : « nullable » n'est pas « mixte »
 
@@ -753,3 +778,36 @@ relèvent donc ni des politiques de la famille 2, ni du déclencheur de portée 
 
 **Une table mixte est une table métier dont une ligne a une portée** — Groupe ou filiale. Une
 colonne nullable pour une raison chronologique ou technique n'en fait pas une.
+
+### 17.8 L'acteur d'une entrée de journal n'est pas fourni par le client
+
+Le déclencheur de chaînage écrase déjà `numero`, `horodatage`, `empreinte_precedente` et
+`empreinte` : c'est ce qui rend une entrée impossible à forger par l'API (§12). **L'identité de
+l'acteur relevait pourtant du client.**
+
+Elle relève désormais de la session, comme `cree_par` sur toute autre table : le déclencheur
+impose `utilisateur_id = f_utilisateur_courant()`. Le libellé texte, lui, reste fourni — c'est un
+confort de lecture qui doit survivre à la disparition du compte (§12) — mais il n'est plus la
+source de l'identité.
+
+Le principe, qui vaut au-delà de cette table : **tout ce qui fait la valeur probante d'une trace
+vient du serveur, jamais de l'appelant.** Un journal inaltérable dont l'acteur est déclaré par le
+client garantit l'intégrité d'une fausse preuve — le mécanisme fonctionne parfaitement, sur un
+contenu faux.
+
+### 17.9 La filiale d'écriture appartient toujours au périmètre de lecture
+
+`f_filiale_ecriture()` vérifie que `grc.filiale_id` figure dans `f_filiales_autorisees()`, et lève
+`GRC04` sinon.
+
+Sans cette condition, les deux réglages étaient indépendants : une session déclarant un périmètre
+de lecture `FIL-A` et une filiale active `FIL-B` écrivait chez B — **entrée de journal chaînée et
+scellée comprise**. Le contrôle existait, mais seulement en TypeScript ; or la RLS est là
+précisément pour que le code puisse se tromper sans que cela devienne une fuite
+(`PLAN_SERVEUR` §1.9).
+
+Aucun flux légitime n'en souffre : un périmètre système n'a pas de filiale active et échoue en
+amont, et une administration Groupe bascule entre des filiales **de** son périmètre.
+
+Règle générale : **deux réglages de session qui doivent être cohérents entre eux sont recoupés
+par la base**, jamais seulement par le code qui les pose.
