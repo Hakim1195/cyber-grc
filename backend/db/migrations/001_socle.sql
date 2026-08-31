@@ -537,30 +537,83 @@ comment on function f_verifier_tracabilite() is
 -- fichier. Elle agrège les trois vérifications de schéma du dépôt et les rend sous la
 -- même forme (objet, anomalie, detail) ; un schéma sain ne renvoie aucune ligne.
 --
--- POURQUOI « si elle existe » POUR LA COUVERTURE RLS. Le découpage du lot L1
--- (CONVENTIONS §16.1) veut que les politiques soient créées par 004 et par elle seule :
--- 001, 002 et 003 s'exécutent donc dans un schéma qui n'a légitimement aucune politique,
--- et f_verifier_couverture_rls() n'y existe même pas encore. Le renvoi conditionnel dit
--- cette dépendance au lieu de la taire — et, sur toute base où 004 est déjà appliquée,
--- une migration 005 qui appelle cette fonction est bel et bien couverte.
+-- IL DÉCOUVRE SES CONTRÔLES, IL NE LES RÉCITE PAS (CONVENTIONS.md §19.4 et §19.5).
+--
+-- Première version : ce corps ÉNUMÉRAIT f_verifier_chemin_recherche() et
+-- f_verifier_tracabilite(), et testait l'existence de f_verifier_couverture_rls(). Le
+-- quatrième passage de la porte S1 a montré où mène cette forme : le commit qui a branché
+-- deux garde-fous sur le déploiement a été immédiatement suivi de celui qui en écrivait un
+-- troisième, sans rien rebrancher — le défaut s'est reproduit sous le contrôle créé pour
+-- lui, en deux commits (constat Q-1). Et le présent correctif en ajoute un quatrième
+-- (f_verifier_unicite_cloisonnee, migration 004) : la même liste aurait dû être retouchée
+-- une fois de plus, au même endroit, avec la même occasion d'oublier.
+--
+-- La parade est celle que f_poser_tracabilite_insertion() applique déjà à la traçabilité :
+-- DÉCOUVRIR PLUTÔT QU'ÉNUMÉRER. Est un contrôle de schéma, et est donc joué ici, toute
+-- fonction du schéma public qui :
+--   - s'appelle « f_verifier_<quelque chose> » ;
+--   - ne prend AUCUN argument ;
+--   - et rend exactement « table (objet text, anomalie text, detail text) ».
+--
+-- Ces trois conditions sont la CONVENTION D'ÉCRITURE d'un garde-fou de schéma. Les
+-- respecter suffit à être branché — sur le déploiement comme sur la recette — sans
+-- toucher à ce fichier, ni à db/migrate.mjs, ni à deploy/install.sh. C'est la seule forme
+-- qui résiste à l'oubli, parce qu'elle en supprime l'occasion.
+--
+-- La forme du résultat exclut d'elle-même cette fonction-ci (quatre colonnes) : pas de
+-- récursion. Elle exclut aussi f_journal_audit_verifier(), qui vérifie des DONNÉES et non
+-- le schéma, et dont le coût n'a rien à voir.
+--
+-- CE QUE LA DÉCOUVERTE NE PROTÈGE PAS, et qu'il faut dire : renommer ou supprimer un
+-- garde-fou existant le fait disparaître SANS BRUIT de l'agrégation. Le zéro absolu est
+-- rattrapé ici même ; la disparition d'un seul contrôle sur quatre est épinglée par le
+-- banc d'essai (test/base/rls.test.mjs, « l'ensemble des contrôles découverts contient… »),
+-- qui est l'endroit juste pour cela.
+--
+-- CE QUE LE DÉCOUPAGE DU LOT IMPOSE ENCORE. Les politiques sont créées par 004 et par elle
+-- seule (CONVENTIONS §16.1) : 001, 002 et 003 s'exécutent dans un schéma qui n'a
+-- légitimement aucune politique, et les garde-fous de 004 n'y existent pas encore. La
+-- découverte rend cette dépendance triviale — ce qui n'existe pas n'est pas joué — là où
+-- le renvoi conditionnel devait l'écrire à la main.
 create or replace function f_verifier_schema()
 returns table (controle text, objet text, anomalie text, detail text)
     language plpgsql stable
     set search_path = pg_catalog, public, pg_temp as
 $$
+declare
+    -- La signature exacte qu'un garde-fou de schéma doit rendre pour être découvert.
+    v_forme constant text := 'TABLE(objet text, anomalie text, detail text)';
+    v_joues integer := 0;
+    r record;
 begin
-    return query
-        select 'chemin_recherche'::text, v.objet, v.anomalie, v.detail
-          from f_verifier_chemin_recherche() v;
+    for r in
+        select p.proname::text                                     as fonction,
+               substring(p.proname::text from '^f_verifier_(.+)$') as controle
+          from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'public'
+           and p.prokind = 'f'
+           and p.proname::text like 'f\_verifier\_%'
+           and p.pronargs = 0
+           and pg_get_function_result(p.oid) = v_forme
+         order by p.proname
+    loop
+        v_joues := v_joues + 1;
+        return query execute format(
+            'select %L::text, v.objet, v.anomalie, v.detail from public.%I() v',
+            r.controle, r.fonction);
+    end loop;
 
-    return query
-        select 'tracabilite'::text, v.objet, v.anomalie, v.detail
-          from f_verifier_tracabilite() v;
-
-    if to_regprocedure('public.f_verifier_couverture_rls()') is not null then
-        return query execute
-            'select ''couverture_rls''::text, v.objet, v.anomalie, v.detail
-               from f_verifier_couverture_rls() v';
+    -- Un point d'appel qui n'appelle plus rien rendrait « aucune anomalie » sur une base
+    -- entièrement sabotée. C'est le pire des résultats possibles : il rassure.
+    if v_joues = 0 then
+        controle := 'point_appel';
+        objet    := 'f_verifier_schema';
+        anomalie := 'aucun_controle_decouvert';
+        detail   := 'aucune fonction « f_verifier_<x>() » sans argument rendant '
+                    '(objet, anomalie, detail) n''existe dans le schéma public : le point '
+                    'd''appel unique ne joue plus aucun contrôle et son silence ne vaut rien';
+        return next;
     end if;
 
     return;
@@ -568,12 +621,14 @@ end;
 $$;
 
 comment on function f_verifier_schema() is
-    'Point d''appel UNIQUE des vérifications automatiques du schéma (CONVENTIONS.md §18.4) : '
-    'chemin de recherche figé, traçabilité imposée à l''insertion, et couverture RLS lorsque '
-    'la fonction qui la porte existe (elle est créée par 004, cf. §16.1). Un schéma sain ne '
-    'renvoie AUCUNE ligne. À appeler en fin de TOUTE migration, et à faire échouer le '
-    'déploiement sur la moindre ligne rendue : écrire le contrôle est la moitié du travail, '
-    'le brancher est l''autre moitié.';
+    'Point d''appel UNIQUE des vérifications automatiques du schéma (CONVENTIONS.md §18.4 et '
+    '§19.4). Il DÉCOUVRE ses contrôles dans le catalogue au lieu de les énumérer : toute '
+    'fonction « public.f_verifier_<x>() », sans argument, rendant (objet, anomalie, detail), '
+    'est jouée — et un garde-fou neuf qui respecte cette convention est donc branché sur le '
+    'déploiement ET sur la recette sans qu''aucun fichier change. Un schéma sain ne renvoie '
+    'AUCUNE ligne. À appeler en fin de TOUTE migration, et à faire échouer le déploiement sur '
+    'la moindre ligne rendue : écrire le contrôle est la moitié du travail, le brancher est '
+    'l''autre moitié — et l''énumérer était l''occasion de l''oublier.';
 
 -- Garde générique d'ajout seul. Utilisée par journal_audit (§9).
 -- Un déclencheur plutôt qu'une « rule … do instead nothing » : une règle transforme la
@@ -868,6 +923,26 @@ create table utilisateurs (
     constraint fk_utilisateurs_filiale  foreign key (filiale_defaut_id)
         references filiales(id) on delete restrict,
     constraint ck_utilisateurs_ident    check (identifiant <> ''),
+    -- « systeme » est RÉSERVÉ : c'est la sentinelle rendue par f_utilisateur_courant()
+    -- hors session (migrations, timers, démarrage du service, échec d'authentification).
+    -- Constat Q-3 du quatrième passage de la porte S1, CONVENTIONS.md §19.2.
+    --
+    -- Rien n'interdisait de créer un compte portant cet identifiant, et le
+    -- provisionnement automatique depuis l'AD (PLAN_SERVEUR §1.5) suffisait à le faire
+    -- sans qu'aucun humain le décide : il crée le compte du premier membre d'un groupe
+    -- autorisé qui se présente. Dès lors, f_journal_audit_chainage() — qui résout
+    -- l'acteur par « lower(identifiant) = lower(f_utilisateur_courant()) », §17.8 —
+    -- rattache TOUS les événements système à cette personne nommée, dans un journal
+    -- scellé et chaîné dont la vérification ne signale rien : la chaîne est intacte,
+    -- c'est l'imputation qui est fausse. C'est la pathologie du §17.8 atteinte par
+    -- l'autre bout : au lieu de déclarer l'acteur, on capture la sentinelle.
+    --
+    -- Insensible à la casse ET aux espaces de bordure : la résolution du journal compare
+    -- déjà en minuscules, un contrôle sensible à la casse serait contourné par
+    -- « Systeme » ; et identifiant est du texte libre, pas un id_metier, donc rien ne
+    -- rogne « systeme » suivi d'une espace.
+    constraint ck_utilisateurs_identifiant_reserve check (
+        lower(btrim(identifiant)) <> 'systeme'),
     constraint ck_utilisateurs_nom      check (nom_affichage <> ''),
     constraint ck_utilisateurs_tent     check (tentatives_echouees >= 0),
     -- Un compte AD n'a jamais de secret local ; le compte de secours en a toujours un.
@@ -1555,6 +1630,35 @@ alter table filiales
 -- Circuit de validation étendu au-delà des seuls documents, le mécanisme étant identique
 -- (PLAN_SERVEUR §3.5). L'acceptation des risques résiduels est explicitement exigée par
 -- l'ISO 27001 ; son absence est un constat d'audit classique.
+--
+-- ── POURQUOI L'UNICITÉ D'UNE ÉTAPE COMMENCE PAR filiale_id (CONVENTIONS.md §19.1) ────
+--
+-- Constat Q-2 du quatrième passage de la porte S1. L'unicité s'écrivait
+-- « unique (objet_type, objet_id, etape, ordre) », sans la filiale. Or PostgreSQL évalue
+-- une contrainte d'unicité EN DEHORS des politiques de sécurité de niveau ligne,
+-- exactement comme il évalue une clé étrangère (§17.1) : l'index est parcouru en entier,
+-- quelle que soit la session.
+--
+-- Le scénario, et il est irréversible : approbations.objet_id est un rattachement
+-- POLYMORPHE, sans clé étrangère (voir le commentaire de colonne plus bas) — rien
+-- n'oblige donc l'objet visé à appartenir à la filiale qui écrit. Une filiale A pose
+-- l'étape (« risque », « RISK-B-… », « acceptation », 1) en la rattachant à SA propre
+-- filiale ; la ligne est parfaitement valide de son point de vue. La filiale B, à qui ce
+-- risque appartient, ne peut alors JAMAIS ouvrir son acceptation de risque résiduel —
+-- celle que l'ISO 27001 exige nommément — et reçoit un « doublon » sur une ligne qu'elle
+-- ne peut pas lire, donc sans le moindre détail lui permettant de comprendre. Et l'étape
+-- de A est irrévocable par construction : f_approbations_verrou_decision(), armée en
+-- « always », refuse de la modifier comme de la supprimer (GRC02).
+--
+-- Ce n'est pas une fuite de données : c'est un DÉNI DE SERVICE PERMANENT infligé d'une
+-- filiale à une autre, sur le geste de conformité le plus visible du produit. Le
+-- cloisonnement n'est pas seulement « B ne voit pas les lignes de A » ; c'est aussi
+-- « A ne peut rien empêcher chez B ».
+--
+-- Règle générale, qui vaut pour tout le schéma et qu'un garde-fou balaie désormais au
+-- déploiement — f_verifier_unicite_cloisonnee(), §4 bis : TOUT contrôle que PostgreSQL
+-- applique hors des politiques — clé étrangère, unicité, exclusion — porte filiale_id
+-- dès lors que sa table en porte un.
 -- =====================================================================================
 
 create table approbations (
@@ -1577,7 +1681,9 @@ create table approbations (
     modifie_le      timestamptz,
     modifie_par     text,
     constraint pk_approbations         primary key (id),
-    constraint uq_approbations_etape   unique (objet_type, objet_id, etape, ordre),
+    -- filiale_id EN TÊTE, et ce n'est pas de l'ornement : constat Q-2 du quatrième passage
+    -- de la porte S1, le plus grave des quatre passages. Voir le pavé sous la table.
+    constraint uq_approbations_etape   unique (filiale_id, objet_type, objet_id, etape, ordre),
     constraint fk_approbations_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
     constraint fk_approbations_acteur  foreign key (acteur_id)
