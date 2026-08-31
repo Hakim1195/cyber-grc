@@ -33,6 +33,7 @@ import Fastify from 'fastify';
 import type { FastifyError, FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 
+import { greffonApi } from './api/index.js';
 import { chargerConfiguration, ErreurConfiguration, resumerConfiguration } from './config/index.js';
 import type { Configuration } from './config/index.js';
 import { creerPool, fermerPool, verifierBase } from './db/pool.js';
@@ -107,6 +108,21 @@ export function construireServeur(config: Configuration, pool: Pool): FastifyIns
       base: { ok: base.ok, latence_ms: base.latenceMs },
     });
   });
+
+  /**
+   * API du lot L2 — chargement initial, écritures ciblées, sondage.
+   *
+   * Enregistrée comme greffon, donc **encapsulée** : son propre traitement
+   * d'erreurs (qui garantit qu'aucun message de PostgreSQL ne sort, contrôle
+   * S12) s'applique à ses routes, et à elles seules. La sonde de santé
+   * ci-dessus reste servie par le traitement générique.
+   *
+   * Le greffon découvre le catalogue PostgreSQL au démarrage et **refuse de
+   * démarrer** si son registre d'entités ne correspond plus au schéma
+   * (`ErreurRegistre`) : c'est le contrôle S16 — un garde-fou que rien
+   * n'appelle est un commentaire.
+   */
+  void serveur.register(greffonApi, { pool, config });
 
   serveur.setNotFoundHandler((requete, reponse) => {
     void reponse.code(404).send({

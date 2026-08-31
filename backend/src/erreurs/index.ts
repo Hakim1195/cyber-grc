@@ -1,0 +1,508 @@
+/**
+ * Traduction des échecs en réponses d'API — le point unique où une erreur
+ * devient quelque chose qu'un utilisateur lit.
+ *
+ * ── Ce que ce module garantit (contrôle S12 de `docs/PLAN_EXECUTION.md` §4) ──
+ *
+ * Deux destinataires, deux textes, et jamais l'inverse :
+ *
+ *  · **Le client** reçoit un message français, actionnable, qui nomme la
+ *    *règle* enfreinte et jamais la donnée qu'il n'a pas le droit de voir : ni
+ *    nom de table, ni nom de contrainte, ni pile d'appel, ni requête SQL, ni
+ *    message brut de PostgreSQL.
+ *  · **Le journal technique** reçoit le détail complet (`detailJournal`), qui
+ *    ne sort jamais dans une réponse.
+ *
+ * C'est un report explicite du lot L1 : les six passages de la porte S1 ont
+ * constaté que les refus de la base nomment parfois des objets internes, et ont
+ * inscrit la traduction au débit de L2 (`RAPPORT_S1` §O-2 et §934,
+ * `RAPPORT_S1_TER` §T-8). Ce fichier est cette dette-là, payée.
+ *
+ * ── Pourquoi ce module n'importe rien d'exécutable ───────────────────────
+ *
+ * Il ne dépend d'aucun autre fichier du serveur à l'exécution : ses seuls
+ * imports sont des `import type`, effacés à la compilation. C'est la contrainte
+ * que `src/reprise/types.ts` documente déjà — Node exécute directement les `.ts`
+ * du banc d'essai, et un import de valeur en `./x.js` ne s'y résout pas. Un
+ * module de traduction d'erreurs doit être éprouvable seul ; il l'est.
+ *
+ * La couche d'accès aux données (`src/entites/`) ne connaît donc **pas** HTTP :
+ * elle lève une `ErreurEntite` porteuse d'un motif métier, et c'est ici, et
+ * seulement ici, que le motif devient un code de statut et une phrase.
+ */
+
+import type { ErreurEntite, MotifEchec } from '../entites/types.js';
+
+/* =====================================================================
+ *  Codes rendus au client
+ * ===================================================================== */
+
+/**
+ * Codes machine des réponses d'erreur. Stables : le frontend s'y branche.
+ * Volontairement grossiers — un code fin serait, lui aussi, un oracle.
+ */
+export type CodeApi =
+  /** Conflit de verrouillage optimiste : `GRC03` du `CONVENTIONS.md` §15. */
+  | 'conflit_version'
+  /** La ressource n'existe pas *dans le périmètre lisible de la session*. */
+  | 'ressource_inconnue'
+  /** La ressource est lisible mais l'écriture est refusée (filiale, portée). */
+  | 'hors_perimetre'
+  /** L'entrée ne respecte pas le modèle : champ inconnu, type, valeur, taille. */
+  | 'donnee_invalide'
+  /** Refus d'intégrité de la base, traduit sans nommer d'objet interne. */
+  | 'contrainte_base'
+  /** Le volume demandé dépasse la borne admise (contrôle S13). */
+  | 'volume_excessif'
+  /** Le service n'est pas en mesure de répondre pour l'instant. */
+  | 'indisponible'
+  /** Défaut de programmation ou panne : rien n'en sort, tout part au journal. */
+  | 'erreur_interne';
+
+/** Réponse d'erreur, telle qu'elle part sur le réseau. */
+export interface CorpsErreur {
+  readonly erreur: CodeApi;
+  readonly message: string;
+  /**
+   * Code d'erreur applicatif du `CONVENTIONS.md` §15, quand il s'applique.
+   * Présent surtout pour `GRC03`, que l'interface traite spécifiquement
+   * (« modifié entre-temps, recharger l'enregistrement »).
+   */
+  readonly code_grc?: string;
+  /** Entité et identifiant concernés, quand les nommer n'apprend rien de neuf. */
+  readonly entite?: string;
+  readonly identifiant?: string;
+  /**
+   * Version réellement en base, renvoyée avec `GRC03` **et seulement là** :
+   * l'appelant vient de prouver qu'il détient une version de cette ligne, il
+   * peut donc la lire. Elle épargne un aller-retour au rechargement.
+   */
+  readonly version_actuelle?: number;
+}
+
+/* =====================================================================
+ *  Erreur applicative
+ * ===================================================================== */
+
+/**
+ * Erreur prête à être rendue. `message` est destiné à l'utilisateur ;
+ * `detailJournal` ne sort jamais de la machine.
+ */
+export class ErreurApplicative extends Error {
+  public readonly nomErreur = 'ErreurApplicative';
+  public readonly code: CodeApi;
+  public readonly statut: number;
+  public readonly detailJournal: string | undefined;
+  public readonly codeGrc: string | undefined;
+  public readonly entite: string | undefined;
+  public readonly identifiant: string | undefined;
+  public readonly versionActuelle: number | undefined;
+
+  constructor(parametres: {
+    code: CodeApi;
+    statut: number;
+    message: string;
+    detailJournal?: string | undefined;
+    codeGrc?: string | undefined;
+    entite?: string | undefined;
+    identifiant?: string | undefined;
+    versionActuelle?: number | undefined;
+  }) {
+    super(parametres.message);
+    this.name = 'ErreurApplicative';
+    this.code = parametres.code;
+    this.statut = parametres.statut;
+    this.detailJournal = parametres.detailJournal;
+    this.codeGrc = parametres.codeGrc;
+    this.entite = parametres.entite;
+    this.identifiant = parametres.identifiant;
+    this.versionActuelle = parametres.versionActuelle;
+  }
+
+  /** Corps de réponse. Ne contient que ce que le client a le droit de savoir. */
+  public corps(): CorpsErreur {
+    const corps: {
+      erreur: CodeApi;
+      message: string;
+      code_grc?: string;
+      entite?: string;
+      identifiant?: string;
+      version_actuelle?: number;
+    } = { erreur: this.code, message: this.message };
+
+    if (this.codeGrc !== undefined) corps.code_grc = this.codeGrc;
+    if (this.entite !== undefined) corps.entite = this.entite;
+    if (this.identifiant !== undefined) corps.identifiant = this.identifiant;
+    if (this.versionActuelle !== undefined) corps.version_actuelle = this.versionActuelle;
+
+    return corps;
+  }
+}
+
+/** Raccourci : entrée refusée au bord (400). */
+export function entreeInvalide(message: string, detailJournal?: string): ErreurApplicative {
+  return new ErreurApplicative({
+    code: 'donnee_invalide',
+    statut: 400,
+    message,
+    detailJournal: detailJournal ?? undefined,
+  });
+}
+
+/* =====================================================================
+ *  Traduction d'une ErreurEntite
+ * ===================================================================== */
+
+/**
+ * Table motif → (statut, code). Un `switch` exhaustif plutôt qu'un objet :
+ * `noImplicitReturns` et l'exhaustivité de l'union font échouer la compilation
+ * si un motif est ajouté sans être traduit ici. C'est le seul « garde-fou »
+ * que TypeScript sache poser tout seul ; il ne coûte rien, on le prend.
+ */
+function correspondance(motif: MotifEchec): { statut: number; code: CodeApi } {
+  switch (motif) {
+    case 'conflit_version':
+      return { statut: 409, code: 'conflit_version' };
+    case 'introuvable':
+      return { statut: 404, code: 'ressource_inconnue' };
+    case 'refus_perimetre':
+      return { statut: 403, code: 'hors_perimetre' };
+    case 'donnee_invalide':
+      return { statut: 400, code: 'donnee_invalide' };
+    case 'refus_base':
+      return { statut: 409, code: 'contrainte_base' };
+    case 'volume_excessif':
+      return { statut: 413, code: 'volume_excessif' };
+    case 'etat_incoherent':
+      return { statut: 500, code: 'erreur_interne' };
+  }
+}
+
+/** Reconnaît une `ErreurEntite` sans importer sa classe (voir l'entête). */
+export function estErreurEntite(erreur: unknown): erreur is ErreurEntite {
+  return (
+    erreur instanceof Error &&
+    (erreur as { nomErreur?: unknown }).nomErreur === 'ErreurEntite' &&
+    typeof (erreur as { motif?: unknown }).motif === 'string'
+  );
+}
+
+/**
+ * Traduit une erreur quelconque en `ErreurApplicative`.
+ *
+ * L'ordre compte : une erreur déjà traduite passe telle quelle, une
+ * `ErreurEntite` est convertie, une erreur PostgreSQL brute est interprétée,
+ * et **tout le reste devient une erreur interne générique**. Ce dernier cas est
+ * le plus important : c'est lui qui garantit qu'aucun message inattendu ne
+ * sort. Une traduction qui laisserait passer l'inconnu ne serait pas une
+ * traduction, mais un filtre percé.
+ */
+export function traduireErreur(erreur: unknown): ErreurApplicative {
+  if (erreur instanceof ErreurApplicative) return erreur;
+
+  if (estErreurEntite(erreur)) return traduireErreurEntite(erreur);
+
+  const postgres = lireErreurPostgres(erreur);
+  if (postgres !== null) return traduireErreurPostgres(postgres);
+
+  return new ErreurApplicative({
+    code: 'erreur_interne',
+    statut: 500,
+    message: "Le serveur n'a pas pu traiter la demande. L'incident est journalisé.",
+    detailJournal: erreur instanceof Error ? `${erreur.name}: ${erreur.message}` : String(erreur),
+  });
+}
+
+function traduireErreurEntite(erreur: ErreurEntite): ErreurApplicative {
+  // Un refus de la base arrive enveloppé : c'est lui qui porte le sens, pas
+  // l'enveloppe. On le traduit d'abord, puis on lui rattache l'entité visée.
+  if (erreur.motif === 'refus_base' && erreur.erreurBase !== undefined) {
+    const traduite = traduireErreurPostgres(erreur.erreurBase);
+    return new ErreurApplicative({
+      code: traduite.code,
+      statut: traduite.statut,
+      message: traduite.message,
+      detailJournal: joindre(traduite.detailJournal, erreur.detailJournal),
+      codeGrc: traduite.codeGrc,
+      entite: erreur.entite,
+      identifiant: erreur.identifiant,
+    });
+  }
+
+  const { statut, code } = correspondance(erreur.motif);
+
+  return new ErreurApplicative({
+    code,
+    statut,
+    message: erreur.message,
+    detailJournal: erreur.detailJournal,
+    // `GRC03` est le seul code du §15 que l'API émet elle-même : il se définit
+    // exactement sur le zéro ligne d'un « update … and version = $2 », et sur
+    // rien d'autre. Les deux autres motifs qui produisent aussi ce zéro
+    // (ligne absente, écriture refusée par la RLS) portent leur propre code —
+    // c'est tout l'objet du diagnostic de `src/entites/index.ts`.
+    codeGrc: erreur.motif === 'conflit_version' ? 'GRC03' : undefined,
+    entite: erreur.entite,
+    identifiant: erreur.identifiant,
+    versionActuelle: erreur.versionActuelle,
+  });
+}
+
+/* =====================================================================
+ *  Erreurs PostgreSQL
+ * ===================================================================== */
+
+/** Ce que `pg` expose d'une erreur du serveur, et dont ce module se sert. */
+export interface ErreurPostgres {
+  readonly code: string;
+  readonly message: string;
+  readonly detail?: string | undefined;
+  readonly hint?: string | undefined;
+  readonly constraint?: string | undefined;
+  readonly column?: string | undefined;
+  readonly table?: string | undefined;
+  readonly schema?: string | undefined;
+}
+
+/**
+ * Reconnaît une erreur venue de PostgreSQL. Le critère est le `code`
+ * `SQLSTATE` : cinq caractères alphanumériques. `pg` ne définit pas de classe
+ * d'erreur propre à interroger par `instanceof` de façon fiable.
+ */
+export function lireErreurPostgres(erreur: unknown): ErreurPostgres | null {
+  if (typeof erreur !== 'object' || erreur === null) return null;
+  const candidat = erreur as Record<string, unknown>;
+  const code = candidat['code'];
+  if (typeof code !== 'string' || !/^[0-9A-Za-z]{5}$/.test(code)) return null;
+
+  return {
+    code,
+    message: typeof candidat['message'] === 'string' ? candidat['message'] : '',
+    detail: typeof candidat['detail'] === 'string' ? candidat['detail'] : undefined,
+    hint: typeof candidat['hint'] === 'string' ? candidat['hint'] : undefined,
+    constraint: typeof candidat['constraint'] === 'string' ? candidat['constraint'] : undefined,
+    column: typeof candidat['column'] === 'string' ? candidat['column'] : undefined,
+    table: typeof candidat['table'] === 'string' ? candidat['table'] : undefined,
+    schema: typeof candidat['schema'] === 'string' ? candidat['schema'] : undefined,
+  };
+}
+
+/**
+ * Traduit un `SQLSTATE`.
+ *
+ * ⚠️ **Le message de PostgreSQL n'est jamais recopié**, à une exception près,
+ * argumentée sur place : les refus levés par les déclencheurs métier du socle,
+ * dont le texte est *écrit pour l'utilisateur* (`CONVENTIONS.md` §15) et se
+ * reconnaît à l'absence de nom de contrainte.
+ */
+export function traduireErreurPostgres(erreur: ErreurPostgres): ErreurApplicative {
+  const detailJournal = detailComplet(erreur);
+
+  switch (erreur.code) {
+    // ── Codes applicatifs du CONVENTIONS.md §15 ──────────────────────────
+    case 'GRC01':
+      return new ErreurApplicative({
+        code: 'contrainte_base',
+        statut: 403,
+        message:
+          "Le journal d'audit est en ajout seul : une entrée déjà écrite ne peut être ni " +
+          'modifiée ni supprimée.',
+        detailJournal,
+        codeGrc: 'GRC01',
+      });
+
+    case 'GRC02':
+      return new ErreurApplicative({
+        code: 'contrainte_base',
+        statut: 409,
+        message:
+          "Cette étape d'approbation est franchie : la décision est irréversible. Une nouvelle " +
+          'version repart du début du circuit.',
+        detailJournal,
+        codeGrc: 'GRC02',
+      });
+
+    case 'GRC04':
+      // Le périmètre de session n'a pas été positionné, ou il est incohérent.
+      // Ce n'est jamais une faute de l'utilisateur : c'est un défaut de
+      // programmation du serveur, et la réponse ne doit rien en dire.
+      return new ErreurApplicative({
+        code: 'erreur_interne',
+        statut: 500,
+        message: "Le serveur n'a pas pu traiter la demande. L'incident est journalisé.",
+        detailJournal,
+        codeGrc: 'GRC04',
+      });
+
+    // ── Intégrité ────────────────────────────────────────────────────────
+    case '23505':
+      // Unicité. Le constat T-8 de la porte S1 est ici : l'espace des
+      // identifiants est de niveau Groupe, les unicités ignorent la RLS, et
+      // une filiale peut donc se voir refuser un identifiant qu'elle ne voit
+      // pas. Le message nomme la RÈGLE (« cet identifiant est pris ») et se
+      // garde bien de dire où, ni par qui — ce serait l'oracle même que
+      // `RAPPORT_S1_TER` §T-8 demande de fermer.
+      return new ErreurApplicative({
+        code: 'contrainte_base',
+        statut: 409,
+        message:
+          "Cet enregistrement fait doublon : son identifiant, ou l'une de ses clés " +
+          "(un code d'exigence de référentiel, une date de point d'historique), est déjà " +
+          'utilisé. Reprenez la saisie avec un nouvel enregistrement.',
+        detailJournal,
+      });
+
+    case '23503':
+      return new ErreurApplicative({
+        code: 'contrainte_base',
+        statut: 409,
+        message:
+          "Opération refusée : l'enregistrement est encore référencé ailleurs, ou il désigne " +
+          "un élément qui n'existe pas dans votre périmètre. Déliez-le d'abord, ou " +
+          "— s'il s'agit d'un contrôle du socle commun — archivez-le au lieu de le supprimer.",
+        detailJournal,
+      });
+
+    case '23502':
+      return new ErreurApplicative({
+        code: 'donnee_invalide',
+        statut: 400,
+        message:
+          erreur.column !== undefined
+            ? `Le champ « ${nettoyerNom(erreur.column)} » est obligatoire.`
+            : 'Un champ obligatoire est absent.',
+        detailJournal,
+      });
+
+    case '23514':
+      // Deux familles derrière le même code, et la distinction est nette :
+      //  · avec un nom de contrainte -> un « check » du schéma. Son message
+      //    PostgreSQL nomme la table et la contrainte : il ne sort pas.
+      //  · sans nom de contrainte -> un « raise » d'un déclencheur métier du
+      //    socle (f_coherence_mesure_catalogue, f_interdit_changement_portee).
+      //    Le CONVENTIONS.md §15 dit explicitement que ce message-là est
+      //    « déjà rédigé pour l'utilisateur », et il l'est : il parle de
+      //    mesures et de portées, jamais de lignes invisibles.
+      if (erreur.constraint === undefined) {
+        return new ErreurApplicative({
+          code: 'donnee_invalide',
+          statut: 409,
+          message: erreur.message,
+          detailJournal,
+        });
+      }
+      return new ErreurApplicative({
+        code: 'donnee_invalide',
+        statut: 400,
+        message: messageDeContrainte(erreur.constraint),
+        detailJournal,
+      });
+
+    case '22P02': // syntaxe de valeur invalide
+    case '22007': // format de date invalide
+    case '22008': // dépassement de champ date/heure
+    case '22001': // chaîne trop longue pour le type
+    case '22003': // valeur numérique hors bornes
+      return new ErreurApplicative({
+        code: 'donnee_invalide',
+        statut: 400,
+        message:
+          'Une valeur ne correspond pas au type attendu (nombre, date ou texte). Vérifiez la ' +
+          'saisie et recommencez.',
+        detailJournal,
+      });
+
+    // ── Refus de la Row Level Security ───────────────────────────────────
+    case '42501':
+      // « new row violates row-level security policy » : l'insertion visait
+      // une filiale ou une portée que la session n'écrit pas. Le refus est ici
+      // BRUYANT (contrairement à l'update et au delete, muets — constat T-6),
+      // ce qui en fait le cas facile.
+      return new ErreurApplicative({
+        code: 'hors_perimetre',
+        statut: 403,
+        message:
+          "Écriture refusée : cet enregistrement sort du périmètre de votre session " +
+          '(filiale active, ou portée Groupe réservée à une administration Groupe).',
+        detailJournal,
+      });
+
+    // ── Concurrence et disponibilité ─────────────────────────────────────
+    case '40001': // échec de sérialisation
+    case '40P01': // interblocage
+    case '55P03': // verrou indisponible (lock_timeout)
+      return new ErreurApplicative({
+        code: 'indisponible',
+        statut: 409,
+        message:
+          "Un autre enregistrement en cours a empêché l'opération d'aboutir. Recommencez : " +
+          'aucune modification partielle n\'a été appliquée.',
+        detailJournal,
+      });
+
+    case '57014': // requête annulée (statement_timeout)
+      return new ErreurApplicative({
+        code: 'indisponible',
+        statut: 503,
+        message: "L'opération a dépassé le délai de garde du serveur et a été annulée.",
+        detailJournal,
+      });
+
+    case '53300': // trop de connexions
+    case '57P03': // base en cours de démarrage
+      return new ErreurApplicative({
+        code: 'indisponible',
+        statut: 503,
+        message: 'Le service est momentanément indisponible. Réessayez dans un instant.',
+        detailJournal,
+      });
+
+    default:
+      return new ErreurApplicative({
+        code: 'erreur_interne',
+        statut: 500,
+        message: "Le serveur n'a pas pu traiter la demande. L'incident est journalisé.",
+        detailJournal,
+      });
+  }
+}
+
+/**
+ * Message d'un `check` nommé, sans jamais montrer le nom de la contrainte.
+ *
+ * Le `CONVENTIONS.md` §9 impose de nommer toute contrainte « pour qu'un message
+ * d'erreur `ck_actifs_criticite` se traduise en message utilisateur ». C'est ce
+ * que fait cette fonction : elle lit la convention `ck_<table>_<sujet>` et n'en
+ * garde que le **sujet**, qui est un mot du vocabulaire métier — jamais la
+ * table.
+ */
+function messageDeContrainte(contrainte: string): string {
+  const morceaux = contrainte.split('_');
+  const sujet = morceaux.length >= 3 ? morceaux[morceaux.length - 1] : undefined;
+
+  if (morceaux[0] === 'ck' && sujet !== undefined && /^[a-z0-9]+$/.test(sujet)) {
+    return `La valeur du champ « ${sujet} » n'est pas admise pour cet enregistrement.`;
+  }
+  return "Une valeur de l'enregistrement n'est pas admise.";
+}
+
+/** Retire tout ce qui n'est pas un nom de champ, avant de le citer au client. */
+function nettoyerNom(nom: string): string {
+  return /^[a-z_][a-z0-9_]{0,62}$/.test(nom) ? nom : 'inconnu';
+}
+
+/** Détail réservé au journal technique. Il ne sort d'aucune réponse. */
+function detailComplet(erreur: ErreurPostgres): string {
+  const parties = [`sqlstate=${erreur.code}`, erreur.message];
+  if (erreur.table !== undefined) parties.push(`table=${erreur.table}`);
+  if (erreur.constraint !== undefined) parties.push(`contrainte=${erreur.constraint}`);
+  if (erreur.column !== undefined) parties.push(`colonne=${erreur.column}`);
+  if (erreur.detail !== undefined) parties.push(`detail=${erreur.detail}`);
+  return parties.join(' · ');
+}
+
+function joindre(a: string | undefined, b: string | undefined): string | undefined {
+  if (a === undefined) return b;
+  if (b === undefined) return a;
+  return `${a} · ${b}`;
+}
