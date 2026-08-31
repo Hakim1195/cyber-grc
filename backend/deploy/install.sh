@@ -405,8 +405,8 @@ BASE_NOM="$(lire_variable BASE_NOM)";    BASE_NOM="${BASE_NOM:-cyber_grc}"
 ROLE_APP="$(lire_variable BASE_UTILISATEUR)";                    ROLE_APP="${ROLE_APP:-grc_app}"
 ROLE_PROPRIETAIRE="$(lire_variable BASE_UTILISATEUR_PROPRIETAIRE)"
 ROLE_PROPRIETAIRE="${ROLE_PROPRIETAIRE:-grc_proprietaire}"
-# BASE_UTILISATEUR_LECTURE n'existe pas encore dans .env.example (fichier réservé à
-# l'orchestrateur) : la valeur du §14 des CONVENTIONS sert de défaut.
+# Le défaut du §14 des CONVENTIONS sert de filet si la clé manque au fichier de
+# configuration (installations antérieures à son ajout à .env.example).
 ROLE_LECTURE="$(lire_variable BASE_UTILISATEUR_LECTURE)";        ROLE_LECTURE="${ROLE_LECTURE:-grc_lecture}"
 
 valider_identifiant BASE_NOM "$BASE_NOM"
@@ -570,6 +570,55 @@ proprietaire_base() {
     "$(litteral "$BASE_NOM")" | sql_admin
 }
 
+# Marche à suivre manuelle, imprimée partout où la reprise automatique ne s'applique
+# pas. Elle vit à UN SEUL endroit, et c'est délibéré : la version imprimée était une
+# recopie de la version automatique, les deux ont divergé, et le « revoke » sur
+# migrations_schema a disparu de la copie sans que personne ne le voie. Deux recettes
+# finissent toujours par ne plus dire la même chose ; il n'y en a plus qu'une.
+#
+#   $1  propriétaire actuel de la base
+#   $2  « reassign » (version courte) ou « objet » (sans « reassign owned », quand ce
+#       propriétaire possède d'autres bases du cluster — voir le garde-fou plus bas)
+imprimer_reparation_manuelle() {
+  local actuel="$1" mode="${2:-reassign}"
+  alerte "     alter database $BASE_NOM owner to $ROLE_PROPRIETAIRE;"
+  alerte "     \\c $BASE_NOM"
+  if [[ "$mode" == "objet" ]]; then
+    alerte "     -- objet par objet, SANS « reassign owned » :"
+    alerte "     do \$\$ declare r record; begin"
+    alerte "       for r in select c.oid::regclass::text n, c.relkind k from pg_class c"
+    alerte "                  join pg_namespace s on s.oid = c.relnamespace"
+    alerte "                 where s.nspname = 'public' and c.relkind in ('r','p','v','m','S')"
+    alerte "                   and pg_get_userbyid(c.relowner) = '$actuel'"
+    alerte "       loop execute format('alter %s %s owner to $ROLE_PROPRIETAIRE',"
+    alerte "              case r.k when 'S' then 'sequence' when 'v' then 'view'"
+    alerte "                       when 'm' then 'materialized view' else 'table' end, r.n);"
+    alerte "       end loop; end \$\$;"
+  else
+    alerte "     reassign owned by $actuel to $ROLE_PROPRIETAIRE;"
+  fi
+  alerte "     grant select, insert, update, delete on all tables in schema public to $ROLE_APP;"
+  alerte "     -- les deux « revoke » suivants viennent APRÈS le « grant » ci-dessus,"
+  alerte "     -- jamais avant : dans l'autre ordre le « grant » les annule."
+  alerte "     revoke update, delete, truncate on journal_audit from $ROLE_APP;"
+  alerte "     revoke insert, update, delete, truncate on migrations_schema from $ROLE_APP;"
+  alerte "     -- et les déclencheurs du journal, qu'une base possédée par le compte du"
+  alerte "     -- service a pu voir désarmés (§12, couche 3) :"
+  alerte "     do \$\$ declare d text; begin"
+  alerte "       for d in select tgname from pg_trigger"
+  alerte "                 where tgrelid = 'public.journal_audit'::regclass and not tgisinternal"
+  alerte "       loop execute format('alter table journal_audit enable always trigger %I', d);"
+  alerte "       end loop; end \$\$;"
+  alerte ""
+  alerte "  Ces deux tables sont les seules que les migrations ferment nommément au"
+  alerte "  compte du service : journal_audit (ajout seul, db/CONVENTIONS.md §12) et"
+  alerte "  migrations_schema (garde-fou d'empreinte, 004_rls.sql §1). En oublier une"
+  alerte "  rend inopérant le contrôle qu'elle porte."
+  alerte ""
+  alerte "  Relancez ensuite « bash install.sh --seulement-base » : les contrôles de"
+  alerte "  sécurité diront si la réparation est complète."
+}
+
 BASE_EXISTE="$(printf "select 1 from pg_database where datname = '%s';\n" "$(litteral "$BASE_NOM")" | sql_admin)"
 
 if [[ "$BASE_EXISTE" != "1" ]]; then
@@ -602,24 +651,15 @@ select string_agg(datname, ', ' order by datname)
    and datname <> '$(litteral "$BASE_NOM")';
 SQL
 )"
-    [[ -z "$AUTRES_BASES" ]] || echec \
-      "« $PROPRIETAIRE_ACTUEL » possède d'autres bases sur ce cluster : $AUTRES_BASES
-      La reprise emploie « reassign owned », qui déplace aussi les objets partagés :
-      ces bases changeraient de propriétaire elles aussi, sans que rien ne le demande.
-      Reprenez la propriété à la main, base par base, en superutilisateur PostgreSQL :
-        alter database $BASE_NOM owner to $ROLE_PROPRIETAIRE;
-        \\c $BASE_NOM
-        -- objet par objet, sans « reassign owned » :
-        do \$\$ declare r record; begin
-          for r in select c.oid::regclass::text n, c.relkind k from pg_class c
-                     join pg_namespace s on s.oid = c.relnamespace
-                    where s.nspname = 'public' and c.relkind in ('r','p','v','m','S')
-                      and pg_get_userbyid(c.relowner) = '$PROPRIETAIRE_ACTUEL'
-          loop execute format('alter %s %s owner to $ROLE_PROPRIETAIRE',
-                 case r.k when 'S' then 'sequence' when 'v' then 'view'
-                          when 'm' then 'materialized view' else 'table' end, r.n);
-          end loop; end \$\$;
-      puis relancez « bash install.sh --seulement-base »."
+    if [[ -n "$AUTRES_BASES" ]]; then
+      alerte "« $PROPRIETAIRE_ACTUEL » possède d'autres bases sur ce cluster : $AUTRES_BASES"
+      alerte "La reprise emploie « reassign owned », qui déplace aussi les objets partagés :"
+      alerte "ces bases changeraient de propriétaire elles aussi, sans que rien ne le demande."
+      alerte ""
+      alerte "  Reprenez la propriété à la main, en superutilisateur PostgreSQL :"
+      imprimer_reparation_manuelle "$PROPRIETAIRE_ACTUEL" objet
+      echec "Reprise automatique refusée : elle emporterait d'autres bases du cluster."
+    fi
 
     printf "alter database %s owner to %s;\n" "$BASE_NOM" "$ROLE_PROPRIETAIRE" | sql_admin
     # `reassign owned` s'exécute DANS la base concernée, et ne déplace que la
@@ -705,29 +745,7 @@ SQL
     alerte "  2. reprise automatique      bash install.sh --reprendre-propriete"
     alerte ""
     alerte "  ou, à la main, en superutilisateur PostgreSQL :"
-    alerte "     alter database $BASE_NOM owner to $ROLE_PROPRIETAIRE;"
-    alerte "     \\c $BASE_NOM"
-    alerte "     reassign owned by $PROPRIETAIRE_ACTUEL to $ROLE_PROPRIETAIRE;"
-    alerte "     grant select, insert, update, delete on all tables in schema public to $ROLE_APP;"
-    alerte "     -- les deux « revoke » suivants viennent APRÈS le « grant » ci-dessus,"
-    alerte "     -- jamais avant : dans l'autre ordre le « grant » les annule."
-    alerte "     revoke update, delete, truncate on journal_audit from $ROLE_APP;"
-    alerte "     revoke insert, update, delete, truncate on migrations_schema from $ROLE_APP;"
-    alerte "     -- et les déclencheurs du journal, qu'une base possédée par le compte du"
-    alerte "     -- service a pu voir désarmés (§12, couche 3) :"
-    alerte "     do \$\$ declare d text; begin"
-    alerte "       for d in select tgname from pg_trigger"
-    alerte "                 where tgrelid = 'public.journal_audit'::regclass and not tgisinternal"
-    alerte "       loop execute format('alter table journal_audit enable always trigger %I', d);"
-    alerte "       end loop; end \$\$;"
-    alerte ""
-    alerte "  Ces deux tables sont les seules que les migrations ferment nommément au"
-    alerte "  compte du service : journal_audit (ajout seul, db/CONVENTIONS.md §12) et"
-    alerte "  migrations_schema (garde-fou d'empreinte, 004_rls.sql §1). En oublier une"
-    alerte "  rend inopérant le contrôle qu'elle porte."
-    alerte ""
-    alerte "  Dans les deux cas, relancez ensuite « bash install.sh --seulement-base » :"
-    alerte "  les contrôles de sécurité diront si la réparation est complète."
+    imprimer_reparation_manuelle "$PROPRIETAIRE_ACTUEL"
     alerte "════════════════════════════════════════════════════════════════════"
     echec "Propriété de la base non conforme — installation interrompue."
   fi
