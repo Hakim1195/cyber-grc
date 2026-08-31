@@ -731,7 +731,12 @@ create table documents (
     cree_par         text        not null default f_utilisateur_courant(),
     modifie_le       timestamptz,
     modifie_par      text,
+    -- Portée de la ligne, ENGENDRÉE : « vrai » = document du socle Groupe. Sa seule
+    -- raison d'être est d'offrir à document_referentiels un couple référençable qui,
+    -- contrairement à (id, filiale_id), n'est JAMAIS nul — voir §10 bis, plus bas.
+    portee_groupe   boolean generated always as (filiale_id is null) stored,
     constraint pk_documents         primary key (id),
+    constraint uq_documents_id_portee unique (id, portee_groupe),
     -- Cible de la clé étrangère composite de document_referentiels. (id) étant déjà la
     -- clé primaire, cette unicité n'ajoute aucune contrainte métier : elle rend
     -- seulement le couple référençable.
@@ -784,16 +789,37 @@ create table document_referentiels (
     filiale_id  id_metier,
     cree_le     timestamptz not null default now(),
     cree_par    text        not null default f_utilisateur_courant(),
+    -- Même colonne engendrée que chez le parent, et pour la même raison.
+    portee_groupe boolean generated always as (filiale_id is null) stored,
     constraint pk_document_referentiels primary key (document_id, ref_id),
-    constraint fk_document_referentiels_document foreign key (document_id)
-        references documents(id) on delete cascade,
-    -- Cohérence de cloisonnement : quand le lien porte une filiale, c'est CELLE du
-    -- document. Vérification effective dès que filiale_id est renseigné ; quand il est
-    -- nul (document de niveau Groupe), la règle de correspondance des clés étrangères
-    -- laisse passer — d'où la clé étrangère simple ci-dessus, qui garantit dans TOUS
-    -- les cas l'existence du document et la cascade.
+    -- ── DEUX CLÉS ÉTRANGÈRES, ET IL EN FAUT DEUX ────────────────────────────────────
+    --
+    -- La règle de correspondance par défaut (« match simple ») neutralise une clé
+    -- composite dès que L'UNE de ses colonnes est nulle. La clé de cohérence ci-dessous
+    -- vérifie donc effectivement l'égalité des filiales quand filiale_id est RENSEIGNÉ,
+    -- et ne vérifie plus rien quand il est nul — c'est-à-dire précisément pour les lignes
+    -- de portée Groupe.
+    --
+    -- Cet angle mort a été relevé au second passage de la porte de sécurité S1 (constat
+    -- N-10) : avec le drapeau d'administration, une ligne de portée GROUPE pouvait
+    -- désigner un document LOCAL d'une filiale, et la suppression ordinaire de ce
+    -- document par sa filiale emportait alors, en cascade, une ligne de portée Groupe.
+    --
+    -- La clé de PORTÉE ci-dessous ferme le cas symétrique : portee_groupe est engendrée
+    -- et n'est JAMAIS nulle, la vérification a donc toujours lieu. Les deux clés
+    -- ensemble épinglent filiale_id dans les deux cas :
+    --   - filiale_id renseigné -> fk_..._coherence impose documents.filiale_id égal ;
+    --   - filiale_id nul       -> fk_..._portee impose documents.filiale_id nul aussi.
+    --
+    -- Elle remplace la clé étrangère simple qui existait ici : celle-ci ne garantissait
+    -- que l'existence du document et la cascade, ce que la clé de portée fait aussi — en
+    -- vérifiant une chose de plus. Déclaratif, et donc AVEUGLE À LA RLS : c'est ce qui
+    -- compte, un déclencheur « security invoker » ne verrait pas le document d'une autre
+    -- filiale et conclurait à tort.
+    constraint fk_document_referentiels_portee foreign key (document_id, portee_groupe)
+        references documents (id, portee_groupe) on delete cascade,
     constraint fk_document_referentiels_coherence foreign key (document_id, filiale_id)
-        references documents(id, filiale_id) on delete cascade,
+        references documents (id, filiale_id) on delete cascade,
     constraint fk_document_referentiels_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
     constraint ck_document_referentiels_ref check (ref_id <> '')

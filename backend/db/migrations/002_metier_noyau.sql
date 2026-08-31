@@ -283,6 +283,31 @@ create table mesure_catalogue (
     nom         text        not null,
     description text,
     domaine     text,
+    -- ── ÉTAT DE CYCLE DE VIE (CONVENTIONS.md §17.6) ──────────────────────────────────
+    -- Ajouté au second passage de la porte de sécurité S1 (constat N-6). Le §17.6 pose
+    -- qu'un contrôle qu'une filiale a déjà évalué « ne disparaît pas : il s'archive » —
+    -- et le « restrict » des quatre références au catalogue le rend effectivement
+    -- indestructible. Mais l'issue promise n'existait nulle part dans le schéma :
+    -- l'administration Groupe se retrouvait devant un refus SANS ISSUE, ni supprimer, ni
+    -- retirer du service. Un exploitant qui suit le document cherchait le bouton
+    -- « archiver », ne le trouvait pas, et finissait par supprimer les mises en oeuvre
+    -- des vingt filiales — exactement ce que le « restrict » existe pour éviter. C'est la
+    -- règle du §17.5 (ne pas prêter à un garde-fou plus de portée qu'il n'en a),
+    -- appliquée cette fois au document normatif lui-même.
+    --
+    -- CE QUE LA BASE GARANTIT ICI, ET RIEN DE PLUS : l'état, sa date, et leur cohérence
+    -- mutuelle. Une mesure archivée reste LISIBLE et reste RATTACHÉE à tout ce qui la
+    -- référence — c'est le point : la preuve historique survit, et une évaluation d'il y
+    -- a deux ans continue de désigner le contrôle qu'elle visait.
+    --
+    -- CE QUI N'EST PAS ICI, DÉLIBÉRÉMENT : « ne plus être proposée pour de nouvelles
+    -- évaluations » est une règle APPLICATIVE. Un déclencheur qui refuserait un nouveau
+    -- lien vers une mesure archivée casserait la reprise d'un export grc-backup portant
+    -- des liens légitimes vers un contrôle archivé depuis, et rendrait l'archivage
+    -- destructif par un autre chemin. La base dit l'état ; la couche métier en tire les
+    -- conséquences dans les écrans de saisie.
+    statut      text        not null default 'active',
+    archive_le  timestamptz,
     version     integer     not null default 1,
     cree_le     timestamptz not null default now(),
     cree_par    text        not null default f_utilisateur_courant(),
@@ -292,7 +317,13 @@ create table mesure_catalogue (
     constraint fk_mesure_catalogue_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
     constraint ck_mesure_catalogue_nom     check (nom <> ''),
-    constraint ck_mesure_catalogue_ref     check (reference is null or reference <> '')
+    constraint ck_mesure_catalogue_ref     check (reference is null or reference <> ''),
+    constraint ck_mesure_catalogue_statut  check (statut in ('active', 'archivee')),
+    -- L'état et sa date sont indissociables : une mesure archivée sans date d'archivage
+    -- ne se date plus après coup, et une date d'archivage sur une mesure active est une
+    -- incohérence silencieuse. L'équivalence, et non une simple implication, ferme les
+    -- deux sens.
+    constraint ck_mesure_catalogue_archive check ((statut = 'archivee') = (archive_le is not null))
 );
 
 -- Unicité de la référence, séparément pour le socle Groupe et pour chaque filiale.
@@ -308,6 +339,10 @@ create unique index uq_mesure_catalogue_reference_locale
     where filiale_id is not null and reference is not null;
 
 create index ix_mesure_catalogue_filiale on mesure_catalogue (filiale_id, nom);
+-- Le catalogue est lu à chaque écran de saisie pour proposer les contrôles disponibles :
+-- cet index partiel sert exactement cette requête, et ne grossit pas avec les archivées.
+create index ix_mesure_catalogue_actives on mesure_catalogue (filiale_id, nom)
+    where statut = 'active';
 
 create trigger trg_mesure_catalogue_maj before update on mesure_catalogue
     for each row execute function f_maj_tracabilite();
@@ -322,6 +357,18 @@ comment on table mesure_catalogue is
 comment on column mesure_catalogue.filiale_id is
     'Null = mesure du socle Groupe, applicable partout ; renseigné = mesure LOCALE à une '
     'filiale. Voir la justification du caractère nullable ci-dessus.';
+comment on column mesure_catalogue.statut is
+    'Cycle de vie du contrôle (CONVENTIONS.md §17.6) : "active" = proposé pour de nouvelles '
+    'évaluations ; "archivee" = retiré du service, mais TOUJOURS LISIBLE et TOUJOURS RATTACHÉ à '
+    'ce qui le référence. C''est l''issue que le "restrict" des quatre références suppose : un '
+    'contrôle qu''une filiale a déjà évalué ne se supprime pas, il s''archive — et la preuve '
+    'historique survit. Le filtrage des écrans de saisie est une règle APPLICATIVE, pas un '
+    'déclencheur : le forcer en base casserait la reprise d''un export portant des liens '
+    'légitimes vers un contrôle archivé depuis.';
+comment on column mesure_catalogue.archive_le is
+    'Date de retrait du service, indissociable du statut par ck_mesure_catalogue_archive. Un '
+    'archivage sans date ne se date plus après coup, et c''est cette date que l''auditeur ISO '
+    '27001 demande quand un contrôle du référentiel n''est plus proposé.';
 comment on column mesure_catalogue.reference is
     'Référence courte et stable du contrôle (ex. « MES-CHIFF-01 »), facultative. Unique au '
     'sein du socle Groupe, et unique au sein de chaque filiale pour les mesures locales.';
@@ -385,6 +432,12 @@ create table mesure_mise_en_oeuvre (
     -- pas. Ce qui change, c'est qu'un contrôle partagé et DÉJÀ ÉVALUÉ par une filiale ne
     -- peut plus s'évaporer : il s'archive. C'est aussi ce qu'attend un auditeur ISO 27001,
     -- pour qui la disparition sans trace d'un contrôle du référentiel est un constat.
+    --
+    -- « IL S'ARCHIVE » N'EST PLUS UNE FIGURE DE STYLE : mesure_catalogue.statut et
+    -- archive_le (§4 de ce fichier) portent le mécanisme. Ils ont été ajoutés au second
+    -- passage de la porte S1 (constat N-6) : la promesse d'archivage était écrite ici et
+    -- au CONVENTIONS §17.6 sans qu'aucune colonne ne la rende possible, si bien que
+    -- l'administration Groupe se retrouvait devant un refus sans issue.
     --
     -- Les trois cas, tels que le §17.6 les fixe et que le banc d'essai les éprouve :
     --   - mesure LOCALE d'une filiale ....... supprimable par elle, après déliage ; son

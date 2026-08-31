@@ -294,6 +294,34 @@ comment on function f_filiales_lecture() is
 -- -------------------------------------------------------------------------------------
 -- Filiale d'ÉCRITURE, exigée. On n'écrit que dans la filiale ACTIVE (CONVENTIONS §11),
 -- et il n'existe aucune écriture légitime de donnée de filiale sans filiale active.
+--
+-- ── DEUX CONDITIONS, ET LA SECONDE MANQUAIT (CONVENTIONS.md §17.9) ──────────────────
+--
+-- 1. La filiale active est POSÉE. Sans elle, il n'y a rien à écrire nulle part.
+-- 2. La filiale active APPARTIENT AU PÉRIMÈTRE DE LECTURE. C'est la condition ajoutée
+--    à la suite du second passage de la porte de sécurité S1 (constat bloquant N-1).
+--
+-- Sans la seconde, « grc.filiale_id » et « grc.filiales » étaient deux réglages
+-- INDÉPENDANTS : une session déclarant un périmètre de lecture FIL-A et une filiale
+-- active FIL-B écrivait chez B — une filiale qu'elle ne lisait même pas. Rejoué à la
+-- porte S1 : création d'un risque chez B, puis d'une entrée de journal attribuée à un
+-- utilisateur de B, NUMÉROTÉE, HORODATÉE PAR LE SERVEUR, CHAÎNÉE ET SCELLÉE — donc
+-- indiscernable d'une entrée authentique pour l'auditeur qui vérifiera la chaîne. Le
+-- mécanisme d'inaltérabilité garantissait alors l'intégrité d'une fausse preuve.
+--
+-- POURQUOI DANS LA BASE ALORS QUE LE CODE LE VÉRIFIE DÉJÀ. Le contrôle existait, une
+-- seule fois, dans src/db/pool.ts (validerPerimetre). Or le PLAN_SERVEUR §1.9 pose que
+-- « un oubli de filtre dans le code ne peut pas provoquer de fuite inter-filiales » : la
+-- RLS est le filet SOUS le code, pas sa doublure. Un filet dont la seule maille est dans
+-- le code qu'il est censé rattraper n'est pas un filet.
+--
+-- Règle générale qui en découle (§17.9) : deux réglages de session qui doivent être
+-- cohérents entre eux sont recoupés PAR LA BASE, jamais seulement par le code qui les
+-- pose.
+--
+-- AUCUN FLUX LÉGITIME N'EN SOUFFRE, et c'est vérifiable : un périmètre système n'a pas de
+-- filiale active et échoue déjà sur la première condition ; une administration Groupe qui
+-- retire un contrôle du socle (§17.6) bascule entre des filiales DE son périmètre.
 -- -------------------------------------------------------------------------------------
 create or replace function f_filiale_ecriture() returns text
     language plpgsql stable
@@ -313,14 +341,34 @@ begin
                          'Voir backend/db/CONVENTIONS.md §11 et §15.';
     end if;
 
+    -- f_filiales_autorisees() et non f_filiales_lecture() : cette dernière lève sur un
+    -- périmètre JAMAIS posé, avec un message qui parle de lecture. Ici, le défaut à
+    -- nommer est l'incohérence entre les deux réglages, et le message doit le dire —
+    -- y compris quand grc.filiales n'a pas été posé du tout, cas où le tableau est vide
+    -- et où la condition échoue donc aussi, ce qui est le bon comportement : sans
+    -- périmètre de lecture déclaré, il n'y a de filiale d'écriture légitime nulle part.
+    if not (v_filiale = any (f_filiales_autorisees())) then
+        raise exception
+            'Filiale active % hors du périmètre lisible de la session : on n''écrit pas dans '
+            'une filiale que l''on ne lit pas.', v_filiale
+            using errcode = 'GRC04',
+                  hint = 'grc.filiale_id doit figurer dans grc.filiales. Les deux réglages '
+                         'viennent de la SESSION SERVEUR et sont résolus ensemble ; les poser '
+                         'séparément est un défaut de programmation. '
+                         'Voir backend/db/CONVENTIONS.md §11, §15 et §17.9.';
+    end if;
+
     return v_filiale;
 end;
 $$;
 
 comment on function f_filiale_ecriture() is
-    'Filiale ACTIVE de la transaction, EXIGÉE : f_filiale_courante() qui lève GRC04 au lieu de '
-    'rendre null. Employée dans toutes les politiques d''écriture des tables cloisonnées, pour '
-    'qu''un périmètre oublié échoue bruyamment au lieu de refuser en silence.';
+    'Filiale ACTIVE de la transaction, EXIGÉE, et vérifiée APPARTENIR au périmètre de lecture '
+    '(CONVENTIONS.md §17.9) : f_filiale_courante() qui lève GRC04 au lieu de rendre null, plus '
+    'le recoupement avec f_filiales_autorisees(). Employée dans toutes les politiques d''écriture '
+    'des tables cloisonnées, pour qu''un périmètre oublié — ou incohérent — échoue bruyamment au '
+    'lieu de refuser en silence. Sans le recoupement, une session lisant FIL-A et déclarant '
+    'FIL-B active écrivait chez B, journal d''audit scellé compris.';
 
 -- -------------------------------------------------------------------------------------
 -- Le SEUL réglage d'administration du cloisonnement.
@@ -456,7 +504,7 @@ begin
                   hint = 'Une ligne de portée Groupe (filiale_id nul) est le socle commun de '
                          'toutes les filiales ; une ligne locale appartient à la sienne. Pour '
                          'changer de portée, créez une nouvelle ligne et retirez l''ancienne. '
-                         'Voir backend/db/CONVENTIONS.md §17.1 et le §4 de cette migration.';
+                         'Voir backend/db/CONVENTIONS.md §17.6 et le §4 de cette migration.';
     end if;
     return new;
 end;
@@ -1128,14 +1176,26 @@ comment on policy pol_import_erreurs_lecture on import_erreurs is
 --     domaines « droits », « filiales », « parametres », « journal » sont réservés au
 --     profil Administrateur (PLAN_SERVEUR §3.2) ;
 --   - les privilèges SQL (§1 et CONVENTIONS §14) ;
---   - et, depuis la porte de sécurité S1 (constat M-2), pour les QUATRE TABLES DE
---     CONFIGURATION (utilisateurs, profils, profil_domaines, groupes_ad) : une politique
---     d'ÉCRITURE réservée à l'administration Groupe. L'arbitrage d'origine — « ce n'est
---     pas la RLS qui les protège » — se défend pour « mappings » ou « filiales ». Il
---     était CIRCULAIRE pour les tables qui PRODUISENT la décision d'autorisation : le
---     contrôle applicatif décide des droits en les lisant, et elles étaient intégralement
---     réinscriptibles par le rôle qui exécute ce contrôle. Il n'y avait plus de défense en
---     profondeur, seulement une couche.
+--   - et, depuis la porte de sécurité S1, pour les CINQ TABLES DE CONFIGURATION
+--     (utilisateurs, profils, profil_domaines, groupes_ad au premier passage — constat
+--     M-2 ; filiales au second — constat N-2) : une politique d'ÉCRITURE réservée à
+--     l'administration Groupe. L'arbitrage d'origine — « ce n'est pas la RLS qui les
+--     protège » — se défend pour « mappings ». Il était CIRCULAIRE pour les tables qui
+--     PRODUISENT la décision d'autorisation : le contrôle applicatif décide des droits en
+--     les lisant, et elles étaient intégralement réinscriptibles par le rôle qui exécute
+--     ce contrôle. Il n'y avait plus de défense en profondeur, seulement une couche.
+--     Et il était simplement FAUX pour « filiales », qui définit la frontière même du
+--     cloisonnement : n'importe quelle filiale renommait, archivait ou créait les autres.
+--
+-- CE QUE CETTE RÉSERVE EST, ET CE QU'ELLE N'EST PAS (CONVENTIONS.md §17.4). Le drapeau
+-- « grc.administration_groupe » est une DÉCLARATION QUE LA SESSION FAIT SUR ELLE-MÊME,
+-- pas un privilège : le rôle applicatif le pose lui-même, et rien dans la base ne l'en
+-- empêche. Il protège donc contre la FAUTE DE PROGRAMMATION — une écriture Groupe par un
+-- chemin qui ne l'a pas déclarée — et pas du tout contre un rôle applicatif compromis,
+-- qui poserait le drapeau avant d'écrire. La barrière réelle est le modèle de droits à
+-- trois axes du lot L3, qui décide si la session a le profil Administration et le
+-- périmètre Groupe AVANT de poser le drapeau. Dit ici, à l'endroit où la réserve est
+-- posée, pour que la porte S3 n'hérite pas d'une protection qu'elle croirait acquise.
 --
 -- Trois d'entre elles portent pourtant un filiale_id, et leur ouverture est une
 -- DÉROGATION assumée, inscrite dans la liste du §2 (f_verifier_couverture_rls) :
@@ -1164,14 +1224,14 @@ comment on policy pol_import_erreurs_lecture on import_erreurs is
 -- CE QUI RESTE OUVERT, ET POURQUOI C'EST ÉCRIT ICI ET NON AILLEURS. Les trois tables de
 -- session sont écrites, par construction, par la couche qui n'a pas encore de périmètre :
 -- ce sont elles qui le PRODUISENT. Leur fermeture est REPORTÉE AU LOT L3, dont c'est la
--- matière — voir le commentaire posé à l'endroit exact, plus bas.
+-- matière — voir le commentaire posé à l'endroit exact, plus bas. Les deux tables de
+-- correspondances restent ouvertes aussi, pour de tout autres raisons, arbitrées et
+-- écrites au même endroit.
 do $$
 declare
     -- (a) Écriture ouverte au rôle applicatif.
     v_ouvertes constant text[] := array[
         'migrations_schema',  -- registre technique ; écriture fermée à grc_app par les privilèges
-        'filiales',           -- la liste des filiales du groupe n'est pas une donnée de filiale,
-                              -- et l'authentification la lit avant tout périmètre
         -- Les trois tables de SESSION. Leur écriture reste ouverte SANS CONDITION, et c'est
         -- un REPORT EXPLICITE AU LOT L3 (CONVENTIONS.md §17.4), pas un oubli :
         --   - ce sont ces tables qui PRODUISENT le périmètre et la décision d'autorisation.
@@ -1186,8 +1246,32 @@ declare
         --     parade actuelle est le contrôle S5 — requêtes intégralement paramétrées,
         --     vérifié à la porte S1. Cette dette est une CONDITION D'ENTRÉE du lot L3.
         'sessions', 'session_filiales', 'session_domaines',
-        'mappings', 'mapping_exigences'  -- correspondances inter-référentiels : niveau Groupe,
-                                         -- vraies partout, définies une fois (CONVENTIONS §16.4)
+        -- ── mappings / mapping_exigences : ARBITRÉ, et voici la décision ──────────────
+        -- Le second passage de la porte S1 a demandé que ce cas soit tranché par écrit
+        -- plutôt que déduit. Ces deux tables RESTENT ouvertes en écriture, pour trois
+        -- raisons qui ne valent QUE pour elles :
+        --   1. leur contenu n'est pas une donnée de filiale et n'en devient jamais une :
+        --      une correspondance « ANSSI 12 ↔ ISO A.8.7 » est vraie partout, ne cite
+        --      aucune donnée métier, et sa divulgation n'apprend rien sur personne ;
+        --   2. c'est un contenu ÉDITÉ EN FONCTIONNEMENT COURANT. Le module
+        --      « Correspondances » du produit (js/modules/mapping.js) permet de créer,
+        --      modifier, masquer et réinitialiser cette surcouche ; la réserver à
+        --      l'administration Groupe supprimerait une fonctionnalité livrée, sans que
+        --      personne l'ait arbitré. La différence avec « filiales », « profils » ou
+        --      « utilisateurs » est là : celles-là ne sont pas écrites au fil de l'eau ;
+        --   3. aucun chemin d'intégrité ne les relie à une table de niveau filiale —
+        --      mapping_exigences ne référence que mappings, et l'autre extrémité est le
+        --      couple (ref_id, code) d'un catalogue statique hors base. La pathologie du
+        --      constat B-1 (une suppression ici modifiant les lignes d'une filiale) est
+        --      donc structurellement impossible, et le balayage du banc d'essai le
+        --      vérifie.
+        -- CE QUI RESTE VRAI, ET QUI DOIT ÊTRE DIT : une filiale peut modifier, pour les
+        -- dix-neuf autres, un catalogue partagé. C'est un enjeu de GOUVERNANCE, pas de
+        -- cloisonnement, et sa réponse est le domaine fonctionnel « correspondances » du
+        -- modèle de droits à trois axes (PLAN_SERVEUR §3.2), à réserver à un profil de
+        -- niveau Groupe au lot L3. Un test épingle cette décision : il tombera le jour où
+        -- quelqu'un la changera sans la réécrire ici.
+        'mappings', 'mapping_exigences'
     ];
     -- (b) Écriture réservée à l'administration Groupe (CONVENTIONS §17.4).
     v_configuration constant text[] := array[
@@ -1195,8 +1279,26 @@ declare
                               -- passera par le réglage d'authentification du lot L3
         'profils',            -- définition des profils métier (PLAN_SERVEUR §3.2)
         'profil_domaines',    -- niveau de droit d'un profil sur un domaine fonctionnel
-        'groupes_ad'          -- aiguillage d'authentification : lu AVANT tout périmètre,
+        'groupes_ad',         -- aiguillage d'authentification : lu AVANT tout périmètre,
                               -- d'où la lecture ouverte, mais écrit par l'administration seule
+        -- ── filiales : déplacée ici au second passage de la porte S1 (constat N-2) ────
+        -- Elle figurait parmi les tables ouvertes, avec un motif — « l'authentification la
+        -- lit avant tout périmètre » — qui ne justifiait QUE LA LECTURE. L'écriture, elle,
+        -- était ouverte sans condition à n'importe quelle filiale, sur les quatre verbes.
+        -- Rejoué à la porte S1, depuis un périmètre strictement FIL-A : renommer FIL-B,
+        -- l'archiver, créer une filiale, en supprimer une — et, par
+        -- filiales.logo_piece_jointe_id qui pointe une table de NIVEAU FILIALE, poser son
+        -- propre fichier comme logo de FIL-B puis le supprimer, ce qui remettait à null le
+        -- logo de B en incrémentant sa version et en y inscrivant « modifie_par = alice ».
+        -- La pathologie exacte du constat bloquant B-1, par un chemin que son balayage ne
+        -- pouvait pas voir : filiales ne porte pas de filiale_id.
+        --
+        -- C'est pourtant la table la plus sensible du schéma : elle porte l'IDENTITÉ de
+        -- chaque filiale (raison sociale, logo — lot L9), son STATUT de cycle de vie
+        -- (active / archivee / sortie — lot L13, purges RGPD), et surtout elle DÉFINIT LA
+        -- FRONTIÈRE de tout le cloisonnement. Elle est au moins autant une table de
+        -- paramétrage que les quatre ci-dessus.
+        'filiales'
     ];
     t text;
 begin
@@ -1285,10 +1387,23 @@ $$;
 -- Ces deux fonctions appartiennent au socle (001) et ne sont pas redéfinies ici.
 --
 -- CE QUI COMPENSE, et ce qui reste :
---   - l'ÉCRITURE, elle, est cloisonnée : une entrée ne peut être attribuée qu'à une
---     filiale du périmètre de la session, ou à aucune (événement transversal, ou
---     antérieur à la résolution du périmètre — échec de connexion). Personne ne peut
---     donc fabriquer de preuve dans le registre d'une autre filiale.
+--   - l'ÉCRITURE, elle, est cloisonnée : une entrée ne peut être attribuée qu'à la
+--     FILIALE ACTIVE de la session, ou à aucune (événement transversal, ou antérieur à
+--     la résolution du périmètre — échec de connexion). Ce commentaire a dit deux
+--     choses fausses avant de dire celle-ci, et les deux comptent :
+--       * il parlait du périmètre de LECTURE, alors que le §11 exige la filiale ACTIVE
+--         — corrigé au premier passage de la porte S1 (constat m-4) ;
+--       * il affirmait ensuite que « personne ne peut fabriquer de preuve dans le
+--         registre d'une autre filiale », alors que rien ne vérifiait que la filiale
+--         active appartenait au périmètre lisible : une session lisant FIL-A et
+--         déclarant FIL-B active écrivait chez B une entrée chaînée et scellée —
+--         corrigé au second passage (constat bloquant N-1, §17.9), par la condition
+--         d'appartenance de f_filiale_ecriture() (§2).
+--     Les deux conditions étant désormais tenues PAR LA BASE, l'affirmation est vraie :
+--     nul ne peut fabriquer de preuve dans le registre d'une filiale où il n'opère pas.
+--   - l'ACTEUR de l'entrée vient de la session, plus du client : f_journal_audit_chainage()
+--     (001) impose utilisateur_id = f_utilisateur_courant(), comme il impose déjà le
+--     numéro, l'horodatage et les empreintes (CONVENTIONS §17.8).
 --   - la consultation du journal est un DOMAINE fonctionnel à part (« journal »,
 --     PLAN_SERVEUR §3.2), réservé au profil Administrateur et vérifié côté serveur.
 --   - reste vrai, et doit être dit : un défaut de filtrage applicatif sur cette table
@@ -1367,7 +1482,10 @@ comment on policy pol_journal_audit_ajout on journal_audit is
     'connexion). Corrigé à la porte de sécurité S1 : elle suivait le périmètre de LECTURE, si '
     'bien qu''un compte de périmètre Groupe pouvait attribuer une trace à n''importe laquelle '
     'des filiales qu''il lit. '
-    'Nul ne peut donc fabriquer de preuve dans le registre d''une autre filiale. '
+    'Depuis le second passage de la porte S1, f_filiale_ecriture() vérifie en outre que cette '
+    'filiale active appartient au périmètre LISIBLE (CONVENTIONS.md §17.9) : sans quoi une '
+    'session lisant FIL-A et déclarant FIL-B active écrivait une entrée scellée chez B. '
+    'Nul ne peut donc fabriquer de preuve dans le registre d''une filiale où il n''opère pas. '
     'L''ajout seul, lui, ne relève pas des politiques mais des privilèges et des '
     'déclencheurs du socle (CONVENTIONS §12) — voir les politiques de modification et de '
     'suppression, ouvertes à dessein.';
@@ -1428,6 +1546,44 @@ create trigger trg_document_referentiels_portee_figee
 create trigger trg_documents_portee_figee
     before update on documents
     for each row execute function f_interdit_changement_portee();
+
+-- --- (c) les neuf déclencheurs du §7 sont armés en « always » ------------------------
+-- Constat N-11 du second passage de la porte S1 : ils étaient armés en « origin », alors
+-- que les trois du journal d'audit (001 §9) sont en « always ». Sans effet aujourd'hui —
+-- « session_replication_role » est refusé au rôle applicatif, vérifié aux deux passages,
+-- et le propriétaire de la base est hors modèle de menace (CONVENTIONS §12) — mais ces
+-- neuf déclencheurs portent désormais des garanties de CLOISONNEMENT opposables : la
+-- cohérence du catalogue de mesures et la portée figée des tables mixtes. Ce qui porte une
+-- garantie opposable s'arme comme tel, et l'écart avec le journal n'a pas de raison d'être.
+--
+-- Portée exacte, à ne pas surestimer : « always » ne change rien pour un attaquant qui ne
+-- peut déjà pas poser le réglage. Il ferme le cas du jour où une réplication logique, un
+-- outil de migration de données ou une reprise en masse basculerait la session en mode
+-- « replica » — et désarmerait alors, silencieusement, tout ce qui n'est pas « always ».
+do $$
+declare
+    v_declencheurs constant text[] := array[
+        'mesure_mise_en_oeuvre:trg_mesure_mise_en_oeuvre_coherence_mesure',
+        'evaluation_mesures:trg_evaluation_mesures_coherence_mesure',
+        'actions:trg_actions_coherence_mesure',
+        'traitement_mesures:trg_traitement_mesures_coherence_mesure',
+        'parametres:trg_parametres_portee_figee',
+        'mesure_catalogue:trg_mesure_catalogue_portee_figee',
+        'personnes:trg_personnes_portee_figee',
+        'document_referentiels:trg_document_referentiels_portee_figee',
+        'documents:trg_documents_portee_figee'
+    ];
+    d text;
+begin
+    foreach d in array v_declencheurs loop
+        execute format('alter table %I enable always trigger %I',
+                       split_part(d, ':', 1), split_part(d, ':', 2));
+    end loop;
+
+    raise notice 'Déclencheurs de cohérence et de portée : % armés en « always ».',
+                 array_length(v_declencheurs, 1);
+end;
+$$;
 
 -- =====================================================================================
 -- §8 — GARDE-FOU DE COUVERTURE

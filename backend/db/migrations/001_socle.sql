@@ -835,9 +835,17 @@ comment on column journal_audit.horodatage is
 comment on column journal_audit.filiale_id is
     'Nullable : un événement peut précéder la résolution du périmètre (échec de connexion) ou être '
     'transversal (démarrage du service, administration Groupe).';
+comment on column journal_audit.utilisateur_id is
+    'Acteur de l''événement, RÉSOLU PAR LE SERVEUR : le déclencheur de chaînage l''écrase par '
+    'grc.utilisateur (CONVENTIONS.md §17.8), et le met à null si ce dernier ne désigne aucun '
+    'compte connu — traitement système, ou événement antérieur à la résolution de l''identité. '
+    'Une valeur fournie par l''appelant est toujours ignorée : la valeur probante d''une trace ne '
+    'se déclare pas.';
 comment on column journal_audit.utilisateur_libelle is
     'Identité telle que connue au moment des faits. Doublure texte volontaire : la trace reste '
-    'lisible même si le compte est supprimé, et couvre l''échec de connexion sur un compte inconnu.';
+    'lisible même si le compte est supprimé, et couvre l''échec de connexion sur un compte '
+    'inconnu. FOURNI par l''appelant, à la différence de utilisateur_id : c''est un confort '
+    'd''affichage, pas la source de l''identité.';
 comment on column journal_audit.session_id is
     'Sans clé étrangère : les sessions sont purgées, le journal ne l''est pas.';
 comment on column journal_audit.valeurs_avant is
@@ -930,6 +938,30 @@ begin
     new.empreinte_precedente := v_precedent.empreinte;   -- null pour l'entrée de genèse
     new.horodatage           := clock_timestamp();
 
+    -- L'ACTEUR VIENT DE LA SESSION, PAS DU CLIENT (CONVENTIONS.md §17.8).
+    --
+    -- Ajouté au second passage de la porte de sécurité S1 (constat N-5). Le déclencheur
+    -- écrasait déjà le numéro, l'horodatage et les empreintes — tout ce qui fait qu'une
+    -- entrée ne se forge pas — mais laissait l'identité de l'acteur en saisie libre. La
+    -- seule table dont l'objet EST de faire preuve était donc la seule à croire son
+    -- appelant sur ce point. Un journal inaltérable dont l'acteur est déclaré par le
+    -- client garantit l'intégrité d'une fausse preuve : le mécanisme fonctionne
+    -- parfaitement, sur un contenu faux.
+    --
+    -- La valeur fournie par l'appelant est écrasée SANS CONDITION. Elle est remplacée par
+    -- l'identifiant de session lorsqu'il désigne un compte connu, et par null sinon —
+    -- « sinon » couvrant les écritures légitimes qui n'ont pas de compte derrière elles :
+    -- « systeme » (migrations, timers d'exploitation) et les événements antérieurs à la
+    -- résolution de l'identité (échec de connexion sur un compte inconnu). Mettre
+    -- l'identifiant tel quel violerait la clé étrangère vers utilisateurs et rendrait ces
+    -- écritures impossibles ; le libellé texte, lui, reste renseigné dans tous les cas.
+    --
+    -- utilisateur_libelle reste FOURNI par l'appelant, et c'est délibéré (§12) : c'est un
+    -- confort de lecture qui doit survivre à la disparition du compte. Il n'est plus la
+    -- source de l'identité, seulement son affichage.
+    new.utilisateur_id := (
+        select u.id from utilisateurs u where u.id = f_utilisateur_courant());
+
     new.empreinte := encode(sha256(convert_to(
         f_journal_audit_charge_utile(
             new.numero, new.id, new.horodatage, new.filiale_id,
@@ -944,7 +976,12 @@ end;
 $$;
 
 comment on function f_journal_audit_chainage() is
-    'Attribue numero, horodatage, empreinte_precedente et empreinte à chaque entrée de journal. '
+    'Attribue numero, horodatage, utilisateur_id, empreinte_precedente et empreinte à chaque '
+    'entrée de journal : TOUT ce qui fait la valeur probante d''une trace vient du serveur, jamais '
+    'de l''appelant (CONVENTIONS.md §17.8). utilisateur_id est résolu depuis grc.utilisateur et '
+    'vaut null si ce dernier ne désigne aucun compte connu (traitement système, échec de '
+    'connexion) ; utilisateur_libelle, lui, reste fourni — c''est un confort de lecture qui doit '
+    'survivre à la disparition du compte (§12). '
     'Sérialisé par pg_advisory_xact_lock(4718271936042001).';
 
 create trigger trg_journal_audit_chainage before insert on journal_audit
@@ -1095,6 +1132,11 @@ create table pieces_jointes (
     modifie_le         timestamptz,
     modifie_par        text,
     constraint pk_pieces_jointes         primary key (id),
+    -- Cible de la clé étrangère COMPOSITE du logo de filiale (§10, plus bas) : c'est ce
+    -- couple qui interdit à une filiale de poser son propre fichier comme logo d'une
+    -- autre. Même motif que le CONVENTIONS.md §17.1, à ceci près que le parent — filiales
+    -- — ne porte pas de colonne « filiale_id » : c'est son « id » QUI EST la filiale.
+    constraint uq_pieces_jointes_id_filiale unique (id, filiale_id),
     constraint uq_pieces_jointes_chemin  unique (chemin_stockage),
     constraint fk_pieces_jointes_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
@@ -1142,9 +1184,34 @@ comment on column pieces_jointes.etat_analyse is
 
 -- Le logo de filiale est une pièce jointe comme une autre : même chaîne de contrôle.
 -- Contrainte posée ici, la table n'existant pas au §5.
+--
+-- ── CLÉ ÉTRANGÈRE COMPOSITE (esprit du CONVENTIONS.md §17.1) ─────────────────────────
+--
+-- Le couple porte (logo_piece_jointe_id, id) et vise (id, filiale_id) : le fichier doit
+-- appartenir à LA FILIALE ELLE-MÊME. La particularité, qui explique la forme inhabituelle
+-- de la clé, est que « filiales » ne porte pas de colonne « filiale_id » — son « id » EST
+-- la filiale. Le motif du §17.1 s'applique donc avec « id » en second membre.
+--
+-- POURQUOI. Constat N-2 du second passage de la porte S1 : la filiale A déposait une
+-- pièce jointe CHEZ ELLE, la posait comme logo de la filiale B, puis supprimait son
+-- fichier — ce qui remettait à null le logo de B, incrémentait la version de la ligne de
+-- B et y inscrivait « modifie_par = alice ». C'est mot pour mot le constat bloquant B-1,
+-- sur un chemin que son balayage ne pouvait pas voir : « filiales » ne porte pas de
+-- filiale_id et sort donc du champ de f_verifier_couverture_rls().
+--
+-- L'écriture de « filiales » est par ailleurs réservée à l'administration Groupe depuis
+-- ce même constat (004_rls.sql §6). Les deux mesures sont cumulatives et aucune ne rend
+-- l'autre inutile : la première est une DÉCLARATION que la session fait sur elle-même
+-- (CONVENTIONS §17.4) et ne tient pas contre un rôle applicatif compromis ; celle-ci est
+-- une contrainte d'intégrité, que rien dans la session ne peut désarmer.
+--
+-- « set null (logo_piece_jointe_id) » et non « set null » tout court : la forme sans
+-- liste remettrait à null TOUTES les colonnes de la clé, « id » compris — la clé primaire
+-- de la filiale. La liste de colonnes existe depuis PostgreSQL 15, minimum exigé au §0.
 alter table filiales
-    add constraint fk_filiales_logo foreign key (logo_piece_jointe_id)
-        references pieces_jointes(id) on delete set null;
+    add constraint fk_filiales_logo foreign key (logo_piece_jointe_id, id)
+        references pieces_jointes (id, filiale_id)
+        on delete set null (logo_piece_jointe_id);
 
 -- =====================================================================================
 -- §11 — APPROBATIONS

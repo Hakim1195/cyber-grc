@@ -86,6 +86,12 @@ async function semer() {
     applicatif,
     perimetre('semeur', A, [A, B]),
     async (c) => {
+      // La création d'une filiale est une opération d'ADMINISTRATION GROUPE depuis le
+      // second passage de la porte S1 (constat N-2, CONVENTIONS §17.4) : « filiales » a
+      // rejoint les tables de configuration. Le semis devait donc changer — et le fait
+      // qu'il ait fallu le changer est exactement ce que l'auditeur a relevé : le banc
+      // d'essai reposait jusque-là sur la propriété défectueuse.
+      await c.query("select set_config('grc.administration_groupe', 'oui', true)");
       await c.query(
         `insert into filiales (id, code, raison_sociale, pays) values
              ($1, 'ZZESSA', 'Essai Toulouse', 'FR'),
@@ -93,8 +99,7 @@ async function semer() {
         [A, B],
       );
 
-      // Socle de niveau Groupe : son écriture EXIGE le réglage d'administration.
-      await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+      // Socle de niveau Groupe : son écriture EXIGE le même réglage, déjà posé.
       await c.query(
         `insert into mesure_catalogue (id, nom) values ('MESURE-G', 'Chiffrement des postes')`,
       );
@@ -1301,6 +1306,13 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
         'create trigger trg_mesure_catalogue_portee_figee before update on mesure_catalogue '
           + 'for each row execute function f_interdit_changement_portee()',
       );
+      // Et RÉARMÉ en « always », comme la migration le pose (004 §7 c) : un « create
+      // trigger » nu le rend en mode « origin ». Le contrôle de morsure doit restituer le
+      // schéma à l'identique, pas seulement à peu près — c'est le test N-11 qui a vu
+      // l'écart, et c'est exactement ce qu'on lui demande.
+      await proprietaire.query(
+        'alter table mesure_catalogue enable always trigger trg_mesure_catalogue_portee_figee',
+      );
     }
   });
 
@@ -1688,6 +1700,9 @@ describe('Identifiants métier : virgule et espaces de bord (CONVENTIONS §17.3)
     // On ferme deux caractères, on ne durcit pas le format. Les exports anciens portent
     // des identifiants sans suffixe aléatoire, voire sans préfixe (processus BIA).
     const acceptes = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      // Créer une filiale est une opération d'administration Groupe (§17.4) : le domaine
+      // est ce qu'on éprouve ici, pas la politique d'écriture.
+      await c.query("select set_config('grc.administration_groupe', 'oui', true)");
       let n = 0;
       for (const identifiant of ['1720000000000', 'SANSPREFIXE', 'FIL-1720000000000', 'a b']) {
         n += (await c.query(
@@ -1887,5 +1902,629 @@ describe('Schéma et reprise', () => {
       return resultat.rows[0].description;
     });
     assert.equal(relu, 'Arrêt des expéditions, pénalités contractuelles');
+  });
+});
+
+/* =====================================================================
+ *  §17.9 — La filiale d'écriture appartient au périmètre de lecture
+ * =====================================================================
+ *
+ *  Constat BLOQUANT N-1 du second passage de la porte S1. « grc.filiale_id » et
+ *  « grc.filiales » étaient deux réglages indépendants : une session déclarant un
+ *  périmètre de lecture FIL-A et une filiale active FIL-B écrivait chez B — une filiale
+ *  qu'elle ne lisait même pas. Le contrôle existait, une seule fois, dans le TypeScript
+ *  (`src/db/pool.ts`, validerPerimetre) ; la base, qui est le filet SOUS le code et non sa
+ *  doublure (PLAN_SERVEUR §1.9), laissait passer.
+ *
+ *  Le cas ouvert n'était pas « filiale lue mais non active » — celui-là était testé — mais
+ *  « filiale NI lue NI active ». Les deux tests cohabitent ci-dessous, et ils ne rendent
+ *  pas le même code : c'est la preuve que ce sont bien deux mécanismes distincts.
+ */
+
+describe('Filiale d’écriture et périmètre de lecture (CONVENTIONS §17.9)', () => {
+  /** Périmètre incohérent : on lit A, on prétend écrire dans B. */
+  const horsPerimetre = () => ({ utilisateur: 'alice', filialeId: B, filiales: [A] });
+
+  test('LE CAS OUVERT : écrire dans une filiale NI lue NI active est refusé', async () => {
+    const erreur = await refus(
+      applicatif,
+      horsPerimetre(),
+      `insert into risques (id, filiale_id, nom) values ('RISK-HORS', $1, 'écrit hors périmètre')`,
+      [B],
+    );
+    assert.equal(erreur.code, 'GRC04', 'La base doit recouper les deux réglages, pas le seul code.');
+    assert.match(erreur.message, /hors du périmètre lisible/);
+  });
+
+  test('et le JOURNAL D’AUDIT non plus : plus de fausse preuve scellée chez le voisin', async () => {
+    // C'est le cas qui a fait du constat un bloquant. L'entrée forgée était numérotée,
+    // horodatée par le serveur, chaînée et scellée par empreinte : pour l'auditeur ISO
+    // 27001 qui vérifie la chaîne, elle était indiscernable d'une entrée authentique. Le
+    // mécanisme d'inaltérabilité — qui est excellent — garantissait l'intégrité d'une
+    // fausse preuve.
+    const erreur = await refus(
+      applicatif,
+      horsPerimetre(),
+      `insert into journal_audit (filiale_id, utilisateur_libelle, action, resume)
+           values ($1, 'bruno', 'suppression', 'Suppression du risque majeur par bruno')`,
+      [B],
+    );
+    assert.equal(erreur.code, 'GRC04');
+  });
+
+  test('même la filiale LUE est refusée si elle n’est pas la filiale ACTIVE', async () => {
+    // Le contrôle porte sur la filiale active, pas sur ce que la session sait lire :
+    // déclarer FIL-B active en ne lisant que FIL-A ferme aussi l'écriture chez A.
+    const erreur = await refus(
+      applicatif,
+      horsPerimetre(),
+      `insert into risques (id, filiale_id, nom) values ('RISK-A-BIS', $1, 'chez soi')`,
+      [A],
+    );
+    assert.equal(erreur.code, 'GRC04', 'La fonction lève avant même que la politique décide.');
+  });
+
+  test('DEUX MÉCANISMES DISTINCTS : « lue mais non active » rend 42501, pas GRC04', async () => {
+    // Le cas déjà couvert avant ce correctif (C49 de la démonstration). Il passe par la
+    // POLITIQUE — la filiale active est légitime, mais ce n'est pas celle de la ligne —
+    // là où le cas neuf passe par la FONCTION. Deux codes, deux causes : les confondre
+    // reviendrait à croire le second couvert par le premier, ce qui est exactement
+    // l'erreur qui a laissé passer le constat.
+    const erreur = await refus(
+      applicatif,
+      rssiGroupe(A),
+      `insert into risques (id, filiale_id, nom) values ('RISK-X', $1, 'chez le voisin')`,
+      [B],
+    );
+    assert.equal(erreur.code, '42501');
+  });
+
+  test('contrôle symétrique : la filiale active DANS le périmètre écrit normalement', async () => {
+    // Sans ce contre-test, une fonction qui refuserait TOUT obtiendrait un sans-faute.
+    const affectees = await base.avecPerimetre(
+      applicatif,
+      perimetre('alice', B, [A, B]),
+      async (c) => (await c.query(
+        `insert into risques (id, filiale_id, nom) values ('RISK-OK-B', $1, 'légitime')`,
+        [B],
+      )).rowCount,
+    );
+    assert.equal(affectees, 1, 'Un périmètre Groupe doit pouvoir écrire dans chacune de ses filiales.');
+  });
+
+  test('contrôle symétrique : la bascule de filiale active en cours de transaction reste possible', async () => {
+    // C'est le geste qu'exige le retrait Groupe d'un contrôle du socle (§17.6) : délier
+    // chez chaque filiale, puis supprimer. Il doit continuer de fonctionner — tant que
+    // chaque filiale visitée appartient au périmètre.
+    const posees = await base.avecPerimetre(applicatif, perimetre('alice', A, [A, B]), async (c) => {
+      let n = 0;
+      for (const filiale of [A, B, A]) {
+        await c.query("select set_config('grc.filiale_id', $1, true)", [filiale]);
+        n += (await c.query(
+          `insert into risques (id, filiale_id, nom) values ($1, $2, 'bascule')`,
+          [`RISK-BASCULE-${n}`, filiale],
+        )).rowCount;
+      }
+      return n;
+    });
+    assert.equal(posees, 3);
+  });
+
+  test('un périmètre de lecture VIDE ferme aussi l’écriture', async () => {
+    // Le périmètre système (PERIMETRE_SYSTEME de src/db/pool.ts) n'a pas de filiale
+    // active et échoue sur la première condition. Mais un périmètre vide AVEC une filiale
+    // active est un état incohérent, que la seconde condition doit fermer : sans périmètre
+    // de lecture déclaré, il n'y a de filiale d'écriture légitime nulle part.
+    const erreur = await refus(
+      applicatif,
+      { utilisateur: 'alice', filialeId: A, filiales: [] },
+      `insert into risques (id, filiale_id, nom) values ('RISK-VIDE', $1, 'essai')`,
+      [A],
+    );
+    assert.equal(erreur.code, 'GRC04');
+    assert.match(erreur.message, /hors du périmètre lisible/);
+  });
+
+  test('LE BALAYAGE : toute politique d’écriture d’une table cloisonnée passe par f_filiale_ecriture', async () => {
+    // Le correctif tient dans une fonction ; ce qui le rend général, c'est que toutes les
+    // politiques d'écriture l'appellent. Une politique future qui filtrerait « à la main »
+    // sur filiale_id — sans passer par elle — rouvrirait le chemin pour sa table. Ce
+    // balayage part du catalogue et le verrait.
+    const fautives = await base.lignes(
+      proprietaire,
+      `select c.relname::text || '.' || p.polname as politique
+         from pg_policy p
+         join pg_class c on c.oid = p.polrelid
+         join pg_namespace n on n.oid = c.relnamespace
+         join pg_attribute a on a.attrelid = c.oid and a.attname = 'filiale_id'
+        where n.nspname = 'public' and p.polpermissive
+          and a.attnotnull and a.attnum > 0 and not a.attisdropped
+          and p.polcmd in ('a', 'w', 'd', '*')
+          -- Dérogations de la famille 4, arbitrées et documentées (004_rls.sql §6) :
+          -- session_filiales produit le périmètre, elle ne peut pas s'y adosser.
+          and c.relname <> 'session_filiales'
+          and coalesce(pg_get_expr(p.polwithcheck, p.polrelid),
+                       pg_get_expr(p.polqual, p.polrelid), '') !~ 'f_filiale_ecriture'
+        order by 1`,
+    );
+    assert.deepEqual(fautives.map((l) => l.politique), []);
+  });
+});
+
+/* =====================================================================
+ *  §17.4 — `filiales` est une table de configuration
+ * =====================================================================
+ *
+ *  Constat MAJEUR N-2 du second passage. `filiales` figurait parmi les tables ouvertes,
+ *  avec un motif — « l'authentification la lit avant tout périmètre » — qui ne justifiait
+ *  que la LECTURE. L'écriture était ouverte sans condition, sur les quatre verbes, à
+ *  n'importe quelle filiale : renommer, archiver, créer, supprimer les autres.
+ *
+ *  C'est pourtant la table qui DÉFINIT la frontière du cloisonnement, et elle échappait
+ *  par construction au balayage de `f_verifier_couverture_rls()` — elle ne porte pas de
+ *  `filiale_id`.
+ */
+
+describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', () => {
+  /** Pose le drapeau d'administration Groupe pour la durée du bloc. */
+  const enAdmin = (client, p, travail) =>
+    base.avecPerimetre(client, p, async (c) => {
+      await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+      return travail(c);
+    });
+
+  test('LE CAS DEMANDÉ : la filiale A ne modifie pas la fiche de la filiale B', async () => {
+    const etat = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      const affectees = (await c.query(
+        "update filiales set raison_sociale = 'Détournée par Toulouse' where id = $1",
+        [B],
+      )).rowCount;
+      // Le refus est SILENCIEUX (0 ligne) et non bruyant : le « using » de la politique
+      // écarte la ligne avant tout contrôle. C'est l'observation O-2 du premier rapport,
+      // reportée au lot L2 — l'API devra distinguer « refusé » de « conflit de version ».
+      // Ce qui compte ici, c'est que la fiche soit intacte, et on le vérifie.
+      await c.query("select set_config('grc.filiales', $1, true)", [`${A},${B}`]);
+      const fiche = (await c.query(
+        'select raison_sociale, version, modifie_par from filiales where id = $1',
+        [B],
+      )).rows[0];
+      return { affectees, ...fiche };
+    });
+    assert.equal(etat.affectees, 0, 'Aucune ligne de la filiale B n’est candidate.');
+    assert.equal(etat.raison_sociale, 'Essai Allemagne', 'La raison sociale de B est intacte.');
+    assert.equal(etat.version, 1, 'Et sa version n’a pas bougé : personne n’a touché sa ligne.');
+    assert.equal(etat.modifie_par, null);
+  });
+
+  test('ni même SA PROPRE fiche : ce n’est pas une donnée de filiale', async () => {
+    const affectees = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => (
+      await c.query("update filiales set nom_court = 'TLS' where id = $1", [A])
+    ).rowCount);
+    assert.equal(affectees, 0, 'L’identité d’une filiale se paramètre, elle ne se modifie pas au fil de l’eau.');
+  });
+
+  test('créer une filiale sans l’administration Groupe est refusé, et bruyamment', async () => {
+    const erreur = await refus(
+      applicatif,
+      rssiSite(A),
+      "insert into filiales (id, code, raison_sociale) values ('FIL-PIRATE', 'ZZPIR', 'Créée par Toulouse')",
+    );
+    assert.equal(erreur.code, '42501');
+  });
+
+  test('en supprimer une non plus', async () => {
+    const affectees = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => (
+      await c.query('delete from filiales where id = $1', [B])
+    ).rowCount);
+    assert.equal(affectees, 0);
+  });
+
+  test('contrôle symétrique : EN administration Groupe, le paramétrage passe', async () => {
+    // Ce qui est demandé, c'est de RÉSERVER l'écriture, pas de la supprimer : les lots L4
+    // (création de filiale) et L9 (identité par filiale) en dépendent.
+    const etat = await enAdmin(applicatif, rssiSite(A), async (c) => {
+      const creees = (await c.query(
+        "insert into filiales (id, code, raison_sociale) values ('FIL-ESSAI-C', 'ZZESSC', 'Essai Espagne')"
+      )).rowCount;
+      const modifiees = (await c.query(
+        "update filiales set nom_court = 'TLS' where id = $1", [A],
+      )).rowCount;
+      return { creees, modifiees };
+    });
+    assert.deepEqual(etat, { creees: 1, modifiees: 1 });
+  });
+
+  test('la LECTURE reste ouverte, et elle doit l’être', async () => {
+    // L'authentification lit cette table AVANT que le périmètre existe : la cloisonner
+    // rendrait toute connexion impossible.
+    const predicat = await base.valeur(
+      proprietaire,
+      `select pg_get_expr(polqual, polrelid) from pg_policy
+        where polrelid = 'filiales'::regclass and polname = 'pol_filiales_lecture'`,
+    );
+    assert.equal(predicat, 'true');
+    const vues = await compter(applicatif, rssiSite(A), 'select count(*)::int as n from filiales');
+    assert.ok(vues >= 2, 'Une session de site voit bien la liste des filiales du groupe.');
+  });
+
+  test('LE LOGO : une filiale ne pose pas SON fichier comme logo d’une AUTRE', async () => {
+    // La pathologie de B-1 par un chemin que son balayage ne pouvait pas voir :
+    // filiales.logo_piece_jointe_id pointe une table de NIVEAU FILIALE. La filiale A
+    // déposait une pièce jointe chez elle, la posait comme logo de B, puis la supprimait —
+    // ce qui remettait à null le logo de B, incrémentait sa version et y inscrivait
+    // « modifie_par = alice ». La clé étrangère est désormais COMPOSITE (001 §10).
+    const erreur = await erreurAttendue(
+      enAdmin(applicatif, perimetre('alice', A, [A, B]), async (c) => {
+        await c.query(
+          `insert into pieces_jointes (id, filiale_id, entite_type, entite_id, nom_fichier,
+                                       type_mime, taille_octets, sha256, chemin_stockage)
+               values ('PJ-A-LOGO', $1, 'filiales', $1, 'logo.png', 'image/png', 12,
+                       repeat('a', 64), '/magasin/pj-a-logo')`,
+          [A],
+        );
+        await c.query('update filiales set logo_piece_jointe_id = $1 where id = $2', ['PJ-A-LOGO', B]);
+      }),
+    );
+    assert.equal(erreur.code, '23503', 'Le refus vient de l’intégrité référentielle, aveugle à la RLS.');
+    assert.match(erreur.message, /fk_filiales_logo/);
+  });
+
+  test('contrôle symétrique : son PROPRE fichier, en revanche, fait un logo valide', async () => {
+    const affectees = await enAdmin(applicatif, rssiSite(A), async (c) => {
+      await c.query(
+        `insert into pieces_jointes (id, filiale_id, entite_type, entite_id, nom_fichier,
+                                     type_mime, taille_octets, sha256, chemin_stockage)
+             values ('PJ-A-LOGO2', $1, 'filiales', $1, 'logo.png', 'image/png', 12,
+                     repeat('c', 64), '/magasin/pj-a-logo2')`,
+        [A],
+      );
+      return (await c.query(
+        'update filiales set logo_piece_jointe_id = $1 where id = $2', ['PJ-A-LOGO2', A],
+      )).rowCount;
+    });
+    assert.equal(affectees, 1);
+  });
+
+  test('LE BALAYAGE : les cinq tables de configuration ont bien une écriture conditionnée', async () => {
+    // Structurel plutôt qu'anecdotique : c'est le motif que l'auditeur a réclamé — « toute
+    // table de niveau Groupe dont l'écriture est ouverte est-elle dans une liste
+    // explicitement arbitrée ? ». La liste ci-dessous EST cette liste, et toute table qui
+    // en sortirait, ou qui y entrerait sans que ce test bouge, se voit.
+    const conditionnees = await base.lignes(
+      proprietaire,
+      `select distinct c.relname::text as nom
+         from pg_policy p join pg_class c on c.oid = p.polrelid
+        where p.polcmd in ('a', 'w', 'd')
+          and coalesce(pg_get_expr(p.polwithcheck, p.polrelid),
+                       pg_get_expr(p.polqual, p.polrelid), '') = 'f_administration_groupe()'
+        order by 1`,
+    );
+    assert.deepEqual(
+      conditionnees.map((l) => l.nom),
+      ['filiales', 'groupes_ad', 'profil_domaines', 'profils', 'utilisateurs'],
+    );
+  });
+
+  test('DÉCISION ÉPINGLÉE : mappings et mapping_exigences restent ouvertes en écriture', async () => {
+    // Arbitrage rendu au second passage, et écrit en commentaire dans 004_rls.sql §6 :
+    //   - leur contenu n'est pas une donnée de filiale et n'en devient jamais une ;
+    //   - c'est un contenu ÉDITÉ EN FONCTIONNEMENT COURANT par le module
+    //     « Correspondances » : le réserver supprimerait une fonctionnalité livrée ;
+    //   - aucun chemin d'intégrité ne les relie à une table de niveau filiale, la
+    //     pathologie du constat B-1 y est donc structurellement impossible.
+    // Ce qui reste vrai : une filiale peut modifier un catalogue partagé. C'est un enjeu
+    // de GOUVERNANCE, dont la réponse est le domaine « correspondances » du modèle de
+    // droits (L3). Ce test tombera le jour où quelqu'un changera la décision sans la
+    // réécrire — c'est tout son objet.
+    const predicats = await base.lignes(
+      proprietaire,
+      `select c.relname::text || '.' || p.polcmd::text as politique,
+              coalesce(pg_get_expr(p.polwithcheck, p.polrelid),
+                       pg_get_expr(p.polqual, p.polrelid)) as predicat
+         from pg_policy p join pg_class c on c.oid = p.polrelid
+        where c.relname in ('mappings', 'mapping_exigences') and p.polcmd in ('a', 'w', 'd')
+        order by 1`,
+    );
+    assert.equal(predicats.length, 6, 'Deux tables × ajout / modification / suppression.');
+    assert.deepEqual([...new Set(predicats.map((l) => l.predicat))], ['true']);
+
+    // Le troisième argument de l'arbitrage, vérifié plutôt qu'affirmé : aucune clé
+    // étrangère ne relie ces deux tables à une table portant un filiale_id.
+    const liens = await base.lignes(
+      proprietaire,
+      `select con.conname::text as nom
+         from pg_constraint con
+         join pg_class enfant on enfant.oid = con.conrelid
+         join pg_class parent on parent.oid = con.confrelid
+        where con.contype = 'f'
+          and enfant.relname in ('mappings', 'mapping_exigences')
+          and exists (select 1 from pg_attribute a
+                       where a.attrelid = parent.oid and a.attname = 'filiale_id'
+                         and a.attnum > 0 and not a.attisdropped)`,
+    );
+    assert.deepEqual(liens, [], 'Aucun chemin d’intégrité vers une table cloisonnée.');
+  });
+});
+
+/* =====================================================================
+ *  §17.8 — L'acteur d'une entrée de journal vient de la session
+ * =====================================================================
+ *
+ *  Constat N-5. Le déclencheur de chaînage écrasait déjà le numéro, l'horodatage et les
+ *  empreintes — tout ce qui fait qu'une entrée ne se forge pas — mais laissait l'identité
+ *  de l'acteur en saisie libre. La seule table dont l'objet EST de faire preuve était donc
+ *  la seule à croire son appelant sur ce point : un journal inaltérable dont l'acteur est
+ *  déclaré par le client garantit l'intégrité d'une fausse preuve.
+ */
+
+describe('L’acteur du journal d’audit (CONVENTIONS §17.8)', () => {
+  /** Provisionne un compte, puis écrit une entrée sous l'identité `utilisateur`. */
+  async function entree(utilisateur, colonnes, valeurs) {
+    return base.avecPerimetre(applicatif, perimetre(utilisateur, A, [A]), async (c) => {
+      await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+      await c.query(
+        `insert into utilisateurs (id, identifiant, nom_affichage) values ($1, $2, 'Compte d''essai')
+           on conflict (id) do nothing`,
+        [utilisateur, utilisateur],
+      );
+      await c.query("select set_config('grc.administration_groupe', '', true)");
+      await c.query(
+        `insert into journal_audit (filiale_id, action, resume${colonnes}) values ($1, 'creation', 'essai'${valeurs})`,
+        [A],
+      );
+      return (await c.query(
+        `select utilisateur_id, utilisateur_libelle, numero, empreinte
+           from journal_audit where resume = 'essai' order by numero desc limit 1`,
+      )).rows[0];
+    });
+  }
+
+  test('un utilisateur_id fourni par le client est ÉCRASÉ par celui de la session', async () => {
+    const ligne = await entree('alice', ', utilisateur_id', ", 'USR-USURPE'");
+    assert.equal(ligne.utilisateur_id, 'alice', 'L’acteur vient de grc.utilisateur, pas du corps.');
+  });
+
+  test('le LIBELLÉ, lui, reste fourni — et c’est délibéré', async () => {
+    // §12 : la doublure texte doit survivre à la disparition du compte, et couvre l'échec
+    // de connexion sur un compte inconnu. Elle n'est plus la SOURCE de l'identité,
+    // seulement son affichage.
+    const ligne = await entree('alice', ', utilisateur_libelle', ", 'Bruno Schmidt'");
+    assert.equal(ligne.utilisateur_libelle, 'Bruno Schmidt');
+    assert.equal(ligne.utilisateur_id, 'alice');
+  });
+
+  test('les deux à la fois : l’identité est celle de la session, le libellé celui du client', async () => {
+    const ligne = await entree('alice', ', utilisateur_id, utilisateur_libelle', ", 'USR-USURPE', 'bruno'");
+    assert.deepEqual(
+      { id: ligne.utilisateur_id, libelle: ligne.utilisateur_libelle },
+      { id: 'alice', libelle: 'bruno' },
+      'Une trace forgée ne peut plus accuser nommément un tiers.',
+    );
+  });
+
+  test('un identifiant de session sans compte connu donne un acteur NUL, pas un échec', async () => {
+    // Les écritures légitimes sans compte derrière elles doivent continuer de passer :
+    // « systeme » (migrations, timers) et les événements antérieurs à la résolution de
+    // l'identité (échec de connexion sur un compte inconnu). Mettre l'identifiant tel quel
+    // violerait la clé étrangère vers utilisateurs.
+    const ligne = await base.avecPerimetre(applicatif, perimetre('systeme', A, [A]), async (c) => {
+      await c.query(
+        `insert into journal_audit (filiale_id, action, utilisateur_libelle, resume)
+             values ($1, 'connexion_echouee', 'compte-inconnu', 'sans compte')`,
+        [A],
+      );
+      return (await c.query(
+        "select utilisateur_id, utilisateur_libelle from journal_audit where resume = 'sans compte'",
+      )).rows[0];
+    });
+    assert.equal(ligne.utilisateur_id, null);
+    assert.equal(ligne.utilisateur_libelle, 'compte-inconnu', 'Le libellé, lui, reste lisible.');
+  });
+
+  test('l’entrée reste scellée, et la chaîne intacte', async () => {
+    // L'acteur entre dans la charge utile de l'empreinte : il fallait vérifier que
+    // l'écraser dans le déclencheur ne casse pas le sceau.
+    await base.avecPerimetre(applicatif, perimetre('alice', A, [A]), async (c) => {
+      await c.query(
+        `insert into journal_audit (filiale_id, action, resume) values ($1, 'export', 'scellé')`,
+        [A],
+      );
+    }, { annuler: false });
+    const anomalies = await base.lignes(proprietaire, 'select anomalie from f_journal_audit_verifier()');
+    assert.deepEqual(anomalies.map((l) => l.anomalie), []);
+  });
+});
+
+/* =====================================================================
+ *  §17.6 — « Il s'archive » : le mécanisme existe maintenant
+ * =====================================================================
+ *
+ *  Constat N-6. Le §17.6 et les commentaires de 002 promettaient qu'un contrôle déjà
+ *  évalué « s'archive » — et le `restrict` des quatre références le rendait effectivement
+ *  indestructible — sans qu'aucune colonne ne rende l'archivage possible. L'administration
+ *  Groupe se retrouvait devant un refus SANS ISSUE, et un exploitant qui suit le document
+ *  finissait par supprimer les mises en œuvre des vingt filiales : exactement ce que le
+ *  `restrict` existe pour éviter.
+ */
+
+describe('Cycle de vie du catalogue de mesures (CONVENTIONS §17.6, constat N-6)', () => {
+  test('L’ISSUE : un contrôle du socle qu’on ne peut pas supprimer, on l’archive', async () => {
+    const etat = await base.avecPerimetre(applicatif, perimetre('alice', A, [A, B]), async (c) => {
+      await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+      await c.query("insert into mesure_catalogue (id, nom) values ('MESURE-ARCH', 'Contrôle retiré')");
+      await c.query("select set_config('grc.administration_groupe', '', true)");
+      await c.query("select set_config('grc.filiale_id', $1, true)", [B]);
+      await c.query(
+        "insert into mesure_mise_en_oeuvre (id, filiale_id, mesure_id) values ('MMO-ARCH', $1, 'MESURE-ARCH')",
+        [B],
+      );
+
+      // Le retrait par suppression est fermé — c'est le §17.6, premier volet.
+      await c.query("select set_config('grc.filiale_id', $1, true)", [A]);
+      await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+      await c.query('savepoint avant_suppression');
+      const refusee = await erreurAttendue(c.query("delete from mesure_catalogue where id = 'MESURE-ARCH'"));
+      await c.query('rollback to savepoint avant_suppression');
+
+      // …et l'archivage est l'issue que le document promettait.
+      const archivees = (await c.query(
+        "update mesure_catalogue set statut = 'archivee', archive_le = now() where id = 'MESURE-ARCH'"
+      )).rowCount;
+
+      const ligne = (await c.query(
+        `select m.statut, m.archive_le is not null as datee,
+                (select count(*)::int from mesure_mise_en_oeuvre o where o.mesure_id = m.id) as rattachements
+           from mesure_catalogue m where m.id = 'MESURE-ARCH'`,
+      )).rows[0];
+      return { suppression: refusee.code, archivees, ...ligne };
+    });
+
+    assert.equal(etat.suppression, '23503', 'La suppression reste refusée : c’est le point de départ.');
+    assert.equal(etat.archivees, 1, 'L’archivage, lui, doit passer.');
+    assert.equal(etat.statut, 'archivee');
+    assert.equal(etat.datee, true);
+    // Le point du §17.6 : la mesure archivée reste LISIBLE et reste RATTACHÉE. Une
+    // évaluation d'il y a deux ans continue de désigner le contrôle qu'elle visait — la
+    // preuve historique survit, ce qui est exactement ce qu'un auditeur ISO 27001 attend.
+    assert.equal(etat.rattachements, 1, 'La mise en oeuvre de l’autre filiale est intacte.');
+  });
+
+  test('l’état et sa date sont indissociables, dans les DEUX sens', async () => {
+    for (const [libelle, instruction] of [
+      ['archivée sans date', "update mesure_catalogue set statut = 'archivee' where id = 'MESURE-G'"],
+      ['datée sans être archivée', "update mesure_catalogue set archive_le = now() where id = 'MESURE-G'"],
+    ]) {
+      const erreur = await erreurAttendue(
+        base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+          await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+          await c.query(instruction);
+        }),
+      );
+      assert.equal(erreur.code, '23514', `${libelle} : incohérence à refuser.`);
+      assert.match(erreur.message, /ck_mesure_catalogue_archive/);
+    }
+  });
+
+  test('le statut n’admet que les deux valeurs du cycle de vie', async () => {
+    const erreur = await erreurAttendue(
+      base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+        await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+        await c.query("update mesure_catalogue set statut = 'supprimee' where id = 'MESURE-G'");
+      }),
+    );
+    assert.equal(erreur.code, '23514');
+    assert.match(erreur.message, /ck_mesure_catalogue_statut/);
+  });
+
+  test('par défaut une mesure est ACTIVE, et sans date d’archivage', async () => {
+    const ligne = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => (
+      await c.query("select statut, archive_le from mesure_catalogue where id = 'MESURE-A'")
+    ).rows[0]);
+    assert.deepEqual(ligne, { statut: 'active', archive_le: null });
+  });
+
+  test('DÉLIBÉRÉMENT ABSENT : rien n’interdit de référencer une mesure archivée', async () => {
+    // « Ne plus être proposée pour de nouvelles évaluations » est une règle APPLICATIVE.
+    // Un déclencheur qui refuserait un nouveau lien casserait la reprise d'un export
+    // grc-backup portant des liens légitimes vers un contrôle archivé depuis, et rendrait
+    // l'archivage destructif par un autre chemin. La base dit l'état ; la couche métier en
+    // tire les conséquences dans les écrans de saisie. Ce test fige cette frontière.
+    const affectees = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+      await c.query(
+        `insert into mesure_catalogue (id, nom, statut, archive_le)
+             values ('MESURE-VIEILLE', 'Contrôle archivé', 'archivee', now())`,
+      );
+      await c.query("select set_config('grc.administration_groupe', '', true)");
+      return (await c.query(
+        "insert into mesure_mise_en_oeuvre (id, filiale_id, mesure_id) values ('MMO-VIEILLE', $1, 'MESURE-VIEILLE')",
+        [A],
+      )).rowCount;
+    });
+    assert.equal(affectees, 1, 'La reprise d’un export ancien doit continuer de passer.');
+  });
+});
+
+/* =====================================================================
+ *  Deux observations du second passage, fermées ici
+ * ===================================================================== */
+
+describe('Portée des liens documentaires et armement des déclencheurs (N-10, N-11)', () => {
+  test('N-10 : un lien de portée GROUPE ne désigne pas un document LOCAL d’une filiale', async () => {
+    // La règle de correspondance par défaut (« match simple ») neutralise une clé
+    // composite dès qu'une de ses colonnes est nulle : fk_document_referentiels_coherence
+    // ne vérifiait donc plus rien pour les lignes de portée Groupe. Une opération
+    // ordinaire d'une filiale — supprimer son document — emportait alors en cascade une
+    // ligne de portée Groupe. La clé de PORTÉE (colonne engendrée, jamais nulle) ferme le
+    // cas symétrique ; les deux ensemble épinglent filiale_id dans les deux sens.
+    const erreur = await erreurAttendue(
+      base.avecPerimetre(applicatif, perimetre('alice', A, [A, B]), async (c) => {
+        await c.query("select set_config('grc.filiale_id', $1, true)", [B]);
+        await c.query(
+          "insert into documents (id, filiale_id, titre) values ('DOC-LOCAL-B', $1, 'Verfahren')",
+          [B],
+        );
+        await c.query("select set_config('grc.filiale_id', $1, true)", [A]);
+        await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+        await c.query(
+          "insert into document_referentiels (document_id, ref_id, filiale_id) values ('DOC-LOCAL-B', 'anssi', null)",
+        );
+      }),
+    );
+    assert.equal(erreur.code, '23503');
+    assert.match(erreur.message, /fk_document_referentiels_portee/);
+  });
+
+  test('contrôle symétrique : un lien de portée Groupe vers un document Groupe passe', async () => {
+    const affectees = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+      return (await c.query(
+        "insert into document_referentiels (document_id, ref_id, filiale_id) values ('DOC-G', 'anssi', null)",
+      )).rowCount;
+    });
+    assert.equal(affectees, 1);
+  });
+
+  test('contrôle symétrique : un lien LOCAL vers son propre document passe aussi', async () => {
+    const affectees = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => (
+      await c.query(
+        "insert into document_referentiels (document_id, ref_id, filiale_id) values ('DOC-A', 'iso-27002-2022', $1)",
+        [A],
+      )
+    ).rowCount);
+    assert.equal(affectees, 1);
+  });
+
+  test('N-11 : les neuf déclencheurs de cohérence et de portée sont armés en « always »', async () => {
+    // Les trois du journal d'audit le sont depuis 001 ; ces neuf-là portent désormais des
+    // garanties de cloisonnement opposables — cohérence du catalogue, portée figée — et
+    // n'ont pas de raison d'être armés plus faiblement. Sans effet contre le rôle
+    // applicatif (qui ne peut pas poser session_replication_role) ; ce que « always »
+    // ferme, c'est le jour où une reprise en masse ou une réplication logique basculerait
+    // la session en mode « replica » et désarmerait tout ce qui ne l'est pas.
+    const armement = await base.lignes(
+      proprietaire,
+      `select t.tgname::text as nom, t.tgenabled::text as armement
+         from pg_trigger t
+        where not t.tgisinternal
+          and (t.tgname like '%\\_coherence\\_mesure' or t.tgname like '%\\_portee\\_figee')
+        order by 1`,
+    );
+    assert.equal(armement.length, 9, 'Quatre déclencheurs de cohérence, cinq de portée.');
+    assert.deepEqual(
+      [...new Set(armement.map((l) => l.armement))],
+      ['A'],
+      `Armement attendu « A » (always) : ${JSON.stringify(armement)}`,
+    );
+  });
+
+  test('et les trois du journal d’audit le sont toujours', async () => {
+    // Contrôle de non-régression : c'est le modèle sur lequel les neuf ont été alignés.
+    const armement = await base.lignes(
+      proprietaire,
+      `select t.tgenabled::text as armement from pg_trigger t
+         where not t.tgisinternal and t.tgrelid = 'journal_audit'::regclass`,
+    );
+    assert.deepEqual([...new Set(armement.map((l) => l.armement))], ['A']);
   });
 });

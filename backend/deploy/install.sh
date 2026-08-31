@@ -584,6 +584,43 @@ else
     succes "base déjà présente, propriétaire $ROLE_PROPRIETAIRE"
   elif [[ $REPRENDRE_PROPRIETE -eq 1 ]]; then
     alerte "--reprendre-propriete : la base et ses objets passent de « $PROPRIETAIRE_ACTUEL » à « $ROLE_PROPRIETAIRE »."
+
+    # « reassign owned » ne se limite PAS à la base dans laquelle on l'exécute : il
+    # déplace aussi les objets PARTAGÉS du cluster, au premier rang desquels les
+    # AUTRES BASES appartenant au même rôle. Mesuré sur 16.13 : deux bases d'un même
+    # propriétaire, « reassign owned » joué dans la première — les DEUX changent de
+    # main. Le cas nominal est sans danger (le propriétaire fautif est le compte du
+    # service, qui ne possède rien d'autre), mais l'option se déclenche dès que le
+    # propriétaire n'est pas celui attendu : une base créée à la main sous le compte
+    # d'un DBA emporterait avec elle tout ce que ce compte possède sur le cluster.
+    # On refuse plutôt que de le découvrir après coup — le drapeau est annoncé
+    # DESTRUCTIF, encore faut-il qu'il ne détruise que ce qu'on lui montre.
+    AUTRES_BASES="$(sql_admin <<SQL
+select string_agg(datname, ', ' order by datname)
+  from pg_database
+ where pg_get_userbyid(datdba) = '$(litteral "$PROPRIETAIRE_ACTUEL")'
+   and datname <> '$(litteral "$BASE_NOM")';
+SQL
+)"
+    [[ -z "$AUTRES_BASES" ]] || echec \
+      "« $PROPRIETAIRE_ACTUEL » possède d'autres bases sur ce cluster : $AUTRES_BASES
+      La reprise emploie « reassign owned », qui déplace aussi les objets partagés :
+      ces bases changeraient de propriétaire elles aussi, sans que rien ne le demande.
+      Reprenez la propriété à la main, base par base, en superutilisateur PostgreSQL :
+        alter database $BASE_NOM owner to $ROLE_PROPRIETAIRE;
+        \\c $BASE_NOM
+        -- objet par objet, sans « reassign owned » :
+        do \$\$ declare r record; begin
+          for r in select c.oid::regclass::text n, c.relkind k from pg_class c
+                     join pg_namespace s on s.oid = c.relnamespace
+                    where s.nspname = 'public' and c.relkind in ('r','p','v','m','S')
+                      and pg_get_userbyid(c.relowner) = '$PROPRIETAIRE_ACTUEL'
+          loop execute format('alter %s %s owner to $ROLE_PROPRIETAIRE',
+                 case r.k when 'S' then 'sequence' when 'v' then 'view'
+                          when 'm' then 'materialized view' else 'table' end, r.n);
+          end loop; end \$\$;
+      puis relancez « bash install.sh --seulement-base »."
+
     printf "alter database %s owner to %s;\n" "$BASE_NOM" "$ROLE_PROPRIETAIRE" | sql_admin
     # `reassign owned` s'exécute DANS la base concernée, et ne déplace que la
     # propriété : les privilèges du rôle applicatif sont ensuite reposés à la main,
@@ -598,8 +635,21 @@ alter default privileges for role $ROLE_PROPRIETAIRE in schema public
       grant select, insert, update, delete on tables to $ROLE_APP;
 alter default privileges for role $ROLE_PROPRIETAIRE in schema public
       grant select on tables to $ROLE_LECTURE;
--- Le verrou du journal d'audit est reposé APRÈS les grants généraux, sinon le
--- « grant … on all tables » que l'on vient de faire le rouvrirait (CONVENTIONS §12).
+-- Les verrous CIBLÉS posés par les migrations sont reposés APRÈS les grants
+-- généraux, jamais avant : le « grant … on all tables » ci-dessus les rouvrirait
+-- tous. Il y en a DEUX, et les oublier n'a pas le même prix ailleurs :
+--
+--   journal_audit      — couche 1 de l'ajout seul (CONVENTIONS §12) ;
+--   migrations_schema  — le registre des migrations (004_rls.sql §1). Rendre
+--                        « update » à $ROLE_APP lui permet de maquiller l'empreinte
+--                        d'une migration déjà appliquée (db/migrate.mjs, code de
+--                        sortie 4), donc de réécrire une migration passée sans que
+--                        rien ne le signale, et de faire annoncer « déjà appliquée »
+--                        une migration de durcissement jamais jouée.
+--
+-- Ce chemin est celui de la RÉPARATION : c'est le moment où les privilèges doivent
+-- être exacts, pas approximativement exacts. Un « revoke » de plus ici ne coûte
+-- rien ; un « revoke » de moins rend le garde-fou d'empreinte décoratif.
 do \$\$
 declare
     declencheur text;
@@ -620,6 +670,17 @@ begin
         loop
             execute format('alter table journal_audit enable always trigger %I', declencheur);
         end loop;
+    end if;
+
+    -- Le registre des migrations : « select » et rien d'autre pour le compte du
+    -- service. Le registre s'écrit sous le compte propriétaire, qui seul applique
+    -- les migrations (004_rls.sql §1). $ROLE_LECTURE n'est pas touché : il n'a que
+    -- « select » (CONVENTIONS §14) et le registre lui sert au diagnostic.
+    if to_regclass('public.migrations_schema') is not null then
+        execute 'revoke insert, update, delete, truncate on migrations_schema from public';
+        execute format(
+            'revoke insert, update, delete, truncate on migrations_schema from %I', '$ROLE_APP');
+        execute format('grant select on migrations_schema to %I', '$ROLE_APP');
     end if;
 end
 \$\$;
@@ -648,7 +709,25 @@ SQL
     alerte "     \\c $BASE_NOM"
     alerte "     reassign owned by $PROPRIETAIRE_ACTUEL to $ROLE_PROPRIETAIRE;"
     alerte "     grant select, insert, update, delete on all tables in schema public to $ROLE_APP;"
+    alerte "     -- les deux « revoke » suivants viennent APRÈS le « grant » ci-dessus,"
+    alerte "     -- jamais avant : dans l'autre ordre le « grant » les annule."
     alerte "     revoke update, delete, truncate on journal_audit from $ROLE_APP;"
+    alerte "     revoke insert, update, delete, truncate on migrations_schema from $ROLE_APP;"
+    alerte "     -- et les déclencheurs du journal, qu'une base possédée par le compte du"
+    alerte "     -- service a pu voir désarmés (§12, couche 3) :"
+    alerte "     do \$\$ declare d text; begin"
+    alerte "       for d in select tgname from pg_trigger"
+    alerte "                 where tgrelid = 'public.journal_audit'::regclass and not tgisinternal"
+    alerte "       loop execute format('alter table journal_audit enable always trigger %I', d);"
+    alerte "       end loop; end \$\$;"
+    alerte ""
+    alerte "  Ces deux tables sont les seules que les migrations ferment nommément au"
+    alerte "  compte du service : journal_audit (ajout seul, db/CONVENTIONS.md §12) et"
+    alerte "  migrations_schema (garde-fou d'empreinte, 004_rls.sql §1). En oublier une"
+    alerte "  rend inopérant le contrôle qu'elle porte."
+    alerte ""
+    alerte "  Dans les deux cas, relancez ensuite « bash install.sh --seulement-base » :"
+    alerte "  les contrôles de sécurité diront si la réparation est complète."
     alerte "════════════════════════════════════════════════════════════════════"
     echec "Propriété de la base non conforme — installation interrompue."
   fi
@@ -848,6 +927,61 @@ SQL
       Réarmement : alter table journal_audit enable always trigger <nom>;"
   succes "déclencheurs du journal armés en mode « always » (§12, couche 3)"
 fi
+
+# S14 — le registre des migrations : « select » et RIEN D'AUTRE pour le compte du
+# service (004_rls.sql §1, db/CONVENTIONS.md §13).
+#
+# Ce contrôle n'existait pas, et c'est précisément son absence qui a laissé passer un
+# défaut : le chemin --reprendre-propriete reposait les privilèges applicatifs par un
+# « grant … on all tables », rendait ainsi « update » sur migrations_schema, et le
+# script se déclarait conforme. Rendre ce privilège à $ROLE_APP, c'est lui permettre
+# de réécrire l'empreinte d'une migration déjà appliquée — donc de maquiller la
+# réécriture d'une migration (db/migrate.mjs, code de sortie 4) — et d'inscrire une
+# migration jamais jouée, que migrate.mjs annoncera « déjà appliquée » alors que le
+# durcissement qu'elle porte n'existe nulle part.
+#
+# Un « grant » général qui écrase un « revoke » ciblé ne se voit pas : il faut aller
+# le lire. Il y a exactement deux tables dans ce cas — journal_audit ci-dessus et
+# migrations_schema ici. Toute migration future qui ferme une troisième table
+# nommément doit ajouter son contrôle ici, faute de quoi elle se rouvrira en silence
+# au premier --reprendre-propriete.
+REGISTRE="$(sql_admin_base <<SQL
+select coalesce(
+  (select case
+     when pg_get_userbyid(c.relowner) = '$(litteral "$ROLE_APP")'
+       then 'PROPRIETE: migrations_schema appartient à $ROLE_APP'
+     when has_table_privilege('$(litteral "$ROLE_APP")', 'migrations_schema', 'INSERT')
+       then 'PRIVILEGE: $ROLE_APP porte INSERT sur migrations_schema'
+     when has_table_privilege('$(litteral "$ROLE_APP")', 'migrations_schema', 'UPDATE')
+       then 'PRIVILEGE: $ROLE_APP porte UPDATE sur migrations_schema'
+     when has_table_privilege('$(litteral "$ROLE_APP")', 'migrations_schema', 'DELETE')
+       then 'PRIVILEGE: $ROLE_APP porte DELETE sur migrations_schema'
+     when has_table_privilege('$(litteral "$ROLE_APP")', 'migrations_schema', 'TRUNCATE')
+       then 'PRIVILEGE: $ROLE_APP porte TRUNCATE sur migrations_schema'
+     when not has_table_privilege('$(litteral "$ROLE_APP")', 'migrations_schema', 'SELECT')
+       then 'LECTURE: $ROLE_APP ne peut pas lire migrations_schema'
+     else ''
+   end
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname = 'migrations_schema'),
+  'ABSENTE');
+SQL
+)"
+case "$REGISTRE" in
+  ABSENTE)  alerte "migrations_schema absente : contrôle du registre sans objet (migrations partielles)." ;;
+  "")       succes "migrations_schema : $ROLE_APP n'y a que « select » (004_rls.sql §1)" ;;
+  LECTURE:*) alerte "$REGISTRE
+      Le serveur contrôle la version du schéma au démarrage : il lui faut « select ».
+      Rétablir : grant select on migrations_schema to $ROLE_APP;" ;;
+  *)        echec  "Registre des migrations non conforme — $REGISTRE
+      Le compte du service peut réécrire l'empreinte d'une migration déjà appliquée :
+      le garde-fou anti-réécriture de db/migrate.mjs (code de sortie 4) ne détecte
+      plus rien, et une migration de durcissement peut être déclarée « déjà appliquée »
+      sans avoir jamais été jouée.
+      Rétablir : revoke insert, update, delete, truncate on migrations_schema from $ROLE_APP;
+      Vérifier ensuite ce qui a été appliqué : node db/migrate.mjs --verifier" ;;
+esac
 
 if [[ $SEULEMENT_BASE -eq 1 ]]; then
   printf '\n\033[1;32mBase « %s » prête.\033[0m (--seulement-base : ni code, ni service, ni frontal)\n' "$BASE_NOM"
