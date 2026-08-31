@@ -1,8 +1,27 @@
 // Emplacement : js/services/backup.js
 // Nom du fichier : backup.js
 //
-// Service de sauvegarde par fichier : téléchargement (clair ou chiffré),
-// suivi de la date du dernier export, et bandeau de rappel non intrusif.
+// Export et import de fichier `grc-backup` — devenu un **FORMAT D'ÉCHANGE**,
+// et non plus un mécanisme de sauvegarde (`PLAN_SERVEUR` §2.6).
+//
+// ── Ce qui change avec la bascule serveur ───────────────────────────────────
+//
+// L'export reste, et il a deux emplois précis :
+//   · **reprise** des données d'une filiale déjà équipée de la version locale ;
+//   · **remise à l'acquéreur** des données d'une filiale qui sort du groupe.
+//
+// Le **bandeau de rappel a été retiré**. Il disait : « Vos données ne quittent
+// pas ce navigateur — exportez régulièrement pour ne rien perdre. » C'est
+// désormais faux sur les deux points : les données vivent sur le serveur, qui
+// les sauvegarde en continu (§1.8, RPO de quelques minutes). Laisser ce rappel
+// entretiendrait une inquiétude sans objet et, pire, encouragerait la
+// multiplication de fichiers complets de gouvernance cyber sur les postes —
+// alors que le droit d'export est précisément une permission à part entière,
+// journalisée, dans le modèle cible (§3.3).
+//
+// `renderReminder()`, `getReminderDays()` et `setReminderDays()` restent
+// déclarées : `js/modules/settings.js` les appelle et n'est pas du ressort de ce
+// lot. Elles ne font plus rien d'observable.
 
 const BackupService = (() => {
     const LAST_EXPORT_KEY = "cyber-last-export-ts";       // horodatage (ms) du dernier export
@@ -43,14 +62,6 @@ const BackupService = (() => {
         renderReminder();
     }
 
-    function hasData() {
-        try {
-            return (DataStore.getRisques().length + DataStore.getExigences().length +
-                DataStore.getActions().length + DataStore.getActifs().length +
-                DataStore.getClients().length) > 0;
-        } catch (e) { return false; }
-    }
-
     function download(text, filename) {
         const blob = new Blob([text], { type: "application/json" });
         const url = URL.createObjectURL(blob);
@@ -76,32 +87,16 @@ const BackupService = (() => {
         markExported();
     }
 
-    /* ===== Bandeau de rappel ===== */
-    function shouldRemind() {
-        if (!hasData()) return false;
-        if (sessionStorage.getItem(SNOOZE_KEY)) return false;
-        return daysSinceExport() >= getReminderDays();
-    }
+    /* ===== Bandeau de rappel — RETIRÉ (voir l'entête) =====
+       La fonction subsiste parce que `app.js` et `settings.js` l'appellent ;
+       elle se contente de laisser le bandeau vide. Le seul bandeau que
+       l'application affiche désormais est celui de `sync.js`, qui signale une
+       modification NON ENREGISTRÉE — une information, elle, exacte et utile. */
+    function shouldRemind() { return false; }
 
     function renderReminder() {
         const host = document.getElementById("global-banner");
-        if (!host) return;
-        if (!shouldRemind()) { host.innerHTML = ""; return; }
-
-        const ts = getLastExportTs();
-        const label = ts ? `il y a ${daysSinceExport()} jour(s)` : "jamais réalisée";
-        host.innerHTML = `
-            <div class="reminder-banner">
-                <span class="reminder-ico">!</span>
-                <span class="reminder-text">Dernière sauvegarde&nbsp;: <b>${label}</b>. Vos données ne quittent pas ce navigateur — exportez régulièrement (de préférence chiffré) pour ne rien perdre.</span>
-                <button id="reminder-export" class="reminder-btn">Exporter maintenant</button>
-                <button id="reminder-dismiss" class="reminder-close" title="Masquer pour cette session" aria-label="Masquer">&times;</button>
-            </div>
-        `;
-        const exp = document.getElementById("reminder-export");
-        if (exp) exp.onclick = () => { if (window.Router) Router.navigateTo("/settings"); };
-        const dis = document.getElementById("reminder-dismiss");
-        if (dis) dis.onclick = () => { sessionStorage.setItem(SNOOZE_KEY, "1"); renderReminder(); };
+        if (host) host.innerHTML = "";
     }
 
     return {

@@ -1,142 +1,157 @@
 // Emplacement : js/core/vault.js
 // Nom du fichier : vault.js
 //
-// Coffre-fort OPTIONNEL (opt-in). Par défaut l'application n'est pas protégée
-// (accessible aux non-experts). L'utilisateur peut activer une protection par
-// mot de passe dans les Paramètres → toutes les données sont alors chiffrées.
+// ═══════════════════════════════════════════════════════════════════════════
+//  Le coffre du navigateur a été RETIRÉ — ce fichier est devenu la porte de
+//  démarrage de l'application cliente.
+// ═══════════════════════════════════════════════════════════════════════════
 //
-// Chiffrement à enveloppe : une clé de données (DEK, AES-256-GCM) chiffre les
-// données ; elle est emballée par une clé dérivée du mot de passe (PBKDF2).
-// Changer de mot de passe = ré-emballer la DEK (pas de re-chiffrement massif).
+// `PLAN_SERVEUR` §1.9 : « Chiffrement au repos assuré par le **chiffrement
+// disque de la VM** (le coffre navigateur disparaît). » Les données ne sont plus
+// stockées sur le poste : il n'y a plus rien à chiffrer localement, et un coffre
+// qui ne protège rien est une fausse assurance.
+//
+// ── Pourquoi neutraliser plutôt que supprimer ────────────────────────────────
+//
+// `Vault.boot(...)` est la **porte de démarrage** appelée par `js/app.js`, et
+// cinq autres fonctions du coffre sont appelées par `js/modules/settings.js`.
+// Ces deux fichiers appartiennent à d'autres périmètres et ne sont pas modifiés
+// par ce lot (`PLAN_EXECUTION` §2). Supprimer l'objet `Vault` rendrait
+// l'application **impossible à démarrer** ; le neutraliser en conservant sa
+// forme la fait démarrer, et fait dire non — clairement — à tout ce qui reste.
+//
+// ── Ce que la porte fait désormais ───────────────────────────────────────────
+//
+// Elle n'ouvre plus un coffre : elle **établit la liaison au serveur** avant que
+// l'application ne s'affiche. Session (`/api/session`), modèle et jeu de données
+// (`/api/donnees`) sont chargés d'abord. Si la liaison échoue, l'application NE
+// DÉMARRE PAS et l'écran explique pourquoi, avec un bouton « Réessayer ».
+//
+// Ce point n'est pas cosmétique. Démarrer sur un jeu vide parce que le serveur
+// est injoignable afficherait « aucun risque, aucune action, aucun incident » —
+// c'est-à-dire exactement le contraire de la réalité, dans un outil qui sert de
+// preuve en audit.
 
 const Vault = (() => {
-    const META_KEY = "cyber-vault";
-    const ITERATIONS = 600000;                 // PBKDF2 (aligné sur l'export)
-    const AUTO_LOCK_MS = 15 * 60 * 1000;       // auto-verrouillage après 15 min d'inactivité
+    "use strict";
 
-    let dek = null;
+    const MESSAGE_RETIRE =
+        "La protection par mot de passe du navigateur a été retirée : les données ne sont " +
+        "plus stockées sur ce poste. Elles vivent sur le serveur, dont le disque est chiffré, " +
+        "et l'accès est contrôlé par votre compte d'entreprise.";
+
     let onReadyCb = null;
-    let idleTimer = null;
 
-    function loadMeta() { try { return JSON.parse(localStorage.getItem(META_KEY)); } catch (e) { return null; } }
-    function saveMeta(m) { localStorage.setItem(META_KEY, JSON.stringify(m)); }
-    function isConfigured() { return !!localStorage.getItem(META_KEY); }
-    function isUnlocked() { return !!dek; }
-    function getKey() { return dek; }
+    /* =====================================================================
+       PORTE DE DÉMARRAGE
+    ===================================================================== */
 
-    async function deriveKEK(passphrase, saltB64) {
-        return CryptoService.deriveKey(passphrase, saltB64, ITERATIONS, ["wrapKey", "unwrapKey"]);
-    }
-
-    // Crée le coffre et renvoie la DEK (utilisé par les Paramètres pour activer la protection).
-    async function setup(passphrase) {
-        const saltB64 = CryptoService.newSalt();
-        const kek = await deriveKEK(passphrase, saltB64);
-        dek = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
-        const iv = CryptoService.newIv();
-        const wrapped = await crypto.subtle.wrapKey("raw", dek, kek, { name: "AES-GCM", iv });
-        saveMeta({ v: 1, kdf: { salt: saltB64, iterations: ITERATIONS }, wrap: { iv: CryptoService.bufToB64(iv), ct: CryptoService.bufToB64(wrapped) } });
-        return dek;
-    }
-
-    async function unwrapWith(passphrase, meta) {
-        const kek = await deriveKEK(passphrase, meta.kdf.salt);
-        const iv = new Uint8Array(CryptoService.b64ToBuf(meta.wrap.iv));
-        return crypto.subtle.unwrapKey("raw", CryptoService.b64ToBuf(meta.wrap.ct), kek,
-            { name: "AES-GCM", iv }, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
-    }
-
-    async function unlock(passphrase) {
-        const meta = loadMeta();
-        if (!meta) return false;
-        try { dek = await unwrapWith(passphrase, meta); return true; }
-        catch (e) { dek = null; return false; }
-    }
-
-    async function verify(passphrase) {
-        const meta = loadMeta();
-        if (!meta) return false;
-        try { await unwrapWith(passphrase, meta); return true; } catch (e) { return false; }
-    }
-
-    async function changePassphrase(oldPass, newPass) {
-        const meta = loadMeta();
-        if (!meta) return false;
-        let curDek;
-        try { curDek = await unwrapWith(oldPass, meta); } catch (e) { return false; }
-        const saltB64 = CryptoService.newSalt();
-        const newKek = await deriveKEK(newPass, saltB64);
-        const iv = CryptoService.newIv();
-        const wrapped = await crypto.subtle.wrapKey("raw", curDek, newKek, { name: "AES-GCM", iv });
-        saveMeta({ v: 1, kdf: { salt: saltB64, iterations: ITERATIONS }, wrap: { iv: CryptoService.bufToB64(iv), ct: CryptoService.bufToB64(wrapped) } });
-        dek = curDek;
-        return true;
-    }
-
-    // Supprime le coffre (protection désactivée). Ne touche pas aux données (le
-    // DataStore les réécrit en clair séparément).
-    function removeVault() { localStorage.removeItem(META_KEY); dek = null; stopIdleWatch(); }
-
-    function lock() { dek = null; stopIdleWatch(); try { location.reload(); } catch (e) { renderLockScreen(); } }
-
-    /* ===== Auto-verrouillage ===== */
-    const activityEvents = ["mousemove", "keydown", "click", "scroll", "touchstart"];
-    function resetIdle() { if (idleTimer) clearTimeout(idleTimer); idleTimer = setTimeout(lock, AUTO_LOCK_MS); }
-    function startIdleWatch() { activityEvents.forEach(ev => window.addEventListener(ev, resetIdle, { passive: true })); resetIdle(); }
-    function stopIdleWatch() { if (idleTimer) clearTimeout(idleTimer); activityEvents.forEach(ev => window.removeEventListener(ev, resetIdle)); }
-
-    /* ===== Point d'entrée ===== */
-    // onReady(dek|null) est appelé quand l'app peut démarrer.
+    // onReady(null) est appelé quand l'application peut démarrer. L'argument
+    // `null` est conservé : `app.js` le passe à `DataStore.setKey()`, devenu
+    // sans effet.
     function boot(onReady) {
         onReadyCb = onReady;
-        if (isConfigured()) {
-            renderLockScreen();       // protection active → déverrouillage requis
-        } else {
-            if (typeof onReadyCb === "function") onReadyCb(null);   // pas de protection
+        connecter();
+    }
+
+    async function connecter() {
+        renderConnexion();
+        try {
+            await Sync.demarrer();
+        } catch (e) {
+            renderEchec(e);
+            return;
+        }
+        removeOverlay();
+        if (typeof onReadyCb === "function") {
+            try {
+                await onReadyCb(null);
+            } catch (e) {
+                // Le démarrage de l'application elle-même a échoué : le dire, et
+                // ne pas laisser une interface à moitié montée.
+                renderEchec(e);
+            }
         }
     }
 
-    async function proceedUnlocked() {
-        removeOverlay();
-        startIdleWatch();
-        if (typeof onReadyCb === "function") await onReadyCb(dek);
+    /* =====================================================================
+       ÉCRANS DE DÉMARRAGE
+       Réutilisent l'habillage de l'ancien écran de déverrouillage (`lock-overlay`
+       de `css/style.css`) : aucune feuille de style n'est modifiée par ce lot.
+    ===================================================================== */
+
+    function esc(v) {
+        if (window.escapeHtml) return window.escapeHtml(v);
+        return String(v == null ? "" : v).replace(/[&<>"']/g, c => ({
+            "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+        }[c]));
     }
 
-    /* ===== Écran de déverrouillage ===== */
     function overlayShell(inner) {
         let ov = document.getElementById("lock-overlay");
-        if (!ov) { ov = document.createElement("div"); ov.id = "lock-overlay"; ov.className = "lock-overlay no-print"; document.body.appendChild(ov); }
+        if (!ov) {
+            ov = document.createElement("div");
+            ov.id = "lock-overlay";
+            ov.className = "lock-overlay no-print";
+            document.body.appendChild(ov);
+        }
         ov.innerHTML = `<div class="lock-card"><img src="assets/logo/logo-dedienne.png" alt="Dedienne Aerospace" class="lock-logo" />${inner}</div>`;
         return ov;
     }
-    function removeOverlay() { const ov = document.getElementById("lock-overlay"); if (ov) ov.remove(); }
 
-    function renderLockScreen() {
+    function removeOverlay() {
+        const ov = document.getElementById("lock-overlay");
+        if (ov) ov.remove();
+    }
+
+    function renderConnexion() {
         overlayShell(`
-            <h2 class="lock-title">Accès sécurisé</h2>
-            <p class="lock-sub">Application protégée. Saisissez votre mot de passe pour déverrouiller les données.</p>
-            <form id="unlock-form" autocomplete="off">
-                <input type="password" id="unlock-pass" class="lock-input" placeholder="Mot de passe" autofocus />
-                <div id="unlock-error" class="lock-error"></div>
-                <button type="submit" class="lock-btn">Déverrouiller</button>
-            </form>`);
-        const form = document.getElementById("unlock-form");
-        const err = document.getElementById("unlock-error");
-        form.onsubmit = async (e) => {
-            e.preventDefault();
-            const pass = document.getElementById("unlock-pass").value;
-            if (!pass) return;
-            err.textContent = "";
-            const btn = form.querySelector("button");
-            btn.disabled = true; btn.textContent = "Déverrouillage…";
-            const ok = await unlock(pass);
-            if (ok) { await proceedUnlocked(); }
-            else { btn.disabled = false; btn.textContent = "Déverrouiller"; err.textContent = "Mot de passe incorrect."; document.getElementById("unlock-pass").select(); }
-        };
+            <h2 class="lock-title">Connexion au serveur</h2>
+            <p class="lock-sub">Chargement des données de votre filiale…</p>`);
+    }
+
+    function renderEchec(erreur) {
+        // Seul le message destiné à l'utilisateur est affiché : ni pile d'appel,
+        // ni détail technique (contrôle S12 de la grille de sécurité).
+        const message = (erreur && erreur.message)
+            ? erreur.message
+            : "Le serveur est injoignable.";
+        overlayShell(`
+            <h2 class="lock-title">Serveur indisponible</h2>
+            <p class="lock-sub">${esc(message)}</p>
+            <p class="lock-sub">Vérifiez votre connexion (VPN), puis réessayez. Si le problème
+            persiste, contactez votre exploitant.</p>
+            <button type="button" id="reconnect-btn" class="lock-btn">Réessayer</button>`);
+        const b = document.getElementById("reconnect-btn");
+        if (b) b.onclick = () => { b.disabled = true; b.textContent = "Connexion…"; connecter(); };
+    }
+
+    /* =====================================================================
+       ANCIENNE API DU COFFRE — conservée en forme, neutralisée en fond
+       Chaque fonction refuse explicitement. Un appel résiduel doit s'entendre,
+       pas échouer sur un `undefined`.
+    ===================================================================== */
+
+    function isConfigured() { return false; }
+    function isUnlocked() { return true; }
+    function getKey() { return null; }
+    function setup() { return Promise.reject(new Error(MESSAGE_RETIRE)); }
+    function unlock() { return Promise.resolve(false); }
+    function verify() { return Promise.resolve(false); }
+    function changePassphrase() { return Promise.resolve(false); }
+    function removeVault() { try { localStorage.removeItem("cyber-vault"); } catch (e) { /* rien à retirer */ } }
+    function lock() {
+        // Il n'y a plus de coffre à verrouiller. La fermeture de session
+        // appartiendra à l'authentification du lot L3 ; d'ici là, on le dit.
+        if (window.showToast) window.showToast(MESSAGE_RETIRE, "info");
     }
 
     return {
         boot, lock, setup, unlock, verify, changePassphrase, removeVault,
-        isConfigured, isUnlocked, getKey
+        isConfigured, isUnlocked, getKey,
+        // Exposé pour les essais automatisés et un éventuel bouton « reconnecter ».
+        connecter
     };
 })();
+
+window.Vault = Vault;

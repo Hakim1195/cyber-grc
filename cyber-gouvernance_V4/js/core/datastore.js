@@ -1,16 +1,31 @@
 // Emplacement : js/core/datastore.js
 // Nom du fichier : datastore.js
 //
-// Source de vérité en mémoire (API 100% synchrone pour les modules) + persistance
-// durable via IndexedDB (voir persistence.js). Repli localStorage anti-crash.
-// L'API publique (getX / addX / updateX / deleteX) est INCHANGÉE : les modules
-// n'ont pas besoin d'être modifiés.
+// Source de vérité EN MÉMOIRE, API 100 % synchrone pour les modules.
+//
+// ── Ce qui a changé, et ce qui n'a pas changé (lot L2) ───────────────────────
+//
+// N'a PAS changé — et c'est la décision qui rend le chantier faisable
+// (`PLAN_SERVEUR` §1.3, risque projet P3) : **l'API publique**. Les 125 méthodes
+// `getX / addX / updateX / deleteX` gardent leur signature et restent synchrones.
+// Aucun des 26 modules métier n'est modifié.
+//
+// A changé — la persistance, et elle seule :
+//   · le jeu de données est **chargé depuis le serveur** au démarrage
+//     (`/api/donnees`), dans la forme exacte de l'objet `data` ;
+//   · `save()` — toujours l'entonnoir unique appelé après chaque mutation —
+//     ne réécrit plus un instantané complet mais réveille `sync.js`, qui
+//     n'envoie que **l'enregistrement modifié**, sous verrouillage optimiste ;
+//   · IndexedDB, le miroir `localStorage` et les points de restauration locaux
+//     **disparaissent** : la sauvegarde est celle du serveur (§1.8), et garder
+//     une copie complète des données de gouvernance sur chaque poste serait une
+//     régression de sécurité — d'autant que le coffre qui la chiffrait a été
+//     retiré lui aussi (§1.9) ;
+//   · l'export/import `grc-backup` **reste**, non plus comme sauvegarde mais
+//     comme **format d'échange** (§2.6) : reprise d'une filiale déjà équipée,
+//     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const STORAGE_KEY = "cyber-gouvernance-data";   // ancienne clé localStorage (migration)
-    const LEGACY_AUDITS_KEY = "cyber-audits";
-    const LEGACY_REVUES_KEY = "cyber-revues";
-    const LOCAL_CURRENT_KEY = "cyber-current";      // repli (chiffré si clé) si IndexedDB indisponible
     const SCHEMA_VERSION = 12;
 
     const ARRAY_FIELDS = [
@@ -40,10 +55,6 @@ const DataStore = (() => {
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
 
-    const AUTOSAVE_DEBOUNCE_MS = 500;
-    const AUTO_BACKUP_INTERVAL_MS = 10 * 60 * 1000; // un point auto au maximum toutes les 10 min
-    const AUTO_BACKUP_KEEP = 20;                     // nombre de points auto conservés
-
     function emptyData() {
         const d = { schemaVersion: SCHEMA_VERSION };
         ARRAY_FIELDS.forEach(f => { d[f] = []; });
@@ -51,66 +62,21 @@ const DataStore = (() => {
     }
 
     let data = emptyData();
-    let flushTimer = null;
-    let lastSavedAt = 0;
-    let lastAutoBackupTs = 0;
-    let idbHealthy = true;
-    let dek = null;   // clé de chiffrement au repos (null = mode non chiffré). Fournie par le Vault.
 
-    // Active/désactive le chiffrement au repos (appelée par app.js / Vault).
-    function setKey(key) { dek = key; }
+    // Conservé pour compatibilité de signature : `app.js` appelle encore
+    // `setKey(dek)` au démarrage. Le chiffrement au repos est désormais celui du
+    // disque de la VM (`PLAN_SERVEUR` §1.9) ; il n'y a plus de clé navigateur.
+    function setKey(_cle) { /* sans objet depuis la bascule serveur */ }
 
     /* =========================
-       DÉTECTION DE SATURATION DU STOCKAGE (quota)
-       Les écritures durables (IndexedDB / localStorage) peuvent échouer si le quota
-       du navigateur est atteint (typiquement à l'import d'un gros volume). On le
-       signale explicitement au lieu d'échouer en silence (risque de perte de données).
+       SATURATION DU STOCKAGE — SANS OBJET DEPUIS LA BASCULE
+       Le quota du navigateur ne limite plus rien : les données ne sont plus
+       stockées localement. L'observateur reste enregistrable (app.js s'y branche)
+       mais n'est jamais appelé. La perte de données ne vient plus d'un quota mais
+       d'un refus d'écriture du serveur, que `sync.js` affiche explicitement.
     ========================== */
     let quotaListeners = [];
-    let quotaHitLast = false;   // le DERNIER flush a-t-il buté sur le quota ?
-    function isQuotaError(e) {
-        if (!e) return false;
-        return e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" || e.code === 22 || e.code === 1014;
-    }
-    function notifyQuota(source) {
-        quotaListeners.forEach(cb => { try { cb(source); } catch (err) { /* ignore */ } });
-    }
-    // Enregistre un observateur appelé quand une écriture échoue faute de place.
     function onQuotaExceeded(cb) { if (typeof cb === "function") quotaListeners.push(cb); }
-
-    function deepCopy(obj) {
-        return JSON.parse(JSON.stringify(obj));
-    }
-
-    // Empreinte rapide (djb2) pour dédupliquer les points de restauration sans déchiffrer.
-    function quickHash(str) {
-        let h = 5381;
-        for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
-        return (h >>> 0).toString(16);
-    }
-
-    // Encapsule l'état pour le stockage (chiffré si une clé est présente).
-    async function encodePayload() {
-        const plaintext = JSON.stringify(data);
-        if (dek && typeof CryptoService !== "undefined" && CryptoService.available()) {
-            const env = await CryptoService.encryptString(dek, plaintext);
-            return { enc: true, iv: env.iv, ct: env.ct };
-        }
-        return { enc: false, data: JSON.parse(plaintext) };
-    }
-
-    // Décode un enregistrement stocké (chiffré, encapsulé clair, ou ancien objet direct).
-    async function decodePayload(payload) {
-        if (!payload) return null;
-        if (payload.enc) {
-            if (!dek) return null;
-            try { return JSON.parse(await CryptoService.decryptString(dek, payload)); }
-            catch (e) { console.error("Déchiffrement du stockage impossible", e); return null; }
-        }
-        if (payload.data && typeof payload.data === "object") return payload.data;
-        if (Array.isArray(payload.exigences) || Array.isArray(payload.clients)) return payload; // ancien format direct
-        return null;
-    }
 
     function normalize(d) {
         const out = Object.assign(emptyData(), d || {});
@@ -161,267 +127,111 @@ const DataStore = (() => {
         return out;
     }
 
-    function isEmpty(d) {
-        return ARRAY_FIELDS.every(f => !Array.isArray(d[f]) || d[f].length === 0);
-    }
-
-    function safeParse(str) {
-        try { return str ? JSON.parse(str) : null; } catch (e) { return null; }
-    }
-
-    /* =========================
-       MIGRATION DEPUIS localStorage
-    ========================== */
-    function migrateFromLegacy() {
-        const base = safeParse(localStorage.getItem(STORAGE_KEY));
-        const audits = safeParse(localStorage.getItem(LEGACY_AUDITS_KEY));
-        const revues = safeParse(localStorage.getItem(LEGACY_REVUES_KEY));
-        if (!base && !audits && !revues) return null;
-
-        const merged = base || {};
-        if (Array.isArray(audits) && !Array.isArray(merged.audits)) merged.audits = audits;
-        if (Array.isArray(revues) && !Array.isArray(merged.revues)) merged.revues = revues;
-        return merged;
-    }
-
     /* =========================
        CHARGEMENT / INITIALISATION (async)
+       Le jeu de données vient du serveur, et de nulle part ailleurs. En cas
+       d'échec, `init()` LÈVE : l'application ne doit pas démarrer sur un jeu
+       vide, qui se lirait comme « cette filiale n'a rien saisi ». C'est
+       `vault.js` (la porte de démarrage) qui présente l'échec et propose de
+       réessayer.
     ========================== */
     async function init() {
-        try {
-            let payload = null;
+        // La porte de démarrage a normalement déjà chargé la session et les
+        // données ; si `init()` est appelé seul (essai automatisé), on démarre.
+        let charge = (typeof Sync !== "undefined") ? Sync.jeuDeDonnees() : null;
+        if (!charge) charge = await Sync.demarrer();
 
-            if (Persistence.idbAvailable()) {
-                try {
-                    payload = await Persistence.kvGet("current");
-                } catch (e) {
-                    console.error("Lecture IndexedDB échouée", e);
-                    idbHealthy = false;
-                }
-            } else {
-                idbHealthy = false;
-            }
-
-            // Repli : instantané stocké dans localStorage (si IndexedDB KO)
-            if (!payload) payload = safeParse(localStorage.getItem(LOCAL_CURRENT_KEY));
-
-            let loaded = payload ? await decodePayload(payload) : null;
-
-            // Aucun enregistrement durable → tenter la migration depuis l'ancien localStorage
-            if (!loaded) {
-                loaded = migrateFromLegacy();
-            }
-
-            data = normalize(loaded || data);
-
-            // (Re)chiffre/persiste l'état normalisé (finalise migration ou activation du chiffrement)
-            await flushNow();
-
-            // Rendre le stockage persistant + point de restauration d'ouverture
-            if (idbHealthy) {
-                Persistence.requestPersistent();
-                await maybeAutoBackup("Ouverture de session", true, true);
-            }
-        } catch (e) {
-            console.error("Erreur d'initialisation du DataStore", e);
-            data = normalize(data);
+        // Un serveur plus récent que ce frontend enverrait des champs que nous ne
+        // saurions ni afficher ni réécrire : mieux vaut refuser que perdre.
+        if (charge.schemaVersion > SCHEMA_VERSION) {
+            throw new Error("Le serveur utilise une version de modèle (" + charge.schemaVersion +
+                ") plus récente que cette application (" + SCHEMA_VERSION + "). Mettez l'application à jour.");
         }
 
-        // Filet de sécurité : flush avant fermeture / onglet caché
-        try {
-            window.addEventListener("beforeunload", () => { mirrorToLocalStorage(); flushNow(); });
-            document.addEventListener("visibilitychange", () => {
-                if (document.visibilityState === "hidden") { mirrorToLocalStorage(); flushNow(); }
-            });
-        } catch (e) { /* ignore */ }
+        data = normalize(charge.data);
+
+        Sync.brancher({
+            collections: ARRAY_FIELDS,
+            lire: () => data,
+            remplacer: (nouveau) => { data = normalize(nouveau); }
+        });
+        Sync.adopterJeu(data);
+        Sync.installerFilets();
+        Sync.demarrerSondage();
     }
 
     /* =========================
        ENREGISTREMENT
+       `save()` reste le point d'entrée SYNCHRONE appelé par tous les modules.
+       Il ne persiste plus rien lui-même : il signale que la mémoire a bougé, et
+       `sync.js` calcule l'écriture ciblée (`PLAN_SERVEUR` §1.3).
     ========================== */
-    // Point d'entrée synchrone appelé par tous les modules.
     function save() {
         data.updatedAt = Date.now();
-        mirrorToLocalStorage();   // secours synchrone anti-crash (uniquement en mode non chiffré)
-        scheduleFlush();          // persistance durable (débounce)
+        if (typeof Sync !== "undefined") Sync.marquerModification();
     }
 
-    function scheduleFlush() {
-        if (flushTimer) clearTimeout(flushTimer);
-        flushTimer = setTimeout(() => { flushNow(); }, AUTOSAVE_DEBOUNCE_MS);
-    }
-
-    // Miroir localStorage synchrone (anti-crash) — désactivé quand le chiffrement
-    // au repos est actif (on n'écrit jamais de données en clair dans ce cas).
-    function mirrorToLocalStorage() {
-        if (dek) return;
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        } catch (e) {
-            // Quota dépassé ou indisponible : le miroir est best-effort, mais on
-            // signale la saturation (le stockage durable risque d'échouer aussi).
-            if (isQuotaError(e)) notifyQuota("localStorage");
-        }
-    }
-
-    async function flushNow() {
-        if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
-        quotaHitLast = false;
-        try {
-            const payload = await encodePayload();   // chiffré si une clé est présente
-            if (Persistence.idbAvailable() && idbHealthy) {
-                await Persistence.kvSet("current", payload);
-                await Persistence.kvSet("meta", { schemaVersion: SCHEMA_VERSION, updatedAt: Date.now(), encrypted: !!dek });
-            } else {
-                localStorage.setItem(LOCAL_CURRENT_KEY, JSON.stringify(payload));
-            }
-            lastSavedAt = Date.now();
-            maybeAutoBackup(undefined, false, true); // throttlé + dédupliqué
-            return true;
-        } catch (e) {
-            if (isQuotaError(e)) { quotaHitLast = true; notifyQuota("indexedDB"); }
-            console.error("Échec de l'enregistrement", e);
-            if (Persistence.idbAvailable()) idbHealthy = false;
-            return false;
-        }
-    }
-
-    // Force un enregistrement immédiat et renvoie l'état (dont la saturation de
-    // quota) — utile après un import en masse pour prévenir l'utilisateur.
+    // Force l'envoi immédiat et attend le serveur. Utilisé après un import en
+    // masse. La forme du retour est conservée (`importExcel.js` la lit) ;
+    // `quota` vaut désormais toujours faux — le quota du navigateur ne limite
+    // plus rien, et un refus du serveur est signalé par son propre bandeau.
     async function flush() {
-        const ok = await flushNow();
-        return { ok, quota: quotaHitLast };
+        if (typeof Sync === "undefined") return { ok: false, quota: false };
+        const r = await Sync.pousser();
+        return { ok: !!(r && r.ok), quota: false };
     }
 
     /* =========================
-       POINTS DE RESTAURATION (HISTORIQUE)
+       POINTS DE RESTAURATION LOCAUX — RETIRÉS
+       Ils dupliquaient toute la base dans le navigateur. La sauvegarde et la
+       restauration sont désormais celles du serveur (`PLAN_SERVEUR` §1.8 :
+       archivage continu des journaux de transactions, RPO de quelques minutes),
+       et l'utilisateur n'a plus à s'en occuper. Les fonctions restent déclarées
+       pour que l'écran Paramètres, qui n'est pas du ressort de ce lot, continue
+       de fonctionner : il affiche alors « aucun point de restauration ».
     ========================== */
-    // Construit un enregistrement de point de restauration (chiffré si une clé est
-    // présente). `sig` = empreinte du contenu clair, pour dédupliquer sans déchiffrer.
-    async function makeBackupRecord(label, type) {
-        const plaintext = JSON.stringify(data);
-        const rec = { ts: Date.now(), type, label, schemaVersion: SCHEMA_VERSION, sig: quickHash(plaintext) };
-        if (dek && typeof CryptoService !== "undefined" && CryptoService.available()) {
-            const env = await CryptoService.encryptString(dek, plaintext);
-            rec.enc = true; rec.iv = env.iv; rec.ct = env.ct;
-        } else {
-            rec.enc = false; rec.data = JSON.parse(plaintext);
-        }
-        return rec;
-    }
-
-    async function maybeAutoBackup(label, force, dedup) {
-        if (!Persistence.idbAvailable() || !idbHealthy) return;
-        if (isEmpty(data)) return;   // rien à sauvegarder
-        const now = Date.now();
-        if (!force && (now - lastAutoBackupTs < AUTO_BACKUP_INTERVAL_MS)) return;
-        // Déduplication : ne pas recréer un point identique au plus récent (via l'empreinte)
-        if (dedup) {
-            try {
-                const list = await Persistence.listBackups();
-                if (list.length && list[0].sig === quickHash(JSON.stringify(data))) return;
-            } catch (e) { /* on sauvegarde quand même en cas de doute */ }
-        }
-        lastAutoBackupTs = now;
-        try {
-            await Persistence.addBackup(await makeBackupRecord(label || "Sauvegarde automatique", "auto"));
-            await Persistence.pruneBackups("auto", AUTO_BACKUP_KEEP);
-        } catch (e) {
-            if (isQuotaError(e)) notifyQuota("backup");
-            console.error("Point de restauration automatique impossible", e);
-        }
-    }
-
-    async function createManualBackup(label) {
-        if (!Persistence.idbAvailable()) return false;
-        try {
-            await Persistence.addBackup(await makeBackupRecord((label && label.trim()) || "Point de restauration manuel", "manual"));
-            return true;
-        } catch (e) {
-            console.error("Création du point de restauration impossible", e);
-            return false;
-        }
-    }
-
-    function listBackups() {
-        if (!Persistence.idbAvailable()) return Promise.resolve([]);
-        return Persistence.listBackups().catch(() => []);
-    }
-
-    async function restoreBackup(id) {
-        if (!Persistence.idbAvailable()) return false;
-        const b = await Persistence.getBackup(id);
-        if (!b) return false;
-        const restored = await decodePayload(b);   // gère backups chiffrés et anciens
-        if (!restored) return false;
-        // Instantané de sécurité de l'état courant AVANT de restaurer (annulable)
-        await maybeAutoBackup("Avant restauration", true);
-        data = normalize(restored);
-        mirrorToLocalStorage();
-        await flushNow();
-        return true;
-    }
-
-    function deleteBackup(id) {
-        if (!Persistence.idbAvailable()) return Promise.resolve(false);
-        return Persistence.deleteBackup(id).then(() => true).catch(() => false);
-    }
-
-    async function deleteAllBackups() {
-        if (!Persistence.idbAvailable()) return;
-        try {
-            const list = await Persistence.listBackups();
-            for (const b of list) await Persistence.deleteBackup(b.id);
-        } catch (e) { /* ignore */ }
-    }
+    function createManualBackup(_label) { return Promise.resolve(false); }
+    function listBackups() { return Promise.resolve([]); }
+    function restoreBackup(_id) { return Promise.resolve(false); }
+    function deleteBackup(_id) { return Promise.resolve(false); }
 
     /* =========================
-       CHIFFREMENT AU REPOS (OPT-IN)
+       CHIFFREMENT AU REPOS — RETIRÉ
+       `PLAN_SERVEUR` §1.9 : « Chiffrement au repos assuré par le chiffrement
+       disque de la VM (le coffre navigateur disparaît) ». Les fonctions
+       refusent explicitement plutôt que de disparaître : un appel résiduel doit
+       s'entendre, pas échouer sur un `undefined`.
     ========================== */
-    function isEncrypted() { return !!dek; }
-
-    // Active le chiffrement : la clé chiffre la base, on purge toute trace en clair
-    // (miroir localStorage + anciens points de restauration) puis on repart chiffré.
-    async function enableEncryption(key) {
-        setKey(key);
-        try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
-        await deleteAllBackups();                 // les points existants étaient en clair
-        await flushNow();                         // écrit l'instantané chiffré
-        await maybeAutoBackup("Protection activée", true);
-        return true;
-    }
-
-    // Désactive le chiffrement : on réécrit tout en clair et on repart des points en clair.
-    async function disableEncryption() {
-        setKey(null);
-        await deleteAllBackups();                 // les points existants étaient chiffrés
-        try { localStorage.removeItem(LOCAL_CURRENT_KEY); } catch (e) { /* ignore */ }
-        await flushNow();
-        await maybeAutoBackup("Protection désactivée", true);
-        return true;
-    }
+    const MESSAGE_COFFRE =
+        "Le coffre du navigateur a été retiré : les données ne sont plus stockées sur ce poste. " +
+        "Le chiffrement au repos est celui du disque du serveur.";
+    function isEncrypted() { return false; }
+    function enableEncryption(_cle) { return Promise.reject(new Error(MESSAGE_COFFRE)); }
+    function disableEncryption() { return Promise.resolve(true); }
 
     /* =========================
        INFOS STOCKAGE
+       Même forme qu'avant (l'écran Paramètres la lit telle quelle), mais elle
+       décrit désormais la liaison au serveur et non le stockage du navigateur.
     ========================== */
     async function getStorageInfo() {
         const bytes = new Blob([JSON.stringify(data)]).size;
-        const estimate = Persistence.idbAvailable() ? await Persistence.estimate() : null;
-        let backupCount = 0;
-        if (Persistence.idbAvailable()) {
-            try { backupCount = (await Persistence.listBackups()).length; } catch (e) { /* ignore */ }
-        }
         const counts = {};
         ARRAY_FIELDS.forEach(f => { counts[f] = data[f].length; });
+        const etat = (typeof Sync !== "undefined") ? Sync.etat() : null;
+        const filiale = (typeof Session !== "undefined") ? Session.libelleFiliale() : "";
         return {
-            engine: (Persistence.idbAvailable() && idbHealthy) ? "IndexedDB" : "localStorage (secours)",
-            encrypted: !!dek,
+            engine: "Serveur" + (filiale ? " — " + filiale : ""),
+            encrypted: false,
             bytes,
-            estimate,
-            backupCount,
-            lastSavedAt,
+            estimate: null,
+            backupCount: 0,
+            lastSavedAt: etat ? etat.dernierEnregistrement : 0,
             counts,
-            updatedAt: data.updatedAt || null
+            updatedAt: data.updatedAt || null,
+            // Champs neufs, sans incidence sur l'affichage existant.
+            enAttente: etat ? etat.enAttente : false,
+            incidents: etat ? etat.incidents : 0
         };
     }
 
@@ -760,16 +570,26 @@ const DataStore = (() => {
         const m = getMesureById(id);
         if (!m) return 0;
         let n = 0;
+        const touchees = [];
         data.evaluations.forEach(e => {
             if (Array.isArray(e.mesure_ids) && e.mesure_ids.indexOf(id) !== -1) {
                 const agg = aggregateFromMesures(e.mesure_ids);
                 e.statut = agg.statut;
                 e.maturite = agg.maturite;
                 e.updatedAt = Date.now();
+                touchees.push(e.id);
                 n++;
             }
         });
-        if (n > 0) save();
+        if (n > 0) {
+            // Le recalcul ci-dessus rend l'écran juste immédiatement (la façade
+            // reste synchrone). Mais une propagation est une opération COMPOSITE :
+            // elle doit réussir entièrement ou pas du tout (contrôle S14). C'est
+            // donc le serveur qui la rejoue dans une transaction unique, et son
+            // résultat qui fait foi — voir `sync.js`.
+            if (typeof Sync !== "undefined") Sync.marquerPropagation(id, touchees);
+            save();
+        }
         return n;
     }
 
@@ -1038,30 +858,37 @@ const DataStore = (() => {
     }
 
     // Applique un payload validé. mode: "replace" (défaut) ou "merge".
+    //
+    // L'import d'un `grc-backup` reste un **format d'échange** (§2.6) : reprise
+    // d'une filiale déjà équipée de la version locale. Il s'applique en mémoire,
+    // puis `sync.js` le pousse au serveur enregistrement par enregistrement — un
+    // moteur d'import transactionnel côté serveur est le lot L7.
     async function applyImport(payload, mode) {
-        // Sécurité : point de restauration de l'état courant avant modification
-        await maybeAutoBackup("Avant import de fichier", true);
-
         if (mode === "merge") {
             const incoming = normalize(payload);
             const added = {};
             ARRAY_FIELDS.forEach(f => {
                 const existingIds = new Set(data[f].map(x => x && x.id));
                 const toAdd = incoming[f].filter(x => x && !existingIds.has(x.id));
-                data[f] = data[f].concat(toAdd);
+                // On concatène SUR PLACE : `sync.js` observe le tableau que le
+                // DataStore lui a prêté, le remplacer le lui déroberait.
+                toAdd.forEach(x => data[f].push(x));
                 added[f] = toAdd.length;
             });
             data.schemaVersion = SCHEMA_VERSION;
-            mirrorToLocalStorage();
-            await flushNow();
-            return { ok: true, added };
+            const r = await flush();
+            return { ok: r.ok, added };
         }
 
-        // Remplacement
-        data = normalize(payload);
-        mirrorToLocalStorage();
-        await flushNow();
-        return { ok: true };
+        // Remplacement : on vide chaque collection sur place, puis on recharge.
+        const incoming = normalize(payload);
+        ARRAY_FIELDS.forEach(f => {
+            data[f].length = 0;
+            incoming[f].forEach(x => data[f].push(x));
+        });
+        data.schemaVersion = SCHEMA_VERSION;
+        const r = await flush();
+        return { ok: r.ok };
     }
 
     return {
@@ -1111,8 +938,15 @@ const DataStore = (() => {
         // Historique des indicateurs (courbes de tendance)
         getHistory, recordDailySnapshot, clearHistory,
 
-        // Sauvegarde / restauration
+        // Échange de fichier `grc-backup` (§2.6) et état du stockage
         exportSnapshot, exportEncrypted, parseImport, applyImport,
         getStorageInfo, listBackups, restoreBackup, deleteBackup, createManualBackup
     };
 })();
+
+// `const` au premier niveau d'un script classique ne pose PAS de propriété sur
+// `window` : le nom `DataStore` est bien global, mais `window.DataStore` reste
+// indéfini. On l'expose explicitement, comme le font `UI`, `Sync` et `Api` —
+// c'est ce qui permet à un essai automatisé, ou à la console d'un exploitant,
+// d'interroger l'état du magasin sans deviner sa portée.
+window.DataStore = DataStore;

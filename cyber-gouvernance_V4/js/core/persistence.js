@@ -1,140 +1,70 @@
 // Emplacement : js/core/persistence.js
 // Nom du fichier : persistence.js
 //
-// Couche de persistance bas niveau basée sur IndexedDB.
-// - Store "kv"      : paires clé/valeur (ex. "current" = instantané complet des données)
-// - Store "backups" : points de restauration versionnés (auto + manuels)
+// ═══════════════════════════════════════════════════════════════════════════
+//  La persistance NAVIGATEUR a été retirée (lot L2)
+// ═══════════════════════════════════════════════════════════════════════════
 //
-// Cette couche est volontairement générique : elle ne connaît pas le modèle
-// métier. Le DataStore l'utilise pour charger/enregistrer et gérer l'historique.
+// Ce fichier portait la base IndexedDB `cyber-grc-db` : un instantané complet
+// des données dans le store `kv`, et des points de restauration versionnés dans
+// le store `backups`. Les deux ont disparu avec la bascule client/serveur :
+//
+//  · la **source de vérité** est PostgreSQL, et le chargement se fait à la
+//    connexion (`PLAN_SERVEUR` §1.3) ;
+//  · la **sauvegarde** est celle du serveur — archivage continu des journaux de
+//    transactions, RPO de quelques minutes (§1.8) — et non plus une copie que
+//    chaque utilisateur devait penser à exporter ;
+//  · surtout, garder une **copie complète des données de gouvernance cyber du
+//    groupe sur chaque poste** serait une régression de sécurité : le coffre qui
+//    la chiffrait a été retiré au même endroit du plan (§1.9), le poste n'est
+//    pas la VM chiffrée, et un portable volé emporterait la cartographie des
+//    faiblesses d'une filiale.
+//
+// ── Pourquoi le fichier subsiste ─────────────────────────────────────────────
+//
+// `index.html` le charge et `js/modules/settings.js` interroge encore l'état du
+// stockage. Le module est donc conservé avec la même forme, mais **il ne stocke
+// plus rien** : `idbAvailable()` répond faux, ce qui suffit à ce que tout le
+// code appelant emprunte le chemin « pas de stockage local ».
+//
+// Une base `cyber-grc-db` héritée d'une version antérieure est **effacée** au
+// chargement : laisser sur le poste une copie en clair des données qu'on vient
+// de rapatrier au serveur ne serait pas une omission neutre.
 
 const Persistence = (() => {
+    "use strict";
+
     const DB_NAME = "cyber-grc-db";
-    const DB_VERSION = 1;
-    const STORE_KV = "kv";
-    const STORE_BACKUPS = "backups";
 
-    let dbPromise = null;
-
-    function idbAvailable() {
+    // Efface la base héritée de la version 100 % navigateur. Sans effet si elle
+    // n'existe pas ; silencieux si le navigateur refuse (onglet privé, verrou).
+    function purgerBaseHeritee() {
         try {
-            return typeof indexedDB !== "undefined" && indexedDB !== null;
-        } catch (e) {
-            return false;
-        }
+            if (typeof indexedDB === "undefined" || !indexedDB) return;
+            const req = indexedDB.deleteDatabase(DB_NAME);
+            req.onerror = () => { /* une autre fenêtre la tient : sans conséquence ici */ };
+        } catch (e) { /* stockage indisponible */ }
     }
 
-    function openDB() {
-        if (dbPromise) return dbPromise;
-        dbPromise = new Promise((resolve, reject) => {
-            const req = indexedDB.open(DB_NAME, DB_VERSION);
-            req.onupgradeneeded = () => {
-                const db = req.result;
-                if (!db.objectStoreNames.contains(STORE_KV)) {
-                    db.createObjectStore(STORE_KV);
-                }
-                if (!db.objectStoreNames.contains(STORE_BACKUPS)) {
-                    const s = db.createObjectStore(STORE_BACKUPS, { keyPath: "id", autoIncrement: true });
-                    s.createIndex("ts", "ts");
-                    s.createIndex("type", "type");
-                }
-            };
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        });
-        return dbPromise;
-    }
+    // Faux, et définitivement : plus aucune donnée n'est écrite sur le poste.
+    function idbAvailable() { return false; }
 
-    function reqToPromise(request) {
-        return new Promise((resolve, reject) => {
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
+    const refus = () => Promise.resolve(undefined);
+    const refusListe = () => Promise.resolve([]);
 
-    function txDone(t) {
-        return new Promise((resolve, reject) => {
-            t.oncomplete = () => resolve();
-            t.onerror = () => reject(t.error);
-            t.onabort = () => reject(t.error);
-        });
-    }
-
-    async function withStore(store, mode, fn) {
-        const db = await openDB();
-        const t = db.transaction(store, mode);
-        const os = t.objectStore(store);
-        const result = fn(os);
-        await txDone(t);
-        return result;
-    }
-
-    /* ===== KV ===== */
-    async function kvGet(key) {
-        const db = await openDB();
-        const t = db.transaction(STORE_KV, "readonly");
-        return reqToPromise(t.objectStore(STORE_KV).get(key));
-    }
-    async function kvSet(key, val) {
-        return withStore(STORE_KV, "readwrite", os => os.put(val, key));
-    }
-    async function kvDelete(key) {
-        return withStore(STORE_KV, "readwrite", os => os.delete(key));
-    }
-
-    /* ===== Backups ===== */
-    async function addBackup(record) {
-        return withStore(STORE_BACKUPS, "readwrite", os => os.add(record));
-    }
-    async function listBackups() {
-        const db = await openDB();
-        const t = db.transaction(STORE_BACKUPS, "readonly");
-        const all = await reqToPromise(t.objectStore(STORE_BACKUPS).getAll());
-        return (all || []).sort((a, b) => b.ts - a.ts);
-    }
-    async function getBackup(id) {
-        const db = await openDB();
-        const t = db.transaction(STORE_BACKUPS, "readonly");
-        return reqToPromise(t.objectStore(STORE_BACKUPS).get(id));
-    }
-    async function deleteBackup(id) {
-        return withStore(STORE_BACKUPS, "readwrite", os => os.delete(id));
-    }
-    // Ne conserve que les "keep" backups les plus récents d'un type donné.
-    async function pruneBackups(type, keep) {
-        const all = (await listBackups()).filter(b => b.type === type);
-        const toDelete = all.slice(keep);
-        for (const b of toDelete) {
-            await deleteBackup(b.id);
-        }
-        return toDelete.length;
-    }
-
-    /* ===== Quota ===== */
-    async function estimate() {
-        try {
-            if (navigator.storage && navigator.storage.estimate) {
-                return await navigator.storage.estimate();
-            }
-        } catch (e) { /* ignore */ }
-        return null;
-    }
-
-    // Demande au navigateur de rendre le stockage persistant (évite l'éviction
-    // automatique en cas de pression disque). Sans effet si non supporté.
-    async function requestPersistent() {
-        try {
-            if (navigator.storage && navigator.storage.persist) {
-                return await navigator.storage.persist();
-            }
-        } catch (e) { /* ignore */ }
-        return false;
-    }
+    purgerBaseHeritee();
 
     return {
         idbAvailable,
-        kvGet, kvSet, kvDelete,
-        addBackup, listBackups, getBackup, deleteBackup, pruneBackups,
-        estimate, requestPersistent
+        purgerBaseHeritee,
+        // Ancienne surface, conservée pour ne rien casser — toutes ces fonctions
+        // sont sans effet depuis la bascule serveur.
+        kvGet: refus, kvSet: refus, kvDelete: refus,
+        addBackup: refus, listBackups: refusListe, getBackup: refus,
+        deleteBackup: refus, pruneBackups: () => Promise.resolve(0),
+        estimate: () => Promise.resolve(null),
+        requestPersistent: () => Promise.resolve(false)
     };
 })();
+
+window.Persistence = Persistence;

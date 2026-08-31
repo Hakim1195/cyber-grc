@@ -71,6 +71,12 @@
 
     <script src="js/core/persistence.js"></script>
     <script src="js/core/crypto.js"></script>
+    <!-- Bascule de la persistance (lot L2) : client de l'API, périmètre résolu
+         par le serveur, moteur de synchronisation. Chargés AVANT datastore.js,
+         qui s'appuie sur eux, et avant vault.js, devenu la porte de connexion. -->
+    <script src="js/core/api.js"></script>
+    <script src="js/core/session.js"></script>
+    <script src="js/core/sync.js"></script>
     <script src="js/core/vault.js"></script>
     <script src="js/core/datastore.js"></script>
     <script src="js/core/router.js"></script>
