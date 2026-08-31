@@ -41,6 +41,10 @@
 --       sentinelle « systeme » ne se provisionne pas (Q-3) ; les erreurs d'import suivent
 --       la filiale de leur import, et la liste des tables NON cloisonnées est montrée
 --       plutôt qu'affirmée (Q-5) ;
+--   §8g CE QU'UNE FILIALE IMPOSE AUX DIX-NEUF AUTRES — le catalogue de correspondances
+--       ne se réécrit ni ne se supprime depuis une filiale, sa lecture restant ouverte
+--       (constat M-4) ; et la note du registre RGPD est écrite puis relue, là où elle
+--       disparaissait en silence (constat M-8) ;
 --   §9  LE RÔLE APPLICATIF — ni BYPASSRLS, ni SUPERUSER, propriétaire de rien ;
 --   §10 COUVERTURE — les 47 tables sous « enable » et « force row level security », et le
 --       chemin de recherche figé sur chaque fonction (constat M-1).
@@ -2042,6 +2046,127 @@ begin
         'C101', 'Chemin de magasin devinable — et remontant d''un répertoire — refusé',
         '23514', v_obtenu,
         case when v_obtenu = '23514' then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- =====================================================================================
+-- §8 octies — CE QU'UNE FILIALE IMPOSE AUX DIX-NEUF AUTRES  (premier passage S2)
+-- -------------------------------------------------------------------------------------
+-- Le §17.6 avait coûté un constat bloquant à la porte S1 pour fermer le sens
+-- « Groupe -> filiale » : une action de portée Groupe ne modifie pas les données d'une
+-- filiale à son insu. Le sens inverse restait ouvert sur le catalogue de correspondances,
+-- et personne ne l'avait regardé.
+-- =====================================================================================
+
+\echo
+\echo '§8 octies — Le catalogue partagé, et le champ qui manquait'
+
+-- --- M-4 : le catalogue de correspondances n'est plus réinscriptible par une filiale ---
+-- Rejoué depuis Toulouse, sans le drapeau d'administration Groupe : créer une
+-- correspondance, en réécrire une, en supprimer une. Les trois échouaient à réussir.
+-- La LECTURE, elle, reste ouverte — c'est une référence commune, et la fermer n'aurait
+-- aucun sens.
+do $$
+declare
+    v_ajout  text;
+    v_maj    integer;
+    v_suppr  integer;
+    v_lu     integer;
+begin
+    -- Un groupe de correspondances posé par l'administration Groupe, comme il le sera.
+    perform set_config('grc.administration_groupe', 'oui', true);
+    insert into mappings (id, theme) values ('MAP-DEMO-G', 'Chiffrement des postes');
+    insert into mapping_exigences (mapping_id, ref_id, code) values ('MAP-DEMO-G', 'anssi', 'M22');
+    perform set_config('grc.administration_groupe', '', true);
+
+    begin
+        insert into mappings (id, theme) values ('MAP-DEMO-FORGE', 'forgé par Toulouse');
+        v_ajout := 'AUCUN REFUS';
+    exception when others then
+        v_ajout := sqlstate;
+    end;
+
+    -- Modification et suppression : le « using » d'une politique ÉCARTE la ligne au lieu
+    -- de refuser l'opération. Le refus est donc MUET — constat T-6 de la porte S1 — et
+    -- c'est ce que le lot L2 doit savoir : « 0 ligne » ici ne veut pas dire « conflit de
+    -- version », il veut dire « refusé ».
+    update mappings set theme = 'réécrit par Toulouse' where id = 'MAP-DEMO-G';
+    get diagnostics v_maj = row_count;
+    delete from mapping_exigences where mapping_id = 'MAP-DEMO-G';
+    get diagnostics v_suppr = row_count;
+    select count(*) into v_lu from mappings where id = 'MAP-DEMO-G';
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(
+            jsonb_build_array(
+                'C102', 'Créer une correspondance dans le catalogue partagé, sans administration Groupe',
+                '42501', v_ajout,
+                case when v_ajout = '42501' then 'OK' else 'ÉCHEC' end),
+            jsonb_build_array(
+                'C103', 'Réécrire et supprimer le catalogue partagé des vingt filiales',
+                '0 modifiée / 0 supprimée', format('%s modifiée / %s supprimée', v_maj, v_suppr),
+                case when v_maj = 0 and v_suppr = 0 then 'OK' else 'ÉCHEC' end),
+            jsonb_build_array(
+                'C104', 'Le LIRE, en revanche, reste ouvert (contrôle symétrique)',
+                '1', v_lu::text,
+                case when v_lu = 1 then 'OK' else 'ÉCHEC' end)
+        ))::text, true);
+end;
+$$;
+
+-- --- M-4, contrôle symétrique : l'administration Groupe, elle, édite bien --------------
+-- Sans lui, un catalogue rendu simplement immuable obtiendrait le même sans-faute : ce
+-- qui est demandé, c'est de RÉSERVER l'écriture, pas de la supprimer.
+do $$
+declare v_obtenu text;
+begin
+    perform set_config('grc.administration_groupe', 'oui', true);
+    begin
+        update mappings set theme = 'révisé par le Groupe' where id = 'MAP-DEMO-G';
+        if not found then
+            v_obtenu := '0 ligne modifiée';
+        else
+            v_obtenu := 'AUCUN REFUS';
+        end if;
+    exception when others then
+        v_obtenu := sqlstate;
+    end;
+    perform set_config('grc.administration_groupe', '', true);
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C105', 'EN administration Groupe, la correspondance s''édite (contrôle symétrique)',
+        'AUCUN REFUS', v_obtenu,
+        case when v_obtenu = 'AUCUN REFUS' then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- --- M-8 : le champ que la reprise perdait en silence ---------------------------------
+-- traitements.notes n'avait aucune colonne. Le formulaire RGPD le collecte, le serveur le
+-- retirait du corps et enregistrait le reste ; un export « grc-backup » existant le
+-- porte, et la reprise l'aurait perdu SANS RIEN DIRE — sur le registre de l'article 30.
+-- Le contrôle écrit une note et la relit : c'est la seule preuve qui vaille.
+do $$
+declare v_relu text;
+begin
+    -- L'écriture est encadrée : si la colonne venait à disparaître, ce contrôle doit
+    -- rendre un VERDICT nommé, pas interrompre la démonstration. Une pièce d'audit qui
+    -- s'arrête au milieu ne dit pas ce qui manque.
+    begin
+        insert into traitements (id, filiale_id, nom, notes)
+             values ('TRT-DEMO-M8', 'FIL-DEMO-A', 'Gestion de la paie',
+                     'Sous-traitant hébergé hors UE — clauses contractuelles types à revoir.');
+        select notes into v_relu from traitements where id = 'TRT-DEMO-M8';
+    exception when others then
+        v_relu := format('champ REFUSÉ par le schéma (%s)', sqlstate);
+    end;
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C106', 'Registre RGPD : la note du responsable de traitement est écrite ET relue',
+        'la note saisie', coalesce(v_relu, '(PERDUE)'),
+        case when v_relu = 'Sous-traitant hébergé hors UE — clauses contractuelles types à revoir.'
+             then 'OK' else 'ÉCHEC' end)))::text, true);
 end;
 $$;
 

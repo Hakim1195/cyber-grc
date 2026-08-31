@@ -862,6 +862,13 @@ create table traitements (
     destinataires        text,
     transfert_hors_ue    text,
     duree_conservation   text,
+    -- Constat M-8 du premier passage de la porte S2. Le formulaire RGPD collecte ce champ
+    -- depuis toujours ; le schéma ne l'avait pas, et le serveur le retirait donc du corps
+    -- avant d'enregistrer le reste. Le bandeau prévenait — « champs non reconnus par le
+    -- serveur, donc non enregistrés : traitements.notes » — mais la note saisie n'était
+    -- jamais écrite. Surtout : un export « grc-backup » existant PORTE ces notes, et la
+    -- reprise les aurait perdues en silence, sur le registre de l'article 30.
+    notes                text,
     version              integer     not null default 1,
     cree_le              timestamptz not null default now(),
     cree_par             text        not null default f_utilisateur_courant(),
@@ -886,6 +893,11 @@ comment on table traitements is
     'Registre des activités de traitement de données personnelles (identifiants "TRT-…"), '
     'article 30 du RGPD. L''outil héberge ce registre pour chaque filiale — et y figure '
     'lui-même, son journal d''audit conservant des identités trois ans (PLAN_SERVEUR §1.7).';
+comment on column traitements.notes is
+    'Notes libres du responsable de traitement. Collectée par le module RGPD du produit '
+    '(js/modules/rgpd.js) depuis l''origine et absente du schéma jusqu''au constat M-8 de la '
+    'porte S2 : sans elle, la reprise d''un export « grc-backup » perdait ce champ SANS RIEN '
+    'DIRE — le registre de l''article 30 est précisément celui où une perte muette se paie.';
 comment on column traitements.donnees_sensibles is
     'Catégories particulières de données (article 9). Booléen, pas une chaîne "Oui"/"Non" '
     '(CONVENTIONS.md §5).';

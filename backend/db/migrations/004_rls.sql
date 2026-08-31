@@ -709,8 +709,9 @@ declare
         -- et son autre extrémité est le couple (ref_id, code) du catalogue statique de
         -- référentiels, qui n'est pas en base. Aucune de ses deux extrémités n'appartient
         -- à une filiale : elle ne peut, par construction, porter aucun lien
-        -- inter-filiales. Dérogée EN CONNAISSANCE DE CAUSE, et son ouverture en écriture
-        -- est arbitrée par écrit au §6.
+        -- inter-filiales. Dérogée EN CONNAISSANCE DE CAUSE — la dérogation ne porte que
+        -- sur la LECTURE ; son écriture est réservée à l'administration Groupe depuis le
+        -- constat M-4 de la porte S2, et c'est arbitré par écrit au §6.
         'mapping_exigences'
     ];
 
@@ -1525,9 +1526,10 @@ comment on policy pol_import_erreurs_lecture on import_erreurs is
 --     domaines « droits », « filiales », « parametres », « journal » sont réservés au
 --     profil Administrateur (PLAN_SERVEUR §3.2) ;
 --   - les privilèges SQL (§1 et CONVENTIONS §14) ;
---   - et, depuis la porte de sécurité S1, pour les CINQ TABLES DE CONFIGURATION
+--   - et, depuis la porte de sécurité S1, pour les SEPT TABLES DE CONFIGURATION
 --     (utilisateurs, profils, profil_domaines, groupes_ad au premier passage — constat
---     M-2 ; filiales au second — constat N-2) : une politique d'ÉCRITURE réservée à
+--     M-2 ; filiales au second — constat N-2 ; mappings et mapping_exigences au premier
+--     passage de la porte S2 — constat M-4) : une politique d'ÉCRITURE réservée à
 --     l'administration Groupe. L'arbitrage d'origine — « ce n'est pas la RLS qui les
 --     protège » — se défend pour « mappings ». Il était CIRCULAIRE pour les tables qui
 --     PRODUISENT la décision d'autorisation : le contrôle applicatif décide des droits en

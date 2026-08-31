@@ -1594,9 +1594,14 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
  *  lisant, et le rôle qui exécute ce contrôle pouvait les réécrire — il n'y avait plus
  *  de défense en profondeur, seulement une couche.
  *
- *  Le §17.4 tranche en deux : les QUATRE tables de configuration sont fermées ici ; les
- *  TROIS tables de session sont REPORTÉES au lot L3, dont c'est la matière. Le second
- *  bloc de tests verrouille ce report — il tombera quand L3 le lèvera, et c'est le but.
+ *  Le §17.4 tranche en deux : les tables de configuration sont fermées ici ; les TROIS
+ *  tables de session sont REPORTÉES au lot L3, dont c'est la matière. Le second bloc de
+ *  tests verrouille ce report — il tombera quand L3 le lèvera, et c'est le but.
+ *
+ *  Elles étaient quatre au premier passage de S1, cinq au second (constat N-2, `filiales`),
+ *  SEPT depuis le premier passage de la porte S2 : `mappings` et `mapping_exigences` ont
+ *  rejoint la liste (constat M-4), et l'arbitrage inverse écrit à la cinquième passe de S1
+ *  est renversé — voir la décision, réécrite plus bas.
  */
 
 describe('Tables de configuration : écriture réservée au Groupe (CONVENTIONS §17.4)', () => {
@@ -1607,6 +1612,11 @@ describe('Tables de configuration : écriture réservée au Groupe (CONVENTIONS 
     // Forme « transversale » : ni filiale, ni profil, donc aucune clé étrangère ni
     // contrainte de cohérence en jeu — seule la politique RLS peut refuser cette ligne.
     ['groupes_ad', "insert into groupes_ad (id, nom, perimetre, accorde_export) values ('GAD-M2', 'CN=GRC-EXPORT', 'transversal', true)"],
+    // Les deux tables de correspondances, depuis le constat M-4 de la porte S2. Une
+    // session de filiale ordinaire créait, réécrivait et SUPPRIMAIT le catalogue partagé
+    // des vingt filiales.
+    ['mappings', "insert into mappings (id, theme) values ('MAP-M4', 'Chiffrement')"],
+    ['mapping_exigences', "insert into mapping_exigences (mapping_id, ref_id, code) values ('MAP-M4', 'anssi', 'M12')"],
   ];
 
   for (const [table, instruction] of configuration) {
@@ -1620,7 +1630,7 @@ describe('Tables de configuration : écriture réservée au Groupe (CONVENTIONS 
     });
   }
 
-  test('contrôle symétrique : EN administration Groupe, les quatre écritures passent', async () => {
+  test('contrôle symétrique : EN administration Groupe, toutes les écritures passent', async () => {
     // Sans ce contre-test, une table rendue simplement non inscriptible obtiendrait le
     // même sans-faute : ce qui est demandé, c'est de RÉSERVER l'écriture, pas de la
     // supprimer — le paramétrage doit rester possible.
@@ -1641,10 +1651,11 @@ describe('Tables de configuration : écriture réservée au Groupe (CONVENTIONS 
       `select c.relname::text as nom, pg_get_expr(p.polqual, p.polrelid) as predicat
          from pg_policy p join pg_class c on c.oid = p.polrelid
         where p.polcmd = 'r'
-          and c.relname in ('profils', 'profil_domaines', 'utilisateurs', 'groupes_ad')
+          and c.relname in ('profils', 'profil_domaines', 'utilisateurs', 'groupes_ad',
+                            'mappings', 'mapping_exigences')
         order by 1`,
     );
-    assert.deepEqual(predicats.map((l) => l.predicat), ['true', 'true', 'true', 'true']);
+    assert.deepEqual(predicats.map((l) => l.predicat), Array(6).fill('true'));
   });
 
   test('aucune politique de LECTURE ne s’adosse au drapeau d’administration', async () => {
@@ -2216,7 +2227,7 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
     assert.equal(affectees, 1);
   });
 
-  test('LE BALAYAGE : les cinq tables de configuration ont bien une écriture conditionnée', async () => {
+  test('LE BALAYAGE : les SEPT tables de configuration ont une écriture conditionnée', async () => {
     // Structurel plutôt qu'anecdotique : c'est le motif que l'auditeur a réclamé — « toute
     // table de niveau Groupe dont l'écriture est ouverte est-elle dans une liste
     // explicitement arbitrée ? ». La liste ci-dessous EST cette liste, et toute table qui
@@ -2232,7 +2243,8 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
     );
     assert.deepEqual(
       conditionnees.map((l) => l.nom),
-      ['filiales', 'groupes_ad', 'profil_domaines', 'profils', 'utilisateurs'],
+      ['filiales', 'groupes_ad', 'mapping_exigences', 'mappings', 'profil_domaines',
+       'profils', 'utilisateurs'],
     );
   });
 
@@ -2274,17 +2286,24 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
     assert.equal(erreur.code, 'GRC04');
   });
 
-  test('DÉCISION ÉPINGLÉE : mappings et mapping_exigences restent ouvertes en écriture', async () => {
-    // Arbitrage rendu au second passage, et écrit en commentaire dans 004_rls.sql §6 :
-    //   - leur contenu n'est pas une donnée de filiale et n'en devient jamais une ;
-    //   - c'est un contenu ÉDITÉ EN FONCTIONNEMENT COURANT par le module
-    //     « Correspondances » : le réserver supprimerait une fonctionnalité livrée ;
-    //   - aucun chemin d'intégrité ne les relie à une table de niveau filiale, la
-    //     pathologie du constat B-1 y est donc structurellement impossible.
-    // Ce qui reste vrai : une filiale peut modifier un catalogue partagé. C'est un enjeu
-    // de GOUVERNANCE, dont la réponse est le domaine « correspondances » du modèle de
-    // droits (L3). Ce test tombera le jour où quelqu'un changera la décision sans la
-    // réécrire — c'est tout son objet.
+  test('DÉCISION RENVERSÉE : mappings et mapping_exigences sont RÉSERVÉES au Groupe', async () => {
+    // Ce test disait le contraire jusqu'au premier passage de la porte S2, et il annonçait
+    // lui-même sa chute : « il tombera le jour où quelqu'un changera la décision sans la
+    // réécrire — c'est tout son objet ». La décision a changé, et voici la réécriture.
+    //
+    // CE QUI TENAIT ENCORE de l'arbitrage précédent, et qui borne ce que ce correctif ne
+    // prétend PAS régler : le contenu n'est pas une donnée de filiale, et aucun chemin
+    // d'intégrité ne relie ces tables à une table cloisonnée — ce n'est donc ni une fuite
+    // en lecture, ni la pathologie du constat B-1. Les deux propriétés sont vérifiées plus
+    // bas, parce qu'elles restent la raison pour laquelle le constat est majeur et non
+    // bloquant.
+    //
+    // CE QUI EST TOMBÉ : « c'est un contenu édité en fonctionnement courant, le réserver
+    // supprimerait une fonctionnalité livrée ». La porte S2 a rejoué la conséquence depuis
+    // une session FIL-A sans privilège — création d'une correspondance forgée, visible des
+    // vingt filiales, puis suppression du catalogue partagé. Éditer une correspondance
+    // devient un acte d'administration Groupe (PLAN_SERVEUR §2.2) ; c'est écrit dans
+    // 004_rls.sql §6, et c'est assumé.
     const predicats = await base.lignes(
       proprietaire,
       `select c.relname::text || '.' || p.polcmd::text as politique,
@@ -2295,10 +2314,60 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
         order by 1`,
     );
     assert.equal(predicats.length, 6, 'Deux tables × ajout / modification / suppression.');
-    assert.deepEqual([...new Set(predicats.map((l) => l.predicat))], ['true']);
+    assert.deepEqual(
+      [...new Set(predicats.map((l) => l.predicat))],
+      ['f_administration_groupe()'],
+    );
 
-    // Le troisième argument de l'arbitrage, vérifié plutôt qu'affirmé : aucune clé
-    // étrangère ne relie ces deux tables à une table portant un filiale_id.
+    // Et en EXÉCUTION, pas seulement dans le catalogue : le scénario de la porte S2,
+    // rejoué. Une session de filiale ordinaire crée, réécrit, supprime — ou plus.
+    await base.avecPerimetre(
+      applicatif, rssiSite(A),
+      async (c) => {
+        await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+        await c.query("insert into mappings (id, theme) values ('MAP-S2', 'Sauvegardes')");
+        await c.query(
+          "insert into mapping_exigences (mapping_id, ref_id, code) values ('MAP-S2', 'anssi', 'M10')",
+        );
+        await c.query("select set_config('grc.administration_groupe', '', true)");
+      },
+      { annuler: false },
+    );
+    try {
+      const observe = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+        await c.query('savepoint avant_m4');
+        const ajout = await erreurAttendue(
+          c.query("insert into mappings (id, theme) values ('MAP-FORGE', 'forgé par FIL-A')"),
+        );
+        await c.query('rollback to savepoint avant_m4');
+        // Modification et suppression : le « using » d'une politique ÉCARTE la ligne au
+        // lieu de refuser l'opération — le refus est donc MUET, et c'est le constat T-6
+        // de S1, reproduit ici pour que L2 sache qu'un « 0 ligne » sur ces tables peut
+        // vouloir dire « refusé » et non « conflit de version ».
+        const maj = (await c.query(
+          "update mappings set theme = 'réécrit par FIL-A' where id = 'MAP-S2'")).rowCount;
+        const suppr = (await c.query(
+          "delete from mapping_exigences where mapping_id = 'MAP-S2'")).rowCount;
+        const lecture = (await c.query(
+          "select id from mappings where id = 'MAP-S2'")).rowCount;
+        return { ajout: ajout.code, maj, suppr, lecture };
+      });
+      assert.deepEqual(observe, { ajout: '42501', maj: 0, suppr: 0, lecture: 1 },
+        'Écriture refusée depuis une filiale ; la LECTURE, elle, reste ouverte.');
+    } finally {
+      await base.avecPerimetre(
+        applicatif, rssiSite(A),
+        async (c) => {
+          await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+          await c.query("delete from mapping_exigences where mapping_id = 'MAP-S2'");
+          await c.query("delete from mappings where id = 'MAP-S2'");
+        },
+        { annuler: false },
+      );
+    }
+
+    // Les deux propriétés de l'ancien arbitrage qui TIENNENT toujours, vérifiées plutôt
+    // qu'affirmées : aucune clé étrangère ne relie ces tables à une table cloisonnée…
     const liens = await base.lignes(
       proprietaire,
       `select con.conname::text as nom
@@ -2312,6 +2381,18 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
                          and a.attnum > 0 and not a.attisdropped)`,
     );
     assert.deepEqual(liens, [], 'Aucun chemin d’intégrité vers une table cloisonnée.');
+
+    // … et aucune des deux ne porte de filiale_id : la famille 4 leur convient telle
+    // quelle, c'est pourquoi le déplacement tient en deux noms.
+    const cloisonnees = await base.lignes(
+      proprietaire,
+      `select c.relname::text as nom from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+         join pg_attribute a on a.attrelid = c.oid and a.attname = 'filiale_id'
+        where n.nspname = 'public' and c.relname in ('mappings', 'mapping_exigences')
+          and a.attnum > 0 and not a.attisdropped`,
+    );
+    assert.deepEqual(cloisonnees, []);
   });
 });
 
