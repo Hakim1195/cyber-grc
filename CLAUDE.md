@@ -30,8 +30,8 @@ RSSI/consultants **et** non-experts à sensibiliser → chaque concept doit avoi
   persistance bascule vers le serveur (voir `PLAN_SERVEUR` §1.3).
 - **Backend** : `backend/` — Node.js 22 + TypeScript + PostgreSQL, Debian 13,
   **sans conteneur**, Apache2 en frontal. En construction.
-- **Branche de travail** : `claude/backend-saas-feasibility-8l7e8h`.
-  ⚠️ L'ancienne consigne « tout pousser sur `main` » ne s'applique plus à ce chantier.
+- **Branche de travail** : **`main`** — consigne utilisateur maintenue : tout pousser
+  sur `main`, ne pas créer de branche de travail.
 - **Marque** : Dedienne Aerospace pour le frontend actuel ; la cible serveur rend
   **logo et raison sociale configurables par filiale** (`PLAN_SERVEUR` §6).
 
@@ -138,13 +138,33 @@ cyber-gouvernance_V4/
   Toujours vérifier `pageerror`/`console` (objectif : 0 erreur) et prendre des captures pour validation visuelle.
 - Pas de données de démo pré-chargées (interdit par le brief) : les tests injectent leurs propres données.
 
+### Skill UI/UX (aide à la décision design)
+
+Skill projet **`ui-ux-pro-max`** installée dans `.claude/skills/ui-ux-pro-max/` (v2.13.0, MIT,
+[nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)).
+Base de connaissances **locale** (CSV) interrogeable par un moteur BM25 en Python — aucun réseau,
+aucune dépendance externe, cohérent avec la contrainte « full frontend / rien ne sort de la machine ».
+
+```bash
+python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<requête>" --domain ux   # 119 règles UX/a11y
+```
+
+Domaines utiles ici : `ux` (accessibilité, tableaux denses, formulaires, navigation), `chart`
+(radars/sparklines), `typography`, `color`, `icons`. **Pas de `--stack`** : aucun des 22 stacks ne
+correspond au vanilla JS de l'app (le plus proche, `html-tailwind`, est spécifique à Tailwind).
+
+**Garde-fou** : les tokens de `css/tokens.css` et la charte Dedienne (orange `#E9631B` / bleu
+`#2059A6`, sémantique stricte des statuts) restent la référence — la skill sert à *arbitrer*
+(contraste, cibles tactiles, densité, lisibilité des tableaux), pas à imposer une palette.
+Ne pas utiliser `--design-system` pour regénérer une identité visuelle (décision déjà validée, cf. §2).
+
 ## 6. Git / méthode de travail
 
 - Travailler **par itérations** : une fonctionnalité = une livraison testable, commit + push, montrer le résultat.
 - **Mettre à jour `CHANGELOG.md`** à chaque itération et `DATA_MODEL.md` si le schéma change.
-- Commits en français, descriptifs. Pousser sur **`claude/backend-saas-feasibility-8l7e8h`**
-  (branche du chantier serveur). Les anciennes consignes de branche de ce fichier
-  — `main`, puis `claude/decompress-zip-folder-230woc` — sont **caduques**.
+- Commits en français, descriptifs. Pousser sur **`main`** (consigne utilisateur).
+  ⚠️ Plusieurs sessions peuvent travailler en parallèle sur ce dépôt : **faire
+  `git pull --rebase origin main` avant de pousser**, sinon la poussée est rejetée.
 - Ne PAS ouvrir de PR sans demande explicite.
 
 ## 7. État d'avancement (voir docs/PLAN.md pour le détail)
