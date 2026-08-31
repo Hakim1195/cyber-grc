@@ -16,8 +16,10 @@
 > l'appliquer. Les sections 2 à 7 ci-dessous décrivent l'**application frontend
 > existante**, qui reste la base de code à faire évoluer — pas la cible d'architecture.
 >
-> **Reprise de travail** : lire `docs/PLAN_SERVEUR.md`, puis `backend/README.md` §8
-> (« Avancement ») pour l'état réel des lots, puis reprendre au premier lot non livré.
+> **Reprise de travail** : lire `docs/PLAN_SERVEUR.md` (le quoi), puis
+> `docs/PLAN_EXECUTION.md` (le comment : vagues, portes, périmètre de chaque agent),
+> puis `backend/README.md` §8 (« Avancement ») pour l'état réel des lots — et reprendre
+> à la vague en cours.
 
 ## 1. Le produit
 
@@ -356,6 +358,8 @@ non-régression Mesure↔action 20 + Personnel 17+16 + statut 12 + MCO 44 + Éch
 
 > **Plan de référence : [`docs/PLAN_SERVEUR.md`](docs/PLAN_SERVEUR.md)** — cadrage clos,
 > validé avec l'utilisateur et le client. **Ne pas re-débattre, appliquer.**
+> **Conduite du chantier : [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md)** — vagues,
+> propriété des fichiers, portes de sécurité, définition de « terminé ».
 > État détaillé des lots : **[`backend/README.md`](backend/README.md) §8**.
 
 ### Contexte client (rappel court)
@@ -398,28 +402,45 @@ sur l'**Active Directory** du groupe.
 - **Le périmètre de session vient du serveur**, jamais d'une valeur transmise par le
   navigateur (`cyber-context` en `localStorage` est à retirer côté frontend).
 
-### Avancement au 25/08/2026
+### Avancement au 31/08/2026
 
 | Lot | État |
 |---|---|
-| **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache, `install.sh` idempotent, `backend/README.md` |
-| **L1 — Schéma relationnel** | 🟡 **partiel** — `001_socle.sql` (16 tables) écrit et **vérifié en exécution** ; inaltérabilité du journal **prouvée** (`UPDATE`/`DELETE` refusés par la base) |
-| L2 → L15 | ⬜ à faire — voir `PLAN_SERVEUR` §7 |
+| **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache + durcissement de portée serveur, `install.sh` idempotent, `backend/README.md` |
+| **L1 — Schéma relationnel** | ✅ **livré** (vague 1) — **47 tables** en 4 migrations, appliquées sur base neuve ; **188 politiques**, RLS activée **et forcée** partout ; `verifier_cloisonnement.sql` (28 contrôles) et `migrate.mjs` livrés ; **144 tests** `node:test` verts. ⚠️ **Porte de sécurité S1 en cours d'instruction — livré ≠ validé** |
+| L2 → L15 | ⬜ à faire — vagues 2 à 8, voir `docs/PLAN_EXECUTION.md` §3 et `PLAN_SERVEUR` §7 |
 
-**Reprendre ici** — reste à écrire pour clore L1 :
-`db/migrations/002_metier.sql` (21 entités + liaisons n-n, scission des mesures,
-découpage Groupe/Filiale/Mixte) · `db/migrations/003_rls.sql` (rôles, RLS sur toutes
-les tables à `filiale_id`, `FORCE ROW LEVEL SECURITY`) · `db/migrate.mjs`
-(**référencé par `install.sh` mais pas encore écrit**) · `db/verifier_cloisonnement.sql`.
+Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
+`grc-backup`** (`backend/src/reprise/**`, portage serveur des migrations v1 → v12,
+module pur, 66 tests) et **base de développement** (`db/dev/preparer_base_dev.sh`).
 
-Conventions de schéma à respecter : **`backend/db/CONVENTIONS.md`**.
+**Reprendre ici — vague 2, lot L2 (API et bascule de la persistance)**, le lot qui
+porte le risque projet **P1** (écrasement silencieux) : couche d'accès générique par
+entité, **verrouillage optimiste** (`where id = $1 and version = $2`, zéro ligne →
+`GRC03`), chargement initial du jeu de données d'une filiale, puis **détournement de
+`save()` et du chargement dans `datastore.js` / `persistence.js`** — la façade
+synchrone est préservée, aucun module métier n'est réécrit. Ne pas démarrer tant que
+la porte S1 n'est pas franchie (`docs/PLAN_EXECUTION.md` §1).
+
+**Comment le chantier est conduit** (vagues, propriété exclusive des fichiers par
+agent, grille de sécurité rejouée à chaque porte, définition de « terminé ») :
+**`docs/PLAN_EXECUTION.md`**. Conventions de schéma : **`backend/db/CONVENTIONS.md`**.
+
+**Ce qui n'a pas pu être vérifié** sur la machine de développement, et qui reste donc
+à éprouver sur la VM cible : l'installation Debian 13 complète, Apache, ClamAV,
+l'Active Directory et le relais SMTP. Le schéma a été validé sur **PostgreSQL 16**,
+la cible est **PostgreSQL 17**.
 
 ### Vérifications à mener au démarrage du projet (côté client)
 
 - Accès sortant de la VM vers Microsoft 365 (conditionne les notifications, lot L12).
 - Existence d'une version anglaise officielle du questionnaire AirCyber (allégerait
   L11 d'un sixième du volume de traduction).
-- **Validation formelle du découpage Groupe/Filiale par le RSSI groupe — avant L1.**
+- **Validation formelle du découpage Groupe/Filiale par le RSSI groupe** (risque P5 du
+  `PLAN_SERVEUR` §8). Elle était attendue *avant* L1 ; **aucune trace n'en subsiste dans
+  le dépôt**, et L1 a été écrit sur le découpage arbitré en interne
+  (`backend/db/CONVENTIONS.md` §16.4). À faire confirmer **avant la mise en service
+  pilote** : changer le niveau d'une table après coup se paie en migration de données.
 
 ### Historique frontend
 

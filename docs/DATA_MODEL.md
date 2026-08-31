@@ -1,8 +1,32 @@
 # Modèle de données — Cyber GRC
 
-> Document de référence du schéma de données. À tenir à jour à chaque évolution.
-> Application **100 % frontend** : toutes les données vivent dans le navigateur
-> (IndexedDB, avec repli localStorage). Aucune donnée ne quitte le poste.
+> Document de référence du **modèle navigateur**, celui de la SPA
+> `cyber-gouvernance_V4/` : toutes les données décrites ici vivent dans le
+> navigateur (IndexedDB, avec repli localStorage). À tenir à jour à chaque
+> évolution du frontend.
+
+> ## ⚠️ Il existe désormais un second schéma : le schéma relationnel serveur
+>
+> Le produit est passé à une architecture client/serveur multi-filiales
+> (`../docs/PLAN_SERVEUR.md`). Un **schéma PostgreSQL** existe et est appliqué :
+> `backend/db/migrations/001_socle.sql` → `004_rls.sql`, dont les arbitrages sont
+> figés dans **[`backend/db/CONVENTIONS.md`](../backend/db/CONVENTIONS.md) §16**.
+>
+> **Ce document reste la référence du frontend** — il n'est pas remplacé. Mais il ne
+> décrit pas la base du serveur, et les deux modèles diffèrent volontairement sur
+> quatre points :
+>
+> | Ici (navigateur) | Là (PostgreSQL) |
+> |---|---|
+> | une entité **`mesures`** unique | **scindée** en `mesure_catalogue` (la *définition* du contrôle, niveau Groupe ou local) et `mesure_mise_en_oeuvre` (l'*évaluation* du contrôle dans une filiale). Sans cette scission, les filiales ne sont plus comparables et la vision Groupe additionne des grandeurs incomparables (`CONVENTIONS.md` §16.2) |
+> | tableaux d'identifiants dans l'objet (`exigences_liees`, `risques_lies`, `actifs_lies`, `mesure_ids`, `dependances[]`, `mappings.refs`) | **tables de liaison** n-n avec de vraies clés étrangères (`risque_exigences`, `actif_risques`, `processus_actifs`, `actif_dependances`, `evaluation_mesures`, `incident_actifs`, `traitement_mesures`, `document_referentiels`, `mapping_exigences`) |
+> | cascades de suppression **écrites dans le code** (`DataStore.deleteX`) | cascades **portées par le schéma** (`on delete cascade` / `set null`, `CONVENTIONS.md` §8) : le rattrapage des tests PRA orphelins n'a plus lieu d'être |
+> | aucune notion de filiale | **cloisonnement par filiale**, colonne `filiale_id` et Row Level Security activée *et forcée* sur toutes les tables |
+>
+> Deux choses **ne** changent **pas**, et c'est délibéré : les **identifiants texte**
+> (`"RISK-<horodatage>-<aléa>"`) restent les clés primaires — c'est ce qui rend la
+> reprise d'un export `grc-backup` exacte au round-trip — et les **valeurs
+> d'énumération** sont reprises mot pour mot, casse et accents compris.
 
 Version de schéma courante : **`SCHEMA_VERSION = 12`** (défini dans `js/core/datastore.js`).
 > v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`.
@@ -47,8 +71,10 @@ Un enregistrement `backups` : `{ id, ts, type: "auto"|"manual", label, schemaVer
 
 **Fichier d'export** (`grc-backup`) :
 ```jsonc
-{ "format":"grc-backup", "version":2, "encrypted":false, "createdAt":"ISO",
+{ "format":"grc-backup", "version":12, "encrypted":false, "createdAt":"ISO",
   "app":"cyber-grc-dedienne", "payload": <objet data> }
+// `version` = SCHEMA_VERSION au moment de l'export (12 aujourd'hui), pas un numéro
+// de format : c'est elle qui pilote les migrations à la relecture.
 // chiffré : "encrypted":true, "kdf":{salt,iterations,hash}, "cipher":{iv,ct} (payload absent)
 ```
 
@@ -61,7 +87,7 @@ Un enregistrement `backups` : `{ id, ts, type: "auto"|"manual", label, schemaVer
 ### 1.3 Instantané complet (objet `data`)
 ```jsonc
 {
-  "schemaVersion": 3,
+  "schemaVersion": 12,   // = SCHEMA_VERSION courant
   "updatedAt": 1730000000000,
   "clients": [],        "exigences": [],   "actions": [],
   "risques": [],        "actifs": [],      "processus": [],
@@ -140,6 +166,7 @@ les noms distincts triés.
 | `evaluation_id` | string | lien vers une évaluation de référentiel (v3) |
 | `incident_id` | string | lien vers un incident de sécurité (v4) |
 | `mesure_id` | string \| null | lien vers une **Mesure de sécurité** pivot (optionnel, rétrocompatible). Plan d'action porté directement par la mesure → couvre toutes les exigences qu'elle porte. `getActionsByMesure(id)` ; `deleteMesure` **délie** les actions (`mesure_id → null`, conservées), comme il délie déjà les évaluations. |
+| `commentaire` | string | optionnel — zone de texte libre de la fiche action (`js/modules/actions.js`). Sans contrainte de longueur ni de contenu. |
 
 ### Risque (inspiré EBIOS RM, méthode F×G×M) — `risques`
 | Champ | Type | Notes |
@@ -186,13 +213,28 @@ Un actif dont **≥ 2 processus critiques** dépendent est signalé **SPOF** (po
 ### Processus / BIA (ISO 22301) — `processus`
 | Champ | Type | Notes |
 |-------|------|-------|
-| `id` | string | |
+| `id` | string | préfixe `BIA-` sur les créations récentes ; **les enregistrements anciens n'ont pas de préfixe** et ne sont pas réécrits |
 | `nom` | string | |
-| `criticite` | string | |
-| `rto` | string | Recovery Time Objective |
-| `rpo` | string | Recovery Point Objective |
+| `criticite` | string | `Faible` \| `Modérée` \| `Élevée` \| `Critique` — **capitalisées** (voir l'encadré ci-dessous) |
+| `rto` | string | Recovery Time Objective, stocké tel qu'affiché (« 4 heures », « 0h (Immédiat - PRA) ») |
+| `rpo` | string | Recovery Point Objective, même remarque |
 | `responsable` | string | |
+| `description` | string | optionnel — champ « Impacts (Interruption) » de la fiche BIA (`js/modules/bia.js`) : ce que coûte l'arrêt du processus (financier, légal, image). |
 | `actifs_lies` | string[] | ids d'`actifs` |
+
+> **⚠️ La criticité des processus n'est PAS écrite comme celle des actifs, et c'est à conserver.**
+>
+> | Entité | Valeurs stockées |
+> |---|---|
+> | `actifs.criticite` | `faible` · `modérée` · `élevée` · `critique` — **minuscules** |
+> | `processus.criticite` | `Faible` · `Modérée` · `Élevée` · `Critique` — **capitalisées** |
+>
+> La dissymétrie est historique (`js/modules/actifs.js` contre `js/modules/bia.js`) et
+> **délibérément conservée** : les comparaisons de l'application portent sur ces chaînes
+> exactes, et le schéma serveur les reprend mot pour mot (`ck_actifs_criticite` en
+> minuscules ; aucune contrainte sur `processus.criticite`, précisément pour ne pas faire
+> échouer la reprise d'exports anciens). **Les « harmoniser » casserait à la fois
+> l'affichage et le round-trip `grc-backup`.**
 
 ### Cellule de crise — `crise`
 `{ id, role, nom, telephone, email, suppleant, notes }`

@@ -1,9 +1,73 @@
 # Changelog — Cyber GRC
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
-Application 100 % frontend (HTML/CSS/JS, sans backend).
+Deux composants depuis le chantier serveur : la SPA `cyber-gouvernance_V4/`
+(HTML/CSS/JS, sans build) et le serveur applicatif `backend/`
+(Node.js 22 + TypeScript + PostgreSQL). Cadrage : `docs/PLAN_SERVEUR.md` ;
+conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
+
+### Serveur — vague 1 : le schéma relationnel (lot L1) et son outillage
+> Livré et éprouvé en exécution. **La porte de sécurité S1 est en cours d'instruction**
+> par un auditeur indépendant au moment où ces lignes sont écrites : le lot est livré,
+> il n'est pas validé, et aucun verdict n'est annoncé ici.
+
+- **Schéma métier — `002_metier_noyau.sql`** : 9 entités (clients, personnes, exigences,
+  **`mesure_catalogue`**, **`mesure_mise_en_oeuvre`**, évaluations, risques, actifs,
+  processus) et 5 liaisons n-n (`risque_exigences`, `actif_risques`, `processus_actifs`,
+  `actif_dependances`, `evaluation_mesures`). La **scission des mesures** — la *définition*
+  du contrôle d'un côté, son *évaluation dans une filiale* de l'autre — est ce qui rend les
+  filiales comparables et donne un sens à la vision Groupe (`CONVENTIONS.md` §16.2).
+- **Schéma des opérations — `003_metier_operations.sql`** : 13 entités (actions, incidents,
+  cellule de crise, scénarios et tests PCA/PRA, MCO, prestataires, audits, revues, documents,
+  traitements RGPD, correspondances, historique) et 4 liaisons, dont **`mapping_exigences`**
+  (le `mappings.refs` du modèle navigateur est un objet de tableaux d'identifiants : il
+  devient une table fille, pas du JSONB).
+- **Cascades portées par la base** : les suppressions du `DATA_MODEL.md` §3 ne sont plus
+  écrites dans le code mais dans le schéma (`on delete cascade` / `set null`,
+  `CONVENTIONS.md` §8). Vérifié sur la base : une action tombe avec son exigence, son risque,
+  son évaluation ou son incident, mais **survit** à la suppression de sa mesure
+  (`mesure_id → null`) ; un test PRA tombe avec son scénario. Le chantier de rattrapage des
+  tests orphelins n'a plus lieu d'être.
+- **Cloisonnement — `004_rls.sql`** : **188 politiques**, Row Level Security **activée et
+  forcée sur les 47 tables** (le propriétaire y est soumis comme les autres), déclencheurs
+  de cohérence catalogue ↔ filiale, et **garde-fou de couverture** — une table à `filiale_id`
+  ajoutée demain sans politique fait échouer le contrôle au lieu de fuir en silence.
+- **`db/verifier_cloisonnement.sql`** : la démonstration jouable devant un auditeur —
+  **28 contrôles**, deux filiales montées puis annulées par un `rollback` (le script n'écrit
+  rien de durable). Lecture, écriture, liaisons, mesures, périmètre, journal, privilèges du
+  rôle applicatif, couverture. Joué avec `grc_app` : **28 réussis, 0 échec**.
+- **`db/migrate.mjs`** : l'exécuteur de migrations qu'`install.sh` appelait depuis le lot L0
+  **sans qu'il existe**. Ordre déterministe (un nom hors convention échoue au lieu d'être
+  ignoré), connexion imposée au compte propriétaire, empreinte SHA-256 mémorisée à
+  l'application — une migration retouchée après coup arrête le programme au lieu de produire
+  deux bases divergentes. `--verifier`, `--jusqu-a`, codes de sortie documentés.
+- **`db/dev/preparer_base_dev.sh`** : base de développement et de recette, idempotente,
+  refusant de tourner sous `NODE_ENV=production`.
+- **Banc d'essai — 144 tests `node:test`, 0 échec** : 78 sur la base (socle, journal en ajout
+  seul et chaînage, verrouillage optimiste, RLS, privilèges) et 66 sur la reprise. Chaque
+  fichier de test monte une base neuve **en appelant le vrai `db/migrate.mjs`** : l'outil de
+  migration est éprouvé en même temps que le schéma.
+- **Reprise des exports `grc-backup` (`src/reprise/**`)** : portage serveur des migrations
+  **v1 → v12** et lecture d'enveloppe, en vue d'absorber l'export d'une société rachetée quelle
+  que soit son ancienneté. Module **pur** (ni base, ni disque, ni horloge), qui ne lève jamais :
+  il rend un statut et un rapport. Round-trip exact des identifiants, scission des mesures à la
+  reprise, refus explicite d'une enveloppe chiffrée, entrées hostiles bornées en profondeur et
+  en nombre de nœuds.
+- **Déploiement — correction majeure** : une installation antérieure laissait la base au compte
+  du service. Cela annulait la **quatrième couche** de l'inaltérabilité du journal (seul le
+  propriétaire peut `alter table … disable trigger`) : une API compromise aurait pu désarmer les
+  déclencheurs et réécrire le journal. `install.sh` vérifie désormais la propriété et **échoue**
+  si elle n'est pas la bonne, avec `--reprendre-propriete` pour rattraper l'existant. Ajout du
+  durcissement Apache de portée serveur (`deploy/apache/durcissement-global.conf`).
+- **Ce qui n'est PAS livré, et doit être dit** : aucune API, aucune authentification, aucun
+  droit appliqué — le serveur n'expose toujours que son point de santé. La bascule de la
+  persistance de la SPA n'est pas commencée (lot L2, vague 2). **Rien n'a pu être éprouvé** en
+  conditions réelles pour l'installation Debian 13, Apache, ClamAV, l'Active Directory ni le
+  relais SMTP : ces environnements n'existent pas sur la machine de développement. Les
+  vérifications ci-dessus ont été menées sur **PostgreSQL 16** alors que la cible est
+  **PostgreSQL 17**.
 
 ### Outillage — skill Claude Code `ui-ux-pro-max`
 - Installation de la skill **`ui-ux-pro-max` v2.13.0** (MIT) dans `.claude/skills/ui-ux-pro-max/` :
