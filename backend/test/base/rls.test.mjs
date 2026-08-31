@@ -2205,6 +2205,44 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
     );
   });
 
+  test('L’AMORÇAGE RESTE POSSIBLE : la première filiale se crée SANS périmètre', async () => {
+    // Point soulevé par l'agent qui travaille sur le pool : la création de la toute
+    // première filiale (lot L4) n'a aucun périmètre à déclarer — il n'existe pas encore de
+    // filiale à nommer. Ce test constate que LA BASE ne s'y oppose pas : les tables de
+    // configuration ne passent pas par f_filiale_ecriture(), seul le drapeau
+    // d'administration leur est demandé. La donnée MÉTIER, elle, continue d'exiger un
+    // périmètre — c'est le contrôle symétrique de la seconde moitié.
+    //
+    // Autrement dit : le correctif N-1 n'aggrave PAS le problème d'amorçage, et le verrou
+    // qui subsiste est côté serveur (validerPerimetre), pas ici. Écrit sous forme de test
+    // pour que le lot L4 puisse s'appuyer dessus, et pour que la propriété ne se perde pas.
+    const amorcage = await base.avecPerimetre(
+      applicatif,
+      { utilisateur: 'amorcage', filialeId: null, filiales: [] },
+      async (c) => {
+        await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+        const filiale = (await c.query(
+          "insert into filiales (id, code, raison_sociale) values ('FIL-AMORCE', 'ZZAMO', 'Première filiale')"
+        )).rowCount;
+        const compte = (await c.query(
+          "insert into utilisateurs (id, identifiant, nom_affichage) values ('u-amorce', 'u-amorce', 'Premier compte')"
+        )).rowCount;
+        await c.query("select set_config('grc.administration_groupe', '', true)");
+        return { filiale, compte };
+      },
+    );
+    assert.deepEqual(amorcage, { filiale: 1, compte: 1 });
+
+    // Contrôle symétrique : la donnée métier, elle, exige toujours un périmètre.
+    const erreur = await refus(
+      applicatif,
+      { utilisateur: 'amorcage', filialeId: null, filiales: [] },
+      `insert into risques (id, filiale_id, nom) values ('RISK-AMORCE', $1, 'essai')`,
+      [A],
+    );
+    assert.equal(erreur.code, 'GRC04');
+  });
+
   test('DÉCISION ÉPINGLÉE : mappings et mapping_exigences restent ouvertes en écriture', async () => {
     // Arbitrage rendu au second passage, et écrit en commentaire dans 004_rls.sql §6 :
     //   - leur contenu n'est pas une donnée de filiale et n'en devient jamais une ;

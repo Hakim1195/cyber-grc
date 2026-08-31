@@ -660,9 +660,21 @@ garde-fou de couverture RLS rendu aveugle.
 Corollaire d'exploitation : **le privilège `temporary` est retiré au rôle applicatif** sur toute
 base, développement et recette compris. La production le refusait déjà, mais par effet de bord
 d'un `revoke all` posé pour d'autres raisons — une seule ligne ajoutée un jour par commodité
-aurait rouvert la porte sans que rien ne le signale. Le refus est donc **explicite et vérifié aux
-trois endroits qui créent une base** : `deploy/install.sh` (production), `db/dev/preparer_base_dev.sh`
-(développement et recette) et `test/aide/base.mjs` (banc d'essai).
+aurait rouvert la porte sans que rien ne le signale.
+
+Aux **trois endroits qui créent une base**, et en étant précis sur ce que chacun fait, parce que
+ce n'est pas la même chose :
+
+| Endroit | Ce qu'il fait |
+|---|---|
+| `deploy/install.sh` (production) | `revoke temporary` **nommé**, puis **vérification** qui fait échouer l'installation |
+| `db/dev/preparer_base_dev.sh` (développement, recette) | `revoke all from public` puis `grant connect` seul — le refus est donc **implicite**, mais une **vérification** explicite le constate et échoue sinon |
+| `test/aide/base.mjs` (banc d'essai) | même schéma implicite, et un test du banc constate le refus |
+
+Seule la production le révoque nommément. Les deux autres s'appuient sur l'absence d'octroi — ce
+qui suffit, tant qu'une vérification le constate. **C'est cette vérification qui est la vraie
+garantie**, pas la forme du `revoke` : un octroi ajouté un jour par commodité se ferait voir aux
+trois endroits.
 
 Ce dernier point n'est pas cosmétique : **le banc d'essai doit éprouver la configuration
 déployée**, jamais une configuration plus permissive. Tant qu'il accordait `temporary`, il

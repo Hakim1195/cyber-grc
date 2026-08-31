@@ -185,8 +185,16 @@ comment on domain type_entite is
 --     search_path = pg_catalog, essai, pg_temp     -> la fonction lit la table réelle
 --
 -- Écrire « set search_path = pg_catalog, public » — sans pg_temp — ne fermerait donc
--- RIEN. Le §9 de ce fichier refuse la migration si une fonction du schéma oublie ce
+-- RIEN. Le §15 bis de ce fichier refuse la migration si une fonction du schéma oublie ce
 -- réglage ou omet d'y nommer pg_temp.
+--
+-- CONSÉQUENCE À CONNAÎTRE, relevée au second passage de la porte S1 (constat N-7) : le
+-- « -c search_path=public » que pose le pool à la connexion n'est PLUS une mesure de
+-- sécurité, seulement une commodité — il ne protégeait de toute façon rien, pg_temp étant
+-- consulté avant lui. Ce qui protège est ici, sur chaque fonction, et une session psql
+-- ordinaire (dont le chemin vaut « "$user", public ») est désormais exactement aussi sûre
+-- qu'une connexion du service. Ne pas rétablir la confusion en présentant le réglage de
+-- connexion comme une défense.
 --
 -- Corollaire d'exploitation, HORS de ce fichier et qui reste dû : le privilège
 -- « temporary » doit être retiré au rôle applicatif sur toute base — développement et
