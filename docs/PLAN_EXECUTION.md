@@ -185,6 +185,14 @@ sans objet à ce stade est marqué « sans objet », jamais « passé ».
 | **S13** | Dénis de service applicatifs | §1.2 | Taille de corps bornée, délais de garde posés, pool borné, listes paginées ou bornées. |
 | **S14** | Intégrité des opérations composites | §1.4 | Propagation, cascade et import : tout ou rien. Aucun état intermédiaire observable après échec. |
 | **S15** | Dépendances | §1.2 | `npm audit` sans vulnérabilité connue ; toute dépendance ajoutée est justifiée et épinglée. |
+| **S16** | **Les garde-fous sont branchés** | retour d'expérience S1 | Tout contrôle automatique écrit (vérification de couverture RLS, de chemin de recherche, de privilèges) est **réellement appelé** par un chemin de déploiement ou de recette, et **fait échouer** ce chemin. Un garde-fou que rien n'invoque est un commentaire. |
+
+**Pourquoi S16 existe.** Il a été ajouté après le troisième passage de la porte S1, qui a
+constaté qu'une fonction de vérification de la couverture RLS, écrite, testée et correcte,
+**n'était appelée par aucun chemin de déploiement**. Une base sabotée passait les contrôles
+d'installation au vert pendant que la fonction, si on l'avait appelée, remontait deux anomalies.
+Les deux passages précédents ne l'avaient pas vu, parce que **la grille ne demandait nulle part
+qu'un garde-fou soit branché** — seulement qu'il existe.
 
 **Ce que la grille ne couvre pas, et qu'il faut dire** : elle ne remplace pas le test
 d'intrusion prévu en L15, et elle ne protège pas contre un `root` sur la VM ni contre le
@@ -261,6 +269,22 @@ Groupe, avant généralisation aux vingt (`PLAN_SERVEUR` §7).
 | Porte | Date | Verdict | Rapport |
 |---|---|---|---|
 | **S1** | 31/08/2026 | ❌ **refusée** — 1 bloquant, 3 majeurs, 6 mineurs | [`securite/RAPPORT_S1.md`](securite/RAPPORT_S1.md) |
+| **S1** (2ᵉ) | 31/08/2026 | ❌ **refusée** — 1 bloquant, 3 majeurs, 3 mineurs, **tous neufs** | [`securite/RAPPORT_S1_BIS.md`](securite/RAPPORT_S1_BIS.md) |
+| **S1** (3ᵉ) | 31/08/2026 | ❌ **refusée** — 0 bloquant, 4 majeurs | [`securite/RAPPORT_S1_TER.md`](securite/RAPPORT_S1_TER.md) |
+
+Ce que trois passages ont appris, et qui vaut pour toutes les portes à venir :
+
+- **Chaque passage a trouvé ce que le précédent avait manqué, sur un chemin que personne ne
+  regardait.** Le premier a examiné les clés étrangères et manqué le recoupement des réglages de
+  session ; le second a fait l'inverse ; le troisième a trouvé que l'`insert` n'avait jamais été
+  éprouvé, alors que l'`update` l'avait été de fond en comble. **Un auditeur unique n'aurait
+  trouvé qu'un tiers des défauts.**
+- **Le document normatif s'est trompé quatre fois**, et ce sont les agents qui l'ont rattrapé à
+  chaque fois. Une convention n'est pas une preuve.
+- **Un correctif se juge à ce qu'il rend impossible autant qu'à ce qu'il ferme.** Plusieurs
+  correctifs ont été acceptés parce que la suite restait verte — or la suite restait verte
+  **parce que rien n'exerçait le chemin corrigé**. C'est le sens de la règle « sans les tests, le
+  correctif ne compte pas ».
 
 Le bloquant mérite d'être retenu, parce qu'il justifie à lui seul le dispositif : sept clés
 étrangères directes traversaient la frontière de filiale, si bien qu'une suppression ordinaire

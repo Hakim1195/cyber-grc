@@ -16,7 +16,8 @@ Sommaire : [1. Généralités](#1-généralités) · [2. Identifiants](#2-identi
 [12. Journal](#12-journal-daudit--règles-particulières) · [13. Migrations](#13-migrations) ·
 [14. Rôles et privilèges](#14-rôles-et-privilèges) · [15. Codes d'erreur](#15-codes-derreur-applicatifs) ·
 [16. Découpage L1](#16-découpage-du-lot-l1--décisions-figées) ·
-[17. Décisions porte S1](#17-décisions-issues-de-la-porte-de-sécurité-s1--31082026)
+[17. Décisions porte S1](#17-décisions-issues-de-la-porte-de-sécurité-s1--31082026) ·
+[18. Décisions 3ᵉ passage](#18-décisions-issues-du-troisième-passage-de-la-porte-s1)
 
 ---
 
@@ -823,3 +824,74 @@ amont, et une administration Groupe bascule entre des filiales **de** son périm
 
 Règle générale : **deux réglages de session qui doivent être cohérents entre eux sont recoupés
 par la base**, jamais seulement par le code qui les pose.
+
+---
+
+## 18. Décisions issues du troisième passage de la porte S1
+
+> Rapport : [`../../docs/securite/RAPPORT_S1_TER.md`](../../docs/securite/RAPPORT_S1_TER.md).
+> Premier passage à ne trouver **aucun** défaut de cloisonnement : la frontière entre filiales a
+> tenu sous des balayages indépendants. Ce qui suit porte sur d'autres propriétés.
+
+### 18.1 La traçabilité est imposée à l'insertion comme à la modification
+
+`f_maj_tracabilite()` protégeait l'`update` — et l'`insert` n'était protégé par rien. Le client
+pouvait donc fixer lui-même `version`, `cree_le` et `cree_par` à la création, et le déclencheur
+de modification **gelait ensuite la forgerie pour toujours** : le mécanisme qui protège la vérité
+protégeait le mensonge.
+
+Deux conséquences, l'une sur la preuve, l'autre sur la disponibilité :
+
+- une ligne créée au nom d'un directeur général qu'on n'est pas, avec la date qu'on choisit,
+  devient une pièce d'audit inattaquable ;
+- une ligne créée avec `version` au maximum de l'entier signé est **définitivement immodifiable**
+  — chaque tentative dépasse la capacité du type.
+
+**Règle** : un déclencheur `before insert` impose `version = 1`, `cree_le = now()`,
+`cree_par = f_utilisateur_courant()` et annule `modifie_le` / `modifie_par`, sur **toute** table
+portant le bloc du §3. Ce que le client envoie dans ces colonnes est ignoré, jamais refusé — un
+export `grc-backup` en contient, et la reprise ne doit pas échouer pour autant.
+
+**Ce que cela dit de la reprise** : à l'import, l'auteur tracé est **celui qui importe**, à la
+date de l'import. C'est exact et c'est voulu : la création de la ligne *dans ce système*, c'est
+l'import. L'historique d'origine, s'il faut le conserver, est une donnée métier, pas une colonne
+de traçabilité.
+
+### 18.2 Toute action référentielle qui franchit une frontière est bornée
+
+`personnes.utilisateur_id → utilisateurs` était en `on delete set null` : supprimer un compte
+réécrivait les fiches d'annuaire **de toutes les filiales**, y compris celles que l'auteur ne peut
+pas lire — incrémentant leur `version` et y inscrivant son nom.
+
+C'est la pathologie du §17.6, sur la dernière action référentielle du schéma qui traverse un
+niveau sans être bornée. La règle du §17.6 est donc **générale** et ne vaut pas seulement pour le
+catalogue de mesures : **une clé étrangère d'une table cloisonnée vers une table de niveau Groupe
+ne porte ni `cascade` ni `set null`.** Le délien est un geste explicite, fait dans le périmètre de
+celui qui le fait.
+
+### 18.3 `grc.utilisateur` désigne un login, pas une clé primaire
+
+Le réglage de session est documenté par le socle comme un **login** (`'jdupont'`), et c'est lui
+qui alimente `cree_par`. Le chaînage du journal, lui, le joignait à `utilisateurs.id`.
+
+Tant que les deux coïncident, rien ne se voit. Le jour où le lot L3 y met un login alors que la
+clé primaire est un `USER-…`, **toutes** les entrées basculent silencieusement sur la branche
+« acteur inconnu » : la chaîne reste intacte, les empreintes restent valides, et l'identité
+affichée redevient celle que le client a fournie.
+
+**Règle** : la résolution se fait sur le **login** (`utilisateurs.login`), et un test doit
+provisionner un compte dont l'identifiant **diffère** du login — sans quoi il valide une
+coïncidence, pas une propriété.
+
+### 18.4 Un garde-fou que rien n'appelle est un commentaire
+
+`f_verifier_couverture_rls()` était écrite, testée et correcte. **Aucun chemin de déploiement ne
+l'appelait.** Une base sabotée passait les contrôles d'installation au vert pendant que la
+fonction, invoquée à la main, remontait deux anomalies et qu'une session lisait la filiale
+voisine.
+
+**Règle** : tout contrôle automatique du schéma est appelé par un chemin réel — la fin d'une
+migration **et** l'installation — et **fait échouer** ce chemin. Écrire le contrôle est la moitié
+du travail ; le brancher est l'autre moitié.
+
+C'est désormais le contrôle **S16** de la grille du `PLAN_EXECUTION` §4, ajouté pour cette raison.
