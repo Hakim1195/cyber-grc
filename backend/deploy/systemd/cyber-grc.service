@@ -3,17 +3,29 @@
 # Service applicatif Cyber GRC Groupe — Debian 13, SANS conteneur.
 # Le durcissement ci-dessous remplace l'isolation qu'aurait apportée un conteneur ;
 # il est volontairement explicite, car il constitue une preuve d'audit ISO 27001.
+# Chaque directive est justifiée : une ligne dont on ne sait plus pourquoi elle est
+# là finit par sauter le jour où elle gêne.
 #
 # Installation :
 #   cp cyber-grc.service /etc/systemd/system/
 #   systemctl daemon-reload && systemctl enable --now cyber-grc
+#
+# Vérification du durcissement, à joindre au dossier de recette :
+#   systemd-analyze security cyber-grc
 
 [Unit]
 Description=Cyber GRC Groupe — serveur applicatif
 Documentation=file:/opt/cyber-grc/backend/README.md
-After=network-online.target postgresql.service
-Wants=network-online.target
+After=network-online.target postgresql.service clamav-daemon.service
+Wants=network-online.target clamav-daemon.service
+# La base est indispensable ; l'antivirus ne l'est pas (§1.11 : une fonction
+# indisponible ne doit pas empêcher l'outil de fonctionner) — d'où Wants et non
+# Requires pour clamav-daemon.
 Requires=postgresql.service
+# Un service qui redémarre en boucle noie le journal et masque la vraie panne :
+# au-delà de 5 échecs en 5 minutes, systemd s'arrête et l'exploitant est prévenu.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -21,28 +33,53 @@ Type=simple
 # ---- Identité : utilisateur dédié, sans shell, sans domicile ----
 User=cyber-grc
 Group=cyber-grc
+# L'accès à la socket de ClamAV (/run/clamav/clamd.ctl) passe par le groupe
+# « clamav ». L'appartenance est posée par deploy/install.sh (usermod -aG), et non
+# par SupplementaryGroups= : sur une VM sans ClamAV installé, un groupe inexistant
+# ici empêcherait le service de démarrer du tout.
 
 # ---- Application ----
 WorkingDirectory=/opt/cyber-grc/backend
 ExecStart=/usr/bin/node /opt/cyber-grc/backend/dist/serveur.js
-# Les secrets vivent hors du dépôt, lisibles du seul compte de service (chmod 600).
-EnvironmentFile=/etc/cyber-grc/serveur.env
+# Secrets hors du dépôt, lisibles du seul compte de service (root:cyber-grc 0640).
+# systemd lit ce fichier en root, avant de descendre de privilèges.
+# Limite connue (S8) : les secrets se retrouvent dans l'environnement du processus,
+# donc dans /proc/<pid>/environ — lisible du seul compte de service et de root.
+# Le passage à LoadCredential= supprimerait cette exposition, mais suppose que
+# l'application sache lire $CREDENTIALS_DIRECTORY : à traiter côté src/config.
+EnvironmentFile=/etc/cyber-grc/env
+# Tout fichier créé par le service (pièces jointes, quarantaine) est lisible de
+# son seul propriétaire. Sans cela, l'umask hérité (0022) les rendrait lisibles
+# de tout compte de la machine.
+UMask=0077
 
 # ---- Cycle de vie ----
 Restart=on-failure
 RestartSec=5s
-# Le serveur intercepte SIGTERM et draine ses connexions (voir SERVEUR_DELAI_ARRET).
+# Le serveur intercepte SIGTERM et draine ses connexions (SERVEUR_DELAI_ARRET,
+# 25 s par défaut) : TimeoutStopSec doit rester au-dessus, sinon systemd tue le
+# processus au milieu d'une transaction.
 KillSignal=SIGTERM
 TimeoutStopSec=30s
 
 # ---- Durcissement : système de fichiers ----
-# Tout le système est en lecture seule, sauf les trois chemins de données.
+# Tout le système est en lecture seule, sauf les deux chemins de données.
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+PrivateMounts=true
 ReadWritePaths=/var/lib/cyber-grc /var/log/cyber-grc
-# Le magasin de pièces jointes n'est accessible qu'ici — jamais par Apache.
-InaccessiblePaths=/etc/cyber-grc/ldap-service.key
+# Le service ne doit pas pouvoir réécrire le code qu'il exécute. ProtectSystem=strict
+# le garantit déjà pour tout /opt ; on le redit pour que l'intention soit lisible en
+# audit, et pour survivre à un ReadWritePaths ajouté un peu vite.
+ReadOnlyPaths=/opt/cyber-grc
+# Une pièce jointe déposée par un utilisateur ne s'exécute jamais, même si un
+# défaut ailleurs permettait de la lancer (PLAN_SERVEUR §1.6).
+NoExecPaths=/var/lib/cyber-grc
+# Le service n'a rien à faire dans les sauvegardes, ni dans la clé privée TLS
+# d'Apache. Le préfixe « - » tolère l'absence du chemin (recette, laboratoire).
+InaccessiblePaths=-/var/backups/cyber-grc
+InaccessiblePaths=-/etc/ssl/cyber-grc
 
 # ---- Durcissement : privilèges ----
 NoNewPrivileges=true
@@ -54,10 +91,18 @@ ProtectControlGroups=true
 ProtectClock=true
 ProtectHostname=true
 ProtectProc=invisible
+# Le service ne voit dans /proc que ses propres processus : il n'a aucune raison
+# d'énumérer ce qui tourne sur la VM (complète ProtectProc).
+ProcSubset=pid
 RestrictNamespaces=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
+RemoveIPC=true
+KeyringMode=private
+# V8 compile le JavaScript à la volée : il lui faut des pages à la fois
+# inscriptibles et exécutables. Interdire W^X empêcherait Node de démarrer.
+# C'est la seule protection standard que l'on renonce à poser, et c'est assumé.
 MemoryDenyWriteExecute=false
 # Aucune capacité : le service écoute sur 3001, pas sur un port privilégié.
 CapabilityBoundingSet=
@@ -65,17 +110,34 @@ AmbientCapabilities=
 
 # ---- Durcissement : réseau ----
 # Le service ne parle qu'à PostgreSQL (local), l'AD (LDAPS) et le relais SMTP.
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# AF_NETLINK est nécessaire : la résolution de noms de la glibc (getaddrinfo,
+# AI_ADDRCONFIG) interroge les interfaces par netlink. Sans lui, la résolution du
+# contrôleur de domaine devient aléatoire — panne difficile à diagnostiquer, pour
+# un gain de sécurité marginal (netlink n'est ici accessible qu'en lecture).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 IPAddressDeny=any
 IPAddressAllow=localhost
 # À COMPLÉTER À L'INSTALLATION : sous-réseaux des contrôleurs de domaine,
-# et du relais SMTP si les notifications sont activées.
+# et du relais SMTP si les notifications sont activées. Tant que ces lignes
+# manquent, l'authentification AD ne peut pas fonctionner — c'est délibéré :
+# une liste blanche vide se remarque, une liste blanche trop large ne se voit pas.
 # IPAddressAllow=10.0.0.0/8
 
 # ---- Durcissement : appels système ----
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
+# Redit explicitement, pour l'auditeur : rien de tout cela n'a de sens pour un
+# serveur applicatif. (@resources n'est PAS refusé : la bibliothèque de threads
+# de Node s'en sert pour dimensionner son parc.)
+SystemCallFilter=~@privileged @obsolete @mount @debug @cpu-emulation @swap @reboot @raw-io @module @clock
 SystemCallErrorNumber=EPERM
+
+# ---- Secrets : aucune image mémoire sur le disque (S8) ----
+# Un vidage de cœur contiendrait le secret de session, les mots de passe de la
+# base et celui du compte de service LDAP, dans un fichier lisible hors du
+# contrôle de l'application.
+LimitCORE=0
+CoredumpFilter=0x00
 
 # ---- Journalisation ----
 # Le journal d'audit métier vit en base (table journal_audit, en ajout seul).
@@ -84,7 +146,14 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=cyber-grc
 
-# ---- Limites ----
+# ---- Limites : dénis de service (S13) ----
+# ~10 utilisateurs par filiale et un jeu de données chargé en une fois (§1.3) :
+# 2 Gio laissent une marge confortable pour un import volumineux. À réviser si
+# la VM est dimensionnée autrement — mais une borne existe, et c'est le point :
+# sans elle, une requête pathologique emporte PostgreSQL avec elle.
+MemoryAccounting=true
+MemoryHigh=1G
+MemoryMax=2G
 LimitNOFILE=8192
 TasksMax=256
 
