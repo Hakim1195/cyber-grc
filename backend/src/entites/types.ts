@@ -127,10 +127,28 @@ export interface DescriptionUnicite {
   readonly porteFiliale: boolean;
 }
 
+/**
+ * Clé étrangère découverte. Sert à **dériver** l'ordre d'écriture et de purge
+ * d'une reprise, au lieu de le récrire à la main — le motif que le
+ * `CONVENTIONS.md` §19.5 nomme « une omission qui attend », et qui a produit à
+ * lui seul quatre défauts à la porte S1.
+ */
+export interface DescriptionCleEtrangere {
+  readonly nom: string;
+  /** Table portant la clé (l'enfant). */
+  readonly table: string;
+  /** Table visée (le parent). */
+  readonly cible: string;
+  /** Action à la suppression : `cascade`, `set null`, `restrict`/`no action`. */
+  readonly action: 'cascade' | 'set_null' | 'restrict' | 'set_default';
+}
+
 export interface Catalogue {
   readonly tables: ReadonlyMap<string, DescriptionTable>;
   /** Unicités du schéma, indexées par nom de contrainte. */
   readonly unicites: ReadonlyMap<string, DescriptionUnicite>;
+  /** Clés étrangères du schéma. */
+  readonly clesEtrangeres: readonly DescriptionCleEtrangere[];
   /** Horodatage de la découverte, pour le journal de démarrage. */
   readonly decouvertLe: Date;
 }
@@ -223,6 +241,35 @@ export interface JeuDeDonnees {
   readonly horodatage: string;
   /** Dernière modification connue, tous enregistrements confondus, en ms. */
   readonly updatedAt: number | null;
+}
+
+/* =====================================================================
+ *  Reprise d'un jeu de données complet
+ * ===================================================================== */
+
+/** Mode d'application d'une reprise. */
+export type ModeReprise =
+  /** Le jeu de données de la filiale est **remplacé** par celui du fichier. */
+  | 'remplacer'
+  /** Le fichier est **fusionné** : ce qui existe est mis à jour, le reste créé. */
+  | 'fusionner';
+
+/** Ce qu'une reprise a fait, collection par collection. */
+export interface BilanReprise {
+  readonly mode: ModeReprise;
+  readonly supprimes: Readonly<Record<string, number>>;
+  readonly crees: Readonly<Record<string, number>>;
+  readonly misAJour: Readonly<Record<string, number>>;
+  readonly liaisons: number;
+  /**
+   * Champs du fichier sans colonne où les écrire, signalés une fois par
+   * collection. Ils ne font pas échouer la reprise — c'est le « rapport
+   * d'erreurs ligne par ligne » du `PLAN_SERVEUR` §5, pas un refus en bloc —
+   * mais ils sont **dits**, jamais avalés.
+   */
+  readonly champsIgnores: readonly string[];
+  /** Total d'enregistrements lus dans le fichier. */
+  readonly lus: number;
 }
 
 /** Réponse d'un sondage de rafraîchissement. */

@@ -56,6 +56,23 @@ const Reprise = (() => {
         return h;
     }
 
+    // Texte `grc-backup` de la base héritée, construit UNE fois : l'export et la
+    // reprise doivent porter exactement le même fichier, donc la même empreinte.
+    let fichierCache = null;
+    function fichierHerite() {
+        if (fichierCache === null) {
+            fichierCache = JSON.stringify({
+                format: "grc-backup",
+                version: (heritage.payload && heritage.payload.schemaVersion) || 1,
+                app: "cyber-grc-dedienne",
+                encrypted: false,
+                createdAt: new Date().toISOString(),
+                payload: heritage.payload
+            }, null, 2);
+        }
+        return fichierCache;
+    }
+
     function compter(payload) {
         if (!payload || typeof payload !== "object") return 0;
         let n = 0;
@@ -111,15 +128,7 @@ const Reprise = (() => {
 
         const exporter = document.getElementById("reprise-exporter");
         if (exporter) exporter.onclick = () => {
-            const enveloppe = {
-                format: "grc-backup",
-                version: (heritage.payload && heritage.payload.schemaVersion) || 1,
-                app: "cyber-grc-dedienne",
-                encrypted: false,
-                createdAt: new Date().toISOString(),
-                payload: heritage.payload
-            };
-            BackupService.telecharger(JSON.stringify(enveloppe, null, 2),
+            BackupService.telecharger(fichierHerite(),
                 "Reprise_CyberGRC_poste_" + new Date().toISOString().split("T")[0] + ".json");
             misEnAbri = true;
             rendre();
@@ -132,8 +141,13 @@ const Reprise = (() => {
                 "Les éléments déjà présents ne sont pas écrasés : seuls les absents sont ajoutés.")) return;
             reprendre.disabled = true; reprendre.textContent = "Reprise en cours…";
             try {
-                const r = await DataStore.applyImport(heritage.payload, "merge");
-                const total = r.added ? Object.values(r.added).reduce((a, b) => a + b, 0) : 0;
+                // Le MÊME texte que celui du bouton « Exporter » : le serveur
+                // l'empreinte pour son idempotence, une reprise relancée deux
+                // fois ne doit pas produire deux jeux de données.
+                const r = await DataStore.applyImport(heritage.payload, "merge",
+                    { texte: fichierHerite(), nom: "reprise-poste.json" });
+                const total = (typeof r.total === "number") ? r.total
+                    : (r.added ? Object.values(r.added).reduce((a, b) => a + b, 0) : 0);
                 misEnAbri = !!r.ok;
                 rendre();
                 if (window.showToast) {

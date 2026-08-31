@@ -85,12 +85,15 @@ const Sync = (() => {
      * référence et ignoré), et la marge couvre largement la durée d'une
      * transaction d'écriture, bornée à 15 s côté serveur.
      *
-     * ⚠️ Ce n'est qu'un filet. Le remède exact — prendre l'horodatage au DÉBUT
-     * de la transaction de lecture, ou passer à une séquence monotone — est
-     * côté serveur ; une transaction plus longue que la marge repasserait au
-     * travers.
+     * ⚠️ Ce n'est qu'un filet, et il est désormais **redondant** : le serveur
+     * a repris le remède exact à sa charge — l'horodatage est pris au DÉBUT de
+     * la transaction de lecture, marge comprise. Le filet reste, à trois titres :
+     * il protège un navigateur qui parlerait à un serveur plus ancien, il ne
+     * coûte rien (un enregistrement déjà connu est reconnu identique à sa
+     * référence et ignoré), et une défense qui ne tient qu'à un seul bout n'en
+     * est pas une. La marge est réduite en conséquence.
      */
-    const RECOUVREMENT_SONDAGE_MS = 30000;
+    const RECOUVREMENT_SONDAGE_MS = 10000;
 
     /* =====================================================================
        ÉTAT

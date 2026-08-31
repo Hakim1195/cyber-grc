@@ -865,56 +865,114 @@ const DataStore = (() => {
         return { ok: true, payload, encrypted, meta: { version, createdAt }, summary: check.summary };
     }
 
-    // Applique un payload validé. mode: "merge" (le seul admis) ou "replace".
-    //
-    // L'import d'un `grc-backup` reste un **format d'échange** (§2.6) : reprise
-    // d'une filiale déjà équipée de la version locale. Il s'applique en mémoire,
-    // puis `sync.js` le pousse au serveur enregistrement par enregistrement — le
-    // moteur d'import transactionnel est le lot L7.
-    //
-    // ══ POURQUOI « REMPLACER » EST REFUSÉ (constat B-3 de la porte S2) ═══════
-    //
-    // Avant la bascule, « Remplacer » détruisait la copie navigateur de son seul
-    // auteur, et un point de restauration local existait vraiment. Après la
-    // bascule, le même bouton détruit **le jeu de données serveur de la filiale
-    // entière, pour tout le monde** — en autant de requêtes `DELETE`
-    // indépendantes, donc **hors transaction** : une coupure de VPN au milieu
-    // laisse la filiale à moitié détruite, l'état intermédiaire est visible par
-    // les autres utilisateurs, et rien ne le journalise (le journal d'audit est
-    // le lot L5). L'auditeur l'a rejoué : 8 risques avant, 1 après, 20 `DELETE`,
-    // aucun point de restauration.
-    //
-    // Une destruction irréversible, non transactionnelle, non journalisée et au
-    // rayon d'une filiale entière ne peut pas rester derrière un bouton. Elle est
-    // donc **refusée** jusqu'au moteur d'import transactionnel du lot L7.
-    //
-    // Ce qui reste possible, et qui couvre le besoin de reprise : la **fusion**,
-    // qui ajoute les enregistrements absents et n'en détruit aucun. Une filiale
-    // qu'on équipe est vide : fusionner y produit exactement le même résultat.
-    const MESSAGE_REMPLACEMENT =
-        "Le remplacement complet des données de la filiale n'est pas disponible : il détruirait " +
-        "le contenu du serveur enregistrement par enregistrement, sans transaction et sans retour " +
-        "arrière possible. Utilisez « Fusionner », qui ajoute ce qui manque sans rien supprimer.";
+    /* =========================
+       IMPORT D'UN FICHIER `grc-backup` — FORMAT D'ÉCHANGE (§2.6)
+       Reprise d'une filiale déjà équipée de la version locale, ou données
+       remises par une filiale.
 
-    async function applyImport(payload, mode) {
-        if (mode === "replace") throw new Error(MESSAGE_REMPLACEMENT);
-        if (mode === "merge" || mode === undefined) {
-            const incoming = normalize(payload);
-            const added = {};
-            ARRAY_FIELDS.forEach(f => {
-                const existingIds = new Set(data[f].map(x => x && x.id));
-                const toAdd = incoming[f].filter(x => x && !existingIds.has(x.id));
-                // On concatène SUR PLACE : `sync.js` observe le tableau que le
-                // DataStore lui a prêté, le remplacer le lui déroberait.
-                toAdd.forEach(x => data[f].push(x));
-                added[f] = toAdd.length;
-            });
-            data.schemaVersion = SCHEMA_VERSION;
-            const r = await flush();
-            return { ok: r.ok, added };
+       ══ Ce que la porte S2 a changé ici (constat B-3) ═══════════════════════
+
+       Avant la bascule, « Remplacer » détruisait la copie navigateur de son seul
+       auteur, et un point de restauration local existait vraiment. Après la
+       bascule, le même bouton détruisait **le jeu de données serveur de la
+       filiale entière, pour tout le monde**, en autant de `DELETE` indépendants
+       — donc hors transaction, avec un état intermédiaire visible par les autres
+       et rien pour le journaliser. L'auditeur l'a rejoué : 8 risques avant,
+       1 après, 20 `DELETE`, et un écran qui promettait un point de restauration
+       qui n'existait plus.
+
+       La réponse n'est pas de désactiver le bouton, c'est de rendre l'opération
+       **atomique** : une route de reprise côté serveur applique la charge v12
+       entière en UNE transaction, en conservant les identifiants du fichier —
+       ce qui rétablit du même coup l'exactitude du round-trip `grc-backup`,
+       qu'un import `POST` un par un ne permettait de toute façon plus depuis que
+       le serveur impose ses identifiants.
+
+       Tant que cette route n'est pas déployée, l'appel rend 404 et l'on se
+       replie : la **fusion** reste possible enregistrement par enregistrement
+       (elle n'efface rien), le **remplacement** est refusé avec sa raison. Dans
+       les deux cas, rien n'est détruit à moitié.
+    ========================== */
+    const MESSAGE_REMPLACEMENT =
+        "Le remplacement complet des données de la filiale n'est pas disponible sur ce serveur : " +
+        "il détruirait le contenu enregistrement par enregistrement, sans transaction et sans " +
+        "retour arrière possible. Utilisez « Fusionner », qui ajoute ce qui manque sans rien " +
+        "supprimer, ou demandez la mise à jour du serveur.";
+
+    // Vrai quand le serveur ne connaît pas (encore) la route de reprise.
+    function repriseIndisponible(erreur) {
+        return erreur && (erreur.statut === 404 || erreur.statut === 405);
+    }
+
+    // Enveloppe `grc-backup` d'une charge utile, quand on ne dispose pas du
+    // fichier d'origine (reprise de la base héritée d'un poste, par exemple).
+    function envelopper(payload) {
+        return JSON.stringify(buildEnvelope({ encrypted: false, payload: payload }), null, 2);
+    }
+
+    /**
+     * Applique un fichier `grc-backup`.
+     *
+     * @param payload  charge utile déjà lue par `parseImport` (déchiffrée).
+     * @param mode     "merge" (défaut) ou "replace".
+     * @param options  { texte, nom } — le TEXTE d'origine du fichier quand on
+     *                 l'a : c'est lui que le serveur lit, migre et empreinte
+     *                 (l'empreinte porte l'idempotence : réimporter deux fois le
+     *                 même fichier est refusé par la base, pas par une
+     *                 comparaison faite au vol).
+     */
+    async function applyImport(payload, mode, options) {
+        const opts = options || {};
+        const demande = (mode === "replace") ? "remplacer" : "fusionner";
+        const contenu = opts.texte || envelopper(payload);
+        const nom = opts.nom || "reprise.json";
+
+        // 1. Le chemin transactionnel : tout ou rien, identifiants conservés.
+        try {
+            const resultat = await Api.reprendre(demande, nom, contenu);
+            await Sync.recharger();   // le serveur fait foi : on reprend son état
+            const bilan = (resultat && resultat.bilan) || {};
+            const somme = (o) => Object.keys(o || {}).reduce((n, k) => n + (o[k] || 0), 0);
+            return {
+                ok: true, transactionnel: true,
+                total: somme(bilan.crees) + somme(bilan.misAJour),
+                crees: somme(bilan.crees), misAJour: somme(bilan.misAJour),
+                supprimes: somme(bilan.supprimes),
+                champsIgnores: bilan.champsIgnores || [],
+                added: bilan.crees || {}
+            };
+        } catch (e) {
+            // L'idempotence de la reprise est portée par une unicité du schéma
+            // (empreinte du fichier). Le message générique de contrainte —
+            // « l'une de ses clés est déjà utilisée » — n'apprend rien à qui
+            // vient de choisir un fichier : on dit ce qui s'est réellement passé.
+            if (e && e.code === "contrainte_base") {
+                throw new Error("Ce fichier a déjà été importé dans cette filiale. "
+                    + "Rien n'a été modifié. Pour le réappliquer, demandez à votre exploitant "
+                    + "de lever la trace de l'import précédent.");
+            }
+            if (!repriseIndisponible(e)) throw e;
         }
 
-        throw new Error(MESSAGE_REMPLACEMENT);
+        // 2. Repli, serveur sans route de reprise : la fusion reste possible
+        //    enregistrement par enregistrement (elle n'efface rien) ; le
+        //    remplacement est refusé plutôt que fait à moitié.
+        if (demande === "remplacer") throw new Error(MESSAGE_REMPLACEMENT);
+
+        const incoming = normalize(payload);
+        const added = {};
+        ARRAY_FIELDS.forEach(f => {
+            const existingIds = new Set(data[f].map(x => x && x.id));
+            const toAdd = incoming[f].filter(x => x && !existingIds.has(x.id));
+            // On concatène SUR PLACE : `sync.js` observe le tableau que le
+            // DataStore lui a prêté, le remplacer le lui déroberait.
+            toAdd.forEach(x => data[f].push(x));
+            added[f] = toAdd.length;
+        });
+        data.schemaVersion = SCHEMA_VERSION;
+        const r = await flush();
+        const total = Object.values(added).reduce((a, b) => a + b, 0);
+        return { ok: r.ok, transactionnel: false, added: added, total: total };
     }
 
     return {

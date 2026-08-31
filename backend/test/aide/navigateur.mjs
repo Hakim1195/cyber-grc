@@ -242,8 +242,12 @@ export async function attendreApplication(page, options = {}) {
   const delai = options.delai ?? 15000;
   return page.waitForFunction(
     () => {
-      const corps = document.body ? document.body.innerText : '';
-      if (/Serveur indisponible|Connexion impossible|indisponible/i.test(corps)) return 'refus';
+      // L'écran de refus se reconnaît à SA STRUCTURE — le bouton « Réessayer » que
+      // `js/core/vault.js` pose — et non à un mot de son texte. Une première version
+      // cherchait « indisponible » dans le corps de la page : elle prenait pour un
+      // refus l'écran « Cellule de crise », qui explique que « le SI peut être
+      // indisponible ». Un repère textuel est un repère qui déménage.
+      if (document.getElementById('reconnect-btn') !== null) return 'refus';
       if (typeof window.DataStore === 'undefined') return false;
       try {
         if (window.DataStore.getRisques === undefined) return false;

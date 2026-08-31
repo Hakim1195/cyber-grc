@@ -103,41 +103,96 @@ describe('La bascule, de bout en bout', () => {
     }
   });
 
-  test('LE CONTRAT DE CRÉATION : ce que le navigateur envoie doit être accepté', async () => {
-    // Ce test isole, en une seule assertion, la cause de tous les échecs de création
-    // de ce fichier. Il est écrit séparément pour qu'un agent qui lit le rapport de
-    // la suite voie LE défaut, et non ses cinq conséquences.
+  test('LE CONTRAT DE CRÉATION : l’identifiant vient du SERVEUR, et le navigateur l’adopte', async () => {
+    // ── L'arbitrage, et les deux moitiés qu'il engage ────────────────────────
     //
-    // Le frontend engendre l'identifiant lui-même (`UI.genId`, convention
-    // « <PRÉFIXE>-<horodatage>-<aléa> » du `CONVENTIONS.md` §2, celle qui rend le
-    // round-trip d'un export `grc-backup` exact) et l'envoie dans le corps. Si la
-    // route le refuse, PLUS AUCUNE CRÉATION n'est possible depuis l'application —
-    // risques, actions, incidents, documents, tout.
+    // La première version de ce test exigeait seulement que « la création telle que
+    // le navigateur l'émet aboutisse ». Elle a fait son travail : les deux côtés
+    // avaient chacun raison — l'API fermait l'oracle d'existence du constat M-3 en
+    // refusant un identifiant proposé, le frontend continuait d'en proposer un — et
+    // plus aucune création n'était possible. L'arbitrage est désormais rendu :
+    // **l'identifiant vient du serveur.**
     //
-    // Les deux moitiés du contrat sont ici ; l'arbitrage entre elles appartient aux
-    // agents API et FRONT, pas au banc d'essai. Ce que le banc exige, c'est
-    // qu'elles se rencontrent.
+    // Le test le fige donc dans ses DEUX moitiés, parce qu'une seule ne tient pas :
+    //
+    //   · côté serveur, proposer un identifiant est REFUSÉ — sans quoi l'oracle
+    //     rouvre (succès et refus redeviennent distinguables) ;
+    //   · côté navigateur, la création aboutit quand même, et l'enregistrement
+    //     porte ensuite l'identifiant que le serveur a choisi.
+    //
+    // Si l'une des deux moitiés bouge sans l'autre, ce test tombe — et c'est
+    // exactement ce qu'on lui demande.
     const session = await ouvrirApplication();
     try {
-      const codes = await session.page.evaluate(async () => {
-        const envoyer = (corps) =>
-          fetch('/api/entites/risques', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(corps),
-          }).then((r) => r.status);
+      const refus = await session.page.evaluate(() =>
+        fetch('/api/entites/risques', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id: 'RISK-PROPOSE-PAR-LE-CLIENT', champs: { nom: 'contrat' } }),
+        }).then((r) => r.status));
+      assert.equal(refus, 400, 'Proposer un identifiant doit rester refusé : c’est ce qui ferme M-3.');
+
+      // Et la création par le chemin réel de l'application aboutit.
+      const observe = await session.page.evaluate(async () => {
+        const idLocal = window.UI.genId('RISK');
+        window.DataStore.addRisque({ id: idLocal, nom: 'Créé par le chemin réel' });
+        await window.Sync.pousser();
+        const enMemoire = window.DataStore.getRisques().find((r) => r.nom === 'Créé par le chemin réel');
+        return { idLocal, idFinal: enMemoire ? enMemoire.id : null, etat: window.Sync.etat() };
+      });
+
+      assert.ok(observe.idFinal, 'L’enregistrement doit rester en mémoire après la création.');
+      assert.equal(observe.etat.bloques, 0, 'Une création nominale ne bloque rien.');
+      assert.notEqual(
+        observe.idFinal,
+        observe.idLocal,
+        'Le navigateur doit ADOPTER l’identifiant du serveur, pas conserver le sien.',
+      );
+
+      const enBaseFinal = await enBase('select id, nom from risques where id = $1', [observe.idFinal]);
+      assert.equal(enBaseFinal.length, 1, 'L’identifiant vu en mémoire doit être celui de la base.');
+      assert.equal(enBaseFinal[0].nom, 'Créé par le chemin réel');
+      const sousLAncien = await enBase('select id from risques where id = $1', [observe.idLocal]);
+      assert.equal(sousLAncien.length, 0, 'L’identifiant local ne doit exister nulle part au serveur.');
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('les RÉFÉRENCES suivent le renommage : rien ne pointe dans le vide', async () => {
+    // La conséquence de l'arbitrage, et l'endroit où il peut coûter cher : un actif
+    // créé puis relié à un risque créé dans le même geste porterait, sans le
+    // renommage, une référence vers un identifiant qui n'existe qu'en mémoire.
+    // Un lien mort dans une cartographie d'actifs ne se voit pas — il se constate
+    // le jour de l'audit.
+    const session = await ouvrirApplication();
+    try {
+      const observe = await session.page.evaluate(async () => {
+        const idRisque = window.UI.genId('RISK');
+        window.DataStore.addRisque({ id: idRisque, nom: 'Risque référencé' });
+        const idActif = window.UI.genId('ACTIF');
+        window.DataStore.addActif({ id: idActif, nom: 'Actif référençant', risques_lies: [idRisque] });
+        await window.Sync.pousser();
+        const actif = window.DataStore.getActifs().find((a) => a.nom === 'Actif référençant');
+        const risque = window.DataStore.getRisques().find((r) => r.nom === 'Risque référencé');
         return {
-          commeLeFrontendEnvoie: await envoyer({ id: window.UI.genId('RISK'), champs: { nom: 'contrat' } }),
-          sansIdentifiant: await envoyer({ champs: { nom: 'contrat' } }),
+          actif: actif ? { id: actif.id, liens: actif.risques_lies } : null,
+          risque: risque ? risque.id : null,
         };
       });
-      assert.equal(
-        codes.commeLeFrontendEnvoie,
-        201,
-        'La création telle que `js/core/sync.js` l’émet — identifiant compris — doit aboutir. ' +
-          'Un 400 ici rend l’application incapable de créer quoi que ce soit.',
+
+      assert.ok(observe.actif && observe.risque);
+      assert.deepEqual(
+        observe.actif.liens,
+        [observe.risque],
+        'La liaison doit viser l’identifiant définitif, pas celui d’avant l’envoi.',
       );
-      assert.equal(codes.sansIdentifiant, 201);
+
+      const lien = await enBase(
+        'select r.nom from actif_risques l join risques r on r.id = l.risque_id where l.actif_id = $1',
+        [observe.actif.id],
+      );
+      assert.deepEqual(lien.map((x) => x.nom), ['Risque référencé'], 'Et le lien existe en base.');
     } finally {
       await session.fermer();
     }
@@ -146,12 +201,19 @@ describe('La bascule, de bout en bout', () => {
   test('une saisie faite dans le navigateur arrive en base, et y reste', async () => {
     const session = await ouvrirApplication();
     try {
+      // L'identifiant définitif vient du SERVEUR : on le relit dans le magasin après
+      // l'envoi, au lieu d'employer celui qu'`UI.genId` avait fabriqué.
       const identifiant = await session.page.evaluate(async () => {
-        const id = window.UI.genId('RISK');
-        window.DataStore.addRisque({ id, nom: 'Rupture d’approvisionnement', description: 'saisie du banc' });
+        window.DataStore.addRisque({
+          id: window.UI.genId('RISK'),
+          nom: 'Rupture d’approvisionnement',
+          description: 'saisie du banc',
+        });
         await window.Sync.pousser();
-        return id;
+        const enregistre = window.DataStore.getRisques().find((r) => r.nom === 'Rupture d’approvisionnement');
+        return enregistre ? enregistre.id : null;
       });
+      assert.ok(identifiant, 'L’enregistrement doit rester en mémoire après l’envoi.');
 
       const lignes = await enBase('select nom, description, version, cree_par from risques where id = $1', [identifiant]);
       assert.equal(lignes.length, 1, 'La saisie doit être en base, pas seulement à l’écran.');
@@ -163,6 +225,54 @@ describe('La bascule, de bout en bout', () => {
         'L’auteur tracé vient de la SESSION SERVEUR, jamais du navigateur (CONVENTIONS §18.1).',
       );
       assert.deepEqual(session.erreursInattendues(), []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('un FORMULAIRE RÉEL, rempli au minimum, enregistre (constat M-8)', async () => {
+    // Le constat M-8 de la porte S2 : « deux modules sont cassés par leur propre
+    // valeur par défaut ». Les listes de criticité et d'accès des Prestataires
+    // commencent par `["", "— Non évaluée —"]` ; le schéma code le non-renseigné par
+    // `NULL` et refusait la chaîne vide. Créer un prestataire sans évaluer sa
+    // criticité — l'état par défaut du formulaire — échouait, et toute la fonction
+    // « Risque fournisseur & chaîne d'appro NIS2/DORA » était inutilisable.
+    //
+    // On pilote ici le VRAI formulaire, pas un appel d'API : c'est la seule façon de
+    // savoir ce que l'application envoie réellement quand l'utilisateur ne remplit
+    // que le champ obligatoire.
+    const session = await ouvrirApplication();
+    try {
+      await session.page.goto(`${application.url}/index.html#/prestataires`, { waitUntil: 'domcontentloaded' });
+      assert.equal(await attendreApplication(session.page), 'chargee');
+      await session.page.waitForSelector('#addBtn', { timeout: 10000 });
+      await session.page.click('#addBtn');
+      await session.page.waitForSelector('#societe', { timeout: 10000 });
+
+      // Rien d'autre que la raison sociale : criticité et accès restent « — Non
+      // évaluée — », c'est-à-dire la chaîne vide.
+      await session.page.fill('#societe', 'Infogérance du Nord');
+      const valeursParDefaut = await session.page.evaluate(() => ({
+        criticite: document.getElementById('criticite').value,
+        acces: document.getElementById('acces').value,
+      }));
+      assert.deepEqual(
+        valeursParDefaut,
+        { criticite: '', acces: '' },
+        'Le scénario n’a de sens que si le formulaire propose bien la chaîne vide par défaut.',
+      );
+
+      await session.page.click('#saveBtn');
+      await session.page.evaluate(() => window.Sync.pousser());
+
+      const lignes = await enBase("select societe, criticite, acces from prestataires where societe = 'Infogérance du Nord'");
+      assert.equal(lignes.length, 1, 'Le prestataire doit être enregistré au serveur.');
+      assert.equal(lignes[0].criticite, null, 'Le « non renseigné » du navigateur devient NULL en base.');
+      assert.equal(lignes[0].acces, null);
+
+      const etat = await session.page.evaluate(() => window.Sync.etat());
+      assert.equal(etat.bloques, 0, 'Aucun enregistrement ne doit rester bloqué.');
+      assert.deepEqual(session.erreursScript, []);
     } finally {
       await session.fermer();
     }
@@ -245,23 +355,24 @@ describe('La bascule, de bout en bout', () => {
       application.definirApiInjoignable(true);
 
       const etatCoupe = await session.page.evaluate(async () => {
-        const id = window.UI.genId('RISK');
-        window.DataStore.addRisque({ id, nom: 'Saisie pendant la coupure' });
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Saisie pendant la coupure' });
         await window.Sync.pousser();
-        return { etat: window.Sync.etat(), id };
+        return window.Sync.etat();
       });
-      assert.equal(etatCoupe.etat.enAttente, true, 'La saisie doit rester EN ATTENTE, pas disparaître.');
+      assert.equal(etatCoupe.enAttente, true, 'La saisie doit rester EN ATTENTE, pas disparaître.');
 
-      const absente = await enBase('select id from risques where id = $1', [etatCoupe.id]);
+      const absente = await enBase("select id from risques where nom = 'Saisie pendant la coupure'");
       assert.equal(absente.length, 0, 'Et elle n’est évidemment pas en base : le serveur est coupé.');
 
       // Le VPN revient.
       application.definirApiInjoignable(false);
-      await session.page.evaluate(async () => {
+      const idFinal = await session.page.evaluate(async () => {
         await window.Sync.pousser();
+        const r = window.DataStore.getRisques().find((x) => x.nom === 'Saisie pendant la coupure');
+        return r ? r.id : null;
       });
 
-      const arrivee = await enBase('select nom from risques where id = $1', [etatCoupe.id]);
+      const arrivee = await enBase('select nom from risques where id = $1', [idFinal ?? '']);
       assert.equal(arrivee.length, 1, 'Au retour du réseau, la saisie doit partir seule.');
       assert.equal(arrivee[0].nom, 'Saisie pendant la coupure');
     } finally {
@@ -274,11 +385,15 @@ describe('La bascule, de bout en bout', () => {
     const session = await ouvrirApplication();
     try {
       const identifiant = await session.page.evaluate(async () => {
-        const id = window.UI.genId('ACT');
-        window.DataStore.addAction({ id, titre: 'Action qui doit survivre au rechargement' });
+        window.DataStore.addAction({
+          id: window.UI.genId('ACT'),
+          titre: 'Action qui doit survivre au rechargement',
+        });
         await window.Sync.pousser();
-        return id;
+        const a = window.DataStore.getActions().find((x) => x.titre === 'Action qui doit survivre au rechargement');
+        return a ? a.id : null;
       });
+      assert.ok(identifiant, 'La création doit avoir abouti avant de recharger la page.');
 
       await session.page.reload({ waitUntil: 'domcontentloaded' });
       assert.equal(await attendreApplication(session.page), 'chargee');
@@ -287,7 +402,7 @@ describe('La bascule, de bout en bout', () => {
         (id) => window.DataStore.getActions().some((a) => a.id === id),
         identifiant,
       );
-      assert.equal(survit, true);
+      assert.equal(survit, true, 'L’identifiant rendu par le serveur doit être celui rechargé.');
       assert.deepEqual(session.erreursInattendues(), []);
     } finally {
       await session.fermer();

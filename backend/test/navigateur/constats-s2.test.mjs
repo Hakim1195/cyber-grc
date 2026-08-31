@@ -286,57 +286,237 @@ describe('B-2 — un enregistrement bloqué ne disparaît pas avec son bandeau',
 });
 
 /* =====================================================================
+ *  M-6 — l'interface sous la CSP du vhost de production
+ * ===================================================================== */
+
+describe('M-6 — sous la CSP de production, l’interface répond encore', () => {
+  /**
+   * La politique de sécurité de contenu **exacte** du vhost du lot L0
+   * (`deploy/apache/cyber-grc.conf`). Recopiée ici plutôt que lue du fichier : le
+   * fichier appartient au lot L0, et un test qui lirait la configuration passerait
+   * au vert le jour où quelqu'un l'affaiblirait. C'est la valeur ATTENDUE qui est
+   * l'objet du test — la divergence entre les deux est signalée par l'assertion qui
+   * suit, pas masquée.
+   */
+  const CSP_PRODUCTION =
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; " +
+    "frame-src 'none'; child-src 'none'; worker-src 'none'; media-src 'none'; " +
+    "manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+
+  test('la CSP du dépôt est bien celle qu’on éprouve', async () => {
+    // Contrôle de matière : si le vhost change, ce test le dit, et l'on saura que le
+    // scénario ci-dessous a cessé de décrire la production.
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { RACINE_BACKEND } = await import('../aide/serveur.mjs');
+    const vhost = readFileSync(join(RACINE_BACKEND, 'deploy', 'apache', 'cyber-grc.conf'), 'utf8');
+    assert.ok(
+      vhost.includes(CSP_PRODUCTION),
+      'La CSP du vhost a changé : mettre à jour CSP_PRODUCTION, puis relire ce scénario.',
+    );
+  });
+
+  test('aucun ÉCRAN ne porte de gestionnaire en ligne : sinon il est inerte', async () => {
+    // Constat M-6 : « L'application DÉMARRE (les <script src> sont bien 'self'), puis
+    // une large part de l'interface est INERTE, EN SILENCE ». Un `onclick=` en
+    // attribut est du script en ligne : `script-src 'self'` le refuse.
+    //
+    // ── Pourquoi ce test regarde le DOM et pas seulement la console ──────────
+    //
+    // Parce qu'un refus n'est journalisé QU'AU MOMENT OÙ le gestionnaire est
+    // déclenché. Une première version de ce test se contentait de parcourir les
+    // écrans en lisant la console : elle passait au vert sur une page qui portait
+    // trois attributs `onclick`, simplement parce que personne n'avait cliqué. Un
+    // test qui passe quoi qu'on fasse ne prouve rien — c'est la règle du chantier, et
+    // elle vient de s'appliquer à moi.
+    //
+    // La propriété se lit donc dans le DOM, où elle est vraie ou fausse sans qu'on
+    // ait à deviner quel bouton un utilisateur touchera.
+    const session = await ouvrirPage(navigateur);
+    try {
+      application.definirCsp(CSP_PRODUCTION);
+
+      const ecrans = [
+        '#/dashboard', '#/cartographie', '#/matrice', '#/crise',
+        '#/prestataires', '#/audits', '#/pra', '#/risques',
+      ];
+      const enLigne = [];
+      for (const route of ecrans) {
+        await session.page.goto(`${application.url}/index.html${route}`, { waitUntil: 'domcontentloaded' });
+        assert.equal(await attendreApplication(session.page), 'chargee', `L’écran ${route} doit s’afficher.`);
+        await session.page.waitForTimeout(200);
+        const trouves = await session.page.evaluate(() => {
+          const elements = Array.from(
+            document.querySelectorAll('[onclick],[onchange],[oninput],[onsubmit],[onkeyup]'),
+          );
+          const exemple = elements[0];
+          return {
+            nombre: elements.length,
+            exemple:
+              exemple === undefined
+                ? null
+                : `<${exemple.tagName.toLowerCase()} ${
+                    exemple.getAttributeNames().find((n) => n.startsWith('on')) ?? 'on?'
+                  }="${(exemple.getAttribute('onclick') ?? exemple.getAttribute('onchange') ?? '').slice(0, 60)}">`,
+          };
+        });
+        if (trouves.nombre > 0) {
+          enLigne.push(`${route} : ${String(trouves.nombre)} gestionnaire(s), ex. ${trouves.exemple}`);
+        }
+      }
+
+      assert.deepEqual(
+        enLigne,
+        [],
+        'Chaque écran listé porte des gestionnaires que la CSP de production rendra inertes, ' +
+          'en silence. Le remède est `addEventListener`, que le dépôt emploie déjà partout ailleurs.',
+      );
+      const refus = session.erreursConsole.filter((e) => /Content Security Policy|inline event handler/i.test(e));
+      assert.deepEqual(refus, [], 'Et aucun refus n’a été journalisé pendant le parcours.');
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      application.definirCsp(null);
+      await session.fermer();
+    }
+  });
+
+  test('LE DÉTECTEUR MORD : un gestionnaire en ligne déclenché EST vu', async () => {
+    // Contrôle de morsure du test précédent, et il est indispensable : il prouve que
+    // le banc VERRAIT le défaut si l'application le portait. On plante un
+    // gestionnaire en ligne, on le déclenche, et l'on vérifie deux choses — qu'il
+    // n'a pas tourné, et que le refus est arrivé jusqu'au journal du banc.
+    const session = await ouvrirPage(navigateur);
+    try {
+      application.definirCsp(CSP_PRODUCTION);
+      await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
+      assert.equal(await attendreApplication(session.page), 'chargee');
+
+      await session.page.evaluate(() => {
+        const bouton = document.createElement('button');
+        bouton.id = 'zz-morsure-csp';
+        bouton.setAttribute('onclick', 'window.__gestionnaireALanceTourne = true;');
+        document.body.appendChild(bouton);
+      });
+      await session.page.click('#zz-morsure-csp');
+      await session.page.waitForTimeout(200);
+
+      assert.equal(
+        await session.page.evaluate(() => window.__gestionnaireALanceTourne === true),
+        false,
+        'Sous cette CSP, un gestionnaire en ligne NE DOIT PAS s’exécuter.',
+      );
+      const refus = session.erreursConsole.filter((e) => /inline event handler/i.test(e));
+      assert.equal(refus.length, 1, 'Et le banc doit avoir vu le refus, sinon il ne verra jamais rien.');
+    } finally {
+      application.definirCsp(null);
+      await session.fermer();
+    }
+  });
+});
+
+/* =====================================================================
  *  B-3 — l'import « Remplacer » ne détruit pas une filiale
  * ===================================================================== */
 
 describe('B-3 — l’import « Remplacer » ne détruit pas la filiale hors transaction', () => {
-  test('le mode « Remplacer » ne supprime RIEN au serveur', async () => {
-    // Rejoué de l'auditeur : « 8 risques, 2 documents, 1 incident avant ; 1 risque,
-    // 0 document, 0 incident après ; 20 DELETE HTTP ; listBackups() → [] ; valeur de
-    // retour {"ok":false}, et la destruction a eu lieu quand même. »
+  test('« Remplacer » passe par UNE transaction serveur, et n’émet aucun DELETE', async () => {
+    // ── L'arbitrage, et ce que ce test est devenu ────────────────────────────
+    //
+    // Première version : « le mode Remplacer ne supprime RIEN », parce que le
+    // correctif immédiat avait été de le refuser côté navigateur — un pansement, et
+    // il était dit comme tel. La vraie réponse est arrivée depuis : une route de
+    // reprise qui prend le fichier entier et l'applique en UNE transaction serveur
+    // (`POST /api/reprise`, couverte par `test/api/reprise-route.test.mjs`).
+    //
+    // Le test suit donc l'arbitrage, et vérifie la propriété qui compte vraiment :
+    // le remplacement a bien lieu, MAIS PAS PAR UNE RAFALE. C'est la formulation
+    // exacte du constat B-3 — « vingt requêtes DELETE, sans transaction : une coupure
+    // de VPN au milieu laisse la filiale à moitié détruite, et l'état intermédiaire
+    // est parfaitement observable par les autres utilisateurs ».
     const session = await ouvrirPage(navigateur);
     try {
       await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
       assert.equal(await attendreApplication(session.page), 'chargee');
 
-      const avant = {
-        risques: (await enBase('select id from risques')).length,
-        documents: (await enBase('select id from documents')).length,
-        incidents: (await enBase('select id from incidents')).length,
-      };
-      assert.ok(avant.risques > 0 && avant.incidents > 0, 'Le scénario n’a de sens qu’avec des données.');
-
+      const avant = (await enBase('select id from risques')).length;
+      assert.ok(avant > 0, 'Le scénario n’a de sens qu’avec des données à remplacer.');
       const suppressionsAvant = application.appelsPar('DELETE').length;
 
       const issue = await session.page.evaluate(async () => {
-        const charge = { schemaVersion: 12, risques: [{ id: 'RISK-IMPORTE', nom: 'Venu d’un fichier' }] };
+        const charge = {
+          schemaVersion: 12,
+          risques: [{ id: 'RISK-VENU-DU-FICHIER', nom: 'Venu d’un fichier' }],
+        };
         try {
-          const r = await window.DataStore.applyImport(charge, 'replace');
-          return { refuse: false, resultat: JSON.stringify(r) };
+          return { refuse: false, resultat: await window.DataStore.applyImport(charge, 'replace') };
         } catch (erreur) {
           return { refuse: true, message: String(erreur && erreur.message) };
         }
       });
 
-      const apres = {
-        risques: (await enBase('select id from risques')).length,
-        documents: (await enBase('select id from documents')).length,
-        incidents: (await enBase('select id from incidents')).length,
-      };
-      assert.deepEqual(
-        apres,
-        avant,
-        `Le jeu de données de la filiale doit être INTACT. Issue de l’import : ${JSON.stringify(issue)}`,
+      assert.equal(
+        application.appelsPar('DELETE').length - suppressionsAvant,
+        0,
+        'AUCUNE suppression une par une : c’est le cœur du constat B-3. ' +
+          `Issue de l’import : ${JSON.stringify(issue).slice(0, 300)}`,
       );
 
-      const suppressions = application.appelsPar('DELETE').length - suppressionsAvant;
-      assert.equal(
-        suppressions,
-        0,
-        'Aucune suppression ne doit être émise : une rafale de DELETE indépendants n’est pas ' +
-          'une opération composite (contrôle S14), et une coupure au milieu laisse la filiale ' +
-          'à moitié détruite.',
+      // Deux issues sont acceptables, et une seule est inacceptable : détruire hors
+      // transaction. Si l'import est appliqué, il doit l'avoir été entièrement.
+      if (issue.refuse) {
+        assert.equal(
+          (await enBase('select id from risques')).length,
+          avant,
+          'Un import refusé ne doit rien avoir détruit.',
+        );
+      } else {
+        const apres = await enBase('select id from risques');
+        assert.deepEqual(
+          apres.map((r) => r.id),
+          ['RISK-VENU-DU-FICHIER'],
+          'Un remplacement appliqué doit l’être ENTIÈREMENT, et sous l’identifiant du fichier.',
+        );
+      }
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('un fichier fautif ne laisse RIEN à moitié détruit', async () => {
+    // L'autre moitié, et celle qui coûtait la filiale : l'échec au milieu. Le fichier
+    // porte des enregistrements valides PUIS une valeur refusée — sans transaction,
+    // les premiers seraient écrits et les données d'origine déjà supprimées.
+    const session = await ouvrirPage(navigateur);
+    try {
+      await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
+      assert.equal(await attendreApplication(session.page), 'chargee');
+
+      const avant = (await enBase('select id from risques order by id')).map((r) => r.id);
+      const suppressionsAvant = application.appelsPar('DELETE').length;
+
+      const issue = await session.page.evaluate(async () => {
+        const charge = {
+          schemaVersion: 12,
+          risques: [
+            { id: 'RISK-BON-1', nom: 'Valide' },
+            { id: 'RISK-BON-2', nom: 'Valide aussi' },
+            { id: 'RISK-FAUTIF', nom: 'Troisième', niveau: 'valeur hors de la liste fermée' },
+          ],
+        };
+        try {
+          return { refuse: false, resultat: await window.DataStore.applyImport(charge, 'replace') };
+        } catch (erreur) {
+          return { refuse: true, message: String(erreur && erreur.message) };
+        }
+      });
+
+      assert.deepEqual(
+        (await enBase('select id from risques order by id')).map((r) => r.id),
+        avant,
+        `Le jeu de données doit être EXACTEMENT celui d’avant. Issue : ${JSON.stringify(issue).slice(0, 300)}`,
       );
+      assert.equal(application.appelsPar('DELETE').length - suppressionsAvant, 0);
     } finally {
       await session.fermer();
     }

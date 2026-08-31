@@ -171,6 +171,32 @@ const Api = (() => {
             { methode: "DELETE" });
     }
 
+    /**
+     * Reprise d'un fichier `grc-backup` — **une seule transaction côté serveur**
+     * (constat bloquant B-3 de la porte S2), et le seul chemin où les
+     * identifiants du fichier redeviennent les clés primaires.
+     *
+     * C'est le **texte brut du fichier** qui part : le serveur lit l'enveloppe,
+     * monte la charge de v1 à v12 et borne la taille lui-même. Le navigateur
+     * n'a pas à connaître les paliers de migration, et un export ancien est
+     * absorbé même par une SPA qui ne le comprendrait plus.
+     *
+     *     POST /api/reprise
+     *     { mode: "remplacer" | "fusionner", apercu?: boolean,
+     *       fichier: { nom, contenu } }
+     *
+     *     → 200 { applique, mode, bilan: {lus, crees, misAJour, supprimes,
+     *                                     champsIgnores}, rapport: {…} }
+     *
+     * `apercu: true` applique réellement puis annule : ce qui est montré est ce
+     * qui se produirait, contraintes de la base comprises.
+     */
+    function reprendre(mode, nomFichier, contenu, apercu) {
+        const corps = { mode: mode, fichier: { nom: nomFichier, contenu: contenu } };
+        if (apercu === true) corps.apercu = true;
+        return appeler("/reprise", { methode: "POST", corps: corps, delai: DELAI_CHARGEMENT_MS });
+    }
+
     // Opération composite : la propagation « au plus défavorable » s'exécute en
     // UNE transaction côté serveur (contrôle S14), et rend les évaluations
     // relues, versions comprises.
@@ -181,7 +207,7 @@ const Api = (() => {
     return {
         ErreurApi,
         session, modele, donnees, rafraichir,
-        creer, modifier, supprimer, propagerMesure
+        creer, modifier, supprimer, propagerMesure, reprendre
     };
 })();
 

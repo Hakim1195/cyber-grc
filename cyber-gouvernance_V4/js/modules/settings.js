@@ -96,7 +96,7 @@ const SettingsModule = (() => {
                     <div class="dashboard-card" style="border-top: 4px solid var(--color-danger);">
                         <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Importer une sauvegarde</h3>
                         <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px;">
-                            Chargez un fichier .json (chiffré ou non) — reprise d'une filiale déjà équipée de l'ancienne version, ou données remises par une filiale. Le contenu est validé, puis <strong>fusionné</strong> : les enregistrements absents sont ajoutés, <strong>aucun n'est supprimé ni écrasé</strong>.
+                            Chargez un fichier .json (chiffré ou non) — reprise d'une filiale déjà équipée de l'ancienne version, ou données remises par une filiale. Le contenu est validé, puis appliqué <strong>en une seule transaction</strong> sur le serveur : il réussit entièrement, ou rien n'est modifié.
                         </p>
                         <div style="text-align: center; margin-bottom: 10px;">
                             <input type="file" id="importInput" accept=".json,application/json" style="display: none;" />
@@ -236,35 +236,67 @@ const SettingsModule = (() => {
                 <table class="data-table" style="margin:0;"><tbody>${rows}</tbody></table>
                 <div style="display:flex; gap:10px; margin-top:12px;">
                     <button id="imp-merge" style="background: var(--primary); flex:1; justify-content:center;">Fusionner dans la filiale</button>
+                    <button id="imp-replace" style="background: var(--color-danger); flex:1; justify-content:center;">Remplacer tout</button>
                     <button id="imp-cancel" style="background: var(--color-gray); justify-content:center;">Annuler</button>
                 </div>
                 <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 8px;">
-                    Fusionner ajoute les éléments absents (par identifiant) et ne supprime rien.
-                    Le remplacement complet n'est pas proposé : il détruirait les données du serveur
-                    sans transaction ni retour arrière.
+                    <strong>Fusionner</strong> ajoute les éléments absents et ne supprime rien.
+                    <strong>Remplacer</strong> substitue le contenu du fichier à celui de la filiale
+                    <strong>pour tous ses utilisateurs</strong> : c'est irréversible, et il n'existe pas
+                    de point de restauration côté navigateur — la restauration se demande à l'exploitant.
                 </div>
             </div>
         `;
         document.getElementById("imp-cancel").onclick = () => { recap.innerHTML = ""; };
-        document.getElementById("imp-merge").onclick = async () => {
-            const bouton = document.getElementById("imp-merge");
-            bouton.disabled = true; bouton.textContent = "Fusion en cours…";
+
+        // Un seul chemin pour les deux modes : `applyImport` applique la charge en
+        // UNE transaction côté serveur quand il la porte, et se replie sinon —
+        // en refusant le remplacement plutôt qu'en le faisant à moitié (B-3).
+        async function appliquer(mode, bouton, libelle) {
+            bouton.disabled = true; bouton.textContent = "Application en cours…";
             try {
-                const r = await DataStore.applyImport(res.payload, "merge");
-                const total = r.added ? Object.values(r.added).reduce((a, b) => a + b, 0) : 0;
-                if (r.ok) {
+                // Le TEXTE d'origine part au serveur : c'est lui qui lit
+                // l'enveloppe, monte la charge de v1 à v12 et porte l'empreinte
+                // d'idempotence. Pour un fichier chiffré, le texte n'est pas
+                // lisible par le serveur : on lui remet la charge déchiffrée
+                // dans une enveloppe en clair.
+                const r = await DataStore.applyImport(res.payload, mode,
+                    res.encrypted ? { nom: filename } : { texte: text, nom: filename });
+                const total = (typeof r.total === "number")
+                    ? r.total
+                    : (r.added ? Object.values(r.added).reduce((a, b) => a + b, 0) : 0);
+                if (r.ok && r.transactionnel) {
+                    const details = [`${r.crees || 0} créé(s)`, `${r.misAJour || 0} mis à jour`];
+                    if (r.supprimes) details.push(`${r.supprimes} supprimé(s)`);
+                    const ignores = (r.champsIgnores && r.champsIgnores.length)
+                        ? `\n\nChamps du fichier que le modèle ne connaît pas, donc non repris : `
+                          + r.champsIgnores.join(", ")
+                        : "";
+                    alert(`Import appliqué en une seule transaction : ${details.join(", ")}.` + ignores);
+                } else if (r.ok) {
                     alert(`Fusion terminée : ${total} élément(s) ajouté(s) sur le serveur.`);
                 } else {
-                    alert(`Fusion incomplète : ${total} élément(s) repris, certains ont été refusés par le serveur. `
+                    alert(`Import incomplet : ${total} élément(s) repris, certains ont été refusés par le serveur. `
                         + `Le bandeau en haut de page dit lesquels — ne rechargez pas la page avant de l'avoir lu.`);
                 }
+                recap.innerHTML = "";
             } catch (e) {
-                alert("Import impossible : " + e.message);
+                alert("Import impossible.\n\n" + e.message);
             } finally {
-                bouton.disabled = false; bouton.textContent = "Fusionner dans la filiale";
+                bouton.disabled = false; bouton.textContent = libelle;
             }
-            recap.innerHTML = "";
             loadStorageInfo();
+        }
+
+        document.getElementById("imp-merge").onclick = () =>
+            appliquer("merge", document.getElementById("imp-merge"), "Fusionner dans la filiale");
+
+        document.getElementById("imp-replace").onclick = () => {
+            if (!confirm("Remplacer les données de cette filiale par le contenu du fichier ?\n\n"
+                + "Tout ce qui n'est pas dans le fichier sera supprimé, pour tous les utilisateurs "
+                + "de la filiale. L'opération est appliquée en une seule transaction : elle réussit "
+                + "entièrement ou ne change rien — mais elle est IRRÉVERSIBLE une fois réussie.")) return;
+            appliquer("replace", document.getElementById("imp-replace"), "Remplacer tout");
         };
     }
 

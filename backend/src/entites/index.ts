@@ -93,7 +93,9 @@ import type { PoolClient } from 'pg';
 
 import type { PerimetreSession } from '../db/pool.js';
 import type {
+  BilanReprise,
   Catalogue,
+  DescriptionCleEtrangere,
   DescriptionColonne,
   DescriptionEntite,
   DescriptionLiaison,
@@ -103,6 +105,7 @@ import type {
   Enregistrement,
   FamilleType,
   JeuDeDonnees,
+  ModeReprise,
   MotifEchec,
   NomEntite,
   Rafraichissement,
@@ -648,6 +651,7 @@ interface LigneCatalogue {
 export async function chargerCatalogue(client: PoolClient): Promise<Catalogue> {
   const videsInterdits = await decouvrirVidesInterdits(client);
   const unicites = await decouvrirUnicites(client);
+  const clesEtrangeres = await decouvrirClesEtrangeres(client);
 
   const { rows } = await client.query<LigneCatalogue>(`
     select c.relname                                              as table,
@@ -740,7 +744,55 @@ export async function chargerCatalogue(client: PoolClient): Promise<Catalogue> {
   }
 
   etatsRlsParCatalogue.set(tables, etatsRls);
-  return { tables, unicites, decouvertLe: new Date() };
+  return { tables, unicites, clesEtrangeres, decouvertLe: new Date() };
+}
+
+/**
+ * Découvre les clés étrangères, avec leur action à la suppression.
+ *
+ * Elles servent à **dériver** deux ordres dont dépend la reprise d'un jeu de
+ * données complet : celui dans lequel on purge une filiale, et celui dans
+ * lequel on la réécrit. Les écrire à la main serait le motif que la porte S1 a
+ * vu produire quatre défauts distincts (`CONVENTIONS.md` §19.5) — d'autant que
+ * ces ordres changent à chaque migration qui ajoute une entité.
+ */
+async function decouvrirClesEtrangeres(
+  client: PoolClient,
+): Promise<DescriptionCleEtrangere[]> {
+  const { rows } = await client.query<{
+    nom: string;
+    table: string;
+    cible: string;
+    action: string;
+  }>(`
+    select k.conname                     as nom,
+           c.relname                     as table,
+           p.relname                     as cible,
+           k.confdeltype                 as action
+      from pg_constraint k
+      join pg_class c     on c.oid = k.conrelid
+      join pg_class p     on p.oid = k.confrelid
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public'
+       and k.contype = 'f'
+  `);
+
+  const actions: Record<string, DescriptionCleEtrangere['action']> = {
+    c: 'cascade',
+    n: 'set_null',
+    d: 'set_default',
+    r: 'restrict',
+    a: 'restrict',
+  };
+
+  return rows.map((ligne) => ({
+    nom: ligne.nom,
+    table: ligne.table,
+    cible: ligne.cible,
+    // Une action inconnue est traitée comme la plus contraignante : mieux vaut
+    // un ordre trop prudent qu'une suppression refusée en pleine reprise.
+    action: actions[ligne.action] ?? 'restrict',
+  }));
 }
 
 /* ---------------------------------------------------------------------
@@ -1188,6 +1240,13 @@ export interface OptionsCreation {
    * d'administration, pas la création d'un enregistrement à l'unité.
    */
   readonly identifiantImpose?: string | null;
+
+  /**
+   * Reçoit les champs sans destination au lieu de les faire refuser. Réservé
+   * au chemin de reprise (voir `repartir`) : une écriture ordinaire refuse,
+   * une reprise signale.
+   */
+  readonly signalerChampInconnu?: ((champ: string) => void) | null;
 }
 
 export class Depot {
@@ -1382,7 +1441,12 @@ export class Depot {
     const identifiant = options.identifiantImpose ?? engendrerIdentifiant(d.prefixe);
     verifierIdentifiant(identifiant);
 
-    const { valeurs, liaisons } = this.repartir(d, champs, entite);
+    const { valeurs, liaisons } = this.repartir(
+      d,
+      champs,
+      entite,
+      options.signalerChampInconnu ?? null,
+    );
 
     // La table principale d'abord : c'est elle qui porte l'identité, et les
     // clés étrangères des autres tables la visent.
@@ -1449,13 +1513,14 @@ export class Depot {
     version: number,
     champs: Enregistrement,
     versionSeconde: number | null = null,
+    signalerChampInconnu: ((champ: string) => void) | null = null,
   ): Promise<Enregistrement> {
     const d = description(entite);
     const filiale = this.filialeActive(perimetre);
     this.exigerDroitEcriture(d, perimetre, entite);
     verifierIdentifiant(identifiant);
 
-    const { valeurs, liaisons } = this.repartir(d, champs, entite);
+    const { valeurs, liaisons } = this.repartir(d, champs, entite, signalerChampInconnu);
     let principales = valeurs.get(d.table) ?? new Map<string, unknown>();
 
     // ── M-1 : CE QUI N'A PAS CHANGÉ NE S'ÉCRIT PAS ─────────────────────
@@ -1809,6 +1874,344 @@ export class Depot {
     }
 
     return { evaluationsMisesAJour: misesAJour, evaluations };
+  }
+
+  /* ===============================================================
+   *  8.6 bis — REPRISE D'UN JEU DE DONNÉES COMPLET
+   * =============================================================== */
+
+  /**
+   * Applique la charge utile v12 d'un export `grc-backup` à la filiale active,
+   * **en une seule fois**.
+   *
+   * ── Pourquoi cette méthode existe ────────────────────────────────────
+   *
+   * Le constat bloquant **B-3** de la porte S2 : l'import « Remplacer » du
+   * navigateur n'était pas une opération composite mais une rafale de vingt
+   * `DELETE` HTTP indépendants. Une coupure de VPN au milieu laissait la
+   * filiale à moitié détruite, l'état intermédiaire était observable par les
+   * autres utilisateurs, et l'appelant recevait `ok: false` **après** que la
+   * destruction avait eu lieu. Le remède n'est pas un pansement côté
+   * navigateur : c'est une transaction unique côté serveur (contrôle S14).
+   *
+   * Elle referme aussi l'objection légitime que le banc d'essai opposait à
+   * **M-3** : le round-trip exact d'un export (`CONVENTIONS.md` §2) exige que
+   * les identifiants du fichier deviennent tels quels les clés primaires. Ils
+   * le redeviennent — **ici**, sur le chemin de reprise, et nulle part
+   * ailleurs.
+   *
+   * ── Deux passes, et la seconde n'est pas un détail ───────────────────
+   *
+   *  1. **les enregistrements**, dans un ordre dérivé du graphe des clés
+   *     étrangères (une exigence avant l'action qui la vise) ;
+   *  2. **les liaisons**, toutes ensemble, une fois que tout existe.
+   *
+   * Sans la seconde passe, une dépendance d'actif vers un actif inséré plus
+   * loin dans la même collection échouerait — le cas est ordinaire, le module
+   * Cartographie en produit à chaque graphe. Différer les liaisons supprime
+   * la question de l'ordre **à l'intérieur** d'une collection, et pas
+   * seulement entre collections.
+   *
+   * ── Ce que cette méthode ne fait pas ─────────────────────────────────
+   *
+   *  · elle n'ouvre **aucune** transaction : l'appelant en ouvre une, et c'est
+   *    ce qui rend l'opération tout-ou-rien. Un aperçu s'obtient en annulant
+   *    cette transaction plutôt qu'en simulant quoi que ce soit — ce qui
+   *    garantit que l'aperçu montre le **vrai** résultat, contraintes de la
+   *    base comprises, et non une estimation ;
+   *  · elle n'écrit rien dans `journal_audit` (lot L5) ;
+   *  · elle ne touche **jamais** le socle Groupe : la purge se borne à
+   *    `filiale_id = <filiale active>`, et les lignes de portée Groupe
+   *    survivent — c'est la propriété du §17.6, appliquée à l'import.
+   */
+  public async appliquerReprise(
+    client: PoolClient,
+    perimetre: PerimetreSession,
+    charge: Readonly<Record<string, unknown>>,
+    mode: ModeReprise,
+  ): Promise<BilanReprise> {
+    const filiale = this.filialeActive(perimetre);
+
+    const supprimes: Record<string, number> = {};
+    const crees: Record<string, number> = {};
+    const misAJour: Record<string, number> = {};
+    const champsIgnores = new Set<string>();
+    let lus = 0;
+
+    // ── Ce que le fichier apporte, borné avant d'y toucher (S13) ────────
+    const apports = new Map<NomEntite, Enregistrement[]>();
+    for (const entite of ORDRE_ENTITES) {
+      const brut = charge[entite];
+      if (brut === undefined || brut === null) continue;
+      if (!Array.isArray(brut)) {
+        throw invalide(`La collection « ${entite} » du fichier n'est pas une liste.`);
+      }
+      if (brut.length > BORNES.lignesParCollection) {
+        throw new ErreurAccesEntite({
+          motif: 'volume_excessif',
+          message:
+            `La collection « ${entite} » du fichier porte ${String(brut.length)} enregistrements, ` +
+            `au-delà des ${String(BORNES.lignesParCollection)} admis. La reprise est refusée ` +
+            "dans son ENTIER : rien n'a été modifié.",
+          entite,
+        });
+      }
+      const enregistrements = brut.filter(
+        (element): element is Enregistrement =>
+          typeof element === 'object' && element !== null && !Array.isArray(element),
+      );
+      lus += enregistrements.length;
+      apports.set(entite, enregistrements);
+    }
+
+    // ── Purge, s'il faut remplacer ──────────────────────────────────────
+    if (mode === 'remplacer') {
+      Object.assign(supprimes, await this.purgerFiliale(client, filiale));
+    }
+
+    // ── Ce qui subsiste et que le fichier vise : mise à jour, non création
+    const existants = await this.identifiantsExistants(client, filiale);
+
+    // ── Passe 1 : les enregistrements, sans leurs liaisons ──────────────
+    const differees: {
+      entite: NomEntite;
+      identifiant: string;
+      portee: string | null;
+      liaisons: Enregistrement;
+    }[] = [];
+    const signaler = (champ: string): void => {
+      champsIgnores.add(champ);
+    };
+
+    for (const entite of this.ordreEcriture()) {
+      const enregistrements = apports.get(entite);
+      if (enregistrements === undefined) continue;
+      const d = description(entite);
+      const champsDeLiaison = new Set((d.liaisons ?? []).map((l) => l.champ));
+      const connus = existants.get(entite) ?? new Map<string, { version: number; seconde: number | null }>();
+
+      crees[entite] = 0;
+      misAJour[entite] = 0;
+
+      for (const enregistrement of enregistrements) {
+        const identifiant = typeof enregistrement['id'] === 'string' ? enregistrement['id'] : null;
+        if (identifiant === null) {
+          throw invalide(`Un enregistrement de « ${entite} » n'a pas d'identifiant exploitable.`);
+        }
+
+        const donnees: Enregistrement = {};
+        const liaisons: Enregistrement = {};
+        for (const [champ, valeur] of Object.entries(enregistrement)) {
+          if (champsDeLiaison.has(champ)) liaisons[champ] = valeur;
+          else donnees[champ] = valeur;
+        }
+
+        const deja = connus.get(identifiant);
+        if (deja === undefined) {
+          await this.creer(client, perimetre, entite, donnees, {
+            identifiantImpose: identifiant,
+            signalerChampInconnu: signaler,
+          });
+          crees[entite] = (crees[entite] ?? 0) + 1;
+        } else {
+          await this.modifier(
+            client,
+            perimetre,
+            entite,
+            identifiant,
+            deja.version,
+            donnees,
+            deja.seconde,
+            signaler,
+          );
+          misAJour[entite] = (misAJour[entite] ?? 0) + 1;
+        }
+
+        if (Object.keys(liaisons).length > 0) {
+          differees.push({
+            entite,
+            identifiant,
+            portee: await this.filialeDeLaLigne(client, d.table, identifiant),
+            liaisons,
+          });
+        }
+      }
+    }
+
+    // ── Passe 2 : les liaisons, une fois que tout existe ────────────────
+    let liaisonsEcrites = 0;
+    for (const differee of differees) {
+      const d = description(differee.entite);
+      const { liaisons } = this.repartir(d, differee.liaisons, differee.entite, signaler);
+      for (const [liaison, elements] of liaisons) {
+        await this.ecrireLiaison(
+          client,
+          liaison,
+          differee.identifiant,
+          differee.portee,
+          elements,
+          differee.entite,
+        );
+        liaisonsEcrites += elements.length;
+      }
+    }
+
+    return {
+      mode,
+      supprimes,
+      crees,
+      misAJour,
+      liaisons: liaisonsEcrites,
+      champsIgnores: [...champsIgnores].sort(),
+      lus,
+    };
+  }
+
+  /**
+   * Vide la filiale active de ses données métier.
+   *
+   * ⚠️ **L'ordre est DÉRIVÉ, pas récité.** Il vient du graphe des clés
+   * étrangères : une table visée par une référence en `restrict` est purgée
+   * **après** celles qui la référencent. C'est ce qui fait que le catalogue de
+   * mesures locales part en dernier, sans qu'aucune ligne de ce fichier ne le
+   * nomme — et qu'une entité ajoutée en L4 ou L7 trouvera sa place toute
+   * seule (`CONVENTIONS.md` §19.5).
+   *
+   * Ce qui n'est pas purgé, et ne doit pas l'être : les lignes de **portée
+   * Groupe** des tables mixtes (socle de mesures, politique Groupe, annuaire
+   * Groupe), et les tables de niveau Groupe entières (correspondances). Le
+   * filtre est `filiale_id = <filiale active>`, jamais plus large.
+   *
+   * ⚠️ **Cet invariant ne dépend pas du périmètre de la session.** Une reprise
+   * s'exécute en administration Groupe (voir `enReprise` dans `src/api/`), et
+   * un lecteur pourrait en conclure que la purge s'élargit avec elle. Elle ne
+   * s'élargit pas : ne sont touchées que les tables portant `filiale_id`, sur
+   * la seule filiale active. Détruire le socle commun en restaurant UNE
+   * filiale emporterait les données des dix-neuf autres — la pathologie même
+   * du constat bloquant B-1 de la porte S1.
+   */
+  public async purgerFiliale(
+    client: PoolClient,
+    filiale: string,
+  ): Promise<Record<string, number>> {
+    const comptes: Record<string, number> = {};
+
+    for (const nomTable of this.ordrePurge()) {
+      const table = this.table(nomTable);
+      if (!table.cloisonnee) continue; // purgée par cascade depuis son parent
+      const resultat = await this.executer(
+        client,
+        `delete from ${ident(nomTable)} where ${ident('filiale_id')} = $1`,
+        [filiale],
+        'clients',
+      );
+      if ((resultat.rowCount ?? 0) > 0) comptes[nomTable] = resultat.rowCount ?? 0;
+    }
+    return comptes;
+  }
+
+  /** Identifiants déjà présents dans la filiale, par entité, avec leurs versions. */
+  private async identifiantsExistants(
+    client: PoolClient,
+    filiale: string,
+  ): Promise<Map<NomEntite, Map<string, { version: number; seconde: number | null }>>> {
+    const resultat = new Map<NomEntite, Map<string, { version: number; seconde: number | null }>>();
+
+    for (const entite of ORDRE_ENTITES) {
+      const d = description(entite);
+      const table = this.table(d.table);
+      const conditions: string[] = [];
+      const parametres: unknown[] = [];
+      let jointure = '';
+      let colonneSeconde = 'null::integer';
+
+      if (table.cloisonnee) {
+        parametres.push(filiale);
+        conditions.push(
+          table.filialeNullable
+            ? `(p.${ident('filiale_id')} = $1 or p.${ident('filiale_id')} is null)`
+            : `p.${ident('filiale_id')} = $1`,
+        );
+      }
+      if (d.seconde !== undefined) {
+        if (parametres.length === 0) parametres.push(filiale);
+        jointure =
+          ` left join ${ident(d.seconde.table)} s on s.${ident('mesure_id')} = p.${ident('id')}` +
+          ` and s.${ident('filiale_id')} = $1`;
+        colonneSeconde = `s.${ident('version')}`;
+      }
+
+      const { rows } = await client.query<{ id: string; v: number | string; vs: number | string | null }>(
+        `select p.${ident('id')} as id, p.${ident('version')} as v, ${colonneSeconde} as vs
+           from ${ident(d.table)} p${jointure}
+          ${conditions.length > 0 ? `where ${conditions.join(' and ')}` : ''}`,
+        parametres,
+      );
+
+      const parEntite = new Map<string, { version: number; seconde: number | null }>();
+      for (const ligne of rows) {
+        parEntite.set(ligne.id, {
+          version: Number(ligne.v),
+          seconde: ligne.vs === null ? null : Number(ligne.vs),
+        });
+      }
+      resultat.set(entite, parEntite);
+    }
+    return resultat;
+  }
+
+  /**
+   * Ordre d'écriture des entités : un parent avant l'enfant qui le référence
+   * **par une colonne**. Les liaisons n'entrent pas dans ce calcul — elles sont
+   * différées à une seconde passe, ce qui supprime la question de l'ordre à
+   * l'intérieur d'une collection.
+   */
+  private ordreEcriture(): readonly NomEntite[] {
+    const tableVersEntite = new Map<string, NomEntite>();
+    for (const entite of ORDRE_ENTITES) {
+      const d = description(entite);
+      tableVersEntite.set(d.table, entite);
+      if (d.seconde !== undefined) tableVersEntite.set(d.seconde.table, entite);
+    }
+
+    const dependances = new Map<NomEntite, Set<NomEntite>>(
+      ORDRE_ENTITES.map((entite) => [entite, new Set<NomEntite>()]),
+    );
+    for (const cle of this.catalogue.clesEtrangeres) {
+      const enfant = tableVersEntite.get(cle.table);
+      const parent = tableVersEntite.get(cle.cible);
+      if (enfant === undefined || parent === undefined || enfant === parent) continue;
+      dependances.get(enfant)?.add(parent);
+    }
+
+    return trierParDependances(ORDRE_ENTITES, dependances);
+  }
+
+  /**
+   * Ordre de purge des tables : une table visée par une référence en
+   * `restrict` est purgée **après** celles qui la référencent.
+   */
+  private ordrePurge(): readonly string[] {
+    const tables: string[] = [];
+    for (const entite of ORDRE_ENTITES) {
+      const d = description(entite);
+      tables.push(d.table);
+      if (d.seconde !== undefined) tables.push(d.seconde.table);
+      for (const liaison of d.liaisons ?? []) tables.push(liaison.table);
+    }
+    const uniques = [...new Set(tables)];
+    const connues = new Set(uniques);
+
+    // « avant » : la table doit être purgée avant celle qu'elle référence en
+    // restrict, faute de quoi la suppression du parent est refusée.
+    const dependances = new Map<string, Set<string>>(uniques.map((t) => [t, new Set<string>()]));
+    for (const cle of this.catalogue.clesEtrangeres) {
+      if (cle.action !== 'restrict') continue;
+      if (!connues.has(cle.table) || !connues.has(cle.cible) || cle.table === cle.cible) continue;
+      dependances.get(cle.cible)?.add(cle.table);
+    }
+
+    return trierParDependances(uniques, dependances);
   }
 
   /* ===============================================================
@@ -2682,6 +3085,7 @@ export class Depot {
     d: DescriptionEntite,
     champs: Enregistrement,
     entite: NomEntite,
+    signalerChampInconnu: ((champ: string) => void) | null = null,
   ): {
     valeurs: Map<string, Map<string, unknown>>;
     liaisons: Map<DescriptionLiaison, Record<string, unknown>[]>;
@@ -2713,6 +3117,18 @@ export class Depot {
       const cible = cibleDuChamp(this.catalogue, d, champ);
       if (cible === 'ignore') continue;
       if (cible === null) {
+        // ── Deux régimes, et la différence est délibérée ──────────────────
+        // Écriture ORDINAIRE : un champ sans destination est REFUSÉ. Une
+        // donnée saisie qui disparaît sans un mot est pire qu'un refus.
+        // REPRISE d'un fichier : le refus en bloc serait pire encore — un
+        // export d'une version dérivée porte des champs que ce modèle ne
+        // connaît pas, et le `PLAN_SERVEUR` §5 demande un « rapport d'erreurs
+        // ligne par ligne », pas un rejet du fichier entier. Le champ est donc
+        // SIGNALÉ, et il remonte dans le bilan.
+        if (signalerChampInconnu !== null) {
+          signalerChampInconnu(`${entite}.${nomLisible(champ)}`);
+          continue;
+        }
         throw invalide(
           `Le champ « ${nomLisible(champ)} » n'appartient pas à l'entité « ${entite} », ou n'est ` +
             "pas modifiable depuis cette interface. Aucune donnée n'a été enregistrée.",
@@ -2941,6 +3357,50 @@ function versLeFrontend(valeur: unknown, famille: FamilleType): unknown {
  * En cas de doute, on répond « différent » : écrire pour rien est sans
  * conséquence, tenir à tort une saisie pour inchangée la perdrait.
  */
+/**
+ * Tri topologique : rend les éléments dans un ordre où chaque élément suit
+ * ceux dont il dépend.
+ *
+ * ⚠️ **Un cycle n'est pas silencieusement contourné.** Il signifierait que le
+ * graphe des clés étrangères s'est refermé sur lui-même, ce que le
+ * `CONVENTIONS.md` §16.1 déclare impossible par construction — et si cela
+ * devenait faux, l'ordre rendu serait faux avec lui. On échoue donc, en
+ * nommant les éléments restants : un ordre approximatif produirait des refus
+ * d'intégrité incompréhensibles au milieu d'une reprise.
+ */
+function trierParDependances<T>(
+  elements: readonly T[],
+  dependances: ReadonlyMap<T, ReadonlySet<T>>,
+): readonly T[] {
+  const ordre: T[] = [];
+  const place = new Set<T>();
+  let restants = [...elements];
+
+  while (restants.length > 0) {
+    const prets = restants.filter((element) => {
+      const requis = dependances.get(element);
+      if (requis === undefined) return true;
+      for (const dependance of requis) {
+        if (!place.has(dependance) && restants.includes(dependance)) return false;
+      }
+      return true;
+    });
+
+    if (prets.length === 0) {
+      throw incoherent(
+        `Cycle dans le graphe des dépendances : ${restants.map((e) => String(e)).join(', ')}. ` +
+          "L'ordre d'écriture ne peut pas être dérivé, la reprise est refusée.",
+      );
+    }
+    for (const element of prets) {
+      ordre.push(element);
+      place.add(element);
+    }
+    restants = restants.filter((element) => !place.has(element));
+  }
+  return ordre;
+}
+
 function valeursEquivalentes(famille: FamilleType, stockee: unknown, proposee: unknown): boolean {
   if (famille === 'json') return false;
 

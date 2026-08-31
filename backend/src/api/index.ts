@@ -18,6 +18,7 @@
  * | `POST` | `/api/entites/:entite` | Créer un enregistrement |
  * | `PUT` | `/api/entites/:entite/:id` | Modifier — **verrouillage optimiste obligatoire** |
  * | `DELETE` | `/api/entites/:entite/:id` | Supprimer (cascades portées par le schéma) |
+ * | `POST` | `/api/reprise` | **Reprendre un export `grc-backup` entier, en UNE transaction** — avec aperçu |
  * | `POST` | `/api/operations/propager-mesure` | Propagation « au plus défavorable », en une transaction |
  *
  * ════════════════════════════════════════════════════════════════════════
@@ -32,6 +33,16 @@
  * | `PUT` sur `mesures` | l'envoi de l'enregistrement entier touchait la définition Groupe et rendait 403 | les champs de la définition **inchangés** ne sont plus écrits | M-1 : aucune filiale ne pouvait évaluer un contrôle du socle |
  * | Chaîne vide | refusée par les listes fermées du schéma | convertie en `NULL` quand le schéma refuse `''` | M-8 : deux modules étaient cassés par leur propre valeur par défaut |
  * | `mappings` | écrivable par toute session | **réservé à l'administration Groupe** | M-4 : une action de filiale réécrivait une référence commune aux vingt |
+ *
+ * **`POST /api/reprise`** remplace la rafale de `DELETE` un par un que le
+ * constat bloquant B-3 condamne. Corps :
+ * `{ mode: "remplacer" | "fusionner", apercu?: boolean, fichier: { nom, contenu } }`,
+ * où `contenu` est le **texte brut du fichier** — c'est le serveur qui lit
+ * l'enveloppe et monte la charge de v1 à v12 (`PLAN_SERVEUR` §2.6). La réponse
+ * porte le bilan (supprimés / créés / mis à jour par collection, liaisons,
+ * champs sans destination) et le rapport de reprise (paliers traversés,
+ * anomalies ligne par ligne). Avec `apercu: true`, tout est appliqué puis la
+ * transaction est **annulée** : ce qui est montré est ce qui se produirait.
  *
  * Un `409` de doublon sur une **clé métier** (le point d'historique du jour,
  * une exigence de référentiel déjà évaluée) porte désormais `identifiant` et
@@ -66,6 +77,8 @@
  *    couche d'authentification, qui n'existe pas.
  */
 
+import { createHash } from 'node:crypto';
+
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 
@@ -81,11 +94,33 @@ import {
   verifierRegistre,
   VERSION_SCHEMA,
 } from '../entites/index.js';
-import type { NomEntite } from '../entites/types.js';
+import type { BilanReprise, ModeReprise, NomEntite } from '../entites/types.js';
+import { reprendreExport } from '../reprise/index.js';
 import { entreeInvalide, ErreurApplicative, traduireErreur } from '../erreurs/index.js';
 import type { ContexteTraduction } from '../erreurs/index.js';
 import { PerimetreProvisoire } from './session.js';
 import type { ResolveurPerimetre } from './session.js';
+
+/**
+ * Force l'annulation de la transaction d'un aperçu, en portant son bilan.
+ *
+ * Ce n'est pas un détournement d'exception : c'est **la seule façon** de
+ * montrer un aperçu qui soit le vrai résultat. Simuler l'application donnerait
+ * une estimation — sans les `check`, sans les clés étrangères, sans la RLS.
+ * Appliquer puis annuler donne le résultat exact, et ne laisse rien derrière.
+ */
+class SentinelleApercu extends Error {
+  public readonly bilan: BilanReprise;
+  constructor(bilan: BilanReprise) {
+    super('aperçu de reprise : annulation volontaire de la transaction');
+    this.name = 'SentinelleApercu';
+    this.bilan = bilan;
+  }
+}
+
+function totaliser(comptes: Readonly<Record<string, number>>): number {
+  return Object.values(comptes).reduce((somme, valeur) => somme + valeur, 0);
+}
 
 export interface OptionsApi {
   readonly pool: Pool;
@@ -186,6 +221,33 @@ const SCHEMA_RAFRAICHIR = {
   required: ['depuis'],
   additionalProperties: false,
   properties: { depuis: { type: 'string', minLength: 10, maxLength: 40 } },
+} as const;
+
+const SCHEMA_REPRISE = {
+  type: 'object',
+  required: ['mode', 'fichier'],
+  additionalProperties: false,
+  properties: {
+    mode: { type: 'string', enum: ['remplacer', 'fusionner'] },
+    // Un aperçu applique VRAIMENT la reprise, puis annule la transaction :
+    // il montre le résultat réel, contraintes de la base comprises, et non une
+    // estimation (`PLAN_SERVEUR` §5, « aperçu avant validation »).
+    apercu: { type: 'boolean' },
+    fichier: {
+      type: 'object',
+      required: ['nom', 'contenu'],
+      additionalProperties: false,
+      properties: {
+        nom: { type: 'string', minLength: 1, maxLength: 260 },
+        // Le TEXTE BRUT du fichier, tel que l'utilisateur l'a choisi. C'est le
+        // serveur qui lit l'enveloppe et monte la charge de v1 à v12
+        // (`PLAN_SERVEUR` §2.6) : le navigateur n'a pas à connaître les
+        // paliers, et un export ancien doit être absorbé même si la SPA qui le
+        // reçoit ne sait plus le lire.
+        contenu: { type: 'string', minLength: 2, maxLength: 20000000 },
+      },
+    },
+  },
 } as const;
 
 const SCHEMA_PROPAGATION = {
@@ -367,6 +429,62 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   ): Promise<T> => {
     const instanceDepot = await assurerDepot();
     const perimetre = await resolveur.resoudre();
+    return avecTransaction(pool, perimetre, (client) => travail(client, instanceDepot, perimetre));
+  };
+
+  /**
+   * Transaction d'une **reprise**, et pourquoi son périmètre n'est pas celui
+   * d'une écriture ordinaire.
+   *
+   * ── Ce n'est pas un contournement : c'est la qualification de l'acte ──
+   *
+   * Une reprise ne modifie pas un enregistrement, elle **restaure un jeu de
+   * données entier** — socle Groupe compris, puisqu'un export `grc-backup` en
+   * porte la part que l'installation d'origine détenait : correspondances
+   * inter-référentiels, politiques de portée Groupe, socle de contrôles. C'est
+   * par nature un acte d'**administration Groupe**, pas une écriture de
+   * filiale. Le déclarer est donc la description exacte de l'opération, et non
+   * une exception ouverte pour faire passer une collection gênante.
+   *
+   * ── La règle est générale, et c'est le point ─────────────────────────
+   *
+   * Elle porte sur l'**opération**, pas sur une liste de collections à
+   * autoriser. Une reprise qui apporterait demain une autre entité de portée
+   * Groupe passera sans que ce fichier change — et c'est délibéré : « une
+   * liste écrite à la main est une omission qui attend » (`CONVENTIONS.md`
+   * §19.5), motif que ce chantier a payé quatre fois.
+   *
+   * ── Ce que le drapeau ne fait pas, et qu'il faut savoir ──────────────
+   *
+   *  · **Il n'élargit jamais la lecture** : il n'apparaît dans aucune
+   *    politique de `select`, et la migration `004_rls` refuse de s'appliquer
+   *    s'il venait à y apparaître.
+   *  · **Il n'élargit pas la purge.** `purgerFiliale` ne touche que les tables
+   *    portant `filiale_id`, filtrées sur la filiale active : les lignes de
+   *    portée Groupe survivent à un « remplacer », drapeau ou non. C'est un
+   *    invariant du moteur, pas une conséquence du périmètre.
+   *  · **Ce n'est pas un privilège** (`CONVENTIONS.md` §17.4) : c'est une
+   *    déclaration que la session fait sur elle-même, que le rôle applicatif
+   *    peut poser lui-même et que la base n'arbitre pas. Elle protège de la
+   *    faute de programmation — une écriture Groupe faite par un chemin qui ne
+   *    l'a pas déclarée — et **pas du tout** d'un appelant qui n'aurait pas le
+   *    droit de reprendre.
+   *
+   * **La barrière réelle est donc à écrire, et elle est du lot L3** : avant
+   * d'ouvrir cette transaction, il faudra exiger le profil *Administration* et
+   * un périmètre couvrant la filiale visée, exactement comme pour toute autre
+   * action d'administration. Tant que L3 n'existe pas, la seule barrière est
+   * le refus fail-closed hors développement (`session.ts`).
+   */
+  const enReprise = async <T>(
+    travail: (client: PoolClient, depot: Depot, perimetre: PerimetreSession) => Promise<T>,
+  ): Promise<T> => {
+    const instanceDepot = await assurerDepot();
+    const session = await resolveur.resoudre();
+    const perimetre: PerimetreSession = Object.freeze({
+      ...session,
+      administrationGroupe: true,
+    });
     return avecTransaction(pool, perimetre, (client) => travail(client, instanceDepot, perimetre));
   };
 
@@ -552,6 +670,131 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         'Enregistrement supprimé (cascades portées par le schéma, CONVENTIONS.md §8)',
       );
       return reponse.send({ supprime: true });
+    },
+  );
+
+  /* -------------------------------------------------------------------
+   *  POST /api/reprise — reprendre un export `grc-backup`, EN UNE TRANSACTION
+   * -------------------------------------------------------------------
+   *  La vraie réponse au constat bloquant B-3 de la porte S2 : l'import
+   *  « Remplacer » était une rafale de vingt `DELETE` HTTP indépendants, dont
+   *  une coupure de VPN au milieu laissait la filiale à moitié détruite. Ici,
+   *  tout tient dans **une** transaction : elle réussit entièrement, ou elle
+   *  n'a jamais eu lieu (contrôle S14).
+   *
+   *  C'est aussi le seul chemin où les identifiants du fichier redeviennent
+   *  les clés primaires (`CONVENTIONS.md` §2, round-trip exact) — la route de
+   *  création ordinaire ne l'admet plus depuis M-3, et c'est ici que la
+   *  propriété a été conservée plutôt que perdue.
+   * ------------------------------------------------------------------- */
+  instance.post(
+    '/api/reprise',
+    { schema: { body: SCHEMA_REPRISE } },
+    async (
+      requete: FastifyRequest<{
+        Body: {
+          mode: ModeReprise;
+          apercu?: boolean;
+          fichier: { nom: string; contenu: string };
+        };
+      }>,
+      reponse: FastifyReply,
+    ) => {
+      const { mode, fichier } = requete.body;
+      const apercu = requete.body.apercu === true;
+
+      // 1. Lire l'enveloppe et monter la charge de v1 à v12. Le module de
+      //    reprise borne lui-même la taille, le nombre de nœuds et la
+      //    profondeur AVANT d'analyser (S13) ; on lui impose en plus la borne
+      //    de corps du serveur, pour qu'il n'y ait pas deux vérités.
+      const lecture = reprendreExport(fichier.contenu, {
+        tailleMaxOctets: config.serveur.tailleMaxCorpsOctets,
+      });
+
+      if (lecture.statut !== 'reprise') {
+        // Le module distingue « ce n'est pas un fichier exploitable » de « ce
+        // lot ne sait pas le traiter » ; ses messages sont écrits pour un
+        // exploitant et ne nomment aucun objet interne.
+        throw entreeInvalide(lecture.message, `reprise refusée : ${lecture.code}`);
+      }
+
+      const empreinte = createHash('sha256').update(fichier.contenu, 'utf8').digest('hex');
+
+      const resultat = await enReprise(async (client, instanceDepot, perimetre) => {
+        const bilan = await instanceDepot.appliquerReprise(
+          client,
+          perimetre,
+          lecture.charge as unknown as Record<string, unknown>,
+          mode,
+        );
+
+        // 2. Tracer la reprise dans la table prévue pour cela. Elle porte la
+        //    clé d'idempotence du `PLAN_SERVEUR` §5 : réimporter le même
+        //    fichier deux fois est refusé par une unicité du schéma, pas par
+        //    une comparaison faite au vol.
+        if (!apercu) {
+          await client.query(
+            `insert into "imports" ("id", "filiale_id", "utilisateur_libelle", "entite",
+                                    "source", "nom_fichier", "sha256", "taille_octets",
+                                    "cle_idempotence", "statut", "lignes_lues", "lignes_creees",
+                                    "lignes_mises_a_jour", "lignes_ignorees", "fin_le", "message")
+             values ($1, $2, $3, 'toutes', 'grc-backup', $4, $5, $6, $5, 'applique',
+                     $7, $8, $9, $10, now(), $11)`,
+            [
+              `IMP-${String(Date.now())}-${String(Math.floor(Math.random() * 1000000))}`,
+              perimetre.filialeId,
+              perimetre.utilisateurId,
+              fichier.nom,
+              empreinte,
+              Buffer.byteLength(fichier.contenu, 'utf8'),
+              bilan.lus,
+              totaliser(bilan.crees),
+              totaliser(bilan.misAJour),
+              bilan.champsIgnores.length,
+              `reprise « ${mode} » depuis un export v${String(lecture.rapport.versionOrigine)}`,
+            ],
+          );
+        }
+
+        // 3. L'aperçu montre le VRAI résultat, puis annule tout. Le sentinelle
+        //    n'est pas un détour : c'est ce qui garantit que ce qui est montré
+        //    est ce qui se produirait, contraintes comprises.
+        if (apercu) throw new SentinelleApercu(bilan);
+        return bilan;
+      }).catch((erreur: unknown) => {
+        if (erreur instanceof SentinelleApercu) return erreur.bilan;
+        throw erreur;
+      });
+
+      requete.log.info(
+        {
+          mode,
+          apercu,
+          fichier: fichier.nom,
+          lus: resultat.lus,
+          crees: totaliser(resultat.crees),
+          maj: totaliser(resultat.misAJour),
+          supprimes: totaliser(resultat.supprimes),
+        },
+        apercu
+          ? 'Aperçu de reprise : la transaction a été annulée, rien n’a été écrit'
+          : 'Reprise appliquée en une transaction (journal d’audit : lot L5)',
+      );
+
+      return reponse.send({
+        applique: !apercu,
+        mode,
+        bilan: resultat,
+        rapport: {
+          version_origine: lecture.rapport.versionOrigine,
+          version_cible: lecture.rapport.versionCible,
+          forme_enveloppe: lecture.rapport.formeEnveloppe,
+          paliers: lecture.rapport.paliers,
+          volumes: lecture.rapport.volumes,
+          compteurs: lecture.rapport.compteurs,
+          anomalies: lecture.rapport.anomalies,
+        },
+      });
     },
   );
 

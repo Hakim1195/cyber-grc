@@ -36,7 +36,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
-import { FILIALE_A, FILIALE_B, ouvrirBaseEssai, semerJeuEssai } from '../aide/base.mjs';
+import { FILIALE_A, FILIALE_B, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
 import { monterGreffon, monterServeurReel } from '../aide/serveur.mjs';
 
 /** @type {Awaited<ReturnType<typeof ouvrirBaseEssai>>} */
@@ -44,6 +44,9 @@ let base;
 let serveur;
 /** Une session d'administration Groupe : le seul moyen d'écrire le socle commun. */
 let administration;
+
+/** Périmètre de lecture directe, pour vérifier en base ce que la route a écrit. */
+const perimetreLecture = perimetre('temoin', FILIALE_A, [FILIALE_A]);
 
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
@@ -257,6 +260,41 @@ describe('Une entité par famille de différence', () => {
     });
     assert.equal(parLaColonne.statut, 201);
     assert.equal(parLaColonne.corps.enregistrement.date, '2026-06-16', 'Rendu sous le nom du navigateur.');
+  });
+
+  test('le « non renseigné » du navigateur est accepté partout où il l’était (M-8)', async () => {
+    // Constat M-8 : « le "non renseigné" du navigateur (chaîne vide) est refusé par
+    // les énumérations du schéma ». Les deux conventions — la chaîne vide du modèle
+    // navigateur, le NULL du schéma — ne se rencontraient nulle part, et le résultat
+    // était le refus de l'enregistrement ENTIER.
+    //
+    // Le balayage porte sur les colonnes que l'auditeur a nommées, et il vérifie les
+    // deux moitiés : l'écriture passe, ET la valeur devient NULL en base — sans quoi
+    // une chaîne vide dans une colonne énumérée serait une bombe à retardement pour
+    // le premier `check` ajouté plus tard.
+    const cas = [
+      ['prestataires', { societe: 'Sous-traitance SA', criticite: '', acces: '', type: '' }],
+      ['traitements', { nom: 'Recrutement', base_legale: '', duree_conservation: '' }],
+      ['actifs', { nom: 'Poste nomade', type: '', criticite: '' }],
+      ['risques', { nom: 'Risque non coté', niveau: '' }],
+    ];
+    const echecs = [];
+    for (const [entite, champs] of cas) {
+      const reponse = await serveur.appeler('POST', `/api/entites/${entite}`, { corps: { champs } });
+      if (reponse.statut !== 201) {
+        echecs.push(`${entite} → ${reponse.statut} ${JSON.stringify(reponse.corps.message ?? '')}`);
+      }
+    }
+    assert.deepEqual(echecs, [], 'Un formulaire laissé dans son état par défaut doit s’enregistrer.');
+
+    // Et le vide est devenu NULL, pas une chaîne vide stockée.
+    const stocke = await base.avecPerimetre(
+      await base.connexion('app'),
+      perimetreLecture,
+      async (c) =>
+        (await c.query("select criticite, acces from prestataires where societe = 'Sous-traitance SA'")).rows[0],
+    );
+    assert.deepEqual(stocke, { criticite: null, acces: null });
   });
 
   test('JSONB — « prestataires.supplyChain » : un document figé traverse sans être touché', async () => {
