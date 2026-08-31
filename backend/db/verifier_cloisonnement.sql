@@ -21,6 +21,9 @@
 --       supprime pas sous les pieds des autres (constat M-3) ;
 --   §6c CONFIGURATION — les tables qui PRODUISENT les droits ne s'écrivent qu'en
 --       administration Groupe (constat M-2) ;
+--   §6d CATALOGUE DE MESURES — un contrôle du socle déjà mis en oeuvre ou référencé par
+--       une filiale ne se supprime pas ; délier puis supprimer, dans la même transaction,
+--       fonctionne toujours (CONVENTIONS.md §17.6) ;
 --   §7  PÉRIMÈTRE — vide (légitime, silencieux) contre absent (défaut, bruyant), et un
 --       identifiant de filiale ne peut pas contenir la virgule qui sépare le périmètre ;
 --   §8  JOURNAL — nul ne fabrique de preuve dans le registre d'une autre filiale, ni même
@@ -167,6 +170,12 @@ insert into evaluations (id, filiale_id, ref_id, code)   values ('EVAL-DEMO-A', 
 insert into scenarios_pra (id, filiale_id, nom)          values ('SCEN-DEMO-A', 'FIL-DEMO-A', 'Perte du site de Toulouse');
 insert into risque_exigences (risque_id, exigence_id)    values ('RISK-DEMO-A', 'EX-DEMO-A');
 insert into actif_risques    (actif_id,  risque_id)      values ('ACTIF-DEMO-A','RISK-DEMO-A');
+-- Toulouse rattache SA mesure locale : de quoi éprouver le cas 1 du CONVENTIONS §17.6
+-- (délier, puis supprimer, dans la même transaction).
+insert into mesure_mise_en_oeuvre (id, filiale_id, mesure_id) values
+    ('MMO-DEMO-A', 'FIL-DEMO-A', 'MESURE-DEMO-A');
+insert into actions (id, filiale_id, titre, mesure_id) values
+    ('ACT-DEMO-A', 'FIL-DEMO-A', 'Chiffrer les postes', 'MESURE-DEMO-A');
 
 -- --- données d'Allemagne (la filiale active bascule : on n'écrit que là où l'on est) ---
 select set_config('grc.filiale_id', 'FIL-DEMO-B', true) \gset _rebut
@@ -184,14 +193,28 @@ insert into scenarios_pra (id, filiale_id, nom)          values ('SCEN-DEMO-B', 
 insert into risque_exigences (risque_id, exigence_id)    values ('RISK-DEMO-B', 'EX-DEMO-B');
 insert into actif_risques    (actif_id,  risque_id)      values ('ACTIF-DEMO-B','RISK-DEMO-B');
 
--- L'Allemagne met en oeuvre une mesure du socle Groupe. Cette ligne est INVISIBLE de
--- Toulouse : c'est elle qui, au §6b, empêchera Toulouse de supprimer le socle commun.
+-- L'Allemagne référence des contrôles du socle Groupe, par les QUATRE chemins possibles
+-- — un contrôle distinct pour chacun, plus un cinquième que personne n'utilise. Ces
+-- lignes sont INVISIBLES de Toulouse : ce sont elles qui, au §6 bis et au §6 quater,
+-- empêcheront Toulouse de supprimer le socle commun (CONVENTIONS.md §17.6).
 select set_config('grc.administration_groupe', 'oui', true) \gset _rebut
 insert into mesure_catalogue (id, nom) values
-    ('MESURE-DEMO-G2', 'Journalisation centralisée (socle Groupe)');
+    ('MESURE-DEMO-G2', 'Journalisation centralisée (socle Groupe)'),
+    ('MESURE-DEMO-G3', 'Revue des habilitations (socle Groupe)'),
+    ('MESURE-DEMO-G4', 'Sauvegardes testées (socle Groupe)'),
+    ('MESURE-DEMO-G5', 'Cloisonnement réseau (socle Groupe)'),
+    ('MESURE-DEMO-G6', 'Contrôle du socle que personne n''utilise');
 select set_config('grc.administration_groupe', '', true) \gset _rebut
+insert into traitements (id, filiale_id, nom) values
+    ('TRT-DEMO-B', 'FIL-DEMO-B', 'Gehaltsabrechnung');
 insert into mesure_mise_en_oeuvre (id, filiale_id, mesure_id) values
     ('MMO-DEMO-B', 'FIL-DEMO-B', 'MESURE-DEMO-G2');
+insert into evaluation_mesures (evaluation_id, mesure_id, filiale_id) values
+    ('EVAL-DEMO-B', 'MESURE-DEMO-G3', 'FIL-DEMO-B');
+insert into traitement_mesures (traitement_id, mesure_id, filiale_id) values
+    ('TRT-DEMO-B', 'MESURE-DEMO-G4', 'FIL-DEMO-B');
+insert into actions (id, filiale_id, titre, mesure_id) values
+    ('ACT-DEMO-B', 'FIL-DEMO-B', 'Revoir les habilitations', 'MESURE-DEMO-G5');
 
 select 'semé : 2 filiales, 1 socle Groupe, des données des deux côtés' as "jeu d'essai";
 
@@ -285,17 +308,18 @@ union all select 'incidents', count(*) from incidents
 order by 1;
 
 -- --- tables mixtes : le socle Groupe est commun, le local reste local -----------------
--- Quatre lignes de portée Groupe : deux mesures du socle, une personne, un document.
--- La seconde mesure (MESURE-DEMO-G2) sert au §6 bis — elle est mise en oeuvre par la
--- seule Allemagne, et c'est cette ligne invisible qui protège le socle de la suppression.
+-- Huit lignes de portée Groupe : six mesures du socle, une personne, un document. Les
+-- quatre mesures MESURE-DEMO-G2 à G5 servent au §6 quater — chacune n'est référencée que par
+-- l'Allemagne, par l'un des quatre chemins possibles, et ce sont ces lignes invisibles qui
+-- protègent le socle de la suppression. MESURE-DEMO-G6, elle, n'est utilisée par personne.
 do $$
 declare v_ligne jsonb;
 begin
     select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
       into v_ligne
       from (
-        select 'C04', 'Tables mixtes : le socle de Groupe est lisible (2 mesures, personne, document)',
-               '4', v.n::text, case when v.n = 4 then 'OK' else 'ÉCHEC' end
+        select 'C04', 'Tables mixtes : le socle de Groupe est lisible (6 mesures, personne, document)',
+               '8', v.n::text, case when v.n = 8 then 'OK' else 'ÉCHEC' end
           from (select (select count(*) from mesure_catalogue where filiale_id is null)
                      + (select count(*) from personnes        where filiale_id is null)
                      + (select count(*) from documents        where filiale_id is null) as n) v
@@ -757,6 +781,137 @@ end;
 $$;
 
 -- =====================================================================================
+-- §6 quater — TOUTE RÉFÉRENCE AU CATALOGUE EST EN « restrict » (CONVENTIONS.md §17.6)
+-- -------------------------------------------------------------------------------------
+-- Amendement du §8, dont les règles — « délie les évaluations », « conserve les actions »
+-- — avaient été écrites pour le produit MONO-FILIALE, où le rayon d'une suppression ne
+-- quittait pas le poste de l'utilisateur.
+--
+-- En contexte de groupe, elles produisaient l'effet INVERSE de leur intention : supprimer
+-- un contrôle du socle commun déliait les évaluations et remettait à null les actions de
+-- VINGT filiales, ce qui incrémentait leur « version » et inscrivait dans leurs lignes le
+-- nom de quelqu'un qui n'y a jamais travaillé. C'est la pathologie du constat bloquant
+-- B-1, par un autre chemin.
+--
+-- CE QUE CES CONTRÔLES DOIVENT ÉTABLIR, ET DANS CET ORDRE :
+--   - les QUATRE chemins de référence refusent la suppression (C51 à C54), y compris —
+--     surtout — quand la ligne qui s'y oppose est INVISIBLE de celui qui supprime : le
+--     refus vient de l'intégrité référentielle, qui ignore la Row Level Security ;
+--   - le comportement fonctionnel ne change pas : délier puis supprimer, DANS LA MÊME
+--     TRANSACTION, fonctionne toujours (C55 et C56), et l'action déliée reste au plan
+--     d'actions comme le §8 le promettait (C57) ;
+--   - le socle ne devient pas immuable pour autant : un contrôle que personne n'utilise
+--     se supprime (C58).
+-- =====================================================================================
+
+\echo
+\echo '§6 quater — Le catalogue de mesures : « restrict » sur les quatre références'
+
+do $$
+declare
+    v_cas constant text[] := array[
+        'C51', 'Supprimer un contrôle du socle MIS EN OEUVRE par une autre filiale',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'delete from mesure_catalogue where id = ''MESURE-DEMO-G2''',
+               '23503',
+        'C52', 'Supprimer un contrôle du socle lié à une ÉVALUATION d''une autre filiale',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'delete from mesure_catalogue where id = ''MESURE-DEMO-G3''',
+               '23503',
+        'C53', 'Supprimer un contrôle du socle lié à un TRAITEMENT RGPD d''une autre filiale',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'delete from mesure_catalogue where id = ''MESURE-DEMO-G4''',
+               '23503',
+        'C54', 'Supprimer un contrôle du socle porté par une ACTION d''une autre filiale',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'delete from mesure_catalogue where id = ''MESURE-DEMO-G5''',
+               '23503',
+        -- Cas 1 du tableau du §17.6 : la mesure LOCALE de Toulouse. Son rayon n'a de toute
+        -- façon jamais quitté sa filiale — f_coherence_mesure_catalogue() (004 §2) interdit
+        -- à toute autre de la citer, ce que le C14 a déjà établi.
+        'C55', 'Supprimer SA mesure locale sans l''avoir déliée',
+               'delete from mesure_catalogue where id = ''MESURE-DEMO-A''',
+               '23503',
+        'C56', 'La délier PUIS la supprimer, dans la MÊME transaction (contrôle symétrique)',
+               'delete from mesure_mise_en_oeuvre where mesure_id = ''MESURE-DEMO-A'';'
+               || 'update actions set mesure_id = null where mesure_id = ''MESURE-DEMO-A'';'
+               || 'delete from mesure_catalogue where id = ''MESURE-DEMO-A''',
+               'AUCUN REFUS',
+        'C58', 'Supprimer un contrôle du socle que PERSONNE n''utilise (contrôle symétrique)',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'delete from mesure_catalogue where id = ''MESURE-DEMO-G6''',
+               'AUCUN REFUS'
+    ];
+    i        int;
+    v_obtenu text;
+begin
+    i := 1;
+    while i <= array_length(v_cas, 1) loop
+        begin
+            execute v_cas[i + 2];
+            v_obtenu := 'AUCUN REFUS';
+        exception when others then
+            v_obtenu := sqlstate;
+        end;
+        perform set_config('grc.administration_groupe', '', true);
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+            v_cas[i], v_cas[i + 1], v_cas[i + 3], v_obtenu,
+            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end)))::text, true);
+        i := i + 4;
+    end loop;
+end;
+$$;
+
+-- --- l'action déliée est-elle restée au plan d'actions ? -------------------------------
+-- La promesse du §8 (« conserve les actions ») est tenue : ce qui a changé, c'est QUI la
+-- délie — la couche applicative, dans la filiale concernée, et non plus une cascade
+-- déclenchée depuis le Groupe sur vingt filiales à la fois.
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C57', 'L''action déliée reste au plan d''actions (promesse du §8, tenue)',
+               '1', count(*)::text, case when count(*) = 1 then 'OK' else 'ÉCHEC' end
+          from actions where id = 'ACT-DEMO-A' and mesure_id is null
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+-- --- le balayage : aucune référence au catalogue n'est en cascade ni en « set null » ----
+-- Les sept cas ci-dessus prouvent l'état d'aujourd'hui ; celui-ci protège de demain. Une
+-- cinquième table qui référencerait mesure_catalogue en cascade — ou un retour au
+-- « set null » du §8 — fera échouer ce contrôle sans que personne n'ait à y penser.
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C59',
+               format('Références à mesure_catalogue qui ne sont pas en « restrict » (%s balayées)',
+                      count(*)),
+               '0',
+               coalesce(string_agg(con.conname::text, ', ' order by con.conname)
+                        filter (where con.confdeltype <> 'r'), '0'),
+               case when count(*) filter (where con.confdeltype <> 'r') = 0 then 'OK' else 'ÉCHEC' end
+          from pg_constraint con
+         where con.contype = 'f' and con.confrelid = 'mesure_catalogue'::regclass
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+-- =====================================================================================
 -- §8 bis — LE JOURNAL S'ÉCRIT SUR LA FILIALE ACTIVE, PAS SUR LE PÉRIMÈTRE DE LECTURE
 -- -------------------------------------------------------------------------------------
 -- Constat m-4. Le §8 ci-dessus (C18) montre qu'une session de Toulouse ne peut pas écrire
@@ -1016,8 +1171,9 @@ begin
         'allemande, ne peut pas y écrire, ne peut créer vers elle NI lien de liaison NI clé '
         'étrangère directe (les sept du constat B-1, plus le balayage du catalogue), ne peut '
         'pas mettre en oeuvre ses mesures locales, ne peut ni s''approprier ni détruire le '
-        'socle commun du Groupe, ne peut pas fabriquer d''entrée dans son journal — pas même '
-        'avec un périmètre de lecture qui la couvre.';
+        'socle commun du Groupe — un contrôle qu''une filiale a déjà évalué ne peut plus '
+        'disparaître, il s''archive —, et ne peut pas fabriquer d''entrée dans le journal '
+        'd''une autre, pas même avec un périmètre de lecture qui la couvre.';
 end;
 $$;
 

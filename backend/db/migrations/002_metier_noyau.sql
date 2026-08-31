@@ -356,23 +356,45 @@ create table mesure_mise_en_oeuvre (
     constraint uq_mesure_mise_en_oeuvre_filiale_mesure unique (filiale_id, mesure_id),
     constraint fk_mesure_mise_en_oeuvre_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
-    -- « restrict » et NON « cascade » — corrigé à la porte de sécurité S1 (constat M-3).
+    -- ── « restrict », ET C'EST LA RÈGLE POUR LES QUATRE (CONVENTIONS.md §17.6) ────────
     --
-    -- mesure_catalogue est MIXTE : une ligne de portée Groupe (filiale_id nul) est le socle
-    -- commun des vingt filiales, et CHACUNE en porte sa propre mise en oeuvre. En cascade,
-    -- la suppression de cette seule ligne de catalogue détruisait la mise en oeuvre de
-    -- TOUTES les filiales — y compris celles que l'auteur de la suppression ne peut pas
-    -- voir, sans aucune trace en base. Une cascade dont le rayon traverse la frontière de
-    -- filiale n'est pas une commodité, c'est une destruction collatérale invisible.
+    -- Corrigé à la porte de sécurité S1 (constat M-3), puis ÉTENDU aux trois autres
+    -- références au catalogue par l'amendement du §17.6 : evaluation_mesures.mesure_id,
+    -- traitement_mesures.mesure_id et actions.mesure_id sont eux aussi en « restrict ».
+    -- Le raisonnement est écrit ici une fois, les trois autres sites y renvoient.
     --
-    -- Le refus est ici LOUD (23503) et il vient de l'intégrité référentielle, qui ignore la
-    -- RLS : il compte donc aussi les mises en oeuvre invisibles de l'auteur, ce qu'aucun
-    -- déclencheur « security invoker » ne saurait faire. Retirer une mesure du catalogue
-    -- redevient ce qu'elle doit être : une procédure — chaque filiale retire d'abord SA
-    -- mise en oeuvre, puis le catalogue se nettoie.
+    -- POURQUOI LE §8 EST AMENDÉ, ET NON CONTREDIT. Ses règles — « délie les évaluations »,
+    -- « conserve les actions » (mesure_id remis à null) — ont été écrites pour le produit
+    -- MONO-FILIALE, où le rayon d'une suppression ne quittait pas le poste de
+    -- l'utilisateur. En contexte de groupe, elles produisent l'effet INVERSE de leur
+    -- intention : mesure_catalogue est MIXTE, une ligne de portée Groupe (filiale_id nul)
+    -- est le socle commun des vingt filiales, et la supprimer déliait les évaluations et
+    -- remettait à null les actions DE TOUTES — ce qui incrémentait leur « version » et
+    -- inscrivait dans leurs lignes le nom de quelqu'un qui n'y a jamais travaillé. C'est
+    -- exactement la pathologie du constat bloquant B-1, par un autre chemin.
     --
-    -- Rayon d'une mesure LOCALE (filiale_id renseigné) : il ne quitte jamais sa filiale,
-    -- f_coherence_mesure_catalogue() (004 §2) interdisant à toute autre de la référencer.
+    -- POURQUOI « restrict » ET PAS UN DÉCLENCHEUR. Le refus vient de l'intégrité
+    -- référentielle, qui IGNORE la Row Level Security : il compte donc aussi les mises en
+    -- oeuvre et les liens INVISIBLES de l'auteur. Aucun déclencheur « security invoker » ne
+    -- saurait le faire — il ne verrait que son propre périmètre et laisserait passer.
+    --
+    -- CE QUE ÇA CHANGE, ET CE QUE ÇA NE CHANGE PAS. Rien pour l'utilisateur : la couche
+    -- applicative délie puis supprime, dans la MÊME transaction, exactement comme
+    -- aujourd'hui — « restrict » est vérifié au moment de la suppression, pas à la fin de
+    -- la transaction, donc des liens retirés par une instruction antérieure ne s'y opposent
+    -- pas. Ce qui change, c'est qu'un contrôle partagé et DÉJÀ ÉVALUÉ par une filiale ne
+    -- peut plus s'évaporer : il s'archive. C'est aussi ce qu'attend un auditeur ISO 27001,
+    -- pour qui la disparition sans trace d'un contrôle du référentiel est un constat.
+    --
+    -- Les trois cas, tels que le §17.6 les fixe et que le banc d'essai les éprouve :
+    --   - mesure LOCALE d'une filiale ....... supprimable par elle, après déliage ; son
+    --                                         rayon n'a de toute façon jamais quitté sa
+    --                                         filiale, f_coherence_mesure_catalogue()
+    --                                         (004 §2) interdisant à une autre de la citer ;
+    --   - mesure du SOCLE, inutilisée ....... supprimable par l'administration Groupe ;
+    --   - mesure du SOCLE, mise en oeuvre ou
+    --     référencée quelque part ........... REFUSÉE (23503), y compris — surtout — quand
+    --                                         la ligne qui s'y oppose est invisible.
     constraint fk_mesure_mise_en_oeuvre_mesure  foreign key (mesure_id)
         references mesure_catalogue(id) on delete restrict,
     constraint ck_mesure_mise_en_oeuvre_statut   check (statut in (
@@ -771,8 +793,15 @@ create table evaluation_mesures (
     -- Vise le CATALOGUE, jamais la mise en oeuvre (CONVENTIONS.md §16.3) : l'identifiant
     -- écrit dans un export grc-backup est celui du catalogue ; le traduire vers un "MMO-…"
     -- propre à la filiale exigerait une table de correspondance à la reprise.
+    --
+    -- « restrict » et NON « cascade » (CONVENTIONS.md §17.6, amendement du §8) : en cascade,
+    -- supprimer un contrôle du socle Groupe déliait les évaluations de TOUTES les filiales,
+    -- y compris celles que l'auteur ne peut pas voir. Le raisonnement complet est écrit au
+    -- §5 de ce fichier, sur fk_mesure_mise_en_oeuvre_mesure. Le déliage volontaire, lui,
+    -- reste immédiat : il se fait en supprimant la ligne de liaison, ce que la politique
+    -- d'écriture de cette table autorise dans la filiale active.
     constraint fk_evaluation_mesures_mesure     foreign key (mesure_id)
-        references mesure_catalogue(id) on delete cascade,
+        references mesure_catalogue(id) on delete restrict,
     constraint fk_evaluation_mesures_filiale    foreign key (filiale_id)
         references filiales(id) on delete restrict
 );

@@ -380,7 +380,9 @@ create or replace function f_coherence_mesure_catalogue() returns trigger
 $$
 begin
     if new.mesure_id is null then
-        return new;   -- rattachement facultatif (actions.mesure_id, « on delete set null »)
+        return new;   -- rattachement facultatif : actions.mesure_id est nullable, et c'est
+                      -- par ce null que la couche applicative DÉLIE une action avant de
+                      -- retirer sa mesure du catalogue (CONVENTIONS.md §17.6).
     end if;
 
     if not exists (
@@ -1142,6 +1144,10 @@ comment on policy pol_import_erreurs_lecture on import_erreurs is
 --                        circulaire, et aucune connexion ne serait possible.
 --   - session_filiales : c'est la table qui PRODUIT le périmètre. Même circularité.
 --   - journal_audit    : voir le paragraphe qui lui est consacré ci-dessous.
+--
+-- Le filiale_id NULLABLE de groupes_ad et de journal_audit n'en fait pas pour autant des
+-- tables mixtes : « nullable » n'est pas « mixte », CONVENTIONS.md §17.7. Elles ne
+-- relèvent donc ni des politiques de la famille 2, ni du déclencheur de portée du §7.
 -- =====================================================================================
 
 -- La famille se scinde en DEUX groupes depuis la porte de sécurité S1 (constat M-2), et
@@ -1397,6 +1403,12 @@ create trigger trg_traitement_mesures_coherence_mesure
 -- --- (b) les cinq tables MIXTES : une ligne ne change pas de portée --------------------
 -- Mêmes cinq tables que la famille 2 (§4), et dans le même ordre : la liste doit se
 -- relire d'un fichier à l'autre sans effort. Corrigé à la porte S1 (constat M-3).
+--
+-- La liste s'arrête là, et c'est le §17.7 qui dit pourquoi : « nullable » n'est pas
+-- « mixte ». journal_audit, groupes_ad et sessions portent un filiale_id nullable pour une
+-- raison chronologique ou technique, pas parce que leurs lignes auraient une PORTÉE. Elles
+-- n'ont donc pas de déclencheur ici. Le banc d'essai balaie le catalogue avec exactement
+-- cette exclusion (test/base/rls.test.mjs).
 create trigger trg_parametres_portee_figee
     before update on parametres
     for each row execute function f_interdit_changement_portee();

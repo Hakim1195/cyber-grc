@@ -280,14 +280,28 @@ create table actions (
     -- "MESURE-…" est celui qui figure dans les exports grc-backup, ce qui rend la reprise
     -- exacte sans table de correspondance. La mise en oeuvre concernée se déduit du couple
     -- (filiale_id de l'action, mesure_id), unique dans mesure_mise_en_oeuvre.
+    --
+    -- « restrict » et NON « set null » (CONVENTIONS.md §17.6, amendement du §8). Le §8
+    -- disait « conserve les actions (mesure_id -> null) », écrit pour un produit
+    -- mono-filiale. Ici, mesure_catalogue est MIXTE : supprimer un contrôle du socle
+    -- Groupe remettait à null le mesure_id des actions de VINGT filiales — donc
+    -- incrémentait leur « version » (déclencheur f_maj_tracabilite) et inscrivait dans
+    -- leurs lignes le « modifie_par » d'un utilisateur qui n'y a jamais travaillé. C'est
+    -- la pathologie du constat B-1 : une action de portée Groupe modifie les données d'une
+    -- filiale à son insu. Raisonnement complet sur fk_mesure_mise_en_oeuvre_mesure (002 §5).
+    --
+    -- Le déliage volontaire d'une action reste immédiat et local : « update actions set
+    -- mesure_id = null », dans la filiale active, ce que la politique d'écriture autorise.
     constraint fk_actions_mesure     foreign key (mesure_id)
-        references mesure_catalogue(id) on delete set null,
+        references mesure_catalogue(id) on delete restrict,
     constraint ck_actions_titre    check (titre <> ''),
     constraint ck_actions_statut   check (statut in ('à faire', 'en cours', 'terminée')),
     constraint ck_actions_priorite check (priorite in ('Basse', 'Moyenne', 'Haute', 'Critique')),
     -- Au plus UN rattachement. « Au plus » et non « exactement un » : une action peut
-    -- rester au plan d'actions après suppression de sa mesure (mesure_id remis à null),
-    -- et les reprises de données anciennes contiennent des actions sans rattachement.
+    -- rester au plan d'actions après avoir été DÉLIÉE de sa mesure (mesure_id remis à null
+    -- par la couche applicative, avant que la mesure ne soit retirée du catalogue —
+    -- CONVENTIONS.md §17.6), et les reprises de données anciennes contiennent des actions
+    -- sans aucun rattachement.
     constraint ck_actions_rattachement check (
         (case when exigence_id   is not null then 1 else 0 end
        + case when risque_id     is not null then 1 else 0 end
@@ -315,8 +329,12 @@ comment on table actions is
     'est DÉRIVÉ (échéance dépassée et statut différent de "terminée"), jamais stocké.';
 comment on column actions.mesure_id is
     'Action portée directement par une mesure de sécurité : elle vaut alors pour toutes les '
-    'exigences que cette mesure couvre. Référence le catalogue Groupe ; "on delete set null" '
-    'conserve l''action quand la mesure disparaît (CONVENTIONS.md §8 et §16.3).';
+    'exigences que cette mesure couvre. Référence le catalogue Groupe, en "on delete restrict" '
+    '(CONVENTIONS.md §17.6, amendement du §8) : une mesure encore rattachée à des actions ne '
+    'se supprime pas. Délier reste immédiat — "update actions set mesure_id = null" dans la '
+    'filiale active — et la couche applicative le fait avant le retrait, dans la même '
+    'transaction. Le "set null" automatique a été retiré parce qu''il modifiait les actions de '
+    'TOUTES les filiales quand la mesure supprimée appartenait au socle Groupe.';
 comment on column actions.filiale_id is
     'Filiale propriétaire de l''action. Rien n''empêche techniquement de viser une mesure '
     'locale d''une AUTRE filiale : cette cohérence relève de la RLS (004) et du service '
@@ -867,8 +885,13 @@ create table traitement_mesures (
         references traitements(id, filiale_id) on delete cascade,
     -- Vise le CATALOGUE (CONVENTIONS.md §16.3), comme actions.mesure_id : c'est
     -- l'identifiant présent dans les exports grc-backup.
+    --
+    -- « restrict » et NON « cascade » (CONVENTIONS.md §17.6, amendement du §8) : même
+    -- motif que les trois autres références au catalogue — une suppression dans le socle
+    -- Groupe ne doit pas défaire les rattachements RGPD de filiales qu'elle ne voit pas.
+    -- Raisonnement complet sur fk_mesure_mise_en_oeuvre_mesure (002 §5).
     constraint fk_traitement_mesures_mesure foreign key (mesure_id)
-        references mesure_catalogue(id) on delete cascade,
+        references mesure_catalogue(id) on delete restrict,
     constraint fk_traitement_mesures_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict
 );

@@ -1224,7 +1224,7 @@ describe('Chemin de recherche figé (CONVENTIONS §17.2)', () => {
  *  §17.1 — La PORTÉE d'une ligne mixte ne change pas, et le socle tient
  * ===================================================================== */
 
-describe('Portée figée des tables mixtes et socle Groupe (constat M-3)', () => {
+describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', () => {
   /** Le drapeau d'administration est un réglage de session ordinaire : nul ne l'empêche. */
   const enAdministration = async (client, p, travail, options) =>
     base.avecPerimetre(
@@ -1270,8 +1270,10 @@ describe('Portée figée des tables mixtes et socle Groupe (constat M-3)', () =>
          join pg_attribute a on a.attrelid = c.oid and a.attname = 'filiale_id'
         where n.nspname = 'public' and c.relkind = 'r'
           and a.attnum > 0 and not a.attisdropped and not a.attnotnull
-          -- Dérogations de la famille 4 (004_rls.sql §6) : ces trois tables ne sont pas
-          -- des tables MÉTIER mixtes, leur filiale_id nullable a un autre sens.
+          -- « nullable » n'est pas « mixte » (CONVENTIONS.md §17.7) : ces tables portent un
+          -- filiale_id nullable pour une raison chronologique ou technique, pas parce que
+          -- leurs lignes auraient une PORTÉE. (sessions n'apparaît pas dans cette exclusion :
+          -- sa colonne s'appelle filiale_active_id, le balayage ne la voit donc pas.)
           and c.relname not in ('groupes_ad', 'journal_audit')
           and not exists (select 1 from pg_trigger t
                            where t.tgrelid = c.oid and not t.tgisinternal
@@ -1313,7 +1315,187 @@ describe('Portée figée des tables mixtes et socle Groupe (constat M-3)', () =>
     assert.equal(affectees, 1);
   });
 
-  test('SUPPRIMER du socle une mesure mise en oeuvre AILLEURS est refusé', async () => {
+  /* ------------------------------------------------------------------
+   *  §17.6, second volet : toute référence à mesure_catalogue est en
+   *  « restrict ». Amendement du §8, dont les règles (« délie les
+   *  évaluations », « conserve les actions ») avaient été écrites pour un
+   *  produit MONO-FILIALE, où le rayon d'une suppression ne quittait pas le
+   *  poste de l'utilisateur. En contexte de groupe, elles faisaient d'une
+   *  suppression dans le socle commun une modification des données de vingt
+   *  filiales : « version » incrémentée, « modifie_par » portant le nom de
+   *  quelqu'un qui n'y a jamais travaillé — la pathologie exacte de B-1.
+   * ------------------------------------------------------------------ */
+
+  /**
+   * Sème un contrôle de portée Groupe, puis le fait référencer par la SEULE
+   * filiale B, et rend la main à une session de la seule filiale A — munie du
+   * drapeau d'administration, et donc en droit de supprimer le socle.
+   *
+   * @param {import('pg').Client} c
+   * @param {string} mesure identifiant du contrôle à semer
+   * @param {string} lien instruction posant la référence, côté filiale B
+   */
+  async function socleReferenceParB(c, mesure, lien) {
+    await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+    await c.query('insert into mesure_catalogue (id, nom) values ($1, $2)', [mesure, 'Contrôle du socle']);
+    await c.query("select set_config('grc.administration_groupe', '', true)");
+    await c.query("select set_config('grc.filiale_id', $1, true)", [B]);
+    await c.query(lien, [B, mesure]);
+
+    // Session de la seule filiale A : elle ne voit rien de ce qui précède.
+    await c.query("select set_config('grc.filiales', $1, true)", [A]);
+    await c.query("select set_config('grc.filiale_id', $1, true)", [A]);
+    await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+  }
+
+  const referents = [
+    ['mesure_mise_en_oeuvre', 'fk_mesure_mise_en_oeuvre_mesure',
+      "insert into mesure_mise_en_oeuvre (id, filiale_id, mesure_id) values ('MMO-REF', $1, $2)"],
+    ['evaluation_mesures', 'fk_evaluation_mesures_mesure',
+      "insert into evaluation_mesures (evaluation_id, mesure_id, filiale_id) values ('EVAL-B', $2, $1)"],
+    ['traitement_mesures', 'fk_traitement_mesures_mesure',
+      "insert into traitement_mesures (traitement_id, mesure_id, filiale_id) values ('TRT-B', $2, $1)"],
+    ['actions', 'fk_actions_mesure',
+      "insert into actions (id, filiale_id, titre, mesure_id) values ('ACT-REF', $1, 'essai', $2)"],
+  ];
+
+  for (const [table, contrainte, lien] of referents) {
+    test(`supprimer du socle un contrôle référencé par ${table} d’une AUTRE filiale est refusé`, async () => {
+      // Le point décisif est l'invisibilité : le refus vient de l'intégrité
+      // référentielle, qui IGNORE la Row Level Security. Aucun déclencheur
+      // « security invoker » ne saurait le rendre — il ne verrait que son propre
+      // périmètre, conclurait « personne ne s'en sert » et laisserait passer.
+      const mesure = `MESURE-G-${table.toUpperCase()}`;
+      const erreur = await erreurAttendue(
+        base.avecPerimetre(applicatif, perimetre('semeur', A, [A, B]), async (c) => {
+          await socleReferenceParB(c, mesure, lien);
+
+          const invisible = await c.query(
+            `select count(*)::int as n from ${table} where mesure_id = $1`,
+            [mesure],
+          );
+          assert.equal(invisible.rows[0].n, 0, `La ligne de B est bien invisible de A (${table}).`);
+
+          await c.query('delete from mesure_catalogue where id = $1', [mesure]);
+        }),
+      );
+      assert.equal(erreur.code, '23503', 'Le refus vient de l’intégrité référentielle, qui voit tout.');
+      assert.ok(
+        erreur.message.includes(contrainte),
+        `Attendu un refus de ${contrainte}, obtenu : ${erreur.message}`,
+      );
+    });
+  }
+
+  test('LE BALAYAGE : les quatre références au catalogue sont en « restrict »', async () => {
+    // Les tests ci-dessus prouvent l'état d'aujourd'hui ; celui-ci protège de demain. Une
+    // cinquième table qui référencerait mesure_catalogue en cascade — ou un retour au
+    // « set null » du §8 — le fera tomber sans que personne n'ait à y penser.
+    const requete = `
+      select con.conname::text as nom,
+             case con.confdeltype when 'a' then 'no action' when 'r' then 'restrict'
+                                  when 'c' then 'cascade'   when 'n' then 'set null'
+                                  when 'd' then 'set default' end as suppression
+        from pg_constraint con
+       where con.contype = 'f' and con.confrelid = 'mesure_catalogue'::regclass
+       order by 1`;
+
+    const references = await base.lignes(proprietaire, requete);
+    assert.deepEqual(references, [
+      { nom: 'fk_actions_mesure', suppression: 'restrict' },
+      { nom: 'fk_evaluation_mesures_mesure', suppression: 'restrict' },
+      { nom: 'fk_mesure_mise_en_oeuvre_mesure', suppression: 'restrict' },
+      { nom: 'fk_traitement_mesures_mesure', suppression: 'restrict' },
+    ]);
+
+    // Contrôle de morsure intégré : on recrée le défaut d'origine du §8.
+    await proprietaire.query('alter table actions drop constraint fk_actions_mesure');
+    try {
+      await proprietaire.query(
+        'alter table actions add constraint fk_actions_mesure foreign key (mesure_id) '
+          + 'references mesure_catalogue(id) on delete set null',
+      );
+      const apres = await base.lignes(proprietaire, requete);
+      assert.equal(
+        apres.find((l) => l.nom === 'fk_actions_mesure').suppression,
+        'set null',
+        'Le balayage doit voir une référence revenue au « set null ».',
+      );
+    } finally {
+      await proprietaire.query('alter table actions drop constraint fk_actions_mesure');
+      await proprietaire.query(
+        'alter table actions add constraint fk_actions_mesure foreign key (mesure_id) '
+          + 'references mesure_catalogue(id) on delete restrict',
+      );
+    }
+    assert.deepEqual((await base.lignes(proprietaire, requete)).map((l) => l.suppression),
+      ['restrict', 'restrict', 'restrict', 'restrict']);
+  });
+
+  test('CAS 1 du §17.6 : une mesure LOCALE se supprime après déliage, même transaction', async () => {
+    // Ce que l'utilisateur voit ne change pas : la couche applicative délie puis supprime,
+    // en une transaction. « restrict » est vérifié AU MOMENT de la suppression, pas à la
+    // fin de la transaction : des liens retirés par une instruction antérieure ne s'y
+    // opposent donc pas. C'est ce que ce test établit, et c'est la condition pour que
+    // l'amendement du §8 ne change rien au comportement fonctionnel.
+    const etapes = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      await c.query(
+        "insert into mesure_mise_en_oeuvre (id, filiale_id, mesure_id) values ('MMO-LOC', $1, 'MESURE-A')",
+        [A],
+      );
+      await c.query(
+        "insert into evaluation_mesures (evaluation_id, mesure_id, filiale_id) values ('EVAL-A', 'MESURE-A', $1)",
+        [A],
+      );
+      await c.query(
+        "insert into traitement_mesures (traitement_id, mesure_id, filiale_id) values ('TRT-A', 'MESURE-A', $1)",
+        [A],
+      );
+      await c.query(
+        "insert into actions (id, filiale_id, titre, mesure_id) values ('ACT-LOC', $1, 'Chiffrer', 'MESURE-A')",
+        [A],
+      );
+
+      // a) Sans déliage : refusé, et c'est la protection. Le point de reprise est
+      //    indispensable — une erreur abandonne la transaction entière, et c'est bien
+      //    ainsi que la couche applicative devra s'y prendre si elle tente la suppression
+      //    avant le déliage.
+      await c.query('savepoint avant_deliage');
+      const avant = await erreurAttendue(c.query("delete from mesure_catalogue where id = 'MESURE-A'"));
+      await c.query('rollback to savepoint avant_deliage');
+
+      // b) Déliage puis suppression, dans la même transaction.
+      await c.query("delete from mesure_mise_en_oeuvre where mesure_id = 'MESURE-A'");
+      await c.query("delete from evaluation_mesures     where mesure_id = 'MESURE-A'");
+      await c.query("delete from traitement_mesures     where mesure_id = 'MESURE-A'");
+      await c.query("update actions set mesure_id = null where mesure_id = 'MESURE-A'");
+      const supprimees = (await c.query("delete from mesure_catalogue where id = 'MESURE-A'")).rowCount;
+
+      // c) L'action, elle, reste au plan d'actions — la promesse du §8 est tenue.
+      const action = (await c.query("select count(*)::int as n from actions where id = 'ACT-LOC'")).rows[0].n;
+      return { code: avant.code, supprimees, action };
+    });
+
+    assert.equal(etapes.code, '23503', 'Sans déliage, la suppression doit être refusée.');
+    assert.equal(etapes.supprimees, 1, 'Après déliage, la même suppression doit passer.');
+    assert.equal(etapes.action, 1, 'L’action déliée reste au plan d’actions (CONVENTIONS §8).');
+  });
+
+  test('CAS 1 bis : le rayon d’une mesure LOCALE n’a de toute façon jamais quitté sa filiale', async () => {
+    // Corollaire, et il vaut d'être établi : f_coherence_mesure_catalogue() (004 §2)
+    // interdit à toute autre filiale de citer une mesure locale. La suppression d'une
+    // mesure locale ne peut donc, par construction, rien atteindre au-delà de sa filiale.
+    const erreur = await refus(
+      applicatif,
+      rssiSite(B),
+      "insert into mesure_mise_en_oeuvre (id, filiale_id, mesure_id) values ('MMO-VOL', $1, 'MESURE-A')",
+      [B],
+    );
+    assert.equal(erreur.code, '23514');
+    assert.match(erreur.message, /locale à une autre filiale/);
+  });
+
+  test('ANCIEN CAS M-3, conservé : la mise en oeuvre de B survit à la tentative de A', async () => {
     // Le second pas de l'attaque M-3, et le plus grave : la cascade détruisait les mises
     // en oeuvre des autres filiales — invisibles de l'auteur, dans des filiales qui ne
     // sont pas la sienne, sans aucune trace en base. Le « restrict » ferme ce chemin, et
@@ -1346,7 +1528,10 @@ describe('Portée figée des tables mixtes et socle Groupe (constat M-3)', () =>
     assert.match(erreur.message, /fk_mesure_mise_en_oeuvre_mesure/);
   });
 
-  test('contrôle symétrique : une mesure du socle que personne n’implémente se supprime', async () => {
+  test('CAS 2 du §17.6 : une mesure du socle que PERSONNE n’utilise se supprime', async () => {
+    // Sans ce contre-test, un schéma qui refuserait TOUTE suppression du catalogue
+    // obtiendrait le même sans-faute. Ce qui est demandé, c'est de protéger un contrôle
+    // déjà évalué, pas de rendre le socle immuable.
     const affectees = await enAdministration(applicatif, rssiSite(A), async (c) => {
       await c.query("insert into mesure_catalogue (id, nom) values ('MESURE-G3', 'Jamais mise en oeuvre')");
       const resultat = await c.query("delete from mesure_catalogue where id = 'MESURE-G3'");
