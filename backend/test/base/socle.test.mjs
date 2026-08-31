@@ -354,9 +354,30 @@ describe("Journal d'audit — le client ne peut rien forger (CONVENTIONS §12)",
 describe('Verrouillage optimiste (CONVENTIONS §3, risque projet P1)', () => {
   const IDENTIFIANT = 'FIL-1720000000000-001';
 
-  /** Crée la filiale d'essai dans une transaction confiée à `travail`, puis annule. */
+  /**
+   * Crée la filiale d'essai dans une transaction confiée à `travail`, puis annule.
+   *
+   * La fixture DÉCLARE qu'elle administre : créer une filiale est un acte
+   * d'administration Groupe depuis le second passage de la porte de sécurité S1
+   * (constat N-2), `filiales` ayant rejoint les tables de configuration —
+   * `CONVENTIONS.md` §17.4. Sans le réglage, l'insertion est refusée par la politique
+   * d'écriture (`42501`), et c'est le comportement voulu : le `force row level security`
+   * y soumet même le compte propriétaire, qui est celui employé ici.
+   *
+   * Ce n'est pas un assouplissement : le jeu d'essai dit désormais ce qu'il fait, au lieu
+   * de s'appuyer sur une écriture que n'importe quelle filiale pouvait faire sur la fiche
+   * de n'importe quelle autre.
+   *
+   * Le réglage vaut pour TOUTE la transaction, et pas seulement pour l'insertion, parce
+   * que ces trois tests prennent `filiales` pour SUJET : ils la modifient pour éprouver le
+   * verrouillage optimiste. Ce qu'ils vérifient — l'incrément de `version`, le gel de
+   * `cree_le` / `cree_par`, le « zéro ligne » d'une version périmée — est porté par le
+   * déclencheur `f_maj_tracabilite()` et ne dépend en rien du drapeau : la propriété
+   * éprouvée est donc inchangée, seule la déclaration d'intention est ajoutée.
+   */
   async function avecFiliale(travail) {
     await base.avecPerimetre(proprietaire, perimetre('jdupont', IDENTIFIANT), async (client) => {
+      await client.query("select set_config('grc.administration_groupe', 'oui', true)");
       await client.query(
         `insert into filiales (id, code, raison_sociale) values ($1, 'TLS', 'Dedienne Toulouse')`,
         [IDENTIFIANT],

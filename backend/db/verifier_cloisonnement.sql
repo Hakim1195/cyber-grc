@@ -28,6 +28,13 @@
 --       identifiant de filiale ne peut pas contenir la virgule qui sépare le périmètre ;
 --   §8  JOURNAL — nul ne fabrique de preuve dans le registre d'une autre filiale, ni même
 --       dans celui d'une filiale qu'il LIT mais où il n'opère pas (constat m-4) ;
+--   §8b FILIALE D'ÉCRITURE — on n'écrit pas dans une filiale que l'on ne lit pas : la
+--       base recoupe grc.filiale_id et grc.filiales, elle ne s'en remet pas au code
+--       (constat BLOQUANT N-1, CONVENTIONS.md §17.9) ;
+--   §8c CONFIGURATION, SUITE — « filiales » ne s'écrit qu'en administration Groupe, et
+--       une filiale ne pose pas son fichier comme logo d'une autre (constat N-2) ; un
+--       contrôle du socle indestructible S'ARCHIVE (N-6) ; l'acteur du journal vient de
+--       la session (N-5) ; les déclencheurs de cohérence sont armés en « always » (N-11) ;
 --   §9  LE RÔLE APPLICATIF — ni BYPASSRLS, ni SUPERUSER, propriétaire de rien ;
 --   §10 COUVERTURE — les 47 tables sous « enable » et « force row level security », et le
 --       chemin de recherche figé sur chaque fonction (constat M-1).
@@ -143,9 +150,17 @@ select set_config('grc.utilisateur', 'demonstration', true),
        set_config('grc.filiales',    'FIL-DEMO-A,FIL-DEMO-B', true),
        set_config('grc.filiale_id',  'FIL-DEMO-A', true) \gset _rebut
 
+-- Créer une filiale est un acte d'ADMINISTRATION GROUPE depuis le second passage de la
+-- porte de sécurité S1 (constat N-2) : « filiales » a rejoint les tables de configuration
+-- (CONVENTIONS.md §17.4). Le semis le déclare, comme il le fait déjà pour le socle
+-- ci-dessous. Le fait que cette ligne ait dû être ajoutée est le constat lui-même : la
+-- démonstration reposait jusque-là sur une écriture que n'importe quelle filiale pouvait
+-- faire sur la fiche de n'importe quelle autre.
+select set_config('grc.administration_groupe', 'oui', true) \gset _rebut
 insert into filiales (id, code, raison_sociale, pays) values
     ('FIL-DEMO-A', 'ZZDEMOA', 'Démonstration Toulouse',  'FR'),
     ('FIL-DEMO-B', 'ZZDEMOB', 'Démonstration Allemagne', 'DE');
+select set_config('grc.administration_groupe', '', true) \gset _rebut
 
 -- --- socle de niveau Groupe : écriture réservée à l'administration Groupe -------------
 select set_config('grc.administration_groupe', 'oui', true) \gset _rebut
@@ -170,6 +185,13 @@ insert into evaluations (id, filiale_id, ref_id, code)   values ('EVAL-DEMO-A', 
 insert into scenarios_pra (id, filiale_id, nom)          values ('SCEN-DEMO-A', 'FIL-DEMO-A', 'Perte du site de Toulouse');
 insert into risque_exigences (risque_id, exigence_id)    values ('RISK-DEMO-A', 'EX-DEMO-A');
 insert into actif_risques    (actif_id,  risque_id)      values ('ACTIF-DEMO-A','RISK-DEMO-A');
+-- Une pièce jointe de Toulouse, pour éprouver au §8 quater le chemin du LOGO : c'est par
+-- lui que la filiale A modifiait la fiche de la filiale B (constat N-2).
+insert into pieces_jointes (id, filiale_id, entite_type, entite_id, nom_fichier, type_mime,
+                            taille_octets, sha256, chemin_stockage)
+    values ('PJ-DEMO-A', 'FIL-DEMO-A', 'filiales', 'FIL-DEMO-A', 'logo-toulouse.png',
+            'image/png', 4096, repeat('a', 64), '/magasin/demo/pj-demo-a');
+
 -- Toulouse rattache SA mesure locale : de quoi éprouver le cas 1 du CONVENTIONS §17.6
 -- (délier, puis supprimer, dans la même transaction).
 insert into mesure_mise_en_oeuvre (id, filiale_id, mesure_id) values
@@ -736,8 +758,11 @@ declare
         'C46', 'Créer une filiale dont l''identifiant contient la virgule du périmètre',
                'insert into filiales (id, code, raison_sociale) values (''FIL-DEMO-A,FIL-DEMO-B'', ''ZZDEMOC'', ''Filiale forgée'')',
                '23514',
+        -- Le drapeau est posé ici parce que le contrôle porte sur le DOMAINE id_metier,
+        -- pas sur la politique d'écriture de « filiales » (celle-là est éprouvée en C60).
         'C47', 'Créer une filiale à l''identifiant ancien, sans préfixe (contrôle symétrique)',
-               'insert into filiales (id, code, raison_sociale) values (''1720000000000'', ''ZZDEMOD'', ''Reprise ancienne'')',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'insert into filiales (id, code, raison_sociale) values (''1720000000000'', ''ZZDEMOD'', ''Reprise ancienne'')',
                'AUCUN REFUS'
     ];
     i        int;
@@ -942,6 +967,327 @@ begin
         (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
         'C49', 'Périmètre Groupe : écrire au journal d''une filiale LUE mais non active',
         '42501', v_obtenu, case when v_obtenu = '42501' then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- =====================================================================================
+-- §8 ter — LA FILIALE D'ÉCRITURE APPARTIENT AU PÉRIMÈTRE DE LECTURE
+-- -------------------------------------------------------------------------------------
+-- Constat BLOQUANT N-1 du SECOND passage de la porte de sécurité S1. « grc.filiale_id »
+-- et « grc.filiales » étaient deux réglages INDÉPENDANTS : rien, dans la base, ne
+-- vérifiait que la filiale d'écriture appartenait au périmètre de lecture. Une session
+-- déclarant un périmètre FIL-DEMO-A et une filiale active FIL-DEMO-B écrivait donc chez
+-- B — une filiale qu'elle ne lisait même pas. Le contrôle existait, une seule fois, dans
+-- le TypeScript ; or la Row Level Security est le filet SOUS le code, pas sa doublure.
+--
+-- LE CAS QUI MANQUAIT N'ÉTAIT PAS CELUI QU'ON CROYAIT. Le contrôle C18 éprouve « filiale
+-- LUE mais non active » depuis le premier passage. Le cas ouvert était « filiale NI lue
+-- NI active », et personne ne l'avait joué. Les deux figurent désormais côte à côte, et
+-- ils ne rendent PAS le même code — 42501 pour la politique, GRC04 pour la fonction :
+-- c'est la preuve que ce sont deux mécanismes distincts, et que le second n'était pas
+-- couvert par le premier.
+-- =====================================================================================
+
+\echo
+\echo '§8 ter — Écrire dans une filiale que l''on ne lit même pas'
+
+do $$
+declare
+    v_cas constant text[] := array[
+        'C60', 'Écrire un risque dans une filiale NI lue NI active',
+               'select set_config(''grc.filiale_id'', ''FIL-DEMO-B'', true);'
+               || 'insert into risques (id, filiale_id, nom) values (''RISK-DEMO-HORS'', ''FIL-DEMO-B'', ''hors périmètre'')',
+               'GRC04',
+        'C61', 'Forger une entrée de JOURNAL dans une filiale NI lue NI active',
+               'select set_config(''grc.filiale_id'', ''FIL-DEMO-B'', true);'
+               || 'insert into journal_audit (filiale_id, utilisateur_libelle, action, resume)'
+               || ' values (''FIL-DEMO-B'', ''bruno'', ''suppression'', ''FAUSSE PREUVE scellée'')',
+               'GRC04',
+        'C62', 'Écrire chez SOI après avoir déclaré une autre filiale active',
+               'select set_config(''grc.filiale_id'', ''FIL-DEMO-B'', true);'
+               || 'insert into risques (id, filiale_id, nom) values (''RISK-DEMO-Z'', ''FIL-DEMO-A'', ''chez soi'')',
+               'GRC04',
+        'C63', 'Périmètre de lecture VIDE et filiale active posée',
+               'select set_config(''grc.filiales'', '''', true);'
+               || 'insert into risques (id, filiale_id, nom) values (''RISK-DEMO-W'', ''FIL-DEMO-A'', ''essai'')',
+               'GRC04',
+        'C64', 'Écrire dans la filiale active, celle-ci étant DANS le périmètre (symétrique)',
+               'insert into risques (id, filiale_id, nom) values (''RISK-DEMO-OK2'', ''FIL-DEMO-A'', ''légitime'')',
+               'AUCUN REFUS'
+    ];
+    i        int;
+    v_obtenu text;
+begin
+    i := 1;
+    while i <= array_length(v_cas, 1) loop
+        begin
+            execute v_cas[i + 2];
+            v_obtenu := 'AUCUN REFUS';
+        exception when others then
+            v_obtenu := sqlstate;
+        end;
+        -- Les DEUX réglages sont rétablis : le C63 retire volontairement le périmètre.
+        perform set_config('grc.filiales',   'FIL-DEMO-A', true);
+        perform set_config('grc.filiale_id', 'FIL-DEMO-A', true);
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+            v_cas[i], v_cas[i + 1], v_cas[i + 3], v_obtenu,
+            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end)))::text, true);
+        i := i + 4;
+    end loop;
+end;
+$$;
+
+-- --- le balayage : toute politique d'écriture passe-t-elle par f_filiale_ecriture ? ----
+-- Le correctif tient dans une fonction ; ce qui le rend général, c'est que toutes les
+-- politiques d'écriture des tables cloisonnées l'appellent. Une politique future qui
+-- filtrerait « à la main » sur filiale_id rouvrirait le chemin pour sa table.
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C65',
+               format('Politiques d''écriture cloisonnées ne passant pas par f_filiale_ecriture (%s balayées)',
+                      count(*)),
+               '0',
+               coalesce(string_agg(c.relname || '.' || p.polname, ', ')
+                        filter (where coalesce(pg_get_expr(p.polwithcheck, p.polrelid),
+                                               pg_get_expr(p.polqual, p.polrelid), '') !~ 'f_filiale_ecriture'),
+                        '0'),
+               case when count(*) filter (
+                        where coalesce(pg_get_expr(p.polwithcheck, p.polrelid),
+                                       pg_get_expr(p.polqual, p.polrelid), '') !~ 'f_filiale_ecriture') = 0
+                    then 'OK' else 'ÉCHEC' end
+          from pg_policy p
+          join pg_class c on c.oid = p.polrelid
+          join pg_namespace n on n.oid = c.relnamespace
+          join pg_attribute a on a.attrelid = c.oid and a.attname = 'filiale_id'
+         where n.nspname = 'public' and p.polpermissive
+           and a.attnotnull and a.attnum > 0 and not a.attisdropped
+           and p.polcmd in ('a', 'w', 'd', '*')
+           -- Dérogation arbitrée : session_filiales PRODUIT le périmètre, elle ne peut
+           -- pas s'y adosser (004_rls.sql §6).
+           and c.relname <> 'session_filiales'
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+-- =====================================================================================
+-- §8 quater — LA TABLE « filiales », LE CYCLE DE VIE DU CATALOGUE, L'ACTEUR DU JOURNAL
+-- -------------------------------------------------------------------------------------
+-- Trois constats du second passage, regroupés parce qu'ils partagent leur mise en place.
+--
+--   N-2 — « filiales » était réinscriptible sans condition par n'importe quelle filiale :
+--         renommer, archiver, créer, supprimer les autres. C'est pourtant la table qui
+--         DÉFINIT la frontière du cloisonnement, et elle échappait par construction au
+--         balayage de f_verifier_couverture_rls() faute de porter un filiale_id.
+--   N-6 — le §17.6 promettait qu'un contrôle déjà évalué « s'archive » sans qu'aucune
+--         colonne ne le permette : l'administration Groupe faisait face à un refus sans
+--         issue.
+--   N-5 — l'acteur inscrit au journal était fourni par le client : la seule table dont
+--         l'objet EST de faire preuve était la seule à croire son appelant sur ce point.
+-- =====================================================================================
+
+\echo
+\echo '§8 quater — filiales, cycle de vie du catalogue, acteur du journal'
+
+do $$
+declare
+    v_cas constant text[] := array[
+        -- N-2
+        'C66', 'Créer une filiale sans être en administration Groupe',
+               'insert into filiales (id, code, raison_sociale) values (''FIL-DEMO-PIRATE'', ''ZZPIR'', ''Créée par Toulouse'')',
+               '42501',
+        'C67', 'Créer une filiale EN administration Groupe (contrôle symétrique)',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'insert into filiales (id, code, raison_sociale) values (''FIL-DEMO-C'', ''ZZDEMOE'', ''Démonstration Espagne'')',
+               'AUCUN REFUS',
+        'C68', 'Poser SA pièce jointe comme LOGO d''une autre filiale',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'update filiales set logo_piece_jointe_id = ''PJ-DEMO-A'' where id = ''FIL-DEMO-B''',
+               '23503',
+        'C69', 'Poser SA pièce jointe comme SON PROPRE logo (contrôle symétrique)',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'update filiales set logo_piece_jointe_id = ''PJ-DEMO-A'' where id = ''FIL-DEMO-A''',
+               'AUCUN REFUS',
+        -- N-6
+        'C70', 'ARCHIVER un contrôle du socle que le « restrict » rend indestructible',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'update mesure_catalogue set statut = ''archivee'', archive_le = now()'
+               || ' where id = ''MESURE-DEMO-G2''',
+               'AUCUN REFUS',
+        'C71', 'Archiver SANS date : l''état et sa date sont indissociables',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'update mesure_catalogue set statut = ''archivee'' where id = ''MESURE-DEMO-G3''',
+               '23514',
+        -- N-10
+        'C72', 'Lien de portée GROUPE désignant un document LOCAL d''une autre filiale',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'insert into document_referentiels (document_id, ref_id, filiale_id)'
+               || ' values (''DOC-DEMO-B'', ''anssi'', null)',
+               '23503'
+    ];
+    i        int;
+    v_obtenu text;
+begin
+    i := 1;
+    while i <= array_length(v_cas, 1) loop
+        begin
+            execute v_cas[i + 2];
+            v_obtenu := 'AUCUN REFUS';
+        exception when others then
+            v_obtenu := sqlstate;
+        end;
+        perform set_config('grc.filiale_id', 'FIL-DEMO-A', true);
+        perform set_config('grc.administration_groupe', '', true);
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+            v_cas[i], v_cas[i + 1], v_cas[i + 3], v_obtenu,
+            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end)))::text, true);
+        i := i + 4;
+    end loop;
+end;
+$$;
+
+-- --- N-2 : la fiche de l'autre filiale est-elle RESTÉE INTACTE ? ------------------------
+-- Le contrôle qui donne son sens aux précédents, et il se mesure autrement : le refus
+-- d'un « update » par le « using » d'une politique est SILENCIEUX (zéro ligne), pas
+-- bruyant. C'est l'observation O-2 du premier rapport, reportée au lot L2 — l'API devra
+-- distinguer « refusé » de « conflit de version ». Ici, ce qui compte est l'état de la
+-- ligne : ni sa raison sociale, ni sa version, ni son « modifie_par » ne doivent bouger.
+do $$
+declare
+    v_affectees int;
+    v_etat      record;
+begin
+    update filiales set raison_sociale = 'Détournée par Toulouse' where id = 'FIL-DEMO-B';
+    get diagnostics v_affectees = row_count;
+
+    perform set_config('grc.filiales', 'FIL-DEMO-A,FIL-DEMO-B', true);
+    select f.raison_sociale, f.version, coalesce(f.modifie_par, '(intact)') as modifie_par
+      into v_etat from filiales f where f.id = 'FIL-DEMO-B';
+    perform set_config('grc.filiales', 'FIL-DEMO-A', true);
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C73', 'La fiche de la filiale allemande est intacte après la tentative de Toulouse',
+        '0 ligne / Démonstration Allemagne / v1 / (intact)',
+        format('%s ligne / %s / v%s / %s', v_affectees, v_etat.raison_sociale,
+               v_etat.version, v_etat.modifie_par),
+        case when v_affectees = 0
+              and v_etat.raison_sociale = 'Démonstration Allemagne'
+              and v_etat.version = 1
+              and v_etat.modifie_par = '(intact)'
+             then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- --- N-6 : la mesure archivée reste LISIBLE et reste RATTACHÉE ------------------------
+-- C'est tout le point de l'archivage : la preuve historique survit. Une évaluation d'il y
+-- a deux ans continue de désigner le contrôle qu'elle visait.
+do $$
+declare v_ligne jsonb;
+begin
+    -- La mise en oeuvre qui rattache cette mesure appartient à l'ALLEMAGNE : invisible de
+    -- Toulouse. Un comptage à zéro depuis Toulouse ne prouverait rien — le périmètre est
+    -- donc élargi le temps du constat, puis refermé.
+    perform set_config('grc.filiales', 'FIL-DEMO-A,FIL-DEMO-B', true);
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C74',
+               'La mesure archivée reste lisible ET reste rattachée à ce qui la référence',
+               'archivee / datée / 1 rattachement',
+               format('%s / %s / %s rattachement',
+                      m.statut,
+                      case when m.archive_le is not null then 'datée' else 'SANS DATE' end,
+                      (select count(*) from mesure_mise_en_oeuvre o where o.mesure_id = m.id)),
+               case when m.statut = 'archivee' and m.archive_le is not null
+                     and (select count(*) from mesure_mise_en_oeuvre o where o.mesure_id = m.id) = 1
+                    then 'OK' else 'ÉCHEC' end
+          from mesure_catalogue m where m.id = 'MESURE-DEMO-G2'
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    perform set_config('grc.filiales', 'FIL-DEMO-A', true);
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+-- --- N-5 : l'acteur du journal vient de la session, le libellé du client ---------------
+do $$
+declare v_ligne jsonb;
+begin
+    perform set_config('grc.administration_groupe', 'oui', true);
+    insert into utilisateurs (id, identifiant, nom_affichage)
+    values ('demonstration', 'demonstration', 'Compte de démonstration')
+    on conflict (id) do nothing;
+    perform set_config('grc.administration_groupe', '', true);
+
+    -- L'entrée est posée dans son propre bloc : si le déclencheur ne réécrivait PAS
+    -- l'acteur, la valeur forgée « USR-USURPE » violerait la clé étrangère vers
+    -- utilisateurs et ferait échouer l'instruction. Le contrôle doit alors rendre un
+    -- verdict, pas interrompre la démonstration.
+    begin
+        insert into journal_audit (filiale_id, utilisateur_id, utilisateur_libelle, action, resume)
+        values ('FIL-DEMO-A', 'USR-USURPE', 'bruno', 'creation', 'acteur declare par le client');
+    exception when others then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+            'C75', 'Journal : l''acteur vient de la SESSION, le libellé reste celui du client',
+            'demonstration / bruno',
+            format('l''acteur fourni par le client a été CONSERVÉ (%s)', sqlstate),
+            'ÉCHEC')))::text, true);
+        return;
+    end;
+
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C75',
+               'Journal : l''acteur vient de la SESSION, le libellé reste celui du client',
+               'demonstration / bruno',
+               coalesce(j.utilisateur_id, '(nul)') || ' / ' || coalesce(j.utilisateur_libelle, '(nul)'),
+               case when j.utilisateur_id = 'demonstration' and j.utilisateur_libelle = 'bruno'
+                    then 'OK' else 'ÉCHEC' end
+          from journal_audit j where j.resume = 'acteur declare par le client'
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+-- --- N-11 : les neuf déclencheurs de cohérence et de portée sont armés en « always » ----
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C76',
+               format('Déclencheurs de cohérence et de portée armés en « always » (%s balayés)',
+                      count(*)),
+               '9 sur 9',
+               format('%s sur %s', count(*) filter (where t.tgenabled = 'A'), count(*)),
+               case when count(*) = 9 and count(*) filter (where t.tgenabled = 'A') = 9
+                    then 'OK' else 'ÉCHEC' end
+          from pg_trigger t
+         where not t.tgisinternal
+           and (t.tgname::text like '%\_coherence\_mesure' or t.tgname::text like '%\_portee\_figee')
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
 end;
 $$;
 
@@ -1168,12 +1514,15 @@ begin
 
     raise notice
         'CLOISONNEMENT DÉMONTRÉ : la filiale de Toulouse ne voit aucune ligne de la filiale '
-        'allemande, ne peut pas y écrire, ne peut créer vers elle NI lien de liaison NI clé '
-        'étrangère directe (les sept du constat B-1, plus le balayage du catalogue), ne peut '
-        'pas mettre en oeuvre ses mesures locales, ne peut ni s''approprier ni détruire le '
-        'socle commun du Groupe — un contrôle qu''une filiale a déjà évalué ne peut plus '
-        'disparaître, il s''archive —, et ne peut pas fabriquer d''entrée dans le journal '
-        'd''une autre, pas même avec un périmètre de lecture qui la couvre.';
+        'allemande ; ne peut pas y écrire — ni depuis un périmètre qui la couvre, ni en '
+        'déclarant une filiale active qu''elle ne lit même pas, la base recoupant les deux '
+        'réglages elle-même ; ne peut créer vers elle NI lien de liaison NI clé étrangère '
+        'directe (les sept du constat B-1, plus le balayage du catalogue) ; ne peut pas mettre '
+        'en oeuvre ses mesures locales ; ne peut ni s''approprier ni détruire le socle commun '
+        'du Groupe — un contrôle qu''une filiale a déjà évalué ne disparaît pas, il s''archive, '
+        'et l''archivage existe ; ne peut pas modifier la fiche d''une autre filiale, ni lui '
+        'poser son propre logo ; et ne peut pas fabriquer d''entrée dans le journal d''une '
+        'autre, ni y déclarer un acteur qui n''est pas elle.';
 end;
 $$;
 
