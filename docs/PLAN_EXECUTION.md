@@ -70,6 +70,7 @@ périmètre** et signale au lieu de corriger ce qui appartient à un autre.
 | **API** | Node/TypeScript, Fastify, accès aux données | `backend/src/entites/**`, `backend/src/api/**`, `backend/src/db/**` |
 | **AUTH** | LDAPS, sessions, droits à trois axes | `backend/src/auth/**`, `backend/src/droits/**` |
 | **FRONT** | Bascule de la persistance côté SPA | `cyber-gouvernance_V4/js/core/**`, `cyber-gouvernance_V4/js/services/**` |
+| **MODULES** | Les 26 modules métier de la SPA | `cyber-gouvernance_V4/js/modules/**`, `cyber-gouvernance_V4/js/app.js` |
 | **SECU** | Revue adversariale — **lecture seule** | `docs/securite/RAPPORT_*.md` uniquement |
 | **DÉPLOIEMENT** | Installation, service systemd, frontal Apache | `backend/deploy/**` |
 | **DOC** | Exploitation et traçabilité | `backend/README.md`, `CHANGELOG.md`, `docs/DATA_MODEL.md`, `CLAUDE.md` |
@@ -185,7 +186,15 @@ sans objet à ce stade est marqué « sans objet », jamais « passé ».
 | **S13** | Dénis de service applicatifs | §1.2 | Taille de corps bornée, délais de garde posés, pool borné, listes paginées ou bornées. |
 | **S14** | Intégrité des opérations composites | §1.4 | Propagation, cascade et import : tout ou rien. Aucun état intermédiaire observable après échec. |
 | **S15** | Dépendances | §1.2 | `npm audit` sans vulnérabilité connue ; toute dépendance ajoutée est justifiée et épinglée. |
+| **S17** | **Le chemin complet a été parcouru pour de vrai** | retour d'expérience S2 | Dans un **navigateur réel**, contre le **serveur réel**, dans la **configuration de déploiement réelle** — vhost et en-têtes compris. Une démonstration écrite par l'auteur du code ne voit jamais l'écart entre ce qu'il a prouvé et ce que l'usage fait. |
 | **S16** | **Les garde-fous sont branchés** | retour d'expérience S1 | Tout contrôle automatique écrit (vérification de couverture RLS, de chemin de recherche, de privilèges) est **réellement appelé** par un chemin de déploiement ou de recette, et **fait échouer** ce chemin. Un garde-fou que rien n'invoque est un commentaire. |
+
+**Pourquoi S17 existe.** La porte S2 a trouvé qu'une branche annoncée comme fonctionnelle dans
+la démonstration de son auteur était **du code mort en usage réel** : le frontend n'envoyait pas
+ce que la démonstration envoyait. Elle a aussi trouvé que, sous la politique de sécurité de
+contenu du vhost livré, **les soixante-dix gestionnaires en ligne de vingt-cinq fichiers sont
+bloqués** — l'application ne fonctionne donc pas dans sa configuration de déploiement, ce
+qu'aucun test n'avait vu. Ces deux classes de défaut ne se voient que dans le chemin complet.
 
 **Pourquoi S16 existe.** Il a été ajouté après le troisième passage de la porte S1, qui a
 constaté qu'une fonction de vérification de la couverture RLS, écrite, testée et correcte,

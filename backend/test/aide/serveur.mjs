@@ -1,0 +1,294 @@
+/**
+ * serveur.mjs — monter le VRAI serveur du lot L2 sur une base d'essai.
+ *
+ * ── Pourquoi ce fichier existe ───────────────────────────────────────────────
+ *
+ * La porte S2 a été refusée sur une lacune de couverture, et sa première ligne est
+ * celle-ci : « **Aucune route.** Rien n'importe `dist/api/index.js`, rien ne monte
+ * Fastify, rien n'appelle `inject()` » (`RAPPORT_S2` §5). Six des vingt et un constats
+ * vivent à la jointure entre le serveur et le navigateur — l'endroit exact que le banc
+ * d'essai ne regardait pas.
+ *
+ * L'argument qui avait justifié l'absence d'aide HTTP — « tant que les routes bougent,
+ * une aide partagée figerait une forme qui n'est pas encore stable » — n'est plus
+ * recevable : la porte est précisément le moment où la forme cesse de bouger, et
+ * l'auditeur l'a écrit.
+ *
+ * ── Deux façons de monter, et il faut les deux ───────────────────────────────
+ *
+ *  1. `monterServeurReel()` appelle **`construireServeur()`**, celui que
+ *     `dist/serveur.js` lance en production. On éprouve donc aussi ce qui n'est pas
+ *     dans le greffon : les en-têtes posés par `onSend` (S10), le gestionnaire de
+ *     route inconnue, le plafond de corps, le traitement d'erreur de haut niveau.
+ *     Son résolveur de périmètre est `PerimetreProvisoire` — donc **une seule
+ *     filiale**, celle dont le code vient en premier.
+ *
+ *  2. `monterGreffon()` enregistre `greffonApi` seul, avec un **résolveur fourni par
+ *     le test**. C'est le point d'accroche que `OptionsApi` documente pour le lot L3,
+ *     et c'est le seul moyen d'obtenir un périmètre de LECTURE Groupe — donc
+ *     d'atteindre le `403 refus_perimetre` sur une ligne visible d'une autre filiale,
+ *     qui est le constat Q-7 vu par HTTP.
+ *
+ * Aucune des deux ne simule quoi que ce soit : c'est le code de `src/`, compilé, qui
+ * répond.
+ *
+ * ── Utilisation ──────────────────────────────────────────────────────────────
+ *
+ *     let base, serveur;
+ *     before(async () => {
+ *       base = await ouvrirBaseEssai(import.meta.url);
+ *       await semerJeuEssai(base, await base.connexion('app'));
+ *       serveur = await monterServeurReel(base);
+ *     });
+ *     after(async () => { await serveur?.fermer(); await base?.fermer(); });
+ *
+ *     const r = await serveur.appeler('GET', '/api/donnees');
+ *     assert.equal(r.statut, 200);
+ *
+ * `appeler()` rend `{ statut, entetes, corps }`, `corps` étant déjà décodé quand la
+ * réponse est du JSON. `ecouter()` ouvre en plus un vrai port, pour les essais de
+ * navigateur.
+ *
+ * ── Compilation ──────────────────────────────────────────────────────────────
+ *
+ * `src/` est en TypeScript et ce banc en JavaScript : `compilerSiNecessaire()` produit
+ * `dist/` quand il manque ou qu'il est en retard. Exiger un `npm run build` préalable
+ * ferait échouer la suite pour une commande oubliée, et l'on apprendrait à ignorer les
+ * échecs.
+ */
+
+import { execFile } from 'node:child_process';
+import { readdirSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
+const executerFichier = promisify(execFile);
+
+export const RACINE_BACKEND = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+/** Racine du frontend, servi tel quel par Apache en production. */
+export const RACINE_FRONTEND = join(RACINE_BACKEND, '..', 'cyber-gouvernance_V4');
+
+/* =====================================================================
+ *  Compilation de dist/
+ * ===================================================================== */
+
+function dateLaPlusRecente(repertoire) {
+  let date = 0;
+  for (const entree of readdirSync(repertoire, { withFileTypes: true })) {
+    const chemin = join(repertoire, entree.name);
+    date = Math.max(date, entree.isDirectory() ? dateLaPlusRecente(chemin) : statSync(chemin).mtimeMs);
+  }
+  return date;
+}
+
+/** Compile `src/` vers `dist/` si nécessaire. Idempotent, et sûr en parallèle. */
+export async function compilerSiNecessaire() {
+  const temoin = join(RACINE_BACKEND, 'dist', 'serveur.js');
+  let dateTemoin = 0;
+  try {
+    dateTemoin = statSync(temoin).mtimeMs;
+  } catch {
+    dateTemoin = 0;
+  }
+  if (dateTemoin > dateLaPlusRecente(join(RACINE_BACKEND, 'src'))) return;
+  try {
+    await executerFichier(
+      process.execPath,
+      [join(RACINE_BACKEND, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.json'],
+      { cwd: RACINE_BACKEND },
+    );
+  } catch (erreur) {
+    // Trois agents travaillent en parallèle sur ce dépôt : `src/` peut être en cours
+    // d'écriture au moment où la suite tourne. Le dire franchement évite de faire
+    // chercher un défaut de test là où il y a une compilation en vol.
+    throw new Error(
+      "Le banc d'essai n'a pas pu compiler `src/` vers `dist/` : les tests de routes et de " +
+        'navigateur ne peuvent pas être joués contre un code qui ne compile pas.\n' +
+        `${erreur.stdout ?? ''}${erreur.stderr ?? ''}`,
+    );
+  }
+}
+
+/** Importe un module compilé. Compile d'abord si besoin. */
+export async function moduleCompile(chemin) {
+  await compilerSiNecessaire();
+  return import(`file://${join(RACINE_BACKEND, 'dist', chemin)}`);
+}
+
+/* =====================================================================
+ *  Configuration de test
+ * ===================================================================== */
+
+/**
+ * Variables d'environnement minimales acceptées par `chargerConfiguration`.
+ *
+ * Les valeurs LDAP et le secret de session sont **requis** par la configuration mais
+ * ne sont lus par aucun chemin du lot L2 : ce sont des exigences du lot L3, déjà
+ * posées. Ils sont donc renseignés avec des valeurs manifestement factices, jamais
+ * avec quelque chose qui ressemblerait à un secret.
+ */
+function environnementDeTest(base, environnement) {
+  return {
+    NODE_ENV: environnement,
+    // Port réel jamais utilisé : `inject()` n'écoute pas, et `ecouter()` demande
+    // explicitement le port 0 à Fastify. La configuration, elle, refuse 0.
+    SERVEUR_PORT: '3999',
+    BASE_HOTE: process.env.BASE_HOTE ?? '127.0.0.1',
+    BASE_PORT: process.env.BASE_PORT ?? '5432',
+    BASE_NOM: base.nom,
+    BASE_UTILISATEUR: process.env.BASE_UTILISATEUR ?? 'grc_app',
+    BASE_MOT_DE_PASSE: process.env.BASE_MOT_DE_PASSE ?? 'dev',
+    BASE_SSL: 'desactive',
+    SESSION_SECRET: 'secret-de-banc-d-essai-sans-valeur-aucune-0123456789',
+    LDAP_URL: 'ldaps://annuaire.invalide.test:636',
+    LDAP_DN_SERVICE: 'CN=inutilise,DC=invalide,DC=test',
+    LDAP_MOT_DE_PASSE_SERVICE: 'inutilise-lot-L3',
+    LDAP_BASE_RECHERCHE: 'DC=invalide,DC=test',
+    // Le serveur journalise en JSON sur la sortie standard : sans cela, chaque test
+    // noierait le rapport de la suite sous les traces de requêtes.
+    // Silencieux par défaut ; `SERVEUR_NIVEAU_JOURNAL=error npm test` rallume les
+    // traces quand un test échoue sur un 500 et qu'il faut savoir pourquoi.
+    SERVEUR_NIVEAU_JOURNAL: process.env.SERVEUR_NIVEAU_JOURNAL ?? 'silent',
+  };
+}
+
+/* =====================================================================
+ *  Résolveur de périmètre pour les tests
+ * ===================================================================== */
+
+/**
+ * Résolveur qui rend le périmètre qu'on lui donne.
+ *
+ * Il respecte scrupuleusement le contrat de `ResolveurPerimetre` — en particulier
+ * **`resoudre()` ne prend aucun paramètre** : le périmètre est fixé à la construction
+ * ou par `poser()`, jamais déduit d'une requête. Un résolveur de test qui lirait une
+ * entête réintroduirait exactement ce que le contrôle S2 interdit, et le banc d'essai
+ * donnerait le mauvais exemple.
+ */
+export class PerimetreFixe {
+  constructor(perimetre) {
+    this.provisoire = true;
+    this._perimetre = Object.freeze({ ...perimetre });
+  }
+
+  /** Change le périmètre entre deux appels. Jamais depuis une requête. */
+  poser(perimetre) {
+    this._perimetre = Object.freeze({ ...perimetre });
+  }
+
+  async resoudre() {
+    return this._perimetre;
+  }
+
+  decrire() {
+    return 'périmètre fixé par le banc d’essai (test/aide/serveur.mjs)';
+  }
+}
+
+/* =====================================================================
+ *  Montage
+ * ===================================================================== */
+
+function envelopper(instance, config) {
+  let adresse = null;
+
+  return {
+    instance,
+    config,
+
+    /**
+     * Appelle une route sans ouvrir de port (`inject`). Rend `{ statut, entetes,
+     * corps }` — `corps` décodé si la réponse est du JSON, sinon le texte brut.
+     */
+    async appeler(methode, url, options = {}) {
+      const reponse = await instance.inject({
+        method: methode,
+        url,
+        ...(options.corps === undefined ? {} : { payload: options.corps }),
+        ...(options.entetes === undefined ? {} : { headers: options.entetes }),
+      });
+      let corps = reponse.body;
+      if ((reponse.headers['content-type'] ?? '').includes('application/json')) {
+        try {
+          corps = JSON.parse(reponse.body);
+        } catch {
+          /* Une réponse annoncée JSON mais illisible est un constat en soi : on
+             rend le texte brut, et le test le verra. */
+        }
+      }
+      return { statut: reponse.statusCode, entetes: reponse.headers, corps };
+    },
+
+    /** Ouvre un vrai port sur la boucle locale et rend son URL de base. */
+    async ecouter() {
+      if (adresse !== null) return adresse;
+      await instance.listen({ host: '127.0.0.1', port: 0 });
+      const info = instance.server.address();
+      adresse = `http://127.0.0.1:${info.port}`;
+      return adresse;
+    },
+
+    async fermer() {
+      await instance.close().catch(() => {});
+    },
+  };
+}
+
+/**
+ * Monte le serveur **réel** (`construireServeur`) sur la base d'essai.
+ *
+ * @param {{nom: string}} base base d'essai ouverte par `ouvrirBaseEssai`
+ * @param {{environnement?: 'production'|'recette'|'developpement'}} [options]
+ */
+export async function monterServeurReel(base, options = {}) {
+  const environnement = options.environnement ?? 'developpement';
+  const { chargerConfiguration } = await moduleCompile('config/index.js');
+  const { creerPool } = await moduleCompile('db/pool.js');
+  const { construireServeur } = await moduleCompile('serveur.js');
+
+  const config = chargerConfiguration(environnementDeTest(base, environnement));
+  const pool = creerPool(config.base);
+  const instance = construireServeur(config, pool);
+  await instance.ready();
+
+  const enveloppe = envelopper(instance, config);
+  const fermerSeul = enveloppe.fermer.bind(enveloppe);
+  enveloppe.pool = pool;
+  enveloppe.fermer = async () => {
+    await fermerSeul();
+    await pool.end().catch(() => {});
+  };
+  return enveloppe;
+}
+
+/**
+ * Monte le **greffon seul**, avec un résolveur de périmètre fourni par le test.
+ *
+ * Sert à ce que `monterServeurReel` ne peut pas atteindre : un périmètre de lecture
+ * Groupe, une administration Groupe, ou l'absence de filiale active.
+ */
+export async function monterGreffon(base, perimetre, options = {}) {
+  const { default: Fastify } = await import('fastify');
+  const { chargerConfiguration } = await moduleCompile('config/index.js');
+  const { creerPool } = await moduleCompile('db/pool.js');
+  const { greffonApi } = await moduleCompile('api/index.js');
+
+  const config = chargerConfiguration(environnementDeTest(base, options.environnement ?? 'developpement'));
+  const pool = creerPool(config.base);
+  const resolveur = new PerimetreFixe(perimetre);
+
+  const instance = Fastify({ logger: false, bodyLimit: config.serveur.tailleMaxCorpsOctets });
+  await instance.register(greffonApi, { pool, config, resolveur });
+  await instance.ready();
+
+  const enveloppe = envelopper(instance, config);
+  const fermerSeul = enveloppe.fermer.bind(enveloppe);
+  enveloppe.pool = pool;
+  enveloppe.resolveur = resolveur;
+  enveloppe.fermer = async () => {
+    await fermerSeul();
+    await pool.end().catch(() => {});
+  };
+  return enveloppe;
+}

@@ -1,11 +1,19 @@
 // Emplacement : js/modules/settings.js
 // Nom du fichier : settings.js
 //
-// Gestion des données & sauvegardes :
-//  - État du stockage (moteur, quota, persistance, dernier enregistrement / export)
-//  - Export chiffré (recommandé) ou en clair ; rappel d'export paramétrable
-//  - Import robuste : validation, aperçu, Remplacer / Fusionner
-//  - Points de restauration versionnés (historique auto + manuel)
+// Données & échanges de fichier.
+//
+// ⚠️ Cet écran a été rectifié à la porte S2 (constats B-3 et m-7) : il annonçait
+// encore le monde d'avant la bascule client/serveur — « vos données ne quittent
+// jamais ce navigateur », une protection par mot de passe retirée depuis, et
+// « un point de restauration est créé avant toute modification » à l'endroit
+// exact du geste le plus destructeur de l'application. Un écran qui rassure à
+// tort est plus dangereux qu'un écran qui plante.
+//
+//  - État de la liaison au serveur et volume détenu
+//  - Export `grc-backup` (chiffré ou en clair) — FORMAT D'ÉCHANGE (§2.6),
+//    et non plus une sauvegarde : celle-ci est faite par le serveur (§1.8)
+//  - Import : validation, aperçu, **fusion** (le remplacement est refusé, B-3)
 
 const SettingsModule = (() => {
 
@@ -42,23 +50,22 @@ const SettingsModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>Paramètres & Sauvegardes</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Stockage local (mode hors-ligne) — vos données ne quittent jamais ce navigateur</p>
+                        <h1>Paramètres & données</h1>
+                        <p style="color: var(--text-muted); margin-top: 5px;">Vos données sont enregistrées sur le serveur de votre filiale, qui les sauvegarde. Cet écran sert aux échanges de fichier.</p>
                     </div>
                 </div>
 
                 <!-- ÉTAT DU STOCKAGE -->
                 <div class="dashboard-card" style="border-top: 4px solid var(--accent); margin-bottom: 1.5rem;">
-                    <h3 style="font-size: 1.15rem; margin-bottom: 15px;">État du stockage</h3>
+                    <h3 style="font-size: 1.15rem; margin-bottom: 15px;">État de la liaison au serveur</h3>
                     <div id="storage-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 1rem;">
                         <div style="color: var(--text-muted);">Chargement…</div>
                     </div>
-                    <div id="quota-wrap" style="margin-top: 1rem;"></div>
                 </div>
 
                 <!-- SÉCURITÉ & CHIFFREMENT -->
                 <div class="dashboard-card" style="border-top: 4px solid var(--primary); margin-bottom: 1.5rem;">
-                    <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Sécurité & chiffrement</h3>
+                    <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Sécurité</h3>
                     <div id="security-body"><div style="color: var(--text-muted);">Chargement…</div></div>
                 </div>
 
@@ -80,8 +87,8 @@ const SettingsModule = (() => {
                             Exporter en clair (non chiffré)
                         </button>
                         <div style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted);">
-                            Me rappeler d'exporter tous les
-                            <input id="reminderDays" type="number" min="1" max="365" value="${BackupService.getReminderDays()}" style="width: 60px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px;" /> jours.
+                            Un export est une extraction complète de la filiale : il sort de la machine.
+                            Ne le produisez que pour un échange identifié.
                         </div>
                     </div>
 
@@ -89,7 +96,7 @@ const SettingsModule = (() => {
                     <div class="dashboard-card" style="border-top: 4px solid var(--color-danger);">
                         <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Importer une sauvegarde</h3>
                         <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px;">
-                            Chargez un fichier .json (chiffré ou non). Le contenu est validé, puis vous choisissez de <strong>remplacer</strong> ou de <strong>fusionner</strong>. Un point de restauration est créé avant toute modification.
+                            Chargez un fichier .json (chiffré ou non) — reprise d'une filiale déjà équipée de l'ancienne version, ou données remises par une filiale. Le contenu est validé, puis <strong>fusionné</strong> : les enregistrements absents sont ajoutés, <strong>aucun n'est supprimé ni écrasé</strong>.
                         </p>
                         <div style="text-align: center; margin-bottom: 10px;">
                             <input type="file" id="importInput" accept=".json,application/json" style="display: none;" />
@@ -101,116 +108,59 @@ const SettingsModule = (() => {
                     </div>
                 </div>
 
-                <!-- HISTORIQUE / POINTS DE RESTAURATION -->
+                <!-- SAUVEGARDE — assurée par le serveur (PLAN_SERVEUR §1.8).
+                     Les points de restauration NAVIGATEUR ont disparu avec la bascule ;
+                     ce panneau en listait qui n'existent plus (constat m-7). -->
                 <div class="dashboard-card" style="border-top: 4px solid var(--primary);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
-                        <h3 style="font-size: 1.15rem; margin: 0;">Points de restauration</h3>
-                        <button id="createBackupBtn">Créer un point maintenant</button>
+                    <h3 style="font-size: 1.15rem; margin: 0 0 15px;">Sauvegarde et restauration</h3>
+                    <div class="help-note">
+                        Elles sont assurées par le serveur, sans action de votre part : les journaux de
+                        transactions sont archivés en continu (perte maximale de quelques minutes) et la
+                        machine est sauvegardée chaque jour. Une restauration se demande à votre exploitant.
+                        <br><br>
+                        L'export ci-dessus n'est <strong>pas</strong> une sauvegarde : c'est un format
+                        d'échange, pour reprendre les données d'une filiale ou les lui remettre.
                     </div>
-                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px;">
-                        Versions internes horodatées de votre base. Revenez à n'importe quelle version en un clic.
-                    </p>
-                    <div id="backups-list"><div style="color: var(--text-muted);">Chargement…</div></div>
                 </div>
             </section>
         `;
 
         wireExport();
         wireImport();
-        document.getElementById("reminderDays").onchange = (e) => {
-            BackupService.setReminderDays(e.target.value);
-            if (window.showToast) window.showToast("Fréquence de rappel mise à jour.", "info");
-        };
-        document.getElementById("createBackupBtn").onclick = async () => {
-            const label = prompt("Nom du point de restauration :", "Point de restauration manuel");
-            if (label === null) return;
-            const ok = await DataStore.createManualBackup(label);
-            if (window.showToast) window.showToast(ok ? "Point de restauration créé." : "Création impossible.", ok ? "success" : "error");
-            loadBackups();
-        };
-
         loadStorageInfo();
-        loadBackups();
         renderSecurity();
     }
 
-    /* ===== Sécurité & chiffrement (opt-in) ===== */
+    /* ===== Sécurité =====
+       Le coffre du navigateur et le chiffrement au repos côté poste ont été
+       retirés à la bascule serveur (`PLAN_SERVEUR` §1.9 : le chiffrement au
+       repos est celui du disque de la VM). Cet écran proposait encore de les
+       activer, et le bouton échouait — constat m-7 de la porte S2. Il décrit
+       désormais l'état réel. */
     function renderSecurity() {
         const el = document.getElementById("security-body");
         if (!el) return;
-        const cryptoOk = typeof CryptoService !== "undefined" && CryptoService.available();
-        const vaultReady = typeof Vault !== "undefined";
-
-        if (!cryptoOk || !vaultReady) {
-            el.innerHTML = `<div class="help-note">Chiffrement indisponible dans ce contexte. Ouvrez l'application via <strong>https</strong>, <strong>localhost</strong> ou un fichier local pour activer la protection par mot de passe.</div>`;
-            return;
-        }
-
-        if (!Vault.isConfigured()) {
-            el.innerHTML = `
-                <div class="help-note" style="margin-bottom: 15px;">
-                    Par défaut, vos données sont stockées <strong>en clair</strong> dans ce navigateur. Activez une protection par mot de passe pour les <strong>chiffrer (AES-256)</strong> et exiger un déverrouillage à l'ouverture.
-                    <br>Le mot de passe n'est jamais enregistré et <strong>ne peut pas être récupéré</strong>.
-                </div>
-                <button id="sec-enable" style="background: var(--primary);">Activer la protection par mot de passe</button>`;
-            document.getElementById("sec-enable").onclick = enableProtection;
-        } else {
-            el.innerHTML = `
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
-                    <span class="status" style="background:#e6f4ea; color:var(--color-success);">Protection activée</span>
-                    <span style="color: var(--text-muted); font-size: 0.9rem;">Données chiffrées au repos (AES-256), auto-verrouillage après 15 min.</span>
-                </div>
-                <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <button id="sec-lock" style="background: var(--primary);">Verrouiller maintenant</button>
-                    <button id="sec-change" style="background: var(--accent);">Changer le mot de passe</button>
-                    <button id="sec-disable" style="background: var(--color-gray);">Désactiver la protection</button>
-                </div>`;
-            document.getElementById("sec-lock").onclick = () => Vault.lock();
-            document.getElementById("sec-change").onclick = changeProtection;
-            document.getElementById("sec-disable").onclick = disableProtection;
-        }
-    }
-
-    async function enableProtection() {
-        const p1 = prompt("Choisissez un mot de passe pour protéger l'application :");
-        if (p1 === null) return;
-        if (p1.length < 8) { alert("8 caractères minimum."); return; }
-        const p2 = prompt("Confirmez le mot de passe :");
-        if (p2 === null) return;
-        if (p1 !== p2) { alert("Les mots de passe ne correspondent pas."); return; }
-        try {
-            const dek = await Vault.setup(p1);
-            await DataStore.enableEncryption(dek);
-            alert("Protection activée. Vos données sont désormais chiffrées.");
-            window.location.reload();
-        } catch (e) {
-            alert("Échec de l'activation : " + e.message);
-        }
-    }
-
-    async function changeProtection() {
-        const oldP = prompt("Mot de passe actuel :");
-        if (oldP === null) return;
-        const p1 = prompt("Nouveau mot de passe :");
-        if (p1 === null) return;
-        if (p1.length < 8) { alert("8 caractères minimum."); return; }
-        const p2 = prompt("Confirmez le nouveau mot de passe :");
-        if (p2 === null) return;
-        if (p1 !== p2) { alert("Les mots de passe ne correspondent pas."); return; }
-        const ok = await Vault.changePassphrase(oldP, p1);
-        alert(ok ? "Mot de passe modifié." : "Mot de passe actuel incorrect.");
-    }
-
-    async function disableProtection() {
-        const pass = prompt("Confirmez votre mot de passe pour désactiver la protection :");
-        if (pass === null) return;
-        const ok = await Vault.verify(pass);
-        if (!ok) { alert("Mot de passe incorrect."); return; }
-        if (!confirm("Désactiver la protection ? Les données seront réécrites EN CLAIR dans ce navigateur.")) return;
-        await DataStore.disableEncryption();
-        Vault.removeVault();
-        alert("Protection désactivée.");
-        window.location.reload();
+        const session = (typeof Session !== "undefined") ? Session.courante() : null;
+        const provisoire = session && session.provisoire;
+        el.innerHTML = `
+            <div class="help-note" style="margin-bottom: 15px;">
+                Vos données ne sont plus stockées sur ce poste : elles vivent sur le serveur de votre
+                filiale, dont le disque est chiffré, et elles y sont sauvegardées en continu.
+                La protection par mot de passe du navigateur a donc été retirée — elle ne protégeait
+                qu'une copie locale qui n'existe plus.
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                ${statBox("Filiale active", escapeHtml((typeof Session !== "undefined" && Session.libelleFiliale()) || "—"))}
+                ${statBox("Compte", escapeHtml((session && session.utilisateur) || "—"))}
+                ${statBox("Chiffrement au repos", "Disque du serveur")}
+            </div>
+            ${provisoire ? `<div class="help-note" style="margin-top:15px; border-left-color: var(--color-warning);">
+                <strong>Authentification non installée sur ce serveur.</strong> La session est provisoire :
+                l'identité et les droits ne sont pas encore vérifiés. C'est attendu avant la mise en service
+                (raccordement à l'annuaire d'entreprise) ; signalez-le à votre exploitant si vous voyez ce
+                message en production.
+            </div>` : ""}
+        `;
     }
 
     /* ===== Export ===== */
@@ -285,27 +235,36 @@ const SettingsModule = (() => {
                 </div>
                 <table class="data-table" style="margin:0;"><tbody>${rows}</tbody></table>
                 <div style="display:flex; gap:10px; margin-top:12px;">
-                    <button id="imp-replace" style="background: var(--color-danger); flex:1; justify-content:center;">Remplacer tout</button>
-                    <button id="imp-merge" style="background: var(--primary); flex:1; justify-content:center;">Fusionner</button>
+                    <button id="imp-merge" style="background: var(--primary); flex:1; justify-content:center;">Fusionner dans la filiale</button>
                     <button id="imp-cancel" style="background: var(--color-gray); justify-content:center;">Annuler</button>
                 </div>
                 <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 8px;">
-                    Remplacer : écrase la base actuelle. Fusionner : ajoute les éléments absents (par identifiant), sans écraser l'existant.
+                    Fusionner ajoute les éléments absents (par identifiant) et ne supprime rien.
+                    Le remplacement complet n'est pas proposé : il détruirait les données du serveur
+                    sans transaction ni retour arrière.
                 </div>
             </div>
         `;
         document.getElementById("imp-cancel").onclick = () => { recap.innerHTML = ""; };
-        document.getElementById("imp-replace").onclick = async () => {
-            if (!confirm("Remplacer DÉFINITIVEMENT les données actuelles ? (un point de restauration est créé avant)")) return;
-            await DataStore.applyImport(res.payload, "replace");
-            alert("Import terminé. L'application va se recharger.");
-            window.location.reload();
-        };
         document.getElementById("imp-merge").onclick = async () => {
-            const r = await DataStore.applyImport(res.payload, "merge");
-            const total = r.added ? Object.values(r.added).reduce((a, b) => a + b, 0) : 0;
-            alert(`Fusion terminée : ${total} élément(s) ajouté(s). L'application va se recharger.`);
-            window.location.reload();
+            const bouton = document.getElementById("imp-merge");
+            bouton.disabled = true; bouton.textContent = "Fusion en cours…";
+            try {
+                const r = await DataStore.applyImport(res.payload, "merge");
+                const total = r.added ? Object.values(r.added).reduce((a, b) => a + b, 0) : 0;
+                if (r.ok) {
+                    alert(`Fusion terminée : ${total} élément(s) ajouté(s) sur le serveur.`);
+                } else {
+                    alert(`Fusion incomplète : ${total} élément(s) repris, certains ont été refusés par le serveur. `
+                        + `Le bandeau en haut de page dit lesquels — ne rechargez pas la page avant de l'avoir lu.`);
+                }
+            } catch (e) {
+                alert("Import impossible : " + e.message);
+            } finally {
+                bouton.disabled = false; bouton.textContent = "Fusionner dans la filiale";
+            }
+            recap.innerHTML = "";
+            loadStorageInfo();
         };
     }
 
@@ -316,37 +275,28 @@ const SettingsModule = (() => {
     /* ===== État du stockage ===== */
     async function loadStorageInfo() {
         const el = document.getElementById("storage-stats");
-        const quotaWrap = document.getElementById("quota-wrap");
         if (!el) return;
         try {
             const info = await DataStore.getStorageInfo();
             const totalItems = Object.values(info.counts).reduce((a, b) => a + b, 0);
-            let persisted = null;
-            try { if (navigator.storage && navigator.storage.persisted) persisted = await navigator.storage.persisted(); } catch (e) { /* ignore */ }
-
+            // Ces tuiles décrivaient le stockage du NAVIGATEUR : moteur IndexedDB,
+            // chiffrement local, quota, points de restauration. Plus rien de tout
+            // cela n'existe (constat m-7) — et « Chiffrement : Désactivé » juste
+            // au-dessus d'un texte expliquant que le disque du serveur est
+            // chiffré était le genre de contradiction qu'un auditeur relève.
+            const attente = info.enAttente
+                ? `<span style="color: var(--color-danger);">${info.incidents > 0 ? info.incidents + " refusée(s)" : "en cours d’envoi"}</span>`
+                : "Tout est enregistré";
             el.innerHTML = `
-                ${statBox("Moteur", escapeHtml(info.engine))}
-                ${statBox("Chiffrement", info.encrypted ? "Activé (AES-256)" : "Désactivé")}
-                ${statBox("Taille de la base", formatBytes(info.bytes))}
-                ${statBox("Enregistrements", totalItems + " éléments")}
-                ${statBox("Stockage persistant", persisted === null ? "Inconnu" : (persisted ? "Accordé" : "Non accordé"))}
-                ${statBox("Points de restauration", String(info.backupCount))}
+                ${statBox("Enregistré sur", escapeHtml(info.engine))}
+                ${statBox("Enregistrements détenus", totalItems + " éléments")}
+                ${statBox("Volume en mémoire", formatBytes(info.bytes))}
+                ${statBox("Modifications en attente", attente)}
                 ${statBox("Dernier enregistrement", formatDate(info.lastSavedAt || info.updatedAt))}
             `;
 
-            if (info.estimate && info.estimate.quota) {
-                const used = info.estimate.usage || 0;
-                const pct = Math.min(100, Math.round((used / info.estimate.quota) * 100));
-                quotaWrap.innerHTML = `
-                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">
-                        Espace navigateur utilisé : <strong>${formatBytes(used)}</strong> sur ${formatBytes(info.estimate.quota)} (${pct}%)
-                    </div>
-                    <div class="progress-bar" style="margin: 0;">
-                        <div class="progress-fill" style="width:${pct}%; background-color: ${pct > 85 ? 'var(--color-danger)' : 'var(--primary)'};"></div>
-                    </div>`;
-            } else { quotaWrap.innerHTML = ""; }
         } catch (e) {
-            el.innerHTML = `<div style="color: var(--color-danger);">Impossible de lire l'état du stockage.</div>`;
+            el.innerHTML = `<div style="color: var(--color-danger);">Impossible de lire l'état de la liaison au serveur.</div>`;
         }
     }
 
@@ -356,53 +306,6 @@ const SettingsModule = (() => {
                 <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">${label}</div>
                 <div style="font-size: 1.05rem; font-weight: 700; margin-top: 4px;">${value}</div>
             </div>`;
-    }
-
-    /* ===== Historique ===== */
-    async function loadBackups() {
-        const wrap = document.getElementById("backups-list");
-        if (!wrap) return;
-        let backups = [];
-        try { backups = await DataStore.listBackups(); } catch (e) { backups = []; }
-        if (!backups.length) {
-            wrap.innerHTML = `<div style="color: var(--text-muted); font-size: 0.9rem;">Aucun point de restauration pour le moment.</div>`;
-            return;
-        }
-        const rows = backups.map(b => {
-            const typeLabel = b.type === "manual"
-                ? `<span class="status" style="background:#e3f0ff; color: var(--accent);">Manuel</span>`
-                : `<span class="status" style="background:var(--bg-body); color: var(--text-muted);">Auto</span>`;
-            return `
-                <tr>
-                    <td>${formatDate(b.ts)}</td>
-                    <td>${escapeHtml(b.label)}</td>
-                    <td>${typeLabel}</td>
-                    <td style="text-align:right; white-space:nowrap;">
-                        <button class="restore-btn" data-id="${b.id}" style="padding:4px 10px; font-size:0.8rem;">Restaurer</button>
-                        <button class="delete-backup-btn" data-id="${b.id}" style="padding:4px 10px; font-size:0.8rem; background: var(--color-gray);">Suppr.</button>
-                    </td>
-                </tr>`;
-        }).join("");
-        wrap.innerHTML = `
-            <table class="data-table" style="margin-top: 0;">
-                <thead><tr><th>Date</th><th>Libellé</th><th>Type</th><th style="text-align:right;">Actions</th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>`;
-        wrap.querySelectorAll(".restore-btn").forEach(btn => {
-            btn.onclick = async () => {
-                if (!confirm("Restaurer cette version ? L'état actuel sera sauvegardé au préalable.")) return;
-                const ok = await DataStore.restoreBackup(Number(btn.dataset.id));
-                if (ok) { alert("Version restaurée. L'application va se recharger."); window.location.reload(); }
-                else if (window.showToast) window.showToast("Restauration impossible.", "error");
-            };
-        });
-        wrap.querySelectorAll(".delete-backup-btn").forEach(btn => {
-            btn.onclick = async () => {
-                if (!confirm("Supprimer ce point de restauration ?")) return;
-                await DataStore.deleteBackup(Number(btn.dataset.id));
-                loadBackups(); loadStorageInfo();
-            };
-        });
     }
 
     return { render };

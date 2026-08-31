@@ -66,6 +66,11 @@ const Vault = (() => {
         if (typeof onReadyCb === "function") {
             try {
                 await onReadyCb(null);
+                // Une fois — et seulement une fois — la liaison établie et
+                // l'application montée : signaler d'éventuelles données de la
+                // version 100 % navigateur restées sur ce poste. On les propose
+                // à la reprise ; on n'y touche pas (constat B-1 de la porte S2).
+                if (typeof Reprise !== "undefined") await Reprise.verifier();
             } catch (e) {
                 // Le démarrage de l'application elle-même a échoué : le dire, et
                 // ne pas laisser une interface à moitié montée.

@@ -100,6 +100,10 @@ const BackupService = (() => {
     }
 
     return {
+        // `telecharger` est exposé pour `js/core/reprise.js`, qui doit produire un
+        // fichier `grc-backup` à partir de la base héritée du poste (constat B-1)
+        // sans dupliquer la mécanique de téléchargement.
+        telecharger: download,
         exportPlain, exportEncrypted, markExported,
         getLastExportDisplay, getLastExportTs, daysSinceExport,
         getReminderDays, setReminderDays, renderReminder

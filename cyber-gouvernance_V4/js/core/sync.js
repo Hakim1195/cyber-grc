@@ -70,6 +70,28 @@ const Sync = (() => {
     const SONDAGE_MS = 20000;           // rythme du rafraîchissement (§1.3 : un sondage suffit)
     const RELANCE_RESEAU_MS = 8000;     // nouvel essai après une panne passagère
 
+    /**
+     * Recouvrement du sondage — constat M-7 de la porte S2.
+     *
+     * L'horodatage rendu au client est pris **après** la lecture ; un écrivain
+     * concurrent estampille `modifie_le` à l'**ouverture** de sa transaction,
+     * donc avant, et valide après. Le sondage suivant demande « ce qui a changé
+     * depuis » et ne voit rien ; les volumes n'ayant pas bougé, le filet de
+     * l'écart de volume ne se déclenche pas davantage. La modification est
+     * perdue pour ce client — durablement, puisque plus rien ne la redemandera.
+     *
+     * Le client redemande donc une fenêtre légèrement antérieure. Le surcoût est
+     * nul en pratique (un enregistrement déjà connu est reconnu identique à sa
+     * référence et ignoré), et la marge couvre largement la durée d'une
+     * transaction d'écriture, bornée à 15 s côté serveur.
+     *
+     * ⚠️ Ce n'est qu'un filet. Le remède exact — prendre l'horodatage au DÉBUT
+     * de la transaction de lecture, ou passer à une séquence monotone — est
+     * côté serveur ; une transaction plus longue que la marge repasserait au
+     * travers.
+     */
+    const RECOUVREMENT_SONDAGE_MS = 30000;
+
     /* =====================================================================
        ÉTAT
     ===================================================================== */
@@ -99,7 +121,15 @@ const Sync = (() => {
     const incidents = [];               // échecs à afficher (jamais effacés tout seuls)
     const champsRefuses = new Set();    // "collection.champ" que le modèle serveur ignore
     const propagations = new Map();     // mesureId -> Set(evaluationId) à propager côté serveur
+    const derives = new Set();          // "collection:id" recalculables, jamais saisis
 
+    // Le lot L2 a d'abord accepté un identifiant proposé par le client ; la porte
+    // S2 (constat M-3) en a fait un oracle d'existence inter-filiales, et le
+    // serveur le refuse désormais. Le client s'adapte au contrat qu'il trouve :
+    // il propose, et si on lui refuse, il adopte l'identifiant rendu — et ne
+    // repropose plus rien de la session.
+    let identifiantImposeParLeServeur = false;
+    let bandeauReduit = false;       // la croix réduit le détail, elle n'éteint rien
     let panneReseau = false;
     let dernierEnregistrement = 0;
     let observateursEtat = [];
@@ -232,16 +262,183 @@ const Sync = (() => {
         return e._acceptes;
     }
 
-    function corpsDe(collection, enregistrement) {
+    /**
+     * Le « non renseigné » du navigateur est la **chaîne vide** ; celui du schéma
+     * est `NULL`. Les deux conventions ne se rencontrent jamais, et le résultat
+     * est un refus de l'enregistrement entier (constat M-8 de la porte S2).
+     *
+     * Ce qui se règle ICI, sans ambiguïté et sans rien perdre : une chaîne vide
+     * dans un champ **qui n'est pas du texte** — une date, un nombre, un entier,
+     * un booléen, un horodatage, un document JSON — ne peut rien vouloir dire
+     * d'autre que « non renseigné ». Deux gestes, deux traitements, et la
+     * différence n'est pas cosmétique :
+     *
+     *  · à la **création**, le champ est **omis** : la base applique sa valeur
+     *    par défaut, qui est précisément ce que « non renseigné » veut dire pour
+     *    elle. Envoyer `null` serait refusé sur une colonne non nulle à défaut
+     *    (`mco_actions.avancement`, `scenarios_pra.etapes_pca`, `mappings.masque`) ;
+     *  · à la **modification**, il part en `null` : c'est ainsi qu'on VIDE une
+     *    date déjà saisie. Si la colonne refuse le vide, le serveur le dit et le
+     *    bandeau le montre — plutôt que d'omettre le champ en silence et de
+     *    laisser l'écran afficher un vide que la base ne contient pas.
+     *
+     * Ce qui NE se règle pas ici, et qu'il faut dire : les colonnes **texte
+     * énumérées** (`prestataires.criticite`, `traitements.base_legale`,
+     * `documents.type`…) refusent aussi la chaîne vide, et de l'extérieur rien ne
+     * les distingue d'un champ de texte libre où `''` est une valeur légitime que
+     * le serveur conserve à dessein. Convertir tout le texte en `null` détruirait
+     * cette distinction au passage. L'arbitrage appartient au schéma et à l'API :
+     * admettre `''` dans les `check`, ou convertir côté serveur là où il sait
+     * qu'une colonne est énumérée.
+     */
+    function familleDuChamp(collection, champ) {
+        const e = modele && modele.entites && modele.entites[collection];
+        const c = e && e.champs && e.champs[champ];
+        return c ? c.type : null;
+    }
+
+    // Rend `undefined` quand le champ doit être OMIS du corps.
+    function valeurPourLeServeur(collection, champ, valeur, creation) {
+        if (valeur !== "") return valeur;
+        const famille = familleDuChamp(collection, champ);
+        if (famille === null || famille === "texte") return valeur;
+        return creation ? undefined : null;
+    }
+
+    function corpsDe(collection, enregistrement, creation) {
         const acceptes = champsAcceptes(collection);
         const champs = {};
         Object.keys(enregistrement).forEach(k => {
             if (k === "id" || k === "updatedAt" || k === "_version" || k === "_versionMiseEnOeuvre") return;
             if (enregistrement[k] === undefined) return;
             if (acceptes && !acceptes.has(k)) { champsRefuses.add(collection + "." + k); return; }
-            champs[k] = enregistrement[k];
+            const valeur = valeurPourLeServeur(collection, k, enregistrement[k], creation === true);
+            if (valeur !== undefined) champs[k] = valeur;
         });
         return champs;
+    }
+
+    /**
+     * ÉCRITURE CIBLÉE : le corps d'une MODIFICATION ne porte que les champs qui
+     * ont réellement changé.
+     *
+     * ── Pourquoi (constat M-1 de la porte S2) ────────────────────────────────
+     *
+     * L'API a une sémantique **partielle** : « seuls les champs présents sont
+     * écrits ». Envoyer l'enregistrement entier était donc sans effet visible…
+     * sauf sur l'entité SCINDÉE `mesures`. Le serveur traite avec soin le cas
+     * qu'il nomme lui-même « le cas NOMINAL d'une filiale qui évalue un contrôle
+     * du socle Groupe » : si aucun champ de la table principale ne change, il ne
+     * touche pas `mesure_catalogue` et se contente d'un contrôle de version en
+     * lecture. Mais tant que le client renvoyait `nom` et `description`
+     * inchangés, cette branche était **inatteignable** : l'`update` sur la ligne
+     * de portée Groupe partait, la RLS le refusait, et la filiale recevait un
+     * 403. Le pivot était inopérant là où il a été inventé.
+     *
+     * Envoyer la différence n'est donc pas une optimisation : c'est ce qui rend
+     * la scission `mesure_catalogue` / `mesure_mise_en_oeuvre` utilisable, et
+     * donc les vingt filiales comparables (`PLAN_SERVEUR` §2.2).
+     *
+     * ── Ce que la différence ne fait PAS ─────────────────────────────────────
+     *
+     * Un champ **disparu** de l'enregistrement n'est pas envoyé à `null` : le
+     * comportement est le même qu'avant la bascule (un champ absent n'était déjà
+     * pas transmis), et deviner qu'une clé absente vaut « efface-moi » ferait
+     * échouer toute colonne non nulle. Aucun module ne supprime de clé : ils
+     * posent `null` ou `""` explicitement, et cela part bien.
+     */
+    function corpsModifieDe(collection, id, enregistrement) {
+        const complet = corpsDe(collection, enregistrement);
+        const connu = valeurs[collection].get(id);
+        if (!connu) return complet;      // valeur de référence perdue : on renvoie tout
+        const partiel = {};
+        Object.keys(complet).forEach(k => {
+            if (canonique(complet[k]) !== canonique(connu[k])) partiel[k] = complet[k];
+        });
+        return partiel;
+    }
+
+    /* =====================================================================
+       ADOPTION DE L'IDENTIFIANT RENDU PAR LE SERVEUR
+    ===================================================================== */
+
+    /**
+     * Le serveur peut imposer son propre identifiant à la création. Le modèle
+     * navigateur, lui, porte ses clés étrangères **en texte** dans les
+     * enregistrements (`action.risque_id`, `evaluation.mesure_ids[]`,
+     * `actif.dependances[].to`, `mapping.refs`…). Adopter un identifiant sans
+     * réécrire ces références laisserait des liens pointant dans le vide — la
+     * classe de défaut que le passage en base était censé rendre impossible.
+     *
+     * Le remplacement est donc fait **partout**, par parcours des valeurs, sans
+     * liste de champs écrite à la main : la même mécanique que le tri des
+     * créations, et pour la même raison — une liste écrite à la main est une
+     * omission qui attend.
+     */
+    function renommer(collection, ancien, nouveau) {
+        if (!ancien || !nouveau || ancien === nouveau) return;
+        const data = donnees();
+        if (!data) return;
+
+        const enr = (data[collection] || []).find(x => x && x.id === ancien);
+        if (enr) enr.id = nouveau;
+
+        // Références portées par les autres enregistrements, tous niveaux.
+        const remplacer = (objet) => {
+            Object.keys(objet).forEach(k => {
+                const v = objet[k];
+                if (typeof v === "string") { if (v === ancien && k !== "id") objet[k] = nouveau; return; }
+                if (Array.isArray(v)) {
+                    for (let i = 0; i < v.length; i++) {
+                        if (typeof v[i] === "string") { if (v[i] === ancien) v[i] = nouveau; }
+                        else if (v[i] && typeof v[i] === "object") remplacer(v[i]);
+                    }
+                    return;
+                }
+                if (v && typeof v === "object") remplacer(v);
+            });
+        };
+        collections.forEach(c => (data[c] || []).forEach(x => { if (x && typeof x === "object") remplacer(x); }));
+
+        // Instantané de référence, versions, blocages, dérivés, propagations.
+        [reference, valeurs, versions].forEach(carte => {
+            const m = carte[collection];
+            if (m && m.has(ancien)) { m.set(nouveau, m.get(ancien)); m.delete(ancien); }
+        });
+        [bloques, derives].forEach(set => {
+            if (set.has(cle(collection, ancien))) { set.delete(cle(collection, ancien)); set.add(cle(collection, nouveau)); }
+        });
+        if (propagations.has(ancien)) { propagations.set(nouveau, propagations.get(ancien)); propagations.delete(ancien); }
+        propagations.forEach(ids => { if (ids.has(ancien)) { ids.delete(ancien); ids.add(nouveau); } });
+
+        // Une fiche ouverte pointait peut-être l'ancien identifiant : sans cela,
+        // l'écran deviendrait « Page introuvable » au prochain rafraîchissement.
+        try {
+            if (location.hash.indexOf(ancien) !== -1) {
+                history.replaceState(null, "", location.hash.split(ancien).join(nouveau));
+            }
+        } catch (e) { /* pas de fenêtre : rien à recaler */ }
+    }
+
+    /**
+     * Crée en proposant l'identifiant local, et se replie sur un identifiant
+     * imposé par le serveur si celui-ci refuse la proposition. Le repli n'a lieu
+     * qu'une fois par session : ensuite, plus rien n'est proposé.
+     */
+    async function creerAdaptatif(collection, id, champs) {
+        if (!identifiantImposeParLeServeur) {
+            try {
+                return await Api.creer(collection, id, champs);
+            } catch (e) {
+                const refusDeForme = e instanceof Api.ErreurApi && e.statut === 400;
+                if (!refusDeForme) throw e;
+                const reponse = await Api.creer(collection, null, champs);
+                identifiantImposeParLeServeur = true;
+                console.info("Le serveur impose ses identifiants : les identifiants locaux sont adoptés à la création.");
+                return reponse;
+            }
+        }
+        return await Api.creer(collection, null, champs);
     }
 
     /* =====================================================================
@@ -259,24 +456,30 @@ const Sync = (() => {
         const differees = new Set();
         propagations.forEach(ids => ids.forEach(id => differees.add(id)));
 
+        // ⚠️ Un enregistrement BLOQUÉ (conflit non résolu) est classé comme les
+        //    autres, avec un drapeau. Il n'est pas ESCAMOTÉ du différentiel.
+        //    C'était le cœur du constat B-2 : escamoté, il ne comptait plus dans
+        //    « des modifications en attente ? », l'avertissement de fermeture se
+        //    taisait et l'écran affirmait que tout était enregistré. Le blocage
+        //    s'applique désormais à un seul endroit : au moment d'écrire.
         collections.forEach(c => {
             const presents = new Set();
             const liste = Array.isArray(data[c]) ? data[c] : [];
             liste.forEach(enr => {
                 if (!enr || !enr.id) return;
                 presents.add(enr.id);
-                if (bloques.has(cle(c, enr.id))) return;
+                const bloque = bloques.has(cle(c, enr.id));
                 const texte = canonique(enr);
                 if (!reference[c].has(enr.id)) {
-                    creations.push({ collection: c, id: enr.id, enregistrement: enr });
+                    creations.push({ collection: c, id: enr.id, enregistrement: enr, bloque: bloque });
                 } else if (reference[c].get(enr.id) !== texte) {
                     if (c === "evaluations" && differees.has(enr.id)) return;
-                    modifications.push({ collection: c, id: enr.id, enregistrement: enr });
+                    modifications.push({ collection: c, id: enr.id, enregistrement: enr, bloque: bloque });
                 }
             });
             reference[c].forEach((_texte, id) => {
-                if (!presents.has(id) && !bloques.has(cle(c, id))) {
-                    suppressions.push({ collection: c, id: id });
+                if (!presents.has(id)) {
+                    suppressions.push({ collection: c, id: id, bloque: bloques.has(cle(c, id)) });
                 }
             });
         });
@@ -336,9 +539,14 @@ const Sync = (() => {
         return ordonnees;
     }
 
+    // Vrai dès qu'une saisie n'est pas au serveur — **enregistrements bloqués
+    // compris**. C'est ce que lit `beforeunload`, et ce que l'écran Paramètres
+    // affiche : une saisie bloquée est une saisie non enregistrée, et le dire
+    // autrement serait le mensonge que le constat B-2 a relevé.
     function aDesModificationsEnAttente() {
         const d = calculerDifferentiel();
-        return d.creations.length > 0 || d.modifications.length > 0 || d.suppressions.length > 0 || propagations.size > 0;
+        return d.creations.length > 0 || d.modifications.length > 0 ||
+            d.suppressions.length > 0 || propagations.size > 0 || bloques.size > 0;
     }
 
     // Collections dont le NOMBRE d'enregistrements local diffère légitimement de
@@ -367,6 +575,22 @@ const Sync = (() => {
     // exigences en mémoire (pour que l'écran soit juste tout de suite) ; le
     // serveur refera le calcul dans UNE transaction, et c'est son résultat qui
     // fait foi.
+    /**
+     * Déclare un enregistrement **dérivé** : recalculé par l'application, jamais
+     * saisi par l'utilisateur. Le point d'historique quotidien du tableau de bord
+     * en est un.
+     *
+     * Constat m-5 : deux sessions ouvertes le même jour créent chacune le point
+     * du jour, l'unicité de la date en refuse un, et l'utilisateur reçoit un
+     * bandeau « 1 modification non enregistrée — Point d'historique » parfaitement
+     * anodin. Quotidien, il apprend à le masquer d'un geste — et le geste appris
+     * sur un faux positif finit par s'appliquer à un vrai conflit. Un refus sur
+     * un enregistrement dérivé est donc **absorbé** : la copie locale est
+     * abandonnée, le sondage rapportera celle du serveur, et rien n'est perdu
+     * puisque rien n'a été saisi.
+     */
+    function marquerDerive(collection, id) { derives.add(cle(collection, id)); }
+
     function marquerPropagation(mesureId, evaluationIds) {
         if (!mesureId) return;
         const set = propagations.get(mesureId) || new Set();
@@ -386,8 +610,13 @@ const Sync = (() => {
         if (minuteurEcriture) { clearTimeout(minuteurEcriture); minuteurEcriture = null; }
 
         const diff = calculerDifferentiel();
-        if (diff.creations.length === 0 && diff.modifications.length === 0 &&
-            diff.suppressions.length === 0 && propagations.size === 0) {
+        const aEcrire = diff.creations.concat(diff.modifications, diff.suppressions)
+            .filter(i => !i.bloque).length;
+        if (aEcrire === 0 && propagations.size === 0) {
+            // Il peut rester des enregistrements bloqués : le bandeau les dit,
+            // et `aDesModificationsEnAttente()` les compte. Simplement, rien
+            // n'est à envoyer tant qu'ils n'ont pas été rechargés.
+            rendreBandeau();
             return { ok: true, vide: true };
         }
 
@@ -419,6 +648,9 @@ const Sync = (() => {
     /** Le corps d'un cycle : créations, modifications, suppressions, composites. */
     async function appliquer(diff) {
         let echecs = 0;
+        // Le seul endroit où un blocage a un effet : on n'écrit pas. Partout
+        // ailleurs, l'enregistrement bloqué reste compté et reste visible.
+        const actifs = (liste) => liste.filter(i => !i.bloque);
 
         // 1. Créations. L'ordre des collections place le plus souvent l'entité
         //    référencée avant celle qui la référence — mais pas toujours : une
@@ -426,13 +658,13 @@ const Sync = (() => {
         //    qu'une liste de dépendances écrite à la main — « une liste écrite à
         //    la main est une omission qui attend » —, l'ordre est déduit des
         //    identifiants réellement cités, et un repassage rattrape le reste.
-        echecs += await ecrireParPasses(ordonnerCreations(diff.creations), ecrireCreation);
+        echecs += await ecrireParPasses(ordonnerCreations(actifs(diff.creations)), ecrireCreation);
 
         // 2. Modifications. Elles précèdent les suppressions à dessein : c'est
         //    ainsi qu'un délien (une évaluation qui lâche sa mesure, une action
         //    dont `mesure_id` passe à null) part AVANT la suppression de la
         //    mesure, dont les références sont en `restrict` côté schéma.
-        for (const item of diff.modifications) {
+        for (const item of actifs(diff.modifications)) {
             if (!await ecrireModification(item)) echecs++;
         }
 
@@ -440,7 +672,7 @@ const Sync = (() => {
         //    est référencé. Même repassage que pour les créations, et pour la
         //    même raison. Les cascades du schéma peuvent avoir déjà fait le
         //    travail — un 404 est alors un succès, pas un échec.
-        echecs += await ecrireParPasses(diff.suppressions.slice().reverse(), ecrireSuppression);
+        echecs += await ecrireParPasses(actifs(diff.suppressions).reverse(), ecrireSuppression);
 
         // 4. Opérations composites, une fois l'état de leurs éléments à jour.
         for (const mesureId of Array.from(propagations.keys())) {
@@ -489,13 +721,16 @@ const Sync = (() => {
     async function ecrireCreation(item, definitif) {
         const { collection, id, enregistrement } = item;
         try {
-            const reponse = await Api.creer(collection, id, corpsDe(collection, enregistrement));
+            const reponse = await creerAdaptatif(collection, id, corpsDe(collection, enregistrement, true));
             const rendu = reponse && reponse.enregistrement;
-            versions[collection].set(id, {
+            const idFinal = (rendu && typeof rendu.id === "string" && rendu.id !== "") ? rendu.id : id;
+            if (idFinal !== id) renommer(collection, id, idFinal);
+            item.id = idFinal;
+            versions[collection].set(idFinal, {
                 v: (rendu && typeof rendu._version === "number") ? rendu._version : 1,
                 vmo: (rendu && typeof rendu._versionMiseEnOeuvre === "number") ? rendu._versionMiseEnOeuvre : null
             });
-            alignerReference(collection, id, enregistrement);
+            alignerReference(collection, idFinal, enregistrement);
             return true;
         } catch (e) {
             if (!definitif && peutAttendre(e)) return "differee";
@@ -514,8 +749,18 @@ const Sync = (() => {
                 message: "La version de cet enregistrement n'est pas connue de cette session."
             }), "modification", enregistrement);
         }
+        // Le verrou de la mise en oeuvre est transmis DÈS QU'IL EST CONNU : c'est
+        // la moitié du constat M-2 qui revient au navigateur. L'autre moitié —
+        // le serveur qui écrit sans clause de version quand le champ est absent —
+        // ne peut pas être fermée d'ici (voir le rapport).
+        const champs = corpsModifieDe(collection, id, enregistrement);
+        if (Object.keys(champs).length === 0 && typeof v.vmo !== "number") {
+            // Rien à écrire : la différence était un champ que le serveur ignore.
+            alignerReference(collection, id, enregistrement);
+            return true;
+        }
         try {
-            const reponse = await Api.modifier(collection, id, v.v, corpsDe(collection, enregistrement),
+            const reponse = await Api.modifier(collection, id, v.v, champs,
                 (typeof v.vmo === "number") ? v.vmo : undefined);
             const rendu = reponse && reponse.enregistrement;
             versions[collection].set(id, {
@@ -593,6 +838,18 @@ const Sync = (() => {
         if (erreur.estPassagere()) {
             panneReseau = true;
             return false;
+        }
+
+        // Enregistrement DÉRIVÉ : aucune saisie n'est en jeu (voir `marquerDerive`).
+        // On abandonne la valeur locale plutôt que d'alerter sur un faux positif ;
+        // le sondage rapportera celle du serveur, qui vaut exactement autant.
+        if (derives.has(cle(collection, id))) {
+            const connu = valeurs[collection].get(id);
+            if (connu) revenirALaValeurServeur(collection, id, "modification");
+            else revenirALaValeurServeur(collection, id, "creation");
+            derives.delete(cle(collection, id));
+            console.info("Enregistrement dérivé abandonné (le serveur détient le sien) :", collection, id);
+            return true;
         }
 
         if (erreur.estRefusDroit()) {
@@ -687,6 +944,7 @@ const Sync = (() => {
         source.remplacer(neuf);
         adopterJeu(donnees());
         incidents.length = 0;
+        bandeauReduit = false;
         propagations.clear();
         champsRefuses.clear();
         rendreBandeau();
@@ -702,6 +960,13 @@ const Sync = (() => {
     function demarrerSondage() {
         if (minuteurSondage) return;
         minuteurSondage = setInterval(() => { sonder(); }, SONDAGE_MS);
+    }
+
+    // Recule l'horodatage demandé de la marge de recouvrement (voir M-7).
+    function avecRecouvrement(horodatage) {
+        const t = Date.parse(horodatage);
+        if (Number.isNaN(t)) return horodatage;
+        return new Date(t - RECOUVREMENT_SONDAGE_MS).toISOString();
     }
 
     // Recharge sans rien perdre : ce qui attend d'être écrit part d'abord.
@@ -727,7 +992,7 @@ const Sync = (() => {
 
         let resultat;
         try {
-            resultat = await Api.rafraichir(horodatageServeur);
+            resultat = await Api.rafraichir(avecRecouvrement(horodatageServeur));
         } catch (e) {
             return;   // le sondage est un confort : son échec ne dérange personne
         }
@@ -829,14 +1094,29 @@ const Sync = (() => {
         const h = hote();
         if (!h) return;
 
-        if (incidents.length === 0 && !panneReseau && champsRefuses.size === 0) {
+        if (incidents.length === 0 && bloques.size === 0 && !panneReseau && champsRefuses.size === 0) {
             h.innerHTML = "";
             return;
         }
 
         const morceaux = [];
 
-        if (incidents.length > 0) {
+        // ── LA TRACE NE S'ÉTEINT PAS ────────────────────────────────────────
+        // La croix « Masquer » réduit le détail ; tant qu'un enregistrement est
+        // bloqué, une ligne compacte subsiste, avec le remède. Le constat B-2
+        // portait exactement là : la croix effaçait la seule trace, l'écriture
+        // restait bloquée pour toujours, et l'application affirmait ensuite que
+        // tout était enregistré.
+        if (bloques.size > 0 && (bandeauReduit || incidents.length === 0)) {
+            morceaux.push(
+                '<div class="quota-banner" role="alert">' +
+                '<span class="quota-ico">!</span>' +
+                '<span class="quota-text"><b>' + bloques.size + ' enregistrement(s) non enregistré(s)</b> — ' +
+                'la saisie reste à l’écran mais n’est pas partie au serveur.</span>' +
+                '<button id="sync-detail" class="reminder-btn">Voir le détail</button>' +
+                '<button id="sync-recharger" class="reminder-btn">Recharger les données</button>' +
+                '</div>');
+        } else if (incidents.length > 0) {
             const rechargeable = incidents.some(i => i.rechargeable);
             const lignes = incidents.slice(-5).map(i => {
                 const tete = i.type === "conflit" ? "Modifié entre-temps"
@@ -880,15 +1160,25 @@ const Sync = (() => {
         if (r) r.onclick = async () => {
             r.disabled = true; r.textContent = "Rechargement…";
             try {
-                await recharger();
+                // m-6 : ce qui attend d'être écrit PART D'ABORD — sans quoi le
+                // rechargement emporterait les saisies faites sur d'autres fiches.
+                await rechargerApresEcriture();
                 if (window.showToast) window.showToast("Données rechargées depuis le serveur.", "success");
             } catch (e) {
                 r.disabled = false; r.textContent = "Recharger les données";
                 if (window.showToast) window.showToast("Rechargement impossible : serveur injoignable.", "error");
             }
         };
+        const d = document.getElementById("sync-detail");
+        if (d) d.onclick = () => { bandeauReduit = false; rendreBandeau(); };
         const f = document.getElementById("sync-fermer");
-        if (f) f.onclick = () => { incidents.length = 0; rendreBandeau(); };
+        if (f) f.onclick = () => {
+            // Masquer le DÉTAIL, jamais le fait. Si plus rien n'est bloqué, le
+            // bandeau peut disparaître : il n'y a plus rien à dire.
+            incidents.length = 0;
+            bandeauReduit = bloques.size > 0;
+            rendreBandeau();
+        };
         const e = document.getElementById("sync-reessayer");
         if (e) e.onclick = () => { panneReseau = false; rendreBandeau(); pousser(); };
     }
@@ -956,7 +1246,7 @@ const Sync = (() => {
 
     return {
         brancher, demarrer, jeuDeDonnees, adopterJeu,
-        marquerModification, marquerPropagation, pousser, cycle,
+        marquerModification, marquerPropagation, marquerDerive, pousser, cycle,
         recharger, sonder, demarrerSondage, installerFilets,
         etat, surChangementEtat, aDesModificationsEnAttente, rendreBandeau
     };

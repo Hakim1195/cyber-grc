@@ -64,16 +64,22 @@ const Router = (() => {
         const app = document.getElementById("app");
         if (!app) return;
 
+        // Le gestionnaire est branché en JavaScript, pas par un attribut `onclick`
+        // en ligne : la politique de sécurité de contenu du frontal (`script-src
+        // 'self'`, sans `unsafe-inline`) refuse les gestionnaires en ligne, qui
+        // deviennent alors inertes en silence — constat M-6 de la porte S2.
         app.innerHTML = `
             <section class="page" style="text-align: center; margin-top: 10vh;">
                 <div style="font-size: 4rem; margin-bottom: 20px;"></div>
                 <h1>Page introuvable</h1>
                 <p style="color: var(--text-muted); margin-bottom: 20px;">La page que vous recherchez n'existe pas ou a été déplacée.</p>
-                <button onclick="Router.navigateTo('/dashboard')" style="background-color: var(--primary);">
+                <button id="retour-tableau-de-bord" style="background-color: var(--primary);">
                     Retour au tableau de bord
                 </button>
             </section>
         `;
+        const retour = document.getElementById("retour-tableau-de-bord");
+        if (retour) retour.onclick = () => navigateTo("/dashboard");
     }
 
     return {

@@ -21,7 +21,13 @@
  *    **engendrées**, clés primaires, cloisonnement, RLS — est **découvert dans
  *    le catalogue** (§5) ;
  *  · un **garde-fou** (§6) recoupe les deux et **fait échouer le démarrage**
- *    si le registre et le schéma divergent (contrôle S16).
+ *    quand le registre nomme quelque chose que le schéma ne porte plus, ou
+ *    quand une table perd son cloisonnement (contrôle S16). Il attrape des
+ *    **noms et des formes**, et rien de plus : la disparition d'une colonne
+ *    métier ordinaire lui échappe, et le §6 dit précisément pourquoi. Ne pas
+ *    lire cette ligne comme « le registre et le schéma ne peuvent pas
+ *    diverger » — c'est exactement la faute que `CONVENTIONS.md` §17.5
+ *    interdit, et la porte S2 l'a relevée ici même (constat m-4).
  *
  * ════════════════════════════════════════════════════════════════════════
  *  2. Le risque projet P1, et la parade
@@ -92,6 +98,7 @@ import type {
   DescriptionEntite,
   DescriptionLiaison,
   DescriptionTable,
+  DescriptionUnicite,
   Diagnostic,
   Enregistrement,
   FamilleType,
@@ -130,6 +137,21 @@ export const BORNES = Object.freeze({
   profondeurJson: 12,
   /** Nœuds d'un document JSON soumis en écriture. */
   noeudsJson: 20000,
+  /**
+   * Marge de sûreté du repère de sondage, en millisecondes (constat M-7).
+   *
+   * Elle doit couvrir la **durée maximale d'une transaction d'écriture**, car
+   * une écriture estampille `modifie_le` à l'ouverture de sa transaction et
+   * devient visible à sa validation. Les deux bornes qui l'encadrent sont
+   * posées à la connexion par `src/db/pool.ts` (`statement_timeout`,
+   * `idle_in_transaction_session_timeout`) et valent quelques dizaines de
+   * secondes. Soixante secondes les couvrent largement.
+   *
+   * Ce que la marge coûte : quelques enregistrements renvoyés pour rien à
+   * chaque sondage. Ce qu'elle évite : qu'une modification validée juste après
+   * une lecture ne soit **jamais** rendue à personne.
+   */
+  margeSondageMs: 60000,
 });
 
 /** Version de schéma du modèle navigateur servie par cette API. */
@@ -624,6 +646,9 @@ interface LigneCatalogue {
  * porte aussi l'état de la RLS, dont le garde-fou du §6 se sert.
  */
 export async function chargerCatalogue(client: PoolClient): Promise<Catalogue> {
+  const videsInterdits = await decouvrirVidesInterdits(client);
+  const unicites = await decouvrirUnicites(client);
+
   const { rows } = await client.query<LigneCatalogue>(`
     select c.relname                                              as table,
            a.attname                                              as colonne,
@@ -692,6 +717,8 @@ export async function chargerCatalogue(client: PoolClient): Promise<Catalogue> {
       obligatoire: ligne.obligatoire,
       engendree: ligne.engendree,
       avecDefaut: ligne.avec_defaut,
+      videInterdit:
+        famille === 'texte' && videsInterdits.has(`${ligne.table}.${ligne.colonne}`),
     });
     if (ligne.cle_primaire) table.clePrimaire.push(ligne.colonne);
   }
@@ -713,7 +740,135 @@ export async function chargerCatalogue(client: PoolClient): Promise<Catalogue> {
   }
 
   etatsRlsParCatalogue.set(tables, etatsRls);
-  return { tables, decouvertLe: new Date() };
+  return { tables, unicites, decouvertLe: new Date() };
+}
+
+/* ---------------------------------------------------------------------
+ *  Le « non renseigné » du navigateur contre celui du schéma (M-8)
+ * ------------------------------------------------------------------- */
+
+/**
+ * Découvre les colonnes texte dont le schéma **refuse la chaîne vide**.
+ *
+ * ── Le défaut que cela ferme ───────────────────────────────────────────
+ *
+ * Le modèle navigateur n'a jamais porté de `null` : son « non renseigné » est
+ * la chaîne vide, et c'est ce que les formulaires envoient — l'option
+ * « — Non évaluée — » d'un prestataire, le « — À déterminer — » d'une base
+ * légale RGPD. Le schéma, lui, code le non-renseigné par `NULL` : ses listes
+ * fermées s'écrivent `colonne is null or colonne = any (array[…])`.
+ *
+ * Les deux conventions ne se rencontraient jamais, et le résultat était le
+ * refus de l'enregistrement **entier** : deux modules — Prestataires et
+ * registre RGPD — étaient inutilisables **par leur propre valeur par défaut**
+ * (porte S2, constat M-8). Chacun avait raison de son côté ; c'est la jointure
+ * qui manquait, et sa place est ici, au bord de l'écriture.
+ *
+ * ── Pourquoi une découverte, et pas une liste ─────────────────────────
+ *
+ * Une liste de colonnes « à convertir » serait exactement l'omission qui
+ * attend du `CONVENTIONS.md` §19.5 : une valeur ajoutée à un `check` par une
+ * migration future ne s'y inscrirait pas toute seule. La règle est donc lue
+ * dans `pg_constraint`, et elle est double :
+ *
+ *  · une liste fermée qui **ne contient pas** `''` refuse la chaîne vide ;
+ *  · un `check (colonne <> '')` la refuse explicitement.
+ *
+ * Deux colonnes échappent d'elles-mêmes à la conversion, et c'est voulu :
+ * `evaluations.statut` et `mesure_mise_en_oeuvre.statut` admettent `''::text`
+ * dans leur liste — c'est leur « non évalué », et il compte.
+ *
+ * ⚠️ Portée exacte, à ne pas surestimer : cette découverte lit le **texte** de
+ * la contrainte. Un `check` qui refuserait la chaîne vide par un autre moyen —
+ * une expression régulière, une fonction — lui échappe. Le filet, là, est le
+ * message d'erreur : le refus reste bruyant et nomme le champ.
+ */
+async function decouvrirVidesInterdits(client: PoolClient): Promise<Set<string>> {
+  const { rows } = await client.query<{ table: string; colonne: string; definition: string }>(`
+    select c.relname       as table,
+           a.attname       as colonne,
+           pg_get_constraintdef(k.oid) as definition
+      from pg_constraint k
+      join pg_class c     on c.oid = k.conrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      join lateral unnest(k.conkey) as cle(numero) on true
+      join pg_attribute a on a.attrelid = c.oid and a.attnum = cle.numero
+     where n.nspname = 'public'
+       and k.contype = 'c'
+  `);
+
+  const interdits = new Set<string>();
+  for (const ligne of rows) {
+    const definition = ligne.definition;
+    const listeFermee = definition.includes('= ANY (ARRAY[');
+    const admetLeVide = definition.includes("''::text");
+    const refuseLeVide = definition.includes("<> ''::text");
+
+    if ((listeFermee && !admetLeVide) || refuseLeVide) {
+      interdits.add(`${ligne.table}.${ligne.colonne}`);
+    }
+  }
+  return interdits;
+}
+
+/* ---------------------------------------------------------------------
+ *  Unicités — pour traduire un 23505 sans construire d'oracle
+ * ------------------------------------------------------------------- */
+
+/**
+ * Découvre les contraintes d'unicité et **si elles portent `filiale_id`**.
+ *
+ * La distinction n'est pas cosmétique : les contrôles d'unicité contournent
+ * délibérément la RLS (`CONVENTIONS.md` §19.1). Une unicité qui porte
+ * `filiale_id` ne peut donc être heurtée que par une ligne **de la filiale de
+ * l'appelant**, qu'il a le droit de lire — le message peut être précis. Une
+ * unicité qui ne le porte pas est de portée Groupe, et le doublon peut venir
+ * d'une ligne invisible : le message doit rester muet.
+ */
+async function decouvrirUnicites(client: PoolClient): Promise<Map<string, DescriptionUnicite>> {
+  const { rows } = await client.query<{
+    nom: string;
+    table: string;
+    colonnes: string[];
+    cle_primaire: boolean;
+  }>(`
+    select k.conname                                as nom,
+           c.relname                                as table,
+           -- Le « ::text » n'est pas décoratif : attname est de type « name »,
+           -- et le pilote pg n'a pas d'analyseur pour « name[] » — il rendrait
+           -- la chaîne brute {a,b} au lieu d'un tableau. Le défaut serait
+           -- SILENCIEUX : porteFiliale resterait juste par accident (une
+           -- recherche de sous-chaîne), et la relecture d'un doublon itérerait
+           -- sur des caractères. Constaté en jouant le cas, pas en le lisant.
+           array_agg(a.attname::text order by cle.rang) as colonnes,
+           (k.contype = 'p')                        as cle_primaire
+      from pg_constraint k
+      join pg_class c     on c.oid = k.conrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      join lateral unnest(k.conkey) with ordinality as cle(numero, rang) on true
+      join pg_attribute a on a.attrelid = c.oid and a.attnum = cle.numero
+     where n.nspname = 'public'
+       and k.contype in ('p', 'u')
+     group by k.conname, c.relname, k.contype
+  `);
+
+  const unicites = new Map<string, DescriptionUnicite>();
+  for (const ligne of rows) {
+    if (!Array.isArray(ligne.colonnes)) {
+      throw new ErreurRegistre([
+        `Unicité ${ligne.nom} : le catalogue rend ses colonnes sous une forme inattendue ` +
+          `(${typeof ligne.colonnes}). La découverte doit être bruyante, pas approximative.`,
+      ]);
+    }
+    unicites.set(ligne.nom, {
+      nom: ligne.nom,
+      table: ligne.table,
+      colonnes: ligne.colonnes,
+      clePrimaire: ligne.cle_primaire,
+      porteFiliale: ligne.colonnes.includes('filiale_id'),
+    });
+  }
+  return unicites;
 }
 
 /**
@@ -999,7 +1154,6 @@ function champDeColonne(d: DescriptionEntite, nomTable: string, nomColonne: stri
  *  §8 — LE DÉPÔT
  * ===================================================================== */
 
-/** Options de création : la portée d'une ligne d'une table mixte. */
 export interface OptionsCreation {
   /**
    * `filiale` (défaut) : la ligne appartient à la filiale active.
@@ -1008,6 +1162,32 @@ export interface OptionsCreation {
    * chemin, pas celui-ci.
    */
   readonly portee?: 'filiale' | 'groupe';
+
+  /**
+   * Identifiant **imposé** par l'appelant, au lieu d'être engendré.
+   *
+   * ⚠️ **Réservé au chemin de reprise, et hors de portée du réseau.** Aucune
+   * route HTTP ne renseigne ce champ, et c'est une propriété de sécurité, pas
+   * une commodité — c'est le constat **M-3** de la porte S2 :
+   *
+   *   > l'unicité de la clé primaire ignore la RLS (`CONVENTIONS.md` §19.1).
+   *   > Laisser le client choisir son identifiant, c'est lui donner un
+   *   > **oracle d'existence inter-filiales en une requête** : identifiant pris
+   *   > ailleurs → 409, identifiant libre → 201. Et une variante silencieuse
+   *   > qui, en joignant une liaison invalide, annule la transaction dans les
+   *   > deux cas tout en rendant deux réponses distinctes.
+   *
+   * Le §8.7 de ce fichier refuse par ailleurs de construire cet oracle sur le
+   * chemin de lecture ; le raisonnement était juste et n'avait été appliqué
+   * qu'à une des deux routes. En engendrant l'identifiant côté serveur, la
+   * branche qui dépendait de lui **disparaît** : il n'y a plus rien à observer.
+   *
+   * Le round-trip exact d'un export `grc-backup` (`CONVENTIONS.md` §2) reste
+   * possible — c'est à cela que sert ce champ — mais il passera par le moteur
+   * d'import **transactionnel et cloisonné** du lot L7, qui est un chemin
+   * d'administration, pas la création d'un enregistrement à l'unité.
+   */
+  readonly identifiantImpose?: string | null;
 }
 
 export class Depot {
@@ -1059,6 +1239,7 @@ export class Depot {
     perimetre: PerimetreSession,
   ): Promise<JeuDeDonnees> {
     const filiale = this.filialeActive(perimetre);
+    const horodatage = await this.repereDeSondage(client);
     const collections = {} as Record<NomEntite, Enregistrement[]>;
     const volumes = {} as Record<NomEntite, number>;
     let updatedAt: number | null = null;
@@ -1075,13 +1256,7 @@ export class Depot {
       }
     }
 
-    return {
-      schemaVersion: VERSION_SCHEMA,
-      collections,
-      volumes,
-      horodatage: new Date().toISOString(),
-      updatedAt,
-    };
+    return { schemaVersion: VERSION_SCHEMA, collections, volumes, horodatage, updatedAt };
   }
 
   /* ===============================================================
@@ -1104,6 +1279,7 @@ export class Depot {
     depuis: Date,
   ): Promise<Rafraichissement> {
     const filiale = this.filialeActive(perimetre);
+    const horodatage = await this.repereDeSondage(client);
     const modifications: Partial<Record<NomEntite, Enregistrement[]>> = {};
     const volumes = {} as Record<NomEntite, number>;
     let restant: number = BORNES.lignesParSondage;
@@ -1129,7 +1305,45 @@ export class Depot {
       }
     }
 
-    return { horodatage: new Date().toISOString(), modifications, volumes, tronque };
+    return { horodatage, modifications, volumes, tronque };
+  }
+
+  /**
+   * Repère à renvoyer au client comme base de son prochain sondage.
+   *
+   * ── M-7 : pourquoi ce n'est pas `new Date()` ─────────────────────────
+   *
+   * La première rédaction prenait l'heure **après** la lecture, côté serveur.
+   * Un écrivain concurrent estampille `modifie_le` à l'ouverture de **sa**
+   * transaction — donc plus tôt — et valide plus tard : sa modification
+   * portait une date antérieure au repère et devenait invisible au sondage
+   * suivant. Les volumes n'ayant pas bougé, le filet « écart de volume ⇒
+   * rechargement » ne se déclenchait pas non plus, et la modification était
+   * **définitivement perdue pour le lecteur**. Rejoué et mesuré par la porte
+   * S2 ; l'intégrité n'était pas en cause, la fraîcheur l'était — et sur un
+   * tableau de bord de conformité, une valeur périmée lue comme courante est
+   * exactement ce qu'un auditeur regarde.
+   *
+   * Deux corrections, cumulatives :
+   *
+   *  1. l'heure vient de **PostgreSQL**, et c'est celle du **début de la
+   *     transaction** (`transaction_timestamp()`), pas de la fin de la lecture.
+   *     Elle est aussi immunisée contre une dérive d'horloge entre le serveur
+   *     applicatif et la base ;
+   *  2. on lui retranche une **marge** qui couvre la durée maximale d'une
+   *     transaction d'écriture (`BORNES.margeSondageMs`).
+   *
+   * ⚠️ Ce que cela ne fait pas : rendre les **suppressions**. Rien ne les trace
+   * encore (le journal d'audit est le lot L5) ; c'est l'écart de volume qui les
+   * signale, et c'est dit tel quel dans `rafraichir`.
+   */
+  private async repereDeSondage(client: PoolClient): Promise<string> {
+    const { rows } = await client.query<{ t: Date }>('select transaction_timestamp() as t');
+    const debut = rows[0]?.t;
+    const millisecondes =
+      debut instanceof Date ? debut.getTime() : new Date(String(debut ?? '')).getTime();
+    const base = Number.isNaN(millisecondes) ? Date.now() : millisecondes;
+    return new Date(base - BORNES.margeSondageMs).toISOString();
   }
 
   /* ===============================================================
@@ -1141,11 +1355,11 @@ export class Depot {
     perimetre: PerimetreSession,
     entite: NomEntite,
     champs: Enregistrement,
-    identifiantPropose: string | null,
     options: OptionsCreation = {},
   ): Promise<Enregistrement> {
     const d = description(entite);
     const filiale = this.filialeActive(perimetre);
+    this.exigerDroitEcriture(d, perimetre, entite);
     const portee = options.portee ?? 'filiale';
 
     if (portee === 'groupe' && !perimetre.administrationGroupe) {
@@ -1163,14 +1377,29 @@ export class Depot {
     }
     const filialeLigne = portee === 'groupe' ? null : filiale;
 
-    const identifiant = identifiantPropose ?? engendrerIdentifiant(d.prefixe);
+    // L'identifiant vient du serveur, sauf sur le chemin de reprise (voir
+    // OptionsCreation.identifiantImpose : aucune route HTTP ne le renseigne).
+    const identifiant = options.identifiantImpose ?? engendrerIdentifiant(d.prefixe);
     verifierIdentifiant(identifiant);
 
     const { valeurs, liaisons } = this.repartir(d, champs, entite);
 
     // La table principale d'abord : c'est elle qui porte l'identité, et les
     // clés étrangères des autres tables la visent.
-    await this.inserer(client, d.table, identifiant, filialeLigne, valeurs.get(d.table) ?? new Map<string, unknown>(), entite);
+    const principales = valeurs.get(d.table) ?? new Map<string, unknown>();
+    const tentative = await this.avecPointDeReprise(client, 'pr_creation', () =>
+      this.inserer(client, d.table, identifiant, filialeLigne, principales, entite),
+    );
+    if (!tentative.ok) {
+      throw await this.enrichirDoublon(
+        client,
+        tentative.erreur,
+        d.table,
+        principales,
+        filialeLigne,
+        entite,
+      );
+    }
 
     if (d.seconde !== undefined) {
       // Mise en oeuvre du contrôle : toujours LOCALE à la filiale active,
@@ -1223,10 +1452,37 @@ export class Depot {
   ): Promise<Enregistrement> {
     const d = description(entite);
     const filiale = this.filialeActive(perimetre);
+    this.exigerDroitEcriture(d, perimetre, entite);
     verifierIdentifiant(identifiant);
 
     const { valeurs, liaisons } = this.repartir(d, champs, entite);
-    const principales = valeurs.get(d.table) ?? new Map<string, unknown>();
+    let principales = valeurs.get(d.table) ?? new Map<string, unknown>();
+
+    // ── M-1 : CE QUI N'A PAS CHANGÉ NE S'ÉCRIT PAS ─────────────────────
+    //
+    // Sur une entité SCINDÉE, la définition (Groupe) et la mise en oeuvre
+    // (filiale) sont écrites par des gens qui n'ont pas les mêmes droits. Or
+    // `save()` côté navigateur n'a jamais su dire ce qui a bougé : il envoie
+    // l'enregistrement ENTIER. Les champs `nom` et `description` du catalogue
+    // partaient donc à chaque évaluation, la RLS refusait l'écriture d'une
+    // ligne de portée Groupe, et la branche « cas nominal » ci-dessous — écrite
+    // pour ce cas précis — était INATTEIGNABLE depuis le navigateur : du code
+    // mort qui se croyait fonctionnel. C'est le constat M-1 de la porte S2, et
+    // ma propre démonstration l'annonçait comme fonctionnel : l'écart entre la
+    // preuve et l'usage réel est le vrai enseignement de ce constat.
+    //
+    // La règle, énoncée comme un principe et non comme un rustinage :
+    // **un enregistrement qui ne change pas la définition ne doit pas exiger le
+    // droit de l'écrire.** On relit donc les colonnes visées et on retire du
+    // lot celles dont la valeur est déjà celle-là.
+    //
+    // Restreint aux entités scindées, et volontairement : sur les tables
+    // MIXTES ordinaires (`documents`, `personnes`), une ligne de portée Groupe
+    // n'a pas de moitié locale — la refuser est le comportement juste, pas un
+    // défaut à contourner.
+    if (d.seconde !== undefined && principales.size > 0) {
+      principales = await this.retirerLesInchangees(client, d.table, identifiant, principales);
+    }
 
     // ── LE CŒUR DU LOT ─────────────────────────────────────────────────
     // « update … where id = $1 and version = $2 ». Zéro ligne = refus, et
@@ -1327,6 +1583,7 @@ export class Depot {
     version: number | null,
   ): Promise<void> {
     const d = description(entite);
+    this.exigerDroitEcriture(d, perimetre, entite);
     verifierIdentifiant(identifiant);
 
     if (d.seconde !== undefined) {
@@ -2064,6 +2321,31 @@ export class Depot {
    * l'avait pas encore évaluée — le cas d'un contrôle du socle Groupe qu'une
    * filiale évalue pour la première fois.
    */
+  /**
+   * Écrit la **mise en œuvre** d'un contrôle dans la filiale active.
+   *
+   * ── M-2 : LE VERROU N'EST PLUS FACULTATIF ────────────────────────────
+   *
+   * La première rédaction n'ajoutait la clause `and version = $n` que si
+   * l'appelant avait bien voulu fournir un numéro. Absent, l'`update` écrasait
+   * en silence et rendait 200 : le risque projet **P1**, rouvert sur la moitié
+   * du modèle qui porte la comparabilité entre filiales (porte S2, constat
+   * M-2). Pire, le cas nominal l'atteignait sans rien forger — deux personnes
+   * ouvrant le même contrôle du socle que la filiale n'a pas encore évalué
+   * détiennent toutes deux `_versionMiseEnOeuvre: null`.
+   *
+   * Il n'y a donc plus de chemin sans arbitre, et il y en a exactement deux :
+   *
+   * | Ce que l'appelant détient | Ce que le serveur fait | Qui arbitre |
+   * |---|---|---|
+   * | `version = null` — « aucune mise en œuvre » | `insert` | l'**unicité** `(filiale_id, mesure_id)`, que la RLS ne contourne pas (`CONVENTIONS.md` §19.1) |
+   * | `version = n` — « je détiens la version n » | `update … and version = $n` | la clause de version |
+   *
+   * Dans les deux cas, perdre la course rend `GRC03` avec la version réelle,
+   * jamais un 200 muet. Et la résurrection silencieuse a disparu au passage :
+   * un appelant qui annonce une version sur une ligne effacée entre-temps
+   * reçoit un conflit, il ne recrée pas la ligne à son insu.
+   */
   private async majMiseEnOeuvre(
     client: PoolClient,
     nomTable: string,
@@ -2085,11 +2367,26 @@ export class Depot {
     }
     if (affectations.length === 0) return;
 
-    let condition = `${ident('mesure_id')} = $1 and ${ident('filiale_id')} = $2`;
-    if (version !== null) {
-      parametres.push(version);
-      condition += ` and ${ident('version')} = $${String(parametres.length)}`;
+    // ── Chemin 1 : l'appelant n'a pas de mise en œuvre à modifier ────────
+    // L'unicité (filiale_id, mesure_id) est l'arbitre. Elle ignore la RLS,
+    // mais elle porte `filiale_id` : un doublon vient donc forcément d'une
+    // ligne de la filiale de l'appelant, qu'il peut lire — aucun oracle.
+    if (version === null) {
+      const nouvelles = new Map(valeurs);
+      nouvelles.set('mesure_id', mesureId);
+      const tentative = await this.avecPointDeReprise(client, 'pr_mise_en_oeuvre', () =>
+        this.inserer(client, nomTable, engendrerIdentifiant('MMO'), filiale, nouvelles, entite),
+      );
+      if (tentative.ok) return;
+      if (!estViolationUnicite(tentative.erreur)) throw tentative.erreur;
+      throw await this.conflitMiseEnOeuvre(client, nomTable, mesureId, filiale, entite);
     }
+
+    // ── Chemin 2 : verrouillage optimiste ordinaire ──────────────────────
+    parametres.push(version);
+    const condition =
+      `${ident('mesure_id')} = $1 and ${ident('filiale_id')} = $2 ` +
+      `and ${ident('version')} = $${String(parametres.length)}`;
 
     const resultat = await this.executer(
       client,
@@ -2101,31 +2398,195 @@ export class Depot {
 
     if ((resultat.rowCount ?? 0) > 0) return;
 
-    // Rien de touché : soit la filiale n'évalue pas encore ce contrôle (cas
-    // nominal du socle Groupe), soit la version est périmée. La distinction se
-    // fait par une lecture, pas par une supposition.
+    // Zéro ligne : version périmée, ou mise en œuvre supprimée entre-temps.
+    // Les deux se disent « rechargez », et surtout aucune des deux ne se
+    // traduit par une insertion silencieuse.
+    throw await this.conflitMiseEnOeuvre(client, nomTable, mesureId, filiale, entite);
+  }
+
+  /**
+   * Enrichit un doublon d'une **clé métier** avec l'enregistrement qui l'occupe
+   * déjà — quand, et seulement quand, l'appelant a le droit de le voir.
+   *
+   * ── Ce que cela ferme (constat m-5 de la porte S2) ────────────────────
+   *
+   * Le point d'historique quotidien du tableau de bord porte une unicité sur la
+   * date. Deux sessions ouvertes le même jour produisent donc un `409` parfait,
+   * quotidien et parfaitement anodin — c'est-à-dire une **fausse alerte
+   * apprise**, et le geste appris sur un faux positif s'applique un jour au
+   * vrai. Rendre l'identifiant et la version de la ligne qui existe déjà donne
+   * au client de quoi basculer sur une modification, sans bandeau ni
+   * rechargement complet.
+   *
+   * ── Pourquoi ce n'est pas un oracle ──────────────────────────────────
+   *
+   * L'enrichissement n'a lieu que si l'unicité heurtée **porte `filiale_id`**
+   * (découvert dans le catalogue). La ligne en cause appartient alors
+   * nécessairement à la filiale de l'appelant, donc à son périmètre de lecture :
+   * on ne lui apprend rien qu'un simple rechargement ne lui dirait. Sur une
+   * unicité de portée Groupe — la clé primaire au premier chef — rien n'est
+   * ajouté, et la traduction reste muette (`RAPPORT_S1_TER` §T-8).
+   *
+   * En cas de doute — contrainte inconnue, valeur manquante, ligne illisible —
+   * l'erreur d'origine repart telle quelle. Un enrichissement n'a jamais le
+   * droit de masquer le refus qu'il commente.
+   */
+  private async enrichirDoublon(
+    client: PoolClient,
+    erreur: unknown,
+    nomTable: string,
+    valeurs: ReadonlyMap<string, unknown>,
+    filiale: string | null,
+    entite: NomEntite,
+  ): Promise<unknown> {
+    if (!(erreur instanceof ErreurAccesEntite) || !estViolationUnicite(erreur)) return erreur;
+
+    const nomContrainte = erreur.erreurBase?.['constraint'];
+    if (typeof nomContrainte !== 'string') return erreur;
+
+    const unicite = this.catalogue.unicites.get(nomContrainte);
+    if (unicite === undefined || unicite.clePrimaire || !unicite.porteFiliale) return erreur;
+
+    const conditions: string[] = [];
+    const parametres: unknown[] = [];
+    for (const colonne of unicite.colonnes) {
+      const valeur = colonne === 'filiale_id' ? filiale : valeurs.get(colonne);
+      if (valeur === undefined) return erreur;
+      parametres.push(valeur);
+      conditions.push(`${ident(colonne)} = $${String(parametres.length)}`);
+    }
+
+    let existante: { id: string; version: number | string } | undefined;
+    try {
+      const { rows } = await client.query<{ id: string; version: number | string }>(
+        `select ${ident('id')} as id, ${ident('version')} as version
+           from ${ident(nomTable)} where ${conditions.join(' and ')}`,
+        parametres,
+      );
+      existante = rows[0];
+    } catch {
+      // La transaction est déjà en échec : la relecture peut être refusée.
+      // On rend alors le refus d'origine, ce qui reste exact.
+      return erreur;
+    }
+    if (existante === undefined) return erreur;
+
+    return new ErreurAccesEntite({
+      motif: 'refus_base',
+      message: erreur.message,
+      entite,
+      identifiant: existante.id,
+      versionActuelle: Number(existante.version),
+      erreurBase: erreur.erreurBase,
+      detailJournal:
+        `doublon sur ${nomContrainte} : l'enregistrement ${existante.id} occupe déjà cette clé ` +
+        "dans la filiale de l'appelant",
+    });
+  }
+
+  /**
+   * Joue un travail sous **point de reprise**, pour qu'un refus *attendu* de la
+   * base ne condamne pas la transaction entière.
+   *
+   * Nécessaire dès qu'on se sert d'une contrainte comme d'un arbitre : après un
+   * `23505`, PostgreSQL place la transaction en échec (`25P02`) et refuse toute
+   * requête suivante — y compris la relecture qui doit dire à l'appelant
+   * **quelle** version il lui manque. Sans le point de reprise, un conflit
+   * légitime se présentait en `erreur_interne` 500, ce qui est exactement le
+   * contraire du message attendu.
+   *
+   * La portée du retour arrière est ce seul travail : les écritures déjà faites
+   * dans la transaction survivent, et l'atomicité de l'ensemble reste celle de
+   * `avecTransaction` (contrôle S14) — on rejette ensuite, donc tout est annulé.
+   */
+  private async avecPointDeReprise<T>(
+    client: PoolClient,
+    nom: string,
+    travail: () => Promise<T>,
+  ): Promise<{ ok: true; valeur: T } | { ok: false; erreur: unknown }> {
+    await client.query(`savepoint ${ident(nom)}`);
+    try {
+      const valeur = await travail();
+      await client.query(`release savepoint ${ident(nom)}`);
+      return { ok: true, valeur };
+    } catch (erreur) {
+      await client.query(`rollback to savepoint ${ident(nom)}`);
+      return { ok: false, erreur };
+    }
+  }
+
+  /** Relit la version réelle d'une mise en œuvre pour bâtir le `GRC03`. */
+  private async conflitMiseEnOeuvre(
+    client: PoolClient,
+    nomTable: string,
+    mesureId: string,
+    filiale: string,
+    entite: NomEntite,
+  ): Promise<ErreurAccesEntite> {
     const { rows } = await client.query<{ version: number | string }>(
       `select ${ident('version')} as version from ${ident(nomTable)}
         where ${ident('mesure_id')} = $1 and ${ident('filiale_id')} = $2`,
       [mesureId, filiale],
     );
     const existante = rows[0];
-    if (existante !== undefined) {
-      throw new ErreurAccesEntite({
-        motif: 'conflit_version',
-        message:
-          'L’évaluation de ce contrôle a été modifiée entre-temps. Rechargez-la avant de ' +
-          'reprendre votre saisie.',
-        entite,
-        identifiant: mesureId,
-        versionActuelle: Number(existante.version),
-        detailJournal: `conflit optimiste sur ${nomTable} (mesure ${mesureId}, filiale ${filiale})`,
-      });
-    }
 
-    const nouvelles = new Map(valeurs);
-    nouvelles.set('mesure_id', mesureId);
-    await this.inserer(client, nomTable, engendrerIdentifiant('MMO'), filiale, nouvelles, entite);
+    return new ErreurAccesEntite({
+      motif: 'conflit_version',
+      message:
+        'L’évaluation de ce contrôle a été modifiée entre-temps par quelqu’un d’autre. ' +
+        'Rechargez-la pour repartir de la version en cours, puis reprenez votre saisie.',
+      entite,
+      identifiant: mesureId,
+      versionActuelle: existante === undefined ? undefined : Number(existante.version),
+      detailJournal:
+        `conflit optimiste sur ${nomTable} (mesure ${mesureId}, filiale ${filiale}) ; ` +
+        `mise en oeuvre ${existante === undefined ? 'absente' : 'présente'} au moment du constat`,
+    });
+  }
+
+  /**
+   * Retire du lot les colonnes dont la valeur en base est **déjà** celle
+   * proposée (constat M-1). Voir le commentaire de `modifier`.
+   *
+   * ⚠️ Portée exacte : les documents `jsonb` sont toujours tenus pour changés.
+   * Comparer deux documents JSON demande une égalité structurelle que
+   * `JSON.stringify` ne donne pas (l'ordre des clés compte), et se tromper
+   * dans le sens « inchangé » ferait perdre une saisie. On préfère écrire pour
+   * rien — aucune table scindée ne porte de `jsonb` aujourd'hui.
+   */
+  private async retirerLesInchangees(
+    client: PoolClient,
+    nomTable: string,
+    identifiant: string,
+    proposees: Map<string, unknown>,
+  ): Promise<Map<string, unknown>> {
+    const table = this.table(nomTable);
+    const colonnes = [...proposees.keys()].filter((nom) => table.colonnes.has(nom));
+    if (colonnes.length === 0) return proposees;
+
+    const selections = colonnes.map((nom) => {
+      const colonne = table.colonnes.get(nom);
+      if (colonne === undefined) throw incoherent(`Colonne inconnue : ${nomTable}.${nom}`);
+      return `${expressionLecture('p', colonne)} as ${ident(nom)}`;
+    });
+
+    const { rows } = await client.query<Record<string, unknown>>(
+      `select ${selections.join(', ')} from ${ident(nomTable)} p where p.${ident('id')} = $1`,
+      [identifiant],
+    );
+    const stockee = rows[0];
+    // Ligne illisible : on ne retire rien, et l'`update` qui suit produira le
+    // diagnostic à trois causes — c'est lui qui sait dire pourquoi.
+    if (stockee === undefined) return proposees;
+
+    const retenues = new Map<string, unknown>();
+    for (const [nom, proposee] of proposees) {
+      const colonne = table.colonnes.get(nom);
+      if (colonne === undefined) continue;
+      if (valeursEquivalentes(colonne.famille, stockee[nom], proposee)) continue;
+      retenues.set(nom, proposee);
+    }
+    return retenues;
   }
 
   /**
@@ -2324,6 +2785,56 @@ export class Depot {
    *  8.11 — Utilitaires internes
    * =============================================================== */
 
+  /**
+   * Refuse l'écriture d'une entité de **niveau Groupe** à une session qui ne
+   * déclare pas d'administration Groupe.
+   *
+   * ── M-4, et pourquoi ce garde-fou est ici plutôt qu'ailleurs ─────────
+   *
+   * `mappings` (le catalogue des correspondances ANSSI↔ISO↔NIS2↔DORA) est de
+   * niveau Groupe : **pas de colonne `filiale_id`**, donc hors de la famille de
+   * politiques qui protège les lignes de portée Groupe des tables mixtes, et
+   * hors du garde-fou `portee: 'groupe'` de la création, qui ne vaut que pour
+   * celles-là. Ses quatre politiques valent `true`. N'importe quelle session de
+   * filiale pouvait donc créer, réécrire et **supprimer** une référence
+   * commune aux vingt filiales — le rayon d'une action de filiale sortait de la
+   * filiale (porte S2, constat M-4).
+   *
+   * Le critère n'est pas une liste de tables : c'est **l'absence de
+   * `filiale_id`**, que le catalogue donne. Une entité de niveau Groupe ajoutée
+   * demain sera couverte sans que ce fichier change.
+   *
+   * ⚠️ **Ce garde-fou est en TypeScript, et c'est une faiblesse assumée, pas
+   * une solution.** Le `PLAN_SERVEUR` §1.9 veut que la RLS soit le filet SOUS
+   * le code, et le `CONVENTIONS.md` §17.9 dit exactement pourquoi : « un filet
+   * dont la seule maille est dans le code qu'il est censé rattraper n'est pas
+   * un filet ». La vraie correction appartient à la migration `004_rls.sql`,
+   * dont ce n'est pas le périmètre ici : faire passer `mappings` et
+   * `mapping_exigences` de la famille « ouverte » à la famille
+   * « configuration », dont l'écriture est conditionnée à
+   * `f_administration_groupe()`. Elle est demandée à l'orchestrateur ; en
+   * attendant, ceci ferme le chemin applicatif, qui est le seul qui existe.
+   */
+  private exigerDroitEcriture(
+    d: DescriptionEntite,
+    perimetre: PerimetreSession,
+    entite: NomEntite,
+  ): void {
+    if (this.table(d.table).cloisonnee) return;
+    if (perimetre.administrationGroupe) return;
+
+    throw new ErreurAccesEntite({
+      motif: 'refus_perimetre',
+      message:
+        'Cet élément appartient au socle commun du Groupe : il est le même pour toutes les ' +
+        'filiales. Sa modification relève de l’administration Groupe.',
+      entite,
+      detailJournal:
+        `écriture refusée sur ${d.table} : entité de niveau Groupe (aucune colonne filiale_id), ` +
+        'session sans administration Groupe',
+    });
+  }
+
   private table(nom: string): DescriptionTable {
     const table = this.catalogue.tables.get(nom);
     if (table === undefined) throw incoherent(`Table absente du catalogue : ${nom}`);
@@ -2420,6 +2931,46 @@ function versLeFrontend(valeur: unknown, famille: FamilleType): unknown {
   }
 }
 
+/**
+ * Deux valeurs désignent-elles la même chose, l'une venue de la base et l'autre
+ * du navigateur ? Sert au retrait des colonnes inchangées (§M-1).
+ *
+ * La comparaison est faite **famille par famille** parce que les deux côtés
+ * n'ont pas la même représentation : `pg` rend un `numeric` en chaîne, une date
+ * cadrée par `expressionLecture` en `AAAA-MM-JJ`, un `timestamptz` en `Date`.
+ * En cas de doute, on répond « différent » : écrire pour rien est sans
+ * conséquence, tenir à tort une saisie pour inchangée la perdrait.
+ */
+function valeursEquivalentes(famille: FamilleType, stockee: unknown, proposee: unknown): boolean {
+  if (famille === 'json') return false;
+
+  const videA = stockee === null || stockee === undefined;
+  const videB = proposee === null || proposee === undefined;
+  if (videA || videB) return videA && videB;
+
+  switch (famille) {
+    case 'texte':
+    case 'date':
+      return String(stockee) === String(proposee);
+    case 'entier':
+    case 'nombre':
+      return Number(stockee) === Number(proposee);
+    case 'booleen':
+      return Boolean(stockee) === Boolean(proposee);
+    case 'horodatage':
+      return enMillisecondes(stockee) === enMillisecondes(proposee);
+    default:
+      return false;
+  }
+}
+
+/** Reconnaît un `23505` (violation d'unicité) sans importer de dépendance. */
+function estViolationUnicite(erreur: unknown): boolean {
+  const brut =
+    erreur instanceof ErreurAccesEntite ? erreur.erreurBase : (erreur as Record<string, unknown>);
+  return typeof brut === 'object' && brut !== null && brut['code'] === '23505';
+}
+
 function enMillisecondes(valeur: unknown): number | null {
   if (valeur === null || valeur === undefined) return null;
   if (valeur instanceof Date) return valeur.getTime();
@@ -2433,10 +2984,23 @@ function convertirPourLaBase(champ: string, valeur: unknown, colonne: Descriptio
 
   if (valeur === undefined || valeur === null) return null;
 
-  // La chaîne vide est le « non renseigné » du modèle navigateur. Sur une
-  // colonne texte elle reste telle quelle (le round-trip la doit) ; ailleurs
-  // elle vaut l'absence de valeur.
-  if (valeur === '' && colonne.famille !== 'texte') return null;
+  // ── LA CHAÎNE VIDE, ET LE POINT OÙ LES DEUX CONVENTIONS SE RENCONTRENT ──
+  //
+  // La chaîne vide est le « non renseigné » du modèle navigateur ; le `NULL`
+  // est celui du schéma. Trois cas, et un seul conserve la chaîne :
+  //
+  //  · colonne non texte  -> NULL. Une date vide n'est pas une date.
+  //  · colonne texte dont le schéma REFUSE la chaîne vide (liste fermée qui ne
+  //    la contient pas, ou `check (colonne <> '')`) -> NULL. C'est le constat
+  //    M-8 de la porte S2 : sans cette ligne, un prestataire dont la criticité
+  //    n'est pas évaluée — l'état par défaut du formulaire — est refusé en bloc.
+  //    Le fait que la colonne refuse le vide est DÉCOUVERT dans `pg_constraint`
+  //    (`decouvrirVidesInterdits`), jamais recopié ici.
+  //  · colonne texte libre -> la chaîne vide est conservée telle quelle. Le
+  //    round-trip la doit, et la relecture rend `''` dans les deux cas
+  //    (`versLeFrontend`), si bien que la conversion reste invisible du
+  //    navigateur.
+  if (valeur === '' && (colonne.famille !== 'texte' || colonne.videInterdit)) return null;
 
   switch (colonne.famille) {
     case 'texte': {
@@ -2575,8 +3139,28 @@ function nomLisible(champ: string): string {
  * cesserait d'être exact.
  */
 export function engendrerIdentifiant(prefixe: string): string {
-  const alea = Math.floor(Math.random() * 100000);
-  return `${prefixe}-${String(Date.now())}-${String(alea)}`;
+  return `${prefixe}-${String(Date.now())}-${String(aleaEntier())}`;
+}
+
+/**
+ * Aléa du suffixe d'identifiant.
+ *
+ * Depuis que le serveur est seul à engendrer les identifiants (M-3), leur
+ * imprévisibilité cesse d'être une commodité : un identifiant devinable
+ * redonnerait, par la route de suppression, une partie de l'oracle qu'on vient
+ * de fermer. On tire donc sur le générateur cryptographique, disponible en
+ * **global** dans Node 22 — ce qui évite un `import` de valeur et garde ce
+ * fichier exécutable tel quel par le banc d'essai.
+ */
+function aleaEntier(): number {
+  const source = (globalThis as { crypto?: { getRandomValues?: (t: Uint32Array) => Uint32Array } })
+    .crypto;
+  if (source?.getRandomValues !== undefined) {
+    const tampon = new Uint32Array(1);
+    source.getRandomValues(tampon);
+    return (tampon[0] ?? 0) % 1_000_000;
+  }
+  return Math.floor(Math.random() * 1_000_000);
 }
 
 /**

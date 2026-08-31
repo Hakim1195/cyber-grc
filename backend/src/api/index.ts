@@ -21,6 +21,24 @@
  * | `POST` | `/api/operations/propager-mesure` | Propagation « au plus défavorable », en une transaction |
  *
  * ════════════════════════════════════════════════════════════════════════
+ *  Ce que la porte S2 a changé au contrat — à lire côté navigateur
+ * ════════════════════════════════════════════════════════════════════════
+ *
+ * | Point | Avant | Maintenant | Motif |
+ * |---|---|---|---|
+ * | `POST` | `{id?, champs}` | **`{champs}`** — envoyer `id` est refusé | M-3 : l'identifiant choisi par le client était un oracle d'existence inter-filiales |
+ * | `DELETE` | `?version` facultatif | **`?version` exigé** | m-8 : `PLAN_SERVEUR` §1.4 range la suppression sous P1 |
+ * | `PUT` sur `mesures` | `versionMiseEnOeuvre` facultatif et sans effet s'il manquait | **toujours arbitré** : absent ⇒ `insert` arbitré par l'unicité `(filiale_id, mesure_id)` ; présent ⇒ `update … and version = $n` | M-2 : le verrou était facultatif, donc absent |
+ * | `PUT` sur `mesures` | l'envoi de l'enregistrement entier touchait la définition Groupe et rendait 403 | les champs de la définition **inchangés** ne sont plus écrits | M-1 : aucune filiale ne pouvait évaluer un contrôle du socle |
+ * | Chaîne vide | refusée par les listes fermées du schéma | convertie en `NULL` quand le schéma refuse `''` | M-8 : deux modules étaient cassés par leur propre valeur par défaut |
+ * | `mappings` | écrivable par toute session | **réservé à l'administration Groupe** | M-4 : une action de filiale réécrivait une référence commune aux vingt |
+ *
+ * Un `409` de doublon sur une **clé métier** (le point d'historique du jour,
+ * une exigence de référentiel déjà évaluée) porte désormais `identifiant` et
+ * `version_actuelle` de l'enregistrement qui occupe la clé : de quoi basculer
+ * sur une modification au lieu d'afficher un incident (m-5).
+ *
+ * ════════════════════════════════════════════════════════════════════════
  *  Trois propriétés que ce fichier tient
  * ════════════════════════════════════════════════════════════════════════
  *
@@ -39,7 +57,9 @@
  *  · **Aucun contrôle de droits par domaine** (contrôle S6) : il n'y a pas
  *    encore de modèle de droits. Toute session qui passe la porte peut écrire
  *    dans sa filiale. C'est le lot L3, et la barrière provisoire est le refus
- *    fail-closed en production (`session.ts`).
+ *    fail-closed **partout sauf en développement** (`session.ts`) — la recette
+ *    comprise, parce qu'elle porte une copie réaliste de la production
+ *    (`PLAN_SERVEUR` §1.10).
  *  · **Aucune écriture au journal d'audit** (contrôle S3) : c'est le lot L5.
  *    Le journal technique trace les écritures, il n'a pas valeur de preuve.
  *  · **Aucune limitation de rythme** (contrôle S11) : elle appartient à la
@@ -63,6 +83,7 @@ import {
 } from '../entites/index.js';
 import type { NomEntite } from '../entites/types.js';
 import { entreeInvalide, ErreurApplicative, traduireErreur } from '../erreurs/index.js';
+import type { ContexteTraduction } from '../erreurs/index.js';
 import { PerimetreProvisoire } from './session.js';
 import type { ResolveurPerimetre } from './session.js';
 
@@ -108,12 +129,24 @@ const SCHEMA_PARAMS_ENTITE_ID = {
   },
 } as const;
 
+// ⚠️ Pas de champ `id` : **l'identifiant vient du serveur** (constat M-3 de la
+// porte S2). Laisser le client le choisir lui donnait un oracle d'existence
+// inter-filiales en une requête — l'unicité de la clé primaire ignore la RLS,
+// donc « identifiant pris ailleurs » se lisait au code de retour. `additionalProperties:
+// false` fait que l'envoyer quand même est refusé, bruyamment, plutôt qu'ignoré.
+// Le round-trip d'un export `grc-backup` passe par le moteur d'import du lot L7
+// (voir `OptionsCreation.identifiantImpose`), pas par cette route.
 const SCHEMA_CREATION = {
   type: 'object',
   required: ['champs'],
   additionalProperties: false,
   properties: {
-    id: { type: 'string', minLength: 1, maxLength: 64 },
+    // `id` est DÉCLARÉ pour être REFUSÉ. Fastify compile ses schémas avec
+    // `removeAdditional: true` : une propriété simplement absente du schéma
+    // serait *retirée en silence*, et un client qui continue d'envoyer son
+    // identifiant ne l'apprendrait jamais. `not: {}` n'accepte aucune valeur :
+    // l'envoyer produit un 400 explicite.
+    id: { not: {} },
     champs: { type: 'object' },
     portee: { type: 'string', enum: ['filiale', 'groupe'] },
   },
@@ -128,13 +161,22 @@ const SCHEMA_MODIFICATION = {
     // `champs`. C'est ce qui lève l'ambiguïté sur `documents`, dont le modèle
     // navigateur porte un champ « version » qui est la version du DOCUMENT.
     version: { type: 'integer', minimum: 1, maximum: 2147483647 },
-    versionMiseEnOeuvre: { type: 'integer', minimum: 1, maximum: 2147483647, nullable: true },
+    // `['integer','null']` et non le mot-clé `nullable` d'OpenAPI, qu'AJV
+    // n'interprète pas : `null` doit être une valeur ACCEPTÉE et signifiante —
+    // « la filiale n'a pas encore de mise en œuvre pour ce contrôle ».
+    versionMiseEnOeuvre: { type: ['integer', 'null'], minimum: 1, maximum: 2147483647 },
     champs: { type: 'object' },
   },
 } as const;
 
+// `version` est **exigée** : le `PLAN_SERVEUR` §1.4 range explicitement
+// « supprimer une ligne que quelqu'un vient de modifier » sous le risque P1, et
+// une suppression sans numéro de version y échappait (porte S2, constat m-8).
+// Le moteur garde un chemin sans version pour ses cascades internes ; le réseau
+// n'en a pas.
 const SCHEMA_SUPPRESSION = {
   type: 'object',
+  required: ['version'],
   additionalProperties: false,
   properties: { version: { type: 'integer', minimum: 1, maximum: 2147483647 } },
 } as const;
@@ -164,6 +206,14 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
 
   /** Dépôt, construit une fois le catalogue découvert. */
   let depot: Depot | null = null;
+  /**
+   * Ce que la traduction des erreurs doit savoir du schéma pour ne pas le
+   * laisser fuir : les noms de tables (qu'aucun message ne doit contenir) et
+   * les unicités (pour ne préciser un doublon que s'il est forcément lisible).
+   * Découvert, jamais listé — et passé en paramètre, pour que `src/erreurs/`
+   * reste sans dépendance d'exécution.
+   */
+  let contexteErreurs: ContexteTraduction = {};
   /** Anomalies du garde-fou : tant qu'il y en a, le service ne sert rien. */
   let anomaliesRegistre: readonly string[] | null = null;
 
@@ -212,6 +262,10 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     }
 
     depot = new Depot(catalogue);
+    contexteErreurs = {
+      nomsInternes: new Set(catalogue.tables.keys()),
+      unicites: catalogue.unicites,
+    };
     instance.log.info(
       { tables: catalogue.tables.size, entites: listerEntites().length },
       "Catalogue PostgreSQL découvert, registre d'entités vérifié",
@@ -249,10 +303,10 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
 
     const traduite = estValidation
       ? entreeInvalide(
-          'La requête ne respecte pas le format attendu.',
+          messageDeValidation(erreur),
           `validation : ${erreur instanceof Error ? erreur.message : String(erreur)}`,
         )
-      : traduireErreur(erreur);
+      : traduireErreur(erreur, contexteErreurs);
 
     const trace = {
       erreur: traduite.code,
@@ -277,6 +331,26 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   /* -------------------------------------------------------------------
    *  Outils communs
    * ------------------------------------------------------------------- */
+
+  /**
+   * Message d'un refus de validation.
+   *
+   * Générique par défaut — un message de schéma décrirait la forme interne des
+   * requêtes. **Une exception, et elle est utile** : l'envoi d'un `id` à la
+   * création. C'est un changement de contrat issu de la porte S2 (M-3), et un
+   * appelant qui le heurte doit apprendre quoi faire, pas seulement qu'il a
+   * tort. La phrase ne décrit aucun schéma : elle énonce la règle.
+   */
+  const messageDeValidation = (erreur: unknown): string => {
+    const items = (erreur as { validation?: { instancePath?: unknown }[] }).validation;
+    if (Array.isArray(items) && items.some((item) => item.instancePath === '/id')) {
+      return (
+        "L'identifiant d'un enregistrement est engendré par le serveur : ne l'envoyez pas à la " +
+        'création. Reprenez celui que la réponse vous rend.'
+      );
+    }
+    return 'La requête ne respecte pas le format attendu.';
+  };
 
   const enLecture = async <T>(
     travail: (client: PoolClient, depot: Depot, perimetre: PerimetreSession) => Promise<T>,
@@ -390,7 +464,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     async (
       requete: FastifyRequest<{
         Params: { entite: string };
-        Body: { id?: string; champs: Record<string, unknown>; portee?: 'filiale' | 'groupe' };
+        Body: { champs: Record<string, unknown>; portee?: 'filiale' | 'groupe' };
       }>,
       reponse: FastifyReply,
     ) => {
@@ -398,7 +472,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       const corps = requete.body;
 
       const enregistrement = await enEcriture(async (client, instanceDepot, perimetre) =>
-        instanceDepot.creer(client, perimetre, entite, corps.champs, corps.id ?? null, {
+        instanceDepot.creer(client, perimetre, entite, corps.champs, {
           portee: corps.portee ?? 'filiale',
         }),
       );
@@ -457,7 +531,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     async (
       requete: FastifyRequest<{
         Params: { entite: string; identifiant: string };
-        Querystring: { version?: number };
+        Querystring: { version: number };
       }>,
       reponse: FastifyReply,
     ) => {
@@ -469,7 +543,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
           perimetre,
           entite,
           requete.params.identifiant,
-          requete.query.version ?? null,
+          requete.query.version,
         );
       });
 

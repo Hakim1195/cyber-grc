@@ -178,6 +178,26 @@ function correspondance(motif: MotifEchec): { statut: number; code: CodeApi } {
   }
 }
 
+/**
+ * Ce que la traduction doit savoir du schéma pour ne pas le laisser fuir.
+ *
+ * Volontairement passé en **paramètre** plutôt qu'importé : ce module n'a
+ * aucune dépendance d'exécution, et c'est ce qui le rend éprouvable seul.
+ */
+export interface ContexteTraduction {
+  /**
+   * Noms d'objets internes (tables) qu'aucune réponse ne doit contenir.
+   * Découverts dans le catalogue par l'appelant, jamais listés ici.
+   */
+  readonly nomsInternes?: ReadonlySet<string>;
+  /**
+   * Unicités du schéma, par nom de contrainte, avec l'indication qu'elles
+   * portent ou non `filiale_id`. Sert à ne préciser un doublon que lorsque la
+   * ligne en cause est **forcément lisible** par l'appelant.
+   */
+  readonly unicites?: ReadonlyMap<string, { readonly porteFiliale: boolean }>;
+}
+
 /** Reconnaît une `ErreurEntite` sans importer sa classe (voir l'entête). */
 export function estErreurEntite(erreur: unknown): erreur is ErreurEntite {
   return (
@@ -197,13 +217,37 @@ export function estErreurEntite(erreur: unknown): erreur is ErreurEntite {
  * sort. Une traduction qui laisserait passer l'inconnu ne serait pas une
  * traduction, mais un filtre percé.
  */
-export function traduireErreur(erreur: unknown): ErreurApplicative {
+export function traduireErreur(
+  erreur: unknown,
+  contexte: ContexteTraduction = {},
+): ErreurApplicative {
   if (erreur instanceof ErreurApplicative) return erreur;
 
-  if (estErreurEntite(erreur)) return traduireErreurEntite(erreur);
+  if (estErreurEntite(erreur)) return traduireErreurEntite(erreur, contexte);
 
   const postgres = lireErreurPostgres(erreur);
-  if (postgres !== null) return traduireErreurPostgres(postgres);
+  if (postgres !== null) return traduireErreurPostgres(postgres, contexte);
+
+  // ── m-1 : une 4xx du cadre reste une 4xx ─────────────────────────────
+  // Fastify refuse lui-même un corps trop volumineux, un JSON malformé, un
+  // type de contenu inconnu : ses erreurs portent un `statusCode`. Les faire
+  // tomber dans le cas générique les transformait en **500 avec pile d'appel
+  // au niveau `error`** — statut faux pour le client, et journal technique
+  // remplissable à volonté par deux requêtes triviales, donc alertes fausses
+  // (porte S2, constat m-1). Le gestionnaire de `serveur.ts` honorait déjà ce
+  // champ ; celui du greffon ne le faisait pas.
+  const statutCadre = lireStatutCadre(erreur);
+  if (statutCadre !== null) {
+    return new ErreurApplicative({
+      code: statutCadre === 413 ? 'volume_excessif' : 'donnee_invalide',
+      statut: statutCadre,
+      message:
+        statutCadre === 413
+          ? "La requête dépasse la taille admise par le serveur."
+          : "La requête n'a pas pu être lue : format ou type de contenu invalide.",
+      detailJournal: `refus du cadre HTTP : ${detailLibre(erreur)}`,
+    });
+  }
 
   return new ErreurApplicative({
     code: 'erreur_interne',
@@ -213,11 +257,14 @@ export function traduireErreur(erreur: unknown): ErreurApplicative {
   });
 }
 
-function traduireErreurEntite(erreur: ErreurEntite): ErreurApplicative {
+function traduireErreurEntite(
+  erreur: ErreurEntite,
+  contexte: ContexteTraduction,
+): ErreurApplicative {
   // Un refus de la base arrive enveloppé : c'est lui qui porte le sens, pas
   // l'enveloppe. On le traduit d'abord, puis on lui rattache l'entité visée.
   if (erreur.motif === 'refus_base' && erreur.erreurBase !== undefined) {
-    const traduite = traduireErreurPostgres(erreur.erreurBase);
+    const traduite = traduireErreurPostgres(erreur.erreurBase, contexte);
     return new ErreurApplicative({
       code: traduite.code,
       statut: traduite.statut,
@@ -226,6 +273,9 @@ function traduireErreurEntite(erreur: ErreurEntite): ErreurApplicative {
       codeGrc: traduite.codeGrc,
       entite: erreur.entite,
       identifiant: erreur.identifiant,
+      // Renseignée sur un doublon de clé métier enrichi : l'enregistrement qui
+      // occupe déjà la clé est dans la filiale de l'appelant, donc lisible.
+      versionActuelle: erreur.versionActuelle,
     });
   }
 
@@ -295,7 +345,10 @@ export function lireErreurPostgres(erreur: unknown): ErreurPostgres | null {
  * dont le texte est *écrit pour l'utilisateur* (`CONVENTIONS.md` §15) et se
  * reconnaît à l'absence de nom de contrainte.
  */
-export function traduireErreurPostgres(erreur: ErreurPostgres): ErreurApplicative {
+export function traduireErreurPostgres(
+  erreur: ErreurPostgres,
+  contexte: ContexteTraduction = {},
+): ErreurApplicative {
   const detailJournal = detailComplet(erreur);
 
   switch (erreur.code) {
@@ -335,22 +388,49 @@ export function traduireErreurPostgres(erreur: ErreurPostgres): ErreurApplicativ
       });
 
     // ── Intégrité ────────────────────────────────────────────────────────
-    case '23505':
-      // Unicité. Le constat T-8 de la porte S1 est ici : l'espace des
-      // identifiants est de niveau Groupe, les unicités ignorent la RLS, et
-      // une filiale peut donc se voir refuser un identifiant qu'elle ne voit
-      // pas. Le message nomme la RÈGLE (« cet identifiant est pris ») et se
-      // garde bien de dire où, ni par qui — ce serait l'oracle même que
-      // `RAPPORT_S1_TER` §T-8 demande de fermer.
+    case '23505': {
+      // ── Unicité : deux cas, et un seul autorise un message précis ──────
+      //
+      // Les contrôles d'unicité contournent délibérément la RLS
+      // (`CONVENTIONS.md` §19.1). D'où la distinction, lue dans le catalogue
+      // et jamais devinée :
+      //
+      //  · l'unicité PORTE `filiale_id` (`uq_history_filiale_date`,
+      //    `uq_evaluations_ref_code`, `uq_mesure_mise_en_oeuvre_filiale_mesure`) :
+      //    la ligne en cause appartient forcément à la filiale de l'appelant,
+      //    donc il peut la lire. Lui dire précisément ce qui fait doublon
+      //    n'apprend rien qu'il n'ait le droit de savoir — et lui permet de
+      //    recharger plutôt que de retenter en boucle ;
+      //  · l'unicité ne le porte pas (la clé primaire au premier chef) : elle
+      //    est de portée Groupe et le doublon peut venir d'une ligne
+      //    **invisible**. Le message reste alors muet sur ce qui existe
+      //    (`RAPPORT_S1_TER` §T-8). Ce chemin ne devrait plus être atteignable
+      //    depuis le réseau depuis que le serveur engendre seul les
+      //    identifiants (M-3), mais la traduction reste sûre par elle-même.
+      const unicite =
+        erreur.constraint === undefined ? undefined : contexte.unicites?.get(erreur.constraint);
+
+      if (unicite?.porteFiliale === true) {
+        return new ErreurApplicative({
+          code: 'contrainte_base',
+          statut: 409,
+          message:
+            'Un enregistrement portant la même clé existe déjà dans votre filiale — la même ' +
+            "exigence de référentiel, le même point d'historique du jour, la même mise en " +
+            'œuvre de contrôle. Rechargez la liste et complétez celui qui existe.',
+          detailJournal,
+        });
+      }
+
       return new ErreurApplicative({
         code: 'contrainte_base',
         statut: 409,
         message:
-          "Cet enregistrement fait doublon : son identifiant, ou l'une de ses clés " +
-          "(un code d'exigence de référentiel, une date de point d'historique), est déjà " +
-          'utilisé. Reprenez la saisie avec un nouvel enregistrement.',
+          "Cet enregistrement n'a pas pu être créé : l'une de ses clés est déjà utilisée. " +
+          'Rechargez la liste, puis reprenez la saisie.',
         detailJournal,
       });
+    }
 
     case '23503':
       return new ErreurApplicative({
@@ -384,10 +464,27 @@ export function traduireErreurPostgres(erreur: ErreurPostgres): ErreurApplicativ
       //    « déjà rédigé pour l'utilisateur », et il l'est : il parle de
       //    mesures et de portées, jamais de lignes invisibles.
       if (erreur.constraint === undefined) {
+        // ── m-3 : « pas de nom de contrainte » ne veut PAS dire « sûr » ───
+        //
+        // La règle initiale relayait tel quel tout message sans nom de
+        // contrainte, au motif que le `CONVENTIONS.md` §15 tient ces
+        // messages-là pour « déjà rédigés pour l'utilisateur ». C'est vrai de
+        // `f_coherence_mesure_catalogue()`, qui fond délibérément « inconnue »
+        // et « locale à une autre filiale » — exactement ce qu'il faut. Ce
+        // l'est **moins** de `f_interdit_changement_portee()`, dont le texte
+        // nomme la table (`tg_table_name`) et la portée précédente. Le chemin
+        // est aujourd'hui inatteignable (l'API n'écrit jamais `filiale_id`),
+        // mais la règle, elle, était fausse dès maintenant — et c'est la règle
+        // qui sera relue dans six mois (porte S2, constat m-3).
+        //
+        // Le filtre ne se fie donc plus à l'origine du message : il regarde ce
+        // que le message CONTIENT, et le compare aux noms d'objets que le
+        // catalogue a **découverts**. Un message qui nomme une table du schéma
+        // ne sort pas. Dégradation sûre : on retombe sur le message générique.
         return new ErreurApplicative({
           code: 'donnee_invalide',
           statut: 409,
-          message: erreur.message,
+          message: messageSurEtRedige(erreur.message, contexte),
           detailJournal,
         });
       }
@@ -484,6 +581,46 @@ function messageDeContrainte(contrainte: string): string {
     return `La valeur du champ « ${sujet} » n'est pas admise pour cet enregistrement.`;
   }
   return "Une valeur de l'enregistrement n'est pas admise.";
+}
+
+/**
+ * Rend le message d'un déclencheur métier **s'il ne nomme aucun objet interne**,
+ * et un texte générique sinon. Voir le commentaire du cas `23514`.
+ */
+function messageSurEtRedige(message: string, contexte: ContexteTraduction): string {
+  const generique =
+    "Cette opération n'est pas admise : une valeur, ou une combinaison de valeurs, enfreint " +
+    'une règle du modèle. Rechargez la fiche et vérifiez votre saisie.';
+
+  const interdits = contexte.nomsInternes;
+  if (interdits === undefined || interdits.size === 0) {
+    // Sans catalogue, on ne sait pas juger : on ne relaie pas. Le doute
+    // profite au cloisonnement, jamais à la lisibilité du message.
+    return generique;
+  }
+
+  const jetons = message.toLowerCase().match(/[a-z][a-z0-9_]{2,}/g) ?? [];
+  for (const jeton of jetons) {
+    if (interdits.has(jeton)) return generique;
+  }
+  return message;
+}
+
+/** Statut d'une erreur levée par le cadre HTTP lui-même, ou `null`. */
+function lireStatutCadre(erreur: unknown): number | null {
+  if (typeof erreur !== 'object' || erreur === null) return null;
+  const statut = (erreur as { statusCode?: unknown }).statusCode;
+  if (typeof statut !== 'number' || !Number.isInteger(statut)) return null;
+  return statut >= 400 && statut < 500 ? statut : null;
+}
+
+/** Détail libre d'une erreur, pour le seul journal technique. */
+function detailLibre(erreur: unknown): string {
+  if (erreur instanceof Error) {
+    const code = (erreur as { code?: unknown }).code;
+    return `${typeof code === 'string' ? `${code} ` : ''}${erreur.name}: ${erreur.message}`;
+  }
+  return String(erreur);
 }
 
 /** Retire tout ce qui n'est pas un nom de champ, avant de le citer au client. */

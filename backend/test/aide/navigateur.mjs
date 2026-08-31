@@ -1,0 +1,260 @@
+/**
+ * navigateur.mjs — piloter la SPA dans un vrai navigateur, contre le vrai serveur.
+ *
+ * ── Pourquoi c'est ici et pas ailleurs ───────────────────────────────────────
+ *
+ * `CLAUDE.md` §5 impose depuis le début du projet des tests Playwright headless avec
+ * « 0 erreur » et des captures de validation. La porte S2 a constaté qu'**il n'en
+ * existait aucun dans le dépôt** (`grep -rl playwright` ne rendait rien hors
+ * `node_modules`) — et que **six** de ses constats, dont les trois bloquants, ne se
+ * voient que là :
+ *
+ *   B-1  la base héritée détruite avant toute reprise
+ *   B-2  la croix « Masquer » qui éteint la seule trace d'un enregistrement bloqué
+ *   B-3  l'import « Remplacer » qui détruit la filiale hors transaction
+ *   M-1  la filiale qui ne peut pas évaluer un contrôle du socle Groupe
+ *   M-6  l'interface inerte sous la CSP de production
+ *   M-8  les modules refusés par leur propre valeur par défaut
+ *
+ * Aucun d'eux ne viole un contrôle de la grille §4 ; tous détruisent ou bloquent du
+ * travail réel. C'est la raison d'être de ce fichier.
+ *
+ * ── Ce qu'il monte ──────────────────────────────────────────────────────────
+ *
+ *  · un serveur HTTP local qui sert `cyber-gouvernance_V4/` **tel quel** — les mêmes
+ *    fichiers qu'Apache servira ;
+ *  · `/api/**` relayé vers l'instance Fastify RÉELLE, par `inject()` : pas de second
+ *    port, pas de latence réseau à attendre, et surtout **le vrai code** de bout en
+ *    bout ;
+ *  · trois leviers dont les scénarios de perte de données ont besoin :
+ *      `definirApiInjoignable()` coupe l'API comme le ferait une coupure de VPN,
+ *      `definirCsp()` sert la page sous une politique de sécurité de contenu donnée
+ *      (celle du vhost de production, pour le constat M-6),
+ *      `interceptions` compte ce que le navigateur a réellement émis.
+ *
+ * ── Environnement ───────────────────────────────────────────────────────────
+ *
+ * Playwright global (`/opt/node22/lib/node_modules/playwright`) et Chromium
+ * (`/opt/pw-browsers`), comme `CLAUDE.md` §5 le décrit. Ils ne sont pas des
+ * dépendances de `backend/package.json` — le banc ne fait qu'utiliser ce que la
+ * machine de développement fournit. Leur absence est signalée par un message qui dit
+ * quoi faire, jamais par un test silencieusement ignoré.
+ */
+
+import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { extname, join, normalize } from 'node:path';
+
+import { RACINE_FRONTEND } from './serveur.mjs';
+
+const CHEMIN_PLAYWRIGHT = '/opt/node22/lib/node_modules/playwright/index.mjs';
+
+const TYPES = Object.freeze({
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+});
+
+/* =====================================================================
+ *  Le navigateur
+ * ===================================================================== */
+
+/**
+ * Lance Chromium. Un seul par fichier de test : le démarrage coûte plus cher que
+ * tout le reste.
+ */
+export async function lancerNavigateur() {
+  let playwright;
+  try {
+    playwright = await import(CHEMIN_PLAYWRIGHT);
+  } catch (erreur) {
+    throw new Error(
+      `Playwright est introuvable à ${CHEMIN_PLAYWRIGHT}.\n` +
+        'Les essais de navigateur exigent le Playwright global de la machine de développement ' +
+        '(CLAUDE.md §5), et Chromium dans /opt/pw-browsers.\n' +
+        `Cause : ${erreur.message}`,
+    );
+  }
+  process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH ?? '/opt/pw-browsers';
+  return playwright.chromium.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  });
+}
+
+/* =====================================================================
+ *  Le serveur de l'application
+ * ===================================================================== */
+
+/**
+ * Sert la SPA et relaie `/api/**` vers l'instance Fastify.
+ *
+ * @param {{instance: import('fastify').FastifyInstance}} serveur enveloppe rendue par
+ *        `monterServeurReel` / `monterGreffon`
+ */
+export async function servirApplication(serveur, options = {}) {
+  const etat = {
+    /** Coupe l'API : c'est la coupure de VPN, vue du navigateur. */
+    apiInjoignable: options.apiInjoignable === true,
+    /** En-tête `Content-Security-Policy` posé sur la page, ou `null`. */
+    csp: options.csp ?? null,
+    /** Toutes les requêtes `/api/**` reçues, dans l'ordre. */
+    appels: [],
+  };
+
+  const http = createServer((requete, reponse) => {
+    const url = new URL(requete.url ?? '/', 'http://127.0.0.1');
+
+    if (url.pathname.startsWith('/api/')) {
+      etat.appels.push({ methode: requete.method, chemin: url.pathname + url.search });
+      if (etat.apiInjoignable) {
+        // Ce que voit le navigateur quand le VPN tombe : la requête n'aboutit pas.
+        requete.socket.destroy();
+        return;
+      }
+      const morceaux = [];
+      requete.on('data', (m) => morceaux.push(m));
+      requete.on('end', () => {
+        const corps = Buffer.concat(morceaux);
+        serveur.instance
+          .inject({
+            method: requete.method,
+            url: url.pathname + url.search,
+            headers: { 'content-type': requete.headers['content-type'] ?? 'application/json' },
+            ...(corps.length === 0 ? {} : { payload: corps.toString('utf8') }),
+          })
+          .then((reponseApi) => {
+            reponse.writeHead(reponseApi.statusCode, {
+              'content-type': reponseApi.headers['content-type'] ?? 'application/json',
+            });
+            reponse.end(reponseApi.body);
+          })
+          .catch((erreur) => {
+            reponse.writeHead(500, { 'content-type': 'application/json' });
+            reponse.end(JSON.stringify({ erreur: 'relais', message: erreur.message }));
+          });
+      });
+      return;
+    }
+
+    // Fichiers statiques de la SPA. `normalize` puis contrôle de préfixe : un
+    // « ../ » ne doit pas sortir de la racine, même dans un banc d'essai.
+    const relatif = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
+    const chemin = normalize(join(RACINE_FRONTEND, relatif));
+    if (!chemin.startsWith(normalize(RACINE_FRONTEND)) || !existsSync(chemin) || statSync(chemin).isDirectory()) {
+      reponse.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+      reponse.end('introuvable');
+      return;
+    }
+    const entetes = { 'content-type': TYPES[extname(chemin)] ?? 'application/octet-stream' };
+    if (etat.csp !== null) entetes['content-security-policy'] = etat.csp;
+    reponse.writeHead(200, entetes);
+    createReadStream(chemin).pipe(reponse);
+  });
+
+  await new Promise((resoudre) => http.listen(0, '127.0.0.1', resoudre));
+  const port = http.address().port;
+
+  return {
+    url: `http://127.0.0.1:${port}`,
+    etat,
+    definirApiInjoignable(valeur) {
+      etat.apiInjoignable = valeur;
+    },
+    definirCsp(valeur) {
+      etat.csp = valeur;
+    },
+    /** Appels `/api/**` reçus, filtrés par méthode. */
+    appelsPar(methode) {
+      return etat.appels.filter((a) => a.methode === methode);
+    },
+    async fermer() {
+      await new Promise((resoudre) => http.close(resoudre));
+    },
+  };
+}
+
+/* =====================================================================
+ *  Une page, et ce qu'elle a crié
+ * ===================================================================== */
+
+/**
+ * Ouvre une page qui **retient tout** : erreurs de script, messages de console,
+ * requêtes refusées. `CLAUDE.md` §5 demande « 0 erreur » — encore faut-il les avoir
+ * recueillies pour pouvoir le dire.
+ */
+export async function ouvrirPage(navigateur, options = {}) {
+  const contexte = await navigateur.newContext(options.contexte ?? {});
+  const page = await contexte.newPage();
+  /** Exceptions non rattrapées : elles cassent un gestionnaire, donc une fonction. */
+  const erreursScript = [];
+  /** Messages `console.error`, dont les échecs de `fetch` que le navigateur signale. */
+  const erreursConsole = [];
+  const journalConsole = [];
+
+  page.on('pageerror', (erreur) => erreursScript.push(String(erreur.message ?? erreur)));
+  page.on('console', (message) => {
+    journalConsole.push({ type: message.type(), texte: message.text() });
+    if (message.type() === 'error') erreursConsole.push(message.text());
+  });
+
+  return {
+    page,
+    contexte,
+    erreursScript,
+    erreursConsole,
+    console: journalConsole,
+    /**
+     * Ce que `CLAUDE.md` §5 appelle « 0 erreur » : les exceptions de script, plus les
+     * messages d'erreur de console que le test n'a pas déclarés attendus.
+     *
+     * La distinction compte : un scénario qui provoque VOLONTAIREMENT un refus du
+     * serveur (409, 403) verra le navigateur journaliser l'échec du `fetch`, et ce
+     * n'est pas un défaut. Une exception de script, elle, ne s'accepte jamais.
+     */
+    erreursInattendues(motifsAcceptes = []) {
+      return [
+        ...erreursScript,
+        ...erreursConsole
+          .filter((e) => !motifsAcceptes.some((motif) => e.includes(motif)))
+          .map((e) => `console: ${e}`),
+      ];
+    },
+    async fermer() {
+      await contexte.close().catch(() => {});
+    },
+  };
+}
+
+/**
+ * Attend que l'application soit prête, ou qu'elle ait renoncé.
+ *
+ * Rend `'chargee'` quand le jeu de données du serveur est en mémoire, `'refus'`
+ * quand l'écran d'indisponibilité est affiché. Ne jamais se contenter d'un délai
+ * fixe : c'est ce qui rend un banc d'essai capricieux, et un banc capricieux apprend
+ * à ignorer les échecs.
+ */
+export async function attendreApplication(page, options = {}) {
+  const delai = options.delai ?? 15000;
+  return page.waitForFunction(
+    () => {
+      const corps = document.body ? document.body.innerText : '';
+      if (/Serveur indisponible|Connexion impossible|indisponible/i.test(corps)) return 'refus';
+      if (typeof window.DataStore === 'undefined') return false;
+      try {
+        if (window.DataStore.getRisques === undefined) return false;
+      } catch (e) {
+        return false;
+      }
+      const pret = document.querySelector('#app');
+      if (pret && pret.innerHTML.trim().length > 0) return 'chargee';
+      return false;
+    },
+    null,
+    { timeout: delai },
+  ).then((poignee) => poignee.jsonValue());
+}

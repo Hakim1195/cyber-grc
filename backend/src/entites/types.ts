@@ -24,9 +24,18 @@
 
 /**
  * Les collections de `data`, dans l'ordre de `ARRAY_FIELDS`
- * (`cyber-gouvernance_V4/js/core/datastore.js`). L'ordre est significatif :
- * il place les entités référencées avant celles qui les référencent, ce dont
- * l'insertion d'un lot complet tire parti.
+ * (`cyber-gouvernance_V4/js/core/datastore.js`).
+ *
+ * ⚠️ **Cet ordre n'est PAS un ordre d'insertion**, et la première rédaction de
+ * ce commentaire le prétendait — à tort, relevé par l'agent frontend. Il
+ * suffit de le lire : `actions` (3ᵉ) référence `risques` (4ᵉ), `evaluations`
+ * (14ᵉ), `mesures` (15ᵉ) et `incidents` (16ᵉ), tous placés après elle. Un lot
+ * complet inséré dans cet ordre échouerait sur les clés étrangères.
+ *
+ * C'est l'ordre d'affichage et de dénombrement, rien de plus. L'ordre
+ * d'insertion d'un lot complet est l'affaire du moteur d'import (lot L7), et il
+ * devra être **dérivé du graphe des clés étrangères**, pas d'une liste écrite à
+ * la main (`CONVENTIONS.md` §19.5).
  */
 export type NomEntite =
   | 'clients'
@@ -78,6 +87,16 @@ export interface DescriptionColonne {
   readonly engendree: boolean;
   /** Porte une valeur par défaut : l'omettre est légitime. */
   readonly avecDefaut: boolean;
+  /**
+   * Colonne texte dont le schéma **refuse la chaîne vide** — soit que sa liste
+   * fermée ne la contienne pas, soit qu'un `check` l'exclue explicitement
+   * (`nom <> ''`). Découvert dans `pg_constraint`, jamais recopié.
+   *
+   * C'est le point de rencontre de deux conventions qui ne se parlaient pas
+   * (constat M-8 de la porte S2) : le modèle navigateur code le « non
+   * renseigné » par la chaîne vide, le schéma le code par `NULL`.
+   */
+  readonly videInterdit: boolean;
 }
 
 export interface DescriptionTable {
@@ -92,8 +111,26 @@ export interface DescriptionTable {
   readonly versionnee: boolean;
 }
 
+/**
+ * Contrainte d'unicité, telle que le catalogue la donne. Sert à traduire un
+ * `23505` sans construire d'oracle : une unicité **portant `filiale_id`** ne
+ * peut être heurtée que par une ligne de la filiale de l'appelant, donc
+ * lisible par lui ; une unicité qui ne le porte pas — la clé primaire au
+ * premier chef — est de portée Groupe, et un doublon peut alors venir d'une
+ * ligne invisible (`RAPPORT_S1_TER` §T-8).
+ */
+export interface DescriptionUnicite {
+  readonly nom: string;
+  readonly table: string;
+  readonly colonnes: readonly string[];
+  readonly clePrimaire: boolean;
+  readonly porteFiliale: boolean;
+}
+
 export interface Catalogue {
   readonly tables: ReadonlyMap<string, DescriptionTable>;
+  /** Unicités du schéma, indexées par nom de contrainte. */
+  readonly unicites: ReadonlyMap<string, DescriptionUnicite>;
   /** Horodatage de la découverte, pour le journal de démarrage. */
   readonly decouvertLe: Date;
 }

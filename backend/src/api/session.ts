@@ -40,13 +40,24 @@
  * autre implémentation, et **rien d'autre ne change** dans `src/api/`.
  *
  * ════════════════════════════════════════════════════════════════════════
- *  Fail-closed en production
+ *  Fail-closed partout sauf en développement
  * ════════════════════════════════════════════════════════════════════════
  *
- * En `production`, la session provisoire **refuse de résoudre quoi que ce
- * soit** : l'API répond 503 sur toutes ses routes de données. Un service
- * déployé sans authentification ne doit pas servir de données de gouvernance
- * cyber — pas même en lecture, pas même « le temps de finir L3 ».
+ * La session provisoire **refuse de résoudre quoi que ce soit** hors du seul
+ * environnement `developpement` : l'API répond alors 503 sur toutes ses routes
+ * de données. Un service déployé sans authentification ne doit pas servir de
+ * données de gouvernance cyber — pas même en lecture, pas même « le temps de
+ * finir L3 ».
+ *
+ * ⚠️ **La recette est fermée elle aussi, et c'est le point.** La première
+ * rédaction ne fermait que `production`, en croyant que la recette était un
+ * environnement d'essai à données jetables. Elle ne l'est pas : le
+ * `PLAN_SERVEUR` §1.10 exige qu'elle soit « alimentée par une **copie réaliste
+ * de la production** — tester sur une base vide ne révèle rien ». La recette
+ * porte donc de la vraie donnée de gouvernance de vingt filiales, sur une VM
+ * joignable par le VPN, et elle servait **et laissait écrire** sans la moindre
+ * authentification (porte S2, constat M-5). Une barrière qui protège la copie
+ * mais pas l'original ne protège rien.
  */
 
 import type { Pool } from 'pg';
@@ -81,6 +92,30 @@ interface FilialeResolue {
 /** Durée de mise en cache du périmètre résolu. Courte : c'est un pis-aller. */
 const DUREE_CACHE_MS = 60_000;
 
+/**
+ * Filiale de travail imposée par l'exploitant, ou `null`.
+ *
+ * ⚠️ **Lecture directe de l'environnement, et c'est une entorse assumée.** La
+ * configuration du serveur est centralisée dans `src/config/index.ts`, qui
+ * n'appartient pas au périmètre de cet agent ; la variable a donc été
+ * documentée dans `.env.example` sans que rien ne la lise, ce que la porte S2
+ * a relevé (constat m-2). Plutôt que de laisser une variable mensongère, elle
+ * est lue **ici**, au seul endroit qui s'en sert, et elle disparaîtra avec
+ * cette classe : le lot L3 résout le périmètre depuis les groupes AD, et le
+ * lot L4 rend le choix de la filiale à l'utilisateur.
+ *
+ * Ce n'est **pas** une valeur venue du navigateur (contrôle S2) : c'est
+ * l'environnement du processus, posé par systemd, hors de portée du réseau.
+ * `resoudre()` reste sans paramètre, et c'est cette signature qui tient la
+ * propriété.
+ */
+function filialeDemandeeParLExploitant(): string | null {
+  const brut = process.env['API_FILIALE_PROVISOIRE'];
+  if (typeof brut !== 'string') return null;
+  const valeur = brut.trim();
+  return valeur === '' ? null : valeur;
+}
+
 export class PerimetreProvisoire implements ResolveurPerimetre {
   public readonly provisoire = true;
 
@@ -111,12 +146,12 @@ export class PerimetreProvisoire implements ResolveurPerimetre {
   /** Filiale active résolue, pour l'affichage. Ne sert jamais à décider. */
   public async filiale(): Promise<FilialeResolue> {
     await this.resoudre();
-    if (this.cache === null) throw this.refusProduction();
+    if (this.cache === null) throw this.refusEnvironnement();
     return this.cache.filiale;
   }
 
   public async resoudre(): Promise<PerimetreSession> {
-    if (this.environnement === 'production') throw this.refusProduction();
+    if (this.environnement !== 'developpement') throw this.refusEnvironnement();
 
     const maintenant = Date.now();
     if (this.cache !== null && this.cache.expire > maintenant) return this.cache.perimetre;
@@ -147,7 +182,7 @@ export class PerimetreProvisoire implements ResolveurPerimetre {
     this.cache = null;
   }
 
-  private refusProduction(): ErreurApplicative {
+  private refusEnvironnement(): ErreurApplicative {
     return new ErreurApplicative({
       code: 'indisponible',
       statut: 503,
@@ -155,8 +190,10 @@ export class PerimetreProvisoire implements ResolveurPerimetre {
         "L'authentification n'est pas encore installée sur ce serveur : il ne peut pas servir " +
         'de données. Contactez votre exploitant.',
       detailJournal:
-        "refus fail-closed : la session provisoire du lot L2 est inutilisable en production ; " +
-        "l'authentification Active Directory est le lot L3",
+        `refus fail-closed : la session provisoire du lot L2 ne sert qu'en « developpement » ; ` +
+        `environnement courant « ${this.environnement} ». La recette est fermée au même titre ` +
+        "que la production (PLAN_SERVEUR §1.10 : elle porte une copie réaliste de la " +
+        "production). L'authentification Active Directory est le lot L3.",
     });
   }
 
@@ -176,6 +213,7 @@ export class PerimetreProvisoire implements ResolveurPerimetre {
    *    lot L4 qui le lui rendra.
    */
   private async lireFilialeUnique(): Promise<FilialeResolue> {
+    const choisie = filialeDemandeeParLExploitant();
     const filiales = await avecTransaction(
       this.pool,
       PERIMETRE_SYSTEME,
@@ -195,6 +233,27 @@ export class PerimetreProvisoire implements ResolveurPerimetre {
       },
       { lectureSeule: true },
     );
+
+    // ── m-2 : la variable documentée est désormais LUE ──────────────────
+    // `API_FILIALE_PROVISOIRE` était documentée dans `.env.example` et lue par
+    // personne (porte S2, constat m-2). Une variable documentée et sans effet
+    // est pire qu'absente : un exploitant la renseigne et croit avoir choisi.
+    if (choisie !== null) {
+      const retenue = filiales.find((f) => f.id === choisie || f.code === choisie);
+      if (retenue === undefined) {
+        throw new ErreurApplicative({
+          code: 'indisponible',
+          statut: 503,
+          message:
+            "La filiale de travail configurée sur ce serveur n'existe pas, ou n'est pas " +
+            "active. Contactez votre exploitant.",
+          detailJournal:
+            `API_FILIALE_PROVISOIRE = « ${choisie} » ne correspond à aucune filiale active ` +
+            `(codes disponibles : ${filiales.map((f) => f.code).join(', ')})`,
+        });
+      }
+      return { id: retenue.id, code: retenue.code, raisonSociale: retenue.raison_sociale };
+    }
 
     const premiere = filiales[0];
     if (premiere === undefined) {

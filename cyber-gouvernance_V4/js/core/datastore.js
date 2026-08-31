@@ -719,8 +719,16 @@ const DataStore = (() => {
         if (existing) {
             if (JSON.stringify(existing.metrics) === JSON.stringify(metrics)) return existing;
             existing.metrics = metrics; existing.ts = Date.now();
+            // Dérivé aussi à la MISE À JOUR : deux sessions ouvertes le même jour
+            // se disputent le même point quotidien, et le perdant recevrait un
+            // « modifié entre-temps » sur un indicateur que personne n'a saisi.
+            if (typeof Sync !== "undefined") Sync.marquerDerive("history", existing.id);
         } else {
-            data.history.push({ id: "HIST-" + Date.now() + "-" + Math.floor(Math.random() * 1000), ts: Date.now(), date, metrics });
+            const point = { id: "HIST-" + Date.now() + "-" + Math.floor(Math.random() * 1000), ts: Date.now(), date, metrics };
+            data.history.push(point);
+            // Recalculable, jamais saisi : un refus du serveur (deux sessions le
+            // même jour, unicité sur la date) ne doit pas produire d'alerte.
+            if (typeof Sync !== "undefined") Sync.marquerDerive("history", point.id);
             if (data.history.length > HISTORY_KEEP) {
                 data.history.sort((a, b) => (a.date < b.date ? -1 : 1));
                 data.history = data.history.slice(data.history.length - HISTORY_KEEP);
@@ -857,14 +865,40 @@ const DataStore = (() => {
         return { ok: true, payload, encrypted, meta: { version, createdAt }, summary: check.summary };
     }
 
-    // Applique un payload validé. mode: "replace" (défaut) ou "merge".
+    // Applique un payload validé. mode: "merge" (le seul admis) ou "replace".
     //
     // L'import d'un `grc-backup` reste un **format d'échange** (§2.6) : reprise
     // d'une filiale déjà équipée de la version locale. Il s'applique en mémoire,
-    // puis `sync.js` le pousse au serveur enregistrement par enregistrement — un
-    // moteur d'import transactionnel côté serveur est le lot L7.
+    // puis `sync.js` le pousse au serveur enregistrement par enregistrement — le
+    // moteur d'import transactionnel est le lot L7.
+    //
+    // ══ POURQUOI « REMPLACER » EST REFUSÉ (constat B-3 de la porte S2) ═══════
+    //
+    // Avant la bascule, « Remplacer » détruisait la copie navigateur de son seul
+    // auteur, et un point de restauration local existait vraiment. Après la
+    // bascule, le même bouton détruit **le jeu de données serveur de la filiale
+    // entière, pour tout le monde** — en autant de requêtes `DELETE`
+    // indépendantes, donc **hors transaction** : une coupure de VPN au milieu
+    // laisse la filiale à moitié détruite, l'état intermédiaire est visible par
+    // les autres utilisateurs, et rien ne le journalise (le journal d'audit est
+    // le lot L5). L'auditeur l'a rejoué : 8 risques avant, 1 après, 20 `DELETE`,
+    // aucun point de restauration.
+    //
+    // Une destruction irréversible, non transactionnelle, non journalisée et au
+    // rayon d'une filiale entière ne peut pas rester derrière un bouton. Elle est
+    // donc **refusée** jusqu'au moteur d'import transactionnel du lot L7.
+    //
+    // Ce qui reste possible, et qui couvre le besoin de reprise : la **fusion**,
+    // qui ajoute les enregistrements absents et n'en détruit aucun. Une filiale
+    // qu'on équipe est vide : fusionner y produit exactement le même résultat.
+    const MESSAGE_REMPLACEMENT =
+        "Le remplacement complet des données de la filiale n'est pas disponible : il détruirait " +
+        "le contenu du serveur enregistrement par enregistrement, sans transaction et sans retour " +
+        "arrière possible. Utilisez « Fusionner », qui ajoute ce qui manque sans rien supprimer.";
+
     async function applyImport(payload, mode) {
-        if (mode === "merge") {
+        if (mode === "replace") throw new Error(MESSAGE_REMPLACEMENT);
+        if (mode === "merge" || mode === undefined) {
             const incoming = normalize(payload);
             const added = {};
             ARRAY_FIELDS.forEach(f => {
@@ -880,15 +914,7 @@ const DataStore = (() => {
             return { ok: r.ok, added };
         }
 
-        // Remplacement : on vide chaque collection sur place, puis on recharge.
-        const incoming = normalize(payload);
-        ARRAY_FIELDS.forEach(f => {
-            data[f].length = 0;
-            incoming[f].forEach(x => data[f].push(x));
-        });
-        data.schemaVersion = SCHEMA_VERSION;
-        const r = await flush();
-        return { ok: r.ok };
+        throw new Error(MESSAGE_REMPLACEMENT);
     }
 
     return {
