@@ -252,7 +252,7 @@ L3, L6 et L12 se recettent sur des doublures, et cela doit être écrit dans leu
 | Vague | Lots | État | Porte |
 |---|---|---|---|
 | — | L0 socle d'infrastructure | ✅ livré | — |
-| **V1** | L1 schéma relationnel | 🟡 livré, **porte S1 refusée** — correctifs en cours | S1 |
+| **V1** | L1 schéma relationnel | 🟡 livré et corrigé cinq fois ; **porte S1 en cours de 5ᵉ instruction** | S1 |
 | V2 | L2 API et bascule | ⬜ | S2 |
 | V3 | L3 authentification, L5 journal | ⬜ | S3 |
 | V4 | L4 multi-filiales, L6 pièces jointes | ⬜ | S4 |
@@ -271,6 +271,8 @@ Groupe, avant généralisation aux vingt (`PLAN_SERVEUR` §7).
 | **S1** | 31/08/2026 | ❌ **refusée** — 1 bloquant, 3 majeurs, 6 mineurs | [`securite/RAPPORT_S1.md`](securite/RAPPORT_S1.md) |
 | **S1** (2ᵉ) | 31/08/2026 | ❌ **refusée** — 1 bloquant, 3 majeurs, 3 mineurs, **tous neufs** | [`securite/RAPPORT_S1_BIS.md`](securite/RAPPORT_S1_BIS.md) |
 | **S1** (3ᵉ) | 31/08/2026 | ❌ **refusée** — 0 bloquant, 4 majeurs | [`securite/RAPPORT_S1_TER.md`](securite/RAPPORT_S1_TER.md) |
+| **S1** (4ᵉ) | 31/08/2026 | ⚠️ **franchie sous réserve** — 0 bloquant, 5 majeurs. **Réserve jugée bloquante par l'orchestrateur** : l'auditeur pose lui-même la lecture stricte, et le §18.4 exige un chemin de *déploiement* — le constat Q-1 est donc un échec du contrôle S16. Les cinq majeurs sont corrigés. | [`securite/RAPPORT_S1_QUATER.md`](securite/RAPPORT_S1_QUATER.md) |
+| **S1** (5ᵉ) | 31/08/2026 | 🔄 **en cours d'instruction** | `securite/RAPPORT_S1_QUINQUIES.md` |
 
 Ce que trois passages ont appris, et qui vaut pour toutes les portes à venir :
 
@@ -285,6 +287,14 @@ Ce que trois passages ont appris, et qui vaut pour toutes les portes à venir :
   correctifs ont été acceptés parce que la suite restait verte — or la suite restait verte
   **parce que rien n'exerçait le chemin corrigé**. C'est le sens de la règle « sans les tests, le
   correctif ne compte pas ».
+- **Une liste écrite à la main est une omission qui attend.** Le motif a produit quatre défauts
+  distincts : sept clés étrangères oubliées, les déclencheurs d'insertion, une table de liaison
+  sur sept, et le point d'appel des garde-fous lui-même. La parade n'est pas la vigilance, c'est
+  la **découverte dans le catalogue** — et elle a fini par être appliquée au dispositif de
+  contrôle lui-même.
+- **Le journal ci-dessus se tient à jour à chaque passage.** Il a pris deux passages de retard
+  pendant le chantier, et c'est un agent de documentation qui l'a signalé : les autres documents
+  y renvoient, un lecteur y aurait donc trouvé un état antérieur au dernier rapport.
 
 Le bloquant mérite d'être retenu, parce qu'il justifie à lui seul le dispositif : sept clés
 étrangères directes traversaient la frontière de filiale, si bien qu'une suppression ordinaire

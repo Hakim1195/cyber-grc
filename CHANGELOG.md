@@ -9,9 +9,13 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 ## [Non publié]
 
 ### Serveur — vague 1 : le schéma relationnel (lot L1) et son outillage
-> Livré et éprouvé en exécution. **La porte de sécurité S1 est en cours d'instruction**
-> par un auditeur indépendant au moment où ces lignes sont écrites : le lot est livré,
-> il n'est pas validé, et aucun verdict n'est annoncé ici.
+> Travail de la vague 1 terminé et **rejoué en exécution** au 31/08/2026 : migrations
+> appliquées sur base neuve, tests lancés, démonstration de cloisonnement jouée.
+> **La porte de sécurité S1 a été jouée plusieurs fois et est en cours de re-passage**
+> au moment où ces lignes sont écrites. Chaque passage a produit des correctifs, dont
+> le détail figure plus bas. Le verdict de chaque passage vit dans le journal des
+> portes de `docs/PLAN_EXECUTION.md` §7 et dans les rapports de `docs/securite/` :
+> **aucun verdict n'est annoncé ici**, et livré ne veut pas dire validé.
 
 - **Schéma métier — `002_metier_noyau.sql`** : 9 entités (clients, personnes, exigences,
   **`mesure_catalogue`**, **`mesure_mise_en_oeuvre`**, évaluations, risques, actifs,
@@ -24,20 +28,51 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   traitements RGPD, correspondances, historique) et 4 liaisons, dont **`mapping_exigences`**
   (le `mappings.refs` du modèle navigateur est un objet de tableaux d'identifiants : il
   devient une table fille, pas du JSONB).
-- **Cascades portées par la base** : les suppressions du `DATA_MODEL.md` §3 ne sont plus
-  écrites dans le code mais dans le schéma (`on delete cascade` / `set null`,
-  `CONVENTIONS.md` §8). Vérifié sur la base : une action tombe avec son exigence, son risque,
-  son évaluation ou son incident, mais **survit** à la suppression de sa mesure
-  (`mesure_id → null`) ; un test PRA tombe avec son scénario. Le chantier de rattrapage des
-  tests orphelins n'a plus lieu d'être.
+- **Suppressions portées par la base — et amendées pour le multi-filiales.** Les cascades du
+  `DATA_MODEL.md` §3 ne sont plus écrites dans le code mais dans le schéma
+  (`CONVENTIONS.md` §8) : une action tombe avec son exigence, son risque, son évaluation ou
+  son incident ; un test PRA tombe avec son scénario ; les dépendances d'actifs sont purgées
+  des deux côtés. Le chantier de rattrapage des tests orphelins n'a plus lieu d'être.
+  **Mais les règles écrites pour un produit mono-filiale ont dû être amendées** : relevé dans
+  `pg_constraint`, le schéma compte **43 clés étrangères en `restrict`, 27 en `cascade` et une
+  seule en `set null`** (`incidents.risque_id`). En particulier **`actions.mesure_id` est en
+  `restrict`, et non en `set null`** : une suppression déclenchée au niveau Groupe aurait
+  réécrit les lignes de vingt filiales — incrémentant leur `version` et y inscrivant le nom de
+  quelqu'un qui n'y a jamais travaillé, dans des lignes qu'il ne peut même pas lire
+  (`CONVENTIONS.md` §17.6 et §18.2).
+- **Un contrôle du socle déjà évalué ne disparaît plus : il s'archive.** `mesure_catalogue`
+  porte un état de cycle de vie (`active` / `archivee`) et sa date. Une mesure archivée reste
+  lisible et reste rattachée à tout ce qui la référence — la preuve historique survit — mais
+  n'est plus proposée pour de nouvelles évaluations. C'est la seule issue qui ne détruise rien
+  chez les filiales tout en laissant le Groupe faire évoluer son socle.
 - **Cloisonnement — `004_rls.sql`** : **188 politiques**, Row Level Security **activée et
   forcée sur les 47 tables** (le propriétaire y est soumis comme les autres), déclencheurs
-  de cohérence catalogue ↔ filiale, et **garde-fou de couverture** — une table à `filiale_id`
-  ajoutée demain sans politique fait échouer le contrôle au lieu de fuir en silence.
+  de cohérence catalogue ↔ filiale, et garde-fous de couverture.
+- **Les contrôles que PostgreSQL applique hors des politiques portent `filiale_id`.** La RLS ne
+  voit ni les clés étrangères, ni les unicités : une clé simple est satisfaite par une ligne
+  **invisible** de la filiale voisine, et une unicité sans `filiale_id` laisse une filiale
+  occuper l'identifiant d'une autre. D'où **11 clés étrangères composites** `(référence,
+  filiale_id)` et **9 unicités `uq_<parent>_id_filiale`** (`CONVENTIONS.md` §17.1 et §19.1).
+- **La traçabilité est imposée à la création**, sur les **42 tables** portant `cree_par` : un
+  déclencheur `before insert` fixe `version`, `cree_le` et `cree_par` ; ce que l'appelant envoie
+  dans ces colonnes est ignoré. Sans lui, une ligne créée au nom d'un directeur général qu'on
+  n'est pas — à la date qu'on choisit — devenait une pièce d'audit inattaquable, le gel opéré
+  ensuite figeant la forgerie pour toujours (`CONVENTIONS.md` §18.1).
+- **Les garde-fous du schéma sont branchés, et ils se découvrent.** `db/migrate.mjs` et
+  `deploy/install.sh` appellent **`f_verifier_schema()`**, et elle seule : un **point d'appel
+  unique** qui trouve ses contrôles dans le catalogue au lieu de les réciter. Un garde-fou neuf
+  respectant la convention d'écriture (`f_verifier_<x>()`, sans argument, rendant
+  `(objet, anomalie, detail)`) arrive donc sur le déploiement **sans qu'aucun fichier de
+  déploiement change**. Quatre sont branchés aujourd'hui : couverture RLS, chemin de recherche
+  des fonctions, traçabilité, unicités cloisonnées. Nouveau **code de sortie 7** de
+  `migrate.mjs` : « migrations passées, schéma non conforme » (`CONVENTIONS.md` §19.4, §19.5).
 - **`db/verifier_cloisonnement.sql`** : la démonstration jouable devant un auditeur —
-  **28 contrôles**, deux filiales montées puis annulées par un `rollback` (le script n'écrit
-  rien de durable). Lecture, écriture, liaisons, mesures, périmètre, journal, privilèges du
-  rôle applicatif, couverture. Joué avec `grc_app` : **28 réussis, 0 échec**.
+  **93 contrôles**, deux filiales montées puis annulées par un `rollback` (le script n'écrit
+  rien de durable). Joué avec `grc_app` : **93 réussis, 0 échec**. Il **n'est appelé par aucun
+  chemin d'installation, et c'est délibéré** : c'est un geste de **recette**, avant mise en
+  service puis annuellement, au même titre que le test de restauration des sauvegardes — il
+  sème des données de démonstration et éprouve un *comportement*, là où les garde-fous du
+  schéma lisent des *déclarations* (`CONVENTIONS.md` §18.5).
 - **`db/migrate.mjs`** : l'exécuteur de migrations qu'`install.sh` appelait depuis le lot L0
   **sans qu'il existe**. Ordre déterministe (un nom hors convention échoue au lieu d'être
   ignoré), connexion imposée au compte propriétaire, empreinte SHA-256 mémorisée à
@@ -45,10 +80,10 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   deux bases divergentes. `--verifier`, `--jusqu-a`, codes de sortie documentés.
 - **`db/dev/preparer_base_dev.sh`** : base de développement et de recette, idempotente,
   refusant de tourner sous `NODE_ENV=production`.
-- **Banc d'essai — 144 tests `node:test`, 0 échec** : 78 sur la base (socle, journal en ajout
-  seul et chaînage, verrouillage optimiste, RLS, privilèges) et 66 sur la reprise. Chaque
-  fichier de test monte une base neuve **en appelant le vrai `db/migrate.mjs`** : l'outil de
-  migration est éprouvé en même temps que le schéma.
+- **Banc d'essai — 306 tests `node:test`, 0 échec** : **229 sur la base** (socle, journal en
+  ajout seul et chaînage, verrouillage optimiste, RLS, privilèges, garde-fous du schéma) et
+  **77 sur la reprise**. Chaque fichier de test monte une base neuve **en appelant le vrai
+  `db/migrate.mjs`** : l'outil de migration est éprouvé en même temps que le schéma.
 - **Reprise des exports `grc-backup` (`src/reprise/**`)** : portage serveur des migrations
   **v1 → v12** et lecture d'enveloppe, en vue d'absorber l'export d'une société rachetée quelle
   que soit son ancienneté. Module **pur** (ni base, ni disque, ni horloge), qui ne lève jamais :
@@ -66,8 +101,24 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   persistance de la SPA n'est pas commencée (lot L2, vague 2). **Rien n'a pu être éprouvé** en
   conditions réelles pour l'installation Debian 13, Apache, ClamAV, l'Active Directory ni le
   relais SMTP : ces environnements n'existent pas sur la machine de développement. Les
-  vérifications ci-dessus ont été menées sur **PostgreSQL 16** alors que la cible est
+  vérifications ci-dessus ont été menées sur **PostgreSQL 16.13** alors que la cible est
   **PostgreSQL 17**.
+- **Dette explicitement reportée, datée, et non refermée par cette vague** — le détail et les
+  échéances sont dans `backend/README.md` §8 :
+  - les tables du substrat d'authentification (`sessions`, `session_filiales`,
+    `session_domaines`) restent **écrivables sans condition** par le rôle applicatif — c'est
+    circulaire et assumé, et c'est une **condition d'entrée du lot L3** (`CONVENTIONS.md` §17.4) ;
+  - **la lecture du journal d'audit n'est pas cloisonnée** : dérogation qu'impose le chaînage
+    par empreinte, sans effet tant que le journal est vide, mais dont le resserrement est un
+    **livrable ferme du lot L5** ;
+  - `UPDATE 0` ne distingue pas « ligne absente », « version périmée » et « écriture refusée
+    par la RLS », alors que `GRC03` se définit sur ce zéro : **à traiter dans la conception du
+    lot L2**, sous peine d'annoncer « modifié entre-temps, rechargez » à qui n'avait pas le
+    droit d'écrire ;
+  - la **colonne engendrée** `portee_groupe` de `documents` impose que toute insertion nomme
+    ses colonnes : contrainte à respecter par **L2** et **L7** (`CONVENTIONS.md` §18.6) ;
+  - un compte ou une filiale cité au journal devient **structurellement indestructible** : la
+    purge de sortie de filiale reste à écrire au **lot L13**.
 
 ### Outillage — skill Claude Code `ui-ux-pro-max`
 - Installation de la skill **`ui-ux-pro-max` v2.13.0** (MIT) dans `.claude/skills/ui-ux-pro-max/` :

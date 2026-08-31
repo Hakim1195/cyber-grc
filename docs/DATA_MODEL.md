@@ -9,19 +9,47 @@
 >
 > Le produit est passé à une architecture client/serveur multi-filiales
 > (`../docs/PLAN_SERVEUR.md`). Un **schéma PostgreSQL** existe et est appliqué :
-> `backend/db/migrations/001_socle.sql` → `004_rls.sql`, dont les arbitrages sont
-> figés dans **[`backend/db/CONVENTIONS.md`](../backend/db/CONVENTIONS.md) §16**.
+> `backend/db/migrations/001_socle.sql` → `004_rls.sql`, 47 tables, dont les arbitrages
+> sont figés dans **[`backend/db/CONVENTIONS.md`](../backend/db/CONVENTIONS.md)** — §16
+> pour le découpage initial, **§17 à §19 pour les décisions prises au fil de la porte de
+> sécurité S1**, qui ont amendé plusieurs règles écrites ci-dessous.
 >
 > **Ce document reste la référence du frontend** — il n'est pas remplacé. Mais il ne
-> décrit pas la base du serveur, et les deux modèles diffèrent volontairement sur
-> quatre points :
+> décrit pas la base du serveur, et les deux modèles diffèrent volontairement :
 >
 > | Ici (navigateur) | Là (PostgreSQL) |
 > |---|---|
-> | une entité **`mesures`** unique | **scindée** en `mesure_catalogue` (la *définition* du contrôle, niveau Groupe ou local) et `mesure_mise_en_oeuvre` (l'*évaluation* du contrôle dans une filiale). Sans cette scission, les filiales ne sont plus comparables et la vision Groupe additionne des grandeurs incomparables (`CONVENTIONS.md` §16.2) |
+> | une entité **`mesures`** unique | **scindée** en `mesure_catalogue` (la *définition* du contrôle, niveau Groupe ou local) et `mesure_mise_en_oeuvre` (l'*évaluation* du contrôle dans une filiale, unique sur `(filiale_id, mesure_id)`). Sans cette scission, les filiales ne sont plus comparables et la vision Groupe additionne des grandeurs incomparables (`CONVENTIONS.md` §16.2) |
+> | une mesure se **supprime** | une mesure du socle Groupe déjà évaluée ou référencée **ne se supprime pas** : elle s'**archive** (`mesure_catalogue.statut` = `active` / `archivee`, plus `archive_le`). Elle reste lisible et reste rattachée à tout ce qui la référence — la preuve historique survit — mais n'est plus proposée pour de nouvelles évaluations (`CONVENTIONS.md` §17.6) |
 > | tableaux d'identifiants dans l'objet (`exigences_liees`, `risques_lies`, `actifs_lies`, `mesure_ids`, `dependances[]`, `mappings.refs`) | **tables de liaison** n-n avec de vraies clés étrangères (`risque_exigences`, `actif_risques`, `processus_actifs`, `actif_dependances`, `evaluation_mesures`, `incident_actifs`, `traitement_mesures`, `document_referentiels`, `mapping_exigences`) |
-> | cascades de suppression **écrites dans le code** (`DataStore.deleteX`) | cascades **portées par le schéma** (`on delete cascade` / `set null`, `CONVENTIONS.md` §8) : le rattrapage des tests PRA orphelins n'a plus lieu d'être |
-> | aucune notion de filiale | **cloisonnement par filiale**, colonne `filiale_id` et Row Level Security activée *et forcée* sur toutes les tables |
+> | cascades de suppression **écrites dans le code** (`DataStore.deleteX`) | suppressions **portées par le schéma** — mais **pas les mêmes** : voir l'encadré ci-dessous |
+> | aucune notion de filiale | **cloisonnement par filiale** : colonne `filiale_id`, Row Level Security activée *et forcée* sur les 47 tables, **clés étrangères et unicités composites** `(référence, filiale_id)` (`CONVENTIONS.md` §17.1 et §19.1) |
+> | `updatedAt` posé par le code appelant | **traçabilité imposée par la base** : sur les 42 tables portant le bloc `version` / `cree_le` / `cree_par` / `modifie_le` / `modifie_par`, un déclencheur `before insert` **ignore ce que l'appelant envoie** dans ces colonnes et les fixe lui-même (`CONVENTIONS.md` §18.1). À l'import d'un export `grc-backup`, l'auteur tracé est donc **celui qui importe**, à la date de l'import |
+> | rien d'équivalent | `documents` et `document_referentiels` portent une **colonne engendrée** (`portee_groupe`, = `filiale_id is null`) qui entre dans une clé étrangère. PostgreSQL refuse qu'on lui donne une valeur : **toute insertion nomme ses colonnes**, et un aller-retour naïf qui relit une ligne entière puis la réinsère échoue (`CONVENTIONS.md` §18.6) |
+>
+> ### ⚠️ Les cascades du §3 ne se transposent pas telles quelles
+>
+> Les règles de suppression décrites plus bas ont été écrites pour un produit
+> **mono-filiale**, où le rayon d'une suppression ne quittait pas le poste de
+> l'utilisateur. En contexte de groupe, elles produisent l'effet inverse de leur
+> intention. Relevé dans `pg_constraint` : sur 71 clés étrangères, **43 sont en
+> `restrict`, 27 en `cascade`, et une seule en `set null`**.
+>
+> | Règle du navigateur | Schéma serveur |
+> |---|---|
+> | l'action tombe avec son exigence / son risque / son évaluation / son incident | `cascade` — **identique** |
+> | le test PRA tombe avec son scénario | `cascade` — **identique** |
+> | les dépendances d'actifs sont purgées des deux côtés | `cascade` — **identique** |
+> | l'incident survit à son risque (`risque_id → null`) | `set null` — **identique**, et c'est la **seule** de tout le schéma |
+> | `deleteMesure` **délie** les évaluations et les actions (`mesure_id → null`) | ⚠️ **`restrict`** : la suppression est **refusée**. `actions.mesure_id`, `evaluation_mesures`, `traitement_mesures` et `mesure_mise_en_oeuvre` pointent tous vers `mesure_catalogue` en `restrict` (`CONVENTIONS.md` §17.6) |
+> | — | ⚠️ `personnes.utilisateur_id` → `utilisateurs` est également en **`restrict`** (`CONVENTIONS.md` §18.2) |
+>
+> **Pourquoi.** Un `set null` ou un `cascade` déclenché depuis le niveau **Groupe**
+> réécrit les lignes de vingt filiales : il incrémente leur `version` et y inscrit le nom
+> de quelqu'un qui n'y a jamais travaillé, dans des lignes que l'auteur ne peut même pas
+> lire. Délier reste possible, mais devient un **geste explicite**, fait dans le périmètre
+> de celui qui le fait — la couche applicative délie puis supprime, dans la même
+> transaction, exactement comme aujourd'hui côté navigateur.
 >
 > Deux choses **ne** changent **pas**, et c'est délibéré : les **identifiants texte**
 > (`"RISK-<horodatage>-<aléa>"`) restent les clés primaires — c'est ce qui rend la
@@ -445,6 +473,9 @@ Cascades implémentées : `deleteClient`→exigences→actions ; `deleteExigence
 risques + supprime actions liées ; `deleteRisque`→délie actifs + supprime actions liées ;
 `deleteActif`→délie incidents (`actifs_touches`) + **purge les `dependances` pointant vers l'actif** (v9).
 > ⚠️ Orphelins possibles : `TestPra.scenario_id` vers un scénario supprimé (non nettoyé).
+> ⚠️ **Côté serveur, ces règles ne se transposent pas telles quelles** : les suppressions
+> qui touchent `mesure_catalogue` (et `utilisateurs`) sont en `restrict`, pas en `set null`.
+> Voir l'encadré en tête de document et `backend/db/CONVENTIONS.md` §17.6 et §18.2.
 
 ---
 

@@ -401,18 +401,39 @@ sur l'**Active Directory** du groupe.
   rend l'import d'un export `grc-backup` exact au round-trip.
 - **Le périmètre de session vient du serveur**, jamais d'une valeur transmise par le
   navigateur (`cyber-context` en `localStorage` est à retirer côté frontend).
+- **Tout contrôle que PostgreSQL applique hors des politiques porte `filiale_id`** —
+  clé étrangère, unicité, exclusion. La RLS ne les voit pas : une clé simple est
+  satisfaite par une ligne **invisible** de la filiale voisine, et une unicité sans
+  `filiale_id` laisse une filiale occuper l'identifiant d'une autre. La porte S1 l'a
+  élargie en deux temps : aux clés étrangères d'abord (`CONVENTIONS.md` §17.1), aux
+  unicités ensuite (§19.1).
+- **Un garde-fou que rien n'appelle est un commentaire.** Tout contrôle automatique du
+  schéma se branche sur `f_verifier_schema()`, le point d'appel unique appelé par
+  `migrate.mjs` et `install.sh` — et il s'y branche **en respectant la convention
+  d'écriture** (`f_verifier_<x>()`, sans argument, rendant `(objet, anomalie, detail)`),
+  pas en s'ajoutant à une liste. Ne jamais réintroduire de liste écrite à la main
+  (`CONVENTIONS.md` §18.4, §19.4 et §19.5).
 
 ### Avancement au 31/08/2026
 
 | Lot | État |
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache + durcissement de portée serveur, `install.sh` idempotent, `backend/README.md` |
-| **L1 — Schéma relationnel** | ✅ **livré** (vague 1) — **47 tables** en 4 migrations, appliquées sur base neuve ; **188 politiques**, RLS activée **et forcée** partout ; `verifier_cloisonnement.sql` (28 contrôles) et `migrate.mjs` livrés ; **144 tests** `node:test` verts. ⚠️ **Porte de sécurité S1 en cours d'instruction — livré ≠ validé** |
+| **L1 — Schéma relationnel** | ✅ **livré** (vague 1), puis **corrigé au fil de la porte S1** — **47 tables** en 4 migrations, appliquées sur base neuve ; **188 politiques**, RLS activée **et forcée** partout ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur 42 tables ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()` ; `verifier_cloisonnement.sql` (**93 contrôles**, 0 échec) et `migrate.mjs` livrés ; **306 tests** `node:test` verts (229 base + 77 reprise). ⚠️ **Porte S1 jouée plusieurs fois et en cours de re-passage — livré ≠ validé** |
 | L2 → L15 | ⬜ à faire — vagues 2 à 8, voir `docs/PLAN_EXECUTION.md` §3 et `PLAN_SERVEUR` §7 |
 
 Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 `grc-backup`** (`backend/src/reprise/**`, portage serveur des migrations v1 → v12,
-module pur, 66 tests) et **base de développement** (`db/dev/preparer_base_dev.sh`).
+module pur, 77 tests) et **base de développement** (`db/dev/preparer_base_dev.sh`).
+
+**État de la porte S1 — à lire, pas à deviner.** Le lot L1 a été soumis plusieurs fois
+à la porte de sécurité, chaque passage étant mené par un auditeur qui n'avait écrit
+aucune des lignes examinées. **Le verdict de chaque passage vit dans le journal des
+portes de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7**, avec le rapport
+correspondant dans `docs/securite/` — c'est la source, et la seule. Un re-passage est
+en cours : **ne rien conclure de l'absence de verdict ici.** Les arbitrages issus des
+passages successifs sont figés dans `backend/db/CONVENTIONS.md` **§17, §18 et §19** :
+les lire avant de toucher au schéma évite de rouvrir ce qui vient d'être fermé.
 
 **Reprendre ici — vague 2, lot L2 (API et bascule de la persistance)**, le lot qui
 porte le risque projet **P1** (écrasement silencieux) : couche d'accès générique par
@@ -422,14 +443,37 @@ entité, **verrouillage optimiste** (`where id = $1 and version = $2`, zéro lig
 synchrone est préservée, aucun module métier n'est réécrit. Ne pas démarrer tant que
 la porte S1 n'est pas franchie (`docs/PLAN_EXECUTION.md` §1).
 
+**Trois pièges que la vague 1 lègue à L2**, et qu'il vaut mieux traiter à la
+conception qu'après :
+
+1. **`UPDATE 0` n'est pas toujours un conflit de version.** Il vaut aussi « ligne
+   absente » et « écriture refusée par la RLS ». Or `GRC03` se définit exactement sur
+   ce zéro (`CONVENTIONS.md` §15) : sans distinction, l'API annoncera « modifié
+   entre-temps, rechargez » à un utilisateur qui n'avait pas le droit d'écrire.
+2. **Le client ne fixe plus `version`, `cree_le` ni `cree_par`** — la base les impose
+   à l'insertion et les gèle ensuite (`CONVENTIONS.md` §18.1). Une couche d'écriture
+   qui les envoie ne provoque pas d'erreur : ses valeurs sont simplement ignorées.
+3. **`documents` porte une colonne engendrée** (`portee_groupe`) qui entre dans une
+   clé étrangère : toute insertion doit **nommer ses colonnes**, et un aller-retour
+   naïf « je relis la ligne, je la réinsère » échoue (`CONVENTIONS.md` §18.6).
+
 **Comment le chantier est conduit** (vagues, propriété exclusive des fichiers par
 agent, grille de sécurité rejouée à chaque porte, définition de « terminé ») :
 **`docs/PLAN_EXECUTION.md`**. Conventions de schéma : **`backend/db/CONVENTIONS.md`**.
+État détaillé des lots et des réserves : **`backend/README.md` §8**.
 
 **Ce qui n'a pas pu être vérifié** sur la machine de développement, et qui reste donc
 à éprouver sur la VM cible : l'installation Debian 13 complète, Apache, ClamAV,
-l'Active Directory et le relais SMTP. Le schéma a été validé sur **PostgreSQL 16**,
+l'Active Directory et le relais SMTP. Le schéma a été validé sur **PostgreSQL 16.13**,
 la cible est **PostgreSQL 17**.
+
+**Dette reportée, assumée et datée** (détail et échéances dans `backend/README.md` §8) :
+les tables du substrat d'authentification (`sessions`, `session_filiales`,
+`session_domaines`) restent écrivables sans condition par le rôle applicatif —
+**condition d'entrée de L3** (`CONVENTIONS.md` §17.4) ; **la lecture du journal d'audit
+n'est pas cloisonnée**, dérogation qu'impose le chaînage par empreinte et dont le
+resserrement est un **livrable ferme de L5** ; la purge de sortie d'une filiale
+(`PLAN_SERVEUR` §2.7) n'a aucun chemin applicatif et revient au **lot L13**.
 
 ### Vérifications à mener au démarrage du projet (côté client)
 
