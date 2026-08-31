@@ -2566,3 +2566,652 @@ describe('Portée des liens documentaires et armement des déclencheurs (N-10, N
     assert.deepEqual([...new Set(armement.map((l) => l.armement))], ['A']);
   });
 });
+
+/* =====================================================================
+ *  §18.1 — La traçabilité est imposée à l'INSERTION comme à la modification
+ * =====================================================================
+ *
+ *  Constat T-1 du troisième passage, et c'est lui qui met le contrôle S4 de la grille en
+ *  échec : son texte de preuve dit « le client ne peut pas fixer `version` ». Il le
+ *  pouvait — à la création. Les deux audits précédents ont éprouvé l'`update` de fond en
+ *  comble et jamais l'`insert`, où aucun déclencheur n'intervenait.
+ *
+ *  Le pire n'était pas la valeur forgée mais son sort : `f_maj_tracabilite()` GÈLE
+ *  `cree_le` et `cree_par` à chaque modification, si bien que la forgerie devenait
+ *  définitive et inaltérable. Le mécanisme qui protège la vérité protégeait le mensonge.
+ */
+
+describe('Traçabilité imposée à l’insertion (CONVENTIONS §18.1)', () => {
+  test('LA PREUVE FABRIQUÉE : version, cree_par et cree_le fournis sont IGNORÉS', async () => {
+    // Le scénario du rapport, mot pour mot : une ligne créée aujourd'hui par « alice » se
+    // présentait comme créée quinze mois plus tôt par le directeur général — et le gel
+    // rendait la chose définitive.
+    const ligne = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      await c.query(
+        `insert into risques (id, filiale_id, nom, version, cree_par, cree_le,
+                              modifie_par, modifie_le)
+             values ('RISK-USURPE', $1, 'Risque accepté par la direction', 42,
+                     'marc.dupuis (DG)', '2024-01-15', 'marc.dupuis (DG)', '2024-01-15')`,
+        [A],
+      );
+      return (await c.query(
+        `select version, cree_par, cree_le::date::text as cree_le, modifie_par, modifie_le
+           from risques where id = 'RISK-USURPE'`,
+      )).rows[0];
+    });
+
+    assert.equal(ligne.version, 1, 'La version d’une ligne qui naît vaut 1, quoi qu’on envoie.');
+    assert.equal(ligne.cree_par, 'rssi-site', 'L’auteur vient de la session, pas du corps de la requête.');
+    assert.equal(
+      ligne.cree_le,
+      new Date().toISOString().slice(0, 10),
+      'La date de création est celle du serveur — l’antidatage est fermé.',
+    );
+    assert.equal(ligne.modifie_par, null, 'Une ligne qui naît n’a jamais été modifiée.');
+    assert.equal(ligne.modifie_le, null);
+  });
+
+  test('IGNORÉ, JAMAIS REFUSÉ : une charge qui porte ces colonnes s’insère quand même', async () => {
+    // Condition explicite du §18.1 : un export grc-backup contient ces colonnes, et la
+    // reprise ne doit pas échouer pour autant. Refuser aurait été plus simple à écrire et
+    // aurait cassé le lot L7.
+    const affectees = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => (
+      await c.query(
+        `insert into actifs (id, filiale_id, nom, version, cree_par, cree_le)
+             values ('ACTIF-REPRISE', $1, 'ERP repris', 7, 'ancien-systeme', '2019-06-01')`,
+        [A],
+      )
+    ).rowCount);
+    assert.equal(affectees, 1);
+  });
+
+  test('LE GEL DÉFINITIF DISPARAÎT : version au maximum de l’entier ne fige plus la ligne', async () => {
+    // « new.version := old.version + 1 » débordait, et l'erreur avortait la transaction
+    // entière : la ligne devenait DÉFINITIVEMENT immodifiable. Le cas s'éteint de lui-même
+    // dès lors que la valeur ne peut plus venir de l'appelant.
+    const etat = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      await c.query(
+        `insert into risques (id, filiale_id, nom, version) values ('RISK-GEL', $1, 'gelé', 2147483647)`,
+        [A],
+      );
+      const nee = (await c.query("select version from risques where id = 'RISK-GEL'")).rows[0].version;
+      await c.query("update risques set nom = 'modifié' where id = 'RISK-GEL'");
+      const apres = (await c.query("select version from risques where id = 'RISK-GEL'")).rows[0].version;
+      return { nee, apres };
+    });
+    assert.deepEqual(etat, { nee: 1, apres: 2 }, 'La ligne naît en 1 et reste modifiable.');
+  });
+
+  test('les tables SANS version sont tracées aussi — liaisons et profil_domaines', async () => {
+    // Trois formes de tables, trois fonctions miroir. Une liaison n'a que sa création à
+    // enregistrer ; profil_domaines a en plus des colonnes de modification, sans version.
+    const liaison = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      // Une exigence NEUVE : le semis a déjà posé le lien RISK-A ↔ EX-A, et « on conflict
+      // do nothing » rendrait la ligne du semeur au lieu de celle qu'on veut éprouver.
+      await c.query(
+        `insert into exigences (id, filiale_id, code, intitule) values ('EX-T1', $1, 'A.5.9', 'Essai')`,
+        [A],
+      );
+      await c.query(
+        `insert into risque_exigences (risque_id, exigence_id, cree_par, cree_le)
+             values ('RISK-A', 'EX-T1', 'usurpe', '1999-01-01')`,
+      );
+      return (await c.query(
+        `select cree_par, cree_le::date::text as cree_le from risque_exigences
+          where risque_id = 'RISK-A' and exigence_id = 'EX-T1'`,
+      )).rows[0];
+    });
+    assert.equal(liaison.cree_par, 'rssi-site');
+    assert.equal(liaison.cree_le, new Date().toISOString().slice(0, 10));
+
+    const domaine = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+      await c.query(
+        `insert into profils (id, code, nom) values ('PROF-T1', 'ZZT1', 'Profil d''essai')`,
+      );
+      await c.query(
+        `insert into profil_domaines (profil_id, domaine, niveau, cree_par, modifie_par)
+             values ('PROF-T1', 'risques', 'lecture', 'usurpe', 'usurpe')`,
+      );
+      return (await c.query(
+        `select cree_par, modifie_par from profil_domaines where profil_id = 'PROF-T1'`,
+      )).rows[0];
+    });
+    assert.deepEqual(domaine, { cree_par: 'rssi-site', modifie_par: null });
+  });
+
+  test('LE BALAYAGE : toute table portant « cree_par » a son déclencheur, armé en « always »', async () => {
+    // Balayage écrit ICI, indépendamment de f_verifier_tracabilite() : un test qui se
+    // contenterait d'appeler la fonction du schéma la validerait par elle-même. Les deux
+    // doivent dire la même chose, et le test suivant vérifie qu'elles le disent.
+    const fautives = await base.lignes(
+      proprietaire,
+      `select c.relname::text || ' (' || coalesce(x.fonction, 'AUCUN') || '/'
+                              || coalesce(x.armement, '-') || ')' as fautive
+         from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+         left join lateral (
+              select p.proname::text as fonction, t.tgenabled::text as armement
+                from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+               where t.tgrelid = c.oid and not t.tgisinternal
+                 and t.tgname = 'trg_' || c.relname || '_creation') x on true
+        where n.nspname = 'public' and c.relkind in ('r', 'p')
+          and exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                       and a.attname = 'cree_par' and a.attnum > 0 and not a.attisdropped)
+          and (x.fonction is null or x.armement <> 'A'
+               or x.fonction <> case
+                    when exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                                  and a.attname = 'version' and a.attnum > 0 and not a.attisdropped)
+                         then 'f_init_tracabilite'
+                    when exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                                  and a.attname = 'modifie_le' and a.attnum > 0 and not a.attisdropped)
+                         then 'f_init_horodatage'
+                    else 'f_init_creation' end)
+        order by 1`,
+    );
+    assert.deepEqual(fautives.map((l) => l.fautive), []);
+
+    const tracees = await base.valeur(
+      proprietaire,
+      `select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind in ('r', 'p')
+          and exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                       and a.attname = 'cree_par' and a.attnum > 0 and not a.attisdropped)`,
+    );
+    assert.ok(tracees >= 42, `Balayage suspect : ${tracees} table(s) seulement.`);
+  });
+
+  test('ET LE GARDE-FOU DU SCHÉMA DIT LA MÊME CHOSE — puis il MORD', async () => {
+    assert.deepEqual(await base.lignes(proprietaire, 'select objet from f_verifier_tracabilite()'), []);
+
+    // Contrôle de morsure : on retire le déclencheur d'une table, on vérifie que la
+    // fonction le voit, et — c'est le point — que le client peut alors forger de nouveau.
+    await proprietaire.query('drop trigger trg_risques_creation on risques');
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select anomalie from f_verifier_tracabilite() where objet = 'risques'",
+      );
+      assert.deepEqual(anomalies.map((l) => l.anomalie), ['creation_non_tracee']);
+
+      const forgee = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+        await c.query(
+          `insert into risques (id, filiale_id, nom, version, cree_par)
+               values ('RISK-MORSURE', $1, 'x', 99, 'usurpateur')`,
+          [A],
+        );
+        return (await c.query("select version, cree_par from risques where id = 'RISK-MORSURE'")).rows[0];
+      });
+      assert.deepEqual(forgee, { version: 99, cree_par: 'usurpateur' }, 'Sans le déclencheur : c’est T-1.');
+
+      // Et l'armement compte : « origin » se désarme par un réglage de session.
+      await proprietaire.query(
+        'create trigger trg_risques_creation before insert on risques '
+          + 'for each row execute function f_init_tracabilite()',
+      );
+      assert.deepEqual(
+        (await base.lignes(
+          proprietaire,
+          "select anomalie from f_verifier_tracabilite() where objet = 'risques'",
+        )).map((l) => l.anomalie),
+        ['creation_desarmable'],
+      );
+    } finally {
+      await proprietaire.query('drop trigger if exists trg_risques_creation on risques');
+      await proprietaire.query(
+        'create trigger trg_risques_creation before insert on risques '
+          + 'for each row execute function f_init_tracabilite()',
+      );
+      await proprietaire.query('alter table risques enable always trigger trg_risques_creation');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select objet from f_verifier_tracabilite()'), []);
+  });
+});
+
+/* =====================================================================
+ *  §18.2 — Toute action référentielle qui franchit une frontière est bornée
+ * =====================================================================
+ *
+ *  Constat T-2. `personnes.utilisateur_id → utilisateurs` était en `on delete set null` :
+ *  la DERNIÈRE action référentielle du schéma à traverser une frontière de niveau sans
+ *  être bornée. Supprimer un compte réécrivait les fiches d'annuaire de toutes les
+ *  filiales, y compris celles que l'auteur ne peut pas lire — `version` incrémentée,
+ *  `modifie_par` portant le nom de quelqu'un qui n'y a jamais travaillé.
+ *
+ *  La politique d'écriture de `personnes` exige pourtant `filiale_id = f_filiale_ecriture()`.
+ *  Elle n'est jamais évaluée : les contrôles d'intégrité référentielle contournent
+ *  délibérément la RLS. C'est le raisonnement du §17.1, appliqué aux clés et jamais aux
+ *  ACTIONS — et le §18.2 en fait maintenant une règle générale.
+ */
+
+describe('Actions référentielles bornées (CONVENTIONS §18.2, constat T-2)', () => {
+  /** Provisionne un compte et le rattache à une fiche d'annuaire de chaque filiale. */
+  async function annuaireLie(c, compte) {
+    await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+    await c.query(
+      `insert into utilisateurs (id, identifiant, nom_affichage) values ($1, $2, 'Compte lié')`,
+      [compte, `login-${compte}`],
+    );
+    await c.query("select set_config('grc.administration_groupe', '', true)");
+    for (const [filiale, suffixe] of [[A, 'A'], [B, 'B']]) {
+      await c.query("select set_config('grc.filiale_id', $1, true)", [filiale]);
+      await c.query(
+        `insert into personnes (id, filiale_id, nom, utilisateur_id) values ($1, $2, 'Fiche', $3)`,
+        [`PERS-LIE-${suffixe}`, filiale, compte],
+      );
+    }
+    await c.query("select set_config('grc.filiale_id', $1, true)", [A]);
+  }
+
+  test('LE CAS DEMANDÉ : supprimer un compte ne touche aucune fiche hors du périmètre', async () => {
+    const resultat = await base.avecPerimetre(
+      applicatif,
+      perimetre('rssi-groupe', A, [A, B]),
+      async (c) => {
+        await annuaireLie(c, 'USR-T2');
+
+        // La session se referme sur la seule filiale A : elle ne voit plus la fiche de B.
+        await c.query("select set_config('grc.filiales', $1, true)", [A]);
+        const invisible = (await c.query(
+          "select count(*)::int as n from personnes where id = 'PERS-LIE-B'",
+        )).rows[0].n;
+
+        await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+        await c.query('savepoint avant_suppression');
+        const erreur = await erreurAttendue(c.query("delete from utilisateurs where id = 'USR-T2'"));
+        await c.query('rollback to savepoint avant_suppression');
+
+        // Et les deux fiches sont intactes — c'est la vraie question.
+        await c.query("select set_config('grc.filiales', $1, true)", [`${A},${B}`]);
+        const fiches = (await c.query(
+          `select id, utilisateur_id, version, modifie_par from personnes
+            where id in ('PERS-LIE-A', 'PERS-LIE-B') order by id`,
+        )).rows;
+        return { invisible, code: erreur.code, message: erreur.message, fiches };
+      },
+    );
+
+    assert.equal(resultat.invisible, 0, 'La fiche de la filiale B est bien invisible.');
+    assert.equal(resultat.code, '23503', 'Le refus vient de l’intégrité référentielle, qui voit tout.');
+    assert.match(resultat.message, /fk_personnes_utilisateur/);
+    assert.deepEqual(
+      resultat.fiches.map((f) => ({ id: f.id, lien: f.utilisateur_id, v: f.version, par: f.modifie_par })),
+      [
+        { id: 'PERS-LIE-A', lien: 'USR-T2', v: 1, par: null },
+        { id: 'PERS-LIE-B', lien: 'USR-T2', v: 1, par: null },
+      ],
+      'Aucune fiche n’a été réécrite, aucune version incrémentée.',
+    );
+  });
+
+  test('contrôle symétrique : après déliage explicite, la suppression passe', async () => {
+    // Le délien est un geste EXPLICITE, fait dans le périmètre de celui qui le fait —
+    // exactement comme la couche applicative délie déjà avant de retirer un contrôle du
+    // catalogue (§17.6). Le comportement fonctionnel reste donc atteignable.
+    const supprimes = await base.avecPerimetre(
+      applicatif,
+      perimetre('rssi-groupe', A, [A, B]),
+      async (c) => {
+        await annuaireLie(c, 'USR-T2B');
+        for (const filiale of [A, B]) {
+          await c.query("select set_config('grc.filiale_id', $1, true)", [filiale]);
+          await c.query(
+            'update personnes set utilisateur_id = null where utilisateur_id = $1 and filiale_id = $2',
+            ['USR-T2B', filiale],
+          );
+        }
+        await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+        return (await c.query("delete from utilisateurs where id = 'USR-T2B'")).rowCount;
+      },
+    );
+    assert.equal(supprimes, 1);
+  });
+
+  test('LE BALAYAGE : aucune action référentielle non bornée ne franchit une frontière', async () => {
+    // Le balayage qui manquait au §17.1 : il portait sur les CLÉS, jamais sur les ACTIONS.
+    // Une entité future dont la clé vers une table de niveau Groupe serait en « cascade »
+    // ou en « set null » le fera tomber — c'est le seul filet qui empêche T-2 de revenir.
+    const requete = `
+      with niveau as (
+        select c.oid, c.relname::text as nom,
+               exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                        and a.attname = 'filiale_id' and a.attnum > 0 and not a.attisdropped) as cloisonnee
+          from pg_class c join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relkind in ('r', 'p'))
+      select k.conname::text || ' (' || e.nom || ' -> ' || p.nom || ', '
+             || case k.confdeltype when 'c' then 'cascade' when 'n' then 'set null'
+                                   when 'd' then 'set default' else k.confdeltype::text end || ')' as fautive
+        from pg_constraint k
+        join niveau e on e.oid = k.conrelid
+        join niveau p on p.oid = k.confrelid
+       where k.contype = 'f'
+         and e.cloisonnee and not p.cloisonnee            -- filiale -> Groupe
+         and k.confdeltype not in ('a', 'r')              -- ni « no action », ni « restrict »
+         -- Dérogation arbitrée, et la seule : session_filiales n'est pas une table métier.
+         -- Ses lignes sont l'état d'une session ; elles doivent mourir avec la session et
+         -- avec la filiale, sans quoi une session survivrait à son propre périmètre
+         -- (004_rls.sql §6, famille 4).
+         and e.nom <> 'session_filiales'
+       order by 1`;
+
+    assert.deepEqual((await base.lignes(proprietaire, requete)).map((l) => l.fautive), []);
+
+    // Contrôle de morsure intégré : on recrée le défaut d'origine.
+    await proprietaire.query('alter table personnes drop constraint fk_personnes_utilisateur');
+    try {
+      await proprietaire.query(
+        'alter table personnes add constraint fk_personnes_utilisateur '
+          + 'foreign key (utilisateur_id) references utilisateurs(id) on delete set null',
+      );
+      assert.deepEqual(
+        (await base.lignes(proprietaire, requete)).map((l) => l.fautive),
+        ['fk_personnes_utilisateur (personnes -> utilisateurs, set null)'],
+      );
+    } finally {
+      await proprietaire.query('alter table personnes drop constraint fk_personnes_utilisateur');
+      await proprietaire.query(
+        'alter table personnes add constraint fk_personnes_utilisateur '
+          + 'foreign key (utilisateur_id) references utilisateurs(id) on delete restrict',
+      );
+    }
+    assert.deepEqual((await base.lignes(proprietaire, requete)).map((l) => l.fautive), []);
+  });
+
+  test('T-7 : supprimer la pièce jointe qui sert de logo est refusé, pas silencieux', async () => {
+    // Corollaire du même principe, dans l'autre sens. La clé composite bornait déjà le
+    // DOMMAGE à la ligne de la filiale concernée ; mais l'action référentielle contournait
+    // la politique d'écriture de « filiales », qui exige l'administration Groupe : une
+    // session de filiale sans le drapeau incrémentait la version de sa propre fiche.
+    const erreur = await erreurAttendue(
+      base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+        await c.query(
+          `insert into pieces_jointes (id, filiale_id, entite_type, entite_id, nom_fichier,
+                                       type_mime, taille_octets, sha256, chemin_stockage)
+               values ('PJ-T7', $1, 'filiales', $1, 'logo.png', 'image/png', 12,
+                       repeat('7', 64), '/magasin/pj-t7')`,
+          [A],
+        );
+        await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+        await c.query('update filiales set logo_piece_jointe_id = $1 where id = $2', ['PJ-T7', A]);
+        await c.query("select set_config('grc.administration_groupe', '', true)");
+        await c.query("delete from pieces_jointes where id = 'PJ-T7'");
+      }),
+    );
+    assert.equal(erreur.code, '23503');
+    assert.match(erreur.message, /fk_filiales_logo/);
+  });
+});
+
+/* =====================================================================
+ *  §18.3 — `grc.utilisateur` désigne un LOGIN, pas une clé primaire
+ * =====================================================================
+ *
+ *  Constat T-3. Le déclencheur de chaînage joignait le réglage de session à
+ *  `utilisateurs.id`, alors que le socle documente ce réglage comme un login et qu'il
+ *  alimente `cree_par` sur les 42 tables. Tant que les deux coïncident, rien ne se voit —
+ *  et c'est exactement ce que le test de la passe précédente validait : il provisionnait
+ *  un compte dont l'`id` ÉTAIT le login. Il prouvait une coïncidence, pas une propriété.
+ */
+
+describe('L’acteur du journal est résolu sur le LOGIN (CONVENTIONS §18.3)', () => {
+  /** Le cas de production : une clé primaire « USR-… » et un login qui n'a rien à voir. */
+  const CLE = 'USR-1720000000000-482';
+  const LOGIN = 'jdupont';
+
+  async function avecCompte(utilisateur, travail) {
+    return base.avecPerimetre(applicatif, perimetre(utilisateur, A, [A]), async (c) => {
+      await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+      await c.query(
+        `insert into utilisateurs (id, identifiant, nom_affichage)
+             values ($1, $2, 'Jean Dupont') on conflict (id) do nothing`,
+        [CLE, LOGIN],
+      );
+      await c.query("select set_config('grc.administration_groupe', '', true)");
+      return travail(c);
+    });
+  }
+
+  test('LE TEST QUI MANQUAIT : id ≠ identifiant, et l’acteur est quand même résolu', async () => {
+    const ligne = await avecCompte(LOGIN, async (c) => {
+      await c.query(
+        `insert into journal_audit (filiale_id, utilisateur_id, utilisateur_libelle, action, resume)
+             values ($1, 'USR-USURPE', 'bruno', 'creation', 'acteur sur login')`,
+        [A],
+      );
+      return (await c.query(
+        "select utilisateur_id, utilisateur_libelle from journal_audit where resume = 'acteur sur login'",
+      )).rows[0];
+    });
+    assert.equal(ligne.utilisateur_id, CLE, 'Le login doit être résolu vers la clé primaire du compte.');
+    assert.equal(ligne.utilisateur_libelle, 'bruno', 'Le libellé, lui, reste fourni (§17.8).');
+  });
+
+  test('la résolution ignore la casse, comme l’unicité du login', async () => {
+    // uq_utilisateurs_identifiant est posée sur lower(identifiant) : un sAMAccountName
+    // n'est pas sensible à la casse, et la résolution ne doit pas l'être davantage.
+    const acteur = await avecCompte('JDupont', async (c) => {
+      await c.query(
+        `insert into journal_audit (filiale_id, action, resume) values ($1, 'creation', 'casse')`,
+        [A],
+      );
+      return (await c.query(
+        "select utilisateur_id from journal_audit where resume = 'casse'",
+      )).rows[0].utilisateur_id;
+    });
+    assert.equal(acteur, CLE);
+  });
+
+  test('et la traçabilité des 42 tables reste LISIBLE : cree_par porte le login', async () => {
+    // L'autre moitié de l'arbitrage. Résoudre dans l'autre sens — mettre la clé primaire
+    // dans grc.utilisateur — aurait rempli cree_par de « USR-1720000000000-482 » sur
+    // toutes les tables métier, et fait perdre au produit la lisibilité qu'il avait.
+    const auteur = await avecCompte(LOGIN, async (c) => {
+      await c.query(
+        `insert into risques (id, filiale_id, nom) values ('RISK-T3', $1, 'essai')`, [A],
+      );
+      return (await c.query("select cree_par from risques where id = 'RISK-T3'")).rows[0].cree_par;
+    });
+    assert.equal(auteur, LOGIN);
+  });
+
+  test('BRANCHE LÉGITIME, ET ELLE RESTE OUVERTE : un login sans compte donne un acteur nul', async () => {
+    // « systeme » (migrations, timers) et l'échec de connexion sur un login inconnu — qui
+    // est précisément l'événement que le PLAN_SERVEUR §1.7 veut voir tracé. Distinguer
+    // « pas d'acteur » de « acteur non résolu » suppose de connaître la liste des actions
+    // antérieures à l'authentification : c'est une décision du lot L3, pas du schéma.
+    const ligne = await base.avecPerimetre(
+      applicatif,
+      perimetre('systeme', A, [A]),
+      async (c) => {
+        await c.query(
+          `insert into journal_audit (filiale_id, action, utilisateur_libelle, resume)
+               values ($1, 'connexion_echouee', 'compte-inconnu', 'sans compte T3')`,
+          [A],
+        );
+        return (await c.query(
+          "select utilisateur_id, utilisateur_libelle from journal_audit where resume = 'sans compte T3'",
+        )).rows[0];
+      },
+    );
+    assert.deepEqual(ligne, { utilisateur_id: null, utilisateur_libelle: 'compte-inconnu' });
+  });
+});
+
+/* =====================================================================
+ *  §18.4 — Un garde-fou que rien n'appelle est un commentaire
+ * =====================================================================
+ *
+ *  Constat T-4, et c'est le plus embarrassant : `f_verifier_couverture_rls()` était
+ *  écrite, correcte, testée, montrée à l'auditeur — et appelée par la seule migration 004.
+ *  Sur une base à jour les migrations ne sont pas rejouées : le garde-fou ne s'exécutait
+ *  donc plus jamais. Une migration postérieure créant une table sans politique passait
+ *  avec un code de sortie zéro.
+ *
+ *  Les tests ci-dessous vérifient les deux moitiés : que le point d'appel agrège bien les
+ *  trois contrôles, et — c'est celle qui manquait — que les quatre migrations l'appellent
+ *  RÉELLEMENT. La part « déploiement » (`migrate.mjs`, `install.sh` §9) est hors de ce
+ *  fichier et revient à un autre agent.
+ */
+
+describe('Le garde-fou de schéma est branché (CONVENTIONS §18.4)', () => {
+  test('f_verifier_schema() ne signale rien sur un schéma sain', async () => {
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('elle AGRÈGE bien les trois contrôles — chacun éprouvé par sabotage', async () => {
+    /** Anomalies rendues par le point d'appel unique, pour un objet donné. */
+    const vues = async (objet) =>
+      (await base.lignes(
+        proprietaire,
+        'select controle, anomalie from f_verifier_schema() where objet like $1 order by 1, 2',
+        [objet],
+      )).map((l) => `${l.controle}/${l.anomalie}`);
+
+    // 1. couverture RLS — la table neuve sans politique, le scénario exact de T-4.
+    await proprietaire.query('create table essai_t4_sans_politique (id text primary key)');
+    try {
+      assert.deepEqual(await vues('essai_t4%'), [
+        'couverture_rls/force_absente',
+        'couverture_rls/politique_ecriture_absente',
+        'couverture_rls/politique_lecture_absente',
+        'couverture_rls/rls_desactivee',
+      ]);
+    } finally {
+      await proprietaire.query('drop table essai_t4_sans_politique');
+    }
+
+    // 2. chemin de recherche — une fonction sans réglage.
+    await proprietaire.query(
+      "create function f_essai_t4() returns int language sql immutable as $x$ select 1 $x$",
+    );
+    try {
+      assert.deepEqual(await vues('f_essai_t4%'), ['chemin_recherche/search_path_non_fige']);
+    } finally {
+      await proprietaire.query('drop function if exists f_essai_t4()');
+    }
+
+    // 3. traçabilité — une table qui porte « cree_par » sans son déclencheur.
+    await proprietaire.query(
+      "create table essai_t4_trace (id text primary key, cree_par text not null default 'x')",
+    );
+    try {
+      assert.ok(
+        (await vues('essai_t4_trace')).includes('tracabilite/creation_non_tracee'),
+        'Le point d’appel doit remonter aussi les anomalies de traçabilité.',
+      );
+    } finally {
+      await proprietaire.query('drop table essai_t4_trace');
+    }
+
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('LES QUATRE MIGRATIONS L’APPELLENT — c’est la moitié qui manquait', async () => {
+    // Le défaut n'était pas dans la fonction, il était dans son absence d'appel. Ce test
+    // lit les migrations sur le disque : c'est le seul endroit du banc d'essai où la
+    // propriété « le contrôle est branché » puisse être établie. Une migration future qui
+    // créerait des tables sans recopier ces deux instructions le fera tomber.
+    const { readFile } = await import('node:fs/promises');
+    const { dirname, join } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const dossier = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'db', 'migrations');
+
+    const manquantes = [];
+    for (const fichier of [
+      '001_socle.sql', '002_metier_noyau.sql', '003_metier_operations.sql', '004_rls.sql',
+    ]) {
+      const texte = await readFile(join(dossier, fichier), 'utf8');
+      const appelle = texte.includes('from f_verifier_schema()');
+      const pose = texte.includes('f_poser_tracabilite_insertion()');
+      const echoue = /raise exception[\s\S]{0,400}Vérification du schéma en défaut/.test(texte);
+      if (!appelle || !pose || !echoue) {
+        manquantes.push(`${fichier} (appel:${appelle} pose:${pose} échec:${echoue})`);
+      }
+    }
+    assert.deepEqual(manquantes, []);
+  });
+
+  test('T-10 : le garde-fou du chemin exige pg_temp NOMMÉ ET EN DERNIER', async () => {
+    // Il ne vérifiait que la première moitié : « set search_path = pg_temp, pg_catalog,
+    // public » — qui ne ferme évidemment rien — passait sans un mot. Un garde-fou qui
+    // affirme plus qu'il ne vérifie est précisément ce que le §17.5 proscrit.
+    await proprietaire.query(
+      'create function f_essai_ordre() returns int language sql immutable '
+        + 'set search_path = pg_temp, pg_catalog, public as $x$ select 1 $x$',
+    );
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select anomalie from f_verifier_chemin_recherche() where objet like 'f_essai_ordre%'",
+      );
+      assert.deepEqual(anomalies.map((l) => l.anomalie), ['pg_temp_mal_place']);
+    } finally {
+      await proprietaire.query('drop function if exists f_essai_ordre()');
+    }
+  });
+
+  test('T-10 bis : et il balaie aussi les PROCÉDURES', async () => {
+    await proprietaire.query(
+      'create procedure p_essai_t10() language sql as $x$ select 1 $x$',
+    );
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select anomalie from f_verifier_chemin_recherche() where objet like 'p_essai_t10%'",
+      );
+      assert.deepEqual(anomalies.map((l) => l.anomalie), ['search_path_non_fige']);
+    } finally {
+      await proprietaire.query('drop procedure if exists p_essai_t10()');
+    }
+  });
+
+  test('T-11 : le garde-fou de couverture balaie aussi les tables PARTITIONNÉES', async () => {
+    // Le commentaire de la fonction dit « TOUTE table du schéma public » ; elle ne
+    // regardait que relkind = 'r'. Il n'y a aucune table partitionnée aujourd'hui — le
+    // filet ne doit pas attendre la première.
+    await proprietaire.query(
+      "create table essai_t11 (id text not null, jour date not null) partition by range (jour)",
+    );
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select anomalie from f_verifier_couverture_rls() where objet = 'essai_t11' order by 1",
+      );
+      assert.ok(
+        anomalies.map((l) => l.anomalie).includes('rls_desactivee'),
+        `Une table partitionnée sans RLS doit être vue : ${JSON.stringify(anomalies)}`,
+      );
+    } finally {
+      await proprietaire.query('drop table if exists essai_t11');
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+});
+
+/* =====================================================================
+ *  T-6 — Ce que le refus des tables de configuration ne dit PAS
+ * ===================================================================== */
+
+describe('Refus silencieux sur les tables de configuration (constat T-6)', () => {
+  test('l’AJOUT est bruyant, la MODIFICATION et la SUPPRESSION sont muettes', async () => {
+    // Les migrations posent à trois endroits le principe que le refus doit être BRUYANT.
+    // Les cinq tables de configuration ne le suivent qu'à moitié, et c'est inhérent à la
+    // RLS : le « using » d'une politique ÉCARTE la ligne, il ne refuse pas l'opération.
+    //
+    // Ce test ne célèbre pas la propriété, il la FIGE — pour que le lot L2 sache qu'un
+    // « UPDATE 0 » sur ces tables peut vouloir dire « refusé » et non « conflit de
+    // version », et n'affiche pas « enregistré ». C'est le pendant de l'observation O-2 du
+    // premier rapport, sur les tables de configuration.
+    const observe = await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
+      await c.query('savepoint avant_ajout');
+      const ajout = await erreurAttendue(
+        c.query("insert into profils (id, code, nom) values ('PROF-T6', 'ZZT6', 'x')"),
+      );
+      await c.query('rollback to savepoint avant_ajout');
+      const modif = (await c.query("update filiales set nom_court = 'X' where id = $1", [A])).rowCount;
+      const suppr = (await c.query('delete from filiales where id = $1', [B])).rowCount;
+      return { ajout: ajout.code, modif, suppr };
+    });
+    assert.deepEqual(observe, { ajout: '42501', modif: 0, suppr: 0 });
+  });
+});

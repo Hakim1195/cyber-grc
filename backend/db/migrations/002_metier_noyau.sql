@@ -170,8 +170,34 @@ create table personnes (
     constraint pk_personnes             primary key (id),
     constraint fk_personnes_filiale     foreign key (filiale_id)
         references filiales(id) on delete restrict,
+    -- ── « restrict », ET C'EST LA RÈGLE GÉNÉRALE (CONVENTIONS.md §18.2) ─────────────
+    --
+    -- Cette clé était en « on delete set null », et c'était la DERNIÈRE action
+    -- référentielle du schéma qui traversait une frontière de niveau sans être bornée par
+    -- filiale_id. Constat T-2 du troisième passage de la porte de sécurité S1.
+    --
+    -- CE QUE ÇA FAISAIT. Un RSSI groupe supprimant un compte, en administration Groupe et
+    -- avec un périmètre réduit à sa filiale, réécrivait les fiches d'annuaire de TOUTES
+    -- les filiales — y compris celles qu'il ne peut pas lire : lien rompu, « version »
+    -- incrémentée, et « modifie_par » portant le nom de quelqu'un qui n'y a jamais
+    -- travaillé. La politique d'écriture de « personnes » exige pourtant
+    -- « filiale_id = f_filiale_ecriture() » : elle n'est JAMAIS évaluée, les contrôles
+    -- d'intégrité référentielle de PostgreSQL contournant délibérément la RLS. C'est le
+    -- raisonnement même du §17.1, appliqué aux clés étrangères et jamais aux ACTIONS.
+    --
+    -- LA RÈGLE QUE LE §18.2 EN TIRE, et qui ne vaut plus seulement pour le catalogue de
+    -- mesures : une clé étrangère d'une table cloisonnée vers une table de niveau Groupe
+    -- ne porte ni « cascade » ni « set null ». Le délien est un geste EXPLICITE, fait dans
+    -- le périmètre de celui qui le fait — exactement comme la couche applicative délie
+    -- déjà avant de retirer un contrôle du catalogue (§17.6).
+    --
+    -- COHÉRENT AVEC LE RESTE. Les trois autres références à « utilisateurs » sont déjà en
+    -- « restrict », et le §12 veut qu'une trace survive à la disparition du compte. Le
+    -- chemin nominal de déprovisionnement n'est d'ailleurs pas la suppression mais
+    -- « actif = false » (PLAN_SERVEUR §1.5) ; la suppression viendra avec les purges RGPD
+    -- du lot L13, et elle devra délier filiale par filiale.
     constraint fk_personnes_utilisateur foreign key (utilisateur_id)
-        references utilisateurs(id) on delete set null,
+        references utilisateurs(id) on delete restrict,
     constraint ck_personnes_nom         check (nom <> '')
 );
 
@@ -873,6 +899,53 @@ comment on table evaluation_mesures is
 comment on column evaluation_mesures.filiale_id is
     'Filiale du lien, nécessairement celle de l''évaluation (garanti par la clé étrangère '
     'composite). Présent parce que mesure_catalogue est de niveau mixte.';
+
+-- =====================================================================================
+-- §11 bis — TRAÇABILITÉ D'INSERTION, PUIS GARDE-FOU DE SCHÉMA
+-- -------------------------------------------------------------------------------------
+-- Les deux mêmes instructions qu'en fin de 001_socle.sql, et pour la même raison
+-- (CONVENTIONS.md §18.1 et §18.4) : poser les déclencheurs « before insert » sur les
+-- tables que ce fichier vient de créer, puis faire échouer la migration si une
+-- vérification de schéma rend la moindre ligne.
+--
+-- Le §18.4 est né de ce qu'un garde-fou appelé par la SEULE migration 004 ne s'exécutait
+-- plus jamais sur une base à jour. Toute migration termine désormais par ce couple : c'est
+-- ce qui rend le filet réel plutôt que documentaire.
+-- =====================================================================================
+
+do $$
+declare v_poses integer;
+begin
+    v_poses := f_poser_tracabilite_insertion();
+    raise notice 'Traçabilité d''insertion : % déclencheur(s) posé(s).', v_poses;
+end;
+$$;
+
+do $$
+declare
+    v_anomalies text;
+    v_nombre    integer;
+begin
+    select string_agg(format('  - [%s] %s : %s (%s)', controle, objet, anomalie, detail),
+                      E'\n' order by controle, objet, anomalie),
+           count(*)
+      into v_anomalies, v_nombre
+      from f_verifier_schema();
+
+    if v_nombre > 0 then
+        raise exception E'Vérification du schéma en défaut — % anomalie(s) :\n%',
+                        v_nombre, v_anomalies
+            using errcode = '42501',
+                  hint = 'Voir backend/db/CONVENTIONS.md §18.4 et le §15 bis de 001_socle.sql.';
+    end if;
+
+    raise notice 'Schéma vérifié : aucune anomalie sur % table(s) à la création tracée.',
+                 (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'public' and c.relkind in ('r', 'p')
+                     and exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                                  and a.attname = 'cree_par' and a.attnum > 0 and not a.attisdropped));
+end;
+$$;
 
 -- =====================================================================================
 -- §11 — ENREGISTREMENT DE LA MIGRATION

@@ -1292,6 +1292,271 @@ end;
 $$;
 
 -- =====================================================================================
+-- §8 quinquies — LA TRAÇABILITÉ, LES ACTIONS RÉFÉRENTIELLES, ET LES GARDE-FOUS BRANCHÉS
+-- -------------------------------------------------------------------------------------
+-- Quatre constats du TROISIÈME passage de la porte S1. Aucun ne porte sur le cloisonnement
+-- — ce passage est le premier à n'y trouver aucun défaut — mais le premier met en échec le
+-- contrôle S4 de la grille.
+--
+--   T-1 — À l'INSERTION, le client fixait lui-même version, cree_par et cree_le. Les deux
+--         audits précédents avaient éprouvé l'« update » de fond en comble et jamais
+--         l'« insert », où aucun déclencheur n'intervenait. Et f_maj_tracabilite() GELANT
+--         ensuite cree_le / cree_par, la forgerie devenait définitive : le mécanisme qui
+--         protège la vérité protégeait le mensonge.
+--   T-2 — personnes.utilisateur_id était en « on delete set null » : supprimer un compte
+--         réécrivait les fiches d'annuaire de TOUTES les filiales, y compris invisibles.
+--   T-3 — l'acteur du journal était résolu sur la clé primaire alors que grc.utilisateur
+--         porte un LOGIN : le jour où L3 y met un vrai login, toutes les entrées basculent
+--         en silence sur la branche « acteur inconnu ».
+--   T-4 — le garde-fou de couverture RLS n'était appelé que par la migration 004, qui n'est
+--         pas rejouée sur une base à jour : il ne s'exécutait plus jamais.
+-- =====================================================================================
+
+\echo
+\echo '§8 quinquies — Traçabilité d''insertion, actions référentielles, garde-fous branchés'
+
+-- --- T-1 : ce que le client envoie à la création est ignoré ---------------------------
+do $$
+declare
+    v_ligne  jsonb;
+    v_refus  text := 'AUCUN REFUS';
+begin
+    -- Ignoré, JAMAIS refusé : un export grc-backup porte ces colonnes, et la reprise ne
+    -- doit pas échouer pour autant (CONVENTIONS.md §18.1).
+    begin
+        insert into risques (id, filiale_id, nom, version, cree_par, cree_le,
+                             modifie_par, modifie_le)
+        values ('RISK-DEMO-USURPE', 'FIL-DEMO-A', 'Risque accepté par la direction', 42,
+                'marc.dupuis (DG)', '2024-01-15', 'marc.dupuis (DG)', '2024-01-15');
+    exception when others then
+        v_refus := sqlstate;
+    end;
+
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C77',
+               'Création : version, cree_par et cree_le fournis par le client sont IGNORÉS',
+               'v1 / demonstration / aujourd''hui / non modifié',
+               case when v_refus <> 'AUCUN REFUS' then 'REFUSÉE (' || v_refus || ')'
+                    else format('v%s / %s / %s / %s', r.version, r.cree_par,
+                                case when r.cree_le::date = current_date then 'aujourd''hui'
+                                     else r.cree_le::date::text end,
+                                case when r.modifie_par is null then 'non modifié'
+                                     else 'modifie_par = ' || r.modifie_par end)
+               end,
+               case when v_refus = 'AUCUN REFUS' and r.version = 1
+                     and r.cree_par = 'demonstration' and r.cree_le::date = current_date
+                     and r.modifie_par is null and r.modifie_le is null
+                    then 'OK' else 'ÉCHEC' end
+          from risques r where r.id = 'RISK-DEMO-USURPE'
+      ) as x (numero, controle, attendu, obtenu, verdict);
+
+    if v_ligne is null then
+        v_ligne := jsonb_build_array('C77',
+            'Création : version, cree_par et cree_le fournis par le client sont IGNORÉS',
+            'v1 / demonstration / aujourd''hui / non modifié',
+            'la ligne n''a pas été créée (' || v_refus || ')', 'ÉCHEC');
+    end if;
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+end;
+$$;
+
+-- --- T-1 : la ligne définitivement immodifiable n'existe plus --------------------------
+do $$
+declare
+    v_nee    integer;
+    v_apres  integer;
+    v_obtenu text;
+begin
+    insert into risques (id, filiale_id, nom, version)
+    values ('RISK-DEMO-GEL', 'FIL-DEMO-A', 'Risque gelé', 2147483647);
+    select version into v_nee from risques where id = 'RISK-DEMO-GEL';
+
+    begin
+        update risques set nom = 'modifié' where id = 'RISK-DEMO-GEL';
+        select version into v_apres from risques where id = 'RISK-DEMO-GEL';
+        v_obtenu := format('naît en v%s, se modifie en v%s', v_nee, v_apres);
+    exception when others then
+        v_obtenu := format('naît en v%s puis %s — ligne immodifiable', v_nee, sqlstate);
+    end;
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C78', 'Créer une ligne avec version = 2147483647 ne la rend plus immodifiable',
+        'naît en v1, se modifie en v2', v_obtenu,
+        case when v_obtenu = 'naît en v1, se modifie en v2' then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- --- T-1 : le balayage — toute table portant « cree_par » a son déclencheur ------------
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C79',
+               format('Tables portant « cree_par » dont la création n''est pas tracée (%s balayées)',
+                      (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                        where n.nspname = 'public' and c.relkind in ('r', 'p')
+                          and exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                                       and a.attname = 'cree_par' and a.attnum > 0
+                                       and not a.attisdropped))),
+               '0',
+               coalesce(string_agg(v.objet || ' (' || v.anomalie || ')', ', ' order by v.objet), '0'),
+               case when count(*) = 0 then 'OK' else 'ÉCHEC' end
+          from f_verifier_tracabilite() v
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+-- --- T-2 : supprimer un compte ne réécrit aucune fiche d'annuaire ----------------------
+do $$
+declare
+    v_obtenu text;
+    v_etat   text;
+begin
+    perform set_config('grc.filiales', 'FIL-DEMO-A,FIL-DEMO-B', true);
+    perform set_config('grc.administration_groupe', 'oui', true);
+    insert into utilisateurs (id, identifiant, nom_affichage)
+    values ('USR-DEMO-1', 'login-demo', 'Compte de démonstration');
+    perform set_config('grc.administration_groupe', '', true);
+
+    -- Une fiche d'annuaire de chaque côté, rattachée au même compte.
+    insert into personnes (id, filiale_id, nom, utilisateur_id)
+    values ('PERS-DEMO-LA', 'FIL-DEMO-A', 'Responsable TLS', 'USR-DEMO-1');
+    perform set_config('grc.filiale_id', 'FIL-DEMO-B', true);
+    insert into personnes (id, filiale_id, nom, utilisateur_id)
+    values ('PERS-DEMO-LB', 'FIL-DEMO-B', 'Verantwortlicher DEU', 'USR-DEMO-1');
+
+    -- Puis une session de la seule Toulouse, en administration Groupe, qui ne voit pas
+    -- la fiche allemande et tente la suppression du compte.
+    perform set_config('grc.filiales', 'FIL-DEMO-A', true);
+    perform set_config('grc.filiale_id', 'FIL-DEMO-A', true);
+    perform set_config('grc.administration_groupe', 'oui', true);
+    begin
+        delete from utilisateurs where id = 'USR-DEMO-1';
+        v_obtenu := 'AUCUN REFUS';
+    exception when others then
+        v_obtenu := sqlstate || ' / ' || split_part(sqlerrm, '"', 4);
+    end;
+    perform set_config('grc.administration_groupe', '', true);
+
+    perform set_config('grc.filiales', 'FIL-DEMO-A,FIL-DEMO-B', true);
+    select format('%s / v%s / %s', coalesce(p.utilisateur_id, '(délié)'), p.version,
+                  coalesce(p.modifie_par, 'intact'))
+      into v_etat from personnes p where p.id = 'PERS-DEMO-LB';
+    perform set_config('grc.filiales', 'FIL-DEMO-A', true);
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(
+            jsonb_build_array(
+                'C80', 'Supprimer un compte lié à une fiche d''annuaire d''une autre filiale',
+                '23503 / fk_personnes_utilisateur', v_obtenu,
+                case when v_obtenu = '23503 / fk_personnes_utilisateur' then 'OK' else 'ÉCHEC' end),
+            jsonb_build_array(
+                'C81', 'La fiche d''annuaire de l''Allemagne est restée intacte',
+                'USR-DEMO-1 / v1 / intact', v_etat,
+                case when v_etat = 'USR-DEMO-1 / v1 / intact' then 'OK' else 'ÉCHEC' end)
+        ))::text, true);
+end;
+$$;
+
+-- --- T-2 : le balayage des ACTIONS référentielles --------------------------------------
+-- Le §17.1 avait fait balayer les CLÉS étrangères, jamais les ACTIONS. C'est ce balayage
+-- qui empêche T-2 de revenir au prochain ajout d'entité.
+do $$
+declare v_ligne jsonb;
+begin
+    with niveau as (
+        select c.oid, c.relname::text as nom,
+               exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                        and a.attname = 'filiale_id' and a.attnum > 0 and not a.attisdropped) as cloisonnee
+          from pg_class c join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relkind in ('r', 'p'))
+    select jsonb_build_array('C82',
+               format('Actions référentielles filiale -> Groupe non bornées (%s clés balayées)',
+                      count(*)),
+               '0',
+               coalesce(string_agg(k.conname::text, ', ' order by k.conname)
+                        filter (where k.confdeltype not in ('a', 'r')), '0'),
+               case when count(*) filter (where k.confdeltype not in ('a', 'r')) = 0
+                    then 'OK' else 'ÉCHEC' end)
+      into v_ligne
+      from pg_constraint k
+      join niveau e on e.oid = k.conrelid
+      join niveau p on p.oid = k.confrelid
+     where k.contype = 'f' and e.cloisonnee and not p.cloisonnee
+       -- Dérogation arbitrée, et la seule : session_filiales n'est pas une table métier.
+       -- Ses lignes sont l'état d'une session et doivent mourir avec elle (004 §6).
+       and e.nom <> 'session_filiales';
+
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+-- --- T-3 : l'acteur du journal est résolu sur le LOGIN, pas sur la clé primaire --------
+-- Le contrôle C75 provisionnait un compte dont l'identifiant ÉTAIT la clé primaire : il
+-- validait une coïncidence, pas une propriété. Celui-ci prend le cas de production.
+do $$
+declare v_ligne jsonb;
+begin
+    perform set_config('grc.administration_groupe', 'oui', true);
+    insert into utilisateurs (id, identifiant, nom_affichage)
+    values ('USR-1720000000000-482', 'jdupont', 'Jean Dupont');
+    perform set_config('grc.administration_groupe', '', true);
+    perform set_config('grc.utilisateur', 'jdupont', true);
+
+    insert into journal_audit (filiale_id, utilisateur_id, utilisateur_libelle, action, resume)
+    values ('FIL-DEMO-A', 'USR-USURPE', 'bruno', 'creation', 'acteur resolu sur le login');
+
+    select jsonb_build_array('C83',
+               'Journal : le LOGIN de session est résolu vers la clé du compte (id <> identifiant)',
+               'USR-1720000000000-482 / bruno',
+               coalesce(j.utilisateur_id, '(NUL)') || ' / ' || coalesce(j.utilisateur_libelle, '(nul)'),
+               case when j.utilisateur_id = 'USR-1720000000000-482'
+                     and j.utilisateur_libelle = 'bruno'
+                    then 'OK' else 'ÉCHEC' end)
+      into v_ligne
+      from journal_audit j where j.resume = 'acteur resolu sur le login';
+
+    perform set_config('grc.utilisateur', 'demonstration', true);
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+-- --- T-4 : le garde-fou de schéma est branché, et il ne signale rien -------------------
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array('C84',
+               'Anomalies du point d''appel unique f_verifier_schema() (chemin, traçabilité, RLS)',
+               '0',
+               coalesce(string_agg(format('[%s] %s : %s', v.controle, v.objet, v.anomalie), ', '
+                                   order by v.controle, v.objet), '0'),
+               case when count(*) = 0 then 'OK' else 'ÉCHEC' end)
+      into v_ligne
+      from f_verifier_schema() v;
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
+
+-- =====================================================================================
 -- §9 — LE RÔLE APPLICATIF
 -- -------------------------------------------------------------------------------------
 -- Toutes les politiques du monde ne valent rien au-dessus d'un rôle qui porte BYPASSRLS,
@@ -1513,7 +1778,14 @@ begin
     end if;
 
     raise notice
-        'CLOISONNEMENT DÉMONTRÉ : la filiale de Toulouse ne voit aucune ligne de la filiale '
+        'CLOISONNEMENT DÉMONTRÉ — AVEC LA RÉSERVE DU CONTRÔLE C22, À LIRE AVANT LE RESTE : '
+        'la LECTURE du journal d''audit n''est PAS cloisonnée, et c''est une dérogation assumée '
+        'que le chaînage par empreinte impose (004_rls.sql §6). Elle est sans effet tant que le '
+        'journal est vide ; dès que le lot L5 alimentera valeurs_avant / valeurs_apres, une '
+        'session de Toulouse y lira le contenu des données allemandes — et le compte de '
+        'supervision grc_lecture aussi, sans passer par l''application. Le resserrement est un '
+        'livrable ferme de L5. Sous cette réserve, et elle seule : '
+        'la filiale de Toulouse ne voit aucune ligne de la filiale '
         'allemande ; ne peut pas y écrire — ni depuis un périmètre qui la couvre, ni en '
         'déclarant une filiale active qu''elle ne lit même pas, la base recoupant les deux '
         'réglages elle-même ; ne peut créer vers elle NI lien de liaison NI clé étrangère '
@@ -1522,7 +1794,9 @@ begin
         'du Groupe — un contrôle qu''une filiale a déjà évalué ne disparaît pas, il s''archive, '
         'et l''archivage existe ; ne peut pas modifier la fiche d''une autre filiale, ni lui '
         'poser son propre logo ; et ne peut pas fabriquer d''entrée dans le journal d''une '
-        'autre, ni y déclarer un acteur qui n''est pas elle.';
+        'autre, ni y déclarer un acteur qui n''est pas elle ; ne peut pas antidater ni signer '
+        'du nom d''un autre les lignes qu''elle crée ; et ne peut pas, en supprimant un compte, '
+        'réécrire les fiches d''annuaire des filiales qu''elle ne lit pas.';
 end;
 $$;
 

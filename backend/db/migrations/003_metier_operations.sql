@@ -1055,6 +1055,53 @@ comment on column history.metrics is
     'relationnel imposerait une migration à chaque nouvel indicateur.';
 
 -- =====================================================================================
+-- §14 bis — TRAÇABILITÉ D'INSERTION, PUIS GARDE-FOU DE SCHÉMA
+-- -------------------------------------------------------------------------------------
+-- Les deux mêmes instructions qu'en fin de 001_socle.sql, et pour la même raison
+-- (CONVENTIONS.md §18.1 et §18.4) : poser les déclencheurs « before insert » sur les
+-- tables que ce fichier vient de créer, puis faire échouer la migration si une
+-- vérification de schéma rend la moindre ligne.
+--
+-- Le §18.4 est né de ce qu'un garde-fou appelé par la SEULE migration 004 ne s'exécutait
+-- plus jamais sur une base à jour. Toute migration termine désormais par ce couple : c'est
+-- ce qui rend le filet réel plutôt que documentaire.
+-- =====================================================================================
+
+do $$
+declare v_poses integer;
+begin
+    v_poses := f_poser_tracabilite_insertion();
+    raise notice 'Traçabilité d''insertion : % déclencheur(s) posé(s).', v_poses;
+end;
+$$;
+
+do $$
+declare
+    v_anomalies text;
+    v_nombre    integer;
+begin
+    select string_agg(format('  - [%s] %s : %s (%s)', controle, objet, anomalie, detail),
+                      E'\n' order by controle, objet, anomalie),
+           count(*)
+      into v_anomalies, v_nombre
+      from f_verifier_schema();
+
+    if v_nombre > 0 then
+        raise exception E'Vérification du schéma en défaut — % anomalie(s) :\n%',
+                        v_nombre, v_anomalies
+            using errcode = '42501',
+                  hint = 'Voir backend/db/CONVENTIONS.md §18.4 et le §15 bis de 001_socle.sql.';
+    end if;
+
+    raise notice 'Schéma vérifié : aucune anomalie sur % table(s) à la création tracée.',
+                 (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'public' and c.relkind in ('r', 'p')
+                     and exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                                  and a.attname = 'cree_par' and a.attnum > 0 and not a.attisdropped));
+end;
+$$;
+
+-- =====================================================================================
 -- §14 — ENREGISTREMENT DE LA MIGRATION
 -- =====================================================================================
 

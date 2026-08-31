@@ -895,3 +895,28 @@ migration **et** l'installation — et **fait échouer** ce chemin. Écrire le c
 du travail ; le brancher est l'autre moitié.
 
 C'est désormais le contrôle **S16** de la grille du `PLAN_EXECUTION` §4, ajouté pour cette raison.
+
+### 18.5 Ce que l'installation contrôle, et ce que la recette démontre
+
+Deux dispositifs, deux natures, et les confondre affaiblirait les deux.
+
+| | `f_verifier_couverture_rls()` · `f_verifier_chemin_recherche()` | `db/verifier_cloisonnement.sql` |
+|---|---|---|
+| Ce que c'est | Des **fonctions de la base** | Un **script de démonstration** |
+| Ce qu'il lit | Le **texte** des politiques, la déclaration de `search_path` | Le **comportement** : on écrit, on lit, on compte |
+| Quand | **À chaque migration et à chaque installation**, et fait échouer | À la **recette**, avant mise en service puis annuellement |
+| Ce qu'il attrape | Une table sans politique, un `force` absent, un `search_path` non figé | Une politique dont le texte est juste et le sens faux |
+
+L'installation appelle des **fonctions**, pas des fichiers : ce n'est pas une dépendance de
+`deploy/` vers `db/`, c'est une requête. Elle bloque donc le déploiement, et c'est le contrôle
+**S16** de la grille.
+
+`verifier_cloisonnement.sql`, lui, **reste un geste de recette** et n'est appelé par aucun chemin
+d'installation. Ce n'est pas un oubli : c'est un test de comportement qui sème des données de
+démonstration, et sa place est là où se testent aussi la restauration des sauvegardes et l'envoi
+des courriels (`PLAN_SERVEUR` §1.10). Il est **jouable devant un auditeur**, ce qui est sa
+raison d'être, et le message d'échec des garde-fous le cite.
+
+**La limite à ne pas oublier** (§17.5) : les fonctions lisent du texte. Une politique qui nomme
+la bonne fonction de périmètre en s'en servant mal leur échappe. Ce qui mord sur le sens, ce sont
+les tests de comportement — le banc d'essai et ce script. **Aucun des deux ne remplace l'autre.**

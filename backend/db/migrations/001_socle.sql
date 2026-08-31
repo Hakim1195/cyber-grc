@@ -298,6 +298,271 @@ $$;
 comment on function f_maj_horodatage() is
     'Variante de f_maj_tracabilite() pour les tables filles / de liaison, sans colonne version.';
 
+-- ── CE QUI MANQUAIT : L'INSERTION (CONVENTIONS.md §18.1) ────────────────────────────
+--
+-- f_maj_tracabilite() ci-dessus protège l'« update ». L'« insert » n'était protégé par
+-- RIEN. Les colonnes « version integer not null default 1 » et « cree_par text not null
+-- default f_utilisateur_courant() » ne portent que des VALEURS PAR DÉFAUT, et une valeur
+-- par défaut n'est pas une contrainte : elle ne s'applique que si l'appelant se tait.
+--
+-- Constat T-1 du troisième passage de la porte de sécurité S1, et il met en échec le
+-- contrôle S4 de la grille, dont le texte de preuve dit « le client ne peut pas fixer
+-- version ». Il le pouvait — à la création :
+--
+--     insert into risques (id, filiale_id, nom, cree_par, cree_le)
+--       values ('R-USURPE','FIL-A','Risque accepté par la direction',
+--               'marc.dupuis (DG)','2024-01-15');                      INSERT 0 1
+--
+-- La ligne se présente alors comme créée quinze mois plus tôt par le directeur général.
+-- Et le pire vient ensuite : f_maj_tracabilite() GÈLE cree_le et cree_par à chaque
+-- modification, si bien que la forgerie devient DÉFINITIVE ET INALTÉRABLE. Le mécanisme
+-- qui protège la vérité protégeait le mensonge. C'est mot pour mot la pathologie que le
+-- §17.8 décrit pour le journal d'audit — « un journal inaltérable dont l'acteur est
+-- déclaré par le client garantit l'intégrité d'une fausse preuve » — laissée ouverte sur
+-- les 42 tables qui portent une traçabilité.
+--
+-- Second effet, sur la disponibilité de la donnée et non sur sa preuve : une ligne créée
+-- avec « version = 2147483647 » devenait DÉFINITIVEMENT IMMODIFIABLE, chaque tentative
+-- débordant l'entier signé dans « new.version := old.version + 1 » — et l'erreur avortait
+-- la transaction entière. Imposer la version à l'insertion fait disparaître ce cas de
+-- lui-même : la valeur ne peut plus venir de l'appelant.
+--
+-- CE QUE LE CLIENT ENVOIE EST IGNORÉ, JAMAIS REFUSÉ. Un export grc-backup contient ces
+-- colonnes, et la reprise ne doit pas échouer pour autant : elle doit simplement ne pas
+-- les croire. Conséquence à assumer, et elle est juste : à l'import, l'auteur tracé est
+-- CELUI QUI IMPORTE, à la date de l'import — car la création de la ligne *dans ce
+-- système*, c'est l'import. L'historique d'origine, s'il faut le conserver, est une donnée
+-- métier, pas une colonne de traçabilité (CONVENTIONS.md §18.1).
+--
+-- TROIS FORMES, PARCE QUE LE SCHÉMA EN A TROIS. Chaque fonction d'initialisation est le
+-- miroir exact de la fonction de mise à jour qui lui correspond, et n'écrit que des
+-- colonnes que sa famille de tables possède — une fonction PL/pgSQL qui référencerait un
+-- champ absent échouerait à l'exécution.
+--
+--   f_init_tracabilite()  <-> f_maj_tracabilite()  : version + création + modification
+--   f_init_horodatage()   <-> f_maj_horodatage()   : création + modification, sans version
+--   f_init_creation()     <-> (aucune)             : création seule — tables de liaison et
+--                                                    « sessions », qui ne se modifient pas
+create or replace function f_init_tracabilite() returns trigger
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
+$$
+begin
+    new.version     := 1;
+    new.cree_le     := now();
+    new.cree_par    := f_utilisateur_courant();
+    new.modifie_le  := null;   -- une ligne qui naît n'a jamais été modifiée
+    new.modifie_par := null;
+    return new;
+end;
+$$;
+
+comment on function f_init_tracabilite() is
+    'Déclencheur "before insert" obligatoire sur toute table portant le bloc du §3 : impose '
+    'version = 1, la date et l''auteur de création, et annule les colonnes de modification. '
+    'Miroir de f_maj_tracabilite(). Ce que l''appelant envoie dans ces colonnes est IGNORÉ, '
+    'jamais refusé — un export grc-backup en contient (CONVENTIONS.md §18.1).';
+
+create or replace function f_init_horodatage() returns trigger
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
+$$
+begin
+    new.cree_le     := now();
+    new.cree_par    := f_utilisateur_courant();
+    new.modifie_le  := null;
+    new.modifie_par := null;
+    return new;
+end;
+$$;
+
+comment on function f_init_horodatage() is
+    'Variante de f_init_tracabilite() pour les tables sans colonne "version" mais qui gardent '
+    'une trace de modification. Miroir de f_maj_horodatage().';
+
+create or replace function f_init_creation() returns trigger
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
+$$
+begin
+    new.cree_le  := now();
+    new.cree_par := f_utilisateur_courant();
+    return new;
+end;
+$$;
+
+comment on function f_init_creation() is
+    'Variante minimale pour les tables qui n''enregistrent QUE leur création : les liaisons n-n '
+    '(une liaison se crée et se supprime, elle ne se modifie pas — CONVENTIONS.md §3) et '
+    '"sessions". Aucune colonne de modification à annuler.';
+
+-- ── POSE ET VÉRIFICATION, PILOTÉES PAR LE CATALOGUE ─────────────────────────────────
+--
+-- Deux fonctions plutôt qu'une liste de tables recopiée dans chaque migration. La liste se
+-- serait désynchronisée au premier ajout d'entité — c'est exactement l'omission qui a
+-- produit le constat bloquant B-1, et le remède est le même : découvrir plutôt qu'énumérer.
+--
+-- Toute migration qui crée des tables appelle f_poser_tracabilite_insertion() en fin de
+-- fichier, puis le garde-fou du §15 ter la vérifie. Une migration future qui oublierait
+-- l'appel échouera au déploiement au lieu de livrer des tables dont l'appelant fixe la
+-- traçabilité.
+create or replace function f_poser_tracabilite_insertion() returns integer
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
+$$
+declare
+    r       record;
+    v_pose  integer := 0;
+begin
+    for r in
+        select c.relname::text as nom,
+               exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                        and a.attname = 'version' and a.attnum > 0 and not a.attisdropped) as a_version,
+               exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                        and a.attname = 'modifie_le' and a.attnum > 0 and not a.attisdropped) as a_modifie
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relkind in ('r', 'p')
+           -- « cree_par » est le marqueur d'une table qui trace sa création. journal_audit
+           -- ne l'a pas (il porte « horodatage » et son propre déclencheur de chaînage), et
+           -- migrations_schema non plus : les deux sont donc naturellement hors champ.
+           and exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                        and a.attname = 'cree_par' and a.attnum > 0 and not a.attisdropped)
+           and not exists (select 1 from pg_trigger t where t.tgrelid = c.oid
+                            and not t.tgisinternal and t.tgname = 'trg_' || c.relname || '_creation')
+         order by c.relname
+    loop
+        execute format(
+            'create trigger %I before insert on %I for each row execute function %I()',
+            'trg_' || r.nom || '_creation', r.nom,
+            case when r.a_version then 'f_init_tracabilite'
+                 when r.a_modifie then 'f_init_horodatage'
+                 else 'f_init_creation' end);
+        -- Armé en « always », comme les déclencheurs de cohérence et de portée (004 §7 c) :
+        -- ce qui porte une garantie opposable ne se désarme pas par un réglage de session.
+        execute format('alter table %I enable always trigger %I',
+                       r.nom, 'trg_' || r.nom || '_creation');
+        v_pose := v_pose + 1;
+    end loop;
+
+    return v_pose;
+end;
+$$;
+
+comment on function f_poser_tracabilite_insertion() is
+    'Pose, sur toute table portant "cree_par" qui n''en a pas déjà un, le déclencheur '
+    '"before insert" adapté à sa forme (CONVENTIONS.md §18.1). Idempotente, pilotée par le '
+    'catalogue : à appeler en fin de TOUTE migration qui crée des tables. Rend le nombre de '
+    'déclencheurs posés.';
+
+create or replace function f_verifier_tracabilite()
+returns table (objet text, anomalie text, detail text)
+    language plpgsql stable
+    set search_path = pg_catalog, public, pg_temp as
+$$
+declare r record;
+begin
+    for r in
+        select c.relname::text as nom,
+               exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                        and a.attname = 'version' and a.attnum > 0 and not a.attisdropped) as a_version,
+               exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                        and a.attname = 'modifie_le' and a.attnum > 0 and not a.attisdropped) as a_modifie,
+               (select p.proname::text from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+                 where t.tgrelid = c.oid and not t.tgisinternal
+                   and t.tgname = 'trg_' || c.relname || '_creation') as fonction,
+               (select t.tgenabled from pg_trigger t
+                 where t.tgrelid = c.oid and not t.tgisinternal
+                   and t.tgname = 'trg_' || c.relname || '_creation') as armement
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relkind in ('r', 'p')
+           and exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                        and a.attname = 'cree_par' and a.attnum > 0 and not a.attisdropped)
+         order by c.relname
+    loop
+        objet := r.nom;
+
+        if r.fonction is null then
+            anomalie := 'creation_non_tracee';
+            detail   := 'la table porte « cree_par » mais aucun déclencheur « before insert » : '
+                        'l''appelant fixe lui-même version, cree_le et cree_par';
+            return next;
+        elsif r.fonction <> (case when r.a_version then 'f_init_tracabilite'
+                                  when r.a_modifie then 'f_init_horodatage'
+                                  else 'f_init_creation' end) then
+            anomalie := 'creation_mal_tracee';
+            detail   := format('déclencheur « %s » sur une table dont la forme en appelle un autre',
+                               r.fonction);
+            return next;
+        elsif r.armement <> 'A' then
+            anomalie := 'creation_desarmable';
+            detail   := 'déclencheur armé en « origin » : un réglage de session le désarmerait';
+            return next;
+        end if;
+    end loop;
+
+    return;
+end;
+$$;
+
+comment on function f_verifier_tracabilite() is
+    'Vérifie que TOUTE table portant "cree_par" a le déclencheur "before insert" adapté à sa '
+    'forme, armé en « always » (CONVENTIONS.md §18.1). Un schéma sain ne renvoie AUCUNE ligne. '
+    'Sans ce déclencheur, l''appelant fixe lui-même version, cree_le et cree_par — et le gel '
+    'opéré ensuite par f_maj_tracabilite() rend la valeur forgée définitive.';
+
+-- ── UN GARDE-FOU QUE RIEN N'APPELLE EST UN COMMENTAIRE (CONVENTIONS.md §18.4) ───────
+--
+-- Constat T-4 du troisième passage de la porte S1, et c'est le plus embarrassant des
+-- quatre : f_verifier_couverture_rls() était écrite, correcte, testée, montrée à
+-- l'auditeur — et appelée par la seule migration 004. Sur une base à jour, les migrations
+-- ne sont pas rejouées : le garde-fou ne s'exécutait donc plus jamais. Une migration
+-- postérieure créant une table sans politique passait avec un code de sortie zéro, et une
+-- base sabotée à la main se déclarait conforme.
+--
+-- Cette fonction est le point d'appel UNIQUE que toute migration invoque en fin de
+-- fichier. Elle agrège les trois vérifications de schéma du dépôt et les rend sous la
+-- même forme (objet, anomalie, detail) ; un schéma sain ne renvoie aucune ligne.
+--
+-- POURQUOI « si elle existe » POUR LA COUVERTURE RLS. Le découpage du lot L1
+-- (CONVENTIONS §16.1) veut que les politiques soient créées par 004 et par elle seule :
+-- 001, 002 et 003 s'exécutent donc dans un schéma qui n'a légitimement aucune politique,
+-- et f_verifier_couverture_rls() n'y existe même pas encore. Le renvoi conditionnel dit
+-- cette dépendance au lieu de la taire — et, sur toute base où 004 est déjà appliquée,
+-- une migration 005 qui appelle cette fonction est bel et bien couverte.
+create or replace function f_verifier_schema()
+returns table (controle text, objet text, anomalie text, detail text)
+    language plpgsql stable
+    set search_path = pg_catalog, public, pg_temp as
+$$
+begin
+    return query
+        select 'chemin_recherche'::text, v.objet, v.anomalie, v.detail
+          from f_verifier_chemin_recherche() v;
+
+    return query
+        select 'tracabilite'::text, v.objet, v.anomalie, v.detail
+          from f_verifier_tracabilite() v;
+
+    if to_regprocedure('public.f_verifier_couverture_rls()') is not null then
+        return query execute
+            'select ''couverture_rls''::text, v.objet, v.anomalie, v.detail
+               from f_verifier_couverture_rls() v';
+    end if;
+
+    return;
+end;
+$$;
+
+comment on function f_verifier_schema() is
+    'Point d''appel UNIQUE des vérifications automatiques du schéma (CONVENTIONS.md §18.4) : '
+    'chemin de recherche figé, traçabilité imposée à l''insertion, et couverture RLS lorsque '
+    'la fonction qui la porte existe (elle est créée par 004, cf. §16.1). Un schéma sain ne '
+    'renvoie AUCUNE ligne. À appeler en fin de TOUTE migration, et à faire échouer le '
+    'déploiement sur la moindre ligne rendue : écrire le contrôle est la moitié du travail, '
+    'le brancher est l''autre moitié.';
+
 -- Garde générique d'ajout seul. Utilisée par journal_audit (§9).
 -- Un déclencheur plutôt qu'une « rule … do instead nothing » : une règle transforme la
 -- suppression en opération silencieuse qui RÉUSSIT — l'appelant croit avoir supprimé et
@@ -356,7 +621,10 @@ begin
                p.proconfig
           from pg_proc p
           join pg_namespace n on n.oid = p.pronamespace
-         where n.nspname = 'public' and p.prokind = 'f'
+         -- « f » ET « p » : une PROCÉDURE est tout aussi détournable qu'une fonction, et
+         -- le commentaire ci-dessous dit « toute fonction du schéma ». Il n'y en a aucune
+         -- aujourd'hui ; le balayage ne doit pas attendre la première (constat T-10).
+         where n.nspname = 'public' and p.prokind in ('f', 'p')
          order by p.proname, pg_get_function_identity_arguments(p.oid)
     loop
         objet := r.nom || '(' || r.arguments || ')';
@@ -377,6 +645,19 @@ begin
                                'temporaire reste consulté EN PREMIER, le réglage ne ferme rien',
                                v_chemin);
             return next;
+        -- Le §17.2 exige pg_temp NOMMÉ *et* NOMMÉ EN DERNIER. Ce garde-fou ne vérifiait
+        -- que la première moitié : « set search_path = pg_temp, pg_catalog, public » — qui
+        -- ne ferme évidemment rien — passait sans un mot. Constat T-10 du troisième
+        -- passage, et c'est précisément ce que le §17.5 range parmi les garde-fous qui
+        -- endorment la vigilance : affirmer plus qu'on ne vérifie.
+        elsif btrim(split_part(v_chemin, ',', array_length(string_to_array(v_chemin, ','), 1)))
+              <> 'pg_temp' then
+            anomalie := 'pg_temp_mal_place';
+            detail   := format('pg_temp est nommé mais pas EN DERNIER (%s) : tout schéma placé '
+                               'après lui est consulté après le schéma temporaire, qui reprend '
+                               'donc la main sur ce qui le suit',
+                               v_chemin);
+            return next;
         end if;
     end loop;
 
@@ -385,8 +666,8 @@ end;
 $$;
 
 comment on function f_verifier_chemin_recherche() is
-    'Vérifie que TOUTE fonction du schéma public fige son chemin de recherche ET y nomme '
-    'explicitement pg_temp (CONVENTIONS.md §17.2). Un schéma sain ne renvoie AUCUNE ligne. '
+    'Vérifie que TOUTE fonction ET TOUTE PROCÉDURE du schéma public fige son chemin de '
+    'recherche, y nomme explicitement pg_temp, ET l''y nomme EN DERNIER (CONVENTIONS.md §17.2). Un schéma sain ne renvoie AUCUNE ligne. '
     'À appeler par toute migration future qui crée une fonction : un chemin de recherche non '
     'figé est détournable par masquage pg_temp. Ce garde-fou lit une DÉCLARATION, pas un '
     'comportement : il ne dit rien de ce que la fonction fait de son chemin une fois figé.';
@@ -844,9 +1125,11 @@ comment on column journal_audit.filiale_id is
     'Nullable : un événement peut précéder la résolution du périmètre (échec de connexion) ou être '
     'transversal (démarrage du service, administration Groupe).';
 comment on column journal_audit.utilisateur_id is
-    'Acteur de l''événement, RÉSOLU PAR LE SERVEUR : le déclencheur de chaînage l''écrase par '
-    'grc.utilisateur (CONVENTIONS.md §17.8), et le met à null si ce dernier ne désigne aucun '
-    'compte connu — traitement système, ou événement antérieur à la résolution de l''identité. '
+    'Acteur de l''événement, RÉSOLU PAR LE SERVEUR : le déclencheur de chaînage l''écrase en '
+    'cherchant le LOGIN grc.utilisateur dans utilisateurs.identifiant (CONVENTIONS.md §17.8 et '
+    '§18.3 — la résolution se faisait sur la clé primaire, ce qui aurait vidé la colonne le jour '
+    'où L3 y met un vrai login), et le met à null si ce login ne désigne aucun compte connu — '
+    'traitement système, ou événement antérieur à la résolution de l''identité. '
     'Une valeur fournie par l''appelant est toujours ignorée : la valeur probante d''une trace ne '
     'se déclare pas.';
 comment on column journal_audit.utilisateur_libelle is
@@ -967,8 +1250,30 @@ begin
     -- utilisateur_libelle reste FOURNI par l'appelant, et c'est délibéré (§12) : c'est un
     -- confort de lecture qui doit survivre à la disparition du compte. Il n'est plus la
     -- source de l'identité, seulement son affichage.
+    -- La résolution se fait sur le LOGIN, pas sur la clé primaire (CONVENTIONS.md §18.3).
+    --
+    -- Elle joignait « grc.utilisateur » à « utilisateurs.id ». Or ce réglage est documenté
+    -- par ce fichier même comme un login (« set local grc.utilisateur = 'jdupont' »), et
+    -- c'est lui qui alimente « cree_par » sur les 42 tables — un identifiant technique
+    -- « USR-1720000000000-482 » y serait illisible. Tant que les deux coïncident, rien ne
+    -- se voit ; le jour où le lot L3 y met un vrai login, TOUTES les entrées basculent en
+    -- silence sur la branche « acteur inconnu » : la chaîne reste intacte, les empreintes
+    -- restent valides, et la seule identité qui subsiste est celle que le client a fournie
+    -- dans utilisateur_libelle. Constat T-3 du troisième passage de la porte S1.
+    --
+    -- « lower(...) » des deux côtés : c'est la forme de l'unicité posée sur
+    -- utilisateurs.identifiant (§6), et un sAMAccountName n'est pas sensible à la casse.
+    --
+    -- CE QUI RESTE LÉGITIMEMENT NUL, et il faut le savoir en lisant le journal :
+    --   - « systeme » : migrations, timers d'exploitation — aucun compte derrière ;
+    --   - un échec de connexion sur un login inconnu, qui est précisément l'événement que
+    --     le §1.7 du plan veut voir tracé.
+    -- Distinguer « pas d'acteur » (légitime) de « acteur non résolu » (défaut de
+    -- programmation) exigerait de connaître, ici, la liste des actions antérieures à
+    -- l'authentification : c'est une décision du lot L3, pas du schéma. Signalé comme tel.
     new.utilisateur_id := (
-        select u.id from utilisateurs u where u.id = f_utilisateur_courant());
+        select u.id from utilisateurs u
+         where lower(u.identifiant) = lower(f_utilisateur_courant()));
 
     new.empreinte := encode(sha256(convert_to(
         f_journal_audit_charge_utile(
@@ -986,9 +1291,9 @@ $$;
 comment on function f_journal_audit_chainage() is
     'Attribue numero, horodatage, utilisateur_id, empreinte_precedente et empreinte à chaque '
     'entrée de journal : TOUT ce qui fait la valeur probante d''une trace vient du serveur, jamais '
-    'de l''appelant (CONVENTIONS.md §17.8). utilisateur_id est résolu depuis grc.utilisateur et '
-    'vaut null si ce dernier ne désigne aucun compte connu (traitement système, échec de '
-    'connexion) ; utilisateur_libelle, lui, reste fourni — c''est un confort de lecture qui doit '
+    'de l''appelant (CONVENTIONS.md §17.8). utilisateur_id est résolu en cherchant le LOGIN '
+    'grc.utilisateur dans utilisateurs.identifiant (§18.3), et vaut null si ce login ne désigne '
+    'aucun compte connu (traitement système, échec de connexion) ; utilisateur_libelle, lui, reste fourni — c''est un confort de lecture qui doit '
     'survivre à la disparition du compte (§12). '
     'Sérialisé par pg_advisory_xact_lock(4718271936042001).';
 
@@ -1216,10 +1521,22 @@ comment on column pieces_jointes.etat_analyse is
 -- « set null (logo_piece_jointe_id) » et non « set null » tout court : la forme sans
 -- liste remettrait à null TOUTES les colonnes de la clé, « id » compris — la clé primaire
 -- de la filiale. La liste de colonnes existe depuis PostgreSQL 15, minimum exigé au §0.
+--
+-- « restrict » et non « set null » — constat T-7 du troisième passage. La clé composite
+-- ci-dessus borne le DOMMAGE à la ligne de la filiale concernée : c'est acquis. Mais
+-- l'action référentielle, elle, contourne la politique d'écriture de « filiales », qui
+-- exige l'administration Groupe (004 §6) : une session de filiale sans le drapeau ne peut
+-- pas modifier sa propre fiche, et pouvait pourtant en incrémenter la « version » en
+-- supprimant SA pièce jointe. Un administrateur Groupe qui éditait la fiche au même moment
+-- recevait alors un conflit de version provoqué par quelqu'un qui n'a pas le droit
+-- d'écrire là.
+--
+-- Le §18.2 pose que le délien est un geste explicite : poser un logo est un acte
+-- d'administration Groupe, le retirer en est un aussi. On retire donc le logo, PUIS on
+-- supprime le fichier.
 alter table filiales
     add constraint fk_filiales_logo foreign key (logo_piece_jointe_id, id)
-        references pieces_jointes (id, filiale_id)
-        on delete set null (logo_piece_jointe_id);
+        references pieces_jointes (id, filiale_id) on delete restrict;
 
 -- =====================================================================================
 -- §11 — APPROBATIONS
@@ -1558,35 +1875,57 @@ end;
 $$;
 
 -- =====================================================================================
--- §15 bis — GARDE-FOU : LE CHEMIN DE RECHERCHE DE CHAQUE FONCTION EST FIGÉ
+-- §15 bis — TRAÇABILITÉ D'INSERTION, PUIS GARDE-FOU DE SCHÉMA
 -- -------------------------------------------------------------------------------------
--- Placé après la création de TOUTES les fonctions du fichier. Une fonction ajoutée demain
--- sans « set search_path = pg_catalog, public, pg_temp » fera échouer la migration ici,
--- au déploiement, plutôt que d'ouvrir en silence le masquage par pg_temp (§2).
+-- Deux instructions, dans cet ordre, et le même couple clôt les quatre migrations
+-- (CONVENTIONS.md §18.1 et §18.4) :
+--
+--   1. poser les déclencheurs « before insert » sur les tables que ce fichier a créées ;
+--   2. faire échouer la migration si une vérification de schéma rend la moindre ligne.
+--
+-- Une migration future qui créerait des tables sans recopier ces deux instructions
+-- échouera au déploiement sur la seconde — c'est tout l'objet du §18.4.
 -- =====================================================================================
+
+do $$
+declare v_poses integer;
+begin
+    v_poses := f_poser_tracabilite_insertion();
+    raise notice 'Traçabilité d''insertion : % déclencheur(s) posé(s).', v_poses;
+end;
+$$;
 
 do $$
 declare
     v_anomalies text;
     v_nombre    integer;
 begin
-    select string_agg(format('  - %s : %s (%s)', objet, anomalie, detail), E'\n' order by objet),
+    select string_agg(format('  - [%s] %s : %s (%s)', controle, objet, anomalie, detail),
+                      E'\\n' order by controle, objet, anomalie),
            count(*)
       into v_anomalies, v_nombre
-      from f_verifier_chemin_recherche();
+      from f_verifier_schema();
 
     if v_nombre > 0 then
-        raise exception E'Chemin de recherche non figé — % fonction(s) :\n%', v_nombre, v_anomalies
+        raise exception E'Vérification du schéma en défaut — % anomalie(s) :\\n%',
+                        v_nombre, v_anomalies
             using errcode = '42501',
-                  hint = 'Ajoutez « set search_path = pg_catalog, public, pg_temp » à la '
-                         'définition de chaque fonction. pg_temp doit être nommé, et en '
-                         'DERNIER : non nommé, il est consulté en PREMIER. Voir le §2 de cette '
-                         'migration et backend/db/CONVENTIONS.md §17.2.';
+                  hint = 'chemin_recherche : ajoutez « set search_path = pg_catalog, public, '
+                         'pg_temp » — pg_temp NOMMÉ et en DERNIER (§17.2). '
+                         'tracabilite : appelez f_poser_tracabilite_insertion() en fin de '
+                         'migration (§18.1). '
+                         'couverture_rls : toute table porte « enable » et « force row level '
+                         'security », une politique de lecture et une d''écriture (§11). '
+                         'Voir backend/db/CONVENTIONS.md §18.4.';
     end if;
 
-    raise notice 'Chemin de recherche figé sur les % fonction(s) du schéma.',
+    raise notice 'Schéma vérifié : % fonction(s) au chemin figé, % table(s) à la création tracée.',
                  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-                   where n.nspname = 'public' and p.prokind = 'f');
+                   where n.nspname = 'public' and p.prokind in ('f', 'p')),
+                 (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'public' and c.relkind in ('r', 'p')
+                     and exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                                  and a.attname = 'cree_par' and a.attnum > 0 and not a.attisdropped));
 end;
 $$;
 

@@ -319,9 +319,20 @@ comment on function f_filiales_lecture() is
 -- cohérents entre eux sont recoupés PAR LA BASE, jamais seulement par le code qui les
 -- pose.
 --
--- AUCUN FLUX LÉGITIME N'EN SOUFFRE, et c'est vérifiable : un périmètre système n'a pas de
--- filiale active et échoue déjà sur la première condition ; une administration Groupe qui
--- retire un contrôle du socle (§17.6) bascule entre des filiales DE son périmètre.
+-- CE QUI EN SOUFFRE, ET CE QUI N'EN SOUFFRE PAS. Deux flux passent sans changement : un
+-- périmètre système n'a pas de filiale active et échoue déjà sur la première condition ;
+-- une administration Groupe qui retire un contrôle du socle (§17.6) bascule entre des
+-- filiales DE son périmètre.
+--
+-- Un troisième en souffre, et il faut le dire ici plutôt que de laisser le lot L4 le
+-- découvrir — constat T-5 du troisième passage, qui reprochait au §17.9 son « aucun flux
+-- légitime n'en souffre » : une filiale qui vient d'être CRÉÉE ne peut pas figurer dans un
+-- périmètre résolu à l'ouverture de session. La créer puis l'amorcer dans le même
+-- mouvement échoue donc en GRC04 sur la seconde instruction. Le comportement de la base
+-- est CORRECT — c'est exactement la propriété voulue — mais le lot L4 doit savoir qu'il
+-- lui faut étendre grc.filiales dans la même transaction, ou re-résoudre le périmètre
+-- après la création. La création elle-même, elle, passe : les tables de configuration ne
+-- consultent pas f_filiale_ecriture().
 -- -------------------------------------------------------------------------------------
 create or replace function f_filiale_ecriture() returns text
     language plpgsql stable
@@ -569,7 +580,12 @@ begin
                           and a.attnum > 0 and not a.attisdropped)         as porte_filiale
           from pg_class c
           join pg_namespace n on n.oid = c.relnamespace
-         where n.nspname = 'public' and c.relkind = 'r'
+         -- « r » ET « p » : le commentaire de cette fonction dit « TOUTE table du schéma
+         -- public », et le §0 de ce fichier pense déjà à relkind in ('r','p','v','m') pour
+         -- le contrôle de propriété. Une table partitionnée échappait ici au balayage —
+         -- constat T-11 du troisième passage. Il n'y en a aucune aujourd'hui ; le filet ne
+         -- doit pas attendre la première.
+         where n.nspname = 'public' and c.relkind in ('r', 'p')
          order by c.relname
     loop
         objet := r.nom;
@@ -673,7 +689,8 @@ end;
 $$;
 
 comment on function f_verifier_couverture_rls() is
-    'Vérifie que TOUTE table du schéma public porte « enable » et « force row level security », '
+    'Vérifie que TOUTE table du schéma public — ordinaire ou partitionnée — porte « enable » et '
+    '« force row level security », '
     'au moins une politique de lecture et une d''écriture, qu''aucune politique de lecture ne '
     'dépend d''un réglage d''administration, et que toute table cloisonnée hors dérogation a des '
     'prédicats qui MENTIONNENT les fonctions de périmètre (f_filiales_lecture ou '
@@ -1627,35 +1644,54 @@ end;
 $$;
 
 -- -------------------------------------------------------------------------------------
--- Second garde-fou, sur les FONCTIONS cette fois : chacune fige son chemin de recherche.
--- La vérification est celle de 001 (§2 bis, f_verifier_chemin_recherche) ; elle est
--- rejouée ici parce que ce fichier crée SIX fonctions de plus, et qu'un chemin non figé
--- est détournable par masquage pg_temp — ce qui désarmerait, entre autres,
--- f_coherence_mesure_catalogue() et f_verifier_couverture_rls() elle-même
--- (CONVENTIONS.md §17.2, constat M-1 de la porte S1).
+-- §8 bis — TRAÇABILITÉ D'INSERTION, PUIS LE GARDE-FOU COMPLET
 -- -------------------------------------------------------------------------------------
+-- Les deux mêmes instructions qu'en fin des trois autres migrations (CONVENTIONS.md
+-- §18.1 et §18.4). Ce fichier ne crée aucune table, mais il crée SIX fonctions de plus,
+-- et f_verifier_schema() les couvre comme il couvre le reste : chemin de recherche figé,
+-- traçabilité d'insertion, et — ici seulement, puisque c'est ce fichier qui la crée —
+-- couverture RLS.
+--
+-- Le §18.4 est né de ce que la couverture RLS n'était vérifiée QUE par ce bloc : sur une
+-- base à jour, les migrations ne sont pas rejouées, donc il ne s'exécutait plus jamais.
+-- Une migration postérieure créant une table sans politique passait avec un code de sortie
+-- zéro. Le garde-fou est désormais appelé par les quatre migrations, à travers le même
+-- point d'appel — et la part « déploiement » (migrate.mjs, install.sh §9) est traitée
+-- hors de ce fichier.
+-- -------------------------------------------------------------------------------------
+do $$
+declare v_poses integer;
+begin
+    v_poses := f_poser_tracabilite_insertion();
+    raise notice 'Traçabilité d''insertion : % déclencheur(s) posé(s).', v_poses;
+end;
+$$;
+
 do $$
 declare
     v_anomalies text;
     v_nombre    integer;
 begin
-    select string_agg(format('  - %s : %s (%s)', objet, anomalie, detail), E'\n' order by objet),
+    select string_agg(format('  - [%s] %s : %s (%s)', controle, objet, anomalie, detail),
+                      E'\n' order by controle, objet, anomalie),
            count(*)
       into v_anomalies, v_nombre
-      from f_verifier_chemin_recherche();
+      from f_verifier_schema();
 
     if v_nombre > 0 then
-        raise exception E'Chemin de recherche non figé — % fonction(s) :\n%', v_nombre, v_anomalies
+        raise exception E'Vérification du schéma en défaut — % anomalie(s) :\n%',
+                        v_nombre, v_anomalies
             using errcode = '42501',
-                  hint = 'Ajoutez « set search_path = pg_catalog, public, pg_temp » à la '
-                         'définition de chaque fonction. pg_temp doit être nommé, et en '
-                         'DERNIER : non nommé, il est consulté en PREMIER. Voir le §2 de '
-                         '001_socle.sql et backend/db/CONVENTIONS.md §17.2.';
+                  hint = 'Voir backend/db/CONVENTIONS.md §18.4 et le §15 bis de 001_socle.sql.';
     end if;
 
-    raise notice 'Chemin de recherche figé sur les % fonction(s) du schéma.',
+    raise notice 'Schéma vérifié : % fonction(s) au chemin figé, % table(s) à la création tracée.',
                  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-                   where n.nspname = 'public' and p.prokind = 'f');
+                   where n.nspname = 'public' and p.prokind in ('f', 'p')),
+                 (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'public' and c.relkind in ('r', 'p')
+                     and exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                                  and a.attname = 'cree_par' and a.attnum > 0 and not a.attisdropped));
 end;
 $$;
 
