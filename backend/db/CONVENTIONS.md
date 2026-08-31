@@ -243,6 +243,9 @@ Règles :
   doivent donc couvrir ces tables explicitement, et la porte S1 le vérifie.
 - `actif_dependances` conserve un `check (actif_id <> actif_cible_id)` : un actif ne dépend
   pas de lui-même.
+- **Toute référence à `mesure_catalogue` est en `restrict`** — amendement au §8, motivé au
+  §17.6 : en contexte de groupe, « délier » et « conserver » feraient modifier les données de
+  vingt filiales par une seule suppression.
 
 ---
 
@@ -262,6 +265,10 @@ n'a plus lieu d'être).
 | `deleteMesure` | **délie** les évaluations et **conserve** les actions (`mesure_id → null`) | `cascade` sur la liaison, `on delete set null` sur `actions.mesure_id` |
 | `deleteScenarioPra` | supprime ses `tests_pra` | `cascade` |
 | `deleteIncident` | supprime ses `actions` | `cascade` |
+
+⚠️ **Ce tableau est amendé par le §17.6** : toute référence à `mesure_catalogue` passe en
+`restrict`. Les règles ci-dessus ont été écrites pour un produit mono-filiale, où le rayon d'une
+suppression ne quittait pas le poste de l'utilisateur.
 
 Distinction à ne jamais confondre : **« supprime » = `on delete cascade`**,
 **« délie » = `on delete set null`** (ou suppression de la seule ligne de liaison).
@@ -307,6 +314,14 @@ Créées par `001_socle.sql`. **À réutiliser telles quelles** — ne pas en é
 | `f_journal_audit_charge_utile(…)` | `stable` → `text` | Sérialisation canonique d'une entrée de journal (support du chaînage). |
 | `f_journal_audit_chainage()` | déclencheur | Attribue `numero`, `horodatage`, `empreinte_precedente` et `empreinte`. |
 | `f_journal_audit_verifier(depuis)` | `stable` → table | Vérification du chaînage (§12). |
+| `f_verifier_chemin_recherche()` | `stable` → table | Contrôle que **toute** fonction fige son `search_path` et y relègue `pg_temp` (§17.2). |
+| `f_verifier_couverture_rls()` | `stable` → table | Contrôle que toute table cloisonnée a la RLS active, forcée, et des politiques nommant les fonctions de périmètre (§11, §17.5). |
+| `f_coherence_mesure_catalogue()` | déclencheur | Interdit de viser la mesure **locale** d'une autre filiale (§16.3). |
+| `f_interdit_changement_portee()` | déclencheur | Fige la portée d'une ligne d'une table mixte : une ligne Groupe ne devient pas locale, ni l'inverse (§17.6). |
+
+Ces fonctions sont **la mémoire des défauts déjà rencontrés**. Les deux fonctions de vérification
+sont appelées en fin de migration et **font échouer le déploiement** — ce qui vaut mieux qu'un
+constat en audit.
 
 Ces fonctions sont en `security invoker` (défaut) : **aucune** n'est un contournement de
 droits.
@@ -499,7 +514,12 @@ poste de développement.
 | `GRC01` | Journal d'audit inaltérable : modification ou suppression refusée | Base |
 | `GRC02` | Étape d'approbation franchie : décision irréversible | Base |
 | `GRC03` | Conflit de version (verrouillage optimiste) — « modifié entre-temps » | API (`0 ligne` sur `update … and version = $2`) |
-| `GRC04` | Périmètre non positionné : `grc.filiale_id` absent alors que la RLS l'exige | Base (L1 partie 3) |
+| `GRC04` | Périmètre non positionné : `grc.filiale_id` absent alors que la RLS l'exige | Base (`004_rls.sql`) |
+
+Deux refus d'intégrité empruntent le `23514` standard plutôt qu'un code propre, **à dessein** :
+viser la mesure locale d'une autre filiale, et changer la portée d'une ligne mixte. L'API les
+traduit comme n'importe quelle violation de contrainte, et le message de la base est déjà
+rédigé pour l'utilisateur.
 
 ---
 
@@ -614,8 +634,22 @@ une ligne invisible. C'est le point à retenir, et il vaut pour toute entité fu
 
 ### 17.2 Toute fonction fige son `search_path`
 
-**Règle** : `set search_path = pg_catalog, public` sur **chaque** fonction, `security invoker`
-comprises.
+**Règle** : `set search_path = pg_catalog, public, pg_temp` sur **chaque** fonction,
+`security invoker` comprises.
+
+⚠️ **`pg_temp` doit être NOMMÉ, et nommé en dernier.** La première rédaction de cette règle
+s'arrêtait à `pg_catalog, public` — et ne fermait rien. Tant que `pg_temp` n'apparaît pas
+explicitement, PostgreSQL le consulte **avant** tout le reste ; le nommer en queue de liste est
+la seule façon de le reléguer. Mesuré sur 16.13 :
+
+| `search_path` de la fonction | Ce que lit la fonction |
+|---|---|
+| `pg_catalog, public` | **la table temporaire de l'attaquant** |
+| `pg_catalog, public, pg_temp` | la vraie table |
+
+C'est le genre de règle qu'on croit appliquée parce qu'elle est écrite. Elle est donc **vérifiée
+par une fonction du socle** (`f_verifier_chemin_recherche()`), appelée en fin de migration, qui
+distingue deux anomalies : `search_path_non_fige` et `pg_temp_non_relegue`.
 
 PostgreSQL consulte implicitement `pg_temp` **avant** le `search_path`, y compris quand celui-ci
 est fixé à `public` — ce que fait pourtant le pool. Un rôle disposant du privilège `temporary`
@@ -673,3 +707,49 @@ cloisonnante mais non triviale lui échappe — éprouvé par mutation à la por
 Le filet existe, il est simplement ailleurs : ce sont les **tests de comportement** qui mordent.
 La règle qui en découle vaut pour tout garde-fou : **son commentaire ne lui prête pas plus de
 portée qu'il n'en a**, faute de quoi il endort la vigilance au lieu de l'entretenir.
+
+### 17.6 La portée d'une ligne mixte est figée, et le socle Groupe ne se supprime pas sous les pieds des filiales
+
+Deux mécanismes, pour un même défaut : **une action de portée Groupe ne doit pas modifier les
+données d'une filiale à son insu.**
+
+**La portée est figée.** Une ligne d'une table mixte ne passe pas de `filiale_id is null` à une
+filiale, ni l'inverse. Une politique RLS ne peut pas l'interdire : elle évalue son prédicat
+*séparément* sur l'ancienne et la nouvelle ligne, et ne voit donc jamais la transition. C'est un
+déclencheur (`f_interdit_changement_portee()`) qui s'en charge. Sans lui, une filiale s'appropriait
+une ligne du socle commun, puis la supprimait — et la cascade emportait les données des dix-neuf
+autres, invisibles d'elle.
+
+**Toute référence à `mesure_catalogue` est en `restrict`.** C'est un **amendement au §8**, dont les
+règles (« délie les évaluations », « conserve les actions ») ont été écrites pour un produit
+mono-filiale, où le rayon d'une suppression ne quittait pas le poste de l'utilisateur.
+
+En contexte de groupe, elles produisent l'effet inverse de leur intention : supprimer un contrôle
+du socle **délie les évaluations et met à `null` les actions de vingt filiales**, ce qui incrémente
+leur `version` et inscrit dans leurs lignes le nom de quelqu'un qui n'y a jamais travaillé — la
+pathologie exacte du constat bloquant B-1.
+
+| Cas | Comportement |
+|---|---|
+| Mesure **locale** à une filiale | Supprimable par sa filiale, après avoir délié ses liens **dans la même transaction**. Le rayon ne quitte pas la filiale. |
+| Mesure du **socle Groupe**, non utilisée | Supprimable par l'administration Groupe. |
+| Mesure du **socle Groupe**, mise en œuvre ou référencée quelque part | **Refusée.** Un contrôle que des filiales ont évalué ne disparaît pas : il s'archive. |
+
+Ce que l'utilisateur voit ne change pas — la couche applicative délie puis supprime, en une
+transaction, exactement comme aujourd'hui. Ce qui change, c'est qu'un contrôle partagé et déjà
+évalué ne peut plus s'évaporer : c'est aussi ce qu'attend un auditeur ISO 27001, pour qui la
+disparition sans trace d'un contrôle du référentiel est un constat.
+
+### 17.7 Ce que le §16.4 ne disait pas : « nullable » n'est pas « mixte »
+
+Trois tables portent un `filiale_id` nullable **sans** être des tables métier mixtes, et ne
+relèvent donc ni des politiques de la famille 2, ni du déclencheur de portée du §17.6 :
+
+| Table | Pourquoi son `filiale_id` est nullable |
+|---|---|
+| `journal_audit` | L'événement peut précéder la résolution du périmètre (échec de connexion) ou être transversal (démarrage du service). |
+| `groupes_ad` | Un groupe peut être transversal (`GRC-EXPORT`, `GRC-ADMIN`). |
+| `sessions` | La session existe avant que son périmètre soit résolu. |
+
+**Une table mixte est une table métier dont une ligne a une portée** — Groupe ou filiale. Une
+colonne nullable pour une raison chronologique ou technique n'en fait pas une.

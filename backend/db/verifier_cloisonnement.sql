@@ -54,7 +54,7 @@
 -- ── Il ne laisse RIEN derrière lui ───────────────────────────────────────────────────
 --
 -- Tout se joue dans UNE transaction, close par un « rollback » : les deux filiales
--- d'essai, leurs données et la table de résultats disparaissent. Le script n'écrit
+-- d'essai, leurs données et le registre des résultats disparaissent. Le script n'écrit
 -- rien de durable, et peut donc être joué sur la base de production — même si la recette
 -- reste le bon endroit pour une démonstration devant témoin.
 --
@@ -120,7 +120,7 @@ begin
     perform set_config('demo.resultats',
         (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
         'C01', 'Lire une table cloisonnée sans avoir déclaré grc.filiales',
-        'GRC04', v_obtenu, case when v_obtenu = 'GRC04' then 'OK' else 'ÉCHEC' end))))::text, true);
+        'GRC04', v_obtenu, case when v_obtenu = 'GRC04' then 'OK' else 'ÉCHEC' end)))::text, true);
 end;
 $$;
 
@@ -246,21 +246,34 @@ begin
         'C02',
         format('Lignes d''une autre filiale visibles depuis Toulouse (%s tables balayées)', v_tables),
         '0', coalesce(v_coupable, v_total::text),
-        case when v_total = 0 then 'OK' else 'ÉCHEC' end))))::text, true);
+        case when v_total = 0 then 'OK' else 'ÉCHEC' end)))::text, true);
 end;
 $$;
 
 -- Contrôle symétrique, indispensable : « zéro ligne » ne vaut comme preuve que si l'on
 -- voit bien SES PROPRES données. Une base vide donnerait le même zéro.
-insert into demo_resultat
-select 'C03', 'Toulouse voit bien SES données (contrôle symétrique)', '≥ 5', v.n::text,
-       case when v.n >= 5 then 'OK' else 'ÉCHEC' end
-  from (select (select count(*) from clients)
-             + (select count(*) from exigences)
-             + (select count(*) from risques)
-             + (select count(*) from actifs)
-             + (select count(*) from processus)
-             + (select count(*) from incidents) as n) v;
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C03', 'Toulouse voit bien SES données (contrôle symétrique)', '≥ 5', v.n::text,
+               case when v.n >= 5 then 'OK' else 'ÉCHEC' end
+          from (select (select count(*) from clients)
+                     + (select count(*) from exigences)
+                     + (select count(*) from risques)
+                     + (select count(*) from actifs)
+                     + (select count(*) from processus)
+                     + (select count(*) from incidents) as n) v
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
 -- Détail lisible, table par table : c'est ce que l'auditeur regarde.
 \echo
@@ -275,32 +288,84 @@ order by 1;
 -- Quatre lignes de portée Groupe : deux mesures du socle, une personne, un document.
 -- La seconde mesure (MESURE-DEMO-G2) sert au §6 bis — elle est mise en oeuvre par la
 -- seule Allemagne, et c'est cette ligne invisible qui protège le socle de la suppression.
-insert into demo_resultat
-select 'C04', 'Tables mixtes : le socle de Groupe est lisible (2 mesures, personne, document)',
-       '4', v.n::text, case when v.n = 4 then 'OK' else 'ÉCHEC' end
-  from (select (select count(*) from mesure_catalogue where filiale_id is null)
-             + (select count(*) from personnes        where filiale_id is null)
-             + (select count(*) from documents        where filiale_id is null) as n) v;
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C04', 'Tables mixtes : le socle de Groupe est lisible (2 mesures, personne, document)',
+               '4', v.n::text, case when v.n = 4 then 'OK' else 'ÉCHEC' end
+          from (select (select count(*) from mesure_catalogue where filiale_id is null)
+                     + (select count(*) from personnes        where filiale_id is null)
+                     + (select count(*) from documents        where filiale_id is null) as n) v
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
-insert into demo_resultat
-select 'C05', 'Tables mixtes : les lignes LOCALES de l''Allemagne restent invisibles',
-       '0', v.n::text, case when v.n = 0 then 'OK' else 'ÉCHEC' end
-  from (select (select count(*) from mesure_catalogue where filiale_id = 'FIL-DEMO-B')
-             + (select count(*) from personnes        where filiale_id = 'FIL-DEMO-B')
-             + (select count(*) from documents        where filiale_id = 'FIL-DEMO-B') as n) v;
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C05', 'Tables mixtes : les lignes LOCALES de l''Allemagne restent invisibles',
+               '0', v.n::text, case when v.n = 0 then 'OK' else 'ÉCHEC' end
+          from (select (select count(*) from mesure_catalogue where filiale_id = 'FIL-DEMO-B')
+                     + (select count(*) from personnes        where filiale_id = 'FIL-DEMO-B')
+                     + (select count(*) from documents        where filiale_id = 'FIL-DEMO-B') as n) v
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
 -- --- liaisons sans filiale_id : invisibles des deux bouts ------------------------------
-insert into demo_resultat
-select 'C06', 'Liaisons sans filiale_id : les liens de l''Allemagne sont invisibles',
-       '0', v.n::text, case when v.n = 0 then 'OK' else 'ÉCHEC' end
-  from (select (select count(*) from risque_exigences where risque_id = 'RISK-DEMO-B')
-             + (select count(*) from actif_risques    where risque_id = 'RISK-DEMO-B') as n) v;
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C06', 'Liaisons sans filiale_id : les liens de l''Allemagne sont invisibles',
+               '0', v.n::text, case when v.n = 0 then 'OK' else 'ÉCHEC' end
+          from (select (select count(*) from risque_exigences where risque_id = 'RISK-DEMO-B')
+                     + (select count(*) from actif_risques    where risque_id = 'RISK-DEMO-B') as n) v
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
-insert into demo_resultat
-select 'C07', 'Liaisons sans filiale_id : les liens de Toulouse, eux, sont visibles',
-       '2', v.n::text, case when v.n = 2 then 'OK' else 'ÉCHEC' end
-  from (select (select count(*) from risque_exigences where risque_id = 'RISK-DEMO-A')
-             + (select count(*) from actif_risques    where risque_id = 'RISK-DEMO-A') as n) v;
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C07', 'Liaisons sans filiale_id : les liens de Toulouse, eux, sont visibles',
+               '2', v.n::text, case when v.n = 2 then 'OK' else 'ÉCHEC' end
+          from (select (select count(*) from risque_exigences where risque_id = 'RISK-DEMO-A')
+                     + (select count(*) from actif_risques    where risque_id = 'RISK-DEMO-A') as n) v
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
 -- =====================================================================================
 -- §4 à §8 — LES REFUS
@@ -386,7 +451,7 @@ begin
         perform set_config('demo.resultats',
             (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
             v_cas[i], v_cas[i + 1], v_cas[i + 3], v_obtenu,
-            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end))))::text, true);
+            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end)))::text, true);
         i := i + 4;
     end loop;
 end;
@@ -416,7 +481,7 @@ begin
         v_obtenu || case v_obtenu when '42501' then ' (couche 1 : privilèges)'
                                   when 'GRC01' then ' (couche 2 : déclencheur)'
                                   else '' end,
-        case when v_obtenu in ('GRC01', '42501') then 'OK' else 'ÉCHEC' end))))::text, true);
+        case when v_obtenu in ('GRC01', '42501') then 'OK' else 'ÉCHEC' end)))::text, true);
 end;
 $$;
 
@@ -442,7 +507,7 @@ begin
         'C21', 'Périmètre posé mais VIDE : aucune ligne, et aucune erreur',
         '0 ligne / aucune erreur',
         format('%s ligne(s) / erreur : %s', v_visibles, v_erreur),
-        case when v_visibles = 0 and v_erreur = 'aucune' then 'OK' else 'ÉCHEC' end))))::text, true);
+        case when v_visibles = 0 and v_erreur = 'aucune' then 'OK' else 'ÉCHEC' end)))::text, true);
 end;
 $$;
 
@@ -451,12 +516,25 @@ $$;
 -- n'est pas cloisonnée : le chaînage par empreinte (001) exige de voir la chaîne entière
 -- pour numéroter et pour se vérifier. C'est une dérogation ASSUMÉE et documentée
 -- (004_rls.sql §6) ; ce contrôle la constate, il ne la cache pas.
-insert into demo_resultat
-select 'C22', 'Journal d''audit : lecture NON cloisonnée (dérogation assumée, cf. 004 §6)',
-       'true', coalesce(pg_get_expr(p.polqual, p.polrelid), '(aucun)'),
-       case when coalesce(pg_get_expr(p.polqual, p.polrelid), '') = 'true' then 'OK (constaté)' else 'ÉCHEC' end
-  from pg_policy p
- where p.polrelid = 'journal_audit'::regclass and p.polname = 'pol_journal_audit_lecture';
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C22', 'Journal d''audit : lecture NON cloisonnée (dérogation assumée, cf. 004 §6)',
+               'true', coalesce(pg_get_expr(p.polqual, p.polrelid), '(aucun)'),
+               case when coalesce(pg_get_expr(p.polqual, p.polrelid), '') = 'true' then 'OK (constaté)' else 'ÉCHEC' end
+          from pg_policy p
+         where p.polrelid = 'journal_audit'::regclass and p.polname = 'pol_journal_audit_lecture'
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
 
 -- =====================================================================================
@@ -532,7 +610,7 @@ begin
         perform set_config('demo.resultats',
             (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
             v_cas[i], v_cas[i + 1], v_cas[i + 3], v_obtenu,
-            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end))))::text, true);
+            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end)))::text, true);
         i := i + 4;
     end loop;
 end;
@@ -583,7 +661,7 @@ begin
         format('Clés étrangères SIMPLES entre deux tables cloisonnées (%s clés balayées)',
                coalesce(v_total, 0)),
         '0', coalesce(v_fautives, coalesce(v_nombre, 0)::text),
-        case when coalesce(v_nombre, 0) = 0 then 'OK' else 'ÉCHEC' end))))::text, true);
+        case when coalesce(v_nombre, 0) = 0 then 'OK' else 'ÉCHEC' end)))::text, true);
 end;
 $$;
 
@@ -653,7 +731,7 @@ begin
         perform set_config('demo.resultats',
             (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
             v_cas[i], v_cas[i + 1], v_cas[i + 3], v_obtenu,
-            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end))))::text, true);
+            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end)))::text, true);
         i := i + 4;
     end loop;
 end;
@@ -674,7 +752,7 @@ begin
     perform set_config('demo.resultats',
         (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
         'C48', 'La mise en oeuvre de l''Allemagne a survécu à la tentative de Toulouse',
-        '1', v_reste::text, case when v_reste = 1 then 'OK' else 'ÉCHEC' end))))::text, true);
+        '1', v_reste::text, case when v_reste = 1 then 'OK' else 'ÉCHEC' end)))::text, true);
 end;
 $$;
 
@@ -708,7 +786,7 @@ begin
     perform set_config('demo.resultats',
         (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
         'C49', 'Périmètre Groupe : écrire au journal d''une filiale LUE mais non active',
-        '42501', v_obtenu, case when v_obtenu = '42501' then 'OK' else 'ÉCHEC' end))))::text, true);
+        '42501', v_obtenu, case when v_obtenu = '42501' then 'OK' else 'ÉCHEC' end)))::text, true);
 end;
 $$;
 
@@ -722,53 +800,105 @@ $$;
 \echo
 \echo '§9 — Le rôle applicatif : ni BYPASSRLS, ni SUPERUSER, propriétaire de rien'
 
-insert into demo_resultat
-select 'C23', 'grc_app : ni SUPERUSER ni BYPASSRLS',
-       'non / non',
-       case when r.rolsuper then 'SUPERUSER ' else 'non ' end
-       || case when r.rolbypassrls then '/ BYPASSRLS' else '/ non' end,
-       case when not r.rolsuper and not r.rolbypassrls then 'OK' else 'ÉCHEC' end
-  from pg_roles r where r.rolname = 'grc_app';
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C23', 'grc_app : ni SUPERUSER ni BYPASSRLS',
+               'non / non',
+               case when r.rolsuper then 'SUPERUSER ' else 'non ' end
+               || case when r.rolbypassrls then '/ BYPASSRLS' else '/ non' end,
+               case when not r.rolsuper and not r.rolbypassrls then 'OK' else 'ÉCHEC' end
+          from pg_roles r where r.rolname = 'grc_app'
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
-insert into demo_resultat
-select 'C24', 'grc_app ne possède aucune table du schéma public', '0', count(*)::text,
-       case when count(*) = 0 then 'OK' else 'ÉCHEC' end
-  from pg_class c
-  join pg_namespace n on n.oid = c.relnamespace
-  join pg_roles r     on r.oid = c.relowner
- where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm') and r.rolname = 'grc_app';
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C24', 'grc_app ne possède aucune table du schéma public', '0', count(*)::text,
+               case when count(*) = 0 then 'OK' else 'ÉCHEC' end
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          join pg_roles r     on r.oid = c.relowner
+         where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm') and r.rolname = 'grc_app'
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
-insert into demo_resultat
-select 'C25', 'grc_app sur journal_audit : select et insert SEULEMENT',
-       'select+insert',
-       concat_ws('+',
-           case when has_table_privilege('grc_app', 'journal_audit', 'select')   then 'select'   end,
-           case when has_table_privilege('grc_app', 'journal_audit', 'insert')   then 'insert'   end,
-           case when has_table_privilege('grc_app', 'journal_audit', 'update')   then 'update'   end,
-           case when has_table_privilege('grc_app', 'journal_audit', 'delete')   then 'delete'   end,
-           case when has_table_privilege('grc_app', 'journal_audit', 'truncate') then 'truncate' end),
-       case when has_table_privilege('grc_app', 'journal_audit', 'select')
-             and has_table_privilege('grc_app', 'journal_audit', 'insert')
-             and not has_table_privilege('grc_app', 'journal_audit', 'update')
-             and not has_table_privilege('grc_app', 'journal_audit', 'delete')
-             and not has_table_privilege('grc_app', 'journal_audit', 'truncate')
-            then 'OK' else 'ÉCHEC' end
- where exists (select 1 from pg_roles where rolname = 'grc_app');
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C25', 'grc_app sur journal_audit : select et insert SEULEMENT',
+               'select+insert',
+               concat_ws('+',
+                   case when has_table_privilege('grc_app', 'journal_audit', 'select')   then 'select'   end,
+                   case when has_table_privilege('grc_app', 'journal_audit', 'insert')   then 'insert'   end,
+                   case when has_table_privilege('grc_app', 'journal_audit', 'update')   then 'update'   end,
+                   case when has_table_privilege('grc_app', 'journal_audit', 'delete')   then 'delete'   end,
+                   case when has_table_privilege('grc_app', 'journal_audit', 'truncate') then 'truncate' end),
+               case when has_table_privilege('grc_app', 'journal_audit', 'select')
+                     and has_table_privilege('grc_app', 'journal_audit', 'insert')
+                     and not has_table_privilege('grc_app', 'journal_audit', 'update')
+                     and not has_table_privilege('grc_app', 'journal_audit', 'delete')
+                     and not has_table_privilege('grc_app', 'journal_audit', 'truncate')
+                    then 'OK' else 'ÉCHEC' end
+         where exists (select 1 from pg_roles where rolname = 'grc_app')
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
-insert into demo_resultat
-select 'C26', 'grc_app sur migrations_schema : select SEULEMENT (garde-fou anti-réécriture)',
-       'select',
-       concat_ws('+',
-           case when has_table_privilege('grc_app', 'migrations_schema', 'select') then 'select' end,
-           case when has_table_privilege('grc_app', 'migrations_schema', 'insert') then 'insert' end,
-           case when has_table_privilege('grc_app', 'migrations_schema', 'update') then 'update' end,
-           case when has_table_privilege('grc_app', 'migrations_schema', 'delete') then 'delete' end),
-       case when has_table_privilege('grc_app', 'migrations_schema', 'select')
-             and not has_table_privilege('grc_app', 'migrations_schema', 'insert')
-             and not has_table_privilege('grc_app', 'migrations_schema', 'update')
-             and not has_table_privilege('grc_app', 'migrations_schema', 'delete')
-            then 'OK' else 'ÉCHEC' end
- where exists (select 1 from pg_roles where rolname = 'grc_app');
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C26', 'grc_app sur migrations_schema : select SEULEMENT (garde-fou anti-réécriture)',
+               'select',
+               concat_ws('+',
+                   case when has_table_privilege('grc_app', 'migrations_schema', 'select') then 'select' end,
+                   case when has_table_privilege('grc_app', 'migrations_schema', 'insert') then 'insert' end,
+                   case when has_table_privilege('grc_app', 'migrations_schema', 'update') then 'update' end,
+                   case when has_table_privilege('grc_app', 'migrations_schema', 'delete') then 'delete' end),
+               case when has_table_privilege('grc_app', 'migrations_schema', 'select')
+                     and not has_table_privilege('grc_app', 'migrations_schema', 'insert')
+                     and not has_table_privilege('grc_app', 'migrations_schema', 'update')
+                     and not has_table_privilege('grc_app', 'migrations_schema', 'delete')
+                    then 'OK' else 'ÉCHEC' end
+         where exists (select 1 from pg_roles where rolname = 'grc_app')
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
 -- =====================================================================================
 -- §10 — COUVERTURE
@@ -777,26 +907,65 @@ select 'C26', 'grc_app sur migrations_schema : select SEULEMENT (garde-fou anti-
 \echo
 \echo '§10 — Couverture : toutes les tables sous « enable » ET « force row level security »'
 
-insert into demo_resultat
-select 'C27', 'Tables du schéma public sans RLS active et forcée', '0', count(*)::text,
-       case when count(*) = 0 then 'OK' else 'ÉCHEC' end
-  from pg_class c join pg_namespace n on n.oid = c.relnamespace
- where n.nspname = 'public' and c.relkind = 'r'
-   and not (c.relrowsecurity and c.relforcerowsecurity);
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C27', 'Tables du schéma public sans RLS active et forcée', '0', count(*)::text,
+               case when count(*) = 0 then 'OK' else 'ÉCHEC' end
+          from pg_class c join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relkind = 'r'
+           and not (c.relrowsecurity and c.relforcerowsecurity)
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
-insert into demo_resultat
-select 'C28', 'Anomalies de f_verifier_couverture_rls()', '0', count(*)::text,
-       case when count(*) = 0 then 'OK' else 'ÉCHEC' end
-  from f_verifier_couverture_rls();
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C28', 'Anomalies de f_verifier_couverture_rls()', '0', count(*)::text,
+               case when count(*) = 0 then 'OK' else 'ÉCHEC' end
+          from f_verifier_couverture_rls()
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
 -- Constat M-1 : une fonction dont le chemin de recherche n'est pas figé est détournable
 -- par masquage pg_temp — le rôle applicatif substitue sa propre table à une table du
 -- schéma, et la fonction qui la lit travaille sur les données de l'attaquant. Le réglage
 -- doit NOMMER pg_temp, et en dernier : non nommé, il est consulté en PREMIER.
-insert into demo_resultat
-select 'C50', 'Fonctions dont le chemin de recherche n''est pas figé (pg_temp compris)',
-       '0', count(*)::text, case when count(*) = 0 then 'OK' else 'ÉCHEC' end
-  from f_verifier_chemin_recherche();
+do $$
+declare v_ligne jsonb;
+begin
+    select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
+      into v_ligne
+      from (
+        select 'C50', 'Fonctions dont le chemin de recherche n''est pas figé (pg_temp compris)',
+               '0', count(*)::text, case when count(*) = 0 then 'OK' else 'ÉCHEC' end
+          from f_verifier_chemin_recherche()
+      ) as x (numero, controle, attendu, obtenu, verdict);
+    -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
+    if v_ligne is not null then
+        perform set_config('demo.resultats',
+            (current_setting('demo.resultats')::jsonb || jsonb_build_array(v_ligne))::text, true);
+    end if;
+end;
+$$;
 
 select count(*) filter (where relrowsecurity)        as "RLS active",
        count(*) filter (where relforcerowsecurity)   as "RLS forcée",
@@ -814,25 +983,27 @@ select count(*) filter (where relrowsecurity)        as "RLS active",
 \echo ' VERDICT'
 \echo '====================================================================================='
 
-select numero as "n°", controle as "contrôle", attendu as "attendu",
-       obtenu as "obtenu", verdict as "verdict"
-  from demo_resultat order by numero;
+select r ->> 0 as "n°", r ->> 1 as "contrôle", r ->> 2 as "attendu",
+       r ->> 3 as "obtenu", r ->> 4 as "verdict"
+  from jsonb_array_elements(current_setting('demo.resultats')::jsonb) as r
+ order by 1;
 
-select count(*)                                            as "contrôles",
-       count(*) filter (where verdict like 'OK%')          as "réussis",
-       count(*) filter (where verdict = 'ÉCHEC')           as "échoués"
-  from demo_resultat;
+select count(*)                                              as "contrôles",
+       count(*) filter (where r ->> 4 like 'OK%')            as "réussis",
+       count(*) filter (where r ->> 4 = 'ÉCHEC')             as "échoués"
+  from jsonb_array_elements(current_setting('demo.resultats')::jsonb) as r;
 
 do $$
 declare
     v_echecs text;
     v_nombre int;
 begin
-    select string_agg(format('  %s — %s (attendu %s, obtenu %s)', numero, controle, attendu, obtenu),
-                      E'\n' order by numero),
+    select string_agg(format('  %s — %s (attendu %s, obtenu %s)',
+                             r ->> 0, r ->> 1, r ->> 2, r ->> 3), E'\n' order by r ->> 0),
            count(*)
       into v_echecs, v_nombre
-      from demo_resultat where verdict = 'ÉCHEC';
+      from jsonb_array_elements(current_setting('demo.resultats')::jsonb) as r
+     where r ->> 4 = 'ÉCHEC';
 
     if v_nombre > 0 then
         raise exception E'CLOISONNEMENT EN DÉFAUT — % contrôle(s) en échec :\n%', v_nombre, v_echecs

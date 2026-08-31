@@ -1033,6 +1033,32 @@ describe('Clés étrangères directes entre filiales (CONVENTIONS §17.1)', () =
  *      est écrit.
  */
 
+describe('Privilège « temporary » retiré au rôle applicatif (CONVENTIONS §17.2)', () => {
+  // Point (c) du constat M-1, et la raison pour laquelle il forme un bloc À PART, joué
+  // AVANT celui du chemin de recherche : ce dernier s'accorde le privilège pour rejouer
+  // les attaques, et masquerait donc l'état réel s'il était mêlé à ce constat.
+  //
+  // Le chemin de recherche figé ferme le détournement de FONCTION ; le retrait de
+  // « temporary » empêche l'attaque d'exister. Les deux sont voulus, et le second est le
+  // plus fragile : un « grant » posé un jour par commodité — pour dépanner un script, pour
+  // faire tourner un outil — rouvrirait la porte en silence. Ce test est le seul endroit
+  // du dépôt qui s'en apercevrait.
+  test('grc_app n’a PAS « temporary » — l’ACL de production, jusque sur le banc d’essai', async () => {
+    const accorde = await base.valeur(
+      applicatif,
+      "select has_database_privilege(current_user, current_database(), 'temporary')",
+    );
+    assert.equal(accorde, false, 'Le rôle applicatif ne doit pas pouvoir créer de table temporaire.');
+  });
+
+  test('et le refus est EFFECTIF, pas seulement déclaré', async () => {
+    const jetable = await base.nouvelleConnexion('app');
+    connexionsJetables.push(jetable);
+    const erreur = await erreurAttendue(jetable.query('create temp table essai_temp (x int)'));
+    assert.equal(erreur.code, '42501');
+  });
+});
+
 describe('Chemin de recherche figé (CONVENTIONS §17.2)', () => {
   /**
    * Les trois attaques ci-dessous EXIGENT le privilège `temporary`. Sur cette machine, la
