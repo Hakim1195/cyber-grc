@@ -66,6 +66,7 @@ import type {
   ObjetJson,
   OptionsReprise,
   PalierApplique,
+  PreAnalyse,
   RapportReprise,
   ResultatEnveloppe,
   ResultatReprise,
@@ -703,6 +704,179 @@ function assainir(valeur: unknown, profondeur: number, chemin: string, ctx: Cont
 }
 
 /* =====================================================================
+ *  §5 bis — Pré-analyse lexicale : compter avant d'allouer
+ *
+ *  **Constat m-5 de la porte de sécurité S1.** Les bornes de la reprise
+ *  existaient et mordaient réellement — mais elles se payaient *après*
+ *  `JSON.parse`. Le budget de nœuds n'était consulté qu'une fois l'arbre
+ *  complet construit puis recopié par `assainir`. Un fichier **admis par le
+ *  plafond de taille et refusé par le budget de nœuds** coûtait donc l'analyse
+ *  entière : mesuré à la porte, 59 Mio d'entrée valaient 4 642 ms de blocage de
+ *  la boucle d'événements et 611 Mio de mémoire résidente **avant** le refus.
+ *
+ *  Ce qui est fermé ici n'est pas le pic de mémoire, c'est sa suite. Dès que le
+ *  lot L7 exposera l'import, quelques envois concurrents suffisent : le cgroup
+ *  tue le service (`MemoryMax=2G`), `Restart=on-failure` le relance, et
+ *  `StartLimitBurst=5` sur `StartLimitIntervalSec=300` **arrête définitivement
+ *  l'unité** au bout de cinq occurrences, jusqu'à un `systemctl reset-failed`
+ *  manuel. Le déni de service devient durable, et c'est cela qui est grave.
+ *
+ *  La parade tient en une phrase : **on compte avant d'allouer**. Le balayage
+ *  ci-dessous parcourt le texte sans rien construire — pas d'objet, pas de
+ *  tableau, pas même une sous-chaîne : il ne fait qu'avancer un indice, en
+ *  franchissant les chaînes d'un `indexOf` —, dénombre les valeurs JSON
+ *  exactement comme le fait `assainir`, et **rend la main dès la première valeur
+ *  au-delà du budget**. Un fichier hostile est refusé après lecture de son seul
+ *  préfixe, à mémoire constante.
+ *
+ *  ## Ce que le compteur compte, et pourquoi c'est le même nombre
+ *
+ *  `assainir` compte **une valeur JSON** à chaque appel : la racine, chaque
+ *  élément de tableau, chaque valeur de membre d'objet — jamais les clés. Il
+ *  cesse de descendre au-delà de `PROFONDEUR_MAX`, et ne compte donc pas ce qui
+ *  s'y trouve. Le balayage reproduit les deux règles : un « : » ou une virgule
+ *  de tableau annonce une valeur, une valeur au-delà de la profondeur admise
+ *  n'est pas comptée.
+ *
+ *  Deux écarts subsistent, tous deux **majorés** (le balayage compte au plus,
+ *  jamais au moins), tous deux bornés à des constructions qu'aucun export
+ *  légitime ne produit :
+ *
+ *  1. les valeurs portées par une clé `__proto__`, `constructor` ou
+ *     `prototype`, qu'`assainir` écarte (§5) et que le balayage compte ;
+ *  2. les clés **répétées** dans un même objet, dont `JSON.parse` ne garde
+ *     qu'une occurrence et que le balayage compte toutes.
+ *
+ *  Il faudrait de l'ordre du million de telles clés pour changer un verdict, ce
+ *  qui suppose un fichier fabriqué — et le refuser plus tôt est alors le bon
+ *  comportement. Le coût d'analyse, lui, est bien proportionnel au nombre
+ *  d'occurrences : c'est ce coût que le budget borne.
+ *
+ *  ## Une divergence d'ordre, assumée
+ *
+ *  Une entrée textuelle dont la racine n'est pas un objet et qui dépasse le
+ *  budget est désormais refusée en `entree-trop-complexe` là où elle l'était en
+ *  `enveloppe-inconnue` : reconnaître la forme suppose l'arbre, et c'est
+ *  précisément ce que l'on refuse de payer. Les deux verdicts rendent
+ *  `statut: 'invalide'` ; seul le message change, sur un fichier refusé dans les
+ *  deux cas.
+ *
+ *  L'entrée passée **en objet** (et non en texte) ne traverse pas ce balayage :
+ *  elle n'a pas de représentation textuelle à lire, et c'est `assainir` qui la
+ *  borne comme auparavant. Elle ne vient jamais du réseau.
+ * ===================================================================== */
+
+/** Message unique du refus pour dépassement du budget de nœuds. */
+function messageTropComplexe(noeudsMax: number): string {
+  return `Structure au-delà de ${noeudsMax} nœuds JSON : reprise refusée pour ne pas saturer la mémoire du serveur.`;
+}
+
+/**
+ * Balaye un texte JSON et dénombre ses valeurs **sans l'analyser**. Ne lève
+ * jamais et n'alloue rien de proportionnel à l'entrée : un `Uint8Array` de
+ * dix-huit octets pour la pile de conteneurs, et trois compteurs.
+ *
+ * Le texte n'est pas validé : un fichier mal formé peut être mal compté, ce qui
+ * est sans conséquence puisque `JSON.parse` le refusera juste après. Le seul
+ * verdict qui engage est `budgetDepasse`.
+ */
+export function preAnalyserJson(texte: string, noeudsMax: number = NOEUDS_MAX_DEFAUT): PreAnalyse {
+  const longueur = texte.length;
+  /** Pile des conteneurs ouverts : 1 = tableau, 0 = objet. */
+  const pile = new Uint8Array(PROFONDEUR_MAX + 2);
+  let noeuds = 0;
+  /** Nombre de conteneurs ouverts — donc la profondeur de la prochaine valeur. */
+  let niveau = 0;
+  /** La racine du document est la première valeur attendue. */
+  let attendValeur = true;
+
+  for (let i = 0; i < longueur; i += 1) {
+    const code = texte.charCodeAt(i);
+
+    // Blancs JSON : espace, tabulation, saut de ligne, retour chariot.
+    if (code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d) continue;
+
+    if (code === 0x22 /* " */) {
+      if (attendValeur) {
+        attendValeur = false;
+        if (niveau <= PROFONDEUR_MAX) {
+          noeuds += 1;
+          if (noeuds > noeudsMax) return { noeuds, budgetDepasse: true, caracteresLus: i + 1 };
+        }
+      }
+      // Consommation de la chaîne. On se déplace, on n'extrait rien : aucune
+      // sous-chaîne n'est matérialisée. `indexOf` saute d'un guillemet au
+      // suivant — bien plus rapide qu'un parcours caractère par caractère sur
+      // les longs textes, et un export en porte (un logo, une pièce encodée).
+      // La chaîne s'achève au premier guillemet **non échappé**, c'est-à-dire
+      // précédé d'un nombre pair d'antislashs.
+      const ouvrant = i;
+      let depart = ouvrant + 1;
+      for (;;) {
+        const fin = texte.indexOf('"', depart);
+        if (fin < 0) {
+          // Chaîne non terminée : le fichier est de toute façon illisible, et
+          // `JSON.parse` le dira. On arrête le balayage ici.
+          i = longueur;
+          break;
+        }
+        let antislashs = 0;
+        for (let k = fin - 1; k > ouvrant && texte.charCodeAt(k) === 0x5c; k -= 1) antislashs += 1;
+        if ((antislashs & 1) === 0) {
+          i = fin;
+          break;
+        }
+        depart = fin + 1;
+      }
+      continue;
+    }
+
+    if (code === 0x7b /* { */ || code === 0x5b /* [ */) {
+      const tableau = code === 0x5b;
+      if (attendValeur && niveau <= PROFONDEUR_MAX) {
+        noeuds += 1;
+        if (noeuds > noeudsMax) return { noeuds, budgetDepasse: true, caracteresLus: i + 1 };
+      }
+      if (niveau < pile.length) pile[niveau] = tableau ? 1 : 0;
+      niveau += 1;
+      // Un tableau attend aussitôt sa première valeur ; un objet attend une clé.
+      attendValeur = tableau;
+      continue;
+    }
+
+    if (code === 0x7d /* } */ || code === 0x5d /* ] */) {
+      if (niveau > 0) niveau -= 1;
+      attendValeur = false;
+      continue;
+    }
+
+    if (code === 0x2c /* , */) {
+      // Dans un tableau, la virgule annonce une valeur ; dans un objet, elle
+      // annonce une clé, dont la valeur sera comptée par le « : » qui suit.
+      attendValeur = niveau > 0 && niveau - 1 < pile.length && pile[niveau - 1] === 1;
+      continue;
+    }
+
+    if (code === 0x3a /* : */) {
+      attendValeur = true;
+      continue;
+    }
+
+    // Littéral : `true`, `false`, `null` ou un nombre. Seul son premier
+    // caractère compte ; les suivants ne sont jamais structurants.
+    if (attendValeur) {
+      attendValeur = false;
+      if (niveau <= PROFONDEUR_MAX) {
+        noeuds += 1;
+        if (noeuds > noeudsMax) return { noeuds, budgetDepasse: true, caracteresLus: i + 1 };
+      }
+    }
+  }
+
+  return { noeuds, budgetDepasse: false, caracteresLus: longueur };
+}
+
+/* =====================================================================
  *  §6 — Lecture de l'enveloppe
  * ===================================================================== */
 
@@ -728,6 +902,7 @@ function refus(
  */
 export function lireEnveloppe(entree: unknown, options: OptionsReprise = {}): ResultatEnveloppe {
   const tailleMax = options.tailleMaxOctets ?? TAILLE_MAX_DEFAUT;
+  const noeudsMax = options.noeudsMax ?? NOEUDS_MAX_DEFAUT;
   const journal = new JournalAnomalies(options.anomaliesMax ?? ANOMALIES_MAX_DEFAUT);
   const application = options.application ?? APPLICATION_ATTENDUE;
 
@@ -741,6 +916,15 @@ export function lireEnveloppe(entree: unknown, options: OptionsReprise = {}): Re
         `Fichier de ${entree.length} caractères : au-delà du plafond de reprise (${tailleMax}). ` +
           'Découpez l’export ou relevez le plafond en connaissance de cause.',
       );
+    }
+    // m-5 : le budget de nœuds se paie **avant** `JSON.parse`. Le balayage du
+    // §5 bis ne construit rien et s'arrête au premier dépassement ; sans lui, un
+    // fichier admis par le plafond de taille mais refusé par le budget faisait
+    // tout de même bâtir l'arbre complet en mémoire, boucle d'événements
+    // bloquée. Le contrôle de l'étape 2 est conservé : il couvre l'entrée
+    // fournie directement en objet, qui n'a pas de texte à balayer.
+    if (preAnalyserJson(entree, noeudsMax).budgetDepasse) {
+      return refus('invalide', 'entree-trop-complexe', messageTropComplexe(noeudsMax));
     }
     try {
       brut = JSON.parse(entree) as unknown;
@@ -772,17 +956,13 @@ export function lireEnveloppe(entree: unknown, options: OptionsReprise = {}): Re
   /* --- Étape 2 : copie assainie et bornée --- */
   const ctx: ContexteCopie = {
     journal,
-    noeudsMax: options.noeudsMax ?? NOEUDS_MAX_DEFAUT,
+    noeudsMax,
     noeuds: 0,
     budgetDepasse: false,
   };
   const racine = assainir(brut, 0, 'racine', ctx);
   if (ctx.budgetDepasse || !estObjet(racine)) {
-    return refus(
-      'invalide',
-      'entree-trop-complexe',
-      `Structure au-delà de ${ctx.noeudsMax} nœuds JSON : reprise refusée pour ne pas saturer la mémoire du serveur.`,
-    );
+    return refus('invalide', 'entree-trop-complexe', messageTropComplexe(noeudsMax));
   }
 
   /* --- Étape 3 : reconnaissance de la forme --- */

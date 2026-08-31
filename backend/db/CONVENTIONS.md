@@ -624,7 +624,18 @@ d'une entrée de journal au chaînage rompu, désarmement du déclencheur de coh
 garde-fou de couverture RLS rendu aveugle.
 
 Corollaire d'exploitation : **le privilège `temporary` est retiré au rôle applicatif** sur toute
-base, développement et recette compris. La production le refusait déjà, mais par accident.
+base, développement et recette compris. La production le refusait déjà, mais par effet de bord
+d'un `revoke all` posé pour d'autres raisons — une seule ligne ajoutée un jour par commodité
+aurait rouvert la porte sans que rien ne le signale. Le refus est donc **explicite et vérifié aux
+trois endroits qui créent une base** : `deploy/install.sh` (production), `db/dev/preparer_base_dev.sh`
+(développement et recette) et `test/aide/base.mjs` (banc d'essai).
+
+Ce dernier point n'est pas cosmétique : **le banc d'essai doit éprouver la configuration
+déployée**, jamais une configuration plus permissive. Tant qu'il accordait `temporary`, il
+testait un système que personne n'installe.
+
+Conséquence pratique à connaître : un script d'exploitation qui crée une table temporaire ne
+tourne plus sous le compte applicatif. C'est voulu.
 
 ### 17.3 `id_metier` n'admet ni virgule ni espace en tête ou en fin
 

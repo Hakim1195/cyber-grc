@@ -29,6 +29,37 @@
 -- de celui-ci. Le graphe des clés étrangères est acyclique dans cet ordre : RIEN ici ne
 -- référence une table de 003.
 --
+-- ── CLÉS ÉTRANGÈRES COMPOSITES ENTRE TABLES CLOISONNÉES (CONVENTIONS.md §17.1) ────────
+--
+-- RÈGLE, SANS EXCEPTION : quand l'enfant ET le parent portent tous deux un « filiale_id »
+-- non nul, la clé étrangère porte « (colonne_reference, filiale_id) » et vise une unicité
+-- « uq_<parent>_id_filiale (id, filiale_id) ».
+--
+-- POURQUOI. Les contrôles d'intégrité référentielle de PostgreSQL contournent
+-- délibérément la Row Level Security (« referential integrity checks always bypass row
+-- security »). Une clé étrangère SIMPLE est donc satisfaite par une ligne d'une autre
+-- filiale, invisible de l'auteur : la filiale A écrit une référence vers une ligne de la
+-- filiale B, puis une suppression parfaitement ordinaire faite par B détruit — ou modifie,
+-- si l'action est « set null » — des lignes de A. La RLS tient toujours en lecture : ce
+-- n'est pas une fuite de confidentialité, c'est une brèche d'INTÉGRITÉ et de
+-- DISPONIBILITÉ entre filiales, et elle inscrit au passage l'identité d'un utilisateur de
+-- B, ainsi qu'un incrément du compteur de verrouillage optimiste, dans une ligne de A.
+--
+-- Rejoué de bout en bout à la porte de sécurité S1 sur sept clés qui y avaient échappé
+-- (constat B-1). La clé composite ferme le chemin À L'INSERTION : le couple (parent,
+-- filiale) doit exister tel quel, ce qu'aucune ligne d'une autre filiale ne peut offrir.
+--
+-- CAS OÙ ELLE EST IMPOSSIBLE, et ce qui prend le relais : quand le parent est MIXTE
+-- (« filiale_id » nullable — mesure_catalogue, documents), le couple ne peut pas être
+-- contraint, une ligne de portée Groupe n'ayant pas de filiale. C'est alors un
+-- déclencheur qui tient la cohérence : f_coherence_mesure_catalogue() (004_rls.sql §2)
+-- pour les quatre références au catalogue de mesures, et la clé composite « de cohérence »
+-- doublée d'une clé simple pour document_referentiels (003 §11).
+--
+-- Le banc d'essai balaie le catalogue et échoue si une clé étrangère entre deux tables
+-- cloisonnées redevient simple (test/base/rls.test.mjs) : l'omission ne peut pas se
+-- reproduire en silence au prochain ajout d'entité.
+--
 -- Les politiques RLS ne sont PAS ici : elles sont créées par 004_rls.sql
 -- (CONVENTIONS.md §11). Ce fichier se contente de définir « filiale_id » selon le §4.
 --
@@ -85,6 +116,11 @@ create table clients (
     modifie_le  timestamptz,
     modifie_par text,
     constraint pk_clients         primary key (id),
+    -- Cible des clés étrangères COMPOSITES venues des tables cloisonnées
+    -- (CONVENTIONS.md §17.1). Voir l'encadré « clés étrangères composites » en tête de
+    -- fichier : sans ce couple référençable, exigences.client_id ne pourrait pas être
+    -- contrainte à rester dans la filiale.
+    constraint uq_clients_id_filiale unique (id, filiale_id),
     constraint fk_clients_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
     constraint ck_clients_nom     check (nom <> '')
@@ -183,11 +219,19 @@ create table exigences (
     modifie_le        timestamptz,
     modifie_par       text,
     constraint pk_exigences          primary key (id),
+    -- Cible des clés étrangères composites venues d'actions (CONVENTIONS.md §17.1).
+    constraint uq_exigences_id_filiale unique (id, filiale_id),
     constraint fk_exigences_filiale  foreign key (filiale_id)
         references filiales(id) on delete restrict,
     -- Cascade du DATA_MODEL.md §3 : « deleteClient supprime les exigences rattachées ».
-    constraint fk_exigences_client   foreign key (client_id)
-        references clients(id) on delete cascade,
+    -- Clé étrangère COMPOSITE (CONVENTIONS.md §17.1) : le couple (donneur d'ordre,
+    -- filiale) doit exister TEL QUEL dans clients. Une clé simple sur client_id serait
+    -- satisfaite par un donneur d'ordre d'une AUTRE filiale — les contrôles d'intégrité
+    -- référentielle de PostgreSQL contournent délibérément la RLS, donc une ligne
+    -- invisible satisfait quand même la référence. La suppression de ce donneur d'ordre
+    -- par sa propre filiale détruirait alors, en cascade, des exigences d'ici.
+    constraint fk_exigences_client   foreign key (client_id, filiale_id)
+        references clients (id, filiale_id) on delete cascade,
     constraint ck_exigences_code     check (code <> ''),
     constraint ck_exigences_intitule check (intitule <> ''),
     -- Valeurs reprises MOT POUR MOT du DATA_MODEL.md §2 (accents et espaces compris) :
@@ -312,9 +356,25 @@ create table mesure_mise_en_oeuvre (
     constraint uq_mesure_mise_en_oeuvre_filiale_mesure unique (filiale_id, mesure_id),
     constraint fk_mesure_mise_en_oeuvre_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
-    -- Une mise en oeuvre sans définition n'a pas d'objet : elle disparaît avec sa mesure.
+    -- « restrict » et NON « cascade » — corrigé à la porte de sécurité S1 (constat M-3).
+    --
+    -- mesure_catalogue est MIXTE : une ligne de portée Groupe (filiale_id nul) est le socle
+    -- commun des vingt filiales, et CHACUNE en porte sa propre mise en oeuvre. En cascade,
+    -- la suppression de cette seule ligne de catalogue détruisait la mise en oeuvre de
+    -- TOUTES les filiales — y compris celles que l'auteur de la suppression ne peut pas
+    -- voir, sans aucune trace en base. Une cascade dont le rayon traverse la frontière de
+    -- filiale n'est pas une commodité, c'est une destruction collatérale invisible.
+    --
+    -- Le refus est ici LOUD (23503) et il vient de l'intégrité référentielle, qui ignore la
+    -- RLS : il compte donc aussi les mises en oeuvre invisibles de l'auteur, ce qu'aucun
+    -- déclencheur « security invoker » ne saurait faire. Retirer une mesure du catalogue
+    -- redevient ce qu'elle doit être : une procédure — chaque filiale retire d'abord SA
+    -- mise en oeuvre, puis le catalogue se nettoie.
+    --
+    -- Rayon d'une mesure LOCALE (filiale_id renseigné) : il ne quitte jamais sa filiale,
+    -- f_coherence_mesure_catalogue() (004 §2) interdisant à toute autre de la référencer.
     constraint fk_mesure_mise_en_oeuvre_mesure  foreign key (mesure_id)
-        references mesure_catalogue(id) on delete cascade,
+        references mesure_catalogue(id) on delete restrict,
     constraint ck_mesure_mise_en_oeuvre_statut   check (statut in (
         '', 'conforme', 'partiellement conforme', 'non conforme', 'non applicable')),
     constraint ck_mesure_mise_en_oeuvre_maturite check (
@@ -432,6 +492,9 @@ create table risques (
     modifie_le     timestamptz,
     modifie_par    text,
     constraint pk_risques         primary key (id),
+    -- Cible des clés étrangères composites venues d'actions et d'incidents
+    -- (CONVENTIONS.md §17.1).
+    constraint uq_risques_id_filiale unique (id, filiale_id),
     constraint fk_risques_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
     constraint ck_risques_nom     check (nom <> ''),
@@ -526,6 +589,7 @@ create table processus (
     rto         text,
     rpo         text,
     responsable text,
+    description text,
     version     integer     not null default 1,
     cree_le     timestamptz not null default now(),
     cree_par    text        not null default f_utilisateur_courant(),
@@ -556,6 +620,11 @@ comment on column processus.rto is
     'Actif) »). Texte et non « interval » : c''est un LIBELLÉ choisi dans une liste, pas une '
     'durée calculée, et l''export doit le rendre à l''identique.';
 comment on column processus.rpo is 'Objectif de perte de données maximale. Même remarque que rto.';
+comment on column processus.description is
+    'Impacts d''une interruption du processus (financiers, légaux, d''image) — le champ '
+    '« Impacts (Interruption) » du module BIA du frontend. Son absence de cette table faisait '
+    'perdre silencieusement la donnée à la reprise : src/reprise/index.ts l''attend dans les '
+    'champs de « processus ». Constat relevé à la porte de sécurité S1.';
 
 -- =====================================================================================
 -- §10 — LIAISONS N-N

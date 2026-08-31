@@ -222,8 +222,9 @@ export function lireConfiguration(source = process.env) {
         'couche 4 de la garantie d\'ajout seul du journal (CONVENTIONS.md §12).',
     );
   }
-  // Garde-fou explicite : une erreur de copier-coller dans serveur.env ne doit pas
-  // faire tourner les migrations sous le compte du service.
+  // Garde-fou explicite : une erreur de copier-coller dans /etc/cyber-grc/env — le
+  // seul fichier de configuration que connaisse le code — ne doit pas faire tourner
+  // les migrations sous le compte du service.
   const applicatif = texte('BASE_UTILISATEUR', '');
   if (utilisateur !== '' && applicatif !== '' && utilisateur === applicatif) {
     problemes.push(

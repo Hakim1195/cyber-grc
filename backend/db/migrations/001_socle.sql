@@ -24,6 +24,7 @@
 --   §13 imports (+ import_erreurs) ................. traçabilité des imports
 --   §14 parametres ................................. configuration (SMTP, seuils, rétention)
 --   §15 Privilèges
+--   §15 bis Garde-fou : le chemin de recherche de chaque fonction est figé
 --   §16 Enregistrement de la migration
 --
 -- Invocation : psql -v ON_ERROR_STOP=1 -d cyber_grc -f 001_socle.sql
@@ -80,7 +81,24 @@ $$;
 -- grc-backup soit un round-trip exact. Volontairement permissif : les exports anciens
 -- contiennent des identifiants sans suffixe aléatoire, voire sans préfixe (processus BIA).
 create domain id_metier as text
-    check (value <> '' and length(value) <= 64);
+    check (value <> ''
+       and length(value) <= 64
+       -- Deux caractères, et deux seulement, sont refusés (CONVENTIONS.md §17.3) :
+       --   * la VIRGULE — le périmètre de session transite en chaîne jointe par virgules
+       --     (grc.filiales, lu par string_to_array au §2). Un identifiant de filiale valant
+       --     « FIL-A,FIL-B » scinderait le périmètre en DEUX entrées et accorderait la
+       --     lecture de deux filiales. Aucun chemin ne permet aujourd'hui de choisir un
+       --     identifiant de filiale (la création de filiale est le lot L4) : c'est une
+       --     mesure de défense en profondeur, fermée maintenant parce que le domaine est
+       --     en train d'être figé et qu'un « alter domain » sur une base peuplée coûte
+       --     bien davantage ;
+       --   * l'ESPACE EN TÊTE OU EN FIN (espace, tabulation, retour chariot, saut de
+       --     ligne) — invisible à l'oeil, il fait de « RISK-1 » et « RISK-1 » deux clés
+       --     distinctes et casse silencieusement le round-trip grc-backup.
+       -- Le domaine reste VOLONTAIREMENT permissif par ailleurs (§2) : la reprise
+       -- d'exports anciens en dépend. On ferme deux caractères, on ne durcit pas le format.
+       and value !~ ','
+       and value = btrim(value, E' \t\r\n'));
 
 comment on domain id_metier is
     'Clé primaire métier au format "<PRÉFIXE>-<horodatage>-<aléa>" (ex. RISK-1720000000000-482). '
@@ -145,6 +163,36 @@ comment on domain type_entite is
 -- §2 — FONCTIONS PARTAGÉES DU SOCLE
 -- Réutilisées par toutes les migrations. Ne pas en écrire de variantes.
 -- Toutes en « security invoker » (défaut) : aucune n'est un contournement de droits.
+--
+-- ── CHEMIN DE RECHERCHE FIGÉ (CONVENTIONS.md §17.2) ─────────────────────────────────
+--
+-- CHAQUE fonction de ce fichier porte « set search_path = pg_catalog, public, pg_temp ».
+-- Ce n'est pas une précaution de style, c'est la fermeture d'une attaque REPRODUITE à la
+-- porte de sécurité S1 : PostgreSQL consulte le schéma temporaire de la session AVANT le
+-- chemin de recherche, y compris quand celui-ci est explicitement fixé à « public » — ce
+-- que fait pourtant le pool (src/db/pool.ts, « -c search_path=public »). Un rôle
+-- disposant du privilège « temporary » masque alors n'importe quelle table du schéma par
+-- une table temporaire de son cru, et détourne la fonction qui la lit : forge d'une
+-- entrée de journal au chaînage rompu, désarmement du déclencheur de cohérence des
+-- mesures, garde-fou de couverture RLS rendu aveugle.
+--
+-- LA POSITION DE « pg_temp » DANS LA LISTE EST LA MESURE ELLE-MÊME, et elle est
+-- contre-intuitive : tant que pg_temp n'est PAS nommé, il est consulté EN PREMIER, avant
+-- même pg_catalog. Le nommer en DERNIER est ce qui le relègue derrière public. Vérifié en
+-- exécution sur PostgreSQL 16.13 :
+--
+--     search_path = pg_catalog, essai              -> la fonction lit la table TEMPORAIRE
+--     search_path = pg_catalog, essai, pg_temp     -> la fonction lit la table réelle
+--
+-- Écrire « set search_path = pg_catalog, public » — sans pg_temp — ne fermerait donc
+-- RIEN. Le §9 de ce fichier refuse la migration si une fonction du schéma oublie ce
+-- réglage ou omet d'y nommer pg_temp.
+--
+-- Corollaire d'exploitation, HORS de ce fichier et qui reste dû : le privilège
+-- « temporary » doit être retiré au rôle applicatif sur toute base — développement et
+-- recette compris (db/dev/preparer_base_dev.sh). La production le refusait déjà, mais par
+-- accident : deploy/install.sh fait « revoke all on database … from public », ce qui
+-- retire TEMPORARY au passage.
 -- =====================================================================================
 
 -- Contexte de la transaction, positionné par le service applicatif :
@@ -155,7 +203,8 @@ comment on domain type_entite is
 -- pool de connexions. Ces valeurs viennent de la SESSION SERVEUR, jamais du navigateur.
 
 create or replace function f_utilisateur_courant() returns text
-    language sql stable as
+    language sql stable
+    set search_path = pg_catalog, public, pg_temp as
 $$
     select coalesce(nullif(current_setting('grc.utilisateur', true), ''), 'systeme');
 $$;
@@ -165,7 +214,8 @@ comment on function f_utilisateur_courant() is
     '(migrations, timers systemd). Alimente cree_par / modifie_par.';
 
 create or replace function f_filiale_courante() returns text
-    language sql stable as
+    language sql stable
+    set search_path = pg_catalog, public, pg_temp as
 $$
     select nullif(current_setting('grc.filiale_id', true), '');
 $$;
@@ -175,7 +225,8 @@ comment on function f_filiale_courante() is
     'politiques RLS créées par la migration dédiée (CONVENTIONS.md §11).';
 
 create or replace function f_filiales_autorisees() returns text[]
-    language sql stable as
+    language sql stable
+    set search_path = pg_catalog, public, pg_temp as
 $$
     select coalesce(
         string_to_array(nullif(current_setting('grc.filiales', true), ''), ','),
@@ -189,7 +240,8 @@ comment on function f_filiales_autorisees() is
 -- Génération d'identifiant côté serveur, strictement identique à UI.genId du frontend :
 -- <PRÉFIXE>-<millisecondes>-<aléa 0..999>.
 create or replace function f_generer_id(p_prefixe text) returns id_metier
-    language sql volatile as
+    language sql volatile
+    set search_path = pg_catalog, public, pg_temp as
 $$
     select (upper(p_prefixe) || '-'
             || (extract(epoch from clock_timestamp()) * 1000)::bigint::text || '-'
@@ -203,7 +255,8 @@ comment on function f_generer_id(text) is
 -- Traçabilité + verrouillage optimiste. Le client ne fixe jamais lui-même « version » :
 -- il transmet la version qu'il a lue dans le « where », et ce déclencheur incrémente.
 create or replace function f_maj_tracabilite() returns trigger
-    language plpgsql as
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
 $$
 begin
     new.version     := old.version + 1;
@@ -222,7 +275,8 @@ comment on function f_maj_tracabilite() is
 -- Variante pour les tables filles et de liaison, qui ne portent pas de « version »
 -- (la version est celle de l'entité parente).
 create or replace function f_maj_horodatage() returns trigger
-    language plpgsql as
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
 $$
 begin
     new.modifie_le  := now();
@@ -242,7 +296,8 @@ comment on function f_maj_horodatage() is
 -- personne n'est alerté. Ici l'opération échoue bruyamment et laisse une trace. Les règles
 -- ne couvrent d'ailleurs pas TRUNCATE.
 create or replace function f_interdit_modification() returns trigger
-    language plpgsql as
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
 $$
 begin
     raise exception
@@ -257,6 +312,76 @@ $$;
 comment on function f_interdit_modification() is
     'Déclencheur de refus (SQLSTATE GRC01) : bloque update / delete / truncate sur une table '
     'en ajout seul, y compris pour le propriétaire applicatif.';
+
+-- -------------------------------------------------------------------------------------
+-- Garde-fou du chemin de recherche (CONVENTIONS.md §17.2).
+--
+-- Une fonction dont le search_path n'est pas figé est détournable par masquage pg_temp
+-- (voir l'en-tête du §2). Cette vérification balaie le catalogue plutôt que d'énumérer
+-- les fonctions : c'est ce qui la rend valable pour les migrations à venir, qui n'ont
+-- qu'à l'appeler pour refuser de s'appliquer si elles ont oublié le réglage.
+--
+-- Elle exige DEUX choses, et la seconde est celle qu'on oublie :
+--   1. un réglage « search_path » dans proconfig — sinon le chemin est celui de la
+--      session appelante, que l'appelant choisit ;
+--   2. la mention EXPLICITE de « pg_temp » dans ce réglage — sinon le schéma temporaire
+--      est consulté EN PREMIER et le réglage ne ferme rien. C'est le point démontré à la
+--      porte S1, et c'est pourquoi ce garde-fou ne se contente pas de « proconfig non vide ».
+--
+-- Un schéma sain ne renvoie AUCUNE ligne — même idiome que f_journal_audit_verifier().
+-- Portée exacte, à ne pas surestimer : ce garde-fou lit une DÉCLARATION, pas un
+-- comportement. Il ne dit rien de ce que la fonction fait de son chemin une fois figé.
+-- -------------------------------------------------------------------------------------
+create or replace function f_verifier_chemin_recherche()
+returns table (objet text, anomalie text, detail text)
+    language plpgsql stable
+    set search_path = pg_catalog, public, pg_temp as
+$$
+declare
+    r        record;
+    v_chemin text;
+begin
+    for r in
+        select p.oid,
+               p.proname::text as nom,
+               pg_get_function_identity_arguments(p.oid) as arguments,
+               p.proconfig
+          from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'public' and p.prokind = 'f'
+         order by p.proname, pg_get_function_identity_arguments(p.oid)
+    loop
+        objet := r.nom || '(' || r.arguments || ')';
+
+        select c into v_chemin
+          from unnest(coalesce(r.proconfig, array[]::text[])) as c
+         where c like 'search_path=%'
+         limit 1;
+
+        if v_chemin is null then
+            anomalie := 'search_path_non_fige';
+            detail   := 'la fonction n''a pas « set search_path » : son chemin de recherche est '
+                        'celui de la session appelante, et pg_temp y est consulté en premier';
+            return next;
+        elsif v_chemin not like '%pg_temp%' then
+            anomalie := 'pg_temp_non_relegue';
+            detail   := format('search_path figé mais sans pg_temp explicite (%s) : le schéma '
+                               'temporaire reste consulté EN PREMIER, le réglage ne ferme rien',
+                               v_chemin);
+            return next;
+        end if;
+    end loop;
+
+    return;
+end;
+$$;
+
+comment on function f_verifier_chemin_recherche() is
+    'Vérifie que TOUTE fonction du schéma public fige son chemin de recherche ET y nomme '
+    'explicitement pg_temp (CONVENTIONS.md §17.2). Un schéma sain ne renvoie AUCUNE ligne. '
+    'À appeler par toute migration future qui crée une fonction : un chemin de recherche non '
+    'figé est détournable par masquage pg_temp. Ce garde-fou lit une DÉCLARATION, pas un '
+    'comportement : il ne dit rien de ce que la fonction fait de son chemin une fois figé.';
 
 -- =====================================================================================
 -- §3 — REGISTRE DES MIGRATIONS
@@ -751,7 +876,8 @@ create or replace function f_journal_audit_charge_utile(
     p_version_application  text,
     p_empreinte_precedente text
 ) returns text
-    language sql stable as
+    language sql stable
+    set search_path = pg_catalog, public, pg_temp as
 $$
     select concat_ws(chr(31),
         p_numero::text,
@@ -786,7 +912,8 @@ comment on function f_journal_audit_charge_utile(bigint, text, timestamptz, text
 -- Il n'existe donc aucun moyen de forger une entrée cohérente par l'API.
 -- ---------------------------------------------------------------------------------
 create or replace function f_journal_audit_chainage() returns trigger
-    language plpgsql as
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
 $$
 declare
     v_precedent record;
@@ -860,7 +987,8 @@ returns table (
     anomalie          text,
     detail            text
 )
-    language plpgsql stable as
+    language plpgsql stable
+    set search_path = pg_catalog, public, pg_temp as
 $$
 declare
     r                     record;
@@ -1086,7 +1214,8 @@ comment on column approbations.acteur_libelle is
 
 -- Irréversibilité : une étape franchie ne se rejoue pas et ne s'efface pas.
 create or replace function f_approbations_verrou_decision() returns trigger
-    language plpgsql as
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
 $$
 declare
     v_statut text := old.statut;
@@ -1354,6 +1483,39 @@ end;
 $$;
 
 -- =====================================================================================
+-- §15 bis — GARDE-FOU : LE CHEMIN DE RECHERCHE DE CHAQUE FONCTION EST FIGÉ
+-- -------------------------------------------------------------------------------------
+-- Placé après la création de TOUTES les fonctions du fichier. Une fonction ajoutée demain
+-- sans « set search_path = pg_catalog, public, pg_temp » fera échouer la migration ici,
+-- au déploiement, plutôt que d'ouvrir en silence le masquage par pg_temp (§2).
+-- =====================================================================================
+
+do $$
+declare
+    v_anomalies text;
+    v_nombre    integer;
+begin
+    select string_agg(format('  - %s : %s (%s)', objet, anomalie, detail), E'\n' order by objet),
+           count(*)
+      into v_anomalies, v_nombre
+      from f_verifier_chemin_recherche();
+
+    if v_nombre > 0 then
+        raise exception E'Chemin de recherche non figé — % fonction(s) :\n%', v_nombre, v_anomalies
+            using errcode = '42501',
+                  hint = 'Ajoutez « set search_path = pg_catalog, public, pg_temp » à la '
+                         'définition de chaque fonction. pg_temp doit être nommé, et en '
+                         'DERNIER : non nommé, il est consulté en PREMIER. Voir le §2 de cette '
+                         'migration et backend/db/CONVENTIONS.md §17.2.';
+    end if;
+
+    raise notice 'Chemin de recherche figé sur les % fonction(s) du schéma.',
+                 (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                   where n.nspname = 'public' and p.prokind = 'f');
+end;
+$$;
+
+-- =====================================================================================
 -- §16 — ENREGISTREMENT DE LA MIGRATION
 -- =====================================================================================
 
@@ -1381,6 +1543,7 @@ commit;
 --   alter table journal_audit disable trigger trg_journal_audit_interdit_vidage;
 --   drop table if exists journal_audit cascade;
 --   drop table if exists utilisateurs, filiales cascade;
+--   drop function if exists f_verifier_chemin_recherche();
 --   drop function if exists f_journal_audit_verifier(bigint);
 --   drop function if exists f_journal_audit_chainage();
 --   drop function if exists f_journal_audit_charge_utile(bigint, text, timestamptz, text, text,

@@ -293,6 +293,30 @@ export type ResultatReprise =
     };
 
 /* =====================================================================
+ *  Pré-analyse lexicale
+ * ===================================================================== */
+
+/**
+ * Verdict du balayage lexical qui précède `JSON.parse` (constat m-5 de la porte
+ * S1). Il ne construit rien : il compte, et il s'arrête au budget.
+ */
+export interface PreAnalyse {
+  /**
+   * Nombre de valeurs JSON dénombrées. Le comptage s'arrête au premier
+   * dépassement, la valeur est donc plafonnée à `noeudsMax + 1`.
+   */
+  readonly noeuds: number;
+  /** Vrai quand le budget de nœuds est dépassé : l'entrée ne sera pas analysée. */
+  readonly budgetDepasse: boolean;
+  /**
+   * Nombre de caractères réellement parcourus. C'est la mesure de l'arrêt
+   * anticipé : sur une entrée hostile, il vaut une fraction de la taille du
+   * fichier — et c'est ce qui rend le refus bon marché.
+   */
+  readonly caracteresLus: number;
+}
+
+/* =====================================================================
  *  Options
  * ===================================================================== */
 

@@ -655,12 +655,35 @@ SQL
 fi
 
 # Seuls les rôles nommés se connectent : `public` n'a rien à faire ici.
+#
+# Le `revoke temporary` nommé n'est pas une redondance du `revoke all` qui le
+# précède (db/CONVENTIONS.md §17.2). PostgreSQL consulte `pg_temp` AVANT le
+# `search_path`, même quand celui-ci est fixé à `public` — ce que fait pourtant
+# le pool. Un rôle disposant de `temporary` peut donc masquer une table du schéma
+# et détourner une fonction : l'audit de la porte S1 l'a démontré en forgeant une
+# entrée de journal au chaînage rompu, en désarmant un déclencheur de cohérence,
+# et en rendant aveugle le garde-fou de couverture RLS.
+#
+# La production le refusait déjà, mais par effet de bord du `revoke all`. Une
+# seule ligne posée un jour par commodité (`grant temporary … to $ROLE_APP`)
+# rouvrirait la porte sans que rien ne le signale. Le refus est donc explicite,
+# et vérifié plus bas.
 sql_admin <<SQL
 revoke all on database $BASE_NOM from public;
 grant connect, temporary on database $BASE_NOM to $ROLE_PROPRIETAIRE;
 grant connect on database $BASE_NOM to $ROLE_APP, $ROLE_LECTURE;
+revoke temporary on database $BASE_NOM from $ROLE_APP, $ROLE_LECTURE;
 SQL
 succes "droits de connexion : $ROLE_PROPRIETAIRE, $ROLE_APP, $ROLE_LECTURE (public exclu)"
+
+for role in "$ROLE_APP" "$ROLE_LECTURE"; do
+  # Les deux noms de rôle ont déjà passé `valider_identifiant` : rien de libre ici.
+  if [[ "$(printf "select has_database_privilege('%s', '%s', 'temporary')" \
+             "$role" "$BASE_NOM" | sql_admin)" != "f" ]]; then
+    echec "$role dispose de TEMPORARY sur $BASE_NOM : pg_temp peut masquer le schéma (§17.2)."
+  fi
+done
+succes "$ROLE_APP et $ROLE_LECTURE sans TEMPORARY — pg_temp ne peut pas masquer le schéma"
 
 # ---- les mots de passe du fichier fonctionnent-ils vraiment ? --------------
 # Sinon l'échec surviendrait plus loin, dans migrate.mjs, sous une forme moins claire.

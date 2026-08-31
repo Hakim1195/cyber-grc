@@ -22,7 +22,8 @@
 --   §4  Famille 2 — 5 tables mixtes (filiale_id nullable, null = portée Groupe)
 --   §5  Famille 3 — 6 liaisons et tables filles SANS filiale_id
 --   §6  Famille 4 — 12 tables de niveau Groupe et socle, dont journal_audit
---   §7  Cohérence catalogue de mesures ↔ filiale (ce qu'aucune clé étrangère ne tient)
+--   §7  Déclencheurs de cohérence : catalogue de mesures ↔ filiale, portée figée des
+--       tables mixtes (ce qu'aucune clé étrangère ni aucune politique ne tient)
 --   §8  Garde-fou de couverture
 --   §9  Enregistrement de la migration
 --
@@ -264,7 +265,8 @@ comment on table migrations_schema is
 -- d'une session psql ; le garde qui vaut TOUJOURS est celui de l'écriture ci-dessous.
 -- -------------------------------------------------------------------------------------
 create or replace function f_filiales_lecture() returns text[]
-    language plpgsql stable as
+    language plpgsql stable
+    set search_path = pg_catalog, public, pg_temp as
 $$
 declare
     v_brut text := current_setting('grc.filiales', true);
@@ -294,7 +296,8 @@ comment on function f_filiales_lecture() is
 -- et il n'existe aucune écriture légitime de donnée de filiale sans filiale active.
 -- -------------------------------------------------------------------------------------
 create or replace function f_filiale_ecriture() returns text
-    language plpgsql stable as
+    language plpgsql stable
+    set search_path = pg_catalog, public, pg_temp as
 $$
 declare
     v_filiale text := f_filiale_courante();
@@ -335,7 +338,8 @@ comment on function f_filiale_ecriture() is
 -- Comparaison stricte à 'oui' : toute autre valeur, y compris 'true' ou '1', vaut non.
 -- -------------------------------------------------------------------------------------
 create or replace function f_administration_groupe() returns boolean
-    language sql stable as
+    language sql stable
+    set search_path = pg_catalog, public, pg_temp as
 $$
     select coalesce(current_setting('grc.administration_groupe', true), '') = 'oui';
 $$;
@@ -371,7 +375,8 @@ comment on function f_administration_groupe() is
 -- qui aurait permis de deviner le catalogue local d'une autre filiale.
 -- -------------------------------------------------------------------------------------
 create or replace function f_coherence_mesure_catalogue() returns trigger
-    language plpgsql as
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
 $$
 begin
     if new.mesure_id is null then
@@ -404,6 +409,64 @@ comment on function f_coherence_mesure_catalogue() is
     'nullable (CONVENTIONS.md §16.2). SQLSTATE 23514.';
 
 -- -------------------------------------------------------------------------------------
+-- La PORTÉE d'une ligne mixte ne change pas — corrigé à la porte S1 (constat M-3).
+--
+-- CE QUE LA POLITIQUE NE PEUT PAS FAIRE. Le prédicat des tables mixtes (§4) vaut
+--     case when filiale_id is null then f_administration_groupe()
+--          else filiale_id = f_filiale_ecriture() end
+-- et il est évalué SÉPARÉMENT sur l'ancienne et sur la nouvelle ligne. Rien, dans cette
+-- forme, n'interdit de franchir la frontière entre les deux portées : le « using » est
+-- satisfait par la moitié gauche (ligne de portée Groupe plus le drapeau), le
+-- « with check » par la moitié droite (ligne de la filiale active). Une politique ne voit
+-- jamais les deux moitiés d'un même « update » sous la même condition ; un déclencheur,
+-- si. Reproduit à la porte S1 :
+--
+--     update mesure_catalogue set filiale_id = 'FIL-A' where id = 'MESURE-SOCLE';  UPDATE 1
+--
+-- CE QUE ÇA COÛTAIT. La ligne du socle commun — visible des vingt filiales — devenait une
+-- ligne LOCALE de la filiale A, donc invisible des dix-neuf autres, puis supprimable par
+-- elle comme une ligne ordinaire. La cascade emportait alors les mises en oeuvre des
+-- autres filiales. Les deux moitiés du chemin sont fermées : ici pour l'appropriation,
+-- et par « on delete restrict » sur fk_mesure_mise_en_oeuvre_mesure (002) pour la
+-- destruction collatérale.
+--
+-- POURQUOI REFUSER TOUT CHANGEMENT, ET PAS SEULEMENT L'APPROPRIATION. Les quatre
+-- transitions sont également fautives, et aucune n'a d'usage légitime :
+--     Groupe  -> filiale : appropriation du socle commun ;
+--     filiale -> Groupe  : promotion d'une ligne locale en socle, sans arbitrage Groupe ;
+--     filiale -> filiale : le déplacement chez le voisin, que la RLS interdit déjà aux
+--                          tables de niveau filiale — la même règle vaut ici ;
+--     Groupe  -> Groupe  : sans objet (aucun changement).
+-- Une ligne ne change pas de portée : on en crée une nouvelle. Même motif et même
+-- SQLSTATE que f_coherence_mesure_catalogue(), pour que l'API les traduise pareillement.
+-- -------------------------------------------------------------------------------------
+create or replace function f_interdit_changement_portee() returns trigger
+    language plpgsql
+    set search_path = pg_catalog, public, pg_temp as
+$$
+begin
+    if new.filiale_id is distinct from old.filiale_id then
+        raise exception
+            'Table % : la portée d''une ligne ne change pas (% -> %).',
+            tg_table_name,
+            coalesce(old.filiale_id, 'Groupe'), coalesce(new.filiale_id, 'Groupe')
+            using errcode = '23514',
+                  hint = 'Une ligne de portée Groupe (filiale_id nul) est le socle commun de '
+                         'toutes les filiales ; une ligne locale appartient à la sienne. Pour '
+                         'changer de portée, créez une nouvelle ligne et retirez l''ancienne. '
+                         'Voir backend/db/CONVENTIONS.md §17.1 et le §4 de cette migration.';
+    end if;
+    return new;
+end;
+$$;
+
+comment on function f_interdit_changement_portee() is
+    'Déclencheur des cinq tables MIXTES : refuse (SQLSTATE 23514) tout « update » qui change '
+    'filiale_id, dans un sens comme dans l''autre. Ferme le franchissement de la frontière '
+    'Groupe / filiale que les politiques RLS, évaluées séparément sur l''ancienne et la '
+    'nouvelle ligne, ne peuvent pas voir. Constat M-3 de la porte de sécurité S1.';
+
+-- -------------------------------------------------------------------------------------
 -- Vérification de la couverture RLS. Créée en fonction, et pas seulement jouée en fin de
 -- migration, pour trois raisons : le banc d'essai s'en sert, le script
 -- db/verifier_cloisonnement.sql le montre à l'auditeur, et une migration future peut
@@ -413,7 +476,8 @@ comment on function f_coherence_mesure_catalogue() is
 -- -------------------------------------------------------------------------------------
 create or replace function f_verifier_couverture_rls()
 returns table (objet text, anomalie text, detail text)
-    language plpgsql stable as
+    language plpgsql stable
+    set search_path = pg_catalog, public, pg_temp as
 $$
 declare
     -- Les six tables de liaison sans filiale_id, nommées explicitement : elles sont
@@ -505,16 +569,21 @@ begin
             return next;
         end if;
 
-        -- Prédicats triviaux sur une table qui porte, elle, une filiale.
+        -- Politiques qui ne CONSULTENT PAS le périmètre, sur une table qui porte, elle,
+        -- une filiale. La détection ne compare plus le prédicat au littéral « true » : elle
+        -- exige qu'il MENTIONNE la fonction de périmètre correspondante. Voir la portée
+        -- exacte, et ses limites, dans le commentaire de la fonction.
         if (r.porte_filiale or r.nom = any (v_liaisons)) and not (r.nom = any (v_derogations)) then
             if exists (
                 select 1 from pg_policy p
                  where p.polrelid = r.oid and p.polpermissive and p.polcmd in ('r', '*')
-                   and coalesce(pg_get_expr(p.polqual, p.polrelid), 'true') = 'true')
+                   and coalesce(pg_get_expr(p.polqual, p.polrelid), 'true')
+                       !~ '(f_filiales_lecture|f_filiales_autorisees)')
             then
                 anomalie := 'lecture_non_cloisonnee';
-                detail   := 'une politique de lecture vaut « true » sur une table cloisonnée : '
-                            'toutes les filiales se lisent entre elles';
+                detail   := 'une politique de lecture ne consulte pas le périmètre de la session '
+                            '(ni f_filiales_lecture, ni f_filiales_autorisees) sur une table '
+                            'cloisonnée : toutes les filiales se lisent entre elles';
                 return next;
             end if;
 
@@ -527,11 +596,12 @@ begin
                                when 'd' then pg_get_expr(p.polqual, p.polrelid)
                                else coalesce(pg_get_expr(p.polwithcheck, p.polrelid),
                                              pg_get_expr(p.polqual, p.polrelid))
-                           end, 'true') = 'true')
+                           end, 'true') !~ 'f_filiale_ecriture')
             then
                 anomalie := 'ecriture_non_cloisonnee';
-                detail   := 'une politique d''écriture vaut « true » sur une table cloisonnée : '
-                            'une filiale peut écrire chez une autre';
+                detail   := 'une politique d''écriture ne consulte pas la filiale ACTIVE '
+                            '(f_filiale_ecriture) sur une table cloisonnée : une filiale peut '
+                            'écrire chez une autre';
                 return next;
             end if;
         end if;
@@ -555,9 +625,18 @@ $$;
 comment on function f_verifier_couverture_rls() is
     'Vérifie que TOUTE table du schéma public porte « enable » et « force row level security », '
     'au moins une politique de lecture et une d''écriture, qu''aucune politique de lecture ne '
-    'dépend d''un réglage d''administration, et qu''aucune table cloisonnée n''a de prédicat '
-    'trivial. Un schéma sain ne renvoie AUCUNE ligne. À appeler par toute migration future qui '
-    'crée une table : sans politique, elle doit échouer au déploiement, pas fuir en silence.';
+    'dépend d''un réglage d''administration, et que toute table cloisonnée hors dérogation a des '
+    'prédicats qui MENTIONNENT les fonctions de périmètre (f_filiales_lecture ou '
+    'f_filiales_autorisees en lecture, f_filiale_ecriture en écriture). Un schéma sain ne '
+    'renvoie AUCUNE ligne. À appeler par toute migration future qui crée une table : sans '
+    'politique, elle doit échouer au déploiement, pas fuir en silence. '
+    'PORTÉE EXACTE, À NE PAS SURESTIMER (CONVENTIONS.md §17.5) : ce garde-fou lit le TEXTE des '
+    'prédicats, pas leur sens. Il attrape une politique qui ne consulte pas le périmètre — '
+    '« true », « filiale_id is not null », un prédicat sur une autre colonne — mais il ne peut '
+    'pas attraper une politique qui NOMME la bonne fonction en s''en servant mal, par exemple '
+    '« f_filiales_lecture() is not null ». Ce qui mord vraiment là, ce sont les tests de '
+    'comportement de test/base/rls.test.mjs et db/verifier_cloisonnement.sql. Un garde-fou '
+    'auquel on prête plus de portée qu''il n''en a endort la vigilance au lieu de l''entretenir.';
 
 -- =====================================================================================
 -- §3 — FAMILLE 1 : LES 24 TABLES DE NIVEAU FILIALE
@@ -684,9 +763,18 @@ begin
             'Ajout : une ligne locale dans la seule filiale active ; une ligne de portée '
             'Groupe seulement en transaction d''administration Groupe '
             '(grc.administration_groupe = ''oui''). Ce réglage n''élargit jamais la lecture.');
+        -- Le commentaire dit ce que la POLITIQUE fait, et nomme ce qu'elle NE PEUT PAS
+        -- faire. Il affirmait auparavant l'inverse de son comportement réel — corrigé à la
+        -- porte de sécurité S1 (constat M-3).
         execute format('comment on policy %I on %I is %L', 'pol_' || t || '_maj', t,
-            'Modification : mêmes conditions que l''ajout, des deux côtés — une filiale ne '
-            'peut ni s''approprier une ligne Groupe, ni pousser une ligne chez une autre.');
+            'Modification : mêmes conditions que l''ajout, appliquées SÉPARÉMENT à l''ancienne '
+            'ligne (« using ») et à la nouvelle (« with check »). À elle seule, cette politique '
+            'n''interdit donc PAS de franchir la frontière entre portée Groupe et portée '
+            'filiale : le « using » peut être satisfait par une moitié du « case » et le '
+            '« with check » par l''autre. C''est le déclencheur trg_' || t || '_portee_figee '
+            '(§7) qui refuse tout changement de filiale_id, dans un sens comme dans l''autre. '
+            'Le déplacement d''une ligne LOCALE vers une autre filiale, lui, est bien refusé '
+            'par le « with check » de cette politique.');
         execute format('comment on policy %I on %I is %L', 'pol_' || t || '_suppression', t,
             'Suppression : mêmes conditions que l''ajout. Une filiale ne supprime pas le socle '
             'commun.');
@@ -1032,11 +1120,20 @@ comment on policy pol_import_erreurs_lecture on import_erreurs is
 --   - qu'un ajout futur de colonne « filiale_id » à l'une d'elles fasse aussitôt échouer
 --     la vérification de couverture (« lecture_non_cloisonnee ») au lieu de passer.
 --
--- Ce qui les protège n'est PAS la RLS, et il faut le dire clairement :
+-- Ce qui les protège n'est PAS le cloisonnement par filiale, et il faut le dire
+-- clairement :
 --   - le modèle de droits à trois axes, vérifié côté serveur à chaque requête — les
 --     domaines « droits », « filiales », « parametres », « journal » sont réservés au
 --     profil Administrateur (PLAN_SERVEUR §3.2) ;
---   - les privilèges SQL (§1 et CONVENTIONS §14).
+--   - les privilèges SQL (§1 et CONVENTIONS §14) ;
+--   - et, depuis la porte de sécurité S1 (constat M-2), pour les QUATRE TABLES DE
+--     CONFIGURATION (utilisateurs, profils, profil_domaines, groupes_ad) : une politique
+--     d'ÉCRITURE réservée à l'administration Groupe. L'arbitrage d'origine — « ce n'est
+--     pas la RLS qui les protège » — se défend pour « mappings » ou « filiales ». Il
+--     était CIRCULAIRE pour les tables qui PRODUISENT la décision d'autorisation : le
+--     contrôle applicatif décide des droits en les lisant, et elles étaient intégralement
+--     réinscriptibles par le rôle qui exécute ce contrôle. Il n'y avait plus de défense en
+--     profondeur, seulement une couche.
 --
 -- Trois d'entre elles portent pourtant un filiale_id, et leur ouverture est une
 -- DÉROGATION assumée, inscrite dans la liste du §2 (f_verifier_couverture_rls) :
@@ -1047,22 +1144,57 @@ comment on policy pol_import_erreurs_lecture on import_erreurs is
 --   - journal_audit    : voir le paragraphe qui lui est consacré ci-dessous.
 -- =====================================================================================
 
+-- La famille se scinde en DEUX groupes depuis la porte de sécurité S1 (constat M-2), et
+-- la ligne de partage est simple : une table qu'on LIT pour décider des droits n'a pas à
+-- être ÉCRITE en fonctionnement courant.
+--
+--   (a) TABLES OUVERTES — écriture au rôle applicatif, sans condition de base.
+--   (b) TABLES DE CONFIGURATION — écriture réservée à l'administration Groupe
+--       (CONVENTIONS §17.4). Ce sont des données d'administration : elles se posent lors
+--       d'un paramétrage, jamais au fil de l'eau. Leur LECTURE reste ouverte : elle est
+--       nécessaire AVANT que le périmètre existe, et le §8 refuserait de toute façon une
+--       politique de lecture qui mentionnerait f_administration_groupe().
+--
+-- CE QUI RESTE OUVERT, ET POURQUOI C'EST ÉCRIT ICI ET NON AILLEURS. Les trois tables de
+-- session sont écrites, par construction, par la couche qui n'a pas encore de périmètre :
+-- ce sont elles qui le PRODUISENT. Leur fermeture est REPORTÉE AU LOT L3, dont c'est la
+-- matière — voir le commentaire posé à l'endroit exact, plus bas.
 do $$
 declare
-    v_tables constant text[] := array[
+    -- (a) Écriture ouverte au rôle applicatif.
+    v_ouvertes constant text[] := array[
         'migrations_schema',  -- registre technique ; écriture fermée à grc_app par les privilèges
         'filiales',           -- la liste des filiales du groupe n'est pas une donnée de filiale,
                               -- et l'authentification la lit avant tout périmètre
-        'utilisateurs',       -- identités AD, provisionnées à la première connexion
-        'profils', 'profil_domaines',
-        'groupes_ad',         -- dérogation : aiguillage d'authentification (voir ci-dessus)
+        -- Les trois tables de SESSION. Leur écriture reste ouverte SANS CONDITION, et c'est
+        -- un REPORT EXPLICITE AU LOT L3 (CONVENTIONS.md §17.4), pas un oubli :
+        --   - ce sont ces tables qui PRODUISENT le périmètre et la décision d'autorisation.
+        --     Les conditionner à un réglage issu de ce même périmètre serait circulaire :
+        --     elles sont lues, et écrites, AVANT que le périmètre existe ;
+        --   - le lot L3 (authentification) posera un réglage « grc.authentification » pour
+        --     sa SEULE transaction d'ouverture de session — provisionnement d'un compte
+        --     inconnu compris (PLAN_SERVEUR §1.5) — et les politiques d'écriture de ces
+        --     trois tables s'y adosseront alors ;
+        --   - risque assumé dans l'intervalle, et il doit être dit : une injection SQL dans
+        --     le rôle applicatif permettrait de forger une session et son périmètre. La
+        --     parade actuelle est le contrôle S5 — requêtes intégralement paramétrées,
+        --     vérifié à la porte S1. Cette dette est une CONDITION D'ENTRÉE du lot L3.
         'sessions', 'session_filiales', 'session_domaines',
         'mappings', 'mapping_exigences'  -- correspondances inter-référentiels : niveau Groupe,
                                          -- vraies partout, définies une fois (CONVENTIONS §16.4)
     ];
+    -- (b) Écriture réservée à l'administration Groupe (CONVENTIONS §17.4).
+    v_configuration constant text[] := array[
+        'utilisateurs',       -- identités AD ; le provisionnement à la première connexion
+                              -- passera par le réglage d'authentification du lot L3
+        'profils',            -- définition des profils métier (PLAN_SERVEUR §3.2)
+        'profil_domaines',    -- niveau de droit d'un profil sur un domaine fonctionnel
+        'groupes_ad'          -- aiguillage d'authentification : lu AVANT tout périmètre,
+                              -- d'où la lecture ouverte, mais écrit par l'administration seule
+    ];
     t text;
 begin
-    foreach t in array v_tables loop
+    foreach t in array v_ouvertes loop
         execute format('alter table %I enable row level security', t);
         execute format('alter table %I force row level security', t);
 
@@ -1089,8 +1221,45 @@ begin
             'Idem ajout.');
     end loop;
 
-    raise notice 'Famille 4 (Groupe et socle) : % tables + journal_audit.',
-                 array_length(v_tables, 1);
+    foreach t in array v_configuration loop
+        execute format('alter table %I enable row level security', t);
+        execute format('alter table %I force row level security', t);
+
+        -- LECTURE ouverte : ces tables sont lues pour RÉSOUDRE les droits, donc avant que
+        -- le périmètre existe. La conditionner serait circulaire.
+        execute format('create policy %I on %I for select using (true)',
+                       'pol_' || t || '_lecture', t);
+        -- ÉCRITURE réservée à l'administration Groupe. f_administration_groupe() n'élargit
+        -- jamais la lecture (§2), et le garde-fou du §8 refuse la migration si cette
+        -- fonction venait à apparaître dans une politique de LECTURE.
+        execute format('create policy %I on %I for insert with check (f_administration_groupe())',
+                       'pol_' || t || '_ajout', t);
+        execute format('create policy %I on %I for update using (f_administration_groupe()) '
+                       'with check (f_administration_groupe())',
+                       'pol_' || t || '_maj', t);
+        execute format('create policy %I on %I for delete using (f_administration_groupe())',
+                       'pol_' || t || '_suppression', t);
+
+        execute format('comment on policy %I on %I is %L', 'pol_' || t || '_lecture', t,
+            'Lecture ouverte, et elle doit l''être : cette table est lue pour RÉSOUDRE les '
+            'droits de la session, donc AVANT que le périmètre existe. La confidentialité de '
+            'son contenu relève du domaine « droits » du modèle à trois axes, vérifié côté '
+            'serveur (PLAN_SERVEUR §3.2).');
+        execute format('comment on policy %I on %I is %L', 'pol_' || t || '_ajout', t,
+            'Écriture réservée à l''ADMINISTRATION GROUPE (grc.administration_groupe = ''oui''), '
+            'corrigé à la porte de sécurité S1 (constat M-2, CONVENTIONS.md §17.4) : cette '
+            'table PRODUIT la décision d''autorisation, la laisser réinscriptible par le rôle '
+            'qui exécute le contrôle des droits rendait la défense circulaire. C''est une donnée '
+            'de paramétrage, elle n''a pas à être écrite en fonctionnement courant.');
+        execute format('comment on policy %I on %I is %L', 'pol_' || t || '_maj', t,
+            'Idem ajout : administration Groupe seulement.');
+        execute format('comment on policy %I on %I is %L', 'pol_' || t || '_suppression', t,
+            'Idem ajout : administration Groupe seulement.');
+    end loop;
+
+    raise notice 'Famille 4 (Groupe et socle) : % tables ouvertes + % tables de configuration '
+                 '(écriture réservée à l''administration Groupe) + journal_audit.',
+                 array_length(v_ouvertes, 1), array_length(v_configuration, 1);
 end;
 $$;
 
@@ -1129,8 +1298,23 @@ alter table journal_audit force row level security;
 create policy pol_journal_audit_lecture on journal_audit for select
     using (true);
 
+-- ÉCRITURE : sur la filiale ACTIVE, comme partout ailleurs dans le schéma.
+--
+-- Elle suivait le périmètre de LECTURE (« = any (f_filiales_autorisees()) ») — seule
+-- politique d'écriture du schéma dans ce cas, et un écart au CONVENTIONS §11 relevé à la
+-- porte de sécurité S1 (constat m-4). Un compte de périmètre Groupe pouvait attribuer une
+-- entrée de journal à n'importe laquelle des vingt filiales, et non à celle qu'il avait
+-- sélectionnée : c'est la valeur probante du registre de chaque filiale qui s'en trouvait
+-- affaiblie, précisément ce que ce journal existe pour porter.
+--
+-- « case » et non « or », pour la raison exposée au §4 : l'ordre d'évaluation d'un « or »
+-- n'est pas garanti, et f_filiale_ecriture() LÈVE GRC04 en l'absence de filiale active.
+-- Une entrée transversale légitime — démarrage du service, échec de connexion, donc
+-- ANTÉRIEURE à la résolution du périmètre — doit passer, pas échouer sur le membre droit
+-- d'une disjonction évaluée en premier.
 create policy pol_journal_audit_ajout on journal_audit for insert
-    with check (filiale_id is null or filiale_id = any (f_filiales_autorisees()));
+    with check (case when filiale_id is null then true
+                     else filiale_id = f_filiale_ecriture() end);
 
 -- Modification et suppression OUVERTES — et c'est délibéré, contre l'intuition.
 --
@@ -1172,20 +1356,28 @@ comment on policy pol_journal_audit_lecture on journal_audit is
     'domaine « journal » du modèle de droits, vérifié côté serveur. Voir le commentaire '
     'détaillé dans 004_rls.sql §6.';
 comment on policy pol_journal_audit_ajout on journal_audit is
-    'Une entrée ne s''attribue qu''à une filiale du périmètre de la session, ou à aucune '
-    '(événement transversal, ou antérieur à la résolution du périmètre : échec de connexion). '
+    'Une entrée ne s''attribue qu''à la filiale ACTIVE de la session (CONVENTIONS.md §11), ou à '
+    'aucune (événement transversal, ou antérieur à la résolution du périmètre : échec de '
+    'connexion). Corrigé à la porte de sécurité S1 : elle suivait le périmètre de LECTURE, si '
+    'bien qu''un compte de périmètre Groupe pouvait attribuer une trace à n''importe laquelle '
+    'des filiales qu''il lit. '
     'Nul ne peut donc fabriquer de preuve dans le registre d''une autre filiale. '
     'L''ajout seul, lui, ne relève pas des politiques mais des privilèges et des '
     'déclencheurs du socle (CONVENTIONS §12) — voir les politiques de modification et de '
     'suppression, ouvertes à dessein.';
 
 -- =====================================================================================
--- §7 — COHÉRENCE CATALOGUE DE MESURES ↔ FILIALE
+-- §7 — DÉCLENCHEURS DE COHÉRENCE : CE QU'AUCUNE CLÉ ÉTRANGÈRE NI AUCUNE POLITIQUE NE TIENT
 -- -------------------------------------------------------------------------------------
--- Voir la justification complète en tête de f_coherence_mesure_catalogue() (§2).
--- Les quatre tables qui référencent mesure_catalogue en portant un filiale_id.
+-- Deux règles, deux raisons de ne pas être exprimables ailleurs :
+--   (a) catalogue de mesures ↔ filiale — une clé étrangère composite est impossible,
+--       mesure_catalogue.filiale_id étant nullable. Voir f_coherence_mesure_catalogue (§2) ;
+--   (b) portée figée des tables mixtes — une politique RLS évalue son prédicat séparément
+--       sur l'ancienne et la nouvelle ligne, et ne peut donc pas voir une TRANSITION.
+--       Voir f_interdit_changement_portee (§2).
 -- =====================================================================================
 
+-- --- (a) les quatre tables qui référencent mesure_catalogue en portant un filiale_id ---
 create trigger trg_mesure_mise_en_oeuvre_coherence_mesure
     before insert or update on mesure_mise_en_oeuvre
     for each row execute function f_coherence_mesure_catalogue();
@@ -1201,6 +1393,29 @@ create trigger trg_actions_coherence_mesure
 create trigger trg_traitement_mesures_coherence_mesure
     before insert or update on traitement_mesures
     for each row execute function f_coherence_mesure_catalogue();
+
+-- --- (b) les cinq tables MIXTES : une ligne ne change pas de portée --------------------
+-- Mêmes cinq tables que la famille 2 (§4), et dans le même ordre : la liste doit se
+-- relire d'un fichier à l'autre sans effort. Corrigé à la porte S1 (constat M-3).
+create trigger trg_parametres_portee_figee
+    before update on parametres
+    for each row execute function f_interdit_changement_portee();
+
+create trigger trg_mesure_catalogue_portee_figee
+    before update on mesure_catalogue
+    for each row execute function f_interdit_changement_portee();
+
+create trigger trg_personnes_portee_figee
+    before update on personnes
+    for each row execute function f_interdit_changement_portee();
+
+create trigger trg_document_referentiels_portee_figee
+    before update on document_referentiels
+    for each row execute function f_interdit_changement_portee();
+
+create trigger trg_documents_portee_figee
+    before update on documents
+    for each row execute function f_interdit_changement_portee();
 
 -- =====================================================================================
 -- §8 — GARDE-FOU DE COUVERTURE
@@ -1243,6 +1458,39 @@ begin
 end;
 $$;
 
+-- -------------------------------------------------------------------------------------
+-- Second garde-fou, sur les FONCTIONS cette fois : chacune fige son chemin de recherche.
+-- La vérification est celle de 001 (§2 bis, f_verifier_chemin_recherche) ; elle est
+-- rejouée ici parce que ce fichier crée SIX fonctions de plus, et qu'un chemin non figé
+-- est détournable par masquage pg_temp — ce qui désarmerait, entre autres,
+-- f_coherence_mesure_catalogue() et f_verifier_couverture_rls() elle-même
+-- (CONVENTIONS.md §17.2, constat M-1 de la porte S1).
+-- -------------------------------------------------------------------------------------
+do $$
+declare
+    v_anomalies text;
+    v_nombre    integer;
+begin
+    select string_agg(format('  - %s : %s (%s)', objet, anomalie, detail), E'\n' order by objet),
+           count(*)
+      into v_anomalies, v_nombre
+      from f_verifier_chemin_recherche();
+
+    if v_nombre > 0 then
+        raise exception E'Chemin de recherche non figé — % fonction(s) :\n%', v_nombre, v_anomalies
+            using errcode = '42501',
+                  hint = 'Ajoutez « set search_path = pg_catalog, public, pg_temp » à la '
+                         'définition de chaque fonction. pg_temp doit être nommé, et en '
+                         'DERNIER : non nommé, il est consulté en PREMIER. Voir le §2 de '
+                         '001_socle.sql et backend/db/CONVENTIONS.md §17.2.';
+    end if;
+
+    raise notice 'Chemin de recherche figé sur les % fonction(s) du schéma.',
+                 (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                   where n.nspname = 'public' and p.prokind = 'f');
+end;
+$$;
+
 -- =====================================================================================
 -- §9 — ENREGISTREMENT DE LA MIGRATION
 -- =====================================================================================
@@ -1262,6 +1510,11 @@ commit;
 -- les unes des autres. À n'exécuter qu'en développement, jamais en production.
 --
 -- begin;
+--   drop trigger if exists trg_documents_portee_figee                 on documents;
+--   drop trigger if exists trg_document_referentiels_portee_figee     on document_referentiels;
+--   drop trigger if exists trg_personnes_portee_figee                 on personnes;
+--   drop trigger if exists trg_mesure_catalogue_portee_figee          on mesure_catalogue;
+--   drop trigger if exists trg_parametres_portee_figee                on parametres;
 --   drop trigger if exists trg_traitement_mesures_coherence_mesure    on traitement_mesures;
 --   drop trigger if exists trg_actions_coherence_mesure               on actions;
 --   drop trigger if exists trg_evaluation_mesures_coherence_mesure    on evaluation_mesures;
@@ -1286,6 +1539,7 @@ commit;
 --   $$;
 --
 --   drop function if exists f_verifier_couverture_rls();
+--   drop function if exists f_interdit_changement_portee();
 --   drop function if exists f_coherence_mesure_catalogue();
 --   drop function if exists f_administration_groupe();
 --   drop function if exists f_filiale_ecriture();

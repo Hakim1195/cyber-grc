@@ -12,25 +12,49 @@
 --       cloisonnées, y compris celles qu'une migration future ajouterait ;
 --   §4  ÉCRITURE — impossible d'écrire chez l'autre, impossible d'y déplacer une ligne ;
 --   §5  LIAISONS — un lien Toulouse → Allemagne est refusé À L'INSERTION ;
+--   §5b CLÉS ÉTRANGÈRES DIRECTES — une action, une exigence, un incident ou un test de
+--       Toulouse ne peut pas RÉFÉRENCER une ligne de l'Allemagne (les sept clés du
+--       constat B-1 de la porte de sécurité S1), et le catalogue est balayé pour qu'aucune
+--       clé future ne redevienne simple en silence ;
 --   §6  MESURES — une filiale ne met pas en oeuvre la mesure locale d'une autre ;
---   §7  PÉRIMÈTRE — vide (légitime, silencieux) contre absent (défaut, bruyant) ;
---   §8  JOURNAL — nul ne fabrique de preuve dans le registre d'une autre filiale ;
+--   §6b SOCLE GROUPE — une filiale ne s'approprie pas une ligne du socle commun et ne le
+--       supprime pas sous les pieds des autres (constat M-3) ;
+--   §6c CONFIGURATION — les tables qui PRODUISENT les droits ne s'écrivent qu'en
+--       administration Groupe (constat M-2) ;
+--   §7  PÉRIMÈTRE — vide (légitime, silencieux) contre absent (défaut, bruyant), et un
+--       identifiant de filiale ne peut pas contenir la virgule qui sépare le périmètre ;
+--   §8  JOURNAL — nul ne fabrique de preuve dans le registre d'une autre filiale, ni même
+--       dans celui d'une filiale qu'il LIT mais où il n'opère pas (constat m-4) ;
 --   §9  LE RÔLE APPLICATIF — ni BYPASSRLS, ni SUPERUSER, propriétaire de rien ;
---   §10 COUVERTURE — les 47 tables sous « enable » et « force row level security ».
+--   §10 COUVERTURE — les 47 tables sous « enable » et « force row level security », et le
+--       chemin de recherche figé sur chaque fonction (constat M-1).
 --
 -- ── Comment le jouer ─────────────────────────────────────────────────────────────────
 --
---   psql -v ON_ERROR_STOP=1 -d cyber_grc -f backend/db/verifier_cloisonnement.sql
+--   PGPASSWORD=… psql -h 127.0.0.1 -U grc_proprietaire -d cyber_grc \
+--       -v ON_ERROR_STOP=1 -f backend/db/verifier_cloisonnement.sql
 --
--- De préférence AVEC LE COMPTE DE L'APPLICATION — c'est de lui que parle la question
--- d'audit :
+-- POURQUOI LE COMPTE PROPRIÉTAIRE, ET POURQUOI CE N'EST PAS UN AFFAIBLISSEMENT. Ce script
+-- range ses résultats dans une table TEMPORAIRE, et le privilège « temporary » est
+-- désormais RETIRÉ au compte de l'application sur toute base (CONVENTIONS.md §17.2 : sans
+-- ce retrait, le rôle applicatif masque une table du schéma par une table temporaire et
+-- détourne les fonctions qui la lisent). Le compte de l'application ne peut donc plus
+-- jouer ce script sur une base durcie — et c'est une bonne nouvelle, pas une gêne.
+--
+-- La démonstration sous le propriétaire est même PLUS forte : « force row level security »
+-- soumet le propriétaire des tables aux mêmes politiques que tout le monde, et c'est
+-- précisément ce que le §10 vérifie. Quant aux quatre contrôles qui parlent du compte
+-- applicatif lui-même (§9 : BYPASSRLS, propriété des tables, privilèges), ce sont des
+-- requêtes sur le catalogue : leur réponse ne dépend pas du compte qui les pose.
+--
+-- Sur une base de DÉVELOPPEMENT où « temporary » n'aurait pas encore été retiré, le
+-- script se joue aussi tel quel avec le compte de l'application :
 --
 --   PGPASSWORD=… psql -h 127.0.0.1 -U grc_app -d cyber_grc \
 --       -v ON_ERROR_STOP=1 -f backend/db/verifier_cloisonnement.sql
 --
--- Sous le compte propriétaire (grc_proprietaire), la démonstration reste valable et même
--- PLUS forte : « force row level security » soumet le propriétaire des tables aux mêmes
--- politiques. Le §9 le vérifie et l'affiche, quel que soit le compte employé.
+-- Il commence par dire quel compte le joue, et s'arrête avec un message explicite si ce
+-- compte n'a pas de quoi créer sa table de résultats.
 --
 -- ── Il ne laisse RIEN derrière lui ───────────────────────────────────────────────────
 --
@@ -52,6 +76,26 @@
 \timing off
 
 begin;
+
+-- Garde préalable : dire ce qui manque, plutôt que de laisser un « permission denied to
+-- create temporary tables » que rien n'explique. Le retrait du privilège « temporary » au
+-- compte applicatif est VOULU (CONVENTIONS.md §17.2) : c'est ce qui ferme le masquage de
+-- table par pg_temp. Un script de démonstration ne doit pas donner de raison de le rendre.
+do $$
+begin
+    if not has_database_privilege(current_user, current_database(), 'temp') then
+        raise exception
+            'Le compte « % » ne peut pas créer de table temporaire dans « % » : ce script y '
+            'range ses résultats.', current_user, current_database()
+            using hint = 'Jouez la démonstration avec le compte PROPRIÉTAIRE de la base '
+                         '(grc_proprietaire) : « force row level security » le soumet aux mêmes '
+                         'politiques, la démonstration est donc au moins aussi forte. '
+                         'N''accordez PAS « temporary » au compte applicatif pour contourner ce '
+                         'message : ce privilège est retiré à dessein (CONVENTIONS.md §17.2), '
+                         'il rouvrirait le détournement de fonction par masquage pg_temp.';
+    end if;
+end;
+$$;
 
 -- La table de résultats est TEMPORAIRE : elle vit dans le schéma pg_temp, hors de
 -- « public », et n'apparaît donc pas au balayage de couverture du §10.
@@ -141,6 +185,8 @@ insert into processus (id, filiale_id, nom)              values ('BIA-DEMO-A',  
 insert into incidents (id, filiale_id, titre)            values ('INC-DEMO-A',  'FIL-DEMO-A', 'Hameçonnage Toulouse');
 insert into mesure_catalogue (id, filiale_id, nom)       values ('MESURE-DEMO-A','FIL-DEMO-A','Mesure locale Toulouse');
 insert into personnes (id, filiale_id, nom)              values ('PERS-DEMO-A', 'FIL-DEMO-A', 'Responsable TLS');
+insert into evaluations (id, filiale_id, ref_id, code)   values ('EVAL-DEMO-A', 'FIL-DEMO-A', 'anssi', 'M1');
+insert into scenarios_pra (id, filiale_id, nom)          values ('SCEN-DEMO-A', 'FIL-DEMO-A', 'Perte du site de Toulouse');
 insert into risque_exigences (risque_id, exigence_id)    values ('RISK-DEMO-A', 'EX-DEMO-A');
 insert into actif_risques    (actif_id,  risque_id)      values ('ACTIF-DEMO-A','RISK-DEMO-A');
 
@@ -155,8 +201,19 @@ insert into incidents (id, filiale_id, titre)            values ('INC-DEMO-B',  
 insert into mesure_catalogue (id, filiale_id, nom)       values ('MESURE-DEMO-B','FIL-DEMO-B','Mesure locale Allemagne');
 insert into personnes (id, filiale_id, nom)              values ('PERS-DEMO-B', 'FIL-DEMO-B', 'Verantwortlicher DEU');
 insert into documents (id, filiale_id, titre, statut)    values ('DOC-DEMO-B',  'FIL-DEMO-B', 'Verfahren DEU', 'en vigueur');
+insert into evaluations (id, filiale_id, ref_id, code)   values ('EVAL-DEMO-B', 'FIL-DEMO-B', 'anssi', 'M1');
+insert into scenarios_pra (id, filiale_id, nom)          values ('SCEN-DEMO-B', 'FIL-DEMO-B', 'Ausfall des Standorts');
 insert into risque_exigences (risque_id, exigence_id)    values ('RISK-DEMO-B', 'EX-DEMO-B');
 insert into actif_risques    (actif_id,  risque_id)      values ('ACTIF-DEMO-B','RISK-DEMO-B');
+
+-- L'Allemagne met en oeuvre une mesure du socle Groupe. Cette ligne est INVISIBLE de
+-- Toulouse : c'est elle qui, au §6b, empêchera Toulouse de supprimer le socle commun.
+select set_config('grc.administration_groupe', 'oui', true) \gset _rebut
+insert into mesure_catalogue (id, nom) values
+    ('MESURE-DEMO-G2', 'Journalisation centralisée (socle Groupe)');
+select set_config('grc.administration_groupe', '', true) \gset _rebut
+insert into mesure_mise_en_oeuvre (id, filiale_id, mesure_id) values
+    ('MMO-DEMO-B', 'FIL-DEMO-B', 'MESURE-DEMO-G2');
 
 select 'semé : 2 filiales, 1 socle Groupe, des données des deux côtés' as "jeu d'essai";
 
@@ -236,9 +293,12 @@ union all select 'incidents', count(*) from incidents
 order by 1;
 
 -- --- tables mixtes : le socle Groupe est commun, le local reste local -----------------
+-- Quatre lignes de portée Groupe : deux mesures du socle, une personne, un document.
+-- La seconde mesure (MESURE-DEMO-G2) sert au §6 bis — elle est mise en oeuvre par la
+-- seule Allemagne, et c'est cette ligne invisible qui protège le socle de la suppression.
 insert into demo_resultat
-select 'C04', 'Tables mixtes : le socle de Groupe est lisible (mesure, personne, document)',
-       '3', v.n::text, case when v.n = 3 then 'OK' else 'ÉCHEC' end
+select 'C04', 'Tables mixtes : le socle de Groupe est lisible (2 mesures, personne, document)',
+       '4', v.n::text, case when v.n = 4 then 'OK' else 'ÉCHEC' end
   from (select (select count(*) from mesure_catalogue where filiale_id is null)
              + (select count(*) from personnes        where filiale_id is null)
              + (select count(*) from documents        where filiale_id is null) as n) v;
@@ -338,8 +398,11 @@ begin
             v_obtenu := sqlstate;
         end;
 
-        -- Le périmètre d'écriture est rétabli après le cas qui le retire volontairement.
+        -- Le périmètre d'écriture, et le drapeau d'administration, sont rétablis après
+        -- les cas qui les modifient volontairement : un cas ne doit jamais hériter du
+        -- contexte du précédent, sinon la démonstration ne prouve plus ce qu'elle annonce.
         perform set_config('grc.filiale_id', 'FIL-DEMO-A', true);
+        perform set_config('grc.administration_groupe', '', true);
 
         insert into demo_resultat values (
             v_cas[i], v_cas[i + 1], v_cas[i + 3], v_obtenu,
@@ -412,6 +475,255 @@ select 'C22', 'Journal d''audit : lecture NON cloisonnée (dérogation assumée,
        case when coalesce(pg_get_expr(p.polqual, p.polrelid), '') = 'true' then 'OK (constaté)' else 'ÉCHEC' end
   from pg_policy p
  where p.polrelid = 'journal_audit'::regclass and p.polname = 'pol_journal_audit_lecture';
+
+
+-- =====================================================================================
+-- §5 bis — CLÉS ÉTRANGÈRES DIRECTES : RÉFÉRENCER UNE LIGNE DE L'AUTRE FILIALE
+-- -------------------------------------------------------------------------------------
+-- Le §5 ci-dessus ne portait que sur les tables de LIAISON. Or les liens inter-filiales
+-- ne passent pas seulement par elles : une action, une exigence, un incident, un test de
+-- continuité portent des colonnes de rattachement qui désignent, elles aussi, une ligne
+-- d'une autre table cloisonnée.
+--
+-- Sept de ces clés étrangères étaient SIMPLES, et sept liens sur treize passaient donc :
+-- c'est le constat B-1 de la porte de sécurité S1. La conclusion de ce script affirmait
+-- que Toulouse « ne peut pas créer de lien vers » l'Allemagne — c'était faux, et rien
+-- ici ne le montrait. Ces contrôles-là existent pour cette raison.
+--
+-- Ce qui refuse ici n'est pas la RLS mais l'INTÉGRITÉ RÉFÉRENTIELLE (23503), et c'est le
+-- point : les contrôles d'intégrité de PostgreSQL contournent délibérément la RLS, si
+-- bien qu'une clé simple est satisfaite par une ligne invisible. Seule la clé COMPOSITE
+-- (colonne_reference, filiale_id) ferme le chemin — le couple doit exister tel quel.
+-- =====================================================================================
+
+\echo
+\echo '§5 bis — Référencer une ligne de l''Allemagne : les sept clés étrangères directes'
+
+do $$
+declare
+    v_cas constant text[] := array[
+        'C29', 'Rattacher une action de Toulouse à une EXIGENCE de l''Allemagne',
+               'insert into actions (id, filiale_id, titre, exigence_id) values (''ACT-DEMO-1'', ''FIL-DEMO-A'', ''essai'', ''EX-DEMO-B'')',
+               '23503',
+        'C30', 'Rattacher une action de Toulouse à un RISQUE de l''Allemagne',
+               'insert into actions (id, filiale_id, titre, risque_id) values (''ACT-DEMO-2'', ''FIL-DEMO-A'', ''essai'', ''RISK-DEMO-B'')',
+               '23503',
+        'C31', 'Rattacher une action de Toulouse à une ÉVALUATION de l''Allemagne',
+               'insert into actions (id, filiale_id, titre, evaluation_id) values (''ACT-DEMO-3'', ''FIL-DEMO-A'', ''essai'', ''EVAL-DEMO-B'')',
+               '23503',
+        'C32', 'Rattacher une action de Toulouse à un INCIDENT de l''Allemagne',
+               'insert into actions (id, filiale_id, titre, incident_id) values (''ACT-DEMO-4'', ''FIL-DEMO-A'', ''essai'', ''INC-DEMO-B'')',
+               '23503',
+        'C33', 'Rattacher une exigence de Toulouse à un DONNEUR D''ORDRE de l''Allemagne',
+               'insert into exigences (id, filiale_id, code, intitule, client_id) values (''EX-DEMO-X'', ''FIL-DEMO-A'', ''A.5.2'', ''essai'', ''CLI-DEMO-B'')',
+               '23503',
+        'C34', 'Rattacher un incident de Toulouse à un RISQUE de l''Allemagne',
+               'insert into incidents (id, filiale_id, titre, risque_id) values (''INC-DEMO-X'', ''FIL-DEMO-A'', ''essai'', ''RISK-DEMO-B'')',
+               '23503',
+        'C35', 'Rattacher un test de continuité de Toulouse à un SCÉNARIO de l''Allemagne',
+               'insert into tests_pra (id, filiale_id, scenario_id) values (''TEST-DEMO-X'', ''FIL-DEMO-A'', ''SCEN-DEMO-B'')',
+               '23503',
+        -- Sans ces trois contrôles symétriques, une clé étrangère cassée obtiendrait le
+        -- même sans-faute que la clé composite : ce qui est demandé, c'est de refuser le
+        -- lien transfrontière SANS refuser le lien légitime.
+        'C36', 'Rattacher une action de Toulouse à SON PROPRE risque (contrôle symétrique)',
+               'insert into actions (id, filiale_id, titre, risque_id) values (''ACT-DEMO-OK'', ''FIL-DEMO-A'', ''essai'', ''RISK-DEMO-A'')',
+               'AUCUN REFUS',
+        'C37', 'Rattacher un test de Toulouse à SON PROPRE scénario (contrôle symétrique)',
+               'insert into tests_pra (id, filiale_id, scenario_id) values (''TEST-DEMO-OK'', ''FIL-DEMO-A'', ''SCEN-DEMO-A'')',
+               'AUCUN REFUS',
+        'C38', 'Créer une action SANS rattachement (contrôle symétrique : « match simple »)',
+               'insert into actions (id, filiale_id, titre) values (''ACT-DEMO-NUL'', ''FIL-DEMO-A'', ''essai'')',
+               'AUCUN REFUS'
+    ];
+    i        int;
+    v_obtenu text;
+begin
+    i := 1;
+    while i <= array_length(v_cas, 1) loop
+        begin
+            execute v_cas[i + 2];
+            v_obtenu := 'AUCUN REFUS';
+        exception when others then
+            v_obtenu := sqlstate;
+        end;
+        insert into demo_resultat values (
+            v_cas[i], v_cas[i + 1], v_cas[i + 3], v_obtenu,
+            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end);
+        i := i + 4;
+    end loop;
+end;
+$$;
+
+-- --- le balayage : AUCUNE clé étrangère entre deux tables cloisonnées n'est simple -----
+-- Les dix cas ci-dessus prouvent l'état d'aujourd'hui ; celui-ci protège de demain. Il ne
+-- cite aucune contrainte : il les découvre dans le catalogue. Une entité ajoutée par une
+-- migration future avec une clé étrangère simple vers une autre table cloisonnée fera
+-- échouer ce contrôle sans que personne n'ait à y penser — c'est exactement l'omission
+-- qui a produit le constat B-1.
+do $$
+declare
+    v_fautives text;
+    v_nombre   int;
+    v_total    int;
+begin
+    with cloisonnee as (
+        select c.oid, c.relname::text as nom
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          join pg_attribute a on a.attrelid = c.oid and a.attname = 'filiale_id'
+         where n.nspname = 'public' and c.relkind = 'r'
+           and a.attnotnull and a.attnum > 0 and not a.attisdropped
+    ),
+    liens as (
+        select con.conname::text as nom_contrainte,
+               e.nom as enfant, p.nom as parent,
+               exists (
+                   select 1 from unnest(con.conkey) as k
+                   join pg_attribute att on att.attrelid = con.conrelid and att.attnum = k
+                    where att.attname = 'filiale_id') as composite
+          from pg_constraint con
+          join cloisonnee e on e.oid = con.conrelid
+          join cloisonnee p on p.oid = con.confrelid
+         where con.contype = 'f' and p.nom <> 'filiales'
+    )
+    select string_agg(format('%s (%s -> %s)', nom_contrainte, enfant, parent), ', ' order by nom_contrainte)
+             filter (where not composite),
+           count(*) filter (where not composite),
+           count(*)
+      into v_fautives, v_nombre, v_total
+      from liens;
+
+    insert into demo_resultat values (
+        'C39',
+        format('Clés étrangères SIMPLES entre deux tables cloisonnées (%s clés balayées)',
+               coalesce(v_total, 0)),
+        '0', coalesce(v_fautives, coalesce(v_nombre, 0)::text),
+        case when coalesce(v_nombre, 0) = 0 then 'OK' else 'ÉCHEC' end);
+end;
+$$;
+
+-- =====================================================================================
+-- §6 bis — LE SOCLE GROUPE : NI ACCAPARÉ, NI SUPPRIMÉ SOUS LES PIEDS DES AUTRES
+-- -------------------------------------------------------------------------------------
+-- Constat M-3 de la porte S1. Les lignes de portée Groupe (filiale_id nul) des cinq
+-- tables mixtes sont le socle commun des vingt filiales. Deux chemins permettaient de se
+-- l'approprier puis de le détruire, et le second détruisait des lignes INVISIBLES de son
+-- auteur, dans des filiales qui ne sont pas la sienne, sans aucune trace en base.
+--
+-- Le drapeau grc.administration_groupe est posé ici volontairement : c'est un réglage de
+-- session ordinaire, rien n'empêche une session de le poser elle-même, et c'est
+-- précisément dans cette hypothèse que la démonstration a de la valeur.
+-- =====================================================================================
+
+\echo
+\echo '§6 bis — Le socle Groupe : appropriation et destruction collatérale'
+
+do $$
+declare
+    v_cas constant text[] := array[
+        'C40', 'S''APPROPRIER une ligne du socle Groupe (la basculer dans sa filiale)',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'update mesure_catalogue set filiale_id = ''FIL-DEMO-A'' where id = ''MESURE-DEMO-G''',
+               '23514',
+        'C41', 'PROMOUVOIR sa mesure locale en socle Groupe (le sens inverse)',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'update mesure_catalogue set filiale_id = null where id = ''MESURE-DEMO-A''',
+               '23514',
+        'C42', 'SUPPRIMER du socle Groupe une mesure mise en oeuvre par une AUTRE filiale',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'delete from mesure_catalogue where id = ''MESURE-DEMO-G2''',
+               '23503',
+        'C43', 'Modifier le CONTENU d''une ligne Groupe en administration (contrôle symétrique)',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'update mesure_catalogue set description = ''précisée'' where id = ''MESURE-DEMO-G''',
+               'AUCUN REFUS',
+        -- §6 ter — les tables qui PRODUISENT la décision d'autorisation (constat M-2).
+        'C44', 'Écrire dans « profils » sans être en administration Groupe',
+               'insert into profils (id, code, nom) values (''PROF-DEMO'', ''ZZDEMO'', ''Profil de démonstration'')',
+               '42501',
+        'C45', 'Écrire dans « profils » EN administration Groupe (contrôle symétrique)',
+               'select set_config(''grc.administration_groupe'', ''oui'', true);'
+               || 'insert into profils (id, code, nom) values (''PROF-DEMO2'', ''ZZDEMO2'', ''Profil de démonstration'')',
+               'AUCUN REFUS',
+        -- §7 bis — le domaine des identifiants (constat m-2).
+        'C46', 'Créer une filiale dont l''identifiant contient la virgule du périmètre',
+               'insert into filiales (id, code, raison_sociale) values (''FIL-DEMO-A,FIL-DEMO-B'', ''ZZDEMOC'', ''Filiale forgée'')',
+               '23514',
+        'C47', 'Créer une filiale à l''identifiant ancien, sans préfixe (contrôle symétrique)',
+               'insert into filiales (id, code, raison_sociale) values (''1720000000000'', ''ZZDEMOD'', ''Reprise ancienne'')',
+               'AUCUN REFUS'
+    ];
+    i        int;
+    v_obtenu text;
+begin
+    i := 1;
+    while i <= array_length(v_cas, 1) loop
+        begin
+            execute v_cas[i + 2];
+            v_obtenu := 'AUCUN REFUS';
+        exception when others then
+            v_obtenu := sqlstate;
+        end;
+        perform set_config('grc.administration_groupe', '', true);
+        insert into demo_resultat values (
+            v_cas[i], v_cas[i + 1], v_cas[i + 3], v_obtenu,
+            case when v_obtenu = v_cas[i + 3] then 'OK' else 'ÉCHEC' end);
+        i := i + 4;
+    end loop;
+end;
+$$;
+
+-- --- la mise en oeuvre invisible de l'Allemagne a-t-elle survécu ? ---------------------
+-- Le contrôle qui donne son sens au précédent : ce qui devait être protégé l'est.
+-- Le comptage se fait sous le périmètre de l'ALLEMAGNE, puisque la ligne est par
+-- construction invisible de Toulouse — un comptage à zéro depuis Toulouse ne prouverait
+-- rien, ni dans un sens ni dans l'autre.
+do $$
+declare v_reste bigint;
+begin
+    perform set_config('grc.filiales', 'FIL-DEMO-B', true);
+    select count(*) into v_reste from mesure_mise_en_oeuvre where id = 'MMO-DEMO-B';
+    perform set_config('grc.filiales', 'FIL-DEMO-A', true);
+
+    insert into demo_resultat values (
+        'C48', 'La mise en oeuvre de l''Allemagne a survécu à la tentative de Toulouse',
+        '1', v_reste::text, case when v_reste = 1 then 'OK' else 'ÉCHEC' end);
+end;
+$$;
+
+-- =====================================================================================
+-- §8 bis — LE JOURNAL S'ÉCRIT SUR LA FILIALE ACTIVE, PAS SUR LE PÉRIMÈTRE DE LECTURE
+-- -------------------------------------------------------------------------------------
+-- Constat m-4. Le §8 ci-dessus (C18) montre qu'une session de Toulouse ne peut pas écrire
+-- dans le registre de l'Allemagne — mais elle ne LIT que Toulouse. Le cas qui manquait est
+-- celui d'un compte de périmètre Groupe : il lit les vingt filiales, et pouvait donc
+-- attribuer une trace à n'importe laquelle, et non à celle qu'il avait sélectionnée.
+-- C'est la valeur probante du registre de chaque filiale qui s'y jouait.
+-- =====================================================================================
+
+\echo
+\echo '§8 bis — Journal : un compte de périmètre Groupe n''écrit que dans sa filiale active'
+
+do $$
+declare v_obtenu text;
+begin
+    -- Périmètre de LECTURE : les deux filiales. Filiale ACTIVE : Toulouse.
+    perform set_config('grc.filiales', 'FIL-DEMO-A,FIL-DEMO-B', true);
+    begin
+        insert into journal_audit (action, filiale_id, resume)
+        values ('creation', 'FIL-DEMO-B', 'trace attribuée à une filiale seulement LUE');
+        v_obtenu := 'AUCUN REFUS';
+    exception when others then
+        v_obtenu := sqlstate;
+    end;
+    perform set_config('grc.filiales', 'FIL-DEMO-A', true);
+
+    insert into demo_resultat values (
+        'C49', 'Périmètre Groupe : écrire au journal d''une filiale LUE mais non active',
+        '42501', v_obtenu, case when v_obtenu = '42501' then 'OK' else 'ÉCHEC' end);
+end;
+$$;
 
 -- =====================================================================================
 -- §9 — LE RÔLE APPLICATIF
@@ -490,6 +802,15 @@ select 'C28', 'Anomalies de f_verifier_couverture_rls()', '0', count(*)::text,
        case when count(*) = 0 then 'OK' else 'ÉCHEC' end
   from f_verifier_couverture_rls();
 
+-- Constat M-1 : une fonction dont le chemin de recherche n'est pas figé est détournable
+-- par masquage pg_temp — le rôle applicatif substitue sa propre table à une table du
+-- schéma, et la fonction qui la lit travaille sur les données de l'attaquant. Le réglage
+-- doit NOMMER pg_temp, et en dernier : non nommé, il est consulté en PREMIER.
+insert into demo_resultat
+select 'C50', 'Fonctions dont le chemin de recherche n''est pas figé (pg_temp compris)',
+       '0', count(*)::text, case when count(*) = 0 then 'OK' else 'ÉCHEC' end
+  from f_verifier_chemin_recherche();
+
 select count(*) filter (where relrowsecurity)        as "RLS active",
        count(*) filter (where relforcerowsecurity)   as "RLS forcée",
        count(*)                                      as "tables",
@@ -534,8 +855,11 @@ begin
 
     raise notice
         'CLOISONNEMENT DÉMONTRÉ : la filiale de Toulouse ne voit aucune ligne de la filiale '
-        'allemande, ne peut pas y écrire, ne peut pas créer de lien vers elle, ni mettre en '
-        'oeuvre ses mesures locales, ni fabriquer d''entrée dans son journal.';
+        'allemande, ne peut pas y écrire, ne peut créer vers elle NI lien de liaison NI clé '
+        'étrangère directe (les sept du constat B-1, plus le balayage du catalogue), ne peut '
+        'pas mettre en oeuvre ses mesures locales, ne peut ni s''approprier ni détruire le '
+        'socle commun du Groupe, ne peut pas fabriquer d''entrée dans son journal — pas même '
+        'avec un périmètre de lecture qui la couvre.';
 end;
 $$;
 

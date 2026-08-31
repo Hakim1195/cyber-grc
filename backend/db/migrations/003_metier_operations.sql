@@ -32,7 +32,7 @@
 --   §13 history .................................. relevés d'indicateurs datés
 --   §14 Enregistrement de la migration
 --
--- Trois règles transversales, appliquées partout dans ce fichier :
+-- Quatre règles transversales, appliquées partout dans ce fichier :
 --
 --   1. NIVEAU DE CLOISONNEMENT (CONVENTIONS §4 et §16.4) — « mappings » est de niveau
 --      Groupe (aucun filiale_id), « documents » est mixte (filiale_id nullable, null =
@@ -53,6 +53,17 @@
 --      DATA_MODEL rejetterait les données existantes. Une liste se fait évoluer par
 --      « alter table … drop constraint / add constraint », sans verrou exclusif — c'est
 --      exactement pourquoi le §5 refuse les types « enum ».
+--
+--   4. CLÉS ÉTRANGÈRES COMPOSITES ENTRE TABLES CLOISONNÉES (CONVENTIONS §17.1) — quand
+--      l'enfant et le parent portent tous deux un « filiale_id » non nul, la clé porte
+--      « (colonne_reference, filiale_id) » et vise « uq_<parent>_id_filiale ». Les
+--      contrôles d'intégrité référentielle de PostgreSQL contournent délibérément la Row
+--      Level Security : une clé SIMPLE est satisfaite par une ligne d'une autre filiale,
+--      invisible — et la suppression de cette ligne, chez elle, détruit ou modifie les
+--      nôtres, en y inscrivant l'identité de son auteur. Six des sept clés du constat B-1
+--      de la porte de sécurité S1 sont dans ce fichier : les quatre rattachements
+--      d'« actions », « incidents.risque_id » et « tests_pra.scenario_id ». L'encadré
+--      complet est en tête de 002_metier_noyau.sql.
 --
 -- Invocation : psql -v ON_ERROR_STOP=1 -d cyber_grc -f 003_metier_operations.sql
 -- =====================================================================================
@@ -129,12 +140,26 @@ create table incidents (
     modifie_le         timestamptz,
     modifie_par        text,
     constraint pk_incidents         primary key (id),
+    -- Cible des clés étrangères composites venues d'actions (CONVENTIONS.md §17.1).
+    constraint uq_incidents_id_filiale unique (id, filiale_id),
     constraint fk_incidents_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
     -- « délie » et non « supprime » : un incident survit au scénario de risque qu'il a
     -- matérialisé (CONVENTIONS.md §8, ligne deleteRisque).
-    constraint fk_incidents_risque  foreign key (risque_id)
-        references risques(id) on delete set null,
+    --
+    -- Clé étrangère COMPOSITE (CONVENTIONS.md §17.1) : le couple (risque, filiale) doit
+    -- exister tel quel dans risques. En clé simple, un incident d'ici pouvait pointer un
+    -- risque d'une autre filiale — et la suppression de ce risque, chez elle, remettait
+    -- risque_id à null ICI, en inscrivant l'identité de son auteur dans modifie_par et en
+    -- incrémentant la version de notre ligne. Reproduit à la porte S1 (constat B-1).
+    --
+    -- « set null (risque_id) » et non « set null » tout court : la forme sans liste
+    -- remettrait à null TOUTES les colonnes de la clé, filiale_id comprise, qui est « not
+    -- null » — la suppression du risque échouerait alors sur la contrainte au lieu de
+    -- délier. La liste de colonnes est disponible depuis PostgreSQL 15, minimum exigé par
+    -- le §0 de cette migration.
+    constraint fk_incidents_risque  foreign key (risque_id, filiale_id)
+        references risques (id, filiale_id) on delete set null (risque_id),
     constraint ck_incidents_titre   check (titre <> ''),
     constraint ck_incidents_type    check (type is null or type in (
         'Hameçonnage', 'Rançongiciel', 'Intrusion / compromission', 'Fuite de données',
@@ -231,14 +256,26 @@ create table actions (
     constraint pk_actions         primary key (id),
     constraint fk_actions_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
-    constraint fk_actions_exigence   foreign key (exigence_id)
-        references exigences(id)   on delete cascade,
-    constraint fk_actions_risque     foreign key (risque_id)
-        references risques(id)     on delete cascade,
-    constraint fk_actions_evaluation foreign key (evaluation_id)
-        references evaluations(id) on delete cascade,
-    constraint fk_actions_incident   foreign key (incident_id)
-        references incidents(id)   on delete cascade,
+    -- Les QUATRE rattachements en cascade sont des clés étrangères COMPOSITES
+    -- (CONVENTIONS.md §17.1) : le couple (porteur, filiale) doit exister tel quel. En clé
+    -- simple, une action d'ici pouvait se rattacher à une exigence, un risque, une
+    -- évaluation ou un incident d'une AUTRE filiale — les contrôles d'intégrité
+    -- référentielle ignorant la RLS, la référence était satisfaite par une ligne
+    -- invisible. La suppression de ce porteur, chez elle, détruisait alors nos actions.
+    -- Quatre des sept clés du constat B-1 de la porte S1.
+    --
+    -- Rappel de sémantique, utile ici : en « match simple » (le défaut), une clé
+    -- composite dont l'une des colonnes est nulle est satisfaite sans contrôle. Une
+    -- action sans rattachement — exigence_id nul — passe donc comme avant, ce que la
+    -- contrainte ck_actions_rattachement autorise explicitement.
+    constraint fk_actions_exigence   foreign key (exigence_id, filiale_id)
+        references exigences   (id, filiale_id) on delete cascade,
+    constraint fk_actions_risque     foreign key (risque_id, filiale_id)
+        references risques     (id, filiale_id) on delete cascade,
+    constraint fk_actions_evaluation foreign key (evaluation_id, filiale_id)
+        references evaluations (id, filiale_id) on delete cascade,
+    constraint fk_actions_incident   foreign key (incident_id, filiale_id)
+        references incidents   (id, filiale_id) on delete cascade,
     -- Vise le CATALOGUE, jamais la mise en oeuvre (CONVENTIONS.md §16.3) : l'identifiant
     -- "MESURE-…" est celui qui figure dans les exports grc-backup, ce qui rend la reprise
     -- exacte sans table de correspondance. La mise en oeuvre concernée se déduit du couple
@@ -348,6 +385,8 @@ create table scenarios_pra (
     modifie_le  timestamptz,
     modifie_par text,
     constraint pk_scenarios_pra         primary key (id),
+    -- Cible de la clé étrangère composite venue de tests_pra (CONVENTIONS.md §17.1).
+    constraint uq_scenarios_pra_id_filiale unique (id, filiale_id),
     constraint fk_scenarios_pra_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
     constraint ck_scenarios_pra_nom        check (nom <> ''),
@@ -391,9 +430,13 @@ create table tests_pra (
     constraint pk_tests_pra         primary key (id),
     constraint fk_tests_pra_filiale foreign key (filiale_id)
         references filiales(id) on delete restrict,
-    -- LA cascade qui rend le défaut structurellement impossible (PLAN_SERVEUR §2.1).
-    constraint fk_tests_pra_scenario foreign key (scenario_id)
-        references scenarios_pra(id) on delete cascade,
+    -- LA cascade qui rend le défaut structurellement impossible (PLAN_SERVEUR §2.1) —
+    -- rendue COMPOSITE (CONVENTIONS.md §17.1) : le couple (scénario, filiale) doit
+    -- exister tel quel. En clé simple, un test d'ici pouvait se rattacher au scénario
+    -- d'une autre filiale, et la suppression de ce scénario, chez elle, supprimait notre
+    -- test. Septième et dernière clé du constat B-1 de la porte S1.
+    constraint fk_tests_pra_scenario foreign key (scenario_id, filiale_id)
+        references scenarios_pra (id, filiale_id) on delete cascade,
     constraint ck_tests_pra_succes check (succes is null or succes in ('Oui', 'Non')),
     constraint ck_tests_pra_type   check (type_test is null or type_test in (
         'Théorique (Sur table)', 'Technique (Simulation)', 'Technique (Basculement réel)'))

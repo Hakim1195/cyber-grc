@@ -11,6 +11,7 @@
 #   bash db/dev/preparer_base_dev.sh --base grc_recette --mot-de-passe 'un-autre'
 #   bash db/dev/preparer_base_dev.sh --recreer            # base repartie de zéro
 #   bash db/dev/preparer_base_dev.sh --sans-migration     # rôles et base seulement
+#   bash db/dev/preparer_base_dev.sh --purger-bases-essai # balaie les bases d'essai orphelines
 #
 # ── Ce que ce script n'est pas ────────────────────────────────────────────────
 #
@@ -42,6 +43,7 @@ SUPERUTILISATEUR="${PGSUPERUTILISATEUR:-postgres}"
 RECREER=0
 SANS_MIGRATION=0
 REINITIALISER=0
+PURGER_ESSAIS=0
 
 PROPRIETAIRE="grc_proprietaire"
 APPLICATIF="grc_app"
@@ -62,6 +64,8 @@ Prépare une base de développement ou de recette pour Cyber GRC Groupe.
   --sans-migration       s'arrête après les rôles et la base
   --reinitialiser-mots-de-passe
                          réécrit le mot de passe des rôles déjà existants
+  --purger-bases-essai   supprime les bases « grc_essai_% » sans connexion active,
+                         laissées par un banc d'essai interrompu, puis s'arrête
   --aide                 ce message
 
 Rôles créés (CONVENTIONS.md §14) : grc_proprietaire · grc_app · grc_lecture
@@ -80,6 +84,7 @@ while [[ $# -gt 0 ]]; do
     --recreer)       RECREER=1; shift ;;
     --sans-migration) SANS_MIGRATION=1; shift ;;
     --reinitialiser-mots-de-passe) REINITIALISER=1; shift ;;
+    --purger-bases-essai) PURGER_ESSAIS=1; shift ;;
     --aide|-h|--help) aide; exit 0 ;;
     *) echec "Option inconnue : $1 (voir --aide)." ;;
   esac
@@ -93,7 +98,8 @@ done
 if [[ "${NODE_ENV:-}" == "production" ]]; then
   echec "NODE_ENV=production : ce script ne prépare que des bases de développement ou de recette.
       En production, c'est deploy/install.sh qui crée la base, et les secrets sont
-      renseignés à la main dans /etc/cyber-grc/serveur.env."
+      renseignés à la main dans /etc/cyber-grc/env — le seul chemin de configuration
+      que connaisse le code (src/config/index.ts, .env.example, unité systemd)."
 fi
 
 # Même motif que src/config/index.ts : le nom de base finit interpolé dans un
@@ -127,6 +133,41 @@ if ! printf 'select 1;\n' | sql_admin >/dev/null 2>&1; then
       votre compte peut se connecter (PGSUPERUTILISATEUR pour un autre nom)."
 fi
 succes "superutilisateur $SUPERUTILISATEUR"
+
+# ------------------------------------------------------ purge des bases d'essai ----
+
+# Le banc d'essai (`test/aide/base.mjs`) crée une base par fichier de test, nommée
+# `grc_essai_<fichier>_<jeton unique>`, et la supprime dans son `after()`. Une
+# exécution tuée par un signal n'y arrive pas : la base survit. Ce mode les balaie.
+#
+# Deux garde-fous, parce que plusieurs exécutions peuvent tourner en même temps sur la
+# même grappe : seules les bases dont le nom commence par `grc_essai_` sont candidates,
+# et **seules celles sans aucune connexion active** sont supprimées — une base qu'un
+# banc d'essai est en train d'utiliser n'est pas orpheline.
+if [[ $PURGER_ESSAIS -eq 1 ]]; then
+  info "Purge des bases d'essai orphelines"
+  candidates="$(printf "%s\n" "select d.datname
+                                  from pg_database d
+                                 where d.datname like 'grc\\_essai\\_%'
+                                   and not exists (select 1 from pg_stat_activity a
+                                                    where a.datname = d.datname)
+                                 order by 1;" | sql_admin)"
+  if [[ -z "${candidates//[[:space:]]/}" ]]; then
+    succes "aucune base d'essai orpheline"
+  else
+    while read -r orpheline; do
+      [[ -n "$orpheline" ]] || continue
+      printf 'drop database if exists %s with (force);\n' "$orpheline" | sql_admin
+      succes "$orpheline — supprimée"
+    done <<< "$candidates"
+  fi
+  actives="$(printf "%s\n" "select count(distinct d.datname)
+                               from pg_database d
+                               join pg_stat_activity a on a.datname = d.datname
+                              where d.datname like 'grc\\_essai\\_%';" | sql_admin)"
+  [[ "$actives" == "0" ]] || alerte "$actives base(s) d'essai en cours d'utilisation : laissées en place."
+  exit 0
+fi
 
 # ----------------------------------------------------------------------- rôles ----
 
@@ -215,6 +256,48 @@ else
   printf 'create database %s owner %s encoding UTF8;\n' "$BASE" "$PROPRIETAIRE" | sql_admin
   succes "base créée, propriétaire $PROPRIETAIRE"
 fi
+
+# ---------------------------------------------- privilèges de niveau base (§17.2) ----
+
+# `create database` accorde par défaut à PUBLIC — donc à TOUT rôle — les privilèges
+# `connect` ET `temporary`. Ce second est tout sauf anodin.
+#
+# CONVENTIONS.md §17.2, démontré à la porte de sécurité S1 : un rôle qui dispose de
+# `temporary` crée une table dans le schéma `pg_temp`, que PostgreSQL consulte **avant**
+# le `search_path` — y compris quand celui-ci est fixé à `public`, ce que fait pourtant
+# le pool. Masquer une table du schéma revient donc à détourner les fonctions qui la
+# lisent. Trois attaques ont été menées ainsi : forge d'une entrée du journal d'audit au
+# chaînage rompu, désarmement du déclencheur de cohérence des mesures, et garde-fou de
+# couverture RLS rendu aveugle sur un faux `pg_class`.
+#
+# La production fermait déjà la porte, mais **par effet de bord** : `deploy/install.sh`
+# fait `revoke all on database … from public` pour d'autres raisons, et n'accorde ensuite
+# que `connect` au rôle applicatif. Ici, c'est une décision, écrite comme telle — et le
+# développement, la recette et le banc d'essai cessent de tourner dans une configuration
+# plus permissive que la machine qu'ils sont censés représenter.
+info "Privilèges de niveau base (CONVENTIONS.md §17.2)"
+printf 'revoke all on database %s from public;\n' "$BASE" | sql_admin
+printf 'grant connect, temporary on database %s to %s;\n' "$BASE" "$PROPRIETAIRE" | sql_admin
+printf 'grant connect on database %s to %s, %s;\n' "$BASE" "$APPLICATIF" "$LECTURE" | sql_admin
+succes "PUBLIC privé de tout sur « $BASE » ; connect accordé nommément"
+
+# Constater, et pas seulement décréter : un « grant temporary » posé plus tard par
+# commodité rouvrirait la porte en silence.
+for role in "$APPLICATIF" "$LECTURE"; do
+  accorde="$(printf "select has_database_privilege('%s', '%s', 'temporary');\n" "$role" "$BASE" | sql_admin)"
+  [[ "$accorde" == "f" ]] || echec "Le rôle $role conserve TEMPORARY sur « $BASE ».
+      Il pourrait masquer une table du schéma par pg_temp et détourner les fonctions du
+      journal d'audit (CONVENTIONS.md §17.2). Corrigez :
+        revoke temporary on database $BASE from $role, public;"
+done
+succes "$APPLICATIF et $LECTURE sans TEMPORARY — pg_temp ne peut pas masquer le schéma"
+
+# Le propriétaire, lui, garde TEMPORARY : `db/verifier_cloisonnement.sql` s'appuie sur
+# une table temporaire pour son tableau de résultats, et les migrations peuvent en avoir
+# besoin. C'est le rôle qui applique la DDL, il n'y a rien à lui masquer qu'il ne puisse
+# déjà modifier.
+proprio_temp="$(printf "select has_database_privilege('%s', '%s', 'temporary');\n" "$PROPRIETAIRE" "$BASE" | sql_admin)"
+[[ "$proprio_temp" == "t" ]] || alerte "$PROPRIETAIRE n'a pas TEMPORARY : verifier_cloisonnement.sql ne pourra pas être joué sous ce compte."
 
 # --------------------------------------------------- vérification des connexions ----
 
