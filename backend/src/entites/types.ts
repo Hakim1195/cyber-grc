@@ -143,8 +143,23 @@ export interface DescriptionCleEtrangere {
   readonly action: 'cascade' | 'set_null' | 'restrict' | 'set_default';
 }
 
+/**
+ * Contrainte de validation (`check`) et les colonnes qu'elle porte. Sert à
+ * traduire un `23514` sans **inventer** un nom de champ : la convention
+ * `ck_<table>_<sujet>` du `CONVENTIONS.md` §9 donne un sujet, qui n'est pas
+ * toujours une colonne (`ck_actions_rattachement` en est une, et il n'existe
+ * aucun champ « rattachement »).
+ */
+export interface DescriptionValidation {
+  readonly nom: string;
+  readonly table: string;
+  readonly colonnes: readonly string[];
+}
+
 export interface Catalogue {
   readonly tables: ReadonlyMap<string, DescriptionTable>;
+  /** Contraintes de validation, indexées par nom. */
+  readonly validations: ReadonlyMap<string, DescriptionValidation>;
   /** Unicités du schéma, indexées par nom de contrainte. */
   readonly unicites: ReadonlyMap<string, DescriptionUnicite>;
   /** Clés étrangères du schéma. */

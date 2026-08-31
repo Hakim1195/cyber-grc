@@ -101,6 +101,7 @@ import type {
   DescriptionLiaison,
   DescriptionTable,
   DescriptionUnicite,
+  DescriptionValidation,
   Diagnostic,
   Enregistrement,
   FamilleType,
@@ -649,7 +650,8 @@ interface LigneCatalogue {
  * porte aussi l'état de la RLS, dont le garde-fou du §6 se sert.
  */
 export async function chargerCatalogue(client: PoolClient): Promise<Catalogue> {
-  const videsInterdits = await decouvrirVidesInterdits(client);
+  const validations = new Map<string, DescriptionValidation>();
+  const videsInterdits = await decouvrirVidesInterdits(client, validations);
   const unicites = await decouvrirUnicites(client);
   const clesEtrangeres = await decouvrirClesEtrangeres(client);
 
@@ -744,7 +746,7 @@ export async function chargerCatalogue(client: PoolClient): Promise<Catalogue> {
   }
 
   etatsRlsParCatalogue.set(tables, etatsRls);
-  return { tables, unicites, clesEtrangeres, decouvertLe: new Date() };
+  return { tables, validations, unicites, clesEtrangeres, decouvertLe: new Date() };
 }
 
 /**
@@ -835,10 +837,19 @@ async function decouvrirClesEtrangeres(
  * une expression régulière, une fonction — lui échappe. Le filet, là, est le
  * message d'erreur : le refus reste bruyant et nomme le champ.
  */
-async function decouvrirVidesInterdits(client: PoolClient): Promise<Set<string>> {
-  const { rows } = await client.query<{ table: string; colonne: string; definition: string }>(`
-    select c.relname       as table,
-           a.attname       as colonne,
+async function decouvrirVidesInterdits(
+  client: PoolClient,
+  validations: Map<string, DescriptionValidation>,
+): Promise<Set<string>> {
+  const { rows } = await client.query<{
+    nom: string;
+    table: string;
+    colonne: string;
+    definition: string;
+  }>(`
+    select k.conname       as nom,
+           c.relname       as table,
+           a.attname::text as colonne,
            pg_get_constraintdef(k.oid) as definition
       from pg_constraint k
       join pg_class c     on c.oid = k.conrelid
@@ -851,6 +862,16 @@ async function decouvrirVidesInterdits(client: PoolClient): Promise<Set<string>>
 
   const interdits = new Set<string>();
   for (const ligne of rows) {
+    // Le même balayage sert deux fins : savoir où la chaîne vide est refusée,
+    // et savoir quelles colonnes chaque « check » porte — ce dont la
+    // traduction d'un 23514 a besoin pour ne pas inventer un nom de champ.
+    const connue = validations.get(ligne.nom);
+    if (connue === undefined) {
+      validations.set(ligne.nom, { nom: ligne.nom, table: ligne.table, colonnes: [ligne.colonne] });
+    } else {
+      (connue.colonnes as string[]).push(ligne.colonne);
+    }
+
     const definition = ligne.definition;
     const listeFermee = definition.includes('= ANY (ARRAY[');
     const admetLeVide = definition.includes("''::text");

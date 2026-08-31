@@ -186,8 +186,19 @@ sans objet à ce stade est marqué « sans objet », jamais « passé ».
 | **S13** | Dénis de service applicatifs | §1.2 | Taille de corps bornée, délais de garde posés, pool borné, listes paginées ou bornées. |
 | **S14** | Intégrité des opérations composites | §1.4 | Propagation, cascade et import : tout ou rien. Aucun état intermédiaire observable après échec. |
 | **S15** | Dépendances | §1.2 | `npm audit` sans vulnérabilité connue ; toute dépendance ajoutée est justifiée et épinglée. |
+| **S18** | **Le produit fait ce qu'il doit faire** | retour d'expérience S2 | Les gestes réels de l'utilisateur — créer, saisir un formulaire, importer, enregistrer, recharger — aboutissent, **et ne détruisent rien**. Un correctif de sécurité qui casse une fonction n'est pas un correctif : c'est un défaut d'une autre nature. |
 | **S17** | **Le chemin complet a été parcouru pour de vrai** | retour d'expérience S2 | Dans un **navigateur réel**, contre le **serveur réel**, dans la **configuration de déploiement réelle** — vhost et en-têtes compris. Une démonstration écrite par l'auteur du code ne voit jamais l'écart entre ce qu'il a prouvé et ce que l'usage fait. |
 | **S16** | **Les garde-fous sont branchés** | retour d'expérience S1 | Tout contrôle automatique écrit (vérification de couverture RLS, de chemin de recherche, de privilèges) est **réellement appelé** par un chemin de déploiement ou de recette, et **fait échouer** ce chemin. Un garde-fou que rien n'invoque est un commentaire. |
+
+**Pourquoi S18 existe.** L'agent qui tient le banc d'essai de la vague 2 l'a formulé mieux que
+personne : *« la grille ne demande nulle part que le produit fonctionne »*. Cinq des constats de
+la porte S2 — dont les trois bloquants, qui détruisent des données de l'utilisateur — **ne
+violaient aucun des seize contrôles**. Un banc bâti sur la seule grille serait resté vert pendant
+que l'application effaçait le travail de ses utilisateurs.
+
+La démonstration est venue du chantier lui-même : le remède au constat sur l'oracle d'existence a
+**cassé toute création depuis le navigateur** — plus un risque, plus un incident, plus un document
+créable — et rien dans les dix-sept contrôles ne s'en serait ému.
 
 **Pourquoi S17 existe.** La porte S2 a trouvé qu'une branche annoncée comme fonctionnelle dans
 la démonstration de son auteur était **du code mort en usage réel** : le frontend n'envoyait pas

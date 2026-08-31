@@ -72,7 +72,7 @@ const SettingsModule = (() => {
                 <div class="dashboard-grid" style="margin-bottom: 1.5rem;">
                     <!-- EXPORT -->
                     <div class="dashboard-card" style="border-top: 4px solid var(--color-success);">
-                        <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Exporter une sauvegarde</h3>
+                        <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Exporter un fichier d'échange</h3>
                         <div class="help-note" style="margin-bottom: 15px;">
                             Le fichier contient des données sensibles (risques, vulnérabilités, plans de continuité).
                             <strong>Chiffrez-le</strong> : posé sur un partage réseau ou une clé USB, un export en clair est directement exploitable par un attaquant.
@@ -81,7 +81,7 @@ const SettingsModule = (() => {
                             <strong>Dernier export :</strong> <span id="lastExportDisplay">${escapeHtml(BackupService.getLastExportDisplay())}</span>
                         </div>
                         <button id="exportEncBtn" style="background-color: var(--color-success); width: 100%; justify-content: center;" ${cryptoOk ? "" : "disabled title='Chiffrement indisponible (contexte non sécurisé)'"}>
-                            Télécharger la sauvegarde chiffrée (.json)
+                            Télécharger le fichier chiffré (.json)
                         </button>
                         <button id="exportPlainBtn" style="background: transparent; color: var(--text-muted); border: 1px solid var(--border); width: 100%; justify-content: center; margin-top: 10px;">
                             Exporter en clair (non chiffré)
@@ -94,7 +94,7 @@ const SettingsModule = (() => {
 
                     <!-- IMPORT -->
                     <div class="dashboard-card" style="border-top: 4px solid var(--color-danger);">
-                        <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Importer une sauvegarde</h3>
+                        <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Importer un fichier d'échange</h3>
                         <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px;">
                             Chargez un fichier .json (chiffré ou non) — reprise d'une filiale déjà équipée de l'ancienne version, ou données remises par une filiale. Le contenu est validé, puis appliqué <strong>en une seule transaction</strong> sur le serveur : il réussit entièrement, ou rien n'est modifié.
                         </p>
@@ -176,7 +176,7 @@ const SettingsModule = (() => {
             try {
                 await BackupService.exportEncrypted(p1);
                 refreshLastExport();
-                if (window.showToast) window.showToast("Sauvegarde chiffrée téléchargée.", "success");
+                if (window.showToast) window.showToast("Fichier chiffré téléchargé.", "success");
             } catch (e) {
                 alert("Échec du chiffrement : " + e.message);
             }
