@@ -710,7 +710,7 @@ function refus(
   statut: 'invalide' | 'non-pris-en-charge' | 'chiffre',
   code: CodeRefus,
   message: string,
-): ResultatEnveloppe & ResultatReprise {
+): ResultatEnveloppe {
   return { statut, code, message };
 }
 
@@ -1432,11 +1432,12 @@ function resoudreIdentifiant(
     if (!identifiant.startsWith(`${prefixe}-`)) {
       // Attendu sur les processus BIA d'origine : `CONVENTIONS.md` §2 assume
       // explicitement ce cas, le schéma reste permissif, on ne corrige rien.
-      journal.signaler(
+      journal.signalerUneFois(
+        `sans-prefixe:${nom}`,
         'identifiant-sans-prefixe',
         'information',
-        `${nom} : « ${identifiant} » ne porte pas le préfixe « ${prefixe}- » ; conservé tel quel ` +
-          '(le domaine id_metier l’admet, le round-trip l’exige).',
+        `${nom} : identifiants ne portant pas le préfixe « ${prefixe}- » (ex. « ${identifiant} ») ; ` +
+          'conservés tels quels — le domaine id_metier l’admet, le round-trip l’exige.',
         { collection: nom, identifiant, champ: 'id' },
       );
     } else if (/^\d+$/.test(identifiant.slice(prefixe.length + 1))) {
@@ -1741,6 +1742,9 @@ export function reprendreExport(entree: unknown, options: OptionsReprise = {}): 
 
   const journal = new JournalAnomalies(options.anomaliesMax ?? ANOMALIES_MAX_DEFAUT);
   for (const anomalie of enveloppe.anomalies) {
+    // Le marqueur de troncature appartient au journal de lecture : le rejouer
+    // ici en ferait une anomalie de plus, et le journal principal pose le sien.
+    if (anomalie.code === 'anomalies-tronquees') continue;
     journal.signaler(anomalie.code, anomalie.gravite, anomalie.message, {
       ...(anomalie.collection !== null ? { collection: anomalie.collection } : {}),
       ...(anomalie.identifiant !== null ? { identifiant: anomalie.identifiant } : {}),
