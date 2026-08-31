@@ -1,0 +1,617 @@
+/**
+ * socle.test.mjs — ce que `001_socle.sql` promet, éprouvé en exécution réelle.
+ *
+ * Le socle repose sur quatre promesses que personne ne peut vérifier en lisant du SQL :
+ * le journal d'audit est en ajout seul, sa chaîne d'empreintes détecte toute retouche,
+ * le verrouillage optimiste ne se contourne pas, et le périmètre de session ne survit
+ * pas à la transaction. Chacune est ici mise en défaut délibérément — un test qui ne
+ * peut pas échouer ne prouve rien.
+ *
+ * Chaque assertion vise **une** propriété nommée de `backend/db/CONVENTIONS.md` :
+ *   §3  colonnes obligatoires et verrouillage optimiste (risque projet P1)
+ *   §11 périmètre de session et Row Level Security
+ *   §12 journal d'audit : ajout seul, chaînage, vérification
+ *   §14 rôles et privilèges
+ *   §15 codes d'erreur applicatifs (GRC01)
+ *
+ * Base neuve à chaque exécution, migrée par `db/migrate.mjs` : voir `../aide/base.mjs`.
+ * Prérequis machine : `bash db/dev/preparer_base_dev.sh`.
+ *
+ * Note de dépendance : ces tests portent sur le socle seul. Quand `004_rls.sql`
+ * activera `force row level security`, les insertions faites ici devront satisfaire les
+ * politiques — elles sont déjà exécutées sous un périmètre explicite là où c'est
+ * possible. Une régression de ce fichier après `004` serait un constat à instruire,
+ * pas un test à assouplir.
+ */
+
+import assert from 'node:assert/strict';
+import { after, before, describe, test } from 'node:test';
+
+import { erreurAttendue, ouvrirBaseEssai, perimetre } from '../aide/base.mjs';
+
+/** @type {Awaited<ReturnType<typeof ouvrirBaseEssai>>} */
+let base;
+/** Connexion du compte propriétaire (`grc_proprietaire`) : DDL et migrations. */
+let proprietaire;
+/** Connexion du compte applicatif (`grc_app`) : ce que le service peut réellement faire. */
+let applicatif;
+
+before(async () => {
+  base = await ouvrirBaseEssai(import.meta.url);
+  proprietaire = await base.connexion('proprietaire');
+  applicatif = await base.connexion('app');
+});
+
+after(async () => {
+  await base?.fermer();
+});
+
+/* =====================================================================
+ *  Outils locaux
+ * ===================================================================== */
+
+/**
+ * Exécute une instruction attendue en échec, dans sa propre transaction, et rend
+ * l'erreur. La transaction est annulée dans tous les cas : une erreur SQL avorte la
+ * transaction courante, et sans ce nettoyage la connexion resterait inutilisable pour
+ * les tests suivants.
+ */
+async function refus(client, instruction) {
+  await client.query('begin');
+  const erreur = await erreurAttendue(client.query(instruction));
+  await client.query('rollback');
+  return erreur;
+}
+
+/** Insère `nombre` entrées de journal validées, et renvoie leur nombre total en base. */
+async function semerJournal(nombre) {
+  await proprietaire.query(
+    `insert into journal_audit (action, resume)
+     select 'export', 'entrée d''essai ' || g from generate_series(1, $1) g`,
+    [nombre],
+  );
+  return base.valeur(proprietaire, 'select count(*)::int from journal_audit');
+}
+
+/** Anomalies renvoyées par la vérification du chaînage, forme compacte et comparable. */
+async function anomalies(client, depuis = null) {
+  const lignes = await base.lignes(
+    client,
+    'select numero_entree::int as numero, anomalie from f_journal_audit_verifier($1) order by numero, anomalie',
+    [depuis],
+  );
+  return lignes.map((l) => `${l.numero}:${l.anomalie}`);
+}
+
+/* =====================================================================
+ *  §12 — Journal d'audit : ajout seul
+ * ===================================================================== */
+
+describe("Journal d'audit — ajout seul (CONVENTIONS §12)", () => {
+  before(async () => {
+    // Le compte applicatif doit pouvoir écrire : c'est tout ce qu'il doit pouvoir faire.
+    await applicatif.query(
+      "insert into journal_audit (action, resume) values ('demarrage', 'amorçage du banc d''essai')",
+    );
+  });
+
+  test('couche 1 — le compte applicatif n’a pas le verbe SQL', async () => {
+    // `revoke update, delete, truncate … from grc_app` : la tentative est arrêtée par
+    // le contrôle de privilèges, avant même d'atteindre le déclencheur.
+    for (const instruction of [
+      "update journal_audit set resume = 'falsifié'",
+      'delete from journal_audit',
+      'truncate journal_audit',
+    ]) {
+      const erreur = await refus(applicatif, instruction);
+      assert.equal(
+        erreur.code,
+        '42501',
+        `« ${instruction} » aurait dû être refusée à grc_app faute de privilège (reçu : ${erreur.code}).`,
+      );
+    }
+  });
+
+  test('couche 2 — le propriétaire lui-même est refusé, avec le code GRC01', async () => {
+    // C'est la question d'audit : le RSSI, administrateur applicatif, peut-il corriger
+    // le journal ? Non — et l'échec est bruyant, pas silencieux.
+    for (const [instruction, operation] of [
+      ["update journal_audit set resume = 'falsifié'", 'UPDATE'],
+      ['delete from journal_audit', 'DELETE'],
+      ['truncate journal_audit', 'TRUNCATE'],
+    ]) {
+      const erreur = await refus(proprietaire, instruction);
+      assert.equal(erreur.code, 'GRC01', `« ${instruction} » : SQLSTATE attendu GRC01.`);
+      assert.match(erreur.message, new RegExp(`opération ${operation} refusée`));
+    }
+  });
+
+  test('un update qui ne toucherait aucune ligne est refusé lui aussi', async () => {
+    // Le déclencheur est « for each statement » précisément pour cela : un
+    // « for each row » ne se déclencherait sur aucune ligne, et l'opération
+    // réussirait sans rien faire — l'appelant croirait le journal modifiable.
+    const erreur = await refus(proprietaire, "update journal_audit set resume = 'x' where 1 = 0");
+    assert.equal(erreur.code, 'GRC01');
+  });
+
+  test('couche 2 sans couche 1 — le privilège rendu ne rouvre pas la porte', async () => {
+    // On retire volontairement la première couche pour éprouver la seconde. C'est le
+    // scénario « un administrateur accorde le droit par erreur, ou une migration mal
+    // écrite le rétablit » : le déclencheur doit encore tenir seul.
+    await proprietaire.query('grant update, delete, truncate on journal_audit to grc_app');
+    try {
+      for (const instruction of [
+        "update journal_audit set resume = 'falsifié'",
+        'delete from journal_audit',
+        'truncate journal_audit',
+      ]) {
+        const erreur = await refus(applicatif, instruction);
+        assert.equal(
+          erreur.code,
+          'GRC01',
+          `Privilège rendu, « ${instruction} » aurait dû être arrêtée par le déclencheur.`,
+        );
+      }
+    } finally {
+      // Rétablissement systématique : les tests suivants supposent le socle intact.
+      await proprietaire.query('revoke update, delete, truncate on journal_audit from grc_app');
+    }
+  });
+
+  test('couche 3 — les déclencheurs sont « enable always »', async () => {
+    // `session_replication_role = replica` désarme les déclencheurs ordinaires. Le
+    // contournement est ici sans effet, ce que traduit tgenabled = 'A'. La preuve
+    // fonctionnelle exigerait un superutilisateur, que ni grc_app ni
+    // grc_proprietaire ne sont — et c'est très bien ainsi.
+    const etats = await base.lignes(
+      proprietaire,
+      `select tgname, tgenabled from pg_trigger
+        where tgrelid = 'journal_audit'::regclass and not tgisinternal
+        order by tgname`,
+    );
+    assert.equal(etats.length, 4, 'Quatre déclencheurs attendus : chaînage + trois refus.');
+    for (const { tgname, tgenabled } of etats) {
+      assert.equal(tgenabled, 'A', `${tgname} n'est pas en « enable always ».`);
+    }
+  });
+
+  test('couche 4 — le compte applicatif ne possède pas la table', async () => {
+    // Seul le propriétaire peut désactiver un déclencheur. Si grc_app possédait
+    // journal_audit, les couches 2 et 3 ne vaudraient plus rien.
+    const proprietaireTable = await base.valeur(
+      proprietaire,
+      "select pg_get_userbyid(relowner) from pg_class where oid = 'journal_audit'::regclass",
+    );
+    assert.notEqual(proprietaireTable, 'grc_app');
+  });
+});
+
+/* =====================================================================
+ *  §12 — Chaînage par empreinte
+ * ===================================================================== */
+
+describe("Journal d'audit — chaînage par empreinte (CONVENTIONS §12)", () => {
+  const ENTREES = 5;
+
+  before(async () => {
+    await semerJournal(ENTREES);
+  });
+
+  test('un journal sain ne renvoie aucune anomalie', async () => {
+    assert.deepEqual(await anomalies(proprietaire), []);
+  });
+
+  test('la chaîne est numérotée sans trou et chaque maillon pointe le précédent', async () => {
+    const lignes = await base.lignes(
+      proprietaire,
+      'select numero::int as numero, empreinte, empreinte_precedente from journal_audit order by numero',
+    );
+    assert.equal(lignes[0].numero, 1);
+    assert.equal(lignes[0].empreinte_precedente, null, "L'entrée de genèse ne pointe rien.");
+    for (let index = 1; index < lignes.length; index += 1) {
+      assert.equal(lignes[index].numero, lignes[index - 1].numero + 1);
+      assert.equal(lignes[index].empreinte_precedente, lignes[index - 1].empreinte);
+    }
+  });
+
+  test('falsification naïve d’une ligne : empreinte_invalide', async () => {
+    // Désactiver un déclencheur est le SEUL chemin de falsification, et il demande
+    // le propriétaire de la base. C'est exactement le scénario que le chaînage est
+    // censé rendre détectable a posteriori (CONVENTIONS §12, « ce qui n'est pas
+    // couvert »). Tout se passe dans une transaction annulée en sortie.
+    await proprietaire.query('begin');
+    try {
+      await proprietaire.query('alter table journal_audit disable trigger trg_journal_audit_interdit_maj');
+      await proprietaire.query("update journal_audit set resume = 'falsifié' where numero = 3");
+
+      assert.deepEqual(await anomalies(proprietaire), ['3:empreinte_invalide']);
+    } finally {
+      await proprietaire.query('rollback');
+    }
+  });
+
+  test('falsification soignée (empreinte recalculée) : chainage_rompu sur la suivante', async () => {
+    // Le falsificateur avisé recalcule l'empreinte de la ligne qu'il retouche : elle
+    // redevient cohérente avec elle-même. C'est là que le CHAÎNAGE fait son travail —
+    // l'entrée suivante déclare une empreinte précédente qui n'existe plus.
+    await proprietaire.query('begin');
+    try {
+      await proprietaire.query('alter table journal_audit disable trigger trg_journal_audit_interdit_maj');
+      await proprietaire.query(
+        `update journal_audit j
+            set resume = 'falsifié',
+                empreinte = encode(sha256(convert_to(
+                    f_journal_audit_charge_utile(
+                        j.numero, j.id, j.horodatage, j.filiale_id, j.utilisateur_id,
+                        j.utilisateur_libelle, j.session_id, j.adresse_ip, j.action,
+                        j.entite_type, j.entite_id, 'falsifié', j.valeurs_avant,
+                        j.valeurs_apres, j.version_application, j.empreinte_precedente),
+                    'UTF8')), 'hex')
+          where j.numero = 3`,
+      );
+
+      const trouvees = await anomalies(proprietaire);
+      assert.deepEqual(
+        trouvees,
+        ['4:chainage_rompu'],
+        'La ligne retouchée redevient cohérente, mais la chaîne, elle, ne suit plus.',
+      );
+    } finally {
+      await proprietaire.query('rollback');
+    }
+  });
+
+  test('suppression d’une ligne : numero_manquant', async () => {
+    await proprietaire.query('begin');
+    try {
+      await proprietaire.query('alter table journal_audit disable trigger trg_journal_audit_interdit_suppr');
+      await proprietaire.query('delete from journal_audit where numero = 3');
+
+      const trouvees = await anomalies(proprietaire);
+      assert.ok(
+        trouvees.includes('4:numero_manquant'),
+        `Trou dans la numérotation non détecté (anomalies : ${trouvees.join(', ')}).`,
+      );
+      assert.ok(
+        trouvees.includes('4:chainage_rompu'),
+        'La disparition d’un maillon rompt aussi la chaîne d’empreintes.',
+      );
+    } finally {
+      await proprietaire.query('rollback');
+    }
+  });
+
+  test('le journal est intact après les falsifications annulées', async () => {
+    // Garde-fou du banc d'essai lui-même : si un « rollback » avait été oublié, les
+    // tests suivants raisonneraient sur un journal corrompu sans le savoir.
+    assert.deepEqual(await anomalies(proprietaire), []);
+  });
+
+  test('vérification partielle : chaine_tronquee est informatif, pas une alerte', async () => {
+    const trouvees = await anomalies(proprietaire, 3);
+    assert.deepEqual(trouvees, ['3:chaine_tronquee']);
+  });
+});
+
+/* =====================================================================
+ *  §12 — Le client ne peut rien forger
+ * ===================================================================== */
+
+describe("Journal d'audit — le client ne peut rien forger (CONVENTIONS §12)", () => {
+  test('numero, horodatage et empreintes fournis par le client sont écrasés', async () => {
+    const dernier = await base.lignes(
+      proprietaire,
+      'select numero::int as numero, empreinte from journal_audit order by numero desc limit 1',
+    );
+    const attenduNumero = (dernier[0]?.numero ?? 0) + 1;
+    const attenduPrecedente = dernier[0]?.empreinte ?? null;
+
+    await applicatif.query('begin');
+    try {
+      // Valeurs volontairement plausibles : le domaine empreinte_sha256 impose
+      // 64 caractères hexadécimaux, donc un « FORGE » serait rejeté par le type
+      // avant d'atteindre le déclencheur. Ici, rien ne distingue ces valeurs de
+      // vraies empreintes — et elles sont pourtant écrasées.
+      await applicatif.query(
+        `insert into journal_audit
+             (numero, horodatage, empreinte, empreinte_precedente, action, resume)
+         values ($1, timestamptz '2000-01-01 00:00:00+00', $2, $3, 'export', 'tentative de forge')`,
+        [999_999, 'a'.repeat(64), 'b'.repeat(64)],
+      );
+
+      const ligne = (
+        await base.lignes(
+          applicatif,
+          `select numero::int as numero, empreinte, empreinte_precedente,
+                  horodatage > now() - interval '1 minute' as horodatage_recent
+             from journal_audit where resume = 'tentative de forge'`,
+        )
+      )[0];
+
+      assert.equal(ligne.numero, attenduNumero, 'Le numéro vient du déclencheur, pas du client.');
+      assert.equal(ligne.empreinte_precedente, attenduPrecedente, 'La chaîne est reprise en base.');
+      assert.notEqual(ligne.empreinte, 'a'.repeat(64), "L'empreinte annoncée a été écrasée.");
+      assert.equal(ligne.horodatage_recent, true, "L'horodatage est celui du serveur.");
+
+      // Et le résultat reste une chaîne saine : la forge n'a pas laissé de trace.
+      assert.deepEqual(await anomalies(applicatif), []);
+    } finally {
+      await applicatif.query('rollback');
+    }
+  });
+});
+
+/* =====================================================================
+ *  §3 — Verrouillage optimiste (risque projet P1)
+ * ===================================================================== */
+
+describe('Verrouillage optimiste (CONVENTIONS §3, risque projet P1)', () => {
+  const IDENTIFIANT = 'FIL-1720000000000-001';
+
+  /** Crée la filiale d'essai dans une transaction confiée à `travail`, puis annule. */
+  async function avecFiliale(travail) {
+    await base.avecPerimetre(proprietaire, perimetre('jdupont', IDENTIFIANT), async (client) => {
+      await client.query(
+        `insert into filiales (id, code, raison_sociale) values ($1, 'TLS', 'Dedienne Toulouse')`,
+        [IDENTIFIANT],
+      );
+      await travail(client);
+    });
+  }
+
+  test('une version périmée n’affecte aucune ligne — c’est le conflit GRC03 de l’API', async () => {
+    await avecFiliale(async (client) => {
+      const premiere = await client.query(
+        "update filiales set nom_court = 'Toulouse' where id = $1 and version = $2",
+        [IDENTIFIANT, 1],
+      );
+      assert.equal(premiere.rowCount, 1, "La première écriture, à jour, doit passer.");
+
+      // Second écrivain, resté sur la version 1 : il n'écrase rien. L'API traduit
+      // ce « zéro ligne » en GRC03 « modifié entre-temps » (CONVENTIONS §15).
+      const seconde = await client.query(
+        "update filiales set nom_court = 'Écrasement' where id = $1 and version = $2",
+        [IDENTIFIANT, 1],
+      );
+      assert.equal(seconde.rowCount, 0, 'Une version périmée ne doit rien écraser.');
+
+      const nomCourt = await base.valeur(client, 'select nom_court from filiales where id = $1', [
+        IDENTIFIANT,
+      ]);
+      assert.equal(nomCourt, 'Toulouse', "L'écriture perdante n'a laissé aucune trace.");
+    });
+  });
+
+  test('le déclencheur incrémente version et ignore la valeur envoyée par le client', async () => {
+    await avecFiliale(async (client) => {
+      await client.query('update filiales set nom_court = $2, version = 42 where id = $1', [
+        IDENTIFIANT,
+        'Toulouse',
+      ]);
+      const version = await base.valeur(client, 'select version from filiales where id = $1', [
+        IDENTIFIANT,
+      ]);
+      assert.equal(
+        version,
+        2,
+        'La version est old.version + 1 ; la valeur du client (42) doit être ignorée.',
+      );
+    });
+  });
+
+  test('cree_le et cree_par sont gelés, modifie_le et modifie_par sont posés par la base', async () => {
+    await avecFiliale(async (client) => {
+      const avant = (
+        await base.lignes(client, 'select cree_le, cree_par, modifie_le from filiales where id = $1', [
+          IDENTIFIANT,
+        ])
+      )[0];
+      assert.equal(avant.cree_par, 'jdupont', 'cree_par vient de f_utilisateur_courant().');
+      assert.equal(avant.modifie_le, null, "Une ligne jamais modifiée n'a pas de date de modification.");
+
+      await client.query(
+        `update filiales
+            set nom_court = 'Toulouse',
+                cree_par  = 'pirate',
+                cree_le   = timestamptz '2000-01-01 00:00:00+00'
+          where id = $1`,
+        [IDENTIFIANT],
+      );
+
+      const apres = (
+        await base.lignes(
+          client,
+          'select cree_le, cree_par, modifie_le, modifie_par from filiales where id = $1',
+          [IDENTIFIANT],
+        )
+      )[0];
+      assert.equal(apres.cree_par, 'jdupont', 'cree_par est non réinscriptible.');
+      assert.deepEqual(apres.cree_le, avant.cree_le, 'cree_le est non réinscriptible.');
+      assert.notEqual(apres.modifie_le, null, 'modifie_le est posé par le déclencheur.');
+      assert.equal(apres.modifie_par, 'jdupont', 'modifie_par vient de f_utilisateur_courant().');
+    });
+  });
+});
+
+/* =====================================================================
+ *  §11 — Périmètre de session
+ * ===================================================================== */
+
+describe('Périmètre de session (CONVENTIONS §11)', () => {
+  /** Connexion dédiée : on observe ici l'état d'une session, il ne doit rien lui arriver d'autre. */
+  let session;
+
+  before(async () => {
+    session = await base.nouvelleConnexion('app');
+  });
+
+  /** Les trois fonctions de contexte, lues d'un coup. */
+  async function contexte(client) {
+    const lignes = await base.lignes(
+      client,
+      `select f_utilisateur_courant() as utilisateur,
+              f_filiale_courante()    as filiale,
+              f_filiales_autorisees() as filiales`,
+    );
+    return lignes[0];
+  }
+
+  test('sans réglage : « systeme », aucune filiale active, périmètre vide', async () => {
+    // C'est le contexte des migrations et des timers systemd : attribué, mais sans
+    // aucun accès aux données d'une filiale.
+    const etat = await contexte(session);
+    assert.equal(etat.utilisateur, 'systeme');
+    assert.equal(etat.filiale, null);
+    assert.deepEqual(etat.filiales, []);
+  });
+
+  test('le périmètre posé par set_config(…, true) est lu par les trois fonctions', async () => {
+    await base.avecPerimetre(
+      session,
+      perimetre('jdupont', 'FIL-A', ['FIL-A', 'FIL-B']),
+      async (client) => {
+        const etat = await contexte(client);
+        assert.equal(etat.utilisateur, 'jdupont');
+        assert.equal(etat.filiale, 'FIL-A', 'La filiale ACTIVE est le périmètre d’écriture.');
+        assert.deepEqual(etat.filiales, ['FIL-A', 'FIL-B'], 'Le périmètre de LECTURE peut être plus large.');
+      },
+    );
+  });
+
+  test('le périmètre meurt au rollback', async () => {
+    await base.avecPerimetre(session, perimetre('jdupont', 'FIL-A'), async () => {});
+    const etat = await contexte(session);
+    assert.equal(etat.utilisateur, 'systeme');
+    assert.equal(etat.filiale, null);
+    assert.deepEqual(etat.filiales, []);
+  });
+
+  test('le périmètre meurt au COMMIT — la condition du pool de connexions', async () => {
+    // C'est l'assertion la plus importante du fichier. Une connexion rendue au pool
+    // après un commit ne doit pas emporter le périmètre de l'utilisateur précédent :
+    // sans cela, la requête suivante — un autre utilisateur, une autre filiale —
+    // hériterait d'un périmètre qui n'est pas le sien. Le cloisonnement entier tient
+    // à ce que « set local » soit bien local.
+    await base.avecPerimetre(session, perimetre('mdurand', 'FIL-Z', ['FIL-Z']), async () => {}, {
+      annuler: false,
+    });
+
+    const etat = await contexte(session);
+    assert.equal(etat.utilisateur, 'systeme', 'Le réglage n’a pas survécu au commit.');
+    assert.equal(etat.filiale, null);
+    assert.deepEqual(etat.filiales, []);
+  });
+
+  test('une session vierge du pool ne voit aucun périmètre résiduel', async () => {
+    const autre = await base.nouvelleConnexion('app');
+    const etat = await contexte(autre);
+    assert.equal(etat.utilisateur, 'systeme');
+    assert.deepEqual(etat.filiales, []);
+  });
+});
+
+/* =====================================================================
+ *  §14 — Rôles et privilèges
+ * ===================================================================== */
+
+describe('Rôles et privilèges (CONVENTIONS §14)', () => {
+  test('grc_app n’a ni SUPERUSER, ni BYPASSRLS, ni CREATEROLE, ni CREATEDB', async () => {
+    // BYPASSRLS rendrait toute la Row Level Security décorative ; SUPERUSER rendrait
+    // le reste sans objet. C'est le contrôle S1 de la grille de sécurité.
+    const role = (
+      await base.lignes(
+        proprietaire,
+        `select rolsuper, rolbypassrls, rolcreaterole, rolcreatedb
+           from pg_roles where rolname = 'grc_app'`,
+      )
+    )[0];
+    assert.ok(role, 'Le rôle grc_app doit exister (db/dev/preparer_base_dev.sh).');
+    assert.equal(role.rolsuper, false);
+    assert.equal(role.rolbypassrls, false);
+    assert.equal(role.rolcreaterole, false);
+    assert.equal(role.rolcreatedb, false);
+  });
+
+  test('grc_app ne possède aucune table du schéma', async () => {
+    // Couche 4 de l'ajout seul : seul le propriétaire peut désactiver un déclencheur.
+    const possedees = await base.lignes(
+      proprietaire,
+      `select c.relname
+         from pg_class c
+         join pg_roles r on r.oid = c.relowner
+         join pg_namespace n on n.oid = c.relnamespace
+        where r.rolname = 'grc_app' and n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm')
+        order by 1`,
+    );
+    assert.deepEqual(
+      possedees.map((l) => l.relname),
+      [],
+      'Le rôle applicatif ne doit posséder aucun objet : il ne pourrait plus être bridé.',
+    );
+  });
+
+  test('grc_app n’a que select et insert sur journal_audit', async () => {
+    const droits = (
+      await base.lignes(
+        proprietaire,
+        `select has_table_privilege('grc_app', 'journal_audit', 'select')   as lecture,
+                has_table_privilege('grc_app', 'journal_audit', 'insert')   as ajout,
+                has_table_privilege('grc_app', 'journal_audit', 'update')   as modification,
+                has_table_privilege('grc_app', 'journal_audit', 'delete')   as suppression,
+                has_table_privilege('grc_app', 'journal_audit', 'truncate') as vidage`,
+      )
+    )[0];
+    assert.equal(droits.lecture, true, 'Le service doit pouvoir consulter le journal.');
+    assert.equal(droits.ajout, true, 'Le service doit pouvoir écrire au journal.');
+    assert.equal(droits.modification, false);
+    assert.equal(droits.suppression, false);
+    assert.equal(droits.vidage, false);
+  });
+
+  test('grc_app a bien le CRUD sur les tables métier (privilèges par défaut du §0)', async () => {
+    // Contrôle symétrique : si les « alter default privileges » de 001 sautaient, le
+    // service ne pourrait plus rien écrire et les tests ci-dessus passeraient quand
+    // même. Une restriction n'a de valeur que si le cas nominal est vérifié aussi.
+    const droits = (
+      await base.lignes(
+        proprietaire,
+        `select has_table_privilege('grc_app', 'filiales', 'select') as lecture,
+                has_table_privilege('grc_app', 'filiales', 'insert') as ajout,
+                has_table_privilege('grc_app', 'filiales', 'update') as modification,
+                has_table_privilege('grc_app', 'filiales', 'delete') as suppression`,
+      )
+    )[0];
+    assert.deepEqual(droits, { lecture: true, ajout: true, modification: true, suppression: true });
+  });
+
+  test('grc_lecture est en lecture seule', async () => {
+    const droits = (
+      await base.lignes(
+        proprietaire,
+        `select has_table_privilege('grc_lecture', 'filiales', 'select') as lecture,
+                has_table_privilege('grc_lecture', 'filiales', 'insert') as ajout,
+                has_table_privilege('grc_lecture', 'filiales', 'update') as modification,
+                has_table_privilege('grc_lecture', 'filiales', 'delete') as suppression,
+                has_table_privilege('grc_lecture', 'journal_audit', 'select') as journal`,
+      )
+    )[0];
+    assert.deepEqual(droits, {
+      lecture: true,
+      ajout: false,
+      modification: false,
+      suppression: false,
+      journal: true,
+    });
+  });
+
+  test('le propriétaire des tables n’est pas le compte du service', async () => {
+    const proprietaires = await base.lignes(
+      proprietaire,
+      `select distinct pg_get_userbyid(c.relowner) as proprietaire
+         from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'r'`,
+    );
+    assert.equal(proprietaires.length, 1, 'Toutes les tables doivent avoir le même propriétaire.');
+    assert.notEqual(proprietaires[0].proprietaire, 'grc_app');
+  });
+});

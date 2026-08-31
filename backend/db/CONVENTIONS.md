@@ -106,10 +106,15 @@ create trigger trg_<table>_maj before update on <table>
   `modifie_le = now()`, `modifie_par = f_utilisateur_courant()`.
 - `cree_par` / `modifie_par` sont **du texte, sans clé étrangère** vers `utilisateurs` :
   la trace doit survivre à la suppression d'un compte.
-- **Tables de liaison et tables filles** (`profil_domaines`, `session_filiales`,
-  `import_erreurs`, tables n-n du §7) : **pas de `version`** (la version est portée par
-  l'entité parente), traçabilité réduite à `cree_le` / `cree_par`, déclencheur
-  `f_maj_horodatage()` si la ligne est modifiable.
+- **Tables de liaison et tables filles** (`profil_domaines`, `import_erreurs`, tables n-n
+  du §7) : **pas de `version`** (la version est portée par l'entité parente), traçabilité
+  réduite à `cree_le` / `cree_par`, déclencheur `f_maj_horodatage()` si la ligne est
+  modifiable.
+- **Exemption : les tables filles d'une session** (`session_filiales`, `session_domaines`)
+  ne portent **aucune** colonne de traçabilité. Elles décrivent un périmètre résolu qui vit
+  et meurt avec sa session, laquelle porte déjà son auteur et son horodatage ; les dupliquer
+  par ligne n'apprendrait rien et alourdirait le chemin le plus chaud de l'application.
+  C'est ce que fait `001_socle.sql`, et c'est délibéré.
 - **`journal_audit` est hors de cette règle** : voir §12.
 
 ---
@@ -221,13 +226,20 @@ Règles :
 
 - Nom = `<parent_singulier>_<enfant_pluriel>`.
 - Clé primaire **composite** sur le couple d'identifiants (dédoublonnage garanti par le
-  schéma, là où le frontend s'en remettait au code).
+  schéma, là où le frontend s'en remettait au code). **Exception : quand l'attribut porté
+  fait partie de l'identité du lien, il entre dans la clé.** C'est le cas d'
+  `actif_dependances`, où le frontend admet délibérément « A est hébergé sur B » *et* « A
+  est sauvegardé par B » (`actifs.js` dédoublonne sur `(cible, type)`) : une clé réduite au
+  couple ferait échouer la reprise d'un export contenant les deux liens.
 - `on delete cascade` **des deux côtés** : supprimer l'une des extrémités supprime le lien,
   jamais l'autre extrémité — c'est exactement le comportement « délier » des cascades
   actuelles (§8).
 - Une table de liaison **ne porte pas** de `filiale_id` quand ses deux extrémités sont
-  déjà cloisonnées ; la RLS s'applique par jointure. Elle en porte un si l'une des
-  extrémités est de niveau Groupe (cas de `evaluation_mesures` après la scission L4).
+  déjà cloisonnées ; la RLS s'applique alors par jointure. Elle en porte un si l'une des
+  extrémités est de niveau Groupe ou mixte (cas d'`evaluation_mesures`, §16.5).
+  ⚠️ Une liaison **sans** `filiale_id` n'est protégée d'un lien inter-filiales que par la
+  RLS ; aucune clé étrangère composite ne peut l'y contraindre. Les politiques de `004`
+  doivent donc couvrir ces tables explicitement, et la porte S1 le vérifie.
 - `actif_dependances` conserve un `check (actif_id <> actif_cible_id)` : un actif ne dépend
   pas de lui-même.
 
@@ -488,13 +500,18 @@ poste de développement.
 |---|---|---|
 | `001_socle.sql` | 16 tables du socle, domaines partagés, fonctions, journal chaîné | — (livré) |
 | `002_metier_noyau.sql` | `clients`, `personnes`, `exigences`, `mesure_catalogue`, `mesure_mise_en_oeuvre`, `evaluations`, `risques`, `actifs`, `processus` + liaisons `risque_exigences`, `actif_risques`, `processus_actifs`, `actif_dependances`, `evaluation_mesures` | `001` |
-| `003_metier_operations.sql` | `actions`, `incidents`, `crise`, `scenarios_pra`, `tests_pra`, `mco_actions`, `prestataires`, `audits`, `revues`, `documents`, `traitements`, `mappings`, `history` + liaisons `incident_actifs`, `traitement_mesures`, `document_referentiels` | `002` |
+| `003_metier_operations.sql` | `incidents`, `actions`, `crise`, `scenarios_pra`, `tests_pra`, `mco_actions`, `prestataires`, `audits`, `revues`, `documents`, `traitements`, `mappings`, `history` + liaisons `incident_actifs`, `traitement_mesures`, `document_referentiels`, `mapping_exigences` | `002` |
 | `004_rls.sql` | Rôles, privilèges, politiques RLS, garde-fou de couverture | `003` |
 
 Le graphe des clés étrangères est **acyclique dans cet ordre** : rien dans `002` ne référence
 `003`. `actions` est en `003` parce qu'elle référence `incidents`, alors qu'elle référence
 aussi `exigences`, `risques`, `evaluations` et `mesure_catalogue` — elle doit donc venir après
-les deux groupes.
+les deux groupes, et après `incidents` à l'intérieur de `003`.
+
+`mapping_exigences` ne figurait pas au découpage initial : le champ `mappings.refs`
+(`{ref_id: [codes]}`) du modèle navigateur est un **objet de tableaux d'identifiants**, que les
+trois interdits du §6 excluent du `jsonb`. C'est donc une table fille, de niveau Groupe comme
+son parent.
 
 ### 16.2 Scission des mesures
 

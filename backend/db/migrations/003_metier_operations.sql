@@ -742,9 +742,10 @@ create index ix_document_referentiels_filiale on document_referentiels (filiale_
 create index ix_document_referentiels_ref     on document_referentiels (ref_id);
 
 comment on table document_referentiels is
-    'Référentiels couverts par un document (n-n). Table de liaison : ni version, ni '
-    'déclencheur — toutes ses colonnes métier composent la clé primaire, une ligne ne se '
-    'modifie pas, elle se supprime et se recrée.';
+    'Référentiels couverts par un document (n-n). Table de liaison : ni version, ni déclencheur '
+    'de mise à jour — un lien ne se modifie pas, il se supprime et se recrée ; la seule colonne '
+    'hors clé primaire, filiale_id, est une recopie de la filiale du document, tenue cohérente '
+    'par fk_document_referentiels_coherence et non par une saisie.';
 comment on column document_referentiels.ref_id is
     'Identifiant du référentiel dans le CATALOGUE STATIQUE (anssi-hygiene, iso27001-smsi, '
     'nis2-art21, dora, aircyber). SANS CLÉ ÉTRANGÈRE, et ce n''est pas un oubli : les '
@@ -836,7 +837,9 @@ comment on table traitement_mesures is
     'Mesures de sécurité couvrant un traitement RGPD (n-n). Réutilise le pivot "mesure de '
     'sécurité" : les mesures décrites une fois servent la conformité ISO, NIS2 ET le registre '
     'article 30 — zéro double saisie. "on delete cascade" des deux côtés : supprimer la mesure '
-    'délie le traitement, elle ne le supprime pas.';
+    'délie le traitement, elle ne le supprime pas. Table de liaison : ni version, ni déclencheur '
+    'de mise à jour — un lien se supprime et se recrée, et filiale_id n''est qu''une recopie de '
+    'la filiale du traitement, imposée par la clé étrangère composite.';
 comment on column traitement_mesures.filiale_id is
     'Filiale du traitement. Présent parce que mesure_catalogue est mixte : sans lui, la RLS '
     'devrait joindre pour trancher (CONVENTIONS.md §16.5). La cohérence avec la filiale du '
