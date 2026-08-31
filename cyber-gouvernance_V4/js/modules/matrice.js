@@ -203,7 +203,7 @@ const MatriceModule = (() => {
                     return `
                     <td class="matrix-cell ${colorClass}"
                         style="cursor: ${count > 0 ? 'pointer' : 'default'};"
-                        ${count > 0 ? `onclick="MatriceModule.selectCell(${f}, ${g})"` : ""}
+                        ${count > 0 ? `data-cell-f="${f}" data-cell-g="${g}"` : ""}
                         title="${count > 0 ? `Cliquer pour voir les ${count} risques` : 'Aucun risque'}">
 
                         <div class="cell-content center-bubble">
@@ -225,8 +225,8 @@ const MatriceModule = (() => {
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (SI global)</strong> - Méthode Brute (FxG)</p>
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center;">
-                        <button onclick="MatriceModule.exportPNG()" title="Télécharger la matrice au format image PNG">Exporter en PNG</button>
-                        <button onclick="MatriceModule.exportSVG()" style="background: var(--bg-body); color: var(--text-main); border: 1px solid var(--border);" title="Télécharger la matrice au format vectoriel SVG">Exporter en SVG</button>
+                        <button type="button" id="matrixExportPngBtn" title="Télécharger la matrice au format image PNG">Exporter en PNG</button>
+                        <button type="button" id="matrixExportSvgBtn" style="background: var(--bg-body); color: var(--text-main); border: 1px solid var(--border);" title="Télécharger la matrice au format vectoriel SVG">Exporter en SVG</button>
                     </div>
                 </div>
 
@@ -298,7 +298,7 @@ const MatriceModule = (() => {
                     <div id="matrix-detail-panel" class="dashboard-card detail-panel" style="display: none;">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--primary); padding-bottom: 10px; margin-bottom: 15px;">
                             <h3 id="detail-title" style="margin:0;">Liste des risques</h3>
-                            <button onclick="MatriceModule.closeDetail()" style="padding: 2px 8px; font-size: 0.8rem; background: var(--bg-body); color: #333; border: 1px solid var(--border);">Fermer X</button>
+                            <button type="button" id="matrixCloseDetailBtn" style="padding: 2px 8px; font-size: 0.8rem; background: var(--bg-body); color: #333; border: 1px solid var(--border);">Fermer X</button>
                         </div>
                         <ul id="detail-list" class="detail-risk-list">
                             </ul>
@@ -354,6 +354,19 @@ const MatriceModule = (() => {
         }
 
         window.matrixData_Internal = matrixData;
+
+        /* Branchement des gestionnaires (aucun attribut « on… » : la CSP de
+           production interdit le script en ligne). Les coordonnées de case
+           voyagent en `data-`, lues au clic. */
+        const pngBtn = document.getElementById("matrixExportPngBtn");
+        if (pngBtn) pngBtn.addEventListener("click", exportPNG);
+        const svgBtn = document.getElementById("matrixExportSvgBtn");
+        if (svgBtn) svgBtn.addEventListener("click", exportSVG);
+        const closeBtn = document.getElementById("matrixCloseDetailBtn");
+        if (closeBtn) closeBtn.addEventListener("click", closeDetail);
+        app.querySelectorAll(".matrix-cell[data-cell-f]").forEach(td => {
+            td.addEventListener("click", () => selectCell(Number(td.dataset.cellF), Number(td.dataset.cellG)));
+        });
     }
 
     /* =========================
@@ -370,12 +383,16 @@ const MatriceModule = (() => {
 
         title.innerHTML = `Risques pour Gravité ${g} / Fréquence ${f} <span style="font-weight: normal; color: #666; font-size: 0.9rem;">(${cellRisks.length} scénarios)</span>`;
 
+        const esc = window.escapeHtml || (v => String(v == null ? "" : v));
         list.innerHTML = cellRisks.map(r => `
-            <li class="detail-risk-item" onclick="Router.navigateTo('/risques/${r.id}')">
-                <strong>${r.nom}</strong>
-                <span>Score Brut : ${r.score_brut} | Résiduel : ${(r.score_residuel || 0).toFixed(2)}</span>
+            <li class="detail-risk-item" data-id="${esc(r.id)}">
+                <strong>${esc(r.nom)}</strong>
+                <span>Score Brut : ${esc(r.score_brut)} | Résiduel : ${(Number(r.score_residuel) || 0).toFixed(2)}</span>
             </li>
         `).join("");
+        list.querySelectorAll(".detail-risk-item").forEach(li => {
+            li.addEventListener("click", () => Router.navigateTo(`/risques/${li.dataset.id}`));
+        });
 
         panel.style.display = "block";
         panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

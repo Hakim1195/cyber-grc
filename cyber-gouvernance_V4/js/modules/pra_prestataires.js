@@ -73,11 +73,11 @@ const PraPrestatairesModule = (() => {
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                     <div class="form-group">
                         <label>Criticité pour vos activités ${Help.tip("Impact si ce fournisseur défaille ou est compromis.")}</label>
-                        <select id="criticite" onchange="PraPrestatairesModule.updateRiskPreview()">${optionsHtml(CRITICITE_OPTS, p.criticite || "")}</select>
+                        <select id="criticite">${optionsHtml(CRITICITE_OPTS, p.criticite || "")}</select>
                     </div>
                     <div class="form-group">
                         <label>Accès à votre SI / vos données ${Help.tip("Un accès étendu (administration, données sensibles) augmente le risque.")}</label>
-                        <select id="acces" onchange="PraPrestatairesModule.updateRiskPreview()">${optionsHtml(ACCES_OPTS, p.acces || "")}</select>
+                        <select id="acces">${optionsHtml(ACCES_OPTS, p.acces || "")}</select>
                     </div>
                 </div>
                 <div style="background:var(--bg-body); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center; margin:6px 0 16px;">
@@ -87,6 +87,14 @@ const PraPrestatairesModule = (() => {
                 <p style="color:var(--text-muted); font-size:0.85rem; margin:2px 0 8px;">Points de vigilance contractuels et opérationnels attendus (NIS2 / DORA).</p>
                 ${reqs}
             </div>`;
+    }
+
+    // Branche le recalcul en direct du badge de risque (create + detail).
+    function wireRiskSection() {
+        ["criticite", "acces"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener("change", updateRiskPreview);
+        });
     }
 
     // Recalcule le badge de risque en direct quand criticité/accès changent.
@@ -120,7 +128,7 @@ const PraPrestatairesModule = (() => {
 
         const rows = prestataires.map(p => `
             <tr class="clickable-row" data-id="${p.id}">
-                <td class="no-print" style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
+                <td class="no-print stop-row-click" style="text-align: center; width: 40px;">
                     <input type="checkbox" class="row-cb" data-id="${p.id}">
                 </td>
                 <td><strong>${esc(p.societe)}</strong></td>
@@ -152,7 +160,7 @@ const PraPrestatairesModule = (() => {
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
-                        <button onclick="window.print()" style="background-color: var(--primary);">Imprimer l'annuaire</button>
+                        <button type="button" id="printBtn" style="background-color: var(--primary);">Imprimer l'annuaire</button>
                         <button id="addBtn" style="background-color: var(--color-success);">Nouveau Contact</button>
                     </div>
                 </div>
@@ -187,6 +195,10 @@ const PraPrestatairesModule = (() => {
         `;
 
         document.getElementById("addBtn").onclick = renderCreate;
+        document.getElementById("printBtn").addEventListener("click", () => window.print());
+        // La case à cocher ne doit pas ouvrir la fiche du prestataire.
+        document.querySelectorAll(".stop-row-click").forEach(el =>
+            el.addEventListener("click", (e) => e.stopPropagation()));
 
         // Sélection multiple + suppression groupée (helper partagé, cf. js/core/ui.js).
         UI.wireBulkDelete({
@@ -270,6 +282,7 @@ const PraPrestatairesModule = (() => {
             Router.navigateTo("/prestataires");
         };
 
+        wireRiskSection();
         updateRiskPreview();
     }
 
@@ -352,6 +365,7 @@ const PraPrestatairesModule = (() => {
             redirect: "/prestataires"
         });
 
+        wireRiskSection();
         updateRiskPreview();
     }
 

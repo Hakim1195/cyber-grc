@@ -307,7 +307,7 @@ const AuditsModule = (() => {
                 <div id="print-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#f0f2f5; z-index:2000; overflow-y:auto; padding:40px;">
                     <div class="no-print" style="display:flex; justify-content:space-between; margin-bottom:20px; max-width: 900px; margin: 0 auto 20px auto;">
                         <button id="closePrintBtn" style="background:#676879; padding:10px 20px;">Fermer l'aperçu</button>
-                        <button onclick="window.print()" style="background:#0073ea; padding:10px 20px;">Imprimer / PDF</button>
+                        <button type="button" id="doPrintBtn" style="background:#0073ea; padding:10px 20px;">Imprimer / PDF</button>
                     </div>
                     <div id="print-content" class="print-container" style="max-width: 900px; margin: 0 auto; background: white; padding: 50px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid #ccc; font-family: Arial, sans-serif;"></div>
                 </div>
@@ -347,6 +347,7 @@ const AuditsModule = (() => {
             });
         }
 
+        document.getElementById("doPrintBtn").addEventListener("click", () => window.print());
         document.getElementById("closePrintBtn").onclick = () => {
             document.body.classList.remove("printing-audit");
             document.getElementById("print-modal").style.display = "none";
@@ -401,6 +402,15 @@ const AuditsModule = (() => {
                 <button onclick="this.closest('.constat-row').remove()" style="background:none; color:red; border:none; font-size:1.5rem; cursor:pointer;" title="Supprimer"></button>
             </div>
         `).join("") || `<p style="text-align:center; color:gray; padding:20px;">Aucun constat saisi.</p>`;
+
+        // Le retrait d'une ligne de constat : branché après chaque rendu de la
+        // liste, qui est réécrite en entier à chaque ajout.
+        container.querySelectorAll(".constat-del").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const ligne = btn.closest(".constat-row");
+                if (ligne) ligne.remove();
+            });
+        });
     }
 
     function addConstat() {
@@ -525,7 +535,7 @@ const AuditsModule = (() => {
                 <div id="print-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#f0f2f5; z-index:2000; overflow-y:auto; padding:40px;">
                     <div class="no-print" style="display:flex; justify-content:space-between; margin-bottom:20px; max-width: 900px; margin: 0 auto 20px auto;">
                         <button id="closePrintBtn" style="background:#676879; padding:10px 20px;">Fermer l'aperçu</button>
-                        <button onclick="window.print()" style="background:#0073ea; padding:10px 20px;">Imprimer / PDF</button>
+                        <button type="button" id="doPrintBtn" style="background:#0073ea; padding:10px 20px;">Imprimer / PDF</button>
                     </div>
                     <div id="print-content" class="print-container" style="max-width: 900px; margin: 0 auto; background: white; padding: 50px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid #ccc; font-family: Arial, sans-serif;"></div>
                 </div>
@@ -545,6 +555,7 @@ const AuditsModule = (() => {
             });
         }
 
+        document.getElementById("doPrintBtn").addEventListener("click", () => window.print());
         document.getElementById("closePrintBtn").onclick = () => {
             document.body.classList.remove("printing-audit");
             document.getElementById("print-modal").style.display = "none";
