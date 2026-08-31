@@ -836,12 +836,13 @@ case "$CODE_MIGRATIONS" in
       migration qui corrige : une migration appliquée ne se réécrit jamais
       (db/CONVENTIONS.md §13)." ;;
   7) echec "Les migrations sont passées, et le SCHÉMA OBTENU N'EST PAS CONFORME
-      (db/migrate.mjs, code 7). Les anomalies sont nommées juste au-dessus : elles
-      viennent des garde-fous que la base porte elle-même (couverture RLS, chemin de
-      recherche). Tant qu'elles subsistent, le cloisonnement par filiale n'est pas
-      garanti — db/CONVENTIONS.md §11 et §18.4.
+      (db/migrate.mjs, code 7). Les anomalies sont nommées juste au-dessus, chacune
+      préfixée du contrôle qui l'a remontée : elles viennent des garde-fous que la base
+      porte elle-même, agrégés par f_verifier_schema() (db/CONVENTIONS.md §18.4 et §19.4).
+      Tant qu'elles subsistent, ni le cloisonnement par filiale ni la traçabilité des
+      écritures ne sont garantis.
       L'installation s'arrête ici : ni service, ni frontal ne sont mis en place sur un
-      schéma qui laisse une filiale lire les données d'une autre." ;;
+      schéma dont les garanties opposables ne tiennent pas." ;;
   6) echec "Une migration a échoué (db/migrate.mjs, code 6). Le message ci-dessus dit si
       la base a été modifiée ou si elle est restée dans son état antérieur." ;;
   *) echec "Les migrations se sont arrêtées avec le code $CODE_MIGRATIONS
@@ -859,8 +860,9 @@ esac
 #
 # La phrase ci-dessus était fausse pour S1 : la section ne regardait ni la RLS ni les
 # politiques, alors qu'elles sont le seul objet de ce contrôle. Elle est vraie depuis que
-# les deux garde-fous de la base sont joués plus bas (S16). Une section de contrôles qui
-# annonce plus qu'elle ne fait est pire que pas de section du tout : elle rassure.
+# le point d'appel unique des garde-fous de la base est joué plus bas (S16). Une section
+# de contrôles qui annonce plus qu'elle ne fait est pire que pas de section du tout :
+# elle rassure.
 
 info "Contrôles de sécurité"
 
@@ -1029,69 +1031,85 @@ case "$REGISTRE" in
       Vérifier ensuite ce qui a été appliqué : node db/migrate.mjs --verifier" ;;
 esac
 
-# S16 — LE CLOISONNEMENT LUI-MÊME. Les deux garde-fous que la base porte sont joués ici.
+# S16 — LE SCHÉMA LUI-MÊME. UN SEUL appel, et c'est tout l'objet de ce qui suit.
 #
 # Cette section s'intitule « on vérifie, on ne suppose pas » et annonce rejouer « S1
-# cloisonnement ». Elle ne regardait pourtant ni la RLS, ni les politiques : rôles,
-# propriété, journal, registre — pas une ligne sur ce qui cloisonne. Une base dont on
-# avait retiré « force row level security » et remplacé une politique de lecture par
-# « true » passait les trois contrôles au vert, et une session de la filiale de Hambourg
-# lisait les risques de Toulouse.
+# cloisonnement ». Elle ne regardait pourtant ni la RLS, ni les politiques, ni la
+# traçabilité : rôles, propriété, journal, registre. Une base dont on avait retiré
+# « force row level security » et remplacé une politique de lecture par « true » passait
+# les contrôles au vert, et une session de la filiale de Hambourg lisait les risques de
+# Toulouse.
 #
 # Les migrations ne rattrapent pas : sur une base à jour elles ne sont pas rejouées, et
 # leur garde-fou de fin ne s'exécute jamais. C'est le cas de CHAQUE ré-exécution de ce
 # script, et notamment du chemin --reprendre-propriete — qui existe justement parce que
 # le compte du service a été propriétaire, donc parce qu'il a pu faire
-# « alter table … disable row level security » aussi bien que désarmer un déclencheur.
+# « alter table … disable row level security » ou « drop trigger … » aussi bien que
+# désarmer un déclencheur du journal.
+#
+# POURQUOI UN SEUL NOM DE FONCTION ICI. La première version de ce contrôle énumérait les
+# deux fonctions de vérification connues. Le commit suivant en a écrit une troisième
+# (traçabilité) sans toucher à ce fichier : le défaut que S16 venait d'être créé pour
+# empêcher s'est reproduit sous lui, en deux commits. « f_verifier_schema() » est le point
+# d'appel unique et agrégeant ; en l'appelant ELLE, un garde-fou ajouté plus tard arrive
+# ici sans que personne ait à s'en souvenir (db/CONVENTIONS.md §19.4). On supprime
+# l'occasion de l'oubli plutôt que de compter sur la vigilance.
+#
+# ⚠️ Ne JAMAIS réintroduire ici une liste de contrôles connus : la colonne « controle »
+# du résultat les nomme d'elle-même, y compris ceux qui n'existaient pas quand ces lignes
+# ont été écrites.
 #
 # Appeler une fonction de la base n'est pas une dépendance vers un fichier de db/ : c'est
 # une requête. Un garde-fou que rien n'appelle est un commentaire (CONVENTIONS §18.4).
-#
-# Les noms de fonction viennent de la liste figée ci-dessous, jamais d'une saisie.
-for garde in \
-  "f_verifier_couverture_rls:couverture RLS et politiques de périmètre:004_rls.sql:une table sans « force row level security » ou dont une politique ne consulte pas le périmètre se lit d'une filiale à l'autre" \
-  "f_verifier_chemin_recherche:chemin de recherche des fonctions:001_socle.sql:une fonction dont le chemin ne relègue pas pg_temp est détournable par masquage d'une table du schéma"
-do
-  FONCTION="${garde%%:*}";      reste="${garde#*:}"
-  SUJET="${reste%%:*}";         reste="${reste#*:}"
-  POSE_PAR="${reste%%:*}"
-  CONSEQUENCE="${reste#*:}"
+GARDE_FOU_SCHEMA="f_verifier_schema"
 
-  if [[ "$(sql_admin_base <<SQL
-select case when to_regprocedure('public.$FONCTION()') is null then 'ABSENTE' else 'PRESENTE' end;
+if [[ "$(sql_admin_base <<SQL
+select case when to_regprocedure('public.$GARDE_FOU_SCHEMA()') is null
+            then 'ABSENTE' else 'PRESENTE' end;
 SQL
 )" == "ABSENTE" ]]; then
-    # Une base antérieure au garde-fou n'a rien à répondre : on avertit, on n'échoue pas.
-    # Refuser ici empêcherait de migrer les bases que ce contrôle est censé protéger.
-    alerte "$FONCTION() absente : le contrôle « $SUJET » n'a pas pu être joué."
-    alerte "Cette fonction est posée par db/migrations/$POSE_PAR — la base est antérieure."
-    continue
-  fi
-
+  # Une base antérieure au point d'appel n'a rien à répondre : on avertit, on n'échoue
+  # pas. Refuser ici empêcherait de migrer les bases que ce contrôle est censé protéger.
+  alerte "$GARDE_FOU_SCHEMA() absente : les contrôles automatiques du schéma n'ont pas pu"
+  alerte "être joués. Cette fonction est posée par db/migrations/001_socle.sql — la base est"
+  alerte "antérieure à ce point d'appel (db/CONVENTIONS.md §18.4 et §19.4)."
+else
   # Un schéma sain ne renvoie AUCUNE ligne (même idiome que f_journal_audit_verifier).
   # « set -e » ne protège pas d'une substitution de commande : si la fonction échoue,
-  # ANOMALIES_RLS serait vide et le contrôle passerait pour vert. On compte donc à part.
-  if ! ANOMALIES_RLS="$(sql_admin_base <<SQL
-select objet || ' → ' || anomalie from $FONCTION() order by objet, anomalie;
+  # ANOMALIES_SCHEMA serait vide et le contrôle passerait pour vert. On teste donc le
+  # code de sortie à part — c'est exactement le piège d'un contrôle qui n'échoue pas.
+  if ! ANOMALIES_SCHEMA="$(sql_admin_base <<SQL
+select controle || ' · ' || objet || ' → ' || anomalie
+  from $GARDE_FOU_SCHEMA() order by controle, objet, anomalie;
 SQL
 )"; then
-    echec "Le garde-fou $FONCTION() n'a pas pu être joué sur « $BASE_NOM ».
+    echec "Le garde-fou $GARDE_FOU_SCHEMA() n'a pas pu être joué sur « $BASE_NOM ».
       Le schéma n'est donc pas déclaré conforme : une question restée sans réponse n'est
-      pas une réponse rassurante. Jouez-le à la main : select * from $FONCTION();"
+      pas une réponse rassurante. Jouez-le à la main : select * from $GARDE_FOU_SCHEMA();"
   fi
 
-  if [[ -n "$ANOMALIES_RLS" ]]; then
-    alerte "Anomalies remontées par $FONCTION() :"
-    while IFS= read -r ligne; do [[ -z "$ligne" ]] || alerte "     $ligne"; done <<< "$ANOMALIES_RLS"
-    echec "Schéma NON CONFORME — contrôle « $SUJET » (db/CONVENTIONS.md §18.4).
-      $CONSEQUENCE.
+  if [[ -n "$ANOMALIES_SCHEMA" ]]; then
+    alerte "Anomalies remontées par $GARDE_FOU_SCHEMA() :"
+    while IFS= read -r ligne; do
+      [[ -z "$ligne" ]] || alerte "     $ligne"
+    done <<< "$ANOMALIES_SCHEMA"
+    echec "Schéma NON CONFORME (db/CONVENTIONS.md §18.4 et §19.4).
+      Chaque ligne ci-dessus est préfixée du contrôle qui l'a remontée. Selon le contrôle :
+        couverture_rls   — une table sans « force row level security », ou dont une politique
+                           ne consulte pas le périmètre, se lit d'une filiale à l'autre ;
+        tracabilite      — sans déclencheur « before insert », l'appelant fixe lui-même
+                           version, cree_le et cree_par, et le gel rend la valeur définitive ;
+        chemin_recherche — une fonction qui ne relègue pas pg_temp est détournable par
+                           masquage d'une table du schéma ;
+        (autre)          — contrôle ajouté au schéma depuis l'écriture de ce script : le
+                           détail est dans la fonction, et il fait échouer au même titre.
       Les migrations sont passées ; le schéma obtenu ne l'est pas — et elles ne le
       rattraperont pas, puisqu'une base à jour ne les rejoue pas.
-      Détail complet : psql -d $BASE_NOM -c 'select * from $FONCTION();'
+      Détail complet : psql -d $BASE_NOM -c 'select * from $GARDE_FOU_SCHEMA();'
       Démonstration de bout en bout : psql -U $ROLE_APP -d $BASE_NOM -f db/verifier_cloisonnement.sql"
   fi
-  succes "$SUJET : aucune anomalie ($FONCTION(), §18.4)"
-done
+  succes "garde-fous du schéma : aucune anomalie ($GARDE_FOU_SCHEMA(), point d'appel unique)"
+fi
 
 if [[ $SEULEMENT_BASE -eq 1 ]]; then
   printf '\n\033[1;32mBase « %s » prête.\033[0m (--seulement-base : ni code, ni service, ni frontal)\n' "$BASE_NOM"

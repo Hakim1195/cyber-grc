@@ -36,14 +36,19 @@
  *
  *  6. **Aucun secret en sortie.** Ni mot de passe, ni chaîne de connexion complète.
  *
- *  7. **Les garde-fous du schéma sont joués, et font échouer.** `f_verifier_couverture_rls()`
- *     et `f_verifier_chemin_recherche()` étaient écrites, testées, correctes — et appelées
- *     par aucun chemin de déploiement. Une base sabotée passait au vert pendant qu'une
- *     filiale lisait les données de la voisine. Elles sont donc jouées ici **après
- *     application, et aussi quand il n'y a rien à appliquer** : c'est le cas d'une base à
- *     jour, c'est-à-dire chaque ré-exécution de `install.sh`, et c'est précisément là que
- *     le sabotage passait inaperçu. Un garde-fou que rien n'appelle est un commentaire
- *     (CONVENTIONS.md §18.4).
+ *  7. **Les garde-fous du schéma sont joués, et font échouer.** Ils étaient écrits, testés,
+ *     corrects — et appelés par aucun chemin de déploiement. Une base sabotée passait au
+ *     vert pendant qu'une filiale lisait les données de la voisine. `f_verifier_schema()`
+ *     est donc jouée ici **après application, et aussi quand il n'y a rien à appliquer** :
+ *     c'est le cas d'une base à jour, c'est-à-dire chaque ré-exécution de `install.sh`, et
+ *     c'est précisément là que le sabotage passait inaperçu. Un garde-fou que rien
+ *     n'appelle est un commentaire (CONVENTIONS.md §18.4).
+ *
+ *     **Un seul appel, agrégeant** (CONVENTIONS.md §19.4). Énumérer les fonctions de
+ *     vérification ici a déjà échoué une fois : un garde-fou écrit au commit suivant n'a
+ *     pas été branché, et le défaut s'est reproduit sous le contrôle créé pour lui. Ce
+ *     programme appelle `f_verifier_schema()` et rien d'autre ; un contrôle qui s'y agrège
+ *     plus tard est branché sans que ce fichier change.
  *
  * ── Utilisation ──────────────────────────────────────────────────────────────
  *
@@ -66,8 +71,8 @@
  *     4   divergence d'empreinte : une migration appliquée a été modifiée depuis
  *     5   répertoire de migrations invalide (nom hors convention, numéro en double)
  *     6   échec d'application d'une migration
- *     7   schéma NON CONFORME : les migrations sont passées, mais un garde-fou de la
- *         base remonte une anomalie (couverture RLS, chemin de recherche)
+ *     7   schéma NON CONFORME : les migrations sont passées, mais f_verifier_schema()
+ *         remonte une anomalie
  *    10   --verifier : des migrations restent à appliquer (informatif, pas une panne)
  *
  * Aucune dépendance ajoutée : `pg` est déjà au `package.json`, la bibliothèque
@@ -187,8 +192,8 @@ Le compte propriétaire est obligatoire : les migrations ne s'appliquent jamais 
 compte applicatif (backend/db/CONVENTIONS.md §12 et §14).
 
 Après application — et aussi quand il n'y a rien à appliquer — les garde-fous de la base
-sont joués : f_verifier_couverture_rls() et f_verifier_chemin_recherche(). Toute anomalie
-fait sortir en erreur (code 7). Un schéma sain ne renvoie aucune ligne.
+sont joués, par leur point d'appel unique f_verifier_schema(). Toute anomalie fait sortir
+en erreur (code 7). Un schéma sain ne renvoie aucune ligne.
 
 Codes de sortie : 0 à jour · 1 usage · 2 configuration · 3 connexion ·
                   4 empreinte divergente · 5 répertoire invalide · 6 migration en échec ·
@@ -482,120 +487,108 @@ async function appliquerUne(client, migration, registreAvecEmpreinte) {
  * ===================================================================== */
 
 /**
- * Les garde-fous que la base porte elle-même. Ils sont écrits par les migrations,
- * éprouvés par `test/base/rls.test.mjs`, montrés à l'auditeur par
- * `db/verifier_cloisonnement.sql` — et, jusqu'ici, appelés par aucun chemin de
- * déploiement. C'est le constat T-4 de la porte S1 : « un garde-fou que rien n'appelle
- * est un commentaire » (CONVENTIONS.md §18.4).
+ * LE point d'appel. Un seul, et c'est tout l'objet de cette constante.
  *
- * Convention commune aux deux : **un schéma sain ne renvoie AUCUNE ligne**, même idiome
- * que `f_journal_audit_verifier()`.
+ * Première version : ce module énumérait `f_verifier_couverture_rls()` et
+ * `f_verifier_chemin_recherche()`. Le commit SUIVANT a écrit un troisième garde-fou,
+ * `f_verifier_tracabilite()`, sans toucher à ce fichier — et le défaut que le contrôle
+ * S16 venait d'être créé pour empêcher s'est reproduit sous lui, en deux commits. Une
+ * migration `005` réaliste, qui recopiait ses quatre politiques et oubliait le couple de
+ * traçabilité, s'appliquait en code 0 et « aucune anomalie » pendant que le compte du
+ * service forgeait un « cree_par » de directeur général sur une date choisie.
  *
- * PORTÉE, à ne pas surestimer (CONVENTIONS §17.5) : `f_verifier_couverture_rls()` lit le
- * TEXTE des prédicats, pas leur sens, et `f_verifier_chemin_recherche()` lit une
- * déclaration, pas un comportement. Ce contrôle attrape une table ouverte en grand ou
- * oubliée ; ce qui mord vraiment sur le sens, ce sont les tests de comportement.
+ * `f_verifier_schema()` agrège les vérifications du schéma et les rend sous une forme
+ * commune (`controle, objet, anomalie, detail`). En l'appelant ELLE, et elle seule, un
+ * garde-fou ajouté plus tard arrive ici **sans que personne ait à s'en souvenir**
+ * (CONVENTIONS.md §19.4). On supprime l'occasion de l'oubli, on ne compte pas sur la
+ * vigilance : c'est la seule forme qui tienne.
+ *
+ * Corollaire à respecter en relisant ce fichier : ne JAMAIS réintroduire ici une liste
+ * de contrôles connus. La table CONSEQUENCES ci-dessous enrichit le message quand elle
+ * reconnaît un contrôle, et ne décide de rien — un contrôle qu'elle ignore est rapporté
+ * et fait échouer exactement comme les autres.
+ *
+ * PORTÉE, à ne pas surestimer (CONVENTIONS §17.5) : ces garde-fous lisent des
+ * déclarations et le TEXTE des prédicats, pas leur sens. Ce qui mord sur le sens, ce sont
+ * les tests de comportement de `test/base/rls.test.mjs` et `db/verifier_cloisonnement.sql`.
  */
-const GARDE_FOUS = Object.freeze([
-  Object.freeze({
-    nom: 'f_verifier_couverture_rls',
-    sujet: 'couverture RLS',
-    posePar: '004_rls.sql',
-    consequence:
-      'une table sans « force row level security » ou sans politique consultant le ' +
-      'périmètre se lit d\'une filiale à l\'autre (CONVENTIONS.md §11)',
-  }),
-  Object.freeze({
-    nom: 'f_verifier_chemin_recherche',
-    sujet: 'chemin de recherche des fonctions',
-    posePar: '001_socle.sql',
-    consequence:
-      'une fonction dont le chemin de recherche ne relègue pas pg_temp est détournable ' +
-      'par masquage d\'une table du schéma (CONVENTIONS.md §17.2)',
-  }),
-]);
+const GARDE_FOU = Object.freeze({
+  nom: 'f_verifier_schema',
+  posePar: '001_socle.sql',
+});
+
+/** Conséquence lisible par contrôle rendu. Purement explicative : elle enrichit le
+ *  message, elle ne filtre rien. Un contrôle absent de cette table est signalé et fait
+ *  échouer au même titre — c'est la propriété qui rend le §19.4 tenable. */
+const CONSEQUENCES = Object.freeze({
+  couverture_rls:
+    'une table sans « force row level security » ou sans politique consultant le ' +
+    'périmètre se lit d\'une filiale à l\'autre (CONVENTIONS.md §11)',
+  chemin_recherche:
+    'une fonction dont le chemin de recherche ne relègue pas pg_temp est détournable ' +
+    'par masquage d\'une table du schéma (CONVENTIONS.md §17.2)',
+  tracabilite:
+    'sans déclencheur « before insert », l\'appelant fixe lui-même version, cree_le et ' +
+    'cree_par — et le gel opéré ensuite rend la valeur forgée définitive (CONVENTIONS.md §18.1)',
+});
 
 /**
- * Joue les garde-fous du schéma et rend ce qu'ils disent, sans rien décider.
+ * Joue le point d'appel unique et rend ce qu'il dit, sans rien décider.
  *
- * Les deux fonctions sont `stable` et ne lisent que des catalogues : l'appel n'écrit
- * rien, et reste donc légitime sous `--verifier`, qui promet « aucune écriture ».
+ * La fonction est `stable` et ne lit que des catalogues : l'appel n'écrit rien, et reste
+ * donc légitime sous `--verifier`, qui promet « aucune écriture ».
  *
  * Une fonction ABSENTE n'est pas une anomalie : sur une base antérieure à la migration
  * qui la pose, il n'y a rien à interroger. C'est un avertissement, pas un échec — sans
- * quoi ce contrôle empêcherait de migrer les bases qu'il est censé protéger.
+ * quoi ce contrôle empêcherait de migrer les bases qu'il est censé protéger. Présente
+ * mais INJOUABLE, en revanche, est un échec : une question restée sans réponse n'est pas
+ * une réponse rassurante.
  *
- * Le nom de fonction interpolé vient de la constante figée ci-dessus, jamais d'une
- * entrée : rien d'extérieur n'atteint cette requête.
- *
- * @returns {Promise<{anomalies: {fonction: string, objet: string, anomalie: string,
+ * @returns {Promise<{anomalies: {controle: string, objet: string, anomalie: string,
  *                                detail: string}[],
- *                    absents: string[], injouables: {fonction: string, raison: string}[]}>}
+ *                    absente: boolean, injouable: string|null}>}
  */
 export async function verifierConformite(client) {
-  const anomalies = [];
-  const absents = [];
-  const injouables = [];
+  const presence = await client.query('select to_regprocedure($1) is not null as existe', [
+    `public.${GARDE_FOU.nom}()`,
+  ]);
+  if (!presence.rows[0].existe) return { anomalies: [], absente: true, injouable: null };
 
-  for (const garde of GARDE_FOUS) {
-    const presence = await client.query(
-      'select to_regprocedure($1) is not null as existe',
-      [`public.${garde.nom}()`],
+  try {
+    // Les colonnes sont nommées : la fonction peut en gagner d'autres sans casser ceci.
+    const lignes = await client.query(
+      `select controle, objet, anomalie, detail from public.${GARDE_FOU.nom}()
+        order by controle, objet, anomalie`,
     );
-    if (!presence.rows[0].existe) {
-      absents.push(garde.nom);
-      continue;
-    }
-
-    let lignes;
-    try {
-      lignes = await client.query(
-        `select objet, anomalie, detail from public.${garde.nom}() order by 1, 2`,
-      );
-    } catch (erreur) {
-      // Un garde-fou qu'on n'a PAS pu jouer ne vaut pas un garde-fou muet : on ne
-      // conclut pas « conforme » d'une question restée sans réponse.
-      injouables.push({ fonction: garde.nom, raison: erreur.message });
-      continue;
-    }
-
-    for (const ligne of lignes.rows) {
-      anomalies.push({
-        fonction: garde.nom,
-        objet: ligne.objet,
-        anomalie: ligne.anomalie,
-        detail: ligne.detail,
-      });
-    }
+    return { anomalies: lignes.rows, absente: false, injouable: null };
+  } catch (erreur) {
+    return { anomalies: [], absente: false, injouable: erreur.message };
   }
-
-  return { anomalies, absents, injouables };
 }
 
 /**
- * Joue les garde-fous, écrit le verdict, et rend le code de sortie.
+ * Joue le garde-fou, écrit le verdict, et rend le code de sortie.
  *
  * @param {import('pg').Client} client
  * @param {number} codeSiConforme code à rendre si le schéma est conforme
  * @returns {Promise<number>}
  */
 async function conclureSurLaConformite(client, codeSiConforme) {
-  const { anomalies, absents, injouables } = await verifierConformite(client);
+  const { anomalies, absente, injouable } = await verifierConformite(client);
 
-  for (const nom of absents) {
-    const garde = GARDE_FOUS.find((g) => g.nom === nom);
+  if (absente) {
     journal.alerte(
-      `${nom}() est absente de cette base : le contrôle « ${garde.sujet} » n'a pas pu être ` +
-        `joué. Cette fonction est posée par ${garde.posePar} ; une base qui ne l'a pas est ` +
-        'antérieure à ce garde-fou.',
+      `${GARDE_FOU.nom}() est absente de cette base : les contrôles automatiques du schéma ` +
+        `n'ont pas pu être joués. Cette fonction est posée par ${GARDE_FOU.posePar} ; une base ` +
+        'qui ne l\'a pas est antérieure à ce point d\'appel (CONVENTIONS.md §18.4 et §19.4).',
     );
+    return codeSiConforme;
   }
 
-  if (injouables.length > 0) {
+  if (injouable !== null) {
     journal.echec(
-      'Un garde-fou du schéma n\'a pas pu être joué :\n' +
-        injouables.map((i) => `        ${i.fonction}() : ${i.raison}`).join('\n') +
-        '\n      Le schéma n\'est donc pas déclaré conforme : une question sans réponse ' +
+      `Le garde-fou ${GARDE_FOU.nom}() n'a pas pu être joué : ${injouable}\n` +
+        '      Le schéma n\'est donc pas déclaré conforme : une question sans réponse ' +
         'n\'est pas une réponse rassurante.',
     );
     return CODES.CONFORMITE;
@@ -604,30 +597,34 @@ async function conclureSurLaConformite(client, codeSiConforme) {
   if (anomalies.length > 0) {
     journal.titre('Garde-fous du schéma — anomalies :');
     for (const a of anomalies) {
-      journal.ligne(`  ${a.objet} → ${a.anomalie}`);
+      journal.ligne(`  [${a.controle}] ${a.objet} → ${a.anomalie}`);
       journal.ligne(`      ${a.detail}`);
     }
-    // Le message nomme la conséquence du garde-fou qui a RÉELLEMENT parlé : expliquer une
-    // anomalie de chemin de recherche par une fuite entre filiales enverrait l'exploitant
-    // chercher au mauvais endroit.
-    const parlants = GARDE_FOUS.filter((g) => anomalies.some((a) => a.fonction === g.nom));
+    // Les contrôles sont lus dans le RÉSULTAT, jamais dans une liste écrite ici : un
+    // contrôle ajouté à f_verifier_schema() après coup est nommé sans rien changer ici.
+    const controles = [...new Set(anomalies.map((a) => a.controle))];
     journal.echec(
-      `Schéma NON CONFORME : ${anomalies.length} anomalie(s) remontée(s) par ` +
-        `${parlants.map((g) => `${g.nom}()`).join(' et ')}.\n` +
+      `Schéma NON CONFORME : ${anomalies.length} anomalie(s) sur ${controles.length} ` +
+        `contrôle(s) — ${controles.join(', ')}.\n` +
         '      Les migrations sont passées ; le schéma obtenu ne l\'est pas.\n' +
-        parlants.map((g) => `      — ${g.sujet} : ${g.consequence}`).join('\n') +
-        '\n      À rejouer après correction : ' +
-        `${parlants.map((g) => `select * from ${g.nom}();`).join(' ')}`,
+        controles
+          .map(
+            (c) =>
+              `      — ${c} : ${
+                CONSEQUENCES[c] ??
+                'contrôle ajouté au schéma depuis ce programme ; voir le détail ci-dessus et ' +
+                  `le commentaire de ${GARDE_FOU.nom}()`
+              }`,
+          )
+          .join('\n') +
+        `\n      À rejouer après correction : select * from ${GARDE_FOU.nom}();`,
     );
     return CODES.CONFORMITE;
   }
 
-  const joues = GARDE_FOUS.filter((g) => !absents.includes(g.nom));
-  if (joues.length > 0) {
-    journal.ligne(
-      `  garde-fous du schéma : ${joues.map((g) => g.sujet).join(', ')} — aucune anomalie.`,
-    );
-  }
+  journal.ligne(
+    `  garde-fous du schéma (${GARDE_FOU.nom}, point d'appel unique) : aucune anomalie.`,
+  );
   return codeSiConforme;
 }
 
