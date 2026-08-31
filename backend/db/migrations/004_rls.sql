@@ -53,6 +53,15 @@
 --          car il n'existe aucune écriture légitime de donnée de filiale sans filiale
 --          active. Un refus muet (« 0 ligne insérée ») serait très coûteux à diagnostiquer.
 --
+--      Une limite à connaître, propre au fonctionnement des réglages de PostgreSQL :
+--      après un « commit », un réglage posé par set_config(…, true) ne redevient pas
+--      ABSENT mais VIDE. Sur une connexion déjà employée — donc sur toute connexion
+--      rendue à un pool — un périmètre de lecture oublié se lit alors comme un périmètre
+--      vide : zéro ligne, silencieusement. Le garde bruyant de la LECTURE vaut donc sur
+--      une connexion neuve (et sur psql, et sur les scripts d'exploitation) ; celui de
+--      l'ÉCRITURE, lui, vaut TOUJOURS, y compris dans un pool — et c'est le cas dangereux,
+--      puisqu'une écriture sans filiale active n'a, elle, aucune interprétation légitime.
+--
 -- -------------------------------------------------------------------------------------
 -- CE QUE CE FICHIER NE PROTÈGE PAS, ET QUI DOIT ÊTRE DIT
 --
@@ -212,12 +221,9 @@ begin
         end if;
     end if;
 
-    if exists (select 1 from pg_roles where rolname = 'grc_lecture') then
-        -- Le rôle de supervision n'a que « select » (§14) : rien à retirer sur les
-        -- tables, mais le registre des migrations n'a pas à lui être fermé — il ne
-        -- contient aucune donnée métier et sert au diagnostic d'exploitation.
-        null;
-    end if;
+    -- grc_lecture n'est pas touché : il n'a que « select » (§14), et le registre des
+    -- migrations n'a aucune raison de lui être fermé — il ne contient pas de donnée
+    -- métier et sert au diagnostic d'exploitation.
 end;
 $$;
 
@@ -249,6 +255,13 @@ comment on table migrations_schema is
 --     Ce n'est pas une situation d'utilisateur, c'est un défaut de programmation : il
 --     doit être BRUYANT. Une liste vide rendue silencieusement enverrait chercher la
 --     cause partout sauf au bon endroit.
+--
+-- Portée exacte du garde, à ne pas surestimer : après un « commit », PostgreSQL rend le
+-- réglage local à sa valeur de session, qui est la chaîne VIDE et non l'absence. Sur une
+-- connexion déjà employée — donc sur toute connexion rendue à un pool — un périmètre
+-- oublié se lit comme un périmètre vide, et la lecture ne rend rien, en silence. Ce garde
+-- attrape donc à coup sûr le cas d'une connexion neuve, d'un script d'exploitation ou
+-- d'une session psql ; le garde qui vaut TOUJOURS est celui de l'écriture ci-dessous.
 -- -------------------------------------------------------------------------------------
 create or replace function f_filiales_lecture() returns text[]
     language plpgsql stable as
