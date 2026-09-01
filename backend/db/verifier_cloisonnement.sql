@@ -1783,6 +1783,15 @@ $$;
 -- lui-même (§17.5). La liste attendue est celle des tables de niveau Groupe et des tables
 -- de session ; toute autre table sans filiale_id qui viendrait s'y ajouter — comme
 -- import_erreurs le faisait — apparaît ici, sous les yeux de l'auditeur.
+--
+-- ⚠️ La liste est écrite DEUX FOIS ci-dessous — colonne « attendu », puis comparaison du
+-- « case when » — et les deux doivent bouger ensemble : n'en corriger qu'une rend le
+-- contrôle muet ou bruyant à tort. Elle est arbitrée au CONVENTIONS.md §24, qui explique
+-- pourquoi une énumération écrite à la main est ici le BON outil (§19.5 la proscrit
+-- partout ailleurs) : on ne cherche pas à énumérer, on cherche à obliger quelqu'un à
+-- trancher quand une table apparaît. Elle est reprise à l'identique dans
+-- test/base/rls.test.mjs, « la liste des tables NON cloisonnées est exactement celle qui
+-- est arbitrée ». controles_schema y est entrée avec la migration 005.
 do $$
 declare v_ligne jsonb;
 begin
@@ -1793,12 +1802,13 @@ begin
                           and not exists (select 1 from pg_attribute a where a.attrelid = c.oid
                                            and a.attname = 'filiale_id' and a.attnum > 0
                                            and not a.attisdropped))),
-               'filiales, mapping_exigences, mappings, migrations_schema, profil_domaines, '
-               'profils, session_domaines, sessions, utilisateurs',
+               'controles_schema, filiales, mapping_exigences, mappings, migrations_schema, '
+               'profil_domaines, profils, session_domaines, sessions, utilisateurs',
                coalesce(string_agg(t.nom, ', ' order by t.nom), '(aucune)'),
                case when coalesce(string_agg(t.nom, ', ' order by t.nom), '') =
-                         'filiales, mapping_exigences, mappings, migrations_schema, '
-                         'profil_domaines, profils, session_domaines, sessions, utilisateurs'
+                         'controles_schema, filiales, mapping_exigences, mappings, '
+                         'migrations_schema, profil_domaines, profils, session_domaines, '
+                         'sessions, utilisateurs'
                     then 'OK' else 'ÉCHEC' end)
       into v_ligne
       from (

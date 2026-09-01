@@ -253,20 +253,22 @@ catalogue PostgreSQL**, jamais recopié.
 `"<PRÉFIXE>-<horodatage>-<aléa>"` — la forme historique du produit, conservée.
 
 ⚠️ Ce qui est normatif est une **propriété, pas un encodage** : la part aléatoire
-porte **au moins 52 bits tirés d'un générateur cryptographique**. Le produit engendre
-des identifiants à **quatre endroits, dans trois langages**, et les formes diffèrent
-légitimement — imposer une forme unique obligerait le navigateur à appeler le serveur
-pour créer une ligne. Le tableau des quatre formes, le plancher et son contrôle sont
+porte **au moins 52 bits tirés d'un générateur cryptographique**. Le produit fabrique
+des identifiants à **cinq endroits, dans trois langages** — trois générateurs aléatoires,
+un par langage, et **deux dérivations qui ne tirent rien** —, et les formes diffèrent
+légitimement : imposer une forme unique obligerait le navigateur à appeler le serveur
+pour créer une ligne. Le tableau des cinq formes, le plancher et son contrôle sont
 dans **[`backend/db/CONVENTIONS.md`](../backend/db/CONVENTIONS.md) §2**, qui fait foi ;
 ils ne sont pas recopiés ici.
 
 > **Dette soldée.** Ce paragraphe a longtemps porté un avertissement — `Date.now()`
-> seul, sujet à collision. Il valait mieux que ce qu'on croyait : la part aléatoire
-> tenait sur **mille valeurs**, ce qui donne **24 collisions sur 250 tirages** dans une
-> même milliseconde, c'est-à-dire à l'échelle d'un import courant. Le défaut a produit
-> le seul constat bloquant d'un passage de la porte S2 — un import qui écrit 223 lignes
-> sur 250 **et annonce le succès**, donc un score de conformité faux dans un outil
-> destiné à servir de preuve en audit.
+> seul, sujet à collision. Le défaut était **pire** que l'avertissement ne le laissait
+> croire : la part aléatoire ne tenait que sur **mille valeurs**, et un import tire les
+> siennes dans la même milliseconde. Les mesures, consignées au
+> `backend/db/CONVENTIONS.md` §2 et dans le rapport de la porte S2 : **24 collisions sur
+> 250 tirages**, et un import qui écrit **223 lignes sur 250 en annonçant le succès** —
+> donc un score de conformité faux, dans un outil destiné à servir de preuve en audit.
+> Ce fut le seul constat bloquant d'un passage de porte du chantier.
 
 **Ce que les identifiants texte garantissent, et qui explique qu'on les ait gardés
 plutôt que de passer à des UUID ou des `serial` :** la reprise d'un export
@@ -275,14 +277,20 @@ quels les clés primaires, et les huit clés étrangères implicites du modèle 
 `risque_id`, `client_id`, `exigence_id`, `scenario_id`, `mesure_id`, `evaluation_id`,
 `incident_id`) continuent de pointer sans table de correspondance.
 
-**Une exception, et une seule** : quand l'identifiant d'un fichier est **déjà pris dans
-le domaine global par une ligne d'une filiale que l'appelant ne voit pas**, le serveur
-en retient un autre — **dérivé** d'une empreinte de `(filiale, table, identifiant du
-fichier)`, de la forme `<PRÉFIXE>-r-<empreinte>` — et **réécrit toutes les références**
-de la charge qui le visaient. La dérivation rend la reprise **idempotente** : trois
-reprises du même fichier convergent sur **une** ligne au lieu d'en cloner trois.
-L'absence d'horodatage dans cette forme est délibérée : un identifiant dérivé n'a pas
-d'instant de création, et y en laisser un crédible mentirait au lecteur du journal.
+**Deux exceptions, et elles se lisent dans l'identifiant lui-même.** Les deux sont des
+**dérivations** : rien n'y est tiré au hasard, et la marque qui remplace l'horodatage dit
+laquelle — un identifiant dérivé n'a pas d'instant de création, et y en laisser un
+crédible mentirait au lecteur du journal.
+
+| Marque | Ce qu'elle dit | Dérivée de |
+|---|---|---|
+| `<PRÉFIXE>-r-<empreinte>` | **le serveur a dû ré-émettre** : l'identifiant du fichier était déjà pris dans le domaine global par une ligne d'une filiale que l'appelant ne voit pas | `(filiale, table, identifiant du fichier)` |
+| `<PRÉFIXE>-d-<empreinte>` | **le fichier n'apportait pas d'identifiant** exploitable — cas des exports anciens | `(collection, rang, contenu)` |
+
+Dans le premier cas, le serveur **réécrit toutes les références** de la charge qui
+visaient l'identifiant remplacé. Les deux dérivations rendent la reprise
+**idempotente** : trois reprises du même fichier convergent sur **une** ligne au lieu
+d'en cloner trois.
 
 Le domaine `id_metier` reste **volontairement permissif** (texte non vide, ≤ 64
 caractères) : les exports anciens contiennent des identifiants sans suffixe aléatoire

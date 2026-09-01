@@ -548,10 +548,79 @@ const CONSEQUENCES = Object.freeze({
   unicite_cloisonnee:
     'une unicité sans filiale_id laisse une filiale occuper une valeur dans l\'espace ' +
     'd\'une autre, qui reçoit un doublon sur une ligne invisible (CONVENTIONS.md §19.1)',
+  // ⚠️ Ce contrôle rend désormais SIX anomalies, et non plus une seule : la fonction non
+  // conforme qu'il refusait de jouer, l'absence totale de contrôle découvert, et — depuis
+  // la migration 005 — la disparition, la re-signature et les deux défauts du registre
+  // lui-même. La conséquence énoncée ici doit donc valoir pour toutes : elle décrivait
+  // « une fonction porte le nom d'un garde-fou sans en avoir les propriétés », ce qui est
+  // devenu faux de « controle_disparu », « controle_resigne » et « registre_… ». Un
+  // message d'aide devenu faux envoie l'exploitant chercher au mauvais endroit — c'est
+  // exactement le reproche que le constat T-2 faisait à un remède qui rend fausse la
+  // phrase d'un autre fichier. La ligne de DÉTAIL rendue par la base, elle, reste exacte
+  // et nomme le cas précis ; celle-ci se borne à dire ce qui est en jeu.
   point_appel:
-    'une fonction porte le nom d\'un garde-fou sans en avoir les propriétés : elle n\'est ' +
-    'pas jouée, et sa présence est déjà l\'anomalie (CONVENTIONS.md §19.4)',
+    'le point d\'appel unique des garde-fous du schéma n\'est plus dans l\'état qu\'on lui ' +
+    'connaît : une fonction en porte le nom sans en avoir les propriétés, aucun contrôle ' +
+    'n\'est découvert, ou un contrôle observé à la dernière application a disparu, a été ' +
+    're-signé, ou son registre est absent ou vide. Dans tous les cas le silence du point ' +
+    'd\'appel cesse de prouver quoi que ce soit ; le détail ci-dessus nomme le cas ' +
+    '(CONVENTIONS.md §19.4, constats Q-1 et Q-5)',
 });
+
+/**
+ * Consigne les garde-fous découverts dans `controles_schema` — le filet de la migration
+ * qui oublierait de le faire elle-même.
+ *
+ * ── Pourquoi cet appel existe, et pourquoi il est ICI ────────────────────────────────
+ *
+ * Le constat **Q-5** : `f_verifier_schema()` DÉCOUVRE ses contrôles, ce qui supprime
+ * l'oubli à l'ajout — et l'introduit au retrait. Un garde-fou renommé, re-signé ou
+ * remplacé cessait d'être joué sans que rien ne le dise, et le déploiement annonçait
+ * « aucune anomalie » sur une base dont la Row Level Security était tombée. La parade est
+ * un registre de la DERNIÈRE OBSERVATION : un contrôle consigné puis absent de la
+ * découverte devient une anomalie.
+ *
+ * Chaque migration appelle déjà `f_consigner_controles_schema()` en fin de fichier. Cet
+ * appel-ci est le **filet pour celle qui l'oublierait** — et un oubli n'est pas
+ * hypothétique : c'est exactement ce que la découverte était censée rendre impossible,
+ * transposé d'un cran.
+ *
+ * ── Ses trois conditions, qui ne sont pas décoratives ────────────────────────────────
+ *
+ *  · **après une application réussie**, au moins une migration appliquée. Le chemin
+ *    « rien à appliquer » est celui de la ré-exécution d'`install.sh` : il doit
+ *    **comparer sans consigner**, sans quoi une disparition survenue entre deux
+ *    exécutions serait consignée comme l'état normal — le registre se réécrirait sur
+ *    le schéma saboté, et la comparaison ne prouverait plus rien ;
+ *  · **sous le compte propriétaire**, seul à détenir l'écriture sur le registre ;
+ *  · **hors de la transaction « read only »** de `verifierConformite()`, qui n'admet
+ *    aucune écriture — et donc jamais sous `--verifier`, dont c'est la promesse.
+ *
+ * L'appel n'interrompt pas le déploiement s'il échoue : les migrations sont déjà
+ * validées, rien ne serait annulé. Il est signalé, et la vérification qui suit dira ce
+ * que le registre vaut désormais — « registre_vide », « controle_disparu ». Le verdict
+ * appartient au garde-fou, pas à cet appel.
+ *
+ * @param {import('pg').Client} client connexion du propriétaire, hors transaction
+ * @param {number} appliquees nombre de migrations appliquées par cette exécution
+ */
+async function consignerLesControles(client, appliquees) {
+  if (appliquees === 0) return;
+  try {
+    const { rows } = await client.query('select garde_fou, mouvement from f_consigner_controles_schema()');
+    if (rows.length === 0) return; // Rien de neuf : les migrations l'avaient fait elles-mêmes.
+    journal.ligne(
+      `  registre des garde-fous : ${rows.map((l) => `${l.garde_fou} (${l.mouvement})`).join(', ')}`,
+    );
+  } catch (erreur) {
+    journal.alerte(
+      'Registre des garde-fous NON consigné : ' +
+        (erreur instanceof Error ? erreur.message : String(erreur)) +
+        '. La disparition d\'un contrôle ne serait plus détectée au déploiement suivant ' +
+        '(CONVENTIONS.md §19.4, constat Q-5). La vérification qui suit dit l\'état réel du registre.',
+    );
+  }
+}
 
 /**
  * Joue le point d'appel unique et rend ce qu'il dit, sans rien décider.
@@ -926,6 +995,13 @@ async function deroulement(client, migrations, options) {
     appliquees += 1;
     journal.ligne(`  ${remplir(migration.nom)} appliquée en ${dureeMs} ms`);
   }
+
+  // UN seul point d'appel, et il est ici plutôt qu'avant chacun des trois « return » qui
+  // suivent : les deux fins possibles d'une application — arrêt demandé (--jusqu-a) et
+  // schéma complet — passent par ce point et par lui seul. Recopier l'appel dans chaque
+  // branche serait la liste écrite à la main que ce chantier a payée quatre fois.
+  // Le mode --verifier ne passe jamais ici : il a rendu la main plus haut.
+  await consignerLesControles(client, appliquees);
 
   // Un arrêt volontaire (--jusqu-a) n'est pas un schéma « à jour » : le dire autrement
   // ferait croire l'exploitant complet alors qu'il ne l'est pas.

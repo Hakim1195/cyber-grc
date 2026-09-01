@@ -3711,6 +3711,13 @@ describe('Le garde-fou de couverture découvre son périmètre (CONVENTIONS §19
     // Constaté depuis le catalogue, sans passer par le garde-fou : celui-ci se
     // vérifierait lui-même (§17.5). Toute table sans filiale_id qui viendrait s'ajouter —
     // comme import_erreurs le faisait — fait tomber ce test, et c'est le but.
+    //
+    // ⚠️ Cette énumération est une liste ÉCRITE À LA MAIN, et c'est délibéré : le §19.5
+    // la proscrit partout ailleurs, le §24 la retient ici. La différence tient à ce
+    // qu'on cherche — on ne cherche pas à énumérer les tables, on cherche à obliger
+    // quelqu'un à TRANCHER quand il en apparaît une. Le geste attendu devant un rouge
+    // est donc d'écrire l'arbitrage au §24, puis d'ajouter la table ici et dans le
+    // contrôle C93 ; jamais d'assouplir la comparaison.
     const ouvertes = await base.lignes(
       proprietaire,
       `select c.relname as nom
@@ -3726,6 +3733,13 @@ describe('Le garde-fou de couverture découvre son périmètre (CONVENTIONS §19
         order by 1`,
     );
     assert.deepEqual(ouvertes.map((l) => l.nom), [
+      // Arrivée avec la migration 005, et elle a fait rougir ce test en arrivant —
+      // c'est son office (`CONVENTIONS.md` §24). Elle décrit le SCHÉMA et non les
+      // données : son contenu est identique dans toutes les filiales par
+      // construction, au même titre que `migrations_schema`. L'arbitrage est écrit
+      // au §24 ; il est repris à l'identique dans le contrôle C93 de
+      // `db/verifier_cloisonnement.sql`, et les deux doivent bouger ensemble.
+      'controles_schema',
       'filiales',
       'mapping_exigences',
       'mappings',

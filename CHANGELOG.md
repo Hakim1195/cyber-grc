@@ -72,15 +72,18 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   requête — « cet identifiant existe-t-il dans une filiale que je ne vois pas ? ». La
   reprise, elle, **conserve** les identifiants du fichier : c'est ce qui rend le round-trip
   exact, et c'est le seul chemin autorisé à les imposer.
-- **Quand un identifiant du fichier est déjà pris par une filiale invisible, le
-  remplacement est dérivé, pas tiré.** Le serveur retient
-  `<PRÉFIXE>-r-<empreinte de (filiale, table, identifiant du fichier)>` et réécrit les
-  références de la charge qui le visaient — références découvertes dans le graphe des
-  clés étrangères, pas énumérées. La reprise devient ainsi **idempotente** : trois
-  reprises du même fichier convergent sur **une** ligne au lieu d'en cloner trois. La
-  marque `-r-` tient lieu d'horodatage, et c'est délibéré : un identifiant dérivé n'a
-  pas d'instant de création, et y en laisser un crédible mentirait au lecteur du
-  journal (`backend/db/CONVENTIONS.md` §2).
+- **Deux dérivations d'identifiant, qui ne tirent rien, et dont la marque remplace
+  l'horodatage.** `<PRÉFIXE>-r-…` dit « **le serveur a dû ré-émettre** » : l'identifiant
+  du fichier était déjà pris dans le domaine global par une ligne d'une filiale que
+  l'appelant ne voit pas, et le serveur en dérive un autre de
+  `(filiale, table, identifiant du fichier)` **en réécrivant toutes les références** de la
+  charge qui le visaient — références découvertes dans le graphe des clés étrangères, pas
+  énumérées. `<PRÉFIXE>-d-…` dit « **le fichier n'apportait pas d'identifiant** » (cas des
+  exports anciens), et le dérive de `(collection, rang, contenu)`. Dans les deux cas la
+  reprise devient **idempotente** : trois reprises du même fichier convergent sur **une**
+  ligne au lieu d'en cloner trois. L'absence d'horodatage est délibérée — un identifiant
+  dérivé n'a pas d'instant de création, et y en laisser un crédible mentirait au lecteur
+  du journal (`backend/db/CONVENTIONS.md` §2).
 - **Une requête = une transaction**, périmètre RLS posé à l'ouverture et mort au `commit` ;
   les lectures s'ouvrent en `read only` — la base refuse alors toute écriture, ce qui vaut
   mieux qu'une convention de nommage.
@@ -169,7 +172,8 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   client dans le sélecteur de donneur d'ordre.
 - **Un import en lot n'écrit plus une partie de ses lignes en annonçant le succès.** La
   part aléatoire des identifiants valait **mille valeurs**, et un import tire les siens
-  dans la même milliseconde : 250 lignes annoncées, 223 écrites, aucun incident signalé —
+  dans la même milliseconde. Mesuré par l'auditeur et consigné au
+  `backend/db/CONVENTIONS.md` §2 : 250 lignes annoncées, 223 écrites, aucun incident signalé —
   et, sur le questionnaire AirCyber, un **score de conformité faux** dans un outil destiné
   à servir de preuve en audit. Deux barrières indépendantes : le générateur du navigateur
   passe à un compteur de session monotone plus 52 bits d'aléa cryptographique, celui de la
@@ -240,11 +244,13 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   lots L3, L4 et L6.
 - **Des constats restent ouverts**, dont des majeurs. Ils sont pour l'essentiel d'une
   seule famille, et elle mérite d'être nommée : **le produit engendre des identifiants à
-  quatre endroits, dans trois langages**, et le durcissement de l'un a laissé les autres
-  derrière — deux fois. C'est ce qui a fait réécrire le `backend/db/CONVENTIONS.md` §2,
-  qui norme désormais une **propriété** — un plancher de 52 bits tirés d'un générateur
-  cryptographique — au lieu de l'encodage d'une seule implémentation. Propriétaires et
-  échéances : registre des constats ouverts, `docs/PLAN_EXECUTION.md` §7.
+  cinq endroits, dans trois langages** — trois générateurs aléatoires et deux dérivations
+  qui ne tirent rien —, et le durcissement de l'un a laissé les autres derrière, deux
+  fois. C'est ce qui a fait réécrire le `backend/db/CONVENTIONS.md` §2 : il norme désormais
+  une **propriété** — un plancher de 52 bits tirés d'un générateur cryptographique — au
+  lieu de l'encodage d'une seule implémentation, et recense les cinq sites. Propriétaires,
+  échéances et **état** : registre des constats ouverts, `docs/PLAN_EXECUTION.md` §7 — un
+  constat n'en sort que **corrigé *et* rejoué** à la porte.
 - **Rien n'a pu être éprouvé en conditions réelles** pour l'installation Debian 13, le TLS
   et le mandataire inverse d'Apache, ClamAV, l'Active Directory ni le relais SMTP. Nuance :
   la **CSP et les en-têtes** du vhost, eux, l'ont été — extraits du fichier livré et

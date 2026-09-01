@@ -201,9 +201,13 @@ export class PerimetreProvisoire implements ResolveurPerimetre {
       // quel droit elle parle. Cette couche, c'est le résolveur de périmètre —
       // aujourd'hui provisoire, demain l'authentification du lot L3.
       //
-      // Aucune route ne le pose, et cela se vérifie en une commande —
-      // `grep -rn 'administrationGroupe: true' src/` ne rend rien. Le premier
-      // jet avait un `enAdministrationGroupe` qui l'accordait à la route de
+      // Aucune route ne le pose, et cela se vérifie en balayant `src/` à la
+      // recherche d'une affectation littérale de ce champ à vrai : il n'y en a
+      // aucune. (Le motif n'est pas recopié ici — l'écrire en toutes lettres
+      // ferait de ce commentaire la seule occurrence, et le balayage
+      // répondrait « trouvé » à qui vérifie qu'il ne trouve rien. La leçon est
+      // fraîche : je venais de l'appliquer ailleurs et je l'ai manquée ici.)
+      // Le premier jet avait un `enAdministrationGroupe` qui l'accordait à la route de
       // reprise ; la porte S2 a montré ce que cela coûtait, et il a été retiré
       // plutôt que corrigé : une route vérifie un droit, elle ne se l'accorde
       // pas. Il vaut donc

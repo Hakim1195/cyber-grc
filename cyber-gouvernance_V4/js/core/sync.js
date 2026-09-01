@@ -145,13 +145,63 @@ const Sync = (() => {
 
     function copie(o) { return JSON.parse(JSON.stringify(o)); }
 
-    // Texte canonique d'un enregistrement : clés triées, pour qu'un module qui
-    // reconstruit un objet dans un autre ordre ne passe pas pour une modification.
+    /**
+     * Texte canonique d'un enregistrement : clés triées, pour qu'un module qui
+     * reconstruit un objet dans un autre ordre ne passe pas pour une modification.
+     *
+     * ── Pourquoi cette fonction est écrite pour la vitesse (constat Q-8) ─────
+     *
+     * C'est le **seul** poste de dépense du différentiel : mesurée sur un jeu de
+     * 12 000 enregistrements (3,75 Mo), la canonisation prend 60 ms là où le
+     * reste du parcours — les présences, les identifiants, les `Map` — en prend
+     * 6. Tout gain se joue donc ici, et nulle part ailleurs.
+     *
+     * Le seul changement est de **mémoriser le texte JSON des NOMS de champs** :
+     * les mêmes vingt noms reviennent sur chaque enregistrement d'une
+     * collection, et `JSON.stringify("responsable")` les recalculait
+     * 12 000 fois. La **sortie est inchangée** — c'est une exigence, pas une
+     * intention : elle sert de témoin de modification, et un texte qui bougerait
+     * sans que la donnée bouge ferait réécrire toute la filiale au serveur.
+     * L'équivalence avec l'écriture précédente a été vérifiée sur le jeu réel,
+     * sur les formes tordues (tableau troué, `undefined`, `Date`, `NaN`,
+     * demi-substitut isolé, caractère de contrôle) et sur 200 000 structures
+     * tirées au hasard.
+     *
+     * Ce qui a été écarté, et pourquoi : comparer sans construire le texte (un
+     * appariement caractère par caractère contre le texte de référence) allait
+     * plus vite encore, mais c'est une **seconde écriture de la même grammaire**
+     * — et une divergence entre les deux ne se voit pas : elle se lit
+     * « inchangé », c'est-à-dire une saisie perdue en silence. Sur une couche de
+     * persistance, ce prix ne se paie pas pour 20 ms.
+     */
+    const clesCanoniques = new Map();
+    const CLES_CANONIQUES_MAX = 512;   // borne : un champ JSONB à clés variables ne doit pas la faire enfler
+
+    function cleCanonique(nom) {
+        let texte = clesCanoniques.get(nom);
+        if (texte !== undefined) return texte;
+        texte = JSON.stringify(nom);
+        if (clesCanoniques.size < CLES_CANONIQUES_MAX) clesCanoniques.set(nom, texte);
+        return texte;
+    }
+
     function canonique(valeur) {
         if (valeur === null || typeof valeur !== "object") return JSON.stringify(valeur === undefined ? null : valeur);
+        // `map` (et non une boucle) : il préserve les trous d'un tableau creux,
+        // que `join` rend alors par une chaîne vide — une boucle les rendrait
+        // par `null`. Le cas est improbable, la divergence ne le serait pas.
         if (Array.isArray(valeur)) return "[" + valeur.map(canonique).join(",") + "]";
-        const cles = Object.keys(valeur).filter(k => valeur[k] !== undefined).sort();
-        return "{" + cles.map(k => JSON.stringify(k) + ":" + canonique(valeur[k])).join(",") + "}";
+        const cles = Object.keys(valeur).sort();
+        let texte = "{";
+        let premier = true;
+        for (let i = 0; i < cles.length; i++) {
+            const k = cles[i];
+            const v = valeur[k];
+            if (v === undefined) continue;   // `filter` d'origine, sans le tableau intermédiaire
+            texte += (premier ? "" : ",") + cleCanonique(k) + ":" + canonique(v);
+            premier = false;
+        }
+        return texte + "}";
     }
 
     function donnees() { return source ? source.lire() : null; }

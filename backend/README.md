@@ -199,7 +199,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3001/api/session
 
 | Réponse | Ce que cela veut dire |
 |---|---|
-| `503` | trois causes, que **seul le journal technique distingue** — la réponse au client, elle, reste générique : (a) refus **fail-closed**, `NODE_ENV` n'est pas `developpement` (attendu en production **et en recette**, §7) ; (b) aucune filiale active en base — créez-en une avant la mise en service ; (c) `API_FILIALE_PROVISOIRE` désigne une filiale inexistante ou inactive |
+| `503` | trois causes. (a) Refus **fail-closed** : `NODE_ENV` n'est pas `developpement` — attendu en production **et en recette** (§7). Le message rendu est volontairement générique (« l'authentification n'est pas encore installée… ») ; **le motif exact part au journal technique**, jamais au client. (b) Aucune filiale active en base : créez-en une avant la mise en service. (c) `API_FILIALE_PROVISOIRE` désigne une filiale inexistante ou inactive — ce cas-là le dit, et le journal donne les codes disponibles |
 | `200` | le périmètre est résolu ; l'application peut charger `/api/donnees` |
 
 ```bash
@@ -568,13 +568,18 @@ dans [`../docs/securite/`](../docs/securite/). Reproduits mot pour mot :
 | **S2** (4ᵉ passage) | ✅ **FRANCHIE** — 0 bloquant, 4 majeurs, 7 mineurs, **aucun des dix-huit contrôles en échec** | [`RAPPORT_S2_QUATER.md`](../docs/securite/RAPPORT_S2_QUATER.md) |
 
 **Franchie ne veut pas dire sans réserve.** Les constats de S2 sont ouverts,
-chacun avec un **propriétaire nommé et une échéance**, dans le **registre des
+chacun avec un **propriétaire nommé, une échéance et un état**, dans le **registre des
 constats ouverts** du [plan d'exécution](../docs/PLAN_EXECUTION.md) §7. Ce registre
 n'est ni recopié ni résumé ici — pas même par un décompte : il vit, des constats s'y
 ajoutent et s'y ferment, et deux listes des mêmes constats divergent en silence. Il
 existe précisément parce que la vague 1 avait mesuré, chiffré et écrit un défaut de
 générateur d'identifiants **sans l'attribuer à personne** — il est ressorti deux
 vagues plus tard en **bloquant**.
+
+⚠️ **Lire la colonne d'état, et pas seulement la présence dans le tableau.** Un constat
+n'en sort que **corrigé *et* rejoué** — la porte est rejouée intégralement, jamais
+seulement sur le correctif. « Corrigé, en attente du rejeu » n'est donc pas « réglé »,
+et c'est délibérément que les deux ne se confondent pas.
 
 ### Fait et vérifié en exécution
 
@@ -672,12 +677,13 @@ une erreur de lecture : ils décrivent un chantier en cours.
   rattrapée par la relecture : elle **empêche le service de démarrer**, exactement comme
   `f_verifier_schema()` empêche une migration d'aboutir côté base.
 
-  ⚠️ **Ce contrôle ne couvre que le générateur du serveur.** Le produit en compte
-  quatre, dans trois langages (`db/CONVENTIONS.md` §2) : celui de la base a le sien dans
-  `f_verifier_schema()`, celui du navigateur n'en a pas encore. Ne pas lire cette ligne
-  comme une couverture des quatre sites — c'est exactement l'erreur qui a produit le
-  constat le plus coûteux de la vague : un générateur durci, gardé et démontré qui
-  n'était pas celui qui écrivait.
+  ⚠️ **Ce contrôle ne couvre que le générateur du serveur.** Le produit fabrique des
+  identifiants à **cinq endroits, dans trois langages** — trois générateurs aléatoires et
+  deux dérivations qui ne tirent rien (`db/CONVENTIONS.md` §2, qui fait foi). Celui de la
+  base a son propre garde-fou dans `f_verifier_schema()` ; celui du navigateur n'en a pas
+  encore. Ne pas lire cette ligne comme une couverture des cinq sites — c'est exactement
+  l'erreur qui a produit le constat le plus coûteux de la vague : un générateur durci,
+  gardé et démontré qui n'était pas celui qui écrivait.
 - **Une requête = une transaction**, avec le périmètre RLS posé à l'ouverture et
   mort au `commit` ; les lectures s'ouvrent en `read only`, ce qui vaut mieux qu'une
   convention de nommage. Les opérations composites (propagation, reprise) tiennent
@@ -791,7 +797,12 @@ Ce que la reprise fait, quand on la rejoue :
   la reprise devient **idempotente** — trois reprises du même fichier convergent sur
   **une** ligne au lieu d'en cloner trois —, et l'absence d'horodatage est délibérée :
   un identifiant dérivé n'a pas d'instant de création, et y en laisser un crédible
-  mentirait au lecteur du journal (`db/CONVENTIONS.md` §2) ;
+  mentirait au lecteur du journal ;
+- **une seconde marque, `-d-`, dit autre chose** : « le fichier n'apportait pas
+  d'identifiant ». Un enregistrement qu'un export ancien livre sans identifiant
+  exploitable en reçoit un, dérivé de `(collection, rang, contenu)`. Les deux marques se
+  lisent au journal et ne se confondent pas — `-r-` : « le serveur a dû ré-émettre » ;
+  `-d-` : « il n'y avait rien à reprendre » (`db/CONVENTIONS.md` §2) ;
 - un identifiant **répété dans le fichier** est **refusé** (`400`), avec le nom du
   doublon, et rien n'est modifié : le fichier est fautif, et son porteur peut le voir ;
 - l'empreinte SHA-256 du fichier est écrite dans `imports.sha256` ;
@@ -880,14 +891,20 @@ Ce que la reprise fait, quand on la rejoue :
   majeurs. Ils ont chacun un propriétaire et une échéance dans le **registre des
   constats ouverts** du [plan d'exécution](../docs/PLAN_EXECUTION.md) §7 : c'est la
   seule liste, volontairement, et c'est là qu'il faut aller avant de conclure quoi
-  que ce soit. Deux familles touchent directement ce document, et il vaut mieux les
-  connaître avant de lire les chiffres ci-dessus comme un acquis définitif :
-  **les générateurs d'identifiants** — le produit en compte quatre, dans trois
-  langages, et le durcissement de l'un a deux fois laissé les autres derrière
-  (`CONVENTIONS.md` §2) — et **la portée des garde-fous** : `f_verifier_schema()` ne
-  refuse que s'il ne découvre **aucun** contrôle, si bien qu'un garde-fou qui cesse
-  d'être découvert disparaîtrait en silence. Ce qui est écrit ci-dessus décrit l'état
-  **présent**, pas l'état visé.
+  que ce soit. Une famille de constats domine, et il vaut mieux la connaître avant de
+  lire les chiffres ci-dessus comme un acquis : **les générateurs d'identifiants**. Le
+  produit en fabrique à **cinq endroits, dans trois langages** — trois générateurs
+  aléatoires et deux dérivations qui ne tirent rien (`CONVENTIONS.md` §2) — et le
+  durcissement de l'un a **deux fois** laissé les autres derrière. Ce qui est écrit
+  ci-dessus décrit l'état **présent**, pas l'état visé.
+- **Un garde-fou qui cesse d'être découvert ne disparaît plus en silence.**
+  `f_verifier_schema()` ne refusait que s'il ne découvrait **aucun** contrôle : une
+  migration qui renomme ou re-signe une fonction en aurait effacé un sans un mot. La
+  table `controles_schema` (migration `005_controles_schema.sql`) tient désormais le
+  **registre nominatif** des garde-fous branchés, et `f_verifier_schema()` **compare** ce
+  qu'elle découvre à ce registre. Retirer un contrôle devient un geste explicite —
+  `select f_retirer_controle_schema('f_verifier_<x>', '<motif>')`, dans la migration qui
+  le retire — au lieu d'une omission silencieuse.
 - Les vérifications ont été menées sur **PostgreSQL 16.13**, alors que la cible du
   déploiement est **PostgreSQL 17** (dépôt PGDG, `install.sh`). Aucune fonctionnalité
   postérieure à 16 n'est employée, mais l'écart reste à éprouver sur la VM cible.

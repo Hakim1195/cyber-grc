@@ -136,11 +136,13 @@ cyber-gouvernance_V4/
   `js/services/importExcel.js`) se contentent de lui déléguer, avec un repli défensif si
   `UI` n'est pas chargé. Forme `"<PRÉFIXE>-<horodatage>-<aléa>"` ; **ce qui est normatif
   est une propriété, pas un encodage** : au moins 52 bits tirés d'un générateur
-  cryptographique (`backend/db/CONVENTIONS.md` §2, qui fait foi). **Ne jamais recopier la
-  convention dans une fonction locale** : le produit en a compté quatre implémentations
-  indépendantes, dans trois langages, et le durcissement de l'une a laissé les autres
-  derrière — deux fois. L'une de ces omissions a coûté le seul constat bloquant d'un
-  passage de porte : un import qui écrivait 223 lignes sur 250 *et annonçait le succès*.
+  cryptographique (`backend/db/CONVENTIONS.md` §2, qui fait foi — il recense les **cinq**
+  endroits où le produit fabrique un identifiant : trois générateurs aléatoires et deux
+  dérivations qui ne tirent rien). **Ne jamais recopier la convention dans une fonction
+  locale** : le durcissement de l'un de ces générateurs a laissé les autres derrière —
+  deux fois. L'une de ces omissions a coûté le seul constat bloquant d'un
+  passage de porte — un import qui écrivait *223 lignes sur 250 en annonçant le succès*,
+  chiffre mesuré par l'auditeur et consigné au `backend/db/CONVENTIONS.md` §2.
 
 ## 4. Persistance & modèle de données (résumé — détail dans DATA_MODEL.md)
 
@@ -501,8 +503,8 @@ sur l'**Active Directory** du groupe.
 - **Identifiants texte conservés** (`"RISK-<ts>-<alea>"`), pas d'UUID : c'est ce qui
   rend l'import d'un export `grc-backup` exact au round-trip. Ce qui est normatif est
   une **propriété** — au moins 52 bits d'aléa cryptographique —, pas une forme unique :
-  le produit engendre des identifiants à quatre endroits, dans trois langages
-  (`CONVENTIONS.md` §2). **Un seul générateur par langage**, jamais de clone local.
+  le produit en fabrique à **cinq endroits, dans trois langages** (`CONVENTIONS.md` §2).
+  **Un seul générateur aléatoire par langage**, jamais de clone local.
 - **Le périmètre de session vient du serveur**, jamais d'une valeur transmise par le
   navigateur. Tenu par la **forme** : `resoudre()` ne prend aucun argument, et
   `js/core/api.js` n'expose aucun paramètre de filiale. Les clés `cyber-context` et
@@ -550,9 +552,11 @@ rapport correspondant dans `docs/securite/` — c'est la source, et la seule. Au
 évite de rouvrir ce qui vient d'être fermé.
 
 **Franchie ne veut pas dire sans réserve.** Les constats restants vivent dans le
-**registre des constats ouverts** du même §7, chacun avec un **propriétaire nommé et une
-échéance**. Ce registre n'est ni recopié ni résumé ici — deux listes des mêmes constats
-divergent, et la divergence est silencieuse. Il existe parce que la vague 1 avait mesuré,
+**registre des constats ouverts** du même §7, chacun avec un **propriétaire nommé, une
+échéance et un état**. Ce registre n'est ni recopié ni résumé ici — deux listes des mêmes
+constats divergent, et la divergence est silencieuse. Y lire la **colonne d'état** :
+un constat n'en sort que **corrigé *et* rejoué** à la porte, si bien que « corrigé, en
+attente du rejeu » n'est pas « réglé ». Il existe parce que la vague 1 avait mesuré,
 chiffré et écrit un défaut de générateur d'identifiants **sans l'attribuer à personne** :
 il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écrivait 223
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
