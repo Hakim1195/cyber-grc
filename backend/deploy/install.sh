@@ -1598,12 +1598,86 @@ else
     succes "configuration Apache valide, vhost cyber-grc compris ($("$APACHECTL" -v 2>/dev/null | head -n1 || echo 'version inconnue'))"
   else
     succes "configuration Apache valide"
-    alerte "…mais le vhost cyber-grc n'est PAS activé : « configtest » ne l'a donc PAS lu."
-    alerte "Cette vérification ne dit encore rien de lui. Activez-le, puis re-vérifiez :"
+    alerte "…mais le vhost cyber-grc n'est PAS activé : « configtest » ne l'a donc PAS lu,"
+    alerte "et le contrôle de bout en bout ci-dessous n'a pas pu être joué. Activez-le :"
     alerte "  a2ensite cyber-grc && $APACHECTL configtest && systemctl reload apache2"
-    alerte "Enfin, éprouvez la liste blanche de Q-31 sur le service en marche :"
-    alerte "  curl -o /dev/null -w '%{http_code}' https://<hôte>/index.html   → 200 attendu"
-    alerte "  curl -o /dev/null -w '%{http_code}' https://<hôte>/essai.xlsx   → 403 attendu"
+    alerte "puis RELANCEZ ce script : il éprouvera alors l'URL d'entrée lui-même."
+  fi
+
+  # ══ L'URL D'ENTRÉE RÉPOND-ELLE ? (constat Q-36) ════════════════════════
+  #
+  # ── Pourquoi ce contrôle existe, et pourquoi il interroge « / » ────────
+  #
+  # Ce bloc prescrivait « curl https://<hôte>/index.html → 200 attendu ». La
+  # prescription était juste, et elle a MENTI : la liste blanche du constat
+  # Q-31 refusait « / » — l'URL par laquelle tout le monde entre — pendant que
+  # « /index.html » rendait 200. Une requête de répertoire est résolue vers un
+  # chemin terminé par « / », dont le dernier composant est vide, et le motif à
+  # négation du <FilesMatch> était vrai sur cette chaîne vide. Mesuré :
+  # http://hôte → 308 → https://hôte/ → **403**, application injoignable, et le
+  # contrôle prescrit au vert. Un contrôle vide pris pour un contrôle réussi,
+  # pour la seconde fois dans ce fichier.
+  #
+  # D'où deux changements, et le second compte plus que le premier :
+  #  1. on interroge « / », l'URL d'entrée, et non « /index.html » ;
+  #  2. on ne le PRESCRIT plus, on le FAIT. Une consigne écrite dans une alerte
+  #     est une réserve ; ce chantier vient d'apprendre qu'une réserve écrite
+  #     n'est pas une réserve traitée.
+  #
+  # `-k` : on éprouve le ROUTAGE et l'AUTORISATION, pas la confiance TLS — le
+  # certificat vient de la PKI interne et n'a aucune raison d'être approuvé sur
+  # la machine elle-même. `--resolve` force le test sur CE serveur, quel que
+  # soit ce que le DNS raconte.
+  if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
+    NOM_SERVEUR="$(sed -n 's/^[[:space:]]*ServerName[[:space:]]\{1,\}//p' \
+                   /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null | head -n1 || true)"
+    if [[ -z "$NOM_SERVEUR" ]]; then
+      alerte "le vhost ne déclare aucun ServerName : l'URL d'entrée n'a pas pu être éprouvée."
+    else
+      # `--noproxy '*'` : la cible est cette machine, imposée par `--resolve`. Un
+      # mandataire déclaré dans l'environnement (http_proxy, courant sur un
+      # réseau d'entreprise) détournerait la sonde et la ferait échouer sur un
+      # service parfaitement sain — c'est ce qui est arrivé au banc.
+      # `|| true` sans `echo` de repli : curl rend DÉJÀ « 000 » sur son %{http_code}
+      # quand la connexion échoue, et un repli en ajoutait un second (« 000000 »),
+      # que les comparaisons n'auraient reconnu ni comme un succès ni comme le
+      # 000 documenté dans le message d'échec.
+      sonder() {  # <chemin> [--chaine] → code HTTP, ou 000 si rien ne répond
+        local code
+        if [[ "${2:-}" == --chaine ]]; then
+          code="$(curl -sk -L --max-time 15 --noproxy '*' \
+                       --resolve "$NOM_SERVEUR:80:127.0.0.1" \
+                       --resolve "$NOM_SERVEUR:443:127.0.0.1" \
+                       -o /dev/null -w '%{http_code}' "http://$NOM_SERVEUR$1" 2>/dev/null || true)"
+        else
+          code="$(curl -sk --max-time 15 --noproxy '*' \
+                       --resolve "$NOM_SERVEUR:443:127.0.0.1" \
+                       -o /dev/null -w '%{http_code}' "https://$NOM_SERVEUR$1" 2>/dev/null || true)"
+        fi
+        printf '%s' "${code:-000}"
+      }
+      CODE_ENTREE="$(sonder / --chaine)"
+      CODE_RACINE="$(sonder /)"
+      CODE_INTERDIT="$(sonder /verification-liste-blanche-q31.xlsx)"
+
+      if [[ "$CODE_ENTREE" != 200 || "$CODE_RACINE" != 200 ]]; then
+        alerte "URL d'entrée   http://$NOM_SERVEUR/  (redirection suivie) -> $CODE_ENTREE"
+        alerte "racine HTTPS   https://$NOM_SERVEUR/                      -> $CODE_RACINE"
+        echec "l'application ne répond pas à son URL d'entrée (constat Q-36). Un 403 ici avec
+          un /index.html qui répond 200 désigne le <FilesMatch> en liste blanche de
+          deploy/apache/cyber-grc.conf : son motif doit exempter le nom VIDE — « (?!\$) » —
+          faute de quoi il refuse le répertoire avant que DirectoryIndex n'ait résolu
+          index.html. Un 000 signifie qu'Apache ne répond pas du tout : $APACHECTL configtest,
+          puis journalctl -u apache2. Le journal du vhost nomme le chemin refusé."
+      elif [[ "$CODE_INTERDIT" != 403 ]]; then
+        echec "un fichier non publiable obtient $CODE_INTERDIT au lieu de 403 (constat Q-31) :
+          la liste blanche du vhost ne protège plus rien, et des données déposées dans la
+          racine web seraient servies sans authentification. Voir le <FilesMatch> de
+          deploy/apache/cyber-grc.conf."
+      else
+        succes "URL d'entrée servie (200 après redirection), fichier non publiable refusé (403)"
+      fi
+    fi
   fi
 fi
 # <<< banc: configtest >>>
