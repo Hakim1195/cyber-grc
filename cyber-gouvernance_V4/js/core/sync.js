@@ -415,6 +415,102 @@ const Sync = (() => {
                 history.replaceState(null, "", location.hash.split(ancien).join(nouveau));
             }
         } catch (e) { /* pas de fenêtre : rien à recaler */ }
+
+        // …et le BALISAGE DÉJÀ RENDU, qui porte lui aussi l'ancien identifiant.
+        recalerBalisage(ancien, nouveau);
+    }
+
+    /**
+     * Recale le document sur le nouvel identifiant — constat **N-3** de la porte
+     * S2 (2ᵉ passage), et contrôle **S18** de la grille.
+     *
+     * ── Le défaut, tel qu'il se produisait ───────────────────────────────────
+     *
+     * Un module crée un enregistrement puis retourne à sa liste ; la liste est
+     * rendue **immédiatement**, avec l'identifiant local, et le cycle d'écriture
+     * ne part que 400 ms plus tard. `renommer()` réécrit alors la mémoire à la
+     * perfection — et ne peut rien pour le DOM déjà écrit. La ligne affichée
+     * garde une clé périmée : le clic ne mène nulle part, et « Supprimer
+     * sélection » **confirme une suppression qui n'a pas lieu**, parce que
+     * `deleteRisque(<clé périmée>)` filtre un tableau sans rien trouver. Un geste
+     * qui ne fait rien tout en disant qu'il a fait quelque chose est pire qu'un
+     * geste qui échoue : c'est la famille du constat B-2, réintroduite par le
+     * remède de M-3.
+     *
+     * ── Pourquoi recaler le balisage plutôt que réafficher la vue ────────────
+     *
+     * Les deux réponses étaient possibles. Celle-ci a été retenue sur constat,
+     * pas par préférence : depuis que les gestionnaires en ligne ont été
+     * convertis, **toutes les listes lisent l'identifiant au moment du clic**,
+     * dans un attribut (`row.onclick = () => Router.navigateTo('/actifs/' +
+     * row.dataset.id)`) — vérifié sur les 26 modules. Les trois seuls
+     * gestionnaires qui n'y recourent pas capturent l'OBJET, pas la chaîne
+     * (`risque.id`, `exigence.id`, `n.id`), et lisent donc la valeur renommée.
+     * Recaler les attributs est par conséquent **suffisant**, et cela préserve ce
+     * qu'un réaffichage détruirait : une sélection en cours, un panneau déplié,
+     * un formulaire à demi rempli.
+     *
+     * ── Et pour que cela ne s'oublie pas au prochain module ─────────────────
+     *
+     * La reprise ne connaît **ni les noms d'attributs ni les modules** : elle
+     * réécrit toute valeur d'attribut égale à l'ancien identifiant, plus les
+     * `href` qui le contiennent. Un module neuf en bénéficie sans rien déclarer.
+     * Et si, malgré cela, une trace périmée subsiste dans `#app`, le
+     * réaffichage prend le relais — c'est le filet, pas la règle.
+     *
+     * Le filet MORD : réécriture neutralisée, il rattrape à lui seul le clic et
+     * la suppression groupée. Mais il ne suffirait pas : il ramène l'écran là où
+     * pointe l'adresse, et vole donc une navigation en cours — mesuré sur le
+     * module Incidents, qui ouvre une fiche après création.
+     *
+     * Coût mesuré du balayage : **~1 ms** sur un registre de 400 lignes
+     * (2 671 éléments), une fois par enregistrement créé. Le document entier est
+     * balayé plutôt que le seul `#app` : 0,35 ms de plus, contre l'hypothèse que
+     * tout module rendrait à l'intérieur de `#app`.
+     */
+    function recalerBalisage(ancien, nouveau) {
+        if (typeof document === "undefined") return 0;
+        let touches = 0;
+        try {
+            const elements = document.querySelectorAll("*");
+            for (let i = 0; i < elements.length; i++) {
+                const el = elements[i];
+                const attributs = el.attributes;
+                for (let j = 0; j < attributs.length; j++) {
+                    const nom = attributs[j].name;
+                    const valeur = attributs[j].value;
+                    if (valeur === ancien) { el.setAttribute(nom, nouveau); touches++; }
+                    else if (nom === "href" && valeur.indexOf(ancien) !== -1) {
+                        el.setAttribute("href", valeur.split(ancien).join(nouveau));
+                        touches++;
+                    }
+                }
+                // Une case cochée ou une liste déroulante porte sa valeur en
+                // PROPRIÉTÉ autant qu'en attribut : les deux doivent suivre.
+                if (typeof el.value === "string" && el.value === ancien) { el.value = nouveau; touches++; }
+            }
+        } catch (e) {
+            console.error("Recalage du balisage impossible", e);
+        }
+
+        // Filet : s'il reste une trace de l'ancien identifiant dans la vue, on
+        // réaffiche — sans jamais voler un formulaire en cours de saisie.
+        if (traceResiduelle(ancien)) reafficher(false);
+        return touches;
+    }
+
+    // Vrai si un attribut de la vue porte encore l'ancien identifiant.
+    function traceResiduelle(ancien) {
+        const zone = document.getElementById("app");
+        if (!zone) return false;
+        const elements = zone.querySelectorAll("*");
+        for (let i = 0; i < elements.length; i++) {
+            const attributs = elements[i].attributes;
+            for (let j = 0; j < attributs.length; j++) {
+                if (attributs[j].value.indexOf(ancien) !== -1) return true;
+            }
+        }
+        return false;
     }
 
     /**
