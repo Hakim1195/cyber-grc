@@ -32,6 +32,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { createHash, randomBytes } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -42,6 +43,7 @@ const {
   engendrerIdentifiant,
   estIdentifiantDerive,
   identifiantDerive,
+  mesurerBitsParPosition,
   verifierGenerateurIdentifiants,
 } = await moduleCompile('entites/index.js');
 
@@ -232,6 +234,253 @@ describe('Le contrôle du générateur est branché sur le démarrage', () => {
       appelants.filter((c) => !c.endsWith('entites/index.ts')),
       ['src/api/index.ts'],
       `Le garde-fou doit avoir UN seul appelant : ${appelants.join(', ')}`,
+    );
+  });
+});
+
+/* =====================================================================
+ *  §4 — Le garde-fou d'entropie, interrogé DANS LE SENS OÙ IL PARLE
+ * =====================================================================
+ *
+ *  Constat **Q-26** : ce contrôle mesurait une LONGUEUR là où la convention
+ *  norme une ENTROPIE. `alea.length × log2(36)` vaut 129,2 quel que soit le
+ *  contenu — un remplissage de vingt-quatre zéros suivi d'un signe le
+ *  satisfaisait aussi bien que cent vingt-huit bits tirés au sort.
+ *
+ *  Le remède mesure position par position. Et il a apporté ce qui manquait
+ *  encore plus : le contrôle prend désormais **son générateur en paramètre**.
+ *  Avant cette couture, éprouver un refus exigeait de recopier `dist/` et d'y
+ *  réécrire une constante — assez pénible pour n'être jamais refait, et c'est
+ *  précisément pour cela que la version précédente a survécu un lot entier en
+ *  étant vide. C'est la leçon d'`exigerSilence` portée au code de production :
+ *  rendre le mécanisme interrogeable dans le sens où il parle.
+ * ===================================================================== */
+
+describe('La mesure d’entropie mesure une ENTROPIE (constat Q-26)', () => {
+  /** L'alphabet du suffixe, tel que `enBase36` le produit. */
+  const SIGNES = '0123456789abcdefghijklmnopqrstuvwxyz';
+  const LONGUEUR = 25;
+
+  /** 512 parts aléatoires réelles, prélevées comme le contrôle le fait. */
+  function aleasReels(combien = 512) {
+    return Array.from({ length: combien }, () => engendrerIdentifiant('CTRL').split('-')[2]);
+  }
+
+  test('LA MESURE EST JUSTE : 128,08 bits sur les sorties réelles', async () => {
+    // ── Pourquoi figer un NOMBRE, et pas seulement un seuil ─────────────────
+    //
+    // Un seuil dit « au-dessus de la barre ». Ce nombre-ci dit « la mesure lit
+    // toujours le bon objet » : s'il dérive, c'est que l'échantillon, l'alphabet
+    // ou la position lue ont changé — bien avant qu'un plancher ne bouge. C'est
+    // le contrôle qui détecte qu'on a cessé de lire la source.
+    //
+    // 128,08 et non 128,00 : la première position ne prend que 16 valeurs, parce
+    // que `enBase36` rend un nombre de 128 bits sur 25 signes et que le signe de
+    // tête est borné. Les 24 autres prennent les 36. Le majorant vaut donc
+    // log2(16) + 24 × log2(36) ≈ 128,08.
+    const mesure = mesurerBitsParPosition(aleasReels());
+
+    assert.equal(mesure.longueur, LONGUEUR, 'La part aléatoire fait 25 signes.');
+    assert.ok(
+      Math.abs(mesure.bits - 128.08) <= 0.2,
+      `La mesure rend ${mesure.bits.toFixed(3)} bits au lieu de 128,08 ± 0,2. Un nombre qui ` +
+        'dérive dit que la mesure ne mesure plus le même objet, avant même qu’un seuil ne bouge. ' +
+        `Symboles par position : ${mesure.symbolesParPosition.join(',')}`,
+    );
+
+    // ── Et ce n'est PAS la longueur ─────────────────────────────────────────
+    // Le nombre que rendait la version fautive, sur les mêmes données.
+    assert.ok(
+      Math.abs(mesure.bits - LONGUEUR * Math.log2(36)) > 1,
+      `La mesure rend exactement « longueur × log2(36) » (${(LONGUEUR * Math.log2(36)).toFixed(3)}) : ` +
+        'c’est la régression du constat Q-26, et elle est indétectable par un seuil.',
+    );
+  });
+
+  test('UN REMPLISSAGE a la bonne longueur et presque aucun bit', async () => {
+    // Le contre-exemple qui a donné son nom au constat : 24 zéros et un signe
+    // qui varie. Vingt-cinq signes, alphabet conforme — et rien dedans.
+    const bourrage = Array.from({ length: 512 }, (_, i) => `${'0'.repeat(24)}${SIGNES[i % 36]}`);
+    const mesure = mesurerBitsParPosition(bourrage);
+
+    assert.equal(mesure.longueur, LONGUEUR, 'Le remplissage a bien la LONGUEUR attendue…');
+    assert.ok(
+      mesure.bits < 52,
+      `…et il doit être vu pour ce qu'il est : ${mesure.bits.toFixed(2)} bits, sous le plancher ` +
+        'normé. Une chaîne longue n’est pas une chaîne aléatoire.',
+    );
+
+    // Contrôle symétrique : sur les vraies sorties, la même fonction rend 128.
+    assert.ok(
+      mesurerBitsParPosition(aleasReels()).bits > 120,
+      'Sans quoi cette fonction serait satisfaite par une mesure qui rend toujours zéro.',
+    );
+  });
+});
+
+describe('Les deux planchers du garde-fou, et le canari (constats Q-1, Q-26)', () => {
+  const SIGNES = '0123456789abcdefghijklmnopqrstuvwxyz';
+
+  /**
+   * Un générateur de la BONNE forme dont la part aléatoire ne porte que
+   * `signes` signes réellement tirés, le reste étant du remplissage.
+   */
+  function generateurRemplissage(signes) {
+    return (prefixe) => {
+      let variable = '';
+      for (let i = 0; i < signes; i += 1) variable += SIGNES[randomBytes(1)[0] % 36];
+      return `${prefixe}-${String(Date.now())}-${'0'.repeat(25 - signes)}${variable}`;
+    };
+  }
+
+  /** Les anomalies rendues, étiquetées par la famille à laquelle elles appartiennent. */
+  function familles(anomalies) {
+    return anomalies.map((texte) =>
+      /plancher NORMÉ/.test(texte) ? 'norme'
+        : /plancher propre/.test(texte) ? 'propre'
+          : /suffixes distincts/.test(texte) ? 'collision'
+            : /la forme/.test(texte) ? 'forme'
+              : 'inconnue');
+  }
+
+  test('SOUS LE PLANCHER NORMÉ : le refus cite la norme, et le §2', async () => {
+    // Neuf signes ≈ 46,5 bits : sous les 52 que le CONVENTIONS.md §2 impose à
+    // TOUS les générateurs du produit.
+    const anomalies = verifierGenerateurIdentifiants(generateurRemplissage(9));
+    assert.deepEqual(familles(anomalies), ['norme'], JSON.stringify(anomalies).slice(0, 400));
+    assert.match(anomalies[0], /CONVENTIONS\.md §2/, 'Le refus doit renvoyer à la règle qu’il applique.');
+    assert.match(
+      anomalies[0],
+      /46[.,]\d|4\d[.,]\d bits/,
+      `Et DIRE ce qu'il a mesuré : ${anomalies[0]}`,
+    );
+
+    // Contrôle symétrique : le générateur réel ne déclenche rien.
+    assert.deepEqual(verifierGenerateurIdentifiants(), []);
+  });
+
+  test('LES DEUX PLANCHERS SONT DISTINCTS : 46 bits et 57 bits ne rendent pas le même verdict', async () => {
+    // ── Pourquoi ce couple, et pas deux essais séparés ──────────────────────
+    //
+    // Le second plancher — celui du générateur lui-même, 120 bits — n'a de sens
+    // que s'il se distingue du premier. Un `else if` supprimé, ou une constante
+    // ramenée à zéro, ferait tomber les deux cas dans la même branche : chaque
+    // essai pris à part resterait vert, et le produit aurait cessé de dire
+    // « il satisfait la norme, mais il n'est plus celui que le §2 décrit ».
+    const sousLaNorme = familles(verifierGenerateurIdentifiants(generateurRemplissage(9)));
+    const entreLesDeux = familles(verifierGenerateurIdentifiants(generateurRemplissage(11)));
+
+    assert.deepEqual(sousLaNorme, ['norme'], '46 bits relèvent du plancher NORMÉ…');
+    assert.deepEqual(entreLesDeux, ['propre'], '…et 57 bits du plancher PROPRE, pas du normé.');
+    assert.notDeepEqual(
+      sousLaNorme,
+      entreLesDeux,
+      'Les deux branches doivent rendre des verdicts DIFFÉRENTS : confondues, elles ne ' +
+        'distinguent plus « en deçà de la règle » de « en deçà de ce qu’on a promis ».',
+    );
+
+    // Le message du plancher propre dit comment l'affaiblir légitimement.
+    const propre = verifierGenerateurIdentifiants(generateurRemplissage(11))[0];
+    assert.match(propre, /DEUX gestes/, `Il doit dire que l'affaiblissement se déclare : ${propre}`);
+  });
+
+  test('LE CANARI VOIT CE QUE LA MESURE ADMET : une graine étroite', async () => {
+    // ── La seule famille que la mesure par position ne peut pas voir ────────
+    //
+    // Un condensat d'une graine de vingt bits : chaque position varie sur tout
+    // l'alphabet, donc la mesure majore à ~129 bits — et elle a raison, c'est un
+    // MAJORANT. Ce qui trahit la graine est la répétition, et elle ne se voit
+    // qu'en N². C'est pour cette famille-là, et pour elle seule, que le canari
+    // de collision existe.
+    const grainesEtroites = () => {
+      const graine = randomBytes(3).readUIntBE(0, 3) & 0xf_ff_ff; // 20 bits
+      return createHash('sha256').update(String(graine)).digest('base64url')
+        .toLowerCase().replace(/[^0-9a-z]/g, '0').slice(0, 25);
+    };
+
+    // La mesure par position, elle, ADMET : c'est ce qui rend le canari nécessaire.
+    assert.ok(
+      mesurerBitsParPosition(Array.from({ length: 512 }, grainesEtroites)).bits > 52,
+      'Le scénario EXIGE que la mesure par position soit aveugle ici : sinon le canari ne ' +
+        'serait pas la seule chose qui parle, et cet essai ne prouverait pas ce qu’il dit.',
+    );
+
+    const anomalies = verifierGenerateurIdentifiants(
+      (prefixe) => `${prefixe}-${String(Date.now())}-${grainesEtroites()}`,
+    );
+    assert.deepEqual(familles(anomalies), ['collision'], JSON.stringify(anomalies).slice(0, 400));
+    assert.match(anomalies[0], /clé primaire/, `Et il dit ce que cela coûte : ${anomalies[0]}`);
+
+    // Contrôle symétrique : le générateur réel ne fait jamais crier le canari.
+    assert.equal(
+      familles(verifierGenerateurIdentifiants()).includes('collision'),
+      false,
+      'Un canari qui crie sur le générateur réel ferait refuser tout démarrage.',
+    );
+  });
+
+  test('LA FORME EST VÉRIFIÉE SUR TOUT L’ÉCHANTILLON, pas sur un tirage', async () => {
+    // Un générateur qui se dégrade par intermittence passait une fois sur deux
+    // quand la forme n'était contrôlée que sur le premier tirage. Ici, une
+    // rupture sur mille suffit à faire refuser.
+    let rang = 0;
+    const intermittent = (prefixe) => {
+      rang += 1;
+      return rang % 1000 === 0 ? `${prefixe}--${String(rang)}` : engendrerIdentifiant(prefixe);
+    };
+    const anomalies = verifierGenerateurIdentifiants(intermittent);
+    assert.deepEqual(familles(anomalies), ['forme'], JSON.stringify(anomalies).slice(0, 400));
+    assert.match(anomalies[0], /CTRL--/, `Le refus doit MONTRER le tirage fautif : ${anomalies[0]}`);
+
+    // Contrôle symétrique : sur le générateur réel, la forme n'est jamais signalée.
+    assert.equal(familles(verifierGenerateurIdentifiants()).includes('forme'), false);
+  });
+});
+
+describe('La couture d’essai n’est pas une porte dérobée', () => {
+  test('« verifierRegistre » appelle le contrôle SANS argument', async () => {
+    // ── Pourquoi cet essai existe ───────────────────────────────────────────
+    //
+    // Le paramètre `tirer` est ce qui rend le garde-fou éprouvable. C'est aussi,
+    // exactement, ce qui permettrait un jour au service de vérifier un
+    // générateur AUTRE que celui qu'il emploie — un contrôle vert sur une
+    // fonction que personne n'appelle. On fige donc que le point de démarrage
+    // l'appelle à vide, et que le défaut du paramètre est le vrai générateur.
+    const source = readFileSync(join(RACINE_BACKEND, 'src', 'entites', 'index.ts'), 'utf8');
+
+    const debut = source.indexOf('export function verifierRegistre');
+    assert.notEqual(debut, -1, 'Le point de vérification unique a disparu ou changé de nom.');
+    const fin = source.indexOf('\n}\n', debut);
+    assert.ok(fin > debut, 'Corps de « verifierRegistre » illisible.');
+    const corps = source.slice(debut, fin);
+
+    const appels = corps.match(/verifierGenerateurIdentifiants\s*\(([^)]*)\)/g) ?? [];
+    assert.equal(appels.length, 1, `Un seul appel attendu, trouvé ${String(appels.length)} : ${appels.join(' · ')}`);
+    assert.equal(
+      appels[0],
+      'verifierGenerateurIdentifiants()',
+      'Le démarrage doit éprouver le générateur qu’il EMPLOIE, pas un autre : la couture ' +
+        'd’essai deviendrait sinon une porte dérobée.',
+    );
+
+    // Et le défaut du paramètre est bien le générateur réel.
+    const declaration = source.slice(source.indexOf('export function verifierGenerateurIdentifiants'));
+    assert.match(
+      declaration.slice(0, 200),
+      /tirer:\s*\(prefixe: string\) => string = engendrerIdentifiant/,
+      'Le paramètre doit avoir « engendrerIdentifiant » pour valeur par défaut.',
+    );
+
+    // Contrôle de morsure du balayage : le corps lu doit être CELUI de la
+    // fonction, et le motif doit savoir dire non.
+    assert.equal(
+      corps.includes('export function verifierGenerateurIdentifiants'),
+      false,
+      'Le balayage déborde sur la déclaration : il verrait un appel là où il n’y en a pas.',
+    );
+    assert.equal(
+      /verifierGenerateurIdentifiants\s*\(([^)]*)\)/.test('function verifierRegistre(c) { return []; }'),
+      false,
     );
   });
 });
