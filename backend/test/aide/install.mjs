@@ -77,14 +77,14 @@ export function extraireBloc(nom) {
  * @param {Record<string,string>} variables variables posées avant le bloc
  * @param {string} dossier répertoire de travail, où le script est écrit
  */
-export function jouerBloc(nom, variables, dossier) {
-  const script = join(dossier, `bloc-${nom}.sh`);
-  const preambule = [
+function preambule(variables) {
+  return [
     '#!/bin/bash',
     'set -Eeuo pipefail',
     "succes() { printf '  ok %s\\n' \"$*\"; }",
     "alerte() { printf '  !! %s\\n' \"$*\"; }",
     "echec()  { printf ' ERR %s\\n' \"$*\"; exit 1; }",
+    "info()   { printf '== %s\\n' \"$*\"; }",
     // `lire_variable` appartient à `install.sh` et lit le fichier d'environnement
     // installé. Hors VM il n'y en a pas : la doublure rend vide, ce qui est
     // exactement ce que la fonction réelle rendrait pour une variable absente.
@@ -92,7 +92,11 @@ export function jouerBloc(nom, variables, dossier) {
     ...Object.entries(variables).map(([cle, valeur]) => `${cle}=${JSON.stringify(valeur)}`),
     '',
   ].join('\n');
-  writeFileSync(script, `${preambule}${extraireBloc(nom)}\n`);
+}
+
+export function jouerBloc(nom, variables, dossier) {
+  const script = join(dossier, `bloc-${nom}.sh`);
+  writeFileSync(script, `${preambule(variables)}${extraireBloc(nom)}\n`);
 
   try {
     const sortie = execFileSync('bash', [script], {
@@ -100,6 +104,61 @@ export function jouerBloc(nom, variables, dossier) {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     return { code: 0, sortie };
+  } catch (erreur) {
+    return { code: erreur.status ?? 1, sortie: `${erreur.stdout ?? ''}${erreur.stderr ?? ''}` };
+  }
+}
+
+/**
+ * Extrait une FONCTION shell de `install.sh`, par son nom.
+ *
+ * ── Pourquoi c'est légitime là où deviner un bloc ne l'est pas ──────────────
+ *
+ * `extraireBloc` refuse de deviner parce qu'une frontière de bloc n'existe que
+ * dans l'intention de son auteur : « du premier `FRONTEND_PUBLIABLE=` jusqu'au
+ * `rsync` » désigne un jour autre chose. Une fonction, elle, a des bornes que
+ * le langage impose — `nom() {` et l'accolade en colonne zéro —, et sa
+ * disparition est bruyante. Deux fonctions sont extraites ainsi :
+ * `jeton_frontend` et `injecter_jeton_frontend`, qui versionnent les URL du
+ * frontend déployé et qu'aucune ancre n'entoure (elles sont appelées hors
+ * bloc). Les rejouer est la seule façon de mettre la racine web dans l'état où
+ * une VRAIE installation la laisse — état sans lequel le garde-fou du constat
+ * **Q-43** n'éprouverait rien.
+ */
+export function extraireFonction(nom) {
+  const source = readFileSync(INSTALL, 'utf8');
+  const debut = new RegExp(`^${nom}\\(\\)[ \\t]*\\{[ \\t]*$`, 'm').exec(source);
+  assert.notEqual(
+    debut,
+    null,
+    `La fonction « ${nom}() » a disparu de deploy/install.sh, ou a changé de forme. Le banc ` +
+      'refuse d’en inventer une : la rejouer est ce qui met la racine web dans l’état d’une ' +
+      'vraie installation.',
+  );
+  const reste = source.slice(debut.index);
+  const fin = /^\}[ \t]*$/m.exec(reste);
+  assert.notEqual(fin, null, `La fonction « ${nom}() » n’est pas refermée en colonne zéro.`);
+  const corps = reste.slice(0, fin.index + fin[0].length);
+  const utile = corps.split('\n').filter((l) => l.trim() !== '' && !l.trim().startsWith('#'));
+  assert.ok(
+    utile.length >= 5,
+    `La fonction « ${nom}() » ne porte que ${String(utile.length)} ligne(s) exécutable(s).`,
+  );
+  return corps;
+}
+
+/**
+ * Joue un script bash arbitraire avec les fonctions de sortie d'`install.sh`.
+ * Rend `{ code, sortie }` — jamais d'exception : le CONTENU décide.
+ */
+export function jouerScript(corps, variables, dossier, nom = 'script') {
+  const chemin = join(dossier, `${nom}.sh`);
+  writeFileSync(chemin, `${preambule(variables)}${corps}\n`);
+  try {
+    return {
+      code: 0,
+      sortie: execFileSync('bash', [chemin], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }),
+    };
   } catch (erreur) {
     return { code: erreur.status ?? 1, sortie: `${erreur.stdout ?? ''}${erreur.stderr ?? ''}` };
   }

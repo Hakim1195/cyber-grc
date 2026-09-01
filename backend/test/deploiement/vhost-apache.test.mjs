@@ -58,6 +58,7 @@ import {
   readdirSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import http from 'node:http';
@@ -67,7 +68,8 @@ import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 
-import { jouerBloc } from '../aide/install.mjs';
+import { exigerSilenceApres } from '../aide/assertions.mjs';
+import { extraireBloc, extraireFonction, jouerBloc, jouerScript } from '../aide/install.mjs';
 import { RACINE_BACKEND, RACINE_FRONTEND } from '../aide/serveur.mjs';
 
 /** Le nom d'hôte du vhost livré. `/etc/hosts` le fait pointer sur la boucle locale. */
@@ -83,6 +85,7 @@ let portApi;
 let certificat;
 let apache;
 let apiDoublure;
+let urlVersionnees = 0;
 
 /**
  * Exige un outil, et ÉCHOUE bruyamment s'il manque.
@@ -154,8 +157,15 @@ function journalApache() {
   return morceaux.join('\n');
 }
 
-/** Écrit le vhost du dépôt, rendu jouable ici — substitutions DÉCLARÉES. */
-function ecrireVhost() {
+/**
+ * Écrit le vhost du dépôt, rendu jouable ici — substitutions DÉCLARÉES.
+ *
+ * `supplementaires` sert aux essais qui doivent éprouver un vhost FAUTIF : la
+ * mutation y est passée comme une substitution ordinaire, donc comptée comme
+ * les autres. Un essai qui muterait « à peu près » finirait par éprouver autre
+ * chose que ce qu'il annonce.
+ */
+function ecrireVhost(supplementaires = []) {
   const source = readFileSync(VHOST_SOURCE, 'utf8');
   const substitutions = [
     ['<VirtualHost *:80>', `<VirtualHost *:${String(portClair)}>`, 1],
@@ -177,6 +187,7 @@ function ecrireVhost() {
     // Pas de PKI interne ici : le certificat auto-signé n'a pas de chaîne.
     ['    SSLCertificateChainFile /etc/ssl/cyber-grc/chaine-pki-interne.crt\n', '', 1],
     ['http://127.0.0.1:3001/api/', `http://127.0.0.1:${String(portApi)}/api/`, 2],
+    ...supplementaires,
   ];
 
   let vhost = source;
@@ -203,12 +214,14 @@ function ecrireVhost() {
       .filter((l) =>
         /^(<\/?FilesMatch|<\/?DirectoryMatch|Require |Options |DirectoryIndex |Header always |SSLProtocol|SSLCipherSuite|LimitRequestBody|ProxyTimeout|RequestHeader |ServerSignature|<\/?LocationMatch)/.test(l),
       );
-  assert.deepEqual(
-    decisives(vhost),
-    decisives(source),
-    'Une substitution a touché une directive de décision : l’essai éprouverait sa propre ' +
-      'réécriture, pas le vhost livré.',
-  );
+  if (supplementaires.length === 0) {
+    assert.deepEqual(
+      decisives(vhost),
+      decisives(source),
+      'Une substitution a touché une directive de décision : l’essai éprouverait sa propre ' +
+        'réécriture, pas le vhost livré.',
+    );
+  }
 
   writeFileSync(join(racine, 'vhost.conf'), vhost);
 }
@@ -292,6 +305,33 @@ before(async () => {
   assert.equal(publication.code, 0, `La publication du frontend doit aboutir :\n${publication.sortie}`);
   assert.match(publication.sortie, /ok frontend : \d+ fichier\(s\) publiés/, publication.sortie);
 
+  // ── …puis VERSIONNÉE par la vraie injection de jeton ──────────────────
+  // Sans elle, la racine web n'est pas dans l'état qu'une installation laisse :
+  // les 61 URL `.js`/`.css` d'index.html seraient nues, et le garde-fou du
+  // constat Q-43 refuserait l'installation à bon droit — l'essai mesurerait
+  // alors son propre montage, pas le produit.
+  const injection = jouerScript(
+    [
+      extraireFonction('jeton_frontend'),
+      extraireFonction('injecter_jeton_frontend'),
+      'JETON="$(jeton_frontend "$RACINE/frontend" "$VERSION_PAQUET")"',
+      'N="$(injecter_jeton_frontend "$RACINE/frontend/index.html" "$JETON")"',
+      'printf "versionnees=%s jeton=%s\\n" "$N" "$JETON"',
+    ].join('\n\n'),
+    { RACINE: racine, VERSION_PAQUET: '1.4.2' },
+    racine,
+    'jeton',
+  );
+  assert.equal(injection.code, 0, `L’injection du jeton doit aboutir :\n${injection.sortie}`);
+  const compte = /versionnees=(\d+)/.exec(injection.sortie);
+  assert.notEqual(compte, null, injection.sortie);
+  assert.ok(
+    Number(compte[1]) >= 55,
+    `Seulement ${compte[1]} URL versionnées : le montage ne reproduit pas une installation ` +
+      `réelle, et tout ce qui suit mesurerait ce montage.\n${injection.sortie}`,
+  );
+  urlVersionnees = Number(compte[1]);
+
   // Une doublure d'API, pour que le mandataire ait quelque chose à joindre.
   // Elle ne prouve rien de l'application ; elle prouve que `ProxyPass` marche,
   // et que `/api/` échappe bien aux règles de fichier du frontend.
@@ -303,6 +343,24 @@ before(async () => {
 
   ecrireVhost();
   ecrireConfigServeur();
+
+  // ── Une enveloppe d'`apache2ctl`, et c'est la seule doublure du fichier ──
+  // Le bloc « configtest » appelle `apache2ctl configtest`, qui lit la
+  // configuration DU SYSTÈME. Sans cette enveloppe, l'essai éprouverait la
+  // configuration d'une autre instance — et rougirait pour une raison qui
+  // n'est pas la sienne. La traduction `configtest` → `-t` est celle
+  // qu'`apache2ctl` fait lui-même ; rien d'autre n'est simulé.
+  writeFileSync(
+    join(racine, 'apachectl'),
+    ['#!/bin/sh',
+      `conf=${join(racine, 'httpd.conf')}`,
+      'case "$1" in',
+      '  configtest) exec apache2 -f "$conf" -t ;;',
+      '  *) exec apache2 -f "$conf" "$@" ;;',
+      'esac',
+      ''].join('\n'),
+    { mode: 0o755 },
+  );
   execFileSync('chmod', ['-R', 'a+rX', racineWeb]);
 
   const controle = execFileSync('apache2', ['-f', join(racine, 'httpd.conf'), '-t'], {
@@ -323,6 +381,51 @@ before(async () => {
   await attendrePort(portClair, 'Apache (clair)');
   await attendrePort(portTls, 'Apache (TLS)');
 });
+
+/**
+ * Relit la configuration, et attend que le changement soit OBSERVABLE.
+ *
+ * `-k graceful` est asynchrone : les processus fils en cours terminent avec
+ * l'ancienne configuration. Attendre une durée serait un pari ; on attend donc
+ * que la propriété visée soit vraie, ce qui ne peut arriver qu'une fois le
+ * rechargement effectif.
+ */
+async function rechargerApache(preuve, quoi, delai = 20000) {
+  execFileSync('apache2', ['-f', join(racine, 'httpd.conf'), '-k', 'graceful'], { stdio: 'ignore' });
+  const echeance = Date.now() + delai;
+  for (;;) {
+    if (await preuve()) return;
+    if (Date.now() > echeance) {
+      throw new Error(`Apache n’a pas pris sa nouvelle configuration en ${String(delai)} ms : ${quoi}\n${journalApache()}`);
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+/** Le `max-age` qu'Apache annonce pour une URL, ou `null`. */
+async function maxAge(chemin) {
+  const reponse = await demander(chemin);
+  const trouve = /max-age=(\d+)/.exec(reponse.entetes['cache-control'] ?? '');
+  return trouve === null ? null : Number(trouve[1]);
+}
+
+/**
+ * Joue le vhost MUTÉ le temps d'un essai, puis remet celui du dépôt.
+ *
+ * Le retour est dans un `finally`, et il est lui aussi attendu sur une preuve :
+ * un essai qui laisserait le vhost muté derrière lui ferait échouer les
+ * suivants pour une raison qui n'est pas la leur.
+ */
+async function avecVhost(mutations, preuveMutation, preuveRetour, corps) {
+  ecrireVhost(mutations);
+  try {
+    await rechargerApache(preuveMutation, 'la mutation du vhost n’est pas visible');
+    return await corps();
+  } finally {
+    ecrireVhost();
+    await rechargerApache(preuveRetour, 'le vhost du dépôt n’est pas revenu');
+  }
+}
 
 after(async () => {
   // `-k graceful-stop` arrête AUSSI les processus fils. Un simple signal au
@@ -347,10 +450,17 @@ after(async () => {
  *  Parler à Apache — en vérifiant SON certificat, jamais en le désactivant
  * ===================================================================== */
 
-function demander(chemin) {
+function demander(chemin, options = {}) {
   return new Promise((resoudre, rejeter) => {
     const requete = https.request(
-      { host: HOTE, port: portTls, path: chemin, method: 'GET', agent: false, ca: certificat, servername: HOTE },
+      {
+        host: HOTE, port: portTls, path: chemin, method: 'GET', agent: false,
+        ca: certificat, servername: HOTE,
+        // Node n'annonce AUCUN encodage par défaut : sans cet en-tête, Apache
+        // n'a aucune raison de compresser, et un essai sur mod_deflate
+        // conclurait « pas de gzip » contre un frontal parfaitement réglé.
+        ...(options.entetes === undefined ? {} : { headers: options.entetes }),
+      },
       (reponse) => {
         let corps = '';
         reponse.on('data', (m) => (corps += m));
@@ -499,6 +609,12 @@ describe('La liste blanche du frontal refuse ce qui n’est pas publiable (const
     // Et la page voisine, elle, est toujours servie : le 403 vient de la RÈGLE,
     // pas d'un frontal qui se serait mis à tout refuser en cours d'essai.
     assert.equal((await demander('/index.html')).statut, 200);
+
+    // Les intrus sont retirés : la racine web doit redevenir celle qu'une
+    // installation laisse, pour que le garde-fou du §5 éprouve le produit et
+    // non les décombres de cet essai-ci.
+    for (const relatif of INTRUS) unlinkSync(join(racineWeb, relatif));
+    rmSync(join(racineWeb, 'data'), { recursive: true, force: true });
   });
 
   test('UN LIEN SYMBOLIQUE ne sert rien, même sous un nom publiable', async () => {
@@ -523,6 +639,8 @@ describe('La liste blanche du frontal refuse ce qui n’est pas publiable (const
       200,
       'Le refus doit venir du LIEN, pas du suffixe : sinon cet essai ne dit rien.',
     );
+    unlinkSync(lien);
+    unlinkSync(join(racineWeb, 'temoin.html'));
   });
 });
 
@@ -559,5 +677,380 @@ describe('Les en-têtes du vhost, posés par Apache lui-même (contrôles S10 / 
       'Une réponse d’API mise en cache par un mandataire intermédiaire serait une fuite ' +
         'inter-utilisateurs.',
     );
+  });
+});
+
+/* =====================================================================
+ *  §4 — Le JavaScript est compressé, et caché aussi longtemps que promis
+ *       (constat Q-42)
+ * ---------------------------------------------------------------------
+ *  Le vhost nommait `application/javascript` dans DEUX directives. Apache
+ *  2.4.58 sert les `.js` en **`text/javascript`** : aucune des deux ne
+ *  s'appliquait. 59 fichiers, 2 166 105 octets, transférés **sans compression**
+ *  et revalidés **toutes les heures** au lieu de sept jours — exactement le
+ *  coût que le commentaire du bloc se félicitait d'éviter.
+ *
+ *  ── Pourquoi le régresseur ne porte PAS sur le gzip ─────────────────────
+ *
+ *  Un essai qui vérifierait seulement « app.js arrive compressé » resterait
+ *  vert le jour où Apache change de graphie — et c'est très exactement ainsi
+ *  que le défaut est né : un type MIME **écrit de mémoire** au lieu d'être lu
+ *  dans la réponse. Le premier essai ci-dessous éprouve donc le VICE : le type
+ *  qu'Apache **émet** doit figurer dans ce que le vhost **nomme**. Il ne
+ *  connaît aucune graphie ; il compare deux sources, dont aucune n'est lui.
+ * ===================================================================== */
+
+describe('Le JavaScript est compressé et caché long (constat Q-42)', () => {
+  /** Les types de `AddOutputFilterByType DEFLATE`, continuations comprises. */
+  function typesCompresses() {
+    const source = readFileSync(VHOST_SOURCE, 'utf8');
+    const lignes = source.split('\n');
+    const debut = lignes.findIndex((l) => /^\s*AddOutputFilterByType\s+DEFLATE\b/.test(l));
+    assert.notEqual(debut, -1, 'Le vhost ne porte plus de AddOutputFilterByType : rien n’est compressé.');
+    let texte = '';
+    for (let i = debut; i < lignes.length; i += 1) {
+      const brute = lignes[i];
+      texte += ` ${brute.replace(/\\\s*$/, '')}`;
+      if (!/\\\s*$/.test(brute)) break;
+    }
+    return texte.replace(/^\s*AddOutputFilterByType\s+DEFLATE\s*/, '').trim().split(/\s+/).filter(Boolean);
+  }
+
+  /** Les types que `ExpiresByType` cache PLUS LONGTEMPS que `ExpiresDefault`. */
+  function typesLongueDuree() {
+    const source = readFileSync(VHOST_SOURCE, 'utf8');
+    const secondes = (texte) => {
+      const trouve = /plus\s+(\d+)\s+(second|minute|hour|day|week|month|year)/.exec(texte);
+      if (trouve === null) return 0;
+      const facteur = { second: 1, minute: 60, hour: 3600, day: 86400, week: 604800, month: 2592000, year: 31536000 };
+      return Number(trouve[1]) * facteur[trouve[2]];
+    };
+    const defaut = /^\s*ExpiresDefault\s+"([^"]*)"/m.exec(source);
+    assert.notEqual(defaut, null, 'Le vhost ne pose plus d’ExpiresDefault : le seuil n’existe plus.');
+    const seuil = secondes(defaut[1]);
+    assert.ok(seuil > 0, `ExpiresDefault illisible : ${defaut[1]}`);
+    const longs = [];
+    for (const ligne of source.split('\n')) {
+      const trouve = /^\s*ExpiresByType\s+(\S+)\s+"([^"]*)"/.exec(ligne);
+      if (trouve !== null && secondes(trouve[2]) > seuil) longs.push(trouve[1]);
+    }
+    return longs;
+  }
+
+  /** Le type MIME qu'Apache annonce, sans son paramètre de jeu de caractères. */
+  async function typeEmisPour(chemin) {
+    const reponse = await demander(chemin);
+    assert.equal(reponse.statut, 200, `${chemin} doit être servi : ${String(reponse.statut)}`);
+    const type = (reponse.entetes['content-type'] ?? '').split(';')[0].trim();
+    assert.notEqual(type, '', `Apache n’annonce aucun type pour ${chemin}.`);
+    return type;
+  }
+
+  test('LE RÉGRESSEUR DU VICE : le type qu’Apache ÉMET est celui que le vhost NOMME', async () => {
+    // Aucune graphie n'est écrite ici. On demande à Apache ce qu'il émet, on
+    // lit dans le vhost ce qu'il nomme, et on exige que le second contienne le
+    // premier. C'est la règle que le constat Q-42 impose — « les types se
+    // lisent dans ce qu'Apache émet, jamais de mémoire » — rendue exécutable.
+    const type = await typeEmisPour('/js/app.js');
+
+    assert.ok(
+      typesCompresses().includes(type),
+      `Apache sert les « .js » en « ${type} », et AddOutputFilterByType ne le nomme pas : ` +
+        `les 59 fichiers JavaScript du produit partent SANS COMPRESSION, sur un VPN, à ` +
+        `chaque chargement. Types nommés : ${typesCompresses().join(' ')} (constat Q-42).`,
+    );
+    assert.ok(
+      typesLongueDuree().includes(type),
+      `Apache sert les « .js » en « ${type} », et aucun ExpiresByType de cette graphie ne ` +
+        `dépasse ExpiresDefault : les 59 fichiers sont revalidés toutes les heures au lieu ` +
+        `de sept jours, alors même que leurs URL sont versionnées. Types à durée longue : ` +
+        `${typesLongueDuree().join(' ')} (constat Q-42).`,
+    );
+
+    // Et la même exigence pour le CSS, qui allait bien : sans ce second cas, un
+    // vhost qui aurait perdu les deux graphies passerait pour n'en avoir perdu
+    // qu'une, et le message ci-dessus désignerait le mauvais coupable.
+    const typeCss = await typeEmisPour('/css/style.css');
+    assert.ok(typesCompresses().includes(typeCss), `« ${typeCss} » n’est pas compressé.`);
+    assert.ok(typesLongueDuree().includes(typeCss), `« ${typeCss} » n’est pas caché long.`);
+  });
+
+  test('MESURÉ SUR LA RÉPONSE : app.js arrive compressé, et vaut sept jours', async () => {
+    const reponse = await demander('/js/app.js', { entetes: { 'accept-encoding': 'gzip' } });
+    assert.equal(reponse.statut, 200);
+    assert.equal(
+      reponse.entetes['content-encoding'],
+      'gzip',
+      `« /js/app.js » arrive sans compression. En-têtes : ${JSON.stringify(reponse.entetes)}`,
+    );
+    assert.equal(
+      await maxAge('/js/app.js'),
+      604800,
+      'Sept jours, et pas une heure : les URL .js sont versionnées par le jeton, le cache ' +
+        'long leur est donc dû (constat Q-42, et invariant du constat Q-43).',
+    );
+    // La contre-épreuve du gzip : sans l'en-tête, Apache ne compresse pas. Sans
+    // elle, l'assertion ci-dessus serait satisfaite par un frontal qui
+    // compresse tout, tout le temps, y compris pour un client qui ne sait pas
+    // le lire.
+    const brut = await demander('/js/app.js');
+    assert.equal(brut.entetes['content-encoding'], undefined, 'Sans Accept-Encoding, pas de gzip.');
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE : index.html n’est JAMAIS caché', async () => {
+    // Sans cette moitié, un `ExpiresDefault` élargi — ou un ExpiresByType posé
+    // sur text/html — passerait : « app.js vaut sept jours » resterait vrai, et
+    // la page qui PORTE les 61 URL versionnées serait figée avec elles. C'est la
+    // condition de validité de tout le dispositif, écrite dans le vhost.
+    for (const chemin of ['/', '/index.html']) {
+      const reponse = await demander(chemin);
+      assert.equal(reponse.statut, 200);
+      assert.match(
+        reponse.entetes['cache-control'] ?? '',
+        /no-cache/,
+        `${chemin} doit être revalidé à chaque ouverture.`,
+      );
+      assert.match(reponse.entetes['cache-control'] ?? '', /must-revalidate/);
+      assert.equal(
+        await maxAge(chemin),
+        null,
+        `${chemin} porte un max-age : un index.html périmé redemande les ANCIENNES URL ` +
+          'versionnées, que le cache sert aussitôt — tout le dispositif tombe.',
+      );
+    }
+  });
+});
+
+/* =====================================================================
+ *  §5 — Le garde-fou du cache : LONG ⇒ VERSIONNÉ (constat Q-43)
+ * ---------------------------------------------------------------------
+ *  Le bloc `mod_expires` ÉNONÇAIT sa condition depuis le début (« ce bloc n'est
+ *  sûr que couplé au jeton de version »). Un type non couvert est arrivé —
+ *  `image/png`, trente jours, jamais versionné — et personne ne l'a vu pendant
+ *  sept passages de porte. La règle était un commentaire.
+ *
+ *  `install.sh` porte maintenant un contrôle qui la fait respecter. Ces essais
+ *  le jouent contre un Apache réel, parce que le contrôle DEMANDE la durée à
+ *  Apache : le doubler reviendrait à éprouver ma lecture de `mod_expires`.
+ *
+ *  ── Le troisième essai est le plus important des trois ──────────────────
+ *
+ *  Le remède évident au constat était « étendre le jeton aux images ». Il est
+ *  faux, et d'une façon vicieuse : le logo a **deux** URL — `index.html` en
+ *  porte une, `js/core/vault.js:119` construit l'autre à l'exécution, dans la
+ *  porte de démarrage. Versionner la page n'en couvrirait qu'une, tout en
+ *  faisant TAIRE un garde-fou borné à la page. C'est la forme la plus coûteuse
+ *  du décor : un contrôle que le remède évident éteint sans rien réparer. Le
+ *  troisième essai interdit cette version-là du garde-fou.
+ * ===================================================================== */
+
+describe('Un actif n’a un cache long que si son URL est versionnée (constat Q-43)', () => {
+  /** La mutation : `image/png` reçoit trente jours, sans être versionné. */
+  const PNG_TRENTE_JOURS = [
+    [
+      '        ExpiresDefault                         "access plus 1 hour"',
+      '        ExpiresByType image/png                "access plus 30 days"\n' +
+        '        ExpiresDefault                         "access plus 1 hour"',
+      1,
+    ],
+  ];
+  const LOGO = 'assets/logo/logo-dedienne.png';
+
+  /**
+   * La ligne de `vault.js` qui construit l'URL du logo — LUE dans le fichier
+   * publié, jamais recopiée.
+   *
+   * Elle vaut 119 aujourd'hui, et l'écrire ici ferait rougir le banc au premier
+   * commentaire ajouté trois lignes plus haut. Ce qui est normatif est que le
+   * refus nomme **le fichier ET la ligne** : c'est ce qu'un exploitant a besoin
+   * de lire, et c'est cela qui est assertionné.
+   */
+  function ligneDuLogoDansVault() {
+    const source = readFileSync(join(racineWeb, 'js', 'core', 'vault.js'), 'utf8');
+    const rang = source.split('\n').findIndex((l) => l.includes(`src="${LOGO}"`));
+    assert.notEqual(
+      rang,
+      -1,
+      'js/core/vault.js ne construit plus l’URL du logo : ces essais éprouvent le piège du ' +
+        'constat Q-43 — une seconde URL bâtie à l’exécution — et ce piège aurait disparu. ' +
+        'Vérifier alors que le garde-fou a toujours une raison d’être avant de toucher ici.',
+    );
+    return rang + 1;
+  }
+
+  /** Le motif « vault.js:<ligne>: » attendu dans le refus. */
+  function refusNommeVault() {
+    return new RegExp(`vault\\.js:${String(ligneDuLogoDansVault())}:`);
+  }
+
+  /**
+   * Joue le bloc « configtest » de `install.sh` contre CETTE instance.
+   *
+   * Huit substitutions, toutes déclarées et comptées : elles disent où est le
+   * vhost, quels ports écoutent, et par quoi passer pour parler à `apache2ctl`.
+   * **Aucune ne touche ce qui décide** — l'arithmétique des durées, la
+   * comparaison au seuil, le motif qui cherche une référence de chargement
+   * sans « ?v= ». Les trois lignes qui portent cette décision sont vérifiées
+   * présentes, à l'octet près, après substitution.
+   */
+  function jouerGarde() {
+    let bloc = extraireBloc('configtest');
+    const substitutions = [
+      ['APACHECTL="$(command -v apache2ctl || command -v apachectl || true)"',
+        `APACHECTL="${join(racine, 'apachectl')}"`, 1],
+      ['/etc/apache2/sites-enabled/cyber-grc.conf', join(racine, 'vhost.conf'), 2],
+      ['/etc/apache2/sites-available/cyber-grc.conf', join(racine, 'vhost.conf'), 2],
+      [':80:127.0.0.1"', `:${String(portClair)}:127.0.0.1"`, 1],
+      [':443:127.0.0.1"', `:${String(portTls)}:127.0.0.1"`, 3],
+      ['"http://$NOM_SERVEUR$1"', `"http://$NOM_SERVEUR:${String(portClair)}$1"`, 1],
+      ['"https://$NOM_SERVEUR$1"', `"https://$NOM_SERVEUR:${String(portTls)}$1"`, 1],
+      ['"https://$NOM_SERVEUR/$REL"', `"https://$NOM_SERVEUR:${String(portTls)}/$REL"`, 1],
+    ];
+    for (const [avant, apres, attendu] of substitutions) {
+      const vues = bloc.split(avant).length - 1;
+      assert.equal(
+        vues,
+        attendu,
+        `Substitution « ${avant} » : ${String(vues)} occurrence(s) au lieu de ${String(attendu)}. ` +
+          'Le bloc a changé de forme, et cet essai jouerait autre chose que ce qu’il annonce.',
+      );
+      bloc = bloc.split(avant).join(apres);
+    }
+    // Ce qui DÉCIDE doit être intact. Sans cette vérification, une substitution
+    // maladroite ferait éprouver ma réécriture plutôt que le garde-fou.
+    for (const decisive of [
+      '[[ -n "$AGE" && "$AGE" -gt "$SEUIL_COURT" ]] || continue',
+      'REFS="$(grep -rnE ',
+      '$MOTIF',
+      'secondes_expires() {',
+      'find "$RACINE/frontend" -type f ! -name index.html',
+    ]) {
+      assert.ok(
+        bloc.includes(decisive),
+        `La ligne qui décide a disparu du bloc joué : ${decisive}`,
+      );
+    }
+    return jouerScript(bloc, { RACINE: racine }, racine, 'garde-cache');
+  }
+
+  test('CONTRÔLE SYMÉTRIQUE : le vhost du dépôt passe le garde-fou', async () => {
+    // ── Sans cette moitié, les deux suivantes seraient satisfaites par un
+    //    garde-fou qui refuse TOUT — c'est-à-dire par une installation
+    //    impossible. Et elle porte la mise en garde de l'auteur du correctif :
+    //    les 61 fichiers .js/.css SONT en cache long, et pleinement versionnés ;
+    //    aucun ne doit déclencher le refus.
+    const issue = jouerGarde();
+
+    assert.equal(
+      issue.code,
+      0,
+      `Le vhost du dépôt doit passer :\n${issue.sortie}\n${journalApache()}`,
+    );
+    assert.match(
+      issue.sortie,
+      /ok cache : tout actif à durée longue porte une URL versionnée/,
+      `Le garde-fou doit être ALLÉ jusqu’à sa conclusion — sinon son silence ne prouve rien ` +
+        `(constat Q-37) :\n${issue.sortie}`,
+    );
+    // ── Et il a bien regardé quelque chose : le cas EXACT que le garde-fou
+    //    doit laisser passer. `js/app.js` est en cache long (sept jours) ET
+    //    pleinement versionné : un garde-fou qui le refuserait passerait les
+    //    deux essais suivants tout en rendant toute installation impossible.
+    assert.equal(
+      await maxAge('/js/app.js'),
+      604800,
+      'Le cas à laisser passer doit bien être un cas de cache LONG, sinon il ne dit rien.',
+    );
+    const page = readFileSync(join(racineWeb, 'index.html'), 'utf8');
+    assert.match(page, /src="js\/app\.js\?v=/, 'Et il doit être VERSIONNÉ dans la page.');
+    assert.equal(
+      page.includes('src="js/app.js"'),
+      false,
+      'Aucune référence nue ne doit subsister vers ce fichier : c’est ce qui lui donne droit ' +
+        'au cache long, et c’est ce que le garde-fou vérifie.',
+    );
+    assert.ok(urlVersionnees >= 55, `Seulement ${String(urlVersionnees)} URL versionnées.`);
+  });
+
+  test('LE REFUS : un PNG en cache long arrête l’installation, et nomme le fichier fautif', async () => {
+    await avecVhost(
+      PNG_TRENTE_JOURS,
+      async () => (await maxAge(`/${LOGO}`)) === 2592000,
+      async () => (await maxAge(`/${LOGO}`)) === 3600,
+      async () => {
+        const issue = jouerGarde();
+
+        assert.notEqual(
+          issue.code,
+          0,
+          `Un actif caché trente jours et jamais versionné doit ARRÊTER l’installation : ` +
+            `sans cela, un changement de logo reste invisible un mois sur tout poste ayant ` +
+            `déjà ouvert l’application (constat Q-43).\n${issue.sortie}`,
+        );
+        assert.match(issue.sortie, /constat Q-43/, 'Le refus doit renvoyer au constat qui l’explique.');
+        assert.match(
+          issue.sortie,
+          new RegExp(`${LOGO.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\(max-age=2592000\\)`),
+          `Le refus doit nommer le fichier ET sa durée :\n${issue.sortie}`,
+        );
+        assert.match(
+          issue.sortie,
+          refusNommeVault(),
+          `Il doit nommer la référence fautive, fichier ET ligne — c’est ce qu’un exploitant ` +
+            `à 22 h a besoin de lire.\n${issue.sortie}`,
+        );
+        // La page aussi porte une référence nue, à ce stade : c'est elle qui
+        // fait parler l'assertion de silence de l'essai suivant.
+        assert.match(issue.sortie, /index\.html:\d+:/, `La page doit être nommée elle aussi :\n${issue.sortie}`);
+      },
+    );
+  });
+
+  test('LE REMÈDE NAÏF NE SUFFIT PAS : versionner index.html ne fait pas taire le garde-fou', async () => {
+    // ── L'essai qui distingue un garde-fou de portée réelle d'un contrôle
+    //    borné à la page. On applique le correctif que tout le monde écrirait —
+    //    étendre le jeton au logo dans index.html — et le refus doit TENIR,
+    //    parce que `vault.js` construit la seconde URL à l'exécution.
+    const page = join(racineWeb, 'index.html');
+    const avant = readFileSync(page, 'utf8');
+    assert.ok(avant.includes(`src="${LOGO}"`), 'La page doit porter la référence nue avant le correctif.');
+    writeFileSync(page, avant.split(`src="${LOGO}"`).join(`src="${LOGO}?v=1.4.2.essai"`));
+
+    try {
+      await avecVhost(
+        PNG_TRENTE_JOURS,
+        async () => (await maxAge(`/${LOGO}`)) === 2592000,
+        async () => (await maxAge(`/${LOGO}`)) === 3600,
+        async () => {
+          const issue = jouerGarde();
+
+          assert.notEqual(
+            issue.code,
+            0,
+            `Le garde-fou s’est TU alors que le logo garde une URL non versionnée dans ` +
+              `js/core/vault.js. Un contrôle qui ne regarde qu’index.html est éteint par le ` +
+              `remède évident sans que rien ne soit réparé — c’est la forme la plus coûteuse ` +
+              `du décor (constat Q-43).\n${issue.sortie}`,
+          );
+          assert.match(
+            issue.sortie,
+            refusNommeVault(),
+            `Et il doit nommer LA référence qui reste, celle que le correctif n’a pas ` +
+              `touchée :\n${issue.sortie}`,
+          );
+          // La page, elle, ne doit plus être nommée : son URL est versionnée.
+          // Absence appariée — l'essai qui la fait parler est nommé ci-dessous —
+          // et jugée seulement APRÈS la preuve que le garde-fou a conclu.
+          exigerSilenceApres(
+            issue.sortie,
+            /index\.html:\d+:/,
+            /constat Q-43/,
+            'LE REFUS : un PNG en cache long arrête l’installation, et nomme le fichier fautif',
+          );
+        },
+      );
+    } finally {
+      writeFileSync(page, avant);
+    }
   });
 });
