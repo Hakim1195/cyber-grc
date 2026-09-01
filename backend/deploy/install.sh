@@ -452,8 +452,167 @@ if [[ $SEULEMENT_BASE -eq 0 ]]; then
         --exclude node_modules --exclude .env --exclude 'var/' \
         --exclude 'db/dev/' --exclude 'test/' \
         "$SOURCE/" "$RACINE/backend/"
-  # Le frontend est servi directement par Apache.
-  rsync -a --delete "$DEPOT/cyber-gouvernance_V4/" "$RACINE/frontend/"
+  # ══ LE FRONTEND — LISTE BLANCHE, ET UN REFUS AVANT LA COPIE (Q-31) ═══
+  #
+  # Cette ligne était `rsync -a --delete "$DEPOT/cyber-gouvernance_V4/" …`, sans
+  # aucune exclusion, alors que le rsync du serveur juste au-dessus en portait
+  # cinq. Le répertoire versionné contenait quatre classeurs de données RÉELLES
+  # — registre de risques, plan de continuité, exigences client, et un fichier
+  # de verrou Excel nommant une personne. `DocumentRoot` + `Require all granted`
+  # les rendaient téléchargeables **sans aucune authentification**, par une URL
+  # devinable, dans un produit dont la promesse centrale est le cloisonnement
+  # par filiale. Sixième passage de la porte S2, constat Q-31.
+  #
+  # ── Pourquoi une liste blanche, et pas `--exclude 'data/'` ────────────
+  #
+  # Parce que le répertoire n'est pas ce qui distingue un fichier servable d'un
+  # fichier qui ne l'est pas : sa NATURE l'est. Un classeur déposé à la racine,
+  # ou dans `assets/`, ou dans `js/`, serait passé sous une exclusion par
+  # répertoire — et la prochaine personne qui dépose un fichier pour essayer
+  # quelque chose ne relira pas cette ligne.
+  #
+  # ── D'où vient la liste, pour qu'elle ne soit pas arbitraire ──────────
+  #
+  # C'est **exactement ce que la politique de sécurité de contenu de la page
+  # autorise à charger depuis 'self'** (voir `deploy/apache/cyber-grc.conf`) :
+  # script-src (js), style-src (css), img-src (svg png ico jpg jpeg gif webp),
+  # font-src (woff woff2), manifest-src (webmanifest), plus le document
+  # lui-même (html). Un fichier d'un autre type ne peut être chargé par aucune
+  # directive : il n'a donc rien à faire dans une racine web, quel que soit le
+  # motif qui l'y a amené. `media-src` et `object-src` valent 'none' — pas
+  # d'audio, pas de vidéo, pas de PDF embarqué : la liste ne les porte pas.
+  #
+  # Les deux listes — celle-ci et le <FilesMatch> du vhost — disent la même
+  # chose et doivent le rester ; le contrôle du §10 compare les deux fichiers.
+  FRONTEND_PUBLIABLE=(html js css svg png ico jpg jpeg gif webp woff woff2 webmanifest)
+
+  # Toléré dans le dépôt, JAMAIS copié : la documentation d'un répertoire vit à
+  # côté de lui — `cyber-gouvernance_V4/data/LISEZ-MOI.md` dit pourquoi ce
+  # répertoire doit rester vide, et cette phrase perdrait tout son sens si elle
+  # devait être rangée ailleurs. Les fichiers cachés (`.gitignore`…) relèvent de
+  # la même tolérance : plomberie de dépôt, jamais du produit livré.
+  # TOUT LE RESTE ARRÊTE L'INSTALLATION — voir juste en dessous.
+  FRONTEND_TOLERE=(md)
+
+  # ── Les deux barrières vont par paire, et cela se VÉRIFIE ─────────────
+  # La ligne ci-dessus et le <FilesMatch> inversé du vhost disent la même chose
+  # à deux endroits. Deux listes qui doivent rester égales finissent par
+  # diverger — le chantier l'a payé assez souvent —, et la divergence serait
+  # silencieuse : un type ajouté ici seulement serait copié puis refusé par
+  # Apache (page cassée), ajouté là seulement il serait servable mais jamais
+  # copié (personne ne le remarque).
+  #
+  # ⚠️ La liste est extraite du MOTIF <FilesMatch> lui-même — de ce qui refuse
+  # réellement —, jamais d'un commentaire qui l'accompagnerait. Un commentaire
+  # est une déclaration : il peut cesser d'être vrai sans que rien ne bouge, et
+  # ce chantier vient d'en payer un (le ProxyTimeout de Q-19 affirmait le
+  # contraire de ce qui se passait). Ici les deux valeurs comparées sortent des
+  # deux fichiers versionnés, et aucune n'est recopiée dans un troisième.
+  VHOST_REF="$SOURCE/deploy/apache/cyber-grc.conf"
+  LISTE_VHOST="$(awk -F'\\\\.\\(' '/<FilesMatch "\(\?i\)/ { split($2, a, ")"); gsub(/\|/, " ", a[1]); print a[1] }' \
+                 "$VHOST_REF" 2>/dev/null | tail -n1 || true)"
+  LISTE_ICI="${FRONTEND_PUBLIABLE[*]}"
+  if [[ -z "$LISTE_VHOST" ]]; then
+    alerte "le vhost de référence ne porte plus de <FilesMatch> en liste blanche : la paire"
+    alerte "de barrières n'est plus vérifiable, et le frontal ne refuse plus par défaut."
+    alerte "Voir deploy/apache/cyber-grc.conf, et le constat Q-31."
+  elif [[ "$LISTE_VHOST" != "$LISTE_ICI" ]]; then
+    alerte "install.sh : $LISTE_ICI"
+    alerte "vhost      : $LISTE_VHOST"
+    echec "les deux listes blanches du frontend ont divergé (constat Q-31). Ce qui est copié
+      et ce qui est servi ne coïncident plus : un type présent d'un seul côté est soit copié
+      puis refusé par Apache — page cassée —, soit servable mais jamais livré. Alignez
+      FRONTEND_PUBLIABLE et le <FilesMatch> de deploy/apache/cyber-grc.conf."
+  else
+    succes "listes blanches du frontend alignées ($LISTE_ICI)"
+  fi
+
+  # ── UNE seule règle, DEUX lectures ────────────────────────────────────
+  # `frontend_intrus <racine> <tolerer>` liste les fichiers qui n'ont pas leur
+  # place là où elle regarde. Elle sert avant la copie (sur le dépôt) et après
+  # (sur ce qui a réellement atterri) : deux exemplaires de cette règle auraient
+  # fini par ne plus dire la même chose, en silence.
+  #
+  # ⚠️ `tolerer` vaut « oui » pour le DÉPÔT et « non » pour la RACINE WEB, et la
+  # nuance n'est pas cosmétique : un `.md` a sa place à côté du répertoire qu'il
+  # explique, il n'en a aucune dans ce qu'Apache sert. Confondre les deux — ce
+  # que faisait la première rédaction — laissait la seconde lecture accepter
+  # dans la racine web ce que la première ne faisait que tolérer dans le dépôt.
+  frontend_intrus() {
+    local racine="$1" tolerer="$2" base ext e connu admis
+    while IFS= read -r -d '' fichier; do
+      base="${fichier##*/}"
+      # Fichiers cachés : plomberie de dépôt (.gitignore…), jamais du produit
+      # livré, et le vhost les refuse déjà par son motif « ^\. ».
+      if [[ "$base" == .* ]]; then continue; fi
+      ext="${base##*.}"
+      if [[ "$ext" == "$base" ]]; then ext=''; fi     # aucun point : sans extension
+      admis=("${FRONTEND_PUBLIABLE[@]}")
+      if [[ "$tolerer" == oui ]]; then admis+=("${FRONTEND_TOLERE[@]}"); fi
+      connu=0
+      for e in "${admis[@]}"; do
+        if [[ "${ext,,}" == "$e" ]]; then connu=1; break; fi
+      done
+      if [[ $connu -eq 0 ]]; then printf '%s\n' "${fichier#"$racine"/}"; fi
+    done < <(find "$racine" -type f -print0)
+  }
+
+  # ── 1. Le refus PRÉCÈDE la copie ──────────────────────────────────────
+  # Une exclusion silencieuse ne se relit pas ; une installation qui s'arrête en
+  # nommant le fichier se lit forcément. Même forme que le contrôle de dérive de
+  # ProxyTimeout au §10 : c'est le CONTENU qui décide, pas le code de sortie
+  # d'une commande.
+  FRONTEND_INTRUS="$(frontend_intrus "$DEPOT/cyber-gouvernance_V4" oui || true)"
+  if [[ -n "$FRONTEND_INTRUS" ]]; then
+    while IFS= read -r intrus; do alerte "fichier non publiable : $intrus"; done <<< "$FRONTEND_INTRUS"
+    echec "les fichiers ci-dessus n'ont rien à faire dans une racine web servie sans
+      authentification (constat Q-31 : quatre classeurs de données réelles y ont séjourné —
+      registre de risques, plan de continuité, exigences client, verrou Excel nommant une
+      personne). L'installation s'arrête AVANT de copier quoi que ce soit.
+      Retirez-les de cyber-gouvernance_V4/ : les jeux d'essai vivent hors du dépôt.
+      Si le type est légitimement servable, ajoutez-le à FRONTEND_PUBLIABLE ICI *et* au
+      <FilesMatch> de deploy/apache/cyber-grc.conf — les deux barrières vont par paire."
+  fi
+
+  # ── 2. La copie, restreinte à la liste blanche ────────────────────────
+  # `--include '*/'` fait descendre rsync dans les répertoires ; `-m` élague
+  # ensuite ceux qui se retrouvent vides, si bien qu'un répertoire dont rien
+  # n'est publiable (`data/`) n'apparaît même pas dans la racine web.
+  # `--delete` efface ce qu'une installation précédente y aurait laissé.
+  FRONTEND_REGLES=(--include '*/')
+  for e in "${FRONTEND_PUBLIABLE[@]}"; do FRONTEND_REGLES+=(--include "*.$e"); done
+  FRONTEND_REGLES+=(--exclude '*')
+  rsync -a -m --delete "${FRONTEND_REGLES[@]}" \
+        "$DEPOT/cyber-gouvernance_V4/" "$RACINE/frontend/"
+
+  # ── 3. Ce qui a RÉELLEMENT atterri ────────────────────────────────────
+  # Les règles de filtre de rsync sont subtiles et n'ont pas pu être éprouvées
+  # sur la machine de développement (rsync n'y est pas installé). On ne fait
+  # donc pas confiance à la commande : on relit la racine web. Le contrôle
+  # regarde dans les DEUX sens — un intrus publié arrête l'installation, et un
+  # fichier légitime manquant aussi, parce qu'une liste blanche trop serrée
+  # livrerait une application muette dont personne ne comprendrait la panne.
+  PUBLIES_INTRUS="$(frontend_intrus "$RACINE/frontend" non || true)"
+  if [[ -n "$PUBLIES_INTRUS" ]]; then
+    while IFS= read -r intrus; do alerte "PUBLIÉ à tort : $intrus"; done <<< "$PUBLIES_INTRUS"
+    echec "la racine web contient les fichiers ci-dessus, que la liste blanche aurait dû
+      écarter (constat Q-31). Ils sont servis SANS authentification : retirez-les de
+      $RACINE/frontend/ avant d'ouvrir le service, et corrigez FRONTEND_REGLES."
+  fi
+  ATTENDUS="$(find "$DEPOT/cyber-gouvernance_V4" -type f | grep -cEi "\.($(IFS='|'; echo "${FRONTEND_PUBLIABLE[*]}"))$" || true)"
+  OBTENUS="$(find "$RACINE/frontend" -type f | wc -l)"
+  if [[ "$ATTENDUS" -ne "$OBTENUS" ]]; then
+    if [[ "$OBTENUS" -lt "$ATTENDUS" ]]; then
+      echec "frontend : $ATTENDUS fichier(s) publiables dans le dépôt, $OBTENUS seulement dans
+        la racine web. FRONTEND_REGLES écarte quelque chose qu'elle devrait publier :
+        l'application serait livrée incomplète, et le défaut ne se verrait qu'à l'usage."
+    fi
+    echec "frontend : $ATTENDUS fichier(s) publiables dans le dépôt, $OBTENUS dans la racine
+      web. Il y a donc là des fichiers que la copie n'a pas apportés — reliquat d'une
+      installation précédente que « --delete » n'a pas emporté, ou dépôt manuel. Ils sont
+      servis SANS authentification (constat Q-31) : videz $RACINE/frontend/ et recommencez."
+  fi
+  succes "frontend : $OBTENUS fichier(s) publiés, aucun fichier non publiable"
 
   # Jeton de cache : sans lui, les 61 fichiers .js/.css de la page restent SEPT JOURS
   # dans le cache des navigateurs (vhost, ExpiresByType) et aucun correctif n'atteint
