@@ -308,12 +308,15 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   trace les écritures, il n'a pas valeur de preuve.
 - **Aucune limitation de rythme**, **aucun sélecteur de filiale**, **aucune pièce jointe** :
   lots L3, L4 et L6.
-- **Quatre constats restent ouverts, par décision écrite et non par oubli** : le coût
+- **Quatre constats sont reportés par décision écrite, et non par oubli** : le coût
   d'analyse de corps avant toute authentification et un commentaire faux dans une
   migration **déjà appliquée** (tous deux **lot L3**) ; un garde-fou qui mesure une
   **longueur** là où le `CONVENTIONS.md` §2 norme désormais une **entropie** — rien ne
   casse, mais aligner un jour le générateur SQL le ferait crier à tort (**lot L5**) ; et
-  l'absence de plafond de durée ou de volume sur une reprise (**lot L7**).
+  l'absence de plafond de durée ou de volume sur une reprise (**lot L7**). Cette liste
+  nomme les **reports**, pas l'ensemble des constats ouverts : d'autres sont en cours de
+  correction, et l'écriture des essais de fermeture en fait encore apparaître. Le compte
+  se lit dans le registre, jamais ici.
 - **Un cinquième est documenté sans être fermé, et c'est délibéré.** Le repli
   d'`applyImport` — emprunté seulement contre un serveur qui ne porte pas `/api/reprise`,
   donc lors d'un retour arrière — réécrit toute chaîne égale à l'identifiant renommé. Le
@@ -389,11 +392,28 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   **invisible** de la filiale voisine, et une unicité sans `filiale_id` laisse une filiale
   occuper l'identifiant d'une autre. D'où **11 clés étrangères composites** `(référence,
   filiale_id)` et **9 unicités `uq_<parent>_id_filiale`** (`CONVENTIONS.md` §17.1 et §19.1).
-- **La traçabilité est imposée à la création**, sur les **42 tables** portant `cree_par` : un
-  déclencheur `before insert` fixe `version`, `cree_le` et `cree_par` ; ce que l'appelant envoie
-  dans ces colonnes est ignoré. Sans lui, une ligne créée au nom d'un directeur général qu'on
-  n'est pas — à la date qu'on choisit — devenait une pièce d'audit inattaquable, le gel opéré
-  ensuite figeant la forgerie pour toujours (`CONVENTIONS.md` §18.1).
+- **La traçabilité est imposée à la création**, sur les **42 tables** portant `cree_par` :
+  chacune reçoit un déclencheur `before insert` nommé `trg_<table>_creation` qui fixe
+  `cree_le` et `cree_par`, et **ce que l'appelant envoie dans ces colonnes est ignoré**.
+  Non pas une fonction, mais **trois, choisies selon la forme de la table** : 31 tables
+  prennent `f_init_tracabilite`, qui fixe **en plus** `version` et remet `modifie_le` /
+  `modifie_par` à vide ; les neuf tables de liaison et `sessions` prennent
+  `f_init_creation`, qui s'en tient aux deux colonnes de création **parce que ces tables
+  n'ont pas de `version`** ; `profil_domaines` prend `f_init_horodatage`. Sans ce
+  dispositif, une ligne créée au nom d'un directeur général qu'on n'est pas — à la date
+  qu'on choisit — devenait une pièce d'audit inattaquable, le gel opéré ensuite figeant la
+  forgerie pour toujours (`CONVENTIONS.md` §18.1).
+
+  > ⚠️ **Cette entrée a été corrigée après coup, sans que ses chiffres bougent.** Elle
+  > annonçait « un déclencheur `before insert` fixe `version`, `cree_le` et `cree_par` », ce
+  > qui était **faux pour onze des quarante-deux tables le jour même où la phrase a été
+  > écrite** — les trois fonctions existaient déjà, posées quelques heures plus tôt. Le
+  > défaut n'était pas le compte, qui est exact : c'était l'affirmation d'un **mécanisme
+  > unique**. Un lecteur qui va vérifier un mécanisme unique le trouve, en conclut que
+  > c'est couvert, et ne regarde jamais les onze tables qui font autrement. C'est aussi
+  > pour cela que la couverture ne s'affirme plus : elle se **vérifie**, par
+  > `f_verifier_tracabilite()`, qui exige le déclencheur, **la bonne fonction pour la
+  > forme**, l'armement `always`, et refuse une clause `when`.
 - **Les garde-fous du schéma sont branchés, et ils se découvrent.** `db/migrate.mjs` et
   `deploy/install.sh` appellent **`f_verifier_schema()`**, et elle seule : un **point d'appel
   unique** qui trouve ses contrôles dans le catalogue au lieu de les réciter. Un garde-fou neuf
@@ -472,6 +492,41 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 - Vérifié : recherche par domaine (`ux`), par stack (`html-tailwind`), mode `--design-system`
   et `validate_data.py` (12 fichiers de domaine + 22 fichiers de stack OK).
 - Documentation : mode d'emploi et garde-fous (charte Dedienne prioritaire) dans `CLAUDE.md` §5.
+
+---
+
+> ## ⚠️ Tout ce qui suit décrit le produit **100 % navigateur**, avant la bascule serveur
+>
+> Ces entrées sont **datées et exactes pour leur date** : elles disent ce qu'un chantier a
+> livré, le jour où il l'a livré, et c'est à ce titre qu'on les garde — c'est là qu'on
+> retrouve *pourquoi* un module est fait comme il est. Elles ne décrivent **pas** l'état
+> actuel du produit.
+>
+> Ce qui a changé depuis, et qu'il ne faut pas aller chercher plus bas : les données
+> vivent sur le **serveur** (PostgreSQL) et non plus dans IndexedDB ; le **miroir
+> `localStorage`**, les **points de restauration locaux**, le **coffre de chiffrement** et
+> la **gestion du quota** ont été retirés ; l'export `grc-backup` est devenu un **format
+> d'échange**, plus une sauvegarde. Voir les sections « vague 1 » et « vague 2 » ci-dessus,
+> `backend/README.md` §8, et `docs/DATA_MODEL.md` §1.
+>
+> ⚠️ **Et une mise en garde qui vaut pour la quasi-totalité des entrées ci-dessous : les
+> « tests headless (Playwright) » qu'elles annoncent n'ont jamais été versionnés.**
+> Vingt-trois entrées les mentionnent ; la porte de sécurité S2 a constaté qu'il n'en
+> existait **aucun dans le dépôt** — `grep -rl playwright` ne rendait rien hors
+> `node_modules` —, alors que `CLAUDE.md` §5 les impose depuis le début du projet. Ils
+> avaient bien été écrits et joués, dans un répertoire de travail, puis jetés. Une
+> assertion de test qui n'est pas versionnée ne protège de rien : personne ne peut la
+> rejouer, et elle ne s'oppose à aucune régression. C'est la raison pour laquelle les
+> essais navigateur **vivent désormais dans le dépôt** (`backend/test/navigateur/`, joués
+> par `npm test`) — et six constats de S2, dont ses trois bloquants, ne se voyaient que là.
+>
+> **Trois entrées ci-dessous portent une note d'errata**, signalée par un ⚠️ à l'endroit
+> exact — la centralisation des identifiants, l'échappement XSS, l'édition des
+> correspondances —, et une quatrième dans la section « vague 1 » plus haut. Ce sont
+> celles dont la *phrase sur le mécanisme* s'est révélée fausse : soit après coup, soit
+> dès le jour où elle a été écrite. Le chiffre et le fait livré n'y sont pas touchés ;
+> seule l'affirmation l'est. **Un journal se corrige de cette façon, pas en se
+> réécrivant** — effacer la phrase fausse effacerait aussi la trace de ce qu'elle a coûté.
 
 ### Référentiels — plusieurs mesures de sécurité par exigence (schéma v12)
 - **Une exigence peut désormais être couverte par PLUSIEURS mesures** (ex. une question AirCyber = MFA
@@ -851,8 +906,20 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   anti-collision `"<PRÉFIXE>-<timestamp>-<aléa>"` qui était **recopiée sur 23 sites / 17 modules**
   (Actifs, Audits ×2, BIA, Donneurs d'ordre, Crise, Documents, Exigences ×2, Incidents ×2,
   Correspondances ×2, Mesures, MCO, Prestataires, Scénarios, Tests PRA, Référentiels ×2, RGPD, Risques ×2).
-  **Solde la dette « collisions »** notée dans le CLAUDE.md : un seul endroit à faire évoluer (p. ex.
-  future migration vers `crypto.randomUUID`).
+  Un seul endroit à faire évoluer (p. ex. future migration vers `crypto.randomUUID`).
+
+  > ⚠️ **Cette entrée annonçait « solde la dette *collisions* ». Elle ne la soldait pas.**
+  > La centralisation était juste, et elle est restée ; ce qui était faux, c'est la
+  > conclusion. La convention centralisée tirait
+  > `Math.floor(Math.random() * 1000)` — **mille valeurs** —, et `Date.now()` ne bouge pas
+  > d'une itération à l'autre dans une boucle d'import : l'identifiant s'y réduit à ce
+  > tirage. Le défaut a survécu **deux vagues** sous cette phrase, et il est ressorti en
+  > **constat bloquant** d'un passage de porte — un import qui écrivait 223 lignes sur 250
+  > *en annonçant le succès*, donc un score de conformité faux dans un outil qui sert de
+  > preuve en audit. La leçon a été inscrite au `backend/db/CONVENTIONS.md` §2 :
+  > **centraliser un générateur n'est pas le corriger**, et ce qui est normatif est une
+  > **propriété** — au moins 52 bits d'aléa cryptographique — et non le fait qu'il n'existe
+  > qu'à un endroit.
 - **Comportement identique** : `UI.genId("INC")` produit exactement `"INC-<timestamp>-<aléa>"` comme avant.
   Les horodatages `updatedAt: Date.now()` (10 sites) **ne sont pas touchés** (ce ne sont pas des id).
 - **Collecte de formulaire** : après analyse, la lecture des champs (`getElementById(...).value`) reste
@@ -968,6 +1035,14 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   catalogue (surcouche « Modifiée »), **masquer** un groupe, et **réinitialiser** le catalogue par
   défaut. **Cartographie** en tête : part des exigences de chaque référentiel reliée à au moins une
   correspondance.
+
+  > ⚠️ **« Entièrement éditable » ne vaut plus depuis la bascule serveur, et la
+  > restriction est voulue.** Ce qui était juste sur un poste isolé devenait faux en
+  > contexte de groupe : une correspondance est une **référence commune aux vingt
+  > filiales**, et n'importe laquelle pouvait la réécrire ou la supprimer pour les
+  > dix-neuf autres. L'éditer est désormais un acte d'**administration Groupe** ; la
+  > **lire** reste ouvert à tous, et la **propagation** décrite plus haut reste offerte
+  > puisqu'elle ne touche que des données de filiale.
 - **Modèle de données (schéma v7)** : nouveau tableau **`mappings`** = surcouche utilisateur
   (ajouts, overrides par id, masquages `_deleted`) fusionnée avec le **catalogue statique**
   (`js/data/mappings.js`). API DataStore `getMappings` / `getMappingById` / `upsertMapping` /
@@ -995,7 +1070,18 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 - **Échappement généralisé** (`escapeHtml`) de toutes les données utilisateur injectées en DOM
   dans les 7 modules restants : **Actifs, Donneurs d'ordre, BIA, Scénarios PCA/PRA, Tests PRA,
   MCO, Contrôles & Audits** (listes, fiches, formulaires, options, matrice RACI et **vues
-  d'impression**). La dette XSS transverse est désormais **soldée** sur les modules de saisie.
+  d'impression**). La dette XSS transverse est **soldée sur les modules de saisie**.
+
+  > ⚠️ **« Soldée » a été démenti deux fois, et il faut le dire ici.** Le travail décrit
+  > est réel et il tient ; c'est le mot qui promettait trop. La porte de sécurité S2 a
+  > trouvé **deux injections résiduelles** — le nom d'un risque dans le panneau de détail
+  > de la matrice, le nom d'un client dans le sélecteur de donneur d'ordre —, dans des
+  > modules qui disposaient de l'échappement et s'en servaient trente lignes plus loin. Et
+  > elle a trouvé que la seconde couche, la politique de sécurité de contenu du vhost,
+  > **bloquait soixante-quatre gestionnaires en ligne** : l'application ne fonctionnait pas
+  > dans sa configuration de déploiement. Un échappement n'est jamais « soldé » — c'est une
+  > discipline qui se tient à chaque rendu, y compris dans un panneau de détail ou un
+  > `<option>`.
 - **Correctifs de sécurité notables** :
   - **Audits — injection HTML** : les rapports/PV imprimés faisaient `…replace(/\n/g, '<br>')`
     **sans échappement préalable** (rendu HTML de texte libre : synthèse, audité, participants,

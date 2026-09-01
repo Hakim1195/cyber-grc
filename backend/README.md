@@ -976,9 +976,16 @@ Ce que la reprise fait, quand on la rejoue :
   exercés, mais la grille n'a pas été rejouée par un auditeur indépendant depuis
   `120266e`. L'état constat par constat vit dans le **registre** du
   [plan d'exécution](../docs/PLAN_EXECUTION.md) §7 — seule liste, volontairement.
-- **Ce qui reste ouvert l'est par décision écrite, pas par oubli**, et c'est ce que la
-  colonne d'état du registre permet de vérifier plutôt que de croire. Quatre reports,
-  chacun rattaché au lot qui a l'occasion de le traiter : deux relèvent du **lot L3**
+- **Une partie de ce qui reste ouvert l'est par décision écrite, pas par oubli** — et
+  c'est ce que la colonne d'état du registre permet de vérifier plutôt que de croire. Elle
+  distingue un **report** (un constat rattaché au lot qui aura l'occasion de le traiter)
+  d'un constat **en cours de correction**, et cette seconde catégorie se remplit encore :
+  l'écriture des essais de fermeture en a fait apparaître au moins un de plus. **Ne lisez
+  donc pas la liste ci-dessous comme exhaustive** : elle nomme les reports, parce qu'un
+  report est une décision qui doit être relisible ; le compte des constats ouverts, lui, se
+  lit dans le registre et nulle part ailleurs.
+
+  Les reports, donc : deux relèvent du **lot L3**
   (le coût d'analyse de corps avant toute authentification, qui se règle avec la
   limitation de rythme en `onRequest` ; et un commentaire faux dans une migration
   **déjà appliquée**, qui ne se corrige que par un `comment on` dans la migration
