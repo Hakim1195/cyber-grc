@@ -544,7 +544,10 @@ export function exportAncienVolumineux(options = {}) {
     id: id('ACTIF', 3000 + i),
     nom: `Actif ${String(i + 1)}`,
     type: ['Matériel', 'Logiciel', 'Service', 'Donnée'][i % 4],
-    criticite: ['faible', 'moyenne', 'élevée', 'critique'][i % 4],
+    // Le vocabulaire est celui des FORMULAIRES de l'application (`js/modules/*.js`),
+    // jamais une invention de ce fichier : c'est de l'accord entre ce vocabulaire et
+    // le schéma que parle le constat M-8.
+    criticite: ['faible', 'modérée', 'élevée', 'critique'][i % 4],
     responsable: `Responsable ${String(i % 5)}`,
     description: 'Actif du périmètre industriel.',
     risques_lies: [risques[i % risques.length].id],
@@ -554,9 +557,9 @@ export function exportAncienVolumineux(options = {}) {
   const processus = suite(Math.max(2, Math.round(n / 3)), (i) => ({
     id: id('BIA', 4000 + i),
     nom: `Processus métier ${String(i + 1)}`,
-    criticite: ['Faible', 'Moyenne', 'Critique'][i % 3],
-    rto: `${String((i % 8) + 1)} heures`,
-    rpo: `${String((i % 3) + 1)} heures`,
+    criticite: ['Faible', 'Modérée', 'Élevée', 'Critique'][i % 4],
+    rto: ['4 heures', '24 heures', '48 heures', '1 semaine'][i % 4],
+    rpo: ['4 heures', '24 heures', '1 semaine', '1 mois'][i % 4],
     responsable: `Responsable ${String(i % 4)}`,
     description: 'Processus soumis au BIA.',
     actifs_lies: [actifs[i % actifs.length].id],

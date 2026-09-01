@@ -406,10 +406,61 @@ describe('Le dernier chemin non éprouvé : un vieil export réel, de bout en bo
     assert.equal(Object.hasOwn(evaluation, 'mesure_id'), false);
 
     // Et rien n'a été inventé : un export v6 ne porte ni correspondances, ni
-    // historique, ni annuaire.
+    // historique, ni annuaire, et la reprise ne doit pas en fabriquer.
+    //
+    // La mesure porte sur ce que CETTE reprise a créé, pas sur le contenu de la
+    // table : `mappings` est de niveau Groupe et survit donc au « remplacer », qui
+    // ne purge que la filiale. Compter les lignes ferait dépendre le verdict des
+    // tests joués avant — un test dont l'ordre décide du résultat ne mesure rien.
     for (const absente of ['mappings', 'history', 'personnes']) {
-      assert.deepEqual(jeu[absente], [], `« ${absente} » n’existait pas en v6 : rien ne doit l’inventer.`);
+      assert.equal(
+        reponse.corps.bilan.crees[absente] ?? 0,
+        0,
+        `« ${absente} » n’existait pas en v6 : la reprise ne doit rien y créer.`,
+      );
     }
+    assert.ok(Array.isArray(jeu.personnes), 'La collection existe côté modèle, même vide.');
+  });
+
+  test('TOUT jeu d’essai de la reprise est acceptable au SCHÉMA, pas seulement au module', async () => {
+    // ── La leçon du jeu d'essai fautif, transformée en garde-fou ──────────────
+    //
+    // `jeux-essai.mjs` portait une action rattachée aux cinq parents à la fois. Le
+    // module de reprise l'acceptait — il ne connaît aucune règle métier, et il a
+    // raison de n'en connaître aucune —, si bien que les tests de round-trip
+    // passaient sur un enregistrement que PostgreSQL refuse. Ils prouvaient donc
+    // moins qu'ils n'en avaient l'air : **un jeu d'essai qui ne pourrait pas exister
+    // en base fait mesurer autre chose que le produit.**
+    //
+    // Ce test empêche que cela recommence, pour tous les jeux du fichier et pas
+    // seulement pour celui qui a été pris en défaut. Il tourne en APERÇU : il
+    // applique vraiment — contraintes, clés étrangères, unicités et politiques
+    // comprises — puis annule.
+    const jeux = [
+      ['v1 minimal', 1, instantane(1, { risques: [{ id: 'RISK-1699000000001', nom: 'Risque d’un vieux poste' }] })],
+      ['v6 volumineux', 6, exportAncienVolumineux({ parCollection: 6, base: 1_697_000_000_000 })],
+      ['v12 complet', 12, instantaneV12Complet()],
+    ];
+
+    const refus = [];
+    for (const [nom, version, charge] of jeux) {
+      // « remplacer », et non « fusionner » : la purge de la filiale précède
+      // l'application, si bien que le verdict ne dépend pas de ce que les tests
+      // précédents ont laissé — une unicité métier (un code d'exigence, un point
+      // d'historique du jour) ferait sinon échouer le jeu pour la mauvaise raison.
+      // L'aperçu annule le tout ensuite.
+      const reponse = await serveur.appeler('POST', '/api/reprise', {
+        corps: {
+          mode: 'remplacer',
+          apercu: true,
+          fichier: { nom: `${nom}.json`, contenu: JSON.stringify(enveloppe(version, charge)) },
+        },
+      });
+      if (reponse.statut !== 200) {
+        refus.push(`${nom} → ${String(reponse.statut)} ${JSON.stringify(reponse.corps.message ?? '')}`);
+      }
+    }
+    assert.deepEqual(refus, [], 'Chaque entrée est un jeu d’essai qui ne pourrait pas exister en base.');
   });
 
   test('un vieil export FAUTIF ne laisse rien à moitié repris', async () => {

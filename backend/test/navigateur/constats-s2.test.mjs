@@ -337,15 +337,40 @@ describe('M-6 — sous la CSP de production, l’interface répond encore', () =
     try {
       application.definirCsp(CSP_PRODUCTION);
 
+      // TOUTES les routes de l'application, et non un échantillon : ce test est
+      // l'instrument de mesure de la conversion en cours dans `js/modules/**`, et un
+      // instrument qui ne regarde que huit écrans sur vingt-huit annoncerait la fin
+      // du travail avant l'heure. La liste est celle de `js/app.js`.
       const ecrans = [
-        '#/dashboard', '#/cartographie', '#/matrice', '#/crise',
-        '#/prestataires', '#/audits', '#/pra', '#/risques',
+        '#/dashboard', '#/synthese', '#/echeances', '#/clients', '#/personnel',
+        '#/actifs', '#/cartographie', '#/risques', '#/matrice', '#/exigences',
+        '#/referentiels', '#/mesures', '#/mapping', '#/couverture', '#/soa',
+        '#/actions', '#/incidents', '#/documents', '#/rgpd', '#/bia',
+        '#/crise', '#/crise-fiches', '#/pra', '#/mco', '#/tests',
+        '#/prestataires', '#/audits', '#/settings',
       ];
+      // Les FICHES et les FORMULAIRES comptent autant que les listes : un
+      // gestionnaire en ligne sur un bouton « Enregistrer » rend la saisie
+      // impossible, et aucune liste ne le montrerait. Les identifiants viennent du
+      // jeu d'essai partagé.
+      const fiches = [
+        '#/risques/RISK-A', '#/exigences/EX-A', '#/actifs/ACTIF-A', '#/clients/CLI-A',
+        '#/actions/ACT-A', '#/incidents/INC-A', '#/documents/DOC-A', '#/rgpd/TRT-A',
+        '#/bia/BIA-A', '#/personnel/PERS-A', '#/prestataires/PRES-A', '#/audits/AUD-A',
+        '#/mesures/MESURE-A', '#/pra/SCEN-A',
+      ];
+
       const enLigne = [];
-      for (const route of ecrans) {
+      /** Ce que le balayage a réellement vu — sans quoi il pourrait passer sur du vide. */
+      const couverture = { ecrans: 0, formulaires: 0, caracteres: 0 };
+      for (const route of [...ecrans, ...fiches]) {
         await session.page.goto(`${application.url}/index.html${route}`, { waitUntil: 'domcontentloaded' });
         assert.equal(await attendreApplication(session.page), 'chargee', `L’écran ${route} doit s’afficher.`);
         await session.page.waitForTimeout(200);
+        couverture.ecrans += 1;
+        couverture.caracteres += await session.page.evaluate(
+          () => (document.getElementById('app')?.innerHTML ?? '').length,
+        );
         const trouves = await session.page.evaluate(() => {
           const elements = Array.from(
             document.querySelectorAll('[onclick],[onchange],[oninput],[onsubmit],[onkeyup]'),
@@ -364,7 +389,44 @@ describe('M-6 — sous la CSP de production, l’interface répond encore', () =
         if (trouves.nombre > 0) {
           enLigne.push(`${route} : ${String(trouves.nombre)} gestionnaire(s), ex. ${trouves.exemple}`);
         }
+
+        // Et le formulaire de création, quand l'écran en propose un : c'est le geste
+        // le plus coûteux à perdre, et il n'est visible qu'après un clic.
+        const aFormulaire = await session.page.evaluate(() => {
+          const bouton = document.getElementById('addBtn');
+          if (bouton === null) return false;
+          bouton.click();
+          return true;
+        });
+        if (aFormulaire) {
+          couverture.formulaires += 1;
+          await session.page.waitForTimeout(150);
+          const dansLeFormulaire = await session.page.evaluate(
+            () => document.querySelectorAll('[onclick],[onchange],[oninput],[onsubmit],[onkeyup]').length,
+          );
+          if (dansLeFormulaire > 0) {
+            enLigne.push(`${route} (formulaire) : ${String(dansLeFormulaire)} gestionnaire(s)`);
+          }
+        }
       }
+
+      // ── La couverture est RÉCLAMÉE ────────────────────────────────────────
+      //
+      // « Aucun gestionnaire trouvé » est aussi ce que rend un balayage qui n'a rien
+      // affiché. On exige donc que les écrans aient produit de la matière, et qu'un
+      // nombre plancher de formulaires de création ait été ouvert.
+      assert.equal(couverture.ecrans, ecrans.length + fiches.length, 'Tous les écrans doivent être visités.');
+      assert.ok(
+        couverture.caracteres > 200_000,
+        `Balayage suspect : ${String(couverture.caracteres)} caractères de HTML rendus en tout.`,
+      );
+      // Neuf écrans exposent un bouton « Nouveau » sous l'identifiant `addBtn` ; les
+      // autres créent depuis une fiche parente ou n'ont pas de création. Le plancher
+      // est donc la valeur mesurée : il parlera si un écran perd son bouton.
+      assert.ok(
+        couverture.formulaires >= 9,
+        `Seulement ${String(couverture.formulaires)} formulaire(s) de création ouvert(s).`,
+      );
 
       assert.deepEqual(
         enLigne,

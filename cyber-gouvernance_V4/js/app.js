@@ -228,7 +228,18 @@ window.FiltreDonneurOrdre = (function () {
 })();
 
 /* =========================
-   GESTION DU SÉLECTEUR DE CLIENT
+   BARRE LATÉRALE : PÉRIMÈTRE (SERVEUR) + FILTRE DONNEUR D'ORDRE (LOCAL)
+
+   Deux choses distinctes, longtemps confondues sous une seule étiquette
+   « Périmètre Actif » :
+
+     · le PÉRIMÈTRE — la filiale dont on voit les données. Il vient du serveur
+       (`Session`, résolu par `/api/session`), il n'a AUCUN mutateur côté navigateur
+       et il est affiché en LECTURE SEULE. C'est le contrôle S2 de la grille : le
+       navigateur ne choisit pas son périmètre, il l'apprend.
+     · le FILTRE « donneur d'ordre » — un confort d'affichage interne à la filiale,
+       qui restreint conformité et actions à un client donné. Il vit en mémoire
+       (`FiltreDonneurOrdre`), plus dans le localStorage.
 ========================= */
 window.renderContextSelector = function() {
     const sidebarHeader = document.querySelector(".sidebar-header");
@@ -237,19 +248,31 @@ window.renderContextSelector = function() {
     const existing = document.getElementById("context-selector-container");
     if (existing) existing.remove();
 
+    const esc = window.escapeHtml || (v => String(v == null ? "" : v));
     const clients = DataStore.getClients();
     const currentContext = FiltreDonneurOrdre.get();
+
+    // Périmètre résolu par le serveur. Tant qu'il ne l'est pas, on ne l'invente pas.
+    let filiale = "";
+    try {
+        if (typeof Session !== "undefined" && Session.libelleFiliale) filiale = Session.libelleFiliale();
+    } catch (e) { filiale = ""; }
 
     const container = document.createElement("div");
     container.id = "context-selector-container";
 
-    let optionsHtml = `<option value="global" style="color: #333; background: #fff;" ${currentContext === "global" ? "selected" : ""}>Vue Globale (Interne + Tous clients)</option>`;
+    let optionsHtml = `<option value="global" style="color: #333; background: #fff;" ${currentContext === "global" ? "selected" : ""}>Tous les donneurs d'ordre (+ interne)</option>`;
     clients.forEach(c => {
-        optionsHtml += `<option value="${c.id}" style="color: #333; background: #fff;" ${currentContext === c.id ? "selected" : ""}>${c.nom}</option>`;
+        optionsHtml += `<option value="${esc(c.id)}" style="color: #333; background: #fff;" ${currentContext === c.id ? "selected" : ""}>${esc(c.nom)}</option>`;
     });
 
     container.innerHTML = `
-        <div class="sidebar-divider">Périmètre Actif</div>
+        <div class="sidebar-divider">Périmètre</div>
+        <div id="perimetre-filiale" title="Périmètre résolu par le serveur — il ne se choisit pas depuis le navigateur"
+             style="width: 100%; padding: 6px 8px; background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; font-size: 0.85rem; font-weight: 600;">
+            ${filiale ? esc(filiale) : `<span style="font-weight:400; opacity:0.75;">Périmètre non résolu</span>`}
+        </div>
+        <div class="sidebar-divider">Filtre donneur d'ordre</div>
         <select id="context-selector" style="width: 100%; padding: 6px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; font-size: 0.85rem; cursor: pointer; outline: none;">
             ${optionsHtml}
         </select>
@@ -259,7 +282,7 @@ window.renderContextSelector = function() {
 
     document.getElementById("context-selector").addEventListener("change", (e) => {
         FiltreDonneurOrdre.set(e.target.value);
-        if (window.showToast) window.showToast("Périmètre de travail mis à jour.", "info");
+        if (window.showToast) window.showToast("Filtre « donneur d'ordre » mis à jour.", "info");
         Router.navigateTo(location.hash.replace(/^#/, ""), false);
     });
 };
