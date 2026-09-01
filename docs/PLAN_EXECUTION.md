@@ -334,3 +334,39 @@ migration elle-même et appliqué aux tables de liaison — mais pas à ces sept
 d'essai ni la démonstration d'audit ne couvraient ce chemin : **le défaut serait parti en
 production sous 28 contrôles verts**. C'est exactement le cas qu'une revue repoussée en L15
 aurait découvert trop tard.
+
+### Registre des constats ouverts
+
+**Pourquoi ce tableau existe.** La vague 1 a mesuré, chiffré et écrit noir sur blanc qu'un
+générateur d'identifiants ne rendait que 95 valeurs distinctes sur 100. Personne ne l'a porté :
+le constat a été renvoyé à « la clôture de la vague », c'est-à-dire à personne. Deux vagues plus
+tard il est ressorti en **bloquant** — un import qui écrit 223 lignes sur 250 *et annonce le
+succès*. La leçon tient en une phrase, et elle vaut désormais règle : **un constat chiffré et non
+attribué est un constat perdu.** Tout constat sort d'une porte avec un propriétaire nommé et une
+échéance, ou il n'en sort pas.
+
+Un constat ne quitte ce tableau que fermé **et rejoué** — la porte est rejouée intégralement,
+jamais seulement sur le correctif.
+
+| # | Constat | Gravité | Propriétaire | Échéance |
+|---|---|---|---|---|
+| **Q-1** | Le générateur d'identifiants corrigé, gardé et démontré n'est pas celui qui écrit : tout identifiant réellement écrit vient d'`engendrerIdentifiant()` en TypeScript, un million de valeurs, sans garde-fou | 🟠 majeur | agent **API** | fermeture de la porte S2 |
+| **Q-2** | La ré-émission d'identifiant n'est pas idempotente : trois reprises de la même sauvegarde donnent trois clones, et la référence vise le dernier. Le correctif T-4 lui a ouvert le chemin | 🟠 majeur | agent **API** | **avant la mise en service pilote** |
+| **Q-3** | La moitié navigateur du correctif T-1 n'a aucun test, alors que le rapport TER en faisait une condition explicite | 🟠 majeur | agent **OUTILLAGE** | fermeture de la porte S2 |
+| **Q-4** | La documentation reste antérieure à la vague — **4ᵉ signalement** | 🟠 majeur | agent **DOC** | fermeture de la porte S2 |
+| **Q-5** | Un garde-fou de schéma qui *cesse d'être découvert* disparaît en silence : `f_verifier_schema()` ne refuse que s'il n'en trouve **aucun**. Une migration qui renomme ou re-signe une fonction suffit | 🔵 mineur | agent **OUTILLAGE** | fermeture de la porte S2 |
+| **Q-6** | Trois textes rendus faux par les correctifs T-2 et T-4 : l'en-tête d'`applyImport`, les commentaires de `uq_imports_idempotence` et `imports.cle_idempotence`, l'anomalie `identifiant-duplique` | 🔵 mineur | (a) et (c) agent **API** · (b) **lot L3**, voir ci-dessous | (a)(c) porte S2 · (b) vague 3 |
+| **Q-7** | `imports.id` est engendré par un `Math.random()` en ligne sur un million de valeurs — quatrième clone de la convention d'identifiant, alors que le §2 des conventions n'en veut **qu'un** | 🔵 mineur | agent **API**, avec Q-1 | fermeture de la porte S2 |
+| **Q-8** | Le différentiel complet est recalculé plusieurs fois par battement : sondage complet mesuré à 608 ms sur 12 000 enregistrements, et le correctif T-1 en a ajouté un, toutes les 20 s, y compris quand rien n'attend | 🔵 mineur | agent **FRONTEND** | **après** la fermeture de Q-3 — les tests de Q-3 exercent `sonder()`/`cycle()` |
+| **Q-9** | Une reprise de 12 000 enregistrements tient une connexion du pool 20 s ; `statement_timeout` borne l'instruction, jamais la transaction. Dix reprises simultanées épuisent le pool | 🔵 mineur | **lot L7** (import) | vague 5 |
+| **Q-10** | ~160 ms d'analyse de corps avant toute décision, sans authentification. Ce n'est pas propre à la reprise : le remède est un contrôle en `onRequest`, avec la limitation de rythme | 🔵 mineur | **lot L3** | vague 3 |
+| **Q-11** | Le repli d'`applyImport` réintroduit un renommage global quand le serveur ne porte pas `/api/reprise` : chemin atteignable seulement lors d'un retour arrière. À défaut de le fermer, le dire dans le code | 🔵 mineur | agent **FRONTEND** | avec Q-8 |
+
+**Arbitrage sur Q-6 (b) — pourquoi il attend la vague 3.** Le commentaire fautif est dans
+`001_socle.sql`, migration **déjà appliquée**. `migrate.mjs` en tient l'empreinte SHA-256 et
+sort en **code 4** si le fichier bouge : la règle « une migration appliquée ne se réécrit pas »
+n'admet pas d'exception pour un commentaire. La correction prend donc la forme d'instructions
+`comment on` dans la **prochaine** migration, celle du lot L3. Le produit n'étant pas déployé,
+réécrire 001 et recréer les bases de développement serait matériellement possible — et c'est
+exactement le raisonnement qui vide une règle de sa substance la première fois qu'elle coûte
+quelque chose.
