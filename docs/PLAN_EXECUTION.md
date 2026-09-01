@@ -124,14 +124,32 @@ Le lot qui porte le risque projet **P1** (écrasement silencieux). Il se traite 
 
 ### Vague 3 — L3 authentification et droits 🔴, puis L5 journal
 
-| Agent | Livrable |
-|---|---|
-| AUTH | LDAPS, groupes imbriqués, provisionnement et déprovisionnement, sessions serveur, **trois axes** périmètre × profil × niveau, **droit d'export distinct**, compte de secours, limitation du rythme |
-| API | Application des droits à chaque requête, alimentation de l'annuaire `personnes` depuis l'AD |
-| OUTILLAGE | Annuaire LDAP simulé pour la recette (aucun AD réel en développement) |
+**Six conditions d'entrée** sont écrites au `CONVENTIONS.md` §22, avec l'endroit où chacune fait
+foi et la façon dont la porte S3 la vérifiera. Elles se lisent **avant** de répartir le travail :
+trois d'entre elles (E1, E2, E3) ne sont pas des améliorations, ce sont des dettes que la vague 1
+et la vague 2 ont contractées **au nom de cette vague-ci**.
+
+| Agent | Livrable | Critère d'acceptation |
+|---|---|---|
+| SCHEMA | `005_*.sql` — politiques d'écriture du substrat de session adossées au réglage `grc.authentification` (**E1**), corrections `comment on` des textes rendus faux (**E5**), et ce que le modèle de droits exige en base | Une session applicative ordinaire ne peut plus écrire dans `sessions`, `session_filiales`, `session_domaines` ; la transaction d'ouverture le peut. `migrate.mjs` ne sort pas en code 4. |
+| AUTH | Liaison LDAPS, **résolution récursive des groupes imbriqués**, provisionnement à la première connexion, déprovisionnement qui invalide les sessions actives, sessions serveur, **trois axes** périmètre × profil × niveau, **droit d'export distinct**, compte de secours, limitation du rythme (`PLAN_SERVEUR` §1.5 et §3) | Une appartenance **indirecte** ouvre l'accès ; le retrait du groupe le coupe **et invalide les sessions en cours**, pas seulement la connexion suivante. Le compte de secours est journalisé à chaque usage. |
+| API | Application des droits à chaque requête, contrôle d'authentification et limitation de rythme en **`onRequest`, avant l'analyse du corps** (**E4**), droit d'appel de la reprise (**E3**), alimentation de l'annuaire `personnes` depuis l'AD | Un corps volumineux non authentifié est refusé **sans que son analyse ait été payée** : la mesure de ~160 ms pour 18,6 Mo relevée à S2 doit s'effondrer. Aucune route ne pose le drapeau d'administration sans l'avoir décidé d'après la session (**E2**). |
+| FRONT | Écran de connexion dans la **porte de démarrage existante** — `Vault.boot` établit déjà la liaison au serveur avant l'affichage —, traitement des `401`/`403`, expiration de session sans perte de saisie | Une session expirée pendant une saisie ne détruit pas la saisie. L'application **ne démarre pas** sur un jeu vide si le serveur refuse : la règle posée en vague 2 tient. |
+| MODULES | Ce que les droits rendent conditionnel dans l'interface : entrées de menu, boutons d'écriture, **bouton d'export** | Un profil *Direction* (lecture, Groupe) ne se voit proposer aucune action d'écriture — et l'interface n'est **pas** la barrière : le serveur refuse aussi. |
+| OUTILLAGE | Annuaire LDAP simulé pour la recette (aucun AD réel en développement), et le banc qui exerce les trois axes | Chaque profil du `PLAN_SERVEUR` §3.2 est exercé sur ses domaines **et sur ceux qu'il ne doit pas voir**. Un garde-fou se vérifie dans les deux sens (§20.2). |
+| DÉPLOIEMENT | Variables de configuration LDAPS, autorité de certification interne, procédure de création des groupes AD **prête à exécuter** (`PLAN_SERVEUR` §3.4) | La liste des groupes est engendrée depuis la configuration des filiales, pas écrite à la main (§19.5). |
 
 Puis, une fois L3 stable : **L5 — journal d'audit** (couverture complète des événements du
-`PLAN_SERVEUR` §1.7, consultation, export, vérification du chaînage).
+`PLAN_SERVEUR` §1.7, consultation, export, vérification du chaînage). **Le resserrement de la
+lecture du journal est un livrable ferme de ce lot** (§22, E6) : il ne peut pas être fait plus
+tôt, le chaînage par empreinte imposant l'ordre, et il ne doit pas être oublié.
+
+**Ce que cette vague ne doit pas croire acquis** : trois protections tiennent aujourd'hui et ne
+survivent pas seules à l'arrivée de l'authentification. Elles sont énumérées au `CONVENTIONS.md`
+§22, en fin de paragraphe. La première est la plus traître : *le périmètre vient du serveur*
+est vrai parce qu'aucun chemin ne le lit ailleurs — or L3 introduit précisément la couche qui
+**fabrique** ce périmètre. Le contrôle S2 de la grille se rejoue contre elle, pas contre les
+routes.
 
 **Porte S3** : authentification, sessions, autorisation, couverture et inaltérabilité du journal.
 
@@ -361,6 +379,7 @@ jamais seulement sur le correctif.
 | **Q-9** | Une reprise de 12 000 enregistrements tient une connexion du pool 20 s ; `statement_timeout` borne l'instruction, jamais la transaction. Dix reprises simultanées épuisent le pool | 🔵 mineur | **lot L7** (import) | vague 5 |
 | **Q-10** | ~160 ms d'analyse de corps avant toute décision, sans authentification. Ce n'est pas propre à la reprise : le remède est un contrôle en `onRequest`, avec la limitation de rythme | 🔵 mineur | **lot L3** | vague 3 |
 | **Q-11** | Le repli d'`applyImport` réintroduit un renommage global quand le serveur ne porte pas `/api/reprise` : chemin atteignable seulement lors d'un retour arrière. À défaut de le fermer, le dire dans le code | 🔵 mineur | agent **FRONTEND** | avec Q-8 |
+| **Q-12** | L'en-tête de `js/core/vault.js` justifie la neutralisation du coffre par le fait que « **cinq autres fonctions du coffre sont appelées par `js/modules/settings.js`** » — or `settings.js` n'y fait plus aucune référence, et `Vault.boot` dans `js/app.js` est le seul appel subsistant dans toute la SPA. La décision reste juste ; sa justification écrite ne l'est plus. **Neuvième occurrence du motif « le remède rend fausse la phrase d'un autre fichier »** — cette fois entre deux périmètres d'agents, ce qui est précisément le cas que la propriété exclusive des fichiers ne couvre pas | 🔵 mineur | agent **FRONTEND** | avec Q-8 |
 
 **Arbitrage sur Q-6 (b) — pourquoi il attend la vague 3.** Le commentaire fautif est dans
 `001_socle.sql`, migration **déjà appliquée**. `migrate.mjs` en tient l'empreinte SHA-256 et
