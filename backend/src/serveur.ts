@@ -116,27 +116,81 @@ export function construireServeur(config: Configuration, pool: Pool): FastifyIns
     requestIdHeader: false,
   });
 
-  // Q-39 (seconde couche) — la valeur du client, gardée mais jamais confondue.
+  // ══ Q-39 (seconde couche) — CE CROCHET A CHANGÉ DE MÉTIER ═══════════════
   //
-  // Un client qui porte sa propre corrélation a une raison légitime de vouloir
-  // la retrouver dans le journal. On la journalise donc, sous un nom qui dit
-  // d'où elle vient, et jamais à la place de la nôtre. Elle ne repart pas dans
-  // la réponse : le client sait ce qu'il a envoyé, et l'y renvoyer rendrait de
-  // nouveau les deux valeurs confusables.
+  // Il a été écrit pour rendre service : garder la corrélation d'un client qui
+  // porte la sienne, à part de la nôtre, plutôt que de la jeter. Cet usage est
+  // mort, et il faut le dire au lieu de laisser le code le suggérer — le vhost
+  // livré efface désormais `X-Request-Id`, si bien que derrière Apache ce
+  // crochet **ne se déclenche jamais**. Observé, avec un serveur d'écho à la
+  // place du service et les lignes `RequestHeader` extraites du fichier livré :
   //
-  // Bornée à 64 signes et débarrassée de ses caractères de contrôle : la
-  // mesure a montré que 2 000 signes passaient, et étaient recopiés sur chaque
-  // ligne de journal de la requête — un facteur d'amplification gratuit sur un
-  // disque qui doit tenir trois ans de rétention (PLAN_SERVEUR §1.7).
+  //   à travers Apache : x-request-id présent ? false
+  //   en direct        : x-request-id présent ? true  (valeur du client intacte)
+  //
+  // ── Ce qu'il est devenu, et pourquoi il reste ────────────────────────────
+  //
+  // Un TÉMOIN. Puisque le frontal efface cet en-tête et que personne ne le
+  // produit — ni le frontend, ni le vhost, ni le banc —, sa présence à
+  // l'arrivée signifie exactement l'une de deux choses, et les deux méritent
+  // d'être vues :
+  //
+  //  1. quelque chose parle au service **sans passer par Apache** — donc hors
+  //     TLS, hors en-têtes de sécurité, et demain hors authentification ;
+  //  2. le nettoyage du vhost **ne fait pas ce qu'il dit**.
+  //
+  // Le second n'est pas une hypothèse. `RequestHeader unset` prend un nom
+  // LITTÉRAL ; un motif générique est accepté par `apachectl configtest`, qui
+  // rend « Syntax OK », et n'efface rien. Mesuré ici, les noms littéraux
+  // remplacés par « unset X-* » :
+  //
+  //   configtest      : Syntax OK
+  //   x-request-id    : traverse, valeur du client conservée
+  //   x-forwarded-for : « 10.0.0.1, 127.0.0.1 » — l'adresse FORGÉE en tête,
+  //                     c'est-à-dire le défaut même que ce bloc du vhost
+  //                     existe pour empêcher
+  //
+  // Une protection au frontal peut donc être silencieusement vide, et l'outil
+  // qui vérifie la configuration la bénit. Ce crochet est la seule chose du
+  // produit qui s'en apercevrait. C'est ce qui a emporté l'arbitrage : le
+  // retirer aurait été défendable — un chemin que le déploiement rend
+  // inatteignable est un chemin que personne n'éprouve —, mais on aurait retiré
+  // le témoin en gardant la barrière faillible.
+  //
+  // ⚠️ Ce qu'il n'est PAS, et il faut le dire aussi net : ni une barrière — la
+  // vraie tient une ligne plus haut, `requestIdHeader: false`, et elle tient
+  // seule —, ni une alerte : rien ne lit ce journal aujourd'hui. C'est une
+  // ligne qu'un exploitant trouvera s'il cherche, et que le journal d'audit du
+  // lot L5 pourra reprendre. Le niveau est donc `warn` et non `info` :
+  // derrière un déploiement correct il ne sort pas, et quand il sort, c'est
+  // qu'une chose supposée impossible s'est produite.
+  //
+  // ⚠️ ET SI UNE CHAÎNE DE CORRÉLATION ARRIVE UN JOUR — le vhost le dit déjà,
+  // et il faut que les deux fichiers le disent : **retirer la ligne
+  // « RequestHeader unset X-Request-Id » du vhost et ajouter un producteur de
+  // cet en-tête vont ensemble, jamais l'un sans l'autre.** Retirer la ligne
+  // seule rouvre Q-39 sur ce témoin, qui deviendrait bavard sans rien dire ;
+  // ajouter un producteur seul donne un en-tête qu'Apache efface, donc une
+  // corrélation qui n'arrive jamais. Ce jour-là, ce crochet redevient ce pour
+  // quoi il avait été écrit, et son niveau doit redescendre à `info`.
+  //
+  // La valeur reste bornée à 64 signes et débarrassée de ses caractères de
+  // contrôle : la mesure a montré que 2 000 signes passaient et se recopiaient
+  // sur chaque ligne de journal — inutile sur un disque qui doit tenir trois
+  // ans de rétention (PLAN_SERVEUR §1.7), et d'autant moins souhaitable que
+  // cette valeur est, par construction, choisie par qui ne devrait pas être là.
   serveur.addHook('onRequest', async (requete) => {
     const brut = requete.headers['x-request-id'];
     const valeur = typeof brut === 'string' ? brut : null;
     if (valeur === null || valeur === '') return;
     const propre = valeur.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 64);
     if (propre === '') return;
-    requete.log.info(
+    requete.log.warn(
       { referenceClient: propre },
-      'Référence de corrélation fournie par le client (elle ne remplace pas celle du serveur)',
+      'En-tête « x-request-id » reçu du client : le frontal devrait l’effacer et personne ne le ' +
+        'produit. Cette requête n’est pas passée par Apache, ou le nettoyage du vhost est ' +
+        'inopérant. ' +
+        'La référence servie reste celle du serveur.',
     );
   });
 
