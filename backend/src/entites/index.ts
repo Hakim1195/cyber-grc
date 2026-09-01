@@ -4416,10 +4416,86 @@ const LONGUEUR_ALEA = 25;
 /** Marque d'un identifiant ré-émis par le serveur (voir `identifiantDerive`). */
 const MARQUE_REEMISSION = 'r';
 
-/** Nombre de tirages du contrôle d'entropie de démarrage. */
-const TIRAGES_CONTROLE_ENTROPIE = 20_000;
+/**
+ * Tirages de la **mesure d'entropie par position**.
+ *
+ * 512, et le nombre est mesuré, pas repris : la borne se stabilise là. Sur le
+ * générateur réel — 128 bits rendus sur 25 signes base 36 —
+ *
+ * ```
+ *   128 tirages → 127,26 bits   (positions vues : 33 à 36 symboles — sous-compte)
+ *   256 tirages → 128,04 bits
+ *   512 tirages → 128,08 bits   (toutes les positions voient leurs 36 symboles)
+ *  4096 tirages → 128,08 bits
+ * ```
+ *
+ * En deçà, des symboles manquent à l'appel et la borne *descend* sous la
+ * vérité — or une borne supérieure qui sous-compte peut accuser à tort. C'est
+ * la seule erreur que ce contrôle n'a pas le droit de commettre, puisqu'il
+ * empêche le service de démarrer.
+ */
+const TIRAGES_MESURE_ENTROPIE = 512;
 
-/** Plancher d'entropie exigé du suffixe, en bits. */
+/**
+ * Tirages du **canari de collision**.
+ *
+ * 20 000, conservés du contrôle précédent, et il faut dire pourquoi : ce
+ * décompte ne mesure aucune entropie — son pouvoir de détection est en N² —
+ * mais c'est le **seul** des deux qui voie la famille « graine étroite », celle
+ * dont chaque position varie normalement alors que l'espace joint est minuscule
+ * (`sha256(<graine de b bits>)`). Mesuré, 100 exécutions par palier :
+ *
+ * ```
+ *   b (bits de graine)          16    20    24    28    32
+ *   mesure par position        0/100 0/100 0/100 0/100 0/100   ← aveugle
+ *   canari, 512 tirages       86/100 12/100  1/100  0/100 0/100
+ *   canari, 20 000 tirages   100/100 100/100 100/100 55/100 4/100
+ * ```
+ *
+ * Le ramener à 512 aurait donc supprimé la seule lecture qui attrape cette
+ * famille. Prix payé : 121 ms au démarrage contre 15 ms — c'est ce que coûtait
+ * déjà le contrôle précédent, et c'est le prix du seul regard porté là.
+ */
+const TIRAGES_CANARI_COLLISION = 20_000;
+
+/**
+ * Plancher **normé** du `CONVENTIONS.md` §2, en bits : ce que tout générateur
+ * du produit doit porter, quel que soit son langage et son alphabet.
+ *
+ * Sous ce seuil, la borne supérieure mesurée dit que le générateur est
+ * **certainement** hors norme. C'est ce qui autorise à en faire un refus de
+ * démarrage : un majorant sous le plancher ne peut pas accuser à tort.
+ *
+ * La transition est mesurée, et elle tombe exactement où la norme la place —
+ * famille « remplissage », 200 exécutions par palier :
+ *
+ * ```
+ *   b réellement tirés     16    24    32    40    48    56    64
+ *   refusés à 52 bits     200   200   200   200   200     0     0
+ * ```
+ *
+ * 48 bits refusé, 56 bits admis : le contrôle refuse ce que la norme refuse, et
+ * rien d'autre.
+ */
+const BITS_NORME_MINIMUM = 52;
+
+/**
+ * Plancher propre à **ce** générateur-ci, en bits.
+ *
+ * `randomBytes(16)` porte 128 bits, et le §2 le déclare tel. 120 laisse la
+ * marge de la mesure sans laisser passer une régression : à 96 bits tirés, la
+ * famille « remplissage » est refusée 200 fois sur 200.
+ *
+ * ⚠️ Ce seuil est **plus strict que la norme**, et c'est délibéré : entre 52 et
+ * 120, le générateur satisfait encore le §2 mais n'est plus celui que le §2
+ * décrit. Affaiblir ce générateur volontairement se fait donc en **deux
+ * gestes** — cette constante *et* la ligne « Serveur — `engendrerIdentifiant()` »
+ * du tableau du §2 —, jamais en un seul. Le message du refus le dit.
+ *
+ * ⚠️ Il n'est **pas** dérivé d'`OCTETS_ALEA` : un seuil calculé sur la
+ * constante qu'il surveille descendrait avec elle, et l'on aurait reconstruit,
+ * sous une autre forme, le contrôle incapable d'échouer que Q-26 corrige.
+ */
 const BITS_ALEA_MINIMUM = 120;
 
 /** Un paquet d'octets rendu en base 36, à longueur constante. */
@@ -4427,6 +4503,102 @@ function enBase36(octets: Uint8Array): string {
   let valeur = 0n;
   for (const octet of octets) valeur = (valeur << 8n) | BigInt(octet);
   return valeur.toString(36).padStart(LONGUEUR_ALEA, '0');
+}
+
+/**
+ * Borne **supérieure** de l'entropie d'un générateur, mesurée sur un échantillon
+ * de ses sorties, **symbole par symbole et position par position**.
+ *
+ * ══ POURQUOI CETTE MESURE ET PAS UNE AUTRE (constat Q-26) ════════════
+ *
+ * Ce qui était mesuré avant : `alea.length * Math.log2(36)`. Or `enBase36`
+ * ci-dessus **complète à gauche** jusqu'à `LONGUEUR_ALEA`. La longueur était
+ * donc constante par construction, et le contrôle **structurellement incapable
+ * d'échouer** — il disait « la chaîne est longue » sous un nom qui promettait
+ * « le générateur est bon ». Mesuré sur ce module :
+ *
+ * ```
+ *   générateur                     bits réels   « bits » annoncés   refusé ?
+ *   réel (randomBytes 16)             128            129,2            non
+ *   remplissage 40 bits                40            129,2            non
+ *   défaut exact de Q-1 (10⁶)          19,9          129,2            non
+ *   générateur bloqué ('0'×25)          0            129,2            non
+ * ```
+ *
+ * Quatre générateurs dont trois catastrophiques, un seul verdict : admis.
+ * C'est la même faute que le jumeau SQL (`006_entropie_et_commentaires.sql`),
+ * et le §17.5 la nomme : un garde-fou auquel on prête plus de portée qu'il n'en
+ * a endort la vigilance au lieu de l'entretenir.
+ *
+ * ══ CE QUE CETTE FONCTION CALCULE ═══════════════════════════════════
+ *
+ *     bits ≤ Σ log2(symboles distincts observés à la position i)
+ *
+ * Trois propriétés, et la première est celle qui autorise le refus :
+ *
+ *  1. **C'est un majorant** — l'entropie jointe est toujours ≤ la somme des
+ *     entropies marginales. Passer sous le seuil prouve donc que le générateur
+ *     est en deçà ; le refus ne peut pas accuser à tort.
+ *  2. **Elle est en bits**, l'unité de la norme, donc indépendante de
+ *     l'alphabet : 25 signes base 36 et 32 signes hexadécimaux ne se comparent
+ *     pas en signes, ils se comparent ici.
+ *  3. **Elle voit le remplissage**, qui est la forme que prend en pratique une
+ *     dégradation : une position de bourrage ne prend qu'une valeur, pèse
+ *     0 bit, et la somme s'effondre.
+ *
+ * ══ LE CONTRÔLE DE JUSTESSE DE LA MESURE ELLE-MÊME ══════════════════
+ *
+ * Sur le générateur réel, elle rend **128,08 bits**. Ce nombre n'est écrit
+ * nulle part : il se retrouve par le calcul, et c'est ce qui établit la mesure
+ * mieux qu'une relecture. `2^128 / 36^24 = 15,16`, donc le signe de tête des
+ * 25 ne prend que **16** valeurs (0 à f) quand les 24 autres en prennent 36 :
+ *
+ *     log2(16) + 24 × log2(36) = 4 + 124,08 = 128,08
+ *
+ * Retrouver exactement ce nombre — et non 129,2, la longueur — dit que la
+ * mesure lit bien la source. (Le jumeau SQL fait le même contrôle sur son
+ * alphabet : 122 bits, ceux d'un UUID v4 dont la version et la variante sont
+ * figées. Même méthode, nombres différents : rien ne se recopie d'un fichier
+ * à l'autre, tout se re-dérive.)
+ *
+ * ══ CE QU'ELLE NE VOIT PAS, ET QUI DOIT ÊTRE DIT (§17.5) ════════════
+ *
+ * Un générateur dont chaque position varie normalement mais dont l'espace
+ * **joint** est étroit — `sha256(<graine de 32 bits>)` — la traverse sans
+ * broncher : mesuré **0 sur 200 à tous les paliers de 16 à 96 bits**. C'est
+ * pour cela, et pour cela seulement, que le canari de collision lui reste
+ * adjoint dans `verifierGenerateurIdentifiants`. Le trou résiduel est nommé,
+ * il n'est pas comblé : **aucun contrôle statistique ne peut certifier un
+ * plancher de 52 bits** — il faudrait deux cents millions de tirages pour le
+ * voir par collisions. Ce qui reste, pour cette famille, est la lecture de la
+ * SOURCE : `engendrerIdentifiant` doit appeler `randomBytes`, et cela se lit,
+ * cela ne se mesure pas.
+ *
+ * @param echantillon sorties du générateur — **la part aléatoire seule**, pas
+ *        l'identifiant entier : l'horodatage les séparerait toutes.
+ */
+export function mesurerBitsParPosition(echantillon: readonly string[]): {
+  readonly bits: number;
+  readonly longueur: number;
+  readonly symbolesParPosition: readonly number[];
+} {
+  if (echantillon.length === 0) return { bits: 0, longueur: 0, symbolesParPosition: [] };
+
+  const longueur = Math.max(...echantillon.map((valeur) => valeur.length));
+  const symbolesParPosition: number[] = [];
+  let bits = 0;
+
+  for (let position = 0; position < longueur; position += 1) {
+    const symboles = new Set<string>();
+    // `?? ''` : une sortie plus courte que les autres compte comme un symbole
+    // à part entière à cette position — une longueur variable est une
+    // information, pas une raison d'ignorer la position.
+    for (const valeur of echantillon) symboles.add(valeur[position] ?? '');
+    symbolesParPosition.push(symboles.size);
+    bits += Math.log2(symboles.size);
+  }
+
+  return { bits, longueur, symbolesParPosition };
 }
 
 /**
@@ -4526,47 +4698,140 @@ export function estIdentifiantDerive(prefixe: string, identifiant: string): bool
  * transposition, côté application, de ce que `f_verifier_schema()` fait côté
  * base (`CONVENTIONS.md` §18.4).
  *
- * Trois choses y sont vérifiées, et chacune se rapporte à un défaut réel :
+ * Un seul tirage en volume, **quatre lectures**, et chacune se rapporte à un
+ * défaut réel plutôt qu'à une idée générale de qualité :
  *
- *  1. **la forme et le plancher d'entropie** — un échantillon suffit, et il
- *     attrape un affaiblissement même quand le tirage a de la chance ;
- *  2. **la mesure elle-même**, sur le suffixe seul : 20 000 tirages, tous
- *     distincts. Compter sur l'identifiant entier ne prouverait rien, puisque
- *     l'horodatage suffirait à les séparer dès que la boucle traîne — or le
- *     défaut de Q-1 n'apparaît QUE dans une boucle serrée ;
- *  3. **le déterminisme de la ré-émission** (Q-2) : la même entrée rend le
+ *  1. **la forme**, sur tout l'échantillon et non sur un tirage : trois
+ *     segments, un horodatage décimal, un suffixe dans l'alphabet base 36 ;
+ *  2. **l'entropie**, majorée position par position sur 512 tirages
+ *     (`mesurerBitsParPosition`), contre DEUX planchers — celui de la norme
+ *     (52 bits, §2) et celui que ce générateur-ci déclare (120) ;
+ *  3. **le canari de collision** sur 20 000 tirages : il ne mesure rien, mais
+ *     il est le seul à voir la famille « graine étroite » ;
+ *  4. **le déterminisme de la ré-émission** (Q-2) : la même entrée rend le
  *     même identifiant, deux entrées différentes en rendent deux, et le
  *     résultat reste reconnaissable — la convergence de la reprise en dépend.
+ *
+ * Le suffixe seul est mesuré, jamais l'identifiant entier : l'horodatage
+ * suffirait à les séparer tous dès que la boucle traîne, or le défaut de Q-1
+ * n'apparaît QUE dans une boucle serrée.
+ *
+ * ══ CE QUE CE CONTRÔLE COUVRE, ET CE QU'IL NE COUVRE PAS (§17.5) ═════
+ *
+ * **Il ne couvre qu'`engendrerIdentifiant()`**, le générateur du serveur. Le
+ * produit en a d'autres, et ils appellent des garde-fous de **formes
+ * différentes** — les confondre est exactement ce qui a produit Q-1, où un
+ * générateur durci et gardé n'était pas celui qui écrivait :
+ *
+ *  · **la base** (`f_generer_id()`) a le sien dans `f_verifier_schema()`,
+ *    réparé par la migration `006` — même méthode, alphabet hexadécimal, et un
+ *    contrôle de justesse qui retrouve les 122 bits d'un UUID v4 ;
+ *  · **le navigateur** (`UI.genId`) a le sien depuis Q-23, et il est d'une
+ *    **troisième nature** : un détecteur de collision réelle en session. Là-bas
+ *    l'identifiant ne quitte jamais la page, et la propriété qui compte est
+ *    l'unicité, pas l'entropie ;
+ *  · **les deux dérivations** (`identifiantDerive` ici, `-r-` ; et le `-d-` de
+ *    `src/reprise/`) ne tirent rien : leur propriété est le déterminisme, que
+ *    la lecture 4 ci-dessous vérifie pour la première. La seconde vit dans un
+ *    module volontairement pur et n'a pas d'aléa à garder.
+ *
+ * Et ce qu'aucune des lectures ne voit : un espace **joint** étroit à entropie
+ * marginale normale. C'est écrit en toutes lettres dans
+ * `mesurerBitsParPosition`, avec la mesure qui l'établit. **Aucun contrôle
+ * statistique ne peut certifier un plancher de 52 bits** ; ce qui reste, pour
+ * cette famille, est la lecture de la source.
+ *
+ * ══ POURQUOI LE GÉNÉRATEUR EST UN PARAMÈTRE ═════════════════════════
+ *
+ * `tirer` vaut `engendrerIdentifiant` et `verifierRegistre` l'appelle **sans
+ * argument** : en service, rien ne change. Il existe pour que ce contrôle soit
+ * **éprouvable**, et c'est une leçon du constat qu'il répare.
+ *
+ * Le contrôle précédent était incapable d'échouer, et personne ne s'en est
+ * aperçu pendant un lot entier — parce que le seul essai possible sur lui était
+ * « sur le vrai générateur, il ne dit rien », qu'un contrôle vide passe aussi.
+ * Sans ce paramètre, éprouver un refus obligeait à recopier `dist/` et à y
+ * réécrire `OCTETS_ALEA` : faisable, mais assez pénible pour n'être jamais
+ * fait. Avec lui, un essai passe un générateur dégradé et exige que le refus
+ * tombe — c'est-à-dire qu'il interroge le garde-fou **dans le sens où il
+ * parle**, et pas seulement dans le sens où il se tait.
  */
-export function verifierGenerateurIdentifiants(): readonly string[] {
+export function verifierGenerateurIdentifiants(
+  tirer: (prefixe: string) => string = engendrerIdentifiant,
+): readonly string[] {
   const anomalies: string[] = [];
 
-  const echantillon = engendrerIdentifiant('CTRL');
-  const morceaux = echantillon.split('-');
-  const alea = morceaux[2] ?? '';
-  if (morceaux.length !== 3 || morceaux[0] !== 'CTRL' || !/^\d+$/.test(morceaux[1] ?? '')) {
+  // ── 1. La forme, sur TOUT l'échantillon ─────────────────────────────
+  // Un seul tirage suffisait à un générateur qui se dégrade par intermittence
+  // pour passer une fois sur deux. La part aléatoire est prélevée ici et sert
+  // aux deux mesures suivantes : un seul tirage en volume, trois lectures.
+  const aleas: string[] = [];
+  let formeRompue: string | null = null;
+  for (let i = 0; i < TIRAGES_CANARI_COLLISION; i += 1) {
+    const identifiant = tirer('CTRL');
+    const morceaux = identifiant.split('-');
+    if (
+      formeRompue === null &&
+      (morceaux.length !== 3 ||
+        morceaux[0] !== 'CTRL' ||
+        !/^\d+$/.test(morceaux[1] ?? '') ||
+        !/^[0-9a-z]+$/.test(morceaux[2] ?? ''))
+    ) {
+      formeRompue = identifiant;
+    }
+    aleas.push(morceaux[2] ?? '');
+  }
+
+  if (formeRompue !== null) {
     anomalies.push(
       `Générateur d'identifiants : la forme « <PRÉFIXE>-<horodatage>-<aléa> » du ` +
-        `CONVENTIONS.md §2 n'est plus respectée (« ${echantillon} »).`,
-    );
-  }
-  const bits = alea.length * Math.log2(36);
-  if (!/^[0-9a-z]+$/.test(alea) || bits < BITS_ALEA_MINIMUM) {
-    anomalies.push(
-      `Générateur d'identifiants : le suffixe porte ${bits.toFixed(0)} bits d'aléa, ` +
-        `le plancher est de ${String(BITS_ALEA_MINIMUM)} (constat Q-1). Un identifiant ` +
-        'engendré en boucle se répéterait, et un import de masse perdrait des lignes.',
+        `CONVENTIONS.md §2 n'est plus respectée (« ${identifiantLisible(formeRompue)} »).`,
     );
   }
 
-  const vus = new Set<string>();
-  for (let i = 0; i < TIRAGES_CONTROLE_ENTROPIE; i += 1) {
-    vus.add(engendrerIdentifiant('CTRL').split('-')[2] ?? '');
-  }
-  if (vus.size !== TIRAGES_CONTROLE_ENTROPIE) {
+  // ── 2. L'ENTROPIE, majorée position par position (constat Q-26) ─────
+  // Sur les 512 premiers tirages : au-delà, la borne ne bouge plus (mesuré),
+  // et en deçà elle sous-compte — ce qu'un majorant n'a pas le droit de faire.
+  const { bits, longueur, symbolesParPosition } = mesurerBitsParPosition(
+    aleas.slice(0, TIRAGES_MESURE_ENTROPIE),
+  );
+  const positionsMortes = symbolesParPosition.filter((symboles) => symboles <= 1).length;
+  const commun =
+    `la part aléatoire porte AU PLUS ${bits.toFixed(1)} bits — majorés position par ` +
+    `position sur ${String(TIRAGES_MESURE_ENTROPIE)} tirages, ${String(longueur)} signe(s), ` +
+    `dont ${String(positionsMortes)} ne prenne(nt) qu'une seule valeur. Attention : une ` +
+    "chaîne LONGUE n'est pas une chaîne ALÉATOIRE — un remplissage donne la bonne " +
+    'longueur et zéro bit (constat Q-26).';
+
+  if (bits < BITS_NORME_MINIMUM) {
     anomalies.push(
-      `Générateur d'identifiants : ${String(TIRAGES_CONTROLE_ENTROPIE)} tirages n'ont rendu ` +
-        `que ${String(vus.size)} suffixes distincts (constat Q-1).`,
+      `Générateur d'identifiants : ${commun} Le plancher NORMÉ est de ` +
+        `${String(BITS_NORME_MINIMUM)} bits (CONVENTIONS.md §2), tous générateurs du ` +
+        'produit confondus : sous ce seuil, le générateur est CERTAINEMENT en deçà. Un ' +
+        'import en lot tire ses identifiants dans la MÊME milliseconde ; sous le plancher, ' +
+        "les collisions de clé primaire font perdre des lignes au milieu d'un lot annoncé " +
+        'complet (porte S2, constat bloquant).',
+    );
+  } else if (bits < BITS_ALEA_MINIMUM) {
+    anomalies.push(
+      `Générateur d'identifiants : ${commun} Ce générateur-ci est déclaré à 128 bits ` +
+        `(« randomBytes(16) », CONVENTIONS.md §2) et son plancher propre est de ` +
+        `${String(BITS_ALEA_MINIMUM)} bits : il satisfait encore la norme, mais il n'est ` +
+        "plus celui que le §2 décrit. Si l'affaiblissement est voulu, il se fait en DEUX " +
+        'gestes — cette constante et la ligne « Serveur » du tableau du §2 —, jamais en un.',
+    );
+  }
+
+  // ── 3. Le canari de collision (constat Q-1) ─────────────────────────
+  // Il ne mesure aucune entropie : son pouvoir est en N². Il est là pour la
+  // SEULE famille que la mesure ci-dessus ne voit pas — la graine étroite,
+  // dont chaque position varie normalement (voir `mesurerBitsParPosition`).
+  const vus = new Set(aleas);
+  if (vus.size !== TIRAGES_CANARI_COLLISION) {
+    anomalies.push(
+      `Générateur d'identifiants : ${String(TIRAGES_CANARI_COLLISION)} tirages n'ont rendu ` +
+        `que ${String(vus.size)} suffixes distincts (constat Q-1). Deux identifiants égaux ` +
+        "tirés à quelques millisecondes d'écart se heurtent sur la clé primaire.",
     );
   }
 
