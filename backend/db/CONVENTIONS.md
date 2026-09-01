@@ -86,9 +86,18 @@ vers lui, mais c'est un choix et non une propriété.
 refuse déjà le démarrage du serveur — mesure la forme, l'entropie et le déterminisme de la
 ré-émission sur 20 000 tirages. Une régression n'est pas rattrapée par la relecture : elle
 empêche le démarrage. **Ce contrôle ne couvre que le générateur du serveur** — celui de la base
-a le sien dans `f_verifier_schema()` — **avec la réserve du constat Q-17 : ce dernier mesure une
-longueur, pas une entropie, et son pouvoir de détection mesuré est de 8 sur 200 à 32 bits** ;
-celui du navigateur n'en a aucun, et c'est le constat **Q-23** du registre.
+a le sien dans `f_verifier_schema()` — **réparé par `006` : il mesure désormais une borne
+supérieure de l'entropie, en bits, symbole par symbole et position par position, et non plus une
+longueur que le remplissage rendait infaillible.** Celui du navigateur a le sien depuis **Q-23**,
+et il est d'une **troisième nature** — un détecteur de collision réelle dans la session, parce que
+l'identifiant ne quitte jamais la page et que la propriété qui compte y est l'unicité, pas
+l'entropie. **Le quatrième, le jumeau TypeScript, n'a toujours rien : c'est le constat Q-26.**
+
+> **Ne pas lire cette liste comme quatre fois le même contrôle.** Trois générateurs, trois
+> propriétés différentes, trois garde-fous de formes différentes — et le remède qui convient à
+> l'un a été mesuré comme **inopérant** chez l'autre : compter les valeurs distinctes a un pouvoir
+> de détection en N², donc voir 52 bits demanderait deux cents millions de tirages. C'est la
+> raison pour laquelle ce paragraphe énumère au lieu de généraliser.
 
 > **Errata, 01/09/2026.** Ce paragraphe attribuait le manque du navigateur au constat **Q-3**,
 > qui dit autre chose — l'absence d'essais — et qui est clos. Le manque serait donc sorti du
