@@ -129,6 +129,19 @@ const SettingsModule = (() => {
         wireImport();
         loadStorageInfo();
         renderSecurity();
+
+        // La tuile « Modifications en attente » était une PHOTO prise au rendu :
+        // elle pouvait annoncer « non enregistrées » une demi-seconde avant que
+        // le cycle n'aboutisse, ou l'inverse. `Sync.surChangementEtat` existait
+        // depuis la bascule sans aucun abonné (relevé au 2ᵉ passage) ; c'est
+        // exactement son emploi. Le garde sur la présence du conteneur suffit à
+        // ne rien faire quand l'écran a changé.
+        if (typeof Sync !== "undefined" && Sync.surChangementEtat && !render._abonne) {
+            render._abonne = true;
+            Sync.surChangementEtat(() => {
+                if (document.getElementById("storage-stats")) loadStorageInfo();
+            });
+        }
     }
 
     /* ===== Sécurité =====
