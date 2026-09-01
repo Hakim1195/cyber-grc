@@ -49,24 +49,38 @@ id id_metier primary key
 
 ⚠️ **Ce qui est normatif est une propriété, pas un encodage** : la part aléatoire porte **au
 moins 52 bits**, tirés d'un générateur **cryptographique**, et non les trois chiffres décimaux de
-la première écriture. Le produit engendre des identifiants à quatre endroits, dans trois langages,
-et les formes diffèrent légitimement — imposer une forme unique obligerait le navigateur à
-appeler le serveur pour créer une ligne. Ce qui ne diffère pas, c'est le plancher.
+la première écriture. Le produit fabrique des identifiants à cinq endroits, dans trois langages :
+**trois générateurs aléatoires**, un par langage, et **deux dérivations qui ne tirent rien**. Les
+formes diffèrent légitimement — imposer une forme unique obligerait le navigateur à appeler le
+serveur pour créer une ligne. Ce qui ne diffère pas, c'est le plancher.
 
 | Où | Forme engendrée | Aléa |
 |---|---|---|
 | Navigateur — `UI.genId` | `<PRÉFIXE>-<ms>-<compteur base 36><aléa base 36>` | **compteur de session monotone** *plus* 52 bits de `crypto.getRandomValues`. Le compteur suffit à lui seul pour un import : deux appels d'une même page ne peuvent pas rendre le même identifiant, quel que soit le hasard. |
 | Serveur — `engendrerIdentifiant()` | `<PRÉFIXE>-<ms>-<25 caractères base 36>` | 128 bits de `randomBytes(16)` |
 | Base — `f_generer_id()` | `<PRÉFIXE>-<ms>-<32 caractères hexadécimaux>` | `gen_random_uuid()`, natif depuis PostgreSQL 13 |
-| Serveur — **ré-émission** `identifiantDerive()` | `<PRÉFIXE>-r-<25 caractères base 36>` | **aucun** — voir ci-dessous |
+| Serveur — **ré-émission** `identifiantDerive()` | `<PRÉFIXE>-r-<25 caractères base 36>` | **aucun** — dérivé, voir ci-dessous |
+| Reprise — enregistrement **sans identifiant** dans le fichier | `<PRÉFIXE>-d-<25 caractères base 36>` | **aucun** — dérivé de `(collection, rang, contenu)` |
 
-**La ré-émission n'est pas un tirage, et sa marque `-r-` remplace l'horodatage.** Quand
+**Les deux dérivations ne tirent rien, et leur marque remplace l'horodatage** — un identifiant
+dérivé n'a pas d'instant de création, si bien qu'y laisser un horodatage crédible mentirait au
+lecteur du journal. Les deux marques ne disent pas la même chose, et c'est le seul endroit où
+l'on peut le lire : **`-r-` dit « le serveur a dû ré-émettre »**, l'identifiant du fichier étant
+déjà pris ; **`-d-` dit « le fichier n'apportait pas d'identifiant »**.
+
+**La ré-émission, `-r-`.** Quand
 l'identifiant d'un fichier de reprise est déjà pris dans le domaine global par une ligne que
 l'appelant ne voit pas, le serveur en retient un autre — **dérivé** d'une empreinte de
 `(filiale, table, identifiant du fichier)`. Deux raisons, et la seconde n'était pas évidente :
 la dérivation rend la reprise **idempotente** — trois reprises du même fichier convergent sur une
-ligne au lieu d'en cloner trois —, et un identifiant dérivé **n'a pas d'instant de création**, si
-bien qu'y laisser un horodatage crédible mentirait au lecteur du journal.
+ligne au lieu d'en cloner trois — et elle supprime la collision au lieu de la rendre improbable.
+
+**La dérivation de la reprise, `-d-`.** Un enregistrement qu'un export ancien livre sans
+identifiant exploitable en reçoit un, dérivé de `(collection, rang, contenu)`. Le rang rend
+l'unicité **certaine dans le fichier** ; le contenu fait converger le même fichier repris deux
+fois. Le prix, assumé : un enregistrement qui change de rang entre deux exports reçoit un
+identifiant différent — sans conséquence, puisque par construction aucune référence ne pointe
+vers lui, mais c'est un choix et non une propriété.
 
 **Le plancher est un contrôle, pas une intention.** `verifierRegistre()` — le point unique qui
 refuse déjà le démarrage du serveur — mesure la forme, l'entropie et le déterminisme de la
