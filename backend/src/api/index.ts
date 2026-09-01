@@ -434,58 +434,73 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   };
 
   /**
-   * Transaction d'une **reprise**, et pourquoi son périmètre n'est pas celui
-   * d'une écriture ordinaire.
+   * Transaction d'une opération qui touche au **socle commun du Groupe**.
    *
-   * ── Ce n'est pas un contournement : c'est la qualification de l'acte ──
+   * ══ La règle, et pourquoi elle a cette forme-là ══════════════════════
    *
-   * Une reprise ne modifie pas un enregistrement, elle **restaure un jeu de
-   * données entier** — socle Groupe compris, puisqu'un export `grc-backup` en
-   * porte la part que l'installation d'origine détenait : correspondances
-   * inter-référentiels, politiques de portée Groupe, socle de contrôles. C'est
-   * par nature un acte d'**administration Groupe**, pas une écriture de
-   * filiale. Le déclarer est donc la description exacte de l'opération, et non
-   * une exception ouverte pour faire passer une collection gênante.
+   *   > **Une route ne fabrique jamais un drapeau d'administration : elle le
+   *   > vérifie.**
    *
-   * ── La règle est générale, et c'est le point ─────────────────────────
+   * La première rédaction faisait l'inverse. Elle raisonnait ainsi : une
+   * reprise restaure un jeu de données entier, socle compris, donc c'est par
+   * nature un acte d'administration Groupe, donc la transaction le déclare.
+   * Le raisonnement est juste sur la **nature** de l'opération, et il s'arrête
+   * à mi-chemin : il qualifie l'acte sans jamais demander si la session a le
+   * droit de le conduire.
    *
-   * Elle porte sur l'**opération**, pas sur une liste de collections à
-   * autoriser. Une reprise qui apporterait demain une autre entité de portée
-   * Groupe passera sans que ce fichier change — et c'est délibéré : « une
-   * liste écrite à la main est une omission qui attend » (`CONVENTIONS.md`
-   * §19.5), motif que ce chantier a payé quatre fois.
+   * Le résultat se mesurait au banc d'essai, depuis une même session de
+   * filiale ordinaire :
    *
-   * ── Ce que le drapeau ne fait pas, et qu'il faut savoir ──────────────
+   * ```
+   * POST /api/entites/mappings        → 403  hors_perimetre
+   * POST /api/reprise  {mappings:[…]} → 200  la correspondance est en base
+   * ```
    *
-   *  · **Il n'élargit jamais la lecture** : il n'apparaît dans aucune
-   *    politique de `select`, et la migration `004_rls` refuse de s'appliquer
-   *    s'il venait à y apparaître.
-   *  · **Il n'élargit pas la purge.** `purgerFiliale` ne touche que les tables
-   *    portant `filiale_id`, filtrées sur la filiale active : les lignes de
-   *    portée Groupe survivent à un « remplacer », drapeau ou non. C'est un
-   *    invariant du moteur, pas une conséquence du périmètre.
-   *  · **Ce n'est pas un privilège** (`CONVENTIONS.md` §17.4) : c'est une
-   *    déclaration que la session fait sur elle-même, que le rôle applicatif
-   *    peut poser lui-même et que la base n'arbitre pas. Elle protège de la
-   *    faute de programmation — une écriture Groupe faite par un chemin qui ne
-   *    l'a pas déclarée — et **pas du tout** d'un appelant qui n'aurait pas le
-   *    droit de reprendre.
+   * La même écriture, deux verdicts, et la correspondance forgée depuis une
+   * filiale visible des dix-neuf autres. Ce n'est pas une fuite de lecture :
+   * c'est **une écriture dont le rayon sort de la filiale**, sans droit à la
+   * produire et sans journal pour l'attribuer — le constat M-4, atteint par le
+   * chemin créé pour le refermer.
    *
-   * **La barrière réelle est donc à écrire, et elle est du lot L3** : avant
-   * d'ouvrir cette transaction, il faudra exiger le profil *Administration* et
-   * un périmètre couvrant la filiale visée, exactement comme pour toute autre
-   * action d'administration. Tant que L3 n'existe pas, la seule barrière est
-   * le refus fail-closed hors développement (`session.ts`).
+   * La cause tient en une phrase du `CONVENTIONS.md` §17.4, qui était sous nos
+   * yeux : *le drapeau n'est pas un privilège, c'est une déclaration que la
+   * session fait sur elle-même.* Une déclaration ne s'auto-délivre pas. Elle
+   * vient du **résolveur de périmètre** — donc de l'authentification, donc du
+   * lot L3 — et une route ne peut que la constater.
+   *
+   * ══ Ce que cette forme rend impossible ═══════════════════════════════
+   *
+   * Aucune route ne peut plus s'accorder l'administration Groupe : le
+   * périmètre passé à `avecTransaction` est **celui de la session, inchangé**.
+   * Il n'existe donc plus, dans tout le greffon, un seul endroit où
+   * `administrationGroupe` soit construit à `true`. C'est vérifiable en un
+   * `grep`, et c'est ce qui distingue une propriété d'une discipline.
+   *
+   * C'est aussi la règle générale que le lot L4 devra suivre pour la création
+   * de filiale et la gestion des profils : **vérifier le droit, puis agir**,
+   * jamais « qualifier l'opération » et se croire quitte.
    */
-  const enReprise = async <T>(
+  const enAdministrationGroupe = async <T>(
+    motif: string,
     travail: (client: PoolClient, depot: Depot, perimetre: PerimetreSession) => Promise<T>,
   ): Promise<T> => {
     const instanceDepot = await assurerDepot();
-    const session = await resolveur.resoudre();
-    const perimetre: PerimetreSession = Object.freeze({
-      ...session,
-      administrationGroupe: true,
-    });
+    const perimetre = await resolveur.resoudre();
+
+    if (!perimetre.administrationGroupe) {
+      throw new ErreurApplicative({
+        code: 'hors_perimetre',
+        statut: 403,
+        message:
+          `${motif} Cette opération touche au socle commun du Groupe — le même pour toutes ` +
+          "les filiales — et relève de l'administration Groupe. Rien n'a été modifié.",
+        detailJournal:
+          "administration Groupe exigée et non détenue par la session ; le drapeau vient du " +
+          'résolveur de périmètre (lot L3), jamais de la route',
+      });
+    }
+
+    // Le périmètre est celui de la session, tel quel. Rien n'est ajouté.
     return avecTransaction(pool, perimetre, (client) => travail(client, instanceDepot, perimetre));
   };
 
@@ -721,13 +736,31 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
 
       const empreinte = createHash('sha256').update(fichier.contenu, 'utf8').digest('hex');
 
-      const resultat = await enReprise(async (client, instanceDepot, perimetre) => {
-        const bilan = await instanceDepot.appliquerReprise(
-          client,
-          perimetre,
-          lecture.charge as unknown as Record<string, unknown>,
-          mode,
-        );
+      // ── Le fichier exige-t-il l'administration Groupe ? ─────────────────
+      // Un export du modèle navigateur porte la surcouche des correspondances
+      // inter-référentiels, qui sont de **niveau Groupe** : les reprendre est
+      // une écriture dans le socle commun aux vingt filiales. On le demande au
+      // moteur, dont le critère est celui de la route ordinaire — une table
+      // sans `filiale_id` —, et non à une liste tenue ici.
+      //
+      // Une collection vide n'exige rien : c'est le cas courant, un export
+      // portant toujours les 21 clés. Un fichier purement « niveau filiale »
+      // se reprend donc normalement, sans habilitation particulière.
+      const depotCourant = await assurerDepot();
+      const charge = lecture.charge as unknown as Record<string, unknown>;
+      const exigeantes = depotCourant.entitesDePorteeGroupeApportees(charge);
+
+      const executer =
+        exigeantes.length === 0
+          ? enEcriture
+          : <T,>(travail: (c: PoolClient, d: Depot, p: PerimetreSession) => Promise<T>) =>
+              enAdministrationGroupe(
+                `Ce fichier apporte des données de portée Groupe (${exigeantes.join(', ')}).`,
+                travail,
+              );
+
+      const resultat = await executer(async (client, instanceDepot, perimetre) => {
+        const bilan = await instanceDepot.appliquerReprise(client, perimetre, charge, mode);
 
         // 2. Tracer la reprise dans la table prévue pour cela. Elle porte la
         //    clé d'idempotence du `PLAN_SERVEUR` §5 : réimporter le même

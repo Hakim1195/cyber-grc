@@ -31,7 +31,7 @@
  * | Identité fixe `developpement` | L'identifiant AD de l'utilisateur connecté (`CONVENTIONS.md` §18.3 : un **login**, pas une clé primaire) |
  * | Filiale active = l'unique filiale active de la base | La filiale sélectionnée par l'utilisateur **parmi celles que ses groupes AD lui ouvrent**, mémorisée dans `sessions.filiale_active_id` |
  * | Périmètre de lecture = cette seule filiale | `session_filiales`, résolu depuis les groupes AD, groupes imbriqués compris |
- * | `administrationGroupe` toujours **faux** | Vrai seulement si profil *Administration* **et** périmètre *Groupe* (`CONVENTIONS.md` §17.4) |
+ * | `administrationGroupe` **faux**, sauf échappatoire de développement explicite | Vrai seulement si profil *Administration* **et** périmètre *Groupe* (`CONVENTIONS.md` §17.4) — et c'est **ici**, dans le résolveur, que le droit se décide : aucune route ne pose ce drapeau |
  * | `perimetreGroupe` toujours **faux** | Vrai pour un périmètre Groupe (direction, RSSI groupe) |
  * | Aucun droit par domaine ni droit d'export | Les trois axes, et le **droit d'export distinct** (`PLAN_SERVEUR` §3.3, contrôle S7) |
  * | Aucune expiration, aucune limitation de rythme | Expiration d'inactivité, verrouillage temporaire (contrôle S11) |
@@ -109,6 +109,33 @@ const DUREE_CACHE_MS = 60_000;
  * `resoudre()` reste sans paramètre, et c'est cette signature qui tient la
  * propriété.
  */
+/**
+ * L'exploitant a-t-il ouvert l'administration Groupe sur cette machine ?
+ *
+ * ⚠️ **Échappatoire de développement, et rien d'autre.** Elle permet de
+ * reprendre un export portant des collections de portée Groupe (les
+ * correspondances inter-référentiels) tant que le modèle de droits n'existe
+ * pas. Trois bornes l'encadrent :
+ *
+ *  · elle vaut **faux** par défaut — l'absence de réglage ne l'accorde pas ;
+ *  · elle n'a aucun effet en production ni en recette, où la session
+ *    provisoire refuse de résoudre quoi que ce soit (voir l'entête) ;
+ *  · elle est **journalisée à chaque résolution** quand elle est active, pour
+ *    qu'une machine ainsi ouverte le dise d'elle-même.
+ *
+ * Elle disparaît avec cette classe : le lot L3 dérive ce droit du profil
+ * *Administration* et du périmètre *Groupe*, résolus depuis les groupes AD.
+ *
+ * ⚠️ Variable **non documentée** dans `.env.example`, qui appartient à
+ * l'orchestrateur : elle lui est demandée dans le rapport. Une variable de
+ * sécurité lue et non documentée est un moindre mal qu'une variable
+ * documentée et non lue (constat m-2), mais c'en est un — elle doit être
+ * écrite au modèle de configuration.
+ */
+function administrationGroupeDemandee(): boolean {
+  return (process.env['API_ADMINISTRATION_GROUPE_PROVISOIRE'] ?? '').trim().toLowerCase() === 'oui';
+}
+
 function filialeDemandeeParLExploitant(): string | null {
   const brut = process.env['API_FILIALE_PROVISOIRE'];
   if (typeof brut !== 'string') return null;
@@ -166,12 +193,29 @@ export class PerimetreProvisoire implements ResolveurPerimetre {
       filialeId: filiale.id,
       filiales: Object.freeze([filiale.id]) as readonly string[],
       perimetreGroupe: false,
-      // Fail-closed : aucune écriture de portée Groupe tant que le modèle de
-      // droits n'existe pas. Le drapeau n'est pas un privilège que la base
-      // arbitre (§17.4), c'est une déclaration ; la seule barrière réelle est
-      // ici, et elle reste fermée.
-      administrationGroupe: false,
+      // ── Fail-closed, et c'est ICI que la barrière se tient ──────────────
+      //
+      // Le drapeau n'est pas un privilège que la base arbitre (§17.4) : c'est
+      // une déclaration que la session fait sur elle-même. Il n'a donc de
+      // valeur que si **une seule** couche le pose, et si cette couche sait de
+      // quel droit elle parle. Cette couche, c'est le résolveur de périmètre —
+      // aujourd'hui provisoire, demain l'authentification du lot L3.
+      //
+      // Aucune route ne le pose : la porte S2 a montré ce que cela coûte
+      // (voir `enAdministrationGroupe` dans `src/api/index.ts`). Il vaut donc
+      // faux par défaut, et il ne devient vrai que si l'exploitant l'a demandé
+      // explicitement, sur une machine de développement.
+      administrationGroupe: administrationGroupeDemandee(),
     });
+
+    if (perimetre.administrationGroupe) {
+      this.journal.warn(
+        { administration_groupe: true },
+        "Session provisoire (lot L2) : l'administration Groupe est OUVERTE par " +
+          'API_ADMINISTRATION_GROUPE_PROVISOIRE. Le socle commun aux filiales est écrivable ' +
+          "depuis cette machine. À n'employer qu'en développement.",
+      );
+    }
 
     this.cache = { perimetre, filiale, expire: maintenant + DUREE_CACHE_MS };
     return perimetre;

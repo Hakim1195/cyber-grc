@@ -1981,6 +1981,14 @@ export class Depot {
         (element): element is Enregistrement =>
           typeof element === 'object' && element !== null && !Array.isArray(element),
       );
+      // Une collection VIDE n'apporte rien, donc n'exige rien — pas même le
+      // droit de l'écrire. Un export du modèle navigateur porte toujours les
+      // 21 clés, la plupart à zéro enregistrement : garder les vides ici
+      // ferait refuser, au nom du socle Groupe, une reprise qui n'y touche
+      // pas. C'est la même notion d'« apporter quelque chose » que celle dont
+      // la route se sert pour exiger l'habilitation : une seule règle, deux
+      // endroits qui la lisent.
+      if (enregistrements.length === 0) continue;
       lus += enregistrements.length;
       apports.set(entite, enregistrements);
     }
@@ -2008,6 +2016,27 @@ export class Depot {
       const enregistrements = apports.get(entite);
       if (enregistrements === undefined) continue;
       const d = description(entite);
+
+      // ── LE MÊME GARDE-FOU QUE LA ROUTE ORDINAIRE, ET C'EST LE POINT ────
+      //
+      // La reprise est une route neuve ; elle n'hérite de rien. Sans cette
+      // ligne, une session de filiale se voyait refuser l'écriture d'une
+      // correspondance de portée Groupe par `POST /api/entites/mappings`
+      // (403) et l'obtenait par `POST /api/reprise` (201) — la même écriture,
+      // deux verdicts. C'est M-4 mot pour mot, atteint par le chemin créé pour
+      // le refermer : « le remède crée son propre chemin » (`CONVENTIONS.md`
+      // §20.3), et il s'attaque pour lui-même au passage suivant.
+      //
+      // Le prédicat n'est pas recopié : c'est `exigerDroitEcriture`, celui de
+      // la route ordinaire, appelé ici tel quel. Les deux routes ne peuvent
+      // donc pas diverger — non parce qu'on y veille, mais parce qu'il n'y a
+      // qu'une règle.
+      //
+      // Et c'est un REFUS, pas un saut : écarter la collection en silence
+      // perdrait une donnée du fichier. La transaction étant unique, le refus
+      // n'applique rien du tout (contrôle S14).
+      this.exigerDroitEcriture(d, perimetre, entite);
+
       const champsDeLiaison = new Set((d.liaisons ?? []).map((l) => l.champ));
       const connus = existants.get(entite) ?? new Map<string, { version: number; seconde: number | null }>();
 
@@ -2086,6 +2115,33 @@ export class Depot {
       champsIgnores: [...champsIgnores].sort(),
       lus,
     };
+  }
+
+  /**
+   * Les entités de **niveau Groupe** que cette charge utile apporte réellement.
+   *
+   * Sert à la route de reprise pour exiger l'habilitation **avant** d'ouvrir sa
+   * transaction, et donc à rendre un message qui dise quoi faire plutôt qu'un
+   * refus au milieu du travail. Ce n'est pas une seconde source de vérité : le
+   * critère est celui d'`exigerDroitEcriture` — une table sans colonne
+   * `filiale_id` est de niveau Groupe —, découvert dans le catalogue et non
+   * récité. Le moteur applique la règle de toute façon, collection par
+   * collection ; ceci ne fait que l'anticiper.
+   *
+   * Une collection **vide** n'exige rien : un export du modèle navigateur
+   * porte toujours les 21 clés, la plupart à zéro enregistrement.
+   */
+  public entitesDePorteeGroupeApportees(
+    charge: Readonly<Record<string, unknown>>,
+  ): readonly NomEntite[] {
+    const exigeantes: NomEntite[] = [];
+    for (const entite of ORDRE_ENTITES) {
+      const brut = charge[entite];
+      if (!Array.isArray(brut) || brut.length === 0) continue;
+      if (this.table(description(entite).table).cloisonnee) continue;
+      exigeantes.push(entite);
+    }
+    return exigeantes;
   }
 
   /**
