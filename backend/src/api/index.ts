@@ -425,82 +425,50 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     });
   };
 
-  const enEcriture = async <T>(
-    travail: (client: PoolClient, depot: Depot, perimetre: PerimetreSession) => Promise<T>,
-  ): Promise<T> => {
-    const instanceDepot = await assurerDepot();
-    const perimetre = await resolveur.resoudre();
-    return avecTransaction(pool, perimetre, (client) => travail(client, instanceDepot, perimetre));
-  };
-
   /**
-   * Transaction d'une opération qui touche au **socle commun du Groupe**.
+   * Transaction d'écriture.
    *
    * ══ La règle, et pourquoi elle a cette forme-là ══════════════════════
    *
    *   > **Une route ne fabrique jamais un drapeau d'administration : elle le
    *   > vérifie.**
    *
-   * La première rédaction faisait l'inverse. Elle raisonnait ainsi : une
-   * reprise restaure un jeu de données entier, socle compris, donc c'est par
-   * nature un acte d'administration Groupe, donc la transaction le déclare.
-   * Le raisonnement est juste sur la **nature** de l'opération, et il s'arrête
-   * à mi-chemin : il qualifie l'acte sans jamais demander si la session a le
-   * droit de le conduire.
+   * Le périmètre passé à `avecTransaction` est **celui de la session, tel
+   * quel**. Il n'existe, dans tout le greffon, aucun endroit où
+   * `administrationGroupe` soit construit à `true` — c'est vérifiable en un
+   * `grep`, et le banc d'essai le retient.
    *
-   * Le résultat se mesurait au banc d'essai, depuis une même session de
-   * filiale ordinaire :
+   * La leçon vient d'un défaut que ce lot a créé lui-même. La route de reprise
+   * avait d'abord été écrite ainsi : *une reprise restaure un jeu de données
+   * entier, socle compris, donc c'est un acte d'administration Groupe, donc la
+   * transaction le déclare.* Le raisonnement est juste sur la **nature** de
+   * l'opération, et il s'arrête à mi-chemin : il qualifie l'acte sans demander
+   * si la session a le droit de le conduire. Mesuré au banc, depuis une même
+   * session de filiale ordinaire :
    *
    * ```
    * POST /api/entites/mappings        → 403  hors_perimetre
    * POST /api/reprise  {mappings:[…]} → 200  la correspondance est en base
    * ```
    *
-   * La même écriture, deux verdicts, et la correspondance forgée depuis une
-   * filiale visible des dix-neuf autres. Ce n'est pas une fuite de lecture :
-   * c'est **une écriture dont le rayon sort de la filiale**, sans droit à la
-   * produire et sans journal pour l'attribuer — le constat M-4, atteint par le
-   * chemin créé pour le refermer.
+   * La même écriture, deux verdicts. La cause tient en une phrase du
+   * `CONVENTIONS.md` §17.4 : *le drapeau n'est pas un privilège, c'est une
+   * déclaration que la session fait sur elle-même.* Une déclaration ne
+   * s'auto-délivre pas : elle vient du **résolveur de périmètre** — donc de
+   * l'authentification, donc du lot L3 — et une route ne peut que la constater.
    *
-   * La cause tient en une phrase du `CONVENTIONS.md` §17.4, qui était sous nos
-   * yeux : *le drapeau n'est pas un privilège, c'est une déclaration que la
-   * session fait sur elle-même.* Une déclaration ne s'auto-délivre pas. Elle
-   * vient du **résolveur de périmètre** — donc de l'authentification, donc du
-   * lot L3 — et une route ne peut que la constater.
-   *
-   * ══ Ce que cette forme rend impossible ═══════════════════════════════
-   *
-   * Aucune route ne peut plus s'accorder l'administration Groupe : le
-   * périmètre passé à `avecTransaction` est **celui de la session, inchangé**.
-   * Il n'existe donc plus, dans tout le greffon, un seul endroit où
-   * `administrationGroupe` soit construit à `true`. C'est vérifiable en un
-   * `grep`, et c'est ce qui distingue une propriété d'une discipline.
-   *
-   * C'est aussi la règle générale que le lot L4 devra suivre pour la création
-   * de filiale et la gestion des profils : **vérifier le droit, puis agir**,
-   * jamais « qualifier l'opération » et se croire quitte.
+   * C'est la règle générale que le lot L4 devra suivre pour la création de
+   * filiale et la gestion des profils : **vérifier le droit, puis agir**,
+   * jamais « qualifier l'opération » et se croire quitte. Le contrôle lui-même
+   * vit dans `exigerDroitEcriture` (`src/entites/`), appelé au moment où une
+   * écriture aurait lieu — donc par toutes les routes, sans qu'aucune ait à y
+   * penser.
    */
-  const enAdministrationGroupe = async <T>(
-    motif: string,
+  const enEcriture = async <T>(
     travail: (client: PoolClient, depot: Depot, perimetre: PerimetreSession) => Promise<T>,
   ): Promise<T> => {
     const instanceDepot = await assurerDepot();
     const perimetre = await resolveur.resoudre();
-
-    if (!perimetre.administrationGroupe) {
-      throw new ErreurApplicative({
-        code: 'hors_perimetre',
-        statut: 403,
-        message:
-          `${motif} Cette opération touche au socle commun du Groupe — le même pour toutes ` +
-          "les filiales — et relève de l'administration Groupe. Rien n'a été modifié.",
-        detailJournal:
-          "administration Groupe exigée et non détenue par la session ; le drapeau vient du " +
-          'résolveur de périmètre (lot L3), jamais de la route',
-      });
-    }
-
-    // Le périmètre est celui de la session, tel quel. Rien n'est ajouté.
     return avecTransaction(pool, perimetre, (client) => travail(client, instanceDepot, perimetre));
   };
 
@@ -547,6 +515,15 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  GET /api/modele — description, aucune donnée
    * ------------------------------------------------------------------- */
   instance.get('/api/modele', async (_requete: FastifyRequest, reponse: FastifyReply) => {
+    // ── N-6 : cette route suit le sort des autres ────────────────────────
+    // Elle ne rend aucune donnée métier, mais elle rend la STRUCTURE du
+    // produit : 21 entités, tous les noms de champs, leurs types, les préfixes
+    // d'identifiant. Elle répondait 200 en production et en recette là où
+    // `/api/session` et `/api/donnees` répondent 503 — une divulgation de
+    // structure sur la seule route qui échappait à la barrière fail-closed,
+    // faute d'appeler le résolveur. Elle l'appelle désormais, et pour cela
+    // seulement : le périmètre résolu n'est pas utilisé au-delà.
+    await resolveur.resoudre();
     const instanceDepot = await assurerDepot();
     return reponse.send(instanceDepot.decrire());
   });
@@ -736,31 +713,26 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
 
       const empreinte = createHash('sha256').update(fichier.contenu, 'utf8').digest('hex');
 
-      // ── Le fichier exige-t-il l'administration Groupe ? ─────────────────
-      // Un export du modèle navigateur porte la surcouche des correspondances
-      // inter-référentiels, qui sont de **niveau Groupe** : les reprendre est
-      // une écriture dans le socle commun aux vingt filiales. On le demande au
-      // moteur, dont le critère est celui de la route ordinaire — une table
-      // sans `filiale_id` —, et non à une liste tenue ici.
+      // Le droit d'écrire dans le socle commun n'est PAS demandé ici, et ce
+      // n'est pas un oubli : il l'est par le moteur, au moment exact où une
+      // écriture aurait lieu (voir `appliquerReprise`). Un fichier qui renvoie
+      // le socle Groupe à l'identique — ce que fait tout export du produit —
+      // n'écrit rien dans le socle et n'exige donc rien ; un fichier qui
+      // apporte une correspondance NEUVE l'exige, et sera refusé si la session
+      // ne l'a pas. C'est le constat N-2 fermé sans desserrer M-4.
       //
-      // Une collection vide n'exige rien : c'est le cas courant, un export
-      // portant toujours les 21 clés. Un fichier purement « niveau filiale »
-      // se reprend donc normalement, sans habilitation particulière.
-      const depotCourant = await assurerDepot();
-      const charge = lecture.charge as unknown as Record<string, unknown>;
-      const exigeantes = depotCourant.entitesDePorteeGroupeApportees(charge);
-
-      const executer =
-        exigeantes.length === 0
-          ? enEcriture
-          : <T,>(travail: (c: PoolClient, d: Depot, p: PerimetreSession) => Promise<T>) =>
-              enAdministrationGroupe(
-                `Ce fichier apporte des données de portée Groupe (${exigeantes.join(', ')}).`,
-                travail,
-              );
-
-      const resultat = await executer(async (client, instanceDepot, perimetre) => {
-        const bilan = await instanceDepot.appliquerReprise(client, perimetre, charge, mode);
+      // Le périmètre passé à la transaction est celui de la session, INCHANGÉ :
+      // aucune route de ce greffon ne construit `administrationGroupe`, et
+      // c'est ce qui rend la règle « une route vérifie un droit, elle ne se
+      // l'accorde pas » vraie par la forme plutôt que par la discipline.
+      const resultat = await enEcriture(async (client, instanceDepot, perimetre) => {
+        const bilan = await instanceDepot.appliquerReprise(
+          client,
+          perimetre,
+          lecture.charge as unknown as Record<string, unknown>,
+          mode,
+          requete.log,
+        );
 
         // 2. Tracer la reprise dans la table prévue pour cela. Elle porte la
         //    clé d'idempotence du `PLAN_SERVEUR` §5 : réimporter le même
@@ -784,8 +756,18 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
               bilan.lus,
               totaliser(bilan.crees),
               totaliser(bilan.misAJour),
-              bilan.champsIgnores.length,
-              `reprise « ${mode} » depuis un export v${String(lecture.rapport.versionOrigine)}`,
+              // N-9 : « lignes ignorées » compte des LIGNES. Y mettre le nombre
+              // de champs sans destination rendait la colonne fausse — et tant
+              // que le journal d'audit du lot L5 n'existe pas, cette ligne est
+              // la seule trace d'un acte destructeur : elle doit être exacte.
+              0,
+              // Le VOLUME SUPPRIMÉ n'a pas de colonne, et c'est ce que la trace
+              // taisait alors qu'un « remplacer » vide la filiale. Il part donc
+              // dans le message, avec le reste de ce que le bilan sait.
+              `reprise « ${mode} » depuis un export v${String(lecture.rapport.versionOrigine)} · ` +
+                `${String(totaliser(bilan.supprimes))} ligne(s) supprimée(s) · ` +
+                `${String(bilan.liaisons)} liaison(s) · ` +
+                `${String(bilan.champsIgnores.length)} champ(s) sans destination`,
             ],
           );
         }

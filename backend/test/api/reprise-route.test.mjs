@@ -111,6 +111,13 @@ async function compter(p = lectureA) {
     )).rows[0]);
 }
 
+/** Nombre de reprises tracées dans « imports » — la trace que l'aperçu ne doit pas laisser. */
+async function compterImports(p = lectureA) {
+  const client = await base.connexion('app');
+  return base.avecPerimetre(client, p, async (c) =>
+    (await c.query('select count(*)::int as n from imports')).rows[0].n);
+}
+
 /** Les identifiants d'une collection, vus en base. */
 async function identifiants(table, p = lectureA) {
   const client = await base.connexion('app');
@@ -156,6 +163,89 @@ describe('L’aperçu applique vraiment, puis annule', () => {
       'Le bilan appliqué doit être celui qui avait été annoncé.',
     );
     assert.ok((await identifiants('risques')).includes('RISK-ANNONCE'));
+  });
+});
+
+/* =====================================================================
+ *  §1 bis — L'aperçu ne renseigne pas l'attaquant (constat N-1)
+ * ===================================================================== */
+
+describe('L’aperçu n’est pas un oracle d’existence (constat N-1, contrôle S12)', () => {
+  /** Deux sondes identiques à l'identifiant près : l'une prise, l'autre libre. */
+  async function sonder(identifiant, options = {}) {
+    const charge = instantane(12, { risques: [{ id: identifiant, nom: 'sonde' }] });
+    return reprendre('fusionner', charge, {
+      nom: `sonde-${identifiant}-${options.apercu === true ? 'apercu' : 'applique'}.json`,
+      ...(options.apercu === true ? { apercu: true } : {}),
+    });
+  }
+
+  test('EN APERÇU : un identifiant pris ailleurs et un identifiant libre sont indiscernables', async () => {
+    // Le constat N-1 : le mode aperçu redonnait en une requête ce que la route de
+    // création avait cessé de dire (constat M-3) — « cet identifiant existe-t-il dans
+    // une filiale que je ne vois pas ? ». Et il ne laissait aucune trace, puisqu'un
+    // aperçu n'écrit pas la ligne d'import : la sonde était gratuite ET muette.
+    //
+    // `RISK-B` appartient à la filiale allemande, invisible d'ici. La réponse doit
+    // être la même que pour un identifiant qui n'existe nulle part.
+    const pris = await sonder('RISK-B', { apercu: true });
+    const libre = await sonder('RISK-CERTAINEMENT-LIBRE-1', { apercu: true });
+
+    assert.equal(pris.statut, libre.statut, 'Les deux statuts doivent être identiques.');
+    assert.deepEqual(
+      pris.corps.bilan.crees,
+      libre.corps.bilan.crees,
+      'Le bilan ne doit pas trahir l’existence de la ligne voisine.',
+    );
+    assert.equal(
+      JSON.stringify(pris.corps).includes(FILIALE_B),
+      false,
+      'La filiale voisine ne doit être nommée nulle part.',
+    );
+  });
+
+  test('APPLIQUÉ : même indiscernabilité, et la ligne voisine n’est pas touchée', async () => {
+    const avantVoisine = await base.avecPerimetre(await base.connexion('app'), lectureB, async (c) =>
+      (await c.query("select id, nom from risques where id = 'RISK-B'")).rows);
+
+    const pris = await sonder('RISK-B');
+    const libre = await sonder('RISK-CERTAINEMENT-LIBRE-2');
+    assert.equal(pris.statut, libre.statut);
+    assert.equal(pris.corps.bilan.crees.risques, libre.corps.bilan.crees.risques);
+
+    // ── Ce que cela coûte, et qu'il faut savoir ─────────────────────────────
+    //
+    // Pour que les deux réponses se ressemblent, l'identifiant pris est RENOMMÉ
+    // plutôt que refusé. Le round-trip exact — la propriété que la route de reprise
+    // est seule à préserver — cède donc sur ce cas précis, et c'est le bon
+    // arbitrage : mieux vaut une reprise fidèle à 99 % qu'un oracle inter-filiales.
+    // Le banc le fige pour que ce ne soit pas une surprise le jour où quelqu'un
+    // comparera un export à sa reprise.
+    const chezMoi = await base.avecPerimetre(await base.connexion('app'), lectureA, async (c) =>
+      (await c.query("select id from risques where nom = 'sonde' order by id")).rows);
+    assert.ok(chezMoi.length >= 2, 'Les deux sondes doivent avoir été créées.');
+    assert.equal(
+      chezMoi.some((l) => l.id === 'RISK-B'),
+      false,
+      'L’identifiant pris ailleurs ne peut pas être réutilisé : il est renommé.',
+    );
+
+    const apresVoisine = await base.avecPerimetre(await base.connexion('app'), lectureB, async (c) =>
+      (await c.query("select id, nom from risques where id = 'RISK-B'")).rows);
+    assert.deepEqual(apresVoisine, avantVoisine, 'La ligne allemande doit être intacte.');
+  });
+
+  test('l’aperçu ne laisse AUCUNE trace, l’application en laisse une', async () => {
+    // L'autre moitié du constat N-1 : une sonde gratuite est une sonde qu'on peut
+    // répéter. La trace d'import est ce qui rendra la répétition visible le jour où
+    // le journal d'audit existera (lot L5) ; encore faut-il qu'elle soit écrite —
+    // et seulement quand quelque chose a été écrit.
+    const avant = await compterImports();
+    await sonder('RISK-TRACE-APERCU', { apercu: true });
+    assert.equal(await compterImports(), avant, 'Un aperçu n’écrit rien, pas même sa trace.');
+
+    await sonder('RISK-TRACE-APPLIQUEE');
+    assert.equal(await compterImports(), avant + 1, 'Une reprise appliquée est tracée.');
   });
 });
 
@@ -353,22 +443,47 @@ describe('Un export complet, comme l’application en produit', () => {
     //
     // Le test le dit désormais dans les DEUX sens. Se contenter de passer une
     // session habilitée aurait fait disparaître ce qu'il prouvait.
+    const avantRisques = await identifiants('risques');
+    const importsAvant = await compterImports();
+    assert.ok(avantRisques.length > 0, 'Le scénario n’a de sens que si la filiale a des données à perdre.');
+
     const reponse = await reprendre('remplacer', instantaneV12Complet(), { nom: 'complet-filiale.json' });
 
     assert.equal(reponse.statut, 403, JSON.stringify(reponse.corps).slice(0, 300));
     assert.equal(reponse.corps.erreur, 'hors_perimetre');
     assert.equal(reponse.corps.code_grc, undefined, 'Un refus de droit n’est pas un conflit de version.');
-    assert.match(
-      reponse.corps.message,
-      /mappings/,
-      'Le refus doit NOMMER la collection en cause : sans elle, l’exploitant ne sait pas quoi faire.',
-    );
     assert.match(reponse.corps.message, /administration Groupe/i);
 
-    // Et il n'a rien écrit au passage : un refus de droit n'est pas une reprise
-    // partielle.
+    // Le refus doit DÉSIGNER ce qui l'a provoqué — sans quoi l'exploitant reçoit
+    // « c'est du socle commun » sans savoir quelle partie de son fichier l'est.
+    //
+    // La désignation a déjà changé de place une fois : elle était dans la phrase
+    // (« Ce fichier apporte des données de portée Groupe (mappings) ») quand le
+    // contrôle vivait dans la route ; elle est dans le champ « entite » depuis qu'il
+    // vit dans le moteur — ce qui couvre plus de chemins, et c'est mieux. Le test
+    // exige donc la PROPRIÉTÉ, pas l'endroit : que l'information soit là.
+    const designation = `${reponse.corps.message} ${String(reponse.corps.entite ?? '')}`;
+    assert.match(
+      designation,
+      /mappings/,
+      `Le refus ne désigne pas la collection en cause : ${JSON.stringify(reponse.corps)}`,
+    );
+
+    // ── Le refus précède l'écriture, et cela se vérifie par ses traces ──────
+    //
+    // « Rien du fichier n'est en base » ne suffit pas : en mode « remplacer », la
+    // purge de la filiale vient AVANT l'application, et un contrôle placé après elle
+    // laisserait une filiale vidée. On vérifie donc les trois traces qu'un refus
+    // tardif laisserait — les données d'origine, la ligne de journal d'import, et le
+    // compte des collections.
     const apres = await identifiants('risques');
     assert.equal(apres.includes('RISK-1720000000000-104'), false, 'Rien du fichier ne doit être en base.');
+    assert.deepEqual(apres, avantRisques, 'La filiale ne doit pas avoir été purgée avant le refus.');
+    assert.equal(
+      await compterImports(),
+      importsAvant,
+      'Un refus n’est pas une reprise : il ne laisse pas de trace d’import.',
+    );
   });
 
   test('… et ACCEPTÉ d’une administration Groupe : les 21 collections traversent', async () => {

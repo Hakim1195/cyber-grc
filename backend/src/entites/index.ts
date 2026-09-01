@@ -158,6 +158,11 @@ export const BORNES = Object.freeze({
   margeSondageMs: 60000,
 });
 
+/** Ce que la reprise attend d'un journal, sans dépendre du serveur HTTP. */
+export interface JournalMinimalReprise {
+  warn(donnees: unknown, message?: string): void;
+}
+
 /** Version de schéma du modèle navigateur servie par cette API. */
 export const VERSION_SCHEMA = 12;
 
@@ -846,16 +851,43 @@ async function decouvrirVidesInterdits(
     table: string;
     colonne: string;
     definition: string;
+    surDomaine: boolean;
   }>(`
+    -- Contraintes portées par la TABLE.
     select k.conname       as nom,
            c.relname       as table,
            a.attname::text as colonne,
-           pg_get_constraintdef(k.oid) as definition
+           pg_get_constraintdef(k.oid) as definition,
+           false           as "surDomaine"
       from pg_constraint k
       join pg_class c     on c.oid = k.conrelid
       join pg_namespace n on n.oid = c.relnamespace
       join lateral unnest(k.conkey) as cle(numero) on true
       join pg_attribute a on a.attrelid = c.oid and a.attnum = cle.numero
+     where n.nspname = 'public'
+       and k.contype = 'c'
+
+    union all
+
+    -- Contraintes portées par le DOMAINE de la colonne.
+    --
+    -- Elles échappaient au balayage — leur « conrelid » vaut zéro, c'est
+    -- « contypid » qui porte le type — et c'est ce qui faisait refuser un
+    -- « exigence_id » vide : le domaine « id_metier » interdit la chaîne vide,
+    -- mais aucune contrainte de table ne le disait. Une reprise de l'export du
+    -- produit échouait donc sur une action sans exigence (constat N-2). Le
+    -- schéma dit la même chose des deux façons ; la découverte doit lire les
+    -- deux.
+    select k.conname       as nom,
+           c.relname       as table,
+           a.attname::text as colonne,
+           pg_get_constraintdef(k.oid) as definition,
+           true            as "surDomaine"
+      from pg_constraint k
+      join pg_type td     on td.oid = k.contypid
+      join pg_attribute a on a.atttypid = td.oid and a.attnum > 0 and not a.attisdropped
+      join pg_class c     on c.oid = a.attrelid and c.relkind in ('r', 'p')
+      join pg_namespace n on n.oid = c.relnamespace
      where n.nspname = 'public'
        and k.contype = 'c'
   `);
@@ -865,11 +897,17 @@ async function decouvrirVidesInterdits(
     // Le même balayage sert deux fins : savoir où la chaîne vide est refusée,
     // et savoir quelles colonnes chaque « check » porte — ce dont la
     // traduction d'un 23514 a besoin pour ne pas inventer un nom de champ.
-    const connue = validations.get(ligne.nom);
-    if (connue === undefined) {
-      validations.set(ligne.nom, { nom: ligne.nom, table: ligne.table, colonnes: [ligne.colonne] });
-    } else {
-      (connue.colonnes as string[]).push(ligne.colonne);
+    // Une contrainte de domaine porte le même nom pour toutes les colonnes qui
+    // emploient ce domaine : on ne la recense pas comme une contrainte de
+    // table, sans quoi son « colonnes » deviendrait un fourre-tout et le
+    // message d'erreur nommerait n'importe quoi.
+    if (!ligne.surDomaine) {
+      const connue = validations.get(ligne.nom);
+      if (connue === undefined) {
+        validations.set(ligne.nom, { nom: ligne.nom, table: ligne.table, colonnes: [ligne.colonne] });
+      } else {
+        (connue.colonnes as string[]).push(ligne.colonne);
+      }
     }
 
     const definition = ligne.definition;
@@ -1268,6 +1306,17 @@ export interface OptionsCreation {
    * une reprise signale.
    */
   readonly signalerChampInconnu?: ((champ: string) => void) | null;
+
+  /**
+   * Reçoit les identifiants que le serveur a dû **ré-émettre** parce que celui
+   * du fichier était déjà pris dans le domaine global (voir N-1 dans `creer`).
+   * L'appelant s'en sert pour réécrire les références de la charge.
+   *
+   * ⚠️ Ce signal reste **côté serveur**. Le rendre à l'appelant rouvrirait
+   * l'oracle par la petite porte : « ton identifiant a été renommé » veut dire
+   * « il existe ailleurs ». Il part au journal technique, pas dans la réponse.
+   */
+  readonly signalerRenommage?: ((ancien: string, nouveau: string) => void) | null;
 }
 
 export class Depot {
@@ -1472,25 +1521,77 @@ export class Depot {
     // La table principale d'abord : c'est elle qui porte l'identité, et les
     // clés étrangères des autres tables la visent.
     const principales = valeurs.get(d.table) ?? new Map<string, unknown>();
+    let identifiantRetenu = identifiant;
     const tentative = await this.avecPointDeReprise(client, 'pr_creation', () =>
       this.inserer(client, d.table, identifiant, filialeLigne, principales, entite),
     );
+
     if (!tentative.ok) {
-      throw await this.enrichirDoublon(
-        client,
-        tentative.erreur,
-        d.table,
-        principales,
-        filialeLigne,
-        entite,
-      );
+      // ══ N-1 : LE DOUBLON DE CLÉ GLOBALE NE DOIT RIEN APPRENDRE ═══════
+      //
+      // L'espace des identifiants est de niveau **Groupe** : la clé primaire
+      // porte `id` seul, et les contrôles d'unicité contournent délibérément la
+      // RLS (`CONVENTIONS.md` §19.1). Un identifiant proposé par l'appelant et
+      // déjà pris par une filiale **invisible** produit donc un `23505` — et ce
+      // refus, à lui seul, répond « cette ligne existe » à qui ne peut pas la
+      // lire.
+      //
+      // Le constat M-3 avait fermé ce canal sur la route de création, en
+      // retirant l'identifiant de la surface HTTP. La route de **reprise** l'a
+      // rouvert, parce qu'elle conserve les identifiants du fichier — ce qui
+      // est correct pour son objet (`CONVENTIONS.md` §2, round-trip exact) et
+      // ne peut donc pas être retiré. Constat N-1 du second passage, aggravé
+      // par l'aperçu, qui n'écrit rien et ne laisse donc aucune trace.
+      //
+      // ── Pourquoi refuser ne referme rien ────────────────────────────
+      //
+      // Toute réponse qui distingue « pris » de « libre » est l'oracle,
+      // quel qu'en soit le texte : un refus poli reste un refus, et le succès
+      // reste un succès. Rendre le message indistinct ne suffit pas ; il faut
+      // que **l'issue** le soit.
+      //
+      // ── Ce qu'on fait donc : on n'échoue pas, on renomme ────────────
+      //
+      // L'identifiant est ré-émis par le serveur, et **toutes les références
+      // qui le visaient dans la charge sont réécrites** (voir le plan de
+      // renommage d'`appliquerReprise`). Les deux issues deviennent identiques
+      // — 200, un enregistrement créé — et le canal disparaît au lieu d'être
+      // habillé.
+      //
+      // Ce que cela coûte : l'identifiant d'un enregistrement peut différer de
+      // celui du fichier. Ce que cela préserve, et qui est la vraie exigence du
+      // §2 : **les références continuent de pointer sans table de
+      // correspondance**. En usage légitime le cas ne se produit jamais — les
+      // identifiants portent un horodatage et un aléa, et un export d'une
+      // filiale ne contient que ses propres lignes.
+      //
+      // Et cela referme du même coup la face INTÉGRITÉ du constat : une filiale
+      // ne peut plus, en occupant un identifiant du domaine global, empêcher
+      // définitivement une autre filiale de reprendre son export.
+      const global = this.doublonDeCleGlobale(tentative.erreur);
+
+      if (!global || options.identifiantImpose === undefined || options.identifiantImpose === null) {
+        throw await this.enrichirDoublon(
+          client,
+          tentative.erreur,
+          d.table,
+          principales,
+          filialeLigne,
+          entite,
+        );
+      }
+
+      identifiantRetenu = engendrerIdentifiant(d.prefixe);
+      options.signalerRenommage?.(identifiant, identifiantRetenu);
+      await this.inserer(client, d.table, identifiantRetenu, filialeLigne, principales, entite);
     }
+    const identifiantFinal = identifiantRetenu;
 
     if (d.seconde !== undefined) {
       // Mise en oeuvre du contrôle : toujours LOCALE à la filiale active,
       // même quand la définition est de portée Groupe (CONVENTIONS.md §16.2).
       const secondaires = valeurs.get(d.seconde.table) ?? new Map<string, unknown>();
-      secondaires.set('mesure_id', identifiant);
+      secondaires.set('mesure_id', identifiantFinal);
       await this.inserer(
         client,
         d.seconde.table,
@@ -1498,17 +1599,22 @@ export class Depot {
         filiale,
         secondaires,
         entite,
+        // N-10 : un refus doit désigner l'enregistrement que l'appelant
+        // connaît — la mesure — et non le « MMO-… » que le serveur vient
+        // d'engendrer, qui n'existera même pas si la transaction est annulée.
+        identifiantFinal,
       );
     }
 
     for (const [liaison, elements] of liaisons) {
-      await this.ecrireLiaison(client, liaison, identifiant, filialeLigne, elements, entite);
+      await this.ecrireLiaison(client, liaison, identifiantFinal, filialeLigne, elements, entite);
     }
 
-    const relu = await this.lireUn(client, entite, identifiant, filiale);
+    const relu = await this.lireUn(client, entite, identifiantFinal, filiale);
     if (relu === null) {
       throw incoherent(
-        `Enregistrement ${entite}/${identifiant} inséré puis illisible dans la même transaction.`,
+        `Enregistrement ${entite}/${identifiantFinal} inséré puis illisible dans la même ` +
+          'transaction.',
       );
     }
     return relu;
@@ -1538,58 +1644,76 @@ export class Depot {
   ): Promise<Enregistrement> {
     const d = description(entite);
     const filiale = this.filialeActive(perimetre);
-    this.exigerDroitEcriture(d, perimetre, entite);
     verifierIdentifiant(identifiant);
 
     const { valeurs, liaisons } = this.repartir(d, champs, entite, signalerChampInconnu);
     let principales = valeurs.get(d.table) ?? new Map<string, unknown>();
 
-    // ── M-1 : CE QUI N'A PAS CHANGÉ NE S'ÉCRIT PAS ─────────────────────
+    // ══ CE QUI N'A PAS CHANGÉ NE S'ÉCRIT PAS ═══════════════════════════
     //
-    // Sur une entité SCINDÉE, la définition (Groupe) et la mise en oeuvre
-    // (filiale) sont écrites par des gens qui n'ont pas les mêmes droits. Or
-    // `save()` côté navigateur n'a jamais su dire ce qui a bougé : il envoie
-    // l'enregistrement ENTIER. Les champs `nom` et `description` du catalogue
-    // partaient donc à chaque évaluation, la RLS refusait l'écriture d'une
-    // ligne de portée Groupe, et la branche « cas nominal » ci-dessous — écrite
-    // pour ce cas précis — était INATTEIGNABLE depuis le navigateur : du code
-    // mort qui se croyait fonctionnel. C'est le constat M-1 de la porte S2, et
-    // ma propre démonstration l'annonçait comme fonctionnel : l'écart entre la
-    // preuve et l'usage réel est le vrai enseignement de ce constat.
+    //   > **Un enregistrement qui ne change rien n'exige pas le droit de
+    //   > l'écrire.**
     //
-    // La règle, énoncée comme un principe et non comme un rustinage :
-    // **un enregistrement qui ne change pas la définition ne doit pas exiger le
-    // droit de l'écrire.** On relit donc les colonnes visées et on retire du
-    // lot celles dont la valeur est déjà celle-là.
+    // Le principe est né du constat M-1 (une filiale ne pouvait pas évaluer un
+    // contrôle du socle Groupe, parce que le navigateur renvoyait aussi la
+    // définition inchangée). Je l'avais alors restreint aux entités SCINDÉES,
+    // en croyant qu'ailleurs « refuser était le comportement juste ». C'était
+    // une demi-mesure, et elle s'est payée : le second passage de la porte a
+    // montré que **le produit ne sait pas reprendre son propre export**
+    // (constat N-2). Le fichier que l'application exporte contient le socle
+    // Groupe — c'est normal, la filiale le lit —, et le renvoyer à l'identique
+    // se heurtait à quatre refus en cascade : les correspondances, puis une
+    // mesure, un document et une personne de portée Groupe.
     //
-    // Restreint aux entités scindées, et volontairement : sur les tables
-    // MIXTES ordinaires (`documents`, `personnes`), une ligne de portée Groupe
-    // n'a pas de moitié locale — la refuser est le comportement juste, pas un
-    // défaut à contourner.
-    if (d.seconde !== undefined && principales.size > 0) {
+    // Or aucun de ces quatre renvois ne CHANGE quoi que ce soit. Le principe
+    // est donc général, et il l'est maintenant : colonnes **et** liaisons, sur
+    // **toutes** les entités. Le droit d'écrire est exigé exactement quand une
+    // écriture aurait lieu, et à aucun autre moment.
+    if (principales.size > 0) {
       principales = await this.retirerLesInchangees(client, d.table, identifiant, principales);
     }
+
+    // Les liaisons suivent la même règle : réécrire à l'identique un ensemble
+    // de liens, c'est un `delete` puis un `insert` — donc une écriture, donc un
+    // droit exigé, pour un résultat rigoureusement inchangé. (Et c'est aussi,
+    // accessoirement, la fin d'une réécriture inutile à chaque enregistrement.)
+    const liaisonsAEcrire = new Map<DescriptionLiaison, Record<string, unknown>[]>();
+    for (const [liaison, elements] of liaisons) {
+      if (await this.liaisonInchangee(client, liaison, identifiant, filiale, elements)) continue;
+      liaisonsAEcrire.set(liaison, elements);
+    }
+
+    const secondaires =
+      d.seconde === undefined
+        ? new Map<string, unknown>()
+        : await this.retirerLesInchangeesMiseEnOeuvre(
+            client,
+            d.seconde.table,
+            identifiant,
+            filiale,
+            valeurs.get(d.seconde.table) ?? new Map<string, unknown>(),
+          );
+
+    const ecritPrincipale = principales.size > 0 || liaisonsAEcrire.size > 0;
+    const ecritQuelqueChose = ecritPrincipale || secondaires.size > 0;
+
+    // Le droit n'est demandé qu'ici, et seulement si quelque chose part.
+    if (ecritQuelqueChose) this.exigerDroitEcriture(d, perimetre, entite);
 
     // ── LE CŒUR DU LOT ─────────────────────────────────────────────────
     // « update … where id = $1 and version = $2 ». Zéro ligne = refus, et
     // c'est le diagnostic qui dit LEQUEL des trois (voir §8.7).
     //
-    // Le « update » est joué même quand aucune colonne de la table principale
-    // ne change : il sert alors de PRISE DE VERROU et de contrôle de version
-    // pour les liaisons. Sans lui, modifier les seules liaisons échapperait au
-    // verrouillage optimiste — le risque P1 par la porte de derrière.
+    // Le « update » est joué dès qu'une liaison change, même sans colonne
+    // modifiée : il sert alors de PRISE DE VERROU et de contrôle de version.
+    // Sans lui, modifier les seules liaisons échapperait au verrouillage
+    // optimiste — le risque P1 par la porte de derrière.
     //
-    // ── L'EXCEPTION, ET ELLE EST FONCTIONNELLE ─────────────────────────
-    // Sur une entité SCINDÉE, ne rien écrire dans la table principale n'est pas
-    // un cas dégénéré : c'est le cas NOMINAL d'une filiale qui évalue un
-    // contrôle du socle Groupe. Écrire la définition partagée lui est refusé —
-    // et doit l'être (CONVENTIONS.md §17.6) —, alors que sa mise en oeuvre
-    // locale est précisément ce qu'elle a le droit de faire. On se contente
-    // alors d'un contrôle de version EN LECTURE sur la définition.
-    const toucherPrincipale =
-      d.seconde === undefined || principales.size > 0 || liaisons.size > 0;
-
-    if (toucherPrincipale) {
+    // Quand rien ne part dans la table principale, on se contente d'un
+    // contrôle de version EN LECTURE : c'est le cas d'une filiale qui évalue
+    // un contrôle du socle Groupe (sa mise en oeuvre est locale, la définition
+    // ne bouge pas), et celui d'une reprise qui renvoie le socle à l'identique.
+    if (ecritPrincipale) {
       const touchee = await this.majAvecVersion(
         client,
         d.table,
@@ -1615,24 +1739,21 @@ export class Depot {
       }
     }
 
-    if (d.seconde !== undefined) {
-      const secondaires = valeurs.get(d.seconde.table) ?? new Map<string, unknown>();
-      if (secondaires.size > 0) {
-        await this.majMiseEnOeuvre(
-          client,
-          d.seconde.table,
-          identifiant,
-          filiale,
-          versionSeconde,
-          secondaires,
-          entite,
-        );
-      }
+    if (d.seconde !== undefined && secondaires.size > 0) {
+      await this.majMiseEnOeuvre(
+        client,
+        d.seconde.table,
+        identifiant,
+        filiale,
+        versionSeconde,
+        secondaires,
+        entite,
+      );
     }
 
-    if (liaisons.size > 0) {
+    if (liaisonsAEcrire.size > 0) {
       const porteeLigne = await this.filialeDeLaLigne(client, d.table, identifiant);
-      for (const [liaison, elements] of liaisons) {
+      for (const [liaison, elements] of liaisonsAEcrire) {
         await this.ecrireLiaison(client, liaison, identifiant, porteeLigne, elements, entite);
       }
     }
@@ -1950,6 +2071,7 @@ export class Depot {
     perimetre: PerimetreSession,
     charge: Readonly<Record<string, unknown>>,
     mode: ModeReprise,
+    journal: JournalMinimalReprise | null = null,
   ): Promise<BilanReprise> {
     const filiale = this.filialeActive(perimetre);
 
@@ -2012,32 +2134,57 @@ export class Depot {
       champsIgnores.add(champ);
     };
 
+    // ── Plan de renommage (constat N-1) ─────────────────────────────────
+    // Quand un identifiant du fichier est déjà pris dans le domaine global —
+    // par une ligne qui peut être invisible — le serveur en ré-émet un et
+    // l'inscrit ici. Toutes les références qui visaient l'ancien sont ensuite
+    // réécrites : c'est ce qui préserve la vraie exigence du round-trip
+    // (`CONVENTIONS.md` §2), à savoir que **les références continuent de
+    // pointer sans table de correspondance**.
+    //
+    // Le plan ne sort pas d'ici : le rendre à l'appelant lui apprendrait qu'un
+    // identifiant existe ailleurs, c'est-à-dire l'oracle qu'on vient de fermer.
+    const renommages = new Map<string, string>();
+    const signalerRenommage = (ancien: string, nouveau: string): void => {
+      renommages.set(ancien, nouveau);
+      // Le DÉTAIL va au journal technique du serveur, jamais dans la réponse :
+      // c'est ce qui rend le renommage traçable pour l'exploitant sans le
+      // rendre observable par l'appelant.
+      journal?.warn(
+        { ancien, nouveau },
+        "Reprise : identifiant déjà pris dans le domaine global, ré-émis par le serveur ; " +
+          'les références de la charge ont été réécrites',
+      );
+    };
+
+    // Colonnes qui portent une référence vers une autre entité : ce sont les
+    // seules à réécrire. Découvertes dans le graphe des clés étrangères, pas
+    // énumérées — une entité ajoutée demain sera couverte sans que ce code
+    // change (`CONVENTIONS.md` §19.5).
+    const colonnesDeReference = this.colonnesDeReference();
+
     for (const entite of this.ordreEcriture()) {
       const enregistrements = apports.get(entite);
       if (enregistrements === undefined) continue;
       const d = description(entite);
 
-      // ── LE MÊME GARDE-FOU QUE LA ROUTE ORDINAIRE, ET C'EST LE POINT ────
+      // ── LE DROIT SE DEMANDE AU POINT D'EFFET, PAS À L'ENTRÉE ──────────
       //
-      // La reprise est une route neuve ; elle n'hérite de rien. Sans cette
-      // ligne, une session de filiale se voyait refuser l'écriture d'une
-      // correspondance de portée Groupe par `POST /api/entites/mappings`
-      // (403) et l'obtenait par `POST /api/reprise` (201) — la même écriture,
-      // deux verdicts. C'est M-4 mot pour mot, atteint par le chemin créé pour
-      // le refermer : « le remède crée son propre chemin » (`CONVENTIONS.md`
-      // §20.3), et il s'attaque pour lui-même au passage suivant.
+      // Il n'y a plus de garde-fou par collection ici, et c'est délibéré. Le
+      // premier jet en posait un — le même prédicat que la route ordinaire,
+      // ce qui était juste — mais **à l'entrée de la collection**, donc avant
+      // de savoir si le fichier changeait quoi que ce soit. Résultat : renvoyer
+      // le socle Groupe à l'identique, ce que fait tout export du produit, se
+      // heurtait à un refus (porte S2 bis, constat N-2). Et ce garde-fou était
+      // par ailleurs **inatteignable**, le contrôle de la route refusant
+      // d'abord — un second filet muet, que le banc a démasqué en le retirant
+      // sans qu'un seul test tombe (constat N-13, sabotage 7).
       //
-      // Le prédicat n'est pas recopié : c'est `exigerDroitEcriture`, celui de
-      // la route ordinaire, appelé ici tel quel. Les deux routes ne peuvent
-      // donc pas diverger — non parce qu'on y veille, mais parce qu'il n'y a
-      // qu'une règle.
-      //
-      // Et c'est un REFUS, pas un saut : écarter la collection en silence
-      // perdrait une donnée du fichier. La transaction étant unique, le refus
-      // n'applique rien du tout (contrôle S14).
-      this.exigerDroitEcriture(d, perimetre, entite);
-
-      const champsDeLiaison = new Set((d.liaisons ?? []).map((l) => l.champ));
+      // `creer` et `modifier` demandent désormais le droit exactement quand une
+      // écriture aurait lieu. Le prédicat est le même, il est appelé par les
+      // deux routes, et il est maintenant **sur le chemin** : le retirer se
+      // voit.
+            const champsDeLiaison = new Set((d.liaisons ?? []).map((l) => l.champ));
       const connus = existants.get(entite) ?? new Map<string, { version: number; seconde: number | null }>();
 
       crees[entite] = 0;
@@ -2056,14 +2203,30 @@ export class Depot {
           else donnees[champ] = valeur;
         }
 
+        // Les références déjà réécrites suivent : un parent renommé l'a
+        // toujours été AVANT ses enfants, l'ordre d'écriture le garantit.
+        appliquerRenommages(donnees, colonnesDeReference.get(entite) ?? new Set(), renommages);
+
         const deja = connus.get(identifiant);
         if (deja === undefined) {
-          await this.creer(client, perimetre, entite, donnees, {
+          const cree = await this.creer(client, perimetre, entite, donnees, {
             identifiantImpose: identifiant,
             signalerChampInconnu: signaler,
+            signalerRenommage,
           });
+          const retenu = typeof cree['id'] === 'string' ? cree['id'] : identifiant;
           crees[entite] = (crees[entite] ?? 0) + 1;
-        } else {
+          if (Object.keys(liaisons).length > 0) {
+            differees.push({
+              entite,
+              identifiant: retenu,
+              portee: await this.filialeDeLaLigne(client, d.table, retenu),
+              liaisons,
+            });
+          }
+          continue;
+        }
+        {
           await this.modifier(
             client,
             perimetre,
@@ -2093,7 +2256,28 @@ export class Depot {
     for (const differee of differees) {
       const d = description(differee.entite);
       const { liaisons } = this.repartir(d, differee.liaisons, differee.entite, signaler);
+      // Les liaisons sont écrites en dernier : le plan de renommage est alors
+      // complet, et une référence vers un enregistrement renommé plus tôt OU
+      // plus tard dans le fichier pointe au bon endroit.
+      for (const elements of liaisons.values()) {
+        for (const element of elements) {
+          for (const [cle, valeur] of Object.entries(element)) {
+            if (typeof valeur !== 'string') continue;
+            const nouveau = renommages.get(valeur);
+            if (nouveau !== undefined) element[cle] = nouveau;
+          }
+        }
+      }
       for (const [liaison, elements] of liaisons) {
+        // La seconde passe écrivait sans regarder, et c'est par là que le
+        // constat N-2 subsistait après le correctif : `modifier` savait ne pas
+        // réécrire un ensemble de liens inchangé, mais la reprise court-circuite
+        // `modifier` pour ses liaisons — donc court-circuitait aussi la règle.
+        // Un remède qui ne couvre pas tous ses chemins n'est pas un remède.
+        if (await this.liaisonInchangee(client, liaison, differee.identifiant, filiale, elements)) {
+          continue;
+        }
+        this.exigerDroitEcriture(description(differee.entite), perimetre, differee.entite);
         await this.ecrireLiaison(
           client,
           liaison,
@@ -2115,33 +2299,6 @@ export class Depot {
       champsIgnores: [...champsIgnores].sort(),
       lus,
     };
-  }
-
-  /**
-   * Les entités de **niveau Groupe** que cette charge utile apporte réellement.
-   *
-   * Sert à la route de reprise pour exiger l'habilitation **avant** d'ouvrir sa
-   * transaction, et donc à rendre un message qui dise quoi faire plutôt qu'un
-   * refus au milieu du travail. Ce n'est pas une seconde source de vérité : le
-   * critère est celui d'`exigerDroitEcriture` — une table sans colonne
-   * `filiale_id` est de niveau Groupe —, découvert dans le catalogue et non
-   * récité. Le moteur applique la règle de toute façon, collection par
-   * collection ; ceci ne fait que l'anticiper.
-   *
-   * Une collection **vide** n'exige rien : un export du modèle navigateur
-   * porte toujours les 21 clés, la plupart à zéro enregistrement.
-   */
-  public entitesDePorteeGroupeApportees(
-    charge: Readonly<Record<string, unknown>>,
-  ): readonly NomEntite[] {
-    const exigeantes: NomEntite[] = [];
-    for (const entite of ORDRE_ENTITES) {
-      const brut = charge[entite];
-      if (!Array.isArray(brut) || brut.length === 0) continue;
-      if (this.table(description(entite).table).cloisonnee) continue;
-      exigeantes.push(entite);
-    }
-    return exigeantes;
   }
 
   /**
@@ -2233,6 +2390,53 @@ export class Depot {
         });
       }
       resultat.set(entite, parEntite);
+    }
+    return resultat;
+  }
+
+  /**
+   * Colonnes qui portent une **référence** vers une autre entité, par entité.
+   *
+   * Ce sont les seules à réécrire quand un identifiant est ré-émis (N-1).
+   * Découvertes dans le graphe des clés étrangères — pas énumérées : une
+   * entité ajoutée par une migration future sera couverte sans que ce fichier
+   * change, et c'est la parade que quatre défauts de la porte S1 ont réclamée
+   * (`CONVENTIONS.md` §19.5).
+   *
+   * ⚠️ On ne réécrit **que** ces colonnes-là. Balayer toutes les valeurs texte
+   * à la recherche d'un identifiant renommé « marcherait » aussi, et
+   * remplacerait un jour le nom d'un risque qui se trouverait ressembler à un
+   * identifiant. Le catalogue sait où sont les références ; on le lui demande.
+   */
+  private colonnesDeReference(): Map<NomEntite, Set<string>> {
+    const tableVersEntite = new Map<string, NomEntite>();
+    for (const entite of ORDRE_ENTITES) {
+      const d = description(entite);
+      tableVersEntite.set(d.table, entite);
+      if (d.seconde !== undefined) tableVersEntite.set(d.seconde.table, entite);
+    }
+
+    const resultat = new Map<NomEntite, Set<string>>(
+      ORDRE_ENTITES.map((entite) => [entite, new Set<string>()]),
+    );
+
+    for (const cle of this.catalogue.clesEtrangeres) {
+      const entite = tableVersEntite.get(cle.table);
+      if (entite === undefined || !tableVersEntite.has(cle.cible)) continue;
+      const d = description(entite);
+      const table = this.catalogue.tables.get(cle.table);
+      if (table === undefined) continue;
+
+      // La clé étrangère porte ses colonnes dans son nom conventionnel
+      // (`fk_<table>_<colonne>`) ; plus sûr : toute colonne de la table qui
+      // est un identifiant et dont le nom finit par « _id » et qui n'est ni
+      // l'identité ni le cloisonnement.
+      for (const colonne of table.colonnes.values()) {
+        if (!colonne.nom.endsWith('_id')) continue;
+        if (colonne.nom === 'filiale_id' || colonne.nom === 'id') continue;
+        const champ = champDeColonne(d, cle.table, colonne.nom);
+        resultat.get(entite)?.add(champ);
+      }
     }
     return resultat;
   }
@@ -2720,6 +2924,7 @@ export class Depot {
     filiale: string | null,
     valeurs: ReadonlyMap<string, unknown>,
     entite: NomEntite,
+    identifiantSignale: string = identifiant,
   ): Promise<void> {
     const table = this.table(nomTable);
 
@@ -2756,7 +2961,7 @@ export class Depot {
       `insert into ${ident(nomTable)} (${colonnes.join(', ')}) values (${marques.join(', ')})`,
       parametres,
       entite,
-      identifiant,
+      identifiantSignale,
     );
   }
 
@@ -2854,8 +3059,20 @@ export class Depot {
     if (version === null) {
       const nouvelles = new Map(valeurs);
       nouvelles.set('mesure_id', mesureId);
+      // N-10 : l'identifiant SIGNALÉ est celui de la mesure, pas le « MMO-… »
+      // que le serveur vient d'engendrer. Un refus qui nomme un identifiant
+      // interne, engendré à l'instant et annulé avec la transaction, envoie
+      // l'utilisateur chercher un enregistrement qui n'a jamais existé.
       const tentative = await this.avecPointDeReprise(client, 'pr_mise_en_oeuvre', () =>
-        this.inserer(client, nomTable, engendrerIdentifiant('MMO'), filiale, nouvelles, entite),
+        this.inserer(
+          client,
+          nomTable,
+          engendrerIdentifiant('MMO'),
+          filiale,
+          nouvelles,
+          entite,
+          mesureId,
+        ),
       );
       if (tentative.ok) return;
       if (!estViolationUnicite(tentative.erreur)) throw tentative.erreur;
@@ -2882,6 +3099,33 @@ export class Depot {
     // Les deux se disent « rechargez », et surtout aucune des deux ne se
     // traduit par une insertion silencieuse.
     throw await this.conflitMiseEnOeuvre(client, nomTable, mesureId, filiale, entite);
+  }
+
+  /**
+   * Ce refus est-il un doublon sur une unicité de **portée Groupe** — c'est-à-
+   * dire une unicité qui ne porte pas `filiale_id`, la clé primaire au premier
+   * chef ?
+   *
+   * C'est la distinction qui commande tout le traitement du constat N-1 :
+   *
+   *  · unicité **portant `filiale_id`** (`uq_history_filiale_date`,
+   *    `uq_evaluations_ref_code`…) : la ligne en cause appartient forcément à
+   *    la filiale de l'appelant, donc il peut la lire. Le refus ne lui apprend
+   *    rien, et il peut même être précis (voir `enrichirDoublon`) ;
+   *  · unicité **ne le portant pas** : le doublon peut venir d'une ligne
+   *    **invisible**, et le refus devient un oracle d'existence
+   *    inter-filiales.
+   *
+   * Le critère est lu dans le catalogue, jamais deviné. Une contrainte inconnue
+   * est traitée comme globale : en cas de doute, on protège.
+   */
+  private doublonDeCleGlobale(erreur: unknown): boolean {
+    if (!estViolationUnicite(erreur)) return false;
+    const nom =
+      erreur instanceof ErreurAccesEntite ? erreur.erreurBase?.['constraint'] : undefined;
+    if (typeof nom !== 'string') return true;
+    const unicite = this.catalogue.unicites.get(nom);
+    return unicite === undefined || !unicite.porteFiliale;
   }
 
   /**
@@ -3022,6 +3266,106 @@ export class Depot {
         `conflit optimiste sur ${nomTable} (mesure ${mesureId}, filiale ${filiale}) ; ` +
         `mise en oeuvre ${existante === undefined ? 'absente' : 'présente'} au moment du constat`,
     });
+  }
+
+  /**
+   * L'ensemble de liens proposé est-il **déjà** celui qui est en base ?
+   *
+   * Réécrire une liaison à l'identique est un `delete` suivi d'un `insert` :
+   * une écriture, donc un droit exigé, pour un résultat rigoureusement
+   * inchangé. C'est ce qui refusait à une filiale de renvoyer, dans une
+   * reprise, les référentiels d'un document de portée Groupe (constat N-2).
+   *
+   * La comparaison porte sur les **colonnes écrites**, pas sur la
+   * représentation frontend : deux ensembles sont égaux s'ils ont les mêmes
+   * lignes, quel qu'en soit l'ordre. En cas de doute — colonne inconnue,
+   * lecture impossible — on répond « changé » : réécrire pour rien est sans
+   * conséquence, tenir à tort un changement pour un non-changement le serait.
+   */
+  private async liaisonInchangee(
+    client: PoolClient,
+    liaison: DescriptionLiaison,
+    identifiantParent: string,
+    filiale: string,
+    elements: readonly Record<string, unknown>[],
+  ): Promise<boolean> {
+    const table = this.table(liaison.table);
+    const colonnes = [...new Set(colonnesDeLiaison(liaison))].filter(
+      (nom) => nom !== liaison.colonneParent && table.colonnes.has(nom),
+    );
+    if (colonnes.length === 0) return false;
+
+    const parametres: unknown[] = [identifiantParent];
+    let condition = `${ident(liaison.colonneParent)} = $1`;
+    if (table.cloisonnee) {
+      parametres.push(filiale);
+      condition += table.filialeNullable
+        ? ` and (${ident('filiale_id')} = $2 or ${ident('filiale_id')} is null)`
+        : ` and ${ident('filiale_id')} = $2`;
+    }
+
+    const { rows } = await client.query<Record<string, unknown>>(
+      `select ${colonnes.map((nom) => ident(nom)).join(', ')} from ${ident(liaison.table)}
+        where ${condition} limit ${String(BORNES.elementsParLiaison + 1)}`,
+      parametres,
+    );
+    if (rows.length !== elements.length) return false;
+
+    const empreinte = (ligne: Record<string, unknown>): string =>
+      colonnes.map((nom) => String(ligne[nom] ?? '')).join('\u0000');
+
+    const stockees = new Set(rows.map(empreinte));
+    for (const element of elements) {
+      if (!stockees.has(empreinte(element))) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Même règle, appliquée à la **mise en œuvre** d'un contrôle : ce qui ne
+   * change pas n'est pas écrit, donc n'exige pas le droit d'écrire.
+   *
+   * Sans elle, reprendre son propre export réclamait le droit d'écrire la mise
+   * en œuvre du socle alors que le fichier la renvoyait à l'identique.
+   */
+  private async retirerLesInchangeesMiseEnOeuvre(
+    client: PoolClient,
+    nomTable: string,
+    mesureId: string,
+    filiale: string,
+    proposees: Map<string, unknown>,
+  ): Promise<Map<string, unknown>> {
+    if (proposees.size === 0) return proposees;
+
+    const table = this.table(nomTable);
+    const colonnes = [...proposees.keys()].filter(
+      (nom) => nom !== 'mesure_id' && table.colonnes.has(nom),
+    );
+    if (colonnes.length === 0) return proposees;
+
+    const selections = colonnes.map((nom) => {
+      const colonne = table.colonnes.get(nom);
+      if (colonne === undefined) throw incoherent(`Colonne inconnue : ${nomTable}.${nom}`);
+      return `${expressionLecture('p', colonne)} as ${ident(nom)}`;
+    });
+
+    const { rows } = await client.query<Record<string, unknown>>(
+      `select ${selections.join(', ')} from ${ident(nomTable)} p
+        where p.${ident('mesure_id')} = $1 and p.${ident('filiale_id')} = $2`,
+      [mesureId, filiale],
+    );
+    const stockee = rows[0];
+    // Pas de mise en oeuvre : tout est à écrire, c'est une création.
+    if (stockee === undefined) return proposees;
+
+    const retenues = new Map<string, unknown>();
+    for (const [nom, proposee] of proposees) {
+      const colonne = table.colonnes.get(nom);
+      if (colonne === undefined) continue;
+      if (valeursEquivalentes(colonne.famille, stockee[nom], proposee)) continue;
+      retenues.set(nom, proposee);
+    }
+    return retenues;
   }
 
   /**
@@ -3445,6 +3789,24 @@ function versLeFrontend(valeur: unknown, famille: FamilleType): unknown {
  * nommant les éléments restants : un ordre approximatif produirait des refus
  * d'intégrité incompréhensibles au milieu d'une reprise.
  */
+/**
+ * Réécrit, dans un enregistrement, les références visées par un renommage.
+ * N'agit que sur les champs déclarés comme portant une référence.
+ */
+function appliquerRenommages(
+  enregistrement: Enregistrement,
+  champsDeReference: ReadonlySet<string>,
+  renommages: ReadonlyMap<string, string>,
+): void {
+  if (renommages.size === 0) return;
+  for (const champ of champsDeReference) {
+    const valeur = enregistrement[champ];
+    if (typeof valeur !== 'string') continue;
+    const nouveau = renommages.get(valeur);
+    if (nouveau !== undefined) enregistrement[champ] = nouveau;
+  }
+}
+
 function trierParDependances<T>(
   elements: readonly T[],
   dependances: ReadonlyMap<T, ReadonlySet<T>>,
@@ -3481,8 +3843,25 @@ function trierParDependances<T>(
 function valeursEquivalentes(famille: FamilleType, stockee: unknown, proposee: unknown): boolean {
   if (famille === 'json') return false;
 
-  const videA = stockee === null || stockee === undefined;
-  const videB = proposee === null || proposee === undefined;
+  // ── N-4 : `NULL` et `''` désignent la MÊME absence, sur texte et date ──
+  //
+  // Cette comparaison doit être l'inverse exact de `versLeFrontend`, qui rend
+  // `NULL` sous la forme `''` pour ces deux familles — délibérément, parce que
+  // le modèle navigateur ne porte pas de `null`. Tant qu'elle déclarait les
+  // deux différents, **le client ne pouvait pas renvoyer une valeur qui compare
+  // égale** : il relisait `''`, le renvoyait, et on le tenait pour un
+  // changement. Le remède de M-1 ne fonctionnait donc pas contre une colonne
+  // nulle — c'est-à-dire contre l'asymétrie de M-8, revenue à l'intérieur du
+  // remède de M-1 (porte S2 bis, constat N-4).
+  //
+  // Le vide se définit donc ici comme il est rendu là-bas, et pas autrement.
+  const vide = (valeur: unknown): boolean =>
+    valeur === null ||
+    valeur === undefined ||
+    ((famille === 'texte' || famille === 'date') && valeur === '');
+
+  const videA = vide(stockee);
+  const videB = vide(proposee);
   if (videA || videB) return videA && videB;
 
   switch (famille) {

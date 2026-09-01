@@ -526,9 +526,17 @@ export function traduireErreurPostgres(
       return new ErreurApplicative({
         code: 'hors_perimetre',
         statut: 403,
+        // ── N-5 : la cause la plus fréquente n'est pas un défaut de droit ──
+        // Sur une table de LIAISON, la politique exige que les deux extrémités
+        // soient visibles : un lien vers un identifiant qui n'existe pas rend
+        // donc le même 42501 qu'un lien vers la filiale voisine. Le message ne
+        // doit pas trancher — c'est ce qui ferme l'oracle — mais il ne doit pas
+        // non plus n'énoncer qu'une des deux causes : parler de droits seuls
+        // envoyait l'utilisateur chercher un problème qu'il n'a pas.
         message:
-          "Écriture refusée : cet enregistrement sort du périmètre de votre session " +
-          '(filiale active, ou portée Groupe réservée à une administration Groupe).',
+          "Écriture refusée : cet enregistrement, ou l'un des éléments qu'il désigne, " +
+          "n'existe pas dans votre périmètre — ou sort de la filiale où vous travaillez. " +
+          'Vérifiez que les éléments liés existent bien, puis rechargez la fiche.',
         detailJournal,
       });
 

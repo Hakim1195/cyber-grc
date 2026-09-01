@@ -285,6 +285,22 @@ export interface BilanReprise {
   readonly champsIgnores: readonly string[];
   /** Total d'enregistrements lus dans le fichier. */
   readonly lus: number;
+  /**
+   * ⚠️ **Ce que ce bilan ne dira JAMAIS : les identifiants ré-émis.**
+   *
+   * Quand l'identifiant d'un fichier est déjà pris dans le domaine global — la
+   * clé primaire porte `id` seul, et les unicités contournent la RLS — le
+   * serveur en ré-émet un et réécrit les références (voir `creer`, constat
+   * N-1). Ni la liste **ni même le nombre** ne sortent d'ici : un compteur à 1
+   * sur un fichier d'un seul enregistrement répondrait « celui-là existe
+   * ailleurs », ce qui est exactement l'oracle qu'on ferme. Le détail va au
+   * journal technique du serveur, où l'exploitant le trouve et où l'appelant
+   * ne le voit pas.
+   *
+   * Première rédaction : le compteur était exposé « pour la transparence ».
+   * Mesuré : il rendait la sonde parfaite. La transparence utile est celle qui
+   * s'adresse à l'exploitant, pas celle qui répond à l'attaquant.
+   */
 }
 
 /** Réponse d'un sondage de rafraîchissement. */
