@@ -337,7 +337,9 @@ before(async () => {
   // et que `/api/` échappe bien aux règles de fichier du frontend.
   apiDoublure = http.createServer((requete, reponse) => {
     reponse.writeHead(200, { 'content-type': 'application/json' });
-    reponse.end(JSON.stringify({ chemin: requete.url, doublure: true }));
+    // Elle RÉFLÉCHIT ce qu'elle a reçu : c'est la seule façon de savoir ce que
+    // le frontal a réellement effacé — le constat Q-39 vit très exactement là.
+    reponse.end(JSON.stringify({ chemin: requete.url, doublure: true, entetes: requete.headers }));
   });
   await new Promise((r) => apiDoublure.listen(portApi, '127.0.0.1', r));
 
@@ -1052,5 +1054,115 @@ describe('Un actif n’a un cache long que si son URL est versionnée (constat Q
     } finally {
       writeFileSync(page, avant);
     }
+  });
+});
+
+/* =====================================================================
+ *  §6 — Ce que le frontal efface VRAIMENT (constat Q-39)
+ * ---------------------------------------------------------------------
+ *  Le vhost efface six en-têtes de provenance ou d'identité, et `install.sh`
+ *  vérifie que la liste couvre tout ce que le service lit
+ *  (`install-blocs.test.mjs` §4). Ces deux contrôles comparent des NOMS ; ils ne
+ *  disent pas ce qu'Apache fait de la requête.
+ *
+ *  Il faut le mesurer, parce que la mesure surprend : **`RequestHeader unset`
+ *  prend un nom LITTÉRAL**, et un motif générique est accepté par
+ *  `apachectl configtest` — « Syntax OK » — sans rien effacer du tout. Une
+ *  protection au frontal peut donc être silencieusement vide, et l'outil qui
+ *  vérifie la configuration la bénit. Rien, dans un fichier, ne distingue ce
+ *  cas-là d'une neutralisation réelle : seule une requête le distingue.
+ * ===================================================================== */
+
+describe('Le frontal efface vraiment ce qu’il annonce effacer (constat Q-39)', () => {
+  /** Les six lignes littérales, remplacées par un motif qui n'efface rien. */
+  const MOTIF_GENERIQUE = [
+    ['    RequestHeader unset X-Forwarded-For\n' +
+      '    RequestHeader unset X-Forwarded-Host\n' +
+      '    RequestHeader unset X-Forwarded-Server\n' +
+      '    RequestHeader unset X-Real-IP\n' +
+      '    RequestHeader unset Forwarded\n',
+      '    RequestHeader unset X-*\n', 1],
+    ['    RequestHeader unset X-Request-Id\n', '', 1],
+  ];
+
+  /** Ce que la doublure d'API a reçu, pour une requête portant `entetes`. */
+  async function recuParLeService(entetes) {
+    const reponse = await demander('/api/sonde-entetes', { entetes });
+    assert.equal(reponse.statut, 200, `Le mandataire doit joindre le service : ${reponse.corps.slice(0, 200)}`);
+    const corps = JSON.parse(reponse.corps);
+    assert.equal(corps.doublure, true, 'La réponse doit venir de derrière le mandataire.');
+    return corps.entetes;
+  }
+
+  const FORGES = { 'x-request-id': 'REFERENCE-FORGEE', 'x-forwarded-for': '10.0.0.1' };
+
+  test('LE VHOST DU DÉPÔT : l’en-tête forgé n’atteint pas le service', async () => {
+    const recus = await recuParLeService(FORGES);
+
+    assert.equal(
+      recus['x-request-id'],
+      undefined,
+      `« x-request-id » a traversé le frontal : le client choisirait de nouveau la référence ` +
+        `de son incident (constat Q-39). Reçu : ${JSON.stringify(recus['x-request-id'])}`,
+    );
+    // X-Forwarded-For est EFFACÉ puis REPOSÉ par mod_proxy : ce qui arrive est
+    // l'adresse du pair réel, jamais celle que le client a écrite. L'ordre
+    // compte — mod_proxy ajoute à la FIN de ce qu'il trouve, si bien qu'un
+    // effacement manquant laisserait l'adresse forgée EN TÊTE.
+    assert.equal(
+      String(recus['x-forwarded-for'] ?? '').includes('10.0.0.1'),
+      false,
+      `L’adresse forgée est arrivée au service : « ${String(recus['x-forwarded-for'])} ». ` +
+        'C’est elle qui serait journalisée comme celle du client (PLAN_SERVEUR §1.7).',
+    );
+    assert.equal(recus['x-forwarded-for'], '127.0.0.1', 'Et ce qui arrive est l’adresse du pair réel.');
+    // Contrôle symétrique : le frontal n'efface pas TOUT — sans quoi cet essai
+    // serait satisfait par un mandataire qui ne transmet rien.
+    assert.equal(recus['x-forwarded-proto'], 'https', 'Ce que le vhost REPOSE doit arriver.');
+    assert.ok(String(recus.host ?? '').length > 0, 'Et l’en-tête Host traverse, évidemment.');
+  });
+
+  test('UN MOTIF GÉNÉRIQUE passe « configtest » ET N’EFFACE RIEN', async () => {
+    // ── La mesure qui donne son prix au contrôle statique d'install.sh ──────
+    //
+    // Les deux moitiés sont indissociables : la configuration est déclarée
+    // VALIDE, et elle ne protège plus. C'est le pire des trois cas — pire
+    // qu'une ligne manquante, qu'on voit, et pire qu'une erreur de syntaxe,
+    // qui empêche le démarrage.
+    await avecVhost(
+      MOTIF_GENERIQUE,
+      async () => (await recuParLeService(FORGES))['x-request-id'] !== undefined,
+      async () => (await recuParLeService(FORGES))['x-request-id'] === undefined,
+      async () => {
+        // 1. Apache dit que tout va bien.
+        const controle = execFileSync('apache2', ['-f', join(racine, 'httpd.conf'), '-t'], {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        assert.match(
+          `${controle} `,
+          /Syntax OK|^\s*$/m,
+          `« configtest » doit ACCEPTER le motif : c’est ce qui rend le défaut invisible. ` +
+            `Sortie : ${controle}`,
+        );
+
+        // 2. …et il n'efface rien.
+        const recus = await recuParLeService(FORGES);
+        assert.equal(
+          recus['x-request-id'],
+          'REFERENCE-FORGEE',
+          'Le motif devrait laisser passer l’en-tête : si cet essai échoue ici, c’est ' +
+            'qu’`unset` a appris à lire un motif, et le contrôle statique d’install.sh peut ' +
+            'être reconsidéré.',
+        );
+        assert.match(
+          String(recus['x-forwarded-for'] ?? ''),
+          /^10\.0\.0\.1/,
+          `Et l’adresse FORGÉE arrive en tête de X-Forwarded-For : « ${String(recus['x-forwarded-for'])} ». ` +
+            'C’est le défaut même que ce bloc du vhost existe pour empêcher, et ' +
+            '« Syntax OK » l’a béni.',
+        );
+      },
+    );
   });
 });

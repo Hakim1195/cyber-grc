@@ -132,9 +132,27 @@ function preambule(variables) {
   ].join('\n');
 }
 
-export function jouerBloc(nom, variables, dossier) {
+export function jouerBloc(nom, variables, dossier, substitutions = []) {
   const script = join(dossier, `bloc-${nom}.sh`);
-  writeFileSync(script, `${preambule(variables)}${extraireBloc(nom)}\n`);
+  let corps = extraireBloc(nom);
+  // ── Les substitutions sont DÉCLARÉES, et comptées ─────────────────────────
+  // Un bloc porte parfois un chemin absolu d'installation (`/etc/apache2/…`)
+  // qui n'existe pas ici — ou qui existe, appartient à une AUTRE instance, et
+  // ferait éprouver la configuration de quelqu'un d'autre. On le réécrit, mais
+  // jamais en silence : le nombre d'occurrences attendu est vérifié, faute de
+  // quoi une reformulation du bloc ferait jouer l'essai contre autre chose que
+  // ce qu'il annonce — c'est-à-dire contre rien.
+  for (const [avant, apres, attendu] of substitutions) {
+    const vues = corps.split(avant).length - 1;
+    assert.equal(
+      vues,
+      attendu,
+      `Substitution « ${avant} » dans le bloc « ${nom} » : ${String(vues)} occurrence(s) au ` +
+        `lieu de ${String(attendu)}. Le bloc a changé de forme.`,
+    );
+    corps = corps.split(avant).join(apres);
+  }
+  writeFileSync(script, `${preambule(variables)}${corps}\n`);
 
   try {
     const sortie = execFileSync('bash', [script], {

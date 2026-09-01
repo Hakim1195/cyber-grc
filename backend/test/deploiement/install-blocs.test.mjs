@@ -25,7 +25,7 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, test } from 'node:test';
@@ -48,8 +48,8 @@ function repertoireJetable() {
 }
 
 /** Joue un bloc extrait, dans un répertoire jetable de ce fichier. */
-function jouerBloc(nom, variables = {}) {
-  return jouerBlocDans(nom, variables, repertoireJetable());
+function jouerBloc(nom, variables = {}, substitutions = []) {
+  return jouerBlocDans(nom, variables, repertoireJetable(), substitutions);
 }
 
 /** Fabrique une racine web jetable contenant `fichiers` (chemins relatifs). */
@@ -304,5 +304,216 @@ describe('La dérive du ProxyTimeout est vue (constat Q-19)', () => {
     const sortie = avecVhostInstalle('<VirtualHost *:443>\n  ServerName exemple\n</VirtualHost>\n');
     assert.match(sortie, /aucun ProxyTimeout/, sortie);
     assert.match(sortie, /300 s/, `Le défaut d’Apache doit être nommé : ${sortie}`);
+  });
+});
+
+/* =====================================================================
+ *  §4 — Ce que le service LIT, le frontal doit l'avoir neutralisé (Q-39)
+ * ---------------------------------------------------------------------
+ *  Le vhost efface six en-têtes de provenance ou d'identité. La liste est
+ *  écrite à la main, et elle est fragile par nature : `X-Request-Id` y a manqué
+ *  pendant tout un lot, pendant que `src/serveur.ts` en faisait la « référence »
+ *  rendue au client et la clé de ses lignes de journal — constat **Q-39**.
+ *
+ *  `install.sh` porte désormais un contrôle qui CONFRONTE la liste au réel :
+ *  tout en-tête de requête que `src/` lit, ou auquel il fait confiance, doit
+ *  être effacé ou reposé par le vhost. Les deux termes sortent de deux fichiers
+ *  versionnés, aucun n'est recopié dans un troisième.
+ *
+ *  ── L'essai qui compte est le troisième ────────────────────────────────
+ *
+ *  Un contrôle qui porterait sa PROPRE liste d'en-têtes passerait les deux
+ *  premiers cas sans rien éprouver. Le cas D — le code cesse de lire un
+ *  en-tête, et l'installation passe — est le seul qui distingue « suivre le
+ *  code » de « réciter un annuaire ». C'est la famille que ce banc vient de se
+ *  faire prendre à porter lui-même, deux fois dans la même journée.
+ * ===================================================================== */
+
+describe('Tout en-tête que le service lit est neutralisé par le frontal (constat Q-39)', () => {
+  const VHOST_DEPOT = join(RACINE_BACKEND, 'deploy', 'apache', 'cyber-grc.conf');
+
+  /** Écrit une copie du vhost du dépôt, avec des substitutions DÉCLARÉES. */
+  function vhostAvec(substitutions = []) {
+    let texte = readFileSync(VHOST_DEPOT, 'utf8');
+    for (const [avant, apres, attendu] of substitutions) {
+      const vues = texte.split(avant).length - 1;
+      assert.equal(
+        vues,
+        attendu,
+        `Le vhost ne porte plus « ${avant} » ${String(attendu)} fois (${String(vues)}) : la ` +
+          'mutation de cet essai porterait sur autre chose que ce qu’elle annonce.',
+      );
+      texte = texte.split(avant).join(apres);
+    }
+    const chemin = join(repertoireJetable(), 'cyber-grc.conf');
+    writeFileSync(chemin, texte);
+    return chemin;
+  }
+
+  /**
+   * Une racine « SOURCE » dont le `src/` est celui du dépôt, éventuellement
+   * modifié. On copie plutôt qu'on ne simule : le contrôle cherche ce que le
+   * VRAI code lit, et une arborescence inventée éprouverait mon imagination.
+   */
+  function sourceAvec(substitutions = []) {
+    const racine = repertoireJetable();
+    cpSync(join(RACINE_BACKEND, 'src'), join(racine, 'src'), { recursive: true });
+    for (const [fichier, avant, apres, attendu] of substitutions) {
+      const chemin = join(racine, 'src', fichier);
+      const texte = readFileSync(chemin, 'utf8');
+      const vues = texte.split(avant).length - 1;
+      assert.equal(vues, attendu, `« ${avant} » : ${String(vues)} occurrence(s) dans src/${fichier}.`);
+      writeFileSync(chemin, texte.split(avant).join(apres));
+    }
+    return racine;
+  }
+
+  /** Joue le bloc, en lui désignant LE vhost à examiner. */
+  function jouerEntetes(source, vhost) {
+    return jouerBloc(
+      'entetes',
+      { SOURCE: source },
+      // Le bloc lit d'abord le vhost INSTALLÉ. Sur cette machine il en existe
+      // un — celui d'une autre instance —, et sans cette substitution l'essai
+      // éprouverait la configuration de quelqu'un d'autre.
+      [['VHOST_APPLIQUE=/etc/apache2/sites-available/cyber-grc.conf', `VHOST_APPLIQUE=${vhost}`, 1]],
+    );
+  }
+
+  /** La ligne de `src/serveur.ts` où le code lit l'en-tête, LUE. */
+  function ligneQuiLit(entete) {
+    const source = readFileSync(join(RACINE_BACKEND, 'src', 'serveur.ts'), 'utf8');
+    const rang = source.split('\n').findIndex((l) => l.includes(`headers['${entete}']`));
+    assert.notEqual(rang, -1, `Plus personne ne lit « ${entete} » dans src/serveur.ts.`);
+    return rang + 1;
+  }
+
+  test('A — LE VHOST DU DÉPÔT passe le contrôle', async () => {
+    // Moitié symétrique, sans laquelle les quatre autres seraient satisfaites
+    // par un contrôle qui refuse tout — c'est-à-dire par une installation
+    // impossible.
+    const issue = jouerEntetes(RACINE_BACKEND, vhostAvec());
+
+    assert.equal(issue.code, 0, `Le vhost livré doit passer :\n${issue.sortie}`);
+    assert.match(
+      issue.sortie,
+      /ok en-têtes : tout ce que le service lit est effacé ou reposé par le vhost/,
+      `Le contrôle doit être ALLÉ jusqu’à sa conclusion — un silence ne prouve rien ` +
+        `(constat Q-37) :\n${issue.sortie}`,
+    );
+  });
+
+  test('B — « unset X-Request-Id » retiré : arrêt, avec le FICHIER ET LA LIGNE', async () => {
+    const issue = jouerEntetes(
+      RACINE_BACKEND,
+      vhostAvec([['    RequestHeader unset X-Request-Id\n', '', 1]]),
+    );
+
+    assert.notEqual(
+      issue.code,
+      0,
+      `Le service lit « x-request-id » et le frontal le laisse passer : un client peut le ` +
+        `forger, et c’est le constat Q-39.\n${issue.sortie}`,
+    );
+    assert.match(issue.sortie, /en-tête lu par le service et NON neutralisé par le vhost : x-request-id/, issue.sortie);
+    assert.match(issue.sortie, /constat Q-39/, 'Le refus doit renvoyer au constat qui l’explique.');
+    assert.match(
+      issue.sortie,
+      new RegExp(`lu ici : src/serveur\\.ts:${String(ligneQuiLit('x-request-id'))}`),
+      `Il doit NOMMER l’endroit où le code lit cet en-tête — fichier et ligne. C’est ce ` +
+        `qu’un exploitant a besoin de lire pour décider quoi faire.\n${issue.sortie}`,
+    );
+  });
+
+  test('C — « unset X-Forwarded-For » retiré alors que trustProxy est actif : arrêt', async () => {
+    // Cet en-tête-là, `src/` ne le nomme nulle part : c'est `trustProxy` qui le
+    // fait lire par le cadre. Le contrôle doit donc exiger AUSSI ce à quoi le
+    // code fait confiance sans l'écrire — sinon il ne voit que la moitié du
+    // problème, et c'est la moitié la moins dangereuse.
+    assert.match(
+      readFileSync(join(RACINE_BACKEND, 'src', 'serveur.ts'), 'utf8'),
+      /trustProxy/,
+      'La prémisse de cet essai : le code doit bien poser trustProxy.',
+    );
+    const issue = jouerEntetes(
+      RACINE_BACKEND,
+      vhostAvec([['    RequestHeader unset X-Forwarded-For\n', '', 1]]),
+    );
+
+    assert.notEqual(issue.code, 0, `L’adresse réelle du client deviendrait forgeable :\n${issue.sortie}`);
+    assert.match(issue.sortie, /NON neutralisé par le vhost : x-forwarded-for/, issue.sortie);
+  });
+
+  test('D — LE CONTRÔLE SUIT LE CODE : l’en-tête n’est plus lu, l’installation passe', async () => {
+    // ── L'essai qui distingue un contrôle d'un annuaire ────────────────────
+    //
+    // Un contrôle qui porterait sa propre liste d'en-têtes passerait A, B et C
+    // sans rien éprouver, et resterait rouge ici pour toujours. Le code cesse
+    // de lire « x-request-id » ; le vhost n'en dit plus rien non plus ; il n'y
+    // a donc plus rien à exiger, et l'installation doit passer.
+    const source = sourceAvec([
+      ['serveur.ts', "requete.headers['x-request-id']", 'undefined /* plus lu */', 1],
+    ]);
+    const issue = jouerEntetes(source, vhostAvec([['    RequestHeader unset X-Request-Id\n', '', 1]]));
+
+    assert.equal(
+      issue.code,
+      0,
+      `Le contrôle exige encore un en-tête que PLUS PERSONNE ne lit : il récite sa propre ` +
+        `liste au lieu de suivre le code, et il rougira à chaque évolution légitime ` +
+        `(constat Q-39).\n${issue.sortie}`,
+    );
+    assert.match(issue.sortie, /ok en-têtes/, issue.sortie);
+  });
+
+  test('E — LE SEPTIÈME EN-TÊTE ne manquera pas : un en-tête NEUF non neutralisé arrête', async () => {
+    // La question que le constat posait : « le septième oubli suivra ». Voici la
+    // propriété qui y répond — le contrôle n'a pas à connaître le nom d'avance.
+    const source = sourceAvec([
+      [
+        'serveur.ts',
+        "const brut = requete.headers['x-request-id'];",
+        "const brut = requete.headers['x-request-id'];\n    const jeton = requete.headers['x-jeton-maison'];",
+        1,
+      ],
+    ]);
+    const issue = jouerEntetes(source, vhostAvec());
+
+    assert.notEqual(
+      issue.code,
+      0,
+      `Le code s’est mis à lire un en-tête que le vhost ne neutralise pas, et l’installation ` +
+        `a continué : le septième oubli passera comme les six premiers.\n${issue.sortie}`,
+    );
+    assert.match(issue.sortie, /NON neutralisé par le vhost : x-jeton-maison/, issue.sortie);
+    assert.match(issue.sortie, /lu ici : src\/serveur\.ts:\d+/, `Avec l’endroit :\n${issue.sortie}`);
+  });
+
+  test('F — UN MOTIF GÉNÉRIQUE ne neutralise rien, et le contrôle le voit', async () => {
+    // ── Mesuré par l'agent de déploiement, et c'est le pire des trois cas ───
+    //
+    // `RequestHeader unset` prend un nom LITTÉRAL. Un motif générique est
+    // accepté par `apachectl configtest` — « Syntax OK » — et n'efface RIEN :
+    // l'adresse forgée arrive au service. Une protection au frontal peut donc
+    // être silencieusement vide, et l'outil qui vérifie la configuration la
+    // bénit. Ce contrôle-ci, lui, compare des NOMS : il n'est pas dupe.
+    //
+    // La contre-épreuve dynamique — Apache réel, en-tête forgé qui traverse —
+    // est dans `vhost-apache.test.mjs`, parce qu'elle demande un vrai frontal.
+    const issue = jouerEntetes(
+      RACINE_BACKEND,
+      vhostAvec([
+        ['    RequestHeader unset X-Forwarded-For\n', '    RequestHeader unset X-Forwarded-*\n', 1],
+        ['    RequestHeader unset X-Request-Id\n', '', 1],
+      ]),
+    );
+
+    assert.notEqual(
+      issue.code,
+      0,
+      `Un « unset X-Forwarded-* » a été pris pour une neutralisation : il n’efface rien, et ` +
+        `l’installation a continué.\n${issue.sortie}`,
+    );
+    assert.match(issue.sortie, /NON neutralisé par le vhost : x-forwarded-for/, issue.sortie);
   });
 });

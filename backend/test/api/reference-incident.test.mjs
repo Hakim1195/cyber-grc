@@ -201,7 +201,21 @@ describe('La valeur du client survit, à côté et jamais à la place (constat Q
         `personne ne pourrait plus corréler depuis son côté. Lignes : ${JSON.stringify(lignes).slice(0, 400)}`,
     );
     assert.equal(ligne.referenceClient, IMPOSEE, 'Et elle doit être conservée telle qu’envoyée.');
-    assert.match(String(ligne.msg ?? ''), /client/i, 'Le message doit dire d’où vient cette valeur.');
+
+    // ⚠️ Ce qui est normatif ici est le NOM DU CHAMP, pas la phrase.
+    //
+    // La rédaction précédente exigeait que le message contienne « client ».
+    // C'était épingler une mise en forme : le message a été réécrit en entier
+    // le jour même — l'usage du crochet a changé, il est devenu un témoin — et
+    // l'assertion n'a survécu que par la chance des mots choisis. `referenceClient`
+    // est l'interface : c'est ce qu'un exploitant filtre, et ce que le journal
+    // d'audit du lot L5 reprendra. La phrase, elle, doit rester libre.
+    assert.equal(
+      typeof ligne.msg,
+      'string',
+      'La ligne doit porter une phrase pour l’exploitant, quelle qu’elle soit.',
+    );
+    assert.ok(ligne.msg.length > 0);
 
     // …et elle ne repart PAS dans la réponse : l'y renvoyer rendrait les deux
     // valeurs de nouveau confusables. Absence appariée : l'essai qui fait
