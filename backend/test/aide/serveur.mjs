@@ -235,6 +235,15 @@ function envelopper(instance, config) {
     },
 
     async fermer() {
+      // ── Les connexions gardées en vie doivent être coupées ──────────────
+      //
+      // `close()` de Fastify attend que les connexions ouvertes se ferment
+      // d'elles-mêmes. Un essai qui a parlé au serveur par un VRAI port
+      // (`ecouter()`) laisse derrière lui les sockets que `fetch` garde en vie :
+      // le processus d'essai restait alors une minute de plus, sans rien faire,
+      // et le fichier semblait coûter trois fois son temps réel. Mesuré : 93 s
+      // pour 31 s d'essais.
+      instance.server.closeAllConnections?.();
       await instance.close().catch(() => {});
     },
   };

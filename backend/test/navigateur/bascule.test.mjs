@@ -1857,3 +1857,303 @@ describe('Un champ non reconnu est ANNONCÉ, pas avalé (constat Q-24)', () => {
     }
   });
 });
+
+/* =====================================================================
+ *  §13 — Le doublon silencieux du rejeu d'une création (constat Q-27)
+ * =====================================================================
+ *
+ *  Une écriture qui EXPIRE est jugée passagère, donc rejouée. Si le serveur
+ *  avait en fait validé, la création part deux fois : l'écran en montre une, la
+ *  base en porte deux, `enAttente` est faux et le bandeau vide — le produit
+ *  annonce que tout est enregistré. La modification et la suppression sont
+ *  tenues par le verrou de version et par le 404 ; la création n'avait rien,
+ *  précisément parce que le client ne propose plus d'identifiant (constat M-3).
+ *
+ *  ── Ce que ces essais simulent, et ce qu'ils n'ont pas le droit de simuler ──
+ *
+ *  Le serveur valide POUR DE BON, la base est la vraie, `sync.js` est le vrai, et
+ *  l'erreur est construite avec la classe du produit (`Api.ErreurApi`) et les
+ *  champs exacts que `js/core/api.js` pose sur ce chemin. La SEULE chose
+ *  simulée est le mur de trente secondes du délai de garde : l'attendre pour de
+ *  bon coûterait une demi-minute par essai et n'apprendrait rien de plus.
+ * ===================================================================== */
+
+describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)', () => {
+  /**
+   * Fait ÉCHOUER UNE FOIS un verbe de l'API — après l'avoir laissé aboutir.
+   *
+   * C'est le cas exact du constat : la transaction est validée, la réponse ne
+   * revient pas. Les appels suivants passent normalement, sans quoi on
+   * n'observerait pas le rejeu qu'on veut justement voir ne pas avoir lieu.
+   */
+  function expirerUneFois(page, verbe, issueInconnue = true) {
+    return page.evaluate(([v, inconnue]) => {
+      const vrai = window.Api[v].bind(window.Api);
+      let restante = true;
+      window.Api[v] = async (...arguments_) => {
+        // La coupure ORDINAIRE n'a rien validé : elle échoue AVANT d'appeler.
+        if (restante && inconnue === false) {
+          restante = false;
+          throw new window.Api.ErreurApi({
+            reseau: true, statut: 0, code: 'indisponible',
+            message: 'Le serveur est injoignable. Vérifiez votre connexion (VPN) et réessayez.',
+          });
+        }
+        const issue = await vrai(...arguments_);
+        if (restante) {
+          restante = false;
+          throw new window.Api.ErreurApi({
+            reseau: true, statut: 0, code: 'indisponible', issueInconnue: true,
+            message: 'Le serveur n’a pas répondu dans le délai imparti. L’opération a peut-être ' +
+              'été appliquée : rechargez la page avant de recommencer.',
+          });
+        }
+        return issue;
+      };
+    }, [verbe, issueInconnue]);
+  }
+
+  /** État de synchronisation et bandeau, tels qu'un utilisateur les voit. */
+  function vueDeLEtat(page) {
+    return page.evaluate(() => ({
+      etat: window.Sync.etat(),
+      bandeau: (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+      boutonRecharger: document.getElementById('sync-recharger') !== null,
+    }));
+  }
+
+  test('LE SERVEUR A VALIDÉ, la réponse expire : UNE ligne, la saisie à l’écran', async () => {
+    const nom = 'Saisie dont la réponse s’est perdue';
+    const session = await ouvrirApplication();
+    try {
+      await expirerUneFois(session.page, 'creer');
+      await session.page.evaluate((n) => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: n });
+      }, nom);
+
+      // On attend l'ÉTAT — l'enregistrement bloqué —, jamais un délai.
+      await session.page.waitForFunction(
+        () => window.Sync.etat().bloques > 0 && window.Sync.etat().enCours === false,
+        null,
+        { timeout: 15000 },
+      );
+
+      // ── LA propriété : une seule ligne ──────────────────────────────────
+      const enBaseApres = await enBase('select count(*)::int as n from risques where nom = $1', [nom]);
+      assert.equal(
+        enBaseApres[0].n,
+        1,
+        'Le rejeu a fabriqué un second enregistrement : l’écran en montre un, la base en ' +
+          'porte deux, et le produit annonce que tout est enregistré. C’est le constat Q-27.',
+      );
+
+      // ── Et la saisie n'a pas été effacée au passage ─────────────────────
+      // Troquer un doublon contre une perte serait pire : c'est pourquoi le
+      // remède bloque au lieu de revenir à la valeur du serveur.
+      assert.equal(
+        await session.page.evaluate(
+          (n) => window.DataStore.getRisques().filter((r) => r.nom === n).length,
+          nom,
+        ),
+        1,
+        'La saisie doit rester sous les yeux de l’utilisateur.',
+      );
+
+      // ── Et l'incertitude est NOMMÉE ─────────────────────────────────────
+      const vue = await vueDeLEtat(session.page);
+      assert.equal(vue.etat.bloques, 1, 'L’enregistrement doit être bloqué, pas réémis.');
+      assert.match(
+        vue.bandeau,
+        /Enregistrement incertain/,
+        `Ni « refusé » ni « enregistré » : l’écriture a PEUT-ÊTRE abouti, et c’est tout ce ` +
+          `que le navigateur sait. ${vue.bandeau}`,
+      );
+      assert.equal(
+        vue.boutonRecharger,
+        true,
+        'Et recharger est ici le bon geste : c’est le seul moyen de savoir ce que le serveur a.',
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('CONTRÔLE : une coupure ORDINAIRE se rejoue toute seule, et atterrit', async () => {
+    // ── La moitié sans laquelle le remède serait une régression ─────────────
+    //
+    // « Les créations ne sont plus rejouées » serait satisfait par un produit qui
+    // ne rejoue plus RIEN. Or le cas fréquent — le VPN qui tombe, la requête qui
+    // ne part jamais — n'a rien validé, et doit continuer de se rattraper seul.
+    // C'est ce qui distingue le remède d'un renoncement au rejeu.
+    const nom = 'Saisie pendant une coupure ordinaire';
+    const session = await ouvrirApplication();
+    try {
+      await expirerUneFois(session.page, 'creer', false);
+      await session.page.evaluate((n) => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: n });
+      }, nom);
+
+      // Le sondage reprend ce qui attend (le troisième reproche de T-1) : c'est
+      // le rattrapage automatique, et il ne demande aucun geste.
+      await session.page.waitForFunction(
+        () => window.Sync.etat().panneReseau === true,
+        null,
+        { timeout: 15000 },
+      );
+      await session.page.evaluate(() => window.Sync.sonder());
+      await attendreQuiescence(session.page);
+
+      const vue = await vueDeLEtat(session.page);
+      assert.equal(vue.etat.bloques, 0, 'Une coupure ordinaire ne doit RIEN bloquer.');
+      assert.equal(
+        /Enregistrement incertain/.test(vue.bandeau),
+        false,
+        `Aucune incertitude n’est à signaler : la requête n’est jamais partie. ${vue.bandeau}`,
+      );
+      const enBaseApres = await enBase('select count(*)::int as n from risques where nom = $1', [nom]);
+      assert.equal(enBaseApres[0].n, 1, 'Et la saisie doit avoir atterri, sans geste de l’utilisateur.');
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('CONTRÔLE : modification et suppression gardent leur comportement', async () => {
+    // Le remède se borne à la CRÉATION. Bloquer aussi les deux autres ajouterait
+    // un dérangement sans retirer aucun mensonge : elles sont déjà tenues, l'une
+    // par le verrou de version, l'autre par le 404.
+    const session = await ouvrirApplication();
+    try {
+      // ── Modification : rejouée, puis arrêtée par le verrou ──────────────
+      const identifiant = await session.page.evaluate(async () => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Risque modifié puis expiré' });
+        await window.Sync.pousser();
+        return window.DataStore.getRisques().find((r) => r.nom === 'Risque modifié puis expiré').id;
+      });
+      await attendreQuiescence(session.page);
+
+      await expirerUneFois(session.page, 'modifier');
+      await session.page.evaluate(async (id) => {
+        const r = window.DataStore.getRisques().find((x) => x.id === id);
+        window.DataStore.updateRisque({ ...r, nom: 'Risque modifié puis expiré (v2)' });
+        await window.Sync.pousser();
+        await window.Sync.pousser(); // le rejeu, qui doit se heurter au verrou
+      }, identifiant);
+
+      const apresModification = await vueDeLEtat(session.page);
+      assert.equal(apresModification.etat.bloques, 1, 'La modification rejouée doit être arrêtée…');
+      assert.match(
+        apresModification.bandeau,
+        /Modifié entre-temps/,
+        `…par le VERROU DE VERSION, et sous son propre intitulé — pas comme une incertitude : ` +
+          `${apresModification.bandeau}`,
+      );
+      assert.equal(
+        /Enregistrement incertain/.test(apresModification.bandeau),
+        false,
+        'Une modification rejouée n’est pas incertaine : le serveur a tranché, en GRC03.',
+      );
+      assert.deepEqual(
+        (await enBase('select nom from risques where id = $1', [identifiant]))[0].nom,
+        'Risque modifié puis expiré (v2)',
+        'Et la première écriture, celle qui avait abouti, tient toujours.',
+      );
+    } finally {
+      await session.fermer();
+    }
+
+    // ── Suppression : rejouée, et le 404 vaut succès ────────────────────────
+    const seconde = await ouvrirApplication();
+    try {
+      await seconde.page.evaluate(async () => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Risque supprimé puis expiré' });
+        await window.Sync.pousser();
+      });
+      await attendreQuiescence(seconde.page);
+
+      await expirerUneFois(seconde.page, 'supprimer');
+      await seconde.page.evaluate(async () => {
+        const r = window.DataStore.getRisques().find((x) => x.nom === 'Risque supprimé puis expiré');
+        window.DataStore.deleteRisque(r.id);
+        await window.Sync.pousser();
+        await window.Sync.pousser();
+      });
+      await attendreQuiescence(seconde.page);
+
+      const vue = await vueDeLEtat(seconde.page);
+      assert.equal(
+        vue.etat.bloques,
+        0,
+        'Une suppression rejouée ne ment pas : la ligne est partie, ce que l’utilisateur ' +
+          'voulait. Le 404 du rejeu vaut succès, et rien ne doit être bloqué.',
+      );
+      assert.equal(/Enregistrement incertain/.test(vue.bandeau), false, vue.bandeau);
+      assert.equal(
+        (await enBase("select count(*)::int as n from risques where nom = 'Risque supprimé puis expiré'"))[0].n,
+        0,
+      );
+      assert.deepEqual(seconde.erreursScript, []);
+    } finally {
+      await seconde.fermer();
+    }
+  });
+
+  test('CONTRÔLE : un enregistrement DÉRIVÉ n’est pas bloqué, et ne fait pas de bandeau', async () => {
+    // Le point d'historique quotidien du tableau de bord n'est pas une saisie :
+    // aucun utilisateur ne l'a tapé, et personne n'a rien à vérifier. Le bloquer
+    // produirait le bandeau anodin et QUOTIDIEN que le constat m-5 condamne —
+    // celui qu'on apprend à ignorer, et qui masque ensuite les vrais.
+    const session = await ouvrirApplication();
+    try {
+      await expirerUneFois(session.page, 'creer');
+      await session.page.evaluate(async () => {
+        const id = window.UI.genId('RISK');
+        window.DataStore.addRisque({ id, nom: 'Indicateur recalculé, pas saisi' });
+        window.Sync.marquerDerive('risques', id);
+        await window.Sync.pousser();
+      });
+
+      const vue = await vueDeLEtat(session.page);
+      assert.equal(
+        vue.etat.bloques,
+        0,
+        'Un enregistrement dérivé ne doit JAMAIS être bloqué : le remède du constat Q-27 ' +
+          'se borne aux saisies.',
+      );
+      exigerSilence(
+        vue.bandeau,
+        /Enregistrement incertain/,
+        'LE SERVEUR A VALIDÉ, la réponse expire : UNE ligne, la saisie à l’écran',
+      );
+
+      // ── « Pas bloqué » ne suffit pas à décrire le traitement conservé ────
+      //
+      // Trouvé en sabotant : bloquer AUSSI les dérivés laissait cet essai vert.
+      // Le dérivé est protégé deux fois — `rejeuDangereux` l'exclut, et la
+      // branche « dérivé » de `traiterEchec` s'exécute de toute façon avant le
+      // blocage —, si bien que « bloqués = 0 » est vrai des deux côtés. Ce qui
+      // les sépare est ailleurs : sur le chemin conservé, la panne est déclarée
+      // passagère et la copie locale RESTE, pour être reprise ; sur l'autre, la
+      // copie est abandonnée séance tenante. On éprouve donc le traitement, pas
+      // seulement son absence de bruit.
+      assert.equal(
+        vue.etat.panneReseau,
+        true,
+        'Un dérivé dont la réponse expire suit le chemin des pannes passagères : ' +
+          'c’est ce qui le fera repartir tout seul.',
+      );
+      assert.equal(
+        await session.page.evaluate(
+          () => window.DataStore.getRisques().filter((r) => r.nom === 'Indicateur recalculé, pas saisi').length,
+        ),
+        1,
+        'Et sa copie locale reste en place pour la reprise : l’abandonner ici serait un ' +
+          'autre traitement que celui que le remède dit conserver.',
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+});
