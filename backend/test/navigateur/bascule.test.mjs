@@ -491,11 +491,30 @@ describe('La bascule, de bout en bout', () => {
     // d'essai qui portait une action impossible.
     const session = await ouvrirApplication();
     try {
-      // Le socle Groupe n'est pas vide : c'est la condition du constat.
+      // ── Le socle Groupe n'est pas vide : c'est la condition du constat ──────
       const socle = await administration.appeler('POST', '/api/entites/mappings', {
         corps: { champs: { theme: 'Chiffrement des données au repos' } },
       });
       assert.equal(socle.statut, 201);
+
+      // ── Et il porte une valeur NULLE, ce qui n'est pas un détail ────────────
+      //
+      // Le modèle navigateur ne connaît pas `null` : son « non renseigné » est la
+      // chaîne vide, et l'export la transporte comme telle. Le schéma, lui, code le
+      // non-renseigné par `NULL`. Un contrôle du socle dont la description est nulle
+      // fait donc voyager la conversion dans les DEUX sens en un aller-retour — c'est
+      // le constat N-4, et sans lui ce test passerait sans l'exercer.
+      const client = await base.connexion('app');
+      await base.avecPerimetre(
+        client,
+        perimetre('administrateur-groupe', FILIALE_A, [FILIALE_A], true),
+        async (c) => {
+          await c.query("update mesure_catalogue set description = null where id = 'MESURE-G'");
+        },
+        { annuler: false },
+      );
+      const avantExport = await enBase("select description from mesure_catalogue where id = 'MESURE-G'");
+      assert.equal(avantExport[0].description, null, 'Le socle doit bien porter une description nulle.');
       await session.page.reload({ waitUntil: 'domcontentloaded' });
       assert.equal(await attendreApplication(session.page), 'chargee');
 
@@ -533,6 +552,16 @@ describe('La bascule, de bout en bout', () => {
         documents: window.DataStore.getDocuments().map((d) => d.id).sort(),
       }));
       assert.deepEqual(apres, avant, 'Reprendre son propre export ne doit ni perdre ni dupliquer.');
+
+      // La valeur nulle a fait l'aller-retour sans se transformer en chaîne vide :
+      // sinon le socle du Groupe serait « modifié » par la simple restauration d'une
+      // filiale, et vingt filiales verraient leur catalogue changer sans raison.
+      const apresExport = await enBase("select description from mesure_catalogue where id = 'MESURE-G'");
+      assert.equal(
+        apresExport[0].description,
+        null,
+        'Une description nulle doit rester nulle après un aller-retour par l’export.',
+      );
       assert.deepEqual(session.erreursScript, []);
     } finally {
       await session.fermer();

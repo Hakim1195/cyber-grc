@@ -418,6 +418,24 @@ describe('L’habilitation Groupe ne se fabrique nulle part (suite du constat M-
     'api/session.ts': 'LE résolveur : c’est là, et seulement là, que le droit se décide',
   });
 
+  /**
+   * Fichiers autorisés à POSER LE RÉGLAGE DE SESSION `grc.administration_groupe`.
+   *
+   * ── Pourquoi c'est une propriété distincte de la précédente ───────────────
+   *
+   * Le champ TypeScript `administrationGroupe` est une *intention* ; le privilège
+   * réel, celui que PostgreSQL arbitre, est le **réglage de session**. Un code qui
+   * n'écrirait jamais le champ mais poserait `set_config('grc.administration_groupe',
+   * 'oui', true)` avant sa requête obtiendrait exactement le droit que le champ est
+   * censé porter — et le balayage précédent ne verrait rien.
+   *
+   * Les deux balayages ne se remplacent donc pas : l'un garde le nom du champ, l'autre
+   * le nom du réglage. Le second est celui qui compte pour la base.
+   */
+  const AUTORISES_REGLAGE = Object.freeze({
+    'db/pool.ts': 'appliquerPerimetre() — le seul endroit qui pose les quatre réglages de session',
+  });
+
   test('aucun fichier hors du résolveur ne pose le drapeau d’administration', async () => {
     // Garde-fou STRUCTUREL, découvert et non récité (CONVENTIONS.md §19.5) : il
     // balaie `src/`, il ne consulte aucune liste de routes. Une route ajoutée demain
@@ -461,6 +479,48 @@ describe('L’habilitation Groupe ne se fabrique nulle part (suite du constat M-
     );
   });
 
+  test('aucun fichier hors du pool ne POSE le réglage « grc.administration_groupe »', async () => {
+    // Le pendant du balayage précédent, côté base. `f_administration_groupe()` lit ce
+    // réglage et rien d'autre : qui le pose détient le droit, quel que soit l'état du
+    // champ TypeScript. Poser le réglage ailleurs que dans `appliquerPerimetre`, c'est
+    // s'accorder l'administration Groupe pour la durée d'une transaction.
+    const { readdirSync, readFileSync } = await import('node:fs');
+    const { join, relative } = await import('node:path');
+    const { RACINE_BACKEND } = await import('../aide/serveur.mjs');
+    const racine = join(RACINE_BACKEND, 'src');
+
+    const fichiers = [];
+    const parcourir = (repertoire) => {
+      for (const entree of readdirSync(repertoire, { withFileTypes: true })) {
+        const chemin = join(repertoire, entree.name);
+        if (entree.isDirectory()) parcourir(chemin);
+        else if (entree.name.endsWith('.ts')) fichiers.push(chemin);
+      }
+    };
+    parcourir(racine);
+
+    // Une POSE, pas une lecture : `set_config('grc.administration_groupe', …)` ou
+    // `set grc.administration_groupe = …`. `current_setting(…)` reste libre — c'est
+    // ce que fait la base pour décider.
+    const pose = /(set_config\s*\(\s*['"`]grc\.administration_groupe|set\s+grc\.administration_groupe\s*=)/i;
+    const fautifs = [];
+    for (const chemin of fichiers) {
+      const relatif = relative(racine, chemin).split('\\').join('/');
+      if (AUTORISES_REGLAGE[relatif] !== undefined) continue;
+      readFileSync(chemin, 'utf8').split('\n').forEach((ligne, i) => {
+        if (pose.test(ligne.replace(/\/\/.*$/, ''))) {
+          fautifs.push(`${relatif}:${String(i + 1)} ${ligne.trim().slice(0, 90)}`);
+        }
+      });
+    }
+    assert.deepEqual(
+      fautifs,
+      [],
+      'Ces lignes posent elles-mêmes le réglage de session qui accorde l’administration Groupe. ' +
+        'Le champ TypeScript peut rester à faux : c’est CE réglage que PostgreSQL arbitre.',
+    );
+  });
+
   test('LE BALAYAGE MORD : il doit VOIR le drapeau là où il est légitime', async () => {
     // Contrôle de morsure du balayage : un motif qui ne trouve rien nulle part
     // rendrait « aucun fautif » pour la pire des raisons. On vérifie donc qu'il
@@ -476,6 +536,16 @@ describe('L’habilitation Groupe ne se fabrique nulle part (suite du constat M-
       assert.ok(
         trouvees.length > 0,
         `Le motif ne voit rien dans ${relatif} : il ne verrait pas davantage une route fautive.`,
+      );
+    }
+
+    // Et le second motif, celui du réglage de session, doit voir la pose légitime.
+    const pose = /(set_config\s*\(\s*['"`]grc\.administration_groupe|set\s+grc\.administration_groupe\s*=)/i;
+    for (const relatif of Object.keys(AUTORISES_REGLAGE)) {
+      const texte = readFileSync(join(RACINE_BACKEND, 'src', relatif), 'utf8');
+      assert.ok(
+        texte.split('\n').some((ligne) => pose.test(ligne.replace(/\/\/.*$/, ''))),
+        `Le motif de POSE ne voit rien dans ${relatif} : il ne verrait pas davantage une pose fautive.`,
       );
     }
   });

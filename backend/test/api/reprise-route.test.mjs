@@ -192,16 +192,30 @@ describe('L’aperçu n’est pas un oracle d’existence (constat N-1, contrôl
     const libre = await sonder('RISK-CERTAINEMENT-LIBRE-1', { apercu: true });
 
     assert.equal(pris.statut, libre.statut, 'Les deux statuts doivent être identiques.');
-    assert.deepEqual(
-      pris.corps.bilan.crees,
-      libre.corps.bilan.crees,
-      'Le bilan ne doit pas trahir l’existence de la ligne voisine.',
-    );
+
+    // Le CORPS ENTIER, et pas seulement le bilan : toute différence est le canal.
+    // L'horodatage est le seul champ légitimement variable — on le neutralise.
+    const comparable = (corps) => JSON.stringify(corps, (cle, valeur) => (cle === 'horodatage' ? '·' : valeur));
     assert.equal(
-      JSON.stringify(pris.corps).includes(FILIALE_B),
-      false,
-      'La filiale voisine ne doit être nommée nulle part.',
+      comparable(pris.corps),
+      comparable(libre.corps),
+      'Les deux réponses doivent être indiscernables, champ pour champ.',
     );
+
+    // ── Et surtout : AUCUN compteur de renommage ─────────────────────────────
+    //
+    // Un compteur exposé « pour la transparence » — « 1 identifiant a été renommé » —
+    // rend la sonde PARFAITE sur un fichier d'un seul enregistrement : il répond
+    // exactement à la question que le renommage était censé rendre inaudible. Une
+    // information honnête peut être un oracle ; c'est l'usage qui décide, pas
+    // l'intention.
+    const texte = JSON.stringify(pris.corps);
+    assert.equal(
+      /renomm/i.test(texte),
+      false,
+      `La réponse ne doit rien dire des renommages : ${texte.slice(0, 250)}`,
+    );
+    assert.equal(texte.includes(FILIALE_B), false, 'La filiale voisine ne doit être nommée nulle part.');
   });
 
   test('APPLIQUÉ : même indiscernabilité, et la ligne voisine n’est pas touchée', async () => {
@@ -505,6 +519,74 @@ describe('Un export complet, comme l’application en produit', () => {
     assert.ok(creees.includes('mappings'), 'La surcouche de correspondances doit être reprise.');
     assert.ok(creees.length >= 15, `Collections reprises : ${creees.join(', ')}`);
     assert.deepEqual(reponse.corps.rapport.anomalies ?? [], [], 'Un export sain ne produit aucune anomalie.');
+  });
+
+  test('le garde-fou Groupe tient sur les DEUX chemins d’écriture de la reprise', async () => {
+    // ── Deux sites d'appel, pas un ───────────────────────────────────────────
+    //
+    // La reprise écrit en deux passes : les enregistrements d'abord, les LIAISONS
+    // ensuite (les `refs` d'une correspondance, par exemple). Le contrôle du droit
+    // vit aux deux endroits, et un test qui n'éprouverait que le premier laisserait
+    // le second se faire retirer sans bruit — c'est précisément ainsi que le
+    // contournement du constat M-4 était passé la première fois.
+    //
+    // Chaque chemin est donc joué dans les deux sens : refusé à une filiale, accepté
+    // d'une administration.
+    const socle = await administration.appeler('POST', '/api/entites/mappings', {
+      corps: { champs: { theme: 'Correspondance à enrichir', refs: { anssi: ['M1'] } } },
+    });
+    assert.equal(socle.statut, 201);
+    const existant = socle.corps.enregistrement;
+
+    // Chemin 1 — un ENREGISTREMENT neuf de portée Groupe.
+    const neuf = instantane(12, {
+      mappings: [{ id: 'MAP-CHEMIN-1', theme: 'Correspondance neuve', aide: '', refs: {} }],
+    });
+    assert.equal((await reprendre('fusionner', neuf, { nom: 'chemin1-filiale.json' })).statut, 403);
+    assert.equal(
+      (await reprendre('fusionner', neuf, { nom: 'chemin1-admin.json', par: administration })).statut,
+      200,
+    );
+
+    // Chemin 2 — une LIAISON ajoutée à un enregistrement Groupe qui existe déjà.
+    // Le thème ne change pas : seule la liste des codes s'enrichit. Sans le contrôle
+    // du second site, une filiale ajouterait des correspondances au socle commun.
+    const enrichi = instantane(12, {
+      mappings: [{ ...existant, refs: { anssi: ['M1', 'M2'] } }],
+    });
+    const parLaFiliale = await reprendre('fusionner', enrichi, { nom: 'chemin2-filiale.json' });
+    assert.equal(
+      parLaFiliale.statut,
+      403,
+      `Enrichir les « refs » du socle depuis une filiale doit être refusé : ${JSON.stringify(parLaFiliale.corps).slice(0, 250)}`,
+    );
+    // ── Et le refus doit venir du contrôle, pas seulement de la base ─────────
+    //
+    // Mesuré : en retirant le contrôle de ce second site, l'écriture reste refusée —
+    // par la RLS de PostgreSQL, `mapping_exigences` étant de niveau Groupe. Ce qui
+    // change alors, c'est le MESSAGE : on passe de « cet élément appartient au socle
+    // commun » à un générique « cet enregistrement, ou l'un des éléments qu'il
+    // désigne, n'existe pas dans votre périmètre » — qui envoie l'exploitant chercher
+    // une donnée manquante là où il n'y a qu'un droit qui manque.
+    //
+    // Le contrôle du second site achète donc un diagnostic juste, pas la barrière.
+    // C'est cela que le test tient, et c'est cela qui se perdrait sans lui.
+    assert.equal(
+      `${parLaFiliale.corps.message} ${String(parLaFiliale.corps.entite ?? '')}`.includes('mappings'),
+      true,
+      `Le refus du chemin « liaisons » doit désigner le socle : ${JSON.stringify(parLaFiliale.corps).slice(0, 250)}`,
+    );
+    assert.match(parLaFiliale.corps.message, /socle commun|administration Groupe/i);
+    const parLAdministration = await reprendre('fusionner', enrichi, {
+      nom: 'chemin2-admin.json',
+      par: administration,
+    });
+    assert.equal(parLAdministration.statut, 200);
+    assert.equal(
+      parLAdministration.corps.bilan.misAJour.mappings,
+      1,
+      'Et l’administration doit avoir réellement enrichi la correspondance.',
+    );
   });
 
   test('LE DROIT MORD : la même session, les deux fichiers, deux verdicts opposés', async () => {
