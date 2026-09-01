@@ -72,6 +72,11 @@ const Api = (() => {
         const delai = opts.delai || DELAI_MS;
         const minuteur = controleur ? setTimeout(() => controleur.abort(), delai) : null;
 
+        // Cette requête pouvait-elle MODIFIER quelque chose ? Le discriminant sert
+        // à deux endroits — l'expiration et le refus du frontal — et il est calculé
+        // ici, une fois : deux calculs finiraient par diverger.
+        const modifie = (opts.methode || "GET") !== "GET";
+
         const entetes = { "accept": "application/json" };
         if (opts.corps !== undefined) entetes["content-type"] = "application/json";
 
@@ -123,7 +128,6 @@ const Api = (() => {
              * deux chemins.
              */
             const expire = !!(e && e.name === "AbortError");
-            const modifie = (opts.methode || "GET") !== "GET";
             throw new ErreurApi({
                 reseau: true,
                 statut: 0,
@@ -147,17 +151,43 @@ const Api = (() => {
         }
 
         if (!reponse.ok) {
+            /* ── LE FRONTAL AUSSI PEUT RENDRE UNE ISSUE INCONNUE (constat Q-30) ──
+             *
+             * `502` et `504` ne viennent pas de l'application : ils viennent
+             * d'Apache, qui a **transmis la requête** puis renoncé à attendre la
+             * réponse (`ProxyTimeout`) ou vu la connexion arrière céder. La
+             * transaction peut donc avoir été validée — exactement le cas que le
+             * délai de garde du navigateur produit, par un autre chemin. Ne pas
+             * poser le drapeau ici laissait le doublon silencieux du constat Q-27
+             * intact sur la moitié frontale du défaut : écran 1, base 2, bandeau
+             * vide.
+             *
+             * `503` est délibérément exclu, et ce n'est pas un oubli : il est rendu
+             * **avant** que quoi que ce soit soit tenté — par la barrière
+             * fail-closed hors développement, ou par Apache quand le service est
+             * arrêté. Rien n'a été engagé, donc rien n'est incertain. Étendre le
+             * drapeau à `503` avertirait « peut-être appliquée » sur un service à
+             * l'arrêt, c'est-à-dire sur le cas le plus fréquent et le plus
+             * anodin — le faux positif que le constat m-5 condamne.
+             */
+            const issueInconnue = modifie && (reponse.status === 502 || reponse.status === 504);
+
             // Une réponse non JSON vient du frontal, pas de l'application : elle
             // ne doit rien apprendre de plus que « ça n'a pas marché ».
             if (!charge || typeof charge !== "object") {
                 throw new ErreurApi({
                     statut: reponse.status,
                     code: reponse.status >= 500 ? "indisponible" : "erreur_interne",
-                    message: "Le serveur a refusé la demande (code " + reponse.status + ")."
+                    issueInconnue: issueInconnue,
+                    message: "Le serveur a refusé la demande (code " + reponse.status + ")." +
+                        (issueInconnue
+                            ? " L'opération a peut-être été appliquée : rechargez la page avant de recommencer."
+                            : "")
                 });
             }
             throw new ErreurApi({
                 statut: reponse.status,
+                issueInconnue: issueInconnue,
                 code: charge.erreur,
                 message: charge.message,
                 codeGrc: charge.code_grc,

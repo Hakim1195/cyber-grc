@@ -126,6 +126,21 @@ const Sync = (() => {
     const incidents = [];               // échecs à afficher (jamais effacés tout seuls)
     const champsRefuses = new Set();    // "collection.champ" que le modèle serveur ignore
     const doublons = new Set();         // identifiants portés par deux enregistrements
+    /**
+     * Créations bloquées, conservées AVEC leur contenu (constat Q-29).
+     *
+     * Une création bloquée est la seule chose que le serveur ne détient pas sous
+     * cet identifiant : elle n'existe qu'à l'écran. Un rechargement la
+     * détruisait — et c'était le geste que le bandeau demandait. On garde donc de
+     * quoi la remettre en place, et le rechargement redevient sûr.
+     *
+     * Réservé aux CRÉATIONS : une modification ou une suppression bloquée porte
+     * l'identifiant d'une ligne que le serveur détient, et la réinjecter après un
+     * rechargement écraserait la version du serveur ou fabriquerait deux
+     * enregistrements de même clé. Pour celles-là, recharger EST le remède.
+     */
+    const creationsBloquees = new Map();   // "collection:id" -> { collection, enregistrement }
+
     // Doublons rendus par le GÉNÉRATEUR de la page (constat Q-23) — à distinguer
     // de `doublons`, qui constate deux enregistrements de même clé sans pouvoir
     // dire d'où ils viennent : d'un fichier repris incohérent, ou du générateur.
@@ -536,6 +551,10 @@ const Sync = (() => {
         [bloques, derives, renommagesAPousser].forEach(set => {
             if (set.has(cle(collection, ancien))) { set.delete(cle(collection, ancien)); set.add(cle(collection, nouveau)); }
         });
+        if (creationsBloquees.has(cle(collection, ancien))) {
+            creationsBloquees.set(cle(collection, nouveau), creationsBloquees.get(cle(collection, ancien)));
+            creationsBloquees.delete(cle(collection, ancien));
+        }
         if (propagations.has(ancien)) { propagations.set(nouveau, propagations.get(ancien)); propagations.delete(ancien); }
         propagations.forEach(ids => { if (ids.has(ancien)) { ids.delete(ancien); ids.add(nouveau); } });
 
@@ -977,9 +996,35 @@ const Sync = (() => {
         return chaine;
     }
 
+    /**
+     * Un blocage dont l'enregistrement n'existe plus n'a plus d'objet.
+     *
+     * Sans ce ménage, l'utilisateur qui supprime lui-même la saisie bloquée —
+     * le geste que le bandeau lui recommande quand il découvre un doublon —
+     * laisse une clé dans `bloques`, donc un « modifications non enregistrées »
+     * définitif que plus rien ne peut éteindre. Le défaut est antérieur au
+     * constat Q-29 et vaut pour tous les blocages, pas seulement les créations.
+     *
+     * Coût : le nombre d'enregistrements BLOQUÉS, jamais celui du jeu de données.
+     */
+    function nettoyerBlocages() {
+        if (bloques.size === 0) return;
+        const data = donnees();
+        if (!data) return;
+        Array.from(bloques).forEach(k => {
+            const coupe = k.indexOf(":");
+            const c = k.slice(0, coupe), id = k.slice(coupe + 1);
+            const liste = Array.isArray(data[c]) ? data[c] : null;
+            const present = !!liste && liste.some(x => x && x.id === id);
+            const connuDuServeur = !!reference[c] && reference[c].has(id);
+            if (!present && !connuDuServeur) { bloques.delete(k); creationsBloquees.delete(k); }
+        });
+    }
+
     async function cycle() {
         if (!source || !modele) return { ok: false, raison: "non demarre" };
         if (minuteurEcriture) { clearTimeout(minuteurEcriture); minuteurEcriture = null; }
+        nettoyerBlocages();
 
         const diff = calculerDifferentiel();
         const aEcrire = diff.creations.concat(diff.modifications, diff.suppressions)
@@ -1456,14 +1501,33 @@ const Sync = (() => {
         // yeux de l'utilisateur (la lui effacer serait une perte), mais elle
         // n'est plus réécrite tant qu'elle n'a pas été rechargée.
         bloques.add(cle(collection, id));
+        // Q-29 : ce que le serveur ne détient pas, le navigateur doit pouvoir le
+        // remettre après un rechargement — sinon le bouton du bandeau détruit.
+        if (geste === "creation" && enregistrement) {
+            creationsBloquees.set(cle(collection, id), { collection: collection, enregistrement: enregistrement });
+        }
+        const incertain = !!erreur.issueInconnue && geste === "creation";
         ajouterIncident({
             collection, id, geste,
             // « refusé » serait faux : l'écriture a peut-être abouti. C'est tout
             // ce que le navigateur sait, et c'est ce qu'il dit.
             type: erreur.estConflit() ? "conflit"
                 : (erreur.estIntrouvable() ? "disparu"
-                    : (erreur.issueInconnue ? "incertain" : "refus")),
-            message: erreur.message,
+                    : (incertain ? "incertain" : "refus")),
+            // ── Q-29 : la phrase partagée ne suffit plus ici ─────────────────
+            // `api.js` dit « rechargez la page avant de recommencer », ce qui est
+            // vrai pour une reprise. Pour une création bloquée, c'était la seule
+            // consigne à ne pas suivre : elle effaçait la saisie. Le rechargement
+            // la conserve désormais — mais l'utilisateur a besoin de savoir quoi
+            // faire ENSUITE, et cela, seule cette couche le sait. Le complément
+            // s'ajoute donc ici, comme `refusDeReprise` le fait de son côté :
+            // une seule formulation du FAIT, et chaque couche ajoute ce qu'elle
+            // seule connaît du GESTE.
+            message: incertain
+                ? erreur.message + " Votre saisie reste à l'écran et n'est plus renvoyée ; " +
+                  "le rechargement la conserve. Vérifiez ensuite si elle figure déjà dans la " +
+                  "liste : si oui, supprimez le doublon ; sinon, cliquez « Envoyer à nouveau »."
+                : erreur.message,
             versionActuelle: erreur.versionActuelle,
             rechargeable: true
         });
@@ -1532,8 +1596,28 @@ const Sync = (() => {
         const charge = await Api.donnees();
         horodatageServeur = charge.horodatage;
         const neuf = charge.data;
+        // ── Q-29 : ON NE DÉTRUIT PAS CE QUE LE SERVEUR N'A PAS ──────────────
+        // Le bandeau d'un enregistrement bloqué propose « Recharger les
+        // données ». Le geste était destructeur pour une création bloquée : elle
+        // n'existe qu'à l'écran, et `remplacer` la faisait disparaître, avec un
+        // message de succès par-dessus. Les créations bloquées sont donc remises
+        // en place, et re-bloquées : rien n'est envoyé sans que l'utilisateur le
+        // demande, et rien n'est perdu s'il suit ce que le produit lui dit.
+        const aPreserver = Array.from(creationsBloquees.values());
         source.remplacer(neuf);
         adopterJeu(donnees());
+        const apres = donnees();
+        aPreserver.forEach(v => {
+            const liste = apres && Array.isArray(apres[v.collection]) ? apres[v.collection] : null;
+            if (!liste) return;
+            // Si le serveur l'a finalement — même identifiant —, il fait foi.
+            if (liste.some(x => x && x.id === v.enregistrement.id)) {
+                creationsBloquees.delete(cle(v.collection, v.enregistrement.id));
+                return;
+            }
+            liste.push(v.enregistrement);
+            bloques.add(cle(v.collection, v.enregistrement.id));
+        });
         incidents.length = 0;
         bandeauReduit = false;
         propagations.clear();
@@ -1689,6 +1773,21 @@ const Sync = (() => {
         return h;
     }
 
+    /**
+     * Le renvoi d'une création bloquée — **délibéré**, jamais automatique.
+     *
+     * C'est la moitié manquante du constat Q-29. Le rejeu automatique a été
+     * retiré parce qu'il fabriquait un doublon silencieux quand le serveur avait
+     * validé (Q-27) ; mais quand il n'avait RIEN validé, la saisie restait alors
+     * en rade sans aucun moyen de repartir. Ce bouton rend ce moyen à
+     * l'utilisateur — après qu'il a rechargé et vu par lui-même si la ligne est
+     * là. C'est la même décision, prise par celui qui, lui, peut la prendre.
+     */
+    function boutonRenvoi() {
+        if (creationsBloquees.size === 0) return "";
+        return '<button id="sync-renvoyer" class="reminder-btn">Envoyer à nouveau</button>';
+    }
+
     function rendreBandeau() {
         const h = hote();
         if (!h) return;
@@ -1716,6 +1815,7 @@ const Sync = (() => {
                 'la saisie reste à l’écran mais n’est pas partie au serveur.</span>' +
                 '<button id="sync-detail" class="reminder-btn">Voir le détail</button>' +
                 '<button id="sync-recharger" class="reminder-btn">Recharger les données</button>' +
+                boutonRenvoi() +
                 '</div>');
         } else if (incidents.length > 0) {
             const rechargeable = incidents.some(i => i.rechargeable);
@@ -1733,6 +1833,7 @@ const Sync = (() => {
                 '<span class="quota-text"><b>' + incidents.length + ' modification(s) non enregistrée(s).</b>' +
                 '<ul style="margin:6px 0 0 18px; padding:0; font-weight:400;">' + lignes + '</ul></span>' +
                 (rechargeable ? '<button id="sync-recharger" class="reminder-btn">Recharger les données</button>' : '') +
+                boutonRenvoi() +
                 '<button id="sync-fermer" class="reminder-close" title="Masquer" aria-label="Masquer">&times;</button>' +
                 '</div>');
         }
@@ -1829,6 +1930,17 @@ const Sync = (() => {
         };
         const e = document.getElementById("sync-reessayer");
         if (e) e.onclick = () => { panneReseau = false; rendreBandeau(); pousser(); };
+        const rv = document.getElementById("sync-renvoyer");
+        if (rv) rv.onclick = () => {
+            // On ne débloque QUE les créations : une modification ou une
+            // suppression bloquée l'est pour une raison que le renvoi ne lève pas.
+            creationsBloquees.forEach((_v, k) => bloques.delete(k));
+            creationsBloquees.clear();
+            incidents.length = 0;
+            bandeauReduit = false;
+            rendreBandeau();
+            pousser();
+        };
     }
 
     function signalerRafraichissement(n) {

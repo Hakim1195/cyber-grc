@@ -250,9 +250,32 @@ window.UI = (function () {
     // se dégrade, il ne se retourne pas contre l'utilisateur.
     var IDENTIFIANTS_EMIS_MAX = 50000;
 
+    /* ── LE SÉPARATEUR N'EST PAS COSMÉTIQUE ─────────────────────────────────
+       Le compteur et l'aléa étaient collés l'un à l'autre. Les deux ont une
+       LONGUEUR VARIABLE en base 36, si bien que la concaténation était ambiguë
+       et que deux appels d'une même page pouvaient rendre le même identifiant :
+
+           compteur 1,  aléa "0ab"  ->  ...-1 0ab  =  "10ab"
+           compteur 36, aléa  "ab"  ->  ...-10 ab  =  "10ab"
+
+       Ce n'est pas une hypothèse : la collision a été fabriquée avec CE
+       générateur, sans en modifier une ligne — seuls l'horloge et la source
+       d'aléa étaient imposées —, et le détecteur ci-dessous l'a annoncée.
+
+       La conséquence dépasse le cas : le §2 de `backend/db/CONVENTIONS.md`
+       affirme que « le compteur suffit à lui seul pour un import : deux appels
+       d'une même page ne peuvent pas rendre le même identifiant, quel que soit
+       le hasard ». C'était FAUX tant que rien ne séparait les deux champs — le
+       compteur ne suffisait pas, il ne faisait qu'ajouter de l'improbable à de
+       l'improbable. Avec le séparateur, deux compteurs différents donnent deux
+       chaînes différentes **quoi qu'il arrive**, et la phrase devient vraie.
+       La forme engendrée gagne un caractère (47 au plus, pour un domaine qui en
+       admet 64) : c'est à signaler au document normatif, qui décrit trois
+       segments là où il y en a désormais quatre.
+    ───────────────────────────────────────────────────────────────────────── */
     function genId(prefix) {
         compteurSession += 1;
-        var id = (prefix || "ID") + "-" + Date.now() + "-" + compteurSession.toString(36) + aleaFort();
+        var id = (prefix || "ID") + "-" + Date.now() + "-" + compteurSession.toString(36) + "-" + aleaFort();
         if (identifiantsEmis.has(id)) {
             // Un défaut de programmation, pas un cas d'usage : on le crie.
             console.error("Générateur d'identifiants : « " + id + " » a déjà été émis dans cette session.");
