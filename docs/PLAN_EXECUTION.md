@@ -260,6 +260,16 @@ Une livraison n'est acceptée que si **tous** ces points sont vrais. C'est ce qu
 5. **C'est en français** — noms, commentaires, messages d'erreur, interface (`CLAUDE.md` §3).
 6. **C'est documenté** — `backend/README.md` §8 reflète l'état réel, `CHANGELOG.md` est à jour,
    `DATA_MODEL.md` suit si le schéma bouge.
+
+   > ⚠️ **La passe de documentation est une étape de la fermeture de porte, pas une demande après
+   > coup.** Le constat Q-4 a été signalé **six fois** par six auditeurs successifs, et « inattention »
+   > ne l'explique pas : *entre deux passages de porte, ce document vieillit plus vite que le code*.
+   > Le compte d'essais a fait 505 → 534 → 564 → 615 en une journée, et une famille entière est
+   > apparue. Tant que la remise à jour est demandée **après** le verdict, le signalement suivant est
+   > déjà écrit. Elle se joue donc **avec** le rejeu de la grille, au même titre — et l'auditeur qui
+   > trouve un chiffre faux le compte comme un constat, pas comme une coquille : un exploitant qui
+   > vérifie une installation compare ce chiffre au réel, et faux, il ne mesure plus rien — pire,
+   > il rassure.
 7. **C'est dans le périmètre** — aucun fichier modifié hors de la propriété de l'agent (§2).
 8. **Les manques sont dits** — ce qui n'a pas été fait est listé explicitement, pas passé sous
    silence. Un lot partiel annoncé comme tel vaut mieux qu'un lot complet qui ne l'est pas.

@@ -800,6 +800,10 @@ leur base, et une suite qui ne démarre pas ne compte aucun échec. **Un banc qu
 sans rougir est le symptôme le plus trompeur qui soit** : il ressemble à un succès. Le
 premier réflexe est `pg_isready`, pas la chasse à la régression.
 
+*Contrôle de fraîcheur* : la suite a été rejouée après la fermeture du constat suivant
+(qui ne touche que `src/serveur.ts`) et rend toujours **615 · 615 · 0**. Le schéma, lui,
+n'a pas bougé depuis la révision mesurée — aucune migration n'a été ajoutée.
+
 ⚠️ **Le banc grossit à chaque fermeture de constat**, et c'est la raison d'être de la
 ligne « révision mesurée » : **505** essais au 4ᵉ passage, **534**, **564**, **615** ici —
 la dernière marche étant une **cinquième famille** née d'un bloquant (§5). Un total
