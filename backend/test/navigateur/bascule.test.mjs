@@ -1434,6 +1434,20 @@ describe('Les avertissements du produit, éprouvés quand ils PARLENT (constat Q
         /peut être inaccessible/i,
         `Et dire ce que l’utilisateur risque : ${texte}`,
       );
+
+      // ── L'OUTIL D'APPARIEMENT MORD LUI AUSSI ────────────────────────────
+      //
+      // `exigerSilence` est employé aux quatre coins du banc pour les assertions
+      // d'absence d'avertissement. C'est lui-même une assertion de silence : le
+      // neutraliser ne ferait rougir personne, puisque tous ses appels portent sur
+      // des textes qui se taisent. On l'éprouve donc ici, sur le seul texte du
+      // banc dont on SAIT qu'il parle — celui qu'on vient de lire.
+      assert.throws(
+        () => exigerSilence(texte, /Identifiants en double/i, 'cet essai-ci'),
+        /Un avertissement paraît/,
+        'exigerSilence ne rejette plus rien : toutes les assertions de silence du banc ' +
+          'seraient devenues décoratives d’un seul coup.',
+      );
       assert.deepEqual(session.erreursScript, []);
     } finally {
       await session.fermer();
