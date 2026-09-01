@@ -341,6 +341,28 @@ Ce que trois passages ont appris, et qui vaut pour toutes les portes à venir :
   sur sept, et le point d'appel des garde-fous lui-même. La parade n'est pas la vigilance, c'est
   la **découverte dans le catalogue** — et elle a fini par être appliquée au dispositif de
   contrôle lui-même.
+- **La question utile n'est pas « est-ce que ça passe », c'est « qu'est-ce qui passerait aussi ».**
+  Formulée par l'agent qui tient le banc, au terme d'une journée où le motif est apparu quatre fois
+  sous quatre déguisements : un essai qui passait des options figées à une fonction **qui les
+  ignore**, et concluait « sous horloge et aléa figés, c'est reproductible » — attribuant à un
+  décor la propriété qu'il prétendait éprouver ; un essai de masse qui comptait les lignes
+  arrivées sans voir que **le rattrapage** les avait remises, donc restait vert avec la moitié
+  d'un bloquant rouverte ; un filet de consignation qui **ne rattrape jamais** la migration qui
+  l'a introduit, parce qu'elle se vérifie elle-même ; et une démonstration de cloisonnement
+  privée de tous ses contrôles, qui **sort en code 0**. Les quatre rendent le même vert qu'une
+  propriété tenue. **Seul le sabotage les sépare** — c'est pourquoi le contrôle de morsure n'est
+  pas une formalité de fin de travail mais la seule chose qui distingue un essai d'un décor.
+- **Un correctif rend fausse la phrase d'un autre fichier — dix fois sur ce chantier.** Le cas le
+  plus fréquent n'est pas le renvoi mort, c'est la **justification** : la phrase écrite pour
+  expliquer pourquoi on garde quelque chose, que personne ne relit quand l'appelant disparaît.
+  Trois exemples du même jour : un commentaire justifiant un cloisonnement « comme le fait déjà »
+  une heuristique **que le même correctif venait de supprimer** ; une justification faisant du
+  format d'identifiant une condition du round-trip exact, ce qui aurait rendu **intouchable le
+  générateur qu'il a fallu changer** ; et un cas nominal du déploiement décrit comme un cas limite
+  (« en usage légitime, cela ne se produit jamais »), ce qui est une invitation à ne pas le
+  tester. La parade est le **balayage mécanique** — extraire tout symbole cité dans un commentaire
+  et vérifier qu'il existe encore hors commentaire — suivi d'une vérification du comportement
+  avant chaque réécriture : remplacer une phrase fausse par une autre phrase fausse est un recul.
 - **Le journal ci-dessus se tient à jour à chaque passage.** Il a pris deux passages de retard
   pendant le chantier, et c'est un agent de documentation qui l'a signalé : les autres documents
   y renvoient, un lecteur y aurait donc trouvé un état antérieur au dernier rapport.
@@ -371,7 +393,7 @@ jamais seulement sur le correctif.
 | **Q-1** | Le générateur d'identifiants corrigé, gardé et démontré n'est pas celui qui écrit : tout identifiant réellement écrit vient d'`engendrerIdentifiant()` en TypeScript, un million de valeurs, sans garde-fou | 🟠 majeur | agent **API** | fermeture de la porte S2 | ✅ **corrigé** — attend le rejeu de la porte |
 | **Q-2** | La ré-émission d'identifiant n'est pas idempotente : trois reprises de la même sauvegarde donnent trois clones, et la référence vise le dernier. Le correctif T-4 lui a ouvert le chemin | 🟠 majeur | agent **API** | **avant la mise en service pilote** | ✅ **corrigé** — attend le rejeu |
 | **Q-3** | La moitié navigateur du correctif T-1 n'a aucun test, alors que le rapport TER en faisait une condition explicite | 🟠 majeur | agent **OUTILLAGE** | fermeture de la porte S2 | ✅ **corrigé** — attend le rejeu |
-| **Q-4** | La documentation reste antérieure à la vague — **4ᵉ signalement** | 🟠 majeur | agent **DOC** | fermeture de la porte S2 | ouvert |
+| **Q-4** | La documentation reste antérieure à la vague — **4ᵉ signalement** | 🟠 majeur | agent **DOC** | fermeture de la porte S2 | ✅ **corrigé** — attend le rejeu |
 | **Q-5** | Un garde-fou de schéma qui *cesse d'être découvert* disparaît en silence : `f_verifier_schema()` ne refuse que s'il n'en trouve **aucun**. Une migration qui renomme ou re-signe une fonction suffit | 🔵 mineur | agent **OUTILLAGE** | fermeture de la porte S2 | ✅ **corrigé** (`005`) — attend le rejeu |
 | **Q-6** | Trois textes rendus faux par les correctifs T-2 et T-4 : l'en-tête d'`applyImport`, les commentaires de `uq_imports_idempotence` et `imports.cle_idempotence`, l'anomalie `identifiant-duplique` | 🔵 mineur | (a) et (c) agent **API** · (b) **lot L3**, voir ci-dessous | (a)(c) porte S2 · (b) vague 3 | ◐ **(c) corrigé** · (a) en cours (FRONTEND) · (b) reporté L3, §22 E5 |
 | **Q-7** | `imports.id` est engendré par un `Math.random()` en ligne sur un million de valeurs — quatrième clone de la convention d'identifiant, alors que le §2 des conventions n'en veut **qu'un** | 🔵 mineur | agent **API**, avec Q-1 | fermeture de la porte S2 | ✅ **corrigé** — attend le rejeu |
