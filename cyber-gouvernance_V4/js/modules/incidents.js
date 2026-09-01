@@ -140,7 +140,8 @@ const IncidentsModule = (() => {
         const app = document.getElementById("app");
         const inc = DataStore.getIncidentById(id);
         if (!inc) {
-            app.innerHTML = `<section class="page"><h1>Incident introuvable</h1><button onclick="Router.navigateTo('/incidents')">Retour</button></section>`;
+            app.innerHTML = `<section class="page"><h1>Incident introuvable</h1><button type="button" id="backBtn">Retour</button></section>`;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/incidents"));
             return;
         }
 

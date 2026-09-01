@@ -399,7 +399,7 @@ const AuditsModule = (() => {
                     </div>
                     <textarea class="c-desc" placeholder="Description du constat / Preuve d'audit..." style="min-height:60px;">${escapeHtml(c.desc||'')}</textarea>
                 </div>
-                <button onclick="this.closest('.constat-row').remove()" style="background:none; color:red; border:none; font-size:1.5rem; cursor:pointer;" title="Supprimer"></button>
+                <button type="button" class="constat-del" style="background:none; color:red; border:none; font-size:1.5rem; cursor:pointer;" title="Supprimer" aria-label="Supprimer ce constat"></button>
             </div>
         `).join("") || `<p style="text-align:center; color:gray; padding:20px;">Aucun constat saisi.</p>`;
 

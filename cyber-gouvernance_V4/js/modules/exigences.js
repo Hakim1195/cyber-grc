@@ -7,7 +7,7 @@ const ExigencesModule = (() => {
        LISTE & IMPORT
     ========================== */
     function renderList() {
-        const currentClient = localStorage.getItem("cyber-context") || "global";
+        const currentClient = window.FiltreDonneurOrdre ? FiltreDonneurOrdre.get() : "global";   // filtre en mémoire (app.js), plus dans le localStorage
         const exigences = DataStore.getExigencesByClient(currentClient);
         const clients = DataStore.getClients();
         const app = document.getElementById("app");
@@ -20,7 +20,7 @@ const ExigencesModule = (() => {
 
         const rows = exigences.map(e => `
             <tr class="clickable-row" data-id="${e.id}">
-                <td style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
+                <td class="stop-row-click" style="text-align: center; width: 40px;">
                     <input type="checkbox" class="row-cb" data-id="${e.id}">
                 </td>
                 <td><strong>${escapeHtml(e.code)}</strong></td>
@@ -99,6 +99,12 @@ const ExigencesModule = (() => {
         }
 
         // Sélection multiple + suppression groupée (helper partagé, cf. js/core/ui.js).
+        // La case à cocher (et le lien courriel) ne doivent pas ouvrir la fiche :
+        // conversion de l'ancien attribut `onclick="event.stopPropagation()"`, que la
+        // politique de sécurité de contenu de production refuse.
+        document.querySelectorAll(".stop-row-click").forEach(el =>
+            el.addEventListener("click", (e) => e.stopPropagation()));
+
         UI.wireBulkDelete({
             remove: (id) => DataStore.deleteExigence(id),
             confirm: (n) => `Confirmer la suppression de ${n} exigence(s) ? Les actions associées seront également supprimées.`,
@@ -116,7 +122,7 @@ const ExigencesModule = (() => {
     ========================== */
     function renderCreate() {
         const app = document.getElementById("app");
-        const currentClient = localStorage.getItem("cyber-context") || "global";
+        const currentClient = window.FiltreDonneurOrdre ? FiltreDonneurOrdre.get() : "global";   // filtre en mémoire (app.js), plus dans le localStorage
         const clients = DataStore.getClients();
 
         let contextInfo = "Cette exigence sera <strong>globale (Interne)</strong>.";
@@ -208,7 +214,8 @@ const ExigencesModule = (() => {
         const app = document.getElementById("app");
 
         if (!exigence) {
-            app.innerHTML = `<section class="page"><h1>Erreur</h1><p>Introuvable.</p><button onclick="Router.navigateTo('/exigences')">Retour</button></section>`;
+            app.innerHTML = `<section class="page"><h1>Erreur</h1><p>Introuvable.</p><button type="button" id="backBtn">Retour</button></section>`;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/exigences"));
             return;
         }
 

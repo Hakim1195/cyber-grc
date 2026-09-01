@@ -116,7 +116,8 @@ const ConformiteModule = (() => {
         const app = document.getElementById("app");
         const ref = (typeof Referentiels !== "undefined") ? Referentiels.get(id) : null;
         if (!ref) {
-            app.innerHTML = `<section class="page"><h1>Référentiel introuvable</h1><button onclick="Router.navigateTo('/referentiels')">Retour</button></section>`;
+            app.innerHTML = `<section class="page"><h1>Référentiel introuvable</h1><button type="button" id="backBtn">Retour</button></section>`;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/referentiels"));
             return;
         }
 
@@ -161,7 +162,7 @@ const ConformiteModule = (() => {
                         <h1>Déclaration d'applicabilité (SoA)</h1>
                         <p style="color:var(--text-muted); margin-top:5px;">${escapeHtml(ref.nom)} — <a href="#/referentiels/${escapeHtml(ref.id)}" style="color:var(--accent);">retour à l'évaluation</a> ${Help.tip("La déclaration d'applicabilité (Statement of Applicability) est un livrable clé d'ISO 27001 : elle liste toutes les mesures, indique lesquelles s'appliquent, leur justification et leur état de mise en œuvre.")}</p>
                     </div>
-                    <button onclick="window.print()" style="background:var(--primary);">Imprimer / PDF</button>
+                    <button type="button" id="printSoaBtn" style="background:var(--primary);">Imprimer / PDF</button>
                 </div>
 
                 <div class="soa-print-head" style="display:none;">
@@ -187,6 +188,8 @@ const ConformiteModule = (() => {
 
                 <p class="soa-foot" style="margin-top:20px; color:var(--text-muted); font-size:0.8rem;">Document généré depuis Cyber GRC — Dedienne Aerospace. Les intitulés sont des reformulations ; se référer au référentiel officiel pour le texte exact.</p>
             </section>`;
+
+        document.getElementById("printSoaBtn").addEventListener("click", () => window.print());
     }
 
     return { renderCouverture, renderSoa };

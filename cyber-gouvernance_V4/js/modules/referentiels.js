@@ -410,7 +410,8 @@ const ReferentielsModule = (() => {
         const ref = (typeof Referentiels !== "undefined") ? Referentiels.get(id) : null;
 
         if (!ref) {
-            app.innerHTML = `<section class="page"><h1>Référentiel introuvable</h1><p>Ce référentiel n'existe pas ou n'est plus disponible.</p><button onclick="Router.navigateTo('/referentiels')">Retour aux référentiels</button></section>`;
+            app.innerHTML = `<section class="page"><h1>Référentiel introuvable</h1><p>Ce référentiel n'existe pas ou n'est plus disponible.</p><button type="button" id="backBtn">Retour aux référentiels</button></section>`;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/referentiels"));
             return;
         }
 

@@ -57,11 +57,11 @@ const PersonnelModule = (() => {
             const n = assignmentCount(p.nom);
             return `
                 <tr class="clickable-row" data-id="${p.id}">
-                    <td style="text-align:center; width:40px;" onclick="event.stopPropagation();"><input type="checkbox" class="row-cb" data-id="${p.id}"></td>
+                    <td class="stop-row-click" style="text-align:center; width:40px;"><input type="checkbox" class="row-cb" data-id="${p.id}"></td>
                     <td><strong>${escapeHtml(p.nom)}</strong></td>
                     <td>${p.fonction ? escapeHtml(p.fonction) : "<span style='color:var(--text-muted);'>—</span>"}</td>
                     <td>${p.service ? escapeHtml(p.service) : "<span style='color:var(--text-muted);'>—</span>"}</td>
-                    <td>${p.email ? `<a href="mailto:${escapeHtml(p.email)}" onclick="event.stopPropagation();" style="color:var(--accent);">${escapeHtml(p.email)}</a>` : "<span style='color:var(--text-muted);'>—</span>"}</td>
+                    <td>${p.email ? `<a href="mailto:${escapeHtml(p.email)}" class="stop-row-click" style="color:var(--accent);">${escapeHtml(p.email)}</a>` : "<span style='color:var(--text-muted);'>—</span>"}</td>
                     <td style="text-align:center;">${n > 0 ? `<strong>${n}</strong> affectation${n > 1 ? "s" : ""}` : "<span style='color:var(--text-muted);'>—</span>"}</td>
                 </tr>`;
         }).join("");
@@ -103,6 +103,12 @@ const PersonnelModule = (() => {
         const add = () => renderCreate();
         const b1 = document.getElementById("addBtn"); if (b1) b1.onclick = add;
         const b2 = document.getElementById("addBtn2"); if (b2) b2.onclick = add;
+
+        // La case à cocher (et le lien courriel) ne doivent pas ouvrir la fiche :
+        // conversion de l'ancien attribut `onclick="event.stopPropagation()"`, que la
+        // politique de sécurité de contenu de production refuse.
+        document.querySelectorAll(".stop-row-click").forEach(el =>
+            el.addEventListener("click", (e) => e.stopPropagation()));
 
         UI.wireBulkDelete({
             remove: (id) => DataStore.deletePersonne(id),

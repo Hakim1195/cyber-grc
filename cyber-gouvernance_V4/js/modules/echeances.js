@@ -280,7 +280,7 @@ const EcheancesModule = (() => {
                     <div style="display:flex; gap:10px; flex-wrap:wrap;">
                         <button id="ech-export-xlsx" class="btn-secondary">Excel</button>
                         <button id="ech-export-ics" class="btn-secondary">Agenda (.ics)</button>
-                        <button onclick="window.print()" class="btn-secondary">Imprimer</button>
+                        <button type="button" id="ech-print" class="btn-secondary">Imprimer</button>
                     </div>
                 </div>
 
@@ -328,6 +328,8 @@ const EcheancesModule = (() => {
         const search = document.getElementById("ech-search");
         if (search) { search.value = filterSearch; search.addEventListener("input", () => { filterSearch = search.value; renderBody(); }); }
         // Exports.
+        const bp = document.getElementById("ech-print");
+        if (bp) bp.addEventListener("click", () => window.print());
         const bx = document.getElementById("ech-export-xlsx");
         const bi = document.getElementById("ech-export-ics");
         if (bx) bx.addEventListener("click", exportExcel);

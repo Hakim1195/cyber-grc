@@ -38,7 +38,13 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
 import { FILIALE_A, FILIALE_B, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
-import { fichier, instantane, instantaneV12Complet } from '../reprise/jeux-essai.mjs';
+import {
+  enveloppe,
+  exportAncienVolumineux,
+  fichier,
+  instantane,
+  instantaneV12Complet,
+} from '../reprise/jeux-essai.mjs';
 import { monterServeurReel } from '../aide/serveur.mjs';
 
 /** @type {Awaited<ReturnType<typeof ouvrirBaseEssai>>} */
@@ -88,30 +94,6 @@ async function identifiants(table, p = lectureA) {
   const lignes = await base.avecPerimetre(client, p, async (c) =>
     (await c.query(`select id from ${table} order by id`)).rows);
   return lignes.map((l) => l.id);
-}
-
-/**
- * Un instantané v12 réaliste : celui du jeu d'essai de la reprise, **corrigé de son
- * unique divergence avec le schéma**.
- *
- * `instantaneV12Complet()` porte une action rattachée à CINQ objets à la fois
- * (exigence, risque, évaluation, incident et mesure). Le modèle navigateur l'admet et
- * le module de reprise la traverse sans rien dire ; le schéma, lui, l'interdit
- * (`ck_actions_rattachement` : au plus un rattachement). Le jeu d'essai a été écrit
- * pour éprouver le PORTAGE, pas l'écriture en base — la divergence est donc normale
- * de son point de vue, et elle est signalée dans le rapport de l'agent plutôt que
- * corrigée en silence dans son fichier, qui ne m'appartient pas.
- */
-function chargeRealiste(surcharges = {}) {
-  const charge = instantaneV12Complet();
-  charge.actions = charge.actions.map((a) => ({
-    ...a,
-    risque_id: '',
-    evaluation_id: '',
-    incident_id: '',
-    mesure_id: '',
-  }));
-  return { ...charge, ...surcharges };
 }
 
 /* =====================================================================
@@ -293,11 +275,43 @@ describe('Les refus de la route de reprise', () => {
  * ===================================================================== */
 
 describe('Un export complet, comme l’application en produit', () => {
+  test('un contrôle de niveau GROUPE passe par la reprise ce que la création refuse', async () => {
+    // ── Le remède crée son propre chemin (CONVENTIONS.md §20.3) ──────────────
+    //
+    // Le constat M-4 a été fermé sur la route de création : une session de filiale ne
+    // peut plus écrire `mappings`, référence COMMUNE aux vingt filiales. La route de
+    // reprise, elle, écrit la même table par un autre chemin — et la même session y
+    // arrive.
+    //
+    // Ce n'est pas une fuite de lecture : c'est une écriture dont le rayon sort de la
+    // filiale, sans droit à produire et sans journal pour l'attribuer. Exactement ce
+    // que M-4 décrivait, par la porte de côté.
+    //
+    // Le banc ne tranche pas COMMENT fermer — refuser la collection, l'ignorer avec
+    // un avertissement, ou exiger une administration Groupe. Il exige que les deux
+    // routes disent la même chose.
+    const charge = instantane(12, {
+      mappings: [{ id: 'MAP-PAR-LA-REPRISE', theme: 'Forgé depuis une filiale', aide: '', refs: {} }],
+    });
+    const parLaReprise = await reprendre('fusionner', charge, { nom: 'mappings.json' });
+    const parLaCreation = await serveur.appeler('POST', '/api/entites/mappings', {
+      corps: { champs: { theme: 'Forgé depuis une filiale' } },
+    });
+
+    assert.equal(parLaCreation.statut, 403, 'La route de création refuse — c’est le correctif M-4.');
+    assert.notEqual(
+      parLaReprise.statut,
+      200,
+      'La route de reprise ne doit pas offrir à une filiale ce que la création lui refuse : ' +
+        'une même session, une même table, deux verdicts, c’est M-4 rouvert.',
+    );
+  });
+
   test('les 21 collections d’un export v12 traversent la route de reprise', async () => {
     // Le chemin que `PLAN_SERVEUR` §2.6 désigne comme LE chemin de migration : un
     // export `grc-backup` d'une filiale encore en version locale, repris dans la
     // version serveur. S'il ne passe pas, il n'y a pas de migration.
-    const reponse = await reprendre('remplacer', chargeRealiste(), { nom: 'complet.json' });
+    const reponse = await reprendre('remplacer', instantaneV12Complet(), { nom: 'complet.json' });
     assert.equal(
       reponse.statut,
       200,
@@ -308,5 +322,113 @@ describe('Un export complet, comme l’application en produit', () => {
     const creees = Object.entries(bilan.crees).filter(([, n]) => n > 0).map(([nom]) => nom);
     assert.ok(creees.length >= 15, `Collections reprises : ${creees.join(', ')}`);
     assert.deepEqual(reponse.corps.rapport.anomalies ?? [], [], 'Un export sain ne produit aucune anomalie.');
+  });
+});
+
+/* =====================================================================
+ *  §6 — Un export tel qu'un client en enverrait
+ * ===================================================================== */
+
+describe('Le dernier chemin non éprouvé : un vieil export réel, de bout en bout', () => {
+  test('un export v6 volumineux traverse six paliers ET atterrit en base', async () => {
+    // Ce que `PLAN_SERVEUR` §2.6 désigne comme LE chemin de migration, et que rien
+    // n'avait parcouru en entier : un fichier produit par un site resté en version
+    // locale — ancien, volumineux, aux conventions de son époque — lu, monté de v6 à
+    // v12, puis appliqué à PostgreSQL en une transaction.
+    //
+    // Les tests de `test/reprise/**` éprouvent le portage sans base ; ceux du §1 au
+    // §5 éprouvent la route sur des jeux courts et actuels. Entre les deux, il restait
+    // ce trou : personne n'avait vérifié qu'un fichier RÉEL survivait aux deux moitiés
+    // bout à bout.
+    const ancien = exportAncienVolumineux({ parCollection: 30 });
+    const contenu = JSON.stringify(enveloppe(6, ancien));
+    const enregistrements = Object.values(ancien).filter(Array.isArray).reduce((s, a) => s + a.length, 0);
+    assert.ok(enregistrements > 200, `Le fichier doit être volumineux : ${String(enregistrements)}.`);
+
+    const reponse = await reprendre('remplacer', null, { contenu, nom: 'export-site-2024.json' });
+    assert.equal(
+      reponse.statut,
+      200,
+      `Un export v6 réel doit être reprisable : ${JSON.stringify(reponse.corps).slice(0, 400)}`,
+    );
+
+    // Les six paliers ont bien été traversés — sinon on aurait éprouvé un v12 déguisé.
+    assert.equal(reponse.corps.rapport.version_origine, 6);
+    assert.equal(reponse.corps.rapport.version_cible, 12);
+    assert.equal(reponse.corps.rapport.paliers.length, 6, 'v6 → v12, c’est six paliers.');
+
+    // Et tout est arrivé : le compte des créations doit égaler celui du fichier.
+    const crees = Object.values(reponse.corps.bilan.crees).reduce((s, n) => s + n, 0);
+    assert.equal(crees, enregistrements, 'Chaque enregistrement du fichier doit avoir atterri.');
+  });
+
+  test('les identifiants SANS suffixe aléatoire sont rendus tels quels', async () => {
+    // La convention d'avant le chantier 9 : `RISK-1699123456789`, sans aléa. Le
+    // domaine `id_metier` les accepte, et c'est la route de reprise — seule — qui
+    // préserve encore l'identifiant du fichier depuis le constat M-3. Si elle les
+    // réécrivait, réimporter un export ne serait plus un round-trip mais une copie.
+    const ancien = exportAncienVolumineux({ parCollection: 8, base: 1_699_500_000_000 });
+    await reprendre('remplacer', null, {
+      contenu: JSON.stringify(enveloppe(6, ancien)),
+      nom: 'export-identifiants.json',
+    });
+
+    const attendus = ancien.risques.map((r) => r.id).sort();
+    assert.match(attendus[0], /^RISK-\d+$/, 'Le jeu doit bien porter des identifiants sans aléa.');
+    assert.deepEqual(await identifiants('risques'), attendus);
+  });
+
+  test('les paliers ont VRAIMENT converti : le MCO et les évaluations sont au format d’aujourd’hui', async () => {
+    // Contrôle de matière du test précédent : « 200 » ne dit pas que la migration a
+    // fait quelque chose. On vérifie les deux conversions que ce fichier impose —
+    // celles qui, mal faites, feraient perdre du sens sans faire échouer la reprise.
+    const ancien = exportAncienVolumineux({ parCollection: 6, base: 1_699_900_000_000 });
+    const reponse = await reprendre('remplacer', null, {
+      contenu: JSON.stringify(enveloppe(6, ancien)),
+      nom: 'export-paliers.json',
+    });
+    assert.equal(reponse.statut, 200, JSON.stringify(reponse.corps).slice(0, 300));
+
+    const jeu = (await serveur.appeler('GET', '/api/donnees')).corps.data;
+
+    // v9 → v10 : { etat, date, notes } devient un suivi d'action planifiée.
+    const mco = jeu.mco_actions[0];
+    assert.ok(mco, 'Le MCO doit avoir été repris.');
+    assert.equal(Object.hasOwn(mco, 'etat'), false, 'L’ancien champ ne doit plus exister.');
+    assert.ok(
+      ['À planifier', 'En cours', 'Réalisée', 'Annulée'].includes(mco.statut),
+      `Statut converti attendu, vu « ${String(mco.statut)} ».`,
+    );
+
+    // v11 → v12 : « mesure_id » unique devient « mesure_ids[] ».
+    const evaluation = jeu.evaluations.find((e) => (e.mesure_ids ?? []).length > 0);
+    assert.ok(evaluation, 'Le lien exigence → mesure doit avoir survécu au palier v12.');
+    assert.equal(Object.hasOwn(evaluation, 'mesure_id'), false);
+
+    // Et rien n'a été inventé : un export v6 ne porte ni correspondances, ni
+    // historique, ni annuaire.
+    for (const absente of ['mappings', 'history', 'personnes']) {
+      assert.deepEqual(jeu[absente], [], `« ${absente} » n’existait pas en v6 : rien ne doit l’inventer.`);
+    }
+  });
+
+  test('un vieil export FAUTIF ne laisse rien à moitié repris', async () => {
+    // Le tout-ou-rien, sur le rayon le plus large que le lot connaisse : 240
+    // enregistrements valides, une valeur refusée à la fin. Sans transaction unique,
+    // la filiale serait vidée puis à moitié remplie.
+    const avant = await identifiants('risques');
+    const ancien = exportAncienVolumineux({ parCollection: 30, base: 1_698_000_000_000 });
+    ancien.incidents[ancien.incidents.length - 1].gravite = 'catastrophique';
+
+    const reponse = await reprendre('remplacer', null, {
+      contenu: JSON.stringify(enveloppe(6, ancien)),
+      nom: 'export-fautif.json',
+    });
+    assert.notEqual(reponse.statut, 200, 'La reprise devait être refusée.');
+    assert.deepEqual(
+      await identifiants('risques'),
+      avant,
+      'Le jeu de données doit être exactement celui d’avant : ni purgé, ni à moitié rempli.',
+    );
   });
 });

@@ -18,7 +18,7 @@ const BiaModule = (() => {
 
             return `
             <tr class="clickable-row" data-id="${p.id}">
-                <td style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
+                <td class="stop-row-click" style="text-align: center; width: 40px;">
                     <input type="checkbox" class="row-cb" data-id="${p.id}">
                 </td>
                 <td><strong>${escapeHtml(p.nom)}</strong></td>
@@ -76,6 +76,12 @@ const BiaModule = (() => {
         document.getElementById("addProcessusBtn").onclick = renderCreate;
 
         // Sélection multiple + suppression groupée (helper partagé, cf. js/core/ui.js).
+        // La case à cocher (et le lien courriel) ne doivent pas ouvrir la fiche :
+        // conversion de l'ancien attribut `onclick="event.stopPropagation()"`, que la
+        // politique de sécurité de contenu de production refuse.
+        document.querySelectorAll(".stop-row-click").forEach(el =>
+            el.addEventListener("click", (e) => e.stopPropagation()));
+
         UI.wireBulkDelete({
             remove: (id) => DataStore.deleteProcessus(id),
             confirm: (n) => `Confirmer la suppression de ${n} processus ?`,
@@ -185,7 +191,8 @@ const BiaModule = (() => {
         const app = document.getElementById("app");
 
         if (!processus) {
-            app.innerHTML = `<section class="page"><h1>Erreur</h1><p>Processus introuvable.</p><button onclick="Router.navigateTo('/bia')">Retour</button></section>`;
+            app.innerHTML = `<section class="page"><h1>Erreur</h1><p>Processus introuvable.</p><button type="button" id="backBtn">Retour</button></section>`;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/bia"));
             return;
         }
 

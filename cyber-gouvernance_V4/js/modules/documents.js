@@ -125,7 +125,8 @@ const DocumentsModule = (() => {
         const app = document.getElementById("app");
         const doc = DataStore.getDocumentById(id);
         if (!doc) {
-            app.innerHTML = `<section class="page"><h1>Document introuvable</h1><button onclick="Router.navigateTo('/documents')">Retour</button></section>`;
+            app.innerHTML = `<section class="page"><h1>Document introuvable</h1><button type="button" id="backBtn">Retour</button></section>`;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/documents"));
             return;
         }
         const r = revueState(doc.date_revue);

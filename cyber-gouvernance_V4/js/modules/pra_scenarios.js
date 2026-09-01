@@ -175,7 +175,7 @@ const PraScenariosModule = (() => {
                 <div id="raci-modal" class="raci-modal-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:white; z-index:2000; overflow-y:auto; padding:40px;">
                     <div class="no-print" style="display:flex; justify-content:space-between; margin-bottom:30px; max-width: 1300px; margin: 0 auto 30px auto; border-bottom: 2px solid #e6e9ef; padding-bottom: 15px;">
                         <button id="closeRaciBtn" style="background:#676879; padding:10px 20px; font-size:1rem;">Retour au Scénario</button>
-                        <button onclick="window.print()" style="background:#0073ea; padding:10px 20px; font-size:1rem;">Imprimer la Matrice RACI</button>
+                        <button type="button" id="printRaciBtn" style="background:#0073ea; padding:10px 20px; font-size:1rem;">Imprimer la Matrice RACI</button>
                     </div>
                     <div id="raci-content" style="max-width: 1300px; margin: 0 auto;"></div>
                 </div>
@@ -189,6 +189,7 @@ const PraScenariosModule = (() => {
         document.getElementById("addStepPra").onclick = () => openStepEditor(null, 'pra');
         if (isEdit) document.getElementById("showRaciBtn").onclick = renderRaciMatrix;
 
+        document.getElementById("printRaciBtn").addEventListener("click", () => window.print());
         document.getElementById("closeRaciBtn").onclick = () => {
             document.body.classList.remove("printing-raci");
             document.getElementById("raci-modal").style.display = "none";
@@ -295,14 +296,14 @@ const PraScenariosModule = (() => {
 
         const renderItems = (steps, type) => {
             return steps.map((s, idx) => `
-                <div class="step-row" style="display:flex; align-items:center; justify-content:space-between; padding:12px; border:1px solid #eee; margin-bottom:8px; border-radius:4px; background:#fff; cursor:pointer;" onclick="PraScenariosModule.openStepEditor(${idx}, '${type}')">
+                <div class="step-row" style="display:flex; align-items:center; justify-content:space-between; padding:12px; border:1px solid #eee; margin-bottom:8px; border-radius:4px; background:#fff; cursor:pointer;" data-step-idx="${idx}" data-step-type="${escapeHtml(type)}">
                     <div style="flex:1;">
                         <div style="font-weight:bold; font-size:0.95rem;">${escapeHtml(s.titre) || 'Nouvelle étape'}</div>
                         <div style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">R: ${escapeHtml(s.realisateur) || '-'} | A: ${escapeHtml(s.responsable) || '-'} | ${escapeHtml(s.duree || 0)} min</div>
                     </div>
                     <div style="display:flex; gap:12px; align-items:center;">
                          <span class="status" style="font-size:0.7rem; padding:3px 8px; background:#f1f3f5;">${escapeHtml(s.statut)}</span>
-                         <button style="background:none; color:var(--color-danger); border:none; font-size:1.1rem; padding:5px;" onclick="event.stopPropagation(); PraScenariosModule.deleteStep(${idx}, '${type}')"></button>
+                         <button type="button" class="step-del" style="background:none; color:var(--color-danger); border:none; font-size:1.1rem; padding:5px;" title="Supprimer l'étape" aria-label="Supprimer l'étape"></button>
                     </div>
                 </div>
             `).join("") || `<p style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:15px; background:#f9f9f9;">Aucune étape.</p>`;
@@ -310,6 +311,19 @@ const PraScenariosModule = (() => {
 
         pcaCont.innerHTML = renderItems(editingScenario.etapes_pca, 'pca');
         praCont.innerHTML = renderItems(editingScenario.etapes_pra, 'pra');
+
+        // Ouverture / suppression d'une étape : rebranchées à chaque rafraîchissement
+        // (les deux listes sont réécrites en entier). L'indice et le type voyagent
+        // en `data-`, jamais dans un attribut de gestionnaire.
+        [pcaCont, praCont].forEach(cont => {
+            cont.querySelectorAll(".step-row").forEach(row => {
+                const idx = Number(row.dataset.stepIdx);
+                const type = row.dataset.stepType;
+                row.addEventListener("click", () => openStepEditor(idx, type));
+                const del = row.querySelector(".step-del");
+                if (del) del.addEventListener("click", (e) => { e.stopPropagation(); deleteStep(idx, type); });
+            });
+        });
 
         let totalMins = 0;
         editingScenario.etapes_pra.forEach(st => totalMins += (parseInt(st.duree) || 0));

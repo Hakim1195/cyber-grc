@@ -186,7 +186,8 @@ const ActifsModule = (() => {
         const app = document.getElementById("app");
 
         if (!actif) {
-            app.innerHTML = `<section class="page"><h1>Erreur</h1><p>Actif introuvable.</p><button onclick="Router.navigateTo('/actifs')">Retour</button></section>`;
+            app.innerHTML = `<section class="page"><h1>Erreur</h1><p>Actif introuvable.</p><button type="button" id="backBtn">Retour</button></section>`;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/actifs"));
             return;
         }
 

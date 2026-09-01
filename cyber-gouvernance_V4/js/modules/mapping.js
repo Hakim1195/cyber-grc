@@ -28,6 +28,25 @@ const MappingModule = (() => {
     // État d'édition : null (fermé) | "__new__" (création) | <id> (modification).
     let editing = null;
 
+    /* =========================
+       QUI PEUT ÉDITER LE CATALOGUE
+       Les correspondances sont une table de configuration de **niveau Groupe** :
+       elles n'ont pas de `filiale_id`, elles sont les mêmes pour les vingt filiales,
+       et le serveur refuse leur écriture (403 « refus_perimetre ») à toute session
+       qui ne déclare pas l'administration Groupe. L'écran doit le dire, plutôt que
+       d'offrir un geste qui échouera. La LECTURE, elle, reste ouverte à tous : le
+       module garde tout son sens en consultation, et la propagation vers les
+       évaluations et les mesures — qui, elles, sont de niveau filiale — continue de
+       fonctionner normalement.
+       Repli fermé : sans session résolue, on n'affiche pas les commandes d'écriture.
+    ========================== */
+    function peutEditerCatalogue() {
+        try {
+            const s = (typeof Session !== "undefined" && Session.courante) ? Session.courante() : null;
+            return !!(s && s.administrationGroupe);
+        } catch (e) { return false; }
+    }
+
     // Libellés courts pour les étiquettes de colonnes (les `editeur` de NIS2/DORA
     // sont des références réglementaires trop longues à afficher).
     const SHORT_LABELS = {
@@ -226,10 +245,10 @@ const MappingModule = (() => {
             <div class="map-refs">${rows}</div>
             <div class="map-group__foot">
                 <span class="map-cover">${stats.pairs} exigence(s) · ${stats.evaluated} évaluée(s) · ${stats.conforme} conforme(s)${mesureInfo}</span>
-                <div class="map-actions">
+                ${peutEditerCatalogue() ? `<div class="map-actions">
                     <button type="button" class="map-edit" data-id="${esc(g.id)}">Modifier</button>
                     <button type="button" class="map-del" data-id="${esc(g.id)}" title="${esc(delTitle)}">${delLabel}</button>
-                </div>
+                </div>` : ""}
             </div>
             ${propagatePanel(g, stats)}
         </div>`;
@@ -275,6 +294,8 @@ const MappingModule = (() => {
 
     function render() {
         const app = document.getElementById("app");
+        const editable = peutEditerCatalogue();
+        if (!editable) editing = null;   // aucun éditeur ouvert sans le droit d'écrire
         const effective = effectiveMappings();
         const hidden = countHidden();
         const userLayer = (DataStore.getMappings ? DataStore.getMappings() : []) || [];
@@ -288,7 +309,9 @@ const MappingModule = (() => {
 
         const cards = effective.length
             ? effective.map(groupCard).join("")
-            : `<div class="empty-state"><h3>Aucune correspondance</h3><p>Le catalogue est vide. <a href="#" id="map-restore" style="color:var(--accent);">Réinitialiser</a> pour restaurer les correspondances par défaut, ou créez-en une.</p></div>`;
+            : (peutEditerCatalogue()
+                ? `<div class="empty-state"><h3>Aucune correspondance</h3><p>Le catalogue est vide. <a href="#" id="map-restore" style="color:var(--accent);">Réinitialiser</a> pour restaurer les correspondances par défaut, ou créez-en une.</p></div>`
+                : `<div class="empty-state"><h3>Aucune correspondance</h3><p>Le catalogue commun du Groupe est vide. Sa constitution relève de l'administration Groupe.</p></div>`);
 
         app.innerHTML = `
             <section class="page">
@@ -299,26 +322,29 @@ const MappingModule = (() => {
                     </div>
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                         <a href="#/couverture" class="btn-secondary">Couverture croisée →</a>
-                        <button type="button" id="map-new" style="background:var(--primary);">＋ Nouvelle correspondance</button>
+                        ${editable ? `<button type="button" id="map-new" style="background:var(--primary);">＋ Nouvelle correspondance</button>` : ""}
                     </div>
                 </div>
 
                 <div class="synthese-message info" style="padding:10px; font-size:0.9rem;">
-                    Correspondances <strong>indicatives</strong> (reformulations maison) : elles n'engagent pas les éditeurs des normes. Utilisez-les pour <strong>accélérer la saisie</strong> et repérer les recouvrements, puis affinez selon votre contexte. Vous pouvez tout modifier.
+                    Correspondances <strong>indicatives</strong> (reformulations maison) : elles n'engagent pas les éditeurs des normes. Utilisez-les pour <strong>accélérer la saisie</strong> et repérer les recouvrements, puis affinez selon votre contexte.${editable ? " Vous pouvez tout modifier." : ""}
                 </div>
+                ${editable ? "" : `<div class="synthese-message warning no-print" style="padding:10px; font-size:0.9rem;">
+                    <strong>Catalogue commun au Groupe — consultation.</strong> Ces correspondances sont le socle partagé par toutes les filiales : elles sont définies une fois pour toutes, et leur modification relève de l'<strong>administration Groupe</strong>. Vous pouvez les consulter et vous en servir pour propager une mesure ou un statut sur vos propres exigences ; leur création, leur modification et leur masquage se demandent au RSSI Groupe.
+                </div>`}
 
                 <div class="dashboard-card" style="margin-bottom:1.2rem;">
                     <div class="map-cov-head">
                         <h3 style="margin:0;">Cartographie des référentiels ${Help.tip("Part des exigences de chaque référentiel citées dans au moins une correspondance. Plus c'est haut, plus le référentiel est relié aux autres.")}</h3>
                         <div class="map-toolbar">
                             ${(userLayer.length) ? `<span class="map-hidden-note">${hidden ? hidden + " du catalogue masquée(s) · " : ""}surcouche active</span>` : ""}
-                            <button type="button" id="map-reset" class="btn-secondary"${userLayer.length ? "" : " disabled"} title="Restaurer le catalogue par défaut (retire vos ajouts, modifications et masquages)">Réinitialiser</button>
+                            ${editable ? `<button type="button" id="map-reset" class="btn-secondary"${userLayer.length ? "" : " disabled"} title="Restaurer le catalogue par défaut (retire vos ajouts, modifications et masquages)">Réinitialiser</button>` : ""}
                         </div>
                     </div>
                     <div class="map-cov-chips">${coverageChips}</div>
                 </div>
 
-                ${editing ? editorHtml(editing === "__new__" ? null : effective.find(x => x.id === editing)) : ""}
+                ${editing && editable ? editorHtml(editing === "__new__" ? null : effective.find(x => x.id === editing)) : ""}
 
                 <div id="map-list" class="map-list">${cards}</div>
             </section>`;
@@ -383,6 +409,7 @@ const MappingModule = (() => {
     function groupById(id) { return effectiveMappings().find(g => g.id === id) || null; }
 
     function saveEditor() {
+        if (!peutEditerCatalogue()) return;   // le serveur refuserait : ne rien tenter
         const themeEl = document.getElementById("map-edit-theme");
         const aideEl = document.getElementById("map-edit-aide");
         const theme = themeEl ? themeEl.value.trim() : "";
@@ -407,6 +434,7 @@ const MappingModule = (() => {
     }
 
     function deleteGroup(id) {
+        if (!peutEditerCatalogue()) return;   // le serveur refuserait : ne rien tenter
         const g = groupById(id);
         if (!g) return;
         const isCatalog = (typeof MappingCatalog !== "undefined") && MappingCatalog.has(id);

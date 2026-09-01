@@ -14,11 +14,12 @@ document.addEventListener("DOMContentLoaded", () => {
 async function startApp() {
 
     /* =========================
-       SÉLECTEUR DE CONTEXTE (CLIENT)
+       SÉLECTEUR DE DONNEUR D'ORDRE
+       Le périmètre de SÉCURITÉ vient du serveur (`Session` / `/api/session`) et n'est
+       ni choisi ni mémorisé par le navigateur (contrôle S2). Ce sélecteur-ci n'est pas
+       un périmètre : c'est un filtre de confort « donneur d'ordre », qui vit désormais
+       en mémoire — plus rien n'écrit `cyber-context` dans le localStorage.
     ========================== */
-    if (!localStorage.getItem("cyber-context")) {
-        localStorage.setItem("cyber-context", "global");
-    }
     renderContextSelector();
 
     /* =========================
@@ -197,7 +198,7 @@ const ROUTE_META = {
     "/mco":          { s: "Continuité", t: "Actions Préalables (MCO)" },
     "/tests":        { s: "Continuité", t: "Historique des Tests" },
     "/prestataires": { s: "Continuité", t: "Prestataires & Tiers" },
-    "/settings":     { s: "Administration", t: "Paramètres & Sauvegardes" }
+    "/settings":     { s: "Administration", t: "Paramètres & données" }
 };
 
 window.renderBreadcrumb = function(route) {
@@ -212,6 +213,21 @@ window.renderBreadcrumb = function(route) {
 };
 
 /* =========================
+   FILTRE « DONNEUR D'ORDRE » — EN MÉMOIRE, JAMAIS DANS LE STOCKAGE
+   Remplace l'ancienne clé `cyber-context` du localStorage. Elle ne portait pas un
+   périmètre de sécurité (celui-ci vient du serveur, cf. `js/core/session.js`), mais
+   elle en avait l'apparence, et elle survivait d'une session à l'autre.
+   Valeur : "global" (interne + tous donneurs d'ordre) ou un identifiant de client.
+========================= */
+window.FiltreDonneurOrdre = (function () {
+    let actif = "global";
+    return {
+        get() { return actif || "global"; },
+        set(valeur) { actif = valeur || "global"; }
+    };
+})();
+
+/* =========================
    GESTION DU SÉLECTEUR DE CLIENT
 ========================= */
 window.renderContextSelector = function() {
@@ -222,7 +238,7 @@ window.renderContextSelector = function() {
     if (existing) existing.remove();
 
     const clients = DataStore.getClients();
-    const currentContext = localStorage.getItem("cyber-context");
+    const currentContext = FiltreDonneurOrdre.get();
 
     const container = document.createElement("div");
     container.id = "context-selector-container";
@@ -242,7 +258,7 @@ window.renderContextSelector = function() {
     sidebarHeader.appendChild(container);
 
     document.getElementById("context-selector").addEventListener("change", (e) => {
-        localStorage.setItem("cyber-context", e.target.value);
+        FiltreDonneurOrdre.set(e.target.value);
         if (window.showToast) window.showToast("Périmètre de travail mis à jour.", "info");
         Router.navigateTo(location.hash.replace(/^#/, ""), false);
     });

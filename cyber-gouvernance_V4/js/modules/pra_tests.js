@@ -24,7 +24,7 @@ const PraTestsModule = (() => {
 
         const rows = tests.map(t => `
             <tr class="clickable-row" data-id="${t.id}">
-                <td style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
+                <td class="stop-row-click" style="text-align: center; width: 40px;">
                     <input type="checkbox" class="row-cb" data-id="${t.id}">
                 </td>
                 <td>${t.date ? new Date(t.date).toLocaleDateString('fr-FR') : "Non définie"}</td>
@@ -89,6 +89,12 @@ const PraTestsModule = (() => {
         }
 
         // Sélection multiple + suppression groupée (helper partagé, cf. js/core/ui.js).
+        // La case à cocher (et le lien courriel) ne doivent pas ouvrir la fiche :
+        // conversion de l'ancien attribut `onclick="event.stopPropagation()"`, que la
+        // politique de sécurité de contenu de production refuse.
+        document.querySelectorAll(".stop-row-click").forEach(el =>
+            el.addEventListener("click", (e) => e.stopPropagation()));
+
         UI.wireBulkDelete({
             remove: (id) => DataStore.deleteTestPra(id),
             confirm: (n) => `Confirmer la suppression de ${n} test(s) de l'historique ?`,
@@ -115,9 +121,10 @@ const PraTestsModule = (() => {
                     <div class="synthese-message warning">
                         Vous devez d'abord créer au moins un "Playbook PCA/PRA" avant de pouvoir historiser un test.
                     </div>
-                    <button onclick="Router.navigateTo('/tests')" style="margin-top: 20px;">Retour</button>
+                    <button type="button" id="backBtn" style="margin-top: 20px;">Retour</button>
                 </section>
             `;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/tests"));
             return;
         }
 

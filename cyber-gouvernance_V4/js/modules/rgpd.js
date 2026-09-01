@@ -107,7 +107,8 @@ const RgpdModule = (() => {
         const app = document.getElementById("app");
         const t = DataStore.getTraitementById(id);
         if (!t) {
-            app.innerHTML = `<section class="page"><h1>Traitement introuvable</h1><button onclick="Router.navigateTo('/rgpd')">Retour</button></section>`;
+            app.innerHTML = `<section class="page"><h1>Traitement introuvable</h1><button type="button" id="backBtn">Retour</button></section>`;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/rgpd"));
             return;
         }
         app.innerHTML = `

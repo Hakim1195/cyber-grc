@@ -237,7 +237,8 @@ const MesuresModule = (() => {
         const app = document.getElementById("app");
         const m = DataStore.getMesureById(id);
         if (!m) {
-            app.innerHTML = `<section class="page"><h1>Mesure introuvable</h1><p>Cette mesure n'existe pas ou a été supprimée.</p><button onclick="Router.navigateTo('/mesures')">Retour</button></section>`;
+            app.innerHTML = `<section class="page"><h1>Mesure introuvable</h1><p>Cette mesure n'existe pas ou a été supprimée.</p><button type="button" id="backBtn">Retour</button></section>`;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/mesures"));
             return;
         }
 

@@ -35,7 +35,7 @@ const RisquesModule = (() => {
             const scoreRes = r.score_residuel || 0;
             return `
             <tr class="clickable-row" data-id="${r.id}">
-                <td style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
+                <td class="stop-row-click" style="text-align: center; width: 40px;">
                     <input type="checkbox" class="row-cb" data-id="${r.id}">
                 </td>
                 <td><strong>${escapeHtml(r.nom) || "Sans nom"}</strong></td>
@@ -108,6 +108,12 @@ const RisquesModule = (() => {
         }
 
         // Sélection multiple + suppression groupée (helper partagé, cf. js/core/ui.js).
+        // La case à cocher (et le lien courriel) ne doivent pas ouvrir la fiche :
+        // conversion de l'ancien attribut `onclick="event.stopPropagation()"`, que la
+        // politique de sécurité de contenu de production refuse.
+        document.querySelectorAll(".stop-row-click").forEach(el =>
+            el.addEventListener("click", (e) => e.stopPropagation()));
+
         UI.wireBulkDelete({
             remove: (id) => DataStore.deleteRisque(id),
             confirm: (n) => `Confirmer la suppression définitive de ${n} risque(s) ?`,

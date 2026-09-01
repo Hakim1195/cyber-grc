@@ -278,7 +278,7 @@ const DashboardModule = (() => {
     ========================== */
     function render() {
         const app = document.getElementById("app");
-        const currentClient = localStorage.getItem("cyber-context") || "global";
+        const currentClient = window.FiltreDonneurOrdre ? FiltreDonneurOrdre.get() : "global";   // filtre en mémoire (app.js), plus dans le localStorage
 
         // Données (exigences + actions filtrées par périmètre ; le reste = posture globale).
         const exigences = DataStore.getExigencesByClient(currentClient);

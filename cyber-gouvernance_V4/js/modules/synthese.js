@@ -190,7 +190,7 @@ const SyntheseModule = (() => {
        incidents, dispositif & référentiels reflètent la posture GLOBALE (comme le dashboard).
        ========================================================================= */
     function computeModel() {
-        const currentClient = localStorage.getItem("cyber-context") || "global";
+        const currentClient = window.FiltreDonneurOrdre ? FiltreDonneurOrdre.get() : "global";   // filtre en mémoire (app.js), plus dans le localStorage
         const clients = DataStore.getClients();
 
         // -- Conformité (périmètre) --

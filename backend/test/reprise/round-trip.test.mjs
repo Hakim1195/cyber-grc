@@ -79,12 +79,24 @@ test('les clés étrangères implicites continuent de pointer après reprise', (
   const resultat = reprendreExport(fichier(12, instantaneV12Complet()), OPTIONS_FIGEES);
   const { charge } = resultat;
 
-  const action = charge.actions[0];
-  assert.equal(action.exigence_id, charge.exigences[0].id);
-  assert.equal(action.risque_id, charge.risques[0].id);
-  assert.equal(action.evaluation_id, charge.evaluations[0].id);
-  assert.equal(action.incident_id, charge.incidents[0].id);
-  assert.equal(action.mesure_id, charge.mesures[0].id);
+  // Les cinq rattachements possibles d'une action, un par action : le modèle
+  // n'admet qu'un seul parent par action (`ck_actions_rattachement`), et le jeu
+  // d'essai a été corrigé pour le respecter — il portait auparavant une action
+  // rattachée aux cinq à la fois, que PostgreSQL refuse. Ce test vérifie donc que
+  // CHAQUE référence traverse la reprise, sans exiger qu'elles cohabitent.
+  const parChamp = (champ) => charge.actions.find((a) => a[champ] !== undefined);
+  assert.equal(parChamp('exigence_id').exigence_id, charge.exigences[0].id);
+  assert.equal(parChamp('risque_id').risque_id, charge.risques[0].id);
+  assert.equal(parChamp('evaluation_id').evaluation_id, charge.evaluations[0].id);
+  assert.equal(parChamp('incident_id').incident_id, charge.incidents[0].id);
+  assert.equal(parChamp('mesure_id').mesure_id, charge.mesures[0].id);
+  // Et aucune action n'en porte deux : c'est la règle, et elle se vérifie ici
+  // plutôt que d'attendre le refus de la base.
+  for (const action of charge.actions) {
+    const parents = ['exigence_id', 'risque_id', 'evaluation_id', 'incident_id', 'mesure_id']
+      .filter((champ) => typeof action[champ] === 'string' && action[champ] !== '');
+    assert.ok(parents.length <= 1, `L’action ${action.id} porte ${parents.join(' + ')}.`);
+  }
 
   assert.equal(charge.exigences[0].client_id, charge.clients[0].id);
   assert.equal(charge.tests_pra[0].scenario_id, charge.scenarios_pra[0].id);
@@ -106,9 +118,10 @@ test('les volumes du rapport recensent les 21 collections', () => {
   assert.equal(volumes.actifs, 2);
   assert.equal(volumes.clients, 1);
   assert.equal(volumes.mesures, 1);
+  assert.equal(volumes.actions, 5, 'Cinq actions, une par rattachement possible.');
   const total = Object.values(volumes).reduce((somme, n) => somme + n, 0);
-  assert.equal(total, 22);
-  assert.match(resultat.message, /22 enregistrement\(s\)/);
+  assert.equal(total, 26);
+  assert.match(resultat.message, /26 enregistrement\(s\)/);
 });
 
 test('un identifiant ancien — sans suffixe aléatoire, sans préfixe — passe et n’est pas réécrit', () => {

@@ -7,7 +7,7 @@ const ActionsModule = (() => {
        LISTE DES ACTIONS (FILTRÉE)
     ========================== */
     function renderList() {
-        const currentClient = localStorage.getItem("cyber-context") || "global";
+        const currentClient = window.FiltreDonneurOrdre ? FiltreDonneurOrdre.get() : "global";   // filtre en mémoire (app.js), plus dans le localStorage
         const exigencesClient = DataStore.getExigencesByClient(currentClient);
         const toutesExigences = DataStore.getExigences();
         const toutesActions = DataStore.getActions();
@@ -79,7 +79,7 @@ const ActionsModule = (() => {
 
             return `
                 <tr class="clickable-row" data-id="${a.id}">
-                    <td style="text-align: center; width: 40px;" onclick="event.stopPropagation();">
+                    <td class="stop-row-click" style="text-align: center; width: 40px;">
                         <input type="checkbox" class="row-cb" data-id="${a.id}">
                     </td>
                     <td><strong>${a.titre}</strong></td>
@@ -130,6 +130,12 @@ const ActionsModule = (() => {
         `;
 
         // Sélection multiple + suppression groupée (helper partagé, cf. js/core/ui.js).
+        // La case à cocher (et le lien courriel) ne doivent pas ouvrir la fiche :
+        // conversion de l'ancien attribut `onclick="event.stopPropagation()"`, que la
+        // politique de sécurité de contenu de production refuse.
+        document.querySelectorAll(".stop-row-click").forEach(el =>
+            el.addEventListener("click", (e) => e.stopPropagation()));
+
         UI.wireBulkDelete({
             remove: (id) => DataStore.deleteAction(id),
             confirm: (n) => `Confirmer la suppression définitive de ${n} action(s) ?`,
@@ -157,8 +163,9 @@ const ActionsModule = (() => {
                 <section class="page">
                     <h1>Erreur</h1>
                     <p>L'action demandée est introuvable.</p>
-                    <button onclick="Router.navigateTo('/actions')">Retour</button>
+                    <button type="button" id="backBtn">Retour</button>
                 </section>`;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/actions"));
             return;
         }
 

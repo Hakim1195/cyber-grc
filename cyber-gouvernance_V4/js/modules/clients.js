@@ -122,8 +122,9 @@ const ClientsModule = (() => {
                 <section class="page">
                     <h1>Erreur</h1>
                     <p>Le client demandé est introuvable.</p>
-                    <button onclick="Router.navigateTo('/clients')">Retour</button>
+                    <button type="button" id="backBtn">Retour</button>
                 </section>`;
+            document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/clients"));
             return;
         }
 
@@ -156,13 +157,15 @@ const ClientsModule = (() => {
                         <div class="synthese-message info">
                             <strong>${exigences.length}</strong> exigence(s) rattachée(s) à ce client.
                         </div>
-                        <button onclick="Router.navigateTo('/exigences')" style="width: 100%; margin-top: 15px; background: white; color: var(--primary); border: 1px solid var(--border);">
+                        <button type="button" id="voirExigencesBtn" style="width: 100%; margin-top: 15px; background: white; color: var(--primary); border: 1px solid var(--border);">
                             Voir les exigences
                         </button>
                     </div>
                 </div>
             </section>
         `;
+
+        document.getElementById("voirExigencesBtn").addEventListener("click", () => Router.navigateTo("/exigences"));
 
         /* ===== Mettre à jour ===== */
         document.getElementById("saveBtn").onclick = () => {
