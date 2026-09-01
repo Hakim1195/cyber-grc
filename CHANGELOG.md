@@ -348,9 +348,9 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 - **Ce qui n'est PAS livré à la clôture de cette vague, et doit être dit** : aucune API,
   aucune authentification, aucun droit appliqué — le serveur n'expose alors que son point de
   santé, et la bascule de la persistance de la SPA n'est pas commencée. *(L'API et la bascule
-  sont livrées par la vague 2, ci-dessus ; l'authentification reste le lot L3.)* **Rien n'a pu
-  être éprouvé** en
-  conditions réelles pour l'installation Debian 13, Apache, ClamAV, l'Active Directory ni le
+  sont livrées par la vague 2, ci-dessus ; l'authentification reste le lot L3.)* **Rien n'a
+  pu être éprouvé** en conditions réelles pour l'installation Debian 13, Apache, ClamAV,
+  l'Active Directory ni le
   relais SMTP : ces environnements n'existent pas sur la machine de développement. Les
   vérifications ci-dessus ont été menées sur **PostgreSQL 16.13** alors que la cible est
   **PostgreSQL 17**.
