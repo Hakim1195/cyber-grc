@@ -357,6 +357,13 @@ Ce que trois passages ont appris, et qui vaut pour toutes les portes à venir :
   Toutes les familles d'assertion négative ne sont pas concernées : « la filiale voisine n'est
   nommée nulle part » mord d'elle-même, puisque casser le cloisonnement fait *apparaître* la
   chaîne. Le piège est réservé aux **absences d'avertissement**.
+- **Le commit d'instantané n'est pas une formalité de fin de tour — c'est un filet.** Un agent a
+  détruit son propre travail non commité par un `git checkout` réflexe, après l'échec d'un script
+  qui n'avait pourtant rien écrit. Deux blocs voisins ont survécu **parce qu'ils avaient été
+  commités** ; le troisième a été perdu et réécrit. Dans un dépôt où plusieurs sessions
+  travaillent, un instantané vert et honnêtement titré coûte une minute et rachète une heure.
+  Corollaire pour les agents : **`git checkout` sur un fichier suivi n'est jamais un réflexe**, et
+  l'échec d'un script d'édition n'est pas une preuve qu'il a écrit.
 - **La question utile n'est pas « est-ce que ça passe », c'est « qu'est-ce qui passerait aussi ».**
   Formulée par l'agent qui tient le banc, au terme d'une journée où le motif est apparu quatre fois
   sous quatre déguisements : un essai qui passait des options figées à une fonction **qui les
@@ -440,6 +447,7 @@ jamais seulement sur le correctif.
 | **Q-32** | **Q-23 fermé en apparence.** Détecteur neutralisé → **banc vert 43/43**, et aucune occurrence dans `test/` : les « deux silences vérifiés » du registre appartenaient à d'autres mécanismes. Pire — le compteur de session rend le détecteur **structurellement inerte** : l'auditeur n'a pas su fabriquer de collision sans le retirer | 🟠 majeur | agent **FRONT** (le mécanisme) · **OUTILLAGE** (l'essai) | immédiat | ◐ **le mécanisme est réparé, l'essai manque** — le détecteur n'était pas inerte, mais le compteur ne portait pas la garantie qu'on lui prêtait |
 | **Q-33** | **Trois remèdes antérieurs sans aucun essai** — recalage d'adresse (N-3), vidage (m-6), abandon avant transaction. Le premier affiche « Mesure introuvable » pour une fiche créée dix secondes plus tôt | 🔵 mineur | agent **OUTILLAGE** | avant le 7ᵉ passage |
 | **Q-34** | **Q-4, cinquième signalement.** `README` et `CHANGELOG` ignorent la migration `006` et les douze constats Q-15 → Q-28 ; « 5 migrations » quand le catalogue en porte **6** | 🔵 mineur | agent **DOC** | avant le 7ᵉ passage |
+| **Q-35** | **`install.sh` n'est joué par aucun essai du dépôt**, et huit mutations le prouvent — y compris la régression de Q-31 elle-même : *quelqu'un recommite un classeur sous `cyber-gouvernance_V4/`*. Chiffré par son auteur en trois niveaux : **niveau 1** (quelques dizaines de minutes, pur `node:test`, aucune dépendance) couvre l'essentiel du risque — le régresseur de Q-31, le motif du vhost joué sur 64 noms publiés plus douze contournements **et son contrôle symétrique**, l'égalité des deux listes blanches ; **niveau 2** (une à deux heures) porte ses treize cas au dépôt via trois marqueurs d'extraction ; **niveau 3** exige root, systemd, Apache et rsync — **ce n'est pas une lacune de banc mais une vérification de VM** | 🟠 majeur | agent **OUTILLAGE** (niveaux 1 et 2) · **VM cible** (niveau 3) | avant le 7ᵉ passage |
 
 **Arbitrage sur Q-6 (b) — rendu le 01/09/2026, et déjà dépassé par les faits.** La migration
 `005` §9 a posé les `comment on` le jour même : « la prochaine migration » s'est trouvée être
