@@ -1144,3 +1144,218 @@ describe('Un vieil export où DEUX entités partagent un identifiant', () => {
     );
   });
 });
+
+/* =====================================================================
+ *  §8 — Le geste de MASSE, recompté EN BASE (constat Q-13)
+ * =====================================================================
+ *
+ *  Le quatrième passage de la porte a trouvé, dans le générateur de la reprise,
+ *  la troisième réapparition du même défaut : mille valeurs d'aléa, et **un
+ *  identifiant engendré par mesure**. Mesuré sur 250 enregistrements dans la même
+ *  milliseconde : 231 identifiants distincts sur 250. Les conséquences n'étaient
+ *  pas celles qu'on attend d'un défaut d'aléa —
+ *
+ *   · un `400` qui reprochait au fichier un doublon que le SERVEUR venait de
+ *     fabriquer, ce qui envoie l'exploitant corriger un fichier sain ;
+ *   · un export ancien parfaitement légitime irreprenable une fois sur neuf.
+ *
+ *  Le correctif a été démontré par son auteur, sur ses propres scripts, hors
+ *  dépôt. Le banc, lui, ne recomptait **jamais en base après un geste de masse** :
+ *  ses reprises portent une poignée d'enregistrements, et une collision sur mille
+ *  valeurs ne s'y voit pas. C'est le trou que ce paragraphe ferme — et il le ferme
+ *  du seul côté qui compte, celui où les lignes atterrissent.
+ * ===================================================================== */
+
+describe('Une reprise de 250 mesures, recomptée en base', () => {
+  /** Le nombre du constat : 250 tirages dans la même milliseconde. */
+  const LOT = 250;
+
+  /** Ce que la base contient pour un marqueur donné, des DEUX côtés de l'entité scindée. */
+  async function comptesMesures(marqueur) {
+    const client = await base.connexion('app');
+    return base.avecPerimetre(client, lectureA, async (c) =>
+      (await c.query(
+        `select (select count(*)          from mesure_catalogue     where nom like $1)::int as catalogue,
+                (select count(distinct id) from mesure_catalogue     where nom like $1)::int as catalogue_distincts,
+                (select count(*)          from mesure_mise_en_oeuvre m
+                   where exists (select 1 from mesure_catalogue c
+                                  where c.id = m.mesure_id and c.nom like $1))::int          as mise_en_oeuvre,
+                (select count(distinct m.id) from mesure_mise_en_oeuvre m
+                   where exists (select 1 from mesure_catalogue c
+                                  where c.id = m.mesure_id and c.nom like $1))::int          as mise_en_oeuvre_distincts`,
+        [marqueur],
+      )).rows[0]);
+  }
+
+  /** Les identifiants du catalogue portant un marqueur, tels qu'ils sont en base. */
+  async function identifiantsMesures(marqueur) {
+    const client = await base.connexion('app');
+    const lignes = await base.avecPerimetre(client, lectureA, async (c) =>
+      (await c.query('select id from mesure_catalogue where nom like $1 order by id', [marqueur])).rows);
+    return lignes.map((l) => l.id);
+  }
+
+  test('250 mesures AVEC identifiant : 250 définitions et 250 mises en œuvre', async () => {
+    const mesures = Array.from({ length: LOT }, (_, i) => ({
+      id: `MESURE-1699000000000-${String(i)}`,
+      nom: `Contrôle de masse n° ${String(i)}`,
+      statut: 'conforme',
+      maturite: 3,
+    }));
+
+    const reponse = await reprendre('fusionner', instantane(12, { mesures }), { nom: 'masse-avec-id.json' });
+    assert.equal(reponse.statut, 200, JSON.stringify(reponse.corps).slice(0, 400));
+    assert.equal(reponse.corps.bilan.crees.mesures, LOT, 'Le bilan doit annoncer les 250.');
+
+    // ── Et la base doit les porter, des deux côtés de l'entité scindée ──────
+    const comptes = await comptesMesures('Contrôle de masse n° %');
+    assert.deepEqual(
+      comptes,
+      {
+        catalogue: LOT,
+        catalogue_distincts: LOT,
+        mise_en_oeuvre: LOT,
+        mise_en_oeuvre_distincts: LOT,
+      },
+      'Un bilan qui annonce 250 et une base qui en porte moins est exactement le défaut ' +
+        'du bloquant : l’import réussit, et il écrit faux.',
+    );
+
+    // Les identifiants du fichier restent les clés primaires (§2, round-trip exact).
+    assert.deepEqual(
+      await identifiantsMesures('Contrôle de masse n° %'),
+      mesures.map((m) => m.id).sort(),
+    );
+  });
+
+  test('250 mesures SANS identifiant : le serveur en engendre 250 DISTINCTS', async () => {
+    // ── Le chemin qui écrivait faux ─────────────────────────────────────────
+    //
+    // Un export ancien livre des enregistrements sans identifiant exploitable ; la
+    // reprise en fabrique un. C'est ici que mille valeurs d'aléa se voyaient — 231
+    // distincts sur 250 — et le symptôme n'était pas une ligne perdue en silence :
+    // c'était un `400` reprochant au fichier un doublon que le serveur venait
+    // d'inventer. L'exploitant partait corriger un fichier sain.
+    const mesures = Array.from({ length: LOT }, (_, i) => ({
+      nom: `Contrôle anonyme n° ${String(i)}`,
+      statut: 'partiellement conforme',
+      maturite: 2,
+    }));
+    const contenu = fichier(12, instantane(12, { mesures }));
+
+    const reponse = await reprendre('fusionner', null, { contenu, nom: 'masse-sans-id.json' });
+    assert.equal(
+      reponse.statut,
+      200,
+      `Un fichier sain doit être repris : ${JSON.stringify(reponse.corps).slice(0, 400)}`,
+    );
+    assert.equal(
+      /doublon|deux fois/i.test(JSON.stringify(reponse.corps)),
+      false,
+      'Aucun doublon ne doit être reproché à un fichier qui n’en porte pas.',
+    );
+
+    const comptes = await comptesMesures('Contrôle anonyme n° %');
+    assert.deepEqual(comptes, {
+      catalogue: LOT,
+      catalogue_distincts: LOT,
+      mise_en_oeuvre: LOT,
+      mise_en_oeuvre_distincts: LOT,
+    });
+
+    // Chaque identifiant engendré s'annonce comme tel : la marque « -d- » du §2 dit
+    // « le fichier n'apportait pas d'identifiant », et se distingue du « -r- » des
+    // ré-émissions. C'est une propriété — la provenance —, pas un encodage.
+    const engendres = await identifiantsMesures('Contrôle anonyme n° %');
+    const horsConvention = engendres.filter((id) => !id.startsWith('MESURE-d-') || id.length > 64);
+    assert.deepEqual(horsConvention, [], 'Identifiants engendrés hors convention du §2.');
+  });
+
+  test('deux enregistrements RIGOUREUSEMENT identiques reçoivent deux identifiants', async () => {
+    // ── Ce que le RANG garantit, et que le contenu ne garantit pas ───────────
+    //
+    // La dérivation prend `(collection, rang, contenu)`. Le contenu sert la
+    // convergence — un fichier rejoué retombe sur ses identifiants ; c'est le RANG
+    // qui assure l'unicité DANS le fichier. Sans lui, deux lignes rigoureusement
+    // identiques se dériveraient au même identifiant : la seconde écraserait la
+    // première, ou la clé primaire refuserait — et l'on reprocherait au fichier un
+    // doublon qu'il ne porte pas.
+    //
+    // Un export ancien en contient : deux processus BIA homonymes, deux mesures
+    // recopiées d'un modèle. Le cas n'a rien de théorique.
+    const jumelles = Array.from({ length: 4 }, () => ({
+      nom: 'Contrôle jumeau, sans rien qui le distingue',
+      statut: 'conforme',
+      maturite: 1,
+    }));
+
+    const reponse = await reprendre('fusionner', instantane(12, { mesures: jumelles }), {
+      nom: 'jumelles.json',
+    });
+    assert.equal(reponse.statut, 200, JSON.stringify(reponse.corps).slice(0, 400));
+
+    const comptes = await comptesMesures('Contrôle jumeau,%');
+    assert.equal(comptes.catalogue, jumelles.length, 'Quatre lignes confiées, quatre lignes écrites.');
+    assert.equal(
+      comptes.catalogue_distincts,
+      jumelles.length,
+      'Quatre identifiants distincts : c’est le rang qui les sépare, pas le contenu.',
+    );
+    assert.equal(comptes.mise_en_oeuvre, jumelles.length);
+    assert.equal(comptes.mise_en_oeuvre_distincts, jumelles.length);
+  });
+
+  test('LE MÊME fichier rejoué n’ajoute AUCUNE ligne, un AUTRE ajoute les siennes', async () => {
+    // La dérivation converge : c'est ce qui distingue « engendrer » de « tirer ».
+    // Un tirage rendrait 250 lignes de plus à chaque passage, et l'exploitant qui
+    // restaure deux fois sa sauvegarde doublerait son référentiel sans le voir.
+    const mesures = Array.from({ length: LOT }, (_, i) => ({
+      nom: `Contrôle rejoué n° ${String(i)}`,
+      statut: 'conforme',
+    }));
+    const contenu = fichier(12, instantane(12, { mesures }));
+
+    const premier = await reprendre('fusionner', null, { contenu, nom: 'masse-rejouee.json' });
+    assert.equal(premier.statut, 200, JSON.stringify(premier.corps).slice(0, 300));
+    const apresPremier = await comptesMesures('Contrôle rejoué n° %');
+    const identifiantsPremier = await identifiantsMesures('Contrôle rejoué n° %');
+    assert.equal(apresPremier.catalogue, LOT);
+
+    const second = await reprendre('fusionner', null, { contenu, nom: 'masse-rejouee.json' });
+    assert.equal(second.statut, 200, JSON.stringify(second.corps).slice(0, 300));
+    assert.equal(second.corps.bilan.crees.mesures ?? 0, 0, 'Le second passage ne CRÉE rien.');
+
+    assert.deepEqual(
+      await comptesMesures('Contrôle rejoué n° %'),
+      apresPremier,
+      'Rejouer le même fichier ne doit ajouter aucune ligne, d’aucun des deux côtés.',
+    );
+    assert.deepEqual(
+      await identifiantsMesures('Contrôle rejoué n° %'),
+      identifiantsPremier,
+      'Et ce sont les MÊMES lignes : la dérivation retombe sur ses identifiants.',
+    );
+
+    // ── Contrôle symétrique : rien n'est confondu ───────────────────────────
+    // Sans lui, ce test serait satisfait par une reprise qui n'écrit plus rien du
+    // tout — la convergence deviendrait de l'inertie.
+    const autres = Array.from({ length: 10 }, (_, i) => ({
+      nom: `Contrôle d’un autre fichier n° ${String(i)}`,
+      statut: 'non conforme',
+    }));
+    const troisieme = await reprendre('fusionner', instantane(12, { mesures: autres }), {
+      nom: 'masse-autre.json',
+    });
+    assert.equal(troisieme.statut, 200, JSON.stringify(troisieme.corps).slice(0, 300));
+    assert.equal(troisieme.corps.bilan.crees.mesures, 10, 'Un AUTRE fichier ajoute bien ses lignes.');
+
+    const autreEnBase = await comptesMesures('Contrôle d’un autre fichier n° %');
+    assert.equal(autreEnBase.catalogue, 10);
+    assert.equal(autreEnBase.mise_en_oeuvre, 10);
+    assert.deepEqual(
+      await comptesMesures('Contrôle rejoué n° %'),
+      apresPremier,
+      'Et il ne touche pas aux lignes du premier : deux fichiers ne se confondent pas.',
+    );
+  });
+});

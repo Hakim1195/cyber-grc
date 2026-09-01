@@ -131,12 +131,16 @@ cyber-gouvernance_V4/
   au clic) fonctionne aussi, puisque le renommage l'a modifié en place.
 - **Pédagogie** : `${Help.tip("explication courte")}` à côté des termes techniques.
 - **Design** : n'utiliser que les tokens de `tokens.css`. Semantique stricte.
-- **IDs** : un seul générateur par langage — côté navigateur `UI.genId(prefix)`, et rien
-  d'autre. Forme `"<PRÉFIXE>-<horodatage>-<aléa>"` ; **ce qui est normatif est une propriété,
-  pas un encodage** : au moins 52 bits tirés d'un générateur cryptographique
-  (`backend/db/CONVENTIONS.md` §2, qui fait foi). Ne jamais recopier la convention dans une
-  fonction locale : le produit en a compté quatre clones, et deux d'entre eux ont survécu au
-  durcissement des autres — dont l'un a coûté le seul constat bloquant d'un passage de porte.
+- **IDs** : **un seul générateur effectif par langage**. Côté navigateur, c'est
+  `UI.genId(prefix)` — les deux enveloppes qui existent (`js/core/datastore.js`,
+  `js/services/importExcel.js`) se contentent de lui déléguer, avec un repli défensif si
+  `UI` n'est pas chargé. Forme `"<PRÉFIXE>-<horodatage>-<aléa>"` ; **ce qui est normatif
+  est une propriété, pas un encodage** : au moins 52 bits tirés d'un générateur
+  cryptographique (`backend/db/CONVENTIONS.md` §2, qui fait foi). **Ne jamais recopier la
+  convention dans une fonction locale** : le produit en a compté quatre implémentations
+  indépendantes, dans trois langages, et le durcissement de l'une a laissé les autres
+  derrière — deux fois. L'une de ces omissions a coûté le seul constat bloquant d'un
+  passage de porte : un import qui écrivait 223 lignes sur 250 *et annonçait le succès*.
 
 ## 4. Persistance & modèle de données (résumé — détail dans DATA_MODEL.md)
 
@@ -145,7 +149,8 @@ cyber-gouvernance_V4/
 > locaux, ni coffre de chiffrement. Ce qui suit décrit **la forme de l'objet `data`** — celle
 > que voient les modules à travers la façade préservée, et celle du fichier d'échange
 > `grc-backup`. C'est une **représentation de transport**, plus un lieu de stockage. La
-> correspondance avec les 47 tables du serveur est dans `docs/DATA_MODEL.md` §1.5.
+> correspondance avec les tables du serveur est dans `docs/DATA_MODEL.md` §1.5 ; le compte
+> exact, rejoué, est dans `backend/README.md` §8.
 >
 > Ce qui subsiste d'IndexedDB : `js/core/persistence.js` sait **lire** la base héritée d'un
 > poste, en lecture seule, pour permettre sa reprise. Rien n'est effacé d'un poste sans un
@@ -525,7 +530,7 @@ sur l'**Active Directory** du groupe.
 | Lot | État |
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache + durcissement de portée serveur, `install.sh` idempotent, `backend/README.md` |
-| **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — **47 tables** en 4 migrations ; **188 politiques**, RLS activée **et forcée** partout ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur 42 tables ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()` |
+| **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — une cinquantaine de tables (compte rejoué dans `backend/README.md` §8), RLS activée **et forcée** partout, propriétaire compris ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur 42 tables ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()` |
 | **L2 — API et bascule de la persistance** | ✅ **livré** (vague 2), corrigé au fil de la porte **S2** — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (130 membres avant, 130 après), session provisoire **fail-closed** hors développement |
 | L3 — Authentification AD et droits · L5 — Journal | ⬜ **à faire — vague 3, c'est ici qu'on reprend** |
 | L4 → L15 | ⬜ à faire — vagues 4 à 8, voir `docs/PLAN_EXECUTION.md` §3 et `PLAN_SERVEUR` §7 |

@@ -9,7 +9,10 @@
  *     de son fichier — c'est le critère décisif du client (§5).
  *
  * Le module est **pur** : il ne touche ni la base, ni le disque, ni l'horloge
- * (injectable). Il prend une entrée quelconque et rend une charge utile v12
+ * (injectable) — ni, depuis le constat Q-13, la moindre source d'aléa : les
+ * deux identifiants qu'il lui arrive d'inventer sont **dérivés**, donc
+ * reproductibles sans qu'on ait à figer quoi que ce soit. Il prend une entrée
+ * quelconque et rend une charge utile v12
  * normalisée, accompagnée d'un **rapport de reprise** dont la couche
  * d'insertion du lot L2 fera un compte rendu ligne par ligne.
  *
@@ -17,7 +20,13 @@
  *
  * **Le round-trip est exact.** Les identifiants du fichier deviennent tels
  * quels les clés primaires (`backend/db/CONVENTIONS.md` §2) : aucune table de
- * correspondance, aucune réécriture. Un export ancien — `ACT-1720000000000`
+ * correspondance, aucune réécriture — *ici*. La précision a été ajoutée après
+ * coup, parce que ce module a fini par ne plus être seul sur le chemin : à
+ * l'insertion, la couche d'accès ré-émet l'identifiant d'un enregistrement
+ * dont l'identifiant est déjà pris par une filiale invisible, et réécrit les
+ * références qui le visaient (constats N-1 puis Q-2, `identifiantDerive` dans
+ * `src/entites/`). Le fichier, lui, n'est jamais modifié, et le round-trip du
+ * MODULE reste ce qu'il dit être. Un export ancien — `ACT-1720000000000`
  * sans suffixe aléatoire, processus BIA sans préfixe — passe sans être
  * modifié ; le domaine `id_metier` est délibérément permissif et ce module ne
  * durcit pas ce que le schéma a laissé souple. Ces écarts sont **signalés**,
@@ -1943,8 +1952,14 @@ function controlerMappings(charge: ChargeV12, journal: JournalAnomalies): void {
  * L'identifiant `MESURE-…` **reste celui du fichier** et devient la clé de
  * `mesure_catalogue` : c'est ce qui permet à `actions.mesure_id`,
  * `evaluation_mesures` et `traitement_mesures` de pointer sans table de
- * correspondance. Le `MMO-…` de la mise en œuvre est engendré ici — c'est le
- * seul identifiant du modèle absent de tout export.
+ * correspondance. Le `MMO-…` de la mise en œuvre est le seul identifiant du
+ * modèle absent de tout export : il faut donc bien l'inventer quelque part.
+ *
+ * ⚠️ **Ce n'est pas ici que la base le reçoit**, et la phrase précédente le
+ * laissait croire. Mesuré : une reprise réelle de 250 mesures écrit 250 lignes
+ * dans `mesure_mise_en_oeuvre`, toutes sous la forme d'`engendrerIdentifiant()`
+ * — la scission appliquée est refaite par `Depot.creer`. De cette fonction, il
+ * ne sort qu'un compte (`volumesMesures` du rapport).
  *
  * Ni `filiale_id` ni `version` ne sont posés : le périmètre vient du serveur,
  * jamais du fichier, et la version est du ressort du déclencheur de la base.

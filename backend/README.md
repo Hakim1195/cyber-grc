@@ -603,7 +603,22 @@ grossit avec eux : au moment où ce paragraphe est écrit, il porte **des tests 
 délibérés** — écrits pour des constats dont le correctif n'est pas encore posé. Un
 banc vert n'est donc pas la seule lecture correcte pendant une fermeture de vague ;
 la lecture correcte est le **registre des constats ouverts** (`../docs/PLAN_EXECUTION.md`
-§7). Les chiffres ci-dessus seront remesurés et réécrits à l'ouverture de la vague 3.
+§7).
+
+Ce que la fermeture a déjà fait bouger, mesuré sur une base neuve montée depuis la
+révision courante de la branche :
+
+| Grandeur | À la fermeture de S2 (`120266e`) | Pendant la fermeture des constats |
+|---|---|---|
+| Migrations | 4 | **5** — `005_controles_schema.sql` |
+| Tables | 47 | **48** — la nouvelle est `controles_schema`, le **registre des garde-fous** : elle ferme le constat « un garde-fou qui cesse d'être découvert disparaît en silence » |
+| Politiques RLS | 188 | **192** |
+| Clés étrangères | 71 | 71 |
+| Garde-fous découverts et joués | 8 | 8, **0 anomalie** |
+
+**Ces chiffres seront remesurés et réécrits à l'ouverture de la vague 3**, quand la
+fermeture sera close et le banc redevenu vert. Les prendre pour l'état stable serait
+une erreur de lecture : ils décrivent un chantier en cours.
 
 #### Lot L2 — l'API
 
@@ -785,12 +800,14 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **47 tables** en 4 migrations, appliquées de bout en bout par `db/migrate.mjs` :
-  `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités + 5 liaisons),
-  `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql` (privilèges,
-  politiques, déclencheurs, garde-fous).
-- **188 politiques**, RLS **activée et forcée** sur les **47** tables : mesuré dans
-  `pg_class`, **0 table sans `relrowsecurity`, 0 sans `relforcerowsecurity`**.
+- **47 tables** en 4 migrations à la fermeture de S2, appliquées de bout en bout par
+  `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
+  5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
+  (privilèges, politiques, déclencheurs, garde-fous). Une **cinquième migration** est
+  arrivée depuis, avec la fermeture des constats — voir le tableau ci-dessus.
+- **188 politiques**, RLS **activée et forcée** sur **toutes** les tables : mesuré dans
+  `pg_class`, **0 table sans `relrowsecurity`, 0 sans `relforcerowsecurity`** — et cette
+  propriété tient toujours sur la révision courante.
 - **71 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
   migrations : **43 en `restrict`, 27 en `cascade`, une seule en `set null`**
   (`incidents.risque_id` — l'incident survit au risque).
@@ -815,10 +832,12 @@ Ce que la reprise fait, quand on la rejoue :
   `archive_le`), reste lisible et reste rattaché à tout ce qui le référence.
 - **Clés étrangères et unicités composites** : quand l'enfant et le parent sont tous
   deux cloisonnés, la clé porte `(référence, filiale_id)` et vise une unicité
-  `uq_<parent>_id_filiale`. Une clé simple aurait été satisfaite par une ligne
-  **invisible** de la filiale voisine : les contrôles d'intégrité de PostgreSQL
-  contournent délibérément la RLS (`CONVENTIONS.md` §17.1, étendu aux unicités par
-  le §19.1).
+  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **11 clés étrangères** dont la
+  seconde colonne visée est le `filiale_id` du parent, et **9 unicités** de cette forme.
+  Une douzième clé composite vise `(id, portee_groupe)` — la colonne engendrée de
+  `documents`. Une clé simple aurait été satisfaite par une ligne **invisible** de la
+  filiale voisine : les contrôles d'intégrité de PostgreSQL contournent délibérément la
+  RLS (`CONVENTIONS.md` §17.1, étendu aux unicités par le §19.1).
 - **Traçabilité imposée à la création** : les **42 tables** portant `cree_par`
   reçoivent un déclencheur `before insert` qui impose `version`, `cree_le` et
   `cree_par` ; ce que le client envoie dans ces colonnes est ignoré

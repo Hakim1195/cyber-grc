@@ -201,8 +201,12 @@ export class PerimetreProvisoire implements ResolveurPerimetre {
       // quel droit elle parle. Cette couche, c'est le résolveur de périmètre —
       // aujourd'hui provisoire, demain l'authentification du lot L3.
       //
-      // Aucune route ne le pose : la porte S2 a montré ce que cela coûte
-      // (voir `enAdministrationGroupe` dans `src/api/index.ts`). Il vaut donc
+      // Aucune route ne le pose, et cela se vérifie en une commande —
+      // `grep -rn 'administrationGroupe: true' src/` ne rend rien. Le premier
+      // jet avait un `enAdministrationGroupe` qui l'accordait à la route de
+      // reprise ; la porte S2 a montré ce que cela coûtait, et il a été retiré
+      // plutôt que corrigé : une route vérifie un droit, elle ne se l'accorde
+      // pas. Il vaut donc
       // faux par défaut, et il ne devient vrai que si l'exploitant l'a demandé
       // explicitement, sur une machine de développement.
       administrationGroupe: administrationGroupeDemandee(),

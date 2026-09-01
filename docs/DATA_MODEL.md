@@ -16,7 +16,7 @@
 >
 > Dit autrement : ce document décrit désormais une **représentation de transport**, pas
 > un lieu de stockage. La vérité vit dans le schéma relationnel du serveur —
-> `backend/db/migrations/001_socle.sql` → `004_rls.sql`, **47 tables** — dont les règles
+> `backend/db/migrations/` — une cinquantaine de tables, dont les règles
 > sont figées dans **[`backend/db/CONVENTIONS.md`](../backend/db/CONVENTIONS.md)** :
 > §16 pour le découpage Groupe/Filiale, §17 à §21 pour les arbitrages pris aux portes de
 > sécurité S1 et S2. **Ces règles ne sont pas recopiées ici** — deux textes normatifs qui
@@ -31,7 +31,7 @@
 > | une mesure se **supprime** | une mesure du socle Groupe déjà évaluée ou référencée **ne se supprime pas** : elle s'**archive** (`mesure_catalogue.statut` = `active` / `archivee`, plus `archive_le`). Elle reste lisible et reste rattachée à tout ce qui la référence — la preuve historique survit — mais n'est plus proposée pour de nouvelles évaluations (`CONVENTIONS.md` §17.6) |
 > | tableaux d'identifiants dans l'objet (`exigences_liees`, `risques_lies`, `actifs_lies`, `mesure_ids`, `dependances[]`, `mappings.refs`) | **tables de liaison** n-n avec de vraies clés étrangères — la liste est au §1.5 |
 > | cascades de suppression **écrites dans le code** (`DataStore.deleteX`) | suppressions **portées par le schéma** — mais **pas les mêmes** : voir l'encadré suivant |
-> | aucune notion de filiale | **cloisonnement par filiale** : colonne `filiale_id`, Row Level Security activée *et forcée* sur les 47 tables, **clés étrangères et unicités composites** `(référence, filiale_id)` (`CONVENTIONS.md` §17.1 et §19.1) |
+> | aucune notion de filiale | **cloisonnement par filiale** : colonne `filiale_id`, Row Level Security activée *et forcée* sur **toutes** les tables (propriétaire compris), **clés étrangères et unicités composites** `(référence, filiale_id)` (`CONVENTIONS.md` §17.1 et §19.1) |
 > | `updatedAt` posé par le code appelant | **traçabilité imposée par la base** : sur les 42 tables portant le bloc `version` / `cree_le` / `cree_par` / `modifie_le` / `modifie_par`, un déclencheur `before insert` **ignore ce que l'appelant envoie** dans ces colonnes et les fixe lui-même (`CONVENTIONS.md` §18.1). À la reprise d'un export `grc-backup`, l'auteur tracé est donc **celui qui importe**, à la date de l'import |
 > | rien d'équivalent | un compteur **`version`** par enregistrement, qui porte le verrouillage optimiste — voir §1.4 |
 > | rien d'équivalent | `documents` et `document_referentiels` portent une **colonne engendrée** (`portee_groupe`, = `filiale_id is null`) qui entre dans une clé étrangère. PostgreSQL refuse qu'on lui donne une valeur : **toute insertion nomme ses colonnes**, et un aller-retour naïf qui relit une ligne entière puis la réinsère échoue (`CONVENTIONS.md` §18.6) |
@@ -100,7 +100,7 @@ indépendante du numéro des migrations SQL.
 | Points de restauration | store `backups`, sur le poste | sauvegarde du serveur (`backend/README.md` §6) |
 | Chiffrement au repos | coffre opt-in du navigateur (PBKDF2 600k + AES-256-GCM) | **chiffrement disque de la VM** — le coffre a été retiré : il ne protégeait plus rien |
 | Miroir `localStorage` | instantané de secours en clair | supprimé |
-| `cyber-context` (« périmètre actif ») | choisi et mémorisé dans le navigateur | **le périmètre vient du serveur** (`/api/session`) ; la clé est purgée au démarrage |
+| `cyber-context` (« périmètre actif ») | choisi et mémorisé dans le navigateur | **le périmètre vient du serveur** (`/api/session`), en lecture seule ; la clé est purgée au démarrage **et à la fermeture**. Le filtre « donneur d'ordre », qu'elle portait aussi, vit désormais en mémoire (`window.FiltreDonneurOrdre`) — deux choses distinctes, longtemps confondues |
 | Export `grc-backup` | sauvegarde | **format d'échange** (`PLAN_SERVEUR` §2.6) |
 
 Ce qui subsiste d'IndexedDB, et rien d'autre : `js/core/persistence.js` sait encore

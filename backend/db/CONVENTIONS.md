@@ -1234,3 +1234,30 @@ base de recette du client aura déjà tourné.
 **Corollaire pratique** : un commentaire faux dans une migration appliquée **reste faux un
 moment** — le temps qu'une migration suivante existe. Le dire est préférable à le corriger en
 douce ; c'est le sort réservé au constat Q-6 (b), reporté au lot L3 et écrit au §22, ligne **E5**.
+
+---
+
+## 24. Une table sans `filiale_id` est un arbitrage, jamais un oubli
+
+Dix tables du schéma n'ont pas de politique cloisonnante. Neuf portent le substrat
+d'autorisation ou le socle Groupe ; la dixième, `controles_schema`, est arrivée avec la migration
+`005` et **a fait échouer un essai en arrivant** — ce qui est exactement son office.
+
+**La règle** : une table peut être non cloisonnée si, et seulement si, elle porte *la même chose
+pour tout le groupe* — le registre des migrations, le registre des garde-fous, le catalogue des
+correspondances, le substrat qui décide de l'autorisation. Une table qui porte une donnée de
+travail est cloisonnée, sans exception. `controles_schema` relève du premier cas au même titre
+que `migrations_schema` : elle décrit le **schéma**, pas les données, et son contenu est
+identique dans toutes les filiales par construction.
+
+**Ce qui rend la règle tenable, c'est qu'elle est vérifiée.** La liste des tables non
+cloisonnées est **arbitrée** et figée à deux endroits — un essai du banc et le contrôle C93 de
+`verifier_cloisonnement.sql` — qui la relèvent dans le catalogue et la comparent. Une table
+oubliée en cours de route ne passe donc pas inaperçue : elle fait rougir les deux, et quelqu'un
+doit décider. C'est une **liste écrite à la main** au sens du §19.5, et c'est le seul cas où
+elle est le bon outil : ce qu'on veut ici n'est pas d'énumérer les tables, c'est d'**obliger un
+humain à trancher** chaque fois qu'il en apparaît une.
+
+Corollaire pour la suite du chantier : une migration qui ajoute une table sans `filiale_id`
+casse ces deux contrôles, et c'est **normal**. Le geste attendu est d'écrire pourquoi ici, puis
+d'ajouter la table aux deux listes — dans cet ordre.

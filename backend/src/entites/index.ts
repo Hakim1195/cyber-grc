@@ -1576,14 +1576,25 @@ export class Depot {
       // qui le visaient dans la charge sont réécrites** (voir le plan de
       // renommage d'`appliquerReprise`). Les deux issues deviennent identiques
       // — 200, un enregistrement créé — et le canal disparaît au lieu d'être
-      // habillé.
+      // habillé. (Sur un identifiant que la filiale a DÉJÀ repris, l'issue est
+      // « mise à jour » : elle ne renseigne alors que sur une ligne qu'elle
+      // lit déjà, et c'est le prix de la convergence.)
       //
       // Ce que cela coûte : l'identifiant d'un enregistrement peut différer de
       // celui du fichier. Ce que cela préserve, et qui est la vraie exigence du
       // §2 : **les références continuent de pointer sans table de
-      // correspondance**. En usage légitime le cas ne se produit jamais — les
-      // identifiants portent un horodatage et un aléa, et un export d'une
-      // filiale ne contient que ses propres lignes.
+      // correspondance**.
+      //
+      // ⚠️ Cette phrase disait « en usage légitime le cas ne se produit
+      // jamais ». C'est vrai entre deux exports d'aujourd'hui — les
+      // identifiants portent un horodatage et 128 bits d'aléa — et faux là où
+      // ce chemin va réellement servir : les vingt filiales migrent depuis la
+      // version locale, dont les exports anciens portent des identifiants
+      // « parfois réduits à un nombre » (§2). Deux filiales issues de la même
+      // version en partagent alors, et la seconde à migrer voit les siens
+      // ré-émis. C'est le cas nominal de ce code, pas son cas limite — et
+      // c'est pourquoi la ré-émission doit converger (constat Q-2) plutôt que
+      // de tirer un identifiant neuf à chaque reprise.
       //
       // Et cela referme du même coup la face INTÉGRITÉ du constat : une filiale
       // ne peut plus, en occupant un identifiant du domaine global, empêcher
@@ -2182,8 +2193,12 @@ export class Depot {
     // réécrivait l'`exigence_id` d'une action qui visait l'EXIGENCE « 7 » :
     // la clé étrangère refusait, la reprise entière échouait, et le message
     // reprochait à l'utilisateur de ne pas avoir « délié » quelque chose
-    // (porte S2 ter, constat T-5). Le plan est donc cloisonné comme
-    // `colonnesDeReference` l'est déjà.
+    // (porte S2 ter, constat T-5). Le plan est donc cloisonné par entité, sur
+    // la même carte que celle qui sert à réécrire les références —
+    // `referencesParTable()`, qui donne pour chaque colonne l'entité qu'elle
+    // vise. (Cette phrase renvoyait à `colonnesDeReference`, une heuristique
+    // sur le suffixe « _id » que le même correctif a supprimée : le remède
+    // avait rendu fausse sa propre justification.)
     const renommages = new Map<NomEntite, Map<string, string>>();
     const planDe = (entite: NomEntite): Map<string, string> => {
       let plan = renommages.get(entite);
@@ -2437,10 +2452,16 @@ export class Depot {
    * Groupe), et les tables de niveau Groupe entières (correspondances). Le
    * filtre est `filiale_id = <filiale active>`, jamais plus large.
    *
-   * ⚠️ **Cet invariant ne dépend pas du périmètre de la session.** Une reprise
-   * s'exécute en administration Groupe (voir `enReprise` dans `src/api/`), et
-   * un lecteur pourrait en conclure que la purge s'élargit avec elle. Elle ne
-   * s'élargit pas : ne sont touchées que les tables portant `filiale_id`, sur
+   * ⚠️ **Cet invariant ne dépend pas du périmètre de la session.** La
+   * rédaction précédente le justifiait autrement : elle disait qu'une reprise
+   * « s'exécute en administration Groupe ». C'était vrai d'un premier jet — la
+   * route déclarait le drapeau sur sa transaction — et l'arbitrage de la porte
+   * S2 l'a retiré : `enEcriture` passe le périmètre de la session **tel quel**,
+   * aucune route de ce greffon ne construit `administrationGroupe`, et le
+   * droit d'écrire dans le socle commun est exigé au point d'effet. La purge
+   * n'a donc jamais eu de périmètre élargi à contenir — mais l'invariant, lui,
+   * vaut toujours d'être écrit : ne sont touchées que les tables portant
+   * `filiale_id`, sur
    * la seule filiale active. Détruire le socle commun en restaurant UNE
    * filiale emporterait les données des dix-neuf autres — la pathologie même
    * du constat bloquant B-1 de la porte S1.
@@ -4263,9 +4284,19 @@ function enBase36(octets: Uint8Array): string {
 
 /**
  * Engendre un identifiant au format du `CONVENTIONS.md` §2, celui d'`UI.genId`
- * côté navigateur : `"<PRÉFIXE>-<horodatage>-<aléa>"`. Le format est **le
- * même** des deux côtés, sans quoi le round-trip d'un export `grc-backup`
- * cesserait d'être exact.
+ * côté navigateur : `"<PRÉFIXE>-<horodatage>-<aléa>"`.
+ *
+ * Les deux côtés partagent la **forme** et l'alphabet, pas la longueur du
+ * suffixe : ce qui compte est qu'un identifiant engendré ici ne détonne pas
+ * dans un export relu par le navigateur, et réciproquement.
+ *
+ * ⚠️ La rédaction précédente ajoutait « sans quoi le round-trip d'un export
+ * `grc-backup` cesserait d'être exact ». C'était faux, et vérifié faux : la
+ * reprise recopie les identifiants du fichier **tels quels**, quelle qu'en
+ * soit la forme — `7`, `ACT_2019_007` ou une phrase entière font l'aller-retour
+ * sans être modifiés. Le round-trip ne dépend donc pas de ce générateur, et
+ * s'appuyer sur lui pour justifier son format aurait rendu intouchable le
+ * format d'un générateur qu'il a précisément fallu changer (constat Q-1).
  *
  * ── Porte S2 quater, constat Q-1 ─────────────────────────────────────
  *

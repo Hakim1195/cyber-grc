@@ -222,6 +222,12 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 - **Un huitième garde-fou de schéma** — l'entropie des identifiants — se branche sur
   `f_verifier_schema()` **sans qu'aucun fichier de déploiement change** : c'est la
   démonstration que le point d'appel unique de la vague 1 fait ce qu'il annonce.
+- **Et son angle mort est fermé** : `f_verifier_schema()` ne refusait que s'il ne
+  découvrait **aucun** contrôle — une migration qui renomme ou re-signe une fonction en
+  aurait fait disparaître un **en silence**. La fermeture de la vague apporte une
+  cinquième migration, `005_controles_schema.sql`, et la table `controles_schema` : le
+  **registre des garde-fous réellement branchés**, pour qu'une diminution soit une
+  anomalie au même titre que l'absence totale.
 
 **Ce qui n'est PAS livré, et doit être dit**
 
