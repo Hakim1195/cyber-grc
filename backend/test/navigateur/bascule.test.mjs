@@ -1213,3 +1213,155 @@ describe('Le renommage large s’annonce, et lui seul (constat Q-11)', () => {
     assert.deepEqual(issue.erreurs, []);
   });
 });
+
+/* =====================================================================
+ *  §8 — Après un renommage large, la page doit revenir au repos (constat Q-15)
+ * =====================================================================
+ *
+ *  Trouvé en écrivant les essais du §7 : l'attente de repos expirait, et ce
+ *  n'était pas l'essai qui avait tort.
+ *
+ *  `renommer()` réécrit les enregistrements EN MÉMOIRE — c'est ce qui empêche
+ *  les références de se casser quand le serveur ré-attribue un identifiant. Mais
+ *  la réécriture n'est signalée à personne : aucun envoi n'est armé. La page
+ *  reste donc « en attente » indéfiniment, sans rien envoyer, et l'écran porte
+ *  une valeur que la base ignore. Mesuré :
+ *
+ *      mémoire  action.responsable = "RISK-1788…"   (réécrit)
+ *      base     action.responsable = "7"            (inchangé)
+ *      état     enAttente true · enCours false · bloques 0 · incidents 0
+ *
+ *  Ce que cela coûte : l'utilisateur voit « modifications non enregistrées » sans
+ *  avoir rien saisi, ne peut rien faire pour l'éteindre, et referme son onglet sur
+ *  un avertissement qu'il a appris à ignorer — pendant que la base porte encore la
+ *  vieille valeur. C'est une divergence silencieuse entre ce qui est montré et ce
+ *  qui fait preuve, dans un outil dont c'est l'unique objet.
+ *
+ *  ⚠️ Cet essai est ROUGE tant que le correctif n'est pas livré, et c'est le
+ *  contrat : il dit la PROPRIÉTÉ attendue, jamais le remède. Il n'exige pas que
+ *  tel appel soit fait — la façon de réarmer l'envoi appartient à `js/core/**` —
+ *  il exige que la page revienne au repos et que les deux côtés portent la même
+ *  valeur.
+ * ===================================================================== */
+
+describe('Une réécriture de références ne reste pas en attente (constat Q-15)', () => {
+  /** Le `responsable` de l'action repère, tel qu'une connexion tierce le lit. */
+  async function responsableEnBase(titre) {
+    const lignes = await enBase('select responsable from actions where titre = $1', [titre]);
+    return lignes.length === 0 ? null : lignes[0].responsable;
+  }
+
+  /**
+   * Attend le repos et rend `null`, ou rend l'état constaté à l'expiration.
+   * On ne laisse pas l'expiration remonter telle quelle : « Timeout » n'apprend
+   * rien à qui lira le rouge, alors que l'état, lui, nomme le défaut.
+   */
+  async function attendreLeRepos(page, delai) {
+    try {
+      await page.waitForFunction(
+        () => {
+          const e = window.Sync.etat();
+          return e.enAttente === false && e.enCours === false;
+        },
+        null,
+        { timeout: delai },
+      );
+      return null;
+    } catch {
+      return page.evaluate(() => window.Sync.etat());
+    }
+  }
+
+  test('après le renommage, et SANS aucun autre geste, la page revient au repos', async () => {
+    const titre = 'Action repère du constat Q-15';
+    const session = await ouvrirApplication();
+    try {
+      await session.page.evaluate((t) => {
+        window.DataStore.addAction({ id: window.UI.genId('ACT'), titre: t, responsable: '7' });
+      }, titre);
+      await attendreQuiescence(session.page);
+      assert.equal(await responsableEnBase(titre), '7', 'Départ : les deux côtés portent « 7 ».');
+
+      // Le renommage large : le serveur ré-attribue l'identifiant, et le balayage
+      // des références réécrit le « responsable » de l'action.
+      await session.page.evaluate(() => {
+        window.DataStore.addRisque({ id: '7', nom: 'Risque du constat Q-15' });
+      });
+      await session.page.waitForFunction(
+        () => {
+          const r = window.DataStore.getRisques().find((x) => x.nom === 'Risque du constat Q-15');
+          return r !== undefined && r.id !== '7';
+        },
+        null,
+        { timeout: 15000 },
+      );
+
+      // ── À partir d'ici, AUCUN geste : c'est tout le sujet ────────────────
+      // Dix secondes, très au-delà du regroupement (400 ms) et de la relance
+      // réseau (8 s) : si rien ne part dans ce délai, rien ne partira.
+      const bloquee = await attendreLeRepos(session.page, 10000);
+      const memoire = await session.page.evaluate(
+        (t) => window.DataStore.getActions().find((a) => a.titre === t).responsable,
+        titre,
+      );
+      const base_ = await responsableEnBase(titre);
+
+      assert.equal(
+        bloquee,
+        null,
+        'La page ne revient jamais au repos après une réécriture de références. ' +
+          `État : ${JSON.stringify(bloquee)} · mémoire : ${JSON.stringify(memoire)} · ` +
+          `base : ${JSON.stringify(base_)}. L'utilisateur voit « modifications non ` +
+          'enregistrées » sans avoir rien saisi, et ne peut rien faire pour l’éteindre.',
+      );
+
+      // ── LA divergence, qui est le défaut lui-même ───────────────────────
+      assert.equal(
+        base_,
+        memoire,
+        'Au repos, l’écran et la base doivent porter la MÊME valeur. Une réécriture ' +
+          'qui ne part pas laisse la preuve d’audit en désaccord avec ce qui est montré.',
+      );
+      assert.notEqual(base_, '7', 'Et c’est bien la valeur réécrite qui a été enregistrée.');
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE : sans renommage, une saisie ordinaire revient au repos seule', async () => {
+    // Sans cette moitié, l'essai précédent serait satisfait par un produit qui n'a
+    // jamais rien en attente — c'est-à-dire par la suppression du mécanisme même
+    // qui protège les saisies non parties.
+    const titre = 'Action témoin du constat Q-15';
+    const session = await ouvrirApplication();
+    try {
+      await session.page.evaluate((t) => {
+        window.DataStore.addAction({ id: window.UI.genId('ACT'), titre: t, responsable: 'Personne fictive' });
+      }, titre);
+      await attendreQuiescence(session.page);
+
+      // Une modification ordinaire, et rien d'autre : elle DOIT partir seule.
+      await session.page.evaluate((t) => {
+        const action = window.DataStore.getActions().find((a) => a.titre === t);
+        window.DataStore.updateAction({ ...action, responsable: 'Autre personne fictive' });
+      }, titre);
+      assert.equal(
+        await session.page.evaluate(() => window.Sync.etat().enAttente),
+        true,
+        'La saisie doit d’abord être « en attente » : sinon cet essai ne mesure rien.',
+      );
+
+      const bloquee = await attendreLeRepos(session.page, 10000);
+      assert.equal(bloquee, null, `La page doit revenir au repos seule : ${JSON.stringify(bloquee)}`);
+      assert.equal(
+        await responsableEnBase(titre),
+        'Autre personne fictive',
+        'Et la valeur doit être arrivée en base.',
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+});

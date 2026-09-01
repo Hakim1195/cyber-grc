@@ -126,6 +126,10 @@ const Sync = (() => {
     const incidents = [];               // échecs à afficher (jamais effacés tout seuls)
     const champsRefuses = new Set();    // "collection.champ" que le modèle serveur ignore
     const doublons = new Set();         // identifiants portés par deux enregistrements
+    // Enregistrements que le serveur DÉTIENT DÉJÀ et qu'un renommage vient de
+    // réécrire en mémoire (constat Q-15, voir `renommer` et `reprendreRenommages`).
+    const renommagesAPousser = new Set();
+
     // Renommages d'identifiants trop banals pour être distingués d'une donnée
     // saisie, ayant touché d'autres champs que l'enregistrement lui-même (Q-11,
     // voir `renommer`). Volontairement JAMAIS vidé, pas même par un
@@ -499,7 +503,19 @@ const Sync = (() => {
                 if (v && typeof v === "object") remplacer(v);
             });
         };
-        collections.forEach(c => (data[c] || []).forEach(x => { if (x && typeof x === "object") remplacer(x); }));
+        collections.forEach(c => (data[c] || []).forEach(x => {
+            if (!x || typeof x !== "object") return;
+            const avant = touchesAilleurs;
+            remplacer(x);
+            if (touchesAilleurs === avant) return;
+            // ── Q-15 : une réécriture ne s'enregistre pas toute seule ────────
+            // L'enregistrement en cours de création sera aligné dans l'instant
+            // par `ecrireCreation` : il n'a rien à repousser. Ceux que le
+            // SERVEUR DÉTIENT DÉJÀ, eux, viennent de changer en mémoire sans que
+            // personne l'ait demandé — et sans que rien ne les fasse partir.
+            if (c === collection && x.id === nouveau) return;
+            if (reference[c] && reference[c].has(x.id)) renommagesAPousser.add(cle(c, x.id));
+        }));
 
         if (touchesAilleurs > 0 && !ID_DISTINCTIF.test(ancien)) {
             renommagesLarges.add(ancien + " → " + touchesAilleurs + " valeur(s)");
@@ -510,7 +526,7 @@ const Sync = (() => {
             const m = carte[collection];
             if (m && m.has(ancien)) { m.set(nouveau, m.get(ancien)); m.delete(ancien); }
         });
-        [bloques, derives].forEach(set => {
+        [bloques, derives, renommagesAPousser].forEach(set => {
             if (set.has(cle(collection, ancien))) { set.delete(cle(collection, ancien)); set.add(cle(collection, nouveau)); }
         });
         if (propagations.has(ancien)) { propagations.set(nouveau, propagations.get(ancien)); propagations.delete(ancien); }
@@ -979,6 +995,9 @@ const Sync = (() => {
             // ce serait éteindre définitivement écriture ET rafraîchissement,
             // silencieusement, ce que ce fichier existe précisément pour éviter.
             ecritureEnCours = false;
+            // …ni faire perdre une réécriture de renommage (Q-15) : c'est ici,
+            // et pas après le `try`, pour la même raison.
+            reprendreRenommages();
         }
 
         if (echecs === 0) dernierEnregistrement = Date.now();
@@ -992,6 +1011,64 @@ const Sync = (() => {
         }
 
         return { ok: echecs === 0, echecs: echecs };
+    }
+
+    /**
+     * Un cycle se termine au repos, ou il se réarme (constat Q-15).
+     *
+     * ── Le défaut, tel qu'il se mesurait ─────────────────────────────────────
+     *
+     * `renommer()` réécrit la mémoire, et rien d'autre. Quand sa réécriture
+     * touche un enregistrement que le **serveur détient déjà** et que le
+     * différentiel de ce cycle ne contenait pas, elle fabrique une modification
+     * en attente que personne ne pousse : le minuteur n'est pas réarmé, l'écran
+     * et la base divergent, et l'état « modifications non enregistrées » devient
+     * **permanent et inexpliqué** — dans un outil qui sert de preuve en audit,
+     * c'est l'état qui fait douter de tout le reste.
+     *
+     * Deux chemins y mènent, et **le second n'a rien d'un cas tordu** :
+     *
+     *  · une valeur métier égale à un identifiant trop court pour s'en
+     *    distinguer — c'est le constat Q-11, et son remède est ailleurs ;
+     *  · **une vraie référence**, écrite au serveur à un cycle précédent parce
+     *    que la création qu'elle vise avait échoué sur une coupure passagère.
+     *    Le nouvel essai crée l'enregistrement, le renommage réécrit la
+     *    référence en mémoire — et la base garde un lien vers une ligne qui
+     *    n'existe pas. C'est exactement la classe de défaut que `renommer`
+     *    existe pour empêcher, et elle survivait EN BASE.
+     *
+     * Le même cycle, lui, n'a pas ce problème : `appliquer` écrit toutes les
+     * créations avant les modifications, si bien qu'un enregistrement réécrit
+     * qui figure déjà au différentiel part avec la bonne valeur. C'est mesuré,
+     * pas supposé — les deux témoins du banc (deux créations d'un même cycle,
+     * modification d'un même cycle) sont au repos et alignés sans rien changer.
+     *
+     * ── Pourquoi ce contrôle ne coûte rien ──────────────────────────────────
+     *
+     * Il ne recalcule **aucun** différentiel : il ne regarde que les
+     * enregistrements que le renommage a effectivement touchés — un, deux,
+     * rarement plus. Reposer la question complète en fin de cycle aurait
+     * réintroduit, par la bande, la passe de canonisation que le constat Q-8
+     * venait de retirer.
+     *
+     * Et il ne peut pas tourner en rond : un enregistrement qui refuse de
+     * s'écrire finit BLOQUÉ, donc écarté de ce qui est à écrire, et l'ensemble
+     * est vidé à chaque passage. Une panne réseau, elle, relève du minuteur de
+     * relance, qui existe déjà.
+     */
+    function reprendreRenommages() {
+        if (renommagesAPousser.size === 0) return;
+        const data = donnees();
+        let reste = false;
+        renommagesAPousser.forEach(k => {
+            const coupe = k.indexOf(":");          // un nom de collection ne porte pas de « : »
+            const c = k.slice(0, coupe), id = k.slice(coupe + 1);
+            if (!data || !Array.isArray(data[c]) || !reference[c] || !reference[c].has(id)) return;
+            const enr = data[c].find(x => x && x.id === id);
+            if (enr && reference[c].get(id) !== canonique(enr)) reste = true;
+        });
+        renommagesAPousser.clear();
+        if (reste) marquerModification();
     }
 
     /** Le corps d'un cycle : créations, modifications, suppressions, composites. */
