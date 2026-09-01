@@ -128,7 +128,7 @@ export async function moduleCompile(chemin) {
  * posées. Ils sont donc renseignés avec des valeurs manifestement factices, jamais
  * avec quelque chose qui ressemblerait à un secret.
  */
-function environnementDeTest(base, environnement) {
+function environnementDeTest(base, environnement, supplement = {}) {
   return {
     NODE_ENV: environnement,
     // Port réel jamais utilisé : `inject()` n'écoute pas, et `ecouter()` demande
@@ -150,6 +150,11 @@ function environnementDeTest(base, environnement) {
     // Silencieux par défaut ; `SERVEUR_NIVEAU_JOURNAL=error npm test` rallume les
     // traces quand un test échoue sur un 500 et qu'il faut savoir pourquoi.
     SERVEUR_NIVEAU_JOURNAL: process.env.SERVEUR_NIVEAU_JOURNAL ?? 'silent',
+    // Réglages propres à un essai — `BASE_POOL_MAX` pour éprouver la saturation
+    // du pool sans ouvrir dix connexions réelles, par exemple. Posés EN DERNIER :
+    // un essai qui a besoin d'un serveur particulier le dit, plutôt que de monter
+    // sa propre configuration à côté de celle-ci.
+    ...supplement,
   };
 }
 
@@ -247,7 +252,7 @@ export async function monterServeurReel(base, options = {}) {
   const { creerPool } = await moduleCompile('db/pool.js');
   const { construireServeur } = await moduleCompile('serveur.js');
 
-  const config = chargerConfiguration(environnementDeTest(base, environnement));
+  const config = chargerConfiguration(environnementDeTest(base, environnement, options.env ?? {}));
   const pool = creerPool(config.base);
   const instance = construireServeur(config, pool);
   await instance.ready();
