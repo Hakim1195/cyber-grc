@@ -279,7 +279,7 @@ L3, L6 et L12 se recettent sur des doublures, et cela doit être écrit dans leu
 |---|---|---|---|
 | — | L0 socle d'infrastructure | ✅ livré | — |
 | **V1** | L1 schéma relationnel | ✅ **livré, porte S1 franchie** au 5ᵉ passage | S1 |
-| **V2** | L2 API et bascule | 🟡 livré, **porte S2 refusée** — correctifs en cours | S2 |
+| **V2** | L2 API et bascule | ✅ **livré, porte S2 franchie** au 4ᵉ passage | S2 |
 | V3 | L3 authentification, L5 journal | ⬜ | S3 |
 | V4 | L4 multi-filiales, L6 pièces jointes | ⬜ | S4 |
 | V5 | L7 import, L8 approbation, L9 identité | ⬜ | S5 |
@@ -298,6 +298,7 @@ Groupe, avant généralisation aux vingt (`PLAN_SERVEUR` §7).
 | **S1** (2ᵉ) | 31/08/2026 | ❌ **refusée** — 1 bloquant, 3 majeurs, 3 mineurs, **tous neufs** | [`securite/RAPPORT_S1_BIS.md`](securite/RAPPORT_S1_BIS.md) |
 | **S1** (3ᵉ) | 31/08/2026 | ❌ **refusée** — 0 bloquant, 4 majeurs | [`securite/RAPPORT_S1_TER.md`](securite/RAPPORT_S1_TER.md) |
 | **S1** (4ᵉ) | 31/08/2026 | ⚠️ **franchie sous réserve** — 0 bloquant, 5 majeurs. **Réserve jugée bloquante par l'orchestrateur** : l'auditeur pose lui-même la lecture stricte, et le §18.4 exige un chemin de *déploiement* — le constat Q-1 est donc un échec du contrôle S16. Les cinq majeurs sont corrigés. | [`securite/RAPPORT_S1_QUATER.md`](securite/RAPPORT_S1_QUATER.md) |
+| **S2** (4ᵉ) | 31/08/2026 | ✅ **FRANCHIE** — 0 bloquant, 4 majeurs, 7 mineurs, **aucun des dix-huit contrôles en échec**. Le bloquant du 3ᵉ passage est fermé **deux fois** : la seconde barrière tient sans la première, générateur saboté à trois valeurs et les quarante lignes arrivent quand même. | [`securite/RAPPORT_S2_QUATER.md`](securite/RAPPORT_S2_QUATER.md) |
 | **S2** (3ᵉ) | 31/08/2026 | ❌ **refusée** — 1 bloquant, 4 majeurs, 9 mineurs ; **S18 en échec**. Un import en lot n'écrit qu'une partie de ses lignes **et annonce le succès**. Racine : un générateur d'identifiants à mille valeurs d'aléa, **signalé et chiffré dès la vague 1 et laissé de côté par l'orchestrateur**. | [`securite/RAPPORT_S2_TER.md`](securite/RAPPORT_S2_TER.md) |
 | **S2** (2ᵉ) | 31/08/2026 | ⚠️ **franchie selon l'auditeur — refusée par l'orchestrateur.** 0 bloquant, 4 majeurs, mais **S12 et S18 sont marqués en échec dans sa propre grille**. Un contrôle en échec ne se franchit pas : c'est la lecture appliquée à la porte S1 au quatrième passage, et elle ne change pas parce que le lot paraît proche de la fin. **Trois des quatre majeurs sont des défauts créés par les correctifs du premier passage.** | [`securite/RAPPORT_S2_BIS.md`](securite/RAPPORT_S2_BIS.md) |
 | **S2** | 31/08/2026 | ❌ **refusée** — 3 bloquants, 9 majeurs, 9 mineurs. Le cœur serveur est juste et la façade réellement préservée ; **le lot casse aux jointures**, là où aucun test ne regarde : aucune route montée par le banc, une seule entité couverte, aucun test frontend. | [`securite/RAPPORT_S2.md`](securite/RAPPORT_S2.md) |
