@@ -8,14 +8,256 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur — vague 2 : l'API et la bascule de la persistance (lot L2)
+> Travail de la vague 2 terminé et **rejoué en exécution** au 01/09/2026, sur un export
+> propre de la révision `120266e` : migrations appliquées sur base neuve
+> (PostgreSQL 16.13), `npm test` → **505 tests, 505 passés, 0 échec**,
+> `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
+> `db/verifier_cloisonnement.sql` → **107 contrôles, 107 réussis, 0 échec**,
+> `f_verifier_schema()` → **0 anomalie** (8 garde-fous découverts et joués).
+>
+> **La porte de sécurité S2 est franchie**, au 4ᵉ passage : « ✅ FRANCHIE — 0 bloquant,
+> 4 majeurs, 7 mineurs, aucun des dix-huit contrôles en échec »
+> (`docs/PLAN_EXECUTION.md` §7, rapport `docs/securite/RAPPORT_S2_QUATER.md`). Franchie
+> **n'est pas sans réserve** : les constats restants ont chacun un propriétaire et une
+> échéance dans le **registre des constats ouverts** du même §7. Ce registre n'est ni
+> recopié ni résumé ici, pas même par un décompte — il vit, et deux listes des mêmes
+> constats divergent en silence.
+>
+> Les chiffres ci-dessus datent de la fermeture de la porte ; la fermeture des constats
+> continue derrière eux, et le banc d'essai porte pendant ce temps des **tests rouges
+> délibérés**, écrits pour des correctifs qui ne sont pas encore posés.
+
+**L'API**
+
+- **Une couche d'accès générique, un moteur et un registre** (`src/entites/`) pour les
+  **21 collections** du modèle navigateur. Le registre ne décrit que ce que PostgreSQL ne
+  sait pas — nom frontend, préfixe d'identifiant, alias de colonne, liaisons n-n, scission
+  des mesures ; colonnes, types, `not null`, colonnes **engendrées** et cloisonnement sont
+  **découverts dans le catalogue**. C'est l'application au code de la leçon la plus chère
+  de la vague 1 : « une liste écrite à la main est une omission qui attend ». Un garde-fou
+  recoupe registre et schéma et **fait échouer le démarrage** quand ils divergent sur un
+  nom ou une forme.
+- **Verrouillage optimiste — le risque projet P1 est traité, pas repoussé.**
+  `update … where id = $1 and version = $2` ; zéro ligne = refus. C'est la parade au modèle
+  navigateur, qui réécrivait l'instantané complet à chaque enregistrement : transposé au
+  serveur, le dernier qui enregistre aurait silencieusement écrasé le travail des autres.
+  Le `DELETE` est soumis au même verrou (`?version` **exigé**) : supprimer relève du même
+  risque.
+- **`UPDATE 0` est diagnostiqué en trois causes, pas interprété en une.** C'était le piège
+  n°1 légué par la vague 1 : `GRC03` se définit exactement sur ce zéro, qui vaut aussi
+  « ligne absente » et « écriture refusée par la RLS ». `diagnostiquerEcriture()` tranche
+  **dans la même transaction** que l'écriture qui a échoué et rend cinq verdicts :
+  `conflit_version` → 409 + `GRC03` + la version réellement en base ; `invisible` → 404 ;
+  `autre_filiale`, `portee_groupe` et `refus_politique` → 403, avec une phrase qui dit
+  laquelle. Sans cela, l'API aurait envoyé recharger sa page à quelqu'un qui n'avait pas
+  le droit d'écrire.
+- **Les deux autres pièges de la vague 1 sont fermés à la conception** : les colonnes
+  `version` / `cree_le` / `cree_par` sont **exclues par construction** en écriture, et un
+  champ client qui les viserait est **refusé** et non ignoré (ignorer aurait été le pire
+  des deux mondes) ; toute insertion **nomme ses colonnes**, filtrées sur
+  `engendree = false`, à cause de `documents.portee_groupe` qui entre dans une clé
+  étrangère.
+- **Neuf routes**, plus le point de santé : `/api/session`, `/api/modele`, `/api/donnees`
+  (le jeu de données entier d'une filiale, dans la forme exacte de l'objet `data` du
+  navigateur), `/api/rafraichir`, `POST`/`PUT`/`DELETE` `/api/entites/…`, `/api/reprise` et
+  `/api/operations/propager-mesure`. Le détail est dans `backend/README.md` §4.
+- **`POST /api/reprise` : un export `grc-backup` entier, en UNE transaction**, avec un mode
+  `apercu` qui applique puis **annule** — ce qui est montré est le vrai résultat, `check`,
+  clés étrangères et RLS compris, et rien ne reste derrière. Le serveur lit l'enveloppe et
+  monte la charge de v1 à v12 lui-même. Cette route remplace la rafale de `DELETE` un par
+  un qui, avant elle, détruisait une filiale hors transaction.
+- **L'identifiant d'une création ordinaire est engendré par le serveur** : en proposer un
+  est refusé, parce que ce choix donnait un **oracle d'existence inter-filiales** en une
+  requête — « cet identifiant existe-t-il dans une filiale que je ne vois pas ? ». La
+  reprise, elle, **conserve** les identifiants du fichier : c'est ce qui rend le round-trip
+  exact, et c'est le seul chemin autorisé à les imposer.
+- **Quand un identifiant du fichier est déjà pris par une filiale invisible, le
+  remplacement est dérivé, pas tiré.** Le serveur retient
+  `<PRÉFIXE>-r-<empreinte de (filiale, table, identifiant du fichier)>` et réécrit les
+  références de la charge qui le visaient — références découvertes dans le graphe des
+  clés étrangères, pas énumérées. La reprise devient ainsi **idempotente** : trois
+  reprises du même fichier convergent sur **une** ligne au lieu d'en cloner trois. La
+  marque `-r-` tient lieu d'horodatage, et c'est délibéré : un identifiant dérivé n'a
+  pas d'instant de création, et y en laisser un crédible mentirait au lecteur du
+  journal (`backend/db/CONVENTIONS.md` §2).
+- **Une requête = une transaction**, périmètre RLS posé à l'ouverture et mort au `commit` ;
+  les lectures s'ouvrent en `read only` — la base refuse alors toute écriture, ce qui vaut
+  mieux qu'une convention de nommage.
+- **Le périmètre vient du serveur, et c'est tenu par la forme** : `resoudre()` ne prend
+  **aucun argument**. Il n'existe donc structurellement aucun chemin par lequel un corps,
+  une entête, un paramètre d'URL ou un cookie atteindrait `grc.filiale_id` ou
+  `grc.filiales`.
+- **Session provisoire fail-closed** (`src/api/session.ts`), en attendant le lot L3 : hors
+  `NODE_ENV=developpement`, elle refuse de résoudre et l'API répond `503`. **La recette est
+  fermée au même titre que la production** — elle porte une copie réaliste de la
+  production, donc de la vraie donnée de vingt filiales sur une VM joignable par le VPN ;
+  une barrière qui protège la copie mais pas l'original ne protège rien. Deux réglages
+  provisoires l'accompagnent, `API_FILIALE_PROVISOIRE` et
+  `API_ADMINISTRATION_GROUPE_PROVISOIRE`, sans effet hors développement.
+- **Aucune route ne pose le drapeau d'administration Groupe : elles le vérifient.** Le
+  droit se décide dans le résolveur de périmètre, et nulle part ailleurs — ce qui rend la
+  règle impossible à enfreindre par oubli. Un test la contrôle **mécaniquement**, par
+  recherche dans les sources et dans le catalogue de la base.
+- **Aucun message d'erreur brut ne sort** : un chemin unique traduit les erreurs, le détail
+  part au journal technique, et la réponse ne porte ni pile d'appel ni nom d'objet de base.
+
+**La bascule côté navigateur**
+
+- **La façade synchrone de `DataStore` est préservée, et c'est mesurable** : l'objet
+  exposé compte **130 membres** — exactement les mêmes qu'avant la vague, aucun ajouté,
+  aucun retiré. Les **118 méthodes distinctes** appelées depuis les modules, les services
+  et `app.js` (**323 sites d'appel**) le sont à l'identique. C'est la parade au risque P3 :
+  aucun des 26 modules métier n'est réécrit.
+- **Tout l'asynchrone est absorbé dans un seul fichier**, `js/core/sync.js` — exactement
+  comme `flushNow()` absorbait IndexedDB auparavant. Au démarrage il lit `/api/session`,
+  `/api/modele` et `/api/donnees` ; à chaque `save()` il compare l'état en mémoire à un
+  **instantané de référence** et n'envoie que la différence, **enregistrement par
+  enregistrement** ; un sondage périodique rapatrie le travail des autres utilisateurs.
+- **Le numéro de version ne vit pas dans l'enregistrement** mais dans une table à part,
+  interne à `sync.js` : les champs `_version` / `_versionMiseEnOeuvre` sont retirés dès
+  réception. Motif : `data` garde exactement la forme que les modules et l'export
+  `grc-backup` connaissent, et **un module qui reconstruit un objet ne peut donc pas
+  perdre la version au passage** — ce serait une porte ouverte au risque P1.
+- **Un refus d'écriture produit toujours quelque chose de visible.** Un refus avalé en
+  silence laisserait l'utilisateur croire sa saisie enregistrée : le même défaut, déplacé
+  d'un cran. Conflit de version et ressource inconnue conservent la saisie, la marquent et
+  proposent **Recharger** ; un refus de droit ne propose **aucun** rechargement — il n'y a
+  rien à recharger ; une panne réseau ne marque rien et réessaie toute seule.
+- **Nouveaux fichiers du noyau client** : `js/core/api.js` (le seul endroit du frontend qui
+  parle au réseau ; aucune méthode n'accepte de filiale ni de périmètre — tenu par la
+  forme), `js/core/session.js` (le périmètre tel que le serveur le résout, objet gelé, sans
+  mutateur), `js/core/sync.js` et `js/core/reprise.js`.
+- **`js/core/persistence.js` ne persiste plus rien** : `idbAvailable()` rend `false`
+  définitivement, ce qui fait emprunter partout le chemin « pas de stockage local ». Le
+  fichier ne sait plus que **lire** la base héritée d'un poste, sans jamais la modifier.
+- **Le coffre du navigateur est retiré** (`js/core/vault.js`) : les données ne sont plus
+  stockées sur le poste, il n'y a plus rien à chiffrer localement, et un coffre qui ne
+  protège rien est une fausse assurance. Le chiffrement au repos est celui du disque de la
+  VM. Le fichier est **neutralisé et non supprimé** : il est la porte de démarrage appelée
+  par `js/app.js` et `js/modules/settings.js`, deux fichiers d'un autre périmètre.
+- **`js/core/vault.js` est devenu la porte de démarrage** : session, modèle et jeu de
+  données sont chargés **avant** que l'application ne s'affiche, et si la liaison échoue,
+  l'application **ne démarre pas** — écran de refus, bouton « Réessayer ». Démarrer sur un
+  jeu vide afficherait « aucun risque, aucune action, aucun incident », c'est-à-dire le
+  contraire de la réalité dans un outil qui sert de preuve en audit.
+- **L'export `grc-backup` devient un format d'échange**, et non plus une sauvegarde : la
+  sauvegarde est celle du serveur. Le bandeau « exportez régulièrement pour ne rien
+  perdre » est retiré — il serait faux sur les deux points, et il encouragerait la
+  multiplication de fichiers complets de gouvernance cyber sur les postes, alors que le
+  droit d'export est une permission distincte et journalisée dans le modèle cible.
+- **Les restes de la version 100 % navigateur sont purgés au démarrage** :
+  `cyber-context` (le « périmètre » choisi dans le navigateur), `cyber-vault`,
+  `cyber-current`, `cyber-gouvernance-data`. Le périmètre vient désormais du serveur.
+
+**Ce que la porte S2 a fait corriger — quatre passages, et ce qu'ils ont trouvé**
+
+- **La base héritée d'un poste n'est plus détruite.** La version précédente purgeait
+  `cyber-grc-db` au chargement du module, sans condition — donc **y compris quand le
+  serveur était injoignable et que l'application refusait de démarrer**. Deux ans de
+  travail détruits par quelqu'un qui n'avait encore rien pu faire. Règle désormais tenue :
+  *rien n'est effacé de ce poste sans un geste explicite de l'utilisateur, et jamais avant
+  que ses données aient été mises à l'abri*. La base est détectée, un bandeau propose
+  **d'exporter** puis **de reprendre**, et l'effacement n'apparaît qu'ensuite.
+- **L'application fonctionne enfin sous sa propre politique de sécurité de contenu.**
+  **64 gestionnaires en ligne dans 23 modules** étaient bloqués par la CSP du vhost livré :
+  l'application ne fonctionnait pas dans sa configuration de déploiement, et aucun test ne
+  l'avait vu. Assouplir la politique aurait annulé la défense principale — la conversion en
+  `addEventListener` était la seule issue. Aucune donnée ne voyage plus dans un attribut de
+  gestionnaire. **Deux injections HTML antérieures** ont été trouvées en chemin et
+  corrigées : le nom d'un risque dans le panneau de détail de la matrice, le nom d'un
+  client dans le sélecteur de donneur d'ordre.
+- **Un import en lot n'écrit plus une partie de ses lignes en annonçant le succès.** La
+  part aléatoire des identifiants valait **mille valeurs**, et un import tire les siens
+  dans la même milliseconde : 250 lignes annoncées, 223 écrites, aucun incident signalé —
+  et, sur le questionnaire AirCyber, un **score de conformité faux** dans un outil destiné
+  à servir de preuve en audit. Deux barrières indépendantes : le générateur du navigateur
+  passe à un compteur de session monotone plus 52 bits d'aléa cryptographique, celui de la
+  base à 122 bits, celui du serveur à 128 ; et l'import n'indexe plus ses résultats **par
+  identifiant** mais **par rang** — une propriété de forme, qui ne perd rien même si le
+  hasard est saboté. Le `backend/db/CONVENTIONS.md` §2 norme désormais un **plancher**
+  d'entropie et non plus une forme unique : imposer la même aux quatre générateurs
+  obligerait le navigateur à appeler le serveur pour créer une ligne.
+- **Le geste de l'utilisateur aboutit après une création.** Le serveur réattribuant
+  l'identifiant, une liste déjà rendue gardait une clé périmée : le clic ne menait nulle
+  part et « Supprimer la sélection » **confirmait une suppression qui n'avait pas lieu**.
+  Le balisage déjà rendu est désormais recalé, sans réafficher — ce qui préserve une
+  sélection en cours, un panneau déplié, un formulaire à demi rempli. La convention qui
+  rend ce correctif durable est inscrite dans `CLAUDE.md` §3.
+- **Un correctif d'urgence atteint le poste le jour où il est posé.** Le vhost met les
+  `.js` et `.css` en cache sept jours : sans versionnement, un correctif serait resté
+  invisible une semaine sur les postes de vingt filiales. `install.sh` calcule désormais une
+  empreinte du frontend et l'injecte dans **toutes** les URL de scripts et de feuilles de
+  style, en **échouant** si une seule reste sans jeton ; `index.html`, qui porte ces jetons,
+  passe en `no-cache, must-revalidate`.
+- **La reprise refuse avant de travailler**, et un fichier invalide reçoit le même refus
+  qu'un fichier valide : l'oracle de forme est fermé.
+- **Le catalogue des correspondances inter-référentiels devient une table de
+  configuration.** Il était réécrit et supprimé par n'importe quelle filiale, pour les
+  dix-neuf autres. L'éditer est désormais un acte d'**administration Groupe** ; le lire
+  reste ouvert, et la propagation — qui vise des données de filiale — reste offerte.
+- **`traitements.notes` retrouve sa colonne.** Le formulaire RGPD la collectait depuis
+  l'origine et le schéma ne la portait pas : la note était retirée du corps avant
+  enregistrement, et surtout un export `grc-backup` existant la **porte** — la reprise
+  l'aurait perdue en silence, sur le registre de l'article 30.
+- **L'export Excel ne ment plus** : il lisait encore la clé de stockage supprimée par la
+  bascule et retombait donc en silence sur « Global », exportant toutes les exigences et
+  nommant le fichier « global » alors qu'un donneur d'ordre était sélectionné à l'écran.
+
+**Le banc d'essai — de 306 à 505 tests**
+
+- **505 tests `node:test`, 0 échec**, en quatre familles : **260 sur la base** (socle,
+  journal, RLS, privilèges, garde-fous, vocabulaire), **145 sur l'API** (routes réellement
+  montées, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité
+  d'écriture, route de reprise), **77 sur la reprise** et **23 dans un navigateur réel**.
+- **Les tests navigateur n'existaient pas** — `grep -rl playwright` ne rendait rien hors
+  `node_modules`, alors que `CLAUDE.md` §5 les impose depuis le début du projet. Six
+  constats de la porte S2, dont les trois bloquants, ne se voient **que** là. Le banc monte
+  un serveur local qui sert `cyber-gouvernance_V4/` **tel quel**, relaie `/api/**` vers
+  l'instance Fastify réelle, et sait couper l'API comme le ferait une coupure de VPN ou
+  servir la page sous la CSP exacte du vhost de production.
+- **`db/verifier_cloisonnement.sql` passe de 93 à 107 contrôles** : ajout du catalogue
+  partagé des correspondances (C102 à C105, en refus et en symétrique), du champ retrouvé
+  du registre RGPD (C106) et de l'entropie du générateur d'identifiants (C107).
+- **Un huitième garde-fou de schéma** — l'entropie des identifiants — se branche sur
+  `f_verifier_schema()` **sans qu'aucun fichier de déploiement change** : c'est la
+  démonstration que le point d'appel unique de la vague 1 fait ce qu'il annonce.
+
+**Ce qui n'est PAS livré, et doit être dit**
+
+- **Aucune authentification, aucun droit** : toute session qui passe la porte peut écrire
+  dans sa filiale. C'est le lot L3, et la barrière provisoire est le refus fail-closed hors
+  développement.
+- **Aucune écriture au journal d'audit** par l'API : c'est le lot L5. Le journal technique
+  trace les écritures, il n'a pas valeur de preuve.
+- **Aucune limitation de rythme**, **aucun sélecteur de filiale**, **aucune pièce jointe** :
+  lots L3, L4 et L6.
+- **Des constats restent ouverts**, dont des majeurs. Ils sont pour l'essentiel d'une
+  seule famille, et elle mérite d'être nommée : **le produit engendre des identifiants à
+  quatre endroits, dans trois langages**, et le durcissement de l'un a laissé les autres
+  derrière — deux fois. C'est ce qui a fait réécrire le `backend/db/CONVENTIONS.md` §2,
+  qui norme désormais une **propriété** — un plancher de 52 bits tirés d'un générateur
+  cryptographique — au lieu de l'encodage d'une seule implémentation. Propriétaires et
+  échéances : registre des constats ouverts, `docs/PLAN_EXECUTION.md` §7.
+- **Rien n'a pu être éprouvé en conditions réelles** pour l'installation Debian 13, le TLS
+  et le mandataire inverse d'Apache, ClamAV, l'Active Directory ni le relais SMTP. Nuance :
+  la **CSP et les en-têtes** du vhost, eux, l'ont été — extraits du fichier livré et
+  appliqués à un Chromium. Les vérifications ont été menées sur **PostgreSQL 16.13** alors
+  que la cible est **PostgreSQL 17**.
+
 ### Serveur — vague 1 : le schéma relationnel (lot L1) et son outillage
 > Travail de la vague 1 terminé et **rejoué en exécution** au 31/08/2026 : migrations
 > appliquées sur base neuve, tests lancés, démonstration de cloisonnement jouée.
-> **La porte de sécurité S1 a été jouée plusieurs fois et est en cours de re-passage**
-> au moment où ces lignes sont écrites. Chaque passage a produit des correctifs, dont
-> le détail figure plus bas. Le verdict de chaque passage vit dans le journal des
-> portes de `docs/PLAN_EXECUTION.md` §7 et dans les rapports de `docs/securite/` :
-> **aucun verdict n'est annoncé ici**, et livré ne veut pas dire validé.
+> **La porte de sécurité S1 est franchie**, au 6ᵉ passage : « ✅ CONFIRMÉE FRANCHIE —
+> 0 bloquant, 0 majeur, 6 mineurs » (`docs/PLAN_EXECUTION.md` §7, rapport
+> `docs/securite/RAPPORT_S1_SEXIES.md`). Six passages, chacun mené par un auditeur qui
+> n'avait écrit aucune des lignes examinées, et chacun a trouvé ce que le précédent
+> avait manqué : **un auditeur unique n'aurait trouvé qu'un tiers des défauts**.
+>
+> Les chiffres de cette section sont ceux de la clôture de la vague 1. Plusieurs ont
+> bougé depuis (garde-fous du schéma, contrôles de cloisonnement, nombre de tests) :
+> l'état courant se lit dans la section de la vague 2 ci-dessus et dans
+> `backend/README.md` §8, jamais ici.
 
 - **Schéma métier — `002_metier_noyau.sql`** : 9 entités (clients, personnes, exigences,
   **`mesure_catalogue`**, **`mesure_mise_en_oeuvre`**, évaluations, risques, actifs,
@@ -63,8 +305,9 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   unique** qui trouve ses contrôles dans le catalogue au lieu de les réciter. Un garde-fou neuf
   respectant la convention d'écriture (`f_verifier_<x>()`, sans argument, rendant
   `(objet, anomalie, detail)`) arrive donc sur le déploiement **sans qu'aucun fichier de
-  déploiement change**. Quatre sont branchés aujourd'hui : couverture RLS, chemin de recherche
-  des fonctions, traçabilité, unicités cloisonnées. Nouveau **code de sortie 7** de
+  déploiement change**. Sept sont branchés à la clôture de cette vague — le compte courant se
+  lit dans `backend/README.md` §5, et il a augmenté depuis **sans qu'un seul fichier de
+  déploiement change**, ce qui est la démonstration attendue. Nouveau **code de sortie 7** de
   `migrate.mjs` : « migrations passées, schéma non conforme » (`CONVENTIONS.md` §19.4, §19.5).
 - **`db/verifier_cloisonnement.sql`** : la démonstration jouable devant un auditeur —
   **93 contrôles**, deux filiales montées puis annulées par un `rollback` (le script n'écrit
@@ -96,9 +339,11 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   déclencheurs et réécrire le journal. `install.sh` vérifie désormais la propriété et **échoue**
   si elle n'est pas la bonne, avec `--reprendre-propriete` pour rattraper l'existant. Ajout du
   durcissement Apache de portée serveur (`deploy/apache/durcissement-global.conf`).
-- **Ce qui n'est PAS livré, et doit être dit** : aucune API, aucune authentification, aucun
-  droit appliqué — le serveur n'expose toujours que son point de santé. La bascule de la
-  persistance de la SPA n'est pas commencée (lot L2, vague 2). **Rien n'a pu être éprouvé** en
+- **Ce qui n'est PAS livré à la clôture de cette vague, et doit être dit** : aucune API,
+  aucune authentification, aucun droit appliqué — le serveur n'expose alors que son point de
+  santé, et la bascule de la persistance de la SPA n'est pas commencée. *(L'API et la bascule
+  sont livrées par la vague 2, ci-dessus ; l'authentification reste le lot L3.)* **Rien n'a pu
+  être éprouvé** en
   conditions réelles pour l'installation Debian 13, Apache, ClamAV, l'Active Directory ni le
   relais SMTP : ces environnements n'existent pas sur la machine de développement. Les
   vérifications ci-dessus ont été menées sur **PostgreSQL 16.13** alors que la cible est

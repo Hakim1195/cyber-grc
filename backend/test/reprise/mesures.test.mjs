@@ -159,16 +159,48 @@ test('champs absents ou mal typés : la mise en œuvre reste insérable', () => 
   assert.equal(mesures.catalogue[1].nom, '', 'un nom non textuel n’est pas deviné');
 });
 
-test('scinderMesures est appelable seule, sur une charge déjà reprise', () => {
+test('scinderMesures est appelable seule, et reproductible SANS options figées', () => {
+  // ── Ce que ce test affirmait, et pourquoi il change ──────────────────────
+  //
+  // Il passait `OPTIONS_FIGEES` à `scinderMesures` et concluait « sous horloge et
+  // aléa figés, la scission est reproductible ». `scinderMesures` ne prend plus
+  // d'options du tout : l'argument était ignoré, et la conclusion attribuait à un
+  // décor la propriété qu'il fallait éprouver. Un essai vert pour la mauvaise
+  // raison endort — c'est la leçon du constat Q-3.
+  //
+  // La reproductibilité n'est plus organisée par le banc, elle est ACQUISE : le
+  // module ne tire plus, il dérive. On l'éprouve donc là où elle vit — deux appels
+  // nus, aucun décor.
   const { charge } = repriseAvecMesures([
     { id: 'MESURE-1720000000000-1', nom: 'A', statut: 'conforme', maturite: 5 },
+    // Sans identifiant : c'est CE chemin qui engendre, et donc celui qui pouvait
+    // rendre deux valeurs différentes d'un appel à l'autre.
+    { nom: 'B', statut: 'non conforme', maturite: 1 },
   ]);
 
-  const premier = scinderMesures(charge, OPTIONS_FIGEES);
-  const second = scinderMesures(charge, OPTIONS_FIGEES);
+  const premier = scinderMesures(charge);
+  const second = scinderMesures(charge);
 
-  assert.deepEqual(premier, second, 'sous horloge et aléa figés, la scission est reproductible');
-  assert.equal(premier.catalogue[0].id, 'MESURE-1720000000000-1');
+  assert.deepEqual(premier, second, 'Deux appels nus doivent rendre exactement la même scission.');
+  assert.equal(premier.catalogue[0].id, 'MESURE-1720000000000-1', 'L’identifiant du fichier est conservé.');
+
+  // La mise en œuvre reçoit un identifiant ENGENDRÉ, et il est stable d'un appel à
+  // l'autre : c'est lui qui déciderait, en base, de créer une ligne ou d'en
+  // retrouver une. Un tirage le rendrait différent à chaque scission.
+  for (const [rang, mise] of premier.miseEnOeuvre.entries()) {
+    assert.ok(estIdentifiantEngendre('MMO', mise.id), `Hors convention : ${String(mise.id)}`);
+    assert.equal(mise.id, second.miseEnOeuvre[rang].id, 'Identifiant de mise en œuvre instable.');
+  }
+  assert.equal(
+    new Set(premier.miseEnOeuvre.map((m) => m.id)).size,
+    premier.miseEnOeuvre.length,
+    'Deux mises en œuvre ne peuvent pas partager un identifiant : l’unicité (filiale, mesure) en dépend.',
+  );
+
+  // Et la mesure SANS identifiant en a reçu un, dérivé lui aussi et donc stable.
+  const engendree = premier.catalogue[1];
+  assert.ok(estIdentifiantEngendre('MESURE', engendree.id), `Hors convention : ${String(engendree.id)}`);
+  assert.equal(engendree.id, second.catalogue[1].id);
 });
 
 test('une charge sans mesure rend deux collections vides, pas une erreur', () => {

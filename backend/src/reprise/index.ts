@@ -1545,7 +1545,8 @@ function controler(charge: ChargeV12, journal: JournalAnomalies): void {
           'identifiant-duplique',
           'avertissement',
           `${nom} : l’identifiant « ${identifiant} » apparaît plusieurs fois. ` +
-            'La clé primaire refusera le doublon ; l’import doit trancher avant insertion.',
+            'La reprise entière sera refusée et rien ne sera écrit : corrigez le fichier ' +
+            'avant de le reprendre.',
           { collection: nom, identifiant, champ: 'id' },
         );
       }

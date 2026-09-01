@@ -1,30 +1,39 @@
 # Modèle de données — Cyber GRC
 
-> Document de référence du **modèle navigateur**, celui de la SPA
-> `cyber-gouvernance_V4/` : toutes les données décrites ici vivent dans le
-> navigateur (IndexedDB, avec repli localStorage). À tenir à jour à chaque
-> évolution du frontend.
+> ## ⚠️ À lire avant tout : ce document ne dit plus où vivent les données
+>
+> Il a été écrit pour le **produit 100 % navigateur**, où l'objet `data` décrit ici
+> *était* la base. Depuis le lot L2, **les données vivent sur le serveur, dans
+> PostgreSQL** (`../docs/PLAN_SERVEUR.md` §1.3). Ce document n'est pas caduc pour
+> autant — il décrit encore deux choses bien réelles, et c'est pour cela qu'il reste :
+>
+> | Ce qu'il décrit | Statut |
+> |---|---|
+> | La forme de l'objet `data` **que voient les modules métier**, à travers la façade synchrone `DataStore` préservée par le lot L2 | ✅ **toujours vrai** — c'est ce que le serveur rend sur `/api/donnees`, dans cette forme exacte |
+> | La forme du **fichier d'échange `grc-backup`** (enveloppe + charge utile) | ✅ **toujours vrai** — c'est le format de reprise d'une filiale déjà équipée, et de remise des données à une filiale qui sort du groupe (`PLAN_SERVEUR` §2.6) |
+> | La **couche de stockage** : IndexedDB, `localStorage`, points de restauration locaux, coffre de chiffrement | ❌ **caduc** — voir §1, réécrit |
+> | Les **cascades de suppression** écrites dans `DataStore.deleteX` | ⚠️ **transposées, et pas à l'identique** — voir l'encadré ci-dessous |
+>
+> Dit autrement : ce document décrit désormais une **représentation de transport**, pas
+> un lieu de stockage. La vérité vit dans le schéma relationnel du serveur —
+> `backend/db/migrations/001_socle.sql` → `004_rls.sql`, **47 tables** — dont les règles
+> sont figées dans **[`backend/db/CONVENTIONS.md`](../backend/db/CONVENTIONS.md)** :
+> §16 pour le découpage Groupe/Filiale, §17 à §21 pour les arbitrages pris aux portes de
+> sécurité S1 et S2. **Ces règles ne sont pas recopiées ici** — deux textes normatifs qui
+> se répètent divergent, et la divergence est silencieuse. La correspondance entre les
+> deux modèles est au **§1.5**.
 
-> ## ⚠️ Il existe désormais un second schéma : le schéma relationnel serveur
+> ### Les deux modèles diffèrent volontairement
 >
-> Le produit est passé à une architecture client/serveur multi-filiales
-> (`../docs/PLAN_SERVEUR.md`). Un **schéma PostgreSQL** existe et est appliqué :
-> `backend/db/migrations/001_socle.sql` → `004_rls.sql`, 47 tables, dont les arbitrages
-> sont figés dans **[`backend/db/CONVENTIONS.md`](../backend/db/CONVENTIONS.md)** — §16
-> pour le découpage initial, **§17 à §19 pour les décisions prises au fil de la porte de
-> sécurité S1**, qui ont amendé plusieurs règles écrites ci-dessous.
->
-> **Ce document reste la référence du frontend** — il n'est pas remplacé. Mais il ne
-> décrit pas la base du serveur, et les deux modèles diffèrent volontairement :
->
-> | Ici (navigateur) | Là (PostgreSQL) |
+> | Ici (objet `data`) | Là (PostgreSQL) |
 > |---|---|
 > | une entité **`mesures`** unique | **scindée** en `mesure_catalogue` (la *définition* du contrôle, niveau Groupe ou local) et `mesure_mise_en_oeuvre` (l'*évaluation* du contrôle dans une filiale, unique sur `(filiale_id, mesure_id)`). Sans cette scission, les filiales ne sont plus comparables et la vision Groupe additionne des grandeurs incomparables (`CONVENTIONS.md` §16.2) |
 > | une mesure se **supprime** | une mesure du socle Groupe déjà évaluée ou référencée **ne se supprime pas** : elle s'**archive** (`mesure_catalogue.statut` = `active` / `archivee`, plus `archive_le`). Elle reste lisible et reste rattachée à tout ce qui la référence — la preuve historique survit — mais n'est plus proposée pour de nouvelles évaluations (`CONVENTIONS.md` §17.6) |
-> | tableaux d'identifiants dans l'objet (`exigences_liees`, `risques_lies`, `actifs_lies`, `mesure_ids`, `dependances[]`, `mappings.refs`) | **tables de liaison** n-n avec de vraies clés étrangères (`risque_exigences`, `actif_risques`, `processus_actifs`, `actif_dependances`, `evaluation_mesures`, `incident_actifs`, `traitement_mesures`, `document_referentiels`, `mapping_exigences`) |
-> | cascades de suppression **écrites dans le code** (`DataStore.deleteX`) | suppressions **portées par le schéma** — mais **pas les mêmes** : voir l'encadré ci-dessous |
+> | tableaux d'identifiants dans l'objet (`exigences_liees`, `risques_lies`, `actifs_lies`, `mesure_ids`, `dependances[]`, `mappings.refs`) | **tables de liaison** n-n avec de vraies clés étrangères — la liste est au §1.5 |
+> | cascades de suppression **écrites dans le code** (`DataStore.deleteX`) | suppressions **portées par le schéma** — mais **pas les mêmes** : voir l'encadré suivant |
 > | aucune notion de filiale | **cloisonnement par filiale** : colonne `filiale_id`, Row Level Security activée *et forcée* sur les 47 tables, **clés étrangères et unicités composites** `(référence, filiale_id)` (`CONVENTIONS.md` §17.1 et §19.1) |
-> | `updatedAt` posé par le code appelant | **traçabilité imposée par la base** : sur les 42 tables portant le bloc `version` / `cree_le` / `cree_par` / `modifie_le` / `modifie_par`, un déclencheur `before insert` **ignore ce que l'appelant envoie** dans ces colonnes et les fixe lui-même (`CONVENTIONS.md` §18.1). À l'import d'un export `grc-backup`, l'auteur tracé est donc **celui qui importe**, à la date de l'import |
+> | `updatedAt` posé par le code appelant | **traçabilité imposée par la base** : sur les 42 tables portant le bloc `version` / `cree_le` / `cree_par` / `modifie_le` / `modifie_par`, un déclencheur `before insert` **ignore ce que l'appelant envoie** dans ces colonnes et les fixe lui-même (`CONVENTIONS.md` §18.1). À la reprise d'un export `grc-backup`, l'auteur tracé est donc **celui qui importe**, à la date de l'import |
+> | rien d'équivalent | un compteur **`version`** par enregistrement, qui porte le verrouillage optimiste — voir §1.4 |
 > | rien d'équivalent | `documents` et `document_referentiels` portent une **colonne engendrée** (`portee_groupe`, = `filiale_id is null`) qui entre dans une clé étrangère. PostgreSQL refuse qu'on lui donne une valeur : **toute insertion nomme ses colonnes**, et un aller-retour naïf qui relit une ligne entière puis la réinsère échoue (`CONVENTIONS.md` §18.6) |
 >
 > ### ⚠️ Les cascades du §3 ne se transposent pas telles quelles
@@ -49,14 +58,18 @@
 > de quelqu'un qui n'y a jamais travaillé, dans des lignes que l'auteur ne peut même pas
 > lire. Délier reste possible, mais devient un **geste explicite**, fait dans le périmètre
 > de celui qui le fait — la couche applicative délie puis supprime, dans la même
-> transaction, exactement comme aujourd'hui côté navigateur.
+> transaction, exactement comme le faisait le navigateur.
 >
 > Deux choses **ne** changent **pas**, et c'est délibéré : les **identifiants texte**
-> (`"RISK-<horodatage>-<aléa>"`) restent les clés primaires — c'est ce qui rend la
-> reprise d'un export `grc-backup` exacte au round-trip — et les **valeurs
-> d'énumération** sont reprises mot pour mot, casse et accents compris.
+> restent les clés primaires — c'est ce qui rend la reprise d'un export `grc-backup`
+> exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
+> mot, casse et accents compris.
 
 Version de schéma courante : **`SCHEMA_VERSION = 12`** (défini dans `js/core/datastore.js`).
+Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
+vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v12**. Elle est
+indépendante du numéro des migrations SQL.
 > v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`.
 > v4 (chantier Incidents) : ajout du tableau `incidents`.
 > v5 (chantier Documentaire) : ajout du tableau `documents`.
@@ -77,42 +90,45 @@ Version de schéma courante : **`SCHEMA_VERSION = 12`** (défini dans `js/core/d
 
 ---
 
-## 1. Couche de stockage
+## 1. Où vivent les données, et sous quelle forme
 
-### 1.1 IndexedDB (stockage durable principal)
-Base `cyber-grc-db` (voir `js/core/persistence.js`), deux object stores :
+### 1.1 La source de vérité est le serveur
 
-| Store | Clé | Contenu |
-|-------|-----|---------|
-| `kv` | chaîne | `"current"` → **enveloppe** de l'instantané ; `"meta"` → `{ schemaVersion, updatedAt, encrypted }` |
-| `backups` | `id` auto-incrément | points de restauration versionnés (index `ts`, `type`) |
+| | Avant (produit navigateur) | Depuis le lot L2 |
+|---|---|---|
+| Source de vérité | IndexedDB `cyber-grc-db`, store `kv`, clé `current` | **PostgreSQL**, sur le serveur, cloisonné par filiale |
+| Points de restauration | store `backups`, sur le poste | sauvegarde du serveur (`backend/README.md` §6) |
+| Chiffrement au repos | coffre opt-in du navigateur (PBKDF2 600k + AES-256-GCM) | **chiffrement disque de la VM** — le coffre a été retiré : il ne protégeait plus rien |
+| Miroir `localStorage` | instantané de secours en clair | supprimé |
+| `cyber-context` (« périmètre actif ») | choisi et mémorisé dans le navigateur | **le périmètre vient du serveur** (`/api/session`) ; la clé est purgée au démarrage |
+| Export `grc-backup` | sauvegarde | **format d'échange** (`PLAN_SERVEUR` §2.6) |
 
-**Enveloppe de stockage** (`current` et champ des backups) :
-- Non chiffré : `{ enc: false, data: <objet> }`
-- Chiffré (protection active) : `{ enc: true, iv, ct }` (AES-256-GCM)
+Ce qui subsiste d'IndexedDB, et rien d'autre : `js/core/persistence.js` sait encore
+**lire** la base héritée d'un poste, en lecture seule et sans jamais provoquer de
+migration, pour que l'utilisateur puisse l'exporter puis la reprendre.
+`idbAvailable()` rend `false` **définitivement**, ce qui fait emprunter partout le
+chemin « pas de stockage local ». Rien n'est effacé de ce poste sans un geste
+explicite de l'utilisateur, et jamais avant que ses données aient été mises à l'abri.
 
-Un enregistrement `backups` : `{ id, ts, type: "auto"|"manual", label, schemaVersion, sig, (enc/iv/ct | data) }`
-(`sig` = empreinte du contenu clair, pour dédupliquer sans déchiffrer).
+### 1.2 Ce que les modules métier voient, en revanche, n'a pas changé
 
-**Chiffrement au repos (opt-in)** : quand une protection par mot de passe est active
-(`js/core/vault.js`), `data`/backups sont chiffrés ; le miroir localStorage en clair est désactivé.
+C'est la décision qui rend le chantier faisable (`PLAN_SERVEUR` §1.3, risque projet
+P3) : **la façade synchrone de `DataStore` est préservée**. Les modules appellent
+toujours `getX / addX / updateX / deleteX`, toujours de façon synchrone, sur le même
+objet `data` en mémoire. Ce qui a basculé, c'est ce qu'il y a *dessous* :
 
-**Fichier d'export** (`grc-backup`) :
-```jsonc
-{ "format":"grc-backup", "version":12, "encrypted":false, "createdAt":"ISO",
-  "app":"cyber-grc-dedienne", "payload": <objet data> }
-// `version` = SCHEMA_VERSION au moment de l'export (12 aujourd'hui), pas un numéro
-// de format : c'est elle qui pilote les migrations à la relecture.
-// chiffré : "encrypted":true, "kdf":{salt,iterations,hash}, "cipher":{iv,ct} (payload absent)
-```
-
-### 1.2 localStorage (secours + petits réglages)
-- `cyber-gouvernance-data` : ancienne base (migrée automatiquement vers IndexedDB au 1er chargement) + miroir de secours anti-crash.
-- `cyber-audits`, `cyber-revues` : anciennes clés (audits/revues), désormais **migrées et intégrées** à la base unifiée.
-- `cyber-context` : périmètre actif du sélecteur (`"global"` ou un `client.id`).
-- `cyber-last-backup` : date du dernier export JSON (affichage).
+- au démarrage, `data` est **chargé depuis `/api/donnees`**, dans la forme exacte
+  décrite par ce document ;
+- `save()` — toujours l'entonnoir unique appelé après chaque mutation — ne réécrit
+  plus un instantané complet : il réveille `js/core/sync.js`, qui compare l'état en
+  mémoire à un **instantané de référence** et n'envoie que **l'enregistrement
+  modifié**, sous verrouillage optimiste ;
+- un sondage périodique rapatrie le travail des autres utilisateurs.
 
 ### 1.3 Instantané complet (objet `data`)
+
+Inchangé — c'est aussi la charge utile d'un fichier `grc-backup` :
+
 ```jsonc
 {
   "schemaVersion": 12,   // = SCHEMA_VERSION courant
@@ -126,14 +142,153 @@ Un enregistrement `backups` : `{ id, ts, type: "auto"|"manual", label, schemaVer
   "documents": [],      // v5 — chantier Documentaire
   "traitements": [],    // v6 — chantier RGPD (article 30)
   "mappings": [],       // v7 — chantier 3 (surcouche des correspondances inter-référentiels)
-  "history": []         // v8 — chantier 7 (indicateurs historisés : courbes de tendance)
+  "history": [],        // v8 — chantier 7 (indicateurs historisés : courbes de tendance)
+  "personnes": []       // v11 — chantier Personnel (annuaire)
 }
 ```
 
-### 1.4 Convention d'identifiants
-`"<PREFIXE>-" + Date.now()` (parfois `+ Math.floor(Math.random()*1000)` à l'import).
-> ⚠️ Dette : `Date.now()` seul est sujet à collision (deux créations dans la même
-> milliseconde). Voir `AUDIT.md`.
+**Fichier d'export `grc-backup`** — l'enveloppe, elle aussi inchangée :
+
+```jsonc
+{ "format":"grc-backup", "version":12, "encrypted":false, "createdAt":"ISO",
+  "app":"cyber-grc-dedienne", "payload": <objet data> }
+// `version` = SCHEMA_VERSION au moment de l'export, pas un numéro de format :
+// c'est elle qui pilote les migrations à la relecture.
+// chiffré : "encrypted":true, "kdf":{salt,iterations,hash}, "cipher":{iv,ct} (payload absent)
+```
+
+⚠️ **Le serveur refuse explicitement une enveloppe chiffrée** : la phrase de passe
+n'existe plus dans cette version. Un instantané chiffré par l'ancien coffre doit être
+exporté depuis l'ancienne version de l'application, en clair, avant d'être repris.
+
+### 1.4 Le numéro de version d'un enregistrement — et pourquoi il n'est pas dans l'enregistrement
+
+Chaque ligne du serveur porte un compteur **`version`**, incrémenté à chaque écriture.
+C'est lui qui porte le **verrouillage optimiste**, la parade au risque projet P1 —
+*l'écrasement silencieux* : le serveur écrit avec
+`update … where id = $1 and version = $2`, et zéro ligne modifiée vaut refus, jamais
+écrasement (`CONVENTIONS.md` §15, code `GRC03`).
+
+**Côté navigateur, ce numéro ne vit pas dans l'enregistrement.** Il est tenu dans une
+table à part, interne à `js/core/sync.js` (`versions[collection] : id → {v, vmo}`), et
+les champs `_version` / `_versionMiseEnOeuvre` que le serveur ajoute sont **retirés
+des enregistrements dès leur réception**.
+
+La raison est celle-ci, et elle vaut d'être comprise avant d'être trouvée gênante :
+`data` garde ainsi **exactement la forme décrite par ce document** — celle que les
+modules connaissent, et celle du fichier `grc-backup`. Un module qui reconstruit un
+objet en repartant de ses champs (ce que font plusieurs formulaires) ne peut donc pas
+**perdre la version au passage** : ce serait une porte ouverte au risque P1, et elle
+serait invisible.
+
+Conséquences pratiques :
+
+- **un export `grc-backup` ne porte aucun numéro de version**, et n'a pas à en porter :
+  à la reprise, la base impose `version = 1` à l'insertion et ignore ce qu'on lui
+  enverrait (`CONVENTIONS.md` §18.1) ;
+- `mesures` en porte **deux**, parce que l'entité est scindée côté serveur (§1.5) :
+  celle de la définition et celle de la mise en œuvre.
+
+### 1.5 Correspondance entre l'objet `data` et le schéma serveur
+
+**21 collections, 21 entités.** Les noms coïncident partout sauf pour `mesures` :
+
+| Collection `data` | Table(s) PostgreSQL | Préfixe d'identifiant |
+|---|---|---|
+| `clients` | `clients` | `CLI` |
+| `personnes` | `personnes` | `PERS` |
+| `exigences` | `exigences` | `EX` |
+| `actions` | `actions` | `ACT` |
+| `risques` | `risques` | `RISK` |
+| `actifs` | `actifs` | `ACTIF` |
+| `processus` | `processus` | `BIA` |
+| `crise` | `crise` | `CRISE` |
+| `scenarios_pra` | `scenarios_pra` | `SCEN` |
+| `tests_pra` | `tests_pra` | `TEST` |
+| `prestataires` | `prestataires` | `PREST` |
+| `mco_actions` | `mco_actions` | `MCO` |
+| `audits` | `audits` | `AUD` |
+| `revues` | `revues` | `REV` |
+| `evaluations` | `evaluations` | `EVAL` |
+| **`mesures`** | **`mesure_catalogue`** (la définition) **+ `mesure_mise_en_oeuvre`** (l'évaluation dans une filiale) | `MESURE`, et `MMO` pour la mise en œuvre |
+| `incidents` | `incidents` | `INC` |
+| `documents` | `documents` | `DOC` |
+| `traitements` | `traitements` | `TRT` |
+| `mappings` | `mappings` | `MAP` |
+| `history` | `history` | `HIST` |
+
+**La scission des mesures**, en une phrase : l'entité unique du modèle navigateur
+portait deux choses de nature différente — la **définition** du contrôle (la même
+partout, niveau Groupe) et son **évaluation** (propre à chaque site, niveau Filiale).
+Le frontend continue de voir **une** entité ; le serveur en tient **deux**. Sans cela,
+les filiales ne sont plus comparables et la vision Groupe additionne des grandeurs
+incomparables. Attention au piège : les deux tables portent une colonne `statut`, de
+sens **opposé** — cycle de vie du contrôle d'un côté (`active` / `archivee`),
+conformité de l'autre. Le `statut` que voit le frontend est celui de la **mise en
+œuvre**. `MMO` est le seul identifiant du modèle qui n'existe dans aucun export
+`grc-backup` : il est engendré à la reprise, jamais lu depuis un fichier.
+
+**Les tableaux d'identifiants deviennent des tables de liaison** — neuf, avec de
+vraies clés étrangères :
+
+| Champ de l'objet `data` | Table de liaison |
+|---|---|
+| `risques[].exigences_liees` | `risque_exigences` |
+| `actifs[].risques_lies` | `actif_risques` |
+| `actifs[].dependances` | `actif_dependances` |
+| `processus[].actifs_lies` | `processus_actifs` |
+| `evaluations[].mesure_ids` | `evaluation_mesures` |
+| `incidents[].actifs_touches` | `incident_actifs` |
+| `documents[].referentiels` | `document_referentiels` |
+| `traitements[].mesures_ids` | `traitement_mesures` |
+| `mappings[].refs` | `mapping_exigences` |
+
+Quelques champs changent de nom de colonne (`tests_pra.date` → `date_test`, par
+exemple) ; ces alias sont déclarés une fois dans le registre d'entités du serveur, et
+**tout le reste — colonnes, types, contraintes, cloisonnement — est découvert dans le
+catalogue PostgreSQL**, jamais recopié.
+
+### 1.6 Convention d'identifiants
+
+`"<PRÉFIXE>-<horodatage>-<aléa>"` — la forme historique du produit, conservée.
+
+⚠️ Ce qui est normatif est une **propriété, pas un encodage** : la part aléatoire
+porte **au moins 52 bits tirés d'un générateur cryptographique**. Le produit engendre
+des identifiants à **quatre endroits, dans trois langages**, et les formes diffèrent
+légitimement — imposer une forme unique obligerait le navigateur à appeler le serveur
+pour créer une ligne. Le tableau des quatre formes, le plancher et son contrôle sont
+dans **[`backend/db/CONVENTIONS.md`](../backend/db/CONVENTIONS.md) §2**, qui fait foi ;
+ils ne sont pas recopiés ici.
+
+> **Dette soldée.** Ce paragraphe a longtemps porté un avertissement — `Date.now()`
+> seul, sujet à collision. Il valait mieux que ce qu'on croyait : la part aléatoire
+> tenait sur **mille valeurs**, ce qui donne **24 collisions sur 250 tirages** dans une
+> même milliseconde, c'est-à-dire à l'échelle d'un import courant. Le défaut a produit
+> le seul constat bloquant d'un passage de la porte S2 — un import qui écrit 223 lignes
+> sur 250 **et annonce le succès**, donc un score de conformité faux dans un outil
+> destiné à servir de preuve en audit.
+
+**Ce que les identifiants texte garantissent, et qui explique qu'on les ait gardés
+plutôt que de passer à des UUID ou des `serial` :** la reprise d'un export
+`grc-backup` est un **round-trip exact**. Les identifiants du fichier deviennent tels
+quels les clés primaires, et les huit clés étrangères implicites du modèle (`ref_id`,
+`risque_id`, `client_id`, `exigence_id`, `scenario_id`, `mesure_id`, `evaluation_id`,
+`incident_id`) continuent de pointer sans table de correspondance.
+
+**Une exception, et une seule** : quand l'identifiant d'un fichier est **déjà pris dans
+le domaine global par une ligne d'une filiale que l'appelant ne voit pas**, le serveur
+en retient un autre — **dérivé** d'une empreinte de `(filiale, table, identifiant du
+fichier)`, de la forme `<PRÉFIXE>-r-<empreinte>` — et **réécrit toutes les références**
+de la charge qui le visaient. La dérivation rend la reprise **idempotente** : trois
+reprises du même fichier convergent sur **une** ligne au lieu d'en cloner trois.
+L'absence d'horodatage dans cette forme est délibérée : un identifiant dérivé n'a pas
+d'instant de création, et y en laisser un crédible mentirait au lecteur du journal.
+
+Le domaine `id_metier` reste **volontairement permissif** (texte non vide, ≤ 64
+caractères) : les exports anciens contiennent des identifiants sans suffixe aléatoire
+(`ACT-1720000000000`) et des identifiants de processus BIA sans préfixe. C'est le
+format *engendré* qui est normé, pas le format *accepté* — une expression régulière
+stricte casserait la reprise de données réelles.
 
 ---
 
@@ -405,6 +560,7 @@ actions ; `deleteRisque`/`deleteActif` nettoient les références (`risque_id`, 
 | `personnes_concernees`, `categories_donnees` | string | |
 | `donnees_sensibles` | bool | catégories particulières (art. 9) |
 | `destinataires`, `transfert_hors_ue`, `duree_conservation` | string | |
+| `notes` | string | notes libres du responsable de traitement. Collectée par le module depuis l'origine, elle **manquait à ce tableau et au schéma serveur** : le serveur la retirait du corps avant d'enregistrer le reste, et un export existant la portant l'aurait perdue en silence à la reprise — sur le registre de l'article 30. Colonne ajoutée à `traitements` (porte S2, constat M-8) |
 | `mesures_ids` | string[] | **réutilise le pivot** `mesures` (`deleteMesure` délie) |
 
 ### Correspondance inter-référentiels — `mappings` (v7, surcouche)
@@ -471,11 +627,16 @@ Crise, Prestataire, McoAction : autonomes
 
 Cascades implémentées : `deleteClient`→exigences→actions ; `deleteExigence`→délie
 risques + supprime actions liées ; `deleteRisque`→délie actifs + supprime actions liées ;
-`deleteActif`→délie incidents (`actifs_touches`) + **purge les `dependances` pointant vers l'actif** (v9).
-> ⚠️ Orphelins possibles : `TestPra.scenario_id` vers un scénario supprimé (non nettoyé).
-> ⚠️ **Côté serveur, ces règles ne se transposent pas telles quelles** : les suppressions
-> qui touchent `mesure_catalogue` (et `utilisateurs`) sont en `restrict`, pas en `set null`.
-> Voir l'encadré en tête de document et `backend/db/CONVENTIONS.md` §17.6 et §18.2.
+`deleteActif`→délie incidents (`actifs_touches`) + **purge les `dependances` pointant vers l'actif** (v9) ;
+`deleteScenarioPra`→supprime ses tests (`scenario_id`). Les orphelins hérités d'anciennes
+suppressions se détectent et se nettoient (`getOrphanTests` / `deleteOrphanTests`) ; côté
+serveur, la clé étrangère `tests_pra → scenarios_pra` est en `cascade` et le cas ne se
+produit plus.
+> ⚠️ **Côté serveur, ces règles ne se transposent pas toutes telles quelles** : les
+> suppressions qui touchent `mesure_catalogue` (et `utilisateurs`) sont en `restrict`, pas
+> en `set null` — elles sont **refusées**, et le contrôle du socle Groupe s'**archive** au
+> lieu de disparaître. Voir l'encadré en tête de document et
+> `backend/db/CONVENTIONS.md` §17.6 et §18.2.
 
 ---
 

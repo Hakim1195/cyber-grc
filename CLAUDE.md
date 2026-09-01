@@ -16,10 +16,21 @@
 > l'appliquer. Les sections 2 à 7 ci-dessous décrivent l'**application frontend
 > existante**, qui reste la base de code à faire évoluer — pas la cible d'architecture.
 >
-> **Reprise de travail** : lire `docs/PLAN_SERVEUR.md` (le quoi), puis
-> `docs/PLAN_EXECUTION.md` (le comment : vagues, portes, périmètre de chaque agent),
-> puis `backend/README.md` §8 (« Avancement ») pour l'état réel des lots — et reprendre
-> à la vague en cours.
+> **Reprise de travail — dans cet ordre, et l'ordre compte** :
+>
+> 1. **[`docs/PLAN_SERVEUR.md`](docs/PLAN_SERVEUR.md)** — le *quoi* (cadrage clos, fait autorité) ;
+> 2. **[`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md)** — le *comment* : vagues, périmètre
+>    exclusif de chaque agent, grille de sécurité, **journal des portes** (§7, la seule source
+>    des verdicts) et **registre des constats ouverts** (§7 également, avec propriétaire et
+>    échéance) ;
+> 3. **[`backend/README.md`](backend/README.md) §8** — l'état réel des lots et les chiffres
+>    rejoués ;
+> 4. **[`backend/db/CONVENTIONS.md`](backend/db/CONVENTIONS.md) §22** si l'on ouvre la vague 3 :
+>    la liste des conditions d'entrée à épuiser.
+>
+> Puis reprendre où le §8 de **ce** document dit de reprendre (« ▶ REPRENDRE ICI »).
+> **Au 01/09/2026 : vague 3, lots L3 puis L5.** Les lots L0, L1 et L2 sont livrés et
+> leurs portes S1 et S2 franchies — ne pas les refaire.
 
 ## 1. Le produit
 
@@ -28,12 +39,16 @@ RSSI/consultants **et** non-experts à sensibiliser → chaque concept doit avoi
 **note pédagogique** (`Help.tip(...)`).
 
 - **Frontend** : `cyber-gouvernance_V4/` — SPA maison (HTML/CSS/JS, sans framework,
-  sans build). ~17 100 lignes. Conservée telle quelle : seule sa couche de
-  persistance bascule vers le serveur (voir `PLAN_SERVEUR` §1.3).
+  sans build), 26 modules métier. Conservée telle quelle : **seule sa couche de
+  persistance a basculé** vers le serveur (`PLAN_SERVEUR` §1.3, lot L2 livré), et la
+  façade synchrone `DataStore` est intacte — aucun module métier n'a été réécrit.
 - **Backend** : `backend/` — Node.js 22 + TypeScript + PostgreSQL, Debian 13,
-  **sans conteneur**, Apache2 en frontal. En construction.
-- **Branche de travail** : **`main`** — consigne utilisateur maintenue : tout pousser
-  sur `main`, ne pas créer de branche de travail.
+  **sans conteneur**, Apache2 en frontal. Lots L0, L1 et L2 livrés ; **pas encore
+  d'authentification** (lot L3), donc **il ne sert de données qu'en développement**.
+- **Branche** : la consigne utilisateur reste **« tout pousser sur `main`, ne pas créer
+  de branche de travail »**. ⚠️ Le chantier serveur est de fait conduit sur
+  **`claude/backend-plan-serveur-hj46fs`** : ne pas « corriger » l'un ou l'autre sans
+  demander — c'est un arbitrage qui appartient à l'utilisateur, pas à une session.
 - **Marque** : Dedienne Aerospace pour le frontend actuel ; la cible serveur rend
   **logo et raison sociale configurables par filiale** (`PLAN_SERVEUR` §6).
 
@@ -43,7 +58,7 @@ RSSI/consultants **et** non-experts à sensibiliser → chaque concept doit avoi
 |-------|----------|
 | Identité visuelle | **Orange dominant** (Option B) : structure bleue `#2059A6`, action/marque orange `#E9631B`. Couleurs sémantiques strictes (vert=conforme, orange=partiel, rouge=critique, gris=NA) réservées aux statuts. |
 | Marque | **Garder Dedienne Aerospace** (logo `assets/logo/logo-dedienne.png`). |
-| Chiffrement | **Opt-in** (désactivé par défaut, activable dans Paramètres). |
+| ~~Chiffrement navigateur~~ | ⚠️ **CADUC depuis le lot L2.** Le coffre opt-in du navigateur est **retiré** : plus aucune donnée n'est stockée sur le poste, et un coffre qui ne protège rien est une fausse assurance. Le chiffrement au repos est celui du **disque de la VM** (`PLAN_SERVEUR` §1.9). L'export de fichier, lui, peut toujours être chiffré. |
 | Multi-« Donneurs d'ordre » | **Conservé** (pertinent pour un sous-traitant aéro), libellés génériques. |
 | ~~Full frontend~~ | ⚠️ **CADUC depuis le chantier serveur.** Valait pour le produit local. La cible est désormais client/serveur (`docs/PLAN_SERVEUR.md`). Reste vrai : **aucun CDN runtime ni service tiers**, libs embarquées localement. |
 
@@ -63,40 +78,87 @@ cyber-gouvernance_V4/
 ├── css/style.css              styles (consomme les tokens)
 ├── assets/logo/               logo Dedienne + favicon
 ├── js/core/
-│   ├── persistence.js         IndexedDB (stores kv + backups, quota)
-│   ├── crypto.js              Web Crypto (PBKDF2 + AES-GCM)
-│   ├── vault.js               coffre OPT-IN (chiffrement à enveloppe DEK/KEK) + écran de verrouillage
-│   ├── datastore.js           SOURCE DE VÉRITÉ (mémoire) + persistance ; API CRUD synchrone
+│   ├── api.js         (L2)    SEUL point du frontend qui parle au réseau (/api/…)
+│   ├── session.js     (L2)    périmètre TEL QUE LE SERVEUR LE RÉSOUT (objet gelé, sans mutateur)
+│   ├── sync.js        (L2)    BASCULE : chargement, écritures ciblées, verrouillage optimiste, sondage
+│   ├── reprise.js     (L2)    reprise de la base héritée d'un poste (export puis import)
+│   ├── persistence.js         ne persiste plus rien — LIT la base IndexedDB héritée, en lecture seule
+│   ├── crypto.js              Web Crypto (PBKDF2 + AES-GCM) — sert encore à l'export chiffré
+│   ├── vault.js               coffre RETIRÉ ; devenu la PORTE DE DÉMARRAGE (liaison au serveur)
+│   ├── datastore.js           SOURCE DE VÉRITÉ EN MÉMOIRE ; API CRUD synchrone — façade préservée
 │   ├── router.js              routeur par hash (#/route, #/route/:id)
+│   ├── ui.js                  helpers partagés (UI.genId, badges, suppression, multi-personnes)
 │   └── help.js                composant tooltip pédagogique `Help.tip(text)`
 ├── js/services/
-│   ├── backup.js              export/import fichier + bandeau de rappel
+│   ├── backup.js              export/import `grc-backup` — FORMAT D'ÉCHANGE, plus une sauvegarde
 │   ├── importExcel.js, exportExcel.js, exportPDF.js
 │   ├── echeances.js           AGRÉGATEUR d'échéances (lecture seule) `window.Echeances`
-├── js/modules/                1 module = 1 domaine (IIFE `XxxModule.renderList/renderDetail`)
+├── js/modules/                26 modules ; 1 module = 1 domaine (IIFE `XxxModule.renderList/renderDetail`)
 │   └── dashboard, synthese, echeances, clients, personnel, actifs, cartographie, risques, matrice, exigences,
+│       referentiels, mesures, conformite, mapping, incidents, documents, rgpd,
 │       actions, bia, crise, pra_scenarios, pra_mco, pra_tests,
 │       pra_prestataires, audits, settings
 ├── js/lib/xlsx.full.min.js    SheetJS (embarqué)
-└── js/app.js                  bootstrap (gate Vault → init → routes → breadcrumb/menu)
+└── js/app.js                  bootstrap (Vault.boot = liaison serveur → init → routes → breadcrumb/menu)
 ```
 
 ### Conventions
 - **UI en français.** Voix active, libellés orientés action.
 - Module = IIFE retournant `{ render / renderList / renderDetail }`. Rendu via `app.innerHTML = template`.
 - **DataStore : API 100 % synchrone** pour les modules (`getX/addX/updateX/deleteX`).
-  La persistance (IndexedDB, chiffrement) est asynchrone SOUS le capot ; ne pas casser l'API sync.
-- **Sécurité XSS** : échapper toute donnée utilisateur injectée en DOM. Un helper
-  `escapeHtml` existe dans `settings.js` ; **dette ouverte** : le généraliser (voir AUDIT §3.1).
+  L'asynchrone — hier IndexedDB, aujourd'hui le serveur — est absorbé **sous** la façade,
+  dans `js/core/sync.js` et là seulement. **Ne pas casser l'API sync** : c'est la parade au
+  risque projet P3, et c'est ce qui a permis de basculer 26 modules sans en réécrire un seul.
+- **Sécurité XSS** : échapper toute donnée utilisateur injectée en DOM. `escapeHtml` est
+  partagé (`window.escapeHtml`) et généralisé à tous les modules — la dette du chantier 9
+  est soldée. La porte S2 a néanmoins trouvé deux injections résiduelles : l'échappement
+  ne se relâche jamais, y compris dans un panneau de détail ou un `<option>`.
+- **Aucun gestionnaire en ligne.** Pas d'`onclick=`, `onchange=`, `oninput=`, `onsubmit=`
+  dans le balisage : la **politique de sécurité de contenu du vhost livré les bloque**, et
+  l'application ne fonctionnait pas dans sa configuration de déploiement. On branche après
+  rendu (`addEventListener`), et **aucune donnée ne voyage dans un attribut de gestionnaire**.
+- **L'identifiant d'un enregistrement se lit dans un attribut du DOM au moment du clic,
+  jamais capturé en chaîne dans une fermeture.** Écrire
+  `row.dataset.id = enr.id` puis `row.onclick = () => Router.navigateTo('/actifs/' + row.dataset.id)`,
+  et non `const id = enr.id; …() => …(id)`. Raison : **le serveur réattribue l'identifiant à
+  la création** — proposer le sien est refusé (oracle d'existence inter-filiales). Une
+  fermeture qui a capturé l'ancien continue donc de viser un enregistrement qui n'existe
+  plus, **en silence** : le clic ne mène nulle part, et « Supprimer la sélection » confirme
+  une suppression qui n'a pas lieu. Le recalage du balisage — `recalerBalisage()`, interne
+  à `js/core/sync.js` et appelé par le renommage — réécrit les **attributs** du balisage
+  déjà rendu, mais **il ne peut rien pour une valeur capturée** : la réparation ne tient
+  que si la convention est respectée. Capturer l'**objet** (`enr`, puis lire `enr.id`
+  au clic) fonctionne aussi, puisque le renommage l'a modifié en place.
 - **Pédagogie** : `${Help.tip("explication courte")}` à côté des termes techniques.
 - **Design** : n'utiliser que les tokens de `tokens.css`. Semantique stricte.
-- **IDs** : convention `"<PREFIXE>-" + Date.now()` — **dette** : ajouter un suffixe aléatoire (collisions).
+- **IDs** : un seul générateur par langage — côté navigateur `UI.genId(prefix)`, et rien
+  d'autre. Forme `"<PRÉFIXE>-<horodatage>-<aléa>"` ; **ce qui est normatif est une propriété,
+  pas un encodage** : au moins 52 bits tirés d'un générateur cryptographique
+  (`backend/db/CONVENTIONS.md` §2, qui fait foi). Ne jamais recopier la convention dans une
+  fonction locale : le produit en a compté quatre clones, et deux d'entre eux ont survécu au
+  durcissement des autres — dont l'un a coûté le seul constat bloquant d'un passage de porte.
 
 ## 4. Persistance & modèle de données (résumé — détail dans DATA_MODEL.md)
 
-- IndexedDB `cyber-grc-db` : store `kv` (`current` = instantané, chiffré si protection active ;
-  `meta`), store `backups` (points de restauration versionnés, auto + manuels).
-- `SCHEMA_VERSION = 12` dans `datastore.js`. Migrations à l'import via `migratePayload`.
+> ⚠️ **Depuis le lot L2, les données vivent sur le serveur (PostgreSQL).** Le navigateur
+> n'écrit plus rien : ni IndexedDB, ni miroir `localStorage`, ni points de restauration
+> locaux, ni coffre de chiffrement. Ce qui suit décrit **la forme de l'objet `data`** — celle
+> que voient les modules à travers la façade préservée, et celle du fichier d'échange
+> `grc-backup`. C'est une **représentation de transport**, plus un lieu de stockage. La
+> correspondance avec les 47 tables du serveur est dans `docs/DATA_MODEL.md` §1.5.
+>
+> Ce qui subsiste d'IndexedDB : `js/core/persistence.js` sait **lire** la base héritée d'un
+> poste, en lecture seule, pour permettre sa reprise. Rien n'est effacé d'un poste sans un
+> geste explicite de l'utilisateur, et jamais avant que ses données soient à l'abri.
+>
+> Le **numéro de version** d'un enregistrement (verrouillage optimiste, risque P1) n'est
+> **pas** dans l'enregistrement : il est tenu à part dans `js/core/sync.js`, précisément
+> pour que `data` garde la forme décrite ici et qu'un module qui reconstruit un objet ne
+> puisse pas perdre la version au passage (`docs/DATA_MODEL.md` §1.4).
+
+- `SCHEMA_VERSION = 12` dans `datastore.js` — elle numérote la forme de `data` et du fichier
+  `grc-backup`, pas les migrations SQL. Migrations à l'import via `migratePayload` côté
+  navigateur, et **paliers v1 → v12 rejoués côté serveur** (`backend/src/reprise/`).
 - Entités (tableaux) : clients, exigences, actions, risques, actifs, processus, crise,
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
   **evaluations** (auto-évaluations de référentiels), **mesures** (pivot « Mesure de sécurité »),
@@ -133,11 +195,37 @@ cyber-gouvernance_V4/
 
 ## 5. Lancer & tester (important)
 
-- **IndexedDB et Web Crypto exigent une vraie origine** (pas `file://`). Servir en local :
-  `cd cyber-gouvernance_V4 && python3 -m http.server 8891` → http://127.0.0.1:8891/index.html
+> ⚠️ **La SPA ne démarre plus seule.** Depuis le lot L2, elle charge session, modèle et jeu
+> de données **avant** de s'afficher ; sans serveur joignable, elle refuse de démarrer et
+> propose « Réessayer ». C'est délibéré : démarrer sur un jeu vide afficherait « aucun
+> risque, aucune action, aucun incident » dans un outil qui sert de preuve en audit. Un
+> `python3 -m http.server` sur `cyber-gouvernance_V4/` seul ne suffit donc plus.
+
+- **Monter le serveur d'abord** (une fois par poste) :
+  `pg_ctlcluster 16 main start` puis, depuis `backend/`,
+  `bash db/dev/preparer_base_dev.sh` (rôles + base + migrations). Le serveur ne sert de
+  données **qu'en `NODE_ENV=developpement`** : hors de là, il répond `503` — la
+  recette comprise, et c'est voulu (`backend/README.md` §7). Il faut aussi **au moins une
+  filiale active** en base, sans quoi la session ne se résout pas.
+- **Servir la SPA** sur une vraie origine (pas `file://`) avec `/api/**` relayé vers le
+  serveur. Le banc d'essai monte exactement cela : `backend/test/aide/navigateur.mjs` sert
+  `cyber-gouvernance_V4/` **tel quel** et relaie `/api/**` vers l'instance Fastify réelle —
+  c'est le montage à reprendre plutôt qu'à réinventer.
 - **Tests headless** : Node + Playwright global à `/opt/node22/lib/node_modules/playwright`,
-  Chromium à `/opt/pw-browsers`. Écrire les scripts de test/captures dans le scratchpad, pas dans le repo.
+  Chromium à `/opt/pw-browsers`. Les tests navigateur **vivent désormais dans le dépôt**
+  (`backend/test/navigateur/`, joués par `npm test`) : la porte S2 a constaté qu'il n'en
+  existait aucun alors que ce paragraphe les impose depuis le début du projet, et que
+  **six de ses constats, dont les trois bloquants, ne se voient que là**. Les scripts
+  d'exploration et les captures restent dans le scratchpad.
   Toujours vérifier `pageerror`/`console` (objectif : 0 erreur) et prendre des captures pour validation visuelle.
+- **Éprouver sous la CSP réelle.** L'application a été livrée un temps sans fonctionner dans
+  sa configuration de déploiement : soixante-quatre gestionnaires en ligne étaient bloqués
+  par la politique de sécurité de contenu du vhost, et aucun test ne l'avait vu. La règle
+  qui en découle : la politique se **lit dans `backend/deploy/apache/cyber-grc.conf`**, elle
+  ne se recopie pas à la main.
+- **Banc d'essai serveur** : depuis `backend/`, `npm test` (base, API, reprise, navigateur),
+  `npm run verifier-types`, `npm audit --omit=dev`. Chaque fichier de test monte une base
+  neuve en appelant le vrai `db/migrate.mjs`.
 - Pas de données de démo pré-chargées (interdit par le brief) : les tests injectent leurs propres données.
 
 ### Skill UI/UX (aide à la décision design)
@@ -169,7 +257,15 @@ Ne pas utiliser `--design-system` pour regénérer une identité visuelle (déci
   `git pull --rebase origin main` avant de pousser**, sinon la poussée est rejetée.
 - Ne PAS ouvrir de PR sans demande explicite.
 
-## 7. État d'avancement (voir docs/PLAN.md pour le détail)
+## 7. État d'avancement du produit NAVIGATEUR (historique — voir docs/PLAN.md pour le détail)
+
+> ⚠️ **Section historique.** Elle recense les chantiers du produit 100 % navigateur, dans
+> l'ordre où ils ont été livrés. Elle reste utile — c'est là qu'on retrouve *pourquoi* un
+> module est fait comme il est — mais elle **ne décrit pas l'état actuel du produit** :
+> la persistance a basculé sur le serveur au lot L2. Ce qui, ci-dessous, concerne le
+> stockage local (IndexedDB, points de restauration, coffre opt-in, rappel d'export, quota)
+> a été **retiré ou remplacé** ; voir §4 et `docs/DATA_MODEL.md` §1. L'état du chantier en
+> cours est au **§8**.
 
 **Fait** : décompression • charte Dedienne + logo • retrait emojis + icônes SVG •
 **Sauvegarde complète** (IndexedDB + historique versionné + migration ; enveloppe grc-backup ;
@@ -398,9 +494,19 @@ sur l'**Active Directory** du groupe.
   RACI des scénarios PRA, `supplyChain` des prestataires, `metrics` de l'historique).
   Tout le reste est relationnel, avec de vraies contraintes.
 - **Identifiants texte conservés** (`"RISK-<ts>-<alea>"`), pas d'UUID : c'est ce qui
-  rend l'import d'un export `grc-backup` exact au round-trip.
+  rend l'import d'un export `grc-backup` exact au round-trip. Ce qui est normatif est
+  une **propriété** — au moins 52 bits d'aléa cryptographique —, pas une forme unique :
+  le produit engendre des identifiants à quatre endroits, dans trois langages
+  (`CONVENTIONS.md` §2). **Un seul générateur par langage**, jamais de clone local.
 - **Le périmètre de session vient du serveur**, jamais d'une valeur transmise par le
-  navigateur (`cyber-context` en `localStorage` est à retirer côté frontend).
+  navigateur. Tenu par la **forme** : `resoudre()` ne prend aucun argument, et
+  `js/core/api.js` n'expose aucun paramètre de filiale. Les clés `cyber-context` et
+  `cyber-vault` du `localStorage` sont purgées au démarrage **et à la fermeture**
+  (`js/core/session.js`). Ne pas confondre deux choses longtemps réunies sous une seule
+  étiquette « Périmètre Actif » : le **périmètre**, qui vient du serveur et s'affiche en
+  lecture seule, et le **filtre « donneur d'ordre »**, simple confort d'affichage interne
+  à la filiale — il vit désormais en mémoire (`window.FiltreDonneurOrdre`, `js/app.js`) et
+  ne survit plus d'une session à l'autre.
 - **Tout contrôle que PostgreSQL applique hors des politiques porte `filiale_id`** —
   clé étrangère, unicité, exclusion. La RLS ne les voit pas : une clé simple est
   satisfaite par une ligne **invisible** de la filiale voisine, et une unicité sans
@@ -414,66 +520,107 @@ sur l'**Active Directory** du groupe.
   pas en s'ajoutant à une liste. Ne jamais réintroduire de liste écrite à la main
   (`CONVENTIONS.md` §18.4, §19.4 et §19.5).
 
-### Avancement au 31/08/2026
+### Avancement au 01/09/2026
 
 | Lot | État |
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache + durcissement de portée serveur, `install.sh` idempotent, `backend/README.md` |
-| **L1 — Schéma relationnel** | ✅ **livré** (vague 1), puis **corrigé au fil de la porte S1** — **47 tables** en 4 migrations, appliquées sur base neuve ; **188 politiques**, RLS activée **et forcée** partout ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur 42 tables ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()` ; `verifier_cloisonnement.sql` (**93 contrôles**, 0 échec) et `migrate.mjs` livrés ; **306 tests** `node:test` verts (229 base + 77 reprise). ⚠️ **Porte S1 jouée plusieurs fois et en cours de re-passage — livré ≠ validé** |
-| L2 → L15 | ⬜ à faire — vagues 2 à 8, voir `docs/PLAN_EXECUTION.md` §3 et `PLAN_SERVEUR` §7 |
+| **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — **47 tables** en 4 migrations ; **188 politiques**, RLS activée **et forcée** partout ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur 42 tables ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()` |
+| **L2 — API et bascule de la persistance** | ✅ **livré** (vague 2), corrigé au fil de la porte **S2** — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (130 membres avant, 130 après), session provisoire **fail-closed** hors développement |
+| L3 — Authentification AD et droits · L5 — Journal | ⬜ **à faire — vague 3, c'est ici qu'on reprend** |
+| L4 → L15 | ⬜ à faire — vagues 4 à 8, voir `docs/PLAN_EXECUTION.md` §3 et `PLAN_SERVEUR` §7 |
 
 Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 `grc-backup`** (`backend/src/reprise/**`, portage serveur des migrations v1 → v12,
-module pur, 77 tests) et **base de développement** (`db/dev/preparer_base_dev.sh`).
+module pur) et **base de développement** (`db/dev/preparer_base_dev.sh`).
 
-**État de la porte S1 — à lire, pas à deviner.** Le lot L1 a été soumis plusieurs fois
-à la porte de sécurité, chaque passage étant mené par un auditeur qui n'avait écrit
-aucune des lignes examinées. **Le verdict de chaque passage vit dans le journal des
-portes de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7**, avec le rapport
-correspondant dans `docs/securite/` — c'est la source, et la seule. Un re-passage est
-en cours : **ne rien conclure de l'absence de verdict ici.** Les arbitrages issus des
-passages successifs sont figés dans `backend/db/CONVENTIONS.md` **§17, §18 et §19** :
-les lire avant de toucher au schéma évite de rouvrir ce qui vient d'être fermé.
+**État des portes — à lire, pas à deviner.** Les lots L1 et L2 ont été soumis à leur
+porte de sécurité six et quatre fois, chaque passage étant mené par un auditeur qui
+n'avait écrit aucune des lignes examinées. **Le verdict de chaque passage vit dans le
+journal des portes de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7**, avec le
+rapport correspondant dans `docs/securite/` — c'est la source, et la seule. Au
+01/09/2026 il porte **S1 « CONFIRMÉE FRANCHIE » (6ᵉ passage)** et **S2 « FRANCHIE »
+(4ᵉ passage)**. Les arbitrages issus de ces passages sont figés dans
+`backend/db/CONVENTIONS.md` **§2, §17 à §23** : les lire avant de toucher au schéma
+évite de rouvrir ce qui vient d'être fermé.
 
-**Reprendre ici — vague 2, lot L2 (API et bascule de la persistance)**, le lot qui
-porte le risque projet **P1** (écrasement silencieux) : couche d'accès générique par
-entité, **verrouillage optimiste** (`where id = $1 and version = $2`, zéro ligne →
-`GRC03`), chargement initial du jeu de données d'une filiale, puis **détournement de
-`save()` et du chargement dans `datastore.js` / `persistence.js`** — la façade
-synchrone est préservée, aucun module métier n'est réécrit. Ne pas démarrer tant que
-la porte S1 n'est pas franchie (`docs/PLAN_EXECUTION.md` §1).
+**Franchie ne veut pas dire sans réserve.** Les constats restants vivent dans le
+**registre des constats ouverts** du même §7, chacun avec un **propriétaire nommé et une
+échéance**. Ce registre n'est ni recopié ni résumé ici — deux listes des mêmes constats
+divergent, et la divergence est silencieuse. Il existe parce que la vague 1 avait mesuré,
+chiffré et écrit un défaut de générateur d'identifiants **sans l'attribuer à personne** :
+il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écrivait 223
+lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
+constat perdu.**
 
-**Trois pièges que la vague 1 lègue à L2**, et qu'il vaut mieux traiter à la
-conception qu'après :
+### ▶ REPRENDRE ICI — vague 3 : L3 (authentification AD et droits), puis L5 (journal)
 
-1. **`UPDATE 0` n'est pas toujours un conflit de version.** Il vaut aussi « ligne
-   absente » et « écriture refusée par la RLS ». Or `GRC03` se définit exactement sur
-   ce zéro (`CONVENTIONS.md` §15) : sans distinction, l'API annoncera « modifié
-   entre-temps, rechargez » à un utilisateur qui n'avait pas le droit d'écrire.
-2. **Le client ne fixe plus `version`, `cree_le` ni `cree_par`** — la base les impose
-   à l'insertion et les gèle ensuite (`CONVENTIONS.md` §18.1). Une couche d'écriture
-   qui les envoie ne provoque pas d'erreur : ses valeurs sont simplement ignorées.
-3. **`documents` porte une colonne engendrée** (`portee_groupe`) qui entre dans une
-   clé étrangère : toute insertion doit **nommer ses colonnes**, et un aller-retour
-   naïf « je relis la ligne, je la réinsère » échoue (`CONVENTIONS.md` §18.6).
+C'est le chemin critique. Le lot **L3** apporte LDAPS et les groupes AD imbriqués, les
+sessions serveur, le modèle de droits à **trois axes** (périmètre × profil métier ×
+domaine), le **droit d'export distinct**, le compte de secours et la limitation de
+rythme. Une fois L3 stable vient **L5**, le journal d'audit : couverture complète des
+événements du `PLAN_SERVEUR` §1.7, consultation, export, vérification du chaînage.
+
+**Le point d'accroche existe déjà** : l'interface `ResolveurPerimetre`
+(`backend/src/api/session.ts`). L3 en fournit une autre implémentation, et **rien
+d'autre ne change** dans `backend/src/api/`. Le fichier actuel dit, ligne par ligne, ce
+que L3 doit mettre à la place de chaque approximation provisoire.
+
+**Les conditions d'entrée sont écrites, et elles sont fermes.** La liste que la vague 3
+doit épuiser est le **`backend/db/CONVENTIONS.md` §22** — six conditions (E1 à E6),
+chacune disant *où lire* et *comment la porte S3 vérifiera*. Elle existe parce que ces
+décisions sont écrites à cinq endroits différents, arbitrées à quatre passages de porte
+distincts, et qu'une vague qui ouvre sans les avoir toutes lues en oubliera. Les trois
+qui coûtent le plus cher si on les découvre tard :
+
+1. **`sessions`, `session_filiales` et `session_domaines` sont écrivables sans condition
+   par le rôle applicatif** — circulaire et assumé, parce que ces tables *produisent* la
+   décision d'autorisation. Tant que ce n'est pas fermé, les requêtes intégralement
+   paramétrées sont la **seule** parade (`CONVENTIONS.md` §17.4, condition E1).
+2. **Les clés primaires composites sont reportées**, par un arbitrage écrit et daté
+   (`CONVENTIONS.md` §21). Reconduire ce report sans le réécrire est exactement ce que le
+   chantier a appris à ne plus faire.
+3. **Toute route qui exige l'administration Groupe la *vérifie* ; aucune ne la *pose*.**
+   C'est vrai aujourd'hui et démontré par un test mécanique — mais c'est une propriété du
+   code d'aujourd'hui, **pas une barrière**. Le drapeau reste une déclaration que la
+   session fait sur elle-même : à L3 de le faire décider par le modèle de droits
+   (condition E2).
+
+**Ne pas croire acquis** ce que L3 peut casser sans le voir : le périmètre vient du
+serveur parce qu'*aucun chemin ne le lit ailleurs* — or L3 introduit précisément la
+couche qui le **fabrique**, et devient donc le seul endroit où l'erreur est possible.
+Le `CONVENTIONS.md` §22 en liste trois de cette nature.
+
+**Ce que la vague 2 a déjà réglé, et qu'il ne faut pas re-traiter** — les trois pièges
+que ce document annonçait comme légués à L2 sont **fermés** :
+
+| Piège | Ce qui a été fait |
+|---|---|
+| `UPDATE 0` ne distingue pas conflit de version, ligne absente et refus RLS | `diagnostiquerEcriture()` tranche **dans la même transaction** que l'écriture qui a échoué, en cinq verdicts (`conflit_version` → 409 + `GRC03`, `invisible` → 404, `autre_filiale` / `portee_groupe` / `refus_politique` → 403) |
+| Le client ne fixe ni `version`, ni `cree_le`, ni `cree_par` | ces colonnes sont **exclues par construction** en écriture, et un champ client qui les viserait est **refusé**, pas ignoré |
+| `documents.portee_groupe` est une colonne engendrée qui entre dans une clé étrangère | toute insertion **nomme ses colonnes**, liste filtrée sur `engendree = false` — découverte, pas recopiée |
 
 **Comment le chantier est conduit** (vagues, propriété exclusive des fichiers par
-agent, grille de sécurité rejouée à chaque porte, définition de « terminé ») :
-**`docs/PLAN_EXECUTION.md`**. Conventions de schéma : **`backend/db/CONVENTIONS.md`**.
-État détaillé des lots et des réserves : **`backend/README.md` §8**.
+agent, grille de sécurité — **dix-huit contrôles** — rejouée intégralement à chaque
+porte, définition de « terminé ») : **`docs/PLAN_EXECUTION.md`**. Conventions de
+schéma : **`backend/db/CONVENTIONS.md`**. État détaillé des lots, chiffres rejoués et
+réserves : **`backend/README.md` §8**.
 
 **Ce qui n'a pas pu être vérifié** sur la machine de développement, et qui reste donc
-à éprouver sur la VM cible : l'installation Debian 13 complète, Apache, ClamAV,
-l'Active Directory et le relais SMTP. Le schéma a été validé sur **PostgreSQL 16.13**,
-la cible est **PostgreSQL 17**.
+à éprouver sur la VM cible : l'installation Debian 13 complète, le TLS et le mandataire
+inverse d'Apache, ClamAV, l'Active Directory et le relais SMTP. Nuance apportée par la
+vague 2 : la **politique de sécurité de contenu et les en-têtes** du vhost, eux, ont été
+éprouvés — extraits du fichier livré et appliqués à un Chromium réel, ce qui a révélé que
+l'application ne fonctionnait pas dans sa configuration de déploiement. Le schéma a été
+validé sur **PostgreSQL 16.13**, la cible est **PostgreSQL 17**.
 
 **Dette reportée, assumée et datée** (détail et échéances dans `backend/README.md` §8) :
-les tables du substrat d'authentification (`sessions`, `session_filiales`,
-`session_domaines`) restent écrivables sans condition par le rôle applicatif —
-**condition d'entrée de L3** (`CONVENTIONS.md` §17.4) ; **la lecture du journal d'audit
-n'est pas cloisonnée**, dérogation qu'impose le chaînage par empreinte et dont le
-resserrement est un **livrable ferme de L5** ; la purge de sortie d'une filiale
-(`PLAN_SERVEUR` §2.7) n'a aucun chemin applicatif et revient au **lot L13**.
+les tables du substrat d'authentification restent écrivables sans condition par le rôle
+applicatif — **condition d'entrée de L3** ; **la lecture du journal d'audit n'est pas
+cloisonnée**, dérogation qu'impose le chaînage par empreinte et dont le resserrement est
+un **livrable ferme de L5** ; **aucun droit par domaine ni droit d'export distinct**, et
+**aucune écriture au journal d'audit** par l'API — lots L3 et L5 ; la purge de sortie
+d'une filiale (`PLAN_SERVEUR` §2.7) n'a aucun chemin applicatif et revient au **lot L13**.
 
 ### Vérifications à mener au démarrage du projet (côté client)
 
