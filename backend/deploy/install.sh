@@ -1492,6 +1492,76 @@ else
   succes "LimitRequestBody ($TAILLE_APACHE) ≥ SERVEUR_TAILLE_MAX_CORPS ($TAILLE_APP)"
 fi
 
+# >>> banc: entetes <<<
+# ══ CE QUE LE SERVICE LIT, LE FRONTAL DOIT L'AVOIR NEUTRALISÉ (Q-39) ═════════
+#
+# Le vhost efface six en-têtes de provenance ou d'identité, pour qu'un client ne
+# puisse pas les forger. La liste est ÉCRITE À LA MAIN, et elle est fragile par
+# nature : `X-Request-Id` y a manqué pendant tout un lot, alors que
+# `src/serveur.ts` en faisait la « référence » rendue au client et la clé de ses
+# lignes de journal.
+#
+# On ne peut pas la remplacer par un motif : mesuré, `RequestHeader unset
+# X-Forwarded-*` passe `configtest` et n'efface RIEN (le détail est dans le
+# vhost, à côté de la liste). Ce qui reste possible, et que le CONVENTIONS.md
+# §24 exige d'une liste écrite à la main, c'est de la CONFRONTER AU RÉEL :
+#
+#   > tout en-tête de requête que `src/` lit, ou auquel il fait confiance,
+#   > doit être effacé ou reposé par le vhost.
+#
+# Les deux termes sortent de deux fichiers versionnés — le code du serveur et le
+# vhost —, aucun n'est recopié ici. Ce contrôle aurait fait échouer
+# l'installation le jour où `requestIdHeader: 'x-request-id'` a été écrit sans
+# la ligne correspondante au frontal.
+VHOST_APPLIQUE=/etc/apache2/sites-available/cyber-grc.conf
+[[ -f "$VHOST_APPLIQUE" ]] || VHOST_APPLIQUE="$SOURCE/deploy/apache/cyber-grc.conf"
+
+# 1. Ce que le code LIT : « requete.headers['x-…'] ». Le motif vise la requête,
+#    jamais la réponse — `res.headers["set-cookie"]` de la liste de masquage de
+#    pino est un en-tête de RÉPONSE et n'a rien à faire ici.
+ENTETES_ATTENDUS="$(grep -rhoE "requete\.headers\['[a-z0-9-]+'\]" "$SOURCE/src" 2>/dev/null \
+                    | sed "s/.*\['//; s/'\]//" | sort -u || true)"
+
+# 2. Ce à quoi il fait CONFIANCE sans le nommer : `trustProxy` fait lire à
+#    Fastify les trois en-têtes ci-dessous. C'est une propriété du cadre, pas
+#    une découverte — elle est donc écrite, et conditionnée à la présence réelle
+#    du réglage dans le code plutôt que supposée.
+if grep -rq "trustProxy" "$SOURCE/src" 2>/dev/null; then
+  ENTETES_ATTENDUS="$ENTETES_ATTENDUS
+x-forwarded-for
+x-forwarded-host
+x-forwarded-proto"
+fi
+
+ENTETES_NUS=""
+while IFS= read -r entete; do
+  [[ -n "$entete" ]] || continue
+  # « unset » ou « set » : reposer une valeur soi-même neutralise aussi bien
+  # qu'effacer — c'est ce que fait X-Forwarded-Proto.
+  if ! grep -qiE "^[[:space:]]*RequestHeader[[:space:]]+(unset|set)[[:space:]]+${entete}([[:space:]]|$)" \
+       "$VHOST_APPLIQUE" 2>/dev/null; then
+    ENTETES_NUS+="$entete"$'\n'
+  fi
+done <<< "$ENTETES_ATTENDUS"
+
+if [[ -n "${ENTETES_NUS//[[:space:]]/}" ]]; then
+  while IFS= read -r e; do
+    [[ -n "$e" ]] || continue
+    alerte "en-tête lu par le service et NON neutralisé par le vhost : $e"
+    OU="$(grep -rn "headers\['$e'\]" "$SOURCE/src" 2>/dev/null | head -n1 || true)"
+    [[ -n "$OU" ]] && alerte "  lu ici : ${OU#"$SOURCE/"}"
+  done <<< "$ENTETES_NUS"
+  echec "le service lit des en-têtes de requête que le frontal laisse passer tels quels
+    (constat Q-39). Un client peut donc les forger : c'est ainsi que la « référence »
+    d'un incident, rendue au client et servant de clé dans le journal, était choisie par
+    la personne même qu'elle trace. Ajoutez « RequestHeader unset <en-tête> » au bloc des
+    en-têtes de provenance de deploy/apache/cyber-grc.conf — à côté des six autres, et
+    non ailleurs — ou reposez-en la valeur avec « RequestHeader set »."
+else
+  succes "en-têtes : tout ce que le service lit est effacé ou reposé par le vhost"
+fi
+# <<< banc: entetes >>>
+
 # >>> banc: proxytimeout <<<
 # ProxyTimeout du vhost INSTALLÉ contre celui du vhost de RÉFÉRENCE.
 #
