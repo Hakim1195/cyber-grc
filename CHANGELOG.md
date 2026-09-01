@@ -9,24 +9,26 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 ## [Non publié]
 
 ### Serveur — vague 2 : l'API et la bascule de la persistance (lot L2)
-> Travail de la vague 2 terminé et **rejoué en exécution** au 01/09/2026, sur un export
-> propre de la révision `120266e` : migrations appliquées sur base neuve
-> (PostgreSQL 16.13), `npm test` → **505 tests, 505 passés, 0 échec**,
-> `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
+> Travail de la vague 2 terminé, **puis** ses constats fermés. Chiffres **rejoués** au
+> 01/09/2026 sur la révision **`fef2db3`**, arbre propre, base neuve
+> (PostgreSQL 16.13) : `npm test` → **534 essais, 534 passés, 0 échec**
+> (base 272 · api 160 · reprise 77 · navigateur 25), `npm run verifier-types` sans
+> erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` → **107 contrôles, 107 réussis, 0 échec**,
-> `f_verifier_schema()` → **0 anomalie** (8 garde-fous découverts et joués).
+> `f_verifier_schema()` → **0 anomalie** (8 garde-fous découverts, joués et consignés).
 >
 > **La porte de sécurité S2 est franchie**, au 4ᵉ passage : « ✅ FRANCHIE — 0 bloquant,
 > 4 majeurs, 7 mineurs, aucun des dix-huit contrôles en échec »
-> (`docs/PLAN_EXECUTION.md` §7, rapport `docs/securite/RAPPORT_S2_QUATER.md`). Franchie
-> **n'est pas sans réserve** : les constats restants ont chacun un propriétaire et une
-> échéance dans le **registre des constats ouverts** du même §7. Ce registre n'est ni
-> recopié ni résumé ici, pas même par un décompte — il vit, et deux listes des mêmes
-> constats divergent en silence.
+> (`docs/PLAN_EXECUTION.md` §7, rapport `docs/securite/RAPPORT_S2_QUATER.md`).
 >
-> Les chiffres ci-dessus datent de la fermeture de la porte ; la fermeture des constats
-> continue derrière eux, et le banc d'essai porte pendant ce temps des **tests rouges
-> délibérés**, écrits pour des correctifs qui ne sont pas encore posés.
+> ⚠️ **Ce verdict porte sur la révision `a4116b6`, examinée par l'auditeur, et il est
+> consigné en `120266e`. Les correctifs listés plus bas sont venus après, et n'ont pas
+> repassé la porte.** Le banc est vert et les exerce ; ce
+> n'est pas la même chose qu'un rejeu de la grille entière par un auditeur indépendant.
+> L'état constat par constat — *corrigé en attente du rejeu*, *reporté par écrit*,
+> *documenté sans être fermé* — vit dans le **registre des constats ouverts** du même
+> §7. Il n'est ni recopié ni résumé ici, pas même par un décompte : il vit, et deux
+> listes des mêmes constats divergent en silence.
 
 **L'API**
 
@@ -208,12 +210,22 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   bascule et retombait donc en silence sur « Global », exportant toutes les exigences et
   nommant le fichier « global » alors qu'un donneur d'ordre était sélectionné à l'écran.
 
-**Le banc d'essai — de 306 à 505 tests**
+**Le banc d'essai — de 306 à 534 essais**
 
-- **505 tests `node:test`, 0 échec**, en quatre familles : **260 sur la base** (socle,
-  journal, RLS, privilèges, garde-fous, vocabulaire), **145 sur l'API** (routes réellement
-  montées, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité
-  d'écriture, route de reprise), **77 sur la reprise** et **23 dans un navigateur réel**.
+- **534 essais `node:test`, 0 échec** (à `fef2db3`), en quatre familles : **272 sur la
+  base** (socle, journal, RLS, privilèges, garde-fous, consignation, vocabulaire, et la
+  démonstration de cloisonnement rejouée), **160 sur l'API** (routes réellement montées,
+  verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité
+  d'écriture, identifiants, route de reprise), **77 sur la reprise** et **25 dans un
+  navigateur réel**.
+- **Le banc dépend désormais du client `psql`, et c'est écrit.** La dépendance existait
+  déjà sans être dite — la pire des deux situations : `db/dev/preparer_base_dev.sh`
+  s'arrête dessus, `install.sh` l'exige sur la VM. Elle devient nécessaire au banc parce
+  que `db/verifier_cloisonnement.sql` porte des méta-commandes `psql` (`\pset`, `\echo`,
+  `\gset`) que le pilote `pg` ne sait pas exécuter, et le réécrire pour s'en passer
+  reviendrait à éprouver *autre chose* que le fichier que l'auditeur lance. **Si `psql`
+  manque, l'essai échoue ; il ne se saute pas** — un essai qui se saute rend un banc vert
+  sur une machine où la démonstration n'a pas été jouée.
 - **Les tests navigateur n'existaient pas** — `grep -rl playwright` ne rendait rien hors
   `node_modules`, alors que `CLAUDE.md` §5 les impose depuis le début du projet. Six
   constats de la porte S2, dont les trois bloquants, ne se voient **que** là. Le banc monte
@@ -233,6 +245,60 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   **registre des garde-fous réellement branchés**, pour qu'une diminution soit une
   anomalie au même titre que l'absence totale.
 
+**La fermeture de la vague — ce qui a été corrigé APRÈS le passage de la porte**
+
+> ⚠️ Tout ce qui suit est **postérieur au verdict** et n'a donc **pas repassé la porte**.
+> Le banc l'exerce, ce qui n'est pas la même chose.
+
+- **Le générateur qui écrit vraiment a reçu l'entropie et son garde-fou.** Le correctif
+  du bloquant avait durci le générateur de la *base* ; celui du *serveur*, qui est celui
+  qui écrit, était resté à un million de valeurs. `verifierRegistre()` — le point unique
+  qui refuse déjà le démarrage quand registre et schéma divergent — mesure désormais la
+  forme, le plancher d'entropie et le déterminisme de la ré-émission sur 20 000 tirages :
+  une régression **empêche le service de démarrer** au lieu d'écrire un avertissement
+  dans un journal que personne ne lit.
+- **Le dernier générateur faible de la reprise a été mesuré, requalifié, puis supprimé.**
+  Présumé bloquant, il s'est révélé majeur *par la mesure* : sa sortie n'atteignait jamais
+  la base sur le chemin qu'on croyait. Le chemin qui écrivait réellement était l'autre —
+  sur 250 enregistrements **sans identifiant**, il en engendrait 231 distincts (mesure de
+  l'agent, consignée au registre des constats), et la reprise partait en `400` en
+  reprochant au fichier un doublon **que le serveur venait de fabriquer**. Un export ancien
+  légitime devenait irreprenable une fois sur neuf, avec un message qui accusait
+  l'utilisateur. Rien n'était perdu en silence — mais c'était un déni
+  de reprise. Les deux sites **dérivent** désormais au lieu de tirer, et il ne reste plus
+  aucun générateur aléatoire dans `src/reprise/`.
+- **Le registre des garde-fous** (`005_controles_schema.sql`, table `controles_schema`) :
+  `f_verifier_schema()` ne refusait que s'il ne découvrait **aucun** contrôle — une
+  migration qui renomme ou re-signe une fonction en aurait effacé un sans un mot. Elle
+  compare maintenant ce qu'elle découvre à un registre nominatif, et retirer un contrôle
+  devient un geste explicite : `select f_retirer_controle_schema('f_verifier_<x>', '<motif>')`,
+  dans la migration qui le retire.
+- **La démonstration de cloisonnement est rejouée par le banc.** Ses 107 contrôles
+  étaient dans la situation exacte que ce chantier a appris à redouter — écrits, corrects,
+  et rejoués par personne entre deux recettes. Le banc ne remplace pas le geste de
+  recette : il empêche le script de pourrir en silence entre deux passages, et il juge le
+  code de sortie, le nombre de contrôles joués **et** le nombre d'échecs *ensemble* — un
+  script vidé de ses contrôles sortirait en 0 et annoncerait la démonstration faite.
+- **Le sondage ne recalcule plus tout, trois fois par battement, et ne mémorise rien.**
+  Il demandait trois différentiels complets par battement, chacun canonisant les 12 000
+  enregistrements de la filiale. Un parcours unique à deux réglages les remplace : sans
+  contenu — **3 ms au lieu de 41**, mesure consignée dans `js/core/sync.js` — et
+  interruptible au premier écart quand la question est booléenne. **La
+  mémorisation a été mesurée puis refusée** : `data` appartient au `DataStore`, qui en
+  prête une référence vive, et toute invalidation aurait été une liste de sites de
+  mutation tenue à la main — une invalidation manquée annoncerait « aucune modification en
+  attente » alors qu'il y en a, soit le risque P1 par un autre chemin.
+- **Les commentaires que les correctifs avaient rendus faux ont été balayés et corrigés**
+  — l'en-tête d'`applyImport`, l'anomalie `identifiant-duplique`, et **trois occurrences**
+  dans les en-têtes du noyau client, qui justifiaient une décision par un appelant disparu
+  (`js/core/vault.js`, `js/core/session.js`). C'est la neuvième occurrence du motif « le
+  remède rend fausse la phrase d'un autre fichier », et la première où le balayage a été
+  fait exprès plutôt qu'au hasard d'une relecture.
+- **Les essais navigateur du correctif de l'import ont été écrits** : l'entropie de
+  `UI.genId`, l'indexation par rang, le canari de doublons, le signalement de
+  rétrécissement et le sondage qui pousse sont désormais exercés, alors que le passage de
+  porte précédent en avait fait une condition explicite.
+
 **Ce qui n'est PAS livré, et doit être dit**
 
 - **Aucune authentification, aucun droit** : toute session qui passe la porte peut écrire
@@ -242,15 +308,29 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   trace les écritures, il n'a pas valeur de preuve.
 - **Aucune limitation de rythme**, **aucun sélecteur de filiale**, **aucune pièce jointe** :
   lots L3, L4 et L6.
-- **Des constats restent ouverts**, dont des majeurs. Ils sont pour l'essentiel d'une
-  seule famille, et elle mérite d'être nommée : **le produit engendre des identifiants à
-  cinq endroits, dans trois langages** — trois générateurs aléatoires et deux dérivations
-  qui ne tirent rien —, et le durcissement de l'un a laissé les autres derrière, deux
-  fois. C'est ce qui a fait réécrire le `backend/db/CONVENTIONS.md` §2 : il norme désormais
-  une **propriété** — un plancher de 52 bits tirés d'un générateur cryptographique — au
-  lieu de l'encodage d'une seule implémentation, et recense les cinq sites. Propriétaires,
-  échéances et **état** : registre des constats ouverts, `docs/PLAN_EXECUTION.md` §7 — un
-  constat n'en sort que **corrigé *et* rejoué** à la porte.
+- **Quatre constats restent ouverts, par décision écrite et non par oubli** : le coût
+  d'analyse de corps avant toute authentification et un commentaire faux dans une
+  migration **déjà appliquée** (tous deux **lot L3**) ; un garde-fou qui mesure une
+  **longueur** là où le `CONVENTIONS.md` §2 norme désormais une **entropie** — rien ne
+  casse, mais aligner un jour le générateur SQL le ferait crier à tort (**lot L5**) ; et
+  l'absence de plafond de durée ou de volume sur une reprise (**lot L7**).
+- **Un cinquième est documenté sans être fermé, et c'est délibéré.** Le repli
+  d'`applyImport` — emprunté seulement contre un serveur qui ne porte pas `/api/reprise`,
+  donc lors d'un retour arrière — réécrit toute chaîne égale à l'identifiant renommé. Le
+  fermer supposerait de savoir **quels champs sont des références** : `/api/modele` rend le
+  *type* d'une colonne, jamais sa nature de référence, et les références imbriquées vivent
+  dans du JSONB dont il ne dit rien. Écrire cette liste à la main fermerait le cas du jour
+  et rouvrirait celui que ce chantier a déjà payé deux fois — le champ neuf que personne
+  n'y ajoute. **Une fermeture partielle serait pire que le défaut** : le bandeau compte
+  désormais les réécritures faites hors de l'enregistrement renommé, et le dit.
+- **La famille de constats qui a le plus coûté est nommée une fois pour toutes** : le
+  produit fabrique des identifiants à **cinq endroits, dans trois langages** — trois
+  générateurs aléatoires et deux dérivations qui ne tirent rien —, et le durcissement de
+  l'un a laissé les autres derrière, deux fois. C'est ce qui a fait réécrire le
+  `backend/db/CONVENTIONS.md` §2 : il norme une **propriété** — un plancher de 52 bits
+  tirés d'un générateur cryptographique — au lieu de l'encodage d'une seule
+  implémentation, et recense les cinq sites. Propriétaires, échéances et **état** :
+  registre des constats ouverts, `docs/PLAN_EXECUTION.md` §7.
 - **Rien n'a pu être éprouvé en conditions réelles** pour l'installation Debian 13, le TLS
   et le mandataire inverse d'Apache, ClamAV, l'Active Directory ni le relais SMTP. Nuance :
   la **CSP et les en-têtes** du vhost, eux, l'ont été — extraits du fichier livré et
@@ -266,10 +346,12 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'avait écrit aucune des lignes examinées, et chacun a trouvé ce que le précédent
 > avait manqué : **un auditeur unique n'aurait trouvé qu'un tiers des défauts**.
 >
-> Les chiffres de cette section sont ceux de la clôture de la vague 1. Plusieurs ont
-> bougé depuis (garde-fous du schéma, contrôles de cloisonnement, nombre de tests) :
-> l'état courant se lit dans la section de la vague 2 ci-dessus et dans
-> `backend/README.md` §8, jamais ici.
+> Les chiffres de cette section sont ceux de la clôture de la vague 1, et **plusieurs ont
+> bougé depuis** : nombre de tables et de politiques, garde-fous du schéma, contrôles de
+> cloisonnement, nombre d'essais. L'état courant se lit dans la section de la vague 2
+> ci-dessus et dans `backend/README.md` §8 — **jamais ici**. Cette section n'est pas mise
+> à jour, elle est datée : c'est ce qui la rend utile pour comprendre *pourquoi* une
+> décision a été prise, et inutilisable pour savoir *où en est* le produit.
 
 - **Schéma métier — `002_metier_noyau.sql`** : 9 entités (clients, personnes, exigences,
   **`mesure_catalogue`**, **`mesure_mise_en_oeuvre`**, évaluations, risques, actifs,

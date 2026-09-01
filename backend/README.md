@@ -403,12 +403,20 @@ transaction close par un `rollback` : **il n'écrit rien de durable** et peut do
 être joué sur la production, même si la recette reste le bon endroit pour une
 démonstration devant témoin.
 
-#### ⚠️ Aucun chemin d'installation ne le joue, et c'est délibéré
+#### ⚠️ Aucun chemin d'INSTALLATION ne le joue — mais le banc d'essai, si
 
 `db/verifier_cloisonnement.sql` **n'est appelé ni par `install.sh`, ni par
-`migrate.mjs`**. Ce n'est pas un oubli : c'est un **geste de recette**, à jouer une
+`migrate.mjs`**, et ce n'est pas un oubli : c'est un **geste de recette**, à jouer une
 fois avant la mise en service puis annuellement, exactement comme le test de
-restauration des sauvegardes (`db/CONVENTIONS.md` §18.5).
+restauration des sauvegardes (`db/CONVENTIONS.md` §18.5). La raison tient à sa nature :
+il **sème des données de démonstration** pour éprouver un comportement, et sa place est
+là où l'on éprouve aussi la restauration d'une sauvegarde et l'envoi des courriels.
+
+Ce qui a changé, en revanche : **le banc d'essai le rejoue** (`test/base/demonstration.test.mjs`),
+en lançant `psql` sur une base neuve. Il l'a fallu, parce que ces 107 contrôles étaient
+dans la situation exacte que ce chantier a appris à redouter — **écrits, corrects, et
+rejoués par personne** entre deux recettes. Le banc n'annule pas le geste de recette :
+il empêche seulement le script de pourrir en silence entre deux passages.
 
 Deux dispositifs, deux natures, et les confondre les affaiblirait tous les deux :
 
@@ -416,20 +424,17 @@ Deux dispositifs, deux natures, et les confondre les affaiblirait tous les deux 
 |---|---|---|
 | Ce que c'est | des **fonctions de la base** | un **script de démonstration** |
 | Ce qu'il lit | le **texte** des politiques, la déclaration du chemin de recherche | le **comportement** : on écrit, on lit, on compte |
-| Quand | à **chaque migration et à chaque installation**, et fait échouer | à la **recette**, avant mise en service puis annuellement |
+| Quand | à **chaque migration et à chaque installation**, et fait échouer | à **chaque passage du banc**, et à la **recette** devant témoin |
 | Ce qu'il attrape | une table sans politique, un `force` absent, un chemin non figé | une politique dont le texte est juste et le sens faux |
 
-La raison de ne pas le brancher sur l'installation est dans sa nature même : il
-**sème des données de démonstration** pour éprouver un comportement. Sa place est là
-où l'on éprouve aussi la restauration d'une sauvegarde et l'envoi des courriels — et
-il est **jouable devant un auditeur**, ce qui est sa raison d'être. Le message d'échec
-des garde-fous du schéma le cite d'ailleurs comme l'étape suivante.
+Il reste **jouable devant un auditeur**, ce qui est sa raison d'être, et le message
+d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 **Banc d'essai.** Sur un poste de développement ou une recette :
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 505 tests : base, API, reprise, navigateur
+npm test                           # 534 tests : base, API, reprise, navigateur
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -437,22 +442,43 @@ npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 `npm test` crée et détruit une base neuve par fichier de test, en appelant le vrai
 `db/migrate.mjs` : le banc d'essai éprouve donc aussi l'outil de migration.
 
-Quatre familles, et le détail compte parce que chacune attrape une classe de défaut
-que les autres ne voient pas :
+#### Prérequis de la machine
+
+Trois, et aucun n'est facultatif. Ils étaient tous **déjà exigés de fait** ; les écrire
+est la moitié du travail, parce qu'une dépendance non écrite est celle qui casse sur la
+machine de quelqu'un d'autre.
+
+| Prérequis | Pourquoi | Ce qui se passe s'il manque |
+|---|---|---|
+| **PostgreSQL joignable**, et `db/dev/preparer_base_dev.sh` déjà passé | chaque fichier de test monte sa propre base | les suites ne démarrent pas — voir l'avertissement du §8 sur les chiffres en baisse |
+| Le client **`psql`**, installé et sur le `PATH` | `db/verifier_cloisonnement.sql` porte des méta-commandes `psql` (`\pset`, `\echo`, `\gset`) que le pilote `pg` ne sait pas exécuter | l'essai **échoue** — il ne se saute pas |
+| **Playwright** global (`/opt/node22/lib/node_modules/playwright`) et son Chromium (`/opt/pw-browsers`) | les essais navigateur montent un serveur local qui sert `cyber-gouvernance_V4/` **tel quel**, `/api/**` relayé vers l'instance Fastify réelle | l'absence est signalée ; ni l'un ni l'autre n'est une dépendance de `package.json` |
+
+⚠️ **Pourquoi l'essai de cloisonnement échoue au lieu de se sauter**, alors que l'usage
+courant est de sauter ce qu'on ne peut pas jouer : **un essai qui se saute rend un banc
+vert sur une machine où la démonstration n'a pas été jouée.** Il fabrique exactement le
+silence que tout ce dispositif cherche à supprimer — c'est le trou du « zéro contrôle
+découvert » (§5, garde-fous du schéma) sous une autre forme. Réécrire le script pour se
+passer de `psql` reviendrait par ailleurs à éprouver *autre chose* que le fichier que
+l'auditeur lance devant témoin.
+
+Le même raisonnement vaut pour ce que l'essai juge : **le code de sortie, le nombre de
+contrôles joués et le nombre d'échecs, ensemble**. Un script vidé de ses contrôles
+sortirait en 0 et annoncerait la démonstration faite ; le compte est donc comparé à un
+plancher relevé et daté, qu'un ajout de contrôle ne fait pas rougir mais qu'une
+disparition fait échouer.
+
+#### Quatre familles d'essais
+
+Le détail compte, parce que chacune attrape une classe de défaut que les autres ne
+voient pas. Comptes relevés à `fef2db3` (§8) :
 
 | Répertoire | Tests | Ce qu'il éprouve |
 |---|---|---|
-| `test/base/` | 260 | socle, journal en ajout seul et chaînage, RLS, privilèges, garde-fous du schéma, vocabulaire |
-| `test/api/` | 145 | routes montées pour de vrai, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité d'écriture, route de reprise |
+| `test/base/` | 272 | socle, journal en ajout seul et chaînage, RLS, privilèges, garde-fous du schéma, consignation, vocabulaire, **et la démonstration de cloisonnement rejouée par `psql`** |
+| `test/api/` | 160 | routes montées pour de vrai, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité d'écriture, identifiants, route de reprise |
 | `test/reprise/` | 77 | paliers v1 → v12, enveloppe, scission des mesures, round-trip, entrées hostiles |
-| `test/navigateur/` | 23 | la bascule côté SPA, dans **Chromium**, contre le serveur réel (Playwright global) |
-
-Les tests `test/navigateur/` demandent le **Playwright global**
-(`/opt/node22/lib/node_modules/playwright`) et son Chromium (`/opt/pw-browsers`) —
-ni l'un ni l'autre n'est une dépendance de `package.json`. Ils montent un serveur
-local qui sert `cyber-gouvernance_V4/` **tel quel**, avec `/api/**` relayé vers
-l'instance Fastify réelle. Ils font partie de `npm test` et se signalent, au lieu de
-s'exécuter, sur une machine qui n'en dispose pas.
+| `test/navigateur/` | 25 | la bascule côté SPA, dans **Chromium**, contre le serveur réel et sous la CSP du vhost |
 
 ## 6. Sauvegarde et restauration
 
@@ -567,63 +593,102 @@ dans [`../docs/securite/`](../docs/securite/). Reproduits mot pour mot :
 | **S1** (6ᵉ passage) | ✅ **CONFIRMÉE FRANCHIE** — 0 bloquant, 0 majeur, 6 mineurs | [`RAPPORT_S1_SEXIES.md`](../docs/securite/RAPPORT_S1_SEXIES.md) |
 | **S2** (4ᵉ passage) | ✅ **FRANCHIE** — 0 bloquant, 4 majeurs, 7 mineurs, **aucun des dix-huit contrôles en échec** | [`RAPPORT_S2_QUATER.md`](../docs/securite/RAPPORT_S2_QUATER.md) |
 
-**Franchie ne veut pas dire sans réserve.** Les constats de S2 sont ouverts,
-chacun avec un **propriétaire nommé, une échéance et un état**, dans le **registre des
-constats ouverts** du [plan d'exécution](../docs/PLAN_EXECUTION.md) §7. Ce registre
-n'est ni recopié ni résumé ici — pas même par un décompte : il vit, des constats s'y
-ajoutent et s'y ferment, et deux listes des mêmes constats divergent en silence. Il
-existe précisément parce que la vague 1 avait mesuré, chiffré et écrit un défaut de
-générateur d'identifiants **sans l'attribuer à personne** — il est ressorti deux
-vagues plus tard en **bloquant**.
+Ces deux verdicts portent sur les révisions où ils ont été rendus : l'auditeur de S2 a
+examiné **`a4116b6`**, et son verdict est consigné en **`120266e`**. Le travail de
+fermeture des constats est venu **après**, et n'a pas été soumis à la porte.
 
-⚠️ **Lire la colonne d'état, et pas seulement la présence dans le tableau.** Un constat
-n'en sort que **corrigé *et* rejoué** — la porte est rejouée intégralement, jamais
-seulement sur le correctif. « Corrigé, en attente du rejeu » n'est donc pas « réglé »,
-et c'est délibérément que les deux ne se confondent pas.
+**Franchie ne veut pas dire sans réserve.** Les constats de S2 vivent dans le
+**registre des constats ouverts** du [plan d'exécution](../docs/PLAN_EXECUTION.md) §7,
+chacun avec un **propriétaire nommé, une échéance et un état**. Ce registre n'est ni
+recopié ni résumé ici — pas même par un décompte : il vit, des constats s'y ajoutent et
+s'y ferment, et deux listes des mêmes constats divergent en silence. Il existe
+précisément parce que la vague 1 avait mesuré, chiffré et écrit un défaut de générateur
+d'identifiants **sans l'attribuer à personne** — il est ressorti deux vagues plus tard
+en **bloquant**.
+
+⚠️ **Lire la colonne d'état, et pas seulement la présence dans le tableau.** Elle
+distingue trois situations que rien d'autre ne distingue : **corrigé, en attente du
+rejeu** ; **reporté par écrit** à un lot nommé, avec sa raison ; et **documenté sans
+être fermé**, quand fermer coûterait plus cher que le défaut. Un constat ne quitte le
+registre que **corrigé *et* rejoué**, la porte étant rejouée intégralement et jamais
+seulement sur le correctif.
+
+### ⚠️ Ce qui est prouvé, et ce qui ne l'est pas — à lire avant les chiffres
+
+Trois mots reviennent ci-dessous, et ils ne veulent **pas** dire la même chose. Les
+confondre est le seul moyen de se tromper sur l'état réel du lot.
+
+| Mot | Ce qu'il garantit | Qui l'a établi |
+|---|---|---|
+| **mesuré** | la commande a été lancée à la révision indiquée, et c'est sa sortie qui est écrite | l'auteur de ce document, en rejouant |
+| **corrigé** | le défaut est réparé, et le banc d'essai l'exerce | l'agent propriétaire du constat |
+| **rejoué / franchi** | un auditeur **qui n'a écrit aucune de ces lignes** a rejoué la **grille entière** — pas seulement le correctif | la porte de sécurité |
+
+**La phrase qui compte, et il n'y en a qu'une : l'auditeur de S2 a examiné la révision
+`a4116b6`, son verdict a été consigné en `120266e`, et TOUT ce qui a été corrigé depuis
+n'a pas repassé la porte.** Le banc est vert, les correctifs sont exercés par des essais,
+les chiffres ci-dessous sont rejoués — et rien de tout cela ne vaut un passage de porte.
+C'est exactement la distinction que le registre des constats tient dans sa colonne
+d'état : « ✅ corrigé — attend le rejeu » n'est pas « réglé », et un lecteur pressé qui
+lirait la coche verte pour un quitus se tromperait.
+
+Pour l'auditeur qui rejouera la grille, cela se traduit en une consigne courte : **ne
+prenez rien de ce document pour un acquis de la porte précédente.** Ce qui a été franchi
+est écrit ci-dessus avec sa révision ; le reste est du travail à contrôler, y compris —
+et surtout — ce qui est présenté comme la fermeture d'un constat que vous aviez ouvert.
+
+Cette prudence n'est pas rituelle. Elle vient de ce que ce chantier a mesuré six fois :
+**chaque passage de porte a trouvé ce que le précédent avait manqué**, et plusieurs
+correctifs acceptés parce que « la suite restait verte » l'étaient parce que rien
+n'exerçait le chemin corrigé. Une suite verte prouve l'absence de régression sur ce
+qu'elle couvre ; elle ne prouve jamais la couverture.
 
 ### Fait et vérifié en exécution
 
-Les chiffres ci-dessous ont été **rejoués** au moment de la rédaction, pas repris
-d'un rapport. Point de mesure, sans lequel un chiffre est invérifiable :
+Les chiffres ci-dessous ont été **rejoués** au moment de la rédaction, pas repris d'un
+rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiable :
 
 | | |
 |---|---|
-| Révision mesurée | **`120266e`** — « Porte S2 franchie… », branche `claude/backend-plan-serveur-hj46fs`. C'est la révision **sur laquelle repose le verdict de la porte** |
-| Comment | export propre de cette révision (`git archive`) monté **hors** du dépôt de travail : mesurer dans un arbre où d'autres agents écrivent ne mesure rien |
-| Base | neuve, `db/dev/preparer_base_dev.sh --recreer`, **PostgreSQL 16.13** |
+| Révision mesurée | **`fef2db3`** — « Registre : neuf constats corrigés, deux partiels, trois reportés par écrit », branche `claude/backend-plan-serveur-hj46fs` |
+| État de l'arbre | **propre** (`git status --porcelain` vide) |
+| Base | neuve, `BASE_NOM=… bash db/dev/preparer_base_dev.sh --recreer`, **PostgreSQL 16.13**, client `psql` 16.13 |
 | Node | 22.22.2 |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 505 · pass 505 · fail 0  (48,7 s)
-                                                   base 260 · api 145 · reprise 77 · navigateur 23
+npm test                                         → tests 534 · pass 534 · fail 0  (54,3 s)
+                                                   base 272 · api 160 · reprise 77 · navigateur 25
 npm audit --omit=dev                             → found 0 vulnerabilities
-psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué
-select * from f_verifier_schema()                → 0 ligne (8 garde-fous découverts et joués)
+psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
+select * from f_verifier_schema()                → 0 ligne (8 garde-fous découverts, joués, consignés)
 ```
 
-⚠️ **Ces chiffres datent de la fermeture de la porte, et le travail continue derrière
-eux.** Les constats que S2 a laissés ouverts se ferment depuis, et le banc d'essai
-grossit avec eux : au moment où ce paragraphe est écrit, il porte **des tests rouges
-délibérés** — écrits pour des constats dont le correctif n'est pas encore posé. Un
-banc vert n'est donc pas la seule lecture correcte pendant une fermeture de vague ;
-la lecture correcte est le **registre des constats ouverts** (`../docs/PLAN_EXECUTION.md`
-§7).
+Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **48 tables** en
+**5 migrations**, **192 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**71 clés étrangères** (43 `restrict`, 27 `cascade`, 1 `set null`), **43 tables portant
+`cree_par` et 43 déclencheurs de création**, **11 clés étrangères composites** visant
+`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`.
 
-Ce que la fermeture a déjà fait bouger, mesuré sur une base neuve montée depuis la
-révision courante de la branche :
+⚠️ **Un chiffre en baisse se diagnostique avant d'être écrit.** Le cas s'est présenté
+pendant la rédaction de ces lignes : PostgreSQL était arrêté au redémarrage du
+conteneur, et le banc a rendu un total très inférieur **sans un seul échec** — les
+suites n'avaient pas pu monter leur base, et une suite qui ne démarre pas ne compte
+aucun échec. J'ai moi-même buté sur la même cause un cran plus tôt, `preparer_base_dev.sh`
+refusant de se connecter au superutilisateur pendant que le service démarrait encore.
 
-| Grandeur | À la fermeture de S2 (`120266e`) | Pendant la fermeture des constats |
-|---|---|---|
-| Migrations | 4 | **5** — `005_controles_schema.sql` |
-| Tables | 47 | **48** — la nouvelle est `controles_schema`, le **registre des garde-fous** : elle ferme le constat « un garde-fou qui cesse d'être découvert disparaît en silence » |
-| Politiques RLS | 188 | **192** |
-| Clés étrangères | 71 | 71 |
-| Garde-fous découverts et joués | 8 | 8, **0 anomalie** |
+**Un banc qui rétrécit sans rougir est le symptôme le plus trompeur qui soit** : il
+ressemble à un succès. La règle qui en découle complète celle du point de mesure — un
+chiffre sans sa révision est invérifiable, et **un chiffre en baisse se comprend avant
+d'être consigné**. Le premier réflexe est `pg_isready`, pas la recherche d'une régression.
 
-**Ces chiffres seront remesurés et réécrits à l'ouverture de la vague 3**, quand la
-fermeture sera close et le banc redevenu vert. Les prendre pour l'état stable serait
-une erreur de lecture : ils décrivent un chantier en cours.
+⚠️ **Le banc grossit encore pendant la fermeture de la vague** — et c'est la raison
+d'être de la ligne « révision mesurée ». Constaté à l'instant même où ce paragraphe était
+écrit : une seconde exécution, à la **même révision** mais avec des essais en cours
+d'ajout par l'agent d'outillage dans l'arbre de travail, a rendu **539** au lieu de 534,
+tous verts. Un total supérieur au vôtre n'est donc **pas** une contradiction : comparez
+d'abord la révision **et l'état de l'arbre**. Un total *inférieur*, en revanche, se
+diagnostique — voir l'avertissement précédent.
 
 #### Lot L2 — l'API
 
@@ -710,6 +775,19 @@ une erreur de lecture : ils décrivent un chantier en cours.
   `/api/session`, `/api/modele` et `/api/donnees` ; à chaque `save()`, il compare
   l'état en mémoire à un **instantané de référence** et n'envoie que la différence,
   enregistrement par enregistrement ; un **sondage** rapatrie le travail des autres.
+- **Le sondage ne recalcule plus tout, trois fois par battement** — et la façon dont
+  ce défaut a été fermé mérite d'être lue, parce qu'elle contredit ce que l'auditeur
+  suggérait. Un parcours unique à deux réglages remplace les trois différentiels
+  complets : sans contenu, une création se voit à l'absence de sa clé et une
+  suppression à la présence d'une clé sans enregistrement en face, ce qui évite de
+  canoniser quoi que ce soit (**3 ms au lieu de 41** sur 12 000 enregistrements — mesure
+  consignée dans `js/core/sync.js`) ; et
+  le visiteur peut **arrêter le parcours** au premier écart quand la question est
+  booléenne. **La mémorisation, elle, a été mesurée puis refusée** : `data` appartient
+  au `DataStore`, qui en prête une référence vive, et toute invalidation aurait été une
+  liste de sites de mutation tenue à la main. Une invalidation manquée afficherait
+  « aucune modification en attente » alors qu'il y en a — c'est le risque P1 par un
+  autre chemin, pour un gain que la mesure ne réclamait pas.
 - **Le numéro de version ne vit pas dans l'enregistrement.** Il est tenu dans une
   table à part, interne à `sync.js` (`versions[collection] : id → {v, vmo}`), et les
   champs `_version` / `_versionMiseEnOeuvre` sont retirés des enregistrements dès
@@ -811,14 +889,14 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **47 tables** en 4 migrations à la fermeture de S2, appliquées de bout en bout par
-  `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
-  5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
-  (privilèges, politiques, déclencheurs, garde-fous). Une **cinquième migration** est
-  arrivée depuis, avec la fermeture des constats — voir le tableau ci-dessus.
-- **188 politiques**, RLS **activée et forcée** sur **toutes** les tables : mesuré dans
-  `pg_class`, **0 table sans `relrowsecurity`, 0 sans `relforcerowsecurity`** — et cette
-  propriété tient toujours sur la révision courante.
+- **48 tables** en **5 migrations**, appliquées de bout en bout par `db/migrate.mjs` :
+  `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités + 5 liaisons),
+  `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql` (privilèges,
+  politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le registre des
+  garde-fous, arrivé avec la fermeture de la vague — voir plus bas).
+- **192 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
+  compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
+  `relforcerowsecurity`**.
 - **71 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
   migrations : **43 en `restrict`, 27 en `cascade`, une seule en `set null`**
   (`incidents.risque_id` — l'incident survit au risque).
@@ -849,10 +927,15 @@ Ce que la reprise fait, quand on la rejoue :
   `documents`. Une clé simple aurait été satisfaite par une ligne **invisible** de la
   filiale voisine : les contrôles d'intégrité de PostgreSQL contournent délibérément la
   RLS (`CONVENTIONS.md` §17.1, étendu aux unicités par le §19.1).
-- **Traçabilité imposée à la création** : les **42 tables** portant `cree_par`
-  reçoivent un déclencheur `before insert` qui impose `version`, `cree_le` et
-  `cree_par` ; ce que le client envoie dans ces colonnes est ignoré
-  (`CONVENTIONS.md` §18.1).
+- **Traçabilité imposée à la création** : les **43 tables** portant `cree_par` portent
+  chacune un déclencheur `before insert` nommé `trg_<table>_creation` — **43 relevés**,
+  répartis selon la forme de la table entre `f_init_tracabilite` (31), `f_init_creation`
+  (10) et `f_init_horodatage` (2). Ce que le client envoie dans `version`, `cree_le` et
+  `cree_par` est **ignoré** (`CONVENTIONS.md` §18.1). La couverture n'est pas affirmée
+  ici, elle est **vérifiée** : `f_verifier_tracabilite()` balaie les tables à `cree_par`,
+  exige le déclencheur, exige la **bonne** fonction pour la forme, exige l'armement
+  `always` et **refuse une clause `when`** — un déclencheur conditionnel serait un décor.
+  Sur base neuve : 0 anomalie.
 - **Garde-fous du schéma branchés et découverts** : `f_verifier_schema()` est
   appelée par `db/migrate.mjs` **et** par `deploy/install.sh`, et fait échouer les
   deux. Elle **découvre** ses contrôles dans le catalogue — **8** aujourd'hui : armement
@@ -887,16 +970,51 @@ Ce que la reprise fait, quand on la rejoue :
 
 **Sur l'état des lots**
 
-- Les deux portes sont franchies, **et des constats restent ouverts** — dont des
-  majeurs. Ils ont chacun un propriétaire et une échéance dans le **registre des
-  constats ouverts** du [plan d'exécution](../docs/PLAN_EXECUTION.md) §7 : c'est la
-  seule liste, volontairement, et c'est là qu'il faut aller avant de conclure quoi
-  que ce soit. Une famille de constats domine, et il vaut mieux la connaître avant de
-  lire les chiffres ci-dessus comme un acquis : **les générateurs d'identifiants**. Le
-  produit en fabrique à **cinq endroits, dans trois langages** — trois générateurs
-  aléatoires et deux dérivations qui ne tirent rien (`CONVENTIONS.md` §2) — et le
-  durcissement de l'un a **deux fois** laissé les autres derrière. Ce qui est écrit
-  ci-dessus décrit l'état **présent**, pas l'état visé.
+- **La plupart des constats de S2 sont corrigés — aucun n'est rejoué.** C'est la
+  distinction du bloc « Ce qui est prouvé, et ce qui ne l'est pas », et elle est le
+  point le plus important de ce paragraphe : le banc est vert et les correctifs sont
+  exercés, mais la grille n'a pas été rejouée par un auditeur indépendant depuis
+  `120266e`. L'état constat par constat vit dans le **registre** du
+  [plan d'exécution](../docs/PLAN_EXECUTION.md) §7 — seule liste, volontairement.
+- **Ce qui reste ouvert l'est par décision écrite, pas par oubli**, et c'est ce que la
+  colonne d'état du registre permet de vérifier plutôt que de croire. Quatre reports,
+  chacun rattaché au lot qui a l'occasion de le traiter : deux relèvent du **lot L3**
+  (le coût d'analyse de corps avant toute authentification, qui se règle avec la
+  limitation de rythme en `onRequest` ; et un commentaire faux dans une migration
+  **déjà appliquée**, qui ne se corrige que par un `comment on` dans la migration
+  suivante — voir plus bas), un du **lot L5** (un garde-fou qui mesure une **longueur**
+  là où le `CONVENTIONS.md` §2 norme désormais une **entropie** : rien ne casse
+  aujourd'hui, mais aligner un jour le générateur SQL le ferait crier à tort) et un du
+  **lot L7** (aucun plafond de durée ni de volume sur une reprise).
+- **Un constat n'est pas fermé, et le dire vaut mieux que le fermer à moitié.** Le
+  repli d'`applyImport` — emprunté seulement contre un serveur qui ne porte pas
+  `/api/reprise`, c'est-à-dire lors d'un retour arrière — réécrit **toute chaîne égale
+  à l'identifiant renommé**, dans toutes les collections et tous les champs. Le fermer
+  proprement supposerait de savoir **quels champs sont des références** : or
+  `/api/modele` rend le *type* d'une colonne, jamais sa nature de référence, et les
+  références imbriquées vivent dans des documents JSONB dont il ne dit rien. Écrire
+  cette liste à la main fermerait le cas d'aujourd'hui et rouvrirait celui que ce
+  chantier a déjà payé deux fois : le champ neuf que personne n'y ajoute, et dont la
+  référence se met à pointer dans le vide sans que rien ne le dise. **Une fermeture
+  partielle serait pire que le défaut.** Ce qui est fait à la place : le cas ne se
+  produit plus en silence — quand l'identifiant renommé n'a pas la forme distinctive du
+  `CONVENTIONS.md` §2 (un export très ancien peut porter `"7"`) et que le balayage a
+  touché autre chose que l'enregistrement lui-même, **le fait est affiché, avec le
+  compte des réécritures faites au dehors**.
+- **La famille de constats qui a le plus coûté, et qu'il faut connaître avant de lire
+  les chiffres ci-dessus comme un acquis : les générateurs d'identifiants.** Le produit
+  en fabrique à **cinq endroits, dans trois langages** — trois générateurs aléatoires et
+  deux dérivations qui ne tirent rien (`CONVENTIONS.md` §2) — et le durcissement de l'un
+  a **deux fois** laissé les autres derrière. Il n'en reste aujourd'hui aucun de faible
+  dans `src/reprise/`, où les deux sites **dérivent** au lieu de tirer.
+- **Un garde-fou qui cesse d'être découvert ne disparaît plus en silence.**
+  `f_verifier_schema()` ne refusait que s'il ne découvrait **aucun** contrôle : une
+  migration qui renomme ou re-signe une fonction en aurait effacé un sans un mot. La
+  table `controles_schema` (migration `005_controles_schema.sql`) tient désormais le
+  **registre nominatif** des garde-fous branchés, et `f_verifier_schema()` **compare** ce
+  qu'elle découvre à ce registre. Retirer un contrôle devient un geste explicite —
+  `select f_retirer_controle_schema('f_verifier_<x>', '<motif>')`, dans la migration qui
+  le retire — au lieu d'une omission silencieuse.
 - **Un garde-fou qui cesse d'être découvert ne disparaît plus en silence.**
   `f_verifier_schema()` ne refusait que s'il ne découvrait **aucun** contrôle : une
   migration qui renomme ou re-signe une fonction en aurait effacé un sans un mot. La
@@ -936,6 +1054,7 @@ Ce que la reprise fait, quand on la rejoue :
 | **La lecture du journal d'audit n'est pas cloisonnée** | Dérogation qu'impose le chaînage par empreinte (`004_rls.sql` §6). Sans effet tant que le journal est vide ; dès que L5 alimentera `valeurs_avant` / `valeurs_apres`, une session d'une filiale y lirait le contenu d'une autre — et le compte de supervision `grc_lecture` aussi. | **resserrement = livrable ferme de L5** |
 | **Aucun contrôle de droits par domaine, aucun droit d'export distinct** | Il n'existe pas encore de modèle de droits : toute session qui passe la porte peut écrire dans sa filiale. La barrière provisoire est le refus **fail-closed** hors développement (§7). | **lot L3** (contrôles S6 et S7 de la grille) |
 | **Aucune écriture au journal d'audit** par l'API | Le journal technique trace les écritures ; il n'a pas valeur de preuve. | **lot L5** (contrôle S3) |
+| Un garde-fou mesure une **longueur** là où le §2 norme une **entropie** (constat Q-14) | `f_verifier_entropie_identifiants()` exige de `f_generer_id()` au moins **32 caractères** d'aléa. Rien ne casse : `f_generer_id` est inchangée. Mais les formes serveur tiennent 128 bits en 25 caractères de base 36 — **plus d'aléa en moins de signes** —, si bien qu'aligner un jour le générateur SQL ferait crier ce garde-fou **à tort**. Un seuil exprimé dans la mauvaise unité est un piège qui attend son déclencheur. | **lot L5**, seul écrivain de `f_generer_id()` |
 | **Aucune limitation de rythme** | Elle appartient à la couche d'authentification, qui n'existe pas. Le constat **Q-10** (coût d'analyse de corps avant toute décision) se traite avec elle, en `onRequest`. | **lot L3** (contrôle S11) |
 | Le drapeau `grc.administration_groupe` est une **déclaration que la session fait sur elle-même**, pas un privilège | Il protège contre la faute de programmation, **pas** contre un rôle applicatif compromis, qui le poserait avant d'écrire. La règle tenue aujourd'hui — *toute route qui l'exige le vérifie, aucune ne le pose* — est vraie et démontrée par un test ; à L3 de la rendre **structurellement** vraie. | **lot L3** (`CONVENTIONS.md` §17.4) |
 | Supprimer un compte ou une filiale cité au journal est **structurellement impossible** (`restrict` + journal en ajout seul) | Cohérent avec la rétention de trois ans, mais la « purge explicite » de sortie de filiale (`PLAN_SERVEUR` §2.7) n'a aucun chemin applicatif. | procédures d'exploitation à écrire au **lot L13**, avec les purges RGPD |

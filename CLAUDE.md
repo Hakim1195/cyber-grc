@@ -129,6 +129,28 @@ cyber-gouvernance_V4/
   déjà rendu, mais **il ne peut rien pour une valeur capturée** : la réparation ne tient
   que si la convention est respectée. Capturer l'**objet** (`enr`, puis lire `enr.id`
   au clic) fonctionne aussi, puisque le renommage l'a modifié en place.
+- **Une liste écrite à la main est une omission qui attend — sauf quand son objet est
+  d'obliger quelqu'un à trancher.** La première moitié de cette règle a produit quatre
+  défauts distincts au fil du chantier ; la seconde a été arbitrée récemment, et sans
+  elle la règle devient une superstition. Le discriminant n'est pas le sujet de la
+  liste, c'est **ce qui arrive le jour où elle devient incomplète** :
+
+  | Ce que produit une omission | Verdict | Ce qu'on écrit à la place |
+  |---|---|---|
+  | quelque chose **réussit en silence** alors que c'est faux | ❌ la liste est le mauvais outil | on **découvre dans le catalogue** — `pg_catalog` côté base, un parcours de valeurs côté navigateur |
+  | quelque chose **échoue bruyamment** et quelqu'un doit décider | ✅ la liste est le bon outil | on l'écrit, on la **fige à deux endroits** qui la comparent au réel, et on dit pourquoi |
+
+  Les trois cas du dépôt, à relire avant d'en écrire un quatrième :
+  **(a)** la liste des tables sans `filiale_id` est **écrite à la main, délibérément**
+  (`backend/db/CONVENTIONS.md` §24) — une table qui apparaît fait rougir deux contrôles,
+  et un humain doit dire si elle porte la même chose pour tout le groupe ;
+  **(b)** la liste des champs qui sont des **références**, dans le renommage de
+  `js/core/sync.js`, est **refusée** : `/api/modele` rend le *type* d'une colonne, jamais
+  sa nature de référence, et un champ neuf oublié pointerait dans le vide sans un mot —
+  le constat reste donc ouvert et **affiché**, plutôt que fermé à moitié ;
+  **(c)** la liste des **sites de mutation** qu'exigerait une mémorisation du différentiel
+  est **refusée** pour la même raison : une invalidation manquée annoncerait « aucune
+  modification en attente » alors qu'il y en a.
 - **Pédagogie** : `${Help.tip("explication courte")}` à côté des termes techniques.
 - **Design** : n'utiliser que les tokens de `tokens.css`. Semantique stricte.
 - **IDs** : **un seul générateur effectif par langage**. Côté navigateur, c'est
@@ -532,7 +554,7 @@ sur l'**Active Directory** du groupe.
 | Lot | État |
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache + durcissement de portée serveur, `install.sh` idempotent, `backend/README.md` |
-| **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — une cinquantaine de tables (compte rejoué dans `backend/README.md` §8), RLS activée **et forcée** partout, propriétaire compris ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur 42 tables ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()` |
+| **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — une cinquantaine de tables (compte rejoué dans `backend/README.md` §8), RLS activée **et forcée** partout, propriétaire compris ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur **toutes** les tables qui portent `cree_par`, et **vérifiée** par un garde-fou ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()`, et **consignés dans un registre** depuis la migration `005` — un contrôle qui cesse d'être découvert ne disparaît plus en silence |
 | **L2 — API et bascule de la persistance** | ✅ **livré** (vague 2), corrigé au fil de la porte **S2** — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (130 membres avant, 130 après), session provisoire **fail-closed** hors développement |
 | L3 — Authentification AD et droits · L5 — Journal | ⬜ **à faire — vague 3, c'est ici qu'on reprend** |
 | L4 → L15 | ⬜ à faire — vagues 4 à 8, voir `docs/PLAN_EXECUTION.md` §3 et `PLAN_SERVEUR` §7 |
@@ -551,12 +573,16 @@ rapport correspondant dans `docs/securite/` — c'est la source, et la seule. Au
 `backend/db/CONVENTIONS.md` **§2, §17 à §23** : les lire avant de toucher au schéma
 évite de rouvrir ce qui vient d'être fermé.
 
-**Franchie ne veut pas dire sans réserve.** Les constats restants vivent dans le
-**registre des constats ouverts** du même §7, chacun avec un **propriétaire nommé, une
-échéance et un état**. Ce registre n'est ni recopié ni résumé ici — deux listes des mêmes
-constats divergent, et la divergence est silencieuse. Y lire la **colonne d'état** :
-un constat n'en sort que **corrigé *et* rejoué** à la porte, si bien que « corrigé, en
-attente du rejeu » n'est pas « réglé ». Il existe parce que la vague 1 avait mesuré,
+**Franchie ne veut pas dire sans réserve, et « corrigé » ne veut pas dire « rejoué ».**
+Les constats restants vivent dans le **registre des constats ouverts** du même §7, chacun
+avec un **propriétaire nommé, une échéance et un état**. Ce registre n'est ni recopié ni
+résumé ici — deux listes des mêmes constats divergent, et la divergence est silencieuse.
+Y lire la **colonne d'état**, qui distingue trois situations : *corrigé, en attente du
+rejeu* ; *reporté par écrit* à un lot nommé ; *documenté sans être fermé*, quand fermer
+coûterait plus cher que le défaut. **L'auditeur de S2 a examiné la révision `a4116b6`,
+son verdict est consigné en `120266e`, et tout ce qui a été corrigé depuis n'a pas
+repassé la porte** — un banc vert ne vaut pas un passage de porte, six passages ayant
+montré que chacun trouvait ce que le précédent avait manqué. Il existe parce que la vague 1 avait mesuré,
 chiffré et écrit un défaut de générateur d'identifiants **sans l'attribuer à personne** :
 il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écrivait 223
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
