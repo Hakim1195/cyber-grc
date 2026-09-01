@@ -54,6 +54,7 @@ Règles de conduite :
 | **Auditeur indépendant** | L'agent qui contrôle n'est jamais celui qui a écrit. Il travaille en lecture seule et rend un rapport, pas un correctif. |
 | **Constat bloquant** | Un défaut de la grille §4 arrête la vague. Il est corrigé, puis la porte est rejouée — pas seulement sur le correctif, sur la grille entière. |
 | **Commit par vague** | Le travail est validé et poussé à la fermeture de chaque porte, jamais au milieu d'une vague. |
+| **L'orchestrateur nomme ses chemins** | Tant qu'un agent écrit, l'orchestrateur commite **des chemins explicites**, jamais `git add -A`. Appris le 01/09/2026 : un `-A` a emporté le travail en vol de trois agents sous un message qui parlait d'autre chose. Rien n'a été cassé — le banc était vert — mais l'historique attribue désormais un correctif de garde-fou à un commit sur une table de synthèse. C'est la même famille que les divergences que ce chantier passe son temps à corriger : **une trace qui dit autre chose que ce qui s'est passé**, et elle ne se répare pas après coup sur une branche déjà poussée. |
 
 ---
 
