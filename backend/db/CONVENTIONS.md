@@ -19,7 +19,8 @@ Sommaire : [1. Généralités](#1-généralités) · [2. Identifiants](#2-identi
 [17. Décisions porte S1](#17-décisions-issues-de-la-porte-de-sécurité-s1--31082026) ·
 [18. Décisions 3ᵉ passage](#18-décisions-issues-du-troisième-passage-de-la-porte-s1) ·
 [19. Décisions 4ᵉ passage](#19-décisions-issues-du-quatrième-passage-de-la-porte-s1) ·
-[20. Porte S1 franchie](#20-décisions-issues-des-cinquième-et-sixième-passages--porte-s1-franchie)
+[20. Porte S1 franchie](#20-décisions-issues-des-cinquième-et-sixième-passages--porte-s1-franchie) ·
+[21. Report : clé primaire globale](#21-report-explicite--la-clé-primaire-reste-globale)
 
 ---
 
@@ -1089,3 +1090,41 @@ précédents avaient manqué. Ce qu'il faut en retenir pour les portes S2 à S8 
 | Les correctifs passaient avec une suite verte | La suite restait verte **parce que rien n'exerçait le chemin corrigé**. Sans le test, le correctif ne compte pas. |
 | Une liste écrite à la main a produit **quatre** défauts | La parade est la découverte dans le catalogue — appliquée pour finir au dispositif de contrôle lui-même (§20.1). |
 | Le remède crée son propre chemin | Un correctif s'attaque **pour lui-même** au passage suivant, jamais présumé sûr. |
+
+---
+
+## 21. Report explicite — la clé primaire reste globale
+
+> Constat **T-9** du troisième passage de la porte S2. Report **assumé et daté**, comme
+> l'exige la conduite du chantier : un silence ne serait pas acceptable, un report écrit l'est.
+
+**33 tables sur 47 portent `primary key (id)`**, sans `filiale_id`. Un identifiant est donc unique
+à l'échelle du Groupe, et une reprise dans une filiale révèle — indirectement — qu'un identifiant
+est occupé dans une autre. La ré-émission d'identifiant introduite en L2 déplace le signal sans le
+supprimer.
+
+**Ce n'est pas fermé, et c'est dit plutôt qu'appelé fermé.** Le canal résiduel coûte deux requêtes
+au lieu d'une, laisse une ligne dans `imports` et une ligne à supprimer, et se double d'un écart
+de temps mesurable (médiane 9,1 ms contre 7,0 ms). L'auditeur le classe **mineur** et l'assigne au
+lot **L3**.
+
+### Pourquoi ne pas rendre la clé primaire composite maintenant
+
+Ce serait cohérent avec le §19.1 — *tout contrôle que PostgreSQL applique hors des politiques
+porte `filiale_id`* — et rien n'est déployé, donc aucune donnée n'est à migrer. L'argument
+« corriger maintenant coûte peu » joue. Il ne l'emporte pas, pour trois raisons :
+
+1. **Ce que la clé globale achète est le round-trip**, et il est la raison d'être du §2 : les
+   identifiants du fichier deviennent tels quels les clés primaires, et les **références
+   polymorphes** (`journal_audit.entite_id`, le rattachement des pièces jointes) désignent une
+   ligne par son seul identifiant. Les rendre composites touche le journal inaltérable, dont le
+   chaînage est scellé — c'est-à-dire ce que le produit a de plus coûteux à reprendre.
+2. **Le remède déplacerait le signal une seconde fois** plutôt que de l'éteindre : deux filiales
+   pouvant alors porter le même identifiant, c'est la *collision* qui deviendrait observable.
+   Fermer un oracle demande de rendre l'issue indistincte (§20.1), pas de changer l'index.
+3. **La vraie barrière est le droit d'appeler la route**, et elle appartient à L3. Une reprise
+   est un acte d'administration ; qui n'a pas ce droit ne dispose d'aucun de ces canaux.
+
+**Condition d'entrée de L3** : le modèle de droits doit décider qui peut appeler la reprise
+**avant** que ce report ne soit reconduit. S'il ne suffit pas à fermer le canal, la clé composite
+redevient la réponse — et elle coûtera alors une migration de données.

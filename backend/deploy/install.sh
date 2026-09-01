@@ -201,6 +201,114 @@ engendrer_secret() {
 }
 
 # =============================================================================
+#  Outils : jeton de version du frontend (invalidation du cache navigateur)
+# =============================================================================
+#
+# LE PROBLÈME QUE CECI RÉSOUT, ET QUI A FAILLI COÛTER TRÈS CHER.
+#
+# `frontend/index.html` charge 59 scripts et 2 feuilles de style par des URL SANS
+# jeton de version, et le vhost pose « ExpiresByType application/javascript "access
+# plus 7 days" ». Conséquence : un correctif poussé sur la VM n'atteint PAS les
+# navigateurs avant sept jours. Sur vingt filiales derrière un VPN, cela veut dire une
+# semaine de données fausses pendant que l'exploitant constate que « le correctif ne
+# marche pas ». Relevé à trois passages de la porte S2.
+#
+# POURQUOI UN JETON PLUTÔT QUE SUPPRIMER LE CACHE. Sans cache, ce sont 61 requêtes
+# conditionnelles à chaque chargement, sur un VPN international — et le PLAN_SERVEUR
+# §1.3 fait précisément du chargement initial un point de conception. Le jeton garde le
+# cache long ET rend le correctif immédiat : l'URL change, le navigateur retélécharge.
+#
+# POURQUOI PAS SEULEMENT « APPLICATION_VERSION ». Parce qu'un correctif livré sans
+# incrément de version — le cas exact du correctif d'urgence — laisserait le jeton
+# inchangé, donc le cache actif, donc le défaut entier reconstitué. Le jeton est donc
+# « <version>.<empreinte du contenu réellement déployé> » :
+#
+#   il CHANGE  dès qu'un octet d'un .js ou d'un .css change, version bumpée ou non ;
+#   il NE CHANGE PAS quand rien n'a changé — sinon on remplacerait un cache inefficace
+#              par un cache inutile, et les 61 requêtes reviendraient à chaque
+#              réinstallation.
+#
+# La partie « version » ne sert donc pas à l'invalidation : elle sert à l'exploitant et
+# à l'auditeur, qui lisent le numéro livré directement dans le source de la page.
+#
+# AUCUN EMPAQUETEUR, AUCUNE RÉÉCRITURE DE CODE. Les fichiers .js et .css sont déployés
+# à l'octet près, lisibles et diffables contre le dépôt ; seul `index.html` est réécrit,
+# et seulement dans ses attributs d'URL. Un « diff -r » entre le dépôt et l'arborescence
+# servie ne montre que ce fichier. C'est ce que le cadrage demande pour l'audit.
+#
+# Fonctionne en mode hors ligne (CYBER_GRC_HORS_LIGNE=1) : ni réseau, ni npm, ni node —
+# seulement find, sha256sum et sed.
+
+# Empreinte du frontend RÉELLEMENT déployé. LC_ALL=C et « sort » figent l'ordre : deux
+# installations du même contenu doivent rendre le même jeton, sur n'importe quelle
+# machine. Les noms de fichiers entrent dans l'empreinte (sha256sum les imprime) : un
+# simple renommage change donc le jeton, ce qui est le comportement voulu.
+jeton_frontend() {
+  local racine="$1" version="$2" empreinte
+  empreinte="$(cd "$racine" && LC_ALL=C find js css -type f \( -name '*.js' -o -name '*.css' \) -print0 \
+                 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
+  [[ -n "$empreinte" ]] || echec "Empreinte du frontend vide : $racine ne contient ni js/ ni css/ ?"
+  printf '%s.%s' "${version:-0}" "$empreinte"
+}
+
+# Injection dans l'index.html DÉPLOYÉ (jamais dans celui du dépôt : servi en local par
+# « python3 -m http.server », il doit rester sans jeton).
+#
+# Seules les URL se terminant par .js ou .css sont touchées, et seulement si elles ne
+# portent pas déjà de « ? ». Les liens de navigation (« href="#/dashboard" ») et les
+# images ne correspondent pas au motif.
+#
+# Le contrôle qui suit l'injection n'est pas décoratif : une injection partielle — un
+# script ajouté avec des apostrophes au lieu de guillemets, par exemple — rendrait
+# quelques fichiers non versionnés et donc figés sept jours, sans que rien ne le dise.
+# C'est exactement la forme de défaut que ce correctif ferme ; on ne la réintroduit pas
+# par la porte de derrière.
+injecter_jeton_frontend() {
+  local page="$1" jeton="$2" avant apres restants
+
+  [[ -f "$page" ]] || echec "Frontend déployé sans index.html : $page est absent."
+
+  # Le motif de DÉTECTION ignore volontairement la façon dont l'URL est entourée —
+  # guillemets doubles, apostrophes, ou rien : une URL « .js » suivie d'un guillemet,
+  # d'une apostrophe, d'une espace ou de « > » est une URL SANS jeton, quelle que soit
+  # l'écriture. Le motif d'INJECTION, lui, ne traite que les guillemets doubles, qui sont
+  # la convention de la page. L'écart entre les deux est délibéré : une balise écrite
+  # autrement n'est pas silencieusement tolérée, elle fait échouer l'installation avec un
+  # message qui dit quoi corriger. Une première rédaction comptait les deux fois en
+  # guillemets doubles : un script ajouté avec des apostrophes n'était PAS versionné et le
+  # contrôle ne voyait rien — le défaut même que ce correctif ferme, reconstitué dans son
+  # garde-fou.
+  #
+  # « || true » : sous « set -e » et « pipefail », un grep sans correspondance rend 1 et
+  # tuerait le script — y compris sur le chemin de SUCCÈS, où « restants » doit justement
+  # ne rien trouver. Un contrôle qui échoue quand tout va bien est aussi faux qu'un
+  # contrôle qui n'échoue jamais.
+  local sans_jeton='(src|href)=["'"'"']?[^"'"'"'>[:space:]]*\.(js|css)["'"'"'[:space:]>]'
+  local avec_jeton='(src|href)=["'"'"']?[^"'"'"'>[:space:]]*\.(js|css)\?v='
+
+  avant="$( { grep -oE "$sans_jeton" "$page" || true; } | wc -l)"
+  [[ "$avant" -gt 0 ]] || echec "Aucune URL .js/.css dans $page : le motif d'injection ne
+      correspond plus à la façon dont la page déclare ses scripts. Ne PAS ignorer :
+      sans jeton, un correctif reste invisible sept jours (cache du vhost)."
+
+  # Délimiteur « @ » et non « | » : le motif contient lui-même des alternatives (src|href,
+  # js|css), et un « | » délimiteur les couperait en silence.
+  sed -i -E "s@(src|href)=\"([^\"?]+\\.(js|css))\"@\\1=\"\\2?v=${jeton}\"@g" "$page"
+
+  apres="$( { grep -oE "$avec_jeton" "$page" || true; } | wc -l)"
+  restants="$( { grep -oE "$sans_jeton" "$page" || true; } | wc -l)"
+
+  [[ "$restants" -eq 0 && "$apres" -eq "$avant" ]] || echec \
+    "Injection du jeton de version incomplète dans $page :
+      $avant URL .js/.css attendues, $apres versionnées, $restants laissées sans jeton.
+      Les fichiers non versionnés resteraient sept jours dans le cache des navigateurs
+      (deploy/apache/cyber-grc.conf, ExpiresByType). Corrigez le motif d'injection ou la
+      façon dont index.html déclare ses scripts (guillemets doubles, pas de « ? »)."
+
+  printf '%s' "$avant"
+}
+
+# =============================================================================
 #  Outils : accès PostgreSQL
 # =============================================================================
 #
@@ -325,6 +433,16 @@ fi
 #  4. Code source
 # =============================================================================
 
+# Version du paquet, lue UNE fois. Elle sert à deux endroits : le jeton de cache du
+# frontend (§4, calculé avant que le fichier de configuration n'existe forcément) et
+# APPLICATION_VERSION (§5, affichée par /api/sante et tracée au journal). Sans « node »
+# — cas qui ne devrait pas se produire ici — la version reste vide : le jeton retombe
+# sur « 0.<empreinte> », qui invalide toujours correctement le cache.
+VERSION_PAQUET=""
+if [[ -f "$SOURCE/package.json" ]]; then
+  VERSION_PAQUET="$(node -p "require('$SOURCE/package.json').version" 2>/dev/null || echo '')"
+fi
+
 if [[ $SEULEMENT_BASE -eq 0 ]]; then
   info "Déploiement du code"
   # `db/dev` et `test` ne servent qu'au développement : `db/dev/preparer_base_dev.sh`
@@ -336,6 +454,15 @@ if [[ $SEULEMENT_BASE -eq 0 ]]; then
         "$SOURCE/" "$RACINE/backend/"
   # Le frontend est servi directement par Apache.
   rsync -a --delete "$DEPOT/cyber-gouvernance_V4/" "$RACINE/frontend/"
+
+  # Jeton de cache : sans lui, les 61 fichiers .js/.css de la page restent SEPT JOURS
+  # dans le cache des navigateurs (vhost, ExpiresByType) et aucun correctif n'atteint
+  # un poste avant une semaine. Voir le commentaire de « jeton_frontend » plus haut.
+  # L'index.html du DÉPÔT n'est pas touché : il reste servable tel quel en local.
+  JETON_FRONTEND="$(jeton_frontend "$RACINE/frontend" "$VERSION_PAQUET")"
+  NB_VERSIONNES="$(injecter_jeton_frontend "$RACINE/frontend/index.html" "$JETON_FRONTEND")"
+  succes "frontend versionné : $NB_VERSIONNES URL portent « ?v=$JETON_FRONTEND »"
+
   # Le code appartient à root et n'est modifiable par personne d'autre : le compte
   # de service ne doit pas pouvoir réécrire ce qu'il exécute (l'unité systemd pose
   # en plus ProtectSystem=strict et ReadOnlyPaths, en défense en profondeur).
@@ -392,11 +519,9 @@ if [[ ! -f "$FICHIER_CONFIG" ]]; then
 fi
 appliquer_droits_config "$FICHIER_CONFIG"
 
-# Version affichée par /api/sante et tracée au journal d'audit (§0.3).
-if [[ -f "$SOURCE/package.json" ]]; then
-  VERSION_PAQUET="$(node -p "require('$SOURCE/package.json').version" 2>/dev/null || echo '')"
-  if [[ -n "$VERSION_PAQUET" ]]; then definir_variable APPLICATION_VERSION "$VERSION_PAQUET"; fi
-fi
+# Version affichée par /api/sante et tracée au journal d'audit (§0.3). Lue plus haut,
+# avant le déploiement du frontend, parce que le jeton de cache s'en sert aussi.
+if [[ -n "$VERSION_PAQUET" ]]; then definir_variable APPLICATION_VERSION "$VERSION_PAQUET"; fi
 
 BASE_HOTE="$(lire_variable BASE_HOTE)";  BASE_HOTE="${BASE_HOTE:-127.0.0.1}"
 BASE_PORT="$(lire_variable BASE_PORT)";  BASE_PORT="${BASE_PORT:-5432}"
