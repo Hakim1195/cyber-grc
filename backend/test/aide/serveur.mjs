@@ -329,3 +329,113 @@ export async function monterGreffon(base, perimetre, options = {}) {
   };
   return enveloppe;
 }
+
+/* =====================================================================
+ *  Le serveur lancé comme un PROCESSUS, pour lire son journal
+ * ===================================================================== */
+
+/**
+ * Lance `dist/serveur.js` dans un vrai processus, sur un vrai port, et rend de
+ * quoi l'interroger ET lire son journal.
+ *
+ * ── Pourquoi un processus, et pas `monterServeurReel` ───────────────────────
+ *
+ * Deux propriétés ne s'observent pas autrement.
+ *
+ *  · **Il faut un serveur qui ÉCOUTE.** Le constat **Q-39** — la référence d'un
+ *    incident choisie par le client via `x-request-id` — est invisible tant
+ *    qu'on n'envoie pas d'en-tête sur une vraie requête ; `inject()` en accepte,
+ *    mais c'est alors le banc qui décide de ce que le réseau apporte.
+ *  · **Il faut LIRE le journal.** `construireServeur` construit son pino sur le
+ *    descripteur 1, à la construction : rien, dans le processus d'essai, ne
+ *    peut s'intercaler après coup — pino écrit dans le descripteur, pas dans
+ *    `process.stdout.write`. Le journal se lit donc là où il est écrit, en
+ *    faisant du serveur ce qu'il est en production : un processus séparé.
+ *
+ * C'est le chemin de démarrage RÉEL (`demarrer()`), configuration comprise.
+ *
+ * @param {{nom: string}} base base d'essai ouverte par `ouvrirBaseEssai`
+ * @param {{env?: Record<string,string>, environnement?: string}} [options]
+ */
+export async function lancerServeurProcessus(base, options = {}) {
+  const { spawn } = await import('node:child_process');
+  const net = await import('node:net');
+
+  await compilerSiNecessaire();
+
+  const port = await new Promise((resoudre, rejeter) => {
+    const prise = net.createServer();
+    prise.on('error', rejeter);
+    prise.listen(0, '127.0.0.1', () => {
+      const { port: libre } = prise.address();
+      prise.close(() => resoudre(libre));
+    });
+  });
+
+  const environnement = {
+    ...environnementDeTest(base, options.environnement ?? 'developpement', options.env ?? {}),
+    SERVEUR_PORT: String(port),
+    SERVEUR_HOTE: '127.0.0.1',
+    // Le journal EST l'objet de la mesure : il ne peut pas être « silent ».
+    SERVEUR_NIVEAU_JOURNAL: options.env?.SERVEUR_NIVEAU_JOURNAL ?? 'info',
+  };
+
+  const processus = spawn(process.execPath, [join(RACINE_BACKEND, 'dist', 'serveur.js')], {
+    cwd: RACINE_BACKEND,
+    env: { ...process.env, ...environnement },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  /** Toutes les lignes de journal reçues, décodées quand elles sont du JSON. */
+  const journal = [];
+  let reliquat = '';
+  const erreurs = [];
+  processus.stdout.on('data', (morceau) => {
+    reliquat += String(morceau);
+    const lignes = reliquat.split('\n');
+    reliquat = lignes.pop() ?? '';
+    for (const ligne of lignes) {
+      if (ligne.trim() === '') continue;
+      try {
+        journal.push(JSON.parse(ligne));
+      } catch {
+        journal.push({ msg: ligne, nonJson: true });
+      }
+    }
+  });
+  processus.stderr.on('data', (morceau) => erreurs.push(String(morceau)));
+
+  // On attend l'ÉVÉNEMENT que le serveur émet lui-même quand il est prêt, pas
+  // un délai : « Serveur Cyber GRC démarré » est la dernière ligne de
+  // `demarrer()`, écrite après `listen()`.
+  const echeance = Date.now() + 30000;
+  for (;;) {
+    if (journal.some((l) => /Serveur Cyber GRC démarré/.test(String(l.msg ?? '')))) break;
+    if (processus.exitCode !== null || Date.now() > echeance) {
+      throw new Error(
+        `Le serveur n’a pas démarré (code ${String(processus.exitCode)}).\n` +
+          `${erreurs.join('')}\n${journal.map((l) => JSON.stringify(l)).join('\n')}`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+
+  return {
+    port,
+    url: `http://127.0.0.1:${String(port)}`,
+    journal,
+    erreurs,
+    /** Les lignes reçues depuis un rang donné. */
+    depuis(rang) {
+      return journal.slice(rang);
+    },
+    async fermer() {
+      processus.kill('SIGTERM');
+      const limite = Date.now() + 5000;
+      while (processus.exitCode === null && Date.now() < limite) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      processus.kill('SIGKILL');
+    },
+  };
+}

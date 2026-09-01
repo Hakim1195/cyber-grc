@@ -31,7 +31,7 @@ import { join } from 'node:path';
 import { after, describe, test } from 'node:test';
 
 import { exigerSilenceApres } from '../aide/assertions.mjs';
-import { extraireBloc, jouerBloc as jouerBlocDans } from '../aide/install.mjs';
+import { blocsAnnonces, extraireBloc, jouerBloc as jouerBlocDans } from '../aide/install.mjs';
 import { RACINE_BACKEND } from '../aide/serveur.mjs';
 
 const temporaires = [];
@@ -107,10 +107,27 @@ function publies(racine) {
 }
 
 describe('L’extraction par ancres refuse de deviner (constat Q-35)', () => {
-  test('les trois blocs annoncés existent, sont bornés, et ne sont pas vides', async () => {
-    for (const nom of ['frontend', 'proxytimeout', 'configtest']) {
+  test('TOUS les blocs annoncés existent, sont bornés, et ne sont pas vides', async () => {
+    // ⚠️ La liste est DÉCOUVERTE, elle n'est plus écrite ici.
+    //
+    // Cet essai portait `['frontend', 'proxytimeout', 'configtest']`. Un annuaire :
+    // le jour où un bloc s'ajoute — et il vient de s'en ajouter un, « entetes » —,
+    // l'essai reste vert sans l'avoir seulement regardé. C'est la forme exacte du
+    // défaut relevé au correctif du constat Q-39, côté serveur : un contrôle qui
+    // figeait la liste des appelants du générateur unique au lieu de la propriété.
+    const noms = blocsAnnonces();
+    for (const nom of noms) {
       const corps = extraireBloc(nom);
       assert.ok(corps.length > 200, `Le bloc « ${nom} » est trop court pour être celui qu’on croit.`);
+    }
+    // Et les trois que ce fichier JOUE doivent être parmi eux : un bloc renommé
+    // ferait sinon disparaître ses essais sans que rien ne le dise.
+    for (const joue of ['frontend', 'proxytimeout', 'configtest']) {
+      assert.ok(
+        noms.includes(joue),
+        `Le bloc « ${joue} » est joué par ce fichier et n’est plus annoncé par install.sh : ` +
+          `blocs vus : ${noms.join(', ')}.`,
+      );
     }
   });
 

@@ -26,6 +26,44 @@ import { RACINE_BACKEND } from './serveur.mjs';
 export const INSTALL = join(RACINE_BACKEND, 'deploy', 'install.sh');
 
 /**
+ * Les noms de TOUS les blocs qu'`install.sh` annonce, DÉCOUVERTS.
+ *
+ * ── Pourquoi découverts, et pas énumérés ────────────────────────────────────
+ *
+ * Le banc portait la liste écrite à la main `['frontend', 'proxytimeout',
+ * 'configtest']`. C'est un **annuaire** : il ne dit rien du jour où un bloc
+ * s'ajoute — il l'ignore, en silence, et le nouveau bloc n'est joué par
+ * personne. C'est la forme exacte du défaut que le correctif du constat
+ * **Q-39** a fait rougir chez l'agent serveur : un contrôle qui figeait la
+ * liste des appelants du générateur unique, et qui vérifiait l'annuaire au lieu
+ * de la propriété.
+ *
+ * La propriété est : **tout bloc qu'un marqueur annonce est extractible, borné
+ * et non vide**. Elle se vérifie sur ce que le fichier annonce, pas sur ce que
+ * le banc se souvient d'avoir vu.
+ */
+export function blocsAnnonces() {
+  const source = readFileSync(INSTALL, 'utf8');
+  const noms = [];
+  for (const ligne of source.split('\n')) {
+    const trouve = /^[ \t]*# >>> banc: ([a-z0-9_-]+) <<<[ \t]*$/.exec(ligne);
+    if (trouve !== null) noms.push(trouve[1]);
+  }
+  assert.ok(
+    noms.length >= 3,
+    `Seulement ${String(noms.length)} bloc(s) annoncé(s) dans deploy/install.sh : les ` +
+      'marqueurs ont disparu, et le banc ne joue plus rien de ce fichier.',
+  );
+  assert.equal(
+    new Set(noms).size,
+    noms.length,
+    `Deux blocs portent le même nom dans deploy/install.sh : ${noms.join(', ')}. ` +
+      'L’extraction prendrait le premier, en silence.',
+  );
+  return noms;
+}
+
+/**
  * Extrait un bloc de `install.sh` entre ses deux marqueurs.
  *
  * ── Pourquoi les marqueurs, et pourquoi ce refus ────────────────────────────

@@ -230,10 +230,30 @@ describe('Le contrôle du générateur est branché sur le démarrage', () => {
       }
     };
     parcourir(join(RACINE_BACKEND, 'src'));
-    assert.deepEqual(
-      appelants.filter((c) => !c.endsWith('entites/index.ts')),
-      ['src/api/index.ts'],
-      `Le garde-fou doit avoir UN seul appelant : ${appelants.join(', ')}`,
+
+    // ⚠️ ON ASSERTIONNE LA PROPRIÉTÉ, PAS L'ANNUAIRE.
+    //
+    // Cette assertion figeait le NOM du fichier appelant (`['src/api/index.ts']`).
+    // C'est un annuaire : il rougit le jour où le garde-fou change légitimement de
+    // voisin, et il ne dit alors rien de vrai. Un contrôle de cette forme exacte,
+    // côté serveur, a rougi au correctif du constat **Q-39** — lequel ajoutait au
+    // générateur unique un appelant parfaitement légitime.
+    //
+    // Ce qui est NORMATIF : **un seul** appelant hors du module qui déclare, et cet
+    // appelant est celui qui tient la porte de démarrage — reconnu à ce qu'il porte
+    // `assurerDepot`, jamais à son chemin. Deux points de démarrage, c'est un point
+    // de démarrage qu'on oubliera de brancher.
+    const dehors = appelants.filter((c) => !c.endsWith('entites/index.ts'));
+    assert.equal(
+      dehors.length,
+      1,
+      `Le garde-fou doit avoir UN seul appelant hors de son module. Vus : ${appelants.join(', ')}`,
+    );
+    assert.ok(
+      readFileSync(join(RACINE_BACKEND, dehors[0]), 'utf8').includes('assurerDepot'),
+      `« ${dehors[0]} » appelle le garde-fou sans tenir la porte de démarrage : le verdict ` +
+        'ne fermerait alors rien. C’est « assurerDepot » qui transforme « le générateur est ' +
+        'faible » en « le service ne sert plus », et c’est là que l’appel doit vivre.',
     );
   });
 });
