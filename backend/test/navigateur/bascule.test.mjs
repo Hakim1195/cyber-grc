@@ -886,3 +886,330 @@ describe('Un import en lot ne perd pas une ligne (bloquant T-1)', () => {
     }
   });
 });
+
+/* =====================================================================
+ *  §6 — Trois chemins que rien n'exerçait
+ * =====================================================================
+ *
+ *  Les trois viennent de l'agent FRONT, et le premier est né d'un sabotage :
+ *  en éprouvant l'équivalence de son propre correctif, il a vidé le corps de
+ *  `collectionsAuVolumeIncertain()` et **la suite est restée verte**. Ce n'est
+ *  pas une fonction décorative : elle décide si le sondage doit recharger tout
+ *  le jeu de données. Le motif est celui qu'on a rencontré toute la journée —
+ *  une propriété que rien n'exerce, et qui disparaît sans bruit.
+ * ===================================================================== */
+
+describe('Ce que le sondage décide, et ce que l’écran en dit', () => {
+  /** Nombre de chargements complets (`GET /api/donnees`) émis depuis le début du fichier. */
+  function chargementsComplets() {
+    return application.appelsPar('GET').filter((a) => a.chemin === '/api/donnees').length;
+  }
+
+  test('LE SONDAGE NE RECHARGE PAS quand une création est bloquée', async () => {
+    // ── Le chemin, et ce qu'il coûte quand il tombe ─────────────────────────
+    //
+    // Une création refusée pour DONNÉE INVALIDE reste locale et bloquée : la
+    // saisie demeure sous les yeux de l'utilisateur, elle n'est plus réémise. Le
+    // jeu local porte donc un enregistrement de plus que le serveur.
+    //
+    // Le sondage compare les volumes pour découvrir les suppressions distantes —
+    // aucune pierre tombale n'existe avant le journal du lot L5. S'il ne défalquait
+    // pas les créations locales non parties, il conclurait « une ligne a disparu
+    // ailleurs » et rechargerait tout : le rechargement écrase la mémoire par
+    // l'état du serveur, où la saisie refusée n'existe pas. L'utilisateur perdrait
+    // sa saisie, à chaque battement, sans que rien ne le dise.
+    const session = await ouvrirApplication();
+    try {
+      // `gravite` est un champ contraint côté schéma : le serveur refuse la valeur
+      // par `donnee_invalide` — un refus DÉFINITIF, pas une panne passagère.
+      await session.page.evaluate(() => {
+        window.DataStore.addIncident({
+          id: window.UI.genId('INC'),
+          titre: 'Incident dont la gravité est refusée',
+          gravite: 'catastrophique',
+        });
+      });
+
+      // On attend l'état, jamais un délai : le blocage est ce qui définit le
+      // scénario, et le cycle doit avoir rendu la main.
+      await session.page.waitForFunction(
+        () => {
+          const e = window.Sync.etat();
+          return e.bloques > 0 && e.enCours === false;
+        },
+        null,
+        { timeout: 15000 },
+      );
+
+      const avant = chargementsComplets();
+      const volumes = await session.page.evaluate(() => ({
+        local: window.DataStore.getIncidents().length,
+      }));
+      const enBaseIncidents = await enBase('select count(*)::int as n from incidents');
+      assert.equal(
+        volumes.local,
+        enBaseIncidents[0].n + 1,
+        'Le scénario EXIGE un écart de volume : sans lui, le sondage n’aurait aucune raison ' +
+          'de recharger et ce test ne mesurerait rien.',
+      );
+
+      // ── LA propriété ────────────────────────────────────────────────────
+      await session.page.evaluate(() => window.Sync.sonder());
+      assert.equal(
+        chargementsComplets(),
+        avant,
+        'Le sondage a rechargé tout le jeu de données alors qu’une création locale ' +
+          'expliquait l’écart de volume. Ce rechargement écrase la saisie refusée que ' +
+          'l’utilisateur a encore sous les yeux.',
+      );
+
+      // Et la saisie est toujours là : c'est elle qu'on protège, pas un compteur.
+      assert.equal(
+        await session.page.evaluate(() =>
+          window.DataStore.getIncidents().some((i) => i.titre === 'Incident dont la gravité est refusée'),
+        ),
+        true,
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE : une vraie suppression distante, elle, fait recharger', async () => {
+    // Sans cette moitié, le test précédent serait satisfait par un sondage qui ne
+    // recharge JAMAIS — c'est-à-dire par la suppression du mécanisme qu'il protège.
+    const session = await ouvrirApplication();
+    try {
+      const identifiant = await session.page.evaluate(async () => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Risque supprimé côté serveur' });
+        await window.Sync.pousser();
+        const trouve = window.DataStore.getRisques().find((r) => r.nom === 'Risque supprimé côté serveur');
+        return trouve.id;
+      });
+      await attendreQuiescence(session.page);
+
+      // Suppression par une connexion tierce : le navigateur n'en sait rien, et
+      // aucune écriture locale n'attend — l'écart de volume est donc RÉEL.
+      const client = await base.connexion('app');
+      await base.avecPerimetre(
+        client,
+        perimetre('menage', FILIALE_A, [FILIALE_A]),
+        async (c) => {
+          await c.query('delete from risques where id = $1', [identifiant]);
+        },
+        { annuler: false },
+      );
+
+      const avant = chargementsComplets();
+      await session.page.evaluate(() => window.Sync.sonder());
+      assert.ok(
+        chargementsComplets() > avant,
+        'Un écart de volume que rien de local n’explique doit provoquer un rechargement : ' +
+          'sans lui, une suppression faite ailleurs resterait invisible ici.',
+      );
+      assert.equal(
+        await session.page.evaluate(
+          (id) => window.DataStore.getRisques().some((r) => r.id === id),
+          identifiant,
+        ),
+        false,
+        'Et le rechargement doit avoir fait disparaître la ligne supprimée.',
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('une MODIFICATION seule est « en attente », alors qu’aucun volume ne bouge', async () => {
+    // ── Ce que ce test épingle ──────────────────────────────────────────────
+    //
+    // `aDesModificationsEnAttente()` emprunte un raccourci par les VOLUMES avant
+    // de canoniser quoi que ce soit — c'est ce qui rend le sondage abordable sur
+    // une filiale de douze mille enregistrements (constat Q-8). Le raccourci ne
+    // peut pas se tromper, et son auteur le démontre ; mais un raisonnement juste
+    // n'est pas un essai. Une modification ne change AUCUN volume : si le
+    // raccourci devenait un jour un chemin exclusif — « rien n'a bougé, donc rien
+    // n'attend » —, toute saisie non partie serait déclarée enregistrée, et
+    // `beforeunload` laisserait fermer l'onglet sans prévenir.
+    const session = await ouvrirApplication();
+    try {
+      const mesure = await session.page.evaluate(() => {
+        const compter = () => ({
+          risques: window.DataStore.getRisques().length,
+          actions: window.DataStore.getActions().length,
+        });
+        const avant = compter();
+        const risque = window.DataStore.getRisques()[0];
+        // Une MODIFICATION, et rien d'autre : même nombre d'enregistrements
+        // avant et après. On lit l'état dans la même exécution synchrone que la
+        // saisie — le minuteur de regroupement ne peut pas s'être déclenché.
+        // `updateRisque` prend l'enregistrement ENTIER, pas un correctif : la
+        // première rédaction lui passait `(id, champs)` et ne modifiait donc RIEN —
+        // l'essai mesurait alors l'absence de saisie, et l'aurait fait en silence
+        // si l'assertion n'avait pas porté sur « en attente ».
+        window.DataStore.updateRisque({ ...risque, nom: `${risque.nom} (revu)` });
+        return { avant, apres: compter(), etat: window.Sync.etat(), id: risque.id };
+      });
+
+      assert.deepEqual(
+        mesure.apres,
+        mesure.avant,
+        'Le scénario EXIGE qu’aucun volume ne bouge : c’est ce qui rend le raccourci ' +
+          'aveugle si on en fait un chemin exclusif.',
+      );
+      assert.equal(
+        mesure.etat.enAttente,
+        true,
+        'Une modification non encore envoyée est « en attente ». La déclarer enregistrée ' +
+          'laisse fermer l’onglet sans avertissement, et la saisie est perdue.',
+      );
+
+      // ── Contrôle symétrique ─────────────────────────────────────────────
+      // Sans lui, un `enAttente` constamment vrai passerait ce test — et le
+      // bandeau « modifications non enregistrées » ne s'éteindrait jamais.
+      await attendreQuiescence(session.page);
+      assert.equal(
+        await session.page.evaluate(() => window.Sync.etat().enAttente),
+        false,
+        'Une fois partie, la modification ne doit plus être « en attente ».',
+      );
+      const enBaseApres = await enBase('select nom from risques where id = $1', [mesure.id]);
+      assert.match(enBaseApres[0].nom, /\(revu\)$/, 'Et elle doit être arrivée en base.');
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+});
+
+/* =====================================================================
+ *  §7 — Q-11 : ce qu'un identifiant trop court fait payer, et qui le dit
+ * ===================================================================== */
+
+describe('Le renommage large s’annonce, et lui seul (constat Q-11)', () => {
+  /** Le texte du bandeau de synchronisation, tel qu'un utilisateur le lit. */
+  function bandeau(page) {
+    return page.evaluate(
+      () => (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+    );
+  }
+
+  /**
+   * Joue le scénario complet pour un identifiant donné et rend ce que l'écran dit.
+   *
+   * Le scénario est celui du constat : un enregistrement ANCIEN dont l'identifiant
+   * n'a pas la forme du §2, une donnée métier qui vaut exactement cette chaîne, et
+   * la création par laquelle le serveur ré-attribue l'identifiant (constat M-3). Le
+   * balayage des références réécrit alors tout ce qui égale l'ancien — références
+   * légitimes ET données de même valeur, sans pouvoir les distinguer.
+   */
+  async function jouerLeRenommage(identifiant, marque) {
+    // ⚠️ Les libellés portent une MARQUE propre à chaque cas. Les deux essais
+    // partagent la base : sans elle, le second retrouvait l'action du premier —
+    // déjà réécrite — et concluait sur elle. Il passait seul et échouait en
+    // suite, ce qui est la pire des deux façons d'échouer.
+    const titreAction = `Action dont le responsable porte la même valeur (${marque})`;
+    const nomRisque = `Risque hérité d’un export ancien (${marque})`;
+    const session = await ouvrirApplication();
+    try {
+      // Une donnée MÉTIER qui vaut la chaîne : ici le responsable d'une action.
+      // C'est un champ de texte libre, exactement le genre qu'un balayage de
+      // références ne peut pas distinguer d'un lien.
+      await session.page.evaluate(([valeur, titre]) => {
+        window.DataStore.addAction({ id: window.UI.genId('ACT'), titre, responsable: valeur });
+      }, [identifiant, titreAction]);
+      await attendreQuiescence(session.page);
+
+      // Puis la création qui déclenche la ré-attribution : le serveur refuse
+      // l'identifiant proposé et rend le sien, le navigateur adopte et renomme.
+      await session.page.evaluate(([id, nom]) => {
+        window.DataStore.addRisque({ id, nom });
+      }, [identifiant, nomRisque]);
+
+      // ── On attend le RENOMMAGE, pas le repos ────────────────────────────
+      //
+      // C'est l'événement qui décide de tout ici : une fois l'identifiant
+      // ré-attribué, `renommer` a balayé les références et le sort du bandeau est
+      // scellé. Attendre le repos de la page serait plus commode et faux : la
+      // page ne revient PAS au repos après ce balayage — les enregistrements
+      // réécrits restent en attente sans que rien ne les repousse (voir le rapport
+      // de cette vague). Un essai qui attendrait le repos mesurerait ce défaut-là
+      // au lieu de la propriété qu'il vise, et expirerait.
+      await session.page.waitForFunction(
+        ([propose, nom]) => {
+          const r = window.DataStore.getRisques().find((x) => x.nom === nom);
+          return r !== undefined && r.id !== propose;
+        },
+        [identifiant, nomRisque],
+        { timeout: 15000 },
+      );
+
+      const apres = await session.page.evaluate(([valeur, titre, nom]) => {
+        const action = window.DataStore.getActions().find((a) => a.titre === titre);
+        const risque = window.DataStore.getRisques().find((r) => r.nom === nom);
+        return { responsable: action.responsable, idRisque: risque.id, valeurInitiale: valeur };
+      }, [identifiant, titreAction, nomRisque]);
+
+      return { texte: await bandeau(session.page), apres, erreurs: session.erreursScript };
+    } finally {
+      await session.fermer();
+    }
+  }
+
+  test('un identifiant TROP COURT : le bandeau nomme la réécriture et son compte', async () => {
+    // ── Pourquoi il faut le DIRE plutôt que le corriger ──────────────────────
+    //
+    // Le balayage ne peut pas savoir lesquels de ces champs étaient vraiment des
+    // références : « 7 » est un identifiant recevable d'un export ancien, et une
+    // valeur métier parfaitement légitime. Choisir en silence, dans un outil qui
+    // sert de preuve en audit, c'est fabriquer une donnée fausse que rien
+    // n'expliquera ensuite. On réécrit — sinon les vraies références se cassent —
+    // et l'on prévient, avec le compte, pour que le contrôle soit possible.
+    const issue = await jouerLeRenommage('7', 'court');
+
+    assert.notEqual(issue.apres.idRisque, '7', 'Le serveur doit avoir ré-attribué l’identifiant.');
+    assert.equal(
+      issue.apres.responsable,
+      issue.apres.idRisque,
+      'Le scénario EXIGE que la donnée métier ait été réécrite : c’est ce dont on prévient.',
+    );
+    assert.match(
+      issue.texte,
+      /Réécriture de références à vérifier/,
+      `Le bandeau doit annoncer la réécriture : ${issue.texte}`,
+    );
+    assert.match(
+      issue.texte,
+      /7 → 1 valeur\(s\)/,
+      `Il doit nommer la chaîne et COMPTER ce qu’elle a touché : ${issue.texte}`,
+    );
+    assert.deepEqual(issue.erreurs, []);
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE : identifiant canonique, même situation, bandeau MUET', async () => {
+    // La moitié sans laquelle l'essai précédent serait satisfait par un bandeau
+    // qui crie toujours — et un avertissement permanent est un avertissement mort.
+    //
+    // La configuration est RIGOUREUSEMENT la même : une donnée métier égale à
+    // l'identifiant, donc une réécriture qui a bien lieu. Seule change la FORME de
+    // l'identifiant : celle du §2 ne peut pas être confondue avec une valeur
+    // saisie, et il n'y a donc rien à faire vérifier à l'utilisateur.
+    const canonique = `RISK-${String(Date.now())}-zzq7canonique`;
+    const issue = await jouerLeRenommage(canonique, 'canonique');
+
+    assert.equal(
+      issue.apres.responsable,
+      issue.apres.idRisque,
+      'La réécriture doit avoir eu lieu ici AUSSI : sans elle, le silence ne prouverait rien.',
+    );
+    assert.notEqual(issue.apres.responsable, canonique);
+    assert.equal(
+      /Réécriture de références à vérifier/.test(issue.texte),
+      false,
+      `Aucun avertissement n’est dû sur un identifiant distinctif : ${issue.texte}`,
+    );
+    assert.deepEqual(issue.erreurs, []);
+  });
+});
