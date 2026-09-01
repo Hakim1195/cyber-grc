@@ -95,8 +95,18 @@
  *
  *     ESSAI_UTILISATEUR_LECTURE (grc_lecture) · ESSAI_MOT_DE_PASSE_LECTURE (dev)
  *
- * Prérequis : `bash db/dev/preparer_base_dev.sh` a été passé une fois sur la machine
- * (rôles créés, `createdb` accordé au propriétaire). Le message d'erreur le rappelle.
+ * ── PRÉREQUIS MACHINE, à lire avant de monter un environnement ───────────────
+ *
+ *  1. `bash db/dev/preparer_base_dev.sh` a été passé une fois (rôles créés, `createdb`
+ *     accordé au propriétaire). Le message d'erreur le rappelle.
+ *  2. **Le client `psql` est installé et sur le `PATH`.** `preparer_base_dev.sh` l'exige
+ *     déjà pour monter la base, et `deploy/install.sh` sur la VM cible : la dépendance
+ *     existait, elle n'était simplement écrite nulle part. Le banc l'emploie en plus
+ *     pour rejouer `db/verifier_cloisonnement.sql` — cent sept contrôles de
+ *     cloisonnement portant des méta-commandes `psql` que le pilote `pg` ne sait pas
+ *     exécuter (`test/base/demonstration.test.mjs`). Sans `psql`, ces essais
+ *     **échouent** ; ils ne se sautent pas, parce qu'un essai sauté rendrait le banc
+ *     vert sur une machine où la démonstration n'a pas été jouée.
  *
  * Une exécution tuée par un signal peut laisser une base `grc_essai_…` derrière elle.
  * Pour les balayer : `bash db/dev/preparer_base_dev.sh --purger-bases-essai`.
@@ -275,6 +285,18 @@ export async function ouvrirBaseEssai(urlFichierTest, options = {}) {
   const base = {
     /** Nom de la base d'essai — utile dans les messages d'assertion. */
     nom,
+
+    /**
+     * Réglages de connexion résolus (hôte, port, et les trois rôles avec leur secret).
+     *
+     * Exposés parce qu'un essai peut avoir besoin d'un CLIENT EXTERNE plutôt que du
+     * pilote : `db/verifier_cloisonnement.sql` porte des méta-commandes `psql`
+     * (`\pset`, `\echo`) que `pg` ne sait pas exécuter, et c'est ce script-là qui
+     * démontre le cloisonnement à un auditeur. Les re-dériver dans l'essai créerait
+     * une seconde source de vérité pour les mêmes valeurs par défaut — exactement ce
+     * que ce banc évite ailleurs.
+     */
+    reglages: conf,
 
     /** Connexion partagée pour ce rôle (ouverte à la première demande). */
     async connexion(role = 'proprietaire') {

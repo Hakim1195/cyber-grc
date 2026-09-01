@@ -124,6 +124,13 @@ const Sync = (() => {
     const incidents = [];               // échecs à afficher (jamais effacés tout seuls)
     const champsRefuses = new Set();    // "collection.champ" que le modèle serveur ignore
     const doublons = new Set();         // identifiants portés par deux enregistrements
+    // Renommages d'identifiants trop banals pour être distingués d'une donnée
+    // saisie, ayant touché d'autres champs que l'enregistrement lui-même (Q-11,
+    // voir `renommer`). Volontairement JAMAIS vidé, pas même par un
+    // rechargement : la réécriture est déjà partie au serveur, un rechargement
+    // ne la défait pas, et effacer la trace de ce qu'on n'a pas su distinguer
+    // serait le geste que le constat B-2 a condamné.
+    const renommagesLarges = new Set();
     const propagations = new Map();     // mesureId -> Set(evaluationId) à propager côté serveur
     const derives = new Set();          // "collection:id" recalculables, jamais saisis
 
@@ -422,7 +429,50 @@ const Sync = (() => {
      * liste de champs écrite à la main : la même mécanique que le tri des
      * créations, et pour la même raison — une liste écrite à la main est une
      * omission qui attend.
+     *
+     * ── CE QUE CE BALAYAGE PEUT ATTEINDRE DE TROP (constat Q-11) ─────────────
+     *
+     * Il réécrit **toute chaîne égale à l'ancien identifiant**, dans toutes les
+     * collections et tous les champs. Il n'a aucun moyen de distinguer une
+     * référence d'une donnée métier qui aurait, par hasard, la même valeur — et
+     * il n'en aura pas : les huit clés étrangères implicites du modèle
+     * (`risque_id`, `mesure_ids[]`, `dependances[].to`, `mapping.refs`…) ne sont
+     * pas déclarées comme telles côté serveur. `/api/modele` rend le TYPE d'une
+     * colonne (`texte`, `date`, `entier`), pas sa nature de référence, et les
+     * références imbriquées vivent dans des documents JSONB dont il ne dit rien.
+     * Écrire ici la liste des champs à réécrire fermerait le cas d'aujourd'hui
+     * et rouvrirait celui que ce fichier a déjà payé deux fois : le champ neuf
+     * qu'on oublie d'y inscrire, et dont la référence se met à pointer dans le
+     * vide sans que rien ne le dise.
+     *
+     * **Quand cela mord, et seulement alors** : il faut que l'ancien identifiant
+     * soit assez banal pour être aussi une valeur métier plausible. Les
+     * identifiants que ce produit fabrique ne le sont pas (`RISK-1788…-3k9zq`,
+     * une trentaine de caractères, `CONVENTIONS.md` §2). Un export très ancien,
+     * lui, peut porter `"7"` — et alors une criticité, un RTO ou un compteur qui
+     * vaut `"7"` serait réécrit.
+     *
+     * **Le chemin qui y mène est unique et étroit** : le repli d'`applyImport`,
+     * qui ne s'emprunte que contre un serveur ne portant pas `/api/reprise`,
+     * c'est-à-dire lors d'un retour arrière. Le chemin normal, transactionnel,
+     * **ne renomme rien du tout** : le serveur y conserve les identifiants du
+     * fichier. Le remède d'exploitation est donc connu et court — déployer un
+     * serveur à jour — et le repli reste ce qu'il doit être : un import qui
+     * n'efface rien, contre un serveur ancien.
+     *
+     * **Ce qui est fait ici**, faute de pouvoir le fermer : le cas ne se produit
+     * plus en silence. Quand un identifiant NON conforme à la convention du
+     * produit est renommé et que le balayage a touché autre chose que
+     * l'enregistrement lui-même, le fait est **affiché**, avec le compte. C'est
+     * la règle de maison : trancher en silence est ce qu'on ne fait pas.
      */
+
+    // Un identifiant « distinctif » porte la forme du §2 des conventions : un
+    // préfixe, un tiret, et une suite assez longue pour qu'aucune donnée métier
+    // ne puisse l'égaler par hasard. `"7"` n'en est pas un ; `"ACT-1720000000000"`
+    // — la forme des exports d'avant le suffixe aléatoire — en est un.
+    const ID_DISTINCTIF = /^[A-Za-z][A-Za-z0-9_]*-[A-Za-z0-9_-]{8,}$/;
+
     function renommer(collection, ancien, nouveau) {
         if (!ancien || !nouveau || ancien === nouveau) return;
         const data = donnees();
@@ -432,13 +482,14 @@ const Sync = (() => {
         if (enr) enr.id = nouveau;
 
         // Références portées par les autres enregistrements, tous niveaux.
+        let touchesAilleurs = 0;
         const remplacer = (objet) => {
             Object.keys(objet).forEach(k => {
                 const v = objet[k];
-                if (typeof v === "string") { if (v === ancien && k !== "id") objet[k] = nouveau; return; }
+                if (typeof v === "string") { if (v === ancien && k !== "id") { objet[k] = nouveau; touchesAilleurs++; } return; }
                 if (Array.isArray(v)) {
                     for (let i = 0; i < v.length; i++) {
-                        if (typeof v[i] === "string") { if (v[i] === ancien) v[i] = nouveau; }
+                        if (typeof v[i] === "string") { if (v[i] === ancien) { v[i] = nouveau; touchesAilleurs++; } }
                         else if (v[i] && typeof v[i] === "object") remplacer(v[i]);
                     }
                     return;
@@ -447,6 +498,10 @@ const Sync = (() => {
             });
         };
         collections.forEach(c => (data[c] || []).forEach(x => { if (x && typeof x === "object") remplacer(x); }));
+
+        if (touchesAilleurs > 0 && !ID_DISTINCTIF.test(ancien)) {
+            renommagesLarges.add(ancien + " → " + touchesAilleurs + " valeur(s)");
+        }
 
         // Instantané de référence, versions, blocages, dérivés, propagations.
         [reference, valeurs, versions].forEach(carte => {
@@ -1418,7 +1473,7 @@ const Sync = (() => {
         if (!h) return;
 
         if (incidents.length === 0 && bloques.size === 0 && !panneReseau &&
-            champsRefuses.size === 0 && doublons.size === 0) {
+            champsRefuses.size === 0 && doublons.size === 0 && renommagesLarges.size === 0) {
             h.innerHTML = "";
             return;
         }
@@ -1486,6 +1541,24 @@ const Sync = (() => {
                 '<span class="reminder-ico">!</span>' +
                 '<span class="reminder-text">Champs non reconnus par le serveur, donc <b>non enregistrés</b> : ' +
                 esc(Array.from(champsRefuses).join(", ")) + '. Signalez-le à votre exploitant.</span>' +
+                '</div>');
+        }
+
+        // Constat Q-11 : un identifiant trop banal pour être distingué d'une
+        // donnée métier a été renommé, et le balayage des références a touché
+        // d'autres champs. On ne peut pas savoir lesquels étaient vraiment des
+        // références — on le DIT, plutôt que de laisser passer une réécriture
+        // qu'aucune trace n'expliquerait ensuite.
+        if (renommagesLarges.size > 0) {
+            morceaux.push(
+                '<div class="quota-banner" role="alert">' +
+                '<span class="quota-ico">!</span>' +
+                '<span class="quota-text"><b>Réécriture de références à vérifier</b> : ' +
+                esc(Array.from(renommagesLarges).slice(0, 5).join(" ; ")) +
+                '. Ces identifiants, issus d’un fichier ancien, sont trop courts pour être ' +
+                'distingués d’une valeur saisie ; des champs de même valeur ont pu être réécrits. ' +
+                'Contrôlez les données importées, et demandez à votre exploitant un serveur ' +
+                'qui accepte la reprise transactionnelle — elle ne renomme rien.</span>' +
                 '</div>');
         }
 
