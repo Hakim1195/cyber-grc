@@ -207,6 +207,97 @@ describe('Le verrou de la mise en œuvre n’est pas facultatif', () => {
     assert.equal((await enBase(mesure.id))[0].statut, 'partiellement conforme');
   });
 
+  test('« versionMiseEnOeuvre » PÉRIMÉ sur une requête QUI N’ÉCRIT RIEN de ce côté : encore un conflit', async () => {
+    // ── D'où vient ce test ──────────────────────────────────────────────────
+    //
+    // D'une contre-épreuve écrite pour le test précédent, et qui a trouvé mieux que
+    // ce qu'elle cherchait. Le cas périmé « ordinaire » se voit : deux valeurs qui
+    // s'excluent, un `update … where version = $n` qui ne trouve pas sa ligne, un
+    // 409. Mais une requête peut ne rien avoir à écrire DANS LA MOITIÉ FILIALE et
+    // présenter tout de même une version pour elle — le navigateur renvoie le
+    // formulaire entier, versions comprises, et l'utilisateur n'a corrigé qu'un
+    // libellé du catalogue.
+    //
+    // Le serveur n'avait alors aucune raison de visiter `mesure_mise_en_oeuvre` :
+    // rien à y mettre. Il ne LISAIT donc même pas sa version, et rendait 200. Ce 200
+    // vaut, pour l'interface, « ta vue est à jour » : la saisie suivante repart d'une
+    // maturité périmée et l'écrase. C'est P1 par la moitié que personne ne regarde —
+    // la version d'une entité scindée vit dans `mesure_mise_en_oeuvre`, pas dans
+    // `mesure_catalogue`, et c'est la seule écriture du produit dont le verrou
+    // pouvait s'ouvrir sans que quiconque s'en aperçoive.
+    const mesure = await creerMesure('Contrôle immobile', { statut: 'conforme', maturite: 2 });
+    const detenue = mesure._versionMiseEnOeuvre;
+
+    // Quelqu'un d'autre modifie la MISE EN ŒUVRE, et elle seule : la version du
+    // catalogue ne bouge pas, celle de la mise en œuvre avance.
+    const autre = await ecrire(mesure.id, {
+      version: mesure._version,
+      versionMiseEnOeuvre: detenue,
+      champs: { maturite: 4 },
+    });
+    assert.equal(autre.statut, 200);
+    assert.equal(
+      autre.corps.enregistrement._version,
+      mesure._version,
+      'Le scénario exige que la version du CATALOGUE soit restée juste…',
+    );
+    assert.equal(
+      autre.corps.enregistrement._versionMiseEnOeuvre,
+      detenue + 1,
+      '…et que celle de la MISE EN ŒUVRE ait vraiment avancé.',
+    );
+
+    // ── Le retardataire renvoie son formulaire ──────────────────────────────
+    // Il ne touche qu'un champ du catalogue, et il y remet la valeur qui s'y trouve
+    // déjà : sa requête n'écrit rien, ni d'un côté ni de l'autre. Elle présente
+    // pourtant une version de mise en œuvre, et cette version est fausse.
+    const immobile = await ecrire(mesure.id, {
+      version: mesure._version,
+      versionMiseEnOeuvre: detenue,
+      champs: { nom: 'Contrôle immobile' },
+    });
+    assert.equal(
+      immobile.statut,
+      409,
+      'Une version présentée doit être vérifiée même quand il n’y a rien à écrire ' +
+        'du côté qu’elle protège — sans quoi 200 veut dire « à jour » à tort.',
+    );
+    assert.equal(immobile.corps.code_grc, 'GRC03');
+    assert.equal(immobile.corps.version_actuelle, detenue + 1, 'Et le retardataire repart de la vraie version.');
+
+    // Le voisin n'a rien perdu au passage : un conflit ne doit pas écrire à moitié.
+    assert.equal((await enBase(mesure.id))[0].maturite, 4);
+    assert.equal((await enBase(mesure.id))[0].version, detenue + 1);
+
+    // ── Le même défaut par l'autre porte ────────────────────────────────────
+    // Cette fois la requête écrit bien dans la moitié filiale, mais y remet la
+    // valeur déjà en place. L'`update` porte sa clause de version : il ne trouve
+    // rien, et c'est encore un conflit — pas un 200 « rien à faire ».
+    const memeValeur = await ecrire(mesure.id, {
+      version: mesure._version,
+      versionMiseEnOeuvre: detenue,
+      champs: { statut: 'conforme' },
+    });
+    assert.equal(memeValeur.statut, 409, 'Réécrire la valeur en place ne dispense pas du verrou.');
+    assert.equal(memeValeur.corps.code_grc, 'GRC03');
+
+    // ── Contrôle symétrique (§20.2) ─────────────────────────────────────────
+    // Sans lui, un serveur qui refuserait TOUTE requête sans effet passerait ce
+    // test — et l'application deviendrait inutilisable au premier formulaire
+    // renvoyé sans modification.
+    const ajour = await ecrire(mesure.id, {
+      version: mesure._version,
+      versionMiseEnOeuvre: detenue + 1,
+      champs: { nom: 'Contrôle immobile' },
+    });
+    assert.equal(ajour.statut, 200, 'La MÊME requête sans effet, avec la bonne version, doit passer.');
+    assert.equal(
+      ajour.corps.enregistrement._versionMiseEnOeuvre,
+      detenue + 1,
+      'Et ne rien écrire ne consomme pas de version : deux lectures concurrentes restent valides.',
+    );
+  });
+
   test('« versionMiseEnOeuvre » sur une mise en œuvre EFFACÉE : conflit, pas de résurrection', async () => {
     // Le troisième chemin, et le plus discret : la mise en œuvre a disparu entre la
     // lecture et l'écriture. Un `insert` de rattrapage recréerait la ligne à l'insu

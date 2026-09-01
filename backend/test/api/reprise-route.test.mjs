@@ -432,6 +432,67 @@ describe('Les refus de la route de reprise', () => {
     );
   });
 
+  test('un fichier portant DEUX FOIS le même identifiant est refusé en entier (constat T-2)', async () => {
+    // ── Pourquoi ce cas mérite son test ──────────────────────────────────────
+    //
+    // Le fichier n'est pas produit que par l'application : un exploitant en édite un
+    // à la main pour rejouer une restauration partielle, une fusion de deux exports
+    // colle deux collections bout à bout, un tableur en recopie une ligne. Le
+    // résultat porte deux fois le même identifiant dans la même collection.
+    //
+    // Une reprise qui « applique dans l'ordre » écrirait le premier, puis le second
+    // par-dessus : le second gagne, sans que personne l'ait décidé. C'est un
+    // écrasement silencieux — le risque P1 — avec cette aggravation qu'il vient du
+    // fichier lui-même et non d'une course entre deux navigateurs, donc qu'aucun
+    // verrou optimiste ne peut l'attraper. La seule réponse juste est le refus.
+    const avant = await compter();
+    const identifiantsAvant = await identifiants('risques');
+
+    const reponse = await reprendre('fusionner', instantane(12, {
+      risques: [
+        { id: 'RISK-DOUBLE', nom: 'la première ligne' },
+        { id: 'RISK-DOUBLE', nom: 'la seconde, qui écraserait la première' },
+        { id: 'RISK-VOISIN', nom: 'la ligne innocente du même fichier' },
+      ],
+    }), { nom: 'doublon.json' });
+
+    assert.equal(reponse.statut, 400, JSON.stringify(reponse.corps).slice(0, 300));
+    assert.equal(reponse.corps.erreur, 'donnee_invalide');
+
+    // Le message doit être exploitable : l'identifiant fautif ET la collection où le
+    // chercher. « Fichier invalide » enverrait l'exploitant relire dix mille lignes.
+    assert.match(reponse.corps.message, /RISK-DOUBLE/, 'Le message doit NOMMER l’identifiant en double.');
+    assert.match(reponse.corps.message, /risques/, 'Et la collection où il se trouve.');
+
+    // Contrôle S12 : nommer une donnée du fichier de l'appelant n'est pas divulguer
+    // l'état du serveur. Rien d'interne ne doit sortir pour autant.
+    const texte = JSON.stringify(reponse.corps).toLowerCase();
+    for (const interdit of ['select ', 'insert into', 'pg_', '23505', 'mesure_catalogue', 'at object']) {
+      assert.equal(texte.includes(interdit), false, `« ${interdit} » ne doit pas sortir.`);
+    }
+
+    // ── Tout ou rien : la ligne innocente n'est pas passée non plus ──────────
+    assert.deepEqual(await compter(), avant, 'Un refus de fichier ne doit RIEN avoir écrit — pas même la trace d’import.');
+    assert.deepEqual(
+      await identifiants('risques'),
+      identifiantsAvant,
+      'Ni « RISK-DOUBLE », ni « RISK-VOISIN » qui voyageait dans le même fichier.',
+    );
+
+    // ── Contrôle symétrique ─────────────────────────────────────────────────
+    // Le même fichier, le doublon en moins, doit passer : sans cela le test serait
+    // satisfait par une route qui refuse tout fichier comportant plusieurs risques.
+    const corrige = await reprendre('fusionner', instantane(12, {
+      risques: [
+        { id: 'RISK-DOUBLE', nom: 'la première ligne' },
+        { id: 'RISK-VOISIN', nom: 'la ligne innocente du même fichier' },
+      ],
+    }), { nom: 'corrige.json' });
+    assert.equal(corrige.statut, 200, JSON.stringify(corrige.corps).slice(0, 300));
+    const apres = await identifiants('risques');
+    assert.equal(apres.includes('RISK-VOISIN'), true, 'Le fichier corrigé, lui, entre bel et bien.');
+  });
+
   test('un fichier illisible est refusé par un message écrit pour un exploitant', async () => {
     const reponse = await reprendre('fusionner', null, { contenu: 'ceci n’est pas du JSON', nom: 'x.json' });
     assert.equal(reponse.statut, 400);
@@ -858,6 +919,112 @@ describe('Le dernier chemin non éprouvé : un vieil export réel, de bout en bo
       await identifiants('risques'),
       avant,
       'Le jeu de données doit être exactement celui d’avant : ni purgé, ni à moitié rempli.',
+    );
+  });
+});
+
+/* =====================================================================
+ *  §7 — Deux entités, un même identifiant (constat T-5)
+ * ===================================================================== */
+
+describe('Un vieil export où DEUX entités partagent un identifiant', () => {
+  /** Les liaisons écrites en base, lues par une connexion tierce. */
+  async function liaison(sql) {
+    const client = await base.connexion('app');
+    return base.avecPerimetre(client, lectureA, async (c) => (await c.query(sql)).rows);
+  }
+
+  test('chaque référence suit SON entité, pas la chaîne de caractères', async () => {
+    // ── Le cas, et pourquoi il n'a rien d'exotique ───────────────────────────
+    //
+    // Un identifiant n'est unique que DANS sa collection : rien n'a jamais interdit
+    // qu'un risque et un actif portent le même. Les vieux exports en contiennent —
+    // les identifiants d'alors n'avaient pas de suffixe aléatoire, et deux modules
+    // créés dans la même milliseconde produisaient la même chaîne.
+    //
+    // Que devient cette chaîne quand la reprise doit renommer l'une des deux ? Ici
+    // le risque `RISK-B` est déjà pris par une filiale INVISIBLE, donc renommé
+    // (c'est le remède du constat N-1 : on ne refuse pas, on renomme, sans quoi le
+    // refus dirait « cette ligne existe ailleurs »). L'actif `RISK-B`, lui, n'entre
+    // en collision avec rien et garde son identifiant.
+    //
+    // Un plan de renommage à plat — une seule table `ancien → nouveau` pour toutes
+    // les collections — réécrirait alors AUSSI les références vers l'actif. Le lien
+    // « incident → actif » pointerait vers l'identifiant neuf du risque : soit une
+    // violation de clé étrangère, soit, si l'identifiant existe par ailleurs, un
+    // rattachement silencieusement faux dans un registre d'incidents qui sert de
+    // preuve en audit. C'est le constat T-5.
+    const charge = instantane(12, {
+      risques: [{ id: 'RISK-B', nom: 'le risque homonyme' }],
+      actifs: [{ id: 'RISK-B', nom: 'l’actif homonyme', risques_lies: ['RISK-B'] }],
+      actions: [{ id: 'ACT-HOMONYME', titre: 'action rattachée au risque', risque_id: 'RISK-B' }],
+      incidents: [{ id: 'INC-HOMONYME', titre: 'incident touchant l’actif', actifs_touches: ['RISK-B'] }],
+    });
+
+    const reponse = await reprendre('remplacer', null, {
+      contenu: JSON.stringify(enveloppe(6, charge)),
+      nom: 'homonymes.json',
+    });
+    assert.equal(reponse.statut, 200, JSON.stringify(reponse.corps).slice(0, 400));
+
+    const client = await base.connexion('app');
+    const [risque] = await base.avecPerimetre(client, lectureA, async (c) =>
+      (await c.query('select id from risques')).rows);
+    const [actif] = await base.avecPerimetre(client, lectureA, async (c) =>
+      (await c.query('select id from actifs')).rows);
+
+    // ── L'homonymie est bien résolue, et d'un seul côté ──────────────────────
+    assert.equal(actif.id, 'RISK-B', 'L’actif n’entrait en collision avec rien : il garde son identifiant.');
+    assert.notEqual(risque.id, 'RISK-B', 'Le risque, lui, se heurtait à une filiale invisible : il est renommé.');
+    assert.match(risque.id, /^RISK-\d+-\d+$/, 'Et il est renommé selon la convention du chantier (§2).');
+
+    // ── Chaque référence a suivi la bonne entité ─────────────────────────────
+    const [action] = await base.avecPerimetre(client, lectureA, async (c) =>
+      (await c.query("select risque_id from actions where id = 'ACT-HOMONYME'")).rows);
+    assert.equal(action.risque_id, risque.id, 'La référence vers le RISQUE suit le risque renommé.');
+
+    const incidentActifs = await liaison('select incident_id, actif_id from incident_actifs');
+    assert.deepEqual(
+      incidentActifs,
+      [{ incident_id: 'INC-HOMONYME', actif_id: 'RISK-B' }],
+      'La référence vers l’ACTIF ne bouge pas : ce n’est pas la même entité, même chaîne ou non.',
+    );
+    assert.notEqual(
+      incidentActifs[0].actif_id,
+      risque.id,
+      'C’est ici qu’un plan de renommage à plat se voit : il aurait rattaché l’incident au risque.',
+    );
+
+    const actifRisques = await liaison('select actif_id, risque_id from actif_risques');
+    assert.deepEqual(
+      actifRisques,
+      [{ actif_id: 'RISK-B', risque_id: risque.id }],
+      'Et la liaison qui vise LES DEUX à la fois les distingue : l’une renommée, l’autre non.',
+    );
+  });
+
+  test('CONTRÔLE DE MORSURE : sans homonymie, les deux identifiants sont conservés', async () => {
+    // Sans ce contre-essai, le test précédent serait satisfait par une reprise qui
+    // renomme systématiquement les risques — ce qui détruirait la propriété du §2
+    // (un export repris garde ses identifiants) tout en gardant les assertions
+    // vertes. On rejoue la même charge avec un identifiant de risque libre.
+    const charge = instantane(12, {
+      risques: [{ id: 'RISK-LIBRE', nom: 'aucun homonyme' }],
+      actifs: [{ id: 'RISK-LIBRE', nom: 'l’actif homonyme du risque libre', risques_lies: ['RISK-LIBRE'] }],
+      actions: [{ id: 'ACT-LIBRE', titre: 'action', risque_id: 'RISK-LIBRE' }],
+    });
+    const reponse = await reprendre('remplacer', null, {
+      contenu: JSON.stringify(enveloppe(6, charge)),
+      nom: 'homonymes-libres.json',
+    });
+    assert.equal(reponse.statut, 200, JSON.stringify(reponse.corps).slice(0, 400));
+
+    assert.deepEqual(await identifiants('risques'), ['RISK-LIBRE'], 'Rien ne justifiait de renommer.');
+    assert.deepEqual(await identifiants('actifs'), ['RISK-LIBRE'], 'Et l’homonymie seule n’est pas un motif.');
+    assert.deepEqual(
+      await liaison('select actif_id, risque_id from actif_risques'),
+      [{ actif_id: 'RISK-LIBRE', risque_id: 'RISK-LIBRE' }],
+      'Deux entités homonymes reliées l’une à l’autre : la liaison est écrite telle quelle.',
     );
   });
 });
