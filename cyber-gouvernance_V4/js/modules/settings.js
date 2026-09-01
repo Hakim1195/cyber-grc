@@ -316,9 +316,21 @@ const SettingsModule = (() => {
             // cela n'existe (constat m-7) — et « Chiffrement : Désactivé » juste
             // au-dessus d'un texte expliquant que le disque du serveur est
             // chiffré était le genre de contradiction qu'un auditeur relève.
-            const attente = info.enAttente
-                ? `<span style="color: var(--color-danger);">${info.incidents > 0 ? info.incidents + " refusée(s)" : "en cours d’envoi"}</span>`
-                : "Tout est enregistré";
+            // T-11 : cette tuile disait « en cours d'envoi » dès que quelque chose
+            // attendait — y compris quand rien ne partait, ce qui était la seule
+            // information du produit sur un lot perdu (constat T-1). Elle
+            // distingue désormais les trois états, et ne promet pas un envoi qui
+            // n'a pas lieu.
+            let attente = "Tout est enregistré";
+            if (info.incidents > 0) {
+                attente = `<span style="color: var(--color-danger);">${info.incidents} refusée(s)</span>`;
+            } else if (info.panneReseau) {
+                attente = `<span style="color: var(--color-danger);">serveur injoignable</span>`;
+            } else if (info.enCours) {
+                attente = `<span style="color: var(--text-muted);">envoi en cours</span>`;
+            } else if (info.enAttente) {
+                attente = `<span style="color: var(--color-danger);">non enregistrées</span>`;
+            }
             el.innerHTML = `
                 ${statBox("Enregistré sur", escapeHtml(info.engine))}
                 ${statBox("Enregistrements détenus", totalItems + " éléments")}

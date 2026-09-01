@@ -771,17 +771,22 @@ async function decouvrirClesEtrangeres(
     table: string;
     cible: string;
     action: string;
+    colonnes: string[];
   }>(`
-    select k.conname                     as nom,
-           c.relname                     as table,
-           p.relname                     as cible,
-           k.confdeltype                 as action
+    select k.conname                                     as nom,
+           c.relname                                     as table,
+           p.relname                                     as cible,
+           k.confdeltype                                 as action,
+           array_agg(a.attname::text order by cle.rang)  as colonnes
       from pg_constraint k
       join pg_class c     on c.oid = k.conrelid
       join pg_class p     on p.oid = k.confrelid
       join pg_namespace n on n.oid = c.relnamespace
+      join lateral unnest(k.conkey) with ordinality as cle(numero, rang) on true
+      join pg_attribute a on a.attrelid = c.oid and a.attnum = cle.numero
      where n.nspname = 'public'
        and k.contype = 'f'
+     group by k.conname, c.relname, p.relname, k.confdeltype
   `);
 
   const actions: Record<string, DescriptionCleEtrangere['action']> = {
@@ -796,6 +801,7 @@ async function decouvrirClesEtrangeres(
     nom: ligne.nom,
     table: ligne.table,
     cible: ligne.cible,
+    colonnes: Array.isArray(ligne.colonnes) ? ligne.colonnes : [],
     // Une action inconnue est traitée comme la plus contraignante : mieux vaut
     // un ordre trop prudent qu'une suppression refusée en pleine reprise.
     action: actions[ligne.action] ?? 'restrict',
@@ -2144,9 +2150,27 @@ export class Depot {
     //
     // Le plan ne sort pas d'ici : le rendre à l'appelant lui apprendrait qu'un
     // identifiant existe ailleurs, c'est-à-dire l'oracle qu'on vient de fermer.
-    const renommages = new Map<string, string>();
-    const signalerRenommage = (ancien: string, nouveau: string): void => {
-      renommages.set(ancien, nouveau);
+    // ⚠️ **La clé du plan est (entité, identifiant), pas l'identifiant seul.**
+    // Le domaine `id_metier` est volontairement permissif — un export ancien
+    // porte des identifiants sans préfixe, parfois réduits à un nombre
+    // (`CONVENTIONS.md` §2) — si bien que deux entités d'un même fichier
+    // peuvent porter le même. Avec un plan à plat, renommer le risque « 7 »
+    // réécrivait l'`exigence_id` d'une action qui visait l'EXIGENCE « 7 » :
+    // la clé étrangère refusait, la reprise entière échouait, et le message
+    // reprochait à l'utilisateur de ne pas avoir « délié » quelque chose
+    // (porte S2 ter, constat T-5). Le plan est donc cloisonné comme
+    // `colonnesDeReference` l'est déjà.
+    const renommages = new Map<NomEntite, Map<string, string>>();
+    const planDe = (entite: NomEntite): Map<string, string> => {
+      let plan = renommages.get(entite);
+      if (plan === undefined) {
+        plan = new Map<string, string>();
+        renommages.set(entite, plan);
+      }
+      return plan;
+    };
+    const signalerRenommage = (entite: NomEntite, ancien: string, nouveau: string): void => {
+      planDe(entite).set(ancien, nouveau);
       // Le DÉTAIL va au journal technique du serveur, jamais dans la réponse :
       // c'est ce qui rend le renommage traçable pour l'exploitant sans le
       // rendre observable par l'appelant.
@@ -2161,7 +2185,8 @@ export class Depot {
     // seules à réécrire. Découvertes dans le graphe des clés étrangères, pas
     // énumérées — une entité ajoutée demain sera couverte sans que ce code
     // change (`CONVENTIONS.md` §19.5).
-    const colonnesDeReference = this.colonnesDeReference();
+    const references = this.referencesParTable();
+    const identifiantsEcrits = new Map<NomEntite, Set<string>>();
 
     for (const entite of this.ordreEcriture()) {
       const enregistrements = apports.get(entite);
@@ -2199,20 +2224,53 @@ export class Depot {
         const donnees: Enregistrement = {};
         const liaisons: Enregistrement = {};
         for (const [champ, valeur] of Object.entries(enregistrement)) {
+          // `id` est l'identité de l'enregistrement, pas un de ses champs : il
+          // est passé à part (`identifiantImpose`, ou l'adresse de la
+          // modification). Le laisser ici le ferait refuser (T-6).
+          if (champ === 'id') continue;
           if (champsDeLiaison.has(champ)) liaisons[champ] = valeur;
           else donnees[champ] = valeur;
         }
 
+        // ── T-2 : un doublon DANS LE FICHIER n'est pas un identifiant pris
+        //         ailleurs, et n'appelle pas la même réponse ────────────────
+        //
+        // La ré-émission vise le cas d'un identifiant occupé **hors du
+        // fichier**, par une ligne que l'appelant ne voit pas. Appliquée à un
+        // identifiant **répété dans le même fichier**, elle fabriquait un
+        // jumeau : deux lignes là où le fichier en décrit une, et les
+        // références réorientées vers la seconde. Avant le remède, la clé
+        // primaire refusait et la reprise entière était annulée : l'utilisateur
+        // voyait un refus. Après, il voyait un succès et une base fausse.
+        //
+        // Le fichier est ici fautif, et il l'est de façon visible pour son
+        // porteur : le nommer n'apprend rien à personne — l'identifiant vient
+        // de son propre fichier. On refuse donc, bruyamment, et la transaction
+        // unique fait que rien n'est appliqué.
+        const dejaEcrits = identifiantsEcrits.get(entite) ?? new Set<string>();
+        if (dejaEcrits.has(identifiant)) {
+          throw invalide(
+            `Le fichier porte deux fois l'identifiant « ${nomLisible(identifiant)} » dans ` +
+              `« ${entite} ». Un identifiant désigne un seul enregistrement : corrigez le ` +
+              "fichier avant de le reprendre. Rien n'a été modifié.",
+            `doublon d'identifiant dans la charge : ${entite}/${identifiant}`,
+          );
+        }
+        dejaEcrits.add(identifiant);
+        identifiantsEcrits.set(entite, dejaEcrits);
+
         // Les références déjà réécrites suivent : un parent renommé l'a
         // toujours été AVANT ses enfants, l'ordre d'écriture le garantit.
-        appliquerRenommages(donnees, colonnesDeReference.get(entite) ?? new Set(), renommages);
+        appliquerRenommages(donnees, d, references.get(d.table), renommages);
 
         const deja = connus.get(identifiant);
         if (deja === undefined) {
           const cree = await this.creer(client, perimetre, entite, donnees, {
             identifiantImpose: identifiant,
             signalerChampInconnu: signaler,
-            signalerRenommage,
+            signalerRenommage: (ancien, nouveau) => {
+              signalerRenommage(entite, ancien, nouveau);
+            },
           });
           const retenu = typeof cree['id'] === 'string' ? cree['id'] : identifiant;
           crees[entite] = (crees[entite] ?? 0) + 1;
@@ -2259,12 +2317,16 @@ export class Depot {
       // Les liaisons sont écrites en dernier : le plan de renommage est alors
       // complet, et une référence vers un enregistrement renommé plus tôt OU
       // plus tard dans le fichier pointe au bon endroit.
-      for (const elements of liaisons.values()) {
+      for (const [liaison, elements] of liaisons) {
+        const cibles = references.get(liaison.table);
+        if (cibles === undefined) continue;
         for (const element of elements) {
-          for (const [cle, valeur] of Object.entries(element)) {
+          for (const [colonne, valeur] of Object.entries(element)) {
             if (typeof valeur !== 'string') continue;
-            const nouveau = renommages.get(valeur);
-            if (nouveau !== undefined) element[cle] = nouveau;
+            const cible = cibles.get(colonne);
+            if (cible === undefined) continue;
+            const nouveau = renommages.get(cible)?.get(valeur);
+            if (nouveau !== undefined) element[colonne] = nouveau;
           }
         }
       }
@@ -2395,20 +2457,21 @@ export class Depot {
   }
 
   /**
-   * Colonnes qui portent une **référence** vers une autre entité, par entité.
+   * Pour chaque table du modèle, quelles colonnes portent une **référence** et
+   * **vers quelle entité**.
    *
-   * Ce sont les seules à réécrire quand un identifiant est ré-émis (N-1).
-   * Découvertes dans le graphe des clés étrangères — pas énumérées : une
-   * entité ajoutée par une migration future sera couverte sans que ce fichier
-   * change, et c'est la parade que quatre défauts de la porte S1 ont réclamée
-   * (`CONVENTIONS.md` §19.5).
+   * Le « vers quelle entité » n'est pas un raffinement : le plan de renommage
+   * est cloisonné par entité (constat T-5), donc réécrire une référence exige
+   * de savoir laquelle consulter. La première rédaction se contentait d'une
+   * heuristique — « toute colonne dont le nom finit par _id » — qui donnait la
+   * colonne mais pas sa cible, et confondait donc un risque et une exigence
+   * portant le même identifiant.
    *
-   * ⚠️ On ne réécrit **que** ces colonnes-là. Balayer toutes les valeurs texte
-   * à la recherche d'un identifiant renommé « marcherait » aussi, et
-   * remplacerait un jour le nom d'un risque qui se trouverait ressembler à un
-   * identifiant. Le catalogue sait où sont les références ; on le lui demande.
+   * Tout vient du catalogue : les clés étrangères portent leurs colonnes et
+   * leur table visée. Rien n'est énuméré, et une entité ajoutée demain sera
+   * couverte sans que ce fichier change (`CONVENTIONS.md` §19.5).
    */
-  private colonnesDeReference(): Map<NomEntite, Set<string>> {
+  private referencesParTable(): Map<string, Map<string, NomEntite>> {
     const tableVersEntite = new Map<string, NomEntite>();
     for (const entite of ORDRE_ENTITES) {
       const d = description(entite);
@@ -2416,26 +2479,21 @@ export class Depot {
       if (d.seconde !== undefined) tableVersEntite.set(d.seconde.table, entite);
     }
 
-    const resultat = new Map<NomEntite, Set<string>>(
-      ORDRE_ENTITES.map((entite) => [entite, new Set<string>()]),
-    );
-
+    const resultat = new Map<string, Map<string, NomEntite>>();
     for (const cle of this.catalogue.clesEtrangeres) {
-      const entite = tableVersEntite.get(cle.table);
-      if (entite === undefined || !tableVersEntite.has(cle.cible)) continue;
-      const d = description(entite);
-      const table = this.catalogue.tables.get(cle.table);
-      if (table === undefined) continue;
-
-      // La clé étrangère porte ses colonnes dans son nom conventionnel
-      // (`fk_<table>_<colonne>`) ; plus sûr : toute colonne de la table qui
-      // est un identifiant et dont le nom finit par « _id » et qui n'est ni
-      // l'identité ni le cloisonnement.
-      for (const colonne of table.colonnes.values()) {
-        if (!colonne.nom.endsWith('_id')) continue;
-        if (colonne.nom === 'filiale_id' || colonne.nom === 'id') continue;
-        const champ = champDeColonne(d, cle.table, colonne.nom);
-        resultat.get(entite)?.add(champ);
+      const cible = tableVersEntite.get(cle.cible);
+      if (cible === undefined) continue;
+      for (const colonne of cle.colonnes) {
+        // `filiale_id` participe aux clés composites (CONVENTIONS.md §17.1) :
+        // ce n'est pas une référence d'entité, et la réécrire serait un
+        // franchissement de frontière.
+        if (colonne === 'filiale_id' || colonne === 'id') continue;
+        let parColonne = resultat.get(cle.table);
+        if (parColonne === undefined) {
+          parColonne = new Map<string, NomEntite>();
+          resultat.set(cle.table, parColonne);
+        }
+        parColonne.set(colonne, cible);
       }
     }
     return resultat;
@@ -3526,7 +3584,22 @@ export class Depot {
     for (const champ of noms) {
       const valeur = champs[champ];
 
-      if (champ === 'id') continue; // porté par l'enveloppe, jamais par les champs
+      // ── T-6 : `id` est REFUSÉ, pas avalé ─────────────────────────────
+      // La route de création déclare `id` pour le refuser explicitement, en
+      // expliquant qu'« une propriété retirée en silence ne serait jamais
+      // apprise par le client ». Le garde ne valait qu'au niveau de
+      // l'enveloppe : glissé dans `champs`, l'identifiant était ignoré sans un
+      // mot — le seul champ traité ainsi, et justement celui du constat M-3.
+      //
+      // Le chemin de REPRISE retire `id` avant d'appeler : là, il est porté par
+      // l'enregistrement et il est légitime.
+      if (champ === 'id') {
+        throw invalide(
+          "L'identifiant d'un enregistrement ne se transmet pas parmi ses champs : il est " +
+            'engendré par le serveur à la création, et porté par l’adresse à la modification.',
+          `champ « id » refusé sur ${entite}`,
+        );
+      }
       if (CHAMPS_STRUCTURELS.has(champ)) continue;
 
       const liaison = parChamp.get(champ);
@@ -3795,14 +3868,19 @@ function versLeFrontend(valeur: unknown, famille: FamilleType): unknown {
  */
 function appliquerRenommages(
   enregistrement: Enregistrement,
-  champsDeReference: ReadonlySet<string>,
-  renommages: ReadonlyMap<string, string>,
+  d: DescriptionEntite,
+  referencesDeLaTable: ReadonlyMap<string, NomEntite> | undefined,
+  renommages: ReadonlyMap<NomEntite, ReadonlyMap<string, string>>,
 ): void {
-  if (renommages.size === 0) return;
-  for (const champ of champsDeReference) {
+  if (renommages.size === 0 || referencesDeLaTable === undefined) return;
+  for (const [colonne, cible] of referencesDeLaTable) {
+    const champ = champDeColonne(d, d.table, colonne);
     const valeur = enregistrement[champ];
     if (typeof valeur !== 'string') continue;
-    const nouveau = renommages.get(valeur);
+    // Le plan de la SEULE entité visée par cette colonne : c'est ce
+    // cloisonnement qui empêche de confondre un risque et une exigence
+    // portant le même identifiant (constat T-5).
+    const nouveau = renommages.get(cible)?.get(valeur);
     if (nouveau !== undefined) enregistrement[champ] = nouveau;
   }
 }
@@ -3843,7 +3921,7 @@ function trierParDependances<T>(
 function valeursEquivalentes(famille: FamilleType, stockee: unknown, proposee: unknown): boolean {
   if (famille === 'json') return false;
 
-  // ── N-4 : `NULL` et `''` désignent la MÊME absence, sur texte et date ──
+  // ── N-4, puis T-7 : `NULL` et `''` désignent la MÊME absence ─────────
   //
   // Cette comparaison doit être l'inverse exact de `versLeFrontend`, qui rend
   // `NULL` sous la forme `''` pour ces deux familles — délibérément, parce que
@@ -3855,10 +3933,18 @@ function valeursEquivalentes(famille: FamilleType, stockee: unknown, proposee: u
   // remède de M-1 (porte S2 bis, constat N-4).
   //
   // Le vide se définit donc ici comme il est rendu là-bas, et pas autrement.
+  //
+  // La première rédaction ne le faisait que pour les familles TEXTE et DATE —
+  // celles que `versLeFrontend` rend en `''`. C'était la moitié du chemin :
+  // `convertirPourLaBase` convertit `''` en `NULL` pour **toutes** les autres
+  // familles, si bien qu'un `''` proposé sur une colonne booléenne, entière ou
+  // d'horodatage était encore tenu pour un changement, et réclamait donc le
+  // droit d'écrire (porte S2 ter, constat T-7 : `_deleted` renvoyé à `''` sur
+  // une correspondance de portée Groupe → 403). La chaîne vide est le « non
+  // renseigné » du modèle navigateur, quelle que soit la colonne : elle vaut
+  // l'absence partout, ici comme à l'écriture.
   const vide = (valeur: unknown): boolean =>
-    valeur === null ||
-    valeur === undefined ||
-    ((famille === 'texte' || famille === 'date') && valeur === '');
+    valeur === null || valeur === undefined || valeur === '';
 
   const videA = vide(stockee);
   const videB = vide(proposee);

@@ -139,6 +139,12 @@ export interface DescriptionCleEtrangere {
   readonly table: string;
   /** Table visée (le parent). */
   readonly cible: string;
+  /**
+   * Colonnes de l'enfant qui portent la référence, dans l'ordre de la clé.
+   * Sert à savoir **quelle colonne vise quelle entité** — ce qu'une heuristique
+   * sur le suffixe « _id » ne donne pas.
+   */
+  readonly colonnes: readonly string[];
   /** Action à la suppression : `cascade`, `set null`, `restrict`/`no action`. */
   readonly action: 'cascade' | 'set_null' | 'restrict' | 'set_default';
 }

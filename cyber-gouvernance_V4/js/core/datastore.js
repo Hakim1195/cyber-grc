@@ -63,6 +63,24 @@ const DataStore = (() => {
 
     let data = emptyData();
 
+    /**
+     * Identifiant métier — **un seul générateur pour tout le produit**.
+     *
+     * Le magasin portait deux clones de la convention `"<PRÉFIXE>-<horodatage>-
+     * <aléa>"` (`upsertEvaluation`, `recordDailySnapshot`), chacun avec son
+     * propre tirage sur mille valeurs. Le constat T-1 de la porte S2 a montré ce
+     * que cela coûtait : **12 à 29 doublons sur 234** créations consécutives, et
+     * autant de lignes perdues à l'import. Un générateur recopié est un
+     * générateur qu'on oublie de corriger ; il n'y en a donc plus qu'un.
+     *
+     * Le repli n'existe que pour l'ordre de chargement des scripts : `ui.js` est
+     * chargé après ce fichier, mais tout appel a lieu bien après l'analyse.
+     */
+    function genId(prefixe) {
+        if (typeof UI !== "undefined" && UI.genId) return UI.genId(prefixe);
+        return prefixe + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 12);
+    }
+
     // Conservé pour compatibilité de signature : `app.js` appelle encore
     // `setKey(dek)` au démarrage. Le chiffrement au repos est désormais celui du
     // disque de la VM (`PLAN_SERVEUR` §1.9) ; il n'y a plus de clé navigateur.
@@ -231,6 +249,9 @@ const DataStore = (() => {
             updatedAt: data.updatedAt || null,
             // Champs neufs, sans incidence sur l'affichage existant.
             enAttente: etat ? etat.enAttente : false,
+            enCours: etat ? etat.enCours : false,
+            bloques: etat ? etat.bloques : 0,
+            panneReseau: etat ? etat.panneReseau : false,
             incidents: etat ? etat.incidents : 0
         };
     }
@@ -474,7 +495,7 @@ const DataStore = (() => {
         const rec = Object.assign(
             { statut: "non conforme", maturite: 0, commentaire: "", preuves: "", mesure_ids: [] },
             ev,
-            { id: "EVAL-" + Date.now() + "-" + Math.floor(Math.random() * 1000), updatedAt: Date.now() }
+            { id: genId("EVAL"), updatedAt: Date.now() }
         );
         data.evaluations.push(rec);
         save();
@@ -724,7 +745,7 @@ const DataStore = (() => {
             // « modifié entre-temps » sur un indicateur que personne n'a saisi.
             if (typeof Sync !== "undefined") Sync.marquerDerive("history", existing.id);
         } else {
-            const point = { id: "HIST-" + Date.now() + "-" + Math.floor(Math.random() * 1000), ts: Date.now(), date, metrics };
+            const point = { id: genId("HIST"), ts: Date.now(), date, metrics };
             data.history.push(point);
             // Recalculable, jamais saisi : un refus du serveur (deux sessions le
             // même jour, unicité sur la date) ne doit pas produire d'alerte.

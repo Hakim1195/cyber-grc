@@ -1,7 +1,31 @@
 // Emplacement : js/services/importExcel.js
 // Nom du fichier : importExcel.js
+//
+// Import de classeurs Excel/CSV (exigences, risques, actifs).
+//
+// ── Ce que la porte S2 a corrigé ici (constat T-1, bloquant) ─────────────────
+//
+// Ce service était **le seul du frontend que la bascule client/serveur n'avait
+// pas touché**, et c'est précisément là que les lignes se perdaient :
+//
+//  · il portait **trois clones** de la convention d'identifiant, dans une forme
+//    encore plus faible que l'originale — `"EX-" + Date.now() + aléa`, **sans
+//    le tiret séparateur** — dont l'aléa tenait sur mille valeurs. Sur une
+//    boucle d'import, `Date.now()` ne bouge pas : deux lignes recevaient le même
+//    identifiant, et l'une d'elles disparaissait sans un mot. Les trois appellent
+//    désormais `UI.genId`, générateur unique du produit ;
+//  · son compte rendu parlait encore de **« stockage saturé »** et du quota du
+//    navigateur, notions retirées par la bascule. Il annonçait donc le succès
+//    quel que soit le sort réel des lignes. Il rend compte à présent de ce que
+//    le serveur a réellement accepté.
 
 const ImportExcelService = (() => {
+
+    // Identifiant métier : le générateur du produit, et lui seul (voir l'entête).
+    function genId(prefixe) {
+        if (typeof UI !== "undefined" && UI.genId) return UI.genId(prefixe);
+        return prefixe + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 12);
+    }
 
     /* =========================
        IMPORTATION DES EXIGENCES
@@ -49,7 +73,7 @@ const ImportExcelService = (() => {
                 else statut = "non conforme";
 
                 DataStore.addExigence({
-                    id: "EX-" + Date.now() + Math.floor(Math.random() * 1000),
+                    id: genId("EX"),
                     client_id: currentClient === "global" ? null : currentClient,
                     code: code,
                     intitule: String(row[colMapping.intitule] || "Sans intitulé").trim(),
@@ -111,7 +135,7 @@ const ImportExcelService = (() => {
                 const scoreResiduel = scoreBrut * m;
 
                 DataStore.addRisque({
-                    id: "RISK-" + Date.now() + Math.floor(Math.random() * 1000),
+                    id: genId("RISK"),
                     nom: nom,
                     f_frequence: f,
                     g_gravite: g,
@@ -184,7 +208,7 @@ const ImportExcelService = (() => {
                 else if (["modérée", "moderee", "2", "m"].includes(rawCrit)) criticite = "modérée";
 
                 DataStore.addActif({
-                    id: "ACTIF-" + Date.now() + Math.floor(Math.random() * 1000),
+                    id: genId("ACTIF"),
                     nom: nom,
                     type: type,
                     criticite: criticite,
@@ -230,12 +254,27 @@ const ImportExcelService = (() => {
     // Termine un import : force l'enregistrement durable puis prévient l'utilisateur
     // si le stockage est saturé (quota) — sinon l'échec serait silencieux et les
     // lignes importées (en mémoire) seraient perdues au prochain chargement.
+    /**
+     * Termine un import : **attend que le serveur ait réellement pris les
+     * lignes**, puis rend la main au module — qui affiche son compte rendu.
+     *
+     * L'ordre compte. Avant le correctif T-1, `_finish` guettait la saturation
+     * d'un stockage navigateur qui n'existe plus, et rendait la main quoi qu'il
+     * arrive : l'écran annonçait « 250 ajoutées » quand 225 seulement étaient en
+     * base. Désormais, si l'écriture n'a pas tout passé, l'utilisateur est
+     * prévenu **avant** le message de succès, et le bandeau de synchronisation
+     * dit lesquelles — un import à moitié écrit ne peut plus se lire comme un
+     * import réussi.
+     */
     function _finish(importedCount, skippedCount, onSuccess) {
         const done = () => { if (onSuccess) onSuccess(importedCount, skippedCount); };
         if (importedCount > 0 && DataStore.flush) {
             DataStore.flush().then(res => {
-                if (res && res.quota && window.showToast) {
-                    window.showToast("Stockage saturé : l'import risque de ne pas être enregistré durablement. Exportez une sauvegarde et libérez de l'espace (Paramètres → Sauvegardes).", "error");
+                if (res && res.ok === false && window.showToast) {
+                    window.showToast(
+                        "Import incomplet : le serveur n'a pas accepté toutes les lignes. "
+                        + "Le bandeau en haut de page dit lesquelles — ne rechargez pas avant de l'avoir lu.",
+                        "error");
                 }
                 done();
             }).catch(done);

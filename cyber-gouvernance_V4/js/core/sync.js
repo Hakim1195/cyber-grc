@@ -123,6 +123,7 @@ const Sync = (() => {
     const bloques = new Set();          // "collection:id" qu'on ne réécrit plus
     const incidents = [];               // échecs à afficher (jamais effacés tout seuls)
     const champsRefuses = new Set();    // "collection.champ" que le modèle serveur ignore
+    const doublons = new Set();         // identifiants portés par deux enregistrements
     const propagations = new Map();     // mesureId -> Set(evaluationId) à propager côté serveur
     const derives = new Set();          // "collection:id" recalculables, jamais saisis
 
@@ -567,6 +568,13 @@ const Sync = (() => {
             const liste = Array.isArray(data[c]) ? data[c] : [];
             liste.forEach(enr => {
                 if (!enr || !enr.id) return;
+                // Canari : deux enregistrements d'une même collection ne peuvent
+                // pas porter le même identifiant — `getRisqueById` ne saurait
+                // lequel rendre, et c'est ainsi que le constat T-1 faisait
+                // disparaître des lignes. Le générateur a été corrigé ; si cela
+                // se reproduisait (régression, fichier repris incohérent), le
+                // produit le DIT au lieu de trancher en silence.
+                if (presents.has(enr.id)) doublons.add(c + " / " + enr.id);
                 presents.add(enr.id);
                 const bloque = bloques.has(cle(c, enr.id));
                 const texte = canonique(enr);
@@ -603,13 +611,26 @@ const Sync = (() => {
      */
     function ordonnerCreations(creations) {
         if (creations.length < 2) return creations;
+
+        // ⚠️ L'index est le RANG dans le lot, jamais l'identifiant.
+        //
+        // Cette `Map` était clé = identifiant. Deux créations portant le même
+        // identifiant s'y effondraient donc en une seule, et la seconde n'était
+        // **jamais rendue, donc jamais écrite** — sans erreur, sans incident,
+        // sans trace. C'est la moitié structurelle du constat T-1 : un lot de
+        // 250 exigences en écrivait 225, et le cycle répondait `{ok:true,
+        // echecs:0}`. Le générateur d'identifiants a été corrigé par ailleurs,
+        // mais **aucun générateur ne doit pouvoir faire disparaître une ligne** :
+        // c'est ici que la propriété se tient, et elle se tient par la forme —
+        // un tableau indexé par rang ne perd rien, quoi qu'on lui donne.
+        const rangs = creations.map((item, rang) => rang);
         const parId = new Map();
-        creations.forEach(item => parId.set(item.id, item));
+        creations.forEach((item, rang) => { if (!parId.has(item.id)) parId.set(item.id, rang); });
 
         const citees = (item) => {
             const trouvees = new Set();
             const visiter = (v) => {
-                if (typeof v === "string") { if (parId.has(v) && v !== item.id) trouvees.add(v); return; }
+                if (typeof v === "string") { if (parId.has(v) && v !== item.id) trouvees.add(parId.get(v)); return; }
                 if (Array.isArray(v)) { v.forEach(visiter); return; }
                 if (v && typeof v === "object") { Object.keys(v).forEach(k => visiter(v[k])); }
             };
@@ -617,32 +638,29 @@ const Sync = (() => {
             return trouvees;
         };
 
-        const restantes = new Map();
-        creations.forEach(item => restantes.set(item.id, citees(item)));
-
+        const attentes = creations.map(citees);          // rang -> Set(rangs cités)
+        const place = creations.map(() => false);
         const ordonnees = [];
         let progres = true;
-        while (restantes.size > 0 && progres) {
+        while (ordonnees.length < creations.length && progres) {
             progres = false;
-            for (const item of creations) {
-                if (!restantes.has(item.id)) continue;
-                const attend = restantes.get(item.id);
+            for (const rang of rangs) {
+                if (place[rang]) continue;
                 let pret = true;
-                attend.forEach(id => { if (restantes.has(id)) pret = false; });
+                attentes[rang].forEach(r => { if (!place[r]) pret = false; });
                 if (!pret) continue;
-                ordonnees.push(item);
-                restantes.delete(item.id);
+                ordonnees.push(creations[rang]);
+                place[rang] = true;
                 progres = true;
             }
         }
-        if (restantes.size > 0) creations.forEach(item => { if (restantes.has(item.id)) ordonnees.push(item); });
+        // Cycle de références : le reste part dans l'ordre d'origine, et le
+        // repassage de `ecrireParPasses` s'en charge. Rien n'est abandonné.
+        rangs.forEach(rang => { if (!place[rang]) ordonnees.push(creations[rang]); });
         return ordonnees;
     }
 
-    // Vrai dès qu'une saisie n'est pas au serveur — **enregistrements bloqués
-    // compris**. C'est ce que lit `beforeunload`, et ce que l'écran Paramètres
-    // affiche : une saisie bloquée est une saisie non enregistrée, et le dire
-    // autrement serait le mensonge que le constat B-2 a relevé.
+
     function aDesModificationsEnAttente() {
         const d = calculerDifferentiel();
         return d.creations.length > 0 || d.modifications.length > 0 ||
@@ -752,13 +770,34 @@ const Sync = (() => {
         // ailleurs, l'enregistrement bloqué reste compté et reste visible.
         const actifs = (liste) => liste.filter(i => !i.bloque);
 
+        // ── LE LOT NE RÉTRÉCIT PAS ───────────────────────────────────────────
+        // Constat T-1 : un lot de 250 lignes en écrivait 225, et le cycle
+        // répondait `{ok: true, echecs: 0}`. La cause a été supprimée, mais la
+        // PROPRIÉTÉ doit être tenue ici, où elle se vérifie : ce qui entre dans
+        // le cycle doit en ressortir écrit ou compté en échec. Un écart n'est
+        // pas un cas à traiter, c'est un défaut de programmation — et il
+        // s'affiche, plutôt que de coûter des lignes en silence.
+        const compter = (liste) => liste.length;
+
         // 1. Créations. L'ordre des collections place le plus souvent l'entité
         //    référencée avant celle qui la référence — mais pas toujours : une
         //    évaluation de référentiel précède les mesures qu'elle cite. Plutôt
         //    qu'une liste de dépendances écrite à la main — « une liste écrite à
         //    la main est une omission qui attend » —, l'ordre est déduit des
         //    identifiants réellement cités, et un repassage rattrape le reste.
-        echecs += await ecrireParPasses(ordonnerCreations(actifs(diff.creations)), ecrireCreation);
+        const aCreer = actifs(diff.creations);
+        const ordonnees = ordonnerCreations(aCreer);
+        if (compter(ordonnees) !== compter(aCreer)) {
+            // Le tri a perdu des éléments : c'est un défaut de programmation. On
+            // le RÉPARE — ce qui manque est réintroduit, donc rien n'est perdu —
+            // et on le SIGNALE, parce qu'un défaut réparé en silence se reproduit.
+            // Le compte est pris AVANT la réparation : c'est lui qui dit l'ampleur.
+            const perdus = compter(ordonnees);
+            const presents = new Set(ordonnees);
+            aCreer.forEach(item => { if (!presents.has(item)) ordonnees.push(item); });
+            signalerRetrecissement("créations", compter(aCreer), perdus, true);
+        }
+        echecs += await ecrireParPasses(ordonnees, ecrireCreation);
 
         // 2. Modifications. Elles précèdent les suppressions à dessein : c'est
         //    ainsi qu'un délien (une évaluation qui lâche sa mesure, une action
@@ -795,21 +834,54 @@ const Sync = (() => {
     async function ecrireParPasses(items, ecrire) {
         let restantes = items;
         let echecs = 0;
+        let traites = 0;
         while (restantes.length > 0) {
             const differees = [];
             for (const item of restantes) {
                 const verdict = await ecrire(item, false);
                 if (verdict === "differee") differees.push(item);
-                else if (verdict === false) echecs++;
+                else { traites++; if (verdict === false) echecs++; }
             }
             if (differees.length === 0) break;
             if (differees.length === restantes.length) {
-                for (const item of differees) { await ecrire(item, true); echecs++; }
+                for (const item of differees) { await ecrire(item, true); traites++; echecs++; }
                 break;
             }
             restantes = differees;
         }
+        // Chaque élément confié doit avoir été tenté, une fois et une seule.
+        // Ici, rien ne peut plus être rattrapé : le manque compte donc comme un
+        // échec, et le cycle ne pourra pas répondre « tout va bien ».
+        if (traites !== items.length) {
+            echecs += signalerRetrecissement("écritures", items.length, traites, false);
+        }
         return echecs;
+    }
+
+    /**
+     * Un lot a rétréci entre ce qu'on a confié au cycle et ce qu'il a traité.
+     *
+     * Ce n'est jamais normal — et c'est exactement la forme du constat T-1 :
+     * l'utilisateur voit « 250 importées », la base en porte 225, et rien ne le
+     * dit. On le journalise et on l'affiche : un défaut visible coûte une
+     * inquiétude, un défaut silencieux coûte des données de gouvernance.
+     */
+    function signalerRetrecissement(quoi, attendus, obtenus, repare) {
+        const manquants = attendus - obtenus;
+        console.error("Cycle d'écriture incohérent : " + attendus + " " + quoi +
+            " confiées, " + obtenus + " traitées" + (repare ? " — réparé avant envoi." : "."));
+        ajouterIncident({
+            // Identifiant STABLE : un défaut répété remplace le précédent au
+            // lieu d'empiler des bandeaux.
+            collection: "__cycle", id: "coherence", libelle: "Enregistrement en lot",
+            geste: "cycle", type: "refus", rechargeable: false,
+            message: repare
+                ? "Défaut interne rattrapé : " + manquants + " enregistrement(s) avaient disparu de " +
+                  "la file d'envoi et y ont été remis. Rien n'est perdu, mais signalez-le à votre exploitant."
+                : "Défaut interne : " + manquants + " enregistrement(s) n'ont pas été transmis au " +
+                  "serveur. Vérifiez le contenu importé avant de vous y fier, et signalez-le à votre exploitant."
+        });
+        return repare ? 0 : manquants;
     }
 
     // Un refus qui peut n'être qu'un problème d'ordre d'écriture.
@@ -1004,7 +1076,9 @@ const Sync = (() => {
 
     function ajouterIncident(incident) {
         incident.horodatage = Date.now();
-        incident.libelle = libelleEnregistrement(incident.collection, incident.id);
+        // Un incident qui n'appartient à aucun enregistrement (défaut interne)
+        // apporte son propre libellé.
+        if (!incident.libelle) incident.libelle = libelleEnregistrement(incident.collection, incident.id);
         // Un même enregistrement ne s'empile pas : le dernier échec fait foi.
         const i = incidents.findIndex(x => x.collection === incident.collection && x.id === incident.id);
         if (i !== -1) incidents.splice(i, 1);
@@ -1047,6 +1121,7 @@ const Sync = (() => {
         bandeauReduit = false;
         propagations.clear();
         champsRefuses.clear();
+        doublons.clear();
         rendreBandeau();
         prevenirObservateurs();
         reafficher(true);
@@ -1082,7 +1157,14 @@ const Sync = (() => {
         // Une écriture en attente n'annule pas le sondage : elle passe d'abord.
         // L'ordre compte, l'exclusion serait un défaut — c'est ainsi qu'un écran
         // qui écrit à chaque affichage éteindrait le rafraîchissement.
-        if (minuteurEcriture) await cycle();
+        //
+        // Et le sondage POUSSE ce qui attend, même sans minuteur armé. Le
+        // constat T-1 relevait que « rien ne repart tout seul » : un lot resté
+        // en attente y restait indéfiniment, deux cycles de sondage plus tard
+        // comme au premier instant, jusqu'à ce qu'une saisie de l'utilisateur
+        // réveille l'entonnoir. Le sondage est le seul battement régulier de
+        // l'application : c'est à lui de reprendre ce qui traîne.
+        if (minuteurEcriture || aDesModificationsEnAttente()) await cycle();
 
         // ⚠️ On ne s'arrête PAS parce qu'une modification locale attend d'être
         // écrite : ce serait rendre le rafraîchissement dépendant du hasard, et
@@ -1194,7 +1276,8 @@ const Sync = (() => {
         const h = hote();
         if (!h) return;
 
-        if (incidents.length === 0 && bloques.size === 0 && !panneReseau && champsRefuses.size === 0) {
+        if (incidents.length === 0 && bloques.size === 0 && !panneReseau &&
+            champsRefuses.size === 0 && doublons.size === 0) {
             h.innerHTML = "";
             return;
         }
@@ -1242,6 +1325,17 @@ const Sync = (() => {
                 '<span class="reminder-text">Serveur injoignable : vos dernières modifications ne sont pas encore enregistrées. ' +
                 'Un nouvel essai est en cours — ne fermez pas cet onglet.</span>' +
                 '<button id="sync-reessayer" class="reminder-btn">Réessayer maintenant</button>' +
+                '</div>');
+        }
+
+        if (doublons.size > 0) {
+            morceaux.push(
+                '<div class="quota-banner" role="alert">' +
+                '<span class="quota-ico">!</span>' +
+                '<span class="quota-text"><b>Identifiants en double détectés</b> : ' +
+                esc(Array.from(doublons).slice(0, 5).join(", ")) +
+                '. Deux enregistrements portent la même clé ; l’un d’eux peut être inaccessible. ' +
+                'Signalez-le à votre exploitant.</span>' +
                 '</div>');
         }
 

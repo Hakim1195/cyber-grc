@@ -696,6 +696,28 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       const { mode, fichier } = requete.body;
       const apercu = requete.body.apercu === true;
 
+      // ══ T-3 : LE REFUS PRÉCÈDE LE TRAVAIL ═══════════════════════════
+      //
+      // Cette ligne est un ordre, et c'est tout ce qu'elle est — mais l'ordre
+      // était faux. Le fichier était lu, migré de v1 à v12 et analysé AVANT
+      // que la barrière fail-closed n'ait dit un mot. Mesuré par la porte
+      // S2 ter, sur un serveur en production :
+      //
+      //   fichier de 4,5 Mo, 20 000 enregistrements → 503, après 139 ms
+      //   GET /api/donnees, pour comparaison        → 503, après 1 ms
+      //
+      // Trois conséquences, toutes acquises SANS authentification : un demi-
+      // second de boucle d'événements bloquée par requête à la borne de 20 Mo
+      // (Node est mono-fil : quelques appels simultanés figent le service,
+      // `/api/sante` compris) ; un oracle de forme, le 400 distinguant « ceci
+      // est un grc-backup exploitable » du 503 ; et le principe que cette route
+      // énonce elle-même — *une route vérifie un droit avant d'agir* — respecté
+      // sur l'écriture mais pas sur le COÛT.
+      //
+      // Résoudre le périmètre d'abord ne coûte rien et referme les trois.
+      const instanceDepot = await assurerDepot();
+      await resolveur.resoudre();
+
       // 1. Lire l'enveloppe et monter la charge de v1 à v12. Le module de
       //    reprise borne lui-même la taille, le nombre de nœuds et la
       //    profondeur AVANT d'analyser (S13) ; on lui impose en plus la borne
@@ -725,7 +747,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       // aucune route de ce greffon ne construit `administrationGroupe`, et
       // c'est ce qui rend la règle « une route vérifie un droit, elle ne se
       // l'accorde pas » vraie par la forme plutôt que par la discipline.
-      const resultat = await enEcriture(async (client, instanceDepot, perimetre) => {
+      const resultat = await enEcriture(async (client, _depot, perimetre) => {
         const bilan = await instanceDepot.appliquerReprise(
           client,
           perimetre,
@@ -734,17 +756,37 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
           requete.log,
         );
 
-        // 2. Tracer la reprise dans la table prévue pour cela. Elle porte la
-        //    clé d'idempotence du `PLAN_SERVEUR` §5 : réimporter le même
-        //    fichier deux fois est refusé par une unicité du schéma, pas par
-        //    une comparaison faite au vol.
+        // 2. Tracer la reprise dans la table prévue pour cela.
+        //
+        // ── T-4 : la trace ne CONSOMME plus le fichier ──────────────────
+        //
+        // `cle_idempotence` était renseignée avec l'empreinte du contenu, et
+        // l'unicité `(filiale_id, entite, cle_idempotence) where statut =
+        // 'applique'` en faisait un jeton à usage unique : un fichier donné ne
+        // pouvait être appliqué à une filiale **qu'une fois, pour toujours,
+        // quel que soit le mode**. Trois gestes ordinaires devenaient
+        // impossibles sans l'exploitant — fusionner pour voir puis remplacer,
+        // restaurer deux fois la même sauvegarde (le geste même de la reprise
+        // après incident, dans un produit qui héberge le PCA du groupe), et
+        // reprendre un fichier déjà essayé.
+        //
+        // Ce n'est pas ce que le cadrage demande : l'idempotence est une
+        // exigence du **lot L7** (`PLAN_SERVEUR` §7), et son sens usuel est
+        // « rejouer la même requête ne double pas l'effet » — pas « ce fichier
+        // est consommé ». Or la reprise l'est déjà **par construction** : elle
+        // met à jour ce qu'elle retrouve, et converge.
+        //
+        // L'empreinte reste écrite dans `sha256` : la trace dit toujours QUEL
+        // fichier a été appliqué. Seul le jeton d'unicité disparaît. L'index
+        // du schéma reste en place et servira L7, quand l'idempotence sera
+        // portée par la requête et non par le fichier.
         if (!apercu) {
           await client.query(
             `insert into "imports" ("id", "filiale_id", "utilisateur_libelle", "entite",
                                     "source", "nom_fichier", "sha256", "taille_octets",
-                                    "cle_idempotence", "statut", "lignes_lues", "lignes_creees",
+                                    "statut", "lignes_lues", "lignes_creees",
                                     "lignes_mises_a_jour", "lignes_ignorees", "fin_le", "message")
-             values ($1, $2, $3, 'toutes', 'grc-backup', $4, $5, $6, $5, 'applique',
+             values ($1, $2, $3, 'toutes', 'grc-backup', $4, $5, $6, 'applique',
                      $7, $8, $9, $10, now(), $11)`,
             [
               `IMP-${String(Date.now())}-${String(Math.floor(Math.random() * 1000000))}`,
@@ -779,7 +821,12 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         return bilan;
       }).catch((erreur: unknown) => {
         if (erreur instanceof SentinelleApercu) return erreur.bilan;
-        throw erreur;
+        // ── T-10 : sur ce chemin, la cause est le FICHIER ───────────────
+        // Traduire ici, et non dans le gestionnaire commun, est ce qui
+        // permet d'énoncer la bonne cause sans en inventer une : le
+        // gestionnaire ne sait pas par quelle route l'échec est arrivé, et
+        // une erreur déjà traduite le traverse inchangée.
+        throw traduireErreur(erreur, { ...contexteErreurs, origine: 'reprise' });
       });
 
       requete.log.info(

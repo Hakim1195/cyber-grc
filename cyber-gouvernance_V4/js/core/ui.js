@@ -134,12 +134,48 @@ window.UI = (function () {
 
     /* =========================================================================
        IDENTIFIANT ANTI-COLLISION
-       Convention historique : "<PRÉFIXE>-<timestamp>-<aléa>". Centralisée ici
-       pour solder la dette « collisions » (un seul endroit à faire évoluer, ex.
-       migration vers crypto.randomUUID). genId("ACT") → "ACT-1720000000000-482".
+       Convention du produit : "<PRÉFIXE>-<horodatage>-<aléa>"
+       (`CONVENTIONS.md` §2 ; genId("ACT") → "ACT-1720000000000-1k3f9zq2x").
+
+       ── Ce que la porte S2 (3ᵉ passage, constat T-1) a corrigé ici ───────────
+
+       L'aléa tenait sur **mille valeurs** (`Math.floor(Math.random() * 1000)`).
+       Dans une boucle d'import, `Date.now()` ne bouge pas d'une itération à
+       l'autre : l'identifiant se réduit alors à ce tirage, et l'auditeur a
+       mesuré **22 doublons sur 234 tirages consécutifs**. Chaque doublon coûtait
+       une ligne — un registre d'exigences ou un questionnaire AirCyber amputé de
+       5 à 10 % de son contenu, dans l'outil destiné à servir de preuve en audit.
+
+       Deux garanties, et la première suffit à elle seule pour un import :
+
+        1. un **compteur de session**, monotone : deux appels de cette page ne
+           peuvent pas rendre le même identifiant, quel que soit le hasard ;
+        2. **52 bits d'aléa** tirés de `crypto.getRandomValues` (repli sur
+           `Math.random` si l'API manque), qui rendent la collision entre deux
+           postes, deux sessions ou deux filiales aussi improbable qu'un UUID.
+
+       Le format et la longueur restent compatibles avec le domaine `id_metier`
+       du schéma (non vide, 64 caractères au plus, sans virgule, sans blanc de
+       bord) : un identifiant fait ici une trentaine de caractères.
     ========================================================================= */
+    var compteurSession = 0;
+
+    function aleaFort() {
+        try {
+            var api = (typeof crypto !== "undefined") ? crypto : null;
+            if (api && typeof api.getRandomValues === "function") {
+                var t = new Uint32Array(2);
+                api.getRandomValues(t);
+                return t[0].toString(36) + t[1].toString(36);
+            }
+        } catch (e) { /* contexte sans Web Crypto : repli ci-dessous */ }
+        return Math.floor(Math.random() * 4294967296).toString(36)
+            + Math.floor(Math.random() * 4294967296).toString(36);
+    }
+
     function genId(prefix) {
-        return (prefix || "ID") + "-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+        compteurSession += 1;
+        return (prefix || "ID") + "-" + Date.now() + "-" + compteurSession.toString(36) + aleaFort();
     }
 
     /* =========================================================================

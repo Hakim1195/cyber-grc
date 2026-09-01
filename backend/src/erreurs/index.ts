@@ -204,6 +204,26 @@ export interface ContexteTraduction {
     string,
     { readonly table: string; readonly colonnes: readonly string[] }
   >;
+  /**
+   * Chemin d'où vient l'échec, quand il change la CAUSE la plus probable.
+   *
+   * ── T-10 ────────────────────────────────────────────────────────────
+   * Deux refus de PostgreSQL — le `42501` d'une politique et le `23503`
+   * d'une clé étrangère — ont, sur une saisie ordinaire, deux causes
+   * possibles : un élément lié qui n'existe pas, ou un élément lié qui
+   * appartient à la filiale voisine. Le message ne tranche pas, et c'est
+   * ce qui referme l'oracle.
+   *
+   * Sur le chemin d'une **reprise**, l'ambiguïté n'existe plus du point de
+   * vue de l'utilisateur : il n'a rien saisi, il a fourni un fichier, et
+   * dans les deux cas ce fichier désigne un élément qui n'est pas dans ses
+   * données. Lui parler de « votre périmètre » et de « la filiale où vous
+   * travaillez » l'envoie chercher un problème de droits qu'il n'a pas.
+   *
+   * Le mot « reprise » ne fait donc PAS dire au message ce qu'il taisait :
+   * il énonce la même chose dans les termes du geste réellement accompli.
+   */
+  readonly origine?: 'reprise';
 }
 
 /** Reconnaît une `ErreurEntite` sans importer sa classe (voir l'entête). */
@@ -445,9 +465,15 @@ export function traduireErreurPostgres(
         code: 'contrainte_base',
         statut: 409,
         message:
-          "Opération refusée : l'enregistrement est encore référencé ailleurs, ou il désigne " +
-          "un élément qui n'existe pas dans votre périmètre. Déliez-le d'abord, ou " +
-          "— s'il s'agit d'un contrôle du socle commun — archivez-le au lieu de le supprimer.",
+          contexte.origine === 'reprise'
+            ? // T-10 : ici, personne n'a rien « délié ». Le fichier renvoie vers
+              // un enregistrement qu'il n'apporte pas et qui n'est pas en base.
+              'Reprise refusée : le fichier renvoie vers un enregistrement qu’il ' +
+              "n'apporte pas et qui n'est pas dans vos données. Reprenez l'export " +
+              'complet plutôt qu’un extrait, ou reprenez d’abord le jeu dont il dépend.'
+            : "Opération refusée : l'enregistrement est encore référencé ailleurs, ou il désigne " +
+              "un élément qui n'existe pas dans votre périmètre. Déliez-le d'abord, ou " +
+              "— s'il s'agit d'un contrôle du socle commun — archivez-le au lieu de le supprimer.",
         detailJournal,
       });
 
@@ -534,9 +560,16 @@ export function traduireErreurPostgres(
         // non plus n'énoncer qu'une des deux causes : parler de droits seuls
         // envoyait l'utilisateur chercher un problème qu'il n'a pas.
         message:
-          "Écriture refusée : cet enregistrement, ou l'un des éléments qu'il désigne, " +
-          "n'existe pas dans votre périmètre — ou sort de la filiale où vous travaillez. " +
-          'Vérifiez que les éléments liés existent bien, puis rechargez la fiche.',
+          contexte.origine === 'reprise'
+            ? // T-10 : le geste est « j'ai fourni un fichier », pas « j'ai saisi
+              // une fiche ». Les deux causes se disent alors d'un seul mot, sans
+              // rien révéler de plus : le fichier désigne un absent.
+              'Reprise refusée : le fichier désigne un élément qui n’est pas dans vos ' +
+              'données — soit qu’il manque, soit qu’il appartienne à une autre filiale. ' +
+              'Reprenez un export complet de la filiale où vous travaillez.'
+            : "Écriture refusée : cet enregistrement, ou l'un des éléments qu'il désigne, " +
+              "n'existe pas dans votre périmètre — ou sort de la filiale où vous travaillez. " +
+              'Vérifiez que les éléments liés existent bien, puis rechargez la fiche.',
         detailJournal,
       });
 
