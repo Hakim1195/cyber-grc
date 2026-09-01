@@ -568,11 +568,19 @@ describe('La bascule, de bout en bout', () => {
     }
   });
 
-  test('le MÊME fichier importé deux fois est refusé par une phrase écrite pour un humain', async () => {
-    // L'idempotence est portée par une unicité du schéma, dont le message générique
-    // — « l'une de ses clés est déjà utilisée » — n'apprend rien à qui vient de
-    // choisir un fichier. Le produit doit traduire. C'est le pendant du constat m-5 :
-    // une alerte incompréhensible est une alerte qu'on apprend à ignorer.
+  test('reprendre DEUX FOIS sa propre sauvegarde aboutit, et converge (constat T-4)', async () => {
+    // ── Ce que ce test affirmait, et pourquoi il change ──────────────────────
+    //
+    // Il exigeait que la seconde reprise du même fichier soit REFUSÉE, avec une
+    // phrase écrite pour un humain. Le troisième passage de la porte S2 a montré que
+    // l'interdiction elle-même était le défaut (constat T-4) : elle consommait le
+    // fichier pour toujours, et interdisait le geste le plus banal d'un plan de
+    // reprise — restaurer, constater, restaurer encore.
+    //
+    // Le test porte donc désormais sur l'ISSUE, et non sur le libellé du refus. Ce
+    // choix n'est pas seulement une correction : un test qui s'accroche à une phrase
+    // se casse à chaque reformulation, et l'on prend l'habitude de le « réparer »
+    // sans le lire. L'issue, elle, ne se reformule pas.
     const session = await ouvrirApplication();
     try {
       const deuxFois = await session.page.evaluate(async () => {
@@ -580,26 +588,44 @@ describe('La bascule, de bout en bout', () => {
         const lu = await window.DataStore.parseImport(texte);
         const appliquer = () =>
           window.DataStore.applyImport(lu.payload, 'merge', { texte, nom: 'Sauvegarde_identique.json' });
-        await appliquer();
-        try {
-          await appliquer();
-          return { refuse: false };
-        } catch (erreur) {
-          return { refuse: true, message: String(erreur && erreur.message) };
+
+        const issues = [];
+        for (let i = 0; i < 2; i += 1) {
+          try {
+            issues.push({ ok: true, r: await appliquer() });
+          } catch (erreur) {
+            issues.push({ ok: false, message: String(erreur && erreur.message) });
+          }
         }
+        return {
+          issues,
+          risques: window.DataStore.getRisques().map((r) => r.id).sort(),
+          mappings: window.DataStore.getMappings().map((m) => m.id).sort(),
+        };
       });
 
-      assert.equal(deuxFois.refuse, true, 'Réimporter le même fichier ne doit pas dupliquer son contenu.');
-      assert.match(
-        deuxFois.message,
-        /déjà été importé/i,
-        `Le refus doit être dit en français d’utilisateur : « ${String(deuxFois.message).slice(0, 160)} »`,
+      const echecs = deuxFois.issues.filter((i) => !i.ok).map((i) => i.message);
+      assert.deepEqual(
+        echecs,
+        [],
+        'Reprendre deux fois sa propre sauvegarde doit aboutir : c’est le geste d’une ' +
+          'restauration, pas une anomalie.',
       );
-      assert.equal(
-        /clé|contrainte|unicité/i.test(deuxFois.message),
-        false,
-        'Et sans le vocabulaire de la base : c’est un message d’écran, pas un message de schéma.',
+      assert.equal(deuxFois.issues[1].r.transactionnel, true, 'La seconde passe aussi par la transaction.');
+
+      // Convergence : deux reprises, un seul jeu de données — rien n’est dupliqué.
+      assert.deepEqual(
+        deuxFois.risques,
+        [...new Set(deuxFois.risques)],
+        'Aucun identifiant ne doit apparaître deux fois après une double reprise.',
       );
+      const enBaseRisques = await enBase('select id from risques order by id');
+      assert.deepEqual(
+        enBaseRisques.map((l) => l.id),
+        deuxFois.risques,
+        'Et ce que l’écran montre doit être ce que la base contient.',
+      );
+      assert.deepEqual(session.erreursScript, []);
     } finally {
       await session.fermer();
     }

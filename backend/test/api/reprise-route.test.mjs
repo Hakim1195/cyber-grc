@@ -364,16 +364,72 @@ describe('Tout ou rien sur le jeu de données d’une filiale (contrôle S14)', 
  * ===================================================================== */
 
 describe('Les refus de la route de reprise', () => {
-  test('le même fichier deux fois est refusé : la reprise est idempotente', async () => {
+  test('le même fichier se reprend AUTANT DE FOIS QU’ON VEUT, et converge (constat T-4)', async () => {
+    // ── Ce que ce test affirmait, et pourquoi c'était faux ───────────────────
+    //
+    // Il exigeait qu'un fichier déjà repris soit REFUSÉ, au nom de l'idempotence.
+    // Le troisième passage de la porte S2 a montré que cette lecture consommait le
+    // fichier pour toujours : on ne pouvait plus restaurer deux fois la même
+    // sauvegarde, ni fusionner puis remplacer avec le même fichier. Or c'est un geste
+    // légitime — et c'est le scénario même du plan de reprise d'activité que ce
+    // produit héberge (constat T-4).
+    //
+    // L'idempotence n'a jamais été « refuser le second appel » : c'est **converger**.
+    // Rejouer un fichier doit rendre le même état, pas une erreur. L'assertion qui
+    // portait cette propriété — une occurrence, pas deux — est restée telle quelle ;
+    // c'est celle qui avait de la valeur, et elle en a davantage maintenant qu'elle
+    // n'est plus protégée par un refus.
     const charge = instantane(12, { risques: [{ id: 'RISK-IDEMPOTENCE', nom: 'Une seule fois' }] });
-    const premier = await reprendre('fusionner', charge, { nom: 'idem.json' });
-    assert.equal(premier.statut, 200);
+    const contenu = fichier(12, charge);
 
-    const second = await reprendre('fusionner', charge, { nom: 'idem.json' });
-    assert.notEqual(second.statut, 200, 'Réimporter le même fichier ne doit pas dupliquer son contenu.');
+    // Quatre reprises du MÊME fichier, dont un changement de mode au milieu : c'est
+    // la séquence d'une restauration réelle — on fusionne, on hésite, on remplace.
+    const sequence = ['fusionner', 'fusionner', 'remplacer', 'fusionner'];
+    const refus = [];
+    for (const [rang, mode] of sequence.entries()) {
+      const reponse = await reprendre(mode, null, { contenu, nom: 'idem.json' });
+      if (reponse.statut !== 200) {
+        refus.push(`appel ${String(rang + 1)} (${mode}) → ${String(reponse.statut)} ${JSON.stringify(reponse.corps.message ?? '')}`);
+      }
+    }
+    assert.deepEqual(
+      refus,
+      [],
+      'Un fichier n’est pas consommé par sa première reprise : restaurer deux fois la même ' +
+        'sauvegarde est le geste normal d’un plan de reprise d’activité.',
+    );
 
+    // ── LA propriété : convergence, pas duplication ──────────────────────────
     const occurrences = (await identifiants('risques')).filter((id) => id === 'RISK-IDEMPOTENCE');
-    assert.equal(occurrences.length, 1);
+    assert.equal(occurrences.length, 1, 'Quatre reprises, un seul enregistrement.');
+  });
+
+  test('l’empreinte du fichier reste tracée : ce qui est retiré, c’est le VERROU', async () => {
+    // Contrôle symétrique du précédent. Lever l'interdiction ne doit pas effacer la
+    // trace : l'empreinte reste écrite dans « imports » — c'est elle qui permettra au
+    // moteur d'import du lot L7 de reconnaître un fichier déjà vu, et au journal
+    // d'audit du lot L5 de dire qui a rejoué quoi. Sans ce test, « on a retiré la clé
+    // d'idempotence » pourrait un jour devenir « on a retiré la traçabilité ».
+    const contenu = fichier(12, instantane(12, {
+      risques: [{ id: 'RISK-EMPREINTE', nom: 'Tracé deux fois' }],
+    }));
+    await reprendre('fusionner', null, { contenu, nom: 'empreinte.json' });
+    await reprendre('fusionner', null, { contenu, nom: 'empreinte.json' });
+
+    const client = await base.connexion('app');
+    const traces = await base.avecPerimetre(client, lectureA, async (c) =>
+      (await c.query(
+        "select sha256, cle_idempotence from imports where nom_fichier = 'empreinte.json' order by cree_le",
+      )).rows);
+
+    assert.equal(traces.length, 2, 'Chaque reprise laisse SA trace, même la seconde.');
+    assert.match(traces[0].sha256, /^[0-9a-f]{64}$/, 'L’empreinte du fichier est écrite.');
+    assert.equal(traces[1].sha256, traces[0].sha256, 'Et c’est la même : le fichier est reconnu.');
+    assert.equal(
+      traces.every((l) => l.cle_idempotence === null),
+      true,
+      'Ce qui a disparu, c’est la clé qui INTERDISAIT le second passage — pas l’empreinte.',
+    );
   });
 
   test('un fichier illisible est refusé par un message écrit pour un exploitant', async () => {

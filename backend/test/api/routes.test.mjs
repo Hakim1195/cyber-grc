@@ -567,6 +567,152 @@ describe('L’habilitation Groupe ne se fabrique nulle part (suite du constat M-
 });
 
 describe('La session provisoire est fail-closed en production (contrôle S6)', () => {
+  /**
+   * TOUS les points d'entrée qui touchent aux données, avec de quoi les appeler.
+   *
+   * ── Pourquoi la liste, et pourquoi elle est ici ──────────────────────────
+   *
+   * Le troisième passage de la porte a relevé que `POST /api/reprise` n'était couvert
+   * par aucun essai en production : « T-3 serait tombé si le banc l'avait couvert ».
+   * Le défaut n'était pas dans le test qui existait — il était dans ce qu'il ne
+   * regardait pas. Une route neuve échappait à la barrière parce que le banc éprouvait
+   * trois routes choisies à la main.
+   *
+   * La parade tient en deux temps : la liste ci-dessous, et le test suivant qui la
+   * confronte aux routes **réellement montées** dans Fastify. Une route ajoutée demain
+   * sans être ajoutée ici fait échouer le second, et le premier la couvre dès qu'elle
+   * y entre. C'est la seule forme d'exhaustivité qu'un banc puisse tenir sans réciter
+   * (`CONVENTIONS.md` §19.5).
+   */
+  const POINTS_DENTREE = Object.freeze([
+    ['GET', '/api/session', undefined],
+    ['GET', '/api/modele', undefined],
+    ['GET', '/api/donnees', undefined],
+    ['GET', '/api/rafraichir?depuis=2026-01-01T00:00:00.000Z', undefined],
+    ['POST', '/api/entites/risques', { champs: { nom: 'tentative' } }],
+    ['PUT', '/api/entites/risques/RISK-A', { version: 1, champs: { nom: 'tentative' } }],
+    ['DELETE', '/api/entites/risques/RISK-A?version=1', undefined],
+    ['POST', '/api/operations/propager-mesure', { mesureId: 'MESURE-A' }],
+    ['POST', '/api/reprise', {
+      mode: 'fusionner',
+      fichier: {
+        nom: 'tentative.json',
+        contenu: JSON.stringify({
+          format: 'grc-backup',
+          version: 12,
+          app: 'cyber-grc-dedienne',
+          createdAt: '2026-08-31T09:00:00.000Z',
+          encrypted: false,
+          payload: { schemaVersion: 12, risques: [{ id: 'RISK-PROD', nom: 'tentative' }] },
+        }),
+      },
+    }],
+  ]);
+
+  /**
+   * Recompose les routes RÉELLEMENT montées à partir de l'arbre de Fastify.
+   *
+   * `printRoutes()` rend un arbre, pas une liste : un enfant n'y porte que son propre
+   * segment (`/:identifiant` sous `/api/entites/:entite`), et Fastify expose en plus un
+   * `HEAD` pour chaque `GET`. Lire l'arbre ligne à ligne — ce que faisait la première
+   * version de ce test — produisait `PUT /:identifiant`, qui ne ressemble à aucune
+   * route : le contrôle criait au manque sur une route pourtant couverte, et se serait
+   * tu sur une vraie omission dès qu'on l'aurait « corrigé » en relâchant la
+   * comparaison. L'indentation porte la profondeur, quatre caractères par niveau.
+   */
+  function routesMontees(instance) {
+    const table = instance.printRoutes({ commonPrefix: false });
+    const pile = [];
+    const montees = new Set();
+    for (const ligne of table.split('\n')) {
+      const marque = /^([\s│]*)(?:├──|└──)\s(\S+)(?:\s+\(([^)]+)\))?/u.exec(ligne);
+      if (marque === null) continue;
+      const profondeur = marque[1].length / 4;
+      pile.length = profondeur;
+      pile[profondeur] = marque[2];
+      if (marque[3] === undefined) continue; // nœud de branchement sans méthode propre
+      const chemin = pile.join('').replace(/(.)\/$/, '$1');
+      for (const methode of marque[3].split(',')) montees.add(`${methode.trim()} ${chemin}`);
+    }
+    return montees;
+  }
+
+  /** Met une entrée du banc à la forme du routeur : `MÉTHODE /chemin/:parametre`. */
+  function formeRouteur(methode, url) {
+    return `${methode} ${url
+      .split('?')[0]
+      .replace(/\/entites\/[^/]+\/[^/]+$/, '/entites/:entite/:identifiant')
+      .replace(/\/entites\/[^/]+$/, '/entites/:entite')}`;
+  }
+
+  test('AUCUN point d’entrée ne sert de données hors développement (constat T-3)', async () => {
+    // Deux environnements, et le second est celui qui a coûté un constat : la barrière
+    // ne couvrait que la production, alors que `PLAN_SERVEUR` §1.10 veut une recette
+    // « alimentée par une copie réaliste de la production » (constat M-5).
+    for (const environnement of ['production', 'recette']) {
+      const serveurFerme = await monterServeurReel(base, { environnement });
+      try {
+        const servis = [];
+        for (const [methode, url, corps] of POINTS_DENTREE) {
+          const reponse = await serveurFerme.appeler(methode, url, corps === undefined ? {} : { corps });
+          if (reponse.statut !== 503 || reponse.corps?.erreur !== 'indisponible') {
+            servis.push(
+              `${environnement} · ${methode} ${url} → ${String(reponse.statut)} ${String(reponse.corps?.erreur ?? '')}`,
+            );
+          }
+          // Fastify expose un `HEAD` pour chaque `GET` : la moitié des routes montées
+          // vit là. La barrière doit les refuser aussi ; `HEAD` ne rend pas de corps,
+          // seul le statut est jugeable — c'est assez pour distinguer 503 de 200.
+          if (methode === 'GET') {
+            const tete = await serveurFerme.appeler('HEAD', url);
+            if (tete.statut !== 503) servis.push(`${environnement} · HEAD ${url} → ${String(tete.statut)}`);
+          }
+        }
+        assert.deepEqual(
+          servis,
+          [],
+          'Chaque entrée est un point d’entrée qui sert des données de gouvernance sans ' +
+            'authentification. La sonde de santé est la seule exception admise.',
+        );
+
+        // Contrôle symétrique : la sonde de santé, elle, doit répondre — un serveur
+        // muet est indiagnosticable, et elle ne lit aucune donnée métier.
+        assert.equal((await serveurFerme.appeler('GET', '/api/sante')).statut, 200);
+      } finally {
+        await serveurFerme.fermer();
+      }
+    }
+  });
+
+  test('LA LISTE EST COMPLÈTE : elle couvre toutes les routes réellement montées', async () => {
+    // Contrôle de morsure du test précédent. Une liste écrite à la main est une
+    // omission qui attend ; celle-ci est confrontée au routeur de Fastify, qui sait
+    // ce qui est monté. Une route ajoutée sans être couverte est nommée ici.
+    const montees = routesMontees(serveur.instance);
+
+    // Contrôle de morsure du lecteur d'arbre lui-même : s'il rendait des segments nus,
+    // il ne signalerait plus jamais rien d'utile. La route imbriquée est la preuve.
+    assert.ok(
+      montees.has('PUT /api/entites/:entite/:identifiant'),
+      `Lecteur d’arbre en défaut, il ne recompose plus les routes imbriquées : ${[...montees].join(' · ')}`,
+    );
+    assert.ok(montees.size >= 12, `Routeur illisible : ${[...montees].join(' · ')}`);
+
+    const couvertes = new Set();
+    for (const [methode, url] of POINTS_DENTREE) {
+      couvertes.add(formeRouteur(methode, url));
+      if (methode === 'GET') couvertes.add(formeRouteur('HEAD', url));
+    }
+    // `/api/sante` est délibérément hors barrière : elle est éprouvée à part.
+    const manquantes = [...montees].filter((route) => !couvertes.has(route) && !route.endsWith('/api/sante'));
+    assert.deepEqual(
+      manquantes,
+      [],
+      'Ces routes sont montées et ne sont pas éprouvées en environnement fermé. ' +
+        'C’est par là que le constat T-3 est passé.',
+    );
+  });
+
   test('en production, aucune donnée n’est servie ni écrite', async () => {
     const production = await monterServeurReel(base, { environnement: 'production' });
     try {
