@@ -13,8 +13,14 @@ const ExportExcelService = (() => {
         try {
             const wb = XLSX.utils.book_new();
 
-            // Récupérer le contexte
-            const currentClient = localStorage.getItem("cyber-context") || "global";
+            // Récupérer le contexte.
+            // Le filtre « donneur d'ordre » ne vit plus dans localStorage depuis la bascule
+            // serveur : il est en mémoire, porté par window.FiltreDonneurOrdre. Lire l'ancienne
+            // clé retombait silencieusement sur « Global » — l'export sortait donc TOUTES les
+            // exigences, et nommait le fichier « global », alors qu'un donneur d'ordre était
+            // sélectionné à l'écran. Un export faux qui ne dit pas qu'il est faux.
+            const currentClient =
+                (typeof FiltreDonneurOrdre !== "undefined" ? FiltreDonneurOrdre.get() : null) || "global";
             const clients = DataStore.getClients();
             let contextLabel = "Global";
             if (currentClient !== "global") {
