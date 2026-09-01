@@ -9,32 +9,40 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 ## [Non publié]
 
 ### Serveur — vague 2 : l'API et la bascule de la persistance (lot L2)
-> Travail de la vague 2 terminé, **puis** ses constats fermés. Chiffres **rejoués** au
-> 01/09/2026 sur la révision **`fef2db3`**, arbre propre, base neuve
-> (PostgreSQL 16.13) : `npm test` → **534 essais, 534 passés, 0 échec**
-> (base 272 · api 160 · reprise 77 · navigateur 25), `npm run verifier-types` sans
+> Travail de la vague 2 terminé, **puis** ses constats fermés — deux fois. Chiffres
+> **rejoués** au 01/09/2026 sur la révision **`c37d655`**, arbre propre, base neuve
+> (PostgreSQL 16.13) : `npm test` → **564 essais, 564 passés, 0 échec**
+> (base 272 · api 172 · reprise 77 · navigateur 43), `npm run verifier-types` sans
 > erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` → **107 contrôles, 107 réussis, 0 échec**,
-> `f_verifier_schema()` → **0 anomalie** (8 garde-fous découverts, joués et consignés).
+> `f_verifier_schema()` → **0 anomalie** (8 garde-fous découverts, joués et consignés),
+> **6 migrations** appliquées pour **48 tables** et **192 politiques**.
 >
-> ⚠️ **La porte de sécurité S2 N'EST PAS FRANCHIE.** Elle l'a été au 4ᵉ passage
-> (« ✅ FRANCHIE — 0 bloquant, 4 majeurs, 7 mineurs », révision `a4116b6`, verdict
-> consigné en `120266e`) ; les correctifs listés plus bas sont venus **après**, ils ont
-> été soumis au **5ᵉ passage** sur la révision `f68f799`, et **la porte a refusé le
-> lot** : « ❌ refusée — 0 bloquant, 3 majeurs, 3 mineurs, **contrôle S17 en échec** »
-> (`docs/PLAN_EXECUTION.md` §7, rapport `docs/securite/RAPPORT_S2_QUINQUIES.md`).
+> ⚠️ **La porte de sécurité S2 N'EST PAS FRANCHIE, et son dernier verdict porte un
+> bloquant.** Elle l'a été au 4ᵉ passage (« ✅ FRANCHIE — 0 bloquant, 4 majeurs,
+> 7 mineurs », révision `a4116b6`, verdict consigné en `120266e`) ; la fermeture des
+> constats est venue après, soumise au **5ᵉ passage** sur `f68f799` — « ❌ refusée —
+> 0 bloquant, 3 majeurs, 3 mineurs, contrôle **S17** en échec » ; la fermeture de *ces*
+> constats a été soumise au **6ᵉ** sur `f0b4eec` — « ❌ refusée — **1 bloquant**,
+> 3 majeurs, 2 mineurs, contrôles **S17 et S18** en échec »
+> (`docs/PLAN_EXECUTION.md` §7, rapports `docs/securite/RAPPORT_S2_QUINQUIES.md` et
+> `RAPPORT_S2_SEXIES.md`).
 >
-> Le défaut qui a fait échouer le lot **n'est dans aucun des fichiers décrits
-> ci-dessous** : c'est un désaccord *entre* le vhost et le serveur, dont aucun n'a tort
-> seul — le premier coupe la reprise à 60 s pendant que le second valide sa transaction.
-> Le cœur du lot n'est pas en cause : 46 sondes hostiles n'ont bougé ni le périmètre, ni
-> une frontière de filiale, ni une requête SQL. **Ne lisez donc aucune entrée ci-dessous
-> comme un acquis.**
+> **Ni l'un ni l'autre de ces deux défauts n'était dans un fichier de la liste
+> ci-dessous.** Le 5ᵉ tenait à un désaccord *entre* le vhost et le serveur, dont aucun
+> n'avait tort seul — le premier coupe la reprise à 60 s pendant que le second valide sa
+> transaction. Le 6ᵉ tenait à **un correctif que la porte précédente avait accepté**, qui
+> a échangé un doublon silencieux contre une **destruction silencieuse**. Le cœur du lot
+> n'est pas en cause dans les deux cas : 81 sondes hostiles sans effet, 107/107 au
+> cloisonnement, 27 écrans sous la CSP réelle sans violation. **Ne lisez donc aucune
+> entrée ci-dessous comme un acquis.**
 >
 > L'état constat par constat — *corrigé en attente du rejeu*, *reporté par écrit*,
 > *documenté sans être fermé* — vit dans le **registre des constats ouverts** du même
 > §7. Il n'est ni recopié ni résumé ici, pas même par un décompte : il vit, et deux
-> listes des mêmes constats divergent en silence.
+> listes des mêmes constats divergent en silence. Sa colonne d'état se lit en sachant
+> qu'une coche verte y est une **hypothèse** : le 6ᵉ passage a trouvé un constat annoncé
+> « fermé et vérifié » qui ne l'était pas.
 
 **L'API**
 
@@ -216,14 +224,16 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   bascule et retombait donc en silence sur « Global », exportant toutes les exigences et
   nommant le fichier « global » alors qu'un donneur d'ordre était sélectionné à l'écran.
 
-**Le banc d'essai — de 306 à 534 essais**
+**Le banc d'essai — de 306 à 564 essais**
 
-- **534 essais `node:test`, 0 échec** (à `fef2db3`), en quatre familles : **272 sur la
+- **564 essais `node:test`, 0 échec** (à `c37d655`), en quatre familles : **272 sur la
   base** (socle, journal, RLS, privilèges, garde-fous, consignation, vocabulaire, et la
-  démonstration de cloisonnement rejouée), **160 sur l'API** (routes réellement montées,
+  démonstration de cloisonnement rejouée), **172 sur l'API** (routes réellement montées,
   verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité
-  d'écriture, identifiants, route de reprise), **77 sur la reprise** et **25 dans un
-  navigateur réel**.
+  d'écriture, identifiants, bornes, route de reprise), **77 sur la reprise** et **43 dans
+  un navigateur réel**. Le compte a suivi les fermetures de constats — 505 au 4ᵉ passage,
+  534 pendant la première fermeture, 564 après la seconde ; **c'est pourquoi chaque
+  chiffre porte ici sa révision**.
 - **Le banc dépend désormais du client `psql`, et c'est écrit.** La dépendance existait
   déjà sans être dite — la pire des deux situations : `db/dev/preparer_base_dev.sh`
   s'arrête dessus, `install.sh` l'exige sur la VM. Elle devient nécessaire au banc parce
@@ -244,6 +254,8 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 - **Un huitième garde-fou de schéma** — l'entropie des identifiants — se branche sur
   `f_verifier_schema()` **sans qu'aucun fichier de déploiement change** : c'est la
   démonstration que le point d'appel unique de la vague 1 fait ce qu'il annonce.
+  *(Ce garde-fou-là mesurait une longueur et non une entropie ; il a été réémis par la
+  migration `006` — voir « la fermeture de la vague » plus bas.)*
 - **Et son angle mort est fermé** : `f_verifier_schema()` ne refusait que s'il ne
   découvrait **aucun** contrôle — une migration qui renomme ou re-signe une fonction en
   aurait fait disparaître un **en silence**. La fermeture de la vague apporte une
@@ -253,9 +265,12 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 **La fermeture de la vague — ce qui a été corrigé APRÈS le passage de la porte**
 
-> ⚠️ Tout ce qui suit est **postérieur au 4ᵉ passage**. Ces correctifs ont bien été
-> soumis au **5ᵉ**, qui a **refusé le lot** — pour un défaut qu'aucun d'eux ne couvrait,
-> vivant *entre* le vhost et le serveur. Ils restent donc à rejouer, avec le reste.
+> ⚠️ Tout ce qui suit est **postérieur au 4ᵉ passage**, et a été soumis au **5ᵉ** puis au
+> **6ᵉ**, qui ont tous deux **refusé le lot** — chaque fois pour un défaut qu'aucun de ces
+> correctifs ne couvrait. Le 6ᵉ a rejoué **22 des 28 constats par mutation** (en cassant
+> délibérément chaque correctif pour vérifier que le banc rougit) ; c'est ainsi qu'il a
+> trouvé qu'**un constat annoncé « fermé et vérifié » ne l'était pas**, et qu'un correctif
+> accepté au 5ᵉ produisait le **bloquant** du 6ᵉ. Rien de ce qui suit n'est acquis.
 
 - **Le générateur qui écrit vraiment a reçu l'entropie et son garde-fou.** Le correctif
   du bloquant avait durci le générateur de la *base* ; celui du *serveur*, qui est celui
@@ -363,6 +378,70 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   > alignées » comme « la donnée est réparée » serait un contresens exact. La seule
   > défense contre cette corruption-là reste le **bandeau qui nomme la réécriture et son
   > compte** — d'où le fait qu'il ne s'efface jamais tout seul, pas même à un rechargement.
+
+- **Des données réelles ont été retirées du dépôt — et l'installateur ne peut plus les
+  publier.** `cyber-gouvernance_V4/data/` a porté quatre classeurs de données réelles
+  (registre de risques informatiques, import de risques, questionnaire d'exigences
+  client) et un **fichier de verrou Excel nommant une personne**. Aucun code ne les
+  référençait ; mais `install.sh` recopiait alors **tout** le répertoire dans la racine
+  web d'Apache, et ni `.xlsx` ni `data/` ne figuraient dans les interdictions du vhost :
+  sur une installation réelle, ils auraient été **téléchargeables par une URL devinable,
+  sans aucune authentification**, dans un produit dont la promesse centrale est le
+  cloisonnement par filiale. Sixième passage, constat **Q-31**. Les fichiers sont retirés
+  et un `LISEZ-MOI.md` occupe leur place.
+
+  La copie devient une **liste blanche de types publiables**, dérivée de ce que la
+  politique de sécurité de contenu autorise à charger depuis `'self'` — et non une
+  exclusion par répertoire, parce que ce n'est pas le répertoire qui distingue un fichier
+  servable, c'est sa **nature** : un classeur déposé à la racine ou dans `assets/` serait
+  passé sous une exclusion par répertoire. Le contrôle est fait **deux fois**, sur le
+  dépôt puis sur ce qui a réellement atterri, et **dans les deux sens** : un intrus publié
+  arrête l'installation, un fichier légitime manquant aussi.
+
+  > 🔒 **Ce qui reste à faire, et qui n'appartient pas à une session** : ces fichiers
+  > **restent dans l'historique git**, donc dans le dépôt distant. Les en purger impose
+  > une **réécriture d'historique et une poussée forcée** — décision du **propriétaire du
+  > dépôt**. Tant qu'elle n'est pas prise, ces données sont à considérer comme divulguées
+  > à quiconque a accès au dépôt.
+
+- **Un garde-fou mesurait une longueur là où la convention norme une entropie**
+  (migration `006_entropie_et_commentaires.sql`, constats Q-14 et Q-17).
+  `f_verifier_entropie_identifiants()` exigeait **32 caractères** d'aléa quand le §2 des
+  conventions norme **52 bits tirés d'un générateur cryptographique**. Or un remplissage à
+  gauche (`lpad`, le `padStart` du jumeau TypeScript) produit toujours la bonne longueur,
+  **quelle que soit l'entropie portée** : le contrôle était infaillible au mauvais sens du
+  mot. Pouvoir de détection mesuré par l'auditeur : **8 sur 200 à 32 bits, 0 sur 200 à
+  40 bits**, pour un plancher de 52. Il est réémis sur une mesure **en bits**, et la même
+  migration corrige les commentaires du catalogue que les correctifs avaient rendus faux.
+  La leçon est au `CONVENTIONS.md` §17.5 : **un garde-fou auquel on prête plus de portée
+  qu'il n'en a endort la vigilance au lieu de l'entretenir** — une fausse assurance est
+  pire qu'un silence.
+
+- **✅ Une réserve se lève, et un journal doit le dire aussi.** L'hypothèse la plus chargée
+  du correctif de la reprise — **qu'Apache annule réellement la requête vers le serveur à
+  l'expiration de `ProxyTimeout`**, au lieu de laisser une transaction se valider dans le
+  vide — n'était pas mesurée, faute d'Apache sur la machine de développement, et elle
+  était consignée comme telle. Le 6ᵉ passage l'a **mesurée avec un mandataire** : la
+  transaction est bien annulée.
+
+- 🛑 **Et un correctif de cette liste a produit le bloquant du 6ᵉ passage.** Une création
+  dont l'issue est incertaine ne devait plus être rejouée — la rejouer fabrique un doublon
+  silencieux —, et l'arbitrage avait explicitement **écarté la voie « recharger avant de
+  rejouer »**, qui perd la saisie. Le correctif écarte bien cette voie dans le code, et
+  **son bandeau dit à l'utilisateur de recharger**. L'utilisateur fait ce qu'on lui dit :
+  **écran 0, base 0**, message vert « Données rechargées ». Le doublon silencieux a été
+  échangé contre une **destruction silencieuse**.
+
+  > **La cause est ce qu'on avait loué** : une **seule formulation** servait les deux
+  > couches, « pour que le fait ne puisse pas diverger ». L'intention est juste — deux
+  > phrases qui disent la même chose finissent par se contredire, ce chantier l'a payé
+  > neuf fois. Mais la phrase retenue était vraie pour la **reprise**, où recharger est le
+  > bon geste, et destructrice pour une **création bloquée**, où recharger jette la
+  > saisie. **Un même mot, vrai à un endroit et faux à l'autre, voyage d'autant mieux
+  > qu'on a pris soin de n'en avoir qu'un.** Mutualiser un libellé n'est sûr que si les
+  > deux couches partagent la même *situation*, pas seulement le même *code d'erreur* — et
+  > la vérification qui manquait est un essai qui **suit le geste que le message
+  > recommande**, pour constater qu'il ne détruit rien.
 
 **Ce qui n'est PAS livré, et doit être dit**
 

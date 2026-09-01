@@ -8,7 +8,7 @@
 
 **État : lots L0, L1 et L2 livrés. La porte S1 est franchie ; la porte S2 ne l'est
 pas** — S1 « CONFIRMÉE FRANCHIE » au 6ᵉ passage ; S2 franchie au 4ᵉ passage, puis
-**refusée au 5ᵉ** après la fermeture de ses constats. Le
+**refusée au 5ᵉ et au 6ᵉ**, le dernier sur un **bloquant**. Le
 verdict de chaque passage vit dans le journal des portes du
 [plan d'exécution](../docs/PLAN_EXECUTION.md) §7, et les rapports dans
 [`../docs/securite/`](../docs/securite/) — c'est là qu'il se lit, et nulle part
@@ -142,6 +142,51 @@ Le magasin de pièces jointes est en `0700` et **hors de l'arborescence web** :
 Apache ne le sert jamais. Les fichiers ne sont délivrés que par l'application,
 après contrôle des droits. `install.sh` et le serveur refusent tous deux de
 démarrer si ce chemin passe sous `CHEMIN_FRONTEND`.
+
+### ⚠️ Ce qui monte dans la racine web est une **liste blanche**, et pourquoi
+
+`install.sh` ne recopie plus `cyber-gouvernance_V4/` en entier : il ne publie que les
+types de fichiers qu'une page a le droit de charger — `html js css svg png ico jpg jpeg
+gif webp woff woff2 webmanifest`. Tout le reste **arrête l'installation**, et le contrôle
+est fait **deux fois** : sur le dépôt avant la copie, puis sur ce qui a réellement atterri
+dans la racine web. Il regarde aussi dans l'autre sens — un fichier légitime manquant
+arrête tout autant, parce qu'une liste blanche trop serrée livrerait une application
+muette dont personne ne comprendrait la panne.
+
+**D'où vient cette liste, pour qu'elle ne soit pas arbitraire** : c'est exactement ce que
+la politique de sécurité de contenu du vhost autorise à charger depuis `'self'`. Un
+fichier d'un autre type ne peut être chargé par aucune directive — il n'a donc rien à
+faire dans une racine web, quel que soit le motif qui l'y a amené. Les deux listes (celle
+d'`install.sh` et le `<FilesMatch>` de `deploy/apache/cyber-grc.conf`) vont **par paire**
+et doivent le rester ; ajouter un type à l'une sans l'autre est ce que le message d'échec
+rappelle.
+
+#### Ce qui a rendu ce durcissement nécessaire
+
+Le répertoire `cyber-gouvernance_V4/data/` a contenu, un temps, **quatre classeurs de
+données réelles** — registre de risques informatiques, import de risques, questionnaire
+d'exigences client — et un **fichier de verrou Excel nommant une personne**. Aucun code
+de l'application ne les référençait. Mais l'installateur recopiait alors **tout** le
+répertoire dans la racine web, et ni `.xlsx` ni `data/` ne figuraient dans les
+interdictions du vhost : sur une installation réelle, ces fichiers auraient été
+**téléchargeables par une URL devinable, sans aucune authentification** — dans un produit
+dont la promesse centrale est le cloisonnement par filiale. Sixième passage de la porte
+S2, constat **Q-31**.
+
+Les fichiers sont **retirés de l'arbre de travail**, et un `LISEZ-MOI.md` occupe leur
+place pour que la règle survive au retrait.
+
+> 🔒 **Ce qu'il reste à faire, et qui n'appartient pas à une session de travail :** ces
+> fichiers **restent dans l'historique git**, donc dans le dépôt distant. Les en purger
+> impose une **réécriture d'historique et une poussée forcée** — une décision qui revient
+> au **propriétaire du dépôt**. Tant qu'elle n'est pas prise, considérez ces données comme
+> divulguées à quiconque a accès au dépôt, et traitez-les comme telles (information des
+> personnes concernées si le fichier de verrou nomme quelqu'un, et rotation de ce qui
+> serait sensible dans les classeurs).
+
+**La règle qui en découle**, et qui vaut au-delà de ce répertoire : **aucun fichier de
+données ne vit sous `cyber-gouvernance_V4/`.** Les jeux d'essai vivent dans un répertoire
+de travail hors dépôt ; ce que l'application lit au démarrage vient du serveur.
 
 ### Le frontend déployé est **versionné à l'installation**, et il doit l'être
 
@@ -283,7 +328,19 @@ Un schéma sain ne renvoie **aucune ligne** ; la moindre ligne rendue fait écho
 chemin appelant. **Huit contrôles sont découverts et joués** sur une base à jour —
 armement des déclencheurs, chemin de recherche des fonctions, couverture RLS,
 entropie du générateur d'identifiants, portée figée, privilèges du rôle applicatif,
-traçabilité à l'insertion, unicités cloisonnées :
+traçabilité à l'insertion, unicités cloisonnées.
+
+⚠️ **L'un d'eux ne mesurait pas ce que son nom promettait**, et l'histoire vaut d'être
+connue avant d'écrire le prochain. `f_verifier_entropie_identifiants()` tirait un
+identifiant et vérifiait que sa part aléatoire faisait au moins **32 caractères** — une
+**longueur**, quand la convention norme **52 bits d'aléa cryptographique**
+(`db/CONVENTIONS.md` §2). Or un remplissage à gauche (`lpad`, le `padStart` du jumeau
+TypeScript) produit toujours la bonne longueur, **quelle que soit l'entropie portée** :
+le contrôle était donc infaillible, au mauvais sens du mot. Pouvoir de détection mesuré
+par l'auditeur : **8 sur 200 à 32 bits, 0 sur 200 à 40 bits**, pour un plancher normé à
+52. La migration `006` le réémet sur une mesure en **bits**. La leçon est au §17.5 des
+conventions : **un garde-fou auquel on prête plus de portée qu'il n'en a endort la
+vigilance au lieu de l'entretenir** — une fausse assurance est pire qu'un silence.
 
 ```bash
 psql -d cyber_grc -c 'select * from f_verifier_schema();'   # 0 ligne = conforme
@@ -442,7 +499,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 534 tests : base, API, reprise, navigateur
+npm test                           # 564 essais : base, API, reprise, navigateur
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -479,14 +536,14 @@ disparition fait échouer.
 #### Quatre familles d'essais
 
 Le détail compte, parce que chacune attrape une classe de défaut que les autres ne
-voient pas. Comptes relevés à `fef2db3` (§8) :
+voient pas. Comptes relevés à `c37d655` (§8) :
 
 | Répertoire | Tests | Ce qu'il éprouve |
 |---|---|---|
 | `test/base/` | 272 | socle, journal en ajout seul et chaînage, RLS, privilèges, garde-fous du schéma, consignation, vocabulaire, **et la démonstration de cloisonnement rejouée par `psql`** |
-| `test/api/` | 160 | routes montées pour de vrai, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité d'écriture, identifiants, route de reprise |
+| `test/api/` | 172 | routes montées pour de vrai, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité d'écriture, identifiants, bornes, route de reprise |
 | `test/reprise/` | 77 | paliers v1 → v12, enveloppe, scission des mesures, round-trip, entrées hostiles |
-| `test/navigateur/` | 25 | la bascule côté SPA, dans **Chromium**, contre le serveur réel et sous la CSP du vhost |
+| `test/navigateur/` | 43 | la bascule côté SPA, dans **Chromium**, contre le serveur réel et sous la CSP du vhost |
 
 ## 6. Sauvegarde et restauration
 
@@ -586,7 +643,7 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** |
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — jouée six fois |
-| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais non validé** — porte **S2** jouée **cinq fois** : franchie au 4ᵉ passage, **refusée au 5ᵉ** |
+| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais non validé** — porte **S2** jouée **six fois** : franchie au 4ᵉ passage, **refusée au 5ᵉ**, **refusée au 6ᵉ sur un bloquant** |
 | L3 — Authentification AD et droits · L5 — Journal | ⬜ à faire — **vague 3, qui n'ouvre pas tant que S2 n'est pas franchie** |
 | L4 → L15 | ⬜ à faire — voir [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) §3 et [`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7 |
 
@@ -602,16 +659,25 @@ mot pour mot :
 | **S1** (6ᵉ passage) | ✅ **CONFIRMÉE FRANCHIE** — 0 bloquant, 0 majeur, 6 mineurs | [`RAPPORT_S1_SEXIES.md`](../docs/securite/RAPPORT_S1_SEXIES.md) |
 | **S2** (4ᵉ passage) | ✅ **FRANCHIE** — 0 bloquant, 4 majeurs, 7 mineurs, **aucun des dix-huit contrôles en échec** | [`RAPPORT_S2_QUATER.md`](../docs/securite/RAPPORT_S2_QUATER.md) |
 | **S2** (5ᵉ passage) | ❌ **refusée** — 0 bloquant, 3 majeurs, 3 mineurs. **Contrôle S17 en échec** : le défaut vit *entre* trois fichiers dont aucun n'a tort seul — le vhost coupe la reprise à 60 s pendant que le serveur valide sa transaction. Le cœur du lot n'est pas en cause : 46 sondes hostiles n'ont bougé ni le périmètre, ni une frontière de filiale, ni une requête SQL. | [`RAPPORT_S2_QUINQUIES.md`](../docs/securite/RAPPORT_S2_QUINQUIES.md) |
+| **S2** (6ᵉ passage) | ❌ **refusée** — **1 bloquant**, 3 majeurs, 2 mineurs. **S17 et S18 en échec.** Le bloquant vise le correctif Q-27 **accepté à la porte précédente** : il a échangé un doublon silencieux contre une **destruction silencieuse** — le bandeau dit de recharger, l'utilisateur recharge, et la saisie disparaît. Le reste tient : 22 des 28 constats rejoués par mutation, l'hypothèse la plus chargée de Q-19 enfin **mesurée** avec un mandataire (la transaction est bien annulée), 81 sondes hostiles sans effet, 107/107 au cloisonnement, 27 écrans sous la CSP réelle sans violation. | [`RAPPORT_S2_SEXIES.md`](../docs/securite/RAPPORT_S2_SEXIES.md) |
 
-> ## ⚠️ **La porte S2 a été rejouée, et elle est REFUSÉE. Le lot L2 n'est pas franchi.**
+> ## ⚠️ **La porte S2 est REFUSÉE, sur un bloquant. Le lot L2 n'est pas franchi.**
 >
-> C'est l'information la plus importante de ce document, et elle est récente : le
-> franchissement du 4ᵉ passage portait sur la révision **`a4116b6`**, consigné en
-> **`120266e`** ; le travail de fermeture des constats est venu après, il a été soumis à
-> la porte au 5ᵉ passage sur la révision **`f68f799`**, et **la porte l'a refusé**.
+> C'est l'information la plus importante de ce document. Le franchissement du 4ᵉ passage
+> portait sur la révision **`a4116b6`** (verdict consigné en `120266e`) ; la fermeture
+> des constats est venue après et a été soumise au 5ᵉ passage sur **`f68f799`**, refusé ;
+> la fermeture de *ces* constats a été soumise au 6ᵉ sur **`f0b4eec`**, **refusé sur un
+> bloquant**.
 >
 > Ne lisez donc **aucune** ligne de ce §8 comme un acquis. Ce qui suit décrit un lot
 > livré, mesuré et corrigé — pas un lot validé.
+>
+> **Et le bloquant vise un correctif que la porte précédente avait accepté.** Il faut le
+> dire, parce que c'est la leçon la plus transférable du chantier : un correctif jugé bon
+> par un auditeur indépendant a détruit des données au passage suivant. Le détail est
+> plus bas, sous « Un même mot pour deux couches » ; la conséquence pour la lecture de ce
+> document est immédiate : **la fermeture d'un constat n'est pas une garantie, c'est une
+> hypothèse en attente d'être rejouée.**
 
 **Refusée ne veut pas dire cassée, et franchie n'aurait pas voulu dire sans réserve.**
 Le verdict ci-dessus le dit lui-même : aucun bloquant, le cœur du lot hors de cause, et
@@ -677,45 +743,45 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`fef2db3`** — « Registre : neuf constats corrigés, deux partiels, trois reportés par écrit », branche `claude/backend-plan-serveur-hj46fs` |
+| Révision mesurée | **`c37d655`** — « Porte S2 refusée au 6e passage — et le bloquant vise mon arbitrage », branche `claude/backend-plan-serveur-hj46fs` |
 | État de l'arbre | **propre** (`git status --porcelain` vide) |
 | Base | neuve, `BASE_NOM=… bash db/dev/preparer_base_dev.sh --recreer`, **PostgreSQL 16.13**, client `psql` 16.13 |
 | Node | 22.22.2 |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 534 · pass 534 · fail 0  (54,3 s)
-                                                   base 272 · api 160 · reprise 77 · navigateur 25
+npm test                                         → tests 564 · pass 564 · fail 0  (94,4 s)
+                                                   base 272 · api 172 · reprise 77 · navigateur 43
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
 select * from f_verifier_schema()                → 0 ligne (8 garde-fous découverts, joués, consignés)
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **48 tables** en
-**5 migrations**, **192 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**6 migrations**, **192 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **71 clés étrangères** (43 `restrict`, 27 `cascade`, 1 `set null`), **43 tables portant
 `cree_par` et 43 déclencheurs de création**, **11 clés étrangères composites** visant
-`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`.
+`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **8 contrôles consignés**
+dans `controles_schema`.
+
+⚠️ **Le compte de migrations est un contrôle, pas une décoration.** Ce document a
+annoncé « 5 migrations » pendant que le catalogue en portait **6** — c'est le constat
+Q-34, cinquième signalement d'une documentation en retard sur sa vague. Un exploitant qui
+vérifie une installation compare ce chiffre à `select count(*) from migrations_schema` :
+faux, il ne mesure plus rien, et pire, il rassure. C'est la forme la plus discrète du
+défaut que tout ce §8 combat.
 
 ⚠️ **Un chiffre en baisse se diagnostique avant d'être écrit.** Le cas s'est présenté
-pendant la rédaction de ces lignes : PostgreSQL était arrêté au redémarrage du
-conteneur, et le banc a rendu un total très inférieur **sans un seul échec** — les
-suites n'avaient pas pu monter leur base, et une suite qui ne démarre pas ne compte
-aucun échec. J'ai moi-même buté sur la même cause un cran plus tôt, `preparer_base_dev.sh`
-refusant de se connecter au superutilisateur pendant que le service démarrait encore.
+pendant la rédaction : PostgreSQL était arrêté au redémarrage du conteneur, et le banc a
+rendu un total très inférieur **sans un seul échec** — les suites n'avaient pas pu monter
+leur base, et une suite qui ne démarre pas ne compte aucun échec. **Un banc qui rétrécit
+sans rougir est le symptôme le plus trompeur qui soit** : il ressemble à un succès. Le
+premier réflexe est `pg_isready`, pas la chasse à la régression.
 
-**Un banc qui rétrécit sans rougir est le symptôme le plus trompeur qui soit** : il
-ressemble à un succès. La règle qui en découle complète celle du point de mesure — un
-chiffre sans sa révision est invérifiable, et **un chiffre en baisse se comprend avant
-d'être consigné**. Le premier réflexe est `pg_isready`, pas la recherche d'une régression.
-
-⚠️ **Le banc grossit encore pendant la fermeture de la vague** — et c'est la raison
-d'être de la ligne « révision mesurée ». Constaté à l'instant même où ce paragraphe était
-écrit : une seconde exécution, à la **même révision** mais avec des essais en cours
-d'ajout par l'agent d'outillage dans l'arbre de travail, a rendu **539** au lieu de 534,
-tous verts. Un total supérieur au vôtre n'est donc **pas** une contradiction : comparez
-d'abord la révision **et l'état de l'arbre**. Un total *inférieur*, en revanche, se
-diagnostique — voir l'avertissement précédent.
+⚠️ **Le banc grossit à chaque fermeture de constat**, et c'est la raison d'être de la
+ligne « révision mesurée » : 505 essais au 4ᵉ passage, 534 pendant la fermeture, **564
+ici**. Un total différent du vôtre n'est donc pas une contradiction — comparez d'abord la
+révision **et l'état de l'arbre**.
 
 #### Lot L2 — l'API
 
@@ -936,11 +1002,13 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **48 tables** en **5 migrations**, appliquées de bout en bout par `db/migrate.mjs` :
+- **48 tables** en **6 migrations**, appliquées de bout en bout par `db/migrate.mjs` :
   `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités + 5 liaisons),
   `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql` (privilèges,
   politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le registre des
-  garde-fous, arrivé avec la fermeture de la vague — voir plus bas).
+  garde-fous) et `006_entropie_et_commentaires.sql` (un garde-fou réémis et des
+  commentaires corrigés — ni table, ni donnée, ni politique). Les deux dernières sont
+  arrivées avec la **fermeture des constats**, après le franchissement du 4ᵉ passage.
 - **192 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
@@ -1013,16 +1081,57 @@ Ce que la reprise fait, quand on la rejoue :
   chaque passage**, et depuis la vague 2 **versionne les URL du frontend** (§3) en
   échouant si une seule reste sans jeton.
 
+#### Un même mot pour deux couches — le bloquant du 6ᵉ passage
+
+C'est le défaut le plus instructif du chantier, et il n'a rien d'un cas tordu : il est né
+d'une bonne pratique appliquée un cran trop loin.
+
+**Ce qui était voulu.** Une création dont l'issue est incertaine — la réponse expire sans
+qu'on sache si la requête est arrivée — ne doit plus être rejouée : la rejouer fabrique un
+doublon silencieux. L'arbitrage a explicitement **écarté la voie « recharger avant de
+rejouer »**, parce qu'un rechargement perd la saisie de l'utilisateur.
+
+**Ce qui s'est produit.** Le correctif écarte bien cette voie dans le code — et **son
+bandeau dit à l'utilisateur de recharger**, bouton à l'appui. L'utilisateur fait ce qu'on
+lui dit. Mesuré au 6ᵉ passage : **écran 0, base 0**, et un message vert « Données
+rechargées ». Le doublon silencieux a été échangé contre une **destruction silencieuse**.
+Comparaison A/B sans aucun geste pendant 26 s : code antérieur `base=1` (la saisie
+finissait par arriver seule), code actuel `base=0`.
+
+**La cause est ce qu'on avait loué.** Une **seule formulation** servait les deux couches —
+le refus côté données et le message côté écran — « pour que le fait ne puisse pas
+diverger ». L'intention est juste : deux phrases qui disent la même chose finissent par
+se contredire, ce chantier l'a payé neuf fois. Mais la phrase retenue était vraie pour la
+**reprise** (où recharger est le bon geste) et destructrice pour une **création bloquée**
+(où recharger jette la saisie).
+
+> **La leçon, et elle se transfère au-delà de ce produit : un même mot, vrai à un endroit
+> et faux à l'autre, voyage d'autant mieux qu'on a pris soin de n'en avoir qu'un.** La
+> mutualisation d'un libellé n'est sûre que si les deux couches partagent la même
+> *situation*, pas seulement le même *code d'erreur*. Le remède n'est pas de dupliquer la
+> phrase, c'est de vérifier — par un essai qui suit le geste que le message recommande —
+> que **le conseil donné à l'utilisateur ne détruit rien**.
+
+C'est aussi pourquoi le contrôle **S18** de la grille existe (« le produit fait ce qu'il
+doit faire ») : aucun contrôle de sécurité n'était en échec ici, et le produit détruisait
+le travail de son utilisateur.
+
 ### Réserves — ce qui n'est pas vérifié, et ce qui est sciemment reporté
 
 **Sur l'état des lots**
 
-- **La plupart des constats de S2 sont corrigés — aucun n'est rejoué.** C'est la
-  distinction du bloc « Ce qui est prouvé, et ce qui ne l'est pas », et elle est le
-  point le plus important de ce paragraphe : le banc est vert et les correctifs sont
-  exercés, mais la grille n'a pas été rejouée par un auditeur indépendant depuis
-  `120266e`. L'état constat par constat vit dans le **registre** du
-  [plan d'exécution](../docs/PLAN_EXECUTION.md) §7 — seule liste, volontairement.
+- **« Corrigé » et « rejoué » ne se confondent pas, et le 6ᵉ passage vient de le
+  démontrer deux fois.** D'abord parce qu'il a **rejoué 22 des 28 constats par mutation**
+  — en cassant délibérément chaque correctif pour vérifier que le banc rougit —, ce qui
+  est la seule preuve qu'un correctif tient. Ensuite, et surtout, parce qu'il a trouvé
+  qu'**un constat que le registre annonçait fermé et vérifié ne l'était pas** : détecteur
+  neutralisé, banc **vert 43/43**, et aucune occurrence dans les essais — les « silences
+  vérifiés » que le registre citait appartenaient à d'autres mécanismes. Un correctif
+  accepté au passage précédent a par ailleurs produit le **bloquant** de celui-ci.
+  L'état constat par constat vit dans le **registre** du
+  [plan d'exécution](../docs/PLAN_EXECUTION.md) §7 — seule liste, volontairement — et sa
+  colonne d'état se lit en sachant qu'une coche verte y est une **hypothèse**, pas un
+  quitus.
 - **Une partie de ce qui reste ouvert l'est par décision écrite, pas par oubli** — et
   c'est ce que la colonne d'état du registre permet de vérifier plutôt que de croire. Elle
   distingue un **report** (un constat rattaché au lot qui aura l'occasion de le traiter)
@@ -1091,8 +1200,20 @@ Ce que la reprise fait, quand on la rejoue :
   contenu et les en-têtes du vhost** ont bien été éprouvés, en extrayant la
   configuration réelle du fichier livré et en servant le frontend sous elle dans un
   Chromium. C'est ce qui a révélé que l'application ne fonctionnait pas dans sa
-  configuration de déploiement. Le reste du vhost — TLS, mandataire inverse — ne
-  l'est toujours pas.
+  configuration de déploiement. Le **TLS** ne l'est toujours pas.
+- ✅ **Une réserve se lève, et il faut le dire aussi.** L'hypothèse la plus chargée du
+  correctif de la reprise — **qu'Apache annule réellement la requête vers le serveur
+  quand `ProxyTimeout` expire**, plutôt que de laisser une transaction se valider dans
+  le vide — n'était pas mesurée, faute d'Apache sur cette machine ; elle était consignée
+  ici comme telle. Le 6ᵉ passage l'a **mesurée avec un mandataire** : la transaction est
+  bien annulée. Le comportement du mandataire inverse cesse donc d'être une hypothèse
+  sur ce point précis ; il reste à éprouver pour tout le reste.
+- ⚠️ **Une réserve neuve, en revanche** : `rsync` n'est pas installé sur cette machine, et
+  la copie du frontend vers la racine web repose sur ses règles de filtre, qui sont
+  subtiles. `install.sh` en tient compte — il ne fait pas confiance à la commande et
+  **relit la racine web** après la copie, dans les deux sens (un intrus publié arrête
+  l'installation, un fichier légitime manquant aussi). Mais ce contrôle lui-même n'a pas
+  tourné ici : sa première exécution sur la VM cible doit être surveillée.
 - Les lots L3 (authentification), L6 (pièces jointes) et L12 (notifications) se
   recetteront sur des doublures tant que l'annuaire, ClamAV et le relais de
   messagerie du client ne sont pas accessibles.

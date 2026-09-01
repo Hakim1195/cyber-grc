@@ -30,7 +30,8 @@
 >
 > Puis reprendre où le §8 de **ce** document dit de reprendre (« ▶ REPRENDRE ICI »).
 > **Au 01/09/2026 : les lots L0, L1 et L2 sont livrés, la porte S1 est franchie — ne pas
-> les refaire — mais la porte S2 a été REJOUÉE ET REFUSÉE au 5ᵉ passage.** La vague 3 ne
+> les refaire — mais la porte S2 a été REJOUÉE ET REFUSÉE aux 5ᵉ et 6ᵉ passages, le
+> dernier sur un BLOQUANT.** La vague 3 ne
 > s'ouvre donc pas encore : une vague ne démarre pas tant que la porte précédente n'est
 > pas franchie (`docs/PLAN_EXECUTION.md` §1). Le travail immédiat est la fermeture des
 > constats du 5ᵉ passage, puis un 6ᵉ.
@@ -154,6 +155,15 @@ cyber-gouvernance_V4/
   **(c)** la liste des **sites de mutation** qu'exigerait une mémorisation du différentiel
   est **refusée** pour la même raison : une invalidation manquée annoncerait « aucune
   modification en attente » alors qu'il y en a.
+- **Aucun fichier de données ne vit sous `cyber-gouvernance_V4/`.** L'installateur y
+  publiait autrefois **tout** le répertoire dans la racine web d'Apache : quatre classeurs
+  de données réelles — dont un fichier de verrou Excel nommant une personne — y sont
+  restés un temps, **téléchargeables sans authentification** sur une installation réelle.
+  Les jeux d'essai vivent dans le répertoire de travail temporaire, hors dépôt ; ce que
+  l'application lit au démarrage vient du serveur. Deux barrières le tiennent désormais —
+  une **liste blanche de types publiables** dans `install.sh` (dérivée de ce que la CSP
+  autorise à charger) et le `<FilesMatch>` du vhost — et elles vont **par paire** :
+  ajouter un type à l'une sans l'autre est ce que le message d'échec rappelle.
 - **Pédagogie** : `${Help.tip("explication courte")}` à côté des termes techniques.
 - **Design** : n'utiliser que les tokens de `tokens.css`. Semantique stricte.
 - **IDs** : **un seul générateur effectif par langage**. Côté navigateur, c'est
@@ -558,7 +568,7 @@ sur l'**Active Directory** du groupe.
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache + durcissement de portée serveur, `install.sh` idempotent, `backend/README.md` |
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — une cinquantaine de tables (compte rejoué dans `backend/README.md` §8), RLS activée **et forcée** partout, propriétaire compris ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur **toutes** les tables qui portent `cree_par`, et **vérifiée** par un garde-fou ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()`, et **consignés dans un registre** depuis la migration `005` — un contrôle qui cesse d'être découvert ne disparaît plus en silence |
-| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais NON VALIDÉ** — porte **S2** franchie au 4ᵉ passage puis **refusée au 5ᵉ**. Corrigé au fil de la porte — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (130 membres avant, 130 après), session provisoire **fail-closed** hors développement |
+| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais NON VALIDÉ** — porte **S2** franchie au 4ᵉ passage, puis **refusée au 5ᵉ et au 6ᵉ** (bloquant). Corrigé au fil de la porte — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (130 membres avant, 130 après), session provisoire **fail-closed** hors développement |
 | L3 — Authentification AD et droits · L5 — Journal | ⬜ à faire — **vague 3, qui n'ouvre pas tant que S2 n'est pas franchie** |
 | L4 → L15 | ⬜ à faire — vagues 4 à 8, voir `docs/PLAN_EXECUTION.md` §3 et `PLAN_SERVEUR` §7 |
 
@@ -567,24 +577,35 @@ Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 module pur) et **base de développement** (`db/dev/preparer_base_dev.sh`).
 
 **État des portes — à lire, pas à deviner.** Les lots L1 et L2 ont été soumis à leur
-porte de sécurité six et **cinq** fois, chaque passage étant mené par un auditeur qui
+porte de sécurité six fois chacun, chaque passage étant mené par un auditeur qui
 n'avait écrit aucune des lignes examinées. **Le verdict de chaque passage vit dans le
 journal des portes de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7**, avec le
 rapport correspondant dans `docs/securite/` — c'est la source, et la seule. Au
 01/09/2026 il porte **S1 « CONFIRMÉE FRANCHIE » (6ᵉ passage)** et **S2 ❌ « refusée »
-(5ᵉ passage — 0 bloquant, 3 majeurs, 3 mineurs, contrôle S17 en échec)**, après un
-franchissement au 4ᵉ que la fermeture des constats a rouvert. Les arbitrages issus de
+(6ᵉ passage — 1 bloquant, 3 majeurs, 2 mineurs, contrôles S17 et S18 en échec)**, après
+un franchissement au 4ᵉ que la fermeture des constats a rouvert deux fois. Les arbitrages issus de
 ces passages sont figés dans `backend/db/CONVENTIONS.md` **§2, §17 à §24** : les lire
 avant de toucher au schéma évite de rouvrir ce qui vient d'être fermé.
 
-⚠️ **Ce que le 5ᵉ passage enseigne, et qui vaut pour toutes les portes à venir.** Le
-défaut qui a fait échouer le lot n'est **dans aucun fichier** : c'est un désaccord
-**entre** le vhost et le serveur, dont aucun n'a tort seul. Aucune relecture, aucun essai
-unitaire, aucun banc vert ne pouvait le voir — seul le contrôle **S17** (*le chemin
-complet a été parcouru pour de vrai*) le pouvait. Corollaire : **un banc vert mesure ce
-qu'il regarde, jamais ce qu'il ne regarde pas**, et le cœur du lot peut être juste — les
-46 sondes hostiles de ce passage n'ont bougé ni le périmètre, ni une frontière de
-filiale, ni une requête SQL — pendant que le produit ne fonctionne pas.
+⚠️ **Ce que les 5ᵉ et 6ᵉ passages enseignent, et qui vaut pour toutes les portes à
+venir.** Au 5ᵉ, le défaut qui a fait échouer le lot n'était **dans aucun fichier** : un
+désaccord **entre** le vhost et le serveur, dont aucun n'avait tort seul. Au 6ᵉ, le
+bloquant visait **un correctif que la porte précédente avait accepté** — il avait échangé
+un doublon silencieux contre une **destruction silencieuse**, parce qu'une **même
+formulation** servait deux couches : vraie pour la reprise (« rechargez »), destructrice
+pour une création bloquée, où recharger jette la saisie. Trois corollaires :
+
+- **Un banc vert mesure ce qu'il regarde, jamais ce qu'il ne regarde pas.** Le cœur du lot
+  peut être juste — 81 sondes hostiles sans effet, 107/107 au cloisonnement — pendant que
+  le produit détruit le travail de son utilisateur. C'est l'objet des contrôles **S17** et
+  **S18**, et aucun contrôle de sécurité n'était en échec dans le cas du bloquant.
+- **Un même mot, vrai à un endroit et faux à l'autre, voyage d'autant mieux qu'on a pris
+  soin de n'en avoir qu'un.** Mutualiser un libellé n'est sûr que si les deux couches
+  partagent la même *situation*, pas seulement le même *code d'erreur*.
+- **Un correctif accepté n'est pas un correctif sûr.** La seule preuve qu'il tient est la
+  **mutation** — le casser et vérifier que le banc rougit. C'est ainsi que 22 des 28
+  constats ont été rejoués au 6ᵉ passage, et c'est ainsi qu'un constat annoncé « fermé et
+  vérifié » s'est révélé ne pas l'être.
 
 **Franchie ne veut pas dire sans réserve, et « corrigé » ne veut pas dire « rejoué ».**
 Les constats restants vivent dans le **registre des constats ouverts** du même §7, chacun
@@ -601,15 +622,20 @@ il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écriv
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
 constat perdu.**
 
-### ▶ REPRENDRE ICI — fermer les constats du 5ᵉ passage de S2, PUIS ouvrir la vague 3
+### ▶ REPRENDRE ICI — fermer les constats du 6ᵉ passage de S2, PUIS ouvrir la vague 3
 
-**D'abord la porte.** S2 est refusée : trois majeurs et trois mineurs sont à fermer, et
-le contrôle **S17** doit repasser au vert. Les constats, leurs propriétaires et leurs
-échéances sont au registre de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7 ; le
-détail du défaut est dans `docs/securite/RAPPORT_S2_QUINQUIES.md`. La vague 3 n'ouvre
-qu'après un 6ᵉ passage franchi — *une vague ne démarre pas tant que la porte précédente
-ne l'est pas* (`PLAN_EXECUTION` §1), et c'est la règle qui a évité à ce chantier de
-construire sur du sable à chacun des dix passages précédents.
+**D'abord la porte.** S2 est refusée, et cette fois sur un **bloquant** : un correctif
+accepté au 5ᵉ passage détruit la saisie de l'utilisateur. Les contrôles **S17** et **S18**
+doivent repasser au vert. Les constats, leurs propriétaires et leurs échéances sont au
+registre de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7 ; le détail du défaut
+est dans `docs/securite/RAPPORT_S2_SEXIES.md`. La vague 3 n'ouvre qu'après un **7ᵉ passage
+franchi** — *une vague ne démarre pas tant que la porte précédente ne l'est pas*
+(`PLAN_EXECUTION` §1), et c'est la règle qui a évité à ce chantier de construire sur du
+sable à chacun des douze passages précédents.
+
+⚠️ **Ne pas refermer le bloquant par un rechargement** : c'est la voie que l'arbitrage
+avait explicitement écartée, parce qu'elle perd la saisie — et c'est précisément celle que
+le bandeau recommandait. Relire l'arbitrage avant d'écrire le remède.
 
 **Ensuite seulement, la vague 3 — dont le cadrage ci-dessous reste valable et n'est pas
 à refaire.**
