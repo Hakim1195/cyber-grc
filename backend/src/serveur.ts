@@ -25,7 +25,6 @@
  *    produit à maintenir trois ans sur une machine hors ligne.
  */
 
-import { randomUUID } from 'node:crypto';
 import { argv, exit, stderr } from 'node:process';
 import { pathToFileURL } from 'node:url';
 
@@ -34,6 +33,7 @@ import type { FastifyError, FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 
 import { greffonApi } from './api/index.js';
+import { engendrerIdentifiant } from './entites/index.js';
 import { chargerConfiguration, ErreurConfiguration, resumerConfiguration } from './config/index.js';
 import type { Configuration } from './config/index.js';
 import { creerPool, fermerPool, verifierBase } from './db/pool.js';
@@ -65,8 +65,79 @@ export function construireServeur(config: Configuration, pool: Pool): FastifyIns
     // Elle sera tracée dans le journal des connexions réussies et échouées (§1.7).
     trustProxy: config.serveur.proxyDeConfiance,
     bodyLimit: config.serveur.tailleMaxCorpsOctets,
-    genReqId: () => randomUUID(),
-    requestIdHeader: 'x-request-id',
+    // ══ Q-39 : LA RÉFÉRENCE D'UN INCIDENT NE SE CHOISIT PAS ═════════════
+    //
+    // `requestIdHeader` valait « x-request-id ». Fastify lisait donc cet
+    // en-tête DE LA REQUÊTE et en faisait `requete.id` ; `genReqId` n'était
+    // appelé qu'à défaut. Mesuré contre le serveur qui écoute :
+    //
+    //   sans en-tête          → reference = "e4282df0-f896-…"   (du serveur)
+    //   en-tête imposé        → reference = "REFERENCE-CHOISIE-PAR-LE-CLIENT"
+    //   deux requêtes, même en-tête → deux fois la même référence
+    //   2 000 signes          → repris tels quels, sur CHAQUE ligne de journal
+    //
+    // Or cette valeur est double : c'est ce que l'API rend au client sous le
+    // nom « reference » dans toute réponse d'erreur, ET la clé `reqId` que
+    // pino pose sur les six lignes de journal d'une requête. La personne
+    // tracée choisissait donc la clé sous laquelle un exploitant la retrouve —
+    // elle pouvait la répéter, la faire entrer en collision, ou noyer une
+    // référence sous mille requêtes homonymes. Rien ne fuyait, rien ne
+    // s'injectait (pino encode en JSON, et j'ai vérifié qu'aucune structure ne
+    // se casse) : ce qui était perdu, c'est la traçabilité elle-même.
+    //
+    // ── Ce que l'en-tête servait à faire : RIEN ──────────────────────────
+    //
+    // `requestIdHeader` existe pour hériter la corrélation d'un frontal ou
+    // d'une chaîne de traçage. Ici, aucun producteur : le vhost livré ne pose
+    // pas cet en-tête (il pose `X-Forwarded-Proto`, et rien d'autre), le
+    // frontend ne l'envoie pas, le banc ne s'en sert pas. Avant ce correctif,
+    // `src/serveur.ts` était **le seul fichier du dépôt à le mentionner**.
+    // C'était donc une surface d'attaque sans usage.
+    //
+    // ── Le remède, en deux couches ───────────────────────────────────────
+    //
+    // 1. Le serveur engendre TOUJOURS la référence, et ne lit plus l'en-tête
+    //    pour la fabriquer. `engendrerIdentifiant` est le générateur unique du
+    //    serveur (CONVENTIONS.md §2) : 128 bits, gardé au démarrage. Le
+    //    préfixe « REQ- » a un second effet, utile à qui lit un journal — une
+    //    référence qui ne commence pas par « REQ- » n'a pas été engendrée ici.
+    // 2. Ce que le client a envoyé n'est pas jeté pour autant : il est
+    //    conservé À PART, sous un autre nom, et clairement comme sa valeur à
+    //    lui (voir le crochet `onRequest` plus bas).
+    //
+    // La troisième piste — effacer l'en-tête au frontal — vaut d'être prise
+    // AUSSI, et elle est signalée à l'agent de déploiement : le vhost efface
+    // déjà `X-Forwarded-For` et cinq autres, pour la raison exactement
+    // symétrique qu'il énonce lui-même. Mais elle ne pouvait pas être le seul
+    // remède : elle ne protège ni la recette, ni un service interrogé sans
+    // passer par Apache — et ce chantier a payé assez cher les barrières
+    // uniques.
+    genReqId: () => engendrerIdentifiant('REQ'),
+    requestIdHeader: false,
+  });
+
+  // Q-39 (seconde couche) — la valeur du client, gardée mais jamais confondue.
+  //
+  // Un client qui porte sa propre corrélation a une raison légitime de vouloir
+  // la retrouver dans le journal. On la journalise donc, sous un nom qui dit
+  // d'où elle vient, et jamais à la place de la nôtre. Elle ne repart pas dans
+  // la réponse : le client sait ce qu'il a envoyé, et l'y renvoyer rendrait de
+  // nouveau les deux valeurs confusables.
+  //
+  // Bornée à 64 signes et débarrassée de ses caractères de contrôle : la
+  // mesure a montré que 2 000 signes passaient, et étaient recopiés sur chaque
+  // ligne de journal de la requête — un facteur d'amplification gratuit sur un
+  // disque qui doit tenir trois ans de rétention (PLAN_SERVEUR §1.7).
+  serveur.addHook('onRequest', async (requete) => {
+    const brut = requete.headers['x-request-id'];
+    const valeur = typeof brut === 'string' ? brut : null;
+    if (valeur === null || valeur === '') return;
+    const propre = valeur.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 64);
+    if (propre === '') return;
+    requete.log.info(
+      { referenceClient: propre },
+      'Référence de corrélation fournie par le client (elle ne remplace pas celle du serveur)',
+    );
   });
 
   // Défense en profondeur : les en-têtes de sécurité sont posés par Apache
