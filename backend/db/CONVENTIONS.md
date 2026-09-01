@@ -56,11 +56,27 @@ serveur pour créer une ligne. Ce qui ne diffère pas, c'est le plancher.
 
 | Où | Forme engendrée | Aléa |
 |---|---|---|
-| Navigateur — `UI.genId` | `<PRÉFIXE>-<ms>-<compteur base 36><aléa base 36>` | **compteur de session monotone** *plus* 52 bits de `crypto.getRandomValues`. Le compteur suffit à lui seul pour un import : deux appels d'une même page ne peuvent pas rendre le même identifiant, quel que soit le hasard. |
+| Navigateur — `UI.genId` | `<PRÉFIXE>-<ms>-<compteur base 36>-<aléa base 36>` (**quatre** segments, 47 signes au plus) | **compteur de session monotone** *plus* 52 bits de `crypto.getRandomValues`. Le compteur suffit à lui seul pour un import : deux appels d'une même page ne peuvent pas rendre le même identifiant, quel que soit le hasard. |
 | Serveur — `engendrerIdentifiant()` | `<PRÉFIXE>-<ms>-<25 caractères base 36>` | 128 bits de `randomBytes(16)` |
 | Base — `f_generer_id()` | `<PRÉFIXE>-<ms>-<32 caractères hexadécimaux>` | `gen_random_uuid()`, natif depuis PostgreSQL 13 |
 | Serveur — **ré-émission** `identifiantDerive()` | `<PRÉFIXE>-r-<25 caractères base 36>` | **aucun** — dérivé, voir ci-dessous |
 | Reprise — enregistrement **sans identifiant** dans le fichier | `<PRÉFIXE>-d-<25 caractères base 36>` | **aucun** — dérivé de `(collection, rang, contenu)` |
+
+> **Errata, 01/09/2026 — cette ligne a été fausse pendant une vague, et le contre-exemple existe.**
+> Le compteur et l'aléa étaient concaténés **sans séparateur**, tous deux de longueur variable en
+> base 36. « Deux appels ne peuvent pas rendre le même identifiant » était donc une *probabilité*
+> présentée comme une garantie :
+>
+> ```
+> compteur  1, aléa "0ab"  →  …-10ab
+> compteur 36, aléa  "ab"  →  …-10ab      COLLISION
+> ```
+>
+> Le séparateur a été ajouté ; la propriété est maintenant un **théorème** — deux compteurs
+> distincts donnent deux chaînes distinctes, toujours. Ce qu'il faut en retenir dépasse la
+> correction : **une garantie écrite en table normative n'a pas été éprouvée avant d'être écrite**,
+> et elle a servi d'argument pour dimensionner un garde-fou. La forme se vérifie, elle ne se
+> raisonne pas.
 
 **Les deux dérivations ne tirent rien, et leur marque remplace l'horodatage** — un identifiant
 dérivé n'a pas d'instant de création, si bien qu'y laisser un horodatage crédible mentirait au
