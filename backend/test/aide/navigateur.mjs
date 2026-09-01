@@ -107,6 +107,8 @@ export async function servirApplication(serveur, options = {}) {
     appels: [],
     /** Fichiers de la SPA remplacés le temps d'un essai (voir `definirSubstitution`). */
     substitutions: new Map(),
+    /** Statut imposé aux écritures `/api/**`, ou `null` (voir `definirStatutEcriture`). */
+    statutEcriture: null,
   };
 
   const http = createServer((requete, reponse) => {
@@ -117,6 +119,18 @@ export async function servirApplication(serveur, options = {}) {
       if (etat.apiInjoignable) {
         // Ce que voit le navigateur quand le VPN tombe : la requête n'aboutit pas.
         requete.socket.destroy();
+        return;
+      }
+      // ── Une panne de FRONTAL, rendue par le frontal (constat Q-30) ────────
+      //
+      // 502, 503 et 504 ne viennent pas de l'application : ils viennent
+      // d'Apache. Les fabriquer dans la page reviendrait à éprouver la réaction
+      // de `sync.js` à un drapeau qu'on a posé soi-même — et non la DÉCISION de
+      // `js/core/api.js`, qui est précisément ce que le constat Q-30 fige. Le
+      // relais les rend donc comme le frontal les rendrait.
+      if (etat.statutEcriture !== null && (requete.method ?? 'GET') !== 'GET') {
+        reponse.writeHead(etat.statutEcriture, { 'content-type': 'text/html; charset=utf-8' });
+        reponse.end('<html><body><h1>Passerelle</h1></body></html>');
         return;
       }
       const morceaux = [];
@@ -206,6 +220,13 @@ export async function servirApplication(serveur, options = {}) {
      * Sert `contenu` à la place du fichier de la SPA situé à `relatif`
      * (« /js/core/ui.js »). `null` rétablit le fichier du dépôt.
      */
+    /**
+     * Impose un statut HTTP aux ÉCRITURES `/api/**` (502, 503, 504…), comme le
+     * ferait un frontal en panne. `null` rétablit le relais normal.
+     */
+    definirStatutEcriture(statut) {
+      etat.statutEcriture = statut;
+    },
     definirSubstitution(relatif, contenu) {
       if (contenu === null) etat.substitutions.delete(relatif);
       else etat.substitutions.set(relatif, contenu);

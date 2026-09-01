@@ -2300,13 +2300,27 @@ describe('Le générateur DIT quand il se répète (constat Q-32)', () => {
  * ===================================================================== */
 
 describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29)', () => {
-  /** Fait expirer UNE fois un verbe, après l'avoir laissé aboutir côté serveur. */
+  /**
+   * Fait expirer UNE fois un verbe, SANS que le serveur ait rien reçu.
+   *
+   * ── Pourquoi le serveur ne doit rien avoir, ici ─────────────────────────
+   *
+   * « Issue inconnue » veut dire que le navigateur NE SAIT PAS si l'écriture a
+   * abouti ; les deux cas existent. Le cas destructeur est celui où elle n'a
+   * pas abouti : la copie de l'écran est alors la SEULE, et le rechargement
+   * proposé par le produit l'effaçait.
+   *
+   * La première rédaction laissait l'appel aboutir avant d'échouer. La ligne
+   * du serveur portait alors le même nom, et l'assertion « elle est toujours à
+   * l'écran » restait vraie même quand la copie locale avait été détruite :
+   * l'essai regardait la ligne du serveur en croyant regarder la saisie. Trouvé
+   * en sabotant — la préservation retirée, l'essai restait vert.
+   */
   function expirerUneFois(page, verbe) {
     return page.evaluate((v) => {
       const vrai = window.Api[v].bind(window.Api);
       let restante = true;
       window.Api[v] = async (...arguments_) => {
-        const issue = await vrai(...arguments_);
         if (restante) {
           restante = false;
           throw new window.Api.ErreurApi({
@@ -2314,7 +2328,7 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
             message: 'Le serveur n’a pas répondu dans le délai imparti.',
           });
         }
-        return issue;
+        return vrai(...arguments_);
       };
     }, verbe);
   }
@@ -2328,6 +2342,37 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
       return true;
     }, identifiant);
     assert.equal(present, true, `Le produit doit proposer « ${identifiant} » : c’est le geste qu’il recommande.`);
+  }
+
+  /** Nombre de chargements complets (`GET /api/donnees`) reçus par le relais. */
+  function chargements() {
+    return application.appelsPar('GET').filter((a) => a.chemin === '/api/donnees').length;
+  }
+
+  /**
+   * Clique « Recharger les données » et attend que le rechargement ait EU LIEU.
+   *
+   * Le gestionnaire du bouton est asynchrone : lire l'état juste après le clic
+   * observe l'instant d'AVANT. La première rédaction faisait cela, et son essai
+   * restait vert quand on retirait la préservation — il regardait l'écran avant
+   * le geste dont il prétendait mesurer l'effet. On attend donc l'événement, et
+   * il se compte hors de la page : le `GET /api/donnees` reçu par le relais.
+   */
+  async function rechargerEtAttendre(page) {
+    const avant = chargements();
+    await cliquer(page, 'sync-recharger');
+    const echeance = Date.now() + 15000;
+    while (Date.now() < echeance && chargements() === avant) {
+      await new Promise((resoudre) => setTimeout(resoudre, 100));
+    }
+    assert.ok(chargements() > avant, 'Le rechargement n’a jamais été demandé au serveur.');
+    // La requête PARTIE ne suffit pas : il faut qu'elle soit revenue et appliquée.
+    // `enCours` ne le dit pas — il retombe à faux dès que le cycle d'écriture qui
+    // précède le rechargement est fini, pendant que la réponse est encore en vol.
+    // Le marqueur du rechargement ABOUTI est la remise à zéro des incidents, que
+    // `recharger()` fait en dernier. Sans lui, cet essai lisait l'écran d'avant le
+    // geste — et restait vert quand on retirait la préservation.
+    await page.waitForFunction(() => window.Sync.etat().incidents === 0, null, { timeout: 15000 });
   }
 
   test('CRÉATION incertaine : on RECHARGE comme il est proposé, la saisie reste', async () => {
@@ -2352,19 +2397,21 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
       assert.match(bandeau, /le rechargement la conserve/i, bandeau);
 
       // ── LE GESTE ────────────────────────────────────────────────────────
-      await cliquer(session.page, 'sync-recharger');
-      await session.page.waitForFunction(
-        () => window.Sync.etat().enCours === false,
-        null,
-        { timeout: 15000 },
-      );
+      await rechargerEtAttendre(session.page);
 
+      // Le serveur n'a RIEN : la copie de l'écran est la seule qui existe.
+      assert.equal(
+        (await enBase('select count(*)::int as n from risques where nom = $1', [nom]))[0].n,
+        0,
+        'Le scénario EXIGE que le serveur n’ait rien reçu : c’est ce qui rend la copie ' +
+          'locale irremplaçable, et le rechargement destructeur.',
+      );
       assert.equal(
         await session.page.evaluate(
-          (n) => window.DataStore.getRisques().filter((r) => r.nom === n).length >= 1,
+          (n) => window.DataStore.getRisques().filter((r) => r.nom === n).length,
           nom,
         ),
-        true,
+        1,
         'La saisie a disparu de l’écran en faisant ce que le produit recommandait. C’est le ' +
           'constat Q-29 : le message était juste, le geste qu’il conseille détruisait la saisie.',
       );
@@ -2376,11 +2423,22 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
 
       // ── Le second geste proposé : « Envoyer à nouveau » ──────────────────
       await cliquer(session.page, 'sync-renvoyer');
-      await attendreQuiescence(session.page);
-      assert.ok(
-        (await enBase('select count(*)::int as n from risques where nom = $1', [nom]))[0].n >= 1,
+      // On attend l'ISSUE en base, pas le repos de la page : le bouton lance un
+      // envoi sans l'attendre, et un instantané pris trop tôt verrait « rien en
+      // cours » avant même que l'envoi ait commencé.
+      const echeance = Date.now() + 15000;
+      let arrivee = 0;
+      while (Date.now() < echeance) {
+        arrivee = (await enBase('select count(*)::int as n from risques where nom = $1', [nom]))[0].n;
+        if (arrivee > 0) break;
+        await new Promise((resoudre) => setTimeout(resoudre, 200));
+      }
+      assert.equal(
+        arrivee,
+        1,
         'Le renvoi doit faire atterrir la saisie : sans lui, la seule issue serait de la retaper.',
       );
+      await attendreQuiescence(session.page);
       assert.equal(
         (await session.page.evaluate(() => window.Sync.etat())).bloques,
         0,
@@ -2427,9 +2485,9 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
         { timeout: 15000 },
       );
 
-      await cliquer(session.page, 'sync-recharger');
+      await rechargerEtAttendre(session.page);
       await session.page.waitForFunction(
-        () => window.Sync.etat().enCours === false && window.Sync.etat().bloques === 0,
+        () => window.Sync.etat().bloques === 0,
         null,
         { timeout: 15000 },
       );
@@ -2455,42 +2513,44 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
  * ===================================================================== */
 
 describe('502 et 504 rendent une création incertaine, 503 non (constat Q-30)', () => {
-  /** Fait échouer UNE fois la création sur un statut donné, après un vrai succès. */
-  function echouerSur(page, statut) {
-    return page.evaluate((code) => {
-      const vrai = window.Api.creer.bind(window.Api);
-      let restante = true;
-      window.Api.creer = async (...arguments_) => {
-        // 502 et 504 viennent du FRONTAL : la requête a atteint l'application,
-        // qui a pu valider. On reproduit donc un vrai succès avant l'échec.
-        const issue = await vrai(...arguments_);
-        if (restante) {
-          restante = false;
-          throw new window.Api.ErreurApi({
-            statut: code,
-            code: 'indisponible',
-            issueInconnue: code === 502 || code === 504,
-            message: `passerelle ${String(code)}`,
-          });
-        }
-        return issue;
-      };
-    }, statut);
+  /**
+   * Fait rendre au FRONTAL le statut demandé, sur les écritures.
+   *
+   * ── Pourquoi le relais, et non une doublure dans la page ────────────────
+   *
+   * Ce que le constat Q-30 fige est la DÉCISION de `js/core/api.js` : quels
+   * statuts marquent une écriture comme d'issue inconnue. Fabriquer l'erreur
+   * dans la page, drapeau compris, reviendrait à éprouver la réaction de
+   * `sync.js` à un drapeau qu'on a posé soi-même — et la décision, elle, ne
+   * serait exercée par personne. Trouvé en sabotant : la ligne d'`api.js`
+   * modifiée dans les deux sens, l'essai restait vert.
+   *
+   * Le relais rend donc 502, 503 ou 504 comme Apache le ferait, et `api.js`
+   * décide pour de bon.
+   */
+  async function avecFrontalEnPanne(statut, action) {
+    application.definirStatutEcriture(statut);
+    try {
+      return await action();
+    } finally {
+      application.definirStatutEcriture(null);
+    }
   }
 
   for (const statut of [502, 504]) {
     test(`${String(statut)} : la création est BLOQUÉE et dite incertaine`, async () => {
       const session = await ouvrirApplication();
       try {
-        await echouerSur(session.page, statut);
-        await session.page.evaluate((code) => {
-          window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: `Saisie ${String(code)}` });
-        }, statut);
-        await session.page.waitForFunction(
-          () => window.Sync.etat().bloques > 0,
-          null,
-          { timeout: 15000 },
-        );
+        await avecFrontalEnPanne(statut, async () => {
+          await session.page.evaluate((code) => {
+            window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: `Saisie ${String(code)}` });
+          }, statut);
+          await session.page.waitForFunction(
+            () => window.Sync.etat().bloques > 0,
+            null,
+            { timeout: 15000 },
+          );
+        });
         const bandeau = await session.page.evaluate(
           () => (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
         );
@@ -2518,15 +2578,16 @@ describe('502 et 504 rendent une création incertaine, 503 non (constat Q-30)', 
     // toute bonne foi.
     const session = await ouvrirApplication();
     try {
-      await echouerSur(session.page, 503);
-      await session.page.evaluate(() => {
-        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Saisie 503' });
+      await avecFrontalEnPanne(503, async () => {
+        await session.page.evaluate(() => {
+          window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Saisie 503' });
+        });
+        await session.page.waitForFunction(
+          () => window.Sync.etat().panneReseau === true,
+          null,
+          { timeout: 15000 },
+        );
       });
-      await session.page.waitForFunction(
-        () => window.Sync.etat().panneReseau === true,
-        null,
-        { timeout: 15000 },
-      );
 
       const etat = await session.page.evaluate(() => window.Sync.etat());
       assert.equal(etat.bloques, 0, 'Un 503 ne bloque rien : il n’y a rien d’incertain à signaler.');
