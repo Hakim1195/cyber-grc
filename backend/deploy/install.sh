@@ -58,6 +58,26 @@
 
 set -Eeuo pipefail
 
+# =============================================================================
+#  MARQUEURS D'EXTRACTION POUR LE BANC D'ESSAI
+#
+#  Ce script n'est joué par aucun essai du dépôt : il exige root, systemd,
+#  rsync, Apache et PostgreSQL. Ses CONTRÔLES, eux, sont de la logique pure sur
+#  une arborescence et deux fichiers texte — donc jouables hors installation.
+#  Les blocs concernés sont délimités pour que le banc les extraie EXACTEMENT :
+#
+#      awk '/^# >>> banc: <nom> <<<$/,/^# <<< banc: <nom> >>>$/' deploy/install.sh
+#
+#  Une extraction par motif deviné irait chercher le mauvais bloc dès la
+#  première reformulation du fichier, et l'essai passerait au vert en
+#  n'éprouvant rien. Le banc doit donc REFUSER un bloc vide ou privé de son
+#  ancre — c'est la condition sans laquelle ces marqueurs sont une décoration.
+#
+#  Blocs : « frontend » (liste blanche de publication, constat Q-31),
+#          « proxytimeout » (dérive du délai, constat Q-19),
+#          « configtest » (Apache comprend-il sa configuration).
+# =============================================================================
+
 # ------------------------------------------------------------------ réglages ----
 
 UTILISATEUR="cyber-grc"
@@ -452,6 +472,7 @@ if [[ $SEULEMENT_BASE -eq 0 ]]; then
         --exclude node_modules --exclude .env --exclude 'var/' \
         --exclude 'db/dev/' --exclude 'test/' \
         "$SOURCE/" "$RACINE/backend/"
+  # >>> banc: frontend <<<
   # ══ LE FRONTEND — LISTE BLANCHE, ET UN REFUS AVANT LA COPIE (Q-31) ═══
   #
   # Cette ligne était `rsync -a --delete "$DEPOT/cyber-gouvernance_V4/" …`, sans
@@ -613,6 +634,7 @@ if [[ $SEULEMENT_BASE -eq 0 ]]; then
       servis SANS authentification (constat Q-31) : videz $RACINE/frontend/ et recommencez."
   fi
   succes "frontend : $OBTENUS fichier(s) publiés, aucun fichier non publiable"
+  # <<< banc: frontend >>>
 
   # Jeton de cache : sans lui, les 61 fichiers .js/.css de la page restent SEPT JOURS
   # dans le cache des navigateurs (vhost, ExpiresByType) et aucun correctif n'atteint
@@ -1470,6 +1492,7 @@ else
   succes "LimitRequestBody ($TAILLE_APACHE) ≥ SERVEUR_TAILLE_MAX_CORPS ($TAILLE_APP)"
 fi
 
+# >>> banc: proxytimeout <<<
 # ProxyTimeout du vhost INSTALLÉ contre celui du vhost de RÉFÉRENCE.
 #
 # Ce contrôle existe parce qu'un vhost déjà présent n'est jamais écrasé (voir
@@ -1508,6 +1531,7 @@ elif [[ "$PROXY_INSTALLE" -gt "$PROXY_REF" ]]; then
 else
   succes "ProxyTimeout ($PROXY_INSTALLE s) conforme au vhost de référence"
 fi
+# <<< banc: proxytimeout >>>
 
 # TimeoutStopSec doit laisser au serveur le temps de drainer ses connexions.
 DELAI_ARRET="$(lire_variable SERVEUR_DELAI_ARRET)"; DELAI_ARRET="${DELAI_ARRET:-25000}"
@@ -1528,6 +1552,61 @@ for tentative in 1 2 3 4 5; do
   [[ $tentative -eq 5 ]] && echec "le service ne répond pas — voir : journalctl -u cyber-grc -n 50"
   sleep 2
 done
+
+# >>> banc: configtest <<<
+# ══ APACHE COMPREND-IL SA CONFIGURATION ? ════════════════════════════════════
+#
+# Ce contrôle est arrivé avec la liste blanche du constat Q-31, et il vient
+# d'elle : le vhost porte désormais un <FilesMatch> à **motif inversé**
+# (« refuse tout ce qui ne finit pas par un type publiable »). C'est la
+# construction dont l'échec est le plus difficile à lire pour quelqu'un qui n'a
+# pas écrit la ligne — un exploitant, à 22 h, devant une page blanche.
+#
+# Ce que `configtest` prouve, et ce qu'il ne prouve pas, parce que la nuance
+# décide de ce qu'on peut en conclure :
+#
+#  · il prouve qu'Apache **comprend** le motif — une parenthèse de trop, un
+#    `(?!` qu'une version de PCRE refuse, et le service ne redémarrerait pas ;
+#  · il ne prouve **pas** que le motif fait ce qu'il faut. Cela s'éprouve en
+#    chargeant la page, et en demandant un fichier qui doit être refusé.
+#
+# Apache nomme lui-même le fichier et la ligne (« AH00526: Syntax error on line
+# N of … ») : sa sortie est donc relayée telle quelle, jamais résumée.
+info "Configuration du frontal"
+APACHECTL="$(command -v apache2ctl || command -v apachectl || true)"
+if [[ -z "$APACHECTL" ]]; then
+  alerte "ni apache2ctl ni apachectl sur le PATH : la configuration du frontal n'a PAS été"
+  alerte "vérifiée. Après installation d'Apache : apache2ctl configtest"
+else
+  SORTIE_APACHE="$("$APACHECTL" configtest 2>&1)" && RC_APACHE=0 || RC_APACHE=$?
+  if [[ ${RC_APACHE:-0} -ne 0 ]]; then
+    while IFS= read -r ligne; do
+      [[ -n "$ligne" ]] && alerte "apache : $ligne"
+    done <<< "$SORTIE_APACHE"
+    echec "Apache refuse sa configuration (voir la ou les lignes ci-dessus, qui nomment le
+      fichier et le numéro de ligne). Le frontal ne redémarrera pas, et l'application ne
+      sera pas servie. Si la ligne mise en cause est le <FilesMatch> en liste blanche de
+      deploy/apache/cyber-grc.conf, c'est le motif inversé du constat Q-31 : il refuse tout
+      ce qui ne finit pas par un type publiable, et il s'écrit
+      « (?i)^(?!.*\.(<types séparés par |>)$) ». Corrigez, puis relancez ce script."
+  fi
+  # `configtest` ne lit que « sites-enabled ». Sur une PREMIÈRE installation, le
+  # vhost n'est encore que dans « sites-available » : la vérification passe donc
+  # sans avoir seulement ouvert notre fichier. Le taire ferait prendre un contrôle
+  # vide pour un contrôle réussi — c'est exactement ce que le §17.5 interdit.
+  if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
+    succes "configuration Apache valide, vhost cyber-grc compris ($("$APACHECTL" -v 2>/dev/null | head -n1 || echo 'version inconnue'))"
+  else
+    succes "configuration Apache valide"
+    alerte "…mais le vhost cyber-grc n'est PAS activé : « configtest » ne l'a donc PAS lu."
+    alerte "Cette vérification ne dit encore rien de lui. Activez-le, puis re-vérifiez :"
+    alerte "  a2ensite cyber-grc && $APACHECTL configtest && systemctl reload apache2"
+    alerte "Enfin, éprouvez la liste blanche de Q-31 sur le service en marche :"
+    alerte "  curl -o /dev/null -w '%{http_code}' https://<hôte>/index.html   → 200 attendu"
+    alerte "  curl -o /dev/null -w '%{http_code}' https://<hôte>/essai.xlsx   → 403 attendu"
+  fi
+fi
+# <<< banc: configtest >>>
 
 printf '\n\033[1;32mInstallation terminée.\033[0m\n'
 printf 'Configuration : %s  (root:%s 0640)\n' "$FICHIER_CONFIG" "$UTILISATEUR"
