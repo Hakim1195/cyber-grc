@@ -75,6 +75,20 @@
 --
 -- Les trois mesures ensemble — forme, entropie par position, source — attrapent les
 -- dégradations réelles ; le trou résiduel est nommé, il n'est pas caché.
+--
+-- MESURÉ, au protocole de l'auditeur (générateur dégradé à b bits, 200 exécutions par
+-- palier). Les paliers sont vérifiés eux-mêmes : une extraction naïve de b bits d'un UUID
+-- v4 n'en porte que b - 4, le nibble de version étant figé — la première sonde annonçait
+-- donc 32 bits là où elle en tirait 28.
+--
+--   famille de dégradation             16    24    32    40    48    56 bits
+--   remplissage (lpad / padStart)     200   200   200   200   200     0     ← ≥ plancher
+--   condensat d'une graine random()   200   200   200   200   200   200
+--   condensat d'une graine crypto.    170     3     0     0     0     0     ← le trou
+--   témoins : générateur réel 0/200 · forme base 36 du serveur (128 bits) 0/200
+--
+-- Et le remède SUGGÉRÉ, au même protocole, pour dire pourquoi il n'a pas été retenu seul :
+-- comptage de valeurs distinctes sur 20 000 tirages → 7/100 à 32 bits, 0/100 à 40 bits.
 -- =====================================================================================
 
 begin;
@@ -311,7 +325,17 @@ comment on function f_verifier_entropie_identifiants() is
     'gen_random_uuid ou gen_random_bytes et ne pas appeler random() —, qui est une '
     'déclaration et non un comportement. Le trou résiduel est nommé, pas caché. '
     'Sur le générateur d''aujourd''hui la mesure rend 122 bits : la valeur exacte d''un UUID '
-    'v4, dont la version et la variante sont figées.';
+    'v4, dont la version et la variante sont figées. '
+    'POUVOIR DE DÉTECTION MESURÉ, au protocole de l''auditeur — générateur dégradé à b bits, '
+    '200 exécutions par palier (16, 24, 32, 40, 48, 56 bits) : REMPLISSAGE — la forme que '
+    'prend en pratique une dégradation — 200/200 de 16 à 48 bits, et SILENCE à 56, qui est '
+    'au-dessus du plancher ; graine étroite ÉTALÉE PAR UN CONDENSAT avec source random() — '
+    '200/200 à tous les paliers, par la source ; graine étroite étalée avec source '
+    'CRYPTOGRAPHIQUE — 170/200 à 16 bits, 3/200 à 24, puis 0/200 : c''est le trou, et il est '
+    'irréductible. Témoins : le générateur réel et la forme base 36 du serveur (128 bits en '
+    '25 signes) ne sont criés ni l''un ni l''autre, 0/200. Pour comparaison, au même '
+    'protocole, un remède fondé sur le seul COMPTAGE de valeurs distinctes — 20 000 tirages, '
+    'ce que fait le contrôle du serveur — mord 7/100 à 32 bits et 0/100 à 40.';
 
 -- =====================================================================================
 -- §2 — Q-18 ET LE BALAYAGE : LES COMMENTAIRES DU CATALOGUE QUI DISAIENT FAUX
@@ -345,12 +369,12 @@ comment on function f_verifier_entropie_identifiants() is
 -- symbole disparu et ne parle pas des imports ; il énonce une causalité fausse. Un
 -- balayage qui ne cherche que ce qu'il a déjà trouvé ne trouvera que ce qu'il cherche.
 --
--- Le balayage mené pour cette migration a donc porté sur les 398 commentaires du
--- CATALOGUE des cinq migrations, en quatre classes : renvois morts, décomptes périmés,
--- justifications déclarées fausses, et affirmations de comportement portant sur du code
--- hors de la base. Il a rendu dix-huit candidats, dont seize se sont révélés JUSTES après
--- vérification — et il faut le dire, parce qu'un balayage qui n'aurait rendu que des
--- coupables serait un balayage qui ne cherche pas :
+-- Le balayage mené pour cette migration a donc porté sur les commentaires du CATALOGUE
+-- des cinq migrations — 398 au moment où il a tourné — en quatre classes : renvois morts,
+-- décomptes périmés, justifications déclarées fausses, et affirmations de comportement
+-- portant sur du code hors de la base. Il a rendu VINGT-CINQ candidats, dont vingt-quatre
+-- se sont révélés JUSTES après vérification — et il faut le dire, parce qu'un balayage qui
+-- n'aurait rendu que des coupables serait un balayage qui ne cherche pas :
 --
 --   - « le round-trip » invoqué par actifs.criticite, prestataires.acces, tests_pra.succes
 --     et personnes est VRAI : la reprise valide les valeurs contre les chaînes exactes du
@@ -364,8 +388,29 @@ comment on function f_verifier_entropie_identifiants() is
 --   - « 32 caractères / 122 bits » sur f_generer_id est exact, et la mesure du §1 le
 --     retrouve indépendamment.
 --
--- Deux ont été retenus : le commentaire de id_metier, ci-dessous, et un décompte périmé,
--- au §3.
+-- Un seul a été retenu : le commentaire de id_metier, ci-dessous.
+--
+-- LE MÊME BALAYAGE, PASSÉ SUR LES COMMENTAIRES DE FICHIER des six migrations, rend neuf
+-- signalements. Un seul est réparable, et il l'est au §3 parce que ce n'est pas un
+-- commentaire mais du CODE — un décompte écrit dans un message d'anomalie. Les huit autres
+-- vivent dans des migrations APPLIQUÉES et ne se réparent donc pas (§23) ; ils sont
+-- consignés ici pour que le lecteur de ces fichiers sache à quoi s'en tenir :
+--
+--   - 001_socle.sql l.79-82, juste au-dessus de « create domain id_metier » : LE JUMEAU DE
+--     CE QUE CORRIGE LE §2. Il porte la même justification par le round-trip, et il est le
+--     premier texte que rencontre quelqu'un qui lit le fichier. Le catalogue dit vrai
+--     depuis cette migration ; le fichier, lui, restera faux — c'est le prix du §23, et il
+--     vaut mieux le dire que le corriger en douce ;
+--   - 001 l.372 et l.1671 : « les 42 tables qui portent une traçabilité » — elles sont 43
+--     depuis que 005 a posé controles_schema, et ce nombre bougera encore ;
+--   - 001 l.1672 : l'exemple « USR-1720000000000-482 », qui illustre le générateur à mille
+--     valeurs alors qu'il sert à expliquer tout autre chose (un login n'est pas une clé) ;
+--   - 001 l.2462 et 004 l.14, 33 et 100 : « les 47 tables » — même dérive de décompte.
+--
+-- Ce que cela apprend sur la méthode, et qui vaut plus que ces huit lignes : UN DÉCOMPTE
+-- ÉCRIT DANS UN TEXTE EST UNE DETTE. Il est vrai le jour où on l'écrit et faux à la
+-- migration suivante. Le §3 en tire la conséquence pour le seul endroit qui pouvait encore
+-- être corrigé.
 -- =====================================================================================
 
 comment on domain id_metier is
@@ -386,10 +431,10 @@ comment on domain id_metier is
     'générateur de la base est f_generer_id(), et f_verifier_entropie_identifiants() '
     'mesure ce plancher à chaque déploiement. '
     'CORRIGÉ PAR LA MIGRATION 006 (constat Q-18). Le texte posé par 001 présentait le '
-    'format comme une contrainte du domaine — il ne l''est pas —, l''illustrait par '
-    '« RISK-1720000000000-482 », c''est-à-dire par le générateur à mille valeurs qui a '
-    'coûté au chantier son seul constat bloquant, et justifiait ce format par le '
-    'round-trip. Cette dernière justification a été déclarée fausse ET VÉRIFIÉE FAUSSE : '
+    'format comme une contrainte du domaine — il ne l''est pas —, l''illustrait par un '
+    'identifiant du générateur à MILLE VALEURS, celui qui a coûté au chantier son seul '
+    'constat bloquant (l''exemple exact est cité dans le fichier de la migration, où sa '
+    'place est), et justifiait ce format par le round-trip. Cette dernière justification a été déclarée fausse ET VÉRIFIÉE FAUSSE : '
     'la reprise recopie les identifiants du fichier tels quels, quel que soit le format '
     'engendré ; s''appuyer sur elle aurait rendu intouchable le format d''un générateur '
     'qu''il a précisément fallu changer (constat Q-1). La migration 001 est appliquée et '
@@ -399,8 +444,8 @@ comment on domain id_metier is
 -- §3 — UN DÉCOMPTE PÉRIMÉ, TROUVÉ PAR LE MÊME BALAYAGE
 -- -------------------------------------------------------------------------------------
 -- f_verifier_privileges() dit, dans le message de l'anomalie « attribut_de_role_interdit » :
--- « grc_lecture détient "select" sur les 47 tables ». Le schéma en porte 48 depuis que la
--- migration 005 a posé controles_schema — et c'est MOI qui ai reporté ce nombre, en
+-- « grc_lecture détient "select" sur les 47 tables ». Le schéma en porte une de plus depuis
+-- que la migration 005 a posé controles_schema — et c'est MOI qui ai reporté ce nombre, en
 -- réémettant la fonction verbatim.
 --
 -- La leçon n'est pas « il fallait écrire 48 » : c'est qu'un décompte écrit dans un texte

@@ -149,6 +149,62 @@ export class ErreurPerimetre extends Error {
   }
 }
 
+/**
+ * Le pool n'a pas donné de connexion.
+ *
+ * ── Pourquoi ce type existe ──────────────────────────────────────────────
+ *
+ * Constat Q-20 de la porte S2, rejoué au correctif : pendant dix reprises
+ * simultanées, quatre lectures ordinaires sur cinq recevaient **500 « erreur
+ * interne »** après cinq secondes. Le pool était plein, ce qui est un état
+ * d'exploitation banal et passager — et le produit l'annonçait comme un défaut
+ * de programmation. Rien ne distinguait, pour l'exploitant, une saturation
+ * d'une panne.
+ *
+ * Le fond du problème — l'idempotence portée par la requête, la reprise
+ * fractionnée — appartient au lot L7. Ce qui est réparé ici est le **verdict** :
+ * une saturation est un 503, comme l'indisponibilité de la session. Le
+ * navigateur le sait déjà (`ErreurApi.estPassagere()` couvre 503) et proposera
+ * de réessayer au lieu d'afficher une erreur interne.
+ *
+ * `motif` distingue les deux causes, car elles n'appellent pas la même
+ * conduite : `saturation` passe tout seul, `injoignable` demande de regarder
+ * PostgreSQL.
+ */
+export class ErreurConnexionBase extends Error {
+  /** Marqueur structurel : `src/erreurs/` le reconnaît sans importer ce module. */
+  public readonly nomErreur = 'ErreurConnexionBase';
+  public readonly motif: 'saturation' | 'injoignable';
+  public readonly detailJournal: string;
+
+  constructor(motif: 'saturation' | 'injoignable', detailJournal: string) {
+    super(
+      motif === 'saturation'
+        ? 'toutes les connexions du pool sont occupées'
+        : 'PostgreSQL est injoignable',
+    );
+    this.name = 'ErreurConnexionBase';
+    this.motif = motif;
+    this.detailJournal = detailJournal;
+  }
+}
+
+/**
+ * Reconnaît le refus que `pg-pool` émet quand `connectionTimeoutMillis`
+ * expire faute de connexion libre.
+ *
+ * Le critère est le message, parce que `pg-pool` ne rend qu'un `Error` nu
+ * (`pg-pool/index.js`, `new Error('timeout exceeded when trying to connect')`).
+ * Le cas contraire — un vrai échec de connexion — porte un `code` réseau
+ * (`ECONNREFUSED`, `ENOTFOUND`, `ETIMEDOUT`) ou un `SQLSTATE`, et tombe dans
+ * l'autre motif. Se tromper de sens est sans danger : les deux donnent 503,
+ * seule la phrase du journal change.
+ */
+function motifDeConnexion(erreur: unknown): 'saturation' | 'injoignable' {
+  const message = erreur instanceof Error ? erreur.message : String(erreur);
+  return message.includes('timeout exceeded when trying to connect') ? 'saturation' : 'injoignable';
+}
+
 /* =====================================================================
  *  Journal minimal
  * ===================================================================== */
@@ -266,7 +322,19 @@ export async function avecTransaction<T>(
 ): Promise<T> {
   validerPerimetre(perimetre, options.lectureSeule === true);
 
-  const client = await pool.connect();
+  // Q-20 : une saturation du pool n'est pas un défaut de programmation. Sans
+  // ce filtre, l'échec de `connect()` arrivait nu jusqu'au traducteur, qui n'a
+  // d'autre choix que de rendre 500 sur ce qu'il ne reconnaît pas.
+  let client: PoolClient;
+  try {
+    client = await pool.connect();
+  } catch (erreur) {
+    throw new ErreurConnexionBase(
+      motifDeConnexion(erreur),
+      erreur instanceof Error ? `${erreur.name}: ${erreur.message}` : String(erreur),
+    );
+  }
+
   try {
     await client.query(options.lectureSeule === true ? 'begin read only' : 'begin');
     await appliquerPerimetre(client, perimetre);

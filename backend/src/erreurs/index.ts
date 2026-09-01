@@ -236,6 +236,21 @@ export function estErreurEntite(erreur: unknown): erreur is ErreurEntite {
 }
 
 /**
+ * Reconnaît un refus du pool de connexions, sans importer `src/db/pool.ts`
+ * (même règle que ci-dessus : ce module n'importe rien d'exécutable).
+ */
+function estErreurConnexionBase(
+  erreur: unknown,
+): erreur is Error & { motif: 'saturation' | 'injoignable'; detailJournal: string } {
+  return (
+    erreur instanceof Error &&
+    (erreur as { nomErreur?: unknown }).nomErreur === 'ErreurConnexionBase' &&
+    ((erreur as { motif?: unknown }).motif === 'saturation' ||
+      (erreur as { motif?: unknown }).motif === 'injoignable')
+  );
+}
+
+/**
  * Traduit une erreur quelconque en `ErreurApplicative`.
  *
  * L'ordre compte : une erreur déjà traduite passe telle quelle, une
@@ -252,6 +267,25 @@ export function traduireErreur(
   if (erreur instanceof ErreurApplicative) return erreur;
 
   if (estErreurEntite(erreur)) return traduireErreurEntite(erreur, contexte);
+
+  // ── Q-20 : une saturation se dit, elle ne se déguise pas en panne ────
+  // Le pool plein est un état passager et ordinaire — dix reprises
+  // simultanées y suffisaient. Rendu en 500 « erreur interne », il était
+  // indiscernable d'un défaut du produit ; en 503, le navigateur le reconnaît
+  // comme passager (`ErreurApi.estPassagere()`) et propose de réessayer.
+  if (estErreurConnexionBase(erreur)) {
+    return new ErreurApplicative({
+      code: 'indisponible',
+      statut: 503,
+      message:
+        erreur.motif === 'saturation'
+          ? 'Le serveur traite actuellement autant de demandes qu’il le peut. ' +
+            'Réessayez dans quelques instants : rien n’a été modifié.'
+          : 'La base de données est momentanément injoignable. ' +
+            'Réessayez dans quelques instants : rien n’a été modifié.',
+      detailJournal: `${erreur.motif} : ${erreur.detailJournal}`,
+    });
+  }
 
   const postgres = lireErreurPostgres(erreur);
   if (postgres !== null) return traduireErreurPostgres(postgres, contexte);

@@ -1311,6 +1311,42 @@ else
   succes "LimitRequestBody ($TAILLE_APACHE) ≥ SERVEUR_TAILLE_MAX_CORPS ($TAILLE_APP)"
 fi
 
+# ProxyTimeout du vhost INSTALLÉ contre celui du vhost de RÉFÉRENCE.
+#
+# Ce contrôle existe parce qu'un vhost déjà présent n'est jamais écrasé (voir
+# juste au-dessus) : une valeur ajustée à la main survit à toutes les mises à
+# jour, sans que personne ne le sache. Or ce délai est le deuxième maillon
+# d'une chaîne de trois — navigateur (DELAI_CHARGEMENT_MS), Apache
+# (ProxyTimeout), serveur (BORNES.lignesParReprise) — et le baisser coupe des
+# reprises que le serveur sait tenir. Le constat Q-19 de la porte S2 est né
+# d'un commentaire faux resté vrai aux yeux de tous pendant un lot entier :
+# on ne remplace pas un commentaire par un autre commentaire.
+#
+# La référence n'est PAS un nombre recopié ici : c'est le vhost livré. Les deux
+# valeurs viennent donc du même fichier versionné, et ce contrôle ne peut pas
+# devenir faux tout seul.
+lire_proxy_timeout() {
+  sed -n 's/^[[:space:]]*ProxyTimeout[[:space:]]\{1,\}\([0-9]\{1,\}\).*/\1/p' "$1" 2>/dev/null | tail -n1
+}
+PROXY_REF="$(lire_proxy_timeout "$SOURCE/deploy/apache/cyber-grc.conf")"
+PROXY_INSTALLE="$(lire_proxy_timeout /etc/apache2/sites-available/cyber-grc.conf)"
+if [[ -z "$PROXY_REF" ]]; then
+  alerte "Le vhost de référence ne pose plus de ProxyTimeout : ce contrôle ne vérifie plus rien."
+elif [[ -z "$PROXY_INSTALLE" ]]; then
+  alerte "Le vhost installé ne pose aucun ProxyTimeout (défaut Apache : 300 s)."
+  alerte "Une reprise coupée à 300 s laisserait la transaction courir sans lecteur : posez ProxyTimeout ${PROXY_REF}."
+elif [[ "$PROXY_INSTALLE" -lt "$PROXY_REF" ]]; then
+  alerte "ProxyTimeout installé ($PROXY_INSTALLE s) < référence ($PROXY_REF s) :"
+  alerte "Apache coupera des reprises que le serveur sait tenir (BORNES.lignesParReprise)."
+elif [[ "$PROXY_INSTALLE" -gt "$PROXY_REF" ]]; then
+  alerte "ProxyTimeout installé ($PROXY_INSTALLE s) > référence ($PROXY_REF s) :"
+  POOL_MAX="$(lire_variable BASE_POOL_MAX)"; POOL_MAX="${POOL_MAX:-10}"
+  alerte "chaque reprise immobilise d'autant plus longtemps une connexion sur ${POOL_MAX}."
+  alerte "Pour reprendre davantage, scindez le fichier — n'allongez pas ce délai."
+else
+  succes "ProxyTimeout ($PROXY_INSTALLE s) conforme au vhost de référence"
+fi
+
 # TimeoutStopSec doit laisser au serveur le temps de drainer ses connexions.
 DELAI_ARRET="$(lire_variable SERVEUR_DELAI_ARRET)"; DELAI_ARRET="${DELAI_ARRET:-25000}"
 DELAI_SYSTEMD="$(systemctl show -p TimeoutStopUSec --value cyber-grc 2>/dev/null || true)"

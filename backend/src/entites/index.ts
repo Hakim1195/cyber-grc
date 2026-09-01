@@ -134,6 +134,92 @@ import type {
 export const BORNES = Object.freeze({
   /** Lignes par collection au chargement initial. */
   lignesParCollection: 20000,
+  /**
+   * Enregistrements d'UNE reprise, **toutes collections confondues**.
+   *
+   * ══ L'ENDROIT OÙ LES TROIS DÉLAIS DE LA CHAÎNE SE LISENT ═════════════
+   *
+   * Trois fichiers portent un délai, et ils décrivent le même trajet :
+   *
+   *  · `backend/deploy/apache/cyber-grc.conf` — `ProxyTimeout 60` : au-delà,
+   *    Apache abandonne le service applicatif et coupe la connexion arrière ;
+   *  · `cyber-gouvernance_V4/js/core/api.js` — `DELAI_CHARGEMENT_MS = 60000` :
+   *    au-delà, le navigateur abandonne (`AbortController`) ;
+   *  · ce fichier — la borne ci-dessous, qui est ce que **le serveur** promet
+   *    de tenir dans ces 60 s.
+   *
+   * **Les deux premiers sont des délais, le troisième est un volume ; c'est le
+   * troisième qui les rend tenables.** Tant qu'il n'existait pas, la chaîne
+   * annonçait `lignesParCollection` × 21 collections = 420 000 enregistrements,
+   * soit ~11,5 minutes de travail — onze fois ce que 60 s portent. Un
+   * changement de l'un des trois nombres se répercute ici, et c'est ici qu'on
+   * vient lire pourquoi.
+   *
+   * ══ CE QUE LA COUPURE FAISAIT, ET QUI N'ÉTAIT ÉCRIT NULLE PART ═══════
+   *
+   * Le commentaire du vhost affirmait qu'« au-delà, la requête est perdue de
+   * toute façon ». Elle ne l'était pas : la reprise **continuait et validait**.
+   * Mesuré (porte S2, constat Q-19, rejoué au correctif) : le client abandonne
+   * à 4 s, et 11 988 enregistrements sont en base ~35 s plus tard. L'utilisateur
+   * lisait « Le serveur n'a pas répondu dans le délai imparti » puis voyait ses
+   * données apparaître au sondage suivant.
+   *
+   * ══ COMMENT LA VALEUR A ÉTÉ CHOISIE — PAR LA MESURE ══════════════════
+   *
+   * Reprises complètes par HTTP sur un vrai port, jeu `exportAncienVolumineux`
+   * (liaisons n-n peuplées, le cas le plus cher), machine de développement.
+   *
+   *  1. **Six points, de 2 000 à 32 000 enregistrements**, machine au repos :
+   *
+   *     ```
+   *      2 000 →  5,2 s   |  15 983 → 43,9 s
+   *      3 996 →  9,4 s   |  23 975 → 63,3 s
+   *      7 992 → 19,7 s   |  31 967 → 87,8 s
+   *     ```
+   *
+   *     soit 2,75 ms par enregistrement au pire des six.
+   *
+   *  2. **La même machine, une heure plus tard**, donne 3,63 ms : la mesure
+   *     varie d'un tiers d'une exécution à l'autre, sur du matériel identique.
+   *     Une borne calée sur le meilleur chiffre serait fausse un jour sur deux.
+   *
+   *  3. **Trois répétitions au voisinage de la borne** (9 991 enregistrements) :
+   *     32,5 s · 33,1 s · 35,8 s, soit **3,58 ms au pire**. C'est ce chiffre-là
+   *     qui sert, parce qu'il est mesuré *là où la borne se pose* plutôt
+   *     qu'extrapolé depuis des volumes qu'on ne verra jamais.
+   *
+   *  4. **La charge multiplie la durée par quatre** : 3 996 enregistrements
+   *     coûtent 11,5 s seuls et **46,1 s** pendant que deux lecteurs ordinaires
+   *     interrogent `/api/donnees`. Node est mono-fil — ce n'est pas le pool
+   *     qui sature, c'est la boucle d'événements.
+   *
+   * D'où le calcul, et il tient en une ligne : sur les 60 s de la chaîne on
+   * n'en engage que **la moitié**, à la vitesse la plus défavorable mesurée à
+   * la borne. 30 000 ms ÷ 3,58 ms = 8 380 → arrondi à **8 000**.
+   *
+   * Ce que la moitié achète : le facteur quatre de la mesure (4), la variance
+   * de la (2), une VM cible **jamais mesurée** (ni son disque, ni Apache, ni
+   * TLS), et les paliers de migration v1 → v12 qu'un export ancien paie en plus
+   * et que ces mesures ne portent pas.
+   *
+   * Ce que la borne ne coûte pas : 8 000 reste deux à trois fois au-dessus des
+   * « quelques milliers d'enregistrements » pour lesquels le chargement d'une
+   * filiale entière est dimensionné (voir l'en-tête de ce bloc). Elle ne refuse
+   * rien de ce que le produit est fait pour contenir.
+   *
+   * Mesuré au correctif : un fichier de 10 390 enregistrements est refusé en
+   * **146 ms**, avec un 413 qui dit le nombre reçu et le nombre admis — au lieu
+   * de 44 s de travail dont personne n'aurait lu l'issue.
+   *
+   * ══ CE QU'ELLE NE PROMET PAS ════════════════════════════════════════
+   *
+   * Une reprise **au plafond, sur un serveur chargé, peut encore dépasser
+   * 60 s** — la mesure (4) le dit sans détour. La borne rend le cas rare ; elle
+   * ne le supprime pas. C'est pourquoi la route ne se contente pas de borner :
+   * elle **n'engage pas** une transaction dont le client ne saura jamais
+   * l'issue (`src/api/index.ts`, `surveillerAbandon`).
+   */
+  lignesParReprise: 8000,
   /** Lignes de liaison rapportées pour une collection. */
   lignesParLiaison: 100000,
   /** Enregistrements rendus par un sondage de rafraîchissement. */
@@ -608,6 +694,92 @@ export function estEntiteConnue(nom: string): nom is NomEntite {
 
 export function listerEntites(): readonly NomEntite[] {
   return ORDRE_ENTITES;
+}
+
+/* ---------------------------------------------------------------------
+ *  Ce qu'un fichier de reprise apporte — lu, borné et compté UNE fois
+ * ------------------------------------------------------------------- */
+
+/**
+ * Lit les collections d'une charge `grc-backup` v12, les borne et les compte.
+ *
+ * ── Pourquoi cette fonction est exportée, et pourquoi elle est pure ──────
+ *
+ * Elle est appelée **deux fois pour une même reprise**, et c'est délibéré :
+ *
+ *  1. par `POST /api/reprise`, **avant** d'ouvrir la transaction — donc avant
+ *     de prendre une connexion du pool. C'est ce qui rend le refus gratuit :
+ *     un fichier trop gros n'immobilise rien et ne fait attendre personne
+ *     (constats Q-19 et Q-20 de la porte S2) ;
+ *  2. par `appliquerReprise`, qui a besoin des collections filtrées.
+ *
+ * Le second appel est le vrai ; le premier n'est qu'un refus anticipé. Les
+ * faire dériver de la **même** fonction est ce qui garantit qu'ils ne peuvent
+ * pas diverger — une borne recopiée dans la route aurait fini par ne plus dire
+ * la même chose que le moteur, en silence.
+ *
+ * Elle ne touche ni la base ni le réseau : sur 10 000 enregistrements elle
+ * coûte quelques millisecondes, très en deçà de ce qu'une connexion retenue
+ * pour rien coûte aux autres utilisateurs.
+ */
+export function analyserApportsReprise(charge: Readonly<Record<string, unknown>>): {
+  apports: Map<NomEntite, Enregistrement[]>;
+  lus: number;
+  /** Collection la plus volumineuse, pour que le refus soit actionnable. */
+  plusGrande: { entite: NomEntite; lignes: number } | null;
+} {
+  const apports = new Map<NomEntite, Enregistrement[]>();
+  let lus = 0;
+  let plusGrande: { entite: NomEntite; lignes: number } | null = null;
+
+  for (const entite of ORDRE_ENTITES) {
+    const brut = charge[entite];
+    if (brut === undefined || brut === null) continue;
+    if (!Array.isArray(brut)) {
+      throw invalide(`La collection « ${entite} » du fichier n'est pas une liste.`);
+    }
+    const enregistrements = brut.filter(
+      (element): element is Enregistrement =>
+        typeof element === 'object' && element !== null && !Array.isArray(element),
+    );
+    // Une collection VIDE n'apporte rien, donc n'exige rien — pas même le
+    // droit de l'écrire. Un export du modèle navigateur porte toujours les
+    // 21 clés, la plupart à zéro enregistrement : garder les vides ici
+    // ferait refuser, au nom du socle Groupe, une reprise qui n'y touche
+    // pas. C'est la même notion d'« apporter quelque chose » que celle dont
+    // la route se sert pour exiger l'habilitation : une seule règle, deux
+    // endroits qui la lisent.
+    if (enregistrements.length === 0) continue;
+    lus += enregistrements.length;
+    if (plusGrande === null || enregistrements.length > plusGrande.lignes) {
+      plusGrande = { entite, lignes: enregistrements.length };
+    }
+    apports.set(entite, enregistrements);
+  }
+
+  // ── La borne du constat Q-19 ────────────────────────────────────────
+  // Elle porte sur le TOTAL, pas sur chaque collection : c'est la durée de la
+  // reprise entière que la chaîne de déploiement borne à 60 s, et cette durée
+  // ne connaît pas les collections. Une borne par collection laissait passer
+  // 21 × 20 000 enregistrements — onze fois ce que la chaîne peut porter.
+  if (lus > BORNES.lignesParReprise) {
+    throw new ErreurAccesEntite({
+      motif: 'volume_excessif',
+      message:
+        `Le fichier porte ${String(lus)} enregistrements, au-delà des ` +
+        `${String(BORNES.lignesParReprise)} qu'une reprise admet` +
+        (plusGrande === null
+          ? ''
+          : ` (la plus grosse collection est « ${plusGrande.entite} », ` +
+            `${String(plusGrande.lignes)} enregistrements)`) +
+        ". La reprise est refusée dans son ENTIER : rien n'a été modifié. " +
+        'Scindez le fichier, ou faites reprendre celui-ci par un exploitant ' +
+        "depuis le serveur, sans passer par le frontal.",
+      ...(plusGrande === null ? {} : { entite: plusGrande.entite }),
+    });
+  }
+
+  return { apports, lus, plusGrande };
 }
 
 function description(entite: NomEntite): DescriptionEntite {
@@ -2123,38 +2295,13 @@ export class Depot {
     let lus = 0;
 
     // ── Ce que le fichier apporte, borné avant d'y toucher (S13) ────────
-    const apports = new Map<NomEntite, Enregistrement[]>();
-    for (const entite of ORDRE_ENTITES) {
-      const brut = charge[entite];
-      if (brut === undefined || brut === null) continue;
-      if (!Array.isArray(brut)) {
-        throw invalide(`La collection « ${entite} » du fichier n'est pas une liste.`);
-      }
-      if (brut.length > BORNES.lignesParCollection) {
-        throw new ErreurAccesEntite({
-          motif: 'volume_excessif',
-          message:
-            `La collection « ${entite} » du fichier porte ${String(brut.length)} enregistrements, ` +
-            `au-delà des ${String(BORNES.lignesParCollection)} admis. La reprise est refusée ` +
-            "dans son ENTIER : rien n'a été modifié.",
-          entite,
-        });
-      }
-      const enregistrements = brut.filter(
-        (element): element is Enregistrement =>
-          typeof element === 'object' && element !== null && !Array.isArray(element),
-      );
-      // Une collection VIDE n'apporte rien, donc n'exige rien — pas même le
-      // droit de l'écrire. Un export du modèle navigateur porte toujours les
-      // 21 clés, la plupart à zéro enregistrement : garder les vides ici
-      // ferait refuser, au nom du socle Groupe, une reprise qui n'y touche
-      // pas. C'est la même notion d'« apporter quelque chose » que celle dont
-      // la route se sert pour exiger l'habilitation : une seule règle, deux
-      // endroits qui la lisent.
-      if (enregistrements.length === 0) continue;
-      lus += enregistrements.length;
-      apports.set(entite, enregistrements);
-    }
+    // La lecture, le bornage et le comptage sont dans `analyserApportsReprise`
+    // — la MÊME fonction que la route appelle avant d'ouvrir sa transaction
+    // (constat Q-19). Deux exemplaires de cette règle divergeraient, et la
+    // divergence serait silencieuse : la route refuserait un fichier que le
+    // moteur aurait accepté, ou l'inverse.
+    const { apports, lus: apportes } = analyserApportsReprise(charge);
+    lus = apportes;
 
     // ── Purge, s'il faut remplacer ──────────────────────────────────────
     if (mode === 'remplacer') {

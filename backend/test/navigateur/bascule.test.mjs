@@ -31,6 +31,7 @@ import { FILIALE_A, FILIALE_B, ouvrirBaseEssai, perimetre, semerJeuEssai } from 
 import {
   attendreApplication,
   attendreQuiescence,
+  exigerSilence,
   lancerNavigateur,
   ouvrirPage,
   servirApplication,
@@ -786,11 +787,7 @@ describe('Un import en lot ne perd pas une ligne (bloquant T-1)', () => {
       const bandeau = await session.page.evaluate(() =>
         (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
       );
-      assert.equal(
-        /double/i.test(bandeau),
-        false,
-        `Aucun doublon ne doit être signalé sur un lot sain : ${bandeau}`,
-      );
+      exigerSilence(bandeau, /double/i, 'LE CANARI PARLE : deux enregistrements de même identifiant sont ANNONCÉS');
       assert.deepEqual(session.erreursScript, []);
     } finally {
       await session.fermer();
@@ -878,11 +875,7 @@ describe('Un import en lot ne perd pas une ligne (bloquant T-1)', () => {
       const bandeau = await session.page.evaluate(() =>
         (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
       );
-      assert.equal(
-        /défaut interne/i.test(bandeau),
-        false,
-        `Aucun défaut interne ne doit être annoncé à l’utilisateur : ${bandeau}`,
-      );
+      exigerSilence(bandeau, /défaut interne/i, 'le filet PARLE encore sur ses deux canaux');
     } finally {
       await session.fermer();
     }
@@ -1207,10 +1200,10 @@ describe('Le renommage large s’annonce, et lui seul (constat Q-11)', () => {
       'La réécriture doit avoir eu lieu ici AUSSI : sans elle, le silence ne prouverait rien.',
     );
     assert.notEqual(issue.apres.responsable, canonique);
-    assert.equal(
-      /Réécriture de références à vérifier/.test(issue.texte),
-      false,
-      `Aucun avertissement n’est dû sur un identifiant distinctif : ${issue.texte}`,
+    exigerSilence(
+      issue.texte,
+      /Réécriture de références à vérifier/,
+      'un identifiant TROP COURT : le bandeau nomme la réécriture et son compte',
     );
     assert.deepEqual(issue.erreurs, []);
   });
@@ -1411,10 +1404,10 @@ describe('Les avertissements du produit, éprouvés quand ils PARLENT (constat Q
         window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Risque parfaitement ordinaire' });
       });
       await attendreQuiescence(session.page);
-      assert.equal(
-        /Identifiants en double/i.test(await bandeauDe(session.page)),
-        false,
-        'Aucun doublon ne doit être annoncé sur un jeu sain.',
+      exigerSilence(
+        await bandeauDe(session.page),
+        /Identifiants en double/i,
+        'la suite de CET essai, qui provoque le doublon quelques lignes plus bas',
       );
 
       // ── Puis le doublon, et il doit être annoncé ─────────────────────────
@@ -1646,5 +1639,207 @@ describe('Le signalement de rétrécissement reste câblé (constat Q-21)', () =
       /signalerRetrecissement\(/,
       'Le repassage des écritures n’appelle plus le filet.',
     );
+  });
+});
+
+/* =====================================================================
+ *  §11 — Le refus de DROIT, vu du navigateur (constat Q-25)
+ * =====================================================================
+ *
+ *  Le `403` est éprouvé côté API depuis le lot L2 — « SURTOUT PAS GRC03 ». Sa
+ *  moitié navigateur ne l'était pas : rien ne vérifiait ce que `sync.js` en fait.
+ *  Or c'est le seul chemin par lequel le modèle de droits du lot L3 se
+ *  manifestera à l'utilisateur. Livrer L3 sur une moitié que personne n'a jamais
+ *  fait parler, ce serait refaire Q-21 à l'échelle d'un lot — sur la
+ *  fonctionnalité qui décide qui a le droit de voir quoi, chez un client dont
+ *  vingt filiales doivent être cloisonnées.
+ *
+ *  Trois choses distinguent un refus de DROIT d'un conflit, et les trois se
+ *  jouent ici :
+ *
+ *   · la mémoire **revient à la valeur du serveur** — il n'a rien changé, et son
+ *     état nous est connu ; laisser la saisie en place ferait mentir l'écran ;
+ *   · le bandeau **dit ce qui s'est passé**, sous son propre intitulé ;
+ *   · il **ne propose pas de recharger**. Il n'y a rien à recharger : un bouton
+ *     qui ne peut rien réparer apprend à cliquer sans lire.
+ * ===================================================================== */
+
+describe('Un refus de droit se voit, et ne propose pas de recharger (constat Q-25)', () => {
+  /** Le texte du bandeau, et la présence du bouton de rechargement. */
+  function bandeauEtBouton(page) {
+    return page.evaluate(() => ({
+      texte: (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+      boutonRecharger: document.getElementById('sync-recharger') !== null,
+    }));
+  }
+
+  test('REFUS DE DROIT : la valeur du serveur revient, le bandeau parle, PAS de bouton', async () => {
+    // Le socle commun du Groupe est lisible par la filiale et modifiable par la
+    // seule administration Groupe : c'est le refus de droit qu'un utilisateur
+    // rencontre réellement aujourd'hui, sans rien forger.
+    const theme = 'Socle commun, réservé à l’administration Groupe';
+    const cree = await administration.appeler('POST', '/api/entites/mappings', {
+      corps: { champs: { theme } },
+    });
+    assert.equal(cree.statut, 201);
+
+    const session = await ouvrirApplication();
+    try {
+      const vu = await session.page.evaluate(
+        (t) => window.DataStore.getMappings().some((m) => m.theme === t),
+        theme,
+      );
+      assert.equal(vu, true, 'La filiale doit LIRE le socle : sinon le scénario n’est pas celui-là.');
+
+      await session.page.evaluate(async (t) => {
+        const m = window.DataStore.getMappings().find((x) => x.theme === t);
+        window.DataStore.upsertMapping({ ...m, theme: 'Détourné par une filiale' });
+        await window.Sync.pousser();
+      }, theme);
+
+      const etat = await session.page.evaluate(() => window.Sync.etat());
+      assert.equal(etat.incidents, 1, 'Le refus doit produire UN incident.');
+      assert.equal(
+        etat.bloques,
+        0,
+        'Et AUCUN enregistrement bloqué : un refus de droit n’est pas une saisie en souffrance, ' +
+          'c’est une écriture qui n’aura jamais lieu.',
+      );
+
+      // ── 1. La mémoire revient à ce que le serveur détient ────────────────
+      assert.equal(
+        await session.page.evaluate(
+          (t) => window.DataStore.getMappings().some((m) => m.theme === t),
+          theme,
+        ),
+        true,
+        'La valeur du serveur doit être remise en place : laisser la saisie refusée à ' +
+          'l’écran ferait croire qu’elle a pris.',
+      );
+
+      // ── 2. Le bandeau dit ce qui s'est passé ─────────────────────────────
+      const { texte, boutonRecharger } = await bandeauEtBouton(session.page);
+      assert.match(texte, /Écriture refusée/, `Le bandeau doit nommer le refus : ${texte}`);
+      assert.match(
+        texte,
+        /administration Groupe/i,
+        `Et rapporter le motif du serveur, qui dit à qui s’adresser : ${texte}`,
+      );
+
+      // ── 3. Et il ne propose PAS de recharger ─────────────────────────────
+      assert.equal(
+        boutonRecharger,
+        false,
+        'Un refus de droit ne se répare pas en rechargeant : le serveur n’a rien changé. ' +
+          'Un bouton qui ne peut rien réparer apprend à cliquer sans lire.',
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE : un CONFLIT, lui, porte bien son bouton', async () => {
+    // Sans cette moitié, l'essai précédent serait satisfait par un produit qui ne
+    // propose JAMAIS de recharger — et le conflit de version, lui, se répare
+    // exactement comme cela.
+    const session = await ouvrirApplication();
+    try {
+      const identifiant = await session.page.evaluate(async () => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Risque bientôt en conflit' });
+        await window.Sync.pousser();
+        return window.DataStore.getRisques().find((r) => r.nom === 'Risque bientôt en conflit').id;
+      });
+      await attendreQuiescence(session.page);
+
+      // Quelqu'un d'autre écrit : la version détenue par le navigateur devient
+      // périmée. C'est le risque projet P1, joué par une connexion tierce.
+      const client = await base.connexion('app');
+      await base.avecPerimetre(
+        client,
+        perimetre('voisin', FILIALE_A, [FILIALE_A]),
+        async (c) => {
+          await c.query('update risques set nom = $2 where id = $1', [identifiant, 'Écrit par quelqu’un d’autre']);
+        },
+        { annuler: false },
+      );
+
+      await session.page.evaluate(async (id) => {
+        const r = window.DataStore.getRisques().find((x) => x.id === id);
+        window.DataStore.updateRisque({ ...r, nom: 'Ma version à moi' });
+        await window.Sync.pousser();
+      }, identifiant);
+
+      const { texte, boutonRecharger } = await bandeauEtBouton(session.page);
+      assert.match(texte, /Modifié entre-temps/, `Le conflit doit être annoncé comme tel : ${texte}`);
+      assert.equal(
+        boutonRecharger,
+        true,
+        'Un conflit SE répare en rechargeant : le bouton doit être là. C’est ce qui donne ' +
+          'sa valeur au refus de droit qui, lui, ne l’a pas.',
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+});
+
+/* =====================================================================
+ *  §12 — Les champs que le serveur ne connaît pas (constat Q-24)
+ * ===================================================================== */
+
+describe('Un champ non reconnu est ANNONCÉ, pas avalé (constat Q-24)', () => {
+  test('le bandeau nomme la collection et le champ écartés', async () => {
+    // ── Ce que ce bandeau protège ───────────────────────────────────────────
+    //
+    // `corpsDe` écarte les champs que le modèle du serveur ne connaît pas —
+    // sinon chaque écriture serait refusée pour un champ hérité. Écarter est
+    // juste ; le faire en silence ne l'est pas : l'utilisateur croirait avoir
+    // enregistré une donnée que rien ne porte, dans un outil qui sert de preuve
+    // en audit. Le produit le dit, et nomme ce qu'il a écarté.
+    const session = await ouvrirApplication();
+    try {
+      // ── Moitié symétrique, jouée en premier ─────────────────────────────
+      await session.page.evaluate(() => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Risque aux champs connus' });
+      });
+      await attendreQuiescence(session.page);
+      exigerSilence(
+        await session.page.evaluate(
+          () => (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+        ),
+        /Champs non reconnus/i,
+        'la suite de CET essai, qui envoie un champ inconnu quelques lignes plus bas',
+      );
+
+      // ── Puis le champ inconnu, et il doit être annoncé ───────────────────
+      await session.page.evaluate(async () => {
+        window.DataStore.addRisque({
+          id: window.UI.genId('RISK'),
+          nom: 'Risque venu d’un export ancien',
+          champVenuDAilleurs: 'valeur héritée',
+        });
+        await window.Sync.pousser();
+      });
+
+      const texte = await session.page.evaluate(
+        () => (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+      );
+      assert.match(texte, /Champs non reconnus/i, `Le bandeau doit annoncer l’écart : ${texte}`);
+      assert.match(
+        texte,
+        /risques\.champVenuDAilleurs/,
+        `Et NOMMER la collection et le champ : sans eux, l’avertissement est inexploitable. ${texte}`,
+      );
+
+      // Le reste de l'enregistrement, lui, est bien arrivé : écarter un champ
+      // n'est pas refuser la ligne.
+      const enBaseApres = await enBase("select nom from risques where nom = 'Risque venu d’un export ancien'");
+      assert.equal(enBaseApres.length, 1, 'La ligne doit être enregistrée, champ écarté ou non.');
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
   });
 });

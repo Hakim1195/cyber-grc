@@ -86,6 +86,7 @@ import type { Configuration } from '../config/index.js';
 import { avecTransaction, PERIMETRE_SYSTEME } from '../db/pool.js';
 import type { PerimetreSession } from '../db/pool.js';
 import {
+  analyserApportsReprise,
   chargerCatalogue,
   Depot,
   engendrerIdentifiant,
@@ -117,6 +118,57 @@ class SentinelleApercu extends Error {
     this.name = 'SentinelleApercu';
     this.bilan = bilan;
   }
+}
+
+/**
+ * Annule la transaction d'une reprise dont le client est parti.
+ *
+ * ── Le défaut qu'elle ferme ──────────────────────────────────────────────
+ *
+ * Constat Q-19 de la porte S2 : le client abandonne à 4 s, la reprise court
+ * jusqu'au bout et **valide**. L'utilisateur lit « Le serveur n'a pas répondu
+ * dans le délai imparti », puis voit ses données apparaître au sondage
+ * suivant : on lui a annoncé un échec, il constate un succès. Dans un produit
+ * qui héberge le plan de continuité d'un groupe et sert de preuve en audit,
+ * une issue qu'on affirme à tort est plus coûteuse qu'une issue qu'on ignore.
+ *
+ * ── Pourquoi annuler est le bon choix, et non « valider puis expliquer » ──
+ *
+ * La reprise **converge** (constat Q-2) : elle met à jour ce qu'elle retrouve
+ * et ne clone rien. Recommencer est donc sans danger, et c'est ce que
+ * l'utilisateur fera. Entre une base modifiée par une opération dont personne
+ * ne connaît l'issue et une base intacte assortie d'un « recommencez », le
+ * second état est le seul sur lequel on peut raisonner — et c'est le seul qui
+ * reste vrai si la coupure a eu lieu au milieu d'un « remplacer ».
+ */
+class AbandonClient extends Error {
+  constructor() {
+    super("reprise annulée : le client a fermé la connexion avant la réponse");
+    this.name = 'AbandonClient';
+  }
+}
+
+/**
+ * Dit si le client a fermé la connexion avant que la réponse ne parte.
+ *
+ * Le témoin est posé sur la **réponse** et non sur la requête : le flux de
+ * requête se clôt normalement dès que le corps est lu, et l'écouter dirait
+ * « parti » de tout appel qui a fini d'envoyer son fichier. La fermeture de la
+ * réponse **avant** `writableEnded`, elle, ne se produit que si la connexion a
+ * disparu — abandon du navigateur, ou `ProxyTimeout` d'Apache qui coupe la
+ * connexion arrière.
+ *
+ * ⚠️ Elle ne voit que ce que la connexion lui montre. Derrière Apache, un
+ * navigateur qui abandonne seul ne coupe pas la connexion arrière : c'est
+ * `ProxyTimeout` qui la coupera, à la même échéance de 60 s. Le témoin est donc
+ * franc sur le trajet complet, mais il n'est pas instantané.
+ */
+function surveillerAbandon(reponse: FastifyReply): () => boolean {
+  let parti = false;
+  reponse.raw.on('close', () => {
+    if (!reponse.raw.writableEnded) parti = true;
+  });
+  return () => parti;
 }
 
 function totaliser(comptes: Readonly<Record<string, number>>): number {
@@ -734,6 +786,30 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         throw entreeInvalide(lecture.message, `reprise refusée : ${lecture.code}`);
       }
 
+      // ══ Q-19 : LA BORNE PRÉCÈDE LA CONNEXION ════════════════════════
+      //
+      // `analyserApportsReprise` compte ce que le fichier apporte et refuse
+      // au-delà de `BORNES.lignesParReprise` — la borne que `/api/modele`
+      // publie, et dont le commentaire dit comment elle a été mesurée.
+      //
+      // Elle est appelée **ici**, avant `enEcriture`, et non dans le moteur :
+      // un refus qui a déjà pris une connexion du pool est un refus qui fait
+      // attendre les autres. Dix reprises simultanées suffisaient à faire
+      // répondre 500 à tout lecteur ordinaire (constat Q-20) ; un fichier hors
+      // borne ne coûte désormais que quelques millisecondes de comptage, sur
+      // une charge déjà en mémoire.
+      //
+      // Le moteur rappelle la même fonction dans sa transaction : c'est lui qui
+      // fait foi, celle-ci n'anticipe que le refus. Une seule règle, deux
+      // appels, aucun risque de divergence.
+      try {
+        analyserApportsReprise(lecture.charge as unknown as Record<string, unknown>);
+      } catch (erreur) {
+        throw traduireErreur(erreur, { ...contexteErreurs, origine: 'reprise' });
+      }
+
+      const abandonne = surveillerAbandon(reponse);
+
       const empreinte = createHash('sha256').update(fichier.contenu, 'utf8').digest('hex');
 
       // Le droit d'écrire dans le socle commun n'est PAS demandé ici, et ce
@@ -824,9 +900,43 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         //    n'est pas un détour : c'est ce qui garantit que ce qui est montré
         //    est ce qui se produirait, contraintes comprises.
         if (apercu) throw new SentinelleApercu(bilan);
+
+        // 4. Q-19 — ON NE VALIDE PAS UNE ISSUE QUE PERSONNE NE LIRA.
+        //
+        //    Dernier geste avant le `commit` : si la connexion est tombée
+        //    pendant le travail — abandon du navigateur, ou `ProxyTimeout`
+        //    d'Apache — la réponse n'ira nulle part. Valider laisserait
+        //    l'utilisateur devant un « le serveur n'a pas répondu » suivi de
+        //    ses données qui apparaissent. On annule : la reprise converge,
+        //    recommencer est sans danger, et l'état de la base reste celui que
+        //    l'utilisateur croit.
+        //
+        //    Cette ligne est le seul endroit qui décide ; la levée annule la
+        //    transaction dans `avecTransaction`, comme n'importe quel échec.
+        if (abandonne()) throw new AbandonClient();
+
         return bilan;
       }).catch((erreur: unknown) => {
         if (erreur instanceof SentinelleApercu) return erreur.bilan;
+        if (erreur instanceof AbandonClient) {
+          // Le client n'est plus là pour lire quoi que ce soit : ce statut ne
+          // part que dans le journal. Il y part quand même, parce que c'est la
+          // seule trace qu'une reprise a été faite puis défaite, et qu'un
+          // exploitant qui voit un utilisateur « avoir perdu son import » doit
+          // pouvoir la retrouver.
+          requete.log.warn(
+            { mode, fichier: fichier.nom, octets: Buffer.byteLength(fichier.contenu, 'utf8') },
+            'Reprise ANNULÉE : la connexion est tombée avant la réponse ; rien n’a été écrit',
+          );
+          throw new ErreurApplicative({
+            code: 'indisponible',
+            statut: 503,
+            message:
+              "La reprise a été interrompue avant d'aboutir : rien n'a été modifié. " +
+              'Rechargez la page, puis recommencez.',
+            detailJournal: 'abandon du client avant validation (Q-19)',
+          });
+        }
         // ── T-10 : sur ce chemin, la cause est le FICHIER ───────────────
         // Traduire ici, et non dans le gestionnaire commun, est ce qui
         // permet d'énoncer la bonne cause sans en inventer une : le
