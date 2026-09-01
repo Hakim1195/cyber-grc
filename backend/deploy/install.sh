@@ -1677,6 +1677,81 @@ else
       else
         succes "URL d'entrée servie (200 après redirection), fichier non publiable refusé (403)"
       fi
+
+      # ══ INVARIANT DU CACHE : LONG ⇒ VERSIONNÉ (constat Q-43) ═══════════
+      #
+      #   > **Un actif ne reçoit un cache long que si son URL est versionnée.**
+      #
+      # Sans ce contrôle, la règle est un commentaire — et l'on sait ce que
+      # cela donne : le bloc `mod_expires` du vhost ÉNONÇAIT sa condition
+      # (« CE BLOC N'EST SÛR QUE COUPLÉ AU JETON DE VERSION »), un type non
+      # couvert est arrivé (`image/png`, trente jours, jamais versionné), et
+      # personne ne l'a vu pendant sept passages de porte.
+      #
+      # Aucun nombre n'est recopié ici. Les deux termes de la comparaison
+      # sortent des deux artefacts versionnés :
+      #  · la durée — demandée à APACHE lui-même, fichier par fichier ;
+      #  · le seuil — lu dans l'`ExpiresDefault` du vhost installé ;
+      #  · le versionnement — lu dans le frontend RÉELLEMENT PUBLIÉ.
+      #
+      # Ce que le contrôle cherche : un chemin en position de CHARGEMENT
+      # (`src="…"`, `href="…"`, `url(…)`) sans `?v=`. Il regarde tout le
+      # frontend publié, pas seulement `index.html` — parce que c'est
+      # exactement là qu'était le piège : `js/core/vault.js` construit l'URL
+      # du logo à l'exécution, si bien qu'un contrôle borné à la page aurait
+      # été satisfait par un jeton qui ne versionnait qu'une des deux URL.
+      # Les lignes de COMMENTAIRE sont écartées : plusieurs modules citent leur
+      # propre balise `<script src="…">` en en-tête, et les compter aurait fait
+      # échouer l'installation sur une phrase de documentation.
+      secondes_expires() {  # « access plus 1 hour » → 3600
+        local n unite
+        n="$(printf '%s' "$1" | sed -n 's/.*plus[[:space:]]\{1,\}\([0-9]\{1,\}\).*/\1/p')"
+        unite="$(printf '%s' "$1" | sed -n 's/.*plus[[:space:]]\{1,\}[0-9]\{1,\}[[:space:]]\{1,\}\([a-z]*\).*/\1/p')"
+        [[ -n "$n" ]] || { printf '0'; return; }
+        case "$unite" in
+          second*) printf '%s' "$n" ;;   minute*) printf '%s' "$((n*60))" ;;
+          hour*)   printf '%s' "$((n*3600))" ;;  day*)  printf '%s' "$((n*86400))" ;;
+          week*)   printf '%s' "$((n*604800))" ;; month*) printf '%s' "$((n*2592000))" ;;
+          year*)   printf '%s' "$((n*31536000))" ;; *) printf '0' ;;
+        esac
+      }
+      DEFAUT_BRUT="$(sed -n 's/^[[:space:]]*ExpiresDefault[[:space:]]\{1,\}"\([^"]*\)".*/\1/p' \
+                     /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null | tail -n1 || true)"
+      SEUIL_COURT="$(secondes_expires "$DEFAUT_BRUT")"
+
+      if [[ "${SEUIL_COURT:-0}" -le 0 ]]; then
+        alerte "le vhost ne pose pas d'ExpiresDefault lisible : l'invariant « cache long ⇒"
+        alerte "URL versionnée » (constat Q-43) n'a PAS pu être vérifié."
+      else
+        NON_VERSIONNES=""
+        while IFS= read -r fichier; do
+          REL="${fichier#"$RACINE/frontend/"}"
+          AGE="$(curl -sk --max-time 10 --noproxy '*' --resolve "$NOM_SERVEUR:443:127.0.0.1" \
+                 -o /dev/null -D - "https://$NOM_SERVEUR/$REL" 2>/dev/null \
+                 | tr -d '\r' | sed -n 's/^[Cc]ache-[Cc]ontrol:.*max-age=\([0-9]*\).*/\1/p' | tail -n1 || true)"
+          [[ -n "$AGE" && "$AGE" -gt "$SEUIL_COURT" ]] || continue
+          MOTIF="$(printf '%s' "$REL" | sed 's/[.[\*^$/]/\\&/g')"
+          REFS="$(grep -rnE "(src|href)=[\"']$MOTIF[\"']|url\([\"']?$MOTIF[\"')]" \
+                  "$RACINE/frontend" 2>/dev/null \
+                  | grep -vE '^[^:]*:[0-9]+: *(//|\*|/\*|<!--|#)' || true)"
+          [[ -n "$REFS" ]] && NON_VERSIONNES+="$REL (max-age=$AGE)"$'\n'"$REFS"$'\n'
+        done < <(find "$RACINE/frontend" -type f ! -name index.html)
+
+        if [[ -n "$NON_VERSIONNES" ]]; then
+          while IFS= read -r ligne; do [[ -n "$ligne" ]] && alerte "$ligne"; done <<< "$NON_VERSIONNES"
+          echec "un ou plusieurs actifs reçoivent un cache LONG alors que leur URL n'est pas
+            versionnée (constat Q-43, seuil : ExpiresDefault = ${SEUIL_COURT} s). Les lignes
+            ci-dessus donnent le fichier, la ligne et la référence fautive. Un correctif sur
+            ces fichiers resterait invisible jusqu'à l'expiration du cache. Deux issues, et
+            une seule est bonne selon le cas : faire porter « ?v= » à TOUTES les références
+            (jeton d'install.sh, ou l'URL écrite dans le code), OU retirer le type du bloc
+            ExpiresByType de deploy/apache/cyber-grc.conf pour qu'il retombe sur
+            ExpiresDefault. Versionner une SEULE des références ne suffit pas : c'est
+            exactement ce qui a produit ce constat."
+        else
+          succes "cache : tout actif à durée longue porte une URL versionnée (seuil ${SEUIL_COURT} s)"
+        fi
+      fi
     fi
   fi
 fi
