@@ -46,6 +46,10 @@ const Api = (() => {
             this.identifiant = details.identifiant || null;
             this.reference = details.reference || null;
             this.reseau = !!details.reseau;
+            // Vrai quand on ignore SI L'OPÉRATION A EU LIEU côté serveur — et non
+            // pas seulement si elle a réussi (constat Q-19). Voir le bloc
+            // « expiration » plus bas : c'est le seul endroit qui le pose.
+            this.issueInconnue = !!details.issueInconnue;
         }
         // Vrai quand l'enregistrement a été modifié entre-temps (verrouillage
         // optimiste, PLAN_SERVEUR §1.4 — le risque projet P1).
@@ -84,12 +88,52 @@ const Api = (() => {
                 signal: controleur ? controleur.signal : undefined
             });
         } catch (e) {
+            /* ── EXPIRATION : ce que le navigateur SAIT, et ce qu'il ignore ──────
+             *
+             * Constat Q-19. La phrase était « Le serveur n'a pas répondu dans le
+             * délai imparti », pour toutes les routes. Sur une lecture elle est
+             * juste ; sur une reprise elle est trompeuse au pire moment : la
+             * transaction peut avoir été VALIDÉE, et l'utilisateur voit ensuite
+             * ses données apparaître après qu'on lui a laissé croire à un échec.
+             *
+             * Le discriminant est la **MÉTHODE**, pas la route, et c'est ce qui
+             * fait la valeur du remède : `appeler()` ne sait pas ce qu'une route
+             * garantit, mais il sait si la requête pouvait modifier quelque
+             * chose. Une route non idempotente ajoutée demain hérite donc du bon
+             * défaut **sans que personne ait à y penser** — tenu par la forme, pas
+             * par la discipline. C'est le même raisonnement qui a fait refuser,
+             * sur le constat Q-11, une liste de champs écrite à la main.
+             *
+             * ⚠️ Et c'est pour cela que la SECONDE branche ne porte pas le
+             * drapeau, délibérément. Une requête qui n'aboutit pas sans expirer
+             * (VPN tombé, service arrêté) a, elle aussi, pu être reçue et validée
+             * avant que le lien ne cède — mais le cas courant, de très loin, est
+             * qu'elle n'est jamais partie. Avertir « peut-être appliquée » à
+             * chaque coupure de VPN apprendrait à ignorer l'avertissement, et le
+             * geste appris sur un faux positif finit par s'appliquer à un vrai :
+             * c'est exactement ce que le constat m-5 reproche à un bandeau
+             * quotidien et anodin. La phrase de cette branche n'affirme d'ailleurs
+             * aucune issue — elle dit d'où vient la panne, pas ce qu'elle a laissé.
+             *
+             * Ce que ce remède ne fait pas : rendre le cas impossible. Le serveur
+             * surveille désormais l'abandon du client et n'engage plus une
+             * transaction que personne ne lira, mais il subsiste une fenêtre où il
+             * a validé et où la réponse est en vol. « Peut-être appliquée,
+             * rechargez avant de recommencer » reste la seule phrase vraie sur les
+             * deux chemins.
+             */
+            const expire = !!(e && e.name === "AbortError");
+            const modifie = (opts.methode || "GET") !== "GET";
             throw new ErreurApi({
                 reseau: true,
                 statut: 0,
                 code: "indisponible",
-                message: (e && e.name === "AbortError")
-                    ? "Le serveur n'a pas répondu dans le délai imparti."
+                issueInconnue: expire && modifie,
+                message: expire
+                    ? (modifie
+                        ? "Le serveur n'a pas répondu dans le délai imparti. L'opération a peut-être " +
+                          "été appliquée : rechargez la page avant de recommencer."
+                        : "Le serveur n'a pas répondu dans le délai imparti. Rien n'a été modifié.")
                     : "Le serveur est injoignable. Vérifiez votre connexion (VPN) et réessayez."
             });
         } finally {
