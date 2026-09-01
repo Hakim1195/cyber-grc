@@ -1344,6 +1344,71 @@ const Sync = (() => {
        ÉCHECS — la mémoire ne doit pas mentir
     ===================================================================== */
 
+    /**
+     * Rejouer cette écriture peut-il fabriquer un doublon ?
+     *
+     * ── Ce qui a été mesuré ──────────────────────────────────────────────────
+     *
+     * Le serveur valide, puis la réponse expire. Le nouvel essai automatique
+     * part, et sur les trois gestes le résultat n'est pas le même :
+     *
+     *   création      écran 1, base 2 — bandeau VIDE, « tout est enregistré »
+     *   modification  écran 1, base 1 — bloqué et dit (le rejeu bute sur GRC03)
+     *   suppression   écran 0, base 0 — bloqué et dit (le rejeu bute sur 404)
+     *
+     * La cause est nette : **le verrouillage optimiste protège la modification
+     * et la suppression, et la création n'a rien qui la protège** — précisément
+     * parce que le client ne propose plus d'identifiant (remède du constat M-3),
+     * si bien que le serveur n'a aucun moyen de reconnaître qu'il a déjà écrit
+     * cette ligne-là.
+     *
+     * ── L'arbitrage, et pourquoi il penche de ce côté ───────────────────────
+     *
+     * On échange une auto-réparation contre un dérangement. L'erreur qu'on
+     * supprime est **silencieuse, durable, et fabrique une fausse pièce d'audit**
+     * dans un outil dont c'est la raison d'être. L'erreur qu'on ajoute — un
+     * enregistrement bloqué après une expiration qui n'avait rien validé — est
+     * **visible, immédiate, et réparable par la personne qui vient de faire la
+     * saisie**. Entre un mensonge silencieux et un dérangement visible, ce
+     * produit choisit le dérangement : c'est déjà ce qui lui fait refuser de
+     * démarrer sur un jeu vide quand le serveur est injoignable.
+     *
+     * Et la saisie ne bouge pas de l'écran : bloquer n'efface rien (seul
+     * `revenirALaValeurServeur` retire, et il n'est pas sur ce chemin). Si elle
+     * disparaissait, on aurait troqué un doublon contre une perte — c'est-à-dire
+     * la voie « recharger avant de rejouer », qui a été écartée pour cela.
+     *
+     * ── Trois bornes, qui sont ce qui rend ce remède acceptable ─────────────
+     *
+     *  · **La CRÉATION seule.** Bloquer aussi la modification et la suppression
+     *    ajouterait un dérangement sans supprimer aucun mensonge : elles sont
+     *    déjà tenues par le verrou et par le 404. Un garde-fou qui ne supprime
+     *    rien est ce que ce chantier appelle un garde-fou mort.
+     *  · **L'EXPIRATION seule.** Une coupure ordinaire (VPN tombé) n'a
+     *    presque jamais rien validé, et `issueInconnue` ne s'y pose pas : elle
+     *    continue de se rejouer toute seule, ce qui est le bon comportement pour
+     *    le cas fréquent. Voir `js/core/api.js`, où le drapeau est posé.
+     *  · **Pas les enregistrements DÉRIVÉS.** Le point d'historique quotidien
+     *    n'est pas une saisie ; le bloquer produirait le bandeau anodin et
+     *    quotidien que le constat m-5 condamne, et son doublon est de toute façon
+     *    refusé par l'unicité de la date. Il garde donc son traitement : abandon
+     *    de la copie locale, plus bas.
+     *
+     * ── Ce remède est fait pour DISPARAÎTRE ─────────────────────────────────
+     *
+     * La bonne réponse de fond n'est pas de renoncer au rejeu, c'est que le
+     * serveur sache reconnaître un rejeu — une clé d'idempotence portée par la
+     * requête, que le `backend/db/CONVENTIONS.md` §2 assigne au **lot L7**. Le
+     * jour où elle existe, rejouer une création redevient sûr : **cette fonction
+     * doit alors être retirée**, et non pas conservée « au cas où ». Elle n'a de
+     * sens que tant que le serveur ne peut pas converger tout seul.
+     */
+    function rejeuDangereux(erreur, collection, id, geste) {
+        if (geste !== "creation") return false;
+        if (!erreur.issueInconnue) return false;
+        return !derives.has(cle(collection, id));
+    }
+
     function traiterEchec(collection, id, erreur, geste, enregistrement) {
         if (!(erreur instanceof Api.ErreurApi)) {
             console.error("Échec d'écriture inattendu", erreur);
@@ -1353,7 +1418,9 @@ const Sync = (() => {
         // Panne passagère : rien n'est marqué, la modification reste en attente
         // et repartira toute seule. L'utilisateur est prévenu que ce n'est pas
         // encore enregistré.
-        if (erreur.estPassagere()) {
+        //
+        // …SAUF quand rejouer peut fabriquer un doublon : voir `rejeuDangereux`.
+        if (erreur.estPassagere() && !rejeuDangereux(erreur, collection, id, geste)) {
             panneReseau = true;
             return false;
         }
@@ -1391,7 +1458,11 @@ const Sync = (() => {
         bloques.add(cle(collection, id));
         ajouterIncident({
             collection, id, geste,
-            type: erreur.estConflit() ? "conflit" : (erreur.estIntrouvable() ? "disparu" : "refus"),
+            // « refusé » serait faux : l'écriture a peut-être abouti. C'est tout
+            // ce que le navigateur sait, et c'est ce qu'il dit.
+            type: erreur.estConflit() ? "conflit"
+                : (erreur.estIntrouvable() ? "disparu"
+                    : (erreur.issueInconnue ? "incertain" : "refus")),
             message: erreur.message,
             versionActuelle: erreur.versionActuelle,
             rechargeable: true
@@ -1652,7 +1723,8 @@ const Sync = (() => {
                 const tete = i.type === "conflit" ? "Modifié entre-temps"
                     : i.type === "disparu" ? "Supprimé entre-temps"
                         : i.type === "droit" ? "Écriture refusée"
-                            : "Enregistrement refusé";
+                            : i.type === "incertain" ? "Enregistrement incertain"
+                                : "Enregistrement refusé";
                 return "<li><b>" + esc(tete) + "</b> — " + esc(i.libelle) + " : " + esc(i.message) + "</li>";
             }).join("");
             morceaux.push(
