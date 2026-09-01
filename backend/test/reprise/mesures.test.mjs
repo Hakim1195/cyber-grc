@@ -12,7 +12,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { reprendreExport, scinderMesures } from '../../src/reprise/index.ts';
-import { fichier, instantane, instantaneV12Complet, OPTIONS_FIGEES } from './jeux-essai.mjs';
+import {
+  estIdentifiantEngendre,
+  fichier,
+  instantane,
+  instantaneV12Complet,
+  OPTIONS_FIGEES,
+} from './jeux-essai.mjs';
 
 function repriseAvecMesures(mesures, autres = {}) {
   const resultat = reprendreExport(fichier(12, instantane(12, { mesures, ...autres })), OPTIONS_FIGEES);
@@ -41,9 +47,18 @@ test('la définition garde l’identifiant du fichier, la mise en œuvre en reç
     },
   ]);
 
-  assert.deepEqual(mesures.miseEnOeuvre, [
+  // L'identifiant de la mise en œuvre est ENGENDRÉ : il n'existe dans aucun export
+  // (le §16.3 le veut ainsi). On l'écarte de la comparaison de contenu et on
+  // l'éprouve pour ce qu'il est — une propriété, pas une valeur : sa forme était
+  // épinglée au caractère près, et le correctif du constat Q-1 l'a rendue rouge
+  // sans qu'aucune garantie n'ait bougé.
+  assert.equal(mesures.miseEnOeuvre.length, 1);
+  const [mise] = mesures.miseEnOeuvre;
+  assert.ok(estIdentifiantEngendre('MMO', mise.id), `Identifiant hors convention : ${String(mise.id)}`);
+  assert.deepEqual(
+    { ...mise, id: undefined },
     {
-      id: 'MMO-1720000000000-482',
+      id: undefined,
       mesure_id: 'MESURE-1720000000000-1',
       statut: 'partiellement conforme',
       maturite: 3,
@@ -51,7 +66,7 @@ test('la définition garde l’identifiant du fichier, la mise en œuvre en reç
       commentaire: '',
       updatedAt: 1_700_000_000_000,
     },
-  ]);
+  );
 });
 
 test('une mise en œuvre par mesure, et une seule — l’unicité (filiale, mesure) est tenable', () => {
@@ -72,8 +87,19 @@ test('le préfixe MMO n’existe dans aucun export : il est engendré ici', () =
   const origine = instantaneV12Complet();
   const resultat = reprendreExport(fichier(12, origine), OPTIONS_FIGEES);
 
+  // On éprouve la PROPRIÉTÉ, pas la mise en forme. La rédaction précédente
+  // épinglait « MMO-<chiffres>-<chiffres> » ; le suffixe est passé en base 36 au
+  // quatrième passage de la porte (constat Q-1), et cette assertion serait devenue
+  // rouge sans qu'aucune garantie n'ait bougé. Ce qui doit tenir : le préfixe de
+  // l'entité, l'unicité, et la recevabilité par le domaine « id_metier ».
+  const vus = new Set();
   for (const mise of resultat.mesures.miseEnOeuvre) {
-    assert.match(mise.id, /^MMO-\d+-\d+$/);
+    assert.ok(mise.id.startsWith('MMO-'), `Préfixe attendu : ${mise.id}`);
+    assert.ok(mise.id.length > 4 && mise.id.length <= 64, `Longueur hors domaine : ${mise.id}`);
+    assert.equal(mise.id.trim(), mise.id, `Blanc de bord : ${mise.id}`);
+    assert.equal(mise.id.includes(','), false, `Virgule refusée par « id_metier » : ${mise.id}`);
+    assert.equal(vus.has(mise.id), false, `Identifiant engendré deux fois : ${mise.id}`);
+    vus.add(mise.id);
   }
   // Aucun MMO- ne figure dans le fichier d'origine.
   assert.equal(JSON.stringify(origine).includes('MMO-'), false);

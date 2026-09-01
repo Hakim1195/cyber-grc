@@ -404,6 +404,80 @@ describe('Les refus de la route de reprise', () => {
     assert.equal(occurrences.length, 1, 'Quatre reprises, un seul enregistrement.');
   });
 
+  test('… et la RÉ-ÉMISSION converge aussi : trois reprises, un seul clone (constat Q-2)', async () => {
+    // ── Le chemin que le remède précédent a ouvert ───────────────────────────
+    //
+    // Le test ci-dessus reprend quatre fois un fichier dont les identifiants sont
+    // libres : il éprouve la convergence du chemin NOMINAL. Il ne dit rien du
+    // chemin de ré-émission — celui qu'emprunte un identifiant déjà pris dans le
+    // domaine global par une ligne que l'appelant ne peut pas voir.
+    //
+    // Or c'est précisément là que la levée du verrou d'idempotence a ouvert une
+    // porte : tant que le second passage était refusé, une ré-émission tirée au
+    // hasard ne pouvait pas se répéter. Une fois le fichier rejouable, chaque
+    // reprise fabriquait un clone de plus, et la référence suivait le dernier —
+    // trois lignes pour un enregistrement. Septième occurrence du motif que ce
+    // chantier connaît bien : le remède crée son propre chemin.
+    //
+    // La propriété n'est donc pas « l'identifiant ré-émis est imprévisible », mais
+    // « il est LE MÊME d'une reprise à l'autre ». Elle se mesure au compte de
+    // lignes, jamais à la valeur — qui, elle, ne doit rien apprendre à personne.
+    const contenu = fichier(12, instantane(12, {
+      // « RISK-B » appartient à la filiale voisine, invisible d'ici : c'est ce qui
+      // déclenche la ré-émission (constat N-1).
+      risques: [{ id: 'RISK-B', nom: 'Enregistrement dont l’identifiant est pris ailleurs' }],
+      actions: [{ id: 'ACT-REEMISSION', titre: 'action qui vise le renommé', risque_id: 'RISK-B' }],
+    }));
+
+    const apresChaquePassage = [];
+    for (let passage = 0; passage < 3; passage += 1) {
+      const reponse = await reprendre('fusionner', null, { contenu, nom: 'reemission.json' });
+      assert.equal(reponse.statut, 200, `Passage ${String(passage + 1)} : ${JSON.stringify(reponse.corps).slice(0, 200)}`);
+      const vues = await base.avecPerimetre(await base.connexion('app'), lectureA, async (c) =>
+        (await c.query(
+          "select id from risques where nom = 'Enregistrement dont l’identifiant est pris ailleurs' order by id",
+        )).rows);
+      apresChaquePassage.push(vues.map((l) => l.id));
+    }
+
+    // ── LA stabilité, passage par passage ───────────────────────────────
+    // C'est la propriété, et elle se lit mieux ici qu'à la fin : si le troisième
+    // passage seul était compté, une ré-émission qui alterne entre deux valeurs
+    // passerait un tour sur deux. On exige l'IDENTITÉ, pas seulement le compte.
+    assert.deepEqual(
+      apresChaquePassage[1],
+      apresChaquePassage[0],
+      'La deuxième reprise doit RETROUVER la ligne de la première, au même identifiant.',
+    );
+    assert.deepEqual(
+      apresChaquePassage[2],
+      apresChaquePassage[0],
+      'Et la troisième aussi : une dérivation déterministe ne dépend pas du rang du passage.',
+    );
+
+    const client = await base.connexion('app');
+    const lignes = await base.avecPerimetre(client, lectureA, async (c) =>
+      (await c.query(
+        "select id from risques where nom = 'Enregistrement dont l’identifiant est pris ailleurs'",
+      )).rows);
+    assert.equal(
+      lignes.length,
+      1,
+      `Trois reprises du même fichier ont fabriqué ${String(lignes.length)} enregistrement(s). ` +
+        'Une ré-émission tirée au hasard ne retrouve jamais sa ligne : elle en ajoute une.',
+    );
+
+    // Et la référence pointe sur ce seul enregistrement, pas sur un clone disparu.
+    const [action] = await base.avecPerimetre(client, lectureA, async (c) =>
+      (await c.query("select risque_id from actions where id = 'ACT-REEMISSION'")).rows);
+    assert.equal(action.risque_id, lignes[0].id, 'La référence suit l’unique ligne survivante.');
+
+    // Contrôle S12 : rien de ce calcul ne doit transparaître. La réponse ne dit pas
+    // qu'un renommage a eu lieu — sinon l'oracle d'existence se rouvrirait par là.
+    const derniere = await reprendre('fusionner', null, { contenu, nom: 'reemission.json' });
+    assert.equal(/renomm|déjà pris|existe/i.test(JSON.stringify(derniere.corps)), false);
+  });
+
   test('l’empreinte du fichier reste tracée : ce qui est retiré, c’est le VERROU', async () => {
     // Contrôle symétrique du précédent. Lever l'interdiction ne doit pas effacer la
     // trace : l'empreinte reste écrite dans « imports » — c'est elle qui permettra au
@@ -986,7 +1060,25 @@ describe('Un vieil export où DEUX entités partagent un identifiant', () => {
     // ── L'homonymie est bien résolue, et d'un seul côté ──────────────────────
     assert.equal(actif.id, 'RISK-B', 'L’actif n’entrait en collision avec rien : il garde son identifiant.');
     assert.notEqual(risque.id, 'RISK-B', 'Le risque, lui, se heurtait à une filiale invisible : il est renommé.');
-    assert.match(risque.id, /^RISK-\d+-\d+$/, 'Et il est renommé selon la convention du chantier (§2).');
+    // On éprouve la PROPRIÉTÉ, pas la forme. La première rédaction épinglait
+    // « RISK-<chiffres>-<chiffres> » ; le correctif du quatrième passage a changé
+    // l'alphabet du générateur, et ce test est devenu rouge sans qu'aucune
+    // propriété n'ait bougé. Un essai qui décrit une mise en forme casse à chaque
+    // amélioration de la mise en forme, et on prend l'habitude de le « réparer ».
+    // Ce qui compte : l'identifiant est ré-émis par le SERVEUR, il porte le préfixe
+    // de SON entité, et il reste recevable par le domaine « id_metier » du schéma.
+    assert.ok(risque.id.startsWith('RISK-'), `Le préfixe de l’entité est conservé : ${risque.id}`);
+    // La marque « -r- » n'est pas une coquetterie de mise en forme : elle DIT que
+    // l'identifiant a été dérivé, et non tiré. C'est elle qui permet à la reprise de
+    // savoir, sans calculer une seule empreinte, qu'aucune ré-émission n'a eu lieu
+    // dans une filiale — et à l'exploitant de reconnaître une ré-émission au journal.
+    assert.ok(
+      risque.id.startsWith('RISK-r-'),
+      `Un identifiant ré-émis s’annonce comme tel : ${risque.id}`,
+    );
+    assert.ok(risque.id.length > 'RISK-'.length && risque.id.length <= 64, `Longueur : ${risque.id}`);
+    assert.equal(risque.id.trim(), risque.id, 'Ni blanc de bord…');
+    assert.equal(risque.id.includes(','), false, '…ni virgule : le domaine « id_metier » les refuse.');
 
     // ── Chaque référence a suivi la bonne entité ─────────────────────────────
     const [surRisque] = await base.avecPerimetre(client, lectureA, async (c) =>

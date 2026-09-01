@@ -645,6 +645,66 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
       .replace(/\/entites\/[^/]+$/, '/entites/:entite')}`;
   }
 
+  test('LE GÉNÉRATEUR QUI ÉCRIT : 250 créations d’affilée, 250 identifiants distincts', async () => {
+    // ── La leçon du constat Q-1, appliquée à ce banc ─────────────────────────
+    //
+    // Le banc portait déjà un essai d'entropie — 250 puis 20 000 tirages — sur le
+    // générateur SQL. Celui-là n'écrit rien : aucune ligne du produit ne passe par
+    // lui. Le générateur qui écrit vraiment est celui du serveur, appelé par la
+    // route de création, et il n'était mesuré nulle part. Un essai d'entropie sur
+    // un générateur inerte rassure sans rien prouver — c'est exactement la forme
+    // de défaut que cette porte a relevée trois fois.
+    //
+    // On mesure donc le CHEMIN RÉEL : la route, la base, et les identifiants tels
+    // qu'ils y sont écrits. Aucune fonction n'est appelée à part.
+    const LOT = 250;
+    const marque = `Entropie ${String(Date.now())}`;
+    const rendus = [];
+    for (let i = 0; i < LOT; i += 1) {
+      const reponse = await serveur.appeler('POST', '/api/entites/risques', {
+        corps: { champs: { nom: `${marque} n° ${String(i + 1)}` } },
+      });
+      assert.equal(reponse.statut, 201, JSON.stringify(reponse.corps).slice(0, 200));
+      rendus.push(reponse.corps.enregistrement.id);
+    }
+
+    assert.equal(
+      new Set(rendus).size,
+      LOT,
+      'Deux créations consécutives ne doivent jamais rendre le même identifiant.',
+    );
+
+    // ── Et ce sont les identifiants qui distinguent, PAS l'horloge ──────────
+    //
+    // Chaque création passe ici par une transaction : l'horodatage avance donc à
+    // presque chaque appel, et « 250 identifiants distincts » serait vrai même
+    // d'un générateur sans aléa du tout. Première rédaction de ce test : elle
+    // exigeait des horodatages répétés, et échouait pour cette raison — elle
+    // décrivait la boucle du navigateur, pas ce chemin-ci.
+    //
+    // On mesure donc la part VARIABLE seule. Le dernier champ est l'aléa ; si le
+    // format changeait pour n'en plus avoir qu'un, `pop()` rendrait l'identifiant
+    // entier et l'assertion resterait vraie de ce qu'elle veut dire.
+    const alea = new Set(rendus.map((id) => id.split('-').pop()));
+    assert.equal(
+      alea.size,
+      LOT,
+      `Sur ${String(LOT)} créations, l’aléa n’a pris que ${String(alea.size)} valeurs distinctes. ` +
+        'Un générateur dont l’aléa se répète perd des lignes dès que l’horodatage cesse ' +
+        'de varier — c’est le bloquant T-1, et il n’a pas besoin d’une boucle serrée pour ' +
+        'se produire : deux postes qui écrivent la même milliseconde suffisent.',
+    );
+
+    // Et la preuve par la base : 250 confiées, 250 écrites, aucune écrasée.
+    const client = await base.connexion('app');
+    const enBase = await base.avecPerimetre(client, perimetre('temoin', FILIALE_A, [FILIALE_A]), async (c) =>
+      (await c.query('select count(*)::int as n, count(distinct id)::int as d from risques where nom like $1', [
+        `${marque} %`,
+      ])).rows[0]);
+    assert.equal(enBase.n, LOT, `${String(LOT)} créations, ${String(enBase.n)} lignes.`);
+    assert.equal(enBase.d, LOT, 'Et autant d’identifiants distincts.');
+  });
+
   test('AUCUN point d’entrée ne sert de données hors développement (constat T-3)', async () => {
     // Deux environnements, et le second est celui qui a coûté un constat : la barrière
     // ne couvrait que la production, alors que `PLAN_SERVEUR` §1.10 veut une recette

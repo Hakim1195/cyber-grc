@@ -331,10 +331,15 @@ export interface OptionsReprise {
   readonly noeudsMax?: number;
   /** Plafond du nombre d'anomalies listées. Défaut : 500. */
   readonly anomaliesMax?: number;
-  /** Horloge injectable — les identifiants engendrés deviennent reproductibles en test. */
+  /**
+   * Horloge injectable — la date d'une enveloppe reconstruite devient
+   * reproductible en test (`construireEnveloppe`).
+   *
+   * Elle ne sert plus aux identifiants : depuis le constat Q-13, ce module
+   * n'en tire plus aucun au hasard, il les DÉRIVE. La reproductibilité des
+   * identifiants n'a donc plus à être organisée — elle est acquise.
+   */
   readonly horloge?: () => number;
-  /** Source d'aléa injectable, même motif. */
-  readonly alea?: () => number;
   /** Nom applicatif attendu dans l'enveloppe. Défaut : `cyber-grc-dedienne`. */
   readonly application?: string;
 }

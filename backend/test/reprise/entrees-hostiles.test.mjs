@@ -11,7 +11,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { reprendreExport } from '../../src/reprise/index.ts';
-import { anomalies, fichier, idEngendre, instantane, OPTIONS_FIGEES } from './jeux-essai.mjs';
+import {
+  anomalies,
+  estIdentifiantEngendre,
+  fichier,
+  instantane,
+  OPTIONS_FIGEES,
+} from './jeux-essai.mjs';
 
 /* =====================================================================
  *  Pollution de prototype
@@ -166,8 +172,29 @@ test('enregistrement sans identifiant : un identifiant canonique est engendré e
   );
 
   assert.equal(resultat.statut, 'reprise');
-  assert.equal(resultat.charge.clients[0].id, idEngendre('CLI'));
-  assert.equal(resultat.charge.clients[1].id, idEngendre('CLI'));
+  for (const client of resultat.charge.clients) {
+    assert.ok(
+      estIdentifiantEngendre('CLI', client.id),
+      `Identifiant engendré hors convention : ${String(client.id)}`,
+    );
+  }
+  // Deux enregistrements distincts, deux identifiants distincts : sans quoi le
+  // second écraserait le premier — c'est la forme du bloquant T-1.
+  assert.notEqual(resultat.charge.clients[0].id, resultat.charge.clients[1].id);
+
+  // ── Et la REPRODUCTIBILITÉ, qui remplace l'aléa figé ─────────────────────
+  // Le module ne tire plus, il dérive : rejouer le même fichier doit rendre les
+  // mêmes identifiants. C'est ce qui fait converger deux reprises d'une même
+  // sauvegarde au lieu d'y ajouter des clones à chaque passage.
+  const rejoue = reprendreExport(
+    fichier(12, instantane(12, { clients: [{ nom: 'Sans identifiant' }, { id: '   ', nom: 'Vide' }] })),
+    OPTIONS_FIGEES,
+  );
+  assert.deepEqual(
+    rejoue.charge.clients.map((c) => c.id),
+    resultat.charge.clients.map((c) => c.id),
+    'Une reprise déterministe rend les mêmes identifiants sur la même entrée.',
+  );
 
   const signalees = anomalies(resultat.rapport, 'identifiant-engendre');
   assert.equal(signalees.length, 2);

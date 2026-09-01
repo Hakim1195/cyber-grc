@@ -50,6 +50,15 @@
  *   celles de la base ; ce module les anticipe pour rendre un rapport utile.
  */
 
+// Seul import de VALEUR de ce module, et il est délibérément un module INTERNE
+// de Node : un spécificateur relatif en « .js » ne se résout pas quand Node
+// dépouille les types, et les six fichiers d'essai de la reprise s'exécutent
+// sur la SOURCE (`test/reprise/*.test.mjs` importent `src/reprise/index.ts`).
+// C'est cette contrainte qui interdit d'importer ici `engendrerIdentifiant`
+// depuis `src/entites/` — et c'est pourquoi le remède de Q-13 ne consiste pas
+// à partager le tirage, mais à n'en plus faire aucun (voir plus bas).
+import { createHash } from 'node:crypto';
+
 import type {
   Anomalie,
   ChargeV12,
@@ -505,15 +514,68 @@ function extrait(valeur: unknown, longueur = 60): string {
 }
 
 /**
- * Identifiant au format de `UI.genId` (frontend) et de `f_generer_id` (base) :
- * `<PRÉFIXE>-<millisecondes>-<aléa 0..999>`. Les trois implémentations doivent
- * rester alignées, sans quoi un identifiant engendré ici détonnerait dans les
- * exports ultérieurs.
+ * Identifiant **dérivé** — les deux seuls endroits où ce module doit en
+ * inventer un.
+ *
+ * ── Porte S2 quater, constat Q-13 ────────────────────────────────────
+ *
+ * Ce qui vivait ici était un quatrième clone de la convention du §2, et le
+ * plus faible des quatre : un tirage ramené par troncature à **mille
+ * valeurs**, dans des boucles où l'horodatage ne sépare plus rien. (L'appel
+ * fautif n'est pas recopié ici : le prochain balayage du dépôt à la recherche
+ * d'un tirage maison ne doit pas tomber sur un commentaire.) Mesuré sur
+ * la fonction telle qu'elle était, 200 essais par palier :
+ *
+ *     250 mesures  · collisions moyennes 28,4 · pire cas 43 · 11,3 %
+ *    1000 mesures  · collisions moyennes 328  · pire cas 394 · 32,8 %
+ *
+ * Son commentaire disait qu'elle devait « rester alignée » sur `UI.genId` et
+ * `f_generer_id`. Les deux ont été durcis, elle non — et c'est cette phrase,
+ * devenue fausse, qui aurait dû conduire ici.
+ *
+ * ── Pourquoi une dérivation, et non un appel au bon générateur ────────
+ *
+ * `engendrerIdentifiant()` (`src/entites/`) est le générateur unique du
+ * serveur, durci à 128 bits et gardé au démarrage. L'importer d'ici casserait
+ * les six fichiers d'essai de la reprise, qui s'exécutent sur la source (voir
+ * l'import en tête de fichier). Plutôt que d'ajouter un cinquième tirage, ce
+ * module **cesse de tirer** : il dérive, d'une empreinte de ce qui distingue
+ * l'enregistrement dans son propre fichier. Trois conséquences :
+ *
+ *  · **zéro collision par construction** — deux entrées distinctes donnent
+ *    deux identifiants distincts, ce qu'aucun tirage ne garantit ;
+ *  · **le module reste pur** : plus de source d'aléa injectée, donc plus de
+ *    reproductibilité à organiser en test — elle est acquise ;
+ *  · il ne reste **aucun générateur aléatoire** dans ce fichier, donc plus
+ *    rien à « garder aligné ».
+ *
+ * La marque « -d- » (dérivé du fichier) se distingue du « -r- » des
+ * ré-émissions du serveur (`identifiantDerive`, constat Q-2) : les deux
+ * coexistent en base et ne doivent pas se confondre.
  */
-function engendrerId(prefixe: string, horloge: () => number, alea: () => number): string {
-  const millisecondes = Math.trunc(horloge());
-  const suffixe = Math.floor(alea() * 1000);
-  return `${prefixe.toUpperCase()}-${millisecondes}-${suffixe}`;
+/**
+ * Extrait borné et stable du contenu d'un enregistrement, pour la dérivation.
+ *
+ * Il est borné pour une raison de coût : un fichier peut porter 20 000
+ * enregistrements, et prendre l'empreinte de plusieurs mégaoctets par
+ * enregistrement rendrait la reprise plus lente que ce que la borne de S13
+ * autorise. Il n'a pas à être injectif — le RANG assure à lui seul l'unicité
+ * dans le fichier ; le contenu n'est là que pour la convergence d'un fichier
+ * repris deux fois.
+ */
+function empreinteBornee(enregistrement: Enregistrement): string {
+  try {
+    return JSON.stringify(enregistrement)?.slice(0, 512) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function identifiantDeFichier(prefixe: string, ...parties: readonly string[]): string {
+  const empreinte = createHash('sha256').update(parties.join('\u0000'), 'utf8').digest();
+  let valeur = 0n;
+  for (const octet of empreinte.subarray(0, 16)) valeur = (valeur << 8n) | BigInt(octet);
+  return `${prefixe.toUpperCase()}-d-${valeur.toString(36).padStart(25, '0')}`;
 }
 
 /* =====================================================================
@@ -1465,9 +1527,7 @@ const MOTIF_DATE_ISO = /^\d{4}-\d{2}-\d{2}(?:[T ].*)?$/;
 /** Longueur maximale du domaine `id_metier` (`001_socle.sql`). */
 const LONGUEUR_MAX_IDENTIFIANT = 64;
 
-function controler(charge: ChargeV12, journal: JournalAnomalies, options: OptionsReprise): void {
-  const horloge = options.horloge ?? Date.now;
-  const alea = options.alea ?? Math.random;
+function controler(charge: ChargeV12, journal: JournalAnomalies): void {
 
   /* --- Passe 1 : identifiants (il faut les connaître tous avant les clés étrangères) --- */
   const index: Record<NomCollection, Set<string>> = {} as Record<NomCollection, Set<string>>;
@@ -1479,7 +1539,7 @@ function controler(charge: ChargeV12, journal: JournalAnomalies, options: Option
     for (let i = 0; i < charge[nom].length; i += 1) {
       const enregistrement = charge[nom][i];
       if (enregistrement === undefined) continue;
-      const identifiant = resoudreIdentifiant(enregistrement, nom, i, description, journal, horloge, alea);
+      const identifiant = resoudreIdentifiant(enregistrement, nom, i, description, journal);
       if (vus.has(identifiant)) {
         journal.signaler(
           'identifiant-duplique',
@@ -1562,8 +1622,6 @@ function resoudreIdentifiant(
   rang: number,
   description: DescriptionCollection,
   journal: JournalAnomalies,
-  horloge: () => number,
-  alea: () => number,
 ): string {
   const brut = lire(enregistrement, 'id');
 
@@ -1582,7 +1640,26 @@ function resoudreIdentifiant(
   }
 
   if (typeof brut !== 'string' || brut.trim() === '') {
-    const engendre = engendrerId(description.prefixe ?? 'ID', horloge, alea);
+    // Q-13 — C'EST CE CHEMIN QUI ÉCRIT. Contrairement au « MMO- » de
+    // `scinderMesures`, l'identifiant posé ici entre dans la charge que le
+    // serveur applique. Mesuré avant le remède, sur un fichier de 250
+    // enregistrements sans identifiant : 231 identifiants distincts pour 250
+    // enregistrements, et la reprise entière refusée en 400 par le garde
+    // anti-doublon — en reprochant au fichier un doublon que le serveur venait
+    // lui-même de fabriquer. Bruyant, donc, mais faux, et un export ancien
+    // parfaitement légitime devenait irreprenable une fois sur neuf.
+    //
+    // La dérivation porte le RANG, qui rend l'unicité certaine à l'intérieur
+    // du fichier, et un extrait borné du contenu, qui rend le même fichier
+    // repris deux fois convergent. Rien ne pointe vers ces enregistrements —
+    // l'avertissement ci-dessous le dit —, donc rien ne se casse à ce que
+    // l'identifiant change d'un fichier à l'autre.
+    const engendre = identifiantDeFichier(
+      description.prefixe ?? 'ID',
+      nom,
+      String(rang),
+      empreinteBornee(enregistrement),
+    );
     enregistrement['id'] = engendre;
     journal.signaler(
       'identifiant-engendre',
@@ -1871,10 +1948,10 @@ function controlerMappings(charge: ChargeV12, journal: JournalAnomalies): void {
  * Ni `filiale_id` ni `version` ne sont posés : le périmètre vient du serveur,
  * jamais du fichier, et la version est du ressort du déclencheur de la base.
  */
-export function scinderMesures(charge: ChargeV12, options: OptionsReprise = {}): MesuresScindees {
-  const horloge = options.horloge ?? Date.now;
-  const alea = options.alea ?? Math.random;
-
+// Plus d'options : depuis Q-13, cette fonction ne tire plus rien au hasard et
+// n'a donc plus rien à configurer. Un appelant qui lui passe encore un objet
+// d'options n'en souffre pas — l'argument est simplement ignoré.
+export function scinderMesures(charge: ChargeV12): MesuresScindees {
   const catalogue: MesureCatalogue[] = [];
   const miseEnOeuvre: MesureMiseEnOeuvre[] = [];
 
@@ -1889,7 +1966,19 @@ export function scinderMesures(charge: ChargeV12, options: OptionsReprise = {}):
     });
 
     miseEnOeuvre.push({
-      id: engendrerId('MMO', horloge, alea),
+      // ⚠️ CET IDENTIFIANT N'EST PAS CELUI QUE LA BASE REÇOIT, et c'est
+      // vérifié plutôt que supposé : une reprise réelle de 250 mesures écrit
+      // 250 lignes dans `mesure_mise_en_oeuvre`, toutes sous la forme
+      // « MMO-<ms>-<25 caractères en base 36> », c'est-à-dire celle
+      // d'`engendrerIdentifiant()`. La scission appliquée est refaite côté
+      // serveur par `Depot.creer` ; d'ici, seul `volumesMesures` (un compte)
+      // sort. C'est ce qui a fait de Q-13 un majeur et non un bloquant.
+      //
+      // Il reste dérivé, et non tiré : le jour où quelqu'un branchera cette
+      // sortie sur une écriture — c'est exactement le geste que le nom de la
+      // fonction invite à faire —, il ne trouvera pas un générateur à mille
+      // valeurs qui l'attend.
+      id: identifiantDeFichier('MMO', id),
       mesure_id: id,
       statut: texteDe(lire(mesure, 'statut')),
       maturite: nombreOuNull(lire(mesure, 'maturite')) ?? 0,
@@ -1955,9 +2044,9 @@ export function reprendreExport(entree: unknown, options: OptionsReprise = {}): 
     );
   }
 
-  controler(charge, journal, options);
+  controler(charge, journal);
 
-  const mesures = scinderMesures(charge, options);
+  const mesures = scinderMesures(charge);
 
   const volumes = {} as Record<NomCollection, number>;
   for (const nom of COLLECTIONS) volumes[nom] = charge[nom].length;

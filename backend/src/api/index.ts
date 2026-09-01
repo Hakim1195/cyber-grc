@@ -88,6 +88,7 @@ import type { PerimetreSession } from '../db/pool.js';
 import {
   chargerCatalogue,
   Depot,
+  engendrerIdentifiant,
   ErreurRegistre,
   estEntiteConnue,
   listerEntites,
@@ -789,7 +790,12 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
              values ($1, $2, $3, 'toutes', 'grc-backup', $4, $5, $6, 'applique',
                      $7, $8, $9, $10, now(), $11)`,
             [
-              `IMP-${String(Date.now())}-${String(Math.floor(Math.random() * 1000000))}`,
+              // Q-7 : quatrième clone de la convention du §2, sur une clé
+              // primaire, à un million de valeurs. Il n'y a qu'un générateur
+              // d'identifiants côté serveur, et c'est celui-là — durci à 128
+              // bits et gardé au démarrage (constat Q-1). Le recopier, fût-ce
+              // sur une ligne, c'est recréer la cause qu'on soigne.
+              engendrerIdentifiant('IMP'),
               perimetre.filialeId,
               perimetre.utilisateurId,
               fichier.nom,

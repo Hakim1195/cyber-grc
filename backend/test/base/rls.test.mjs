@@ -3909,6 +3909,72 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
     assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
   });
 
+  test('… et le REMPLACEMENT, que compter les contrôles ne rattrape pas (constat Q-5)', async () => {
+    // ── Le second scénario, et le plus retors ────────────────────────────────
+    //
+    // Le premier — un contrôle qui sort de la convention — fait chuter l'effectif
+    // découvert : un remède qui compterait suffirait à l'attraper. Celui-ci ne
+    // touche pas au compte. Un contrôle part, un autre arrive : c'est le geste
+    // ordinaire d'une migration qui « renomme » ou « remplace » un garde-fou.
+    // L'effectif est le même, la couverture ne l'est pas — le remplaçant, ici, ne
+    // vérifie rien.
+    //
+    // Un remède fondé sur un NOMBRE passe ici sans rien voir. C'est pourquoi ce
+    // qu'il faut consigner, ce sont les NOMS : tout contrôle présent dans la
+    // dernière observation et absent de la découverte courante est une anomalie —
+    // à charge pour une migration de dire explicitement quand un retrait est
+    // voulu. Ce test est écrit pour que le remède soit obligé de prendre cette
+    // forme-là, et il resterait vert d'un remède qui ne compte que.
+    const definition = await base.valeur(
+      proprietaire,
+      `select pg_get_functiondef(p.oid)
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'f_verifier_couverture_rls' and p.pronargs = 0`,
+    );
+    assert.ok(typeof definition === 'string' && definition.length > 0, 'Le contrôle visé doit exister.');
+    const compterJouables = async () =>
+      Number(await base.valeur(
+        proprietaire,
+        `select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.prokind = 'f' and p.pronargs = 0
+            and p.proname::text like 'f\\_verifier\\_%'
+            and pg_get_function_result(p.oid) = 'TABLE(objet text, anomalie text, detail text)'`,
+      ));
+    const jouablesAvant = await compterJouables();
+
+    // Le contrôle part ; un homonyme d'apparence respectable prend sa place.
+    await proprietaire.query('drop function f_verifier_couverture_rls()');
+    await proprietaire.query(
+      `create function f_verifier_couverture_politiques()
+           returns table (objet text, anomalie text, detail text)
+           language plpgsql stable set search_path = pg_catalog, public, pg_temp as $x$
+       begin return; end; $x$`,
+    );
+    try {
+      assert.equal(
+        await compterJouables(),
+        jouablesAvant,
+        'Le scénario exige un effectif INCHANGÉ : c’est ce qui rend un remède fondé sur ' +
+          'un compte inopérant.',
+      );
+
+      const anomalies = await avecRlsTombee(async () =>
+        base.lignes(proprietaire, 'select controle, objet, anomalie from f_verifier_schema()'),
+      );
+      assert.notDeepEqual(
+        anomalies,
+        [],
+        'Un contrôle a disparu, remplacé par un homonyme qui ne vérifie rien, et la RLS de ' +
+          '« risques » est tombée sans que le point d’appel s’en émeuve. L’effectif n’a pas ' +
+          'bougé : consigner un NOMBRE ne suffit pas, il faut consigner les NOMS.',
+      );
+    } finally {
+      await proprietaire.query('drop function if exists f_verifier_couverture_politiques()');
+      await proprietaire.query(definition);
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
   test('un garde-fou qui CESSE d’être découvert ne doit pas s’effacer en silence (constat Q-5)', async () => {
     // Le geste : on sort UN contrôle de la convention de nommage. C'est ce que fait
     // une migration qui renomme — pas une attaque, une maintenance ordinaire.
@@ -3957,9 +4023,9 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
         anomalies,
         [],
         'Le point d’appel a rendu « aucune anomalie » alors qu’il joue SEPT contrôles sur ' +
-          'huit et que la RLS de « risques » est tombée. Il sait pourtant combien il en ' +
-          'avait trouvé la dernière fois : une diminution doit être une anomalie, comme ' +
-          'l’absence totale en est déjà une.',
+          'huit et que la RLS de « risques » est tombée. Il sait pourtant quels contrôles ' +
+          'il avait trouvés la dernière fois : un contrôle observé puis absent doit être ' +
+          'une anomalie, comme l’absence totale en est déjà une.',
       );
 
       // Et le verdict qui compte pour une mise en service : l'outil doit refuser.

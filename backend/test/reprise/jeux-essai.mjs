@@ -9,17 +9,43 @@
  */
 
 /**
- * Horloge et aléa figés : les identifiants engendrés par la reprise deviennent
- * reproductibles (`<PRÉFIXE>-1720000000000-482`), donc assertables.
+ * Horloge figée : `createdAt` de l'enveloppe devient reproductible.
+ *
+ * ── Ce qui a disparu ici, et pourquoi ────────────────────────────────────────
+ *
+ * Une source d'`alea` était injectée à côté de l'horloge, pour que les
+ * identifiants engendrés par la reprise soient prévisibles (`CLI-1720000000000-482`)
+ * et donc assertables au caractère près. Le correctif du constat Q-1 a supprimé le
+ * besoin : le module ne TIRE plus, il DÉRIVE d'une empreinte de ce qui distingue
+ * l'enregistrement dans son fichier. La reproductibilité n'est plus à organiser,
+ * elle est acquise — et l'option `alea` n'était plus lue par personne.
+ *
+ * Une option documentée que rien ne lit est pire qu'absente : le chantier l'a déjà
+ * payé une fois (constat m-2, `API_FILIALE_PROVISOIRE`). Elle est donc retirée
+ * plutôt que conservée par prudence.
  */
 export const OPTIONS_FIGEES = Object.freeze({
   horloge: () => 1_720_000_000_000,
-  alea: () => 0.482,
 });
 
-/** Identifiant qu'engendre la reprise sous `OPTIONS_FIGEES`. */
-export function idEngendre(prefixe) {
-  return `${prefixe}-1720000000000-482`;
+/**
+ * Un identifiant engendré par la reprise est-il de la bonne forme ?
+ *
+ * On éprouve la PROPRIÉTÉ et non la valeur : le préfixe de l'entité, la marque
+ * « -d- » (dérivé du fichier, à ne pas confondre avec le « -r- » des ré-émissions
+ * du serveur), et la recevabilité par le domaine `id_metier` du schéma. La valeur
+ * exacte, elle, est une empreinte : l'épingler ferait de chaque amélioration du
+ * générateur une fausse alerte.
+ */
+export function estIdentifiantEngendre(prefixe, identifiant) {
+  return (
+    typeof identifiant === 'string' &&
+    identifiant.startsWith(`${prefixe}-d-`) &&
+    identifiant.length > prefixe.length + 3 &&
+    identifiant.length <= 64 &&
+    identifiant.trim() === identifiant &&
+    !identifiant.includes(',')
+  );
 }
 
 /**
