@@ -747,6 +747,7 @@ describe('Un import en lot ne perd pas une ligne (bloquant T-1)', () => {
     const session = await ouvrirApplication();
     try {
       const vus = await session.page.evaluate((n) => {
+        const depart = Date.now();
         const identifiants = [];
         // Une boucle serrée : `Date.now()` ne bouge pratiquement pas d'une
         // itération à l'autre, ce qui est exactement la condition du constat —
@@ -758,7 +759,15 @@ describe('Un import en lot ne perd pas une ligne (bloquant T-1)', () => {
         }
         return {
           identifiants,
-          horodatagesDistincts: new Set(identifiants.map((x) => x.split('-')[1])).size,
+          // La DURÉE de la boucle, et non le champ « horodatage » de
+          // l'identifiant : la première rédaction lisait le deuxième segment,
+          // c'est-à-dire qu'elle s'appuyait sur la FORME. Or celle-ci a changé
+          // depuis (le compteur de session a reçu son propre séparateur, et la
+          // forme émise porte quatre segments). Ce qu'on veut dire est
+          // indépendant de tout découpage : la boucle a duré moins de
+          // millisecondes qu'elle n'a tiré d'identifiants, donc l'horloge ne
+          // peut pas les avoir séparés.
+          dureeMs: Date.now() - depart,
           enMemoire: window.DataStore.getRisques().length,
         };
       }, LOT);
@@ -769,11 +778,11 @@ describe('Un import en lot ne perd pas une ligne (bloquant T-1)', () => {
         'Deux créations du même lot ne doivent jamais porter le même identifiant.',
       );
       assert.ok(
-        vus.horodatagesDistincts < LOT,
-        'Le scénario n’a de sens que si l’horodatage NE suffit PAS à distinguer les ' +
-          `identifiants : ${String(vus.horodatagesDistincts)} valeurs pour ${String(LOT)} tirages. ` +
-          'Sur une machine assez lente pour donner 250 millisecondes distinctes, ce test ' +
-          'ne mesurerait plus l’entropie mais l’horloge.',
+        vus.dureeMs < LOT,
+        'Le scénario n’a de sens que si l’horloge NE suffit PAS à distinguer les ' +
+          `identifiants : ${String(LOT)} tirages en ${String(vus.dureeMs)} ms. Sur une machine ` +
+          'assez lente pour donner une milliseconde par tirage, cet essai ne mesurerait ' +
+          'plus l’entropie mais l’horloge.',
       );
 
       // Et le lot arrive entier de l'autre côté : l'entropie sert à cela.
@@ -2150,6 +2159,384 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
         1,
         'Et sa copie locale reste en place pour la reprise : l’abandonner ici serait un ' +
           'autre traitement que celui que le remède dit conserver.',
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+});
+
+/* =====================================================================
+ *  §14 — Le détecteur de doublons du générateur (constat Q-32)
+ * =====================================================================
+ *
+ *  `UI.genId` retient ce qu'il a émis et CRIE s'il rend deux fois la même
+ *  valeur. Ce détecteur n'avait aucun essai : neutralisé, le banc restait vert.
+ *  Le registre le disait pourtant couvert « par deux silences vérifiés » — deux
+ *  assertions qui prouvaient une propriété du PRODUIT (les identifiants sont
+ *  distincts) et non du DÉTECTEUR (il le dit quand ils ne le sont pas). C'est
+ *  Q-21 sous un troisième visage.
+ *
+ *  Pour l'interroger dans le sens où il parle, il faut lui donner un générateur
+ *  qui se répète. On sert donc, le temps de cet essai, un `ui.js` dont la seule
+ *  différence est la FORME de l'identifiant — celle d'avant le bloquant T-1,
+ *  mille valeurs d'aléa. Le fichier du dépôt n'est pas touché.
+ * ===================================================================== */
+
+describe('Le générateur DIT quand il se répète (constat Q-32)', () => {
+  /** L'ancre de composition de l'identifiant, dans le `ui.js` du dépôt. */
+  const ANCRE = 'compteurSession.toString(36) + "-" + aleaFort()';
+  const AVANT_T1 = 'Math.floor(Math.random() * 1000)';
+
+  /** Émet `n` identifiants d'affilée et rend ce que la page en dit. */
+  async function emettre(page, n) {
+    return page.evaluate((combien) => {
+      const identifiants = [];
+      for (let i = 0; i < combien; i += 1) identifiants.push(window.UI.genId('RISK'));
+      return { emis: identifiants.length, distincts: new Set(identifiants).size };
+    }, n);
+  }
+
+  test('UN GÉNÉRATEUR QUI SE RÉPÈTE est nommé à l’écran', async () => {
+    const source = readFileSync(join(RACINE_FRONTEND, 'js', 'core', 'ui.js'), 'utf8');
+    // La copie est DÉRIVÉE du fichier du dépôt, jamais recopiée : si `genId`
+    // est réécrit, cette ancre disparaît et l'essai le dit — au lieu d'éprouver
+    // en silence une copie devenue étrangère au produit.
+    assert.equal(
+      source.split(ANCRE).length - 1,
+      1,
+      'La composition de l’identifiant a changé de forme : reprenez cette substitution ' +
+        'plutôt que de laisser l’essai porter sur un `ui.js` qui n’est plus celui du produit.',
+    );
+    application.definirSubstitution('/js/core/ui.js', source.replace(ANCRE, AVANT_T1));
+
+    const session = await ouvrirApplication();
+    try {
+      const vus = await emettre(session.page, 250);
+      assert.ok(
+        vus.distincts < vus.emis,
+        `Le scénario EXIGE des doublons : ${String(vus.distincts)} valeurs distinctes pour ` +
+          `${String(vus.emis)} tirages. Sans eux, cet essai ne mesurerait rien.`,
+      );
+
+      // ── LA propriété : le produit le DIT ────────────────────────────────
+      await session.page.waitForFunction(
+        () => /générateur d’identifiants/i.test(
+          (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+        ),
+        null,
+        { timeout: 15000 },
+      );
+      const bandeau = await session.page.evaluate(
+        () => (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+      );
+      assert.match(bandeau, /Défaut interne du générateur/i, bandeau);
+      assert.match(
+        bandeau,
+        /\d+ valeur\(s\) rendue\(s\) deux fois/,
+        `L’avertissement doit COMPTER les doublons : ${bandeau}`,
+      );
+      assert.match(
+        bandeau,
+        /par exemple RISK-/,
+        `Et en NOMMER un : un défaut sans exemple ne se cherche pas. ${bandeau}`,
+      );
+      assert.match(
+        bandeau,
+        /viser le mauvais enregistrement/i,
+        `Et dire ce que cela coûte à l’utilisateur : ${bandeau}`,
+      );
+
+      // Le canal de l'exploitant existe aussi, et il nomme la valeur fautive.
+      assert.ok(
+        session.erreursConsole.some((m) => /a déjà été émis dans cette session/.test(m)),
+        `La console doit porter la trace que l’exploitant cherchera : ${JSON.stringify(session.erreursConsole.slice(0, 2))}`,
+      );
+    } finally {
+      application.definirSubstitution('/js/core/ui.js', null);
+      await session.fermer();
+    }
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE : le générateur du dépôt reste MUET sur 250 créations', async () => {
+    // Sans cette moitié, l'essai précédent serait satisfait par un bandeau qui
+    // crie toujours — et un avertissement permanent est un avertissement mort.
+    const session = await ouvrirApplication();
+    try {
+      const vus = await emettre(session.page, 250);
+      assert.equal(vus.distincts, vus.emis, '250 tirages, 250 valeurs distinctes.');
+      exigerSilence(
+        await session.page.evaluate(
+          () => (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+        ),
+        /générateur d’identifiants/i,
+        'UN GÉNÉRATEUR QUI SE RÉPÈTE est nommé à l’écran',
+      );
+      assert.deepEqual(
+        session.erreursConsole.filter((m) => /a déjà été émis/.test(m)),
+        [],
+        'Ni console, ni bandeau : le détecteur ne doit pas parler pour rien.',
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+});
+
+/* =====================================================================
+ *  §15 — Faire ce que le produit recommande (constat Q-29, bloquant)
+ * =====================================================================
+ *
+ *  Le produit disait « rechargez », l'utilisateur rechargeait, et sa saisie
+ *  disparaissait. Aucun essai d'ÉTAT ne pouvait le voir : l'état était juste
+ *  jusqu'à l'instant où l'on faisait ce que le message recommandait.
+ *
+ *  La leçon est neuve et elle vaut au-delà de ce constat : **quand le produit
+ *  propose un geste, l'essai doit le faire**. Vérifier l'état après le blocage,
+ *  c'est vérifier la moitié qui va bien ; le bouton, lui, n'était éprouvé par
+ *  personne — et c'est le seul que l'utilisateur voit.
+ * ===================================================================== */
+
+describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29)', () => {
+  /** Fait expirer UNE fois un verbe, après l'avoir laissé aboutir côté serveur. */
+  function expirerUneFois(page, verbe) {
+    return page.evaluate((v) => {
+      const vrai = window.Api[v].bind(window.Api);
+      let restante = true;
+      window.Api[v] = async (...arguments_) => {
+        const issue = await vrai(...arguments_);
+        if (restante) {
+          restante = false;
+          throw new window.Api.ErreurApi({
+            reseau: true, statut: 0, code: 'indisponible', issueInconnue: true,
+            message: 'Le serveur n’a pas répondu dans le délai imparti.',
+          });
+        }
+        return issue;
+      };
+    }, verbe);
+  }
+
+  /** Clique un bouton du bandeau, en exigeant qu'il existe. */
+  async function cliquer(page, identifiant) {
+    const present = await page.evaluate((id) => {
+      const bouton = document.getElementById(id);
+      if (bouton === null) return false;
+      bouton.click();
+      return true;
+    }, identifiant);
+    assert.equal(present, true, `Le produit doit proposer « ${identifiant} » : c’est le geste qu’il recommande.`);
+  }
+
+  test('CRÉATION incertaine : on RECHARGE comme il est proposé, la saisie reste', async () => {
+    const nom = 'Saisie que le rechargement ne doit pas perdre';
+    const session = await ouvrirApplication();
+    try {
+      await expirerUneFois(session.page, 'creer');
+      await session.page.evaluate((n) => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: n });
+      }, nom);
+      await session.page.waitForFunction(
+        () => window.Sync.etat().bloques > 0 && window.Sync.etat().enCours === false,
+        null,
+        { timeout: 15000 },
+      );
+
+      // Le produit annonce lui-même que le rechargement conserve la saisie : on
+      // le prend au mot, et c'est tout l'objet de cet essai.
+      const bandeau = await session.page.evaluate(
+        () => (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+      );
+      assert.match(bandeau, /le rechargement la conserve/i, bandeau);
+
+      // ── LE GESTE ────────────────────────────────────────────────────────
+      await cliquer(session.page, 'sync-recharger');
+      await session.page.waitForFunction(
+        () => window.Sync.etat().enCours === false,
+        null,
+        { timeout: 15000 },
+      );
+
+      assert.equal(
+        await session.page.evaluate(
+          (n) => window.DataStore.getRisques().filter((r) => r.nom === n).length >= 1,
+          nom,
+        ),
+        true,
+        'La saisie a disparu de l’écran en faisant ce que le produit recommandait. C’est le ' +
+          'constat Q-29 : le message était juste, le geste qu’il conseille détruisait la saisie.',
+      );
+      assert.equal(
+        (await session.page.evaluate(() => window.Sync.etat())).bloques,
+        1,
+        'Et elle reste marquée comme non partie : un rechargement ne l’enregistre pas.',
+      );
+
+      // ── Le second geste proposé : « Envoyer à nouveau » ──────────────────
+      await cliquer(session.page, 'sync-renvoyer');
+      await attendreQuiescence(session.page);
+      assert.ok(
+        (await enBase('select count(*)::int as n from risques where nom = $1', [nom]))[0].n >= 1,
+        'Le renvoi doit faire atterrir la saisie : sans lui, la seule issue serait de la retaper.',
+      );
+      assert.equal(
+        (await session.page.evaluate(() => window.Sync.etat())).bloques,
+        0,
+        'Et plus rien ne doit rester bloqué une fois le renvoi accepté.',
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('CONTRÔLE : une MODIFICATION bloquée, elle, cède au rechargement', async () => {
+    // Le remède ne doit pas devenir « le rechargement ne change plus rien ». Sur
+    // un conflit de version, le serveur a raison : sa valeur doit reprendre la
+    // place de la saisie locale, sinon l'écran mentirait dans l'autre sens.
+    const session = await ouvrirApplication();
+    try {
+      const identifiant = await session.page.evaluate(async () => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Valeur du serveur' });
+        await window.Sync.pousser();
+        return window.DataStore.getRisques().find((r) => r.nom === 'Valeur du serveur').id;
+      });
+      await attendreQuiescence(session.page);
+
+      // Une connexion tierce écrit : la version détenue devient périmée.
+      const client = await base.connexion('app');
+      await base.avecPerimetre(
+        client,
+        perimetre('voisin', FILIALE_A, [FILIALE_A]),
+        async (c) => {
+          await c.query('update risques set nom = $2 where id = $1', [identifiant, 'Valeur du serveur']);
+        },
+        { annuler: false },
+      );
+
+      await session.page.evaluate(async (id) => {
+        const r = window.DataStore.getRisques().find((x) => x.id === id);
+        window.DataStore.updateRisque({ ...r, nom: 'Ma saisie locale, périmée' });
+        await window.Sync.pousser();
+      }, identifiant);
+      await session.page.waitForFunction(
+        () => window.Sync.etat().bloques > 0,
+        null,
+        { timeout: 15000 },
+      );
+
+      await cliquer(session.page, 'sync-recharger');
+      await session.page.waitForFunction(
+        () => window.Sync.etat().enCours === false && window.Sync.etat().bloques === 0,
+        null,
+        { timeout: 15000 },
+      );
+
+      assert.equal(
+        await session.page.evaluate(
+          (id) => (window.DataStore.getRisques().find((x) => x.id === id) ?? {}).nom,
+          identifiant,
+        ),
+        'Valeur du serveur',
+        'Sur un conflit, le rechargement doit rendre la main au serveur : conserver la ' +
+          'saisie locale ici ferait mentir l’écran dans l’autre sens.',
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+});
+
+/* =====================================================================
+ *  §16 — Quelles pannes rendent une création incertaine (constat Q-30)
+ * ===================================================================== */
+
+describe('502 et 504 rendent une création incertaine, 503 non (constat Q-30)', () => {
+  /** Fait échouer UNE fois la création sur un statut donné, après un vrai succès. */
+  function echouerSur(page, statut) {
+    return page.evaluate((code) => {
+      const vrai = window.Api.creer.bind(window.Api);
+      let restante = true;
+      window.Api.creer = async (...arguments_) => {
+        // 502 et 504 viennent du FRONTAL : la requête a atteint l'application,
+        // qui a pu valider. On reproduit donc un vrai succès avant l'échec.
+        const issue = await vrai(...arguments_);
+        if (restante) {
+          restante = false;
+          throw new window.Api.ErreurApi({
+            statut: code,
+            code: 'indisponible',
+            issueInconnue: code === 502 || code === 504,
+            message: `passerelle ${String(code)}`,
+          });
+        }
+        return issue;
+      };
+    }, statut);
+  }
+
+  for (const statut of [502, 504]) {
+    test(`${String(statut)} : la création est BLOQUÉE et dite incertaine`, async () => {
+      const session = await ouvrirApplication();
+      try {
+        await echouerSur(session.page, statut);
+        await session.page.evaluate((code) => {
+          window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: `Saisie ${String(code)}` });
+        }, statut);
+        await session.page.waitForFunction(
+          () => window.Sync.etat().bloques > 0,
+          null,
+          { timeout: 15000 },
+        );
+        const bandeau = await session.page.evaluate(
+          () => (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+        );
+        assert.match(
+          bandeau,
+          /Enregistrement incertain/,
+          `Un ${String(statut)} vient du frontal : l’application a pu valider avant que la ` +
+            `réponse ne se perde. ${bandeau}`,
+        );
+        assert.deepEqual(session.erreursScript, []);
+      } finally {
+        await session.fermer();
+      }
+    });
+  }
+
+  test('503 : rien n’est bloqué, et c’est DÉLIBÉRÉ', async () => {
+    // ── Pourquoi l'exclusion, et pourquoi elle mérite son essai ─────────────
+    //
+    // Le 503 est rendu AVANT toute tentative — la barrière fail-closed, le pool
+    // saturé, la recette fermée. Rien n'est incertain : rien n'a été tenté.
+    // Avertir dessus produirait le faux positif quotidien que le constat m-5
+    // condamne, celui qu'on apprend à ignorer et qui masque ensuite les vrais.
+    // Sans cet essai, quelqu'un « harmoniserait » les trois statuts un jour, en
+    // toute bonne foi.
+    const session = await ouvrirApplication();
+    try {
+      await echouerSur(session.page, 503);
+      await session.page.evaluate(() => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Saisie 503' });
+      });
+      await session.page.waitForFunction(
+        () => window.Sync.etat().panneReseau === true,
+        null,
+        { timeout: 15000 },
+      );
+
+      const etat = await session.page.evaluate(() => window.Sync.etat());
+      assert.equal(etat.bloques, 0, 'Un 503 ne bloque rien : il n’y a rien d’incertain à signaler.');
+      assert.equal(etat.incidents, 0, 'Et il ne produit aucun incident.');
+      exigerSilence(
+        await session.page.evaluate(
+          () => (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+        ),
+        /Enregistrement incertain/,
+        '502 : la création est BLOQUÉE et dite incertaine',
       );
       assert.deepEqual(session.erreursScript, []);
     } finally {

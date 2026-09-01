@@ -105,6 +105,8 @@ export async function servirApplication(serveur, options = {}) {
     csp: options.csp ?? null,
     /** Toutes les requêtes `/api/**` reçues, dans l'ordre. */
     appels: [],
+    /** Fichiers de la SPA remplacés le temps d'un essai (voir `definirSubstitution`). */
+    substitutions: new Map(),
   };
 
   const http = createServer((requete, reponse) => {
@@ -159,6 +161,23 @@ export async function servirApplication(serveur, options = {}) {
     // Fichiers statiques de la SPA. `normalize` puis contrôle de préfixe : un
     // « ../ » ne doit pas sortir de la racine, même dans un banc d'essai.
     const relatif = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
+
+    // ── Substitution d'un fichier de la SPA (constat Q-32) ──────────────────
+    //
+    // Un essai peut demander que ce serveur rende, pour un chemin donné, un
+    // contenu de son choix — typiquement un `js/core/ui.js` dont le générateur
+    // porte la forme d'avant un correctif. C'est ainsi qu'on éprouve un
+    // détecteur DANS LE SENS OÙ IL PARLE : provoquer le défaut qu'il guette
+    // sans toucher au dépôt, et sans recopier tout le frontend.
+    const substitut = etat.substitutions.get(relatif);
+    if (substitut !== undefined) {
+      const entetesSub = { 'content-type': TYPES[extname(relatif)] ?? 'application/octet-stream' };
+      if (etat.csp !== null) entetesSub['content-security-policy'] = etat.csp;
+      reponse.writeHead(200, entetesSub);
+      reponse.end(substitut);
+      return;
+    }
+
     const chemin = normalize(join(RACINE_FRONTEND, relatif));
     if (!chemin.startsWith(normalize(RACINE_FRONTEND)) || !existsSync(chemin) || statSync(chemin).isDirectory()) {
       reponse.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
@@ -182,6 +201,14 @@ export async function servirApplication(serveur, options = {}) {
     },
     definirCsp(valeur) {
       etat.csp = valeur;
+    },
+    /**
+     * Sert `contenu` à la place du fichier de la SPA situé à `relatif`
+     * (« /js/core/ui.js »). `null` rétablit le fichier du dépôt.
+     */
+    definirSubstitution(relatif, contenu) {
+      if (contenu === null) etat.substitutions.delete(relatif);
+      else etat.substitutions.set(relatif, contenu);
     },
     /** Appels `/api/**` reçus, filtrés par méthode. */
     appelsPar(methode) {
