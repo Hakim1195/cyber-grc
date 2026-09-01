@@ -1051,6 +1051,14 @@ const Sync = (() => {
      * réintroduit, par la bande, la passe de canonisation que le constat Q-8
      * venait de retirer.
      *
+     * ⚠️ Ce qui décide est la **comparaison ci-dessous**, pas le tri fait à
+     * l'entrée par `renommer`. Le tri d'entrée ne fait que garder l'ensemble
+     * petit ; sabotez-le et le cycle inutile ne revient pas, parce que la
+     * comparaison finale trouve l'enregistrement aligné et se tait. C'est
+     * mesuré, et c'est dit ici pour qu'on ne retire pas la mauvaise des deux :
+     * retirer la comparaison rearme un cycle à chaque création citée par une
+     * autre, soit le cas le plus courant du produit.
+     *
      * Et il ne peut pas tourner en rond : un enregistrement qui refuse de
      * s'écrire finit BLOQUÉ, donc écarté de ce qui est à écrire, et l'ensemble
      * est vidé à chaque passage. Une panne réseau, elle, relève du minuteur de
