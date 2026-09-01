@@ -22,11 +22,18 @@
 // le périmètre vient d'ici, et le chiffrement au repos est celui du disque de la
 // VM (§1.9). `purgerRestesNavigateur()` les efface au démarrage.
 //
-// ⚠️ Réserve à connaître : `cyber-context` est aussi lu par six fichiers hors du
-// périmètre de cet agent (`js/app.js`, quatre modules, `js/services/exportExcel.js`),
-// où il sert de filtre « donneur d'ordre » et non de périmètre de sécurité. La
-// purge faite ici l'empêche de SURVIVRE d'une session à l'autre ; le retirer
-// complètement suppose de toucher ces six fichiers, ce qui est signalé au rapport.
+// La réserve qui accompagnait ces lignes est **levée**, et son texte était
+// devenu faux (constat Q-12, même motif que l'entête de `js/core/vault.js`) : il
+// annonçait que six fichiers lisaient encore `cyber-context` pour en tirer un
+// filtre « donneur d'ordre ». Ils ne le lisent plus. Ce filtre — un confort
+// d'affichage, jamais un périmètre de sécurité — vit désormais **en mémoire**,
+// dans `window.FiltreDonneurOrdre` (`js/app.js`), et disparaît donc avec
+// l'onglet. Plus aucun fichier de la SPA ne lit ni n'écrit `cyber-context`.
+//
+// La purge reste, et le double filet ci-dessous aussi. Ce n'est pas un reliquat :
+// elle vise les postes qui ont fait tourner la version 100 % navigateur, où la
+// clé est encore écrite sur le disque. Elle disparaîtra le jour où plus aucun
+// poste n'aura connu cette version — c'est-à-dire pas dans ce lot.
 
 const Session = (() => {
     "use strict";
@@ -53,12 +60,16 @@ const Session = (() => {
 
     function purgerRestesNavigateur() {
         purger();
-        // `js/app.js` réécrit `cyber-context` juste après le démarrage, et quatre
-        // modules le relisent : ces six fichiers ne sont pas du ressort de ce lot.
-        // La purge est donc rejouée à la fermeture, de sorte que **rien de ce qui
-        // ressemble à un périmètre ne survive d'une session à l'autre** dans le
-        // navigateur. Le périmètre réel, lui, ne transite jamais par là : il est
-        // résolu par `/api/session` et n'a aucun mutateur ici (contrôle S2).
+        // La purge est rejouée à la FERMETURE, et pas seulement au démarrage.
+        // Ce second passage ne vise plus un écrivain de l'application — il n'y
+        // en a plus — mais tout ce qui pourrait réécrire ces clés pendant la
+        // session sans que ce fichier le sache : une extension de navigateur, un
+        // onglet resté ouvert sur une version ancienne servie par le cache, un
+        // module non encore converti. La propriété tenue est celle-ci, et elle
+        // ne dépend d'aucune énumération : **rien de ce qui ressemble à un
+        // périmètre ne survit d'une session à l'autre** dans le navigateur.
+        // Le périmètre réel, lui, ne transite jamais par là : il est résolu par
+        // `/api/session` et n'a aucun mutateur ici (contrôle S2).
         if (!purgeInstallee) {
             purgeInstallee = true;
             try {

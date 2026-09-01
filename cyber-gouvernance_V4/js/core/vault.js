@@ -13,12 +13,28 @@
 //
 // ── Pourquoi neutraliser plutôt que supprimer ────────────────────────────────
 //
-// `Vault.boot(...)` est la **porte de démarrage** appelée par `js/app.js`, et
-// cinq autres fonctions du coffre sont appelées par `js/modules/settings.js`.
-// Ces deux fichiers appartiennent à d'autres périmètres et ne sont pas modifiés
-// par ce lot (`PLAN_EXECUTION` §2). Supprimer l'objet `Vault` rendrait
-// l'application **impossible à démarrer** ; le neutraliser en conservant sa
-// forme la fait démarrer, et fait dire non — clairement — à tout ce qui reste.
+// `Vault.boot(...)` est la **porte de démarrage** appelée par `js/app.js`.
+// C'est aujourd'hui le **seul** appel au coffre subsistant dans toute la SPA :
+// l'écran Paramètres, qui en appelait cinq autres fonctions, n'y fait plus
+// aucune référence depuis que la bascule serveur lui a retiré le chiffrement au
+// repos, le quota et les points de restauration locaux.
+//
+// La justification a donc changé, et le constat Q-12 l'a relevée : elle
+// s'appuyait sur un appelant disparu. La décision, elle, ne change pas — pour
+// deux raisons qui tiennent toujours :
+//
+//  · **`boot` doit rester une porte.** Sans elle, l'application s'afficherait
+//    avant d'avoir la moindre donnée, et `js/app.js` appartient à un autre
+//    périmètre (`PLAN_EXECUTION` §2). Supprimer l'objet `Vault` la rendrait
+//    **impossible à démarrer**.
+//  · **Les neuf autres fonctions refusent au lieu de disparaître.** Elles ne
+//    coûtent rien, et elles portent une propriété qu'un fichier supprimé ne
+//    porterait pas : un appel résiduel — un module non converti, une extension,
+//    un essai ancien — reçoit un refus explicite et une phrase lisible, au lieu
+//    d'échouer sur un `undefined` dont personne ne saurait quoi faire.
+//
+// Quand `js/modules/settings.js` et `js/app.js` seront réécrits, ce fichier
+// pourra disparaître avec le dernier appel. Pas avant.
 //
 // ── Ce que la porte fait désormais ───────────────────────────────────────────
 //

@@ -970,13 +970,32 @@ const DataStore = (() => {
     /**
      * Applique un fichier `grc-backup`.
      *
+     * ── Réimporter deux fois le même fichier : ce qui se passe vraiment ──────
+     *
+     * Ce commentaire a affirmé le contraire, et le constat Q-6 (a) l'a relevé :
+     * il disait que « l'empreinte porte l'idempotence — réimporter deux fois le
+     * même fichier est refusé par la base ». C'était vrai jusqu'au correctif
+     * T-4, qui a retiré ce jeton d'unicité, précisément parce qu'il rendait
+     * impossible le geste le plus banal d'un plan de reprise : restaurer,
+     * constater, restaurer encore.
+     *
+     * Aujourd'hui la seconde reprise n'est pas refusée : elle **converge**. Le
+     * serveur, quand l'identifiant d'un fichier est déjà pris par une ligne
+     * qu'il ne peut pas réutiliser, en **dérive** un autre à partir de
+     * `(filiale, table, identifiant du fichier)` — une empreinte, pas un tirage.
+     * La seconde reprise retombe donc sur le même identifiant que la première,
+     * **retrouve** la ligne et la met à jour au lieu d'en fabriquer un clone.
+     * Trois reprises du même fichier donnent une ligne, pas trois
+     * (`CONVENTIONS.md` §2, marque `-r-`).
+     *
+     * L'empreinte du fichier, elle, est toujours calculée et **écrite dans la
+     * trace d'import** (`imports.sha256`) : elle dit QUEL fichier a été
+     * appliqué, ce qui est un besoin de preuve, et non plus un verrou.
+     *
      * @param payload  charge utile déjà lue par `parseImport` (déchiffrée).
      * @param mode     "merge" (défaut) ou "replace".
      * @param options  { texte, nom } — le TEXTE d'origine du fichier quand on
-     *                 l'a : c'est lui que le serveur lit, migre et empreinte
-     *                 (l'empreinte porte l'idempotence : réimporter deux fois le
-     *                 même fichier est refusé par la base, pas par une
-     *                 comparaison faite au vol).
+     *                 l'a : c'est lui que le serveur lit, migre et empreinte.
      */
     async function applyImport(payload, mode, options) {
         const opts = options || {};
