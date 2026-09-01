@@ -1596,6 +1596,21 @@ describe('Le signalement de rétrécissement reste câblé (constat Q-21)', () =
       'Et il doit dire COMBIEN : « un défaut interne » sans nombre n’est pas exploitable.',
     );
 
+    // ── Et il ne doit pas rendre la main AVANT d'avoir parlé ────────────────
+    //
+    // Trouvé en sabotant mon propre essai : les deux assertions ci-dessus se
+    // contentent de la PRÉSENCE des deux appels. Une sortie anticipée les laisse
+    // en place et les rend inatteignables — le filet se tait, et le balayage n'y
+    // voit rien. La règle est donc énoncée telle qu'elle a du sens : rien ne rend
+    // la main entre l'entrée dans le filet et le moment où il parle.
+    const avantDeParler = corps.slice(0, corps.indexOf('ajouterIncident('));
+    assert.equal(
+      /\breturn\b/.test(avantDeParler),
+      false,
+      'Le filet rend la main avant d’avoir prévenu : les appels sont là, ils ne sont ' +
+        `plus atteints. Extrait : ${avantDeParler.slice(-200)}`,
+    );
+
     // ── Contrôles de morsure du balayage lui-même ───────────────────────────
     // Le corps lu doit être CELUI de la fonction : s'il débordait sur la suite du
     // fichier, il verrait n'importe quel `console.error` et ne signalerait plus
