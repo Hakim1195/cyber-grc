@@ -55,6 +55,23 @@ before(async () => {
     'La borne doit être PUBLIÉE par « /api/modele » : un client qui ne peut pas la lire ' +
       'ne peut pas scinder son fichier avant de l’envoyer.',
   );
+  // ── La borne doit être VRAISEMBLABLE, et ce contrôle a été trouvé par sabotage ──
+  //
+  // Les essais fabriquent leurs fichiers À PARTIR de la borne publiée, pour ne pas
+  // recopier une constante que le produit détient déjà. Portée à un milliard, cette
+  // borne faisait fabriquer un milliard d'enregistrements : la mémoire du processus
+  // partait avant toute assertion, et le fichier entier tombait sur une erreur qui ne
+  // nommait rien. Un essai doit échouer en DISANT quoi, surtout quand il a raison.
+  //
+  // 20 000 est l'ordre de grandeur des autres bornes du modèle et le volume que
+  // l'ancienne borne par collection laissait passer ; au-delà, ce n'est plus une
+  // borne, et la chaîne de déploiement coupera à 60 s comme avant le correctif.
+  assert.ok(
+    BORNE > 0 && BORNE <= 20000,
+    `Borne de reprise invraisemblable : ${String(BORNE)}. Une borne qui n’en est pas une ` +
+      'rouvre le constat Q-19 — le travail est fait, puis interrompu par le frontal, et ' +
+      'personne n’apprend l’issue.',
+  );
 });
 
 after(async () => {
