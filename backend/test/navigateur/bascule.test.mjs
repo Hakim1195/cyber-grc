@@ -2605,3 +2605,264 @@ describe('502 et 504 rendent une création incertaine, 503 non (constat Q-30)', 
     }
   });
 });
+
+/* =====================================================================
+ *  §17 — L'ADRESSE suit le renommage (constats N-3 / Q-38)
+ * ---------------------------------------------------------------------
+ *  Le serveur ré-attribue l'identifiant à la création : `renommer()` réécrit la
+ *  mémoire, `recalerBalisage()` réécrit les attributs déjà rendus, et
+ *  `history.replaceState` réécrit **l'adresse**. Les deux premiers sont tenus
+ *  par des essais ; le troisième ne l'était par aucun — le 7ᵉ passage a
+ *  neutralisé `replaceState` et le banc est resté vert, 50/50 (constat Q-38).
+ *
+ *  Ce qu'il coûte quand il manque est pourtant ce que l'utilisateur voit en
+ *  premier : la fiche qu'il vient de créer est ouverte à une adresse qui ne
+ *  désigne plus rien, et le premier réaffichage la remplace par **« Mesure
+ *  introuvable »**. Rien n'est perdu — mais rien ne le dit, et la fiche a l'air
+ *  de s'être évaporée.
+ * ===================================================================== */
+
+describe('L’adresse d’une fiche suit le renommage (constats N-3 / Q-38)', () => {
+  /** Le texte de la zone de contenu. */
+  function ecran(page) {
+    return page.evaluate(() => (document.getElementById('app') ?? { textContent: '' }).textContent);
+  }
+
+  test('LE MÊME ÉCRAN SAIT LE DIRE : une adresse qui ne mène nulle part est annoncée', async () => {
+    // Moitié symétrique, jouée EN PREMIER, et c'est elle que nomme
+    // `exigerSilence` plus bas : sans elle, « Mesure introuvable » absent ne
+    // prouverait rien — un écran qui ne sait pas le dire est muet lui aussi.
+    const session = await ouvrirApplication();
+    try {
+      await session.page.evaluate(() => {
+        window.location.hash = '#/mesures/MESURE-QUI-NA-JAMAIS-EXISTE';
+      });
+      await session.page.waitForFunction(
+        () => /Mesure introuvable/.test((document.getElementById('app') ?? { textContent: '' }).textContent),
+        null,
+        { timeout: 15000 },
+      );
+      assert.match(await ecran(session.page), /Mesure introuvable/);
+      assert.deepEqual(session.erreursScript, [], 'CLAUDE.md §5 : zéro erreur.');
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('une fiche créée à l’instant reste ouverte — et le reste après un rechargement', async () => {
+    const nom = 'Chiffrement des sauvegardes hors site';
+    const session = await ouvrirApplication();
+    try {
+      // ── Le geste réel, par les boutons du module ────────────────────────
+      await session.page.evaluate(() => {
+        window.location.hash = '#/mesures';
+      });
+      await session.page.waitForSelector('#addMesureBtn', { timeout: 15000 });
+      await session.page.click('#addMesureBtn');
+      await session.page.waitForSelector('#save', { timeout: 15000 });
+      await session.page.fill('#nom', nom);
+      await session.page.click('#save');
+
+      // Le module navigue vers la fiche AVEC L'IDENTIFIANT LOCAL : le cycle
+      // d'écriture ne partira que quelques centaines de millisecondes plus tard.
+      await session.page.waitForFunction(
+        () => /^#\/mesures\/MESURE-/.test(window.location.hash),
+        null,
+        { timeout: 15000 },
+      );
+      const adresseLocale = await session.page.evaluate(() => window.location.hash);
+      const identifiantLocal = adresseLocale.replace('#/mesures/', '');
+
+      // ── Le renommage a lieu ─────────────────────────────────────────────
+      await attendreQuiescence(session.page);
+
+      const apres = await session.page.evaluate((n) => {
+        const mesure = window.DataStore.getMesures().find((m) => m.nom === n);
+        return { adresse: window.location.hash, identifiant: mesure ? mesure.id : null };
+      }, nom);
+
+      assert.ok(apres.identifiant, 'La mesure créée doit rester en mémoire après le cycle.');
+      assert.notEqual(
+        apres.identifiant,
+        identifiantLocal,
+        'Le serveur DOIT ré-attribuer l’identifiant : sans renommage, cet essai n’éprouverait rien.',
+      );
+      assert.equal(
+        apres.adresse,
+        `#/mesures/${apres.identifiant}`,
+        `L’adresse de la fiche ouverte doit suivre le renommage. Elle porte encore ` +
+          `« ${adresseLocale} », qui ne désigne plus rien : le premier réaffichage — un ` +
+          `sondage, un retour, un rechargement — remplacera la fiche par « Mesure ` +
+          `introuvable » (constats N-3 / Q-38).`,
+      );
+
+      // ── Ce que l'utilisateur fait, et que l'adresse doit supporter ──────
+      // Recharger la page est le geste le plus banal qui soit, et c'est
+      // exactement celui qui met une adresse périmée en évidence.
+      await session.page.reload({ waitUntil: 'domcontentloaded' });
+      const etat = await attendreApplication(session.page);
+      assert.equal(etat, 'chargee', 'L’application doit redémarrer sur la fiche.');
+      await session.page.waitForFunction(
+        (n) => (document.getElementById('app') ?? { textContent: '' }).textContent.includes(n),
+        nom,
+        { timeout: 15000 },
+      );
+
+      const texte = await ecran(session.page);
+      exigerSilence(
+        texte,
+        /Mesure introuvable/,
+        'LE MÊME ÉCRAN SAIT LE DIRE : une adresse qui ne mène nulle part est annoncée',
+      );
+      assert.match(texte, new RegExp(nom), 'La fiche créée doit être celle qui s’affiche.');
+      assert.deepEqual(session.erreursScript, [], 'CLAUDE.md §5 : zéro erreur.');
+    } finally {
+      await session.fermer();
+    }
+  });
+});
+
+/* =====================================================================
+ *  §18 — Le rechargement ÉCRIT D'ABORD ce qui attend (constats m-6 / Q-38)
+ * ---------------------------------------------------------------------
+ *  `rechargerApresEcriture()` tient en deux lignes, et la première est tout le
+ *  remède : `if (aDesModificationsEnAttente()) await cycle();`. Sans elle, le
+ *  bouton « Recharger les données » — celui que le produit RECOMMANDE — emporte
+ *  les saisies faites sur les autres fiches, puisque `recharger()` remplace le
+ *  jeu de données par celui du serveur.
+ *
+ *  Le 7ᵉ passage a retiré cette ligne : banc vert, 50/50 (constat Q-38).
+ *
+ *  ── Ce que l'essai observe, et pourquoi ce n'est pas la base ──────────────
+ *
+ *  La valeur en base est un mauvais témoin : si le regroupement de 400 ms tire
+ *  pendant que le rechargement est en vol, la modification part QUAND MÊME —
+ *  après coup, et perdue de l'écran, mais présente au serveur. L'essai serait
+ *  vert sur une machine rapide et rouge sur une lente, ce qui est pire que
+ *  rouge. Ce qui distingue vraiment les deux produits est l'ORDRE des appels :
+ *  l'écriture part-elle AVANT le rechargement ? Le relais le sait ; il les
+ *  enregistre dans l'ordre.
+ * ===================================================================== */
+
+describe('Le rechargement écrit d’abord ce qui attend (constats m-6 / Q-38)', () => {
+  /** Fait expirer UNE fois un verbe, sans que le serveur ait rien reçu (voir §15). */
+  function expirerUneFois(page, verbe) {
+    return page.evaluate((v) => {
+      const vrai = window.Api[v].bind(window.Api);
+      let restante = true;
+      window.Api[v] = async (...arguments_) => {
+        if (restante) {
+          restante = false;
+          throw new window.Api.ErreurApi({
+            reseau: true, statut: 0, code: 'indisponible', issueInconnue: true,
+            message: 'Le serveur n’a pas répondu dans le délai imparti.',
+          });
+        }
+        return vrai(...arguments_);
+      };
+    }, verbe);
+  }
+
+  test('« Recharger les données » n’emporte pas une saisie faite sur une autre fiche', async () => {
+    const nouveauNom = 'Rançongiciel — analyse revue ce matin';
+    const session = await ouvrirApplication();
+    try {
+      // ── 1. Un incident, pour que le bandeau et son bouton existent ──────
+      // C'est le seul chemin par lequel un utilisateur atteint
+      // `rechargerApresEcriture()` : le produit lui propose le geste.
+      await expirerUneFois(session.page, 'creer');
+      await session.page.evaluate(() => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Création restée bloquée' });
+      });
+      await session.page.waitForFunction(
+        () => window.Sync.etat().bloques > 0 && window.Sync.etat().enCours === false,
+        null,
+        { timeout: 15000 },
+      );
+
+      // ── 2. Quelqu'un d'autre écrit, pour que le rechargement ait de quoi
+      //      rapporter. C'est la moitié symétrique : sans elle, « la saisie a
+      //      survécu » serait satisfait par un rechargement qui ne recharge rien.
+      const client = await base.connexion('app');
+      await base.avecPerimetre(
+        client,
+        perimetre('voisin', FILIALE_A, [FILIALE_A]),
+        async (c) => {
+          await c.query('update risques set nom = $2 where id = $1', ['RISK2-A', 'Changé par quelqu’un d’autre']);
+        },
+        { annuler: false },
+      );
+
+      // ── 3. LE GESTE : une saisie, puis le bouton, dans le MÊME instant ──
+      // Les deux dans un seul `evaluate` : aucun regroupement de 400 ms n'a pu
+      // tirer entre les deux, et la modification est donc réellement EN ATTENTE
+      // au moment du clic. C'est la seule condition qui rend le remède visible.
+      const debut = application.etat.appels.length;
+      const clique = await session.page.evaluate((n) => {
+        const risque = window.DataStore.getRisques().find((r) => r.id === 'RISK-A');
+        window.DataStore.updateRisque({ ...risque, nom: n });
+        const bouton = document.getElementById('sync-recharger');
+        if (bouton === null) return { bouton: false, enAttente: false };
+        const enAttente = window.Sync.aDesModificationsEnAttente();
+        bouton.click();
+        return { bouton: true, enAttente };
+      }, nouveauNom);
+
+      assert.equal(clique.bouton, true, 'Le produit doit proposer « Recharger les données ».');
+      assert.equal(
+        clique.enAttente,
+        true,
+        'La saisie doit être EN ATTENTE au moment du clic : sinon le scénario ne pose pas la question.',
+      );
+
+      // ── 4. On attend que le rechargement ait ÉTÉ APPLIQUÉ ───────────────
+      // L'événement, pas un délai : la valeur écrite par le tiers apparaît en
+      // mémoire — ce qui ne peut arriver qu'une fois la réponse reçue et adoptée.
+      await session.page.waitForFunction(
+        () => {
+          const risque = window.DataStore.getRisques().find((r) => r.id === 'RISK2-A');
+          return risque !== undefined && risque.nom === 'Changé par quelqu’un d’autre';
+        },
+        null,
+        { timeout: 15000 },
+      );
+
+      // ── 5. L'ORDRE, tel que le relais l'a vu ────────────────────────────
+      const depuis = application.etat.appels.slice(debut);
+      const rangEcriture = depuis.findIndex(
+        (a) => a.methode === 'PUT' && a.chemin === '/api/entites/risques/RISK-A',
+      );
+      const rangRechargement = depuis.findIndex(
+        (a) => a.methode === 'GET' && a.chemin === '/api/donnees',
+      );
+
+      assert.notEqual(
+        rangEcriture,
+        -1,
+        'La saisie en attente doit être ENVOYÉE : sans cela le rechargement l’emporte, et ' +
+          'l’utilisateur perd ce qu’il vient de taper en suivant ce que le produit lui dit ' +
+          `(constats m-6 / Q-38). Appels vus : ${JSON.stringify(depuis)}`,
+      );
+      assert.notEqual(rangRechargement, -1, 'Et le rechargement doit bien avoir été demandé.');
+      assert.ok(
+        rangEcriture < rangRechargement,
+        'Et elle doit partir AVANT le rechargement : après, elle court contre la réponse — ' +
+          `c'est le hasard qui déciderait. Appels vus : ${JSON.stringify(depuis)}`,
+      );
+
+      // ── 6. Et le résultat, des deux côtés ───────────────────────────────
+      const enMemoire = await session.page.evaluate(() => {
+        const par = (id) => window.DataStore.getRisques().find((r) => r.id === id);
+        return { a: par('RISK-A')?.nom ?? null, deux: par('RISK2-A')?.nom ?? null };
+      });
+      assert.equal(enMemoire.a, nouveauNom, 'La saisie doit être encore à l’écran après le rechargement.');
+      assert.equal(enMemoire.deux, 'Changé par quelqu’un d’autre', 'Et le rechargement doit avoir rapporté le travail du voisin.');
+
+      const enBaseA = await enBase('select nom from risques where id = $1', ['RISK-A']);
+      assert.equal(enBaseA[0].nom, nouveauNom, 'Et le serveur doit la détenir.');
+      assert.deepEqual(session.erreursScript, [], 'CLAUDE.md §5 : zéro erreur.');
+    } finally {
+      await session.fermer();
+    }
+  });
+});

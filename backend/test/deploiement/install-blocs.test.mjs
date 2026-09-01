@@ -7,17 +7,17 @@
  * marqueurs y ont été posés (`# >>> banc: <nom> <<<`) pour qu'un banc puisse en
  * extraire un bloc et l'exécuter. Ce fichier les emploie.
  *
- * **Il ne double pas `rsync`, et c'est un choix.** Une doublure de `rsync`
- * éprouverait ma compréhension de ses règles de filtre, pas `rsync` — or
- * `install.sh` dit lui-même que ces règles « n'ont pas pu être éprouvées sur la
- * machine de développement ». Les simuler transformerait un « non vérifié »
- * honnête en un « vérifié » faux, ce qui est exactement le décor que ce chantier
- * traque. La copie relève de la vérification sur la VM, et elle y est inscrite.
+ * **Il ne double pas `rsync` : il joue le vrai.** Une doublure n'éprouverait que
+ * ma compréhension des règles de filtre, pas `rsync` — elle transformerait un
+ * « non vérifié » honnête en un « vérifié » faux, ce qui est exactement le décor
+ * que ce chantier traque. `rsync` étant désormais installé sur la machine, le
+ * contrôle symétrique publie pour de bon et **relit la racine web obtenue**.
+ * S'il venait à manquer, `exigerRsync()` fait échouer l'essai bruyamment : son
+ * absence ne doit jamais ressembler à une propriété tenue (constat **Q-37**).
  *
- * Ce qui EST joué ici ne dépend d'aucun binaire absent : le refus qui **précède**
- * la copie — celui qui porte le constat Q-31 — et le contrôle de dérive du
- * ProxyTimeout. Les deux sont du texte et de l'arithmétique, et les deux
- * décident.
+ * Sont joués ici : le refus qui **précède** la copie — celui qui porte le constat
+ * Q-31 —, la copie elle-même et son contrôle d'après-coup, et le contrôle de
+ * dérive du ProxyTimeout.
  *
  * **`configtest` n'est pas porté** : il appelle `apache2ctl`, c'est-à-dire la
  * chose même qu'il éprouve. Le doubler ne prouverait rien.
@@ -25,11 +25,12 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, test } from 'node:test';
 
+import { exigerSilenceApres } from '../aide/assertions.mjs';
 import { RACINE_BACKEND } from '../aide/serveur.mjs';
 
 const INSTALL = join(RACINE_BACKEND, 'deploy', 'install.sh');
@@ -133,6 +134,47 @@ function racineAvec(fichiers) {
   return { racine, depot };
 }
 
+/**
+ * Refuse de continuer si `rsync` manque — au lieu de laisser son absence rendre
+ * un essai vert.
+ *
+ * C'est la leçon même du constat **Q-37** : un outil absent ne doit jamais
+ * ressembler à une propriété tenue. Le banc joue ici le VRAI `rsync` (le
+ * doubler n'éprouverait que ma compréhension de ses règles de filtre) ; s'il
+ * n'est pas là, l'essai échoue bruyamment et dit quoi installer.
+ */
+function exigerRsync() {
+  const trouve = (() => {
+    try {
+      execFileSync('rsync', ['--version'], { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  assert.ok(
+    trouve,
+    '`rsync` est introuvable sur cette machine. Cet essai joue la copie réelle du frontend : ' +
+      'sans `rsync`, le bloc meurt avant de publier quoi que ce soit, et TOUT ce qui suit ' +
+      'observerait le silence d’un script mort (constat Q-37). Installez rsync ' +
+      '(`apt-get install rsync`) plutôt que de neutraliser cet essai.',
+  );
+}
+
+/** Les chemins relatifs des fichiers réellement présents sous `racine`, triés. */
+function publies(racine) {
+  const trouves = [];
+  const parcourir = (dossier, prefixe) => {
+    for (const entree of readdirSync(dossier, { withFileTypes: true })) {
+      const relatif = prefixe ? `${prefixe}/${entree.name}` : entree.name;
+      if (entree.isDirectory()) parcourir(join(dossier, entree.name), relatif);
+      else trouves.push(relatif);
+    }
+  };
+  parcourir(racine, '');
+  return trouves.sort();
+}
+
 describe('L’extraction par ancres refuse de deviner (constat Q-35)', () => {
   test('les trois blocs annoncés existent, sont bornés, et ne sont pas vides', async () => {
     for (const nom of ['frontend', 'proxytimeout', 'configtest']) {
@@ -198,25 +240,61 @@ describe('Le refus PRÉCÈDE la copie, et il nomme le fichier (constat Q-31)', (
     });
   }
 
-  test('CONTRÔLE SYMÉTRIQUE : une racine web propre franchit le refus', async () => {
+  test('CONTRÔLE SYMÉTRIQUE : une racine web propre est publiée, en entier et rien de plus', async () => {
     // Sans cette moitié, les treize essais ci-dessus seraient satisfaits par un
     // bloc qui refuse TOUT — c'est-à-dire par une installation impossible.
+    //
+    // ⚠️ Cet essai portait, jusqu'au septième passage, une assertion FAUSSE EN SOI :
+    // « la sortie ne contient pas “fichier non publiable” ». Le message de
+    // SUCCÈS du bloc est « aucun fichier non publiable » — l'assertion était donc
+    // condamnée à rougir dès que le bloc irait jusqu'au bout. Elle était verte
+    // parce que le bloc mourait plus tôt, sur un `rsync` absent de la machine.
+    // C'est le constat **Q-37**, et la réponse est `exigerSilenceApres` : une
+    // absence ne se juge qu'après avoir prouvé que l'étape observée a eu lieu.
+    exigerRsync();
     const { racine } = racineAvec(['index.html', 'js/app.js', 'css/style.css', 'data/LISEZ-MOI.md']);
     const issue = jouerBloc('frontend', { DEPOT: racine, RACINE: racine, SOURCE: RACINE_BACKEND });
 
     assert.equal(
-      issue.sortie.includes('fichier non publiable'),
-      false,
-      `Aucun de ces fichiers ne doit être refusé — le « .md » est toléré dans le dépôt :\n${issue.sortie}`,
+      issue.code,
+      0,
+      `Le bloc doit aller à son terme sur une racine propre — sinon tout ce qui suit ` +
+        `observerait le silence d'un script mort :\n${issue.sortie}`,
     );
     assert.match(
       issue.sortie,
       /listes blanches du frontend alignées/,
       `Le bloc doit être allé jusqu’à la comparaison des deux listes :\n${issue.sortie}`,
     );
-    // Il s'arrête ensuite sur `rsync`, absent de cette machine — et c'est voulu :
-    // ce banc ne double pas la copie (voir l'en-tête).
-    assert.match(issue.sortie, /rsync/, `L’arrêt attendu est celui de la copie :\n${issue.sortie}`);
+    // L'absence du refus, mais seulement APRÈS la preuve que la publication a
+    // abouti — et sur la FORME de l'alerte (« !! fichier non publiable : »),
+    // jamais sur la sous-chaîne que le message de succès porte lui aussi.
+    exigerSilenceApres(
+      issue.sortie,
+      /!! fichier non publiable :/,
+      /ok frontend : \d+ fichier\(s\) publiés/,
+      '« Registre_des_risques.xlsx » arrête l’installation AVANT toute copie',
+    );
+    assert.match(
+      issue.sortie,
+      /ok frontend : 3 fichier\(s\) publiés, aucun fichier non publiable/,
+      `Trois fichiers publiables sont au dépôt : le compte annoncé doit être 3.\n${issue.sortie}`,
+    );
+
+    // ── Et ce qui a RÉELLEMENT atterri ───────────────────────────────
+    // Le bloc s'auto-contrôle (§ 3), mais un contrôle qui se juge lui-même ne vaut
+    // que si quelqu'un regarde par-dessus son épaule : on relit la racine web.
+    assert.deepEqual(
+      publies(join(racine, 'frontend')),
+      ['css/style.css', 'index.html', 'js/app.js'],
+      'La racine web doit porter les trois fichiers publiables, et eux seuls.',
+    );
+    assert.equal(
+      existsSync(join(racine, 'frontend', 'data')),
+      false,
+      'Le répertoire « data/ » n’a rien de publiable : `rsync -m` doit l’avoir élagué ' +
+        'au lieu de le créer vide dans une racine servie sans authentification (constat Q-31).',
+    );
   });
 });
 

@@ -395,45 +395,11 @@ export async function attendreQuiescence(page, options = {}) {
 }
 
 /* =====================================================================
- *  Les deux familles d'assertions négatives — et celle qui est piégeuse
+ *  Assertions appariées — réexportées depuis `assertions.mjs`
+ * ---------------------------------------------------------------------
+ *  Elles ont quitté ce fichier au septième passage : elles ne sont pas
+ *  propres au navigateur, et un essai de déploiement en a besoin aussi
+ *  (constat Q-37). Le réexport garde les imports existants valides.
  * ===================================================================== */
 
-/**
- * Exige qu'un AVERTISSEMENT ne soit pas affiché — en nommant l'essai qui,
- * lui, le fait parler.
- *
- * ── Pourquoi cette fonction existe plutôt qu'un `assert` nu ──────────────────
- *
- * Le banc porte deux familles d'assertions négatives, et une seule est piégeuse.
- *
- *  · **La famille sûre** : « la filiale voisine n'est nommée nulle part »,
- *    « l'identifiant caché n'est pas rendu ». Casser le cloisonnement fait
- *    APPARAÎTRE la chaîne : l'assertion mord d'elle-même, elle se suffit.
- *  · **La famille piégeuse** : « le bandeau ne dit rien », « aucun défaut interne
- *    n'est annoncé ». Ce qu'on observe est le silence d'un mécanisme — et retirer
- *    le mécanisme produit le même silence. Une telle assertion est satisfaite par
- *    un produit qui ne dit JAMAIS rien.
- *
- * C'est le constat **Q-21** : trois comportements du remède du bloquant T-1
- * n'étaient exercés que dans ce sens-là, et le banc restait vert quand on les
- * neutralisait un par un.
- *
- * Une assertion de silence n'est donc jamais un essai à elle seule : elle est la
- * moitié d'un couple, et la moitié qui ne prouve rien. Le troisième argument
- * force à nommer l'autre moitié — ce qui rend le couple relisible, et greppable
- * (`grep -rn "exigerSilence" test/`) le jour où quelqu'un refait ce tri.
- *
- * @param {string} texte ce qu'on a lu à l'écran (bandeau, console, corps de réponse)
- * @param {RegExp} avertissement le motif qui NE doit pas y figurer
- * @param {string} essaiQuiFaitParler le nom de l'essai qui exige le même
- *   avertissement quand il DOIT paraître. Sans lui, ce silence ne vaut rien.
- */
-export function exigerSilence(texte, avertissement, essaiQuiFaitParler) {
-  assert.equal(
-    avertissement.test(texte),
-    false,
-    `Un avertissement paraît alors que rien ne le justifie (${String(avertissement)}). ` +
-      `Sa moitié symétrique — l'essai qui le fait parler — est « ${essaiQuiFaitParler} ». ` +
-      `Vu : ${texte.slice(0, 300)}`,
-  );
-}
+export { exigerSilence, exigerSilenceApres } from './assertions.mjs';

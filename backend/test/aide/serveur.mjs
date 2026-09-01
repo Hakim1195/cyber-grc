@@ -290,9 +290,32 @@ export async function monterGreffon(base, perimetre, options = {}) {
 
   const config = chargerConfiguration(environnementDeTest(base, options.environnement ?? 'developpement'));
   const pool = creerPool(config.base);
-  const resolveur = new PerimetreFixe(perimetre);
+  // `options.resolveur` sert aux essais qui ont besoin de MAÎTRISER l'instant où le
+  // périmètre se résout — celui de l'abandon avant transaction, par exemple. Le
+  // contrat reste entier : quel qu'il soit, `resoudre()` ne prend aucun argument.
+  const resolveur = options.resolveur ?? new PerimetreFixe(perimetre);
 
-  const instance = Fastify({ logger: false, bodyLimit: config.serveur.tailleMaxCorpsOctets });
+  // `options.journal` reçoit chaque ligne du journal, déjà décodée. Certaines
+  // propriétés ne s'observent QUE là : quand le client est parti, le produit n'a
+  // plus personne à qui répondre, et son journal est la seule trace de ce qu'il a
+  // décidé — c'est ce que dit `signalerAbandon` dans `src/api/index.ts`.
+  const journal =
+    options.journal === undefined
+      ? false
+      : {
+          level: 'warn',
+          stream: {
+            write(ligne) {
+              try {
+                options.journal(JSON.parse(ligne));
+              } catch {
+                options.journal({ msg: String(ligne) });
+              }
+            },
+          },
+        };
+
+  const instance = Fastify({ logger: journal, bodyLimit: config.serveur.tailleMaxCorpsOctets });
   await instance.register(greffonApi, { pool, config, resolveur });
   await instance.ready();
 

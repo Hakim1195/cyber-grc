@@ -25,11 +25,13 @@
  */
 
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import { after, before, describe, test } from 'node:test';
 
+import { exigerSilence } from '../aide/assertions.mjs';
 import { FILIALE_A, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
 import { fichier, instantane } from '../reprise/jeux-essai.mjs';
-import { monterServeurReel } from '../aide/serveur.mjs';
+import { monterGreffon, monterServeurReel, PerimetreFixe } from '../aide/serveur.mjs';
 
 /** La borne publiée par le modèle, relue au démarrage plutôt que recopiée. */
 let BORNE;
@@ -290,5 +292,271 @@ describe('Une connexion qui tombe n’écrit rien (constat Q-19)', () => {
       'Une reprise dont le client est parti ne doit RIEN laisser : la moitié d’un fichier ' +
         'appliquée est le pire état possible pour un registre qui sert de preuve en audit.',
     );
+  });
+});
+
+/* =====================================================================
+ *  Le client parti AVANT la transaction (constats Q-19 / Q-38)
+ * ---------------------------------------------------------------------
+ *  L'essai ci-dessus tient le contrôle d'abandon **d'avant validation** : le
+ *  client part pendant la transaction, et rien n'est écrit. Il ne tient PAS
+ *  l'autre, celui d'avant transaction — le 7ᵉ passage l'a mesuré : mutation
+ *  appliquée, banc vert 172/172 (constat **Q-38**).
+ *
+ *  ── Pourquoi le second ne se laissait pas prendre par le premier ──────────
+ *
+ *  Parce que les deux produisent le MÊME résultat visible : 503, zéro ligne.
+ *  Retirer le contrôle d'avant transaction ne perd aucune donnée ; cela coûte
+ *  une **connexion du pool** et une transaction ouverte pour rien — exactement
+ *  ce que le constat Q-20 fait payer aux autres utilisateurs. Une assertion sur
+ *  les lignes écrites ne pouvait donc pas mordre, et n'a pas mordu.
+ *
+ *  Ce que cet essai observe est ce qui les distingue vraiment :
+ *
+ *   1. le **journal** — seule trace quand le client n'est plus là pour lire —
+ *      dit `moment: "avant transaction"` et non `"avant validation"` ;
+ *   2. **aucune connexion n'est prise au pool** après l'abandon.
+ *
+ *  ── Et comment l'instant est maîtrisé, plutôt que couru ───────────────────
+ *
+ *  Entre l'entrée du gestionnaire et le contrôle, il n'y a que deux `await` :
+ *  viser cette fenêtre avec un minuteur serait un pari, et un essai qui parie
+ *  est un décor. On la tient donc ouverte par le SEUL point d'extension prévu —
+ *  le résolveur de périmètre, point d'accroche du lot L3 — dont le contrat est
+ *  scrupuleusement respecté : `resoudre()` ne prend toujours aucun argument.
+ * ===================================================================== */
+
+/** Résolveur qui s'annonce puis ATTEND, une fois, qu'on le laisse passer. */
+class PerimetreRetarde extends PerimetreFixe {
+  constructor(perimetreSession) {
+    super(perimetreSession);
+    this.appels = 0;
+    this._porte = null;
+    this._annoncer = null;
+  }
+
+  /** Arme UN retard. Rend `{ entre, ouvrir }` : `entre` se résout quand le
+   *  gestionnaire est arrivé jusqu'ici — donc après `surveillerAbandon`. */
+  armer() {
+    let ouvrir;
+    let annoncer;
+    const porte = new Promise((resoudre) => {
+      ouvrir = resoudre;
+    });
+    const entre = new Promise((resoudre) => {
+      annoncer = resoudre;
+    });
+    this._porte = porte;
+    this._annoncer = annoncer;
+    return { entre, ouvrir: () => ouvrir() };
+  }
+
+  async resoudre() {
+    this.appels += 1;
+    if (this._porte !== null) {
+      const porte = this._porte;
+      this._porte = null;          // un seul appel est retenu : le suivant passe
+      this._annoncer();
+      await porte;
+    }
+    return super.resoudre();
+  }
+}
+
+describe('Un client déjà parti ne prend pas de connexion (constats Q-19 / Q-38)', () => {
+  const journal = [];
+  const socketsServeur = [];
+  let greffon;
+  let resolveur;
+  let url;
+  /** Nombre d'appels à `pool.connect()` — le coût que le contrôle évite. */
+  let prises = 0;
+
+  before(async () => {
+    resolveur = new PerimetreRetarde({
+      utilisateurId: 'reprise-abandon',
+      filialeId: FILIALE_A,
+      filiales: [FILIALE_A],
+      perimetreGroupe: false,
+      administrationGroupe: false,
+    });
+    greffon = await monterGreffon(base, null, {
+      resolveur,
+      journal: (ligne) => journal.push(ligne),
+    });
+    const connecter = greffon.pool.connect.bind(greffon.pool);
+    greffon.pool.connect = (...arguments_) => {
+      prises += 1;
+      return connecter(...arguments_);
+    };
+    greffon.instance.server.on('connection', (socket) => socketsServeur.push(socket));
+    url = await greffon.ecouter();
+  });
+
+  after(async () => {
+    await greffon?.fermer();
+  });
+
+  /**
+   * Envoie une reprise sur un VRAI port, sans connexion réutilisée.
+   *
+   * `inject()` n'ouvre pas de socket : il n'y a rien à couper, et le témoin
+   * d'abandon ne se déclencherait jamais. `agent: false` garantit en plus une
+   * connexion neuve par requête — sans quoi la socket à surveiller serait celle
+   * d'un essai précédent.
+   */
+  function envoyer(marque, n) {
+    const corps = JSON.stringify({
+      mode: 'fusionner',
+      fichier: { nom: `${marque}.json`, contenu: fichierDe(n, marque) },
+    });
+    const requete = http.request(`${url}/api/reprise`, {
+      method: 'POST',
+      agent: false,
+      headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(corps) },
+    });
+    const fini = new Promise((resoudre) => {
+      requete.on('response', (reponse) => {
+        let texte = '';
+        reponse.on('data', (morceau) => {
+          texte += morceau;
+        });
+        reponse.on('end', () => resoudre({ statut: reponse.statusCode, texte }));
+      });
+      requete.on('error', () => resoudre({ statut: 0, texte: '' }));
+    });
+    requete.end(corps);
+    return { requete, fini };
+  }
+
+  /** Attend qu'une condition devienne vraie, et ÉCHOUE bruyamment sinon. */
+  async function attendreQue(condition, quoi, delai = 20000) {
+    const echeance = Date.now() + delai;
+    while (Date.now() < echeance) {
+      if (condition()) return;
+      await new Promise((resoudre) => setTimeout(resoudre, 50));
+    }
+    throw new Error(`Jamais observé en ${String(delai)} ms : ${quoi}`);
+  }
+
+  /** La ligne « Reprise ANNULÉE » du journal, attendue puis rendue. */
+  async function attendreAbandonJournalise(depuis) {
+    let ligne = null;
+    await attendreQue(
+      () => {
+        ligne = journal.slice(depuis).find((l) => /Reprise ANNUL/i.test(String(l.msg ?? '')));
+        return ligne !== undefined && ligne !== null;
+      },
+      'la ligne de journal « Reprise ANNULÉE ». Quand le client est parti, le journal est ' +
+        'la SEULE trace de ce que le serveur a décidé : sans elle, un exploitant à qui l’on ' +
+        'signale un import « perdu » n’a rien à retrouver.',
+    );
+    return ligne;
+  }
+
+  test('NOMINAL : personne ne part, la reprise aboutit et le journal se tait', async () => {
+    // Moitié symétrique, jouée EN PREMIER — et elle sert deux fois : elle
+    // réchauffe le dépôt (le catalogue n'est chargé qu'une fois, et son
+    // chargement prend une connexion qu'on ne veut pas compter plus loin), et
+    // elle prouve que la route écrit quand personne ne s'en va.
+    const depuis = journal.length;
+    const avant = prises;
+
+    const { fini } = envoyer('NOMINAL', 300);
+    const reponse = await fini;
+
+    assert.equal(reponse.statut, 200, `Une reprise que personne n’abandonne doit aboutir : ${reponse.texte.slice(0, 300)}`);
+    assert.equal(await compter('NOMINAL'), 300, 'Et ses 300 lignes doivent être en base.');
+    assert.ok(
+      prises > avant,
+      'Le compteur de connexions doit BOUGER sur une reprise ordinaire : sans cela, ' +
+        '« aucune connexion prise » plus bas serait vrai d’un compteur en panne.',
+    );
+    exigerSilence(
+      JSON.stringify(journal.slice(depuis)),
+      /Reprise ANNUL/i,
+      'ABANDON AVANT TRANSACTION : le journal dit « avant transaction », et rien n’est pris au pool',
+    );
+  });
+
+  test('ABANDON AVANT TRANSACTION : le journal dit « avant transaction », et rien n’est pris au pool', async () => {
+    const depuis = journal.length;
+    const socketsAvant = socketsServeur.length;
+
+    // 1. La porte est armée : le gestionnaire ira jusqu'au résolveur, et
+    //    s'arrêtera là — c'est-à-dire APRÈS avoir posé son témoin d'abandon,
+    //    et AVANT le contrôle qu'on éprouve.
+    const porte = resolveur.armer();
+    const { requete, fini } = envoyer('AVANT', 300);
+    await porte.entre;
+
+    // 2. Le client s'en va. On attend la fermeture vue DU CÔTÉ SERVEUR : c'est
+    //    elle que `surveillerAbandon` écoute, et la voir depuis le client ne
+    //    prouverait rien de ce que le serveur a appris.
+    await attendreQue(
+      () => socketsServeur.length > socketsAvant,
+      'la connexion ouverte par cette requête, côté serveur',
+    );
+    const socket = socketsServeur[socketsServeur.length - 1];
+    const fermee = new Promise((resoudre) => socket.on('close', () => resoudre()));
+    requete.destroy();
+    await fermee;
+    await fini;
+
+    // 3. On laisse le gestionnaire repartir. Tout ce qui suit lui appartient.
+    const prisesAvant = prises;
+    porte.ouvrir();
+
+    const ligne = await attendreAbandonJournalise(depuis);
+    assert.equal(
+      ligne.moment,
+      'avant transaction',
+      'Le contrôle qui a tranché doit être celui d’AVANT la transaction. « avant validation » ' +
+        'signifierait que le serveur a ouvert une transaction pour un client déjà parti — ' +
+        'même résultat visible, et tout le coût du constat Q-20. Vu : ' +
+        JSON.stringify(ligne).slice(0, 300),
+    );
+    assert.equal(ligne.fichier, 'AVANT.json', 'Et il doit nommer le fichier concerné.');
+
+    assert.equal(
+      prises,
+      prisesAvant,
+      `Aucune connexion ne doit être prise au pool après l’abandon : le refus qui coûte une ` +
+        `connexion est exactement celui que Q-20 fait payer aux autres. Prises : ` +
+        `${String(prises - prisesAvant)}.`,
+    );
+    assert.equal(await compter('AVANT'), 0, 'Et rien n’est écrit, évidemment.');
+  });
+
+  test('ABANDON APRÈS L’ENTRÉE EN TRANSACTION : le journal dit « avant validation »', async () => {
+    // ── La moitié qui rend la précédente discriminante ──────────────────────
+    //
+    // Sans elle, « le journal dit avant transaction » serait satisfait par un
+    // produit qui écrirait toujours ce mot-là — y compris quand la transaction
+    // est déjà ouverte. Les deux valeurs de `moment` existent, elles se
+    // distinguent, et c'est ce qui donne son mordant à l'essai d'au-dessus.
+    //
+    // L'instant du départ n'est pas couru non plus : on attend l'ÉVÉNEMENT
+    // « une connexion vient d'être prise au pool », qui ne peut se produire
+    // qu'au-delà du contrôle d'avant transaction.
+    const depuis = journal.length;
+    const avant = prises;
+    const { requete, fini } = envoyer('APRES', 2500);
+
+    await attendreQue(
+      () => prises > avant,
+      'la prise de connexion au pool, qui marque l’entrée en transaction',
+    );
+    requete.destroy();
+    await fini;
+
+    const ligne = await attendreAbandonJournalise(depuis);
+    assert.equal(
+      ligne.moment,
+      'avant validation',
+      `Un client parti APRÈS l’ouverture de la transaction doit être vu par l’autre contrôle. ` +
+        `Vu : ${JSON.stringify(ligne).slice(0, 300)}`,
+    );
+    assert.equal(await compter('APRES'), 0, 'Et la transaction est défaite : zéro ligne.');
   });
 });
