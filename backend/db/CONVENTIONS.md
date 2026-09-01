@@ -46,6 +46,26 @@ id id_metier primary key
 **Format conservé de l'application existante** : `"<PRÉFIXE>-<horodatage>-<aléa>"`
 (`UI.genId`, ex. `RISK-1720000000000-482`).
 
+⚠️ **La part aléatoire vaut 32 caractères hexadécimaux**, tirés du générateur
+cryptographique du serveur (`gen_random_uuid()`, natif depuis PostgreSQL 13, sans extension) —
+et non les trois chiffres décimaux de la première écriture. Les identifiants anciens, à trois
+chiffres, restent lisibles et repris tels quels : c'est le format **engendré** qui change, pas
+le format **accepté**.
+
+Pourquoi, et le prix qu'a coûté l'écart : mille valeurs d'aléa donnent **24 collisions sur 250
+tirages** dans une même milliseconde, c'est-à-dire à l'échelle d'un import courant. Le défaut a
+été mesuré et chiffré dès la vague 1, laissé sans propriétaire, et il a produit deux vagues plus
+tard le seul constat bloquant d'un passage de porte : un import qui écrit une partie de ses
+lignes **et annonce le succès**.
+
+Il portait plus que l'import. `journal_audit.id` a pour valeur par défaut `f_generer_id('LOG')`,
+sous clé primaire : **une collision y refuse la trace au moment précis où elle doit être
+écrite**, sur la seule table dont l'objet est de faire preuve.
+
+Budget de longueur : le domaine plafonne à 64 caractères, soit préfixe + 47 ; le plus long
+préfixe du produit en compte 6, il reste donc 11 de marge. Au-delà de 17, le domaine refuse —
+bruyamment, et un test le fige.
+
 - **Pas d'UUID, pas de `serial`, pas d'`identity`.** L'import d'un export `grc-backup`
   doit être un **round-trip exact** : les identifiants du fichier deviennent tels quels
   les clés primaires, et les huit clés étrangères implicites du modèle actuel

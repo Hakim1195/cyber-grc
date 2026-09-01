@@ -3764,13 +3764,16 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
           and pg_get_function_result(p.oid) = 'TABLE(objet text, anomalie text, detail text)'
         order by 1`,
     );
-    // Ils étaient quatre au cinquième correctif, sept au sixième : les trois neufs — armement,
-    // portee_figee, privileges — se sont branchés SANS qu'un fichier de déploiement change.
-    // C'est la propriété du §19.4, constatée plutôt qu'affirmée.
+    // Quatre au cinquième correctif, sept au sixième, HUIT depuis le troisième passage de
+    // la porte S2 (entropie_identifiants). Chacun s'est branché SANS qu'un fichier de
+    // déploiement change : c'est la propriété du §19.4, constatée plutôt qu'affirmée.
+    // Cette liste est délibérément ÉPINGLÉE : un garde-fou qui apparaît doit être
+    // reconnu ici, un garde-fou qui disparaît ne doit pas s'effacer en silence.
     assert.deepEqual(controles.map((l) => l.controle), [
       'armement',
       'chemin_recherche',
       'couverture_rls',
+      'entropie_identifiants',
       'portee_figee',
       'privileges',
       'tracabilite',

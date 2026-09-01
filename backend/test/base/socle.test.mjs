@@ -642,3 +642,191 @@ describe('Rôles et privilèges (CONVENTIONS §14)', () => {
     assert.notEqual(proprietaires[0].proprietaire, 'grc_app');
   });
 });
+
+/* =====================================================================
+ *  Entropie des identifiants engendrés (CONVENTIONS §2)
+ * =====================================================================
+ *
+ *  Constat BLOQUANT du troisième passage de la porte S2, et son histoire vaut d'être
+ *  écrite ici plutôt que perdue : le PREMIER banc d'essai de la vague 1 avait déjà mesuré
+ *  et signalé le défaut — « ids engendrés: 100, distincts: 95, millisecondes distinctes:
+ *  2 » — avec la remarque que c'est le générateur du serveur, celui de l'import et de la
+ *  reprise, où une collision devient un refus d'écriture. La mesure existait ; ce qui
+ *  manquait était le test qui la REJOUE. Deux vagues plus tard, mille valeurs d'aléa ont
+ *  produit le seul bloquant du passage : un import annonçant 250 lignes en écrivait 223,
+ *  sans signaler le moindre incident, et le questionnaire AirCyber perdait 13 réponses sur
+ *  234 — donc un score de conformité faux, dans un outil qui sert de preuve en audit.
+ *
+ *  Ces tests tiennent la propriété pour qu'elle ne se reperde pas. Le premier est le seul
+ *  qui compte vraiment : il MESURE, en volume, dans les conditions qui déclenchent le
+ *  défaut — quelques centaines de tirages dans la même milliseconde.
+ */
+
+describe('Identifiants engendrés par le serveur (CONVENTIONS §2)', () => {
+  /** Tire `n` identifiants en une seule requête : ils tombent dans la même milliseconde. */
+  async function tirer(n, prefixe = 'RISK') {
+    return (await base.lignes(
+      proprietaire,
+      `select f_generer_id($1) as v from generate_series(1, $2)`,
+      [prefixe, n],
+    )).map((l) => l.v);
+  }
+
+  test('250 tirages dans la même milliseconde : AUCUNE collision', async () => {
+    // 250, parce que c'est la taille du lot du constat. Le test vérifie d'abord qu'il
+    // éprouve bien ce qu'il annonce : si les tirages s'étalaient sur des centaines de
+    // millisecondes, l'absence de collision ne prouverait rien du générateur.
+    const ids = await tirer(250);
+    const millisecondes = new Set(ids.map((v) => v.split('-')[1]));
+    assert.ok(
+      millisecondes.size <= 10,
+      `Le test doit tirer dans un très petit nombre de millisecondes ; il en a vu ${millisecondes.size}.`,
+    );
+    assert.equal(
+      new Set(ids).size, 250,
+      `Collisions : ${250 - new Set(ids).size}. Une collision de clé primaire fait perdre une `
+        + 'ligne au milieu d’un lot annoncé complet (porte S2).',
+    );
+  });
+
+  test('20 000 tirages : toujours aucune collision', async () => {
+    // Très au-delà du besoin — un import du questionnaire AirCyber en fait 234 — mais
+    // c'est le volume qui donne au chiffre sa valeur : à 1 000 valeurs d'aléa, celui-ci
+    // rendait des milliers de doublons.
+    const ids = await tirer(20_000);
+    assert.equal(new Set(ids).size, 20_000);
+  });
+
+  test('le FORMAT de la convention est tenu, segment par segment', async () => {
+    // §2 fige « <PRÉFIXE>-<millisecondes>-<aléa> ». Le correctif élargit le troisième
+    // segment ; il ne touche pas aux deux premiers, et l'horodatage reste la clé de tri.
+    const [id] = await tirer(1, 'mesure');
+    const segments = id.split('-');
+    assert.equal(segments.length, 3, `Trois segments attendus : ${id}`);
+    assert.equal(segments[0], 'MESURE', 'Le préfixe est mis en capitales.');
+    assert.match(segments[1], /^\d{13}$/, 'Millisecondes depuis l’époque Unix.');
+    assert.match(segments[2], /^[0-9a-f]{32}$/, 'Part aléatoire : 32 caractères hexadécimaux.');
+
+    // Et l'horodatage est bien celui de maintenant, pas une constante.
+    const ecart = Math.abs(Date.now() - Number(segments[1]));
+    assert.ok(ecart < 60_000, `Horodatage incohérent : ${segments[1]}`);
+  });
+
+  test('la longueur reste dans le domaine, et le déborder est BRUYANT', async () => {
+    // id_metier plafonne à 64 caractères. Le plus long préfixe du produit est « MESURE » ;
+    // ce test fige la marge, pour qu'un élargissement futur de l'aléa ne la mange pas en
+    // silence — le défaut se verrait alors à l'import, pas ici.
+    const [id] = await tirer(1, 'MESURE');
+    assert.equal(id.length, 53);
+    assert.ok(id.length <= 64 - 11, 'Au moins onze caractères de marge sous le plafond du domaine.');
+
+    // Contrôle symétrique : au-delà, la contrainte de domaine refuse, elle ne tronque pas.
+    const erreur = await refus(proprietaire, `select f_generer_id('${'P'.repeat(20)}')`);
+    assert.equal(erreur.code, '23514', 'Un préfixe démesuré doit échouer, pas produire un id tronqué.');
+  });
+
+  test('le JOURNAL D’AUDIT tire ses identifiants du même générateur', async () => {
+    // Ce n'est pas un détail de plus : une collision sur journal_audit.id refuse la trace
+    // au moment précis où elle doit être écrite, sur la seule table dont l'objet est de
+    // faire preuve. Le lien est constaté dans le catalogue plutôt que supposé.
+    const defaut = await base.valeur(
+      proprietaire,
+      `select pg_get_expr(d.adbin, d.adrelid)
+         from pg_attrdef d
+         join pg_class c on c.oid = d.adrelid
+         join pg_attribute a on a.attrelid = c.oid and a.attnum = d.adnum
+        where c.relname = 'journal_audit' and a.attname = 'id'`,
+    );
+    assert.match(defaut, /f_generer_id\('LOG'/);
+  });
+
+  test('LE GARDE-FOU MORD : l’ancien générateur à mille valeurs est REFUSÉ', async () => {
+    // Contrôle de morsure sur le garde-fou, pas sur le générateur : on remet la fonction
+    // dans sa forme d'origine, celle qui a produit le bloquant, et on exige que le
+    // déploiement le dise.
+    await proprietaire.query(
+      `create or replace function f_generer_id(p_prefixe text) returns id_metier
+           language sql volatile set search_path = pg_catalog, public, pg_temp as $x$
+         select (upper(p_prefixe) || '-'
+                 || (extract(epoch from clock_timestamp()) * 1000)::bigint::text || '-'
+                 || floor(random() * 1000)::integer::text)::id_metier;
+       $x$`,
+    );
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        'select objet, anomalie from f_verifier_entropie_identifiants()',
+      );
+      assert.deepEqual(anomalies, [
+        { objet: 'f_generer_id', anomalie: 'identifiant_entropie_faible' },
+      ]);
+
+      // Et il remonte par le POINT D'APPEL : c'est ce qui le rend branché sur les deux
+      // chemins de déploiement sans qu'aucun fichier ait changé (CONVENTIONS §19.4).
+      const parLePoint = await base.lignes(
+        proprietaire,
+        "select controle from f_verifier_schema() where objet = 'f_generer_id'",
+      );
+      assert.deepEqual(parLePoint.map((l) => l.controle), ['entropie_identifiants']);
+
+      // La preuve par la mesure, tant qu'on y est : la forme fautive collisionne.
+      const ids = await tirer(250);
+      assert.ok(
+        new Set(ids).size < 250,
+        'La forme d’origine DOIT collisionner : sinon ce test ne prouve rien.',
+      );
+    } finally {
+      await proprietaire.query(
+        `create or replace function f_generer_id(p_prefixe text) returns id_metier
+             language sql volatile set search_path = pg_catalog, public, pg_temp as $x$
+           select (upper(p_prefixe) || '-'
+                   || (extract(epoch from clock_timestamp()) * 1000)::bigint::text || '-'
+                   || replace(gen_random_uuid()::text, '-', ''))::id_metier;
+         $x$`,
+      );
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('LE BALAYAGE MORD : un autre tirage étroit sous une unicité est réclamé', async () => {
+    // Le motif « une valeur qui se veut unique, engendrée par une expression étroite » ne
+    // vit jamais seul. Le balayage cherche la FORME dans le catalogue, pas le nom de la
+    // fonction qui la portait — une colonne future y tombera sans que ce fichier bouge.
+    await proprietaire.query(
+      `create table essai_entropie (
+           id text not null default ('E-' || floor(random() * 1000)::text),
+           constraint pk_essai_entropie primary key (id))`,
+    );
+    try {
+      const anomalies = await base.lignes(
+        proprietaire,
+        "select objet, anomalie from f_verifier_entropie_identifiants() "
+          + "where objet like 'essai_entropie%'",
+      );
+      assert.deepEqual(anomalies, [
+        { objet: 'essai_entropie.id', anomalie: 'valeur_unique_a_hasard_etroit' },
+      ]);
+    } finally {
+      await proprietaire.query('drop table if exists essai_entropie');
+    }
+
+    // Contrôle symétrique : le même tirage sur une colonne SANS promesse d'unicité ne
+    // déclenche rien — un garde-fou qui crierait sur tout ne serait plus lu.
+    await proprietaire.query(
+      `create table essai_entropie (
+           id text not null, echantillon integer default floor(random() * 1000),
+           constraint pk_essai_entropie primary key (id))`,
+    );
+    try {
+      assert.deepEqual(
+        await base.lignes(
+          proprietaire,
+          "select objet from f_verifier_entropie_identifiants() where objet like 'essai_entropie%'",
+        ),
+        [],
+      );
+    } finally {
+      await proprietaire.query('drop table if exists essai_entropie');
+    }
+  });
+});

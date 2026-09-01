@@ -247,18 +247,68 @@ comment on function f_filiales_autorisees() is
 
 -- Génération d'identifiant côté serveur, strictement identique à UI.genId du frontend :
 -- <PRÉFIXE>-<millisecondes>-<aléa 0..999>.
+-- ── MILLE VALEURS D'ALÉA, ET UN IMPORT QUI MENT ─────────────────────────────────────
+--
+-- Constat BLOQUANT du troisième passage de la porte S2. La part aléatoire de cet
+-- identifiant valait « floor(random() * 1000) » : MILLE valeurs. L'horodatage à la
+-- milliseconde ne sauve rien, parce qu'un import en lot tire ses identifiants dans la même
+-- milliseconde — le premier banc d'essai de la vague 1 l'avait déjà chiffré et écrit, mot
+-- pour mot : « ids engendrés: 100, distincts: 95, millisecondes distinctes: 2 ».
+--
+-- Mesuré sur cette fonction avant correction, 250 tirages, ce qu'un import de taille
+-- ordinaire produit :
+--
+--     tirages | distincts | collisions | millisecondes distinctes
+--         250 |       226 |         24 |                        2
+--
+-- CE QUE COÛTE UNE COLLISION ICI, et pourquoi c'est bloquant et pas cosmétique. Une
+-- collision n'est pas un doublon : c'est un REFUS D'ÉCRITURE sur la clé primaire, au
+-- milieu d'un lot. L'import annonçait 250 lignes, en écrivait 223, et ne signalait aucun
+-- incident. Rejoué sur le questionnaire AirCyber par son code réel : 13 réponses sur 234
+-- manquantes, donc un SCORE DE CONFORMITÉ FAUX — dans un outil dont la raison d'être est
+-- de servir de preuve en audit ISO 27001. Un chiffre faux qui se présente comme juste est
+-- pire qu'une erreur visible.
+--
+-- Et cette fonction n'est pas un utilitaire de confort : c'est le générateur du SERVEUR,
+-- celui des identifiants engendrés à l'import et à la reprise, là où le navigateur
+-- n'intervient pas — plus l'identifiant de chaque entrée du JOURNAL D'AUDIT (§9), où une
+-- collision refuse la trace au moment précis où elle doit être écrite.
+--
+-- LE FORMAT NE CHANGE PAS, L'ALÉA S'ÉLARGIT. « <PRÉFIXE>-<millisecondes>-<aléa> » est une
+-- convention du produit (CONVENTIONS.md §2) : trois segments, l'horodatage restant la clé
+-- de tri lisible. Seul le troisième segment change, et il passe de trois chiffres décimaux
+-- à 32 CARACTÈRES HEXADÉCIMAUX — un « gen_random_uuid() » débarrassé de ses tirets, soit
+-- 122 bits tirés du générateur cryptographique du serveur. Natif depuis PostgreSQL 13,
+-- aucune extension.
+--
+-- L'ORDRE DE GRANDEUR, pour que le choix se relise : mille tirages dans la même
+-- milliseconde donnaient une collision quasi certaine sur 1 000 valeurs ; sur 2^122 la
+-- probabilité tombe sous 10^-31, très en deçà de toute autre cause de perte de ligne.
+--
+-- BUDGET DE LONGUEUR, parce que le domaine id_metier plafonne à 64 caractères : préfixe
+-- + 1 + 13 (millisecondes) + 1 + 32 = 47 + préfixe. Le plus long préfixe du produit est
+-- « MESURE » (6), soit 53 caractères ; il reste 11 caractères de marge. Un préfixe de plus
+-- de 17 caractères ferait échouer la contrainte de domaine, bruyamment — c'est le bon
+-- comportement, et le banc d'essai le fige.
 create or replace function f_generer_id(p_prefixe text) returns id_metier
     language sql volatile
     set search_path = pg_catalog, public, pg_temp as
 $$
     select (upper(p_prefixe) || '-'
             || (extract(epoch from clock_timestamp()) * 1000)::bigint::text || '-'
-            || floor(random() * 1000)::integer::text)::id_metier;
+            || replace(gen_random_uuid()::text, '-', ''))::id_metier;
 $$;
 
 comment on function f_generer_id(text) is
-    'Identifiant métier au format de UI.genId (frontend). Pour les insertions faites côté '
-    'serveur : imports, provisionnement, tâches planifiées.';
+    'Identifiant métier au format « <PRÉFIXE>-<millisecondes>-<aléa> » (CONVENTIONS.md §2), '
+    'commun au frontend (UI.genId). Pour les insertions faites côté serveur : imports, '
+    'reprise, provisionnement, tâches planifiées, et l''identifiant de chaque entrée du '
+    'journal d''audit. '
+    'La part aléatoire fait 32 caractères hexadécimaux — un gen_random_uuid() sans ses '
+    'tirets, 122 bits du générateur cryptographique du serveur. Elle valait MILLE valeurs '
+    'jusqu''au troisième passage de la porte S2 : un import de 250 lignes en perdait 24 par '
+    'collision de clé primaire, sans le dire. Une collision ici n''est pas un doublon, '
+    'c''est une ligne qui n''est jamais écrite au milieu d''un lot annoncé complet.';
 
 -- Traçabilité + verrouillage optimiste. Le client ne fixe jamais lui-même « version » :
 -- il transmet la version qu'il a lue dans le « where », et ce déclencheur incrémente.
@@ -2422,6 +2472,121 @@ comment on column utilisateurs.mot_de_passe_hash is
 -- existe toujours) et il vérifie le sens inverse (aucune autre colonne n'est fermée par
 -- accident). Ce qu'il ne peut pas faire, c'est deviner qu'une colonne future est un
 -- secret ; c'est écrit ici plutôt que sous-entendu.
+-- ── LE GARDE-FOU DE L'ENTROPIE ──────────────────────────────────────────────────────
+--
+-- Le défaut corrigé au §2 avait été SIGNALÉ ET CHIFFRÉ par le premier banc d'essai de la
+-- vague 1, puis reporté à la fermeture de la vague, puis attribué à personne — et il est
+-- ressorti deux vagues plus tard comme le seul bloquant d'un passage de porte. Ce qui
+-- manquait n'était pas la mesure : c'était le contrôle qui la rejoue à chaque déploiement.
+--
+-- Deux propriétés, et aucune n'est une liste :
+--
+--   1. LE GÉNÉRATEUR TIENT SA PROMESSE. Un identifiant engendré porte trois segments et
+--      sa part aléatoire fait au moins 32 caractères. Constaté par un tirage réel, pas
+--      lu dans le texte de la fonction : c'est le comportement qui compte, et une
+--      réécriture qui le réduirait serait vue quelle qu'en soit la forme.
+--
+--   2. AUCUNE AUTRE VALEUR UNIQUE N'EST TIRÉE AU HASARD FAIBLE. Le motif « une valeur qui
+--      se veut unique, engendrée par une expression étroite » ne vit jamais seul. Le
+--      balayage cherche donc, dans le CATALOGUE, toute valeur par défaut qui appelle
+--      « random() » sur une colonne participant à une contrainte d'unicité ou à une clé
+--      primaire — la forme exacte du défaut, débarrassée du nom de la fonction qui le
+--      portait. Il n'y en a aucune aujourd'hui ; le filet ne doit pas attendre la première.
+--
+-- Ce que ce garde-fou NE FAIT PAS, et le §17.5 impose de le dire : il ne mesure pas
+-- l'entropie réelle, il constate une LONGUEUR et une absence de motif connu. Une part
+-- aléatoire de 32 caractères tous égaux le satisferait. Ce qui mord vraiment sur le sens,
+-- c'est la mesure en volume — quelques centaines de tirages dans la même milliseconde —
+-- et elle est au banc d'essai (test/base/socle.test.mjs) et à la démonstration de recette.
+create or replace function f_verifier_entropie_identifiants()
+returns table (objet text, anomalie text, detail text)
+    language plpgsql stable
+    set search_path = pg_catalog, public, pg_temp as
+$$
+declare
+    -- Longueur minimale de la part aléatoire. 32 caractères hexadécimaux = 122 bits pour
+    -- la forme retenue au §2 ; le seuil est ici pour que la promesse se relise sans avoir
+    -- à ouvrir le générateur.
+    v_minimum constant integer := 32;
+    v_id      text;
+    v_alea    text;
+    r         record;
+begin
+    -- 1. Le générateur, éprouvé par un tirage.
+    if to_regprocedure('public.f_generer_id(text)') is null then
+        objet    := 'f_generer_id';
+        anomalie := 'generateur_absent';
+        detail   := 'le générateur d''identifiants du serveur n''existe pas : les insertions '
+                    'faites côté serveur (import, reprise, journal d''audit) n''ont plus de '
+                    'source d''identifiant';
+        return next;
+    else
+        v_id   := f_generer_id('ZZVERIF');
+        v_alea := split_part(v_id, '-', 3);
+
+        if array_length(string_to_array(v_id, '-'), 1) <> 3 then
+            objet    := 'f_generer_id';
+            anomalie := 'format_identifiant_rompu';
+            detail   := format('l''identifiant engendré ne porte pas les trois segments de la '
+                               'convention « <PRÉFIXE>-<millisecondes>-<aléa> » '
+                               '(CONVENTIONS.md §2) : %s', v_id);
+            return next;
+        elsif length(v_alea) < v_minimum then
+            objet    := 'f_generer_id';
+            anomalie := 'identifiant_entropie_faible';
+            detail   := format(
+                'la part aléatoire fait %s caractère(s), le minimum est %s. Un import en lot '
+                'tire ses identifiants dans la MÊME milliseconde : sous ce seuil, les '
+                'collisions de clé primaire font perdre des lignes au milieu d''un lot annoncé '
+                'complet, sans que rien ne le signale (porte S2, constat bloquant).',
+                length(v_alea), v_minimum);
+            return next;
+        end if;
+    end if;
+
+    -- 2. Le balayage : une valeur par défaut « au hasard » sous une contrainte d'unicité.
+    for r in
+        select (c.relname || '.' || a.attname)::text as colonne,
+               pg_get_expr(d.adbin, d.adrelid)       as defaut
+          from pg_attrdef d
+          join pg_class c on c.oid = d.adrelid
+          join pg_namespace n on n.oid = c.relnamespace
+          join pg_attribute a on a.attrelid = c.oid and a.attnum = d.adnum
+         where n.nspname = 'public' and c.relkind in ('r', 'p')
+           and pg_get_expr(d.adbin, d.adrelid) ~ 'random\s*\('
+           -- … et la colonne porte une promesse d'unicité : clé primaire, contrainte
+           -- d'unicité ou index unique. Ailleurs, un tirage étroit ne coûte rien.
+           and exists (
+               select 1 from pg_index ix
+                where ix.indrelid = c.oid and ix.indisunique
+                  and a.attnum = any (ix.indkey::int2[]))
+         order by 1
+    loop
+        objet    := r.colonne;
+        anomalie := 'valeur_unique_a_hasard_etroit';
+        detail   := format(
+            'valeur par défaut tirée au hasard sur une colonne qui doit être UNIQUE, hors du '
+            'générateur commun : %s. Une collision n''est pas un doublon, c''est une ligne '
+            'refusée. Passer par f_generer_id(), ou justifier ici l''entropie retenue.',
+            r.defaut);
+        return next;
+    end loop;
+
+    return;
+end;
+$$;
+
+comment on function f_verifier_entropie_identifiants() is
+    'Vérifie que le générateur d''identifiants du serveur tient sa promesse — trois segments, '
+    'part aléatoire d''au moins 32 caractères — en TIRANT un identifiant plutôt qu''en lisant '
+    'le texte de la fonction ; et balaie le catalogue à la recherche de toute autre valeur par '
+    'défaut tirée au hasard sur une colonne unique. Un schéma sain ne renvoie AUCUNE ligne. '
+    'Né du constat bloquant du troisième passage de la porte S2 : mille valeurs d''aléa, un '
+    'import de 250 lignes qui en écrivait 223, et aucun incident signalé. '
+    'PORTÉE EXACTE (CONVENTIONS.md §17.5) : il constate une LONGUEUR, pas une entropie — la '
+    'mesure en volume, quelques centaines de tirages dans la même milliseconde, est au banc '
+    'd''essai et à la démonstration de recette.';
+
 create or replace function f_verifier_privileges()
 returns table (objet text, anomalie text, detail text)
     language plpgsql stable

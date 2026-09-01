@@ -45,6 +45,8 @@
 --       ne se réécrit ni ne se supprime depuis une filiale, sa lecture restant ouverte
 --       (constat M-4) ; et la note du registre RGPD est écrite puis relue, là où elle
 --       disparaissait en silence (constat M-8) ;
+--       et les identifiants engendrés par le serveur ne collisionnent plus dans la
+--       milliseconde d'un import (porte S2, constat bloquant du troisième passage) ;
 --   §9  LE RÔLE APPLICATIF — ni BYPASSRLS, ni SUPERUSER, propriétaire de rien ;
 --   §10 COUVERTURE — les 47 tables sous « enable » et « force row level security », et le
 --       chemin de recherche figé sur chaque fonction (constat M-1).
@@ -2167,6 +2169,36 @@ begin
         'la note saisie', coalesce(v_relu, '(PERDUE)'),
         case when v_relu = 'Sous-traitant hébergé hors UE — clauses contractuelles types à revoir.'
              then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- --- Porte S2, troisième passage : l'entropie des identifiants engendrés --------------
+-- Le générateur du serveur — celui de l'import, de la reprise et de l'identifiant de
+-- chaque entrée du journal — tirait sa part aléatoire parmi MILLE valeurs. Un import tire
+-- ses identifiants dans la même milliseconde : sur 250 lignes annoncées, 223 arrivaient en
+-- base, et rien ne le signalait. Sur le questionnaire AirCyber, 13 réponses sur 234
+-- manquaient — donc un score de conformité faux, dans la pièce même qui sert de preuve.
+--
+-- Une collision ici n'est pas un doublon : c'est une LIGNE JAMAIS ÉCRITE au milieu d'un
+-- lot annoncé complet. C'est pourquoi ce contrôle MESURE plutôt qu'il ne constate : il
+-- tire un lot de taille réaliste et compte, comme le ferait l'import.
+do $$
+declare
+    v_tires    integer := 250;
+    v_distincts integer;
+    v_ms        integer;
+begin
+    select count(distinct v), count(distinct split_part(v, '-', 2))
+      into v_distincts, v_ms
+      from (select f_generer_id('RISK') as v from generate_series(1, v_tires)) t;
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C107',
+        format('Identifiants engendrés : %s tirages d''un import, sur %s milliseconde(s)',
+               v_tires, v_ms),
+        format('%s distincts', v_tires), format('%s distincts', v_distincts),
+        case when v_distincts = v_tires then 'OK' else 'ÉCHEC' end)))::text, true);
 end;
 $$;
 
