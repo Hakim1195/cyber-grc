@@ -315,6 +315,35 @@ test('clé métier en double : évaluations sur (ref_id, code), historique sur l
   const doublons = anomalies(resultat.rapport, 'cle-metier-dupliquee');
   assert.equal(doublons.length, 2);
   assert.deepEqual(doublons.map((a) => a.collection).sort(), ['evaluations', 'history']);
+
+  // ── L'empreinte interne ne doit pas ressortir telle quelle (constat T-8) ──
+  //
+  // La clé métier composée est fabriquée en collant ses champs autour d'un
+  // séparateur U+0000 — un caractère qui ne peut pas figurer dans une donnée
+  // saisie, ce qui fait justement un bon séparateur. Il n'a en revanche rien à
+  // faire dans une phrase rendue à un exploitant : PostgreSQL refuse U+0000
+  // dans une colonne « text » (`invalid byte sequence`), si bien qu'un message
+  // qui le transporterait ferait échouer, au lot L5, l'écriture du journal
+  // d'audit qui le consigne — et l'échec porterait sur le journal, pas sur
+  // l'import. Le module le remplace ; ce test vérifie qu'il continue.
+  for (const anomalie of doublons) {
+    assert.equal(
+      anomalie.message.includes('\u0000'),
+      false,
+      `Le séparateur interne ne doit pas sortir dans le message : ${JSON.stringify(anomalie.message)}`,
+    );
+  }
+  const evaluation = doublons.find((a) => a.collection === 'evaluations');
+  assert.match(
+    evaluation.message,
+    /anssi-hygiene \+ 22/,
+    'Et il est remplacé par un séparateur lisible, sans quoi les deux champs se confondent.',
+  );
+
+  // Contrôle de morsure : la même vérification appliquée à l'empreinte BRUTE,
+  // celle que le module manipule en interne, doit échouer — sinon l'assertion
+  // ci-dessus serait vraie de n'importe quelle chaîne et ne prouverait rien.
+  assert.equal(['anssi-hygiene', '22'].join('\u0000').includes('\u0000'), true);
 });
 
 test('champ inconnu : signalé une seule fois, quel que soit le nombre d’enregistrements', () => {

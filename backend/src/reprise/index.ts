@@ -1530,13 +1530,13 @@ function controler(charge: ChargeV12, journal: JournalAnomalies, options: Option
       }
 
       if (description.cleMetier !== null) {
-        const empreinte = description.cleMetier.map((champ) => texteDe(lire(enregistrement, champ))).join(' ');
+        const empreinte = description.cleMetier.map((champ) => texteDe(lire(enregistrement, champ))).join('\u0000');
         if (clesMetierVues.has(empreinte)) {
           journal.signaler(
             'cle-metier-dupliquee',
             'avertissement',
             `${nom} : clé métier (${description.cleMetier.join(', ')}) en double — « ${extrait(
-              empreinte.replace(/ /g, ' + '),
+              empreinte.replace(/\u0000/g, ' + '),
             )} ». L’unicité de la base refusera le second.`,
             { collection: nom, identifiant, champ: description.cleMetier.join('+') },
           );

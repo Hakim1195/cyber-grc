@@ -276,3 +276,71 @@ export async function attendreApplication(page, options = {}) {
     { timeout: delai },
   ).then((poignee) => poignee.jsonValue());
 }
+
+/**
+ * Attend que le navigateur n'ait plus RIEN à écrire.
+ *
+ * ── Pourquoi cette attente existe ────────────────────────────────────────────
+ *
+ * Trouvée en enchaînant trois exécutions concurrentes de la suite : un essai sur
+ * dix échouait, et seul le troisième processus. Le message accusait un conflit de
+ * version au milieu d'une reprise — un rouge parfaitement crédible, et faux.
+ *
+ * `js/core/sync.js` regroupe les écritures : `marquerModification()` arme un
+ * minuteur (`DEBOUNCE_MS = 400`) et `pousser()` part ensuite. Un chargement de page
+ * peut laisser un envoi en attente — l'application normalise ce qu'elle reçoit, et
+ * la normalisation est une modification comme une autre. Sur une machine au repos,
+ * cet envoi part avant la suite de l'essai ; sur une machine chargée, il part **au
+ * milieu**, et se glisse entre la lecture des versions par la reprise et son
+ * écriture. Le serveur a raison de répondre `GRC03` : quelqu'un a bien écrit
+ * entre-temps. C'est l'essai qui avait tort de croire la page au repos.
+ *
+ * Un banc capricieux est pire qu'un banc absent : il apprend à relancer sans lire.
+ * On attend donc l'état, jamais un délai — et l'état est celui que `sync.js`
+ * publie lui-même (`Sync.etat()`), pas une devinette.
+ */
+export async function attendreQuiescence(page, options = {}) {
+  const delai = options.delai ?? 15000;
+  const repos = options.repos ?? 700; // > DEBOUNCE_MS (400 ms) : un minuteur armé se voit
+  const echeance = Date.now() + delai;
+
+  for (;;) {
+    await page.waitForFunction(
+      () => {
+        if (typeof window.Sync === 'undefined' || window.Sync.etat === undefined) return true;
+        const e = window.Sync.etat();
+        return e.enAttente === false && e.enCours === false;
+      },
+      null,
+      { timeout: Math.max(500, echeance - Date.now()) },
+    );
+
+    // Deuxième lecture après un temps de repos supérieur au regroupement : un
+    // minuteur armé pendant la première lecture aurait déjà tiré.
+    const stable = await page.evaluate(
+      (attente) =>
+        new Promise((resoudre) => {
+          setTimeout(() => {
+            if (typeof window.Sync === 'undefined' || window.Sync.etat === undefined) {
+              resoudre(true);
+              return;
+            }
+            const e = window.Sync.etat();
+            resoudre(e.enAttente === false && e.enCours === false);
+          }, attente);
+        }),
+      repos,
+    );
+    if (stable) return;
+    if (Date.now() > echeance) {
+      const etat = await page.evaluate(() =>
+        typeof window.Sync === 'undefined' ? null : window.Sync.etat(),
+      );
+      throw new Error(
+        `Le navigateur n’est jamais revenu au repos en ${String(delai)} ms : ` +
+          `${JSON.stringify(etat)}. Un envoi reste en attente — l’essai qui suit ` +
+          'mesurerait une course, pas la propriété qu’il vise.',
+      );
+    }
+  }
+}

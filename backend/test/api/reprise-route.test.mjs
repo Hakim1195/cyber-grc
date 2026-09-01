@@ -956,9 +956,19 @@ describe('Un vieil export où DEUX entités partagent un identifiant', () => {
     // preuve en audit. C'est le constat T-5.
     const charge = instantane(12, {
       risques: [{ id: 'RISK-B', nom: 'le risque homonyme' }],
+      // Trois entités, un seul identifiant. Deux d'entre elles sont visées par une
+      // RÉFÉRENCE DE CHAMP (`actions.risque_id`, `actions.exigence_id`), la troisième
+      // par une LIAISON (`incident_actifs`) : les deux chemins de réécriture du plan
+      // sont donc exercés, et non un seul.
+      exigences: [{ id: 'RISK-B', code: 'A.5.1', intitule: 'l’exigence homonyme' }],
       actifs: [{ id: 'RISK-B', nom: 'l’actif homonyme', risques_lies: ['RISK-B'] }],
-      actions: [{ id: 'ACT-HOMONYME', titre: 'action rattachée au risque', risque_id: 'RISK-B' }],
-      incidents: [{ id: 'INC-HOMONYME', titre: 'incident touchant l’actif', actifs_touches: ['RISK-B'] }],
+      actions: [
+        // `ck_actions_rattachement` n'admet qu'UN parent par action : il en faut donc
+        // deux pour viser les deux homonymes.
+        { id: 'ACT-RISQUE', titre: 'action rattachée au RISQUE', risque_id: 'RISK-B' },
+        { id: 'ACT-EXIGENCE', titre: 'action rattachée à l’EXIGENCE', exigence_id: 'RISK-B' },
+      ],
+      incidents: [{ id: 'INC-HOMONYME', titre: 'incident touchant l’ACTIF', actifs_touches: ['RISK-B'] }],
     });
 
     const reponse = await reprendre('remplacer', null, {
@@ -979,9 +989,23 @@ describe('Un vieil export où DEUX entités partagent un identifiant', () => {
     assert.match(risque.id, /^RISK-\d+-\d+$/, 'Et il est renommé selon la convention du chantier (§2).');
 
     // ── Chaque référence a suivi la bonne entité ─────────────────────────────
-    const [action] = await base.avecPerimetre(client, lectureA, async (c) =>
-      (await c.query("select risque_id from actions where id = 'ACT-HOMONYME'")).rows);
-    assert.equal(action.risque_id, risque.id, 'La référence vers le RISQUE suit le risque renommé.');
+    const [surRisque] = await base.avecPerimetre(client, lectureA, async (c) =>
+      (await c.query("select risque_id from actions where id = 'ACT-RISQUE'")).rows);
+    assert.equal(surRisque.risque_id, risque.id, 'La référence vers le RISQUE suit le risque renommé.');
+
+    const [exigence] = await base.avecPerimetre(client, lectureA, async (c) =>
+      (await c.query('select id from exigences')).rows);
+    assert.equal(exigence.id, 'RISK-B', 'L’exigence non plus n’entrait en collision avec rien.');
+    const [surExigence] = await base.avecPerimetre(client, lectureA, async (c) =>
+      (await c.query("select exigence_id from actions where id = 'ACT-EXIGENCE'")).rows);
+    assert.equal(
+      surExigence.exigence_id,
+      'RISK-B',
+      'Et la référence vers l’EXIGENCE ne suit pas le risque : c’est le cas exact que ' +
+        'le commentaire du remède décrit — renommer le risque « 7 » réécrivait ' +
+        'l’« exigence_id » d’une action qui visait l’EXIGENCE « 7 ».',
+    );
+    assert.notEqual(surExigence.exigence_id, risque.id);
 
     const incidentActifs = await liaison('select incident_id, actif_id from incident_actifs');
     assert.deepEqual(

@@ -35,7 +35,13 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
 import { FILIALE_A, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
-import { attendreApplication, lancerNavigateur, ouvrirPage, servirApplication } from '../aide/navigateur.mjs';
+import {
+  attendreApplication,
+  attendreQuiescence,
+  lancerNavigateur,
+  ouvrirPage,
+  servirApplication,
+} from '../aide/navigateur.mjs';
 import { monterServeurReel } from '../aide/serveur.mjs';
 
 /** @type {Awaited<ReturnType<typeof ouvrirBaseEssai>>} */
@@ -169,6 +175,7 @@ describe('B-1 — la base héritée survit à l’ouverture de la nouvelle appli
 
       await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
       assert.equal(await attendreApplication(session.page), 'chargee');
+      await attendreQuiescence(session.page);
       await session.page.waitForTimeout(500);
 
       const apres = await session.page.evaluate(LIRE_BASE_HERITEE);
@@ -236,6 +243,7 @@ describe('B-2 — un enregistrement bloqué ne disparaît pas avec son bandeau',
     try {
       await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
       assert.equal(await attendreApplication(session.page), 'chargee');
+      await attendreQuiescence(session.page);
 
       const conflit = await provoquerUnConflit(session);
       assert.ok(conflit.bloques >= 1, 'Le conflit doit bloquer l’enregistrement.');
@@ -281,6 +289,7 @@ describe('B-2 — un enregistrement bloqué ne disparaît pas avec son bandeau',
     try {
       await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
       assert.equal(await attendreApplication(session.page), 'chargee');
+      await attendreQuiescence(session.page);
       await provoquerUnConflit(session);
       await session.page.evaluate(() => {
         const bouton = document.getElementById('sync-fermer');
@@ -477,6 +486,7 @@ describe('M-6 — sous la CSP de production, l’interface répond encore', () =
       application.definirCsp(CSP_PRODUCTION);
       await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
       assert.equal(await attendreApplication(session.page), 'chargee');
+      await attendreQuiescence(session.page);
 
       await session.page.evaluate(() => {
         const bouton = document.createElement('button');
@@ -524,6 +534,7 @@ describe('B-3 — l’import « Remplacer » ne détruit pas la filiale hors tra
     try {
       await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
       assert.equal(await attendreApplication(session.page), 'chargee');
+      await attendreQuiescence(session.page);
 
       const avant = (await enBase('select id from risques')).length;
       assert.ok(avant > 0, 'Le scénario n’a de sens qu’avec des données à remplacer.');
@@ -577,6 +588,7 @@ describe('B-3 — l’import « Remplacer » ne détruit pas la filiale hors tra
     try {
       await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
       assert.equal(await attendreApplication(session.page), 'chargee');
+      await attendreQuiescence(session.page);
 
       const avant = (await enBase('select id from risques order by id')).map((r) => r.id);
       const suppressionsAvant = application.appelsPar('DELETE').length;
@@ -615,6 +627,7 @@ describe('B-3 — l’import « Remplacer » ne détruit pas la filiale hors tra
     try {
       await session.page.goto(`${application.url}/index.html#/settings`, { waitUntil: 'domcontentloaded' });
       assert.equal(await attendreApplication(session.page), 'chargee');
+      await attendreQuiescence(session.page);
       await session.page.waitForTimeout(400);
 
       const ecran = await session.page.evaluate(() => document.getElementById('app').innerText);

@@ -26,7 +26,13 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
 import { FILIALE_A, FILIALE_B, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
-import { attendreApplication, lancerNavigateur, ouvrirPage, servirApplication } from '../aide/navigateur.mjs';
+import {
+  attendreApplication,
+  attendreQuiescence,
+  lancerNavigateur,
+  ouvrirPage,
+  servirApplication,
+} from '../aide/navigateur.mjs';
 import { monterGreffon, monterServeurReel } from '../aide/serveur.mjs';
 
 /** @type {Awaited<ReturnType<typeof ouvrirBaseEssai>>} */
@@ -73,6 +79,11 @@ async function ouvrirApplication() {
   await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
   const etat = await attendreApplication(session.page);
   assert.equal(etat, 'chargee', 'L’application doit démarrer contre le serveur.');
+  // Le tableau de bord inscrit son point d'historique du jour au chargement : un
+  // envoi part donc SANS geste de l'utilisateur. Tant qu'il n'est pas parti, la
+  // page n'est pas au repos, et tout ce qu'on mesurerait ensuite serait une
+  // course. Voir `attendreQuiescence`.
+  await attendreQuiescence(session.page);
   return session;
 }
 
@@ -517,6 +528,7 @@ describe('La bascule, de bout en bout', () => {
       assert.equal(avantExport[0].description, null, 'Le socle doit bien porter une description nulle.');
       await session.page.reload({ waitUntil: 'domcontentloaded' });
       assert.equal(await attendreApplication(session.page), 'chargee');
+      await attendreQuiescence(session.page);
 
       const avant = await session.page.evaluate(() => ({
         risques: window.DataStore.getRisques().map((r) => r.id).sort(),
@@ -562,6 +574,46 @@ describe('La bascule, de bout en bout', () => {
         null,
         'Une description nulle doit rester nulle après un aller-retour par l’export.',
       );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('LE BANC ATTEND VRAIMENT : « au repos » se mesure, il ne se suppose pas', async () => {
+    // ── Pourquoi ce test existe ─────────────────────────────────────────────
+    //
+    // `attendreQuiescence` a été écrit après avoir vu un essai rouge une fois sur
+    // dix, et seulement quand trois exécutions de la suite tournaient de front. Un
+    // outil d'attente qui rendrait la main tout de suite ferait disparaître le
+    // symptôme de la même façon qu'un `sleep` bien dosé : en apparence. Il faut
+    // donc que l'attente elle-même soit éprouvée, sinon la prochaine personne qui
+    // la simplifiera ne verra rien casser.
+    const session = await ouvrirApplication();
+    try {
+      // Une écriture est armée mais pas encore partie : c'est l'état exact qu'une
+      // page laisse après son chargement, reproduit ici volontairement.
+      const arme = await session.page.evaluate(() => {
+        window.DataStore.addRisque({
+          id: window.UI.genId('RISK'),
+          nom: 'Risque écrit juste avant la mesure',
+        });
+        return window.Sync.etat();
+      });
+      assert.equal(arme.enAttente, true, 'Le scénario exige une écriture EN ATTENTE.');
+
+      await attendreQuiescence(session.page);
+
+      const apres = await session.page.evaluate(() => window.Sync.etat());
+      assert.equal(apres.enAttente, false, 'Après l’attente, plus rien ne doit être en attente…');
+      assert.equal(apres.enCours, false, '…ni en cours.');
+
+      // Et la preuve par la base : l'attente ne s'est pas contentée de regarder un
+      // drapeau, l'écriture est bel et bien arrivée de l'autre côté.
+      const enBaseApres = await enBase(
+        "select count(*)::int as n from risques where nom = 'Risque écrit juste avant la mesure'",
+      );
+      assert.equal(enBaseApres[0].n, 1, 'L’écriture attendue doit être PARVENUE au serveur.');
       assert.deepEqual(session.erreursScript, []);
     } finally {
       await session.fermer();
@@ -647,6 +699,7 @@ describe('La bascule, de bout en bout', () => {
 
       await session.page.reload({ waitUntil: 'domcontentloaded' });
       assert.equal(await attendreApplication(session.page), 'chargee');
+      await attendreQuiescence(session.page);
 
       const survit = await session.page.evaluate(
         (id) => window.DataStore.getActions().some((a) => a.id === id),
