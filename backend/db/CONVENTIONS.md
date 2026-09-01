@@ -1128,3 +1128,66 @@ porte `filiale_id`* — et rien n'est déployé, donc aucune donnée n'est à mi
 **Condition d'entrée de L3** : le modèle de droits doit décider qui peut appeler la reprise
 **avant** que ce report ne soit reconduit. S'il ne suffit pas à fermer le canal, la clé composite
 redevient la réponse — et elle coûtera alors une migration de données.
+
+---
+
+## 22. Conditions d'entrée du lot L3 — la liste que la vague 3 doit épuiser
+
+> Ce paragraphe ne contient **aucune règle neuve**. Les décisions qu'il rassemble sont écrites
+> ailleurs, et c'est là qu'elles font foi ; il existe parce qu'elles sont écrites à **cinq
+> endroits différents**, arbitrées à quatre passages de porte distincts, et qu'une vague qui
+> ouvre sans les avoir toutes lues en oubliera. Chaque ligne dit donc **où lire**, et **comment
+> la porte S3 vérifiera** — pas ce qu'il faut faire.
+
+**La règle de lecture** : une condition d'entrée n'est pas une intention. Elle se ferme dans la
+vague qui l'a reçue, ou elle est reconduite **par écrit, avec une date et un motif** — jamais par
+le silence. Reconduire sans l'écrire est ce que le chantier a appris à ne plus faire.
+
+| # | Ce qui doit être vrai à la sortie de L3 | Écrit en | Vérifié à la porte S3 par |
+|---|---|---|---|
+| **E1** | `sessions`, `session_filiales` et `session_domaines` ne sont plus écrivables sans condition par le rôle applicatif : la couche d'authentification pose `grc.authentification` pour sa **seule** transaction d'ouverture de session, et les politiques s'y adossent | **§17.4** | Une session applicative ordinaire tente d'insérer dans les trois tables → refus. La transaction d'ouverture, elle, réussit. |
+| **E2** | Le drapeau `grc.administration_groupe` cesse d'être une déclaration que la session fait sur elle-même : le modèle à trois axes décide du profil *Administration* et du périmètre *Groupe* **avant** de le poser | **§17.4**, encadré | Aucune route ne pose le drapeau sans l'avoir décidé d'après la session. Le contrôle est **mécanique** : le banc d'essai de L2 le vérifie déjà par recherche dans les sources ; il doit rester vert et s'étendre aux routes neuves. |
+| **E3** | Le droit d'appeler la reprise est décidé par le modèle de droits — c'est un acte d'administration | **§21**, condition finale | Un compte sans ce droit reçoit un refus **avant** toute analyse de corps. S'il ne suffit pas à fermer le canal d'oracle du §21, la clé composite redevient la réponse : la reconduction du report doit alors être **réécrite et redatée**, pas héritée. |
+| **E4** | La limitation de rythme et le contrôle d'authentification s'exercent en `onRequest`, **avant** l'analyse du corps | registre des constats, **Q-10** | Un corps volumineux envoyé sans authentification est refusé sans que son analyse ait été payée. La mesure de référence est celle de la porte S2 (~160 ms pour 18,6 Mo) : elle doit s'effondrer. |
+| **E5** | Les commentaires rendus faux par les correctifs T-2 et T-4 dans `001_socle.sql` sont corrigés par des instructions `comment on` dans la migration de L3 — la migration appliquée, elle, ne bouge pas | registre des constats, **Q-6 (b)** ; règle au **§23** | `migrate.mjs` ne sort pas en code 4, et le commentaire lu dans le catalogue décrit ce que fait réellement le code. |
+| **E6** | La lecture du journal d'audit reste non cloisonnée **jusqu'à L5 inclus**, et son resserrement est un livrable ferme de L5 — pas une condition de L3 | `004_rls.sql` §6, `README` §8 | Sans objet à S3. Rappelé ici pour qu'il ne soit **ni oublié, ni traité trop tôt** : le chaînage par empreinte impose l'ordre. |
+
+### Ce que la vague 3 ne doit pas croire acquis
+
+Trois protections existent aujourd'hui et **ne survivent pas** à l'arrivée de
+l'authentification si personne ne s'en occupe :
+
+1. **Le périmètre vient du serveur** parce qu'aucun chemin ne le lit ailleurs — vérifié à S2 sur
+   six formes d'en-tête, le cookie, l'URL et le corps. L3 introduit précisément la couche qui
+   *fabrique* ce périmètre : elle devient le seul endroit où l'erreur est possible, et le
+   contrôle S2 de la grille doit être rejoué contre elle, pas contre les routes.
+2. **Aucune route ne fabrique le drapeau d'administration** — c'est vrai et démontré, mais c'est
+   une propriété du code d'aujourd'hui, pas une barrière. Voir **E2**.
+3. **Les requêtes sont intégralement paramétrées**, ce qui est aujourd'hui la *seule* parade au
+   risque assumé du §17.4. Tant que **E1** n'est pas fermée, une injection dans le rôle
+   applicatif forge une session et son périmètre : le contrôle S5 n'est pas une formalité pendant
+   cette vague, c'est le filet unique.
+
+---
+
+## 23. Une migration appliquée ne se réécrit pas
+
+`migrate.mjs` retient l'**empreinte SHA-256** du contenu de chaque fichier de migration au moment
+où il l'applique, et **sort en code 4** si le fichier a bougé depuis. La règle était donc tenue
+par l'outil et décrite dans le guide d'exploitation (`README` §5) — mais nulle part ici,
+c'est-à-dire nulle part où la lise quelqu'un qui écrit du schéma. Elle y est maintenant.
+
+**Corriger une migration déjà appliquée se fait dans la migration suivante**, jamais sur place :
+`alter table` pour la structure, `comment on` pour les commentaires, `create or replace` pour les
+fonctions. Le fichier appliqué est un fait historique, pas un brouillon.
+
+**Cela vaut aussi pour un commentaire, et surtout pour un commentaire.** L'objection est immédiate
+et elle est fausse : « ce n'est qu'un texte, aucune donnée n'est en jeu, et rien n'est déployé —
+je réécris le fichier et je recrée les bases de développement ». C'est matériellement exact. C'est
+aussi le raisonnement qui vide une règle de sa substance la première fois qu'elle coûte quelque
+chose : la fois suivante, l'argument « rien n'est déployé » sera fait sur une colonne, et la
+base de recette du client aura déjà tourné.
+
+**Corollaire pratique** : un commentaire faux dans une migration appliquée **reste faux un
+moment** — le temps qu'une migration suivante existe. Le dire est préférable à le corriger en
+douce ; c'est le sort réservé au constat Q-6 (b), reporté au lot L3 et écrit au §22, ligne **E5**.
