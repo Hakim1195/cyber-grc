@@ -124,8 +124,22 @@ export async function servirApplication(serveur, options = {}) {
           .inject({
             method: requete.method,
             url: url.pathname + url.search,
-            headers: { 'content-type': requete.headers['content-type'] ?? 'application/json' },
-            ...(corps.length === 0 ? {} : { payload: corps.toString('utf8') }),
+            // ── Le type de contenu N'EST POSÉ QUE S'IL Y A UN CORPS ──────────
+            //
+            // Ce relais l'ajoutait sans condition. Un `DELETE` sans corps partait
+            // donc annoncé « application/json », et Fastify, invité à lire un JSON
+            // vide, répondait `400 « La requête n'a pas pu être lue »`.
+            //
+            // Le banc fabriquait ainsi une panne qui n'existe pas dans le produit :
+            // j'ai bien failli rapporter comme défaut une suppression refusée que
+            // seul mon relais refusait. Un instrument qui invente ce qu'il mesure
+            // est pire qu'un instrument absent.
+            ...(corps.length === 0
+              ? {}
+              : {
+                  headers: { 'content-type': requete.headers['content-type'] ?? 'application/json' },
+                  payload: corps.toString('utf8'),
+                }),
           })
           .then((reponseApi) => {
             reponse.writeHead(reponseApi.statusCode, {

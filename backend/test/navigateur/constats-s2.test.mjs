@@ -185,6 +185,9 @@ describe('B-1 — la base héritée survit à l’ouverture de la nouvelle appli
  * ===================================================================== */
 
 describe('B-2 — un enregistrement bloqué ne disparaît pas avec son bandeau', () => {
+  /** Compteur : chaque conflit provoqué doit porter une valeur inédite (voir ci-dessous). */
+  let conflitsProvoques = 0;
+
   /** Provoque un vrai conflit de version sur RISK-A, depuis le navigateur. */
   async function provoquerUnConflit(session) {
     // Quelqu'un d'autre écrit d'abord : la version que le navigateur détient devient
@@ -192,12 +195,33 @@ describe('B-2 — un enregistrement bloqué ne disparaît pas avec son bandeau',
     // La version courante, et non « 1 » : ce fichier joue plusieurs scénarios sur la
     // même ligne, et un test qui présume l'état laissé par le précédent est un test
     // dont l'ordre décide du verdict.
+    //
+    // ── Et une valeur RÉELLEMENT NOUVELLE, à chaque appel ────────────────────
+    //
+    // Nouveau contrat du moteur, assumé : **un enregistrement qui ne change rien
+    // n'avance plus la version**. Ce fichier appelle cette fonction deux fois ; le
+    // second appel réécrivait la valeur que le premier avait déjà posée, n'écrivait
+    // donc rien, la version ne bougeait pas — et Alice ne rencontrait plus aucun
+    // conflit. Le test tombait sans que rien ne soit cassé dans le produit.
+    //
+    // C'était mon défaut, et il est instructif : un jeu d'essai qui répète une valeur
+    // mesure ce que le moteur veut bien réécrire, pas ce que l'utilisateur subit. Un
+    // compteur suffit à le fermer.
+    conflitsProvoques += 1;
     const jeu = await serveur.appeler('GET', '/api/donnees');
     const courante = jeu.corps.data.risques.find((r) => r.id === 'RISK-A')._version;
     const reponse = await serveur.appeler('PUT', '/api/entites/risques/RISK-A', {
-      corps: { version: courante, champs: { nom: 'Rançongiciel (corrigé par Bob)' } },
+      corps: {
+        version: courante,
+        champs: { nom: `Rançongiciel (corrigé par Bob, ${String(conflitsProvoques)})` },
+      },
     });
     assert.equal(reponse.statut, 200);
+    assert.equal(
+      (await serveur.appeler('GET', '/api/donnees')).corps.data.risques.find((r) => r.id === 'RISK-A')._version,
+      courante + 1,
+      'L’écriture de Bob doit VRAIMENT avancer la version : sinon Alice ne rencontrera pas de conflit.',
+    );
 
     return session.page.evaluate(async () => {
       const r = window.DataStore.getRisques().find((x) => x.id === 'RISK-A');

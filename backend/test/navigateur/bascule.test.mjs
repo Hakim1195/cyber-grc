@@ -25,27 +25,44 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
-import { FILIALE_A, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
+import { FILIALE_A, FILIALE_B, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
 import { attendreApplication, lancerNavigateur, ouvrirPage, servirApplication } from '../aide/navigateur.mjs';
-import { monterServeurReel } from '../aide/serveur.mjs';
+import { monterGreffon, monterServeurReel } from '../aide/serveur.mjs';
 
 /** @type {Awaited<ReturnType<typeof ouvrirBaseEssai>>} */
 let base;
 let serveur;
 let application;
 let navigateur;
+/**
+ * Session d'ADMINISTRATION GROUPE, hors navigateur.
+ *
+ * Elle ne sert qu'à SEMER le socle commun — une correspondance inter-référentiels —
+ * pour que l'export produit par l'application ne soit pas creux à cet endroit. C'est
+ * la condition du constat **N-2** : « le produit ne sait plus reprendre son propre
+ * export dès que le socle Groupe n'est pas vide ».
+ */
+let administration;
 
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
   await semerJeuEssai(base, await base.connexion('app'));
   serveur = await monterServeurReel(base);
   application = await servirApplication(serveur);
+  administration = await monterGreffon(base, {
+    utilisateurId: 'administrateur-groupe',
+    filialeId: FILIALE_A,
+    filiales: [FILIALE_A, FILIALE_B],
+    perimetreGroupe: true,
+    administrationGroupe: true,
+  });
   navigateur = await lancerNavigateur();
 });
 
 after(async () => {
   await navigateur?.close().catch(() => {});
   await application?.fermer();
+  await administration?.fermer();
   await serveur?.fermer();
   await base?.fermer();
 });
@@ -377,6 +394,184 @@ describe('La bascule, de bout en bout', () => {
       assert.equal(arrivee[0].nom, 'Saisie pendant la coupure');
     } finally {
       application.definirApiInjoignable(false);
+      await session.fermer();
+    }
+  });
+
+  test('le geste complet — créer, voir, sélectionner, supprimer — aboutit VRAIMENT (S18)', async () => {
+    // ── Le dix-huitième contrôle, joué à la souris ───────────────────────────
+    //
+    // Constat N-3 de la porte S2 : après une création, la liste gardait
+    // l'identifiant local, et « Supprimer sélection » confirmait à l'utilisateur une
+    // suppression qui n'avait pas lieu. C'est la forme la plus coûteuse du mensonge
+    // d'interface — pire qu'un plantage, parce qu'elle ne laisse rien à raconter.
+    //
+    // Le test suit la chaîne entière par les gestes réels : bouton « Nouveau »,
+    // formulaire, enregistrement, case à cocher de la ligne, « Supprimer sélection »,
+    // confirmation. Puis il regarde la BASE — parce que ce que l'écran affiche est
+    // précisément ce dont il faut se méfier.
+    const session = await ouvrirApplication();
+    try {
+      session.page.on('dialog', (boite) => {
+        void boite.accept();
+      });
+
+      await session.page.goto(`${application.url}/index.html#/prestataires`, { waitUntil: 'domcontentloaded' });
+      assert.equal(await attendreApplication(session.page), 'chargee');
+      await session.page.waitForSelector('#addBtn', { timeout: 10000 });
+      await session.page.click('#addBtn');
+      await session.page.waitForSelector('#societe', { timeout: 10000 });
+      await session.page.fill('#societe', 'Prestataire éphémère');
+      await session.page.click('#saveBtn');
+      await session.page.evaluate(() => window.Sync.pousser());
+      await session.page.waitForTimeout(300);
+
+      // 1. L'identifiant AFFICHÉ est celui que le serveur a donné — sinon la case à
+      //    cocher désignera une ligne qui n'existe que dans ce navigateur.
+      const apresCreation = await session.page.evaluate(() => {
+        const enregistrement = window.DataStore.getPrestataires().find((x) => x.societe === 'Prestataire éphémère');
+        const affiches = Array.from(document.querySelectorAll('[data-id]')).map((e) => e.dataset.id);
+        return { id: enregistrement ? enregistrement.id : null, affiche: affiches.includes(enregistrement?.id) };
+      });
+      assert.ok(apresCreation.id, 'La création doit avoir abouti.');
+      assert.equal(apresCreation.affiche, true, 'La liste doit afficher l’identifiant définitif.');
+
+      const enBaseApresCreation = await enBase('select id from prestataires where societe = $1', ['Prestataire éphémère']);
+      assert.deepEqual(
+        enBaseApresCreation.map((l) => l.id),
+        [apresCreation.id],
+        'Ce que la liste montre doit être ce que la base contient.',
+      );
+
+      // 2. Le geste de suppression groupée, par la case et le bouton réels.
+      const geste = await session.page.evaluate((cible) => {
+        const cases = Array.from(document.querySelectorAll('input[type=checkbox][data-id]'));
+        const la = cases.find((c) => c.dataset.id === cible);
+        if (!la) return { ok: false, raison: 'aucune case pour cette ligne' };
+        la.checked = true;
+        la.dispatchEvent(new Event('change', { bubbles: true }));
+        const bouton = document.getElementById('bulkDeleteBtn');
+        if (bouton === null) return { ok: false, raison: 'pas de bouton de suppression groupée' };
+        bouton.click();
+        return { ok: true };
+      }, apresCreation.id);
+      assert.equal(geste.ok, true, `Le geste doit être possible : ${JSON.stringify(geste)}`);
+
+      await session.page.waitForTimeout(900);
+      await session.page.evaluate(() => window.Sync.pousser());
+      await session.page.waitForTimeout(400);
+
+      // 3. Et la suppression a VRAIMENT eu lieu.
+      const restant = await enBase('select id from prestataires where societe = $1', ['Prestataire éphémère']);
+      const etat = await session.page.evaluate(() => window.Sync.etat());
+      assert.deepEqual(
+        restant,
+        [],
+        'La suppression confirmée à l’utilisateur doit avoir eu lieu au serveur. ' +
+          `État de synchronisation : ${JSON.stringify(etat)}`,
+      );
+      assert.equal(etat.bloques, 0, 'Et rien ne doit rester bloqué en silence.');
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('LE PRODUIT SAIT REPRENDRE SON PROPRE EXPORT (constat N-2)', async () => {
+    // ── Le chemin de migration du cadrage, joué par le geste de l'utilisateur ──
+    //
+    // `PLAN_SERVEUR` §2.6 fait de l'export `grc-backup` LE chemin de reprise. Le
+    // constat N-2 de la porte S2 dit qu'il avait cessé de fonctionner « dès que le
+    // socle Groupe n'est pas vide » — c'est-à-dire dans le cas courant.
+    //
+    // Ce test ne fabrique donc rien : il prend le fichier que l'application PRODUIT,
+    // par `exportSnapshot()`, et le lui redonne par la porte d'entrée réelle
+    // (`parseImport` puis `applyImport`, exactement comme l'écran Paramètres). Un
+    // jeu d'essai, si fidèle soit-il, ne prouve pas cela — c'est la leçon du jeu
+    // d'essai qui portait une action impossible.
+    const session = await ouvrirApplication();
+    try {
+      // Le socle Groupe n'est pas vide : c'est la condition du constat.
+      const socle = await administration.appeler('POST', '/api/entites/mappings', {
+        corps: { champs: { theme: 'Chiffrement des données au repos' } },
+      });
+      assert.equal(socle.statut, 201);
+      await session.page.reload({ waitUntil: 'domcontentloaded' });
+      assert.equal(await attendreApplication(session.page), 'chargee');
+
+      const avant = await session.page.evaluate(() => ({
+        risques: window.DataStore.getRisques().map((r) => r.id).sort(),
+        mappings: window.DataStore.getMappings().map((m) => m.id).sort(),
+        documents: window.DataStore.getDocuments().map((d) => d.id).sort(),
+      }));
+      assert.ok(avant.mappings.length > 0, 'Le socle Groupe doit être présent dans la mémoire.');
+
+      const issue = await session.page.evaluate(async () => {
+        const texte = window.DataStore.exportSnapshot();
+        const lu = await window.DataStore.parseImport(texte);
+        if (!lu.ok) return { etape: 'lecture', ok: false, lu };
+        try {
+          const r = await window.DataStore.applyImport(lu.payload, 'merge', {
+            texte,
+            nom: 'Sauvegarde_CyberGRC.json',
+          });
+          return { etape: 'application', ok: true, r, socleDansLeFichier: (lu.payload.mappings ?? []).length };
+        } catch (erreur) {
+          return { etape: 'application', ok: false, message: String(erreur && erreur.message) };
+        }
+      });
+
+      assert.equal(issue.ok, true, `La reprise de son propre export doit aboutir : ${JSON.stringify(issue).slice(0, 300)}`);
+      assert.equal(issue.socleDansLeFichier, avant.mappings.length, 'L’export doit bien porter le socle.');
+      assert.equal(issue.r.transactionnel, true, 'Elle passe par la route transactionnelle, pas par une rafale.');
+
+      // Rien n'est perdu, rien n'est dupliqué : c'est ce qu'un utilisateur attend
+      // d'une restauration de sa propre sauvegarde.
+      const apres = await session.page.evaluate(() => ({
+        risques: window.DataStore.getRisques().map((r) => r.id).sort(),
+        mappings: window.DataStore.getMappings().map((m) => m.id).sort(),
+        documents: window.DataStore.getDocuments().map((d) => d.id).sort(),
+      }));
+      assert.deepEqual(apres, avant, 'Reprendre son propre export ne doit ni perdre ni dupliquer.');
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('le MÊME fichier importé deux fois est refusé par une phrase écrite pour un humain', async () => {
+    // L'idempotence est portée par une unicité du schéma, dont le message générique
+    // — « l'une de ses clés est déjà utilisée » — n'apprend rien à qui vient de
+    // choisir un fichier. Le produit doit traduire. C'est le pendant du constat m-5 :
+    // une alerte incompréhensible est une alerte qu'on apprend à ignorer.
+    const session = await ouvrirApplication();
+    try {
+      const deuxFois = await session.page.evaluate(async () => {
+        const texte = window.DataStore.exportSnapshot();
+        const lu = await window.DataStore.parseImport(texte);
+        const appliquer = () =>
+          window.DataStore.applyImport(lu.payload, 'merge', { texte, nom: 'Sauvegarde_identique.json' });
+        await appliquer();
+        try {
+          await appliquer();
+          return { refuse: false };
+        } catch (erreur) {
+          return { refuse: true, message: String(erreur && erreur.message) };
+        }
+      });
+
+      assert.equal(deuxFois.refuse, true, 'Réimporter le même fichier ne doit pas dupliquer son contenu.');
+      assert.match(
+        deuxFois.message,
+        /déjà été importé/i,
+        `Le refus doit être dit en français d’utilisateur : « ${String(deuxFois.message).slice(0, 160)} »`,
+      );
+      assert.equal(
+        /clé|contrainte|unicité/i.test(deuxFois.message),
+        false,
+        'Et sans le vocabulaire de la base : c’est un message d’écran, pas un message de schéma.',
+      );
+    } finally {
       await session.fermer();
     }
   });
