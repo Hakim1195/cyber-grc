@@ -925,6 +925,42 @@ const DataStore = (() => {
         return erreur && (erreur.statut === 404 || erreur.statut === 405);
     }
 
+    /**
+     * Un refus de reprise, dit dans les termes du serveur.
+     *
+     * ── Ce que la porte S2 (3ᵉ passage) a corrigé ici ────────────────────────
+     *
+     * Ce chemin traduisait **toute** violation de contrainte par « Ce fichier a
+     * déjà été importé dans cette filiale ». C'était une explication INVENTÉE :
+     * juste tant que la trace d'import consommait le fichier, fausse pour tout
+     * le reste — une référence morte, une clé métier en double — et fausse tout
+     * court depuis que le constat T-4 a été tranché. Restaurer deux fois la même
+     * sauvegarde est un geste légitime : c'est le scénario même du plan de
+     * reprise que ce produit héberge.
+     *
+     * Le serveur écrit désormais des phrases destinées à l'utilisateur, et il
+     * distingue sur le chemin de reprise qu'une référence absente vient **du
+     * fichier** plutôt que du périmètre (constat T-10). On les relaie donc
+     * telles quelles : deviner la cause à la place de celui qui la connaît,
+     * c'est exactement ce qui a produit le message précédent.
+     *
+     * La seule chose que le navigateur ajoute est ce que lui seul sait du
+     * GESTE : la reprise s'applique en une transaction, donc un refus rendu par
+     * le serveur n'a rien modifié. On ne l'ajoute que lorsque le serveur a
+     * effectivement répondu — jamais sur une coupure réseau ou un service
+     * indisponible, où l'on ignore ce qui s'est passé.
+     */
+    function refusDeReprise(erreur) {
+        if (!erreur || typeof erreur.statut !== "number") return erreur;
+        const aRepondu = erreur.statut >= 400 && erreur.statut < 500;
+        if (!aRepondu || !erreur.message) return erreur;
+        const complet = new Error(erreur.message +
+            " Aucune donnée n'a été modifiée : la reprise s'applique en une seule transaction.");
+        complet.code = erreur.code;
+        complet.statut = erreur.statut;
+        return complet;
+    }
+
     // Enveloppe `grc-backup` d'une charge utile, quand on ne dispose pas du
     // fichier d'origine (reprise de la base héritée d'un poste, par exemple).
     function envelopper(payload) {
@@ -963,16 +999,7 @@ const DataStore = (() => {
                 added: bilan.crees || {}
             };
         } catch (e) {
-            // L'idempotence de la reprise est portée par une unicité du schéma
-            // (empreinte du fichier). Le message générique de contrainte —
-            // « l'une de ses clés est déjà utilisée » — n'apprend rien à qui
-            // vient de choisir un fichier : on dit ce qui s'est réellement passé.
-            if (e && e.code === "contrainte_base") {
-                throw new Error("Ce fichier a déjà été importé dans cette filiale. "
-                    + "Rien n'a été modifié. Pour le réappliquer, demandez à votre exploitant "
-                    + "de lever la trace de l'import précédent.");
-            }
-            if (!repriseIndisponible(e)) throw e;
+            if (!repriseIndisponible(e)) throw refusDeReprise(e);
         }
 
         // 2. Repli, serveur sans route de reprise : la fusion reste possible

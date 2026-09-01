@@ -921,10 +921,12 @@ const Sync = (() => {
                 message: "La version de cet enregistrement n'est pas connue de cette session."
             }), "modification", enregistrement);
         }
-        // Le verrou de la mise en oeuvre est transmis DÈS QU'IL EST CONNU : c'est
-        // la moitié du constat M-2 qui revient au navigateur. L'autre moitié —
-        // le serveur qui écrit sans clause de version quand le champ est absent —
-        // ne peut pas être fermée d'ici (voir le rapport).
+        // Le verrou de la mise en oeuvre est transmis DÈS QU'IL EST CONNU. Le
+        // serveur consulte désormais les DEUX moitiés d'une entité scindée : un
+        // client tenant une maturité périmée reçoit un conflit au lieu d'un
+        // succès. Ce fichier n'a jamais compté sur l'indulgence d'avant — il
+        // envoie la version qu'il détient et adopte celle qu'on lui rend —, mais
+        // la propriété n'est vraie que si l'adoption est FIDÈLE : voir plus bas.
         const champs = corpsModifieDe(collection, id, enregistrement);
         if (Object.keys(champs).length === 0 && typeof v.vmo !== "number") {
             // Rien à écrire : la différence était un champ que le serveur ignore.
@@ -935,9 +937,16 @@ const Sync = (() => {
             const reponse = await Api.modifier(collection, id, v.v, champs,
                 (typeof v.vmo === "number") ? v.vmo : undefined);
             const rendu = reponse && reponse.enregistrement;
+            // Adoption FIDÈLE des deux versions. Le serveur rend `null` quand la
+            // filiale n'a pas (ou plus) de mise en oeuvre pour ce contrôle :
+            // garder l'ancien numéro dans ce cas ferait envoyer, au coup
+            // suivant, la version d'une ligne qui n'existe pas — et masquerait
+            // le conflit que le serveur vient d'apprendre à voir.
             versions[collection].set(id, {
                 v: (rendu && typeof rendu._version === "number") ? rendu._version : v.v + 1,
-                vmo: (rendu && typeof rendu._versionMiseEnOeuvre === "number") ? rendu._versionMiseEnOeuvre : v.vmo
+                vmo: (rendu && Object.prototype.hasOwnProperty.call(rendu, "_versionMiseEnOeuvre"))
+                    ? (typeof rendu._versionMiseEnOeuvre === "number" ? rendu._versionMiseEnOeuvre : null)
+                    : v.vmo
             });
             alignerReference(collection, id, enregistrement);
             return true;
