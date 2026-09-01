@@ -14,8 +14,9 @@
 //
 // ── Ce que la porte S2 a corrigé ici (constat B-1) ──────────────────────────
 //
-// La version précédente de ce fichier appelait `purgerBaseHeritee()` **au
-// chargement du module**, sans condition. L'auditeur l'a rejoué : serveur
+// La version précédente de ce fichier purgeait la base héritée **au chargement
+// du module**, sans condition (la fonction qui le faisait a disparu avec le
+// défaut, il ne sert donc à rien de la chercher). L'auditeur l'a rejoué : serveur
 // injoignable, l'application refuse de démarrer — et les données de la version
 // locale sont déjà détruites, avant toute reprise possible. « Il n'a rien fait
 // de mal : il n'a pas encore pu se connecter. »

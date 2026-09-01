@@ -6,10 +6,12 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // `PLAN_SERVEUR` §1.3 : **la façade synchrone de `DataStore` est préservée**.
-// Les ~330 appels répartis sur 125 méthodes ne changent pas de signature, et
-// aucun des 26 modules métier n'est réécrit (c'est la parade au risque P3).
+// Les **330 appels** `DataStore.*` des modules métier — répartis sur 119 des
+// 131 méthodes de la façade — ne changent pas de signature, et aucun des
+// 26 modules n'est réécrit (c'est la parade au risque P3).
 // Ce fichier est l'endroit — le seul — où l'asynchrone est absorbé, exactement
-// comme `flushNow()` absorbait IndexedDB auparavant.
+// comme le faisait avant lui, pour IndexedDB, la fonction d'écriture différée du
+// DataStore (elle n'existe plus : le point d'entrée est aujourd'hui `save()`).
 //
 // Trois mouvements, et rien d'autre :
 //
@@ -636,12 +638,29 @@ const Sync = (() => {
      * absent. Le client adopte donc celui qui lui revient et **réécrit toutes les
      * références** qui visaient l'identifiant local (voir `renommer`).
      *
-     * Ce qui est perdu, et qu'il faut porter au rapport plutôt que le taire :
-     * **la reprise d'un export `grc-backup` ne conserve plus les identifiants**,
-     * et réimporter deux fois le même fichier duplique son contenu. Le rétablir
-     * suppose un chemin de reprise côté serveur — c'est le lot L7, et le moteur
-     * d'accès l'a déjà prévu (`OptionsCreation.identifiantImpose`, qu'aucune
-     * route n'expose).
+     * ── Ce que cela coûte, et ce qui le rattrape ────────────────────────────
+     *
+     * Ce paragraphe annonçait une perte qui n'en est plus une, et il faut le
+     * dire au lieu de le corriger en silence : il énonçait que « la reprise d'un
+     * export `grc-backup` ne conserve plus les identifiants », que « réimporter
+     * deux fois le même fichier duplique son contenu », et que le remède
+     * attendait le lot L7. Les trois points ont cessé d'être vrais dans le même
+     * lot que celui qui les a écrits — c'est le motif du constat Q-12, et il se
+     * paie ici aussi.
+     *
+     * Ce qui est vrai : **cette fonction-là** ne conserve pas les identifiants,
+     * et elle n'a pas à le faire. Elle sert la création **ordinaire**, où
+     * l'identifiant du navigateur n'est qu'un brouillon. La reprise d'un fichier
+     * passe par une AUTRE route, `POST /api/reprise` (voir `Api.reprendre` et
+     * `DataStore.applyImport`), qui applique la charge entière en une
+     * transaction **en conservant les identifiants du fichier** ; le
+     * round-trip `grc-backup` y est donc exact, et une seconde reprise du même
+     * fichier converge au lieu de cloner.
+     *
+     * Il reste un chemin où le renommage a lieu : le **repli** d'`applyImport`,
+     * emprunté quand le serveur ne connaît pas encore `/api/reprise`. C'est là,
+     * et là seulement, que des identifiants venus d'un fichier traversent cette
+     * fonction — voir la mise en garde de `renommer` (constat Q-11).
      */
     async function creerAdaptatif(collection, _id, champs) {
         return Api.creer(collection, null, champs);
@@ -668,7 +687,8 @@ const Sync = (() => {
      *
      *   · `avecContenu = false` — on ne canonise RIEN. Une création se voit à
      *     l'absence de sa clé dans l'instantané de référence, une suppression à
-     *     la présence d'une clé sans enregistrement en face. 6 ms au lieu de 60.
+     *     la présence d'une clé sans enregistrement en face. **3 ms au lieu de
+     *     41** sur le jeu de mesure (12 000 enregistrements, 3,75 Mo, Chromium).
      *   · le visiteur peut **arrêter le parcours** en rendant `false` : une
      *     question booléenne s'arrête au premier écart trouvé.
      *
@@ -832,22 +852,46 @@ const Sync = (() => {
      * (constat Q-8) :
      *
      *   1. deux compteurs, sans rien parcourir ;
-     *   2. les seules PRÉSENCES — une création ou une suppression en attente se
-     *      voit sans canoniser un seul enregistrement (6 ms sur 12 000) ;
-     *   3. les contenus, arrêt au premier écart.
+     *   2. les VOLUMES par collection — 21 comparaisons d'entiers ;
+     *   3. si un volume a bougé : les seules PRÉSENCES, qui disent tout de
+     *      suite laquelle et sans canoniser un seul enregistrement (3 ms) ;
+     *   4. les contenus, arrêt au premier écart.
      *
-     * L'ordre est celui-là et pas un autre : l'étape 3 canonise tout ce qu'elle
+     * L'ordre est celui-là et pas un autre : l'étape 4 canonise tout ce qu'elle
      * traverse avant de trouver, si bien qu'une création située dans la dernière
-     * collection lui coûterait le parcours entier. L'étape 2 la lui épargne.
+     * collection lui coûterait le parcours entier. L'étape 3 la lui épargne —
+     * mais elle ne se paie que quand elle sert, d'où l'étape 2.
+     *
+     * Pourquoi l'étape 2 ne peut pas se tromper : si aucun volume n'a bougé,
+     * une création en attente suppose une suppression en attente dans la MÊME
+     * collection, qui la compense. L'étape 4 voit alors cette création — elle
+     * n'a pas besoin de la canoniser pour la reconnaître, une clé absente de
+     * l'instantané de référence suffit — et elle rend `true`. Sauter l'étape 3
+     * ne coûte donc, dans ce cas, que le temps qu'on aurait de toute façon
+     * dépensé au repos.
      *
      * Le résultat est identique à l'ancienne écriture — même disjonction, mêmes
      * règles de parcours — puisque tout passe par `parcourirEcarts`.
      */
+    function unVolumeABouge() {
+        const data = donnees();
+        if (!data) return false;
+        for (let i = 0; i < collections.length; i++) {
+            const c = collections[i];
+            const liste = Array.isArray(data[c]) ? data[c] : [];
+            const ref = reference[c];
+            if (!ref || liste.length !== ref.size) return true;
+        }
+        return false;
+    }
+
     function aDesModificationsEnAttente() {
         if (bloques.size > 0 || propagations.size > 0) return true;
         let trouve = false;
-        parcourirEcarts(false, () => { trouve = true; return false; });
-        if (trouve) return true;
+        if (unVolumeABouge()) {
+            parcourirEcarts(false, () => { trouve = true; return false; });
+            if (trouve) return true;
+        }
         parcourirEcarts(true, () => { trouve = true; return false; });
         return trouve;
     }

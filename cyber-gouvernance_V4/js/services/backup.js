@@ -20,8 +20,21 @@
 // journalisée, dans le modèle cible (§3.3).
 //
 // `renderReminder()`, `getReminderDays()` et `setReminderDays()` restent
-// déclarées : `js/modules/settings.js` les appelle et n'est pas du ressort de ce
-// lot. Elles ne font plus rien d'observable.
+// déclarées, mais **pas pour la raison qui était écrite ici** : ce texte
+// annonçait que `js/modules/settings.js` les appelait, ce qui n'est plus vrai
+// depuis que l'écran Paramètres a perdu ses réglages de sauvegarde locale.
+// C'est le motif du constat Q-12 — une justification qui survit à son appelant
+// — et il a été relevé trois fois dans ce lot ; celle-ci est la troisième.
+//
+// Ce qui est vrai aujourd'hui : `renderReminder()` a **un seul** appelant hors
+// de ce fichier, `js/app.js`, qui l'exécute au montage de l'application ; à
+// l'intérieur, `markExported()` l'appelle après chaque export. Elle ne fait plus
+// qu'une chose, et elle doit continuer de la faire : **vider** le bandeau
+// `#global-banner`, pour qu'aucun reste d'un rendu antérieur n'y survive.
+// `getReminderDays()` et `setReminderDays()` n'ont, elles, plus aucun appelant
+// nulle part — elles ne sont conservées que le temps que l'écran Paramètres, qui
+// appartient à un autre périmètre (`PLAN_EXECUTION` §2), soit relu ; elles
+// disparaîtront avec le seuil de rappel qu'elles réglaient.
 
 const BackupService = (() => {
     const LAST_EXPORT_KEY = "cyber-last-export-ts";       // horodatage (ms) du dernier export
@@ -88,10 +101,11 @@ const BackupService = (() => {
     }
 
     /* ===== Bandeau de rappel — RETIRÉ (voir l'entête) =====
-       La fonction subsiste parce que `app.js` et `settings.js` l'appellent ;
-       elle se contente de laisser le bandeau vide. Le seul bandeau que
-       l'application affiche désormais est celui de `sync.js`, qui signale une
-       modification NON ENREGISTRÉE — une information, elle, exacte et utile. */
+       La fonction subsiste parce que `app.js` l'appelle au montage — et parce
+       qu'elle a encore un effet utile : elle VIDE `#global-banner`. Le seul
+       bandeau que l'application affiche désormais est celui de `sync.js`, qui
+       signale une modification NON ENREGISTRÉE — une information, elle, exacte
+       et utile ; il vit dans son propre hôte, jamais dans celui-ci. */
     function shouldRemind() { return false; }
 
     function renderReminder() {
