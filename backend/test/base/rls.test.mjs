@@ -3843,6 +3843,141 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
     }
     assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
   });
+
+  /* ─────────────────────────────────────────────────────────────────────────
+   *  Q-5 — Le point d'appel dit quand il ne trouve PLUS RIEN.
+   *        Il ne dit rien quand il trouve MOINS.
+   *
+   *  Le test précédent est la moitié facile : on renomme les huit contrôles, il
+   *  n'en reste aucun, et `f_verifier_schema()` le dit. La moitié qui compte est
+   *  celle-ci — un SEUL contrôle sort de la convention, les sept autres tournent,
+   *  et le point d'appel rend « aucune anomalie » sur une base où la RLS est
+   *  tombée. C'est le motif que le chantier a payé quatre fois, retourné : la
+   *  découverte supprime l'oubli à l'ajout, et l'introduit au retrait.
+   *
+   *  Aucune malveillance n'est requise. Une migration qui renomme une fonction,
+   *  ou qui lui ajoute un argument par défaut, suffit — et elle passe la revue,
+   *  puisqu'elle ne touche pas au contrôle lui-même.
+   * ───────────────────────────────────────────────────────────────────────── */
+
+  /** Ce que « node db/migrate.mjs --verifier » conclut de l'état courant de la base. */
+  async function verifierParLOutil() {
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const { dirname, join } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const racine = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+    const issue = await promisify(execFile)(
+      process.execPath,
+      [join(racine, 'db', 'migrate.mjs'), '--verifier'],
+      {
+        env: {
+          ...process.env,
+          BASE_NOM: base.nom,
+          BASE_HOTE: process.env.BASE_HOTE ?? '127.0.0.1',
+          BASE_PORT: process.env.BASE_PORT ?? '5432',
+          BASE_UTILISATEUR_PROPRIETAIRE: process.env.BASE_UTILISATEUR_PROPRIETAIRE ?? 'grc_proprietaire',
+          BASE_MOT_DE_PASSE_PROPRIETAIRE: process.env.BASE_MOT_DE_PASSE_PROPRIETAIRE ?? 'dev',
+        },
+        cwd: racine,
+      },
+    ).catch((erreur) => erreur);
+    return { code: issue.code ?? 0, sortie: `${issue.stdout ?? ''}${issue.stderr ?? ''}` };
+  }
+
+  /** Coupe la RLS sur « risques », joue quelque chose, puis remet tout en place. */
+  async function avecRlsTombee(action) {
+    await proprietaire.query('alter table risques no force row level security');
+    try {
+      return await action();
+    } finally {
+      await proprietaire.query('alter table risques force row level security');
+    }
+  }
+
+  test('CONTRÔLE SYMÉTRIQUE : le garde-fou EN PLACE voit bien la RLS tomber', async () => {
+    // Sans cette moitié, le test suivant serait satisfait par une brèche qui n'en
+    // est pas une : on ne saurait pas si le silence vient du garde-fou disparu ou
+    // d'un sabotage sans effet.
+    const vues = await avecRlsTombee(async () =>
+      base.lignes(proprietaire, "select controle, objet, anomalie from f_verifier_schema() where objet = 'risques'"),
+    );
+    assert.ok(
+      vues.some((l) => l.controle === 'couverture_rls'),
+      `La brèche doit être VISIBLE tant que le contrôle est là : ${JSON.stringify(vues)}`,
+    );
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
+
+  test('un garde-fou qui CESSE d’être découvert ne doit pas s’effacer en silence (constat Q-5)', async () => {
+    // Le geste : on sort UN contrôle de la convention de nommage. C'est ce que fait
+    // une migration qui renomme — pas une attaque, une maintenance ordinaire.
+    const avant = (await base.lignes(
+      proprietaire,
+      `select p.proname as nom
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.prokind = 'f' and p.pronargs = 0
+          and p.proname::text like 'f\\_verifier\\_%'
+          and pg_get_function_result(p.oid) = 'TABLE(objet text, anomalie text, detail text)'`,
+    )).map((l) => l.nom);
+    assert.ok(avant.includes('f_verifier_couverture_rls'), 'Le contrôle visé doit exister au départ.');
+
+    await proprietaire.query(
+      'alter function f_verifier_couverture_rls() rename to zz_essai_q5_couverture_rls',
+    );
+    try {
+      // Le point d'appel en trouve un de moins, et sept sur huit tournent encore :
+      // il ne peut donc pas s'en remettre à « aucun contrôle découvert ».
+      const restants = await base.valeur(
+        proprietaire,
+        `select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.prokind = 'f' and p.pronargs = 0
+            and p.proname::text like 'f\\_verifier\\_%'
+            and pg_get_function_result(p.oid) = 'TABLE(objet text, anomalie text, detail text)'`,
+      );
+      assert.equal(Number(restants), avant.length - 1, 'Exactement un contrôle doit avoir disparu.');
+
+      // Les deux observations sont prises AVANT d'être jugées : le message doit
+      // pouvoir nommer ce que le point d'appel a rendu ET ce que l'outil de
+      // déploiement en a conclu — c'est ce second verdict que lit un exploitant.
+      const { anomalies, deploiement } = await avecRlsTombee(async () => ({
+        anomalies: await base.lignes(
+          proprietaire,
+          'select controle, objet, anomalie from f_verifier_schema()',
+        ),
+        deploiement: await verifierParLOutil(),
+      }));
+
+      // ── LA propriété ────────────────────────────────────────────────────
+      // Peu importe la forme du signalement — la disparition du contrôle, ou la
+      // brèche qu'il aurait vue. Ce qui est interdit, c'est le silence : un
+      // garde-fou qui rend « aucune anomalie » sur une base où la RLS est tombée
+      // ne vaut rien, et il rassure, ce qui est pire que de se taire.
+      assert.notDeepEqual(
+        anomalies,
+        [],
+        'Le point d’appel a rendu « aucune anomalie » alors qu’il joue SEPT contrôles sur ' +
+          'huit et que la RLS de « risques » est tombée. Il sait pourtant combien il en ' +
+          'avait trouvé la dernière fois : une diminution doit être une anomalie, comme ' +
+          'l’absence totale en est déjà une.',
+      );
+
+      // Et le verdict qui compte pour une mise en service : l'outil doit refuser.
+      // Un déploiement qui sort à zéro sur une base dont la RLS est tombée installe
+      // le défaut et le certifie du même geste.
+      assert.notEqual(
+        deploiement.code,
+        0,
+        `« migrate.mjs --verifier » a rendu 0 sur une base dont la RLS de « risques » est ` +
+          `tombée :\n${deploiement.sortie}`,
+      );
+    } finally {
+      await proprietaire.query(
+        'alter function zz_essai_q5_couverture_rls() rename to f_verifier_couverture_rls',
+      );
+    }
+    assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
+  });
 });
 
 /* =====================================================================

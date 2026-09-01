@@ -89,6 +89,13 @@
  *    valeur**. Il est exécutable tel quel par Node, donc éprouvable seul.
  */
 
+// Seul import de VALEUR de ce fichier, et il ne coûte pas la propriété qui
+// vaut au module d'être exécutable tel quel par le banc d'essai : ce qui met
+// Node en défaut quand il dépouille les types, ce sont les spécificateurs
+// relatifs en « .js » qui désignent un « .ts » — pas les modules internes,
+// qu'il résout toujours. `src/api/index.ts` en use déjà de la même façon.
+import { createHash, randomBytes } from 'node:crypto';
+
 import type { PoolClient } from 'pg';
 
 import type { PerimetreSession } from '../db/pool.js';
@@ -1011,7 +1018,14 @@ const etatsRlsParCatalogue = new WeakMap<
  *  colonne se prouve par le round-trip, pas par le catalogue.
  * ===================================================================== */
 export function verifierRegistre(catalogue: Catalogue): readonly string[] {
-  const anomalies: string[] = [];
+  // Le contrôle du générateur d'identifiants se branche ICI, et pas dans une
+  // liste d'appels à côté : `verifierRegistre` est le point unique par lequel
+  // le démarrage de l'API vérifie ses garanties, comme `f_verifier_schema()`
+  // l'est côté base (CONVENTIONS.md §18.4, §19.4). Un garde-fou que rien
+  // n'appelle est un commentaire — c'est exactement ce que le constat Q-1
+  // reprochait au précédent, qui gardait la bonne propriété sur la mauvaise
+  // fonction.
+  const anomalies: string[] = [...verifierGenerateurIdentifiants()];
   const etats = etatsRlsParCatalogue.get(catalogue.tables);
 
   for (const entite of ORDRE_ENTITES) {
@@ -1587,7 +1601,12 @@ export class Depot {
         );
       }
 
-      identifiantRetenu = engendrerIdentifiant(d.prefixe);
+      // Q-2 : DÉRIVÉ, pas tiré. Un tirage neuf à chaque reprise fabriquait un
+      // clone de plus à chaque fois ; une empreinte de (filiale, table,
+      // identifiant du fichier) rend la seconde reprise convergente — c'est
+      // `appliquerReprise` qui exploite cette stabilité pour RETROUVER la
+      // ligne au lieu d'en créer une autre.
+      identifiantRetenu = identifiantDerive(d.prefixe, filialeLigne, d.table, identifiant);
       options.signalerRenommage?.(identifiant, identifiantRetenu);
       await this.inserer(client, d.table, identifiantRetenu, filialeLigne, principales, entite);
     }
@@ -2217,6 +2236,14 @@ export class Depot {
             const champsDeLiaison = new Set((d.liaisons ?? []).map((l) => l.champ));
       const connus = existants.get(entite) ?? new Map<string, { version: number; seconde: number | null }>();
 
+      // Cette filiale porte-t-elle déjà une ré-émission pour cette entité ?
+      // Un parcours de clés déjà en mémoire, une seule fois par collection —
+      // c'est ce qui permet de ne calculer AUCUNE empreinte sur une reprise
+      // ordinaire, laquelle est le cas de tout le monde.
+      const aDesReemissions = [...connus.keys()].some((cle) =>
+        estIdentifiantDerive(d.prefixe, cle),
+      );
+
       crees[entite] = 0;
       misAJour[entite] = 0;
 
@@ -2268,7 +2295,34 @@ export class Depot {
         // toujours été AVANT ses enfants, l'ordre d'écriture le garantit.
         appliquerRenommages(donnees, d, references.get(d.table), renommages);
 
-        const deja = connus.get(identifiant);
+        // ══ Q-2 : RETROUVER une ré-émission, au lieu d'en fabriquer une ══
+        //
+        // Le fichier désigne l'enregistrement par SON identifiant. Si celui-ci
+        // a déjà été ré-émis lors d'une reprise précédente — parce qu'il était
+        // pris dans le domaine global par une filiale invisible —, la ligne
+        // est bien ici, mais sous l'identifiant DÉRIVÉ. Sans ce détour, la
+        // reprise ne la reconnaissait pas : elle en créait une deuxième, puis
+        // une troisième, et réorientait les références vers la dernière.
+        //
+        // C'est le correctif T-4 qui a ouvert ce chemin, en rendant possible
+        // la seconde application d'un même fichier — le geste qu'il devait
+        // précisément rendre possible. Le remède crée son propre chemin ; il
+        // faut donc le parcourir.
+        let cible = identifiant;
+        let deja = connus.get(identifiant);
+        if (deja === undefined && aDesReemissions) {
+          const derive = identifiantDerive(d.prefixe, filiale, d.table, identifiant);
+          const dejaDerive = connus.get(derive);
+          if (dejaDerive !== undefined) {
+            cible = derive;
+            deja = dejaDerive;
+            // Les références du fichier doivent suivre, exactement comme au
+            // premier passage : c'est ce qui rend la reprise convergente et
+            // non pas seulement « sans doublon ».
+            signalerRenommage(entite, identifiant, derive);
+          }
+        }
+
         if (deja === undefined) {
           const cree = await this.creer(client, perimetre, entite, donnees, {
             identifiantImpose: identifiant,
@@ -2294,7 +2348,7 @@ export class Depot {
             client,
             perimetre,
             entite,
-            identifiant,
+            cible,
             deja.version,
             donnees,
             deja.seconde,
@@ -2306,8 +2360,8 @@ export class Depot {
         if (Object.keys(liaisons).length > 0) {
           differees.push({
             entite,
-            identifiant,
-            portee: await this.filialeDeLaLigne(client, d.table, identifiant),
+            identifiant: cible,
+            portee: await this.filialeDeLaLigne(client, d.table, cible),
             liaisons,
           });
         }
@@ -4185,35 +4239,184 @@ function identifiantLisible(identifiant: string): string {
  *  §10 — Identifiants métier
  * ===================================================================== */
 
+/** Octets tirés pour le suffixe aléatoire : 16 octets, soit 128 bits. */
+const OCTETS_ALEA = 16;
+
+/** Longueur du suffixe en base 36 — `ceil(128 / log2(36))`, complétée à gauche. */
+const LONGUEUR_ALEA = 25;
+
+/** Marque d'un identifiant ré-émis par le serveur (voir `identifiantDerive`). */
+const MARQUE_REEMISSION = 'r';
+
+/** Nombre de tirages du contrôle d'entropie de démarrage. */
+const TIRAGES_CONTROLE_ENTROPIE = 20_000;
+
+/** Plancher d'entropie exigé du suffixe, en bits. */
+const BITS_ALEA_MINIMUM = 120;
+
+/** Un paquet d'octets rendu en base 36, à longueur constante. */
+function enBase36(octets: Uint8Array): string {
+  let valeur = 0n;
+  for (const octet of octets) valeur = (valeur << 8n) | BigInt(octet);
+  return valeur.toString(36).padStart(LONGUEUR_ALEA, '0');
+}
+
 /**
  * Engendre un identifiant au format du `CONVENTIONS.md` §2, celui d'`UI.genId`
  * côté navigateur : `"<PRÉFIXE>-<horodatage>-<aléa>"`. Le format est **le
  * même** des deux côtés, sans quoi le round-trip d'un export `grc-backup`
  * cesserait d'être exact.
+ *
+ * ── Porte S2 quater, constat Q-1 ─────────────────────────────────────
+ *
+ * L'aléa tenait sur **un million de valeurs** (`getRandomValues % 1_000_000`).
+ * Mesuré sur ce module : 20 000 tirages rendaient 19 997 valeurs distinctes,
+ * soit trois collisions. Le remède avait pourtant été écrit, gardé, mesuré et
+ * démontré — sur `f_generer_id()`, la fonction SQL, qui n'est la valeur par
+ * défaut que de `journal_audit.id` : une table que ce lot n'écrit jamais. Le
+ * générateur du navigateur était devenu plus fort que celui du serveur.
+ *
+ * Ici, 128 bits tirés du générateur cryptographique, rendus en base 36 comme
+ * `UI.genId` le fait de son côté. Budget de longueur : `MESURE-` (7) +
+ * horodatage (13) + tiret + 25 = **46 caractères**, quand le domaine
+ * `id_metier` en admet 64.
+ *
+ * Ce qui manquait au premier remède n'était pas la mesure : c'était le
+ * contrôle qui la rejoue. Il est en bas de ce fichier
+ * (`verifierGenerateurIdentifiants`), appelé par `verifierRegistre`, et il
+ * fait échouer le DÉMARRAGE du service.
  */
 export function engendrerIdentifiant(prefixe: string): string {
-  return `${prefixe}-${String(Date.now())}-${String(aleaEntier())}`;
+  return `${prefixe}-${String(Date.now())}-${enBase36(randomBytes(OCTETS_ALEA))}`;
 }
 
 /**
- * Aléa du suffixe d'identifiant.
+ * Identifiant de **ré-émission** : celui que le serveur retient quand
+ * l'identifiant d'un fichier de reprise est déjà pris dans le domaine global
+ * par une ligne que l'appelant ne voit pas (constat N-1).
  *
- * Depuis que le serveur est seul à engendrer les identifiants (M-3), leur
- * imprévisibilité cesse d'être une commodité : un identifiant devinable
- * redonnerait, par la route de suppression, une partie de l'oracle qu'on vient
- * de fermer. On tire donc sur le générateur cryptographique, disponible en
- * **global** dans Node 22 — ce qui évite un `import` de valeur et garde ce
- * fichier exécutable tel quel par le banc d'essai.
+ * ── Porte S2 quater, constat Q-2 : pourquoi il est DÉRIVÉ, pas tiré ───
+ *
+ * Il était tiré au hasard. Chaque reprise du même fichier fabriquait donc un
+ * clone de plus, et la référence visait le dernier :
+ *
+ *     reprise 1 → crees {risques:1}    reprise 2 → crees {risques:1}
+ *     reprise 3 → crees {risques:1}    ⇒ trois lignes pour un enregistrement
+ *
+ * Le chemin n'existait pas tant que l'unicité d'idempotence interdisait la
+ * seconde application d'un fichier — c'est le correctif T-4 qui l'a ouvert, en
+ * rendant possible le geste qu'il devait rendre possible : restaurer,
+ * constater, restaurer encore. Septième occurrence du motif : *le remède crée
+ * son propre chemin*.
+ *
+ * Une empreinte de `(filiale, table, identifiant du fichier)` rend la
+ * ré-émission **idempotente** : la seconde reprise retombe sur le même
+ * identifiant, donc RETROUVE la ligne au lieu d'en fabriquer une autre (voir
+ * `appliquerReprise`). L'issue reste rigoureusement indistincte pour
+ * l'appelant — c'est ce que le §20.1 exige d'un oracle fermé —, puisque rien
+ * de ce calcul ne sort du serveur.
+ *
+ * La marque « -r- » tient lieu d'horodatage : un identifiant dérivé n'en a
+ * pas, et ne peut donc pas en porter un crédible. Elle sert deux fois : elle
+ * dit à l'exploitant, dans le journal, qu'il lit une ré-émission ; et elle
+ * permet à la reprise de savoir, sans calculer une seule empreinte, qu'aucune
+ * ré-émission n'a jamais eu lieu dans cette filiale.
  */
-function aleaEntier(): number {
-  const source = (globalThis as { crypto?: { getRandomValues?: (t: Uint32Array) => Uint32Array } })
-    .crypto;
-  if (source?.getRandomValues !== undefined) {
-    const tampon = new Uint32Array(1);
-    source.getRandomValues(tampon);
-    return (tampon[0] ?? 0) % 1_000_000;
+export function identifiantDerive(
+  prefixe: string,
+  filiale: string | null,
+  table: string,
+  source: string,
+): string {
+  const empreinte = createHash('sha256')
+    .update([filiale ?? '@groupe', table, source].join('\u0000'), 'utf8')
+    .digest();
+  return `${prefixe}-${MARQUE_REEMISSION}-${enBase36(empreinte.subarray(0, OCTETS_ALEA))}`;
+}
+
+/** Cet identifiant est-il une ré-émission du serveur pour ce préfixe ? */
+export function estIdentifiantDerive(prefixe: string, identifiant: string): boolean {
+  return identifiant.startsWith(`${prefixe}-${MARQUE_REEMISSION}-`);
+}
+
+/**
+ * Le contrôle qui **rejoue la mesure** — celui qui manquait au premier remède.
+ *
+ * Il est appelé par `verifierRegistre`, donc par le point de démarrage unique
+ * de l'API : une entropie affaiblie ne produit pas un avertissement dans un
+ * journal que personne ne lit, elle empêche le service de démarrer. C'est la
+ * transposition, côté application, de ce que `f_verifier_schema()` fait côté
+ * base (`CONVENTIONS.md` §18.4).
+ *
+ * Trois choses y sont vérifiées, et chacune se rapporte à un défaut réel :
+ *
+ *  1. **la forme et le plancher d'entropie** — un échantillon suffit, et il
+ *     attrape un affaiblissement même quand le tirage a de la chance ;
+ *  2. **la mesure elle-même**, sur le suffixe seul : 20 000 tirages, tous
+ *     distincts. Compter sur l'identifiant entier ne prouverait rien, puisque
+ *     l'horodatage suffirait à les séparer dès que la boucle traîne — or le
+ *     défaut de Q-1 n'apparaît QUE dans une boucle serrée ;
+ *  3. **le déterminisme de la ré-émission** (Q-2) : la même entrée rend le
+ *     même identifiant, deux entrées différentes en rendent deux, et le
+ *     résultat reste reconnaissable — la convergence de la reprise en dépend.
+ */
+export function verifierGenerateurIdentifiants(): readonly string[] {
+  const anomalies: string[] = [];
+
+  const echantillon = engendrerIdentifiant('CTRL');
+  const morceaux = echantillon.split('-');
+  const alea = morceaux[2] ?? '';
+  if (morceaux.length !== 3 || morceaux[0] !== 'CTRL' || !/^\d+$/.test(morceaux[1] ?? '')) {
+    anomalies.push(
+      `Générateur d'identifiants : la forme « <PRÉFIXE>-<horodatage>-<aléa> » du ` +
+        `CONVENTIONS.md §2 n'est plus respectée (« ${echantillon} »).`,
+    );
   }
-  return Math.floor(Math.random() * 1_000_000);
+  const bits = alea.length * Math.log2(36);
+  if (!/^[0-9a-z]+$/.test(alea) || bits < BITS_ALEA_MINIMUM) {
+    anomalies.push(
+      `Générateur d'identifiants : le suffixe porte ${bits.toFixed(0)} bits d'aléa, ` +
+        `le plancher est de ${String(BITS_ALEA_MINIMUM)} (constat Q-1). Un identifiant ` +
+        'engendré en boucle se répéterait, et un import de masse perdrait des lignes.',
+    );
+  }
+
+  const vus = new Set<string>();
+  for (let i = 0; i < TIRAGES_CONTROLE_ENTROPIE; i += 1) {
+    vus.add(engendrerIdentifiant('CTRL').split('-')[2] ?? '');
+  }
+  if (vus.size !== TIRAGES_CONTROLE_ENTROPIE) {
+    anomalies.push(
+      `Générateur d'identifiants : ${String(TIRAGES_CONTROLE_ENTROPIE)} tirages n'ont rendu ` +
+        `que ${String(vus.size)} suffixes distincts (constat Q-1).`,
+    );
+  }
+
+  const premier = identifiantDerive('RISK', 'FIL-A', 'risques', '7');
+  if (identifiantDerive('RISK', 'FIL-A', 'risques', '7') !== premier) {
+    anomalies.push(
+      "Ré-émission d'identifiant : elle n'est pas déterministe (constat Q-2). Reprendre " +
+        'deux fois la même sauvegarde fabriquerait des clones au lieu de converger.',
+    );
+  }
+  if (
+    identifiantDerive('RISK', 'FIL-B', 'risques', '7') === premier ||
+    identifiantDerive('RISK', 'FIL-A', 'risques', '8') === premier ||
+    identifiantDerive('RISK', 'FIL-A', 'exigences', '7') === premier
+  ) {
+    anomalies.push(
+      "Ré-émission d'identifiant : la dérivation ignore l'une de ses entrées (filiale, " +
+        'table ou identifiant du fichier). Deux enregistrements distincts se confondraient.',
+    );
+  }
+  if (!estIdentifiantDerive('RISK', premier)) {
+    anomalies.push(
+      "Ré-émission d'identifiant : le résultat n'est plus reconnaissable comme tel. La " +
+        'reprise s’en sert pour retrouver un enregistrement déjà ré-émis (constat Q-2).',
+    );
+  }
+
+  return anomalies;
 }
 
 /**

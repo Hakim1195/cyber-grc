@@ -712,3 +712,177 @@ describe('La bascule, de bout en bout', () => {
     }
   });
 });
+
+/* =====================================================================
+ *  §5 — Les DEUX barrières du bloquant T-1, chacune éprouvée seule
+ *
+ *  Le troisième passage de la porte S2 a trouvé un import qui perdait des
+ *  lignes en silence : « 250 exigences importées », 225 en base, `{ok: true,
+ *  echecs: 0}` rendu à l'utilisateur. Le remède a posé DEUX barrières
+ *  indépendantes, et le quatrième passage (constat Q-3) a relevé qu'aucune
+ *  n'était éprouvée au dépôt — la preuve existait, mais dans le brouillon d'un
+ *  auditeur, et un brouillon ne se rejoue pas au prochain changement.
+ *
+ *   1. l'ENTROPIE du générateur — elle supprime la CAUSE ;
+ *   2. l'INDEXATION PAR RANG du tri des créations — elle supprime la
+ *      CONSÉQUENCE, et elle tient même quand la première a été sabotée.
+ *
+ *  Elles sont éprouvées séparément, et la seconde l'est PRÉCISÉMENT dans le
+ *  cas où la première a disparu : c'est la seule façon de montrer qu'elle est
+ *  bien une seconde barrière, et non un doublon de la première.
+ * ===================================================================== */
+
+describe('Un import en lot ne perd pas une ligne (bloquant T-1)', () => {
+  /** Le nombre du constat : « un lot de 250 exigences en écrivait 225 ». */
+  const LOT = 250;
+
+  test('BARRIÈRE 1 — l’entropie : 250 créations d’affilée, 250 identifiants distincts', async () => {
+    // Le générateur est mesuré SUR SON CHEMIN RÉEL — celui qu'empruntent les
+    // modules — et non appelé à part. C'est la leçon du constat Q-1 : un essai
+    // d'entropie sur un générateur qui n'écrit pas ne prouve rien sur celui qui
+    // écrit. Ici les identifiants sont ceux que le DataStore a réellement reçus.
+    const session = await ouvrirApplication();
+    try {
+      const vus = await session.page.evaluate((n) => {
+        const identifiants = [];
+        // Une boucle serrée : `Date.now()` ne bouge pratiquement pas d'une
+        // itération à l'autre, ce qui est exactement la condition du constat —
+        // l'identifiant s'y réduit à la part aléatoire.
+        for (let i = 0; i < n; i += 1) {
+          const id = window.UI.genId('RISK');
+          identifiants.push(id);
+          window.DataStore.addRisque({ id, nom: `Exigence importée n° ${String(i + 1)}` });
+        }
+        return {
+          identifiants,
+          horodatagesDistincts: new Set(identifiants.map((x) => x.split('-')[1])).size,
+          enMemoire: window.DataStore.getRisques().length,
+        };
+      }, LOT);
+
+      assert.equal(
+        new Set(vus.identifiants).size,
+        LOT,
+        'Deux créations du même lot ne doivent jamais porter le même identifiant.',
+      );
+      assert.ok(
+        vus.horodatagesDistincts < LOT,
+        'Le scénario n’a de sens que si l’horodatage NE suffit PAS à distinguer les ' +
+          `identifiants : ${String(vus.horodatagesDistincts)} valeurs pour ${String(LOT)} tirages. ` +
+          'Sur une machine assez lente pour donner 250 millisecondes distinctes, ce test ' +
+          'ne mesurerait plus l’entropie mais l’horloge.',
+      );
+
+      // Et le lot arrive entier de l'autre côté : l'entropie sert à cela.
+      await attendreQuiescence(session.page);
+      const enBaseApres = await enBase(
+        "select count(*)::int as n from risques where nom like 'Exigence importée n° %'",
+      );
+      assert.equal(enBaseApres[0].n, LOT, `${String(LOT)} confiées, ${String(LOT)} en base.`);
+
+      // Le canari de `calculerDifferentiel` doit être muet : aucun doublon.
+      const bandeau = await session.page.evaluate(() =>
+        (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+      );
+      assert.equal(
+        /double/i.test(bandeau),
+        false,
+        `Aucun doublon ne doit être signalé sur un lot sain : ${bandeau}`,
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('BARRIÈRE 2 — le rang : générateur SABOTÉ à trois valeurs, les 40 lignes arrivent quand même', async () => {
+    // ── La démonstration de l'auditeur, figée au dépôt ───────────────────────
+    //
+    // On remplace le générateur du navigateur par un générateur volontairement
+    // dégénéré : trois valeurs, pas de compteur, pas d'horodatage. C'est pire
+    // que le défaut d'origine. La première barrière est donc absente, et le lot
+    // porte massivement des identifiants en double.
+    //
+    // La propriété que ce test tient : AUCUN GÉNÉRATEUR NE DOIT POUVOIR FAIRE
+    // DISPARAÎTRE UNE LIGNE. `ordonnerCreations` indexe par RANG dans le lot, pas
+    // par identifiant ; un tableau indexé par rang ne perd rien, quoi qu'on lui
+    // donne. C'est une propriété de FORME, et elle survit à la bêtise du
+    // générateur — ce qui est exactement ce qu'on attend d'une seconde barrière.
+    const CREATIONS = 40;
+    const session = await ouvrirApplication();
+    try {
+      const vus = await session.page.evaluate((n) => {
+        // Sabotage : trois valeurs, et rien d'autre.
+        window.UI.genId = (prefixe) => `${prefixe ?? 'ID'}-SABOTE-${String(Math.floor(Math.random() * 3))}`;
+        const identifiants = [];
+        for (let i = 0; i < n; i += 1) {
+          const id = window.UI.genId('RISK');
+          identifiants.push(id);
+          window.DataStore.addRisque({ id, nom: `Ligne sabotée n° ${String(i + 1)}` });
+        }
+        return { distincts: new Set(identifiants).size, confiees: identifiants.length };
+      }, CREATIONS);
+
+      assert.ok(
+        vus.distincts <= 3,
+        `Le sabotage doit VRAIMENT produire des doublons : ${String(vus.distincts)} identifiants ` +
+          `distincts pour ${String(CREATIONS)} créations. Sans cela le test ne mesurerait rien.`,
+      );
+
+      await attendreQuiescence(session.page);
+
+      // ── LA propriété ────────────────────────────────────────────────────
+      const enBaseApres = await enBase(
+        "select count(*)::int as n from risques where nom like 'Ligne sabotée n° %'",
+      );
+      assert.equal(
+        enBaseApres[0].n,
+        CREATIONS,
+        `La seconde barrière doit tenir SANS la première : ${String(CREATIONS)} créations ` +
+          `confiées, ${String(enBaseApres[0].n)} lignes en base. Toute valeur inférieure est ` +
+          'la perte silencieuse du bloquant T-1.',
+      );
+
+      // Chaque ligne a bien reçu SON identité : le serveur a ré-émis, et rien
+      // n'a été écrasé au passage.
+      const noms = await enBase(
+        "select count(distinct nom)::int as n from risques where nom like 'Ligne sabotée n° %'",
+      );
+      assert.equal(noms[0].n, CREATIONS, 'Les 40 lignes sont 40 lignes différentes, pas 3 réécrites.');
+      const identites = await enBase(
+        "select count(distinct id)::int as n from risques where nom like 'Ligne sabotée n° %'",
+      );
+      assert.equal(identites[0].n, CREATIONS, 'Et 40 identifiants distincts en base.');
+
+      // ── Et c'est bien LE RANG qui a tenu, pas le filet placé sous lui ────
+      //
+      // Sous le tri il existe un rattrapage : `ecrireEnLot` recompte, remet ce
+      // qui manque et le signale. Il est là pour qu'un défaut de programmation
+      // ne coûte pas de donnée — mais tant qu'il travaille, « 40 lignes sont
+      // arrivées » ne dit RIEN du tri lui-même : un tri qui perd tout et un tri
+      // juste rendent le même compte. Écrit sans cette distinction, ce test
+      // restait vert quand on ré-indexait `ordonnerCreations` sur l'identifiant
+      // — c'est-à-dire quand on rouvrait la moitié structurelle du bloquant.
+      //
+      // On exige donc que le filet n'ait PAS servi. Les deux barrières
+      // redeviennent distinguables, et le signalement de rétrécissement — le
+      // quatrième comportement neuf du remède T-1 — se trouve pris au passage :
+      // il est ici la marque de son absence.
+      assert.deepEqual(
+        session.erreursConsole.filter((m) => /incohérent/i.test(m)),
+        [],
+        'Le tri par rang ne doit rien avoir perdu : dès qu’il perd, le rattrapage crie.',
+      );
+      const bandeau = await session.page.evaluate(() =>
+        (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+      );
+      assert.equal(
+        /défaut interne/i.test(bandeau),
+        false,
+        `Aucun défaut interne ne doit être annoncé à l’utilisateur : ${bandeau}`,
+      );
+    } finally {
+      await session.fermer();
+    }
+  });
+});
