@@ -403,6 +403,99 @@ describe('Ce que le serveur pose sur toutes ses réponses', () => {
  *  §4 — La barrière fail-closed de la session provisoire
  * ===================================================================== */
 
+describe('L’habilitation Groupe ne se fabrique nulle part (suite du constat M-4)', () => {
+  /**
+   * Fichiers autorisés à ÉCRIRE `administrationGroupe`, et la raison de chacun.
+   *
+   * Toute autre écriture est une reprise du défaut que ce banc a isolé : la route de
+   * reprise se déclarait administratrice pour pouvoir écrire le socle commun, ce
+   * qu'aucune session n'avait demandé. Le correctif n'a pas ajouté un contrôle de
+   * plus — il a supprimé la possibilité : **le drapeau ne peut venir que du résolveur
+   * de périmètre.**
+   */
+  const AUTORISES = Object.freeze({
+    'db/pool.ts': 'déclare le champ du périmètre et la sentinelle systeme (faux)',
+    'api/session.ts': 'LE résolveur : c’est là, et seulement là, que le droit se décide',
+  });
+
+  test('aucun fichier hors du résolveur ne pose le drapeau d’administration', async () => {
+    // Garde-fou STRUCTUREL, découvert et non récité (CONVENTIONS.md §19.5) : il
+    // balaie `src/`, il ne consulte aucune liste de routes. Une route ajoutée demain
+    // qui se déclarerait administratrice serait signalée le jour où elle est écrite,
+    // et non à la porte de sécurité suivante.
+    const { readdirSync, readFileSync } = await import('node:fs');
+    const { join, relative } = await import('node:path');
+    const { RACINE_BACKEND } = await import('../aide/serveur.mjs');
+    const racine = join(RACINE_BACKEND, 'src');
+
+    const fichiers = [];
+    const parcourir = (repertoire) => {
+      for (const entree of readdirSync(repertoire, { withFileTypes: true })) {
+        const chemin = join(repertoire, entree.name);
+        if (entree.isDirectory()) parcourir(chemin);
+        else if (entree.name.endsWith('.ts')) fichiers.push(chemin);
+      }
+    };
+    parcourir(racine);
+    assert.ok(fichiers.length >= 6, `Balayage suspect : ${String(fichiers.length)} fichier(s).`);
+
+    // Une ÉCRITURE, pas une mention : « administrationGroupe: … » (littéral d'objet)
+    // ou « .administrationGroupe = … » (affectation). Lire le champ reste libre —
+    // c'est même ce que fait le contrôle du droit.
+    const ecriture = /(^|[^.\w])administrationGroupe\s*[:=][^=]/;
+    const fautifs = [];
+    for (const chemin of fichiers) {
+      const relatif = relative(racine, chemin).split('\\').join('/');
+      if (AUTORISES[relatif] !== undefined) continue;
+      const lignes = readFileSync(chemin, 'utf8').split('\n');
+      lignes.forEach((ligne, i) => {
+        const utile = ligne.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, '');
+        if (ecriture.test(utile)) fautifs.push(`${relatif}:${String(i + 1)} ${ligne.trim().slice(0, 90)}`);
+      });
+    }
+    assert.deepEqual(
+      fautifs,
+      [],
+      'Ces lignes posent le drapeau d’administration hors du résolveur de périmètre. ' +
+        'C’est par là que le contournement du constat M-4 était passé.',
+    );
+  });
+
+  test('LE BALAYAGE MORD : il doit VOIR le drapeau là où il est légitime', async () => {
+    // Contrôle de morsure du balayage : un motif qui ne trouve rien nulle part
+    // rendrait « aucun fautif » pour la pire des raisons. On vérifie donc qu'il
+    // trouve bien les écritures autorisées, dans les deux fichiers qui les portent.
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { RACINE_BACKEND } = await import('../aide/serveur.mjs');
+
+    const ecriture = /(^|[^.\w])administrationGroupe\s*[:=][^=]/;
+    for (const relatif of Object.keys(AUTORISES)) {
+      const texte = readFileSync(join(RACINE_BACKEND, 'src', relatif), 'utf8');
+      const trouvees = texte.split('\n').filter((ligne) => ecriture.test(ligne.replace(/\/\/.*$/, '')));
+      assert.ok(
+        trouvees.length > 0,
+        `Le motif ne voit rien dans ${relatif} : il ne verrait pas davantage une route fautive.`,
+      );
+    }
+  });
+
+  test('et le serveur réel n’a AUCUNE habilitation Groupe par défaut', async () => {
+    // La moitié comportementale : la barrière est fermée à la livraison. L'ouvrir
+    // demande une variable d'environnement explicite, documentée, sans effet hors
+    // développement — et le journal le crie quand elle est posée.
+    const session = await serveur.appeler('GET', '/api/session');
+    assert.equal(session.corps.administration_groupe, false);
+
+    // Conséquence directe et vérifiable : une écriture de portée Groupe est refusée.
+    const socle = await serveur.appeler('POST', '/api/entites/mappings', {
+      corps: { champs: { theme: 'Correspondance du socle' } },
+    });
+    assert.equal(socle.statut, 403);
+    assert.equal(socle.corps.erreur, 'hors_perimetre');
+  });
+});
+
 describe('La session provisoire est fail-closed en production (contrôle S6)', () => {
   test('en production, aucune donnée n’est servie ni écrite', async () => {
     const production = await monterServeurReel(base, { environnement: 'production' });

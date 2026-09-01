@@ -45,11 +45,21 @@ import {
   instantane,
   instantaneV12Complet,
 } from '../reprise/jeux-essai.mjs';
-import { monterServeurReel } from '../aide/serveur.mjs';
+import { monterGreffon, monterServeurReel } from '../aide/serveur.mjs';
 
 /** @type {Awaited<ReturnType<typeof ouvrirBaseEssai>>} */
 let base;
+/** Le vrai serveur, résolveur provisoire : une session de FILIALE, sans habilitation. */
 let serveur;
+/**
+ * Le greffon avec un périmètre d'ADMINISTRATION GROUPE.
+ *
+ * Le drapeau ne peut plus venir que du résolveur de périmètre — aucune route ne le
+ * fabrique, et c'est ce qui a fermé le contournement de M-4. Le banc respecte ce
+ * contrat : il ne force rien, il monte une session qui DÉTIENT le droit, par le point
+ * d'accroche que `OptionsApi` documente pour le lot L3.
+ */
+let administration;
 
 const lectureA = perimetre('temoin', FILIALE_A, [FILIALE_A]);
 const lectureB = perimetre('temoin', FILIALE_B, [FILIALE_B]);
@@ -58,16 +68,29 @@ before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
   await semerJeuEssai(base, await base.connexion('app'));
   serveur = await monterServeurReel(base);
+  administration = await monterGreffon(base, {
+    utilisateurId: 'administrateur-groupe',
+    filialeId: FILIALE_A,
+    filiales: [FILIALE_A, FILIALE_B],
+    perimetreGroupe: true,
+    administrationGroupe: true,
+  });
 });
 
 after(async () => {
   await serveur?.fermer();
+  await administration?.fermer();
   await base?.fermer();
 });
 
-/** Envoie un fichier `grc-backup` à la route de reprise. */
+/**
+ * Envoie un fichier `grc-backup` à la route de reprise.
+ *
+ * `options.par` choisit la session : par défaut celle du serveur réel — une filiale
+ * ordinaire, sans habilitation Groupe.
+ */
 function reprendre(mode, charge, options = {}) {
-  return serveur.appeler('POST', '/api/reprise', {
+  return (options.par ?? serveur).appeler('POST', '/api/reprise', {
     corps: {
       mode,
       ...(options.apercu === true ? { apercu: true } : {}),
@@ -275,53 +298,134 @@ describe('Les refus de la route de reprise', () => {
  * ===================================================================== */
 
 describe('Un export complet, comme l’application en produit', () => {
-  test('un contrôle de niveau GROUPE passe par la reprise ce que la création refuse', async () => {
-    // ── Le remède crée son propre chemin (CONVENTIONS.md §20.3) ──────────────
+  test('les DEUX routes disent la même chose du socle commun — dans les deux sens', async () => {
+    // ── Ce que ce test a servi à trouver, et ce qu'il garde ──────────────────
     //
-    // Le constat M-4 a été fermé sur la route de création : une session de filiale ne
-    // peut plus écrire `mappings`, référence COMMUNE aux vingt filiales. La route de
-    // reprise, elle, écrit la même table par un autre chemin — et la même session y
-    // arrive.
+    // Il a d'abord été rouge : le constat M-4 était fermé sur la route de création,
+    // et la route de reprise écrivait la même table par un autre chemin — « le
+    // remède crée son propre chemin » (`CONVENTIONS.md` §20.3). Une session de
+    // filiale posait une correspondance visible des vingt filiales, sans droit à
+    // produire et sans journal pour l'attribuer.
     //
-    // Ce n'est pas une fuite de lecture : c'est une écriture dont le rayon sort de la
-    // filiale, sans droit à produire et sans journal pour l'attribuer. Exactement ce
-    // que M-4 décrivait, par la porte de côté.
-    //
-    // Le banc ne tranche pas COMMENT fermer — refuser la collection, l'ignorer avec
-    // un avertissement, ou exiger une administration Groupe. Il exige que les deux
-    // routes disent la même chose.
+    // Le correctif a fait mieux que la parade attendue : **aucun endroit du serveur
+    // ne fabrique plus le drapeau d'administration**, il ne peut venir que du
+    // résolveur de périmètre. Le test reste, comme garde de non-régression, et il
+    // vérifie désormais les deux sens — une porte fermée des deux côtés pour une
+    // filiale, ouverte des deux côtés pour une administration. Sans la seconde
+    // moitié, il serait satisfait par un serveur où plus personne ne peut tenir le
+    // catalogue de correspondances.
     const charge = instantane(12, {
-      mappings: [{ id: 'MAP-PAR-LA-REPRISE', theme: 'Forgé depuis une filiale', aide: '', refs: {} }],
-    });
-    const parLaReprise = await reprendre('fusionner', charge, { nom: 'mappings.json' });
-    const parLaCreation = await serveur.appeler('POST', '/api/entites/mappings', {
-      corps: { champs: { theme: 'Forgé depuis une filiale' } },
+      mappings: [{ id: 'MAP-PAR-LA-REPRISE', theme: 'Correspondance du socle', aide: '', refs: {} }],
     });
 
-    assert.equal(parLaCreation.statut, 403, 'La route de création refuse — c’est le correctif M-4.');
-    assert.notEqual(
-      parLaReprise.statut,
-      200,
-      'La route de reprise ne doit pas offrir à une filiale ce que la création lui refuse : ' +
-        'une même session, une même table, deux verdicts, c’est M-4 rouvert.',
-    );
+    const filialeParLaReprise = await reprendre('fusionner', charge, { nom: 'mappings-filiale.json' });
+    const filialeParLaCreation = await serveur.appeler('POST', '/api/entites/mappings', {
+      corps: { champs: { theme: 'Correspondance du socle' } },
+    });
+    assert.equal(filialeParLaCreation.statut, 403, 'La création refuse à une filiale.');
+    assert.equal(filialeParLaReprise.statut, 403, 'La reprise doit refuser de la même façon.');
+
+    const adminParLaReprise = await reprendre('fusionner', charge, {
+      nom: 'mappings-administration.json',
+      par: administration,
+    });
+    const adminParLaCreation = await administration.appeler('POST', '/api/entites/mappings', {
+      corps: { champs: { theme: 'Correspondance posée par le Groupe' } },
+    });
+    assert.equal(adminParLaCreation.statut, 201, 'La création accepte d’une administration.');
+    assert.equal(adminParLaReprise.statut, 200, 'La reprise aussi : les deux routes s’accordent.');
   });
 
-  test('les 21 collections d’un export v12 traversent la route de reprise', async () => {
-    // Le chemin que `PLAN_SERVEUR` §2.6 désigne comme LE chemin de migration : un
-    // export `grc-backup` d'une filiale encore en version locale, repris dans la
-    // version serveur. S'il ne passe pas, il n'y a pas de migration.
-    const reponse = await reprendre('remplacer', instantaneV12Complet(), { nom: 'complet.json' });
+  test('reprendre un export complet est un ACTE D’ADMINISTRATION — refusé à une filiale', async () => {
+    // ── Le sens a changé, et c'est une décision, pas une régression ──────────
+    //
+    // Ce test exigeait naguère qu'un export v12 complet passe, point. Il passait
+    // parce que rien ne vérifiait le droit : la route de reprise écrivait le socle
+    // commun sans le demander à personne — le contournement du constat M-4 que ce
+    // banc avait isolé.
+    //
+    // Depuis, le drapeau d'administration ne peut plus venir que du résolveur de
+    // périmètre. Un export du modèle navigateur porte la surcouche `mappings`, de
+    // portée Groupe : le reprendre EST une écriture dans le socle commun aux vingt
+    // filiales, donc un acte d'administration. C'est cohérent avec le geste réel —
+    // intégrer une société rachetée, c'est créer la filiale puis charger ses
+    // données, de bout en bout sous une habilitation Groupe.
+    //
+    // Le test le dit désormais dans les DEUX sens. Se contenter de passer une
+    // session habilitée aurait fait disparaître ce qu'il prouvait.
+    const reponse = await reprendre('remplacer', instantaneV12Complet(), { nom: 'complet-filiale.json' });
+
+    assert.equal(reponse.statut, 403, JSON.stringify(reponse.corps).slice(0, 300));
+    assert.equal(reponse.corps.erreur, 'hors_perimetre');
+    assert.equal(reponse.corps.code_grc, undefined, 'Un refus de droit n’est pas un conflit de version.');
+    assert.match(
+      reponse.corps.message,
+      /mappings/,
+      'Le refus doit NOMMER la collection en cause : sans elle, l’exploitant ne sait pas quoi faire.',
+    );
+    assert.match(reponse.corps.message, /administration Groupe/i);
+
+    // Et il n'a rien écrit au passage : un refus de droit n'est pas une reprise
+    // partielle.
+    const apres = await identifiants('risques');
+    assert.equal(apres.includes('RISK-1720000000000-104'), false, 'Rien du fichier ne doit être en base.');
+  });
+
+  test('… et ACCEPTÉ d’une administration Groupe : les 21 collections traversent', async () => {
+    // L'autre moitié, et elle compte autant (§20.2, « un garde-fou se vérifie dans
+    // les deux sens ») : sans elle, ce fichier serait satisfait par un serveur où
+    // PERSONNE ne peut plus migrer une filiale — ce qui fermerait la porte S2 en
+    // supprimant la fonction plutôt qu'en la protégeant.
+    const reponse = await reprendre('remplacer', instantaneV12Complet(), {
+      nom: 'complet-administration.json',
+      par: administration,
+    });
     assert.equal(
       reponse.statut,
       200,
-      `Un export v12 complet doit être reprisable. Refus : ${JSON.stringify(reponse.corps).slice(0, 400)}`,
+      `Une administration Groupe doit pouvoir migrer une filiale. Refus : ${JSON.stringify(reponse.corps).slice(0, 400)}`,
     );
 
-    const bilan = reponse.corps.bilan;
-    const creees = Object.entries(bilan.crees).filter(([, n]) => n > 0).map(([nom]) => nom);
+    const creees = Object.entries(reponse.corps.bilan.crees).filter(([, n]) => n > 0).map(([nom]) => nom);
+    assert.ok(creees.includes('mappings'), 'La surcouche de correspondances doit être reprise.');
     assert.ok(creees.length >= 15, `Collections reprises : ${creees.join(', ')}`);
     assert.deepEqual(reponse.corps.rapport.anomalies ?? [], [], 'Un export sain ne produit aucune anomalie.');
+  });
+
+  test('LE DROIT MORD : la même session, les deux fichiers, deux verdicts opposés', async () => {
+    // Contrôle de morsure du couple. Il ne suffit pas que le refus et l'acceptation
+    // existent : il faut que ce soit L'HABILITATION qui les sépare, et rien d'autre.
+    // On envoie donc le MÊME contenu, à la même route, à la même seconde, et l'on
+    // ne fait varier que la session. Si les deux verdicts se rejoignaient — dans un
+    // sens ou dans l'autre — ce fichier ne prouverait plus rien.
+    const charge = instantane(12, {
+      mappings: [{ id: 'MAP-MORSURE', theme: 'Correspondance du socle', aide: '', refs: {} }],
+    });
+    const contenu = fichier(12, charge);
+
+    const parLaFiliale = await reprendre('fusionner', null, { contenu, nom: 'morsure-filiale.json' });
+    const parLAdministration = await reprendre('fusionner', null, {
+      contenu,
+      nom: 'morsure-administration.json',
+      par: administration,
+    });
+
+    assert.equal(parLaFiliale.statut, 403);
+    assert.equal(parLAdministration.statut, 200);
+    assert.notEqual(
+      parLaFiliale.statut,
+      parLAdministration.statut,
+      'Seule l’habilitation distingue ces deux appels : si elle cessait de compter, ils se rejoindraient.',
+    );
+
+    // Symétrie utile : un fichier SANS collection de portée Groupe ne demande aucune
+    // habilitation. Sans ce contrôle, l'exigence pourrait s'être élargie à tout, et
+    // la migration d'une filiale ordinaire deviendrait impossible sans le dire.
+    const sansSocle = fichier(12, instantane(12, {
+      risques: [{ id: 'RISK-SANS-SOCLE', nom: 'Purement local' }],
+    }));
+    const ordinaire = await reprendre('fusionner', null, { contenu: sansSocle, nom: 'sans-socle.json' });
+    assert.equal(ordinaire.statut, 200, 'Une reprise purement locale ne doit exiger aucune habilitation.');
   });
 });
 
@@ -432,35 +536,56 @@ describe('Le dernier chemin non éprouvé : un vieil export réel, de bout en bo
     // moins qu'ils n'en avaient l'air : **un jeu d'essai qui ne pourrait pas exister
     // en base fait mesurer autre chose que le produit.**
     //
-    // Ce test empêche que cela recommence, pour tous les jeux du fichier et pas
-    // seulement pour celui qui a été pris en défaut. Il tourne en APERÇU : il
-    // applique vraiment — contraintes, clés étrangères, unicités et politiques
-    // comprises — puis annule.
+    // ── Pourquoi ce test-ci passe par une ADMINISTRATION ─────────────────────
+    //
+    // Il mesure UNE chose : est-ce que le schéma accepte ces enregistrements ? Le
+    // droit d'écrire le socle commun est une autre question, et elle a son propre
+    // test (« reprendre un export complet est un acte d'administration »). Les jouer
+    // ici sous une session de filiale les ferait échouer pour DÉFAUT DE DROIT, ce
+    // qui masquerait exactement ce que ce test cherche — un refus du schéma.
+    //
+    // Le risque de cette séparation est qu'un refus de droit se glisse dans le
+    // résultat sans qu'on le voie. Il est fermé : les deux natures de refus sont
+    // distinguées ci-dessous, et un `hors_perimetre` fait échouer ce test avec un
+    // message qui renvoie à l'autre.
     const jeux = [
       ['v1 minimal', 1, instantane(1, { risques: [{ id: 'RISK-1699000000001', nom: 'Risque d’un vieux poste' }] })],
       ['v6 volumineux', 6, exportAncienVolumineux({ parCollection: 6, base: 1_697_000_000_000 })],
       ['v12 complet', 12, instantaneV12Complet()],
     ];
 
-    const refus = [];
+    const refusDeSchema = [];
+    const refusDeDroit = [];
     for (const [nom, version, charge] of jeux) {
       // « remplacer », et non « fusionner » : la purge de la filiale précède
       // l'application, si bien que le verdict ne dépend pas de ce que les tests
       // précédents ont laissé — une unicité métier (un code d'exigence, un point
       // d'historique du jour) ferait sinon échouer le jeu pour la mauvaise raison.
       // L'aperçu annule le tout ensuite.
-      const reponse = await serveur.appeler('POST', '/api/reprise', {
+      const reponse = await administration.appeler('POST', '/api/reprise', {
         corps: {
           mode: 'remplacer',
           apercu: true,
           fichier: { nom: `${nom}.json`, contenu: JSON.stringify(enveloppe(version, charge)) },
         },
       });
-      if (reponse.statut !== 200) {
-        refus.push(`${nom} → ${String(reponse.statut)} ${JSON.stringify(reponse.corps.message ?? '')}`);
-      }
+      if (reponse.statut === 200) continue;
+      const ligne = `${nom} → ${String(reponse.statut)} ${JSON.stringify(reponse.corps.message ?? '')}`;
+      if (reponse.corps.erreur === 'hors_perimetre') refusDeDroit.push(ligne);
+      else refusDeSchema.push(ligne);
     }
-    assert.deepEqual(refus, [], 'Chaque entrée est un jeu d’essai qui ne pourrait pas exister en base.');
+
+    assert.deepEqual(
+      refusDeDroit,
+      [],
+      'Ce test mesure le SCHÉMA : un refus de droit ici veut dire que la session du banc a ' +
+        'perdu son habilitation, et que le fichier ne mesure plus ce qu’il annonce.',
+    );
+    assert.deepEqual(
+      refusDeSchema,
+      [],
+      'Chaque entrée est un jeu d’essai qui ne pourrait pas exister en base.',
+    );
   });
 
   test('un vieil export FAUTIF ne laisse rien à moitié repris', async () => {
