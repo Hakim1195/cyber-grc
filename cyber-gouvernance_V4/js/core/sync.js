@@ -596,52 +596,108 @@ const Sync = (() => {
        DIFFÉRENTIEL
     ===================================================================== */
 
-    function calculerDifferentiel() {
+    /**
+     * **Le** parcours du différentiel — un seul, pour les trois questions qu'on
+     * lui pose.
+     *
+     * ── Constat Q-8 : trois différentiels complets par battement ─────────────
+     *
+     * Le sondage demandait successivement « y a-t-il quelque chose en
+     * attente ? » (`aDesModificationsEnAttente`), « quoi exactement ? »
+     * (`cycle`), puis « quelles collections ont un volume incertain ? »
+     * (`collectionsAuVolumeIncertain`) — et chacune recalculait **tout**, en
+     * canonisant les 12 000 enregistrements de la filiale. Les deux premières
+     * questions n'ont pourtant pas besoin de la réponse complète : l'une veut un
+     * booléen, l'autre une liste de collections que les seules **présences**
+     * suffisent à établir. D'où deux réglages sur un parcours unique :
+     *
+     *   · `avecContenu = false` — on ne canonise RIEN. Une création se voit à
+     *     l'absence de sa clé dans l'instantané de référence, une suppression à
+     *     la présence d'une clé sans enregistrement en face. 6 ms au lieu de 60.
+     *   · le visiteur peut **arrêter le parcours** en rendant `false` : une
+     *     question booléenne s'arrête au premier écart trouvé.
+     *
+     * Rien n'est mémorisé d'un appel à l'autre — c'était la piste suggérée par
+     * l'auditeur, et elle a été écartée : la mémoire de `data` appartient au
+     * DataStore, qui la prête à qui la demande, et une invalidation manquée s'y
+     * lirait « aucune modification en attente » alors qu'il y en a. Ce serait le
+     * risque P1 (écrasement silencieux) par un autre chemin, contre un gain que
+     * la mesure ne réclamait pas.
+     *
+     * ⚠️ Un enregistrement BLOQUÉ (conflit non résolu) est parcouru comme les
+     *    autres. Il n'est pas ESCAMOTÉ du différentiel : c'était le cœur du
+     *    constat B-2 — escamoté, il ne comptait plus dans « des modifications en
+     *    attente ? », l'avertissement de fermeture se taisait et l'écran
+     *    affirmait que tout était enregistré. Le blocage s'applique à un seul
+     *    endroit : au moment d'écrire.
+     *
+     * @param avecContenu {boolean} comparer aussi les contenus (donc canoniser)
+     * @param visiteur {function}   reçoit `{genre, collection, id, enregistrement}` ;
+     *                              rendre `false` arrête le parcours.
+     */
+    function parcourirEcarts(avecContenu, visiteur) {
         const data = donnees();
-        const creations = [], modifications = [], suppressions = [];
-        if (!data) return { creations, modifications, suppressions };
+        if (!data) return;
 
         // Les évaluations que la propagation va réécrire côté serveur ne sont
         // pas poussées une par une : l'opération composite est transactionnelle
         // (contrôle S14), et la pousser deux fois n'ajouterait rien.
         const differees = new Set();
-        propagations.forEach(ids => ids.forEach(id => differees.add(id)));
+        if (avecContenu) propagations.forEach(ids => ids.forEach(id => differees.add(id)));
 
-        // ⚠️ Un enregistrement BLOQUÉ (conflit non résolu) est classé comme les
-        //    autres, avec un drapeau. Il n'est pas ESCAMOTÉ du différentiel.
-        //    C'était le cœur du constat B-2 : escamoté, il ne comptait plus dans
-        //    « des modifications en attente ? », l'avertissement de fermeture se
-        //    taisait et l'écran affirmait que tout était enregistré. Le blocage
-        //    s'applique désormais à un seul endroit : au moment d'écrire.
-        collections.forEach(c => {
+        for (let n = 0; n < collections.length; n++) {
+            const c = collections[n];
             const presents = new Set();
             const liste = Array.isArray(data[c]) ? data[c] : [];
-            liste.forEach(enr => {
-                if (!enr || !enr.id) return;
+            for (let i = 0; i < liste.length; i++) {
+                const enr = liste[i];
+                if (!enr || !enr.id) continue;
                 // Canari : deux enregistrements d'une même collection ne peuvent
                 // pas porter le même identifiant — `getRisqueById` ne saurait
                 // lequel rendre, et c'est ainsi que le constat T-1 faisait
                 // disparaître des lignes. Le générateur a été corrigé ; si cela
                 // se reproduisait (régression, fichier repris incohérent), le
                 // produit le DIT au lieu de trancher en silence.
+                //
+                // Un parcours arrêté tôt peut ne pas voir un doublon situé plus
+                // loin : il n'est pas perdu pour autant, car tout battement
+                // comporte au moins un parcours mené jusqu'au bout — celui de
+                // `calculerDifferentiel` quand il y a de quoi écrire, celui de
+                // `collectionsAuVolumeIncertain` sinon.
                 if (presents.has(enr.id)) doublons.add(c + " / " + enr.id);
                 presents.add(enr.id);
-                const bloque = bloques.has(cle(c, enr.id));
-                const texte = canonique(enr);
                 if (!reference[c].has(enr.id)) {
-                    creations.push({ collection: c, id: enr.id, enregistrement: enr, bloque: bloque });
-                } else if (reference[c].get(enr.id) !== texte) {
-                    if (c === "evaluations" && differees.has(enr.id)) return;
-                    modifications.push({ collection: c, id: enr.id, enregistrement: enr, bloque: bloque });
+                    if (visiteur({ genre: "creation", collection: c, id: enr.id, enregistrement: enr }) === false) return;
+                    continue;
                 }
-            });
+                if (!avecContenu) continue;
+                if (reference[c].get(enr.id) === canonique(enr)) continue;
+                if (c === "evaluations" && differees.has(enr.id)) continue;
+                if (visiteur({ genre: "modification", collection: c, id: enr.id, enregistrement: enr }) === false) return;
+            }
+            let arret = false;
             reference[c].forEach((_texte, id) => {
-                if (!presents.has(id)) {
-                    suppressions.push({ collection: c, id: id, bloque: bloques.has(cle(c, id)) });
-                }
+                if (arret || presents.has(id)) return;
+                if (visiteur({ genre: "suppression", collection: c, id: id }) === false) arret = true;
             });
-        });
+            if (arret) return;
+        }
+    }
 
+    function calculerDifferentiel() {
+        const creations = [], modifications = [], suppressions = [];
+        parcourirEcarts(true, (ecart) => {
+            const bloque = bloques.has(cle(ecart.collection, ecart.id));
+            if (ecart.genre === "suppression") {
+                suppressions.push({ collection: ecart.collection, id: ecart.id, bloque: bloque });
+                return;
+            }
+            const item = {
+                collection: ecart.collection, id: ecart.id,
+                enregistrement: ecart.enregistrement, bloque: bloque
+            };
+            (ecart.genre === "creation" ? creations : modifications).push(item);
+        });
         return { creations, modifications, suppressions };
     }
 
@@ -711,21 +767,47 @@ const Sync = (() => {
     }
 
 
+    /**
+     * Y a-t-il quelque chose qui n'est pas parti au serveur ?
+     *
+     * La question est booléenne, et c'est la plus posée du fichier :
+     * l'avertissement de fermeture d'onglet, le sondage, `Sync.etat()` — donc
+     * l'écran Paramètres — et `DataStore.getStorageInfo()` la posent tous. Elle
+     * est traitée du moins cher au plus cher, et on s'arrête dès qu'on sait
+     * (constat Q-8) :
+     *
+     *   1. deux compteurs, sans rien parcourir ;
+     *   2. les seules PRÉSENCES — une création ou une suppression en attente se
+     *      voit sans canoniser un seul enregistrement (6 ms sur 12 000) ;
+     *   3. les contenus, arrêt au premier écart.
+     *
+     * L'ordre est celui-là et pas un autre : l'étape 3 canonise tout ce qu'elle
+     * traverse avant de trouver, si bien qu'une création située dans la dernière
+     * collection lui coûterait le parcours entier. L'étape 2 la lui épargne.
+     *
+     * Le résultat est identique à l'ancienne écriture — même disjonction, mêmes
+     * règles de parcours — puisque tout passe par `parcourirEcarts`.
+     */
     function aDesModificationsEnAttente() {
-        const d = calculerDifferentiel();
-        return d.creations.length > 0 || d.modifications.length > 0 ||
-            d.suppressions.length > 0 || propagations.size > 0 || bloques.size > 0;
+        if (bloques.size > 0 || propagations.size > 0) return true;
+        let trouve = false;
+        parcourirEcarts(false, () => { trouve = true; return false; });
+        if (trouve) return true;
+        parcourirEcarts(true, () => { trouve = true; return false; });
+        return trouve;
     }
 
     // Collections dont le NOMBRE d'enregistrements local diffère légitimement de
     // celui du serveur, parce qu'une création ou une suppression n'est pas encore
     // partie. Le sondage doit les écarter de son contrôle de volume, faute de
     // quoi il conclurait à une suppression distante et rechargerait en boucle.
+    //
+    // Seules les présences comptent ici : une MODIFICATION ne change aucun
+    // volume. Le parcours se fait donc sans canoniser (constat Q-8), ce qui rend
+    // exactement la même réponse pour un dixième du prix.
     function collectionsAuVolumeIncertain() {
-        const d = calculerDifferentiel();
         const set = new Set();
-        d.creations.forEach(i => set.add(i.collection));
-        d.suppressions.forEach(i => set.add(i.collection));
+        parcourirEcarts(false, (ecart) => { set.add(ecart.collection); });
         return set;
     }
 
@@ -1461,6 +1543,10 @@ const Sync = (() => {
 
     function surChangementEtat(cb) { if (typeof cb === "function") observateursEtat.push(cb); }
     function prevenirObservateurs() {
+        // Personne n'écoute tant que l'écran Paramètres n'a pas été ouvert :
+        // calculer l'état pour ne le donner à personne coûtait un différentiel
+        // complet à chaque cycle d'écriture (constat Q-8).
+        if (observateursEtat.length === 0) return;
         const e = etat();
         observateursEtat.forEach(cb => { try { cb(e); } catch (err) { /* un observateur ne casse pas le cycle */ } });
     }

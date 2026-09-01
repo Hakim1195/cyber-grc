@@ -3751,6 +3751,64 @@ describe('Le garde-fou de couverture découvre son périmètre (CONVENTIONS §19
       'utilisateurs',
     ]);
   });
+
+  test('LA MÊME LISTE, aux TROIS endroits où elle est écrite', async () => {
+    // ── Pourquoi ce test existe ─────────────────────────────────────────────
+    //
+    // L'arbitrage du §24 est figé à deux endroits — l'essai ci-dessus et le contrôle
+    // C93 de `db/verifier_cloisonnement.sql` — et dans ce second fichier la liste est
+    // écrite DEUX FOIS : une fois en colonne « attendu », une fois dans la
+    // comparaison du « case when ». Une table ajoutée à l'une et pas à l'autre rend
+    // le contrôle muet ou bruyant à tort, et personne ne le voit : le script est joué
+    // à la main par un auditeur, pas par ce banc.
+    //
+    // Constaté en le faisant : en ajoutant `controles_schema` (migration 005), j'ai
+    // eu les deux occurrences à corriger et rien ne me l'aurait dit. Ce test le dit.
+    const { readFileSync } = await import('node:fs');
+    const { dirname, join } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const racine = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+    // La référence : ce que le catalogue porte réellement, et que l'essai précédent
+    // vient de comparer à l'arbitrage. On ne recopie donc pas une troisième liste.
+    const attendues = (await base.lignes(
+      proprietaire,
+      `select c.relname as nom
+         from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind in ('r', 'p')
+          and not exists (select 1 from pg_attribute a where a.attrelid = c.oid
+                           and a.attname = 'filiale_id' and a.attnum > 0 and not a.attisdropped)
+          and exists (select 1 from pg_policy p
+                       where p.polrelid = c.oid and p.polpermissive and p.polcmd in ('r', '*')
+                         and coalesce(pg_get_expr(p.polqual, p.polrelid), 'true')
+                             !~ '(f_filiales_lecture|f_filiales_autorisees)')
+        order by 1`,
+    )).map((l) => l.nom);
+
+    // Les listes du script d'audit : des littéraux SQL concaténés sur plusieurs
+    // lignes, qu'on recolle avant de les lire.
+    const script = readFileSync(join(racine, 'db', 'verifier_cloisonnement.sql'), 'utf8');
+    const zoneC93 = script.slice(script.indexOf("'C93'"));
+    const listes = [...zoneC93.matchAll(/((?:'[^']*'\s*){1,6})/g)]
+      .map((m) => m[1].replaceAll("'", '').replace(/\s+/g, ' ').trim())
+      .filter((texte) => texte.includes('migrations_schema') && texte.includes(','))
+      .map((texte) => texte.split(',').map((n) => n.trim()).filter(Boolean).sort());
+
+    assert.equal(
+      listes.length,
+      2,
+      `Le contrôle C93 doit porter EXACTEMENT deux occurrences de la liste ; ${String(listes.length)} ` +
+        'trouvée(s). Si le script a été réécrit, ce test doit l’être aussi — pas contourné.',
+    );
+    for (const [rang, liste] of listes.entries()) {
+      assert.deepEqual(
+        liste,
+        attendues,
+        `L’occurrence n° ${String(rang + 1)} de la liste du contrôle C93 diverge du schéma. ` +
+          'Les deux occurrences et l’essai ci-dessus doivent bouger ensemble (CONVENTIONS.md §24).',
+      );
+    }
+  });
 });
 
 /* =====================================================================
