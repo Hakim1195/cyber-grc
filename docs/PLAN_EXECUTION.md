@@ -72,12 +72,18 @@ périmètre** et signale au lieu de corriger ce qui appartient à un autre.
 | **FRONT** | Bascule de la persistance côté SPA | `cyber-gouvernance_V4/js/core/**`, `cyber-gouvernance_V4/js/services/**` |
 | **MODULES** | Les 26 modules métier de la SPA | `cyber-gouvernance_V4/js/modules/**`, `cyber-gouvernance_V4/js/app.js` |
 | **SECU** | Revue adversariale — **lecture seule** | `docs/securite/RAPPORT_*.md` uniquement |
-| **DÉPLOIEMENT** | Installation, service systemd, frontal Apache | `backend/deploy/**` |
+| **DÉPLOIEMENT** | Installation, service systemd, frontal Apache, **livraison du frontend au poste** | `backend/deploy/**`, `cyber-gouvernance_V4/index.html` |
 | **DOC** | Exploitation et traçabilité | `backend/README.md`, `CHANGELOG.md`, `docs/DATA_MODEL.md`, `CLAUDE.md` |
 
 Un rôle absent de ce tableau est une lacune, pas une permission : deux agents ont dû
 écrire dans `backend/src/reprise/**` et `backend/test/aide/**` sans qu'aucun rôle les porte,
 ce que la porte S1 a relevé (constat m-6). **Tout fichier neuf est attribué avant d'être écrit.**
+
+Le motif s'est reproduit **trois fois** malgré cet avertissement : les 26 modules métier de la
+SPA, puis `index.html`, relevé à trois passages de la porte S2 sans que personne ne puisse le
+prendre. Une lacune de propriété se voit dans les rapports d'audit avant de se voir dans le
+plan — c'est le signe qu'il faut relire cette table à chaque ouverture de vague, et non
+seulement quand un agent bute dessus.
 
 Quatre fichiers sont **partagés et donc réservés à l'orchestrateur** : ce document,
 `backend/db/CONVENTIONS.md`, `backend/package.json` et `backend/.env.example`. Un agent qui a besoin d'une dépendance ou

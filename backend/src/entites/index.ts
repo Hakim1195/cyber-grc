@@ -1745,7 +1745,12 @@ export class Depot {
       }
     }
 
-    if (d.seconde !== undefined && secondaires.size > 0) {
+    // La mise en oeuvre est visitée dès qu'une version est présentée, même
+    // sans rien à y écrire : c'est ce passage qui contrôle sa version (voir
+    // `majMiseEnOeuvre`). Sans cela, la moitié « filiale » de l'entité scindée
+    // était la seule écriture du produit dont le verrou pouvait s'ouvrir en
+    // silence — le risque P1 par la moitié qu'on ne regardait pas.
+    if (d.seconde !== undefined && (secondaires.size > 0 || versionSeconde !== null)) {
       await this.majMiseEnOeuvre(
         client,
         d.seconde.table,
@@ -2250,7 +2255,7 @@ export class Depot {
         const dejaEcrits = identifiantsEcrits.get(entite) ?? new Set<string>();
         if (dejaEcrits.has(identifiant)) {
           throw invalide(
-            `Le fichier porte deux fois l'identifiant « ${nomLisible(identifiant)} » dans ` +
+            `Le fichier porte deux fois l'identifiant « ${identifiantLisible(identifiant)} » dans ` +
               `« ${entite} ». Un identifiant désigne un seul enregistrement : corrigez le ` +
               "fichier avant de le reprendre. Rien n'a été modifié.",
             `doublon d'identifiant dans la charge : ${entite}/${identifiant}`,
@@ -3108,7 +3113,31 @@ export class Depot {
       parametres.push(valeur);
       affectations.push(`${ident(nomColonne)} = $${String(parametres.length)}`);
     }
-    if (affectations.length === 0) return;
+    if (affectations.length === 0) {
+      // ── Rien à écrire ici — ce n'est PAS une raison de ne rien vérifier ──
+      //
+      // Le contrat du lot est qu'une version périmée s'apprend. La table
+      // principale l'honorait déjà sans écrire (contrôle de version EN
+      // LECTURE, voir `modifier`) ; la moitié « filiale » de l'entité scindée,
+      // elle, ne le faisait pas : quand la mise en oeuvre ne changeait pas, sa
+      // version n'était pas même lue. Un client qui tenait une maturité
+      // périmée recevait alors 200 et la croyait à jour, alors que la même
+      // requête sur la moitié « Groupe » aurait rendu GRC03.
+      //
+      // Aucune écriture n'a lieu ici, donc aucun DROIT n'est exigé (N-2) : on
+      // se borne à comparer la version présentée à celle qui est en base.
+      if (version === null) return;
+      const { rows } = await client.query<{ version: number | string }>(
+        `select ${ident('version')} as version from ${ident(nomTable)}
+          where ${ident('mesure_id')} = $1 and ${ident('filiale_id')} = $2`,
+        [mesureId, filiale],
+      );
+      const ligne = rows[0];
+      if (ligne !== undefined && Number(ligne.version) === version) return;
+      // Version périmée, ou mise en oeuvre supprimée entre-temps : les deux se
+      // disent « rechargez », par le même chemin que le verrou d'écriture.
+      throw await this.conflitMiseEnOeuvre(client, nomTable, mesureId, filiale, entite);
+    }
 
     // ── Chemin 1 : l'appelant n'a pas de mise en œuvre à modifier ────────
     // L'unicité (filiale_id, mesure_id) est l'arbitre. Elle ignore la RLS,
@@ -4128,6 +4157,28 @@ function texteObligatoire(valeur: unknown, champ: string): string {
 /** Nom de champ tel qu'il peut être renvoyé au client, sans surprise. */
 function nomLisible(champ: string): string {
   return /^[A-Za-z_][A-Za-z0-9_.]{0,63}$/.test(champ) ? champ : 'inconnu';
+}
+
+/**
+ * Identifiant métier tel qu'il peut être renvoyé au client.
+ *
+ * `nomLisible` ne convient pas : il vise les noms de COLONNES, et son motif
+ * refuse le tiret — un identifiant du produit (`RISK-1788…-137`) y devient
+ * « inconnu », ce qui prive le message de la seule information utile.
+ *
+ * Le rendre n'apprend rien à personne **là où il vient de l'appelant** : c'est
+ * le cas du refus de doublon interne au fichier (T-2), où l'identifiant est
+ * lu dans le fichier que l'appelant vient d'envoyer. On se borne donc à
+ * empêcher qu'un identifiant forgé n'injecte des caractères de contrôle dans
+ * un journal ou une réponse, et à en borner la longueur.
+ *
+ * ⚠️ Ne jamais s'en servir pour un identifiant **découvert en base** : ce
+ * serait rendre visible ce que la session ne voit pas.
+ */
+function identifiantLisible(identifiant: string): string {
+  const propre = identifiant.replace(/[\u0000-\u001f\u007f]/g, '');
+  if (propre === '') return 'inconnu';
+  return propre.length > 64 ? `${propre.slice(0, 64)}…` : propre;
 }
 
 /* =====================================================================
