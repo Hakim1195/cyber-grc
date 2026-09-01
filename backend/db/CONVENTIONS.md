@@ -86,8 +86,16 @@ vers lui, mais c'est un choix et non une propriété.
 refuse déjà le démarrage du serveur — mesure la forme, l'entropie et le déterminisme de la
 ré-émission sur 20 000 tirages. Une régression n'est pas rattrapée par la relecture : elle
 empêche le démarrage. **Ce contrôle ne couvre que le générateur du serveur** — celui de la base
-a le sien dans `f_verifier_schema()` ; celui du navigateur n'en a pas encore, et c'est le constat
-Q-3 du registre. Ne pas lire ce paragraphe comme une couverture des quatre sites : c'est
+a le sien dans `f_verifier_schema()` — **avec la réserve du constat Q-17 : ce dernier mesure une
+longueur, pas une entropie, et son pouvoir de détection mesuré est de 8 sur 200 à 32 bits** ;
+celui du navigateur n'en a aucun, et c'est le constat **Q-23** du registre.
+
+> **Errata, 01/09/2026.** Ce paragraphe attribuait le manque du navigateur au constat **Q-3**,
+> qui dit autre chose — l'absence d'essais — et qui est clos. Le manque serait donc sorti du
+> registre avec lui, **sans avoir jamais eu de propriétaire**. C'est la forme exacte que ce
+> chantier a payée deux fois, et elle s'est reproduite ici, dans le paragraphe qui met en garde
+> contre elle. Un renvoi vers le registre vieillit comme le reste : il se vérifie, il ne se
+> suppose pas. Ne pas lire ce paragraphe comme une couverture des quatre sites : c'est
 exactement l'erreur qui a produit Q-1, où un générateur durci et gardé n'était pas celui qui
 écrivait.
 
@@ -1192,7 +1200,7 @@ le silence. Reconduire sans l'écrire est ce que le chantier a appris à ne plus
 | **E2** | Le drapeau `grc.administration_groupe` cesse d'être une déclaration que la session fait sur elle-même : le modèle à trois axes décide du profil *Administration* et du périmètre *Groupe* **avant** de le poser | **§17.4**, encadré | Aucune route ne pose le drapeau sans l'avoir décidé d'après la session. Le contrôle est **mécanique** : le banc d'essai de L2 le vérifie déjà par recherche dans les sources ; il doit rester vert et s'étendre aux routes neuves. |
 | **E3** | Le droit d'appeler la reprise est décidé par le modèle de droits — c'est un acte d'administration | **§21**, condition finale | Un compte sans ce droit reçoit un refus **avant** toute analyse de corps. S'il ne suffit pas à fermer le canal d'oracle du §21, la clé composite redevient la réponse : la reconduction du report doit alors être **réécrite et redatée**, pas héritée. |
 | **E4** | La limitation de rythme et le contrôle d'authentification s'exercent en `onRequest`, **avant** l'analyse du corps | registre des constats, **Q-10** | Un corps volumineux envoyé sans authentification est refusé sans que son analyse ait été payée. La mesure de référence est celle de la porte S2 (~160 ms pour 18,6 Mo) : elle doit s'effondrer. |
-| **E5** | Les commentaires rendus faux par les correctifs T-2 et T-4 dans `001_socle.sql` sont corrigés par des instructions `comment on` dans la migration de L3 — la migration appliquée, elle, ne bouge pas | registre des constats, **Q-6 (b)** ; règle au **§23** | `migrate.mjs` ne sort pas en code 4, et le commentaire lu dans le catalogue décrit ce que fait réellement le code. |
+| **E5** | ⚠️ **Partiellement satisfaite avant l'heure, et c'est un piège.** Les deux commentaires que visait Q-6 (b) ont été corrigés par `005` §9 — « la prochaine migration » s'est trouvée être `005`, pas celle de L3. **Il en reste un troisième**, faux et vivant dans le catalogue (constat **Q-18**), qu'aucun des deux balayages n'a vu parce qu'ils cherchaient là où on savait déjà. Ne pas lire cette ligne comme acquise par héritage | registre, **Q-18** et **Q-22 (a)** ; règle au **§23** | `migrate.mjs` ne sort pas en code 4, et **chacun** des commentaires lus dans le catalogue décrit ce que fait réellement le code — le troisième compris. |
 | **E6** | La lecture du journal d'audit reste non cloisonnée **jusqu'à L5 inclus**, et son resserrement est un livrable ferme de L5 — pas une condition de L3 | `004_rls.sql` §6, `README` §8 | Sans objet à S3. Rappelé ici pour qu'il ne soit **ni oublié, ni traité trop tôt** : le chaînage par empreinte impose l'ordre. |
 
 ### Ce que la vague 3 ne doit pas croire acquis
