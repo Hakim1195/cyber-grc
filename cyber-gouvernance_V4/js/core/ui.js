@@ -173,9 +173,96 @@ window.UI = (function () {
             + Math.floor(Math.random() * 4294967296).toString(36);
     }
 
+    /* =========================================================================
+       LE GARDE-FOU D'EXÉCUTION DE CE GÉNÉRATEUR — constat Q-23
+
+       ── Le manque, et pourquoi il a failli disparaître ──────────────────────
+
+       Le §2 de `backend/db/CONVENTIONS.md` recense trois générateurs aléatoires
+       et dit ce qui les garde : celui du serveur est mesuré au démarrage et
+       **refuse de démarrer** en cas de régression ; celui de la base a le sien
+       dans `f_verifier_schema()` ; celui-ci « n'en a pas encore ». Le manque
+       était donc écrit et exact — mais rattaché à un constat qui parlait
+       d'autre chose et qui est clos, si bien qu'il serait sorti du registre
+       sans avoir jamais eu de propriétaire.
+
+       ── Ce qu'un générateur faible coûte ENCORE, mesuré ─────────────────────
+
+       Il ne coûte plus de lignes : deux barrières le tiennent. Le tri des
+       créations indexe par RANG (`ordonnerCreations`), donc aucun générateur ne
+       peut faire disparaître une ligne ; et **l'identifiant fabriqué ici ne
+       devient jamais une clé primaire** — `js/core/sync.js` appelle
+       `Api.creer(collection, null, champs)`, le serveur refuse qu'on lui en
+       propose un, et il rend le sien.
+
+       Ce qu'il coûte, en revanche, a été rejoué au banc. Générateur d'avant le
+       remède T-1 (mille valeurs, sans compteur), 250 mesures créées et reliées
+       chacune à une évaluation :
+
+           250 lignes confiées, 250 lignes EN BASE — rien n'est perdu ;
+           226 identifiants distincts ;
+           226 cibles de référence distinctes — **24 évaluations reliées à la
+           mauvaise mesure de sécurité**, sans rien qui le montre à l'écran.
+
+       Dans un produit qui engendre la déclaration d'applicabilité et sert de
+       preuve en audit, une exigence rattachée au mauvais contrôle est un défaut
+       plus sournois qu'une ligne manquante : la ligne manquante finit par se
+       voir.
+
+       ── Le contrôle retenu, et les deux qui ont été écartés ─────────────────
+
+       **Écarté — mesurer l'entropie au chargement**, comme le fait le serveur.
+       Deux raisons. Le navigateur n'a pas de démarrage où échouer bruyamment
+       sans empêcher quelqu'un de travailler, et refuser d'ouvrir l'application
+       pour un défaut qui ne perd plus aucune ligne serait pire que le défaut.
+       Surtout, **l'entropie n'est plus la propriété qui compte ici** : puisque
+       l'identifiant ne quitte pas la page, ce qu'il faut garantir est
+       l'unicité DANS LA SESSION, et elle est portée par le compteur monotone,
+       pas par le hasard. Mesurer 20 000 tirages éprouverait donc autre chose
+       que ce qui protège.
+
+       **Écarté — vérifier la FORME** (trois segments, 64 caractères au plus).
+       Le domaine `id_metier` ne voit jamais cette valeur : le contrôle serait
+       décoratif. C'est exactement le reproche fait au garde-fou de la base
+       (constat Q-17), qui mesurait une longueur qu'un `padStart` rendait
+       infaillible et laissait passer un générateur à 40 bits.
+
+       **Retenu — un détecteur sur le chemin réel.** Le générateur retient ce
+       qu'il a émis dans cette session ; s'il rend deux fois la même valeur, il
+       le DIT — au moment où la valeur est produite, en nommant la cause. Il ne
+       répare pas : inventer une forme d'identifiant que le §2 ne décrit pas
+       serait pire, et les conséquences sont déjà tenues par les deux barrières.
+
+       ── Ce que ce garde-fou ne couvre pas, et il faut le savoir ─────────────
+
+       Il vit DANS `genId`. Quelqu'un qui remplace `UI.genId` en entier — ce que
+       fait délibérément l'essai de la seconde barrière — sort de sa portée ; ce
+       cas-là reste couvert par le canari de `js/core/sync.js`, qui constate deux
+       enregistrements de même clé. Les deux ne disent pas la même chose : celui-ci
+       accuse le générateur, l'autre constate le résultat sans pouvoir distinguer
+       un générateur fautif d'un fichier repris incohérent.
+    ========================================================================= */
+    var identifiantsEmis = new Set();
+    // Borne mémoire. Le plus gros geste du produit est l'import d'un
+    // questionnaire (AirCyber, 234 questions) ou d'un classeur de quelques
+    // centaines de lignes ; 50 000 est deux ordres de grandeur au-dessus. Au-delà,
+    // on cesse de mémoriser plutôt que de laisser enfler la page : le détecteur
+    // se dégrade, il ne se retourne pas contre l'utilisateur.
+    var IDENTIFIANTS_EMIS_MAX = 50000;
+
     function genId(prefix) {
         compteurSession += 1;
-        return (prefix || "ID") + "-" + Date.now() + "-" + compteurSession.toString(36) + aleaFort();
+        var id = (prefix || "ID") + "-" + Date.now() + "-" + compteurSession.toString(36) + aleaFort();
+        if (identifiantsEmis.has(id)) {
+            // Un défaut de programmation, pas un cas d'usage : on le crie.
+            console.error("Générateur d'identifiants : « " + id + " » a déjà été émis dans cette session.");
+            try {
+                if (typeof Sync !== "undefined" && Sync.signalerGenerateurDouble) Sync.signalerGenerateurDouble(id);
+            } catch (e) { /* un signalement ne doit jamais empêcher une création */ }
+        } else if (identifiantsEmis.size < IDENTIFIANTS_EMIS_MAX) {
+            identifiantsEmis.add(id);
+        }
+        return id;
     }
 
     /* =========================================================================

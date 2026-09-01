@@ -29,8 +29,11 @@
 >    la liste des conditions d'entrée à épuiser.
 >
 > Puis reprendre où le §8 de **ce** document dit de reprendre (« ▶ REPRENDRE ICI »).
-> **Au 01/09/2026 : vague 3, lots L3 puis L5.** Les lots L0, L1 et L2 sont livrés et
-> leurs portes S1 et S2 franchies — ne pas les refaire.
+> **Au 01/09/2026 : les lots L0, L1 et L2 sont livrés, la porte S1 est franchie — ne pas
+> les refaire — mais la porte S2 a été REJOUÉE ET REFUSÉE au 5ᵉ passage.** La vague 3 ne
+> s'ouvre donc pas encore : une vague ne démarre pas tant que la porte précédente n'est
+> pas franchie (`docs/PLAN_EXECUTION.md` §1). Le travail immédiat est la fermeture des
+> constats du 5ᵉ passage, puis un 6ᵉ.
 
 ## 1. Le produit
 
@@ -555,8 +558,8 @@ sur l'**Active Directory** du groupe.
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache + durcissement de portée serveur, `install.sh` idempotent, `backend/README.md` |
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — une cinquantaine de tables (compte rejoué dans `backend/README.md` §8), RLS activée **et forcée** partout, propriétaire compris ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur **toutes** les tables qui portent `cree_par`, et **vérifiée** par un garde-fou ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()`, et **consignés dans un registre** depuis la migration `005` — un contrôle qui cesse d'être découvert ne disparaît plus en silence |
-| **L2 — API et bascule de la persistance** | ✅ **livré** (vague 2), corrigé au fil de la porte **S2** — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (130 membres avant, 130 après), session provisoire **fail-closed** hors développement |
-| L3 — Authentification AD et droits · L5 — Journal | ⬜ **à faire — vague 3, c'est ici qu'on reprend** |
+| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais NON VALIDÉ** — porte **S2** franchie au 4ᵉ passage puis **refusée au 5ᵉ**. Corrigé au fil de la porte — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (130 membres avant, 130 après), session provisoire **fail-closed** hors développement |
+| L3 — Authentification AD et droits · L5 — Journal | ⬜ à faire — **vague 3, qui n'ouvre pas tant que S2 n'est pas franchie** |
 | L4 → L15 | ⬜ à faire — vagues 4 à 8, voir `docs/PLAN_EXECUTION.md` §3 et `PLAN_SERVEUR` §7 |
 
 Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
@@ -564,14 +567,24 @@ Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 module pur) et **base de développement** (`db/dev/preparer_base_dev.sh`).
 
 **État des portes — à lire, pas à deviner.** Les lots L1 et L2 ont été soumis à leur
-porte de sécurité six et quatre fois, chaque passage étant mené par un auditeur qui
+porte de sécurité six et **cinq** fois, chaque passage étant mené par un auditeur qui
 n'avait écrit aucune des lignes examinées. **Le verdict de chaque passage vit dans le
 journal des portes de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7**, avec le
 rapport correspondant dans `docs/securite/` — c'est la source, et la seule. Au
-01/09/2026 il porte **S1 « CONFIRMÉE FRANCHIE » (6ᵉ passage)** et **S2 « FRANCHIE »
-(4ᵉ passage)**. Les arbitrages issus de ces passages sont figés dans
-`backend/db/CONVENTIONS.md` **§2, §17 à §23** : les lire avant de toucher au schéma
-évite de rouvrir ce qui vient d'être fermé.
+01/09/2026 il porte **S1 « CONFIRMÉE FRANCHIE » (6ᵉ passage)** et **S2 ❌ « refusée »
+(5ᵉ passage — 0 bloquant, 3 majeurs, 3 mineurs, contrôle S17 en échec)**, après un
+franchissement au 4ᵉ que la fermeture des constats a rouvert. Les arbitrages issus de
+ces passages sont figés dans `backend/db/CONVENTIONS.md` **§2, §17 à §24** : les lire
+avant de toucher au schéma évite de rouvrir ce qui vient d'être fermé.
+
+⚠️ **Ce que le 5ᵉ passage enseigne, et qui vaut pour toutes les portes à venir.** Le
+défaut qui a fait échouer le lot n'est **dans aucun fichier** : c'est un désaccord
+**entre** le vhost et le serveur, dont aucun n'a tort seul. Aucune relecture, aucun essai
+unitaire, aucun banc vert ne pouvait le voir — seul le contrôle **S17** (*le chemin
+complet a été parcouru pour de vrai*) le pouvait. Corollaire : **un banc vert mesure ce
+qu'il regarde, jamais ce qu'il ne regarde pas**, et le cœur du lot peut être juste — les
+46 sondes hostiles de ce passage n'ont bougé ni le périmètre, ni une frontière de
+filiale, ni une requête SQL — pendant que le produit ne fonctionne pas.
 
 **Franchie ne veut pas dire sans réserve, et « corrigé » ne veut pas dire « rejoué ».**
 Les constats restants vivent dans le **registre des constats ouverts** du même §7, chacun
@@ -579,16 +592,27 @@ avec un **propriétaire nommé, une échéance et un état**. Ce registre n'est 
 résumé ici — deux listes des mêmes constats divergent, et la divergence est silencieuse.
 Y lire la **colonne d'état**, qui distingue trois situations : *corrigé, en attente du
 rejeu* ; *reporté par écrit* à un lot nommé ; *documenté sans être fermé*, quand fermer
-coûterait plus cher que le défaut. **L'auditeur de S2 a examiné la révision `a4116b6`,
-son verdict est consigné en `120266e`, et tout ce qui a été corrigé depuis n'a pas
-repassé la porte** — un banc vert ne vaut pas un passage de porte, six passages ayant
-montré que chacun trouvait ce que le précédent avait manqué. Il existe parce que la vague 1 avait mesuré,
+coûterait plus cher que le défaut. Ce que le 5ᵉ passage a confirmé : **les constats
+fermés depuis le 4ᵉ ont bien été soumis à la porte, et elle a refusé le lot pour un
+défaut qu'aucun d'eux ne couvrait.** Un banc vert ne vaut pas un passage de porte. Le
+registre existe parce que la vague 1 avait mesuré,
 chiffré et écrit un défaut de générateur d'identifiants **sans l'attribuer à personne** :
 il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écrivait 223
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
 constat perdu.**
 
-### ▶ REPRENDRE ICI — vague 3 : L3 (authentification AD et droits), puis L5 (journal)
+### ▶ REPRENDRE ICI — fermer les constats du 5ᵉ passage de S2, PUIS ouvrir la vague 3
+
+**D'abord la porte.** S2 est refusée : trois majeurs et trois mineurs sont à fermer, et
+le contrôle **S17** doit repasser au vert. Les constats, leurs propriétaires et leurs
+échéances sont au registre de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7 ; le
+détail du défaut est dans `docs/securite/RAPPORT_S2_QUINQUIES.md`. La vague 3 n'ouvre
+qu'après un 6ᵉ passage franchi — *une vague ne démarre pas tant que la porte précédente
+ne l'est pas* (`PLAN_EXECUTION` §1), et c'est la règle qui a évité à ce chantier de
+construire sur du sable à chacun des dix passages précédents.
+
+**Ensuite seulement, la vague 3 — dont le cadrage ci-dessous reste valable et n'est pas
+à refaire.**
 
 C'est le chemin critique. Le lot **L3** apporte LDAPS et les groupes AD imbriqués, les
 sessions serveur, le modèle de droits à **trois axes** (périmètre × profil métier ×

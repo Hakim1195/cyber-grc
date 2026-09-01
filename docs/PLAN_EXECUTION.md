@@ -297,8 +297,8 @@ L3, L6 et L12 se recettent sur des doublures, et cela doit être écrit dans leu
 | Vague | Lots | État | Porte |
 |---|---|---|---|
 | — | L0 socle d'infrastructure | ✅ livré | — |
-| **V1** | L1 schéma relationnel | ✅ **livré, porte S1 franchie** au 5ᵉ passage | S1 |
-| **V2** | L2 API et bascule | ✅ **livré, porte S2 franchie** au 4ᵉ passage | S2 |
+| **V1** | L1 schéma relationnel | ✅ **livré, porte S1 franchie** au 5ᵉ passage, **confirmée au 6ᵉ** | S1 |
+| **V2** | L2 API et bascule | ⚠️ **livré, porte S2 franchie au 4ᵉ passage puis REFUSÉE au 5ᵉ** — 3 majeurs, 3 mineurs, contrôle S17 en échec. **La vague 3 n'ouvre pas** (§1, règle de séquencement) | S2 |
 | V3 | L3 authentification, L5 journal | ⬜ | S3 |
 | V4 | L4 multi-filiales, L6 pièces jointes | ⬜ | S4 |
 | V5 | L7 import, L8 approbation, L9 identité | ⬜ | S5 |

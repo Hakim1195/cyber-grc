@@ -17,14 +17,20 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > `db/verifier_cloisonnement.sql` → **107 contrôles, 107 réussis, 0 échec**,
 > `f_verifier_schema()` → **0 anomalie** (8 garde-fous découverts, joués et consignés).
 >
-> **La porte de sécurité S2 est franchie**, au 4ᵉ passage : « ✅ FRANCHIE — 0 bloquant,
-> 4 majeurs, 7 mineurs, aucun des dix-huit contrôles en échec »
-> (`docs/PLAN_EXECUTION.md` §7, rapport `docs/securite/RAPPORT_S2_QUATER.md`).
+> ⚠️ **La porte de sécurité S2 N'EST PAS FRANCHIE.** Elle l'a été au 4ᵉ passage
+> (« ✅ FRANCHIE — 0 bloquant, 4 majeurs, 7 mineurs », révision `a4116b6`, verdict
+> consigné en `120266e`) ; les correctifs listés plus bas sont venus **après**, ils ont
+> été soumis au **5ᵉ passage** sur la révision `f68f799`, et **la porte a refusé le
+> lot** : « ❌ refusée — 0 bloquant, 3 majeurs, 3 mineurs, **contrôle S17 en échec** »
+> (`docs/PLAN_EXECUTION.md` §7, rapport `docs/securite/RAPPORT_S2_QUINQUIES.md`).
 >
-> ⚠️ **Ce verdict porte sur la révision `a4116b6`, examinée par l'auditeur, et il est
-> consigné en `120266e`. Les correctifs listés plus bas sont venus après, et n'ont pas
-> repassé la porte.** Le banc est vert et les exerce ; ce
-> n'est pas la même chose qu'un rejeu de la grille entière par un auditeur indépendant.
+> Le défaut qui a fait échouer le lot **n'est dans aucun des fichiers décrits
+> ci-dessous** : c'est un désaccord *entre* le vhost et le serveur, dont aucun n'a tort
+> seul — le premier coupe la reprise à 60 s pendant que le second valide sa transaction.
+> Le cœur du lot n'est pas en cause : 46 sondes hostiles n'ont bougé ni le périmètre, ni
+> une frontière de filiale, ni une requête SQL. **Ne lisez donc aucune entrée ci-dessous
+> comme un acquis.**
+>
 > L'état constat par constat — *corrigé en attente du rejeu*, *reporté par écrit*,
 > *documenté sans être fermé* — vit dans le **registre des constats ouverts** du même
 > §7. Il n'est ni recopié ni résumé ici, pas même par un décompte : il vit, et deux
@@ -247,8 +253,9 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 **La fermeture de la vague — ce qui a été corrigé APRÈS le passage de la porte**
 
-> ⚠️ Tout ce qui suit est **postérieur au verdict** et n'a donc **pas repassé la porte**.
-> Le banc l'exerce, ce qui n'est pas la même chose.
+> ⚠️ Tout ce qui suit est **postérieur au 4ᵉ passage**. Ces correctifs ont bien été
+> soumis au **5ᵉ**, qui a **refusé le lot** — pour un défaut qu'aucun d'eux ne couvrait,
+> vivant *entre* le vhost et le serveur. Ils restent donc à rejouer, avec le reste.
 
 - **Le générateur qui écrit vraiment a reçu l'entropie et son garde-fou.** Le correctif
   du bloquant avait durci le générateur de la *base* ; celui du *serveur*, qui est celui
@@ -294,10 +301,68 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   (`js/core/vault.js`, `js/core/session.js`). C'est la neuvième occurrence du motif « le
   remède rend fausse la phrase d'un autre fichier », et la première où le balayage a été
   fait exprès plutôt qu'au hasard d'une relecture.
-- **Les essais navigateur du correctif de l'import ont été écrits** : l'entropie de
-  `UI.genId`, l'indexation par rang, le canari de doublons, le signalement de
-  rétrécissement et le sondage qui pousse sont désormais exercés, alors que le passage de
-  porte précédent en avait fait une condition explicite.
+- **Les essais navigateur du correctif de l'import ont été écrits — et deux des cinq
+  comportements exigés sont réellement exercés.** L'entropie de `UI.genId` et
+  l'indexation par rang le sont ; **le canari de doublons, le signalement de
+  rétrécissement et « le sondage qui pousse » ne le sont pas**, et les trois essais qui
+  manquent sont en cours d'écriture au moment où cette ligne est corrigée (révision
+  `a883024`).
+
+  > ⚠️ **Cette entrée annonçait les cinq. C'était faux, et la façon dont ça l'était
+  > compte plus que le fait.** L'auditeur du passage suivant a **neutralisé les trois
+  > comportements un par un** — il les a cassés délibérément — et le banc est resté
+  > **vert, 32 sur 32**. Les essais traversaient donc ces chemins sans rien exiger d'eux :
+  > ils passaient à côté, dans le sens du silence. Un essai qui ne rougit pas quand on
+  > casse ce qu'il prétend couvrir ne couvre rien ; il **atteste** au lieu de contrôler.
+  >
+  > La règle que j'en tire, et qui vaut pour ce fichier autant que pour celui qui l'écrit :
+  > **une affirmation de couverture qui m'est rapportée n'est pas une couverture
+  > vérifiée.** J'ai écrit ici ce que le rapport de l'agent affirmait, sans le mettre à
+  > l'épreuve — et un journal qui relaie une telle affirmation lui donne l'autorité
+  > qu'elle n'a pas : le lecteur suivant ne lira pas le rapport, il lira cette ligne. La
+  > seule preuve qu'un essai couvre un comportement est de **casser le comportement et de
+  > constater que l'essai rougit**. Tant que ce sabotage n'a pas été fait, la formule
+  > juste est « des essais ont été écrits », jamais « c'est couvert ».
+  >
+  > **Quatrième occurrence du motif** « une protection affirmée qui n'existe pas » — et
+  > elle survient dans le journal que je venais d'annoter pour ce motif même, à propos des
+  > vingt-trois entrées Playwright du panneau ci-dessous. Écrire la mise en garde ne
+  > dispense pas de se l'appliquer.
+
+- **Une référence pendante pouvait survivre EN BASE, et le journal ne le disait nulle
+  part.** Défaut trouvé et corrigé **après** le franchissement du 4ᵉ passage, et soumis
+  au 5ᵉ (révision `a883024` au moment où cette ligne est écrite). `renommer()` — la fonction qui réécrit
+  les références quand le serveur ré-attribue un identifiant — réécrivait **en mémoire
+  sans réarmer l'envoi** : rien ne partait, l'écran et la base divergeaient, et l'état
+  « modifications non enregistrées » devenait **permanent et inexpliqué**.
+
+  **Le pire cas n'a rien à voir avec celui qui l'a révélé**, et c'est lui qu'un exploitant
+  doit savoir reconnaître. La création d'une mesure échoue sur une **panne réseau
+  passagère** et repart au cycle suivant ; entre-temps, la modification de l'action qui la
+  cite sort dans le cycle courant **avec l'identifiant local** ; le nouvel essai crée bien
+  l'enregistrement, le renommage réécrit la référence — mais **en mémoire seulement**. La
+  base garde alors un lien vers une ligne qui n'existe pas. C'est exactement la classe de
+  défaut que `renommer` existe pour empêcher, et elle survivait **en base**. Déclencheur
+  exact, pour qui cherche la trace : le renommage touche un enregistrement que le serveur
+  détient **déjà** et que le différentiel du cycle courant ne contenait **pas**. Un
+  renommage à l'intérieur d'un même cycle n'est pas concerné — les créations y sont
+  écrites avant les modifications.
+
+  Le correctif fait qu'**un cycle se termine au repos, ou il se réarme** : les
+  enregistrements que le renommage a touchés sont comparés en fin de cycle, et ceux qui
+  ont bougé repartent. La comparaison ne recalcule aucun différentiel — elle ne regarde
+  que les quelques enregistrements concernés, pour ne pas réintroduire par la bande la
+  passe de canonisation qu'un autre correctif venait de retirer.
+
+  > ⚠️ **Réserve essentielle, et elle se perd si on la résume : ce correctif soigne la
+  > divergence, jamais la corruption.** Il garantit que la base finit par porter ce que la
+  > mémoire porte — pas que ce que la mémoire porte soit juste. Là où un champ métier
+  > valait légitimement la même chaîne qu'un identifiant (le cas des exports très anciens,
+  > où un identifiant peut valoir `"7"`), le renommage a écrasé cette valeur, et le
+  > correctif **persiste fidèlement la valeur corrompue**. Lire « mémoire et base
+  > alignées » comme « la donnée est réparée » serait un contresens exact. La seule
+  > défense contre cette corruption-là reste le **bandeau qui nomme la réécriture et son
+  > compte** — d'où le fait qu'il ne s'efface jamais tout seul, pas même à un rechargement.
 
 **Ce qui n'est PAS livré, et doit être dit**
 

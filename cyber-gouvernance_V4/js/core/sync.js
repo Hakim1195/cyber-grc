@@ -126,6 +126,13 @@ const Sync = (() => {
     const incidents = [];               // échecs à afficher (jamais effacés tout seuls)
     const champsRefuses = new Set();    // "collection.champ" que le modèle serveur ignore
     const doublons = new Set();         // identifiants portés par deux enregistrements
+    // Doublons rendus par le GÉNÉRATEUR de la page (constat Q-23) — à distinguer
+    // de `doublons`, qui constate deux enregistrements de même clé sans pouvoir
+    // dire d'où ils viennent : d'un fichier repris incohérent, ou du générateur.
+    // Le remède n'est pas le même, donc le message non plus.
+    let generateurDoublons = 0;
+    let generateurExemple = "";
+
     // Enregistrements que le serveur DÉTIENT DÉJÀ et qu'un renommage vient de
     // réécrire en mémoire (constat Q-15, voir `renommer` et `reprendreRenommages`).
     const renommagesAPousser = new Set();
@@ -1182,6 +1189,20 @@ const Sync = (() => {
      * dit. On le journalise et on l'affiche : un défaut visible coûte une
      * inquiétude, un défaut silencieux coûte des données de gouvernance.
      */
+    /**
+     * Le générateur d'identifiants de la page a rendu deux fois la même valeur.
+     *
+     * Appelé par `UI.genId` (`js/core/ui.js`), qui est le seul générateur du
+     * navigateur — voir le constat Q-23 et le §2 de `backend/db/CONVENTIONS.md`.
+     * Le signalement vit ici parce que c'est ici qu'est le bandeau, et parce
+     * qu'une trace de ce genre **ne s'éteint pas toute seule**.
+     */
+    function signalerGenerateurDouble(identifiant) {
+        generateurDoublons += 1;
+        if (!generateurExemple) generateurExemple = String(identifiant);
+        rendreBandeau();
+    }
+
     function signalerRetrecissement(quoi, attendus, obtenus, repare) {
         const manquants = attendus - obtenus;
         console.error("Cycle d'écriture incohérent : " + attendus + " " + quoi +
@@ -1602,7 +1623,8 @@ const Sync = (() => {
         if (!h) return;
 
         if (incidents.length === 0 && bloques.size === 0 && !panneReseau &&
-            champsRefuses.size === 0 && doublons.size === 0 && renommagesLarges.size === 0) {
+            champsRefuses.size === 0 && doublons.size === 0 && renommagesLarges.size === 0 &&
+            generateurDoublons === 0) {
             h.innerHTML = "";
             return;
         }
@@ -1670,6 +1692,23 @@ const Sync = (() => {
                 '<span class="reminder-ico">!</span>' +
                 '<span class="reminder-text">Champs non reconnus par le serveur, donc <b>non enregistrés</b> : ' +
                 esc(Array.from(champsRefuses).join(", ")) + '. Signalez-le à votre exploitant.</span>' +
+                '</div>');
+        }
+
+        // Constat Q-23 : le générateur de la page a rendu deux fois la même
+        // valeur. Ce que l'utilisateur doit savoir n'est pas « un identifiant est
+        // en double » — c'est que **les liens** faits depuis l'ouverture de la
+        // page peuvent viser le mauvais enregistrement, et que cela ne se voit
+        // sur aucun écran.
+        if (generateurDoublons > 0) {
+            morceaux.push(
+                '<div class="quota-banner" role="alert">' +
+                '<span class="quota-ico">!</span>' +
+                '<span class="quota-text"><b>Défaut interne du générateur d’identifiants</b> — ' +
+                generateurDoublons + ' valeur(s) rendue(s) deux fois (par exemple ' +
+                esc(generateurExemple) + '). Les liens créés depuis l’ouverture de cette page ' +
+                'peuvent viser le mauvais enregistrement : ne vous y fiez pas, rechargez la page ' +
+                'et signalez-le à votre exploitant.</span>' +
                 '</div>');
         }
 
@@ -1789,7 +1828,8 @@ const Sync = (() => {
         brancher, demarrer, jeuDeDonnees, adopterJeu,
         marquerModification, marquerPropagation, marquerDerive, pousser, cycle,
         recharger, sonder, demarrerSondage, installerFilets,
-        etat, surChangementEtat, aDesModificationsEnAttente, rendreBandeau
+        etat, surChangementEtat, aDesModificationsEnAttente, rendreBandeau,
+        signalerGenerateurDouble
     };
 })();
 

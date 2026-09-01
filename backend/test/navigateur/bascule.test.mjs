@@ -23,6 +23,8 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 
 import { FILIALE_A, FILIALE_B, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
@@ -33,7 +35,7 @@ import {
   ouvrirPage,
   servirApplication,
 } from '../aide/navigateur.mjs';
-import { monterGreffon, monterServeurReel } from '../aide/serveur.mjs';
+import { monterGreffon, monterServeurReel, RACINE_FRONTEND } from '../aide/serveur.mjs';
 
 /** @type {Awaited<ReturnType<typeof ouvrirBaseEssai>>} */
 let base;
@@ -1363,5 +1365,271 @@ describe('Une réécriture de références ne reste pas en attente (constat Q-15
     } finally {
       await session.fermer();
     }
+  });
+});
+
+/* =====================================================================
+ *  §9 — Ce qui PARLE doit être éprouvé quand il parle (constat Q-21)
+ * =====================================================================
+ *
+ *  Trois des cinq comportements que le constat Q-3 exigeait n'étaient exercés
+ *  que dans le sens du SILENCE : « sur un lot sain, le bandeau ne dit rien »,
+ *  « aucun défaut interne n'est annoncé ». L'auditeur les a neutralisés un par
+ *  un — le banc est resté vert, 32 sur 32.
+ *
+ *  Un essai qui n'exige que du silence ne peut pas échouer quand on retire ce
+ *  qui parle : il est satisfait par un produit qui ne dit jamais rien. C'est la
+ *  question que ce chantier s'est apprise — *la question utile n'est pas « est-ce
+ *  que ça passe », c'est « qu'est-ce qui passerait aussi »* — appliquée à ce banc,
+ *  et elle mord. Les assertions de silence des §5 restent : elles sont la moitié
+ *  symétrique de celles-ci, et n'ont de valeur qu'avec elles.
+ * ===================================================================== */
+
+describe('Les avertissements du produit, éprouvés quand ils PARLENT (constat Q-21)', () => {
+  /** Le texte du bandeau de synchronisation, tel qu'un utilisateur le lit. */
+  function bandeauDe(page) {
+    return page.evaluate(
+      () => (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+    );
+  }
+
+  test('LE CANARI PARLE : deux enregistrements de même identifiant sont ANNONCÉS', async () => {
+    // ── Ce que le canari protège ────────────────────────────────────────────
+    //
+    // Deux enregistrements d'une même collection portant le même identifiant :
+    // `getRisqueById` ne sait plus lequel rendre, et c'est ainsi que le bloquant
+    // T-1 faisait disparaître des lignes. Le générateur a été corrigé ; si cela
+    // se reproduisait — régression, fichier repris incohérent, export ancien —
+    // le produit doit le DIRE plutôt que de trancher en silence.
+    const session = await ouvrirApplication();
+    try {
+      // ── Moitié symétrique, jouée EN PREMIER ─────────────────────────────
+      // Sur un jeu sain, le canari se tait. Sans cette moitié, l'essai serait
+      // satisfait par un bandeau qui crie toujours — et un avertissement
+      // permanent est un avertissement mort.
+      await session.page.evaluate(() => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Risque parfaitement ordinaire' });
+      });
+      await attendreQuiescence(session.page);
+      assert.equal(
+        /Identifiants en double/i.test(await bandeauDe(session.page)),
+        false,
+        'Aucun doublon ne doit être annoncé sur un jeu sain.',
+      );
+
+      // ── Puis le doublon, et il doit être annoncé ─────────────────────────
+      await session.page.evaluate(() => {
+        window.DataStore.addRisque({ id: 'DOUBLON-Q21', nom: 'Premier porteur de la clé' });
+        window.DataStore.addRisque({ id: 'DOUBLON-Q21', nom: 'Second porteur de la même clé' });
+      });
+      await session.page.waitForFunction(
+        () => /Identifiants en double/i.test(
+          (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+        ),
+        null,
+        { timeout: 15000 },
+      );
+
+      const texte = await bandeauDe(session.page);
+      assert.match(
+        texte,
+        /risques \/ DOUBLON-Q21/,
+        `L’avertissement doit NOMMER la collection et la clé, sinon il est inexploitable : ${texte}`,
+      );
+      assert.match(
+        texte,
+        /peut être inaccessible/i,
+        `Et dire ce que l’utilisateur risque : ${texte}`,
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('LE SONDAGE POUSSE : une écriture en attente repart sans aucun geste', async () => {
+    // ── Le troisième reproche du bloquant T-1 ───────────────────────────────
+    //
+    // « Rien ne repart tout seul » : un lot resté en attente y restait
+    // indéfiniment — deux cycles de sondage plus tard comme au premier instant —
+    // jusqu'à ce qu'une saisie de l'utilisateur réveille l'entonnoir. Le sondage
+    // est le seul battement régulier de l'application : c'est à lui de reprendre
+    // ce qui traîne, MÊME sans minuteur armé.
+    //
+    // L'essai de coupure de VPN du §2 ne l'éprouve pas : il appelle `pousser()`
+    // lui-même. C'est justement le geste que le sondage doit rendre inutile.
+    const session = await ouvrirApplication();
+    try {
+      // ── Moitié symétrique : un sondage à vide n'écrit RIEN ───────────────
+      // Sans elle, l'essai serait satisfait par un sondage qui écrit toujours —
+      // et le rafraîchissement deviendrait une écriture périodique.
+      // La prémisse se lit AVANT l'appel : le sondage lui-même provoque un
+      // réaffichage, et le tableau de bord réarme alors son point d'historique du
+      // jour. Lire l'état APRÈS mesurerait ce réarmement, pas le sondage — la
+      // première rédaction de cet essai s'y est fait prendre.
+      assert.equal(
+        await session.page.evaluate(() => window.Sync.etat().enAttente),
+        false,
+        'La page doit être au repos AVANT la mesure : sinon ce n’est pas un sondage à vide.',
+      );
+      const avantVide = application.appelsPar('POST').length + application.appelsPar('PUT').length;
+      await session.page.evaluate(() => window.Sync.sonder());
+      assert.equal(
+        application.appelsPar('POST').length + application.appelsPar('PUT').length,
+        avantVide,
+        'Un sondage sans rien en attente ne doit émettre AUCUNE écriture : le ' +
+          'rafraîchissement n’est pas une écriture périodique.',
+      );
+
+      // ── Une écriture reste en attente, et AUCUN minuteur ne l'attend ─────
+      // La coupure fait échouer l'envoi : le minuteur de regroupement a déjà
+      // tiré, la saisie reste en mémoire. C'est l'état que le sondage doit
+      // rattraper.
+      application.definirApiInjoignable(true);
+      const coupe = await session.page.evaluate(async () => {
+        window.DataStore.addRisque({
+          id: window.UI.genId('RISK'),
+          nom: 'Écriture reprise par le sondage',
+        });
+        await window.Sync.pousser();
+        return window.Sync.etat();
+      });
+      assert.equal(coupe.enAttente, true, 'La saisie doit être en attente…');
+      assert.equal(coupe.panneReseau, true, '…et le réseau déclaré en panne.');
+
+      application.definirApiInjoignable(false);
+      assert.deepEqual(
+        await enBase("select id from risques where nom = 'Écriture reprise par le sondage'"),
+        [],
+        'Rien ne doit être en base avant le sondage : c’est ce qu’on va lui demander de faire.',
+      );
+
+      // ── LA propriété : le sondage, et rien d'autre ───────────────────────
+      // `sonder()` attend le cycle qu'il déclenche : au retour, l'écriture est
+      // faite ou elle ne le sera pas. Aucune fenêtre de temps, aucune course.
+      await session.page.evaluate(() => window.Sync.sonder());
+
+      const arrivee = await enBase("select nom from risques where nom = 'Écriture reprise par le sondage'");
+      assert.equal(
+        arrivee.length,
+        1,
+        'Le sondage doit reprendre ce qui attend. Sans cela, une saisie que le réseau a ' +
+          'fait échouer reste en mémoire indéfiniment, et l’utilisateur croit l’avoir ' +
+          'enregistrée — c’est le troisième reproche du bloquant T-1.',
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      application.definirApiInjoignable(false);
+      await session.fermer();
+    }
+  });
+});
+
+/* =====================================================================
+ *  §10 — Le signalement de rétrécissement : ce qu'on peut en prouver,
+ *        et ce qu'on ne peut pas encore
+ * ===================================================================== */
+
+describe('Le signalement de rétrécissement reste câblé (constat Q-21)', () => {
+  /**
+   * ── Pourquoi cet essai est structurel, et pourquoi je le dis ────────────────
+   *
+   * Les deux autres comportements de Q-21 sont éprouvés par le COMPORTEMENT : on
+   * provoque le doublon, on provoque l'attente, et l'on exige que le produit
+   * parle. Celui-ci ne peut pas l'être aujourd'hui, et ce n'est pas un choix de
+   * confort — c'est une propriété du code, que j'ai vérifiée avant de me rabattre
+   * sur un balayage :
+   *
+   *  · premier appelant, `ecrireEnLot` : `compter` est `liste.length`, et
+   *    `ordonnerCreations` réintroduit elle-même en fin de fonction tout rang
+   *    resté en plan (« Cycle de références : le reste part dans l'ordre
+   *    d'origine »). Le compte rendu est donc TOUJOURS égal au compte reçu ;
+   *  · second appelant, `ecrireParPasses` : chaque élément confié passe par
+   *    exactement une branche qui incrémente `traites`, y compris la sortie de
+   *    secours « toutes différées ». `traites !== items.length` ne peut pas se
+   *    produire.
+   *
+   * `signalerRetrecissement` est donc un FILET pour un défaut de programmation
+   * que le code actuel ne sait pas produire. Aucune donnée, si hostile soit-elle,
+   * ne l'atteint : un essai qui prétendrait l'exercer par les données mentirait
+   * sur ce qu'il fait — et c'est exactement le reproche du constat Q-21.
+   *
+   * Ce qui reste vérifiable, et qui n'est pas rien : que le filet soit toujours
+   * BRANCHÉ à ses deux appelants, et qu'il PARLE encore sur ses deux canaux — la
+   * console pour l'exploitant, l'incident pour l'utilisateur. C'est ce que la
+   * mutation de l'auditeur retirait, et c'est ce que cet essai fait tomber.
+   *
+   * Ce qu'il faudrait pour faire mieux : une couture dans `js/core/**` — le
+   * mécanisme d'incident accepte déjà `collection: "__cycle"`, il suffirait qu'un
+   * point d'entrée d'essai puisse déclarer un lot rétréci. Cela n'est pas mon
+   * périmètre ; je le nomme plutôt que de le contourner.
+   */
+  const source = readFileSync(join(RACINE_FRONTEND, 'js', 'core', 'sync.js'), 'utf8');
+
+  /** Corps de la fonction, BORNÉ : jusqu'à l'accolade fermante en colonne 4. */
+  function corpsDe(nom) {
+    const debut = source.indexOf(`function ${nom}(`);
+    assert.notEqual(debut, -1, `« ${nom} » a disparu ou changé de nom.`);
+    const fin = source.indexOf('\n    }\n', debut);
+    assert.ok(fin > debut, `Corps de « ${nom} » illisible.`);
+    return source.slice(debut, fin);
+  }
+
+  test('le filet PARLE encore sur ses deux canaux', async () => {
+    const corps = corpsDe('signalerRetrecissement');
+
+    assert.match(
+      corps,
+      /console\.error\(/,
+      'Le canal de l’EXPLOITANT a disparu : un défaut interne ne laisserait plus de trace ' +
+        'dans la console, là où on la cherche après coup.',
+    );
+    assert.match(
+      corps,
+      /ajouterIncident\(/,
+      'Le canal de l’UTILISATEUR a disparu : le défaut serait réparé en silence, et ' +
+        '« 250 importées / 225 en base » redeviendrait invisible — c’est le bloquant T-1.',
+    );
+    assert.match(
+      corps,
+      /manquants/,
+      'Et il doit dire COMBIEN : « un défaut interne » sans nombre n’est pas exploitable.',
+    );
+
+    // ── Contrôles de morsure du balayage lui-même ───────────────────────────
+    // Le corps lu doit être CELUI de la fonction : s'il débordait sur la suite du
+    // fichier, il verrait n'importe quel `console.error` et ne signalerait plus
+    // jamais rien. C'est la faute que le sabotage M15 avait révélée ailleurs.
+    assert.equal(
+      /function (?!signalerRetrecissement)[A-Za-z]+\(/.test(corps),
+      false,
+      `Le balayage déborde sur la fonction suivante : ${corps.slice(-160)}`,
+    );
+    // Et le motif doit savoir dire non.
+    assert.equal(/console\.error\(/.test('function signalerRetrecissement() { return 0; }'), false);
+  });
+
+  test('le filet est APPELÉ, aux deux endroits où un lot peut rétrécir', async () => {
+    const appels = source.match(/signalerRetrecissement\(/g) ?? [];
+    // Une déclaration plus deux appels.
+    assert.equal(
+      appels.length,
+      3,
+      `« signalerRetrecissement » doit être déclarée une fois et appelée deux fois ` +
+        `(trouvé ${String(appels.length)} occurrences). Un filet que rien n’appelle est un ` +
+        'commentaire ; un troisième appel demande à être lu.',
+    );
+    // Les deux appelants sont nommés, et le balayage les retrouve par leur nom :
+    // si l'un est renommé, cet essai le dit au lieu de compter juste par hasard.
+    assert.match(
+      corpsDe('appliquer'),
+      /signalerRetrecissement\(/,
+      'Le tri des créations n’appelle plus le filet : un lot qui rétrécit y passerait sans bruit.',
+    );
+    assert.match(
+      corpsDe('ecrireParPasses'),
+      /signalerRetrecissement\(/,
+      'Le repassage des écritures n’appelle plus le filet.',
+    );
   });
 });

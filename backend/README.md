@@ -6,8 +6,9 @@
 > « terminé » — vit dans [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md).
 > Conventions de schéma : [`db/CONVENTIONS.md`](db/CONVENTIONS.md).
 
-**État : lots L0, L1 et L2 livrés. Les portes de sécurité S1 et S2 sont
-franchies** — S1 « CONFIRMÉE FRANCHIE » au 6ᵉ passage, S2 « FRANCHIE » au 4ᵉ. Le
+**État : lots L0, L1 et L2 livrés. La porte S1 est franchie ; la porte S2 ne l'est
+pas** — S1 « CONFIRMÉE FRANCHIE » au 6ᵉ passage ; S2 franchie au 4ᵉ passage, puis
+**refusée au 5ᵉ** après la fermeture de ses constats. Le
 verdict de chaque passage vit dans le journal des portes du
 [plan d'exécution](../docs/PLAN_EXECUTION.md) §7, et les rapports dans
 [`../docs/securite/`](../docs/securite/) — c'est là qu'il se lit, et nulle part
@@ -256,6 +257,13 @@ Nuance à connaître : cette idempotence est celle de **l'exécuteur**. Passer u
 fichier de migration directement à `psql` une seconde fois échoue, et c'est
 délibéré (`db/CONVENTIONS.md` §13) — mieux vaut un échec bruyant qu'un `create
 table if not exists` qui masque une divergence.
+
+⚠️ **Conséquence pratique : même un commentaire ne se corrige pas dans une migration
+déjà appliquée.** On le corrige par des instructions `comment on` dans la migration
+**suivante** — c'est ce qu'a fait `005_controles_schema.sql` §9 pour deux commentaires
+que la vague 2 avait rendus faux. L'objection « ce n'est qu'un commentaire, rien n'est
+encore déployé » est matériellement exacte, et refusée : c'est le raisonnement qui vide
+une règle de sa substance la première fois qu'elle coûte quelque chose.
 
 ### Le schéma obtenu est contrôlé, pas seulement les migrations appliquées
 
@@ -578,26 +586,39 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** |
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — jouée six fois |
-| **L2 — API et bascule de la persistance** | ✅ **livré** (vague 2), corrigé au fil de la porte **S2** — jouée quatre fois |
-| L3 — Authentification AD et droits · L5 — Journal | ⬜ à faire (vague 3) |
+| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais non validé** — porte **S2** jouée **cinq fois** : franchie au 4ᵉ passage, **refusée au 5ᵉ** |
+| L3 — Authentification AD et droits · L5 — Journal | ⬜ à faire — **vague 3, qui n'ouvre pas tant que S2 n'est pas franchie** |
 | L4 → L15 | ⬜ à faire — voir [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) §3 et [`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7 |
 
-### Les deux verdicts, tels que le journal des portes les formule
+### Les verdicts, tels que le journal des portes les formule
 
 Ils ne se déduisent pas d'ici : ils se lisent dans le journal des portes du
 [plan d'exécution](../docs/PLAN_EXECUTION.md) §7, avec le rapport correspondant
-dans [`../docs/securite/`](../docs/securite/). Reproduits mot pour mot :
+dans [`../docs/securite/`](../docs/securite/). Les deux derniers passages, reproduits
+mot pour mot :
 
 | Porte | Verdict du journal | Rapport |
 |---|---|---|
 | **S1** (6ᵉ passage) | ✅ **CONFIRMÉE FRANCHIE** — 0 bloquant, 0 majeur, 6 mineurs | [`RAPPORT_S1_SEXIES.md`](../docs/securite/RAPPORT_S1_SEXIES.md) |
 | **S2** (4ᵉ passage) | ✅ **FRANCHIE** — 0 bloquant, 4 majeurs, 7 mineurs, **aucun des dix-huit contrôles en échec** | [`RAPPORT_S2_QUATER.md`](../docs/securite/RAPPORT_S2_QUATER.md) |
+| **S2** (5ᵉ passage) | ❌ **refusée** — 0 bloquant, 3 majeurs, 3 mineurs. **Contrôle S17 en échec** : le défaut vit *entre* trois fichiers dont aucun n'a tort seul — le vhost coupe la reprise à 60 s pendant que le serveur valide sa transaction. Le cœur du lot n'est pas en cause : 46 sondes hostiles n'ont bougé ni le périmètre, ni une frontière de filiale, ni une requête SQL. | [`RAPPORT_S2_QUINQUIES.md`](../docs/securite/RAPPORT_S2_QUINQUIES.md) |
 
-Ces deux verdicts portent sur les révisions où ils ont été rendus : l'auditeur de S2 a
-examiné **`a4116b6`**, et son verdict est consigné en **`120266e`**. Le travail de
-fermeture des constats est venu **après**, et n'a pas été soumis à la porte.
+> ## ⚠️ **La porte S2 a été rejouée, et elle est REFUSÉE. Le lot L2 n'est pas franchi.**
+>
+> C'est l'information la plus importante de ce document, et elle est récente : le
+> franchissement du 4ᵉ passage portait sur la révision **`a4116b6`**, consigné en
+> **`120266e`** ; le travail de fermeture des constats est venu après, il a été soumis à
+> la porte au 5ᵉ passage sur la révision **`f68f799`**, et **la porte l'a refusé**.
+>
+> Ne lisez donc **aucune** ligne de ce §8 comme un acquis. Ce qui suit décrit un lot
+> livré, mesuré et corrigé — pas un lot validé.
 
-**Franchie ne veut pas dire sans réserve.** Les constats de S2 vivent dans le
+**Refusée ne veut pas dire cassée, et franchie n'aurait pas voulu dire sans réserve.**
+Le verdict ci-dessus le dit lui-même : aucun bloquant, le cœur du lot hors de cause, et
+un contrôle en échec qui porte sur un défaut vivant **entre** trois fichiers dont aucun
+n'a tort seul. C'est précisément la classe de défaut que le contrôle S17 — *le chemin
+complet a été parcouru pour de vrai* — existe pour attraper, et qu'aucune relecture de
+fichier ne trouve. Les constats de S2 vivent dans le
 **registre des constats ouverts** du [plan d'exécution](../docs/PLAN_EXECUTION.md) §7,
 chacun avec un **propriétaire nommé, une échéance et un état**. Ce registre n'est ni
 recopié ni résumé ici — pas même par un décompte : il vit, des constats s'y ajoutent et
@@ -624,18 +645,24 @@ confondre est le seul moyen de se tromper sur l'état réel du lot.
 | **corrigé** | le défaut est réparé, et le banc d'essai l'exerce | l'agent propriétaire du constat |
 | **rejoué / franchi** | un auditeur **qui n'a écrit aucune de ces lignes** a rejoué la **grille entière** — pas seulement le correctif | la porte de sécurité |
 
-**La phrase qui compte, et il n'y en a qu'une : l'auditeur de S2 a examiné la révision
-`a4116b6`, son verdict a été consigné en `120266e`, et TOUT ce qui a été corrigé depuis
-n'a pas repassé la porte.** Le banc est vert, les correctifs sont exercés par des essais,
-les chiffres ci-dessous sont rejoués — et rien de tout cela ne vaut un passage de porte.
-C'est exactement la distinction que le registre des constats tient dans sa colonne
-d'état : « ✅ corrigé — attend le rejeu » n'est pas « réglé », et un lecteur pressé qui
-lirait la coche verte pour un quitus se tromperait.
+**La phrase qui compte, et il n'y en a qu'une : la porte a été rejouée sur la révision
+`f68f799` et elle a REFUSÉ le lot.** Le banc est vert, les correctifs sont exercés par
+des essais, les chiffres ci-dessous sont rejoués — et rien de tout cela n'a suffi. C'est
+exactement la distinction que le registre des constats tient dans sa colonne d'état :
+« ✅ corrigé — attend le rejeu » n'est pas « réglé », et un lecteur pressé qui lirait la
+coche verte pour un quitus se tromperait. Le 5ᵉ passage vient de le démontrer.
+
+**Et la démonstration est plus intéressante que le verdict.** Ce qui a fait échouer le
+lot n'est dans aucun des fichiers que ce document décrit : c'est un désaccord **entre**
+le vhost et le serveur, dont aucun n'a tort seul. Aucune relecture, aucun essai unitaire,
+aucun de nos chiffres verts ne pouvait le voir — seul le contrôle S17, *« le chemin
+complet a été parcouru pour de vrai »*, le pouvait. Prenez-en la leçon avant de lire la
+suite : **un banc vert mesure ce qu'il regarde, jamais ce qu'il ne regarde pas.**
 
 Pour l'auditeur qui rejouera la grille, cela se traduit en une consigne courte : **ne
-prenez rien de ce document pour un acquis de la porte précédente.** Ce qui a été franchi
-est écrit ci-dessus avec sa révision ; le reste est du travail à contrôler, y compris —
-et surtout — ce qui est présenté comme la fermeture d'un constat que vous aviez ouvert.
+prenez rien de ce document pour un acquis.** Chaque verdict est écrit ci-dessus avec sa
+révision ; tout le reste est du travail à contrôler, y compris — et surtout — ce qui est
+présenté comme la fermeture d'un constat que vous aviez ouvert.
 
 Cette prudence n'est pas rituelle. Elle vient de ce que ce chantier a mesuré six fois :
 **chaque passage de porte a trouvé ce que le précédent avait manqué**, et plusieurs
@@ -815,6 +842,26 @@ diagnostique — voir l'avertissement précédent.
   des modules est inchangé, méthode par méthode et compte par compte**. `settings.js`
   perd six appels — points de restauration locaux et chiffrement du navigateur — parce
   que ces fonctions n'existent plus (voir ci-dessous).
+- **Un cycle d'écriture se termine au repos, ou il se réarme** — et l'absence de cette
+  propriété a laissé vivre, un temps, une **référence pendante en base**. `renommer()`
+  réécrivait les références en mémoire sans réarmer l'envoi : rien ne partait, l'écran et
+  la base divergeaient, et l'état « modifications non enregistrées » devenait permanent et
+  inexpliqué. Le pire cas est celui qu'un exploitant doit savoir reconnaître dans des
+  données antérieures au correctif : une création qui échoue sur une **panne réseau
+  passagère** et repart au cycle suivant, la modification qui la cite partie entre-temps
+  **avec l'identifiant local**, et la base qui conserve un lien vers une ligne qui n'existe
+  pas. Déclencheur exact : le renommage touche un enregistrement que le serveur détient
+  **déjà** et que le différentiel du cycle courant ne contenait **pas** ; un renommage à
+  l'intérieur d'un même cycle n'est pas concerné, les créations y étant écrites avant les
+  modifications.
+
+  ⚠️ **Ce correctif soigne la divergence, jamais la corruption.** Il garantit que la base
+  finit par porter ce que la mémoire porte — pas que ce que la mémoire porte soit juste.
+  Là où un champ métier valait légitimement la même chaîne qu'un identifiant, la
+  réécriture a écrasé cette valeur, et le correctif **persiste fidèlement la valeur
+  corrompue**. Lire « mémoire et base alignées » comme « la donnée est réparée » serait un
+  contresens ; la seule défense contre cette corruption-là est le **bandeau qui nomme la
+  réécriture et son compte**, et c'est pourquoi il ne s'efface jamais tout seul.
 - **Une convention de codage en découle**, et elle est inscrite dans `CLAUDE.md` §3 :
   **l'identifiant d'un enregistrement se lit dans un attribut du DOM au moment du
   clic, jamais capturé en chaîne dans une fermeture.** Le serveur réattribuant
@@ -985,14 +1032,12 @@ Ce que la reprise fait, quand on la rejoue :
   report est une décision qui doit être relisible ; le compte des constats ouverts, lui, se
   lit dans le registre et nulle part ailleurs.
 
-  Les reports, donc : deux relèvent du **lot L3**
-  (le coût d'analyse de corps avant toute authentification, qui se règle avec la
-  limitation de rythme en `onRequest` ; et un commentaire faux dans une migration
-  **déjà appliquée**, qui ne se corrige que par un `comment on` dans la migration
-  suivante — voir plus bas), un du **lot L5** (un garde-fou qui mesure une **longueur**
-  là où le `CONVENTIONS.md` §2 norme désormais une **entropie** : rien ne casse
-  aujourd'hui, mais aligner un jour le générateur SQL le ferait crier à tort) et un du
-  **lot L7** (aucun plafond de durée ni de volume sur une reprise).
+  Les reports, donc : un relève du **lot L3** (le coût d'analyse de corps avant toute
+  authentification, qui se règle avec la limitation de rythme en `onRequest`), un du
+  **lot L5** (un garde-fou qui mesure une **longueur** là où le `CONVENTIONS.md` §2 norme
+  désormais une **entropie** : rien ne casse aujourd'hui, mais aligner un jour le
+  générateur SQL le ferait crier à tort) et un du **lot L7** (aucun plafond de durée ni de
+  volume sur une reprise).
 - **Un constat n'est pas fermé, et le dire vaut mieux que le fermer à moitié.** Le
   repli d'`applyImport` — emprunté seulement contre un serveur qui ne porte pas
   `/api/reprise`, c'est-à-dire lors d'un retour arrière — réécrit **toute chaîne égale
@@ -1065,7 +1110,6 @@ Ce que la reprise fait, quand on la rejoue :
 | **Aucune limitation de rythme** | Elle appartient à la couche d'authentification, qui n'existe pas. Le constat **Q-10** (coût d'analyse de corps avant toute décision) se traite avec elle, en `onRequest`. | **lot L3** (contrôle S11) |
 | Le drapeau `grc.administration_groupe` est une **déclaration que la session fait sur elle-même**, pas un privilège | Il protège contre la faute de programmation, **pas** contre un rôle applicatif compromis, qui le poserait avant d'écrire. La règle tenue aujourd'hui — *toute route qui l'exige le vérifie, aucune ne le pose* — est vraie et démontrée par un test ; à L3 de la rendre **structurellement** vraie. | **lot L3** (`CONVENTIONS.md` §17.4) |
 | Supprimer un compte ou une filiale cité au journal est **structurellement impossible** (`restrict` + journal en ajout seul) | Cohérent avec la rétention de trois ans, mais la « purge explicite » de sortie de filiale (`PLAN_SERVEUR` §2.7) n'a aucun chemin applicatif. | procédures d'exploitation à écrire au **lot L13**, avec les purges RGPD |
-| Un **commentaire fautif subsiste dans `001_socle.sql`** (constat Q-6 b) | La migration est **déjà appliquée** et `migrate.mjs` en tient l'empreinte SHA-256 : il sort en **code 4** si le fichier bouge. « Une migration appliquée ne se réécrit pas » n'admet pas d'exception pour un commentaire — la correction prendra la forme d'instructions `comment on` dans la migration suivante. Le texte reste donc faux un moment, et c'est le prix de la règle. | **vague 3** |
 | Aucun plafond de durée ni de volume sur une reprise | Une reprise de 12 000 enregistrements tient une connexion du pool une vingtaine de secondes ; `statement_timeout` borne l'instruction, jamais la transaction (constat Q-9). | **lot L7** (import) |
 
 Enfin, ce que le dispositif **ne** couvre **pas**, et qui est assumé : ni un `root`
