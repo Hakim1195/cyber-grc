@@ -124,13 +124,29 @@ describe('Le motif du vhost refuse tout ce qui n’est pas publiable (constat Q-
    */
   function motifDuVhost() {
     const source = readFileSync(VHOST, 'utf8');
-    const trouve = /<FilesMatch\s+"\(\?i\)(\^\(\?!.*?)"\s*>/.exec(source);
+    // ⚠️ On lit TOUT ce qui suit `(?i)`, sans rien présumer de sa forme.
+    //
+    // La rédaction précédente ancrait sur `^(?!` — elle épinglait une FORME là
+    // où seule la RÈGLE compte, et c'est le reproche que ce banc adresse aux
+    // autres. Le correctif du bloquant **Q-36** a inséré un lookahead de plus
+    // (`(?!$)`) : l'extraction d'à côté, qui codait le préfixe en dur, a cessé
+    // de trouver quoi que ce soit. Un essai qui rougit parce que le produit a
+    // été CORRIGÉ est un essai mal écrit.
+    const trouve = /<FilesMatch\s+"\(\?i\)([^"]*)"\s*>/.exec(source);
     assert.notEqual(
       trouve,
       null,
       'Le <FilesMatch> en liste blanche a disparu du vhost, ou a changé de forme. La ' +
         'barrière du frontal n’est plus vérifiable ici — et « Require all denied » par ' +
         'défaut avec elle (constat Q-31).',
+    );
+    // Et le motif lu doit être celui qu'on croit : un `<FilesMatch "(?i)">` vide
+    // serait extrait sans erreur, ne refuserait rien, et rendrait verts les
+    // essais de refus — puisqu'un motif vide correspond à tout.
+    assert.match(
+      trouve[1],
+      /\\\.\([a-z0-9|]+\)\$/i,
+      `Le motif extrait ne porte plus de liste d’extensions : ${trouve[1]}`,
     );
     return new RegExp(trouve[1], 'i');
   }
@@ -210,6 +226,38 @@ describe('Le motif du vhost refuse tout ce qui n’est pas publiable (constat Q-
     );
   });
 
+  test('LE RÉGRESSEUR DU BLOQUANT Q-36 : le motif ne refuse pas le NOM VIDE', async () => {
+    // ── Une entrée, une seule, et elle rendait la page d'accueil inaccessible ──
+    //
+    // Apache évalue `<FilesMatch>` sur le composant final de l'URL. Pour
+    // `GET /`, ce composant est la CHAÎNE VIDE — et l'autorisation est décidée
+    // AVANT que `DirectoryIndex` n'ait choisi `index.html`. L'ancien motif,
+    // `^(?!.*\.(html|…)$)`, correspond au nom vide : le répertoire était donc
+    // refusé, et **la page d'accueil rendait 403** dans la configuration livrée.
+    // Septième passage de la porte S2, constat Q-36, bloquant.
+    //
+    // ── Ce que cet essai peut, et ce qu'il ne peut pas ────────────────────
+    //
+    // Il FIGE la leçon — une ligne, sans Apache, et elle distingue le correctif
+    // du défaut. Il n'aurait pas pu la TROUVER : rien dans le vhost ne dit
+    // qu'Apache passe une chaîne vide à ce motif, et c'est le journal d'un
+    // Apache réel qui l'a appris. Les deux essais sont nécessaires, et celui
+    // qui manquait est l'autre : voir `vhost-apache.test.mjs`.
+    const motif = motifDuVhost();
+    assert.equal(
+      refuse(motif, ''),
+      false,
+      'Le motif refuse le nom VIDE : Apache refusera donc le répertoire avant d’avoir ' +
+        'choisi son DirectoryIndex, et « GET / » rendra 403 — l’application entière est ' +
+        'inaccessible dans sa configuration de déploiement (constat Q-36, bloquant).',
+    );
+    // Le couple qui rend l'assertion discriminante : le nom vide passe, un
+    // fichier légitime passe, un classeur ne passe pas. Le motif fautif de Q-36
+    // ne différait du bon QUE sur la première des trois.
+    assert.equal(refuse(motif, 'index.html'), false, 'La page elle-même reste servable.');
+    assert.equal(refuse(motif, 'Registre_des_risques.xlsx'), true, 'Et le classeur reste refusé.');
+  });
+
   test('LES 64 FICHIERS RÉELLEMENT PUBLIÉS passent le motif du vhost', async () => {
     // Le contrôle de bout en bout : ce que `install.sh` copierait doit être ce
     // que le frontal accepte de servir. Les deux barrières se rencontrent ici.
@@ -246,7 +294,10 @@ describe('Les deux listes blanches disent la même chose (constat Q-31)', () => 
     const cote = tableauBash('FRONTEND_PUBLIABLE').map((e) => e.toLowerCase());
 
     const vhost = readFileSync(VHOST, 'utf8');
-    const trouve = /<FilesMatch\s+"\(\?i\)\^\(\?!\.\*\\\.\(([^)]*)\)\$\)"\s*>/.exec(vhost);
+    // Ancré sur le GROUPE D'EXTENSIONS, pas sur les lookaheads qui le précèdent :
+    // le correctif du bloquant Q-36 en a ajouté un (`(?!$)`), et la rédaction
+    // précédente — qui codait le préfixe en dur — a cessé de trouver la liste.
+    const trouve = /<FilesMatch\s+"\(\?i\)\^.*?\\\.\(([^)]*)\)\$\)"\s*>/.exec(vhost);
     assert.notEqual(
       trouve,
       null,

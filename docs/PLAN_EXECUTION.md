@@ -365,6 +365,19 @@ Ce que trois passages ont appris, et qui vaut pour toutes les portes à venir :
   travaillent, un instantané vert et honnêtement titré coûte une minute et rachète une heure.
   Corollaire pour les agents : **`git checkout` sur un fichier suivi n'est jamais un réflexe**, et
   l'échec d'un script d'édition n'est pas une preuve qu'il a écrit.
+- **Ne pas lancer les correctifs avant que l'auditeur ait fini.** Au septième passage, j'ai
+  dispatché les remèdes sur le résumé du verdict, quatre minutes avant que l'auditeur n'ait terminé
+  son rapport. Trois conséquences, toutes évitables : l'arbre a bougé sous lui, une session
+  concurrente a commité son propre rapport, et **une phrase qu'il venait d'écrire est devenue fausse
+  dix minutes plus tard** — « Q-36 reste entier », alors que le correctif venait d'être poussé.
+  C'est le motif que ce chantier traque depuis dix occurrences, et il a fini par prendre l'auditeur
+  dans son propre rapport. Le §1 le disait déjà pour les vagues ; il vaut aussi pour l'intervalle
+  entre un verdict et sa remise.
+- **Une mesure faite après coup par l'auditeur n'est pas un rejeu de la porte.** Celui du septième
+  passage a mesuré le correctif du bloquant sous un Apache réel et l'a trouvé bon — et il a **écrit
+  lui-même** que cela ne vaut pas rejeu : le verdict porte sur la révision qu'il a examinée, la
+  grille n'a pas été rejouée, et les constats corrigés depuis ne sont pas mesurés. *Un essai qui
+  existe ne prouve rien tant qu'on n'a pas montré qu'il rougit sous la mutation qui l'a motivé.*
 - **La question utile n'est pas « est-ce que ça passe », c'est « qu'est-ce qui passerait aussi ».**
   Formulée par l'agent qui tient le banc, au terme d'une journée où le motif est apparu quatre fois
   sous quatre déguisements : un essai qui passait des options figées à une fonction **qui les

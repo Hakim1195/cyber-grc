@@ -777,3 +777,132 @@ sans quoi son verdict est un caprice.
 ---
 
 *Fin du rapport du septième passage de la porte S2.*
+
+---
+
+## Post-scriptum — 01/09/2026, 20:30 UTC : le dépôt a bougé après le verdict
+
+**Le verdict ci-dessus est rendu sur la révision `41ed654`, arbre propre.** `git status
+--porcelain` est resté vide pendant toute la durée de l'audit, et au moment où ce rapport
+a été écrit (20:05 UTC) il ne rendait que ce fichier. Le §7 le dit, et cela reste vrai.
+
+**Vingt-cinq minutes plus tard, il ne l'est plus** — et ce ne sont pas mes modifications :
+
+```
+$ git status --porcelain            (20:28 UTC)
+ M backend/test/aide/navigateur.mjs
+ M backend/test/aide/serveur.mjs
+ M backend/test/api/bornes-reprise.test.mjs
+ M backend/test/deploiement/install-blocs.test.mjs
+ M backend/test/navigateur/bascule.test.mjs
+?? backend/test/aide/assertions.mjs
+?? docs/securite/RAPPORT_S2_SEPTIES.md
+```
+
+Horodatage des fichiers : 20:09 à 20:23, tous **postérieurs** à ce rapport (20:05). Une
+**session concurrente** a commencé à traiter mes constats — le `CLAUDE.md` §6 prévient que
+plusieurs sessions travaillent en parallèle sur ce dépôt. Le diff les nomme : **Q-37** (5
+occurrences) et **Q-38** (11 occurrences). L'en-tête d'`install-blocs.test.mjs` est
+réécrit — *« Il ne double pas `rsync` : il joue le vrai […] `exigerRsync()` fait échouer
+l'essai bruyamment : son absence ne doit jamais ressembler à une propriété tenue (constat
+**Q-37**) »* — et ~530 lignes d'essais sont ajoutées à `bascule.test.mjs` et
+`bornes-reprise.test.mjs`.
+
+**Trois choses à en retenir, et elles ne changent pas le verdict.**
+
+1. **Toutes mes mutations ont vécu hors du dépôt** (`…/scratchpad/s2vii/copie`). Aucun de
+   ces six fichiers n'a été touché par moi, et mon rapport est intact (60 648 octets,
+   inchangé). Je le consigne parce qu'un lecteur qui lancera `git status` après moi verra
+   un arbre sale et pourrait me l'attribuer.
+2. **Le verdict porte sur ce qui a été soumis.** Une porte se juge sur une révision, pas
+   sur les correctifs qui arrivent après elle — c'est la règle que ce chantier applique
+   depuis six passages, et c'est ce que la colonne d'état du registre distingue :
+   « corrigé » n'est pas « corrigé **et rejoué** ». Ces changements n'ont été rejoués par
+   personne, et surtout pas par moi.
+3. **Le bloquant, lui, n'était pas encore dans ce lot** — il l'a été vingt minutes plus
+   tard. Voir l'addendum ci-dessous : la phrase que je venais d'écrire ici (« Q-36 reste
+   entier ») est devenue fausse avant que je la relise. C'est, à la lettre, le motif que
+   ce chantier traque depuis dix occurrences — *un correctif rend fausse la phrase d'un
+   autre fichier* —, et il m'a pris dans mon propre rapport, dix minutes après. Je la
+   corrige plutôt que de la laisser : remplacer une phrase fausse par rien serait un
+   recul, la laisser telle quelle en serait un pire.
+
+Une dernière remarque, qui vaut pour le huitième passage : les essais qu'on est en train
+d'écrire pour **Q-38** portent sur trois remèdes dont j'ai montré que les mutations ne
+mordaient pas. **Qu'ils existent ne prouve rien** ; qu'ils rougissent sous ces trois
+mutations-là, si. C'est exactement ce que Q-38 reproche à la fermeture précédente, et ce
+serait un mauvais tour à jouer que de le reproduire dans son propre correctif.
+
+---
+
+## Addendum — 01/09/2026, 20:40 UTC : le correctif de Q-36, mesuré
+
+> ⚠️ **Ceci n'est pas un rejeu de la porte.** Le verdict du §1 porte sur `41ed654` et ne
+> bouge pas. Une porte se rejoue **intégralement**, par un auditeur, sur une révision
+> soumise — pas au fil de l'eau sur les correctifs qui arrivent. Ce que je consigne ici
+> est une **mesure ponctuelle**, faite parce que j'avais encore le montage sous la main et
+> qu'un bloquant mérite qu'on dise sans attendre s'il est refermé.
+
+Deux commits ont suivi ce rapport :
+
+```
+e5ac177 Q-36 : l'application est de nouveau joignable, et le contrôle ne prescrit plus
+8234c36 Porte S2 refusée au 7e passage — et j'ai fermé un constat par une expression régulière
+41ed654 Registre : les cinq constats du 6e passage sont fermés   ← la révision jugée
+```
+
+Le correctif ajoute une seule assertion au motif, et c'est la bonne :
+
+```apache
+-  <FilesMatch "(?i)^(?!.*\.(html|js|css|…)$)">
++  <FilesMatch "(?i)^(?!$)(?!.*\.(html|js|css|…)$)">
+```
+
+`(?!$)` exempte la **chaîne vide** — donc le basename d'une requête de répertoire — sans
+rien relâcher sur les vrais noms de fichier.
+
+**Mesuré, sous le même Apache 2.4.58, avec le vhost extrait du fichier livré à `e5ac177`,
+et avec un `data/registre.xlsx` que j'ai redéposé exprès :**
+
+```
+  configtest                          : Syntax OK
+  /                                   -> 200   <!DOCTYPE html> …
+  /index.html                         -> 200
+  /js/app.js                          -> 200
+  /css/style.css                      -> 200
+  /assets/logo/logo-dedienne.png      -> 200
+  /data/registre.xlsx                 -> 403   ← la barrière de Q-31 tient
+  /data/LISEZ-MOI.md                  -> 403
+  /js/  /css/  /assets/               -> 404   (pas de listage : « Options -Indexes » tient,
+                                                 corps de 120 octets, 0 nom de fichier)
+```
+
+Et le geste qui définissait le bloquant, joué dans un vrai navigateur contre le vrai
+serveur, derrière `mod_proxy` :
+
+```
+--- Chromium sur / ---
+  statut HTTP      : 200
+  état application : chargee
+  <title>          : Cyber GRC — Dedienne Aerospace
+  corps            : CYBER GRC · V4.1  PÉRIMÈTRE Essai Toulouse (ZZESSA) …
+  erreurs script   : 0        violations CSP : 0
+```
+
+**Verdict de cette mesure, et ses limites.** Sur son cas, **Q-36 est refermé sans défaire
+Q-31** — c'était le risque, et il ne s'est pas réalisé. Mais :
+
+* je n'ai **pas** rejoué la grille sur `e5ac177` : ni les 111 sondes, ni le cloisonnement,
+  ni les mutations, ni les 25 écrans. Un correctif de vhost peut casser ailleurs, et c'est
+  précisément ce que les six passages précédents ont montré à chaque fois ;
+* le commit touche aussi `deploy/install.sh` (+84 lignes) — **je ne l'ai pas regardé** ;
+* **Q-37 et Q-38 ne sont pas mesurés** : leurs correctifs étaient en cours d'écriture
+  pendant que j'écrivais ceci, et un essai qui existe ne prouve rien tant qu'on n'a pas
+  montré qu'il rougit sous la mutation qui l'a motivé. C'est tout l'objet de Q-38 ;
+* le changement du `<FilesMatch>` doit être **re-mesuré sur l'Apache de Debian 13**, la
+  cible, et non seulement sur le 2.4.58 de cette machine (§8).
+
+**Ce que le huitième passage doit donc faire, et que celui-ci ne remplace pas** : rejouer
+la grille entière sur la révision qui lui sera soumise, et faire mordre, une par une, les
+mutations de Q-33 que ce rapport a laissées rouges — recalage d'adresse, vidage avant
+rechargement, abandon avant transaction.
