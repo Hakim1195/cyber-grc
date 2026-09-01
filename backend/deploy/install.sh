@@ -1325,11 +1325,14 @@ fi
 # La référence n'est PAS un nombre recopié ici : c'est le vhost livré. Les deux
 # valeurs viennent donc du même fichier versionné, et ce contrôle ne peut pas
 # devenir faux tout seul.
+# « || true » : sous « set -e » et « pipefail », un sed sur un fichier absent rend 2
+# et ferait AVORTER l'installation. Un vhost qu'on ne sait pas lire est un
+# avertissement, pas un motif d'arrêt — le service, lui, est déjà en marche.
 lire_proxy_timeout() {
-  sed -n 's/^[[:space:]]*ProxyTimeout[[:space:]]\{1,\}\([0-9]\{1,\}\).*/\1/p' "$1" 2>/dev/null | tail -n1
+  sed -n 's/^[[:space:]]*ProxyTimeout[[:space:]]\{1,\}\([0-9]\{1,\}\).*/\1/p' "$1" 2>/dev/null | tail -n1 || true
 }
-PROXY_REF="$(lire_proxy_timeout "$SOURCE/deploy/apache/cyber-grc.conf")"
-PROXY_INSTALLE="$(lire_proxy_timeout /etc/apache2/sites-available/cyber-grc.conf)"
+PROXY_REF="$(lire_proxy_timeout "$SOURCE/deploy/apache/cyber-grc.conf" || true)"
+PROXY_INSTALLE="$(lire_proxy_timeout /etc/apache2/sites-available/cyber-grc.conf || true)"
 if [[ -z "$PROXY_REF" ]]; then
   alerte "Le vhost de référence ne pose plus de ProxyTimeout : ce contrôle ne vérifie plus rien."
 elif [[ -z "$PROXY_INSTALLE" ]]; then

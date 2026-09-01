@@ -749,6 +749,12 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       const { mode, fichier } = requete.body;
       const apercu = requete.body.apercu === true;
 
+      // Le témoin d'abandon est posé AVANT tout le reste : une connexion qui
+      // tombe pendant la lecture du fichier doit être vue elle aussi. Posé plus
+      // bas, il aurait manqué la fermeture survenue entre-temps — et l'on
+      // aurait validé pour un client déjà parti, ce que ce constat corrige.
+      const abandonne = surveillerAbandon(reponse);
+
       // ══ T-3 : LE REFUS PRÉCÈDE LE TRAVAIL ═══════════════════════════
       //
       // Cette ligne est un ordre, et c'est tout ce qu'elle est — mais l'ordre
@@ -808,9 +814,43 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         throw traduireErreur(erreur, { ...contexteErreurs, origine: 'reprise' });
       }
 
-      const abandonne = surveillerAbandon(reponse);
-
       const empreinte = createHash('sha256').update(fichier.contenu, 'utf8').digest('hex');
+
+      /**
+       * Un seul texte pour les deux abandons — celui d'avant la transaction et
+       * celui d'avant la validation. Ils disent la même chose et doivent
+       * continuer à la dire ensemble.
+       */
+      const signalerAbandon = (moment: 'avant transaction' | 'avant validation'): never => {
+        // Le client n'est plus là pour lire quoi que ce soit : ce statut ne
+        // part que dans le journal. Il y part quand même, parce que c'est la
+        // seule trace qu'une reprise a été demandée puis défaite, et qu'un
+        // exploitant à qui l'on signale un import « perdu » doit pouvoir la
+        // retrouver.
+        requete.log.warn(
+          {
+            mode,
+            fichier: fichier.nom,
+            octets: Buffer.byteLength(fichier.contenu, 'utf8'),
+            moment,
+          },
+          'Reprise ANNULÉE : la connexion est tombée avant la réponse ; rien n’a été écrit',
+        );
+        throw new ErreurApplicative({
+          code: 'indisponible',
+          statut: 503,
+          message:
+            "La reprise a été interrompue avant d'aboutir : rien n'a été modifié. " +
+            'Rechargez la page, puis recommencez.',
+          detailJournal: `abandon du client, ${moment} (Q-19)`,
+        });
+      };
+
+      // Le client est-il encore là AVANT qu'on prenne une connexion du pool ?
+      // Sur un serveur saturé, les clients abandonnent puis recommencent : sans
+      // ce contrôle, chaque abandon laisse derrière lui une reprise complète
+      // que plus personne n'attend, et qui fait attendre les autres (Q-20).
+      if (abandonne()) signalerAbandon('avant transaction');
 
       // Le droit d'écrire dans le socle commun n'est PAS demandé ici, et ce
       // n'est pas un oubli : il l'est par le moteur, au moment exact où une
@@ -918,25 +958,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         return bilan;
       }).catch((erreur: unknown) => {
         if (erreur instanceof SentinelleApercu) return erreur.bilan;
-        if (erreur instanceof AbandonClient) {
-          // Le client n'est plus là pour lire quoi que ce soit : ce statut ne
-          // part que dans le journal. Il y part quand même, parce que c'est la
-          // seule trace qu'une reprise a été faite puis défaite, et qu'un
-          // exploitant qui voit un utilisateur « avoir perdu son import » doit
-          // pouvoir la retrouver.
-          requete.log.warn(
-            { mode, fichier: fichier.nom, octets: Buffer.byteLength(fichier.contenu, 'utf8') },
-            'Reprise ANNULÉE : la connexion est tombée avant la réponse ; rien n’a été écrit',
-          );
-          throw new ErreurApplicative({
-            code: 'indisponible',
-            statut: 503,
-            message:
-              "La reprise a été interrompue avant d'aboutir : rien n'a été modifié. " +
-              'Rechargez la page, puis recommencez.',
-            detailJournal: 'abandon du client avant validation (Q-19)',
-          });
-        }
+        if (erreur instanceof AbandonClient) signalerAbandon('avant validation');
         // ── T-10 : sur ce chemin, la cause est le FICHIER ───────────────
         // Traduire ici, et non dans le gestionnaire commun, est ce qui
         // permet d'énoncer la bonne cause sans en inventer une : le
