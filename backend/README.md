@@ -8,7 +8,7 @@
 
 **État : lots L0, L1 et L2 livrés. La porte S1 est franchie ; la porte S2 ne l'est
 pas** — S1 « CONFIRMÉE FRANCHIE » au 6ᵉ passage ; S2 franchie au 4ᵉ passage, puis
-**refusée au 5ᵉ et au 6ᵉ**, le dernier sur un **bloquant**. Le
+**refusée aux 5ᵉ, 6ᵉ et 7ᵉ**, les deux derniers sur un **bloquant**. Le
 verdict de chaque passage vit dans le journal des portes du
 [plan d'exécution](../docs/PLAN_EXECUTION.md) §7, et les rapports dans
 [`../docs/securite/`](../docs/securite/) — c'est là qu'il se lit, et nulle part
@@ -499,7 +499,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 564 essais : base, API, reprise, navigateur
+npm test                           # 615 essais : base, API, reprise, navigateur, déploiement
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -509,7 +509,7 @@ npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
 #### Prérequis de la machine
 
-Trois, et aucun n'est facultatif. Ils étaient tous **déjà exigés de fait** ; les écrire
+Quatre, et aucun n'est facultatif. Ils étaient tous **déjà exigés de fait** ; les écrire
 est la moitié du travail, parce qu'une dépendance non écrite est celle qui casse sur la
 machine de quelqu'un d'autre.
 
@@ -518,6 +518,7 @@ machine de quelqu'un d'autre.
 | **PostgreSQL joignable**, et `db/dev/preparer_base_dev.sh` déjà passé | chaque fichier de test monte sa propre base | les suites ne démarrent pas — voir l'avertissement du §8 sur les chiffres en baisse |
 | Le client **`psql`**, installé et sur le `PATH` | `db/verifier_cloisonnement.sql` porte des méta-commandes `psql` (`\pset`, `\echo`, `\gset`) que le pilote `pg` ne sait pas exécuter | l'essai **échoue** — il ne se saute pas |
 | **Playwright** global (`/opt/node22/lib/node_modules/playwright`) et son Chromium (`/opt/pw-browsers`) | les essais navigateur montent un serveur local qui sert `cyber-gouvernance_V4/` **tel quel**, `/api/**` relayé vers l'instance Fastify réelle | l'absence est signalée ; ni l'un ni l'autre n'est une dépendance de `package.json` |
+| **Apache 2.4**, `openssl` et **`rsync`** | les essais de déploiement montent un **Apache réel** sur le vhost du dépôt et interrogent l'URL d'entrée ; `rsync` publie réellement les fichiers | l'essai **échoue** — il ne se saute pas, même arbitrage que pour `psql` |
 
 ⚠️ **Pourquoi l'essai de cloisonnement échoue au lieu de se sauter**, alors que l'usage
 courant est de sauter ce qu'on ne peut pas jouer : **un essai qui se saute rend un banc
@@ -533,17 +534,32 @@ sortirait en 0 et annoncerait la démonstration faite ; le compte est donc compa
 plancher relevé et daté, qu'un ajout de contrôle ne fait pas rougir mais qu'une
 disparition fait échouer.
 
-#### Quatre familles d'essais
+#### Cinq familles d'essais
 
 Le détail compte, parce que chacune attrape une classe de défaut que les autres ne
-voient pas. Comptes relevés à `c37d655` (§8) :
+voient pas. Comptes relevés à `2c7d8d3` (§8) :
 
 | Répertoire | Tests | Ce qu'il éprouve |
 |---|---|---|
 | `test/base/` | 272 | socle, journal en ajout seul et chaînage, RLS, privilèges, garde-fous du schéma, consignation, vocabulaire, **et la démonstration de cloisonnement rejouée par `psql`** |
-| `test/api/` | 172 | routes montées pour de vrai, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité d'écriture, identifiants, bornes, route de reprise |
+| `test/api/` | 175 | routes montées pour de vrai, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité d'écriture, identifiants, bornes, route de reprise |
 | `test/reprise/` | 77 | paliers v1 → v12, enveloppe, scission des mesures, round-trip, entrées hostiles |
-| `test/navigateur/` | 43 | la bascule côté SPA, dans **Chromium**, contre le serveur réel et sous la CSP du vhost |
+| `test/navigateur/` | 53 | la bascule côté SPA, dans **Chromium**, contre le serveur réel et sous la CSP du vhost |
+| **`test/deploiement/`** | **38** | **le vhost livré, joué par un Apache réel** : l'URL d'entrée, la liste blanche de publication, la compression, le cache, les en-têtes ; plus la copie par `rsync` et les blocs d'`install.sh` |
+
+**La cinquième famille est née d'un bloquant, et elle mérite qu'on dise lequel.** Le
+motif `<FilesMatch>` du vhost était éprouvé *en le simulant en JavaScript sur des noms de
+fichier* — utile, gratuit, sans dépendance… et aveugle à **une** entrée : la chaîne vide.
+Pour `GET /`, Apache résout `…/frontend/`, dont le dernier composant est vide, et il
+décide de l'autorisation **avant** que `DirectoryIndex` n'ait choisi `index.html`. Un
+motif à négation étant vrai sur la chaîne vide, `Require all denied` s'appliquait au
+répertoire : **la page d'accueil rendait 403 pendant que `/index.html` rendait 200**.
+
+Trois choses ne s'obtiennent que d'un Apache réel, et ce sont exactement les trois qui
+manquaient : **quelle entrée Apache donne au motif** (rien dans le vhost ne le dit — son
+journal l'a appris), **l'ordre d'évaluation** (autorisation avant `DirectoryIndex`), et
+**la chaîne complète** (redirection, TLS, résolution d'index). Les deux essais sont
+gardés : la simulation **fige** la leçon, l'Apache réel la **trouve**.
 
 ## 6. Sauvegarde et restauration
 
@@ -643,7 +659,7 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** |
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — jouée six fois |
-| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais non validé** — porte **S2** jouée **six fois** : franchie au 4ᵉ passage, **refusée au 5ᵉ**, **refusée au 6ᵉ sur un bloquant** |
+| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais non validé** — porte **S2** jouée **sept fois** : franchie au 4ᵉ passage, **refusée aux 5ᵉ, 6ᵉ et 7ᵉ**, les deux derniers sur un bloquant |
 | L3 — Authentification AD et droits · L5 — Journal | ⬜ à faire — **vague 3, qui n'ouvre pas tant que S2 n'est pas franchie** |
 | L4 → L15 | ⬜ à faire — voir [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) §3 et [`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7 |
 
@@ -660,24 +676,27 @@ mot pour mot :
 | **S2** (4ᵉ passage) | ✅ **FRANCHIE** — 0 bloquant, 4 majeurs, 7 mineurs, **aucun des dix-huit contrôles en échec** | [`RAPPORT_S2_QUATER.md`](../docs/securite/RAPPORT_S2_QUATER.md) |
 | **S2** (5ᵉ passage) | ❌ **refusée** — 0 bloquant, 3 majeurs, 3 mineurs. **Contrôle S17 en échec** : le défaut vit *entre* trois fichiers dont aucun n'a tort seul — le vhost coupe la reprise à 60 s pendant que le serveur valide sa transaction. Le cœur du lot n'est pas en cause : 46 sondes hostiles n'ont bougé ni le périmètre, ni une frontière de filiale, ni une requête SQL. | [`RAPPORT_S2_QUINQUIES.md`](../docs/securite/RAPPORT_S2_QUINQUIES.md) |
 | **S2** (6ᵉ passage) | ❌ **refusée** — **1 bloquant**, 3 majeurs, 2 mineurs. **S17 et S18 en échec.** Le bloquant vise le correctif Q-27 **accepté à la porte précédente** : il a échangé un doublon silencieux contre une **destruction silencieuse** — le bandeau dit de recharger, l'utilisateur recharge, et la saisie disparaît. Le reste tient : 22 des 28 constats rejoués par mutation, l'hypothèse la plus chargée de Q-19 enfin **mesurée** avec un mandataire (la transaction est bien annulée), 81 sondes hostiles sans effet, 107/107 au cloisonnement, 27 écrans sous la CSP réelle sans violation. | [`RAPPORT_S2_SEXIES.md`](../docs/securite/RAPPORT_S2_SEXIES.md) |
+| **S2** (7ᵉ passage) | ❌ **refusée** — **1 bloquant**, 2 majeurs, 3 mineurs. S17 et S18 en échec. **L'auditeur a installé Apache et rsync**, ce que six passages n'avaient pas fait : la liste blanche du vhost — correctif accepté au 6ᵉ — rend **403 sur `/`**, et l'application est injoignable à son URL d'entrée. Le reste tient : 111 sondes hostiles sans effet, cloisonnement 107/107 qui s'effondre proprement au sabotage, et **25 écrans derrière un Apache réel sans une seule violation de CSP** — mesuré pour la première fois. | [`RAPPORT_S2_SEPTIES.md`](../docs/securite/RAPPORT_S2_SEPTIES.md) |
 
 > ## ⚠️ **La porte S2 est REFUSÉE, sur un bloquant. Le lot L2 n'est pas franchi.**
 >
 > C'est l'information la plus importante de ce document. Le franchissement du 4ᵉ passage
-> portait sur la révision **`a4116b6`** (verdict consigné en `120266e`) ; la fermeture
-> des constats est venue après et a été soumise au 5ᵉ passage sur **`f68f799`**, refusé ;
-> la fermeture de *ces* constats a été soumise au 6ᵉ sur **`f0b4eec`**, **refusé sur un
-> bloquant**.
+> portait sur la révision **`a4116b6`** (verdict consigné en `120266e`) ; chaque fermeture
+> de constats a ensuite été soumise à la porte, et **chacune a été refusée** — 5ᵉ passage
+> sur **`f68f799`**, 6ᵉ sur **`f0b4eec`**, 7ᵉ sur la révision qu'il nomme —, les deux
+> derniers sur un **bloquant**.
 >
 > Ne lisez donc **aucune** ligne de ce §8 comme un acquis. Ce qui suit décrit un lot
 > livré, mesuré et corrigé — pas un lot validé.
 >
-> **Et le bloquant vise un correctif que la porte précédente avait accepté.** Il faut le
-> dire, parce que c'est la leçon la plus transférable du chantier : un correctif jugé bon
-> par un auditeur indépendant a détruit des données au passage suivant. Le détail est
-> plus bas, sous « Un même mot pour deux couches » ; la conséquence pour la lecture de ce
-> document est immédiate : **la fermeture d'un constat n'est pas une garantie, c'est une
-> hypothèse en attente d'être rejouée.**
+> **Et les deux derniers bloquants visaient chacun un correctif que la porte précédente
+> avait accepté.** Il faut le dire, parce que c'est la leçon la plus transférable du
+> chantier : un correctif jugé bon par un auditeur indépendant a détruit des données au
+> passage suivant, puis un autre a rendu **l'application injoignable à son URL d'entrée**.
+> Le détail est plus bas, sous « Un même mot pour deux couches » et « Une réserve écrite
+> n'est pas une réserve traitée » ; la conséquence pour la lecture de ce document est
+> immédiate : **la fermeture d'un constat n'est pas une garantie, c'est une hypothèse en
+> attente d'être rejouée.**
 
 **Refusée ne veut pas dire cassée, et franchie n'aurait pas voulu dire sans réserve.**
 Le verdict ci-dessus le dit lui-même : aucun bloquant, le cœur du lot hors de cause, et
@@ -743,15 +762,16 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`c37d655`** — « Porte S2 refusée au 6e passage — et le bloquant vise mon arbitrage », branche `claude/backend-plan-serveur-hj46fs` |
+| Révision mesurée | **`2c7d8d3`** — « Registre : Q-43 fermé ; restent Q-39 et Q-41, plus les quatre reports », branche `claude/backend-plan-serveur-hj46fs` |
 | État de l'arbre | **propre** (`git status --porcelain` vide) |
 | Base | neuve, `BASE_NOM=… bash db/dev/preparer_base_dev.sh --recreer`, **PostgreSQL 16.13**, client `psql` 16.13 |
-| Node | 22.22.2 |
+| Node · Apache · rsync | 22.22.2 · **Apache 2.4.58 (Ubuntu)** · **rsync 3.2.7** |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 564 · pass 564 · fail 0  (94,4 s)
-                                                   base 272 · api 172 · reprise 77 · navigateur 43
+npm test                                         → tests 615 · pass 615 · fail 0  (117,8 s)
+                                                   base 272 · api 175 · reprise 77
+                                                   navigateur 53 · deploiement 38
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
 select * from f_verifier_schema()                → 0 ligne (8 garde-fous découverts, joués, consignés)
@@ -765,11 +785,13 @@ Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **48 t
 dans `controles_schema`.
 
 ⚠️ **Le compte de migrations est un contrôle, pas une décoration.** Ce document a
-annoncé « 5 migrations » pendant que le catalogue en portait **6** — c'est le constat
-Q-34, cinquième signalement d'une documentation en retard sur sa vague. Un exploitant qui
+annoncé « 5 migrations » pendant que le catalogue en portait **6**. Un exploitant qui
 vérifie une installation compare ce chiffre à `select count(*) from migrations_schema` :
 faux, il ne mesure plus rien, et pire, il rassure. C'est la forme la plus discrète du
-défaut que tout ce §8 combat.
+défaut que tout ce §8 combat — et c'est le **sixième** signalement d'une documentation en
+retard sur sa vague, ce qui en dit plus long sur la difficulté de l'exercice que sur
+l'inattention de qui que ce soit : **entre deux passages de porte, ce document vieillit
+plus vite que le code.**
 
 ⚠️ **Un chiffre en baisse se diagnostique avant d'être écrit.** Le cas s'est présenté
 pendant la rédaction : PostgreSQL était arrêté au redémarrage du conteneur, et le banc a
@@ -779,9 +801,10 @@ sans rougir est le symptôme le plus trompeur qui soit** : il ressemble à un su
 premier réflexe est `pg_isready`, pas la chasse à la régression.
 
 ⚠️ **Le banc grossit à chaque fermeture de constat**, et c'est la raison d'être de la
-ligne « révision mesurée » : 505 essais au 4ᵉ passage, 534 pendant la fermeture, **564
-ici**. Un total différent du vôtre n'est donc pas une contradiction — comparez d'abord la
-révision **et l'état de l'arbre**.
+ligne « révision mesurée » : **505** essais au 4ᵉ passage, **534**, **564**, **615** ici —
+la dernière marche étant une **cinquième famille** née d'un bloquant (§5). Un total
+différent du vôtre n'est donc pas une contradiction : comparez d'abord la révision **et**
+l'état de l'arbre.
 
 #### Lot L2 — l'API
 
@@ -1116,6 +1139,38 @@ C'est aussi pourquoi le contrôle **S18** de la grille existe (« le produit fai
 doit faire ») : aucun contrôle de sécurité n'était en échec ici, et le produit détruisait
 le travail de son utilisateur.
 
+#### Une réserve écrite n'est pas une réserve traitée — le bloquant du 7ᵉ passage
+
+Sept passages de porte ont écrit, honnêtement et sans se contredire, que le vhost
+n'était pas éprouvé faute d'Apache sur la machine. C'était vrai, c'était consigné, et
+c'était **reporté de passage en passage** — pendant que l'environnement manquant
+s'installait en une minute. L'auditeur du 7ᵉ l'a installé. Trois défauts sont sortis
+**du seul fait de faire tourner le vhost**, dont un bloquant :
+
+| Ce qui est sorti | Effet mesuré |
+|---|---|
+| 🛑 La liste blanche du vhost rendait **403 sur `/`** | **L'application était injoignable à son URL d'entrée.** Un motif à négation est vrai sur le basename vide d'une requête de répertoire : l'autorisation était refusée **avant** que `DirectoryIndex` n'atteigne `index.html` |
+| **2 166 105 octets de JavaScript servis sans compression** | Apache 2.4.58 sert les `.js` en `text/javascript` ; le vhost écrivait `application/javascript` dans deux directives — **aucune ne s'appliquait**. Corrigé : 2 166 105 → 673 339 octets, et la revalidation **horaire** disparaît au profit des sept jours annoncés |
+| Le **logo mis en cache trente jours sans être versionné** | Le bloc énonçait lui-même que le cache long n'est sûr que couplé au jeton de version — et `injecter_jeton_frontend` ne réécrit que les URL `.js` et `.css`. Changer le logo restait invisible jusqu'à trente jours |
+
+> **Deux règles en sortent, et elles valent plus que les trois correctifs.**
+>
+> 1. **Une réserve écrite n'est pas une réserve traitée.** L'écrire est honnête ; s'y
+>    arrêter ne l'est plus dès l'instant où lever la réserve coûte moins cher que la
+>    reconduire. Une réserve doit porter, comme un constat, un propriétaire et une
+>    échéance — sans quoi elle devient un alibi qui se transmet de passage en passage.
+> 2. **Un contrôle doit interroger le chemin que l'utilisateur emprunte, pas celui qui
+>    est commode à tester.** La vérification prescrite interrogeait `/index.html` — elle
+>    est restée **au vert** pendant que `/` rendait 403. Un contrôle qui évite le chemin
+>    réel ne mesure pas le produit, il mesure lui-même.
+
+**Et une méthode, pour les types de contenu** : le vhost porte désormais un **tableau de
+ce qu'Apache émet réellement**, extension par extension, mesuré sur un fichier témoin, à
+la place de ce qu'on écrivait de mémoire. On y lit par exemple que `.ico` sort en
+`image/vnd.microsoft.icon` et non `image/x-icon` — rien n'est cassé aujourd'hui, mais
+quiconque aurait voulu le mettre en cache l'aurait écrit faux. Avant d'ajouter un type à
+une directive, **servir un fichier de ce type et lire l'en-tête**.
+
 ### Réserves — ce qui n'est pas vérifié, et ce qui est sciemment reporté
 
 **Sur l'état des lots**
@@ -1190,30 +1245,22 @@ le travail de son utilisateur.
 
 **Sur l'environnement**
 
-- **Rien de ce qui suit n'a pu être éprouvé** sur la machine de développement, faute
-  d'environnement : l'installation Debian 13 complète, Apache, ClamAV, l'Active
-  Directory et le relais SMTP. `deploy/install.sh`, les fichiers Apache et l'unité
-  systemd sont **écrits et relus, pas exécutés en conditions réelles**. Leur première
-  exécution sur la VM cible doit être surveillée.
-
-  Nuance apportée par la vague 2, et elle compte : la **politique de sécurité de
-  contenu et les en-têtes du vhost** ont bien été éprouvés, en extrayant la
-  configuration réelle du fichier livré et en servant le frontend sous elle dans un
-  Chromium. C'est ce qui a révélé que l'application ne fonctionnait pas dans sa
-  configuration de déploiement. Le **TLS** ne l'est toujours pas.
-- ✅ **Une réserve se lève, et il faut le dire aussi.** L'hypothèse la plus chargée du
-  correctif de la reprise — **qu'Apache annule réellement la requête vers le serveur
-  quand `ProxyTimeout` expire**, plutôt que de laisser une transaction se valider dans
-  le vide — n'était pas mesurée, faute d'Apache sur cette machine ; elle était consignée
-  ici comme telle. Le 6ᵉ passage l'a **mesurée avec un mandataire** : la transaction est
-  bien annulée. Le comportement du mandataire inverse cesse donc d'être une hypothèse
-  sur ce point précis ; il reste à éprouver pour tout le reste.
-- ⚠️ **Une réserve neuve, en revanche** : `rsync` n'est pas installé sur cette machine, et
-  la copie du frontend vers la racine web repose sur ses règles de filtre, qui sont
-  subtiles. `install.sh` en tient compte — il ne fait pas confiance à la commande et
-  **relit la racine web** après la copie, dans les deux sens (un intrus publié arrête
-  l'installation, un fichier légitime manquant aussi). Mais ce contrôle lui-même n'a pas
-  tourné ici : sa première exécution sur la VM cible doit être surveillée.
+- ✅ **La réserve d'environnement s'est beaucoup réduite, et c'est le 7ᵉ passage qui l'a
+  fait.** Pendant six passages, ce paragraphe disait « Apache n'est pas éprouvé, faute
+  d'Apache sur la machine ». **Apache 2.4.58, `mod_deflate`, `mod_expires`, `mod_proxy`,
+  `openssl` et `rsync` sont désormais installés et éprouvés** : le banc monte un Apache
+  réel sur le vhost du dépôt, interroge **l'URL d'entrée**, publie les fichiers par
+  `rsync`, et mesure ce qui sort. Trois défauts — dont un bloquant — sont sortis du seul
+  fait de le faire tourner ; voir « Une réserve écrite n'est pas une réserve traitée »
+  ci-dessus. Le comportement du mandataire à l'expiration de `ProxyTimeout`, hypothèse la
+  plus chargée du correctif de la reprise, est mesuré lui aussi : **la transaction est
+  bien annulée**.
+- ⚠️ **Ce qui reste hors de portée sur cette machine**, et qu'il faut donc surveiller à
+  la première exécution sur la VM cible : le **TLS d'une vraie PKI** (le banc engendre son
+  propre certificat), l'**installation Debian 13 complète** et l'**unité systemd**,
+  **ClamAV**, l'**Active Directory** et le **relais SMTP**. `deploy/install.sh` est
+  désormais exercé par blocs et sur sa copie de frontend, mais pas de bout en bout en
+  conditions réelles.
 - Les lots L3 (authentification), L6 (pièces jointes) et L12 (notifications) se
   recetteront sur des doublures tant que l'annuaire, ClamAV et le relais de
   messagerie du client ne sont pas accessibles.

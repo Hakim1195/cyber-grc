@@ -30,8 +30,8 @@
 >
 > Puis reprendre où le §8 de **ce** document dit de reprendre (« ▶ REPRENDRE ICI »).
 > **Au 01/09/2026 : les lots L0, L1 et L2 sont livrés, la porte S1 est franchie — ne pas
-> les refaire — mais la porte S2 a été REJOUÉE ET REFUSÉE aux 5ᵉ et 6ᵉ passages, le
-> dernier sur un BLOQUANT.** La vague 3 ne
+> les refaire — mais la porte S2 a été REJOUÉE ET REFUSÉE aux 5ᵉ, 6ᵉ et 7ᵉ passages,
+> les deux derniers sur un BLOQUANT.** La vague 3 ne
 > s'ouvre donc pas encore : une vague ne démarre pas tant que la porte précédente n'est
 > pas franchie (`docs/PLAN_EXECUTION.md` §1). Le travail immédiat est la fermeture des
 > constats du 5ᵉ passage, puis un 6ᵉ.
@@ -568,7 +568,7 @@ sur l'**Active Directory** du groupe.
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache + durcissement de portée serveur, `install.sh` idempotent, `backend/README.md` |
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — une cinquantaine de tables (compte rejoué dans `backend/README.md` §8), RLS activée **et forcée** partout, propriétaire compris ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur **toutes** les tables qui portent `cree_par`, et **vérifiée** par un garde-fou ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()`, et **consignés dans un registre** depuis la migration `005` — un contrôle qui cesse d'être découvert ne disparaît plus en silence |
-| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais NON VALIDÉ** — porte **S2** franchie au 4ᵉ passage, puis **refusée au 5ᵉ et au 6ᵉ** (bloquant). Corrigé au fil de la porte — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (130 membres avant, 130 après), session provisoire **fail-closed** hors développement |
+| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais NON VALIDÉ** — porte **S2** franchie au 4ᵉ passage, puis **refusée aux 5ᵉ, 6ᵉ et 7ᵉ** (bloquant sur les deux derniers). Corrigé au fil de la porte — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (130 membres avant, 130 après), session provisoire **fail-closed** hors développement |
 | L3 — Authentification AD et droits · L5 — Journal | ⬜ à faire — **vague 3, qui n'ouvre pas tant que S2 n'est pas franchie** |
 | L4 → L15 | ⬜ à faire — vagues 4 à 8, voir `docs/PLAN_EXECUTION.md` §3 et `PLAN_SERVEUR` §7 |
 
@@ -577,23 +577,27 @@ Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 module pur) et **base de développement** (`db/dev/preparer_base_dev.sh`).
 
 **État des portes — à lire, pas à deviner.** Les lots L1 et L2 ont été soumis à leur
-porte de sécurité six fois chacun, chaque passage étant mené par un auditeur qui
+porte de sécurité six et **sept** fois, chaque passage étant mené par un auditeur qui
 n'avait écrit aucune des lignes examinées. **Le verdict de chaque passage vit dans le
 journal des portes de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7**, avec le
 rapport correspondant dans `docs/securite/` — c'est la source, et la seule. Au
 01/09/2026 il porte **S1 « CONFIRMÉE FRANCHIE » (6ᵉ passage)** et **S2 ❌ « refusée »
-(6ᵉ passage — 1 bloquant, 3 majeurs, 2 mineurs, contrôles S17 et S18 en échec)**, après
-un franchissement au 4ᵉ que la fermeture des constats a rouvert deux fois. Les arbitrages issus de
+(7ᵉ passage — 1 bloquant, 2 majeurs, 3 mineurs, contrôles S17 et S18 en échec)**, après
+un franchissement au 4ᵉ que chaque fermeture de constats a rouvert. Les arbitrages issus de
 ces passages sont figés dans `backend/db/CONVENTIONS.md` **§2, §17 à §24** : les lire
 avant de toucher au schéma évite de rouvrir ce qui vient d'être fermé.
 
-⚠️ **Ce que les 5ᵉ et 6ᵉ passages enseignent, et qui vaut pour toutes les portes à
+⚠️ **Ce que les 5ᵉ, 6ᵉ et 7ᵉ passages enseignent, et qui vaut pour toutes les portes à
 venir.** Au 5ᵉ, le défaut qui a fait échouer le lot n'était **dans aucun fichier** : un
 désaccord **entre** le vhost et le serveur, dont aucun n'avait tort seul. Au 6ᵉ, le
 bloquant visait **un correctif que la porte précédente avait accepté** — il avait échangé
 un doublon silencieux contre une **destruction silencieuse**, parce qu'une **même
 formulation** servait deux couches : vraie pour la reprise (« rechargez »), destructrice
-pour une création bloquée, où recharger jette la saisie. Trois corollaires :
+pour une création bloquée, où recharger jette la saisie. Au 7ᵉ, **encore** un correctif
+accepté au passage précédent : la liste blanche du vhost rendait **403 sur `/`**, et
+l'application était injoignable à son URL d'entrée — trouvé parce que l'auditeur a
+**installé Apache**, ce que six passages avaient consigné comme impossible sans le
+tenter. Cinq corollaires :
 
 - **Un banc vert mesure ce qu'il regarde, jamais ce qu'il ne regarde pas.** Le cœur du lot
   peut être juste — 81 sondes hostiles sans effet, 107/107 au cloisonnement — pendant que
@@ -606,6 +610,15 @@ pour une création bloquée, où recharger jette la saisie. Trois corollaires :
   **mutation** — le casser et vérifier que le banc rougit. C'est ainsi que 22 des 28
   constats ont été rejoués au 6ᵉ passage, et c'est ainsi qu'un constat annoncé « fermé et
   vérifié » s'est révélé ne pas l'être.
+- **Une réserve écrite n'est pas une réserve traitée.** L'écrire est honnête ; s'y arrêter
+  ne l'est plus dès l'instant où la lever coûte moins cher que la reconduire. Une réserve
+  doit porter, comme un constat, un **propriétaire et une échéance** — sinon elle devient
+  un alibi qui se transmet de passage en passage. Six passages ont reconduit « Apache
+  n'est pas éprouvé » ; l'installer a pris une minute et sorti trois défauts.
+- **Un contrôle doit interroger le chemin que l'utilisateur emprunte, pas celui qui est
+  commode à tester.** La vérification prescrite interrogeait `/index.html` : elle est
+  restée **au vert** pendant que `/` rendait 403. Un contrôle qui évite le chemin réel ne
+  mesure pas le produit, il se mesure lui-même.
 
 **Franchie ne veut pas dire sans réserve, et « corrigé » ne veut pas dire « rejoué ».**
 Les constats restants vivent dans le **registre des constats ouverts** du même §7, chacun
@@ -622,20 +635,25 @@ il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écriv
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
 constat perdu.**
 
-### ▶ REPRENDRE ICI — fermer les constats du 6ᵉ passage de S2, PUIS ouvrir la vague 3
+### ▶ REPRENDRE ICI — fermer les constats du 7ᵉ passage de S2, PUIS ouvrir la vague 3
 
-**D'abord la porte.** S2 est refusée, et cette fois sur un **bloquant** : un correctif
-accepté au 5ᵉ passage détruit la saisie de l'utilisateur. Les contrôles **S17** et **S18**
-doivent repasser au vert. Les constats, leurs propriétaires et leurs échéances sont au
-registre de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7 ; le détail du défaut
-est dans `docs/securite/RAPPORT_S2_SEXIES.md`. La vague 3 n'ouvre qu'après un **7ᵉ passage
+**D'abord la porte.** S2 est refusée, et pour la deuxième fois de suite sur un
+**bloquant visant un correctif que la porte précédente avait accepté** : au 6ᵉ, un remède
+détruisait la saisie de l'utilisateur ; au 7ᵉ, un autre rendait **l'application
+injoignable à son URL d'entrée** (403 sur `/`). Les contrôles **S17** et **S18** doivent
+repasser au vert. Les constats, leurs propriétaires et leurs échéances sont au registre
+de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7 ; le détail est dans
+`docs/securite/RAPPORT_S2_SEPTIES.md`. La vague 3 n'ouvre qu'après un **8ᵉ passage
 franchi** — *une vague ne démarre pas tant que la porte précédente ne l'est pas*
 (`PLAN_EXECUTION` §1), et c'est la règle qui a évité à ce chantier de construire sur du
-sable à chacun des douze passages précédents.
+sable à chacun des treize passages précédents.
 
-⚠️ **Ne pas refermer le bloquant par un rechargement** : c'est la voie que l'arbitrage
-avait explicitement écartée, parce qu'elle perd la saisie — et c'est précisément celle que
-le bandeau recommandait. Relire l'arbitrage avant d'écrire le remède.
+⚠️ **Deux pièges, pour ne pas payer une troisième fois le même prix.** Ne pas refermer le
+bloquant du 6ᵉ **par un rechargement** : c'est la voie que l'arbitrage avait explicitement
+écartée, parce qu'elle perd la saisie — et c'est précisément celle que le bandeau
+recommandait. Et **ne rien conclure d'un contrôle qui n'emprunte pas le chemin de
+l'utilisateur** : celui du 7ᵉ interrogeait `/index.html` et restait vert pendant que `/`
+rendait 403.
 
 **Ensuite seulement, la vague 3 — dont le cadrage ci-dessous reste valable et n'est pas
 à refaire.**
@@ -691,13 +709,22 @@ porte, définition de « terminé ») : **`docs/PLAN_EXECUTION.md`**. Convention
 schéma : **`backend/db/CONVENTIONS.md`**. État détaillé des lots, chiffres rejoués et
 réserves : **`backend/README.md` §8**.
 
-**Ce qui n'a pas pu être vérifié** sur la machine de développement, et qui reste donc
-à éprouver sur la VM cible : l'installation Debian 13 complète, le TLS et le mandataire
-inverse d'Apache, ClamAV, l'Active Directory et le relais SMTP. Nuance apportée par la
-vague 2 : la **politique de sécurité de contenu et les en-têtes** du vhost, eux, ont été
-éprouvés — extraits du fichier livré et appliqués à un Chromium réel, ce qui a révélé que
-l'application ne fonctionnait pas dans sa configuration de déploiement. Le schéma a été
-validé sur **PostgreSQL 16.13**, la cible est **PostgreSQL 17**.
+**Ce qui est éprouvé sur cette machine, et ce qui ne l'est pas.** **Apache 2.4.58**,
+`mod_deflate`, `mod_expires`, `mod_proxy`, `openssl` et **`rsync`** sont installés depuis
+le 7ᵉ passage : le banc monte un **Apache réel** sur le vhost du dépôt et interroge
+**l'URL d'entrée** (famille `backend/test/deploiement/`). Restent hors de portée, et donc
+à surveiller à la première exécution sur la VM cible : le **TLS d'une vraie PKI**,
+l'**installation Debian 13 complète**, l'**unité systemd**, **ClamAV**, l'**Active
+Directory** et le **relais SMTP**. Le schéma a été validé sur **PostgreSQL 16.13**, la
+cible est **PostgreSQL 17**.
+
+⚠️ **Et la leçon qui a coûté le plus cher au 7ᵉ passage : une réserve écrite n'est pas
+une réserve traitée.** Six passages avaient consigné « Apache n'est pas éprouvé » —
+honnêtement, sans se contredire — pendant que l'installer prenait une minute. Trois
+défauts sont sortis du seul fait de le faire tourner, dont **l'application injoignable à
+son URL d'entrée**. Corollaire : **un contrôle doit interroger le chemin que
+l'utilisateur emprunte, pas celui qui est commode à tester** — la vérification prescrite
+interrogeait `/index.html` et restait verte pendant que `/` rendait 403.
 
 **Dette reportée, assumée et datée** (détail et échéances dans `backend/README.md` §8) :
 les tables du substrat d'authentification restent écrivables sans condition par le rôle
