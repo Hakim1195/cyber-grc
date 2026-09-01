@@ -47,25 +47,54 @@ id id_metier primary key
 **Format conservé de l'application existante** : `"<PRÉFIXE>-<horodatage>-<aléa>"`
 (`UI.genId`, ex. `RISK-1720000000000-482`).
 
-⚠️ **La part aléatoire vaut 32 caractères hexadécimaux**, tirés du générateur
-cryptographique du serveur (`gen_random_uuid()`, natif depuis PostgreSQL 13, sans extension) —
-et non les trois chiffres décimaux de la première écriture. Les identifiants anciens, à trois
-chiffres, restent lisibles et repris tels quels : c'est le format **engendré** qui change, pas
-le format **accepté**.
+⚠️ **Ce qui est normatif est une propriété, pas un encodage** : la part aléatoire porte **au
+moins 52 bits**, tirés d'un générateur **cryptographique**, et non les trois chiffres décimaux de
+la première écriture. Le produit engendre des identifiants à quatre endroits, dans trois langages,
+et les formes diffèrent légitimement — imposer une forme unique obligerait le navigateur à
+appeler le serveur pour créer une ligne. Ce qui ne diffère pas, c'est le plancher.
 
-Pourquoi, et le prix qu'a coûté l'écart : mille valeurs d'aléa donnent **24 collisions sur 250
-tirages** dans une même milliseconde, c'est-à-dire à l'échelle d'un import courant. Le défaut a
-été mesuré et chiffré dès la vague 1, laissé sans propriétaire, et il a produit deux vagues plus
-tard le seul constat bloquant d'un passage de porte : un import qui écrit une partie de ses
-lignes **et annonce le succès**.
+| Où | Forme engendrée | Aléa |
+|---|---|---|
+| Navigateur — `UI.genId` | `<PRÉFIXE>-<ms>-<compteur base 36><aléa base 36>` | **compteur de session monotone** *plus* 52 bits de `crypto.getRandomValues`. Le compteur suffit à lui seul pour un import : deux appels d'une même page ne peuvent pas rendre le même identifiant, quel que soit le hasard. |
+| Serveur — `engendrerIdentifiant()` | `<PRÉFIXE>-<ms>-<25 caractères base 36>` | 128 bits de `randomBytes(16)` |
+| Base — `f_generer_id()` | `<PRÉFIXE>-<ms>-<32 caractères hexadécimaux>` | `gen_random_uuid()`, natif depuis PostgreSQL 13 |
+| Serveur — **ré-émission** `identifiantDerive()` | `<PRÉFIXE>-r-<25 caractères base 36>` | **aucun** — voir ci-dessous |
+
+**La ré-émission n'est pas un tirage, et sa marque `-r-` remplace l'horodatage.** Quand
+l'identifiant d'un fichier de reprise est déjà pris dans le domaine global par une ligne que
+l'appelant ne voit pas, le serveur en retient un autre — **dérivé** d'une empreinte de
+`(filiale, table, identifiant du fichier)`. Deux raisons, et la seconde n'était pas évidente :
+la dérivation rend la reprise **idempotente** — trois reprises du même fichier convergent sur une
+ligne au lieu d'en cloner trois —, et un identifiant dérivé **n'a pas d'instant de création**, si
+bien qu'y laisser un horodatage crédible mentirait au lecteur du journal.
+
+**Le plancher est un contrôle, pas une intention.** `verifierRegistre()` — le point unique qui
+refuse déjà le démarrage du serveur — mesure la forme, l'entropie et le déterminisme de la
+ré-émission sur 20 000 tirages. Une régression n'est pas rattrapée par la relecture : elle
+empêche le démarrage. **Ce contrôle ne couvre que le générateur du serveur** — celui de la base
+a le sien dans `f_verifier_schema()` ; celui du navigateur n'en a pas encore, et c'est le constat
+Q-3 du registre. Ne pas lire ce paragraphe comme une couverture des quatre sites : c'est
+exactement l'erreur qui a produit Q-1, où un générateur durci et gardé n'était pas celui qui
+écrivait.
+
+Pourquoi ce plancher, et le prix qu'a coûté l'écart : mille valeurs d'aléa donnent **24 collisions
+sur 250 tirages** dans une même milliseconde, c'est-à-dire à l'échelle d'un import courant. Le
+défaut a été mesuré et chiffré dès la vague 1, laissé sans propriétaire, et il a produit deux
+vagues plus tard le seul constat bloquant d'un passage de porte : un import qui écrit une partie
+de ses lignes **et annonce le succès**. Il est ensuite réapparu **deux fois** — d'abord dans le
+générateur du serveur, que le premier correctif avait manqué en durcissant celui de la base ;
+puis dans celui de la reprise, à mille valeurs, qui engendre un identifiant **par mesure**.
+C'est ce qui justifie qu'il n'y ait **qu'un générateur par langage**, et qu'aucune fonction ne
+recopie la convention dans son coin.
 
 Il portait plus que l'import. `journal_audit.id` a pour valeur par défaut `f_generer_id('LOG')`,
 sous clé primaire : **une collision y refuse la trace au moment précis où elle doit être
 écrite**, sur la seule table dont l'objet est de faire preuve.
 
-Budget de longueur : le domaine plafonne à 64 caractères, soit préfixe + 47 ; le plus long
-préfixe du produit en compte 6, il reste donc 11 de marge. Au-delà de 17, le domaine refuse —
-bruyamment, et un test le fige.
+**Les identifiants anciens restent lisibles et repris tels quels** : c'est le format *engendré*
+qui est normé, pas le format *accepté*. Budget de longueur : le domaine plafonne à 64 caractères
+et la forme la plus longue en consomme 46 (`MESURE-1788250968461-b477dua24ooozhg0zwtpdvknj`).
+Au-delà, le domaine refuse — bruyamment, et un test le fige.
 
 - **Pas d'UUID, pas de `serial`, pas d'`identity`.** L'import d'un export `grc-backup`
   doit être un **round-trip exact** : les identifiants du fichier deviennent tels quels
