@@ -9,11 +9,11 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 ## [Non publié]
 
 ### Serveur — vague 2 : l'API et la bascule de la persistance (lot L2)
-> Travail de la vague 2 terminé, **puis** ses constats fermés — trois fois. Chiffres
-> **rejoués** au 01/09/2026 sur la révision **`2c7d8d3`**, arbre propre, base neuve
-> (PostgreSQL 16.13, **Apache 2.4.58**, **rsync 3.2.7**) : `npm test` → **615 essais,
-> 615 passés, 0 échec** (base 272 · api 175 · reprise 77 · navigateur 53 ·
-> **déploiement 38**), `npm run verifier-types` sans erreur,
+> Travail de la vague 2 terminé, **puis** ses constats fermés — quatre fois. Chiffres
+> **rejoués** au 02/09/2026 sur la révision **`ca73ac6`**, arbre propre, base neuve
+> (PostgreSQL 16.13, **Apache 2.4.58**, **rsync 3.2.7**) : `npm test` → **637 essais,
+> 637 passés, 0 échec** (base 272 · api 180 · reprise 77 · navigateur 53 ·
+> déploiement 51 · **documentation 4**), `npm run verifier-types` sans erreur,
 > `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` → **107 contrôles, 107 réussis, 0 échec**,
 > `f_verifier_schema()` → **0 anomalie** (8 garde-fous découverts, joués et consignés),
@@ -25,10 +25,16 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > constats est venue après, soumise au **5ᵉ passage** sur `f68f799` — « ❌ refusée —
 > 0 bloquant, 3 majeurs, 3 mineurs, contrôle **S17** en échec » ; la fermeture de *ces*
 > constats a été soumise au **6ᵉ** sur `f0b4eec` — « ❌ refusée — **1 bloquant**,
-> 3 majeurs, 2 mineurs, contrôles **S17 et S18** en échec » ; et la suivante au **7ᵉ** —
-> « ❌ refusée — **1 bloquant**, 2 majeurs, 3 mineurs, S17 et S18 en échec »
-> (`docs/PLAN_EXECUTION.md` §7, rapports `docs/securite/RAPPORT_S2_QUINQUIES.md`,
-> `RAPPORT_S2_SEXIES.md` et `RAPPORT_S2_SEPTIES.md`).
+> 3 majeurs, 2 mineurs, contrôles **S17 et S18** en échec » ; la suivante au **7ᵉ** —
+> « ❌ refusée — **1 bloquant**, 2 majeurs, 3 mineurs, S17 et S18 en échec » ; et la
+> dernière au **8ᵉ** sur `ab53aec` — « ❌ refusée — **0 bloquant**, 4 majeurs, 3 mineurs,
+> S13 et S17 en échec » (`docs/PLAN_EXECUTION.md` §7, rapports
+> `docs/securite/RAPPORT_S2_QUINQUIES.md`, `RAPPORT_S2_SEXIES.md`,
+> `RAPPORT_S2_SEPTIES.md` et `RAPPORT_S2_OCTIES.md`).
+>
+> **Le 8ᵉ est le premier refus sans bloquant**, et son auteur écrit que le lot est plus
+> solide qu'à aucun passage : *17 fermetures rejouées par mutation, 17 morsures, zéro
+> exception*, y compris les trois que le 7ᵉ avait trouvées vertes.
 >
 > **Aucun de ces trois défauts n'était dans un fichier de la liste ci-dessous.** Le 5ᵉ
 > tenait à un désaccord *entre* le vhost et le serveur, dont aucun n'avait tort seul — le
@@ -128,7 +134,8 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 **La bascule côté navigateur**
 
 - **La façade synchrone de `DataStore` est préservée, et c'est mesurable** : l'objet
-  exposé compte **130 membres** — exactement les mêmes qu'avant la vague, aucun ajouté,
+  exposé compte **131 membres** — exactement les mêmes qu'avant la vague, `diff` des deux
+  listes triées **vide**, aucun ajouté,
   aucun retiré. Les **118 méthodes distinctes** appelées depuis les modules, les services
   et `app.js` (**323 sites d'appel**) le sont à l'identique. C'est la parade au risque P3 :
   aucun des 26 modules métier n'est réécrit.
@@ -228,16 +235,22 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   bascule et retombait donc en silence sur « Global », exportant toutes les exigences et
   nommant le fichier « global » alors qu'un donneur d'ordre était sélectionné à l'écran.
 
-**Le banc d'essai — de 306 à 615 essais, et de quatre à cinq familles**
+**Le banc d'essai — de 306 à 637 essais, et de quatre à six familles**
 
-- **615 essais `node:test`, 0 échec** (à `2c7d8d3`), en **cinq** familles : **272 sur la
+- **637 essais `node:test`, 0 échec** (à `ca73ac6`), en **six** familles : **272 sur la
   base** (socle, journal, RLS, privilèges, garde-fous, consignation, vocabulaire, et la
-  démonstration de cloisonnement rejouée), **175 sur l'API** (routes réellement montées,
+  démonstration de cloisonnement rejouée), **180 sur l'API** (routes réellement montées,
   verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité
-  d'écriture, identifiants, bornes, route de reprise), **77 sur la reprise**, **53 dans un
-  navigateur réel** et **38 sur le déploiement**. Le compte a suivi les fermetures de
-  constats — 505 au 4ᵉ passage, 534, 564, 615 ; **c'est pourquoi chaque chiffre porte ici
-  sa révision**.
+  d'écriture, identifiants, bornes de corps, route de reprise), **77 sur la reprise**,
+  **53 dans un navigateur réel**, **51 sur le déploiement** et **4 sur la forme du
+  registre des constats**. Le compte a suivi les fermetures de constats — 505 au 4ᵉ
+  passage, puis 534, 564, 615, 637 ; **c'est pourquoi chaque chiffre porte ici sa
+  révision**.
+- **Le banc tourne sur machine propre.** Une famille entière a dépendu, un temps, d'une
+  entrée `/etc/hosts` que rien ne posait : verte chez son auteur, **614 sur 628** sur une
+  machine neuve. Plus aucune résolution de nom, et un **piège fait échouer** toute
+  tentative — une dépendance d'environnement non déclarée est une dépendance qui manquera
+  chez quelqu'un d'autre, et son absence ne doit jamais ressembler à une propriété tenue.
 - **La cinquième famille monte un Apache réel** (`test/deploiement/`) sur le vhost du
   dépôt, publie les fichiers par `rsync`, et **interroge l'URL d'entrée**. Elle est née
   d'un bloquant : le motif `<FilesMatch>` était éprouvé en le *simulant en JavaScript sur
@@ -276,9 +289,10 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 **La fermeture de la vague — ce qui a été corrigé APRÈS le passage de la porte**
 
-> ⚠️ Tout ce qui suit est **postérieur au 4ᵉ passage**, et a été soumis aux **5ᵉ, 6ᵉ et
-> 7ᵉ**, qui ont tous **refusé le lot** — chaque fois pour un défaut qu'aucun de ces
-> correctifs ne couvrait, et deux fois pour un défaut **introduit par l'un d'eux**. Le 6ᵉ a rejoué **22 des 28 constats par mutation** (en cassant
+> ⚠️ Tout ce qui suit est **postérieur au 4ᵉ passage**, et a été soumis aux **5ᵉ, 6ᵉ, 7ᵉ
+> et 8ᵉ**, qui ont tous **refusé le lot** — chaque fois pour un défaut qu'aucun de ces
+> correctifs ne couvrait, et deux fois pour un défaut **introduit par l'un d'eux**. Le 8ᵉ
+> a rejoué **17 de ces fermetures par mutation** : 17 morsures, zéro exception. Le 6ᵉ a rejoué **22 des 28 constats par mutation** (en cassant
 > délibérément chaque correctif pour vérifier que le banc rougit) ; c'est ainsi qu'il a
 > trouvé qu'**un constat annoncé « fermé et vérifié » ne l'était pas**, et qu'un correctif
 > accepté au 5ᵉ produisait le **bloquant** du 6ᵉ. Rien de ce qui suit n'est acquis.
@@ -496,6 +510,54 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
   pour la première fois. Restent hors de portée : le **TLS d'une vraie PKI**,
   l'installation Debian 13 complète, l'unité systemd, **ClamAV**, l'**Active Directory**
   et le **relais SMTP**.
+
+- **La borne de corps du frontal n'existait pas — et le contrôle qui l'affirmait comparait
+  deux déclarations.** `LimitRequestBody` **ne s'applique pas à un corps relayé** : la
+  directive est appliquée par le filtre d'entrée HTTP, et `mod_proxy_http` prend la main
+  avant lui, y compris posée dans un `<Location /api/>`. Mesuré : 28 311 552 octets
+  traversent le frontal alors que la borne annonce 27 262 976 ; le **même** envoi sur
+  `/index.html`, dans le **même** serveur, rend `413`. Et `install.sh` **imprimait « ok »
+  en comparant deux nombres dont l'un n'agissait pas**. Remède à deux étages : un
+  **pré-filtre** `mod_rewrite` sur la longueur annoncée, avant `mod_proxy` (28 311 552 o
+  → **413 en 6 ms**, la doublure ne reçoit rien), et la borne **applicative** de Fastify,
+  qui voit le corps réel. Le contrôle d'installation **envoie** désormais un corps hors
+  borne et constate le refus.
+
+  > ⚠️ **Écrit avec ce qu'il ne couvre pas, et il faut le lire ainsi** : un corps sans
+  > `Content-Length`, en **`Transfer-Encoding: chunked`**, n'est **pas** borné par le
+  > pré-filtre — mesuré, 28 Mio passent entiers. Le pré-filtre arrête l'envoi
+  > surdimensionné *ordinaire*, **pas un client hostile qui choisit son encodage** : ce
+  > n'est donc **pas** la barrière du contrôle S13, la barrière qui tient est
+  > **applicative**. Le trou est un constat **reporté par écrit au lot L3**, où il se
+  > ferme avec la limitation de rythme. Le dire autrement rendrait ce paragraphe aussi
+  > faux que celui qu'il remplace.
+
+- **Le registre des constats avait perdu la ligne d'un bloquant, en silence.** Treize
+  barres sur une ligne au lieu de sept, deux constats collés : le tableau rendait **42
+  lignes au lieu de 43**, et l'absent était **le seul bloquant d'un passage**. La cause
+  était une substitution automatique, faite en fermant le constat qui disait précisément
+  *qu'une case d'état vide passe inaperçue*. Réparé — et surtout **gardé** : quatre essais
+  de forme (`test/documentation/`) tiennent désormais sept barres par ligne, une
+  numérotation continue et sans doublon, et des cases « Propriétaire » et « État » jamais
+  vides. Ils ne jugent **aucun contenu**. C'est le `CONVENTIONS.md` §24 appliqué à la
+  conduite du chantier : une liste écrite à la main n'est le bon outil **que si un
+  contrôle la confronte au réel** — ce tableau était la liste, il n'avait pas son contrôle.
+
+- **Un commit peut ne pas se tenir seul, et rien ne le vérifiait.** Une quinzaine
+  d'instantanés ont été figés « vérifiés et verts » en mesurant **l'arbre de travail**,
+  pas le commit. L'un d'eux commitait un essai appelant une fonction restée non commitée :
+  **à cette révision, il ne s'importait pas**. Le banc ne pouvait pas le voir — il
+  s'exécute sur l'arbre, où les deux fichiers coexistent. La règle qui en découle vaut
+  pour quiconque reprend : **« vert » qualifie une révision, jamais un répertoire de
+  travail** — c'est la même exigence que le point de mesure de ce journal, et elle se
+  tient en mesurant sur un export propre plutôt que dans l'arbre.
+
+- **Trois durcissements de moindre portée, mais mesurés** : la référence d'un incident est
+  désormais **engendrée par le serveur** et non proposée par le client ; `X-Request-Id`
+  est **neutralisé** à l'entrée du frontal, au même titre que les cinq en-têtes de
+  confiance qui l'étaient déjà ; et un contrôle refuse qu'un actif reçoive un **cache long
+  sans URL versionnée** — l'invariant du bloc de cache devient exécutable au lieu d'être
+  seulement énoncé.
 
 **Ce qui n'est PAS livré, et doit être dit**
 

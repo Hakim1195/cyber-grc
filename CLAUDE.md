@@ -30,8 +30,9 @@
 >
 > Puis reprendre où le §8 de **ce** document dit de reprendre (« ▶ REPRENDRE ICI »).
 > **Au 01/09/2026 : les lots L0, L1 et L2 sont livrés, la porte S1 est franchie — ne pas
-> les refaire — mais la porte S2 a été REJOUÉE ET REFUSÉE aux 5ᵉ, 6ᵉ et 7ᵉ passages,
-> les deux derniers sur un BLOQUANT.** La vague 3 ne
+> les refaire — mais la porte S2 a été REJOUÉE ET REFUSÉE aux 5ᵉ, 6ᵉ, 7ᵉ et 8ᵉ
+> passages.** Le 8ᵉ est le premier refus **sans bloquant**, et son auteur écrit que le lot
+> est plus solide qu'à aucun passage. La vague 3 ne
 > s'ouvre donc pas encore : une vague ne démarre pas tant que la porte précédente n'est
 > pas franchie (`docs/PLAN_EXECUTION.md` §1). Le travail immédiat est la fermeture des
 > constats du 5ᵉ passage, puis un 6ᵉ.
@@ -568,7 +569,7 @@ sur l'**Active Directory** du groupe.
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache + durcissement de portée serveur, `install.sh` idempotent, `backend/README.md` |
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — une cinquantaine de tables (compte rejoué dans `backend/README.md` §8), RLS activée **et forcée** partout, propriétaire compris ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur **toutes** les tables qui portent `cree_par`, et **vérifiée** par un garde-fou ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()`, et **consignés dans un registre** depuis la migration `005` — un contrôle qui cesse d'être découvert ne disparaît plus en silence |
-| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais NON VALIDÉ** — porte **S2** franchie au 4ᵉ passage, puis **refusée aux 5ᵉ, 6ᵉ et 7ᵉ** (bloquant sur les deux derniers). Corrigé au fil de la porte — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (130 membres avant, 130 après), session provisoire **fail-closed** hors développement |
+| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais NON VALIDÉ** — porte **S2** franchie au 4ᵉ passage, puis **refusée aux 5ᵉ, 6ᵉ, 7ᵉ et 8ᵉ** (bloquant aux 6ᵉ et 7ᵉ ; le 8ᵉ sans bloquant). Corrigé au fil de la porte — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (131 membres avant, 131 après, listes identiques), session provisoire **fail-closed** hors développement |
 | L3 — Authentification AD et droits · L5 — Journal | ⬜ à faire — **vague 3, qui n'ouvre pas tant que S2 n'est pas franchie** |
 | L4 → L15 | ⬜ à faire — vagues 4 à 8, voir `docs/PLAN_EXECUTION.md` §3 et `PLAN_SERVEUR` §7 |
 
@@ -577,17 +578,17 @@ Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 module pur) et **base de développement** (`db/dev/preparer_base_dev.sh`).
 
 **État des portes — à lire, pas à deviner.** Les lots L1 et L2 ont été soumis à leur
-porte de sécurité six et **sept** fois, chaque passage étant mené par un auditeur qui
+porte de sécurité six et **huit** fois, chaque passage étant mené par un auditeur qui
 n'avait écrit aucune des lignes examinées. **Le verdict de chaque passage vit dans le
 journal des portes de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7**, avec le
 rapport correspondant dans `docs/securite/` — c'est la source, et la seule. Au
-01/09/2026 il porte **S1 « CONFIRMÉE FRANCHIE » (6ᵉ passage)** et **S2 ❌ « refusée »
-(7ᵉ passage — 1 bloquant, 2 majeurs, 3 mineurs, contrôles S17 et S18 en échec)**, après
+02/09/2026 il porte **S1 « CONFIRMÉE FRANCHIE » (6ᵉ passage)** et **S2 ❌ « refusée »
+(8ᵉ passage — 0 bloquant, 4 majeurs, 3 mineurs, contrôles S13 et S17 en échec)**, après
 un franchissement au 4ᵉ que chaque fermeture de constats a rouvert. Les arbitrages issus de
 ces passages sont figés dans `backend/db/CONVENTIONS.md` **§2, §17 à §24** : les lire
 avant de toucher au schéma évite de rouvrir ce qui vient d'être fermé.
 
-⚠️ **Ce que les 5ᵉ, 6ᵉ et 7ᵉ passages enseignent, et qui vaut pour toutes les portes à
+⚠️ **Ce que les 5ᵉ à 8ᵉ passages enseignent, et qui vaut pour toutes les portes à
 venir.** Au 5ᵉ, le défaut qui a fait échouer le lot n'était **dans aucun fichier** : un
 désaccord **entre** le vhost et le serveur, dont aucun n'avait tort seul. Au 6ᵉ, le
 bloquant visait **un correctif que la porte précédente avait accepté** — il avait échangé
@@ -597,7 +598,8 @@ pour une création bloquée, où recharger jette la saisie. Au 7ᵉ, **encore** 
 accepté au passage précédent : la liste blanche du vhost rendait **403 sur `/`**, et
 l'application était injoignable à son URL d'entrée — trouvé parce que l'auditeur a
 **installé Apache**, ce que six passages avaient consigné comme impossible sans le
-tenter. Cinq corollaires :
+tenter. Au 8ᵉ, aucun bloquant — mais deux contrôles en échec, dont un qui affirmait une
+barrière que la mesure a démentie. Huit corollaires :
 
 - **Un banc vert mesure ce qu'il regarde, jamais ce qu'il ne regarde pas.** Le cœur du lot
   peut être juste — 81 sondes hostiles sans effet, 107/107 au cloisonnement — pendant que
@@ -619,6 +621,19 @@ tenter. Cinq corollaires :
   commode à tester.** La vérification prescrite interrogeait `/index.html` : elle est
   restée **au vert** pendant que `/` rendait 403. Un contrôle qui évite le chemin réel ne
   mesure pas le produit, il se mesure lui-même.
+- **Un contrôle qui compare deux déclarations ne contrôle rien ; il faut envoyer et
+  constater.** `install.sh` imprimait « ok » en comparant la borne du vhost à celle du
+  serveur — alors que celle du vhost **n'agissait pas** sur le chemin mandaté. Il envoie
+  désormais un corps hors borne et constate le refus.
+- **« Vert » qualifie une révision, jamais un répertoire de travail.** Une quinzaine
+  d'instantanés ont été figés « vérifiés et verts » en mesurant l'arbre ; l'un d'eux
+  commitait un essai appelant une fonction restée non commitée, et **à cette révision il
+  ne s'importait pas**. Le banc ne peut pas le voir : il s'exécute sur l'arbre, où les
+  deux fichiers coexistent.
+- **Une dépendance d'environnement non déclarée manquera chez quelqu'un d'autre.** Une
+  famille entière d'essais tenait à une entrée `/etc/hosts` que rien ne posait : verte
+  chez son auteur, **614 sur 628** sur une machine neuve. Le banc ne résout plus aucun
+  nom, et un piège fait échouer toute tentative.
 
 **Franchie ne veut pas dire sans réserve, et « corrigé » ne veut pas dire « rejoué ».**
 Les constats restants vivent dans le **registre des constats ouverts** du même §7, chacun
@@ -635,25 +650,33 @@ il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écriv
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
 constat perdu.**
 
-### ▶ REPRENDRE ICI — fermer les constats du 7ᵉ passage de S2, PUIS ouvrir la vague 3
+### ▶ REPRENDRE ICI — fermer les constats du 8ᵉ passage de S2, PUIS ouvrir la vague 3
 
-**D'abord la porte.** S2 est refusée, et pour la deuxième fois de suite sur un
-**bloquant visant un correctif que la porte précédente avait accepté** : au 6ᵉ, un remède
-détruisait la saisie de l'utilisateur ; au 7ᵉ, un autre rendait **l'application
-injoignable à son URL d'entrée** (403 sur `/`). Les contrôles **S17** et **S18** doivent
-repasser au vert. Les constats, leurs propriétaires et leurs échéances sont au registre
-de [`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7 ; le détail est dans
-`docs/securite/RAPPORT_S2_SEPTIES.md`. La vague 3 n'ouvre qu'après un **8ᵉ passage
+**D'abord la porte.** S2 est refusée au 8ᵉ passage — **sans bloquant pour la première
+fois**, l'auteur écrivant que le lot est plus solide qu'à aucun passage : *17 fermetures
+rejouées par mutation, 17 morsures, zéro exception*. Restent 4 majeurs et 3 mineurs, et
+les contrôles **S13** et **S17** à ramener au vert. Les constats, leurs propriétaires et
+leurs échéances sont au registre de
+[`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7 ; le détail est dans
+`docs/securite/RAPPORT_S2_OCTIES.md`. La vague 3 n'ouvre qu'après un **9ᵉ passage
 franchi** — *une vague ne démarre pas tant que la porte précédente ne l'est pas*
 (`PLAN_EXECUTION` §1), et c'est la règle qui a évité à ce chantier de construire sur du
-sable à chacun des treize passages précédents.
+sable à chacun des quatorze passages précédents.
 
-⚠️ **Deux pièges, pour ne pas payer une troisième fois le même prix.** Ne pas refermer le
-bloquant du 6ᵉ **par un rechargement** : c'est la voie que l'arbitrage avait explicitement
-écartée, parce qu'elle perd la saisie — et c'est précisément celle que le bandeau
-recommandait. Et **ne rien conclure d'un contrôle qui n'emprunte pas le chemin de
-l'utilisateur** : celui du 7ᵉ interrogeait `/index.html` et restait vert pendant que `/`
-rendait 403.
+⚠️ **Trois pièges, pour ne pas repayer ce qui l'a déjà été.** Ne pas refermer le bloquant
+du 6ᵉ **par un rechargement** : c'est la voie que l'arbitrage avait explicitement écartée,
+parce qu'elle perd la saisie — et c'est précisément celle que le bandeau recommandait. **Ne
+rien conclure d'un contrôle qui n'emprunte pas le chemin de l'utilisateur** : celui du 7ᵉ
+interrogeait `/index.html` et restait vert pendant que `/` rendait 403. Et **ne pas
+présenter le pré-filtre de corps du frontal comme la barrière S13** : il ne borne pas un
+corps en `Transfer-Encoding: chunked`, la barrière qui tient est applicative, et le trou
+est reporté par écrit au lot L3.
+
+⚠️ **Et une règle sur la façon de dire « vert ».** « Vert » qualifie **une révision**,
+jamais un répertoire de travail : une quinzaine d'instantanés ont été figés « vérifiés »
+en mesurant l'arbre, et l'un d'eux commitait un essai appelant une fonction restée non
+commitée — à cette révision, il ne s'importait pas. Mesurer sur un export propre
+(`git archive`) plutôt que dans l'arbre où d'autres agents écrivent.
 
 **Ensuite seulement, la vague 3 — dont le cadrage ci-dessous reste valable et n'est pas
 à refaire.**

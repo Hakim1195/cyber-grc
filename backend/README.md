@@ -8,7 +8,7 @@
 
 **État : lots L0, L1 et L2 livrés. La porte S1 est franchie ; la porte S2 ne l'est
 pas** — S1 « CONFIRMÉE FRANCHIE » au 6ᵉ passage ; S2 franchie au 4ᵉ passage, puis
-**refusée aux 5ᵉ, 6ᵉ et 7ᵉ**, les deux derniers sur un **bloquant**. Le
+**refusée aux 5ᵉ, 6ᵉ, 7ᵉ et 8ᵉ**. Le
 verdict de chaque passage vit dans le journal des portes du
 [plan d'exécution](../docs/PLAN_EXECUTION.md) §7, et les rapports dans
 [`../docs/securite/`](../docs/securite/) — c'est là qu'il se lit, et nulle part
@@ -499,7 +499,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 615 essais : base, API, reprise, navigateur, déploiement
+npm test                           # 637 essais, six familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -520,6 +520,13 @@ machine de quelqu'un d'autre.
 | **Playwright** global (`/opt/node22/lib/node_modules/playwright`) et son Chromium (`/opt/pw-browsers`) | les essais navigateur montent un serveur local qui sert `cyber-gouvernance_V4/` **tel quel**, `/api/**` relayé vers l'instance Fastify réelle | l'absence est signalée ; ni l'un ni l'autre n'est une dépendance de `package.json` |
 | **Apache 2.4**, `openssl` et **`rsync`** | les essais de déploiement montent un **Apache réel** sur le vhost du dépôt et interrogent l'URL d'entrée ; `rsync` publie réellement les fichiers | l'essai **échoue** — il ne se saute pas, même arbitrage que pour `psql` |
 
+⚠️ **Et rien d'autre : le banc tourne sur machine propre.** Une famille entière a dépendu,
+un temps, d'une entrée `/etc/hosts` que rien ne posait — sur la machine de l'auteur elle
+existait, sur une machine neuve le banc rendait **614 essais sur 628**. Le banc ne résout
+donc plus aucun nom, et un piège **fait échouer** toute tentative de le faire : une
+dépendance d'environnement non déclarée est une dépendance qui manquera chez quelqu'un
+d'autre, et son absence ne doit jamais ressembler à une propriété tenue.
+
 ⚠️ **Pourquoi l'essai de cloisonnement échoue au lieu de se sauter**, alors que l'usage
 courant est de sauter ce qu'on ne peut pas jouer : **un essai qui se saute rend un banc
 vert sur une machine où la démonstration n'a pas été jouée.** Il fabrique exactement le
@@ -534,32 +541,49 @@ sortirait en 0 et annoncerait la démonstration faite ; le compte est donc compa
 plancher relevé et daté, qu'un ajout de contrôle ne fait pas rougir mais qu'une
 disparition fait échouer.
 
-#### Cinq familles d'essais
+#### Six familles d'essais
 
 Le détail compte, parce que chacune attrape une classe de défaut que les autres ne
-voient pas. Comptes relevés à `2c7d8d3` (§8) :
+voient pas. Comptes relevés à `ca73ac6` (§8) ; les noms de répertoires sont ceux du
+dépôt, relus et non recopiés :
 
 | Répertoire | Tests | Ce qu'il éprouve |
 |---|---|---|
 | `test/base/` | 272 | socle, journal en ajout seul et chaînage, RLS, privilèges, garde-fous du schéma, consignation, vocabulaire, **et la démonstration de cloisonnement rejouée par `psql`** |
-| `test/api/` | 175 | routes montées pour de vrai, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité d'écriture, identifiants, bornes, route de reprise |
+| `test/api/` | 180 | routes montées pour de vrai, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité d'écriture, identifiants, bornes de corps, route de reprise |
 | `test/reprise/` | 77 | paliers v1 → v12, enveloppe, scission des mesures, round-trip, entrées hostiles |
 | `test/navigateur/` | 53 | la bascule côté SPA, dans **Chromium**, contre le serveur réel et sous la CSP du vhost |
-| **`test/deploiement/`** | **38** | **le vhost livré, joué par un Apache réel** : l'URL d'entrée, la liste blanche de publication, la compression, le cache, les en-têtes ; plus la copie par `rsync` et les blocs d'`install.sh` |
+| `test/deploiement/` | 51 | **le vhost livré, joué par un Apache réel** : l'URL d'entrée, la liste blanche de publication, la compression, le cache, les en-têtes, la borne de corps ; plus la copie par `rsync` et les blocs d'`install.sh` |
+| **`test/documentation/`** | **4** | **la forme du registre des constats** : sept barres par ligne, numérotation continue et sans doublon, cases « Propriétaire » et « État » jamais vides |
 
-**La cinquième famille est née d'un bloquant, et elle mérite qu'on dise lequel.** Le
-motif `<FilesMatch>` du vhost était éprouvé *en le simulant en JavaScript sur des noms de
-fichier* — utile, gratuit, sans dépendance… et aveugle à **une** entrée : la chaîne vide.
-Pour `GET /`, Apache résout `…/frontend/`, dont le dernier composant est vide, et il
-décide de l'autorisation **avant** que `DirectoryIndex` n'ait choisi `index.html`. Un
-motif à négation étant vrai sur la chaîne vide, `Require all denied` s'appliquait au
-répertoire : **la page d'accueil rendait 403 pendant que `/index.html` rendait 200**.
+*(`test/aide/` n'est pas une famille : ce sont les montages partagés — base, serveur,
+navigateur — que les six autres appellent.)*
 
-Trois choses ne s'obtiennent que d'un Apache réel, et ce sont exactement les trois qui
-manquaient : **quelle entrée Apache donne au motif** (rien dans le vhost ne le dit — son
-journal l'a appris), **l'ordre d'évaluation** (autorisation avant `DirectoryIndex`), et
-**la chaîne complète** (redirection, TLS, résolution d'index). Les deux essais sont
-gardés : la simulation **fige** la leçon, l'Apache réel la **trouve**.
+*Une **septième** famille, `test/depot/`, est en vol au moment où ces lignes sont
+écrites : elle vérifie qu'un fichier suivi n'importe que du suivi — c'est le garde-fou du
+défaut « un commit ne se tient pas seul » décrit plus bas. Elle n'est pas comptée ici
+parce qu'elle n'est pas dans la révision mesurée : **c'est précisément la discipline que
+ce garde-fou impose**, et il serait piquant de l'enfreindre en l'annonçant.*
+
+**Deux de ces familles sont nées d'un défaut, et c'est ce qui leur donne leur valeur.**
+
+`test/deploiement/` est née d'un **bloquant**. Le motif `<FilesMatch>` du vhost était
+éprouvé en le *simulant en JavaScript sur des noms de fichier* — utile, gratuit, sans
+dépendance… et aveugle à **une** entrée : la chaîne vide. Pour `GET /`, Apache résout
+`…/frontend/`, dont le dernier composant est vide, et il décide de l'autorisation
+**avant** que `DirectoryIndex` n'ait choisi `index.html`. Un motif à négation étant vrai
+sur la chaîne vide, `Require all denied` s'appliquait au répertoire : **la page d'accueil
+rendait 403 pendant que `/index.html` rendait 200**. Les deux essais sont gardés — la
+simulation **fige** la leçon, l'Apache réel la **trouve**.
+
+`test/documentation/` est née de la perte d'un constat. Le registre de
+`docs/PLAN_EXECUTION.md` §7 — que le `CLAUDE.md` désigne comme **la seule source des
+verdicts** — a porté un jour treize barres sur une ligne au lieu de sept : deux constats
+s'étaient collés, le tableau rendait **42 lignes au lieu de 43**, et l'absent était **le
+seul bloquant d'un passage**. Le `CONVENTIONS.md` §24 dit qu'une liste écrite à la main
+n'est le bon outil **que si un contrôle la confronte au réel** ; ce tableau-là était la
+liste, et il n'avait pas son contrôle. Il l'a désormais — et cet essai ne juge **aucun
+contenu**, seulement ce qui, dans la forme, fait qu'un constat peut disparaître sans un mot.
 
 ## 6. Sauvegarde et restauration
 
@@ -659,7 +683,7 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** |
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — jouée six fois |
-| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais non validé** — porte **S2** jouée **sept fois** : franchie au 4ᵉ passage, **refusée aux 5ᵉ, 6ᵉ et 7ᵉ**, les deux derniers sur un bloquant |
+| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais non validé** — porte **S2** jouée **huit fois** : franchie au 4ᵉ passage, **refusée aux 5ᵉ, 6ᵉ, 7ᵉ et 8ᵉ** ; le 8ᵉ est le premier refus **sans bloquant** |
 | L3 — Authentification AD et droits · L5 — Journal | ⬜ à faire — **vague 3, qui n'ouvre pas tant que S2 n'est pas franchie** |
 | L4 → L15 | ⬜ à faire — voir [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) §3 et [`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7 |
 
@@ -677,21 +701,27 @@ mot pour mot :
 | **S2** (5ᵉ passage) | ❌ **refusée** — 0 bloquant, 3 majeurs, 3 mineurs. **Contrôle S17 en échec** : le défaut vit *entre* trois fichiers dont aucun n'a tort seul — le vhost coupe la reprise à 60 s pendant que le serveur valide sa transaction. Le cœur du lot n'est pas en cause : 46 sondes hostiles n'ont bougé ni le périmètre, ni une frontière de filiale, ni une requête SQL. | [`RAPPORT_S2_QUINQUIES.md`](../docs/securite/RAPPORT_S2_QUINQUIES.md) |
 | **S2** (6ᵉ passage) | ❌ **refusée** — **1 bloquant**, 3 majeurs, 2 mineurs. **S17 et S18 en échec.** Le bloquant vise le correctif Q-27 **accepté à la porte précédente** : il a échangé un doublon silencieux contre une **destruction silencieuse** — le bandeau dit de recharger, l'utilisateur recharge, et la saisie disparaît. Le reste tient : 22 des 28 constats rejoués par mutation, l'hypothèse la plus chargée de Q-19 enfin **mesurée** avec un mandataire (la transaction est bien annulée), 81 sondes hostiles sans effet, 107/107 au cloisonnement, 27 écrans sous la CSP réelle sans violation. | [`RAPPORT_S2_SEXIES.md`](../docs/securite/RAPPORT_S2_SEXIES.md) |
 | **S2** (7ᵉ passage) | ❌ **refusée** — **1 bloquant**, 2 majeurs, 3 mineurs. S17 et S18 en échec. **L'auditeur a installé Apache et rsync**, ce que six passages n'avaient pas fait : la liste blanche du vhost — correctif accepté au 6ᵉ — rend **403 sur `/`**, et l'application est injoignable à son URL d'entrée. Le reste tient : 111 sondes hostiles sans effet, cloisonnement 107/107 qui s'effondre proprement au sabotage, et **25 écrans derrière un Apache réel sans une seule violation de CSP** — mesuré pour la première fois. | [`RAPPORT_S2_SEPTIES.md`](../docs/securite/RAPPORT_S2_SEPTIES.md) |
+| **S2** (8ᵉ passage) | ❌ **refusée** — **0 bloquant**, 4 majeurs, 3 mineurs. S13 et S17 en échec. « Le lot est plus solide qu'à aucun passage : **17 fermetures rejouées par mutation, 17 morsures, zéro exception**, y compris les trois que le 7ᵉ avait trouvées vertes. » Mais `LimitRequestBody` **ne s'applique pas à `/api/`** et `install.sh` imprimait « ok » en comparant deux nombres dont l'un n'agit pas ; le banc rendait **614/628 sur machine propre**, une famille entière dépendant d'une entrée `/etc/hosts` que rien ne pose ; et **le registre lui-même avait perdu la ligne d'un bloquant** — 42 constats affichés au lieu de 43. La politique TLS livrée est mesurée pour la première fois. | [`RAPPORT_S2_OCTIES.md`](../docs/securite/RAPPORT_S2_OCTIES.md) |
 
 > ## ⚠️ **La porte S2 est REFUSÉE, sur un bloquant. Le lot L2 n'est pas franchi.**
 >
 > C'est l'information la plus importante de ce document. Le franchissement du 4ᵉ passage
 > portait sur la révision **`a4116b6`** (verdict consigné en `120266e`) ; chaque fermeture
 > de constats a ensuite été soumise à la porte, et **chacune a été refusée** — 5ᵉ passage
-> sur **`f68f799`**, 6ᵉ sur **`f0b4eec`**, 7ᵉ sur la révision qu'il nomme —, les deux
-> derniers sur un **bloquant**.
+> sur **`f68f799`**, 6ᵉ sur **`f0b4eec`**, 7ᵉ et 8ᵉ sur les révisions qu'ils nomment
+> (`ab53aec` pour le 8ᵉ).
 >
 > Ne lisez donc **aucune** ligne de ce §8 comme un acquis. Ce qui suit décrit un lot
 > livré, mesuré et corrigé — pas un lot validé.
 >
-> **Et les deux derniers bloquants visaient chacun un correctif que la porte précédente
-> avait accepté.** Il faut le dire, parce que c'est la leçon la plus transférable du
-> chantier : un correctif jugé bon par un auditeur indépendant a détruit des données au
+> **Le 8ᵉ passage est cependant le premier refus sans bloquant, et son auteur écrit que
+> « le lot est plus solide qu'à aucun passage » :** 17 fermetures rejouées par mutation,
+> 17 morsures, zéro exception — y compris les trois que le passage précédent avait
+> trouvées vertes. La trajectoire compte autant que le verdict.
+>
+> **Mais les deux bloquants qui l'ont précédé visaient chacun un correctif que la porte
+> d'avant avait accepté.** Il faut le dire, parce que c'est la leçon la plus transférable
+> du chantier : un correctif jugé bon par un auditeur indépendant a détruit des données au
 > passage suivant, puis un autre a rendu **l'application injoignable à son URL d'entrée**.
 > Le détail est plus bas, sous « Un même mot pour deux couches » et « Une réserve écrite
 > n'est pas une réserve traitée » ; la conséquence pour la lecture de ce document est
@@ -762,16 +792,16 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`2c7d8d3`** — « Registre : Q-43 fermé ; restent Q-39 et Q-41, plus les quatre reports », branche `claude/backend-plan-serveur-hj46fs` |
+| Révision mesurée | **`ca73ac6`** — « Q-52 : rien ne vérifie qu'un commit se tient seul », branche `claude/backend-plan-serveur-hj46fs` |
 | État de l'arbre | **propre** (`git status --porcelain` vide) |
 | Base | neuve, `BASE_NOM=… bash db/dev/preparer_base_dev.sh --recreer`, **PostgreSQL 16.13**, client `psql` 16.13 |
 | Node · Apache · rsync | 22.22.2 · **Apache 2.4.58 (Ubuntu)** · **rsync 3.2.7** |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 615 · pass 615 · fail 0  (117,8 s)
-                                                   base 272 · api 175 · reprise 77
-                                                   navigateur 53 · deploiement 38
+npm test                                         → tests 637 · pass 637 · fail 0  (121,7 s)
+                                                   base 272 · api 180 · reprise 77
+                                                   navigateur 53 · deploiement 51 · documentation 4
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
 select * from f_verifier_schema()                → 0 ligne (8 garde-fous découverts, joués, consignés)
@@ -784,29 +814,37 @@ Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **48 t
 `(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **8 contrôles consignés**
 dans `controles_schema`.
 
-⚠️ **Le compte de migrations est un contrôle, pas une décoration.** Ce document a
-annoncé « 5 migrations » pendant que le catalogue en portait **6**. Un exploitant qui
-vérifie une installation compare ce chiffre à `select count(*) from migrations_schema` :
-faux, il ne mesure plus rien, et pire, il rassure. C'est la forme la plus discrète du
-défaut que tout ce §8 combat — et c'est le **sixième** signalement d'une documentation en
-retard sur sa vague, ce qui en dit plus long sur la difficulté de l'exercice que sur
-l'inattention de qui que ce soit : **entre deux passages de porte, ce document vieillit
-plus vite que le code.**
+Frontend, mesuré en **évaluant le module** et non en dépouillant son texte : façade
+`DataStore` à **131 membres**, identique avant et après la vague 2 ; **118 méthodes
+distinctes** appelées sur **323 sites**, dans **26 modules**.
+
+⚠️ **Un chiffre faux dans ce document est un constat, pas une coquille** — et c'est
+désormais écrit dans la conduite du chantier (`../docs/PLAN_EXECUTION.md` §5) : la remise
+à jour de la documentation est une **étape de la fermeture de porte**, au même titre que
+le rejeu de la grille. La raison tient en une phrase, et elle a été payée neuf fois :
+tant que la mise à jour est demandée **après** le verdict, le signalement suivant est
+déjà écrit. Deux formes de ce défaut, qui n'ont pas le même coût :
+
+| Forme | Ce qu'un lecteur en fait |
+|---|---|
+| un compte qui a **vieilli** (essais, migrations) | il compare à `select count(*)` ou à `npm test`, trouve l'écart, et **cesse de se servir du document comme d'un contrôle** |
+| un compte **faux depuis toujours** (la façade à 130) | il vérifie, trouve faux, et **cesse de croire la propriété que le compte illustrait** — ici *« la façade est intacte »*, qui est le cœur du lot |
+
+Le second est le pire, et c'est celui que ce document a porté le plus longtemps. La
+parade n'est pas la vigilance : c'est de **mesurer par l'exécution** partout où c'est
+possible — `Object.keys` plutôt qu'un dépouillement de texte, `pg_catalog` plutôt qu'une
+relecture de migration, `npm test` plutôt qu'un souvenir.
 
 ⚠️ **Un chiffre en baisse se diagnostique avant d'être écrit.** Le cas s'est présenté
-pendant la rédaction : PostgreSQL était arrêté au redémarrage du conteneur, et le banc a
-rendu un total très inférieur **sans un seul échec** — les suites n'avaient pas pu monter
-leur base, et une suite qui ne démarre pas ne compte aucun échec. **Un banc qui rétrécit
-sans rougir est le symptôme le plus trompeur qui soit** : il ressemble à un succès. Le
-premier réflexe est `pg_isready`, pas la chasse à la régression.
-
-*Contrôle de fraîcheur* : la suite a été rejouée après la fermeture du constat suivant
-(qui ne touche que `src/serveur.ts`) et rend toujours **615 · 615 · 0**. Le schéma, lui,
-n'a pas bougé depuis la révision mesurée — aucune migration n'a été ajoutée.
+deux fois : PostgreSQL arrêté au redémarrage du conteneur — le banc rend alors un total
+très inférieur **sans un seul échec**, parce qu'une suite qui ne démarre pas ne compte
+aucun échec ; et une famille entière qui dépendait d'une entrée `/etc/hosts` absente
+d'une machine neuve (**614 sur 628**). **Un banc qui rétrécit sans rougir est le symptôme
+le plus trompeur qui soit** : il ressemble à un succès.
 
 ⚠️ **Le banc grossit à chaque fermeture de constat**, et c'est la raison d'être de la
-ligne « révision mesurée » : **505** essais au 4ᵉ passage, **534**, **564**, **615** ici —
-la dernière marche étant une **cinquième famille** née d'un bloquant (§5). Un total
+ligne « révision mesurée » : **505** essais au 4ᵉ passage, puis **534**, **564**, **615**,
+**637** ici — avec deux familles nées en chemin, chacune d'un défaut (§5). Un total
 différent du vôtre n'est donc pas une contradiction : comparez d'abord la révision **et**
 l'état de l'arbre.
 
@@ -885,11 +923,20 @@ l'état de l'arbre.
 #### Lot L2 — la bascule côté navigateur
 
 - **La façade synchrone est préservée, et c'est mesurable.** L'objet rendu par
-  `DataStore` expose **130 membres** ; avant la vague 2, il en exposait **130** :
-  aucun ajouté, aucun retiré, aucune signature changée. Les **118 méthodes
-  distinctes** appelées depuis les modules, les services et `app.js` — **323 sites
-  d'appel** — le sont à l'identique. C'est la parade au risque P3 : aucun module
-  métier n'est réécrit.
+  `DataStore` expose **131 membres** ; avant la vague 2, il en exposait **131**, et le
+  `diff` des deux listes triées est **vide** : aucun ajouté, aucun retiré, aucune
+  signature changée. Les **118 méthodes distinctes** appelées depuis les modules, les
+  services et `app.js` — **323 sites d'appel** — le sont à l'identique. C'est la parade
+  au risque P3 : aucun des 26 modules métier n'est réécrit.
+
+  > ⚠️ **Ce document a longtemps écrit 130, et la façon dont il se trompait mérite
+  > d'être lue.** Le nombre venait d'un dépouillement du texte source qui avalait le
+  > **premier** membre de la liste — une erreur d'indice dans mon propre outil, pas dans
+  > le produit. C'est le pire genre de chiffre faux : **la propriété qu'il chiffre est
+  > vraie**, et un lecteur qui vérifie le nombre, le trouve faux, cesse de croire la
+  > propriété — qui est pourtant le cœur du lot. La mesure ne se fait plus sur le texte :
+  > le module est **évalué**, et on lit `Object.keys(DataStore)`. Un compte qui vient de
+  > l'exécution ne peut pas dériver d'un caractère.
 - **Où l'asynchrone est absorbé** : dans `js/core/sync.js`, et là seulement —
   exactement comme `flushNow()` absorbait IndexedDB auparavant. Au démarrage, il lit
   `/api/session`, `/api/modele` et `/api/donnees` ; à chaque `save()`, il compare
@@ -1143,6 +1190,40 @@ C'est aussi pourquoi le contrôle **S18** de la grille existe (« le produit fai
 doit faire ») : aucun contrôle de sécurité n'était en échec ici, et le produit détruisait
 le travail de son utilisateur.
 
+#### La borne de corps du frontal est un **pré-filtre**, pas une barrière
+
+À écrire tel quel, parce que la version précédente de cette page affirmait le contraire
+et que c'est exactement ce qu'un lecteur pressé irait chercher ici.
+
+**Ce qui a été trouvé** : `LimitRequestBody` **ne s'applique pas à un corps relayé**. La
+directive est appliquée par le filtre d'entrée HTTP d'Apache, et `mod_proxy_http` prend
+la main avant lui — y compris quand la directive est posée dans un `<Location /api/>`.
+Mesuré : 28 311 552 octets traversent le frontal en entier alors que la borne annonce
+27 262 976 ; le **même** envoi sur `/index.html`, dans le **même** serveur, rend `413`.
+Le vhost et `install.sh` affirmaient tous deux l'inverse — et `install.sh` **imprimait
+« ok » en comparant deux nombres dont l'un n'agissait pas**, ce qui est la définition
+d'un contrôle qui ne contrôle rien.
+
+**Ce qui est en place maintenant**, et il y a deux étages :
+
+| Étage | Ce qu'il arrête | Ce qu'il n'arrête pas |
+|---|---|---|
+| **Pré-filtre du frontal** (`mod_rewrite` sur `Content-Length`, avant `mod_proxy`) | l'envoi surdimensionné **ordinaire** — un export trop gros, un client qui se trompe. Mesuré : 28 311 552 o annoncés → **413 en 6 ms**, la doublure ne reçoit rien | ⚠️ **un corps sans `Content-Length`, en `Transfer-Encoding: chunked`** : mesuré, 28 Mio passent entiers. Donc **pas un client hostile qui choisit son encodage** |
+| **Borne applicative** (Fastify, `bodyLimit`, `src/serveur.ts`) | tout corps hors borne, **quel qu'en soit l'encodage**, et rend `413` | — |
+
+> ⚠️ **Ne présentez pas le pré-filtre comme la barrière du contrôle S13.** Ce n'est pas
+> elle : **la barrière qui tient pour l'API est applicative**, en aval du frontal, parce
+> qu'elle voit le corps réel. Le trou du `chunked` est un constat ouvert, **reporté par
+> écrit au lot L3** — il se ferme avec la limitation de rythme, au même endroit et pour
+> la même raison. Le dire autrement rendrait ce paragraphe aussi faux que celui qu'il
+> remplace.
+
+Et le contrôle d'installation a changé de nature : il ne compare plus deux nombres, il
+**envoie un corps hors borne et constate le refus** (bloc « banc: corps » de
+`deploy/install.sh`). C'est la même leçon que le 7ᵉ passage : *un contrôle doit
+interroger le chemin que l'utilisateur — ou l'attaquant — emprunte, pas celui qui est
+commode à écrire.*
+
 #### Une réserve écrite n'est pas une réserve traitée — le bloquant du 7ᵉ passage
 
 Sept passages de porte ont écrit, honnêtement et sans se contredire, que le vhost
@@ -1174,6 +1255,39 @@ la place de ce qu'on écrivait de mémoire. On y lit par exemple que `.ico` sort
 `image/vnd.microsoft.icon` et non `image/x-icon` — rien n'est cassé aujourd'hui, mais
 quiconque aurait voulu le mettre en cache l'aurait écrit faux. Avant d'ajouter un type à
 une directive, **servir un fichier de ce type et lire l'en-tête**.
+
+#### Deux défauts de la conduite elle-même, et pourquoi ils sont ici
+
+Ce §8 recense l'état d'un lot. Ces deux-là ne portent pas sur le produit mais sur la
+manière dont on le suit — et ils y ont leur place, parce qu'un lecteur qui reprend le
+chantier héritera des deux avant d'écrire une ligne de code.
+
+**1. Le registre des constats a perdu la ligne d'un bloquant, en silence.** Le tableau de
+`../docs/PLAN_EXECUTION.md` §7 — que le `CLAUDE.md` désigne comme *la seule source des
+verdicts* — a porté treize barres sur une ligne au lieu de sept : deux constats s'étaient
+collés, le tableau rendait **42 lignes au lieu de 43**, et l'absent était **le seul
+bloquant d'un passage**. La cause était une substitution automatique, faite en fermant le
+constat qui disait précisément *qu'une case d'état vide passe inaperçue*.
+
+> La réparation ne suffisait pas, et c'est le point : **le registre existe pour qu'aucun
+> constat ne se perde ; qu'il en perde un méritait mieux qu'une correction.** Il est
+> désormais **gardé par quatre essais de forme** (`test/documentation/`) qui ne jugent
+> aucun contenu — sept barres par ligne, numérotation continue et sans doublon, cases
+> « Propriétaire » et « État » jamais vides. C'est l'application du `CONVENTIONS.md` §24 à
+> la conduite elle-même : une liste écrite à la main n'est le bon outil **que si un
+> contrôle la confronte au réel**.
+
+**2. Un commit peut ne pas se tenir seul, et rien ne le vérifiait.** Une quinzaine
+d'instantanés ont été figés « vérifiés et verts » en mesurant **l'arbre de travail**, pas
+le commit. L'un d'eux commitait un essai qui appelait une fonction restée non commitée :
+**à cette révision, il ne s'importait pas.** Le banc ne pouvait pas le voir — il s'exécute
+sur l'arbre, où les deux fichiers coexistent.
+
+> La règle qui en découle vaut pour quiconque reprend, et pour moi le premier : **« vert »
+> qualifie une révision, jamais un répertoire de travail.** C'est la même exigence que le
+> point de mesure de ce document — un chiffre sans sa révision est invérifiable —, et
+> elle a une conséquence pratique : mesurer sur un export propre de la révision
+> (`git archive`) plutôt que dans l'arbre où d'autres agents écrivent.
 
 ### Réserves — ce qui n'est pas vérifié, et ce qui est sciemment reporté
 
@@ -1259,12 +1373,18 @@ une directive, **servir un fichier de ce type et lire l'en-tête**.
   ci-dessus. Le comportement du mandataire à l'expiration de `ProxyTimeout`, hypothèse la
   plus chargée du correctif de la reprise, est mesuré lui aussi : **la transaction est
   bien annulée**.
+- ✅ **La politique TLS livrée est mesurée**, pour la première fois, au 8ᵉ passage — ce
+  qui restait la dernière affirmation du vhost prise sur parole.
 - ⚠️ **Ce qui reste hors de portée sur cette machine**, et qu'il faut donc surveiller à
   la première exécution sur la VM cible : le **TLS d'une vraie PKI** (le banc engendre son
-  propre certificat), l'**installation Debian 13 complète** et l'**unité systemd**,
-  **ClamAV**, l'**Active Directory** et le **relais SMTP**. `deploy/install.sh` est
-  désormais exercé par blocs et sur sa copie de frontend, mais pas de bout en bout en
-  conditions réelles.
+  propre certificat ; c'est la *politique* qui est mesurée, pas la chaîne de confiance),
+  l'**installation Debian 13 complète** et l'**unité systemd**, **ClamAV**, l'**Active
+  Directory** et le **relais SMTP**. `deploy/install.sh` est désormais exercé par blocs et
+  sur sa copie de frontend, mais pas de bout en bout en conditions réelles.
+- ⚠️ **Une barrière est ouverte et reportée par écrit** : le pré-filtre de corps du
+  frontal ne borne pas un corps en `Transfer-Encoding: chunked` (voir « La borne de corps
+  du frontal » ci-dessus). La borne applicative tient ; le trou du frontal se ferme au
+  **lot L3**, avec la limitation de rythme.
 - Les lots L3 (authentification), L6 (pièces jointes) et L12 (notifications) se
   recetteront sur des doublures tant que l'annuaire, ClamAV et le relais de
   messagerie du client ne sont pas accessibles.
