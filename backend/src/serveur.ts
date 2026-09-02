@@ -29,12 +29,13 @@ import { argv, exit, stderr } from 'node:process';
 import { pathToFileURL } from 'node:url';
 
 import Fastify from 'fastify';
-import type { FastifyError, FastifyInstance } from 'fastify';
+import type { FastifyError, FastifyInstance, FastifyReply } from 'fastify';
 import type { Pool } from 'pg';
 
 import { greffonApi } from './api/index.js';
 import { engendrerIdentifiant } from './entites/index.js';
 import { chargerConfiguration, ErreurConfiguration, resumerConfiguration } from './config/index.js';
+import { traduireErreur } from './erreurs/index.js';
 import type { Configuration } from './config/index.js';
 import { creerPool, fermerPool, verifierBase } from './db/pool.js';
 
@@ -114,6 +115,36 @@ export function construireServeur(config: Configuration, pool: Pool): FastifyIns
     // uniques.
     genReqId: () => engendrerIdentifiant('REQ'),
     requestIdHeader: false,
+    // ── Q-55, second membre de la famille ────────────────────────────────
+    //
+    // Certaines erreurs du cadre sont levées AVANT le routage, donc avant que
+    // `setErrorHandler` puisse les voir : une URL au pourcentage invalide en
+    // est une. Sans ce point d'entrée, Fastify répondait avec son sérialiseur
+    // par défaut, et cela sortait tel quel :
+    //
+    //   GET /api/%zz → {"error":"Bad Request","code":"FST_ERR_BAD_URL",
+    //                   "message":"'/api/%zz' is not a valid url component",
+    //                   "statusCode":400}
+    //
+    // Apache l'absorbe (il rend son propre 400), si bien que le cas ne se voit
+    // pas derrière le frontal livré. Ce n'est pas une raison de le laisser :
+    // la recette et un service interrogé directement ne sont pas protégés, et
+    // ce chantier a payé plusieurs fois le prix des barrières uniques.
+    //
+    // On passe par LA normalisation, comme le reste — pas par une troisième.
+    frameworkErrors: (erreur, requete, reponse) => {
+      const traduite = traduireErreur(erreur);
+      requete.log.warn(
+        { erreur: traduite.code, detail: traduite.detailJournal, reference: requete.id },
+        'Requête refusée avant routage',
+      );
+      // Le `reply` de ce point d'entrée porte des génériques plus étroits que
+      // ceux d'une route : il ne connaît aucun schéma de réponse. Le passage
+      // par `FastifyReply` dit cela, et rien de plus.
+      void (reponse as FastifyReply)
+        .code(traduite.statut)
+        .send({ ...traduite.corps(), reference: requete.id });
+    },
   });
 
   // ══ Q-39 (seconde couche) — CE CROCHET A CHANGÉ DE MÉTIER ═══════════════
@@ -250,33 +281,77 @@ export function construireServeur(config: Configuration, pool: Pool): FastifyIns
   void serveur.register(greffonApi, { pool, config });
 
   serveur.setNotFoundHandler((requete, reponse) => {
+    // Q-55 (second constat, trouvé en mesurant le périmètre) — cette réponse
+    // ne portait AUCUNE référence d'incident. Q-39 avait fermé le fait que la
+    // référence soit choisie par le client ; il restait qu'elle était
+    // simplement ABSENTE sur les chemins qui ne passent pas par le greffon —
+    // « route inconnue », « méthode non prévue », « segment très long ». Un
+    // utilisateur qui appelle le support depuis l'un de ces cas n'avait rien à
+    // donner.
+    //
+    // L'URL est bornée : elle est réfléchie dans la réponse, et elle vient de
+    // l'appelant. Mesuré avant de la borner — une requête de 4 005 signes
+    // rendait 4 083 signes. L'amplification est faible et le corps est du JSON
+    // (donc pas de balisage exécutable), mais renvoyer sans limite ce qu'on
+    // reçoit n'a aucune contrepartie : au-delà, l'URL n'apprend plus rien à
+    // qui lit le message.
+    const cible = `${requete.method} ${requete.url}`;
+    const lisible = cible.length > 120 ? `${cible.slice(0, 120)}…` : cible;
     void reponse.code(404).send({
       erreur: 'ressource_inconnue',
-      message: `Aucune ressource ne répond à ${requete.method} ${requete.url}.`,
+      message: `Aucune ressource ne répond à ${lisible}.`,
+      reference: requete.id,
     });
   });
 
+  // ══ Q-55 — CONTRÔLE S12 : LES ERREURS NE RENSEIGNENT PAS L'ATTAQUANT ══
+  //
+  // Ce gestionnaire avait deux branches, et la seconde renvoyait `erreur.code`
+  // et `erreur.message` TELS QUELS. Pour une erreur du cadre — c'est-à-dire
+  // levée par Fastify avant d'atteindre une route —, cela sortait sa
+  // nomenclature interne. Mesuré derrière un Apache réel, en production, sans
+  // authentification :
+  //
+  //   POST /api/inconnue   {"a":     → {"erreur":"FST_ERR_CTP_INVALID_JSON_BODY",
+  //                                     "message":"Body is not valid JSON but
+  //                                      content-type is set to 'application/json'"}
+  //   POST /api/inconnue   (vide)    → {"erreur":"FST_ERR_CTP_EMPTY_JSON_BODY", …}
+  //
+  // Le second n'était pas au constat : il est sorti d'avoir mesuré la famille
+  // entière avant d'en boucher un membre. C'est la raison pour laquelle le
+  // remède ci-dessous ne vise aucun message en particulier.
+  //
+  // ── Pourquoi le greffon, lui, ne bavardait pas ───────────────────────────
+  //
+  // Parce qu'il normalise : son gestionnaire passe par `traduireErreur`, qui
+  // range déjà les 4xx du cadre dans un message neutre (branche m-1) et met le
+  // texte d'origine au `detailJournal` — donc au journal, jamais à la réponse.
+  // La même requête sur une route DU GREFFON ne fuyait rien ; sur une route
+  // qu'il ne possède pas, elle tombait ici. Le défaut n'était donc pas un
+  // message oublié, c'était **une seconde normalisation**, plus pauvre, écrite
+  // à côté de la première.
+  //
+  // ── Le remède est donc d'en retirer une, pas d'en ajouter une ────────────
+  //
+  // Ce gestionnaire délègue à `traduireErreur`, la même fonction que le
+  // greffon. Il ne décide plus ni du code, ni du statut, ni du message : il
+  // journalise et il répond. Deux normalisations qui se ressemblent finissent
+  // par diverger — ce chantier en a dix démonstrations écrites, et celle-ci en
+  // est la onzième.
   serveur.setErrorHandler((erreur: FastifyError, requete, reponse) => {
-    const code = erreur.statusCode ?? 500;
+    const traduite = traduireErreur(erreur);
 
-    if (code >= 500) {
-      requete.log.error({ erreur: erreur.message, pile: erreur.stack }, 'Erreur non traitée');
-      // Le message interne ne sort jamais : il pourrait révéler une requête SQL
-      // ou un chemin du serveur. La référence permet de retrouver la trace.
-      void reponse.code(code).send({
-        erreur: 'erreur_interne',
-        message: "Le serveur n'a pas pu traiter la demande. L'incident est journalisé.",
-        reference: requete.id,
-      });
-      return;
+    // Le détail d'origine ne sort pas, mais il ne se perd pas non plus :
+    // `detailJournal` porte le texte du cadre, et c'est ce qu'un exploitant
+    // relie à la réponse par la référence.
+    const trace = { erreur: traduite.code, detail: traduite.detailJournal, reference: requete.id };
+    if (traduite.statut >= 500) {
+      requete.log.error({ ...trace, pile: erreur.stack }, 'Erreur non traitée');
+    } else {
+      requete.log.warn(trace, 'Requête refusée');
     }
 
-    requete.log.warn({ erreur: erreur.message, code }, 'Requête refusée');
-    void reponse.code(code).send({
-      erreur: erreur.code ?? 'requete_invalide',
-      message: erreur.message,
-      reference: requete.id,
-    });
+    void reponse.code(traduite.statut).send({ ...traduite.corps(), reference: requete.id });
   });
 
   return serveur;

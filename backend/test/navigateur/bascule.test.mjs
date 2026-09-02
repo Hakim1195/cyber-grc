@@ -2316,21 +2316,35 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
    * l'essai regardait la ligne du serveur en croyant regarder la saisie. Trouvé
    * en sabotant — la préservation retirée, l'essai restait vert.
    */
-  function expirerUneFois(page, verbe) {
-    return page.evaluate((v) => {
-      const vrai = window.Api[v].bind(window.Api);
+  function expirerUneFois(page) {
+    // ══ ON NE FABRIQUE PLUS CE QU'ON DEVRAIT MESURER ═══════════════════════
+    //
+    // Cette fonction remplaçait `Api.creer` et **fabriquait l'erreur d'`api.js`**
+    // — code, drapeau et PHRASE compris. La suite n'exerçait donc jamais la
+    // couche dont la formulation est le sujet de trois constats successifs
+    // (Q-29, Q-30, Q-57), et c'est pour cela que la phrase a pu dériver pendant
+    // trois passages sans qu'un seul essai le voie. Un essai qui fabrique ce
+    // qu'il devrait mesurer est la forme la plus coûteuse de la famille que ce
+    // banc traque : il ne peut rien contredire.
+    //
+    // On coupe donc au NIVEAU DU RÉSEAU : la première écriture voit son `fetch`
+    // rejeter exactement comme le fait un appel interrompu par son propre
+    // `AbortController` — un `DOMException` nommé « AbortError ». Tout ce qui
+    // suit vient d'`api.js` : la classification (`issueInconnue`), le code, et
+    // la phrase. C'est elle qui est éprouvée, et non ma mémoire de ce qu'elle
+    // dit.
+    return page.evaluate(() => {
+      const vrai = window.fetch.bind(window);
       let restante = true;
-      window.Api[v] = async (...arguments_) => {
-        if (restante) {
+      window.fetch = (ressource, options) => {
+        const methode = String((options && options.method) || 'GET').toUpperCase();
+        if (restante && methode !== 'GET') {
           restante = false;
-          throw new window.Api.ErreurApi({
-            reseau: true, statut: 0, code: 'indisponible', issueInconnue: true,
-            message: 'Le serveur n’a pas répondu dans le délai imparti.',
-          });
+          return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'));
         }
-        return vrai(...arguments_);
+        return vrai(ressource, options);
       };
-    }, verbe);
+    });
   }
 
   /** Clique un bouton du bandeau, en exigeant qu'il existe. */
@@ -2379,7 +2393,7 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
     const nom = 'Saisie que le rechargement ne doit pas perdre';
     const session = await ouvrirApplication();
     try {
-      await expirerUneFois(session.page, 'creer');
+      await expirerUneFois(session.page);
       await session.page.evaluate((n) => {
         window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: n });
       }, nom);
@@ -2408,6 +2422,27 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
         vu.bandeau.includes(vu.libelle),
         `Le bandeau ne nomme pas le geste qu’il propose (« ${vu.libelle} ») : l’utilisateur ` +
           `doit savoir LEQUEL conserve sa saisie.\n${vu.bandeau}`,
+      );
+
+      // ── …et il ne doit JAMAIS prescrire le geste destructeur (Q-57) ─────
+      //
+      // La phrase condamnée est « rechargez la page ». Elle était vraie pour une
+      // reprise — tout est au serveur — et destructrice pour une création
+      // bloquée, dont la copie de l'écran est la seule. `api.js` ne nomme plus
+      // aucun geste : il énonce le fait, et chaque couche ajoute celui qu'elle
+      // seule peut connaître.
+      exigerSilence(
+        vu.bandeau,
+        /recharge[zr]\s+la\s+page|actualise[zr]\s+la\s+page/i,
+        'LE GESTE QUE LE PRODUIT NE RECOMMANDE PAS : F5 se comporte comme annoncé',
+      );
+      // Et il en DISSUADE, en nommant ce geste-là : mesuré juste après, il perd
+      // tout. Un bandeau qui se tairait laisserait l'utilisateur l'essayer.
+      assert.match(
+        vu.bandeau,
+        /F5|actualis/i,
+        `Le bandeau ne met pas en garde contre le rafraîchissement du navigateur, qui perd la ` +
+          `saisie (mesuré par l’essai « F5 se comporte comme annoncé »).\n${vu.bandeau}`,
       );
 
       // ── LE GESTE ────────────────────────────────────────────────────────
@@ -2457,6 +2492,88 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
         (await session.page.evaluate(() => window.Sync.etat())).bloques,
         0,
         'Et plus rien ne doit rester bloqué une fois le renvoi accepté.',
+      );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('LE GESTE QUE LE PRODUIT NE RECOMMANDE PAS : F5 se comporte comme annoncé', async () => {
+    // ── L'essai qui suit le geste, et qui manquait depuis trois passages ────
+    //
+    // Constat **Q-57**. Le bandeau disait « rechargez la page » ; le BOUTON
+    // conserve, **F5 perd** — et aucun essai ne jouait F5. Le correctif de Q-29
+    // couvrait un geste, la phrase en nommait un autre, et rien ne les
+    // confrontait.
+    //
+    // Ce que cet essai fige n'est pas « F5 est mauvais » : c'est que **ce que
+    // le produit annonce et ce qu'il fait coïncident**. Le bandeau met en garde
+    // contre F5 ; on fait F5, et l'on exige la perte annoncée.
+    //
+    // ⚠️ S'IL DEVIENT ROUGE PARCE QUE LA SAISIE SURVIT, NE LE SUPPRIMEZ PAS :
+    // quelqu'un aura rendu le geste sûr, et c'est une bonne nouvelle. Il faudra
+    // alors le réécrire dans l'autre sens, retirer la mise en garde du bandeau
+    // — les deux ensemble —, et le dire au registre. Un essai qui rougit parce
+    // que le produit s'est amélioré doit l'annoncer lui-même.
+    const nom = 'Saisie que F5 ne doit pas faire croire sauvée';
+    const session = await ouvrirApplication();
+    try {
+      await expirerUneFois(session.page);
+      await session.page.evaluate((n) => {
+        window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: n });
+      }, nom);
+      await session.page.waitForFunction(
+        () => window.Sync.etat().bloques > 0 && window.Sync.etat().enCours === false,
+        null,
+        { timeout: 15000 },
+      );
+
+      const avant = await session.page.evaluate((n) => ({
+        bandeau: (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+        saisie: window.DataStore.getRisques().some((r) => r.nom === n),
+      }), nom);
+      assert.equal(avant.saisie, true, 'La saisie doit être à l’écran avant le geste.');
+      // Le produit met en garde contre CE geste-là : c'est ce qui rend la perte
+      // mesurée ci-dessous conforme, et non subie.
+      assert.match(
+        avant.bandeau,
+        /F5|actualis/i,
+        `Le bandeau ne dissuade pas du rafraîchissement, et il le devrait : la saisie n’y ` +
+          `survit pas.\n${avant.bandeau}`,
+      );
+
+      // ── LE GESTE : F5, pour de bon ──────────────────────────────────────
+      await session.page.reload({ waitUntil: 'domcontentloaded' });
+      assert.equal(await attendreApplication(session.page), 'chargee', 'L’application doit redémarrer.');
+      await attendreQuiescence(session.page);
+
+      const apres = await session.page.evaluate((n) => ({
+        bandeau: (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent.trim(),
+        saisie: window.DataStore.getRisques().some((r) => r.nom === n),
+        bloques: window.Sync.etat().bloques,
+      }), nom);
+
+      assert.equal(
+        apres.saisie,
+        false,
+        'La saisie a SURVÉCU à F5 : le produit s’est amélioré, et cet essai doit être réécrit ' +
+          'dans l’autre sens — avec la mise en garde du bandeau retirée dans le même ' +
+          'changement (constat Q-57). Ne pas le supprimer.',
+      );
+      assert.equal(apres.bloques, 0, 'Et plus rien n’est en attente : il ne reste aucune trace.');
+      assert.equal(
+        apres.bandeau,
+        '',
+        `Le bandeau doit être vide après F5 : il n’y a plus rien à dire, et c’est bien le ` +
+          `problème que la mise en garde existe pour éviter.\n${apres.bandeau}`,
+      );
+      // Le serveur n'a jamais rien reçu : la perte est totale, et c'est ce qui
+      // donne son prix à la mise en garde.
+      assert.equal(
+        (await enBase('select count(*)::int as n from risques where nom = $1', [nom]))[0].n,
+        0,
+        'Le serveur ne doit rien détenir non plus : sinon la saisie n’était pas perdue.',
       );
       assert.deepEqual(session.erreursScript, []);
     } finally {
@@ -2760,21 +2877,22 @@ describe('L’adresse d’une fiche suit le renommage (constats N-3 / Q-38)', ()
 
 describe('Le rechargement écrit d’abord ce qui attend (constats m-6 / Q-38)', () => {
   /** Fait expirer UNE fois un verbe, sans que le serveur ait rien reçu (voir §15). */
-  function expirerUneFois(page, verbe) {
-    return page.evaluate((v) => {
-      const vrai = window.Api[v].bind(window.Api);
+  function expirerUneFois(page) {
+    // La coupure au NIVEAU DU RÉSEAU, et non une erreur fabriquée : voir le
+    // commentaire de la fonction homonyme du §15. Ce qui suit — classification,
+    // code et phrase — vient d'`api.js`, jamais de cet essai.
+    return page.evaluate(() => {
+      const vrai = window.fetch.bind(window);
       let restante = true;
-      window.Api[v] = async (...arguments_) => {
-        if (restante) {
+      window.fetch = (ressource, options) => {
+        const methode = String((options && options.method) || 'GET').toUpperCase();
+        if (restante && methode !== 'GET') {
           restante = false;
-          throw new window.Api.ErreurApi({
-            reseau: true, statut: 0, code: 'indisponible', issueInconnue: true,
-            message: 'Le serveur n’a pas répondu dans le délai imparti.',
-          });
+          return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'));
         }
-        return vrai(...arguments_);
+        return vrai(ressource, options);
       };
-    }, verbe);
+    });
   }
 
   test('« Recharger les données » n’emporte pas une saisie faite sur une autre fiche', async () => {
@@ -2784,7 +2902,7 @@ describe('Le rechargement écrit d’abord ce qui attend (constats m-6 / Q-38)',
       // ── 1. Un incident, pour que le bandeau et son bouton existent ──────
       // C'est le seul chemin par lequel un utilisateur atteint
       // `rechargerApresEcriture()` : le produit lui propose le geste.
-      await expirerUneFois(session.page, 'creer');
+      await expirerUneFois(session.page);
       await session.page.evaluate(() => {
         window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Création restée bloquée' });
       });

@@ -513,6 +513,7 @@ jamais seulement sur le correctif.
 | **Q-61** | `decisives()` compare **46 des 99 directives** du vhost — l'essai éprouve donc en partie sa propre réécriture | 🔵 mineur | agent **OUTILLAGE** | avant le 10ᵉ passage | ouvert |
 | **Q-62** | **Aucun essai ne joint les trois moitiés de S17.** L'auditeur l'a fait à la main, en une pièce, et c'était la première fois | 🔵 mineur | agent **OUTILLAGE** | vague 3 | ouvert |
 | **Q-63** | **`systemd-analyze verify` était installé et n'avait jamais tourné.** L'unité est valide — mais huit passages ont écrit « systemd non éprouvé » sans lancer la commande qui était là. Quatrième fois que ce motif coûte un constat | 🔵 mineur | agent **DÉPLOIEMENT** | avant le 10ᵉ passage | ouvert |
+| **Q-64** | **Deux sous-essais navigateur sont des courses.** Mesuré en reconstruisant dans les deux configurations : `bascule.test.mjs` échoue tantôt sur Q-29, tantôt sur Q-27, **avec et sans** le correctif de Q-55 — les deux sont fondés sur une expiration de délai. L'agent l'a établi plutôt que de l'affirmer, et refuse de conclure qu'il n'y est pour rien : une charge machine différente peut le rendre plus fréquent. **Un banc qui échoue quatre fois sur cinq apprend à être ignoré** — et un banc qu'on ignore est exactement ce que ce dispositif existe pour empêcher | 🟠 majeur | agent **OUTILLAGE** | avant le 10ᵉ passage | ouvert |
 
 **Arbitrage sur Q-43 — la règle plutôt que le nombre.** Deux remèdes se présentent : étendre le
 jeton de version aux images, ou raccourcir leur durée de cache. Je ne choisis ni l'un ni l'autre,
