@@ -70,7 +70,7 @@ import { join, relative } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 
 import { exigerSilenceApres } from '../aide/assertions.mjs';
-import { extraireBloc, extraireFonction, jouerBloc, jouerScript } from '../aide/install.mjs';
+import { extraireBloc, extraireFonction, jouerBloc, jouerBlocAttendu, jouerScript } from '../aide/install.mjs';
 import { RACINE_BACKEND, RACINE_FRONTEND } from '../aide/serveur.mjs';
 
 /**
@@ -105,6 +105,8 @@ let portApi;
 let certificat;
 let apache;
 let apiDoublure;
+/** Ce que la doublure d'API a réellement reçu (corps compris). */
+let vuesDeLaDoublure;
 /** La vraie `dns.lookup`, remise en place à la fin (voir le piège ci-dessous). */
 let lookupOrigine;
 let urlVersionnees = 0;
@@ -393,12 +395,46 @@ before(async () => {
   // Une doublure d'API, pour que le mandataire ait quelque chose à joindre.
   // Elle ne prouve rien de l'application ; elle prouve que `ProxyPass` marche,
   // et que `/api/` échappe bien aux règles de fichier du frontend.
+  // ══ LA DOUBLURE DOIT POUVOIR PRODUIRE LE CONTRE-EXEMPLE ═══════════════
+  //
+  // C'est la règle des assertions d'absence, portée à l'instrument : **un outil
+  // qui ne peut pas produire le contre-exemple rend l'assertion vraie pour
+  // rien.** Elle a déjà coûté deux fois ailleurs — une doublure qui ne rendait
+  // que des compteurs d'octets faisait passer « l'en-tête n'est pas arrivé »
+  // alors qu'elle n'aurait su le dire dans aucun cas. Celle-ci doit donc :
+  //
+  //  · **rendre les en-têtes reçus** — sans quoi les essais du constat Q-39
+  //    seraient vrais de rien ;
+  //  · **consommer et COMPTER le corps** — sans quoi « la doublure ne reçoit
+  //    rien » (constat Q-44) serait vrai d'une doublure qui ne lit jamais ;
+  //  · **survivre aux ruptures**. Quand Apache refuse en 413, il coupe le lien
+  //    arrière : une doublure qui ne gère pas `error` meurt sur rupture de
+  //    tube, et l'on obtient des 502, 503 ou 000 qui viennent de l'instrument
+  //    et non du produit. Chaque flux porte donc son gestionnaire, et le
+  //    serveur aussi.
+  const recues = [];
   apiDoublure = http.createServer((requete, reponse) => {
-    reponse.writeHead(200, { 'content-type': 'application/json' });
-    // Elle RÉFLÉCHIT ce qu'elle a reçu : c'est la seule façon de savoir ce que
-    // le frontal a réellement effacé — le constat Q-39 vit très exactement là.
-    reponse.end(JSON.stringify({ chemin: requete.url, doublure: true, entetes: requete.headers }));
+    const vue = { chemin: requete.url, methode: requete.method, entetes: requete.headers, octets: 0, complet: false };
+    recues.push(vue);
+    requete.on('data', (morceau) => {
+      vue.octets += morceau.length;
+    });
+    requete.on('error', () => {
+      /* lien coupé en amont : on garde ce qui a été compté, sans mourir */
+    });
+    reponse.on('error', () => {});
+    requete.on('end', () => {
+      vue.complet = true;
+      if (reponse.writableEnded) return;
+      reponse.writeHead(200, { 'content-type': 'application/json' });
+      reponse.end(JSON.stringify({ chemin: requete.url, doublure: true, entetes: requete.headers, octets: vue.octets }));
+    });
   });
+  apiDoublure.on('clientError', (_erreur, prise) => prise.destroy());
+  apiDoublure.on('error', () => {});
+  // Ce que la doublure a vu, depuis un rang donné — l'instrument de mesure des
+  // essais du constat Q-44.
+  vuesDeLaDoublure = { rang: () => recues.length, depuis: (n) => recues.slice(n) };
   await new Promise((r) => apiDoublure.listen(portApi, '127.0.0.1', r));
 
   ecrireVhost();
@@ -1232,6 +1268,242 @@ describe('Le frontal efface vraiment ce qu’il annonce effacer (constat Q-39)',
             '« Syntax OK » l’a béni.',
         );
       },
+    );
+  });
+});
+
+/* =====================================================================
+ *  §7 — La borne de corps du chemin mandaté (constat Q-44)
+ * ---------------------------------------------------------------------
+ *  `LimitRequestBody` est appliquée par le **filtre d'entrée HTTP**. Sur un
+ *  chemin mandaté, `mod_proxy_http` prend la main et relaie le corps sans que
+ *  ce filtre ne l'ait compté : 28 311 552 octets traversaient `/api/` alors que
+ *  la borne est 27 262 976, pendant que le MÊME envoi sur `/index.html` rendait
+ *  413. Le vhost et `install.sh` affirmaient l'inverse, et `install.sh`
+ *  imprimait « ok » en comparant deux nombres dont l'un n'agissait pas.
+ *
+ *  ── Pourquoi ces essais-ci et pas une comparaison ────────────────────────
+ *
+ *  Parce que c'est exactement le défaut : deux nombres égaux ne disent rien de
+ *  ce qui traverse. On ENVOIE, et l'on regarde ce que la doublure a reçu.
+ * ===================================================================== */
+
+/**
+ * Joue le bloc « corps » de `install.sh` contre CETTE instance.
+ *
+ * Quatre substitutions, déclarées et comptées : où est le vhost, et sur quel
+ * port écoute le frontal. **Aucune ne touche ce qui décide** — ni le volume
+ * envoyé, ni la lecture du seuil dans la règle, ni les trois verdicts.
+ */
+function jouerBorneDeCorps() {
+  // ⚠️ La variante NON BLOQUANTE, et ce n'est pas un détail de style : ce bloc
+  // envoie sur `/api/`, qu'Apache relaie vers la doublure vivant dans CE
+  // processus. Joué par `execFileSync`, le processus est figé, la doublure ne
+  // répond pas, Apache attend, et curl coupe à 60 s — deux sondes, 120 s, et un
+  // verdict qui ne dit rien du produit. Mesuré.
+  return jouerBlocAttendu(
+    'corps',
+    {},
+    racine,
+    [
+      ['/etc/apache2/sites-enabled/cyber-grc.conf', join(racine, 'vhost.conf'), 1],
+      ['/etc/apache2/sites-available/cyber-grc.conf', join(racine, 'vhost.conf'), 2],
+      [':443:127.0.0.1"', `:${String(portTls)}:127.0.0.1"`, 1],
+      ['"https://$NOM_VHOST/api/reprise"', `"https://$NOM_VHOST:${String(portTls)}/api/reprise"`, 1],
+    ],
+  );
+}
+
+describe('Un corps hors borne ne traverse pas le mandataire (constat Q-44)', () => {
+  /**
+   * Le seuil, lu dans **la règle qui refuse** — jamais dans un commentaire ni
+   * dans une constante recopiée ici. C'est la leçon du constat lui-même : la
+   * valeur qui décide est celle qui agit.
+   */
+  function seuilDuPrefiltre() {
+    const source = readFileSync(VHOST_SOURCE, 'utf8');
+    const trouve = /^\s*RewriteCond\s+%1\s+"?-gt\s*(\d+)/m.exec(source);
+    assert.notEqual(
+      trouve,
+      null,
+      'Le vhost ne porte plus de règle de refus sur la longueur annoncée : le chemin mandaté ' +
+        'n’est plus borné du tout (constat Q-44), et cet essai ne saurait même pas quoi ' +
+        'envoyer.',
+    );
+    return Number(trouve[1]);
+  }
+
+  /** Envoie un corps de `octets` sur `/api/…` et rend le statut du frontal. */
+  function envoyerCorps(chemin, octets, options = {}) {
+    return new Promise((resoudre, rejeter) => {
+      const morceau = Buffer.alloc(65536, 0x61);
+      const entetes = { 'content-type': 'application/json', host: `${HOTE}:${String(portTls)}`, connection: 'close' };
+      // `chunked` = pas de `content-length` annoncé : c'est le contournement
+      // que le pré-filtre ne voit pas, et l'objet du troisième essai.
+      if (options.chunked === true) entetes['transfer-encoding'] = 'chunked';
+      else entetes['content-length'] = String(octets);
+
+      const requete = https.request(
+        { host: ADRESSE, port: portTls, path: chemin, method: 'POST', agent: false, ca: certificat, servername: HOTE, headers: entetes },
+        (reponse) => {
+          reponse.resume();
+          reponse.on('end', () => resoudre({ statut: reponse.statusCode }));
+        },
+      );
+      // Apache coupe le lien dès qu'il refuse : l'écriture en cours échoue, et
+      // c'est NORMAL. On le note plutôt que d'en mourir — mais on ne résout que
+      // si aucune réponse n'est venue, sinon on perdrait le statut réel.
+      let statutRecu = false;
+      requete.on('response', () => {
+        statutRecu = true;
+      });
+      requete.on('error', (erreur) => {
+        if (statutRecu) return;
+        rejeter(erreur);
+      });
+
+      let ecrits = 0;
+      const pousser = () => {
+        while (ecrits < octets) {
+          const taille = Math.min(morceau.length, octets - ecrits);
+          ecrits += taille;
+          if (!requete.write(taille === morceau.length ? morceau : morceau.subarray(0, taille))) {
+            requete.once('drain', pousser);
+            return;
+          }
+        }
+        requete.end();
+      };
+      pousser();
+    }).catch((erreur) => ({ statut: 0, erreur: erreur.message }));
+  }
+
+  test('LE REFUS : un corps hors borne reçoit 413, et la doublure ne reçoit RIEN', async () => {
+    const seuil = seuilDuPrefiltre();
+    const rang = vuesDeLaDoublure.rang();
+    const issue = await envoyerCorps('/api/essai-corps-hors', seuil + 1048576);
+
+    assert.equal(
+      issue.statut,
+      413,
+      `Un corps de ${String(seuil + 1048576)} octets a traversé le frontal alors que le ` +
+        `pré-filtre annonce ${String(seuil)} : c’est le constat Q-44, et « LimitRequestBody » ` +
+        `n’y peut rien — elle n’est pas appliquée sur un chemin mandaté. Reçu : ` +
+        `${JSON.stringify(issue)}`,
+    );
+    const vues = vuesDeLaDoublure.depuis(rang).filter((v) => v.chemin === '/api/essai-corps-hors');
+    assert.deepEqual(
+      vues.map((v) => `${v.chemin} : ${String(v.octets)} o`),
+      [],
+      'Le refus doit intervenir AVANT le mandataire : la doublure a vu passer la requête, ' +
+        'donc le processus Node l’aurait vue aussi — sans authentification devant lui.',
+    );
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE : un corps minuscule passe, et la doublure le reçoit ENTIER', async () => {
+    // ── Sans cette moitié, un frontal qui refuse TOUT passerait l'essai
+    //    précédent, et l'application serait injoignable en écriture.
+    const rang = vuesDeLaDoublure.rang();
+    const issue = await envoyerCorps('/api/essai-corps-sous', 4096);
+
+    assert.notEqual(
+      issue.statut,
+      413,
+      `Le frontal refuse aussi un corps de 4 096 octets : la règle ne borne pas, elle bloque ` +
+        `tout. Reçu : ${JSON.stringify(issue)}`,
+    );
+    assert.equal(issue.statut, 200, `Et il doit être servi par le service : ${JSON.stringify(issue)}`);
+
+    const vues = vuesDeLaDoublure.depuis(rang).filter((v) => v.chemin === '/api/essai-corps-sous');
+    assert.equal(vues.length, 1, 'La doublure doit avoir vu exactement cette requête.');
+    assert.equal(
+      vues[0].octets,
+      4096,
+      `La doublure a compté ${String(vues[0].octets)} octets sur 4 096. Un instrument qui ne ` +
+        'compte pas le corps rendrait « la doublure ne reçoit rien » vrai de tout, y compris ' +
+        'du cas que l’essai précédent doit voir.',
+    );
+    assert.equal(vues[0].complet, true, 'Et la requête doit lui être parvenue complète.');
+  });
+
+  test('LE RÉGRESSEUR DU VICE : sans la règle de refus, l’installation s’arrête', async () => {
+    // ── L'essai qui distingue un contrôle COMPORTEMENTAL d'une comparaison ──
+    //
+    // L'ancien contrôle d'`install.sh` comparait `LimitRequestBody` à
+    // `SERVEUR_TAILLE_MAX_CORPS` et imprimait « ok » quand les deux
+    // coïncidaient. Sur cette mutation exacte — la règle de refus retirée, la
+    // directive laissée en place — il restait VERT, parce que les deux nombres
+    // qu'il comparait n'avaient pas bougé et que l'un des deux n'agit pas.
+    await avecVhost(
+      [[/* la règle qui refuse, retirée */ '    RewriteCond %{HTTP:Content-Length} ^([0-9]+)$\n', '', 1]],
+      async () => (await envoyerCorps('/api/preuve-mutation', seuilDuPrefiltre() + 1048576)).statut !== 413,
+      async () => (await envoyerCorps('/api/preuve-retour', seuilDuPrefiltre() + 1048576)).statut === 413,
+      async () => {
+        const issue = await jouerBorneDeCorps();
+
+        assert.notEqual(
+          issue.code,
+          0,
+          `Le frontal laisse passer un corps hors borne et l’installation a continué : c’est ` +
+            `un contrôle qui compare deux nombres au lieu d’éprouver ce qui traverse ` +
+            `(constat Q-44).\n${issue.sortie}`,
+        );
+        assert.match(issue.sortie, /constat\s+Q-44/, 'Le refus doit renvoyer au constat qui l’explique.');
+        assert.match(
+          issue.sortie,
+          /par \/api\/ -> \d+ \(413 attendu\)/,
+          `Et dire ce qu’il a mesuré, pas seulement qu’il refuse :\n${issue.sortie}`,
+        );
+      },
+    );
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE : le vhost du dépôt passe la borne de corps', async () => {
+    const issue = await jouerBorneDeCorps();
+    assert.equal(issue.code, 0, `Le vhost livré doit passer :\n${issue.sortie}\n${journalApache()}`);
+    assert.match(
+      issue.sortie,
+      /ok borne de corps éprouvée/,
+      `Le contrôle doit être ALLÉ jusqu’à sa conclusion — un silence ne prouve rien ` +
+        `(constat Q-37) :\n${issue.sortie}`,
+    );
+  });
+
+  test('LA LIMITE ASSUMÉE : 28 Mio en « chunked » traversent, et c’est CONNU (constat Q-51)', async () => {
+    // ── Cet essai fige une LIMITE, pas une propriété ────────────────────────
+    //
+    // Le pré-filtre refuse sur la longueur ANNONCÉE. Un client qui n'en annonce
+    // aucune — `Transfer-Encoding: chunked` — n'est pas borné par lui. Ce n'est
+    // pas un oubli : c'est écrit dans le vhost, mesuré, et la borne qui tient
+    // pour l'API est celle de Fastify, en aval.
+    //
+    // ⚠️ SI CET ESSAI DEVIENT ROUGE, NE LE SUPPRIMEZ PAS : c'est que quelqu'un
+    // a FERMÉ le contournement, et c'est une bonne nouvelle. Il faut alors le
+    // réécrire dans l'autre sens (« chunked est borné aussi »), mettre à jour
+    // le commentaire du vhost qui dit le contraire, et fermer le constat Q-51
+    // au registre. Un essai qui rougit parce que le produit s'est amélioré doit
+    // le dire lui-même, sinon le prochain lecteur le « répare » en l'effaçant.
+    const seuil = seuilDuPrefiltre();
+    const volume = seuil + 1048576;
+    const rang = vuesDeLaDoublure.rang();
+    const issue = await envoyerCorps('/api/essai-chunked', volume, { chunked: true });
+
+    assert.equal(
+      issue.statut,
+      200,
+      `Un corps de ${String(volume)} octets en « chunked » a été refusé (${String(issue.statut)}). ` +
+        'Si c’est délibéré, le contournement du constat Q-51 vient d’être fermé : réécrivez ' +
+        'CET essai dans l’autre sens, corrigez le commentaire du vhost qui affirme encore ' +
+        'l’inverse, et fermez Q-51 au registre. Ne l’effacez pas.',
+    );
+    const vues = vuesDeLaDoublure.depuis(rang).filter((v) => v.chemin === '/api/essai-chunked');
+    assert.equal(vues.length, 1, 'La doublure doit avoir vu la requête.');
+    assert.equal(
+      vues[0].octets,
+      volume,
+      `La doublure a reçu ${String(vues[0].octets)} octets sur ${String(volume)} : le corps ` +
+        'traverse ENTIER, et c’est ce que Q-51 consigne. La borne qui tient pour l’API est ' +
+        'celle de Fastify, en aval du frontal.',
     );
   });
 });
