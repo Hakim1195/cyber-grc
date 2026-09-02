@@ -1941,11 +1941,23 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
       }, nom);
 
       // On attend l'ÉTAT — l'enregistrement bloqué —, jamais un délai.
-      await session.page.waitForFunction(
-        () => window.Sync.etat().bloques > 0 && window.Sync.etat().enCours === false,
-        null,
-        { timeout: 15000 },
-      );
+      //
+      // ── Q-64 : un délai qui expire doit dire CE QUI a mal tourné ─────────
+      //
+      // Mesuré en retirant le remède du constat Q-27 : l'essai mourait sur
+      // « Timeout 15000ms exceeded », sans un mot sur le doublon — qui est
+      // pourtant le défaut, et qui est déjà en base à cet instant. On absorbe
+      // donc l'expiration et on laisse les assertions qui suivent nommer le
+      // mal. Rien n'est masqué : elles échouent aussitôt après.
+      try {
+        await session.page.waitForFunction(
+          () => window.Sync.etat().bloques > 0 && window.Sync.etat().enCours === false,
+          null,
+          { timeout: 15000 },
+        );
+      } catch {
+        /* l'état attendu n'est jamais venu : les assertions vont dire pourquoi */
+      }
 
       // ── LA propriété : une seule ligne ──────────────────────────────────
       const enBaseApres = await enBase('select count(*)::int as n from risques where nom = $1', [nom]);
@@ -1999,6 +2011,46 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
     const session = await ouvrirApplication();
     try {
       await expirerUneFois(session.page, 'creer', false);
+
+      // ── Q-64 : ce que cette attente guettait n'était PAS MONOTONE ────────
+      //
+      // Elle guettait `panneReseau === true`. Ce drapeau est remis à faux au
+      // début de chaque cycle d'écriture (`pousser()`) : il ne dure qu'une
+      // fenêtre de relance, et il est levé PENDANT le cycle, avant que
+      // `ecritureEnCours` retombe. Rien n'interdit donc au scrutin de rendre
+      // la main alors qu'un cycle est encore en vol — or le `sonder()` qui
+      // suit commence par `if (ecritureEnCours) return`. Selon l'instant, le
+      // sondage pousse la saisie en attente, ou ne fait RIEN et la quiescence
+      // dépend alors du minuteur de relance (8 s) sous un plafond de 15 s :
+      // deux scénarios différents pour un seul essai, dont un sans marge sur
+      // une machine chargée.
+      //
+      // ── Ce qui est mesuré, et ce qui ne l'est pas ────────────────────────
+      //
+      // Honnêteté due : sur cette machine, avec UNE seule écriture en attente,
+      // le tirage n'est pas sorti. Instrumenté dans une copie hors dépôt à la
+      // cadence de scrutin de Playwright (une image d'animation), l'état de
+      // `ecritureEnCours` à l'instant où `panneReseau` bascule a été mesuré
+      // SIX fois sur six à `false` — parce qu'avec une seule écriture, plus
+      // rien ne rend la main entre l'échec et la fin du cycle. Le constat
+      // Q-64 n'est donc PAS refermé par ce commentaire : je n'ai pas
+      // reproduit sa course.
+      //
+      // Ce qui est corrigé ici est ce qui est démontrable sans reproduction :
+      // l'essai attendait un état que le produit efface lui-même, et il en
+      // tirait une conclusion sur ce qu'il devait faire ensuite. On pose donc
+      // un VERROU, par le canal d'observation du produit lui-même
+      // (`surChangementEtat`, celui qu'utilise l'écran Paramètres) : une fois
+      // levé il ne retombe jamais, et on ne rend la main qu'une fois le cycle
+      // terminé — ce qui rend le sondage qui suit EFFECTIF dans tous les cas,
+      // au lieu de dépendre de l'instant.
+      await session.page.evaluate(() => {
+        window.__panneObservee = false;
+        window.Sync.surChangementEtat((e) => {
+          if (e.panneReseau === true) window.__panneObservee = true;
+        });
+      });
+
       await session.page.evaluate((n) => {
         window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: n });
       }, nom);
@@ -2006,7 +2058,7 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
       // Le sondage reprend ce qui attend (le troisième reproche de T-1) : c'est
       // le rattrapage automatique, et il ne demande aucun geste.
       await session.page.waitForFunction(
-        () => window.Sync.etat().panneReseau === true,
+        () => window.__panneObservee === true && window.Sync.etat().enCours === false,
         null,
         { timeout: 15000 },
       );
@@ -2049,6 +2101,26 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
         await window.Sync.pousser();
         await window.Sync.pousser(); // le rejeu, qui doit se heurter au verrou
       }, identifiant);
+
+      // ── Q-64 : on n'observe pas À UN INSTANT, on attend l'ÉVÉNEMENT ──────
+      //
+      // L'état était lu ici SANS AUCUNE ATTENTE, juste après deux `pousser()`.
+      // Cela suppose que le rejeu est toujours fini quand la seconde promesse
+      // se résout — vrai tant que rien d'autre ne s'intercale, et ce n'est pas
+      // une propriété que cet essai contrôle : un cycle qui se réarme (Q-15)
+      // ou un minuteur de regroupement encore armé peuvent rendre le second
+      // `pousser()` vide, et le rejeu partirait alors du minuteur, quelques
+      // centaines de millisecondes plus tard.
+      //
+      // Je ne l'ai pas reproduit ; je constate seulement que l'essai lisait à
+      // un instant au lieu d'attendre un événement. `bloques` ne fait que
+      // croître ici : l'attente est monotone, elle ne peut pas manquer sa
+      // fenêtre, et elle ne coûte rien quand l'état est déjà là.
+      await session.page.waitForFunction(
+        () => window.Sync.etat().bloques > 0,
+        null,
+        { timeout: 15000 },
+      );
 
       const apresModification = await vueDeLEtat(session.page);
       assert.equal(apresModification.etat.bloques, 1, 'La modification rejouée doit être arrêtée…');
