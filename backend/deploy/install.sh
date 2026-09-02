@@ -1507,10 +1507,20 @@ if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
                /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null | head -n1 || true)"
   SEUIL_CORPS="$(sed -n 's/^[[:space:]]*RewriteCond[[:space:]]\{1,\}%1[[:space:]]\{1,\}"\{0,1\}-gt[[:space:]]*\([0-9]\{1,\}\).*/\1/p' \
                  /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null | head -n1 || true)"
-  if [[ -z "$NOM_VHOST" || -z "$SEUIL_CORPS" ]]; then
-    alerte "borne de corps : pas de ServerName ou pas de règle de refus lisible dans le vhost."
-    alerte "Le pré-filtre du constat Q-44 n'a PAS été éprouvé — voir le bloc « Dénis de"
-    alerte "service » de deploy/apache/cyber-grc.conf."
+  # ⚠️ Le seuil lu dans le vhost sert à DIMENSIONNER la sonde, jamais à décider.
+  # Une première rédaction en faisait la condition du contrôle : la règle de
+  # refus supprimée, le seuil devenait illisible, et le contrôle se contentait
+  # d'un avertissement en rendant 0 — c'est-à-dire qu'il laissait passer
+  # exactement le défaut qu'il est là pour voir. « Pas de règle » n'est pas
+  # « je ne peux pas mesurer », c'est « la barrière est absente ». Faute de
+  # seuil lisible, on se rabat sur la borne applicative et on exige quand même
+  # le refus.
+  if [[ -z "$SEUIL_CORPS" ]]; then
+    SEUIL_CORPS="$(lire_variable SERVEUR_TAILLE_MAX_CORPS)"; SEUIL_CORPS="${SEUIL_CORPS:-26214400}"
+  fi
+  if [[ -z "$NOM_VHOST" ]]; then
+    alerte "le vhost ne déclare aucun ServerName : la borne de corps (Q-44) n'a pas pu être"
+    alerte "éprouvée. Ce n'est pas un feu vert — voir deploy/apache/cyber-grc.conf."
   else
     CORPS_TMP="$(mktemp)"
     sonder_corps() {  # <octets> → code HTTP rendu par le frontal
@@ -1533,6 +1543,14 @@ if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
         « Dénis de service » de deploy/apache/cyber-grc.conf, et que mod_rewrite est
         chargé (a2enmod rewrite). N'ajustez PAS LimitRequestBody : elle est sans effet
         sur un chemin mandaté, c'est tout l'objet de ce constat."
+    elif [[ "$CODE_SOUS" == 000 || -z "$CODE_SOUS" ]]; then
+      # Un contrôle qui n'observe rien ne doit pas dire « ok ». « 000 » veut
+      # dire que curl n'a obtenu aucune réponse : le service est peut-être
+      # arrêté. Le contrôle symétrique n'a alors pas été joué, et un frontal
+      # qui refuserait TOUT satisferait le reste sans qu'on le voie.
+      alerte "corps de 4 096 octets par /api/ : aucune réponse (le service répond-il ?)."
+      alerte "Le contrôle symétrique de la borne de corps n'a PAS été joué : on sait que le"
+      alerte "frontal refuse hors borne, on ne sait pas qu'il laisse passer le reste (Q-44)."
     elif [[ "$CODE_SOUS" == 413 ]]; then
       alerte "corps de 4 096 octets par /api/ -> $CODE_SOUS"
       echec "le frontal refuse AUSSI un corps minuscule (constat Q-44, contrôle symétrique) :
