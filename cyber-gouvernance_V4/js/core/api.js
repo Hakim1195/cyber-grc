@@ -24,6 +24,26 @@
 const Api = (() => {
     "use strict";
 
+    /* ── LE FAIT, ET RIEN QUE LE FAIT (constats Q-19, Q-29, Q-57) ────────────
+     *
+     * Cette couche énonce **ce qui s'est passé**. Elle ne prescrit **aucun
+     * geste**, et c'est une règle, pas une omission.
+     *
+     * Elle a prescrit « rechargez la page avant de recommencer », et ce même
+     * mot a coûté deux constats successifs : vrai pour une reprise, où tout est
+     * sur le serveur et où recharger montre la vérité ; faux pour une création
+     * bloquée, où le rechargement du navigateur EFFACE la saisie. Le remède de
+     * Q-29 a rendu sûr le bouton du bandeau — et la phrase, elle, nommait
+     * l'autre geste : celui de la touche F5. Troisième tour du même défaut.
+     *
+     * `appeler()` ne peut pas savoir quel geste convient : il ignore ce que
+     * l'appelant tient en mémoire et ce qu'il perdrait. Il n'a donc plus le
+     * droit d'en nommer un. **Chaque couche ajoute le geste qu'elle seule
+     * connaît** — `sync.js` pour une écriture bloquée, `datastore.js` pour une
+     * reprise — et le FAIT, lui, garde une formulation unique, celle-ci.
+     * ───────────────────────────────────────────────────────────────────── */
+    const FAIT_ISSUE_INCONNUE = "L'opération a peut-être été appliquée.";
+
     const BASE = "api";               // relatif : voir l'entête (même origine qu'Apache)
     const DELAI_MS = 30000;           // délai de garde d'une requête
     const DELAI_CHARGEMENT_MS = 60000; // le chargement initial peut être long en VPN
@@ -134,10 +154,8 @@ const Api = (() => {
                 code: "indisponible",
                 issueInconnue: expire && modifie,
                 message: expire
-                    ? (modifie
-                        ? "Le serveur n'a pas répondu dans le délai imparti. L'opération a peut-être " +
-                          "été appliquée : rechargez la page avant de recommencer."
-                        : "Le serveur n'a pas répondu dans le délai imparti. Rien n'a été modifié.")
+                    ? ("Le serveur n'a pas répondu dans le délai imparti. " +
+                       (modifie ? FAIT_ISSUE_INCONNUE : "Rien n'a été modifié."))
                     : "Le serveur est injoignable. Vérifiez votre connexion (VPN) et réessayez."
             });
         } finally {
@@ -180,9 +198,7 @@ const Api = (() => {
                     code: reponse.status >= 500 ? "indisponible" : "erreur_interne",
                     issueInconnue: issueInconnue,
                     message: "Le serveur a refusé la demande (code " + reponse.status + ")." +
-                        (issueInconnue
-                            ? " L'opération a peut-être été appliquée : rechargez la page avant de recommencer."
-                            : "")
+                        (issueInconnue ? " " + FAIT_ISSUE_INCONNUE : "")
                 });
             }
             throw new ErreurApi({

@@ -1018,6 +1018,20 @@ const DataStore = (() => {
                 added: bilan.crees || {}
             };
         } catch (e) {
+            // ── Q-57 : ici, recharger EST le bon geste ──────────────────────
+            // `api.js` ne prescrit plus rien : il ne peut pas savoir. Cette
+            // couche, si. Une reprise n'a rien en mémoire qu'un rechargement
+            // détruirait — tout ce qui compte est sur le serveur —, donc voir
+            // son état réel avant de relancer est exactement ce qu'il faut
+            // faire. C'est le pendant du geste que `sync.js` nomme, à l'opposé,
+            // pour une création bloquée.
+            if (e && e.issueInconnue) {
+                const avecGeste = new Error(e.message +
+                    " Rechargez la page pour voir l'état réel de la filiale avant de relancer la reprise.");
+                avecGeste.code = e.code; avecGeste.statut = e.statut;
+                avecGeste.issueInconnue = true;
+                throw avecGeste;
+            }
             if (!repriseIndisponible(e)) throw refusDeReprise(e);
         }
 

@@ -1523,10 +1523,30 @@ const Sync = (() => {
             // s'ajoute donc ici, comme `refusDeReprise` le fait de son côté :
             // une seule formulation du FAIT, et chaque couche ajoute ce qu'elle
             // seule connaît du GESTE.
+            // ── LE GESTE, NOMMÉ PAR LA COUCHE QUI LE CONNAÎT (Q-57) ─────────
+            //
+            // `api.js` énonce le fait et s'arrête là : il ignore ce que cette
+            // couche tient en mémoire. Le geste, lui, se nomme ici — et il se
+            // nomme **précisément**, parce que deux gestes que l'on confond
+            // volontiers n'ont pas du tout le même effet :
+            //
+            //   · le BOUTON « Recharger les données » relit le serveur en
+            //     CONSERVANT la saisie bloquée (voir `recharger`) ;
+            //   · la touche F5 rebâtit la page : la saisie n'existe qu'en
+            //     mémoire — ni `localStorage`, ni `sessionStorage`, ni
+            //     IndexedDB n'en gardent trace, c'est mesuré — et elle est
+            //     perdue, sans que rien ne le dise ensuite.
+            //
+            // Dire « rechargez la page » désignait le second en croyant décrire
+            // le premier. On ne recommande donc plus que ce qui est garanti, et
+            // on nomme l'autre pour l'écarter : un bandeau qui dirait seulement
+            // « ne rechargez pas » renverrait l'utilisateur à son problème.
             message: incertain
-                ? erreur.message + " Votre saisie reste à l'écran et n'est plus renvoyée ; " +
-                  "le rechargement la conserve. Vérifiez ensuite si elle figure déjà dans la " +
-                  "liste : si oui, supprimez le doublon ; sinon, cliquez « Envoyer à nouveau »."
+                ? erreur.message + " Votre saisie reste à l'écran et n'est plus envoyée. " +
+                  "Servez-vous du bouton « Recharger les données » ci-dessous — lui seul la " +
+                  "conserve — puis regardez la liste : si elle y figure déjà, supprimez le " +
+                  "doublon ; sinon, cliquez « Envoyer à nouveau ». N'actualisez pas le " +
+                  "navigateur (F5) tant que ce message est affiché : la saisie serait perdue."
                 : erreur.message,
             versionActuelle: erreur.versionActuelle,
             rechargeable: true
