@@ -16,7 +16,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -132,7 +132,8 @@ function preambule(variables) {
   ].join('\n');
 }
 
-export function jouerBloc(nom, variables, dossier, substitutions = []) {
+/** Écrit le script d'un bloc, substitutions déclarées appliquées. */
+function ecrireScriptDeBloc(nom, variables, dossier, substitutions) {
   const script = join(dossier, `bloc-${nom}.sh`);
   let corps = extraireBloc(nom);
   // ── Les substitutions sont DÉCLARÉES, et comptées ─────────────────────────
@@ -153,7 +154,11 @@ export function jouerBloc(nom, variables, dossier, substitutions = []) {
     corps = corps.split(avant).join(apres);
   }
   writeFileSync(script, `${preambule(variables)}${corps}\n`);
+  return script;
+}
 
+export function jouerBloc(nom, variables, dossier, substitutions = []) {
+  const script = ecrireScriptDeBloc(nom, variables, dossier, substitutions);
   try {
     const sortie = execFileSync('bash', [script], {
       encoding: 'utf8',
@@ -218,4 +223,31 @@ export function jouerScript(corps, variables, dossier, nom = 'script') {
   } catch (erreur) {
     return { code: erreur.status ?? 1, sortie: `${erreur.stdout ?? ''}${erreur.stderr ?? ''}` };
   }
+}
+
+/**
+ * Comme `jouerBloc`, mais SANS bloquer la boucle d'événements.
+ *
+ * ── Pourquoi cette variante existe, et ce qu'elle a coûté de comprendre ─────
+ *
+ * `execFileSync` fige le processus d'essai tout entier. C'est sans conséquence
+ * tant que le bloc joué ne parle qu'à des choses extérieures — un Apache, un
+ * fichier. Mais le bloc « corps » (constat **Q-44**) envoie des requêtes sur
+ * `/api/`, qu'Apache relaie **vers la doublure d'API vivant dans CE
+ * processus** : bloqué, il ne peut pas répondre, Apache attend, et curl coupe
+ * à `--max-time 60`. Mesuré : 120 s d'attente pour deux sondes, et un verdict
+ * qui ne disait rien du produit.
+ *
+ * C'est la même règle que pour les assertions d'absence, appliquée à
+ * l'outillage : **un instrument qui s'empêche lui-même de répondre rend un
+ * résultat vrai pour rien.**
+ */
+export function jouerBlocAttendu(nom, variables, dossier, substitutions = []) {
+  const script = ecrireScriptDeBloc(nom, variables, dossier, substitutions);
+  return new Promise((resoudre) => {
+    execFile('bash', [script], { encoding: 'utf8' }, (erreur, sortie, erreurs) => {
+      if (erreur === null) resoudre({ code: 0, sortie });
+      else resoudre({ code: erreur.code ?? 1, sortie: `${sortie ?? ''}${erreurs ?? ''}` });
+    });
+  });
 }
