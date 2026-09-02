@@ -1567,6 +1567,70 @@ else
 fi
 # <<< banc: corps >>>
 
+# >>> banc: unite <<<
+# ══ L'UNITÉ SYSTEMD EST VÉRIFIÉE, PLUS DÉCLARÉE « NON ÉPROUVÉE » (Q-63) ══════
+#
+# Huit passages de porte ont écrit « systemd non éprouvé » **alors que
+# `systemd-analyze verify` était installé**. Quatrième fois que ce motif coûte
+# un constat : une réserve écrite n'est pas une réserve traitée, et l'outil
+# manquant était là.
+#
+# ⚠️ Le verdict se lit dans la SORTIE, pas dans le code de retour, et la
+# raison est mesurée — trois unités, sur cette machine :
+#
+#   unité propre (ExecStart existant)      code 0, aucune sortie
+#   ExecStart introuvable                  code 1, une ligne
+#   « Type=nimportequoi »                  code 0, une ligne   ← le piège
+#
+# Un défaut de directive est donc signalé **avec un code de retour nul**. Se
+# fier au code aurait laissé passer exactement ce cas — la même figure que le
+# `configtest` qui dit « Syntax OK » sur un motif qui n'efface rien, et que
+# `LimitRequestBody` qui s'annonce posée sans agir. La sortie est le seul
+# verdict fiable des trois.
+#
+# (Première rédaction de ce commentaire : « rend 0 même quand il signale un
+# problème, mesuré avec un code 0 » — sur le mauvais exemple, parce que la
+# mesure passait par un tube qui rendait le code de `sed`. Refaite proprement,
+# elle dit l'inverse pour ce cas-là et confirme la règle pour l'autre.)
+if command -v systemd-analyze >/dev/null 2>&1; then
+  SORTIE_UNITE="$(systemd-analyze verify "$SOURCE/deploy/systemd/cyber-grc.service" 2>&1 || true)"
+  if [[ -n "${SORTIE_UNITE//[[:space:]]/}" ]]; then
+    while IFS= read -r l; do [[ -n "$l" ]] && alerte "unité : $l"; done <<< "$SORTIE_UNITE"
+    echec "systemd refuse ou critique l'unité livrée (constat Q-63). Le service ne
+      démarrerait pas, ou pas comme prévu. Corrigez deploy/systemd/cyber-grc.service, puis
+      relancez. Si la ligne mise en cause est « Command … is not executable », voir juste
+      en dessous : le chemin de Node écrit dans l'unité et celui que ce script a validé
+      ne sont pas le même."
+  else
+    succes "unité systemd validée par systemd-analyze verify"
+  fi
+else
+  alerte "systemd-analyze absent : l'unité n'a PAS été vérifiée. Ce n'est pas un feu vert."
+fi
+
+# Le chemin de Node de l'unité contre celui que ce script a validé au §3.
+# Ils divergeaient sans que rien ne le dise : le contrôle de version appelle
+# « command -v node » (qui trouve /opt/node22/bin/node sur une machine de
+# développement) pendant que l'unité écrit « /usr/bin/node » en dur. Sur une
+# machine où Node n'est pas dans /usr/bin, l'installation passait et le service
+# ne démarrait pas.
+NODE_UNITE="$(sed -n 's/^ExecStart=\([^[:space:]]*\).*/\1/p' \
+              "$SOURCE/deploy/systemd/cyber-grc.service" 2>/dev/null | head -n1 || true)"
+NODE_REEL="$(command -v node 2>/dev/null || true)"
+if [[ -z "$NODE_UNITE" ]]; then
+  alerte "l'unité ne déclare aucun ExecStart lisible : chemin de Node non vérifié."
+elif [[ ! -x "$NODE_UNITE" ]]; then
+  alerte "unité : ExecStart=$NODE_UNITE"
+  alerte "trouvé sur le PATH : ${NODE_REEL:-aucun}"
+  echec "l'unité lance « $NODE_UNITE », qui n'est pas exécutable sur cette machine. Le
+    service échouerait au démarrage, après une installation qui se serait annoncée
+    réussie. Alignez ExecStart de deploy/systemd/cyber-grc.service sur le Node de cette
+    machine (${NODE_REEL:-installez Node 22}), ou posez un lien vers lui."
+else
+  succes "unité : ExecStart=$NODE_UNITE (exécutable)"
+fi
+# <<< banc: unite >>>
+
 # >>> banc: entetes <<<
 # ══ CE QUE LE SERVICE LIT, LE FRONTAL DOIT L'AVOIR NEUTRALISÉ (Q-39) ═════════
 #
@@ -1591,11 +1655,83 @@ fi
 VHOST_APPLIQUE=/etc/apache2/sites-available/cyber-grc.conf
 [[ -f "$VHOST_APPLIQUE" ]] || VHOST_APPLIQUE="$SOURCE/deploy/apache/cyber-grc.conf"
 
-# 1. Ce que le code LIT : « requete.headers['x-…'] ». Le motif vise la requête,
-#    jamais la réponse — `res.headers["set-cookie"]` de la liste de masquage de
-#    pino est un en-tête de RÉPONSE et n'a rien à faire ici.
-ENTETES_ATTENDUS="$(grep -rhoE "requete\.headers\['[a-z0-9-]+'\]" "$SOURCE/src" 2>/dev/null \
-                    | sed "s/.*\['//; s/'\]//" | sort -u || true)"
+# 1. Ce que le code LIT — et le motif d'hier ne savait lire qu'UNE orthographe.
+#
+# ── Constat Q-56 : le cinquième annuaire ────────────────────────────────
+#
+# Ce bloc cherchait `requete.headers['x-…']` avec des apostrophes simples, et
+# rien d'autre. Trois écritures ordinaires de JavaScript lui étaient invisibles,
+# mesurées : guillemets doubles, accent grave, et destructuration
+# (`const { 'x-a': j } = requete.headers`). **Trois sur quatre passaient.**
+# Ajouter trois motifs à côté du premier aurait donné un annuaire de quatre au
+# lieu d'un, et le cinquième aurait manqué.
+#
+# ── Ce qui a été cherché, et pourquoi la découverte n'est pas possible ──
+#
+# La bonne réponse serait de lire l'ARBRE SYNTAXIQUE plutôt que le texte —
+# l'équivalent, pour du TypeScript, de ce que `f_verifier_schema()` fait en
+# découvrant ses contrôles dans `pg_catalog`. Le compilateur est là pour cela.
+# **Il n'est pas disponible quand ce contrôle tourne**, et c'est mesuré, pas
+# supposé : `typescript` est en `devDependencies`, le chemin en ligne fait
+# `npm ci --include=dev` puis **`npm prune --omit=dev`** (§4 de ce script), et
+# le chemin hors ligne demande une arborescence préparée avec `--omit=dev`.
+# Dans les deux cas, le compilateur a disparu avant qu'on arrive ici. Un
+# contrôle qui dépendrait de sa présence serait vert par absence — la figure
+# que ce chantier passe son temps à payer.
+#
+# ── Ce qui remplace l'annuaire : classer, et REFUSER DE DEVINER ─────────
+#
+# L'orthographe de la CLÉ est libre ; celle du SITE D'ACCÈS ne l'est pas. Les
+# quatre formes, l'aliasing et `requete.raw.headers` ont toutes en commun
+# l'identifiant `headers`, qui est le nom de la propriété Fastify et ne se
+# décline pas. On énumère donc les LIGNES qui le portent — il y en a quatre
+# dans tout `src/` — et chacune reçoit un verdict :
+#
+#   MASQUAGE     une chaîne « req.headers.x » de la liste de pino : elle DÉCRIT
+#                un en-tête pour le masquer au journal, elle n'en lit aucun.
+#                Reconnue seulement si la ligne ne touche pas `requete.headers`,
+#                sans quoi une lecture pourrait se déguiser en masquage.
+#   LECTURE      les littéraux de la ligne — apostrophe, guillemet ou accent
+#                grave, y compris plusieurs par ligne — sont les en-têtes lus.
+#   ILLISIBLE    clé calculée (`requete.headers[NOM]`) : rien à extraire.
+#   INCLASSABLE  tout le reste, l'aliasing compris.
+#
+# **Les deux derniers ARRÊTENT l'installation.** C'est là toute la différence
+# avec l'annuaire : une écriture inconnue n'est plus invisible, elle est
+# bruyante. Le cinquième cas n'a pas besoin d'être prévu pour être vu.
+ENTETES_ATTENDUS=""
+ENTETES_OPAQUES=""
+while IFS= read -r brut; do
+  [[ -n "$brut" ]] || continue
+  LIGNE_FIC="${brut%%:*}"; RESTE="${brut#*:}"; LIGNE_NUM="${RESTE%%:*}"; LIGNE_TXT="${brut#*:*:}"
+  if printf '%s' "$LIGNE_TXT" | grep -qE "['\"\`](req|res)\.headers" \
+     && ! printf '%s' "$LIGNE_TXT" | grep -qE "requete\.headers|request\.headers|\.raw\.headers"; then
+    continue                                   # masquage du journal : ne lit rien
+  fi
+  if printf '%s' "$LIGNE_TXT" | grep -qE "headers[[:space:]]*\[|\}[[:space:]]*=[^=]*headers"; then
+    CLES="$(printf '%s' "$LIGNE_TXT" | grep -oE "['\"\`][A-Za-z][A-Za-z0-9-]*['\"\`]" \
+            | tr -d "'\"\`" | tr 'A-Z' 'a-z' | sort -u || true)"
+    if [[ -z "$CLES" ]]; then
+      ENTETES_OPAQUES+="${LIGNE_FIC#"$SOURCE/"}:$LIGNE_NUM — clé calculée, aucun littéral à lire"$'\n'
+    else
+      ENTETES_ATTENDUS+="$CLES"$'\n'
+    fi
+    continue
+  fi
+  ENTETES_OPAQUES+="${LIGNE_FIC#"$SOURCE/"}:$LIGNE_NUM — accès à « headers » que ce contrôle ne sait pas classer"$'\n'
+done < <(grep -rnE "\bheaders\b" "$SOURCE/src" 2>/dev/null || true)
+
+if [[ -n "${ENTETES_OPAQUES//[[:space:]]/}" ]]; then
+  while IFS= read -r l; do [[ -n "$l" ]] && alerte "$l"; done <<< "$ENTETES_OPAQUES"
+  echec "le code touche « headers » d'une façon que ce contrôle ne sait pas lire (constat
+    Q-56). Il REFUSE de conclure plutôt que de laisser passer : un en-tête lu et non
+    effacé au frontal est forgeable par le client, et c'est ainsi que la « référence »
+    d'un incident se choisissait (Q-39). Deux issues : écrire l'accès sous une forme à
+    clé littérale — apostrophe, guillemet, accent grave ou destructuration, les quatre
+    sont comprises —, ou étendre la classification ci-dessus en l'éprouvant sur les
+    formes existantes ET sur celle que vous ajoutez."
+fi
+ENTETES_ATTENDUS="$(printf '%s' "$ENTETES_ATTENDUS" | sort -u)"
 
 # 2. Ce à quoi il fait CONFIANCE sans le nommer : `trustProxy` fait lire à
 #    Fastify les trois en-têtes ci-dessous. C'est une propriété du cadre, pas
