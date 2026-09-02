@@ -2372,7 +2372,39 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
    * le geste dont il prétendait mesurer l'effet. On attend donc l'événement, et
    * il se compte hors de la page : le `GET /api/donnees` reçu par le relais.
    */
-  async function rechargerEtAttendre(page) {
+  /**
+   * Plante, côté SERVEUR, une marque que seule l'adoption d'un jeu rechargé
+   * peut faire apparaître en mémoire. C'est le témoin de l'essai suivant.
+   */
+  async function planterMarqueur(marque) {
+    const client = await base.connexion('app');
+    await base.avecPerimetre(
+      client,
+      perimetre('voisin', FILIALE_A, [FILIALE_A]),
+      async (c) => {
+        await c.query('update risques set nom = $2 where id = $1', ['RISK2-A', marque]);
+      },
+      { annuler: false },
+    );
+  }
+
+  /**
+   * Clique « Recharger les données » et attend que le rechargement soit APPLIQUÉ.
+   *
+   * ── Pourquoi le marqueur, et pas `incidents === 0` (constat Q-64) ─────────
+   *
+   * La rédaction précédente attendait que le compte d'incidents retombe à zéro.
+   * C'était une COURSE : `recharger()` met bien ce compte à zéro en dernier,
+   * mais il n'est pas le seul à y toucher — le cycle d'écriture qui le précède
+   * passe par le même état, et la fenêtre suffit à faire lire l'écran d'AVANT
+   * le geste. Un banc qui échoue une fois sur cinq apprend à être ignoré, et un
+   * banc qu'on ignore est ce que tout ce dispositif existe pour empêcher.
+   *
+   * On attend donc un fait **monotone et causalement lié** : une valeur que
+   * seul le jeu de données du serveur peut apporter. Elle n'apparaît qu'une
+   * fois la réponse reçue ET adoptée, et elle ne disparaît plus.
+   */
+  async function rechargerEtAttendre(page, marque) {
     const avant = chargements();
     await cliquer(page, 'sync-recharger');
     const echeance = Date.now() + 15000;
@@ -2380,13 +2412,12 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
       await new Promise((resoudre) => setTimeout(resoudre, 100));
     }
     assert.ok(chargements() > avant, 'Le rechargement n’a jamais été demandé au serveur.');
-    // La requête PARTIE ne suffit pas : il faut qu'elle soit revenue et appliquée.
-    // `enCours` ne le dit pas — il retombe à faux dès que le cycle d'écriture qui
-    // précède le rechargement est fini, pendant que la réponse est encore en vol.
-    // Le marqueur du rechargement ABOUTI est la remise à zéro des incidents, que
-    // `recharger()` fait en dernier. Sans lui, cet essai lisait l'écran d'avant le
-    // geste — et restait vert quand on retirait la préservation.
-    await page.waitForFunction(() => window.Sync.etat().incidents === 0, null, { timeout: 15000 });
+    // La requête PARTIE ne suffit pas : il faut qu'elle soit revenue et adoptée.
+    await page.waitForFunction(
+      (m) => window.DataStore.getRisques().some((r) => r.nom === m),
+      marque,
+      { timeout: 15000 },
+    );
   }
 
   test('CRÉATION incertaine : on RECHARGE comme il est proposé, la saisie reste', async () => {
@@ -2446,7 +2477,10 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
       );
 
       // ── LE GESTE ────────────────────────────────────────────────────────
-      await rechargerEtAttendre(session.page);
+      // Le témoin d'adoption : planté au serveur, il n'apparaît en mémoire
+      // qu'une fois le jeu rechargé ADOPTÉ (constat Q-64).
+      await planterMarqueur('ADOPTE-Q29');
+      await rechargerEtAttendre(session.page, 'ADOPTE-Q29');
 
       // Le serveur n'a RIEN : la copie de l'écran est la seule qui existe.
       assert.equal(
@@ -2616,7 +2650,10 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
         { timeout: 15000 },
       );
 
-      await rechargerEtAttendre(session.page);
+      // Le témoin d'adoption : planté au serveur, il n'apparaît en mémoire
+      // qu'une fois le jeu rechargé ADOPTÉ (constat Q-64).
+      await planterMarqueur('ADOPTE-Q29-BIS');
+      await rechargerEtAttendre(session.page, 'ADOPTE-Q29-BIS');
       await session.page.waitForFunction(
         () => window.Sync.etat().bloques === 0,
         null,
