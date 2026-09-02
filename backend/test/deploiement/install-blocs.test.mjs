@@ -466,27 +466,105 @@ describe('Tout en-tête que le service lit est neutralisé par le frontal (const
     assert.match(issue.sortie, /ok en-têtes/, issue.sortie);
   });
 
-  test('E — LE SEPTIÈME EN-TÊTE ne manquera pas : un en-tête NEUF non neutralisé arrête', async () => {
-    // La question que le constat posait : « le septième oubli suivra ». Voici la
-    // propriété qui y répond — le contrôle n'a pas à connaître le nom d'avance.
-    const source = sourceAvec([
-      [
-        'serveur.ts',
-        "const brut = requete.headers['x-request-id'];",
-        "const brut = requete.headers['x-request-id'];\n    const jeton = requete.headers['x-jeton-maison'];",
-        1,
-      ],
-    ]);
-    const issue = jouerEntetes(source, vhostAvec());
+  /**
+   * Les QUATRE façons d'écrire « le service lit cet en-tête ».
+   *
+   * ── Ce que le constat Q-56 reproche à l'essai qui était ici ─────────────
+   *
+   * Il n'en écrivait qu'UNE : celle que le contrôle sait lire. Il mesurait donc
+   * l'accord de l'essai et du contrôle sur une orthographe commune, jamais la
+   * propriété. La question à se poser devant tout régresseur est celle-là, et
+   * elle n'est pas « où est la liste » :
+   *
+   *   > **mon essai emprunte-t-il le même chemin que ce qu'il éprouve ?**
+   *
+   * Si l'essai écrit son cas dans la forme que le contrôle reconnaît, les deux
+   * partagent le même angle mort et l'essai ne peut pas le voir. Les quatre
+   * formes ci-dessous sont du JavaScript ordinaire, qu'un développeur écrira
+   * sans y penser ; trois d'entre elles échappaient au contrôle.
+   */
+  const ORTHOGRAPHES = [
+    ['apostrophes', 'x-jeton-apostrophe', (n) => `requete.headers['${n}']`],
+    ['guillemets', 'x-jeton-guillemet', (n) => `requete.headers["${n}"]`],
+    ['gabarit', 'x-jeton-gabarit', (n) => `requete.headers[\`${n}\`]`],
+    ['destructuration', 'x-jeton-destructure', (n) => `const { '${n}': jeton } = requete.headers; void jeton`],
+  ];
 
-    assert.notEqual(
-      issue.code,
-      0,
-      `Le code s’est mis à lire un en-tête que le vhost ne neutralise pas, et l’installation ` +
-        `a continué : le septième oubli passera comme les six premiers.\n${issue.sortie}`,
+  test('E — LE SEPTIÈME EN-TÊTE ne manquera pas, QUELLE QUE SOIT SON ORTHOGRAPHE', async () => {
+    // La question que le constat posait : « le septième oubli suivra ». La
+    // propriété qui y répond n'est pas « le contrôle connaît le nom d'avance »,
+    // c'est « il voit le code le lire » — et lire s'écrit de plusieurs façons.
+    const aveugles = [];
+    for (const [forme, entete, ecrire] of ORTHOGRAPHES) {
+      const source = sourceAvec([
+        [
+          'serveur.ts',
+          "const brut = requete.headers['x-request-id'];",
+          `const brut = requete.headers['x-request-id'];\n    void (${ecrire(entete)});`,
+          1,
+        ],
+      ]);
+      const issue = jouerEntetes(source, vhostAvec());
+      const vu =
+        issue.code !== 0 && new RegExp(`NON neutralisé par le vhost : ${entete}`).test(issue.sortie);
+      if (!vu) aveugles.push(`${forme} — « ${ecrire(entete)} » : l’installation a CONTINUÉ`);
+    }
+
+    assert.deepEqual(
+      aveugles,
+      [],
+      'Le service lit ces en-têtes, le vhost ne les neutralise pas, et le contrôle a imprimé ' +
+        '« ok » :\n' +
+        aveugles.map((a) => `    · ${a}`).join('\n') +
+        '\n\n  Le motif de `deploy/install.sh`, bloc « banc: entetes », ne reconnaît qu’une ' +
+        'orthographe :\n' +
+        "      grep -rhoE \"requete\\.headers\\['[a-z0-9-]+'\\]\"\n" +
+        '  Il doit reconnaître au minimum les guillemets doubles, le gabarit et la ' +
+        'destructuration — trois écritures de JavaScript ordinaire (constat Q-56).' +
+        '\n\n  ⚠️ Cet essai a lui-même porté ce défaut : il n’écrivait son en-tête que dans ' +
+        'la forme que le contrôle sait lire, et mesurait donc leur accord plutôt que la ' +
+        'propriété. Un régresseur qui emprunte le chemin de ce qu’il éprouve ne peut rien voir.',
     );
-    assert.match(issue.sortie, /NON neutralisé par le vhost : x-jeton-maison/, issue.sortie);
-    assert.match(issue.sortie, /lu ici : src\/serveur\.ts:\d+/, `Avec l’endroit :\n${issue.sortie}`);
+  });
+
+  test('E bis — LE CONTRÔLE SYMÉTRIQUE des quatre orthographes : le vhost neutralise, ça passe', async () => {
+    // ── Sans cette moitié, l'essai ci-dessus serait satisfait par un contrôle
+    //    qui refuse TOUT : les quatre orthographes feraient échouer, et l'on
+    //    conclurait qu'il les voit alors qu'il ne voit rien.
+    //
+    // ⚠️ Sa portée est honnête, et il faut la dire : pour une orthographe que
+    // le contrôle ne sait PAS encore lire, cette moitié est satisfaite sans
+    // rien prouver — il ne refuse pas, faute d'avoir vu. C'est l'essai « E »
+    // qui fait parler le mécanisme, et c'est lui qu'il faut regarder ; celui-ci
+    // ne dit que « il ne bloque pas tout ». Le jour où le motif sera élargi,
+    // les quatre cas deviendront ici des cas pleins.
+    const refuses = [];
+    for (const [forme, entete, ecrire] of ORTHOGRAPHES) {
+      const source = sourceAvec([
+        [
+          'serveur.ts',
+          "const brut = requete.headers['x-request-id'];",
+          `const brut = requete.headers['x-request-id'];\n    void (${ecrire(entete)});`,
+          1,
+        ],
+      ]);
+      // Le vhost neutralise CET en-tête-là : il n'y a plus rien à signaler.
+      const vhost = vhostAvec([
+        [
+          '    RequestHeader unset X-Request-Id\n',
+          `    RequestHeader unset X-Request-Id\n    RequestHeader unset ${entete}\n`,
+          1,
+        ],
+      ]);
+      const issue = jouerEntetes(source, vhost);
+      if (issue.code !== 0) refuses.push(`${forme} : ${issue.sortie.slice(0, 160)}`);
+    }
+    assert.deepEqual(
+      refuses,
+      [],
+      'Le vhost neutralise ces en-têtes et le contrôle refuse quand même : il ne borne pas, ' +
+        'il bloque tout.\n' + refuses.map((r) => `    · ${r}`).join('\n'),
+    );
   });
 
   test('F — UN MOTIF GÉNÉRIQUE ne neutralise rien, et le contrôle le voit', async () => {

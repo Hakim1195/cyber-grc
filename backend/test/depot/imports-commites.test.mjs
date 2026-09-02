@@ -29,9 +29,14 @@
  *
  * ── CE QU'IL NE COUVRE PAS, ET POURQUOI C'EST ÉCRIT ─────────────────────────
  *
- * Il ne regarde **que les imports relatifs** — `import`, `export … from`,
- * `import()`, `require()`. C'est le cas qui a cassé, et le seul que je sache
- * mesurer sans deviner.
+ * Il regarde **les imports relatifs** — `import`, `export … from`, `import()`,
+ * `require()` — **et les ressources qu'une page déclare**, `<script src>` et
+ * `<link href>`.
+ *
+ * Les secondes ont été ajoutées au constat **Q-60** : `index.html` déclare
+ * **63 ressources relatives**, dont les 59 scripts de l'application, et un
+ * script publié mais jamais `git add`é serait passé — le produit ne démarrant
+ * pas à la révision, exactement comme pour un import.
  *
  * Sont **délibérément hors de portée**, faute de pouvoir les mordre :
  *
@@ -150,10 +155,35 @@ function cibleSuivie(depuis, specificateur, suivis) {
   return candidats.some((c) => suivis.has(c));
 }
 
+/**
+ * Les ressources qu'une page déclare — `<script src>`, `<link href>` — avec
+ * leur numéro de ligne.
+ *
+ * ── Ce qui est écarté, et pourquoi ──────────────────────────────────────────
+ *
+ * Une URL absolue, protocolaire, une ancre ou une donnée en ligne ne désignent
+ * aucun fichier du dépôt. Une chaîne de requête (`?v=…`, que l'installation
+ * ajoute) est retirée : c'est la même ressource.
+ */
+function ressourcesRelatives(chemin) {
+  const source = readFileSync(join(RACINE_DEPOT, chemin), 'utf8');
+  const motif = /<(?:script|link|img|source)\b[^>]*?\b(?:src|href)\s*=\s*"([^"]+)"/gi;
+  const trouves = [];
+  for (const found of source.matchAll(motif)) {
+    const brut = found[1].trim();
+    if (/^(?:[a-z]+:|\/\/|#|\/)/i.test(brut) || brut === '') continue;
+    const avant = source.slice(0, found.index);
+    trouves.push({ specificateur: `./${brut.split('?')[0].split('#')[0]}`, ligne: avant.split('\n').length });
+  }
+  return trouves;
+}
+
 /** Tous les orphelins du dépôt : un fichier suivi importe un chemin non suivi. */
 function orphelins() {
   const suivis = fichiersSuivis();
   const lisibles = [...suivis].filter((c) => LISIBLES.some((e) => c.endsWith(e)));
+  const pages = [...suivis].filter((c) => c.endsWith('.html'));
+  assert.ok(pages.length >= 1, 'Aucune page HTML suivie : le balayage des ressources ne porterait sur rien.');
   assert.ok(
     lisibles.length >= 50,
     `Seulement ${String(lisibles.length)} fichier(s) de code suivi(s) : le balayage ne ` +
@@ -162,6 +192,7 @@ function orphelins() {
 
   const manquants = [];
   let examines = 0;
+  let ressources = 0;
   for (const chemin of lisibles) {
     for (const { specificateur, ligne } of importsRelatifs(chemin)) {
       examines += 1;
@@ -170,6 +201,22 @@ function orphelins() {
       }
     }
   }
+  for (const chemin of pages) {
+    for (const { specificateur, ligne } of ressourcesRelatives(chemin)) {
+      ressources += 1;
+      if (!cibleSuivie(chemin, specificateur, suivis)) {
+        manquants.push(`${chemin}:${String(ligne)} déclare « ${specificateur} », qui n’est pas suivi`);
+      }
+    }
+  }
+  // Le HTML doit avoir été VU : `index.html` déclare une soixantaine de
+  // ressources, et « aucun orphelin » ne vaudrait rien si on n'en lisait aucune.
+  assert.ok(
+    ressources >= 50,
+    `Seulement ${String(ressources)} ressource(s) déclarée(s) lue(s) dans ${String(pages.length)} ` +
+      'page(s) : le motif ne reconnaît plus la façon dont la page déclare ses scripts ' +
+      '(constat Q-60).',
+  );
   // ── Le balayage doit avoir VU quelque chose ────────────────────────────
   // « Aucun orphelin » est aussi ce que rend un balayage qui n'a lu aucun
   // import. Le plancher est mesuré, pas choisi : le dépôt en porte plus de
@@ -179,12 +226,12 @@ function orphelins() {
     `Seulement ${String(examines)} import(s) relatif(s) examiné(s) : le motif de lecture ne ` +
       'reconnaît plus la façon dont ce dépôt importe, et « aucun orphelin » ne voudrait rien dire.',
   );
-  return { manquants, examines, lisibles: lisibles.length };
+  return { manquants, examines, ressources, lisibles: lisibles.length };
 }
 
 describe('Un fichier suivi n’importe que du suivi (constat Q-52)', () => {
   test('AUCUN IMPORT RELATIF ne désigne un fichier absent du commit', async () => {
-    const { manquants, examines, lisibles } = orphelins();
+    const { manquants, examines, ressources, lisibles } = orphelins();
 
     assert.deepEqual(
       manquants,
@@ -196,7 +243,8 @@ describe('Un fichier suivi n’importe que du suivi (constat Q-52)', () => {
         '\n\n  ⚠️ CE CONTRÔLE JUGE LE COMMIT, PAS VOTRE ARBRE. Si le fichier visé est bien ' +
         'sous vos yeux, c’est qu’il n’est pas encore suivi : « git add <le fichier cible> », ' +
         'dans le MÊME commit que celui qui l’importe.' +
-        `\n  (${String(examines)} imports relatifs examinés dans ${String(lisibles)} fichiers.)`,
+        `\n  (${String(examines)} imports relatifs dans ${String(lisibles)} fichiers, ` +
+        `${String(ressources)} ressources déclarées par les pages.)`,
     );
   });
 

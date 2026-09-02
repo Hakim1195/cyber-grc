@@ -227,25 +227,48 @@ function ecrireVhost(supplementaires = []) {
     vhost = vhost.split(avant).join(apres);
   }
 
-  // ── Rien de ce qui DÉCIDE n'a bougé ─────────────────────────────────────
-  // Les substitutions ci-dessus sont des paramètres d'exécution. Si l'une
-  // d'elles touchait une règle d'autorisation, cet essai vérifierait sa propre
-  // réécriture. On compare donc, ligne à ligne, les directives de décision.
-  const decisives = (texte) =>
+  // ══ RIEN N'A BOUGÉ, HORS DE CE QUI EST DÉCLARÉ (constat Q-61) ═════════
+  //
+  // La rédaction précédente comparait les lignes commençant par une poignée de
+  // préfixes — `<FilesMatch`, `Require `, `Header always `… — soit **46 des 99
+  // directives** du vhost. C'était un annuaire de plus : ce qu'il ne nommait
+  // pas, il ne le regardait pas, et l'essai éprouvait donc en partie sa propre
+  // réécriture.
+  //
+  // La propriété, elle, ne demande aucune liste : **toute ligne que je n'ai pas
+  // déclaré toucher doit survivre à l'identique, et dans le même ordre.** On
+  // exclut donc, des deux textes, les lignes des `avant` et des `apres`
+  // déclarés — et on exige que le reste soit rigoureusement égal.
+  // Un `avant` n'est pas toujours une ligne entière — « http://127.0.0.1:3001/api/ »
+  // vit à l'intérieur d'un `ProxyPass`. On raisonne donc en FRAGMENTS : une
+  // ligne qui en contient un est une ligne déclarée, et elle sort de la
+  // comparaison ; toutes les autres doivent être identiques.
+  const declarees = [];
+  for (const [avant, apres] of substitutions) {
+    for (const bout of [String(avant), String(apres)]) {
+      for (const ligne of bout.split('\n')) if (ligne.trim() !== '') declarees.push(ligne.trim());
+    }
+  }
+  const survivantes = (texte) =>
     texte
       .split('\n')
       .map((l) => l.trim())
-      .filter((l) =>
-        /^(<\/?FilesMatch|<\/?DirectoryMatch|Require |Options |DirectoryIndex |Header always |SSLProtocol|SSLCipherSuite|LimitRequestBody|ProxyTimeout|RequestHeader |ServerSignature|<\/?LocationMatch)/.test(l),
-      );
-  if (supplementaires.length === 0) {
-    assert.deepEqual(
-      decisives(vhost),
-      decisives(source),
-      'Une substitution a touché une directive de décision : l’essai éprouverait sa propre ' +
-        'réécriture, pas le vhost livré.',
-    );
-  }
+      .filter((l) => l !== '' && !declarees.some((f) => l.includes(f)));
+
+  const avantTout = survivantes(source);
+  const apresTout = survivantes(vhost);
+  assert.ok(
+    avantTout.length >= 200,
+    `Seulement ${String(avantTout.length)} ligne(s) comparée(s) : la comparaison ne porterait ` +
+      'presque sur rien, et « rien n’a bougé » ne voudrait rien dire.',
+  );
+  assert.deepEqual(
+    apresTout,
+    avantTout,
+    'Une substitution a touché une ligne qu’elle n’avait pas déclarée : l’essai éprouverait sa ' +
+      'propre réécriture plutôt que le vhost livré (constat Q-61). Toute ligne hors des ' +
+      '`avant`/`apres` déclarés doit survivre à l’identique.',
+  );
 
   writeFileSync(join(racine, 'vhost.conf'), vhost);
 }

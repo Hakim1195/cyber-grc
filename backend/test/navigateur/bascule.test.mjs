@@ -2389,12 +2389,26 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
         { timeout: 15000 },
       );
 
-      // Le produit annonce lui-même que le rechargement conserve la saisie : on
-      // le prend au mot, et c'est tout l'objet de cet essai.
-      const bandeau = await session.page.evaluate(
-        () => (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+      // ── Le produit doit NOMMER le geste qu'il recommande ────────────────
+      //
+      // ⚠️ Cette assertion épinglait une PHRASE — « le rechargement la conserve ».
+      // Le bandeau a été réécrit (constat Q-57) pour nommer le bouton et mettre
+      // en garde contre F5, et l'essai a rougi sur un produit qui s'améliorait.
+      // C'est la faute que ce banc corrige toute la journée chez les autres :
+      // **assertionner la propriété, jamais la mise en forme.**
+      //
+      // La propriété durable : le bandeau nomme le geste qu'il propose, et ce
+      // nom est celui du BOUTON — les deux sortent du produit, aucun de l'essai.
+      const vu = await session.page.evaluate(() => ({
+        bandeau: (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent,
+        libelle: (document.getElementById('sync-recharger') ?? { textContent: '' }).textContent.trim(),
+      }));
+      assert.ok(vu.libelle.length > 0, 'Le produit doit offrir le bouton qu’il recommande.');
+      assert.ok(
+        vu.bandeau.includes(vu.libelle),
+        `Le bandeau ne nomme pas le geste qu’il propose (« ${vu.libelle} ») : l’utilisateur ` +
+          `doit savoir LEQUEL conserve sa saisie.\n${vu.bandeau}`,
       );
-      assert.match(bandeau, /le rechargement la conserve/i, bandeau);
 
       // ── LE GESTE ────────────────────────────────────────────────────────
       await rechargerEtAttendre(session.page);

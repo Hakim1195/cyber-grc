@@ -32,7 +32,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
@@ -194,6 +194,125 @@ describe('Le registre des constats ne peut pas en perdre un (constat Q-47)', () 
       'Les colonnes du registre ont changé d’ordre ou de nom : ce contrôle lisait les cases ' +
         'par leur rang, et il les lirait désormais au mauvais endroit. Mettre à jour COLONNES ' +
         'dans cet essai, dans le même changement.',
+    );
+  });
+});
+
+/* =====================================================================
+ *  La TRONCATURE, que le comptage ne voit pas (constat Q-54)
+ * ===================================================================== */
+
+/** La racine du dépôt — `backend/` en est un sous-répertoire. */
+const RACINE_DEPOT = join(RACINE_BACKEND, '..');
+
+/**
+ * Tous les constats nommés AILLEURS que dans le registre.
+ *
+ * ── Pourquoi le comptage ne suffisait pas ───────────────────────────────────
+ *
+ * Les trois contrôles ci-dessus tiennent la forme d'une ligne et la continuité
+ * de la numérotation. Ils sont **aveugles à une troncature de queue** : ôtez les
+ * treize dernières lignes et le maximum descend avec le compte — 50 lignes,
+ * numérotées 1 à 50, sans trou. Tout est cohérent, et cinq majeurs ont disparu.
+ * C'est le constat **Q-54**, et il vise ce fichier même, écrit le jour d'avant
+ * pour qu'aucun constat ne se perde.
+ *
+ * ── La propriété qui tient, et qui n'est pas un annuaire ────────────────────
+ *
+ * Le nombre de lignes n'est pas une propriété : le registre grandit. Mais
+ * **tout constat qu'un rapport de porte nomme doit avoir sa ligne**. Les deux
+ * termes sortent de deux endroits versionnés — les rapports d'un côté, le
+ * registre de l'autre — et aucun n'est recopié dans un troisième. Un registre
+ * tronqué perd des lignes que les rapports, eux, continuent de nommer.
+ */
+function constatsNommesAilleurs() {
+  const textes = [];
+  const ajouter = (chemin) => textes.push([chemin, readFileSync(join(RACINE_DEPOT, chemin), 'utf8')]);
+
+  const securite = join(RACINE_DEPOT, 'docs', 'securite');
+  for (const nom of readdirSync(securite)) {
+    if (nom.endsWith('.md')) ajouter(join('docs', 'securite', nom));
+  }
+  ajouter('CLAUDE.md');
+  // Le PLAN lui-même, mais AMPUTÉ de la section du registre : sinon le tableau
+  // se justifierait lui-même, et la comparaison ne comparerait rien.
+  const plan = readFileSync(PLAN, 'utf8');
+  const debut = plan.indexOf(TITRE);
+  textes.push(['docs/PLAN_EXECUTION.md (hors registre)', plan.slice(0, debut)]);
+
+  const nommes = new Map();
+  for (const [chemin, texte] of textes) {
+    for (const trouve of texte.matchAll(/\bQ-(\d+)\b/g)) {
+      const numero = Number(trouve[1]);
+      if (!nommes.has(numero)) nommes.set(numero, chemin);
+    }
+  }
+  return nommes;
+}
+
+describe('Le registre ne peut pas être TRONQUÉ en silence (constat Q-54)', () => {
+  test('TOUT CONSTAT NOMMÉ dans un rapport de porte a sa ligne au registre', async () => {
+    const numeros = new Set(
+      lignesDuRegistre().map((l) => Number(/^\|\s*\*\*Q-(\d+)\*\*/.exec(l.texte)[1])),
+    );
+    const nommes = constatsNommesAilleurs();
+
+    // ── Le balayage doit avoir VU quelque chose ────────────────────────
+    // « Aucun absent » est aussi ce que rend une lecture qui n'a trouvé aucun
+    // constat. Le plancher est mesuré, pas choisi : le seul dernier rapport en
+    // nomme plus de soixante.
+    assert.ok(
+      nommes.size >= 40,
+      `Seulement ${String(nommes.size)} constat(s) nommé(s) hors du registre : les rapports de ` +
+        'porte ne sont plus lus, et « aucun absent » ne voudrait rien dire.',
+    );
+
+    const absents = [...nommes.entries()]
+      .filter(([numero]) => !numeros.has(numero))
+      .sort((a, b) => a[0] - b[0])
+      .map(([numero, ou]) => `Q-${String(numero)} — nommé dans ${ou}, absent du registre`);
+
+    assert.deepEqual(
+      absents,
+      [],
+      'Ces constats sont nommés dans un rapport de porte et n’ont AUCUNE ligne au registre. ' +
+        'Le registre existe pour qu’aucun constat ne se perde, et le CLAUDE.md §8 en fait « la ' +
+        'seule source des verdicts » : un lecteur de la vague suivante ne cherchera pas ce qui ' +
+        'n’y figure pas.\n' +
+        absents.map((a) => `    · ${a}`).join('\n') +
+        '\n\n  ⚠️ La continuité de la numérotation NE VOIT PAS ce cas : une queue tronquée ' +
+        'laisse un tableau de 1 à N, sans trou, parfaitement cohérent — et cinq majeurs en ' +
+        'moins (constat Q-54).',
+    );
+  });
+
+  test('LE REGISTRE NE FINIT PAS SUR SA DERNIÈRE LIGNE : la section se referme', async () => {
+    // ── L'autre moitié de la troncature ────────────────────────────────
+    //
+    // La précédente voit des LIGNES retirées ; celle-ci voit le FICHIER coupé.
+    // Un document arrêté net sur une ligne de tableau ne se distingue d’un
+    // document complet par aucun comptage — mais la section du registre se
+    // referme sur des arbitrages écrits, et leur disparition se voit.
+    const source = readFileSync(PLAN, 'utf8');
+    const debut = source.indexOf(TITRE);
+    assert.notEqual(debut, -1, `La section « ${TITRE} » a disparu.`);
+    const section = source.slice(debut);
+    const lignes = section.split('\n').map((l) => l.trim());
+    const dernierRang = lignes.reduce((rang, l, i) => (/^\|\s*\*\*Q-/.test(l) ? i : rang), -1);
+    assert.notEqual(dernierRang, -1, 'Le registre ne porte plus aucune ligne de constat.');
+
+    const apres = lignes.slice(dernierRang + 1).filter((l) => l !== '');
+    assert.ok(
+      apres.length >= 3,
+      `Le registre s’arrête sur sa dernière ligne : il ne reste que ${String(apres.length)} ` +
+        'ligne(s) après elle. Un fichier coupé net sur un tableau ne se distingue d’un fichier ' +
+        'complet par aucun comptage — et ce qui manque est justement ce qui vient après, ' +
+        'arbitrages compris (constat Q-54).',
+    );
+    assert.equal(
+      /^\|/.test(lignes[lignes.length - 1] === '' ? apres[apres.length - 1] : lignes[lignes.length - 1]),
+      false,
+      'Le document se termine sur une ligne de tableau : la section ne se referme pas.',
     );
   });
 });
