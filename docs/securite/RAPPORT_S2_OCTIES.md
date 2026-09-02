@@ -19,7 +19,7 @@
 
 ## 1. Le verdict
 
-> ### ❌ **PORTE REFUSÉE** — **0 bloquant**, **3 majeurs**, **3 mineurs**. **Deux contrôles de la grille sont en échec : S13 et S17.**
+> ### ❌ **PORTE REFUSÉE** — **0 bloquant**, **4 majeurs**, **3 mineurs**. **Deux contrôles de la grille sont en échec : S13 et S17.**
 
 Il faut commencer par ce qui a changé, parce que c'est réel : **le lot est plus solide
 qu'à aucun des sept passages précédents.** Les fermetures que j'ai rejouées mordent
@@ -38,17 +38,20 @@ suites à RSA statique et les suites CBC refusées, seules les suites AEAD à
 confidentialité persistante acceptées. C'était une minute de travail.
 
 Ce qui refuse la porte n'est ni un bloquant, ni un correctif retourné contre son auteur.
-Ce sont **trois contrôles verts qui ne contrôlent rien** — la forme exacte que ce
-chantier traque depuis quatorze passages, et dont il n'a pas fini de payer les variantes :
+Ce sont **quatre contrôles verts qui ne contrôlent rien** — une borne qui ne borne pas,
+un banc qui ne s'exécute pas, un balayage qui ne balaie pas, et un registre qui perd la
+ligne d'un bloquant. C'est la forme exacte que ce chantier traque depuis quatorze
+passages, et dont il n'a pas fini de payer les variantes :
 
 | # | Constat neuf | Gravité |
 |---|---|---|
 | **Q-44** | **`LimitRequestBody` est inopérante sur `/api/`, le seul chemin qui porte un corps.** Sous Apache 2.4.58 et le vhost du dépôt, un corps de **28 311 552 octets** traverse le frontal en entier et arrive au service, alors que la directive vaut **27 262 976**. Ce n'est pas un mauvais nombre : la directive **ne s'applique pas à un chemin mandaté**, y compris posée dans un `<Location /api/>`. Contrôle symétrique dans le même serveur : le même envoi sur `/index.html` rend **413**. Le commentaire du vhost affirme l'inverse, et `install.sh` compare les deux valeurs pour imprimer « ok » — un garde-fou dont la prémisse est fausse. **Contrôle S13 en échec.** | 🟠 majeur |
 | **Q-45** | **Le banc ne tourne pas sur une machine propre : 14 essais échouent sur `ENOTFOUND grc.exemple.interne`.** Toute la cinquième famille — celle née du bloquant Q-36 — dépend d'une entrée `/etc/hosts` qu'**aucun essai ne pose, qu'aucun essai ne réclame, et qu'aucun document ne mentionne**, alors que le `README` §5 annonce sa liste de prérequis close (« Quatre, et aucun n'est facultatif »). Mesuré : `npm test` → **628 · 614 · 14** ; entrée ajoutée, rien d'autre changé → **628 · 628 · 0**. **Contrôle S17 en échec.** | 🟠 majeur |
 | **Q-46** | **Le quatrième annuaire.** Le balayage qui mesure la conversion des gestionnaires en ligne — l'instrument du constat M-6, celui qui avait rendu l'application inerte sous la CSP de production — porte une **liste de 28 écrans écrite à la main**, annoncée dans son propre commentaire comme « TOUTES les routes de l'application […] la liste est celle de `js/app.js` ». Rien ne compare les deux, ni dans un sens ni dans l'autre. **Mutation : une route neuve portant un `onclick=` est ajoutée à `js/app.js` → le balayage reste vert, 10/10, sans l'avoir seulement visitée.** Et la liste a **déjà dérivé sans que personne le voie** : `#/soa` n'est pas une route ; le balayage y inspecte la page « Page introuvable » (534 caractères) et la compte comme un écran visité. | 🟠 majeur |
-| **Q-47** | **Q-4, septième signalement.** `README` §5 annonce **615 essais** en cinq familles (272 · **175** · 77 · 53 · **38**) ; la mesure rend **628** (272 · **180** · 77 · 53 · **46**). Le « contrôle de fraîcheur » du §8 — « rejouée après la fermeture du constat suivant (qui ne touche que `src/serveur.ts`) et rend toujours 615 · 615 · 0 » — est faux deux fois : cette fermeture a ajouté **un fichier d'essai entier** (`test/api/reference-incident.test.mjs`, 292 lignes) et 354 lignes à deux autres. | 🔵 mineur |
-| **Q-48** | **La façade `DataStore` expose 131 membres, pas 130.** `README` §8 et `CLAUDE.md` §8 écrivent tous deux « 130 membres avant, 130 après ». La **propriété** est vraie, et je l'ai vérifiée plus finement qu'eux — 131 à `d4aeff0` (avant la vague 2), 131 à `HEAD`, et le `diff` des deux listes triées est **vide** — mais le nombre publié est faux, et c'est celui qu'un lecteur comparerait. | 🔵 mineur |
-| **Q-49** | **Une conséquence non écrite du motif de la liste blanche.** Le commentaire du vhost explique le `(?!$)` par le seul **nom vide** d'une requête de répertoire *avec* barre finale. Sans barre finale, le nom n'est pas vide : `GET /assets` rend **403** au lieu de la redirection `301 → /assets/` qu'Apache ferait normalement, parce que `assets` ne porte aucune extension publiable. Sans effet sur l'application livrée — aucune de ses URL n'est un répertoire — mais c'est une propriété du motif que son commentaire ne décrit pas, et le chantier vient de payer deux fois le fait qu'un motif fasse plus que ce que sa note dit. | 🔵 mineur |
+| **Q-47** | **Le registre perd une ligne entière, et c'est celle d'un bloquant.** La ligne 467 de `docs/PLAN_EXECUTION.md` §7 porte **13 barres verticales** là où toutes les autres en portent 7 : les lignes de **Q-28 et de Q-29 sont collées sur un seul retour à la ligne**. Le tableau rendu compte donc **42 constats, pas 43**, et celui qui manque est **Q-29 — le seul 🛑 bloquant du 6ᵉ passage**. Ligne 481, une barre non échappée dans le fragment `` `js|css` `` décale toutes les colonnes de Q-43 : sa colonne « État » rend son **échéance**. C'est **Q-40 au carré, produit par le correctif de Q-40** | 🟠 majeur |
+| **Q-48** | **Q-4, septième signalement.** `README` §5 annonce **615 essais** en cinq familles (272 · **175** · 77 · 53 · **38**) ; la mesure rend **628** (272 · **180** · 77 · 53 · **46**). Le « contrôle de fraîcheur » du §8 — « rejouée après la fermeture du constat suivant (qui ne touche que `src/serveur.ts`) et rend toujours 615 · 615 · 0 » — est faux deux fois : cette fermeture a ajouté **un fichier d'essai entier** (`test/api/reference-incident.test.mjs`, 292 lignes) et 354 lignes à deux autres | 🔵 mineur |
+| **Q-49** | **La façade `DataStore` expose 131 membres, pas 130.** `README` §8 et `CLAUDE.md` §8 écrivent tous deux « 130 membres avant, 130 après ». La **propriété** est vraie, et je l'ai vérifiée plus finement qu'eux — 131 à `d4aeff0` (avant la vague 2), 131 à `HEAD`, et le `diff` des deux listes triées est **vide** — mais le nombre publié est faux, et c'est celui qu'un lecteur comparerait | 🔵 mineur |
+| **Q-50** | **Une conséquence non écrite du motif de la liste blanche.** Le commentaire du vhost explique le `(?!$)` par le seul **nom vide** d'une requête de répertoire *avec* barre finale. Sans barre finale, le nom n'est pas vide : `GET /assets` rend **403** au lieu de la redirection `301 → /assets/` qu'Apache ferait normalement. Sans effet sur l'application livrée — aucune de ses URL n'est un répertoire, et les 64 fichiers publiés sont tous servis — mais c'est une propriété du motif que son commentaire ne décrit pas | 🔵 mineur |
 
 **Pourquoi je ne conclus pas « franchie ».** Deux contrôles de la grille sont en échec, et
 la règle est celle que l'orchestrateur a appliquée deux fois — au 4ᵉ passage de S1 et au
@@ -564,3 +567,188 @@ vérifié que les 64 fichiers publiés sont tous servis. Mais c'est une proprié
 que sa note ne décrit pas, et ce chantier vient de payer **deux fois** le fait qu'un motif
 fasse autre chose que ce que son commentaire annonce (Q-36, puis le motif générique de
 `RequestHeader unset`). Le dire coûte une phrase.
+
+---
+
+## 6. Ce que j'ai cherché et n'ai pas trouvé
+
+Un rapport qui refuse doit dire où il a creusé pour rien, sans quoi le passage suivant
+recreusera au même endroit.
+
+* **Un cinquième annuaire.** J'ai balayé le banc et la configuration à la recherche
+  d'autres listes écrites à la main dont l'omission réussirait en silence. Trouvé : la
+  liste des blocs d'`install.sh` (**découverte**, avec réciproque — c'est le modèle) ; la
+  liste des en-têtes neutralisés par le vhost (**confrontée** au code par le bloc
+  « banc: entetes », et les six essais A→F sont verts, dont un qui exige qu'un **septième
+  en-tête neuf non neutralisé arrête l'installation**) ; les deux listes blanches de
+  publication (**comparées l'une à l'autre**, et divergentes elles arrêtent
+  l'installation : mutée, 15 essais rouges) ; les neuf substitutions du vhost d'essai
+  (**comptées**, et une substitution qui ne s'appliquerait plus fait échouer l'essai) ;
+  les types MIME des blocs `mod_deflate` et `mod_expires` (**mesurés sur ce qu'Apache
+  émet**, régresseur en place depuis Q-42). **La seule qui reste nue est celle des 28
+  écrans** — c'est Q-46.
+
+* **Un appel dans le vide dans le frontend.** Balayage mécanique : les 58 fichiers `.js`
+  du produit chargés dans l'ordre d'`index.html`, les 11 objets globaux réellement
+  construits, et **tout** appel `Objet.membre` confronté aux membres existants.
+  **0 appel vers un membre absent.** C'était le motif « le remède rend fausse la phrase
+  d'un autre fichier » appliqué au code plutôt qu'aux commentaires ; il n'a rien donné.
+
+* **Un écran survivant du monde local.** Les fonctions de la façade que la bascule a
+  vidées (`listBackups`, `restoreBackup`, `createManualBackup`, `deleteBackup`,
+  `enableEncryption`) rendent des valeurs **honnêtes** — liste vide, refus explicite avec
+  un message qui dit pourquoi — et l'écran Paramètres ne les propose plus : il décrit
+  l'état réel (« Vos données ne sont plus stockées sur ce poste »), et affiche même un
+  avertissement quand la session est provisoire. Le constat m-7 est bien fermé.
+
+* **Un contournement de la liste blanche.** Seize formes d'URL hostiles sur des intrus que
+  j'avais moi-même déposés dans la racine web (`data/registre.xlsx`, `secret.env`,
+  `LISEZMOI`) : `%2E`, `%00`, double barre, `./`, `?x=.js`, `/x.js` en suffixe de chemin,
+  `/index.html/../…`, et deux liens symboliques vers `/etc/passwd` sous un nom publiable
+  et sous un nom interdit. **Toutes refusées** (403, sauf `%00` → 404). Et le contrôle
+  symétrique : **les 64 fichiers publiés sont servis, 0 non servi**.
+
+* **Un quatrième délai caché dans la chaîne des trois.** J'ai cru en tenir un :
+  `durcissement-global.conf` pose un `Timeout 60` dont le long commentaire du vhost sur
+  « la chaîne de trois » ne parle pas. **Mesuré avant d'écrire** : `ProxyTimeout 120` +
+  `Timeout 60`, service qui répond en 90 s → **HTTP 200 après 90 s**. `ProxyTimeout` prime
+  sur le chemin mandaté ; `Timeout` ne coupe rien. Et le vhost du dépôt coupe bien où il
+  le dit : service à 70 s → **502 après 60 s**. Le constat était faux ; il n'existe pas.
+
+* **Une régression du bloquant Q-36 par une autre porte.** `GET /`, `GET /index.html`,
+  la chaîne `http → 308 → https → 200`, un répertoire avec et sans index, un répertoire
+  sans barre finale : tout se comporte comme le vhost l'annonce, à la nuance du §Q-50
+  près.
+
+* **Une fuite dans les messages d'erreur.** 155 sondes hostiles au total, aucune ne rend
+  un fragment SQL, un `SQLSTATE`, une pile, un nom de table ou de colonne. Le seul écho
+  est celui de ma propre entrée, ce qui n'est pas une fuite.
+
+* **Une écriture au journal d'audit par l'API.** `grep -rn "journal_audit" backend/src/`
+  ne rend que **deux commentaires**, qui disent tous deux que ce lot n'y écrit pas. La
+  dette est exacte et assumée.
+
+---
+
+## 7. Ce que je n'ai pas pu vérifier
+
+Je distingue ce qui est **impossible ici** de ce qui est seulement **non tenté** — la
+distinction est celle que le 7ᵉ passage a payée en installant Apache en une minute après
+six passages de réserve écrite.
+
+### Impossible sur cette machine
+
+* **Debian 13 et son Apache (2.4.6x).** Tout est mesuré sur **Ubuntu 24.04 / Apache
+  2.4.58**. Le comportement de `LimitRequestBody` sur un chemin mandaté (**Q-44**) doit
+  être re-mesuré là-bas avant d'arrêter un remède : c'est un comportement de
+  `mod_proxy_http`, pas une règle de configuration.
+* **PostgreSQL 17.** La cible ; la machine porte **16.13**, et le dépôt PGDG n'est pas
+  configuré (`apt-cache policy postgresql-17` ne rend aucun candidat). J'ai **tenté**, et
+  c'est le seul point où j'ai renoncé faute de dépôt, pas faute d'envie. Tout le schéma —
+  RLS forcée, colonnes engendrées, contraintes d'exclusion, `gen_random_uuid()` — reste
+  donc validé sur 16 seulement.
+* **Le TLS d'une vraie PKI.** Je peux affirmer, et c'est neuf, que **la politique de
+  protocole et de suites du fichier livré fait ce qu'elle dit** : TLS 1.0 et 1.1 refusés,
+  `AES128-SHA`, `AES256-SHA`, `DHE-RSA-AES128-SHA` et `ECDHE-RSA-AES128-SHA` refusées,
+  `ECDHE-RSA-AES128-GCM-SHA256` acceptée, négociation réelle en `TLSv1.3 /
+  TLS_AES_256_GCM_SHA384`. Ce qui reste hors de portée est la **chaîne ADCS** :
+  `SSLCertificateChainFile` n'a jamais été chargé avec un vrai intermédiaire, et
+  l'agrafage OCSP n'est pas configuré.
+* **L'unité systemd, l'installation Debian complète, `install.sh` de bout en bout.** Ils
+  exigent `root` sur une VM propre. J'ai joué trois de ses blocs (`frontend`,
+  `proxytimeout`, `configtest`) par le banc et par mes propres mutations.
+* **L'Active Directory (L3), ClamAV (L6), le relais SMTP (L12).** Hors périmètre du lot.
+  `clamav` est installable ici (`1.5.3+dfsg` est candidat) et ne l'a pas été : il ne sert
+  à rien avant L6, et l'installer sans le lot qui l'utilise ne prouverait rien.
+
+### Non tenté, et je le dis plutôt que de le déguiser
+
+* **Le comportement au volume réel côté navigateur.** Mes mesures de reprise sont
+  serveur ; je n'ai pas rejoué le sondage sur une filiale de 12 000 enregistrements.
+* **La latence du VPN.** Toutes mes mesures sont locales, et les blocs de compression et
+  de cache — dont le bénéfice se compte en VPN international — ne sont mesurés qu'en
+  taille, pas en temps ressenti.
+* **L'export chiffré et les exports Excel/PDF** (`exportEncrypted`, `exportExcel`,
+  `exportPDF`). Je me suis assuré que **le code existe, qu'il est atteignable et qu'aucun
+  appel ne vise un membre absent**, et l'écran Paramètres le câble correctement. Je n'ai
+  pas produit un fichier chiffré pour le relire. C'est le geste le plus proche de la
+  « preuve d'audit » que ce produit doit fournir, et **aucun essai du dépôt ne le joue** :
+  je le signale ici plutôt que comme constat, parce que je ne l'ai pas mesuré et qu'un
+  soupçon n'est pas un constat.
+* **La validation formelle du découpage Groupe/Filiale par le RSSI groupe** (risque P5,
+  `PLAN_SERVEUR` §8) : toujours aucune trace dans le dépôt, toujours attendue **avant la
+  mise en service pilote**. C'est le **huitième** passage de porte qui l'écrit.
+
+### Ce que j'ai changé sur la machine, et qu'il faut savoir
+
+Deux choses, aucune dans le dépôt :
+
+1. `printf '127.0.0.1 grc.exemple.interne\n' >> /etc/hosts` — sans quoi 14 essais
+   échouent (**Q-45**). La sauvegarde de l'état antérieur est dans mon répertoire de
+   travail.
+2. Un Apache d'audit monté sous `/tmp/grc-audit-apache`, sur ses propres ports
+   (18080/18443), avec `a2enmod ssl proxy proxy_http headers rewrite deflate expires
+   reqtimeout`. Il ne touche à aucun site activé de la machine.
+
+`git status --porcelain` ne rend que ce rapport.
+
+---
+
+## 8. Ce qu'il faut faire, et quand
+
+| # | Constat | Propriétaire | Échéance | Ce que ça coûte |
+|---|---|---|---|---|
+| **Q-44** | `LimitRequestBody` inopérante sur `/api/` | agent **DÉPLOIEMENT** (l'arbitrage et les deux commentaires) · agent **OUTILLAGE** (le régresseur) | **à la fermeture de cette porte** | un arbitrage écrit, deux commentaires rendus vrais, et un essai qui envoie un corps hors borne **par le mandataire** — le banc a déjà tout ce qu'il faut pour le jouer |
+| **Q-45** | le banc ne tourne pas sans une entrée `/etc/hosts` non documentée | agent **OUTILLAGE** | **à la fermeture de cette porte** | soit `exigerHote()` sur le modèle d'`exigerOutil()`, soit — mieux — composer `127.0.0.1` avec l'en-tête `Host`, ce qu'`install.sh` fait déjà avec `--resolve` |
+| **Q-46** | le balayage des écrans est un annuaire | agent **OUTILLAGE** | **à la fermeture de cette porte**, et **avant** que Q-16 ne soit repris en vague 3 | trois lignes : extraire les clés de `Router.init(...)`, exiger l'égalité **dans les deux sens**. La recette est dans `test/aide/install.mjs` |
+| **Q-47** | le registre perd la ligne Q-29 et l'état de Q-43 | **orchestrateur** | **immédiat** | un retour à la ligne, une barre échappée — et un contrôle mécanique du tableau, sans quoi ce sera la troisième fois |
+| **Q-48** | `README` §5 : 615 essais, deux familles fausses, un contrôle de fraîcheur faux | agent **DOC** | avant l'ouverture de la vague 3 | renvoyer au §8 plutôt que recopier, et re-mesurer les cinq familles |
+| **Q-49** | « 130 membres » dans deux documents, dont `CLAUDE.md` | agent **DOC** | avant l'ouverture de la vague 3 | un chiffre, à deux endroits — et l'occasion de dire la propriété plus forte qui est vraie : la **liste** est identique, nom pour nom |
+| **Q-50** | le commentaire du `<FilesMatch>` ne décrit pas le cas sans barre finale | agent **DÉPLOIEMENT** | avec Q-44 | une phrase |
+| Q-9 / Q-20 | fond de la saturation | **lot L7** | vague 5 | report **défendable** — la borne et le refus avant prise de connexion tiennent, et mordent |
+| Q-10 | analyse et validation du corps avant décision | **lot L3** | vague 3 | report **défendable**, re-mesuré, avec un oracle de schéma en plus (§3.3) |
+| Q-11 | repli d'`applyImport` | agent **FRONT** | — | **refus confirmé** : la liste serait le mauvais outil, et le contrôle symétrique muet empêche le bandeau d'être un décor |
+| Q-16 | les 26 modules sans filet | **vague 3** | ouverture de la vague 3 | report **défendable**, mais **plus cher que le registre ne le dit** tant que Q-46 est ouvert |
+| Q-28 | `LONGUEUR_ALEA` dupliquée dans `src/reprise` | agent **API** | vague 3 | report **défendable**, rien ne casse — mais sa ligne au registre est cassée (Q-47) |
+
+---
+
+## 9. Ce qui est solide, et qu'il faut dire
+
+Le lot L2 est, sur le fond, **fini**. Ce que je refuse tient dans deux commentaires faux,
+une ligne de `/etc/hosts`, une liste de 28 chaînes et deux barres verticales — pas une
+seule ligne du cœur.
+
+* **Le périmètre est tenu par la forme, et cela fait quatre passages que personne ne le
+  fait bouger.** 119 sondes cette fois, 0 dérive. `resoudre()` ne prend aucun argument ;
+  `js/core/api.js` n'expose aucun paramètre de filiale. C'est une propriété, pas une
+  vigilance.
+* **Le cloisonnement tient, et s'effondre proprement quand on le casse.** 107/107 ;
+  un `no force row level security` retiré → 104/107, code 3, **trois** contrôles nommés et la
+  phrase « CLOISONNEMENT EN DÉFAUT » ; et le même sabotage arrête l'installateur en code 7.
+* **Les garde-fous sont branchés, et le registre de `005` fait ce qu'on lui demandait :**
+  une fonction supprimée ne disparaît plus en silence — le message nomme la signature
+  perdue **et la date de sa dernière observation**.
+* **Dix-sept mutations, dix-sept morsures.** Y compris les trois que le 7ᵉ passage avait
+  trouvées vertes (Q-38), et y compris le bloquant Q-36, dont le retrait du `(?!$)` fait
+  tomber sept essais sur un Apache réel.
+* **Le journal d'audit est inaltérable au sens fort** : `UPDATE`, `DELETE` et `TRUNCATE`
+  sont refusés **au propriétaire des tables**, pas seulement au rôle applicatif.
+* **La façade synchrone est intacte au sens le plus fort qui soit** : 131 membres avant la
+  vague 2, 131 après, et le `diff` des deux listes triées est vide. Le risque P3 est payé
+  d'avance.
+* **La chaîne complète, sous un Apache réel, est bonne** : URL d'entrée à 200, TLS 1.2/1.3
+  et suites AEAD seules, en-têtes de sécurité posés jusque sur les 403, `TRACE` refusée,
+  bannière muette, 64 fichiers publiés servis, 16 formes hostiles refusées,
+  `LimitRequestLine` et `LimitRequestFields` qui mordent.
+
+**Ce qu'il reste à faire est étroit — et c'est précisément pour cela qu'il faut le faire
+avant d'ouvrir la vague 3.** Les trois majeurs sont tous des *instruments*, pas des
+défauts de produit : une borne qui ne borne pas, un banc qui ne s'exécute pas, un
+balayage qui ne balaie pas. Ce sont les instruments avec lesquels la vague 3 mesurera
+l'authentification et le journal d'audit. Les livrer faux, c'est livrer à L3 les mêmes
+verts trompeurs qui ont coûté sept passages à L2.
+
+---
+
+*Fin du rapport — SECU-S2-OCTIES, 02/09/2026.*
