@@ -389,6 +389,17 @@ Ce que trois passages ont appris, et qui vaut pour toutes les portes à venir :
   lui-même** que cela ne vaut pas rejeu : le verdict porte sur la révision qu'il a examinée, la
   grille n'a pas été rejouée, et les constats corrigés depuis ne sont pas mesurés. *Un essai qui
   existe ne prouve rien tant qu'on n'a pas montré qu'il rougit sous la mutation qui l'a motivé.*
+- **Un banc vert sur l'arbre de travail ne dit rien du commit.** J'ai figé une quinzaine
+  d'« instantanés vérifiés » en écrivant à chaque fois « mesurable et vert » — et je mesurais
+  l'**arbre**, où vivaient aussi les fichiers non commités des agents. La révision `fde4d35`
+  commitait un fichier d'essai appelant une fonction définie dans un fichier que je n'avais pas
+  commité : **à cette révision seule, il ne s'importait pas**. C'est l'agent qui me l'a signalé.
+  La faute est exactement celle que ce chantier traque depuis le premier passage — *mesurer ce qui
+  est commode plutôt que ce qu'on affirme* —, et je l'ai commise une quinzaine de fois en la
+  reprochant aux autres le même jour. Le contrôle est pourtant à trois lignes : pour chaque fichier
+  **suivi**, vérifier que ses imports relatifs désignent des chemins **présents dans le commit**.
+  Écrit et joué : 66 fichiers, aucun orphelin — mais joué *après*, ce qui ne vaut pas mieux qu'un
+  banc vert dont personne n'a saboté les essais.
 - **La question utile n'est pas « est-ce que ça passe », c'est « qu'est-ce qui passerait aussi ».**
   Formulée par l'agent qui tient le banc, au terme d'une journée où le motif est apparu quatre fois
   sous quatre déguisements : un essai qui passait des options figées à une fonction **qui les
@@ -489,6 +500,7 @@ jamais seulement sur le correctif.
 | **Q-49** | La façade `DataStore` est documentée à **130 membres** ; elle en compte **131**, avant comme après la vague 2 (`diff` des deux listes triées vide). La propriété — *intacte* — est vraie ; le nombre qui la chiffre ne l'est pas | 🔵 mineur | agent **DOC** | avant le 9ᵉ passage | ouvert |
 | **Q-50** | La conséquence du motif sans barre finale n'est pas documentée | 🔵 mineur | agent **DÉPLOIEMENT** | avant le 9ᵉ passage | ✅ **corrigé** |
 | **Q-51** | **Le pré-filtre du frontal ne borne pas un corps en `Transfer-Encoding: chunked`** — mesuré : 28 Mio passent et la doublure reçoit tout. Il arrête l'envoi surdimensionné **ordinaire** (un export trop gros, un client qui se trompe), **pas un client hostile qui choisit son encodage** ; son auteur refuse explicitement de l'appeler la barrière S13, et l'écrit dans le vhost. La barrière réelle reste **applicative**. Fermer le contournement au frontal demanderait `mod_security` — dépendance lourde, arbitrage qui n'appartient pas à l'agent. **Rattaché au lot L3**, avec le contrôle en `onRequest` de **Q-10** : c'est le même geste, borner **avant** d'analyser | 🔵 mineur | **lot L3** | vague 3 | ouvert — report daté |
+| **Q-52** | **Rien ne vérifie qu'un commit se tient seul.** Un fichier suivi peut importer un fichier qui n'est pas dans le commit — c'est arrivé à `fde4d35`, où l'essai commité appelait une fonction restée dans l'arbre de travail. Le banc ne le voit jamais : il s'exécute sur l'arbre, où les deux fichiers coexistent. Contrôle mesuré à trois lignes — pour chaque fichier suivi, ses imports relatifs doivent désigner des chemins présents dans le commit — joué une fois **après** coup : 66 fichiers, aucun orphelin. Il n'existe nulle part | 🔵 mineur | agent **OUTILLAGE** | avant le 9ᵉ passage | ouvert |
 
 **Arbitrage sur Q-43 — la règle plutôt que le nombre.** Deux remèdes se présentent : étendre le
 jeton de version aux images, ou raccourcir leur durée de cache. Je ne choisis ni l'un ni l'autre,
