@@ -32,6 +32,8 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 
 import { FILIALE_A, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
@@ -42,9 +44,114 @@ import {
   ouvrirPage,
   servirApplication,
 } from '../aide/navigateur.mjs';
-import { monterServeurReel } from '../aide/serveur.mjs';
+import { monterServeurReel, RACINE_FRONTEND } from '../aide/serveur.mjs';
 
 /** @type {Awaited<ReturnType<typeof ouvrirBaseEssai>>} */
+
+/* =====================================================================
+ *  Les routes de l'application, DÉCOUVERTES (constat Q-46)
+ * ===================================================================== */
+
+/**
+ * Toutes les routes que `js/app.js` déclare, lues dans son `Router.init({…})`.
+ *
+ * ── Pourquoi découvrir, et pourquoi ici précisément ────────────────────────
+ *
+ * La propriété gardée par le balayage — *aucun écran ne porte de gestionnaire
+ * en ligne* — ne vaut que si le balayage voit TOUS les écrans. Une liste écrite
+ * à la main ne le garantit pas : elle ignore ce qui s'ajoute, en silence, et
+ * c'est exactement ce que l'auditeur a mesuré (une route neuve portant un
+ * `onclick=`, balayage vert dix fois sur dix). Elle dérive aussi de son côté —
+ * `#/soa` y figurait alors que seule `/soa/:id` existe.
+ *
+ * Rend `{ ecrans, aParametre }` : les routes sans paramètre, et celles qui en
+ * prennent un.
+ */
+function routesDeclarees() {
+  const source = readFileSync(join(RACINE_FRONTEND, 'js', 'app.js'), 'utf8');
+  const ouverture = source.indexOf('Router.init({');
+  assert.notEqual(
+    ouverture,
+    -1,
+    'js/app.js ne déclare plus ses routes par « Router.init({ … } ) » : ce balayage ne peut ' +
+      'plus les découvrir, et il refuse d’en inventer une liste — c’est ce qui a produit le ' +
+      'constat Q-46.',
+  );
+  const fin = source.indexOf('});', ouverture);
+  assert.ok(fin > ouverture, 'Le bloc « Router.init » de js/app.js n’est pas refermé.');
+  const bloc = source.slice(ouverture, fin);
+
+  const toutes = [];
+  for (const ligne of bloc.split('\n')) {
+    // Une DÉCLARATION de route est une clé de l'objet : « "/…": » en tête de
+    // ligne. Les chaînes qui apparaissent dans un corps de fonction n'en sont
+    // pas, et ne doivent pas être balayées.
+    const trouve = /^\s*"(\/[^"]*)"\s*:/.exec(ligne);
+    if (trouve !== null) toutes.push(trouve[1]);
+  }
+  assert.ok(
+    toutes.length >= 25,
+    `Seulement ${String(toutes.length)} route(s) découverte(s) dans js/app.js : le motif de ` +
+      'lecture ne correspond plus à la façon dont la page déclare ses routes, et le balayage ' +
+      'ne prouverait plus rien.',
+  );
+  assert.equal(new Set(toutes).size, toutes.length, `Deux routes identiques : ${toutes.join(' ')}`);
+  assert.ok(toutes.includes('/dashboard'), 'La route d’accueil doit être découverte.');
+
+  return {
+    ecrans: toutes.filter((r) => !r.includes('/:')).map((r) => `#${r}`),
+    aParametre: toutes.filter((r) => r.includes('/:')),
+  };
+}
+
+/**
+ * L'enregistrement que chaque route à paramètre doit ouvrir.
+ *
+ * ⚠️ CETTE liste-ci est écrite à la main, et c'est le bon outil — au sens du
+ * `CONVENTIONS.md` §24 : son omission **échoue bruyamment**, et un humain doit
+ * trancher. Aucun catalogue ne peut deviner quel enregistrement du jeu d'essai
+ * ouvre `/soa/:id` : le paramètre y est l'identifiant d'un référentiel du
+ * catalogue statique, pas une ligne de la base. La différence avec l'annuaire
+ * qu'on vient de retirer est entière : ici, une route qui manque fait ROUGIR
+ * l'essai au lieu de disparaître du balayage.
+ */
+const IDENTIFIANTS = {
+  '/clients/:id': 'CLI-A',
+  '/personnel/:id': 'PERS-A',
+  '/actifs/:id': 'ACTIF-A',
+  '/risques/:id': 'RISK-A',
+  '/exigences/:id': 'EX-A',
+  '/referentiels/:id': 'anssi',
+  '/mesures/:id': 'MESURE-A',
+  '/soa/:id': 'anssi',
+  '/incidents/:id': 'INC-A',
+  '/documents/:id': 'DOC-A',
+  '/rgpd/:id': 'TRT-A',
+  '/actions/:id': 'ACT-A',
+  '/bia/:id': 'BIA-A',
+  '/crise/:id': 'CRISE-A',
+  '/pra/:id': 'SCEN-A',
+  '/mco/:id': 'MCO-A',
+  '/tests/:id': 'TEST-A',
+  '/prestataires/:id': 'PRES-A',
+  '/audits/:id': 'AUD-A',
+};
+
+/** Une fiche par route à paramètre — et le refus d'en oublier une. */
+function fichesPour(aParametre) {
+  const inconnues = aParametre.filter((route) => IDENTIFIANTS[route] === undefined);
+  assert.deepEqual(
+    inconnues,
+    [],
+    'Ces routes à paramètre sont déclarées dans js/app.js et ce balayage ne sait pas quelle ' +
+      'fiche ouvrir :\n' +
+      inconnues.map((r) => `    · ${r}`).join('\n') +
+      '\n  Ajoutez-leur un identifiant du jeu d’essai dans IDENTIFIANTS. Les taire ferait ' +
+      'sortir leur écran du balayage, et c’est le constat Q-46.',
+  );
+  return aParametre.map((route) => `#${route.replace('/:id', '')}/${IDENTIFIANTS[route]}`);
+}
+
 let base;
 let serveur;
 let application;
@@ -370,28 +477,27 @@ describe('M-6 — sous la CSP de production, l’interface répond encore', () =
     try {
       application.definirCsp(CSP_PRODUCTION);
 
-      // TOUTES les routes de l'application, et non un échantillon : ce test est
-      // l'instrument de mesure de la conversion en cours dans `js/modules/**`, et un
-      // instrument qui ne regarde que huit écrans sur vingt-huit annoncerait la fin
-      // du travail avant l'heure. La liste est celle de `js/app.js`.
-      const ecrans = [
-        '#/dashboard', '#/synthese', '#/echeances', '#/clients', '#/personnel',
-        '#/actifs', '#/cartographie', '#/risques', '#/matrice', '#/exigences',
-        '#/referentiels', '#/mesures', '#/mapping', '#/couverture', '#/soa',
-        '#/actions', '#/incidents', '#/documents', '#/rgpd', '#/bia',
-        '#/crise', '#/crise-fiches', '#/pra', '#/mco', '#/tests',
-        '#/prestataires', '#/audits', '#/settings',
-      ];
+      // ⚠️ LES ROUTES SONT DÉCOUVERTES DANS `js/app.js`, ELLES NE SONT PLUS ÉCRITES ICI.
+      //
+      // Cet essai portait une liste de vingt-huit écrans, annoncée « celle de
+      // js/app.js », que RIEN ne comparait à `js/app.js`. C'était un annuaire, et
+      // il a coûté deux fois :
+      //
+      //  · une route neuve portant un `onclick=` laissait ce balayage vert, dix
+      //    fois sur dix, SANS L'AVOIR VISITÉE — mesuré par l'auditeur au huitième
+      //    passage, constat **Q-46** ;
+      //  · la liste avait déjà dérivé : `#/soa` n'est pas une route (seule
+      //    `/soa/:id` existe), si bien que le balayage inspectait une page
+      //    « Page introuvable » et la comptait comme un écran propre.
+      //
+      // C'est d'autant plus coûteux que cet essai garde la propriété « aucun
+      // gestionnaire en ligne », dont la violation avait rendu l'application
+      // INERTE sous la politique de sécurité de contenu du frontal (constat M-6).
+      const { ecrans, aParametre } = routesDeclarees();
       // Les FICHES et les FORMULAIRES comptent autant que les listes : un
       // gestionnaire en ligne sur un bouton « Enregistrer » rend la saisie
-      // impossible, et aucune liste ne le montrerait. Les identifiants viennent du
-      // jeu d'essai partagé.
-      const fiches = [
-        '#/risques/RISK-A', '#/exigences/EX-A', '#/actifs/ACTIF-A', '#/clients/CLI-A',
-        '#/actions/ACT-A', '#/incidents/INC-A', '#/documents/DOC-A', '#/rgpd/TRT-A',
-        '#/bia/BIA-A', '#/personnel/PERS-A', '#/prestataires/PRES-A', '#/audits/AUD-A',
-        '#/mesures/MESURE-A', '#/pra/SCEN-A',
-      ];
+      // impossible, et aucune liste ne le montrerait.
+      const fiches = fichesPour(aParametre);
 
       const enLigne = [];
       /** Ce que le balayage a réellement vu — sans quoi il pourrait passer sur du vide. */
@@ -403,6 +509,20 @@ describe('M-6 — sous la CSP de production, l’interface répond encore', () =
         couverture.ecrans += 1;
         couverture.caracteres += await session.page.evaluate(
           () => (document.getElementById('app')?.innerHTML ?? '').length,
+        );
+        // ── LA RÉCIPROQUE, sans laquelle `#/soa` reviendrait ────────────────
+        // Une route déclarée qui ne rend pas d'écran est inspectée dans le vide :
+        // « Page introuvable » ne porte aucun gestionnaire, et compterait comme
+        // un écran propre. Le balayage doit donc refuser de conclure sur elle.
+        const introuvable = await session.page.evaluate(
+          () => (document.getElementById('app')?.textContent ?? '').includes('Page introuvable'),
+        );
+        assert.equal(
+          introuvable,
+          false,
+          `« ${route} » est déclarée dans js/app.js et rend « Page introuvable ». Ce balayage ` +
+            'l’aurait comptée comme un écran propre — c’est ainsi que « #/soa » a survécu ' +
+            '(constat Q-46). Corrigez la route, ou l’identifiant que cet essai lui donne.',
         );
         const trouves = await session.page.evaluate(() => {
           const elements = Array.from(

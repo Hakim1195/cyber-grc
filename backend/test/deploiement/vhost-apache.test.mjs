@@ -61,6 +61,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import dns from 'node:dns';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
@@ -72,8 +73,27 @@ import { exigerSilenceApres } from '../aide/assertions.mjs';
 import { extraireBloc, extraireFonction, jouerBloc, jouerScript } from '../aide/install.mjs';
 import { RACINE_BACKEND, RACINE_FRONTEND } from '../aide/serveur.mjs';
 
-/** Le nom d'hôte du vhost livré. `/etc/hosts` le fait pointer sur la boucle locale. */
+/**
+ * Le nom d'hôte du vhost livré — celui du `ServerName`, du certificat et de
+ * l'en-tête `Host`. **Il n'est jamais résolu.**
+ *
+ * ── Constat Q-45 : un banc qui dépendait d'un /etc/hosts modifié à la main ──
+ *
+ * Ces essais se connectaient PAR CE NOM. Sur cette machine, quelqu'un avait
+ * ajouté « 127.0.0.1 grc.exemple.interne » à `/etc/hosts` — à la main, sans
+ * qu'aucun essai ne le pose et qu'aucun document ne le réclame. Sur une machine
+ * propre, les quatorze essais de cette famille tombaient en `ENOTFOUND`, et le
+ * contrôle S17 avec eux : le banc n'était pas reproductible là où cela compte.
+ *
+ * Le remède ne pose rien et n'exige rien : **on se connecte à l'ADRESSE, et on
+ * porte le NOM** — en-tête `Host` pour le vhost, `servername` pour la
+ * vérification du certificat, qui reste entière. C'est exactement ce que fait
+ * `install.sh` avec `--resolve`, et c'est plus juste que la résolution : l'essai
+ * atteint CE serveur-ci, quoi que le DNS de la machine raconte.
+ */
 const HOTE = 'grc.exemple.interne';
+/** L'adresse réellement composée. Rien, ici, n'interroge un résolveur. */
+const ADRESSE = '127.0.0.1';
 const VHOST_SOURCE = join(RACINE_BACKEND, 'deploy', 'apache', 'cyber-grc.conf');
 const DURCISSEMENT = join(RACINE_BACKEND, 'deploy', 'apache', 'durcissement-global.conf');
 
@@ -85,6 +105,8 @@ let portApi;
 let certificat;
 let apache;
 let apiDoublure;
+/** La vraie `dns.lookup`, remise en place à la fin (voir le piège ci-dessous). */
+let lookupOrigine;
 let urlVersionnees = 0;
 
 /**
@@ -267,6 +289,42 @@ function ecrireConfigServeur() {
 }
 
 before(async () => {
+  // ══ Q-45 : LE PIÈGE À RÉSOLUTION, ET POURQUOI IL EST UNE BARRIÈRE ═══════
+  //
+  // Ce fichier ne doit RIEN résoudre : il compose l'adresse et porte le nom.
+  // Écrit ainsi, cela tient par discipline — et la discipline est précisément
+  // ce qui a lâché, puisque personne n'avait remarqué que le banc dépendait
+  // d'un `/etc/hosts` modifié à la main sur cette machine-ci.
+  //
+  // On pose donc une barrière plutôt qu'une consigne : toute résolution de nom
+  // faite depuis ce processus échoue, en disant pourquoi. Sur la machine qui
+  // porte l'entrée, un `host: HOTE` réintroduit par mégarde rougirait donc
+  // ICI, au lieu d'attendre la machine propre du prochain auditeur.
+  //
+  // Les adresses littérales n'y passent pas : Node ne consulte aucun résolveur
+  // pour « 127.0.0.1 ». Les sous-processus non plus — `curl --resolve` du bloc
+  // « configtest » garde son propre chemin, et c'est très bien ainsi.
+  lookupOrigine = dns.lookup;
+  dns.lookup = (nom, ...reste) => {
+    // Une ADRESSE littérale n'est pas une résolution — Node passe quand même
+    // par ce chemin pour « 127.0.0.1 », et le lui refuser couperait le banc de
+    // sa propre boucle locale. Le piège ne vise que les NOMS.
+    if (net.isIP(String(nom)) !== 0) return lookupOrigine(nom, ...reste);
+    const erreur = new Error(
+      `Ce banc a tenté de RÉSOUDRE « ${String(nom)} ». Il ne doit jamais le faire : il se ` +
+        'connecte à 127.0.0.1 et porte le nom dans l’en-tête « Host » et dans le « servername » ' +
+        'du certificat. Une résolution ici veut dire que le banc dépend d’une entrée /etc/hosts ' +
+        'que personne ne pose — c’est le constat Q-45, et il a coûté 14 essais rouges sur une ' +
+        'machine propre.',
+    );
+    const rappel = reste[reste.length - 1];
+    if (typeof rappel === 'function') {
+      rappel(erreur);
+      return undefined;
+    }
+    throw erreur;
+  };
+
   exigerOutil('apache2', ['-v'], 'Cet essai joue le vhost livré contre un Apache réel : c’est la seule façon de voir ce qu’Apache donne à <FilesMatch>, et c’est par là que le bloquant Q-36 est passé.');
   exigerOutil('openssl', ['version'], 'Le vhost impose HTTPS ; il faut un certificat.');
   exigerOutil('rsync', ['--version'], 'La racine web est publiée par le VRAI rsync, comme sur la VM.');
@@ -430,6 +488,7 @@ async function avecVhost(mutations, preuveMutation, preuveRetour, corps) {
 }
 
 after(async () => {
+  if (lookupOrigine !== undefined) dns.lookup = lookupOrigine;
   // `-k graceful-stop` arrête AUSSI les processus fils. Un simple signal au
   // parent laisserait derrière lui des Apache orphelins, et une machine qui en
   // accumule à chaque exécution finit par ne plus rien pouvoir démarrer.
@@ -456,12 +515,19 @@ function demander(chemin, options = {}) {
   return new Promise((resoudre, rejeter) => {
     const requete = https.request(
       {
-        host: HOTE, port: portTls, path: chemin, method: 'GET', agent: false,
+        // ── On compose l'ADRESSE, et l'on porte le NOM (constat Q-45) ──────
+        // `servername` fixe le SNI ET la cible de la vérification du certificat
+        // — celle-ci reste donc entière, contre « grc.exemple.interne », alors
+        // même qu'aucun résolveur n'est interrogé. `Host` est posé plus bas.
+        host: ADRESSE, port: portTls, path: chemin, method: 'GET', agent: false,
         ca: certificat, servername: HOTE,
-        // Node n'annonce AUCUN encodage par défaut : sans cet en-tête, Apache
-        // n'a aucune raison de compresser, et un essai sur mod_deflate
+        // `Host` désigne le vhost : sans lui, Apache recevrait « 127.0.0.1 » et
+        // `%{SERVER_NAME}` cesserait d'être celui du fichier livré.
+        //
+        // Node n'annonce AUCUN encodage par défaut : sans `accept-encoding`,
+        // Apache n'a aucune raison de compresser, et un essai sur mod_deflate
         // conclurait « pas de gzip » contre un frontal parfaitement réglé.
-        ...(options.entetes === undefined ? {} : { headers: options.entetes }),
+        headers: { host: `${HOTE}:${String(portTls)}`, ...(options.entetes ?? {}) },
       },
       (reponse) => {
         let corps = '';
@@ -477,7 +543,10 @@ function demander(chemin, options = {}) {
 function demanderEnClair(chemin) {
   return new Promise((resoudre, rejeter) => {
     const requete = http.request(
-      { host: HOTE, port: portClair, path: chemin, method: 'GET', agent: false },
+      {
+        host: ADRESSE, port: portClair, path: chemin, method: 'GET', agent: false,
+        headers: { host: `${HOTE}:${String(portClair)}` },
+      },
       (reponse) => {
         reponse.resume();
         reponse.on('end', () => resoudre({ statut: reponse.statusCode, entetes: reponse.headers }));
