@@ -1477,20 +1477,77 @@ else
   alerte "Vhost déjà présent — non écrasé (personnalisations préservées)."
 fi
 
-# LimitRequestBody du vhost et SERVEUR_TAILLE_MAX_CORPS doivent rester cohérents,
-# sinon un envoi légitime est refusé par Apache avant même d'atteindre l'application
-# (ou l'inverse : Apache laisse passer un corps que l'application ne borne plus).
-TAILLE_APP="$(lire_variable SERVEUR_TAILLE_MAX_CORPS)"; TAILLE_APP="${TAILLE_APP:-26214400}"
-TAILLE_APACHE="$(sed -n 's/^[[:space:]]*LimitRequestBody[[:space:]]\{1,\}\([0-9]\{1,\}\).*/\1/p' \
-                 /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null | tail -n1 || true)"
-if [[ -z "$TAILLE_APACHE" ]]; then
-  alerte "Le vhost ne pose aucun LimitRequestBody : ajoutez-en un (S13, dénis de service)."
-elif [[ "$TAILLE_APACHE" -lt "$TAILLE_APP" ]]; then
-  alerte "LimitRequestBody ($TAILLE_APACHE) < SERVEUR_TAILLE_MAX_CORPS ($TAILLE_APP) :"
-  alerte "Apache refusera des envois que l'application accepte. Alignez les deux valeurs."
+# >>> banc: corps <<<
+# ══ LA BORNE DE CORPS S'ÉPROUVE, ELLE NE SE COMPARE PAS (constat Q-44) ═══════
+#
+# Ce qui était ici : `LimitRequestBody` du vhost comparé à
+# `SERVEUR_TAILLE_MAX_CORPS`, et un « ok » imprimé quand les deux coïncidaient.
+# Le contrôle ne pouvait pas échouer utilement, parce que **l'une des deux
+# valeurs n'agit pas sur le chemin concerné** : `LimitRequestBody` est sans
+# effet sur `/api/`, le seul chemin qui porte un corps (mesuré — 28 311 552
+# octets traversent ; le même envoi sur `/index.html` rend 413). Comparer deux
+# nombres dont l'un ne s'applique à rien, c'est un garde-fou qui se mesure
+# lui-même — la figure exacte du `CONVENTIONS.md` §17.5.
+#
+# Le contrôle envoie donc un corps et regarde ce qui se passe :
+#
+#   · hors borne, PAR LE MANDATAIRE  -> doit être refusé (413) ;
+#   · sous la borne                  -> ne doit PAS être refusé, sans quoi un
+#     frontal qui refuse tout satisferait l'essai.
+#
+# Le seuil est lu dans la RÈGLE QUI REFUSE, pas dans un commentaire ni dans une
+# constante recopiée ici.
+#
+# ⚠️ Ce contrôle éprouve le PRÉ-FILTRE du frontal, pas une borne étanche. Un
+# client qui envoie en `Transfer-Encoding: chunked` n'annonce pas de longueur et
+# n'est pas borné là — c'est écrit dans le vhost, mesuré, et la borne qui tient
+# pour l'API est celle de Fastify. Ne pas lire ce « ok » comme davantage.
+if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
+  NOM_VHOST="$(sed -n 's/^[[:space:]]*ServerName[[:space:]]\{1,\}//p' \
+               /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null | head -n1 || true)"
+  SEUIL_CORPS="$(sed -n 's/^[[:space:]]*RewriteCond[[:space:]]\{1,\}%1[[:space:]]\{1,\}"\{0,1\}-gt[[:space:]]*\([0-9]\{1,\}\).*/\1/p' \
+                 /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null | head -n1 || true)"
+  if [[ -z "$NOM_VHOST" || -z "$SEUIL_CORPS" ]]; then
+    alerte "borne de corps : pas de ServerName ou pas de règle de refus lisible dans le vhost."
+    alerte "Le pré-filtre du constat Q-44 n'a PAS été éprouvé — voir le bloc « Dénis de"
+    alerte "service » de deploy/apache/cyber-grc.conf."
+  else
+    CORPS_TMP="$(mktemp)"
+    sonder_corps() {  # <octets> → code HTTP rendu par le frontal
+      head -c "$1" /dev/zero | tr '\0' 'a' > "$CORPS_TMP"
+      curl -sk --max-time 60 --noproxy '*' --resolve "$NOM_VHOST:443:127.0.0.1" \
+           -X POST -H 'Content-Type: application/json' -H 'Connection: close' \
+           --data-binary "@$CORPS_TMP" -o /dev/null -w '%{http_code}' \
+           "https://$NOM_VHOST/api/reprise" 2>/dev/null || true
+    }
+    CODE_HORS="$(sonder_corps "$((SEUIL_CORPS + 1048576))")"
+    CODE_SOUS="$(sonder_corps 4096)"
+    rm -f "$CORPS_TMP"
+
+    if [[ "$CODE_HORS" != 413 ]]; then
+      alerte "corps de $((SEUIL_CORPS + 1048576)) octets par /api/ -> $CODE_HORS (413 attendu)"
+      echec "le frontal laisse passer un corps hors borne sur le chemin mandaté (constat
+        Q-44). C'est la première barrière du contrôle S13 qui manque : un envoi
+        surdimensionné atteint le processus Node, qui n'a pas encore d'authentification
+        devant lui (lot L3). Vérifiez la règle « RewriteCond %1 \"-gt …\" » du bloc
+        « Dénis de service » de deploy/apache/cyber-grc.conf, et que mod_rewrite est
+        chargé (a2enmod rewrite). N'ajustez PAS LimitRequestBody : elle est sans effet
+        sur un chemin mandaté, c'est tout l'objet de ce constat."
+    elif [[ "$CODE_SOUS" == 413 ]]; then
+      alerte "corps de 4 096 octets par /api/ -> $CODE_SOUS"
+      echec "le frontal refuse AUSSI un corps minuscule (constat Q-44, contrôle symétrique) :
+        la règle de refus ne borne pas, elle bloque tout, et l'application serait
+        injoignable en écriture. Le seuil lu dans le vhost est $SEUIL_CORPS octets ;
+        vérifiez que la comparaison est bien « -gt » entre guillemets — sans eux, Apache
+        lit l'opérande comme un champ de drapeaux."
+    else
+      succes "borne de corps éprouvée : $((SEUIL_CORPS + 1048576)) o -> 413, 4 096 o -> $CODE_SOUS (pré-filtre du mandataire)"
+    fi
+  fi
 else
-  succes "LimitRequestBody ($TAILLE_APACHE) ≥ SERVEUR_TAILLE_MAX_CORPS ($TAILLE_APP)"
+  alerte "vhost non activé : la borne de corps du chemin mandaté (Q-44) n'a pas été éprouvée."
 fi
+# <<< banc: corps >>>
 
 # >>> banc: entetes <<<
 # ══ CE QUE LE SERVICE LIT, LE FRONTAL DOIT L'AVOIR NEUTRALISÉ (Q-39) ═════════
