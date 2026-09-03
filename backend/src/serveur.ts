@@ -33,6 +33,7 @@ import type { FastifyError, FastifyInstance, FastifyReply } from 'fastify';
 import type { Pool } from 'pg';
 
 import { greffonApi } from './api/index.js';
+import { ServiceAuthentification } from './auth/index.js';
 import { engendrerIdentifiant } from './entites/index.js';
 import { chargerConfiguration, ErreurConfiguration, resumerConfiguration } from './config/index.js';
 import { traduireErreur } from './erreurs/index.js';
@@ -278,7 +279,47 @@ export function construireServeur(config: Configuration, pool: Pool): FastifyIns
    * (`ErreurRegistre`) : c'est le contrôle S16 — un garde-fou que rien
    * n'appelle est un commentaire.
    */
-  void serveur.register(greffonApi, { pool, config });
+  /**
+   * Lot L3 — le câblage qui rend l'authentification vivante.
+   *
+   * ⚠️ **Ce fichier n'appartenait à aucun rôle**, et ce câblage manquait : les
+   * couches d'A1 (`src/auth/`) et d'A2 (`src/api/`) étaient écrites, éprouvées
+   * et **reliées par personne**. Sans ces trois lignes, il n'y a ni route de
+   * connexion ni authentification réelle — **et le banc reste vert**, chaque
+   * moitié étant verte de son côté. C'est la forme exacte du défaut que ce
+   * chantier traque : un défaut qui vit ENTRE deux fichiers dont aucun n'a
+   * tort seul (porte S2, 5ᵉ passage).
+   *
+   * Le service **est** l'`Authentificateur` et fait monter `POST` et
+   * `DELETE /api/connexion` : il se passe seul, sans `authentificateur` en plus
+   * (`CONVENTIONS.md` §26.2).
+   *
+   * **Quand le service réel prend la place du provisoire** : dès que l'annuaire
+   * est configuré. Sinon on retombe sur la session provisoire — ce qui n'est
+   * PAS un repli silencieux, puisqu'elle **refuse de résoudre hors du
+   * développement** et rend 503 sur toutes les routes de données, recette
+   * comprise (`src/api/session.ts`). En production les variables `LDAP_*` sont
+   * exigées au démarrage : le service réel y est donc toujours celui-ci.
+   */
+  const authentification =
+    config.auth.ldapActif && config.auth.ldap !== null
+      ? new ServiceAuthentification(pool, config, serveur.log)
+      : undefined;
+
+  if (authentification === undefined) {
+    serveur.log.warn(
+      { environnement: config.environnement },
+      "Aucun annuaire configuré : l'authentification réelle n'est pas montée. " +
+        'La session provisoire prend le relais et REFUSE de servir des données ' +
+        'hors développement (503).',
+    );
+  }
+
+  void serveur.register(greffonApi, {
+    pool,
+    config,
+    serviceAuthentification: authentification,
+  });
 
   serveur.setNotFoundHandler((requete, reponse) => {
     // Q-55 (second constat, trouvé en mesurant le périmètre) — cette réponse
