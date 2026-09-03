@@ -689,6 +689,14 @@ comment on function f_verifier_substrat_session() is
 --     modifier le journal ? » étant celle qui décide de la valeur probante du registre
 --     (PLAN_SERVEUR §1.7).
 --
+-- `niveau_defaut` porte le NIVEAU DU PROFIL au sens du `PLAN_SERVEUR` §3.1 — le troisième
+-- axe, un par profil. Il vaut donc le plus haut niveau que le profil exerce sur l'un de
+-- ses domaines : « contribution » pour la qualité, qui contribue aux audits même si elle
+-- ne fait que lire la conformité. Le niveau PAR DOMAINE de `profil_domaines` est un
+-- RAFFINEMENT de cet axe, pas un doublon : c'est lui qui dit que la qualité ne réécrit pas
+-- une exigence. Les deux coexistent, et la couche applicative doit consulter le second —
+-- ce qu'elle ne fait pas encore, et c'est écrit dans `src/droits/passerelle-api.ts`.
+--
 -- Le peuplement est IDEMPOTENT : il n'insère que ce qui manque, et ne touche jamais à ce
 -- qu'une administration aurait modifié depuis. Une migration qui écraserait un paramétrage
 -- client à chaque déploiement serait une perte de données, pas une mise à jour.
@@ -722,15 +730,15 @@ begin
          'Saisie courante, bornée à quatre domaines : actions, incidents, actifs, MCO '
          '(PLAN_SERVEUR §3.2).'),
         ('QUALITE',   'Service qualité',
-         'lecture',
+         'contribution',
          'Audits, gestion documentaire et revues de direction en contribution ; la '
          'conformité en lecture. Ne voit pas la cartographie des actifs.'),
         ('RH',        'Ressources humaines',
-         'lecture',
+         'contribution',
          'Annuaire du personnel en contribution ; registre RGPD et incidents en lecture '
          '(PLAN_SERVEUR §3.2).'),
         ('DPO',       'Délégué à la protection des données',
-         'lecture',
+         'validation',
          'Registre RGPD en validation, incidents en contribution, documents en lecture.'),
         ('DIRECTION', 'Direction',
          'lecture',

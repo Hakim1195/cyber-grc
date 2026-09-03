@@ -152,11 +152,17 @@ const MatriceModule = (() => {
     }
 
     function exportSVG() {
+        // Le droit d'export est distinct de la lecture (PLAN_SERVEUR §3.3) :
+        // entonnoir unique `Droits.exigerExport()` (js/core/session.js).
+        if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
         const blob = new Blob([currentSVGString()], { type: "image/svg+xml;charset=utf-8" });
         triggerDownload(blob, "matrice-risques.svg");
     }
 
     function exportPNG() {
+        // Le droit d'export est distinct de la lecture (PLAN_SERVEUR §3.3) :
+        // entonnoir unique `Droits.exigerExport()` (js/core/session.js).
+        if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
         const blob = new Blob([currentSVGString()], { type: "image/svg+xml;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const img = new Image();

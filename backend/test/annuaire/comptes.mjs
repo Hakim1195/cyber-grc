@@ -315,6 +315,18 @@ const ORDRE_NIVEAUX = ['aucun', 'lecture', 'contribution', 'validation', 'admini
 export function deriverDroits(login) {
   const groupes = resoudreGroupes(login);
   if (groupes === null) return null;
+  return deriverDepuisGroupes(groupes, login);
+}
+
+/**
+ * La même dérivation, mais à partir d'une **liste de groupes obtenue ailleurs**.
+ *
+ * C'est la forme dont le banc des trois axes a besoin : il lit les groupes dans
+ * l'annuaire, par le vrai chemin LDAP, et les passe ici. Sans cette séparation,
+ * le banc confronterait le jeu de données à lui-même — et resterait vert quelle
+ * que soit la doublure.
+ */
+export function deriverDepuisGroupes(groupes, login = null) {
   const filiales = new Set();
   let groupeEntier = false;
   let export_ = false;

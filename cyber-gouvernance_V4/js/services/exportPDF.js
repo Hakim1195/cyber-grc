@@ -9,6 +9,9 @@ const ExportPdfService = (() => {
        (Utilisation du moteur d'impression natif du navigateur)
     ========================== */
     function exportAuditPdf() {
+        // ── LE DROIT D'EXPORT EST DISTINCT DE LA LECTURE (§3.3) ───────────
+        // Entonnoir unique : `Droits.exigerExport()` (js/core/session.js).
+        if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
         if (window.showToast) {
             window.showToast("Préparation du document PDF... (Ajustez les marges si besoin)", "success");
         }

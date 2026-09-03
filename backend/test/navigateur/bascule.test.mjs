@@ -90,6 +90,53 @@ async function ouvrirApplication() {
   return session;
 }
 
+/* =====================================================================
+ *  ATTENDRE UN ÉTAT, ET DIRE CE QU'ON A VU QUAND IL NE VIENT PAS (Q-64)
+ * =====================================================================
+ *
+ *  `page.waitForFunction` meurt sur « Timeout 15000ms exceeded » : une phrase
+ *  qui ne dit ni ce qui était attendu, ni ce que la page portait à cet instant.
+ *  C'est la moitié du reproche du constat Q-64 — *un banc qui échoue quatre
+ *  fois sur cinq apprend à être ignoré*. Un échec sur lequel on ne peut rien
+ *  faire se relance ; il ne se lit pas.
+ *
+ *  Cette enveloppe rend donc l'état AU MOMENT DE L'ÉCHEC : ce que `sync.js`
+ *  publie, le bandeau tel qu'un utilisateur le lit, et les appels que le piège
+ *  de l'essai a vus passer. La prochaine intermittence, s'il en reste une,
+ *  arrivera nommée.
+ *
+ *  Le scrutin est un **intervalle**, pas `requestAnimationFrame` : ce qu'on
+ *  guette est un état de JavaScript, pas une trame d'affichage, et lier une
+ *  attente d'état à l'horloge du compositeur ajoute une dépendance dont on n'a
+ *  aucun besoin. (Mesuré sur cette machine : rAF tourne bien à 60 Hz même dans
+ *  un contexte d'arrière-plan — ce n'est donc pas la cause de Q-64, seulement
+ *  une dépendance inutile qu'on retire.)
+ * ===================================================================== */
+async function attendreEtat(page, predicat, argument, description, options = {}) {
+  try {
+    await page.waitForFunction(predicat, argument, {
+      timeout: options.timeout ?? 15000,
+      polling: options.polling ?? 100,
+    });
+  } catch (erreur) {
+    const vu = await page
+      .evaluate(() => ({
+        etat: (window.Sync && window.Sync.etat) ? window.Sync.etat() : null,
+        bandeau: (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent.trim(),
+        appelsVus: window.__appelsVus ?? null,
+        corpsVus: window.__corpsVus ?? null,
+      }))
+      .catch(() => null);
+    throw new Error(
+      `L’état attendu n’est jamais venu : ${description}\n` +
+        `état de synchronisation : ${JSON.stringify(vu?.etat ?? null)}\n` +
+        `bandeau : ${vu?.bandeau || '(vide)'}\n` +
+        `appels interceptés : ${JSON.stringify(vu?.appelsVus ?? vu?.corpsVus ?? null)}\n` +
+        `cause : ${String(erreur.message).split('\n')[0]}`,
+    );
+  }
+}
+
 /** Ce que la base contient réellement, lu par une connexion tierce. */
 async function enBase(texte, valeurs = []) {
   const client = await base.connexion('app');
@@ -1894,14 +1941,55 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
    * C'est le cas exact du constat : la transaction est validée, la réponse ne
    * revient pas. Les appels suivants passent normalement, sans quoi on
    * n'observerait pas le rejeu qu'on veut justement voir ne pas avoir lieu.
+   *
+   * ══ Q-64 : ON NE COUPE PLUS « LE PREMIER APPEL », ON COUPE LE BON ═══════
+   *
+   * La rédaction précédente coupait le **premier** appel du verbe, quel qu'il
+   * soit. Elle supposait qu'aucune écriture ne part sans geste de
+   * l'utilisateur — et c'est faux : **le produit en émet une à chaque
+   * ouverture de page**. Mesuré, trois ouvertures d'affilée, sur le relais du
+   * banc :
+   *
+   *     ouverture 1 : 1 écriture automatique -> ["POST /api/entites/history"]
+   *     ouverture 2 : 1 écriture automatique -> ["PUT  /api/entites/history/HIST-…"]
+   *     ouverture 3 : 1 écriture automatique -> ["PUT  /api/entites/history/HIST-…"]
+   *
+   * Le tableau de bord inscrit son point d'historique du jour au chargement.
+   * `ouvrirApplication` attend la quiescence, ce qui le fait partir AVANT le
+   * piège — mais cette protection tient à la **synchronisation du produit**,
+   * pas à une propriété de l'essai : tout ce qui décale cet envoi (une machine
+   * chargée, un sondage qui pousse, un re-rendu du tableau de bord après un
+   * rechargement) fait consommer le piège par l'écriture d'historique. La
+   * saisie de l'essai part alors normalement, `bloques` reste à zéro, et
+   * l'attente qui suit **expire au bout de quinze secondes sans un mot** —
+   * signature exacte du constat Q-64, dans les deux familles à la fois.
+   *
+   * Le piège vise donc désormais **l'appel qu'on veut couper** : `cible` est un
+   * fragment qui doit apparaître dans les arguments sérialisés (le nom saisi,
+   * ou l'identifiant visé). Un piège qui ne peut plus se tromper de proie ne
+   * dépend plus d'aucune synchronisation.
+   *
+   * @param {string} cible fragment attendu dans les arguments de l'appel visé
    */
-  function expirerUneFois(page, verbe, issueInconnue = true) {
-    return page.evaluate(([v, inconnue]) => {
+  function expirerUneFois(page, verbe, cible, issueInconnue = true) {
+    assert.ok(
+      typeof cible === 'string' && cible.length > 0,
+      'Q-64 : un piège sans cible coupe le premier appel venu, y compris une écriture ' +
+        'que l’essai n’a pas demandée. Nommez ce qui doit être coupé.',
+    );
+    return page.evaluate(([v, c, inconnue]) => {
       const vrai = window.Api[v].bind(window.Api);
       let restante = true;
+      // Le piège se souvient de ce qu'il a laissé passer : si l'essai échoue,
+      // on peut dire POURQUOI plutôt que « délai dépassé ».
+      window.__appelsVus = window.__appelsVus || [];
       window.Api[v] = async (...arguments_) => {
+        let signature = '';
+        try { signature = JSON.stringify(arguments_); } catch (e) { signature = ''; }
+        window.__appelsVus.push(v + ' ' + signature.slice(0, 200));
+        const vise = restante && signature.indexOf(c) !== -1;
         // La coupure ORDINAIRE n'a rien validé : elle échoue AVANT d'appeler.
-        if (restante && inconnue === false) {
+        if (vise && inconnue === false) {
           restante = false;
           throw new window.Api.ErreurApi({
             reseau: true, statut: 0, code: 'indisponible',
@@ -1909,7 +1997,7 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
           });
         }
         const issue = await vrai(...arguments_);
-        if (restante) {
+        if (vise) {
           restante = false;
           throw new window.Api.ErreurApi({
             reseau: true, statut: 0, code: 'indisponible', issueInconnue: true,
@@ -1919,7 +2007,7 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
         }
         return issue;
       };
-    }, [verbe, issueInconnue]);
+    }, [verbe, cible, issueInconnue]);
   }
 
   /** État de synchronisation et bandeau, tels qu'un utilisateur les voit. */
@@ -1935,7 +2023,7 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
     const nom = 'Saisie dont la réponse s’est perdue';
     const session = await ouvrirApplication();
     try {
-      await expirerUneFois(session.page, 'creer');
+      await expirerUneFois(session.page, 'creer', nom);
       await session.page.evaluate((n) => {
         window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: n });
       }, nom);
@@ -1950,10 +2038,11 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
       // donc l'expiration et on laisse les assertions qui suivent nommer le
       // mal. Rien n'est masqué : elles échouent aussitôt après.
       try {
-        await session.page.waitForFunction(
+        await attendreEtat(
+          session.page,
           () => window.Sync.etat().bloques > 0 && window.Sync.etat().enCours === false,
           null,
-          { timeout: 15000 },
+          'une création dont la réponse expire doit être BLOQUÉE, cycle terminé',
         );
       } catch {
         /* l'état attendu n'est jamais venu : les assertions vont dire pourquoi */
@@ -2010,7 +2099,7 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
     const nom = 'Saisie pendant une coupure ordinaire';
     const session = await ouvrirApplication();
     try {
-      await expirerUneFois(session.page, 'creer', false);
+      await expirerUneFois(session.page, 'creer', nom, false);
 
       // ── Q-64 : ce que cette attente guettait n'était PAS MONOTONE ────────
       //
@@ -2057,10 +2146,11 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
 
       // Le sondage reprend ce qui attend (le troisième reproche de T-1) : c'est
       // le rattrapage automatique, et il ne demande aucun geste.
-      await session.page.waitForFunction(
+      await attendreEtat(
+        session.page,
         () => window.__panneObservee === true && window.Sync.etat().enCours === false,
         null,
-        { timeout: 15000 },
+        'la panne réseau doit avoir été observée, et le cycle d’écriture terminé',
       );
       await session.page.evaluate(() => window.Sync.sonder());
       await attendreQuiescence(session.page);
@@ -2094,7 +2184,7 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
       });
       await attendreQuiescence(session.page);
 
-      await expirerUneFois(session.page, 'modifier');
+      await expirerUneFois(session.page, 'modifier', 'Risque modifié puis expiré (v2)');
       await session.page.evaluate(async (id) => {
         const r = window.DataStore.getRisques().find((x) => x.id === id);
         window.DataStore.updateRisque({ ...r, nom: 'Risque modifié puis expiré (v2)' });
@@ -2116,10 +2206,11 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
       // un instant au lieu d'attendre un événement. `bloques` ne fait que
       // croître ici : l'attente est monotone, elle ne peut pas manquer sa
       // fenêtre, et elle ne coûte rien quand l'état est déjà là.
-      await session.page.waitForFunction(
+      await attendreEtat(
+        session.page,
         () => window.Sync.etat().bloques > 0,
         null,
-        { timeout: 15000 },
+        'la modification rejouée doit être arrêtée par le verrou de version',
       );
 
       const apresModification = await vueDeLEtat(session.page);
@@ -2153,7 +2244,12 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
       });
       await attendreQuiescence(seconde.page);
 
-      await expirerUneFois(seconde.page, 'supprimer');
+      // La suppression ne porte pas de nom dans ses arguments : on vise
+      // l'identifiant, qui est ce que `Api.supprimer` reçoit.
+      const idSupprime = await seconde.page.evaluate(
+        () => window.DataStore.getRisques().find((x) => x.nom === 'Risque supprimé puis expiré').id,
+      );
+      await expirerUneFois(seconde.page, 'supprimer', idSupprime);
       await seconde.page.evaluate(async () => {
         const r = window.DataStore.getRisques().find((x) => x.nom === 'Risque supprimé puis expiré');
         window.DataStore.deleteRisque(r.id);
@@ -2187,7 +2283,7 @@ describe('Une création dont la réponse expire ne se rejoue pas (constat Q-27)'
     // celui qu'on apprend à ignorer, et qui masque ensuite les vrais.
     const session = await ouvrirApplication();
     try {
-      await expirerUneFois(session.page, 'creer');
+      await expirerUneFois(session.page, 'creer', 'Indicateur recalculé, pas saisi');
       await session.page.evaluate(async () => {
         const id = window.UI.genId('RISK');
         window.DataStore.addRisque({ id, nom: 'Indicateur recalculé, pas saisi' });
@@ -2388,7 +2484,7 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
    * l'essai regardait la ligne du serveur en croyant regarder la saisie. Trouvé
    * en sabotant — la préservation retirée, l'essai restait vert.
    */
-  function expirerUneFois(page) {
+  function expirerUneFois(page, cible) {
     // ══ ON NE FABRIQUE PLUS CE QU'ON DEVRAIT MESURER ═══════════════════════
     //
     // Cette fonction remplaçait `Api.creer` et **fabriquait l'erreur d'`api.js`**
@@ -2405,18 +2501,32 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
     // suit vient d'`api.js` : la classification (`issueInconnue`), le code, et
     // la phrase. C'est elle qui est éprouvée, et non ma mémoire de ce qu'elle
     // dit.
-    return page.evaluate(() => {
+    // ══ Q-64 : LA CIBLE, POUR LA MÊME RAISON QU'AU §13 ═══════════════════
+    //
+    // « Le premier envoi non-GET » n'est PAS forcément celui de l'essai : le
+    // tableau de bord écrit son point d'historique du jour à chaque ouverture
+    // de page (mesuré : une écriture automatique par ouverture). Le piège vise
+    // donc le corps qui contient `cible` — ce que l'essai vient de saisir.
+    assert.ok(
+      typeof cible === 'string' && cible.length > 0,
+      'Q-64 : un piège sans cible coupe le premier envoi venu, y compris une écriture ' +
+        'que l’essai n’a pas demandée.',
+    );
+    return page.evaluate((c) => {
       const vrai = window.fetch.bind(window);
       let restante = true;
+      window.__corpsVus = window.__corpsVus || [];
       window.fetch = (ressource, options) => {
         const methode = String((options && options.method) || 'GET').toUpperCase();
-        if (restante && methode !== 'GET') {
+        const corps = (options && typeof options.body === 'string') ? options.body : '';
+        if (methode !== 'GET') window.__corpsVus.push(methode + ' ' + corps.slice(0, 200));
+        if (restante && methode !== 'GET' && corps.indexOf(c) !== -1) {
           restante = false;
           return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'));
         }
         return vrai(ressource, options);
       };
-    });
+    }, cible);
   }
 
   /** Clique un bouton du bandeau, en exigeant qu'il existe. */
@@ -2496,14 +2606,15 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
     const nom = 'Saisie que le rechargement ne doit pas perdre';
     const session = await ouvrirApplication();
     try {
-      await expirerUneFois(session.page);
+      await expirerUneFois(session.page, nom);
       await session.page.evaluate((n) => {
         window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: n });
       }, nom);
-      await session.page.waitForFunction(
+      await attendreEtat(
+        session.page,
         () => window.Sync.etat().bloques > 0 && window.Sync.etat().enCours === false,
         null,
-        { timeout: 15000 },
+        'la création interrompue au niveau du réseau doit être BLOQUÉE',
       );
 
       // ── Le produit doit NOMMER le geste qu'il recommande ────────────────
@@ -2625,14 +2736,15 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
     const nom = 'Saisie que F5 ne doit pas faire croire sauvée';
     const session = await ouvrirApplication();
     try {
-      await expirerUneFois(session.page);
+      await expirerUneFois(session.page, nom);
       await session.page.evaluate((n) => {
         window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: n });
       }, nom);
-      await session.page.waitForFunction(
+      await attendreEtat(
+        session.page,
         () => window.Sync.etat().bloques > 0 && window.Sync.etat().enCours === false,
         null,
-        { timeout: 15000 },
+        'la saisie doit être bloquée AVANT qu’on joue F5',
       );
 
       const avant = await session.page.evaluate((n) => ({
@@ -2716,20 +2828,22 @@ describe('Le geste que le produit recommande ne perd pas la saisie (constat Q-29
         window.DataStore.updateRisque({ ...r, nom: 'Ma saisie locale, périmée' });
         await window.Sync.pousser();
       }, identifiant);
-      await session.page.waitForFunction(
+      await attendreEtat(
+        session.page,
         () => window.Sync.etat().bloques > 0,
         null,
-        { timeout: 15000 },
+        'la modification périmée doit être bloquée par le conflit de version',
       );
 
       // Le témoin d'adoption : planté au serveur, il n'apparaît en mémoire
       // qu'une fois le jeu rechargé ADOPTÉ (constat Q-64).
       await planterMarqueur('ADOPTE-Q29-BIS');
       await rechargerEtAttendre(session.page, 'ADOPTE-Q29-BIS');
-      await session.page.waitForFunction(
+      await attendreEtat(
+        session.page,
         () => window.Sync.etat().bloques === 0,
         null,
-        { timeout: 15000 },
+        'le rechargement doit lever le blocage d’une modification en conflit',
       );
 
       assert.equal(
@@ -2986,22 +3100,36 @@ describe('L’adresse d’une fiche suit le renommage (constats N-3 / Q-38)', ()
 
 describe('Le rechargement écrit d’abord ce qui attend (constats m-6 / Q-38)', () => {
   /** Fait expirer UNE fois un verbe, sans que le serveur ait rien reçu (voir §15). */
-  function expirerUneFois(page) {
+  function expirerUneFois(page, cible) {
     // La coupure au NIVEAU DU RÉSEAU, et non une erreur fabriquée : voir le
     // commentaire de la fonction homonyme du §15. Ce qui suit — classification,
     // code et phrase — vient d'`api.js`, jamais de cet essai.
-    return page.evaluate(() => {
+    // ══ Q-64 : LA CIBLE, POUR LA MÊME RAISON QU'AU §13 ═══════════════════
+    //
+    // « Le premier envoi non-GET » n'est PAS forcément celui de l'essai : le
+    // tableau de bord écrit son point d'historique du jour à chaque ouverture
+    // de page (mesuré : une écriture automatique par ouverture). Le piège vise
+    // donc le corps qui contient `cible` — ce que l'essai vient de saisir.
+    assert.ok(
+      typeof cible === 'string' && cible.length > 0,
+      'Q-64 : un piège sans cible coupe le premier envoi venu, y compris une écriture ' +
+        'que l’essai n’a pas demandée.',
+    );
+    return page.evaluate((c) => {
       const vrai = window.fetch.bind(window);
       let restante = true;
+      window.__corpsVus = window.__corpsVus || [];
       window.fetch = (ressource, options) => {
         const methode = String((options && options.method) || 'GET').toUpperCase();
-        if (restante && methode !== 'GET') {
+        const corps = (options && typeof options.body === 'string') ? options.body : '';
+        if (methode !== 'GET') window.__corpsVus.push(methode + ' ' + corps.slice(0, 200));
+        if (restante && methode !== 'GET' && corps.indexOf(c) !== -1) {
           restante = false;
           return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'));
         }
         return vrai(ressource, options);
       };
-    });
+    }, cible);
   }
 
   test('« Recharger les données » n’emporte pas une saisie faite sur une autre fiche', async () => {
@@ -3011,14 +3139,15 @@ describe('Le rechargement écrit d’abord ce qui attend (constats m-6 / Q-38)',
       // ── 1. Un incident, pour que le bandeau et son bouton existent ──────
       // C'est le seul chemin par lequel un utilisateur atteint
       // `rechargerApresEcriture()` : le produit lui propose le geste.
-      await expirerUneFois(session.page);
+      await expirerUneFois(session.page, 'Création restée bloquée');
       await session.page.evaluate(() => {
         window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: 'Création restée bloquée' });
       });
-      await session.page.waitForFunction(
+      await attendreEtat(
+        session.page,
         () => window.Sync.etat().bloques > 0 && window.Sync.etat().enCours === false,
         null,
-        { timeout: 15000 },
+        'la création bloquée doit exister avant qu’on demande le rechargement',
       );
 
       // ── 2. Quelqu'un d'autre écrit, pour que le rechargement ait de quoi

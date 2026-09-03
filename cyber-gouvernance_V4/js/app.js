@@ -25,7 +25,10 @@ async function startApp() {
     /* =========================
        CONFIGURATION DES ROUTES
     ========================== */
-    Router.init({
+    // La table est nommée pour être CONFRONTÉE au rattachement par domaine
+    // (`verifierCouvertureDesRoutes`) : c'est la liste réelle des écrans, pas
+    // une seconde liste qui pourrait diverger de celle-ci.
+    const ROUTES_ENREGISTREES = {
         "/dashboard": () => DashboardModule.render(),
         "/synthese": () => SyntheseModule.render(),
         "/echeances": () => { if (typeof EcheancesModule !== "undefined") EcheancesModule.render(); },
@@ -94,7 +97,18 @@ async function startApp() {
 	"/audits/:id": (id) => { if (typeof AuditsModule !== "undefined") AuditsModule.renderAuditDetail(id); },
 
         "/settings": () => { if (typeof SettingsModule !== "undefined") SettingsModule.render(); }
-    });
+    };
+    Router.init(ROUTES_ENREGISTREES);
+
+    /* =========================
+       DROITS : LE BLOC « COMPTE » ET LE CONTRÔLE DE COUVERTURE
+       Le contrôle se joue AVANT la première navigation : un écran non rattaché
+       à un domaine doit se voir au démarrage, pas quand quelqu'un s'y rend.
+    ========================== */
+    if (window.renderBlocUtilisateur) window.renderBlocUtilisateur();
+    if (window.verifierCouvertureDesRoutes) {
+        window.verifierCouvertureDesRoutes(Object.keys(ROUTES_ENREGISTREES));
+    }
 
     /* =========================
        LANCEMENT INITIAL
@@ -308,6 +322,9 @@ window.updateActiveNav = function(route) {
     if (window.renderBreadcrumb) window.renderBreadcrumb(route);
     if (window.refreshEcheancesBadge) window.refreshEcheancesBadge();
     if (window.UI && UI.refreshPersonnesDatalist) UI.refreshPersonnesDatalist();
+    // Lot L3 : ce que les droits rendent conditionnel. Ici, et pas ailleurs,
+    // parce que c'est le seul point appelé APRÈS chaque rendu de vue.
+    if (window.appliquerDroits) window.appliquerDroits(route);
 };
 
 /* =========================
@@ -347,4 +364,325 @@ window.showToast = function(message, type = "success") {
         toast.style.transition = "all 0.3s ease";
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+};
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  CE QUE LES DROITS RENDENT CONDITIONNEL DANS L'INTERFACE — lot L3
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *  ⚠️ **L'INTERFACE N'EST PAS LA BARRIÈRE** (`CONVENTIONS.md` §26.2). Tout ce
+ *  qui suit masque ce qu'il est absurde de proposer ; le serveur refuse, et
+ *  c'est lui qu'on vérifie en appelant la route directement (contrôle S6). Un
+ *  contrôle qui n'existerait qu'à l'écran serait un contrôle absent.
+ *
+ *  Trois couches, et chacune est sûre POUR UNE RAISON DIFFÉRENTE — c'est
+ *  volontaire : aucune ne rattrape les autres par hasard.
+ *
+ *  | Couche | Où | Ce qui la rend sûre |
+ *  |---|---|---|
+ *  | menu | ici, `appliquerDroitsAuMenu` | la liste des entrées est **lue dans le DOM**, pas recopiée ; une entrée ajoutée demain est prise en compte sans qu'on y pense |
+ *  | écriture | `js/core/datastore.js` | **toutes** les mutations passent par la façade — invariant du projet |
+ *  | export | `Droits.exigerExport()` | entonnoir unique de tout ce qui sort du produit |
+ *
+ *  La quatrième — neutraliser les boutons à l'écran — n'est PAS sûre par
+ *  construction, et elle est écrite pour que son incomplétude soit **bruyante**
+ *  plutôt que silencieuse. Voir `neutraliserEcritures`.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Domaine fonctionnel de chaque écran.
+ *
+ * ── Une liste écrite à la main, et pourquoi c'est le bon outil ici ──────────
+ *
+ * Le `CLAUDE.md` §3 tranche par le **résultat d'une omission**, pas par le
+ * sujet : une liste dont l'incomplétude fait *réussir quelque chose en silence*
+ * est le mauvais outil ; une liste dont l'incomplétude *échoue bruyamment et
+ * oblige quelqu'un à décider* est le bon.
+ *
+ * Ici, rien ne peut découvrir qu'un écran « Correspondances » relève de la
+ * conformité : c'est une décision métier, la même que celle qu'a prise
+ * `DOMAINE_PAR_ENTITE` dans `backend/src/api/droits.ts` — écrite à la main pour
+ * la même raison, et qui fait foi pour les entités.
+ *
+ * Et l'omission ne peut pas passer inaperçue : `verifierCouvertureDesRoutes()`
+ * compare cette table à la **liste réelle des routes** et au **menu réellement
+ * rendu**, à chaque démarrage, et affiche un bandeau nommant les manques. Une
+ * route sans domaine n'est **pas masquée** — elle est **signalée**. Masquer
+ * silencieusement ferait disparaître un écran que personne n'a décidé de
+ * retirer ; le signaler oblige quelqu'un à trancher.
+ *
+ * Les valeurs sont celles de `backend/src/api/droits.ts` (recopiées dans
+ * `Api.CONTRAT_AUTH.domaines`) : un domaine qui n'y figure pas est signalé.
+ */
+const DOMAINE_PAR_ROUTE = Object.freeze({
+    "/dashboard":    "pilotage",
+    "/synthese":     "pilotage",
+    "/echeances":    "pilotage",
+    "/clients":      "tiers",
+    "/prestataires": "tiers",
+    "/personnel":    "personnel",
+    "/actifs":       "actifs",
+    "/cartographie": "actifs",
+    // Le BIA porte les `processus`, que `DOMAINE_PAR_ENTITE` range dans
+    // « actifs » : on suit la décision du serveur plutôt que d'en prendre une
+    // seconde, sans quoi l'écran et la route ne seraient pas d'accord.
+    "/bia":          "actifs",
+    "/risques":      "risques",
+    "/matrice":      "risques",
+    "/exigences":    "conformite",
+    "/referentiels": "conformite",
+    "/mesures":      "conformite",
+    "/couverture":   "conformite",
+    "/soa":          "conformite",
+    "/mapping":      "conformite",
+    "/incidents":    "incidents",
+    "/documents":    "documents",
+    "/rgpd":         "rgpd",
+    "/actions":      "actions",
+    "/mco":          "actions",
+    "/crise":        "continuite",
+    "/crise-fiches": "continuite",
+    "/pra":          "continuite",
+    "/tests":        "continuite",
+    "/audits":       "audits",
+    "/settings":     "administration"
+});
+
+/** Domaine de la route affichée, ou "" si elle n'est pas rattachée. */
+window.domaineDeRoute = function (route) {
+    const segments = String(route || "").split("/").filter(Boolean);
+    const base = "/" + (segments[0] || "dashboard");
+    return DOMAINE_PAR_ROUTE[base] || "";
+};
+
+/**
+ * Confronte la table des domaines au RÉEL, dans les deux sens, et le dit.
+ *
+ * Trois comparaisons, parce qu'une seule laisserait passer trois choses :
+ *  1. une **route enregistrée** dans le routeur sans domaine déclaré ;
+ *  2. une **entrée de menu** (`data-route` du balisage) sans domaine déclaré —
+ *     ce n'est pas la même liste : `index.html` appartient à un autre agent, et
+ *     il peut gagner une entrée sans que `js/app.js` bouge ;
+ *  3. un **écart avec le serveur** : un domaine cité ici qu'il ne connaît pas,
+ *     ou l'inverse (`Droits.verifier`).
+ *
+ * Le résultat est **affiché**, jamais avalé : un garde-fou muet est un
+ * commentaire (`CONVENTIONS.md` §18.4).
+ */
+window.verifierCouvertureDesRoutes = function (routesEnregistrees) {
+    const manques = [];
+
+    const basesDeclarees = Object.keys(DOMAINE_PAR_ROUTE);
+    const baseDe = (r) => "/" + String(r).split("/").filter(Boolean)[0];
+
+    (routesEnregistrees || []).forEach(r => {
+        const b = baseDe(r);
+        if (basesDeclarees.indexOf(b) === -1 && manques.indexOf("route " + b) === -1) {
+            manques.push("route " + b);
+        }
+    });
+
+    document.querySelectorAll(".main-nav a[data-route]").forEach(a => {
+        const b = baseDe(a.getAttribute("data-route"));
+        if (basesDeclarees.indexOf(b) === -1 && manques.indexOf("menu " + b) === -1) {
+            manques.push("menu " + b);
+        }
+    });
+
+    try {
+        const cites = basesDeclarees.map(b => DOMAINE_PAR_ROUTE[b])
+            .filter((d, i, t) => d && t.indexOf(d) === i);
+        const ecart = Droits.verifier(cites);
+        ecart.inconnusDuServeur.forEach(d => manques.push("domaine inconnu du serveur : " + d));
+        // Un domaine que le serveur connaît et qu'aucun écran ne sert n'est pas
+        // un défaut de l'interface — c'est une information pour qui lit le
+        // journal. On ne l'affiche donc pas, on le trace.
+        if (ecart.inconnusDeLaSpa.length > 0) {
+            console.info("Domaines déclarés par le serveur sans écran correspondant :",
+                ecart.inconnusDeLaSpa.join(", "));
+        }
+    } catch (e) { /* `Droits` absent : rien à confronter */ }
+
+    if (manques.length > 0) signalerCouvertureIncomplete(manques);
+    return manques;
+};
+
+function signalerCouvertureIncomplete(manques) {
+    const esc = window.escapeHtml || (v => String(v == null ? "" : v));
+    let host = document.getElementById("droits-banner-host");
+    if (!host) {
+        host = document.createElement("div");
+        host.id = "droits-banner-host";
+        host.className = "no-print";
+        const gb = document.getElementById("global-banner");
+        if (gb && gb.parentNode) gb.parentNode.insertBefore(host, gb);
+        else { const mc = document.querySelector(".main-content"); if (mc) mc.prepend(host); }
+    }
+    host.innerHTML =
+        '<div class="quota-banner" role="alert">' +
+        '<span class="quota-ico">!</span>' +
+        '<span class="quota-text"><b>Écrans non rattachés à un domaine de droits</b> : ' +
+        esc(manques.join(" ; ")) +
+        '. Ces écrans restent accessibles — l\'interface ne masque pas ce que personne n\'a ' +
+        'décidé de masquer — mais le serveur, lui, décide seul. Signalez-le à votre exploitant.</span>' +
+        '</div>';
+}
+
+/**
+ * Masque les entrées de menu dont le domaine n'est pas lisible.
+ *
+ * La liste des entrées est **lue dans le DOM** (`.main-nav a[data-route]`), et
+ * non recopiée : une entrée ajoutée à `index.html` — qui appartient à un autre
+ * périmètre — est prise en compte sans que ce fichier bouge.
+ *
+ * Un séparateur de section dont toutes les entrées sont masquées disparaît
+ * avec elles : laisser un titre « Continuité (ISO 22301) » au-dessus du vide
+ * donnerait à croire à un écran cassé.
+ */
+function appliquerDroitsAuMenu() {
+    if (typeof Droits === "undefined" || !Droits.connus()) return;
+    const nav = document.querySelector(".main-nav");
+    if (!nav) return;
+
+    nav.querySelectorAll("a[data-route]").forEach(lien => {
+        const domaine = window.domaineDeRoute(lien.getAttribute("data-route"));
+        const element = lien.closest("li") || lien;
+        // `hidden`, pas `display:none` en ligne : l'attribut se retire, et il
+        // retire aussi l'entrée de l'ordre de tabulation.
+        element.hidden = !Droits.peutLire(domaine);
+    });
+
+    // Les séparateurs : un titre sans entrée visible n'a plus d'objet.
+    let separateurCourant = null;
+    let vuDepuisSeparateur = false;
+    const fermer = () => { if (separateurCourant) separateurCourant.hidden = !vuDepuisSeparateur; };
+    Array.prototype.forEach.call(nav.querySelectorAll("li"), li => {
+        if (li.classList.contains("sidebar-divider")) {
+            fermer();
+            separateurCourant = li;
+            vuDepuisSeparateur = false;
+            return;
+        }
+        if (!li.hidden) vuDepuisSeparateur = true;
+    });
+    fermer();
+}
+
+/**
+ * Neutralise dans la vue courante ce que le profil n'a pas le droit de faire.
+ *
+ * ── LA LISTE EST INVERSÉE, ET C'EST TOUT LE RAISONNEMENT ───────────────────
+ *
+ * On ne liste **pas** les boutons d'écriture : cette liste-là vieillirait en
+ * silence — un bouton neuf oublié resterait proposé, et l'utilisateur
+ * découvrirait le refus après avoir saisi. On liste les boutons de
+ * **consultation**, et tout le reste est neutralisé.
+ *
+ * L'omission change alors de camp : un bouton de consultation oublié se
+ * retrouve grisé. C'est visible, immédiat, sans danger — exactement le
+ * « échoue bruyamment, et quelqu'un doit décider » du `CLAUDE.md` §3.
+ *
+ * ⚠️ Cette couche n'est pas une barrière, et n'a pas besoin de l'être : ce
+ * qu'elle laisserait passer est refusé par la façade `DataStore` (filet), puis
+ * par le serveur (barrière).
+ */
+const MOTIFS_CONSULTATION = /(^|[-_])(back|retour|cancel|annul|close|fermer|print|imprim|voir|show|open|detail|tab|onglet|filtre|filter|search|recherche|toggle|prev|next|mois|zoom|aide|help)/i;
+
+function estBoutonDeConsultation(bouton) {
+    const identifiant = bouton.id || "";
+    const classe = bouton.className || "";
+    if (MOTIFS_CONSULTATION.test(identifiant)) return true;
+    if (typeof classe === "string" && MOTIFS_CONSULTATION.test(classe)) return true;
+    // Un bouton qui porte une marque explicite est cru sur parole.
+    if (bouton.dataset && bouton.dataset.lecture === "ok") return true;
+    return false;
+}
+
+/**
+ * Ce qui SORT du produit. `import` n'y figure PAS, et c'est un arbitrage :
+ * importer est une **écriture**, pas une extraction. Le confondre priverait un
+ * contributeur sans droit d'export de la reprise de ses classeurs — un refus
+ * qui n'aurait aucun fondement dans le `PLAN_SERVEUR` §3.3.
+ */
+const MOTIFS_EXPORT = /(export|template|canevas|ics|xlsx|excel|pdf|csv|png|svg|telecharg)/i;
+
+function neutraliserEcritures(route) {
+    if (typeof Droits === "undefined" || !Droits.connus()) return;
+    const app = document.getElementById("app");
+    if (!app) return;
+
+    const domaine = window.domaineDeRoute(route);
+    const ecriture = Droits.peutEcrire(domaine);
+    const extraction = Droits.peutExporter();
+    if (ecriture && extraction) return;      // rien à neutraliser
+
+    app.querySelectorAll("button, input[type='submit'], input[type='button']").forEach(bouton => {
+        const identifiant = (bouton.id || "") + " " + (bouton.className || "");
+        const estExport = MOTIFS_EXPORT.test(identifiant);
+
+        if (estExport && !extraction) {
+            bouton.disabled = true;
+            bouton.title = "Le droit d'export n'est pas accordé à votre profil.";
+            return;
+        }
+        if (estExport) return;               // export autorisé : on n'y touche pas
+        if (ecriture) return;                // écriture autorisée : rien à faire
+        if (estBoutonDeConsultation(bouton)) return;
+
+        bouton.disabled = true;
+        bouton.title = "Votre profil est en lecture seule sur cet écran.";
+    });
+}
+
+/**
+ * Bloc « qui suis-je », et la déconnexion.
+ *
+ * Il n'apparaît que lorsque l'authentification est RÉELLE : tant que la session
+ * est provisoire (lot L2), proposer « Se déconnecter » offrirait un geste sans
+ * effet, et afficher un nom d'utilisateur fictif ferait croire à une identité.
+ */
+window.renderBlocUtilisateur = function () {
+    const entete = document.querySelector(".sidebar-header");
+    if (!entete) return;
+    const existant = document.getElementById("bloc-utilisateur");
+    if (existant) existant.remove();
+
+    let session = null;
+    try { session = Session.courante(); } catch (e) { session = null; }
+    if (!session || session.provisoire) return;
+
+    const esc = window.escapeHtml || (v => String(v == null ? "" : v));
+    const bloc = document.createElement("div");
+    bloc.id = "bloc-utilisateur";
+    const profil = (typeof Droits !== "undefined" && Droits.connus())
+        ? Droits.niveau() : "";
+    bloc.innerHTML =
+        '<div class="sidebar-divider">Compte</div>' +
+        '<div style="font-size:0.85rem; font-weight:600; color:#fff;">' +
+        esc(Session.libelleUtilisateur()) + '</div>' +
+        (profil ? '<div style="font-size:0.78rem; opacity:0.75; color:#fff;">Accès : ' +
+            esc(profil) + (Droits.peutExporter() ? ' · export autorisé' : '') + '</div>' : '') +
+        '<button type="button" id="deconnexion-btn" class="reminder-btn" ' +
+        'style="margin-top:8px; width:100%; justify-content:center;">Se déconnecter</button>';
+    entete.appendChild(bloc);
+
+    const bouton = document.getElementById("deconnexion-btn");
+    if (bouton) bouton.addEventListener("click", () => { Vault.deconnecter(); });
+};
+
+/**
+ * Applique tout ce qui dépend des droits à la vue qui vient d'être rendue.
+ *
+ * Appelée par `updateActiveNav`, c'est-à-dire **après chaque navigation** —
+ * donc après chaque `app.innerHTML = template`. C'est le seul moment où le
+ * balisage de la vue existe : un passage plus tôt neutraliserait un écran qui
+ * n'est pas encore là.
+ */
+window.appliquerDroits = function (route) {
+    try {
+        appliquerDroitsAuMenu();
+        neutraliserEcritures(route);
+    } catch (e) {
+        // Un filet d'affichage ne casse pas la navigation. Il se plaint.
+        console.error("Application des droits à l'écran", e);
+    }
 };

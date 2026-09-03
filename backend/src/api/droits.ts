@@ -108,6 +108,17 @@ export type DomaineFonctionnel =
  * que le `PLAN_SERVEUR` §3.2 refuse (« plutôt qu'une matrice ingérable »).
  */
 export type ActionDemandee =
+  /**
+   * **Aucune session exigée.** Réservé aux routes qui ne peuvent pas en avoir :
+   * la connexion elle-même. Ce n'est pas une dérogation glissée dans le crochet,
+   * c'est une **déclaration portée par la route** — donc lisible, dénombrable, et
+   * refusée par défaut à toute route qui ne la porte pas.
+   *
+   * Le `CONVENTIONS.md` §26.2 tranche que `src/api/` se contente d'enregistrer le
+   * greffon de connexion écrit par la couche d'authentification ; c'est
+   * l'enregistrement qui pose cette déclaration, à un seul endroit.
+   */
+  | 'publique'
   /** Lire des données de gouvernance. */
   | 'lire'
   /** Créer, modifier, supprimer, propager. */
@@ -126,10 +137,33 @@ export type ActionDemandee =
  * un droit, elle ne se l'accorde pas.
  */
 export interface DroitsSession {
-  /** Niveau du profil sur son périmètre. */
+  /**
+   * Niveau du profil sur son périmètre — le **plus élevé** qu'il porte, et celui
+   * qui s'applique aux actions transversales (charger le jeu de données,
+   * exporter) qui ne visent aucun domaine en particulier.
+   */
   readonly niveau: NiveauAcces;
   /** Domaines que le profil ouvre. Un domaine absent est un domaine refusé. */
   readonly domaines: readonly DomaineFonctionnel[];
+  /**
+   * Niveau **par domaine**, quand la couche d'authentification sait le donner.
+   *
+   * ── Le défaut que ce champ ferme, et qui l'a trouvé ──────────────────
+   *
+   * `src/droits/passerelle-api.ts` (agent A1) l'a écrit noir sur blanc en
+   * projetant les trente domaines de la base sur les treize d'ici : *« un profil
+   * **Qualité** passe le contrôle pour une écriture sur le domaine `conformite`,
+   * alors que `session_domaines` ne lui accorde que la **lecture** sur
+   * `exigences`, `referentiels` et `mesures` »*. Le constat était juste, et il
+   * visait la forme de ce type-ci : un seul niveau pour toute la session ne peut
+   * pas exprimer « contribue aux audits, lit la conformité ».
+   *
+   * Le champ est **facultatif**, et son absence se comporte comme avant : le
+   * niveau de la session s'applique partout. Renseigné, il **prime** pour le
+   * domaine qu'il nomme — et un domaine qu'il ne nomme pas retombe sur le niveau
+   * de la session, jamais sur un accès plus large.
+   */
+  readonly niveaux?: Readonly<Partial<Record<DomaineFonctionnel, NiveauAcces>>>;
   /**
    * **Droit d'export, distinct de la lecture** (`PLAN_SERVEUR` §3.3, contrôle
    * S7). Un accès Groupe en lecture permet d'extraire, en un clic, la
@@ -197,6 +231,10 @@ export const TOUS_LES_DOMAINES: readonly DomaineFonctionnel[] = Object.freeze([
 
 /** Niveau minimal exigé par chaque action. */
 const NIVEAU_MINIMAL: Readonly<Record<ActionDemandee, NiveauAcces>> = Object.freeze({
+  // Sans objet : `deciderAcces` n'est jamais appelée pour une route publique —
+  // il n'y a pas de session dont on pourrait lire le niveau. La valeur est là
+  // pour que le `Record` reste exhaustif, ce qui est le garde-fou du type.
+  publique: 'lecture',
   lire: 'lecture',
   // Le droit d'export **n'est pas** un niveau : c'est une permission à part
   // (§3.3). Le niveau minimal reste donc « lecture » — un lecteur autorisé à
@@ -236,8 +274,14 @@ export function deciderAcces(
   action: ActionDemandee,
   domaine: DomaineFonctionnel | null,
 ): RefusDroit | null {
+  if (action === 'publique') return null;
+
   const requis = NIVEAU_MINIMAL[action];
-  if (RANG_NIVEAU[droits.niveau] < RANG_NIVEAU[requis]) {
+  // Le niveau qui s'applique est celui du DOMAINE quand il est connu, celui de
+  // la session sinon. Jamais le plus favorable des deux : un niveau par domaine
+  // sert à RESTREINDRE, et une lecture qui élargirait serait un défaut.
+  const effectif = (domaine !== null ? droits.niveaux?.[domaine] : undefined) ?? droits.niveau;
+  if (RANG_NIVEAU[effectif] < RANG_NIVEAU[requis]) {
     return {
       message:
         action === 'administrer'
@@ -246,8 +290,8 @@ export function deciderAcces(
           : 'Votre profil vous donne un accès en consultation : vous ne pouvez pas modifier ces ' +
             'données. Contactez votre administrateur si vous devez y contribuer.',
       detailJournal:
-        `niveau insuffisant : « ${droits.niveau} » pour une action « ${action} » qui exige ` +
-        `« ${requis} »`,
+        `niveau insuffisant : « ${effectif} » sur ${domaine ?? 'aucun domaine'} pour une action ` +
+        `« ${action} » qui exige « ${requis} »`,
     };
   }
 
@@ -277,19 +321,18 @@ export function deciderAcces(
 /**
  * Le refus, prêt à partir sur le réseau.
  *
- * ⚠️ **Le code applicatif est `hors_perimetre`, et ce n'est pas un choix par
- * défaut.** `CodeApi` (`src/erreurs/`) n'appartient pas au périmètre d'écriture
- * de cet agent, et il ne porte aujourd'hui aucun code propre au refus de droit.
- * `hors_perimetre` est le seul dont le sens couvre le cas — « la ressource est
- * lisible mais l'écriture est refusée » — et il rend déjà 403. L'ajout d'un code
- * `droit_refuse` est **demandé à l'orchestrateur** ; il n'est pas fait ici.
+ * Le code est `droit_insuffisant` et le statut **403** — le contrat du
+ * `CONVENTIONS.md` §26.2 : *« affiche un refus ; ne déconnecte pas, et ne
+ * propose pas de recommencer »*. Il est distinct du **401** `non_authentifie`,
+ * qui ouvre l'écran de connexion, et distinct d'`hors_perimetre`, qui dit
+ * « cette ligne-ci n'est pas à vous » et non « ce geste-là n'est pas le vôtre ».
  *
- * Le statut, lui, est celui qui compte pour l'interface : **403**, distinct du
- * **401** que rend l'absence de session.
+ * Le message ne nomme ni le domaine attendu, ni le niveau requis : les énumérer
+ * dirait à qui n'y a pas droit **ce qu'il faudrait obtenir**.
  */
 export function refuserDroit(refus: RefusDroit): ErreurApplicative {
   return new ErreurApplicative({
-    code: 'hors_perimetre',
+    code: 'droit_insuffisant',
     statut: 403,
     message: refus.message,
     detailJournal: refus.detailJournal,

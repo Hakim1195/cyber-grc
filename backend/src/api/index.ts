@@ -102,10 +102,12 @@ import { construireEnveloppe, reprendreExport } from '../reprise/index.js';
 import type { ChargeV12 } from '../reprise/types.js';
 import { entreeInvalide, ErreurApplicative, traduireErreur } from '../erreurs/index.js';
 import type { ContexteTraduction } from '../erreurs/index.js';
+import { greffonConnexion } from '../auth/greffon.js';
+import type { ServiceAuthentification } from '../auth/index.js';
 import { deciderAcces, DOMAINE_PAR_ENTITE, entitesLisibles, refuserDroit } from './droits.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
-import { AuthentificationProvisoire, PerimetreProvisoire } from './session.js';
+import { AuthentificationProvisoire, estAuthentificateur, PerimetreProvisoire } from './session.js';
 import type { Authentificateur, ResolveurPerimetre, SessionAppliquee } from './session.js';
 
 /* =====================================================================
@@ -223,6 +225,18 @@ export interface OptionsApi {
    * développement (`session.ts`).
    */
   readonly authentificateur?: Authentificateur;
+  /**
+   * Service d'authentification du lot L3. Fourni, il apporte deux choses d'un
+   * coup :
+   *
+   *  · il **est** l'`Authentificateur` (il en implémente le contrat), donc
+   *    `authentificateur` n'a pas à être passé en plus ;
+   *  · il fait monter les routes `POST` et `DELETE /api/connexion`, écrites et
+   *    tenues par `src/auth/` — `CONVENTIONS.md` §26.2 : « A1 exporte un greffon
+   *    Fastify que `src/api/index.ts` se contente d'enregistrer par une ligne.
+   *    La route et sa logique vivent chez A1 ; A2 n'écrit qu'un `register`. »
+   */
+  readonly serviceAuthentification?: ServiceAuthentification;
 }
 
 /* =====================================================================
@@ -358,8 +372,14 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   const { pool, config } = options;
   const resolveur: ResolveurPerimetre =
     options.resolveur ?? new PerimetreProvisoire(pool, config, instance.log);
+  // Un seul point d'accroche pour le lot L3, et deux formes admises : un
+  // authentificateur fourni explicitement, ou un résolveur qui sait déjà
+  // authentifier — ce que l'implémentation réelle sera, puisque c'est la même
+  // session serveur qui répond aux deux questions.
   const authentificateur: Authentificateur =
-    options.authentificateur ?? new AuthentificationProvisoire(resolveur);
+    options.authentificateur ??
+    options.serviceAuthentification ??
+    (estAuthentificateur(resolveur) ? resolveur : new AuthentificationProvisoire(resolveur));
 
   /**
    * Limitation du rythme des requêtes **non authentifiées** (condition **E4**).
@@ -552,6 +572,11 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     if (verdict.bloque) {
       void reponse.header('retry-after', String(verdict.attendreS));
       throw new ErreurApplicative({
+        // `indisponible` et non `non_authentifie` : ce que le client doit
+        // comprendre est « réessayez plus tard », pas « identifiez-vous » — et
+        // c'est ce que le navigateur fait de ce code (`estPassagere()`). Un code
+        // propre au verrouillage dirait à l'attaquant qu'il a atteint la borne ;
+        // celui-ci ne distingue pas un verrou d'une saturation.
         code: 'indisponible',
         statut: 429,
         message: messageRefusRythme(),
@@ -559,30 +584,13 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       });
     }
 
-    // ── 2. Authentification ────────────────────────────────────────────
-    let session: SessionAppliquee;
-    try {
-      session = await authentificateur.authentifier(requete);
-    } catch (erreur) {
-      const traduite = traduireErreur(erreur, contexteErreurs);
-      // Seul un refus d'identité compte comme une tentative. Un 503 — le
-      // service qui ne peut pas répondre — n'est pas la faute de l'appelant :
-      // le verrouiller reviendrait à le punir de notre panne, et rendrait la
-      // barrière fail-closed du lot L2 indiscernable d'un verrouillage.
-      if (traduite.statut === 401) {
-        const apresEchec = limiteur.enregistrerRefus(adresse);
-        if (apresEchec.bloque) void reponse.header('retry-after', String(apresEchec.attendreS));
-      }
-      throw traduite;
-    }
-    requete.sessionGrc = session;
-
-    // ── 3. Droits ──────────────────────────────────────────────────────
+    // ── 2. La route exige-t-elle seulement une session ? ───────────────
     //
-    // L'absence de déclaration est un **défaut de programmation**, pas une
-    // permission : la route ne sert rien tant que sa classe d'accès n'est pas
-    // écrite. C'est ce qui rend « aucun point d'entrée sans contrôle » vrai par
-    // construction et non par relecture.
+    // La déclaration est lue AVANT l'authentification, parce qu'une route
+    // publique — la connexion — ne peut pas être authentifiée : elle est ce qui
+    // crée la session. La lire ici plutôt que plus bas ne desserre rien : une
+    // route sans déclaration est refusée, et « publique » est une déclaration
+    // qu'il faut écrire, pas une valeur par défaut.
     const declaration = requete.routeOptions.config.acces;
     if (declaration === undefined) {
       throw new ErreurApplicative({
@@ -594,7 +602,31 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
           "d'accès déclarée : elle est refusée plutôt que servie sans contrôle (grille §4, S6)",
       });
     }
+    if (declaration.action === 'publique') return;
 
+    // ── 3. Authentification ────────────────────────────────────────────
+    let session: SessionAppliquee;
+    try {
+      session = await authentificateur.authentifier(requete);
+    } catch (erreur) {
+      const traduite = traduireErreur(erreur, contexteErreurs);
+      // Seul un refus d'identité compte comme une tentative. Un 503 — le
+      // service qui ne peut pas répondre — n'est pas la faute de l'appelant :
+      // le verrouiller reviendrait à le punir de notre panne, et rendrait la
+      // barrière fail-closed du lot L2 indiscernable d'un verrouillage.
+      if (traduite.statut === 401 || traduite.code === 'non_authentifie') {
+        const apresEchec = limiteur.enregistrerRefus(adresse);
+        if (apresEchec.bloque) void reponse.header('retry-after', String(apresEchec.attendreS));
+      }
+      throw traduite;
+    }
+    requete.sessionGrc = session;
+
+    // ── 4. Droits ──────────────────────────────────────────────────────
+    //
+    // L'absence de déclaration est un **défaut de programmation**, pas une
+    // permission : elle a déjà été refusée plus haut. C'est ce qui rend « aucun
+    // point d'entrée sans contrôle » vrai par construction et non par relecture.
     const refus = deciderAcces(session.droits, declaration.action, domaineDe(declaration, requete));
     if (refus !== null) {
       requete.log.warn(
@@ -609,7 +641,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       throw refuserDroit(refus);
     }
 
-    // ── 4. L'annuaire, à l'ouverture de session seulement ──────────────
+    // ── 5. L'annuaire, à l'ouverture de session seulement ──────────────
     if (session.sessionOuverte === true && session.identite != null) {
       await alimenterAnnuaire(requete, session.perimetre, session.identite);
     }
@@ -795,6 +827,62 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     return nom;
   };
 
+  /**
+   * Ce que `GET /api/session` rend — **et `POST /api/connexion` avec lui**.
+   *
+   * ── Pourquoi c'est une fonction et non le corps d'une route ──────────
+   *
+   * `CONVENTIONS.md` §26.2 : « `POST /api/connexion` rend exactement la même
+   * charge que `GET /api/session`, **à l'octet près**. Le navigateur n'a alors
+   * qu'une seule forme à savoir lire, et le chemin “je viens de me connecter” ne
+   * diverge jamais de “je rouvre l'onglet”. » Deux rédactions se ressembleraient
+   * le premier jour et diveregeraient le second : c'est le motif que ce chantier
+   * traque depuis onze occurrences. Il n'y a donc qu'une rédaction, et le
+   * greffon de connexion la reçoit en paramètre.
+   *
+   * `filiale` n'est renseignée que par la session provisoire, qui sait décrire
+   * la filiale qu'elle a choisie. L'authentification réelle rend l'identifiant ;
+   * le nom de la filiale viendra du sélecteur du lot L4.
+   */
+  const charteSession = (
+    session: SessionAppliquee,
+    filiale: { id: string; code: string; raisonSociale: string } | null = null,
+  ): Record<string, unknown> => {
+    const { perimetre, droits } = session;
+    return {
+      utilisateur: perimetre.utilisateurId,
+      filiale_active:
+        filiale === null
+          ? { id: perimetre.filialeId }
+          : { id: filiale.id, code: filiale.code, raison_sociale: filiale.raisonSociale },
+      perimetre_lecture: perimetre.filiales,
+      perimetre_groupe: perimetre.perimetreGroupe,
+      administration_groupe: perimetre.administrationGroupe,
+      // Les trois axes, tels que le serveur les a résolus. Le frontend s'en sert
+      // pour ne PAS proposer ce qui sera refusé — mais l'interface n'est pas la
+      // barrière : le serveur refuse aussi, et c'est ce que le contrôle S6
+      // vérifie.
+      droits: {
+        niveau: droits.niveau,
+        domaines: droits.domaines,
+        // Nommé « export » des deux côtés : c'est une permission à part entière
+        // (PLAN_SERVEUR §3.3), pas un niveau.
+        export: droits.export,
+        // Rendu seulement quand la couche d'authentification le donne — sinon la
+        // clé est absente, et l'interface s'en tient au niveau de la session.
+        ...(droits.niveaux === undefined ? {} : { niveaux: droits.niveaux }),
+      },
+      // Dit franchement ce que vaut cette session. Un auditeur qui interroge
+      // l'API le lit sans avoir à ouvrir le code.
+      authentification: {
+        provisoire: authentificateur.provisoire,
+        description: authentificateur.decrire(),
+        lot_attendu: 'L3 — authentification Active Directory et droits à trois axes',
+      },
+      schema_version: VERSION_SCHEMA,
+    };
+  };
+
   /* -------------------------------------------------------------------
    *  GET /api/session
    * ------------------------------------------------------------------- */
@@ -806,40 +894,10 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     // exigée — et rien de plus.
     { config: { acces: { action: 'lire', domaine: null } } },
     async (requete: FastifyRequest, reponse: FastifyReply) => {
-    const { perimetre, droits } = sessionDe(requete);
-    const filiale =
-      resolveur instanceof PerimetreProvisoire ? await resolveur.filiale() : null;
-
-    return reponse.send({
-      utilisateur: perimetre.utilisateurId,
-      filiale_active:
-        filiale === null
-          ? { id: perimetre.filialeId }
-          : { id: filiale.id, code: filiale.code, raison_sociale: filiale.raisonSociale },
-      perimetre_lecture: perimetre.filiales,
-      perimetre_groupe: perimetre.perimetreGroupe,
-      administration_groupe: perimetre.administrationGroupe,
-      // Dit franchement ce que vaut cette session. Le frontend peut l'afficher ;
-      // un auditeur qui interroge l'API le lit sans avoir à ouvrir le code.
-      // Les trois axes, tels que le serveur les a résolus. Le frontend s'en
-      // sert pour ne PAS proposer ce qui sera refusé — mais l'interface n'est
-      // pas la barrière : le serveur refuse aussi, et c'est ce que le contrôle
-      // S6 vérifie.
-      droits: {
-        niveau: droits.niveau,
-        domaines: droits.domaines,
-        // Nommé « export » côté serveur comme côté navigateur : c'est une
-        // permission à part entière (PLAN_SERVEUR §3.3), pas un niveau.
-        export: droits.export,
-      },
-      authentification: {
-        provisoire: authentificateur.provisoire,
-        description: authentificateur.decrire(),
-        lot_attendu: 'L3 — authentification Active Directory et droits à trois axes',
-      },
-      schema_version: VERSION_SCHEMA,
-    });
-  },
+      const session = sessionDe(requete);
+      const filiale = resolveur instanceof PerimetreProvisoire ? await resolveur.filiale() : null;
+      return reponse.send(charteSession(session, filiale));
+    },
   );
 
   /* -------------------------------------------------------------------
@@ -1412,4 +1470,59 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       return reponse.send(resultat);
     },
   );
+
+  /* -------------------------------------------------------------------
+   *  POST / DELETE /api/connexion — montés, pas écrits
+   * -------------------------------------------------------------------
+   *
+   *  `CONVENTIONS.md` §26.2 : la route de connexion est la seule surface que
+   *  deux périmètres se disputent. L'arbitrage donne la route et sa logique à
+   *  `src/auth/`, et **une ligne d'enregistrement** à ce fichier. La voici.
+   *
+   *  ══ Le piège, et comment il est fermé ══════════════════════════════
+   *
+   *  La connexion est, par définition, appelée **sans session**. Montée telle
+   *  quelle sous le crochet `onRequest` ci-dessus, elle rendrait 401 avant
+   *  d'être atteinte : une route de connexion qui exige d'être connecté, et le
+   *  défaut ne se verrait qu'à la première tentative réelle.
+   *
+   *  Deux remèdes étaient possibles, et le choix n'est pas indifférent :
+   *
+   *   · **exempter le chemin dans le crochet** — c'est-à-dire y écrire une
+   *     liste de chemins publics. C'est un annuaire au sens du §19.5 : ce qu'il
+   *     ne nomme pas, il ne l'exempte pas, et ce qu'il nomme cesse d'être
+   *     visible depuis la route ;
+   *   · **déclarer la route publique**, comme toutes les autres déclarent leur
+   *     classe d'accès. C'est le remède retenu : `action: 'publique'` est une
+   *     déclaration, pas une dérogation — elle se compte, elle se lit, et une
+   *     route qui ne déclare rien reste refusée.
+   *
+   *  La déclaration est posée **ici**, à l'enregistrement, par un crochet
+   *  `onRoute` qui ne voit que les routes de ce greffon-là : `src/auth/` n'a pas
+   *  à connaître le vocabulaire d'accès de `src/api/`, et `src/api/` n'a pas à
+   *  connaître les chemins de `src/auth/`.
+   *
+   *  ⚠️ Elles restent soumises à la **limitation de rythme** — le crochet la
+   *  fait passer avant la déclaration. Ce qui n'est pas fait ici, et qui est
+   *  dit plutôt que taire : le verrouillage **par compte** exigé par le
+   *  `PLAN_SERVEUR` §1.9 appartient à `src/auth/tentatives.ts`, pas à ce
+   *  fichier. Compter les échecs de mot de passe par adresse verrouillerait un
+   *  site entier derrière son VPN partagé, un jour de crise, pour les erreurs
+   *  de cinq personnes.
+   * ------------------------------------------------------------------- */
+  const service = options.serviceAuthentification;
+  if (service !== undefined) {
+    await instance.register(async (publiques: FastifyInstance) => {
+      publiques.addHook('onRoute', (route) => {
+        route.config = { ...route.config, acces: { action: 'publique', domaine: null } };
+      });
+      await publiques.register(greffonConnexion, {
+        service,
+        config,
+        // Une seule rédaction de la charte de session, servie par les deux
+        // routes : c'est la garantie « à l'octet près » du §26.2.
+        charteSession: (session: SessionAppliquee) => charteSession(session),
+      });
+    });
+  }
 }

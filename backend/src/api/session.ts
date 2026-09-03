@@ -407,6 +407,27 @@ export interface Authentificateur {
 }
 
 /**
+ * Cet objet sait-il aussi authentifier ?
+ *
+ * ── Pourquoi cette question se pose ─────────────────────────────────────
+ *
+ * Les deux interfaces sont séparées **par nécessité** (voir l'encadré
+ * ci-dessus) : l'une ne prend pas la requête, l'autre ne peut pas s'en passer.
+ * Mais rien n'oblige à en faire **deux objets** — et l'implémentation du lot L3
+ * n'en fera qu'un : c'est la même session serveur qui dit qui parle et quel
+ * périmètre lui revient. Les séparer en deux instances obligerait à les tenir
+ * cohérentes, c'est-à-dire à recréer le défaut que la séparation évite.
+ *
+ * `greffonApi` accepte donc un objet qui porte les deux contrats, et n'enveloppe
+ * dans l'authentification provisoire que ce qui ne porte que le premier.
+ */
+export function estAuthentificateur(
+  candidat: ResolveurPerimetre | Authentificateur,
+): candidat is ResolveurPerimetre & Authentificateur {
+  return typeof (candidat as Authentificateur).authentifier === 'function';
+}
+
+/**
  * Authentification provisoire : **il n'y en a pas**.
  *
  * Elle enveloppe le `ResolveurPerimetre` en place et rend les droits d'un profil

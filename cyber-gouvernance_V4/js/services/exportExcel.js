@@ -5,6 +5,9 @@
 const ExportExcelService = (() => {
 
     function exportAudit() {
+        // ── LE DROIT D'EXPORT EST DISTINCT DE LA LECTURE (§3.3) ───────────
+        // Entonnoir unique : `Droits.exigerExport()` (js/core/session.js).
+        if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
         if (typeof XLSX === 'undefined') {
             alert("Erreur : La bibliothèque d'export Excel (SheetJS) n'est pas chargée.");
             return;

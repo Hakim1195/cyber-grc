@@ -152,6 +152,16 @@ const Sync = (() => {
      * motif ne se débloque que par la levée de CE motif.*
      */
     const bloquesParAuthentification = new Set();
+    /**
+     * Clés bloquées par un **refus de droit** (lot L3, `droit_insuffisant`).
+     *
+     * Elles sont conservées à l'écran — le serveur n'a rien écrit, mais
+     * l'utilisateur vient de taper ce texte — et elles ne doivent **jamais**
+     * être proposées au renvoi : réémettre ce que le profil n'a pas le droit
+     * d'écrire ne peut rendre que le même refus. Un bouton qui ne peut
+     * qu'échouer est un bouton qui apprend à ignorer le bandeau (constat m-5).
+     */
+    const bloquesParDroit = new Set();
 
     // Doublons rendus par le GÉNÉRATEUR de la page (constat Q-23) — à distinguer
     // de `doublons`, qui constate deux enregistrements de même clé sans pouvoir
@@ -1472,6 +1482,50 @@ const Sync = (() => {
             erreur = new Api.ErreurApi({ statut: 0, code: "erreur_interne", message: "Échec inattendu de l'enregistrement." });
         }
 
+        /* ── LA SESSION A EXPIRÉ — LE CAS OÙ UNE SAISIE SE PERD (lot L3) ─────
+         *
+         * Cette branche vient AVANT toutes les autres, et l'ordre est le fond
+         * du remède. Un 401 ressemble à trois choses qu'il n'est pas :
+         *
+         *  · à une **panne passagère** — mais rejouer martèlerait un serveur qui
+         *    refuse, toutes les huit secondes, sans qu'aucun essai n'aboutisse
+         *    jamais (c'est pourquoi `estPassagere()` l'exclut explicitement) ;
+         *  · à un **refus de droit** — mais celui-ci remet la mémoire à la
+         *    valeur du serveur, ce qui, sur une création, EFFACE la saisie. Or
+         *    ici le serveur n'a rien refusé : il n'a pas regardé ;
+         *  · à un **enregistrement dérivé** qu'on pourrait abandonner — mais un
+         *    abandon silencieux d'un point d'historique passe encore, tandis
+         *    qu'une saisie abandonnée sans un mot est exactement ce que le
+         *    constat Q-29 a coûté.
+         *
+         * La saisie reste donc **à l'écran**, marquée bloquée, et sa clé est
+         * notée à part : la reconnexion la relancera telle quelle. Rien n'est
+         * réémis avant, parce que rien ne peut aboutir avant.
+         */
+        if (erreur.estNonAuthentifie()) {
+            const k = cle(collection, id);
+            bloques.add(k);
+            bloquesParAuthentification.add(k);
+            if (geste === "creation" && enregistrement) {
+                creationsBloquees.set(k, { collection: collection, enregistrement: enregistrement });
+            }
+            ajouterIncident({
+                collection, id, geste,
+                type: "session",
+                // `api.js` énonce le FAIT (« votre session n'est pas ouverte »).
+                // Le GESTE se nomme ici, parce que cette couche est la seule à
+                // savoir ce qu'elle tient en mémoire — et donc ce que F5
+                // détruirait. Même partage qu'aux constats Q-29 et Q-57.
+                message: erreur.message +
+                    " Votre saisie reste à l'écran et repartira dès que vous serez reconnecté. " +
+                    "N'actualisez pas le navigateur (F5) : elle serait perdue.",
+                // Recharger est IMPOSSIBLE sans session : proposer le bouton
+                // offrirait un geste qui ne peut que rendre le même refus.
+                rechargeable: false
+            });
+            return false;
+        }
+
         // Panne passagère : rien n'est marqué, la modification reste en attente
         // et repartira toute seule. L'utilisateur est prévenu que ce n'est pas
         // encore enregistré.
@@ -1518,6 +1572,10 @@ const Sync = (() => {
         if (geste === "creation" && enregistrement) {
             creationsBloquees.set(cle(collection, id), { collection: collection, enregistrement: enregistrement });
         }
+        // …mais un refus de DROIT n'est pas une incertitude : la saisie reste
+        // à l'écran ET ne doit jamais être proposée au renvoi (voir
+        // `bloquesParDroit`).
+        if (erreur.estDroitInsuffisant()) bloquesParDroit.add(cle(collection, id));
         const incertain = !!erreur.issueInconnue && geste === "creation";
         ajouterIncident({
             collection, id, geste,
@@ -1525,7 +1583,13 @@ const Sync = (() => {
             // ce que le navigateur sait, et c'est ce qu'il dit.
             type: erreur.estConflit() ? "conflit"
                 : (erreur.estIntrouvable() ? "disparu"
-                    : (incertain ? "incertain" : "refus")),
+                    // Droit manquant (lot L3) : la saisie est CONSERVÉE, à la
+                    // différence d'un `hors_perimetre` traité plus haut. Le
+                    // serveur n'a rien écrit, mais l'utilisateur vient de taper
+                    // ce texte : le lui effacer serait une perte, et il n'aurait
+                    // même pas de quoi le recopier.
+                    : (erreur.estDroitInsuffisant() ? "droit"
+                        : (incertain ? "incertain" : "refus"))),
             // ── Q-29 : la phrase partagée ne suffit plus ici ─────────────────
             // `api.js` dit « rechargez la page avant de recommencer », ce qui est
             // vrai pour une reprise. Pour une création bloquée, c'était la seule
@@ -1815,8 +1879,22 @@ const Sync = (() => {
      * l'utilisateur — après qu'il a rechargé et vu par lui-même si la ligne est
      * là. C'est la même décision, prise par celui qui, lui, peut la prendre.
      */
+    /**
+     * Clés de créations bloquées qu'un RENVOI peut faire aboutir.
+     *
+     * Deux motifs de blocage ne se lèvent pas en réémettant : la session
+     * expirée (il faut se reconnecter) et le refus de droit (il faut un autre
+     * profil). Les proposer au renvoi offrirait un bouton qui ne peut
+     * qu'échouer — et un bouton qui échoue toujours apprend à ignorer le
+     * bandeau, ce que le constat m-5 condamne.
+     */
+    function creationsRenvoyables() {
+        return Array.from(creationsBloquees.keys())
+            .filter(k => !bloquesParAuthentification.has(k) && !bloquesParDroit.has(k));
+    }
+
     function boutonRenvoi() {
-        if (creationsBloquees.size === 0) return "";
+        if (creationsRenvoyables().length === 0) return "";
         return '<button id="sync-renvoyer" class="reminder-btn">Envoyer à nouveau</button>';
     }
 
@@ -1855,8 +1933,9 @@ const Sync = (() => {
                 const tete = i.type === "conflit" ? "Modifié entre-temps"
                     : i.type === "disparu" ? "Supprimé entre-temps"
                         : i.type === "droit" ? "Écriture refusée"
-                            : i.type === "incertain" ? "Enregistrement incertain"
-                                : "Enregistrement refusé";
+                            : i.type === "session" ? "Session expirée"
+                                : i.type === "incertain" ? "Enregistrement incertain"
+                                    : "Enregistrement refusé";
                 return "<li><b>" + esc(tete) + "</b> — " + esc(i.libelle) + " : " + esc(i.message) + "</li>";
             }).join("");
             morceaux.push(
@@ -1964,10 +2043,11 @@ const Sync = (() => {
         if (e) e.onclick = () => { panneReseau = false; rendreBandeau(); pousser(); };
         const rv = document.getElementById("sync-renvoyer");
         if (rv) rv.onclick = () => {
-            // On ne débloque QUE les créations : une modification ou une
-            // suppression bloquée l'est pour une raison que le renvoi ne lève pas.
-            creationsBloquees.forEach((_v, k) => bloques.delete(k));
-            creationsBloquees.clear();
+            // On ne débloque QUE les créations, et parmi elles QUE celles
+            // qu'un renvoi peut faire aboutir : une modification, une
+            // suppression, une session expirée ou un refus de droit sont
+            // bloqués pour une raison que le renvoi ne lève pas.
+            creationsRenvoyables().forEach(k => { bloques.delete(k); creationsBloquees.delete(k); });
             incidents.length = 0;
             bandeauReduit = false;
             rendreBandeau();
@@ -2040,12 +2120,51 @@ const Sync = (() => {
         } catch (e) { /* environnement sans fenêtre : rien à installer */ }
     }
 
+    /**
+     * La session vient d'être rouverte : ce qui attendait REPART.
+     *
+     * ── Pourquoi c'est la moitié qui donne son prix à la préservation ───────
+     *
+     * Conserver une saisie à l'écran sans jamais la renvoyer n'est pas une
+     * préservation, c'est un sursis : l'utilisateur croit son travail sauvé, et
+     * il ne l'est pas. C'est la forme exacte du défaut que le constat Q-27 a
+     * relevé dans l'autre sens — un écran qui affirme ce que la base ne porte
+     * pas.
+     *
+     * ── Ce qui est débloqué, et surtout ce qui ne l'est PAS ────────────────
+     *
+     * **Uniquement** les clés notées dans `bloquesParAuthentification`. Un
+     * conflit de version, une ressource disparue, un refus de droit sont
+     * bloqués pour un motif que la reconnexion ne lève pas : les relancer
+     * réémettrait précisément ce que le serveur vient de refuser. *Ce qui est
+     * bloqué pour un motif ne se débloque que par la levée de CE motif.*
+     */
+    function reprendreApresAuthentification() {
+        if (bloquesParAuthentification.size === 0) {
+            // Rien n'était bloqué par la session : il peut malgré tout rester
+            // des modifications en attente, jamais parties. On pousse.
+            return pousser();
+        }
+        bloquesParAuthentification.forEach(k => {
+            bloques.delete(k);
+            creationsBloquees.delete(k);
+        });
+        bloquesParAuthentification.clear();
+        // Les incidents de session n'ont plus d'objet : les autres restent.
+        for (let i = incidents.length - 1; i >= 0; i--) {
+            if (incidents[i].type === "session") incidents.splice(i, 1);
+        }
+        bandeauReduit = false;
+        rendreBandeau();
+        return pousser();
+    }
+
     return {
         brancher, demarrer, jeuDeDonnees, adopterJeu,
         marquerModification, marquerPropagation, marquerDerive, pousser, cycle,
         recharger, sonder, demarrerSondage, installerFilets,
         etat, surChangementEtat, aDesModificationsEnAttente, rendreBandeau,
-        signalerGenerateurDouble
+        signalerGenerateurDouble, reprendreApresAuthentification
     };
 })();
 

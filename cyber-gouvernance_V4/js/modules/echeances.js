@@ -201,6 +201,9 @@ const EcheancesModule = (() => {
     }
 
     function exportExcel() {
+        // Le droit d'export est distinct de la lecture (PLAN_SERVEUR §3.3) :
+        // entonnoir unique `Droits.exigerExport()` (js/core/session.js).
+        if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
         if (typeof XLSX === "undefined") { alert("La bibliothèque d'export Excel (SheetJS) n'est pas chargée."); return; }
         const rows = buildRows();
         const wb = XLSX.utils.book_new();
@@ -237,6 +240,9 @@ const EcheancesModule = (() => {
     }
 
     function exportICS() {
+        // Le droit d'export est distinct de la lecture (PLAN_SERVEUR §3.3) :
+        // entonnoir unique `Droits.exigerExport()` (js/core/session.js).
+        if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
         const count = Echeances.collect().filter(it => it.date && it.jours !== null).length;
         if (!count) { alert("Aucune échéance datée à exporter."); return; }
         const blob = new Blob([buildICS()], { type: "text/calendar;charset=utf-8" });

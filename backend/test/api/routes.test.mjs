@@ -415,8 +415,36 @@ describe('L’habilitation Groupe ne se fabrique nulle part (suite du constat M-
    */
   const AUTORISES = Object.freeze({
     'db/pool.ts': 'déclare le champ du périmètre et la sentinelle systeme (faux)',
-    'api/session.ts': 'LE résolveur : c’est là, et seulement là, que le droit se décide',
+    'api/session.ts': 'le résolveur PROVISOIRE du lot L2, tant qu’il existe',
   });
+
+  /**
+   * Répertoires autorisés à écrire le drapeau — **et la raison est la condition
+   * d'entrée E2 elle-même**.
+   *
+   * `CONVENTIONS.md` §22, E2 : *« le modèle à trois axes décide du profil
+   * Administration et du périmètre Groupe **avant** de le poser »*. Ce sont donc
+   * exactement ces deux répertoires-là, et aucun autre :
+   *
+   *  · `droits/` — le modèle à trois axes. C'est **là** que la décision se
+   *    prend, à partir des groupes AD résolus ;
+   *  · `auth/` — la session serveur, qui porte cette décision dans le périmètre
+   *    qu'elle rend à chaque requête.
+   *
+   * ⚠️ **`api/` n'y est pas, et c'est tout le sujet.** Le greffon monte les
+   * routes : aucune ligne de `api/index.ts` ne doit poser ce drapeau. La règle
+   * « une route vérifie un droit, elle ne se l'accorde pas » se lit donc encore
+   * dans ce balayage, entière.
+   */
+  const PREFIXES_AUTORISES = Object.freeze({
+    'droits/': 'le modèle de droits à trois axes — c’est là que la décision se prend (E2)',
+    'auth/': 'la session serveur, qui porte la décision du modèle de droits (E2)',
+  });
+
+  /** Un chemin est-il couvert par une des deux listes ? */
+  const estAutorise = (relatif) =>
+    AUTORISES[relatif] !== undefined ||
+    Object.keys(PREFIXES_AUTORISES).some((prefixe) => relatif.startsWith(prefixe));
 
   /**
    * Fichiers autorisés à POSER LE RÉGLAGE DE SESSION `grc.administration_groupe`.
@@ -460,11 +488,19 @@ describe('L’habilitation Groupe ne se fabrique nulle part (suite du constat M-
     // Une ÉCRITURE, pas une mention : « administrationGroupe: … » (littéral d'objet)
     // ou « .administrationGroupe = … » (affectation). Lire le champ reste libre —
     // c'est même ce que fait le contrôle du droit.
-    const ecriture = /(^|[^.\w])administrationGroupe\s*[:=][^=]/;
+    //
+    // ⚠️ **Le motif excluait un point devant le nom, et c'était un trou.** Il
+    // annonçait couvrir « .administrationGroupe = … » et ne le couvrait pas :
+    // `perimetre.administrationGroupe = true` passait. Trouvé par le contrôle de
+    // morsure du balayage voisin, qui essaie cette forme-là explicitement — un
+    // garde-fou éprouvé par un autre garde-fou, ce qui est le seul moyen de
+    // découvrir qu'un motif ne mord pas là où son commentaire le promet.
+    // Lire reste libre : une lecture n'est jamais suivie de « : » ou de « = ».
+    const ecriture = /(^|[^\w])administrationGroupe\s*[:=][^=]/;
     const fautifs = [];
     for (const chemin of fichiers) {
       const relatif = relative(racine, chemin).split('\\').join('/');
-      if (AUTORISES[relatif] !== undefined) continue;
+      if (estAutorise(relatif)) continue;
       const lignes = readFileSync(chemin, 'utf8').split('\n');
       lignes.forEach((ligne, i) => {
         const utile = ligne.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, '');
@@ -476,6 +512,122 @@ describe('L’habilitation Groupe ne se fabrique nulle part (suite du constat M-
       [],
       'Ces lignes posent le drapeau d’administration hors du résolveur de périmètre. ' +
         'C’est par là que le contournement du constat M-4 était passé.',
+    );
+  });
+
+  test('E2 — le drapeau n’est JAMAIS accordé par une constante, nulle part', async () => {
+    // ── Pourquoi cette propriété-ci, en plus de la liste de fichiers ──────
+    //
+    // Une liste de fichiers autorisés vieillit : la vague 3 vient d'y ajouter
+    // deux répertoires, et la vague 4 en ajoutera d'autres. Elle ne dit donc
+    // plus rien du jour où un fichier *déjà autorisé* s'accorde le droit au
+    // lieu de le dériver — et c'est très exactement le défaut du constat M-4,
+    // simplement déménagé.
+    //
+    // La propriété qui ne vieillit pas est celle-ci : **le drapeau est toujours
+    // le résultat d'une décision, jamais une constante vraie**. Un
+    // `administrationGroupe: true` littéral, où qu'il soit, est un droit qu'on
+    // s'accorde. Un `administrationGroupe: false` est l'inverse — le refus par
+    // défaut — et reste permis.
+    //
+    // Elle est vraie de tout `src/`, listes ou pas, et elle s'étend d'elle-même
+    // aux fichiers que personne n'a encore écrits.
+    const { readdirSync, readFileSync } = await import('node:fs');
+    const { join, relative } = await import('node:path');
+    const { RACINE_BACKEND } = await import('../aide/serveur.mjs');
+    const racine = join(RACINE_BACKEND, 'src');
+
+    const fichiers = [];
+    const parcourir = (repertoire) => {
+      for (const entree of readdirSync(repertoire, { withFileTypes: true })) {
+        const chemin = join(repertoire, entree.name);
+        if (entree.isDirectory()) parcourir(chemin);
+        else if (entree.name.endsWith('.ts')) fichiers.push(chemin);
+      }
+    };
+    parcourir(racine);
+
+    // `administrationGroupe: true` ou `.administrationGroupe = true`, avec ou
+    // sans espaces, suivi de ce qui termine une expression — virgule,
+    // point-virgule, accolade, fin de ligne.
+    const accorde = /(^|[^\w])administrationGroupe\s*[:=]\s*true(?![\w$])/;
+    const fautifs = [];
+    for (const chemin of fichiers) {
+      const relatif = relative(racine, chemin).split('\\').join('/');
+      readFileSync(chemin, 'utf8').split('\n').forEach((ligne, i) => {
+        const utile = ligne.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, '');
+        if (accorde.test(utile)) fautifs.push(`${relatif}:${String(i + 1)} ${ligne.trim().slice(0, 90)}`);
+      });
+    }
+    assert.deepEqual(
+      fautifs,
+      [],
+      'Ces lignes ACCORDENT l’administration Groupe par une constante, au lieu de la dériver ' +
+        'du modèle de droits. C’est le constat M-4 sous une autre forme : un droit qu’on se ' +
+        'donne n’est pas un droit qu’on vérifie.',
+    );
+
+    // ── Contrôle de morsure : le motif doit voir une constante fautive ────
+    // Sans lui, « aucun fautif » serait vrai parce que le motif ne voit rien.
+    for (const echantillon of [
+      '  administrationGroupe: true,',
+      '      administrationGroupe: true',
+      'perimetre.administrationGroupe = true;',
+      '  const p = { administrationGroupe: true };',
+    ]) {
+      assert.ok(accorde.test(echantillon), `Le motif ne voit pas « ${echantillon.trim()} ».`);
+    }
+    // Et il doit laisser passer ce qui est légitime : le refus, et la dérivation.
+    for (const echantillon of [
+      '    administrationGroupe: false,',
+      "    administrationGroupe: etat.administrateur && etat.portee === 'groupe',",
+      '    administrationGroupe: administrationGroupeDemandee(),',
+    ]) {
+      assert.equal(accorde.test(echantillon), false, `Le motif mord à tort sur « ${echantillon.trim()} ».`);
+    }
+  });
+
+  test('E2 — les répertoires nouvellement autorisés portent bien la décision', async () => {
+    // Une autorisation qui ne couvre rien est une autorisation qu'on a oublié de
+    // retirer : elle élargit le balayage sans contrepartie. On vérifie donc que
+    // chaque préfixe autorisé porte au moins une écriture du drapeau — et que
+    // cette écriture est une **dérivation**, pas une constante.
+    const { readdirSync, readFileSync, existsSync } = await import('node:fs');
+    const { join, relative } = await import('node:path');
+    const { RACINE_BACKEND } = await import('../aide/serveur.mjs');
+    const racine = join(RACINE_BACKEND, 'src');
+
+    const ecriture = /(^|[^\w])administrationGroupe\s*[:=][^=]/;
+    const inutiles = [];
+    for (const prefixe of Object.keys(PREFIXES_AUTORISES)) {
+      const repertoire = join(racine, prefixe);
+      // Le répertoire peut ne pas exister : la vague 3 est en cours, et un
+      // balayage qui EXIGERAIT sa présence ferait rougir le banc d'un autre
+      // agent pendant qu'il écrit. Ce qu'on refuse est l'autorisation qui
+      // couvre un répertoire présent et muet.
+      if (!existsSync(repertoire)) continue;
+      let vues = 0;
+      const parcourir = (dossier) => {
+        for (const entree of readdirSync(dossier, { withFileTypes: true })) {
+          const chemin = join(dossier, entree.name);
+          if (entree.isDirectory()) {
+            parcourir(chemin);
+            continue;
+          }
+          if (!entree.name.endsWith('.ts')) continue;
+          for (const ligne of readFileSync(chemin, 'utf8').split('\n')) {
+            if (ecriture.test(ligne.replace(/\/\/.*$/, ''))) vues += 1;
+          }
+        }
+      };
+      parcourir(repertoire);
+      if (vues === 0) inutiles.push(`${prefixe} (${relative(racine, repertoire)})`);
+    }
+    assert.deepEqual(
+      inutiles,
+      [],
+      'Ces répertoires sont autorisés à poser le drapeau d’administration et n’en font rien : ' +
+        'l’autorisation élargit le balayage sans contrepartie, et doit être retirée.',
     );
   });
 
@@ -529,7 +681,7 @@ describe('L’habilitation Groupe ne se fabrique nulle part (suite du constat M-
     const { join } = await import('node:path');
     const { RACINE_BACKEND } = await import('../aide/serveur.mjs');
 
-    const ecriture = /(^|[^.\w])administrationGroupe\s*[:=][^=]/;
+    const ecriture = /(^|[^\w])administrationGroupe\s*[:=][^=]/;
     for (const relatif of Object.keys(AUTORISES)) {
       const texte = readFileSync(join(RACINE_BACKEND, 'src', relatif), 'utf8');
       const trouvees = texte.split('\n').filter((ligne) => ecriture.test(ligne.replace(/\/\/.*$/, '')));
@@ -588,6 +740,10 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     ['GET', '/api/session', undefined],
     ['GET', '/api/modele', undefined],
     ['GET', '/api/donnees', undefined],
+    // L'extraction du jeu de données entier — le droit d'export du
+    // `PLAN_SERVEUR` §3.3. Elle est ici pour la même raison que les autres :
+    // hors développement, elle ne doit rien servir du tout.
+    ['GET', '/api/export', undefined],
     ['GET', '/api/rafraichir?depuis=2026-01-01T00:00:00.000Z', undefined],
     ['POST', '/api/entites/risques', { champs: { nom: 'tentative' } }],
     ['PUT', '/api/entites/risques/RISK-A', { version: 1, champs: { nom: 'tentative' } }],

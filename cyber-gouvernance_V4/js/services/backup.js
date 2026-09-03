@@ -90,11 +90,17 @@ const BackupService = (() => {
     function dateStamp() { return new Date().toISOString().split("T")[0]; }
 
     function exportPlain() {
+        // ── LE DROIT D'EXPORT EST DISTINCT DE LA LECTURE (§3.3) ───────────
+        // Entonnoir unique : `Droits.exigerExport()` (js/core/session.js).
+        if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
         download(DataStore.exportSnapshot(), `Sauvegarde_CyberGRC_Dedienne_${dateStamp()}.json`);
         markExported();
     }
 
     async function exportEncrypted(password) {
+        // ── LE DROIT D'EXPORT EST DISTINCT DE LA LECTURE (§3.3) ───────────
+        // Entonnoir unique : `Droits.exigerExport()` (js/core/session.js).
+        if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
         const text = await DataStore.exportEncrypted(password);
         download(text, `Sauvegarde_CyberGRC_Dedienne_${dateStamp()}.chiffre.json`);
         markExported();

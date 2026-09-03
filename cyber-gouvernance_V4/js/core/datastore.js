@@ -1109,6 +1109,92 @@ const DataStore = (() => {
     };
 })();
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  FILET DE LECTURE SEULE — lot L3
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *  ⚠️ **CE N'EST PAS LA BARRIÈRE.** La barrière est le serveur, qui refuse la
+ *  requête (`backend/src/api/droits.ts`, contrôle S6). Ceci est un filet : il
+ *  évite qu'un bouton oublié laisse l'utilisateur saisir dix minutes de travail
+ *  avant qu'un refus ne tombe.
+ *
+ *  ── Pourquoi ici, et pas dans les 26 modules ────────────────────────────
+ *
+ *  Parce que **toutes** les mutations passent par cette façade — c'est
+ *  l'invariant du projet, celui qui a permis de basculer 26 modules sans en
+ *  réécrire un seul (`CLAUDE.md` §3). Un filet posé ici est donc complet par
+ *  construction, là où une liste de boutons vieillirait en silence.
+ *
+ *  ── La liste des mutateurs est DÉCOUVERTE, jamais écrite ────────────────
+ *
+ *  On parcourt les membres réellement exportés et on retient ceux dont le nom
+ *  commence par `add`, `update`, `delete`, `upsert`, `reset`, `record`,
+ *  `apply` ou `clear` — la convention `getX/addX/updateX/deleteX` du
+ *  `CLAUDE.md` §3. Un mutateur ajouté demain qui la respecte est couvert **sans
+ *  que personne y pense**.
+ *
+ *  Et s'il ne la respecte pas ? Alors il mute, `sync.js` l'envoie, et **le
+ *  serveur le refuse** : l'échec est bruyant, pas silencieux — c'est le sens de
+ *  lecture du `CLAUDE.md` §3 sur les listes. Le filet ne peut pas mentir dans
+ *  le sens dangereux.
+ *
+ *  ── La façade n'est pas élargie ─────────────────────────────────────────
+ *
+ *  Aucun membre n'est ajouté ni retiré : on remplace des fonctions par des
+ *  fonctions de même nom et de même arité apparente. Le compte de membres —
+ *  131 avant, 131 après la vague 2 — est inchangé, et l'API reste **100 %
+ *  synchrone** : le filet ne rend aucune promesse.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+(() => {
+    "use strict";
+
+    const PREFIXES_MUTATION = ["add", "update", "delete", "upsert", "reset", "record", "apply", "clear"];
+
+    // Un mutateur, oui — mais tout ce qui touche au fichier d'échange et aux
+    // points de restauration reste accessible : ce ne sont pas des écritures de
+    // données de gouvernance, et `applyImport` est déjà tenu par son écran.
+    const EXCEPTIONS = ["applyImport", "deleteBackup", "createManualBackup", "restoreBackup"];
+
+    function estMutateur(nom) {
+        if (EXCEPTIONS.indexOf(nom) !== -1) return false;
+        return PREFIXES_MUTATION.some(p =>
+            nom.length > p.length && nom.indexOf(p) === 0 && nom[p.length] === nom[p.length].toUpperCase());
+    }
+
+    function enLectureSeule() {
+        try {
+            return typeof Droits !== "undefined" && Droits.connus() && Droits.lectureSeule();
+        } catch (e) {
+            // Un filet qui échoue ne doit rien fermer : la barrière est ailleurs.
+            return false;
+        }
+    }
+
+    let dernierAvertissement = 0;
+
+    Object.keys(DataStore).forEach(nom => {
+        const membre = DataStore[nom];
+        if (typeof membre !== "function" || !estMutateur(nom)) return;
+        DataStore[nom] = function () {
+            if (enLectureSeule()) {
+                // Un message, pas une exception : lever ici casserait le
+                // gestionnaire de clic du module appelant, et une interface
+                // inerte est pire qu'une interface qui refuse (constat M-6).
+                const maintenant = Date.now();
+                if (window.showToast && maintenant - dernierAvertissement > 2000) {
+                    dernierAvertissement = maintenant;
+                    window.showToast(
+                        "Votre profil est en lecture seule : cette modification n'a pas été enregistrée.",
+                        "error");
+                }
+                console.info("Modification refusée par le profil (lecture seule) :", nom);
+                return undefined;
+            }
+            return membre.apply(DataStore, arguments);
+        };
+    });
+})();
+
 // `const` au premier niveau d'un script classique ne pose PAS de propriété sur
 // `window` : le nom `DataStore` est bien global, mais `window.DataStore` reste
 // indéfini. On l'expose explicitement, comme le font `UI`, `Sync` et `Api` —

@@ -475,10 +475,16 @@ const CartographieModule = (() => {
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
     function exportSVG() {
+        // Le droit d'export est distinct de la lecture (PLAN_SERVEUR §3.3) :
+        // entonnoir unique `Droits.exigerExport()` (js/core/session.js).
+        if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
         const str = buildExportSVG(); if (!str) return;
         triggerDownload(new Blob([str], { type: "image/svg+xml;charset=utf-8" }), "cartographie-si.svg");
     }
     function exportPNG() {
+        // Le droit d'export est distinct de la lecture (PLAN_SERVEUR §3.3) :
+        // entonnoir unique `Droits.exigerExport()` (js/core/session.js).
+        if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
         const str = buildExportSVG(); if (!str) return;
         const url = URL.createObjectURL(new Blob([str], { type: "image/svg+xml;charset=utf-8" }));
         const img = new Image();

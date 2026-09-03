@@ -284,6 +284,36 @@ const Droits = (() => {
         return d.export === true;
     }
 
+    /**
+     * Entonnoir unique de tout ce qui SORT de l'application.
+     *
+     * `PLAN_SERVEUR` §3.3 : l'export est journalisé systématiquement côté
+     * serveur. Ce qui se joue ici est l'autre moitié — ne pas laisser
+     * quelqu'un fabriquer un fichier complet de gouvernance depuis un écran qui
+     * ne lui a rien interdit. Toutes les extractions du produit (fichier
+     * d'échange `grc-backup`, classeurs Excel, PDF d'audit, images de la matrice
+     * et de la cartographie, agenda `.ics`) passent par ce seul point : c'est ce
+     * qui rend le contrôle vérifiable d'un coup d'œil.
+     *
+     * ⚠️ Ceci **n'est pas la barrière** : un export composé à partir de données
+     * déjà en mémoire ne peut pas être empêché par le navigateur — la vraie
+     * barrière est le droit de LIRE ces données, tenu par le serveur. Ce que
+     * cette fonction empêche est l'extraction en un clic par quelqu'un qui n'y a
+     * pas droit, ce qui est précisément le geste que le §3.3 vise.
+     *
+     * @returns {boolean} vrai si l'appelant peut poursuivre
+     */
+    function exigerExport() {
+        if (peutExporter()) return true;
+        if (window.showToast) {
+            window.showToast(
+                "L'extraction de données n'est pas autorisée pour votre profil. " +
+                "Le droit d'export est accordé séparément de la lecture.",
+                "error");
+        }
+        return false;
+    }
+
     /** Le profil est-il en lecture seule sur TOUT ? (profil *Direction*, *Auditeur*) */
     function lectureSeule() {
         const d = bloc();
@@ -325,7 +355,7 @@ const Droits = (() => {
 
     return {
         connus, niveau, domaines,
-        peutLire, peutEcrire, peutAdministrer, peutExporter, lectureSeule,
+        peutLire, peutEcrire, peutAdministrer, peutExporter, exigerExport, lectureSeule,
         verifier
     };
 })();

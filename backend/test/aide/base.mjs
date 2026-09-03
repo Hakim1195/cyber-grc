@@ -593,17 +593,27 @@ export async function semerJeuEssai(base, client, options = {}) {
         await c.query(`insert into incident_actifs   (incident_id, actif_id)    values ('INC-${s}', 'ACTIF-${s}')`);
         await c.query(`insert into actif_dependances (actif_id, actif_cible_id, type) values ('ACTIF-${s}', 'ACTIF2-${s}', 'hosted')`);
 
-        // Le substrat d'authentification (L3) : une session résolue par filiale. Ces
-        // tables sont, à ce stade, écrivables sans condition par le rôle applicatif et
-        // LISIBLES DE TOUS — dérogation explicite du §17.4, condition d'entrée du lot
-        // L3. Les semer est ce qui permet à un test de chargement de RÉCLAMER cette
-        // dérogation au lieu de l'ignorer.
+        // ── Le substrat d'authentification (L3) — et ce que la migration 007 a changé ──
+        //
+        // Ces tables étaient « écrivables sans condition par le rôle applicatif »,
+        // dérogation explicite du §17.4 et **condition d'entrée E1 du lot L3**. La
+        // migration `007_authentification.sql` l'a refermée : leur écriture exige
+        // désormais que la transaction ait posé `grc.authentification`, ce que seule
+        // la transaction d'ouverture de session fait (`src/auth/transaction.ts`).
+        //
+        // Le semeur emprunte donc le MÊME chemin que le produit, le temps de deux
+        // insertions, et le referme aussitôt : laisser le réglage posé jusqu'au bout
+        // de la transaction ferait écrire le reste du jeu d'essai sous un privilège
+        // qu'il n'a pas, et le banc mesurerait alors une porte plus large que celle
+        // du produit.
+        await c.query("select set_config('grc.authentification', 'oui', true)");
         await c.query(
           `insert into sessions (id, jeton_empreinte, utilisateur_id, filiale_active_id, perimetre, expire_le)
                values ($1, $2, $3, $4, 'filiale', now() + interval '1 hour')`,
           [`SESS-${s}`, (s === 'A' ? 'c' : 'd').repeat(64), `USER-${s}`, filiale],
         );
         await c.query('insert into session_filiales (session_id, filiale_id) values ($1, $2)', [`SESS-${s}`, filiale]);
+        await c.query("select set_config('grc.authentification', '', true)");
 
         // Une entrée de journal PAR FILIALE. Elle n'est pas là par symétrie : la
         // lecture du journal n'est délibérément PAS cloisonnée (dérogation qu'impose
