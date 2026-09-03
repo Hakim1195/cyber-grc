@@ -2225,7 +2225,25 @@ fi
 # mise à jour, elle, corrige peut-être ce qui bloque le client. Le seul cas
 # refusé est la déclaration INVALIDE (code 4), parce qu'elle engendrerait des
 # noms de groupes faux, donc des accès qui n'existent pas.
-GROUPES_AD_SCRIPT="$SOURCE/deploy/groupes-ad.sh"
+# ⚠️ LA COPIE DÉPLOYÉE, PAS CELLE DU DÉPÔT — et le motif mérite d'être écrit, parce
+# que la version précédente échouait à TOUS les coups sur une installation propre.
+#
+# `groupes-ad.sh` ne réécrit pas la convention de nommage : il met en forme ce que
+# rend `groupesAttendus()`, et va donc chercher l'engendreur COMPILÉ en
+# `<son propre répertoire>/../dist/droits/groupes-ad.js`. Or ce script-ci ne compile
+# jamais dans l'arbre source : il compile dans `$RACINE/backend` (§4). Appeler la
+# copie du dépôt revenait donc à chercher `dist/` là où rien ne le construit —
+# « L'engendreur compilé est absent », suivi de « Installation terminée ».
+#
+# Mesuré sur une Debian 13 neuve le 03/09/2026 : deux passages successifs, deux
+# échecs identiques ; le même script lancé depuis `$RACINE/backend/deploy/` rend
+# les 23 groupes attendus. Le script était juste, c'est l'appel qui visait le
+# mauvais arbre. On préfère donc la copie déployée, qui est la seule dont ce
+# script ait construit le `dist/`, et l'on retombe sur celle du dépôt si elle
+# manque — un exploitant qui joue `groupes-ad.sh` à la main depuis ses sources
+# reste servi par le message d'erreur du script, qui lui dit de compiler.
+GROUPES_AD_SCRIPT="$RACINE/backend/deploy/groupes-ad.sh"
+[[ -f "$GROUPES_AD_SCRIPT" ]] || GROUPES_AD_SCRIPT="$SOURCE/deploy/groupes-ad.sh"
 if [[ ! -x "$GROUPES_AD_SCRIPT" && ! -f "$GROUPES_AD_SCRIPT" ]]; then
   alerte "deploy/groupes-ad.sh est absent : la liste des groupes AD n'a PAS été vérifiée."
 else

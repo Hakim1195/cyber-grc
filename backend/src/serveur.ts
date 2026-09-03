@@ -294,24 +294,49 @@ export function construireServeur(config: Configuration, pool: Pool): FastifyIns
    * `DELETE /api/connexion` : il se passe seul, sans `authentificateur` en plus
    * (`CONVENTIONS.md` §26.2).
    *
-   * **Quand le service réel prend la place du provisoire** : dès que l'annuaire
-   * est configuré. Sinon on retombe sur la session provisoire — ce qui n'est
-   * PAS un repli silencieux, puisqu'elle **refuse de résoudre hors du
-   * développement** et rend 503 sur toutes les routes de données, recette
-   * comprise (`src/api/session.ts`). En production les variables `LDAP_*` sont
-   * exigées au démarrage : le service réel y est donc toujours celui-ci.
+   * **Quand le service réel prend la place du provisoire** : dès qu'il existe
+   * UN MOYEN DE S'AUTHENTIFIER — l'annuaire, ou le compte de secours. Sinon on
+   * retombe sur la session provisoire, ce qui n'est pas un repli silencieux :
+   * elle **refuse de résoudre hors du développement** et rend 503 sur toutes
+   * les routes de données, recette comprise (`src/api/session.ts`).
+   *
+   * ⚠️ **Cette condition ne portait que sur l'annuaire, et la phrase qui le
+   * justifiait était fausse** — constat Q-72, mesuré le 03/09/2026 sur une
+   * installation réelle en `NODE_ENV=production`. Elle disait : « en production
+   * les variables `LDAP_*` sont exigées au démarrage, le service réel y est
+   * donc toujours celui-ci ». Or `AUTH_LDAP_ACTIF=non` est un chemin SOUTENU :
+   * `deploy/install.sh` l'accepte en production et annonce lui-même « seul le
+   * compte de secours pourra ouvrir une session », et `src/config/index.ts`
+   * n'exige les `LDAP_*` que si l'annuaire est actif. Mesuré dans cette
+   * configuration, empreinte de secours valide renseignée :
+   *
+   *     POST /api/connexion  ->  404 « Aucune ressource ne répond »
+   *     GET  /api/session    ->  503 « L'authentification n'est pas encore installée »
+   *
+   * Autrement dit le compte de secours était inutilisable **dans la situation
+   * exacte pour laquelle il existe**, et le produit ne pouvait être ouvert par
+   * personne. `ServiceAuthentification` savait déjà tenir sans annuaire —
+   * `src/auth/index.ts` met `annuaire` à `null`, annonce « compte de secours »
+   * parmi ses moyens et porte un refus dédié à `AUTH_LDAP_ACTIF = non`. Rien
+   * ne manquait que cette garde-ci, qui refusait de le construire.
+   *
+   * C'est, une fois de plus, un défaut vivant ENTRE deux fichiers dont aucun
+   * n'a tort seul — et une **justification** devenue fausse que personne n'a
+   * relue quand la configuration qu'elle décrivait a cessé d'être la seule.
    */
   const authentification =
-    config.auth.ldapActif && config.auth.ldap !== null
+    (config.auth.ldapActif && config.auth.ldap !== null) ||
+    config.auth.compteSecours !== null
       ? new ServiceAuthentification(pool, config, serveur.log)
       : undefined;
 
   if (authentification === undefined) {
     serveur.log.warn(
       { environnement: config.environnement },
-      "Aucun annuaire configuré : l'authentification réelle n'est pas montée. " +
-        'La session provisoire prend le relais et REFUSE de servir des données ' +
-        'hors développement (503).',
+      "Aucun moyen d'authentification configuré — ni annuaire, ni compte de " +
+        "secours : l'authentification réelle n'est pas montée. La session " +
+        'provisoire prend le relais et REFUSE de servir des données hors ' +
+        'développement (503).',
     );
   }
 

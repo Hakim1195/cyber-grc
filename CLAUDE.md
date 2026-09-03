@@ -717,14 +717,39 @@ sont **fermés** :
 
 ### Ce qui est éprouvé sur cette machine, et ce qui ne l'est pas
 
-**Apache 2.4.58** (`mod_deflate`, `mod_expires`, `mod_proxy`), **rsync**, **openssl** et
-**`systemd-analyze`** sont installés et **réellement joués par le banc** : la famille
-`backend/test/deploiement/` monte un Apache réel et interroge l'**URL d'entrée**. Trois défauts
-en sont sortis, dont l'application injoignable à son URL d'entrée.
+> ⚠️ **Réécrit le 03/09/2026, et l'écart valait la peine d'être mesuré.** Ce paragraphe
+> décrivait un conteneur portant **Apache 2.4.58 (Ubuntu)** et **PostgreSQL 16.13**. Le
+> chantier tourne désormais sur une **VM Debian 13 réelle**, sous KVM, avec un **systemd
+> vrai** — et Debian 13 n'embarque **ni** 2.4.58 **ni** PostgreSQL 16. Cinq réserves que
+> huit passages de porte avaient reconduites ont été fermées d'un coup ; deux défauts réels
+> en sont sortis (constats **Q-72** et **Q-74**), dont un qui **empêchait purement et
+> simplement d'ouvrir le produit**. C'est, une fois de plus, *une réserve écrite n'est pas
+> une réserve traitée*.
 
-Restent hors de portée : le **TLS d'une vraie PKI**, l'**installation Debian 13 complète**,
-**ClamAV**, l'**Active Directory** et le **relais SMTP**. Le schéma est validé sur
-**PostgreSQL 16.13** ; la cible est **PostgreSQL 17**.
+**Éprouvé en conditions réelles sur Debian 13 (trixie), le 03/09/2026 :**
+
+| Ce qui est joué | Ce qui a été mesuré |
+|---|---|
+| **PostgreSQL 17.11** (PGDG) | les 7 migrations passent ; 48 tables, RLS **activée et forcée 48/48**, 192 politiques, 9 garde-fous enregistrés, 8 profils semés par `007` |
+| **`deploy/install.sh` de bout en bout**, en root | cinq passages : arrêt propre en **code 2** sur configuration incomplète, puis installation complète, contrôles de sécurité de la base, unité systemd, frontal |
+| **Apache 2.4.68 (Debian)** | l'**URL d'entrée** rend 200 ; un fichier non publiable rend 403 ; borne de corps **28 311 552 o → 413**, `chunked` → **411**, corps minuscule → passe ; 59 scripts servis **2 248 762 → 699 088 octets** en `text/javascript`, cache 7 jours |
+| **Unité systemd**, sous un vrai `systemd` | `systemd-analyze security` → **1.3 OK** ; bac à sable mordu **depuis les namespaces du processus réel** et sous l'identité `cyber-grc` (écriture hors `ReadWritePaths` refusée, `InaccessiblePaths` opaque, clé TLS illisible) ; **`IPAddressDeny=any` mesuré pour la première fois**, témoin à l'appui — le service atteint la boucle locale et rien d'autre, pas même l'IP publique de sa machine ; arrêt `SIGTERM` propre relevé au journal |
+| **TLS d'une vraie PKI** | PKI à deux niveaux (racine → émettrice → serveur), racine posée dans le magasin du système : `curl` **sans `-k`** rend 200 et `ssl_verify_result=0` ; le serveur émet `alert protocol version` en TLS 1.0 et 1.1, et refuse les suites CBC en 1.2 |
+| **ClamAV** | installé et actif (`clamd`, ~1 Gio résident) — l'analyse antivirale est annoncée par le serveur au démarrage ; la **chaîne d'analyse d'une pièce jointe** reste à éprouver au lot L6 |
+
+**Ce qui reste hors de portée** : l'**Active Directory** (le développement se fait contre
+l'annuaire simulé, `CONVENTIONS.md` §25) et le **relais SMTP**. ⚠️ Et, sur cette machine-ci,
+**ni Playwright ni Chromium ne sont installés** : les familles `test/navigateur/` et
+`test/modules/` ne peuvent pas y tourner tant qu'ils ne le sont pas — un banc annoncé « 969
+essais » n'en joue ici qu'une partie, et il faut le dire avant de citer un chiffre.
+
+⚠️ **La machine porte aussi les services de production de l'utilisateur** (Odoo, cal.com,
+n8n, traefik, un site web — piles Docker `hm-infra` et `cyber-grc` sous `/opt/hm-infra/`).
+Elles ont été **arrêtées** pour libérer 80/443 et la mémoire, avec l'accord explicite de
+l'utilisateur. Elles se remettent en marche par
+`sudo docker compose -f /opt/hm-infra/docker-compose.yml start` (et de même pour
+`/opt/hm-infra/cyber-grc/docker-compose.yml`), **après avoir arrêté Apache**, qui tient
+désormais ces deux ports.
 
 ⚠️ **La leçon qui a coûté le plus cher** : *une réserve écrite n'est pas une réserve traitée.*
 Six passages ont consigné « Apache n'est pas éprouvé » — honnêtement, sans se contredire —
