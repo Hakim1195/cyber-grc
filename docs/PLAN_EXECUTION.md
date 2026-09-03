@@ -143,6 +143,30 @@ disjoints → un agent.** Sinon, l'orchestrateur le fait directement.
 | Éprouver ce qui vient d'être écrit | **un agent** — voir ci-dessous, c'est le point non négociable |
 | Un arbitrage | **l'orchestrateur**, jamais délégué |
 
+### Disjoint ne suffit pas : regarder aussi les dépendances
+
+Le §2 exige des **périmètres de fichiers disjoints**. C'est nécessaire et **ce n'est pas
+suffisant** — deux agents peuvent n'avoir aucun fichier en commun et l'un attendre pourtant la
+sortie de l'autre. Lancés ensemble, ils ne travaillent pas en parallèle : le second **invente le
+contrat** qui n'existe pas encore, puis refait quand le vrai arrive. Une file d'attente déguisée,
+payée au prix d'un agent.
+
+**Avant de lancer un lot d'agents, poser trois questions :**
+
+1. les périmètres sont-ils disjoints **au fichier près** ?
+2. l'un d'eux a-t-il besoin de ce qu'un autre produit ? si oui, il **n'est pas** parallèle ;
+3. l'outillage dont les autres ont besoin pour s'éprouver existe-t-il déjà ? un banc absent rend
+   tout le lot invérifiable.
+
+**Le remède n'est pas de sérialiser, c'est de publier le contrat d'abord.** L'agent du chemin
+critique livre **en premier** son interface — types, signatures, codes d'erreur — sans
+implémentation. Les dépendants démarrent contre elle. C'est ce qui a fonctionné en vague 2 avec
+`ResolveurPerimetre` : l'interface existait avant le lot qui la remplira.
+
+**Cas de la vague 3**, à titre d'exemple : AUTH, OUTILLAGE (l'annuaire simulé, qui est un
+*prérequis* d'AUTH et non un parallèle), SCHEMA et DÉPLOIEMENT peuvent démarrer ensemble ; API,
+FRONT et MODULES attendent que le modèle de droits et la forme de session soient publiés.
+
 ### Le point qui ne se négocie pas : l'audit indépendant
 
 Ce n'est pas une question de vitesse, c'est une question de ce qui est **structurellement
