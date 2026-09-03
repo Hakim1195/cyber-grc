@@ -143,6 +143,40 @@ disjoints → un agent.** Sinon, l'orchestrateur le fait directement.
 | Éprouver ce qui vient d'être écrit | **un agent** — voir ci-dessous, c'est le point non négociable |
 | Un arbitrage | **l'orchestrateur**, jamais délégué |
 
+### Protocole de lancement — la passe de préparation, avant tout agent
+
+**Avant de créer le moindre sous-agent, l'orchestrateur fait une passe de préparation.** Elle
+n'est pas optionnelle, et elle est presque toujours plus rentable qu'un agent : écrire un contrat
+coûte quelques minutes, un agent coûte 300 000 à 600 000 jetons et une heure.
+
+**La question, posée pour chaque agent envisagé, et dont la réponse s'écrit :**
+
+> *De quoi cet agent a-t-il besoin qui n'existe pas encore dans le dépôt ?*
+
+- « rien » → il peut partir ;
+- « X » → **l'orchestrateur écrit X lui-même, avant de lancer**. X est presque toujours un
+  **contrat**, pas une implémentation : une interface, une signature, un nom de réglage, un
+  format de message, une liste de colonnes. Un agent qui devrait deviner **inventera, puis
+  refera** — c'est le double coût, et il est évitable.
+
+**Le contrat va dans le dépôt, pas dans le brief.** Un contrat qui ne vit que dans le message
+d'un agent est perdu pour le suivant, qui le réinventera autrement.
+
+**Le test de lancement — trois réponses écrites, ou on ne lance pas :**
+
+| | Question |
+|---|---|
+| **Fichiers** | quels fichiers écrit-il exactement, et la liste est-elle **disjointe** de celle de tous les agents en vol ? |
+| **Dépendances** | a-t-il besoin de la **sortie** d'un autre agent ? si oui, son contrat s'écrit d'abord, ou il attend |
+| **Vérifiabilité** | peut-il **prouver** son travail avec ce qui existe ? sinon, l'outillage manquant est le vrai premier agent |
+
+**Ce qui s'affiche avant de lancer** — un tableau `agent | fichiers écrits | ce dont il a besoin
+et où c'est écrit | comment il prouve`. **Une case vide signifie que l'agent n'est pas prêt.**
+
+**Pendant que les agents tournent** : ne modifier aucun fichier qu'un agent possède, et
+**attendre le rapport complet** avant de dispatcher la suite — lancer des correctifs pendant
+qu'un agent termine fait bouger l'arbre sous lui et rend son travail faux (mesuré au 7ᵉ passage).
+
 ### Disjoint ne suffit pas : regarder aussi les dépendances
 
 Le §2 exige des **périmètres de fichiers disjoints**. C'est nécessaire et **ce n'est pas
