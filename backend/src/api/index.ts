@@ -97,11 +97,42 @@ import {
   VERSION_SCHEMA,
 } from '../entites/index.js';
 import type { BilanReprise, ModeReprise, NomEntite } from '../entites/types.js';
-import { reprendreExport } from '../reprise/index.js';
+import type { IdentiteAnnuaire } from '../entites/types.js';
+import { construireEnveloppe, reprendreExport } from '../reprise/index.js';
+import type { ChargeV12 } from '../reprise/types.js';
 import { entreeInvalide, ErreurApplicative, traduireErreur } from '../erreurs/index.js';
 import type { ContexteTraduction } from '../erreurs/index.js';
-import { PerimetreProvisoire } from './session.js';
-import type { ResolveurPerimetre } from './session.js';
+import { deciderAcces, DOMAINE_PAR_ENTITE, entitesLisibles, refuserDroit } from './droits.js';
+import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
+import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
+import { AuthentificationProvisoire, PerimetreProvisoire } from './session.js';
+import type { Authentificateur, ResolveurPerimetre, SessionAppliquee } from './session.js';
+
+/* =====================================================================
+ *  Ce que le crochet `onRequest` pose sur la requête
+ * =====================================================================
+ *
+ *  Deux enrichissements, et **un seul** est écrit par le produit :
+ *
+ *   · `sessionGrc` — la session appliquée, posée par le crochet et lue par les
+ *     routes. Optionnelle **dans le type** parce qu'elle l'est dans la vie d'une
+ *     requête (elle n'existe pas avant le crochet) ; `sessionDe()` refuse de
+ *     servir sans elle, ce qui rend l'oubli impossible plutôt qu'improbable.
+ *   · `acces` — la classe d'accès, **déclarée par la route** dans ses options.
+ *
+ *  ⚠️ `sessionGrc` n'est jamais alimentée depuis la requête HTTP : elle vient de
+ *  l'authentificateur, donc du serveur (contrôle S2).
+ * ===================================================================== */
+declare module 'fastify' {
+  interface FastifyRequest {
+    /** Session appliquée à cette requête. Posée par `onRequest`, jamais par le client. */
+    sessionGrc?: SessionAppliquee;
+  }
+  interface FastifyContextConfig {
+    /** Classe d'accès de la route. Son absence rend la route inutilisable. */
+    acces?: DeclarationAcces;
+  }
+}
 
 /**
  * Force l'annulation de la transaction d'un aperçu, en portant son bilan.
@@ -183,6 +214,15 @@ export interface OptionsApi {
    * périmètre, et rien d'autre ne change ici.
    */
   readonly resolveur?: ResolveurPerimetre;
+  /**
+   * Second point d'accroche du lot L3 : **qui parle**, et avec quels droits.
+   *
+   * Absent, le greffon monte l'authentification provisoire — c'est-à-dire
+   * aucune : elle enveloppe le résolveur ci-dessus et rend des droits complets,
+   * ce qui n'est tenable que parce que ce résolveur refuse de résoudre hors du
+   * développement (`session.ts`).
+   */
+  readonly authentificateur?: Authentificateur;
 }
 
 /* =====================================================================
@@ -318,6 +358,33 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   const { pool, config } = options;
   const resolveur: ResolveurPerimetre =
     options.resolveur ?? new PerimetreProvisoire(pool, config, instance.log);
+  const authentificateur: Authentificateur =
+    options.authentificateur ?? new AuthentificationProvisoire(resolveur);
+
+  /**
+   * Limitation du rythme des requêtes **non authentifiées** (condition **E4**).
+   *
+   * Le budget et la fenêtre sont ceux que l'exploitant a déjà réglés pour les
+   * tentatives de connexion (`AUTH_MAX_TENTATIVES`, `AUTH_DUREE_VERROUILLAGE`) :
+   * ce sont les mêmes grandeurs — *combien d'essais infructueux avant de fermer
+   * la porte, et pour combien de temps*. Le budget est élargi d'un facteur
+   * quatre parce qu'une page en charge plusieurs, là où une connexion est un
+   * geste unique : verrouiller au cinquième appel d'un navigateur qui charge
+   * ses données ferait de ce garde-fou une panne.
+   *
+   * ⚠️ **Deux réglages dédiés seraient plus honnêtes**, et ils sont demandés à
+   * l'orchestrateur — `backend/.env.example` ne m'appartient pas. Réutiliser
+   * ceux de la connexion vaut mieux que d'écrire deux constantes qu'aucun
+   * exploitant ne pourrait ajuster, mais c'est un emprunt, et il est dit.
+   */
+  const limiteur = new LimiteurRythme({
+    budget: Math.max(8, config.auth.maxTentatives * 4),
+    fenetreMs: config.auth.dureeVerrouillageMinutes * 60_000,
+    // Assez pour un site entier derrière son VPN, assez peu pour qu'un
+    // adversaire ne remplisse pas la mémoire du service avec des adresses
+    // forgées (contrôle S13).
+    adressesMax: 4096,
+  });
 
   /** Dépôt, construit une fois le catalogue découvert. */
   let depot: Depot | null = null;
@@ -445,6 +512,173 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   });
 
   /* -------------------------------------------------------------------
+   *  onRequest — LE POINT OÙ TOUT SE DÉCIDE, AVANT L'ANALYSE DU CORPS
+   * -------------------------------------------------------------------
+   *
+   *  ══ Condition d'entrée E4 (constat Q-10) ═══════════════════════════
+   *
+   *  Fastify exécute ses crochets dans cet ordre :
+   *
+   *      routage → onRequest → preParsing → **analyse du corps** → …
+   *
+   *  Tout ce qui est décidé ici l'est donc **avant** que le corps ait coûté
+   *  quoi que ce soit. Ce n'est pas un raffinement : mesuré derrière Apache au
+   *  9ᵉ passage de la porte S2, un `POST /api/reprise` de 18 Mio **sans aucune
+   *  authentification** coûtait 304 ms de médiane, et un `POST
+   *  /api/entites/risques` 157 ms — à comparer aux 2 ms de `/api/sante`. Node
+   *  étant mono-fil, quelques appels simultanés suffisaient à figer le service
+   *  pour tout le monde, et personne n'avait eu à prouver son identité.
+   *
+   *  ══ L'ordre des trois contrôles, et pourquoi c'est cet ordre-là ════
+   *
+   *   1. **Le rythme.** Ne touche ni la base ni l'annuaire : c'est le contrôle
+   *      le moins cher, il passe donc en premier. Un poste déjà verrouillé ne
+   *      fait plus travailler personne.
+   *   2. **L'authentification.** Une identité, ou rien. Un refus ici est un
+   *      refus **avant** l'analyse du corps : c'est la mesure de E4.
+   *   3. **Les droits.** Le niveau, le droit d'export, le domaine. Un profil
+   *      *Lecture* qui tente une écriture est refusé **par le serveur** et non
+   *      par l'interface (contrôle S6).
+   *
+   *  ⚠️ Ce crochet est **encapsulé dans le greffon** : il ne s'applique qu'aux
+   *  routes de l'API. `/api/sante` vit à la racine et reste servie — une sonde
+   *  de disponibilité qui exige une session ne diagnostique plus rien.
+   * ------------------------------------------------------------------- */
+  instance.addHook('onRequest', async (requete: FastifyRequest, reponse: FastifyReply) => {
+    const adresse = requete.ip;
+
+    // ── 1. Rythme ──────────────────────────────────────────────────────
+    const verdict = limiteur.verifier(adresse);
+    if (verdict.bloque) {
+      void reponse.header('retry-after', String(verdict.attendreS));
+      throw new ErreurApplicative({
+        code: 'indisponible',
+        statut: 429,
+        message: messageRefusRythme(),
+        detailJournal: `rythme : poste verrouillé, ${String(verdict.attendreS)} s restantes`,
+      });
+    }
+
+    // ── 2. Authentification ────────────────────────────────────────────
+    let session: SessionAppliquee;
+    try {
+      session = await authentificateur.authentifier(requete);
+    } catch (erreur) {
+      const traduite = traduireErreur(erreur, contexteErreurs);
+      // Seul un refus d'identité compte comme une tentative. Un 503 — le
+      // service qui ne peut pas répondre — n'est pas la faute de l'appelant :
+      // le verrouiller reviendrait à le punir de notre panne, et rendrait la
+      // barrière fail-closed du lot L2 indiscernable d'un verrouillage.
+      if (traduite.statut === 401) {
+        const apresEchec = limiteur.enregistrerRefus(adresse);
+        if (apresEchec.bloque) void reponse.header('retry-after', String(apresEchec.attendreS));
+      }
+      throw traduite;
+    }
+    requete.sessionGrc = session;
+
+    // ── 3. Droits ──────────────────────────────────────────────────────
+    //
+    // L'absence de déclaration est un **défaut de programmation**, pas une
+    // permission : la route ne sert rien tant que sa classe d'accès n'est pas
+    // écrite. C'est ce qui rend « aucun point d'entrée sans contrôle » vrai par
+    // construction et non par relecture.
+    const declaration = requete.routeOptions.config.acces;
+    if (declaration === undefined) {
+      throw new ErreurApplicative({
+        code: 'erreur_interne',
+        statut: 500,
+        message: "Le serveur ne peut pas traiter cette demande.",
+        detailJournal:
+          `route « ${requete.method} ${requete.routeOptions.url ?? requete.url} » sans classe ` +
+          "d'accès déclarée : elle est refusée plutôt que servie sans contrôle (grille §4, S6)",
+      });
+    }
+
+    const refus = deciderAcces(session.droits, declaration.action, domaineDe(declaration, requete));
+    if (refus !== null) {
+      requete.log.warn(
+        {
+          utilisateur: session.perimetre.utilisateurId,
+          action: declaration.action,
+          route: requete.routeOptions.url ?? requete.url,
+          detail: refus.detailJournal,
+        },
+        "Accès refusé par le modèle de droits (le journal d’audit est le lot L5)",
+      );
+      throw refuserDroit(refus);
+    }
+
+    // ── 4. L'annuaire, à l'ouverture de session seulement ──────────────
+    if (session.sessionOuverte === true && session.identite != null) {
+      await alimenterAnnuaire(requete, session.perimetre, session.identite);
+    }
+  });
+
+  /**
+   * Domaine mis en jeu par cette requête.
+   *
+   * `'selon-entite'` lit le paramètre d'URL — qui est, à ce stade, une chaîne
+   * **non encore validée** par le schéma de la route. Elle n'est jamais
+   * interpolée dans quoi que ce soit : elle sert de **clé** dans une table
+   * close, et une clé absente rend `null`. La route refusera ensuite l'entité
+   * pour ce qu'elle est ; ce qui compte ici, c'est que le contrôle de **niveau**
+   * ait quand même lieu — sans quoi « nom d'entité inconnu » serait une porte
+   * dérobée pour un profil en lecture seule.
+   */
+  const domaineDe = (
+    declaration: DeclarationAcces,
+    requete: FastifyRequest,
+  ): DomaineFonctionnel | null => {
+    if (declaration.domaine !== 'selon-entite') return declaration.domaine;
+    const parametres = requete.params as { entite?: unknown } | undefined;
+    const nom = parametres?.entite;
+    if (typeof nom !== 'string' || !estEntiteConnue(nom)) return null;
+    return DOMAINE_PAR_ENTITE[nom];
+  };
+
+  /**
+   * Aligne la fiche d'annuaire de l'utilisateur sur ce que l'AD dit de lui.
+   *
+   * ── Pourquoi un échec ne referme pas la porte ───────────────────────
+   *
+   * L'annuaire est un **confort** — il rend les affectations fiables. Refuser
+   * une session parce que la fiche n'a pas pu être écrite empêcherait un RSSI
+   * d'ouvrir son plan de continuité un jour d'incident, pour une raison sans
+   * rapport. L'échec est donc journalisé, avec ce qu'il faut pour le
+   * diagnostiquer, et la requête continue.
+   *
+   * ⚠️ C'est un choix, pas un oubli : il est écrit ici pour qu'on puisse le
+   * contester.
+   */
+  const alimenterAnnuaire = async (
+    requete: FastifyRequest,
+    perimetre: PerimetreSession,
+    identite: IdentiteAnnuaire,
+  ): Promise<void> => {
+    try {
+      const instanceDepot = await assurerDepot();
+      const bilan = await avecTransaction(pool, perimetre, (client) =>
+        instanceDepot.synchroniserAnnuaire(client, perimetre, identite),
+      );
+      if (bilan.action !== 'inchangee') {
+        requete.log.info(
+          { personne: bilan.personneId, action: bilan.action, login: identite.login },
+          "Annuaire aligné sur l’Active Directory à l’ouverture de session",
+        );
+      }
+    } catch (erreur) {
+      requete.log.warn(
+        {
+          login: identite.login,
+          detail: traduireErreur(erreur, contexteErreurs).detailJournal,
+        },
+        "L’annuaire n’a pas pu être aligné sur l’Active Directory ; la session continue",
+      );
+    }
+  };
+
+  /* -------------------------------------------------------------------
    *  Outils communs
    * ------------------------------------------------------------------- */
 
@@ -468,11 +702,35 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     return 'La requête ne respecte pas le format attendu.';
   };
 
+  /**
+   * Session appliquée à cette requête.
+   *
+   * ⚠️ **Fail-closed.** Une route qui s'exécuterait sans que le crochet
+   * `onRequest` ait posé la session ne sert rien : c'est un défaut de montage,
+   * et il vaut mieux un 500 explicite qu'une transaction ouverte sur un
+   * périmètre improvisé. Il n'existe **aucune** valeur de repli.
+   */
+  const sessionDe = (requete: FastifyRequest): SessionAppliquee => {
+    const session = requete.sessionGrc;
+    if (session === undefined) {
+      throw new ErreurApplicative({
+        code: 'erreur_interne',
+        statut: 500,
+        message: "Le serveur ne peut pas traiter cette demande.",
+        detailJournal:
+          `route « ${requete.method} ${requete.routeOptions.url ?? requete.url} » atteinte sans ` +
+          'session appliquée : le crochet onRequest du greffon ne s’est pas exécuté',
+      });
+    }
+    return session;
+  };
+
   const enLecture = async <T>(
+    requete: FastifyRequest,
     travail: (client: PoolClient, depot: Depot, perimetre: PerimetreSession) => Promise<T>,
   ): Promise<T> => {
     const instanceDepot = await assurerDepot();
-    const perimetre = await resolveur.resoudre();
+    const { perimetre } = sessionDe(requete);
     return avecTransaction(pool, perimetre, (client) => travail(client, instanceDepot, perimetre), {
       lectureSeule: true,
     });
@@ -518,10 +776,11 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    * penser.
    */
   const enEcriture = async <T>(
+    requete: FastifyRequest,
     travail: (client: PoolClient, depot: Depot, perimetre: PerimetreSession) => Promise<T>,
   ): Promise<T> => {
     const instanceDepot = await assurerDepot();
-    const perimetre = await resolveur.resoudre();
+    const { perimetre } = sessionDe(requete);
     return avecTransaction(pool, perimetre, (client) => travail(client, instanceDepot, perimetre));
   };
 
@@ -585,8 +844,9 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  GET /api/donnees — le chargement initial
    * ------------------------------------------------------------------- */
   instance.get('/api/donnees', async (_requete: FastifyRequest, reponse: FastifyReply) => {
-    const jeu = await enLecture(async (client, instanceDepot, perimetre) =>
-      instanceDepot.chargerJeuDeDonnees(client, perimetre),
+    const session = sessionDe(requete);
+    const jeu = await enLecture(requete, async (client, instanceDepot, perimetre) =>
+      instanceDepot.chargerJeuDeDonnees(client, perimetre, entitesLisibles(session.droits)),
     );
 
     // La charge utile est rendue dans la forme EXACTE de l'objet `data` du
@@ -612,8 +872,8 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         throw entreeInvalide("Le paramètre « depuis » n'est pas un horodatage valide.");
       }
 
-      const resultat = await enLecture(async (client, instanceDepot, perimetre) =>
-        instanceDepot.rafraichir(client, perimetre, depuis),
+      const resultat = await enLecture(requete, async (client, instanceDepot, perimetre) =>
+        instanceDepot.rafraichir(client, perimetre, depuis, entitesLisibles(sessionDe(requete).droits)),
       );
       return reponse.send(resultat);
     },
@@ -635,7 +895,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       const entite = entiteDe(requete.params.entite);
       const corps = requete.body;
 
-      const enregistrement = await enEcriture(async (client, instanceDepot, perimetre) =>
+      const enregistrement = await enEcriture(requete, async (client, instanceDepot, perimetre) =>
         instanceDepot.creer(client, perimetre, entite, corps.champs, {
           portee: corps.portee ?? 'filiale',
         }),
@@ -669,7 +929,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       const entite = entiteDe(requete.params.entite);
       const corps = requete.body;
 
-      const enregistrement = await enEcriture(async (client, instanceDepot, perimetre) =>
+      const enregistrement = await enEcriture(requete, async (client, instanceDepot, perimetre) =>
         instanceDepot.modifier(
           client,
           perimetre,
@@ -701,7 +961,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     ) => {
       const entite = entiteDe(requete.params.entite);
 
-      await enEcriture(async (client, instanceDepot, perimetre) => {
+      await enEcriture(requete, async (client, instanceDepot, perimetre) => {
         await instanceDepot.supprimer(
           client,
           perimetre,
@@ -864,7 +1124,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       // aucune route de ce greffon ne construit `administrationGroupe`, et
       // c'est ce qui rend la règle « une route vérifie un droit, elle ne se
       // l'accorde pas » vraie par la forme plutôt que par la discipline.
-      const resultat = await enEcriture(async (client, _depot, perimetre) => {
+      const resultat = await enEcriture(requete, async (client, _depot, perimetre) => {
         const bilan = await instanceDepot.appliquerReprise(
           client,
           perimetre,
@@ -1009,7 +1269,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       requete: FastifyRequest<{ Body: { mesureId: string } }>,
       reponse: FastifyReply,
     ) => {
-      const resultat = await enEcriture(async (client, instanceDepot, perimetre) =>
+      const resultat = await enEcriture(requete, async (client, instanceDepot, perimetre) =>
         instanceDepot.propagerMesure(client, perimetre, requete.body.mesureId),
       );
 

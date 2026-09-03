@@ -63,6 +63,33 @@ export type NomEntite =
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;
 
+/**
+ * Identité rendue par l'annuaire d'entreprise, telle qu'elle alimente `personnes`.
+ *
+ * `PLAN_SERVEUR` §1.5, dernier point : « l'annuaire `personnes` est alimenté
+ * depuis l'AD, ce qui remplace l'actuelle correspondance par nom en texte
+ * libre ». Les attributs repris sont ceux que `LDAP_ATTRIBUTS_PROFIL` énumère.
+ *
+ * ⚠️ Le type vit **ici**, dans la couche d'accès aux données, et non dans
+ * `src/api/` : c'est la couche basse qui écrit la fiche. Le mettre plus haut
+ * obligerait `entites/` à dépendre de `api/`, c'est-à-dire à inverser les deux
+ * couches pour un type de six champs.
+ */
+export interface IdentiteAnnuaire {
+  /** Identifiant de connexion (`sAMAccountName`), tel qu'il est tracé au journal. */
+  readonly login: string;
+  /** Nom affiché (`displayName`) — le libellé qui fait autorité. */
+  readonly nomAffichage: string;
+  readonly email?: string | null;
+  readonly telephone?: string | null;
+  /** `department` — le service de rattachement. */
+  readonly service?: string | null;
+  /** `title` — la fonction tenue. */
+  readonly fonction?: string | null;
+  /** Compte applicatif correspondant (`utilisateurs.id`), quand il est connu. */
+  readonly utilisateurId?: string | null;
+}
+
 /* =====================================================================
  *  Catalogue PostgreSQL découvert
  * ===================================================================== */

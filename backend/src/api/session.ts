@@ -60,12 +60,18 @@
  * mais pas l'original ne protège rien.
  */
 
+import type { FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 
 import type { Configuration } from '../config/index.js';
 import { avecTransaction, PERIMETRE_SYSTEME } from '../db/pool.js';
 import type { PerimetreSession } from '../db/pool.js';
+import type { IdentiteAnnuaire } from '../entites/types.js';
 import { ErreurApplicative } from '../erreurs/index.js';
+import { DROITS_PROVISOIRES_DEVELOPPEMENT } from './droits.js';
+import type { DroitsSession } from './droits.js';
+
+export type { IdentiteAnnuaire };
 
 /**
  * Fournit le périmètre d'une transaction.
@@ -329,5 +335,112 @@ export class PerimetreProvisoire implements ResolveurPerimetre {
     }
 
     return { id: premiere.id, code: premiere.code, raisonSociale: premiere.raison_sociale };
+  }
+}
+
+/* =====================================================================
+ *  Lot L3 — l'authentification vue du point d'entrée
+ * =====================================================================
+ *
+ *  ⚠️ Ce qui suit **n'élargit pas** `ResolveurPerimetre` : son contrat est
+ *  intact, `resoudre()` ne prend toujours aucun argument, et c'est cette
+ *  signature qui tient le contrôle S2 (« le périmètre ne vient jamais du
+ *  navigateur »).
+ *
+ *  Ce qui s'ajoute est une **seconde question**, que le lot L2 n'avait pas à
+ *  poser et que le lot L3 ne peut pas éviter :
+ *
+ *      ResolveurPerimetre  →  « quel est le périmètre de la session ? »
+ *      Authentificateur    →  « cette requête-ci porte-t-elle une session ? »
+ *
+ *  La seconde est **par nature attachée à une requête** — un cookie de session
+ *  s'y trouve, pas ailleurs. La mélanger à la première aurait donné à
+ *  `resoudre()` un paramètre `requete`, c'est-à-dire précisément le chemin par
+ *  lequel un en-tête atteindrait `grc.filiale_id`. Les deux interfaces restent
+ *  donc séparées, et l'implémentation du lot L3 les tient ensemble sans que le
+ *  périmètre cesse d'être décidé par le serveur.
+ * ===================================================================== */
+
+/**
+ * Session appliquée à **une** requête : son périmètre et ses droits.
+ *
+ * Les deux viennent du serveur. Aucun champ n'est lu dans la requête HTTP, et
+ * aucune route ne les construit — elles les constatent.
+ */
+export interface SessionAppliquee {
+  readonly perimetre: PerimetreSession;
+  readonly droits: DroitsSession;
+  /**
+   * Identité de l'annuaire, quand la couche d'authentification en dispose.
+   * Absente pour la session provisoire, qui n'interroge aucun annuaire.
+   */
+  readonly identite?: IdentiteAnnuaire | null;
+  /**
+   * Vrai à la **première** requête d'une session ouverte. C'est le seul moment
+   * où l'annuaire `personnes` est resynchronisé : le faire à chaque requête
+   * transformerait une lecture en écriture, et incrémenterait la `version` de
+   * la fiche à chaque clic.
+   */
+  readonly sessionOuverte?: boolean;
+}
+
+/**
+ * Port d'authentification — **implémenté par le lot L3** (agent A1, LDAPS,
+ * sessions serveur, trois axes), consommé ici.
+ *
+ * `authentifier` **lève** une `ErreurApplicative` plutôt que de rendre un
+ * verdict à interpréter : le point d'entrée n'a alors aucun chemin où « oublier
+ * de regarder le résultat ». Un refus faute de session porte le statut **401**,
+ * un service qui ne peut pas répondre le **503** — et les deux ne se confondent
+ * pas, parce que le second ne doit verrouiller personne.
+ */
+export interface Authentificateur {
+  /**
+   * @param requete requête entrante, **lue seule** — jamais son corps, qui n'est
+   *   pas encore analysé à ce stade (condition d'entrée **E4**).
+   */
+  authentifier(requete: FastifyRequest): Promise<SessionAppliquee>;
+  /** Description lisible, pour `/api/session` et le journal de démarrage. */
+  decrire(): string;
+  /** Vrai tant que l'authentification réelle n'est pas livrée. */
+  readonly provisoire: boolean;
+}
+
+/**
+ * Authentification provisoire : **il n'y en a pas**.
+ *
+ * Elle enveloppe le `ResolveurPerimetre` en place et rend les droits d'un profil
+ * qui peut tout. Ce n'est acceptable que parce que la barrière du dessus est
+ * totale : `PerimetreProvisoire.resoudre()` **refuse de résoudre hors du
+ * développement**, et le 503 qu'elle lève traverse cette classe sans être
+ * transformé. En production comme en recette, aucune requête n'atteint donc ces
+ * droits — c'est vérifié par le banc, sur toutes les routes montées.
+ *
+ * ⚠️ **Elle ne verrouille personne et ne compte rien** : un 503 n'est pas un
+ * échec d'authentification (voir `limiteur.ts`). Le rythme ne se limite que
+ * lorsqu'il y a des identités à protéger, c'est-à-dire à partir du moment où
+ * l'authentification réelle est branchée.
+ */
+export class AuthentificationProvisoire implements Authentificateur {
+  public readonly provisoire = true;
+
+  private readonly resolveur: ResolveurPerimetre;
+
+  constructor(resolveur: ResolveurPerimetre) {
+    this.resolveur = resolveur;
+  }
+
+  public async authentifier(_requete: FastifyRequest): Promise<SessionAppliquee> {
+    // Aucune lecture de la requête : la ligne du dessus le dit, le paramètre
+    // préfixé d'un souligné le prouve à la compilation.
+    const perimetre = await this.resolveur.resoudre();
+    return { perimetre, droits: DROITS_PROVISOIRES_DEVELOPPEMENT };
+  }
+
+  public decrire(): string {
+    return (
+      "aucune authentification : session provisoire du lot L2, droits complets, refusée hors " +
+      `développement — ${this.resolveur.decrire()}`
+    );
   }
 }

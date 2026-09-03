@@ -112,6 +112,7 @@ import type {
   Diagnostic,
   Enregistrement,
   FamilleType,
+  IdentiteAnnuaire,
   JeuDeDonnees,
   ModeReprise,
   MotifEchec,
@@ -326,6 +327,30 @@ export class ErreurRegistre extends Error {
     this.name = 'ErreurRegistre';
     this.anomalies = anomalies;
   }
+}
+
+/** Une fiche d'annuaire, telle qu'elle est relue avant d'être alignée sur l'AD. */
+interface LigneAnnuaire {
+  readonly id: string;
+  readonly nom: string;
+  readonly fonction: string | null;
+  readonly service: string | null;
+  readonly email: string | null;
+  readonly telephone: string | null;
+  readonly utilisateur_id: string | null;
+}
+
+/**
+ * Valeur d'annuaire prête à écrire : espaces retirés, vide ramené à `null`.
+ *
+ * L'AD rend volontiers des chaînes vides pour un attribut non renseigné ; les
+ * écrire telles quelles ferait de « téléphone : “” » une valeur, distincte de
+ * « pas de téléphone », que l'interface afficherait comme un champ rempli.
+ */
+function normaliserTexteAnnuaire(valeur: string | null | undefined): string | null {
+  if (typeof valeur !== 'string') return null;
+  const propre = valeur.trim();
+  return propre === '' ? null : propre;
 }
 
 function invalide(message: string, detail?: string): ErreurAccesEntite {
@@ -1555,9 +1580,24 @@ export class Depot {
    * La transaction est ouverte **en lecture seule** par l'appelant : la base
    * refuse alors toute écriture, ce qui vaut mieux qu'une discipline.
    */
+  /**
+   * @param lisibles collections que le profil de la session a le droit de lire.
+   *   `null` = toutes. Une collection **exclue n'est pas interrogée** : elle
+   *   revient vide, avec un volume nul.
+   *
+   *   ── Pourquoi vide plutôt qu'absente ────────────────────────────────
+   *
+   *   La façade synchrone du navigateur (`PLAN_SERVEUR` §1.3) adopte cet objet
+   *   **tel quel** comme son `data` : une collection absente casserait
+   *   `getRisques()` chez tous les modules, alors qu'une collection vide est
+   *   exactement ce qu'ils savent déjà afficher. Le contrôle de droits ne doit
+   *   pas se payer d'une réécriture des vingt-six modules — c'est le principe
+   *   directeur du chantier.
+   */
   public async chargerJeuDeDonnees(
     client: PoolClient,
     perimetre: PerimetreSession,
+    lisibles: ReadonlySet<NomEntite> | null = null,
   ): Promise<JeuDeDonnees> {
     const filiale = this.filialeActive(perimetre);
     const horodatage = await this.repereDeSondage(client);
@@ -1566,6 +1606,11 @@ export class Depot {
     let updatedAt: number | null = null;
 
     for (const nom of ORDRE_ENTITES) {
+      if (lisibles !== null && !lisibles.has(nom)) {
+        collections[nom] = [];
+        volumes[nom] = 0;
+        continue;
+      }
       const enregistrements = await this.lireCollection(client, nom, filiale, null);
       collections[nom] = enregistrements;
       volumes[nom] = enregistrements.length;
@@ -1594,10 +1639,16 @@ export class Depot {
    * détient signale une suppression et lui dit de recharger. C'est peu coûteux,
    * c'est exact, et cela vaut mieux qu'un mécanisme qui aurait l'air complet.
    */
+  /**
+   * @param lisibles voir `chargerJeuDeDonnees`. Une collection exclue rend un
+   *   volume **nul**, et non son volume réel : le compte est déjà une donnée —
+   *   « la filiale a 47 risques » se lit sans lire les risques.
+   */
   public async rafraichir(
     client: PoolClient,
     perimetre: PerimetreSession,
     depuis: Date,
+    lisibles: ReadonlySet<NomEntite> | null = null,
   ): Promise<Rafraichissement> {
     const filiale = this.filialeActive(perimetre);
     const horodatage = await this.repereDeSondage(client);
@@ -1607,6 +1658,10 @@ export class Depot {
     let tronque = false;
 
     for (const nom of ORDRE_ENTITES) {
+      if (lisibles !== null && !lisibles.has(nom)) {
+        volumes[nom] = 0;
+        continue;
+      }
       volumes[nom] = await this.compterCollection(client, nom, filiale);
       if (restant <= 0) {
         tronque = true;
@@ -1665,6 +1720,161 @@ export class Depot {
       debut instanceof Date ? debut.getTime() : new Date(String(debut ?? '')).getTime();
     const base = Number.isNaN(millisecondes) ? Date.now() : millisecondes;
     return new Date(base - BORNES.margeSondageMs).toISOString();
+  }
+
+  /* ===============================================================
+   *  8.2 bis — L'annuaire alimenté depuis l'Active Directory
+   * =============================================================== */
+
+  /**
+   * Aligne la fiche `personnes` de l'utilisateur qui vient d'ouvrir une session
+   * sur ce que l'annuaire dit de lui.
+   *
+   * ── Ce que cela remplace ────────────────────────────────────────────
+   *
+   * `PLAN_SERVEUR` §1.5, dernier point : « l'annuaire `personnes` est alimenté
+   * depuis l'AD, **ce qui remplace l'actuelle correspondance par nom en texte
+   * libre** — les affectations (“mes actions”, “mes échéances”) deviennent
+   * fiables ». Aujourd'hui, une fiche d'annuaire et un champ « Responsable » se
+   * rejoignent par égalité de chaîne : « J. Martin » et « Jean Martin » sont
+   * deux personnes, et personne ne s'en aperçoit.
+   *
+   * ── Ce que cela NE fait PAS, et il faut le dire ─────────────────────
+   *
+   * Les entités métier **continuent de stocker le nom en texte libre** : c'est
+   * une décision du produit, écrite dans le commentaire de la table elle-même,
+   * et elle garantit le round-trip d'un export `grc-backup`. Ce que le
+   * rattachement apporte n'est donc pas une clé étrangère : c'est un **nom
+   * d'affichage qui fait autorité** — celui de l'AD — et un `utilisateur_id`
+   * qui dit sans ambiguïté de quel compte il s'agit.
+   *
+   * ── Trois règles, et chacune ferme un défaut précis ─────────────────
+   *
+   *  1. **Le rattachement se fait par `utilisateur_id`, jamais par le nom.**
+   *     Un homonyme dans une autre filiale ne peut donc pas capturer la fiche.
+   *  2. **La reprise d'une fiche existante se fait sur le nom, une seule fois**
+   *     — à la première connexion, quand la filiale a déjà saisi la personne à
+   *     la main. Sans cela, chaque site se retrouverait avec deux fiches pour
+   *     la même personne le jour de la bascule.
+   *  3. **Rien n'est écrit s'il n'y a rien à changer.** `version` et
+   *     `modifie_le` sont des données d'audit : les incrémenter à chaque
+   *     ouverture de session ferait de « modifié par » un compteur de
+   *     connexions.
+   *
+   * @returns ce qui a été fait, pour le journal technique — et, au lot L5, pour
+   *   le journal d'audit.
+   */
+  public async synchroniserAnnuaire(
+    client: PoolClient,
+    perimetre: PerimetreSession,
+    identite: IdentiteAnnuaire,
+  ): Promise<{ readonly action: 'creee' | 'mise_a_jour' | 'inchangee'; readonly personneId: string }> {
+    const filiale = this.filialeActive(perimetre);
+    const nom = identite.nomAffichage.trim();
+    if (nom === '') {
+      throw invalide(
+        "L'annuaire n'a rendu aucun nom affichable pour ce compte : la fiche ne peut pas être " +
+          'créée.',
+      );
+    }
+    const utilisateurId = identite.utilisateurId ?? null;
+
+    // 1. Par le compte applicatif — le seul rattachement qui ne se trompe pas
+    //    d'homonyme. La RLS borne déjà la recherche à la filiale lisible.
+    let existante: LigneAnnuaire | null =
+      utilisateurId === null
+        ? null
+        : await this.lireFicheAnnuaire(
+            client,
+            'select "id", "nom", "fonction", "service", "email", "telephone", "utilisateur_id"\n' +
+              '   from "personnes" where "utilisateur_id" = $1 and "filiale_id" = $2 limit 1',
+            [utilisateurId, filiale],
+          );
+
+    // 2. À défaut, une fiche saisie à la main portant exactement ce nom, et
+    //    **pas encore rattachée**. Une fiche déjà rattachée à quelqu'un d'autre
+    //    n'est jamais reprise : ce serait voler l'identité d'un homonyme.
+    if (existante === null) {
+      existante = await this.lireFicheAnnuaire(
+        client,
+        'select "id", "nom", "fonction", "service", "email", "telephone", "utilisateur_id"\n' +
+          '   from "personnes"\n' +
+          '  where "filiale_id" = $1 and lower("nom") = lower($2) and "utilisateur_id" is null\n' +
+          '  order by "cree_le" limit 1',
+        [filiale, nom],
+      );
+    }
+
+    const souhaite = {
+      nom,
+      fonction: normaliserTexteAnnuaire(identite.fonction),
+      service: normaliserTexteAnnuaire(identite.service),
+      email: normaliserTexteAnnuaire(identite.email),
+      telephone: normaliserTexteAnnuaire(identite.telephone),
+      utilisateur_id: utilisateurId,
+    };
+
+    if (existante === null) {
+      const identifiant = engendrerIdentifiant(description('personnes').prefixe);
+      verifierIdentifiant(identifiant);
+      await this.executer(
+        client,
+        `insert into "personnes" ("id", "filiale_id", "utilisateur_id", "nom", "fonction",
+                                  "service", "email", "telephone")
+         values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          identifiant,
+          filiale,
+          souhaite.utilisateur_id,
+          souhaite.nom,
+          souhaite.fonction,
+          souhaite.service,
+          souhaite.email,
+          souhaite.telephone,
+        ],
+        'personnes',
+        identifiant,
+      );
+      return { action: 'creee', personneId: identifiant };
+    }
+
+    // Rien n'est écrasé par du vide : l'annuaire qui ne rend pas de téléphone ne
+    // doit pas effacer celui que la filiale a saisi. Seule une valeur RENSEIGNÉE
+    // par l'annuaire fait autorité.
+    const aEcrire: Record<string, string | null> = {};
+    if (existante.nom !== souhaite.nom) aEcrire['nom'] = souhaite.nom;
+    for (const champ of ['fonction', 'service', 'email', 'telephone'] as const) {
+      const valeur = souhaite[champ];
+      if (valeur !== null && existante[champ] !== valeur) aEcrire[champ] = valeur;
+    }
+    if (souhaite.utilisateur_id !== null && existante.utilisateur_id !== souhaite.utilisateur_id) {
+      aEcrire['utilisateur_id'] = souhaite.utilisateur_id;
+    }
+
+    if (Object.keys(aEcrire).length === 0) {
+      return { action: 'inchangee', personneId: existante.id };
+    }
+
+    const colonnes = Object.keys(aEcrire);
+    const affectations = colonnes.map((colonne, index) => `"${colonne}" = $${String(index + 2)}`);
+    await this.executer(
+      client,
+      `update "personnes" set ${affectations.join(', ')} where "id" = $1`,
+      [existante.id, ...colonnes.map((colonne) => aEcrire[colonne] ?? null)],
+      'personnes',
+      existante.id,
+    );
+    return { action: 'mise_a_jour', personneId: existante.id };
+  }
+
+  /** Lit une fiche d'annuaire, ou `null`. Requête **toujours** paramétrée (S5). */
+  private async lireFicheAnnuaire(
+    client: PoolClient,
+    texte: string,
+    parametres: readonly unknown[],
+  ): Promise<LigneAnnuaire | null> {
+    const { rows } = await client.query<LigneAnnuaire>(texte, [...parametres]);
+    return rows[0] ?? null;
   }
 
   /* ===============================================================
