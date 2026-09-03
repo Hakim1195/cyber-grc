@@ -8,6 +8,31 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur — vague 3 : lot L3, authentification Active Directory et droits
+
+**État mesuré à la livraison**, révision `f11a9ae`, base neuve : `npm test` → **969 essais,
+969 passés, 0 échec** (165,2 s ; base 272 · api 241 · reprise 77 · navigateur 74 ·
+déploiement 56 · dépôt 3 · documentation 12 · **auth 84** · **droits 69** · **annuaire 48** ·
+**modules 33**), `npm run verifier-types` sans erreur. Le banc a gagné **318 essais** et quatre
+familles depuis l'ouverture de la vague.
+
+- **Authentification LDAPS** : liaison, résolution **récursive** des groupes imbriqués (cycle
+  compris), provisionnement à la première connexion, déprovisionnement qui **invalide les
+  sessions en cours**, compte de secours journalisé à chaque usage, limitation du rythme.
+- **Modèle de droits à trois axes** appliqué à chaque requête, **droit d'export distinct**,
+  contrôle d'authentification et limitation de rythme en `onRequest` **avant l'analyse du
+  corps** — un corps anonyme de 18 Mio passe de 291 ms à **90 ms** derrière Apache réel.
+- **Migration `007`** : le substrat de session n'est plus écrivable sans condition (condition
+  d'entrée **E1**), et un neuvième garde-fou de schéma la vérifie.
+- **Annuaire LDAP simulé** dans le banc, avec cycle d'imbrication, troncature et renvoi — les
+  trois détecteurs de réponse incomplète sont **mordus**, dont un contre un serveur que
+  l'auteur du client n'a pas écrit.
+- **Filet de non-régression des 26 modules** (constat Q-16) : comportemental, pas textuel.
+- ⚠️ **Un défaut vivait entre deux fichiers dont aucun n'avait tort seul** (constat Q-71) :
+  `src/serveur.ts` n'appartenait à aucun rôle, et les couches d'authentification et d'API
+  étaient écrites, éprouvées et **reliées par personne** — sans route de connexion, **et avec
+  un banc vert**. C'est le troisième défaut de cette forme sur ce chantier.
+
 ### Serveur — vague 3 : ouverture (lot L3, authentification AD et droits)
 
 **La vague 3 est ouverte le 03/09/2026**, sur une porte S2 refusée au 9ᵉ passage — et c'est

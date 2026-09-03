@@ -502,7 +502,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 651 essais, sept familles (voir plus bas)
+npm test                           # 969 essais, onze familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -796,17 +796,19 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`e69b184`** — « Le pointeur de reprise vise la vague 3 », à l'**ouverture de la vague 3** (03/09/2026). La mesure précédente, `ca73ac6`, rendait 637 : le banc a grossi de quatorze essais entre les deux |
+| Révision mesurée | **`f11a9ae`** — « test/api revient à 241/241 », **vague 3, lot L3 livré** (03/09/2026). À l'ouverture de la vague, `e69b184` rendait 651 : le banc a gagné **318 essais** et quatre familles — `auth`, `droits`, `annuaire`, `modules` |
 | État de l'arbre | **propre** (`git status --porcelain` vide) |
 | Base | neuve, `BASE_NOM=… bash db/dev/preparer_base_dev.sh --recreer`, **PostgreSQL 16.13**, client `psql` 16.13 |
 | Node · Apache · rsync | 22.22.2 · **Apache 2.4.58 (Ubuntu)** · **rsync 3.2.7** |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 651 · pass 651 · fail 0  (126,3 s)
-                                                   base 272 · api 187 · reprise 77
-                                                   navigateur 54 · deploiement 52
-                                                   depot 3 · documentation 6
+npm test                                         → tests 969 · pass 969 · fail 0  (165,2 s)
+                                                   base 272 · api 241 · reprise 77
+                                                   navigateur 74 · deploiement 56
+                                                   depot 3 · documentation 12
+                                                   auth 84 · droits 69 · annuaire 48
+                                                   modules 33
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
 select * from f_verifier_schema()                → 0 ligne (8 garde-fous découverts, joués, consignés)
@@ -849,7 +851,7 @@ le plus trompeur qui soit** : il ressemble à un succès.
 
 ⚠️ **Le banc grossit à chaque fermeture de constat**, et c'est la raison d'être de la
 ligne « révision mesurée » : **505** essais au 4ᵉ passage, puis **534**, **564**, **615**,
-**637**, **651** ici — avec **trois** familles nées en chemin, chacune d'un défaut (§5). Un total
+**637**, **651**, **969** ici — avec **sept** familles nées en chemin, chacune d'un défaut ou d'un lot (§5). Un total
 différent du vôtre n'est donc pas une contradiction : comparez d'abord la révision **et**
 l'état de l'arbre.
 
