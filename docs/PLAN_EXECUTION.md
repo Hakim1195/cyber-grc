@@ -30,6 +30,36 @@ conduit par plusieurs agents en parallèle :
 
 ---
 
+## 0 bis. Arbitrages de l'utilisateur — 03/09/2026
+
+Trois décisions rendues par l'utilisateur, qui **priment sur ce que ce document disait avant** :
+
+| Sujet | Décision |
+|---|---|
+| **Branche** | Le travail se fait sur `claude/backend-plan-serveur-hj46fs`. **Dès qu'une chose est définitive et terminée, elle est poussée sur `main`.** |
+| **Historique git** | La purge des données réelles encore présentes dans l'historique est **écartée**. Conséquence assumée et écrite une fois ici : ces fichiers restent accessibles à quiconque a accès au dépôt. |
+| **Curseur qualité** | **Objectif V1 complète, toutes fonctionnalités, avant le 21/09/2026.** La perfection n'est pas demandée : ce qui compte est que le produit **fonctionne et fasse ce qu'il doit faire**. L'amélioration viendra ensuite, avec un vrai versionnage `Vx.x.x`. |
+
+### Ce que le curseur qualité change concrètement
+
+Le dispositif de portes reste, mais **il cesse de viser le zéro constat**. Le lot L2 a coûté
+neuf passages ; à ce rythme, il resterait trois lots livrés au 21/09 sur les treize qui restent.
+
+**Une porte par vague, et un tri au lieu d'un grinçage.** Chaque constat est classé :
+
+| Classe | Traitement |
+|---|---|
+| **Bloque le fonctionnement** — le produit ne fait pas ce qu'il doit faire | corrigé avant la fin de la vague |
+| **Fuite ou perte de données** — une filiale voit une autre, une saisie disparaît | corrigé avant la fin de la vague, sans négociation : c'est la promesse centrale du produit |
+| **Tout le reste** | inscrit au registre, marqué **`V1.1`**, et la vague continue |
+
+La troisième classe est celle qui change : elle n'arrête plus rien. Les deux premières restent
+fermes, non par exigence de qualité mais parce qu'un outil qui montre à une filiale les données
+d'une autre, ou qui perd une saisie, **ne fonctionne pas** — c'est le critère de l'utilisateur,
+pas un critère de perfection.
+
+---
+
 ## 1. Principe : vagues et portes
 
 ```
