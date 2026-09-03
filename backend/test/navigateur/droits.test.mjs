@@ -278,6 +278,58 @@ describe('Un profil en lecture ne se voit proposer aucune action d’écriture',
     }
   });
 
+  test('CONTRÔLE : un bouton de CONSULTATION reste utilisable, casse chameau comprise', async () => {
+    /* La moitié sans laquelle « rien n'est proposé » serait satisfait par une
+     * interface entièrement grisée (§20.2 : un garde-fou se vérifie dans les
+     * deux sens).
+     *
+     * Le cas qui a réellement fauté : la règle ancrait ses motifs sur `^`, `-`
+     * ou `_`, et le produit écrit ses identifiants en **casse chameau**.
+     * `doPrintBtn` et `closePrintBtn` étaient donc neutralisés, et un profil en
+     * lecture seule perdait l'impression — qui n'est pas une écriture.
+     *
+     * On éprouve la RÈGLE, pas un écran : les boutons concernés vivent sur des
+     * domaines que ce profil ne lit pas, et un essai qui attendrait le bon
+     * écran éprouverait surtout sa propre mise en scène.
+     */
+    const session = await ouvrirApplication(DIRECTION);
+    try {
+      await naviguer(session.page, '/exigences', '#addExigenceBtn');
+      const verdicts = await session.page.evaluate(() => {
+        const app = document.getElementById('app');
+        const poser = (id) => {
+          const b = document.createElement('button');
+          b.id = id;
+          b.textContent = id;
+          app.appendChild(b);
+          return b;
+        };
+        const consultation = ['doPrintBtn', 'closePrintBtn', 'showRaciBtn', 'voirExigencesBtn',
+          'backBtn', 'cancelBtn'].map(poser);
+        const ecriture = ['saveBtn', 'addMesureBtn', 'bulkDeleteBtn'].map(poser);
+        window.appliquerDroits('/exigences');
+        return {
+          consultation: consultation.map((b) => ({ id: b.id, inactif: b.disabled })),
+          ecriture: ecriture.map((b) => ({ id: b.id, inactif: b.disabled })),
+        };
+      });
+
+      for (const b of verdicts.consultation) {
+        assert.equal(
+          b.inactif, false,
+          `« ${b.id} » est un bouton de consultation : le neutraliser prive un lecteur d’un ` +
+            'geste qui ne modifie rien.',
+        );
+      }
+      for (const b of verdicts.ecriture) {
+        assert.equal(b.inactif, true, `« ${b.id} » est une écriture et doit être neutralisé.`);
+      }
+      assert.deepEqual(session.erreursInattendues(), []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
   test('LA FAÇADE REFUSE, même si un bouton avait été oublié', async () => {
     // Le filet, et non la barrière : il existe parce qu'une liste de boutons
     // vieillit en silence, alors que la façade `DataStore` voit passer

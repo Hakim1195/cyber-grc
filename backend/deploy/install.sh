@@ -1794,10 +1794,32 @@ fi
 # Le seuil est lu dans la RÈGLE QUI REFUSE, pas dans un commentaire ni dans une
 # constante recopiée ici.
 #
-# ⚠️ Ce contrôle éprouve le PRÉ-FILTRE du frontal, pas une borne étanche. Un
-# client qui envoie en `Transfer-Encoding: chunked` n'annonce pas de longueur et
-# n'est pas borné là — c'est écrit dans le vhost, mesuré, et la borne qui tient
-# pour l'API est celle de Fastify. Ne pas lire ce « ok » comme davantage.
+# ── LE CORPS SANS LONGUEUR ANNONCÉE, ÉPROUVÉ AUSSI (constats Q-51, Q-58) ────
+#
+# Ce commentaire disait : « un client qui envoie en `Transfer-Encoding: chunked`
+# n'annonce pas de longueur et n'est pas borné là ». C'était vrai, et ce ne
+# l'est plus : le vhost refuse désormais tout `Transfer-Encoding` sur `/api/`.
+# Remesuré derrière un Apache réel, avec une doublure qui compte les octets :
+# chunked 1 Gio -> **411 en 19 ms**, 327 680 octets poussés, **0 au service** —
+# là où, sans la règle, 1 073 741 824 octets étaient relayés en entier.
+#
+# Le contrôle éprouve donc les DEUX règles, et chacune dans les deux sens : ce
+# qui doit être refusé l'est, et ce qui doit passer passe. La seconde moitié est
+# la plus importante — un frontal qui refuse TOUT satisferait la première.
+#
+# ⚠️ ET LE MODULE QUI ANNULERAIT TOUT. Les deux règles lisent des en-têtes
+# HTTP/1.1. En HTTP/2 il n'existe ni `Transfer-Encoding` ni `Content-Length`
+# obligatoire : un corps en trames DATA échapperait aux deux. `mod_http2` n'est
+# pas activé par ce script — mais « n'est pas activé » est un fait d'aujourd'hui,
+# pas une barrière, et c'est exactement la forme du constat Q-65. On le
+# CONSTATE donc, au lieu de le supposer.
+if apache2ctl -M 2>/dev/null | grep -q 'http2_module'; then
+  alerte "mod_http2 est ACTIVÉ sur ce frontal. Les deux bornes de corps du vhost lisent des"
+  alerte "en-têtes HTTP/1.1 (Transfer-Encoding, Content-Length) : en HTTP/2, un corps en"
+  alerte "trames DATA leur échappe entièrement, et seule la borne applicative de Fastify"
+  alerte "subsiste (constats Q-44, Q-51). Soit désactivez-le (a2dismod http2), soit portez"
+  alerte "la limitation ailleurs — et remesurez avant de conclure."
+fi
 if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
   NOM_VHOST="$(sed -n 's/^[[:space:]]*ServerName[[:space:]]\{1,\}//p' \
                /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null | head -n1 || true)"
@@ -1819,18 +1841,42 @@ if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
     alerte "éprouvée. Ce n'est pas un feu vert — voir deploy/apache/cyber-grc.conf."
   else
     CORPS_TMP="$(mktemp)"
-    sonder_corps() {  # <octets> → code HTTP rendu par le frontal
-      head -c "$1" /dev/zero | tr '\0' 'a' > "$CORPS_TMP"
+    # ⚠️ UNE SEULE SONDE, paramétrée par ses en-têtes — et ce n'est pas un goût
+    # de style. Une seconde fonction recopiée aurait dupliqué l'URL et le
+    # `--resolve`, c'est-à-dire les deux endroits où l'essai de A4 déclare ses
+    # substitutions : le banc aurait cessé de jouer ce bloc en annonçant « le
+    # bloc a changé de forme ». Un contrôle qu'on éteint en l'étendant est pire
+    # que celui qu'on n'a pas étendu.
+    sonder_corps() {  # <octets> [en-tête…] → code HTTP rendu par le frontal
+      local octets="$1"; shift
+      local entetes=() h
+      for h in "$@"; do entetes+=(-H "$h"); done
+      head -c "$octets" /dev/zero | tr '\0' 'a' > "$CORPS_TMP"
       curl -sk --max-time 60 --noproxy '*' --resolve "$NOM_VHOST:443:127.0.0.1" \
            -X POST -H 'Content-Type: application/json' -H 'Connection: close' \
+           ${entetes[@]+"${entetes[@]}"} \
            --data-binary "@$CORPS_TMP" -o /dev/null -w '%{http_code}' \
            "https://$NOM_VHOST/api/reprise" 2>/dev/null || true
     }
     CODE_HORS="$(sonder_corps "$((SEUIL_CORPS + 1048576))")"
     CODE_SOUS="$(sonder_corps 4096)"
+    # Le corps SANS longueur annoncée : cet en-tête fait basculer curl en
+    # chunked et lui fait retirer le `Content-Length`. C'est le contournement du
+    # constat Q-51, et il doit désormais recevoir 411.
+    CODE_CHUNKED="$(sonder_corps "$((SEUIL_CORPS + 1048576))" 'Transfer-Encoding: chunked')"
     rm -f "$CORPS_TMP"
 
-    if [[ "$CODE_HORS" != 413 ]]; then
+    # Le contournement d'abord : c'est celui qui laissait passer un gigaoctet.
+    if [[ "$CODE_CHUNKED" != 411 ]]; then
+      alerte "corps chunked de $((SEUIL_CORPS + 1048576)) octets par /api/ -> $CODE_CHUNKED (411 attendu)"
+      echec "le frontal RELAIE un corps sans longueur annoncée sur le chemin mandaté
+        (constats Q-51 et Q-58). Mesuré sans la règle : 1 073 741 824 octets relayés au
+        service en 2,4 s, et le client reçoit 502 là où le service a répondu 413. Vérifiez
+        la règle « RewriteCond %{HTTP:Transfer-Encoding} . » du bloc « Dénis de service »
+        de deploy/apache/cyber-grc.conf, et que mod_rewrite est chargé (a2enmod rewrite).
+        Si un lot a introduit un envoi EN FLUX légitime, la règle doit être restreinte à
+        ce qui n'est pas cette route-là — et remesurée, pas supprimée."
+    elif [[ "$CODE_HORS" != 413 ]]; then
       alerte "corps de $((SEUIL_CORPS + 1048576)) octets par /api/ -> $CODE_HORS (413 attendu)"
       echec "le frontal laisse passer un corps hors borne sur le chemin mandaté (constat
         Q-44). C'est la première barrière du contrôle S13 qui manque : un envoi
@@ -1855,7 +1901,7 @@ if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
         vérifiez que la comparaison est bien « -gt » entre guillemets — sans eux, Apache
         lit l'opérande comme un champ de drapeaux."
     else
-      succes "borne de corps éprouvée : $((SEUIL_CORPS + 1048576)) o -> 413, 4 096 o -> $CODE_SOUS (pré-filtre du mandataire)"
+      succes "borne de corps éprouvée : $((SEUIL_CORPS + 1048576)) o -> 413, chunked -> 411, 4 096 o -> $CODE_SOUS"
     fi
   fi
 else

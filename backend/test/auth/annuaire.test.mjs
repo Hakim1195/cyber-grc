@@ -436,6 +436,67 @@ describe('Q-68 — une réponse TRONQUÉE est refusée, jamais rendue amputée',
     }
   });
 
+  test('UN RENVOI non suivi fait échouer la recherche — la réponse est incomplète', async () => {
+    // `SearchResultReference` — [APPLICATION 19] — n'est PAS une erreur : c'est une
+    // partie de la réponse qui vit sur un autre contrôleur de domaine, et le code de
+    // résultat reste « succès ». C'est ce qui le rend dangereux : le client qui
+    // l'ignore rend une liste incomplète EN ANNONÇANT UN SUCCÈS.
+    //
+    // Ce client ne suit pas les renvois — suivre un renvoi, c'est laisser l'annuaire
+    // choisir à qui le service présente son compte de service. Il ne peut donc que
+    // refuser, et c'est ce qu'on éprouve ici.
+    doublure.definirPanne({ renvoyer: true });
+    try {
+      await assert.rejects(
+        () => service().authentifier('rssi.tls', 'rssi.tls!2026'),
+        (erreur) => {
+          assert.equal(erreur.nomErreur, 'ErreurAnnuaire');
+          assert.match(erreur.detailJournal, /TRONQUÉE/);
+          assert.match(erreur.detailJournal, /SearchResultReference/);
+          return true;
+        },
+      );
+    } finally {
+      doublure.definirPanne({ renvoyer: false });
+    }
+  });
+
+  test('un renvoi ne DÉGRADE PAS non plus en identifiants refusés', async () => {
+    // Même raison que pour la troncature : un compte ne se verrouille pas parce que
+    // l'annuaire est réparti sur plusieurs contrôleurs de domaine.
+    doublure.definirPanne({ renvoyer: true });
+    try {
+      const erreur = await service()
+        .authentifier('rssi.tls', 'rssi.tls!2026')
+        .then(() => null, (e) => e);
+      assert.notEqual(erreur, null);
+      assert.notEqual(erreur.nomErreur, 'ErreurIdentifiants');
+    } finally {
+      doublure.definirPanne({ renvoyer: false });
+    }
+  });
+
+  test('CONTRE-ÉPREUVE : le renvoi retiré, la même connexion aboutit', async () => {
+    const identite = await service().authentifier('rssi.tls', 'rssi.tls!2026');
+    assert.deepEqual([...identite.groupes], ['GRC-TLS-RSSI']);
+  });
+
+  test('le journal du serveur confirme que le RENVOI a bien été émis', async () => {
+    // Sans ce contrôle croisé, le rouge des essais ci-dessus pourrait venir d'autre
+    // chose — un filtre refusé, une connexion tombée — et ne rien prouver de Q-69.
+    doublure.viderJournal();
+    doublure.definirPanne({ renvoyer: true });
+    try {
+      await service().authentifier('rssi.tls', 'rssi.tls!2026').catch(() => null);
+    } finally {
+      doublure.definirPanne({ renvoyer: false });
+    }
+    assert.ok(
+      doublure.journal.some((e) => e.renvoi === true),
+      'L’annuaire simulé doit avoir émis un renvoi : sinon l’essai n’éprouve pas Q-69.',
+    );
+  });
+
   test('le journal du serveur confirme que la troncature a bien EU LIEU', async () => {
     // Sans cette vérification, l'essai précédent pourrait passer pour une autre
     // raison — un filtre mal formé, par exemple — et ne rien prouver de Q-68.

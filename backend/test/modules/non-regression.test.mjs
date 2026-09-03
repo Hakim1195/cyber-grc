@@ -74,13 +74,26 @@ import {
  */
 function routesDeclarees() {
   const source = readFileSync(join(RACINE_FRONTEND, 'js', 'app.js'), 'utf8');
-  // La déclaration a changé de forme pendant la vague 3 : `Router.init({…})` en
-  // ligne est devenu `const ROUTES_ENREGISTREES = {…}` puis `Router.init(…)`. On
-  // lit donc la TABLE, qui est ce qui compte, et le balayage le dit s'il ne la
-  // trouve plus — au lieu de rendre zéro route et de passer au vert.
-  const debut = source.indexOf('ROUTES_ENREGISTREES = {');
-  assert.notEqual(debut, -1, 'La table des routes a disparu de js/app.js : ce balayage ne sait plus où lire.');
-  const bloc = source.slice(debut, source.indexOf('\n    };', debut));
+  // ── La table des routes a changé de forme DEUX FOIS pendant la vague ────
+  //
+  // `Router.init({…})` en ligne, puis `const ROUTES_ENREGISTREES = {…}`, puis
+  // `Router.init({…})` de nouveau — avec, cette fois, un avertissement en tête
+  // disant qu'elle ne se refactorise pas, parce qu'un autre garde-fou la lit.
+  // Un balayage qui ne connaît qu'une des deux formes rend **zéro route** et
+  // laisse le filet passer au vert sur rien : on accepte donc les deux, et l'on
+  // ÉCHOUE bruyamment si aucune ne se trouve.
+  const debut = ['Router.init({', 'ROUTES_ENREGISTREES = {']
+    .map((ancre) => source.indexOf(ancre))
+    .filter((rang) => rang !== -1)
+    .sort((a, b) => a - b)[0];
+  assert.notEqual(debut, undefined,
+    'La table des routes a disparu de js/app.js — ni « Router.init({ » ni ' +
+    '« ROUTES_ENREGISTREES = { » : ce balayage ne sait plus où lire, et rendrait zéro route.');
+  const fin = [source.indexOf('});', debut), source.indexOf('\n    };', debut)]
+    .filter((rang) => rang !== -1)
+    .sort((a, b) => a - b)[0];
+  assert.notEqual(fin, undefined, 'La table des routes de js/app.js ne se referme pas.');
+  const bloc = source.slice(debut, fin);
   const toutes = [...bloc.matchAll(/"(\/[^"]*)"\s*:/g)].map((m) => m[1]);
   assert.ok(toutes.length >= 40, `Seulement ${String(toutes.length)} route(s) lues : le motif ne reconnaît plus la déclaration.`);
   assert.equal(new Set(toutes).size, toutes.length, 'Deux routes identiques dans js/app.js.');

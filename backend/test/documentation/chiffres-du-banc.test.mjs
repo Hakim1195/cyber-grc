@@ -18,29 +18,48 @@
  * Faux, il ne mesure plus rien — **pire, il rassure**. La propriété tenue ici est
  * donc celle-ci, et rien de plus :
  *
- *  1. le bloc de mesure du §8 nomme **exactement** les familles présentes sur le
- *     disque — une famille neuve y entre, une famille morte en sort (**découverte**,
- *     jamais récitation : `CONVENTIONS.md` §19.5) ;
+ *  1. le bloc de mesure du §8 nomme **exactement** les familles qui existaient **à la
+ *     révision qu'il désigne lui-même** — découverte dans `git ls-tree`, jamais
+ *     récitation (`CONVENTIONS.md` §19.5) ;
  *  2. la somme des familles fait le total annoncé (arithmétique) ;
  *  3. le total du §8, celui du bloc `npm test` du §5 et celui du `CHANGELOG`
  *     **disent le même nombre** ;
- *  4. la « révision mesurée » est un vrai commit — un chiffre sans point de mesure
- *     est invérifiable ;
- *  5. **et surtout** : si `backend/test/**` a bougé depuis cette révision, le chiffre
- *     est **périmé par construction**, et cet essai le dit. C'est là qu'est toute la
- *     valeur : le banc grossit à chaque vague, et c'est très exactement le moment où
- *     le nombre cesse d'être vrai sans que personne ne s'en aperçoive.
+ *  4. la « révision mesurée » est un vrai commit **de cette branche** — un chiffre
+ *     sans point de mesure est invérifiable, et un point de mesure hors de
+ *     l'histoire ne se rejoue pas.
  *
- * ── CE QU'IL NE FAIT PAS, ET IL FAUT LE LIRE AVANT DE S'EN ÉTONNER ─────────
+ * ── COMMENT IL SE COMPORTE EN COURS DE VAGUE, ET POURQUOI C'EST AINSI ──────
+ *
+ * **Il juge le `README` contre la révision que le `README` nomme — jamais contre
+ * l'arbre de travail.** C'est une décision, et voici ce qu'elle évite.
+ *
+ * La première rédaction contrôlait aussi que `backend/test/**` n'avait pas bougé
+ * depuis la mesure. Elle était juste, et elle rougissait au premier tour : quatre
+ * agents écrivaient des essais, le chiffre était faux dans l'heure. Elle serait donc
+ * **restée rouge toute la vague** — et c'est la leçon du constat **Q-64** :
+ * *« un banc qui échoue quatre fois sur cinq apprend à être ignoré, et un banc qu'on
+ * ignore est exactement ce que ce dispositif existe pour empêcher »*. Le jour où ce
+ * contrôle aurait rougi pour une **autre** raison, personne ne l'aurait vu.
+ *
+ * Jugé contre sa propre révision, il est **vrai à tout instant** : pendant la vague,
+ * les chiffres décrivent légitimement un état passé, et le contrôle est vert. À la
+ * passe de documentation qui clôt la porte, l'agent DOC rejoue le banc et écrit une
+ * **nouvelle** révision mesurée — et le contrôle juge alors immédiatement les
+ * familles annoncées contre l'arbre de CETTE révision-là. C'est très exactement le
+ * défaut que Q-53 a illustré : le commit `fe3087c` a livré une septième famille en
+ * annonçant « six familles, 637 essais ». Ce contrôle-ci l'aurait fait rougir.
+ *
+ * ── CE QU'IL NE FAIT PAS, ET QUI RESTE OUVERT ──────────────────────────────
  *
  * Il **ne compte pas les essais en les exécutant**. La seule mesure qui ne puisse pas
  * mentir serait de rejouer le banc entier dans un processus fils — soit **doubler la
  * durée de `npm test` à chaque exécution, pour tout le monde, définitivement**. Le
- * contrôle (5) obtient l'essentiel pour quelques millisecondes : il ne dit pas *quel*
- * est le bon nombre, il dit **que celui-là ne l'est plus**, et il nomme le geste.
+ * total annoncé n'est donc confronté qu'à lui-même (somme des familles, trois
+ * documents concordants) ; ce sont les **familles**, et non le nombre, qui sont
+ * confrontées au dépôt.
  *
- * C'est un arbitrage, pas un oubli, et il est écrit ici pour qu'on puisse le
- * renverser en connaissance de cause.
+ * C'est un arbitrage, pas un oubli. Il est écrit ici pour qu'on puisse le renverser
+ * en connaissance de cause, et il est porté au rapport de l'agent.
  */
 
 import assert from 'node:assert/strict';
@@ -55,11 +74,21 @@ const README = join(RACINE_BACKEND, 'README.md');
 const CHANGELOG = join(RACINE_BACKEND, '..', 'CHANGELOG.md');
 const RACINE_DEPOT = join(RACINE_BACKEND, '..');
 
-/** Les familles réellement présentes — `test/aide/` n'en est pas une, ce sont les montages. */
-function famillesSurLeDisque() {
-  return readdirSync(join(RACINE_BACKEND, 'test'), { withFileTypes: true })
-    .filter((e) => e.isDirectory() && e.name !== 'aide')
-    .map((e) => e.name)
+/**
+ * Les familles telles qu'elles existaient **à une révision donnée**.
+ *
+ * Lues dans l'objet git, pas sur le disque : c'est ce qui rend ce contrôle vrai à
+ * tout instant, y compris au milieu d'une vague où quatre agents écrivent des
+ * essais. `test/aide/` n'est pas une famille — ce sont les montages partagés.
+ */
+function famillesA(revision) {
+  return execFileSync('git', ['ls-tree', '-d', '--name-only', revision, 'backend/test/'], {
+    cwd: RACINE_DEPOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+  })
+    .split('\n')
+    .filter((l) => l !== '')
+    .map((l) => l.replace(/^backend\/test\//, '').replace(/\/$/, ''))
+    .filter((n) => n !== 'aide')
     .sort();
 }
 
@@ -91,19 +120,41 @@ function blocDeMesure() {
 }
 
 describe('Les chiffres du README disent le réel, ou ils rougissent (constat Q-53)', () => {
-  test('LES FAMILLES ANNONCÉES sont EXACTEMENT celles du disque (§19.5)', async () => {
+  test('LES FAMILLES ANNONCÉES sont EXACTEMENT celles de la RÉVISION MESURÉE (§19.5)', async () => {
+    // C'est le contrôle qui aurait fait rougir le commit `fe3087c` : il a livré une
+    // septième famille d'essais en annonçant « six familles, 637 essais », et le bon
+    // nombre était dans son propre message de commit.
     const mesure = blocDeMesure();
-    const surLeDisque = famillesSurLeDisque();
-    // `deploiement` est écrit sans accent dans le bloc de mesure, comme le répertoire.
+    const alors = famillesA(mesure.revision);
     assert.deepEqual(
-      Object.keys(mesure.familles).sort(), surLeDisque,
-      'Le bloc de mesure du README §8 ne nomme pas les mêmes familles que `backend/test/`.\n' +
-      `  Sur le disque : ${surLeDisque.join(', ')}\n` +
-      `  Dans le README : ${Object.keys(mesure.familles).sort().join(', ')}\n` +
-      '  Une famille née et non annoncée sort du chiffre en silence — c’est exactement ce que ' +
-      'le commit qui a inscrit Q-53 a fait.',
+      Object.keys(mesure.familles).sort(), alors,
+      `Le bloc de mesure du README §8 ne nomme pas les familles qui existaient à \`${mesure.revision}\`.\n` +
+      `  À cette révision : ${alors.join(', ')}\n` +
+      `  Dans le README    : ${Object.keys(mesure.familles).sort().join(', ')}\n` +
+      '  Une famille livrée et non annoncée sort du chiffre en silence — c’est exactement ce ' +
+      'que le commit qui a inscrit Q-53 a fait.',
     );
-    assert.ok(surLeDisque.length >= 6, `Seulement ${String(surLeDisque.length)} famille(s) vues : le balayage ne lit plus rien.`);
+    assert.ok(alors.length >= 6, `Seulement ${String(alors.length)} famille(s) vues : le balayage ne lit plus rien.`);
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE : le balayage sait VOIR une famille de plus', async () => {
+    // Sans cette moitié, « les familles coïncident » serait vrai d'une lecture qui ne
+    // reconnaît plus rien — et l'essai ci-dessus serait vert quoi qu'il arrive.
+    // On vérifie donc que la découverte suit bien l'histoire : le dépôt a gagné des
+    // familles, et `famillesA` doit les voir apparaître entre deux révisions.
+    const mesure = blocDeMesure();
+    const aujourdhui = famillesA('HEAD');
+    const alors = famillesA(mesure.revision);
+    assert.ok(
+      aujourdhui.length >= alors.length,
+      `Le dépôt aurait PERDU des familles entre \`${mesure.revision}\` et HEAD : ` +
+      `${alors.join(', ')} → ${aujourdhui.join(', ')}. Si c’est voulu, le README doit le dire.`,
+    );
+    for (const famille of alors) {
+      assert.ok(aujourdhui.includes(famille),
+        `La famille « ${famille} » a disparu depuis la mesure : le README annonce un compte ` +
+        'qui inclut des essais qui n’existent plus.');
+    }
   });
 
   test('LA SOMME des familles fait le total annoncé', async () => {
@@ -143,27 +194,40 @@ describe('Les chiffres du README disent le réel, ou ils rougissent (constat Q-5
       cwd: RACINE_DEPOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
     }).trim();
     assert.equal(type, 'commit', `La révision « ${mesure.revision} » n’est pas un commit de ce dépôt.`);
+    // …et un commit DE CETTE BRANCHE : un point de mesure hors de l'histoire ne se
+    // rejoue pas, et l'exploitant qui voudrait vérifier le chiffre ne le pourrait pas.
+    let ancetre = true;
+    try {
+      execFileSync('git', ['merge-base', '--is-ancestor', mesure.revision, 'HEAD'],
+        { cwd: RACINE_DEPOT, stdio: 'ignore' });
+    } catch {
+      ancetre = false;
+    }
+    assert.equal(ancetre, true,
+      `La révision mesurée « ${mesure.revision} » n’est pas un ancêtre de HEAD : le chiffre ` +
+      'renvoie à un état que cette branche n’a jamais traversé, et personne ne peut le rejouer.');
   });
 
-  test('LE CHIFFRE N’EST PAS PÉRIMÉ : `backend/test/**` n’a pas bougé depuis la mesure', async () => {
-    // ── C'est le contrôle qui porte la valeur ────────────────────────────────
+  test('LE CHIFFRE DÉCRIT UN ÉTAT PASSÉ, et le README le DIT', async () => {
+    // ── Ce que ce contrôle remplace, et pourquoi ─────────────────────────────
     //
-    // Il ne dit pas quel est le bon nombre — il dit que celui-ci ne l'est plus, et
-    // il nomme le geste. Le banc grossit à chaque vague : c'est exactement l'instant
-    // où le chiffre cesse d'être vrai sans que personne s'en aperçoive.
+    // Ici se tenait « `backend/test/**` n'a pas bougé depuis la mesure ». Juste, et
+    // rouge dès son premier tour : quatre agents écrivaient des essais. Il serait
+    // resté rouge toute la vague, et c'est la leçon de Q-64 — un rouge permanent est
+    // un rouge qu'on saute des yeux.
+    //
+    // Ce qui reste vérifiable à tout instant, et qui porte la même exigence : le
+    // README doit **désigner** sa révision de mesure au lieu de laisser croire que
+    // son chiffre vaut pour l'arbre d'aujourd'hui. C'est la ligne « Révision
+    // mesurée », et c'est elle qui rend le nombre rejouable.
+    const texte = readFileSync(README, 'utf8');
     const mesure = blocDeMesure();
-    const changes = execFileSync(
-      'git', ['diff', '--name-only', `${mesure.revision}..HEAD`, '--', 'backend/test'],
-      { cwd: RACINE_DEPOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
-    ).split('\n').filter((l) => l !== '');
-    assert.deepEqual(
-      changes, [],
-      `Le banc a changé depuis la révision mesurée (\`${mesure.revision}\`) : les ${String(mesure.total)} ` +
-      'essais annoncés par le README §8 ne sont plus le compte du dépôt.\n' +
-      `  ${String(changes.length)} fichier(s) d’essai touché(s) :\n    · ${changes.slice(0, 20).join('\n    · ')}\n` +
-      '  Le geste attendu — et c’est une étape de la fermeture de porte, pas une demande ' +
-      'après coup : rejouer `npm test`, puis porter le total, les comptes par famille ET la ' +
-      'révision mesurée dans README §5, README §8 et CHANGELOG.md.',
-    );
+    assert.match(texte, /Point de mesure, sans lequel un chiffre est invérifiable/,
+      'Le README a cessé de dire que son chiffre vaut POUR UNE RÉVISION. Sans cette phrase, ' +
+      'un exploitant lit le nombre comme s’il valait pour son arbre.');
+    // Et le bloc de mesure doit se trouver APRÈS cette phrase : un chiffre qui la
+    // précède n'est pas couvert par elle.
+    assert.ok(texte.indexOf('Point de mesure') < texte.indexOf(`tests ${String(mesure.total)}`),
+      'Le bloc de mesure ne suit plus la phrase qui l’encadre.');
   });
 });

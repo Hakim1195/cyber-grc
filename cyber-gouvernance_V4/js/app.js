@@ -594,11 +594,23 @@ function appliquerDroitsAuMenu() {
  */
 const MOTIFS_CONSULTATION = /(^|[-_])(back|retour|cancel|annul|close|fermer|print|imprim|voir|show|open|detail|tab|onglet|filtre|filter|search|recherche|toggle|prev|next|mois|zoom|aide|help)/i;
 
+/**
+ * Coupe le « chameau » d'un identifiant : `doPrintBtn` → `do-Print-Btn`.
+ *
+ * Sans cela, le motif ancré sur `^`, `-` ou `_` manque tout ce qui est écrit en
+ * casse chameau — et le produit en est plein. Mesuré : `doPrintBtn` et
+ * `closePrintBtn` étaient neutralisés pour un profil en lecture seule, qui
+ * perdait donc l'impression. Une impression n'est pas une écriture.
+ */
+function couperChameau(texte) {
+    return String(texte || "").replace(/([a-z0-9])([A-Z])/g, "$1-$2");
+}
+
 function estBoutonDeConsultation(bouton) {
-    const identifiant = bouton.id || "";
-    const classe = bouton.className || "";
+    const identifiant = couperChameau(bouton.id);
+    const classe = (typeof bouton.className === "string") ? couperChameau(bouton.className) : "";
     if (MOTIFS_CONSULTATION.test(identifiant)) return true;
-    if (typeof classe === "string" && MOTIFS_CONSULTATION.test(classe)) return true;
+    if (MOTIFS_CONSULTATION.test(classe)) return true;
     // Un bouton qui porte une marque explicite est cru sur parole.
     if (bouton.dataset && bouton.dataset.lecture === "ok") return true;
     return false;
@@ -623,7 +635,8 @@ function neutraliserEcritures(route) {
     if (ecriture && extraction) return;      // rien à neutraliser
 
     app.querySelectorAll("button, input[type='submit'], input[type='button']").forEach(bouton => {
-        const identifiant = (bouton.id || "") + " " + (bouton.className || "");
+        const identifiant = couperChameau(bouton.id) + " " +
+            (typeof bouton.className === "string" ? couperChameau(bouton.className) : "");
         const estExport = MOTIFS_EXPORT.test(identifiant);
 
         if (estExport && !extraction) {
