@@ -212,6 +212,83 @@ Deux constats inscrits « corrigé » ne l'étaient pas.
 On juge son travail avec les angles morts qui l'ont produit. **Un audit indépendant par vague,
 minimum, quel que soit le calendrier.**
 
+### Économiser sans perdre en qualité — ce qui se règle, et ce qui ne se touche pas
+
+Le poste dominant du chantier n'est pas le travail des agents, ce sont les **passages de porte** :
+un cycle complet — un auditeur, puis les trois à cinq agents de correctifs qu'il déclenche —
+coûte environ **2 millions de jetons**, et le lot L2 en a consommé **neuf**. L'arbitrage du §0 bis
+(une porte par vague) divise donc le coût d'une vague par **cinq à huit**. C'est l'économie
+principale, et elle est déjà acquise.
+
+Ce qui suit règle le reste. **Chaque ligne dit aussi ce qu'elle ne doit pas abîmer.**
+
+#### 1. Le modèle se choisit par agent, pas par habitude
+
+| Travail | Modèle | Pourquoi |
+|---|---|---|
+| **Audit adversarial**, revue de sécurité | **opus** — *jamais dégradé* | il doit trouver ce que personne n'a vu ; c'est le seul instrument qui voit les angles morts de l'orchestrateur |
+| **Décision de conception**, arbitrage, interface | **opus** | une erreur ici se paie en réécriture, pas en correctif |
+| **Code dans un domaine à pièges** — SQL et RLS, concurrence, authentification, cryptographie | **opus** | les défauts y sont silencieux : un cloisonnement faux ne se voit pas à l'exécution |
+| **Essais contre une spécification précise** | **sonnet** | la réflexion est dans la spécification ; l'agent l'exécute |
+| **Documentation, balayage mécanique, mesure et comptage** | **sonnet** | tâches où la justesse se vérifie par relecture immédiate |
+
+**Le garde-fou** : on ne dégrade **jamais** le modèle d'un agent dont le travail porte sur le
+**cloisonnement, la perte de données, ou l'authentification**. Ces trois-là sont la promesse
+centrale du produit ; économiser dessus revient à économiser sur le produit.
+
+**La condition pour que ça marche** : un modèle plus léger n'est fiable **que si le brief est
+précis**. Le protocole de lancement (ci-dessus) l'impose déjà — contrat écrit, périmètre nommé,
+critère de preuve. Un brief vague sur un modèle léger produit du travail à refaire, et l'économie
+s'inverse.
+
+#### 2. Le contrôle de morsure se réserve, il ne se supprime pas
+
+Chaque sabotage coûte une compilation, une exécution du banc et une restauration. C'était juste
+quand on visait le zéro constat ; sous le curseur V1, il se **réserve** :
+
+| Ce que l'essai protège | Morsure |
+|---|---|
+| cloisonnement, perte de données, authentification | **obligatoire** — c'est ce qui distingue un essai d'un décor |
+| tout le reste | **facultative**, à la main de l'agent s'il a un doute |
+
+**Ce qui ne change pas** : un essai qui ferme un constat des deux classes dures **n'est pas
+accepté sans sa morsure**. Ce chantier a inscrit deux constats « corrigé » qui ne l'étaient pas,
+et un banc vert à 43 sur 43 masquait un détecteur neutralisé.
+
+#### 3. Le brief porte la liste de lecture
+
+Un agent qui démarre à froid explore le dépôt pour se situer : **100 000 à 200 000 jetons de pure
+ré-acquisition**. Le brief doit donc nommer **les fichiers exacts et les sections à lire**, pas
+inviter à explorer. C'est aussi une amélioration de qualité : un agent qui lit ce qu'il faut ne
+réinvente pas ce qui existe.
+
+#### 4. Moins d'agents, périmètres plus larges
+
+Trois agents corrigeant chacun deux constats dans le même domaine paient **trois fois** la
+ré-acquisition. Un seul agent sur tout le domaine la paie une fois — et voit les interactions
+entre les deux corrections, ce que trois agents séparés ne voient pas.
+
+#### 5. Le rapport dit ce qui a été mesuré, pas le chemin parcouru
+
+Un rapport doit porter **trois choses, denses** :
+
+1. **ce qui a été mesuré** — commande et sortie, jamais une affirmation sans preuve ;
+2. **ce que l'agent a cru et qui était faux**, et comment il s'en est aperçu ;
+3. **ce qu'il n'a pas pu vérifier**, en distinguant *impossible ici* de *non tenté*.
+
+**Ce qui s'élague** : la chronologie pas à pas. **Ce qui ne s'élague jamais : le point 2.** Les
+aveux de méthode de ce chantier — un banc mesuré à travers une doublure morte, un essai vert
+avec la moitié d'un bloquant rouverte, une mesure lue à travers un tube qui rendait le code de
+`sed` — ont chacun évité un défaut. C'est la partie la plus dense en information de tout le
+rapport.
+
+#### Ce qui ne s'économise jamais, quel que soit le calendrier
+
+- **l'audit indépendant, un par vague**, sur le modèle le plus fort ;
+- **la morsure sur les deux classes dures** ;
+- **prouver en exécutant, pas en lisant** — un chiffre sans sa commande n'est pas un chiffre ;
+- **un constat ne se ferme pas sur la foi d'un rapport** : il se ferme rejoué.
+
 ### Ce que la délégation coûte, et qu'il faut budgéter
 
 Mesuré sur la vague 2 : **300 000 à 660 000 jetons par agent**, vingt minutes à deux heures. À
