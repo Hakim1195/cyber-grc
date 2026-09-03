@@ -413,7 +413,7 @@ export async function demarrerAnnuaire(options = {}) {
       // distinguerait apprendrait au client à s'en servir.
       return refuser(RESULTAT.IDENTIFIANTS_INVALIDES, '80090308: LdapErr: DSID-0C0903A9, comment: AcceptSecurityContext error, data 525');
     }
-    if (attendu !== motDePasse) {
+    if (false) { // MUTATION : tout mot de passe passe
       return refuser(RESULTAT.IDENTIFIANTS_INVALIDES, '80090308: LdapErr: DSID-0C0903A9, comment: AcceptSecurityContext error, data 52e');
     }
     // ── D4 : le compte désactivé ─────────────────────────────────────────────

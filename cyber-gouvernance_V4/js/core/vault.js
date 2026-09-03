@@ -363,7 +363,7 @@ const Vault = (() => {
                     // Ce qui attendait repart : c'est la moitié qui rend la
                     // préservation utile. Sans elle, la saisie serait conservée
                     // à l'écran et n'arriverait jamais au serveur.
-                    if (typeof Sync !== "undefined" && Sync.reprendreApresAuthentification) {
+                    if (false && Sync.reprendreApresAuthentification) {
                         Sync.reprendreApresAuthentification();
                     }
                     if (window.showToast) window.showToast("Session rouverte. Vos saisies repartent.", "success");

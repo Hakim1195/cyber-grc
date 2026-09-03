@@ -355,7 +355,12 @@ export class ClientLdap implements Annuaire {
 
     return new Promise<readonly ElementBer[]>((resoudre, rejeter) => {
       const minuteur = setTimeout(() => {
-        this.attentes.delete(id);
+        // ⚠️ NE PAS retirer l'attente avant `rompre()` : c'est `rompre()` qui rejette
+        // les promesses en cours, en parcourant `this.attentes`. La retirer d'abord la
+        // soustrait à ce parcours, et la promesse de CETTE opération n'est alors jamais
+        // rejetée — l'appel reste suspendu pour toujours. Mesuré : le banc de la panne
+        // « réponse lente » (comportement D5) ne rendait jamais la main, alors même que
+        // le délai de garde se déclenchait bien.
         this.rompre(
           new ErreurAnnuaire(`l’annuaire n’a pas répondu dans le délai de ${this.delaiMs} ms`),
         );

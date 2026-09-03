@@ -231,8 +231,8 @@ describe('Un profil en lecture ne se voit proposer aucune action d’écriture',
       });
 
       const refus = await session.page.evaluate(() => {
-        window.BackupService.exportPlain();
-        return { fichiers: window.__fichiers, peut: window.Droits.peutExporter() };
+        BackupService.exportPlain();
+        return { fichiers: window.__fichiers, peut: Droits.peutExporter() };
       });
 
       assert.equal(refus.peut, false, 'Le droit d’export n’est pas accordé à ce profil.');
@@ -336,7 +336,7 @@ describe('Un garde-fou se vérifie dans les deux sens', () => {
         window.__fichiers = 0;
         const vrai = URL.createObjectURL.bind(URL);
         URL.createObjectURL = (b) => { window.__fichiers++; return vrai(b); };
-        window.BackupService.exportPlain();
+        BackupService.exportPlain();
         return window.__fichiers;
       });
       assert.equal(fichiers, 1, 'Et son droit d’export doit fonctionner.');
@@ -359,7 +359,7 @@ describe('Un garde-fou se vérifie dans les deux sens', () => {
     const session = await ouvrirApplication(null);
     try {
       assert.equal(
-        await session.page.evaluate(() => window.Droits.connus()), false,
+        await session.page.evaluate(() => Droits.connus()), false,
         'Le serveur de développement ne rend pas encore de droits : c’est le cas nominal ici.',
       );
       const visibles = await menuVisible(session.page);

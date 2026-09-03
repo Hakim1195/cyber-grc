@@ -196,14 +196,30 @@ describe('D3 — les groupes imbriqués, et le cycle qui figerait un résolveur 
 });
 
 describe('D4 — le déprovisionnement, modifié en cours d’essai', () => {
-  test('un compte DÉSACTIVÉ est reconnu comme tel, sans que la liaison échoue', async () => {
+  test('un compte DÉSACTIVÉ ne peut plus se connecter, et sa relecture le dit', async () => {
+    // Deux chemins, et il faut les deux. L'annuaire simulé refuse la LIAISON d'un
+    // compte désactivé (bit ACCOUNTDISABLE), comme le fait un Active Directory : la
+    // connexion est donc coupée à la source. Mais le déprovisionnement des sessions
+    // EN COURS ne passe pas par une liaison — il relit le compte sous le compte de
+    // service —, et c'est là que le bit doit être lu.
+    //
+    // Le client garde donc les DEUX contrôles : le refus de liaison, et la lecture du
+    // bit. Le second n'est pas redondant — tous les annuaires ne refusent pas la
+    // liaison d'un compte désactivé, et s'appuyer sur ce refus serait parier sur un
+    // comportement qu'aucune norme n'impose.
     doublure.desactiver('qualite.tls');
     try {
-      const identite = await service().authentifier('qualite.tls', 'qualite.tls!2026');
+      await assert.rejects(
+        () => service().authentifier('qualite.tls', 'qualite.tls!2026'),
+        (erreur) => erreur.nomErreur === 'ErreurIdentifiants',
+        'La liaison d’un compte désactivé est refusée par l’annuaire.',
+      );
+
+      const relu = await service().relire('qualite.tls');
       assert.equal(
-        identite.desactive,
+        relu.desactive,
         true,
-        'Le bit ACCOUNTDISABLE doit être lu : un AD accepte parfois la liaison malgré tout.',
+        'C’est ce que la revalidation périodique observe pour révoquer les sessions actives.',
       );
     } finally {
       doublure.reactiver('qualite.tls');
