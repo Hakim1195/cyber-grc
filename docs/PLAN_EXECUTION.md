@@ -116,9 +116,20 @@ prendre. Une lacune de propriété se voit dans les rapports d'audit avant de se
 plan — c'est le signe qu'il faut relire cette table à chaque ouverture de vague, et non
 seulement quand un agent bute dessus.
 
-Quatre fichiers sont **partagés et donc réservés à l'orchestrateur** : ce document,
-`backend/db/CONVENTIONS.md`, `backend/package.json` et `backend/.env.example`. Un agent qui a besoin d'une dépendance ou
-d'une variable de configuration la demande dans son rapport ; il ne l'ajoute pas lui-même.
+**Cinq** fichiers sont **partagés et donc réservés à l'orchestrateur** : ce document,
+`backend/db/CONVENTIONS.md`, `backend/package.json`, `backend/.env.example` et
+**`backend/src/erreurs/**`**. Un agent qui a besoin d'une dépendance, d'une variable de
+configuration ou d'un code d'erreur la demande dans son rapport ; il ne l'ajoute pas lui-même.
+
+> ⚠️ **`src/erreurs/**` a été ajouté à cette liste le 03/09/2026, après coup — et le retard s'est
+> vu dans le code avant de se voir ici.** Ce fichier porte `CodeApi`, le vocabulaire d'erreur
+> auquel *le frontend se branche* : il est lu par tous les agents et n'appartenait à aucun. L'agent
+> A2 a buté dessus et a écrit, dans `src/api/droits.ts`, qu'il « n'appartient pas au périmètre
+> d'écriture » — puis a contourné le manque plutôt que d'y toucher, ce qui est exactement la
+> discipline demandée. C'est le **quatrième** rappel du même motif (§2, « un rôle absent de ce
+> tableau est une lacune, pas une permission »), et le premier où l'agent a eu raison **contre**
+> le plan. Les deux codes qui manquaient — `non_authentifie` (401) et `droit_insuffisant` (403) —
+> ont été posés par l'orchestrateur, à qui les corrections d'un ou deux fichiers reviennent.
 
 ### `backend/test/**` est partitionné à partir de la vague 3
 

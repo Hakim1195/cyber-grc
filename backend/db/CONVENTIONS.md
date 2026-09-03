@@ -1364,3 +1364,118 @@ volée) est laissé à A4, **à une condition écrite dans son rapport** : la co
 exige LDAPS et `src/config/index.ts` **refuse `ldap://` en production**. Si le banc éprouve le
 client sur du LDAP en clair, alors *la vérification du certificat n'est éprouvée par rien*, et
 c'est une réserve à porter au registre — pas une chose à taire.
+
+---
+
+## 26. Le contrat HTTP d'authentification — ce que L3 expose au navigateur
+
+> **Pourquoi ce paragraphe arrive en retard, et ce que ça a coûté.** Le §25 fige le contrat de
+> l'annuaire pour qu'un agent n'attende pas l'autre. Le même geste n'a pas été fait pour les
+> routes de connexion : trois agents ont donc commencé à travailler sur une surface que
+> **personne n'avait écrite** — celui qui l'implémente, celui qui la monte, et celui qui la
+> consomme depuis le navigateur. Un agent qui doit deviner invente, puis refait.
+>
+> Ce paragraphe **constate** ce que l'arbre a déjà décidé, et **tranche** ce qui restait ouvert.
+> Les deux sont signalés.
+
+### 26.1 Ce que l'arbre a déjà décidé — constaté, pas réinventé
+
+| Point | Où il fait foi |
+|---|---|
+| `ResolveurPerimetre` — « quel est le périmètre ? », **sans argument** | `src/api/session.ts` ; sa signature tient le contrôle S2 |
+| `Authentificateur` — « cette requête-ci porte-t-elle une session ? », `authentifier(requete)` qui **lève** au lieu de rendre un verdict | `src/api/session.ts` |
+| `SessionAppliquee` = `{ perimetre, droits, identite?, sessionOuverte? }` | `src/api/session.ts` |
+| `DroitsSession` = `{ niveau, domaines, export }`, rendus par `GET /api/session` | `src/api/index.ts`, `src/api/droits.ts` |
+| Déclaration d'accès par route : `{ config: { acces: { action, domaine } } }` | `src/api/index.ts` |
+| Enveloppe d'erreur `{ erreur, message, code_grc? }`, codes **grossiers à dessein** | `src/erreurs/index.ts` |
+
+**Les deux interfaces restent séparées, et c'est structurel** : mélanger la seconde à la première
+donnerait à `resoudre()` un paramètre `requete`, c'est-à-dire exactement le chemin par lequel un
+en-tête atteindrait `grc.filiale_id`.
+
+### 26.2 Ce qui restait ouvert — tranché ici
+
+**Où la route de connexion est montée.** `src/auth/**` appartient à l'agent A1, `src/api/**` à
+l'agent A2 : la route de connexion est donc **la seule surface que deux périmètres se disputent**.
+Arbitrage : **A1 exporte un greffon Fastify** depuis `src/auth/`, que `src/api/index.ts` se
+contente d'enregistrer par une ligne. La route et sa logique vivent chez A1 ; A2 n'écrit qu'un
+`register`. Aucun fichier n'est partagé.
+
+| Route | Corps envoyé | Réponse |
+|---|---|---|
+| `POST /api/connexion` | `{ identifiant, motDePasse }` | **200** — exactement la même charge que `GET /api/session`, à l'octet près |
+| `DELETE /api/connexion` | *(vide)* | **204** — la session est révoquée en base (`revoquee_le`, `motif_revocation`), pas seulement oubliée du navigateur |
+
+**Pourquoi `POST /api/connexion` rend la charge de `GET /api/session`** : le navigateur n'a alors
+**qu'une seule forme à savoir lire**, et le chemin « je viens de me connecter » ne diverge jamais
+du chemin « je rouvre l'onglet ». Deux formes, c'est deux comportements, et le second n'est
+éprouvé par personne.
+
+**Le cookie de session.** Nom donné par `SESSION_NOM_COOKIE` (défaut `grc_session`) ; `HttpOnly`,
+`SameSite=Strict`, `Path=/`, `Secure` piloté par `SESSION_COOKIE_SECURISE`. **Aucun `Max-Age` ni
+`Expires`** : l'expiration fait foi **en base** (`sessions.expire_le`, `derniere_activite`), pas
+dans le navigateur. Un cookie qui porte sa propre échéance est une échéance que le client peut
+mentir ; c'est la même famille que « le périmètre vient du serveur ».
+
+**Les deux refus, et ce qu'ils ne disent pas.**
+
+| Statut | `erreur` | Ce que le navigateur en fait |
+|---|---|---|
+| **401** | `non_authentifie` | ouvre l'écran de connexion **sans détruire la saisie en cours** |
+| **403** | `droit_insuffisant` | affiche un refus ; **ne déconnecte pas**, et ne propose pas de recommencer |
+
+Ni l'un ni l'autre ne nomme le domaine attendu, le niveau requis ou l'existence du compte :
+l'énumérer dirait à qui n'y a pas droit **ce qu'il faudrait obtenir**. C'est le même oracle que
+celui contre lequel `ressource_inconnue` existe.
+
+⚠️ **L'interface n'est pas la barrière.** Le navigateur masque ce qu'il est absurde de proposer ;
+le serveur refuse. Un contrôle qui n'existerait qu'à l'écran est un contrôle absent — c'est le
+contrôle **S6** de la grille, et il se vérifie en appelant la route directement.
+
+---
+
+## 27. La déclaration des filiales — la source dont les groupes AD sont engendrés
+
+> **Un critère d'acceptation précédait sa source d'une vague entière.** Le livrable
+> « la liste des groupes AD est **engendrée** depuis la configuration des filiales, pas écrite à
+> la main » (`PLAN_SERVEUR` §3.4) nomme une configuration qui **n'existe nulle part** : la table
+> `filiales` est vide, rien dans `deploy/` ne les décrit, et leur création est le lot **L4**,
+> c'est-à-dire la vague suivante. Arbitrage rendu à l'ouverture de la vague 3.
+
+**La décision** : la déclaration des filiales est un **fichier d'exploitation**, écrit par le
+client, vivant hors de la base — et c'est **lui** qui sème la table `filiales` au lot L4, pas
+l'inverse. L4 le consomme ; il ne fabrique pas sa propre source.
+
+Le motif est celui du §19.5, dans son exception : une omission ici **échoue bruyamment** — un
+groupe AD manquant, c'est un RSSI de site sans aucun accès, et quelqu'un doit trancher. La liste
+est donc le bon outil, à condition qu'elle soit **écrite une fois** et **lue partout**.
+
+```
+# filiales.conf — déclaration d'exploitation, une ligne par filiale
+# code ; raison sociale ; pays ; active
+TLS ; Dedienne Aerospace Toulouse ; FR ; oui
+DEU ; Dedienne Aerospace Deutschland ; DE ; oui
+```
+
+| Ce qui en est engendré | Par |
+|---|---|
+| La liste des groupes `GRC-<FILIALE>-<PROFIL>` à créer dans l'AD | `deploy/` (agent A5), lot L3 |
+| Les lignes de la table `filiales` | lot **L4**, vague 4 |
+| Les groupes `GRC-GROUPE-<PROFIL>`, `GRC-EXPORT`, `GRC-ADMIN` | invariants, indépendants du fichier |
+
+**Le client acquiert des filiales régulièrement.** Une liste de groupes figée est donc fausse à
+la première acquisition, et fausse **en silence**. Ce que l'installateur doit produire est un
+**engendrement**, rejouable, dont la sortie change quand le fichier change — et un contrôle qui
+compare la liste engendrée à ce que l'AD porte réellement relève de l'exploitation, pas du dépôt.
+
+---
+
+## 28. Arbitrages en attente — avec leur critère de décision
+
+Un arbitrage reporté sans critère est un arbitrage perdu, exactement comme un constat non
+attribué (`PLAN_EXECUTION` §7). Ceux-ci sont datés du 03/09/2026.
+
+| Sujet | Pourquoi il n'est pas tranché | Ce qui le tranchera |
+|---|---|---|
+| **Aucun client LDAP n'est déclaré** dans `package.json` — deux agents ont donc écrit chacun leur encodeur BER/ASN.1 (`src/auth/ber.ts`, `test/annuaire/ber.mjs`) | Ajouter la dépendance **pendant** qu'ils écrivent invaliderait un travail déjà fait et ferait bouger l'arbre sous eux (`PLAN_EXECUTION` §2 bis). Le manque est celui de l'orchestrateur, à qui `package.json` est réservé — pas le leur | **Leurs rapports** : ce que la main leur a réellement coûté, et ce que le BER écrit couvre du protocole. Une bibliothèque qui remplace deux encodeurs éprouvés n'est un gain que si elle en fait plus, pas seulement autrement |
+| **La gestion du cookie de session** — `cookie` et `set-cookie-parser` sont présents dans `node_modules` en dépendances **transitives** de Fastify | Bâtir sur une dépendance transitive est une dette silencieuse : elle disparaît le jour où Fastify change d'implémentation, sans qu'aucun `package.json` ne l'annonce | La même passe : soit `@fastify/cookie` est déclaré, soit la lecture d'en-tête est écrite à la main et assumée. **Ce qui n'est pas admis, c'est le troisième cas** — s'en servir sans la déclarer |

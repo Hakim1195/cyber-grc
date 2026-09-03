@@ -54,6 +54,23 @@ export type CodeApi =
   | 'contrainte_base'
   /** Le volume demandé dépasse la borne admise (contrôle S13). */
   | 'volume_excessif'
+  /**
+   * Aucune session : la requête n'est pas authentifiée. Statut **401**.
+   *
+   * Distinct d'`indisponible` (503), et la distinction n'est pas cosmétique :
+   * un 503 ne doit **verrouiller personne**, un 401 compte au rythme des
+   * tentatives (`PLAN_SERVEUR` §1.9). Volontairement grossier, comme les
+   * autres : il ne dit ni si le compte existe, ni pourquoi la session manque.
+   */
+  | 'non_authentifie'
+  /**
+   * La session existe, mais ses droits ne couvrent pas le geste. Statut **403**.
+   *
+   * Il ne nomme ni le domaine attendu ni le niveau requis : les énumérer
+   * dirait à qui n'y a pas droit **ce qu'il faudrait obtenir**, ce qui est le
+   * même oracle que celui contre lequel `ressource_inconnue` existe.
+   */
+  | 'droit_insuffisant'
   /** Le service n'est pas en mesure de répondre pour l'instant. */
   | 'indisponible'
   /** Défaut de programmation ou panne : rien n'en sort, tout part au journal. */
