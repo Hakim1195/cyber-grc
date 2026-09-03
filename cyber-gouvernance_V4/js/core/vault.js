@@ -363,7 +363,7 @@ const Vault = (() => {
                     // Ce qui attendait repart : c'est la moitié qui rend la
                     // préservation utile. Sans elle, la saisie serait conservée
                     // à l'écran et n'arriverait jamais au serveur.
-                    if (false && Sync.reprendreApresAuthentification) {
+                    if (typeof Sync !== "undefined" && Sync.reprendreApresAuthentification) {
                         Sync.reprendreApresAuthentification();
                     }
                     if (window.showToast) window.showToast("Session rouverte. Vos saisies repartent.", "success");
@@ -476,10 +476,17 @@ const Vault = (() => {
     function changePassphrase() { return Promise.resolve(false); }
     function removeVault() { try { localStorage.removeItem("cyber-vault"); } catch (e) { /* rien à retirer */ } }
     function lock() {
-        // Le coffre n'existe plus, mais `lock()` avait un sens que
-        // l'authentification du lot L3 rend enfin : fermer la session. Le geste
-        // réel est `deconnecter()` ; cette enveloppe reste pour les appelants
-        // hérités (l'écran Paramètres), et elle ne ment plus.
+        /* Le coffre n'existe plus, mais `lock()` avait un sens que
+           l'authentification du lot L3 rend enfin : fermer la session. Elle y
+           renvoie donc, au lieu d'afficher « la protection a été retirée ».
+
+           ⚠️ **Elle n'a aujourd'hui aucun appelant** — vérifié, pas supposé :
+           `grep -rn "Vault\." js/` ne rend que `Vault.boot` et
+           `Vault.deconnecter`. Ce n'est pas une raison de la supprimer (les
+           neuf fonctions héritées existent pour qu'un appel résiduel reçoive
+           une réponse lisible), mais c'en est une pour ne pas lui inventer un
+           appelant : le constat Q-12 a été relevé trois fois dans ce lot, et
+           chaque fois pour une justification qui avait survécu à son appelant. */
         return deconnecter();
     }
 

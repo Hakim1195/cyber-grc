@@ -26,6 +26,16 @@ const Router = (() => {
         return hash.replace(/^#/, "");
     }
 
+    /**
+     * Les routes réellement enregistrées.
+     *
+     * Le rattachement des écrans à un domaine de droits (`js/app.js`) doit être
+     * confronté à la liste RÉELLE, et non à une seconde table écrite à côté :
+     * deux listes des mêmes routes finissent par diverger, et la divergence est
+     * silencieuse. C'est le routeur qui la tient ; c'est donc lui qui la rend.
+     */
+    function routesEnregistrees() { return Object.keys(routes); }
+
     function navigateTo(path, pushState = true) {
         if (pushState && location.hash !== "#" + path) {
             history.pushState(null, "", "#" + path);
@@ -105,6 +115,7 @@ const Router = (() => {
 
     return {
         init,
-        navigateTo
+        navigateTo,
+        routesEnregistrees
     };
 })();

@@ -1478,4 +1478,40 @@ attribué (`PLAN_EXECUTION` §7). Ceux-ci sont datés du 03/09/2026.
 | Sujet | Pourquoi il n'est pas tranché | Ce qui le tranchera |
 |---|---|---|
 | **Aucun client LDAP n'est déclaré** dans `package.json` — deux agents ont donc écrit chacun leur encodeur BER/ASN.1 (`src/auth/ber.ts`, `test/annuaire/ber.mjs`) | Ajouter la dépendance **pendant** qu'ils écrivent invaliderait un travail déjà fait et ferait bouger l'arbre sous eux (`PLAN_EXECUTION` §2 bis). Le manque est celui de l'orchestrateur, à qui `package.json` est réservé — pas le leur | **Leurs rapports** : ce que la main leur a réellement coûté, et ce que le BER écrit couvre du protocole. Une bibliothèque qui remplace deux encodeurs éprouvés n'est un gain que si elle en fait plus, pas seulement autrement |
-| **La gestion du cookie de session** — `cookie` et `set-cookie-parser` sont présents dans `node_modules` en dépendances **transitives** de Fastify | Bâtir sur une dépendance transitive est une dette silencieuse : elle disparaît le jour où Fastify change d'implémentation, sans qu'aucun `package.json` ne l'annonce | La même passe : soit `@fastify/cookie` est déclaré, soit la lecture d'en-tête est écrite à la main et assumée. **Ce qui n'est pas admis, c'est le troisième cas** — s'en servir sans la déclarer |
+### Tranché le 03/09/2026, sur la mesure et non sur l'intuition
+
+**Le client LDAP reste écrit à la main. La dépendance n'est pas ajoutée.**
+
+Le critère écrit ci-dessus était : *« une bibliothèque qui remplace deux encodeurs éprouvés n'est
+un gain que si elle en fait plus, pas seulement autrement. »* A1 a rendu la mesure — c'est
+exactement pour l'obtenir que l'arbitrage avait été reporté plutôt que tranché à l'aveugle :
+
+| Mesuré | Valeur |
+|---|---|
+| Écrit à la main | **1 009 lignes** (BER 226, filtre 262, client 521), plus 241 de banc et 18 essais |
+| Part du lot | **environ un cinquième** |
+| Défauts que la main a coûtés | **un**, trouvé par le comportement **D5** du §25 — un délai de garde qui figeait l'appelant *pour toujours* quand l'annuaire était lent |
+| Couvert | BER complet, les six messages nécessaires, les huit formes de filtre |
+| **Non couvert** | SASL, StartTLS, **les contrôles — dont les résultats paginés** —, modify/add/delete/compare/abandon, poursuite des renvois |
+
+**Aucun des manques ne concerne l'authentification**, qui lit un compte et quelques groupes. Un
+seul peut mordre en production : les **résultats paginés**, Active Directory plafonnant une
+recherche à 1 000 entrées. Il ne touche pas le chemin nominal (`memberOf`) mais le **repli**
+`(member=<dn>)`, dans une forêt large.
+
+Remplacer 1 009 lignes éprouvées, mordues, et dont le seul défaut a été **trouvé par le banc**,
+par une dépendance à surveiller, pour obtenir *autrement* ce qui marche déjà — c'est le contraire
+du critère. **La dépendance n'apporterait qu'une chose que la main n'a pas : la pagination.** Elle
+sera donc reconsidérée si, et seulement si, la réponse du client à la question ci-dessous l'exige.
+
+**Ce qui remplace la dépendance, et qui est plus urgent qu'elle** : une recherche tronquée doit
+**se dire**. Une liste de groupes amputée en silence retire des droits sans erreur — un RSSI qui
+perd son accès sans qu'aucune ligne de journal ne l'explique. Le client doit **refuser** plutôt
+que rendre un résultat partiel (constat **Q-68**).
+
+**Question à poser au client**, avec les vérifications du `PLAN_SERVEUR` §9 : *l'attribut
+`memberOf` est-il fiablement peuplé sur tous les comptes, et existe-t-il des groupes de plus de
+1 000 membres dans la forêt ?* Deux « oui » rendent la pagination nécessaire ; sinon elle reste
+une complexité que rien n'exerce.
+
+| **La gestion du cookie de session** — `cookie` et `set-cookie-parser` sont présents dans `node_modules` en dépendances **transitives** de Fastify | Bâtir sur une dépendance transitive est une dette silencieuse : elle disparaît le jour où Fastify change d'implémentation, sans qu'aucun `package.json` ne l'annonce | **Tranché le 03/09/2026 : le troisième cas est écarté.** `lireCookie` est écrit à la main — vingt lignes, éprouvées sur le nom voisin, la valeur vide et l'en-tête absent —, et **aucune dépendance transitive de Fastify n'est employée**. Si l'écriture du cookie devait se complexifier, `@fastify/cookie` serait à **déclarer**, pas à emprunter |

@@ -34,6 +34,9 @@
  */
 
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 
 import { COMPTE_SERVICE, BASE_RECHERCHE } from '../annuaire/comptes.mjs';
@@ -346,5 +349,75 @@ describe('Les bornes du client — un annuaire est un tiers', () => {
       () => service({ filtreUtilisateur: '(objectClass=user)' }).authentifier('rssi.tls', 'x'),
       (erreur) => erreur.nomErreur === 'ErreurAnnuaire' && /ambiguïté/.test(erreur.detailJournal),
     );
+  });
+});
+
+describe('LDAPS — la réserve du §25.4, levée plutôt que portée au registre', () => {
+  /**
+   * Le contrat §25.4 le dit explicitement : « si le banc éprouve le client sur du
+   * LDAP en clair, alors la vérification du certificat n'est éprouvée par rien, et
+   * c'est une réserve à porter au registre ». Tous les essais ci-dessus tournent en
+   * clair sur la boucle locale ; ceux-ci montent un annuaire **LDAPS** avec un
+   * certificat auto-signé engendré par la doublure, et éprouvent la vérification
+   * **dans les deux sens** : ancré, elle passe ; non ancré, elle refuse.
+   *
+   * Ce que cela ne prouve pas, et qui reste écrit au rapport : rien ici ne remplace
+   * une chaîne de certification réelle (PKI interne du client, §0.3).
+   */
+  let annuaireTls;
+  let repertoire;
+  let cheminCa;
+
+  before(async () => {
+    annuaireTls = await demarrerAnnuaire({ tls: true });
+    repertoire = mkdtempSync(join(tmpdir(), 'grc-ca-a1-'));
+    cheminCa = join(repertoire, 'annuaire.crt');
+    writeFileSync(cheminCa, annuaireTls.certificat);
+  });
+
+  after(async () => {
+    await annuaireTls?.fermer();
+    if (repertoire !== undefined) rmSync(repertoire, { recursive: true, force: true });
+  });
+
+  const serviceTls = (surcharge) =>
+    new annuaireModule.ServiceAnnuaire({
+      ...configuration(),
+      url: annuaireTls.url,
+      verifierCertificat: true,
+      ca: cheminCa,
+      ...surcharge,
+    });
+
+  test('l’URL est bien du LDAPS, pas du LDAP en clair', () => {
+    assert.match(annuaireTls.url, /^ldaps:\/\//);
+  });
+
+  test('avec l’autorité ANCRÉE, la connexion chiffrée aboutit', async () => {
+    const identite = await serviceTls().authentifier('rssi.tls', 'rssi.tls!2026');
+    assert.equal(identite.login, 'rssi.tls');
+    assert.deepEqual([...identite.groupes], ['GRC-TLS-RSSI']);
+  });
+
+  test('SANS l’autorité, la vérification du certificat REFUSE la connexion', async () => {
+    // Le sens qui compte : un certificat auto-signé non ancré doit faire échouer la
+    // liaison, pas passer avec un avertissement. Sans cet essai, « LDAPS » ne
+    // vaudrait que pour le chiffrement, et pas pour l’authentification du serveur —
+    // c’est-à-dire pas contre un annuaire interposé.
+    await assert.rejects(
+      () => serviceTls({ ca: null }).authentifier('rssi.tls', 'rssi.tls!2026'),
+      (erreur) => erreur.nomErreur === 'ErreurAnnuaire',
+    );
+  });
+
+  test('vérification DÉSACTIVÉE : la connexion passe — ce que la production interdit', async () => {
+    // La contre-épreuve, et elle explique pourquoi `src/config/index.ts` refuse
+    // `LDAP_VERIFIER_CERTIFICAT=non` en production : le chiffrement seul ne protège
+    // que de l’écoute passive.
+    const identite = await serviceTls({ ca: null, verifierCertificat: false }).authentifier(
+      'rssi.tls',
+      'rssi.tls!2026',
+    );
+    assert.equal(identite.login, 'rssi.tls');
   });
 });

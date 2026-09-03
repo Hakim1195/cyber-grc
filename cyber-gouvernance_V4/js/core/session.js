@@ -128,9 +128,22 @@ const Session = (() => {
     function figerDroits(brut) {
         if (!brut || typeof brut !== "object") return null;
         const domaines = Array.isArray(brut.domaines) ? brut.domaines.filter(d => typeof d === "string") : [];
+        // Niveau PAR DOMAINE, facultatif (`backend/src/api/droits.ts`) : il
+        // permet d'exprimer « contribue aux audits, lit la conformité », qu'un
+        // niveau unique ne sait pas dire. Absent, le niveau de session
+        // s'applique partout — et un domaine qu'il ne nomme pas retombe sur ce
+        // niveau, **jamais sur un accès plus large** : c'est la même règle que
+        // côté serveur, et l'inverser rendrait l'écran plus permissif que lui.
+        const niveaux = {};
+        if (brut.niveaux && typeof brut.niveaux === "object") {
+            Object.keys(brut.niveaux).forEach(d => {
+                if (typeof brut.niveaux[d] === "string") niveaux[d] = brut.niveaux[d];
+            });
+        }
         return Object.freeze({
             niveau: typeof brut.niveau === "string" ? brut.niveau : "",
             domaines: Object.freeze(domaines.slice()),
+            niveaux: Object.freeze(niveaux),
             // Le droit d'export est DISTINCT de la lecture (`PLAN_SERVEUR` §3.3).
             // Absent ⇒ faux : un droit d'extraction ne se déduit pas d'un silence.
             export: brut.export === true
@@ -260,14 +273,28 @@ const Droits = (() => {
         const d = bloc();
         if (!d) return true;
         if (!peutLire(domaine)) return false;
-        return rang(d.niveau) >= rang("contribution");
+        return rang(niveauEffectif(domaine)) >= rang("contribution");
+    }
+
+    /**
+     * Niveau qui s'applique à un domaine : celui du domaine quand il est
+     * nommé, celui de la session sinon. **Jamais le plus favorable des deux** —
+     * un niveau par domaine sert à RESTREINDRE, et une lecture qui élargirait
+     * rendrait l'écran plus permissif que le serveur, ce qui est la seule
+     * erreur que cette couche puisse commettre qui ait des conséquences.
+     */
+    function niveauEffectif(domaine) {
+        const d = bloc();
+        if (!d) return "";
+        if (domaine && d.niveaux && typeof d.niveaux[domaine] === "string") return d.niveaux[domaine];
+        return d.niveau;
     }
 
     /** Le profil peut-il administrer (paramètres, reprise d'un export) ? */
     function peutAdministrer() {
         const d = bloc();
         if (!d) return true;
-        return rang(d.niveau) >= rang("administration");
+        return rang(niveauEffectif("administration")) >= rang("administration");
     }
 
     /**
@@ -318,7 +345,12 @@ const Droits = (() => {
     function lectureSeule() {
         const d = bloc();
         if (!d) return false;
-        return rang(d.niveau) < rang("contribution");
+        // Lecture seule PARTOUT : le niveau de session ne suffit pas, un
+        // domaine peut le relever. On refuse donc l'écriture globale seulement
+        // si AUCUN domaine ouvert n'atteint « contribution » — sinon le filet de
+        // la façade bloquerait une saisie que le serveur accepterait.
+        if (rang(d.niveau) >= rang("contribution")) return false;
+        return !d.domaines.some(dom => rang(niveauEffectif(dom)) >= rang("contribution"));
     }
 
     /**
@@ -354,7 +386,7 @@ const Droits = (() => {
     }
 
     return {
-        connus, niveau, domaines,
+        connus, niveau, niveauEffectif, domaines,
         peutLire, peutEcrire, peutAdministrer, peutExporter, exigerExport, lectureSeule,
         verifier
     };

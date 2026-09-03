@@ -111,9 +111,42 @@ async function injecterDroits(page, droits) {
   });
 }
 
+/**
+ * Retire le bloc `droits` de la charge de session.
+ *
+ * ⚠️ Cette fonction a **remplacé une supposition qui était juste au moment où
+ * elle a été écrite et fausse une heure plus tard**. L'essai « sans bloc droits »
+ * se contentait d'ouvrir l'application contre le serveur de développement, en
+ * expliquant que « le serveur ne rend pas encore de droits ». Il en rend
+ * désormais (agent A2, `charteSession`), et l'essai a rougi sur un produit qui
+ * s'améliorait — la faute exacte que le §15 de `bascule.test.mjs` corrige chez
+ * les autres : **assertionner la propriété, jamais l'état du moment.**
+ *
+ * La propriété visée n'a pas bougé : *quand le serveur n'annonce rien,
+ * l'interface ne masque rien*. On produit donc cette condition, au lieu de
+ * l'espérer.
+ */
+async function retirerLesDroits(page) {
+  await page.route('**/api/session', async (route) => {
+    const vraie = await route.fetch();
+    const charge = JSON.parse(await vraie.text());
+    delete charge.droits;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json; charset=utf-8',
+      body: JSON.stringify(charge),
+    });
+  });
+}
+
+/**
+ * @param {object|null|undefined} droits objet de droits à injecter ; `null`
+ *        retire le bloc ; `undefined` laisse la charge du serveur telle quelle.
+ */
 async function ouvrirApplication(droits) {
   const session = await ouvrirPage(navigateur);
-  if (droits !== null) await injecterDroits(session.page, droits);
+  if (droits === null) await retirerLesDroits(session.page);
+  else if (droits !== undefined) await injecterDroits(session.page, droits);
   await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
   assert.equal(await attendreApplication(session.page), 'chargee', 'L’application doit démarrer.');
   await attendreQuiescence(session.page);
@@ -172,14 +205,14 @@ describe('Un profil en lecture ne se voit proposer aucune action d’écriture',
     try {
       // `/exigences` relève de la conformité : ce profil la LIT. C'est donc le
       // cas intéressant — un écran accessible où rien ne doit être modifiable.
-      await naviguer(session.page, '/exigences', '#addBtn, table');
+      await naviguer(session.page, '/exigences', '#addExigenceBtn');
 
       const boutons = await session.page.evaluate(() =>
         Array.prototype.map.call(document.querySelectorAll('#app button'), (b) => ({
           id: b.id, texte: (b.textContent || '').trim().slice(0, 40), inactif: b.disabled,
         })));
 
-      const ecriture = boutons.filter((b) => /^(addBtn|saveBtn|save|bulkDeleteBtn|deleteBtn|delBtn)$/.test(b.id));
+      const ecriture = boutons.filter((b) => /^(addExigenceBtn|addBtn|saveBtn|save|bulkDeleteBtn|deleteBtn|delBtn)$/.test(b.id));
       assert.ok(ecriture.length > 0, `Aucun bouton d’écriture trouvé : ${JSON.stringify(boutons)}`);
       for (const b of ecriture) {
         assert.equal(
@@ -187,6 +220,45 @@ describe('Un profil en lecture ne se voit proposer aucune action d’écriture',
           `« ${b.id} » (« ${b.texte} ») reste proposé à un profil en lecture seule.`,
         );
       }
+      assert.deepEqual(session.erreursInattendues(), []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('UN ÉCRAN QUI SE REDESSINE ne rend pas ses boutons d’écriture', async () => {
+    /* Le trou que la passe « après navigation » laissait ouvert.
+     *
+     * Plusieurs modules se redessinent SANS naviguer — un filtre changé, une
+     * liste rafraîchie après une suppression. Le balisage neuf sort intact, et
+     * les boutons reviennent actifs sous les yeux d'un profil en lecture seule.
+     * On provoque donc un redessin par le module lui-même, et on exige que la
+     * neutralisation revienne avec lui.
+     */
+    const session = await ouvrirApplication(DIRECTION);
+    try {
+      await naviguer(session.page, '/exigences', '#addExigenceBtn');
+      assert.equal(
+        await session.page.evaluate(() => document.getElementById('addExigenceBtn').disabled), true,
+        'Point de départ : le bouton est bien neutralisé après la navigation.',
+      );
+
+      // Le module se redessine, exactement comme quand un filtre change.
+      await session.page.evaluate(() => { ExigencesModule.renderList(); });
+      await session.page.waitForFunction(
+        () => {
+          const b = document.getElementById('addExigenceBtn');
+          return b !== null && b.disabled === true;
+        },
+        null,
+        { timeout: 5000, polling: 50 },
+      ).catch(() => {});
+
+      assert.equal(
+        await session.page.evaluate(() => document.getElementById('addExigenceBtn').disabled), true,
+        'Après un redessin sans navigation, le bouton d’écriture est redevenu actif : ' +
+          'l’observateur de vue ne fait pas son travail.',
+      );
       assert.deepEqual(session.erreursInattendues(), []);
     } finally {
       await session.fermer();
@@ -360,7 +432,8 @@ describe('Un garde-fou se vérifie dans les deux sens', () => {
     try {
       assert.equal(
         await session.page.evaluate(() => Droits.connus()), false,
-        'Le serveur de développement ne rend pas encore de droits : c’est le cas nominal ici.',
+        'La condition éprouvée ici est « le serveur n’annonce rien » : elle est PRODUITE par ' +
+          'l’essai, pas espérée du serveur du jour.',
       );
       const visibles = await menuVisible(session.page);
       for (const attendu of ['/risques', '/settings', '/rgpd', '/personnel']) {
@@ -378,6 +451,45 @@ describe('Un garde-fou se vérifie dans les deux sens', () => {
         false,
         'Et aucune déconnexion n’est proposée : elle serait sans effet sur une session ' +
           'provisoire, et afficherait une identité qui n’existe pas.',
+      );
+      assert.deepEqual(session.erreursInattendues(), []);
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('CONTRÔLE : les droits que le VRAI serveur rend ne masquent rien non plus', async () => {
+    /* Le contrôle de non-régression qui compte pour les autres agents.
+     *
+     * Le serveur de développement résout un profil d'administration sur tous
+     * les domaines (`DROITS_PROVISOIRES_DEVELOPPEMENT`). L'application doit donc
+     * se comporter exactement comme avant l'arrivée des droits — sans quoi ce
+     * lot casserait les 44 essais du §1 au §22 de `bascule.test.mjs` sans que
+     * personne ne voie pourquoi.
+     *
+     * `undefined` : on ne touche PAS à la charge, on prend celle du serveur.
+     */
+    const session = await ouvrirApplication(undefined);
+    try {
+      const vu = await session.page.evaluate(() => ({
+        connus: Droits.connus(),
+        niveau: Droits.niveau(),
+        exporte: Droits.peutExporter(),
+        lectureSeule: Droits.lectureSeule(),
+      }));
+      assert.equal(vu.connus, true, 'Le serveur rend désormais un bloc « droits ».');
+      assert.equal(vu.lectureSeule, false, `Et il n’est pas en lecture seule (${vu.niveau}).`);
+      assert.equal(vu.exporte, true, 'Le droit d’export est accordé en développement.');
+
+      const visibles = await menuVisible(session.page);
+      for (const attendu of ['/risques', '/settings', '/rgpd', '/personnel', '/audits']) {
+        assert.ok(visibles.includes(attendu), `« ${attendu} » doit rester visible. ${JSON.stringify(visibles)}`);
+      }
+      await naviguer(session.page, '/risques', '#addRisqueBtn');
+      assert.equal(
+        await session.page.evaluate(() => document.getElementById('addRisqueBtn').disabled),
+        false,
+        'Aucun bouton ne doit être neutralisé pour un profil qui a tous les droits.',
       );
       assert.deepEqual(session.erreursInattendues(), []);
     } finally {

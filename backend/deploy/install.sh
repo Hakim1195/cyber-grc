@@ -700,6 +700,23 @@ if [[ ! -f "$FICHIER_CONFIG" ]]; then
 fi
 appliquer_droits_config "$FICHIER_CONFIG"
 
+# La DÉCLARATION DES FILIALES (db/CONVENTIONS.md §27). Fichier d'exploitation,
+# écrit par le client, hors de la base : c'est LUI la source dont la liste des
+# groupes Active Directory est engendrée (deploy/groupes-ad.sh), et lui que le
+# lot L4 consommera pour semer la table `filiales`.
+#
+# Le modèle est posé une fois et JAMAIS écrasé : le réécrire à chaque mise à jour
+# effacerait la déclaration réelle du client, c'est-à-dire son périmètre.
+FICHIER_FILIALES="$CONFIG/filiales.conf"
+if [[ ! -f "$FICHIER_FILIALES" ]]; then
+  install -m 0640 "$SOURCE/deploy/filiales.conf.exemple" "$FICHIER_FILIALES"
+  appliquer_droits_config "$FICHIER_FILIALES"
+  alerte "Déclaration des filiales créée depuis le modèle : $FICHIER_FILIALES"
+  alerte "Elle ne contient AUCUNE filiale : déclarez-les, puis engendrez les groupes AD."
+else
+  appliquer_droits_config "$FICHIER_FILIALES"
+fi
+
 # Version affichée par /api/sante et tracée au journal d'audit (§0.3). Lue plus haut,
 # avant le déploiement du frontend, parce que le jeton de cache s'en sert aussi.
 if [[ -n "$VERSION_PAQUET" ]]; then definir_variable APPLICATION_VERSION "$VERSION_PAQUET"; fi
@@ -1463,6 +1480,257 @@ fi
 #  10. Service et frontal
 # =============================================================================
 
+# >>> banc: ldaps <<<
+# ══ L'ANNUAIRE : CE QUE L'EXPLOITANT DOIT POSER, ET CE QUI ÉCHOUE SANS ══════
+#
+# Le §5 de ce script exige déjà LDAP_URL, LDAP_BASE_RECHERCHE, LDAP_DN_SERVICE et
+# LDAP_MOT_DE_PASSE_SERVICE — c'est-à-dire qu'il vérifie que quatre variables ne
+# sont pas VIDES. C'est le contrôle le plus faible qui existe : il ne dit rien de
+# la seule chose qui décide, savoir si le service peut réellement PARLER à
+# l'annuaire. Trois choses le lui interdisent, et aucune des trois ne se voyait :
+#
+#   1. **LDAP_CA n'était contrôlée nulle part.** Elle désigne l'autorité de la PKI
+#      interne du client, qui n'est PAS dans le magasin d'autorités du système
+#      (`PLAN_SERVEUR` §0.3). Sans elle, la vérification du certificat du
+#      contrôleur de domaine échoue — et `src/config/index.ts` se contente d'un
+#      AVERTISSEMENT, parce qu'il ne peut pas savoir si le magasin la contient.
+#      Ici, on peut : on demande à OpenSSL.
+#   2. **Le fichier doit être lisible par LE COMPTE DE SERVICE**, pas par root.
+#      Un `install -m 0600 ca.pem /etc/cyber-grc/` fait par un exploitant
+#      consciencieux donne un fichier que root lit parfaitement et que
+#      `cyber-grc` ne lit pas. `src/config/index.ts` teste la lisibilité par le
+#      processus courant — au démarrage c'est le bon compte, mais l'erreur
+#      n'apparaît alors qu'au redémarrage, sans que l'installation ait bronché.
+#   3. **L'unité systemd refuse tout le trafic sortant** (`IPAddressDeny=any`)
+#      et n'autorise que la boucle locale. Le sous-réseau des contrôleurs de
+#      domaine est une ligne COMMENTÉE, à décommenter à l'installation. Tant
+#      qu'elle l'est, l'installation se termine par « Installation terminée » et
+#      **aucune authentification n'est possible** — c'est exactement la figure du
+#      constat Q-65, où l'unité codait un chemin de Node que rien ne confrontait
+#      à la machine.
+#
+# Ce bloc confronte donc la configuration au RÉEL : il résout, il se connecte, il
+# vérifie une chaîne de certification, et il compare une liste d'adresses à ce que
+# l'unité autorise. Ce qu'il ne peut pas faire est dit à l'endroit où il s'arrête.
+if [[ "$(lire_variable AUTH_LDAP_ACTIF)" == "non" ]]; then
+  alerte "AUTH_LDAP_ACTIF = non : l'authentification par l'annuaire est DÉSACTIVÉE."
+  alerte "Seul le compte de secours (AUTH_COMPTE_SECOURS_*) pourra ouvrir une session."
+else
+  LDAP_URL="$(lire_variable LDAP_URL)"
+  LDAP_CA="$(lire_variable LDAP_CA)"
+  ENVIRONNEMENT="$(lire_variable NODE_ENV)"; ENVIRONNEMENT="${ENVIRONNEMENT:-production}"
+
+  # ---- Le transport ---------------------------------------------------------
+  # `src/config/index.ts` REFUSE ldap:// en production. Le dire ici, c'est le dire
+  # avant le redémarrage du service plutôt qu'après, dans un journal.
+  case "$LDAP_URL" in
+    ldaps://*) succes "LDAP_URL : liaison chiffrée ($LDAP_URL)" ;;
+    ldap://*)
+      if [[ "$ENVIRONNEMENT" == "production" ]]; then
+        echec "LDAP_URL = « $LDAP_URL » : liaison en CLAIR refusée en production. Les
+      identifiants du compte de service et ceux de chaque utilisateur traverseraient le
+      réseau en clair. Le serveur refusera de démarrer (src/config/index.ts) : corrigez
+      $FICHIER_CONFIG en ldaps://<contrôleur>:636."
+      fi
+      alerte "LDAP_URL : liaison LDAP en clair, tolérée hors production uniquement." ;;
+    *) echec "LDAP_URL = « $LDAP_URL » : ni ldaps:// ni ldap://. Voir backend/.env.example §5." ;;
+  esac
+
+  # Hôte et port, extraits de l'URL. Le port par défaut de LDAPS est 636, celui
+  # de LDAP 389 : les deux sont écrits ici parce qu'une URL sans port est valide.
+  LDAP_RESTE="${LDAP_URL#*://}"; LDAP_RESTE="${LDAP_RESTE%%/*}"
+  LDAP_HOTE="${LDAP_RESTE%%:*}"
+  if [[ "$LDAP_RESTE" == *:* ]]; then LDAP_PORT="${LDAP_RESTE##*:}"; else
+    if [[ "$LDAP_URL" == ldaps://* ]]; then LDAP_PORT=636; else LDAP_PORT=389; fi
+  fi
+
+  # ---- L'autorité de certification interne ---------------------------------
+  if [[ -z "$LDAP_CA" ]]; then
+    alerte "LDAP_CA n'est pas renseignée. La validation du certificat du contrôleur de"
+    alerte "domaine reposera sur le magasin d'autorités du SYSTÈME, qui ne contient pas la"
+    alerte "PKI interne du groupe (PLAN_SERVEUR §0.3) : toute connexion LDAPS échouera."
+    alerte "Déposez la chaîne de l'AC interne au format PEM, puis renseignez LDAP_CA :"
+    alerte "  install -o root -g $UTILISATEUR -m 0640 ca-interne.pem $CONFIG/ca-active-directory.pem"
+  else
+    [[ -f "$LDAP_CA" ]] || echec "LDAP_CA : « $LDAP_CA » n'existe pas. C'est l'autorité de la PKI
+      interne, au format PEM ; sans elle aucune liaison LDAPS ne s'établira."
+    # ⚠️ LISIBLE PAR LE COMPTE DE SERVICE, pas par root : c'est TOUTE la
+    # différence, et c'est celle qu'on ne voit qu'au redémarrage suivant.
+    if ! su "$UTILISATEUR" -s /bin/sh -c "test -r '$LDAP_CA'" 2>/dev/null; then
+      alerte "droits actuels : $(stat -c '%U:%G %a' "$LDAP_CA" 2>/dev/null || echo '?')"
+      echec "LDAP_CA (« $LDAP_CA ») n'est PAS lisible par le compte de service « $UTILISATEUR ».
+      root la lit, le service non : l'installation se terminerait normalement et
+      l'authentification échouerait au premier utilisateur. Corriger :
+        chown root:$UTILISATEUR '$LDAP_CA' && chmod 0640 '$LDAP_CA'"
+    fi
+    openssl x509 -in "$LDAP_CA" -noout >/dev/null 2>&1 \
+      || echec "LDAP_CA (« $LDAP_CA ») n'est pas un certificat PEM lisible par OpenSSL.
+      Attendu : la chaîne de l'autorité interne, au format PEM (« -----BEGIN CERTIFICATE----- »).
+      Un fichier DER se convertit : openssl x509 -inform der -in ca.cer -out ca.pem"
+    if ! openssl x509 -in "$LDAP_CA" -noout -checkend 0 >/dev/null 2>&1; then
+      echec "LDAP_CA (« $LDAP_CA ») a EXPIRÉ le $(openssl x509 -in "$LDAP_CA" -noout -enddate 2>/dev/null | cut -d= -f2).
+      Toute connexion LDAPS échouera. Demandez la chaîne à jour à l'équipe PKI du client."
+    fi
+    # Trente jours : le délai qu'il faut pour obtenir une chaîne renouvelée d'une
+    # équipe PKI interne. Averti, pas refusé — la journée d'installation n'est pas
+    # le moment de bloquer sur un certificat encore valide.
+    if ! openssl x509 -in "$LDAP_CA" -noout -checkend 2592000 >/dev/null 2>&1; then
+      alerte "LDAP_CA expire le $(openssl x509 -in "$LDAP_CA" -noout -enddate | cut -d= -f2) — moins de 30 jours."
+      alerte "À son expiration, PLUS AUCUN utilisateur ne pourra se connecter."
+    fi
+    succes "LDAP_CA : PEM valide, lisible par $UTILISATEUR ($(openssl x509 -in "$LDAP_CA" -noout -subject | sed 's/^subject=//' | cut -c1-60))"
+  fi
+
+  # ---- Le contrôleur de domaine répond-il, et sa chaîne se vérifie-t-elle ? --
+  #
+  # C'est le seul contrôle qui prouve quelque chose : le reste ne fait que lire
+  # des fichiers. `openssl s_client` est employé plutôt qu'un client LDAP parce
+  # qu'aucun n'est installé — et parce que ce qui est en jeu ici est la CHAÎNE DE
+  # CERTIFICATION, pas une liaison authentifiée. Le compte de service, lui, sera
+  # éprouvé au premier utilisateur.
+  #
+  # `timeout` est indispensable : `openssl s_client` attend indéfiniment sur un
+  # port filtré, et une installation qui se fige est pire qu'une qui refuse.
+  if ! ADRESSES_LDAP="$(getent ahosts "$LDAP_HOTE" 2>/dev/null | awk '{print $1}' | sort -u)" \
+     || [[ -z "$ADRESSES_LDAP" ]]; then
+    ADRESSES_LDAP=""
+    alerte "« $LDAP_HOTE » ne se résout pas depuis cette machine. Le service ne saura pas"
+    alerte "joindre le contrôleur de domaine : vérifiez /etc/resolv.conf et le DNS de la VM."
+  else
+    succes "$LDAP_HOTE se résout en : $(printf '%s' "$ADRESSES_LDAP" | tr '\n' ' ')"
+    SORTIE_TLS=""
+    if [[ -n "$LDAP_CA" ]]; then
+      SORTIE_TLS="$(timeout 15 openssl s_client -connect "$LDAP_HOTE:$LDAP_PORT" \
+                      -servername "$LDAP_HOTE" -CAfile "$LDAP_CA" -verify_return_error \
+                      -brief </dev/null 2>&1 || true)"
+    else
+      SORTIE_TLS="$(timeout 15 openssl s_client -connect "$LDAP_HOTE:$LDAP_PORT" \
+                      -servername "$LDAP_HOTE" -verify_return_error \
+                      -brief </dev/null 2>&1 || true)"
+    fi
+    if printf '%s' "$SORTIE_TLS" | grep -q 'Verification: OK'; then
+      succes "LDAPS : $LDAP_HOTE:$LDAP_PORT répond, et sa chaîne se vérifie contre ${LDAP_CA:-le magasin du système}"
+    elif printf '%s' "$SORTIE_TLS" | grep -qi 'verify error\|Verification error'; then
+      while IFS= read -r l; do [[ -n "$l" ]] && alerte "openssl : $l"; done \
+        <<< "$(printf '%s' "$SORTIE_TLS" | grep -i 'verif' | head -n3)"
+      echec "Le certificat de $LDAP_HOTE:$LDAP_PORT NE SE VÉRIFIE PAS contre ${LDAP_CA:-le magasin
+      du système}. Toute connexion d'utilisateur échouera, et le message côté service ne dira
+      pas pourquoi. « unable to get local issuer certificate » signifie que LDAP_CA n'est pas
+      l'autorité qui a émis ce certificat : demandez la CHAÎNE COMPLÈTE de la PKI interne
+      (AC racine + AC intermédiaires) à l'équipe qui exploite l'ADCS du client."
+    else
+      alerte "$LDAP_HOTE:$LDAP_PORT n'a pas répondu en 15 s. Le port est-il filtré, ou le"
+      alerte "contrôleur injoignable depuis cette VM ? La chaîne de certification n'a donc PAS"
+      alerte "été éprouvée — ce n'est pas un feu vert. Vérifier à la main :"
+      alerte "  openssl s_client -connect $LDAP_HOTE:$LDAP_PORT -CAfile ${LDAP_CA:-<AC interne>} -brief"
+    fi
+  fi
+
+  # ---- Ce que l'unité systemd autorise à sortir -----------------------------
+  #
+  # ⚠️ CE CONTRÔLE EST LA RAISON D'ÊTRE DE CE BLOC. `IPAddressDeny=any` +
+  # `IPAddressAllow=localhost` est la configuration LIVRÉE, et elle interdit au
+  # service de joindre le moindre contrôleur de domaine. C'est délibéré — « une
+  # liste blanche vide se remarque, une liste blanche trop large ne se voit pas »,
+  # dit l'unité — mais rien ne REMARQUAIT quoi que ce soit : l'installation
+  # s'achevait sur « Installation terminée ».
+  #
+  # Le DNS compte autant que l'annuaire : un résolveur d'entreprise en 10.x est
+  # refusé par la même règle, et la résolution du contrôleur échouerait DANS le
+  # service alors qu'elle réussit ici, où l'installateur tourne hors du cgroup.
+  #
+  # La liste est lue de l'unité INSTALLÉE quand systemd sait la rendre, du fichier
+  # livré sinon : c'est la même valeur, et l'on dit laquelle on a lue.
+  UNITE_SOURCE="fichier $SOURCE/deploy/systemd/cyber-grc.service"
+  AUTORISES="$(sed -n 's/^[[:space:]]*IPAddressAllow=[[:space:]]*//p' \
+               "$SOURCE/deploy/systemd/cyber-grc.service" 2>/dev/null | tr ' ' '\n' | sed '/^$/d')"
+  if VU="$(systemctl show -p IPAddressAllow --value cyber-grc 2>/dev/null)" && [[ -n "$VU" ]]; then
+    AUTORISES="$(printf '%s' "$VU" | tr ' ' '\n' | sed '/^$/d')"
+    UNITE_SOURCE="systemctl show (unité en vigueur)"
+  fi
+
+  # Couverture IPv4 exacte ; IPv6 déclarée indécidable plutôt que devinée. Un
+  # contrôle qui répondrait « couvert » sans savoir serait pire que pas de
+  # contrôle : c'est celui-là qu'on croirait.
+  entier_ipv4() {
+    local a b c d; IFS=. read -r a b c d <<< "$1"
+    printf '%s' "$(( (a << 24) | (b << 16) | (c << 8) | d ))"
+  }
+  couverte_par() {   # <adresse> <entrée IPAddressAllow> -> 0 si couverte
+    local adresse="$1" regle="$2" prefixe longueur masque
+    case "$regle" in
+      any) return 0 ;;
+      localhost) [[ "$adresse" == 127.* || "$adresse" == "::1" ]] && return 0 || return 1 ;;
+      link-local|multicast) return 1 ;;
+    esac
+    [[ "$adresse" == *:* || "$regle" == *:* ]] && return 2      # IPv6 : indécidable ici
+    prefixe="${regle%%/*}"
+    if [[ "$regle" == */* ]]; then longueur="${regle##*/}"; else longueur=32; fi
+    [[ "$prefixe" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 2
+    [[ "$longueur" =~ ^[0-9]+$ ]] && [[ "$longueur" -le 32 ]] || return 2
+    if [[ "$longueur" -eq 0 ]]; then return 0; fi
+    masque=$(( 0xFFFFFFFF << (32 - longueur) & 0xFFFFFFFF ))
+    [[ $(( $(entier_ipv4 "$adresse") & masque )) -eq $(( $(entier_ipv4 "$prefixe") & masque )) ]]
+  }
+
+  # Les résolveurs comptent : sans eux, le service ne traduit aucun nom.
+  RESOLVEURS="$(sed -n 's/^[[:space:]]*nameserver[[:space:]]\{1,\}//p' /etc/resolv.conf 2>/dev/null | awk '{print $1}' || true)"
+  A_VERIFIER=""
+  while IFS= read -r a; do [[ -n "$a" ]] && A_VERIFIER+="$a contrôleur de domaine ($LDAP_HOTE)"$'\n'; done <<< "$ADRESSES_LDAP"
+  while IFS= read -r a; do [[ -n "$a" ]] && A_VERIFIER+="$a résolveur DNS (/etc/resolv.conf)"$'\n'; done <<< "$RESOLVEURS"
+
+  BLOQUEES=""; INDECIDABLES=""
+  while IFS= read -r ligne; do
+    [[ -n "$ligne" ]] || continue
+    adresse="${ligne%% *}"; quoi="${ligne#* }"
+    verdict=1
+    while IFS= read -r regle; do
+      [[ -n "$regle" ]] || continue
+      couverte_par "$adresse" "$regle"; issue=$?
+      if [[ $issue -eq 0 ]]; then verdict=0; break; fi
+      if [[ $issue -eq 2 ]]; then verdict=2; fi
+    done <<< "$AUTORISES"
+    case $verdict in
+      0) : ;;
+      2) INDECIDABLES+="$adresse — $quoi"$'\n' ;;
+      *) BLOQUEES+="$adresse — $quoi"$'\n' ;;
+    esac
+  done <<< "$A_VERIFIER"
+
+  if [[ -n "${BLOQUEES//[[:space:]]/}" ]]; then
+    while IFS= read -r l; do [[ -n "$l" ]] && alerte "refusée par l'unité : $l"; done <<< "$BLOQUEES"
+    alerte "IPAddressAllow en vigueur ($UNITE_SOURCE) : $(printf '%s' "$AUTORISES" | tr '\n' ' ')"
+    echec "L'unité systemd INTERDIT au service de joindre ces adresses (IPAddressDeny=any).
+      L'installation s'achèverait sur « Installation terminée » et AUCUN utilisateur ne
+      pourrait se connecter : la liaison LDAPS serait refusée par le noyau, pas par
+      l'annuaire, et le message ne dirait pas pourquoi. Ajoutez le ou les sous-réseaux à
+      deploy/systemd/cyber-grc.service, à côté de « IPAddressAllow=localhost » :
+        IPAddressAllow=<sous-réseau des contrôleurs de domaine, ex. 10.0.0.0/8>
+      puis : systemctl daemon-reload && systemctl restart cyber-grc
+      N'écrivez PAS « IPAddressAllow=any » : cela rendrait toute la section inutile."
+  fi
+  if [[ -n "${INDECIDABLES//[[:space:]]/}" ]]; then
+    while IFS= read -r l; do [[ -n "$l" ]] && alerte "couverture NON vérifiée (IPv6) : $l"; done <<< "$INDECIDABLES"
+    alerte "Ce contrôle ne décide que de l'IPv4 : il refuse de conclure plutôt que de dire"
+    alerte "« couvert » sans le savoir. Vérifiez à la main que l'unité autorise ces adresses."
+  fi
+  if [[ -z "${BLOQUEES//[[:space:]]/}" && -z "${INDECIDABLES//[[:space:]]/}" && -n "${A_VERIFIER//[[:space:]]/}" ]]; then
+    succes "unité : contrôleur de domaine et résolveurs DNS couverts par IPAddressAllow ($UNITE_SOURCE)"
+  fi
+
+  # ---- Ce qui reste à la main, et qui n'est éprouvé par personne ------------
+  # Le compte de service et son mot de passe ne sont pas éprouvés ici : un
+  # essai de liaison ratée verrouille le compte selon la politique du domaine,
+  # et verrouiller le compte de service à l'installation coupe l'application
+  # entière. Ce choix est écrit plutôt que tu.
+  [[ -n "$(lire_variable AUTH_COMPTE_SECOURS_EMPREINTE)" ]] || {
+    alerte "AUTH_COMPTE_SECOURS_EMPREINTE est vide : le compte de secours est DÉSACTIVÉ."
+    alerte "Si le compte de service AD venait à être verrouillé ou son mot de passe à expirer,"
+    alerte "PLUS PERSONNE ne pourrait ouvrir de session (PLAN_SERVEUR §0.3)."
+  }
+fi
+# <<< banc: ldaps >>>
+
 info "Service et frontal"
 install -m 0644 "$SOURCE/deploy/systemd/cyber-grc.service" /etc/systemd/system/
 systemctl daemon-reload
@@ -1813,6 +2081,51 @@ else
   succes "ProxyTimeout ($PROXY_INSTALLE s) conforme au vhost de référence"
 fi
 # <<< banc: proxytimeout >>>
+
+# >>> banc: groupesad <<<
+# ══ LES GROUPES AD SUIVENT-ILS LES FILIALES ? (PLAN_SERVEUR §3.4) ═══════════
+#
+# Le client acquiert des filiales régulièrement. À chaque acquisition, sept
+# groupes Active Directory doivent naître — et rien, dans le produit, ne le
+# rappelle : l'application ne voit pas l'annuaire, et l'annuaire ne voit pas la
+# déclaration des filiales. Entre les deux, il n'y a qu'une personne qui doit y
+# penser, et un RSSI de site sans aucun accès quand elle n'y a pas pensé.
+#
+# Ce contrôle est ce rappel. Il ne CRÉE rien — créer un groupe dans l'AD du client
+# n'appartient pas à un installateur —, il constate et il nomme la commande.
+#
+# ⚠️ AVERTISSEMENT, PAS ÉCHEC, et le motif est écrit pour qu'on ne le « durcisse »
+# pas par réflexe : une filiale déclarée sans ses groupes est une lacune
+# d'exploitation, pas une installation défectueuse. Refuser ici empêcherait de
+# METTRE À JOUR un système en production à cause d'une donnée manquante — et la
+# mise à jour, elle, corrige peut-être ce qui bloque le client. Le seul cas
+# refusé est la déclaration INVALIDE (code 4), parce qu'elle engendrerait des
+# noms de groupes faux, donc des accès qui n'existent pas.
+GROUPES_AD_SCRIPT="$SOURCE/deploy/groupes-ad.sh"
+if [[ ! -x "$GROUPES_AD_SCRIPT" && ! -f "$GROUPES_AD_SCRIPT" ]]; then
+  alerte "deploy/groupes-ad.sh est absent : la liste des groupes AD n'a PAS été vérifiée."
+else
+  SORTIE_GROUPES="$(CYBER_GRC_CONFIG="$CONFIG" bash "$GROUPES_AD_SCRIPT" --verifier 2>&1)" \
+    && CODE_GROUPES=0 || CODE_GROUPES=$?
+  while IFS= read -r l; do [[ -n "$l" ]] && printf '%s\n' "$l" >&2; done <<< "$SORTIE_GROUPES"
+  case "$CODE_GROUPES" in
+    0) succes "groupes AD : la déclaration des filiales et la liste engendrée concordent" ;;
+    4) echec "La déclaration des filiales est INVALIDE (voir les lignes ci-dessus).
+      Les noms de groupes engendrés en seraient faux, et un nom de groupe faux ne se voit
+      qu'au moment où quelqu'un ne peut pas se connecter — sans message d'erreur, ni côté
+      annuaire, ni côté application. Corrigez $CONFIG/filiales.conf
+      (format : db/CONVENTIONS.md §27, modèle : deploy/filiales.conf.exemple), puis relancez." ;;
+    5) alerte "Aucune filiale n'est déclarée : seuls les groupes de périmètre Groupe et les"
+       alerte "deux transversaux existent. Aucun RSSI de site n'aura d'accès tant que"
+       alerte "$CONFIG/filiales.conf n'aura pas été renseigné." ;;
+    3) alerte "Écart entre la liste engendrée et la table « groupes_ad » (détail ci-dessus)."
+       alerte "Régénérer le script de création AD :"
+       alerte "  bash $GROUPES_AD_SCRIPT --powershell --ou '<DN de l'unité d'organisation>'" ;;
+    *) alerte "deploy/groupes-ad.sh a rendu $CODE_GROUPES : la liste des groupes AD n'a pas pu"
+       alerte "être engendrée. Ce n'est pas un feu vert — voir les lignes ci-dessus." ;;
+  esac
+fi
+# <<< banc: groupesad >>>
 
 # TimeoutStopSec doit laisser au serveur le temps de drainer ses connexions.
 DELAI_ARRET="$(lire_variable SERVEUR_DELAI_ARRET)"; DELAI_ARRET="${DELAI_ARRET:-25000}"

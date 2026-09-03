@@ -188,6 +188,38 @@ describe('Les trois axes, exercés sur les domaines de chaque profil ET sur les 
  * ===================================================================== */
 
 describe('Ce que chaque compte du §25.3 est censé éprouver, il l’éprouve', () => {
+  test('LE COMPTE DES DOMAINES est celui qu’on a ÉCRIT, pas celui qu’on calcule', async () => {
+    // ── Pourquoi ce chiffre littéral, et ce qu'il rattrape ───────────────────
+    //
+    // La matrice compte par compte confronte `deriverDepuisGroupes(groupes lus)` à
+    // `ATTENDU`, qui est calculé par la MÊME fonction. Elle prouve donc que le
+    // chemin LDAP rend les bons groupes — elle ne prouve rien du tableau des
+    // profils : ouvrez la cartographie au profil Qualité, et les deux côtés bougent
+    // ensemble. Mesuré : cette mutation ne faisait rougir qu'un seul essai.
+    //
+    // Ces sept nombres sont donc écrits à la main, une fois, d'après le
+    // `PLAN_SERVEUR` §3.2. Ils ne se recalculent pas : ils se relisent.
+    const attendus = {
+      'rssi.tls': 27, // tous les domaines de sa filiale, moins filiales/droits/journal
+      'contrib.tls': 4, // §25.3 : « contribution bornée à quatre domaines »
+      'qualite.tls': 7, // audits, documents, revues + les quatre de la conformité
+      direction: 6, // tableau de bord, synthèse + les quatre de la conformité
+      'rssi.groupe': 27, // même profil que rssi.tls, périmètre Groupe
+      dpo: 3, // rgpd, incidents, documents
+      admin: 4, // parametres, filiales, droits, journal
+      'sans.groupe': 0, // le cas négatif
+    };
+    for (const [login, nombre] of Object.entries(attendus)) {
+      const { droits } = await droitsParLAnnuaire(login);
+      assert.equal(
+        Object.keys(droits.domaines).length, nombre,
+        `${login} ouvre ${String(Object.keys(droits.domaines).length)} domaine(s) au lieu de ` +
+        `${String(nombre)} : ${Object.keys(droits.domaines).sort().join(', ')}`,
+      );
+      assert.equal(droits.domainesInterdits.length, DOMAINES.length - nombre, `${login} : les fermés et les ouverts doivent faire trente.`);
+    }
+  });
+
   test('`qualite.tls` NE VOIT PAS la cartographie — ni les risques, ni les actifs', async () => {
     const { droits } = await droitsParLAnnuaire('qualite.tls');
     for (const ferme of ['cartographie', 'risques', 'actifs', 'personnel', 'crise']) {

@@ -78,24 +78,86 @@ describe('Le vocabulaire du modèle de droits est le même en base et dans le co
     assert.deepEqual([...droits.NIVEAUX].sort(), enBase);
   });
 
-  test('chaque domaine de base est rattaché à un domaine du point d’entrée', () => {
+  test('chaque domaine de base a une DÉCISION de rattachement — fût-elle « aucun »', () => {
     const table = droits.DOMAINE_API_PAR_DOMAINE_BASE;
     for (const domaine of droits.DOMAINES) {
       assert.ok(
-        typeof table[domaine] === 'string',
-        `Le domaine « ${domaine} » n’a pas de rattachement : la projection le perdrait.`,
+        Object.hasOwn(table, domaine),
+        `Le domaine « ${domaine} » n’a pas de rattachement : la projection le perdrait ` +
+          'en silence, ce que le type Record est censé rendre impossible.',
       );
     }
+  });
+
+  test('la liste des domaines SANS équivalent est arbitrée, pas subie', () => {
+    // `null` n'est pas un oubli : c'est une décision, et elle doit rester rare et
+    // visible. Ce contrôle oblige un humain à trancher chaque fois qu'un domaine de
+    // base cesse d'avoir un équivalent de décision (CONVENTIONS.md §24, l'esprit de
+    // la liste écrite à la main : obliger à décider, pas énumérer).
+    const sansEquivalent = Object.entries(droits.DOMAINE_API_PAR_DOMAINE_BASE)
+      .filter(([, projete]) => projete === null)
+      .map(([base_]) => base_)
+      .sort();
+    assert.deepEqual(
+      sansEquivalent,
+      ['imports'],
+      'Un domaine de plus sans équivalent doit être justifié dans passerelle-api.ts.',
+    );
   });
 
   test('aucun rattachement ne vise un domaine que le point d’entrée ne connaît pas', () => {
     const connus = new Set(api.TOUS_LES_DOMAINES);
     for (const [base_, projete] of Object.entries(droits.DOMAINE_API_PAR_DOMAINE_BASE)) {
+      if (projete === null) continue;
       assert.ok(
         connus.has(projete),
         `« ${base_} » est projeté sur « ${projete} », que src/api/droits.ts ne déclare pas.`,
       );
     }
+  });
+
+  test('MORSURE : la projection n’accorde PAS « administration » à qui a « imports »', () => {
+    // Le défaut réel, trouvé par le banc et non prévu. Le premier jet rattachait
+    // `imports` à `administration`, au motif que reprendre un jeu de données entier
+    // est un acte d'administration — vrai de l'ACTION, faux du DOMAINE. Conséquence :
+    // le RSSI de site et l'auditeur, qui portent `imports` parmi leurs vingt-six
+    // domaines, recevaient `administration` dans leurs droits projetés et passaient
+    // le contrôle de domaine des routes d'administration.
+    //
+    // Cet essai est la morsure : il rougit si la ligne redevient
+    // `imports: 'administration'`.
+    const etat = {
+      domaines: new Map([
+        ['imports', 'contribution'],
+        ['risques', 'validation'],
+      ]),
+      peutExporter: false,
+    };
+    const projetes = droits.projeterDroits(etat);
+    assert.ok(projetes.domaines.includes('risques'));
+    assert.ok(
+      !projetes.domaines.includes('administration'),
+      'Un domaine sans équivalent de décision n’en ouvre AUCUN : le défaut est fermé.',
+    );
+    assert.equal(projetes.niveau, 'validation', 'Le niveau, lui, reste le plus élevé détenu.');
+  });
+
+  test('les quatre domaines d’administration, eux, projettent bien sur « administration »', () => {
+    for (const domaine of ['droits', 'filiales', 'parametres', 'journal']) {
+      const projetes = droits.projeterDroits({
+        domaines: new Map([[domaine, 'administration']]),
+        peutExporter: false,
+      });
+      assert.deepEqual(projetes.domaines, ['administration'], domaine);
+    }
+  });
+
+  test('un domaine explicitement fermé (« aucun ») n’ouvre rien', () => {
+    const projetes = droits.projeterDroits({
+      domaines: new Map([['cartographie', 'aucun']]),
+      peutExporter: false,
+    });
+    assert.deepEqual(projetes.domaines, []);
   });
 
   test('le cumul se fait au plus FAVORABLE, et la comparaison est ordonnée', () => {

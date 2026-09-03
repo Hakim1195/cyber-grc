@@ -117,6 +117,34 @@ async function aller(session) {
   await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
 }
 
+/**
+ * Attend un état de `sync.js`, et dit CE QU'ON A VU quand il ne vient pas.
+ *
+ * Même raison qu'au §13 de `bascule.test.mjs` (constat Q-64) : « Timeout
+ * 15000ms exceeded » ne dit ni ce qui était attendu, ni ce que la page portait.
+ * Un échec sur lequel on ne peut rien faire se relance ; il ne se lit pas.
+ * L'aide partagée `test/aide/**` appartient à un autre agent : le filet est donc
+ * local, et court.
+ */
+async function attendreEtatSync(page, predicat, description) {
+  try {
+    await page.waitForFunction(predicat, null, { timeout: 15000, polling: 100 });
+  } catch (erreur) {
+    const vu = await page
+      .evaluate(() => ({
+        etat: window.Sync.etat(),
+        bandeau: (document.getElementById('sync-banner-host') ?? { textContent: '' }).textContent.trim(),
+      }))
+      .catch(() => null);
+    throw new Error(
+      `L’état attendu n’est jamais venu : ${description}\n` +
+        `état de synchronisation : ${JSON.stringify(vu?.etat ?? null)}\n` +
+        `bandeau : ${vu?.bandeau || '(vide)'}\n` +
+        `cause : ${String(erreur.message).split('\n')[0]}`,
+    );
+  }
+}
+
 /** Attend un élément par son identifiant, en disant ce qu'on a vu à la place. */
 async function attendreElement(page, identifiant, description) {
   try {
@@ -402,6 +430,13 @@ describe('Une session qui expire pendant une saisie ne détruit pas la saisie', 
         () => document.getElementById('login-form') === null,
         null,
         { timeout: 15000, polling: 100 },
+      );
+      // Ce qui attendait doit REPARTIR : sans cela, « conservé » veut dire
+      // « en sursis », et l'utilisateur croit son travail sauvé.
+      await attendreEtatSync(
+        session.page,
+        () => window.Sync.etat().bloques === 0,
+        'après la reconnexion, ce qui était bloqué par la session doit repartir',
       );
       await attendreQuiescence(session.page);
 

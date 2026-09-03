@@ -68,7 +68,7 @@ const TYPES = Object.freeze({
  * Lance Chromium. Un seul par fichier de test : le démarrage coûte plus cher que
  * tout le reste.
  */
-export async function lancerNavigateur() {
+export async function lancerNavigateur(options = {}) {
   let playwright;
   try {
     playwright = await import(CHEMIN_PLAYWRIGHT);
@@ -81,9 +81,38 @@ export async function lancerNavigateur() {
     );
   }
   process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH ?? '/opt/pw-browsers';
+  // ── `correspondances` : un nom d'hôte, SANS résolveur ────────────────────
+  //
+  // La jonction du contrôle S17 ouvre l'URL d'entrée réelle — un nom, pas une
+  // adresse : c'est le nom que porte le certificat, celui que lit `ServerName`, et
+  // celui sur lequel `RewriteRule` construit sa redirection. Le banc, lui, ne doit
+  // RÉSOUDRE aucun nom (constat Q-45 : une famille entière dépendait d'une entrée
+  // `/etc/hosts` posée à la main, verte chez son auteur et 614 sur 628 ailleurs).
+  //
+  // `--host-resolver-rules` tranche les deux : la correspondance vit dans le
+  // navigateur, ni dans le DNS ni dans `/etc/hosts`, et la machine reste propre.
+  const correspondances = options.correspondances ?? [];
   return playwright.chromium.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      ...(correspondances.length === 0
+        ? []
+        : [
+          `--host-resolver-rules=${correspondances.map((c) => `MAP ${c} 127.0.0.1`).join(',')}`,
+          // ── Et AUCUN mandataire, ce qui n'allait pas de soi ────────────────
+          //
+          // Chromium lit les variables `http_proxy` / `https_proxy` de
+          // l'environnement. Les essais existants visent `http://127.0.0.1:<port>`,
+          // que Chromium exclut d'office ; **un NOM D'HÔTE, lui, part au
+          // mandataire** — qui coupe la connexion. Symptôme :
+          // `net::ERR_CONNECTION_RESET` avec un Apache dont le journal ne montre
+          // rien, parce qu'il n'a jamais rien reçu. Une demi-heure, et la mesure
+          // aurait pu être rangée comme « TLS capricieux ».
+          '--no-proxy-server',
+        ]),
+    ],
   });
 }
 

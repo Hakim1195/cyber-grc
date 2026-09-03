@@ -60,7 +60,7 @@ import type { EtatSession } from './resolveur.js';
  * domaines de décision. Exhaustif par construction — voir l'entête.
  */
 export const DOMAINE_API_PAR_DOMAINE_BASE: Readonly<
-  Record<DomaineFonctionnelBase, DomaineFonctionnel>
+  Record<DomaineFonctionnelBase, DomaineFonctionnel | null>
 > = Object.freeze({
   tableau_de_bord: 'pilotage',
   synthese: 'pilotage',
@@ -87,10 +87,22 @@ export const DOMAINE_API_PAR_DOMAINE_BASE: Readonly<
   tests_pra: 'continuite',
   audits: 'audits',
   revues: 'audits',
-  // Les quatre domaines réservés au profil Administrateur (004_rls.sql §6), plus
-  // les imports : reprendre un jeu de données entier est un acte d'administration,
-  // et c'est déjà ainsi que la route de reprise est classée côté A2.
-  imports: 'administration',
+  // ⚠️ « imports » ne se projette sur RIEN, et cette ligne a été écrite deux fois.
+  //
+  // Le premier jet le rattachait à « administration », au motif que reprendre un jeu
+  // de données entier est un acte d'administration — ce qui est vrai de l'ACTION, pas
+  // du DOMAINE. La conséquence, mesurée par le banc et non prévue : tout profil
+  // portant « imports » — le RSSI de site, l'auditeur — recevait le domaine
+  // « administration » dans ses droits projetés, et passait donc le contrôle de
+  // domaine des routes d'administration. Un sur-octroi silencieux, introduit par une
+  // table de correspondance, dans le fichier même qui prévient qu'une projection perd
+  // de l'information.
+  //
+  // Ce qui garde la reprise fermée est le NIVEAU, pas le domaine : la route la
+  // déclare en action « administrer », qui exige le niveau « administration », que
+  // seul le profil ADMIN porte. Le contrôle fin reste disponible par
+  // `ResolveurPerimetreSession.peut('imports', …)`.
+  imports: null,
   parametres: 'administration',
   filiales: 'administration',
   droits: 'administration',
@@ -120,7 +132,10 @@ export function projeterDroits(etat: EtatSession): DroitsSession {
 
   for (const [base, niveau] of etat.domaines) {
     if (niveau === 'aucun') continue;
-    domaines.add(DOMAINE_API_PAR_DOMAINE_BASE[base]);
+    const projete = DOMAINE_API_PAR_DOMAINE_BASE[base];
+    // `null` = ce domaine de base n'a pas d'équivalent dans le vocabulaire de
+    // décision des routes. Il n'en ouvre donc aucun — le défaut est fermé.
+    if (projete !== null) domaines.add(projete);
     if (RANG[niveau] > RANG[plusHaut]) plusHaut = niveau;
   }
 

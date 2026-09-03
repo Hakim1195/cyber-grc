@@ -25,10 +25,15 @@ async function startApp() {
     /* =========================
        CONFIGURATION DES ROUTES
     ========================== */
-    // La table est nommée pour être CONFRONTÉE au rattachement par domaine
-    // (`verifierCouvertureDesRoutes`) : c'est la liste réelle des écrans, pas
-    // une seconde liste qui pourrait diverger de celle-ci.
-    const ROUTES_ENREGISTREES = {
+    /* ⚠️ **`Router.init({ … })` s'écrit ICI, en toutes lettres, et ne se
+       refactorise pas.** Un garde-fou du banc (`test/navigateur/constats-s2`,
+       constat Q-46) DÉCOUVRE les routes de l'application en lisant ce bloc :
+       il refuse d'inventer une liste quand il ne la trouve plus, et c'est ce
+       refus qui empêche la couverture des écrans d'être affirmée sans preuve.
+       Nommer la table dans une constante l'a fait rougir, immédiatement. La
+       liste des routes se relit donc AILLEURS — `Router.routesEnregistrees()`,
+       qui la tient du routeur lui-même. */
+    Router.init({
         "/dashboard": () => DashboardModule.render(),
         "/synthese": () => SyntheseModule.render(),
         "/echeances": () => { if (typeof EcheancesModule !== "undefined") EcheancesModule.render(); },
@@ -97,8 +102,7 @@ async function startApp() {
 	"/audits/:id": (id) => { if (typeof AuditsModule !== "undefined") AuditsModule.renderAuditDetail(id); },
 
         "/settings": () => { if (typeof SettingsModule !== "undefined") SettingsModule.render(); }
-    };
-    Router.init(ROUTES_ENREGISTREES);
+    });
 
     /* =========================
        DROITS : LE BLOC « COMPTE » ET LE CONTRÔLE DE COUVERTURE
@@ -107,7 +111,9 @@ async function startApp() {
     ========================== */
     if (window.renderBlocUtilisateur) window.renderBlocUtilisateur();
     if (window.verifierCouvertureDesRoutes) {
-        window.verifierCouvertureDesRoutes(Object.keys(ROUTES_ENREGISTREES));
+        // La liste vient du ROUTEUR, jamais d'une seconde table : deux listes
+        // des mêmes routes divergent, et la divergence est silencieuse.
+        window.verifierCouvertureDesRoutes(Router.routesEnregistrees());
     }
 
     /* =========================
@@ -634,6 +640,47 @@ function neutraliserEcritures(route) {
     });
 }
 
+/* ── UN ÉCRAN QUI SE REDESSINE SANS NAVIGUER ────────────────────────────────
+ *
+ * `neutraliserEcritures` est appelée après chaque navigation. Or plusieurs
+ * modules **se redessinent sans naviguer** : un filtre changé, une case cochée,
+ * une suppression groupée qui rafraîchit sa liste. Le balisage neuf sort alors
+ * intact, et les boutons d'écriture réapparaissent — actifs — sous les yeux
+ * d'un profil en lecture seule.
+ *
+ * On observe donc le conteneur de la vue. Deux précautions, et elles suffisent :
+ *
+ *  · **seulement `childList`** : la passe ne modifie que des ATTRIBUTS
+ *    (`disabled`, `title`), qui ne sont pas observés. Il n'y a donc pas de
+ *    boucle possible — ce n'est pas une discipline, c'est la forme de
+ *    l'observation ;
+ *  · **un verrou de réentrance** malgré tout, parce qu'un module pourrait
+ *    ajouter un nœud DANS la passe, et qu'une protection qui ne coûte rien vaut
+ *    mieux qu'un raisonnement juste.
+ *
+ * L'observateur n'existe que lorsqu'il y a quelque chose à neutraliser : sans
+ * droits annoncés, aucune surveillance n'est installée, et le produit se
+ * comporte exactement comme avant.
+ */
+let observateurDeVue = null;
+let passageEnCours = false;
+
+function surveillerLaVue(route) {
+    if (observateurDeVue) { observateurDeVue.disconnect(); observateurDeVue = null; }
+    if (typeof MutationObserver === "undefined") return;
+    if (typeof Droits === "undefined" || !Droits.connus()) return;
+    const domaine = window.domaineDeRoute(route);
+    if (Droits.peutEcrire(domaine) && Droits.peutExporter()) return;   // rien à surveiller
+    const app = document.getElementById("app");
+    if (!app) return;
+    observateurDeVue = new MutationObserver(() => {
+        if (passageEnCours) return;
+        passageEnCours = true;
+        try { neutraliserEcritures(route); } finally { passageEnCours = false; }
+    });
+    observateurDeVue.observe(app, { childList: true, subtree: true });
+}
+
 /**
  * Bloc « qui suis-je », et la déconnexion.
  *
@@ -661,7 +708,13 @@ window.renderBlocUtilisateur = function () {
         '<div style="font-size:0.85rem; font-weight:600; color:#fff;">' +
         esc(Session.libelleUtilisateur()) + '</div>' +
         (profil ? '<div style="font-size:0.78rem; opacity:0.75; color:#fff;">Accès : ' +
-            esc(profil) + (Droits.peutExporter() ? ' · export autorisé' : '') + '</div>' : '') +
+            esc(profil) +
+            (typeof Help !== "undefined" ? Help.tip(
+                "Votre niveau d'accès. « Lecture » consulte sans modifier ; « contribution » " +
+                "saisit et met à jour ; « validation » approuve ; « administration » gère " +
+                "filiales, droits et paramètres. Le droit d'export est accordé à part : " +
+                "extraire un jeu de données complet est une opération journalisée.") : "") +
+            (Droits.peutExporter() ? ' · export autorisé' : '') + '</div>' : '') +
         '<button type="button" id="deconnexion-btn" class="reminder-btn" ' +
         'style="margin-top:8px; width:100%; justify-content:center;">Se déconnecter</button>';
     entete.appendChild(bloc);
@@ -690,6 +743,11 @@ window.appliquerDroits = function (route) {
     try {
         appliquerDroitsAuMenu();
         neutraliserEcritures(route);
+        surveillerLaVue(route);
+        // Le bloc « Compte » suit la session : après une reconnexion, l'identité
+        // et le niveau peuvent avoir changé, et un libellé périmé dans la barre
+        // latérale est le genre de détail qu'on croit sur parole.
+        if (window.renderBlocUtilisateur) window.renderBlocUtilisateur();
     } catch (e) {
         // Un filet d'affichage ne casse pas la navigation. Il se plaint.
         console.error("Application des droits à l'écran", e);

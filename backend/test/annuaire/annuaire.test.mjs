@@ -123,14 +123,31 @@ describe('L’annuaire simulé est monté comme le §25.1 l’exige', () => {
       cwd: join(RACINE_BACKEND, '..'), encoding: 'utf8',
     }).split('\n').filter((f) => f !== '');
     assert.ok(fichiers.length >= 8, `Seulement ${String(fichiers.length)} fichier(s) dans src/ : le balayage ne voit plus rien.`);
+    // ── Ce qui est interdit est un IMPORT, pas une mention ──────────────────
+    //
+    // Première rédaction : toute occurrence de « test/annuaire » dans `src/**`.
+    // Elle a rougi sur `src/auth/index.ts`, dont un COMMENTAIRE dit à juste titre
+    // « le banc y branche la doublure de test/annuaire/ ». Un contrôle qui refuse
+    // qu'on écrive le nom de la chose interdit d'expliquer pourquoi elle l'est —
+    // et l'on apprend à le contourner. On ne lit donc que les spécificateurs
+    // d'import, `require` compris.
+    const specificateurs = /(?:^|[^\w.])(?:import|export)\s[^;]*?from\s*['"]([^'"]+)['"]|(?:^|[^\w.])(?:import|require)\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
     const fautifs = [];
+    let vus = 0;
     for (const fichier of fichiers) {
       const contenu = readFileSync(join(RACINE_BACKEND, '..', fichier), 'utf8');
-      if (/(^|[^\w])(test\/annuaire|annuaire\/serveur-ldap|annuaire\/comptes|annuaire\/client-ldap)/.test(contenu)) {
-        fautifs.push(fichier);
+      for (const trouve of contenu.matchAll(specificateurs)) {
+        const cible = trouve[1] ?? trouve[2];
+        vus += 1;
+        if (/(?:^|\/)(?:test)\//.test(cible) || /annuaire\/(?:serveur-ldap|comptes|client-ldap|ber)/.test(cible)) {
+          fautifs.push(`${fichier} importe « ${cible} »`);
+        }
       }
     }
-    assert.deepEqual(fautifs, [], 'Un fichier de src/ désigne l’annuaire simulé : un import de src vers test est un défaut, pas un raccourci (§25.1).');
+    // Le balayage doit avoir VU des imports : « aucun import fautif » est aussi ce
+    // que rend un motif qui ne reconnaît plus rien.
+    assert.ok(vus >= 20, `Seulement ${String(vus)} import(s) lus dans src/ : le motif ne reconnaît plus la façon dont ce dépôt importe.`);
+    assert.deepEqual(fautifs, [], 'Un fichier de src/ IMPORTE l’annuaire simulé : un import de src vers test est un défaut, pas un raccourci (§25.1).\n  · ' + fautifs.join('\n  · '));
   });
 
   test('LES HUIT COMPTES du §25.3 sont là, et ce sont EXACTEMENT ceux-là', async () => {

@@ -1,0 +1,59 @@
+# =============================================================================
+#  filiales.conf — déclaration d'exploitation des filiales du groupe.
+#  Emplacement cible : /etc/cyber-grc/filiales.conf
+# =============================================================================
+#
+# Arbitré au `backend/db/CONVENTIONS.md` §27. Ce fichier est écrit par le CLIENT,
+# il vit hors de la base, et c'est LUI la source :
+#
+#   · le lot L3 (ce déploiement) en engendre la liste des groupes Active
+#     Directory à créer — `deploy/groupes-ad.sh` ;
+#   · le lot L4 en sèmera les lignes de la table `filiales`.
+#
+# ── POURQUOI UN FICHIER, ET PAS UNE LISTE DANS UN SCRIPT ────────────────────
+#
+# Le client compte plus de vingt filiales et en acquiert régulièrement. Une liste
+# figée dans un script serait fausse à la première acquisition, et fausse **en
+# silence** : un groupe AD manquant, c'est un RSSI de site qui n'a aucun accès,
+# sans message d'erreur ni côté annuaire ni côté application. Ici, la liste est
+# écrite UNE fois et lue partout — et tout ce qui en dérive se régénère.
+#
+# ── FORMAT ──────────────────────────────────────────────────────────────────
+#
+#   code ; raison sociale ; pays ; active
+#
+#   code           2 à 10 caractères, A-Z et 0-9 uniquement. C'est le <FILIALE>
+#                  de la convention de nommage AD (`PLAN_SERVEUR` §3.4), et c'est
+#                  le même domaine que la contrainte `ck_filiales_code` de la
+#                  base : ce qui passe ici passera au lot L4.
+#                  ⚠️ « GROUPE » est INTERDIT : il entrerait en collision avec la
+#                  forme réservée au périmètre Groupe entier, GRC-GROUPE-<PROFIL>.
+#   raison sociale non vide ; sert aux descriptions des groupes AD, et deviendra
+#                  `filiales.raison_sociale`.
+#   pays           deux lettres majuscules — FR, DE, ES… (`ck_filiales_pays`).
+#   active         « oui » ou « non ». Une filiale à « non » n'engendre AUCUN
+#                  groupe : c'est le déprovisionnement d'un site sorti du
+#                  périmètre (`PLAN_SERVEUR` §1.5). La ligne reste, pour que la
+#                  sortie soit un fait écrit et non un oubli.
+#
+# Les lignes vides et les lignes commençant par « # » sont ignorées. Tout le
+# reste doit porter exactement quatre champs : une ligne à trois champs serait
+# lue avec un champ vide et la filiale disparaîtrait de la liste sans un mot.
+#
+# ── APRÈS CHAQUE MODIFICATION ───────────────────────────────────────────────
+#
+#   bash deploy/groupes-ad.sh --verifier
+#   bash deploy/groupes-ad.sh --powershell --ou 'OU=Cyber GRC,OU=Groupes,DC=exemple,DC=interne' \
+#        > creer-groupes-grc.ps1
+#
+# puis faire exécuter `creer-groupes-grc.ps1` par l'équipe IT du client, sur un
+# contrôleur de domaine. Le script est idempotent : il ne crée que ce qui manque.
+# =============================================================================
+
+# Décommentez et remplacez par les filiales réelles du groupe.
+# Les deux lignes ci-dessous sont des EXEMPLES, tirés du §27 : elles sont
+# commentées à dessein, pour qu'une installation neuve ne prétende pas connaître
+# des filiales que personne n'a déclarées.
+
+# TLS ; Dedienne Aerospace Toulouse      ; FR ; oui
+# DEU ; Dedienne Aerospace Deutschland   ; DE ; oui

@@ -203,7 +203,7 @@ describe('Connexion — les trois axes résolus depuis l’annuaire, jusqu’à 
       `select identifiant, nom_affichage, email, actif from utilisateurs where identifiant = 'contrib.tls'`,
     );
     assert.equal(apres.length, 1);
-    assert.equal(apres[0].nom_affichage, 'Léo Marchand');
+    assert.equal(apres[0].nom_affichage, 'Malik Ferrand');
     assert.equal(apres[0].actif, true);
 
     await service().connecter({
@@ -363,13 +363,19 @@ describe('La session — vérification, expiration, déconnexion', () => {
 
     // On vieillit la session par le chemin légitime : la transaction d'ouverture de
     // session est la seule qui puisse écrire ici.
+    //
+    // C'est l'INACTIVITÉ qu'on avance, et non l'échéance absolue : la contrainte
+    // `ck_sessions_expiration` impose `expire_le > cree_le`, si bien qu'une échéance
+    // reculée dans le passé est refusée par la base. Elle a raison — une session dont
+    // l'échéance précède la création n'a jamais existé — et l'essai a dû changer de
+    // levier plutôt que de contourner la contrainte.
     await base.avecPerimetre(
       applicatif,
       perimetre('vieillissement', TLS, [TLS]),
       async (c) => {
         await c.query(`select set_config('grc.authentification', 'oui', true)`);
         const touchees = await c.query(
-          `update sessions set expire_le = now() - interval '1 minute'
+          `update sessions set derniere_activite = now() - interval '2 hours'
             where jeton_empreinte = $1`,
           [(await moduleCompile('auth/sessions.js')).empreinteJeton(jeton)],
         );
