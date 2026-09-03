@@ -1444,41 +1444,68 @@ describe('Un corps hors borne ne traverse pas le mandataire (constat Q-44)', () 
     );
   });
 
-  test('LA LIMITE ASSUMÉE : 28 Mio en « chunked » traversent, et c’est CONNU (constat Q-51)', async () => {
-    // ── Cet essai fige une LIMITE, pas une propriété ────────────────────────
+  test('LE CONTOURNEMENT EST FERMÉ : « chunked » ne traverse plus du tout (constat Q-51)', async () => {
+    // ── Cet essai a changé de sens, et c'est la bonne nouvelle ──────────────
     //
-    // Le pré-filtre refuse sur la longueur ANNONCÉE. Un client qui n'en annonce
-    // aucune — `Transfer-Encoding: chunked` — n'est pas borné par lui. Ce n'est
-    // pas un oubli : c'est écrit dans le vhost, mesuré, et la borne qui tient
-    // pour l'API est celle de Fastify, en aval.
+    // Il figeait une LIMITE : le pré-filtre refusait sur la longueur ANNONCÉE, et
+    // un client qui n'en annonçait aucune — `Transfer-Encoding: chunked` — n'était
+    // pas borné par lui. Sa rédaction disait : *« si cet essai devient rouge, ne le
+    // supprimez pas : c'est que quelqu'un a FERMÉ le contournement. Il faut alors le
+    // réécrire dans l'autre sens. »*
     //
-    // ⚠️ SI CET ESSAI DEVIENT ROUGE, NE LE SUPPRIMEZ PAS : c'est que quelqu'un
-    // a FERMÉ le contournement, et c'est une bonne nouvelle. Il faut alors le
-    // réécrire dans l'autre sens (« chunked est borné aussi »), mettre à jour
-    // le commentaire du vhost qui dit le contraire, et fermer le constat Q-51
-    // au registre. Un essai qui rougit parce que le produit s'est amélioré doit
-    // le dire lui-même, sinon le prochain lecteur le « répare » en l'effaçant.
+    // C'est arrivé. Le vhost refuse désormais **tout** `Transfer-Encoding` sur
+    // `/api/` — plus large que « chunked » seul, une valeur exotique ne devant pas
+    // ouvrir la porte —, et il le documente avec ses mesures. L'essai est donc
+    // réécrit ici, dans l'autre sens, plutôt qu'effacé : un essai qui rougit parce
+    // que le produit s'est amélioré doit le dire lui-même, sinon le prochain lecteur
+    // le « répare » en le supprimant.
+    //
+    // ⚠️ Le constat **Q-51** est à fermer au registre (`docs/PLAN_EXECUTION.md` §7),
+    // qui n'appartient pas à cet agent : c'est une demande, portée au rapport.
     const seuil = seuilDuPrefiltre();
     const volume = seuil + 1048576;
     const rang = vuesDeLaDoublure.rang();
     const issue = await envoyerCorps('/api/essai-chunked', volume, { chunked: true });
 
     assert.equal(
-      issue.statut,
-      200,
-      `Un corps de ${String(volume)} octets en « chunked » a été refusé (${String(issue.statut)}). ` +
-        'Si c’est délibéré, le contournement du constat Q-51 vient d’être fermé : réécrivez ' +
-        'CET essai dans l’autre sens, corrigez le commentaire du vhost qui affirme encore ' +
-        'l’inverse, et fermez Q-51 au registre. Ne l’effacez pas.',
+      issue.statut, 411,
+      `Un corps de ${String(volume)} octets en « chunked » a reçu ${String(issue.statut)} au lieu ` +
+        'de 411. Si le refus a été retiré, le contournement du constat Q-51 est ROUVERT : ' +
+        'un corps sans longueur annoncée traverse alors le frontal sans borne.',
     );
     const vues = vuesDeLaDoublure.depuis(rang).filter((v) => v.chemin === '/api/essai-chunked');
-    assert.equal(vues.length, 1, 'La doublure doit avoir vu la requête.');
     assert.equal(
-      vues[0].octets,
-      volume,
-      `La doublure a reçu ${String(vues[0].octets)} octets sur ${String(volume)} : le corps ` +
-        'traverse ENTIER, et c’est ce que Q-51 consigne. La borne qui tient pour l’API est ' +
-        'celle de Fastify, en aval du frontal.',
+      vues.reduce((total, v) => total + v.octets, 0), 0,
+      'Le refus doit être rendu PAR LE FRONTAL : la doublure ne doit pas recevoir un octet. ' +
+      'Un 411 rendu après que le corps a traversé ne borne rien — c’est la leçon de Q-44.',
+    );
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE du refus : c’est l’ENCODAGE qui est refusé, pas la taille', async () => {
+    // Sans cette moitié, « 411 » serait vrai d'un frontal qui refuse tout ce qui est
+    // gros — et l'on croirait tenir une borne d'encodage en tenant une borne de
+    // taille. On envoie donc un corps MINUSCULE, dans les deux encodages.
+    const rang = vuesDeLaDoublure.rang();
+    const chunkedPetit = await envoyerCorps('/api/essai-chunked-petit', 4096, { chunked: true });
+    assert.equal(
+      chunkedPetit.statut, 411,
+      `4 Kio en « chunked » ont reçu ${String(chunkedPetit.statut)} : le refus dépendrait alors ` +
+      'de la taille, et un gros corps chunked passerait dès qu’il se ferait discret.',
+    );
+    const declarePetit = await envoyerCorps('/api/essai-declare-petit', 4096);
+    assert.equal(
+      declarePetit.statut, 200,
+      `4 Kio avec « Content-Length » ont reçu ${String(declarePetit.statut)} : le frontal ` +
+      'refuserait tout, et « chunked est refusé » ne voudrait plus rien dire.',
+    );
+    const vues = vuesDeLaDoublure.depuis(rang);
+    assert.equal(
+      vues.filter((v) => v.chemin === '/api/essai-chunked-petit').reduce((t, v) => t + v.octets, 0), 0,
+      'Rien du corps chunked ne doit atteindre le service.',
+    );
+    assert.equal(
+      vues.filter((v) => v.chemin === '/api/essai-declare-petit').reduce((t, v) => t + v.octets, 0), 4096,
+      'Le corps déclaré, lui, doit traverser ENTIER : sinon la doublure ne mesure rien.',
     );
   });
 });

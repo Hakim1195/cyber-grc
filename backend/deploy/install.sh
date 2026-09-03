@@ -2060,6 +2060,24 @@ while IFS= read -r brut; do
     fi
     continue
   fi
+  # ── LA FORME À POINT : `requete.headers.cookie` ─────────────────────────
+  #
+  # CINQUIÈME écriture, arrivée avec l'authentification (lot L3). Le
+  # commentaire ci-dessus promettait « les quatre sont comprises » ; il en
+  # manquait une, et c'est la plus naturelle en TypeScript — un nom d'en-tête
+  # sans tiret est un identifiant valide, donc accessible par point. Le contrôle
+  # a fait ce qu'il devait : il a REFUSÉ de conclure, et arrêté l'installation.
+  # C'est ainsi qu'on l'a vu, plutôt qu'en le découvrant en production.
+  if printf '%s' "$LIGNE_TXT" | grep -qE "headers\.[A-Za-z]"; then
+    CLES="$(printf '%s' "$LIGNE_TXT" | grep -oE "headers\.[A-Za-z][A-Za-z0-9_]*" \
+            | sed 's/^headers\.//' | tr 'A-Z' 'a-z' | sort -u || true)"
+    if [[ -z "$CLES" ]]; then
+      ENTETES_OPAQUES+="${LIGNE_FIC#"$SOURCE/"}:$LIGNE_NUM — accès par point sans nom lisible"$'\n'
+    else
+      ENTETES_ATTENDUS+="$CLES"$'\n'
+    fi
+    continue
+  fi
   ENTETES_OPAQUES+="${LIGNE_FIC#"$SOURCE/"}:$LIGNE_NUM — accès à « headers » que ce contrôle ne sait pas classer"$'\n'
 done < <(grep -rnE "\bheaders\b" "$SOURCE/src" 2>/dev/null || true)
 
@@ -2086,9 +2104,41 @@ x-forwarded-host
 x-forwarded-proto"
 fi
 
+# 3. LES EN-TÊTES QUI VIENNENT DU CLIENT PAR NATURE, et qu'effacer casserait.
+#
+# ⚠️ C'est une DÉROGATION, et elle est écrite ici pour être discutée, pas pour
+# passer inaperçue. Le contrôle formulait sa règle ainsi : « tout en-tête que
+# `src/` lit doit être effacé ou reposé par le vhost ». Appliquée au cookie de
+# session, elle exige d'effacer le jeton d'authentification au frontal —
+# c'est-à-dire de rendre toute connexion impossible.
+#
+# Le discriminant n'est donc pas « lu / pas lu », c'est :
+#
+#   un en-tête que le service traite comme une DÉCLARATION DU CLIENT n'a pas à
+#   être effacé ; un en-tête qu'il traite comme un FAIT ÉTABLI AILLEURS doit
+#   l'être.
+#
+# `x-forwarded-for` est un fait supposé établi par le mandataire : forgé, il
+# fait journaliser une fausse adresse (Q-39). `cookie` et `user-agent` sont des
+# déclarations : le cookie n'est pas cru, il est VÉRIFIÉ contre
+# `sessions.jeton_empreinte` ; l'agent utilisateur est journalisé pour ce qu'il
+# est, la prétention du client.
+#
+# La liste est courte et le RESTE : toute addition doit être justifiée par ce
+# discriminant, et elle est IMPRIMÉE à chaque installation pour qu'elle ne
+# grossisse pas en silence. C'est le cas d'exception du `db/CONVENTIONS.md` §24 :
+# obliger quelqu'un à trancher, plutôt qu'énumérer.
+ENTETES_DU_CLIENT=(cookie user-agent)
+
 ENTETES_NUS=""
 while IFS= read -r entete; do
   [[ -n "$entete" ]] || continue
+  DEROGE=0
+  for e in "${ENTETES_DU_CLIENT[@]}"; do [[ "$entete" == "$e" ]] && DEROGE=1; done
+  if [[ $DEROGE -eq 1 ]]; then
+    succes "en-tête « $entete » : déclaration du client, non effacé (dérogation motivée)"
+    continue
+  fi
   # « unset » ou « set » : reposer une valeur soi-même neutralise aussi bien
   # qu'effacer — c'est ce que fait X-Forwarded-Proto.
   if ! grep -qiE "^[[:space:]]*RequestHeader[[:space:]]+(unset|set)[[:space:]]+${entete}([[:space:]]|$)" \
