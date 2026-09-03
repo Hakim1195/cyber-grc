@@ -725,6 +725,24 @@ describe('La connexion est montée hors du contrôle d’authentification (CONVE
    * *un agent n'écrit pas l'essai qui juge le composant qu'il n'a pas écrit*.
    */
   const serviceDoublure = {
+    // Le service **est** l'authentificateur — c'est le contrat de `OptionsApi`,
+    // et c'est ce qu'est le service réel. Celui-ci refuse toujours : si la route
+    // de connexion était montée sous le contrôle d'authentification, elle
+    // rendrait donc 401 et serait inatteignable. C'est le défaut que l'entête de
+    // `src/auth/greffon.ts` décrit, et c'est ce que cet essai fait rougir.
+    provisoire: false,
+    async authentifier() {
+      const { ErreurApplicative } = await moduleCompile('erreurs/index.js');
+      throw new ErreurApplicative({
+        code: 'non_authentifie',
+        statut: 401,
+        message: 'Votre session a expiré. Reconnectez-vous.',
+        detailJournal: 'doublure : aucune session',
+      });
+    },
+    decrire() {
+      return 'doublure de service (test/api/droits-application.test.mjs)';
+    },
     async connecter() {
       return {
         jeton: 'jeton-de-banc',
@@ -740,31 +758,15 @@ describe('La connexion est montée hors du contrôle d’authentification (CONVE
   };
 
   test('POST /api/connexion répond SANS session, là où /api/donnees rend 401', async () => {
-    const { ErreurApplicative } = await moduleCompile('erreurs/index.js');
     const { default: Fastify } = await import('fastify');
     const { greffonApi } = await moduleCompile('api/index.js');
     const socle = await avecProfil(PROFILS.rssi);
-
-    // L'authentificateur refuse TOUT : si la route de connexion était montée
-    // sous le contrôle, elle rendrait 401 et serait inatteignable — le défaut
-    // exact que l'entête de `src/auth/greffon.ts` décrit.
-    const refuseur = new SessionDeBanc({
-      perimetre: PERIMETRE_FILIALE,
-      droits: PROFILS.rssi,
-      refuser: () =>
-        new ErreurApplicative({
-          code: 'non_authentifie',
-          statut: 401,
-          message: 'Votre session a expiré. Reconnectez-vous.',
-          detailJournal: 'banc : aucune session',
-        }),
-    });
 
     const instance = Fastify({ logger: false });
     await instance.register(greffonApi, {
       pool: socle.serveur.pool,
       config: socle.serveur.config,
-      resolveur: refuseur,
+      resolveur: socle.session,
       serviceAuthentification: serviceDoublure,
     });
     await instance.ready();

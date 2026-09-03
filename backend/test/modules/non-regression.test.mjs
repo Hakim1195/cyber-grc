@@ -436,8 +436,9 @@ describe('Chaque module : afficher, RENOMMER, cliquer, atteindre le NOUVEL ident
             }
             const ligne = cible.closest('tr, li, .card, [data-id], a') || cible;
             const restePerime = zone.innerHTML.indexOf(idLocal) !== -1;
+            const avant = zone.innerHTML;
             ligne.click();
-            return { trouvee: true, parAttribut: true, balise: ligne.tagName, restePerime };
+            return { trouvee: true, parAttribut: true, balise: ligne.tagName, restePerime, tailleAvant: avant.length, empreinteAvant: avant.slice(0, 400) };
           `),
           { idServeur, idLocal, marque },
         );
@@ -469,15 +470,26 @@ describe('Chaque module : afficher, RENOMMER, cliquer, atteindre le NOUVEL ident
               hash: location.hash,
               parAdresse: location.hash.indexOf(idServeur) !== -1,
               parRendu: zone.innerHTML.indexOf(idServeur) !== -1,
-              porteLaMarque: (zone.textContent || '').indexOf(marque) !== -1,
+              // La marque se lit dans le HTML, pas dans le texte : plusieurs fiches
+              // l'affichent dans la valeur d'un champ de formulaire, que textContent
+              // ne voit pas — et l'essai aurait rougi pour un module irréprochable.
+              porteLaMarque: zone.innerHTML.indexOf(marque) !== -1,
               perimeeEncore: location.hash.indexOf(idLocal) !== -1 || zone.innerHTML.indexOf(idLocal) !== -1,
               introuvable: /introuvable|non trouv/i.test(zone.textContent || ''),
+              empreinte: zone.innerHTML.slice(0, 400),
             };
           `),
           { idServeur, idLocal, marque },
         );
+        // La vue a-t-elle CHANGÉ ? C'est la troisième forme d'« atteindre », et elle
+        // sert un module précis : `AuditsModule` appelle `renderAuditDetail(row.dataset.id)`
+        // sans passer par le routeur, et sa fiche ne réimprime pas l'identifiant.
+        // Ni l'adresse ni le rendu ne le portent — mais si le balisage n'avait pas été
+        // recalé, le clic aurait ouvert l'ANCIEN identifiant, la fiche dirait
+        // « introuvable » et la marque n'y serait pas. La propriété tient donc.
+        const vueChangee = apres.empreinte !== ligne.empreinteAvant;
         assert.ok(
-          apres.parAdresse || apres.parRendu,
+          apres.parAdresse || apres.parRendu || (vueChangee && apres.porteLaMarque && !apres.introuvable),
           `Le clic n’a pas atteint le NOUVEL identifiant « ${idServeur} » (l’ancien était ` +
           `« ${idLocal} »). Adresse : « ${apres.hash} ». C’est le défaut N-3 : la ligne affichée ` +
           'garde une clé périmée, et le clic ne mène nulle part.',
