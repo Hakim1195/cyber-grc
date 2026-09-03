@@ -420,6 +420,22 @@ avec ce qui a décidé chaque regroupement — un regroupement se justifie par l
 | **A4 — Annuaire simulé et filets** | OUTILLAGE | `backend/test/annuaire/**`, `backend/test/modules/**`, `backend/test/aide/**`, `backend/test/base/**`, `backend/test/depot/**`, `backend/test/documentation/**`, `backend/test/deploiement/**`, `backend/db/migrate.mjs`, `backend/db/verifier_*.sql`, `backend/db/dev/**` | **L'annuaire simulé ne va pas chez A1, et c'est le point.** Un agent qui écrit son client LDAP *et* le serveur qu'il interroge se trompe deux fois de la même façon, et le banc reste vert : c'est le défaut mesuré en **Q-61**, où un essai éprouvait sa propre réécriture |
 | **A5 — Déploiement LDAPS** | DÉPLOIEMENT | `backend/deploy/**`, `cyber-gouvernance_V4/index.html` | Périmètre déjà disjoint, et la seule famille d'essais que le dépôt joue contre un Apache réel |
 
+**Le modèle, par agent — décision manquante du lancement, écrite le 03/09.** Les cinq de la
+vague 3 ont été lancés en héritant `opus`, sans que le choix soit fait : c'est le §2 bis
+(« Économiser sans perdre en qualité ») non appliqué, et la session a fini par atteindre sa
+limite d'utilisation, coupant quatre agents en pleine écriture. Pour la suite :
+
+| Agent | Modèle | Motif |
+|---|---|---|
+| **A1** socle d'authentification · **A2** application des droits | `opus`, **jamais dégradé** | authentification et droits — deux des trois domaines intouchables |
+| **A3** connexion et interface | `opus` | la perte de saisie est le troisième |
+| **A4** filets · **A5** déploiement | `sonnet` | essais contre une spécification précise, balayage, comptage, documentation |
+| **SECU** audit | `opus`, **jamais dégradé** | seul instrument qui voit les angles morts de l'orchestrateur |
+
+⚠️ **Un agent déjà en vol se reprend, il ne se relance pas** : une reprise garde son contexte,
+un relancement repaie 100 000 à 200 000 jetons de ré-acquisition. Le choix du modèle se fait donc
+**au lancement**, et nulle part ailleurs.
+
 **L'audit indépendant (SECU) n'est pas un sixième agent de construction** : il est lancé après,
 sur l'arbre commité, et il n'écrit que dans `docs/securite/` (§2 bis, « le point qui ne se
 négocie pas »).
