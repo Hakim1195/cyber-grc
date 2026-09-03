@@ -826,28 +826,51 @@ describe('Un import en lot ne perd pas une ligne (bloquant T-1)', () => {
     // écrit. Ici les identifiants sont ceux que le DataStore a réellement reçus.
     const session = await ouvrirApplication();
     try {
+      /* ══ Q-64 : LA PRÉMISSE EST PRODUITE, PLUS ESPÉRÉE ════════════════════
+       *
+       * La rédaction précédente comptait sur une boucle SERRÉE : elle mesurait
+       * sa propre durée et exigeait « moins de millisecondes que de tirages »,
+       * pour pouvoir dire que l'horloge n'avait pas séparé les identifiants.
+       * C'était une prémisse **empruntée à la machine**. Reproduit sous charge
+       * (banc complet, charge moyenne 27) : 250 tirages en bien plus de 250 ms,
+       * et l'essai rougit — non parce que le générateur a fauté, mais parce que
+       * la machine était occupée. Un rouge dont personne ne peut rien faire est
+       * exactement ce que le constat Q-64 reproche.
+       *
+       * On **gèle l'horloge** pendant la boucle. La prémisse cesse d'être un
+       * pari sur la vitesse de la machine : elle devient un fait de l'essai.
+       * Les 250 identifiants sont alors tirés au même horodatage, à la lettre —
+       * ce que la version précédente ne faisait qu'approcher —, et leur
+       * distinction ne peut venir que de l'aléa. C'est le constat, dit sans
+       * détour et sans dépendre de rien.
+       *
+       * Le gel est POSÉ ET RETIRÉ dans le même bloc, et il ne touche que
+       * `Date.now` : `save()` s'en sert pour `updatedAt`, ce qui est sans
+       * conséquence sur 250 créations écrites en un seul cycle.
+       */
       const vus = await session.page.evaluate((n) => {
-        const depart = Date.now();
+        const vraieHorloge = Date.now;
+        const instantFige = vraieHorloge.call(Date);
+        const depart = instantFige;
         const identifiants = [];
-        // Une boucle serrée : `Date.now()` ne bouge pratiquement pas d'une
-        // itération à l'autre, ce qui est exactement la condition du constat —
-        // l'identifiant s'y réduit à la part aléatoire.
-        for (let i = 0; i < n; i += 1) {
-          const id = window.UI.genId('RISK');
-          identifiants.push(id);
-          window.DataStore.addRisque({ id, nom: `Exigence importée n° ${String(i + 1)}` });
+        try {
+          Date.now = () => instantFige;
+          for (let i = 0; i < n; i += 1) {
+            const id = window.UI.genId('RISK');
+            identifiants.push(id);
+            window.DataStore.addRisque({ id, nom: `Exigence importée n° ${String(i + 1)}` });
+          }
+        } finally {
+          Date.now = vraieHorloge;
         }
         return {
           identifiants,
-          // La DURÉE de la boucle, et non le champ « horodatage » de
-          // l'identifiant : la première rédaction lisait le deuxième segment,
-          // c'est-à-dire qu'elle s'appuyait sur la FORME. Or celle-ci a changé
-          // depuis (le compteur de session a reçu son propre séparateur, et la
-          // forme émise porte quatre segments). Ce qu'on veut dire est
-          // indépendant de tout découpage : la boucle a duré moins de
-          // millisecondes qu'elle n'a tiré d'identifiants, donc l'horloge ne
-          // peut pas les avoir séparés.
+          // Conservée pour l'INFORMATION, plus pour l'assertion : elle disait
+          // quelque chose de la machine, pas du générateur.
           dureeMs: Date.now() - depart,
+          // Ce qui compte désormais, et qui ne dépend d'aucune horloge : tous
+          // les tirages ont-ils bien eu lieu au MÊME instant ?
+          horlogeFigee: true,
           enMemoire: window.DataStore.getRisques().length,
         };
       }, LOT);
@@ -857,12 +880,11 @@ describe('Un import en lot ne perd pas une ligne (bloquant T-1)', () => {
         LOT,
         'Deux créations du même lot ne doivent jamais porter le même identifiant.',
       );
-      assert.ok(
-        vus.dureeMs < LOT,
-        'Le scénario n’a de sens que si l’horloge NE suffit PAS à distinguer les ' +
-          `identifiants : ${String(LOT)} tirages en ${String(vus.dureeMs)} ms. Sur une machine ` +
-          'assez lente pour donner une milliseconde par tirage, cet essai ne mesurerait ' +
-          'plus l’entropie mais l’horloge.',
+      assert.equal(
+        vus.horlogeFigee, true,
+        'Le scénario n’a de sens que si l’horloge NE distingue PAS les identifiants. Elle est ' +
+          'donc GELÉE pendant la boucle : sans ce gel, l’essai mesurerait l’horloge de la ' +
+          `machine (${String(vus.dureeMs)} ms observées) et non l’entropie du générateur.`,
       );
 
       // Et le lot arrive entier de l'autre côté : l'entropie sert à cela.

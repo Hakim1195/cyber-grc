@@ -449,6 +449,57 @@ describe('D5 — un annuaire qui ne répond pas ne doit pas ouvrir de session', 
     }
   });
 
+  test('RENVOI : la réponse reste un SUCCÈS, et une partie vit AILLEURS (constat Q-68)', async () => {
+    // ── Ce que ce levier existe pour rendre mordable ─────────────────────────
+    //
+    // Un `SearchResultReference` **n'est pas une erreur** : c'est une portion de
+    // l'arbre servie par un autre contrôleur de domaine. Le `SearchResultDone` qui
+    // suit vaut `success`. Un client qui ignore le renvoi rend donc une liste
+    // **incomplète en annonçant un succès** — et pour la résolution des groupes,
+    // une liste amputée **retire des droits sans qu'aucune erreur ne le dise**.
+    //
+    // C'est le troisième détecteur du constat **Q-68** (agent A1), qui était écrit,
+    // lu, et mordu par rien : l'annuaire n'en émettait pas. Ce qui est éprouvé ICI
+    // est que le LEVIER fonctionne — la morsure côté client appartient à A1
+    // (`test/auth/**`), le §2 de `PLAN_EXECUTION` confiant à chacun l'essai du code
+    // qu'il a écrit.
+    const panne = await demarrerAnnuaire();
+    try {
+      const client = await clientDeService(panne.url);
+
+      // Sens 1 — sans le levier, aucun renvoi. Sans cette moitié, « le renvoi est
+      // là » serait vrai d'un annuaire qui en émettrait toujours, et l'essai
+      // d'A1 ne saurait pas distinguer les deux cas.
+      const avant = await client.rechercher({
+        base: BASE_RECHERCHE, portee: 2, filtre: '(objectClass=group)', attributs: ['cn'],
+      });
+      assert.deepEqual(avant.renvois, [], 'Aucun renvoi tant que le levier n’est pas posé.');
+      assert.ok(avant.length > 0, 'La recherche doit rendre des groupes : sinon la comparaison est vide.');
+
+      // Sens 2 — levier posé : le renvoi paraît, AVANT le `Done`, et le `Done`
+      // vaut toujours succès. Les entrées, elles, continuent d'arriver.
+      panne.definirPanne({ renvoyer: true });
+      const apres = await client.rechercher({
+        base: BASE_RECHERCHE, portee: 2, filtre: '(objectClass=group)', attributs: ['cn'],
+      });
+      assert.equal(apres.renvois.length, 1, `Un renvoi attendu, ${String(apres.renvois.length)} reçu(s).`);
+      assert.equal(apres.renvois[0], panne.urlDeRenvoi);
+      assert.match(apres.renvois[0], /^ldap:\/\/[^/]+\//, 'Un renvoi est une URL LDAP (RFC 4516).');
+      assert.equal(apres.length, avant.length,
+        'Le renvoi s’AJOUTE à la réponse, il ne la remplace pas : c’est ce qui le rend traître.');
+
+      // …et le levier se lève.
+      panne.definirPanne({ renvoyer: false });
+      assert.deepEqual(
+        (await client.rechercher({ base: BASE_RECHERCHE, portee: 2, filtre: '(objectClass=group)', attributs: ['cn'] })).renvois,
+        [],
+      );
+      await client.fermer();
+    } finally {
+      await panne.fermer();
+    }
+  });
+
   test('RÉPONSE TRONQUÉE : le client la rejette, il ne la décode pas « au mieux »', async () => {
     const panne = await demarrerAnnuaire();
     try {

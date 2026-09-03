@@ -258,7 +258,17 @@ export async function demarrerAnnuaire(options = {}) {
 
   /** Ce que le serveur a réellement reçu : liaisons, recherches, refus. */
   const journal = [];
-  const panne = { refuserConnexions: false, delaiReponseMs: 0, tronquer: false };
+  const panne = { refuserConnexions: false, delaiReponseMs: 0, tronquer: false, renvoyer: false };
+
+/**
+ * L'URL de renvoi servie quand `definirPanne({ renvoyer: true })` est posé.
+ *
+ * Elle désigne un AUTRE contrôleur de domaine — c'est ce qu'un renvoi est dans un
+ * annuaire réel : une portion de l'arbre qui vit ailleurs, typiquement une autre
+ * forêt ou un autre domaine du groupe. Elle n'a pas à être joignable : ce qui est
+ * éprouvé est ce que le CLIENT fait d'un renvoi, pas ce qu'il y trouverait.
+ */
+  const URL_RENVOI = 'ldap://dc-secondaire.exemple.interne/OU=Groupes,DC=filiale2,DC=interne??sub?(objectClass=group)';
 
   let repertoireTls = null;
   let optionsTls = null;
@@ -446,12 +456,34 @@ export async function demarrerAnnuaire(options = {}) {
         enumere(code), chaine(''), chaine(diagnostic),
       ])));
 
+    /**
+     * Le RENVOI — `SearchResultReference`, [APPLICATION 19] SEQUENCE OF LDAPURL.
+     *
+     * ── Pourquoi c'est un levier de panne, et pas une curiosité de protocole ──
+     *
+     * Un renvoi **n'est pas une erreur** : c'est une partie de la réponse qui vit
+     * sur un autre contrôleur. Un client qui l'ignore rend donc une liste
+     * **incomplète en annonçant un succès** — et pour la résolution des groupes,
+     * une liste amputée **retire des droits sans qu'aucune erreur ne le dise**.
+     * C'est la famille de défaut que ce chantier traque depuis neuf passages, et
+     * c'est le troisième détecteur du constat **Q-68** (agent A1), qui était écrit,
+     * lu, et mordu par rien : l'annuaire n'en émettait pas.
+     *
+     * Il est émis **avant** le `SearchResultDone`, comme la RFC 4511 §4.5.2 le
+     * prévoit : entrées et renvois s'entrelacent, et seul le `Done` clôt.
+     */
+    const renvoi = () =>
+      (panne.renvoyer
+        ? sequence(entier(id), encoder(ETIQUETTE.RENVOI_RECHERCHE, chaine(URL_RENVOI)))
+        : Buffer.alloc(0));
+
     // Le DSE racine : une recherche de portée « base » sur un DN vide. Un client
     // qui découvre le contexte de nommage passe par là avant tout le reste.
     if (base === '' && portee === 0) {
       journal.push({ operation: 'recherche', base: '(DSE racine)', filtre: filtreEnTexte(filtre), rendues: 1 });
       return Buffer.concat([
         entreeEnBer(id, { dn: '', attributs: { namingContexts: [BASE_RECHERCHE], supportedLDAPVersion: ['3'], vendorName: ['Annuaire simulé Cyber GRC'] } }, demandes),
+        renvoi(),
         fin(RESULTAT.SUCCES),
       ]);
     }
@@ -482,12 +514,16 @@ export async function demarrerAnnuaire(options = {}) {
         journal.push({ operation: 'recherche', base, filtre: filtreEnTexte(filtre), rendues: trouvees.length - 1, tailleDepassee: true });
         return Buffer.concat([
           ...trouvees.slice(0, tailleMax).map((e) => entreeEnBer(id, e, demandes)),
+          renvoi(),
           fin(4, 'sizeLimitExceeded'),
         ]);
       }
     }
-    journal.push({ operation: 'recherche', base, filtre: filtreEnTexte(filtre), attributs: demandes, rendues: trouvees.length });
-    return Buffer.concat([...trouvees.map((e) => entreeEnBer(id, e, demandes)), fin(RESULTAT.SUCCES)]);
+    journal.push({
+      operation: 'recherche', base, filtre: filtreEnTexte(filtre), attributs: demandes,
+      rendues: trouvees.length, renvoi: panne.renvoyer,
+    });
+    return Buffer.concat([...trouvees.map((e) => entreeEnBer(id, e, demandes)), renvoi(), fin(RESULTAT.SUCCES)]);
   }
 
   /**
@@ -598,9 +634,17 @@ export async function demarrerAnnuaire(options = {}) {
     },
 
     /* ── D5 : la panne ────────────────────────────────────────────────────── */
+    /**
+     * @param {{refuserConnexions?: boolean, delaiReponseMs?: number, tronquer?: boolean,
+     *          renvoyer?: boolean}} nouvelle
+     *   `renvoyer` insère un `SearchResultReference` avant chaque `SearchResultDone` :
+     *   la réponse reste un succès, et une partie vit ailleurs (constat Q-68).
+     */
     definirPanne(nouvelle) {
       Object.assign(panne, nouvelle);
     },
+    /** L'URL que le renvoi désigne — pour que l'essai puisse la reconnaître. */
+    urlDeRenvoi: URL_RENVOI,
 
     async fermer() {
       for (const prise of connexions) prise.destroy();

@@ -206,8 +206,17 @@ export async function connecter(options) {
         encoderFiltre(filtre), sequence(attributs.map((a) => chaine(a))),
       ])));
       const entrees = [];
+      /**
+       * Les renvois reçus. Ils sont EXPOSÉS et non ignorés en silence : un client
+       * qui les ignore rend une liste incomplète en annonçant un succès, et c'est
+       * précisément ce qu'il faut pouvoir mesurer (constat Q-68).
+       */
+      const renvois = [];
+      Object.defineProperty(entrees, 'renvois', { value: renvois, enumerable: false });
       for (const message of messages) {
-        if (message.etiquette === ETIQUETTE.ENTREE_RECHERCHE) {
+        if (message.etiquette === ETIQUETTE.RENVOI_RECHERCHE) {
+          for (const url of lireTous(message.contenu)) renvois.push(lireChaine(url.contenu));
+        } else if (message.etiquette === ETIQUETTE.ENTREE_RECHERCHE) {
           const [dn, liste] = lireTous(message.contenu);
           const attributsLus = {};
           for (const attribut of lireTous(liste.contenu)) {

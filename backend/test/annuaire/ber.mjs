@@ -48,6 +48,9 @@ export const ETIQUETTE = Object.freeze({
   DEMANDE_RECHERCHE: 0x63, // [3] searchRequest
   ENTREE_RECHERCHE: 0x64, //  [4] searchResultEntry
   FIN_RECHERCHE: 0x65, //     [5] searchResultDone
+  RENVOI_RECHERCHE: 0x73, //  [19] searchResultReference — une PARTIE de la réponse
+                          //       qui vit ailleurs, et qu'un client peut ignorer
+                          //       en croyant sa liste complète.
   DEMANDE_COMPARAISON: 0x6e, // [14] compareRequest
   REPONSE_COMPARAISON: 0x6f, // [15] compareResponse
   DEMANDE_ABANDON: 0x50, //   [16] abandonRequest (primitif)

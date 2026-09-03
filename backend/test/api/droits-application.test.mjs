@@ -667,7 +667,15 @@ describe('Le niveau du domaine prime sur celui de la session', () => {
     const exigence = await serveur.appeler('POST', '/api/entites/exigences', {
       corps: { champs: { code: 'A.9.9', intitule: 'Écrit par un profil en lecture' } },
     });
-    assert.equal(exigence.statut, 403, JSON.stringify(exigence.corps));
+    assert.equal(
+      exigence.statut,
+      403,
+      'SUR-OCTROI : le profil « Qualité » vient d’ÉCRIRE sur le domaine « conformite », où ' +
+        '`session_domaines` ne lui accorde que la LECTURE. C’est le constat rendu par l’agent ' +
+        'qui résout les droits, et il vise la forme de `DroitsSession` : un niveau unique pour ' +
+        'toute la session ne peut pas exprimer « contribue aux audits, lit la conformité ». ' +
+        `Réponse obtenue : ${JSON.stringify(exigence.corps)}`,
+    );
     assert.equal(exigence.corps.erreur, 'droit_insuffisant');
   });
 
@@ -696,7 +704,13 @@ describe('Le niveau du domaine prime sur celui de la session', () => {
     const action = await serveur.appeler('POST', '/api/entites/actions', {
       corps: { champs: { titre: 'Écrite au niveau du domaine' } },
     });
-    assert.equal(action.statut, 201, JSON.stringify(action.corps));
+    assert.equal(
+      action.statut,
+      201,
+      'Le niveau du domaine « actions » vaut « administration » : il doit RESTREINDRE ailleurs ' +
+        'sans fermer ce qu’il ouvre ici. Un raffinement qui ne servirait qu’à refuser serait ' +
+        `une régression déguisée. Réponse obtenue : ${JSON.stringify(action.corps)}`,
+    );
   });
 
   test('les droits rendus par « /api/session » portent le détail quand il existe', async () => {

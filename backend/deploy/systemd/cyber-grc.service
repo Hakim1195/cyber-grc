@@ -117,10 +117,38 @@ AmbientCapabilities=
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 IPAddressDeny=any
 IPAddressAllow=localhost
-# À COMPLÉTER À L'INSTALLATION : sous-réseaux des contrôleurs de domaine,
-# et du relais SMTP si les notifications sont activées. Tant que ces lignes
-# manquent, l'authentification AD ne peut pas fonctionner — c'est délibéré :
-# une liste blanche vide se remarque, une liste blanche trop large ne se voit pas.
+# ══ À COMPLÉTER À L'INSTALLATION — ET DÉSORMAIS VÉRIFIÉ ══════════════════════
+#
+# Sous-réseaux des contrôleurs de domaine, du résolveur DNS, et du relais SMTP
+# si les notifications sont activées. Tant que ces lignes manquent,
+# l'authentification AD ne peut pas fonctionner : c'est délibéré — une liste
+# blanche vide se remarque, une liste blanche trop large ne se voit pas.
+#
+# ⚠️ « SE REMARQUE » ÉTAIT UNE INTENTION, PAS UN FAIT. Rien ne remarquait quoi
+# que ce soit : `install.sh` se terminait sur « Installation terminée » et aucun
+# utilisateur ne pouvait se connecter — le noyau refusait la connexion sortante,
+# pas l'annuaire, et le message ne l'aurait pas dit. C'est la figure exacte du
+# constat Q-65, où cette même unité codait un chemin de Node que rien ne
+# confrontait à la machine. Depuis, le bloc « banc: ldaps » d'`install.sh` résout
+# LDAP_URL, lit cette liste, et REFUSE l'installation si l'adresse du contrôleur
+# n'y est pas couverte.
+#
+# ⚠️ LE RÉSOLVEUR DNS COMPTE AUTANT QUE L'ANNUAIRE, et c'est le piège suivant :
+# un résolveur d'entreprise en 10.x est refusé par la même règle, si bien que
+# `dc01.exemple.interne` se résout parfaitement depuis un shell root — hors
+# cgroup — et pas depuis le service. Sous Debian, `systemd-resolved` écoute sur
+# 127.0.0.53, couvert par « localhost » : la question ne se pose alors pas.
+#
+# ⚠️ NE PAS ÉCRIRE « IPAddressAllow=any » : la section entière deviendrait
+# décorative. Nommer les sous-réseaux, même larges.
+#
+# ⚠️ CE QUE `install.sh` NE PEUT PAS PROUVER, et il faut le savoir : que systemd
+# APPLIQUE réellement ces listes. Elles sont mises en œuvre par des programmes
+# BPF attachés au cgroup ; sur un noyau ou un systemd qui ne les porte pas, la
+# directive est acceptée puis ignorée. Sur la cible (Debian 13, systemd complet)
+# elle s'applique ; la vérification en exploitation est :
+#   systemctl show -p IPAddressAllow -p IPAddressDeny cyber-grc
+#   journalctl -u cyber-grc | grep -i 'IPAddress'
 # IPAddressAllow=10.0.0.0/8
 
 # ---- Durcissement : appels système ----
