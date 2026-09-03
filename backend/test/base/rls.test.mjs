@@ -1669,12 +1669,22 @@ describe('Tables de configuration : écriture réservée au Groupe (CONVENTIONS 
     assert.deepEqual(anomalies, []);
   });
 
-  test('REPORT ASSUMÉ : les trois tables de session restent écrivables sans condition', async () => {
-    // Ce test ne célèbre pas une propriété, il VERROUILLE un report daté (CONVENTIONS
-    // §17.4) : ces tables PRODUISENT le périmètre, elles sont écrites avant qu'il existe.
-    // Le lot L3 posera un réglage « grc.authentification » pour sa seule transaction
-    // d'ouverture de session, et les politiques s'y adosseront. Ce test tombera alors —
-    // c'est exactement ce qu'on attend de lui.
+  test('REPORT FERMÉ : les trois tables de session ne s’écrivent plus que sous authentification', async () => {
+    // ── Ce test annonçait sa propre mort, et elle a eu lieu ─────────────────
+    //
+    // Il verrouillait un report daté (CONVENTIONS §17.4) : les tables du substrat de
+    // session PRODUISENT le périmètre, elles étaient donc écrites avant qu'il existe,
+    // et leurs politiques d'écriture valaient « true ». Sa rédaction disait : « le lot
+    // L3 posera un réglage grc.authentification […] et ce test tombera alors — c'est
+    // exactement ce qu'on attend de lui. »
+    //
+    // `007_authentification.sql` l'a fait, et il est tombé. Le report n'existe plus :
+    // ce qu'on verrouille désormais est la propriété INVERSE — ces trois tables ne
+    // s'écrivent QUE sous `f_authentification()`, c'est-à-dire depuis la seule
+    // transaction d'ouverture de session. C'est la condition d'entrée **E1** du lot L3.
+    //
+    // Il reste appareillé : sa moitié symétrique est l'essai qui montre qu'une session
+    // applicative ordinaire s'y voit REFUSER l'écriture (test/auth/**, agent A1).
     const predicats = await base.lignes(
       proprietaire,
       `select c.relname::text || '.' || p.polcmd::text as politique,
@@ -1688,8 +1698,9 @@ describe('Tables de configuration : écriture réservée au Groupe (CONVENTIONS 
     assert.equal(predicats.length, 9, 'Trois tables × ajout / modification / suppression.');
     assert.deepEqual(
       [...new Set(predicats.map((l) => l.predicat))],
-      ['true'],
-      'Report au lot L3 : voir CONVENTIONS.md §17.4 et 004_rls.sql §6.',
+      ['f_authentification()'],
+      'Le substrat de session ne s’écrit plus que sous grc.authentification : voir ' +
+      'CONVENTIONS.md §17.4 (report) et 007_authentification.sql (fermeture, condition E1).',
     );
   });
 });
@@ -3848,6 +3859,12 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       'entropie_identifiants',
       'portee_figee',
       'privileges',
+      // NEUVIÈME, apporté par `007_authentification.sql` : il vérifie que le substrat
+      // de session est bien refermé sur `f_authentification()`. Cette liste est écrite
+      // à la main À DESSEIN (CLAUDE.md §3, cas (a)) — une migration qui la fait rougir
+      // en arrivant fait exactement son office. Elle s'allonge d'une ligne ; elle ne se
+      // transforme pas en découverte automatique pour cesser de rougir.
+      'substrat_session',
       'tracabilite',
       'unicite_cloisonnee',
     ]);
