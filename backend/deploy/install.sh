@@ -1673,30 +1673,58 @@ else
     [[ $(( $(entier_ipv4 "$adresse") & masque )) -eq $(( $(entier_ipv4 "$prefixe") & masque )) ]]
   }
 
-  # Les résolveurs comptent : sans eux, le service ne traduit aucun nom.
+  # Les résolveurs comptent — mais PAS TOUJOURS, et la nuance décide de la
+  # sévérité. Si LDAP_URL nomme un hôte, le service doit le résoudre : un
+  # résolveur hors de la liste blanche rend l'annuaire injoignable, au même titre
+  # que le contrôleur lui-même. Si LDAP_URL porte une adresse littérale, le DNS
+  # n'entre pas dans le chemin d'authentification, et refuser l'installation pour
+  # cela serait un faux positif — le genre de contrôle qu'on finit par contourner.
+  # (Cas courant sous Debian : le résolveur est systemd-resolved sur 127.0.0.53,
+  # couvert par « localhost ». La question ne se pose alors pas.)
   RESOLVEURS="$(sed -n 's/^[[:space:]]*nameserver[[:space:]]\{1,\}//p' /etc/resolv.conf 2>/dev/null | awk '{print $1}' || true)"
+  LDAP_HOTE_EST_UNE_ADRESSE=0
+  [[ "$LDAP_HOTE" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ || "$LDAP_HOTE" == *:* ]] && LDAP_HOTE_EST_UNE_ADRESSE=1
   A_VERIFIER=""
-  while IFS= read -r a; do [[ -n "$a" ]] && A_VERIFIER+="$a contrôleur de domaine ($LDAP_HOTE)"$'\n'; done <<< "$ADRESSES_LDAP"
-  while IFS= read -r a; do [[ -n "$a" ]] && A_VERIFIER+="$a résolveur DNS (/etc/resolv.conf)"$'\n'; done <<< "$RESOLVEURS"
+  while IFS= read -r a; do [[ -n "$a" ]] && A_VERIFIER+="$a dur contrôleur de domaine ($LDAP_HOTE)"$'\n'; done <<< "$ADRESSES_LDAP"
+  while IFS= read -r a; do
+    [[ -n "$a" ]] || continue
+    if [[ $LDAP_HOTE_EST_UNE_ADRESSE -eq 1 ]]; then
+      A_VERIFIER+="$a souple résolveur DNS (LDAP_URL porte une adresse : le DNS n'est pas sur le chemin d'authentification)"$'\n'
+    else
+      A_VERIFIER+="$a dur résolveur DNS (sans lui, « $LDAP_HOTE » ne se résout pas DANS le service)"$'\n'
+    fi
+  done <<< "$RESOLVEURS"
 
-  BLOQUEES=""; INDECIDABLES=""
+  BLOQUEES=""; BLOQUEES_SOUPLES=""; INDECIDABLES=""
   while IFS= read -r ligne; do
     [[ -n "$ligne" ]] || continue
-    adresse="${ligne%% *}"; quoi="${ligne#* }"
+    adresse="${ligne%% *}"; reste="${ligne#* }"
+    severite="${reste%% *}"; quoi="${reste#* }"
     verdict=1
     while IFS= read -r regle; do
       [[ -n "$regle" ]] || continue
-      couverte_par "$adresse" "$regle"; issue=$?
+      # ⚠️ L'APPEL EST UNE CONDITION, et ce n'est pas cosmétique : sous
+      # « set -e », un `couverte_par …; issue=$?` avorte le script dès que la
+      # fonction rend autre chose que 0 — c'est-à-dire dès la PREMIÈRE règle qui
+      # ne couvre pas l'adresse, donc presque toujours. Mesuré : le contrôle
+      # s'arrêtait avant d'avoir rien conclu, et l'installation échouait sans
+      # message. Un appel en condition désarme « set -e » dans la fonction.
+      if couverte_par "$adresse" "$regle"; then issue=0; else issue=$?; fi
       if [[ $issue -eq 0 ]]; then verdict=0; break; fi
       if [[ $issue -eq 2 ]]; then verdict=2; fi
     done <<< "$AUTORISES"
     case $verdict in
       0) : ;;
       2) INDECIDABLES+="$adresse — $quoi"$'\n' ;;
-      *) BLOQUEES+="$adresse — $quoi"$'\n' ;;
+      *) if [[ "$severite" == dur ]]; then BLOQUEES+="$adresse — $quoi"$'\n'
+         else BLOQUEES_SOUPLES+="$adresse — $quoi"$'\n'; fi ;;
     esac
   done <<< "$A_VERIFIER"
 
+  if [[ -n "${BLOQUEES_SOUPLES//[[:space:]]/}" ]]; then
+    while IFS= read -r l; do [[ -n "$l" ]] && alerte "refusée par l'unité, sans effet sur l'annuaire : $l"; done <<< "$BLOQUEES_SOUPLES"
+    alerte "Sans conséquence pour LDAPS, mais le lot L12 (notifications) en aura besoin."
+  fi
   if [[ -n "${BLOQUEES//[[:space:]]/}" ]]; then
     while IFS= read -r l; do [[ -n "$l" ]] && alerte "refusée par l'unité : $l"; done <<< "$BLOQUEES"
     alerte "IPAddressAllow en vigueur ($UNITE_SOURCE) : $(printf '%s' "$AUTORISES" | tr '\n' ' ')"

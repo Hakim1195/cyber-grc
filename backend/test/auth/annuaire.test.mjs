@@ -344,10 +344,108 @@ describe('Les bornes du client — un annuaire est un tiers', () => {
 
   test('un DN ambigu — deux comptes pour un login — est refusé, pas arbitré', async () => {
     // Choisir « le premier » ferait dépendre l'identité de l'ordre de parcours de
-    // l'annuaire. Le filtre est ici volontairement élargi pour provoquer le cas.
+    // l'annuaire. Le filtre vise EXACTEMENT deux comptes : la borne de la recherche
+    // vaut deux, elle est donc atteinte sans troncature, et c'est bien le doublon —
+    // pas une réponse amputée — que l'on veut voir refusé ici.
+    await assert.rejects(
+      () =>
+        service({
+          filtreUtilisateur: '(|(sAMAccountName=rssi.tls)(sAMAccountName=dpo))',
+        }).authentifier('rssi.tls', 'x'),
+      (erreur) => erreur.nomErreur === 'ErreurAnnuaire' && /ambiguïté/.test(erreur.detailJournal),
+    );
+  });
+});
+
+describe('Q-68 — une réponse TRONQUÉE est refusée, jamais rendue amputée', () => {
+  /**
+   * Le défaut : Active Directory plafonne une recherche à 1 000 entrées. Une liste de
+   * groupes tronquée ne lève rien — elle rend MOINS de groupes, donc MOINS de droits.
+   * Un RSSI perd son accès et aucune ligne de journal ne l'explique.
+   *
+   * La troncature éprouvée ici est **réelle** et vient d'un serveur que je n'ai pas
+   * écrit : l'annuaire simulé honore le `sizeLimit` du protocole et répond
+   * `sizeLimitExceeded` avec un jeu amputé. C'est ce que le §25 cherche à obtenir —
+   * l'agent qui écrit le client n'écrit pas le serveur qui le contredit.
+   */
+  test('sizeLimitExceeded fait ÉCHOUER la recherche, avec le plafond et le filtre au message', async () => {
+    // Neuf comptes correspondent, la borne est de deux : l'annuaire tronque et le dit.
     await assert.rejects(
       () => service({ filtreUtilisateur: '(objectClass=user)' }).authentifier('rssi.tls', 'x'),
-      (erreur) => erreur.nomErreur === 'ErreurAnnuaire' && /ambiguïté/.test(erreur.detailJournal),
+      (erreur) => {
+        assert.equal(erreur.nomErreur, 'ErreurAnnuaire');
+        assert.match(erreur.detailJournal, /TRONQUÉE/);
+        assert.match(erreur.detailJournal, /sizeLimitExceeded/);
+        assert.match(erreur.detailJournal, /objectClass=user/, 'Le filtre doit être nommé.');
+        assert.match(erreur.detailJournal, /borne de 2/, 'Le plafond doit être nommé.');
+        return true;
+      },
+    );
+  });
+
+  test('et la troncature ne DÉGRADE PAS en identifiants refusés', async () => {
+    // La distinction décide du verrouillage : un compte n'est pas verrouillé parce que
+    // l'annuaire a tronqué. Confondre les deux transformerait une limite
+    // d'exploitation en blocage de comptes.
+    const erreur = await service({ filtreUtilisateur: '(objectClass=user)' })
+      .authentifier('rssi.tls', 'x')
+      .then(() => null, (e) => e);
+    assert.notEqual(erreur, null);
+    assert.notEqual(erreur.nomErreur, 'ErreurIdentifiants');
+  });
+
+  test('CONTRE-ÉPREUVE : sans troncature, la même recherche aboutit', async () => {
+    // Sans ce sens-là, le refus pourrait n'être qu'un refus systématique.
+    const identite = await service().authentifier('rssi.tls', 'rssi.tls!2026');
+    assert.deepEqual([...identite.groupes], ['GRC-TLS-RSSI']);
+  });
+
+  test('la BORNE PLEINE est une troncature quand la borne est un filet — et pas sinon', async () => {
+    // Le second détecteur, et le seul que le code de résultat ne couvre pas : un
+    // annuaire qui rend exactement la borne demandée SANS annoncer de dépassement.
+    // Il est éprouvé DANS LES DEUX SENS dans le même essai, parce que c'est la même
+    // requête qui change de verdict selon ce que la borne signifie pour l'appelant.
+    const client = await clientModule.ClientLdap.connecter({
+      url: doublure.url,
+      ca: null,
+      verifierCertificat: false,
+      delaiMs: 4000,
+    });
+    try {
+      await client.lier(COMPTE_SERVICE.dn, COMPTE_SERVICE.motDePasse);
+      const recherche = (bornePleineEstTroncature) => ({
+        base: BASE_RECHERCHE,
+        portee: 'sousArbre',
+        filtre: '(|(sAMAccountName=rssi.tls)(sAMAccountName=dpo))',
+        attributs: ['cn'],
+        tailleMax: 2,
+        bornePleineEstTroncature,
+      });
+
+      // Borne = FILET : l'atteindre veut dire qu'on n'a pas tout vu.
+      await assert.rejects(
+        () => client.rechercher(recherche(true)),
+        (erreur) => erreur.nomErreur === 'ErreurAnnuaire' && /TRONQUÉE/.test(erreur.detailJournal),
+      );
+
+      // Borne = ATTENTE : les deux entrées sont le résultat, et l'appelant décide.
+      const entrees = await client.rechercher(recherche(false));
+      assert.equal(entrees.length, 2, 'La même requête, et cette fois elle aboutit.');
+    } finally {
+      await client.fermer();
+    }
+  });
+
+  test('le journal du serveur confirme que la troncature a bien EU LIEU', async () => {
+    // Sans cette vérification, l'essai précédent pourrait passer pour une autre
+    // raison — un filtre mal formé, par exemple — et ne rien prouver de Q-68.
+    doublure.viderJournal();
+    await service({ filtreUtilisateur: '(objectClass=user)' })
+      .authentifier('rssi.tls', 'x')
+      .catch(() => null);
+    assert.ok(
+      doublure.journal.some((e) => e.tailleDepassee === true),
+      'L’annuaire simulé doit avoir tronqué : sinon l’essai n’éprouve pas la troncature.',
     );
   });
 });

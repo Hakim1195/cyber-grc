@@ -153,13 +153,26 @@ async function ouvrirApplication(droits) {
   return session;
 }
 
-/** Entrées de menu visibles, par route. Lues dans le DOM, jamais recopiées. */
+/**
+ * Entrées de menu **réellement rendues**, par route.
+ *
+ * ⚠️ La première rédaction lisait la propriété `li.hidden` — c'est-à-dire
+ * exactement ce que le code sous essai venait d'écrire. Elle serait restée
+ * verte le jour où une règle de `css/style.css` poserait un `display` sur
+ * `.main-nav li` et écraserait le `[hidden]` du navigateur : l'entrée serait
+ * visible à l'écran, et l'essai aurait dit le contraire. On mesure donc ce que
+ * l'utilisateur voit — un rectangle de rendu —, jamais l'attribut qu'on a posé.
+ *
+ * La liste est lue dans le DOM, jamais recopiée : une entrée ajoutée à
+ * `index.html`, qui appartient à un autre agent, est prise en compte sans que
+ * cet essai bouge.
+ */
 function menuVisible(page) {
   return page.evaluate(() =>
     Array.prototype.filter
       .call(document.querySelectorAll('.main-nav a[data-route]'), (a) => {
         const li = a.closest('li') || a;
-        return !li.hidden;
+        return li.getClientRects().length > 0;
       })
       .map((a) => a.getAttribute('data-route')));
 }

@@ -326,10 +326,35 @@ describe('Une connexion qui tombe n’écrit rien (constat Q-19)', () => {
  *  scrupuleusement respecté : `resoudre()` ne prend toujours aucun argument.
  * ===================================================================== */
 
-/** Résolveur qui s'annonce puis ATTEND, une fois, qu'on le laisse passer. */
-class PerimetreRetarde extends PerimetreFixe {
-  constructor(perimetreSession) {
-    super(perimetreSession);
+/**
+ * Porte qui s'annonce puis ATTEND, une fois, qu'on la laisse passer.
+ *
+ * ══ Pourquoi elle a changé de place — et ce que le banc a attrapé ═══════
+ *
+ * Elle était portée par le **résolveur de périmètre** : le gestionnaire de la
+ * reprise appelait `resoudre()` juste après avoir posé son témoin d'abandon, et
+ * l'essai s'y accrochait. C'était le seul point d'extension prévu, et c'était
+ * vrai tant que la route était le premier code à s'exécuter.
+ *
+ * La condition d'entrée **E4** l'a déplacé : le contrôle d'authentification
+ * s'exerce désormais en `onRequest`, **avant l'analyse du corps**, et c'est là
+ * que le résolveur est appelé. Une porte posée sur lui bloque donc *avant* que
+ * le corps soit lu — et un client qui s'en va à cet instant fait échouer
+ * l'analyse du corps, si bien que le gestionnaire n'est jamais atteint et que
+ * la ligne de journal attendue ne vient plus. Ce fichier a expiré à 20 s, et
+ * c'est ainsi que le réordonnancement s'est vu.
+ *
+ * Elle est donc posée là où le gestionnaire commence vraiment : un crochet
+ * `preValidation`, ajouté par l'essai sur l'instance **parente**. L'ordre des
+ * phases de Fastify le garantit — analyse du corps, puis `preValidation`, puis
+ * le gestionnaire — et il ne dépend d'aucune ligne du produit.
+ *
+ * Ce que l'essai éprouve n'a pas bougé d'un pouce : *un client déjà parti ne
+ * fait pas prendre une connexion au pool, et le journal dit lequel des deux
+ * contrôles a tranché.*
+ */
+class PorteDeGestionnaire {
+  constructor() {
     this.appels = 0;
     this._porte = null;
     this._annoncer = null;
@@ -351,15 +376,17 @@ class PerimetreRetarde extends PerimetreFixe {
     return { entre, ouvrir: () => ouvrir() };
   }
 
-  async resoudre() {
-    this.appels += 1;
-    if (this._porte !== null) {
-      const porte = this._porte;
-      this._porte = null;          // un seul appel est retenu : le suivant passe
-      this._annoncer();
-      await porte;
-    }
-    return super.resoudre();
+  /** Le crochet à poser sur l'instance parente. */
+  crochet() {
+    return async () => {
+      this.appels += 1;
+      if (this._porte !== null) {
+        const porte = this._porte;
+        this._porte = null;        // un seul appel est retenu : le suivant passe
+        this._annoncer();
+        await porte;
+      }
+    };
   }
 }
 
@@ -367,23 +394,74 @@ describe('Un client déjà parti ne prend pas de connexion (constats Q-19 / Q-38
   const journal = [];
   const socketsServeur = [];
   let greffon;
-  let resolveur;
+  let socle;
+  let porteGestionnaire;
   let url;
   /** Nombre d'appels à `pool.connect()` — le coût que le contrôle évite. */
   let prises = 0;
 
   before(async () => {
-    resolveur = new PerimetreRetarde({
+    const perimetreSession = {
       utilisateurId: 'reprise-abandon',
       filialeId: FILIALE_A,
       filiales: [FILIALE_A],
       perimetreGroupe: false,
       administrationGroupe: false,
+    };
+    porteGestionnaire = new PorteDeGestionnaire();
+
+    // Un premier montage sert de SOCLE : il rend le pool et la configuration
+    // réels du banc, sans que cet essai ait à recopier l'environnement de test
+    // — ce qui en ferait une seconde source de vérité pour les mêmes valeurs.
+    socle = await monterGreffon(base, perimetreSession);
+
+    const { default: Fastify } = await import('fastify');
+    const { greffonApi } = await import(
+      `file://${(await import('../aide/serveur.mjs')).RACINE_BACKEND}/dist/api/index.js`
+    );
+    const instance = Fastify({
+      bodyLimit: socle.config.serveur.tailleMaxCorpsOctets,
+      logger: {
+        level: 'warn',
+        stream: {
+          write(ligne) {
+            try {
+              journal.push(JSON.parse(ligne));
+            } catch {
+              journal.push({ msg: String(ligne) });
+            }
+          },
+        },
+      },
     });
-    greffon = await monterGreffon(base, null, {
-      resolveur,
-      journal: (ligne) => journal.push(ligne),
+    // La porte, à l'endroit où le gestionnaire commence : après l'analyse du
+    // corps, avant le gestionnaire. Posée sur l'instance PARENTE, elle vaut
+    // pour les routes du greffon sans que celui-ci en sache rien.
+    instance.addHook('preValidation', porteGestionnaire.crochet());
+    await instance.register(greffonApi, {
+      pool: socle.pool,
+      config: socle.config,
+      resolveur: new PerimetreFixe(perimetreSession),
     });
+    await instance.ready();
+
+    let adresse = null;
+    greffon = {
+      instance,
+      config: socle.config,
+      pool: socle.pool,
+      async ecouter() {
+        if (adresse !== null) return adresse;
+        await instance.listen({ host: '127.0.0.1', port: 0 });
+        adresse = `http://127.0.0.1:${instance.server.address().port}`;
+        return adresse;
+      },
+      async fermer() {
+        instance.server.closeAllConnections?.();
+        await instance.close().catch(() => {});
+      },
+    };
+
     const connecter = greffon.pool.connect.bind(greffon.pool);
     greffon.pool.connect = (...arguments_) => {
       prises += 1;
@@ -395,6 +473,7 @@ describe('Un client déjà parti ne prend pas de connexion (constats Q-19 / Q-38
 
   after(async () => {
     await greffon?.fermer();
+    await socle?.fermer();
   });
 
   /**
@@ -486,7 +565,7 @@ describe('Un client déjà parti ne prend pas de connexion (constats Q-19 / Q-38
     // 1. La porte est armée : le gestionnaire ira jusqu'au résolveur, et
     //    s'arrêtera là — c'est-à-dire APRÈS avoir posé son témoin d'abandon,
     //    et AVANT le contrôle qu'on éprouve.
-    const porte = resolveur.armer();
+    const porte = porteGestionnaire.armer();
     const { requete, fini } = envoyer('AVANT', 300);
     await porte.entre;
 

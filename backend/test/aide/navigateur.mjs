@@ -92,6 +92,42 @@ export async function lancerNavigateur(options = {}) {
   // `--host-resolver-rules` tranche les deux : la correspondance vit dans le
   // navigateur, ni dans le DNS ni dans `/etc/hosts`, et la machine reste propre.
   const correspondances = options.correspondances ?? [];
+  const mandatairesEcartes = correspondances.length === 0
+    ? {}
+    : {
+      // ── LE MANDATAIRE DE L'ENVIRONNEMENT, ÉCARTÉ POUR CES HÔTES ──────────
+      //
+      // Ce qui a coûté le plus longtemps à écrire de toute la jonction S17, et
+      // qui ne se devine pas. Chromium lit `http_proxy` / `https_proxy` de son
+      // environnement. Les essais existants visent `http://127.0.0.1:<port>`,
+      // que Chromium exclut d'office ; **un NOM D'HÔTE en HTTPS, lui, part au
+      // mandataire**, qui coupe la connexion.
+      //
+      // Le symptôme est trompeur : `net::ERR_CONNECTION_RESET` avec un journal
+      // Apache **vide** — parce qu'Apache n'a jamais rien reçu. On range cela en
+      // « TLS capricieux », on ajoute un `ignoreHTTPSErrors` qui ne change rien,
+      // et l'on conclut que le montage est fragile.
+      //
+      // Mesuré, variante par variante, sur un serveur HTTPS de trois lignes :
+      //   adresse nue                          → 200
+      //   nom + host-resolver-rules            → délai dépassé
+      //   nom + host-resolver-rules + --no-proxy-server → délai dépassé
+      //   nom + host-resolver-rules + environnement sans mandataire → 200
+      // Le drapeau ne suffit donc pas ; l'environnement décide.
+      //
+      // Le remède est BORNÉ AUX HÔTES QUE L'APPELANT A LUI-MÊME MIS EN
+      // CORRESPONDANCE : on n'éteint pas le mandataire de la machine, on lui dit
+      // que ces noms-là sont locaux — ce qu'ils sont, puisque c'est nous qui les
+      // faisons pointer sur la boucle.
+      env: {
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(([cle]) => !/^(?:https?|all)_proxy$/i.test(cle)),
+        ),
+        NO_PROXY: [...correspondances, '127.0.0.1', 'localhost'].join(','),
+        no_proxy: [...correspondances, '127.0.0.1', 'localhost'].join(','),
+      },
+    };
+
   return playwright.chromium.launch({
     headless: true,
     args: [
@@ -99,20 +135,9 @@ export async function lancerNavigateur(options = {}) {
       '--disable-dev-shm-usage',
       ...(correspondances.length === 0
         ? []
-        : [
-          `--host-resolver-rules=${correspondances.map((c) => `MAP ${c} 127.0.0.1`).join(',')}`,
-          // ── Et AUCUN mandataire, ce qui n'allait pas de soi ────────────────
-          //
-          // Chromium lit les variables `http_proxy` / `https_proxy` de
-          // l'environnement. Les essais existants visent `http://127.0.0.1:<port>`,
-          // que Chromium exclut d'office ; **un NOM D'HÔTE, lui, part au
-          // mandataire** — qui coupe la connexion. Symptôme :
-          // `net::ERR_CONNECTION_RESET` avec un Apache dont le journal ne montre
-          // rien, parce qu'il n'a jamais rien reçu. Une demi-heure, et la mesure
-          // aurait pu être rangée comme « TLS capricieux ».
-          '--no-proxy-server',
-        ]),
+        : [`--host-resolver-rules=${correspondances.map((c) => `MAP ${c} 127.0.0.1`).join(',')}`]),
     ],
+    ...mandatairesEcartes,
   });
 }
 

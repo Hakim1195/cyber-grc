@@ -150,6 +150,20 @@ export interface OptionsRecherche {
   readonly attributs: readonly string[];
   /** Borne du client, doublant le `sizeLimit` du protocole. */
   readonly tailleMax: number;
+  /**
+   * La borne atteinte doit-elle être tenue pour une TRONCATURE ?
+   *
+   * Seul l'appelant sait ce que sa borne signifie, et les deux cas existent :
+   *  · une borne qui est un **filet de sécurité** — « au plus 250 groupes » — est
+   *    atteinte uniquement si quelque chose déborde : `true` ;
+   *  · une borne qui est une **attente** — « au plus 2 entrées, la seconde signalant
+   *    un doublon » — est atteinte normalement : `false`, et c'est l'appelant qui
+   *    interprète.
+   *
+   * Le détecteur principal, lui, ne dépend pas de ce drapeau : `sizeLimitExceeded`
+   * et tout renvoi font échouer la recherche dans tous les cas.
+   */
+  readonly bornePleineEstTroncature?: boolean;
 }
 
 /** Ce que le client sait faire — l'interface que la couche annuaire consomme. */
@@ -301,6 +315,7 @@ export class ClientLdap implements Annuaire {
 
     const reponses = await this.echanger(corps, OPERATION.finRecherche, options.tailleMax);
     const entrees: EntreeLdap[] = [];
+    let renvoyee = false;
 
     for (const reponse of reponses) {
       if (reponse.etiquette === OPERATION.entreeRecherche) {
@@ -308,22 +323,65 @@ export class ClientLdap implements Annuaire {
         continue;
       }
       if (reponse.etiquette === OPERATION.renvoiRecherche) {
-        // Un renvoi désigne un autre annuaire. On ne le suit PAS : suivre un renvoi,
-        // c'est laisser l'annuaire choisir à qui le service présente le compte de
-        // service. Il est ignoré, et l'absence de résultat sera traitée comme telle.
+        // Un renvoi désigne une PARTIE DE LA RÉPONSE qui vit ailleurs. On ne le suit
+        // pas — suivre un renvoi, c'est laisser l'annuaire choisir à qui le service
+        // présente son compte —, et on ne l'ignore pas non plus : l'ignorer rendrait
+        // une réponse incomplète en annonçant un succès. Voir `troncature()`.
+        renvoyee = true;
         continue;
       }
       if (reponse.etiquette === OPERATION.finRecherche) {
         const code = this.lireCodeResultat(reponse);
         if (code === RESULTAT.objetInexistant) return [];
-        // La limite de taille atteinte n'est pas une erreur : c'est la borne demandée.
-        if (code !== RESULTAT.succes && code !== RESULTAT.limiteTailleAtteinte) {
+        if (code === RESULTAT.limiteTailleAtteinte) {
+          throw this.troncature(options, entrees.length, 'sizeLimitExceeded (code 4)');
+        }
+        if (code !== RESULTAT.succes) {
           throw new ErreurAnnuaire(`recherche refusée par l’annuaire, code de résultat ${code}`);
         }
       }
     }
 
+    if (renvoyee) {
+      throw this.troncature(options, entrees.length, 'un renvoi (SearchResultReference) non suivi');
+    }
+    if (options.bornePleineEstTroncature === true && entrees.length >= options.tailleMax) {
+      throw this.troncature(options, entrees.length, `la borne de ${options.tailleMax} atteinte`);
+    }
+
     return entrees;
+  }
+
+  /**
+   * Une réponse incomplète est une ERREUR, jamais un résultat.
+   *
+   * ── Le défaut que ce refus ferme (constat Q-68) ─────────────────────────
+   *
+   * Active Directory plafonne une recherche à 1 000 entrées (`MaxPageSize`). Une
+   * liste de groupes tronquée **ne lève rien** : elle rend simplement MOINS de
+   * groupes, donc MOINS de droits. Un RSSI perd son accès, aucune ligne de journal
+   * ne l'explique, et le banc reste vert. C'est la forme exacte du défaut que ce
+   * chantier traque — quelque chose réussit en silence alors que c'est faux.
+   *
+   * Un refus bruyant est récupérable : l'exploitant lit le plafond et le filtre dans
+   * le message, et pagine ou resserre la recherche. Une autorisation silencieusement
+   * rabotée ne l'est pas — personne ne sait qu'il faut la récupérer.
+   *
+   * ⚠️ **Ce que ce refus n'est pas** : la pagination. Le client ne sait pas demander
+   * de page suivante (contrôle `1.2.840.113556.1.4.319`, non implémenté). Il sait
+   * seulement DIRE qu'il n'a pas tout reçu, ce qui est la moitié qui protège.
+   */
+  private troncature(
+    options: OptionsRecherche,
+    recues: number,
+    cause: string,
+  ): ErreurAnnuaire {
+    return new ErreurAnnuaire(
+      `réponse TRONQUÉE de l’annuaire : ${cause}. ${recues} entrée(s) reçue(s) pour une borne ` +
+        `de ${options.tailleMax}, filtre « ${options.filtre} » sous « ${options.base} ». ` +
+        'La liste est refusée plutôt que rendue amputée : une appartenance de groupe ' +
+        'incomplète retirerait des droits en silence (constat Q-68).',
+    );
   }
 
   public async fermer(): Promise<void> {

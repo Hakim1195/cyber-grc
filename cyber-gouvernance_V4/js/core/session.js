@@ -290,7 +290,19 @@ const Droits = (() => {
         return d.niveau;
     }
 
-    /** Le profil peut-il administrer (paramètres, reprise d'un export) ? */
+    /**
+     * Le profil peut-il administrer (paramètres, reprise d'un export entier) ?
+     *
+     * ⚠️ **Aucun appelant aujourd'hui, et c'est écrit plutôt que masqué** — le
+     * constat Q-12 a été relevé trois fois dans ce chantier pour des
+     * justifications ayant survécu à leur appelant. L'écran d'administration est
+     * couvert autrement, et mieux : `peutLire("administration")` le retire du
+     * menu, `peutEcrire("administration")` neutralise ses boutons. Cette
+     * fonction reste parce que la **reprise d'un export** (`js/core/reprise.js`)
+     * est un acte d'administration au sens du `PLAN_SERVEUR` §3.2 et de la
+     * condition d'entrée E3, et qu'elle devra la consulter — pas parce qu'elle
+     * sert déjà.
+     */
     function peutAdministrer() {
         const d = bloc();
         if (!d) return true;

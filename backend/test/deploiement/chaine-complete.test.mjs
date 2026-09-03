@@ -298,10 +298,16 @@ describe('Le chemin complet, parcouru pour de vrai — contrôle S17 (constat Q-
 
       // ── Le maillon serveur : l'API répond À TRAVERS le mandataire ───────────
       const api = await vue.page.evaluate(async () => {
-        const r = await fetch('/api/etat', { cache: 'no-store' });
-        return { statut: r.status, corps: (await r.text()).slice(0, 200) };
+        const sante = await fetch('/api/sante', { cache: 'no-store' });
+        const session = await fetch('/api/session', { cache: 'no-store' });
+        return {
+          sante: sante.status, corpsSante: (await sante.text()).slice(0, 200),
+          session: session.status,
+        };
       });
-      assert.ok(api.statut < 400, `L’API n’est pas jointe à travers Apache : ${JSON.stringify(api)}`);
+      assert.equal(api.sante, 200, `Le point de santé n’est pas joint à travers Apache : ${JSON.stringify(api)}`);
+      assert.match(api.corpsSante, /"?(etat|statut|ok)"?/i, `La réponse ne vient pas du serveur : ${api.corpsSante}`);
+      assert.ok(api.session < 400, `La session n’est pas résolue à travers Apache : ${JSON.stringify(api)}`);
 
       // ── Le maillon base : ce que la page affiche vient de PostgreSQL ────────
       const enMemoire = await vue.page.evaluate(() => DataStore.getRisques().map((r) => r.id));

@@ -129,6 +129,11 @@ declare module 'fastify' {
   interface FastifyRequest {
     /** Session appliquée à cette requête. Posée par `onRequest`, jamais par le client. */
     sessionGrc?: SessionAppliquee;
+    /**
+     * « Le client est-il encore là ? » — posé par `onRequest`, avant même
+     * l'authentification, et lu par la route de reprise (constat Q-19).
+     */
+    abandonGrc?: () => boolean;
   }
   interface FastifyContextConfig {
     /** Classe d'accès de la route. Son absence rend la route inutilisable. */
@@ -565,6 +570,29 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  de disponibilité qui exige une session ne diagnostique plus rien.
    * ------------------------------------------------------------------- */
   instance.addHook('onRequest', async (requete: FastifyRequest, reponse: FastifyReply) => {
+    // ── 0. Le témoin d'abandon, avant TOUT le reste ────────────────────
+    //
+    // ── Pourquoi il a remonté jusqu'ici, et ce que cela a coûté ─────────
+    //
+    // Il était posé en tête de la route de reprise, avec ce commentaire :
+    // « posé AVANT tout le reste : une connexion qui tombe pendant la lecture
+    // du fichier doit être vue elle aussi ». C'était vrai quand la route était
+    // le premier code à s'exécuter. Depuis que l'authentification s'exerce en
+    // `onRequest` (condition **E4**), ce n'est plus vrai : une connexion qui
+    // tombe **pendant** l'authentification se ferme avant que l'écouteur
+    // n'existe, et l'abandon devient invisible — le serveur valide alors une
+    // reprise pour un client déjà parti, ce qui est exactement le constat Q-19.
+    //
+    // Le banc l'a montré avant moi : `bornes-reprise.test.mjs` a expiré à 20 s
+    // en attendant un « Reprise ANNULÉE » qui ne venait plus. Un essai qui tient
+    // un ORDRE, et non seulement un résultat, est ce qui rend un réordonnancement
+    // visible.
+    //
+    // Il est donc posé ici : avant le rythme, avant l'identité, avant la
+    // déclaration d'accès. La propriété qu'il porte redevient vraie de tout le
+    // traitement, et non plus du seul corps de la route.
+    requete.abandonGrc = surveillerAbandon(reponse);
+
     const adresse = requete.ip;
 
     // ── 1. Rythme ──────────────────────────────────────────────────────
@@ -1196,11 +1224,11 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       const { mode, fichier } = requete.body;
       const apercu = requete.body.apercu === true;
 
-      // Le témoin d'abandon est posé AVANT tout le reste : une connexion qui
-      // tombe pendant la lecture du fichier doit être vue elle aussi. Posé plus
-      // bas, il aurait manqué la fermeture survenue entre-temps — et l'on
-      // aurait validé pour un client déjà parti, ce que ce constat corrige.
-      const abandonne = surveillerAbandon(reponse);
+      // Le témoin est posé par le crochet `onRequest`, avant l'authentification
+      // elle-même : voir le §0 de ce crochet pour ce que cela ferme. Le repli
+      // ne sert qu'à un montage qui n'aurait pas le crochet — il n'en existe
+      // aucun, et il vaut mieux un témoin tardif qu'aucun témoin.
+      const abandonne = requete.abandonGrc ?? surveillerAbandon(reponse);
 
       // ══ T-3 : LE REFUS PRÉCÈDE LE TRAVAIL ═══════════════════════════
       //
@@ -1221,8 +1249,12 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       // sur l'écriture mais pas sur le COÛT.
       //
       // Résoudre le périmètre d'abord ne coûte rien et referme les trois.
+      // ── Ce que le crochet `onRequest` a déjà fait, et qui n'est plus refait ──
+      // Le refus précédait déjà le travail sur cette route (constat T-3) ; il
+      // le précède désormais pour TOUTES, et plus tôt — avant l'analyse du
+      // corps. L'appel explicite au résolveur qui tenait la propriété ici
+      // ferait maintenant deux barrières dont une seule serait rejouée.
       const instanceDepot = await assurerDepot();
-      await resolveur.resoudre();
 
       // 1. Lire l'enveloppe et monter la charge de v1 à v12. Le module de
       //    reprise borne lui-même la taille, le nombre de nœuds et la

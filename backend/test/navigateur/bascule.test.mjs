@@ -683,28 +683,61 @@ describe('La bascule, de bout en bout', () => {
     // choix n'est pas seulement une correction : un test qui s'accroche à une phrase
     // se casse à chaque reformulation, et l'on prend l'habitude de le « réparer »
     // sans le lire. L'issue, elle, ne se reformule pas.
+    /* ══ Q-64 : LES DEUX REPRISES SONT SÉPARÉES PAR UNE QUIESCENCE ═════════
+     *
+     * Les deux reprises étaient enchaînées dans un SEUL `page.evaluate`, donc
+     * sans qu'aucune attente puisse s'intercaler. Reproduit sous charge (banc
+     * complet, machine à 24 de charge moyenne) : la seconde reprise rend
+     * **GRC03**, « cet enregistrement a été modifié entre-temps », et l'essai
+     * rougit sur un produit qui va bien.
+     *
+     * Le mécanisme est celui que `attendreQuiescence` documente déjà : la
+     * PREMIÈRE reprise fait réafficher l'écran, le tableau de bord réinscrit
+     * son point d'historique du jour, `marquerModification()` arme le minuteur
+     * de regroupement (400 ms) — et sur une machine chargée ce minuteur tire
+     * **pendant** la seconde reprise, entre sa lecture des versions et son
+     * écriture. Le serveur a raison de répondre GRC03 : quelqu'un a bien écrit
+     * entre-temps. C'est l'essai qui avait tort de croire la page au repos.
+     *
+     * ⚠️ **La verrue du produit est réelle et elle est DITE, pas effacée** :
+     * un utilisateur qui enchaîne deux restaurations en quelques centaines de
+     * millisecondes verra le même « modifié entre-temps », alors que rien
+     * d'anormal ne s'est produit. Ce n'est ni bloquant ni destructeur — la
+     * reprise est transactionnelle, rien n'est perdu, et le geste réussit au
+     * second essai —, donc classe 3 du tri du `PLAN_EXECUTION` §0 bis, à
+     * porter au registre. Ce que l'essai fige, lui, est la propriété : deux
+     * reprises du même fichier ABOUTISSENT et CONVERGENT.
+     */
     const session = await ouvrirApplication();
     try {
-      const deuxFois = await session.page.evaluate(async () => {
-        const texte = window.DataStore.exportSnapshot();
-        const lu = await window.DataStore.parseImport(texte);
-        const appliquer = () =>
-          window.DataStore.applyImport(lu.payload, 'merge', { texte, nom: 'Sauvegarde_identique.json' });
-
-        const issues = [];
-        for (let i = 0; i < 2; i += 1) {
+      const reprendre = (texte) =>
+        session.page.evaluate(async (t) => {
+          const source = t ?? window.DataStore.exportSnapshot();
+          const lu = await window.DataStore.parseImport(source);
           try {
-            issues.push({ ok: true, r: await appliquer() });
+            const r = await window.DataStore.applyImport(lu.payload, 'merge', {
+              texte: source, nom: 'Sauvegarde_identique.json',
+            });
+            return { texte: source, issue: { ok: true, r } };
           } catch (erreur) {
-            issues.push({ ok: false, message: String(erreur && erreur.message) });
+            return { texte: source, issue: { ok: false, message: String(erreur && erreur.message) } };
           }
-        }
-        return {
-          issues,
+        }, texte ?? null);
+
+      const premiere = await reprendre(null);
+      // Le point d'historique que la première reprise a fait réécrire doit être
+      // PARTI avant qu'on en lance une seconde. Sans cette ligne, l'essai mesure
+      // une course, pas la propriété qu'il vise.
+      await attendreQuiescence(session.page);
+      const seconde = await reprendre(premiere.texte);
+
+      const deuxFois = {
+        issues: [premiere.issue, seconde.issue],
+        ...(await session.page.evaluate(() => ({
           risques: window.DataStore.getRisques().map((r) => r.id).sort(),
           mappings: window.DataStore.getMappings().map((m) => m.id).sort(),
-        };
-      });
+        }))),
+      };
 
       const echecs = deuxFois.issues.filter((i) => !i.ok).map((i) => i.message);
       assert.deepEqual(

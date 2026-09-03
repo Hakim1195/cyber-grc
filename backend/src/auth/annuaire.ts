@@ -241,7 +241,11 @@ export class ServiceAnnuaire {
         'userPrincipalName',
         'objectSid',
       ],
+      // La borne vaut ATTENTE et non filet : deux entrées signalent un doublon
+      // d'annuaire, qui est traité juste en dessous. La troncature, elle, reste
+      // détectée par le code de résultat, qui ne dépend pas de ce choix.
       tailleMax: 2,
+      bornePleineEstTroncature: false,
     });
 
     if (entrees.length === 0) return null;
@@ -369,7 +373,10 @@ export class ServiceAnnuaire {
       portee: 'sousArbre',
       filtre: filtreEgalite('member', objet.dn),
       attributs: ['cn', 'memberOf'],
+      // Ici la borne est un FILET DE SÉCURITÉ : l'atteindre veut dire qu'on n'a pas
+      // tout vu, donc qu'on rendrait des appartenances incomplètes (constat Q-68).
       tailleMax: GROUPES_MAX,
+      bornePleineEstTroncature: true,
     });
     return groupes.map((g) => g.dn);
   }
