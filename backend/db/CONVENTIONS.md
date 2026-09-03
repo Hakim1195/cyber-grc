@@ -1385,7 +1385,10 @@ c'est une réserve à porter au registre — pas une chose à taire.
 | `ResolveurPerimetre` — « quel est le périmètre ? », **sans argument** | `src/api/session.ts` ; sa signature tient le contrôle S2 |
 | `Authentificateur` — « cette requête-ci porte-t-elle une session ? », `authentifier(requete)` qui **lève** au lieu de rendre un verdict | `src/api/session.ts` |
 | `SessionAppliquee` = `{ perimetre, droits, identite?, sessionOuverte? }` | `src/api/session.ts` |
-| `DroitsSession` = `{ niveau, domaines, export }`, rendus par `GET /api/session` | `src/api/index.ts`, `src/api/droits.ts` |
+| `DroitsSession` = `{ niveau, domaines, export, niveaux? }`, rendus par `GET /api/session` **et** `POST /api/connexion` | `src/api/index.ts`, `src/api/droits.ts` |
+| `niveaux` — un niveau **par domaine**, facultatif ; il **restreint** et ne desserre jamais. Sans lui, le profil *Qualité* écrivait sur `conformite` que la base lui refuse (constat **Q-66**) | `src/api/droits.ts` |
+| `GET /api/export` — enveloppe `grc-backup`, exige le **droit d'export distinct**, journalisé (contrôle S7) | `src/api/index.ts` |
+| Le service d'authentification **est** l'`Authentificateur`, et il est construit dans `src/serveur.ts` — fichier **réservé à l'orchestrateur** depuis le constat **Q-71** | `src/serveur.ts` |
 | Déclaration d'accès par route : `{ config: { acces: { action, domaine } } }` | `src/api/index.ts` |
 | Enveloppe d'erreur `{ erreur, message, code_grc? }`, codes **grossiers à dessein** | `src/erreurs/index.ts` |
 
