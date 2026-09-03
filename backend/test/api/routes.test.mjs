@@ -51,7 +51,7 @@ let vueGroupe;
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
   await semerJeuEssai(base, await base.connexion('app'));
-  serveur = await monterServeurReel(base);
+  serveur = await monterServeurReel(base, { authentification: 'provisoire' });
   vueGroupe = await monterGreffon(base, {
     utilisateurId: 'rssi-groupe',
     filialeId: FILIALE_A,
@@ -866,7 +866,7 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // ne couvrait que la production, alors que `PLAN_SERVEUR` §1.10 veut une recette
     // « alimentée par une copie réaliste de la production » (constat M-5).
     for (const environnement of ['production', 'recette']) {
-      const serveurFerme = await monterServeurReel(base, { environnement });
+      const serveurFerme = await monterServeurReel(base, { authentification: 'provisoire', environnement });
       try {
         const servis = [];
         for (const [methode, url, corps] of POINTS_DENTREE) {
@@ -930,7 +930,7 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
   });
 
   test('en production, aucune donnée n’est servie ni écrite', async () => {
-    const production = await monterServeurReel(base, { environnement: 'production' });
+    const production = await monterServeurReel(base, { authentification: 'provisoire', environnement: 'production' });
     try {
       // La sonde de santé reste servie : elle ne lit aucune donnée métier.
       assert.equal((await production.appeler('GET', '/api/sante')).statut, 200);

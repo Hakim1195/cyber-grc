@@ -38,7 +38,7 @@
  *     before(async () => {
  *       base = await ouvrirBaseEssai(import.meta.url);
  *       await semerJeuEssai(base, await base.connexion('app'));
- *       serveur = await monterServeurReel(base);
+ *       serveur = await monterServeurReel(base, { authentification: 'provisoire' });
  *     });
  *     after(async () => { await serveur?.fermer(); await base?.fermer(); });
  *
@@ -252,16 +252,52 @@ function envelopper(instance, config) {
 /**
  * Monte le serveur **réel** (`construireServeur`) sur la base d'essai.
  *
+ * ⚠️ **`authentification` est OBLIGATOIRE, et c'est le remède du constat Q-71.**
+ *
+ * Le câblage du lot L3 (`src/serveur.ts`) monte l'authentification réelle dès que
+ * l'annuaire est configuré — et ce harnais configure `LDAP_*`. Quatre-vingt-quatre
+ * essais de l'ère L2 sont donc devenus rouges d'un coup, en `401 !== 200` : ils
+ * montaient le serveur réel **sans session**, ce qui avait un sens avant L3 et n'en
+ * a plus.
+ *
+ * Le remède commode aurait été de poser `AUTH_LDAP_ACTIF=non` par défaut ici. Il est
+ * **refusé** : un défaut silencieux qui désarme l'authentification est exactement le
+ * défaut que Q-71 vient de fermer — une propriété que personne ne déclare et que
+ * personne ne vérifie. Chaque essai dit donc ce qu'il monte :
+ *
+ *   · `'provisoire'` — la session provisoire du lot L2. Elle accorde tous les droits
+ *     **et refuse de résoudre hors du développement** (503 partout ailleurs). C'est
+ *     la surface à éprouver quand l'essai porte sur le chargement, les écritures
+ *     ciblées ou la reprise, et non sur l'identité de qui les demande.
+ *   · `'reelle'` — l'authentification du lot L3, contre un annuaire réel.
+ *
  * @param {{nom: string}} base base d'essai ouverte par `ouvrirBaseEssai`
- * @param {{environnement?: 'production'|'recette'|'developpement'}} [options]
+ * @param {{authentification: 'provisoire'|'reelle', environnement?: 'production'|'recette'|'developpement', env?: Record<string,string>}} options
  */
 export async function monterServeurReel(base, options = {}) {
+  if (options.authentification !== 'provisoire' && options.authentification !== 'reelle') {
+    throw new Error(
+      "monterServeurReel : l'option « authentification » est obligatoire, et vaut " +
+        "'provisoire' ou 'reelle'. Elle n'a PAS de valeur par défaut, à dessein " +
+        '(constat Q-71) : depuis le lot L3, monter le serveur réel monte aussi ' +
+        "l'authentification réelle, et un essai qui ne le dit pas ne sait pas ce " +
+        "qu'il éprouve. Un essai de la surface L2 — chargement, écritures ciblées, " +
+        "reprise — demande 'provisoire' ; un essai qui porte sur l'identité demande " +
+        "'reelle'.",
+    );
+  }
   const environnement = options.environnement ?? 'developpement';
   const { chargerConfiguration } = await moduleCompile('config/index.js');
   const { creerPool } = await moduleCompile('db/pool.js');
   const { construireServeur } = await moduleCompile('serveur.js');
 
-  const config = chargerConfiguration(environnementDeTest(base, environnement, options.env ?? {}));
+  // `AUTH_LDAP_ACTIF=non` rend `config.auth.ldap` nul, et `construireServeur` retombe
+  // alors sur la session provisoire — explicitement, parce que l'essai l'a demandé.
+  const supplement =
+    options.authentification === 'provisoire'
+      ? { AUTH_LDAP_ACTIF: 'non', ...(options.env ?? {}) }
+      : (options.env ?? {});
+  const config = chargerConfiguration(environnementDeTest(base, environnement, supplement));
   const pool = creerPool(config.base);
   const instance = construireServeur(config, pool);
   await instance.ready();

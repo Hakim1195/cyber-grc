@@ -41,7 +41,7 @@ const rssi = perimetre('temoin', FILIALE_A, [FILIALE_A]);
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
   await semerJeuEssai(base, await base.connexion('app'));
-  serveur = await monterServeurReel(base);
+  serveur = await monterServeurReel(base, { authentification: 'provisoire' });
   temoin = await base.nouvelleConnexion('app');
 });
 

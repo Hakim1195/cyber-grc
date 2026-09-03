@@ -46,7 +46,7 @@ before(async () => {
   await semerJeuEssai(base, await base.connexion('app'));
   // Pool volontairement ÉTROIT : la saturation s'éprouve avec deux connexions
   // retenues, pas avec dix reprises simultanées qui coûteraient une minute.
-  serveur = await monterServeurReel(base, { env: { BASE_POOL_MAX: '2' } });
+  serveur = await monterServeurReel(base, { authentification: 'provisoire', env: { BASE_POOL_MAX: '2' } });
 
   const modele = await serveur.appeler('GET', '/api/modele');
   assert.equal(modele.statut, 200);

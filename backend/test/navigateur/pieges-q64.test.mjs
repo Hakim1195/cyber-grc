@@ -62,7 +62,7 @@ let base, serveur, application, navigateur;
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
   await semerJeuEssai(base, await base.connexion('app'));
-  serveur = await monterServeurReel(base);
+  serveur = await monterServeurReel(base, { authentification: 'provisoire' });
   application = await servirApplication(serveur);
   navigateur = await lancerNavigateur();
 });

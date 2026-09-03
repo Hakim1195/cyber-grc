@@ -67,7 +67,7 @@ const lectureB = perimetre('temoin', FILIALE_B, [FILIALE_B]);
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
   await semerJeuEssai(base, await base.connexion('app'));
-  serveur = await monterServeurReel(base);
+  serveur = await monterServeurReel(base, { authentification: 'provisoire' });
   administration = await monterGreffon(base, {
     utilisateurId: 'administrateur-groupe',
     filialeId: FILIALE_A,

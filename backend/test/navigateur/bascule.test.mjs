@@ -56,7 +56,7 @@ let administration;
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
   await semerJeuEssai(base, await base.connexion('app'));
-  serveur = await monterServeurReel(base);
+  serveur = await monterServeurReel(base, { authentification: 'provisoire' });
   application = await servirApplication(serveur);
   administration = await monterGreffon(base, {
     utilisateurId: 'administrateur-groupe',
