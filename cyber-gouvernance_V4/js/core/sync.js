@@ -140,6 +140,18 @@ const Sync = (() => {
      * enregistrements de même clé. Pour celles-là, recharger EST le remède.
      */
     const creationsBloquees = new Map();   // "collection:id" -> { collection, enregistrement }
+    /**
+     * Clés bloquées **par une expiration de session**, et par rien d'autre.
+     *
+     * ⚠️ Ce registre existe pour que la reprise après reconnexion soit
+     * **exacte**. Débloquer `bloques` en entier après une reconnexion
+     * relancerait aussi ce qu'un conflit de version ou un refus de droit avait
+     * arrêté — c'est-à-dire réémettre précisément les écritures que le serveur
+     * a déjà refusées pour une raison qui, elle, n'a pas changé. Le lot L2 a
+     * payé ce motif deux fois (Q-27 puis Q-29) : *ce qui est bloqué pour un
+     * motif ne se débloque que par la levée de CE motif.*
+     */
+    const bloquesParAuthentification = new Set();
 
     // Doublons rendus par le GÉNÉRATEUR de la page (constat Q-23) — à distinguer
     // de `doublons`, qui constate deux enregistrements de même clé sans pouvoir

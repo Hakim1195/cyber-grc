@@ -798,8 +798,15 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   /* -------------------------------------------------------------------
    *  GET /api/session
    * ------------------------------------------------------------------- */
-  instance.get('/api/session', async (_requete: FastifyRequest, reponse: FastifyReply) => {
-    const perimetre = await resolveur.resoudre();
+  instance.get(
+    '/api/session',
+    // Lire QUI l'on est n'exige aucun domaine : c'est la première chose qu'un
+    // client demande, et c'est de cette réponse qu'il déduit ce qu'il peut
+    // proposer à l'écran. Elle exige une session — donc le crochet l'a déjà
+    // exigée — et rien de plus.
+    { config: { acces: { action: 'lire', domaine: null } } },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+    const { perimetre, droits } = sessionDe(requete);
     const filiale =
       resolveur instanceof PerimetreProvisoire ? await resolveur.filiale() : null;
 
@@ -814,19 +821,34 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       administration_groupe: perimetre.administrationGroupe,
       // Dit franchement ce que vaut cette session. Le frontend peut l'afficher ;
       // un auditeur qui interroge l'API le lit sans avoir à ouvrir le code.
+      // Les trois axes, tels que le serveur les a résolus. Le frontend s'en
+      // sert pour ne PAS proposer ce qui sera refusé — mais l'interface n'est
+      // pas la barrière : le serveur refuse aussi, et c'est ce que le contrôle
+      // S6 vérifie.
+      droits: {
+        niveau: droits.niveau,
+        domaines: droits.domaines,
+        // Nommé « export » côté serveur comme côté navigateur : c'est une
+        // permission à part entière (PLAN_SERVEUR §3.3), pas un niveau.
+        export: droits.export,
+      },
       authentification: {
-        provisoire: resolveur.provisoire,
-        description: resolveur.decrire(),
+        provisoire: authentificateur.provisoire,
+        description: authentificateur.decrire(),
         lot_attendu: 'L3 — authentification Active Directory et droits à trois axes',
       },
       schema_version: VERSION_SCHEMA,
     });
-  });
+  },
+  );
 
   /* -------------------------------------------------------------------
    *  GET /api/modele — description, aucune donnée
    * ------------------------------------------------------------------- */
-  instance.get('/api/modele', async (_requete: FastifyRequest, reponse: FastifyReply) => {
+  instance.get(
+    '/api/modele',
+    { config: { acces: { action: 'lire', domaine: null } } },
+    async (_requete: FastifyRequest, reponse: FastifyReply) => {
     // ── N-6 : cette route suit le sort des autres ────────────────────────
     // Elle ne rend aucune donnée métier, mais elle rend la STRUCTURE du
     // produit : 21 entités, tous les noms de champs, leurs types, les préfixes
@@ -835,15 +857,27 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     // structure sur la seule route qui échappait à la barrière fail-closed,
     // faute d'appeler le résolveur. Elle l'appelle désormais, et pour cela
     // seulement : le périmètre résolu n'est pas utilisé au-delà.
-    await resolveur.resoudre();
+    // Le crochet `onRequest` a déjà exigé une session : la barrière que le
+    // constat N-6 réclamait est désormais tenue **pour toutes les routes à la
+    // fois**, et non route par route. L'appel explicite au résolveur qui la
+    // tenait ici n'a plus lieu d'être — le laisser ferait deux barrières dont
+    // une seule serait rejouée le jour où elle changerait.
     const instanceDepot = await assurerDepot();
     return reponse.send(instanceDepot.decrire());
-  });
+  },
+  );
 
   /* -------------------------------------------------------------------
    *  GET /api/donnees — le chargement initial
    * ------------------------------------------------------------------- */
-  instance.get('/api/donnees', async (_requete: FastifyRequest, reponse: FastifyReply) => {
+  instance.get(
+    '/api/donnees',
+    // Transversale par construction : elle rend les 21 collections d'un coup
+    // (PLAN_SERVEUR §1.3). Le contrôle par domaine ne porte donc pas sur
+    // l'accès à la route mais sur son CONTENU — `entitesLisibles` en retire ce
+    // que le profil n'a pas.
+    { config: { acces: { action: 'lire', domaine: null } } },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
     const session = sessionDe(requete);
     const jeu = await enLecture(requete, async (client, instanceDepot, perimetre) =>
       instanceDepot.chargerJeuDeDonnees(client, perimetre, entitesLisibles(session.droits)),
@@ -858,14 +892,87 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       volumes: jeu.volumes,
       data: { schemaVersion: jeu.schemaVersion, updatedAt: jeu.updatedAt, ...jeu.collections },
     });
-  });
+  },
+  );
+
+  /* -------------------------------------------------------------------
+   *  GET /api/export — l'extraction, et le droit qui lui est propre
+   * -------------------------------------------------------------------
+   *
+   *  ══ Contrôle S7 : le droit d'export est distinct de la lecture ═════
+   *
+   *  `PLAN_SERVEUR` §3.3 : « un utilisateur disposant d'un accès Groupe en
+   *  lecture peut extraire, en un clic, la cartographie complète des faiblesses
+   *  du groupe dans un seul fichier. L'export est donc une permission à part
+   *  entière, accordée explicitement, et journalisée systématiquement. »
+   *
+   *  ── Pourquoi une route, alors que le navigateur a déjà les données ──
+   *
+   *  C'est l'objection immédiate, et elle a une réponse. Tant que l'extraction
+   *  se fabrique dans le navigateur à partir du jeu déjà chargé, **le droit
+   *  d'export n'est pas un droit** : c'est un bouton qu'on cache, et le
+   *  masquage d'interface est très exactement ce que le §1.9 refuse. Une
+   *  permission qui n'a aucun point de contrôle côté serveur ne peut ni être
+   *  refusée, ni être journalisée — donc ni prouvée en audit.
+   *
+   *  Cette route donne au droit un endroit où être vérifié. Le fichier qu'elle
+   *  rend est l'enveloppe `grc-backup` du `PLAN_SERVEUR` §2.6 — le format
+   *  d'échange, celui qu'une filiale sortante emporte et que `/api/reprise`
+   *  sait relire.
+   *
+   *  ⚠️ **Ce qu'elle ne ferme pas, et il faut le dire** : quelqu'un qui a le
+   *  droit de lire peut toujours recopier ce que son écran affiche. Le droit
+   *  d'export ne rend pas l'extraction impossible ; il rend l'extraction *en
+   *  un clic, complète et silencieuse* impossible, et il la rend traçable. Le
+   *  §17.5 s'applique — un garde-fou ne se voit pas prêter plus de portée qu'il
+   *  n'en a.
+   * ------------------------------------------------------------------- */
+  instance.get(
+    '/api/export',
+    { config: { acces: { action: 'exporter', domaine: null } } },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const session = sessionDe(requete);
+      const lisibles = entitesLisibles(session.droits);
+      const jeu = await enLecture(requete, async (client, instanceDepot, perimetre) =>
+        instanceDepot.chargerJeuDeDonnees(client, perimetre, lisibles),
+      );
+
+      // L'enveloppe est construite par `src/reprise/`, qui la produit déjà pour
+      // la moitié « sortie de filiale » du §2.6. La recopier ici en ferait un
+      // second exemplaire du format, et deux exemplaires d'un format finissent
+      // par ne plus dire la même chose — c'est le motif que ce chantier traque.
+      const charge = {
+        ...jeu.collections,
+        schemaVersion: jeu.schemaVersion,
+        updatedAt: jeu.updatedAt,
+        extras: {},
+      } as unknown as ChargeV12;
+      const enveloppe = construireEnveloppe(charge);
+
+      // Journalisé **systématiquement**, comme l'exige le §3.3. Un refus l'est
+      // aussi, par le crochet `onRequest`. Le journal d'audit inaltérable est
+      // le lot L5 : cette ligne technique est ce qui existe aujourd'hui, et
+      // elle ne se donne pas pour une preuve.
+      requete.log.info(
+        {
+          utilisateur: session.perimetre.utilisateurId,
+          filiale: session.perimetre.filialeId,
+          collections: lisibles.size,
+          lignes: Object.values(jeu.volumes).reduce((somme, valeur) => somme + valeur, 0),
+        },
+        "Export du jeu de données autorisé et servi (journal d’audit : lot L5)",
+      );
+
+      return reponse.send(enveloppe);
+    },
+  );
 
   /* -------------------------------------------------------------------
    *  GET /api/rafraichir — le sondage
    * ------------------------------------------------------------------- */
   instance.get(
     '/api/rafraichir',
-    { schema: { querystring: SCHEMA_RAFRAICHIR } },
+    { schema: { querystring: SCHEMA_RAFRAICHIR }, config: { acces: { action: 'lire', domaine: null } } },
     async (requete: FastifyRequest<{ Querystring: { depuis: string } }>, reponse: FastifyReply) => {
       const depuis = new Date(requete.query.depuis);
       if (Number.isNaN(depuis.getTime())) {
@@ -884,7 +991,10 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    * ------------------------------------------------------------------- */
   instance.post(
     '/api/entites/:entite',
-    { schema: { params: SCHEMA_PARAMS_ENTITE, body: SCHEMA_CREATION } },
+    {
+      schema: { params: SCHEMA_PARAMS_ENTITE, body: SCHEMA_CREATION },
+      config: { acces: { action: 'ecrire', domaine: 'selon-entite' } },
+    },
     async (
       requete: FastifyRequest<{
         Params: { entite: string };
@@ -914,7 +1024,10 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    * ------------------------------------------------------------------- */
   instance.put(
     '/api/entites/:entite/:identifiant',
-    { schema: { params: SCHEMA_PARAMS_ENTITE_ID, body: SCHEMA_MODIFICATION } },
+    {
+      schema: { params: SCHEMA_PARAMS_ENTITE_ID, body: SCHEMA_MODIFICATION },
+      config: { acces: { action: 'ecrire', domaine: 'selon-entite' } },
+    },
     async (
       requete: FastifyRequest<{
         Params: { entite: string; identifiant: string };
@@ -951,7 +1064,10 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    * ------------------------------------------------------------------- */
   instance.delete(
     '/api/entites/:entite/:identifiant',
-    { schema: { params: SCHEMA_PARAMS_ENTITE_ID, querystring: SCHEMA_SUPPRESSION } },
+    {
+      schema: { params: SCHEMA_PARAMS_ENTITE_ID, querystring: SCHEMA_SUPPRESSION },
+      config: { acces: { action: 'ecrire', domaine: 'selon-entite' } },
+    },
     async (
       requete: FastifyRequest<{
         Params: { entite: string; identifiant: string };
@@ -995,7 +1111,20 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    * ------------------------------------------------------------------- */
   instance.post(
     '/api/reprise',
-    { schema: { body: SCHEMA_REPRISE } },
+    // ══ Condition d'entrée E3 (CONVENTIONS.md §21, §22) ═══════════════
+    //
+    // « Le droit d'appeler la reprise est décidé par le modèle de droits —
+    // c'est un acte d'administration. » Reprendre un export remplace ou
+    // fusionne le jeu de données ENTIER d'une filiale : c'est l'opération la
+    // plus destructrice du produit, et la seule qui rende aux identifiants du
+    // fichier leur valeur de clé primaire.
+    //
+    // La déclaration est ici, et le refus se prononce dans `onRequest` : un
+    // compte sans ce droit ne paie donc PAS l'analyse de son fichier.
+    {
+      schema: { body: SCHEMA_REPRISE },
+      config: { acces: { action: 'administrer', domaine: 'administration' } },
+    },
     async (
       requete: FastifyRequest<{
         Body: {
@@ -1264,7 +1393,10 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    * ------------------------------------------------------------------- */
   instance.post(
     '/api/operations/propager-mesure',
-    { schema: { body: SCHEMA_PROPAGATION } },
+    {
+      schema: { body: SCHEMA_PROPAGATION },
+      config: { acces: { action: 'ecrire', domaine: 'conformite' } },
+    },
     async (
       requete: FastifyRequest<{ Body: { mesureId: string } }>,
       reponse: FastifyReply,

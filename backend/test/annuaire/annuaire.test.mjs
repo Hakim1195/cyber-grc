@@ -171,10 +171,13 @@ describe('D1 — le compte de service lit, et le filtre configuré trouve', () =
       );
     }
     // La séquence RÉELLEMENT vue par l'annuaire, et non celle qu'on croit avoir émise.
-    const operations = annuaire.journal.map((l) => l.operation);
+    // Les déliaisons des essais précédents arrivent de façon asynchrone : on ne
+    // juge que les opérations qui décident.
+    const operations = annuaire.journal.map((l) => l.operation).filter((o) => o === 'liaison' || o === 'recherche');
     assert.deepEqual(operations, ['liaison', 'recherche'], `Séquence observée : ${JSON.stringify(annuaire.journal)}`);
-    assert.equal(annuaire.journal[0].dn, COMPTE_SERVICE.dn);
-    assert.equal(annuaire.journal[1].filtre, filtrePour('qualite.tls'));
+    const decisives = annuaire.journal.filter((l) => l.operation === 'liaison' || l.operation === 'recherche');
+    assert.equal(decisives[0].dn, COMPTE_SERVICE.dn);
+    assert.equal(decisives[1].filtre, filtrePour('qualite.tls'));
     await client.fermer();
   });
 

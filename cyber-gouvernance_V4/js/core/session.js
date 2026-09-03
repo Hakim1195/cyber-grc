@@ -83,21 +83,73 @@ const Session = (() => {
     // de paramètre, et c'est le contrat (contrôle S2).
     async function charger() {
         const brut = await Api.session();
-        const filiale = brut.filiale_active || {};
+        return adopter(brut);
+    }
+
+    /**
+     * Adopte une réponse de session, d'où qu'elle vienne.
+     *
+     * Deux appelants : `charger()` (au démarrage) et `Vault` après une
+     * connexion réussie — le contrat suppose que la connexion rend **le même
+     * objet** que `api/session` (voir `Api.CONTRAT_AUTH`). Un seul endroit
+     * construit l'état : deux constructions finiraient par diverger sur un
+     * champ, et c'est exactement le genre d'écart qui ne se voit pas.
+     */
+    function adopter(brut) {
+        const source = brut || {};
+        const filiale = source.filiale_active || {};
+        const droitsBruts = source[Api.CONTRAT_AUTH.champDroits];
+        const identiteBrute = source[Api.CONTRAT_AUTH.champIdentite];
         etat = Object.freeze({
-            utilisateur: brut.utilisateur || "",
+            utilisateur: source.utilisateur || "",
             filialeId: filiale.id || "",
             filialeCode: filiale.code || "",
             filialeNom: filiale.raison_sociale || "",
-            perimetreLecture: Object.freeze((brut.perimetre_lecture || []).slice()),
-            perimetreGroupe: !!brut.perimetre_groupe,
-            administrationGroupe: !!brut.administration_groupe,
-            provisoire: !!(brut.authentification && brut.authentification.provisoire),
-            descriptionAuth: (brut.authentification && brut.authentification.description) || "",
-            schemaVersion: brut.schema_version || null
+            perimetreLecture: Object.freeze((source.perimetre_lecture || []).slice()),
+            perimetreGroupe: !!source.perimetre_groupe,
+            administrationGroupe: !!source.administration_groupe,
+            provisoire: !!(source.authentification && source.authentification.provisoire),
+            descriptionAuth: (source.authentification && source.authentification.description) || "",
+            schemaVersion: source.schema_version || null,
+            // ── LES DROITS, TELS QUE LE SERVEUR LES REND ────────────────────
+            //
+            // `null` quand le serveur n'en annonce aucun — ce qui est le cas
+            // tant que le lot L3 n'est pas branché. Ce n'est PAS « aucun
+            // droit » : c'est « le navigateur n'en sait rien ». La différence
+            // décide de tout ce que fait `Droits` (voir plus bas).
+            droits: figerDroits(droitsBruts),
+            // Identité d'annuaire (nom affiché, service, fonction). Sert à
+            // l'affichage, jamais à décider d'un droit.
+            identite: figerIdentite(identiteBrute)
         });
         return etat;
     }
+
+    function figerDroits(brut) {
+        if (!brut || typeof brut !== "object") return null;
+        const domaines = Array.isArray(brut.domaines) ? brut.domaines.filter(d => typeof d === "string") : [];
+        return Object.freeze({
+            niveau: typeof brut.niveau === "string" ? brut.niveau : "",
+            domaines: Object.freeze(domaines.slice()),
+            // Le droit d'export est DISTINCT de la lecture (`PLAN_SERVEUR` §3.3).
+            // Absent ⇒ faux : un droit d'extraction ne se déduit pas d'un silence.
+            export: brut.export === true
+        });
+    }
+
+    function figerIdentite(brut) {
+        if (!brut || typeof brut !== "object") return null;
+        return Object.freeze({
+            login: brut.login || "",
+            nomAffichage: brut.nomAffichage || brut.nom_affichage || "",
+            email: brut.email || "",
+            service: brut.service || "",
+            fonction: brut.fonction || ""
+        });
+    }
+
+    /** Oublie la session courante : appelé à la déconnexion. */
+    function oublier() { etat = null; }
 
     function courante() { return etat; }
     function chargee() { return etat !== null; }
@@ -110,7 +162,172 @@ const Session = (() => {
         return etat.filialeNom || etat.filialeCode || etat.filialeId || "";
     }
 
-    return { charger, courante, chargee, libelleFiliale, purgerRestesNavigateur };
+    /** Libellé de l'utilisateur connecté (barre latérale, écran de session). */
+    function libelleUtilisateur() {
+        if (!etat) return "";
+        if (etat.identite && etat.identite.nomAffichage) return etat.identite.nomAffichage;
+        return etat.utilisateur || "";
+    }
+
+    return {
+        charger, adopter, oublier, courante, chargee,
+        libelleFiliale, libelleUtilisateur, purgerRestesNavigateur
+    };
 })();
 
 window.Session = Session;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  DROITS — ce que le serveur autorise, tel que l'INTERFACE peut s'en servir
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *  ⚠️ **L'INTERFACE N'EST PAS LA BARRIÈRE, ET CE FICHIER NE DOIT JAMAIS LE
+ *  LAISSER CROIRE.** Ce que fait `Droits` est une **courtoisie** : ne pas
+ *  proposer un geste qui sera refusé. La barrière est le serveur, qui refuse
+ *  la requête — c'est `backend/src/api/droits.ts` qui décide, et lui seul.
+ *  Tout ce qui est masqué ici reste refusé là-bas ; rien de ce qui est montré
+ *  ici n'est pour autant autorisé.
+ *
+ *  ── LA RÈGLE QUI GOUVERNE TOUT LE FICHIER ───────────────────────────────
+ *
+ *  Trois états, et non deux :
+ *
+ *  | Ce que le serveur a dit | Ce que fait l'interface |
+ *  |---|---|
+ *  | **rien** (`droits` absent) | elle ne masque **rien** — elle n'en sait rien, et inventer une restriction serait mentir dans l'autre sens |
+ *  | un domaine **listé** | elle le montre, et autorise l'écriture si le niveau le permet |
+ *  | un domaine **absent de la liste** | elle le masque |
+ *
+ *  La première ligne est celle qui compte aujourd'hui : tant que le lot L3
+ *  n'est pas branché, le serveur ne rend aucun bloc `droits`, et l'application
+ *  se comporte **exactement comme avant**. Aucune régression n'est possible de
+ *  ce côté, et c'est vérifiable : couper le bloc de la réponse doit rendre à
+ *  l'écran tous ses boutons.
+ *
+ *  ── POURQUOI PAS « FERMÉ PAR DÉFAUT » ICI ───────────────────────────────
+ *
+ *  Parce que fermé par défaut, dans une couche qui n'est pas la barrière, ne
+ *  protège rien et casse tout : un serveur muet rendrait l'application
+ *  inutilisable sans qu'aucune donnée soit mieux gardée. Le fail-closed est du
+ *  côté du serveur, où il a un sens — `PerimetreProvisoire` refuse de résoudre
+ *  hors développement, et c'est là que la porte est.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+const Droits = (() => {
+    "use strict";
+
+    // Rangs des niveaux, dans l'ordre de `Api.CONTRAT_AUTH.niveaux` — relevé
+    // dans `backend/src/api/droits.ts`, jamais réécrit ici.
+    function rang(niveau) {
+        const i = Api.CONTRAT_AUTH.niveaux.indexOf(niveau);
+        return i === -1 ? 0 : i + 1;
+    }
+
+    function bloc() {
+        const s = Session.courante();
+        return s ? s.droits : null;
+    }
+
+    /** Le serveur a-t-il annoncé des droits ? Sinon, on ne masque rien. */
+    function connus() { return bloc() !== null; }
+
+    function niveau() { const d = bloc(); return d ? d.niveau : ""; }
+
+    /** Domaines ouverts, ou `null` quand le serveur n'a rien dit. */
+    function domaines() { const d = bloc(); return d ? d.domaines : null; }
+
+    /**
+     * Le domaine est-il lisible ? Vrai quand les droits sont inconnus.
+     * Un domaine vide ou nul est considéré lisible : c'est une vue qui n'a pas
+     * été rattachée, et la masquer serait faire disparaître un écran sans que
+     * personne ne l'ait décidé (voir `verifier`, qui le SIGNALE au lieu de le
+     * masquer).
+     */
+    function peutLire(domaine) {
+        const d = bloc();
+        if (!d) return true;
+        if (!domaine) return true;
+        return d.domaines.indexOf(domaine) !== -1;
+    }
+
+    /**
+     * Le domaine est-il modifiable ? Il faut à la fois le domaine et le niveau.
+     *
+     * Le seuil est « contribution », comme `NIVEAU_MINIMAL` côté serveur : un
+     * profil *Direction* est en `lecture`, et n'écrit donc nulle part.
+     */
+    function peutEcrire(domaine) {
+        const d = bloc();
+        if (!d) return true;
+        if (!peutLire(domaine)) return false;
+        return rang(d.niveau) >= rang("contribution");
+    }
+
+    /** Le profil peut-il administrer (paramètres, reprise d'un export) ? */
+    function peutAdministrer() {
+        const d = bloc();
+        if (!d) return true;
+        return rang(d.niveau) >= rang("administration");
+    }
+
+    /**
+     * Le profil peut-il EXTRAIRE des données de l'application ?
+     *
+     * `PLAN_SERVEUR` §3.3 : « un utilisateur disposant d'un accès Groupe en
+     * lecture peut extraire, en un clic, la cartographie complète des faiblesses
+     * du groupe ». L'export est donc une permission à part entière, jamais
+     * déduite de la lecture ni du niveau.
+     */
+    function peutExporter() {
+        const d = bloc();
+        if (!d) return true;
+        return d.export === true;
+    }
+
+    /** Le profil est-il en lecture seule sur TOUT ? (profil *Direction*, *Auditeur*) */
+    function lectureSeule() {
+        const d = bloc();
+        if (!d) return false;
+        return rang(d.niveau) < rang("contribution");
+    }
+
+    /**
+     * Ce que le serveur annonce et que la SPA ne sait pas placer.
+     *
+     * ── Pourquoi ce contrôle existe ─────────────────────────────────────────
+     *
+     * Le rattachement d'une route à un domaine est une **liste écrite à la
+     * main** (`js/app.js`, `DOMAINE_PAR_ROUTE`) : aucun catalogue ne porte
+     * l'information « l'écran Correspondances relève de la conformité ». Le
+     * `CLAUDE.md` §3 tolère une telle liste à une condition — que son
+     * incomplétude **échoue bruyamment** au lieu de réussir en silence.
+     *
+     * C'est ce que fait cette fonction : elle compare les domaines que le
+     * serveur annonce à ceux que la SPA connaît, dans les deux sens, et rend
+     * les écarts. `js/app.js` les affiche. Un domaine ajouté côté serveur sans
+     * écran, ou un écran sans domaine, se voit donc **le jour où il apparaît**,
+     * et non le jour où quelqu'un s'aperçoit qu'un menu manque.
+     *
+     * @param {string[]} domainesConnusDeLaSpa domaines cités par la table des routes
+     * @returns {{inconnusDeLaSpa: string[], inconnusDuServeur: string[]}}
+     */
+    function verifier(domainesConnusDeLaSpa) {
+        const declares = Api.CONTRAT_AUTH.domaines;
+        const cites = Array.isArray(domainesConnusDeLaSpa) ? domainesConnusDeLaSpa : [];
+        return {
+            // Le serveur annonce un domaine dont aucun écran ne parle.
+            inconnusDeLaSpa: declares.filter(d => cites.indexOf(d) === -1),
+            // Un écran cite un domaine que le serveur ne connaît pas : faute de
+            // frappe, ou décalage avec `backend/src/api/droits.ts`.
+            inconnusDuServeur: cites.filter(d => declares.indexOf(d) === -1)
+        };
+    }
+
+    return {
+        connus, niveau, domaines,
+        peutLire, peutEcrire, peutAdministrer, peutExporter, lectureSeule,
+        verifier
+    };
+})();
+
+window.Droits = Droits;

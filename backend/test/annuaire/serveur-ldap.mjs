@@ -278,8 +278,23 @@ export async function demarrerAnnuaire(options = {}) {
     };
   }
 
+  /**
+   * Les connexions ouvertes.
+   *
+   * ── Pourquoi les tenir, et ce que leur oubli coûte ────────────────────────
+   *
+   * `server.close()` **attend que toutes les connexions se terminent**. Un client
+   * d'essai qui laisse sa prise ouverte — et un essai de panne en laisse toujours
+   * une — fige donc `fermer()` indéfiniment : le banc passe au vert, puis ne rend
+   * jamais la main. Mesuré ici : les vingt essais verts, et le processus qui
+   * n'aurait jamais fini.
+   */
+  const connexions = new Set();
+
   /** Identités liées, par connexion : une recherche exige une liaison préalable. */
   const gererConnexion = (prise) => {
+    connexions.add(prise);
+    prise.on('close', () => connexions.delete(prise));
     if (panne.refuserConnexions) {
       journal.push({ operation: 'connexion', refusee: true });
       prise.destroy();
@@ -588,6 +603,8 @@ export async function demarrerAnnuaire(options = {}) {
     },
 
     async fermer() {
+      for (const prise of connexions) prise.destroy();
+      connexions.clear();
       await new Promise((resoudre) => serveur.close(resoudre));
       if (repertoireTls !== null) rmSync(repertoireTls, { recursive: true, force: true });
     },

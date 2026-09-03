@@ -72,6 +72,7 @@ import { after, before, describe, test } from 'node:test';
 import { exigerSilenceApres } from '../aide/assertions.mjs';
 import { extraireBloc, extraireFonction, jouerBloc, jouerBlocAttendu, jouerScript } from '../aide/install.mjs';
 import { RACINE_BACKEND, RACINE_FRONTEND } from '../aide/serveur.mjs';
+import { attendrePort as attendrePortOutil, exigerOutil, portLibre } from '../aide/outils.mjs';
 
 /**
  * Le nom d'hôte du vhost livré — celui du `ServerName`, du certificat et de
@@ -112,61 +113,12 @@ let lookupOrigine;
 let urlVersionnees = 0;
 
 /**
- * Exige un outil, et ÉCHOUE bruyamment s'il manque.
- *
- * Constat **Q-37** : un essai vert parce qu'un binaire est absent est un décor.
- * Le même arbitrage qu'`ouvrirBaseEssai` pour `psql` : on dit quoi installer,
- * on ne se saute pas.
+ * Les trois gestes communs — `exigerOutil`, `portLibre`, `attendrePort` — ont
+ * quitté ce fichier pour `test/aide/outils.mjs` à la vague 3 : deux familles
+ * neuves montent elles aussi un processus qui écoute, et la copie allait faire
+ * quatre exemplaires. L'arbitrage du constat Q-37 est parti avec eux.
  */
-function exigerOutil(commande, arguments_, pourquoi) {
-  let present = true;
-  try {
-    execFileSync(commande, arguments_, { stdio: 'ignore' });
-  } catch {
-    present = false;
-  }
-  assert.ok(
-    present,
-    `« ${commande} » est introuvable sur cette machine. ${pourquoi} Installez-le plutôt que ` +
-      'de neutraliser cet essai : un contrôle qui se saute quand l’outil manque ne protège ' +
-      'que les machines où il n’y avait rien à protéger (constat Q-37).',
-  );
-}
-
-/** Un port libre sur la boucle locale. */
-function portLibre() {
-  return new Promise((resoudre, rejeter) => {
-    const serveur = net.createServer();
-    serveur.on('error', rejeter);
-    serveur.listen(0, '127.0.0.1', () => {
-      const { port } = serveur.address();
-      serveur.close(() => resoudre(port));
-    });
-  });
-}
-
-/** Attend qu'un port accepte les connexions, et ÉCHOUE en le disant sinon. */
-async function attendrePort(port, quoi, delai = 20000) {
-  const echeance = Date.now() + delai;
-  for (;;) {
-    const ouvert = await new Promise((resoudre) => {
-      const prise = net.connect(port, '127.0.0.1');
-      prise.on('connect', () => {
-        prise.destroy();
-        resoudre(true);
-      });
-      prise.on('error', () => resoudre(false));
-    });
-    if (ouvert) return;
-    if (Date.now() > echeance) {
-      throw new Error(
-        `${quoi} n’écoute toujours pas sur ${String(port)} après ${String(delai)} ms.\n` +
-          journalApache(),
-      );
-    }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-}
+const attendrePort = (port, quoi, delai = 20000) => attendrePortOutil(port, quoi, delai, journalApache);
 
 /** Ce qu'Apache a écrit — le seul endroit où il explique ses refus. */
 function journalApache() {

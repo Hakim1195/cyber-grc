@@ -48,6 +48,81 @@ const Api = (() => {
     const DELAI_MS = 30000;           // délai de garde d'une requête
     const DELAI_CHARGEMENT_MS = 60000; // le chargement initial peut être long en VPN
 
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  CONTRAT HTTP D'AUTHENTIFICATION — LOT L3
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     *  **Source unique et faisant foi : `backend/db/CONVENTIONS.md` §26.**
+     *  Rien ici n'est supposé ; ce bloc RECOPIE ce contrat en un seul endroit
+     *  pour qu'aucune autre ligne de la SPA n'écrive un chemin, un nom de champ
+     *  ou un code d'erreur d'authentification. Le jour où le §26 bouge, la
+     *  réconciliation coûte une édition de cette constante.
+     *
+     *  ── Ce que le contrat impose, et que la SPA respecte par construction ──
+     *
+     *  · `POST api/connexion`, corps `{ identifiant, motDePasse }` → **200 avec
+     *    exactement la charge de `GET api/session`**. Le navigateur n'a donc
+     *    qu'UNE seule forme à savoir lire, et c'est ce qui garantit que le
+     *    chemin « je viens de me connecter » ne diverge jamais du chemin « je
+     *    rouvre l'onglet » : les deux passent par `Session.adopter()`, et il
+     *    n'existe pas de second analyseur.
+     *  · `DELETE api/connexion` → **204**. La session est révoquée EN BASE, pas
+     *    seulement oubliée du navigateur.
+     *  · **Le cookie de session n'est jamais lu ici.** Il est `HttpOnly` : le
+     *    JavaScript ne peut pas le voir, et ne doit pas essayer. Il ne porte ni
+     *    `Max-Age` ni `Expires` — l'expiration fait foi en base. **La SPA
+     *    n'apprend qu'une session a expiré que par un 401**, jamais par un
+     *    minuteur local : une échéance tenue par le client est une échéance que
+     *    le client peut mentir, même famille que « le périmètre vient du
+     *    serveur ». `credentials: "same-origin"` suffit, et c'est déjà en place.
+     *  · **401 `non_authentifie`** : ouvrir l'écran de connexion **sans
+     *    détruire la saisie en cours**.
+     *  · **403 `droit_insuffisant`** : afficher un refus. **Ne pas
+     *    déconnecter**, et ne pas proposer de recommencer — traiter un 403
+     *    comme un 401 déconnecterait quelqu'un de parfaitement connecté.
+     *  · `droits: { niveau, domaines, export }` dans la charge de session.
+     *    `export` est une **permission à part entière**, jamais un niveau.
+     *
+     *  Les valeurs de `niveaux` et `domaines` sont relevées dans
+     *  `backend/src/api/droits.ts`. Un écart entre les deux se voit :
+     *  `Droits.verifier` (js/core/session.js) le signale au lieu de le taire.
+     * ═══════════════════════════════════════════════════════════════════════ */
+    const CONTRAT_AUTH = Object.freeze({
+        /** Ouvre (POST) et ferme (DELETE) la session. Un seul chemin, deux verbes. */
+        cheminConnexion: "/connexion",
+        /** Noms des deux champs du corps de connexion. */
+        champIdentifiant: "identifiant",
+        champMotDePasse: "motDePasse",
+        /** Nom du bloc de droits dans la charge de session. */
+        champDroits: "droits",
+        /** Nom du bloc d'identité (annuaire) dans la charge de session. */
+        champIdentite: "identite",
+        /** Codes d'erreur applicatifs — §26.2, tableau des deux refus. */
+        codeNonAuthentifie: "non_authentifie",
+        codeDroitInsuffisant: "droit_insuffisant",
+        /** Niveaux, relevés dans `backend/src/api/droits.ts`. */
+        niveaux: Object.freeze(["lecture", "contribution", "validation", "administration"]),
+        /** Domaines, relevés dans `backend/src/api/droits.ts`. */
+        domaines: Object.freeze([
+            "pilotage", "conformite", "risques", "actifs", "actions", "incidents",
+            "continuite", "documents", "audits", "tiers", "rgpd", "personnel",
+            "administration"
+        ])
+    });
+
+    /* ── L'AUTHENTIFICATION MANQUANTE EST UN FAIT, PAS UN GESTE ──────────────
+     *
+     * Même règle que pour l'issue inconnue, et pour la même raison (Q-29,
+     * Q-57) : cette couche énonce ce qui s'est passé, et **ne prescrit rien**.
+     * Elle ignore si l'application est montée, si une saisie attend en mémoire,
+     * et donc si « reconnectez-vous » est un geste sûr ou destructeur. Le geste
+     * est nommé par `js/core/vault.js`, qui, lui, le sait.
+     */
+    const FAIT_SESSION_ABSENTE = "Votre session n'est pas ouverte sur le serveur.";
+
+    /** Observateurs prévenus quand une réponse 401 arrive. Voir `vault.js`. */
+    const observateursAuth = [];
+
     /* =====================================================================
        ERREUR TYPÉE
     ===================================================================== */
@@ -76,9 +151,33 @@ const Api = (() => {
         estConflit() { return this.code === "conflit_version" || this.codeGrc === "GRC03"; }
         // Vrai quand l'écriture est refusée par DROIT : ne jamais proposer de
         // recharger dans ce cas, il n'y a rien à recharger.
+        //
+        // ⚠️ `hors_perimetre` **et lui seul**. Un refus de droit fait revenir la
+        // mémoire à la valeur du serveur (`sync.js`), ce qui, sur une CRÉATION,
+        // efface la saisie. C'est acceptable pour `hors_perimetre` — la ligne
+        // visée n'appartient pas à la filiale, il n'y a rien à conserver — et ce
+        // ne l'est pas pour `droit_insuffisant`, qui refuse une saisie que
+        // l'utilisateur vient de taper. Celui-ci suit donc le chemin des
+        // enregistrements BLOQUÉS : la saisie reste à l'écran. Même leçon que
+        // Q-29 : deux situations qui partagent un code HTTP ne partagent pas
+        // forcément la bonne réponse.
         estRefusDroit() { return this.code === "hors_perimetre"; }
+        // Session valide, droit manquant (lot L3). La saisie est conservée.
+        estDroitInsuffisant() {
+            return this.statut === 403 && this.code === CONTRAT_AUTH.codeDroitInsuffisant;
+        }
+        // Il n'y a pas — ou plus — de session ouverte sur le serveur.
+        estNonAuthentifie() { return this.statut === 401; }
+        // Le serveur a fermé la porte un moment (limitation du rythme).
+        estRythmeLimite() { return this.statut === 429; }
         estIntrouvable() { return this.code === "ressource_inconnue"; }
         // Vrai quand un nouvel essai a une chance d'aboutir (panne passagère).
+        //
+        // ⚠️ Un 401 n'en est PAS une, et c'est un point de sûreté : le juger
+        // passager ferait rejouer l'écriture en boucle contre un serveur qui
+        // refuse, et le minuteur de relance martèlerait la route toutes les huit
+        // secondes. Ce qu'il faut ici est un geste humain — se reconnecter —,
+        // pas un nouvel essai.
         estPassagere() { return this.reseau || this.statut === 503 || this.statut === 502 || this.statut === 504; }
     }
 
@@ -192,16 +291,24 @@ const Api = (() => {
 
             // Une réponse non JSON vient du frontal, pas de l'application : elle
             // ne doit rien apprendre de plus que « ça n'a pas marché ».
+            //
+            // ⚠️ Un 401 fait exception, et c'est mesurable : Apache peut rendre
+            // un 401 en HTML (une authentification de frontal), et le navigateur
+            // doit tout de même savoir qu'il n'a plus de session. Le FAIT est
+            // donc énoncé dans les deux cas, avec la même formulation.
             if (!charge || typeof charge !== "object") {
-                throw new ErreurApi({
+                throw signaler(new ErreurApi({
                     statut: reponse.status,
-                    code: reponse.status >= 500 ? "indisponible" : "erreur_interne",
+                    code: reponse.status === 401 ? CONTRAT_AUTH.codeNonAuthentifie
+                        : (reponse.status >= 500 ? "indisponible" : "erreur_interne"),
                     issueInconnue: issueInconnue,
-                    message: "Le serveur a refusé la demande (code " + reponse.status + ")." +
-                        (issueInconnue ? " " + FAIT_ISSUE_INCONNUE : "")
-                });
+                    message: reponse.status === 401
+                        ? FAIT_SESSION_ABSENTE
+                        : ("Le serveur a refusé la demande (code " + reponse.status + ")." +
+                           (issueInconnue ? " " + FAIT_ISSUE_INCONNUE : ""))
+                }), opts);
             }
-            throw new ErreurApi({
+            throw signaler(new ErreurApi({
                 statut: reponse.status,
                 issueInconnue: issueInconnue,
                 code: charge.erreur,
@@ -211,10 +318,28 @@ const Api = (() => {
                 entite: charge.entite,
                 identifiant: charge.identifiant,
                 reference: charge.reference
-            });
+            }), opts);
         }
 
         return charge;
+    }
+
+    /**
+     * Prévient les observateurs qu'il n'y a plus de session, puis rend l'erreur
+     * telle quelle (pour pouvoir écrire `throw signaler(...)`).
+     *
+     * Le signalement est **muet** pour la route de connexion elle-même : un mot
+     * de passe refusé n'est pas une session qui expire, et l'écran de connexion
+     * est déjà sous les yeux de l'utilisateur. Confondre les deux ferait
+     * réapparaître un écran par-dessus lui-même.
+     */
+    function signaler(erreur, opts) {
+        if (erreur.statut !== 401) return erreur;
+        if (opts && opts.sansSignalement) return erreur;
+        observateursAuth.slice().forEach(cb => {
+            try { cb(erreur); } catch (e) { /* un observateur ne casse pas l'appel */ }
+        });
+        return erreur;
     }
 
     /* =====================================================================
@@ -225,6 +350,57 @@ const Api = (() => {
     // Qui suis-je, dans quelle filiale. Remplace toute notion de périmètre
     // conservée par le navigateur (contrôle S2).
     function session() { return appeler("/session"); }
+
+    /* ── CONNEXION ET DÉCONNEXION (lot L3) ───────────────────────────────────
+     *
+     * ⚠️ Chemins, noms de champs et codes viennent tous de `CONTRAT_AUTH` :
+     * aucune chaîne n'est écrite ici. Voir l'entête de cette constante.
+     *
+     * Deux propriétés tenues par la forme :
+     *
+     *  · **le périmètre ne part toujours pas d'ici.** `connexion()` n'accepte ni
+     *    filiale, ni profil, ni domaine : deux chaînes, et rien d'autre. Le
+     *    serveur résout le périmètre depuis les groupes AD, comme
+     *    `resoudre()` le fait déjà sans argument (contrôle S2). Ajouter un
+     *    troisième paramètre à cette fonction serait le premier chemin par
+     *    lequel un navigateur choisirait son périmètre : il faudrait alors le
+     *    refuser, pas l'écrire.
+     *  · **le mot de passe ne transite par aucun autre chemin.** Il n'est ni
+     *    conservé, ni journalisé, ni relu : il entre en paramètre, part dans le
+     *    corps, et la fonction rend la main.
+     */
+    function connexion(identifiant, motDePasse) {
+        const corps = {};
+        corps[CONTRAT_AUTH.champIdentifiant] = identifiant;
+        corps[CONTRAT_AUTH.champMotDePasse] = motDePasse;
+        // `sansSignalement` : un 401 rendu ICI veut dire « ces identifiants-là
+        // sont refusés », pas « votre session a expiré ». Prévenir les
+        // observateurs empilerait un écran de reconnexion sur l'écran de
+        // connexion.
+        return appeler(CONTRAT_AUTH.cheminConnexion,
+            { methode: "POST", corps: corps, sansSignalement: true });
+    }
+
+    /**
+     * Ferme la session. `DELETE` sur le MÊME chemin que la connexion (§26.2) :
+     * une session est une ressource, on la crée et on la supprime.
+     *
+     * Rend `null` : la réponse est un 204 sans corps.
+     */
+    function deconnexion() {
+        return appeler(CONTRAT_AUTH.cheminConnexion,
+            { methode: "DELETE", sansSignalement: true });
+    }
+
+    /**
+     * S'abonne au FAIT « il n'y a pas (ou plus) de session ».
+     *
+     * Rappelé avec l'`ErreurApi` du 401. L'abonné décide du geste — cette
+     * couche n'en nomme aucun (voir `FAIT_SESSION_ABSENTE`).
+     */
+    function surAuthentificationRequise(cb) {
+        if (typeof cb === "function") observateursAuth.push(cb);
+    }
 
     // Description du modèle : champs acceptés par entité. Sert à n'envoyer que
     // ce que le serveur sait recevoir — et à SIGNALER le reste, jamais à le
@@ -296,7 +472,9 @@ const Api = (() => {
 
     return {
         ErreurApi,
+        CONTRAT_AUTH,
         session, modele, donnees, rafraichir,
+        connexion, deconnexion, surAuthentificationRequise,
         creer, modifier, supprimer, propagerMesure, reprendre
     };
 })();
