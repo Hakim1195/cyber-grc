@@ -108,7 +108,7 @@ let serveur;
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
   await semerJeuEssai(base, await base.connexion('app'));
-  serveur = await lancerServeurProcessus(base);
+  serveur = await lancerServeurProcessus(base, { authentification: 'provisoire' });
 });
 
 after(async () => {

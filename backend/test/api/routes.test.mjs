@@ -862,26 +862,86 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
   });
 
   test('AUCUN point d’entrée ne sert de données hors développement (constat T-3)', async () => {
-    // Deux environnements, et le second est celui qui a coûté un constat : la barrière
-    // ne couvrait que la production, alors que `PLAN_SERVEUR` §1.10 veut une recette
-    // « alimentée par une copie réaliste de la production » (constat M-5).
+    // ── Ce que le lot L3 a changé, et pourquoi cet essai est PLUS fort qu'avant ──
+    //
+    // Avant L3, la barrière était unique : la session provisoire refusait de
+    // résoudre hors du développement, et chaque route rendait 503. L'essai montait
+    // donc un serveur de production et comptait les 503.
+    //
+    // Depuis L3 il y a DEUX barrières, et elles ne se remplacent pas :
+    //
+    //   1. sans AUCUN moyen d'authentification, le serveur REFUSE DE DÉMARRER —
+    //      la faute de déploiement est prise à l'allumage, pas à chaque requête ;
+    //   2. avec l'authentification réelle, une requête sans session est refusée
+    //      en `onRequest`, avant l'analyse du corps (condition E4) — 401, plus 503.
+    //
+    // Les deux sont éprouvées ici. Se contenter de la seconde laisserait passer
+    // une installation sans annuaire ni compte de secours ; se contenter de la
+    // première laisserait passer une installation correcte mais grande ouverte.
     for (const environnement of ['production', 'recette']) {
-      const serveurFerme = await monterServeurReel(base, { authentification: 'provisoire', environnement });
+      // ── Barrière 1 : rien pour authentifier ───────────────────────────────
+      //
+      // ⚠️ Elle ne vaut QU'EN PRODUCTION, et l'écart est délibérément éprouvé ici
+      // plutôt que tu : `src/config/index.ts` gate ce refus sur `estProduction`.
+      // En recette, un serveur sans annuaire ni compte de secours démarre — et
+      // c'est la forme du constat M-5, où une barrière protégeait la production
+      // et pas la recette, laquelle porte « une copie réaliste de la production »
+      // (`PLAN_SERVEUR` §1.10). Ici rien ne fuit — la session provisoire refuse de
+      // résoudre et rend 503 partout —, mais l'exploitant ne l'apprend qu'au
+      // premier appel. Constat Q-73.
+      if (environnement === 'production') {
+        await assert.rejects(
+          () => monterServeurReel(base, { authentification: 'provisoire', environnement }),
+          (erreur) => {
+            assert.match(
+              String(erreur.message),
+              /moyen d’authentification|moyen d'authentification/,
+              'Un serveur de production sans annuaire NI compte de secours a démarré. ' +
+                'Le refus doit venir de la configuration, au démarrage : une installation ' +
+                'muette est une installation ouverte.',
+            );
+            return true;
+          },
+        );
+      } else {
+        // Recette : elle démarre. Ce qui doit alors tenir, c'est le refus à la
+        // requête — et il tient, sinon la copie réaliste serait servie sans identité.
+        const sansAuth = await monterServeurReel(base, { authentification: 'provisoire', environnement });
+        try {
+          const reponse = await sansAuth.appeler('GET', '/api/donnees');
+          assert.equal(reponse.statut, 503, 'Recette sans authentification : rien ne doit être servi.');
+          assert.equal(reponse.corps?.erreur, 'indisponible');
+        } finally {
+          await sansAuth.fermer();
+        }
+      }
+
+      // ── Barrière 2 : authentification réelle, aucune session → rien n'est servi ──
+      const serveurFerme = await monterServeurReel(base, { authentification: 'reelle', environnement });
       try {
         const servis = [];
         for (const [methode, url, corps] of POINTS_DENTREE) {
           const reponse = await serveurFerme.appeler(methode, url, corps === undefined ? {} : { corps });
-          if (reponse.statut !== 503 || reponse.corps?.erreur !== 'indisponible') {
+          // 401 « non_authentifie » est le refus attendu depuis E4. 503
+          // « indisponible » reste admis : c'est le refus de la session provisoire,
+          // et il vaut si le résolveur n'a pas pu se prononcer. Tout le reste est
+          // une donnée servie sans identité.
+          const refuse =
+            (reponse.statut === 401 && reponse.corps?.erreur === 'non_authentifie') ||
+            (reponse.statut === 503 && reponse.corps?.erreur === 'indisponible');
+          if (!refuse) {
             servis.push(
               `${environnement} · ${methode} ${url} → ${String(reponse.statut)} ${String(reponse.corps?.erreur ?? '')}`,
             );
           }
           // Fastify expose un `HEAD` pour chaque `GET` : la moitié des routes montées
-          // vit là. La barrière doit les refuser aussi ; `HEAD` ne rend pas de corps,
-          // seul le statut est jugeable — c'est assez pour distinguer 503 de 200.
+          // vit là. `HEAD` ne rend pas de corps, seul le statut est jugeable — c'est
+          // assez pour distinguer un refus d'un 200.
           if (methode === 'GET') {
             const tete = await serveurFerme.appeler('HEAD', url);
-            if (tete.statut !== 503) servis.push(`${environnement} · HEAD ${url} → ${String(tete.statut)}`);
+            if (tete.statut !== 401 && tete.statut !== 503) {
+              servis.push(`${environnement} · HEAD ${url} → ${String(tete.statut)}`);
+            }
           }
         }
         assert.deepEqual(
@@ -930,7 +990,11 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
   });
 
   test('en production, aucune donnée n’est servie ni écrite', async () => {
-    const production = await monterServeurReel(base, { authentification: 'provisoire', environnement: 'production' });
+    // Depuis L3, un serveur de production PORTE une authentification réelle — sans
+    // quoi il ne démarre pas (essai T-3 ci-dessus). Le refus attendu n'est donc plus
+    // le 503 de la session provisoire mais le 401 de l'absence de session, rendu en
+    // `onRequest` avant l'analyse du corps (condition E4).
+    const production = await monterServeurReel(base, { authentification: 'reelle', environnement: 'production' });
     try {
       // La sonde de santé reste servie : elle ne lit aucune donnée métier.
       assert.equal((await production.appeler('GET', '/api/sante')).statut, 200);
@@ -941,8 +1005,8 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
         ['POST', '/api/entites/risques', { champs: { nom: 'tentative en production' } }],
       ]) {
         const reponse = await production.appeler(methode, url, corps === undefined ? {} : { corps });
-        assert.equal(reponse.statut, 503, `${methode} ${url} doit être refusé en production.`);
-        assert.equal(reponse.corps.erreur, 'indisponible');
+        assert.equal(reponse.statut, 401, `${methode} ${url} doit être refusé en production.`);
+        assert.equal(reponse.corps.erreur, 'non_authentifie');
       }
 
       // Contrôle de morsure du contrôle lui-même : rien n'a été écrit.

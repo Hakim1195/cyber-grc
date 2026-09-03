@@ -152,7 +152,7 @@ before(async () => {
   await semerJeuEssai(base, await base.connexion('app'));
   // Le serveur RÉEL, dans son propre processus, sur un vrai port : c'est le chemin
   // de démarrage de production (`demarrer()`), configuration comprise.
-  serveur = await lancerServeurProcessus(base);
+  serveur = await lancerServeurProcessus(base, { authentification: 'provisoire' });
 
   racine = mkdtempSync(join(tmpdir(), 'grc-chaine-'));
   chmodSync(racine, 0o755); // Apache tourne sous www-data : il doit traverser.

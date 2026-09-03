@@ -394,6 +394,16 @@ export async function monterGreffon(base, perimetre, options = {}) {
  * @param {{env?: Record<string,string>, environnement?: string}} [options]
  */
 export async function lancerServeurProcessus(base, options = {}) {
+  // Même exigence que `monterServeurReel`, et pour la même raison (constat Q-71) :
+  // ce helper lance le serveur RÉEL, donc l'authentification réelle dès que
+  // l'annuaire est configuré. Un essai qui ne dit pas laquelle il monte ne sait pas
+  // ce qu'il éprouve — et il l'apprend par un 401 qu'il prend pour un défaut.
+  if (options.authentification !== 'provisoire' && options.authentification !== 'reelle') {
+    throw new Error(
+      "lancerServeurProcessus : l'option « authentification » est obligatoire, et vaut " +
+        "'provisoire' ou 'reelle'. Sans valeur par défaut, à dessein (constat Q-71).",
+    );
+  }
   const { spawn } = await import('node:child_process');
   const net = await import('node:net');
 
@@ -409,7 +419,10 @@ export async function lancerServeurProcessus(base, options = {}) {
   });
 
   const environnement = {
-    ...environnementDeTest(base, options.environnement ?? 'developpement', options.env ?? {}),
+    ...environnementDeTest(base, options.environnement ?? 'developpement', {
+      ...(options.authentification === 'provisoire' ? { AUTH_LDAP_ACTIF: 'non' } : {}),
+      ...(options.env ?? {}),
+    }),
     SERVEUR_PORT: String(port),
     SERVEUR_HOTE: '127.0.0.1',
     // Le journal EST l'objet de la mesure : il ne peut pas être « silent ».
