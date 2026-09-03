@@ -42,6 +42,23 @@ import {
 } from '../aide/navigateur.mjs';
 import { monterServeurReel } from '../aide/serveur.mjs';
 
+/**
+ * Délai d'attente des essais de ce fichier.
+ *
+ * ⚠️ **60 s, et ce n'est pas un délai « au cas où ».** `npm test` exécute les
+ * fichiers d'essai en parallèle : depuis la vague 3, ce sont **cinq** familles
+ * qui lancent chacune un Chromium, plus la famille de déploiement qui monte un
+ * Apache réel — sur quatre cœurs. Mesuré : les essais de ce fichier passent en
+ * ~1,5 s à 3 s joués seuls, et butaient sur la borne de 15 s joués avec toute
+ * la suite, tous à ~15,4 s, c'est-à-dire sur la borne elle-même.
+ *
+ * Relever la borne n'est PAS masquer une course : ce qui est attendu ici est un
+ * état que le produit atteint, et la lenteur vient de la machine, pas du
+ * produit. La distinction est celle du constat Q-64 — un banc qui rougit pour
+ * une raison sur laquelle personne ne peut agir apprend à être ignoré.
+ */
+const DELAI = 60_000;
+
 let base;
 let serveur;
 let application;
@@ -148,8 +165,8 @@ async function ouvrirApplication(droits) {
   if (droits === null) await retirerLesDroits(session.page);
   else if (droits !== undefined) await injecterDroits(session.page, droits);
   await session.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
-  assert.equal(await attendreApplication(session.page), 'chargee', 'L’application doit démarrer.');
-  await attendreQuiescence(session.page);
+  assert.equal(await attendreApplication(session.page, { delai: DELAI }), 'chargee', 'L’application doit démarrer.');
+  await attendreQuiescence(session.page, { delai: DELAI });
   return session;
 }
 
@@ -180,7 +197,7 @@ function menuVisible(page) {
 /** Va sur une route et attend que la vue soit rendue. */
 async function naviguer(page, route, selecteurAttendu) {
   await page.evaluate((r) => { window.location.hash = '#' + r; }, route);
-  await page.waitForSelector(selecteurAttendu, { timeout: 15000 });
+  await page.waitForSelector(selecteurAttendu, { timeout: DELAI });
 }
 
 /* =====================================================================
@@ -264,7 +281,7 @@ describe('Un profil en lecture ne se voit proposer aucune action d’écriture',
           return b !== null && b.disabled === true;
         },
         null,
-        { timeout: 5000, polling: 50 },
+        { timeout: DELAI, polling: 50 },
       ).catch(() => {});
 
       assert.equal(
@@ -344,7 +361,7 @@ describe('Un profil en lecture ne se voit proposer aucune action d’écriture',
       const apres = await session.page.evaluate(() => window.DataStore.getRisques().length);
 
       assert.equal(apres, avant, 'La façade doit refuser la mutation, sans exception.');
-      await attendreQuiescence(session.page);
+      await attendreQuiescence(session.page, { delai: DELAI });
       assert.equal(
         (await enBase('select count(*)::int as n from risques where nom = $1', [nom]))[0].n, 0,
         'Et rien ne doit être parti au serveur.',
@@ -463,7 +480,7 @@ describe('Un garde-fou se vérifie dans les deux sens', () => {
       await session.page.evaluate((n) => {
         window.DataStore.addRisque({ id: window.UI.genId('RISK'), nom: n });
       }, nom);
-      await attendreQuiescence(session.page);
+      await attendreQuiescence(session.page, { delai: DELAI });
       assert.equal(
         (await enBase('select count(*)::int as n from risques where nom = $1', [nom]))[0].n, 1,
         'Et sa saisie doit arriver en base.',

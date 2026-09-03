@@ -45,6 +45,23 @@ import {
 } from '../aide/navigateur.mjs';
 import { monterServeurReel } from '../aide/serveur.mjs';
 
+/**
+ * Délai d'attente des essais de ce fichier.
+ *
+ * ⚠️ **60 s, et ce n'est pas un délai « au cas où ».** `npm test` exécute les
+ * fichiers d'essai en parallèle : depuis la vague 3, ce sont **cinq** familles
+ * qui lancent chacune un Chromium, plus la famille de déploiement qui monte un
+ * Apache réel — sur quatre cœurs. Mesuré : les essais de ce fichier passent en
+ * ~1,5 s à 3 s joués seuls, et butaient sur la borne de 15 s joués avec toute
+ * la suite, tous à ~15,4 s, c'est-à-dire sur la borne elle-même.
+ *
+ * Relever la borne n'est PAS masquer une course : ce qui est attendu ici est un
+ * état que le produit atteint, et la lenteur vient de la machine, pas du
+ * produit. La distinction est celle du constat Q-64 — un banc qui rougit pour
+ * une raison sur laquelle personne ne peut agir apprend à être ignoré.
+ */
+const DELAI = 60_000;
+
 let base;
 let serveur;
 let application;
@@ -128,7 +145,7 @@ async function aller(session) {
  */
 async function attendreEtatSync(page, predicat, description) {
   try {
-    await page.waitForFunction(predicat, null, { timeout: 15000, polling: 100 });
+    await page.waitForFunction(predicat, null, { timeout: DELAI, polling: 100 });
   } catch (erreur) {
     const vu = await page
       .evaluate(() => ({
@@ -151,7 +168,7 @@ async function attendreElement(page, identifiant, description) {
     await page.waitForFunction(
       (id) => document.getElementById(id) !== null,
       identifiant,
-      { timeout: 15000, polling: 100 },
+      { timeout: DELAI, polling: 100 },
     );
   } catch (erreur) {
     const vu = await page
@@ -270,10 +287,10 @@ describe('Un serveur qui demande qui vous êtes ouvre l’écran de connexion', 
       await session.page.click('#login-btn');
 
       assert.equal(
-        await attendreApplication(session.page), 'chargee',
+        await attendreApplication(session.page, { delai: DELAI }), 'chargee',
         'Après une connexion acceptée, l’application doit démarrer.',
       );
-      await attendreQuiescence(session.page);
+      await attendreQuiescence(session.page, { delai: DELAI });
 
       const risques = await session.page.evaluate(() => window.DataStore.getRisques().map((r) => r.id));
       assert.ok(
@@ -363,14 +380,14 @@ describe('Une session qui expire pendant une saisie ne détruit pas la saisie', 
     const session = await ouvrirPageBrute();
     try {
       await aller(session);
-      assert.equal(await attendreApplication(session.page), 'chargee');
-      await attendreQuiescence(session.page);
+      assert.equal(await attendreApplication(session.page, { delai: DELAI }), 'chargee');
+      await attendreQuiescence(session.page, { delai: DELAI });
 
       // ── 1. Une saisie EN COURS, dans un vrai formulaire du produit ───────
       await session.page.evaluate(() => { window.location.hash = '#/risques'; });
-      await session.page.waitForSelector('#addRisqueBtn', { timeout: 15000 });
+      await session.page.waitForSelector('#addRisqueBtn', { timeout: DELAI });
       await session.page.click('#addRisqueBtn');
-      await session.page.waitForSelector('#nom', { timeout: 15000 });
+      await session.page.waitForSelector('#nom', { timeout: DELAI });
       await session.page.fill('#nom', nomTape);
 
       // ── 2. La session expire, et c'est une ÉCRITURE qui le découvre ──────
@@ -429,7 +446,7 @@ describe('Une session qui expire pendant une saisie ne détruit pas la saisie', 
       await session.page.waitForFunction(
         () => document.getElementById('login-form') === null,
         null,
-        { timeout: 15000, polling: 100 },
+        { timeout: DELAI, polling: 100 },
       );
       // Ce qui attendait doit REPARTIR : sans cela, « conservé » veut dire
       // « en sursis », et l'utilisateur croit son travail sauvé.
@@ -438,7 +455,7 @@ describe('Une session qui expire pendant une saisie ne détruit pas la saisie', 
         () => window.Sync.etat().bloques === 0,
         'après la reconnexion, ce qui était bloqué par la session doit repartir',
       );
-      await attendreQuiescence(session.page);
+      await attendreQuiescence(session.page, { delai: DELAI });
 
       const apres = await session.page.evaluate((n) => ({
         champToujoursLa: (document.getElementById('nom') ?? { value: null }).value,
@@ -477,8 +494,8 @@ describe('Une session qui expire pendant une saisie ne détruit pas la saisie', 
     const session = await ouvrirPageBrute();
     try {
       await aller(session);
-      assert.equal(await attendreApplication(session.page), 'chargee');
-      await attendreQuiescence(session.page);
+      assert.equal(await attendreApplication(session.page, { delai: DELAI }), 'chargee');
+      await attendreQuiescence(session.page, { delai: DELAI });
 
       await refuser(session.page, '**/api/entites/**', 403, 'droit_insuffisant',
         "Vous n'avez pas les droits nécessaires pour cette action.");
@@ -489,7 +506,7 @@ describe('Une session qui expire pendant une saisie ne détruit pas la saisie', 
       await session.page.waitForFunction(
         () => window.Sync.etat().bloques > 0 && window.Sync.etat().enCours === false,
         null,
-        { timeout: 15000, polling: 100 },
+        { timeout: DELAI, polling: 100 },
       );
 
       const vu = await session.page.evaluate((n) => ({
