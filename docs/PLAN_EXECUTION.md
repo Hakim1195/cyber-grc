@@ -122,6 +122,60 @@ d'une variable de configuration la demande dans son rapport ; il ne l'ajoute pas
 
 ---
 
+## 2 bis. Quand déléguer, quand faire soi-même — dosage mesuré sur la vague 2
+
+Procédure arrêtée le 03/09/2026, tirée de ce que la vague 2 a réellement coûté. Elle vaut pour
+toutes les vagues suivantes.
+
+### La règle de bascule
+
+> **Déléguer pour la largeur et pour le regard extérieur. Faire soi-même pour la profondeur et
+> les petits gestes.**
+
+Point de bascule : **plus de trois fichiers, dans deux domaines, découpables en périmètres
+disjoints → un agent.** Sinon, l'orchestrateur le fait directement.
+
+| Situation | Qui |
+|---|---|
+| Un changement cohérent dans des fichiers que personne d'autre ne touche | **l'orchestrateur**, directement |
+| Une correction d'un ou deux fichiers | **l'orchestrateur** — un aller-retour d'agent coûte plus que le geste |
+| Trois fronts indépendants à mener de front | **des agents**, périmètres disjoints (§2) |
+| Éprouver ce qui vient d'être écrit | **un agent** — voir ci-dessous, c'est le point non négociable |
+| Un arbitrage | **l'orchestrateur**, jamais délégué |
+
+### Le point qui ne se négocie pas : l'audit indépendant
+
+Ce n'est pas une question de vitesse, c'est une question de ce qui est **structurellement
+visible**. Sur la vague 2 : l'orchestrateur a validé le lot neuf fois ; **tous les bloquants sont
+venus d'auditeurs qui n'avaient écrit aucune des lignes examinées**. Le document normatif de
+l'orchestrateur s'est trompé **onze fois**, et *aucune* de ces erreurs n'a été trouvée par lui.
+Deux constats inscrits « corrigé » ne l'étaient pas.
+
+On juge son travail avec les angles morts qui l'ont produit. **Un audit indépendant par vague,
+minimum, quel que soit le calendrier.**
+
+### Ce que la délégation coûte, et qu'il faut budgéter
+
+Mesuré sur la vague 2 : **300 000 à 660 000 jetons par agent**, vingt minutes à deux heures. À
+quoi s'ajoutent des coûts que le compteur ne montre pas :
+
+- **le briefing** — un périmètre mal écrit produit un travail hors sujet, et le brief de
+  l'orchestrateur **propage ses propres erreurs** à qui l'exécute ;
+- **les courses** — un agent écrit pendant que l'orchestrateur commite ; le correctif de l'un
+  casse l'essai de l'autre ;
+- **la fraîcheur** — des correctifs lancés quatre minutes avant qu'un auditeur ait fini ont rendu
+  fausse une phrase de son rapport. **On attend le rapport complet avant de dispatcher.**
+
+### Le dosage retenu pour les vagues 3 à 8
+
+1. **Construire en parallèle**, 3 à 5 agents par vague, périmètres disjoints — c'est ce qui tient
+   le calendrier.
+2. **Un seul audit indépendant par vague.** Son verdict est un **tri**, plus un veto (§0 bis).
+3. **L'orchestrateur seul** sur les arbitrages, les corrections courtes, et tout ce qui tient en
+   un ou deux fichiers.
+
+---
+
 ## 3. Les vagues
 
 Dépendances reprises du `PLAN_SERVEUR` §7. Le chemin critique est signalé 🔴.
