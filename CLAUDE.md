@@ -650,112 +650,86 @@ il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écriv
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
 constat perdu.**
 
-### ▶ REPRENDRE ICI — fermer les constats du 8ᵉ passage de S2, PUIS ouvrir la vague 3
+### ▶ REPRENDRE ICI — ouvrir la vague 3, sans attendre un franchissement propre de S2
 
-**D'abord la porte.** S2 est refusée au 8ᵉ passage — **sans bloquant pour la première
-fois**, l'auteur écrivant que le lot est plus solide qu'à aucun passage : *17 fermetures
-rejouées par mutation, 17 morsures, zéro exception*. Restent 4 majeurs et 3 mineurs, et
-les contrôles **S13** et **S17** à ramener au vert. Les constats, leurs propriétaires et
-leurs échéances sont au registre de
-[`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md) §7 ; le détail est dans
-`docs/securite/RAPPORT_S2_OCTIES.md`. La vague 3 n'ouvre qu'après un **9ᵉ passage
-franchi** — *une vague ne démarre pas tant que la porte précédente ne l'est pas*
-(`PLAN_EXECUTION` §1), et c'est la règle qui a évité à ce chantier de construire sur du
-sable à chacun des quatorze passages précédents.
+> ⚠️ **Le curseur a changé le 03/09/2026, et cette section a été réécrite pour cela.** Si vous
+> lisez encore, ailleurs dans ce document ou dans un rapport, « la vague 3 n'ouvre qu'après un
+> passage franchi », c'est **périmé** : l'arbitrage vit au `docs/PLAN_EXECUTION.md` **§0 bis**,
+> et il prime.
 
-⚠️ **Trois pièges, pour ne pas repayer ce qui l'a déjà été.** Ne pas refermer le bloquant
-du 6ᵉ **par un rechargement** : c'est la voie que l'arbitrage avait explicitement écartée,
-parce qu'elle perd la saisie — et c'est précisément celle que le bandeau recommandait. **Ne
-rien conclure d'un contrôle qui n'emprunte pas le chemin de l'utilisateur** : celui du 7ᵉ
-interrogeait `/index.html` et restait vert pendant que `/` rendait 403. Et **ne pas
-présenter le pré-filtre de corps du frontal comme la barrière S13** : il ne borne pas un
-corps en `Transfer-Encoding: chunked`, la barrière qui tient est applicative, et le trou
-est reporté par écrit au lot L3.
+**Objectif : une V1 complète, toutes fonctionnalités, avant le 21/09/2026.** Le fonctionnement
+prime sur la perfection ; l'amélioration viendra ensuite, avec un vrai versionnage `Vx.x.x`.
+Concrètement : **la porte S2 ne se rejoue plus jusqu'au vert.** Elle a été refusée au 9ᵉ passage
+**sans bloquant**, le lot fonctionne, et les constats restants se **trient** au lieu de se
+grincer.
 
-⚠️ **Et une règle sur la façon de dire « vert ».** « Vert » qualifie **une révision**,
-jamais un répertoire de travail : une quinzaine d'instantanés ont été figés « vérifiés »
-en mesurant l'arbre, et l'un d'eux commitait un essai appelant une fonction restée non
-commitée — à cette révision, il ne s'importait pas. Mesurer sur un export propre
-(`git archive`) plutôt que dans l'arbre où d'autres agents écrivent.
+| Classe | Traitement |
+|---|---|
+| bloque le fonctionnement | corrigé avant la fin de la vague |
+| fuite ou perte de données | corrigé, sans négociation — c'est la promesse centrale du produit |
+| tout le reste | marqué **`V1.1`** au registre, et on continue |
 
-**Ensuite seulement, la vague 3 — dont le cadrage ci-dessous reste valable et n'est pas
-à refaire.**
+Ce qui reste ouvert au registre (`PLAN_EXECUTION` §7) relève de la troisième classe ou de
+reports déjà datés vers L3, L5 et L7. **Aucun ne bloque l'ouverture de la vague 3.**
 
-C'est le chemin critique. Le lot **L3** apporte LDAPS et les groupes AD imbriqués, les
-sessions serveur, le modèle de droits à **trois axes** (périmètre × profil métier ×
-domaine), le **droit d'export distinct**, le compte de secours et la limitation de
-rythme. Une fois L3 stable vient **L5**, le journal d'audit : couverture complète des
-événements du `PLAN_SERVEUR` §1.7, consultation, export, vérification du chaînage.
+### La vague 3 — L3 authentification AD et droits, puis L5 journal
+
+Découpage, sept agents et critères d'acceptation : `PLAN_EXECUTION` **§3**. Dosage de la
+délégation — quand déléguer, quand faire soi-même : **§2 bis**, mesuré sur ce qu'a réellement
+coûté la vague 2.
 
 **Le point d'accroche existe déjà** : l'interface `ResolveurPerimetre`
-(`backend/src/api/session.ts`). L3 en fournit une autre implémentation, et **rien
-d'autre ne change** dans `backend/src/api/`. Le fichier actuel dit, ligne par ligne, ce
-que L3 doit mettre à la place de chaque approximation provisoire.
+(`backend/src/api/session.ts`). L3 en fournit une autre implémentation, et **rien d'autre ne
+change** dans `backend/src/api/`. Le fichier dit, ligne par ligne, ce que L3 doit mettre à la
+place de chaque approximation provisoire.
 
-**Les conditions d'entrée sont écrites, et elles sont fermes.** La liste que la vague 3
-doit épuiser est le **`backend/db/CONVENTIONS.md` §22** — six conditions (E1 à E6),
-chacune disant *où lire* et *comment la porte S3 vérifiera*. Elle existe parce que ces
-décisions sont écrites à cinq endroits différents, arbitrées à quatre passages de porte
-distincts, et qu'une vague qui ouvre sans les avoir toutes lues en oubliera. Les trois
-qui coûtent le plus cher si on les découvre tard :
+**Six conditions d'entrée, fermes et écrites** : `backend/db/CONVENTIONS.md` **§22** (E1 à E6),
+chacune disant *où lire* et *comment la porte S3 vérifiera*. Les trois qui coûtent le plus cher
+si on les découvre tard :
 
-1. **`sessions`, `session_filiales` et `session_domaines` sont écrivables sans condition
-   par le rôle applicatif** — circulaire et assumé, parce que ces tables *produisent* la
-   décision d'autorisation. Tant que ce n'est pas fermé, les requêtes intégralement
-   paramétrées sont la **seule** parade (`CONVENTIONS.md` §17.4, condition E1).
-2. **Les clés primaires composites sont reportées**, par un arbitrage écrit et daté
-   (`CONVENTIONS.md` §21). Reconduire ce report sans le réécrire est exactement ce que le
-   chantier a appris à ne plus faire.
-3. **Toute route qui exige l'administration Groupe la *vérifie* ; aucune ne la *pose*.**
-   C'est vrai aujourd'hui et démontré par un test mécanique — mais c'est une propriété du
-   code d'aujourd'hui, **pas une barrière**. Le drapeau reste une déclaration que la
-   session fait sur elle-même : à L3 de le faire décider par le modèle de droits
-   (condition E2).
+1. **`sessions`, `session_filiales`, `session_domaines` sont écrivables sans condition** par le
+   rôle applicatif — circulaire et assumé, ces tables *produisant* la décision d'autorisation.
+   Tant que ce n'est pas fermé, les requêtes intégralement paramétrées sont la **seule** parade
+   (§17.4, condition E1).
+2. **Les clés primaires composites sont reportées**, par un arbitrage écrit et daté (§21).
+3. **Toute route qui exige l'administration Groupe la *vérifie* ; aucune ne la *pose*.** Vrai
+   aujourd'hui et démontré par un test mécanique — mais c'est une propriété du code, **pas une
+   barrière**. À L3 de la faire décider par le modèle de droits (condition E2).
 
-**Ne pas croire acquis** ce que L3 peut casser sans le voir : le périmètre vient du
-serveur parce qu'*aucun chemin ne le lit ailleurs* — or L3 introduit précisément la
-couche qui le **fabrique**, et devient donc le seul endroit où l'erreur est possible.
-Le `CONVENTIONS.md` §22 en liste trois de cette nature.
+**Ne pas croire acquis** ce que L3 peut casser sans le voir : le périmètre vient du serveur parce
+qu'*aucun chemin ne le lit ailleurs* — or L3 introduit précisément la couche qui le **fabrique**,
+et devient donc le seul endroit où l'erreur est possible.
 
-**Ce que la vague 2 a déjà réglé, et qu'il ne faut pas re-traiter** — les trois pièges
-que ce document annonçait comme légués à L2 sont **fermés** :
+**Pour l'AD** : le développement se fait contre un **annuaire LDAP simulé** (livrable de l'agent
+OUTILLAGE, `PLAN_EXECUTION` §3). **Ne pas viser un AD de production pour des essais** — un banc
+qui éprouve le cas négatif verrouille des comptes réels, et les groupes `GRC-*` n'existent pas
+encore. L'AD réel a sa place en recette, encadrée.
+
+**Ce que la vague 2 a réglé, et qu'il ne faut pas re-traiter** — les trois pièges légués à L2
+sont **fermés** :
 
 | Piège | Ce qui a été fait |
 |---|---|
-| `UPDATE 0` ne distingue pas conflit de version, ligne absente et refus RLS | `diagnostiquerEcriture()` tranche **dans la même transaction** que l'écriture qui a échoué, en cinq verdicts (`conflit_version` → 409 + `GRC03`, `invisible` → 404, `autre_filiale` / `portee_groupe` / `refus_politique` → 403) |
-| Le client ne fixe ni `version`, ni `cree_le`, ni `cree_par` | ces colonnes sont **exclues par construction** en écriture, et un champ client qui les viserait est **refusé**, pas ignoré |
-| `documents.portee_groupe` est une colonne engendrée qui entre dans une clé étrangère | toute insertion **nomme ses colonnes**, liste filtrée sur `engendree = false` — découverte, pas recopiée |
+| `UPDATE 0` ne distingue pas conflit de version, ligne absente et refus RLS | `diagnostiquerEcriture()` tranche **dans la même transaction**, en cinq verdicts |
+| Le client ne fixe ni `version`, ni `cree_le`, ni `cree_par` | ces colonnes sont **exclues par construction** ; un champ client qui les viserait est **refusé**, pas ignoré |
+| `documents.portee_groupe` est une colonne engendrée entrant dans une clé étrangère | toute insertion **nomme ses colonnes**, liste filtrée sur `engendree = false` — découverte, pas recopiée |
 
-**Comment le chantier est conduit** (vagues, propriété exclusive des fichiers par
-agent, grille de sécurité — **dix-huit contrôles** — rejouée intégralement à chaque
-porte, définition de « terminé ») : **`docs/PLAN_EXECUTION.md`**. Conventions de
-schéma : **`backend/db/CONVENTIONS.md`**. État détaillé des lots, chiffres rejoués et
-réserves : **`backend/README.md` §8**.
+### Ce qui est éprouvé sur cette machine, et ce qui ne l'est pas
 
-**Ce qui est éprouvé sur cette machine, et ce qui ne l'est pas.** **Apache 2.4.58**,
-`mod_deflate`, `mod_expires`, `mod_proxy`, `openssl` et **`rsync`** sont installés depuis
-le 7ᵉ passage : le banc monte un **Apache réel** sur le vhost du dépôt et interroge
-**l'URL d'entrée** (famille `backend/test/deploiement/`). Restent hors de portée, et donc
-à surveiller à la première exécution sur la VM cible : le **TLS d'une vraie PKI**,
-l'**installation Debian 13 complète**, l'**unité systemd**, **ClamAV**, l'**Active
-Directory** et le **relais SMTP**. Le schéma a été validé sur **PostgreSQL 16.13**, la
-cible est **PostgreSQL 17**.
+**Apache 2.4.58** (`mod_deflate`, `mod_expires`, `mod_proxy`), **rsync**, **openssl** et
+**`systemd-analyze`** sont installés et **réellement joués par le banc** : la famille
+`backend/test/deploiement/` monte un Apache réel et interroge l'**URL d'entrée**. Trois défauts
+en sont sortis, dont l'application injoignable à son URL d'entrée.
 
-⚠️ **Et la leçon qui a coûté le plus cher au 7ᵉ passage : une réserve écrite n'est pas
-une réserve traitée.** Six passages avaient consigné « Apache n'est pas éprouvé » —
-honnêtement, sans se contredire — pendant que l'installer prenait une minute. Trois
-défauts sont sortis du seul fait de le faire tourner, dont **l'application injoignable à
-son URL d'entrée**. Corollaire : **un contrôle doit interroger le chemin que
-l'utilisateur emprunte, pas celui qui est commode à tester** — la vérification prescrite
-interrogeait `/index.html` et restait verte pendant que `/` rendait 403.
+Restent hors de portée : le **TLS d'une vraie PKI**, l'**installation Debian 13 complète**,
+**ClamAV**, l'**Active Directory** et le **relais SMTP**. Le schéma est validé sur
+**PostgreSQL 16.13** ; la cible est **PostgreSQL 17**.
 
-**Dette reportée, assumée et datée** (détail et échéances dans `backend/README.md` §8) :
-les tables du substrat d'authentification restent écrivables sans condition par le rôle
-applicatif — **condition d'entrée de L3** ; **la lecture du journal d'audit n'est pas
-cloisonnée**, dérogation qu'impose le chaînage par empreinte et dont le resserrement est
-un **livrable ferme de L5** ; **aucun droit par domaine ni droit d'export distinct**, et
-**aucune écriture au journal d'audit** par l'API — lots L3 et L5 ; la purge de sortie
-d'une filiale (`PLAN_SERVEUR` §2.7) n'a aucun chemin applicatif et revient au **lot L13**.
+⚠️ **La leçon qui a coûté le plus cher** : *une réserve écrite n'est pas une réserve traitée.*
+Six passages ont consigné « Apache n'est pas éprouvé » — honnêtement, sans se contredire —
+pendant que l'installer prenait une minute. Corollaire : **un contrôle doit interroger le chemin
+que l'utilisateur emprunte, pas celui qui est commode à tester.**
+
 
 ### Vérifications à mener au démarrage du projet (côté client)
 
