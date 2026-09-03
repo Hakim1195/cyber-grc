@@ -1294,3 +1294,73 @@ humain à trancher** chaque fois qu'il en apparaît une.
 Corollaire pour la suite du chantier : une migration qui ajoute une table sans `filiale_id`
 casse ces deux contrôles, et c'est **normal**. Le geste attendu est d'écrire pourquoi ici, puis
 d'ajouter la table aux deux listes — dans cet ordre.
+
+---
+
+## 25. Le contrat de l'annuaire simulé — figé avant la vague 3
+
+> Ce paragraphe existe pour une seule raison : **A1 a besoin de l'annuaire qu'écrit A4, et
+> attendre l'un pour lancer l'autre coûte une demi-vague.** Le contrat est donc arrêté ici,
+> par l'orchestrateur, avant que les deux commencent. Ce n'est pas une description de ce qui
+> sera écrit : c'est ce contre quoi les deux codent, et ce que la porte S3 lira.
+>
+> **Pourquoi l'annuaire n'appartient pas à celui qui écrit le client LDAP** : un agent qui
+> écrit sa doublure *et* le code qui l'interroge peut se tromper deux fois de la même façon,
+> et le banc reste vert. C'est le défaut mesuré en **Q-61**, où un essai éprouvait en partie
+> sa propre réécriture. La séparation est le seul garde-fou qui tienne.
+
+### 25.1 Ce que la doublure est
+
+Un **serveur LDAP en processus**, monté par le banc sur `127.0.0.1` et un **port éphémère**
+(jamais un port fixe : deux familles d'essais tournent en parallèle). Il n'y a **aucun Active
+Directory sur cette machine, et il ne faut pas en viser un** : un banc qui éprouve le cas
+négatif verrouille des comptes réels, et les groupes `GRC-*` n'existent nulle part encore.
+
+Il vit dans `backend/test/annuaire/**` et n'est **jamais** importé par `backend/src/**`. Un
+`import` de `src` vers `test` est un défaut, pas un raccourci.
+
+### 25.2 Ce que la doublure doit savoir faire
+
+Cinq comportements, et ils sont là parce que **chacun correspond à une exigence du
+`PLAN_SERVEUR` §1.5 ou §3** — pas parce qu'ils sont commodes à écrire :
+
+| # | Comportement | Exigence servie |
+|---|---|---|
+| **D1** | Liaison d'un compte de service en lecture, puis recherche par `LDAP_FILTRE_UTILISATEUR` avec `{login}` substitué | §1.5, liaison LDAPS avec compte de service |
+| **D2** | Liaison d'un utilisateur par son DN et son mot de passe — **succès et échec**, l'échec rendant `InvalidCredentials` (49) | §1.5, vérification des identifiants |
+| **D3** | Appartenances **imbriquées** : un utilisateur membre d'un groupe lui-même membre d'un groupe `GRC-*` est reconnu. La doublure porte au moins **trois niveaux** et **un cycle** (A membre de B, B membre de A) | §3.4, « les groupes imbriqués doivent être résolus récursivement » |
+| **D4** | Compte **désactivé** (`userAccountControl` portant le bit 2) et compte **retiré d'un groupe**, tous deux modifiables **en cours d'essai** | §1.5, déprovisionnement immédiat |
+| **D5** | Panne : refus de connexion, réponse lente au-delà de `LDAP_DELAI`, et réponse tronquée | §1.5 — un annuaire qui ne répond pas ne doit pas ouvrir une session |
+
+**D3 porte un cycle, et ce n'est pas une coquetterie.** Une résolution récursive naïve d'un
+annuaire réel boucle indéfiniment sur une imbrication circulaire, qui est *légale* en AD. Un
+banc qui n'en contient pas laisse passer un serveur qui se fige à la première connexion en
+production.
+
+### 25.3 Le jeu de comptes — figé, et le même pour les deux agents
+
+Huit comptes, choisis pour couvrir les huit profils du `PLAN_SERVEUR` §3.2 **et** les deux
+axes que rien d'autre n'exerce (périmètre multi-filiales, export sans lecture Groupe) :
+
+| Login | Groupes AD (directs) | Ce que le compte éprouve |
+|---|---|---|
+| `rssi.tls` | `GRC-TLS-RSSI` | le cas nominal : une filiale, tous les domaines |
+| `contrib.tls` | `GRC-TLS-CONTRIB` | contribution bornée à quatre domaines |
+| `qualite.tls` | `GRC-TLS-QUALITE` | un profil qui **ne doit pas** voir la cartographie |
+| `direction` | `GRC-GROUPE-DIRECTION` | Groupe **en lecture**, aucune écriture nulle part |
+| `rssi.groupe` | `GRC-GROUPE-RSSI`, `GRC-EXPORT` | périmètre multi-filiales **et** droit d'export |
+| `dpo` | `GRC-IMBRIQUE-DPO` (membre de `GRC-TLS-DPO`) | **l'appartenance indirecte**, seule preuve de D3 |
+| `admin` | `GRC-ADMIN` | le profil *Administration*, et lui seul, pose le drapeau Groupe |
+| `sans.groupe` | *(aucun)* | **le cas négatif** : identifiants valides, aucun accès |
+
+`sans.groupe` n'est pas un remplissage. Le §20.2 le dit : *un garde-fou se vérifie dans les deux
+sens*. Un banc qui n'éprouve que des comptes autorisés ne démontre pas une autorisation, il
+démontre qu'un chemin existe.
+
+### 25.4 Ce que le contrat ne fixe pas
+
+Le **transport** (LDAP en clair sur boucle locale, ou LDAPS avec un certificat engendré à la
+volée) est laissé à A4, **à une condition écrite dans son rapport** : la configuration réelle
+exige LDAPS et `src/config/index.ts` **refuse `ldap://` en production**. Si le banc éprouve le
+client sur du LDAP en clair, alors *la vérification du certificat n'est éprouvée par rien*, et
+c'est une réserve à porter au registre — pas une chose à taire.

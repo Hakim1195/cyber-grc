@@ -29,13 +29,14 @@
 >    la liste des conditions d'entrée à épuiser.
 >
 > Puis reprendre où le §8 de **ce** document dit de reprendre (« ▶ REPRENDRE ICI »).
-> **Au 01/09/2026 : les lots L0, L1 et L2 sont livrés, la porte S1 est franchie — ne pas
-> les refaire — mais la porte S2 a été REJOUÉE ET REFUSÉE aux 5ᵉ, 6ᵉ, 7ᵉ et 8ᵉ
-> passages.** Le 8ᵉ est le premier refus **sans bloquant**, et son auteur écrit que le lot
-> est plus solide qu'à aucun passage. La vague 3 ne
-> s'ouvre donc pas encore : une vague ne démarre pas tant que la porte précédente n'est
-> pas franchie (`docs/PLAN_EXECUTION.md` §1). Le travail immédiat est la fermeture des
-> constats du 5ᵉ passage, puis un 6ᵉ.
+> **Au 03/09/2026 : les lots L0, L1 et L2 sont livrés, la porte S1 est franchie — ne pas
+> les refaire — et la porte S2 a été jouée neuf fois, refusée au 9ᵉ sans bloquant.**
+> **La vague 3 est OUVERTE depuis le 03/09/2026** : l'arbitrage du
+> `docs/PLAN_EXECUTION.md` §0 bis remplace le veto de la porte par un **tri en trois
+> classes**, et aucun constat ouvert ne relève des deux premières. Si vous lisez ailleurs
+> « la vague 3 ne s'ouvre pas tant que S2 n'est pas franchie », c'est **périmé** — cette
+> phrase-ci l'était encore ce matin. Le travail immédiat est **L3 (authentification et
+> droits), puis L5 (journal)**, découpé en cinq agents au `PLAN_EXECUTION` §3.
 
 ## 1. Le produit
 
@@ -563,14 +564,14 @@ sur l'**Active Directory** du groupe.
   pas en s'ajoutant à une liste. Ne jamais réintroduire de liste écrite à la main
   (`CONVENTIONS.md` §18.4, §19.4 et §19.5).
 
-### Avancement au 01/09/2026
+### Avancement au 03/09/2026
 
 | Lot | État |
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache + durcissement de portée serveur, `install.sh` idempotent, `backend/README.md` |
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — une cinquantaine de tables (compte rejoué dans `backend/README.md` §8), RLS activée **et forcée** partout, propriétaire compris ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur **toutes** les tables qui portent `cree_par`, et **vérifiée** par un garde-fou ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()`, et **consignés dans un registre** depuis la migration `005` — un contrôle qui cesse d'être découvert ne disparaît plus en silence |
-| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais NON VALIDÉ** — porte **S2** franchie au 4ᵉ passage, puis **refusée aux 5ᵉ, 6ᵉ, 7ᵉ et 8ᵉ** (bloquant aux 6ᵉ et 7ᵉ ; le 8ᵉ sans bloquant). Corrigé au fil de la porte — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (131 membres avant, 131 après, listes identiques), session provisoire **fail-closed** hors développement |
-| L3 — Authentification AD et droits · L5 — Journal | ⬜ à faire — **vague 3, qui n'ouvre pas tant que S2 n'est pas franchie** |
+| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais NON VALIDÉ** — porte **S2** franchie au 4ᵉ passage, puis **refusée aux 5ᵉ, 6ᵉ, 7ᵉ, 8ᵉ et 9ᵉ** (bloquant aux 6ᵉ et 7ᵉ ; les 8ᵉ et 9ᵉ sans bloquant). **La porte ne se rejoue plus jusqu'au vert** : le tri du §0 bis a pris le relais le 03/09. Corrigé au fil de la porte — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (131 membres avant, 131 après, listes identiques), session provisoire **fail-closed** hors développement |
+| L3 — Authentification AD et droits · L5 — Journal | 🟡 **en cours — vague 3 OUVERTE le 03/09/2026** (arbitrage `docs/PLAN_EXECUTION.md` §0 bis : la porte trie, elle ne bloque plus). Cinq agents, périmètres au §3 ; conditions d'entrée au `backend/db/CONVENTIONS.md` §22 ; contrat de l'annuaire simulé au §25 |
 | L4 → L15 | ⬜ à faire — vagues 4 à 8, voir `docs/PLAN_EXECUTION.md` §3 et `PLAN_SERVEUR` §7 |
 
 Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports

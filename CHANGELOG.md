@@ -8,6 +8,35 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur — vague 3 : ouverture (lot L3, authentification AD et droits)
+
+**La vague 3 est ouverte le 03/09/2026**, sur une porte S2 refusée au 9ᵉ passage — et c'est
+délibéré. L'arbitrage de l'utilisateur (`docs/PLAN_EXECUTION.md` §0 bis, objectif d'une V1
+complète au 21/09) remplace le veto de la porte par un **tri en trois classes** : ce qui bloque
+le fonctionnement et ce qui fuit ou perd des données se corrige sans négociation ; tout le reste
+part au registre en `V1.1` et la vague continue. Appliqué constat par constat, ce tri ne laisse
+**aucun constat ouvert dans les deux premières classes**.
+
+- **État mesuré à l'ouverture**, révision `e69b184`, machine neuve (PostgreSQL 16.13, Apache
+  2.4.58, rsync 3.2.7 installés pour l'occasion) : `npm test` → **651 essais, 651 passés,
+  0 échec** (126,3 s ; base 272 · api 187 · reprise 77 · navigateur 54 · déploiement 52 ·
+  dépôt 3 · documentation 6), `npm run verifier-types` sans erreur, `npm audit --omit=dev` →
+  **0 vulnérabilité**, `db/verifier_cloisonnement.sql` → **107 contrôles, 107 réussis, 0 échec**,
+  **6 migrations** appliquées sans intervention.
+- **Deux constats étaient périmés, et le sont restés jusqu'à ce qu'on les rejoue** : **Q-54**
+  (le garde-fou du registre existait depuis le 02/09 ; rejoué par mutation le 03/09 — dix lignes
+  de queue retirées, l'essai les nomme, 5/6) et **Q-59** (637 puis 640 annoncés, **651** mesurés).
+- **Découpage arrêté** : cinq agents aux périmètres disjoints (`PLAN_EXECUTION` §3), la partition
+  de `backend/test/**` par famille (§2) — chaque agent prouve son travail sans écrire chez le
+  voisin, ce que le constat Q-3 avait rendu impossible —, et le **contrat de l'annuaire LDAP
+  simulé figé avant le lancement** (`backend/db/CONVENTIONS.md` §25), pour qu'aucun agent
+  n'attende l'autre. L'annuaire simulé n'appartient pas à qui écrit le client LDAP : un agent qui
+  écrit sa doublure et le code qui l'interroge se trompe deux fois de la même façon.
+- **Une phrase fausse retirée avant qu'elle ne coûte** : le tableau de la vague 3 prescrivait une
+  migration `005_*.sql`, alors que `005` et `006` sont **appliquées** — une session neuve aurait
+  écrit `005_` et `migrate.mjs` serait sorti en code 4.
+
+
 ### Serveur — vague 2 : l'API et la bascule de la persistance (lot L2)
 > Travail de la vague 2 terminé, **puis** ses constats fermés — quatre fois. Chiffres
 > **rejoués** au 02/09/2026 sur la révision **`ca73ac6`**, arbre propre, base neuve

@@ -6,9 +6,12 @@
 > « terminé » — vit dans [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md).
 > Conventions de schéma : [`db/CONVENTIONS.md`](db/CONVENTIONS.md).
 
-**État : lots L0, L1 et L2 livrés. La porte S1 est franchie ; la porte S2 ne l'est
-pas** — S1 « CONFIRMÉE FRANCHIE » au 6ᵉ passage ; S2 franchie au 4ᵉ passage, puis
-**refusée aux 5ᵉ, 6ᵉ, 7ᵉ et 8ᵉ**. Le
+**État : lots L0, L1 et L2 livrés ; la vague 3 (lot L3 — authentification et droits) est
+OUVERTE depuis le 03/09/2026.** La porte S1 est « CONFIRMÉE FRANCHIE » au 6ᵉ passage ; la
+porte S2 a été franchie au 4ᵉ passage puis **refusée aux 5ᵉ, 6ᵉ, 7ᵉ, 8ᵉ et 9ᵉ** — et elle
+**ne se rejoue plus jusqu'au vert** : depuis le 03/09, son verdict est un **tri** en trois
+classes (`../docs/PLAN_EXECUTION.md` §0 bis), et aucun constat ouvert ne relève des deux
+premières. Le
 verdict de chaque passage vit dans le journal des portes du
 [plan d'exécution](../docs/PLAN_EXECUTION.md) §7, et les rapports dans
 [`../docs/securite/`](../docs/securite/) — c'est là qu'il se lit, et nulle part
@@ -499,7 +502,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 637 essais, six familles (voir plus bas)
+npm test                           # 651 essais, sept familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -674,7 +677,7 @@ production. La recette fonctionnelle du lot L2 se fait **en développement**, av
 
 ## 8. Avancement
 
-État réel des lots, **au 01/09/2026**. La **conduite** du chantier — découpage en
+État réel des lots, **au 03/09/2026**. La **conduite** du chantier — découpage en
 vagues, portes de sécurité, définition de « terminé » — vit dans
 [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) ; le **quoi** vit dans
 [`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7.
@@ -683,8 +686,8 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** |
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — jouée six fois |
-| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais non validé** — porte **S2** jouée **huit fois** : franchie au 4ᵉ passage, **refusée aux 5ᵉ, 6ᵉ, 7ᵉ et 8ᵉ** ; le 8ᵉ est le premier refus **sans bloquant** |
-| L3 — Authentification AD et droits · L5 — Journal | ⬜ à faire — **vague 3, qui n'ouvre pas tant que S2 n'est pas franchie** |
+| **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais non validé par la porte** — **S2** jouée **neuf fois** : franchie au 4ᵉ passage, **refusée aux 5ᵉ, 6ᵉ, 7ᵉ, 8ᵉ et 9ᵉ** ; les 8ᵉ et 9ᵉ sans bloquant. Elle **ne se rejoue plus jusqu'au vert** : depuis le 03/09, le verdict est un **tri** (`../docs/PLAN_EXECUTION.md` §0 bis), et le lot part en vague 3 avec ses constats triés |
+| L3 — Authentification AD et droits · L5 — Journal | 🟡 **en cours — vague 3 OUVERTE le 03/09/2026** (arbitrage `docs/PLAN_EXECUTION.md` §0 bis : la porte trie, elle ne bloque plus). Cinq agents, périmètres au §3 ; conditions d'entrée au `backend/db/CONVENTIONS.md` §22 ; contrat de l'annuaire simulé au §25 |
 | L4 → L15 | ⬜ à faire — voir [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) §3 et [`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7 |
 
 ### Les verdicts, tels que le journal des portes les formule
@@ -702,6 +705,7 @@ mot pour mot :
 | **S2** (6ᵉ passage) | ❌ **refusée** — **1 bloquant**, 3 majeurs, 2 mineurs. **S17 et S18 en échec.** Le bloquant vise le correctif Q-27 **accepté à la porte précédente** : il a échangé un doublon silencieux contre une **destruction silencieuse** — le bandeau dit de recharger, l'utilisateur recharge, et la saisie disparaît. Le reste tient : 22 des 28 constats rejoués par mutation, l'hypothèse la plus chargée de Q-19 enfin **mesurée** avec un mandataire (la transaction est bien annulée), 81 sondes hostiles sans effet, 107/107 au cloisonnement, 27 écrans sous la CSP réelle sans violation. | [`RAPPORT_S2_SEXIES.md`](../docs/securite/RAPPORT_S2_SEXIES.md) |
 | **S2** (7ᵉ passage) | ❌ **refusée** — **1 bloquant**, 2 majeurs, 3 mineurs. S17 et S18 en échec. **L'auditeur a installé Apache et rsync**, ce que six passages n'avaient pas fait : la liste blanche du vhost — correctif accepté au 6ᵉ — rend **403 sur `/`**, et l'application est injoignable à son URL d'entrée. Le reste tient : 111 sondes hostiles sans effet, cloisonnement 107/107 qui s'effondre proprement au sabotage, et **25 écrans derrière un Apache réel sans une seule violation de CSP** — mesuré pour la première fois. | [`RAPPORT_S2_SEPTIES.md`](../docs/securite/RAPPORT_S2_SEPTIES.md) |
 | **S2** (8ᵉ passage) | ❌ **refusée** — **0 bloquant**, 4 majeurs, 3 mineurs. S13 et S17 en échec. « Le lot est plus solide qu'à aucun passage : **17 fermetures rejouées par mutation, 17 morsures, zéro exception**, y compris les trois que le 7ᵉ avait trouvées vertes. » Mais `LimitRequestBody` **ne s'applique pas à `/api/`** et `install.sh` imprimait « ok » en comparant deux nombres dont l'un n'agit pas ; le banc rendait **614/628 sur machine propre**, une famille entière dépendant d'une entrée `/etc/hosts` que rien ne pose ; et **le registre lui-même avait perdu la ligne d'un bloquant** — 42 constats affichés au lieu de 43. La politique TLS livrée est mesurée pour la première fois. | [`RAPPORT_S2_OCTIES.md`](../docs/securite/RAPPORT_S2_OCTIES.md) |
+| **S2** (9ᵉ passage) | ❌ **refusée** — **0 bloquant**, 4 majeurs, 6 mineurs. **S12 et S18 en échec.** L'auditeur a fait **pour la première fois la jonction que S17 réclame, en une seule pièce** : Chromium réel → Apache réel sur le vhost du dépôt → serveur réel → PostgreSQL, 0 erreur, 0 violation de CSP. 157 sondes de périmètre sans dérive, 30 formes d'injection, journal en ajout seul refusé **au propriétaire**. Mais le bandeau nomme un geste que le correctif ne couvre pas — **troisième tour du même défaut** —, l'erreur brute de l'analyseur JSON fuit en production, et **deux garde-fous posés le jour même sont contournés**, dont celui du registre. | [`RAPPORT_S2_NONIES.md`](../docs/securite/RAPPORT_S2_NONIES.md) |
 
 > ## ⚠️ **La porte S2 est REFUSÉE, sur un bloquant. Le lot L2 n'est pas franchi.**
 >
@@ -792,16 +796,17 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`ca73ac6`** — « Q-52 : rien ne vérifie qu'un commit se tient seul », branche `claude/backend-plan-serveur-hj46fs` |
+| Révision mesurée | **`e69b184`** — « Le pointeur de reprise vise la vague 3 », à l'**ouverture de la vague 3** (03/09/2026). La mesure précédente, `ca73ac6`, rendait 637 : le banc a grossi de quatorze essais entre les deux |
 | État de l'arbre | **propre** (`git status --porcelain` vide) |
 | Base | neuve, `BASE_NOM=… bash db/dev/preparer_base_dev.sh --recreer`, **PostgreSQL 16.13**, client `psql` 16.13 |
 | Node · Apache · rsync | 22.22.2 · **Apache 2.4.58 (Ubuntu)** · **rsync 3.2.7** |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 637 · pass 637 · fail 0  (121,7 s)
-                                                   base 272 · api 180 · reprise 77
-                                                   navigateur 53 · deploiement 51 · documentation 4
+npm test                                         → tests 651 · pass 651 · fail 0  (126,3 s)
+                                                   base 272 · api 187 · reprise 77
+                                                   navigateur 54 · deploiement 52
+                                                   depot 3 · documentation 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
 select * from f_verifier_schema()                → 0 ligne (8 garde-fous découverts, joués, consignés)
@@ -844,7 +849,7 @@ le plus trompeur qui soit** : il ressemble à un succès.
 
 ⚠️ **Le banc grossit à chaque fermeture de constat**, et c'est la raison d'être de la
 ligne « révision mesurée » : **505** essais au 4ᵉ passage, puis **534**, **564**, **615**,
-**637** ici — avec deux familles nées en chemin, chacune d'un défaut (§5). Un total
+**637**, **651** ici — avec **trois** familles nées en chemin, chacune d'un défaut (§5). Un total
 différent du vôtre n'est donc pas une contradiction : comparez d'abord la révision **et**
 l'état de l'arbre.
 
