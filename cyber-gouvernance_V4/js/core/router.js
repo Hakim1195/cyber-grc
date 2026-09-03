@@ -41,6 +41,27 @@ const Router = (() => {
             window.updateActiveNav(path);
         }
 
+        resoudre(path);
+
+        /* ── LES DROITS S'APPLIQUENT APRÈS LE RENDU, ET C'EST TOUT LE POINT ──
+         *
+         * `updateActiveNav` est appelé AVANT que le module ne rende sa vue :
+         * il met à jour le menu, le fil d'Ariane et les badges, qui existent
+         * déjà. Y brancher la neutralisation des boutons la ferait travailler
+         * sur le balisage de l'écran PRÉCÉDENT — elle grisait les boutons de la
+         * vue qu'on quitte, et laissait intacts ceux de la vue qu'on ouvre.
+         * Mesuré : « Supprimer sélection » restait actif pour un profil en
+         * lecture seule.
+         *
+         * Le seul instant où le balisage de la vue existe est **ici**, après
+         * l'appel du module. Le menu, lui, reste traité par `updateActiveNav` :
+         * il ne dépend d'aucun rendu.
+         */
+        if (typeof window.appliquerDroits === "function") window.appliquerDroits(path);
+    }
+
+    /** Appelle le module de la route, ou l'écran « introuvable ». */
+    function resoudre(path) {
         for (const route in routes) {
             if (route.includes("/:")) {
                 const base = route.split("/:")[0];

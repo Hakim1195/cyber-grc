@@ -322,9 +322,10 @@ window.updateActiveNav = function(route) {
     if (window.renderBreadcrumb) window.renderBreadcrumb(route);
     if (window.refreshEcheancesBadge) window.refreshEcheancesBadge();
     if (window.UI && UI.refreshPersonnesDatalist) UI.refreshPersonnesDatalist();
-    // Lot L3 : ce que les droits rendent conditionnel. Ici, et pas ailleurs,
-    // parce que c'est le seul point appelé APRÈS chaque rendu de vue.
-    if (window.appliquerDroits) window.appliquerDroits(route);
+    // Lot L3 : le MENU seulement. La neutralisation des boutons a besoin du
+    // balisage de la vue, qui n'est pas encore rendu à cet instant — elle est
+    // appelée par `js/core/router.js` APRÈS le module (voir le commentaire là-bas).
+    if (window.appliquerDroitsAuMenuSeul) window.appliquerDroitsAuMenuSeul();
 };
 
 /* =========================
@@ -677,6 +678,14 @@ window.renderBlocUtilisateur = function () {
  * balisage de la vue existe : un passage plus tôt neutraliserait un écran qui
  * n'est pas encore là.
  */
+window.appliquerDroitsAuMenuSeul = function () {
+    try {
+        appliquerDroitsAuMenu();
+    } catch (e) {
+        console.error("Application des droits au menu", e);
+    }
+};
+
 window.appliquerDroits = function (route) {
     try {
         appliquerDroitsAuMenu();
