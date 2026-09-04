@@ -89,6 +89,38 @@ function lignesDuRegistre() {
 }
 
 describe('Le registre des constats ne peut pas en perdre un (constat Q-47)', () => {
+  // ── AJOUTÉ LE 04/09/2026, après que ce garde-fou eut laissé passer ────
+  //
+  // Un script de maintenance du registre s'est trompé d'un indice de colonne :
+  // il a écrit l'échéance PAR-DESSUS l'état de quatre constats, et le texte du
+  // nouvel état APRÈS la dernière barre. Sept lignes abîmées, dont quatre dont
+  // l'état — « documenté, non fermé », « coche retirée » — a purement disparu.
+  //
+  // ⚠️ **Ce fichier est passé au vert.** Il comptait les BARRES : `| a | b |` en
+  // porte trois, et `| a | b | c` aussi, le texte ajouté après la dernière
+  // n'étant pas une cellule. La ligne restait donc « à sept barres », et la case
+  // d'état, écrasée par « `V1.1` », n'était pas vide non plus.
+  //
+  // C'est le motif que ce chantier traque : *un contrôle qui mesure autre chose
+  // que ce qu'il prétend mesurer rend le même vert qu'un contrôle qui a tout vu.*
+  // Il compte désormais les CELLULES, et refuse ce qui traîne après la dernière
+  // barre — un tableau Markdown n'a rien à porter là.
+  test('RIEN APRÈS LA DERNIÈRE BARRE : une cellule ne se décale pas en silence', async () => {
+    const fautives = lignesDuRegistre()
+      .filter((l) => !/\|\s*$/.test(l.texte))
+      .map((l) => `finit hors tableau : …${l.texte.slice(-90)}`);
+
+    assert.deepEqual(
+      fautives,
+      [],
+      'Ces lignes portent du texte APRÈS leur dernière barre. Markdown l’ignore : la ' +
+        'colonne concernée disparaît du rendu, et le contenu qu’elle devait porter avec ' +
+        'elle. C’est ainsi qu’un script d’édition décalé d’un indice efface un état sans ' +
+        'que rien ne rougisse.\n' +
+        fautives.map((f) => `    · ${f}`).join('\n'),
+    );
+  });
+
   test('SEPT BARRES par ligne : deux constats ne peuvent pas se coller', async () => {
     // ── Le défaut, exactement ──────────────────────────────────────────────
     // Treize barres sur une ligne : deux constats dans une seule, dont un
