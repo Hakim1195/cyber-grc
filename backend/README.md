@@ -502,7 +502,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 1028 essais, onze familles (voir plus bas)
+npm test                           # 1030 essais, onze familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -803,10 +803,10 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 1028 · pass 1028 · fail 0 (130,6 s)
+npm test                                         → tests 1030 · pass 1030 · fail 0 (131,0 s)
                                                    base 272 · api 241 · reprise 77
                                                    navigateur 74 · deploiement 65
-                                                   depot 3 · documentation 17
+                                                   depot 5 · documentation 17
                                                    auth 115 · droits 83 · annuaire 48
                                                    modules 33
 npm audit --omit=dev                             → found 0 vulnerabilities

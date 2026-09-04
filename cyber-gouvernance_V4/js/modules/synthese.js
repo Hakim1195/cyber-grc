@@ -916,6 +916,21 @@ const SyntheseModule = (() => {
        9. RAPPORT AUTONOME TÉLÉCHARGEABLE (HTML hors-ligne, sans dépendance)
        ========================================================================= */
     function downloadReport(m, history) {
+        // Le droit d'export est distinct de la lecture (PLAN_SERVEUR §3.3) :
+        // entonnoir unique `Droits.exigerExport()` (js/core/session.js).
+        //
+        // ⚠️ **Ce site était le SEUL des douze à ne pas passer par l'entonnoir** —
+        // constat Q-89, trouvé à la porte S3 par la mesure, pas par la lecture :
+        // avec le compte AD `rssi.tls` (`export:false`), un Chromium réel a
+        // téléchargé **38 213 octets** de « Synthèse Direction — Posture Cyber »,
+        // marquée *Document confidentiel*. Deux des huit profils du socle — RSSI
+        // et ADMIN — sont dans cette configuration.
+        //
+        // Le discriminant apparent était trompeur : le profil `direction` était
+        // bien bloqué, mais par son niveau de **lecture seule**, pas par son
+        // absence de droit d'export. Une barrière qui n'arrête que ceux qu'une
+        // autre barrière arrêtait déjà n'est pas une barrière.
+        if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
         const dateJour = new Date().toLocaleDateString("fr-FR", { year: "numeric", month: "long", day: "numeric" });
         const stamp = new Date();
         const y = stamp.getFullYear(), mo = String(stamp.getMonth() + 1).padStart(2, "0"), d = String(stamp.getDate()).padStart(2, "0");

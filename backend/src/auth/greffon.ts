@@ -70,6 +70,34 @@ export interface OptionsGreffonConnexion {
    * (`CONVENTIONS.md` §26.2, « à l'octet près »).
    */
   readonly charteSession: (session: SessionAppliquee) => unknown;
+  /**
+   * Appelé après une connexion RÉUSSIE, avant que la réponse ne parte —
+   * constat **Q-88**.
+   *
+   * ── Le chemin mort qu'il rouvre ──────────────────────────────────────
+   *
+   * L'alimentation de l'annuaire `personnes` depuis l'Active Directory est un
+   * livrable du lot L3. Elle vivait à l'**étape 5** du crochet `onRequest` du
+   * point d'entrée, gardée par `session.sessionOuverte === true` — et le seul
+   * producteur de ce drapeau est `ServiceAuthentification.connecter()`, servi
+   * par la route ci-dessous. Or cette route est déclarée **`publique`** : le
+   * crochet rend la main à l'**étape 2**, puisqu'une route qui *crée* la
+   * session ne peut pas être authentifiée. L'étape 5 n'était donc jamais
+   * atteinte sur la seule requête qui portait le drapeau.
+   *
+   * Mesuré à la porte S3 : `personnes` restait à **0 ligne après sept
+   * connexions réelles** sur l'installation déployée. Quatrième occurrence du
+   * motif « un défaut qui vit ENTRE deux fichiers dont aucun n'a tort seul ».
+   *
+   * Le rappel est fourni par le point d'entrée, comme `charteSession` : c'est
+   * lui qui sait écrire dans la base, et ce greffon-ci n'a pas à le savoir.
+   *
+   * ⚠️ **Une panne d'alimentation ne doit PAS refuser la connexion.**
+   * L'annuaire est un confort d'autocomplétion ; l'authentification a déjà
+   * réussi, la session existe et le cookie est posé. Le rappel est donc
+   * appelé de façon défensive, et son échec est journalisé, pas propagé.
+   */
+  readonly apresConnexion?: (session: SessionAppliquee) => Promise<void>;
 }
 
 interface CorpsConnexion {
@@ -87,7 +115,7 @@ export const greffonConnexion: FastifyPluginAsync<OptionsGreffonConnexion> = asy
   instance: FastifyInstance,
   options: OptionsGreffonConnexion,
 ): Promise<void> => {
-  const { service, config, charteSession } = options;
+  const { service, config, charteSession, apresConnexion } = options;
 
   instance.post(
     CHEMIN_CONNEXION,
@@ -107,6 +135,22 @@ export const greffonConnexion: FastifyPluginAsync<OptionsGreffonConnexion> = asy
         adresseIp: typeof requete.ip === 'string' && requete.ip !== '' ? requete.ip : null,
         agentUtilisateur: enteteTexte(requete.headers['user-agent']),
       });
+
+      // Constat Q-88 : l'annuaire `personnes` se peuple ICI, sur la seule
+      // requête qui porte `sessionOuverte`. Défensif à dessein — voir
+      // `apresConnexion` : l'authentification a réussi, et une écriture
+      // d'agrément ne doit pas la défaire.
+      if (apresConnexion !== undefined) {
+        try {
+          await apresConnexion(resultat.session);
+        } catch (erreur) {
+          instance.log.warn(
+            { erreur: erreur instanceof Error ? erreur.message : String(erreur) },
+            "Alimentation de l'annuaire « personnes » impossible à l'ouverture de session : " +
+              'la connexion reste valide (constat Q-88).',
+          );
+        }
+      }
 
       reponse.header('set-cookie', cookieDeSession(config, resultat.jeton));
       // `no-store` sur la réponse qui porte la session : elle ne doit vivre dans

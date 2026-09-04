@@ -79,7 +79,7 @@
 
 import { createHash } from 'node:crypto';
 
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 
 import type { Configuration } from '../config/index.js';
@@ -685,7 +685,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
 
     // ── 5. L'annuaire, à l'ouverture de session seulement ──────────────
     if (session.sessionOuverte === true && session.identite != null) {
-      await alimenterAnnuaire(requete, session.perimetre, session.identite);
+      await alimenterAnnuaire(requete.log, session.perimetre, session.identite);
     }
   });
 
@@ -725,8 +725,13 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    * ⚠️ C'est un choix, pas un oubli : il est écrit ici pour qu'on puisse le
    * contester.
    */
+  // ⚠️ Prend un JOURNAL, plus une requête — constat Q-88. Elle ne se servait de
+  // la requête que pour `requete.log`, et son second appelant (la route de
+  // connexion, où la session naît) n'a pas de requête à lui prêter au moment où
+  // il l'invoque. Passer le journal rend les deux appels possibles sans
+  // fabriquer une fausse requête pour satisfaire une signature.
   const alimenterAnnuaire = async (
-    requete: FastifyRequest,
+    journal: FastifyBaseLogger,
     perimetre: PerimetreSession,
     identite: IdentiteAnnuaire,
   ): Promise<void> => {
@@ -736,13 +741,13 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         instanceDepot.synchroniserAnnuaire(client, perimetre, identite),
       );
       if (bilan.action !== 'inchangee') {
-        requete.log.info(
+        journal.info(
           { personne: bilan.personneId, action: bilan.action, login: identite.login },
           "Annuaire aligné sur l’Active Directory à l’ouverture de session",
         );
       }
     } catch (erreur) {
-      requete.log.warn(
+      journal.warn(
         {
           login: identite.login,
           detail: traduireErreur(erreur, contexteErreurs).detailJournal,
@@ -1607,6 +1612,22 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         // Une seule rédaction de la charte de session, servie par les deux
         // routes : c'est la garantie « à l'octet près » du §26.2.
         charteSession: (session: SessionAppliquee) => charteSession(session),
+        // ── Constat Q-88 : le chemin mort, rouvert par son seul bout vivant ──
+        //
+        // `alimenterAnnuaire` était appelée à l'étape 5 du crochet `onRequest`,
+        // gardée par `sessionOuverte` — un drapeau que seule `connecter()`
+        // produit, sur une route déclarée **publique**, où le crochet rend la
+        // main à l'étape 2. Résultat mesuré à la porte S3 : `personnes` restait
+        // à **0 ligne après sept connexions réelles**.
+        //
+        // On branche donc l'alimentation là où la session naît. La garde de
+        // l'étape 5 reste en place : elle est désormais sans effet pour cette
+        // route, et redeviendra utile le jour où une autre voie produira une
+        // ouverture de session — sans qu'il faille s'en souvenir.
+        apresConnexion: async (session: SessionAppliquee) => {
+          if (session.identite == null) return;
+          await alimenterAnnuaire(instance.log, session.perimetre, session.identite);
+        },
       });
     });
   }
