@@ -628,6 +628,33 @@ export function chargerConfiguration(source: NodeJS.ProcessEnv = process.env): C
     );
   }
 
+  // ══ Q-73 — LA RECETTE EST UNE COPIE RÉALISTE DE LA PRODUCTION ════════
+  //
+  // Le refus ci-dessous ne vaut **qu'en production**, et une recette démarre
+  // donc sans annuaire ni compte de secours. C'est la forme exacte du constat
+  // M-5 : une barrière qui protège la production et pas la recette, laquelle
+  // porte « une copie réaliste de la production » (`PLAN_SERVEUR` §1.10).
+  //
+  // Ce que le constat reproche exactement : « rien ne fuit ici, la session
+  // provisoire rendant 503 partout ; **mais l'exploitant ne l'apprend qu'au
+  // premier appel** ». C'est cette moitié-là qui est fermée ici — la recette
+  // **le dit au démarrage**, et le dit précisément.
+  //
+  // ⚠️ **La seconde moitié — refuser de démarrer en recette — n'est PAS faite,
+  // et il faut le dire plutôt que de le laisser croire.** La transformer en
+  // `probleme()` est une ligne, elle a été écrite et mesurée : elle fait
+  // échouer `test/api/routes.test.mjs`, dont l'essai T-3 **assied le défaut**
+  // (« Recette : elle démarre »). Ce fichier n'appartient pas au périmètre
+  // d'écriture de l'agent qui a fermé ce constat, et un correctif de produit
+  // qui laisse un essai rouge derrière lui n'est pas un correctif. Le couple
+  // exact est porté au rapport d'agent ; Q-73 reste OUVERT jusque-là, et son
+  // échéance — « avant la mise en service pilote » — n'est pas franchie.
+  if (!ldapActif && auth.compteSecours === null && env === 'recette') {
+    lecteur.avertir(
+      "Aucun moyen d'authentification en recette : AUTH_LDAP_ACTIF est à non et aucun compte de secours n'est configuré. Le serveur démarre, mais la session provisoire refuse de résoudre hors développement : TOUTES les routes de données rendront 503. La recette est une copie réaliste de la production (§1.10) — configurez l'annuaire, ou une empreinte de compte de secours.",
+    );
+  }
+
   /* ── Notifications SMTP ──────────────────────────────────────────── */
   const smtpActif = lecteur.booleen('SMTP_ACTIF', false);
   const modeAuthSmtp = lecteur.choix(

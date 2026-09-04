@@ -73,6 +73,32 @@ import { suffit } from './modele.js';
  * corps analysé, par exemple — reviendrait à laisser le navigateur choisir son
  * périmètre, ce que la propriété 2 de l'entête interdit.
  */
+/**
+ * La filiale active, telle qu'elle s'affiche — constat **Q-85**.
+ *
+ * ── Pourquoi ce type existe ──────────────────────────────────────────────
+ *
+ * Après une connexion réelle, le bandeau « Périmètre » de l'interface affichait
+ * `FIL-1788477623975-5208b3f525954fffb228d9aa292ec1cf`. La session **provisoire**
+ * joignait le libellé de la filiale ; la session **réelle** ne portait que
+ * `sessions.filiale_active_id`, et la charte rendue au navigateur n'avait rien
+ * d'autre à montrer. Ce n'est pas cosmétique dans un outil qui sert de preuve en
+ * audit : l'utilisateur ne sait pas **dans quelle filiale il écrit**.
+ *
+ * Les trois champs sont **exactement** ceux que la session provisoire résout
+ * (`src/api/session.ts`, `FilialeResolue`), et pour la même raison : la charte
+ * doit avoir **une** forme, pas deux qui se ressemblent.
+ *
+ * ⚠️ Ils viennent de la table `filiales`, jointe à la session **au moment où
+ * elle est vérifiée** — jamais d'un cache, jamais de la requête. Une raison
+ * sociale corrigée en base est donc lue à la requête suivante.
+ */
+export interface FilialeActive {
+  readonly id: string;
+  readonly code: string;
+  readonly raisonSociale: string;
+}
+
 export interface EtatSession {
   readonly sessionId: string;
   /** Le **login** de l'utilisateur (`CONVENTIONS.md` §18.3), pas sa clé primaire. */
@@ -81,6 +107,12 @@ export interface EtatSession {
   readonly portee: PorteeSession;
   readonly filiales: readonly string[];
   readonly filialeActive: string | null;
+  /**
+   * La filiale active **nommée** (constat Q-85). `null` quand la session n'en a
+   * pas — un périmètre Groupe en lecture, par exemple — ou quand la ligne a
+   * disparu de `filiales` entre l'ouverture et la vérification.
+   */
+  readonly filiale: FilialeActive | null;
   readonly administrateur: boolean;
   readonly peutExporter: boolean;
   readonly domaines: ReadonlyMap<DomaineFonctionnelBase, NiveauDroit>;
@@ -136,6 +168,33 @@ export class ResolveurPerimetreSession {
     return await Promise.resolve(this.perimetre);
   }
 
+  /**
+   * Le **même** périmètre, sans passer par la promesse — constat **Q-70**.
+   *
+   * ── Pourquoi cet accesseur existe ────────────────────────────────────
+   *
+   * `administrationGroupe` était calculé **deux fois à l'identique** : ici, au
+   * constructeur, et dans `perimetreDe()` de `src/auth/index.ts`, qui
+   * reconstruisait un `PerimetreSession` champ par champ pour l'appliquer à la
+   * requête. Signalé par **ses deux auteurs indépendamment**, ce qui est le
+   * meilleur indice qu'il fallait le fermer : deux rédactions de la même
+   * décision divergent, et la seconde n'est rejouée par personne. Sur ce
+   * drapeau-là, une divergence n'est pas une gêne — c'est un accès Groupe
+   * accordé ou refusé par le hasard de la couche qu'on interroge.
+   *
+   * L'appelant est **synchrone** (`ServiceAuthentification.appliquer`) : lui
+   * donner `resoudre()` l'aurait obligé à devenir asynchrone, et c'est ce coût
+   * qui avait fait recopier le calcul. L'accesseur lève l'excuse.
+   *
+   * Il ne prend **aucun argument**, comme `resoudre()`, et rend le **même objet
+   * gelé** : la propriété 1 de l'entête est intacte — il n'y a pas de second
+   * chemin par lequel une requête atteindrait `grc.filiales`, il y a un second
+   * *appel* au même objet, décidé une fois pour toutes au constructeur.
+   */
+  public get perimetreFige(): PerimetreSession {
+    return this.perimetre;
+  }
+
   public decrire(): string {
     const axe =
       this.etat.portee === 'groupe'
@@ -169,6 +228,17 @@ export class ResolveurPerimetreSession {
 
   public get compteSecours(): boolean {
     return this.etat.compteSecours;
+  }
+
+  /**
+   * La filiale active, **nommée** — constat Q-85.
+   *
+   * Même forme et même rôle que `PerimetreProvisoire.filiale()`, à ceci près
+   * qu'elle est **synchrone** : la valeur a déjà été lue en base par la
+   * transaction qui a vérifié la session, et il n'y a rien à aller chercher.
+   */
+  public filiale(): FilialeActive | null {
+    return this.etat.filiale;
   }
 
   /** Niveau détenu sur un domaine. `aucun` par défaut — le défaut est fermé. */

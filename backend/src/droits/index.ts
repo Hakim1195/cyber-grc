@@ -31,7 +31,7 @@ export { ErreurSocleDroits, ouvreUnAcces, resoudreDroits } from './resolution.js
 export type { OptionsResolution } from './resolution.js';
 
 export { ResolveurPerimetreSession } from './resolveur.js';
-export type { EtatSession } from './resolveur.js';
+export type { EtatSession, FilialeActive } from './resolveur.js';
 
 export {
   groupesAttendus,

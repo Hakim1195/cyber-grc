@@ -56,6 +56,7 @@ import type { JournalMinimal, PerimetreSession } from '../db/pool.js';
 import { projeterDroits } from '../droits/passerelle-api.js';
 import { ouvreUnAcces, resoudreDroits } from '../droits/resolution.js';
 import { ResolveurPerimetreSession } from '../droits/resolveur.js';
+import type { FilialeActive } from '../droits/resolveur.js';
 import type { EtatSession } from '../droits/resolveur.js';
 import { ErreurApplicative } from '../erreurs/index.js';
 
@@ -156,10 +157,39 @@ const REVALIDATION_PAR_DEFAUT_MS = 5 * 60_000;
  *  Le service
  * ===================================================================== */
 
+/**
+ * Une session appliquée par l'authentification **réelle** — constat **Q-85**.
+ *
+ * ── Pourquoi un type de plus, et pas un champ de plus ────────────────────
+ *
+ * `SessionAppliquee` vit dans `src/api/session.ts`, qui n'appartient pas au
+ * périmètre d'écriture de cette couche (`PLAN_EXECUTION` §2). Ce type l'**étend**
+ * plutôt que de la modifier : il reste assignable partout où l'on attend une
+ * `SessionAppliquee`, et il porte en plus ce que seule l'authentification réelle
+ * sait — le **nom** de la filiale active.
+ *
+ * ── Ce qu'il reste à faire, et où ────────────────────────────────────────
+ *
+ * Le champ est produit ici ; il n'est pas encore **lu**. `charteSession`
+ * (`src/api/index.ts`) reçoit la filiale en second argument et ne la reçoit que
+ * de la session provisoire : `POST /api/connexion` et `GET /api/session` rendent
+ * donc toujours `filiale_active : { id }` seul. La ligne qui manque est décrite
+ * dans le rapport de l'agent B1 — un `?? session.filiale` dans `charteSession` —
+ * et elle vaut pour les **deux** routes à la fois, ce qui est la raison pour
+ * laquelle la donnée voyage dans la session plutôt que par un argument : le
+ * greffon de connexion reçoit `charteSession` avec **un seul** paramètre, et une
+ * charte enrichie d'un seul côté ferait diverger deux réponses que le
+ * `CONVENTIONS.md` §26.2 exige identiques « à l'octet près ».
+ */
+export interface SessionAppliqueeReelle extends SessionAppliquee {
+  /** La filiale active, nommée. `null` en portée Groupe sans filiale active. */
+  readonly filiale: FilialeActive | null;
+}
+
 export interface ResultatConnexion {
   /** Jeton EN CLAIR, destiné au seul cookie. Ne repasse jamais par la base. */
   readonly jeton: string;
-  readonly session: SessionAppliquee;
+  readonly session: SessionAppliqueeReelle;
   readonly resolveur: ResolveurPerimetreSession;
 }
 
@@ -537,8 +567,39 @@ export class ServiceAuthentification implements Authentificateur {
     motDePasse: string,
     adresseIp: string | null,
   ): Promise<IdentiteAnnuaire> {
+    // ══ Q-79 — LE CODE HTTP NE DOIT PAS NOMMER LE COMPTE DE SECOURS ══════
+    //
+    // Ce refus rendait **503**, et c'était faux deux fois.
+    //
+    //  · **Faux pour l'exploitant** : « le service d'annuaire ne répond pas »
+    //    annonce une panne réseau, alors que l'annuaire est *délibérément
+    //    désactivé* par `AUTH_LDAP_ACTIF=non`. On cherche un incident qui
+    //    n'existe pas.
+    //  · **Faux pour la sécurité, et c'est le constat** : avec l'annuaire
+    //    désactivé, `POST /api/connexion` rendait **401** pour le seul
+    //    identifiant du compte de secours et **503** pour tous les autres.
+    //    Mesuré le 03/09/2026, six sondes : `secours` → 401, `SECOURS` → 401
+    //    (la comparaison est insensible à la casse), `personne`, `admin`,
+    //    `root`, `svc-grc` → 503. **Une requête par candidat suffisait donc à
+    //    découvrir l'identifiant** que `AUTH_COMPTE_SECOURS_IDENTIFIANT` rend
+    //    configurable pour qu'il ne soit précisément pas devinable.
+    //
+    // Le refus est donc celui d'un mot de passe faux, **à l'octet près** : même
+    // statut, même message, même comptage au rythme, même écriture au journal
+    // d'audit. Ce dernier point n'est pas décoratif : sans le comptage, les deux
+    // chemins redeviendraient distinguables à la cinquième tentative, l'un se
+    // verrouillant et l'autre non. Le vrai motif, lui, va au journal technique,
+    // qui n'est lu que par l'exploitant.
     if (this.annuaire === null) {
-      throw annuaireIndisponible(
+      this.limiteur.echec(login, adresseIp);
+      await this.journaliserEchec(login, adresseIp, {
+        resume: `Échec de connexion pour « ${login} ».`,
+        detail:
+          'AUTH_LDAP_ACTIF vaut « non » et le login présenté n’est pas celui du compte de ' +
+          'secours : aucun moyen de vérifier ces identifiants',
+        compter: true,
+      });
+      throw refusAuthentification(
         'AUTH_LDAP_ACTIF vaut « non » et le login présenté n’est pas celui du compte de secours',
       );
     }
@@ -691,11 +752,14 @@ export class ServiceAuthentification implements Authentificateur {
     resolveur: ResolveurPerimetreSession,
     identite: IdentiteAnnuaire | null,
     sessionOuverte: boolean,
-  ): SessionAppliquee {
+  ): SessionAppliqueeReelle {
     const etat = resolveur.etatSession();
     return {
       perimetre: perimetreDe(resolveur),
       droits: projeterDroits(etat),
+      // Constat Q-85 : la filiale **nommée**, pour que la charte rendue au
+      // navigateur n'ait pas qu'un identifiant technique à afficher.
+      filiale: resolveur.filiale(),
       identite:
         identite === null
           ? null
@@ -739,18 +803,22 @@ function perimetreDeTravail(
   });
 }
 
-/** Le périmètre que le résolveur a figé. Lu ici sans passer par `resoudre()`. */
+/**
+ * Le périmètre que le résolveur a figé — constat **Q-70**.
+ *
+ * ⚠️ Cette fonction **reconstruisait** le périmètre champ par champ, et
+ * recalculait au passage `administrationGroupe = administrateur && portee ===
+ * 'groupe'` : la **même** décision que `ResolveurPerimetreSession`, écrite deux
+ * fois. Les deux rédactions étaient d'accord le jour où elles ont été écrites,
+ * et rien n'aurait dit qu'elles avaient cessé de l'être — condition **E2** du
+ * `CONVENTIONS.md` §22, où le drapeau décide de l'accès Groupe.
+ *
+ * Il n'y a donc plus qu'un producteur, le constructeur du résolveur, et cette
+ * fonction ne fait que **lire** ce qu'il a gelé. Le mot « le même » est ici
+ * littéral : c'est le même objet, pas une copie qui lui ressemble.
+ */
 function perimetreDe(resolveur: ResolveurPerimetreSession): PerimetreSession {
-  const etat = resolveur.etatSession();
-  return Object.freeze({
-    utilisateurId: etat.login,
-    filialeId: etat.filialeActive,
-    filiales: Object.freeze([...etat.filiales]) as readonly string[],
-    perimetreGroupe: etat.portee === 'groupe',
-    // Condition E2 : la même décision que dans le résolveur, et elle vient des
-    // deux mêmes colonnes. Elle n'est jamais prise ailleurs.
-    administrationGroupe: etat.administrateur && etat.portee === 'groupe',
-  });
+  return resolveur.perimetreFige;
 }
 
 /**

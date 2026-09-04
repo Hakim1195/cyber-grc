@@ -26,28 +26,65 @@
  * d'énumérer, c'est d'obliger un humain à trancher.
  *
  * ════════════════════════════════════════════════════════════════════════
- *  ⚠️ CE QUE CETTE PROJECTION PERD, ET IL FAUT LE DIRE
+ *  CE QUE CETTE PROJECTION PERD, ET CE QU'ELLE NE PERD PLUS — constat Q-66
  * ════════════════════════════════════════════════════════════════════════
  *
- * `DroitsSession` porte **un** niveau pour toute la session. Les droits résolus,
- * eux, en portent **un par domaine** : le profil *Qualité* contribue aux audits
- * et **lit** seulement la conformité. La projection ne peut pas exprimer cela —
- * elle rend le niveau le plus élevé, et la liste des domaines ouverts.
+ * `DroitsSession.niveau` porte **un** niveau pour toute la session. Les droits
+ * résolus, eux, en portent **un par domaine** : le profil *Qualité* contribue
+ * aux audits et **lit** seulement la conformité. Ce champ-là ne peut pas
+ * exprimer cela — il rend le niveau le plus élevé.
  *
- * **Conséquence concrète, mesurable, et non corrigée ici** : un profil *Qualité*
+ * ── Ce que ça coûtait, mesuré ────────────────────────────────────────────
+ *
+ * Cette projection l'écrivait, et ne le corrigeait pas : *« un profil Qualité
  * passe le contrôle de `deciderAcces` pour une écriture sur le domaine
- * `conformite`, alors que `session_domaines` ne lui accorde que la lecture sur
- * `exigences`, `referentiels` et `mesures`.
+ * `conformite`, alors que `session_domaines` ne lui accorde que la lecture »*.
+ * Le 03/09/2026, contre un Active Directory réel, la conséquence a été
+ * chiffrée : `qualite.tls` obtenait `niveau = contribution` sur **douze**
+ * domaines de décision, quand la base ne lui en ouvre que sept, dont trois en
+ * lecture seule. Le constat **Q-66** est resté ouvert deux tours parce que la
+ * moitié consommatrice a été livrée sans la moitié productrice : `DroitsSession`
+ * porte le champ `niveaux` depuis l'agent A2, et `deciderAcces` le lit
+ * (`src/api/droits.ts`, « le niveau qui s'applique est celui du DOMAINE quand il
+ * est connu ») — mais **rien ne l'émettait**. Un champ facultatif que personne ne
+ * renseigne se comporte exactement comme un champ absent, en silence.
  *
- * Ce n'est **pas** un défaut de ce fichier : c'est la forme de `DroitsSession`,
- * qui appartient à un autre agent. Le correctif tient en un champ —
- * `niveaux: Readonly<Record<DomaineFonctionnel, NiveauAcces>>` — et il est
- * **demandé dans le rapport d'agent**, pas fait ici (`PLAN_EXECUTION` §2).
+ * ── Ce que cette fonction émet désormais ─────────────────────────────────
  *
- * En attendant, le contrôle fin **existe** et il est exposé :
+ * `niveaux[d]` = le **plus haut** des niveaux tenus sur les domaines de base qui
+ * se projettent sur `d`. Trois propriétés, et chacune est éprouvée par
+ * `test/droits/projection-niveaux.test.mjs` :
+ *
+ *  1. **`niveaux[d]` ne dépasse jamais `niveau`.** C'est un maximum pris sur un
+ *     sous-ensemble de celui qui produit `niveau` : la comparaison est vraie par
+ *     construction, et l'essai la joue sur les huit profils de socle. Le champ
+ *     **restreint**, il ne desserre jamais — un champ qui pourrait élargir aurait
+ *     transformé un correctif de sur-octroi en sur-octroi.
+ *  2. **Tout domaine ouvert est nommé.** `domaines` et les clés de `niveaux` sont
+ *     le même ensemble, et l'essai le vérifie des deux côtés. Un domaine ouvert
+ *     mais absent de `niveaux` retomberait sur `niveau`, c'est-à-dire sur le
+ *     défaut que ce champ existe pour fermer.
+ *  3. **Un domaine à « aucun » n'entre nulle part** — ni dans `domaines`, ni dans
+ *     `niveaux`. `cartographie` est fermée explicitement au profil *Qualité*
+ *     (`007_authentification.sql`), et cette fermeture doit rester lisible.
+ *
+ * ── Ce que ça ne corrige PAS, et il faut le dire ─────────────────────────
+ *
+ * Trente domaines se projettent sur treize : plusieurs domaines de base
+ * partagent une case. `exigences`, `referentiels`, `mesures` et `correspondances`
+ * tombent tous sur `conformite`. Un profil qui contribuerait aux `exigences` et
+ * ne lirait que les `mesures` obtiendrait donc `conformite = contribution`, et
+ * pourrait écrire une mesure. **Prendre le minimum à la place refuserait une
+ * écriture légitime sur les exigences** — c'est-à-dire échanger un sur-octroi
+ * contre un sous-octroi silencieux, ce qui est pire : le premier se mesure, le
+ * second se contourne par une demande de droits que personne ne comprend.
+ *
+ * La granularité de décision est celle de la route, et c'est le vocabulaire à
+ * treize domaines. Aucun profil de socle n'est dans ce cas aujourd'hui — l'essai
+ * le **vérifie** plutôt que de l'affirmer, sur les huit profils. Le jour où un
+ * profil paramétré le sera, le contrôle fin existe déjà et il est exposé :
  * `ResolveurPerimetreSession.peut(domaine, niveau)` répond sur les trente
- * domaines, avec le niveau exact. Ce qui manque n'est pas la donnée, c'est son
- * emploi par la route.
+ * domaines, avec le niveau exact.
  */
 
 import type { DomaineFonctionnel, DroitsSession, NiveauAcces } from '../api/droits.js';
@@ -120,14 +157,25 @@ const RANG: Readonly<Record<NiveauDroit, number>> = Object.freeze({
 /**
  * Projette l'état d'une session sur la forme que le point d'entrée consomme.
  *
- * Le niveau rendu est le **plus élevé** des niveaux par domaine — voir l'avertissement
- * en tête de fichier. Une session sans aucun domaine ouvert rend `lecture` et une
- * liste vide : `deciderAcces` la refusera sur le domaine, jamais sur le niveau,
- * ce qui donne un journal technique exploitable au lieu d'un « niveau insuffisant »
- * trompeur.
+ * Deux niveaux sont rendus, et ils ne servent pas à la même chose :
+ *
+ *  · **`niveau`** — le plus élevé de tous. Il s'applique aux actions qui ne
+ *    visent **aucun** domaine : charger le jeu de données, lire sa propre
+ *    session, exporter. `deciderAcces` retombe dessus quand `domaine` vaut
+ *    `null`, et c'est le seul cas où il décide encore seul.
+ *  · **`niveaux`** — un niveau **par domaine de décision**, qui prime dès que la
+ *    route en nomme un. C'est le correctif du constat **Q-66** ; voir l'entête.
+ *
+ * Une session sans aucun domaine ouvert rend `lecture`, une liste vide et une
+ * table vide : `deciderAcces` la refusera sur le domaine, jamais sur le niveau,
+ * ce qui donne un journal technique exploitable au lieu d'un « niveau
+ * insuffisant » trompeur.
  */
 export function projeterDroits(etat: EtatSession): DroitsSession {
   const domaines = new Set<DomaineFonctionnel>();
+  // Typé sur `NiveauAcces` — donc SANS « aucun » : le `continue` ci-dessous le
+  // retire, et le type le constate au lieu d'un transtypage qui l'affirmerait.
+  const niveaux = new Map<DomaineFonctionnel, NiveauAcces>();
   let plusHaut: NiveauDroit = 'aucun';
 
   for (const [base, niveau] of etat.domaines) {
@@ -135,13 +183,24 @@ export function projeterDroits(etat: EtatSession): DroitsSession {
     const projete = DOMAINE_API_PAR_DOMAINE_BASE[base];
     // `null` = ce domaine de base n'a pas d'équivalent dans le vocabulaire de
     // décision des routes. Il n'en ouvre donc aucun — le défaut est fermé.
-    if (projete !== null) domaines.add(projete);
+    if (projete !== null) {
+      domaines.add(projete);
+      // Plusieurs domaines de base tombent sur le même domaine de décision : on
+      // garde le plus haut. Prendre le plus bas refuserait une écriture légitime
+      // sur l'un d'eux — voir « ce que ça ne corrige pas », en tête de fichier.
+      const deja = niveaux.get(projete);
+      if (deja === undefined || RANG[niveau] > RANG[deja]) niveaux.set(projete, niveau);
+    }
     if (RANG[niveau] > RANG[plusHaut]) plusHaut = niveau;
   }
 
   return Object.freeze({
     niveau: (plusHaut === 'aucun' ? 'lecture' : plusHaut) satisfies NiveauAcces,
     domaines: Object.freeze([...domaines]) as readonly DomaineFonctionnel[],
+    // `niveaux` est TOUJOURS rendu, même vide. Un champ facultatif qu'on n'émet
+    // que « quand on peut » est celui qui a laissé Q-66 ouvert deux tours : le
+    // consommateur était juste, et il ne recevait rien.
+    niveaux: Object.freeze(Object.fromEntries(niveaux)),
     export: etat.peutExporter,
   });
 }

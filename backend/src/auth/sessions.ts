@@ -53,7 +53,7 @@ import type { PoolClient } from 'pg';
 
 import type { DomaineFonctionnelBase, DroitsResolus, NiveauDroit, PorteeSession } from '../droits/modele.js';
 import { estDomaine, estNiveau } from '../droits/modele.js';
-import type { EtatSession } from '../droits/resolveur.js';
+import type { EtatSession, FilialeActive } from '../droits/resolveur.js';
 
 import type { IdentiteAnnuaire } from './annuaire.js';
 
@@ -154,6 +154,11 @@ export async function ouvrirSession(
       portee: ouverture.droits.portee,
       filiales: Object.freeze([...ouverture.droits.filiales]) as readonly string[],
       filialeActive: ouverture.droits.filialeActive,
+      // Constat Q-85 : la session porte le NOM de sa filiale, pas seulement son
+      // identifiant. Lue ici plutôt que déduite d'un cache — la même requête que
+      // `verifierSession`, pour que « je viens de me connecter » et « je rouvre
+      // l'onglet » ne puissent pas afficher deux choses différentes.
+      filiale: await lireFilialeActive(client, ouverture.droits.filialeActive),
       administrateur: ouverture.droits.administrateur,
       peutExporter: ouverture.droits.peutExporter,
       domaines: ouverture.droits.domaines,
@@ -162,6 +167,33 @@ export async function ouvrirSession(
       compteSecours: ouverture.compteSecours,
     }),
   };
+}
+
+/**
+ * La filiale active, **nommée** — constat Q-85.
+ *
+ * Une seule rédaction pour les deux chemins qui produisent un `EtatSession` :
+ * l'ouverture de session ci-dessus, et `verifierSession` en dessous (qui la
+ * joint directement à sa requête, ce qui lui évite un aller-retour). Deux
+ * rédactions afficheraient un jour deux libellés — c'est le motif que ce
+ * chantier traque.
+ *
+ * `filiales` est de niveau Groupe et sa lecture est ouverte : aucun périmètre
+ * n'est franchi. Rendre `null` plutôt que lever est délibéré — un libellé
+ * manquant est une gêne d'affichage, jamais une raison de refuser une session.
+ */
+async function lireFilialeActive(
+  client: PoolClient,
+  filialeId: string | null,
+): Promise<FilialeActive | null> {
+  if (filialeId === null) return null;
+  const { rows } = await client.query<{ code: string; raison_sociale: string }>(
+    `select "code", "raison_sociale" from "filiales" where "id" = $1`,
+    [filialeId],
+  );
+  const ligne = rows[0];
+  if (ligne === undefined) return null;
+  return Object.freeze({ id: filialeId, code: ligne.code, raisonSociale: ligne.raison_sociale });
 }
 
 /* =====================================================================
@@ -191,6 +223,9 @@ interface LigneSession {
   readonly actif: boolean;
   readonly compte_secours: boolean;
   readonly filiale_active_id: string | null;
+  /** Constat Q-85 — `null` sans filiale active, ou si la ligne a disparu. */
+  readonly filiale_code: string | null;
+  readonly filiale_raison_sociale: string | null;
   readonly perimetre: string;
   readonly administrateur: boolean;
   readonly peut_exporter: boolean;
@@ -213,11 +248,21 @@ export async function verifierSession(
   dureeInactiviteMinutes: number,
 ): Promise<VerificationSession> {
   const { rows } = await client.query<LigneSession>(
+    // ── Le `left join filiales` est celui du constat Q-85 ────────────────
+    //
+    // `filiales` est de niveau Groupe et sa lecture est ouverte (`004_rls.sql`
+    // §6) : la jointure ne franchit aucune frontière de cloisonnement, elle
+    // nomme la ligne que `sessions.filiale_active_id` désigne déjà. Il est
+    // `left` parce qu'une session de portée Groupe peut n'avoir aucune filiale
+    // active, et parce qu'une filiale supprimée ne doit pas faire disparaître la
+    // session — ce serait échanger un libellé manquant contre une déconnexion.
     `select s."id", s."utilisateur_id", u."identifiant", u."actif", u."compte_secours",
             s."filiale_active_id", s."perimetre", s."administrateur", s."peut_exporter",
-            s."expire_le", s."derniere_activite", s."revoquee_le"
+            s."expire_le", s."derniere_activite", s."revoquee_le",
+            f."code" as "filiale_code", f."raison_sociale" as "filiale_raison_sociale"
        from "sessions" s
        join "utilisateurs" u on u."id" = s."utilisateur_id"
+       left join "filiales" f on f."id" = s."filiale_active_id"
       where s."jeton_empreinte" = $1`,
     [empreinteJeton(jeton)],
   );
@@ -269,6 +314,16 @@ export async function verifierSession(
       portee: ligne.perimetre as PorteeSession,
       filiales: Object.freeze(filiales.map((f) => f.filiale_id)) as readonly string[],
       filialeActive: ligne.filiale_active_id,
+      filiale:
+        ligne.filiale_active_id === null ||
+        ligne.filiale_code === null ||
+        ligne.filiale_raison_sociale === null
+          ? null
+          : Object.freeze({
+              id: ligne.filiale_active_id,
+              code: ligne.filiale_code,
+              raisonSociale: ligne.filiale_raison_sociale,
+            }),
       administrateur: ligne.administrateur,
       peutExporter: ligne.peut_exporter,
       domaines: carte,
