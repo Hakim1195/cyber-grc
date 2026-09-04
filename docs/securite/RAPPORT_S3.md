@@ -17,8 +17,8 @@
 > ### ❌ **Deux contrôles en échec : S7 et S18.**
 > **0 constat de la classe « fuite entre filiales ».** Le cloisonnement tient, le
 > périmètre vient du serveur, l'authentification fonctionne contre un AD réel, les
-> droits à trois axes mordent, le verrouillage fonctionne. **Quinze constats neufs**
-> (Q-88 → Q-102), dont **deux relèvent des deux premières classes du §0 bis** et se
+> droits à trois axes mordent, le verrouillage fonctionne. **Dix-sept constats neufs**
+> (Q-88 → Q-104), dont **trois relèvent des deux premières classes du §0 bis** et se
 > corrigent avant la fin de la vague.
 
 Sous l'arbitrage du `PLAN_EXECUTION` §0 bis, la porte **trie** au lieu d'opposer un veto.
@@ -27,8 +27,15 @@ Le tri :
 | Classe | Constats | Traitement |
 |---|---|---|
 | **Bloque le fonctionnement** | **Q-88** — l'annuaire `personnes` n'est **jamais** alimenté depuis l'AD : le livrable est du code mort en production, et son essai est vert sur une branche inatteignable | corrigé avant la fin de la vague |
-| **Fuite de données** | **Q-89** — le **droit d'export est contournable** depuis l'interface : un profil `export=false` extrait en un clic la synthèse de posture cyber, sans refus et sans trace | corrigé avant la fin de la vague, sans négociation |
-| **Tout le reste** | Q-90 → Q-102, plus **Q-86** et **Q-87** que la vague n'a pas fermés | marqué **`V1.1`**, la vague continue |
+| **Fuite de données** | **Q-89** — le **droit d'export est contournable** depuis l'interface : un profil `export=false` extrait en un clic la synthèse de posture cyber, sans refus et sans trace · **Q-103** — le correctif est commité mais **pas déployé** : la machine en service fuit toujours | corrigé avant la fin de la vague, sans négociation |
+| **Tout le reste** | Q-90 → Q-102 et **Q-104**, plus **Q-86** et **Q-87** que la vague n'a pas fermés | marqué **`V1.1`**, la vague continue |
+
+> ⚠️ **État à l'heure de la remise.** Ce verdict porte sur `4f76da2`. Pendant l'audit,
+> l'orchestrateur a corrigé Q-88 et Q-89 et commité `294c0eb` ; **j'ai rejoué ces deux
+> constats à mon instrument et ils tiennent** (§9), banc **1030/1030**. Mais la correction
+> de Q-89 **n'est pas déployée** sur la machine en service, qui reste exposée →
+> constat **Q-103**, immédiat. Les seize autres contrôles n'ont pas été rejoués sur
+> `294c0eb` : *une mesure faite après coup n'est pas un rejeu de la porte.*
 
 **Le lot L5 (journal d'audit) n'est pas livré**, et ce rapport ne le lui reproche pas :
 le contrôle S3 est donc rendu « partiel — inaltérabilité acquise, couverture attendue de
@@ -482,23 +489,242 @@ navigateur.
 
 ---
 
+### 1.19 Le journal du serveur, lu — S12 et S8 par la mesure
+
+> **Cette section remplace une réserve.** La première version de ce rapport écrivait :
+> *« je n'ai pas pu lire une seule ligne de pino en production ; S8 et S12 sont établis par
+> lecture, pas par mesure »*. L'accès m'a été ouvert (`sg systemd-journal -c "journalctl -u
+> cyber-grc …"`) et la réserve est **levée par la mesure**, dans les deux sens.
+
+#### a) Le contrat des deux bouts : générique au client, précis au journal
+
+Douze refus provoqués sur `https://grc.exemple.interne/`, puis relus dans le journal par
+leur `reference`. **Rejoué intégralement sur le binaire redéployé** (pid `369777`, voir §9)
+pour que la mesure porte sur une seule révision : 42 lignes JSON, `pid` unique.
+
+| Cas provoqué | Ce que reçoit le CLIENT | Ce que dit le JOURNAL |
+|---|---|---|
+| mot de passe faux, compte connu | « Identifiant ou mot de passe incorrect… » | `identifiants refusés : identifiants refusés par l'annuaire` |
+| identifiant inconnu | **le même message, à l'octet près** | `identifiants refusés : aucun compte ne correspond au login` |
+| session inventée | « Votre session a expiré ou n'a pas été ouverte. » | `session refusée, motif « inconnue »` |
+| session **révoquée** | le même message | `session refusée, motif « revoquee »` |
+| champ manquant à la connexion | « Identifiant et mot de passe sont attendus. » | `champ « mot de passe » absent ou du mauvais type` |
+| corps JSON tronqué | « La requête n'a pas pu être lue… » | `refus du cadre HTTP : FST_ERR_CTP_INVALID_JSON_BODY FastifyError: Body is not valid JSON…` |
+| route inconnue | « Aucune ressource ne répond à GET /api/route-inventee-s12b. » | *(aucune ligne « detail » — seul le `reqId` relie les deux lignes)* |
+| refus de droit | « Votre profil ne donne pas accès à cette partie… » | `domaine « risques » hors du profil (domaines : actifs, actions, incidents)` |
+| refus d'export | « L'export des données est une autorisation distincte… » | `droit d'export absent (PLAN_SERVEUR §3.3)…` |
+| écriture hors périmètre | « Cet enregistrement n'existe pas dans votre périmètre. » | `actions/ACT-SONDE-DEU : absent OU hors du périmètre de lecture — le serveur ne distingue pas les deux, et ne doit pas` |
+| entité inconnue (`pg_shadow`) | « « pg_shadow » n'est pas une entité connue… » | `entité inconnue : pg_shadow` |
+| champ inconnu | « Le champ « … » n'appartient pas à l'entité « actions »… » | `champ refusé : actions.colonne_inexistante_s12b` |
+
+**Le contrat tient dans les deux sens, et sur les douze cas :** aucun `detail`, aucun code
+de cadre, aucune pile, aucun nom d'objet de base n'atteint le navigateur ; et le journal,
+lui, distingue ce que la réponse HTTP confond délibérément. Les deux premières lignes le
+montrent mieux que tout : **le client ne peut pas séparer « mot de passe faux » de
+« compte inexistant », l'exploitant le peut.** C'est exactement le correctif Q-79, vérifié
+pour la première fois **par les deux bouts à la fois**.
+
+Le cas `corps JSON tronqué` clôt Q-55 de la même façon : la nomenclature interne de Fastify
+(`FST_ERR_CTP_INVALID_JSON_BODY`) est **dans le journal** et **pas** dans la réponse.
+
+Deux observations mineures, qui ne remettent rien en cause :
+
+- **`route inconnue` n'écrit aucune ligne de refus.** Le `setNotFoundHandler` répond sans
+  journaliser ; seules « incoming request » et « request completed » portent le `reqId`. La
+  référence reste donc retrouvable, mais un exploitant qui cherche « pourquoi ce 404 » n'a
+  que l'URL.
+- **Le journal nomme le compte de secours là où la réponse HTTP ne le nomme pas** —
+  et c'est le comportement voulu. Sondé à l'aveugle avec quatre identifiants candidats :
+
+  ```
+  secours     -> HTTP 401   journal : « compte de secours : mot de passe refusé »
+  brise-glace -> HTTP 401   journal : « aucun compte ne correspond au login »
+  admin       -> HTTP 401   journal : « aucun compte ne correspond au login »
+  root        -> HTTP 401   journal : « aucun compte ne correspond au login »
+  ```
+
+  Les quatre réponses HTTP sont identiques : **Q-79 tient**. Le journal, lui, m'a appris que
+  le compte de secours de cette installation existe et s'appelle `secours` — ce qui est
+  précisément sa fonction, et la raison pour laquelle il n'est lisible que par un exploitant.
+
+#### b) L'inverse : un secret a-t-il fui DANS le journal ?
+
+908 lignes balayées (9 heures, deux binaires), avec des mots de passe **choisis pour être
+reconnaissables** et envoyés pendant la mesure :
+
+```
+MonMotDePasseSecretAuditS12   -> 0 occurrence      SecretRejeuS12b        -> 0
+AutreSecretAuditS12           -> 0                 AutreSecretRejeuS12b   -> 0
+Contrib-Tls-2026! · Rssi-Tls-2026! · Admin-Grc-2026! · Direction-2026! · P@ssw0rd  -> 0
+jeton de session en clair (43 signes base64url)    -> 0
+son empreinte SHA-256                              -> 0
+grc_session · set-cookie · authorization · "cookie" · motDePasse · password  -> 0
+MOT_DE_PASSE · dnService · CN=svc · scrypt$ · empreinte · SESSION_SECRET     -> 0
+"body" · "champs"  (le corps de requête n'est jamais journalisé)             -> 0
+```
+
+Les 310 chaînes de 43 signes présentes dans le journal sont **toutes** des identifiants
+métier (`ACT-…`, `AUD-…`, `FIL-…`, `REQ-…`) — aucun jeton.
+
+Le **résumé de configuration du démarrage**, seul endroit qui journalise la configuration,
+est une liste blanche de 15 champs, vérifiée sur la ligne réelle :
+
+```json
+{"environnement":"production","version":"0.1.0","ecoute":"127.0.0.1:3001",
+ "url_publique":"https://grc.exemple.interne","base":"grc_app@127.0.0.1:5432/cyber_grc",
+ "base_ssl":"desactive","base_pool_max":10,"authentification":"annuaire (LDAPS)",
+ "ldap_url":"ldaps://dc01.exemple.interne:1636","smtp":"désactivé",
+ "retention_journal_jours":1095, …}
+```
+
+— l'utilisateur de base **sans son mot de passe**, l'URL LDAP **sans le DN ni le mot de
+passe du compte de service**, aucune empreinte, aucun secret de session.
+
+**Piles d'appel** : 17 lignes en portent une, toutes de niveau `50` et toutes **antérieures
+au correctif Q-84** (03/09, 23:26) — le refus *fail-closed* de la session provisoire. Elles
+sont au journal, ce qui est leur place ; aucune n'a atteint un client. Sur le binaire
+courant : **0 ligne ≥ 500**.
+
+#### c) Injection de journal
+
+Un identifiant forgé pour fabriquer une fausse ligne, et un autre porteur de sauts de ligne :
+
+```
+identifiant = 'pirate","level":60,"msg":"COMPROMISSION TOTALE","x":"'
+identifiant = 'saut\nde\rligne'
+→ journal : 6 lignes, 6 JSON valides, 0 ligne non JSON, 0 occurrence de « COMPROMISSION »,
+             aucune ligne de niveau ≥ 60
+→ journal d'AUDIT : les deux logins sont stockés LITTÉRALEMENT dans `utilisateur_libelle`
+   (« saut<LF>de<CR>ligne »), et `f_journal_audit_verifier()` rend 0 anomalie
+```
+
+Le journal technique (pino, JSON) est **imperméable**. Le journal d'audit stocke la valeur
+telle quelle, ce qui est juste en base — mais la **consultation et l'export du journal**
+sont un livrable de L5, et une valeur porteuse de `\n` scindera une ligne dans une sortie
+texte ou CSV. Noté pour L5 ; l'asymétrie mérite d'être dite, puisque le témoin
+`x-request-id` de `src/serveur.ts`, lui, **retire** les caractères de contrôle.
+
+#### d) S8 — ce qui est réellement journalisé d'un événement d'authentification
+
+Mesuré dans le **journal d'audit**, sur des événements que j'ai provoqués :
+
+| Événement | Tracé ? | Ligne relevée |
+|---|---|---|
+| connexion réussie | ✅ | `connexion_reussie · Connexion réussie de « contrib.tls » (Dominique Lefevre).` |
+| connexion refusée (annuaire) | ✅ | `connexion_echouee · détail « identifiants refusés par l'annuaire »` |
+| connexion refusée (login inconnu) | ✅ | `connexion_echouee · détail « aucun compte ne correspond au login »` |
+| **compte de secours — usage REFUSÉ** | ✅ | `connexion_echouee · Échec de connexion sur le COMPTE DE SECOURS « secours ». · détail « empreinte scrypt non concordante »` |
+| verrouillage par le rythme | ✅ | `connexion_echouee · Connexion refusée : trop de tentatives. · détail « rythme dépassé sur identifiant, encore 900 s »` |
+| refus d'autorisation à la connexion | ✅ | `refus_autorisation` (compte sans aucun groupe) |
+| déconnexion | ✅ | `deconnexion` |
+| **refus de droit sur une ROUTE (403)** | ❌ | rien au journal d'audit — seulement une ligne pino `« Accès refusé par le modèle de droits (le journal d'audit est le lot L5) »` |
+| requête sur session révoquée | ❌ *(délibéré)* | 157 entrées avant, **157 après** : un jeton mort rejoué n'écrit pas une entrée par requête dans un journal scellé de trois ans |
+
+Le critère du lot — *« le compte de secours est journalisé à chaque usage »* — est vérifié
+**pour l'usage refusé**. L'usage **réussi** n'a pas pu l'être : je ne détiens pas le mot de
+passe du compte de secours de cette installation (§6).
+
+#### e) La couverture, chiffrée face au `PLAN_SERVEUR` §1.7
+
+La base déclare **vingt** types d'action ; **quatre** sont émis.
+
+```
+$ select pg_get_constraintdef(oid) … journal_audit … contype='c'
+administration · analyse_antivirus · approbation · archivage · arret · connexion_echouee
+connexion_reussie · consultation_sensible · creation · deconnexion · demarrage · export
+import · modification · purge · refus_autorisation · session_expiree · session_revoquee
+suppression · verification_journal                                          → 20 déclarées
+
+$ select action, count(*) from journal_audit group by 1
+connexion_echouee 95 · connexion_reussie 57 · refus_autorisation 3 · deconnexion 2   → 4 émises
+```
+
+Face à la liste explicite du §1.7 :
+
+| Exigé par §1.7 | État |
+|---|---|
+| connexions réussies **et** échouées | ✅ |
+| refus d'autorisation | ◐ **partiel** — seulement à la connexion ; le 403 par requête n'y va pas |
+| création / modification / suppression avec valeurs avant et après | ❌ — **lot L5** |
+| actions d'administration | ❌ — lots L4/L5 |
+| **imports** | ❌ — lot L7 |
+| **exports** | ❌ — et c'est **Q-89**, exigé par la grille **au titre de S7**, pas de L5 |
+
+`journaliser()` n'est appelé **que depuis `src/auth/index.ts`** (cinq sites) : aucune
+écriture de données, aucun import, aucun export, aucune action d'administration ne passe par
+le journal d'audit aujourd'hui. C'est le lot L5, et ce n'est pas reproché — mais la ligne
+« exports » l'est.
+
+**Un point qui change de nature.** La dérogation **E6** (lecture du journal non cloisonnée,
+reportée à L5) est justifiée dans le `README` §8 par : *« Sans effet tant que le journal est
+vide »*. Cette phrase est désormais **fausse**, et je l'ai mesurée : le compte de
+supervision `grc_lecture`, en lecture seule et avec son propre mot de passe, lit
+**138 entrées** — logins, adresses IP, motifs d'échec, et le nom du compte de secours :
+
+```
+$ psql -U grc_lecture -d cyber_grc -c "select count(*) from journal_audit;"     → 138
+$ … "select utilisateur_libelle, resume from journal_audit where resume like '%SECOURS%'"
+  secours | Échec de connexion sur le COMPTE DE SECOURS « secours ».
+```
+
+Le report reste juste ; **sa justification ne l'est plus**. C'est la onzième occurrence du
+motif que ce chantier traque, et elle rejoint **Q-90**.
+
+#### f) La référence d'incident — Q-39, vérifié par les deux bouts
+
+**Elle retrouve la requête.** Simulation d'un appel au support : l'utilisateur donne la
+`reference` reçue dans son refus, l'exploitant la cherche.
+
+```
+$ journalctl -u cyber-grc --grep 'REQ-1788490220485-675bru99xcjo7z7rarnomvyjw'
+  02:50:20.485  POST /api/entites/risques  remoteAddress 127.0.0.1        « incoming request »
+  02:50:20.562  utilisateur contrib.tls · route /api/entites/:entite
+                détail « domaine « risques » hors du profil (domaines : actifs, actions, incidents) »
+  02:50:20.562  erreur droit_insuffisant                                   « Requête refusée »
+  02:50:20.563  statusCode 403                                             « request completed »
+  → 4 lignes retrouvées
+```
+
+L'exploitant obtient l'heure, la méthode, l'URL, l'adresse, **l'utilisateur**, la route
+déclarée et le motif exact — sans que l'utilisateur ait eu à lui dire autre chose que
+`REQ-…`.
+
+**Elle n'est pas choisie par le client**, et le témoin discrimine les deux chemins :
+
+```
+en-tête « X-Request-Id: REFERENCE-CHOISIE-PAR-LE-CLIENT »
+  · à travers Apache  → reference rendue « REQ-1788490138013-3dbwsqor5h1gpddrrnpw82jwq »
+                        et AUCUNE ligne de témoin : le vhost a bien effacé l'en-tête
+  · en direct sur 127.0.0.1:3001 → reference « REQ-1788490138028-… », ET la ligne de témoin :
+      {"referenceClient":"REFERENCE-CHOISIE-PAR-LE-CLIENT",
+       "msg":"En-tête « x-request-id » reçu du client : le frontal devrait l'effacer et
+              personne ne le produit. Cette requête n'est pas passée par Apache…"}
+deux requêtes portant le MÊME en-tête → deux références distinctes
+```
+
+Le témoin de `src/serveur.ts` n'est donc pas décoratif : il **se tait** derrière Apache et
+**parle** quand on court-circuite le frontal. C'est la propriété qui vit entre deux fichiers,
+et elle est vérifiée des deux côtés.
+
+---
+
 ## 2. Verdict par contrôle de la grille §4
 
 | # | Contrôle | Verdict | Sur quoi |
 |---|---|---|---|
-| **S1** | Cloisonnement par filiale non contournable | ✅ **passé** | §1.12 ; RLS `enable`+`force` 48/48 ; le propriétaire lui-même est soumis (ma requête a échoué sans `grc.filiales`) ; `test/base` 272/272 |
+| **S1** | Cloisonnement par filiale non contournable | ✅ **passé**, 1 réserve | §1.12 ; RLS `enable`+`force` 48/48 ; le propriétaire lui-même est soumis (ma requête a échoué sans `grc.filiales`) ; `test/base` 272/272. Réserve : sur **cinq** tables à politique conditionnelle, une lecture sans périmètre d'une table **vide** rend `0` sans que la garde s'exerce → **Q-104** |
 | **S2** | Le périmètre ne vient jamais du navigateur | ✅ **passé — rejoué contre la couche neuve** | §1.11 ; 7 formes d'en-tête, cookie dupliqué, paramètres d'URL, tous inertes ; `resoudre()` sans argument ; E1 fermée (§1.6) |
-| **S3** | Journal d'audit inaltérable et complet | ◐ **partiel — inaltérabilité acquise, couverture attendue de L5** | §1.15 ; `update`/`delete`/`truncate` refusés au **propriétaire** ; chaînage intact ; 4 types d'événement tracés, tous d'authentification |
+| **S3** | Journal d'audit inaltérable et complet | ◐ **partiel — inaltérabilité acquise, couverture chiffrée : 4 types sur 20** | §1.15 et **§1.19** ; `update`/`delete`/`truncate` refusés au **propriétaire** ; chaînage intact même après entrées hostiles ; **4 des 20 actions déclarées** sont émises, toutes par le chemin d'authentification |
 | **S4** | Verrouillage optimiste effectif | ✅ **passé** | §1.14 ; 409 `GRC03` ; `version` et `cree_par` refusés au client |
-| **S5** | Aucune injection SQL | ✅ **passé**, 2 réserves | §1.17 ; 76/76 paramétrés ; réserves : `ident()` n'a **aucun essai**, et `src/entites/index.ts:1859` interpole un nom de colonne **sans** `ident()` (sûr par six clés littérales) → **Q-100** |
+| **S5** | Aucune injection SQL | ✅ **passé**, 2 réserves | §1.17 ; 76/76 paramétrés ; réserves : `ident()` n'a **aucun essai**, et `src/entites/index.ts:1859` interpole un nom de colonne **sans** `ident()` (sûr par six clés littérales) → **Q-99** |
 | **S6** | Droits vérifiés côté serveur à chaque requête | ✅ **passé** | §1.13 ; une route sans classe d'accès déclarée est **refusée** (500) et non servie ; lecture filtrée par domaine |
 | **S7** | Le droit d'export est distinct de la lecture | ❌ **EN ÉCHEC** | §3, **Q-89** : le droit est tenu côté serveur (403/200 mesurés) et **contourné depuis l'interface** ; aucun export n'est journalisé |
-| **S8** | Secrets | ✅ **passé**, 2 réserves | §1.17 ; réserves : aucune assertion négative ne garde la propriété ; réserve `LoadCredential=` du fichier systemd sans propriétaire ni échéance |
+| **S8** | Secrets | ✅ **passé — établi par la MESURE, journal du serveur lu** | §1.17 **et §1.19** ; 908 lignes de journal balayées : aucun mot de passe, aucun jeton, aucune empreinte, aucun cookie. Réserves : aucune assertion négative ne garde la propriété ; réserve `LoadCredential=` sans propriétaire → **Q-102** |
 | **S9** | Chaîne de contrôle des pièces jointes | ⬜ **sans objet** | lot L6, vague 4 |
 | **S10** | Sortie et en-têtes | ✅ **passé** | §1.4 ; CSP stricte, `nosniff`, `no-store`, cookie `HttpOnly`+`SameSite=Strict`+`Secure` sans échéance propre ; 0 violation CSP dans Chromium réel ; aucun en-tête CORS |
-| **S11** | Limitation du rythme et verrouillage | ✅ **passé**, 1 réserve | §1.10 ; verrou par compte à 5, par adresse à 20, échecs journalisés ; réserve : un succès **efface** le compteur d'adresse → **Q-99** |
-| **S12** | Les erreurs ne renseignent pas l'attaquant | ✅ **passé**, 1 réserve | §1.12, §3 ; JSON malformé et corps vide → message générique (Q-55 tient) ; écriture croisée → 404 sans oracle ; réserve : 403 vs 401 distingue « mot de passe juste, aucun accès » → **Q-97** |
-| **S13** | Dénis de service applicatifs | ✅ **passé**, 1 réserve | §1.8, §1.9 ; 413 et 411 au frontal en 13 ms, E4 à ≈93 ms, plafonds de collection, registres de limiteurs bornés ; réserve : la table de revalidation n'est **pas** bornée → **Q-98** |
+| **S11** | Limitation du rythme et verrouillage | ✅ **passé**, 1 réserve | §1.10 ; verrou par compte à 5, par adresse à 20, échecs journalisés ; réserve : un succès **efface** le compteur d'adresse → **Q-98** |
+| **S12** | Les erreurs ne renseignent pas l'attaquant | ✅ **passé — les DEUX bouts confrontés** | §1.19 : **douze refus**, message générique au client et détail technique au journal, sans une seule fuite dans l'autre sens ; injection de journal refusée. Réserve : 403 vs 401 distingue « mot de passe juste, aucun accès » → **Q-96** |
+| **S13** | Dénis de service applicatifs | ✅ **passé**, 1 réserve | §1.8, §1.9 ; 413 et 411 au frontal en 13 ms, E4 à ≈93 ms, plafonds de collection, registres de limiteurs bornés ; réserve : la table de revalidation n'est **pas** bornée → **Q-97** |
 | **S14** | Intégrité des opérations composites | ✅ **passé** *(par le banc, pas par ma mesure)* | l'ouverture de session est **une** transaction (provisionnement + session + journal) ; `test/api/integrite-ecriture.test.mjs` vert. Je n'ai pas provoqué d'échec partiel moi-même — voir §6 |
 | **S15** | Dépendances | ✅ **passé** | §1.2 ; `found 0 vulnerabilities` ; 62 paquets de production épinglés par le verrou |
 | **S16** | Les garde-fous sont branchés | ✅ **passé**, 1 réserve | §1.16 ; 9 contrôles **découverts** dans le catalogue, 0 anomalie, point d'appel unique, garde-fou neuf mordu ; réserve : je n'ai pas saboté la base **de production** pour voir le chemin d'installation échouer (§6) |
@@ -928,6 +1154,68 @@ attribuée**. Le `CLAUDE.md` §8 dit ce qu'il faut en penser : *une réserve éc
 une réserve traitée* ; six passages ont reconduit « Apache n'est pas éprouvé » pendant que
 l'installer prenait une minute.
 
+### 🟠 Q-103 — Le correctif de Q-89 est commité mais **pas déployé** : l'installation qui tourne fuit toujours
+
+**Classe §0 bis : 2ᵉ — l'extraction non autorisée est encore possible sur la machine en
+service.** **Propriétaire : rôle DÉPLOIEMENT** · **échéance : immédiate.**
+
+Le correctif de **Q-89** vit dans le dépôt à `294c0eb`. La racine web servie par Apache,
+elle, porte encore l'ancien fichier. Mesuré en comparant l'octet :
+
+```
+$ curl -sS https://grc.exemple.interne/js/modules/synthese.js -o servi.js
+servi (DocumentRoot /opt/cyber-grc/frontend) : 73 200 octets · md5 e99d438ec582
+dépôt (cyber-gouvernance_V4/…)               : 74 250 octets · md5 a77c92b3c3cd
+occurrences d'« exigerExport » — servi : 0 · dépôt : 2
+```
+
+Conséquence, mesurée au Chromium contre l'installation telle qu'elle sert **en ce moment** :
+
+```
+compte rssi.tls (export:false), fichier SERVI  → TÉLÉCHARGEMENT Synthese-Direction-2026-09-04.html
+compte rssi.tls (export:false), fichier DÉPÔT  → aucun téléchargement, refus affiché
+```
+
+Le service Node a été redéployé et redémarré (§9) ; **le frontend ne l'a pas été**. Ce n'est
+pas un défaut du correctif — c'est la moitié de la livraison qui manque, et elle est
+invisible depuis le dépôt : `npm test` est vert à 1030/1030 pendant que la machine en
+service reste ouverte. C'est la forme du défaut que la grille appelle **S17** — *le chemin
+que l'utilisateur emprunte, pas celui qui est commode à tester*.
+
+### 🔵 Q-104 — La garde « Périmètre non positionné » ne s'exerce pas sur cinq tables vides
+
+**Classe : 3ᵉ → `V1.1`.** **Propriétaire : agent SCHEMA** · **échéance : `V1.1`.**
+
+Cinq tables portent une politique de lecture **conditionnelle** — `CASE WHEN filiale_id IS
+NULL THEN true ELSE (filiale_id = ANY f_filiales_lecture()) END` — parce que leur
+`filiale_id` est nullable (socle Groupe) :
+
+```
+$ select c.relname from pg_policy p join pg_class c on c.oid = p.polrelid
+   where polcmd = 'r' and pg_get_expr(polqual, polrelid) like '%CASE%';
+document_referentiels · documents · mesure_catalogue · parametres · personnes
+```
+
+PostgreSQL ne peut pas hisser un appel qui dépend de la ligne : sur une table **vide**,
+`f_filiales_lecture()` n'est jamais évaluée, et une lecture **sans périmètre déclaré** rend
+`0` **sans erreur** — là où les 43 autres tables lèvent « Périmètre non positionné » même à
+vide. Mesuré, avec le contrôle symétrique :
+
+```
+sans périmètre : documents (0 ligne) -> 0        traitements (0 ligne) -> ERROR
+                 parametres (0 ligne) -> 0        incidents   (0 ligne) -> ERROR
+                 personnes  (4 lignes) -> ERROR   clients     (0 ligne) -> ERROR
+```
+
+**Rien ne fuit** : s'il n'y a pas de ligne, il n'y a rien à voir, et dès qu'une ligne existe
+la garde s'exerce. Ce qui est en cause est la **famille du défaut** : une lecture qui
+*réussit en silence* alors qu'aucun contrôle ne s'est exercé — la ligne « ❌ la liste est le
+mauvais outil » du `CLAUDE.md` §3, appliquée ici à une garde plutôt qu'à une liste. La
+conséquence pratique est méthodologique et elle m'a mordu : **un `0` lu ainsi ne distingue
+pas *vide* de *non contrôlé***, et un exploitant — ou un auditeur — qui s'y fie conclut
+faux. Le remède n'est pas de changer la politique (le `CASE` est juste) mais de le **dire**,
+et d'éprouver la garde table par table plutôt qu'une fois pour toutes.
+
 ### Les deux constats que la vague devait fermer et n'a pas fermés
 
 | # | État mesuré | Ce que je propose |
@@ -1056,6 +1344,59 @@ chevron casse la parenthèse. Le compte réel est **61 appels directs**, plus 17
 constructions indirectes : **76 énoncés**. Une sous-estimation de 62 % sur le contrôle
 S5, obtenue avec la commande la plus naturelle qui soit.
 
+**9. J'ai cru servir au navigateur le fichier corrigé ; je servais le fichier périmé, et
+j'ai failli déclarer le correctif Q-89 inopérant.** Pour juger le correctif du coordinateur
+avec mon propre instrument, j'ai intercepté `js/modules/synthese.js` dans Chromium pour lui
+substituer la version du dépôt. Résultat : `rssi.tls` (`export:false`) **téléchargeait
+toujours**. J'ai été à un cheveu d'écrire « le correctif ne tient pas ». Ce qui manquait
+était un compteur : en instrumentant l'interception, `interceptions: 1` — alors que le
+fichier est demandé une fois au chargement **et** une fois par ma vérification finale. La
+cause :
+
+```
+requête réelle : https://grc.exemple.interne/js/modules/synthese.js?v=0.1.0.896eb449576b
+mon motif      : **/js/modules/synthese.js         → ne correspond PAS (chaîne de requête)
+```
+
+Le vhost ajoute une empreinte de version aux ressources ; mon glob ne la prévoyait pas, si
+bien que **le chargement initial passait par Apache** et que je mesurais le fichier déployé.
+Une route de contexte sur l'expression régulière `/synthese\.js/` a corrigé le tir, et le
+verdict s'est inversé. **C'est la forme exacte du défaut que ce chantier traque** — *un
+contrôle qui mesure autre chose que ce qu'il annonce* — et je l'ai commis en le cherchant
+chez les autres.
+
+**10. J'ai cru que le refus d'export était silencieux ; c'était mon horloge.** Une fois
+l'interception juste, le téléchargement ne se produisait plus — mais aucun message
+n'apparaissait à l'écran. Cause : j'attendais l'événement de téléchargement pendant
+**6 secondes** avant de relever la notification, et celle-ci vit trois à quatre secondes. En
+ramenant l'attente à 1,2 s, le message est là : *« L'extraction de données n'est pas
+autorisée pour votre profil. Le droit d'export est accordé séparément de la lecture. »* Un
+bouton qui ne fait rien et un bouton qui refuse en le disant ne sont pas la même chose, et
+ma mesure ne les séparait pas.
+
+**11. J'ai lu `personnes = 0` sans erreur là où toute autre table cloisonnée aurait levé —
+et je n'ai pas su pourquoi sur le moment.** Le coordinateur m'a signalé que la garde de
+périmètre est évaluée *par ligne*. Mesuré, c'est plus précis que cela, et la nuance compte :
+
+```
+sans périmètre déclaré, comme propriétaire :
+  traitements  (0 ligne)  -> ERROR : Périmètre non positionné
+  incidents    (0 ligne)  -> ERROR
+  clients      (0 ligne)  -> ERROR
+  documents    (0 ligne)  -> 0        ← aucune erreur
+  parametres   (0 ligne)  -> 0
+  personnes    (4 lignes) -> ERROR
+```
+
+Ce n'est donc pas « la garde est par ligne » en général : c'est que **cinq tables** portent
+une politique de lecture *conditionnelle* — `CASE WHEN filiale_id IS NULL THEN true ELSE
+… f_filiales_lecture() END` — que PostgreSQL ne peut pas hisser hors du parcours. Sur une
+table vide, l'expression n'est jamais évaluée, la garde ne s'exerce pas, et la requête rend
+`0` **en silence**. Sur les autres, l'appel est hissé et lève même sans ligne. Ma conclusion
+sur Q-88 tenait quand même — j'avais relu avec le périmètre déclaré, et les tables témoins
+rendaient des valeurs non nulles —, mais **le premier `0` que j'ai lu ne prouvait rien**, et
+je l'ignorais. C'est devenu le constat **Q-104**.
+
 **8. J'ai cru pouvoir mesurer TLS 1.0 avec `openssl s_client -tls1`.** Le brief prévenait,
 et il avait raison : sans `-cipher 'ALL:@SECLEVEL=0'`, OpenSSL 3.5 refuse de **proposer**
 ces versions, et l'on mesure son propre client. Avec l'option, l'alerte `protocol version
@@ -1073,7 +1414,8 @@ minute**.
 
 | Sujet | Pourquoi | Ce que je demande |
 |---|---|---|
-| **Le journal technique du service** | `journalctl -u cyber-grc` → *« Users in groups `adm`, `systemd-journal` can see all messages »*, et je n'ai pas `sudo`. Je n'ai donc **pas pu lire une seule ligne de pino en production** — ni vérifier qu'aucun secret n'y arrive, ni lire la ligne d'export de S7, ni voir le témoin `x-request-id` | **ajouter le compte d'audit au groupe `systemd-journal`**. C'est le seul angle mort de ce rapport qui porte sur une propriété de sécurité (S8, S12) que j'ai dû établir **par lecture** et non par mesure |
+| ~~Le journal technique du service~~ | ✅ **RÉSERVE LEVÉE.** L'accès m'a été ouvert pendant l'audit (`sg systemd-journal -c "journalctl -u cyber-grc …"`). S8 et S12 sont désormais établis **par la mesure** : voir **§1.19**, qui remplace cette ligne. Ce qu'elle a produit : le contrat des deux bouts vérifié sur douze refus, 908 lignes balayées sans une fuite, l'injection de journal refusée, la référence d'incident retrouvée et le témoin `x-request-id` discriminant. **Une réserve écrite n'est pas une réserve traitée** — celle-ci a coûté une demi-heure et rendu quatre mesures que la lecture n'aurait pas données | — |
+| **Le mot de passe du compte de secours** | il n'est pas dans le dépôt (c'est l'objet du contrôle S8) et `/etc/cyber-grc/env` est lisible par `root` seul. Je n'ai donc pu éprouver que l'usage **refusé** du compte de secours, pas l'usage **réussi** — dont le lot fait un critère | fournir un mot de passe de secours jetable à l'auditeur, ou jouer ce cas sur une VM d'essai |
 | **`deploy/install.sh` rejoué de bout en bout** | exige `root`. Les constats **Q-75**, **Q-76**, **Q-101** portent sur son comportement, et je n'ai pu qu'en lire les blocs et croire `test/deploiement/` (65/65) | jouer l'installateur **sur une VM jetable**, avec un nom d'hôte désaligné, pour voir le verdict `reserve()` et le code 3 |
 | **Sabotage de la base de production** pour voir `f_verifier_schema()` faire échouer le chemin d'installation (S16) | j'aurais cassé l'installation servant à tous les autres contrôles. Le garde-fou neuf est mordu par `test/droits/substrat-session.test.mjs`, et le registre `controles_schema` est peuplé | rien : la couverture par le banc est suffisante, et je le dis plutôt que de le taire |
 | **Chromium contre la PKI interne en TLS strict** | `net::ERR_CERT_AUTHORITY_INVALID` : Chromium porte son propre magasin et ignore celui du système. J'ai donc mesuré S17 avec `ignoreHTTPSErrors`, et validé la chaîne **séparément** par `curl` sans `--cacert` (`verif=0`) et par `openssl` (`Verify return code: 0`) | ancrer la racine interne dans une base NSS pour le banc, ou consigner que la validation TLS du navigateur est hors du périmètre du banc |
@@ -1106,10 +1448,12 @@ de vingt filiales.
 
 ## 7. Ce que je recommande à l'orchestrateur
 
-1. **Corriger Q-88 et Q-89 avant de fermer la vague** — ce sont les deux seules lignes non
-   négociables, et chacune tient en peu de code. Pour Q-89, le correctif d'un bouton ne
-   suffit pas : **Q-92** demande que le douzième site d'extraction ne puisse pas apparaître
-   sans entonnoir, et c'est cette propriété-là qui doit être mordue.
+1. ~~Corriger Q-88 et Q-89~~ — **fait pendant l'audit, et vérifié à mon instrument** (§9).
+   Le correctif de Q-89 va au-delà de ce que je demandais : le garde-fou neuf **découvre**
+   les sites d'extraction au lieu d'en tenir la liste, ce qui ferme **Q-92** du même geste.
+   Reste **Q-103, immédiat** : le frontend corrigé **n'est pas déployé**, et la machine en
+   service extrait toujours la synthèse sans droit d'export. Un correctif commité qui ne
+   sert pas est un correctif qui ne protège personne.
 2. **Fermer Q-87 avant la vague 4.** C'est le seul garde-fou qui empêche Q-90 de revenir
    une neuvième fois, et il est resté ouvert alors que son échéance était *avant cette
    porte*. Cinq chiffres faux sont passés dessous, dont deux **contradictions internes au
@@ -1117,9 +1461,16 @@ de vingt filiales.
 3. **Retirer du `README` §8 la table « Dette reportée » pour ce qui concerne L3**, plutôt
    que de la corriger ligne à ligne : cinq de ses dix lignes décrivent un produit qui
    n'existe plus. Une table qui nie ce que le lot a livré est plus nuisible qu'absente.
-4. **Demander l'accès au journal systemd pour l'auditeur suivant.** C'est la seule réserve
-   de ce rapport qui porte sur une propriété de sécurité et que je n'ai pas pu lever ; et
-   ce chantier sait ce que coûte une réserve reconduite six fois.
+4. ~~Demander l'accès au journal systemd~~ — **accordé pendant l'audit, et la réserve est
+   levée par la mesure** (§1.19). Ce qu'elle a rendu et que la lecture n'aurait pas donné :
+   le contrat des deux bouts vérifié sur douze refus, l'injection de journal réfutée, la
+   couverture du journal d'audit **chiffrée** (4 actions émises sur 20 déclarées), et la
+   justification de la dérogation **E6** prise en flagrant délit de fausseté — le journal
+   n'est plus vide, `grc_lecture` y lit 138 entrées d'identités. *Une réserve écrite n'est
+   pas une réserve traitée* : celle-ci a coûté une demi-heure.
+5. **Rejouer la grille sur `294c0eb`.** Mon verdict porte sur `4f76da2` ; deux correctifs
+   ont depuis touché le point d'entrée, le greffon de connexion et un module de la SPA. Ce
+   chantier a payé deux fois le prix d'un correctif accepté sans rejeu complet.
 
 ---
 
@@ -1149,5 +1500,102 @@ traces, et les effacer serait une écriture de plus.
 
 ---
 
-*Rapport rendu le 04/09/2026. Aucune ligne de produit, aucun essai, aucune correction n'a
-été écrite par cet auditeur : `git status` est vide et `HEAD` vaut toujours `4f76da2`.*
+---
+
+## 9. L'arbre a bougé sous moi — deux fois, et il faut le dire
+
+**Le coordinateur me l'a signalé de lui-même, et il a raison de vouloir que ce soit écrit :
+c'est une donnée sur la conduite du chantier.** Le `PLAN_EXECUTION` §7 reproche exactement
+cela au 7ᵉ passage de S2 — *« l'arbre a bougé sous lui, et une phrase qu'il venait d'écrire
+est devenue fausse dix minutes plus tard »*. Le motif s'est reproduit ici, à ceci près qu'il
+a été annoncé pendant, et non découvert après.
+
+| Heure (UTC) | Ce qui a changé | Ce que cela invalide |
+|---|---|---|
+| jusqu'à **02:46** | révision `4f76da2`, service pid `305164` | rien — **c'est la révision que juge ce rapport** |
+| **02:48:50** | le service est **redéployé et redémarré** (pid `369777`) avec les correctifs de Q-88 et Q-89 dans l'arbre de travail | ma première batterie S12 (11 refus, 02:46:12) porte sur l'ancien binaire |
+| **02:55:28** | commit **`294c0eb`** — « Porte S3 refusée : deux bloquants trouvés par la mesure, corrigés le jour même » — qui embarque aussi **la première version de ce rapport** | la phrase de clôture, qui disait « `HEAD` vaut toujours `4f76da2` » |
+
+**Ce que j'ai fait pour que la mesure reste attribuable.** J'ai relevé le `pid` de chaque
+ligne de journal que j'exploite, puis **rejoué intégralement la batterie S12 sur le binaire
+redéployé** — douze cas cette fois, `pid` unique `369777` — plutôt que de mélanger deux
+binaires dans un même tableau. Résultat : **identique**, plus le cas « session révoquée » que
+la première série n'avait pas. Le tableau du §1.19 est celui du rejeu.
+
+### Ce que valent les deux correctifs, jugés à mon instrument
+
+Le coordinateur écrit lui-même : *« ce sont mes correctifs ; je suis le dernier à devoir
+juger s'ils tiennent »*. Voici ce que j'ai mesuré, sans reprendre ses chiffres.
+
+**Q-88 — l'annuaire `personnes`.** ✅ **Fermé.** Sur la base de l'installation en service,
+périmètre déclaré :
+
+```
+$ select nom, email, utilisateur_id is not null as rattachee, cree_par from personnes;
+ Camille Marchand  | rssi.tls@exemple.interne    | t | rssi.tls
+ Sacha Nguyen      | qualite.tls@exemple.interne | t | qualite.tls
+ Claude Fontaine   | admin.grc@exemple.interne   | t | admin.grc
+ Dominique Lefevre | contrib.tls@exemple.interne | t | contrib.tls        (4 lignes)
+```
+
+Quatre fiches, **avec les identités venues de l'annuaire** (nom d'affichage et courriel AD),
+chacune rattachée à son `utilisateur_id`, `cree_par` portant le login. La table était à **0**
+avant, mesuré deux fois et par deux chemins (§3, Q-88). Le livrable existe désormais.
+
+**Q-89 — l'entonnoir d'export.** ✅ **Le correctif tient** — vérifié à mon Chromium, contre
+le serveur réel et l'AD réel, en substituant le seul fichier corrigé à la copie déployée
+(qui est périmée, voir **Q-103**) :
+
+```
+rssi.tls    (export:false, validation)      → AUCUN téléchargement
+                message : « L'extraction de données n'est pas autorisée pour votre profil.
+                            Le droit d'export est accordé séparément de la lecture. »
+admin.grc   (export:false, administration)  → AUCUN téléchargement, même message
+rssi.groupe (export:true,  validation)      → téléchargement, « Rapport de synthèse
+                            téléchargé (HTML autonome). »   ← le cas légitime n'est pas cassé
+```
+
+Les deux profils qui contournaient la barrière — RSSI de filiale et ADMIN, ceux que j'avais
+nommés — sont arrêtés ; celui qui a le droit passe toujours. **Le garde-fou neuf mord** :
+
+```
+$ (garde retirée de downloadReport) node --test test/depot/entonnoir-export.test.mjs
+✖ AUCUN fichier ne fabrique un téléchargement sans exiger le droit
+   · js/modules/synthese.js — URL.createObjectURL(, attribut « download » d'une ancre
+ℹ pass 1 · fail 1
+$ (garde restaurée, md5 a77c92b3c3cd identique à l'original)        ℹ pass 2 · fail 0
+```
+
+Il **découvre** les sites au lieu d'en tenir la liste, et refuse de conclure s'il en voit
+moins de cinq (`sitesVus >= 5`, ligne 112) — ce qui ferme la porte au vert obtenu en
+n'éprouvant rien. C'est le remède que **Q-92** réclamait, et il est meilleur que ce que
+j'avais demandé.
+
+Banc sur la révision corrigée :
+
+```
+$ git rev-parse --short HEAD          → 294c0eb
+$ npm test                            → ℹ tests 1030 · pass 1030 · fail 0    EXIT=0
+```
+
+### Ce que ce rejeu ne vaut PAS
+
+Le `PLAN_EXECUTION` §7 est explicite, et je m'y tiens : *« une mesure faite après coup par
+l'auditeur n'est pas un rejeu de la porte »*. **Le verdict du §2 porte sur `4f76da2`.** Sur
+`294c0eb` je n'ai rejoué **que** Q-88 et Q-89, plus le banc entier ; les seize autres
+contrôles de la grille n'ont pas été repassés sur cette révision, et deux correctifs qui
+touchent `src/api/index.ts`, `src/auth/greffon.ts` et un module de la SPA méritent qu'on le
+dise. Ce chantier a payé deux fois le prix d'un correctif accepté sans rejeu complet ; ce
+n'en est pas un troisième, mais ce n'est pas un franchissement non plus.
+
+**Et il reste Q-103** : à l'heure où j'écris, la machine en service porte le nouveau binaire
+et **l'ancien frontend**. La fuite que Q-89 décrit est encore ouverte sur l'installation,
+pendant que le dépôt est vert à 1030/1030.
+
+---
+
+*Rapport rendu le 04/09/2026, complété le même jour après ouverture de l'accès au journal
+systemd. Aucune ligne de produit, aucun essai, aucune correction n'a été écrite par cet
+auditeur : la seule entrée de `git status` qui lui appartienne est ce fichier. Les mutations
+du §4 et du §9 ont toutes été restaurées à l'octet près — empreintes vérifiées — et le banc
+rejoué après chacune.*

@@ -104,6 +104,7 @@ MAJ_SEULE=0
 SEULEMENT_BASE=0
 REPRENDRE_PROPRIETE=0
 REINITIALISER_MDP=0
+VERIFIER_PUBLICATION=0
 
 info()   { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 succes() { printf '\033[1;32m  ok\033[0m %s\n' "$*"; }
@@ -146,6 +147,9 @@ Installe ou met à jour Cyber GRC Groupe sur Debian 13 (sans conteneur).
                                  installation antérieure les a laissés au compte du service
   --reinitialiser-mots-de-passe  réécrit le mot de passe des rôles PostgreSQL existants
                                  (à employer quand le fichier de configuration a été perdu)
+  --verifier-publication         NE MODIFIE RIEN : compare ce que la racine web
+                                 SERT à ce que le dépôt porte, et rend 5 si un
+                                 fichier diverge (constat Q-103)
   --aide                         ce message
 
 Variables d'environnement reconnues :
@@ -178,12 +182,89 @@ while [[ $# -gt 0 ]]; do
     --seulement-base)               SEULEMENT_BASE=1; shift ;;
     --reprendre-propriete)          REPRENDRE_PROPRIETE=1; shift ;;
     --reinitialiser-mots-de-passe)  REINITIALISER_MDP=1; shift ;;
+    --verifier-publication)         VERIFIER_PUBLICATION=1; shift ;;
     --aide|-h|--help)               aide; exit 0 ;;
     *) echec "Option inconnue : $1 (voir --aide)." ;;
   esac
 done
 
 [[ $EUID -eq 0 ]] || echec "À lancer en root."
+
+# =============================================================================
+#  --verifier-publication — ce qui est SERVI, comparé à ce que le dépôt porte
+# =============================================================================
+#
+# ⚠️ **Constat Q-103 : le dépôt était vert pendant que la machine fuyait.**
+# Un correctif de sécurité — le droit d'export contourné, constat Q-89 — a été
+# commité, éprouvé, mesuré vert au banc, et **jamais publié** : la racine web
+# servait encore l'ancien fichier, 73 200 octets contre 74 250, zéro occurrence
+# de la garde contre deux. Un Chromium réel téléchargeait toujours le document
+# confidentiel. Cause : un redéploiement du **serveur** seul (`rsync dist/` puis
+# `systemctl restart`), sans republier le **frontend**, qui ne se publie que par
+# ce script.
+#
+# Ce mode existe pour que la question « ce qui tourne est-il ce que je crois ? »
+# ait une réponse **en une commande, sans rien republier** — donc sans risque, et
+# donc jouable à tout moment, y compris quand on n'ose pas relancer une
+# installation. C'est la variante déployée du constat Q-52 : *un banc vert sur
+# l'arbre ne dit rien du commit*, et *un commit vert ne dit rien de la machine*.
+#
+# Il compare le CONTENU, pas les dates ni les tailles : un fichier réécrit avec
+# le même nombre d'octets est le cas qu'on veut attraper.
+if [[ $VERIFIER_PUBLICATION -eq 1 ]]; then
+  info "Publication — ce qui est servi, comparé au dépôt"
+  [[ -d "$RACINE/frontend" ]] || echec "Aucune racine web en $RACINE/frontend : rien n'est publié ici."
+
+  TYPES="html|js|css|svg|png|ico|jpg|jpeg|gif|webp|woff|woff2|webmanifest"
+  DIVERGENTS=(); ABSENTS=(); INTRUS=(); COMPARES=0
+
+  while IFS= read -r source; do
+    relatif="${source#"$DEPOT/cyber-gouvernance_V4/"}"
+    publie="$RACINE/frontend/$relatif"
+    if [[ ! -f "$publie" ]]; then ABSENTS+=("$relatif"); continue; fi
+    COMPARES=$((COMPARES+1))
+    cmp -s "$source" "$publie" || DIVERGENTS+=("$relatif")
+  done < <(find "$DEPOT/cyber-gouvernance_V4" -type f | grep -Ei "\\.($TYPES)$")
+
+  while IFS= read -r publie; do
+    relatif="${publie#"$RACINE/frontend/"}"
+    [[ -f "$DEPOT/cyber-gouvernance_V4/$relatif" ]] || INTRUS+=("$relatif")
+  done < <(find "$RACINE/frontend" -type f)
+
+  # Un contrôle qui ne compare rien passerait au vert en n'éprouvant rien : c'est
+  # ce que ce dépôt appelle un décor (constat Q-37).
+  [[ $COMPARES -ge 20 ]] || echec "Seuls $COMPARES fichier(s) comparés : ce contrôle ne mord plus.
+      Soit la racine web n'est pas celle qu'on croit, soit la découverte est cassée."
+
+  # `index.html` porte un jeton de version injecté à la publication : il DIFFÈRE
+  # du dépôt par construction, et le signaler serait un faux positif permanent —
+  # dit ici plutôt que filtré en silence.
+  RESTANTS=(); for f in "${DIVERGENTS[@]:-}"; do [[ -z "$f" || "$f" == "index.html" ]] || RESTANTS+=("$f"); done
+
+  ECART=0
+  if [[ ${#RESTANTS[@]} -gt 0 ]]; then
+    ECART=1
+    alerte "${#RESTANTS[@]} fichier(s) SERVIS diffèrent du dépôt :"
+    for f in "${RESTANTS[@]}"; do alerte "    $f"; done
+  fi
+  if [[ ${#ABSENTS[@]} -gt 0 ]]; then
+    ECART=1
+    alerte "${#ABSENTS[@]} fichier(s) du dépôt ne sont PAS publiés :"
+    for f in "${ABSENTS[@]}"; do alerte "    $f"; done
+  fi
+  if [[ ${#INTRUS[@]} -gt 0 ]]; then
+    ECART=1
+    alerte "${#INTRUS[@]} fichier(s) servis N'EXISTENT PAS au dépôt :"
+    for f in "${INTRUS[@]}"; do alerte "    $f"; done
+  fi
+
+  if [[ $ECART -eq 1 ]]; then
+    alerte "La machine ne sert pas ce que le dépôt porte. Republiez : bash deploy/install.sh --maj"
+    exit 5
+  fi
+  succes "publication conforme : $COMPARES fichier(s) servis identiques au dépôt"
+  exit 0
+fi
 
 # =============================================================================
 #  Outils : lecture et écriture du fichier de configuration
