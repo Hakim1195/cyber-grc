@@ -141,8 +141,14 @@ const DocumentsModule = (() => {
                     ${formFieldsHtml(doc)}
                     <div style="margin-top:20px;"><button id="saveBtn">Mettre à jour</button></div>
                 </div>
+                ${typeof PiecesModule !== "undefined" ? PiecesModule.hoteHtml() : ""}
             </section>`;
         wireCanevas();
+        // Pièces jointes (lot L6) : le panneau se monte APRÈS le rendu de la
+        // fiche — c'est le seul moment où son conteneur existe. Le champ
+        // « Emplacement » ci-dessus désigne un fichier resté ailleurs ; celui-ci
+        // désigne un fichier que l'application détient, analyse et délivre.
+        if (typeof PiecesModule !== "undefined") PiecesModule.monter("documents", doc.id);
         document.getElementById("saveBtn").onclick = () => {
             const data = collectForm();
             if (!data) return;

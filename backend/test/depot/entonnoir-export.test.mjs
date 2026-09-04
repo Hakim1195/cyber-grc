@@ -121,6 +121,36 @@ const ENTONNOIR = /Droits\s*\.\s*exigerExport\s*\(/;
  * ce serait une liste des fichiers *exemptés* : celle-là, incomplète, ferait
  * réussir quelque chose en silence.
  */
+/**
+ * Les fichiers qui font sortir un octet **sans que ce soit un export** —
+ * arbitrage du 04/09/2026, `CONVENTIONS.md` §31.5.
+ *
+ * ── Pourquoi une liste ici, alors que ce fichier en refuse partout ──────
+ *
+ * Le `CLAUDE.md` §3 tranche par **ce que produit une omission**, jamais par le
+ * sujet. Ici, oublier d'inscrire un fichier fait **échouer bruyamment** : le
+ * balayage l'accuse, et quelqu'un doit décider. C'est le bon cas — celui d'une
+ * liste qui *oblige à trancher*. Ce qui serait le mauvais outil, ce serait une
+ * liste des chemins **exemptés du contrôle serveur** : celle-là, incomplète,
+ * ferait passer une extraction en silence.
+ *
+ * ⚠️ **Y ajouter une ligne est une décision de sécurité, pas une formalité.**
+ * Elle doit citer *pourquoi la sortie n'est pas un export*, et *ce qui la garde
+ * à la place*. Sans les deux, l'entrée n'a rien à faire ici.
+ */
+const SORTIES_QUI_NE_SONT_PAS_DES_EXPORTS = [
+  {
+    fichier: 'js/modules/pieces.js',
+    pourquoi:
+      'ouvrir une pièce attachée à une fiche qu’on a le droit de lire EST une lecture ' +
+      '(§31.5). Exiger le droit d’export empêcherait un auditeur d’ouvrir le rapport ' +
+      'qu’il est chargé de lire : GRC-EXPORT n’est porté que par une minorité de comptes.',
+    gardePar:
+      'le serveur — la route déclare « action: lire », le périmètre et la RLS s’appliquent, ' +
+      'et CHAQUE délivrance est tracée en « consultation_sensible ».',
+  },
+];
+
 const SORTIES_DELEGUEES = [
   { fichier: 'js/services/exportExcel.js', par: 'SheetJS (XLSX.writeFile)' },
   { fichier: 'js/services/exportPDF.js', par: "le moteur d'impression du navigateur" },
@@ -137,10 +167,15 @@ describe("Tout ce qui sort du produit passe par l'entonnoir (constat Q-89)", () 
     let sitesVus = 0;
 
     for (const chemin of fichiersDuProduit()) {
+      const relatif = relative(RACINE, chemin).split('\\').join('/');
       const code = sansCommentaires(readFileSync(chemin, 'utf8'));
       const sorties = SORTIES.filter((s) => s.motif.test(code));
       if (sorties.length === 0) continue;
       sitesVus += 1;
+      // Une sortie qui n'est PAS un export n'a pas à passer par l'entonnoir des
+      // exports (§31.5) — mais elle doit être **nommée et motivée** ci-dessus, et
+      // gardée ailleurs. L'essai suivant vérifie que ce « ailleurs » existe.
+      if (SORTIES_QUI_NE_SONT_PAS_DES_EXPORTS.some((e) => e.fichier === relatif)) continue;
       if (!ENTONNOIR.test(code)) {
         fautifs.push(
           `${relative(RACINE, chemin)} — ${sorties.map((s) => s.nom).join(', ')}`,
@@ -181,6 +216,34 @@ describe("Tout ce qui sort du produit passe par l'entonnoir (constat Q-89)", () 
   // borne **exécutable** : les deux fichiers sont nommés, et l'entonnoir y est
   // exigé. Si l'un cesse de l'appeler, cet essai rougit — là où, avant, il
   // restait vert en n'ayant rien regardé.
+  test('CHAQUE sortie non-export est motivée, et dit ce qui la garde', () => {
+    // Une entrée sans motif ni garde serait une exemption déguisée. Cet essai
+    // exige les deux, et refuse une liste vide de sens.
+    const incomplets = [];
+    for (const e of SORTIES_QUI_NE_SONT_PAS_DES_EXPORTS) {
+      const chemin = join(RACINE, e.fichier);
+      if (!existsSync(chemin)) {
+        incomplets.push(`${e.fichier} — INTROUVABLE : l’exemption survit à son objet`);
+        continue;
+      }
+      if (!e.pourquoi || e.pourquoi.length < 40) incomplets.push(`${e.fichier} — motif absent ou creux`);
+      if (!e.gardePar || e.gardePar.length < 40) incomplets.push(`${e.fichier} — ne dit pas ce qui le garde`);
+      // Contrôle de matière : si le fichier cessait de fabriquer une sortie,
+      // l'entrée deviendrait un vestige qui protège un défaut disparu.
+      const code = sansCommentaires(readFileSync(chemin, 'utf8'));
+      if (!SORTIES.some((sortie) => sortie.motif.test(code))) {
+        incomplets.push(`${e.fichier} — ne fabrique plus de sortie : retirez-le de la liste`);
+      }
+    }
+    assert.deepEqual(
+      incomplets,
+      [],
+      'Une sortie dispensée de l’entonnoir doit dire POURQUOI elle n’est pas un export, et ' +
+        'CE QUI LA GARDE à la place. Sans les deux, c’est une exemption déguisée :\n' +
+        incomplets.map((m) => `  · ${m}`).join('\n'),
+    );
+  });
+
   test('LES SORTIES DÉLÉGUÉES aussi passent par l’entonnoir (constat Q-114)', () => {
     const manquants = [];
     for (const { fichier, par } of SORTIES_DELEGUEES) {

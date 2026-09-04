@@ -1,0 +1,43 @@
+# Emplacement cible : /etc/systemd/system/cyber-grc-reanalyse.timer
+#
+# Planification du contrôle n° 7 (ré-analyse périodique des pièces jointes,
+# PLAN_SERVEUR §1.6 ; CONVENTIONS.md §31.4) — déclenche
+# cyber-grc-reanalyse.service.
+#
+# ── Deux cadences, et elles ne se confondent pas ─────────────────────────
+#
+#  · CE fichier décide QUAND le passage a lieu (une fois par jour) ;
+#  · `exploitation.ts` décide QUELLES pièces sont dues (`derniere_reanalyse`
+#    plus vieille que `DELAI_REANALYSE_JOURS_PAR_DEFAUT`, 90 jours par défaut).
+#
+# Tourner tous les jours sans reconsidérer chaque pièce chaque jour répartit
+# la charge (ClamAV, entrées/sorties) sur tout le trimestre au lieu de la
+# concentrer en un seul passage massif, et rattrape de lui-même un stock en
+# retard : `exploitation.ts` traite toujours les pièces les plus négligées en
+# premier (`order by derniere_reanalyse nulls first`).
+#
+# Installation : voir `deploy/install.sh`, section « Service et frontal ».
+# Vérification que le minuteur est armé — ENVOYÉE à systemd, jamais lue d'un
+# fichier (CONVENTIONS.md, corollaire de la porte S1/S2 sur les contrôles qui
+# se mesurent plutôt qu'ils ne se déclarent) :
+#   systemctl is-enabled cyber-grc-reanalyse.timer
+#   systemctl is-active  cyber-grc-reanalyse.timer
+#   systemctl list-timers cyber-grc-reanalyse.timer
+
+[Unit]
+Description=Planification de la ré-analyse périodique des pièces jointes (Cyber GRC Groupe)
+Documentation=file:/opt/cyber-grc/backend/README.md
+
+[Timer]
+OnCalendar=daily
+# Étale le déclenchement réel autour de l'échéance : ne concentre pas la
+# charge (ClamAV + entrées/sorties) pile à minuit, et reste robuste si
+# plusieurs services de ce type sont un jour déployés sur des VM voisines.
+RandomizedDelaySec=1800
+# Un arrêt de la VM ne doit pas faire sauter un cycle : au redémarrage, si
+# l'échéance est passée, le minuteur rattrape immédiatement.
+Persistent=true
+Unit=cyber-grc-reanalyse.service
+
+[Install]
+WantedBy=timers.target

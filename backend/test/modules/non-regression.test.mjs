@@ -1,8 +1,8 @@
 /**
  * non-regression.test.mjs — LE FILET DES MODULES MÉTIER (constat Q-16).
  *
- * Ils étaient 26 quand ce filet est né ; ils sont 27 depuis que le lot L5 a
- * ajouté l'écran du journal d'audit. Le nombre vit dans une constante nommée,
+ * Ils étaient 26 quand ce filet est né, 27 avec l'écran du journal d'audit (L5),
+ * 28 avec le panneau des pièces jointes (L6). Le nombre vit dans une constante nommée,
  * et l'essai dit quoi faire quand il bouge — c'est le sens de ce garde-fou.
  *
  * ── Pourquoi ce fichier existe ──────────────────────────────────────────────
@@ -211,7 +211,7 @@ const SANS_FICHE = {
  * inscrire la route dans `FICHES` ou dans `SANS_FICHE`, sans quoi la seconde
  * assertion tombe à son tour.
  */
-const MODULES_ATTENDUS = 27;
+const MODULES_ATTENDUS = 28;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //

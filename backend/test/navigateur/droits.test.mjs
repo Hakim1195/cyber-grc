@@ -744,6 +744,28 @@ function fichiersQuiExportent() {
  * **échoue bruyamment** — le contrôle de couverture ci-dessous compare cette
  * liste à la découverte et nomme le fichier manquant.
  */
+/**
+ * Les fichiers qui fabriquent un téléchargement **sans que ce soit un export**
+ * — arbitrage du 04/09/2026, `CONVENTIONS.md` §31.5.
+ *
+ * ⚠️ **Ils ne sont pas dispensés de contrôle, ils changent de contrôle.** Le
+ * parcours ci-dessous exige qu'un profil sans droit d'export ne fasse sortir
+ * AUCUN octet ; pour ceux-ci, l'attente est l'**inverse** — il doit obtenir son
+ * fichier, parce qu'ouvrir une pièce attachée à une fiche qu'on a le droit de
+ * lire *est* une lecture. Exiger l'export empêcherait un auditeur d'ouvrir le
+ * rapport qu'il est chargé de lire : `GRC-EXPORT` n'est porté que par une
+ * minorité de comptes.
+ *
+ * Ce qui les garde à la place : le **serveur** — route en `action: 'lire'`,
+ * périmètre, RLS, et chaque délivrance tracée en `consultation_sensible`. Le
+ * parcours dédié vit dans `test/navigateur/pieces.test.mjs`, et le contrôle du
+ * dépôt (`test/depot/entonnoir-export.test.mjs`) exige que chaque entrée dise
+ * **pourquoi** elle n'est pas un export et **ce qui la garde**.
+ */
+const SORTIES_QUI_NE_SONT_PAS_DES_EXPORTS = [
+  { fichier: 'js/modules/pieces.js', eprouvePar: 'test/navigateur/pieces.test.mjs' },
+];
+
 const SITES_DE_SORTIE = [
   {
     nom: 'BackupService.exportPlain — fichier d’échange grc-backup',
@@ -928,7 +950,10 @@ describe('Un profil qui ÉCRIT et n’EXPORTE PAS : la combinaison de Q-89 (cons
      * ceci est la moitié comportementale.
      */
     const decouverts = fichiersQuiExportent();
-    const exerces = new Set(SITES_DE_SORTIE.map((s) => s.fichier));
+    const exerces = new Set([
+      ...SITES_DE_SORTIE.map((s) => s.fichier),
+      ...SORTIES_QUI_NE_SONT_PAS_DES_EXPORTS.map((s) => s.fichier),
+    ]);
 
     assert.ok(
       decouverts.length >= 5,

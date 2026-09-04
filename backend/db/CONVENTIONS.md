@@ -1896,6 +1896,39 @@ des droits **et du périmètre**.
 **Les logos de filiale suivent la même chaîne, et PNG ou JPEG exclusivement** — pas de SVG,
 qui porte du script et s'afficherait *dans* l'interface.
 
+### 31.5 Ouvrir une pièce est une LECTURE, pas un export — arbitré le 04/09/2026
+
+**La question s'est posée entre deux agents, et le brief de l'orchestrateur avait tort.**
+Il disait : *« tout ce qui fait sortir un octet passe par `Droits.exigerExport()` — un
+téléchargement de pièce jointe en est un »*. L'agent qui a écrit le serveur a déclaré la
+route `action: 'lire'` et l'a **contestée par écrit** ; l'agent du navigateur a appliqué la
+consigne. Les deux moitiés se contredisaient : le client refusait ce que le serveur
+autorisait.
+
+**Ce qui a tranché est une mesure** : le droit d'export vient du groupe AD `GRC-EXPORT`, et
+la plupart des comptes ne le portent pas. Exiger l'export pour ouvrir une pièce aurait
+empêché **un auditeur d'ouvrir le rapport d'audit** qu'il est chargé de lire, et un
+contributeur de rouvrir le PDF qu'il vient de déposer. Le module documentaire serait devenu
+inutilisable pour la majorité des profils.
+
+> **Règle : ouvrir une pièce attachée à une fiche qu'on a le droit de lire est une
+> LECTURE.** La route déclare `action: 'lire'`, et **chaque délivrance est tracée** en
+> `consultation_sensible` — « qui a ouvert quoi » reste donc une question à laquelle le
+> journal répond, ce qu'exige le `PLAN_SERVEUR` §1.7.
+
+**Ce que la règle ne dit pas, et qui reste à trancher le jour où le cas existera** : un
+téléchargement **groupé** — une archive de toutes les pièces d'une filiale — serait, lui,
+« l'extraction en un clic, complète et silencieuse » que le §3.3 vise. Aucun n'existe
+aujourd'hui ; qu'aucun ne s'écrive sans revenir ici.
+
+⚠️ **Conséquence côté navigateur, et c'est mieux ainsi** : l'écran **ne fabrique plus** le
+téléchargement. Il suit l'adresse, et le serveur délivre en `attachment` + `nosniff`. Donc
+(a) un fichier de 25 Mio ne transite plus par la mémoire du navigateur, (b) le nom écrit sur
+le disque vient de l'en-tête assaini par le serveur, et (c) le garde-fou mécanique de
+l'entonnoir cesse d'accuser ce chemin **parce qu'il n'y a plus rien à accuser** — par
+disparition de l'objet, jamais par une exemption. *Une exemption incomplète fait réussir
+quelque chose en silence ; une disparition, non.*
+
 ### 31.4 Ce que ClamAV ne garantit pas, et qu'il faut écrire
 
 Le `PLAN_SERVEUR` §1.6 l'ouvre par cette phrase, qui doit se retrouver dans le code :

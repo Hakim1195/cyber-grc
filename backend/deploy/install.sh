@@ -1918,9 +1918,15 @@ fi
 
 info "Service et frontal"
 install -m 0644 "$SOURCE/deploy/systemd/cyber-grc.service" /etc/systemd/system/
+# Contrôle n° 7 du PLAN_SERVEUR §1.6 (CONVENTIONS.md §31.4) : la ré-analyse
+# périodique du stock de pièces jointes. Le service est un `oneshot` sans
+# section [Install] — seul le minuteur est armé.
+install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-reanalyse.service" /etc/systemd/system/
+install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-reanalyse.timer" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable cyber-grc
 systemctl restart cyber-grc
+systemctl enable --now cyber-grc-reanalyse.timer
 
 if [[ ! -f /etc/apache2/sites-available/cyber-grc.conf ]]; then
   install -m 0644 "$SOURCE/deploy/apache/cyber-grc.conf" /etc/apache2/sites-available/
@@ -2146,6 +2152,57 @@ else
 fi
 # <<< banc: unite >>>
 
+# >>> banc: reanalyse <<<
+# ══ LE MINUTEUR EST ARMÉ, CONSTATÉ PAR SYSTEMCTL — PAS PAR LA LECTURE D'UN FICHIER ═
+#
+# Même piège que « banc: unite » deux crans plus haut : un fichier .timer
+# présent sur le disque ne dit rien de ce que systemd EN FAIT. Un `enable
+# --now` peut avoir échoué en silence, ou le minuteur peut être chargé sans
+# jamais avoir démarré — les deux sont invisibles à `cat`. `is-enabled` et
+# `is-active` interrogent le gestionnaire systemd EN COURS D'EXÉCUTION, jamais
+# le fichier source : la même préférence, déjà faite plus haut pour
+# IPAddressAllow (« systemctl show », pas une lecture de l'unité livrée).
+#
+# Contrôle n° 7 du PLAN_SERVEUR §1.6 (CONVENTIONS.md §31.4) : la ré-analyse
+# périodique du stock de pièces jointes. Deux vérifications, dans cet ordre —
+# la forme des unités d'abord (fichier, ne demande aucun privilège), puis leur
+# état RÉEL une fois installées (systemd, en vigueur).
+UNITE_REANALYSE="cyber-grc-reanalyse.timer"
+if command -v systemd-analyze >/dev/null 2>&1; then
+  SORTIE_REANALYSE="$(systemd-analyze verify \
+    "$SOURCE/deploy/systemd/cyber-grc-reanalyse.service" \
+    "$SOURCE/deploy/systemd/cyber-grc-reanalyse.timer" 2>&1 || true)"
+  if [[ -n "${SORTIE_REANALYSE//[[:space:]]/}" ]]; then
+    while IFS= read -r l; do [[ -n "$l" ]] && alerte "minuteur : $l"; done <<< "$SORTIE_REANALYSE"
+    echec "systemd refuse ou critique cyber-grc-reanalyse.service ou .timer. Le contrôle n° 7
+      (ré-analyse périodique, CONVENTIONS.md §31.4) ne se déclencherait pas, ou pas comme prévu.
+      Corrigez deploy/systemd/cyber-grc-reanalyse.{service,timer}, puis relancez."
+  else
+    succes "unités cyber-grc-reanalyse.{service,timer} validées par systemd-analyze verify"
+  fi
+else
+  reserve "systemd-analyze absent : cyber-grc-reanalyse.{service,timer} n'ont PAS été vérifiées."
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+  ARMEMENT="$(systemctl is-enabled "$UNITE_REANALYSE" 2>&1 || true)"
+  MARCHE="$(systemctl is-active "$UNITE_REANALYSE" 2>&1 || true)"
+  if [[ "$ARMEMENT" == "enabled" && "$MARCHE" == "active" ]]; then
+    succes "minuteur $UNITE_REANALYSE armé (enabled, active)"
+  elif [[ "$ARMEMENT" == "not-found" || "$MARCHE" == "not-found" ]]; then
+    reserve "minuteur $UNITE_REANALYSE inconnu de systemd : l'armement n'a PAS pu être constaté."
+  else
+    echec "minuteur $UNITE_REANALYSE désarmé (is-enabled=$ARMEMENT, is-active=$MARCHE). Le
+      contrôle n° 7 (ré-analyse périodique, CONVENTIONS.md §31.4) ne se déclenchera pas : une
+      pièce saine aujourd'hui resterait délivrable même si une signature publiée plus tard la
+      détecte. Réarmez avec :
+        systemctl daemon-reload && systemctl enable --now $UNITE_REANALYSE"
+  fi
+else
+  reserve "systemctl absent : l'armement de $UNITE_REANALYSE n'a PAS pu être constaté."
+fi
+# <<< banc: reanalyse >>>
+
 # >>> banc: entetes <<<
 # ══ CE QUE LE SERVICE LIT, LE FRONTAL DOIT L'AVOIR NEUTRALISÉ (Q-39) ═════════
 #
@@ -2301,7 +2358,13 @@ fi
 # discriminant, et elle est IMPRIMÉE à chaque installation pour qu'elle ne
 # grossisse pas en silence. C'est le cas d'exception du `db/CONVENTIONS.md` §24 :
 # obliger quelqu'un à trancher, plutôt qu'énumérer.
-ENTETES_DU_CLIENT=(cookie user-agent)
+# `content-type` et `content-length` rejoignent la liste au lot L6 : ce sont des
+# DÉCLARATIONS DU CLIENT, pas des faits établis ailleurs — le discriminant de ce
+# bloc. `content-type` porte la frontière multipart, validée contre le RFC 2046
+# puis DÉMENTIE par le contrôle n° 4 (signature binaire) ; `content-length` ne
+# sert qu'à refuser tôt, le compteur de flux restant seul autoritaire. Les
+# effacer casserait tout envoi de corps.
+ENTETES_DU_CLIENT=(cookie user-agent content-type content-length)
 
 ENTETES_NUS=""
 while IFS= read -r entete; do

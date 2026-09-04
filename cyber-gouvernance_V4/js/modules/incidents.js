@@ -178,7 +178,13 @@ const IncidentsModule = (() => {
                         </div>
                     </form>
                 </div>
+
+                ${typeof PiecesModule !== "undefined" ? PiecesModule.hoteHtml() : ""}
             </section>`;
+
+        // Pièces jointes (lot L6) : preuves d'un incident — captures, journaux,
+        // courriels. Monté APRÈS le rendu, seul moment où le conteneur existe.
+        if (typeof PiecesModule !== "undefined") PiecesModule.monter("incidents", inc.id);
 
         document.getElementById("saveBtn").onclick = () => {
             const data = collectForm();

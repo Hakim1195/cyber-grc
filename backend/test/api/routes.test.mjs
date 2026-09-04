@@ -772,6 +772,20 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // d'identités, d'adresses IP et de valeurs avant/après — et l'export en
     // livrerait le fichier. C'est la table dont l'objet est de faire preuve ;
     // elle ne peut pas être la seule à sortir de la barrière.
+    // Les huit routes des pièces jointes (lot L6). Elles sont ici pour la raison
+    // qui vaut pour toutes : hors développement, une pièce servie sans identité
+    // livrerait un document que son déposant croyait cloisonné. ⚠️ Cet essai
+    // était vert **parce que la couture était débranchée** — il rougit dès que
+    // `register(greffonPieces, { pool, config })` est écrit, ce qui est
+    // exactement ce qu'un contrôle doit faire quand une surface apparaît.
+    ['POST', '/api/pieces/risques/RISK-A', undefined],
+    ['GET', '/api/pieces/risques/RISK-A', undefined],
+    ['GET', '/api/pieces/risques/RISK-A/PJ-A', undefined],
+    ['DELETE', '/api/pieces/risques/RISK-A/PJ-A', undefined],
+    ['POST', '/api/pieces/logo', undefined],
+    ['GET', '/api/pieces/logo', undefined],
+    ['GET', '/api/pieces/logo/PJ-A', undefined],
+    ['DELETE', '/api/pieces/logo/PJ-A', undefined],
     ['GET', '/api/journal', undefined],
     ['GET', '/api/journal/export', undefined],
     ['GET', '/api/journal/verification', undefined],
@@ -833,11 +847,38 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
   }
 
   /** Met une entrée du banc à la forme du routeur : `MÉTHODE /chemin/:parametre`. */
-  function formeRouteur(methode, url) {
-    return `${methode} ${url
-      .split('?')[0]
-      .replace(/\/entites\/[^/]+\/[^/]+$/, '/entites/:entite/:identifiant')
-      .replace(/\/entites\/[^/]+$/, '/entites/:entite')}`;
+  /**
+   * La forme de routeur d'une URL de sonde — **demandée à Fastify, plus devinée**.
+   *
+   * ⚠️ Cette fonction normalisait à la main, par deux expressions régulières qui
+   * ne connaissaient que `/entites/…`. Le lot L6 a monté huit routes sous
+   * `/api/pieces/…`, et le contrôle « la liste est complète » a rougi en les
+   * déclarant non éprouvées — alors qu'elles l'étaient : c'est la NORMALISATION
+   * qui ne savait pas les reconnaître.
+   *
+   * Le remède habituel — ajouter deux motifs — aurait tenu jusqu'au lot suivant.
+   * Le routeur, lui, sait déjà : `findRoute()` rend la route qu'une URL atteint
+   * réellement, paramètres compris. On lui demande donc, au lieu de réécrire à
+   * côté de lui une seconde table de correspondance qui divergera (`CONVENTIONS.md`
+   * §19.5 — *une liste écrite à la main est une omission qui attend*).
+   *
+   * Le repli sur l'URL nue n'est pas un défaut : une sonde qui ne résout vers
+   * aucune route est précisément ce que le contrôle doit signaler.
+   */
+  function formeRouteur(methode, url, instance) {
+    const chemin = url.split('?')[0];
+    const trouvee = instance?.findRoute?.({ method: methode, url: chemin });
+    // `findRoute` rend `{ handler, params, searchParams }` — les VALEURS des
+    // paramètres, pas le modèle d'URL. On le reconstruit : chaque segment qui
+    // est la valeur d'un paramètre redevient `:nom`. Le routeur décide donc de
+    // ce qui est un paramètre, et l'essai n'en décide rien.
+    if (trouvee?.params === undefined) return `${methode} ${chemin}`;
+    const parNom = new Map(Object.entries(trouvee.params).map(([nom, valeur]) => [String(valeur), nom]));
+    const modele = chemin
+      .split('/')
+      .map((segment) => (parNom.has(segment) ? `:${parNom.get(segment)}` : segment))
+      .join('/');
+    return `${methode} ${modele}`;
   }
 
   test('LE GÉNÉRATEUR QUI ÉCRIT : 250 créations d’affilée, 250 identifiants distincts', async () => {
@@ -1034,8 +1075,8 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
 
     const couvertes = new Set();
     for (const [methode, url] of POINTS_DENTREE) {
-      couvertes.add(formeRouteur(methode, url));
-      if (methode === 'GET') couvertes.add(formeRouteur('HEAD', url));
+      couvertes.add(formeRouteur(methode, url, serveur.instance));
+      if (methode === 'GET') couvertes.add(formeRouteur('HEAD', url, serveur.instance));
     }
     // `/api/sante` est délibérément hors barrière : elle est éprouvée à part.
     const manquantes = [...montees].filter((route) => !couvertes.has(route) && !route.endsWith('/api/sante'));

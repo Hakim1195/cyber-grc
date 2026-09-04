@@ -3902,6 +3902,11 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       'substrat_session',
       'tracabilite',
       'unicite_cloisonnee',
+      // ONZIÈME, apporté par `009_perimetre_actif.sql` (lot L4) : il vérifie que le
+      // vocabulaire du journal déclare encore « changement_perimetre », l'action que le
+      // sélecteur de filiale émet à chaque basculement (CONVENTIONS.md §30.4). Il a fait
+      // rougir cette liste en arrivant, ce qui est exactement son office.
+      'vocabulaire_journal',
     ]);
   });
 

@@ -109,8 +109,11 @@ import type { ChargeV12 } from '../reprise/types.js';
 import { entreeInvalide, ErreurApplicative, traduireErreur } from '../erreurs/index.js';
 import type { ContexteTraduction } from '../erreurs/index.js';
 import { greffonConnexion } from '../auth/greffon.js';
+import { lireCookie } from '../auth/index.js';
 import type { ServiceAuthentification, SessionAppliqueeReelle } from '../auth/index.js';
 import { journaliser } from '../auth/journal.js';
+import { empreinteJeton } from '../auth/sessions.js';
+import { avecTransactionAuthentification } from '../auth/transaction.js';
 import { deciderAcces, DOMAINE_PAR_ENTITE, entitesLisibles, refuserDroit } from './droits.js';
 import { greffonJournal } from './journal.js';
 import { greffonPieces } from '../pieces/index.js';
@@ -342,6 +345,25 @@ const SCHEMA_RAFRAICHIR = {
   required: ['depuis'],
   additionalProperties: false,
   properties: { depuis: { type: 'string', minLength: 10, maxLength: 40 } },
+} as const;
+
+/**
+ * Le corps du sélecteur de filiale — **un CHOIX, jamais un périmètre**.
+ *
+ * `CONVENTIONS.md` §30.2 : « ce que le client peut envoyer : **un identifiant de
+ * filiale, et rien d'autre** ». `additionalProperties: false` le rend littéral —
+ * un corps qui joindrait une liste de filiales, une portée ou un drapeau est
+ * refusé au bord, avant d'atteindre la moindre ligne de code.
+ *
+ * La borne de 64 signes est celle des identifiants du produit
+ * (`SCHEMA_PARAMS_ENTITE_ID`, `CONVENTIONS.md` §2) : la valeur ne sert jamais
+ * qu'à être **comparée** à une colonne, jamais interpolée.
+ */
+const SCHEMA_FILIALE_ACTIVE = {
+  type: 'object',
+  required: ['filiale'],
+  additionalProperties: false,
+  properties: { filiale: { type: 'string', minLength: 1, maxLength: 64 } },
 } as const;
 
 const SCHEMA_REPRISE = {
@@ -687,6 +709,86 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     }
     requete.sessionGrc = session;
 
+    // ── 3 bis. La FILIALE ACTIVE appartient-elle ENCORE au périmètre ? ──
+    //
+    // `CONVENTIONS.md` §30.3, l'encadré : « les groupes AD d'un utilisateur
+    // peuvent changer *pendant* sa session (le lot L3 les relit tous les
+    // `AUTH_REVERIFICATION_AD` minutes). Si la filiale active en sort, la session
+    // ne doit pas continuer d'écrire là. **La filiale active est donc revérifiée
+    // contre `session_filiales` à chaque requête**, et non seulement au moment du
+    // choix. »
+    //
+    // ── Les deux valeurs comparées viennent de la base, pas d'un cache ──
+    //
+    // `session.perimetre.filiales` est la lecture de `session_filiales` faite par
+    // `verifierSession` **pour cette requête-ci** (aucun cache : `src/auth/index.ts`
+    // le dit et `test/droits/perimetre-serveur.test.mjs` le mesure), et
+    // `session.perimetre.filialeId` est `sessions.filiale_active_id` de la même
+    // lecture. La comparaison est donc celle que le §30.3 demande, et pas une
+    // relecture d'un état vieilli.
+    //
+    // ── Pourquoi un refus, et pas un repli ─────────────────────────────
+    //
+    // Le repli — « on retombe sur la première filiale du périmètre » — est
+    // précisément ce que le §30.2 interdit : *pas de repli, pas de valeur par
+    // défaut*. Il produirait le défaut que tout ce lot existe pour empêcher :
+    // **l'utilisateur croirait écrire chez A en écrivant chez B**, et il n'aurait
+    // rien fait pour cela.
+    //
+    // ── Pourquoi ICI, et uniformément ──────────────────────────────────
+    //
+    // Sans ce contrôle, l'incohérence n'était pas silencieuse — elle rendait
+    // **500** : `validerPerimetre` (`src/db/pool.ts`) refuse un périmètre dont la
+    // filiale active n'est pas lisible, en LECTURE comme en écriture, et le refus
+    // sort en `ErreurPerimetre`, c'est-à-dire en défaut de programmation. Ce
+    // n'en est pas un : c'est un changement d'annuaire, et cela se dit à
+    // l'utilisateur.
+    //
+    // Aucune route n'est exemptée, et aucune liste de chemins n'est écrite :
+    // `POST` et `DELETE /api/connexion` sont déclarées **publiques** et le crochet
+    // leur a déjà rendu la main à l'étape 2. La sortie de secours est donc entière
+    // — se reconnecter re-résout le périmètre depuis les groupes AD — sans qu'un
+    // seul chemin ait été mis à part.
+    const filialeActive = session.perimetre.filialeId;
+    if (filialeActive !== null && !session.perimetre.filiales.includes(filialeActive)) {
+      const detail =
+        'CONVENTIONS.md §30.3 : la filiale active de la session ne figure plus dans ' +
+        `son périmètre de lecture (${String(session.perimetre.filiales.length)} filiale(s) ` +
+        'lisible(s)). Les groupes AD ont changé en cours de session.';
+      requete.log.warn(
+        {
+          utilisateur: session.perimetre.utilisateurId,
+          route: requete.routeOptions.url ?? requete.url,
+          detail,
+        },
+        'Accès refusé : la filiale active a quitté le périmètre de la session',
+      );
+      await tracer(requete.log, session, {
+        // Phrase FIXE (§29.5). Rien de ce qui varie n'y entre.
+        action: 'refus_autorisation',
+        resume:
+          'Requête refusée : la filiale active de la session ne figure plus dans son ' +
+          'périmètre de lecture.',
+        adresseIp: requete.ip,
+        entiteType: 'sessions',
+        valeursApres: {
+          methode: requete.method,
+          route: requete.routeOptions.url ?? null,
+          motif: 'filiale_active_hors_perimetre',
+          filiale_active: filialeActive,
+          perimetre_lecture: [...session.perimetre.filiales],
+        },
+      });
+      throw new ErreurApplicative({
+        code: 'hors_perimetre',
+        statut: 403,
+        message:
+          'Votre périmètre a changé : la filiale dans laquelle vous travailliez ne vous est ' +
+          'plus ouverte. Reconnectez-vous pour reprendre avec vos accès à jour.',
+        detailJournal: detail,
+      });
+    }
+
     // ── 4. Droits ──────────────────────────────────────────────────────
     //
     // L'absence de déclaration est un **défaut de programmation**, pas une
@@ -923,7 +1025,18 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     // ne doit pas voir son refus devenir un 500 : on retombe sur le périmètre
     // système, qui écrit une entrée transversale (`filiale_id` nul, admis par
     // la politique d'ajout) en conservant l'identité dans `utilisateur_libelle`.
-    const attribuee = session.perimetre.filialeId !== null;
+    //
+    // ⚠️ **Et pas seulement « une filiale active existe » — lot L4.** Depuis que
+    // la filiale active est REVÉRIFIÉE à chaque requête (étape 3 bis), il existe
+    // un état où elle est renseignée et **hors** du périmètre lisible : les
+    // groupes AD ont changé. `avecTransaction` refuse alors ce périmètre
+    // (`validerPerimetre`), `journaliser` lève, et `tracer` avale — si bien que
+    // le refus le plus intéressant du lot serait le seul à ne rien laisser au
+    // journal. La condition est donc celle de `f_filiale_ecriture()` elle-même :
+    // *la filiale active appartient-elle au périmètre lisible ?*
+    const attribuee =
+      session.perimetre.filialeId !== null &&
+      session.perimetre.filiales.includes(session.perimetre.filialeId);
     const perimetreTrace = attribuee ? session.perimetre : PERIMETRE_SYSTEME;
     try {
       await avecTransaction(pool, perimetreTrace, async (client: PoolClient) => {
@@ -1034,6 +1147,41 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       });
     }
     return session;
+  };
+
+  /**
+   * Le libellé d'une filiale, pour la réponse du sélecteur de filiale.
+   *
+   * ⚠️ **Appelée uniquement sur une filiale dont l'appartenance est DÉJÀ
+   * établie** — la filiale active de la session, ou celle que l'`update` vient
+   * d'accepter. La lire plus tôt donnerait un oracle d'existence : « cette
+   * filiale a un nom » répond à « cette filiale existe », ce que le refus du
+   * §30.2 se garde justement de dire.
+   *
+   * Le périmètre système suffit et ne donne accès à **aucune** donnée métier :
+   * `filiales` est de niveau Groupe, sa lecture est ouverte (`004_rls.sql` §6),
+   * et c'est déjà par là que la session provisoire nomme la sienne.
+   *
+   * Un nom manquant rend `null` plutôt que de lever : une filiale supprimée
+   * entre l'appartenance et l'affichage est une gêne, jamais une raison de
+   * refuser un changement qui a eu lieu.
+   */
+  const nommerFiliale = async (
+    id: string,
+  ): Promise<{ id: string; code: string | null; raison_sociale: string | null }> => {
+    const ligne = await avecTransaction(
+      pool,
+      PERIMETRE_SYSTEME,
+      async (client) => {
+        const { rows } = await client.query<{ code: string; raison_sociale: string }>(
+          `select "code", "raison_sociale" from "filiales" where "id" = $1`,
+          [id],
+        );
+        return rows[0];
+      },
+      { lectureSeule: true },
+    );
+    return { id, code: ligne?.code ?? null, raison_sociale: ligne?.raison_sociale ?? null };
   };
 
   const enLecture = async <T>(
@@ -1215,6 +1363,338 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
           ? await resolveur.filiale()
           : null;
       return reponse.send(charteSession(session, filiale));
+    },
+  );
+
+  /* -------------------------------------------------------------------
+   *  PUT /api/session/filiale-active — LE SÉLECTEUR DE FILIALE (lot L4)
+   * -------------------------------------------------------------------
+   *
+   *  ══ La distinction qui tient tout le lot ═══════════════════════════
+   *
+   *  `CONVENTIONS.md` §30.2 :
+   *
+   *    > **Le client envoie un CHOIX. Le serveur résout un PÉRIMÈTRE.** Ce ne
+   *    > sont pas la même chose, et rien de ce que le client envoie n'entre
+   *    > jamais dans un périmètre.
+   *
+   *  Ce que le client envoie ici est **un identifiant de filiale**, et rien
+   *  d'autre (`SCHEMA_FILIALE_ACTIVE`, `additionalProperties: false`). Ce que
+   *  le serveur en fait est de le **chercher dans `session_filiales`, relu en
+   *  base pour CETTE session**. L'identifiant reçu n'est jamais interpolé, jamais
+   *  recopié dans un réglage de session, jamais transformé en périmètre : il est
+   *  **comparé**, et c'est la seule chose qu'on en fasse.
+   *
+   *  ══ Pourquoi une route dédiée, et pas un « ?filiale= » ═════════════
+   *
+   *  Le §30.2 le tranche, et le contrôle **S2** de la grille se rejoue contre
+   *  cette couche : *« un agent qui serait tenté d'ajouter `?filiale=` à
+   *  `/api/donnees` doit s'arrêter : ce serait la fin de la propriété »*. La
+   *  propriété en question est celle que tout le produit répète —
+   *  `resoudre()` ne prend aucun argument, et `js/core/api.js` n'expose aucun
+   *  paramètre de filiale — et elle survit intacte à ce lot : **après le
+   *  changement, toute requête suivante résout son périmètre exactement comme
+   *  avant**, parce que le choix a été rangé dans la ligne de session, en base.
+   *
+   *  ══ Où le choix est rangé, et pourquoi pas ailleurs ════════════════
+   *
+   *  Dans `sessions.filiale_active_id` (`001_socle.sql` §8) — **ni cookie, ni
+   *  en-tête, ni URL**. Un cookie de filiale serait une valeur que le client
+   *  choisit et rejoue : le serveur devrait la croire, et l'invariant tomberait
+   *  au premier `curl`. Ici, le seul aller-retour par le navigateur est le
+   *  **jeton de session**, qui n'est pas interprété : il retrouve une ligne, il
+   *  ne revendique rien (`src/droits/resolveur.ts`, propriété 3).
+   *
+   *  ══ Le niveau exigé : `lire`, et c'est un arbitrage ════════════════
+   *
+   *  Choisir *où l'on travaille* n'est pas écrire de la gouvernance. Exiger
+   *  `ecrire` fermerait le sélecteur à la Direction et à l'Auditeur — deux
+   *  profils en **lecture seule** dont le périmètre porte toutes les filiales,
+   *  c'est-à-dire les premiers usagers d'un sélecteur. Et cela n'ouvrirait rien :
+   *  la RLS de lecture porte sur `filiales` (le périmètre entier, inchangé), et
+   *  la filiale active ne fait que désigner **où les écritures atterrissent** —
+   *  écritures que le modèle de droits refuse déjà, séparément, à qui n'y a pas
+   *  droit. §30.3 : « il n'accorde aucun droit ».
+   *
+   *  ══ Ce que cette route NE fait PAS ═════════════════════════════════
+   *
+   *   · elle ne touche pas au **périmètre de lecture** : `session_filiales` vient
+   *     des groupes AD et ne bouge qu'à la ré-authentification (§30.3) ;
+   *   · elle n'accorde **aucun droit** : `session_domaines` n'est pas lue ;
+   *   · elle ne **contourne pas** `f_filiale_ecriture()`, qui vérifie en base
+   *     que la filiale active appartient au périmètre lisible depuis la porte S1
+   *     (§17.9). C'est la dernière barrière **même si cette route se trompe**, et
+   *     le `exists` ci-dessous s'appuie sur la même table qu'elle.
+   * ------------------------------------------------------------------- */
+  instance.put(
+    '/api/session/filiale-active',
+    {
+      schema: { body: SCHEMA_FILIALE_ACTIVE },
+      config: { acces: { action: 'lire', domaine: null } },
+    },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const session = sessionDe(requete);
+      const { filiale: cible } = requete.body as { filiale: string };
+
+      // ── 1. Rien à faire : le choix est déjà celui de la session ────────
+      //
+      // Idempotent, et **sans trace** : une entrée « A → A » dans un registre
+      // scellé trois ans n'apprend rien à l'auditeur qui demande *quand cette
+      // personne est-elle passée chez B*, et un rechargement de page en
+      // écrirait une à chaque fois. Ce n'est pas un événement, c'est un
+      // non-mouvement.
+      //
+      // Ce chemin est aussi le seul que la session **provisoire** du lot L2
+      // puisse emprunter : son périmètre ne porte qu'une filiale, donc tout
+      // autre choix est hors périmètre et sera refusé plus bas.
+      if (cible === session.perimetre.filialeId) {
+        return reponse.send({ change: false, filiale_active: await nommerFiliale(cible) });
+      }
+
+      // ── 2. Le jeton : une RÉFÉRENCE vers UNE ligne de session ──────────
+      //
+      // La filiale active se range dans **la** session qui parle, pas dans
+      // toutes celles du compte : deux navigateurs ouverts par la même personne
+      // travaillent dans deux filiales différentes, et c'est le comportement
+      // attendu. Or `SessionAppliquee` ne porte pas l'identifiant de session —
+      // il vit dans `EtatSession`, côté `src/auth/`. Le jeton du cookie est donc
+      // relu ici pour **retrouver la ligne**, exactement comme
+      // `verifierSession` l'a fait à l'étape 3 du crochet : rien n'en est
+      // interprété, et l'empreinte seule part en base.
+      //
+      // ⚠️ Une demande à l'orchestrateur, écrite au rapport plutôt que
+      // contournée : exposer `sessionId` sur `SessionAppliquee` supprimerait
+      // cette seconde lecture du cookie. `src/auth/index.ts` n'appartient pas au
+      // périmètre de cet agent, et fabriquer la valeur ailleurs aurait fait deux
+      // rédactions de la même chose — le motif que ce chantier traque.
+      const jeton = lireCookie(requete.headers.cookie, config.session.nomCookie);
+      if (jeton === null) {
+        throw new ErreurApplicative({
+          code: 'indisponible',
+          statut: 503,
+          message:
+            'Le choix de la filiale exige une session ouverte sur le serveur. Reconnectez-vous.',
+          detailJournal:
+            'sélecteur de filiale : aucune session serveur à modifier (aucun cookie de ' +
+            "session). C'est le cas de la session PROVISOIRE du lot L2, qui n'a pas de ligne " +
+            'dans « sessions » : son périmètre ne porte qu’une filiale, et le seul choix ' +
+            'atteignable est celui qu’elle a déjà.',
+        });
+      }
+
+      // ── 3. La décision ET l'acte, dans UNE SEULE transaction ───────────
+      //
+      // `CONVENTIONS.md` §29.3, règle 1 : la trace vit dans la transaction de
+      // l'acte. Un changement de filiale ne peut donc pas réussir sans sa ligne
+      // de journal, ni une ligne de journal exister sans son changement.
+      //
+      // ⚠️ **Le contrôle d'appartenance est DANS l'`update`, pas avant.** Un
+      // `select` suivi d'un `update` laisserait entre les deux une fenêtre où
+      // `session_filiales` peut changer — c'est précisément le scénario que le
+      // §30.3 décrit. Ici, la même instruction constate et agit : `rowCount = 0`
+      // est le refus, et il n'y a rien à recouper.
+      //
+      // Le périmètre de la transaction est celui de la session, **tel quel** :
+      // une route ne fabrique pas un périmètre, elle en constate un. La filiale
+      // active y est encore celle qu'on quitte — c'est elle que
+      // `f_filiale_ecriture()` exigera de l'entrée de journal, et c'est donc à
+      // elle que le mouvement est attribué (§30.4).
+      const perimetreActe =
+        session.perimetre.filialeId === null ? PERIMETRE_SYSTEME : session.perimetre;
+
+      const verdict = await avecTransactionAuthentification(
+        pool,
+        perimetreActe,
+        async (client: PoolClient) => {
+          const { rows } = await client.query<{ id: string }>(
+            `update "sessions" as s
+                set "filiale_active_id" = $1
+              where s."jeton_empreinte" = $2
+                and s."revoquee_le" is null
+                and exists (select 1
+                              from "session_filiales" sf
+                             where sf."session_id" = s."id"
+                               and sf."filiale_id" = $1)
+             returning s."id"`,
+            [cible, empreinteJeton(jeton)],
+          );
+
+          const ligne = rows[0];
+          // Aucune ligne : la filiale demandée n'est pas dans `session_filiales`
+          // pour cette session — qu'elle existe ailleurs ou qu'elle n'existe pas
+          // du tout. **Les deux cas sont indiscernables ici**, et c'est voulu :
+          // distinguer « inconnue » de « pas à vous » donnerait, en une requête,
+          // l'annuaire des filiales du groupe à qui n'en lit qu'une (le même
+          // oracle d'existence que le constat M-3 a fermé sur les identifiants
+          // d'enregistrement).
+          //
+          // Le refus est **rendu**, pas levé : lever ici annulerait la
+          // transaction, ce qui n'aurait rien à annuler mais ferait passer la
+          // trace du refus par le chemin des erreurs. C'est la leçon du 04/09 —
+          // une révocation et sa trace repartaient avec le `rollback` de
+          // l'exception qui les suivait (`src/auth/index.ts`).
+          if (ligne === undefined) return { change: false as const, refuse: true as const };
+
+          await journaliser(client, {
+            action: 'changement_perimetre',
+            filialeId: session.perimetre.filialeId,
+            utilisateurLibelle: session.perimetre.utilisateurId,
+            sessionId: ligne.id,
+            adresseIp: requete.ip,
+            entiteType: 'sessions',
+            entiteId: ligne.id,
+            // Phrase FIXE (§29.5) : aucune valeur d'utilisateur n'y entre. Les
+            // deux filiales partent en `jsonb`, où l'encodage est le problème de
+            // PostgreSQL et non celui de qui écrit la phrase.
+            resume: 'Filiale active de la session changée.',
+            valeursAvant: { filiale_active: session.perimetre.filialeId },
+            valeursApres: { filiale_active: cible },
+          });
+
+          // Le nom est lu APRÈS l'appartenance, jamais avant : lu plus tôt, il
+          // dirait à un client refusé si la filiale demandée existe.
+          const { rows: nommee } = await client.query<{ code: string; raison_sociale: string }>(
+            `select "code", "raison_sociale" from "filiales" where "id" = $1`,
+            [cible],
+          );
+          const f = nommee[0];
+          return {
+            change: true as const,
+            refuse: false as const,
+            filiale: {
+              id: cible,
+              code: f?.code ?? null,
+              raison_sociale: f?.raison_sociale ?? null,
+            },
+          };
+        },
+      );
+
+      // ── 4. Le refus : 403, journalisé, filiale active INCHANGÉE ────────
+      //
+      // §30.2 : « **403**, journalisé en `refus_autorisation`. Pas de repli, pas
+      // de valeur par défaut : un choix refusé laisse la filiale active
+      // **inchangée**. » L'`update` n'a touché aucune ligne : l'inchangé n'est
+      // pas une intention, c'est ce que la base a fait.
+      if (verdict.refuse) {
+        await tracer(requete.log, session, {
+          action: 'refus_autorisation',
+          // Phrase FIXE (§29.5).
+          resume: 'Changement de filiale refusé : la filiale demandée n’est pas dans le ' +
+            'périmètre de la session.',
+          adresseIp: requete.ip,
+          entiteType: 'sessions',
+          valeursApres: {
+            methode: requete.method,
+            route: requete.routeOptions.url ?? null,
+            motif: 'filiale_hors_perimetre',
+            // La valeur DEMANDÉE, telle que reçue. Elle est bornée à 64 signes
+            // par le schéma, et elle part en `jsonb` : c'est la sortie prévue
+            // pour une valeur d'utilisateur (§29.5).
+            filiale_demandee: cible,
+            filiale_active: session.perimetre.filialeId,
+          },
+        });
+        throw new ErreurApplicative({
+          code: 'hors_perimetre',
+          statut: 403,
+          // Le message ne dit pas si la filiale existe : il dit ce que
+          // l'utilisateur peut faire. Les deux cas — inconnue, ou connue mais
+          // fermée — rendent le MÊME texte.
+          message:
+            'Cette filiale ne fait pas partie de votre périmètre : vous restez dans celle où ' +
+            'vous travailliez. Si vous devez y accéder, demandez le groupe correspondant à ' +
+            'votre administrateur.',
+          detailJournal:
+            'CONVENTIONS.md §30.2 : la filiale demandée ne figure pas dans session_filiales ' +
+            'pour cette session (existence non distinguée de l’appartenance). Filiale active ' +
+            'inchangée.',
+        });
+      }
+
+      return reponse.send({ change: true, filiale_active: verdict.filiale });
+    },
+  );
+
+  /* -------------------------------------------------------------------
+   *  GET /api/filiales — DE QUOI NOMMER LE CHOIX, et rien de plus
+   * -------------------------------------------------------------------
+   *
+   *  ══ Pourquoi cette route existe ════════════════════════════════════
+   *
+   *  La charte de session ne porte que des IDENTIFIANTS (`perimetre_lecture`).
+   *  Un sélecteur construit là-dessus afficherait
+   *  `FIL-1788477623975-5208b3f525954fffb228d9aa292ec1cf` — c'est-à-dire le
+   *  constat **Q-85** une seconde fois, et cette fois dans le geste qui décide
+   *  **où l'on écrit**. Dans un outil qui sert de preuve en audit, choisir sa
+   *  filiale dans une liste de chaînes techniques est une invitation à se
+   *  tromper de filiale.
+   *
+   *  ⚠️ Mesuré au navigateur avant qu'elle n'existe : l'application appelait
+   *  déjà `api/filiales`, recevait **404**, et journalisait une erreur de
+   *  console à chaque ouverture (`test/navigateur/filiales.test.mjs`).
+   *
+   *  ══ CE QU'ELLE NE DIT PAS, ET C'EST LE POINT ═══════════════════════
+   *
+   *  Elle rend **le périmètre de lecture de la session, et lui seul**. Pas la
+   *  liste des filiales du groupe.
+   *
+   *  Le filtre est écrit ICI, explicitement, et il faut dire pourquoi : la
+   *  table `filiales` est de niveau Groupe et **sa lecture est ouverte**
+   *  (`pol_filiales_lecture … using (true)`, `004_rls.sql` §6) — c'est ce qui
+   *  permet à `f_filiales_lecture()` et au chaînage de fonctionner. La RLS ne
+   *  protège donc **rien** ici : un `select *` rendrait à un RSSI de site la
+   *  liste complète des vingt filiales du groupe, acquisitions comprises, ce
+   *  qui est un oracle d'existence inter-filiales — exactement ce que ce
+   *  chantier ferme depuis la vague 1.
+   *
+   *  La borne est `perimetre.filiales`, c'est-à-dire `session_filiales` relu
+   *  pour cette session : la même source que le sélecteur, et la seule.
+   * ------------------------------------------------------------------- */
+  instance.get(
+    '/api/filiales',
+    // Lire la liste de SES filiales n'exige aucun domaine : c'est le pendant de
+    // `/api/session`, dont elle ne fait que nommer un champ.
+    { config: { acces: { action: 'lire', domaine: null } } },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const session = sessionDe(requete);
+      const perimetre = session.perimetre;
+
+      const lignes = await avecTransaction(
+        pool,
+        perimetre,
+        async (client) => {
+          const { rows } = await client.query<{
+            id: string;
+            code: string;
+            raison_sociale: string;
+            statut: string;
+          }>(
+            `select "id", "code", "raison_sociale", "statut"
+               from "filiales"
+              where "id" = any($1::text[])
+              order by "code"`,
+            // La borne, et elle est la seule : le périmètre de lecture de CETTE
+            // session. Un tableau vide rend zéro ligne — pas « toutes ».
+            [[...perimetre.filiales]],
+          );
+          return rows;
+        },
+        { lectureSeule: true },
+      );
+
+      return reponse.send({
+        filiales: lignes.map((f) => ({
+          id: f.id,
+          code: f.code,
+          raison_sociale: f.raison_sociale,
+          statut: f.statut,
+          // « active » = c'est celle où les écritures atterrissent aujourd'hui.
+          // Le mot désigne la SÉLECTION, pas le statut de la filiale — que la
+          // clé `statut` porte à côté, précisément pour lever l'ambiguïté.
+          active: f.id === perimetre.filialeId,
+        })),
+      });
     },
   );
 
@@ -1939,7 +2419,10 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  celle du journal : deux agents travaillent sur cette surface, et aucun
    *  n'a besoin de toucher à ce fichier. Contrat au `CONVENTIONS.md` §31.
    * ------------------------------------------------------------------- */
-  await instance.register(greffonPieces, { pool });
+  // ⚠️ `{ pool, config }` et non `{ pool }` : sans `config`, le greffon refuse
+  // bruyamment et **n'enregistre aucune route** — le produit n'a alors aucune
+  // pièce jointe. Deux agents l'ont signalé indépendamment.
+  await instance.register(greffonPieces, { pool, config });
 
   const service = options.serviceAuthentification;
   if (service !== undefined) {

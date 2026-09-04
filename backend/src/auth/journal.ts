@@ -62,7 +62,9 @@
 import type { PoolClient } from 'pg';
 
 /**
- * Les vingt actions que déclare `ck_journal_audit_action` (`001_socle.sql` §9).
+ * Les vingt et une actions que déclare `ck_journal_audit_action` — vingt posées par
+ * `001_socle.sql` §9, et **`changement_perimetre` ajoutée par `009_perimetre_actif.sql`**
+ * pour le sélecteur de filiale du lot L4 (`CONVENTIONS.md` §30.4).
  *
  * ⚠️ **C'est une liste écrite à la main, et c'est le bon outil ici** — le
  * discriminant du `CLAUDE.md` §3 étant *ce qui arrive le jour où elle devient
@@ -96,7 +98,19 @@ export type ActionJournal =
   | 'archivage'
   | 'demarrage'
   | 'arret'
-  | 'verification_journal';
+  | 'verification_journal'
+  /**
+   * **Le changement de FILIALE ACTIVE d'une session** — lot L4, `CONVENTIONS.md`
+   * §30.4. L'entrée porte la filiale **quittée** dans `valeursAvant` et la filiale
+   * **rejointe** dans `valeursApres` ; `resume` reste une phrase fixe (§29.5).
+   *
+   * ⚠️ Elle s'attribue à la filiale **quittée**, jamais à la rejointe : c'est celle
+   * qui est active dans la transaction où l'acte a lieu, et `pol_journal_audit_ajout`
+   * (`004_rls.sql` §6) n'en admet pas d'autre. Le coût est écrit : le registre de la
+   * filiale rejointe ne montre pas l'arrivée — seul un périmètre Groupe voit les deux
+   * bouts du mouvement.
+   */
+  | 'changement_perimetre';
 
 /**
  * Ancien nom, conservé le temps que rien ne le référence plus.

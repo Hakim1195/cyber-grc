@@ -21,6 +21,10 @@ async function startApp() {
        en mémoire — plus rien n'écrit `cyber-context` dans le localStorage.
     ========================== */
     renderContextSelector();
+    // La liste des filiales arrive du serveur ; le bloc se redessine quand elle
+    // est là. On ne l'attend pas : un sélecteur absent une seconde vaut mieux
+    // qu'un démarrage suspendu à une route qui pourrait manquer.
+    if (window.chargerCatalogueFiliales) { window.chargerCatalogueFiliales(); }
 
     /* =========================
        CONFIGURATION DES ROUTES
@@ -298,6 +302,7 @@ window.renderContextSelector = function() {
              style="width: 100%; padding: 6px 8px; background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; font-size: 0.85rem; font-weight: 600;">
             ${filiale ? esc(filiale) : `<span style="font-weight:400; opacity:0.75;">Périmètre non résolu</span>`}
         </div>
+        ${selecteurFilialeHtml()}
         <div class="sidebar-divider">Filtre donneur d'ordre</div>
         <select id="context-selector" style="width: 100%; padding: 6px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; font-size: 0.85rem; cursor: pointer; outline: none;">
             ${optionsHtml}
@@ -311,7 +316,335 @@ window.renderContextSelector = function() {
         if (window.showToast) window.showToast("Filtre « donneur d'ordre » mis à jour.", "info");
         Router.navigateTo(location.hash.replace(/^#/, ""), false);
     });
+
+    brancherSelecteurFiliale();
 };
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  LE SÉLECTEUR DE FILIALE — lot L4, `CONVENTIONS.md` §30
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *  ⚠️ **C'est le point le plus dangereux du lot** (§30.1), et le danger n'est
+ *  pas qu'il ne marche pas : c'est qu'il marche **en mentant**. L'utilisateur
+ *  croirait écrire chez A en écrivant chez B, et rien à l'écran ne le dirait.
+ *
+ *  ── La règle, et la seule façon de la tenir ────────────────────────────────
+ *
+ *      **Le client envoie un CHOIX. Le serveur résout un PÉRIMÈTRE.** (§30.2)
+ *
+ *  Conséquence directe sur ce fichier, et c'est la propriété que le banc mesure :
+ *  **l'écran n'affiche JAMAIS la filiale demandée — seulement celle que le
+ *  serveur annonce en réponse.** Le bandeau « Périmètre » est reconstruit
+ *  *après* la réponse, depuis `Session.courante()`, c'est-à-dire depuis ce que
+ *  le serveur a résolu. Un refus (403) laisse donc l'écran **exactement où il
+ *  était**, sans qu'aucune correction n'ait à intervenir : il n'a pas bougé.
+ *
+ *  ⚠️ **Le décalage optimiste est l'erreur à ne pas commettre** — afficher la
+ *  nouvelle filiale tout de suite, puis la corriger si le serveur refuse. Elle
+ *  paraît anodine (« quelques millisecondes ») et ne l'est pas : sur un
+ *  rechargement mal placé, sur une réponse lente, ou simplement sur une capture
+ *  d'écran, l'utilisateur lit un périmètre qui n'est pas le sien. La ligne
+ *  « `<select>` remis à la valeur du serveur » plus bas n'est pas une
+ *  correction d'affichage : elle rétablit le GESTE, pas l'état — l'état, lui,
+ *  n'a jamais bougé.
+ *
+ *  ── Ce que le sélecteur ne fait pas (§30.3) ────────────────────────────────
+ *
+ *  Il ne change **pas** le périmètre de lecture, qui vient des groupes AD, et
+ *  il n'accorde **aucun** droit : un contributeur qui bascule reste
+ *  contributeur. Le niveau et les domaines sont relus de la réponse, comme le
+ *  reste — s'ils changeaient, ce serait le serveur qui l'aurait décidé.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Les filiales entre lesquelles cette session peut basculer, **telles que le
+ * serveur les a nommées**. Mémoire vive uniquement : rien de ce qui ressemble à
+ * un périmètre ne survit d'une session à l'autre dans le navigateur
+ * (`js/core/session.js`).
+ */
+let catalogueFiliales = null;
+/** Vrai pendant qu'un changement est en vol : un second geste ne relance rien. */
+let changementEnVol = false;
+
+/**
+ * Demande au serveur la liste des filiales du périmètre de lecture.
+ *
+ * ⚠️ **Le repli est délibérément PAUVRE, et il est visible.** Si la route
+ * n'existe pas encore, ou refuse, on retombe sur `perimetre_lecture` — qui ne
+ * porte que des identifiants. L'écran affiche alors `FIL-1788477…`, ce qui est
+ * laid et **vrai**. Fabriquer un libellé plausible à partir d'un identifiant
+ * serait le contraire : joli et faux, dans le geste qui décide où l'on écrit.
+ */
+window.chargerCatalogueFiliales = async function () {
+    let session = null;
+    try { session = Session.courante(); } catch (e) { session = null; }
+    if (!session) return null;
+
+    /* ── ON NE POSE PAS UNE QUESTION DONT ON N'UTILISERA PAS LA RÉPONSE ──────
+     *
+     * Un périmètre d'une seule filiale n'affiche aucun sélecteur : demander de
+     * quoi nommer une liste qu'on ne montrera pas est une requête pour rien.
+     *
+     * ⚠️ Ce n'est pas qu'une économie, et la mesure l'a montré. La route
+     * `api/filiales` **n'existe pas encore** ; l'appeler à chaque démarrage
+     * faisait journaliser au navigateur « Failed to load resource: 404 » — donc
+     * une **erreur de console à chaque ouverture de l'application**, sur toutes
+     * les sessions du produit, alors que `CLAUDE.md` §5 impose zéro erreur. Le
+     * banc l'a dit tout de suite (`test/navigateur/droits.test.mjs`), et il
+     * avait raison : un bruit quotidien et anodin est ce qui apprend à ignorer
+     * les erreurs — constat m-5, appliqué à la console.
+     *
+     * La condition n'est donc pas un contournement : elle dit ce qui est vrai —
+     * **il n'y a rien à choisir**. Le jour où un périmètre porte deux filiales,
+     * la question se pose, et elle mérite d'être posée.
+     */
+    if ((session.perimetreLecture || []).length < 2) {
+        catalogueFiliales = [];
+        return catalogueFiliales;
+    }
+
+    try {
+        const charge = await Api.filiales();
+        const brutes = (charge && Array.isArray(charge.filiales)) ? charge.filiales
+            : (Array.isArray(charge) ? charge : []);
+        catalogueFiliales = brutes
+            .filter(f => f && typeof f === "object" && f.id)
+            .map(f => ({
+                id: String(f.id),
+                code: String(f.code || ""),
+                nom: String(f.raison_sociale || f.raisonSociale || f.nom || "")
+            }));
+    } catch (e) {
+        // Le fait, pas le geste : la liste manque, on le dit au journal technique
+        // et on retombe sur ce que la session porte déjà.
+        console.info("Liste des filiales indisponible ; repli sur le périmètre de lecture.",
+            e && e.message);
+        catalogueFiliales = (session.perimetreLecture || [])
+            .map(id => ({ id: String(id), code: "", nom: "" }));
+    }
+    // La liste est arrivée après le premier rendu : on redessine le bloc.
+    if (window.renderContextSelector) window.renderContextSelector();
+    return catalogueFiliales;
+};
+
+/** Libellé d'une filiale du catalogue. Jamais inventé : ce qu'on a, ou l'identifiant. */
+function libelleFilialeCatalogue(f) {
+    if (f.nom && f.code) return f.nom + " (" + f.code + ")";
+    return f.nom || f.code || f.id;
+}
+
+/**
+ * Le `<select>`, ou rien du tout.
+ *
+ * Une seule filiale au périmètre ⇒ **aucun sélecteur**. Proposer un choix qui
+ * n'en est pas apprend à cliquer sans lire, et c'est le geste qu'on veut garder
+ * conscient.
+ */
+function selecteurFilialeHtml() {
+    const esc = window.escapeHtml || (v => String(v == null ? "" : v));
+    let session = null;
+    try { session = Session.courante(); } catch (e) { session = null; }
+    if (!session) return "";
+    const liste = Array.isArray(catalogueFiliales) ? catalogueFiliales : [];
+    if (liste.length < 2) return "";
+
+    // ⚠️ La valeur sélectionnée est celle de la SESSION — ce que le serveur a
+    // résolu —, jamais un dernier choix retenu quelque part.
+    const options = liste.map(f =>
+        '<option value="' + esc(f.id) + '" style="color:#333; background:#fff;"' +
+        (f.id === session.filialeId ? " selected" : "") + ">" +
+        esc(libelleFilialeCatalogue(f)) + "</option>").join("");
+
+    return '<label for="filiale-selector" style="display:block; margin-top:8px; font-size:0.72rem; opacity:0.85; color:#fff;">' +
+        "Filiale d'écriture" +
+        (typeof Help !== "undefined" ? Help.tip(
+            "La filiale dans laquelle vos saisies seront enregistrées. Le choix est " +
+            "envoyé au serveur, qui vérifie qu'elle fait partie de votre périmètre : " +
+            "l'affichage ne change qu'une fois sa réponse reçue. Basculer ne vous " +
+            "donne aucun droit supplémentaire et ne change pas ce que vous pouvez lire.") : "") +
+        "</label>" +
+        '<select id="filiale-selector" style="width:100%; padding:6px; background:rgba(255,255,255,0.15); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:4px; font-size:0.85rem; cursor:pointer; outline:none;">' +
+        options + "</select>";
+}
+
+/**
+ * Branche le sélecteur. **Aucun gestionnaire en ligne** : la politique de
+ * sécurité de contenu du vhost livré les rend inertes, en silence (constat M-6).
+ */
+function brancherSelecteurFiliale() {
+    const select = document.getElementById("filiale-selector");
+    if (!select) return;
+    select.addEventListener("change", () => {
+        // L'identifiant est lu dans le DOM au moment du geste, jamais capturé
+        // dans une fermeture (`CLAUDE.md` §3).
+        window.changerFilialeActive(select.value);
+    });
+}
+
+/**
+ * Envoie le choix, et n'affiche que ce que le serveur a confirmé.
+ *
+ * @returns {Promise<boolean>} vrai si la filiale active a réellement changé.
+ */
+window.changerFilialeActive = async function (filialeChoisie) {
+    if (changementEnVol) return false;
+    let session = null;
+    try { session = Session.courante(); } catch (e) { session = null; }
+    if (!session) return false;
+    if (!filialeChoisie || filialeChoisie === session.filialeId) return false;
+
+    /* ── CE QUI ATTEND D'ÊTRE ÉCRIT APPARTIENT À LA FILIALE QU'ON QUITTE ─────
+     *
+     * `js/core/sync.js` regroupe les écritures : une saisie faite il y a 300 ms
+     * n'est pas encore partie. Si l'on bascule maintenant, elle partira **après**
+     * le changement — et le serveur l'écrira dans la NOUVELLE filiale, puisque
+     * c'est la ligne de session qui décide où atterrissent les écritures
+     * (`f_filiale_ecriture()`, §30.2). Une modification saisie chez A finirait
+     * chez B, sans un mot, dans un outil qui sert de preuve en audit.
+     *
+     * On pousse donc d'abord. Ce qui reste bloqué après la poussée — un conflit
+     * de version, un refus de droit — ne peut pas partir tout seul : on **refuse
+     * la bascule** et on le dit. Refaire un geste est réparable ; écrire dans la
+     * mauvaise filiale ne l'est pas.
+     */
+    if (typeof Sync !== "undefined" && Sync.etat) {
+        try {
+            let etat = Sync.etat();
+            if (etat.enAttente || etat.enCours) {
+                await Sync.cycle();
+                etat = Sync.etat();
+            }
+            if (etat.enAttente || etat.enCours) {
+                if (window.showToast) {
+                    window.showToast(
+                        "Des modifications ne sont pas encore enregistrées sur le serveur. " +
+                        "Elles appartiennent à la filiale actuelle : la bascule est refusée " +
+                        "tant qu'elles n'ont pas abouti.", "error");
+                }
+                if (window.renderContextSelector) window.renderContextSelector();
+                return false;
+            }
+        } catch (e) {
+            if (window.showToast) {
+                window.showToast("Impossible de mettre les modifications à l'abri avant de " +
+                    "changer de filiale. La bascule est refusée.", "error");
+            }
+            if (window.renderContextSelector) window.renderContextSelector();
+            return false;
+        }
+    }
+
+    changementEnVol = true;
+    const select = document.getElementById("filiale-selector");
+    if (select) select.disabled = true;
+    try {
+        /* ── ON RELIT LA SESSION, ON NE CROIT PAS LA RÉPONSE ─────────────────
+         *
+         * La route rend `{ change, filiale_active }` — ce qu'elle a fait, pas un
+         * périmètre. On ne s'en sert donc PAS pour reconstruire la session : ce
+         * fragment ne porte ni `perimetre_lecture`, ni `droits`, ni `identite`,
+         * et les adopter tels quels effacerait les trois en silence — l'écran
+         * perdrait ses menus et son niveau d'accès sans qu'aucune erreur ne soit
+         * levée. Deux formes qui se ressemblent (toutes deux portent
+         * `filiale_active`) et ne disent pas la même chose : c'est le motif que
+         * ce chantier traque depuis onze occurrences.
+         *
+         * **`GET api/session` est la seule forme que la SPA sait lire**
+         * (`Api.CONTRAT_AUTH`, §26.2), et c'est elle qu'on relit. Un aller-retour
+         * de plus sur un geste rare est le prix d'une propriété qui ne dépend
+         * d'aucun accord de forme entre deux agents : ce qui s'affiche est ce
+         * que le serveur répond quand on lui demande « qui suis-je ».
+         */
+        await Api.choisirFilialeActive(filialeChoisie);
+        await Session.charger();
+
+        const apres = Session.courante();
+        const change = !!apres && apres.filialeId !== session.filialeId;
+
+        if (change) {
+            // Le filtre « donneur d'ordre » désigne des clients de l'ANCIENNE
+            // filiale : le laisser en place filtrerait la nouvelle sur un
+            // identifiant qui n'y existe pas, et l'écran paraîtrait vide.
+            if (window.FiltreDonneurOrdre) window.FiltreDonneurOrdre.set("global");
+            // Le jeu de données appartient à la filiale : il se recharge, il ne
+            // se filtre pas. Rien n'est préservé au passage — on a exigé plus
+            // haut qu'il n'y ait plus rien en attente.
+            if (typeof Sync !== "undefined" && Sync.recharger) await Sync.recharger();
+        }
+
+        if (window.renderContextSelector) window.renderContextSelector();
+        if (window.renderBlocUtilisateur) window.renderBlocUtilisateur();
+        if (change) {
+            /* ── UN IDENTIFIANT D'ENREGISTREMENT APPARTIENT À LA FILIALE QU'ON QUITTE ──
+             *
+             * Rester sur `#/documents/DOC-123` après la bascule afficherait
+             * « Document introuvable » — vrai, et illisible : juste après un
+             * changement réussi, cela se lit comme une panne. Les identifiants
+             * sont uniques à l'échelle du produit (`CONVENTIONS.md` §2) : la
+             * fiche ne peut donc PAS exister dans la filiale rejointe.
+             *
+             * On revient au tableau de bord dès que la route porte un
+             * paramètre ; une route sans paramètre (une liste, un écran de
+             * pilotage) est valable dans les deux filiales et se contente d'un
+             * nouveau rendu.
+             */
+            const routeCourante = location.hash.replace(/^#/, "") || "/dashboard";
+            const porteUnIdentifiant = routeCourante.split("/").filter(Boolean).length > 1;
+            // ⚠️ Le second argument de `navigateTo` décide si l'ADRESSE suit. Un
+            // simple redessin (`false`) laisse le hash en place — ce qui convient
+            // quand on reste sur la même route, et **ment** quand on en change :
+            // l'écran montrerait le tableau de bord sous l'adresse d'une fiche,
+            // et un rechargement ramènerait la fiche disparue.
+            Router.navigateTo(
+                porteUnIdentifiant ? "/dashboard" : routeCourante,
+                porteUnIdentifiant);
+            if (window.showToast) {
+                // Le libellé vient de la SESSION, pas du choix : c'est la même
+                // règle, jusque dans le message.
+                window.showToast("Filiale d'écriture : " + Session.libelleFiliale() + ".", "success");
+            }
+        }
+        return change;
+    } catch (e) {
+        /* ── UN REFUS S'AFFICHE COMME UN REFUS, ET L'ÉCRAN N'A PAS BOUGÉ ─────
+         *
+         * §30.2 : « Pas de repli, pas de valeur par défaut : un choix refusé
+         * laisse la filiale active inchangée. » Le bandeau n'a jamais montré la
+         * filiale demandée — il n'y a donc rien à corriger. Ce que
+         * `renderContextSelector()` rétablit ici est le `<select>`, c'est-à-dire
+         * le GESTE, remis sur ce que le serveur dit être vrai.
+         */
+        if (window.showToast) window.showToast(messageRefusFiliale(e), "error");
+        if (window.renderContextSelector) window.renderContextSelector();
+        return false;
+    } finally {
+        changementEnVol = false;
+        const encore = document.getElementById("filiale-selector");
+        if (encore) encore.disabled = false;
+    }
+};
+
+/**
+ * Le FAIT, plus le geste que cette couche-ci connaît (constats Q-19, Q-29, Q-57).
+ *
+ * `js/core/api.js` énonce ce qui s'est passé sans prescrire de geste, parce
+ * qu'il ignore ce que l'appelant tient en mémoire. Ici on le sait : la bascule
+ * n'a rien saisi, il n'y a rien à perdre, et l'écran est resté au même endroit.
+ */
+function messageRefusFiliale(e) {
+    if (!e) return "Le changement de filiale a échoué.";
+    if (e.statut === 403) {
+        return "Cette filiale ne fait pas partie de votre périmètre. Rien n'a changé : " +
+            "vous écrivez toujours dans « " + Session.libelleFiliale() + " ». " +
+            "Le périmètre vient de vos groupes Active Directory, et le serveur seul le décide.";
+    }
+    if (e.estNonAuthentifie && e.estNonAuthentifie()) {
+        return "Votre session n'est plus ouverte sur le serveur. Reconnectez-vous : la filiale " +
+            "d'écriture n'a pas changé.";
+    }
+    return (e.message || String(e)) + " Rien n'a changé : vous écrivez toujours dans « " +
+        Session.libelleFiliale() + " ».";
+}
 
 /* =========================
    GESTION DU MENU ACTIF

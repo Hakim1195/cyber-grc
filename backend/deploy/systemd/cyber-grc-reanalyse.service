@@ -1,0 +1,118 @@
+# Emplacement cible : /etc/systemd/system/cyber-grc-reanalyse.service
+#
+# Ré-analyse périodique du stock de pièces jointes (contrôle n° 7,
+# PLAN_SERVEUR §1.6 ; CONVENTIONS.md §31.4) — Cyber GRC Groupe, Debian 13,
+# SANS conteneur.
+#
+# « Un fichier propre aujourd'hui peut être détecté dans six mois — décisif
+# sur 3 ans de rétention. » Cette unité ne tourne PAS en continu : c'est un
+# `oneshot` qui lance `dist/pieces/exploitation.js`, passe en revue les pièces
+# « saine » dont `derniere_reanalyse` est trop ancienne, remet en quarantaine
+# ce qui est devenu détecté, et s'arrête. Le minutage vient de
+# `cyber-grc-reanalyse.timer`, jamais d'ici : cette unité n'a pas de section
+# [Install] — elle n'a pas vocation à être activée seule.
+#
+# Durcissement : repris quasiment à l'identique de `cyber-grc.service` — même
+# compte de service, mêmes chemins de données, mêmes raisons. Voir ce fichier
+# pour le détail de chaque directive ; seules les différences sont commentées
+# ici.
+#
+# Installation : voir `deploy/install.sh`, section « Service et frontal ».
+# Vérification du durcissement, à joindre au dossier de recette :
+#   systemd-analyze security cyber-grc-reanalyse.service
+
+[Unit]
+Description=Cyber GRC Groupe — ré-analyse périodique des pièces jointes
+Documentation=file:/opt/cyber-grc/backend/README.md
+After=network.target postgresql.service clamav-daemon.service
+Requires=postgresql.service
+# L'antivirus n'est pas requis au sens systemd (§1.11 : une fonction
+# indisponible ne doit pas empêcher l'outil de fonctionner) : si clamd est à
+# l'arrêt, `exploitation.ts` le constate lui-même, ligne par ligne, plutôt que
+# de laisser échouer le déclenchement en entier.
+Wants=clamav-daemon.service
+
+[Service]
+Type=oneshot
+# Un passage qui traînerait indéfiniment (stock très profond, ClamAV très
+# lent) ne doit pas empêcher le suivant de se déclencher un jour : borne dure,
+# au-delà de laquelle systemd tue le processus. `exploitation.ts` borne aussi
+# le nombre de pièces par exécution (LIMITE_REANALYSE_PAR_DEFAUT) : les deux
+# limites sont indépendantes et se recouvrent délibérément.
+TimeoutStartSec=1800
+
+# ---- Identité : le même compte que le service applicatif ----
+User=cyber-grc
+Group=cyber-grc
+
+# ---- Application ----
+WorkingDirectory=/opt/cyber-grc/backend
+ExecStart=/usr/bin/node /opt/cyber-grc/backend/dist/pieces/exploitation.js
+EnvironmentFile=/etc/cyber-grc/env
+UMask=0077
+
+# ---- Durcissement : système de fichiers ----
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateMounts=true
+ReadWritePaths=/var/lib/cyber-grc /var/log/cyber-grc
+ReadOnlyPaths=/opt/cyber-grc
+NoExecPaths=/var/lib/cyber-grc
+InaccessiblePaths=-/var/backups/cyber-grc
+InaccessiblePaths=-/etc/ssl/cyber-grc
+
+# ---- Durcissement : privilèges ----
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RemoveIPC=true
+KeyringMode=private
+# V8 (le même moteur que le service principal) a besoin de pages à la fois
+# inscriptibles et exécutables pour compiler le JavaScript à la volée.
+MemoryDenyWriteExecute=false
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# ---- Durcissement : réseau ----
+# PostgreSQL (local) et la socket ClamAV (AF_UNIX) : jamais l'extérieur. Ce
+# processus ne parle à aucun annuaire, aucun relais SMTP — contrairement au
+# service principal, sa liste blanche n'a donc rien à recevoir à l'installation.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+# ---- Durcissement : appels système ----
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @obsolete @mount @debug @cpu-emulation @swap @reboot @raw-io @module @clock
+SystemCallErrorNumber=EPERM
+
+# ---- Secrets : aucune image mémoire sur le disque (S8) ----
+LimitCORE=0
+CoredumpFilter=0x00
+
+# ---- Journalisation ----
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cyber-grc-reanalyse
+
+# ---- Limites : dénis de service (S13) ----
+MemoryAccounting=true
+MemoryMax=2G
+LimitNOFILE=8192
+TasksMax=256
+
+# Pas de section [Install] : cette unité est déclenchée par
+# cyber-grc-reanalyse.timer, jamais activée pour elle-même.
