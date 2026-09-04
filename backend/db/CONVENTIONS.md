@@ -1936,3 +1936,88 @@ Le `PLAN_SERVEUR` §1.6 l'ouvre par cette phrase, qui doit se retrouver dans le 
 profondeur, pas une promesse. Le §17.5 s'applique — un garde-fou ne se voit pas prêter plus
 de portée qu'il n'en a. ⚠️ Et **si ClamAV ne répond pas, la pièce n'est pas acceptée** :
 `clamavActif` désactive l'analyse en développement, jamais l'échec silencieux en production.
+
+---
+
+## 32. Le resserrement de `filiales` — le contrat, écrit avant la migration `010`
+
+> Constat **Q-132**, classe « fuite entre filiales ». Ce paragraphe est écrit **avant** la
+> migration, parce que le piège y est le même qu'à la condition E6 et qu'il se paie cher :
+> une politique dont le prédicat doit lire la table qu'elle protège.
+
+### 32.1 Ce qui fuit, mesuré
+
+`pol_filiales_lecture` vaut `using (true)`. Mesuré le 04/09/2026 :
+
+```
+périmètre déclaré : UNE filiale (DEU)
+filiales lues     : 2   → DEU ET TLS
+risques lus (témoin, table cloisonnée) : 0
+```
+
+Le témoin donne son sens à la mesure : **le périmètre était bien posé** — c'est la table qui
+ne le respecte pas. Elle porte `raison_sociale`, `adresse`, `code_postal`, `ville`, `pays`,
+`telephone`, `email`, `site_web`, `statut`.
+
+Ce qui rend le constat sérieux n'est pas tant la donnée que **la forme** : c'est le motif de
+**Q-118** — *l'application est la seule barrière, la RLS n'est pas un filet*. Et contrairement
+à la dérogation du journal, qui portait quarante lignes de justification, celle-ci n'est
+documentée nulle part.
+
+### 32.2 ⚠️ Le piège : trois lecteurs légitimes n'ont PAS de périmètre
+
+Un resserrement naïf **casse l'authentification entière**. Les lecteurs de `filiales` :
+
+| Lecteur | Périmètre au moment de lire | Ce qu'il faut |
+|---|---|---|
+| `src/droits/resolution.ts` — *résout* le périmètre à la connexion | **aucun**, par définition | doit lire **toutes** les filiales actives |
+| `src/droits/groupes-ad.ts` — engendre la liste des groupes AD | aucun | idem |
+| `src/api/session.ts` — session provisoire (développement) | aucun | idem |
+| `f_perimetre_groupe()` (008) — compare le périmètre aux filiales actives | celui de la session | **lit la table que la politique protège** |
+| `charteSession`, `sessions.ts` — nomment la filiale active | celui de la session | sa propre filiale suffit |
+
+**Le quatrième est le piège d'E6, à l'identique** : si la politique appelle
+`f_perimetre_groupe()`, et que cette fonction lit `filiales`, la politique se rappelle
+elle-même. PostgreSQL le détecte et lève ; le journal, lui, avait rendu **toute écriture
+impossible**. On ne resserre donc pas avant d'avoir traité la fonction.
+
+### 32.3 La forme retenue
+
+```sql
+create policy pol_filiales_lecture on filiales for select using (
+    case
+        when f_est_proprietaire_base() then true   -- exploitation, garde-fous
+        when f_authentification()      then true   -- la transaction qui RÉSOUT le périmètre
+        when f_perimetre_groupe()      then true   -- la vision Groupe
+        else id = any (f_filiales_lecture())       -- chacun la sienne
+    end
+);
+```
+
+**`case` et non `or`, et l'ordre est normatif** — même raison qu'au §4 de `004_rls.sql` :
+l'ordre d'évaluation d'un `or` n'est pas garanti, et les deux derniers membres **lèvent**
+GRC04 quand aucun périmètre n'est déclaré. La transaction d'authentification doit donc être
+reconnue **avant** qu'on les évalue.
+
+**`f_authentification()` est le bon discriminant** : il existe déjà (condition **E1**,
+`007_authentification.sql`), il n'est vrai que dans la transaction d'ouverture de session, et
+c'est exactement la transaction qui a besoin de voir toutes les filiales pour en déduire un
+périmètre. On ne crée donc aucune dérogation neuve — on réutilise celle qui est déjà motivée.
+
+**`f_perimetre_groupe()` passe en `security definer`**, propriétaire `grc_proprietaire`,
+`search_path` figé (§17.2). Sa lecture de `filiales` s'exécute alors sous le propriétaire, que
+la première branche du `case` reconnaît immédiatement : **la récursion se termine au premier
+tour** au lieu de ne pas commencer.
+
+### 32.4 Ce que la migration doit prouver, et dans les deux sens
+
+1. une session d'**une** filiale ne lit **que la sienne** — sur une table **non vide** ;
+2. un périmètre **Groupe** les lit toutes ;
+3. **la connexion fonctionne toujours** — c'est le contrôle qui manque le plus facilement, et
+   son absence rendrait le produit inutilisable plutôt que non conforme ;
+4. `grc_lecture` sans périmètre ne lit **rien** ;
+5. **morsure** : politique rouverte à `using (true)` → la fuite du §32.1 revient ;
+6. **morsure** : `security definer` retiré de `f_perimetre_groupe()` → la lecture casse.
+
+⚠️ **Le contrôle 3 est celui qu'on oublie.** E6 avait le sien — « la connexion AD rend
+toujours 200 » — et c'est ce qui a permis d'affirmer que les deux moitiés tenaient ensemble.
