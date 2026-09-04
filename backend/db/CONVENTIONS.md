@@ -2106,3 +2106,85 @@ logo, rien ne sait le **désigner**. C'est le premier geste de L9, et il est pet
 
 ⚠️ **PNG ou JPEG exclusivement, jamais SVG** — un SVG porte du script et s'afficherait *dans*
 l'interface. La chaîne du §31 le refuse déjà ; L9 ne doit pas ouvrir de second chemin.
+
+---
+
+## §34 — Les deux niveaux, et ce que l'utilisateur a tranché le 04/09/2026
+
+> **Ce paragraphe fige deux arbitrages de l'utilisateur.** Ils ne se re-débattent pas : ils
+> s'appliquent. La migration `012_socle_de_risques.sql` les met en œuvre, et son entête en
+> porte le détail technique.
+
+### §34.1 — Une décision de portée Groupe se valide UNE FOIS au Groupe
+
+`approbations.filiale_id` était `not null`. Conséquence : une politique de portée Groupe —
+un `documents` à `filiale_id` nul, la PSSI du groupe — recevait **un circuit d'approbation
+par filiale**. Vingt validations pour un document qui n'en demande qu'une, et vingt réponses
+possibles à la question « qui a validé cette politique ? ».
+
+La table est donc **mixte** depuis `012`. Trois conséquences qui ne sont pas décoratives :
+
+1. **L'unicité passe en `nulls not distinct`.** Par défaut, PostgreSQL tient deux `NULL`
+   pour distincts : deux approbations Groupe de la même étape passeraient toutes les deux,
+   et le circuit porterait deux décisions pour un tour.
+2. **La table reçoit son déclencheur de portée figée** (`f_interdit_changement_portee`),
+   réclamé par le garde-fou du §17.6 dès qu'elle est devenue mixte. Sur une table dont
+   l'objet est de figer qui a validé quoi, une décision qui changerait de portée après coup
+   serait le pire défaut possible.
+3. **Écrire une décision Groupe exige l'administration Groupe**, comme toute écriture à
+   `filiale_id` nul (§17.4).
+
+⚠️ **Ce que cela ne dit pas** : quel circuit d'un objet de portée Groupe est visible depuis
+une filiale, et comment l'écran le présente. C'est le travail applicatif qui reste, et il
+n'est pas fait.
+
+### §34.2 — Le socle de risques : la DÉFINITION est commune, l'ÉVALUATION est locale
+
+*« Chaque filiale peut ajouter ses propres risques s'ils ne sont pas déjà présents au niveau
+groupe. »* Il existe donc un socle, et les filiales complètent.
+
+La réponse **n'est pas** de rendre `risques.filiale_id` nullable, pour deux raisons :
+
+- `fk_actions_risque` et `fk_incidents_risque` sont **composites** — une action de filiale
+  rattachée à un risque de portée Groupe ne satisferait plus la clé ;
+- surtout, un risque « Groupe » unique porterait **un seul couple (F, G, M)** pour vingt
+  filiales, alors que l'exposition est précisément ce qui les distingue. *Un risque
+  spécifique à Hambourg n'a rien à faire à Paris, et sa cotation encore moins.*
+
+La réponse est la **scission**, exactement celle que le `PLAN_SERVEUR` §2.2 impose déjà pour
+les mesures :
+
+| | Niveau | Ce qu'elle porte |
+|---|---|---|
+| **`risque_catalogue`** (neuve) | Groupe + ajouts locaux | la **définition** : nom, famille, origine |
+| **`risques`** (inchangée) | Filiale | l'**évaluation** : F, G, M, scores, niveau |
+
+Trois règles qui en découlent :
+
+1. **`risques.catalogue_id` est FACULTATIF.** Une filiale qui saisit un risque hors
+   catalogue continue exactement comme avant — le brief dit « saisie libre conservée », et
+   il vaut ici. Le socle est une aide à la comparaison, pas une contrainte de saisie.
+2. **Le socle est lu par tous, écrit par la seule administration Groupe.** Un RSSI de site
+   voit le socle et ne le change pas, sans quoi la comparabilité — sa raison d'être —
+   dépendrait du premier site qui renomme « Rançongiciel ».
+3. **Archiver une entrée du socle ne détruit rien** : `on delete set null`, l'analyse de
+   risque de la filiale survit à la disparition de la définition qu'elle instanciait.
+
+⚠️ **La table est morte tant qu'aucune route ne l'expose** — exactement comme
+`referentiels_actifs` (constat **Q-150**), qui existe depuis `002` et que personne n'écrit
+ni ne lit. Une table sans chemin applicatif n'est pas une fonctionnalité, c'est une
+promesse. Voir le constat **Q-162**.
+
+### §34.3 — Ce qui reste à faire valider par le client
+
+Le tableau du `PLAN_SERVEUR` §2.2 porte **dix-sept lignes** de ce type, et **deux seulement**
+ont été tranchées par l'utilisateur. Les quinze autres reposent sur un arbitrage interne
+(§16.4) que **le RSSI du groupe n'a jamais confirmé** — c'est le risque projet **P5**, et il
+est attendu depuis avant L1.
+
+Ce n'est pas une formalité : changer le niveau d'une table **après** que les filiales aient
+saisi leurs données n'est pas un `alter table`. Passer `prestataires` de Filiale à Groupe,
+par exemple, obligerait à décider laquelle des vingt fiches du même infogérant survit, qui
+arbitre les divergences d'évaluation, et ce que deviennent les actions rattachées — une
+migration de données **et** une décision métier, sur des enregistrements déjà employés comme
+preuve d'audit.

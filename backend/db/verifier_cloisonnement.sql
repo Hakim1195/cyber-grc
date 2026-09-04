@@ -1381,9 +1381,9 @@ begin
         select 'C76',
                format('Déclencheurs de cohérence et de portée armés en « always » (%s balayés)',
                       count(*)),
-               '9 sur 9',
+               '11 sur 11',
                format('%s sur %s', count(*) filter (where t.tgenabled = 'A'), count(*)),
-               case when count(*) = 9 and count(*) filter (where t.tgenabled = 'A') = 9
+               case when count(*) = 11 and count(*) filter (where t.tgenabled = 'A') = 11
                     then 'OK' else 'ÉCHEC' end
           from pg_trigger t
          where not t.tgisinternal

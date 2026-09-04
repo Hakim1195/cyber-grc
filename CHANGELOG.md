@@ -8,6 +8,50 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Base — migration 012 : un socle de risques, et une approbation Groupe qui ne se répète pas
+
+**Deux arbitrages de l'utilisateur, du 04/09/2026**, figés au `CONVENTIONS.md` §34 parce
+qu'une décision non consignée se re-débat à la vague suivante.
+
+**1. « Une décision groupe se valide une fois au groupe. »** `approbations.filiale_id` était
+`not null` : la PSSI du groupe recevait **un circuit par filiale** — vingt validations pour
+un document qui n'en demande qu'une, et vingt réponses possibles à « qui a validé cette
+politique ? ». La table devient **mixte**. Trois conséquences qui ne sont pas décoratives :
+l'unicité passe en **`nulls not distinct`** (sans quoi deux décisions Groupe de la même étape
+passeraient toutes les deux) ; la table reçoit son **déclencheur de portée figée** ; écrire
+une décision Groupe exige l'administration Groupe. **Aucune migration de données** — la table
+était vide, et une garde **refuse** la migration si elle ne l'est pas, plutôt que de choisir
+à la place d'un humain quel circuit de quelle filiale devient celui du Groupe.
+
+**2. « Chaque filiale peut ajouter ses propres risques s'ils ne sont pas déjà présents au
+niveau groupe. »** Il n'existait aucun niveau Groupe : « Rançongiciel » était ressaisi vingt
+fois, sous vingt libellés, et une consolidation ne pouvait pas répondre à *« combien de nos
+filiales sont exposées à CE risque-là ? »*.
+
+⚠️ **La réponse n'est pas de rendre `risques.filiale_id` nullable.** Les clés étrangères
+d'`actions` et d'`incidents` sont composites — une action de filiale rattachée à un risque
+Groupe ne les satisferait plus — et surtout un risque « Groupe » unique porterait **un seul
+couple (F, G, M) pour vingt filiales**, alors que l'exposition est précisément ce qui les
+distingue. C'est la **scission** qu'il faut, celle que le `PLAN_SERVEUR` §2.2 impose déjà aux
+mesures : **`risque_catalogue`** porte la *définition* (Groupe + ajouts locaux), `risques`
+garde l'*évaluation* (Filiale, inchangée). Le lien est **facultatif** : la saisie libre est
+conservée, et archiver une entrée du socle **délie** sans rien détruire.
+
+**Les garde-fous du schéma ont corrigé cette migration quatre fois**, et chacun a nommé
+exactement ce qui manquait : traçabilité absente à l'insertion, `version` qui cessait de
+s'incrémenter (donc le verrouillage optimiste perdu sur la seule table neuve), déclencheurs
+armés en « origin » donc désarmables par un réglage de session, et `approbations` devenue
+mixte sans sa portée figée. Un cinquième a refusé l'index d'unicité tant qu'il ne portait pas
+`filiale_id` — et la bonne réponse n'était pas la dérogation nommée que son homologue
+`mesure_catalogue` a obtenue, mais d'**écrire l'index correctement** (constat **Q-163**).
+
+⚠️ **La table est morte tant qu'aucune route ne l'expose** — comme `referentiels_actifs`
+(**Q-150**), qui existe depuis `002` et que personne n'écrit ni ne lit. Une table sans chemin
+applicatif n'est pas une fonctionnalité, c'est une promesse (**Q-162**).
+
+**Banc** : 1449 essais, 1449 passés. Le semis couvre la table neuve — un balayage de fuite
+sur une table vide rend « zéro visible » pour la seule raison qu'il n'y a rien à voir.
+
 ### Serveur et interface — lot L9 : l'identité visuelle par filiale
 
 **Une société rachetée ne présente pas un rapport à la marque de sa maison mère.** La

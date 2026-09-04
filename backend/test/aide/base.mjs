@@ -453,16 +453,26 @@ export const FILIALE_B = 'FIL-ESSAI-B';
  * couvert : un balayage qui ne trouve rien passe pour vert.
  */
 export const TABLES_FILIALE = Object.freeze([
-  'actifs', 'actions', 'approbations', 'audits', 'clients', 'crise',
+  'actifs', 'actions', 'audits', 'clients', 'crise',
   'evaluation_mesures', 'evaluations', 'exigences', 'history', 'imports',
   'incidents', 'mco_actions', 'mesure_mise_en_oeuvre', 'pieces_jointes',
   'prestataires', 'processus', 'referentiels_actifs', 'revues', 'risques',
   'scenarios_pra', 'tests_pra', 'traitement_mesures', 'traitements',
 ]);
 
-/** Tables MIXTES : une ligne de portée Groupe ET une ligne locale par filiale (§4, §16). */
+/**
+ * Tables MIXTES : une ligne de portée Groupe ET une ligne locale par filiale (§4, §16).
+ *
+ * ⚠️ **`approbations` a quitté la famille « filiale » le 04/09/2026** (migration `012`),
+ * sur arbitrage utilisateur : *« une décision groupe se valide une fois au groupe »*.
+ * Avant lui, la PSSI du groupe recevait un circuit PAR FILIALE — vingt validations pour
+ * un document qui n'en demande qu'une. `risque_catalogue` naît mixte : socle du Groupe,
+ * plus les ajouts que chaque filiale peut faire *« si le risque n'est pas déjà présent au
+ * niveau groupe »*.
+ */
 export const TABLES_MIXTES = Object.freeze([
-  'document_referentiels', 'documents', 'mesure_catalogue', 'parametres', 'personnes',
+  'approbations', 'document_referentiels', 'documents', 'mesure_catalogue', 'parametres',
+  'personnes', 'risque_catalogue',
 ]);
 
 /** Liaisons et tables filles SANS `filiale_id` — l'angle mort du §7. */
@@ -518,7 +528,13 @@ export async function semerJeuEssai(base, client, options = {}) {
              ($2, 'ZZESSB', 'Essai Allemagne', 'DE')`,
         [a, b],
       );
-      await c.query("insert into mesure_catalogue (id, nom)   values ('MESURE-G', 'Chiffrement des postes')");
+      await c.query("insert into mesure_catalogue (id, nom)   values ('MESURE-G', 'Chiffrement des postes')")
+      // Socle de risques du Groupe (migration 012) : la DÉFINITION est commune, et
+      // chaque filiale l'instancie avec sa propre cotation.
+      await c.query(
+        "insert into risque_catalogue (id, nom, categorie, origine) values " +
+          "('RCAT-G', 'Rançongiciel', 'Malveillance', 'referentiel')",
+      );
       await c.query("insert into personnes        (id, nom)   values ('PERS-G',   'RSSI groupe')");
       await c.query("insert into documents        (id, titre) values ('DOC-G',    'PSSI du groupe')");
       await c.query("insert into parametres       (id, cle)   values ('PARAM-G',  'essai.groupe')");
@@ -542,7 +558,13 @@ export async function semerJeuEssai(base, client, options = {}) {
 
         await c.query(`insert into clients      (id, filiale_id, nom) values ('CLI-${s}',   $1, 'Donneur d''ordre')`, f);
         await c.query(`insert into exigences    (id, filiale_id, code, intitule) values ('EX-${s}', $1, 'A.5.1', 'Politique de sécurité')`, f);
-        await c.query(`insert into risques      (id, filiale_id, nom) values ('RISK-${s}',  $1, 'Rançongiciel')`, f);
+        // Ajout LOCAL au socle : le cas que l'arbitrage du 04/09 autorise expressément —
+        // « chaque filiale peut ajouter ses propres risques s'ils ne sont pas déjà
+        // présents au niveau groupe ».
+        await c.query(`insert into risque_catalogue (id, filiale_id, nom) values ('RCAT-${s}', $1, 'Menace propre au site ${s}')`, f);
+        // Celui-ci INSTANCIE le socle du Groupe : c'est ce lien qui permettra de
+        // répondre « combien de nos filiales sont exposées à CE risque-là ».
+        await c.query(`insert into risques      (id, filiale_id, nom, catalogue_id) values ('RISK-${s}',  $1, 'Rançongiciel', 'RCAT-G')`, f);
         await c.query(`insert into risques      (id, filiale_id, nom) values ('RISK2-${s}', $1, 'Fuite de données')`, f);
         await c.query(`insert into actifs       (id, filiale_id, nom) values ('ACTIF-${s}', $1, 'ERP')`, f);
         await c.query(`insert into actifs       (id, filiale_id, nom) values ('ACTIF2-${s}',$1, 'Serveur de fichiers')`, f);

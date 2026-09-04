@@ -180,7 +180,12 @@ describe('Lecture cloisonnée (CONVENTIONS §4, §11, §16.4)', () => {
           and c.relname <> 'session_filiales'
         order by 1`,
     );
-    assert.ok(tables.length >= 24, `Balayage suspect : ${tables.length} table(s) seulement.`);
+    // 23 depuis la migration `012` : `approbations` a quitté la famille « niveau
+    // filiale » pour la famille MIXTE — une décision de portée Groupe s'y écrit
+    // désormais avec `filiale_id` nul (arbitrage utilisateur du 04/09/2026, Q-153).
+    // Le plancher suit le réel ; il est là pour attraper un balayage qui ne balaierait
+    // plus rien, pas pour figer un nombre.
+    assert.ok(tables.length >= 23, `Balayage suspect : ${tables.length} table(s) seulement.`);
 
     const fautives = [];
     await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
@@ -2742,7 +2747,10 @@ describe('Portée des liens documentaires et armement des déclencheurs (N-10, N
           and (t.tgname like '%\\_coherence\\_mesure' or t.tgname like '%\\_portee\\_figee')
         order by 1`,
     );
-    assert.equal(armement.length, 9, 'Quatre déclencheurs de cohérence, cinq de portée.');
+    // 11 depuis la migration `012` : `risque_catalogue` et `approbations` sont mixtes,
+    // et toute table mixte porte son déclencheur de portée figée (§17.6). C'est le
+    // garde-fou du schéma qui les a réclamés, un par un, pendant l'écriture de 012.
+    assert.equal(armement.length, 11, 'Quatre déclencheurs de cohérence, sept de portée.');
     assert.deepEqual(
       [...new Set(armement.map((l) => l.armement))],
       ['A'],
@@ -4745,8 +4753,17 @@ describe('Armement, portée figée, chemin de magasin (§19.4 et §19.1, Q5-4 et
   test('les tables MIXTES sont découvertes, et chacune porte son déclencheur de portée', async () => {
     const mixtes = (await base.lignes(proprietaire, 'select nom from f_tables_mixtes() order by 1'))
       .map((l) => l.nom);
+    // Sept depuis la migration `012`, et l'écart mérite d'être nommé plutôt que corrigé
+    // en silence : `approbations` est devenue mixte sur arbitrage utilisateur — *« une
+    // décision groupe se valide une fois au groupe »* (Q-153) —, et `risque_catalogue`
+    // naît mixte : socle du Groupe plus les ajouts propres à chaque filiale.
+    //
+    // Cette liste est écrite à la main FACE à une liste découverte, et c'est le bon cas
+    // (`CLAUDE.md` §3) : une table qui deviendrait mixte sans qu'on l'ait voulu fait
+    // rougir ici, bruyamment, et quelqu'un doit dire si c'était l'intention.
     assert.deepEqual(mixtes, [
-      'document_referentiels', 'documents', 'mesure_catalogue', 'parametres', 'personnes',
+      'approbations', 'document_referentiels', 'documents', 'mesure_catalogue',
+      'parametres', 'personnes', 'risque_catalogue',
     ]);
     assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_portee_figee()'), []);
   });
