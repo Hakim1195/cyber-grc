@@ -110,6 +110,27 @@ succes() { printf '\033[1;32m  ok\033[0m %s\n' "$*"; }
 alerte() { printf '\033[1;33m  !!\033[0m %s\n' "$*" >&2; }
 echec()  { printf '\033[1;31m ERR\033[0m %s\n' "$*" >&2; exit 1; }
 
+# ── Constat Q-75 : un TROISIÈME verdict, entre `succes` et `echec` ──────────
+#
+# Un contrôle qui n'a PAS PU être joué — vhost pas encore activé, annuaire
+# injoignable, outil absent — se signalait jusqu'ici par un simple `alerte`,
+# EXACTEMENT comme un avertissement ordinaire. Mesuré les 03 et 04/09/2026 sur
+# une Debian 13 neuve : le vhost s'installe sans s'activer, et tant qu'il ne
+# l'est pas, l'URL d'entrée (Q-36) et la borne de corps du chemin mandaté
+# (Q-44) ne sont éprouvées À AUCUN MOMENT — puis le script imprimait quand
+# même « Installation terminée » et rendait 0. Un exploitant qui écrit
+# `install.sh && echo OK` concluait au succès sur un contrôle qui n'avait
+# jamais eu lieu.
+#
+# `reserve()` NE FAIT PAS ÉCHOUER — ce n'est pas un durcissement, c'est un
+# compte. Elle empile une ligne, que le bloc « bilan » (§11) relit à la toute
+# fin pour décider du MOT DE LA FIN et du CODE DE SORTIE : « installation
+# terminée » et l'exit 0 sont désormais réservés au cas où chaque contrôle a
+# soit réussi, soit échoué bruyamment — jamais au cas où l'un d'eux n'a
+# simplement pas pu être posé.
+RESERVES=()
+reserve() { printf '\033[1;36m N/J\033[0m %s\n' "$*" >&2; RESERVES+=("$*"); }
+
 # `set -E` propage ce piège dans les fonctions : un échec non prévu doit dire OÙ.
 trap 'printf "\033[1;31m ERR\033[0m interruption ligne %s : %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 
@@ -140,6 +161,14 @@ Rôles PostgreSQL (db/CONVENTIONS.md §14) :
   grc_lecture       supervision et exports d'exploitation : select
 
 Configuration : /etc/cyber-grc/env  (modèle : backend/.env.example)
+
+Codes de sortie (constat Q-75 : un « 0 » n'a plus qu'un seul sens) :
+  0  installation terminée ; tout ce qui a pu être contrôlé l'a été, et est conforme
+  1  ÉCHEC — un contrôle a été joué et il est NON CONFORME (voir « ERR » ci-dessus)
+  2  configuration incomplète — des valeurs restent à renseigner avant de continuer
+  3  installation terminée AVEC RÉSERVES — un ou plusieurs contrôles n'ONT PAS PU être
+     joués (voir « N/J » ci-dessus, récapitulés en fin de sortie) : ce n'est PAS un feu
+     vert, à corriger puis à relancer
 FIN
 }
 
@@ -1464,7 +1493,7 @@ SQL
 )" == "ABSENTE" ]]; then
   # Une base antérieure au point d'appel n'a rien à répondre : on avertit, on n'échoue
   # pas. Refuser ici empêcherait de migrer les bases que ce contrôle est censé protéger.
-  alerte "$GARDE_FOU_SCHEMA() absente : les contrôles automatiques du schéma n'ont pas pu"
+  reserve "$GARDE_FOU_SCHEMA() absente : les contrôles automatiques du schéma n'ont pas pu"
   alerte "être joués. Cette fonction est posée par db/migrations/001_socle.sql — la base est"
   alerte "antérieure à ce point d'appel (db/CONVENTIONS.md §18.4 et §19.4)."
 else
@@ -1666,9 +1695,9 @@ else
       l'autorité qui a émis ce certificat : demandez la CHAÎNE COMPLÈTE de la PKI interne
       (AC racine + AC intermédiaires) à l'équipe qui exploite l'ADCS du client."
     else
-      alerte "$LDAP_HOTE:$LDAP_PORT n'a pas répondu en 15 s. Le port est-il filtré, ou le"
-      alerte "contrôleur injoignable depuis cette VM ? La chaîne de certification n'a donc PAS"
-      alerte "été éprouvée — ce n'est pas un feu vert. Vérifier à la main :"
+      reserve "$LDAP_HOTE:$LDAP_PORT n'a pas répondu en 15 s : la chaîne de certification LDAPS"
+      alerte "n'a donc PAS été éprouvée (constat Q-75, même figure). Le port est-il filtré, ou"
+      alerte "le contrôleur injoignable depuis cette VM ? Vérifier à la main :"
       alerte "  openssl s_client -connect $LDAP_HOTE:$LDAP_PORT -CAfile ${LDAP_CA:-<AC interne>} -brief"
     fi
   fi
@@ -1870,8 +1899,24 @@ fi
 if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
   NOM_VHOST="$(sed -n 's/^[[:space:]]*ServerName[[:space:]]\{1,\}//p' \
                /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null | head -n1 || true)"
-  SEUIL_CORPS="$(sed -n 's/^[[:space:]]*RewriteCond[[:space:]]\{1,\}%1[[:space:]]\{1,\}"\{0,1\}-gt[[:space:]]*\([0-9]\{1,\}\).*/\1/p' \
-                 /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null | head -n1 || true)"
+  # ── Ancrée sur la règle GÉNÉRALE, depuis le constat Q-58 ──────────────────
+  # Le vhost porte désormais DEUX règles « RewriteCond %1 "-gt … » : celle-ci,
+  # et une seconde, plus stricte, propre à `RewriteRule ^/api/connexion` (la
+  # fenêtre d'un Mio refermée sur la seule route joignable sans session). Une
+  # extraction non ancrée prendrait la PREMIÈRE rencontrée dans le fichier —
+  # 4 096, celle de la connexion — et dimensionnerait la sonde ci-dessous sur
+  # le mauvais seuil : elle enverrait ~1 Mio à `/api/reprise` en croyant
+  # tester le seuil général (27 262 976), et le « hors borne » attendu ne le
+  # serait pas. `grep -B1` isole donc le bloc dont la `RewriteRule` qui SUIT
+  # porte exactement `^/api/ -` (l'espace après `/api/` l'exclut de
+  # `^/api/connexion -`, dont le caractère suivant est un « c ») ; parmi les
+  # blocs ainsi isolés (chunked ET longueur), seul celui qui commence par
+  # « RewriteCond %1 … -gt » passe l'extraction — le chunked, lui, commence
+  # par « RewriteCond %{HTTP:Transfer-Encoding} . » et ne produit rien.
+  SEUIL_CORPS="$(grep -B1 -E '^[[:space:]]*RewriteRule[[:space:]]+\^/api/[[:space:]]+-' \
+                   /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null \
+                 | sed -n 's/^[[:space:]]*RewriteCond[[:space:]]\{1,\}%1[[:space:]]\{1,\}"\{0,1\}-gt[[:space:]]*\([0-9]\{1,\}\).*/\1/p' \
+                 | head -n1 || true)"
   # ⚠️ Le seuil lu dans le vhost sert à DIMENSIONNER la sonde, jamais à décider.
   # Une première rédaction en faisait la condition du contrôle : la règle de
   # refus supprimée, le seuil devenait illisible, et le contrôle se contentait
@@ -1884,8 +1929,8 @@ if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
     SEUIL_CORPS="$(lire_variable SERVEUR_TAILLE_MAX_CORPS)"; SEUIL_CORPS="${SEUIL_CORPS:-26214400}"
   fi
   if [[ -z "$NOM_VHOST" ]]; then
-    alerte "le vhost ne déclare aucun ServerName : la borne de corps (Q-44) n'a pas pu être"
-    alerte "éprouvée. Ce n'est pas un feu vert — voir deploy/apache/cyber-grc.conf."
+    reserve "vhost sans ServerName : la borne de corps (Q-44) n'a pas pu être éprouvée."
+    alerte "Voir deploy/apache/cyber-grc.conf."
   else
     CORPS_TMP="$(mktemp)"
     # ⚠️ UNE SEULE SONDE, paramétrée par ses en-têtes — et ce n'est pas un goût
@@ -1937,8 +1982,8 @@ if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
       # dire que curl n'a obtenu aucune réponse : le service est peut-être
       # arrêté. Le contrôle symétrique n'a alors pas été joué, et un frontal
       # qui refuserait TOUT satisferait le reste sans qu'on le voie.
-      alerte "corps de 4 096 octets par /api/ : aucune réponse (le service répond-il ?)."
-      alerte "Le contrôle symétrique de la borne de corps n'a PAS été joué : on sait que le"
+      reserve "corps de 4 096 octets par /api/ : aucune réponse (le service répond-il ?) — le"
+      alerte "contrôle symétrique de la borne de corps n'a PAS été joué : on sait que le"
       alerte "frontal refuse hors borne, on ne sait pas qu'il laisse passer le reste (Q-44)."
     elif [[ "$CODE_SOUS" == 413 ]]; then
       alerte "corps de 4 096 octets par /api/ -> $CODE_SOUS"
@@ -1952,7 +1997,7 @@ if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
     fi
   fi
 else
-  alerte "vhost non activé : la borne de corps du chemin mandaté (Q-44) n'a pas été éprouvée."
+  reserve "vhost non activé : la borne de corps du chemin mandaté (Q-44) n'a pas été éprouvée."
 fi
 # <<< banc: corps >>>
 
@@ -1994,7 +2039,7 @@ if command -v systemd-analyze >/dev/null 2>&1; then
     succes "unité systemd validée par systemd-analyze verify"
   fi
 else
-  alerte "systemd-analyze absent : l'unité n'a PAS été vérifiée. Ce n'est pas un feu vert."
+  reserve "systemd-analyze absent : l'unité n'a PAS été vérifiée."
 fi
 
 # Le chemin de Node de l'unité contre celui que ce script a validé au §3.
@@ -2292,7 +2337,7 @@ fi
 GROUPES_AD_SCRIPT="$RACINE/backend/deploy/groupes-ad.sh"
 [[ -f "$GROUPES_AD_SCRIPT" ]] || GROUPES_AD_SCRIPT="$SOURCE/deploy/groupes-ad.sh"
 if [[ ! -x "$GROUPES_AD_SCRIPT" && ! -f "$GROUPES_AD_SCRIPT" ]]; then
-  alerte "deploy/groupes-ad.sh est absent : la liste des groupes AD n'a PAS été vérifiée."
+  reserve "deploy/groupes-ad.sh est absent : la liste des groupes AD n'a PAS été vérifiée."
 else
   SORTIE_GROUPES="$(CYBER_GRC_CONFIG="$CONFIG" bash "$GROUPES_AD_SCRIPT" --verifier 2>&1)" \
     && CODE_GROUPES=0 || CODE_GROUPES=$?
@@ -2310,8 +2355,8 @@ else
     3) alerte "Écart entre la liste engendrée et la table « groupes_ad » (détail ci-dessus)."
        alerte "Régénérer le script de création AD :"
        alerte "  bash $GROUPES_AD_SCRIPT --powershell --ou '<DN de l'unité d'organisation>'" ;;
-    *) alerte "deploy/groupes-ad.sh a rendu $CODE_GROUPES : la liste des groupes AD n'a pas pu"
-       alerte "être engendrée. Ce n'est pas un feu vert — voir les lignes ci-dessus." ;;
+    *) reserve "deploy/groupes-ad.sh a rendu $CODE_GROUPES : la liste des groupes AD n'a pas pu"
+       alerte "être engendrée. Voir les lignes ci-dessus." ;;
   esac
 fi
 # <<< banc: groupesad >>>
@@ -2358,7 +2403,7 @@ done
 info "Configuration du frontal"
 APACHECTL="$(command -v apache2ctl || command -v apachectl || true)"
 if [[ -z "$APACHECTL" ]]; then
-  alerte "ni apache2ctl ni apachectl sur le PATH : la configuration du frontal n'a PAS été"
+  reserve "ni apache2ctl ni apachectl sur le PATH : la configuration du frontal n'a PAS été"
   alerte "vérifiée. Après installation d'Apache : apache2ctl configtest"
 else
   SORTIE_APACHE="$("$APACHECTL" configtest 2>&1)" && RC_APACHE=0 || RC_APACHE=$?
@@ -2381,8 +2426,9 @@ else
     succes "configuration Apache valide, vhost cyber-grc compris ($("$APACHECTL" -v 2>/dev/null | head -n1 || echo 'version inconnue'))"
   else
     succes "configuration Apache valide"
-    alerte "…mais le vhost cyber-grc n'est PAS activé : « configtest » ne l'a donc PAS lu,"
-    alerte "et le contrôle de bout en bout ci-dessous n'a pas pu être joué. Activez-le :"
+    reserve "vhost cyber-grc pas activé : « configtest » ne l'a donc PAS lu, et TOUT le contrôle"
+    alerte "de bout en bout ci-dessous (URL d'entrée Q-36, borne de corps Q-44, invariant de"
+    alerte "cache Q-43, SERVEUR_URL_PUBLIQUE Q-76) n'a pas pu être joué. Activez-le :"
     alerte "  a2ensite cyber-grc && $APACHECTL configtest && systemctl reload apache2"
     alerte "puis RELANCEZ ce script : il éprouvera alors l'URL d'entrée lui-même."
   fi
@@ -2415,7 +2461,7 @@ else
     NOM_SERVEUR="$(sed -n 's/^[[:space:]]*ServerName[[:space:]]\{1,\}//p' \
                    /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null | head -n1 || true)"
     if [[ -z "$NOM_SERVEUR" ]]; then
-      alerte "le vhost ne déclare aucun ServerName : l'URL d'entrée n'a pas pu être éprouvée."
+      reserve "vhost sans ServerName : l'URL d'entrée (Q-36) n'a pas pu être éprouvée."
     else
       # `--noproxy '*'` : la cible est cette machine, imposée par `--resolve`. Un
       # mandataire déclaré dans l'environnement (http_proxy, courant sur un
@@ -2461,6 +2507,55 @@ else
         succes "URL d'entrée servie (200 après redirection), fichier non publiable refusé (403)"
       fi
 
+      # ══ SERVEUR_URL_PUBLIQUE DIT-ELLE VRAI ? (constat Q-76) ════════════════
+      #
+      # `SERVEUR_URL_PUBLIQUE` nomme ce serveur dans les liens qu'il engendre —
+      # courriels et exports (lot L12), et le journal de démarrage dès
+      # aujourd'hui. Le seul contrôle qui existait (§5) ne regardait que sa
+      # FORME : « commence par https:// ». Une valeur syntaxiquement valide et
+      # fonctionnellement fausse passait : `.env.example` a porté
+      # « https://grc.interne.exemple » pendant que CE vhost sert
+      # « grc.exemple.interne » — les mots inversés — et rien ne l'a vu avant
+      # qu'une installation réelle ne parte avec le mauvais nom, sans un mot.
+      #
+      # ⚠️ NE PAS COMPARER DEUX CHAÎNES. C'est la leçon même du 8ᵉ passage
+      # (constat Q-44, juste au-dessus dans ce fichier) : un contrôle qui
+      # compare deux déclarations ne contrôle rien. Le texte « ServerName » ne
+      # suffirait d'ailleurs pas à décider seul : avec un SEUL vhost sur le
+      # port 443, Apache répond quel que soit le nom demandé dans l'en-tête —
+      # deux textes égaux ne prouveraient donc pas plus que deux nombres égaux
+      # n'en prouvaient au 8ᵉ passage. Ce qui décide RÉELLEMENT si un lien vers
+      # SERVEUR_URL_PUBLIQUE s'ouvre sans avertissement de sécurité, c'est le
+      # CERTIFICAT présenté : on l'INTERROGE — même idiome que la vérification
+      # de LDAP_CA plus haut (openssl x509) —, on ne relit pas un fichier.
+      URL_PUBLIQUE="$(lire_variable SERVEUR_URL_PUBLIQUE)"
+      if [[ -z "$URL_PUBLIQUE" ]]; then
+        alerte "SERVEUR_URL_PUBLIQUE est vide : rien à confronter au certificat (voir §5)."
+      else
+        HOTE_PUBLIC="${URL_PUBLIQUE#*://}"; HOTE_PUBLIC="${HOTE_PUBLIC%%/*}"; HOTE_PUBLIC="${HOTE_PUBLIC%%:*}"
+        CERT_SERVI="$(mktemp)"
+        timeout 15 openssl s_client -connect "127.0.0.1:443" -servername "$NOM_SERVEUR" \
+            </dev/null 2>/dev/null | openssl x509 > "$CERT_SERVI" 2>/dev/null || true
+        if [[ ! -s "$CERT_SERVI" ]]; then
+          reserve "aucun certificat obtenu en interrogeant 127.0.0.1:443 (servername=$NOM_SERVEUR) :"
+          alerte "SERVEUR_URL_PUBLIQUE (« $URL_PUBLIQUE ») n'a PAS pu être confrontée au"
+          alerte "certificat réellement servi."
+        elif ! openssl x509 -in "$CERT_SERVI" -noout -checkhost "$HOTE_PUBLIC" >/dev/null 2>&1; then
+          rm -f "$CERT_SERVI"
+          echec "SERVEUR_URL_PUBLIQUE (« $URL_PUBLIQUE ») nomme « $HOTE_PUBLIC », qui n'est PAS
+      couvert par le certificat que ce serveur présente réellement pour « $NOM_SERVEUR »
+      (constat Q-76). Un lien envoyé par courriel ou inscrit dans un export pointerait vers un
+      nom que le navigateur refusera — avertissement de sécurité TLS au mieux ; au pire,
+      quiconque obtiendrait un certificat pour ce nom-là serait indiscernable du bon serveur.
+      Alignez SERVEUR_URL_PUBLIQUE de ${FICHIER_CONFIG:-/etc/cyber-grc/env} sur le nom
+      réellement couvert, ou étendez le certificat (SSLCertificateFile de
+      deploy/apache/cyber-grc.conf) pour qu'il couvre aussi « $HOTE_PUBLIC »."
+        else
+          rm -f "$CERT_SERVI"
+          succes "SERVEUR_URL_PUBLIQUE : « $HOTE_PUBLIC » est couvert par le certificat réellement servi"
+        fi
+      fi
+
       # ══ INVARIANT DU CACHE : LONG ⇒ VERSIONNÉ (constat Q-43) ═══════════
       #
       #   > **Un actif ne reçoit un cache long que si son URL est versionnée.**
@@ -2503,8 +2598,8 @@ else
       SEUIL_COURT="$(secondes_expires "$DEFAUT_BRUT")"
 
       if [[ "${SEUIL_COURT:-0}" -le 0 ]]; then
-        alerte "le vhost ne pose pas d'ExpiresDefault lisible : l'invariant « cache long ⇒"
-        alerte "URL versionnée » (constat Q-43) n'a PAS pu être vérifié."
+        reserve "vhost sans ExpiresDefault lisible : l'invariant « cache long ⇒ URL versionnée »"
+        alerte "(constat Q-43) n'a PAS pu être vérifié."
       else
         NON_VERSIONNES=""
         while IFS= read -r fichier; do
@@ -2540,7 +2635,50 @@ else
 fi
 # <<< banc: configtest >>>
 
-printf '\n\033[1;32mInstallation terminée.\033[0m\n'
-printf 'Configuration : %s  (root:%s 0640)\n' "$FICHIER_CONFIG" "$UTILISATEUR"
+# La ligne qui relie le RESERVES accumulé tout au long du VRAI script à
+# l'entrée que le bloc testable ci-dessous sait recevoir du dehors — deux
+# variables plates, comme tout bloc qui a besoin de quelque chose que
+# lui-même ne calcule pas (« entetes » reçoit SOURCE de la même façon). Elle
+# vit HORS des ancres : un banc qui joue le bloc « bilan » seul lui fournit
+# ces deux valeurs directement, sans avoir à rejouer tout le script pour les
+# obtenir.
+RESERVES_COMPTE=${#RESERVES[@]}
+RESERVES_TEXTE=""
+if [[ $RESERVES_COMPTE -gt 0 ]]; then RESERVES_TEXTE="$(printf '%s\n' "${RESERVES[@]}")"; fi
+
+# >>> banc: bilan <<<
+# ══ LE MOT DE LA FIN DIT CE QUI N'A PAS PU ÊTRE JOUÉ (constat Q-75) ══════════
+#
+# Mesuré les 03 et 04/09/2026 sur une Debian 13 neuve : le vhost s'installe
+# sans s'activer, et tant qu'il ne l'est pas, l'URL d'entrée (Q-36) et la
+# borne de corps du chemin mandaté (Q-44) ne sont éprouvées À AUCUN MOMENT —
+# chaque contrôle concerné le disait honnêtement, en alerte, puis le script
+# imprimait quand même « Installation terminée » et rendait 0. Un exploitant
+# qui écrit `install.sh && echo OK` concluait au succès sur des contrôles qui
+# n'avaient jamais eu lieu — indiscernables, dans le mot de la fin et le code
+# de sortie, de ceux qui avaient tourné et étaient conformes.
+#
+# ⚠️ CE N'EST PAS UN DURCISSEMENT PAR RÉFLEXE. `reserve()` (posée en tête de
+# ce fichier) N'ARRÊTE RIEN par elle-même : une lacune de DONNÉES — une
+# filiale déclarée sans ses groupes AD, bloc « groupesad » plus haut — reste
+# un avertissement ordinaire (`alerte`), parce qu'y répondre par un échec
+# bloquerait la mise à jour d'un système en production, dont la mise à jour
+# corrige peut-être ce qui bloque le client ; cet arbitrage n'est pas rouvert
+# ici. Ce qui change est seulement AVAL, et une seule fois : le mot de la fin
+# et le code de sortie cessent de dire « installation terminée » sans
+# distinguer *contrôle joué et conforme* de *contrôle jamais posé*.
+if [[ $RESERVES_COMPTE -eq 0 ]]; then
+  printf '\n\033[1;32mInstallation terminée.\033[0m\n'
+else
+  printf '\n\033[1;33mInstallation terminée AVEC RÉSERVES (%d contrôle(s) non joué(s)) :\033[0m\n' \
+    "$RESERVES_COMPTE"
+  while IFS= read -r ligne; do [[ -n "$ligne" ]] && printf '  - %s\n' "$ligne"; done <<< "$RESERVES_TEXTE"
+  printf "\033[1;33mCE N'EST PAS UN FEU VERT\033[0m : les points ci-dessus n'ont pas été vérifiés,\n"
+  printf "pas déclarés conformes. Levez-les (souvent : activer le vhost — voir plus haut),\n"
+  printf "puis relancez ce script.\n"
+fi
+printf 'Configuration : %s  (root:%s 0640)\n' "${FICHIER_CONFIG:-/etc/cyber-grc/env}" "${UTILISATEUR:-cyber-grc}"
 printf 'Journaux      : journalctl -u cyber-grc -f\n'
-printf 'Exploitation  : %s/backend/README.md\n' "$RACINE"
+printf 'Exploitation  : %s/backend/README.md\n' "${RACINE:-.}"
+[[ $RESERVES_COMPTE -eq 0 ]] || exit 3
+# <<< banc: bilan >>>

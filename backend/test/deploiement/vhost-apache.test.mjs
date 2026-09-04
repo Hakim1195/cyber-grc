@@ -1138,6 +1138,165 @@ describe('Un actif n’a un cache long que si son URL est versionnée (constat Q
 });
 
 /* =====================================================================
+ *  §5 bis — SERVEUR_URL_PUBLIQUE confrontée au certificat (constat Q-76)
+ * ---------------------------------------------------------------------
+ *  `.env.example` a réellement porté « https://grc.interne.exemple » — les
+ *  mots inversés — pendant que ce vhost sert « grc.exemple.interne » : une
+ *  valeur syntaxiquement valide (elle commence bien par https://) et
+ *  fonctionnellement fausse. Le seul contrôle qui existait avant ce lot ne
+ *  regardait que la FORME ; il n'aurait rien vu passer.
+ *
+ *  `install.sh` ne compare plus deux chaînes : il INTERROGE le certificat que
+ *  ce serveur présente RÉELLEMENT pour son `ServerName`, et demande à
+ *  OpenSSL si le nom porté par SERVEUR_URL_PUBLIQUE en fait partie
+ *  (`openssl x509 -checkhost`, même famille que la vérification de LDAP_CA
+ *  plus haut dans le fichier). C'est ce qui décide VRAIMENT si un lien envoyé
+ *  par courriel s'ouvre sans avertissement de sécurité — pas le texte d'un
+ *  fichier de configuration relu à côté.
+ * ===================================================================== */
+
+describe('SERVEUR_URL_PUBLIQUE est confrontée au certificat réellement servi (constat Q-76)', () => {
+  /**
+   * Joue le bloc « configtest » avec un `lire_variable` qui répond
+   * RÉELLEMENT pour `SERVEUR_URL_PUBLIQUE` — celui de `test/aide/install.mjs`
+   * la rend TOUJOURS vide, ce qui convient à tous les autres essais de ce
+   * fichier mais pas à celui-ci. Même schéma que `avecVhostInstalle()` de
+   * `install-blocs.test.mjs` : un préambule écrit à la main plutôt qu'un mock
+   * partagé qu'on ne peut pas personnaliser par appel.
+   *
+   * Neuf substitutions : les huit de `jouerGarde()` (ports, chemins,
+   * `apache2ctl`) plus une neuvième, propre à ce contrôle — la cible de
+   * l'interrogation TLS, seule adresse littérale que ce contrôle ajoute au
+   * bloc. **Aucune ne touche ce qui décide** : ni l'extraction de l'hôte
+   * depuis SERVEUR_URL_PUBLIQUE, ni l'appel à `openssl x509 -checkhost`.
+   */
+  function jouerGardeUrlPublique(urlPublique) {
+    let bloc = extraireBloc('configtest');
+    const substitutions = [
+      ['APACHECTL="$(command -v apache2ctl || command -v apachectl || true)"',
+        `APACHECTL="${join(racine, 'apachectl')}"`, 1],
+      ['/etc/apache2/sites-enabled/cyber-grc.conf', join(racine, 'vhost.conf'), 2],
+      ['/etc/apache2/sites-available/cyber-grc.conf', join(racine, 'vhost.conf'), 2],
+      [':80:127.0.0.1"', `:${String(portClair)}:127.0.0.1"`, 1],
+      [':443:127.0.0.1"', `:${String(portTls)}:127.0.0.1"`, 3],
+      ['"http://$NOM_SERVEUR$1"', `"http://$NOM_SERVEUR:${String(portClair)}$1"`, 1],
+      ['"https://$NOM_SERVEUR$1"', `"https://$NOM_SERVEUR:${String(portTls)}$1"`, 1],
+      ['"https://$NOM_SERVEUR/$REL"', `"https://$NOM_SERVEUR:${String(portTls)}/$REL"`, 1],
+      ['"127.0.0.1:443"', `"127.0.0.1:${String(portTls)}"`, 1],
+    ];
+    for (const [avant, apres, attendu] of substitutions) {
+      const vues = bloc.split(avant).length - 1;
+      assert.equal(
+        vues,
+        attendu,
+        `Substitution « ${avant} » : ${String(vues)} occurrence(s) au lieu de ${String(attendu)}. ` +
+          'Le bloc a changé de forme, et cet essai jouerait autre chose que ce qu’il annonce.',
+      );
+      bloc = bloc.split(avant).join(apres);
+    }
+    // Ce qui DÉCIDE doit être intact — sans quoi cet essai éprouverait ma
+    // réécriture plutôt que le garde-fou.
+    for (const decisive of [
+      'HOTE_PUBLIC="${URL_PUBLIQUE#*://}"',
+      'openssl x509 -in "$CERT_SERVI" -noout -checkhost "$HOTE_PUBLIC"',
+    ]) {
+      assert.ok(bloc.includes(decisive), `La ligne qui décide a disparu du bloc joué : ${decisive}`);
+    }
+
+    const script = join(racine, 'garde-urlpublique.sh');
+    writeFileSync(script, [
+      '#!/bin/bash',
+      'set -Eeuo pipefail',
+      "succes() { printf '  ok %s\\n' \"$*\"; }",
+      "alerte() { printf '  !! %s\\n' \"$*\"; }",
+      "echec()  { printf ' ERR %s\\n' \"$*\"; exit 1; }",
+      "info()   { printf '== %s\\n' \"$*\"; }",
+      // `reserve()` — même verdict que `alerte()` ici : cet essai n'a pas
+      // vocation à éprouver le compte des réserves (constat Q-75, essais
+      // dédiés dans install-blocs.test.mjs), seulement à ne pas mourir sur un
+      // « command not found » si le chemin « pas de certificat obtenu » était
+      // emprunté par erreur.
+      "reserve() { printf ' N/J %s\\n' \"$*\"; }",
+      `lire_variable() { if [[ "\${1:-}" == "SERVEUR_URL_PUBLIQUE" ]]; then printf '%s' ${JSON.stringify(urlPublique)}; else printf ''; fi; }`,
+      `RACINE=${JSON.stringify(racine)}`,
+      '',
+      bloc,
+    ].join('\n'));
+    try {
+      return { code: 0, sortie: execFileSync('bash', [script], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) };
+    } catch (erreur) {
+      return { code: erreur.status ?? 1, sortie: `${erreur.stdout ?? ''}${erreur.stderr ?? ''}` };
+    }
+  }
+
+  test('CONFORME : SERVEUR_URL_PUBLIQUE nommant CE serveur est acceptée', async () => {
+    // ── Moitié symétrique, sans laquelle la mutation ci-dessous serait
+    //    satisfaite par un contrôle qui refuse TOUT — c'est-à-dire par une
+    //    installation impossible.
+    const issue = jouerGardeUrlPublique(`https://${HOTE}`);
+
+    assert.equal(issue.code, 0, `Le nom réellement servi doit passer :\n${issue.sortie}`);
+    assert.match(
+      issue.sortie,
+      new RegExp(`ok SERVEUR_URL_PUBLIQUE : « ${HOTE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} » est couvert`),
+      `Le contrôle doit être ALLÉ jusqu’à sa conclusion — un silence ne prouve rien ` +
+        `(constat Q-37) :\n${issue.sortie}`,
+    );
+  });
+
+  test('LE MUTANT DU CONSTAT Q-76 : les mots inversés arrêtent l’installation', async () => {
+    // ── La mutation qui a coûté le constat, rejouée telle quelle ────────────
+    // `.env.example` a réellement porté cette valeur : les deux composants du
+    // nom de la mesure — « exemple » et « interne » — ont été inversés.
+    // Aucune règle syntaxique ne la distingue de la bonne : elle commence
+    // par https://, comme il se doit. Le certificat servi ici couvre
+    // « grc.exemple.interne », pas « grc.interne.exemple » : c'est
+    // exactement ce que l'interrogation doit voir, là où comparer deux
+    // chaînes verrait deux valeurs non vides et pourrait s'arrêter là.
+    const errone = 'https://grc.interne.exemple';
+    assert.notEqual(errone, `https://${HOTE}`, 'Prémisse : la valeur mutée doit différer du nom réel.');
+    const issue = jouerGardeUrlPublique(errone);
+
+    assert.notEqual(
+      issue.code,
+      0,
+      `Un lien vers « ${errone} » afficherait un avertissement de sécurité TLS à chaque ` +
+        `destinataire d’un courriel ou d’un export : l’installation doit s’arrêter.\n${issue.sortie}`,
+    );
+    assert.match(
+      issue.sortie,
+      /n'est PAS[\s\S]*?couvert par le certificat/,
+      `Le refus doit dire QUOI, précisément :\n${issue.sortie}`,
+    );
+    assert.match(issue.sortie, /constat Q-76/, 'Le refus doit renvoyer au constat qui l’explique.');
+    assert.match(
+      issue.sortie,
+      /« grc\.interne\.exemple »/,
+      `Le refus doit NOMMER la valeur fautive :\n${issue.sortie}`,
+    );
+    assert.match(
+      issue.sortie,
+      new RegExp(`« ${HOTE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} »`),
+      `Et le nom RÉELLEMENT couvert, pour qu’on sache quoi corriger :\n${issue.sortie}`,
+    );
+  });
+
+  test('VIDE : SERVEUR_URL_PUBLIQUE non renseignée n’arrête pas l’installation, et le dit', async () => {
+    // Portée volontairement modeste : en pratique cette valeur est déjà
+    // exigée non vide par le contrôle du §5 (MANQUANTS, exit 2), bien avant
+    // ce bloc. Ce cas-ci n'en est pas moins couvert, en défense — un bloc
+    // joué seul (recette, banc) ne rejoue pas forcément le §5 en amont.
+    const issue = jouerGardeUrlPublique('');
+    assert.equal(
+      issue.code,
+      0,
+      `Une valeur vide n’a rien à confronter à un certificat : ce n’est pas le constat Q-76.\n${issue.sortie}`,
+    );
+    assert.match(issue.sortie, /SERVEUR_URL_PUBLIQUE est vide/, issue.sortie);
+  });
+});
+
+/* =====================================================================
  *  §6 — Ce que le frontal efface VRAIMENT (constat Q-39)
  * ---------------------------------------------------------------------
  *  Le vhost efface six en-têtes de provenance ou d'identité, et `install.sh`
@@ -1294,16 +1453,28 @@ describe('Un corps hors borne ne traverse pas le mandataire (constat Q-44)', () 
    * Le seuil, lu dans **la règle qui refuse** — jamais dans un commentaire ni
    * dans une constante recopiée ici. C'est la leçon du constat lui-même : la
    * valeur qui décide est celle qui agit.
+   *
+   * ── Ancrée sur la règle GÉNÉRALE, depuis le constat Q-58 ──────────────
+   * Le vhost porte désormais DEUX règles `RewriteCond %1 "-gt …"` : celle-ci,
+   * et une seconde, plus stricte, propre à `RewriteRule ^/api/connexion`
+   * (fenêtre d'un Mio refermée sur la seule route joignable sans session). Une
+   * lecture non ancrée prendrait la PREMIÈRE rencontrée dans le fichier —
+   * celle de `/api/connexion` — et ferait mesurer ce bloc contre 4 096 au lieu
+   * du seuil général : mesuré, quatre essais de ce bloc rougissaient d'un coup
+   * en cherchant « 200 » là où le pré-filtre plus strict rendait 413.
+   * L'ancre est donc la `RewriteRule` qui SUIT, dont le motif est `^/api/ -`
+   * exactement (l'espace après `/api/` l'exclut de `^/api/connexion -`, dont
+   * le caractère suivant est un « c », pas une espace).
    */
   function seuilDuPrefiltre() {
     const source = readFileSync(VHOST_SOURCE, 'utf8');
-    const trouve = /^\s*RewriteCond\s+%1\s+"?-gt\s*(\d+)/m.exec(source);
+    const trouve = /^\s*RewriteCond\s+%1\s+"?-gt\s*(\d+)"?\s*\n\s*RewriteRule\s+\^\/api\/\s+-/m.exec(source);
     assert.notEqual(
       trouve,
       null,
-      'Le vhost ne porte plus de règle de refus sur la longueur annoncée : le chemin mandaté ' +
-        'n’est plus borné du tout (constat Q-44), et cet essai ne saurait même pas quoi ' +
-        'envoyer.',
+      'Le vhost ne porte plus de règle GÉNÉRALE de refus sur la longueur annoncée ' +
+        '(RewriteRule ^/api/ -) : le chemin mandaté n’est plus borné du tout (constat Q-44), ' +
+        'et cet essai ne saurait même pas quoi envoyer.',
     );
     return Number(trouve[1]);
   }
@@ -1401,6 +1572,104 @@ describe('Un corps hors borne ne traverse pas le mandataire (constat Q-44)', () 
     assert.equal(vues[0].complet, true, 'Et la requête doit lui être parvenue complète.');
   });
 
+  test('UN CORPS LÉGITIME PROCHE DU SEUIL (constat Q-58) traverse entier, en Content-Length', async () => {
+    // ── Le point resté non mesuré au registre ────────────────────────────
+    //
+    // Q-58 décrivait un frontal qui ingère un corps SANS BORNE avant de
+    // refuser (« 1 Gio », 502 au lieu du 413 promis). La règle qui ferme
+    // Q-44 borne un `Content-Length` déclaré ; l'essai précédent l'éprouve à
+    // 4 096 octets, un ordre de grandeur qui ne dirait rien d'un défaut
+    // propre aux GRANDES tailles légitimes (troncature, comparaison entière
+    // qui déborde, etc.) Celui-ci envoie un corps proche du seuil — un ordre
+    // de grandeur réaliste pour un import Excel — et exige qu'il arrive
+    // ENTIER, sans jamais recevoir 413 ni 502.
+    const seuil = seuilDuPrefiltre();
+    const octets = seuil - 1048576;
+    const rang = vuesDeLaDoublure.rang();
+    const issue = await envoyerCorps('/api/essai-corps-legitime', octets);
+
+    assert.notEqual(
+      issue.statut,
+      413,
+      `Un corps légitime de ${String(octets)} octets (sous le seuil de ${String(seuil)}) a été ` +
+        `refusé : la règle ne borne pas, elle bloque du trafic normal. Reçu : ${JSON.stringify(issue)}`,
+    );
+    assert.notEqual(
+      issue.statut,
+      502,
+      `502 est précisément ce que Q-58 décrivait — le frontal ingère puis casse au lieu de ` +
+        `refuser proprement. Reçu : ${JSON.stringify(issue)}`,
+    );
+    assert.equal(issue.statut, 200, `Et il doit être servi par le service : ${JSON.stringify(issue)}`);
+
+    const vues = vuesDeLaDoublure.depuis(rang).filter((v) => v.chemin === '/api/essai-corps-legitime');
+    assert.equal(vues.length, 1, 'La doublure doit avoir vu exactement cette requête.');
+    assert.equal(
+      vues[0].octets,
+      octets,
+      `La doublure a compté ${String(vues[0].octets)} octets sur ${String(octets)} attendus : un ` +
+        'corps légitime proche du seuil ne doit pas être tronqué en route.',
+    );
+    assert.equal(vues[0].complet, true, 'Et la requête doit lui être parvenue complète.');
+  });
+
+  test('LE MUTANT DU CONSTAT Q-58 : la fenêtre d’un Mio, refermée sur /api/connexion', async () => {
+    // ── La mesure exacte qui a motivé ce correctif ───────────────────────
+    //
+    // `/api/connexion` DOIT rester joignable sans session — c'est la seule
+    // route de l'API que l'authentification de L3 ne peut pas fermer dans
+    // `onRequest`, avant l'analyse du corps. Mesuré sur l'installation réelle
+    // le 04/09/2026, AVANT ce correctif : un `Content-Length: 26 700 000`
+    // (dans la fenêtre documentée plus haut, entre le `bodyLimit` de la route
+    // — 4 096 o, `src/auth/greffon.ts` — et l'ancien seuil du pré-filtre
+    // général) rendait **502**, le corps entièrement poussé puis coupé en
+    // route. Ce test rejoue EXACTEMENT cette valeur.
+    const rang = vuesDeLaDoublure.rang();
+    const issue = await envoyerCorps('/api/connexion', 26700000);
+
+    assert.notEqual(
+      issue.statut,
+      502,
+      `502 est exactement ce que valait « /api/connexion » avant ce correctif : le frontal ` +
+        `pousse un corps que le service coupe en route. Reçu : ${JSON.stringify(issue)}`,
+    );
+    assert.equal(
+      issue.statut,
+      413,
+      `Un corps de 26 700 000 octets sur /api/connexion doit être refusé AU FRONTAL, avant ` +
+        `que mod_proxy_http ne relaie quoi que ce soit (constat Q-58). Reçu : ${JSON.stringify(issue)}`,
+    );
+    const vues = vuesDeLaDoublure.depuis(rang).filter((v) => v.chemin === '/api/connexion');
+    assert.deepEqual(
+      vues.map((v) => `${v.chemin} : ${String(v.octets)} o`),
+      [],
+      'Le refus doit intervenir AVANT le mandataire : la doublure n’aurait rien dû voir passer.',
+    );
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE : /api/connexion reste joignable pour un corps de connexion ordinaire', async () => {
+    // ── Sans cette moitié, un pré-filtre qui bloque TOUT satisferait l'essai
+    //    précédent — et plus personne ne pourrait se connecter.
+    const rang = vuesDeLaDoublure.rang();
+    // Un couple identifiant + mot de passe réaliste, encodé en JSON : quelques
+    // centaines d'octets, très en-dessous des 4 096 de la route.
+    const corpsConnexion = 512;
+    const issue = await envoyerCorps('/api/connexion', corpsConnexion);
+
+    assert.notEqual(
+      issue.statut,
+      413,
+      `Un corps de connexion ordinaire (${String(corpsConnexion)} o) a été refusé : le ` +
+        `pré-filtre propre à /api/connexion (constat Q-58) ne borne pas, il bloque tout. ` +
+        `Reçu : ${JSON.stringify(issue)}`,
+    );
+    assert.equal(issue.statut, 200, `Et il doit atteindre le service : ${JSON.stringify(issue)}`);
+
+    const vues = vuesDeLaDoublure.depuis(rang).filter((v) => v.chemin === '/api/connexion');
+    assert.equal(vues.length, 1, 'La doublure doit avoir vu exactement cette requête.');
+    assert.equal(vues[0].octets, corpsConnexion, 'Et l’avoir reçue entière.');
+  });
+
   test('LE RÉGRESSEUR DU VICE : sans la règle de refus, l’installation s’arrête', async () => {
     // ── L'essai qui distingue un contrôle COMPORTEMENTAL d'une comparaison ──
     //
@@ -1409,8 +1678,18 @@ describe('Un corps hors borne ne traverse pas le mandataire (constat Q-44)', () 
     // coïncidaient. Sur cette mutation exacte — la règle de refus retirée, la
     // directive laissée en place — il restait VERT, parce que les deux nombres
     // qu'il comparait n'avaient pas bougé et que l'un des deux n'agit pas.
+    // ⚠️ Le motif inclut désormais « -gt 27262976 » : depuis le constat Q-58,
+    // le vhost porte une SECONDE `RewriteCond %{HTTP:Content-Length} …`, propre
+    // à `/api/connexion` (seuil 4 096) — un motif d'une seule ligne en trouverait
+    // deux et refuserait de choisir. Le couple des deux lignes, avec le seuil
+    // GÉNÉRAL en second, n'existe qu'à un seul endroit du fichier.
     await avecVhost(
-      [[/* la règle qui refuse, retirée */ '    RewriteCond %{HTTP:Content-Length} ^([0-9]+)$\n', '', 1]],
+      [[
+        /* la règle qui refuse, retirée — seule la ligne de capture disparaît */
+        '    RewriteCond %{HTTP:Content-Length} ^([0-9]+)$\n    RewriteCond %1 "-gt 27262976"\n',
+        '    RewriteCond %1 "-gt 27262976"\n',
+        1,
+      ]],
       async () => (await envoyerCorps('/api/preuve-mutation', seuilDuPrefiltre() + 1048576)).statut !== 413,
       async () => (await envoyerCorps('/api/preuve-retour', seuilDuPrefiltre() + 1048576)).statut === 413,
       async () => {

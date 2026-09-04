@@ -595,3 +595,189 @@ describe('Tout en-tête que le service lit est neutralisé par le frontal (const
     assert.match(issue.sortie, /NON neutralisé par le vhost : x-forwarded-for/, issue.sortie);
   });
 });
+
+/* =====================================================================
+ *  §8 — Le mot de la fin distingue « joué » de « pas joué » (constat Q-75)
+ * ---------------------------------------------------------------------
+ *  Mesuré les 03 et 04/09/2026 sur une Debian 13 neuve : `install.sh`
+ *  installe le vhost mais ne l'active pas, et tant qu'il ne l'est pas, l'URL
+ *  d'entrée (Q-36) et la borne de corps du chemin mandaté (Q-44) ne sont
+ *  éprouvées à AUCUN moment — chaque contrôle concerné le disait, en alerte,
+ *  puis le script imprimait quand même « Installation terminée » et rendait
+ *  0. Un exploitant qui écrit `install.sh && echo OK` concluait au succès.
+ *
+ *  `reserve()` (tête de fichier) et le bloc « bilan » (fin de fichier) ferment
+ *  ce constat : chaque contrôle qui n'a pas pu être posé s'empile dans
+ *  `RESERVES`, et le bloc « bilan » relit ce compte pour décider du MOT DE LA
+ *  FIN et du CODE DE SORTIE. Ce fichier joue ce bloc SEUL, avec un compte et
+ *  un texte fournis en bash brut (jamais via le mécanisme `variables` de
+ *  `jouerBloc`, qui passerait un retour à la ligne par `JSON.stringify` et
+ *  l'échapperait en « \n » littéral au lieu de le poser) : c'est la seule
+ *  façon de donner à ce bloc une VRAIE liste, une réserve par ligne, comme le
+ *  vrai script la lui donne.
+ * ===================================================================== */
+
+describe('Le mot de la fin distingue « contrôle joué » de « contrôle non joué » (constat Q-75)', () => {
+  /** Joue le bloc « bilan » avec un compte et un texte de réserves donnés. */
+  function jouerBilan(compte, texteBash = "''") {
+    const corps = extraireBloc('bilan');
+    const dossier = repertoireJetable();
+    const script = join(dossier, 'bilan.sh');
+    writeFileSync(script, [
+      '#!/bin/bash',
+      'set -Eeuo pipefail',
+      "succes() { printf '  ok %s\\n' \"$*\"; }",
+      "alerte() { printf '  !! %s\\n' \"$*\"; }",
+      "echec()  { printf ' ERR %s\\n' \"$*\"; exit 1; }",
+      "info()   { printf '== %s\\n' \"$*\"; }",
+      `RESERVES_COMPTE=${String(compte)}`,
+      `RESERVES_TEXTE=${texteBash}`,
+      'FICHIER_CONFIG=/etc/cyber-grc/env',
+      'UTILISATEUR=cyber-grc',
+      'RACINE=/opt/cyber-grc',
+      '',
+      corps,
+    ].join('\n'));
+    try {
+      return { code: 0, sortie: execFileSync('bash', [script], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) };
+    } catch (erreur) {
+      return { code: erreur.status ?? 1, sortie: `${erreur.stdout ?? ''}${erreur.stderr ?? ''}` };
+    }
+  }
+
+  test('AUCUNE RÉSERVE : le mot de la fin et le code de sortie sont ceux d’avant ce lot', async () => {
+    // ── Moitié symétrique, sans laquelle la mutation ci-dessous serait
+    //    satisfaite par un bloc qui annonce TOUJOURS des réserves.
+    const issue = jouerBilan(0);
+    assert.equal(issue.code, 0, `Zéro réserve doit rendre 0, comme avant ce lot :\n${issue.sortie}`);
+    assert.match(issue.sortie, /Installation terminée\./, issue.sortie);
+    assert.equal(
+      issue.sortie.includes('RÉSERVES'),
+      false,
+      `Le mot « RÉSERVES » ne doit apparaître QUE s’il y en a :\n${issue.sortie}`,
+    );
+  });
+
+  test('LE MUTANT DU CONSTAT Q-75 : rendre deux contrôles injouables fait parler le code de sortie', async () => {
+    // ── La mutation exacte que ce lot corrige ────────────────────────────
+    // Avant ce lot, `RESERVES` n'existait pas : TOUT chemin — vhost non
+    // activé compris — se terminait par « Installation terminée » et 0. On
+    // rejoue ici le cas « deux contrôles n'ont pas pu être joués » et on
+    // vérifie que ni le mot de la fin ni le code de sortie ne se confondent
+    // plus avec le cas vert ci-dessus, NI avec un `echec` (code 1).
+    const issue = jouerBilan(2, "$'reserve un : vhost non actif\\nreserve deux : certificat absent'");
+
+    assert.notEqual(
+      issue.code,
+      0,
+      `Deux contrôles n’ont pas pu être joués : un exploitant qui écrit ` +
+        `« install.sh && echo OK » ne doit PLUS conclure au succès.\n${issue.sortie}`,
+    );
+    assert.notEqual(
+      issue.code,
+      1,
+      `Et ce n’est pas non plus un ÉCHEC (code d’« echec ») : rien n’a été joué et trouvé non ` +
+        `conforme, un contrôle n’a simplement pas pu être posé — code obtenu : ` +
+        `${String(issue.code)}.\n${issue.sortie}`,
+    );
+    assert.match(
+      issue.sortie,
+      /Installation terminée AVEC RÉSERVES \(2 contrôle\(s\) non joué\(s\)\)/,
+      `Le mot de la fin doit dire COMBIEN :\n${issue.sortie}`,
+    );
+    assert.match(issue.sortie, /reserve un : vhost non actif/, `La liste doit être reprise :\n${issue.sortie}`);
+    assert.match(issue.sortie, /reserve deux : certificat absent/, issue.sortie);
+    assert.match(issue.sortie, /CE N'EST PAS UN FEU VERT/, issue.sortie);
+    assert.equal(
+      issue.sortie.includes('Installation terminée.'),
+      false,
+      `Le message de succès NU (avec son point) ne doit plus apparaître : les deux mots de la ` +
+        `fin doivent être textuellement distincts, pas l’un un préfixe de l’autre.\n${issue.sortie}`,
+    );
+  });
+
+  test('INTÉGRATION : un VRAI « reserve() » du bloc « corps » alimente RÉELLEMENT le bloc « bilan »', async () => {
+    // ── Les deux essais ci-dessus donnent RESERVES_COMPTE/RESERVES_TEXTE À LA
+    //    MAIN. Sans CELUI-CI, rien ne prouve que le VRAI compte — celui que
+    //    `reserve()` remplit quand le bloc « corps » rencontre un vhost non
+    //    activé — arrive bien jusqu'au bloc « bilan » : les deux pourraient
+    //    s'être mis d'accord sur un contrat que le script réel ne respecte
+    //    plus. On rejoue donc le SCÉNARIO EXACT du constat Q-75 — vhost non
+    //    activé — avec le VRAI bloc « corps », le VRAI `reserve()` de tête de
+    //    fichier, et la VRAIE ligne qui relie les deux (celle qui vit entre
+    //    les ancres, dans `install.sh`, copiée ici à l'identique).
+    const dossier = repertoireJetable();
+    let corps = extraireBloc('corps');
+    // Seule substitution : un chemin qui n'existe PAS, pour que la branche
+    // « vhost non activé » soit RÉELLEMENT empruntée — jamais devinée : sur
+    // CETTE machine, /etc/apache2/sites-enabled/cyber-grc.conf EXISTE (Apache
+    // y est installé pour de vrai), et laisser le chemin réel ferait cet
+    // essai passer par l'autre branche, silencieusement.
+    const cheminAbsent = join(dossier, 'jamais-installe', 'cyber-grc.conf');
+    const vues = corps.split('/etc/apache2/sites-enabled/cyber-grc.conf').length - 1;
+    assert.equal(vues, 1, `« corps » ne porte plus qu'une occurrence de sites-enabled : ${String(vues)}.`);
+    corps = corps.split('/etc/apache2/sites-enabled/cyber-grc.conf').join(cheminAbsent);
+    assert.ok(!existsSync(cheminAbsent), 'Prémisse : ce chemin ne doit exister nulle part.');
+
+    const bilan = extraireBloc('bilan');
+    const script = join(dossier, 'integration-reserves.sh');
+    writeFileSync(script, [
+      '#!/bin/bash',
+      'set -Eeuo pipefail',
+      "succes() { printf '  ok %s\\n' \"$*\"; }",
+      "alerte() { printf '  !! %s\\n' \"$*\"; }",
+      "echec()  { printf ' ERR %s\\n' \"$*\"; exit 1; }",
+      "info()   { printf '== %s\\n' \"$*\"; }",
+      // Le VRAI préambule de tête de fichier d'install.sh (lignes 111 et
+      // suivantes), copié ici À L'IDENTIQUE — pas résumé, pas reformulé :
+      // c'est justement ce qui distingue cet essai des deux précédents.
+      "RESERVES=()",
+      "reserve() { printf '\\033[1;36m N/J\\033[0m %s\\n' \"$*\" >&2; RESERVES+=(\"$*\"); }",
+      'lire_variable() { printf ""; }',
+      '',
+      corps,
+      '',
+      // La ligne réelle, HORS ancres, entre le bloc « corps » (et tous les
+      // autres) et le bloc « bilan » — copiée d'install.sh, pas réinventée.
+      'RESERVES_COMPTE=${#RESERVES[@]}',
+      'RESERVES_TEXTE=""',
+      'if [[ $RESERVES_COMPTE -gt 0 ]]; then RESERVES_TEXTE="$(printf \'%s\\n\' "${RESERVES[@]}")"; fi',
+      '',
+      bilan,
+    ].join('\n'));
+
+    let issue;
+    try {
+      issue = { code: 0, sortie: execFileSync('bash', [script], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) };
+    } catch (erreur) {
+      issue = { code: erreur.status ?? 1, sortie: `${erreur.stdout ?? ''}${erreur.stderr ?? ''}` };
+    }
+
+    // ⚠️ stdout et stderr sont capturés SÉPARÉMENT puis concaténés (même
+    // idiome que `jouerBloc`/`jouerScript`) : rien ne garantit que la ligne
+    // « N/J » de `reserve()` (stderr) apparaisse à côté du texte du bloc
+    // « bilan » (stdout) dans la chaîne obtenue, même si l'une a bien causé
+    // l'autre en vol. Deux vérifications SÉPARÉES, donc, plutôt qu'un seul
+    // motif qui supposerait un ordre que cette capture ne promet pas.
+    assert.match(
+      issue.sortie,
+      /N\/J/,
+      `« reserve() » doit avoir imprimé sa marque distincte — pas un « alerte() » ordinaire :\n${issue.sortie}`,
+    );
+    assert.match(
+      issue.sortie,
+      /vhost non activé : la borne de corps du chemin mandaté \(Q-44\) n'a pas été éprouvée/,
+      `Le bloc « corps » doit avoir RÉELLEMENT appelé reserve() — pas un mock :\n${issue.sortie}`,
+    );
+    assert.notEqual(
+      issue.code,
+      0,
+      `Un contrôle non joué a atteint le bloc « bilan » : le code de sortie doit le dire.\n${issue.sortie}`,
+    );
+    assert.match(
+      issue.sortie,
+      /Installation terminée AVEC RÉSERVES \(1 contrôle\(s\) non joué\(s\)\)/,
+      `Et le compte doit être le VRAI compte — un, pas deux ni zéro :\n${issue.sortie}`,
+    );
+  });
+});
