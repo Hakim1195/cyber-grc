@@ -103,7 +103,7 @@ import type { ChargeV12 } from '../reprise/types.js';
 import { entreeInvalide, ErreurApplicative, traduireErreur } from '../erreurs/index.js';
 import type { ContexteTraduction } from '../erreurs/index.js';
 import { greffonConnexion } from '../auth/greffon.js';
-import type { ServiceAuthentification } from '../auth/index.js';
+import type { ServiceAuthentification, SessionAppliqueeReelle } from '../auth/index.js';
 import { deciderAcces, DOMAINE_PAR_ENTITE, entitesLisibles, refuserDroit } from './droits.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
@@ -891,12 +891,29 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     filiale: { id: string; code: string; raisonSociale: string } | null = null,
   ): Record<string, unknown> => {
     const { perimetre, droits } = session;
+    // ── Constat Q-85 : la filiale avait un identifiant, pas un nom ──────────
+    //
+    // Mesuré au navigateur le 03/09 après une connexion réelle : le bandeau
+    // « Périmètre » affichait `FIL-1788477623975-5208b3f525954fffb228d9aa292ec1cf`.
+    // La session **provisoire** joignait le libellé (`resolveur.filiale()`) ; la
+    // session **réelle** ne le portait pas, et cette fonction recevait `null`.
+    // Dans un outil qui sert de preuve en audit, l'utilisateur doit savoir dans
+    // quelle filiale il écrit.
+    //
+    // La donnée voyage **dans la session**, jamais par un argument de plus : le
+    // greffon de connexion reçoit `charteSession` à **un seul** paramètre, et
+    // enrichir un seul des deux côtés ferait diverger `POST /api/connexion` de
+    // `GET /api/session` — que le `CONVENTIONS.md` §26.2 exige identiques à
+    // l'octet près. L'agent B1 expose donc `filiale` sur la session réelle
+    // (`SessionAppliqueeReelle`), et la forme rendue est **celle que la session
+    // provisoire émettait déjà** : le frontend n'a rien de neuf à savoir lire.
+    const nommee = filiale ?? (session as Partial<SessionAppliqueeReelle>).filiale ?? null;
     return {
       utilisateur: perimetre.utilisateurId,
       filiale_active:
-        filiale === null
+        nommee === null
           ? { id: perimetre.filialeId }
-          : { id: filiale.id, code: filiale.code, raison_sociale: filiale.raisonSociale },
+          : { id: nommee.id, code: nommee.code, raison_sociale: nommee.raisonSociale },
       perimetre_lecture: perimetre.filiales,
       perimetre_groupe: perimetre.perimetreGroupe,
       administration_groupe: perimetre.administrationGroupe,

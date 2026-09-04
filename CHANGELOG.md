@@ -28,10 +28,12 @@ sous-arbre depuis la racine du domaine — aucune connexion n'aboutissait) et **
 « aucun résolveur fourni » et « résolveur fabriqué par requête » — la SPA affichait donc
 « serveur indisponible » à l'utilisateur qui venait de s'authentifier).
 
-**État mesuré à la clôture de cette entrée**, révision `1590c47`, sur cette même machine
+**État mesuré à la clôture de cette entrée**, révision `d217fbb`, sur cette même machine
 réelle (**Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**, **rsync
-3.4.1**, Debian GNU/Linux 13 trixie) : `npm test` → **969 essais, 969 passés, 0 échec**
-(133,3 s ; onze familles, détail au `backend/README.md` §8), `npm run verifier-types`
+3.4.1**, Debian GNU/Linux 13 trixie) : `npm test` → **1028 essais, 1028 passés, 0 échec**
+(130,6 s ; onze familles, détail au `backend/README.md` §8 — le compte est passé de 969 à
+1028 pendant la vague, cinquante-neuf essais ayant été ajoutés par les agents B1 et B2
+après le passage de l'agent de documentation, constat **Q-87**), `npm run verifier-types`
 sans erreur, `npm audit --omit=dev` → 0 vulnérabilité, `db/verifier_cloisonnement.sql` →
 107 contrôles, 107 réussis, 0 échec, `f_verifier_schema()` → 0 anomalie (**9** garde-fous
 consignés, la migration `007_authentification.sql` en ayant ajouté un neuvième). Sur la

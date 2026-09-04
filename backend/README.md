@@ -502,7 +502,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 969 essais, onze familles (voir plus bas)
+npm test                           # 1028 essais, onze familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -520,7 +520,7 @@ machine de quelqu'un d'autre.
 |---|---|---|
 | **PostgreSQL joignable**, et `db/dev/preparer_base_dev.sh` déjà passé | chaque fichier de test monte sa propre base | les suites ne démarrent pas — voir l'avertissement du §8 sur les chiffres en baisse |
 | Le client **`psql`**, installé et sur le `PATH` | `db/verifier_cloisonnement.sql` porte des méta-commandes `psql` (`\pset`, `\echo`, `\gset`) que le pilote `pg` ne sait pas exécuter | l'essai **échoue** — il ne se saute pas |
-| **Playwright** global (`/opt/node22/lib/node_modules/playwright`) et son Chromium (`/opt/pw-browsers`) | les essais navigateur montent un serveur local qui sert `cyber-gouvernance_V4/` **tel quel**, `/api/**` relayé vers l'instance Fastify réelle | l'absence est signalée ; ni l'un ni l'autre n'est une dépendance de `package.json` |
+| **Playwright** — **découvert**, jamais codé en dur (constat **Q-80**) : `PLAYWRIGHT_MODULE` s'il est posé, puis la résolution ordinaire, puis `npm root -g` **demandé à npm** — et son Chromium (`/opt/pw-browsers`) | les essais navigateur montent un serveur local qui sert `cyber-gouvernance_V4/` **tel quel**, `/api/**` relayé vers l'instance Fastify réelle | l'absence est signalée ; ni l'un ni l'autre n'est une dépendance de `package.json` |
 | **Apache 2.4**, `openssl` et **`rsync`** | les essais de déploiement montent un **Apache réel** sur le vhost du dépôt et interrogent l'URL d'entrée ; `rsync` publie réellement les fichiers | l'essai **échoue** — il ne se saute pas, même arbitrage que pour `psql` |
 
 ⚠️ **Et rien d'autre : le banc tourne sur machine propre.** Une famille entière a dépendu,
@@ -796,18 +796,18 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`1590c47`** — « Le banc a besoin d'une ligne de plus sur cette machine, et c'est écrit » (04/09/2026), rejouée **sur la machine réelle** (Debian 13, `SRV-Infra`) et non plus sur un conteneur Ubuntu. Le compte n'a **pas bougé** depuis `f11a9ae` (969 des deux côtés) ; ce qui a changé, c'est l'**environnement qui le mesure** — voir la ligne suivante et le constat **Q-77** |
+| Révision mesurée | **`d217fbb`** — « Q-75, Q-76, Q-58 : un contrôle non joué ne se confond plus avec un contrôle réussi » (04/09/2026), rejouée **sur la machine réelle** (Debian 13, `SRV-Infra`) et non plus sur un conteneur Ubuntu. ⚠️ **Le compte est passé de 969 à 1028 pendant la vague 3**, les agents B1 et B2 ayant ajouté 59 essais après le passage de l'agent de documentation — et le garde-fou neuf ne pouvait pas le voir, puisqu'il ne confronte le document qu'à **lui-même** (constat **Q-87**) |
 | État de l'arbre | **propre** (`git status --porcelain` vide) |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 969 · pass 969 · fail 0  (133,3 s)
+npm test                                         → tests 1028 · pass 1028 · fail 0 (130,6 s)
                                                    base 272 · api 241 · reprise 77
-                                                   navigateur 74 · deploiement 56
-                                                   depot 3 · documentation 12
-                                                   auth 84 · droits 69 · annuaire 48
+                                                   navigateur 74 · deploiement 65
+                                                   depot 3 · documentation 17
+                                                   auth 115 · droits 83 · annuaire 48
                                                    modules 33
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
