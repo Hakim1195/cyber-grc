@@ -30,6 +30,8 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 
 import { FILIALE_A, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
@@ -40,7 +42,7 @@ import {
   ouvrirPage,
   servirApplication,
 } from '../aide/navigateur.mjs';
-import { monterServeurReel } from '../aide/serveur.mjs';
+import { RACINE_FRONTEND, monterServeurReel } from '../aide/serveur.mjs';
 
 /**
  * Délai d'attente des essais de ce fichier.
@@ -623,6 +625,426 @@ describe('Un écran non rattaché à un domaine est SIGNALÉ, jamais masqué', (
         manques, [],
         `Un écran du produit n’est rattaché à aucun domaine de droits : ${JSON.stringify(manques)}`,
       );
+      assert.deepEqual(session.erreursScript, []);
+    } finally {
+      await session.fermer();
+    }
+  });
+});
+
+/* =====================================================================
+ *  §4 — LA COMBINAISON QUI A LAISSÉ PASSER Q-89 (constat Q-92)
+ * ---------------------------------------------------------------------
+ *  Un profil qui **peut écrire** et **ne peut pas exporter**.
+ * ===================================================================== */
+
+/**
+ * ── Pourquoi cette section existe, et pourquoi elle manquait ────────────────
+ *
+ * Le constat **Q-92**, mot pour mot : *« le filet navigateur des droits n'exerce
+ * jamais la combinaison qui a laissé passer Q-89 : un profil qui **peut écrire**
+ * mais **ne peut pas exporter**. Il éprouve la lecture seule, qui bloque pour une
+ * autre raison — d'où un vert sur douze sites dont l'un ne tenait pas. »*
+ *
+ * Ce fichier éprouvait `DIRECTION` (`lecture`, `export: false`). Ce profil est
+ * bien bloqué — mais par sa **lecture seule**, qui grise tous les boutons
+ * d'écriture, et non par l'absence du droit d'export. *Une barrière qui n'arrête
+ * que ceux qu'une autre arrêtait déjà n'est pas une barrière.* Résultat mesuré à
+ * la porte S3 : **38 213 octets** de « Synthèse Direction — Posture Cyber »,
+ * marquée *Document confidentiel*, téléchargés dans un Chromium réel par le
+ * compte AD `rssi.tls`. **RSSI et ADMIN, deux des huit profils du socle, sont
+ * dans cette configuration.**
+ *
+ * ── Comment cette section refuse de rendre vert en n'éprouvant rien ────────
+ *
+ * Trois verrous, et chacun ferme une façon différente de mentir :
+ *
+ *  1. **La liste des fichiers qui exportent est DÉCOUVERTE**, avec les mêmes
+ *     motifs que `test/depot/entonnoir-export.test.mjs` — jamais recopiée. Un
+ *     fichier neuf qui fabrique un téléchargement et que le tableau ci-dessous
+ *     n'exerce pas fait **rougir** cet essai, en le nommant.
+ *  2. **Chaque site doit avoir ATTEINT l'entonnoir** (`Droits.exigerExport` est
+ *     compté). Sans ce verrou, un site qui échouerait avant — module absent,
+ *     écran non rendu — rendrait « aucun fichier » sans rien avoir éprouvé.
+ *  3. **Le même parcours, avec le droit accordé, doit PRODUIRE quelque chose.**
+ *     Sans lui, « zéro fichier » serait aussi ce que rend un bouton cassé.
+ *
+ * ⚠️ La découverte mécanique **ne voit pas tout**, et c'est écrit ici plutôt que
+ * sous-entendu : `js/services/exportExcel.js` et `js/services/exportPDF.js`
+ * n'écrivent pas eux-mêmes le fichier — SheetJS le fait pour l'un, le moteur
+ * d'impression pour l'autre. Ils sont donc **ajoutés à la main** au tableau, et
+ * ce sont précisément les deux sites que le filet mécanique du dépôt ne peut pas
+ * attraper. C'est la moitié comportementale qui les couvre, ou personne.
+ */
+
+/** Les quatorze domaines de `backend/src/api/droits.ts` (`journal` compris). */
+const TOUS_LES_DOMAINES = Object.freeze([
+  'pilotage', 'conformite', 'risques', 'actifs', 'actions', 'incidents',
+  'continuite', 'documents', 'audits', 'tiers', 'rgpd', 'personnel',
+  'administration', 'journal',
+]);
+
+/** Il contribue partout. Il n'extrait rien. C'est le profil de Q-89. */
+const CONTRIBUE_SANS_EXPORTER = Object.freeze({
+  niveau: 'contribution',
+  domaines: TOUS_LES_DOMAINES,
+  export: false,
+});
+
+/** Le même, droit d'export accordé : le contrôle dans l'autre sens. */
+const CONTRIBUE_ET_EXPORTE = Object.freeze({
+  niveau: 'contribution',
+  domaines: TOUS_LES_DOMAINES,
+  export: true,
+});
+
+/* ── La découverte, alignée sur `test/depot/entonnoir-export.test.mjs` ────── */
+
+const SORTIES = [
+  /URL\s*\.\s*createObjectURL\s*\(/,
+  /\.\s*download\s*=/,
+  /msSaveBlob\s*\(/,
+];
+
+function sansCommentaires(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
+/** Tout `.js` du produit, bibliothèques embarquées exclues. */
+function fichiersDuProduit(repertoire = join(RACINE_FRONTEND, 'js')) {
+  const trouves = [];
+  for (const entree of readdirSync(repertoire, { withFileTypes: true })) {
+    const chemin = join(repertoire, entree.name);
+    if (entree.isDirectory()) {
+      if (entree.name === 'lib') continue;
+      trouves.push(...fichiersDuProduit(chemin));
+    } else if (entree.name.endsWith('.js')) {
+      trouves.push(chemin);
+    }
+  }
+  return trouves;
+}
+
+/** Fichiers du produit qui fabriquent eux-mêmes un téléchargement. */
+function fichiersQuiExportent() {
+  return fichiersDuProduit()
+    .filter((c) => {
+      const code = sansCommentaires(readFileSync(c, 'utf8'));
+      return SORTIES.some((motif) => motif.test(code));
+    })
+    .map((c) => relative(RACINE_FRONTEND, c).split('\\').join('/'));
+}
+
+/* ── Les sites, tels qu'un utilisateur les déclenche ──────────────────────── */
+
+/**
+ * ⚠️ **Une liste écrite à la main, et c'est ici le bon outil** (`CLAUDE.md` §3) :
+ * aucun catalogue ne peut deviner qu'on déclenche l'export de la Synthèse en
+ * cliquant `#sdDownloadBtn` après avoir affiché `/synthese`. Et son omission
+ * **échoue bruyamment** — le contrôle de couverture ci-dessous compare cette
+ * liste à la découverte et nomme le fichier manquant.
+ */
+const SITES_DE_SORTIE = [
+  {
+    nom: 'BackupService.exportPlain — fichier d’échange grc-backup',
+    fichier: 'js/services/backup.js',
+    invoquer: () => { BackupService.exportPlain(); },
+  },
+  {
+    nom: 'BackupService.exportEncrypted — export chiffré',
+    fichier: 'js/services/backup.js',
+    invoquer: () => BackupService.exportEncrypted('MotDePasseDEssai!1'),
+    attendreMs: 600,
+  },
+  {
+    nom: 'ExportExcelService.exportAudit — classeur de conformité (SheetJS)',
+    fichier: 'js/services/exportExcel.js',
+    invoquer: () => { ExportExcelService.exportAudit(); },
+  },
+  {
+    nom: 'ExportPdfService.exportAuditPdf — impression du rapport d’audit',
+    fichier: 'js/services/exportPDF.js',
+    invoquer: () => { ExportPdfService.exportAuditPdf(); },
+    attendreMs: 1400, // `setTimeout(…, 800)` avant `window.print()`
+  },
+  {
+    nom: 'MatriceModule.exportSVG — matrice des risques',
+    fichier: 'js/modules/matrice.js',
+    route: '/matrice',
+    selecteur: '#matrixExportSvgBtn',
+    invoquer: () => { MatriceModule.exportSVG(); },
+  },
+  {
+    nom: 'MatriceModule.exportPNG — matrice des risques',
+    fichier: 'js/modules/matrice.js',
+    route: '/matrice',
+    selecteur: '#matrixExportPngBtn',
+    invoquer: () => { MatriceModule.exportPNG(); },
+  },
+  {
+    nom: 'CartographieModule.exportSVG — cartographie du SI',
+    fichier: 'js/modules/cartographie.js',
+    route: '/cartographie',
+    selecteur: '#carto-export-svg',
+    invoquer: () => { CartographieModule.exportSVG(); },
+  },
+  {
+    nom: 'CartographieModule.exportPNG — cartographie du SI',
+    fichier: 'js/modules/cartographie.js',
+    route: '/cartographie',
+    selecteur: '#carto-export-png',
+    invoquer: () => { CartographieModule.exportPNG(); },
+  },
+  {
+    nom: 'SyntheseModule — rapport « Synthèse Direction » (LE site du constat Q-89)',
+    fichier: 'js/modules/synthese.js',
+    route: '/synthese',
+    selecteur: '#sdDownloadBtn',
+    // Par le BOUTON, et non par une fonction : `downloadReport` n'est pas
+    // exposée, et c'est bien un clic qui a produit les 38 213 octets.
+    invoquer: () => { document.getElementById('sdDownloadBtn').click(); },
+  },
+  {
+    nom: 'EcheancesModule.exportExcel — échéancier (SheetJS)',
+    fichier: 'js/modules/echeances.js',
+    route: '/echeances',
+    selecteur: '#ech-export-xlsx',
+    invoquer: () => { EcheancesModule.exportExcel(); },
+  },
+  {
+    nom: 'EcheancesModule.exportICS — échéancier au format agenda',
+    fichier: 'js/modules/echeances.js',
+    route: '/echeances',
+    selecteur: '#ech-export-ics',
+    invoquer: () => { EcheancesModule.exportICS(); },
+  },
+  {
+    nom: 'JournalModule.exporter — trois ans d’identités et d’adresses IP',
+    fichier: 'js/modules/journal.js',
+    route: '/journal',
+    selecteur: '#journalExportBtn',
+    invoquer: () => JournalModule.exporter(),
+    attendreMs: 500,
+  },
+];
+
+/**
+ * Instrumente la page : tout ce qui fait sortir un octet, plus l'entonnoir.
+ *
+ * Trois mécanismes comptés, parce qu'aucun ne les couvre tous : `createObjectURL`
+ * (le geste du produit), le clic d'une ancre portant `download` (celui de
+ * SheetJS), et `window.print` (l'export PDF, qui ne fabrique pas de fichier mais
+ * fait bel et bien sortir le rapport).
+ */
+async function armerMesures(page) {
+  await page.evaluate(() => {
+    window.__sorties = { blobs: 0, telechargements: 0, impressions: 0 };
+    window.__entonnoir = 0;
+    const vraiUrl = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__sorties.blobs += 1; return vraiUrl(b); };
+    const vraiClic = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function clic(...args) {
+      if (this.hasAttribute('download')) window.__sorties.telechargements += 1;
+      return vraiClic.apply(this, args);
+    };
+    window.print = () => { window.__sorties.impressions += 1; };
+    // L'entonnoir est COMPTÉ, jamais remplacé : sa vraie décision s'applique.
+    const vraiEntonnoir = Droits.exigerExport;
+    Droits.exigerExport = function exigerExport(...args) {
+      window.__entonnoir += 1;
+      return vraiEntonnoir.apply(Droits, args);
+    };
+  });
+}
+
+/**
+ * Donne de la MATIÈRE aux sites qui n'en ont pas dans le jeu d'essai.
+ *
+ * `EcheancesModule.exportICS` s'arrête sur « aucune échéance datée » — après la
+ * garde, donc l'entonnoir est bien atteint, mais rien ne sortirait de toute
+ * façon. Sans cette échéance, le contrôle « avec le droit, ça produit » serait
+ * rouge à juste titre : l'essai mesurerait le vide.
+ *
+ * L'échéance est créée **par la façade**, comme un utilisateur la créerait —
+ * c'est-à-dire par le chemin que le profil contributeur a le droit d'emprunter.
+ */
+async function donnerDeLaMatiere(page) {
+  await page.evaluate(() => {
+    const dejaLa = (DataStore.getActions() || []).some((a) => a && a.echeance);
+    if (dejaLa) return;
+    const dans30j = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+    DataStore.addAction({
+      id: UI.genId('ACT'),
+      titre: 'Action datée, pour que l’échéancier ait quelque chose à exporter',
+      echeance: dans30j,
+      statut: 'à faire',
+    });
+  });
+}
+
+/**
+ * Substitue `GET api/journal/export`, et **seulement lui**.
+ *
+ * ⚠️ **Pourquoi une substitution ici, et ce qu'elle ne cache pas.** Les trois
+ * routes du `CONVENTIONS.md` §29.8 sont le livrable de l'agent J2, écrit en
+ * parallèle : `src/api/journal.ts` est aujourd'hui une couture qui n'enregistre
+ * aucune route. Sans cette substitution, le site « journal » ne produirait
+ * jamais de fichier — et le contrôle « avec le droit, ça produit » serait rouge
+ * pour une raison qui n'a rien à voir avec les droits.
+ *
+ * Ce qui est mesuré reste entier : le sens NÉGATIF — le seul qui porte le
+ * constat Q-92 — ne dépend pas d'elle. L'entonnoir s'arrête **avant** le
+ * réseau, et `test/navigateur/journal.test.mjs` le mesure explicitement.
+ * Le jour où J2 livre, ces lignes tombent sans qu'aucune assertion ne bouge.
+ */
+async function substituerExportDuJournal(page) {
+  await page.route('**/api/journal/export**', async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'text/csv; charset=utf-8',
+      body: 'numero;horodatage;action\n1;2026-09-04T08:00:00Z;demarrage\n',
+    }));
+}
+
+/** Déclenche un site et rend ce qui en est sorti. */
+async function exercer(page, site) {
+  if (site.route !== undefined) {
+    await page.evaluate((r) => { window.location.hash = '#' + r; }, site.route);
+    await page.waitForSelector(site.selecteur, { timeout: DELAI });
+  }
+  await page.evaluate(() => { window.__sorties = { blobs: 0, telechargements: 0, impressions: 0 }; window.__entonnoir = 0; });
+  await page.evaluate(site.invoquer);
+  await page.waitForTimeout(site.attendreMs ?? 250);
+  const vu = await page.evaluate(() => ({ ...window.__sorties, entonnoir: window.__entonnoir }));
+  return { ...vu, total: vu.blobs + vu.telechargements + vu.impressions };
+}
+
+describe('Un profil qui ÉCRIT et n’EXPORTE PAS : la combinaison de Q-89 (constat Q-92)', () => {
+  test('LE FILET COUVRE tous les fichiers qui fabriquent un téléchargement', () => {
+    /* Le verrou n°1. Sans lui, cet essai vieillirait en silence : un module neuf
+     * qui exporte resterait hors du parcours ci-dessous, et le vert ne dirait
+     * plus rien de lui. La liste des fichiers est donc DÉCOUVERTE, jamais
+     * recopiée — même parade que `test/depot/entonnoir-export.test.mjs`, dont
+     * ceci est la moitié comportementale.
+     */
+    const decouverts = fichiersQuiExportent();
+    const exerces = new Set(SITES_DE_SORTIE.map((s) => s.fichier));
+
+    assert.ok(
+      decouverts.length >= 5,
+      `Seuls ${String(decouverts.length)} fichier(s) exportent encore : la découverte ne mord ` +
+        'plus, et « tous couverts » ne voudrait rien dire.',
+    );
+    const oublies = decouverts.filter((f) => !exerces.has(f));
+    assert.deepEqual(
+      oublies,
+      [],
+      'Ces fichiers font SORTIR des octets du produit et ne sont exercés par aucun site de ce ' +
+        'filet :\n' + oublies.map((f) => `  · ${f}`).join('\n') +
+        '\nLe contrôle du dépôt vérifie qu’ils APPELLENT l’entonnoir ; celui-ci vérifie que ' +
+        'l’entonnoir REFUSE. Q-89 est passé parce que seule la première moitié existait. ' +
+        'Ajoutez une entrée à `SITES_DE_SORTIE`.',
+    );
+
+    // Et l'inverse : un site qui viserait un fichier disparu ne prouverait rien.
+    for (const site of SITES_DE_SORTIE) {
+      assert.ok(
+        readFileSync(join(RACINE_FRONTEND, site.fichier), 'utf8').length > 0,
+        `« ${site.nom} » vise ${site.fichier}, qui n’existe plus.`,
+      );
+    }
+  });
+
+  test('AUCUN OCTET NE SORT, sur TOUS les sites — et l’entonnoir a bien été atteint', async () => {
+    const session = await ouvrirApplication(CONTRIBUE_SANS_EXPORTER);
+    session.page.on('dialog', (d) => { d.dismiss().catch(() => {}); });
+    try {
+      // Le discriminant de Q-92, posé en toutes lettres : ce profil N'EST PAS en
+      // lecture seule. S'il l'était, tout serait grisé et l'on mesurerait, une
+      // fois de plus, la mauvaise barrière.
+      const profil = await session.page.evaluate(() => ({
+        lectureSeule: Droits.lectureSeule(),
+        ecritRisques: Droits.peutEcrire('risques'),
+        exporte: Droits.peutExporter(),
+      }));
+      assert.equal(profil.lectureSeule, false, 'Ce profil doit pouvoir écrire : c’est TOUT le constat Q-92.');
+      assert.equal(profil.ecritRisques, true);
+      assert.equal(profil.exporte, false);
+
+      // Les deux sites que le jeu d'essai laisserait sans matière — voir chaque
+      // fonction : sans elles, « rien n'est sorti » serait vrai pour une raison
+      // qui n'a rien à voir avec le droit d'export.
+      await donnerDeLaMatiere(session.page);
+      await substituerExportDuJournal(session.page);
+      await armerMesures(session.page);
+
+      /* ── UN SEUL VERDICT, pour que rien n'en masque un autre ──────────────
+       *
+       * Deux assertions successives auraient caché la pire des deux : une garde
+       * retirée rend le site MUET *et* le fait FUIR, et la première assertion
+       * qui tombe emporte la seconde. On rassemble donc, et le message dit les
+       * deux faits — celui qui accuse et celui qui explique.
+       */
+      const problemes = [];
+      for (const site of SITES_DE_SORTIE) {
+        const vu = await exercer(session.page, site);
+        if (vu.total > 0) {
+          problemes.push(`FUITE — ${site.nom} (${site.fichier}) → ${JSON.stringify(vu)}`);
+        }
+        if (vu.entonnoir === 0) {
+          problemes.push(`MUET  — ${site.nom} (${site.fichier}) : l’entonnoir n’a pas été consulté`);
+        }
+      }
+
+      assert.deepEqual(
+        problemes,
+        [],
+        'Le filet d’export a trouvé ceci, pour un profil qui ÉCRIT et n’EXPORTE PAS :\n' +
+          problemes.map((p) => `  · ${p}`).join('\n') +
+          '\n\n« FUITE » est le constat Q-89 reproduit : le profil écrit, donc rien ne le ' +
+          'grise, et `Droits.exigerExport()` est la seule barrière. RSSI et ADMIN — deux des ' +
+          'huit profils du socle — sont dans cette configuration (PLAN_SERVEUR §3.3).\n' +
+          '« MUET » veut dire que le site n’a même pas consulté l’entonnoir : ou bien la ' +
+          'garde manque, ou bien le site n’a pas été atteint et « aucun octet n’est sorti » ' +
+          'ne prouve rien. Les deux se corrigent, aucun ne s’ignore.\n' +
+          'Le remède, en tête de la fonction qui exporte :\n' +
+          '  if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;',
+      );
+      assert.deepEqual(session.erreursScript, [], 'Refuser ne veut pas dire lever (constat M-6).');
+    } finally {
+      await session.fermer();
+    }
+  });
+
+  test('CONTRÔLE DANS L’AUTRE SENS : le même parcours, droit accordé, PRODUIT bien', async () => {
+    /* Le verrou n°3. « Zéro fichier » est aussi ce que rend un bouton cassé, un
+     * module absent ou un écran vide. On rejoue donc exactement le même parcours
+     * avec `export: true`, et l'on exige que chaque site produise.
+     */
+    const session = await ouvrirApplication(CONTRIBUE_ET_EXPORTE);
+    session.page.on('dialog', (d) => { d.dismiss().catch(() => {}); });
+    try {
+      await donnerDeLaMatiere(session.page);
+      await substituerExportDuJournal(session.page);
+      await armerMesures(session.page);
+      const steriles = [];
+      let produits = 0;
+      for (const site of SITES_DE_SORTIE) {
+        const vu = await exercer(session.page, site);
+        produits += vu.total;
+        if (vu.total === 0) steriles.push(`${site.nom} (${site.fichier}) → ${JSON.stringify(vu)}`);
+      }
+
+      assert.deepEqual(
+        steriles,
+        [],
+        'Ces sites ne produisent RIEN même avec le droit d’export :\n' +
+          steriles.map((s) => `  · ${s}`).join('\n') +
+          '\nL’essai précédent y mesure donc le vide, et son vert ne prouve rien de ces ' +
+          'sites-là. Soit le site est cassé, soit le jeu d’essai ne lui donne pas de ' +
+          'matière — les deux se règlent, aucun ne se tait.',
+      );
+      assert.ok(produits >= SITES_DE_SORTIE.length, `Seulement ${String(produits)} sortie(s).`);
       assert.deepEqual(session.erreursScript, []);
     } finally {
       await session.fermer();

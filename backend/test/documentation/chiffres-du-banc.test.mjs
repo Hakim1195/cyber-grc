@@ -234,6 +234,91 @@ describe('Les chiffres du README disent le réel, ou ils rougissent (constat Q-5
 });
 
 /* =====================================================================
+ *  Les FAMILLES DÉCRITES au §5 ne mentent pas sur ce qui existe (constat Q-90)
+ * ===================================================================== */
+
+/**
+ * ── Le défaut que ce bloc ferme ──────────────────────────────────────────────
+ *
+ * Le §5 tenait sa **propre** table de familles, avec ses **propres** effectifs et sa
+ * **propre** révision (`ca73ac6`) — une seconde liste écrite à la main, jamais
+ * confrontée à rien, à côté du bloc de mesure du §8 que ce fichier garde depuis Q-53.
+ * Elle a divergé sans qu'aucun contrôle ne rougisse : **six** familles et **637** essais
+ * au §5 quand le §8 en comptait déjà **onze** et **1030** — cinq chiffres faux, dont
+ * trois qui se contredisaient dans le même document (constat **Q-90**).
+ *
+ * Le remède écrit au §5 lui-même retire les **effectifs** de cette table : il n'y a
+ * plus, désormais, qu'un seul endroit où compter (§8, gardé ci-dessus). Mais la
+ * **liste des répertoires** décrits au §5 reste écrite à la main — pour une raison
+ * différente cette fois, puisque §5 ne compte plus rien, il **nomme** — et rien ne
+ * garantissait qu'elle ne diverge pas à son tour : une famille renommée, retirée, ou
+ * qu'on aurait oublié d'ajouter en racontant sa vocation.
+ *
+ * ── Ce que ce contrôle tient, et pourquoi contre la RÉVISION plutôt que l'ARBRE ──────
+ *
+ * Les répertoires que le §5 **décrit** sont exactement ceux qui existaient à la
+ * révision que le §8 **cite** — ni plus (une famille inventée ou mal nommée), ni moins
+ * (une famille tue). Jugé contre la révision nommée, jamais contre l'arbre de travail,
+ * pour la même raison que le reste de ce fichier (voir l'en-tête, plus haut) : le banc
+ * grandit en cours de vague, et un contrôle qui exigerait la concordance avec `HEAD`
+ * serait rouge la moitié du temps, pour un désaccord que le document assume déjà
+ * explicitement (« comparez d'abord la révision »). Ce n'est qu'à la révision citée que
+ * l'égalité doit être exacte.
+ */
+function famillesDecritesAuSection5() {
+  const texte = readFileSync(README, 'utf8');
+  const TITRE = "#### Les familles d'essais";
+  const debut = texte.indexOf(TITRE);
+  assert.notEqual(debut, -1,
+    `La section « ${TITRE} » du README §5 a disparu, ou a changé de titre : ce contrôle ` +
+    'ne peut plus la borner dans le document (constat Q-90).');
+  const bornes = ['\n#### ', '\n## ']
+    .map((motif) => texte.indexOf(motif, debut + TITRE.length))
+    .filter((i) => i !== -1);
+  const fin = bornes.length === 0 ? texte.length : Math.min(...bornes);
+  const section = texte.slice(debut, fin);
+  const trouvees = new Set();
+  for (const trouve of section.matchAll(/`test\/([a-z]+)\/`/g)) {
+    // `test/aide/` n'est pas une famille : le §5 le dit lui-même, juste après le
+    // tableau — et `famillesA()` l'exclut pour la même raison (montages partagés).
+    if (trouve[1] !== 'aide') trouvees.add(trouve[1]);
+  }
+  return [...trouvees].sort();
+}
+
+describe('Les FAMILLES DÉCRITES au §5 sont celles de la RÉVISION MESURÉE (constat Q-90)', () => {
+  test('NI FAMILLE FANTÔME NI FAMILLE TUE : le §5 nomme exactement les répertoires de la révision que le §8 cite', async () => {
+    const mesure = blocDeMesure();
+    const decrites = famillesDecritesAuSection5();
+    const alors = famillesA(mesure.revision);
+    assert.deepEqual(
+      decrites, alors,
+      `Le §5 décrit ${decrites.join(', ') || '(rien)'} alors que la révision \`${mesure.revision}\` ` +
+      `(celle que le §8 cite) portait ${alors.join(', ')}.\n` +
+      '  Une famille décrite au §5 mais absente du dépôt à cette révision, ou l’inverse, ' +
+      'est exactement la forme du constat Q-90 : un lecteur y apprend une composition du ' +
+      'banc qui n’a jamais existé, ou qui a cessé d’exister sans qu’on le lui dise.',
+    );
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE : le balayage du §5 sait VOIR une famille, il ne rend pas vert en ne lisant rien', async () => {
+    // Sans cette moitié, une section vidée de son tableau (titre gardé, table
+    // effacée) rendrait `decrites = []` — et si le jour venait où `famillesA()`
+    // rendait aussi `[]` pour une autre raison, le test du dessus resterait vert
+    // en n'ayant rien vérifié. On exige donc un plancher, mesuré et non choisi :
+    // le §5 décrit aujourd'hui onze familles, jamais moins de six (constat Q-90,
+    // qui est parti d'un tableau qui en tenait six).
+    const decrites = famillesDecritesAuSection5();
+    assert.ok(
+      decrites.length >= 6,
+      `Seulement ${String(decrites.length)} famille(s) décrite(s) au §5 : le balayage ne ` +
+      'lit plus rien, ou la section a perdu son tableau. Un test qui compare deux listes ' +
+      'vides ne prouve rien (§17.5) — voir l’en-tête de ce bloc.',
+    );
+  });
+});
+
+/* =====================================================================
  *  L'ENVIRONNEMENT documenté est celui qui tourne ICI (constat Q-77)
  * ===================================================================== */
 

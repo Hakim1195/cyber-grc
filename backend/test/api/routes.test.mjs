@@ -745,6 +745,15 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // hors développement, elle ne doit rien servir du tout.
     ['GET', '/api/export', undefined],
     ['GET', '/api/rafraichir?depuis=2026-01-01T00:00:00.000Z', undefined],
+    // Les trois routes du journal d'audit (lot L5, `CONVENTIONS.md` §29.8). Elles
+    // sont ici pour une raison plus forte que les autres : hors développement,
+    // une consultation du journal servie sans identité livrerait trois ans
+    // d'identités, d'adresses IP et de valeurs avant/après — et l'export en
+    // livrerait le fichier. C'est la table dont l'objet est de faire preuve ;
+    // elle ne peut pas être la seule à sortir de la barrière.
+    ['GET', '/api/journal', undefined],
+    ['GET', '/api/journal/export', undefined],
+    ['GET', '/api/journal/verification', undefined],
     ['POST', '/api/entites/risques', { champs: { nom: 'tentative' } }],
     ['PUT', '/api/entites/risques/RISK-A', { version: 1, champs: { nom: 'tentative' } }],
     ['DELETE', '/api/entites/risques/RISK-A?version=1', undefined],
@@ -917,7 +926,26 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
       }
 
       // ── Barrière 2 : authentification réelle, aucune session → rien n'est servi ──
-      const serveurFerme = await monterServeurReel(base, { authentification: 'reelle', environnement });
+      // ⚠️ Le rythme est desserré POUR CET ESSAI, et il faut dire pourquoi.
+      //
+      // La barrière éprouvée ici est celle de l'IDENTITÉ : « aucun point d'entrée
+      // ne sert de données sans authentification ». Le limiteur de rythme en est
+      // une autre, et elle refuse elle aussi — en 429. Avec sa borne ordinaire
+      // (20 refus par adresse), la sonde épuise le budget avant la fin de la
+      // liste, et les derniers points d'entrée sont refusés **par le limiteur**.
+      //
+      // L'essai passerait quand même, puisque rien n'est servi. C'est justement
+      // le danger : il cesserait de mesurer la barrière qu'il nomme, et un jour
+      // où l'authentification manquerait sur la dernière route, il rendrait vert
+      // — le 429 la couvrant. Un contrôle doit interroger le chemin qu'il
+      // prétend interroger, sinon il se mesure lui-même (7ᵉ passage de S2).
+      //
+      // Le limiteur a sa propre famille d'essais (`test/api/limiteur-rythme`).
+      const serveurFerme = await monterServeurReel(base, {
+        authentification: 'reelle',
+        environnement,
+        env: { API_RYTHME_MAX_ANONYME: '1000' },
+      });
       try {
         const servis = [];
         for (const [methode, url, corps] of POINTS_DENTREE) {

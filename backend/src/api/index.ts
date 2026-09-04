@@ -71,8 +71,14 @@
  *    fail-closed **partout sauf en développement** (`session.ts`) — la recette
  *    comprise, parce qu'elle porte une copie réaliste de la production
  *    (`PLAN_SERVEUR` §1.10).
- *  · **Aucune écriture au journal d'audit** (contrôle S3) : c'est le lot L5.
- *    Le journal technique trace les écritures, il n'a pas valeur de preuve.
+ *  · ~~**Aucune écriture au journal d'audit** (contrôle S3)~~ — **caduc depuis
+ *    le lot L5.** Ce fichier écrit désormais au journal d'audit : le refus de
+ *    droit (crochet `onRequest`, étape 4), l'export (`/api/export`), l'import
+ *    (`/api/reprise`) et **toute route déclarée en action `administrer`**, par
+ *    un crochet qui lit la déclaration au lieu de tenir une liste. Les
+ *    créations, modifications et suppressions sont émises par `src/entites/`,
+ *    dans la transaction de l'écriture. Vocabulaire et transaction :
+ *    `CONVENTIONS.md` §29.
  *  · **Aucune limitation de rythme** (contrôle S11) : elle appartient à la
  *    couche d'authentification, qui n'existe pas.
  */
@@ -104,6 +110,7 @@ import { entreeInvalide, ErreurApplicative, traduireErreur } from '../erreurs/in
 import type { ContexteTraduction } from '../erreurs/index.js';
 import { greffonConnexion } from '../auth/greffon.js';
 import type { ServiceAuthentification, SessionAppliqueeReelle } from '../auth/index.js';
+import { journaliser } from '../auth/journal.js';
 import { deciderAcces, DOMAINE_PAR_ENTITE, entitesLisibles, refuserDroit } from './droits.js';
 import { greffonJournal } from './journal.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
@@ -693,8 +700,9 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
           route: requete.routeOptions.url ?? requete.url,
           detail: refus.detailJournal,
         },
-        "Accès refusé par le modèle de droits (le journal d’audit est le lot L5)",
+        'Accès refusé par le modèle de droits',
       );
+      await tracerRefusDroit(requete, session, declaration);
       throw refuserDroit(refus);
     }
 
@@ -702,6 +710,64 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     if (session.sessionOuverte === true && session.identite != null) {
       await alimenterAnnuaire(requete.log, session.perimetre, session.identite);
     }
+  });
+
+  /* -------------------------------------------------------------------
+   *  onResponse — `administration` : TOUTE route déclarée en `administrer`
+   * -------------------------------------------------------------------
+   *
+   *  `CONVENTIONS.md` §29.2 : « `administration` — **toute route déclarée en
+   *  action `administrer`** ». *Toute*, y compris celle que le lot L4 écrira
+   *  l'an prochain pour créer une filiale, et celle que L8 écrira pour changer
+   *  un profil.
+   *
+   *  ══ Pourquoi un crochet, et pas un appel dans chaque route ═════════
+   *
+   *  Parce qu'une omission y serait **silencieuse** : une route
+   *  d'administration qui oublie sa ligne de journal fonctionne parfaitement et
+   *  ne trace rien, et personne ne l'apprend avant l'audit. C'est le premier
+   *  cas du tableau du `CLAUDE.md` §3 — *quelque chose réussit en silence alors
+   *  que c'est faux* —, et le remède prescrit est de **découvrir** au lieu
+   *  d'énumérer. Ce crochet lit `requete.routeOptions.config.acces`, c'est-à-dire
+   *  la déclaration que la route porte déjà et sans laquelle elle est refusée :
+   *  il n'y a rien à penser à faire.
+   *
+   *  ══ Ce qu'il ne tient pas, et qu'il faut dire ══════════════════════
+   *
+   *  Il s'exécute **après** la réponse : la trace n'est donc PAS dans la
+   *  transaction de l'acte, contrairement à la règle 1 du §29.3. Si son
+   *  insertion échoue, l'acte a déjà eu lieu et la réponse est partie. C'est
+   *  assumé, et compensé : **les actes d'administration qui écrivent des
+   *  données portent en plus leur trace transactionnelle** — `import` pour la
+   *  reprise, `creation` / `modification` / `suppression` pour le dépôt. Cette
+   *  entrée-ci répond à une autre question, celle que pose un auditeur ISO :
+   *  *qui a exercé un pouvoir d'administration, quand, depuis quelle adresse*.
+   *
+   *  Un `onSend` permettrait de faire échouer la réponse, pas de défaire la
+   *  transaction — la commodité serait alors payée d'un client qui reçoit 500
+   *  sur une opération réussie. On préfère un défaut de trace visible au
+   *  journal technique à un défaut d'issue affiché à l'utilisateur.
+   * ------------------------------------------------------------------- */
+  instance.addHook('onResponse', async (requete: FastifyRequest, reponse: FastifyReply) => {
+    const declaration = requete.routeOptions.config.acces;
+    if (declaration?.action !== 'administrer') return;
+    // Un refus a déjà sa trace (`refus_autorisation`), et un échec n'est pas un
+    // acte d'administration : seule une issue aboutie en est un.
+    if (reponse.statusCode >= 400) return;
+    const session = requete.sessionGrc;
+    if (session === undefined) return;
+
+    await tracer(requete.log, session, {
+      action: 'administration',
+      resume: 'Acte d’administration exercé sur une route qui l’exige.',
+      adresseIp: requete.ip,
+      valeursApres: {
+        methode: requete.method,
+        route: requete.routeOptions.url ?? null,
+        domaine: declaration.domaine,
+        statut: reponse.statusCode,
+      },
+    });
   });
 
   /**
@@ -770,6 +836,124 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         "L’annuaire n’a pas pu être aligné sur l’Active Directory ; la session continue",
       );
     }
+  };
+
+  /* -------------------------------------------------------------------
+   *  Journal d'audit — les événements qui n'ont pas de transaction à eux
+   * -------------------------------------------------------------------
+   *
+   *  `CONVENTIONS.md` §29.3, règle 3 : « un événement qui n'a pas de
+   *  transaction d'écriture en ouvre une à lui. C'est le cas du refus de droit
+   *  — il se prononce dans `onRequest`, avant toute transaction. »
+   *
+   *  ⚠️ **Pourquoi `avecTransaction` et non `avecTransactionAuthentification`.**
+   *  Le §29.3 renvoie au motif de `journaliserEchec`, qui emploie la seconde —
+   *  mais elle pose `grc.authentification`, réglage dont l'unique objet est
+   *  d'ouvrir l'écriture des trois tables de session (`007_authentification.sql`,
+   *  condition E1). Une trace de journal n'a aucun besoin de cette porte, et la
+   *  lui ouvrir élargirait, le temps d'un `insert`, ce que la transaction a le
+   *  droit d'écrire — pour rien. Le motif retenu est donc « sa propre
+   *  transaction, périmètre de la session », qui est ce que la règle 3 demande
+   *  vraiment.
+   * ------------------------------------------------------------------- */
+
+  /**
+   * Écrit une entrée de journal **hors** de toute transaction métier.
+   *
+   * ⚠️ **Elle avale ses échecs, et c'est la seule posture tenable ici.** C'est
+   * le motif déjà écrit de `journaliserEchec` (`src/auth/index.ts`) : *« un
+   * journal qui échoue ne doit pas transformer un refus en 500 : le refus reste
+   * un refus »*. La règle 2 du §29.3 — une écriture ne peut pas réussir sans sa
+   * trace — vaut pour les **écritures métier**, et celles-là journalisent dans
+   * leur propre transaction, sans `try` (voir `src/entites/`). Les événements
+   * traités ici n'écrivent rien : les rendre dépendants du journal
+   * transformerait une panne de trace en panne de service.
+   *
+   * L'échec, lui, part au journal technique en `error` : il doit être visible
+   * de l'exploitant, pas absorbé.
+   */
+  const tracer = async (
+    journal: FastifyBaseLogger,
+    session: SessionAppliquee,
+    entree: {
+      readonly action: 'refus_autorisation' | 'administration' | 'export';
+      readonly resume: string;
+      readonly adresseIp?: string | null;
+      readonly entiteType?: string | null;
+      readonly entiteId?: string | null;
+      readonly valeursApres?: Record<string, unknown> | null;
+    },
+  ): Promise<void> => {
+    // Une transaction d'écriture exige une filiale active (`validerPerimetre`).
+    // Une session qui n'en a pas — cas qu'aucun chemin ne produit aujourd'hui,
+    // mais que le lot L4 pourrait produire avec un sélecteur de filiale vide —
+    // ne doit pas voir son refus devenir un 500 : on retombe sur le périmètre
+    // système, qui écrit une entrée transversale (`filiale_id` nul, admis par
+    // la politique d'ajout) en conservant l'identité dans `utilisateur_libelle`.
+    const attribuee = session.perimetre.filialeId !== null;
+    const perimetreTrace = attribuee ? session.perimetre : PERIMETRE_SYSTEME;
+    try {
+      await avecTransaction(pool, perimetreTrace, async (client: PoolClient) => {
+        await journaliser(client, {
+          action: entree.action,
+          filialeId: attribuee ? session.perimetre.filialeId : null,
+          utilisateurLibelle: session.perimetre.utilisateurId,
+          adresseIp: entree.adresseIp ?? null,
+          entiteType: entree.entiteType ?? null,
+          entiteId: entree.entiteId ?? null,
+          resume: entree.resume,
+          valeursApres: entree.valeursApres ?? null,
+        });
+      });
+    } catch (erreur) {
+      journal.error(
+        {
+          action: entree.action,
+          detail: traduireErreur(erreur, contexteErreurs).detailJournal,
+        },
+        'Écriture au journal d’audit impossible : l’événement n’a PAS été tracé.',
+      );
+    }
+  };
+
+  /**
+   * Trace un refus de droit — **et seulement celui d'une session valide.**
+   *
+   * ⚠️ `CONVENTIONS.md` §29.3, l'encadré : *« le refus de droit ne doit pas
+   * devenir une arme »*. Une requête refusée qui écrit en base donne à un
+   * attaquant un moyen de faire travailler le serveur sans être authentifié.
+   * Cette fonction n'est donc appelée qu'à **l'étape 4** du crochet, où
+   * l'authentification a déjà réussi et où seul le droit manque. Un refus
+   * d'identité (401) reste traité par le limiteur de rythme, qui le compte sans
+   * écrire, et par l'entrée `connexion_echouee` que `src/auth/` émet déjà.
+   *
+   * Ce que cela coûte, et qui est assumé : un compte **authentifié** qui
+   * bouclerait sur une route interdite écrirait une entrée par requête dans une
+   * table retenue trois ans. Aucune déduplication n'est faite — « cet
+   * utilisateur a heurté dix mille refus » est précisément ce qu'un journal
+   * d'audit doit montrer, pas ce qu'il doit lisser.
+   */
+  const tracerRefusDroit = async (
+    requete: FastifyRequest,
+    session: SessionAppliquee,
+    declaration: DeclarationAcces,
+  ): Promise<void> => {
+    await tracer(requete.log, session, {
+      action: 'refus_autorisation',
+      // Phrase FIXE (§29.5). Ce qui varie part en `jsonb`, où l'encodage est le
+      // problème de PostgreSQL : la route est un gabarit (`/api/entites/:entite`),
+      // jamais l'URL reçue, et le domaine sort d'un vocabulaire clos.
+      resume: 'Requête refusée par le modèle de droits : le droit manque.',
+      adresseIp: requete.ip,
+      valeursApres: {
+        methode: requete.method,
+        route: requete.routeOptions.url ?? null,
+        action_exigee: declaration.action,
+        domaine_exige: domaineDe(declaration, requete),
+        niveau_session: session.droits.niveau,
+        export_session: session.droits.export,
+      },
+    });
   };
 
   /* -------------------------------------------------------------------
@@ -1108,18 +1292,59 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       } as unknown as ChargeV12;
       const enveloppe = construireEnveloppe(charge);
 
-      // Journalisé **systématiquement**, comme l'exige le §3.3. Un refus l'est
-      // aussi, par le crochet `onRequest`. Le journal d'audit inaltérable est
-      // le lot L5 : cette ligne technique est ce qui existe aujourd'hui, et
-      // elle ne se donne pas pour une preuve.
+      const lignes = Object.values(jeu.volumes).reduce((somme, valeur) => somme + valeur, 0);
+
+      // ══ LA MOITIÉ RESTANTE DU CONSTAT Q-89 ═════════════════════════════
+      //
+      // Le droit d'export a été rendu inviolable le 04/09 ; **aucun export
+      // n'était tracé**. `PLAN_SERVEUR` §1.7 : « les exports sont journalisés
+      // au même titre que les modifications — savoir qui a extrait quelles
+      // données est une exigence de sécurité autant qu'une trace d'audit », et
+      // §3.3 : « permission à part entière, accordée explicitement, et
+      // **journalisée systématiquement** ». C'est la première chose qu'un
+      // auditeur ISO 27001 demande à voir.
+      //
+      // ── Deux transactions, et l'ordre n'est pas indifférent ────────────
+      //
+      // L'extraction est une LECTURE : sa transaction est ouverte `read only`
+      // (propriété que ce fichier tient), et une transaction en lecture seule
+      // ne peut pas insérer. La trace a donc la sienne — et elle est écrite
+      // **avant** que la moindre donnée ne parte sur le réseau.
+      //
+      // ⚠️ **Aucun `try` ici, et c'est délibéré** : si le journal refuse
+      // l'entrée, l'appel échoue et **rien n'est extrait**. C'est l'inverse de
+      // la posture retenue pour le refus de droit, où le journal ne doit pas
+      // transformer un refus en 500 — et la différence est exactement celle
+      // qu'énonce la règle 2 du §29.3 : ici, il y a quelque chose à emporter.
+      // Un export silencieux vaudrait mieux que rien pour l'utilisateur, et
+      // moins que rien pour l'audit.
+      await avecTransaction(pool, session.perimetre, async (client: PoolClient) => {
+        await journaliser(client, {
+          action: 'export',
+          filialeId: session.perimetre.filialeId,
+          utilisateurLibelle: session.perimetre.utilisateurId,
+          adresseIp: requete.ip,
+          // Phrase FIXE (§29.5) : le volume et le périmètre partent en `jsonb`.
+          resume: 'Extraction du jeu de données de la filiale, au format d’échange.',
+          valeursApres: {
+            format: 'grc-backup',
+            collections: lisibles.size,
+            lignes,
+            volumes: jeu.volumes,
+            perimetre_lecture: session.perimetre.filiales,
+            schema_version: jeu.schemaVersion,
+          },
+        });
+      });
+
       requete.log.info(
         {
           utilisateur: session.perimetre.utilisateurId,
           filiale: session.perimetre.filialeId,
           collections: lisibles.size,
-          lignes: Object.values(jeu.volumes).reduce((somme, valeur) => somme + valeur, 0),
+          lignes,
         },
-        "Export du jeu de données autorisé et servi (journal d’audit : lot L5)",
+        'Export du jeu de données autorisé, journalisé, puis servi',
       );
 
       return reponse.send(enveloppe);
@@ -1488,6 +1713,50 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
           );
         }
 
+        // 2 bis. LE JOURNAL D'AUDIT — dans la MÊME transaction (§29.3).
+        //
+        // ── Pourquoi ici, et pas dans le moteur ────────────────────────
+        //
+        // `appliquerReprise` ne connaît ni le fichier, ni son nom, ni son
+        // empreinte : elle reçoit une charge déjà lue et migrée. La route, si.
+        // L'entrée porte donc ce qui identifie l'ACTE — le mode, l'empreinte
+        // `sha256` du fichier, la version d'origine — et le bilan de ce qu'il a
+        // fait. C'est aussi pourquoi le moteur passe `sansJournal` à `creer` et
+        // à `modifier` : une reprise laisse **une** entrée, pas 20 000
+        // (l'arbitrage est écrit à `OptionsCreation.sansJournal`).
+        //
+        // ⚠️ Pas de `try` : si le journal refuse, la reprise entière est
+        // annulée. C'est l'opération la plus destructrice du produit — un
+        // « remplacer » vide la filiale — et elle ne doit pas pouvoir se faire
+        // sans laisser de trace (§29.3, règle 2).
+        //
+        // Un APERÇU n'en écrit pas : sa transaction est annulée de toute façon,
+        // et il ne modifie rien. La condition est la même que celle de la ligne
+        // `imports` ci-dessus, à dessein — deux conditions divergeraient.
+        if (!apercu) {
+          await journaliser(client, {
+            action: 'import',
+            filialeId: perimetre.filialeId,
+            utilisateurLibelle: perimetre.utilisateurId,
+            adresseIp: requete.ip,
+            // Phrase FIXE (§29.5). Le nom du fichier vient de l'utilisateur : il
+            // n'entre PAS dans `resume`, il part en `jsonb`.
+            resume: 'Reprise d’un export : le jeu de données de la filiale a été repris.',
+            valeursApres: {
+              mode,
+              fichier: fichier.nom,
+              sha256: empreinte,
+              octets: Buffer.byteLength(fichier.contenu, 'utf8'),
+              version_origine: lecture.rapport.versionOrigine,
+              lus: bilan.lus,
+              crees: totaliser(bilan.crees),
+              mis_a_jour: totaliser(bilan.misAJour),
+              supprimes: totaliser(bilan.supprimes),
+              liaisons: bilan.liaisons,
+            },
+          });
+        }
+
         // 3. L'aperçu montre le VRAI résultat, puis annule tout. Le sentinelle
         //    n'est pas un détour : c'est ce qui garantit que ce qui est montré
         //    est ce qui se produirait, contraintes comprises.
@@ -1628,7 +1897,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  le domaine **`journal`**, pas `administration` : c'est l'arbitrage du
    *  04/09/2026, motivé dans `src/api/droits.ts`.
    * ------------------------------------------------------------------- */
-  await instance.register(greffonJournal, {});
+  await instance.register(greffonJournal, { pool });
 
   const service = options.serviceAuthentification;
   if (service !== undefined) {

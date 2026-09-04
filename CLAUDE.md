@@ -35,14 +35,18 @@
 > même. L'arbitrage du `docs/PLAN_EXECUTION.md` §0 bis remplace le veto de la porte par un
 > **tri en trois classes** : une porte refusée n'arrête plus la vague, elle trie.
 >
-> **Le travail immédiat est le lot L5 — le journal d'audit**, dont la couverture est
-> chiffrée à **4 actions sur 20** : voir « ▶ REPRENDRE ICI » au §8, qui dit exactement ce
-> qui manque et ce qu'il ne faut pas croire acquis.
+> **Le lot L5 — le journal d'audit — est CONSTRUIT** (04/09/2026, soir) et **n'a pas encore
+> été soumis à sa porte S4**. Sa couverture est passée de **4 actions émises sur 20** à
+> **14**, mesurée en base ; la condition **E6 est fermée et vérifiée en vol**. Voir
+> « ▶ REPRENDRE ICI » au §8 — qui dit ce qui reste, et ce qu'il ne faut pas croire acquis.
 >
-> ⚠️ Si vous lisez ailleurs « ouvrir la vague 3 », « L3 reste à faire » ou « aucun essai
-> navigateur n'existe », c'est **périmé** — ces phrases l'étaient encore hier. Le banc rend
-> **1030 essais, 1030 passés**, et la recette tourne en permanence sur cette machine,
-> Active Directory réel compris.
+> ⚠️ Si vous lisez ailleurs « ouvrir la vague 3 », « L3 reste à faire », « aucun essai
+> navigateur n'existe » ou « la couverture du journal est de 4 actions sur 20 », c'est
+> **périmé**. Le banc rend **1136 essais, 1136 passés**, et la recette tourne en permanence
+> sur cette machine, Active Directory réel compris.
+>
+> ⚠️ **Le dépôt est en avance sur la machine** : le service exécute le build d'avant L5, et
+> `GET /api/journal` y rend **404**. Redéployer exige `sudo` (constat **Q-117**).
 
 ## 1. Le produit
 
@@ -668,63 +672,77 @@ il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écriv
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
 constat perdu.**
 
-### ▶ REPRENDRE ICI — **L5, le journal d'audit**. L3 est construit ; la porte S3 a été jouée.
+### ▶ REPRENDRE ICI — **L5 est construit ; sa porte S4 n'a pas été jouée.**
 
-> ⚠️ **Réécrit le 04/09/2026.** Si vous lisez ailleurs « ouvrir la vague 3 », « le lot L3 reste
-> à faire » ou « aucun essai navigateur n'existe », c'est **périmé**. L'arbitrage de curseur
-> vit au `docs/PLAN_EXECUTION.md` **§0 bis** et il prime ; l'état des lots se lit au **§7**,
-> seule source des verdicts.
+> ⚠️ **Réécrit le 04/09/2026 au soir, à la clôture de la vague L5.** Si vous lisez ailleurs
+> « le lot L5 reste à faire », « la couverture du journal est de 4 actions sur 20 »,
+> « ouvrir la vague 3 » ou « aucun essai navigateur n'existe », c'est **périmé**.
+> L'arbitrage de curseur vit au `docs/PLAN_EXECUTION.md` **§0 bis** et il prime ; l'état des
+> lots et les verdicts se lisent au **§7**, seule source.
 
-**Ce qui a été fait dans la nuit du 03 au 04/09, et qu'il ne faut pas refaire :**
+**Ce qui a été livré, et qu'il ne faut pas refaire :**
 
-- **Le lot L3 est construit et fonctionne**, mesuré de bout en bout : un utilisateur ouvre
-  une session depuis un **Active Directory réel**, ses trois axes sont résolus, et
-  l'interface s'affiche avec ses droits. Sept profils entrent, l'appartenance **indirecte**
-  par groupe imbriqué ouvre l'accès, un compte sans groupe reçoit 403.
-- **La porte S3 a été jouée une fois et refusée** — 15 constats, S7 et S18 en échec, mais
-  **zéro fuite entre filiales**. Les deux bloquants (**Q-88** l'annuaire jamais alimenté,
-  **Q-89** l'export contournable) sont **corrigés et mordus**, ainsi que **Q-103**, qui a
-  appris à ce chantier qu'*un commit vert ne dit rien de la machine*.
-- **Banc : 1030 essais, 1030 passés, 0 échec**, sur PostgreSQL 17.11, Debian 13, Apache
-  2.4.68 réels. Registre à **104 constats** (`PLAN_EXECUTION` §7).
-- **La recette tourne en permanence** sur cette machine : service systemd, Apache sur
-  `https://grc.exemple.interne/`, PKI interne, et l'annuaire Samba `grc-ad`. Comptes et
-  procédure d'accès : voir §8 « Ce qui est éprouvé sur cette machine ».
+- **L3 est construit et fonctionne**, mesuré de bout en bout contre un **Active Directory
+  réel** : sept profils entrent, l'appartenance **indirecte** par groupe imbriqué ouvre
+  l'accès, un compte sans groupe reçoit 403.
+- **L5 est construit.** La couverture du journal passe de **4 actions émises sur 20** à
+  **14**, mesurée **en base** après avoir exercé le produit — pas lue dans le code. Sont
+  désormais tracées : création, modification, suppression (avec le **différentiel**, pas le
+  doublon), **export** — la moitié restante du constat Q-89 —, import, administration,
+  refus de droit par requête, démarrage et arrêt du service.
+- **La condition d'entrée E6 est fermée, et vérifiée en vol.** La lecture du journal est
+  cloisonnée : `grc_lecture`, compte de supervision qui lisait **160 entrées** le matin,
+  reçoit désormais « Périmètre non positionné ». Le chaînage tient (`f_journal_audit_verifier()`
+  → 0 anomalie), et la connexion AD répond toujours 200 : les deux moitiés — `security
+  definer` et politique resserrée — vivent ensemble.
+- **Trois routes de consultation** (`/api/journal`, `/api/journal/export`,
+  `/api/journal/verification`), un **écran `/journal`**, et l'export CSV éprouvé par
+  aller-retour sur une entrée hostile (`\r\n`, `"`, `;`) : **une** ligne logique, valeur intacte.
+- **Banc : 1136 essais, 1136 passés, 0 échec.**
 
-**Le travail immédiat est le lot L5 — le journal d'audit**, et il est chiffré :
+**Trois choses à savoir avant de continuer :**
 
-> **4 actions émises sur 20 déclarées** en base, mesuré à la porte S3. Sont journalisés :
-> connexion réussie, connexion refusée, usage du compte de secours (réussi **comme**
-> refusé — le critère du lot), verrouillage par le rythme, déconnexion. **Manquent** : le
-> refus de droit par requête, la création, la modification et la suppression
-> d'enregistrements, l'administration, les imports, et **les exports** — dont l'absence est
-> nommée au constat **Q-89**. `journaliser()` n'est appelé que depuis `src/auth/index.ts`.
+1. ⚠️ **La porte S4 n'a pas été jouée.** L5 n'est pas validé : il est *construit et vert*.
+   Les deux ne se confondent pas — la vague 2 l'a appris en neuf passages, et *un banc vert
+   mesure ce qu'il regarde, jamais ce qu'il ne regarde pas.*
+2. ⚠️ **Le dépôt est en avance sur la machine** (constat **Q-117**). La base de recette porte
+   la migration `008`, mais le service exécute le build d'avant L5 : `GET /api/journal` y
+   rend **404**. Redéployer exige `sudo` — `npm run build`, `rsync dist/`,
+   `systemctl restart cyber-grc`, puis `install.sh --maj` pour le frontend, puis
+   `install.sh --verifier-publication`. C'est le constat **Q-103** dans l'autre sens.
+3. **Six actions sur 20 restent non émises**, et le report est écrit : `consultation_sensible`
+   et `verification_journal` sont émises par les routes de consultation (donc invisibles tant
+   que la machine sert l'ancien build) ; `purge` et `archivage` relèvent de la procédure
+   d'exploitation (`CONVENTIONS.md` §12) ; `approbation` est le lot **L8** ;
+   `analyse_antivirus` le lot **L6**.
 
-Le périmètre complet du lot est au `PLAN_SERVEUR` **§1.7** (couverture des événements,
-consultation, export, **vérification du chaînage**), et le resserrement de la lecture du
-journal est un **livrable ferme** (`CONVENTIONS.md` §22, condition **E6**) : il ne pouvait
-pas être fait plus tôt, le chaînage par empreinte imposant l'ordre. ⚠️ La justification
-écrite au `README` §8 pour reporter E6 — « sans effet tant que le journal est vide » — a été
-**réfutée par la mesure** : `grc_lecture`, compte de supervision en lecture seule, lit
-**138 entrées** du journal, logins et adresses IP compris.
+**Ce que la vague a trouvé et qui vaut d'être lu** — `PLAN_EXECUTION` §7, constats **Q-105
+à Q-117**. Deux méritent d'être nommés ici, parce qu'ils sont du même genre et que ce genre
+est celui qui coûte le plus cher :
 
-**Trois choses à ne pas croire acquises en ouvrant L5** :
+- **Q-108** — une session expirée n'était **ni révoquée ni journalisée**, alors que le code
+  promettait « une fois » : le refus était levé *à l'intérieur* de la transaction, qui
+  annulait les deux écritures. L'essai chargé de le prouver comparait `count(*)` avant et
+  après, lisait **`0` les deux fois**, et concluait au vert. Trouvé en exigeant de l'essai
+  qu'il ait **de la matière à compter**.
+- **Q-116** — l'essai « l'interface n'est pas la barrière » substituait les droits **dans le
+  navigateur** et interrogeait le vrai serveur, qui, lui, avait tous les domaines. Il
+  mesurait une substitution, pas une barrière.
 
-1. **Le journal est en ajout seul, et cela a été éprouvé** (`update`/`delete` refusés même
-   au propriétaire) — mais sa **couverture** ne l'est pas. Un journal inaltérable et
-   incomplet prouve moins qu'il n'en a l'air.
-2. **Une valeur d'utilisateur atterrit littéralement dans le journal d'audit**, sauts de
-   ligne compris — l'auditeur l'a mesuré en forgeant un login contenant du JSON. Le
-   chaînage n'en souffre pas ; **un export texte du journal, lui, scinderait la ligne**.
-3. **Les constats ouverts qui touchent L5** : **Q-90** (le `README` déclare ouvertes cinq
-   propriétés que L3 a livrées), **Q-91** (trois réglages documentés que personne ne lit),
-   **Q-92**, **Q-95**, **Q-104**. Les lire au registre avant de commencer.
+> **La leçon commune, et elle est plus générale que le journal** : *un essai vert qui n'a
+> rien eu à mesurer rend le même verdict qu'un essai vert qui a tout mesuré.* Les deux
+> défauts vivaient depuis des mois sous un banc au vert. Exiger de la matière — « il devait y
+> avoir quelque chose à compter », « la table ne devait pas être vide », « le plancher de
+> sites exercés » — est ce qui les a fait tomber, et c'est désormais la forme attendue de
+> tout contrôle de ce dépôt.
 
-**Objectif : une V1 complète, toutes fonctionnalités, avant le 21/09/2026.** Le fonctionnement
-prime sur la perfection ; l'amélioration viendra ensuite, avec un vrai versionnage `Vx.x.x`.
-Concrètement : **la porte S2 ne se rejoue plus jusqu'au vert.** Elle a été refusée au 9ᵉ passage
-**sans bloquant**, le lot fonctionne, et les constats restants se **trient** au lieu de se
-grincer.
+**Le travail immédiat : jouer la porte S4** — un auditeur indépendant, sur `opus`, écrivant
+dans `docs/securite/` **uniquement** (`PLAN_EXECUTION` §2 bis, « le point qui ne se négocie
+pas »). Périmètre : couverture et inaltérabilité du journal, cloisonnement de sa lecture
+(E6), les trois routes de consultation, et l'export.
+
+**Objectif inchangé : une V1 complète, toutes fonctionnalités, avant le 21/09/2026.** Le
+fonctionnement prime sur la perfection. Le tri du `PLAN_EXECUTION` §0 bis s'applique :
 
 | Classe | Traitement |
 |---|---|
@@ -732,8 +750,6 @@ grincer.
 | fuite ou perte de données | corrigé, sans négociation — c'est la promesse centrale du produit |
 | tout le reste | marqué **`V1.1`** au registre, et on continue |
 
-Ce qui reste ouvert au registre (`PLAN_EXECUTION` §7) relève de la troisième classe ou de
-reports déjà datés vers L3, L5 et L7. **Aucun ne bloque l'ouverture de la vague 3.**
 
 ### La vague 3 — L3 authentification AD et droits, puis L5 journal
 
@@ -750,10 +766,14 @@ place de chaque approximation provisoire.
 chacune disant *où lire* et *comment la porte S3 vérifiera*. Les trois qui coûtent le plus cher
 si on les découvre tard :
 
-1. **`sessions`, `session_filiales`, `session_domaines` sont écrivables sans condition** par le
-   rôle applicatif — circulaire et assumé, ces tables *produisant* la décision d'autorisation.
-   Tant que ce n'est pas fermé, les requêtes intégralement paramétrées sont la **seule** parade
-   (§17.4, condition E1).
+1. ✅ **E1 est FERMÉE depuis L3** — et ces trois lignes ont continué de la déclarer ouverte une
+   vague entière. L'écriture dans `sessions`, `session_filiales` et `session_domaines` exige
+   désormais que la transaction ait posé `grc.authentification = 'oui'`
+   (`007_authentification.sql` ; `src/auth/transaction.ts:56`), ce que seule la transaction
+   d'ouverture de session fait. *Texte périmé, gardé pour son motif : « écrivables sans
+   condition — circulaire et assumé, ces tables produisant la décision d'autorisation ; tant que
+   ce n'est pas fermé, les requêtes intégralement paramétrées sont la seule parade. »* Les
+   requêtes restent intégralement paramétrées, mais ce n'est plus la seule parade (§17.4).
 2. **Les clés primaires composites sont reportées**, par un arbitrage écrit et daté (§21).
 3. **Toute route qui exige l'administration Groupe la *vérifie* ; aucune ne la *pose*.** Vrai
    aujourd'hui et démontré par un test mécanique — mais c'est une propriété du code, **pas une

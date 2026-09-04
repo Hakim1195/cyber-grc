@@ -199,7 +199,12 @@ const Api = (() => {
         // ici, une fois : deux calculs finiraient par diverger.
         const modifie = (opts.methode || "GET") !== "GET";
 
-        const entetes = { "accept": "application/json" };
+        // `binaire` sert à une seule route — l'export du journal d'audit — et il
+        // ne change que deux choses : l'en-tête `accept` et la façon de lire la
+        // réponse. Tout le reste — délai de garde, `same-origin`, `no-store`,
+        // `redirect: error`, traduction des erreurs, détection de session morte —
+        // est celui de toutes les autres requêtes, et c'est le but.
+        const entetes = { "accept": opts.binaire === true ? "*/*" : "application/json" };
         if (opts.corps !== undefined) entetes["content-type"] = "application/json";
 
         let reponse;
@@ -324,6 +329,9 @@ const Api = (() => {
             }), opts);
         }
 
+        // Un corps binaire ne se lit qu'APRÈS les contrôles d'erreur ci-dessus :
+        // une réponse en échec porte du JSON, pas le fichier demandé.
+        if (opts.binaire === true) return await reponse.blob();
         return charge;
     }
 
@@ -466,6 +474,67 @@ const Api = (() => {
         return appeler("/reprise", { methode: "POST", corps: corps, delai: DELAI_CHARGEMENT_MS });
     }
 
+    /* =====================================================================
+       JOURNAL D'AUDIT — lot L5, `CONVENTIONS.md` §29.8
+       ---------------------------------------------------------------------
+       Ces trois fonctions existent pour que l'écran du journal n'ait pas à
+       toucher `fetch`. Il le faisait — une fonction `demander()` locale, aux
+       mêmes garanties, écrite parce que son auteur ne possédait pas ce
+       fichier-ci — et l'entête d'`api.js` dit pourtant, depuis le lot L2, que
+       c'est le SEUL point du frontend qui parle au réseau.
+
+       ⚠️ Ce n'est pas une question de style. Une seconde porte, si soigneuse
+       soit-elle, est une seconde porte : le jour où l'expiration de session, le
+       traitement des `401` ou la détection d'issue inconnue changent ici, elle
+       ne suit pas — et rien ne le dit. C'est le motif que ce chantier traque
+       depuis onze occurrences : deux rédactions se ressemblent le premier jour
+       et divergent le second.
+    ===================================================================== */
+
+    /** Chaîne de requête à partir d'un objet de filtres (les vides sont omis). */
+    function chaineFiltres(filtres) {
+        const parties = [];
+        Object.keys(filtres || {}).forEach(function (cle) {
+            const valeur = filtres[cle];
+            if (valeur === null || valeur === undefined || String(valeur).trim() === "") return;
+            parties.push(encodeURIComponent(cle) + "=" + encodeURIComponent(String(valeur)));
+        });
+        return parties.length ? "?" + parties.join("&") : "";
+    }
+
+    /**
+     * Une page du journal : `{ entrees, suivant, limite }` (§29.8).
+     *
+     * La pagination se fait sur `avant=<numero>`, jamais sur un décalage :
+     * `numero` est strictement croissant et sans trou, donc c'est un curseur
+     * exact. Un `offset` sur un journal qui grandit pendant qu'on le feuillette
+     * saute des lignes.
+     */
+    function journal(filtres) {
+        return appeler("/journal" + chaineFiltres(filtres));
+    }
+
+    /**
+     * Vérification du chaînage par empreinte.
+     *
+     * **Aucune anomalie rendue = journal sain.** C'est la réponse à la question
+     * qu'un auditeur pose : « le RSSI peut-il modifier le journal ? »
+     */
+    function journalVerification() {
+        return appeler("/journal/verification");
+    }
+
+    /**
+     * Export du journal, en fichier.
+     *
+     * ⚠️ Exige le droit d'export **en plus** du domaine `journal`, et le serveur
+     * le vérifie — l'appelant doit néanmoins passer par `Droits.exigerExport()`,
+     * l'entonnoir unique de tout ce qui sort du produit (constat Q-89).
+     */
+    function journalExport(filtres) {
+        return appeler("/journal/export" + chaineFiltres(filtres), { binaire: true, delai: DELAI_CHARGEMENT_MS });
+    }
+
     // Opération composite : la propagation « au plus défavorable » s'exécute en
     // UNE transaction côté serveur (contrôle S14), et rend les évaluations
     // relues, versions comprises.
@@ -478,7 +547,8 @@ const Api = (() => {
         CONTRAT_AUTH,
         session, modele, donnees, rafraichir,
         connexion, deconnexion, surAuthentificationRequise,
-        creer, modifier, supprimer, propagerMesure, reprendre
+        creer, modifier, supprimer, propagerMesure, reprendre,
+        journal, journalVerification, journalExport
     };
 })();
 

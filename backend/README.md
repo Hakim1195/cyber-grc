@@ -6,23 +6,37 @@
 > « terminé » — vit dans [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md).
 > Conventions de schéma : [`db/CONVENTIONS.md`](db/CONVENTIONS.md).
 
-**État : lots L0, L1 et L2 livrés ; la vague 3 (lot L3 — authentification et droits) est
-OUVERTE depuis le 03/09/2026.** La porte S1 est « CONFIRMÉE FRANCHIE » au 6ᵉ passage ; la
-porte S2 a été franchie au 4ᵉ passage puis **refusée aux 5ᵉ, 6ᵉ, 7ᵉ, 8ᵉ et 9ᵉ** — et elle
-**ne se rejoue plus jusqu'au vert** : depuis le 03/09, son verdict est un **tri** en trois
-classes (`../docs/PLAN_EXECUTION.md` §0 bis), et aucun constat ouvert ne relève des deux
-premières. Le
-verdict de chaque passage vit dans le journal des portes du
+**État : lots L0, L1 et L2 livrés. Le lot L3 (authentification AD et droits) est
+CONSTRUIT et mesuré de bout en bout contre un Active Directory réel** — sept profils de
+recette s'authentifient, l'appartenance **indirecte** à un groupe imbriqué ouvre l'accès,
+un compte sans groupe reçoit `403`. **La porte S3 a été jouée une fois, le 04/09/2026, et
+REFUSÉE** : zéro fuite entre filiales, mais **deux bloquants des classes dures** (**Q-88**,
+l'annuaire `personnes` jamais alimenté ; **Q-89**, le droit d'export contournable), tous
+deux **corrigés et mordus le jour même**, plus quinze constats neufs (contrôles S7 et S18
+en échec). Sous l'arbitrage du `../docs/PLAN_EXECUTION.md` §0 bis, la porte **trie** au
+lieu de bloquer : ce qui reste est inscrit et daté au registre, et rien de ce qui reste
+ouvert ne relève des deux premières classes. **Le travail en cours est le lot L5 — le
+journal d'audit**, chiffré à **4 actions émises sur 20 déclarées** (voir §8). La porte S1
+est « CONFIRMÉE FRANCHIE » au 6ᵉ passage ; la porte S2 a été franchie au 4ᵉ passage puis
+**refusée aux 5ᵉ, 6ᵉ, 7ᵉ, 8ᵉ et 9ᵉ** — et elle **ne se rejoue plus jusqu'au vert** : depuis
+le 03/09, son verdict est un **tri** en trois classes (`../docs/PLAN_EXECUTION.md` §0 bis).
+Le verdict de chaque passage vit dans le journal des portes du
 [plan d'exécution](../docs/PLAN_EXECUTION.md) §7, et les rapports dans
 [`../docs/securite/`](../docs/securite/) — c'est là qu'il se lit, et nulle part
 ailleurs. Voir « Avancement » (§8) en fin de document.
 
-> ⚠️ **Ce serveur ne sert pas encore de données ailleurs qu'en développement.**
-> L'authentification est le lot L3 ; d'ici là, la session provisoire **refuse**
-> de résoudre un périmètre hors de `NODE_ENV=developpement`, et l'API répond
-> `503` sur toutes ses routes de données — **recette comprise** (§7). Un outil de
-> gouvernance cyber sans authentification ne sert pas de données, pas même en
-> lecture.
+> ⚠️ **L'authentification existe et fonctionne (lot L3) ; ce qui reste ouvert est sa
+> couverture par le journal d'audit (lot L5, en cours).** Une session s'ouvre contre
+> l'annuaire ou le compte de secours, ses trois axes de droits sont résolus, et une
+> requête sans session reçoit `401`. Le repli **fail-closed** décrit plus bas — refus de
+> résoudre un périmètre hors de `NODE_ENV=developpement`, `503` sur les routes de
+> données — ne vaut plus que pour la session **provisoire** du lot L2, et elle ne sert
+> désormais qu'un seul cas : celui où **ni l'annuaire ni le compte de secours ne sont
+> configurés** (`src/serveur.ts`, condition vérifiée au démarrage). Une installation qui
+> configure l'un des deux — c'est le cas de toute recette ou production correctement
+> montée — sert l'authentification réelle, quel que soit `NODE_ENV` (§7). Ce qui n'est
+> **pas encore** prouvé, c'est que chaque geste laisse une trace complète au journal :
+> voir §8.
 
 ---
 
@@ -219,28 +233,41 @@ curl -fsS http://127.0.0.1:3001/api/sante
 Le service intercepte `SIGTERM` et draine ses connexions avant de sortir
 (`SERVEUR_DELAI_ARRET`). Ne le tuez pas avec `-9`.
 
-### Ce que le serveur expose depuis le lot L2
+### Ce que le serveur expose
 
-Neuf routes de données, plus le point de santé. Le frontend n'en connaît pas
-d'autres, et c'est `js/core/api.js` — un fichier unique — qui les appelle toutes.
+Douze routes de données, plus le point de santé : les neuf du lot L2, et trois livrées
+par le lot L3 — l'ouverture et la fermeture de session, et l'export sous son propre
+droit. Le frontend n'en connaît pas d'autres, et c'est `js/core/api.js` — un fichier
+unique — qui les appelle toutes.
 
 | Verbe | Chemin | Rôle |
 |---|---|---|
 | `GET` | `/api/sante` | point de santé (le seul qui réponde sans périmètre résolu) |
-| `GET` | `/api/session` | qui suis-je, dans quelle filiale, avec quelles réserves |
+| `POST` | `/api/connexion` | ouvrir une session (annuaire ou compte de secours) — **lot L3** |
+| `DELETE` | `/api/connexion` | fermer la session courante — **lot L3** |
+| `GET` | `/api/session` | qui suis-je, dans quelle filiale, avec quels droits et quelles réserves |
 | `GET` | `/api/modele` | description du modèle — champs, types, bornes ; **aucune donnée** |
 | `GET` | `/api/donnees` | le jeu de données entier de la filiale, dans la forme de l'objet `data` du navigateur |
 | `GET` | `/api/rafraichir` | ce qui a changé depuis un horodatage, plus le compte par collection |
+| `GET` | `/api/export` | extraire le jeu de données en enveloppe `grc-backup` — **droit `exporter`, distinct de la lecture** (§3.3, contrôle S7) ; **lot L3** |
 | `POST` | `/api/entites/:entite` | créer — **l'identifiant est engendré par le serveur**, en proposer un est refusé |
 | `PUT` | `/api/entites/:entite/:id` | modifier — **verrouillage optimiste obligatoire** |
 | `DELETE` | `/api/entites/:entite/:id` | supprimer — `?version` **exigé** (une suppression relève du même risque P1) |
 | `POST` | `/api/reprise` | reprendre un export `grc-backup` entier, **en une transaction**, avec aperçu |
 | `POST` | `/api/operations/propager-mesure` | propagation « au plus défavorable », en une transaction |
 
+⚠️ **Ce que `GET /api/export` ne ferme pas, et il faut le dire** (§17.5) : quelqu'un qui a
+le droit de lire peut toujours recopier ce que son écran affiche. Le droit d'export ne
+rend pas l'extraction impossible ; il rend l'extraction *en un clic, complète et
+silencieuse* impossible, et journalisable — voir §8, tableau « Dette réellement
+reportée », pour ce qui, de la journalisation elle-même, est encore devant le lot L5.
+
 ### « Le service tourne mais l'application refuse de démarrer »
 
-C'est le symptôme attendu tant que le lot L3 n'est pas livré, et il se
-diagnostique en une commande :
+C'est le symptôme d'une installation **mal configurée**, pas celui d'une authentification
+qui n'existerait pas encore : le lot L3 est construit, et une installation qui déclare un
+annuaire actif ou un compte de secours (`deploy/install.sh`) sert l'authentification
+réelle quel que soit `NODE_ENV`. Il se diagnostique en une commande :
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3001/api/session
@@ -248,7 +275,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3001/api/session
 
 | Réponse | Ce que cela veut dire |
 |---|---|
-| `503` | trois causes. (a) Refus **fail-closed** : `NODE_ENV` n'est pas `developpement` — attendu en production **et en recette** (§7). Le message rendu est volontairement générique (« l'authentification n'est pas encore installée… ») ; **le motif exact part au journal technique**, jamais au client. (b) Aucune filiale active en base : créez-en une avant la mise en service. (c) `API_FILIALE_PROVISOIRE` désigne une filiale inexistante ou inactive — ce cas-là le dit, et le journal donne les codes disponibles |
+| `401` | pas de session (pas de cookie, ou session expirée/révoquée) : **c'est le cas normal** d'un client qui n'est pas encore connecté. La SPA affiche l'écran de connexion, pas un refus de démarrer |
+| `503` | quatre causes, **et les trois premières ne devraient plus se produire sur une installation correctement configurée**. (a) Refus **fail-closed** de la session **provisoire** du lot L2 : ni l'annuaire ni le compte de secours ne sont configurés (`src/serveur.ts`), et `NODE_ENV` n'est pas `developpement` — un repli de développement, pas le chemin normal d'une recette ou d'une production. Le message rendu est volontairement générique (« l'authentification n'est pas encore installée… ») ; **le motif exact part au journal technique**, jamais au client. (b) Aucune filiale active en base : créez-en une avant la mise en service. (c) `API_FILIALE_PROVISOIRE` désigne une filiale inexistante ou inactive — ce cas-là le dit, et le journal donne les codes disponibles. (d) Base de données injoignable (voir la sonde de santé, `GET /api/sante`) |
 | `200` | le périmètre est résolu ; l'application peut charger `/api/donnees` |
 
 ```bash
@@ -328,10 +356,14 @@ suffit à être branché : **un garde-fou neuf arrive sur le déploiement sans q
 fichier de déploiement change** (`db/CONVENTIONS.md` §19.4 et §19.5).
 
 Un schéma sain ne renvoie **aucune ligne** ; la moindre ligne rendue fait échouer le
-chemin appelant. **Huit contrôles sont découverts et joués** sur une base à jour —
+chemin appelant. **Neuf contrôles sont découverts et joués** sur une base à jour —
 armement des déclencheurs, chemin de recherche des fonctions, couverture RLS,
 entropie du générateur d'identifiants, portée figée, privilèges du rôle applicatif,
-traçabilité à l'insertion, unicités cloisonnées.
+traçabilité à l'insertion, unicités cloisonnées, et — depuis la migration `007`,
+condition d'entrée **E1** du lot L3 — l'écriture du substrat de session
+(`f_verifier_substrat_session()`) : aucune table de `sessions`/`session_filiales`/
+`session_domaines` ne s'écrit sans authentification, et aucune politique de
+**lecture**, où que ce soit dans le schéma, ne s'élargit sur ce même réglage.
 
 ⚠️ **L'un d'eux ne mesurait pas ce que son nom promettait**, et l'histoire vaut d'être
 connue avant d'écrire le prochain. `f_verifier_entropie_identifiants()` tirait un
@@ -544,29 +576,36 @@ sortirait en 0 et annoncerait la démonstration faite ; le compte est donc compa
 plancher relevé et daté, qu'un ajout de contrôle ne fait pas rougir mais qu'une
 disparition fait échouer.
 
-#### Six familles d'essais
+#### Les familles d'essais
 
 Le détail compte, parce que chacune attrape une classe de défaut que les autres ne
-voient pas. Comptes relevés à `ca73ac6` (§8) ; les noms de répertoires sont ceux du
-dépôt, relus et non recopiés :
+voient pas. ⚠️ **Cette section a longtemps porté ses propres effectifs, à côté de ceux du
+§8, relevés à une révision différente (`ca73ac6`) — et les deux ont divergé pendant la
+vague sans qu'aucun contrôle ne les compare : six familles et 637 essais ici quand le §8
+en comptait déjà onze et 1030 (constat **Q-90**).** Un chiffre qui vit à deux endroits
+finit par n'en dire qu'un vrai. Les effectifs ne vivent donc plus qu'**à un seul
+endroit** — le bloc de mesure du §8, avec sa révision et sa date — et cette table-ci ne
+fixe que ce qui change bien moins souvent que le compte d'essais : la **vocation** de
+chaque famille, gardée par `test/documentation/chiffres-du-banc.test.mjs` (elle vérifie
+que les répertoires nommés ci-dessous sont exactement ceux qui existaient à la révision
+que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non recopiés :
 
-| Répertoire | Tests | Ce qu'il éprouve |
-|---|---|---|
-| `test/base/` | 272 | socle, journal en ajout seul et chaînage, RLS, privilèges, garde-fous du schéma, consignation, vocabulaire, **et la démonstration de cloisonnement rejouée par `psql`** |
-| `test/api/` | 180 | routes montées pour de vrai, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité d'écriture, identifiants, bornes de corps, route de reprise |
-| `test/reprise/` | 77 | paliers v1 → v12, enveloppe, scission des mesures, round-trip, entrées hostiles |
-| `test/navigateur/` | 53 | la bascule côté SPA, dans **Chromium**, contre le serveur réel et sous la CSP du vhost |
-| `test/deploiement/` | 51 | **le vhost livré, joué par un Apache réel** : l'URL d'entrée, la liste blanche de publication, la compression, le cache, les en-têtes, la borne de corps ; plus la copie par `rsync` et les blocs d'`install.sh` |
-| **`test/documentation/`** | **4** | **la forme du registre des constats** : sept barres par ligne, numérotation continue et sans doublon, cases « Propriétaire » et « État » jamais vides |
+| Répertoire | Ce qu'il éprouve |
+|---|---|
+| `test/base/` | socle, journal en ajout seul et chaînage, RLS, privilèges, garde-fous du schéma, consignation, vocabulaire, **et la démonstration de cloisonnement rejouée par `psql`** |
+| `test/api/` | routes montées pour de vrai, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité d'écriture, identifiants, bornes de corps, route de reprise |
+| `test/reprise/` | paliers v1 → v12, enveloppe, scission des mesures, round-trip, entrées hostiles |
+| `test/navigateur/` | la bascule côté SPA, dans **Chromium**, contre le serveur réel et sous la CSP du vhost — droits inclus (`droits.test.mjs`) |
+| `test/deploiement/` | **le vhost livré, joué par un Apache réel** : l'URL d'entrée, la liste blanche de publication, la compression, le cache, les en-têtes, la borne de corps ; plus la copie par `rsync` et les blocs d'`install.sh` |
+| `test/depot/` | **ce que le commit seul doit garantir**, pas l'arbre de travail : un fichier suivi n'importe que du suivi, l'entonnoir d'export ne laisse passer aucun site nu, tout réglage documenté est un réglage réellement lu |
+| **`test/documentation/`** | **la forme du registre des constats** (sept barres par ligne, numérotation continue et sans doublon, cases « Propriétaire » et « État » jamais vides), **les chiffres du présent document confrontés au réel**, et — depuis cette entrée — **la vocation des familles ci-dessus confrontée à la révision citée au §8** |
+| `test/auth/` | l'authentification de bout en bout contre un **Active Directory réel** (Samba) : protocole LDAP, renvois de continuation, compte de secours sans annuaire, chaîne HTTP complète |
+| `test/droits/` | le modèle de droits à trois axes : vocabulaire des domaines confronté au catalogue PostgreSQL, projection des niveaux par domaine, écriture conditionnée du substrat de session (E1) |
+| `test/annuaire/` | l'annuaire LDAP **simulé** lui-même, contre son propre contrat (`CONVENTIONS.md` §25.2), et un **oracle tiers** (`mod_authnz_ldap` d'Apache, qui ne partage aucune ligne avec ce dépôt) pour ne pas se croire deux fois de la même façon |
+| `test/modules/` | le filet **comportemental** des modules métier du frontend (constat Q-16) : afficher, renommer, cliquer, exiger que la navigation atteigne le nouvel identifiant |
 
 *(`test/aide/` n'est pas une famille : ce sont les montages partagés — base, serveur,
-navigateur — que les six autres appellent.)*
-
-*Une **septième** famille, `test/depot/`, est en vol au moment où ces lignes sont
-écrites : elle vérifie qu'un fichier suivi n'importe que du suivi — c'est le garde-fou du
-défaut « un commit ne se tient pas seul » décrit plus bas. Elle n'est pas comptée ici
-parce qu'elle n'est pas dans la révision mesurée : **c'est précisément la discipline que
-ce garde-fou impose**, et il serait piquant de l'enfreindre en l'annonçant.*
+navigateur, outillage — que les onze autres appellent.)*
 
 **Deux de ces familles sont nées d'un défaut, et c'est ce qui leur donne leur valeur.**
 
@@ -661,7 +700,7 @@ vingt filiales.
 
 Les booléens de configuration s'écrivent `oui` / `non` (`.env.example` fait foi).
 
-### ⚠️ La recette est fermée elle aussi, tant que L3 n'est pas livré
+### La recette est protégée comme la production — par l'authentification réelle du lot L3
 
 C'est une conséquence directe de la règle ci-dessus, et elle surprend : puisque la
 recette porte une **copie réaliste de la production**, elle porte de la vraie
@@ -671,13 +710,20 @@ un environnement d'essai à données jetables : c'est la même fuite que sur
 l'original. La porte S2 l'a relevé (constat M-5) alors que seule la production
 était fermée.
 
-Jusqu'à L3, la recette répond donc `503` sur toutes les routes de données, comme la
-production. La recette fonctionnelle du lot L2 se fait **en développement**, avec
-`db/dev/preparer_base_dev.sh` et une copie anonymisée si l'on veut du volume.
+⚠️ **Ce paragraphe disait « jusqu'à L3, la recette répond 503 sur toutes les routes de
+données ». C'était vrai tant que L3 n'existait pas ; ce ne l'est plus, et l'écrire encore
+serait nier ce que L3 a livré (constat Q-90).** La parade n'est plus un refus général :
+c'est **l'authentification réelle**, la même qui protège la production — annuaire AD ou
+compte de secours, droits à trois axes, journal des connexions (§8). Mesuré sur la recette
+de ce chantier, Active Directory Samba compris : une connexion réussie répond `200`, une
+connexion refusée `401`. Une recette dont l'installation ne déclare **ni** annuaire actif
+**ni** compte de secours retombe sur la session provisoire du lot L2, qui refuse — `503`
+hors `NODE_ENV=developpement` — mais c'est désormais le signe d'une **installation
+incomplète**, pas le fonctionnement attendu d'une recette (§4).
 
 ## 8. Avancement
 
-État réel des lots, **au 03/09/2026**. La **conduite** du chantier — découpage en
+État réel des lots, **au 04/09/2026**. La **conduite** du chantier — découpage en
 vagues, portes de sécurité, définition de « terminé » — vit dans
 [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) ; le **quoi** vit dans
 [`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7.
@@ -687,15 +733,17 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 | **L0 — Socle d'infrastructure** | ✅ **livré** |
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — jouée six fois |
 | **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais non validé par la porte** — **S2** jouée **neuf fois** : franchie au 4ᵉ passage, **refusée aux 5ᵉ, 6ᵉ, 7ᵉ, 8ᵉ et 9ᵉ** ; les 8ᵉ et 9ᵉ sans bloquant. Elle **ne se rejoue plus jusqu'au vert** : depuis le 03/09, le verdict est un **tri** (`../docs/PLAN_EXECUTION.md` §0 bis), et le lot part en vague 3 avec ses constats triés |
-| L3 — Authentification AD et droits · L5 — Journal | 🟡 **en cours — vague 3 OUVERTE le 03/09/2026** (arbitrage `docs/PLAN_EXECUTION.md` §0 bis : la porte trie, elle ne bloque plus). Cinq agents, périmètres au §3 ; conditions d'entrée au `backend/db/CONVENTIONS.md` §22 ; contrat de l'annuaire simulé au §25 |
+| **L3 — Authentification AD et droits** | ✅ **construit**, mesuré de bout en bout contre un **Active Directory réel** — sept profils entrent, l'appartenance indirecte par groupe imbriqué ouvre l'accès. Porte **S3** jouée une fois (04/09/2026) et **refusée** : zéro fuite entre filiales, **deux bloquants des classes dures** (**Q-88**, **Q-89**) corrigés et mordus le jour même, quinze constats neufs triés par l'arbitrage `docs/PLAN_EXECUTION.md` §0 bis |
+| L5 — Journal d'audit | 🟡 **en cours, ouvert le 04/09/2026** (troisième tour de la vague 3, quatre agents, périmètres au §3). Ajout seul et chaînage **éprouvés** ; couverture chiffrée à **4 actions émises sur 20 déclarées** — détail au §8 ci-dessous. Ne pas croire acquis ce que ce tableau ne dit pas : une table inaltérable et incomplète prouve moins qu'il n'y paraît |
 | L4 → L15 | ⬜ à faire — voir [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) §3 et [`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7 |
 
 ### Les verdicts, tels que le journal des portes les formule
 
 Ils ne se déduisent pas d'ici : ils se lisent dans le journal des portes du
 [plan d'exécution](../docs/PLAN_EXECUTION.md) §7, avec le rapport correspondant
-dans [`../docs/securite/`](../docs/securite/). Les deux derniers passages, reproduits
-mot pour mot :
+dans [`../docs/securite/`](../docs/securite/). Les passages les plus récents de chaque
+porte, reproduits mot pour mot — **S3 manquait encore de ce tableau au moment où le
+constat Q-90 a été mesuré**, alors qu'elle avait déjà été jouée :
 
 | Porte | Verdict du journal | Rapport |
 |---|---|---|
@@ -706,6 +754,7 @@ mot pour mot :
 | **S2** (7ᵉ passage) | ❌ **refusée** — **1 bloquant**, 2 majeurs, 3 mineurs. S17 et S18 en échec. **L'auditeur a installé Apache et rsync**, ce que six passages n'avaient pas fait : la liste blanche du vhost — correctif accepté au 6ᵉ — rend **403 sur `/`**, et l'application est injoignable à son URL d'entrée. Le reste tient : 111 sondes hostiles sans effet, cloisonnement 107/107 qui s'effondre proprement au sabotage, et **25 écrans derrière un Apache réel sans une seule violation de CSP** — mesuré pour la première fois. | [`RAPPORT_S2_SEPTIES.md`](../docs/securite/RAPPORT_S2_SEPTIES.md) |
 | **S2** (8ᵉ passage) | ❌ **refusée** — **0 bloquant**, 4 majeurs, 3 mineurs. S13 et S17 en échec. « Le lot est plus solide qu'à aucun passage : **17 fermetures rejouées par mutation, 17 morsures, zéro exception**, y compris les trois que le 7ᵉ avait trouvées vertes. » Mais `LimitRequestBody` **ne s'applique pas à `/api/`** et `install.sh` imprimait « ok » en comparant deux nombres dont l'un n'agit pas ; le banc rendait **614/628 sur machine propre**, une famille entière dépendant d'une entrée `/etc/hosts` que rien ne pose ; et **le registre lui-même avait perdu la ligne d'un bloquant** — 42 constats affichés au lieu de 43. La politique TLS livrée est mesurée pour la première fois. | [`RAPPORT_S2_OCTIES.md`](../docs/securite/RAPPORT_S2_OCTIES.md) |
 | **S2** (9ᵉ passage) | ❌ **refusée** — **0 bloquant**, 4 majeurs, 6 mineurs. **S12 et S18 en échec.** L'auditeur a fait **pour la première fois la jonction que S17 réclame, en une seule pièce** : Chromium réel → Apache réel sur le vhost du dépôt → serveur réel → PostgreSQL, 0 erreur, 0 violation de CSP. 157 sondes de périmètre sans dérive, 30 formes d'injection, journal en ajout seul refusé **au propriétaire**. Mais le bandeau nomme un geste que le correctif ne couvre pas — **troisième tour du même défaut** —, l'erreur brute de l'analyseur JSON fuit en production, et **deux garde-fous posés le jour même sont contournés**, dont celui du registre. | [`RAPPORT_S2_NONIES.md`](../docs/securite/RAPPORT_S2_NONIES.md) |
+| **S3** (1ᵉʳ passage) | ❌ **refusée** — **0 bloquant de fuite entre filiales**, mais **2 bloquants des classes dures** et **15 constats neufs** (Q-88 → Q-102). **S7 et S18 en échec.** Le cœur du lot tient et c'est mesuré : cloisonnement **48/48 en `force RLS`**, périmètre serveur inviolable, AD **réel** fonctionnel — groupes imbriqués compris —, droits à trois axes qui mordent, banc **1028/1028** rejoué deux fois. ⚠️ **Première fois sur ce chantier : les 17 constats fermés la veille ont TOUS tenu sous la mutation.** Les deux bloquants sont ailleurs, et tous deux invisibles à la lecture : **Q-88**, l'annuaire `personnes` jamais alimenté depuis l'AD — **0 ligne après sept connexions réelles** — et **Q-89**, le droit d'export contourné depuis l'interface — **38 213 octets** de « Synthèse Direction », marquée *Document confidentiel*, téléchargés par un compte AD sans droit d'export. Les deux sont corrigés et mordus le jour même | [`RAPPORT_S3.md`](../docs/securite/RAPPORT_S3.md) |
 
 > ## ⚠️ **La porte S2 est REFUSÉE, sur un bloquant. Le lot L2 n'est pas franchi.**
 >
@@ -796,7 +845,7 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`d217fbb`** — « Q-75, Q-76, Q-58 : un contrôle non joué ne se confond plus avec un contrôle réussi » (04/09/2026), rejouée **sur la machine réelle** (Debian 13, `SRV-Infra`) et non plus sur un conteneur Ubuntu. ⚠️ **Le compte est passé de 969 à 1028 pendant la vague 3**, les agents B1 et B2 ayant ajouté 59 essais après le passage de l'agent de documentation — et le garde-fou neuf ne pouvait pas le voir, puisqu'il ne confronte le document qu'à **lui-même** (constat **Q-87**) |
+| Révision mesurée | **`d217fbb`** — « Q-75, Q-76, Q-58 : un contrôle non joué ne se confond plus avec un contrôle réussi » (04/09/2026), rejouée **sur la machine réelle** (Debian 13, `SRV-Infra`) et non plus sur un conteneur Ubuntu. ⚠️ **Le compte est passé de 969 à 1030 pendant la vague 3**, cinquante-neuf essais ayant été ajoutés par les agents B1 et B2 après le passage de l'agent de documentation, puis deux de plus au fil des correctifs suivants — et le garde-fou de l'époque ne pouvait pas le voir seul : il confronte le document à **lui-même**, jamais au compte réellement joué (constat **Q-87**, resté **ouvert** — c'est ce qui a laissé passer, jusqu'à la porte S3, les cinq chiffres faux du constat **Q-90**, celui-ci compris) |
 | État de l'arbre | **propre** (`git status --porcelain` vide) |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
@@ -851,9 +900,13 @@ le plus trompeur qui soit** : il ressemble à un succès.
 
 ⚠️ **Le banc grossit à chaque fermeture de constat**, et c'est la raison d'être de la
 ligne « révision mesurée » : **505** essais au 4ᵉ passage, puis **534**, **564**, **615**,
-**637**, **651**, **969** ici — avec **sept** familles nées en chemin, chacune d'un défaut ou d'un lot (§5). Un total
-différent du vôtre n'est donc pas une contradiction : comparez d'abord la révision **et**
-l'état de l'arbre.
+**637**, **651**, **969**, **1030** à la révision citée ci-dessus — et davantage,
+probablement, au moment où vous lisez ceci — avec des familles nées en chemin, chacune
+d'un défaut ou d'un lot (§5). Un total différent du vôtre n'est donc pas une
+contradiction : comparez d'abord la révision **et** l'état de l'arbre. C'est très
+exactement la trajectoire que le constat **Q-87** a prise en défaut une fois de plus
+entre l'écriture de cette ligne et la précédente : **969** y est resté écrit comme le
+compte « ici » pendant que la révision nommée en portait déjà **1028**, puis **1030**.
 
 #### Lot L2 — l'API
 
@@ -1083,13 +1136,16 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **48 tables** en **6 migrations**, appliquées de bout en bout par `db/migrate.mjs` :
-  `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités + 5 liaisons),
-  `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql` (privilèges,
-  politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le registre des
-  garde-fous) et `006_entropie_et_commentaires.sql` (un garde-fou réémis et des
-  commentaires corrigés — ni table, ni donnée, ni politique). Les deux dernières sont
-  arrivées avec la **fermeture des constats**, après le franchissement du 4ᵉ passage.
+- **48 tables**, obtenues aujourd'hui en **7 migrations** appliquées de bout en bout par
+  `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
+  5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
+  (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
+  registre des garde-fous) et `006_entropie_et_commentaires.sql` (un garde-fou réémis et
+  des commentaires corrigés — ni table, ni donnée, ni politique) closent le lot **L1** ;
+  `007_authentification.sql` (condition **E1** : écriture du substrat de session
+  conditionnée, neuvième garde-fou de schéma — sans nouvelle table) est du lot **L3**.
+  Les trois dernières sont arrivées avec des **fermetures de constats**, après le
+  franchissement du 4ᵉ passage de S2 pour `005`/`006`, à l'ouverture de L3 pour `007`.
 - **192 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
@@ -1134,10 +1190,11 @@ Ce que la reprise fait, quand on la rejoue :
   Sur base neuve : 0 anomalie.
 - **Garde-fous du schéma branchés et découverts** : `f_verifier_schema()` est
   appelée par `db/migrate.mjs` **et** par `deploy/install.sh`, et fait échouer les
-  deux. Elle **découvre** ses contrôles dans le catalogue — **8** aujourd'hui : armement
+  deux. Elle **découvre** ses contrôles dans le catalogue — **9** aujourd'hui : armement
   des déclencheurs, chemin de recherche, couverture RLS, entropie du générateur
-  d'identifiants, portée figée, privilèges, traçabilité, unicités cloisonnées. Sur base
-  neuve : **0 anomalie**.
+  d'identifiants, portée figée, privilèges, traçabilité, unicités cloisonnées, et
+  l'écriture du substrat de session (`f_verifier_substrat_session()`, migration `007`,
+  condition **E1**). Sur base neuve : **0 anomalie**.
 - **Cloisonnement démontré** : `db/verifier_cloisonnement.sql` joué avec `grc_app`,
   **107 contrôles, 107 réussis, 0 échec**, transaction annulée par `rollback`.
 - **Inaltérabilité du journal** : `UPDATE` refusé par le déclencheur sous le compte
@@ -1369,19 +1426,21 @@ sur l'arbre, où les deux fichiers coexistent.
 
 - ✅ **La réserve d'environnement s'est beaucoup réduite, et c'est le 7ᵉ passage qui l'a
   fait.** Pendant six passages, ce paragraphe disait « Apache n'est pas éprouvé, faute
-  d'Apache sur la machine ». **Apache 2.4.58, `mod_deflate`, `mod_expires`, `mod_proxy`,
-  `openssl` et `rsync` sont désormais installés et éprouvés** : le banc monte un Apache
-  réel sur le vhost du dépôt, interroge **l'URL d'entrée**, publie les fichiers par
-  `rsync`, et mesure ce qui sort. Trois défauts — dont un bloquant — sont sortis du seul
-  fait de le faire tourner ; voir « Une réserve écrite n'est pas une réserve traitée »
-  ci-dessus. Le comportement du mandataire à l'expiration de `ProxyTimeout`, hypothèse la
-  plus chargée du correctif de la reprise, est mesuré lui aussi : **la transaction est
-  bien annulée**.
+  d'Apache sur la machine ». **Apache, `mod_deflate`, `mod_expires`, `mod_proxy`,
+  `openssl` et `rsync` sont désormais installés et éprouvés** — la version alors mesurée,
+  **2.4.58**, était celle d'un conteneur Ubuntu **depuis retiré** (voir le bullet Q-77
+  juste après pour la version réellement installée aujourd'hui, **2.4.68**) : le banc
+  monte un Apache réel sur le vhost du dépôt, interroge **l'URL d'entrée**, publie les
+  fichiers par `rsync`, et mesure ce qui sort. Trois défauts — dont un bloquant — sont
+  sortis du seul fait de le faire tourner ; voir « Une réserve écrite n'est pas une
+  réserve traitée » ci-dessus. Le comportement du mandataire à l'expiration de
+  `ProxyTimeout`, hypothèse la plus chargée du correctif de la reprise, est mesuré lui
+  aussi : **la transaction est bien annulée**.
 - ✅ **La politique TLS livrée est mesurée**, pour la première fois, au 8ᵉ passage — ce
   qui restait la dernière affirmation du vhost prise sur parole.
 - ✅ **Le banc a longtemps mesuré une doublure Ubuntu du frontal, pas la cible — constat
   Q-77.** Les deux bullets ci-dessus datent des 7ᵉ et 8ᵉ passages, joués sur un conteneur
-  portant Apache 2.4.58 : juste comme mesure de ce qu'ils décrivaient, mais **ce n'était
+  qui portait Apache 2.4.58 : juste comme mesure de ce qu'ils décrivaient, mais **ce n'était
   pas l'environnement de déploiement**. Depuis le 03/09/2026 le chantier tourne sur la VM
   Debian 13 réelle, et les mêmes propriétés y ont été rejouées, le 04/09 à la révision
   `1590c47` : **Apache/2.4.68 (Debian)**, dont `/etc/mime.types` déclare bien
@@ -1412,17 +1471,28 @@ sur l'arbre, où les deux fichiers coexistent.
   portée. Le lot **L12** (notifications) reste sur une doublure : le **relais SMTP** du
   client n'est accessible ni en essai ni en recette.
 
-**Dette reportée, assumée et datée** — un report écrit vaut mieux qu'un silence :
+⚠️ **Quatre lignes de ce tableau annonçaient encore, sous ces mêmes intitulés, des
+manques que le lot L3 avait déjà comblés — un lecteur en concluait que le produit ne fait
+pas ce qu'il fait. C'est le constat Q-90, et il ferme ainsi :**
+
+| Ce que cette section disait ouvert | Ce qui est vrai, vérifié dans le code |
+|---|---|
+| `sessions`, `session_filiales`, `session_domaines` **écrivables sans condition** par le rôle applicatif | ✅ **fermé** — migration `007` : toute écriture y exige `grc.authentification = 'oui'`, posé uniquement par `src/auth/**` (condition **E1**), et gardée par le neuvième contrôle de `f_verifier_schema()` (§5) |
+| **Aucun contrôle de droits par domaine, aucun droit d'export distinct** | ✅ **fermé** — un niveau **par domaine** (`DroitsSession.niveaux`, émis par `src/droits/passerelle-api.ts`, consommé par `src/api/droits.ts` : constat **Q-66**) ; `exporter` est une action que `deciderAcces` refuse indépendamment de `lire` (`droits.export`), portée par sa propre route (`GET /api/export`, §4) |
+| **Aucune limitation de rythme** | ✅ **fermé** — condition **E4** (`src/api/limiteur.ts`) : les requêtes sans session sont bornées en `onRequest`, **avant** l'analyse du corps ; le constat **Q-10** qu'elle devait traiter est clos avec elle |
+| Un garde-fou mesure une **longueur** là où le §2 norme une **entropie** (constat Q-14) | ✅ **fermé depuis la migration `006`**, et cette ligne-ci était la seule du document à ne pas encore le savoir : `f_verifier_entropie_identifiants()` mesure désormais des **bits** (plancher 52), pas des caractères — le détail et la mesure de pouvoir de détection sont au §5 ci-dessus |
+
+Ce que ces quatre lignes ne disaient pas, et qu'il faut ajouter : **la couverture** de ces
+propriétés n'est pas encore éprouvée par un banc qui les attaque toutes — c'est le rôle de
+la porte de sécurité, pas de cette page.
+
+**Dette réellement reportée, assumée et datée** — un report écrit vaut mieux qu'un silence :
 
 | Sujet | Décision | Échéance |
 |---|---|---|
-| `sessions`, `session_filiales`, `session_domaines` **écrivables sans condition** par le rôle applicatif | Circulaire et assumé : ces tables *produisent* la décision d'autorisation, elles sont lues avant que le périmètre existe. Parade actuelle : requêtes intégralement paramétrées. | **condition d'entrée du lot L3** (`CONVENTIONS.md` §17.4) |
 | **Clés primaires composites** reportées | Arbitrage écrit et daté au `CONVENTIONS.md` §21. | **condition d'entrée du lot L3** |
-| **La lecture du journal d'audit n'est pas cloisonnée** | Dérogation qu'impose le chaînage par empreinte (`004_rls.sql` §6). Sans effet tant que le journal est vide ; dès que L5 alimentera `valeurs_avant` / `valeurs_apres`, une session d'une filiale y lirait le contenu d'une autre — et le compte de supervision `grc_lecture` aussi. | **resserrement = livrable ferme de L5** |
-| **Aucun contrôle de droits par domaine, aucun droit d'export distinct** | Il n'existe pas encore de modèle de droits : toute session qui passe la porte peut écrire dans sa filiale. La barrière provisoire est le refus **fail-closed** hors développement (§7). | **lot L3** (contrôles S6 et S7 de la grille) |
-| **Aucune écriture au journal d'audit** par l'API | Le journal technique trace les écritures ; il n'a pas valeur de preuve. | **lot L5** (contrôle S3) |
-| Un garde-fou mesure une **longueur** là où le §2 norme une **entropie** (constat Q-14) | `f_verifier_entropie_identifiants()` exige de `f_generer_id()` au moins **32 caractères** d'aléa. Rien ne casse : `f_generer_id` est inchangée. Mais les formes serveur tiennent 128 bits en 25 caractères de base 36 — **plus d'aléa en moins de signes** —, si bien qu'aligner un jour le générateur SQL ferait crier ce garde-fou **à tort**. Un seuil exprimé dans la mauvaise unité est un piège qui attend son déclencheur. | **lot L5**, seul écrivain de `f_generer_id()` |
-| **Aucune limitation de rythme** | Elle appartient à la couche d'authentification, qui n'existe pas. Le constat **Q-10** (coût d'analyse de corps avant toute décision) se traite avec elle, en `onRequest`. | **lot L3** (contrôle S11) |
+| **La lecture du journal d'audit n'est pas cloisonnée** | Dérogation qu'impose le chaînage par empreinte (`004_rls.sql` §6). ⚠️ **La justification qui suivait ici — « sans effet tant que le journal est vide » — était fausse et l'est de plus en plus** : mesuré le 04/09/2026, `select count(*) from journal_audit` en portait déjà **159**, et le compte de supervision en lecture seule `grc_lecture` les lit **sans filtre de filiale** — identifiants et adresses IP compris. Ce n'est pas encore une fuite inter-filiale démontrée — seul `grc_lecture` en profite, un rôle de supervision, pas une session de filiale — mais l'exposition grandit à chaque connexion, pas seulement « dès que L5 alimentera » quelque chose : L5 est **ouvert**, et alimente déjà. | **resserrement = livrable ferme de L5**, condition **E6** |
+| **La couverture du journal d'audit** par l'API | L'ajout seul et le chaînage sont éprouvés (§8) ; **20 actions sont déclarées, 4 sont émises** — connexion réussie/refusée, secours, verrouillage par rythme, déconnexion — toutes depuis `src/auth/index.ts` seul. Le refus de droit, la création/modification/suppression d'enregistrements, l'administration, les imports et **les exports** (constat Q-89, seconde moitié) n'écrivent encore rien au journal. | **lot L5, en cours** (contrôle S3) |
 | Le drapeau `grc.administration_groupe` est une **déclaration que la session fait sur elle-même**, pas un privilège | Il protège contre la faute de programmation, **pas** contre un rôle applicatif compromis, qui le poserait avant d'écrire. La règle tenue aujourd'hui — *toute route qui l'exige le vérifie, aucune ne le pose* — est vraie et démontrée par un test ; à L3 de la rendre **structurellement** vraie. | **lot L3** (`CONVENTIONS.md` §17.4) |
 | Supprimer un compte ou une filiale cité au journal est **structurellement impossible** (`restrict` + journal en ajout seul) | Cohérent avec la rétention de trois ans, mais la « purge explicite » de sortie de filiale (`PLAN_SERVEUR` §2.7) n'a aucun chemin applicatif. | procédures d'exploitation à écrire au **lot L13**, avec les purges RGPD |
 | Aucun plafond de durée ni de volume sur une reprise | Une reprise de 12 000 enregistrements tient une connexion du pool une vingtaine de secondes ; `statement_timeout` borne l'instruction, jamais la transaction (constat Q-9). | **lot L7** (import) |

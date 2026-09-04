@@ -312,38 +312,59 @@ describe("Journal d'audit — le client ne peut rien forger (CONVENTIONS §12)",
     const attenduNumero = (dernier[0]?.numero ?? 0) + 1;
     const attenduPrecedente = dernier[0]?.empreinte ?? null;
 
-    await applicatif.query('begin');
-    try {
-      // Valeurs volontairement plausibles : le domaine empreinte_sha256 impose
-      // 64 caractères hexadécimaux, donc un « FORGE » serait rejeté par le type
-      // avant d'atteindre le déclencheur. Ici, rien ne distingue ces valeurs de
-      // vraies empreintes — et elles sont pourtant écrasées.
-      await applicatif.query(
-        `insert into journal_audit
-             (numero, horodatage, empreinte, empreinte_precedente, action, resume)
-         values ($1, timestamptz '2000-01-01 00:00:00+00', $2, $3, 'export', 'tentative de forge')`,
-        [999_999, 'a'.repeat(64), 'b'.repeat(64)],
-      );
+    // ── LA FORGE EST COMMISE, PLUS ANNULÉE — migration 008, condition E6 ──
+    //
+    // Ce bloc ouvrait une transaction, insérait, relisait et **annulait**, le
+    // tout sous le compte applicatif. Depuis que la lecture du journal est
+    // cloisonnée, la relecture ne rend plus rien : la ligne forgée ne porte
+    // aucune filiale — c'est ce qui la rend insérable —, et une entrée
+    // transversale est réservée au périmètre Groupe (§29.7), impossible à poser
+    // ici puisque cette base n'a aucune filiale active.
+    //
+    // Deux rôles, et le partage est celui du sens de l'essai :
+    //   · **l'INSERT reste sous `applicatif`** — c'est le sujet : « le CLIENT ne
+    //     peut rien forger ». Le faire sous le propriétaire aurait éprouvé
+    //     quelqu'un d'autre ;
+    //   · **la RELECTURE passe sous `proprietaire`** — ce n'est pas le sujet,
+    //     c'est l'instrument de mesure, et le §29.7 lui accorde la chaîne
+    //     entière précisément pour que le chaînage puisse numéroter.
+    //
+    // Le `rollback` disparaît avec la transaction : deux connexions distinctes
+    // ne voient pas les écritures non validées l'une de l'autre. Ça ne coûte
+    // rien — `ouvrirBaseEssai` monte une base neuve par fichier d'essai, et le
+    // journal est en ajout seul de toute façon : il n'y avait rien à nettoyer.
 
-      const ligne = (
-        await base.lignes(
-          applicatif,
-          `select numero::int as numero, empreinte, empreinte_precedente,
-                  horodatage > now() - interval '1 minute' as horodatage_recent
-             from journal_audit where resume = 'tentative de forge'`,
-        )
-      )[0];
+    // Valeurs volontairement plausibles : le domaine empreinte_sha256 impose
+    // 64 caractères hexadécimaux, donc un « FORGE » serait rejeté par le type
+    // avant d'atteindre le déclencheur. Ici, rien ne distingue ces valeurs de
+    // vraies empreintes — et elles sont pourtant écrasées.
+    await applicatif.query(
+      `insert into journal_audit
+           (numero, horodatage, empreinte, empreinte_precedente, action, resume)
+       values ($1, timestamptz '2000-01-01 00:00:00+00', $2, $3, 'export', 'tentative de forge')`,
+      [999_999, 'a'.repeat(64), 'b'.repeat(64)],
+    );
 
-      assert.equal(ligne.numero, attenduNumero, 'Le numéro vient du déclencheur, pas du client.');
-      assert.equal(ligne.empreinte_precedente, attenduPrecedente, 'La chaîne est reprise en base.');
-      assert.notEqual(ligne.empreinte, 'a'.repeat(64), "L'empreinte annoncée a été écrasée.");
-      assert.equal(ligne.horodatage_recent, true, "L'horodatage est celui du serveur.");
+    const lignes = await base.lignes(
+      proprietaire,
+      `select numero::int as numero, empreinte, empreinte_precedente,
+              horodatage > now() - interval '1 minute' as horodatage_recent
+         from journal_audit where resume = 'tentative de forge'`,
+    );
+    assert.equal(
+      lignes.length,
+      1,
+      'La ligne forgée doit exister : sans elle, les assertions ci-dessous ne portent sur rien.',
+    );
+    const ligne = lignes[0];
 
-      // Et le résultat reste une chaîne saine : la forge n'a pas laissé de trace.
-      assert.deepEqual(await anomalies(applicatif), []);
-    } finally {
-      await applicatif.query('rollback');
-    }
+    assert.equal(ligne.numero, attenduNumero, 'Le numéro vient du déclencheur, pas du client.');
+    assert.equal(ligne.empreinte_precedente, attenduPrecedente, 'La chaîne est reprise en base.');
+    assert.notEqual(ligne.empreinte, 'a'.repeat(64), "L'empreinte annoncée a été écrasée.");
+    assert.equal(ligne.horodatage_recent, true, "L'horodatage est celui du serveur.");
+
+    // Et le résultat reste une chaîne saine : la forge n'a pas laissé de trace.
+    assert.deepEqual(await anomalies(proprietaire), []);
   });
 });
 

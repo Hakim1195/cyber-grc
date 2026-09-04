@@ -360,13 +360,15 @@ export class ServiceAuthentification implements Authentificateur {
         filialeId: droits.filialeActive,
         entiteType: 'sessions',
         entiteId: session.etat.sessionId,
+        // §29.5 : phrase FIXE. Le login part dans `utilisateurLibelle` ci-dessus,
+        // le nom d'affichage dans `valeursApres`. La phrase du compte de secours
+        // reste explicite pour qu'une recherche plein texte la trouve sans
+        // connaître le schéma — c'est le critère d'acceptation du lot.
         resume: parSecours
-          ? // Critère d'acceptation du lot : « le compte de secours est journalisé à
-            // chaque usage ». La phrase est explicite pour qu'une recherche plein texte
-            // dans le journal la trouve sans connaître le schéma.
-            `Connexion par le COMPTE DE SECOURS applicatif « ${identite.login} » — hors annuaire.`
-          : `Connexion réussie de « ${identite.login} » (${identite.nomAffichage}).`,
+          ? 'Connexion par le COMPTE DE SECOURS applicatif — hors annuaire.'
+          : 'Connexion réussie.',
         valeursApres: {
+          nom_affichage: identite.nomAffichage,
           perimetre: droits.portee,
           filiales: droits.filiales.length,
           administrateur: droits.administrateur,
@@ -438,7 +440,8 @@ export class ServiceAuthentification implements Authentificateur {
         utilisateurLibelle: verification.login,
         sessionId: verification.sessionId,
         adresseIp,
-        resume: `Déconnexion de « ${verification.login ?? 'inconnu'} ».`,
+        // §29.5 : le login est dans `utilisateurLibelle`, pas dans la phrase.
+        resume: 'Déconnexion.',
       });
       this.derniereRevalidation.delete(verification.sessionId);
       return touchees > 0;
@@ -452,40 +455,75 @@ export class ServiceAuthentification implements Authentificateur {
 
   /* ---- Étapes internes --------------------------------------------- */
 
+  /**
+   * ⚠️ **UN REFUS SE RENVOIE, IL NE SE LÈVE PAS D'ICI — corrigé le 04/09/2026.**
+   *
+   * Ce bloc écrivait deux choses puis levait, **à l'intérieur** de la
+   * transaction : `avecTransaction` annule sur exception, si bien que la
+   * révocation et sa trace repartaient avec elle. Le commentaire promettait
+   * *« une session morte est révoquée en base une fois, et l'événement est
+   * journalisé une fois »* ; la réalité était **zéro fois**, pour les deux.
+   *
+   * Deux mesures le disent, et elles concordent : le journal de la base de
+   * recette porte 160 entrées et **aucune** `session_expiree` ; et l'essai
+   * chargé de le prouver — « une session ne meurt qu'une fois » — comparait
+   * `count(*)` avant et après, lisait **`0` les deux fois**, et concluait au
+   * vert. Il aurait rendu le même verdict si le service avait écrit une entrée
+   * par requête, c'est-à-dire dans le cas exact qu'il existe pour interdire.
+   *
+   * Il est resté invisible six mois parce que les deux moitiés se couvraient :
+   * l'écriture était annulée, et le contrôle mesurait l'annulation contre
+   * elle-même. C'est le motif du 5ᵉ passage de la porte S2 — *deux endroits
+   * dont aucun n'a tort seul* —, et il a été trouvé en ajoutant au contrôle une
+   * exigence de **matière** : « il doit y avoir eu quelque chose à compter ».
+   *
+   * La transaction rend donc un **verdict**, et l'exception est levée après le
+   * `commit`. Le refus est identique pour l'appelant ; ce qui change est que la
+   * trace survit.
+   */
   private async etatDeLaSession(jeton: string, adresseIp: string | null): Promise<EtatSession> {
-    return await avecTransactionAuthentification(this.pool, PERIMETRE_SYSTEME, async (client) => {
-      const verification = await verifierSession(
-        client,
-        jeton,
-        this.config.session.dureeInactiviteMinutes,
-      );
+    const verdict = await avecTransactionAuthentification(
+      this.pool,
+      PERIMETRE_SYSTEME,
+      async (client): Promise<{ etat: EtatSession } | { refus: string }> => {
+        const verification = await verifierSession(
+          client,
+          jeton,
+          this.config.session.dureeInactiviteMinutes,
+        );
 
-      if (verification.etat === null) {
-        // Une session morte est révoquée en base **une fois**, et l'événement est
-        // journalisé **une fois**. Sans cela, un jeton périmé rejoué en boucle
-        // écrirait une entrée par requête dans un journal scellé de trois ans.
-        if (
-          verification.sessionId !== null &&
-          (verification.motif === 'expiree' || verification.motif === 'inactive')
-        ) {
-          await revoquerSession(client, verification.sessionId, verification.motif);
-          await journaliser(client, {
-            action: 'session_expiree',
-            utilisateurLibelle: verification.login,
-            sessionId: verification.sessionId,
-            adresseIp,
-            resume:
-              verification.motif === 'expiree'
-                ? 'Session close : échéance absolue atteinte.'
-                : 'Session close : inactivité prolongée.',
-          });
+        if (verification.etat === null) {
+          // Une session morte est révoquée en base **une fois**, et l'événement est
+          // journalisé **une fois**. Sans cela, un jeton périmé rejoué en boucle
+          // écrirait une entrée par requête dans un journal scellé de trois ans.
+          // C'est `revoquerSession` qui rend cela vrai : la seconde requête ne
+          // trouve plus la session vivante, et ne rejournalise donc pas.
+          if (
+            verification.sessionId !== null &&
+            (verification.motif === 'expiree' || verification.motif === 'inactive')
+          ) {
+            await revoquerSession(client, verification.sessionId, verification.motif);
+            await journaliser(client, {
+              action: 'session_expiree',
+              utilisateurLibelle: verification.login,
+              sessionId: verification.sessionId,
+              adresseIp,
+              resume:
+                verification.motif === 'expiree'
+                  ? 'Session close : échéance absolue atteinte.'
+                  : 'Session close : inactivité prolongée.',
+            });
+          }
+          return { refus: verification.motif ?? 'inconnu' };
         }
-        throw sessionAbsente(`session refusée, motif « ${verification.motif ?? 'inconnu'} »`);
-      }
 
-      await toucherSession(client, verification.etat.sessionId);
-      return verification.etat;
-    });
+        await toucherSession(client, verification.etat.sessionId);
+        return { etat: verification.etat };
+      },
+    );
+
+    if ('refus' in verdict) throw sessionAbsente(`session refusée, motif « ${verdict.refus} »`);
+    return verdict.etat;
   }
 
   /**
@@ -545,9 +583,9 @@ export class ServiceAuthentification implements Authentificateur {
         adresseIp,
         entiteType: 'utilisateurs',
         entiteId: etat.utilisateurId,
-        resume:
-          `Déprovisionnement immédiat de « ${etat.login} » : ${motif}. ` +
-          `${sessionsRevoquees} session(s) active(s) révoquée(s).`,
+        // §29.5 : phrase fixe. `motif` et le décompte sont des valeurs — elles
+        // vont dans le `jsonb`, où elles étaient d'ailleurs déjà.
+        resume: 'Déprovisionnement immédiat : sessions actives révoquées.',
         valeursApres: { motif, sessions_revoquees: sessionsRevoquees },
       });
     });
@@ -602,7 +640,7 @@ export class ServiceAuthentification implements Authentificateur {
     if (this.annuaire === null) {
       this.limiteur.echec(login, adresseIp);
       await this.journaliserEchec(login, adresseIp, {
-        resume: `Échec de connexion pour « ${login} ».`,
+        resume: 'Échec de connexion.',
         detail:
           'AUTH_LDAP_ACTIF vaut « non » et le login présenté n’est pas celui du compte de ' +
           'secours : aucun moyen de vérifier ces identifiants',
@@ -649,7 +687,7 @@ export class ServiceAuthentification implements Authentificateur {
       if (erreur instanceof ErreurIdentifiants) {
         this.limiteur.echec(login, adresseIp);
         await this.journaliserEchec(login, adresseIp, {
-          resume: `Échec de connexion pour « ${login} ».`,
+          resume: 'Échec de connexion.',
           detail: erreur.message,
           compter: true,
         });
@@ -682,7 +720,8 @@ export class ServiceAuthentification implements Authentificateur {
     if (!bon) {
       this.limiteur.echec(login, adresseIp);
       await this.journaliserEchec(login, adresseIp, {
-        resume: `Échec de connexion sur le COMPTE DE SECOURS « ${login} ».`,
+        // §29.5 : phrase fixe ; le login présenté est dans `utilisateurLibelle`.
+        resume: 'Échec de connexion sur le COMPTE DE SECOURS applicatif.',
         detail: 'empreinte scrypt non concordante',
         compter: true,
       });

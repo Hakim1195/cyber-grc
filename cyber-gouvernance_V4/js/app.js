@@ -101,6 +101,12 @@ async function startApp() {
 	"/audits": () => { if (typeof AuditsModule !== "undefined") AuditsModule.renderList(); },
 	"/audits/:id": (id) => { if (typeof AuditsModule !== "undefined") AuditsModule.renderAuditDetail(id); },
 
+        // Journal d'audit (lot L5) : consultation, vérification du chaînage et
+        // export. Domaine de droits « journal », distinct de « administration »
+        // (`CONVENTIONS.md` §29.8) — régler l'application et lire trois ans
+        // d'identités ne sont pas le même droit.
+        "/journal": () => { if (typeof JournalModule !== "undefined") JournalModule.renderList(); },
+
         "/settings": () => { if (typeof SettingsModule !== "undefined") SettingsModule.render(); }
     });
 

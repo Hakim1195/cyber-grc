@@ -34,11 +34,12 @@ import type { Pool } from 'pg';
 
 import { greffonApi } from './api/index.js';
 import { ServiceAuthentification } from './auth/index.js';
+import { journaliser } from './auth/journal.js';
 import { engendrerIdentifiant } from './entites/index.js';
 import { chargerConfiguration, ErreurConfiguration, resumerConfiguration } from './config/index.js';
 import { traduireErreur } from './erreurs/index.js';
 import type { Configuration } from './config/index.js';
-import { creerPool, fermerPool, verifierBase } from './db/pool.js';
+import { avecTransaction, creerPool, fermerPool, PERIMETRE_SYSTEME, verifierBase } from './db/pool.js';
 
 const DEMARRE_LE = Date.now();
 
@@ -467,7 +468,77 @@ export async function demarrer(): Promise<void> {
     exit(1);
   }
 
+  await tracerCycleDeVie(serveur, pool, config, 'demarrage');
   serveur.log.info(resumerConfiguration(config), 'Serveur Cyber GRC démarré');
+}
+
+/* =====================================================================
+ *  Journal d'audit — démarrage et arrêt du service
+ * ===================================================================== */
+
+/**
+ * Écrit au journal d'audit le démarrage ou l'arrêt du service.
+ *
+ * ── Pourquoi ces deux entrées existent ───────────────────────────────────
+ *
+ * `CONVENTIONS.md` §29.2 : « `demarrage`, `arret` — `src/serveur.ts` : **le
+ * journal doit pouvoir montrer un trou de service** ». Sans elles, une période
+ * sans aucune entrée est indiscernable de deux choses très différentes : une
+ * nuit sans utilisateur, ou un service arrêté pendant qu'on touchait à la base.
+ * Un auditeur qui lit le journal trois ans plus tard n'a aucun autre moyen de
+ * faire la différence — `journalctl` est purgé bien avant.
+ *
+ * ── Trois propriétés ────────────────────────────────────────────────────
+ *
+ *  · **Périmètre système, `filiale_id` nul.** L'événement est transversal : il
+ *    n'appartient à aucune filiale, et la politique d'ajout l'admet
+ *    explicitement (`004_rls.sql` §6). `utilisateur_id` sera nul lui aussi —
+ *    c'est le cas « traitement système » que le déclencheur de chaînage
+ *    documente, pas un défaut.
+ *  · **Elle n'empêche jamais le service de démarrer ni de s'arrêter.** La base
+ *    peut être injoignable : le §  « mode dégradé » de `demarrer()` existe
+ *    précisément pour cela, et un service qui refuserait de démarrer parce que
+ *    son journal est indisponible transformerait un incident de base en
+ *    indisponibilité totale. L'échec part au journal technique en `error`.
+ *  · **`resume` est une phrase fixe** (§29.5), et le peu de contexte utile part
+ *    en `jsonb` — sans aucun secret de configuration (§29.6) : ni identifiants
+ *    de base, ni URL d'annuaire, ni chemins. L'environnement, la version et le
+ *    port suffisent à situer un trou de service.
+ */
+async function tracerCycleDeVie(
+  serveur: FastifyInstance,
+  pool: Pool,
+  config: Configuration,
+  quoi: 'demarrage' | 'arret',
+  motif: string | null = null,
+): Promise<void> {
+  try {
+    await avecTransaction(pool, PERIMETRE_SYSTEME, async (client) => {
+      await journaliser(client, {
+        action: quoi,
+        // Transversal : aucune filiale ne le porte (§29.7, troisième cas).
+        filialeId: null,
+        utilisateurLibelle: 'systeme',
+        resume:
+          quoi === 'demarrage'
+            ? 'Démarrage du service applicatif.'
+            : 'Arrêt du service applicatif.',
+        valeursApres: {
+          environnement: config.environnement,
+          version: config.version,
+          ecoute: `${config.serveur.hote}:${String(config.serveur.port)}`,
+          ...(motif === null ? {} : { motif }),
+          ...(quoi === 'arret' ? { duree_service_s: Math.round((Date.now() - DEMARRE_LE) / 1000) } : {}),
+        },
+      });
+    });
+  } catch (erreur) {
+    serveur.log.error(
+      { erreur: erreur instanceof Error ? erreur.message : String(erreur), evenement: quoi },
+      'Écriture au journal d’audit impossible : le cycle de vie du service n’a PAS été tracé. ' +
+        'Le journal montrera un trou de service sans en donner la cause.',
+    );
+  }
 }
 
 /**
@@ -526,6 +597,11 @@ function installerArretPropre(serveur: FastifyInstance, pool: Pool, config: Conf
 
     try {
       await serveur.close();
+      // Après `close()` — les requêtes en cours sont finies, leurs propres
+      // entrées sont donc déjà dans la chaîne — et AVANT `fermerPool`, qui
+      // ferme la seule voie par laquelle cette entrée peut s'écrire. L'ordre
+      // est ce qui fait de `arret` le dernier maillon du segment.
+      await tracerCycleDeVie(serveur, pool, config, 'arret', motif);
       await fermerPool(pool);
       clearTimeout(filet);
       serveur.log.info({ motif }, 'Arrêt propre terminé');

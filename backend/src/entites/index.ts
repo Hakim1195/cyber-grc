@@ -98,6 +98,7 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import type { PoolClient } from 'pg';
 
+import { journaliser } from '../auth/journal.js';
 import type { PerimetreSession } from '../db/pool.js';
 import type {
   BilanReprise,
@@ -1478,6 +1479,20 @@ function champDeColonne(d: DescriptionEntite, nomTable: string, nomColonne: stri
   return nomColonne;
 }
 
+/**
+ * Les phrases du journal d'audit pour les trois écritures métier.
+ *
+ * Fixes, et **sans aucune valeur venue de la requête** (§29.5). Ce que
+ * l'entrée dit de variable, elle le dit dans ses colonnes : `entite_type`,
+ * `entite_id`, `valeurs_avant`, `valeurs_apres`.
+ */
+const RESUME_ECRITURE: Readonly<Record<'creation' | 'modification' | 'suppression', string>> =
+  Object.freeze({
+    creation: 'Création d’un enregistrement.',
+    modification: 'Modification d’un enregistrement.',
+    suppression: 'Suppression d’un enregistrement.',
+  });
+
 /* =====================================================================
  *  §8 — LE DÉPÔT
  * ===================================================================== */
@@ -1534,6 +1549,30 @@ export interface OptionsCreation {
    * « il existe ailleurs ». Il part au journal technique, pas dans la réponse.
    */
   readonly signalerRenommage?: ((ancien: string, nouveau: string) => void) | null;
+
+  /**
+   * N'écrit **pas** l'entrée `creation` au journal d'audit.
+   *
+   * ── Le seul appelant légitime est la reprise, et voici l'arbitrage ──────
+   *
+   * `appliquerReprise` crée et modifie enregistrement par enregistrement, en
+   * appelant `creer` et `modifier` : sans ce drapeau, la reprise d'un export de
+   * 20 000 lignes écrirait **20 000 entrées chaînées** dans une table retenue
+   * trois ans, chacune prenant le verrou consultatif et calculant un `sha256`.
+   *
+   * Ce que le journal doit prouver d'un import n'est pas la ligne, c'est
+   * **l'acte** : qui a repris quel fichier, quand, avec quel effet. C'est
+   * exactement ce que porte l'entrée `import` émise par `POST /api/reprise`
+   * (mode, empreinte `sha256` du fichier, créés / mis à jour / supprimés par
+   * collection) — et le détail ligne à ligne reste dans le fichier lui-même,
+   * dont l'empreinte est consignée dans `imports`.
+   *
+   * ⚠️ Ce n'est donc pas un trou de couverture, c'est une **granularité
+   * choisie**, et elle est mesurée : `test/journal/couverture.test.mjs` vérifie
+   * qu'une reprise laisse **une** entrée `import` et **aucune** entrée
+   * `creation`/`modification`.
+   */
+  readonly sansJournal?: boolean;
 }
 
 export class Depot {
@@ -2035,6 +2074,23 @@ export class Depot {
           'transaction.',
       );
     }
+
+    // ── §29.3 : la trace vit dans la transaction de l'écriture ──────────
+    // Elle est écrite APRÈS la relecture, pour porter l'enregistrement tel
+    // qu'il existe réellement — valeurs par défaut du schéma comprises, et
+    // identifiant **retenu** (qui peut différer de celui proposé, cf. N-1).
+    // Aucun `try` ici : si le journal refuse, la création est annulée avec lui
+    // (règle 2 du §29.3).
+    if (options.sansJournal !== true) {
+      await this.journaliserEcriture(client, perimetre, {
+        action: 'creation',
+        entite,
+        identifiant: identifiantFinal,
+        // §29.4 : `creation` n'a pas d'avant.
+        avant: null,
+        apres: relu,
+      });
+    }
     return relu;
   }
 
@@ -2059,6 +2115,11 @@ export class Depot {
     champs: Enregistrement,
     versionSeconde: number | null = null,
     signalerChampInconnu: ((champ: string) => void) | null = null,
+    /**
+     * N'écrit pas l'entrée `modification` au journal. Seul appelant légitime :
+     * la reprise — voir `OptionsCreation.sansJournal`, qui porte l'arbitrage.
+     */
+    sansJournal = false,
   ): Promise<Enregistrement> {
     const d = description(entite);
     const filiale = this.filialeActive(perimetre);
@@ -2066,6 +2127,11 @@ export class Depot {
 
     const { valeurs, liaisons } = this.repartir(d, champs, entite, signalerChampInconnu);
     let principales = valeurs.get(d.table) ?? new Map<string, unknown>();
+    // §29.4 : les valeurs **précédentes des seuls champs modifiés**, rien de plus.
+    // Deux cartes, parce que les deux tables d'une entité scindée peuvent porter
+    // le même nom de colonne et que le nom **exposé** se dérive de la table.
+    const avantPrincipal = new Map<string, unknown>();
+    const avantSeconde = new Map<string, unknown>();
 
     // ══ CE QUI N'A PAS CHANGÉ NE S'ÉCRIT PAS ═══════════════════════════
     //
@@ -2088,7 +2154,13 @@ export class Depot {
     // **toutes** les entités. Le droit d'écrire est exigé exactement quand une
     // écriture aurait lieu, et à aucun autre moment.
     if (principales.size > 0) {
-      principales = await this.retirerLesInchangees(client, d.table, identifiant, principales);
+      principales = await this.retirerLesInchangees(
+        client,
+        d.table,
+        identifiant,
+        principales,
+        avantPrincipal,
+      );
     }
 
     // Les liaisons suivent la même règle : réécrire à l'identique un ensemble
@@ -2110,6 +2182,7 @@ export class Depot {
             identifiant,
             filiale,
             valeurs.get(d.seconde.table) ?? new Map<string, unknown>(),
+            avantSeconde,
           );
 
     const ecritPrincipale = principales.size > 0 || liaisonsAEcrire.size > 0;
@@ -2187,6 +2260,54 @@ export class Depot {
         `Enregistrement ${entite}/${identifiant} modifié puis illisible dans la même transaction.`,
       );
     }
+
+    // ── §29.4 : LE DIFFÉRENTIEL, PAS LE DOUBLON ────────────────────────
+    //
+    // La rétention est de trois ans. Deux copies complètes à chaque changement
+    // de statut multiplieraient le volume du journal par la taille de
+    // l'enregistrement, pour répondre à une question que personne ne pose : un
+    // auditeur demande *ce qui a changé*, pas *à quoi ressemblait la fiche*.
+    //
+    // Le lot des colonnes retenues est exactement celui que « ce qui n'a pas
+    // changé ne s'écrit pas » a déjà calculé (constat M-1) : la même notion,
+    // le même calcul, aucun second parcours qui pourrait diverger.
+    //
+    // ⚠️ **Asymétrie assumée sur les liaisons, et il faut la connaître.** Une
+    // liaison n-n est réécrite en bloc (`ecrireLiaison` : `delete` puis
+    // `insert`) : son état NEUF est ici, son état précédent ne l'est pas — le
+    // lire coûterait une requête par liaison pour une information qu'aucune
+    // question d'audit ne réclame aujourd'hui. `valeurs_apres` porte donc les
+    // liaisons réécrites, `valeurs_avant` non. Écrit ici pour qu'on puisse le
+    // contester plutôt que le découvrir.
+    if (!sansJournal && ecritQuelqueChose) {
+      // Les deux faces sont nommées comme le frontend nomme ses champs : une
+      // entrée de journal se lit trois ans plus tard par quelqu'un qui connaît
+      // l'écran, pas le schéma. `champDeColonne` est l'alias inverse déjà
+      // employé par `decrire()` — la même carte, pas une seconde.
+      const avant: Enregistrement = {};
+      const apres: Enregistrement = {};
+      const noter = (nomTable: string, colonne: string, ancienne: unknown): void => {
+        const champ = champDeColonne(d, nomTable, colonne);
+        avant[champ] = ancienne;
+        // La valeur NEUVE vient de la relecture, jamais de ce qui a été proposé :
+        // c'est elle qui porte les coercitions du schéma (chaîne vide → NULL,
+        // arrondi d'un numérique), donc l'état réel de la ligne.
+        apres[champ] = relu[champ] ?? null;
+      };
+      for (const [colonne, ancienne] of avantPrincipal) noter(d.table, colonne, ancienne);
+      if (d.seconde !== undefined) {
+        for (const [colonne, ancienne] of avantSeconde) noter(d.seconde.table, colonne, ancienne);
+      }
+      for (const liaison of liaisonsAEcrire.keys()) apres[liaison.champ] = relu[liaison.champ];
+
+      await this.journaliserEcriture(client, perimetre, {
+        action: 'modification',
+        entite,
+        identifiant,
+        avant,
+        apres,
+      });
+    }
     return relu;
   }
 
@@ -2216,36 +2337,58 @@ export class Depot {
     this.exigerDroitEcriture(d, perimetre, entite);
     verifierIdentifiant(identifiant);
 
+    // ── §29.4 : `suppression` porte l'enregistrement SUPPRIMÉ ───────────
+    //
+    // Il faut donc le lire **avant** de le détruire : après, il n'existe plus,
+    // et une trace de suppression qui ne dit pas ce qui a disparu ne prouve
+    // rien. La lecture est faite dans la transaction de la suppression, avec
+    // le périmètre de la session — si elle rend `null`, la ligne n'était pas
+    // lisible, et le `delete` produira lui-même le diagnostic à trois causes.
+    const avant = await this.lireUn(client, entite, identifiant, this.filialeActive(perimetre));
+
     if (d.seconde !== undefined) {
       await this.supprimerMesure(client, perimetre, identifiant, version);
-      return;
+    } else {
+      const conditions = [`${ident('id')} = $1`];
+      const parametres: unknown[] = [identifiant];
+      if (version !== null) {
+        conditions.push(`${ident('version')} = $2`);
+        parametres.push(version);
+      }
+
+      const resultat = await this.executer(
+        client,
+        `delete from ${ident(d.table)} where ${conditions.join(' and ')}`,
+        parametres,
+        entite,
+        identifiant,
+      );
+
+      if (resultat.rowCount === 0) {
+        throw await this.diagnostiquerEcriture(
+          client,
+          perimetre,
+          entite,
+          d.table,
+          identifiant,
+          version,
+        );
+      }
     }
 
-    const conditions = [`${ident('id')} = $1`];
-    const parametres: unknown[] = [identifiant];
-    if (version !== null) {
-      conditions.push(`${ident('version')} = $2`);
-      parametres.push(version);
-    }
-
-    const resultat = await this.executer(
-      client,
-      `delete from ${ident(d.table)} where ${conditions.join(' and ')}`,
-      parametres,
+    // La trace est écrite APRÈS le refus éventuel : une suppression refusée ne
+    // laisse pas de trace de suppression. Elle est écrite dans la MÊME
+    // transaction, et sans `try` : si le journal refuse, la suppression est
+    // annulée avec lui (§29.3, règle 2). C'est la propriété que la morsure
+    // « retirer la journalisation de la suppression » éprouve.
+    await this.journaliserEcriture(client, perimetre, {
+      action: 'suppression',
       entite,
       identifiant,
-    );
-
-    if (resultat.rowCount === 0) {
-      throw await this.diagnostiquerEcriture(
-        client,
-        perimetre,
-        entite,
-        d.table,
-        identifiant,
-        version,
-      );
-    }
+      avant,
+      // §29.4 : `suppression` n'a pas d'après.
+      apres: null,
+    });
   }
 
   /* ===============================================================
@@ -2438,6 +2581,30 @@ export class Depot {
       if (relu !== null) evaluations.push(relu);
     }
 
+    // ── Une entrée, pas N — et c'est un arbitrage, pas une économie ─────
+    //
+    // La propagation est **un geste** de l'utilisateur : « j'ai évalué ce
+    // contrôle, reporte-le sur les exigences qu'il couvre ». Émettre une
+    // `modification` par exigence rendrait le journal illisible à l'endroit
+    // exact où il doit servir — un contrôle AirCyber couvre couramment
+    // plusieurs dizaines de questions —, et la question d'audit est « qui a
+    // fait basculer la conformité, et sur quel périmètre », pas « quelle
+    // ligne a été touchée en soixante-troisième ».
+    //
+    // L'entrée nomme donc la MESURE (l'objet du geste) et porte la liste des
+    // évaluations touchées, en `jsonb` : rien n'est perdu, tout est joignable.
+    await this.journaliserEcriture(client, perimetre, {
+      action: 'modification',
+      entite: 'mesures',
+      identifiant: mesureId,
+      avant: null,
+      apres: {
+        operation: 'propagation_au_plus_defavorable',
+        evaluations_mises_a_jour: misesAJour,
+        evaluations: identifiants,
+      },
+    });
+
     return { evaluationsMisesAJour: misesAJour, evaluations };
   }
 
@@ -2484,7 +2651,11 @@ export class Depot {
    *    cette transaction plutôt qu'en simulant quoi que ce soit — ce qui
    *    garantit que l'aperçu montre le **vrai** résultat, contraintes de la
    *    base comprises, et non une estimation ;
-   *  · elle n'écrit rien dans `journal_audit` (lot L5) ;
+   *  · elle n'écrit **aucune** entrée au journal d'audit, ni pour elle-même ni
+   *    par ligne : c'est la **route** qui écrit l'entrée `import`, dans cette
+   *    même transaction, parce que c'est elle qui connaît le fichier et son
+   *    empreinte. L'arbitrage sur la granularité — un acte, pas 20 000 lignes —
+   *    est écrit à `OptionsCreation.sansJournal` ;
    *  · elle ne touche **jamais** le socle Groupe : la purge se borne à
    *    `filiale_id = <filiale active>`, et les lignes de portée Groupe
    *    survivent — c'est la propriété du §17.6, appliquée à l'import.
@@ -2702,6 +2873,10 @@ export class Depot {
             signalerRenommage: (ancien, nouveau) => {
               signalerRenommage(entite, ancien, nouveau);
             },
+            // Le journal d'audit trace l'ACTE (une entrée `import`, écrite par
+            // la route dans cette même transaction), pas ses 20 000 lignes.
+            // L'arbitrage est écrit à `OptionsCreation.sansJournal`.
+            sansJournal: true,
           });
           const retenu = typeof cree['id'] === 'string' ? cree['id'] : identifiant;
           crees[entite] = (crees[entite] ?? 0) + 1;
@@ -2725,6 +2900,8 @@ export class Depot {
             donnees,
             deja.seconde,
             signaler,
+            // Même arbitrage que pour la création ci-dessus.
+            true,
           );
           misAJour[entite] = (misAJour[entite] ?? 0) + 1;
         }
@@ -3853,6 +4030,13 @@ export class Depot {
     mesureId: string,
     filiale: string,
     proposees: Map<string, unknown>,
+    /**
+     * Reçoit, quand il est fourni, la valeur **précédente** de chaque colonne
+     * retenue : c'est le `valeurs_avant` du journal d'audit (§29.4), et il est
+     * pris ici parce que la ligne est déjà lue. Un second `select` pour la même
+     * information serait une occasion de le lire dans un autre état.
+     */
+    avant?: Map<string, unknown>,
   ): Promise<Map<string, unknown>> {
     if (proposees.size === 0) return proposees;
 
@@ -3883,6 +4067,7 @@ export class Depot {
       if (colonne === undefined) continue;
       if (valeursEquivalentes(colonne.famille, stockee[nom], proposee)) continue;
       retenues.set(nom, proposee);
+      avant?.set(nom, stockee[nom] ?? null);
     }
     return retenues;
   }
@@ -3902,6 +4087,8 @@ export class Depot {
     nomTable: string,
     identifiant: string,
     proposees: Map<string, unknown>,
+    /** Voir `retirerLesInchangeesMiseEnOeuvre` : le `valeurs_avant` du §29.4. */
+    avant?: Map<string, unknown>,
   ): Promise<Map<string, unknown>> {
     const table = this.table(nomTable);
     const colonnes = [...proposees.keys()].filter((nom) => table.colonnes.has(nom));
@@ -3928,6 +4115,7 @@ export class Depot {
       if (colonne === undefined) continue;
       if (valeursEquivalentes(colonne.famille, stockee[nom], proposee)) continue;
       retenues.set(nom, proposee);
+      avant?.set(nom, stockee[nom] ?? null);
     }
     return retenues;
   }
@@ -4203,6 +4391,57 @@ export class Depot {
       detailJournal:
         `écriture refusée sur ${d.table} : entité de niveau Groupe (aucune colonne filiale_id), ` +
         'session sans administration Groupe',
+    });
+  }
+
+  /**
+   * Écrit au journal d'audit la trace d'une écriture métier.
+   *
+   * ════════════════════════════════════════════════════════════════════
+   *  Trois propriétés, et chacune répond à une phrase du §29
+   * ════════════════════════════════════════════════════════════════════
+   *
+   *  1. **Même transaction, même client.** Le `PoolClient` est celui de
+   *     l'écriture : un `rollback` emporte la trace, et une écriture ne peut
+   *     pas réussir sans sa trace (§29.3). Aucun `try` n'entoure cet appel —
+   *     l'entourer d'un `try` rendrait le journal muet sous saturation, ce qui
+   *     est exactement la façon dont un journal cesse d'être inaltérable.
+   *  2. **`resume` est une phrase FIXE, une par action.** Pas de nom d'entité,
+   *     pas d'identifiant, pas de libellé de l'enregistrement. Le §29.5 veut
+   *     que `resume` soit *écrit par le développeur* ; l'entité et
+   *     l'identifiant ont leurs colonnes (`entite_type`, `entite_id`), et le
+   *     reste part en `jsonb`, où l'encodage est le problème de PostgreSQL.
+   *     ⚠️ Ne pas « enrichir » cette phrase avec une valeur venue de la
+   *     requête, fût-elle validée : c'est le geste précis qui a fait arriver
+   *     un login forgé, sauts de ligne compris, dans le journal (porte S3).
+   *  3. **`filiale_id` est la filiale ACTIVE**, jamais celle de la ligne. Une
+   *     écriture de portée Groupe (`filiale_id` nul sur la ligne) reste
+   *     imputée à la filiale depuis laquelle elle a été faite : c'est ce que
+   *     la politique d'ajout attend (`f_filiale_ecriture()`), et c'est ce qui
+   *     la laisse lisible par l'administrateur de cette filiale après le
+   *     resserrement E6 (§29.7). Une trace transversale, elle, se serait
+   *     rendue invisible à tout le monde sauf au Groupe.
+   */
+  private async journaliserEcriture(
+    client: PoolClient,
+    perimetre: PerimetreSession,
+    quoi: {
+      readonly action: 'creation' | 'modification' | 'suppression';
+      readonly entite: NomEntite;
+      readonly identifiant: string;
+      readonly avant: Enregistrement | null;
+      readonly apres: Enregistrement | null;
+    },
+  ): Promise<void> {
+    await journaliser(client, {
+      action: quoi.action,
+      filialeId: perimetre.filialeId,
+      utilisateurLibelle: perimetre.utilisateurId,
+      entiteType: quoi.entite,
+      entiteId: quoi.identifiant,
+      resume: RESUME_ECRITURE[quoi.action],
+      valeursAvant: quoi.avant,
+      valeursApres: quoi.apres,
     });
   }
 

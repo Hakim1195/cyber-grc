@@ -51,6 +51,8 @@ import { moduleCompile, monterServeurReel } from '../aide/serveur.mjs';
 let base;
 /** @type {import('pg').Client} */
 let applicatif;
+/** Propriétaire — seul à lire tout le journal depuis `008` (condition E6). */
+let proprietaire;
 /** @type {import('pg').Pool} */
 let pool;
 
@@ -76,6 +78,7 @@ function journalDEssai() {
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
   applicatif = await base.connexion('app');
+  proprietaire = await base.connexion('proprietaire');
 
   auth = await moduleCompile('auth/index.js');
   secours = await moduleCompile('auth/secours.js');
@@ -384,8 +387,14 @@ describe('Q-79 — le code HTTP ne nomme plus le compte de secours', () => {
     const service = new auth.ServiceAuthentification(pool, configSansAnnuaire(), journalDEssai());
     await refusDe(service, 'un-nom-tout-a-fait-unique-9182', 'faux', '10.9.5.1');
 
+    // Lu sous le PROPRIÉTAIRE depuis la migration `008` (condition E6) : la
+    // lecture du journal est cloisonnée, et un échec de connexion est
+    // transversal (`filiale_id is null`) — donc réservé au périmètre Groupe
+    // (§29.7). Le compte applicatif, hors transaction à périmètre, ne rendrait
+    // pas une erreur mais **zéro ligne**, et l'essai échouerait sur un motif
+    // trompeur (constat Q-104).
     const lignes = await base.lignes(
-      applicatif,
+      proprietaire,
       `select resume, valeurs_apres from journal_audit
         where utilisateur_libelle = 'un-nom-tout-a-fait-unique-9182' order by numero desc limit 1`,
     );

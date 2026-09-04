@@ -640,17 +640,48 @@ describe('Journal d’audit sous RLS (CONVENTIONS §12)', () => {
     assert.equal(affectees, 1);
   });
 
-  test('DÉROGATION ASSUMÉE : la lecture du journal n’est pas cloisonnée', async () => {
-    // Ce test ne célèbre pas une propriété, il VERROUILLE une dérogation : le chaînage
-    // par empreinte (001) numérote à partir de max(numero) et se vérifie sur toute la
-    // chaîne. Resserrer cette politique sans traiter d'abord les deux fonctions du socle
-    // ferait échouer toute écriture au journal — ce test tombera alors, et c'est le but.
+  // ── LA DÉROGATION EST LEVÉE — condition E6, migration 008 ──────────────
+  //
+  // Cet essai disait : « DÉROGATION ASSUMÉE : la lecture du journal n'est pas
+  // cloisonnée », et exigeait littéralement le prédicat `true`. Il portait sa
+  // propre date de péremption : *« resserrer cette politique sans traiter
+  // d'abord les deux fonctions du socle ferait échouer toute écriture au
+  // journal — ce test tombera alors, et c'est le but. »*
+  //
+  // C'est arrivé. L'essai change donc de sens : il ne verrouille plus une
+  // dérogation, il **verrouille son remplacement**. Écrire « le prédicat n'est
+  // plus `true` » ne suffirait pas — n'importe quelle expression fausse
+  // satisferait cela. On nomme donc ce que la politique doit contenir, et
+  // surtout ce qu'elle ne doit **pas** contenir.
+  test('E6 : la lecture du journal est CLOISONNÉE, et par les bonnes fonctions', async () => {
     const predicat = await base.valeur(
       proprietaire,
       `select pg_get_expr(polqual, polrelid) from pg_policy
         where polrelid = 'journal_audit'::regclass and polname = 'pol_journal_audit_lecture'`,
     );
-    assert.equal(predicat, 'true', 'Voir 004_rls.sql §6 : dérogation documentée, à traiter en L5.');
+    assert.notEqual(
+      predicat,
+      'true',
+      'La dérogation de 004_rls.sql §6 est levée par 008 : la lecture ne peut plus être ouverte.',
+    );
+    for (const attendue of [
+      // le propriétaire lit tout — c'est ce qui permet au chaînage de numéroter
+      'f_est_proprietaire_base',
+      // un périmètre Groupe lit tout, y compris les entrées transversales
+      'f_perimetre_groupe',
+      // une filiale ne lit que la sienne
+      'f_filiales_lecture',
+    ]) {
+      assert.ok(
+        String(predicat).includes(attendue),
+        `La politique de lecture doit s’adosser à ${attendue}. Prédicat : ${String(predicat)}`,
+      );
+    }
+    assert.ok(
+      !String(predicat).includes('f_administration_groupe'),
+      'Le DRAPEAU d’administration n’est pas un périmètre : une session qui le pose lirait ' +
+        'tout le journal sans que le modèle de droits l’ait décidé (CONVENTIONS.md §17.4).',
+    );
   });
 
   test('la chaîne se numérote sans trou malgré des entrées de plusieurs filiales', async () => {
@@ -3847,8 +3878,8 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
           and pg_get_function_result(p.oid) = 'TABLE(objet text, anomalie text, detail text)'
         order by 1`,
     );
-    // Quatre au cinquième correctif, sept au sixième, HUIT depuis le troisième passage de
-    // la porte S2 (entropie_identifiants). Chacun s'est branché SANS qu'un fichier de
+    // Quatre au cinquième correctif, sept au sixième, huit depuis le troisième passage de
+    // la porte S2 (entropie_identifiants), neuf avec L3, DIX depuis L5 (lecture_journal). Chacun s'est branché SANS qu'un fichier de
     // déploiement change : c'est la propriété du §19.4, constatée plutôt qu'affirmée.
     // Cette liste est délibérément ÉPINGLÉE : un garde-fou qui apparaît doit être
     // reconnu ici, un garde-fou qui disparaît ne doit pas s'effacer en silence.
@@ -3857,6 +3888,10 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       'chemin_recherche',
       'couverture_rls',
       'entropie_identifiants',
+      // DIXIÈME, apporté par `008_journal_lecture.sql` : il vérifie que la politique de
+      // lecture du journal est bien cloisonnée (condition E6). La liste a rougi en
+      // arrivant, exactement comme elle doit — voir le commentaire du neuvième.
+      'lecture_journal',
       'portee_figee',
       'privileges',
       // NEUVIÈME, apporté par `007_authentification.sql` : il vérifie que le substrat

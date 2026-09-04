@@ -41,6 +41,14 @@ import { demarrerAnnuaire } from '../annuaire/serveur-ldap.mjs';
 let base;
 /** @type {import('pg').Client} */
 let applicatif;
+/**
+ * Compte propriétaire — indispensable pour relire le journal depuis la migration
+ * `008` : la lecture y est cloisonnée, et les événements de connexion sont
+ * transversaux (`filiale_id is null`), donc réservés au périmètre Groupe. Voir
+ * `journalAudit()` ci-dessous.
+ * @type {import('pg').Client}
+ */
+let proprietaire;
 /** @type {import('pg').Pool} */
 let pool;
 /** @type {Awaited<ReturnType<typeof demarrerAnnuaire>>} */
@@ -66,6 +74,7 @@ function journalDEssai() {
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
   applicatif = await base.connexion('app');
+  proprietaire = await base.connexion('proprietaire');
   doublure = await demarrerAnnuaire();
 
   auth = await moduleCompile('auth/index.js');
@@ -162,10 +171,30 @@ const requete = (cookie, ip = '10.0.0.1') => ({
   ip,
 });
 
-/** Les entrées du journal d'audit, les plus récentes d'abord. */
+/**
+ * Les entrées du journal d'audit, les plus récentes d'abord.
+ *
+ * ⚠️ **Lu sous le PROPRIÉTAIRE, et ce n'est pas un raccourci de confort.**
+ *
+ * Depuis la migration `008` (condition E6), la lecture du journal est cloisonnée :
+ * le compte applicatif ne voit que la filiale de son périmètre, et **rien** des
+ * entrées transversales (`filiale_id is null`) — or les événements de connexion
+ * sont précisément transversaux, puisqu'ils précèdent la résolution du périmètre.
+ *
+ * Le piège, et il a failli fonctionner : hors transaction à périmètre, le réglage
+ * `grc.filiales` ne vaut pas `null` mais la **chaîne vide** — donc « périmètre
+ * vide », pas « périmètre absent ». La lecture ne lève alors pas GRC04, elle rend
+ * **zéro ligne en silence**. Un essai qui compare deux comptes obtiendrait
+ * `0 === 0` et passerait au vert sans rien éprouver ; c'est le constat **Q-104**,
+ * et c'est exactement ce qui est arrivé plus bas (voir « Une session ne meurt
+ * qu'une fois »).
+ *
+ * Le propriétaire, lui, lit toute la chaîne — c'est ce que la politique de `008`
+ * lui accorde en premier, pour que le chaînage puisse numéroter.
+ */
 async function journalAudit(limite = 5) {
   return await base.lignes(
-    applicatif,
+    proprietaire,
     `select action, resume, utilisateur_libelle, utilisateur_id
        from journal_audit order by numero desc limit $1`,
     [limite],
@@ -396,17 +425,33 @@ describe('La session — vérification, expiration, déconnexion', () => {
       { annuler: false },
     );
 
+    // ⚠️ CET ESSAI PASSAIT POUR LA MAUVAISE RAISON, et c'est le plus instructif
+    // du fichier. Il lisait sous `applicatif`, hors transaction à périmètre : la
+    // migration `008` a rendu ces deux lectures muettes — `0 === 0` — si bien
+    // qu'il comparait deux riens et concluait « une session ne meurt qu'une
+    // fois ». Il aurait continué de passer même si le service avait écrit une
+    // entrée par requête, c'est-à-dire dans le cas exact qu'il existe pour
+    // interdire (constat Q-104).
+    //
+    // Deux changements, et il faut les deux : lire sous le propriétaire, ET
+    // exiger qu'il y ait quelque chose à compter. Un compte de référence à zéro
+    // ne prouve rien, quelle que soit la suite.
     await assert.rejects(() => s.authentifier(requete(jeton)), (e) => e.statut === 401);
     const apresUn = await base.valeur(
-      applicatif,
+      proprietaire,
       `select count(*)::int from journal_audit where action = 'session_expiree'`,
+    );
+    assert.ok(
+      apresUn >= 1,
+      'La première requête sur un jeton mort doit AVOIR écrit une entrée : sans elle, ' +
+        'l’égalité ci-dessous serait satisfaite par deux zéros.',
     );
 
     // Rejouée : le jeton mort ne doit pas écrire une entrée par requête dans un
     // journal scellé de trois ans.
     await assert.rejects(() => s.authentifier(requete(jeton)), (e) => e.statut === 401);
     const apresDeux = await base.valeur(
-      applicatif,
+      proprietaire,
       `select count(*)::int from journal_audit where action = 'session_expiree'`,
     );
     assert.equal(apresDeux, apresUn, 'Une session ne meurt qu’une fois.');

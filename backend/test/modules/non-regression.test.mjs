@@ -1,5 +1,9 @@
 /**
- * non-regression.test.mjs — LE FILET DES 26 MODULES MÉTIER (constat Q-16).
+ * non-regression.test.mjs — LE FILET DES MODULES MÉTIER (constat Q-16).
+ *
+ * Ils étaient 26 quand ce filet est né ; ils sont 27 depuis que le lot L5 a
+ * ajouté l'écran du journal d'audit. Le nombre vit dans une constante nommée,
+ * et l'essai dit quoi faire quand il bouge — c'est le sens de ce garde-fou.
  *
  * ── Pourquoi ce fichier existe ──────────────────────────────────────────────
  *
@@ -193,7 +197,21 @@ const SANS_FICHE = {
   '/crise-fiches': 'vue d’impression',
   '/settings': 'paramètres',
   '/referentiels': 'catalogue STATIQUE : les identifiants ne viennent pas de la base',
+  '/journal': 'journal d’audit : registre en ajout seul, le détail s’ouvre en place',
 };
+
+/**
+ * Combien de modules le produit porte, aujourd'hui.
+ *
+ * ⚠️ **Ce nombre est censé bouger, et c'est pour cela qu'il est ici.** Il valait
+ * 26 à la naissance du filet, 27 depuis l'écran du journal d'audit (lot L5). Un
+ * module qui naît sans entrer dans ce filet est exactement le défaut de Q-16 —
+ * vingt-trois entrées de journal ont affirmé une couverture qui n'existait pas.
+ * Le mettre à jour est donc une **décision**, pas une formalité : il faut aussi
+ * inscrire la route dans `FICHES` ou dans `SANS_FICHE`, sans quoi la seconde
+ * assertion tombe à son tour.
+ */
+const MODULES_ATTENDUS = 27;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //
@@ -241,12 +259,12 @@ async function ouvrirSur(route) {
  *  Le filet ne laisse aucun module dehors
  * ===================================================================== */
 
-describe('Le filet couvre les 26 modules, et le dit (constat Q-16)', () => {
-  test('LES 26 MODULES du produit sont tous nommés par ce banc', async () => {
+describe('Le filet couvre TOUS les modules, et le dit (constat Q-16)', () => {
+  test('TOUS LES MODULES du produit sont nommés par ce banc', async () => {
     const modules = modulesDuProduit();
     assert.equal(
-      modules.length, 26,
-      `Le produit porte ${String(modules.length)} modules, le constat Q-16 en nomme 26. ` +
+      modules.length, MODULES_ATTENDUS,
+      `Le produit porte ${String(modules.length)} modules, ce filet en nomme ${String(MODULES_ATTENDUS)}. ` +
       `Si un module est né, il entre dans ce filet ; s’il est mort, la ligne se retire.\n${modules.join(', ')}`,
     );
     // Chaque module doit être atteint par au moins une route du balayage : c'est la

@@ -8,6 +8,67 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur — vague 3 : la documentation cesse de nier ce que L3 a livré (constat Q-90)
+
+**Huitième signalement de la famille Q-4 (`README` périmé), et le premier à l'envers** :
+le `README` §8 ne retardait plus sur le code, il **niait** ce qu'il fait. Sa table
+« Dette reportée » annonçait encore **ouvertes** cinq propriétés que le lot L3 avait
+**livrées** — E1 (substrat de session conditionné), droits par domaine, droit d'export
+distinct, limitation de rythme, écriture au journal —, avec cinq chiffres faux dont
+**trois se contredisaient à l'intérieur du même fichier** : le §5 comptait **six**
+familles d'essais et **637** essais pendant que le §8, dans la même page, en comptait
+déjà **onze** et **1030** ; « **huit** contrôles de schéma » contre « **neuf** » deux
+paragraphes plus loin ; « **six** migrations » énumérées quand `db/migrations/` en
+portait déjà **sept**. Détail complet et mesuré au registre, constat **Q-90**
+(`docs/PLAN_EXECUTION.md` §7).
+
+- **Les cinq propriétés sont vérifiées dans le code, une par une, avant d'être
+  déclarées closes** — aucune n'est prise sur la foi du registre : `grc.authentification`
+  conditionne toute écriture du substrat de session (`db/migrations/007_authentification.sql`,
+  condition **E1**) ; `DroitsSession.niveaux` est émis (`src/droits/passerelle-api.ts`)
+  et consommé (`src/api/droits.ts`, constat Q-66 fermé) ; `deciderAcces` refuse l'action
+  `exporter` indépendamment de `lire`, portée par sa propre route (`GET /api/export`,
+  absente jusqu'ici du tableau des routes du §4) ; `src/api/limiteur.ts` borne les
+  requêtes sans session en `onRequest`, avant l'analyse du corps (condition **E4**) ; le
+  neuvième garde-fou de schéma (`f_verifier_substrat_session()`) est bien consigné dans
+  `controles_schema` depuis la migration `007`.
+- **Ce qui reste ouvert le reste — ce document ne prétend pas le contraire.** Le journal
+  d'audit écrit aujourd'hui **4 actions sur 20** déclarées (connexion réussie/refusée,
+  compte de secours, verrouillage par rythme, déconnexion), toutes depuis
+  `src/auth/index.ts` seul : la couverture est le lot **L5**, en cours dans cette même
+  vague. La justification qui couvrait l'absence de cloisonnement de la lecture du
+  journal — « sans effet tant que le journal est vide » (condition **E6**) — est
+  corrigée : le journal n'est plus vide, et `grc_lecture` y lit sans filtre de filiale.
+- **Le `README` §5 ne porte plus sa propre table d'effectifs.** C'est la cause directe
+  des trois contradictions internes : deux tables de comptage, deux révisions de
+  référence, aucun contrôle entre elles. Il ne reste plus qu'un seul endroit où compter
+  (le bloc de mesure du §8) ; le §5 ne fixe plus que la **vocation** de chaque famille —
+  onze aujourd'hui, `test/auth/`, `test/droits/`, `test/annuaire/` et `test/modules/`
+  désormais décrites, alors qu'elles n'existaient pas quand cette table a été écrite.
+- **`test/documentation/chiffres-du-banc.test.mjs` garde désormais la LISTE des
+  familles, pas seulement leur total** (2 essais neufs, constat Q-90) : les répertoires
+  décrits au §5 doivent être exactement ceux de la révision que le §8 cite — jugé contre
+  cette révision, jamais contre l'arbre de travail, pour la même raison que le reste de
+  ce fichier depuis Q-53 (rester vrai pendant que d'autres agents ajoutent des essais en
+  parallèle). **Mordu dans les deux sens** : `test/modules/` retiré du §5 fait rougir en
+  le nommant explicitement ; le titre de la section renommé fait rougir aussi — le
+  contrôle refuse de rendre vert en ne lisant plus rien.
+- Aucun changement de code ni de schéma dans cette entrée : seuls `backend/README.md`,
+  `CHANGELOG.md` et `backend/test/documentation/**` sont touchés — périmètre exclusif de
+  cet agent (`docs/PLAN_EXECUTION.md` §3, agent **J4**).
+
+**État mesuré à la clôture de cette entrée** : `node --test "test/documentation/*.test.mjs"`
+→ **19/19 réussis, aucun échec** (les 17 précédents de cette seule famille, plus les
+2 nouveaux). ⚠️ Ce nombre est celui de la famille `test/documentation/` **seule** — à ne
+pas lire comme le total du banc, qui vit au §8 du `README` et nulle part ailleurs (c'est
+précisément ce que le contrôle « LE MÊME NOMBRE partout » de `chiffres-du-banc.test.mjs`
+refuserait de laisser confondre). Le banc **complet** n'a pas été rejoué pour cette
+entrée : trois autres agents écrivaient au même moment dans `src/`, `db/migrations/008_*`
+et d'autres familles d'essais, et une exécution y a effectivement rougi sur des défauts
+**hors du périmètre de cette entrée** (garde-fou de schéma en cours d'écriture, module
+frontend 27ᵉ pas encore attendu par son filet) — signalé pour mémoire, volontairement non
+corrigé ici, conformément au partage des périmètres de la vague 3.
+
 ### Serveur — vague 3 : la machine réelle referme des réserves (nuit du 03 au 04/09/2026)
 
 Huit passages de porte avaient reconduit, honnêtement et sans se contredire, que

@@ -635,9 +635,19 @@ begin
     select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
       into v_ligne
       from (
-        select 'C22', 'Journal d''audit : lecture NON cloisonnée (dérogation assumée, cf. 004 §6)',
-               'true', coalesce(pg_get_expr(p.polqual, p.polrelid), '(aucun)'),
-               case when coalesce(pg_get_expr(p.polqual, p.polrelid), '') = 'true' then 'OK (constaté)' else 'ÉCHEC' end
+        -- ⚠️ CE CONTRÔLE A ÉTÉ RETOURNÉ le 04/09/2026 (migration 008, condition E6).
+        --
+        -- Il attendait littéralement le prédicat « true » et déclarait OK une lecture
+        -- NON cloisonnée : c'était une dérogation constatée, pas une propriété. Elle
+        -- est levée. Le contrôle exige donc désormais l'inverse — et il le fait en
+        -- NOMMANT les trois fonctions attendues, parce qu'un simple « ce n'est plus
+        -- true » serait satisfait par n'importe quelle expression fausse.
+        select 'C22', 'Journal d''audit : lecture CLOISONNÉE (E6 fermée par 008)',
+               'prédicat citant f_filiales_lecture ET f_perimetre_groupe',
+               coalesce(pg_get_expr(p.polqual, p.polrelid), '(aucun)'),
+               case when coalesce(pg_get_expr(p.polqual, p.polrelid), '') like '%f_filiales_lecture%'
+                     and coalesce(pg_get_expr(p.polqual, p.polrelid), '') like '%f_perimetre_groupe%'
+                    then 'OK (constaté)' else 'ÉCHEC' end
           from pg_policy p
          where p.polrelid = 'journal_audit'::regclass and p.polname = 'pol_journal_audit_lecture'
       ) as x (numero, controle, attendu, obtenu, verdict);
@@ -2480,13 +2490,15 @@ begin
     end if;
 
     raise notice
-        'CLOISONNEMENT DÉMONTRÉ — AVEC LA RÉSERVE DU CONTRÔLE C22, À LIRE AVANT LE RESTE : '
-        'la LECTURE du journal d''audit n''est PAS cloisonnée, et c''est une dérogation assumée '
-        'que le chaînage par empreinte impose (004_rls.sql §6). Elle est sans effet tant que le '
-        'journal est vide ; dès que le lot L5 alimentera valeurs_avant / valeurs_apres, une '
-        'session de Toulouse y lira le contenu des données allemandes — et le compte de '
-        'supervision grc_lecture aussi, sans passer par l''application. Le resserrement est un '
-        'livrable ferme de L5. Sous cette réserve, et elle seule : '
+        'CLOISONNEMENT DÉMONTRÉ — ET LA RÉSERVE DU CONTRÔLE C22 EST LEVÉE. '
+        'Ce message portait, jusqu''au 04/09/2026, un avertissement en tête : la LECTURE du '
+        'journal d''audit n''était pas cloisonnée, dérogation assumée que le chaînage par '
+        'empreinte imposait (004_rls.sql §6). Il ajoutait qu''elle était « sans effet tant que '
+        'le journal est vide » — et LA MESURE L''A DÉMENTIE : le compte de supervision '
+        'grc_lecture y lisait 160 entrées, logins et adresses IP compris, sans passer par '
+        'l''application. La migration 008 a fermé la condition E6 : les deux fonctions du '
+        'chaînage sont « security definer », et la lecture suit le périmètre. '
+        'Sans réserve, désormais : '
         'la filiale de Toulouse ne voit aucune ligne de la filiale '
         'allemande ; ne peut pas y écrire — ni depuis un périmètre qui la couvre, ni en '
         'déclarant une filiale active qu''elle ne lit même pas, la base recoupant les deux '

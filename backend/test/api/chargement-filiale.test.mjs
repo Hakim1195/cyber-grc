@@ -58,18 +58,17 @@ const site = perimetre('rssi-site', FILIALE_A, [FILIALE_A]);
 /** Le RSSI groupe : il sert de témoin — ce qu'il voit est ce qui EXISTE. */
 const groupe = perimetre('rssi-groupe', FILIALE_A, [FILIALE_A, FILIALE_B]);
 
-/**
- * La lecture du journal d'audit n'est **délibérément pas cloisonnée** : le chaînage par
- * empreinte impose de pouvoir relire la chaîne entière. C'est une dérogation écrite,
- * dont le resserrement est un livrable ferme du lot L5 (`CLAUDE.md`, « dette reportée,
- * assumée et datée »).
- *
- * Elle est donc exclue du balayage de fuite — mais **elle est réclamée** par un test
- * dédié plus bas, et non inscrite dans une liste muette : le jour où L5 la referme, ce
- * test tombera et l'exclusion devra disparaître avec lui (§20.2, « un garde-fou se
- * vérifie dans les deux sens »).
- */
-const DEROGATION_JOURNAL = 'journal_audit';
+// ── LA DÉROGATION DU JOURNAL A DISPARU — condition E6, migration 008 ──────
+//
+// `const DEROGATION_JOURNAL = 'journal_audit'` vivait ici, avec ce commentaire :
+// *« le jour où L5 la referme, ce test tombera et l'exclusion devra disparaître
+// avec lui. »* C'est arrivé le 04/09/2026. `journal_audit` n'est donc plus exclu
+// du balayage de fuite : il y est **soumis comme les 47 autres tables**, ce qui
+// est plus fort que n'importe quelle assertion écrite à la main pour lui.
+//
+// L'essai qui réclamait la dérogation n'a pas été supprimé pour autant — il a
+// été **retourné** (voir plus bas). Supprimer aurait retiré la seule ligne qui
+// documente la fermeture à l'endroit exact où la dette était consignée.
 
 /**
  * `session_filiales` — le périmètre RÉSOLU d'une session — porte un `filiale_id` et sa
@@ -88,7 +87,7 @@ const DEROGATION_JOURNAL = 'journal_audit';
 const DEROGATION_SESSION = 'session_filiales';
 
 /** Les deux tables que le balayage écarte — et que deux tests dédiés réclament. */
-const DEROGATIONS = [DEROGATION_JOURNAL, DEROGATION_SESSION];
+const DEROGATIONS = [DEROGATION_SESSION];
 
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
@@ -246,6 +245,25 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     });
   });
 
+  // ⚠️ `journal_audit` est soumis au BALAYAGE DE FUITE ci-dessus, mais pas à
+  // l'égalité ci-dessous — et la nuance n'est pas un aménagement de confort.
+  //
+  // Pour les 31 autres tables, `filiale_id is null` désigne le **socle de
+  // Groupe** : la PSSI, le catalogue de contrôles, l'annuaire — des lignes
+  // partagées, que chaque filiale doit voir, et dont l'absence serait une perte.
+  // Pour le journal, `filiale_id is null` désigne tout autre chose : un
+  // événement **transversal** — un échec de connexion, un démarrage de service —
+  // qui précède la résolution du périmètre. Le §29.7 le réserve au périmètre
+  // Groupe, parce que les rendre visibles à chaque filiale donnerait à chacune
+  // la liste des logins du groupe entier.
+  //
+  // Les deux règles portent le même `null` et disent l'inverse. Comparer le
+  // journal à « ses lignes + le socle » exigerait donc de Toulouse qu'elle voie
+  // ce que E6 lui interdit — l'essai passerait aujourd'hui par chance, la base
+  // d'essai n'ayant aucune entrée transversale, et tomberait le jour où l'une
+  // apparaîtrait, **pour une raison correcte**.
+  const HORS_EGALITE_SOCLE = [...DEROGATIONS, 'journal_audit'];
+
   test('la charge utile de Toulouse = ses lignes + le socle, ni plus ni moins', async () => {
     // La formulation exacte de « intégralité du jeu de données de la filiale active » :
     // ce que voit le RSSI de site doit être, table par table, ce que le RSSI groupe
@@ -254,12 +272,40 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     const vuDeToulouse = await compter(site, 'true');
     const attendu = await compter(groupe, `filiale_id = '${FILIALE_A}' or filiale_id is null`);
     for (const nom of tablesCloisonnees) {
-      if (DEROGATIONS.includes(nom)) continue;
+      if (HORS_EGALITE_SOCLE.includes(nom)) continue;
       assert.equal(vuDeToulouse[nom], attendu[nom], `Table « ${nom} » : charge utile inattendue.`);
     }
     // Contrôle de matière : la comparaison ne doit pas porter sur des tables vides.
-    const nonVides = tablesCloisonnees.filter((nom) => !DEROGATIONS.includes(nom) && vuDeToulouse[nom] > 0);
+    const nonVides = tablesCloisonnees.filter((nom) => !HORS_EGALITE_SOCLE.includes(nom) && vuDeToulouse[nom] > 0);
     assert.equal(nonVides.length, 29, `Tables non vides : ${nonVides.join(', ')}`);
+  });
+
+  // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par
+  // l'égalité est vérifié ici, explicitement, et dans les deux sens.
+  test('JOURNAL : une entrée transversale est réservée au périmètre Groupe (§29.7)', async () => {
+    await base.avecPerimetre(
+      applicatif,
+      groupe,
+      async (c) => {
+        await c.query(
+          "insert into journal_audit (action, resume) values ('connexion_echouee', 'compte inconnu')",
+        );
+      },
+      { annuler: false },
+    );
+
+    const vueGroupe = await base.avecPerimetre(applicatif, groupe, async (c) =>
+      (await c.query('select count(*)::int as n from journal_audit where filiale_id is null')).rows[0].n);
+    assert.ok(vueGroupe >= 1, 'Le périmètre Groupe doit voir les entrées transversales.');
+
+    const vueSite = await base.avecPerimetre(applicatif, site, async (c) =>
+      (await c.query('select count(*)::int as n from journal_audit where filiale_id is null')).rows[0].n);
+    assert.equal(
+      vueSite,
+      0,
+      'Un échec de connexion n’appartient à aucune filiale : le rendre visible à chacune ' +
+        'donnerait à toutes la liste des logins du groupe (§29.7, troisième cas).',
+    );
   });
 });
 
@@ -268,13 +314,36 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
  * ===================================================================== */
 
 describe('Journal d’audit : la dérogation de lecture est réclamée, pas subie', () => {
-  test('depuis Toulouse, l’entrée de journal allemande EST visible — dette datée du lot L5', async () => {
-    // Si ce test tombe, c'est une BONNE nouvelle : L5 a resserré la lecture du journal.
-    // Il faut alors retirer `journal_audit` des exclusions du balayage ci-dessus, et
-    // supprimer ce test. Tant qu'il passe, l'exclusion est justifiée et documentée.
-    const vue = await base.avecPerimetre(applicatif, site, async (c) =>
+  // ── L'ESSAI EST RETOURNÉ, pas supprimé ────────────────────────────────
+  //
+  // Il disait : « depuis Toulouse, l'entrée de journal allemande EST visible —
+  // dette datée du lot L5 », et il ajoutait *« si ce test tombe, c'est une BONNE
+  // nouvelle »*. Il est tombé, et la bonne nouvelle est la migration 008.
+  //
+  // Sa consigne était de le supprimer. On le retourne à la place : supprimer
+  // aurait retiré la seule ligne qui documente la fermeture **à l'endroit exact
+  // où la dette était consignée**, et le lecteur suivant n'aurait trouvé qu'une
+  // absence — c'est-à-dire rien. Ce qui est ici maintenant est plus fort que ce
+  // qui y était : `journal_audit` est en outre soumis au balayage de fuite
+  // général, dont il était exclu.
+  test('depuis Toulouse, l’entrée de journal allemande est INVISIBLE — E6 fermée', async () => {
+    // ⚠️ La mesure porte sur une table NON VIDE, et c'est indispensable : la
+    // garde de périmètre s'évalue par ligne, si bien qu'un `0` sur une table
+    // vide ne distinguerait pas « rien à voir » de « rien de contrôlé »
+    // (constat Q-104). L'entrée allemande existe — le périmètre B la voit.
+    const siteAllemand = perimetre('rssi-site', FILIALE_B, [FILIALE_B]);
+    const vueDepuisB = await base.avecPerimetre(applicatif, siteAllemand, async (c) =>
       (await c.query('select count(*)::int as n from journal_audit where filiale_id = $1', [FILIALE_B])).rows[0].n);
-    assert.equal(vue, 1, 'La lecture du journal n’est pas cloisonnée : c’est écrit, daté, et assumé.');
+    assert.equal(vueDepuisB, 1, 'L’entrée existe : sans cela, le zéro ci-dessous ne prouverait rien.');
+
+    const vueDepuisA = await base.avecPerimetre(applicatif, site, async (c) =>
+      (await c.query('select count(*)::int as n from journal_audit where filiale_id = $1', [FILIALE_B])).rows[0].n);
+    assert.equal(
+      vueDepuisA,
+      0,
+      'Toulouse lit le registre allemand : la condition E6 est rouverte, et le journal ' +
+        'de chaque filiale cesse d’être le sien.',
+    );
   });
 
   test('depuis Toulouse, le PÉRIMÈTRE de la session allemande est visible — dette du lot L3', async () => {

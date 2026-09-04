@@ -797,9 +797,25 @@ dépend. On ferme un caractère précis, on ne durcit pas le format.
 
 ### 17.4 Report explicite à L3 — les tables du substrat d'authentification
 
-`sessions`, `session_filiales` et `session_domaines` **restent écrivables sans condition** par le
-rôle applicatif. C'est circulaire, et c'est assumé : ces tables *produisent* la décision
-d'autorisation, elles sont lues avant que le périmètre existe.
+> ✅ **Le report est CLOS depuis le lot L3, et ce paragraphe le niait encore.** Signalé par
+> l'agent chargé de la documentation le 04/09/2026 : le §22 portait la condition **E1** comme
+> satisfaite pendant que ces lignes-ci la décrivaient comme ouverte — le fichier se contredisait
+> lui-même à huit cents lignes d'écart, et le `CLAUDE.md` §8 reprenait la version périmée.
+> C'est le motif exact du constat **Q-90**, dans le fichier qui sert à l'éviter. Le texte
+> d'origine est conservé ci-dessous en italique, parce qu'il explique *pourquoi* le report avait
+> été pris — ce qui reste utile —, mais il ne décrit plus l'état du produit.
+
+**Ce qui est vrai depuis L3** : l'écriture dans `sessions`, `session_filiales` et
+`session_domaines` exige que la transaction ait posé `grc.authentification = 'oui'`
+(`007_authentification.sql`, fonction `f_authentification()` ; `src/auth/transaction.ts:56`).
+La couche d'authentification le pose pour sa **seule** transaction d'ouverture de session ; une
+session applicative ordinaire ne l'a pas, et se voit refusée. **La propriété vit entre deux
+fichiers dont aucun n'a tort seul** — c'est pour cela qu'ils ont été confiés au même agent.
+
+*Texte d'origine, périmé, gardé pour son motif :* « `sessions`, `session_filiales` et
+`session_domaines` **restent écrivables sans condition** par le rôle applicatif. C'est
+circulaire, et c'est assumé : ces tables *produisent* la décision d'autorisation, elles sont lues
+avant que le périmètre existe. »
 
 | Table | Décision |
 |---|---|
@@ -1693,6 +1709,34 @@ ce qui est fermé, c'est le **prochain** profil paramétré.
 **La pagination se fait sur `numero`, jamais sur un décalage.** `numero` est strictement
 croissant et sans trou (§12) : c'est un curseur exact, insensible aux insertions concurrentes.
 Un `offset` sur un journal qui grandit pendant qu'on le feuillette saute des lignes.
+
+#### Le curseur et l'enveloppe — complété le 04/09/2026, en vol
+
+⚠️ **Ce paragraphe manquait, et c'est l'agent qui écrivait l'écran qui l'a signalé.** Le §29.8
+figeait les chemins, les classes d'accès et les cinq noms de filtres — et ni le nom du curseur,
+ni la forme de la réponse. Les deux moitiés allaient donc les choisir séparément : exactement la
+divergence qu'un contrat existe pour empêcher, et exactement le motif que ce chantier traque
+depuis onze occurrences. *Un contrat incomplet est un contrat qui sera complété deux fois.*
+
+L'arbitrage suit ce que la moitié déjà écrite emploie — le refaire coûterait une réécriture pour
+un gain nul :
+
+| Élément | Nom **normatif** |
+|---|---|
+| Curseur de page | paramètre **`avant`** — rend les entrées de `numero` **strictement inférieur** |
+| Taille de page | paramètre **`limite`**, défaut **50**, plafond **500** |
+| Tableau des entrées | clé **`entrees`** |
+| Curseur de la page suivante | clé **`suivant`** — `null` quand il n'y a plus rien |
+
+**Deux propriétés, et elles ne sont pas décoratives :**
+
+1. **L'ordre est `numero` décroissant.** Le journal se lit du plus récent au plus ancien : c'est
+   la question qu'on lui pose (« que s'est-il passé ? »), et c'est ce qui rend `avant` monotone.
+2. **`suivant` se déduit des données quand le serveur ne l'annonce pas** : c'est le plus petit
+   `numero` de la page. Le client n'a donc pas à croire le serveur sur parole, et une page
+   incomplète est la dernière. Le serveur **doit** néanmoins l'émettre — se reposer sur la
+   déduction ferait dépendre la pagination d'une taille de page, et une taille de page est un
+   réglage.
 
 **L'export du journal se prouve sur une entrée hostile.** Le format doit rendre **une** ligne
 logique pour une valeur contenant `\r\n`, `"` et `;`. La preuve n'est pas une relecture : on
