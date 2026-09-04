@@ -194,10 +194,33 @@ describe('Le refus PRÉCÈDE la prise de connexion (constat Q-20)', () => {
     );
     assert.equal(lecteur.corps.erreur, 'indisponible');
     assert.match(lecteur.corps.message, /réessayez/i, 'Et le message dit quoi faire.');
+    // ── Le motif, resserré, et l'assertion qui DIT CE QU'ELLE A VU ────────
+    //
+    // Constat **Q-105** : cet essai a rougi une fois sur deux exécutions
+    // complètes du banc, sur cette assertion précise, et **il n'a pas été
+    // possible de savoir ce qui avait fui** — le message ne portait pas le
+    // corps. L'enquête a coûté une demi-heure de lecture de sources pour
+    // finir sans réponse.
+    //
+    // Deux corrections, et la seconde est la plus utile :
+    //
+    //  1. **« connexion » sort du motif.** C'est un mot français ordinaire dans
+    //     une phrase destinée à un utilisateur — « la connexion est
+    //     momentanément impossible » ne nomme aucun rouage. Le contrôle S12
+    //     interdit d'exposer la MACHINERIE (`pool`, `pg`, `postgres`,
+    //     `pgbouncer`, un code `ECONNREFUSED`), pas d'employer un mot que le
+    //     lecteur comprend. Un motif trop large finit par accuser le produit
+    //     d'un défaut qu'il n'a pas, et c'est ainsi qu'on apprend à rejouer
+    //     jusqu'au vert.
+    //  2. **Le corps est imprimé quand ça rougit.** Un essai qui échoue sans
+    //     dire ce qu'il a vu transforme chaque rougissement en enquête. Celui-ci
+    //     l'a fait une fois ; il ne le refera pas.
+    const rouages = /\bpool\b|\bpg\b|postgres|pgbouncer|ECONNREFUSED|ETIMEDOUT/i;
     assert.equal(
-      /pool|connexion|pg|postgres/i.test(JSON.stringify(lecteur.corps)),
+      rouages.test(JSON.stringify(lecteur.corps)),
       false,
-      'Sans nommer un rouage interne (contrôle S12).',
+      'Un rouage interne est nommé dans une réponse rendue au client (contrôle S12). ' +
+        `Corps reçu : ${JSON.stringify(lecteur.corps)}`,
     );
   });
 
