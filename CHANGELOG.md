@@ -8,6 +8,61 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur — vague 3 : la machine réelle referme des réserves (nuit du 03 au 04/09/2026)
+
+Huit passages de porte avaient reconduit, honnêtement et sans se contredire, que
+l'installation Debian 13 complète, l'unité systemd, le TLS d'une vraie PKI et ClamAV
+n'étaient pas éprouvés. Ils le sont depuis cette nuit : le chantier tourne désormais sur
+une VM Debian 13 réelle, installée de bout en bout par `deploy/install.sh`, puis un
+contrôleur de domaine **Active Directory Samba réel** a été monté pour la recette.
+Comme à chaque fois qu'une réserve écrite est enfin traitée, ce n'est pas la réserve qui
+était intéressante : ce sont les défauts qu'elle cachait. Quatorze constats en sont
+sortis, **Q-72 à Q-85** — le détail et l'état à jour de chacun vivent au registre
+(`docs/PLAN_EXECUTION.md` §7, colonne État) et ne sont **pas recopiés ici** : deux listes
+des mêmes constats divergent, et la divergence est silencieuse. Deux étaient bloquants,
+et ensemble ils rendaient le produit inutilisable pour quiconque venait de s'authentifier
+avec succès : **Q-83** (le détecteur de renvoi LDAP refusait toute réponse portant un
+`SearchResultReference`, qu'un Active Directory réel émet pourtant sur toute recherche en
+sous-arbre depuis la racine du domaine — aucune connexion n'aboutissait) et **Q-84**
+(`/api/session` rendait 503 juste après une connexion réussie, la route confondant
+« aucun résolveur fourni » et « résolveur fabriqué par requête » — la SPA affichait donc
+« serveur indisponible » à l'utilisateur qui venait de s'authentifier).
+
+**État mesuré à la clôture de cette entrée**, révision `1590c47`, sur cette même machine
+réelle (**Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**, **rsync
+3.4.1**, Debian GNU/Linux 13 trixie) : `npm test` → **969 essais, 969 passés, 0 échec**
+(133,3 s ; onze familles, détail au `backend/README.md` §8), `npm run verifier-types`
+sans erreur, `npm audit --omit=dev` → 0 vulnérabilité, `db/verifier_cloisonnement.sql` →
+107 contrôles, 107 réussis, 0 échec, `f_verifier_schema()` → 0 anomalie (**9** garde-fous
+consignés, la migration `007_authentification.sql` en ayant ajouté un neuvième). Sur la
+base réelle : 48 tables, RLS activée et forcée 48/48, 192 politiques, 2 filiales actives,
+8 profils → 23 groupes `GRC-*`. `systemd-analyze security cyber-grc.service` →
+**1,3 OK**.
+
+- **Constat Q-77 fermé.** `backend/README.md` §8 annonçait « Apache 2.4.58 (Ubuntu) » et
+  « PostgreSQL 16.13 » — la version d'un conteneur de développement qui n'existe plus —
+  pendant que `test/deploiement/` tournait déjà sur la cible réelle, dont le correctif
+  Q-42 (le type MIME qu'Apache attribue aux `.js`). Rejoué sur Debian 13 : la prémisse
+  tient aussi là, `/etc/mime.types` y déclare bien `text/javascript`, et les 59 scripts
+  d'`index.html` sont mesurés à **2 248 762 → 699 088 octets** derrière le vhost livré.
+  Les chiffres et noms de version du README §8 sont réécrits en conséquence ; deux
+  en-têtes d'essai (`test/api/normalisation-erreurs.test.mjs`,
+  `test/deploiement/vhost-apache.test.mjs`) raisonnent encore sur 2.4.58 et restent hors
+  du périmètre d'écriture de cette entrée.
+- **Constat Q-53 fermé.** Rien ne confrontait les chiffres du README au réel — six
+  signalements de documentation périmée en huit passages, la parade restant la
+  discipline d'un agent. `test/documentation/chiffres-du-banc.test.mjs` porte désormais
+  cinq essais qui **rejouent** `apache2 -v`, `psql --version`, `process.version` et
+  `/etc/os-release`, et comparent leur sortie **au même motif** que celui appliqué au
+  texte du README : un nombre qui diverge fait rougir le banc au lieu d'attendre un
+  septième signalement. Mordu dans les cinq sens (Node, Apache, PostgreSQL, rsync, OS
+  falsifiés un par un puis restaurés) — et la première exécution de ce contrôle a
+  elle-même trouvé deux bugs en son propre sein avant d'être mordue : une ligne
+  `| Base |` homonyme plus haut dans le document (le tableau de sauvegarde, §6, sans
+  rapport avec PostgreSQL) et un libellé de colonne répétant le mot « rsync », que le
+  motif de comparaison captait à la place de la valeur.
+- **Constat Q-4, 7ᵉ signalement, fermé** — par cette entrée même.
+
 ### Serveur — vague 3 : lot L3, authentification Active Directory et droits
 
 **État mesuré à la livraison**, révision `f11a9ae`, base neuve : `npm test` → **969 essais,

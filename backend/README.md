@@ -796,14 +796,14 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`f11a9ae`** — « test/api revient à 241/241 », **vague 3, lot L3 livré** (03/09/2026). À l'ouverture de la vague, `e69b184` rendait 651 : le banc a gagné **318 essais** et quatre familles — `auth`, `droits`, `annuaire`, `modules` |
+| Révision mesurée | **`1590c47`** — « Le banc a besoin d'une ligne de plus sur cette machine, et c'est écrit » (04/09/2026), rejouée **sur la machine réelle** (Debian 13, `SRV-Infra`) et non plus sur un conteneur Ubuntu. Le compte n'a **pas bougé** depuis `f11a9ae` (969 des deux côtés) ; ce qui a changé, c'est l'**environnement qui le mesure** — voir la ligne suivante et le constat **Q-77** |
 | État de l'arbre | **propre** (`git status --porcelain` vide) |
-| Base | neuve, `BASE_NOM=… bash db/dev/preparer_base_dev.sh --recreer`, **PostgreSQL 16.13**, client `psql` 16.13 |
-| Node · Apache · rsync | 22.22.2 · **Apache 2.4.58 (Ubuntu)** · **rsync 3.2.7** |
+| Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
+| Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 969 · pass 969 · fail 0  (165,2 s)
+npm test                                         → tests 969 · pass 969 · fail 0  (133,3 s)
                                                    base 272 · api 241 · reprise 77
                                                    navigateur 74 · deploiement 56
                                                    depot 3 · documentation 12
@@ -811,15 +811,15 @@ npm test                                         → tests 969 · pass 969 · fa
                                                    modules 33
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (8 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (9 garde-fous découverts, joués, consignés)
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **48 tables** en
-**6 migrations**, **192 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**7 migrations**, **192 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **71 clés étrangères** (43 `restrict`, 27 `cascade`, 1 `set null`), **43 tables portant
 `cree_par` et 43 déclencheurs de création**, **11 clés étrangères composites** visant
-`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **8 contrôles consignés**
-dans `controles_schema`.
+`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **9 contrôles consignés**
+dans `controles_schema` (la migration `007_authentification.sql` en a ajouté un neuvième).
 
 Frontend, mesuré en **évaluant le module** et non en dépouillant son texte : façade
 `DataStore` à **131 membres**, identique avant et après la vague 2 ; **118 méthodes
@@ -1355,18 +1355,15 @@ sur l'arbre, où les deux fichiers coexistent.
   **registre nominatif** des garde-fous branchés, et `f_verifier_schema()` **compare** ce
   qu'elle découvre à ce registre. Retirer un contrôle devient un geste explicite —
   `select f_retirer_controle_schema('f_verifier_<x>', '<motif>')`, dans la migration qui
-  le retire — au lieu d'une omission silencieuse.
-- **Un garde-fou qui cesse d'être découvert ne disparaît plus en silence.**
-  `f_verifier_schema()` ne refusait que s'il ne découvrait **aucun** contrôle : une
-  migration qui renomme ou re-signe une fonction en aurait effacé un sans un mot. La
-  table `controles_schema` (migration `005_controles_schema.sql`) tient désormais le
-  **registre nominatif** des garde-fous branchés, et `f_verifier_schema()` **compare** ce
-  qu'elle découvre à ce registre. Retirer un contrôle devient un geste explicite —
-  `select f_retirer_controle_schema('f_verifier_<x>', '<motif>')`, dans la migration qui
-  le retire — au lieu d'une omission silencieuse.
-- Les vérifications ont été menées sur **PostgreSQL 16.13**, alors que la cible du
-  déploiement est **PostgreSQL 17** (dépôt PGDG, `install.sh`). Aucune fonctionnalité
-  postérieure à 16 n'est employée, mais l'écart reste à éprouver sur la VM cible.
+  le retire — au lieu d'une omission silencieuse. Neuf contrôles y sont enregistrés
+  depuis la migration `007_authentification.sql` (constat Q-77, ci-dessous).
+- ✅ **Ce qui était une réserve — « vérifié sur 16.13, la cible est 17 » — est
+  maintenant une mesure.** `db/migrate.mjs` a fait passer les 7 migrations sur
+  **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, le paquet réellement livré par le
+  dépôt PGDG sur la VM cible, et non plus seulement sur 16.13 : 48 tables, RLS activée
+  et forcée 48/48, 192 politiques, `f_verifier_schema()` → 0 anomalie. Aucune
+  fonctionnalité postérieure à 16 n'était employée non plus ; l'écart est désormais
+  éprouvé, pas seulement présumé sans conséquence.
 
 **Sur l'environnement**
 
@@ -1382,19 +1379,38 @@ sur l'arbre, où les deux fichiers coexistent.
   bien annulée**.
 - ✅ **La politique TLS livrée est mesurée**, pour la première fois, au 8ᵉ passage — ce
   qui restait la dernière affirmation du vhost prise sur parole.
-- ⚠️ **Ce qui reste hors de portée sur cette machine**, et qu'il faut donc surveiller à
-  la première exécution sur la VM cible : le **TLS d'une vraie PKI** (le banc engendre son
-  propre certificat ; c'est la *politique* qui est mesurée, pas la chaîne de confiance),
-  l'**installation Debian 13 complète** et l'**unité systemd**, **ClamAV**, l'**Active
-  Directory** et le **relais SMTP**. `deploy/install.sh` est désormais exercé par blocs et
-  sur sa copie de frontend, mais pas de bout en bout en conditions réelles.
+- ✅ **Le banc a longtemps mesuré une doublure Ubuntu du frontal, pas la cible — constat
+  Q-77.** Les deux bullets ci-dessus datent des 7ᵉ et 8ᵉ passages, joués sur un conteneur
+  portant Apache 2.4.58 : juste comme mesure de ce qu'ils décrivaient, mais **ce n'était
+  pas l'environnement de déploiement**. Depuis le 03/09/2026 le chantier tourne sur la VM
+  Debian 13 réelle, et les mêmes propriétés y ont été rejouées, le 04/09 à la révision
+  `1590c47` : **Apache/2.4.68 (Debian)**, dont `/etc/mime.types` déclare bien
+  `text/javascript` pour les `.js` — la prémisse du correctif Q-42 tient donc aussi
+  sur la cible, et les 59 scripts d'`index.html` sont mesurés à
+  **2 248 762 → 699 088 octets** derrière le vhost livré ; **PostgreSQL 17.11**
+  (dépôt PGDG, et non plus 16.13) ; l'unité systemd réelle
+  rend **`systemd-analyze security` → 1,3 OK** ; la chaîne TLS livrée (PKI à deux niveaux)
+  vérifie **propre** (`openssl s_client` : `Verify return code: 0`) ; `clamd` est actif.
+  Un **Active Directory Samba réel** a par ailleurs été monté pour la recette (23 groupes
+  `GRC-*`, un groupe imbriqué — constats **Q-83**/**Q-84**) — ce n'est pas celui du
+  client, mais ce n'est plus la doublure JavaScript seule.
+- ⚠️ **Ce qui reste hors de portée sur cette machine** : le **relais SMTP** et
+  l'**Active Directory de production du client**. Le second reste **interdit aux
+  essais** par construction — un banc qui éprouve le cas négatif (mot de passe faux,
+  compte verrouillé) sur un annuaire réel verrouillerait des comptes réels. Tout le
+  reste de ce qui figurait ici — TLS d'une vraie PKI, installation Debian 13 complète,
+  unité systemd, ClamAV — **est désormais éprouvé** (bullet ci-dessus).
 - ⚠️ **Une barrière est ouverte et reportée par écrit** : le pré-filtre de corps du
   frontal ne borne pas un corps en `Transfer-Encoding: chunked` (voir « La borne de corps
   du frontal » ci-dessus). La borne applicative tient ; le trou du frontal se ferme au
   **lot L3**, avec la limitation de rythme.
-- Les lots L3 (authentification), L6 (pièces jointes) et L12 (notifications) se
-  recetteront sur des doublures tant que l'annuaire, ClamAV et le relais de
-  messagerie du client ne sont pas accessibles.
+- Le lot **L6** (pièces jointes) recettera sa **chaîne d'analyse antivirale** sur le
+  ClamAV réel désormais actif sur la machine — c'est la chaîne elle-même (dépôt →
+  `clamd` → verdict) qui reste à construire, le lot n'ayant pas commencé, pas l'outil à
+  installer. Le lot **L3** a été recetté contre un **Active Directory réel** (Samba)
+  plutôt que sur la seule doublure JavaScript ; l'AD du client reste, lui, hors de
+  portée. Le lot **L12** (notifications) reste sur une doublure : le **relais SMTP** du
+  client n'est accessible ni en essai ni en recette.
 
 **Dette reportée, assumée et datée** — un report écrit vaut mieux qu'un silence :
 

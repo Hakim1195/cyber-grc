@@ -69,6 +69,7 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
 import { RACINE_BACKEND } from '../aide/serveur.mjs';
+import { exigerOutil } from '../aide/outils.mjs';
 
 const README = join(RACINE_BACKEND, 'README.md');
 const CHANGELOG = join(RACINE_BACKEND, '..', 'CHANGELOG.md');
@@ -229,5 +230,146 @@ describe('Les chiffres du README disent le réel, ou ils rougissent (constat Q-5
     // précède n'est pas couvert par elle.
     assert.ok(texte.indexOf('Point de mesure') < texte.indexOf(`tests ${String(mesure.total)}`),
       'Le bloc de mesure ne suit plus la phrase qui l’encadre.');
+  });
+});
+
+/* =====================================================================
+ *  L'ENVIRONNEMENT documenté est celui qui tourne ICI (constat Q-77)
+ * ===================================================================== */
+
+/**
+ * ── Le défaut que ce bloc ferme ──────────────────────────────────────────────
+ *
+ * Le README §8 a annoncé « Apache 2.4.58 (Ubuntu) » et « PostgreSQL 16.13 » pendant
+ * toute la vague 3, pendant que le chantier tournait déjà sur une VM Debian 13 — Apache
+ * 2.4.68, PostgreSQL 17. Personne ne l'avait décidé : c'était un conteneur de
+ * développement devenu obsolète sous le texte qui le décrivait, et **toute la famille
+ * `test/deploiement/`** — dont le correctif Q-42, dont la prémisse est le type MIME
+ * qu'Apache attribue aux `.js` — a été validée sur une version qu'aucune machine cible
+ * n'embarque. Personne ne s'en est aperçu pendant six passages de porte, parce que rien
+ * ne comparait le texte à la machine qui faisait tourner le banc. C'est la forme
+ * exacte de Q-53, appliquée cette fois aux **noms de version** plutôt qu'aux comptes
+ * d'essais.
+ *
+ * ── Pourquoi ces essais EXIGENT les outils plutôt que de se sauter ────────────
+ *
+ * `exigerOutil` (constat Q-37) : un essai vert parce qu'un binaire est absent est un
+ * décor. La famille `documentation` n'avait jamais dépendu d'un processus externe
+ * jusqu'ici ; elle en dépend maintenant, **délibérément** — la seule alternative est de
+ * comparer le README à rien, ce qui ne garde rien.
+ *
+ * ── La même règle appliquée aux deux côtés ─────────────────────────────────────
+ *
+ * Chaque contrôle applique **UN SEUL** motif à la sortie de l'outil réel et au texte
+ * du README, et compare les deux captures — jamais deux motifs accordés à la main,
+ * qui pourraient diverger sans que personne ne le voie (c'est très exactement le
+ * défaut que ce fichier existe pour attraper ailleurs).
+ */
+
+/**
+ * Les deux lignes du tableau d'environnement du §8 — bornées par leur PROPRE texte,
+ * jamais par leur position dans le fichier, et RÉDUITES À LEUR CELLULE DE VALEUR
+ * (le libellé de colonne écarté). Deux pièges, trouvés par cet essai lui-même en le
+ * faisant tourner une première fois :
+ *
+ *  1. Une recherche non bornée trouve d'abord `| Base |` **du tableau de sauvegarde**
+ *     (§6, « Archivage continu des WAL… »), qui n'a rien à voir avec PostgreSQL. Ce
+ *     document cite aussi plusieurs vieux « Apache 2.4.58 », tous historiques (le
+ *     7ᵉ passage, le correctif Q-42 originel) — c'est précisément la confusion que
+ *     Q-77 a payée. On ancre donc sur « Révision mesurée », unique dans le fichier.
+ *  2. Le LIBELLÉ « Node · Apache · rsync · OS » répète les mots « Apache » et
+ *     « rsync » : les garder dans le texte comparé aurait fait matcher le motif
+ *     RSYNC sur le « v22.23.2 » de Node, le mot « rsync » du libellé le précédant.
+ *     Mesuré, pas supposé : c'est la première exécution de cet essai qui l'a montré.
+ */
+function lignesEnvironnement() {
+  const texte = readFileSync(README, 'utf8');
+  const ancre = texte.indexOf('| Révision mesurée |');
+  assert.notEqual(ancre, -1,
+    'La ligne « Révision mesurée » du README §8 a disparu : le tableau d’environnement ' +
+    'ne peut plus être borné dans le document.');
+  // Fenêtre courte : les quatre lignes du tableau tiennent largement en dessous.
+  const fenetre = texte.slice(ancre, ancre + 2000);
+  const base = /\| Base \|([^\n]*)\|/.exec(fenetre);
+  const outils = /\| Node · Apache · rsync · OS \|([^\n]*)\|/.exec(fenetre);
+  assert.notEqual(base, null,
+    'La ligne « Base » du tableau d’environnement (README §8) a disparu : plus rien n’y ' +
+    'porte la version de PostgreSQL.');
+  assert.notEqual(outils, null,
+    'La ligne « Node · Apache · rsync · OS » du tableau d’environnement (README §8) a ' +
+    'disparu, changé de libellé, ou changé d’ordre de colonnes.');
+  return { base: base[1], outils: outils[1] };
+}
+
+/** Applique UN motif aux deux textes, et ÉCHOUE si l'un des deux ne capture rien. */
+function comparerParLeMemeMotif(motif, texteReel, texteReadme, quoi) {
+  const capturesReel = motif.exec(texteReel);
+  const capturesReadme = motif.exec(texteReadme);
+  assert.notEqual(capturesReel, null,
+    `${quoi} : le motif de comparaison ne trouve plus rien dans la sortie RÉELLE de ` +
+    `l’outil (« ${texteReel.slice(0, 200)} » …). L’outil a dû changer de format de sortie.`);
+  assert.notEqual(capturesReadme, null,
+    `${quoi} : le motif de comparaison ne trouve plus rien dans le README. La ligne a ` +
+    'changé de forme sans que ce contrôle soit mis à jour avec elle.');
+  assert.equal(capturesReadme[1], capturesReel[1],
+    `${quoi} : le README annonce « ${capturesReadme[1]} », la machine qui joue CE banc ` +
+    `rend « ${capturesReel[1]} ». C’est exactement la dérive du constat Q-77.`);
+}
+
+describe('L’ENVIRONNEMENT du README est celui qui tourne ICI, ou il rougit (constat Q-77)', () => {
+  test('NODE : la version annoncée est celle qui exécute le banc EN CE MOMENT', async () => {
+    // Pas de sous-processus à lancer : `process.version` EST la réponse, pour
+    // l'interpréteur qui est, à cet instant précis, en train de jouer cet essai.
+    const { outils } = lignesEnvironnement();
+    const motif = /\*\*(v\d+\.\d+\.\d+)\*\*/;
+    const trouve = motif.exec(outils);
+    assert.notEqual(trouve, null,
+      'La version de Node a disparu de la ligne d’environnement du README §8.');
+    assert.equal(trouve[1], process.version,
+      `Le README annonce Node ${trouve[1]}, et c’est ${process.version} qui exécute ce ` +
+      'banc à l’instant même. Un chiffre qui ne se corrige pas tout seul (constat Q-77).');
+  });
+
+  test('APACHE : la version annoncée est celle installée sur CETTE machine', async () => {
+    exigerOutil('apache2', ['-v'],
+      'Ce contrôle confronte le README §8 à l’Apache réellement installé : sans lui, ' +
+        'rien ne dit si le README décrit encore un conteneur qui n’existe plus (constat Q-77).');
+    const { outils } = lignesEnvironnement();
+    const sortie = execFileSync('apache2', ['-v'], { encoding: 'utf8' });
+    comparerParLeMemeMotif(/Apache\/(\d+\.\d+\.\d+ \([^)]+\))/, sortie, outils, 'APACHE');
+  });
+
+  test('POSTGRESQL : la version annoncée est celle du client PSQL réellement installé', async () => {
+    // Sur Debian, le paquet du client et celui du serveur PGDG partagent le même
+    // numéro de version : interroger `psql --version` évite d’ouvrir une connexion
+    // pour un contrôle qui n’a besoin que de lire un binaire (§2 bis : mesure et
+    // comptage, pas de dépendance qui n’est pas nécessaire).
+    exigerOutil('psql', ['--version'],
+      'Ce contrôle confronte le README §8 au client PostgreSQL réellement installé ' +
+        '(constat Q-77).');
+    const { base } = lignesEnvironnement();
+    const sortie = execFileSync('psql', ['--version'], { encoding: 'utf8' });
+    comparerParLeMemeMotif(/(\d+\.\d+ \(Debian[^)]*\))/, sortie, base, 'POSTGRESQL');
+  });
+
+  test('RSYNC : la version annoncée est celle installée sur CETTE machine', async () => {
+    exigerOutil('rsync', ['--version'],
+      'Ce contrôle confronte le README §8 au rsync réellement installé (constat Q-77).');
+    const { outils } = lignesEnvironnement();
+    const sortie = execFileSync('rsync', ['--version'], { encoding: 'utf8' });
+    comparerParLeMemeMotif(/rsync\D+(\d+\.\d+\.\d+)/, sortie, outils, 'RSYNC');
+  });
+
+  test('OS : le README documente la VM cible, pas un conteneur de développement', async () => {
+    // Q-77 tient tout entier dans cette phrase : le lot `deploiement` a été validé sur
+    // un système que la cible n’embarque pas. La distribution elle-même — pas
+    // seulement les paquets qu’elle porte — doit donc être confrontée au réel.
+    const { outils } = lignesEnvironnement();
+    const osRelease = readFileSync('/etc/os-release', 'utf8');
+    const trouve = /^PRETTY_NAME="([^"]+)"/m.exec(osRelease);
+    assert.notEqual(trouve, null, '/etc/os-release ne porte plus de PRETTY_NAME sur cette machine.');
+    assert.ok(outils.includes(trouve[1]),
+      `Le README §8 ne cite pas « ${trouve[1]} » (le PRETTY_NAME de /etc/os-release sur ` +
+      `cette machine) dans sa ligne d’environnement : ${outils.slice(0, 200)}…`);
   });
 });
