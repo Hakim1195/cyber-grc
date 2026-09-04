@@ -2195,3 +2195,121 @@ en service n'est pas un `alter table` : passer `prestataires` de Filiale à Grou
 d'évaluation, et ce que deviennent les actions rattachées — une migration de données **et**
 une décision métier, sur des enregistrements déjà employés comme preuve d'audit. La porte
 est ouverte à la révision ; elle a un prix, et il croît avec l'usage.
+
+---
+
+## §35 — Contrat du lot L13 : cycle de vie, sortie de filiale, purges
+
+> **Écrit avant le lot, comme les §29 à §33.** Ce que le contrat fige n'est pas
+> l'implémentation, ce sont les **décisions qui coûtent cher si on les découvre tard**.
+
+### §35.1 — Ce qui existe déjà, et qu'il ne faut pas refaire
+
+| Ce qui est là | Où |
+|---|---|
+| `filiales.statut ∈ {active, archivee, sortie}` et `date_sortie`, avec `ck_filiales_sortie` qui exige la date | `001_socle.sql` |
+| `f_filiales_actives()` — une filiale non `active` **n'entre déjà dans aucun périmètre de session** | `010_lecture_filiales.sql` |
+| `statut` + `archive_le` sur `mesure_catalogue` et `risque_catalogue`, avec l'égalité qui interdit les deux incohérences | `001`, `012` |
+| `referentiels_actifs.date_desactivation` | `002` |
+| `traitements.duree_conservation` — la durée déclarée au registre article 30 | `003` |
+| Le vocabulaire `purge` et `archivage` du journal, **déclaré et émis par personne** | `src/auth/journal.ts` |
+| L'export complet `grc-backup` et sa reprise, paliers v1 → v13 compris | `src/reprise/` |
+| La procédure d'archivage du journal, **documentée en quatre étapes et non outillée** | §12 |
+
+**Aucune migration n'est nécessaire pour la sortie de filiale.** Le schéma la porte déjà.
+
+### §35.2 — Sortie d'une filiale : trois gestes, dans cet ordre, et le premier est irréversible à l'envers
+
+Le cadrage (`PLAN_SERVEUR` §2.7) dit : *« export complet (données + pièces jointes), passage
+en archive pour la durée de rétention obligatoire, puis purge »*.
+
+1. **Exporter d'abord.** Une filiale passée en `sortie` **disparaît de tous les périmètres**
+   (`f_filiales_actives()`) : l'exporter *ensuite* demanderait un chemin qui contourne le
+   cloisonnement, c'est-à-dire exactement ce que ce chantier refuse. **L'ordre n'est pas une
+   commodité, c'est ce qui rend la suite possible sans dérogation.**
+2. **Basculer le statut**, avec `date_sortie`. Acte d'**administration Groupe**, déclaré
+   `perimetre: 'administration-groupe'`, journalisé `archivage`.
+3. **Purger**, après la rétention. Hors application (voir §35.4).
+
+⚠️ **Ce que la sortie NE fait pas** : supprimer des lignes. Une filiale `sortie` garde ses
+données, illisibles par les sessions et lisibles par le propriétaire. C'est ce qui permet de
+répondre à un contrôle deux ans plus tard.
+
+⚠️ **Le piège mesuré (constat Q-155)** : créer ou retirer une filiale **active** fait basculer
+`f_perimetre_groupe()` pour toutes les sessions Groupe en cours, jusqu'à leur reconnexion.
+Une sortie de filiale a donc un effet de bord sur les sessions ouvertes, et le produit doit
+le **dire** plutôt que le laisser découvrir.
+
+### §35.3 — Purge RGPD : anonymiser, pas supprimer
+
+Les données personnelles vivent dans **`personnes`** (annuaire), **`crise`** (contacts
+d'urgence : nom, téléphone, courriel) et **`incidents`** (descriptions libres).
+
+**Supprimer est le mauvais geste**, et pour une raison de modèle : les entités stockent les
+noms **en texte** (`responsable`, `proprietaire`, `auditeur`) — c'est la décision « annuaire +
+autocomplétion, pas de clé étrangère » qui a permis de brancher l'annuaire sans rien casser.
+Supprimer une fiche `personnes` retire donc la **suggestion** et laisse le nom partout
+ailleurs : une purge qui s'arrêterait là **prétendrait** effacer sans effacer.
+
+Le contrat est donc :
+
+- **`personnes`** : suppression de la fiche **et** remplacement du nom dans les entités qui le
+  portent en texte, par une mention neutre (`« personne retirée »`). Les champs qui ne sont
+  pas des noms ne bougent pas.
+- **`crise`** : téléphone et courriel vidés, rôle conservé — une cellule de crise sans rôles
+  n'a plus de sens, et le rôle n'est pas une donnée personnelle.
+- **`incidents`** : **rien d'automatique.** Une description libre peut contenir un nom comme
+  elle peut contenir la seule preuve d'un incident. Le produit **signale** les incidents
+  antérieurs à la rétention et laisse un humain trancher. Purger automatiquement une
+  description serait détruire une preuve d'audit sans que personne ne l'ait décidé.
+- **Journal d'audit : JAMAIS.** Il est en ajout seul, chaîné, et sa rétention est la
+  procédure du §12. Une purge RGPD qui y toucherait casserait la chaîne — et la chaîne est
+  la promesse centrale du produit.
+
+Chaque purge écrit une entrée `purge` au journal, avec **le nombre de lignes touchées par
+table**, jamais leur contenu.
+
+### §35.4 — Ce qui reste hors de l'application, et pourquoi
+
+L'archivage du **journal** passe par le compte **propriétaire**, jamais par l'application :
+c'est la **couche 4** de la garantie d'ajout seul (§12). Le lot L13 l'**outille** — un script
+sous `deploy/`, joué par un exploitant — mais ne le déplace pas dans le serveur. Les quatre
+étapes du §12 (exporter, ancrer l'empreinte, désactiver les déclencheurs, journaliser) sont
+le contrat de ce script, et il doit **vérifier la chaîne de part et d'autre de la coupure**
+avant de rendre la main.
+
+---
+
+## §36 — Contrat du lot L12 : notifications
+
+### §36.1 — Ce qui est mesuré, et ce qui ne l'est pas
+
+- ✅ **La sortie SMTP de SRV-Infra fonctionne** : port 587 vers `smtp.office365.com` rend la
+  bannière `220 … Microsoft ESMTP MAIL Service ready`.
+- ❌ **La VM du client n'a pas été vérifiée** — c'est la vérification du `PLAN_SERVEUR` §9, et
+  elle reste ouverte. Le lot doit donc **fonctionner sans relais** : un envoi impossible est
+  un incident d'exploitation, jamais une erreur rendue à l'utilisateur qui a créé l'échéance.
+
+### §36.2 — Trois règles qui ne se négocient pas
+
+1. **Aucune donnée métier dans le corps d'un courriel.** Un courriel traverse des serveurs
+   que le client ne maîtrise pas, et le produit est cloisonné par filiale : écrire « le
+   risque *Rançongiciel sur l'ERP de Hambourg* est en retard » dans un message sortant
+   annulerait le cloisonnement par le canal le plus banal. Le message dit **quoi faire et
+   où**, jamais **quoi**. Un lien, un compte, une échéance — pas un contenu.
+2. **L'envoi ne bloque jamais l'écriture.** Une échéance se crée même si le relais est
+   injoignable. La file d'envoi est distincte de la transaction métier ; un `rollback` de
+   courriel n'existe pas.
+3. **Un destinataire vient de l'annuaire, jamais d'une saisie libre.** `personnes.email` est
+   alimenté par l'AD ; accepter une adresse tapée à la main ferait du produit un relais de
+   courriel arbitraire.
+
+### §36.3 — Ce qui déclenche un envoi
+
+Le service `js/services/echeances.js` **dérive déjà** toutes les obligations datées du
+produit — plan d'actions, MCO, revues documentaires, déclarations d'incidents à 72 h, audits
+planifiés, revues de direction. **C'est la même source**, et elle ne se réécrit pas côté
+serveur : le lot L12 lit les mêmes dates, avec les mêmes règles, ou il divergera.
+
+⚠️ **Un envoi est un acte tracé** — action `administration` au journal, avec le nombre de
+destinataires, jamais leur liste.
