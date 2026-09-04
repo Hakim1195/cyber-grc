@@ -497,6 +497,25 @@ describe('L’habilitation Groupe ne se fabrique nulle part (suite du constat M-
     // découvrir qu'un motif ne mord pas là où son commentaire le promet.
     // Lire reste libre : une lecture n'est jamais suivie de « : » ou de « = ».
     const ecriture = /(^|[^\w])administrationGroupe\s*[:=][^=]/;
+    // ── Le littéral `false` n'est pas une écriture du drapeau — vague 4 ────
+    //
+    // Ce balayage a accusé `src/pieces/exploitation.ts`, qui construit un
+    // périmètre pour un travail de fond avec `administrationGroupe: false`. Or
+    // l'essai voisin — « E2, le drapeau n'est JAMAIS accordé par une constante »
+    // — écrit noir sur blanc que *« un `administrationGroupe: false` est
+    // l'inverse : le refus »*. Les deux garde-fous se contredisaient.
+    //
+    // L'arbitrage suit celui des deux qui porte la propriété **qui ne
+    // vieillit pas** : ce qu'on interdit est de **s'accorder** le droit, pas de
+    // le refuser. Le balayage ignore donc le littéral `false` — et **rien
+    // d'autre** : `: true` reste accusé, et `: uneVariable` aussi, parce qu'une
+    // variable peut valoir vrai. C'est le cas dangereux, et il est intact.
+    //
+    // ⚠️ La solution qu'on choisit d'ordinaire — allonger la liste de fichiers
+    // autorisés — aurait été la mauvaise, et l'essai voisin dit pourquoi :
+    // *« une liste de fichiers vieillit ; elle ne dit plus rien du jour où un
+    // fichier DÉJÀ autorisé s'accorde le droit au lieu de le dériver »*.
+    const refusExplicite = /(^|[^\w])administrationGroupe\s*[:=]\s*false\s*[,;)}]/;
     const fautifs = [];
     for (const chemin of fichiers) {
       const relatif = relative(racine, chemin).split('\\').join('/');
@@ -504,7 +523,9 @@ describe('L’habilitation Groupe ne se fabrique nulle part (suite du constat M-
       const lignes = readFileSync(chemin, 'utf8').split('\n');
       lignes.forEach((ligne, i) => {
         const utile = ligne.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, '');
-        if (ecriture.test(utile)) fautifs.push(`${relatif}:${String(i + 1)} ${ligne.trim().slice(0, 90)}`);
+        if (ecriture.test(utile) && !refusExplicite.test(utile)) {
+          fautifs.push(`${relatif}:${String(i + 1)} ${ligne.trim().slice(0, 90)}`);
+        }
       });
     }
     assert.deepEqual(
@@ -754,6 +775,15 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     ['GET', '/api/journal', undefined],
     ['GET', '/api/journal/export', undefined],
     ['GET', '/api/journal/verification', undefined],
+    // Le sélecteur de filiale du lot L4 (`CONVENTIONS.md` §30.2). Il est ici pour
+    // la raison qui vaut pour tous les autres, et une de plus : c'est la seule
+    // route du produit qui reçoit un identifiant de filiale, et une route qui
+    // déplacerait un périmètre d'écriture sans identité serait la forme la plus
+    // directe du défaut que le §30.1 décrit.
+    ['PUT', '/api/session/filiale-active', { filiale: 'FIL-TENTATIVE' }],
+    // La liste des filiales du périmètre de session (lot L4) : servie sans
+    // identité, elle donnerait la cartographie des filiales du groupe.
+    ['GET', '/api/filiales', undefined],
     ['POST', '/api/entites/risques', { champs: { nom: 'tentative' } }],
     ['PUT', '/api/entites/risques/RISK-A', { version: 1, champs: { nom: 'tentative' } }],
     ['DELETE', '/api/entites/risques/RISK-A?version=1', undefined],
