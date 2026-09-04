@@ -1546,8 +1546,20 @@ export interface OptionsCreation {
   /**
    * `filiale` (défaut) : la ligne appartient à la filiale active.
    * `groupe` : ligne de portée Groupe — **refusée** tant que la session ne
-   * déclare pas une administration Groupe. Fail-closed : le lot L4 ouvrira ce
-   * chemin, pas celui-ci.
+   * déclare pas une administration Groupe.
+   *
+   * ⚠️ **Ce commentaire disait « le lot L4 ouvrira ce chemin, pas celui-ci ».**
+   * L4 est livré, et `POST /api/entites/:entite` transmet bien `portee` depuis
+   * le corps — mesuré le 04/09/2026 à travers Apache : `admin.grc` crée une
+   * entrée de socle (201), `rssi.tls` reçoit **403 `hors_perimetre`** sur la
+   * même requête, et voit ensuite les deux entrées — la sienne et celle du
+   * Groupe.
+   *
+   * Ce que la réserve périmée a coûté : j'ai créé une entrée SANS `portee`, vu
+   * un RSSI de site la lire, et failli en conclure que le socle fonctionnait.
+   * Elle portait `filiale_id = <sa filiale>` — il la voyait parce qu'elle était
+   * **chez lui**. Les deux cas rendent « 1 entrée visible » ; seule la lecture
+   * de `filiale_id` en base les distingue.
    */
   readonly portee?: 'filiale' | 'groupe';
 
@@ -1982,7 +1994,8 @@ export class Depot {
         motif: 'refus_perimetre',
         message:
           'La création d’un enregistrement de portée Groupe est réservée à une administration ' +
-          'Groupe. Cet écran ne la propose pas encore (lot L4).',
+          'Groupe : ce que vous écrivez ici s’appliquerait à toutes les filiales. Créez-le ' +
+          'dans votre filiale, ou demandez-le à un administrateur Groupe.',
         entite,
       });
     }

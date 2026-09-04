@@ -8,6 +8,39 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Base — migration 013, et le socle de risques réellement éprouvé
+
+**Trois erreurs de ma part, toutes attrapées, et chacune vaut sa leçon.**
+
+**1. J'ai failli déclarer le socle fonctionnel sur une mesure fausse** (constat **Q-167**).
+Entrée créée par Apache, lue par un RSSI de site, conclusion « ça marche ». La ligne portait
+`filiale_id = <sa filiale>` : il la voyait **parce qu'elle était chez lui**. Socle commun et
+ajout local rendent exactement la même chose — *« une entrée visible »*.
+
+La bonne mesure est **différentielle**, et c'est la forme de `test/api/socle-risques.test.mjs` :
+une entrée de socle est vue par une filiale **qui n'est pas celle de son auteur** ; une
+entrée locale ne l'est pas. Prouver la première sans la seconde, c'est prouver qu'on voit
+quelque chose, pas qu'on voit ce qu'il faut. Neutraliser la portée fait rougir trois essais.
+
+**2. Une réserve périmée fait renoncer à essayer** (constat **Q-168**). `OptionsCreation.portee`
+disait *« le lot L4 ouvrira ce chemin, pas celui-ci »*. L4 était livré depuis la veille et la
+route transmettait déjà `portee` — je ne l'avais pas envoyé, sur la foi du commentaire. C'est
+la leçon de **Q-156** dans l'autre sens : *« non rejoué » ne vaut pas « impossible »*, et une
+réserve écrite hier peut être fausse aujourd'hui.
+
+**3. J'ai modifié une migration déjà appliquée** (constat **Q-169**), et `migrate.mjs` a
+refusé. Ce qu'il protège n'est pas une règle de style : la recette n'aurait jamais rejoué la
+version corrigée de `012` — deux schémas différents sous le même numéro, et l'écart ne se
+voyant qu'à la première création **en production**. `012` restaurée, le delta porté par
+**`013`**. Le contrôle compare une **empreinte** : il n'a rien à interpréter.
+
+**Éprouvé à travers Apache, avec l'AD réel** : `/api/modele` rend **23 entités** et
+`schemaVersion: 13` ; `admin.grc` crée une entrée de socle (**201**), `rssi.tls` reçoit
+**403 `hors_perimetre`** sur la même requête, et voit ensuite le socle **et** son propre
+ajout. Les lignes de sonde ont été retirées de la recette.
+
+**Banc** : 1458 essais, 1458 passés, code de retour 0.
+
 ### Serveur et interface — schéma v13 : les deux tables mortes deviennent des fonctionnalités
 
 **Une table sans chemin applicatif n'est pas une fonctionnalité, c'est une promesse.** La
