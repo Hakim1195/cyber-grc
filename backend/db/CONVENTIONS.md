@@ -1780,3 +1780,126 @@ motif le plus coûteux de ce chantier, et il vaut d'être écrit là où il s'es
 | Le partitionnement par année de `journal_audit` | Aucun volume ne le justifie : 159 entrées. Le §12 le prévoit « si le volume devait rendre la procédure pénible » | §12, sans échéance — le déclencheur est le volume |
 | La purge et l'archivage outillés | Procédure d'exploitation sous le compte propriétaire, hors application **par construction** (§12) | §12 |
 | L'horodatage sur source NTP **vérifié** | `clock_timestamp()` prend l'heure du système ; que ce système soit synchronisé est une propriété de la VM, pas du code | à confronter à la recette, `PLAN_SERVEUR` §1.7 |
+
+---
+
+## 30. Le contrat du changement de filiale active — figé avant la vague 4
+
+> Écrit par l'orchestrateur le 04/09/2026, **avant** le lancement des agents de la vague 4.
+> Même raison qu'aux §25 et §29 : c'est un **arbitrage**, et un arbitrage ne se délègue pas.
+
+### 30.1 Pourquoi c'est le point le plus dangereux du lot L4
+
+L'invariant central du produit est écrit partout : **« le périmètre vient du serveur, jamais
+d'une valeur transmise par le navigateur »**. Il n'est pas tenu par de la vigilance, il est
+tenu par la **forme** — `resoudre()` ne prend aucun argument, et `js/core/api.js` n'expose
+aucun paramètre de filiale (`CLAUDE.md` §8, condition vérifiée à la porte S2 sur six formes
+d'en-tête, le cookie, l'URL et le corps).
+
+**Un sélecteur de filiale introduit, par définition, une valeur choisie par le client.** Il
+est donc le seul endroit du produit où cet invariant peut se perdre — et il se perdrait
+*silencieusement* : l'utilisateur croirait écrire chez A en écrivant chez B.
+
+### 30.2 La règle, et la distinction qui la tient
+
+> **Le client envoie un CHOIX. Le serveur résout un PÉRIMÈTRE.** Ce ne sont pas la même
+> chose, et rien de ce que le client envoie n'entre jamais dans un périmètre.
+
+| | |
+|---|---|
+| Ce que le client peut envoyer | un **identifiant de filiale**, et rien d'autre |
+| Ce que le serveur en fait | il le cherche dans **`session_filiales`, relu en base pour CETTE session** — jamais dans une liste que le client aurait jointe, jamais dans le corps, jamais dans un en-tête |
+| Ce qui se passe s'il n'y est pas | **403**, journalisé en `refus_autorisation`. Pas de repli, pas de valeur par défaut : un choix refusé laisse la filiale active **inchangée** |
+| Où la filiale active est rangée | **dans la ligne de session, côté serveur.** Ni cookie, ni en-tête, ni paramètre d'URL |
+
+**Conséquence, et c'est elle qui préserve l'invariant** : après le changement, toute requête
+suivante résout son périmètre exactement comme avant — `resoudre()` ne prend toujours aucun
+argument, et `js/core/api.js` n'expose toujours aucun paramètre de filiale. Le sélecteur est
+une **route dédiée**, pas un paramètre ajouté aux routes existantes. Un agent qui serait
+tenté d'ajouter `?filiale=` à `/api/donnees` doit s'arrêter : ce serait la fin de la
+propriété, et le contrôle **S2** de la grille la rejoue contre cette couche.
+
+### 30.3 Ce que le changement ne fait PAS
+
+- **Il ne change pas le périmètre de LECTURE.** `session_filiales` vient des groupes AD, et
+  ne bouge qu'à la ré-authentification ou au déprovisionnement (lot L3). Le sélecteur ne
+  déplace que la **filiale active** — celle où les écritures atterrissent
+  (`f_filiale_ecriture()`), et elle doit **appartenir** au périmètre de lecture : c'est déjà
+  vérifié *par la base* depuis la porte S1 (§17.9), et cette vérification reste la dernière
+  barrière même si la route se trompe.
+- **Il n'accorde aucun droit.** Les domaines et le niveau ne dépendent pas de la filiale
+  active. Un contributeur qui bascule reste contributeur.
+
+⚠️ **La fenêtre à fermer, et elle est réelle** : les groupes AD d'un utilisateur peuvent
+changer *pendant* sa session (le lot L3 les relit tous les `AUTH_REVERIFICATION_AD`
+minutes). Si la filiale active en sort, la session ne doit pas continuer d'écrire là. **La
+filiale active est donc revérifiée contre `session_filiales` à chaque requête**, et non
+seulement au moment du choix. C'est une lecture indexée sur une table minuscule ; la payer
+est moins cher que de raisonner sur la fenêtre.
+
+### 30.4 L'acte est tracé, et le vocabulaire s'allonge d'une valeur
+
+Aucune des vingt actions de `ck_journal_audit_action` ne décrit un changement de périmètre.
+La migration **`009`** en ajoute une — **`changement_perimetre`** — en **remplaçant la
+contrainte**, ce qui est la voie sanctionnée par le §23 (on n'a pas réécrit `001`, on l'a
+altérée depuis une migration neuve). `ActionJournal` (`src/auth/journal.ts`) gagne la même
+valeur : les deux listes se font face, et une divergence fait **échouer l'insertion
+bruyamment** en `23514`.
+
+L'entrée porte la filiale **quittée** et la filiale **rejointe** dans `valeurs_avant` /
+`valeurs_apres` — et `resume` reste une phrase fixe (§29.5).
+
+---
+
+## 31. Le contrat des pièces jointes — figé avant la vague 4
+
+> ⚠️ **Le modèle EXISTE DÉJÀ, et c'est la première chose à savoir** : ne le réinventez pas.
+
+### 31.1 Ce que le dépôt porte déjà
+
+`001_socle.sql` §… définit `pieces_jointes` avec **tout** ce que la chaîne exige :
+`sha256` (`empreinte_sha256 not null`), `etat_analyse`, `quarantaine`, `chemin_stockage`,
+`taille_octets`, `type_mime`, `extension`, `signature_virale`, `date_analyse`,
+`derniere_reanalyse` — plus les contraintes qui les lient (`etat_analyse <> 'infectee' or
+quarantaine`). `src/config/index.ts` porte `tailleMaxOctets`, `quotaFilialeOctets`,
+`clamavActif`, `clamavSocket`, `clamavDelaiMs`, et les chemins `piecesJointes` /
+`quarantaine`.
+
+**Conséquence pour la vague : L6 n'a pas besoin de migration** — hormis celle du §30.4, qui
+appartient à L4. Il n'y a donc **aucune dépendance de migration entre les agents**.
+
+### 31.2 L'ordre des huit contrôles n'est pas indifférent
+
+Le `PLAN_SERVEUR` §1.6 les énumère ; ce paragraphe fige **l'ordre d'exécution**, parce qu'un
+contrôle joué trop tard ne protège plus rien :
+
+1. **taille** — avant de lire l'octet suivant ; un fichier hors borne ne doit jamais atteindre le disque ;
+2. **quota de la filiale** — même raison, et il se calcule sur `sum(taille_octets)` de la filiale ;
+3. **extension** contre la liste blanche ;
+4. **signature binaire** (les octets de tête), qui doit **concorder** avec l'extension et le type MIME annoncés — un exécutable renommé `.pdf` se refuse ici, et c'est le seul contrôle que l'attaquant ne choisit pas ;
+5. **écriture en zone d'attente**, nom aléatoire opaque, **hors de toute racine web** ;
+6. **SHA-256** calculé sur ce qui a été écrit, pas sur ce qui a été reçu ;
+7. **ClamAV** ; à l'issue, promotion vers le stockage définitif **ou** déplacement en quarantaine et `etat_analyse = 'infectee'` ;
+8. **la ligne n'est visible de l'application qu'après** — une pièce en cours d'analyse n'est jamais délivrable.
+
+⚠️ **Le point 4 est celui qu'on oublie**, et c'est le seul qui ne se laisse pas contourner en
+renommant. Le point 6 après le point 5 est délibéré : une empreinte calculée sur le flux
+reçu ne prouve pas ce que porte le disque.
+
+### 31.3 La délivrance
+
+`Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, **jamais** le type MIME
+annoncé par le déposant — celui qu'on a **constaté**. Apache ne sert **aucun** de ces
+fichiers : ils vivent hors racine web et ne sortent que par l'application, après contrôle
+des droits **et du périmètre**.
+
+**Les logos de filiale suivent la même chaîne, et PNG ou JPEG exclusivement** — pas de SVG,
+qui porte du script et s'afficherait *dans* l'interface.
+
+### 31.4 Ce que ClamAV ne garantit pas, et qu'il faut écrire
+
+Le `PLAN_SERVEUR` §1.6 l'ouvre par cette phrase, qui doit se retrouver dans le code :
+**aucun dispositif ne garantit l'absence de malware.** La chaîne est une défense en
+profondeur, pas une promesse. Le §17.5 s'applique — un garde-fou ne se voit pas prêter plus
+de portée qu'il n'en a. ⚠️ Et **si ClamAV ne répond pas, la pièce n'est pas acceptée** :
+`clamavActif` désactive l'analyse en développement, jamais l'échec silencieux en production.

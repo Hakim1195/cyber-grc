@@ -113,6 +113,7 @@ import type { ServiceAuthentification, SessionAppliqueeReelle } from '../auth/in
 import { journaliser } from '../auth/journal.js';
 import { deciderAcces, DOMAINE_PAR_ENTITE, entitesLisibles, refuserDroit } from './droits.js';
 import { greffonJournal } from './journal.js';
+import { greffonPieces } from '../pieces/index.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
 import { AuthentificationProvisoire, estAuthentificateur, PerimetreProvisoire } from './session.js';
@@ -1930,6 +1931,15 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  04/09/2026, motivé dans `src/api/droits.ts`.
    * ------------------------------------------------------------------- */
   await instance.register(greffonJournal, { pool });
+
+  /* -------------------------------------------------------------------
+   *  Pièces jointes — montées, pas écrites (lot L6)
+   * -------------------------------------------------------------------
+   *  Couture publiée avant l'agent qui la remplira, pour la même raison que
+   *  celle du journal : deux agents travaillent sur cette surface, et aucun
+   *  n'a besoin de toucher à ce fichier. Contrat au `CONVENTIONS.md` §31.
+   * ------------------------------------------------------------------- */
+  await instance.register(greffonPieces, { pool });
 
   const service = options.serviceAuthentification;
   if (service !== undefined) {

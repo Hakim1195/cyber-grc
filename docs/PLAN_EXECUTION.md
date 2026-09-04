@@ -710,6 +710,33 @@ l'air. C'est la formulation exacte de ce que la porte S3 a mesuré.
 > 4. **Correction post-audit en parallèle** : 2 à 3 agents groupés **par domaine**, jamais un
 >    par constat. L'orchestrateur garde les arbitrages et ce qui tient en deux fichiers.
 > 5. **Banc complet au pré-commit seulement** ; les familles touchées pendant le travail.
+
+#### La passe de préparation, jouée le 04/09/2026 — et ce qu'elle a épargné
+
+*De quoi cet agent a-t-il besoin qui n'existe pas encore dans le dépôt ?*
+
+| Agent envisagé | Ce qui lui manquait | Traitement — **fait avant le lancement** |
+|---|---|---|
+| **K1** multi-filiales | **l'arbitrage du changement de filiale active** — le seul endroit du produit où l'invariant « le périmètre vient du serveur » peut se perdre, et se perdre *en silence* | ⚠️ **contrat écrit** : `CONVENTIONS.md` **§30**. Le client envoie un **choix**, le serveur résout un **périmètre** ; le choix est cherché dans `session_filiales` **relu en base**, la filiale active vit dans la ligne de session, et la route est **dédiée** — jamais un `?filiale=` ajouté aux routes existantes |
+| **K1** | un **numéro de migration**, et une action de journal pour tracer l'acte | ⚠️ **`009`** lui est attribuée ; elle ajoute `changement_perimetre` à `ck_journal_audit_action` **en remplaçant la contrainte** (voie sanctionnée par le §23) |
+| **K2** pièces jointes | le **modèle** : table, colonnes d'analyse, quotas, chemins, socket ClamAV | ✅ **rien à faire — tout existe déjà** : `pieces_jointes` porte `sha256`, `etat_analyse`, `quarantaine`, `signature_virale`, `derniere_reanalyse` ; la configuration porte les quotas et ClamAV. **L6 n'a besoin d'AUCUNE migration**, donc aucune dépendance entre agents |
+| **K2** et **K4** | l'**ordre** des huit contrôles — un contrôle joué trop tard ne protège plus rien | ⚠️ **contrat écrit** : `CONVENTIONS.md` **§31.2**, ordre figé. Le point 4 (signature binaire) est celui qu'on oublie, et le seul que l'attaquant ne choisit pas |
+| **K2**, **K3**, **K4** | une **couture** dans `src/api/index.ts` | ⚠️ **`src/pieces/index.ts` créé et enregistré** — greffon vide, contrat en entête. Aucun agent n'a à toucher au point d'entrée |
+
+**Ce que la passe a épargné, chiffré** : cinq réponses sur cinq n'étaient pas « rien », et
+l'une d'elles — « le modèle des pièces jointes existe déjà » — aurait coûté à un agent une
+migration inutile et la réinvention d'une table de vingt colonnes. Coût de la passe :
+quelques milliers de jetons.
+
+#### La table de lancement — aucune case vide
+
+| Agent | Modèle | Périmètre d'écriture | Ce dont il a besoin, et **où c'est écrit** | Comment il prouve |
+|---|---|---|---|---|
+| **K1 — L4, le périmètre se choisit sans jamais venir du client** | `opus`, **jamais dégradé** | `backend/src/api/index.ts`, `backend/src/api/session.ts`, `backend/src/auth/journal.ts`, `backend/db/migrations/009_*.sql`, `backend/test/filiales/**` | **§30** en entier ; l'invariant et sa forme au `CLAUDE.md` §8 | une session bascule entre deux filiales de son périmètre ; un identifiant **hors** périmètre rend **403** et laisse la filiale active **inchangée** ; `?filiale=` ajouté à une route existante n'existe nulle part (contrôle mécanique). **Morsure obligatoire** — le cloisonnement est intouchable |
+| **K2 — L6, la chaîne d'ingestion** | `opus` | `backend/src/pieces/**`, `backend/test/pieces/**` | **§31.1 à §31.4** ; le modèle **existe**, la configuration aussi | un exécutable renommé `.pdf` est refusé **par sa signature binaire** ; ClamAV muet ⇒ pièce refusée, jamais acceptée en silence ; l'empreinte porte sur ce qui est **écrit**. **Morsure obligatoire** |
+| **K3 — L4/L6 côté navigateur** | `opus` | `cyber-gouvernance_V4/**`, `backend/test/navigateur/filiales.test.mjs` | **§30.2** et **§31.3** ; l'entonnoir `Droits.exigerExport()` ; les quatre conventions du `CLAUDE.md` §3 | l'écran affiche la filiale que **le serveur** annonce, jamais celle qu'il a demandée ; le bandeau change **après** la réponse. Un profil sans droit ne voit pas le sélecteur **et** le serveur refuse |
+| **K4 — L6, l'exploitation** | `sonnet` | `backend/src/pieces/exploitation.ts`, `backend/deploy/**`, `backend/test/deploiement/**` | **§31.2** points 7 et 8 ; quotas déjà en configuration | un quota dépassé refuse **avant** l'écriture ; la ré-analyse périodique repasse le stock et **remet en quarantaine** ce qui devient détecté. L'échec est bruyant : un quota faux se compte |
+| **SECU — porte S5** | `opus`, **jamais dégradé** | `docs/securite/` **uniquement** | — | lancé après, sur l'arbre commité. ⚠️ **On travaille pendant qu'il tourne** — il n'écrit nulle part ailleurs |
 > 6. **Le modèle se choisit au lancement, jamais après** — un agent en vol se *reprend*, il ne
 >    se relance pas : un relancement repaie 100 à 200 k de ré-acquisition.
 
