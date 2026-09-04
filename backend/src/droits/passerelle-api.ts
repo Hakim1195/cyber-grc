@@ -1,13 +1,13 @@
 /**
  * La passerelle entre les droits **résolus** (trente domaines, un niveau par
- * domaine) et les droits **appliqués par le point d'entrée** (treize domaines,
+ * domaine) et les droits **appliqués par le point d'entrée** (quatorze domaines,
  * un niveau pour la session).
  *
  * ════════════════════════════════════════════════════════════════════════
  *  Pourquoi il y a deux vocabulaires, et lequel fait foi
  * ════════════════════════════════════════════════════════════════════════
  *
- * `src/api/droits.ts` (agent A2) définit **treize** domaines fonctionnels, taillés
+ * `src/api/droits.ts` définit **quatorze** domaines fonctionnels, taillés
  * pour la décision d'accès d'une route : « ce que cette entité met en jeu ». La
  * base, elle, en porte **trente** (`domaine_fonctionnel`, `001_socle.sql` §1),
  * alignés sur le menu de l'application, et c'est ce vocabulaire-là que
@@ -70,7 +70,7 @@
  *
  * ── Ce que ça ne corrige PAS, et il faut le dire ─────────────────────────
  *
- * Trente domaines se projettent sur treize : plusieurs domaines de base
+ * Trente domaines se projettent sur quatorze : plusieurs domaines de base
  * partagent une case. `exigences`, `referentiels`, `mesures` et `correspondances`
  * tombent tous sur `conformite`. Un profil qui contribuerait aux `exigences` et
  * ne lirait que les `mesures` obtiendrait donc `conformite = contribution`, et
@@ -80,7 +80,7 @@
  * second se contourne par une demande de droits que personne ne comprend.
  *
  * La granularité de décision est celle de la route, et c'est le vocabulaire à
- * treize domaines. Aucun profil de socle n'est dans ce cas aujourd'hui — l'essai
+ * quatorze domaines. Aucun profil de socle n'est dans ce cas aujourd'hui — l'essai
  * le **vérifie** plutôt que de l'affirmer, sur les huit profils. Le jour où un
  * profil paramétré le sera, le contrôle fin existe déjà et il est exposé :
  * `ResolveurPerimetreSession.peut(domaine, niveau)` répond sur les trente
@@ -93,7 +93,7 @@ import type { DomaineFonctionnelBase, NiveauDroit } from './modele.js';
 import type { EtatSession } from './resolveur.js';
 
 /**
- * Rattachement de chacun des trente domaines de la base à l'un des treize
+ * Rattachement de chacun des trente domaines de la base à l'un des quatorze
  * domaines de décision. Exhaustif par construction — voir l'entête.
  */
 export const DOMAINE_API_PAR_DOMAINE_BASE: Readonly<
@@ -143,7 +143,23 @@ export const DOMAINE_API_PAR_DOMAINE_BASE: Readonly<
   parametres: 'administration',
   filiales: 'administration',
   droits: 'administration',
-  journal: 'administration',
+  // ⚠️ « journal » ne se projette PLUS sur « administration » — arbitrage de
+  // l'ouverture du lot L5, motivé dans `src/api/droits.ts`.
+  //
+  // Les trois lignes au-dessus se rejoignent parce qu'un administrateur des
+  // filiales, des droits ou des paramètres administre *l'application*. Lire le
+  // journal d'audit n'est pas administrer l'application : c'est lire trois ans
+  // d'identités, d'adresses IP et de valeurs avant/après, y compris les
+  // siennes. Le `PLAN_SERVEUR` §3.2 en fait un domaine à part ; la projection
+  // le rejoignait quand même, et c'est exactement la perte d'information dont
+  // l'entête de ce fichier prévient.
+  //
+  // Ce que ça change, mesuré : rien aujourd'hui — `ADMIN` est le seul profil du
+  // socle à porter l'un des quatre. Ce que ça empêche : que le premier profil
+  // paramétré recevant « paramètres » hérite du journal sans que personne l'ait
+  // décidé. Une barrière qui n'arrête que ceux qu'une autre arrête déjà n'est
+  // pas une barrière (constat Q-89).
+  journal: 'journal',
 });
 
 const RANG: Readonly<Record<NiveauDroit, number>> = Object.freeze({

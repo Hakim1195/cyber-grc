@@ -99,6 +99,34 @@ export interface ConfigurationAuth {
   readonly compteSecours: { readonly identifiant: string; readonly empreinte: string } | null;
   readonly maxTentatives: number;
   readonly dureeVerrouillageMinutes: number;
+  /**
+   * Délai entre deux relectures de l'annuaire pour une session **déjà ouverte**,
+   * en minutes. C'est la durée pendant laquelle un compte retiré de l'AD
+   * continue de travailler : ce n'est pas un réglage de confort.
+   *
+   * ⚠️ Ajoutée au constat **Q-91**. `src/auth/index.ts` portait une constante
+   * `REVALIDATION_PAR_DEFAUT_MS` avec, écrit à côté, *« ce n'est pas une
+   * variable de configuration, et cela devrait l'être »* — pendant que
+   * `.env.example` documentait `AUTH_REVERIFICATION_AD` comme si elle l'était.
+   * L'exploitant qui la réglait ne réglait rien.
+   */
+  readonly reverificationAdMinutes: number;
+}
+
+/**
+ * Limitation du rythme au point d'entrée — troisième moitié du constat **Q-91**.
+ *
+ * `API_RYTHME_MAX_ANONYME` et `API_RYTHME_FENETRE` étaient documentées dans
+ * `.env.example`, lues **nulle part**, et le limiteur les *empruntait* aux
+ * valeurs de connexion (`AUTH_MAX_TENTATIVES × 4`). Le fichier d'exemple le
+ * disait lui-même — « un emprunt écrit dans le code n'est pas un réglage » —
+ * et l'emprunt était toujours là.
+ */
+export interface ConfigurationApi {
+  /** Refus tolérés par adresse avant verrouillage. */
+  readonly rythmeMaxAnonyme: number;
+  /** Fenêtre de comptage **et** durée du verrouillage, en minutes. */
+  readonly rythmeFenetreMinutes: number;
 }
 
 export interface ConfigurationSmtp {
@@ -145,6 +173,7 @@ export interface Configuration {
   readonly base: ConfigurationBase;
   readonly session: ConfigurationSession;
   readonly auth: ConfigurationAuth;
+  readonly api: ConfigurationApi;
   readonly smtp: ConfigurationSmtp;
   readonly chemins: ConfigurationChemins;
   readonly piecesJointes: ConfigurationPiecesJointes;
@@ -615,6 +644,19 @@ export function chargerConfiguration(source: NodeJS.ProcessEnv = process.env): C
       min: 1,
       max: 1440,
     }),
+    reverificationAdMinutes: lecteur.entier('AUTH_REVERIFICATION_AD', {
+      defaut: 5,
+      // Zéro est admis, et c'est utile : il force la relecture à chaque requête.
+      // Le plafond dit ce que la valeur signifie — au-delà d'une heure, « le
+      // compte révoqué continue de travailler » cesse d'être une nuance.
+      min: 0,
+      max: 60,
+    }),
+  };
+
+  const api: ConfigurationApi = {
+    rythmeMaxAnonyme: lecteur.entier('API_RYTHME_MAX_ANONYME', { defaut: 20, min: 1, max: 1000 }),
+    rythmeFenetreMinutes: lecteur.entier('API_RYTHME_FENETRE', { defaut: 15, min: 1, max: 1440 }),
   };
 
   if (!ldapActif && estProduction) {
@@ -784,6 +826,7 @@ export function chargerConfiguration(source: NodeJS.ProcessEnv = process.env): C
     base,
     session,
     auth,
+    api,
     smtp,
     chemins,
     piecesJointes,

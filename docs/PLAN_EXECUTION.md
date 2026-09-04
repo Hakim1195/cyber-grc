@@ -510,6 +510,69 @@ d'outillage ci-dessus, et ils sont levés. Les périmètres sont disjoints **au 
 `src/api/**` n'appartient à personne ce tour-ci, et `src/serveur.ts` reste à l'orchestrateur
 (constat **Q-71**).
 
+### Vague 3, troisième tour — L5, le journal d'audit — table du 04/09/2026
+
+**Ce tour-ci ouvre L5 et rien d'autre.** L3 est construit, mesuré de bout en bout contre un
+Active Directory réel, et la porte S3 a trié ses constats. Ce qui reste de L3 au registre relève
+de la troisième classe du §0 bis, ou de reports datés.
+
+#### La passe de préparation, jouée AVANT de créer le moindre agent (§2 bis)
+
+Question posée pour chacun — *de quoi a-t-il besoin qui n'existe pas encore dans le dépôt ?* —
+et réponse écrite. **Cinq réponses sur cinq n'étaient pas « rien ».**
+
+| Agent envisagé | Ce qui lui manquait | Traitement — **fait par l'orchestrateur avant le lancement** |
+|---|---|---|
+| **J1** couverture | le **vocabulaire d'émission** : quelle opération émet quelle action, ce qu'on met dans `valeurs_avant`/`valeurs_apres`, et dans quelle transaction | ⚠️ **contrat écrit** — `CONVENTIONS.md` §29.2 à §29.6. Sans lui, J1 invente une convention que J2 et J3 réinventeront autrement |
+| **J2** lecture et cloisonnement | le **contrat HTTP** des trois routes, et surtout **qui lit quoi** après le resserrement E6 — un arbitrage, pas un détail d'implémentation | ⚠️ **contrat écrit** — §29.7 (le tableau des trois cas, dont `filiale_id is null`) et §29.8 |
+| **J2** et **J3** ensemble | une **couture** dans `src/api/index.ts` : sans elle, les deux agents écrivent dans le même fichier, ce que le §2 interdit | ⚠️ **`src/api/journal.ts` créé et enregistré** — greffon vide, contrat en entête. Le motif `ResolveurPerimetre` de la vague 2 |
+| **J2** et **J3** ensemble | le **domaine** sous lequel la consultation se décide. `journal` se projetait sur `administration` : un profil chargé des paramètres aurait lu trois ans d'identités | ⚠️ **arbitrage pris et mordu** — quatorzième domaine de décision, `src/api/droits.ts` + `src/droits/passerelle-api.ts`. La morsure est dans `test/droits/vocabulaire.test.mjs` |
+| **tous** | des **chiffres de banc vrais sur cette machine** | ⚠️ **banc rejoué deux fois** — voir ci-dessous, et la première exécution a démenti la documentation |
+
+**Ce que la passe a coûté et rapporté, mesuré.** Elle a pris moins de temps qu'un aller-retour
+d'agent, et elle a sorti **trois défauts que personne ne cherchait** :
+
+1. `TOUS_LES_DOMAINES` portait le commentaire *« dérivés du type — jamais recopiés »* et était
+   une **liste recopiée à la main**, typée `readonly DomaineFonctionnel[]` — un type qui admet
+   tout sous-ensemble. Une omission y était **silencieuse**. Passée en `Record` exhaustif : elle
+   fait désormais échouer la compilation (`CLAUDE.md` §3, premier cas du tableau).
+2. Le banc n'est **pas** à 1030/1030 en toutes circonstances : la première exécution a rendu
+   **1029 passés, 1 échec** sur `test/api/bornes-reprise.test.mjs` (« POOL SATURÉ »), verte au
+   rejeu isolé trois fois de suite et verte à la seconde exécution complète. C'est un essai
+   **instable**, et un essai instable est pire qu'un essai absent : il apprend à rejouer jusqu'au
+   vert, ce qui est exactement la façon dont un vrai défaut se fait congédier. Inscrit **Q-105**.
+3. Le garde-fou écrit pour Q-91 a mordu **son propre auteur, deux fois** — voir le constat.
+
+#### La table de lancement — aucune case vide (§2 bis)
+
+| Agent | Modèle | Périmètre d'écriture | Ce dont il a besoin, et **où c'est écrit** | Comment il prouve |
+|---|---|---|---|---|
+| **J1 — Chaque geste laisse une trace** | `opus`, **jamais dégradé** | `backend/src/auth/journal.ts`, `backend/src/entites/index.ts`, `backend/src/api/index.ts`, `backend/src/serveur.ts`, `backend/test/journal/**` | vocabulaire et transaction : `CONVENTIONS.md` **§29.2 à §29.6**. Les coutures existent déjà : chaque route porte un `requete.log.info` disant « le journal d'audit est le lot L5 » | le compte d'actions **réellement émises** passe de 4 à 16 sur 20, mesuré en base et non en lisant le code. L'essai **découvre** les sites d'émission au lieu d'en tenir la liste. **Morsures obligatoires** : retirer la journalisation de l'export doit rendre rouge (2ᵉ classe du §0 bis), de même pour la suppression |
+| **J2 — Le journal se lit, se cloisonne et se vérifie** | `opus`, **jamais dégradé** | `backend/db/migrations/008_journal_lecture.sql`, `backend/src/api/journal.ts`, `backend/test/journal-lecture/**` | condition **E6** : `004_rls.sql` §6 écrit déjà la correction ; contrat de lecture et arbitrage des trois cas : **§29.7** ; contrat HTTP : **§29.8**. La couture est enregistrée | `grc_lecture` **cesse** de lire 159 entrées sans périmètre. **Morsures obligatoires, les deux moitiés** : retirer `security definer` doit faire échouer **toute écriture** au journal ; rouvrir la politique doit rendre la lecture non cloisonnée. Un export du journal contenant `\r\n`, `"` et `;` se ré-analyse en **une** ligne |
+| **J3 — L'écran du journal, et le filet qui manquait** | `opus` | `cyber-gouvernance_V4/js/modules/journal.js`, `cyber-gouvernance_V4/index.html`, `cyber-gouvernance_V4/js/app.js`, `backend/test/navigateur/journal.test.mjs`, `backend/test/navigateur/droits.test.mjs` | contrat HTTP : **§29.8** ; le domaine `journal` est **déjà déclaré** des deux côtés (`js/core/api.js`, `DOMAINE_PAR_ROUTE`) ; l'entonnoir d'export est `Droits.exigerExport()` | ferme **Q-92** : un profil qui **peut écrire** et **ne peut pas exporter** est éprouvé — c'est la combinaison qui a laissé passer Q-89, et que le filet actuel n'exerce jamais. Un profil sans `journal` ne voit pas l'entrée de menu **et** reçoit un refus du serveur |
+| **J4 — La documentation cesse de nier** | `sonnet` | `backend/README.md`, `CHANGELOG.md`, `backend/test/documentation/**` | ferme **Q-90** : le `README` §8 déclare **ouvertes** cinq propriétés que L3 a livrées, et le §5 se contredit dans la même section. Chiffres du banc fournis dans le brief, mesurés le 04/09 | plus aucun nombre du `README` ne diverge du réel, et `test/documentation/` le **garde** au lieu de compter sur la discipline |
+| **SECU — porte S4** | `opus`, **jamais dégradé** | `docs/securite/` **uniquement** | — | lancé **après** les quatre, sur l'arbre commité. Son verdict **trie** (§0 bis) ; il n'écrit aucune ligne de produit |
+
+#### Dépendances vérifiées, une par une (§2 bis, « disjoint ne suffit pas »)
+
+1. **Périmètres disjoints au fichier près** : oui. `src/api/index.ts` est à J1 seul ;
+   `src/api/journal.ts` à J2 seul ; `db/migrations/008_*` à J2 seul. `test/depot/**`,
+   `test/aide/**`, `.env.example`, `CONVENTIONS.md` et ce document restent à l'orchestrateur.
+2. **Aucun n'attend la sortie d'un autre** : J1 émet, J2 lit, et **les deux contrats sont écrits
+   avant le lancement**. J3 code contre §29.8. J4 est indépendant.
+3. **L'outillage existe** : Playwright et Chromium sont posés (vague 3), le banc est mesuré,
+   l'AD Samba tourne, la recette est en ligne.
+
+⚠️ **Le seul couplage réel est la base, et il est nommé.** J2 resserre la lecture du journal
+pendant que J1 écrit des essais qui le relisent. Le contrat le dit (§29.7, dernier encadré) :
+**toute lecture du journal dans un essai déclare un périmètre.** Sans cette ligne, J1 aurait
+écrit des essais verts que la migration de J2 aurait rendus rouges après coup — une course
+payée au prix de deux agents.
+
+⚠️ **Ce que J1 et J2 ne doivent pas croire acquis.** L'inaltérabilité du journal est éprouvée ;
+sa **couverture** ne l'est pas, et un journal inaltérable et incomplet prouve moins qu'il n'en a
+l'air. C'est la formulation exacte de ce que la porte S3 a mesuré.
+
 
 ### Vague 4 — L4 multi-filiales et L6 pièces jointes
 
@@ -932,6 +995,9 @@ Ce que ce tri ne fait pas : il ne ferme rien qui ne soit pas fermé. Un constat 
 | **Q-102** | **La réserve `LoadCredential=` du fichier systemd n'a ni propriétaire ni échéance.** Une réserve écrite sans les deux est un alibi qui se transmet de passage en passage — c'est la leçon que six passages ont payée sur Apache | 🔵 mineur | rôle **DÉPLOIEMENT** | **avant la mise en service pilote** | ouvert — le constat consiste précisément à lui **donner** un propriétaire et une échéance, faits ici |
 | **Q-103** | 🛑 **Le dépôt était vert pendant que la machine fuyait.** Le correctif de **Q-89** a été commité, éprouvé et mesuré vert au banc — et la racine web servait toujours l'ancien fichier : `/opt/cyber-grc/frontend/js/modules/synthese.js`, **73 200 octets, 0 occurrence d'`exigerExport`**, contre **74 250 octets et 2 occurrences** au dépôt. Mesuré au Chromium sur le fichier **réellement servi** : `rssi.tls` téléchargeait encore. Cause : j'ai redéployé le **serveur** (`rsync dist/` + `systemctl restart`) et **pas le frontend**, qui se publie par `install.sh`. ⚠️ **La leçon est plus large que l'oubli** : ce chantier mesure d'ordinaire le dépôt, et le dépôt ne dit rien de ce qui est **servi**. C'est la variante déployée du constat **Q-52** — *« un banc vert sur l'arbre de travail ne dit rien du commit »* — d'un cran plus loin : *un commit vert ne dit rien de la machine* | 🛑 **bloquant** *(2ᵉ classe du §0 bis : l'extraction non autorisée restait possible en vol)* | **orchestrateur** | fermé le 04/09 | ✅ **corrigé et remesuré** — republication par `install.sh --maj`, jamais par une copie à la main : le jeton de version d'`index.html` dérive du contenu, et une copie partielle laisserait un cache incohérent. **Le contrôle qui manquait est écrit** : `bash deploy/install.sh --verifier-publication` compare le **contenu** de chaque fichier servi à celui du dépôt — pas les dates ni les tailles, un fichier réécrit à taille égale étant le cas qu'on veut attraper — et rend **5** en le nommant. Il ne modifie rien, donc il se joue à tout moment, y compris quand on n'ose pas relancer une installation. Mordu des deux côtés : 64 fichiers conformes → 0 ; l'ancien `synthese.js` remis dans la racine web → **5**, « js/modules/synthese.js ». Il refuse aussi de passer sous 20 fichiers comparés, sans quoi il rendrait vert en n'éprouvant rien. Vérifié enfin au navigateur, sur le fichier **servi** : `rssi.tls` n'obtient aucun téléchargement, `rssi.groupe` l'obtient |
 | **Q-104** | **Un `0` sur une table cloisonnée ne distingue pas *vide* de *non contrôlé*.** La garde de périmètre (`f_filiales_lecture()`) est évaluée **par ligne** : sur une table vide, elle ne s'exerce pas et `select count(*)` rend `0` sans erreur, là où la même requête sur la même table **non vide** échoue en « Périmètre non positionné ». L'auditeur a affiné : ce n'est pas seulement une question de lignes — **cinq tables à politique conditionnelle** (`CASE WHEN filiale_id IS NULL`, dont `documents` et `parametres`) rendent `0` en silence même quand d'autres lèvent, PostgreSQL ne pouvant pas hisser la condition. Rien ne fuit — c'est une propriété de **méthode de mesure**, pas de cloisonnement —, mais un auditeur qui lit un `0` ainsi peut conclure « la table est vide » là où il faudrait lire « je n'ai rien prouvé ». Les deux se sont produits dans la même nuit, sur le même constat **Q-88** | 🔵 mineur | agent **A4** / rôle **OUTILLAGE** | **avant la porte S3 rejouée** | ouvert — l'aide de banc doit **exiger** un périmètre déclaré avant toute lecture d'une table cloisonnée, plutôt que laisser un `0` ambigu passer pour une mesure |
+| **Q-105** | **Un essai du banc est instable, et un essai instable est pire qu'un essai absent.** `test/api/bornes-reprise.test.mjs` — « POOL SATURÉ : un fichier hors borne reçoit 413, un lecteur ordinaire 503 » — a **échoué** à la première exécution complète du 04/09 (1030 essais, **1029 passés, 1 échec**, sur l'assertion « sans nommer un rouage interne », contrôle S12), puis a été **vert trois fois de suite en isolation** et vert à la seconde exécution complète. Il dépend du temps : sa saturation de pool court contre les autres familles. ⚠️ **Le danger n'est pas le rouge, c'est ce qu'il enseigne** : rejouer jusqu'au vert. C'est exactement la façon dont un vrai défaut se fait congédier, et ce chantier a déjà inscrit deux constats « corrigé » qui ne l'étaient pas. Le dépôt annonce par ailleurs « 1030/1030, 0 échec » sans dire que la mesure n'est pas reproductible | 🔵 mineur | **orchestrateur** | `V1.1` | ouvert — soit l'essai devient déterministe (saturation forcée, sans course), soit il sort du banc et devient une mesure jouée à part |
+| **Q-106** | **`TOUS_LES_DOMAINES` disait « dérivés du type — jamais recopiés » et était recopié à la main.** Typé `readonly DomaineFonctionnel[]`, il admet **tout sous-ensemble** : un domaine oublié n'y faisait échouer ni la compilation ni rien d'autre. Trouvé en ajoutant `journal` au type — la compilation est passée, `test/droits/vocabulaire.test.mjs` a rougi. C'est le premier cas du tableau du `CLAUDE.md` §3 : une liste dont l'omission fait **réussir quelque chose en silence** (`SESSION_TOUS_DROITS` n'accorde pas le domaine absent ; la confrontation du frontend ne le cite pas) | 🔵 mineur | **orchestrateur** | fermé le 04/09 | ✅ **corrigé** — `Record<DomaineFonctionnel, true>` exhaustif, dont les clés dérivent la liste : l'omission est désormais un défaut de **compilation**, comme pour `DOMAINE_PAR_ENTITE` juste au-dessus |
+| **Q-107** | **Un détecteur qui compte une mention pour une lecture se mesure lui-même.** Le garde-fou écrit pour fermer Q-91 (`test/depot/reglages-lus.test.mjs`) cherchait le nom d'un réglage dans le texte brut de `src/`. Il a raté sa morsure : débrancher `API_RYTHME_MAX_ANONYME` l'a laissé **vert**, parce que le nom subsistait dans le commentaire que le débranchement venait d'écrire à côté. Il avait par ailleurs dénoncé à tort deux réglages lus par `deploy/install.sh` — *un réglage n'est pas muet parce que le serveur l'ignore ; il est muet quand RIEN dans le produit ne le lit*. Troisième occurrence sur ce chantier du motif « un contrôle qui évite le chemin réel ne mesure pas le produit » (7ᵉ passage S2, Q-58, celui-ci) | 🔵 mineur | **orchestrateur** | fermé le 04/09 | ✅ **corrigé et mordu** — les commentaires sont retirés avant toute recherche, le parcours couvre `src/`, `db/` et `deploy/`, et l'essai refuse de passer sous vingt réglages extraits. Mordu : débranchement → rouge nommant le réglage ; rebranchement → vert |
 
 **Arbitrage sur Q-43 — la règle plutôt que le nombre.** Deux remèdes se présentent : étendre le
 jeton de version aux images, ou raccourcir leur durée de cache. Je ne choisis ni l'un ni l'autre,

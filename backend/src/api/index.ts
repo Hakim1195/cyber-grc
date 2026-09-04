@@ -105,6 +105,7 @@ import type { ContexteTraduction } from '../erreurs/index.js';
 import { greffonConnexion } from '../auth/greffon.js';
 import type { ServiceAuthentification, SessionAppliqueeReelle } from '../auth/index.js';
 import { deciderAcces, DOMAINE_PAR_ENTITE, entitesLisibles, refuserDroit } from './droits.js';
+import { greffonJournal } from './journal.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
 import { AuthentificationProvisoire, estAuthentificateur, PerimetreProvisoire } from './session.js';
@@ -416,9 +417,23 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    * ceux de la connexion vaut mieux que d'écrire deux constantes qu'aucun
    * exploitant ne pourrait ajuster, mais c'est un emprunt, et il est dit.
    */
+  // ── Constat Q-91 : l'emprunt cesse, le réglage commence ─────────────
+  //
+  // Ces deux valeurs étaient EMPRUNTÉES à la configuration de connexion
+  // (`maxTentatives × 4`, `dureeVerrouillageMinutes`), pendant que
+  // `.env.example` documentait `API_RYTHME_MAX_ANONYME` et `API_RYTHME_FENETRE`
+  // comme si elles étaient lues. Elles ne l'étaient nulle part. Le fichier
+  // d'exemple écrivait déjà la règle qu'il fallait appliquer : *« un emprunt
+  // écrit dans le code n'est pas un réglage »*.
+  //
+  // Ce ne sont pas les mêmes seuils, et c'est le motif de la séparation : le
+  // rythme d'API borne un adversaire qui n'est pas authentifié, la connexion
+  // borne des tentatives de mot de passe. Dix personnes derrière une passerelle
+  // VPN partagent une adresse ; cinq erreurs de mot de passe ne doivent pas
+  // fermer le site.
   const limiteur = new LimiteurRythme({
-    budget: Math.max(8, config.auth.maxTentatives * 4),
-    fenetreMs: config.auth.dureeVerrouillageMinutes * 60_000,
+    budget: config.api.rythmeMaxAnonyme,
+    fenetreMs: config.api.rythmeFenetreMinutes * 60_000,
     // Assez pour un site entier derrière son VPN, assez peu pour qu'un
     // adversaire ne remplisse pas la mémoire du service avec des adresses
     // forgées (contrôle S13).
@@ -1600,6 +1615,21 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  site entier derrière son VPN partagé, un jour de crise, pour les erreurs
    *  de cinq personnes.
    * ------------------------------------------------------------------- */
+  /* -------------------------------------------------------------------
+   *  GET /api/journal** — monté, pas écrit (lot L5)
+   * -------------------------------------------------------------------
+   *  Même arbitrage que la connexion juste en dessous, et pour la même raison :
+   *  la couture est ici, la logique est ailleurs. Elle est enregistrée **avant**
+   *  que les routes existent, pour que l'agent qui les écrit n'ait pas à
+   *  toucher à ce fichier — deux agents sur `src/api/index.ts` violeraient le
+   *  périmètre disjoint qu'exige le `PLAN_EXECUTION` §2.
+   *
+   *  Le contrat des trois routes est au `CONVENTIONS.md` §29.8. Elles déclarent
+   *  le domaine **`journal`**, pas `administration` : c'est l'arbitrage du
+   *  04/09/2026, motivé dans `src/api/droits.ts`.
+   * ------------------------------------------------------------------- */
+  await instance.register(greffonJournal, {});
+
   const service = options.serviceAuthentification;
   if (service !== undefined) {
     await instance.register(async (publiques: FastifyInstance) => {

@@ -451,7 +451,9 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/pra":          "continuite",
     "/tests":        "continuite",
     "/audits":       "audits",
-    "/settings":     "administration"
+    "/settings":     "administration",
+    // Le journal d'audit a son propre domaine : voir `backend/src/api/droits.ts`.
+    "/journal":      "journal"
 });
 
 /** Domaine de la route affichée, ou "" si elle n'est pas rattachée. */

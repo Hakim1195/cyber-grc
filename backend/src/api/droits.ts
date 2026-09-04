@@ -99,8 +99,34 @@ export type DomaineFonctionnel =
   | 'rgpd'
   /** Annuaire des personnes. */
   | 'personnel'
-  /** Filiales, droits, paramètres, journal — et la reprise d'un export entier. */
-  | 'administration';
+  /** Filiales, droits, paramètres — et la reprise d'un export entier. */
+  | 'administration'
+  /**
+   * Consultation du journal d'audit — **un domaine à part, et non une nuance
+   * d'`administration`**.
+   *
+   * ── Pourquoi il a été détaché, à l'ouverture du lot L5 ────────────────
+   *
+   * La base porte trente domaines, dont `journal` ; ce vocabulaire-ci en portait
+   * treize jusqu'ici, et `src/droits/passerelle-api.ts` projetait `journal` sur
+   * `administration` avec les trois autres. La projection perd de l'information
+   * — le fichier le dit lui-même —, et la perte était ici la mauvaise :
+   * `administration` s'ouvre à qui porte `parametres`, `filiales` **ou**
+   * `droits`, si bien qu'un profil chargé de régler l'application aurait lu
+   * trois ans d'identités, d'adresses IP et de valeurs avant/après.
+   *
+   * Aucun profil du socle n'était dans ce cas — mesuré : `ADMIN` est le seul à
+   * porter l'un des quatre. Ce n'était donc pas un défaut, c'était une
+   * **barrière qui n'arrêtait que ceux qu'une autre arrêtait déjà**, et le
+   * constat Q-89 a montré ce que valent celles-là le jour où un profil change.
+   * Le premier profil paramétré qui recevra `parametres` sans `journal` est
+   * celui pour qui la distinction existe.
+   *
+   * Le contrôle reste au même endroit que tous les autres — le crochet
+   * `onRequest`, avant l'analyse du corps —, et c'est ce qui l'a fait préférer
+   * à un contrôle fin appelé depuis la route.
+   */
+  | 'journal';
 
 /**
  * Action qu'une requête demande. Volontairement **grossière** : un droit fin par
@@ -151,7 +177,8 @@ export interface DroitsSession {
    * ── Le défaut que ce champ ferme, et qui l'a trouvé ──────────────────
    *
    * `src/droits/passerelle-api.ts` (agent A1) l'a écrit noir sur blanc en
-   * projetant les trente domaines de la base sur les treize d'ici : *« un profil
+   * projetant les trente domaines de la base sur ceux d'ici — treize à l'époque,
+   * quatorze depuis que `journal` s'est détaché : *« un profil
    * **Qualité** passe le contrôle pour une écriture sur le domaine `conformite`,
    * alors que `session_domaines` ne lui accorde que la **lecture** sur
    * `exigences`, `referentiels` et `mesures` »*. Le constat était juste, et il
@@ -208,22 +235,43 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   personnes: 'personnel',
 });
 
-/** Tous les domaines existants, dérivés du type — jamais recopiés. */
-export const TOUS_LES_DOMAINES: readonly DomaineFonctionnel[] = Object.freeze([
-  'pilotage',
-  'conformite',
-  'risques',
-  'actifs',
-  'actions',
-  'incidents',
-  'continuite',
-  'documents',
-  'audits',
-  'tiers',
-  'rgpd',
-  'personnel',
-  'administration',
-] as const);
+/**
+ * Tous les domaines existants.
+ *
+ * ⚠️ **Ce commentaire disait « dérivés du type — jamais recopiés », et c'était
+ * faux.** La liste était bien recopiée, et son type — `readonly
+ * DomaineFonctionnel[]` — admet **tout sous-ensemble** : un domaine oublié ne
+ * faisait échouer ni la compilation, ni rien d'autre que l'essai qui a fini par
+ * le voir. C'est-à-dire exactement la forme de liste que le `CLAUDE.md` §3
+ * refuse : celle dont l'omission fait *réussir quelque chose en silence*
+ * (`SESSION_TOUS_DROITS` n'accorde pas le domaine absent, et la confrontation
+ * du frontend ne le cite pas).
+ *
+ * Trouvé en ajoutant `journal` au type : la compilation est passée, l'essai a
+ * rougi. La liste passe donc par un `Record` **exhaustif**, où l'omission est un
+ * défaut de compilation — le même garde-fou que `DOMAINE_PAR_ENTITE` juste
+ * au-dessus, et pour la même raison.
+ */
+const DOMAINES_DECLARES: Readonly<Record<DomaineFonctionnel, true>> = Object.freeze({
+  pilotage: true,
+  conformite: true,
+  risques: true,
+  actifs: true,
+  actions: true,
+  incidents: true,
+  continuite: true,
+  documents: true,
+  audits: true,
+  tiers: true,
+  rgpd: true,
+  personnel: true,
+  administration: true,
+  journal: true,
+});
+
+export const TOUS_LES_DOMAINES: readonly DomaineFonctionnel[] = Object.freeze(
+  Object.keys(DOMAINES_DECLARES) as DomaineFonctionnel[],
+);
 
 /* =====================================================================
  *  3. La décision

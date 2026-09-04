@@ -143,15 +143,21 @@ export interface OptionsAuthentification {
 }
 
 /**
- * Cinq minutes par défaut.
+ * ✅ **La demande de l'agent a été traitée — constat Q-91, le 04/09/2026.**
  *
- * ⚠️ **Ce n'est pas une variable de configuration, et cela devrait l'être.**
- * `backend/.env.example` appartient à l'orchestrateur (`PLAN_EXECUTION` §2) :
- * `AUTH_REVERIFICATION_AD` lui est **demandée dans le rapport de l'agent**, elle
- * n'est pas ajoutée ici. En attendant, la constante est ce qu'elle prétend être
- * — une valeur par défaut nommée, pas un nombre perdu dans une ligne de code.
+ * Ce commentaire disait : *« ce n'est pas une variable de configuration, et cela
+ * devrait l'être ; `AUTH_REVERIFICATION_AD` est demandée à l'orchestrateur dans
+ * le rapport de l'agent »*. La demande était juste et elle est restée en l'état
+ * une vague entière, pendant que `.env.example` documentait le réglage comme
+ * s'il était lu. L'exploitant qui le réglait ne réglait rien.
+ *
+ * `config.auth.reverificationAdMinutes` le porte désormais, avec **la même valeur
+ * par défaut**, écrite une seule fois — dans `src/config/index.ts`, où toutes les
+ * autres sont. La constante a donc été retirée plutôt que gardée en repli : deux
+ * exemplaires d'un défaut finissent par ne plus dire la même chose, et le service
+ * reçoit toujours une configuration chargée (les essais passent par
+ * `chargerConfiguration`, jamais par un objet partiel).
  */
-const REVALIDATION_PAR_DEFAUT_MS = 5 * 60_000;
 
 /* =====================================================================
  *  Le service
@@ -216,8 +222,11 @@ export class ServiceAuthentification implements Authentificateur {
     this.config = config;
     this.journal = journal;
     this.horloge = options.horloge ?? Date.now;
+    // Q-91 : la configuration prime, l'option d'essai prime sur elle. Zéro est
+    // une valeur admise et significative — elle force la relecture à chaque
+    // requête —, d'où `??` et non `||`, qui l'aurait remplacée par le défaut.
     this.intervalleRevalidationMs =
-      options.intervalleRevalidationMs ?? REVALIDATION_PAR_DEFAUT_MS;
+      options.intervalleRevalidationMs ?? config.auth.reverificationAdMinutes * 60_000;
     this.annuaire =
       config.auth.ldapActif && config.auth.ldap !== null
         ? new ServiceAnnuaire(config.auth.ldap, options.fabriqueClient)

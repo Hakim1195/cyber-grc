@@ -142,13 +142,49 @@ describe('Le vocabulaire du modèle de droits est le même en base et dans le co
     assert.equal(projetes.niveau, 'validation', 'Le niveau, lui, reste le plus élevé détenu.');
   });
 
-  test('les quatre domaines d’administration, eux, projettent bien sur « administration »', () => {
-    for (const domaine of ['droits', 'filiales', 'parametres', 'journal']) {
+  test('les TROIS domaines d’administration projettent sur « administration »', () => {
+    for (const domaine of ['droits', 'filiales', 'parametres']) {
       const projetes = droits.projeterDroits({
         domaines: new Map([[domaine, 'administration']]),
         peutExporter: false,
       });
       assert.deepEqual(projetes.domaines, ['administration'], domaine);
+    }
+  });
+
+  // ── Arbitrage de l'ouverture du lot L5 ────────────────────────────────
+  //
+  // Ils étaient QUATRE à se projeter sur « administration ». `journal` s'en est
+  // détaché : régler l'application et lire trois ans d'identités, d'adresses IP
+  // et de valeurs avant/après ne sont pas le même droit (`src/api/droits.ts`).
+  //
+  // Cet essai éprouve la propriété dans les DEUX SENS (§20.2), parce que
+  // l'affirmer d'un seul côté ne prouverait rien : porter « journal » n'ouvre
+  // pas l'administration, ET porter l'un des trois autres n'ouvre pas le
+  // journal. C'est le second sens qui compte : c'est la porte que ce détachement
+  // ferme, et elle serait restée ouverte avec un essai qui n'aurait regardé que
+  // le premier.
+  test('MORSURE : « journal » et « administration » ne s’ouvrent pas l’un l’autre', () => {
+    const parLeJournal = droits.projeterDroits({
+      domaines: new Map([['journal', 'administration']]),
+      peutExporter: false,
+    });
+    assert.deepEqual(
+      parLeJournal.domaines,
+      ['journal'],
+      'Lire le journal n’administre pas l’application.',
+    );
+
+    for (const domaine of ['droits', 'filiales', 'parametres']) {
+      const projetes = droits.projeterDroits({
+        domaines: new Map([[domaine, 'administration']]),
+        peutExporter: false,
+      });
+      assert.ok(
+        !projetes.domaines.includes('journal'),
+        `« ${domaine} » n’ouvre pas le journal d’audit : une barrière qui n’arrête ` +
+          'que ceux qu’une autre arrête déjà n’est pas une barrière (Q-89).',
+      );
     }
   });
 

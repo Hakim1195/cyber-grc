@@ -1518,3 +1518,191 @@ que rendre un résultat partiel (constat **Q-68**).
 une complexité que rien n'exerce.
 
 | **La gestion du cookie de session** — `cookie` et `set-cookie-parser` sont présents dans `node_modules` en dépendances **transitives** de Fastify | Bâtir sur une dépendance transitive est une dette silencieuse : elle disparaît le jour où Fastify change d'implémentation, sans qu'aucun `package.json` ne l'annonce | **Tranché le 03/09/2026 : le troisième cas est écarté.** `lireCookie` est écrit à la main — vingt lignes, éprouvées sur le nom voisin, la valeur vide et l'en-tête absent —, et **aucune dépendance transitive de Fastify n'est employée**. Si l'écriture du cookie devait se complexifier, `@fastify/cookie` serait à **déclarer**, pas à emprunter |
+
+---
+
+## 29. Le contrat du journal d'audit — figé avant la vague 4
+
+> Écrit par l'orchestrateur le 04/09/2026, **avant** le lancement du moindre agent du lot L5.
+> Même raison qu'au §25 : trois agents écrivent chacun une moitié du journal — celui qui
+> l'émet, celui qui le lit, celui qui l'affiche —, et un contrat qui ne vit que dans le
+> message d'un agent est perdu pour le suivant, qui le réinventera autrement.
+>
+> Ce paragraphe **fait foi** pour L5. Ce qu'il ne dit pas est laissé à l'agent ; ce qu'il dit
+> ne se rediscute pas sans être réécrit ici.
+
+### 29.1 D'où l'on part, mesuré et non estimé
+
+Au 04/09/2026, sur la base de recette de `SRV-Infra` :
+
+```
+$ psql -U grc_lecture -d cyber_grc -c "select action, count(*) from journal_audit group by action"
+ connexion_echouee  | 95        connexion_reussie | 59
+ refus_autorisation |  3        deconnexion       |  2      -- total : 159 entrées
+```
+
+**Quatre actions émises sur les vingt que déclare `ck_journal_audit_action`.** Et `refus_autorisation`
+ne compte qu'à moitié : ses trois entrées viennent toutes de la couche d'authentification
+(« aucun périmètre ouvert par les groupes de l'annuaire »), **jamais** du crochet `onRequest`,
+qui se contente d'un `requete.log.warn`. Le refus de droit par requête n'est pas journalisé.
+
+`journaliser()` n'est appelée que depuis `src/auth/index.ts`. Les routes d'écriture, d'export et
+de reprise portent chacune un `requete.log.info` qui dit, en toutes lettres, *« le journal d'audit
+est le lot L5 »* : ce sont les coutures, et elles sont déjà nommées.
+
+### 29.2 Les vingt actions, et qui doit les émettre
+
+| Action | Émetteur attendu à L5 | Remarque |
+|---|---|---|
+| `connexion_reussie`, `connexion_echouee`, `deconnexion`, `session_expiree`, `session_revoquee` | `src/auth/` | ✅ **déjà émises** — ne pas y toucher |
+| `refus_autorisation` | `src/auth/` **et** le crochet `onRequest` | la moitié manquante : un refus de droit par requête |
+| `creation`, `modification`, `suppression` | `src/entites/` | avec `valeurs_avant` / `valeurs_apres` — voir §29.4 |
+| `export` | la route `/api/export`, **et toute autre sortie de jeu de données** | c'est la moitié restante du constat **Q-89** |
+| `import` | la route `/api/reprise` | l'opération la plus destructrice du produit |
+| `administration` | toute route déclarée en action `administrer` | |
+| `demarrage`, `arret` | `src/serveur.ts` | le journal doit pouvoir montrer un trou de service |
+| `verification_journal` | la route de vérification du chaînage | se vérifier est un acte tracé |
+| `consultation_sensible` | la lecture du journal lui-même | qui a lu le journal est une question d'audit |
+| `purge`, `archivage` | procédure d'exploitation (§12) | **hors L5** — documentées, pas outillées |
+| `approbation` | lot **L8** | **hors L5** |
+| `analyse_antivirus` | lot **L6** | **hors L5** |
+
+**Seize actions sur vingt à la sortie de L5.** Les quatre autres sont reportées **par écrit et
+avec leur lot**, ce qui est la seule façon admise de reporter (§22, règle de lecture).
+
+### 29.3 L'émission vit dans la transaction de l'écriture
+
+> **Une écriture et sa trace réussissent ensemble ou échouent ensemble.**
+
+`journaliser()` reçoit le `PoolClient` de la transaction en cours, jamais une connexion à elle.
+Trois conséquences, et aucune n'est négociable :
+
+1. **Un `rollback` emporte la trace avec l'écriture.** C'est voulu : une trace d'une écriture qui
+   n'a pas eu lieu est une fausse preuve, et ce journal existe pour faire preuve.
+2. **Une écriture ne peut pas réussir sans sa trace.** Si l'insertion au journal échoue, la
+   transaction échoue. Un journal qu'on peut faire taire en le saturant n'est pas inaltérable.
+3. **Un événement qui n'a pas de transaction d'écriture en ouvre une à lui.** C'est le cas du
+   refus de droit — il se prononce dans `onRequest`, avant toute transaction — et celui du
+   démarrage du service. Ils suivent le motif déjà écrit de `journaliserEchec` :
+   `avecTransactionAuthentification`, périmètre de la session quand elle est résolue.
+
+⚠️ **Le refus de droit ne doit pas devenir une arme.** Une requête refusée qui écrit en base
+donne à un attaquant un moyen de faire travailler le serveur sans être authentifié. Le refus
+journalisé est donc **celui d'une session valide** — l'authentification a réussi, le droit
+manque. Un refus d'identité (401) reste traité par le limiteur de rythme, qui le compte sans
+écrire, et par l'entrée `connexion_echouee` déjà émise.
+
+### 29.4 `valeurs_avant` / `valeurs_apres` : le différentiel, pas le doublon
+
+| Action | `valeurs_avant` | `valeurs_apres` |
+|---|---|---|
+| `creation` | `null` | l'enregistrement créé |
+| `modification` | les valeurs **précédentes des seuls champs modifiés** | leurs valeurs neuves |
+| `suppression` | l'enregistrement supprimé | `null` |
+
+**Pourquoi le différentiel et non l'enregistrement entier à chaque modification** : la rétention
+est de **trois ans** (§12). Stocker deux copies complètes à chaque changement de statut multiplie
+le volume du journal par la taille de l'enregistrement, pour répondre à une question que personne
+ne pose. Un auditeur demande *ce qui a changé*, pas *à quoi ressemblait la fiche*.
+
+Le champ déjà retiré par « ce qui n'a pas changé ne s'écrit pas » (`src/entites/`, constat M-1)
+**n'apparaît donc pas** : c'est la même notion, et elle est déjà calculée.
+
+### 29.5 Aucune valeur d'utilisateur n'est concaténée dans `resume`
+
+L'auditeur de la porte S3 a forgé un login contenant du JSON et des sauts de ligne : il est
+arrivé **littéralement** dans le journal. Le chaînage n'en souffre pas, et rien n'a fui — mais
+l'export du journal est un livrable de ce lot, et un export texte scinderait la ligne.
+
+La règle tient en une phrase :
+
+> **`resume` est une phrase écrite par le développeur. Une valeur d'utilisateur n'y entre jamais.**
+
+Elle a **deux** sorties, et elles suffisent :
+
+- `utilisateur_libelle`, colonne dédiée, pour l'identité présentée ;
+- `valeurs_apres`, en `jsonb`, pour tout le reste — où l'encodage est le problème de PostgreSQL
+  et non celui de qui écrit la phrase.
+
+C'est la même règle que « les requêtes sont intégralement paramétrées » (§17.4), appliquée à la
+seule table dont l'objet est de faire preuve.
+
+### 29.6 Ce qui n'entre jamais dans une entrée
+
+Mot de passe, jeton de session, empreinte de jeton, secret de configuration, contenu d'une pièce
+jointe. Le journal se lit à froid, trois ans plus tard, par des gens qui n'étaient pas là
+(contrôle **S8**).
+
+⚠️ Ce que le journal contient **par construction** et qu'il faut assumer : des identités, des
+adresses IP, et des valeurs métier avant/après — sur trois ans. Il est lui-même un traitement de
+données personnelles, et le produit doit figurer au registre article 30 qu'il héberge
+(`PLAN_SERVEUR` §1.7, dernière phrase). **Ce n'est pas un livrable de code**, c'est une ligne de
+registre à créer.
+
+### 29.7 La lecture du journal après E6 — le contrat entre celui qui resserre et celui qui lit
+
+La condition d'entrée **E6** (§22) est un livrable **ferme** de L5. `004_rls.sql` §6 écrit déjà
+la correction : rendre les deux fonctions de chaînage `security definer` appartenant à
+`grc_proprietaire`, puis resserrer la politique de lecture sur le périmètre.
+
+**L'ordre n'est pas un détail : les deux moitiés n'ont de sens qu'ensemble.** Resserrer sans
+`security definer` fait échouer **toute écriture** au journal — `f_journal_audit_chainage()`
+numérote à partir de `max(numero)` lu sous RLS. Poser `security definer` sans resserrer
+n'améliore rien. C'est le motif du 5ᵉ passage de la porte S2 : *deux fichiers dont aucun n'a tort
+seul*. Ils vont donc au **même agent**.
+
+Ce que la politique resserrée doit dire, et qui est un arbitrage, pas une évidence :
+
+| Entrée | Périmètre Groupe | Périmètre d'une filiale |
+|---|---|---|
+| `filiale_id = <sa filiale>` | lit | **lit** |
+| `filiale_id = <une autre filiale>` | lit | **ne lit pas** |
+| `filiale_id is null` (échec de connexion, démarrage du service) | lit | **ne lit pas** |
+
+**Le troisième cas est l'arbitrage, et il a un coût qu'il faut dire.** Un échec de connexion
+n'est attaché à aucune filiale — il précède la résolution du périmètre, et sur un login inconnu
+il n'y a rien à résoudre. Les rendre visibles à chaque filiale donnerait à chacune la liste des
+logins du groupe entier : c'est l'oracle inter-filiales que ce chantier ferme depuis la vague 1.
+**Le coût assumé** : un administrateur de filiale ne voit pas les tentatives visant ses propres
+utilisateurs. C'est le RSSI Groupe qui les voit. À reconsidérer si le client le demande — par
+écrit, pas par glissement.
+
+⚠️ **Conséquence pour les essais des autres agents** : toute lecture du journal dans un essai
+**déclare un périmètre**. Un `select` sous `grc_lecture` sans périmètre cessera de rendre des
+lignes — et, sur une table non vide, lèvera « Périmètre non positionné » plutôt que de rendre `0`
+(constat **Q-104** : un `0` sur une table cloisonnée ne distingue pas *vide* de *non contrôlé*).
+
+### 29.8 Le contrat HTTP de la consultation — figé ici, implémenté ailleurs
+
+Trois routes, dans le **greffon `src/api/journal.ts`**, que `src/api/index.ts` enregistre déjà.
+La couture existe avant les deux agents qui l'utilisent, exactement comme `ResolveurPerimetre`
+existait avant le lot qui l'a remplie.
+
+| Route | Déclaration d'accès | Rend |
+|---|---|---|
+| `GET /api/journal` | `{ action: 'lire', domaine: 'journal' }` | page d'entrées, filtres `depuis`/`jusqu_a`/`action`/`utilisateur`/`entite_type`, pagination par `numero` décroissant |
+| `GET /api/journal/export` | `{ action: 'exporter', domaine: 'journal' }` | le même jeu, en fichier — **exige le droit d'export en plus du domaine** |
+| `GET /api/journal/verification` | `{ action: 'lire', domaine: 'journal' }` | le résultat de `f_journal_audit_verifier()` : **aucune ligne = journal sain** |
+
+**`domaine: 'journal'` et non `'administration'`** — arbitrage pris le 04/09/2026, motivé dans
+`src/api/droits.ts`. Le vocabulaire de décision passe de treize à **quatorze** domaines : régler
+l'application et lire trois ans d'identités ne sont pas le même droit. Aucun profil du socle n'en
+est affecté (mesuré : `ADMIN` est le seul à porter l'un des quatre domaines d'administration) —
+ce qui est fermé, c'est le **prochain** profil paramétré.
+
+**La pagination se fait sur `numero`, jamais sur un décalage.** `numero` est strictement
+croissant et sans trou (§12) : c'est un curseur exact, insensible aux insertions concurrentes.
+Un `offset` sur un journal qui grandit pendant qu'on le feuillette saute des lignes.
+
+**L'export du journal se prouve sur une entrée hostile.** Le format doit rendre **une** ligne
+logique pour une valeur contenant `\r\n`, `"` et `;`. La preuve n'est pas une relecture : on
+forge l'entrée — un échec de connexion sur un login construit suffit, c'est ce qu'a fait
+l'auditeur —, on exporte, on **ré-analyse**, et on retrouve la valeur intacte.
+
+### 29.9 Ce que L5 ne livre pas, et pourquoi c'est écrit ici
+
+| Non livré | Motif | Où il est repris |
+|---|---|---|
+| Le partitionnement par année de `journal_audit` | Aucun volume ne le justifie : 159 entrées. Le §12 le prévoit « si le volume devait rendre la procédure pénible » | §12, sans échéance — le déclencheur est le volume |
+| La purge et l'archivage outillés | Procédure d'exploitation sous le compte propriétaire, hors application **par construction** (§12) | §12 |
+| L'horodatage sur source NTP **vérifié** | `clock_timestamp()` prend l'heure du système ; que ce système soit synchronisé est une propriété de la VM, pas du code | à confronter à la recette, `PLAN_SERVEUR` §1.7 |

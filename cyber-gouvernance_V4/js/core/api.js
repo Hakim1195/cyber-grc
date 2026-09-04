@@ -106,7 +106,10 @@ const Api = (() => {
         domaines: Object.freeze([
             "pilotage", "conformite", "risques", "actifs", "actions", "incidents",
             "continuite", "documents", "audits", "tiers", "rgpd", "personnel",
-            "administration"
+            // « journal » est distinct d'« administration » depuis l'ouverture du
+            // lot L5 : régler l'application et lire trois ans d'identités ne sont
+            // pas le même droit. Motivé dans `backend/src/api/droits.ts`.
+            "administration", "journal"
         ])
     });
 
