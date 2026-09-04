@@ -8,6 +8,64 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur — lot L4 : la vision Groupe consolidée, qui manquait au lot marqué livré
+
+**La réserve est levée.** Le `PLAN_SERVEUR` §7 range la « consolidation direction » dans le
+lot L4 ; la vague 4 avait livré le sélecteur de filiale et **écrit la réserve** dans le
+`README` §8 : *« la vision Groupe consolidée du cadrage n'existe pas — `/api/donnees` est
+cadré sur la filiale active, donc la Direction voit une filiale à la fois »*. C'était
+honnête, et c'est resté une réserve écrite quatre semaines. **Une réserve écrite n'est pas
+une réserve traitée.**
+
+**`GET /api/consolidation`** rend, pour **chaque filiale du périmètre résolu par le
+serveur**, les indicateurs des sept domaines — conformité par référentiel, risques, actions,
+incidents, documents, actifs, audits —, leur **somme**, et séparément ce qui est de **portée
+Groupe** (les lignes à `filiale_id` nul : la PSSI du groupe n'est pas comptée vingt fois).
+
+Cinq propriétés, chacune éprouvée :
+
+- ⚠️ **Aucune de ses requêtes ne nomme de filiale.** Pas un paramètre, pas un
+  `where filiale_id = $1`, pas une liste dérivée du périmètre : les agrégats lisent les
+  tables **nues**, et c'est la RLS qui borne. La garantie est tenue **par la forme** — il
+  n'existe aucun endroit où écrire la mauvaise filiale, parce qu'il n'en existe aucun où en
+  écrire une. Un essai envoie `?filiale=<voisine>` et constate que la réponse ne bouge pas.
+- **Un domaine hors des droits rend `null`, jamais zéro.** Dire « aucun risque dans ce
+  groupe » à un profil qui n'a pas le domaine `risques` serait faux, dans un outil qui sert
+  de preuve en audit.
+- **Le serveur rend des COMPTES, jamais un taux dont il ne possède pas la définition** :
+  AirCyber se score Oui/Non/N-A sans CMMI, l'ANSSI en maturité — et ce catalogue vit dans le
+  navigateur. Un taux calculé au serveur mélangerait deux définitions **en silence**
+  (constat **Q-147**, assumé et écrit).
+- **Aucun vocabulaire écrit à la main** : les répartitions se font par `group by`, donc une
+  valeur ajoutée demain à une contrainte `check` apparaît toute seule.
+- **Transaction en lecture seule, aucune trace au journal** — le §29 réserve
+  `consultation_sensible` à la lecture du journal, et tracer chaque rafraîchissement d'un
+  tableau de bord noierait la seule question à laquelle il doit répondre vite.
+
+**Un défaut de MA propre route, trouvé par une sonde et non par le banc** (constat
+**Q-151**) : `pol_filiales_lecture` ouvre la table `filiales` **entière** dès que
+`f_perimetre_groupe()` est vraie — or cette fonction est *dérivée* et ne regarde que les
+filiales `active`. Une filiale **cédée**, dans le périmètre de personne, y échappait donc.
+Sur `filiales` seule ce n'est pas une fuite ; dans une consolidation, c'eût été **pire
+qu'une fuite** : les tables de données restant bornées par `f_filiales_lecture()`, la
+filiale cédée serait sortie à **zéro risque, zéro incident, zéro action en retard** — soit
+« tout va bien » là où la vérité est « hors de votre périmètre ». La route filtre désormais
+sur `f_filiales_lecture()`, un prédicat qui ne **nomme** aucune filiale : il demande à la
+base celui qu'elle applique déjà partout ailleurs.
+
+**Banc** : `test/api/consolidation.test.mjs`, 13 essais, **mordus** — trois mutations jouées
+(un domaine fermé qui rend des données, la portée Groupe attribuée aux filiales, la portée
+Groupe ajoutée au total), plus une quatrième sur le filtre de périmètre — chacune fait
+rougir **exactement** l'essai qui nomme la propriété.
+
+**Un défaut du banc trouvé au passage** (constat **Q-148**) : `compilerSiNecessaire()` se
+déclarait *« idempotent, et sûr en parallèle »* et ne l'était pas. Trois agents jouant le
+banc en même temps lancent trois `tsc` dans le **même `dist/`**, et celle qui finit en
+dernier laisse un `dist/` **composite** — mesuré : une source restaurée à l'identique, un
+module compilé portant encore la mutation, un essai rouge pour un défaut qui n'était plus
+dans le code. Corrigé par un **verrou de fichier**, et par un `dist/` qui n'est réputé frais
+que s'il dépasse la source d'une seconde pleine : dans le doute, on recompile.
+
 ### Serveur — lot L5 : le journal d'audit, sa couverture, son cloisonnement, sa porte S4
 
 **Ce que le lot livre.** La couverture du journal passe de **4 actions émises sur 20** à

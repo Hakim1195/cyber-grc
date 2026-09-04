@@ -798,6 +798,12 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // La liste des filiales du périmètre de session (lot L4) : servie sans
     // identité, elle donnerait la cartographie des filiales du groupe.
     ['GET', '/api/filiales', undefined],
+    // La consolidation Groupe (lot L4, la part que le lot avait laissée ouverte).
+    // Elle est ici pour une raison qui lui est propre : c'est la SEULE route du
+    // produit qui lit délibérément plusieurs filiales à la fois. Servie sans
+    // identité, elle ne livrerait pas une filiale mais le groupe entier — les
+    // volumes, les incidents à déclarer et le retard de chacune des vingt.
+    ['GET', '/api/consolidation', undefined],
     ['POST', '/api/entites/risques', { champs: { nom: 'tentative' } }],
     ['PUT', '/api/entites/risques/RISK-A', { version: 1, champs: { nom: 'tentative' } }],
     ['DELETE', '/api/entites/risques/RISK-A?version=1', undefined],

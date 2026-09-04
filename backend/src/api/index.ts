@@ -118,6 +118,7 @@ import { deciderAcces, DOMAINE_PAR_ENTITE, entitesLisibles, refuserDroit } from 
 import { greffonJournal } from './journal.js';
 import { greffonPieces } from '../pieces/index.js';
 import { greffonImport } from '../import/index.js';
+import { greffonConsolidation } from '../consolidation/index.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
 import { AuthentificationProvisoire, estAuthentificateur, PerimetreProvisoire } from './session.js';
@@ -2440,6 +2441,20 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  Couture publiée avant l'agent. Contrat au `CONVENTIONS.md` §33.1 et §33.2.
    * ------------------------------------------------------------------- */
   await instance.register(greffonImport, { pool, config });
+
+  /* -------------------------------------------------------------------
+   *  Consolidation Groupe — la part de L4 que le lot avait laissée ouverte
+   * -------------------------------------------------------------------
+   *  `/api/donnees` est cadré sur la filiale ACTIVE : la Direction voyait donc
+   *  une filiale à la fois, alors que le `PLAN_SERVEUR` §7 range la
+   *  « consolidation direction » dans L4. Le `README` §8 portait la réserve
+   *  écrite ; cette route la lève.
+   *
+   *  Elle ne déclare **pas** `perimetre: 'groupe'`, et c'est délibéré : elle
+   *  rend ce que la session peut lire, la RLS étant la barrière. Un périmètre
+   *  régional de trois filiales est légitime et n'aurait pas à être refusé.
+   * ------------------------------------------------------------------- */
+  await instance.register(greffonConsolidation, { pool });
 
   const service = options.serviceAuthentification;
   if (service !== undefined) {

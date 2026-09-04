@@ -58,7 +58,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { readdirSync, statSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -82,16 +82,93 @@ function dateLaPlusRecente(repertoire) {
   return date;
 }
 
-/** Compile `src/` vers `dist/` si nécessaire. Idempotent, et sûr en parallèle. */
-export async function compilerSiNecessaire() {
-  const temoin = join(RACINE_BACKEND, 'dist', 'serveur.js');
-  let dateTemoin = 0;
-  try {
-    dateTemoin = statSync(temoin).mtimeMs;
-  } catch {
-    dateTemoin = 0;
+/**
+ * Compile `src/` vers `dist/` si nécessaire.
+ *
+ * ⚠️ **Ce commentaire disait « idempotent, et sûr en parallèle ». Il avait tort,
+ * et la mesure l'a démenti le 04/09/2026** (constat Q-148).
+ *
+ * Trois agents jouaient le banc en même temps. Chacun appelle cette fonction,
+ * chacun lance son `tsc` **dans le même `dist/`**. Deux compilations concurrentes
+ * n'écrivent pas les mêmes fichiers au même instant : celle qui finit en dernier
+ * laisse derrière elle un `dist/` **composite**, où un module vient d'un état de
+ * `src/` et son voisin d'un autre. Symptôme observé : une source restaurée à
+ * l'identique, un `dist/consolidation/index.js` portant encore la mutation, et
+ * un essai qui rougissait pour un défaut **qui n'était plus dans le code**.
+ *
+ * C'est la version « répertoire de travail » d'une leçon déjà payée : *« vert »
+ * qualifie une révision, jamais un répertoire de travail* — ici, **jamais un
+ * `dist/` que quelqu'un d'autre est en train d'écrire**.
+ *
+ * La parade est un **verrou de fichier**, pas une horloge : les compilations se
+ * sérialisent, et celle qui attend recompile ensuite plutôt que de faire
+ * confiance à ce que l'autre a laissé. Le verrou est réputé mort au-delà de
+ * `VERROU_PERIME_MS` — un processus tué ne doit pas bloquer le banc pour
+ * toujours.
+ */
+const VERROU_PERIME_MS = 240_000;
+
+const dormir = (ms) => new Promise((resoudre) => setTimeout(resoudre, ms));
+
+/** Prend le verrou de compilation, ou attend que le détenteur ait fini. */
+async function avecVerrouDeCompilation(travail) {
+  const verrou = join(RACINE_BACKEND, 'dist', '.compilation.verrou');
+  mkdirSync(join(RACINE_BACKEND, 'dist'), { recursive: true });
+
+  for (let tentative = 0; ; tentative += 1) {
+    try {
+      writeFileSync(verrou, `${process.pid}\n`, { flag: 'wx' });
+      break;
+    } catch (erreur) {
+      if (erreur.code !== 'EEXIST') throw erreur;
+      let age = 0;
+      try {
+        age = Date.now() - statSync(verrou).mtimeMs;
+      } catch {
+        continue; // le détenteur vient de le rendre : on retente aussitôt.
+      }
+      if (age > VERROU_PERIME_MS) {
+        // Verrou abandonné par un processus mort. On le reprend, en le disant.
+        rmSync(verrou, { force: true });
+        continue;
+      }
+      if (tentative > 1200) {
+        throw new Error(
+          `Le verrou de compilation ${verrou} n'a pas été rendu en 240 s. Un « tsc » est ` +
+            'peut-être bloqué : supprimer le fichier débloque le banc.',
+        );
+      }
+      await dormir(200);
+    }
   }
-  if (dateTemoin > dateLaPlusRecente(join(RACINE_BACKEND, 'src'))) return;
+
+  try {
+    return await travail();
+  } finally {
+    rmSync(verrou, { force: true });
+  }
+}
+
+export async function compilerSiNecessaire() {
+  return await avecVerrouDeCompilation(async () => {
+    const temoin = join(RACINE_BACKEND, 'dist', 'serveur.js');
+    let dateTemoin = 0;
+    try {
+      dateTemoin = statSync(temoin).mtimeMs;
+    } catch {
+      dateTemoin = 0;
+    }
+    // Le témoin doit être postérieur À LA SECONDE PRÈS : `mtimeMs` a une
+    // granularité qui varie selon le système de fichiers, et une égalité
+    // apparente entre une source qu'on vient d'écrire et un `dist/` qu'on vient
+    // de produire ne prouve rien. Dans le doute, on recompile — cela coûte
+    // quelques secondes, pendant qu'un faux vert coûte une demi-journée.
+    if (dateTemoin > dateLaPlusRecente(join(RACINE_BACKEND, 'src')) + 1000) return;
+    await compiler();
+  });
+}
+
+async function compiler() {
   try {
     await executerFichier(
       process.execPath,
