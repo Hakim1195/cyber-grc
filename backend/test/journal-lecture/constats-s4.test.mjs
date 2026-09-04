@@ -148,6 +148,81 @@ describe('Q-118 — la vérification du chaînage est réservée au périmètre 
   });
 });
 
+describe('Q-123 — la vérification PARTIELLE ne crie pas sur un journal sain', () => {
+  // ── Le défaut, et pourquoi il est pire qu'une simple imprécision ───────
+  //
+  // Le §12 PRESCRIT la vérification partielle : « contrôle rapide sur les
+  // entrées récentes ». Elle rend une ligne `chaine_tronquee`, que le même §12
+  // range en *informatif* — et la route la comptait comme une anomalie. Suivre
+  // la prescription rendait donc `sain: false` sur une chaîne intacte.
+  //
+  // Un garde-fou qui crie sur le cas nominal est pire que pas de garde-fou : le
+  // jour où il crie pour de vrai, personne ne l'écoute.
+  //
+  // ⚠️ L'essai qui couvrait ce cas n'interrogeait JAMAIS `sain` — il vérifiait
+  // la liste des anomalies. C'est la même famille que Q-108 et Q-116 : un essai
+  // qui regarde à côté de ce qu'il prétend juger.
+  test('« depuis » rend SAIN, tout en rendant l’anomalie informative', async () => {
+    const monte = await monterJournal(base, sessionGroupe(AUDITEUR));
+    try {
+      await semerJournal(6);
+
+      const entier = await monte.appeler('GET', '/api/journal/verification');
+      assert.equal(entier.statut, 200);
+      assert.equal(entier.corps.sain, true, 'La chaîne entière est intacte : sans cela, rien en dessous ne prouve.');
+
+      const partiel = await monte.appeler('GET', '/api/journal/verification?depuis=3');
+      assert.equal(partiel.statut, 200);
+      assert.equal(
+        partiel.corps.sain,
+        true,
+        'La vérification PARTIELLE est prescrite par le §12 : elle ne peut pas accuser ' +
+          `une chaîne intacte. Anomalies : ${JSON.stringify(partiel.corps.anomalies)}`,
+      );
+      // Et l'anomalie informative reste RENDUE — on n'en cache aucune, on ne
+      // change que le verdict.
+      assert.deepEqual(
+        partiel.corps.anomalies.map((a) => a.anomalie),
+        ['chaine_tronquee'],
+        'L’anomalie informative doit rester visible : la masquer serait l’excès inverse.',
+      );
+    } finally {
+      await monte.fermer();
+    }
+  });
+
+  test('MORSURE : une VRAIE anomalie rend toujours « sain: false »', async () => {
+    const monte = await monterJournal(base, sessionGroupe(AUDITEUR));
+    try {
+      await semerJournal(4);
+      const proprietaire = await base.connexion('proprietaire');
+      // La retouche exige de désactiver le déclencheur d'ajout seul — ce que
+      // seul le propriétaire peut faire, et c'est précisément la limite que le
+      // chaînage existe pour rendre DÉTECTABLE.
+      await proprietaire.query('alter table journal_audit disable trigger trg_journal_audit_interdit_maj');
+      try {
+        await proprietaire.query(
+          `update journal_audit set resume = 'falsifié'
+            where numero = (select min(numero) from journal_audit)`,
+        );
+      } finally {
+        await proprietaire.query('alter table journal_audit enable always trigger trg_journal_audit_interdit_maj');
+      }
+
+      const r = await monte.appeler('GET', '/api/journal/verification');
+      assert.equal(r.statut, 200);
+      assert.equal(
+        r.corps.sain,
+        false,
+        'Une falsification réelle doit rendre « sain: false » — sinon le correctif de Q-123 ' +
+          'aurait échangé une fausse alerte contre un silence, ce qui est pire.',
+      );
+    } finally {
+      await monte.fermer();
+    }
+  });
+});
+
 describe('Q-119 — le libellé porte le LOGIN, et le filtre le trouve', () => {
   test('une connexion réussie est retrouvée PAR SON LOGIN', async () => {
     const monte = await monterJournal(base, sessionGroupe(AUDITEUR));

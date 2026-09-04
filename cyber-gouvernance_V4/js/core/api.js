@@ -6,9 +6,21 @@
 //
 // ── Ce que ce fichier tient ───────────────────────────────────────────────────
 //
-//  · **Le périmètre ne part JAMAIS d'ici.** Aucune méthode n'accepte de filiale,
-//    de périmètre ni de rôle : le serveur les résout seul (PLAN_SERVEUR §2.4,
+//  · **Le périmètre ne part JAMAIS d'ici.** Aucune méthode n'accepte de
+//    périmètre ni de rôle : le serveur les résout seul (PLAN_SERVEUR §2.4,
 //    contrôle S2). C'est tenu par la forme — il n'existe pas de paramètre pour.
+//
+//    ⚠️ **Une exception, et une seule, depuis le lot L4** :
+//    `choisirFilialeActive(id)` envoie un identifiant de filiale. Ce n'est pas
+//    un relâchement, c'est la distinction du `CONVENTIONS.md` §30.2 — **le
+//    client envoie un CHOIX, le serveur résout un PÉRIMÈTRE** : l'identifiant
+//    est cherché dans `session_filiales` relu EN BASE, la filiale active vit
+//    dans la ligne de session côté serveur, et un choix hors périmètre rend
+//    403 sans rien changer. La propriété qui compte reste donc entière et
+//    reste tenue par la forme : **c'est une route DÉDIÉE**. Aucune autre
+//    fonction de ce fichier n'a de paramètre de filiale, et le jour où l'une
+//    en gagne un — un `?filiale=` sur `donnees()`, par exemple — c'est la fin
+//    de la propriété, pas son extension.
 //  · **Origine relative.** Les chemins sont relatifs (`/api/…`) : en production
 //    Apache sert le frontend et l'API sous la même origine (PLAN_SERVEUR §1.1).
 //    Aucune URL de serveur n'est écrite en dur, donc aucune à changer au
@@ -535,6 +547,187 @@ const Api = (() => {
         return appeler("/journal/export" + chaineFiltres(filtres), { binaire: true, delai: DELAI_CHARGEMENT_MS });
     }
 
+    /* =====================================================================
+       FILIALE ACTIVE — lot L4, `CONVENTIONS.md` §30
+       ---------------------------------------------------------------------
+       ⚠️ **C'est le seul endroit du produit où l'invariant « le périmètre vient
+       du serveur » peut se perdre, et il se perdrait en silence** : l'utilisateur
+       croirait écrire chez A en écrivant chez B (§30.1).
+
+       La règle du §30.2 tient en une phrase, et c'est elle qui gouverne la forme
+       de ces deux fonctions :
+
+           **Le client envoie un CHOIX. Le serveur résout un PÉRIMÈTRE.**
+
+       Ce que ces deux fonctions préservent, et qui est vérifiable d'un coup
+       d'œil :
+
+        · `choisirFilialeActive()` est une **route dédiée**. Aucune des autres
+          fonctions de ce fichier — `donnees()`, `creer()`, `modifier()`,
+          `supprimer()`, `rafraichir()`, `reprendre()`, `journal()` — n'a gagné
+          de paramètre de filiale, et le §30.2 dit ce qu'il faudrait faire d'un
+          agent tenté d'ajouter `?filiale=` à `/api/donnees` : l'arrêter.
+        · Ce qu'elle envoie est **un identifiant, et rien d'autre**. Pas de
+          périmètre, pas de liste de filiales « autorisées », pas de niveau : le
+          serveur relit `session_filiales` EN BASE pour cette session, et ce que
+          le navigateur croit savoir n'entre nulle part.
+        · Ce qu'elle **rend** est la charge de session, celle de `GET api/session`
+          — c'est-à-dire **la filiale que le serveur a résolue**, jamais celle
+          qu'on a demandée. L'appelant affiche cela, et rien d'autre (§30.2 :
+          « un choix refusé laisse la filiale active inchangée »).
+
+       ⚠️ **Ce que le §30 ne fige PAS, et qu'il a donc fallu choisir ici** : le
+       CHEMIN des deux routes, le NOM du champ du corps, et la forme de la
+       réponse. Le contrat fige la règle et les conséquences, pas l'encodage —
+       exactement comme le §29.8 laissait au lot L5 le nom de son curseur. Ces
+       noms vivent donc dans **une seule constante**, celle-ci : si l'agent qui
+       écrit la route en retient d'autres, c'est elle qu'on change, et elle seule.
+    ===================================================================== */
+
+    const CONTRAT_FILIALES = Object.freeze({
+        /** Les filiales du périmètre de LECTURE, avec de quoi les nommer à l'écran. */
+        cheminListe: "/filiales",
+        /**
+         * Le choix. `POST` : ce n'est pas une lecture, et l'acte est tracé
+         * (§30.4 — l'action `changement_perimetre`, ajoutée par la migration 009).
+         */
+        cheminFilialeActive: "/session/filiale-active",
+        /** Le SEUL champ du corps. Un identifiant, et rien d'autre (§30.2). */
+        champFiliale: "filiale_id"
+    });
+
+    /**
+     * Les filiales entre lesquelles cette session peut basculer.
+     *
+     * ⚠️ **Ne prend aucun argument, et c'est le contrat.** Le périmètre de
+     * lecture vient des groupes AD, résolu par le serveur (§30.3) : cette
+     * fonction demande « lesquelles ? », elle n'en propose aucune.
+     *
+     * Rend `{ filiales: [{ id, code, raison_sociale, active }] }`. La charge de
+     * session porte déjà `perimetre_lecture`, mais elle ne porte que des
+     * IDENTIFIANTS : afficher `FIL-1788477623975-5208b3f5…` dans un sélecteur
+     * de filiale est le constat **Q-85** une seconde fois, et cette fois dans le
+     * geste qui décide où l'on écrit.
+     */
+    function filiales() { return appeler(CONTRAT_FILIALES.cheminListe); }
+
+    /**
+     * Change la filiale ACTIVE — celle où les écritures atterriront.
+     *
+     * @param {string} filialeId l'identifiant CHOISI. Le serveur le cherche dans
+     *        `session_filiales`, relu en base ; s'il n'y est pas, il rend **403**
+     *        et la filiale active reste **inchangée** (§30.2).
+     * @returns {Promise<object>} la charge de session **telle que le serveur la
+     *        rend après le changement**. C'est elle qui doit s'afficher — jamais
+     *        la valeur demandée.
+     *
+     * ⚠️ Ce que cette fonction ne fait pas, et ne doit jamais faire : mémoriser
+     * le choix. Il n'y a rien à mémoriser côté navigateur — la filiale active vit
+     * **dans la ligne de session**, côté serveur (§30.2), et c'est ce qui fait
+     * qu'un rechargement de page, un second onglet ou une reconnexion voient tous
+     * la même chose. Un miroir local ici serait une seconde source de vérité, et
+     * l'ancienne clé `cyber-context` a déjà appris ce que cela coûte
+     * (`js/core/session.js`).
+     */
+    function choisirFilialeActive(filialeId) {
+        const corps = {};
+        corps[CONTRAT_FILIALES.champFiliale] = filialeId;
+        return appeler(CONTRAT_FILIALES.cheminFilialeActive, { methode: "POST", corps: corps });
+    }
+
+    /* =====================================================================
+       PIÈCES JOINTES — lot L6, `CONVENTIONS.md` §31
+       ---------------------------------------------------------------------
+       Trois gestes : déposer, lister, télécharger. Le §31 fige la CHAÎNE
+       (l'ordre des huit contrôles, §31.2) et la DÉLIVRANCE (§31.3) ; comme au
+       §30, il ne fige ni les chemins ni la forme des charges, qui vivent donc
+       dans une seule constante.
+
+       ⚠️ **La délivrance est un téléchargement forcé, jamais un rendu en ligne**
+       (§31.3) : `Content-Disposition: attachment`, `X-Content-Type-Options:
+       nosniff`, et **jamais** le type MIME annoncé par le déposant. C'est le
+       serveur qui le tient ; ce que ce fichier-ci tient, c'est de ne fabriquer
+       aucun autre chemin vers l'octet — pas de `<a href="api/pieces/…">` posé
+       dans le balisage, pas d'`<img src>`, pas d'`<iframe>`. Une seule porte,
+       et elle passe par une fonction, donc par une garde.
+    ===================================================================== */
+
+    const CONTRAT_PIECES = Object.freeze({
+        /** Liste et dépôt : même chemin, deux verbes — une pièce est une ressource. */
+        chemin: "/pieces",
+        /** Le contenu d'une pièce : `GET /pieces/<id>/contenu`. */
+        suffixeContenu: "/contenu",
+        /** Champs du corps de dépôt. */
+        champEntiteType: "entite_type",
+        champEntiteId: "entite_id",
+        champFichier: "fichier",
+        /**
+         * États d'analyse, relevés dans `ck_pieces_jointes_etat`
+         * (`db/migrations/001_socle.sql`). **Une seule est délivrable.**
+         */
+        etats: Object.freeze(["en_attente", "en_cours", "saine", "infectee", "erreur"]),
+        etatDelivrable: "saine"
+    });
+
+    /**
+     * Les pièces attachées à un enregistrement.
+     *
+     * Rend `{ pieces: [ { id, nom_fichier, taille_octets, type_mime,
+     * etat_analyse, quarantaine, sha256, cree_le, cree_par } ] }`.
+     *
+     * ⚠️ Le périmètre n'est pas un paramètre : le serveur ne rend que ce que la
+     * filiale active peut voir, et c'est la RLS qui le tient — pas cet appel.
+     */
+    function pieces(entiteType, entiteId) {
+        const filtres = {};
+        filtres[CONTRAT_PIECES.champEntiteType] = entiteType;
+        filtres[CONTRAT_PIECES.champEntiteId] = entiteId;
+        return appeler(CONTRAT_PIECES.chemin + chaineFiltres(filtres));
+    }
+
+    /**
+     * Dépose une pièce.
+     *
+     * Le contenu voyage **en base64 dans le corps JSON**, comme le texte d'un
+     * export `grc-backup` voyage dans `reprendre()` : `appeler()` est la seule
+     * porte du frontend sur le réseau, et lui faire parler `multipart` en
+     * ouvrirait une seconde. Les huit contrôles du §31.2 se jouent côté serveur,
+     * dans l'ordre, sur ce que le serveur reçoit — et l'empreinte est calculée
+     * sur ce qui a été **écrit**, pas sur ce qui a été **reçu** (§31.2, point 6).
+     *
+     * ⚠️ Ce que le navigateur ne fait PAS, et ne doit pas faire : contrôler
+     * l'extension, deviner le type, calculer une empreinte. Tout cela se refait
+     * côté serveur de toute façon, et un contrôle qui n'existe qu'ici est un
+     * contrôle absent. La borne de taille est la seule chose que cette couche
+     * regarde, pour ne pas envoyer 30 Mio qui seront refusés — c'est une
+     * courtoisie, elle est dans l'appelant, et elle n'est pas la barrière.
+     */
+    function deposerPiece(entiteType, entiteId, nomFichier, typeMime, contenuBase64) {
+        const fichier = { nom: nomFichier, type_mime: typeMime, contenu_base64: contenuBase64 };
+        const corps = {};
+        corps[CONTRAT_PIECES.champEntiteType] = entiteType;
+        corps[CONTRAT_PIECES.champEntiteId] = entiteId;
+        corps[CONTRAT_PIECES.champFichier] = fichier;
+        return appeler(CONTRAT_PIECES.chemin,
+            { methode: "POST", corps: corps, delai: DELAI_CHARGEMENT_MS });
+    }
+
+    /**
+     * Récupère le contenu d'une pièce, en binaire.
+     *
+     * ⚠️ **L'appelant doit passer par `Droits.exigerExport()` AVANT** : un
+     * téléchargement de pièce jointe fait sortir un octet du produit, donc il
+     * passe par l'entonnoir unique. C'est exactement le constat **Q-89** — un
+     * seul site de sortie qui l'avait oublié, 38 213 octets d'un document
+     * confidentiel téléchargés par un compte sans droit d'export. Le serveur le
+     * vérifie aussi ; ce qui se joue au navigateur est l'autre moitié.
+     */
+    function telechargerPiece(pieceId) {
+        return appeler(
+            CONTRAT_PIECES.chemin + "/" + encodeURIComponent(pieceId) + CONTRAT_PIECES.suffixeContenu,
+            { binaire: true, delai: DELAI_CHARGEMENT_MS });
+    }
+
     // Opération composite : la propagation « au plus défavorable » s'exécute en
     // UNE transaction côté serveur (contrôle S14), et rend les évaluations
     // relues, versions comprises.
@@ -544,11 +737,13 @@ const Api = (() => {
 
     return {
         ErreurApi,
-        CONTRAT_AUTH,
+        CONTRAT_AUTH, CONTRAT_FILIALES, CONTRAT_PIECES,
         session, modele, donnees, rafraichir,
         connexion, deconnexion, surAuthentificationRequise,
         creer, modifier, supprimer, propagerMesure, reprendre,
-        journal, journalVerification, journalExport
+        journal, journalVerification, journalExport,
+        filiales, choisirFilialeActive,
+        pieces, deposerPiece, telechargerPiece
     };
 })();
 

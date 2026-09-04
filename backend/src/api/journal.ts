@@ -620,8 +620,33 @@ export async function greffonJournal(
         return resultat.rows as Record<string, unknown>[];
       });
 
+      // ══ `sain` ignore les anomalies INFORMATIVES — constat Q-123 ═══════
+      //
+      // `chaine_tronquee` n'est pas une falsification : le `CONVENTIONS.md` §12
+      // la range explicitement en *informatif*. Elle dit « la vérification
+      // démarre après le premier maillon », ce qui est exactement ce qu'on a
+      // demandé en passant `depuis`.
+      //
+      // La route la comptait pourtant comme une anomalie, si bien que **la
+      // vérification partielle que le §12 PRESCRIT** — « contrôle rapide sur les
+      // entrées récentes » — rendait `sain: false` sur une chaîne parfaitement
+      // intacte. Un exploitant qui suit la prescription lisait une alerte de
+      // falsification, et la seule façon d'obtenir `sain: true` était de
+      // renoncer à `depuis`, c'est-à-dire de parcourir trois ans à chaque
+      // contrôle.
+      //
+      // ⚠️ Un garde-fou qui crie sur le cas nominal est un garde-fou qu'on
+      // apprend à ignorer — et c'est **pire** que pas de garde-fou : le jour où
+      // il crie pour de vrai, personne ne l'écoute. Le §17.5 vaut dans les deux
+      // sens : on ne prête pas à un contrôle plus de portée qu'il n'en a, et on
+      // ne lui fait pas dire plus d'alarme qu'il n'en constate.
+      //
+      // Les anomalies restent TOUTES rendues — on n'en cache aucune. Seul le
+      // verdict distingue ce qui accuse de ce qui renseigne.
+      const accusatrices = anomalies.filter((a) => a['anomalie'] !== 'chaine_tronquee');
+
       return reponse.send({
-        sain: anomalies.length === 0,
+        sain: accusatrices.length === 0,
         depuis,
         anomalies,
       });
