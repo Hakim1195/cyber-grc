@@ -260,6 +260,48 @@ principale, et elle est déjà acquise.
 
 Ce qui suit règle le reste. **Chaque ligne dit aussi ce qu'elle ne doit pas abîmer.**
 
+#### 0. Le modèle agit sur le PRIX du jeton, jamais sur leur NOMBRE — mesuré le 04/09/2026
+
+⚠️ **Ce point manquait, et son absence rend le tableau ci-dessous trompeur** : on peut lire
+« sonnet pour les tâches mécaniques » comme « sonnet consomme moins ». **C'est faux, et la
+vague L5 le mesure** :
+
+| Modèle | Jetons consommés |
+|---|---|
+| `opus` × 4 (J1, J2, J3, SECU) | 346 615 · 411 768 · 317 678 · 336 063 → **moyenne 353 031** |
+| `sonnet` × 1 (J4) | **412 041 — le plus cher de la vague** |
+
+**Pourquoi** : le nombre de jetons est piloté par la **surface de lecture** et le nombre de
+boucles d'outil, pas par le modèle. J4 devait confronter l'état des lots au réel, donc lire
+les quatre plus gros documents du dépôt — **574 ko, environ 150 000 jetons de pure
+acquisition** avant d'écrire une ligne :
+
+| Document | Taille |
+|---|---|
+| `docs/PLAN_EXECUTION.md` | 195 ko |
+| `CHANGELOG.md` | 151 ko |
+| `backend/db/CONVENTIONS.md` | 115 ko |
+| `backend/README.md` | 113 ko |
+
+**Deux leviers distincts, qu'il ne faut pas confondre — et qui se cumulent :**
+
+| Levier | Sur quoi il agit | Comment |
+|---|---|---|
+| **le modèle** | le **prix** du jeton | `sonnet` là où la réflexion est déjà dans la spécification |
+| **le brief** | le **nombre** de jetons | nommer les fichiers ET les sections ; **extraire** dans le brief plutôt qu'envoyer lire |
+
+> **Règle : ne jamais écrire « lis le §7 » dans un brief.** Le registre porte 129 constats ;
+> un agent qui a besoin de cinq d'entre eux paierait 50 000 jetons pour en utiliser 2 000.
+> L'orchestrateur **recopie les lignes utiles dans le brief** — il les a déjà sous les yeux.
+> Le même raisonnement vaut pour le `CHANGELOG` et le `README` : ce sont des documents
+> d'**écriture**, pas de lecture d'agent.
+
+**Conséquence sur le choix du modèle, qui reste vrai mais pour la bonne raison** : dégrader
+le modèle économise **le prix**, à qualité égale seulement si le brief est précis. Un brief
+vague sur un modèle léger produit du travail à refaire, et l'économie s'inverse — ce que le
+paragraphe suivant disait déjà, et que J4 illustre : sa prose a été **entièrement réécrite**
+(constat **Q-124**).
+
 #### 1. Le modèle se choisit par agent, pas par habitude
 
 | Travail | Modèle | Pourquoi |
@@ -268,7 +310,9 @@ Ce qui suit règle le reste. **Chaque ligne dit aussi ce qu'elle ne doit pas ab�
 | **Décision de conception**, arbitrage, interface | **opus** | une erreur ici se paie en réécriture, pas en correctif |
 | **Code dans un domaine à pièges** — SQL et RLS, concurrence, authentification, cryptographie | **opus** | les défauts y sont silencieux : un cloisonnement faux ne se voit pas à l'exécution |
 | **Essais contre une spécification précise** | **sonnet** | la réflexion est dans la spécification ; l'agent l'exécute |
-| **Documentation, balayage mécanique, mesure et comptage** | **sonnet** | tâches où la justesse se vérifie par relecture immédiate |
+| **Balayage mécanique, mesure et comptage** | **sonnet** | tâches où la justesse se vérifie par relecture immédiate |
+| **Tâche étroite, spécifiée au geste près, avec un essai qui mord** | **haiku** | à réserver aux gestes dont l'échec est bruyant ; ce chantier a déjà produit deux balayages mécaniques *faux et verts* (l'entonnoir aveugle à deux fichiers, Q-114) — un modèle léger n'y change rien, mais un essai qui mord, si |
+| ~~**Documentation d'état**~~ | **ne se délègue plus** | voir « le rendement au jeton » : 412 041 jetons perdus. C'est la tâche dont le coût est maximal pour un agent et quasi nul pour l'orchestrateur |
 
 **Le garde-fou** : on ne dégrade **jamais** le modèle d'un agent dont le travail porte sur le
 **cloisonnement, la perte de données, ou l'authentification**. Ces trois-là sont la promesse
@@ -666,6 +710,24 @@ l'air. C'est la formulation exacte de ce que la porte S3 a mesuré.
 > 4. **Correction post-audit en parallèle** : 2 à 3 agents groupés **par domaine**, jamais un
 >    par constat. L'orchestrateur garde les arbitrages et ce qui tient en deux fichiers.
 > 5. **Banc complet au pré-commit seulement** ; les familles touchées pendant le travail.
+> 6. **Le modèle se choisit au lancement, jamais après** — un agent en vol se *reprend*, il ne
+>    se relance pas : un relancement repaie 100 à 200 k de ré-acquisition.
+
+#### Le modèle par agent — décidé maintenant, sur le critère du §2 bis
+
+| Agent | Modèle | Motif |
+|---|---|---|
+| **L4 — cloisonnement multi-filiales**, sélecteur de filiale, consolidation Groupe, création de filiale | `opus`, **jamais dégradé** | le cloisonnement est l'une des trois promesses centrales du produit, et le §2 bis l'inscrit nommément parmi les domaines intouchables. Un cloisonnement faux **ne se voit pas à l'exécution** |
+| **L6 — la chaîne d'analyse antivirale** : les 8 contrôles du `PLAN_SERVEUR` §1.6, ClamAV, empreinte SHA-256, quarantaine | `opus` | un fichier hostile qui traverse est une compromission de poste, pas un défaut d'affichage. Domaine à pièges au sens strict |
+| **L6 — quotas, stockage, cycle de vie des pièces** | `sonnet` | la réflexion est dans la spécification ; l'agent l'exécute, et l'échec est bruyant (un quota faux se compte) |
+| **Filets d'essai contre une spécification précise** | `sonnet` | ⚠️ à condition que le brief porte le protocole **comportemental**, pas « écris des tests » |
+| **SECU — audit de la porte S5** | `opus`, **jamais dégradé** | seul instrument qui voit les angles morts de l'orchestrateur. Sur L5 : 336 063 jetons, une fuite de données que trois agents **et l'orchestrateur** n'avaient pas vue |
+| **Documentation d'état** | — | **ne se délègue pas** (§2 bis, « le rendement au jeton ») |
+
+**Ce que cela donne** : deux `opus` là où l'erreur est silencieuse, deux `sonnet` là où elle
+est bruyante, zéro agent de documentation. À qualité constante, l'économie vient d'abord des
+**briefs qui extraient au lieu d'envoyer lire** — c'est le levier sur le *nombre* de jetons —
+et ensuite seulement du modèle, qui agit sur leur *prix*.
 
 
 | Agent | Livrable |
