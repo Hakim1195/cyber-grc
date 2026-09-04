@@ -119,6 +119,8 @@ import { greffonJournal } from './journal.js';
 import { greffonPieces } from '../pieces/index.js';
 import { greffonImport } from '../import/index.js';
 import { greffonConsolidation } from '../consolidation/index.js';
+import { greffonFiliales } from '../filiales/index.js';
+import { greffonApprobations } from '../approbations/index.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
 import { AuthentificationProvisoire, estAuthentificateur, PerimetreProvisoire } from './session.js';
@@ -831,25 +833,54 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     // le reste : avant l'analyse du corps, de façon uniforme, et sans qu'une
     // route puisse l'oublier. Le contrôle est un **constat** sur la session,
     // jamais une déclaration que la route ferait sur elle-même (condition E2).
-    if (declaration.perimetre === 'groupe' && !session.perimetre.perimetreGroupe) {
-      const refusPerimetre = {
-        message:
-          'Cette vérification porte sur le journal du groupe entier : elle est réservée à ' +
-          'un périmètre Groupe. Votre journal de filiale reste consultable.',
-        detailJournal:
-          'Q-118 : route à périmètre Groupe demandée depuis un périmètre de ' +
-          `${String(session.perimetre.filiales.length)} filiale(s)`,
-      };
+    //
+    // ⚠️ Deux exigences distinctes, et l'ordre du `case` ne les mélange pas :
+    // lire le groupe entier (`groupe`) et pouvoir l'écrire
+    // (`administration-groupe`) ne sont pas le même droit. Le message diffère
+    // aussi, parce qu'il n'y a rien de commun à dire : dans un cas on refuse une
+    // vue, dans l'autre un pouvoir. ⚠️ Le message qui vivait ici parlait du
+    // journal, la seule route qui portait alors la déclaration — il aurait
+    // annoncé « votre journal de filiale reste consultable » à qui tentait de
+    // créer une filiale.
+    const perimetreExige =
+      declaration.perimetre === 'groupe'
+        ? {
+            satisfait: session.perimetre.perimetreGroupe,
+            message:
+              'Cette vérification porte sur le groupe entier : elle est réservée à un ' +
+              'périmètre Groupe. Votre périmètre de filiale reste consultable.',
+            detail:
+              'Q-118 : route à périmètre Groupe demandée depuis un périmètre de ' +
+              `${String(session.perimetre.filiales.length)} filiale(s)`,
+            resume: 'Accès refusé : périmètre de lecture Groupe exigé',
+          }
+        : declaration.perimetre === 'administration-groupe'
+          ? {
+              satisfait: session.perimetre.administrationGroupe,
+              message:
+                'Cette opération modifie le groupe entier : elle est réservée à ' +
+                "l'administration Groupe. Lire le groupe ne suffit pas à le changer.",
+              detail:
+                "Q-149 : route d'administration Groupe demandée par une session qui ne " +
+                `porte pas ce droit (périmètre de lecture : ${String(session.perimetre.filiales.length)} filiale(s))`,
+              resume: 'Accès refusé : administration Groupe exigée',
+            }
+          : null;
+
+    if (perimetreExige !== null && !perimetreExige.satisfait) {
       requete.log.warn(
         {
           utilisateur: session.perimetre.utilisateurId,
           route: requete.routeOptions.url ?? requete.url,
-          detail: refusPerimetre.detailJournal,
+          detail: perimetreExige.detail,
         },
-        'Accès refusé : périmètre Groupe exigé',
+        perimetreExige.resume,
       );
       await tracerRefusDroit(requete, session, declaration);
-      throw refuserDroit(refusPerimetre);
+      throw refuserDroit({
+        message: perimetreExige.message,
+        detailJournal: perimetreExige.detail,
+      });
     }
 
     // ── 5. L'annuaire, à l'ouverture de session seulement ──────────────
@@ -2455,6 +2486,40 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  régional de trois filiales est légitime et n'aurait pas à être refusé.
    * ------------------------------------------------------------------- */
   await instance.register(greffonConsolidation, { pool });
+
+  /* -------------------------------------------------------------------
+   *  Création de filiale — l'autre part de L4 restée dehors (constat Q-149)
+   * -------------------------------------------------------------------
+   *  `insert into filiales` n'existait nulle part dans `src/` : intégrer une
+   *  société rachetée passait par un administrateur de base écrivant du SQL.
+   *  Or le cadrage dit « acquisitions régulières » — c'est une opération du
+   *  métier, pas une étape d'installation.
+   *
+   *  Le préfixe des groupes d'annuaire vient de la configuration, jamais d'une
+   *  constante : la route engendre `GRC-<CODE>-<PROFIL>` pour la filiale créée,
+   *  et un déploiement dont l'AD impose un autre préfixe n'a rien d'autre à
+   *  changer (`LDAP_PREFIXE_GROUPES`).
+   * ------------------------------------------------------------------- */
+  await instance.register(greffonFiliales, {
+    pool,
+    ...(config.auth.ldap === null || config.auth.ldap === undefined
+      ? {}
+      : { prefixeGroupes: config.auth.ldap.prefixeGroupes }),
+  });
+
+  /* -------------------------------------------------------------------
+   *  Circuit d'approbation — lot L8
+   * -------------------------------------------------------------------
+   *  « Qui a validé cette politique ? » est une question d'audit systématique,
+   *  et l'ISO 27001 exige nommément l'acceptation des risques résiduels.
+   *
+   *  ⚠️ `pool` est OBLIGATOIRE DANS LE TYPE ici, contrairement au greffon du
+   *  journal qui l'avait rendu facultatif pour ne pas bloquer trois agents sur
+   *  une ligne. La couture est écrite en même temps que le lot : le décalage
+   *  n'a plus de raison d'être, et un greffon qui refuse bruyamment à
+   *  l'exécution vaut moins qu'un qui ne compile pas.
+   * ------------------------------------------------------------------- */
+  await instance.register(greffonApprobations, { pool });
 
   const service = options.serviceAuthentification;
   if (service !== undefined) {

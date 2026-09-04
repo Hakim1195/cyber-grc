@@ -798,6 +798,16 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // La liste des filiales du périmètre de session (lot L4) : servie sans
     // identité, elle donnerait la cartographie des filiales du groupe.
     ['GET', '/api/filiales', undefined],
+    // Les deux routes du circuit d'approbation (lot L8). Servies sans identité,
+    // elles diraient qui a validé quoi — et la seconde PRONONCERAIT une décision
+    // irréversible au nom de personne, dans le mécanisme dont tout l'objet est
+    // d'attribuer une décision à quelqu'un.
+    ['GET', '/api/approbations/documents/DOC-A', undefined],
+    ['POST', '/api/approbations/documents/DOC-A', { etape: 'redaction', decision: 'approuve' }],
+    // La création de filiale (lot L4, constat Q-149). Servie sans identité, elle
+    // laisserait n'importe qui inscrire une société dans le groupe — et créer,
+    // au passage, ses groupes d'annuaire.
+    ['POST', '/api/filiales', { code: 'ZZFERM', raison_sociale: 'Créée sans identité' }],
     // La consolidation Groupe (lot L4, la part que le lot avait laissée ouverte).
     // Elle est ici pour une raison qui lui est propre : c'est la SEULE route du
     // produit qui lit délibérément plusieurs filiales à la fois. Servie sans

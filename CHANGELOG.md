@@ -8,6 +8,58 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur — lot L8 : le circuit d'approbation, et lot L4 : créer une filiale
+
+**L8 — « Qui a validé cette politique ? »** Trois circuits du `PLAN_SERVEUR` §3.5 :
+documents (rédaction → revue → approbation → publication), acceptation des risques
+résiduels (**exigée nommément par l'ISO 27001**), rapports d'audit. Deux routes,
+`GET` et `POST /api/approbations/:entite/:entiteId`, et le niveau d'accès
+**`validation`** — déclaré depuis L3 et jusqu'ici exercé par aucune route — reçoit
+son premier usage.
+
+Trois propriétés valent d'être nommées :
+
+- **L'irréversibilité n'est PAS réécrite en TypeScript.** Elle vit dans la base depuis
+  `001_socle.sql` (`f_approbations_verrou_decision`), et la doubler en applicatif aurait
+  créé deux versions d'une même garantie — le jour où elles divergent, c'est la faible
+  qui l'emporte. Le banc la mord là où elle est : `update` et `delete` directs sous le
+  compte applicatif **et sous le propriétaire** rendent `GRC02`, et une **course réelle**
+  entre deux transactions la fait lever à travers l'API (409).
+- **`empreinte_objet` fait périmer une approbation quand l'objet change.** Approuver puis
+  réenregistrer **sans modifier** ne périme rien ; modifier vraiment ramène le circuit à
+  sa première étape, et l'ancien tour reste intact avec son empreinte. Sans cela, le
+  circuit certifierait un contenu qui a changé depuis — exactement ce qu'un auditeur
+  cherche à exclure.
+- **Le refus de niveau vient du crochet, pas d'une garde locale**, et il est prononcé
+  **avant l'analyse du corps** : un corps JSON illisible envoyé par un profil
+  *contribution* rend 403, pas 400.
+
+**L4 — créer une filiale** (constat **Q-149**). `insert into filiales` n'existait nulle
+part dans `src/` : intégrer une société rachetée passait par un administrateur de base
+écrivant du SQL. `POST /api/filiales` le fait, sous la déclaration d'accès la plus forte
+du produit — **`administration-groupe`**, une exigence neuve du vocabulaire : lire le
+groupe entier et pouvoir le changer ne sont pas le même droit, et un profil Direction
+porte la première sans la seconde.
+
+⚠️ **Créer la filiale ne suffit pas, et la route le dit** : sans ses groupes d'annuaire
+`GRC-<CODE>-<PROFIL>`, personne ne peut y entrer. Ils sont synchronisés **dans la même
+transaction** — une morsure le prouve en cassant la seconde écriture et en constatant que
+la première a disparu — et la réponse rend la liste de ceux que l'administrateur doit
+créer **dans l'annuaire**, ce que le produit ne fait pas et ne doit pas faire.
+
+**Ce que la mesure a démenti, et que le raisonnement avait mal deviné** (constat
+**Q-155**) : la route n'emploie **pas** `returning`. Créer une filiale active fait
+basculer `f_perimetre_groupe()` à faux *dans la même transaction* — elle est dérivée, et
+vaut vrai quand le périmètre couvre toutes les filiales actives. La relecture est donc
+refusée alors que l'insertion passe, et PostgreSQL rend le **même message trompeur** dans
+les deux cas. Trancher a exigé de rejouer l'insertion sans `returning`. Ce n'est pas un
+défaut à contourner : c'est le modèle qui parle — l'administrateur a le droit de créer
+une filiale et aucun droit de lire ce qu'elle contiendra, tant que ses groupes n'existent
+pas dans l'annuaire.
+
+**Banc** : 60 essais pour L8, 9 pour la création de filiale, 92 passés sur les deux
+familles réunies.
+
 ### Serveur — lot L4 : la vision Groupe consolidée, qui manquait au lot marqué livré
 
 **La réserve est levée.** Le `PLAN_SERVEUR` §7 range la « consolidation direction » dans le

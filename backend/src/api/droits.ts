@@ -465,8 +465,29 @@ export interface DeclarationAcces {
    * domaine, pas le périmètre. Il le sait maintenant, et le refus se prononce là
    * où tous les autres se prononcent : dans `onRequest`, **avant l'analyse du
    * corps**, de façon déclarative et dénombrable.
+   *
+   * ── Deux exigences, et elles ne se confondent pas ────────────────────
+   *
+   * | Valeur | Constat exigé sur la session | Ce que cela protège |
+   * |---|---|---|
+   * | `'groupe'` | `perimetreGroupe` — le périmètre de **lecture** couvre toutes les filiales actives | ce qui *révèle* le groupe entier (la chaîne du journal) |
+   * | `'administration-groupe'` | `administrationGroupe` — la session a le droit d'**écrire** les lignes de portée Groupe | ce qui *modifie* le groupe entier (créer une filiale) |
+   *
+   * Lire le groupe et pouvoir le changer ne sont pas le même droit, et la
+   * seconde exigence est **strictement plus forte** : un profil Direction porte
+   * la première sans la seconde. Les confondre donnerait à la Direction le droit
+   * de créer des filiales, ou obligerait un administrateur à porter un périmètre
+   * de lecture Groupe pour administrer — deux erreurs symétriques.
+   *
+   * ⚠️ `administrationGroupe` n'est **pas** une barrière côté base : la note de
+   * `PerimetreSession` le dit sans détour — le rôle applicatif peut poser le
+   * réglage lui-même, il ne protège donc que de la faute de programmation. La
+   * barrière est **ici**, dans le modèle de droits, et c'est la seule. Une route
+   * qui écrit en portée Groupe sans porter cette déclaration s'en remettrait à
+   * un `42501` de PostgreSQL — c'est-à-dire à un **500** rendu à l'utilisateur
+   * pour ce qui est un refus de droit.
    */
-  readonly perimetre?: 'groupe';
+  readonly perimetre?: 'groupe' | 'administration-groupe';
 }
 
 /**
