@@ -339,6 +339,85 @@ quoi s'ajoutent des coûts que le compteur ne montre pas :
 - **la fraîcheur** — des correctifs lancés quatre minutes avant qu'un auditeur ait fini ont rendu
   fausse une phrase de son rapport. **On attend le rapport complet avant de dispatcher.**
 
+### Le rendement au jeton — mesuré sur la vague L5, 04/09/2026
+
+> **L'objectif arbitré par l'utilisateur : le maximum de travail de QUALITÉ à parité de
+> jetons, et le temps optimisé avec.** Ce qui suit n'est pas de l'intuition : c'est la
+> décomposition réelle d'une vague de **1 824 165 jetons**.
+
+| Agent | Jetons | Livrable | Ce qu'il est devenu |
+|---|---|---|---|
+| J1 | 346 615 | émission du journal, 14 actions | ✅ tient |
+| J2 | 411 768 | E6 + 3 routes + 61 essais | ✅ tient |
+| J3 | 317 678 | écran `/journal` + filet Q-92 | ✅ tient |
+| **J4** | **412 041** | **documentation d'état** | ❌ **invalidée le jour même** (constat **Q-124**) |
+| SECU | 336 063 | audit S4, 10 constats | ✅ 5 corrigés le jour même |
+
+#### 1. La documentation ne se délègue JAMAIS en parallèle de ce qu'elle décrit
+
+**Le plus gros gaspillage mesuré du chantier : 412 041 jetons, 23 % de la vague, perdus.**
+
+J4 a été lancé **en même temps** que les agents L5, avec l'instruction — juste en soi — de
+ne pas décrire un lot en cours. Il a donc écrit fidèlement l'état d'**avant** L5, et ce
+texte a été commité avec le lot qui le rendait faux. L'orchestrateur a tout réécrit à la
+clôture, en une dizaine de minutes et **quelques milliers de jetons**, parce qu'il avait
+déjà le contexte.
+
+> **Règle : la documentation d'état appartient à l'orchestrateur, à la clôture.** Elle est
+> la seule tâche dont le coût marginal est quasi nul pour lui et maximal pour un agent —
+> un agent doit **acquérir** ce que l'orchestrateur a déjà. Ce qui reste délégable en
+> documentation : ce qui se **mesure** (compter, confronter des chiffres au réel, écrire
+> un garde-fou), jamais ce qui se **raconte**.
+
+#### 2. Le seuil de délégation est un nombre : 200 000 jetons
+
+Un agent paie **100 000 à 200 000 jetons de pure ré-acquisition** avant de produire une
+ligne. La conséquence est arithmétique, et elle rend le §2 bis (« la règle de bascule »)
+chiffrable :
+
+- travail estimé **< 200 k** → l'orchestrateur, toujours. Un aller-retour d'agent coûte
+  plus que le geste ;
+- travail estimé **> 200 k**, découpable en périmètres disjoints → un agent ;
+- **dix constats indépendants → deux ou trois agents groupés PAR DOMAINE**, jamais un par
+  constat : dix agents paieraient dix fois la ré-acquisition pour le même dépôt.
+
+#### 3. Un contrat écrit coûte 5 000 jetons et en économise 300 000
+
+Mesuré en vol sur cette vague : le §29.8 figeait les chemins et les filtres, **mais ni le
+curseur ni la forme de l'enveloppe**. Le serveur rendait `{pagination:{suivant}}`, l'écran
+lisait `corps.suivant`. Un écran qui reçoit `undefined` **cesse de feuilleter et affiche
+une page en croyant les avoir toutes** — rien ne casse, il manque seulement des lignes
+dans un registre qui sert de preuve en audit.
+
+Complété à chaud pour ~3 000 jetons ; sans cela, l'un des deux agents refaisait sa moitié.
+**C'est le meilleur rendement de tout le dispositif**, et c'est ce que la passe de
+préparation achète.
+
+#### 4. On travaille PENDANT que l'auditeur tourne
+
+L'audit a duré **38 minutes**, passées à ne rien faire. La règle *« attendre le rapport
+complet avant de dispatcher »* a été écrite pour des agents **de construction**, dont
+l'arbre bougerait sous eux. **L'auditeur n'écrit que dans `docs/securite/`** : tout le
+reste du dépôt est disponible. Pendant qu'il tourne, on traite les constats déjà ouverts,
+on écrit les contrats de la vague suivante — jamais un fichier qu'il pourrait citer comme
+mesuré, ce qui est traité par un simple message l'avertissant de rejouer sa mesure.
+
+#### 5. Le banc complet se réserve au pré-commit
+
+Un banc complet coûte **140 secondes**. Huit exécutions sur cette vague, **trois
+suffisaient**. Pendant le travail : les familles touchées (`node --test "test/<famille>/*.test.mjs"`).
+Le banc entier : une fois, avant de commiter — c'est là qu'il sert, puisque *« vert »
+qualifie une révision, jamais un répertoire de travail*.
+
+#### 6. Ce qui, à l'inverse, était le bon usage et ne doit pas être rogné
+
+**Les quatre agents de construction en parallèle** : 4 × 40 minutes de travail rendus en
+40 minutes. C'est le poste le plus rentable du dispositif, et il ne se réduit pas.
+**L'audit indépendant non plus** : 336 063 jetons qui ont sorti une fuite de données que
+trois agents et l'orchestrateur n'avaient pas vue. Économiser là reviendrait à économiser
+sur le produit.
+
+
 ### Le dosage retenu pour les vagues 3 à 8
 
 1. **Construire en parallèle**, 3 à 5 agents par vague, périmètres disjoints — c'est ce qui tient
@@ -575,6 +654,19 @@ l'air. C'est la formulation exacte de ce que la porte S3 a mesuré.
 
 
 ### Vague 4 — L4 multi-filiales et L6 pièces jointes
+
+> **Conduite arbitrée par l'utilisateur le 04/09/2026**, sur la décomposition en jetons de
+> la vague L5 (§2 bis, « le rendement au jeton ») :
+>
+> 1. **Construction en parallèle**, périmètres disjoints — le poste le plus rentable, inchangé.
+> 2. **Pas de documentation déléguée.** L'orchestrateur l'écrit à la clôture ; il a déjà le
+>    contexte, l'agent devrait l'acheter. C'est ce qui a coûté 412 041 jetons à la vague L5.
+> 3. **On travaille pendant que l'auditeur tourne** — il n'écrit que dans `docs/securite/`.
+>    Cible : les constats `V1.1` du registre, et les contrats de la vague suivante.
+> 4. **Correction post-audit en parallèle** : 2 à 3 agents groupés **par domaine**, jamais un
+>    par constat. L'orchestrateur garde les arbitrages et ce qui tient en deux fichiers.
+> 5. **Banc complet au pré-commit seulement** ; les familles touchées pendant le travail.
+
 
 | Agent | Livrable |
 |---|---|
