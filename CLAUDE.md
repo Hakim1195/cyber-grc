@@ -91,15 +91,21 @@ de GRC complet et efficient — pas un prototype qu'on ménage.
 | **Sortie SMTP vers Microsoft 365** | ✅ **fonctionne** | port 587 vers `smtp.office365.com` → bannière **`220 … Microsoft ESMTP MAIL Service ready`**. Cela répond, **pour ce VPS**, à la vérification du `PLAN_SERVEUR` §9 ; la VM du client reste à vérifier séparément |
 | **La recette complète** | ✅ en ligne en permanence | `systemctl is-active cyber-grc apache2 postgresql` ; `https://grc.exemple.interne/` → 200 |
 
-### 0.3 Les deux seules limites connues, et elles sont étroites
+### 0.3 La seule limite connue, et elle n'est pas technique
 
-1. **`npm audit --omit=dev` échoue** — le contrôle **S15 n'est pas rejoué**, ce qui ne vaut
-   pas « passé ». Ce n'est **pas** un problème de réseau : `POST
-   /-/npm/v1/security/advisories/bulk` rend **503** ou reste sans réponse au-delà de 20 s,
-   quand la même URL répond **405 en 202 ms** en `HEAD`. Service d'avis dégradé côté npm, ou
-   filtrage de cette requête précise en sortie — je n'ai pas pu départager, et je ne
-   l'affirme donc pas. **À rejouer, c'est peut-être passager.**
-2. **L'AD *de production* du client reste interdit aux essais** — un banc qui éprouve le cas
+> ⚠️ **Il y en avait deux ; il n'en reste qu'une, et la façon dont la première est tombée
+> vaut d'être lue.** `npm audit --omit=dev` échouait, et le contrôle **S15** était consigné
+> « non rejoué » depuis la porte S4 — honnêtement, avec le diagnostic mesuré (`POST
+> /-/npm/v1/security/advisories/bulk` → 503 ou sans réponse au-delà de 20 s, quand la même
+> URL rend 405 en 202 ms en `HEAD`) et la bonne conclusion : *« à rejouer, c'est peut-être
+> passager »*. **Rejoué le 04/09/2026 au soir : `found 0 vulnerabilities`, code de retour 0**
+> (constat Q-156). C'était passager. Il a suffi de rejouer.
+>
+> La leçon est le pendant de celle du §0 : *une réserve écrite n'est pas une réserve
+> traitée*, et **« non rejoué » ne vaut ni « passé » ni « en échec »**. Rejouez avant de
+> reconduire.
+
+1. **L'AD *de production* du client reste interdit aux essais** — un banc qui éprouve le cas
    négatif verrouille des comptes réels. C'est une règle de prudence, pas une limite
    technique. L'AD **simulé** (`grc-ad`) est là pour ça, et il est à vous.
 
@@ -842,28 +848,26 @@ partielle crie sur un journal sain), **Q-125** (les groupes AD et l'annuaire s'�
 trace — **met S3 en échec**), **Q-126** (le 14ᵉ domaine ne sépare rien dans le socle livré),
 et **Q-110** / **Q-112** / **Q-113** / **Q-114** de la construction.
 
-⚠️ **Ce que la porte S4 n'a pas pu éprouver, et qui n'est donc pas acquis** :
-le contrôle **S15** (`npm audit --omit=dev`) **n'est pas rejoué**, et « non rejoué » ne
-vaut pas « passé » ; l'action `arret` ; et l'**export CSV à travers Apache**, aucun compte
-de recette ne portant le groupe `GRC-EXPORT`.
+⚠️ **Ce que la porte S4 n'a pas pu éprouver, et qui n'est donc pas acquis** : l'action
+`arret` ; et l'**export CSV à travers Apache**.
 
-> ⚠️ **Pourquoi S15 échoue — et ce que deux rapports ont dit de faux.** Les agents ont écrit
-> « la machine est hors ligne », et je l'ai recopié ici sans le vérifier. **C'est faux, et
-> mesuré comme tel** le 04/09/2026 : SRV-Infra porte une IP publique (`212.227.38.92`), et
-> depuis elle `GET https://registry.npmjs.org/` rend **200 en 60 ms**, `POST` sur la même
-> racine **403 en 56 ms**, `GET https://github.com/` **200 en 57 ms**.
+> ✅ **Deux de ces réserves sont tombées le 04/09 au soir, et par la même méthode : les
+> essayer.**
 >
-> Ce qui échoue est **un seul point d'accès** : `POST /-/npm/v1/security/advisories/bulk`
-> rend **503 Service Unavailable**, ou reste sans réponse au-delà de 20 s. La même URL en
-> `HEAD` répond **405 en 202 ms** — elle est donc joignable. Je ne peux pas départager
-> « service d'avis dégradé côté npm » de « cette requête-là filtrée en sortie », et je ne
-> l'affirme donc pas.
+> · Le contrôle **S15** (`npm audit --omit=dev`) était consigné « non rejoué » — avec un
+>   diagnostic mesuré et juste (`POST /-/npm/v1/security/advisories/bulk` → 503 ou sans
+>   réponse au-delà de 20 s, quand la même URL rend 405 en 202 ms en `HEAD`) et la bonne
+>   conclusion : *« à rejouer, c'est peut-être passager »*. Rejoué : **`found 0
+>   vulnerabilities`, code de retour 0** (constat **Q-156**). C'était passager.
+> · *« Aucun compte de recette ne porte `GRC-EXPORT` »* était **faux** : `rssi.groupe` le
+>   porte (constat **Q-129**). L'affirmation venait d'un rapport d'agent recopié sans être
+>   vérifiée.
 >
-> **Ce que cela change pour qui reprend** : il n'y a rien à réparer sur le réseau de la
-> machine, et il est inutile d'y chercher un blocage général. Rejouer `npm audit` plus tard
-> est le geste juste — S15 est le seul contrôle concerné. ⚠️ Et cela vaut aussi pour la
-> vérification demandée au `PLAN_SERVEUR` §9 (« accès sortant vers Microsoft 365 ») : la
-> sortie fonctionne, la question reste celle des points d'accès précis.
+> ⚠️ **La leçon, et elle prime sur le réflexe de reconduire une réserve** : « non rejoué »
+> ne vaut ni « passé » **ni « en échec »**. Une réserve honnêtement écrite reste une
+> réserve non traitée tant que personne ne la rejoue — et rejouer coûte ici quelques
+> secondes. Voir aussi le §0, écrit après que trois affirmations fausses sur
+> l'environnement eurent coûté du travail dans la seule journée du 04/09.
 
 **Objectif inchangé : une V1 complète, toutes fonctionnalités, avant le 21/09/2026.** Le
 fonctionnement prime sur la perfection. Le tri du `PLAN_EXECUTION` §0 bis s'applique :
