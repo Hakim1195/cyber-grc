@@ -766,9 +766,27 @@ trace — **met S3 en échec**), **Q-126** (le 14ᵉ domaine ne sépare rien dan
 et **Q-110** / **Q-112** / **Q-113** / **Q-114** de la construction.
 
 ⚠️ **Ce que la porte S4 n'a pas pu éprouver, et qui n'est donc pas acquis** :
-`npm audit --omit=dev` — la machine est **hors ligne**, donc le contrôle **S15 n'est pas
-rejoué**, et « non rejoué » ne vaut pas « passé » ; l'action `arret` ; et l'**export CSV à
-travers Apache**, aucun compte de recette ne portant le groupe `GRC-EXPORT`.
+le contrôle **S15** (`npm audit --omit=dev`) **n'est pas rejoué**, et « non rejoué » ne
+vaut pas « passé » ; l'action `arret` ; et l'**export CSV à travers Apache**, aucun compte
+de recette ne portant le groupe `GRC-EXPORT`.
+
+> ⚠️ **Pourquoi S15 échoue — et ce que deux rapports ont dit de faux.** Les agents ont écrit
+> « la machine est hors ligne », et je l'ai recopié ici sans le vérifier. **C'est faux, et
+> mesuré comme tel** le 04/09/2026 : SRV-Infra porte une IP publique (`212.227.38.92`), et
+> depuis elle `GET https://registry.npmjs.org/` rend **200 en 60 ms**, `POST` sur la même
+> racine **403 en 56 ms**, `GET https://github.com/` **200 en 57 ms**.
+>
+> Ce qui échoue est **un seul point d'accès** : `POST /-/npm/v1/security/advisories/bulk`
+> rend **503 Service Unavailable**, ou reste sans réponse au-delà de 20 s. La même URL en
+> `HEAD` répond **405 en 202 ms** — elle est donc joignable. Je ne peux pas départager
+> « service d'avis dégradé côté npm » de « cette requête-là filtrée en sortie », et je ne
+> l'affirme donc pas.
+>
+> **Ce que cela change pour qui reprend** : il n'y a rien à réparer sur le réseau de la
+> machine, et il est inutile d'y chercher un blocage général. Rejouer `npm audit` plus tard
+> est le geste juste — S15 est le seul contrôle concerné. ⚠️ Et cela vaut aussi pour la
+> vérification demandée au `PLAN_SERVEUR` §9 (« accès sortant vers Microsoft 365 ») : la
+> sortie fonctionne, la question reste celle des points d'accès précis.
 
 **Objectif inchangé : une V1 complète, toutes fonctionnalités, avant le 21/09/2026.** Le
 fonctionnement prime sur la perfection. Le tri du `PLAN_EXECUTION` §0 bis s'applique :
