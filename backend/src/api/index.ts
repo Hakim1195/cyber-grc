@@ -706,6 +706,38 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       throw refuserDroit(refus);
     }
 
+    // ── 4 bis. Le PÉRIMÈTRE exigé — constat Q-118, porte S4 ────────────
+    //
+    // Troisième exigence d'une déclaration d'accès, après l'action et le
+    // domaine. Une seule route la porte : la vérification du chaînage du
+    // journal, qui expose une fonction parcourant la chaîne ENTIÈRE — donc
+    // rendant, par construction, des métadonnées de toutes les filiales.
+    //
+    // Elle se prononce ICI et non dans la route, pour la même raison que tout
+    // le reste : avant l'analyse du corps, de façon uniforme, et sans qu'une
+    // route puisse l'oublier. Le contrôle est un **constat** sur la session,
+    // jamais une déclaration que la route ferait sur elle-même (condition E2).
+    if (declaration.perimetre === 'groupe' && !session.perimetre.perimetreGroupe) {
+      const refusPerimetre = {
+        message:
+          'Cette vérification porte sur le journal du groupe entier : elle est réservée à ' +
+          'un périmètre Groupe. Votre journal de filiale reste consultable.',
+        detailJournal:
+          'Q-118 : route à périmètre Groupe demandée depuis un périmètre de ' +
+          `${String(session.perimetre.filiales.length)} filiale(s)`,
+      };
+      requete.log.warn(
+        {
+          utilisateur: session.perimetre.utilisateurId,
+          route: requete.routeOptions.url ?? requete.url,
+          detail: refusPerimetre.detailJournal,
+        },
+        'Accès refusé : périmètre Groupe exigé',
+      );
+      await tracerRefusDroit(requete, session, declaration);
+      throw refuserDroit(refusPerimetre);
+    }
+
     // ── 5. L'annuaire, à l'ouverture de session seulement ──────────────
     if (session.sessionOuverte === true && session.identite != null) {
       await alimenterAnnuaire(requete.log, session.perimetre, session.identite);

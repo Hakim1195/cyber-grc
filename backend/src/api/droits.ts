@@ -438,6 +438,35 @@ export interface DeclarationAcces {
    *    domaine se fait sur le contenu rendu, pas sur l'accès à la route.
    */
   readonly domaine: DomaineFonctionnel | 'selon-entite' | null;
+  /**
+   * Périmètre exigé — **troisième exigence, ajoutée à la porte S4 (constat Q-118)**.
+   *
+   * `'groupe'` réserve la route à une session dont le périmètre couvre le groupe
+   * entier. Absent, la route ne pose aucune exigence de périmètre : c'est le cas
+   * de toutes les autres, dont le cloisonnement est assuré **par ligne**, par la
+   * RLS, et non par l'accès à la route.
+   *
+   * ── Pourquoi ce champ existe, plutôt qu'une garde dans la route ──────────
+   *
+   * `GET /api/journal/verification` expose `f_journal_audit_verifier()`, qui
+   * parcourt la chaîne **entière** — c'est la raison d'être de son
+   * `security definer`, et cloisonner la fonction la rendrait inutilisable. Ce
+   * qu'elle rend est donc, par construction, du niveau du groupe : le numéro,
+   * l'identifiant et l'horodatage de n'importe quelle entrée. Mesuré à S4 depuis
+   * une session d'une seule filiale : **11 maillons hors périmètre reconstruits
+   * sur 14**.
+   *
+   * Le remède naturel était un `if` en tête de la route. Il a été écrit, puis
+   * **retiré** : `test/journal-lecture/routes.test.mjs` interdit tout
+   * `statut: 403` dans le corps de `src/api/journal.ts`, au motif que *« le refus
+   * doit venir de la déclaration d'accès, jamais d'une garde locale »*. L'essai a
+   * raison, et la bonne réponse n'était pas de l'assouplir : le vocabulaire
+   * d'accès ne savait pas exprimer cette exigence — il porte l'action et le
+   * domaine, pas le périmètre. Il le sait maintenant, et le refus se prononce là
+   * où tous les autres se prononcent : dans `onRequest`, **avant l'analyse du
+   * corps**, de façon déclarative et dénombrable.
+   */
+  readonly perimetre?: 'groupe';
 }
 
 /**

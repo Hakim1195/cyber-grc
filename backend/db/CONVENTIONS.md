@@ -1743,6 +1743,36 @@ logique pour une valeur contenant `\r\n`, `"` et `;`. La preuve n'est pas une re
 forge l'entrée — un échec de connexion sur un login construit suffit, c'est ce qu'a fait
 l'auditeur —, on exporte, on **ré-analyse**, et on retrouve la valeur intacte.
 
+#### Trois exigences ajoutées après la porte S4 — et deux sont des omissions de CE contrat
+
+⚠️ **Le §29.8 n'exigeait que `\r\n`, `"` et `;`. Le lot a livré exactement cela, et c'était
+insuffisant.** L'omission est celle du contrat, pas celle de qui l'a appliqué — ce qui est le
+motif le plus coûteux de ce chantier, et il vaut d'être écrit là où il s'est produit.
+
+1. **La citation protège la structure, pas l'interprétation** (constat **Q-121**). Le format
+   est destiné à un tableur — BOM UTF-8, séparateur `;` des Excel francophones —, et un
+   tableur retire les guillemets *puis* évalue toute cellule commençant par `=`, `+`, `-` ou
+   `@`. Or `utilisateur_libelle` porte, pour une connexion refusée, **le login présenté par un
+   attaquant non authentifié**. Toute valeur textuelle commençant par l'un de ces caractères
+   est donc **préfixée d'une apostrophe à l'export**, sans que la base soit touchée : le
+   journal fait preuve, on ne réécrit pas ce qu'il contient. La cible d'une charge n'est pas
+   le serveur, c'est le poste de l'auditeur externe qui ouvre la pièce.
+2. **Un extrait ne se tronque jamais en silence** (constat **Q-119**… non : **Q-120**). Le
+   plafond portait sur le *paramètre*, jamais sur le *nombre de lignes* : au-delà de 50 000
+   entrées lisibles, l'export rendait les 50 000 plus récentes en se présentant comme
+   l'extrait demandé. On demande donc **un enregistrement de plus que le plafond** ; s'il
+   arrive, on refuse en **400** et l'on dit comment obtenir la suite.
+3. **La vérification du chaînage est réservée au périmètre Groupe** (constat **Q-118**, classe
+   *fuite de données*). `f_journal_audit_verifier(depuis)` est un **oracle exact** : pour tout
+   `N`, elle rend le numéro, l'identifiant et l'horodatage à la microseconde de l'entrée n° N,
+   et au-delà du dernier maillon son `sain: true` donne le volume total. Mesuré depuis une
+   session d'une seule filiale : **11 maillons hors périmètre reconstruits sur 14**, entrées
+   transversales comprises. La chaîne est une propriété du **groupe** — elle enjambe les
+   périmètres par construction, c'est la raison d'être du `security definer` — donc la
+   vérifier est un acte de Groupe. ⚠️ Cela ne ferme pas le canal **SQL** : `grc_app` conserve
+   `execute` sur la fonction, et le même oracle reste atteignable par qui contrôlerait déjà le
+   rôle applicatif. C'est le risque assumé du §17.4.
+
 ### 29.9 Ce que L5 ne livre pas, et pourquoi c'est écrit ici
 
 | Non livré | Motif | Où il est repris |

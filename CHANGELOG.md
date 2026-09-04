@@ -8,6 +8,65 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur — lot L5 : le journal d'audit, sa couverture, son cloisonnement, sa porte S4
+
+**Ce que le lot livre.** La couverture du journal passe de **4 actions émises sur 20** à
+**16 émissibles** : création, modification et suppression avec le **différentiel** (pas le
+doublon), export — la moitié restante du constat Q-89 —, import, administration, refus de
+droit **par requête**, démarrage et arrêt du service, consultation et vérification. Les
+quatre restantes sont reportées **par écrit, avec leur lot** : `purge` et `archivage` à la
+procédure d'exploitation, `approbation` au lot L8, `analyse_antivirus` au lot L6.
+
+**La condition d'entrée E6 est fermée** (`008_journal_lecture.sql`) : les deux fonctions du
+chaînage passent en `security definer`, et la lecture suit le périmètre. Les deux moitiés
+n'ont de sens qu'ensemble — resserrer sans la première ferait échouer **toute** écriture au
+journal. ⚠️ La justification qui reportait cette dette, « sans effet tant que le journal est
+vide », a été **réfutée par la mesure** : le compte de supervision `grc_lecture` y lisait
+**160 entrées**, logins et adresses IP compris ; il reçoit désormais « Périmètre non
+positionné ».
+
+**Trois routes de consultation** (`/api/journal`, `/api/journal/export`,
+`/api/journal/verification`), un **écran `/journal`**, et un export CSV éprouvé par
+aller-retour sur une entrée hostile. Le domaine **`journal`** se détache d'`administration`
+— quatorzième domaine de décision : régler l'application et lire trois ans d'identités ne
+sont pas le même droit.
+
+**Porte S4 : jouée le 04/09/2026, refusée.** Dix constats (Q-118 → Q-127), dont **un de la
+classe « fuite de données »**, tous corrigés ou datés :
+
+- **Q-118** — `verification?depuis=N` était un **oracle exact** : pour tout `N`, le numéro,
+  l'identifiant et l'horodatage à la microseconde de l'entrée n° N, et au-delà du dernier
+  maillon le volume total du journal du groupe. Depuis une session d'**une seule filiale** :
+  11 maillons hors périmètre reconstruits sur 14. La route est réservée au **périmètre
+  Groupe** — et l'exigence est **déclarée**, prononcée par `onRequest`, non codée dans la
+  route : un essai interdisait à juste titre toute garde `403` locale, et la bonne réponse
+  n'était pas de l'assouplir mais d'apprendre au vocabulaire d'accès à exprimer un périmètre.
+- **Q-119** — `utilisateur_libelle` portait le **nom d'affichage** pour une connexion
+  réussie : chercher par login rendait **0 résultat sur 33**, en silence. Régression
+  introduite le jour même en fermant Q-109, avec un commentaire qui **affirmait le
+  contraire de la vérité**.
+- **Q-120** — l'extrait était **tronqué en silence** au plafond, quand le code promettait un
+  refus explicite. Le refus existe désormais — et il ne vise que le plafond *implicite* :
+  une borne demandée est honorée, sans quoi le paramètre serait inutilisable.
+- **Q-121** — l'extrait CSV était **exécutable par le tableur auquel il est destiné** : cinq
+  charges sur cinq (`=cmd|`, `@SUM`, `+HYPERLINK`, `-2+3+`, `=WEBSERVICE`) ressortaient
+  intactes, et la valeur vient d'un attaquant **non authentifié**. Désamorcées à l'export,
+  sans que la base soit touchée.
+- **Q-122 à Q-127** — marqués `V1.1` au registre, avec propriétaire et échéance.
+
+**Ce que l'audit a confirmé, et qui tient** : l'ajout seul survit au `security definer`
+(quatre couches mordues, propriétaire compris), le cloisonnement **par ligne** suit le
+§29.7, le garde-fou neuf rougit sur quatre mutations distinctes, et le chemin complet a été
+parcouru pour la première fois de bout en bout — Chromium réel, Apache réel, Active
+Directory réel, PostgreSQL — sans une violation de CSP.
+
+**La leçon de la vague, plus générale que le journal** : *un essai vert qui n'a rien eu à
+mesurer rend le même verdict qu'un essai vert qui a tout mesuré.* Deux essais du dépôt
+comparaient `0` à `0` et concluaient au vert (Q-108, Q-116) ; un troisième **consacrait**
+le défaut de Q-118 comme une propriété désirable. Exiger de la matière — « il devait y
+avoir quelque chose à compter » — est ce qui les a fait tomber.
+
+
 ### Serveur — vague 3 : la documentation cesse de nier ce que L3 a livré (constat Q-90)
 
 **Huitième signalement de la famille Q-4 (`README` périmé), et le premier à l'envers** :

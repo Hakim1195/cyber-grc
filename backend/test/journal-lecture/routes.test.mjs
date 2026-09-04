@@ -114,7 +114,12 @@ describe('Les trois routes déclarent EXACTEMENT ce que le §29.8 exige', () => 
     assert.deepEqual(parUrl, {
       '/api/journal': { action: 'lire', domaine: 'journal' },
       '/api/journal/export': { action: 'exporter', domaine: 'journal' },
-      '/api/journal/verification': { action: 'lire', domaine: 'journal' },
+      // ⚠️ `perimetre: 'groupe'` depuis le constat **Q-118** (porte S4) : la
+      // vérification expose une fonction qui parcourt la chaîne ENTIÈRE, donc
+      // des métadonnées de toutes les filiales. C'est une exigence DÉCLARÉE,
+      // prononcée par `onRequest` avant l'analyse du corps — et non une garde
+      // écrite dans la route, que l'essai voisin interdit à juste titre.
+      '/api/journal/verification': { action: 'lire', domaine: 'journal', perimetre: 'groupe' },
     });
   });
 
@@ -306,7 +311,8 @@ describe('Les trois routes s’inscrivent elles-mêmes au journal', () => {
   });
 
   test('une vérification écrit « verification_journal » : se vérifier est un acte tracé', async () => {
-    session.poser(sessionSite(FILIALE_A), AUDITEUR);
+    // ⚠️ Périmètre GROUPE : la route lui est réservée depuis Q-118.
+    session.poser(sessionGroupe(), AUDITEUR);
     const avant = (await toutLeJournal()).length;
 
     const r = await serveur.appeler('GET', '/api/journal/verification');
@@ -317,6 +323,7 @@ describe('Les trois routes s’inscrivent elles-mêmes au journal', () => {
     const apres = await toutLeJournal();
     assert.equal(apres.length, avant + 1);
     assert.equal(apres[apres.length - 1].action, 'verification_journal');
+    session.poser(sessionSite(FILIALE_A), AUDITEUR);
   });
 
   test('un REFUS n’écrit AUCUNE consultation : la route n’a pas été atteinte', async () => {
@@ -678,19 +685,48 @@ describe('Export — une valeur hostile reste UNE ligne logique, et intacte', ()
 
 describe('GET /api/journal/verification — aucune ligne = journal sain', () => {
   test('elle rend « sain » sur un journal intact', async () => {
-    session.poser(sessionSite(FILIALE_A), AUDITEUR);
+    // ⚠️ Depuis Q-118, la route exige le périmètre GROUPE. Cet essai passait
+    // sous un périmètre de filiale ; ce n'est plus le chemin nominal.
+    session.poser(sessionGroupe(), AUDITEUR);
     const r = await serveur.appeler('GET', '/api/journal/verification');
     assert.equal(r.statut, 200);
     assert.deepEqual(r.corps, { sain: true, depuis: null, anomalies: [] });
+    session.poser(sessionSite(FILIALE_A), AUDITEUR);
   });
 
-  test('elle voit la chaîne ENTIÈRE, y compris depuis un périmètre d’une seule filiale', async () => {
-    // C'est tout l'objet du « security definer » : cloisonnée, la vérification
-    // signalerait un trou de numérotation à chaque frontière de périmètre — elle
-    // crierait à la falsification sur un journal parfaitement sain.
+  // ── CET ESSAI EST RETOURNÉ — constat Q-118, porte S4 ────────────────────
+  //
+  // Il s'appelait « elle voit la chaîne ENTIÈRE, y compris depuis un périmètre
+  // d'une seule filiale », et il **consacrait le défaut comme une propriété
+  // désirable**. Il n'était pas faux — le `security definer` est bien
+  // nécessaire, et cloisonner la FONCTION la rendrait inutilisable — mais il ne
+  // posait jamais la seule question qui comptait : *et qu'apprend celle qui n'a
+  // pas le droit ?*
+  //
+  // La réponse, mesurée par l'auditeur : le numéro, l'identifiant et
+  // l'horodatage à la microseconde de **n'importe quelle** entrée du groupe,
+  // par le paramètre `depuis` — 11 maillons hors périmètre reconstruits sur 14.
+  //
+  // La fonction voit toujours la chaîne entière ; c'est la ROUTE qui est
+  // désormais réservée au périmètre Groupe. L'essai éprouve donc les deux
+  // moitiés : le refus pour une filiale, et le fait que la vérification
+  // fonctionne bien pour qui y a droit.
+  test('Q-118 : la ROUTE est réservée au Groupe, la FONCTION voit toujours tout', async () => {
     session.poser(sessionSite(FILIALE_B), AUDITEUR);
-    const r = await serveur.appeler('GET', '/api/journal/verification');
-    assert.equal(r.corps.sain, true);
+    const refus = await serveur.appeler('GET', '/api/journal/verification');
+    assert.equal(refus.statut, 403, `Oracle de Q-118 rouvert : ${JSON.stringify(refus.corps)}`);
+
+    // Et l'oracle nommément : aucun numéro ne rend son horodatage.
+    const cible = await serveur.appeler('GET', '/api/journal/verification?depuis=2');
+    assert.equal(cible.statut, 403, `« depuis » est l’oracle exact de Q-118 : ${JSON.stringify(cible.corps)}`);
+
+    // Le contrôle inverse (§20.2) : pour le Groupe, la chaîne entière est bien
+    // parcourue — c'est ce que le `security definer` existe pour permettre, et
+    // le retirer ferait crier à la falsification à chaque frontière.
+    session.poser(sessionGroupe(), AUDITEUR);
+    const groupe = await serveur.appeler('GET', '/api/journal/verification');
+    assert.equal(groupe.statut, 200);
+    assert.equal(groupe.corps.sain, true, JSON.stringify(groupe.corps.anomalies));
     session.poser(sessionSite(FILIALE_A), AUDITEUR);
   });
 

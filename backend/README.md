@@ -15,8 +15,11 @@ l'annuaire `personnes` jamais alimenté ; **Q-89**, le droit d'export contournab
 deux **corrigés et mordus le jour même**, plus quinze constats neufs (contrôles S7 et S18
 en échec). Sous l'arbitrage du `../docs/PLAN_EXECUTION.md` §0 bis, la porte **trie** au
 lieu de bloquer : ce qui reste est inscrit et daté au registre, et rien de ce qui reste
-ouvert ne relève des deux premières classes. **Le travail en cours est le lot L5 — le
-journal d'audit**, chiffré à **4 actions émises sur 20 déclarées** (voir §8). La porte S1
+ouvert ne relève des deux premières classes. **Le lot L5 — le journal d'audit — est
+livré**, et sa porte **S4 a été jouée le 04/09/2026 et refusée** : dix constats, dont
+**un de la classe « fuite de données »** (Q-118), tous corrigés ou datés. Le journal émet
+désormais **16 actions sur 20** (les quatre autres reportées par écrit), et la condition
+**E6 est fermée** — la lecture est cloisonnée. Voir §8. La porte S1
 est « CONFIRMÉE FRANCHIE » au 6ᵉ passage ; la porte S2 a été franchie au 4ᵉ passage puis
 **refusée aux 5ᵉ, 6ᵉ, 7ᵉ, 8ᵉ et 9ᵉ** — et elle **ne se rejoue plus jusqu'au vert** : depuis
 le 03/09, son verdict est un **tri** en trois classes (`../docs/PLAN_EXECUTION.md` §0 bis).
@@ -235,10 +238,10 @@ Le service intercepte `SIGTERM` et draine ses connexions avant de sortir
 
 ### Ce que le serveur expose
 
-Douze routes de données, plus le point de santé : les neuf du lot L2, et trois livrées
+**Quinze** routes de données, plus le point de santé : les neuf du lot L2, trois livrées
 par le lot L3 — l'ouverture et la fermeture de session, et l'export sous son propre
-droit. Le frontend n'en connaît pas d'autres, et c'est `js/core/api.js` — un fichier
-unique — qui les appelle toutes.
+droit —, et **trois par le lot L5**, pour le journal d'audit. Le frontend n'en connaît pas
+d'autres, et c'est `js/core/api.js` — un fichier unique — qui les appelle toutes.
 
 | Verbe | Chemin | Rôle |
 |---|---|---|
@@ -255,6 +258,9 @@ unique — qui les appelle toutes.
 | `DELETE` | `/api/entites/:entite/:id` | supprimer — `?version` **exigé** (une suppression relève du même risque P1) |
 | `POST` | `/api/reprise` | reprendre un export `grc-backup` entier, **en une transaction**, avec aperçu |
 | `POST` | `/api/operations/propager-mesure` | propagation « au plus défavorable », en une transaction |
+| `GET` | `/api/journal` | consulter le journal d'audit — domaine **`journal`**, distinct d'`administration` ; pagination par curseur `avant`, jamais par décalage — **lot L5** |
+| `GET` | `/api/journal/export` | extraire le journal en CSV — exige le droit `exporter` **en plus** du domaine ; les amorces de formule sont désamorcées (Q-121) — **lot L5** |
+| `GET` | `/api/journal/verification` | vérifier le chaînage par empreinte — **aucune ligne = journal sain** ; réservée au **périmètre Groupe** (Q-118 : la chaîne est une propriété du groupe, et `depuis` en faisait un oracle) — **lot L5** |
 
 ⚠️ **Ce que `GET /api/export` ne ferme pas, et il faut le dire** (§17.5) : quelqu'un qui a
 le droit de lire peut toujours recopier ce que son écran affiche. Le droit d'export ne
@@ -734,7 +740,7 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — jouée six fois |
 | **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais non validé par la porte** — **S2** jouée **neuf fois** : franchie au 4ᵉ passage, **refusée aux 5ᵉ, 6ᵉ, 7ᵉ, 8ᵉ et 9ᵉ** ; les 8ᵉ et 9ᵉ sans bloquant. Elle **ne se rejoue plus jusqu'au vert** : depuis le 03/09, le verdict est un **tri** (`../docs/PLAN_EXECUTION.md` §0 bis), et le lot part en vague 3 avec ses constats triés |
 | **L3 — Authentification AD et droits** | ✅ **construit**, mesuré de bout en bout contre un **Active Directory réel** — sept profils entrent, l'appartenance indirecte par groupe imbriqué ouvre l'accès. Porte **S3** jouée une fois (04/09/2026) et **refusée** : zéro fuite entre filiales, **deux bloquants des classes dures** (**Q-88**, **Q-89**) corrigés et mordus le jour même, quinze constats neufs triés par l'arbitrage `docs/PLAN_EXECUTION.md` §0 bis |
-| L5 — Journal d'audit | 🟡 **en cours, ouvert le 04/09/2026** (troisième tour de la vague 3, quatre agents, périmètres au §3). Ajout seul et chaînage **éprouvés** ; couverture chiffrée à **4 actions émises sur 20 déclarées** — détail au §8 ci-dessous. Ne pas croire acquis ce que ce tableau ne dit pas : une table inaltérable et incomplète prouve moins qu'il n'y paraît |
+| **L5 — Journal d'audit** | ✅ **livré** (04/09/2026), **porte S4 jouée et refusée** — le tri du §0 bis s'applique. Couverture portée de **4 actions émises sur 20** à **16 émissibles** (`purge` et `archivage` relèvent de l'exploitation, `approbation` du lot L8, `analyse_antivirus` du lot L6) ; **condition E6 fermée** par `008_journal_lecture.sql` — `grc_lecture` recevait 160 entrées, il reçoit « Périmètre non positionné » ; trois routes de consultation, écran `/journal`, export CSV désamorcé et éprouvé sur une entrée hostile. **Dix constats neufs** (Q-118 → Q-127), dont **Q-118, classe « fuite de données »** — un oracle sur la chronologie du groupe par `verification?depuis=N` —, corrigé et mordu |
 | L4 → L15 | ⬜ à faire — voir [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) §3 et [`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7 |
 
 ### Les verdicts, tels que le journal des portes les formule
@@ -1491,8 +1497,8 @@ la porte de sécurité, pas de cette page.
 | Sujet | Décision | Échéance |
 |---|---|---|
 | **Clés primaires composites** reportées | Arbitrage écrit et daté au `CONVENTIONS.md` §21. | **condition d'entrée du lot L3** |
-| **La lecture du journal d'audit n'est pas cloisonnée** | Dérogation qu'impose le chaînage par empreinte (`004_rls.sql` §6). ⚠️ **La justification qui suivait ici — « sans effet tant que le journal est vide » — était fausse et l'est de plus en plus** : mesuré le 04/09/2026, `select count(*) from journal_audit` en portait déjà **159**, et le compte de supervision en lecture seule `grc_lecture` les lit **sans filtre de filiale** — identifiants et adresses IP compris. Ce n'est pas encore une fuite inter-filiale démontrée — seul `grc_lecture` en profite, un rôle de supervision, pas une session de filiale — mais l'exposition grandit à chaque connexion, pas seulement « dès que L5 alimentera » quelque chose : L5 est **ouvert**, et alimente déjà. | **resserrement = livrable ferme de L5**, condition **E6** |
-| **La couverture du journal d'audit** par l'API | L'ajout seul et le chaînage sont éprouvés (§8) ; **20 actions sont déclarées, 4 sont émises** — connexion réussie/refusée, secours, verrouillage par rythme, déconnexion — toutes depuis `src/auth/index.ts` seul. Le refus de droit, la création/modification/suppression d'enregistrements, l'administration, les imports et **les exports** (constat Q-89, seconde moitié) n'écrivent encore rien au journal. | **lot L5, en cours** (contrôle S3) |
+| ~~**La lecture du journal d'audit n'est pas cloisonnée**~~ | ✅ **FERMÉE le 04/09/2026** par `008_journal_lecture.sql` (condition **E6**). Les deux fonctions du chaînage sont `security definer` et la politique suit le périmètre. ⚠️ La justification qui reportait cette dette — « sans effet tant que le journal est vide » — a été **réfutée par la mesure** : `grc_lecture` y lisait **160 entrées**, logins et adresses IP compris | — |
+| ~~**La couverture du journal d'audit** par l'API~~ | ✅ **FERMÉE le 04/09/2026** (lot L5). **16 actions sur 20 sont émissibles** — création, modification, suppression avec différentiel, export, import, administration, refus de droit par requête, démarrage, arrêt, consultation et vérification, plus les cinq de la connexion. Les quatre restantes sont reportées **par écrit** : `purge` et `archivage` à l'exploitation (`CONVENTIONS.md` §12), `approbation` au lot L8, `analyse_antivirus` au lot L6 | — |
 | Le drapeau `grc.administration_groupe` est une **déclaration que la session fait sur elle-même**, pas un privilège | Il protège contre la faute de programmation, **pas** contre un rôle applicatif compromis, qui le poserait avant d'écrire. La règle tenue aujourd'hui — *toute route qui l'exige le vérifie, aucune ne le pose* — est vraie et démontrée par un test ; à L3 de la rendre **structurellement** vraie. | **lot L3** (`CONVENTIONS.md` §17.4) |
 | Supprimer un compte ou une filiale cité au journal est **structurellement impossible** (`restrict` + journal en ajout seul) | Cohérent avec la rétention de trois ans, mais la « purge explicite » de sortie de filiale (`PLAN_SERVEUR` §2.7) n'a aucun chemin applicatif. | procédures d'exploitation à écrire au **lot L13**, avec les purges RGPD |
 | Aucun plafond de durée ni de volume sur une reprise | Une reprise de 12 000 enregistrements tient une connexion du pool une vingtaine de secondes ; `statement_timeout` borne l'instruction, jamais la transaction (constat Q-9). | **lot L7** (import) |

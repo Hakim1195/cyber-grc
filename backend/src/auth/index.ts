@@ -354,7 +354,25 @@ export class ServiceAuthentification implements Authentificateur {
 
       await journaliser(client, {
         action: 'connexion_reussie',
-        utilisateurLibelle: identite.nomAffichage,
+        // ⚠️ **LE LOGIN, PAS LE NOM D'AFFICHAGE — constat Q-119, porte S4.**
+        //
+        // Cette ligne portait `identite.nomAffichage`, et le commentaire posé
+        // juste en dessous en corrigeant Q-109 affirmait « le login part dans
+        // `utilisateurLibelle` ci-dessus ». **Il était faux, et je l'ai écrit
+        // sans le vérifier** : en retirant le login du `resume`, j'ai retiré le
+        // seul endroit où il figurait en clair.
+        //
+        // Mesuré par l'auditeur : `GET /api/journal?utilisateur=rssi.tls` rend
+        // **0 de ses 33 connexions**, en silence. Le login reste récupérable par
+        // `utilisateur_id` — la colonne est peuplée, 69/69 —, mais le filtre
+        // interroge le libellé, et un auditeur qui cherche par login ne trouve
+        // rien sans savoir pourquoi.
+        //
+        // Le type le dit depuis le début : *« Identité telle que connue au
+        // moment des faits — le login présenté suffit »*, et les six autres
+        // sites d'appel passent tous un login. Celui-ci était le seul écart. Le
+        // nom d'affichage part dans `valeursApres`, où il était déjà.
+        utilisateurLibelle: identite.login,
         sessionId: session.etat.sessionId,
         adresseIp: demande.adresseIp,
         filialeId: droits.filialeActive,

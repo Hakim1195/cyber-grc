@@ -495,10 +495,52 @@ export async function greffonJournal(
     },
     async (requete: FastifyRequest<{ Querystring: QuerystringJournal }>, reponse: FastifyReply) => {
       const { perimetre } = sessionDe(requete);
+      // ⚠️ **UN DE PLUS QUE LE PLAFOND — constat Q-120, porte S4.**
+      //
+      // Le commentaire au-dessus de cette route promettait : *« le plafond est
+      // un refus explicite — dépasser rend 400 — plutôt qu'une troncature
+      // muette, qui donnerait à l'auditeur un extrait incomplet qu'il croirait
+      // entier. »* Le 400 ne portait que sur le **paramètre** `limite` ; le
+      // nombre de lignes n'était jamais compté. Au-delà de 50 000 entrées
+      // lisibles, tout export rendait les 50 000 plus récentes **en se
+      // présentant comme l'extrait demandé** — exactement ce que la phrase
+      // disait vouloir éviter.
+      //
+      // On demande donc **un enregistrement de plus que le plafond**. S'il
+      // arrive, c'est qu'il y avait de quoi tronquer : on refuse, en disant
+      // comment obtenir la suite. Compter d'abord par un `count(*)` coûterait un
+      // second parcours (~400 ms mesurés sur 20 000 entrées) pour la même
+      // information.
+      //
+      // ⚠️ **Le refus ne vise que le plafond IMPLICITE**, et la nuance a été
+      // trouvée par le banc : la première rédaction refusait aussi un `limite`
+      // explicitement demandé, ce qui rendait le paramètre inutilisable — un
+      // appelant qui demande deux lignes et reçoit 400 n'a pas été protégé, il a
+      // été empêché.
+      //
+      // Le discriminant est **qui a posé la borne** : le plafond du serveur,
+      // que l'appelant ne voit pas et croit donc ne pas atteindre ; ou son
+      // propre paramètre, qu'il a écrit et dont il attend précisément l'effet.
+      // Seul le premier ment.
       const filtres = filtresDe(requete.query, LIMITE_EXPORT, LIMITE_EXPORT);
+      const borneDemandee = requete.query.limite !== undefined;
+      const sonde = { ...filtres, limite: filtres.limite + 1 };
 
       const lignes = await avecTransaction(pool, perimetre, async (client) => {
-        const entrees = await lirePage(client, filtres);
+        const entrees = await lirePage(client, sonde);
+        if (!borneDemandee && entrees.length > filtres.limite) {
+          throw new ErreurApplicative({
+            code: 'donnee_invalide',
+            statut: 400,
+            message:
+              `L'extrait dépasse ${String(filtres.limite)} entrées. Restreignez-le par une ` +
+              'date, une action ou un utilisateur, ou reprenez-le par tranches avec le ' +
+              'paramètre « avant ». Un extrait tronqué serait pris pour un extrait complet.',
+            detailJournal:
+              `Q-120 : export refusé, plus de ${String(filtres.limite)} entrées lisibles ` +
+              'dans le périmètre pour ces filtres',
+          });
+        }
         await tracer(
           client,
           perimetre,
@@ -507,7 +549,9 @@ export async function greffonJournal(
           'Export du journal d’audit',
           { ...filtresTraces(filtres), lignes: entrees.length, format: 'csv' },
         );
-        return entrees;
+        // La sonde a demandé un enregistrement de plus : il ne part pas dans le
+        // fichier. Sans cette coupe, un `limite` explicite rendrait n+1 lignes.
+        return entrees.slice(0, filtres.limite);
       });
 
       const horodatage = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
@@ -535,13 +579,28 @@ export async function greffonJournal(
     '/api/journal/verification',
     {
       schema: { querystring: SCHEMA_VERIFICATION },
-      config: { acces: { action: 'lire', domaine: 'journal' } },
+      // ⚠️ `perimetre: 'groupe'` — constat **Q-118**, porte S4. La chaîne est une
+      // propriété du GROUPE : elle enjambe les périmètres par construction, et
+      // c'est la raison d'être du `security definer`. Exposée à une filiale, la
+      // fonction devenait un **oracle exact** — pour tout `N`, le numéro, l'`id`
+      // et l'horodatage à la microseconde de l'entrée n° N, et au-delà du dernier
+      // maillon le volume total du journal du groupe. Mesuré : 11 maillons hors
+      // périmètre reconstruits sur 14.
+      //
+      // Le refus se prononce dans `onRequest`, pas ici : `routes.test.mjs`
+      // interdit toute garde `403` écrite dans ce fichier, et il a raison — un
+      // refus déclaré se compte et se lit, un refus codé s'oublie.
+      //
+      // ⚠️ Cela ne ferme PAS le canal SQL : `grc_app` conserve `execute` sur la
+      // fonction, nécessaire à cette route. C'est le risque assumé du §17.4.
+      config: { acces: { action: 'lire', domaine: 'journal', perimetre: 'groupe' } },
     },
     async (
       requete: FastifyRequest<{ Querystring: { depuis?: number } }>,
       reponse: FastifyReply,
     ) => {
       const { perimetre } = sessionDe(requete);
+
       const depuis = requete.query.depuis ?? null;
 
       const anomalies = await avecTransaction(pool, perimetre, async (client) => {
@@ -599,7 +658,46 @@ function citer(valeur: unknown): string {
         : typeof valeur === 'object'
           ? JSON.stringify(valeur)
           : String(valeur);
-  return `"${texte.replace(/"/gu, '""')}"`;
+  return `"${desamorcer(texte).replace(/"/gu, '""')}"`;
+}
+
+/**
+ * Désamorce une valeur que le tableur destinataire évaluerait — constat **Q-121**.
+ *
+ * ── Ce que `citer()` protège, et ce qu'elle ne protège pas ───────────────
+ *
+ * La citation RFC 4180 protège la **structure** de la ligne : elle garantit
+ * qu'un `;` ou un saut de ligne dans une valeur ne scinde pas l'enregistrement.
+ * Elle ne protège rien contre l'**interprétation** — un tableur retire les
+ * guillemets, *puis* évalue toute cellule commençant par `=`, `+`, `-` ou `@`.
+ *
+ * Et ce format est explicitement destiné à un tableur : BOM UTF-8 « pour
+ * Excel », séparateur `;` des Excel francophones. La cible d'une charge n'est
+ * donc pas le serveur — c'est **le poste du RSSI ou de l'auditeur externe qui
+ * ouvre l'extrait**. `=WEBSERVICE(…)` exfiltre, `=HYPERLINK(…)` invite au clic.
+ *
+ * ⚠️ **Et la valeur vient d'un attaquant NON AUTHENTIFIÉ** : `utilisateur_libelle`
+ * porte, pour une connexion refusée, le login présenté. Mesuré à la porte S4 :
+ * cinq charges sur cinq ressortaient intactes.
+ *
+ * ── Pourquoi une apostrophe, et pourquoi la base n'est pas touchée ───────
+ *
+ * L'apostrophe en tête est la convention que les tableurs lisent comme « ceci
+ * est du texte » ; elle n'est pas affichée. Elle est posée **à l'export
+ * seulement** : le journal est en ajout seul et fait preuve — on ne réécrit pas
+ * ce qu'il contient, on rend inoffensive la copie qu'on transmet.
+ *
+ * ⚠️ **Le contrat §29.8 n'exigeait que `\r\n`, `"` et `;`.** Le lot a livré
+ * exactement cela : l'omission est celle du contrat, pas celle de qui l'a
+ * appliqué. Le §29.8 est corrigé en même temps que cette fonction.
+ */
+function desamorcer(texte: string): string {
+  // La liste est écrite à la main **à dessein**, et c'est le bon outil ici
+  // (`CLAUDE.md` §3) : son incomplétude ne fait rien réussir en silence — elle
+  // laisse passer une charge que la mesure de la porte reverra. Ce sont les
+  // quatre amorces de formule des tableurs, plus les deux caractères qu'ils
+  // ignorent avant de les lire.
+  return /^[=+\-@\t\r]/u.test(texte) ? `'${texte}` : texte;
 }
 
 /**
