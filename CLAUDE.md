@@ -45,8 +45,8 @@
 > **périmé**. Le banc rend **1136 essais, 1136 passés**, et la recette tourne en permanence
 > sur cette machine, Active Directory réel compris.
 >
-> ⚠️ **Le dépôt est en avance sur la machine** : le service exécute le build d'avant L5, et
-> `GET /api/journal` y rend **404**. Redéployer exige `sudo` (constat **Q-117**).
+> **La recette sert L5** depuis le 04/09 au soir : `install.sh --maj` puis
+> `--verifier-publication` → **65 fichiers servis identiques au dépôt** (constat Q-117, fermé).
 
 ## 1. Le produit
 
@@ -705,11 +705,19 @@ constat perdu.**
 1. ⚠️ **La porte S4 n'a pas été jouée.** L5 n'est pas validé : il est *construit et vert*.
    Les deux ne se confondent pas — la vague 2 l'a appris en neuf passages, et *un banc vert
    mesure ce qu'il regarde, jamais ce qu'il ne regarde pas.*
-2. ⚠️ **Le dépôt est en avance sur la machine** (constat **Q-117**). La base de recette porte
-   la migration `008`, mais le service exécute le build d'avant L5 : `GET /api/journal` y
-   rend **404**. Redéployer exige `sudo` — `npm run build`, `rsync dist/`,
-   `systemctl restart cyber-grc`, puis `install.sh --maj` pour le frontend, puis
-   `install.sh --verifier-publication`. C'est le constat **Q-103** dans l'autre sens.
+2. ✅ **La machine sert L5, et c'est mesuré** (constat **Q-117**, fermé). Republié par
+   `install.sh --maj` — **jamais par une copie à la main**, le jeton de version d'`index.html`
+   dérivant du contenu —, puis `--verifier-publication` : **65 fichiers servis identiques au
+   dépôt**. Éprouvé sur le service : `GET /api/journal` sans session rend **401** ; le compte
+   AD `rssi.tls` reçoit **403** sur les trois routes du journal **et 200 sur `/api/donnees`**,
+   ce qui prouve que le refus vient du domaine `journal` et non d'une session cassée ; les
+   trois refus sont **journalisés par le crochet `onRequest`**, avec la route, l'action et le
+   domaine exigés. ⚠️ **Ce qui n'est PAS mesuré sur la machine** : le cas positif — une
+   lecture réussie du journal par un profil `ADMIN`. Le mot de passe AD réel du compte `admin`
+   vivait dans un scratchpad d'une session passée et n'est plus connu ; `test/annuaire/comptes.mjs`
+   décrit l'annuaire **simulé**, dont les mots de passe diffèrent de l'AD Samba. Le chemin
+   positif est couvert par les **61 essais** de `test/journal-lecture/`, à travers le vrai
+   crochet `onRequest` — mais pas à travers Apache.
 3. **Six actions sur 20 restent non émises**, et le report est écrit : `consultation_sensible`
    et `verification_journal` sont émises par les routes de consultation (donc invisibles tant
    que la machine sert l'ancien build) ; `purge` et `archivage` relèvent de la procédure
