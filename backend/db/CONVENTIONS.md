@@ -2175,16 +2175,23 @@ Trois règles qui en découlent :
 ni ne lit. Une table sans chemin applicatif n'est pas une fonctionnalité, c'est une
 promesse. Voir le constat **Q-162**.
 
-### §34.3 — Ce qui reste à faire valider par le client
+### §34.3 — Le découpage est VALIDÉ (04/09/2026)
 
-Le tableau du `PLAN_SERVEUR` §2.2 porte **dix-sept lignes** de ce type, et **deux seulement**
-ont été tranchées par l'utilisateur. Les quinze autres reposent sur un arbitrage interne
-(§16.4) que **le RSSI du groupe n'a jamais confirmé** — c'est le risque projet **P5**, et il
-est attendu depuis avant L1.
+Le tableau du `PLAN_SERVEUR` §2.2 porte **dix-sept lignes** disant, pour chaque type de
+donnée, s'il est commun aux vingt filiales ou propre à chacune. Il avait été arbitré en
+interne (§16.4) et **jamais confirmé** — c'était le risque projet **P5**, attendu depuis
+avant L1.
 
-Ce n'est pas une formalité : changer le niveau d'une table **après** que les filiales aient
-saisi leurs données n'est pas un `alter table`. Passer `prestataires` de Filiale à Groupe,
-par exemple, obligerait à décider laquelle des vingt fiches du même infogérant survit, qui
-arbitre les divergences d'évaluation, et ce que deviennent les actions rattachées — une
-migration de données **et** une décision métier, sur des enregistrements déjà employés comme
-preuve d'audit.
+**Il est validé.** Arbitrage de l'utilisateur, au nom du RSSI groupe : *« les arbitrages
+internes semblent corrects selon le RSSI, donc tu peux les garder comme ça. Si jamais il y a
+des modifications on les verra avec l'utilisation du logiciel sur le long terme. »*
+
+Les dix-sept lignes tiennent donc en l'état, **dont les deux amendées le même jour** :
+`approbations` devient mixte (§34.1) et les risques gagnent un socle (§34.2).
+
+⚠️ **Ce que la validation ne rend pas gratuit.** Réviser le niveau d'une table après la mise
+en service n'est pas un `alter table` : passer `prestataires` de Filiale à Groupe obligerait
+à décider laquelle des vingt fiches du même infogérant survit, qui arbitre les divergences
+d'évaluation, et ce que deviennent les actions rattachées — une migration de données **et**
+une décision métier, sur des enregistrements déjà employés comme preuve d'audit. La porte
+est ouverte à la révision ; elle a un prix, et il croît avec l'usage.

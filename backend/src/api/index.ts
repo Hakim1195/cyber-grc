@@ -1409,7 +1409,52 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         authentificationProvisoire && resolveur instanceof PerimetreProvisoire
           ? await resolveur.filiale()
           : null;
-      return reponse.send(charteSession(session, filiale));
+
+      // ── LES COORDONNÉES DE LA FILIALE ACTIVE — constat Q-160 ────────────
+      //
+      // La table `filiales` porte adresse, ville, pays, téléphone, courriel et
+      // site web depuis `001`, et **aucune route ne les rendait**. Le lot L9 a
+      // donc livré la marque à moitié : raison sociale et logo, pas les
+      // coordonnées — et l'agent a eu raison de refuser de les fabriquer, car
+      // les inventer les aurait fait apparaître sur des documents d'audit.
+      //
+      // Elles sont lues ICI, dans la transaction de la session, et **bornées par
+      // son périmètre** : `id = any(f_filiales_lecture())` — le prédicat ne
+      // nomme aucune filiale, il demande à la base celle qu'elle applique
+      // partout ailleurs. Un `null` est rendu si la filiale n'est pas lisible,
+      // jamais une erreur : ne pas connaître son adresse ne doit pas empêcher
+      // d'ouvrir l'application.
+      const coordonnees =
+        session.perimetre.filialeId === null
+          ? null
+          : await avecTransaction(
+              pool,
+              session.perimetre,
+              async (client) => {
+                const { rows } = await client.query<Record<string, string | null>>(
+                  `select "adresse", "code_postal", "ville", "pays", "telephone", "email",
+                          "site_web", "nom_court"
+                     from "filiales"
+                    where "id" = $1 and "id" = any (f_filiales_lecture())`,
+                  [session.perimetre.filialeId],
+                );
+                return rows[0] ?? null;
+              },
+              { lectureSeule: true },
+            ).catch(() => null);
+
+      const charte = charteSession(session, filiale);
+      return reponse.send(
+        coordonnees === null
+          ? charte
+          : {
+              ...charte,
+              filiale_active:
+                charte.filiale_active === null || charte.filiale_active === undefined
+                  ? charte.filiale_active
+                  : { ...charte.filiale_active, ...coordonnees },
+            },
+      );
     },
   );
 

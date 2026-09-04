@@ -119,6 +119,18 @@ async function startApp() {
         // d'identités ne sont pas le même droit.
         "/journal": () => { if (typeof JournalModule !== "undefined") JournalModule.renderList(); },
 
+        // ── Vague 6 : les écrans des capacités livrées sans interface ────
+        //
+        // Chacune de ces routes existait côté serveur SANS écran, ce qui est
+        // une fonctionnalité à moitié livrée : la consolidation Groupe, le
+        // circuit d'approbation, le socle de risques, l'activation des
+        // référentiels par filiale et l'import généralisé.
+        "/groupe": () => { if (typeof GroupeModule !== "undefined") GroupeModule.renderList(); },
+        "/approbations": () => { if (typeof ApprobationsModule !== "undefined") ApprobationsModule.renderList(); },
+        "/socle": () => { if (typeof SocleModule !== "undefined") SocleModule.renderList(); },
+        "/referentiels-actifs": () => { if (typeof ReferentielsActifsModule !== "undefined") ReferentielsActifsModule.renderList(); },
+        "/imports": () => { if (typeof ImportsModule !== "undefined") ImportsModule.renderList(); },
+
         "/settings": () => { if (typeof SettingsModule !== "undefined") SettingsModule.render(); }
     });
 
@@ -804,7 +816,14 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/audits":       "audits",
     "/settings":     "administration",
     // Le journal d'audit a son propre domaine : voir `backend/src/api/droits.ts`.
-    "/journal":      "journal"
+    "/journal":      "journal",
+    // Vague 6. Le domaine décide de ce que le menu propose : une route sans
+    // domaine reste visible pour tous, ce qui serait faux ici.
+    "/groupe":       "pilotage",
+    "/approbations": "documents",
+    "/socle":        "risques",
+    "/referentiels-actifs": "conformite",
+    "/imports":      "administration"
 });
 
 /** Domaine de la route affichée, ou "" si elle n'est pas rattachée. */
