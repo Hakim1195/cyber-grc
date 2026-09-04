@@ -35,15 +35,18 @@
 > même. L'arbitrage du `docs/PLAN_EXECUTION.md` §0 bis remplace le veto de la porte par un
 > **tri en trois classes** : une porte refusée n'arrête plus la vague, elle trie.
 >
-> **Le lot L5 — le journal d'audit — est CONSTRUIT** (04/09/2026, soir) et **n'a pas encore
-> été soumis à sa porte S4**. Sa couverture est passée de **4 actions émises sur 20** à
-> **14**, mesurée en base ; la condition **E6 est fermée et vérifiée en vol**. Voir
-> « ▶ REPRENDRE ICI » au §8 — qui dit ce qui reste, et ce qu'il ne faut pas croire acquis.
+> **Le lot L5 — le journal d'audit — est LIVRÉ, et sa porte S4 a été jouée le 04/09/2026 :
+> refusée**, dix constats (**Q-118 → Q-127**) dont **un de la classe « fuite de données »**.
+> Sous le tri du §0 bis : **la classe dure et cinq majeurs sont corrigés, mordus et
+> redéployés** ; cinq mineurs sont datés `V1.1`. Le journal émet **16 actions sur 20**
+> (les quatre autres reportées par écrit), et la condition **E6 est fermée**. Voir
+> « ▶ REPRENDRE ICI » au §8.
 >
 > ⚠️ Si vous lisez ailleurs « ouvrir la vague 3 », « L3 reste à faire », « aucun essai
-> navigateur n'existe » ou « la couverture du journal est de 4 actions sur 20 », c'est
-> **périmé**. Le banc rend **1136 essais, 1136 passés**, et la recette tourne en permanence
-> sur cette machine, Active Directory réel compris.
+> navigateur n'existe », « la couverture du journal est de 4 actions sur 20 » ou « la lecture
+> du journal n'est pas cloisonnée », c'est **périmé**. Le banc rend **1143 essais, 1143
+> passés**, et la recette tourne en permanence sur cette machine, Active Directory réel
+> compris.
 >
 > **La recette sert L5** depuis le 04/09 au soir : `install.sh --maj` puis
 > `--verifier-publication` → **65 fichiers servis identiques au dépôt** (constat Q-117, fermé).
@@ -672,7 +675,7 @@ il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écriv
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
 constat perdu.**
 
-### ▶ REPRENDRE ICI — **L5 est construit ; sa porte S4 n'a pas été jouée.**
+### ▶ REPRENDRE ICI — **L5 est livré, S4 est jouée. La suite est la vague 4 (L4, L6).**
 
 > ⚠️ **Réécrit le 04/09/2026 au soir, à la clôture de la vague L5.** Si vous lisez ailleurs
 > « le lot L5 reste à faire », « la couverture du journal est de 4 actions sur 20 »,
@@ -702,9 +705,20 @@ constat perdu.**
 
 **Trois choses à savoir avant de continuer :**
 
-1. ⚠️ **La porte S4 n'a pas été jouée.** L5 n'est pas validé : il est *construit et vert*.
-   Les deux ne se confondent pas — la vague 2 l'a appris en neuf passages, et *un banc vert
-   mesure ce qu'il regarde, jamais ce qu'il ne regarde pas.*
+1. ✅ **La porte S4 a été jouée le 04/09/2026, et refusée** — rapport dans
+   [`docs/securite/RAPPORT_S4.md`](docs/securite/RAPPORT_S4.md), verdicts au
+   `PLAN_EXECUTION` §7. Dix constats, dont **Q-118, classe « fuite de données »** : la route
+   de vérification du chaînage était un **oracle exact** sur la chronologie du groupe
+   entier — depuis une session d'une seule filiale, 11 maillons hors périmètre reconstruits
+   sur 14. Elle est réservée au périmètre Groupe, et le refus est **déclaré**
+   (`DeclarationAcces.perimetre`), prononcé par `onRequest` comme tous les autres.
+   ⚠️ **Trois choses que cette porte a apprises et qui valent pour les suivantes** :
+   *(a)* un essai **mesurait** le défaut de Q-118 et le **consacrait** comme une propriété
+   désirable — il n'était pas faux, il ne posait jamais la question *« et qu'apprend celle
+   qui n'a pas le droit ? »* ; *(b)* ma première correction était une garde `403` dans la
+   route, qu'un essai a refusée à juste titre — la bonne réponse n'était pas de l'assouplir
+   mais d'apprendre au vocabulaire d'accès à exprimer un périmètre ; *(c)* **Q-119 était ma
+   régression de la veille**, avec un commentaire qui affirmait le contraire de la vérité.
 2. ✅ **La machine sert L5, et c'est mesuré** (constat **Q-117**, fermé). Republié par
    `install.sh --maj` — **jamais par une copie à la main**, le jeton de version d'`index.html`
    dérivant du contenu —, puis `--verifier-publication` : **65 fichiers servis identiques au
@@ -744,10 +758,17 @@ est celui qui coûte le plus cher :
 > sites exercés » — est ce qui les a fait tomber, et c'est désormais la forme attendue de
 > tout contrôle de ce dépôt.
 
-**Le travail immédiat : jouer la porte S4** — un auditeur indépendant, sur `opus`, écrivant
-dans `docs/securite/` **uniquement** (`PLAN_EXECUTION` §2 bis, « le point qui ne se négocie
-pas »). Périmètre : couverture et inaltérabilité du journal, cloisonnement de sa lecture
-(E6), les trois routes de consultation, et l'export.
+**Le travail immédiat : la vague 4 — L4 (multi-filiales) et L6 (pièces jointes)**,
+`PLAN_EXECUTION` §3. Cinq constats de L5 restent ouverts et datés `V1.1` au registre :
+**Q-122** (toute lecture du journal l'alimente, sans borne), **Q-123** (la vérification
+partielle crie sur un journal sain), **Q-125** (les groupes AD et l'annuaire s'écrivent sans
+trace — **met S3 en échec**), **Q-126** (le 14ᵉ domaine ne sépare rien dans le socle livré),
+et **Q-110** / **Q-112** / **Q-113** / **Q-114** de la construction.
+
+⚠️ **Ce que la porte S4 n'a pas pu éprouver, et qui n'est donc pas acquis** :
+`npm audit --omit=dev` — la machine est **hors ligne**, donc le contrôle **S15 n'est pas
+rejoué**, et « non rejoué » ne vaut pas « passé » ; l'action `arret` ; et l'**export CSV à
+travers Apache**, aucun compte de recette ne portant le groupe `GRC-EXPORT`.
 
 **Objectif inchangé : une V1 complète, toutes fonctionnalités, avant le 21/09/2026.** Le
 fonctionnement prime sur la perfection. Le tri du `PLAN_EXECUTION` §0 bis s'applique :
