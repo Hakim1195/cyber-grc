@@ -1211,6 +1211,53 @@ esac
 # de contrôles qui annonce plus qu'elle ne fait est pire que pas de section du tout :
 # elle rassure.
 
+# =============================================================================
+#  8 bis. Groupes AD — la table qui décide de qui a accès (constat Q-78)
+# =============================================================================
+#
+# ⚠️ **Sans ce geste, une installation « réussie » ne sert à personne.** La table
+# `groupes_ad` dit quel groupe de l'annuaire accorde quel profil sur quel
+# périmètre. Vide, elle n'accorde rien : mesuré le 03/09/2026 sur une
+# installation réelle, une connexion au compte de secours AVEC LE BON MOT DE
+# PASSE rendait `403 droit_insuffisant`. La fonction qui la remplit était écrite,
+# éprouvée, et **appelée par les essais et par personne d'autre**.
+#
+# Pourquoi ici plutôt qu'au démarrage du service : la synchronisation ne doit
+# jamais être un effet de bord invisible — elle écraserait ce qu'un exploitant a
+# ajusté. Elle est donc une commande explicite, idempotente, rejouable après
+# chaque acquisition de filiale (`filiales.conf`, §27).
+#
+# Et l'échec est un ÉCHEC : une installation dont personne ne peut se servir
+# n'est pas une installation réussie. C'est la moitié du constat Q-75 que ce
+# script peut fermer seul.
+info "Groupes AD"
+CODE_SYNC=0
+BASE_HOTE="$BASE_HOTE" \
+BASE_PORT="$BASE_PORT" \
+BASE_NOM="$BASE_NOM" \
+BASE_UTILISATEUR_PROPRIETAIRE="$ROLE_PROPRIETAIRE" \
+BASE_MOT_DE_PASSE_PROPRIETAIRE="$(lire_variable BASE_MOT_DE_PASSE_PROPRIETAIRE)" \
+BASE_SSL="$(lire_variable BASE_SSL)" \
+BASE_SSL_CA="$(lire_variable BASE_SSL_CA)" \
+LDAP_PREFIXE_GROUPES="$(lire_variable LDAP_PREFIXE_GROUPES)" \
+  node "$RACINE/backend/db/synchroniser-groupes-ad.mjs" || CODE_SYNC=$?
+if [[ $CODE_SYNC -ne 0 ]]; then
+  echec "La table « groupes_ad » n'a pas pu être alignée (code $CODE_SYNC, constat Q-78).
+      Tant qu'elle est vide, AUCUN compte n'obtient d'accès — pas même le compte de
+      secours : la connexion réussit et l'application répond « aucun accès à cette
+      application ne vous est ouvert ». Les lignes ci-dessus disent la cause."
+fi
+SORTIE_SYNC="$(sql_admin_base <<SQL
+select count(*) from "groupes_ad";
+SQL
+)"
+SORTIE_SYNC="$(printf '%s' "$SORTIE_SYNC" | tr -d '[:space:]')"
+[[ "${SORTIE_SYNC:-0}" -gt 0 ]] || echec "« groupes_ad » est VIDE après synchronisation.
+      Le contrôle envoie et constate, il ne se fie pas au code de sortie du script
+      précédent : c'est la leçon du 8ᵉ passage de la porte S2 — un contrôle qui
+      compare deux déclarations ne contrôle rien."
+succes "groupes_ad : $SORTIE_SYNC groupe(s) — l'annuaire peut accorder des accès"
+
 info "Contrôles de sécurité"
 
 # S1 — aucun attribut dangereux sur les rôles non privilégiés.

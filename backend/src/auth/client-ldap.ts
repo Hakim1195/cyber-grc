@@ -142,6 +142,104 @@ export interface EntreeLdap {
   readonly attributsBruts: ReadonlyMap<string, readonly Buffer[]>;
 }
 
+/**
+ * Un `SearchResultReference` désigne-t-il quelque chose que cette recherche
+ * cherchait — ou un ailleurs qui ne la concerne pas ? Constat **Q-83**.
+ *
+ * ── Ce que la mesure contre un VRAI Active Directory a montré ──────────────
+ *
+ * Ce client refusait **toute** réponse portant un `SearchResultReference`, au
+ * motif — juste en soi — qu'une réponse amputée annoncée comme un succès est
+ * pire qu'un refus. Éprouvé le 03/09/2026 contre un contrôleur de domaine Samba
+ * réel, ce refus s'est révélé **total** : aucune connexion n'aboutissait.
+ *
+ *     réponse TRONQUÉE de l'annuaire : un renvoi (SearchResultReference) non
+ *     suivi. 1 entrée(s) reçue(s) pour une borne de 2, filtre
+ *     « (&(objectClass=user)(sAMAccountName=rssi.tls)) » sous
+ *     « DC=exemple,DC=interne »
+ *
+ * L'entrée cherchée **était là**. Ce qui accompagnait la réponse, ce sont les
+ * *continuation references* qu'Active Directory émet sur toute recherche en
+ * sous-arbre depuis la racine du domaine, vers les contextes de nommage qui ne
+ * portent aucun compte : `CN=Configuration,…`, `DC=DomainDnsZones,…`,
+ * `DC=ForestDnsZones,…`. Tout AD le fait, toujours. Le produit était donc
+ * inutilisable contre l'annuaire qu'il existe pour interroger.
+ *
+ * C'est le constat **Q-69** — *« le détecteur de renvoi est écrit, lu, et mordu
+ * par rien »* — mordu enfin, par le réel, et pris en défaut. Aucune doublure
+ * n'aurait pu le montrer : elle n'émet que ce que son auteur a prévu.
+ *
+ * ── L'arbitrage, qui ne rend pas la barrière plus faible ───────────────────
+ *
+ * La propriété qu'on veut garder est *« une réponse amputée ne passe pas pour
+ * complète »*. Elle ne dit rien sur les renvois en général — elle dit quelque
+ * chose sur **ce qui manque à CETTE recherche**. Le discriminant est donc :
+ *
+ *   · un renvoi dont le DN cible est **sous la base de recherche** désigne une
+ *     branche que l'on interrogeait et qu'on n'a pas lue → **troncature**, refus,
+ *     exactement comme avant ;
+ *   · un renvoi vers un **autre contexte de nommage** ne retire rien de ce qui
+ *     était demandé → il est **consigné** et n'arrête rien.
+ *
+ * Un renvoi qu'on ne sait pas lire — URI vide, DN absent, forme inattendue — est
+ * traité comme s'il était dans le périmètre. Le doute reste du côté du refus.
+ */
+export function renvoiHorsPerimetre(
+  uri: string,
+  base: string,
+  contextes: readonly string[],
+): boolean {
+  const dnCible = dnDeUriLdap(uri);
+  if (dnCible === null) return false; // illisible → on refuse, comme avant
+  const cible = normaliserDn(dnCible);
+  const racine = normaliserDn(base);
+  if (racine === '') return false;
+
+  // ⚠️ **Comparer les DN NE SUFFIT PAS, et c'est la première correction de ce
+  // correctif — mesurée, pas raisonnée.** `CN=Configuration,DC=exemple,DC=interne`
+  // *est* syntaxiquement sous `DC=exemple,DC=interne` : une comparaison de
+  // suffixe le range donc « dans le périmètre », et le refus restait entier. La
+  // hiérarchie des DN et le découpage en contextes de nommage sont deux choses
+  // différentes, et c'est le second qui décide.
+  //
+  // On demande donc au serveur ses contextes (`namingContexts` du RootDSE) au
+  // lieu d'écrire la liste `CN=Configuration` / `DomainDnsZones` /
+  // `ForestDnsZones` à la main : une forêt qui en porte d'autres serait sinon
+  // refusée en silence — c'est la règle « on découvre dans le catalogue » du
+  // CLAUDE.md, appliquée ici à l'annuaire.
+  for (const contexte of contextes) {
+    const nc = normaliserDn(contexte);
+    if (nc === '' || nc === racine) continue; // le NC interrogé lui-même
+    if (cible === nc || cible.endsWith(`,${nc}`)) return true;
+  }
+  return false;
+}
+
+/** Le DN d'une URL LDAP (`ldap://hôte/<DN>?attrs?portée?filtre`), ou `null`. */
+function dnDeUriLdap(uri: string): string | null {
+  const sansSchema = uri.replace(/^ldaps?:\/\//i, '');
+  const barre = sansSchema.indexOf('/');
+  if (barre === -1) return null;
+  const apres = sansSchema.slice(barre + 1);
+  const dn = apres.split('?')[0] ?? '';
+  let decode = dn;
+  try {
+    decode = decodeURIComponent(dn);
+  } catch {
+    /* URI mal encodée : on compare ce qu'on a plutôt que de perdre l'information */
+  }
+  return decode.trim() === '' ? null : decode;
+}
+
+/** Comparaison de DN sans prétention : casse et espaces autour des virgules. */
+function normaliserDn(dn: string): string {
+  return dn
+    .split(',')
+    .map((p) => p.trim())
+    .join(',')
+    .toLowerCase();
+}
+
 export interface OptionsRecherche {
   readonly base: string;
   readonly portee: PorteeRecherche;
@@ -315,7 +413,7 @@ export class ClientLdap implements Annuaire {
 
     const reponses = await this.echanger(corps, OPERATION.finRecherche, options.tailleMax);
     const entrees: EntreeLdap[] = [];
-    let renvoyee = false;
+    const renvoisRecus: string[] = [];
 
     for (const reponse of reponses) {
       if (reponse.etiquette === OPERATION.entreeRecherche) {
@@ -325,9 +423,12 @@ export class ClientLdap implements Annuaire {
       if (reponse.etiquette === OPERATION.renvoiRecherche) {
         // Un renvoi désigne une PARTIE DE LA RÉPONSE qui vit ailleurs. On ne le suit
         // pas — suivre un renvoi, c'est laisser l'annuaire choisir à qui le service
-        // présente son compte —, et on ne l'ignore pas non plus : l'ignorer rendrait
-        // une réponse incomplète en annonçant un succès. Voir `troncature()`.
-        renvoyee = true;
+        // présente son compte. Reste à savoir si ce qui vit ailleurs faisait
+        // partie de ce qu'on cherchait : voir `renvoiHorsPerimetre()`.
+        // On COLLECTE ici et l'on classe après la boucle : classer exige les
+        // contextes de nommage du serveur, qui se demandent par une recherche —
+        // impossible au milieu du dépouillement de celle-ci.
+        renvoisRecus.push(...this.lireRenvois(reponse));
         continue;
       }
       if (reponse.etiquette === OPERATION.finRecherche) {
@@ -342,8 +443,23 @@ export class ClientLdap implements Annuaire {
       }
     }
 
-    if (renvoyee) {
-      throw this.troncature(options, entrees.length, 'un renvoi (SearchResultReference) non suivi');
+    if (renvoisRecus.length > 0) {
+      const contextes = await this.contextesDeNommage();
+      const dedans = renvoisRecus.filter((uri) => !renvoiHorsPerimetre(uri, options.base, contextes));
+      if (dedans.length > 0) {
+        throw this.troncature(
+          options,
+          entrees.length,
+          `un renvoi (SearchResultReference) non suivi vers « ${dedans[0]} »`,
+        );
+      }
+      // Les renvois écartés sont EXPOSÉS, jamais tus : `derniersRenvoisEcartes` est
+      // lu par le banc, qui exige de pouvoir NOMMER ce qui a été ignoré. Un
+      // écartement muet redeviendrait ce que ce constat reproche à l'ancienne
+      // version — une décision invisible sur ce qui compose la réponse.
+      this.derniersRenvoisEcartes = renvoisRecus;
+    } else {
+      this.derniersRenvoisEcartes = [];
     }
     if (options.bornePleineEstTroncature === true && entrees.length >= options.tailleMax) {
       throw this.troncature(options, entrees.length, `la borne de ${options.tailleMax} atteinte`);
@@ -548,6 +664,66 @@ export class ClientLdap implements Annuaire {
     const code = champs[0];
     if (code === undefined) throw new ErreurAnnuaire('résultat LDAP sans code');
     return valeurEntiere(code);
+  }
+
+  /**
+   * Les URL d'un `SearchResultReference` : `[APPLICATION 19] SEQUENCE OF LDAPURL`,
+   * chaque URL étant une chaîne d'octets. Un renvoi sans URL lisible rend une
+   * liste contenant une chaîne vide — et non une liste vide — pour que
+   * `renvoiHorsPerimetre()` le traite comme illisible, donc comme un refus.
+   */
+  /**
+   * Les renvois écartés par la dernière recherche, hors du périmètre interrogé.
+   * Vide quand il n'y en a pas eu. Exposé pour que le banc puisse **nommer** ce
+   * qui a été ignoré : une décision sur la complétude d'une réponse ne doit pas
+   * être invisible (constat Q-83).
+   */
+  public derniersRenvoisEcartes: readonly string[] = [];
+
+  /**
+   * Les contextes de nommage du serveur, demandés au RootDSE et gardés en cache
+   * pour la durée de la connexion.
+   *
+   * Demandés, jamais devinés : écrire à la main `CN=Configuration`,
+   * `DC=DomainDnsZones` et `DC=ForestDnsZones` marcherait sur l'annuaire d'à
+   * côté et se tairait sur celui du client, dont la forêt en porte peut-être
+   * d'autres. C'est la règle du dépôt — *on découvre dans le catalogue* —
+   * appliquée à l'annuaire.
+   *
+   * Si le RootDSE ne répond pas ou ne porte pas l'attribut, on rend une liste
+   * VIDE : aucun renvoi n'est alors tenu pour hors périmètre, et l'on retombe
+   * sur le refus d'avant. **Le doute reste du côté du refus.**
+   */
+  private async contextesDeNommage(): Promise<readonly string[]> {
+    if (this.contextesCache !== null) return this.contextesCache;
+    if (this.dansRootDse) return []; // pas de récursion : le RootDSE ne se sonde pas lui-même
+    this.dansRootDse = true;
+    try {
+      const entrees = await this.rechercher({
+        base: '',
+        portee: 'base',
+        filtre: '(objectClass=*)',
+        attributs: ['namingContexts'],
+        tailleMax: 5,
+      });
+      const valeurs = entrees[0]?.attributs.get('namingcontexts') ?? [];
+      this.contextesCache = [...valeurs];
+    } catch {
+      // Un RootDSE muet n'est pas une raison de refuser une authentification :
+      // c'est une raison de ne rien écarter, donc de se comporter comme avant.
+      this.contextesCache = [];
+    } finally {
+      this.dansRootDse = false;
+    }
+    return this.contextesCache;
+  }
+
+  private contextesCache: readonly string[] | null = null;
+  private dansRootDse = false;
+
+  private lireRenvois(reponse: ElementBer): readonly string[] {
+    const uris = lireEnfants(reponse.contenu).map((el) => valeurTexte(el));
+    return uris.length === 0 ? [''] : uris;
   }
 
   private lireEntree(reponse: ElementBer): EntreeLdap {

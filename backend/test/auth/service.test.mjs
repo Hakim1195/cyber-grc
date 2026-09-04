@@ -80,8 +80,16 @@ before(async () => {
     BASE_HOTE: process.env.BASE_HOTE ?? '127.0.0.1',
     BASE_PORT: process.env.BASE_PORT ?? '5432',
     BASE_NOM: base.nom,
-    BASE_UTILISATEUR: 'grc_app',
-    BASE_MOT_DE_PASSE: 'dev',
+    BASE_UTILISATEUR: process.env.BASE_UTILISATEUR ?? 'grc_app',
+    // Le seul des six sites du banc qui écrivait « dev » SANS regarder
+    // l'environnement — constat **Q-81**. Les cinq autres écrivent tous
+    // `process.env.X ?? 'dev'`. Conséquence mesurée le 03/09/2026 sur une machine
+    // où les rôles portent les secrets engendrés par `deploy/install.sh` : **19 des
+    // 26 essais de ce fichier** échouaient sur `password authentication failed for
+    // user "grc_app"`, alors que les autres familles passaient. Le motif est celui
+    // que ce chantier collectionne — *une valeur recopiée à la main dans n sites
+    // finit par diverger dans un seul*, et c'est ce seul-là qu'on ne relit pas.
+    BASE_MOT_DE_PASSE: process.env.BASE_MOT_DE_PASSE ?? 'dev',
     BASE_SSL: 'desactive',
     SESSION_SECRET: 'secret-de-banc-d-essai-sans-valeur-aucune-0123456789',
     SESSION_DUREE_INACTIVITE: '30',
@@ -107,8 +115,12 @@ before(async () => {
     host: config.base.hote,
     port: config.base.port,
     database: base.nom,
-    user: 'grc_app',
-    password: 'dev',
+    // Deuxième site du même constat **Q-81**, dans le même fichier : le premier
+    // (ligne 92) alimente la configuration du serveur, celui-ci ouvre le pool que
+    // les essais interrogent en direct. Corriger l'un sans l'autre laissait
+    // exactement 19 essais rouges — mesuré.
+    user: process.env.BASE_UTILISATEUR ?? 'grc_app',
+    password: process.env.BASE_MOT_DE_PASSE ?? 'dev',
     max: 5,
   });
 

@@ -387,6 +387,20 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     (estAuthentificateur(resolveur) ? resolveur : new AuthentificationProvisoire(resolveur));
 
   /**
+   * Cette instance sert-elle l'authentification PROVISOIRE ? (constat Q-84)
+   *
+   * Se lit sur ce que l'appelant a fourni, jamais sur le type de `resolveur` :
+   * `resolveur` retombe sur `PerimetreProvisoire` par défaut **même quand
+   * l'authentification réelle est montée**, parce que le lot L3 ne fournit pas
+   * de résolveur global — il en fabrique un par requête depuis la session
+   * vérifiée. Confondre les deux faisait interroger le résolveur provisoire sur
+   * une session parfaitement réelle, et rendre 503 juste après une connexion
+   * réussie.
+   */
+  const authentificationProvisoire =
+    options.serviceAuthentification === undefined && options.authentificateur === undefined;
+
+  /**
    * Limitation du rythme des requêtes **non authentifiées** (condition **E4**).
    *
    * Le budget et la fenêtre sont ceux que l'exploitant a déjà réglés pour les
@@ -923,7 +937,29 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     { config: { acces: { action: 'lire', domaine: null } } },
     async (requete: FastifyRequest, reponse: FastifyReply) => {
       const session = sessionDe(requete);
-      const filiale = resolveur instanceof PerimetreProvisoire ? await resolveur.filiale() : null;
+      // ⚠️ **Le test portait sur le TYPE du résolveur, pas sur celui qui a produit
+      // la session** — constat **Q-84**, mesuré le 03/09/2026 contre un Active
+      // Directory réel. `resolveur` vaut `PerimetreProvisoire` **par défaut**,
+      // même quand un `serviceAuthentification` est fourni : le lot L3 n'apporte
+      // pas de résolveur global, il en fabrique un **par requête** à partir de la
+      // session vérifiée (`ServiceAuthentification.authentifier`). La condition
+      // était donc vraie en permanence, et la route interrogeait un résolveur
+      // provisoire qui, hors développement, **échoue par construction**.
+      //
+      // Effet mesuré : connexion réussie (200), `/api/modele` et `/api/donnees`
+      // à 200 — et `/api/session` à **503**. Comme c'est la première route que la
+      // SPA appelle au démarrage, l'utilisateur voyait « Serveur indisponible —
+      // l'authentification n'est pas encore installée » **juste après s'être
+      // authentifié**. Le produit était inutilisable au navigateur alors que
+      // toute la chaîne fonctionnait.
+      //
+      // On teste donc ce qui décide vraiment : *cette session vient-elle de
+      // l'authentification provisoire ?* — et non *existe-t-il quelque part une
+      // instance provisoire ?*
+      const filiale =
+        authentificationProvisoire && resolveur instanceof PerimetreProvisoire
+          ? await resolveur.filiale()
+          : null;
       return reponse.send(charteSession(session, filiale));
     },
   );

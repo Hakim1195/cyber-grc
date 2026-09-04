@@ -737,8 +737,25 @@ sont **fermés** :
 | **TLS d'une vraie PKI** | PKI à deux niveaux (racine → émettrice → serveur), racine posée dans le magasin du système : `curl` **sans `-k`** rend 200 et `ssl_verify_result=0` ; le serveur émet `alert protocol version` en TLS 1.0 et 1.1, et refuse les suites CBC en 1.2 |
 | **ClamAV** | installé et actif (`clamd`, ~1 Gio résident) — l'analyse antivirale est annoncée par le serveur au démarrage ; la **chaîne d'analyse d'une pièce jointe** reste à éprouver au lot L6 |
 
-**Ce qui reste hors de portée** : l'**Active Directory** (le développement se fait contre
-l'annuaire simulé, `CONVENTIONS.md` §25) et le **relais SMTP**. ⚠️ Et, sur cette machine-ci,
+**L'Active Directory n'est plus hors de portée — et il a immédiatement payé.** Un
+contrôleur de domaine **Samba réel** tourne sur cette machine (image `smblds/smblds`,
+conteneur `grc-ad`, realm `EXEMPLE.INTERNE`, LDAPS sur `127.0.0.1:1636`), peuplé **depuis
+la liste engendrée** par `deploy/groupes-ad.sh --csv` : 23 groupes `GRC-*`, un compte de
+service, sept comptes de recette et un **groupe imbriqué** (`equipe-secu-tls` dans
+`GRC-TLS-RSSI`) qui éprouve le critère d'appartenance indirecte. Les scripts de montage
+et de peuplement vivent dans le répertoire de travail temporaire, hors dépôt.
+
+⚠️ **Ce qu'il a trouvé dès la première connexion, et qu'aucune doublure ne pouvait
+montrer** : le détecteur de renvoi LDAP refusait *toute* réponse portant un
+`SearchResultReference` — or Active Directory en émet sur **toute** recherche en
+sous-arbre depuis la racine du domaine. Aucune connexion n'aboutissait (constat
+**Q-83**). C'est le constat **Q-69** — *« écrit, lu, et mordu par rien »* — mordu par le
+réel. **Une doublure n'émet que ce que son auteur a prévu** : c'est la limite structurelle
+du §25, et elle vaut d'être retenue avant d'écrire la prochaine.
+
+**Ce qui reste hors de portée** : le **relais SMTP**, et l'AD **de production** du client —
+celui-ci reste interdit aux essais (un banc qui éprouve le cas négatif verrouille des
+comptes réels). ⚠️ Et, sur cette machine-ci,
 **ni Playwright ni Chromium ne sont installés** : les familles `test/navigateur/` et
 `test/modules/` ne peuvent pas y tourner tant qu'ils ne le sont pas — un banc annoncé « 969
 essais » n'en joue ici qu'une partie, et il faut le dire avant de citer un chiffre.

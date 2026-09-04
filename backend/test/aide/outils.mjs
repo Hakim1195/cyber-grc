@@ -18,6 +18,36 @@ import { execFileSync } from 'node:child_process';
 import net from 'node:net';
 
 /**
+ * Ajoute `/usr/sbin` et `/sbin` au `PATH` du processus d'essai — constat **Q-82**.
+ *
+ * ── Le défaut, mesuré le 03/09/2026 sur la VM Debian 13 ────────────────────
+ *
+ * Debian range les démons dans `/usr/sbin`, et **ne met pas ce répertoire dans le
+ * `PATH` d'un compte non-root**. Un banc lancé par un développeur y trouve donc
+ * `rsync` mais pas `apache2` — et `exigerOutil` annonçait alors, mot pour mot,
+ * *« apache2 est introuvable sur cette machine »*. C'était **faux** : Apache était
+ * installé, actif, et servait le produit à la même seconde depuis
+ * `/usr/sbin/apache2`.
+ *
+ * La conséquence est pire que l'inconvénient : **29 essais** — dont la jonction du
+ * contrôle S17 (Q-62), l'URL d'entrée (Q-36) et la liste blanche du frontal (Q-31),
+ * c'est-à-dire l'endroit d'où sont sortis deux bloquants — étaient annulés en
+ * accusant la machine. Un message d'échec qui se trompe de cause coûte plus cher
+ * qu'un message absent : il envoie installer ce qui est déjà là.
+ *
+ * On complète donc le `PATH` au lieu de coder un chemin en dur, pour la même raison
+ * qu'au constat **Q-80** : ce qui se découvre ne se recopie pas.
+ */
+function completerCheminSbin() {
+  const separateur = ':';
+  const chemins = (process.env.PATH ?? '').split(separateur);
+  for (const sbin of ['/usr/sbin', '/sbin']) {
+    if (!chemins.includes(sbin)) chemins.push(sbin);
+  }
+  process.env.PATH = chemins.join(separateur);
+}
+
+/**
  * Exige un outil, et ÉCHOUE bruyamment s'il manque.
  *
  * @param {string} commande le binaire attendu
@@ -25,6 +55,7 @@ import net from 'node:net';
  * @param {string} pourquoi ce que l'essai ne peut pas montrer sans lui
  */
 export function exigerOutil(commande, arguments_, pourquoi) {
+  completerCheminSbin();
   let present = true;
   try {
     execFileSync(commande, arguments_, { stdio: 'ignore' });

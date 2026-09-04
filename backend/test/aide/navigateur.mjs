@@ -34,7 +34,7 @@
  *
  * ── Environnement ───────────────────────────────────────────────────────────
  *
- * Playwright global (`/opt/node22/lib/node_modules/playwright`) et Chromium
+ * Playwright — DÉCOUVERT, voir `importerPlaywright()` plus bas — et Chromium
  * (`/opt/pw-browsers`), comme `CLAUDE.md` §5 le décrit. Ils ne sont pas des
  * dépendances de `backend/package.json` — le banc ne fait qu'utiliser ce que la
  * machine de développement fournit. Leur absence est signalée par un message qui dit
@@ -48,7 +48,74 @@ import { extname, join, normalize } from 'node:path';
 import { RACINE_FRONTEND } from './serveur.mjs';
 import assert from 'node:assert/strict';
 
-const CHEMIN_PLAYWRIGHT = '/opt/node22/lib/node_modules/playwright/index.mjs';
+/**
+ * Playwright se DÉCOUVRE, il ne se code pas en dur — constat **Q-80**.
+ *
+ * Cette constante valait `/opt/node22/lib/node_modules/playwright/index.mjs`,
+ * chemin d'une machine de développement qui n'existe plus. Sur la VM Debian 13
+ * du 03/09/2026, où Playwright vit sous `/usr/lib/node_modules`, **trente essais
+ * de navigateur échouaient** sur ce seul chemin. C'est mot pour mot la famille de
+ * **Q-45** — *une dépendance d'environnement non déclarée manquera chez quelqu'un
+ * d'autre* —, et la leçon n'avait été appliquée qu'au cas qui l'avait produite.
+ *
+ * On essaie donc, dans l'ordre, ce qui *désigne* Playwright plutôt que ce qui
+ * *devine* où il est :
+ *
+ *   1. `PLAYWRIGHT_MODULE` — la machine le dit elle-même, et c'est la seule
+ *      porte de sortie si les deux suivantes échouent ;
+ *   2. la résolution ordinaire — Playwright installé dans le projet, ou joignable
+ *      par `NODE_PATH` ;
+ *   3. la racine des modules globaux, **demandée à npm** (`npm root -g`), jamais
+ *      supposée.
+ *
+ * Le message d'échec nomme tout ce qui a été tenté : un essai de navigateur ne
+ * doit jamais être silencieusement ignoré, et un chemin qui manque doit dire
+ * lequel.
+ */
+async function importerPlaywright() {
+  const tentes = [];
+
+  const declare = process.env.PLAYWRIGHT_MODULE;
+  if (declare !== undefined && declare !== '') {
+    tentes.push(`PLAYWRIGHT_MODULE=${declare}`);
+    try {
+      return await import(declare);
+    } catch {
+      /* on continue : le message final dira ce qui a été tenté */
+    }
+  }
+
+  tentes.push("résolution ordinaire de « playwright »");
+  try {
+    return await import('playwright');
+  } catch {
+    /* idem */
+  }
+
+  const { execFileSync } = await import('node:child_process');
+  let racineGlobale = null;
+  try {
+    racineGlobale = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim();
+  } catch {
+    /* npm absent ou muet : on le dira */
+  }
+  if (racineGlobale !== null && racineGlobale !== '') {
+    const chemin = join(racineGlobale, 'playwright', 'index.mjs');
+    tentes.push(chemin);
+    if (existsSync(chemin)) return await import(chemin);
+  } else {
+    tentes.push('npm root -g (sans réponse)');
+  }
+
+  throw new Error(
+    'Playwright est introuvable. Chemins et méthodes tentés :\n' +
+      tentes.map((t) => `  · ${t}`).join('\n') +
+      '\nLes essais de navigateur exigent Playwright et Chromium (CLAUDE.md §5) :\n' +
+      '  npm install -g playwright && PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers \\\n' +
+      '    npx playwright install --with-deps chromium\n' +
+      'À défaut, désignez le module : PLAYWRIGHT_MODULE=/chemin/vers/playwright/index.mjs',
+  );
+}
 
 const TYPES = Object.freeze({
   '.html': 'text/html; charset=utf-8',
@@ -69,17 +136,7 @@ const TYPES = Object.freeze({
  * tout le reste.
  */
 export async function lancerNavigateur(options = {}) {
-  let playwright;
-  try {
-    playwright = await import(CHEMIN_PLAYWRIGHT);
-  } catch (erreur) {
-    throw new Error(
-      `Playwright est introuvable à ${CHEMIN_PLAYWRIGHT}.\n` +
-        'Les essais de navigateur exigent le Playwright global de la machine de développement ' +
-        '(CLAUDE.md §5), et Chromium dans /opt/pw-browsers.\n' +
-        `Cause : ${erreur.message}`,
-    );
-  }
+  const playwright = await importerPlaywright();
   process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH ?? '/opt/pw-browsers';
   // ── `correspondances` : un nom d'hôte, SANS résolveur ────────────────────
   //
