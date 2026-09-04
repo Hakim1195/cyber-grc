@@ -281,9 +281,10 @@ export class PerimetreProvisoire implements ResolveurPerimetre {
           code: string;
           raison_sociale: string;
         }>(
+          // `f_filiales_actives()` : la table est cloisonnée depuis `010` (Q-132),
+          // et la session provisoire choisit une filiale AVANT d'avoir un périmètre.
           `select "id", "code", "raison_sociale"
-             from "filiales"
-            where "statut" = 'active'
+             from f_filiales_actives()
             order by "code"
             limit 50`,
         );

@@ -128,7 +128,15 @@ export async function resoudreDroits(
 
   if (porteeGroupe) {
     const { rows } = await client.query<{ id: string }>(
-      `select "id" from "filiales" where "statut" = 'active' order by "code"`,
+      // ⚠️ `f_filiales_actives()` et non `from filiales` — constat **Q-132**.
+      //
+      // La table est cloisonnée depuis la migration `010`, et cette lecture-ci
+      // précède le périmètre **par construction** : elle est en train de le
+      // fabriquer. La fonction est « security definer », de surface étroite —
+      // trois colonnes, jamais l'adresse ni le téléphone —, ce qui vaut mieux
+      // qu'une exemption dans la politique : celle-là s'appliquerait à TOUTE
+      // requête de la transaction, y compris celles qu'on n'a pas prévues.
+      `select "id" from f_filiales_actives() order by "code"`,
     );
     for (const ligne of rows) filiales.add(ligne.id);
   }

@@ -187,8 +187,13 @@ async function lireFilialeActive(
   filialeId: string | null,
 ): Promise<FilialeActive | null> {
   if (filialeId === null) return null;
+  // ⚠️ `f_filiales_actives()` et non `from filiales` — constat **Q-132**.
+  // La table est cloisonnée depuis `010`, et cette lecture a lieu dans la
+  // transaction d'authentification, qui n'a pas encore de périmètre : c'est elle
+  // qui le fabrique. La fonction rend trois colonnes et rien d'autre — jamais
+  // l'adresse ni le téléphone, que la fuite de Q-132 exposait.
   const { rows } = await client.query<{ code: string; raison_sociale: string }>(
-    `select "code", "raison_sociale" from "filiales" where "id" = $1`,
+    `select "code", "raison_sociale" from f_filiales_actives() where "id" = $1`,
     [filialeId],
   );
   const ligne = rows[0];
@@ -262,7 +267,7 @@ export async function verifierSession(
             f."code" as "filiale_code", f."raison_sociale" as "filiale_raison_sociale"
        from "sessions" s
        join "utilisateurs" u on u."id" = s."utilisateur_id"
-       left join "filiales" f on f."id" = s."filiale_active_id"
+       left join f_filiales_actives() f on f."id" = s."filiale_active_id"
       where s."jeton_empreinte" = $1`,
     [empreinteJeton(jeton)],
   );

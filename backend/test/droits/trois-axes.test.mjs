@@ -52,7 +52,7 @@ before(async () => {
 
   await base.avecPerimetre(
     applicatif,
-    perimetre('decor', null, [], true),
+    perimetre('decor', TLS, [TLS, DEU], true),
     async (c) => {
       await c.query(
         `insert into filiales (id, code, raison_sociale, pays) values
@@ -100,7 +100,7 @@ const niveau = (resolus, domaine) => resolus.domaines.get(domaine) ?? 'aucun';
 async function ecrireConfiguration(texte, valeurs) {
   const touchees = await base.avecPerimetre(
     applicatif,
-    perimetre('decor', null, [], true),
+    perimetre('decor', TLS, [TLS, DEU], true),
     async (c) => (await c.query(texte, valeurs)).rowCount,
     { annuler: false },
   );
@@ -133,7 +133,7 @@ describe('L’engendrement des groupes AD suit la convention du PLAN_SERVEUR §3
   test('la synchronisation est idempotente et ne supprime jamais rien', async () => {
     const bilan = await base.avecPerimetre(
       applicatif,
-      perimetre('decor', null, [], true),
+      perimetre('decor', TLS, [TLS, DEU], true),
       async (c) => {
         const attendus = droits.groupesAttendus(
           'GRC-',
@@ -363,7 +363,7 @@ describe('Ce qui n’accorde RIEN — les cas négatifs', () => {
   test('une filiale ARCHIVÉE sort du périmètre Groupe', async () => {
     await base.avecPerimetre(
       applicatif,
-      perimetre('decor', null, [], true),
+      perimetre('decor', TLS, [TLS, DEU], true),
       async (c) => {
         await c.query(`update filiales set statut = 'archivee' where id = $1`, [DEU]);
       },
@@ -375,7 +375,7 @@ describe('Ce qui n’accorde RIEN — les cas négatifs', () => {
     } finally {
       await base.avecPerimetre(
         applicatif,
-        perimetre('decor', null, [], true),
+        perimetre('decor', TLS, [TLS, DEU], true),
         async (c) => {
           await c.query(`update filiales set statut = 'active' where id = $1`, [DEU]);
         },

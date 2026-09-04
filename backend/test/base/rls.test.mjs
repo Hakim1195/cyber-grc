@@ -2218,17 +2218,57 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
     assert.deepEqual(etat, { creees: 1, modifiees: 1 });
   });
 
-  test('la LECTURE reste ouverte, et elle doit l’être', async () => {
-    // L'authentification lit cette table AVANT que le périmètre existe : la cloisonner
-    // rendrait toute connexion impossible.
+  // ── CET ESSAI EST RETOURNÉ — constat Q-132, migration 010 ─────────────
+  //
+  // Il s'appelait « la LECTURE reste ouverte, et elle doit l'être », et il
+  // exigeait le prédicat `true` en constatant qu'« une session de site voit bien
+  // la liste des filiales du groupe ». Son raisonnement était **juste sur la
+  // contrainte et faux sur la conclusion** :
+  //
+  //     « L'authentification lit cette table AVANT que le périmètre existe :
+  //       la cloisonner rendrait toute connexion impossible. »
+  //
+  // La contrainte est réelle — `src/droits/resolution.ts` est en train de
+  // FABRIQUER le périmètre quand il lit. Mais la réponse n'était pas de laisser
+  // la lecture ouverte à tous : c'était de donner à ce lecteur-là une **fonction
+  // étroite**, `f_filiales_actives()`, qui rend trois colonnes et jamais
+  // l'adresse ni le téléphone. L'essai avait accepté la première solution à un
+  // vrai problème.
+  //
+  // ⚠️ **Troisième fois que ce motif se présente en un jour** — après le
+  // `chaine_tronquee` de Q-118 et l'entonnoir de Q-114 : *un essai qui mesure un
+  // défaut et le consacre comme une propriété désirable est plus coûteux qu'un
+  // essai absent, parce qu'il fait passer la vérification pour faite.*
+  test('Q-132 : la lecture est CLOISONNÉE, et l’authentification passe ailleurs', async () => {
     const predicat = await base.valeur(
       proprietaire,
       `select pg_get_expr(polqual, polrelid) from pg_policy
         where polrelid = 'filiales'::regclass and polname = 'pol_filiales_lecture'`,
     );
-    assert.equal(predicat, 'true');
+    assert.notEqual(predicat, 'true', 'La fuite de Q-132 est rouverte.');
+    assert.ok(
+      String(predicat).includes('f_filiales_lecture'),
+      `Le prédicat ne consulte pas le périmètre : ${String(predicat)}`,
+    );
+    assert.ok(
+      !String(predicat).includes('f_authentification'),
+      'Un réglage de session n’élargit jamais une lecture (007 §7) : la résolution du ' +
+        'périmètre passe par f_filiales_actives(), pas par une exemption ici.',
+    );
+
+    // ⚠️ Contrôle de matière : la table doit être NON VIDE, sinon le zéro
+    // ci-dessous ne distinguerait pas « cloisonné » de « rien à voir » (Q-104).
+    const total = await base.valeur(proprietaire, 'select count(*)::int from filiales');
+    assert.ok(total >= 2, `Deux filiales au moins sont attendues, ${String(total)} trouvée(s).`);
+
     const vues = await compter(applicatif, rssiSite(A), 'select count(*)::int as n from filiales');
-    assert.ok(vues >= 2, 'Une session de site voit bien la liste des filiales du groupe.');
+    assert.equal(
+      vues,
+      1,
+      `Une session de site voit ${String(vues)} filiale(s) : elle ne doit voir QUE la sienne. ` +
+        'La table porte raison sociale, adresse, ville, téléphone et courriel des vingt ' +
+        'filiales du groupe — et une acquisition peut précéder son annonce.',
+    );
   });
 
   test('LE LOGO : une filiale ne pose pas SON fichier comme logo d’une AUTRE', async () => {
@@ -3782,7 +3822,10 @@ describe('Le garde-fou de couverture découvre son périmètre (CONVENTIONS §19
       // au §24 ; il est repris à l'identique dans le contrôle C93 de
       // `db/verifier_cloisonnement.sql`, et les deux doivent bouger ensemble.
       'controles_schema',
-      'filiales',
+      // « filiales » a QUITTÉ cette liste le 04/09/2026 : sa lecture est cloisonnée
+      // depuis la migration `010` (constat Q-132). Elle y figurait parce que
+      // l'authentification la lit avant d'avoir un périmètre — ce besoin passe
+      // désormais par `f_filiales_actives()`, de surface étroite.
       'mapping_exigences',
       'mappings',
       'migrations_schema',
@@ -3891,6 +3934,11 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // DIXIÈME, apporté par `008_journal_lecture.sql` : il vérifie que la politique de
       // lecture du journal est bien cloisonnée (condition E6). La liste a rougi en
       // arrivant, exactement comme elle doit — voir le commentaire du neuvième.
+      // DOUZIÈME, apporté par `010_lecture_filiales.sql` (constat Q-132) : il vérifie que
+      // la lecture de `filiales` est cloisonnée, que les dérogations qui la rendent
+      // praticable sont nommées, et que `f_perimetre_groupe()` est bien « security
+      // definer » — sans quoi le resserrement se retourne en récursion.
+      'lecture_filiales',
       'lecture_journal',
       'portee_figee',
       'privileges',

@@ -85,7 +85,7 @@ before(async () => {
 
   await base.avecPerimetre(
     applicatif,
-    perimetre('decor', null, [], true),
+    perimetre('decor', TLS, [TLS], true),
     async (c) => {
       await c.query(
         `insert into filiales (id, code, raison_sociale) values ($1, 'TLS', $3), ($2, 'DEU', 'Dedienne Deutschland')`,
@@ -318,7 +318,7 @@ describe('Q-85 — la session porte le NOM de sa filiale, pas seulement son iden
     const nouvelle = 'Dedienne Aerospace Toulouse SAS';
     await base.avecPerimetre(
       applicatif,
-      perimetre('decor', null, [], true),
+      perimetre('decor', TLS, [TLS], true),
       async (c) => {
         const { rowCount } = await c.query(`update filiales set raison_sociale = $1 where id = $2`, [
           nouvelle,
@@ -341,7 +341,7 @@ describe('Q-85 — la session porte le NOM de sa filiale, pas seulement son iden
     // On remet la base dans l'état où les autres essais l'attendent.
     await base.avecPerimetre(
       applicatif,
-      perimetre('decor', null, [], true),
+      perimetre('decor', TLS, [TLS], true),
       async (c) => c.query(`update filiales set raison_sociale = $1 where id = $2`, [RAISON_SOCIALE_TLS, TLS]),
       { annuler: false },
     );

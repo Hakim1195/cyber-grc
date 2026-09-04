@@ -211,7 +211,9 @@ export async function synchroniserGroupesAd(
 /** Lit les filiales actives, dans la forme qu'attend `groupesAttendus`. */
 export async function lireFilialesActives(client: PoolClient): Promise<readonly FilialeConnue[]> {
   const { rows } = await client.query<{ id: string; code: string; raison_sociale: string }>(
-    `select "id", "code", "raison_sociale" from "filiales" where "statut" = 'active' order by "code"`,
+    // `f_filiales_actives()` : la table est cloisonnée depuis `010` (Q-132), et
+    // l'engendrement des groupes AD tourne hors de tout périmètre.
+    `select "id", "code", "raison_sociale" from f_filiales_actives() order by "code"`,
   );
   return rows.map((f) => ({ id: f.id, code: f.code, raisonSociale: f.raison_sociale }));
 }

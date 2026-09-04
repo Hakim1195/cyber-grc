@@ -1185,10 +1185,31 @@ declare
                'select set_config(''grc.administration_groupe'', ''oui'', true);'
                || 'insert into filiales (id, code, raison_sociale) values (''FIL-DEMO-C'', ''ZZDEMOE'', ''Démonstration Espagne'')',
                'AUCUN REFUS',
+        -- ⚠️ ATTENDU CHANGÉ EN 42501 PAR LA MIGRATION 010 (constat Q-132), et le
+        -- changement rend ce contrôle PLUS FORT, pas moins.
+        --
+        -- L'attaque était refusée par la clé étrangère composite (23503) : la
+        -- pièce de A n'était pas une pièce de B. Depuis que la lecture de
+        -- `filiales` est cloisonnée, la ligne de B est **invisible** à A, donc
+        -- l'« update » n'en trouve aucune — il touche ZÉRO LIGNE et ne lève rien.
+        --
+        -- Un « AUCUN REFUS » serait alors indiscernable d'une attaque RÉUSSIE :
+        -- c'est très exactement le constat Q-104 (*un zéro ne distingue pas
+        -- « rien à voir » de « rien de contrôlé »*), et c'est le pire verdict
+        -- qu'un dispositif de preuve puisse rendre. On compte donc les lignes et
+        -- l'on lève 42501 — « privilège insuffisant », la lecture honnête de
+        -- « cette ligne n'est pas à vous ». Le refus est plus PRÉCOCE qu'avant,
+        -- et il reste bruyant.
         'C68', 'Poser SA pièce jointe comme LOGO d''une autre filiale',
                'select set_config(''grc.administration_groupe'', ''oui'', true);'
-               || 'update filiales set logo_piece_jointe_id = ''PJ-DEMO-A'' where id = ''FIL-DEMO-B''',
-               '23503',
+               || 'do $bloc$ declare n integer; begin '
+               || '  update filiales set logo_piece_jointe_id = ''PJ-DEMO-A'''
+               || '   where id = ''FIL-DEMO-B''; '
+               || '  get diagnostics n = row_count; '
+               || '  if n = 0 then raise exception ''la filiale visee est hors du perimetre'''
+               || '    using errcode = ''42501''; end if; '
+               || 'end $bloc$;',
+               '42501',
         'C69', 'Poser SA pièce jointe comme SON PROPRE logo (contrôle symétrique)',
                'select set_config(''grc.administration_groupe'', ''oui'', true);'
                || 'update filiales set logo_piece_jointe_id = ''PJ-DEMO-A'' where id = ''FIL-DEMO-A''',
@@ -1812,11 +1833,11 @@ begin
                           and not exists (select 1 from pg_attribute a where a.attrelid = c.oid
                                            and a.attname = 'filiale_id' and a.attnum > 0
                                            and not a.attisdropped))),
-               'controles_schema, filiales, mapping_exigences, mappings, migrations_schema, '
+               'controles_schema, mapping_exigences, mappings, migrations_schema, '
                'profil_domaines, profils, session_domaines, sessions, utilisateurs',
                coalesce(string_agg(t.nom, ', ' order by t.nom), '(aucune)'),
                case when coalesce(string_agg(t.nom, ', ' order by t.nom), '') =
-                         'controles_schema, filiales, mapping_exigences, mappings, '
+                         'controles_schema, mapping_exigences, mappings, '
                          'migrations_schema, profil_domaines, profils, session_domaines, '
                          'sessions, utilisateurs'
                     then 'OK' else 'ÉCHEC' end)
