@@ -51,6 +51,81 @@
 > **La recette sert L5** depuis le 04/09 au soir : `install.sh --maj` puis
 > `--verifier-publication` → **65 fichiers servis identiques au dépôt** (constat Q-117, fermé).
 
+## 0. L'ENVIRONNEMENT DE TRAVAIL — mesuré, pas supposé
+
+> ⚠️ **Lire avant de déclarer quoi que ce soit « hors de portée ».** Cette section existe
+> parce que trois affirmations fausses sur l'environnement ont coûté du travail dans la
+> seule journée du 04/09/2026 : « la machine est hors ligne » (constat **Q-128**), « aucun
+> compte ne porte `GRC-EXPORT` » (**Q-129**), et « ni Playwright ni Chromium ne sont
+> installés ». Aucune n'avait été mesurée ; deux venaient de rapports d'agents que j'ai
+> recopiés.
+>
+> **La règle qui en découle, et elle prime sur tout ce que dit ce fichier :** avant d'écrire
+> qu'une chose est impossible ici, **essayez-la**. Une commande coûte cinq secondes ; une
+> réserve fausse se transmet de session en session et fait renoncer à des vérifications qui
+> marchaient.
+
+### 0.1 Où vous êtes
+
+Vous êtes une instance **Claude Code qui s'exécute sur le VPS lui-même** — `SRV-Infra`,
+Debian 13, IP publique `212.227.38.92`. Il n'y a **pas** de machine distante : le dépôt, la
+base, le serveur applicatif, Apache et l'annuaire tournent tous là où vous tapez vos
+commandes.
+
+**Corollaire, et il est libérateur** : tant que cette session existe, l'environnement de
+travail vous est accessible. Un doute sur une capacité se lève par une mesure, jamais par une
+supposition. Le VPS est **à votre disposition pour ce projet**, et l'objectif est un logiciel
+de GRC complet et efficient — pas un prototype qu'on ménage.
+
+### 0.2 Ce dont vous disposez — vérifié le 04/09/2026
+
+| Capacité | État | Comment c'est mesuré |
+|---|---|---|
+| **`sudo`** | ✅ compte `claude`, mot de passe demandé | `sudo -v` puis `sudo id` → `uid=0(root)` |
+| **Internet sortant** | ✅ sans entrave | `GET https://registry.npmjs.org/` → **200 en 60 ms** ; `GET https://github.com/` → **200 en 57 ms** ; `POST` sur la racine du registre → **403 en 56 ms** |
+| **GitHub par SSH** | ✅ clé `~/.ssh/id_ed25519` | `ssh -T git@github.com` → « Hi Hakim1195/cyber-grc! You've successfully authenticated » ; distant `git@github.com:Hakim1195/cyber-grc.git` |
+| **PostgreSQL 17** | ✅ **déjà installé**, PGDG | `psql --version` → **17.11 (Debian 17.11-1.pgdg13+2)** ; cluster `17/main` en ligne sur 5432. `deploy/install.sh` l'installe déjà (`postgresql-17 postgresql-client-17` depuis PGDG) — **rien à faire de ce côté** |
+| **Active Directory simulé** | ✅ conteneur Docker `grc-ad`, **modifiable** | `sudo docker exec grc-ad samba-tool user list` → 12 comptes ; `samba-tool group addmembers` fonctionne. **Vous pouvez y créer les comptes, groupes et unités d'organisation dont vos essais ont besoin** |
+| **Playwright + Chromium** | ✅ installés | `/opt/pw-browsers/chromium-1234` ; Playwright global sous `/opt/node22/lib/node_modules/` |
+| **ClamAV** | ✅ actif | `systemctl is-active clamav-daemon` → `active` |
+| **Sortie SMTP vers Microsoft 365** | ✅ **fonctionne** | port 587 vers `smtp.office365.com` → bannière **`220 … Microsoft ESMTP MAIL Service ready`**. Cela répond, **pour ce VPS**, à la vérification du `PLAN_SERVEUR` §9 ; la VM du client reste à vérifier séparément |
+| **La recette complète** | ✅ en ligne en permanence | `systemctl is-active cyber-grc apache2 postgresql` ; `https://grc.exemple.interne/` → 200 |
+
+### 0.3 Les deux seules limites connues, et elles sont étroites
+
+1. **`npm audit --omit=dev` échoue** — le contrôle **S15 n'est pas rejoué**, ce qui ne vaut
+   pas « passé ». Ce n'est **pas** un problème de réseau : `POST
+   /-/npm/v1/security/advisories/bulk` rend **503** ou reste sans réponse au-delà de 20 s,
+   quand la même URL répond **405 en 202 ms** en `HEAD`. Service d'avis dégradé côté npm, ou
+   filtrage de cette requête précise en sortie — je n'ai pas pu départager, et je ne
+   l'affirme donc pas. **À rejouer, c'est peut-être passager.**
+2. **L'AD *de production* du client reste interdit aux essais** — un banc qui éprouve le cas
+   négatif verrouille des comptes réels. C'est une règle de prudence, pas une limite
+   technique. L'AD **simulé** (`grc-ad`) est là pour ça, et il est à vous.
+
+### 0.4 Les comptes de recette de l'annuaire `grc-ad`
+
+Realm `EXEMPLE.INTERNE`, LDAPS sur `127.0.0.1:1636`. Mot de passe : le login en
+**Capitales-Séparées-Par-Traits**, suivi de `-2026!` — `rssi.tls` → `Rssi-Tls-2026!`,
+`admin.grc` → `Admin-Grc-2026!`, `rssi.groupe` → `Rssi-Groupe-2026!`.
+
+⚠️ **Ne confondez pas avec `backend/test/annuaire/comptes.mjs`**, qui décrit l'annuaire
+**simulé du banc** et emploie d'autres mots de passe (`rssi.tls!2026`). J'ai perdu trois
+tentatives sur `admin` — qui n'existe pas, le compte est `admin.grc` — en croyant ce
+fichier. Le verrouillage est à cinq tentatives.
+
+### 0.5 Ce qui traîne sur le VPS et qui n'est pas à vous
+
+Des piles Docker **arrêtées** sous `/opt/hm-infra/` — Odoo, cal.com, n8n, traefik, searxng,
+un site web. C'est l'essai d'un autre projet, **abandonné** ; l'utilisateur a tranché le
+04/09/2026 : *« je ne vais en aucun cas remettre en place l'ancien projet sur Docker, tu peux
+faire comme s'il n'existait pas »*. Ne les ménagez pas, ne les redémarrez pas.
+
+**Le seul conteneur qui compte est `grc-ad`.**
+
+---
+
+
 ## 1. Le produit
 
 Logiciel de **gouvernance, risques et conformité (GRC) cyber**. Public :
@@ -882,12 +957,21 @@ sous-arbre depuis la racine du domaine. Aucune connexion n'aboutissait (constat
 réel. **Une doublure n'émet que ce que son auteur a prévu** : c'est la limite structurelle
 du §25, et elle vaut d'être retenue avant d'écrire la prochaine.
 
-**Ce qui reste hors de portée** : le **relais SMTP**, et l'AD **de production** du client —
-celui-ci reste interdit aux essais (un banc qui éprouve le cas négatif verrouille des
-comptes réels). ⚠️ Et, sur cette machine-ci,
-**ni Playwright ni Chromium ne sont installés** : les familles `test/navigateur/` et
-`test/modules/` ne peuvent pas y tourner tant qu'ils ne le sont pas — un banc annoncé « 969
-essais » n'en joue ici qu'une partie, et il faut le dire avant de citer un chiffre.
+⚠️ **CE PARAGRAPHE DISAIT TROIS CHOSES FAUSSES — voir le §0, qui fait foi.** Il écrivait :
+*« ce qui reste hors de portée : le relais SMTP … et, sur cette machine-ci, ni Playwright ni
+Chromium ne sont installés »*. Mesuré le 04/09/2026 :
+
+- **Playwright et Chromium sont installés** (`/opt/pw-browsers/chromium-1234`), et les
+  familles `test/navigateur/` et `test/modules/` tournent — elles font partie des 1143
+  essais du banc ;
+- **la sortie SMTP fonctionne** : port 587 vers `smtp.office365.com` rend la bannière
+  `220 … Microsoft ESMTP MAIL Service ready` ;
+- **la machine n'est pas hors ligne** (constat **Q-128**).
+
+**Ce qui reste vraiment hors de portée est une seule chose** : l'AD **de production** du
+client, interdit aux essais parce qu'un banc qui éprouve le cas négatif verrouille des
+comptes réels. C'est une règle de prudence, pas une limite technique — l'AD simulé `grc-ad`
+existe pour cela, et il est modifiable (§0.2).
 
 ℹ️ **`SRV-Infra` est dédiée à ce projet, et à lui seul.** On y trouve des piles Docker
 arrêtées — `hm-infra` et `cyber-grc` sous `/opt/hm-infra/` : Odoo, cal.com, n8n, traefik,

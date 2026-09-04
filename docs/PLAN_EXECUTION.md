@@ -697,28 +697,43 @@ Une livraison n'est acceptée que si **tous** ces points sont vrais. C'est ce qu
 
 ## 6. Environnement de vérification
 
-La machine de développement dispose de tout ce qu'il faut pour prouver le travail — il n'y a
-donc aucune raison de livrer du SQL non exécuté.
+> ⚠️ **RÉÉCRIT LE 04/09/2026, et l'écart valait la peine d'être mesuré.** Ce paragraphe
+> décrivait « une machine de développement » distincte, portant **PostgreSQL 16**, sans
+> **« ni Active Directory, ni ClamAV, ni relais SMTP »**, et prescrivait de recetter L3, L6
+> et L12 « sur des doublures ». **Les quatre affirmations sont fausses.** La référence
+> complète est au `CLAUDE.md` **§0** ; ce qui suit en est le nécessaire.
+
+Il n'y a **pas** de machine de développement séparée. L'agent s'exécute **sur le VPS
+lui-même** (`SRV-Infra`, Debian 13, IP publique), où tournent le dépôt, la base, le serveur,
+Apache et l'annuaire. Tant qu'une session existe, son environnement lui est accessible.
+
+| Ce que disait ce §6 | Ce qui est mesuré |
+|---|---|
+| « PostgreSQL 16, la cible est 17 » | **PostgreSQL 17.11** (PGDG), cluster `17/main` en ligne. `install.sh` l'installe déjà. **Aucune réserve de version à porter** |
+| « ni Active Directory » | contrôleur **Samba réel** (`grc-ad`), realm `EXEMPLE.INTERNE`, LDAPS `127.0.0.1:1636`, 12 comptes, 23 groupes `GRC-*` — et **modifiable** : `samba-tool user`/`group` fonctionnent |
+| « ni ClamAV » | `clamav-daemon` **actif** |
+| « ni relais SMTP » | sortie **587 vers `smtp.office365.com`** → bannière `220 … Microsoft ESMTP MAIL Service ready` |
+
+**Ce que cela change pour la conduite des vagues** : L3 n'a plus à se recetter sur une
+doublure — il tourne contre un AD réel, et c'est ce qui a fait tomber le constat **Q-83**
+qu'aucune doublure ne pouvait montrer (*« une doublure n'émet que ce que son auteur a
+prévu »*). L6 et L12 disposent de ClamAV et d'une sortie SMTP éprouvée.
 
 ```bash
-# PostgreSQL local (démarré une fois par session)
-pg_ctlcluster 16 main start
+# La recette tourne en permanence — on ne la remonte pas, on s'y branche.
+cd backend && set -a && source ~/.grc-essais.env && set +a && npm test
 
-# Rôles de développement (mot de passe 'dev', jamais utilisé ailleurs)
-#   grc_proprietaire · grc_app · grc_lecture
-
-# Base neuve, propre à chaque agent, pour éviter les collisions
-createdb -O grc_proprietaire grc_<agent>
-
-# Application des migrations
-PGPASSWORD=dev psql -h 127.0.0.1 -U grc_proprietaire -d grc_<agent> \
-    -v ON_ERROR_STOP=1 -f backend/db/migrations/001_socle.sql
+# Base neuve par fichier d'essai : chaque test appelle le vrai db/migrate.mjs.
+# ⚠️ NE JAMAIS jouer db/dev/preparer_base_dev.sh sur ce VPS : il ramènerait les
+#    mots de passe des rôles à « dev » et casserait le service installé.
 ```
 
-Réserves à garder en tête : la machine de développement porte **PostgreSQL 16**, la cible
-**PostgreSQL 17** (dépôt PGDG, `install.sh`). N'utiliser aucune fonctionnalité postérieure à
-16 sans le signaler. Il n'y a **ni Active Directory, ni ClamAV, ni relais SMTP** : les lots
-L3, L6 et L12 se recettent sur des doublures, et cela doit être écrit dans leur rapport.
+**La seule limite connue** : `npm audit --omit=dev` échoue (contrôle **S15 non rejoué**, ce
+qui ne vaut pas « passé ») — non par absence de réseau, mais parce que le point d'accès aux
+avis de npm rend 503 ou reste sans réponse. Détail et mesures au `CLAUDE.md` §0.3.
+
+⚠️ **Avant d'écrire qu'une chose est impossible ici, essayez-la.** Trois réserves fausses ont
+coûté du travail dans la seule journée du 04/09 — constats **Q-128** et **Q-129**.
 
 ---
 
@@ -1020,6 +1035,7 @@ Ce que ce tri ne fait pas : il ne ferme rien qui ne soit pas fermé. Un constat 
 | **Q-126** | **Le 14ᵉ domaine ne sépare rien dans le socle livré** : un seul profil sur huit porte `journal`, et c'est `ADMIN`, qui porte déjà `parametres`, `filiales` et `droits`. L'arbitrage du 04/09 est **juste et sans effet mesurable aujourd'hui** — il ferme pour le profil paramétré de demain. ⚠️ Ce n'est pas un défaut du détachement, c'est un défaut de **ce que le socle propose** : aucun profil « auditeur du journal » n'existe, alors que le `PLAN_SERVEUR` §3.2 le nomme | 🔵 mineur | **orchestrateur** | `V1.1` | ouvert — soit le socle gagne un profil qui porte `journal` et rien d'autre, soit l'écart est écrit |
 | **Q-127** | **Trois chiffres pour une même grandeur** : le contrat `CONVENTIONS.md` §29.2 dit **16** actions à la sortie de L5 ; le `CLAUDE.md`, le `CHANGELOG` et le message de commit disent « de 4 à **14** » ; la machine en porte **7**. Les trois sont vrais et mesurent des choses différentes — *émissibles par le code*, *émises par un scénario d'essai*, *observées en recette* — et **aucun document ne les réconcilie**. C'est le motif de Q-90 : *un chiffre qui vit à deux endroits finit par n'en dire qu'un vrai* | 🔵 mineur | **orchestrateur** | fermé le 04/09 | ✅ **corrigé** — le chiffre normatif est **16 émissibles sur 20**, et il est employé partout ; ce qu'une machine observe dépend de ce qu'on lui a fait faire, et se cite avec sa date. Les quatre non émissibles restent reportées par écrit avec leur lot |
 | **Q-128** | **« La machine est hors ligne » était faux, et je l'ai propagé de deux rapports d'agents jusqu'au `CLAUDE.md` et à un message de commit, sans le vérifier.** Mesuré le 04/09 : SRV-Infra porte l'IP publique `212.227.38.92` ; `GET https://registry.npmjs.org/` → **200 en 60 ms**, `POST` sur la même racine → **403 en 56 ms**, `GET https://github.com/` → **200 en 57 ms**. Ce qui échoue est **un seul point d'accès** — `POST /-/npm/v1/security/advisories/bulk` rend **503** ou reste sans réponse au-delà de 20 s —, la même URL répondant **405 en 202 ms** en `HEAD`. ⚠️ **Le défaut n'est pas le mien seul** : deux agents indépendants ont conclu « hors ligne » d'une seule commande qui n'a pas rendu la main, et je l'ai accepté parce que les deux le disaient. **Deux sources ne valent pas une mesure quand elles héritent du même raisonnement.** Trouvé parce que l'utilisateur a demandé « de quelle machine tu parles ? tu es en exécution dans le VPS directement » — la question qu'aucun des trois n'avait posée | 🔵 mineur | **orchestrateur** | fermé le 04/09 | ✅ **corrigé** — `CLAUDE.md` dit désormais ce qui a été mesuré, et distingue ce qu'on sait (S15 ne se rejoue pas, un point d'accès rend 503) de ce qu'on ignore (service dégradé côté npm, ou filtrage de cette requête en sortie). Le contrôle **S15 reste non rejoué** ; ce qui change est qu'on cherchera au bon endroit |
+| **Q-129** | **« Aucun compte de recette ne porte `GRC-EXPORT` » était faux, et cette réserve a fait renoncer à trois mesures.** Le rapport S4 s'en sert pour classer l'export du journal « non vérifiable ici », et j'ai repris la conclusion. Mesuré : `samba-tool user getgroups rssi.groupe` rend **`GRC-EXPORT`**. La conclusion était juste pour une **autre** raison — `rssi.groupe` porte l'export mais **pas** le domaine `journal`, et `admin.grc` l'inverse : aucun compte ne réunissait les deux axes, ce qui est le modèle de droits **fonctionnant correctement**. ⚠️ **Le motif est celui de Q-128, à un jour d'intervalle** : une capacité déclarée absente sans être essayée. Et l'AD est **modifiable** — l'utilisateur l'a rappelé : *« t'as créé un docker pour simuler l'AD et tu peux y ajouter les utilisateurs et l'organisation que tu souhaites pour les tests »* | 🔵 mineur | **orchestrateur** | fermé le 04/09 | ✅ **corrigé, et les trois angles morts sont comblés** — `admin.grc` ajouté à `GRC-EXPORT`, puis mesuré **à travers Apache** : export **200, 118 360 octets, 219 lignes** ; et **Q-121 prouvé en production** — un login forgé `=WEBSERVICE("…")` présenté par un attaquant **non authentifié** ressort de l'extrait en `"'=WEBSERVICE(`, désamorcé. L'environnement est désormais décrit au `CLAUDE.md` **§0**, mesure par mesure |
 
 **Arbitrage sur Q-43 — la règle plutôt que le nombre.** Deux remèdes se présentent : étendre le
 jeton de version aux images, ou raccourcir leur durée de cache. Je ne choisis ni l'un ni l'autre,
