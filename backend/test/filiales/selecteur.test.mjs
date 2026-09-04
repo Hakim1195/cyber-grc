@@ -564,7 +564,20 @@ describe('§30.3 — la filiale active est revérifiée à CHAQUE requête', () 
       'Une session ne doit pas continuer d’écrire dans une filiale qui a quitté son ' +
         'périmètre (§30.3) — et elle ne doit pas non plus rendre 500.',
     );
-    assert.equal(refusee.corps.erreur, 'hors_perimetre');
+    // ⚠️ `perimetre_perime` et non `hors_perimetre` — constat **Q-134**, porte S5.
+    //
+    // Les deux refus partagent le statut 403 et la cause apparente, mais le
+    // navigateur en tire des réponses OPPOSÉES : `hors_perimetre` vise un
+    // enregistrement, et `sync.js` rend alors la saisie à la valeur du serveur ;
+    // celui-ci vise la SESSION, et la saisie de l'utilisateur est innocente.
+    // Mesuré à S5 : elle disparaissait de l'écran et ne revenait pas au
+    // rechargement, dans le scénario même que ce lot existe pour couvrir.
+    assert.equal(
+      refusee.corps.erreur,
+      'perimetre_perime',
+      'Un refus de SESSION ne se confond pas avec un refus d’ENREGISTREMENT : le ' +
+        'navigateur efface la saisie sur le second (Q-134).',
+    );
 
     const ecriture = await creerRisque(cookie, 'Pendant le retrait du périmètre');
     assert.equal(ecriture.statut, 403, JSON.stringify(ecriture.corps));

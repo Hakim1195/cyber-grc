@@ -48,6 +48,33 @@ export type CodeApi =
   | 'ressource_inconnue'
   /** La ressource est lisible mais l'écriture est refusée (filiale, portée). */
   | 'hors_perimetre'
+  /**
+   * **La FILIALE ACTIVE de la session a quitté son périmètre** — constat **Q-134**,
+   * porte S5. Statut **403**.
+   *
+   * ── Pourquoi un code de plus, et pas `hors_perimetre` ────────────────
+   *
+   * Les deux refus partagent le statut ET la cause apparente (« ce n'est pas
+   * votre périmètre »), mais **pas la bonne réponse à l'écran** :
+   *
+   *  · `hors_perimetre` vise **un enregistrement** : le serveur détient la
+   *    vérité sur cette ligne, et le navigateur rend donc la saisie à la valeur
+   *    du serveur (`sync.js`, `revenirALaValeurServeur`). C'est juste — la
+   *    modification n'était pas légitime.
+   *  · celui-ci vise **la session** : les groupes AD de l'utilisateur ont changé
+   *    pendant qu'il travaillait. **Ce qu'il a tapé est innocent**, et l'effacer
+   *    lui fait payer une décision d'annuaire prise ailleurs.
+   *
+   * Mesuré à la porte S5, de bout en bout dans un Chromium réel : la saisie
+   * disparaissait de l'écran **et ne revenait pas au rechargement** — dans le
+   * scénario même que le lot L4 existe pour couvrir. Le banc était vert.
+   *
+   * ⚠️ C'est la leçon du constat **Q-29**, une couche plus loin : *deux
+   * situations qui partagent un code HTTP ne partagent pas forcément la bonne
+   * réponse* — et il ne suffit pas de distinguer le statut, il faut distinguer
+   * le **code**, puisque c'est lui que le navigateur interroge.
+   */
+  | 'perimetre_perime'
   /** L'entrée ne respecte pas le modèle : champ inconnu, type, valeur, taille. */
   | 'donnee_invalide'
   /** Refus d'intégrité de la base, traduit sans nommer d'objet interne. */

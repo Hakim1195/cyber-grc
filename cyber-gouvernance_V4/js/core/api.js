@@ -177,6 +177,23 @@ const Api = (() => {
         // Q-29 : deux situations qui partagent un code HTTP ne partagent pas
         // forcément la bonne réponse.
         estRefusDroit() { return this.code === "hors_perimetre"; }
+        /* ── LE PÉRIMÈTRE DE LA SESSION A CHANGÉ — constat Q-134 ──────────────
+         *
+         * Statut et cause apparente identiques au refus ci-dessus, RÉPONSE
+         * OPPOSÉE. `hors_perimetre` vise un ENREGISTREMENT : le serveur détient
+         * la vérité sur cette ligne, on y revient. Celui-ci vise la SESSION —
+         * les groupes AD de l'utilisateur ont changé pendant qu'il travaillait —
+         * et **ce qu'il a tapé est innocent**. L'effacer lui ferait payer une
+         * décision d'annuaire prise ailleurs.
+         *
+         * Mesuré à la porte S5 : la saisie disparaissait de l'écran et ne
+         * revenait pas au rechargement, dans le scénario même que le lot L4
+         * existe pour couvrir. Le banc était vert.
+         *
+         * C'est Q-29 une couche plus loin : distinguer le STATUT ne suffisait
+         * pas, il fallait distinguer le CODE — c'est lui qu'on interroge ici.
+         */
+        estPerimetrePerime() { return this.code === "perimetre_perime"; }
         // Session valide, droit manquant (lot L3). La saisie est conservée.
         estDroitInsuffisant() {
             return this.statut === 403 && this.code === CONTRAT_AUTH.codeDroitInsuffisant;

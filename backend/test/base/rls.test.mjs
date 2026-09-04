@@ -3942,6 +3942,11 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       'lecture_journal',
       'portee_figee',
       'privileges',
+      // TREIZIÈME, apporté par `011_privileges_definer.sql` (constat Q-136) : aucune
+      // fonction « security definer » ne doit être exécutable par PUBLIC. La migration
+      // `010` avait fermé une fuite et en avait rouvert une plus petite par la fonction
+      // même qui la fermait — un « grant » sans « revoke … from public » ne retire rien.
+      'privileges_definer',
       // NEUVIÈME, apporté par `007_authentification.sql` : il vérifie que le substrat
       // de session est bien refermé sur `f_authentification()`. Cette liste est écrite
       // à la main À DESSEIN (CLAUDE.md §3, cas (a)) — une migration qui la fait rougir

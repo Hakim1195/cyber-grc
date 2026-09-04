@@ -138,6 +138,28 @@ async function dialoguer(chemin: string, socketClamav: string, delaiMs: number):
     let recu = Buffer.alloc(0);
     let termine = false;
 
+    // ⚠️ **LE GESTIONNAIRE D'ERREUR DE LECTURE SE POSE ICI, ET NULLE PART
+    // AILLEURS — constat Q-135, porte S5.**
+    //
+    // Il était posé **à l'intérieur de `socket.on('connect')`**, c'est-à-dire
+    // après un aller-retour réseau. `createReadStream` émet pourtant son `error`
+    // dès la première boucle d'événements si le fichier est illisible — donc
+    // AVANT que le gestionnaire existe. Node traite alors un `error` sans
+    // écouteur comme une exception non rattrapée : **le processus meurt**.
+    //
+    // Mesuré par l'auditeur **6 fois sur 6** sur le point d'entrée réel — celui
+    // que le timer systemd lance, et qui n'a aucun filet. Le serveur d'API en a
+    // un, qui le convertit en `exit(1)` puis redémarrage : moins visible, pas
+    // moins grave.
+    //
+    // La règle générale, et elle vaut au-delà de ce fichier : **un flux reçoit
+    // son gestionnaire d'erreur dans la même instruction qui le crée.** Tout ce
+    // qui s'interpose — un `await`, un rappel, une condition — est une fenêtre
+    // pendant laquelle une erreur tue le processus.
+    lecture.on('error', (erreur) => {
+      echouer(new ErreurClamav(`lecture du fichier à analyser impossible : ${erreur.message}`));
+    });
+
     const minuteur = setTimeout(() => {
       echouer(new ErreurClamav(`aucune réponse de clamd après ${String(delaiMs)} ms`));
     }, delaiMs);
@@ -188,9 +210,7 @@ async function dialoguer(chemin: string, socketClamav: string, delaiMs: number):
       if (cible === null) return;
       cible.write(Buffer.from('zINSTREAM\0', 'latin1'));
 
-      lecture.on('error', (erreur) => {
-        echouer(new ErreurClamav(`lecture du fichier à analyser impossible : ${erreur.message}`));
-      });
+      // `error` est déjà branché, à la création du flux — voir plus haut (Q-135).
       lecture.on('data', (morceau: string | Buffer) => {
         const octets = typeof morceau === 'string' ? Buffer.from(morceau) : morceau;
         const entete = Buffer.alloc(4);

@@ -779,12 +779,21 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
           perimetre_lecture: [...session.perimetre.filiales],
         },
       });
+      // ⚠️ `perimetre_perime`, et NON `hors_perimetre` — constat **Q-134**.
+      //
+      // Les deux refus partagent le statut et la cause apparente. Ils ne
+      // partagent pas la bonne réponse : `hors_perimetre` vise un
+      // ENREGISTREMENT, et le navigateur rend alors la saisie à la valeur du
+      // serveur ; celui-ci vise la SESSION, et ce que l'utilisateur a tapé est
+      // innocent. Mesuré à S5 : la saisie disparaissait et ne revenait pas au
+      // rechargement, dans le scénario même que ce lot existe pour couvrir.
       throw new ErreurApplicative({
-        code: 'hors_perimetre',
+        code: 'perimetre_perime',
         statut: 403,
         message:
           'Votre périmètre a changé : la filiale dans laquelle vous travailliez ne vous est ' +
-          'plus ouverte. Reconnectez-vous pour reprendre avec vos accès à jour.',
+          'plus ouverte. Votre saisie est conservée — reconnectez-vous pour reprendre avec ' +
+          'vos accès à jour.',
         detailJournal: detail,
       });
     }

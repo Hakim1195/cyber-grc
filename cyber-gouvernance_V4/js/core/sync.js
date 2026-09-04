@@ -1548,6 +1548,34 @@ const Sync = (() => {
             return true;
         }
 
+        /* ── LE PÉRIMÈTRE A CHANGÉ SOUS L'UTILISATEUR — constat Q-134 ────────
+         *
+         * Cette branche vient AVANT le refus de droit, et l'ordre est le fond du
+         * correctif : les deux erreurs portent le même statut, et l'ancienne
+         * rédaction attrapait celle-ci dans celle-là — donc **effaçait la saisie**.
+         *
+         * Ici, le serveur n'a rien changé NON PLUS, mais la raison est autre :
+         * les groupes AD de l'utilisateur ont bougé pendant qu'il travaillait.
+         * Ce qu'il a tapé est innocent, et le lui reprendre serait lui faire
+         * payer une décision prise ailleurs. On laisse donc la saisie SOUS SES
+         * YEUX, on la marque bloquée, et on dit qu'il faut se reconnecter —
+         * exactement le traitement d'une session expirée, qui est la situation
+         * réelle : son périmètre est périmé, pas sa saisie.
+         */
+        if (erreur.estPerimetrePerime && erreur.estPerimetrePerime()) {
+            bloques.add(cle(collection, id));
+            if (geste === "creation" && enregistrement) {
+                creationsBloquees.set(cle(collection, id), { collection: collection, enregistrement: enregistrement });
+            }
+            ajouterIncident({
+                collection, id, geste,
+                type: "droit",
+                message: erreur.message,
+                rechargeable: false
+            });
+            return false;
+        }
+
         if (erreur.estRefusDroit()) {
             // Refus de DROIT : le serveur n'a rien changé, et son état nous est
             // connu. On remet donc la mémoire à cet état — c'est la seule

@@ -1921,13 +1921,26 @@ téléchargement **groupé** — une archive de toutes les pièces d'une filiale
 « l'extraction en un clic, complète et silencieuse » que le §3.3 vise. Aucun n'existe
 aujourd'hui ; qu'aucun ne s'écrive sans revenir ici.
 
-⚠️ **Conséquence côté navigateur, et c'est mieux ainsi** : l'écran **ne fabrique plus** le
-téléchargement. Il suit l'adresse, et le serveur délivre en `attachment` + `nosniff`. Donc
-(a) un fichier de 25 Mio ne transite plus par la mémoire du navigateur, (b) le nom écrit sur
-le disque vient de l'en-tête assaini par le serveur, et (c) le garde-fou mécanique de
-l'entonnoir cesse d'accuser ce chemin **parce qu'il n'y a plus rien à accuser** — par
-disparition de l'objet, jamais par une exemption. *Une exemption incomplète fait réussir
-quelque chose en silence ; une disparition, non.*
+⚠️ **CE PARAGRAPHE DÉCRIVAIT UNE IMPLÉMENTATION QUI N'EXISTE PAS — constat Q-144, porte S5.**
+
+Il annonçait que l'écran « ne fabrique plus le téléchargement » et « suit l'adresse », et en
+tirait trois conséquences : pas de fichier en mémoire, nom assaini par le serveur, garde-fou
+sans objet. **Les trois étaient fausses**, parce que j'ai écrit ce paragraphe sur une
+première implémentation, puis changé d'implémentation **sans revenir corriger le contrat**.
+C'est la famille du constat Q-90 dans le fichier qui sert à l'éviter.
+
+**Ce que l'écran fait réellement, et pourquoi** : il **relit le contenu** (`fetch`) puis
+fabrique le téléchargement. L'approche par adresse avait deux avantages réels — pas de
+fichier de 25 Mio en mémoire, nom venu de l'en-tête assaini — et **un inconvénient les
+emporte** : sur un refus, le navigateur **quitte l'écran** pour afficher le JSON d'erreur.
+On perdrait la saisie en cours pour économiser une copie, et la perte de saisie est l'un des
+trois domaines que ce chantier ne négocie pas.
+
+**Conséquence pour le garde-fou de l'entonnoir** : `js/modules/pieces.js` fabrique donc bien
+un téléchargement, et il est **nommé et motivé** dans la liste des sorties qui ne sont pas
+des exports (`test/depot/entonnoir-export.test.mjs`), avec ce qui le garde à la place — le
+serveur. Ce n'est pas une disparition de l'objet ; c'est une exemption **explicite, motivée,
+et vérifiée par un essai qui exige les deux**.
 
 ### 31.4 Ce que ClamAV ne garantit pas, et qu'il faut écrire
 
