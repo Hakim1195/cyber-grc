@@ -807,7 +807,12 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     // L'absence de déclaration est un **défaut de programmation**, pas une
     // permission : elle a déjà été refusée plus haut. C'est ce qui rend « aucun
     // point d'entrée sans contrôle » vrai par construction et non par relecture.
-    const refus = deciderAcces(session.droits, declaration.action, domaineDe(declaration, requete));
+    const refus = deciderAcces(
+      session.droits,
+      declaration.action,
+      domaineDe(declaration, requete),
+      declaration.niveau,
+    );
     if (refus !== null) {
       requete.log.warn(
         {

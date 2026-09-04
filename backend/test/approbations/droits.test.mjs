@@ -87,10 +87,10 @@ describe('Le niveau exigé pour DÉCIDER n’est pas celui exigé pour LIRE', ()
 
   test('LE POINT DU LOT : un profil Contribution ne tranche pas davantage', async () => {
     // Il rédige le document, il le modifie, il crée les risques — et c'est
-    // exactement pour cela qu'il ne doit pas les approuver. Le vocabulaire
-    // d'accès ne sait pas encore l'exprimer (`NIVEAU_MINIMAL` associe `ecrire`
-    // à `contribution`) : sans le crochet de `src/approbations/niveau.ts`,
-    // cette requête passerait.
+    // exactement pour cela qu'il ne doit pas les approuver. `NIVEAU_MINIMAL`
+    // associe `ecrire` à `contribution` : c'est la déclaration
+    // `acces.niveau: 'validation'` de la route qui RESSERRE le plancher, et le
+    // crochet parent qui prononce le refus. Sans elle, cette requête passerait.
     avec(profil('contribution'));
     const r = await decider('documents', 'DOC-A', 'redaction');
     assert.equal(r.statut, 403, JSON.stringify(r.corps));
@@ -190,9 +190,25 @@ describe('Un refus de niveau se prononce avant la route, et se journalise', () =
     const derniere = refus[refus.length - 1];
     assert.equal(derniere.utilisateur_libelle, LOGIN);
     assert.equal(derniere.filiale_id, FILIALE_A);
-    assert.equal(derniere.entite_type, 'approbations');
-    assert.equal(derniere.valeurs_apres.motif, 'niveau_validation_absent');
     assert.equal(derniere.valeurs_apres.methode, 'POST');
+    // ── Ces trois assertions ont CHANGÉ de champ, et il faut dire pourquoi ──
+    //
+    // La trace était écrite par un crochet propre à ce greffon, qui savait
+    // qu'il parlait d'approbations (`entite_type`) et pourquoi il refusait
+    // (`motif: 'niveau_validation_absent'`). Ce crochet a disparu : le refus de
+    // niveau se prononce désormais dans `onRequest`, comme tous les autres, et
+    // c'est `tracerRefusDroit` — commun à toutes les routes — qui écrit.
+    //
+    // Ce qu'on y perd : `entite_type` vaut `null`, parce que le crochet commun
+    // ne sait pas nommer une entité pour une route qui n'en désigne pas une.
+    // Ce qu'on y gagne : le refus est écrit de la MÊME façon pour toutes les
+    // routes du produit, au lieu d'une variante par greffon — et l'information
+    // n'est pas perdue, elle est dans le GABARIT de route, que le crochet
+    // enregistre exprès (« la route est un gabarit, jamais l'URL reçue »).
+    assert.equal(derniere.entite_type, null);
+    assert.equal(derniere.valeurs_apres.route, '/api/approbations/:entite/:entiteId');
+    assert.equal(derniere.valeurs_apres.action_exigee, 'ecrire');
+    assert.equal(derniere.valeurs_apres.domaine_exige, 'risques');
     // Aucune décision n'a été inscrite au journal : la route n'a pas tourné.
     assert.equal((await journalEnBase(base, proprietaire, 'approbation')).length, avantAppro);
   });

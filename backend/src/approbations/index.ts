@@ -93,14 +93,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 
-import { DOMAINE_PAR_ENTITE } from '../api/droits.js';
-import type { DomaineFonctionnel } from '../api/droits.js';
 import type { SessionAppliquee } from '../api/session.js';
 import { journaliser } from '../auth/journal.js';
 import { avecTransaction } from '../db/pool.js';
 import type { PerimetreSession } from '../db/pool.js';
 import { engendrerIdentifiant } from '../entites/index.js';
-import type { NomEntite } from '../entites/types.js';
 import { entreeInvalide, ErreurApplicative } from '../erreurs/index.js';
 import {
   decrireCircuit,
@@ -115,7 +112,6 @@ import type {
   ObjetApprouvable,
   StatutApprobation,
 } from './circuit.js';
-import { exigerNiveau } from './niveau.js';
 
 export interface OptionsApprobations {
   /** Pool de connexions du serveur. Obligatoire : voir l'entête. */
@@ -177,11 +173,6 @@ const SCHEMA_DECISION = {
   },
 } as const;
 
-interface ParamsApprobation {
-  readonly entite?: string;
-  readonly entiteId?: string;
-}
-
 interface CorpsDecision {
   readonly etape: string;
   readonly decision: Decision;
@@ -223,59 +214,17 @@ export async function greffonApprobations(
     return session;
   };
 
-  /**
-   * Domaine mis en jeu, lu **comme le crochet parent le lit** : dans le
-   * paramètre `entite`, à travers `DOMAINE_PAR_ENTITE`. La table de domaines
-   * n'est pas recopiée — c'est elle que le compilateur garde exhaustive.
-   */
-  const domaineDe = (requete: FastifyRequest): DomaineFonctionnel | null => {
-    const params = requete.params as ParamsApprobation | undefined;
-    const nom = params?.entite;
-    if (nom === undefined || !Object.prototype.hasOwnProperty.call(OBJET_PAR_ENTITE, nom)) {
-      return null;
-    }
-    return DOMAINE_PAR_ENTITE[nom as NomEntite] ?? null;
-  };
+  // ── Le domaine et la trace du refus vivaient ICI, et n'y vivent plus ──
+  //
+  // Deux fonctions occupaient cette place : l'une relisait `DOMAINE_PAR_ENTITE`
+  // pour le crochet local, l'autre journalisait le refus de niveau. Les deux
+  // doublaient ce que le crochet `onRequest` de `src/api/index.ts` fait déjà
+  // pour toutes les routes — résoudre `domaine: 'selon-entite'`, et écrire
+  // `refus_autorisation`. Elles n'existaient que parce que le vocabulaire
+  // d'accès ne savait pas exiger un niveau ; il le sait
+  // (`DeclarationAcces.niveau`), et `niveau.ts` a disparu avec elles.
 
-  /**
-   * Écrit l'entrée `refus_autorisation` d'un refus de niveau (§29.2).
-   *
-   * Elle ouvre **sa propre transaction** : le refus se prononce dans
-   * `onRequest`, avant toute transaction métier (§29.3, règle 3). Et son échec
-   * n'annule pas le refus — c'est l'exception que le §29.3 accorde nommément
-   * aux événements qui n'ont aucune écriture à emporter. La refuser ici
-   * transformerait une panne du journal en autorisation.
-   */
-  const tracerRefus = async (requete: FastifyRequest, detail: string): Promise<void> => {
-    const session = requete.sessionGrc;
-    if (session === undefined) return;
-    try {
-      await avecTransaction(pool, session.perimetre, async (client) => {
-        await journaliser(client, {
-          action: 'refus_autorisation',
-          // Phrase FIXE (§29.5) : rien de ce qui varie n'y entre.
-          resume: 'Décision d’approbation refusée : niveau de validation absent du profil.',
-          filialeId: session.perimetre.filialeId,
-          utilisateurLibelle: session.perimetre.utilisateurId,
-          adresseIp: requete.ip,
-          entiteType: 'approbations',
-          valeursApres: {
-            methode: requete.method,
-            route: requete.routeOptions.url ?? null,
-            motif: 'niveau_validation_absent',
-            detail,
-          },
-        });
-      });
-    } catch (erreur) {
-      requete.log.warn(
-        { detail: erreur instanceof Error ? erreur.message : String(erreur) },
-        'Le refus d’approbation n’a pas pu être journalisé ; il reste prononcé',
-      );
-    }
-  };
 
-  exigerNiveau(instance, domaineDe, tracerRefus);
 
   /* -------------------------------------------------------------------
    *  Lecture de l'objet visé — trois requêtes LITTÉRALES
@@ -565,11 +514,12 @@ export async function greffonApprobations(
     {
       schema: { params: SCHEMA_PARAMS, body: SCHEMA_DECISION },
       config: {
-        acces: { action: 'ecrire', domaine: 'selon-entite' },
-        // ⚠️ Le troisième axe, exigé par DÉCLARATION — voir `niveau.ts`. Le
-        // refus se prononce dans un crochet `onRequest`, avant l'analyse du
-        // corps, comme tous les autres refus du produit.
-        niveauMinimal: 'validation',
+        // ⚠️ Le troisième axe, exigé par DÉCLARATION. Le refus se prononce dans
+        // le crochet `onRequest` de `src/api/index.ts`, avant l'analyse du
+        // corps, comme tous les autres refus du produit — et non dans un
+        // crochet propre à ce greffon, qui aurait fait paraître protégée toute
+        // route d'ailleurs portant le même champ.
+        acces: { action: 'ecrire', domaine: 'selon-entite', niveau: 'validation' },
       },
     },
     async (

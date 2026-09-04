@@ -321,10 +321,27 @@ export function deciderAcces(
   droits: DroitsSession,
   action: ActionDemandee,
   domaine: DomaineFonctionnel | null,
+  niveauExige?: NiveauAcces,
 ): RefusDroit | null {
   if (action === 'publique') return null;
 
-  const requis = NIVEAU_MINIMAL[action];
+  // ── Le niveau exigé par la ROUTE ne peut que RESSERRER ─────────────────
+  //
+  // `NIVEAU_MINIMAL` associe une action à son plancher : `ecrire` demande
+  // `contribution`. Aucune action ne demande `validation`, et c'est voulu —
+  // valider n'est pas une cinquième action, c'est la même écriture faite par
+  // quelqu'un de plus haut placé. Le circuit d'approbation (L8) a donc besoin
+  // de le dire route par route.
+  //
+  // ⚠️ On prend le PLUS EXIGEANT des deux, jamais celui de la route seul : une
+  // déclaration qui pourrait abaisser le plancher d'une action serait une
+  // dérogation glissée dans une route, c'est-à-dire l'inverse d'un modèle de
+  // droits. Le vocabulaire n'offre aucun moyen d'écrire « moins ».
+  const parAction = NIVEAU_MINIMAL[action];
+  const requis =
+    niveauExige !== undefined && RANG_NIVEAU[niveauExige] > RANG_NIVEAU[parAction]
+      ? niveauExige
+      : parAction;
   // Le niveau qui s'applique est celui du DOMAINE quand il est connu, celui de
   // la session sinon. Jamais le plus favorable des deux : un niveau par domaine
   // sert à RESTREINDRE, et une lecture qui élargirait serait un défaut.
@@ -335,8 +352,11 @@ export function deciderAcces(
         action === 'administrer'
           ? "Cette opération relève de l'administration de l'application. Votre profil ne la " +
             'porte pas.'
-          : 'Votre profil vous donne un accès en consultation : vous ne pouvez pas modifier ces ' +
-            'données. Contactez votre administrateur si vous devez y contribuer.',
+          : requis !== parAction
+            ? 'Cette décision engage : elle relève d’un profil de validation. Votre profil vous ' +
+              'permet de contribuer, pas de valider.'
+            : 'Votre profil vous donne un accès en consultation : vous ne pouvez pas modifier ces ' +
+              'données. Contactez votre administrateur si vous devez y contribuer.',
       detailJournal:
         `niveau insuffisant : « ${effectif} » sur ${domaine ?? 'aucun domaine'} pour une action ` +
         `« ${action} » qui exige « ${requis} »`,
@@ -488,6 +508,31 @@ export interface DeclarationAcces {
    * pour ce qui est un refus de droit.
    */
   readonly perimetre?: 'groupe' | 'administration-groupe';
+  /**
+   * Niveau **minimal** exigé par la route, quand l'action seule ne suffit pas à
+   * le dire.
+   *
+   * `NIVEAU_MINIMAL` associe `ecrire` → `contribution`, et **aucune action ne
+   * vaut `validation`** : valider n'est pas une cinquième action, c'est la même
+   * écriture faite par quelqu'un de plus haut placé. Le circuit d'approbation
+   * (L8) est le premier à en avoir besoin, et il le déclare route par route.
+   *
+   * ⚠️ Ce champ ne peut que **RESSERRER** : `deciderAcces` prend le plus exigeant
+   * du plancher de l'action et de celui-ci. Le vocabulaire n'offre aucun moyen
+   * d'écrire « moins », faute de quoi une route pourrait s'accorder une
+   * dérogation — l'inverse exact d'un modèle de droits (`CONVENTIONS.md` §17.4).
+   *
+   * ── Ce qu'il remplace ────────────────────────────────────────────────
+   *
+   * L'agent qui a construit L8 avait posé un crochet `onRequest` **dans son
+   * greffon**, piloté par un `config.niveauMinimal` que lui seul lisait. Cela
+   * marchait, et son propre banc en a dit le danger : une route écrite ailleurs
+   * qui aurait porté ce champ **aurait paru protégée sans l'être**. Un contrôle
+   * que seul un greffon applique n'est pas un modèle de droits, c'est une garde
+   * locale déguisée. Le champ vit donc ici, et le refus se prononce là où tous
+   * les autres se prononcent.
+   */
+  readonly niveau?: NiveauAcces;
 }
 
 /**

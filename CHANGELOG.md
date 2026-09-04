@@ -34,6 +34,17 @@ Trois propriétés valent d'être nommées :
   **avant l'analyse du corps** : un corps JSON illisible envoyé par un profil
   *contribution* rend 403, pas 400.
 
+⚠️ **Le vocabulaire d'accès a gagné un troisième terme, et c'est le banc de L8 qui l'a
+exigé.** `NIVEAU_MINIMAL` associe `ecrire` → `contribution`, et **aucune action ne vaut
+`validation`** : valider n'est pas une cinquième action, c'est la même écriture faite par
+quelqu'un de plus haut placé. Le premier remède fut un crochet propre au greffon, piloté
+par un champ que lui seul lisait — et **son propre essai en a dit le danger** : une route
+écrite ailleurs qui aurait porté ce champ *aurait paru protégée sans l'être*. Un contrôle
+que seul un greffon applique n'est pas un modèle de droits, c'est une garde locale
+déguisée. `DeclarationAcces.niveau` vit donc dans le vocabulaire commun, ne peut que
+**resserrer** (`deciderAcces` prend le plus exigeant des deux planchers — le vocabulaire
+n'offre aucun moyen d'écrire « moins »), et `src/approbations/niveau.ts` a disparu.
+
 **L4 — créer une filiale** (constat **Q-149**). `insert into filiales` n'existait nulle
 part dans `src/` : intégrer une société rachetée passait par un administrateur de base
 écrivant du SQL. `POST /api/filiales` le fait, sous la déclaration d'accès la plus forte

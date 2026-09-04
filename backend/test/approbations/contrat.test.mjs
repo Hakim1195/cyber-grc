@@ -156,53 +156,55 @@ describe('Les routes déclarent ce qu’elles exigent', () => {
     const parCle = Object.fromEntries(
       serveur.routes
         .filter((r) => r.methode === 'GET' || r.methode === 'POST')
-        .map((r) => [`${r.methode} ${r.url}`, { acces: r.acces, niveauMinimal: r.niveauMinimal }]),
+        .map((r) => [`${r.methode} ${r.url}`, r.acces]),
     );
     assert.deepEqual(parCle, {
-      'GET /api/approbations/:entite/:entiteId': {
-        acces: { action: 'lire', domaine: 'selon-entite' },
-        niveauMinimal: undefined,
-      },
+      'GET /api/approbations/:entite/:entiteId': { action: 'lire', domaine: 'selon-entite' },
+      // Le troisième axe est DANS la déclaration d'accès, lue par le crochet
+      // parent — et non dans un champ que seul ce greffon lirait.
       'POST /api/approbations/:entite/:entiteId': {
-        acces: { action: 'ecrire', domaine: 'selon-entite' },
-        niveauMinimal: 'validation',
+        action: 'ecrire',
+        domaine: 'selon-entite',
+        niveau: 'validation',
       },
     });
   });
 
   test('AUCUNE écriture n’est servie sans exiger le niveau « validation »', () => {
     // Découvert, jamais récité : une route d'écriture ajoutée demain sans
-    // `niveauMinimal` est nommée ici. C'est la forme du contrôle S6 appliquée au
+    // niveau déclaré est nommée ici. C'est la forme du contrôle S6 appliquée au
     // troisième axe : le défaut par défaut est fermé.
     const sansNiveau = serveur.routes
       .filter((r) => r.acces?.action === 'ecrire' || r.acces?.action === 'administrer')
-      .filter((r) => r.niveauMinimal === undefined)
+      .filter((r) => r.acces?.niveau === undefined)
       .map((r) => `${r.methode} ${r.url}`);
     assert.deepEqual(sansNiveau, []);
     // Morsure du balayage : il doit VOIR au moins une route d'écriture.
     assert.ok(serveur.routes.some((r) => r.acces?.action === 'ecrire'));
   });
 
-  test('« niveauMinimal » n’est déclaré NULLE PART ailleurs — sinon il ne ferait rien', () => {
-    // ── Pourquoi ce contrôle vaut d'être écrit ─────────────────────────
+  test('« niveauMinimal » n’est déclaré NULLE PART — le champ n’est plus lu', () => {
+    // ── Ce contrôle a été RETOURNÉ, et le motif vaut d'être gardé ───────
     //
-    // `niveauMinimal` est un vocabulaire NEUF, et il n'est lu que par le crochet
-    // du greffon des approbations. Une route d'un autre greffon qui le
-    // déclarerait paraîtrait protégée et ne le serait pas : le crochet parent
-    // ignore ce champ, et **rien ne le dirait**. C'est le premier cas du tableau
-    // du `CLAUDE.md` §3 — quelque chose réussit en silence alors que c'est faux.
+    // Il disait : *« `niveauMinimal` n'est lu que par le crochet du greffon des
+    // approbations ; une route d'un autre greffon qui le déclarerait paraîtrait
+    // protégée sans l'être »*. Il avait raison, et c'est ce constat qui a fait
+    // porter l'exigence dans le vocabulaire d'accès lui-même
+    // (`DeclarationAcces.niveau`), lu par le crochet parent pour TOUTES les
+    // routes. Le crochet local et son `niveau.ts` ont disparu.
     //
-    // Découvert chez Fastify, jamais récité : la table des routes est celle du
-    // greffon réellement monté.
+    // Le champ ne veut donc plus rien dire nulle part, et c'est précisément
+    // pourquoi le contrôle reste : une route qui le porterait encore aurait
+    // l'air protégée et ne le serait pas — premier cas du tableau du
+    // `CLAUDE.md` §3, exactement comme avant, à l'envers.
     const egarees = serveur.toutesRoutes
       .filter((r) => r.niveauMinimal !== undefined)
-      .filter((r) => typeof r.url !== 'string' || !r.url.startsWith('/api/approbations'))
       .map((r) => `${r.methode} ${r.url}`);
     assert.deepEqual(
       egarees,
       [],
-      'Ces routes déclarent un niveau minimal que personne ne lit : elles paraissent ' +
-        'protégées et ne le sont pas. Voir src/approbations/niveau.ts.',
+      'Ces routes déclarent « niveauMinimal », que plus personne ne lit : le troisième axe ' +
+        's’exprime désormais par « acces.niveau ». Elles paraissent protégées sans l’être.',
     );
     // Morsure du balayage : il doit voir bien plus que les deux routes du lot,
     // sans quoi « aucune route égarée » serait vrai faute d'avoir regardé.
@@ -234,8 +236,10 @@ describe('Aucune garde d’accès n’est écrite dans le corps des routes', () 
     // modèle de droits se décide, donc un endroit où il peut diverger et qu'une
     // route neuve oublierait.
     //
-    // Le crochet de niveau vit dans un fichier SÉPARÉ (`niveau.ts`) exprès :
-    // c'est ce qui rend ce balayage possible sans l'assouplir.
+    // Ce balayage a d'abord été rendu possible en isolant le crochet de niveau
+    // dans un fichier séparé. Il n'y a plus de crochet du tout : le niveau
+    // s'exprime dans la déclaration d'accès, et le balayage est donc devenu
+    // strictement plus fort — il n'a plus rien à épargner.
     const source = readFileSync(join(RACINE_SRC, 'index.ts'), 'utf8');
     const code = source.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gmu, '');
     for (const garde of ['deciderAcces', 'refuserDroit', 'droit_insuffisant', '.droits']) {
@@ -278,7 +282,7 @@ describe('Aucune garde d’accès n’est écrite dans le corps des routes', () 
     // ferait un doublon silencieux de la garantie ». Le module ne doit donc
     // jamais refuser lui-même une décision au motif qu'une étape est tranchée :
     // il tente, et la base refuse en GRC02.
-    const sources = ['index.ts', 'circuit.ts', 'niveau.ts'].map((f) =>
+    const sources = ['index.ts', 'circuit.ts'].map((f) =>
       readFileSync(join(RACINE_SRC, f), 'utf8')
         .replace(/\/\*[\s\S]*?\*\//gu, '')
         .replace(/^\s*\/\/.*$/gmu, ''),
