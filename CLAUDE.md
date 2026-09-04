@@ -29,14 +29,20 @@
 >    la liste des conditions d'entrée à épuiser.
 >
 > Puis reprendre où le §8 de **ce** document dit de reprendre (« ▶ REPRENDRE ICI »).
-> **Au 03/09/2026 : les lots L0, L1 et L2 sont livrés, la porte S1 est franchie — ne pas
-> les refaire — et la porte S2 a été jouée neuf fois, refusée au 9ᵉ sans bloquant.**
-> **La vague 3 est OUVERTE depuis le 03/09/2026** : l'arbitrage du
-> `docs/PLAN_EXECUTION.md` §0 bis remplace le veto de la porte par un **tri en trois
-> classes**, et aucun constat ouvert ne relève des deux premières. Si vous lisez ailleurs
-> « la vague 3 ne s'ouvre pas tant que S2 n'est pas franchie », c'est **périmé** — cette
-> phrase-ci l'était encore ce matin. Le travail immédiat est **L3 (authentification et
-> droits), puis L5 (journal)**, découpé en cinq agents au `PLAN_EXECUTION` §3.
+> **Au 04/09/2026 : les lots L0, L1, L2 et L3 sont livrés — ne pas les refaire.** S1 est
+> franchie ; S2 a été jouée neuf fois et refusée au 9ᵉ sans bloquant ; **S3 a été jouée une
+> fois et refusée**, avec **zéro fuite entre filiales** et deux bloquants corrigés le jour
+> même. L'arbitrage du `docs/PLAN_EXECUTION.md` §0 bis remplace le veto de la porte par un
+> **tri en trois classes** : une porte refusée n'arrête plus la vague, elle trie.
+>
+> **Le travail immédiat est le lot L5 — le journal d'audit**, dont la couverture est
+> chiffrée à **4 actions sur 20** : voir « ▶ REPRENDRE ICI » au §8, qui dit exactement ce
+> qui manque et ce qu'il ne faut pas croire acquis.
+>
+> ⚠️ Si vous lisez ailleurs « ouvrir la vague 3 », « L3 reste à faire » ou « aucun essai
+> navigateur n'existe », c'est **périmé** — ces phrases l'étaient encore hier. Le banc rend
+> **1030 essais, 1030 passés**, et la recette tourne en permanence sur cette machine,
+> Active Directory réel compris.
 
 ## 1. Le produit
 
@@ -662,12 +668,57 @@ il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écriv
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
 constat perdu.**
 
-### ▶ REPRENDRE ICI — ouvrir la vague 3, sans attendre un franchissement propre de S2
+### ▶ REPRENDRE ICI — **L5, le journal d'audit**. L3 est construit ; la porte S3 a été jouée.
 
-> ⚠️ **Le curseur a changé le 03/09/2026, et cette section a été réécrite pour cela.** Si vous
-> lisez encore, ailleurs dans ce document ou dans un rapport, « la vague 3 n'ouvre qu'après un
-> passage franchi », c'est **périmé** : l'arbitrage vit au `docs/PLAN_EXECUTION.md` **§0 bis**,
-> et il prime.
+> ⚠️ **Réécrit le 04/09/2026.** Si vous lisez ailleurs « ouvrir la vague 3 », « le lot L3 reste
+> à faire » ou « aucun essai navigateur n'existe », c'est **périmé**. L'arbitrage de curseur
+> vit au `docs/PLAN_EXECUTION.md` **§0 bis** et il prime ; l'état des lots se lit au **§7**,
+> seule source des verdicts.
+
+**Ce qui a été fait dans la nuit du 03 au 04/09, et qu'il ne faut pas refaire :**
+
+- **Le lot L3 est construit et fonctionne**, mesuré de bout en bout : un utilisateur ouvre
+  une session depuis un **Active Directory réel**, ses trois axes sont résolus, et
+  l'interface s'affiche avec ses droits. Sept profils entrent, l'appartenance **indirecte**
+  par groupe imbriqué ouvre l'accès, un compte sans groupe reçoit 403.
+- **La porte S3 a été jouée une fois et refusée** — 15 constats, S7 et S18 en échec, mais
+  **zéro fuite entre filiales**. Les deux bloquants (**Q-88** l'annuaire jamais alimenté,
+  **Q-89** l'export contournable) sont **corrigés et mordus**, ainsi que **Q-103**, qui a
+  appris à ce chantier qu'*un commit vert ne dit rien de la machine*.
+- **Banc : 1030 essais, 1030 passés, 0 échec**, sur PostgreSQL 17.11, Debian 13, Apache
+  2.4.68 réels. Registre à **104 constats** (`PLAN_EXECUTION` §7).
+- **La recette tourne en permanence** sur cette machine : service systemd, Apache sur
+  `https://grc.exemple.interne/`, PKI interne, et l'annuaire Samba `grc-ad`. Comptes et
+  procédure d'accès : voir §8 « Ce qui est éprouvé sur cette machine ».
+
+**Le travail immédiat est le lot L5 — le journal d'audit**, et il est chiffré :
+
+> **4 actions émises sur 20 déclarées** en base, mesuré à la porte S3. Sont journalisés :
+> connexion réussie, connexion refusée, usage du compte de secours (réussi **comme**
+> refusé — le critère du lot), verrouillage par le rythme, déconnexion. **Manquent** : le
+> refus de droit par requête, la création, la modification et la suppression
+> d'enregistrements, l'administration, les imports, et **les exports** — dont l'absence est
+> nommée au constat **Q-89**. `journaliser()` n'est appelé que depuis `src/auth/index.ts`.
+
+Le périmètre complet du lot est au `PLAN_SERVEUR` **§1.7** (couverture des événements,
+consultation, export, **vérification du chaînage**), et le resserrement de la lecture du
+journal est un **livrable ferme** (`CONVENTIONS.md` §22, condition **E6**) : il ne pouvait
+pas être fait plus tôt, le chaînage par empreinte imposant l'ordre. ⚠️ La justification
+écrite au `README` §8 pour reporter E6 — « sans effet tant que le journal est vide » — a été
+**réfutée par la mesure** : `grc_lecture`, compte de supervision en lecture seule, lit
+**138 entrées** du journal, logins et adresses IP compris.
+
+**Trois choses à ne pas croire acquises en ouvrant L5** :
+
+1. **Le journal est en ajout seul, et cela a été éprouvé** (`update`/`delete` refusés même
+   au propriétaire) — mais sa **couverture** ne l'est pas. Un journal inaltérable et
+   incomplet prouve moins qu'il n'en a l'air.
+2. **Une valeur d'utilisateur atterrit littéralement dans le journal d'audit**, sauts de
+   ligne compris — l'auditeur l'a mesuré en forgeant un login contenant du JSON. Le
+   chaînage n'en souffre pas ; **un export texte du journal, lui, scinderait la ligne**.
+3. **Les constats ouverts qui touchent L5** : **Q-90** (le `README` déclare ouvertes cinq
+   propriétés que L3 a livrées), **Q-91** (trois réglages documentés que personne ne lit),
+   **Q-92**, **Q-95**, **Q-104**. Les lire au registre avant de commencer.
 
 **Objectif : une V1 complète, toutes fonctionnalités, avant le 21/09/2026.** Le fonctionnement
 prime sur la perfection ; l'amélioration viendra ensuite, avec un vrai versionnage `Vx.x.x`.
@@ -771,13 +822,16 @@ comptes réels). ⚠️ Et, sur cette machine-ci,
 `test/modules/` ne peuvent pas y tourner tant qu'ils ne le sont pas — un banc annoncé « 969
 essais » n'en joue ici qu'une partie, et il faut le dire avant de citer un chiffre.
 
-⚠️ **La machine porte aussi les services de production de l'utilisateur** (Odoo, cal.com,
-n8n, traefik, un site web — piles Docker `hm-infra` et `cyber-grc` sous `/opt/hm-infra/`).
-Elles ont été **arrêtées** pour libérer 80/443 et la mémoire, avec l'accord explicite de
-l'utilisateur. Elles se remettent en marche par
-`sudo docker compose -f /opt/hm-infra/docker-compose.yml start` (et de même pour
-`/opt/hm-infra/cyber-grc/docker-compose.yml`), **après avoir arrêté Apache**, qui tient
-désormais ces deux ports.
+ℹ️ **`SRV-Infra` est dédiée à ce projet, et à lui seul.** On y trouve des piles Docker
+arrêtées — `hm-infra` et `cyber-grc` sous `/opt/hm-infra/` : Odoo, cal.com, n8n, traefik,
+searxng, un site web. **C'est l'essai d'un autre projet, abandonné.** L'utilisateur a
+tranché le 04/09/2026 : *« je ne vais en aucun cas remettre en place l'ancien projet sur
+Docker, tu peux faire comme s'il n'existait pas »*. Elles ont été arrêtées pour libérer
+80/443 et la mémoire, et **elles n'ont pas à être redémarrées** — ne perdez pas de temps
+à les ménager, et ne prenez pas leur présence pour une contrainte.
+
+**Le seul conteneur qui compte est `grc-ad`**, le contrôleur de domaine Samba de la
+recette (voir ci-dessus) : celui-là doit tourner.
 
 ⚠️ **La leçon qui a coûté le plus cher** : *une réserve écrite n'est pas une réserve traitée.*
 Six passages ont consigné « Apache n'est pas éprouvé » — honnêtement, sans se contredire —
