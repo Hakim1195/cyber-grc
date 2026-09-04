@@ -267,6 +267,17 @@ cyber-gouvernance_V4/
   par la politique de sécurité de contenu du vhost, et aucun test ne l'avait vu. La règle
   qui en découle : la politique se **lit dans `backend/deploy/apache/cyber-grc.conf`**, elle
   ne se recopie pas à la main.
+- ⚠️ **Sur SRV-Infra, le banc a besoin d'une ligne de plus, et ce n'est pas un détail.**
+  Les rôles PostgreSQL y portent les secrets engendrés par `deploy/install.sh`, pas le
+  mot de passe `dev` que ce paragraphe suppose — et `db/dev/preparer_base_dev.sh` ne
+  doit **pas** être joué ici : il les ramènerait à `dev` et casserait le service
+  installé. Les secrets sont recopiés dans `~/.grc-essais.env` (0600, hors dépôt) :
+
+      cd backend && set -a && source ~/.grc-essais.env && set +a && npm test
+
+  Sans cela, `test/auth/` échoue sur `password authentication failed for user
+  "grc_app"` et les familles navigateur ne trouvent pas Chromium — deux symptômes qui
+  n'ont rien à voir avec le code, et qui coûtent une demi-heure chacun (constat Q-81).
 - **Banc d'essai serveur** : depuis `backend/`, `npm test` (base, API, reprise, navigateur),
   `npm run verifier-types`, `npm audit --omit=dev`. Chaque fichier de test monte une base
   neuve en appelant le vrai `db/migrate.mjs`.
