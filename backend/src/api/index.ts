@@ -1686,17 +1686,29 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  Elle rend **le périmètre de lecture de la session, et lui seul**. Pas la
    *  liste des filiales du groupe.
    *
-   *  Le filtre est écrit ICI, explicitement, et il faut dire pourquoi : la
-   *  table `filiales` est de niveau Groupe et **sa lecture est ouverte**
-   *  (`pol_filiales_lecture … using (true)`, `004_rls.sql` §6) — c'est ce qui
-   *  permet à `f_filiales_lecture()` et au chaînage de fonctionner. La RLS ne
-   *  protège donc **rien** ici : un `select *` rendrait à un RSSI de site la
-   *  liste complète des vingt filiales du groupe, acquisitions comprises, ce
-   *  qui est un oracle d'existence inter-filiales — exactement ce que ce
-   *  chantier ferme depuis la vague 1.
+   *  Le filtre est écrit ICI, explicitement, et il faut dire pourquoi.
+   *
+   *  ⚠️ **Ce paragraphe a dit le faux pendant une vague, et le motif de sa
+   *  correction vaut plus que sa correction.** Il écrivait : *« la table
+   *  `filiales` est de niveau Groupe et sa lecture est ouverte
+   *  (`pol_filiales_lecture … using (true)`, `004_rls.sql` §6) »*. C'était vrai
+   *  à l'écriture, et **faux depuis la migration `010`** (constat Q-132), qui a
+   *  resserré cette politique après avoir mesuré qu'un périmètre d'**une**
+   *  filiale en lisait **deux**. Un commentaire qui affirme l'inverse du code
+   *  est plus dangereux qu'un commentaire absent : c'est la famille Q-90, et
+   *  c'est ainsi que Q-119 est passé.
+   *
+   *  Ce qui reste vrai, et qui justifie le filtre : **la RLS ne suffit pas à
+   *  borner cette table**. `pol_filiales_lecture` ouvre tout dès que
+   *  `f_perimetre_groupe()` est vraie — et cette fonction est *dérivée*, elle ne
+   *  regarde que les filiales `active` (constat Q-155). Un `select *` rendrait
+   *  donc à une session Groupe les filiales `archivee` et `sortie` qui ne sont
+   *  dans son périmètre à personne, et il rendrait au chaînage du journal de
+   *  quoi fonctionner — ce qui est le but, mais pas ici.
    *
    *  La borne est `perimetre.filiales`, c'est-à-dire `session_filiales` relu
-   *  pour cette session : la même source que le sélecteur, et la seule.
+   *  pour cette session : la même source que le sélecteur, et la seule. C'est
+   *  aussi celle que `/api/consolidation` emploie, par `f_filiales_lecture()`.
    * ------------------------------------------------------------------- */
   instance.get(
     '/api/filiales',
