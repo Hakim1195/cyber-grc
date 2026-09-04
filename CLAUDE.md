@@ -48,8 +48,24 @@
 > passés**, et la recette tourne en permanence sur cette machine, Active Directory réel
 > compris.
 >
-> **La recette sert L5** depuis le 04/09 au soir : `install.sh --maj` puis
-> `--verifier-publication` → **65 fichiers servis identiques au dépôt** (constat Q-117, fermé).
+> **La recette sert la vague 5** depuis le 04/09 au soir : `install.sh --maj` puis
+> `--verifier-publication` → **67 fichiers servis identiques au dépôt** (constat Q-117, fermé).
+> Republier passe **toujours** par `install.sh --maj`, jamais par une copie à la main : le
+> jeton de version d'`index.html` dérive du contenu.
+>
+> **Éprouvé à travers Apache, avec l'AD réel** — pas par `inject()` :
+> `GET /api/consolidation` rend **200 et les deux filiales** à `rssi.groupe`
+> (`perimetre.groupe: true`) ; `GET /api/import/modeles` rend 200 ; `POST /api/filiales`
+> rend **403 `droit_insuffisant`** au même compte, et le refus est **journalisé** avec sa
+> route. Le compte `admin.grc` porte les quatorze domaines et le niveau `administration` :
+> le même `POST` avec un code invalide lui rend **400 `donnee_invalide`** — ce qui prouve
+> que **toute la chaîne d'accès est franchie** (domaine, niveau, périmètre d'administration
+> Groupe), la validation du corps ne s'exécutant qu'après le crochet.
+>
+> ⚠️ **Aucune filiale n'a été créée dans la recette**, délibérément : une filiale active de
+> plus fait basculer `f_perimetre_groupe()` à faux pour toute session Groupe jusqu'à sa
+> reconnexion (constat **Q-155**), ce qui dégraderait la recette pour prouver ce qu'un
+> corps invalide prouve sans rien écrire.
 
 ## 0. L'ENVIRONNEMENT DE TRAVAIL — mesuré, pas supposé
 
