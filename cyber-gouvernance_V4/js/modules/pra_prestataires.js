@@ -150,7 +150,8 @@ const PraPrestatairesModule = (() => {
             <section class="page">
                 <div class="print-head">
                     <h1>Prestataires &amp; Tiers — Annuaire d'urgence</h1>
-                    <p>Dedienne Aerospace · Contacts d'escalade et risque fournisseur · Édité le ${esc(dateJour)}</p>
+                    <img class="print-brand-logo" data-brand-logo hidden alt="" />
+                    <p>${esc(Identite.piedImpression("Contacts d'escalade et risque fournisseur"))} · Édité le ${esc(dateJour)}</p>
                 </div>
 
                 <div class="dashboard-header no-print">
@@ -211,6 +212,7 @@ const PraPrestatairesModule = (() => {
         document.querySelectorAll(".clickable-row").forEach(row => {
             row.onclick = () => Router.navigateTo(`/prestataires/${row.dataset.id}`);
         });
+        if (window.Identite) Identite.brancherLogos();
     }
 
     /* =========================

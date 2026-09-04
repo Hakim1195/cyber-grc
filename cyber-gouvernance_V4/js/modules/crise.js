@@ -149,7 +149,8 @@ const CriseModule = (() => {
             <section class="page">
                 <div class="print-head">
                     <h1>Fiches réflexes de crise</h1>
-                    <p>Dedienne Aerospace · Gestion de crise cyber · Édité le ${esc(dateJour)}</p>
+                    <img class="print-brand-logo" data-brand-logo hidden alt="" />
+                    <p>${esc(Identite.piedImpression("Gestion de crise cyber"))} · Édité le ${esc(dateJour)}</p>
                 </div>
 
                 <div class="dashboard-header no-print">
@@ -189,6 +190,7 @@ const CriseModule = (() => {
         injectFichesStyles();
         document.getElementById("backToCriseBtn").addEventListener("click", () => Router.navigateTo("/crise"));
         document.getElementById("printFichesBtn").addEventListener("click", () => window.print());
+        if (window.Identite) Identite.brancherLogos();
     }
 
     /* =========================
@@ -231,7 +233,8 @@ const CriseModule = (() => {
             <section class="page">
                 <div class="print-head">
                     <h1>Annuaire de la Cellule de Crise</h1>
-                    <p>Dedienne Aerospace · Continuité d'activité · Édité le ${dateJour}</p>
+                    <img class="print-brand-logo" data-brand-logo hidden alt="" />
+                    <p>${esc(Identite.piedImpression("Continuité d'activité"))} · Édité le ${dateJour}</p>
                 </div>
 
                 <div class="dashboard-header no-print">
@@ -289,6 +292,7 @@ const CriseModule = (() => {
         document.querySelectorAll(".clickable-row").forEach(row => {
             row.onclick = () => Router.navigateTo(`/crise/${row.dataset.id}`);
         });
+        if (window.Identite) Identite.brancherLogos();
     }
 
     /* =========================

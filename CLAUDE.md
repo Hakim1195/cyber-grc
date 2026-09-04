@@ -669,17 +669,20 @@ sur l'**Active Directory** du groupe.
   pas en s'ajoutant à une liste. Ne jamais réintroduire de liste écrite à la main
   (`CONVENTIONS.md` §18.4, §19.4 et §19.5).
 
-### Avancement au 03/09/2026
+### Avancement au 04/09/2026 (clôture de la vague 5)
 
 | Lot | État |
 |---|---|
 | **L0 — Socle d'infrastructure** | ✅ **livré** — squelette Node/TS, config validée au démarrage, pool PostgreSQL, serveur + point de santé, unité systemd durcie, vhost Apache + durcissement de portée serveur, `install.sh` idempotent, `backend/README.md` |
 | **L1 — Schéma relationnel** | ✅ **livré** (vague 1), corrigé au fil de la porte **S1** — une cinquantaine de tables (compte rejoué dans `backend/README.md` §8), RLS activée **et forcée** partout, propriétaire compris ; clés étrangères et unicités **composites** `(id, filiale_id)` ; traçabilité imposée à l'insertion sur **toutes** les tables qui portent `cree_par`, et **vérifiée** par un garde-fou ; garde-fous du schéma branchés sur `migrate.mjs` **et** `install.sh` via le point d'appel unique `f_verifier_schema()`, et **consignés dans un registre** depuis la migration `005` — un contrôle qui cesse d'être découvert ne disparaît plus en silence |
 | **L2 — API et bascule de la persistance** | ⚠️ **livré** (vague 2) **mais NON VALIDÉ** — porte **S2** franchie au 4ᵉ passage, puis **refusée aux 5ᵉ, 6ᵉ, 7ᵉ, 8ᵉ et 9ᵉ** (bloquant aux 6ᵉ et 7ᵉ ; les 8ᵉ et 9ᵉ sans bloquant). **La porte ne se rejoue plus jusqu'au vert** : le tri du §0 bis a pris le relais le 03/09. Corrigé au fil de la porte — couche d'accès générique par entité, **verrouillage optimiste** (risque P1), diagnostic d'`UPDATE 0` en cinq verdicts, chargement du jeu de données d'une filiale, route de reprise transactionnelle, **bascule de `datastore.js` / `persistence.js`** avec la façade synchrone **intacte** (131 membres avant, 131 après, listes identiques), session provisoire **fail-closed** hors développement |
-| L3 — Authentification AD et droits · L5 — Journal | 🟡 **en cours — vague 3 OUVERTE le 03/09/2026** (arbitrage `docs/PLAN_EXECUTION.md` §0 bis : la porte trie, elle ne bloque plus). Cinq agents, périmètres au §3 ; conditions d'entrée au `backend/db/CONVENTIONS.md` §22 ; contrat de l'annuaire simulé au §25 |
-| **L4 — Multi-filiales** | ✅ **livré** (04/09/2026, vague 4) — sélecteur de filiale active, `GET /api/filiales`, migration `009`. Le client envoie un **choix**, le serveur résout un **périmètre** depuis `session_filiales` relu en base ; la filiale active est revérifiée **à chaque requête**. ⚠️ **La « vision Groupe consolidée » du cadrage n'existe pas** : `/api/donnees` est cadré sur la filiale *active*, donc la Direction voit une filiale à la fois (constat de la porte S5, à arbitrer avec le client) |
+| **L3 — Authentification AD** · **L5 — Journal** | ✅ **livrés** (vague 3, 03–04/09/2026) — LDAPS écrit à la main, sept profils mesurés contre un AD réel, appartenance indirecte par groupe imbriqué ; journal en ajout seul, chaîné, **16 actions sur 20 émises**, lecture cloisonnée (condition E6 fermée). Porte **S4** jouée et refusée, dix constats, la classe dure et cinq majeurs corrigés le jour même |
+| **L4 — Multi-filiales** | ✅ **livré** (04/09/2026, vague 4) — sélecteur de filiale active, `GET /api/filiales`, migration `009`. Le client envoie un **choix**, le serveur résout un **périmètre** depuis `session_filiales` relu en base ; la filiale active est revérifiée **à chaque requête**. La **vision Groupe consolidée** est livrée le 04/09 (`GET /api/consolidation`, vague 5) : aucune de ses requêtes ne nomme de filiale, c'est la RLS qui borne, et un domaine hors des droits rend **`null`, jamais zéro**. La **création de filiale** aussi (`POST /api/filiales`) — elle synchronise les groupes d'annuaire dans la même transaction et rend la liste de ceux à créer dans l'AD. ⚠️ **Reste dehors** : `referentiels_actifs` n'est écrit ni lu par personne (constat **Q-150**) |
 | **L6 — Pièces jointes** | ✅ **livré** (04/09/2026, vague 4) — les **huit contrôles** du `PLAN_SERVEUR` §1.6 dans un ordre figé, ClamAV réel, SHA-256 sur ce qui est écrit, quarantaine, ré-analyse périodique et son timer. `zip.ts` ouvre le conteneur OOXML : un `.docm` renommé est refusé **par ce que Word y a écrit** |
-| L7 → L15 | ⬜ à faire — vagues 5 à 8, voir `docs/PLAN_EXECUTION.md` §3 |
+| **L7 — Import généralisé** | ✅ **livré** (04/09/2026, vague 5) — un moteur, vingt configurations dérivées de `decrire()` ; transactionnel (morsure : 199 lignes écrites, zéro subsiste), idempotent **par le fichier**, cloisonné, journalisé. CSV **et** XLSX, format lu à la signature binaire. ⚠️ Il **crée** ; il ne met pas à jour et ne supprime pas — trois motifs écrits |
+| **L8 — Circuit d'approbation** | ✅ **livré** (04/09/2026, vague 5) — documents, acceptation des risques résiduels, rapports d'audit. `empreinte_objet` fait périmer une approbation quand l'objet change. **L'irréversibilité n'est pas réécrite en TypeScript** : elle vit dans la base, et la morsure va la chercher là |
+| **L9 — Identité par filiale** | ✅ **livré** (04/09/2026, vague 5) — raison sociale et logo de la filiale active, écrans, impressions et exports ; zéro marque en dur ; PNG/JPEG, jamais SVG. ⚠️ **Les coordonnées ne sont pas livrées** : aucune route ne les rend (constat **Q-160**) |
+| L10 → L15 | ⬜ à faire — vagues 6 à 8, voir `docs/PLAN_EXECUTION.md` §3 |
 
 Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 `grc-backup`** (`backend/src/reprise/**`, portage serveur des migrations v1 → v12,
@@ -758,126 +761,61 @@ il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écriv
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
 constat perdu.**
 
-### ▶ REPRENDRE ICI — **L5 est livré, S4 est jouée. La suite est la vague 4 (L4, L6).**
+### ▶ REPRENDRE ICI — **la vague 5 est close. La suite est la vague 6.**
 
-> ⚠️ **Réécrit le 04/09/2026 au soir, à la clôture de la vague L5.** Si vous lisez ailleurs
-> « le lot L5 reste à faire », « la couverture du journal est de 4 actions sur 20 »,
-> « ouvrir la vague 3 » ou « aucun essai navigateur n'existe », c'est **périmé**.
-> L'arbitrage de curseur vit au `docs/PLAN_EXECUTION.md` **§0 bis** et il prime ; l'état des
-> lots et les verdicts se lisent au **§7**, seule source.
+> ⚠️ **Réécrit le 04/09/2026 au soir, à la clôture de la vague 5.** Si vous lisez ailleurs
+> « le travail immédiat est la vague 4 », « L7 → L15 à faire », « le contrôle S15 n'est pas
+> rejoué » ou « aucun compte ne porte `GRC-EXPORT` », c'est **périmé**. L'état des lots se
+> lit au `PLAN_EXECUTION` §7, seule source des verdicts, et la table des lots du §8 est
+> confrontée aux livrables réels par `test/documentation/etat-des-lots.test.mjs`.
 
-**Ce qui a été livré, et qu'il ne faut pas refaire :**
+**Livré dans la vague 5, et qu'il ne faut pas refaire :**
 
-- **L3 est construit et fonctionne**, mesuré de bout en bout contre un **Active Directory
-  réel** : sept profils entrent, l'appartenance **indirecte** par groupe imbriqué ouvre
-  l'accès, un compte sans groupe reçoit 403.
-- **L5 est construit.** La couverture du journal passe de **4 actions émises sur 20** à
-  **14**, mesurée **en base** après avoir exercé le produit — pas lue dans le code. Sont
-  désormais tracées : création, modification, suppression (avec le **différentiel**, pas le
-  doublon), **export** — la moitié restante du constat Q-89 —, import, administration,
-  refus de droit par requête, démarrage et arrêt du service.
-- **La condition d'entrée E6 est fermée, et vérifiée en vol.** La lecture du journal est
-  cloisonnée : `grc_lecture`, compte de supervision qui lisait **160 entrées** le matin,
-  reçoit désormais « Périmètre non positionné ». Le chaînage tient (`f_journal_audit_verifier()`
-  → 0 anomalie), et la connexion AD répond toujours 200 : les deux moitiés — `security
-  definer` et politique resserrée — vivent ensemble.
-- **Trois routes de consultation** (`/api/journal`, `/api/journal/export`,
-  `/api/journal/verification`), un **écran `/journal`**, et l'export CSV éprouvé par
-  aller-retour sur une entrée hostile (`\r\n`, `"`, `;`) : **une** ligne logique, valeur intacte.
-- **Banc : 1136 essais, 1136 passés, 0 échec.**
-
-**Trois choses à savoir avant de continuer :**
-
-1. ✅ **La porte S4 a été jouée le 04/09/2026, et refusée** — rapport dans
-   [`docs/securite/RAPPORT_S4.md`](docs/securite/RAPPORT_S4.md), verdicts au
-   `PLAN_EXECUTION` §7. Dix constats, dont **Q-118, classe « fuite de données »** : la route
-   de vérification du chaînage était un **oracle exact** sur la chronologie du groupe
-   entier — depuis une session d'une seule filiale, 11 maillons hors périmètre reconstruits
-   sur 14. Elle est réservée au périmètre Groupe, et le refus est **déclaré**
-   (`DeclarationAcces.perimetre`), prononcé par `onRequest` comme tous les autres.
-   ⚠️ **Trois choses que cette porte a apprises et qui valent pour les suivantes** :
-   *(a)* un essai **mesurait** le défaut de Q-118 et le **consacrait** comme une propriété
-   désirable — il n'était pas faux, il ne posait jamais la question *« et qu'apprend celle
-   qui n'a pas le droit ? »* ; *(b)* ma première correction était une garde `403` dans la
-   route, qu'un essai a refusée à juste titre — la bonne réponse n'était pas de l'assouplir
-   mais d'apprendre au vocabulaire d'accès à exprimer un périmètre ; *(c)* **Q-119 était ma
-   régression de la veille**, avec un commentaire qui affirmait le contraire de la vérité.
-2. ✅ **La machine sert L5, et c'est mesuré** (constat **Q-117**, fermé). Republié par
-   `install.sh --maj` — **jamais par une copie à la main**, le jeton de version d'`index.html`
-   dérivant du contenu —, puis `--verifier-publication` : **65 fichiers servis identiques au
-   dépôt**. Éprouvé sur le service : `GET /api/journal` sans session rend **401** ; le compte
-   AD `rssi.tls` reçoit **403** sur les trois routes du journal **et 200 sur `/api/donnees`**,
-   ce qui prouve que le refus vient du domaine `journal` et non d'une session cassée ; les
-   trois refus sont **journalisés par le crochet `onRequest`**, avec la route, l'action et le
-   domaine exigés. ⚠️ **Ce qui n'est PAS mesuré sur la machine** : le cas positif — une
-   lecture réussie du journal par un profil `ADMIN`. Le mot de passe AD réel du compte `admin`
-   vivait dans un scratchpad d'une session passée et n'est plus connu ; `test/annuaire/comptes.mjs`
-   décrit l'annuaire **simulé**, dont les mots de passe diffèrent de l'AD Samba. Le chemin
-   positif est couvert par les **61 essais** de `test/journal-lecture/`, à travers le vrai
-   crochet `onRequest` — mais pas à travers Apache.
-3. **Six actions sur 20 restent non émises**, et le report est écrit : `consultation_sensible`
-   et `verification_journal` sont émises par les routes de consultation (donc invisibles tant
-   que la machine sert l'ancien build) ; `purge` et `archivage` relèvent de la procédure
-   d'exploitation (`CONVENTIONS.md` §12) ; `approbation` est le lot **L8** ;
-   `analyse_antivirus` le lot **L6**.
-
-**Ce que la vague a trouvé et qui vaut d'être lu** — `PLAN_EXECUTION` §7, constats **Q-105
-à Q-117**. Deux méritent d'être nommés ici, parce qu'ils sont du même genre et que ce genre
-est celui qui coûte le plus cher :
-
-- **Q-108** — une session expirée n'était **ni révoquée ni journalisée**, alors que le code
-  promettait « une fois » : le refus était levé *à l'intérieur* de la transaction, qui
-  annulait les deux écritures. L'essai chargé de le prouver comparait `count(*)` avant et
-  après, lisait **`0` les deux fois**, et concluait au vert. Trouvé en exigeant de l'essai
-  qu'il ait **de la matière à compter**.
-- **Q-116** — l'essai « l'interface n'est pas la barrière » substituait les droits **dans le
-  navigateur** et interrogeait le vrai serveur, qui, lui, avait tous les domaines. Il
-  mesurait une substitution, pas une barrière.
-
-> **La leçon commune, et elle est plus générale que le journal** : *un essai vert qui n'a
-> rien eu à mesurer rend le même verdict qu'un essai vert qui a tout mesuré.* Les deux
-> défauts vivaient depuis des mois sous un banc au vert. Exiger de la matière — « il devait y
-> avoir quelque chose à compter », « la table ne devait pas être vide », « le plancher de
-> sites exercés » — est ce qui les a fait tomber, et c'est désormais la forme attendue de
-> tout contrôle de ce dépôt.
-
-**Le travail immédiat : la vague 4 — L4 (multi-filiales) et L6 (pièces jointes)**,
-`PLAN_EXECUTION` §3. Cinq constats de L5 restent ouverts et datés `V1.1` au registre :
-**Q-122** (toute lecture du journal l'alimente, sans borne), **Q-123** (la vérification
-partielle crie sur un journal sain), **Q-125** (les groupes AD et l'annuaire s'écrivent sans
-trace — **met S3 en échec**), **Q-126** (le 14ᵉ domaine ne sépare rien dans le socle livré),
-et **Q-110** / **Q-112** / **Q-113** / **Q-114** de la construction.
-
-⚠️ **Ce que la porte S4 n'a pas pu éprouver, et qui n'est donc pas acquis** : l'action
-`arret` ; et l'**export CSV à travers Apache**.
-
-> ✅ **Deux de ces réserves sont tombées le 04/09 au soir, et par la même méthode : les
-> essayer.**
->
-> · Le contrôle **S15** (`npm audit --omit=dev`) était consigné « non rejoué » — avec un
->   diagnostic mesuré et juste (`POST /-/npm/v1/security/advisories/bulk` → 503 ou sans
->   réponse au-delà de 20 s, quand la même URL rend 405 en 202 ms en `HEAD`) et la bonne
->   conclusion : *« à rejouer, c'est peut-être passager »*. Rejoué : **`found 0
->   vulnerabilities`, code de retour 0** (constat **Q-156**). C'était passager.
-> · *« Aucun compte de recette ne porte `GRC-EXPORT` »* était **faux** : `rssi.groupe` le
->   porte (constat **Q-129**). L'affirmation venait d'un rapport d'agent recopié sans être
->   vérifiée.
->
-> ⚠️ **La leçon, et elle prime sur le réflexe de reconduire une réserve** : « non rejoué »
-> ne vaut ni « passé » **ni « en échec »**. Une réserve honnêtement écrite reste une
-> réserve non traitée tant que personne ne la rejoue — et rejouer coûte ici quelques
-> secondes. Voir aussi le §0, écrit après que trois affirmations fausses sur
-> l'environnement eurent coûté du travail dans la seule journée du 04/09.
-
-**Objectif inchangé : une V1 complète, toutes fonctionnalités, avant le 21/09/2026.** Le
-fonctionnement prime sur la perfection. Le tri du `PLAN_EXECUTION` §0 bis s'applique :
-
-| Classe | Traitement |
+| Lot | Ce qui est en place |
 |---|---|
-| bloque le fonctionnement | corrigé avant la fin de la vague |
-| fuite ou perte de données | corrigé, sans négociation — c'est la promesse centrale du produit |
-| tout le reste | marqué **`V1.1`** au registre, et on continue |
+| **L7 — import généralisé** | Un moteur, vingt configurations dérivées de `decrire()`. Transactionnel (morsure : la ligne 201 heurte une clé posée par la ligne 6 — 199 lignes étaient là, zéro subsiste), idempotent **par le fichier**, cloisonné, journalisé. CSV **et** XLSX, format reconnu à la signature binaire. **L'import crée ; il ne met pas à jour et ne supprime pas** — trois motifs écrits dans `moteur.ts`. |
+| **L8 — circuit d'approbation** | Documents, acceptation des risques résiduels, rapports d'audit. `empreinte_objet` fait périmer une approbation quand l'objet change, pas quand on le réenregistre sans le modifier. **L'irréversibilité n'est pas réécrite en TypeScript** : elle vit dans la base, et la morsure va la chercher là — y compris sous le compte propriétaire, et par une course réelle à travers l'API. |
+| **L9 — identité par filiale** | Raison sociale et logo de la filiale active, aux écrans, aux impressions et aux exports. Zéro occurrence de la marque en dur. PNG/JPEG seulement, jamais SVG. ⚠️ **Les coordonnées ne sont pas livrées** — aucune route ne les rend (constat **Q-160**). |
+| **L4 — le reliquat** | La **consolidation Groupe** (`GET /api/consolidation`) et la **création de filiale** (`POST /api/filiales`) : deux contenus du lot que la vague 4 avait laissés dehors. |
 
+**Quatre acquis d'environnement, mesurés, qui changent ce qu'on peut tenter :**
+
+1. ✅ **Le contrôle S15 passe** — `npm audit --omit=dev` rend `found 0 vulnerabilities`. La
+   réserve « non rejoué » de la porte S4 est levée : c'était passager, et il a suffi de
+   rejouer (**Q-156**).
+2. ✅ **Le banc navigateur transporte les cookies** — il ne le faisait pas, et personne ne
+   l'avait su faute d'essayer. La classe « navigateur réel + authentification AD réelle »
+   est désormais praticable (**Q-159**).
+3. ✅ **Les compilations du banc sont sérialisées** par un verrou de fichier — trois agents
+   jouant `npm test` laissaient un `dist/` **composite** (**Q-148**).
+4. ✅ **`rssi.groupe` porte bien `GRC-EXPORT`** — l'affirmation contraire venait d'un rapport
+   d'agent recopié sans vérification (**Q-129**).
+
+**Le travail de la vague 6, par ordre de valeur :**
+
+| | Contenu | Pourquoi maintenant |
+|---|---|---|
+| **a** | **Le reste de L4** : `referentiels_actifs` n'est **écrit ni lu par personne** (**Q-150**) — toutes les filiales voient les cinq référentiels, NIS2 et DORA comprises, et leur taux de conformité se calcule sur des exigences qui ne les concernent pas. Plus les **coordonnées de filiale** (**Q-160**). | C'est du contenu du **chemin critique** resté dehors, et le second point débloque la moitié de L9 |
+| **b** | **L'écran de la consolidation Groupe** | La route existe et **aucun écran ne l'appelle** : une fonctionnalité à moitié livrée |
+| **c** | **L10 — internationalisation de l'interface** | FR + EN sont **obligatoires** au cadrage ; L11 en dépend, et L11 est le seul lot dont le volume menace le 21/09 |
+| **d** | **L13 — cycle de vie** : archivage, sortie de filiale, purges RGPD, rétention | `filiales` porte déjà `statut` et `date_sortie` ; rien ne les fait vivre |
+
+**Ce qui reste hors d'atteinte, et pourquoi** : **L12** (notifications) demande un relais SMTP
+que la VM du client doit fournir — la sortie de *ce* VPS vers Microsoft 365 fonctionne, celle
+de la VM cliente reste à vérifier (`PLAN_SERVEUR` §9). **L14** (documentation) se fait en
+dernier et **ne se délègue pas** : le §2 bis le mesure — l'agent de documentation de la
+vague 3 a coûté 412 041 jetons et son travail a été invalidé le jour même.
+
+**Deux décisions qui appartiennent au client, et qu'aucune session ne peut prendre :**
+
+- **Q-153** — une politique de portée Groupe se valide-t-elle **une fois au Groupe**, ou
+  **filiale par filiale** ? Aujourd'hui `approbations.filiale_id` est `not null`, donc c'est
+  la seconde ; les deux se défendent, et fermer l'autre demande une migration.
+- **Risque P5** — la **validation formelle du découpage Groupe/Filiale par le RSSI groupe**
+  n'a **aucune trace dans le dépôt**. Elle était attendue avant L1 ; L1 a été écrit sur
+  l'arbitrage interne du `CONVENTIONS.md` §16.4. À faire confirmer **avant la mise en
+  service pilote** : changer le niveau d'une table après coup se paie en migration de
+  données.
 
 ### La vague 3 — L3 authentification AD et droits, puis L5 journal
 

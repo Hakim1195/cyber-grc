@@ -140,6 +140,18 @@ const ENTONNOIR = /Droits\s*\.\s*exigerExport\s*\(/;
  */
 const SORTIES_QUI_NE_SONT_PAS_DES_EXPORTS = [
   {
+    fichier: 'js/core/identite.js',
+    pourquoi:
+      'afficher le logo de SA PROPRE filiale, déjà visible à l’écran, EST une lecture — un ' +
+      'profil sans GRC-EXPORT doit quand même voir la marque de son organisation, et un ' +
+      'document imprimé sans marque est un document qu’un auditeur ne peut rattacher à ' +
+      'personne.',
+    gardePar:
+      'le serveur — GET /api/pieces/logo(/:id) sert TOUJOURS la filiale de la session ' +
+      '(cibleLogo() ne lit aucun identifiant du client), et la pièce servie a passé les huit ' +
+      'contrôles du CONVENTIONS.md §31, dont l’analyse antivirale.',
+  },
+  {
     fichier: 'js/modules/pieces.js',
     pourquoi:
       'ouvrir une pièce attachée à une fiche qu’on a le droit de lire EST une lecture ' +

@@ -838,6 +838,32 @@ const Api = (() => {
         return appeler(cheminPiece(entiteType, entiteId, pieceId), { methode: "DELETE" });
     }
 
+    /* =====================================================================
+       LOGO DE FILIALE — lot L9 (`CONVENTIONS.md` §33.4), famille DISTINCTE du
+       §31 : `filiales` n'est pas une entité métier, et ces routes s'appellent
+       `/pieces/logo`, jamais `/pieces/<entite>/<entiteId>` — la filiale visée
+       est TOUJOURS celle de la session, jamais un paramètre de l'appelant
+       (`backend/src/pieces/index.ts`, « Famille 2 »). Chemins RELEVÉS là,
+       recopiés ici une seule fois — même règle qu'au reste de `CONTRAT_PIECES`.
+
+       ⚠️ Ces routes exigent le domaine `administration` (`{ domaine:
+       'administration' }` côté serveur) : la plupart des profils n'y ont PAS
+       accès en lecture. Un refus ici est un cas NORMAL, pas une panne —
+       `js/core/identite.js` le traite comme « pas de logo », jamais comme une
+       erreur à montrer à l'écran.
+    ===================================================================== */
+
+    const CHEMIN_LOGO = "/pieces/logo";
+
+    /** La ou les pièces déposées comme logo de la filiale active. Même forme que `pieces()`. */
+    function logoFiliale() { return appeler(CHEMIN_LOGO); }
+
+    /** Contenu binaire du logo désigné. Même prudence que `telechargerPiece()`. */
+    function telechargerLogoFiliale(pieceId) {
+        return appeler(CHEMIN_LOGO + "/" + encodeURIComponent(pieceId),
+            { binaire: true, delai: DELAI_CHARGEMENT_MS });
+    }
+
     // Opération composite : la propagation « au plus défavorable » s'exécute en
     // UNE transaction côté serveur (contrôle S14), et rend les évaluations
     // relues, versions comprises.
@@ -853,7 +879,8 @@ const Api = (() => {
         creer, modifier, supprimer, propagerMesure, reprendre,
         journal, journalVerification, journalExport,
         filiales, choisirFilialeActive,
-        pieces, deposerPiece, telechargerPiece, adressePiece, supprimerPiece
+        pieces, deposerPiece, telechargerPiece, adressePiece, supprimerPiece,
+        logoFiliale, telechargerLogoFiliale
     };
 })();
 

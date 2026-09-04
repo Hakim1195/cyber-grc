@@ -78,10 +78,11 @@ const MatriceModule = (() => {
         // Fond blanc (sinon PNG transparent).
         s += `<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`;
 
-        // Titre + marque Dedienne.
+        // Titre + marque de la filiale ACTIVE, jamais d'une constante (lot L9,
+        // CONVENTIONS.md §33.4) : ce texte SVG est ce qu'un auditeur emporte.
         s += `<text x="${M}" y="${M + 22}" font-size="20" font-weight="700" fill="${C.primary}">Matrice de criticité des risques</text>`;
         s += `<text x="${M}" y="${M + 41}" font-size="12" fill="${C.muted}">Méthode EBIOS (Fréquence × Gravité) — ${risques.length} scénario(s)</text>`;
-        s += `<text x="${W - M}" y="${M + 22}" text-anchor="end" font-size="13" font-weight="700" fill="${C.brand}">Dedienne Aerospace</text>`;
+        s += `<text x="${W - M}" y="${M + 22}" text-anchor="end" font-size="13" font-weight="700" fill="${C.brand}">${esc(Identite.raisonSocialeOuRepli(Identite.NOM_PRODUIT))}</text>`;
         s += `<text x="${W - M}" y="${M + 41}" text-anchor="end" font-size="11" fill="${C.muted}">Exporté le ${esc(dateStr)}</text>`;
 
         // Label axe X (Fréquence) au-dessus des colonnes.

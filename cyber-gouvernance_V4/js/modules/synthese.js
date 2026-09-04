@@ -784,7 +784,7 @@ const SyntheseModule = (() => {
             ${buildVigilance(m)}
 
             <div class="sd-footer">
-                <span>Dedienne Aerospace — Gouvernance & Sécurité de l'Information</span>
+                <span><img class="print-brand-logo" data-brand-logo hidden alt="" style="height:16px; max-height:16px; display:inline-block; vertical-align:middle; margin:0 6px 0 0;" />${esc(Identite.piedImpression("Gouvernance & Sécurité de l'Information"))}</span>
                 <span>Document confidentiel · Édité le ${esc(dateJour)}</span>
             </div>`;
     }
@@ -934,9 +934,14 @@ const SyntheseModule = (() => {
         const dateJour = new Date().toLocaleDateString("fr-FR", { year: "numeric", month: "long", day: "numeric" });
         const stamp = new Date();
         const y = stamp.getFullYear(), mo = String(stamp.getMonth() + 1).padStart(2, "0"), d = String(stamp.getDate()).padStart(2, "0");
+        // ⚠️ Ce document devient un FICHIER `.html` AUTONOME (Blob + <a download>,
+        // voir plus bas) : il n'a plus accès à `Session`/`Api` une fois ouvert
+        // hors de cette page. Le logo (asynchrone, réseau) n'y a donc pas sa
+        // place ; la raison sociale, elle, est déjà connue ICI et s'écrit en
+        // texte, comme partout ailleurs (lot L9, `CONVENTIONS.md` §33.4).
         const head = `<div class="sd-head">
             <div>
-                <div style="font-size:0.8rem; font-weight:800; letter-spacing:1px; color:#2059A6; text-transform:uppercase;">Dedienne Aerospace</div>
+                <div style="font-size:0.8rem; font-weight:800; letter-spacing:1px; color:#2059A6; text-transform:uppercase;">${esc(Identite.raisonSocialeOuRepli(Identite.NOM_PRODUIT))}</div>
                 <h1>Synthèse Direction — Posture Cyber</h1>
                 <p>Périmètre : <strong>${esc(m.contextName)}</strong> · Édité le ${esc(dateJour)}</p>
             </div>
@@ -990,6 +995,7 @@ ${styleBlock()}
         </div>`;
 
         app.innerHTML = styleBlock() + `<section class="page syndir">${head}${buildBody(m, history, { standalone: false })}</section>`;
+        if (window.Identite) Identite.brancherLogos();
 
         // -- Interactions --
         const printBtn = document.getElementById("sdPrintBtn");

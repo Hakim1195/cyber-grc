@@ -77,6 +77,19 @@ a { text-decoration: none; color: inherit; }
     width: 100%;
     height: auto;
     display: block;
+    margin-bottom: 6px;
+}
+.brand-logo[hidden] { display: none; }
+/* Repli texte d'une filiale sans logo (lot L9) : toujours présent, jamais
+   remplacé silencieusement par la marque d'une autre filiale. */
+.brand-text {
+    display: block;
+    text-align: center;
+    font-weight: 800;
+    font-size: 0.95rem;
+    line-height: 1.25;
+    color: var(--primary, #2059A6);
+    word-break: break-word;
 }
 
 .sidebar-header h2 { font-size: 1.4rem; margin-bottom: 0.5rem; }
@@ -435,6 +448,9 @@ button:active { transform: translateY(0); }
     text-align: center;
 }
 .lock-logo { width: 220px; max-width: 80%; height: auto; display: block; margin: 0 auto 22px; }
+/* Écran de démarrage (lot L9) : nom de produit neutre, jamais le logo d'une
+   filiale — aucune filiale n'est encore connue avant réponse de /api/session. */
+.lock-brand { font-weight: 800; font-size: 1.3rem; color: var(--primary, #2059A6); margin-bottom: 18px; letter-spacing: 0.02em; }
 .lock-title { font-size: 1.4rem; margin-bottom: 6px; }
 .lock-sub { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px; line-height: 1.5; }
 .lock-warn {
@@ -598,6 +614,12 @@ button:active { transform: translateY(0); }
 /* En-tête de document réservé à l'impression : masqué à l'écran, révélé au print.
    Sert aux annuaires imprimables (cellule de crise, prestataires & tiers). */
 .print-head { display: none; }
+/* Logo de la filiale active dans une entête imprimable (lot L9) : posé par
+   `Identite.brancherLogos()` une fois l'image obtenue — `hidden` tant qu'aucun
+   logo n'est disponible, auquel cas la raison sociale (toujours présente en
+   texte) reste seule. Partagé par `.print-head` et `.soa-print-head`. */
+.print-brand-logo { display: block; max-height: 42px; width: auto; margin-bottom: 6px; }
+.print-brand-logo[hidden] { display: none; }
 
 @media print {
     @page {

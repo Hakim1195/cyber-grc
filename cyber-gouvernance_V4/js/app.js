@@ -14,6 +14,14 @@ document.addEventListener("DOMContentLoaded", () => {
 async function startApp() {
 
     /* =========================
+       IDENTITÉ VISUELLE DE LA FILIALE ACTIVE (lot L9)
+       Titre d'onglet, marque de la barre latérale et logo : jamais une
+       constante, toujours ce que `Session` tient de la filiale résolue par le
+       serveur. Voir `js/core/identite.js` — `CONVENTIONS.md` §33.4.
+    ========================== */
+    if (window.Identite) Identite.brancherEnTete();
+
+    /* =========================
        SÉLECTEUR DE DONNEUR D'ORDRE
        Le périmètre de SÉCURITÉ vient du serveur (`Session` / `/api/session`) et n'est
        ni choisi ni mémorisé par le navigateur (contrôle S2). Ce sélecteur-ci n'est pas
@@ -574,6 +582,10 @@ window.changerFilialeActive = async function (filialeChoisie) {
 
         if (window.renderContextSelector) window.renderContextSelector();
         if (window.renderBlocUtilisateur) window.renderBlocUtilisateur();
+        // La marque affichée suit la filiale ACTIVE, jamais l'ancienne (lot L9) :
+        // sans appel à `Session.charger()` déjà fait plus haut, on afficherait
+        // encore le nom de la filiale qu'on vient de quitter.
+        if (window.Identite) Identite.brancherEnTete();
         if (change) {
             /* ── UN IDENTIFIANT D'ENREGISTREMENT APPARTIENT À LA FILIALE QU'ON QUITTE ──
              *

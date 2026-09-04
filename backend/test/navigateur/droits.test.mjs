@@ -764,6 +764,10 @@ function fichiersQuiExportent() {
  */
 const SORTIES_QUI_NE_SONT_PAS_DES_EXPORTS = [
   { fichier: 'js/modules/pieces.js', eprouvePar: 'test/navigateur/pieces.test.mjs' },
+  // Le logo de SA PROPRE filiale : une lecture, pas un export. Même arbitrage
+  // que `pieces.js` ci-dessus (`CONVENTIONS.md` §31.5), et la barrière est la
+  // même — le serveur ne sert jamais que la filiale de la session.
+  { fichier: 'js/core/identite.js', eprouvePar: 'test/navigateur/identite.test.mjs' },
 ];
 
 const SITES_DE_SORTIE = [

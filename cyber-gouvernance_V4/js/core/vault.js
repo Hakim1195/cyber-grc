@@ -145,6 +145,14 @@ const Vault = (() => {
         }[c]));
     }
 
+    /**
+     * L'écran de démarrage n'affiche JAMAIS le logo d'une filiale ici, à
+     * dessein (lot L9, `CONVENTIONS.md` §33.4) : avant que `/api/session` ait
+     * répondu, aucune filiale n'est encore connue — pas même celle de la
+     * dernière session, qu'on ne suppose pas valide. Montrer le logo de la
+     * maison mère par défaut serait précisément le défaut que ce lot corrige ;
+     * un nom de produit neutre est donc le seul choix qui ne ment jamais.
+     */
     function overlayShell(inner) {
         let ov = document.getElementById("lock-overlay");
         if (!ov) {
@@ -153,7 +161,7 @@ const Vault = (() => {
             ov.className = "lock-overlay no-print";
             document.body.appendChild(ov);
         }
-        ov.innerHTML = `<div class="lock-card"><img src="assets/logo/logo-dedienne.png" alt="Dedienne Aerospace" class="lock-logo" />${inner}</div>`;
+        ov.innerHTML = `<div class="lock-card"><div class="lock-brand">Cyber GRC</div>${inner}</div>`;
         return ov;
     }
 

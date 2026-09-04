@@ -127,6 +127,21 @@ const TYPES = Object.freeze({
   '.ico': 'image/x-icon',
 });
 
+/**
+ * Découpe un en-tête `Cookie` en `{ nom: valeur }`, la forme qu'attend
+ * `inject()`. Analyse volontairement minimale : ce relais ne sert que le banc,
+ * et les cookies du produit sont posés par le produit.
+ */
+function analyserCookies(entete) {
+  const paire = {};
+  for (const morceau of entete.split(';')) {
+    const rang = morceau.indexOf('=');
+    if (rang <= 0) continue;
+    paire[morceau.slice(0, rang).trim()] = morceau.slice(rang + 1).trim();
+  }
+  return paire;
+}
+
 /* =====================================================================
  *  Le navigateur
  * ===================================================================== */
@@ -262,6 +277,23 @@ export async function servirApplication(serveur, options = {}) {
             // j'ai bien failli rapporter comme défaut une suppression refusée que
             // seul mon relais refusait. Un instrument qui invente ce qu'il mesure
             // est pire qu'un instrument absent.
+            //
+            // ── LE COOKIE, DANS LES DEUX SENS — constat Q-159 ────────────────
+            //
+            // Ce relais ne transmettait **ni** `Cookie` en entrée **ni**
+            // `Set-Cookie` en sortie. Conséquence mesurée : une connexion
+            // réussie rendait 200 avec une session complète, et
+            // `context.cookies()` du navigateur restait **vide**. Toute la
+            // classe « navigateur réel + authentification réelle » était donc
+            // intestable — et personne ne l'avait su, faute d'avoir essayé :
+            // `droits.test.mjs` emploie l'authentification provisoire, et les
+            // essais du sélecteur de filiale n'ouvrent pas de navigateur.
+            //
+            // C'est la famille du `CLAUDE.md` §0 : une capacité réputée absente
+            // qu'on n'avait jamais mise à l'épreuve. Deux lignes.
+            ...(requete.headers.cookie === undefined
+              ? {}
+              : { cookies: analyserCookies(requete.headers.cookie) }),
             ...(corps.length === 0
               ? {}
               : {
@@ -270,9 +302,14 @@ export async function servirApplication(serveur, options = {}) {
                 }),
           })
           .then((reponseApi) => {
-            reponse.writeHead(reponseApi.statusCode, {
+            const entetesApi = {
               'content-type': reponseApi.headers['content-type'] ?? 'application/json',
-            });
+            };
+            // `Set-Cookie` peut être multiple : Node l'expose alors en tableau,
+            // et `writeHead` sait le rendre tel quel.
+            const poses = reponseApi.headers['set-cookie'];
+            if (poses !== undefined) entetesApi['set-cookie'] = poses;
+            reponse.writeHead(reponseApi.statusCode, entetesApi);
             reponse.end(reponseApi.body);
           })
           .catch((erreur) => {

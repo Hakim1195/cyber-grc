@@ -167,7 +167,8 @@ const ConformiteModule = (() => {
 
                 <div class="soa-print-head" style="display:none;">
                     <h1 style="margin-bottom:4px;">Déclaration d'applicabilité — ${escapeHtml(ref.nom)}</h1>
-                    <p style="color:var(--text-muted);">Dedienne Aerospace · ${dateJour}</p>
+                    <img class="print-brand-logo" data-brand-logo hidden alt="" />
+                    <p style="color:var(--text-muted);">${escapeHtml(Identite.piedImpression())} · ${dateJour}</p>
                 </div>
 
                 <div class="soa-summary">
@@ -186,10 +187,11 @@ const ConformiteModule = (() => {
                     <tbody>${sections}</tbody>
                 </table>
 
-                <p class="soa-foot" style="margin-top:20px; color:var(--text-muted); font-size:0.8rem;">Document généré depuis Cyber GRC — Dedienne Aerospace. Les intitulés sont des reformulations ; se référer au référentiel officiel pour le texte exact.</p>
+                <p class="soa-foot" style="margin-top:20px; color:var(--text-muted); font-size:0.8rem;">Document généré depuis ${Identite.NOM_PRODUIT} — ${escapeHtml(Identite.raisonSocialeOuRepli(Identite.NOM_PRODUIT))}. Les intitulés sont des reformulations ; se référer au référentiel officiel pour le texte exact.</p>
             </section>`;
 
         document.getElementById("printSoaBtn").addEventListener("click", () => window.print());
+        if (window.Identite) Identite.brancherLogos();
     }
 
     return { renderCouverture, renderSoa };

@@ -89,11 +89,32 @@ const BackupService = (() => {
 
     function dateStamp() { return new Date().toISOString().split("T")[0]; }
 
+    /**
+     * Segment de nom de fichier identifiant la filiale EXPORTÉE — jamais une
+     * marque en dur (lot L9, `CONVENTIONS.md` §33.4) : un export de la filiale
+     * B nommé d'après la filiale A serait trompeur au premier regard porté sur
+     * le fichier, précisément le geste qu'un « remise à l'acquéreur » exige de
+     * ne jamais rater. Repli sur le code (court, déjà sans espace ni accent)
+     * si la raison sociale n'est pas encore résolue.
+     */
+    function segmentFiliale() {
+        let brut = "";
+        try {
+            const s = (typeof Session !== "undefined") ? Session.courante() : null;
+            brut = (s && (s.filialeNom || s.filialeCode)) || "";
+        } catch (e) { brut = ""; }
+        const slug = String(brut)
+            .normalize("NFD").replace(/\p{Diacritic}/gu, "")   // accents décomposés par normalize()
+            .replace(/[^A-Za-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "");
+        return slug || "Filiale";
+    }
+
     function exportPlain() {
         // ── LE DROIT D'EXPORT EST DISTINCT DE LA LECTURE (§3.3) ───────────
         // Entonnoir unique : `Droits.exigerExport()` (js/core/session.js).
         if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
-        download(DataStore.exportSnapshot(), `Sauvegarde_CyberGRC_Dedienne_${dateStamp()}.json`);
+        download(DataStore.exportSnapshot(), `Sauvegarde_CyberGRC_${segmentFiliale()}_${dateStamp()}.json`);
         markExported();
     }
 
@@ -102,7 +123,7 @@ const BackupService = (() => {
         // Entonnoir unique : `Droits.exigerExport()` (js/core/session.js).
         if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
         const text = await DataStore.exportEncrypted(password);
-        download(text, `Sauvegarde_CyberGRC_Dedienne_${dateStamp()}.chiffre.json`);
+        download(text, `Sauvegarde_CyberGRC_${segmentFiliale()}_${dateStamp()}.chiffre.json`);
         markExported();
     }
 

@@ -3,7 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cyber GRC — Dedienne Aerospace</title>
+    <!-- Titre neutre au chargement : aucune filiale n'est encore connue à cet
+         instant (avant réponse de /api/session). `js/core/identite.js` le
+         complète dès que la session est résolue (`Identite.brancherEnTete`,
+         lot L9 — CONVENTIONS.md §33.4) : jamais une marque codée en dur ici. -->
+    <title>Cyber GRC</title>
     <link rel="icon" type="image/svg+xml" href="assets/logo/favicon.svg">
     <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/style.css">
@@ -18,8 +22,14 @@
 
     <nav class="sidebar no-print">
         <div class="sidebar-header">
-            <a href="#/dashboard" class="brand-link" aria-label="Dedienne Aerospace — Tableau de bord">
-                <img src="assets/logo/logo-dedienne.png" alt="Dedienne Aerospace" class="brand-logo" />
+            <!-- Marque de la filiale ACTIVE, jamais d'une constante (lot L9,
+                 CONVENTIONS.md §33.4) : `Identite.brancherEnTete()` complète le
+                 libellé et l'aria-label, puis ajoute le logo s'il y en a un.
+                 Le texte ne disparaît jamais au profit du logo — c'est le
+                 repli visible d'une filiale sans logo propre. -->
+            <a href="#/dashboard" class="brand-link" id="brandLink" aria-label="Cyber GRC — Tableau de bord">
+                <img id="brandLogo" data-brand-logo hidden alt="" class="brand-logo" />
+                <span id="brandText" class="brand-text">Cyber GRC</span>
             </a>
             <span class="badge">Cyber GRC · v4.1</span>
         </div>
@@ -77,6 +87,10 @@
          qui s'appuie sur eux, et avant vault.js, devenu la porte de connexion. -->
     <script src="js/core/api.js"></script>
     <script src="js/core/session.js"></script>
+    <!-- Identité visuelle par filiale (lot L9) : lit Session, appelle Api.
+         Chargé avant tout module qui l'utilise (impressions, exports, barre
+         latérale) et avant vault.js/app.js, qui déclenchent son premier appel. -->
+    <script src="js/core/identite.js"></script>
     <script src="js/core/sync.js"></script>
     <script src="js/core/reprise.js"></script>
     <script src="js/core/vault.js"></script>

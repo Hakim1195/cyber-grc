@@ -918,12 +918,32 @@ describe('Le JavaScript est compressé et caché long (constat Q-42)', () => {
  *  ── Le troisième essai est le plus important des trois ──────────────────
  *
  *  Le remède évident au constat était « étendre le jeton aux images ». Il est
- *  faux, et d'une façon vicieuse : le logo a **deux** URL — `index.html` en
- *  porte une, `js/core/vault.js:119` construit l'autre à l'exécution, dans la
+ *  faux, et d'une façon vicieuse : le logo avait **deux** URL — `index.html` en
+ *  portait une, `js/core/vault.js` construisait l'autre à l'exécution, dans la
  *  porte de démarrage. Versionner la page n'en couvrirait qu'une, tout en
  *  faisant TAIRE un garde-fou borné à la page. C'est la forme la plus coûteuse
  *  du décor : un contrôle que le remède évident éteint sans rien réparer. Le
  *  troisième essai interdit cette version-là du garde-fou.
+ *
+ *  ── LE DÉCOR EST DÉSORMAIS PLANTÉ PAR L'ESSAI, et c'est une correction ──
+ *
+ *  Ces trois essais s'ancraient sur les deux références RÉELLES du produit —
+ *  celle d'`index.html` et celle de `vault.js`. Le lot L9 les a retirées toutes
+ *  les deux, à juste titre : la marque devient configurable par filiale, et le
+ *  logo n'est plus une adresse écrite en dur. Le garde-fou s'est alors retrouvé
+ *  **sans rien à éprouver**, et deux de ces essais ont rougi.
+ *
+ *  Le commentaire de l'ancien décor l'avait anticipé — *« si cette ligne
+ *  disparaît, vérifier que le garde-fou a toujours une raison d'être avant de
+ *  toucher ici »*. Il l'a : le contrôle d'`install.sh` vise **toute** référence
+ *  non versionnée vers un actif à cache long, et rien ne garantit qu'il n'en
+ *  apparaîtra plus jamais. Ce qui était fautif, c'est que l'essai **dépendait
+ *  d'une ligne que le produit avait le droit de supprimer**.
+ *
+ *  Il plante donc son propre décor dans l'arborescence publiée, qu'il possède :
+ *  une page qui référence le logo nûment, et un second fichier qui le référence
+ *  aussi — les deux moitiés du piège, sans qu'aucune ligne du produit ne porte
+ *  l'essai.
  * ===================================================================== */
 
 describe('Un actif n’a un cache long que si son URL est versionnée (constat Q-43)', () => {
@@ -938,31 +958,58 @@ describe('Un actif n’a un cache long que si son URL est versionnée (constat Q
   ];
   const LOGO = 'assets/logo/logo-dedienne.png';
 
+  /** Le second porteur du piège : un fichier que l'ESSAI possède, pas le produit. */
+  const FICHIER_PLANTE = join('js', 'core', 'marque-essai.js');
+
   /**
-   * La ligne de `vault.js` qui construit l'URL du logo — LUE dans le fichier
-   * publié, jamais recopiée.
+   * Plante les deux références nues dans l'arborescence PUBLIÉE.
    *
-   * Elle vaut 119 aujourd'hui, et l'écrire ici ferait rougir le banc au premier
-   * commentaire ajouté trois lignes plus haut. Ce qui est normatif est que le
-   * refus nomme **le fichier ET la ligne** : c'est ce qu'un exploitant a besoin
-   * de lire, et c'est cela qui est assertionné.
+   * ⚠️ On plante, on ne lit pas. Ces essais s'ancraient sur `index.html` et
+   * `js/core/vault.js`, qui portaient chacun une URL de logo écrite en dur ; le
+   * lot L9 les a retirées, à juste titre. Un essai qui dépend d'une ligne que le
+   * produit a le droit de supprimer **change de sujet sans le dire** : il cesse
+   * d'éprouver le garde-fou et se met à éprouver le produit.
+   *
+   * Idempotent : les essais du groupe l'appellent chacun.
    */
-  function ligneDuLogoDansVault() {
-    const source = readFileSync(join(racineWeb, 'js', 'core', 'vault.js'), 'utf8');
+  function planterLeDecor() {
+    const page = join(racineWeb, 'index.html');
+    const html = readFileSync(page, 'utf8');
+    if (!html.includes(`src="${LOGO}"`)) {
+      // Avant </body> : la place d'une balise d'image dans la page.
+      writeFileSync(page, html.replace('</body>', `<img src="${LOGO}" alt="décor Q-43">\n</body>`));
+    }
+    const second = join(racineWeb, FICHIER_PLANTE);
+    if (!existsSync(second)) {
+      writeFileSync(
+        second,
+        '// Décor de vhost-apache.test.mjs — une SECONDE référence nue au logo,\n' +
+          '// bâtie à l’exécution comme js/core/vault.js le faisait avant le lot L9.\n' +
+          `const marque = '<img src="${LOGO}" alt="">';\n` +
+          'void marque;\n',
+      );
+    }
+  }
+
+  /**
+   * Ligne de la seconde référence, LUE dans le fichier planté.
+   *
+   * Ce qui est normatif est que le refus nomme **le fichier ET la ligne** :
+   * c'est ce qu'un exploitant a besoin de lire, et c'est cela qui est
+   * assertionné — jamais un numéro écrit ici, qu'un commentaire ajouté plus haut
+   * ferait mentir.
+   */
+  function ligneDeLaReferencePlantee() {
+    planterLeDecor();
+    const source = readFileSync(join(racineWeb, FICHIER_PLANTE), 'utf8');
     const rang = source.split('\n').findIndex((l) => l.includes(`src="${LOGO}"`));
-    assert.notEqual(
-      rang,
-      -1,
-      'js/core/vault.js ne construit plus l’URL du logo : ces essais éprouvent le piège du ' +
-        'constat Q-43 — une seconde URL bâtie à l’exécution — et ce piège aurait disparu. ' +
-        'Vérifier alors que le garde-fou a toujours une raison d’être avant de toucher ici.',
-    );
+    assert.notEqual(rang, -1, 'Le décor planté ne porte pas la référence nue : l’essai n’éprouve rien.');
     return rang + 1;
   }
 
-  /** Le motif « vault.js:<ligne>: » attendu dans le refus. */
+  /** Le motif « marque-essai.js:<ligne>: » attendu dans le refus. */
   function refusNommeVault() {
-    return new RegExp(`vault\\.js:${String(ligneDuLogoDansVault())}:`);
+    return new RegExp(`marque-essai\\.js:${String(ligneDeLaReferencePlantee())}:`);
   }
 
   /**
@@ -1060,6 +1107,7 @@ describe('Un actif n’a un cache long que si son URL est versionnée (constat Q
       async () => (await maxAge(`/${LOGO}`)) === 2592000,
       async () => (await maxAge(`/${LOGO}`)) === 3600,
       async () => {
+        planterLeDecor();
         const issue = jouerGarde();
 
         assert.notEqual(
@@ -1093,6 +1141,7 @@ describe('Un actif n’a un cache long que si son URL est versionnée (constat Q
     //    borné à la page. On applique le correctif que tout le monde écrirait —
     //    étendre le jeton au logo dans index.html — et le refus doit TENIR,
     //    parce que `vault.js` construit la seconde URL à l'exécution.
+    planterLeDecor();
     const page = join(racineWeb, 'index.html');
     const avant = readFileSync(page, 'utf8');
     assert.ok(avant.includes(`src="${LOGO}"`), 'La page doit porter la référence nue avant le correctif.');

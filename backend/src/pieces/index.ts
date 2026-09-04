@@ -940,11 +940,29 @@ export async function greffonPieces(
       deposer(requete, reponse, ENTITE_FILIALE, cibleLogo(requete)),
   );
 
+  // ── LIRE LE LOGO N'EXIGE AUCUN DOMAINE, ET C'EST UNE CORRECTION ──────
+  //
+  // Les deux lectures ci-dessous déclaraient `domaine: 'administration'`, par
+  // symétrie avec le dépôt. Mesuré à la livraison de L9 : la charge de session
+  // réelle d'un RSSI ne porte **pas** `administration` — seul le profil `ADMIN`
+  // le porte. Conséquence : **la quasi-totalité des profils ne pouvait jamais
+  // voir la marque de sa propre filiale**, c'est-à-dire que le lot L9 aurait été
+  // inerte pour presque tout le monde, sans qu'aucune erreur ne le dise (le
+  // repli texte absorbe le 403 en silence, à dessein).
+  //
+  // La bonne déclaration est celle de `GET /api/filiales`, et pour le même
+  // motif : ce sont des routes de **session**, pas d'administration. Elles ne
+  // rendent rien que la session ne voie déjà à l'écran — le logo de la filiale
+  // où elle travaille, et rien d'autre : `cibleLogo()` vise **toujours** la
+  // filiale active, jamais un identifiant reçu du client.
+  //
+  // ⚠️ Le DÉPÔT et la SUPPRESSION restent `administration` : changer la marque
+  // d'une filiale est un acte d'administration, la regarder ne l'est pas.
   instance.get(
     '/api/pieces/logo',
     {
       schema: { params: SCHEMA_PARAMS_LOGO },
-      config: { acces: { action: 'lire', domaine: 'administration' } },
+      config: { acces: { action: 'lire', domaine: null } },
     },
     async (requete: FastifyRequest, reponse: FastifyReply) =>
       listerPieces(requete, reponse, ENTITE_FILIALE, cibleLogo(requete)),
@@ -954,7 +972,7 @@ export async function greffonPieces(
     '/api/pieces/logo/:pieceId',
     {
       schema: { params: SCHEMA_PARAMS_LOGO_PIECE },
-      config: { acces: { action: 'lire', domaine: 'administration' } },
+      config: { acces: { action: 'lire', domaine: null } },
     },
     async (requete: FastifyRequest, reponse: FastifyReply) =>
       delivrer(requete, reponse, ENTITE_FILIALE, cibleLogo(requete)),

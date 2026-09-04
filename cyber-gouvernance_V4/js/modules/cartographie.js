@@ -444,7 +444,9 @@ const CartographieModule = (() => {
         const dateStr = new Date().toLocaleDateString("fr-FR");
         let s = `<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`;
         s += `<text x="26" y="26" font-size="18" font-weight="700" fill="#2059A6">Cartographie du SI &amp; dépendances</text>`;
-        s += `<text x="${W - 26}" y="20" text-anchor="end" font-size="12" font-weight="700" fill="#E9631B">Dedienne Aerospace</text>`;
+        // Marque de la filiale ACTIVE, jamais d'une constante (lot L9,
+        // CONVENTIONS.md §33.4) : ce texte SVG est ce qu'un auditeur emporte.
+        s += `<text x="${W - 26}" y="20" text-anchor="end" font-size="12" font-weight="700" fill="#E9631B">${esc(Identite.raisonSocialeOuRepli(Identite.NOM_PRODUIT))}</text>`;
         s += `<text x="${W - 26}" y="36" text-anchor="end" font-size="10" fill="#6b7a8d">Exporté le ${esc(dateStr)} — ${vm.assets.length} actif(s), ${vm.depEdges.length} dépendance(s)</text>`;
 
         function path(a, b) { return edgePath(a, b); }

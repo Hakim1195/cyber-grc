@@ -124,9 +124,25 @@ describe('Le montage lui-même', () => {
     const declarees = serveur.routes.filter((r) => r.methode !== 'HEAD');
     assert.equal(declarees.length, 8, JSON.stringify(declarees, null, 2));
     assert.equal(serveur.routes.length - declarees.length, 4, 'un GET sans son HEAD');
-    // Le logo déclare `administration`, jamais `selon-entite` : `filiales` n'est
-    // pas une entité métier, et `domaineDe()` rendrait `null` — c'est-à-dire
-    // aucun contrôle de domaine.
+    // Le logo ne déclare JAMAIS `selon-entite` : `filiales` n'est pas une entité
+    // métier, et `domaineDe()` rendrait `null` — c'est-à-dire aucun contrôle de
+    // domaine là où l'on croirait en avoir un.
+    //
+    // ⚠️ En revanche il ne déclare plus `administration` PARTOUT, et c'est une
+    // correction du 04/09/2026 (constat Q-158). Les quatre routes le
+    // déclaraient, par symétrie ; or la charge de session réelle d'un RSSI ne
+    // porte pas ce domaine — seul `ADMIN` le porte. **La quasi-totalité des
+    // profils n'aurait jamais vu la marque de sa propre filiale**, et sans
+    // qu'aucune erreur ne le dise : le repli texte de l'écran absorbe le 403 en
+    // silence, à dessein. Le lot L9 aurait été inerte pour presque tout le monde.
+    //
+    // La ligne de partage n'est donc pas l'entité, c'est l'ACTE :
+    //
+    //   · LIRE le logo de sa propre filiale — `domaine: null`, comme
+    //     `GET /api/filiales`, et pour le même motif : une route de session, qui
+    //     ne rend rien que la session ne voie déjà à l'écran ;
+    //   · le DÉPOSER ou le SUPPRIMER — `administration`, parce que changer la
+    //     marque d'une filiale en est un acte.
     //
     // ⚠️ Et AUCUN chemin de route ne porte d'identifiant de filiale : la filiale
     // dont on gère le logo est celle de la session. C'est ce qu'exige
@@ -142,8 +158,19 @@ describe('Le montage lui-même', () => {
     const logos = declarees.filter((r) => r.url.startsWith('/api/pieces/logo'));
     assert.equal(logos.length, 4);
     for (const route of logos) {
-      assert.equal(route.acces.domaine, 'administration', `${route.methode} ${route.url}`);
+      // Découvert de la route, jamais récité : c'est la MÉTHODE qui dit l'acte.
+      const attendu = route.methode === 'GET' ? null : 'administration';
+      assert.equal(
+        route.acces.domaine,
+        attendu,
+        `${route.methode} ${route.url} : lire un logo n’exige aucun domaine, le changer ` +
+          'exige l’administration (Q-158)',
+      );
     }
+    // Matière : sans les deux classes présentes, la boucle ci-dessus serait
+    // vraie d'un jeu de routes où toutes déclareraient la même chose.
+    assert.equal(logos.filter((r) => r.acces.domaine === null).length, 2);
+    assert.equal(logos.filter((r) => r.acces.domaine === 'administration').length, 2);
     const metier = declarees.filter((r) => !r.url.startsWith('/api/pieces/logo'));
     assert.equal(metier.length, 4);
     for (const route of metier) {

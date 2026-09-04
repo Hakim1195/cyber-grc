@@ -8,6 +8,56 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur et interface — lot L9 : l'identité visuelle par filiale
+
+**Une société rachetée ne présente pas un rapport à la marque de sa maison mère.** La
+marque Dedienne était écrite en dur dans **dix fichiers**, dont les vues imprimables et
+l'export SVG de la matrice des risques — *« précisément les documents qu'un auditeur aura
+entre les mains »* (`PLAN_SERVEUR` §6). Mesuré après correction :
+`grep -rln "Dedienne" cyber-gouvernance_V4/js/ index.html` ne rend **rien**.
+
+`js/core/identite.js` sert la **raison sociale** et le **logo** de la filiale active. Trois
+propriétés, éprouvées en Chromium réel contre un Fastify réel avec authentification AD :
+
+- **deux filiales rendent deux impressions différentes** — et les noms d'essai ont été
+  choisis sans rapport avec Dedienne, pour qu'une réapparition de la marque soit sans
+  ambiguïté ;
+- **un repli visible, jamais silencieux** : sans logo, l'impression montre la raison
+  sociale et rien d'autre — jamais celui de la maison mère, qui est le défaut que ce lot
+  existe pour corriger ;
+- **un SVG déposé comme logo n'est jamais rendu**, script embarqué compris.
+
+⚠️ **Un défaut qui aurait rendu le lot inerte pour presque tout le monde** (constat
+**Q-158**) : `GET /api/pieces/logo` déclarait `domaine: 'administration'`, par symétrie
+avec le dépôt — or la charge de session réelle d'un RSSI ne porte pas ce domaine, seul
+`ADMIN` le porte. **La quasi-totalité des profils n'aurait jamais vu la marque de sa propre
+filiale**, sans qu'aucune erreur ne le dise : le repli texte absorbe le 403 en silence, à
+dessein. Les deux **lectures** déclarent désormais `domaine: null`, comme `GET
+/api/filiales` et pour le même motif — ce sont des routes de *session*. Le dépôt et la
+suppression restent `administration` : changer la marque est un acte d'administration, la
+regarder ne l'est pas.
+
+⚠️ **Livraison partielle, déclarée** (constat **Q-160**) : les **coordonnées** — adresse,
+ville, pays, téléphone, courriel — sont dans la table `filiales` et **aucune route ne les
+rend**. L'agent a refusé de les fabriquer, ce qui est le bon réflexe : les inventer les
+aurait fait apparaître sur des documents d'audit. Un lot serveur doit les exposer d'abord.
+
+**Deux défauts du BANC, trouvés en construisant le lot :**
+
+- **Q-159 — le relais navigateur partagé ne transportait aucun cookie**, ni en entrée ni en
+  sortie. Une connexion réussie rendait 200 avec une session complète, et
+  `context.cookies()` restait **vide**. Toute la classe « navigateur réel + authentification
+  réelle » était donc intestable, et personne ne l'avait su **faute d'avoir essayé** :
+  `droits.test.mjs` emploie l'authentification provisoire, les essais du sélecteur de
+  filiale n'ouvrent pas de navigateur. Corrigé à la source, en deux lignes.
+- **Le garde-fou du constat Q-43 s'ancrait sur deux lignes du produit** — l'URL du logo
+  dans `index.html` et celle que `vault.js` bâtissait à l'exécution. Le lot les a retirées,
+  à juste titre, et le garde-fou s'est retrouvé **sans rien à éprouver**. Son commentaire
+  l'avait anticipé (*« vérifier que le garde-fou a toujours une raison d'être »*) : il l'a,
+  car il vise **toute** référence non versionnée. Ce qui était fautif, c'est qu'il
+  **dépendait d'une ligne que le produit avait le droit de supprimer**. Il plante désormais
+  son propre décor dans l'arborescence publiée, qu'il possède.
+
 ### Serveur — lot L7 : l'import généralisé, un importeur et non vingt
 
 **Le critère décisif du client.** Intégrer une société rachetée en ressaisissant à la main

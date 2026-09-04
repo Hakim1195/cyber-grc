@@ -56,7 +56,8 @@ const RgpdModule = (() => {
 
                 <div class="soa-print-head" style="display:none;">
                     <h1 style="margin-bottom:4px;">Registre des activités de traitement — Article 30 RGPD</h1>
-                    <p style="color:var(--text-muted);">Dedienne Aerospace · ${dateJour}</p>
+                    <img class="print-brand-logo" data-brand-logo hidden alt="" />
+                    <p style="color:var(--text-muted);">${escapeHtml(Identite.piedImpression())} · ${dateJour}</p>
                 </div>
 
                 <div class="dashboard-grid no-print" style="grid-template-columns:repeat(2,1fr); margin-bottom:1.5rem;">
@@ -77,6 +78,7 @@ const RgpdModule = (() => {
         const b2 = document.getElementById("addBtn2"); if (b2) b2.onclick = add;
         const pb = document.getElementById("printBtn"); if (pb) pb.onclick = () => window.print();
         app.querySelectorAll(".clickable-row").forEach(r => r.onclick = () => Router.navigateTo("/rgpd/" + r.dataset.id));
+        if (window.Identite) Identite.brancherLogos();
     }
 
     /* =========================
