@@ -184,6 +184,16 @@ describe('Q-72 — sans annuaire, le produit s’ouvre quand même', () => {
 
     assert.ok(resultat.jeton.length > 20, 'un jeton de session est rendu');
     assert.equal(resultat.session.perimetre.administrationGroupe, true);
+
+    // ── Constat Q-70, vu depuis la couche qui APPLIQUE ────────────────────
+    //
+    // `administrationGroupe` était calculé deux fois : par le résolveur, et par
+    // `perimetreDe()` qui reconstruisait un périmètre champ par champ pour la requête.
+    // Le périmètre appliqué doit être le MÊME OBJET, pas un objet égal : deux objets
+    // égaux aujourd'hui sont deux objets qui peuvent diverger demain, et sur ce
+    // drapeau-là une divergence est un accès Groupe accordé par le hasard de la couche
+    // qu'on interroge.
+    assert.equal(resultat.session.perimetre, resultat.resolveur.perimetreFige);
     assert.equal(resultat.resolveur.compteSecours, true);
     assert.equal(resultat.session.droits.niveau, 'administration');
   });

@@ -291,6 +291,61 @@ describe('E2 — le drapeau d’administration Groupe, sur ses quatre combinaiso
   });
 });
 
+describe('Q-70 — le drapeau d’administration Groupe n’a qu’UN producteur', () => {
+  /**
+   * Le constat : `administrationGroupe = administrateur ET portee === 'groupe'` était
+   * écrit **deux fois à l'identique**, dans `src/droits/resolveur.ts` et dans
+   * `perimetreDe()` de `src/auth/index.ts`. Signalé par ses **deux auteurs
+   * indépendamment**, ce qui est le meilleur indice qu'il fallait le fermer : deux
+   * rédactions de la même décision divergent, et la seconde n'est rejouée par personne.
+   * Sur ce drapeau-là, une divergence n'est pas une gêne — c'est un accès Groupe accordé
+   * ou refusé selon la couche qu'on interroge.
+   */
+  test('le périmètre appliqué est le MÊME OBJET que celui du résolveur', async () => {
+    const ouverte = await ouvrir(
+      'q70.identite',
+      resolus({ portee: 'groupe', filiales: [DEU, TLS], administrateur: true }),
+    );
+    const resolveur = new droits.ResolveurPerimetreSession((await relire(ouverte.jeton)).etat);
+
+    // L'identité de référence, et non l'égalité : deux objets égaux aujourd'hui sont
+    // deux objets qui peuvent diverger demain. Un seul objet ne le peut pas.
+    assert.equal(resolveur.perimetreFige, await resolveur.resoudre());
+    assert.equal(Object.isFrozen(resolveur.perimetreFige), true);
+  });
+
+  test('MÉCANIQUE : la conjonction n’est écrite qu’à UN endroit dans src/', () => {
+    // Le contrôle qui survit à la prochaine réécriture. Il compte les **calculs** du
+    // drapeau, commentaires retirés — la formule est citée dans plusieurs entêtes, et
+    // c'est très bien : une explication n'est pas une décision.
+    const sites = [];
+    const parcourir = (repertoire) => {
+      for (const entree of readdirSync(repertoire)) {
+        const chemin = join(repertoire, entree);
+        if (statSync(chemin).isDirectory()) {
+          parcourir(chemin);
+          continue;
+        }
+        if (!chemin.endsWith('.ts')) continue;
+        const code = readFileSync(chemin, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, ' ')
+          .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+        for (const trouve of code.matchAll(/administrateur\s*&&[^;)]*['"`]groupe['"`]/g)) {
+          sites.push(`${chemin} :: ${trouve[0].trim()}`);
+        }
+      }
+    };
+    parcourir(join(RACINE_BACKEND, 'src'));
+    assert.equal(
+      sites.length,
+      1,
+      'Le drapeau doit être CALCULÉ à un seul endroit — les autres couches le lisent. ' +
+        `Sites trouvés :\n  ${sites.join('\n  ')}`,
+    );
+    assert.match(sites[0], /droits[/\\]resolveur\.ts/);
+  });
+});
+
 describe('Les droits fins existent, et le défaut est fermé', () => {
   test('peut() répond sur les trente domaines, avec le niveau exact', async () => {
     const attendus = resolus({ portee: 'filiale', filiales: [TLS] });
