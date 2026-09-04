@@ -798,6 +798,12 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // La liste des filiales du périmètre de session (lot L4) : servie sans
     // identité, elle donnerait la cartographie des filiales du groupe.
     ['GET', '/api/filiales', undefined],
+    // Les trois routes de l'import généralisé (lot L7). Servies sans identité,
+    // la première dirait la forme exacte du modèle de données, et la troisième
+    // laisserait n'importe qui écrire 5 000 lignes dans une filiale.
+    ['GET', '/api/import/modeles', undefined],
+    ['GET', '/api/import/incidents/modele', undefined],
+    ['POST', '/api/import/incidents', undefined],
     // Les deux routes du circuit d'approbation (lot L8). Servies sans identité,
     // elles diraient qui a validé quoi — et la seconde PRONONCERAIT une décision
     // irréversible au nom de personne, dans le mécanisme dont tout l'objet est

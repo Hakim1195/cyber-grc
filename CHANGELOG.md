@@ -8,6 +8,65 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur — lot L7 : l'import généralisé, un importeur et non vingt
+
+**Le critère décisif du client.** Intégrer une société rachetée en ressaisissant à la main
+ses incidents, ses actifs et ses prestataires était hors de question ; l'import existant ne
+couvrait **3 entités sur 21** et « ne validait ni le schéma ni les types ».
+
+**Un moteur générique**, dont les colonnes se **dérivent de `Depot.decrire()`** — la forme
+du modèle, jamais une liste recopiée. Ce qui ne se dérive pas — le libellé humain d'une
+colonne et son ordre — s'écrit, et c'est le bon cas : une omission y est **bruyante**, la
+colonne s'affichant sous son nom technique.
+
+Quatre propriétés, chacune mesurée sur des écritures réelles :
+
+- **Tout ou rien.** La morsure n'a pas simulé la coupure : elle l'a **fabriquée par une
+  contrainte que PostgreSQL ne peut heurter que si les lignes précédentes ont réellement
+  été écrites** — la ligne 201 répète une clé posée par la ligne 6. Le `23505` prouve donc
+  que 199 lignes étaient physiquement là ; après le refus, **zéro subsiste**. C'est le
+  constat bloquant B-3 de la porte S2 refermé pour de bon : une coupure de VPN au milieu
+  d'un import ne laisse plus une filiale à moitié détruite.
+- **k erreurs nommées sur N lignes.** 250 lignes dont 27 fausses de trois natures
+  différentes → 27 erreurs, chacune avec **son numéro de ligne et la colonne du fichier**,
+  et aucun message ne laisse fuir un nom de table, de colonne ou de contrainte.
+- **Idempotent par le FICHIER** (empreinte SHA-256 du contenu, pas du nom) : réenvoyer le
+  même fichier ne crée rien **et le dit**. La borne est écrite et mordue — un fichier
+  modifié d'**un seul octet** est un fichier neuf. L'idempotence est cloisonnée : le même
+  fichier s'applique dans chaque filiale.
+- **Cloisonné**, sur base non vide, dans les deux sens : une ligne qui désigne
+  l'enregistrement d'une **autre filiale** est refusée nommément, et rien n'est écrit d'un
+  côté ni de l'autre.
+
+Volumétrie mesurée : **2 000 lignes en 4,3 s, 5 000 en 10,6 s** — ~2,1 ms la ligne, ce qui
+tient dans le `ProxyTimeout` de 60 s.
+
+**XLSX écrit à la main, et le motif n'est pas technique.** La voie « CSV serveur +
+conversion navigateur » aurait mis la moitié du lot dans le frontend, et surtout elle
+aurait déplacé l'empreinte d'idempotence sur le **résultat d'une transformation faite chez
+le client** — deux classeurs différents rendant le même CSV seraient devenus « le même
+fichier », et la borne cesserait d'être vraie. Un `.xlsx` étant un conteneur OOXML,
+`src/pieces/zip.ts` est **importé, pas cloné**. CSV et XLSX sont tous deux acceptés, le
+format étant reconnu à la **signature binaire**, jamais à l'extension.
+
+**Le défaut que ce lot existe pour fermer, retrouvé dans le lot lui-même.** Un fichier de
+30 incidents **sans colonne obligatoire** rendait **200, zéro erreur, zéro création** :
+chaque ligne était écartée, aucune n'émettait d'erreur, et le compte tombait à zéro **en
+silence** — « import réussi ». Premier cas du tableau du `CLAUDE.md` §3. Le fait est celui
+du **fichier** : il est dit une fois, sur la ligne d'en-tête, et il refuse l'import.
+
+⚠️ **Ce que l'import NE fait pas, et qui est écrit** : il **crée**, il ne met pas à jour et
+ne supprime pas. Une colonne « Identifiant » rouvrirait l'oracle d'existence M-3, et une
+clé naturelle par entité serait vingt décisions métier fausses chacune dans un cas limite ;
+`POST /api/reprise` couvre déjà le remplacement. `lignes_mises_a_jour` vaut donc toujours 0,
+et la colonne ne prétend pas le contraire.
+
+**Le contrôle S15 passe** (constat **Q-156**) : `npm audit --omit=dev` rend **`found 0
+vulnerabilities`**, là où la porte S4 l'avait consigné « non rejoué ». C'était passager,
+comme le supposait le diagnostic — et il a suffi de rejouer.
+
+**Banc** : 74 essais pour L7.
+
 ### Serveur — lot L8 : le circuit d'approbation, et lot L4 : créer une filiale
 
 **L8 — « Qui a validé cette politique ? »** Trois circuits du `PLAN_SERVEUR` §3.5 :
