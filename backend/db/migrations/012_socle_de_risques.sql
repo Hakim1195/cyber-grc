@@ -251,6 +251,39 @@ grant select, insert, update, delete on risque_catalogue to grc_app;
 grant select on risque_catalogue to grc_lecture;
 
 -- =====================================================================================
+-- §1 bis — LE DOMAINE « type_entite » APPREND LA TABLE NEUVE
+-- -------------------------------------------------------------------------------------
+-- Trouvé en exposant la table par la couche générique : toute création écrit une entrée
+-- au journal, dont `entite_type` porte le domaine `type_entite`. Une table absente du
+-- domaine rend donc la création **impossible** — 23514 sur `type_entite_check` —, et le
+-- message rendu à l'utilisateur était « une valeur de l'enregistrement n'est pas admise »,
+-- qui ne désigne rien. Le défaut n'était pas dans la table : il était dans la TRACE.
+--
+-- ⚠️ `referentiels_actifs` y figure DÉJÀ depuis `001` : quelqu'un avait prévu son
+-- exposition, et elle n'est jamais venue (constat Q-150). Seule `risque_catalogue` manque.
+--
+-- ⚠️ PostgreSQL n'ajoute pas une valeur à un domaine : il faut réécrire la contrainte
+-- entière, donc RECOPIER la liste. C'est une seconde copie de ce que `001` porte déjà, et
+-- c'est le genre de duplication qui diverge en silence. Ce qui la rend tenable : le
+-- domaine est confronté au registre applicatif par `test/base/vocabulaire.test.mjs`, qui
+-- rougit dès qu'une entité du produit n'y figure pas.
+-- =====================================================================================
+
+alter domain type_entite drop constraint type_entite_check;
+alter domain type_entite add constraint type_entite_check
+    check (value in (
+        'clients', 'personnes', 'exigences', 'actions', 'risques', 'actifs', 'processus',
+        'crise', 'scenarios_pra', 'tests_pra', 'prestataires', 'mco_actions',
+        'audits', 'revues', 'evaluations',
+        'mesures', 'mesure_catalogue', 'mesure_mise_en_oeuvre',
+        'incidents', 'documents', 'traitements', 'mappings', 'history',
+        'filiales', 'utilisateurs', 'profils', 'groupes_ad', 'sessions',
+        'referentiels_actifs', 'pieces_jointes', 'approbations', 'imports', 'parametres',
+        -- La table neuve de cette migration.
+        'risque_catalogue'
+    ));
+
+-- =====================================================================================
 -- §2 — LE LIEN : risques.catalogue_id
 -- -------------------------------------------------------------------------------------
 -- Facultatif, et non destructif. Un risque saisi librement reste un risque valide : la

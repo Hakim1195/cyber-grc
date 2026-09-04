@@ -233,6 +233,15 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   mappings: 'conformite',
   history: 'pilotage',
   personnes: 'personnel',
+  // Le socle de risques relève du domaine « risques » : qui définit un risque au
+  // Groupe fait le même métier que qui l'évalue dans sa filiale. Le rattacher à
+  // « administration » aurait interdit le socle à tous les RSSI, ce qui est
+  // exactement le défaut que Q-158 a coûté sur le logo.
+  risque_catalogue: 'risques',
+  // L'activation d'un référentiel est un acte de conformité — c'est le même
+  // écran, la même personne, la même question : « ce référentiel s'applique-t-il
+  // à ce site ? ».
+  referentiels_actifs: 'conformite',
 });
 
 /**

@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 12;
+    const SCHEMA_VERSION = 13;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -50,7 +50,21 @@ const DataStore = (() => {
         // v11 — Chantier Personnel : annuaire des personnes/rôles réutilisé partout où l'on
         // saisit un responsable (autocomplétion). Le nom reste stocké en texte dans les entités
         // (rétrocompatible) ; l'annuaire alimente les suggestions et la fiche « affectations ».
-        "personnes"
+        "personnes",
+        // v13 — Chantier Groupe : les deux tables que le serveur portait sans que personne
+        // ne les lise. Elles arrivent VIDES sur une base héritée, et c'est correct :
+        // `normalize` crée le tableau, et une filiale sans socle ni activation se comporte
+        // exactement comme avant.
+        //
+        //  · `risque_catalogue` — le SOCLE de risques du Groupe, plus les ajouts propres à
+        //    chaque filiale (arbitrage utilisateur du 04/09/2026). Il porte la DÉFINITION
+        //    d'un risque, jamais son évaluation : F, G, M et le score restent dans
+        //    `risques`, parce que l'exposition est ce qui distingue une filiale d'une autre.
+        //  · `referentiels_actifs` — QUELS référentiels sont dans le périmètre de ce site.
+        //    ⚠️ À ne pas confondre avec le « non applicable » par exigence, qui écarte un
+        //    point précis À L'INTÉRIEUR d'un référentiel pratiqué : s'en servir pour écarter
+        //    un référentiel entier obligerait à cocher 234 cases pour AirCyber.
+        "risque_catalogue", "referentiels_actifs"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
@@ -837,7 +851,12 @@ const DataStore = (() => {
         //           de responsables restent en texte dans les entités (aucune transformation).
         // v11 → v12 : évaluations — `mesure_id` (lien unique) devient `mesure_ids[]` (plusieurs
         //           mesures par exigence) ; normalize convertit l'ancienne valeur en tableau.
-        // (Ajouter ici les futures migrations : if (v < 13) { ... })
+        // v12 → v13 : ajout de `risque_catalogue` (socle de risques du Groupe + ajouts
+        //           locaux) et de `referentiels_actifs` (activation d'un référentiel par
+        //           filiale) → normalize crée les tableaux vides. AUCUNE transformation de
+        //           donnée : le lien `risques[].catalogue_id` est facultatif, et une base
+        //           héritée n'en porte aucun. Un export v12 se reprend donc à l'identique.
+        // (Ajouter ici les futures migrations : if (v < 14) { ... })
         return p;
     }
 

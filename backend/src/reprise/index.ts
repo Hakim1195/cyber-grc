@@ -95,8 +95,21 @@ import type {
  *  §1 — Constantes du format
  * ===================================================================== */
 
-/** Version de schéma cible : celle du frontend (`SCHEMA_VERSION` de `datastore.js`). */
-export const VERSION_SCHEMA = 12;
+/**
+ * Version de schéma cible : celle du frontend (`SCHEMA_VERSION` de `datastore.js`).
+ *
+ * ⚠️ **TROISIÈME COPIE DU MÊME NOMBRE**, et c'est ce qui a coûté du temps le
+ * 04/09/2026 : il vit dans `js/core/datastore.js` (le frontend), dans
+ * `src/entites/index.ts` (ce que l'API annonce) et ici (ce que la reprise sait
+ * relire). Monter les deux premiers et oublier celui-ci donne un produit qui
+ * **exporte un fichier qu'il refuse de relire** — mesuré, avec ce message :
+ * *« Fichier en version de schéma 13, postérieure à la version 12 que ce serveur
+ * sait reprendre »*.
+ *
+ * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
+ * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
+ */
+export const VERSION_SCHEMA = 13;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -130,6 +143,15 @@ export const COLLECTIONS = [
   'mappings',
   'history',
   'personnes',
+  // v13 — le socle de risques du Groupe et l'activation des référentiels par
+  // filiale. ⚠️ `satisfies readonly NomCollection[]` ne suffit PAS à garantir
+  // que la liste est COMPLÈTE : elle vérifie que chaque nom est valide, pas
+  // qu'aucun ne manque. Une collection oubliée ici n'échoue pas à la
+  // compilation — elle devient une « clé de premier niveau inconnue du modèle »
+  // à la reprise, conservée mais **jamais insérée**. C'est ce qui est arrivé le
+  // 04/09/2026, et l'essai qui l'a vu comptait les anomalies d'INFORMATION.
+  'risque_catalogue',
+  'referentiels_actifs',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -475,6 +497,40 @@ const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>> = {
     references: [],
     referencesMultiples: [],
     cleMetier: null,
+  },
+  // ── v13 : le socle de risques du Groupe, plus les ajouts locaux ──────────
+  //
+  // ⚠️ `filiale_id` n'est PAS un champ de l'instantané, et c'est délibéré : la
+  // portée d'une ligne — socle du Groupe ou ajout d'une filiale — est décidée
+  // par le SERVEUR à l'écriture, jamais par le fichier. Un export qui la
+  // porterait permettrait de faire monter au Groupe, par une reprise, ce qu'on
+  // n'a pas le droit d'y écrire directement.
+  risque_catalogue: {
+    prefixe: 'RCAT',
+    champs: ['id', 'reference', 'nom', 'description', 'categorie', 'origine', 'statut'],
+    enumerations: [
+      // `videAdmis: false` — la base pose un défaut « not null » sur les deux,
+      // et une chaîne vide y heurterait le « check ». Mieux vaut que la reprise
+      // le dise que la contrainte.
+      { champ: 'origine', valeurs: ['interne', 'referentiel', 'sectoriel'], videAdmis: false },
+      { champ: 'statut', valeurs: ['active', 'archivee'], videAdmis: false },
+    ],
+    bornes: [],
+    dates: [],
+    references: [],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  // ── v13 : quels référentiels sont dans le périmètre de ce site ───────────
+  referentiels_actifs: {
+    prefixe: 'REFA',
+    champs: ['id', 'ref_id', 'origine', 'obligatoire', 'actif', 'motif'],
+    enumerations: [],
+    bornes: [],
+    dates: ['date_activation', 'date_desactivation'],
+    references: [],
+    referencesMultiples: [],
+    cleMetier: ['ref_id'],
   },
 };
 
@@ -1489,6 +1545,20 @@ const PALIERS: readonly EtapePalier[] = [
       const convertis = convertirMesureIds(ctx.charge);
       return convertis > 0 ? [`${convertis} évaluation(s) dont « mesure_id » est devenu « mesure_ids[] »`] : [];
     },
+  },
+  {
+    de: 12,
+    vers: 13,
+    libelle:
+      'Chantier Groupe : l’instantané gagne « risque_catalogue » (socle de risques du Groupe, ' +
+      'plus les ajouts propres à chaque filiale) et « referentiels_actifs » (quels référentiels ' +
+      'sont dans le périmètre de ce site).',
+    // ⚠️ Un palier qui n'a RIEN À TRANSFORMER, et c'est la forme la plus sûre :
+    // les deux collections arrivent vides sur un fichier v12, `paliersCollections`
+    // les réclame et les crée, et **aucune donnée existante n'est touchée**. Le
+    // lien `risques[].catalogue_id` est facultatif : un export v12 n'en porte
+    // aucun, et se reprend donc à l'identique.
+    appliquer: paliersCollections(['risque_catalogue', 'referentiels_actifs']),
   },
 ];
 

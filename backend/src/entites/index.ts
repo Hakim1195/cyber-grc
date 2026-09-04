@@ -258,8 +258,23 @@ export interface JournalMinimalReprise {
   warn(donnees: unknown, message?: string): void;
 }
 
-/** Version de schéma du modèle navigateur servie par cette API. */
-export const VERSION_SCHEMA = 12;
+/**
+ * Version de schéma du modèle navigateur servie par cette API.
+ *
+ * **13 depuis le 04/09/2026** : l'objet `data` gagne deux collections —
+ * `risque_catalogue` (le socle de risques du Groupe, plus les ajouts locaux) et
+ * `referentiels_actifs` (l'activation d'un référentiel par filiale, constat
+ * Q-150, dont la table existait depuis `002` sans que personne ne l'écrive ni ne
+ * la lise).
+ *
+ * ⚠️ **Elle doit rester égale à `SCHEMA_VERSION` de `js/core/datastore.js`.** Le
+ * navigateur adopte cet objet TEL QUEL comme son `data` : deux versions qui
+ * divergeraient feraient reprendre un export sous une forme que le produit ne
+ * connaît pas. La montée v12 → v13 n'est qu'un AJOUT — aucune donnée n'est
+ * transformée, `normalize` crée les deux tableaux vides, et un export v12 se
+ * reprend à l'identique.
+ */
+export const VERSION_SCHEMA = 13;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -704,6 +719,36 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
           'Directory (PLAN_SERVEUR §1.5) — lot L3, jamais par la saisie.',
       },
     },
+  ],
+
+  // ── Le socle de risques (migration 012, CONVENTIONS.md §34.2) ──────────────
+  //
+  // Table MIXTE, comme `documents` : une ligne à `filiale_id` nul appartient au
+  // socle du Groupe, une ligne renseignée est l'ajout d'une filiale. La couche
+  // générique sait déjà les traiter — c'est la RLS qui décide de ce qui est
+  // lisible et de ce qui est écrivable, jamais ce fichier.
+  //
+  // ⚠️ Elle porte la DÉFINITION d'un risque, jamais son évaluation : F, G, M et
+  // le score résiduel restent dans `risques`, parce que l'exposition est
+  // précisément ce qui distingue une filiale d'une autre.
+  ['risque_catalogue', { nom: 'risque_catalogue', table: 'risque_catalogue', prefixe: 'RCAT' }],
+
+  // ── L'activation d'un référentiel par filiale (constat Q-150) ──────────────
+  //
+  // La table existe depuis `002` et **personne ne l'écrivait ni ne la lisait** :
+  // toutes les filiales voyaient les cinq référentiels, y compris celles à qui
+  // ni NIS2 ni DORA ne s'appliquent — et leur taux de conformité se calculait
+  // sur des exigences qui ne les concernent pas.
+  //
+  // ⚠️ À ne pas confondre avec le « non applicable » par exigence : le
+  // `PLAN_SERVEUR` §2.2 range cette confusion parmi les pièges à ne pas rouvrir.
+  // L'activation dit *quels référentiels sont dans le périmètre de ce site* ; le
+  // « non applicable » écarte un point précis À L'INTÉRIEUR d'un référentiel
+  // pratiqué. S'en servir pour écarter un référentiel entier obligerait à cocher
+  // 234 cases pour AirCyber, filiale par filiale, et fausserait les statistiques.
+  [
+    'referentiels_actifs',
+    { nom: 'referentiels_actifs', table: 'referentiels_actifs', prefixe: 'REFA' },
   ],
 ]);
 

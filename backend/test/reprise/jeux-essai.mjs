@@ -69,6 +69,8 @@ const NOUVELLES_PAR_VERSION = {
   10: [],
   11: ['personnes'],
   12: [],
+  // v13 — socle de risques du Groupe, et activation des référentiels par filiale.
+  13: ['risque_catalogue', 'referentiels_actifs'],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -473,6 +475,51 @@ export function instantaneV12Complet() {
     ],
   };
 }
+
+/**
+ * Le même instantané, **en version courante (v13)**.
+ *
+ * ── Pourquoi les DEUX existent ───────────────────────────────────────────────
+ *
+ * `instantaneV12Complet()` reste : un export v12 est un fichier RÉEL, que des
+ * postes ont produit et qu'il faut savoir reprendre — il doit traverser
+ * exactement un palier et y gagner ses deux collections. Celui-ci sert la
+ * question inverse, et la plus facile à laisser dériver : **un export à la
+ * version courante ne doit traverser AUCUN palier et ne subir AUCUNE
+ * modification.** Employer un v12 pour cette question-là la rendrait fausse au
+ * premier ajout de collection — c'est arrivé le 04/09/2026.
+ *
+ * Les deux collections portent une ligne, pas un tableau vide : un round-trip
+ * qui ne transporte rien ne prouve pas qu'il transporte bien.
+ */
+export function instantaneV13Complet() {
+  return {
+    ...instantaneV12Complet(),
+    schemaVersion: 13,
+    risque_catalogue: [
+      {
+        id: 'RCAT-1720000000000-201',
+        reference: 'R-001',
+        nom: 'Rançongiciel',
+        description: 'Chiffrement des données par un tiers, avec demande de rançon.',
+        categorie: 'Malveillance',
+        origine: 'referentiel',
+        statut: 'active',
+      },
+    ],
+    referentiels_actifs: [
+      {
+        id: 'REFA-1720000000000-202',
+        ref_id: 'anssi',
+        origine: 'socle_groupe',
+        obligatoire: true,
+        actif: true,
+        motif: 'Socle imposé par le Groupe.',
+      },
+    ],
+  };
+}
+
 
 /** Tous les identifiants d'un instantané, collection par collection. */
 export function identifiantsDe(charge) {

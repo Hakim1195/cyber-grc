@@ -63,6 +63,8 @@ export type NomCollection =
   | 'traitements'
   | 'mappings'
   | 'history'
+  | 'risque_catalogue'
+  | 'referentiels_actifs'
   | 'personnes';
 
 /**

@@ -293,7 +293,7 @@ describe('S7 — exporter n’est pas lire', () => {
     assert.equal(r.corps.format, 'grc-backup');
     assert.equal(r.corps.encrypted, false);
     assert.equal(typeof r.corps.payload, 'object');
-    assert.equal(r.corps.payload.schemaVersion, 12);
+    assert.equal(r.corps.payload.schemaVersion, 13);
   });
 
   test('l’export ne rend que les domaines du profil', async () => {

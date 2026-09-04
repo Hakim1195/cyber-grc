@@ -58,7 +58,9 @@ export type NomEntite =
   | 'traitements'
   | 'mappings'
   | 'history'
-  | 'personnes';
+  | 'personnes'
+  | 'risque_catalogue'
+  | 'referentiels_actifs';
 
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;

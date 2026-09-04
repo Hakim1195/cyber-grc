@@ -30,6 +30,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
 import { ouvrirBaseEssai } from '../aide/base.mjs';
+import { moduleCompile } from '../aide/serveur.mjs';
 import { instantaneV12Complet } from '../reprise/jeux-essai.mjs';
 
 /** @type {Awaited<ReturnType<typeof ouvrirBaseEssai>>} */
@@ -195,5 +196,90 @@ describe('Le schéma porte tout ce qu’un export v12 transporte (constat M-8)',
       }
     }
     assert.deepEqual(perimees, []);
+  });
+});
+
+/* =====================================================================
+ *  Le domaine « type_entite » connaît TOUTES les entités du produit
+ * ===================================================================== */
+
+describe('Le journal sait nommer chaque entité que le produit sait écrire', () => {
+  /**
+   * ── Pourquoi cet essai existe, et ce qu'il a coûté de ne pas l'avoir ──
+   *
+   * `journal_audit.entite_type` porte le domaine `type_entite`, dont le `check`
+   * énumère les entités désignables. **Toute création écrit une entrée au
+   * journal** : une entité absente du domaine rend donc sa création
+   * *impossible*, et le refus arrive sous la forme d'un `23514` sur
+   * `type_entite_check`, traduit à l'utilisateur en « une valeur de
+   * l'enregistrement n'est pas admise » — un message qui ne désigne rien.
+   *
+   * Rencontré le 04/09/2026 en exposant `risque_catalogue` par la couche
+   * générique : la table était juste, ses politiques étaient justes, et c'est la
+   * TRACE qui refusait. Une demi-heure pour comprendre, parce que rien ne reliait
+   * les deux listes.
+   *
+   * ⚠️ Le défaut ne se voit **qu'à l'exécution, et qu'une entité à la fois** :
+   * ajouter deux entités et n'en éprouver qu'une laisse l'autre cassée. C'est
+   * exactement le premier cas du tableau du `CLAUDE.md` §3 — sauf qu'ici l'échec
+   * est bruyant mais **tardif**, et qu'il coûte au client, pas au banc.
+   *
+   * La confrontation se fait entre DEUX SOURCES DÉCOUVERTES : les valeurs
+   * admises par le domaine, lues dans `pg_catalog`, et le registre applicatif,
+   * lu dans le code compilé. Aucune liste n'est écrite ici.
+   */
+  test('CHAQUE entité du registre applicatif est admise par le domaine « type_entite »', async () => {
+    const { listerEntites } = await moduleCompile('entites/index.js');
+    const entites = listerEntites();
+
+    const [{ definition }] = await base.lignes(
+      proprietaire,
+      `select pg_get_constraintdef(c.oid) as definition
+         from pg_constraint c
+         join pg_type t on t.oid = c.contypid
+        where t.typname = 'type_entite' and c.contype = 'c'`,
+    );
+
+    // Découverte : on lit les littéraux du `check`, on ne les récite pas.
+    const admises = new Set([...definition.matchAll(/'([a-z0-9_]+)'/gu)].map((m) => m[1]));
+
+    // ── Contrôle de matière, dans les DEUX sens ────────────────────────
+    // Un domaine vide, ou un registre vide, rendrait « aucun manquant » vrai
+    // sans rien prouver. Le dépôt a produit trois essais de cette forme.
+    assert.ok(
+      admises.size >= 30,
+      `Le domaine n'admet que ${admises.size} valeur(s) : la lecture du « check » a échoué, ` +
+        'et cet essai ne mesure rien.',
+    );
+    assert.ok(
+      entites.length >= 20,
+      `Le registre ne porte que ${entites.length} entité(s) : la lecture du module compilé a ` +
+        'échoué.',
+    );
+
+    const absentes = entites.filter((nom) => !admises.has(nom));
+    assert.deepEqual(
+      absentes,
+      [],
+      'Ces entités du produit ne sont pas admises par le domaine « type_entite » : leur ' +
+        'CRÉATION échouera en 23514 dès la première tentative, parce que la trace au journal ' +
+        'ne peut pas les nommer. Étendre le domaine par une migration — PostgreSQL n’ajoute ' +
+        'pas une valeur, il faut réécrire la contrainte entière.',
+    );
+  });
+
+  test('MORSURE : une entité inventée est bien vue comme absente', async () => {
+    // La contrepartie du test précédent : sans elle, « aucune absente » serait
+    // aussi ce que rendrait un balayage qui ne regarde rien.
+    const [{ definition }] = await base.lignes(
+      proprietaire,
+      `select pg_get_constraintdef(c.oid) as definition
+         from pg_constraint c
+         join pg_type t on t.oid = c.contypid
+        where t.typname = 'type_entite' and c.contype = 'c'`,
+    );
+    const admises = new Set([...definition.matchAll(/'([a-z0-9_]+)'/gu)].map((m) => m[1]));
+    assert.equal(admises.has('entite_qui_nexiste_pas'), false);
+    assert.equal(admises.has('risque_catalogue'), true, 'la table de la migration 012 doit y être');
   });
 });

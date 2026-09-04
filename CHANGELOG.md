@@ -8,6 +8,51 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur et interface — schéma v13 : les deux tables mortes deviennent des fonctionnalités
+
+**Une table sans chemin applicatif n'est pas une fonctionnalité, c'est une promesse.** La
+migration `012` avait créé `risque_catalogue` sans que rien ne l'expose, et
+`referentiels_actifs` attendait depuis `002` (constat **Q-150**). Les deux entrent dans le
+registre de la couche générique : elles gagnent d'un coup leur **CRUD**, leur place dans le
+**chargement initial**, leur **modèle d'import** et leur **cloisonnement**. Le modèle passe
+de **21 à 23 entités**, et l'objet `data` de **v12 à v13**.
+
+Ce que la montée a révélé, et qui vaut plus que la montée :
+
+- **Q-164 — le même numéro de version vit à TROIS endroits**, et rien ne garantissait qu'ils
+  concordent : `datastore.js` (ce que le navigateur exporte), `entites/index.ts` (ce que
+  l'API annonce), `reprise/index.ts` (ce que le serveur sait relire). Les deux premiers
+  montés, le troisième oublié, et **le produit exportait un fichier qu'il refusait de
+  relire**. Un essai lit désormais les trois **à leur source** et refuse la divergence — il
+  tombe en une milliseconde là où le défaut n'apparaissait qu'au bout d'un aller-retour
+  complet.
+- **Q-165 — `satisfies` n'est pas un garde-fou d'exhaustivité.** La liste `COLLECTIONS`
+  porte `as const satisfies readonly NomCollection[]`, ce qui vérifie que chaque nom est
+  *valide*, jamais qu'aucun ne *manque*. Les deux collections neuves y étaient absentes sans
+  faire échouer la compilation, et arrivaient à la reprise comme « clé de premier niveau
+  inconnue » — **conservées, jamais insérées**. Ce qui l'a fait tomber : un essai qui
+  comptait les anomalies d'**information**, gravité qu'on est tenté de ne pas regarder.
+- **Q-166 — un essai devenu faux par construction** : *« un export v12 sain traverse la
+  chaîne sans être modifié »*. Corrigé **sur le fond, pas sur le nombre** — la question est
+  *« un fichier déjà à jour est-il laissé intact ? »*, et elle exige la version **courante**,
+  sinon elle se périme à chaque montée de schéma. Le jeu d'essai v12 **reste** : un export
+  v12 est un fichier réel, et savoir le reprendre est une propriété distincte.
+
+⚠️ **Le compilateur, lui, a fait son travail** : ajouter une entité sans lui donner de
+domaine fonctionnel **fait échouer `tsc`** — pas un essai qu'on pourrait ne pas jouer. Le
+socle de risques relève de `risques` et l'activation de `conformite` ; les rattacher à
+`administration` aurait interdit le catalogue à tous les RSSI, c'est-à-dire le défaut exact
+que **Q-158** venait de coûter sur le logo.
+
+**Un défaut que seul l'usage révèle** : la création d'un risque de catalogue échouait en
+`400 « une valeur de l'enregistrement n'est pas admise »` — un message qui ne désigne rien.
+La table était juste ; c'est la **trace** qui refusait, `journal_audit.entite_type` portant
+un domaine qui n'admettait pas la table neuve. **Toute création écrit au journal** : une
+entité absente du domaine est donc *incréable*. Un essai confronte désormais le domaine au
+registre applicatif, les deux **découverts**, jamais récités.
+
+**Banc** : 1453 essais, 1453 passés, code de retour 0.
+
 ### Base — migration 012 : un socle de risques, et une approbation Groupe qui ne se répète pas
 
 **Deux arbitrages de l'utilisateur, du 04/09/2026**, figés au `CONVENTIONS.md` §34 parce

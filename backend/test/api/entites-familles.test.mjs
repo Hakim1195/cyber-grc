@@ -25,7 +25,7 @@
  *
  * ── La couverture est RÉCLAMÉE, pas supposée ─────────────────────────────────
  *
- * Un dernier test balaie les **21 entités du registre** et vérifie que chacune se lit,
+ * Un dernier test balaie les **23 entités du registre** et vérifie que chacune se lit,
  * se décrit, et porte un préfixe d'identifiant. Sans lui, ce fichier resterait un
  * échantillon dont personne ne saurait dire ce qu'il laisse de côté — le reproche
  * exact que la porte a formulé.
@@ -315,12 +315,16 @@ describe('Une entité par famille de différence', () => {
  *  §2 — La couverture, réclamée
  * ===================================================================== */
 
-describe('Les 21 entités du registre, sans échantillonnage', () => {
+describe('Les 23 entités du registre, sans échantillonnage', () => {
   test('chaque entité du modèle est décrite, chargée, et porte un préfixe', async () => {
     const modele = (await serveur.appeler('GET', '/api/modele')).corps;
     const jeu = await donnees();
     const noms = Object.keys(modele.entites).sort();
-    assert.equal(noms.length, 21);
+    // 23 depuis la migration `012` : `risque_catalogue` (le socle de risques) et
+    // `referentiels_actifs` (l'activation par filiale, constat Q-150) entrent dans le
+    // registre. Une table exposée par la couche générique gagne d'un coup son CRUD,
+    // sa place dans le chargement initial et son modèle d'import.
+    assert.equal(noms.length, 23);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -344,7 +348,12 @@ describe('Les 21 entités du registre, sans échantillonnage', () => {
       evaluations: { ref_id: 'anssi', code: 'BALAYAGE-1' },
       history: { date: '2026-12-25' },
       mappings: { theme: 'Balayage' },
-      referentiels_actifs: { ref_id: 'anssi', origine: 'ajout_local' },
+      // `ref_id` distinct de celui du semis : l'unicité (filiale, référentiel) est
+      // le point de la table, et un balayage qui la heurterait mesurerait le semis.
+      referentiels_actifs: { ref_id: 'balayage-nis2', origine: 'ajout_local' },
+      // `origine` porte un vocabulaire fermé : la valeur générique « Balayage … »
+      // heurte le check, ce qui est le comportement voulu, pas un défaut.
+      risque_catalogue: { origine: 'interne', statut: 'active' },
     };
 
     const echecs = [];
