@@ -1318,11 +1318,50 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    * la filiale qu'elle a choisie. L'authentification réelle rend l'identifiant ;
    * le nom de la filiale viendra du sélecteur du lot L4.
    */
-  const charteSession = (
+  /**
+   * ⚠️ **Asynchrone depuis le 04/09/2026, et le motif est un piège que j'ai
+   * refermé sur moi-même.** Les coordonnées de la filiale (constat Q-160) ont
+   * d'abord été ajoutées dans la route `GET /api/session` seule — c'est-à-dire
+   * exactement ce que le commentaire ci-dessous interdit depuis le constat
+   * Q-85 : *« enrichir un seul des deux côtés ferait diverger
+   * `POST /api/connexion` de `GET /api/session` »*. L'essai
+   * `test/auth/chaine-http.test.mjs`, qui exige les deux charges identiques à
+   * l'octet près (§26.2), a rougi immédiatement.
+   *
+   * La charte lit donc les coordonnées **elle-même**, et les deux routes les
+   * reçoivent par construction. Le greffon de connexion n'a pas eu à changer :
+   * il fait `return charteSession(session)`, et Fastify attend une promesse
+   * rendue.
+   */
+  const charteSession = async (
     session: SessionAppliquee,
     filiale: { id: string; code: string; raisonSociale: string } | null = null,
-  ): Record<string, unknown> => {
+  ): Promise<Record<string, unknown>> => {
     const { perimetre, droits } = session;
+
+    // Les coordonnées sont lues dans le périmètre de la session, borné par
+    // `f_filiales_lecture()` — un prédicat qui ne nomme aucune filiale : il
+    // demande à la base celui qu'elle applique partout ailleurs. Un échec rend
+    // `null`, jamais une erreur : ne pas connaître son adresse ne doit pas
+    // empêcher d'ouvrir l'application.
+    const coordonnees =
+      perimetre.filialeId === null
+        ? null
+        : await avecTransaction(
+            pool,
+            perimetre,
+            async (client) => {
+              const { rows } = await client.query<Record<string, string | null>>(
+                `select "adresse", "code_postal", "ville", "pays", "telephone", "email",
+                        "site_web", "nom_court"
+                   from "filiales"
+                  where "id" = $1 and "id" = any (f_filiales_lecture())`,
+                [perimetre.filialeId],
+              );
+              return rows[0] ?? null;
+            },
+            { lectureSeule: true },
+          ).catch(() => null);
     // ── Constat Q-85 : la filiale avait un identifiant, pas un nom ──────────
     //
     // Mesuré au navigateur le 03/09 après une connexion réelle : le bandeau
@@ -1344,8 +1383,13 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       utilisateur: perimetre.utilisateurId,
       filiale_active:
         nommee === null
-          ? { id: perimetre.filialeId }
-          : { id: nommee.id, code: nommee.code, raison_sociale: nommee.raisonSociale },
+          ? { id: perimetre.filialeId, ...(coordonnees ?? {}) }
+          : {
+              id: nommee.id,
+              code: nommee.code,
+              raison_sociale: nommee.raisonSociale,
+              ...(coordonnees ?? {}),
+            },
       perimetre_lecture: perimetre.filiales,
       perimetre_groupe: perimetre.perimetreGroupe,
       administration_groupe: perimetre.administrationGroupe,
@@ -1410,51 +1454,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
           ? await resolveur.filiale()
           : null;
 
-      // ── LES COORDONNÉES DE LA FILIALE ACTIVE — constat Q-160 ────────────
-      //
-      // La table `filiales` porte adresse, ville, pays, téléphone, courriel et
-      // site web depuis `001`, et **aucune route ne les rendait**. Le lot L9 a
-      // donc livré la marque à moitié : raison sociale et logo, pas les
-      // coordonnées — et l'agent a eu raison de refuser de les fabriquer, car
-      // les inventer les aurait fait apparaître sur des documents d'audit.
-      //
-      // Elles sont lues ICI, dans la transaction de la session, et **bornées par
-      // son périmètre** : `id = any(f_filiales_lecture())` — le prédicat ne
-      // nomme aucune filiale, il demande à la base celle qu'elle applique
-      // partout ailleurs. Un `null` est rendu si la filiale n'est pas lisible,
-      // jamais une erreur : ne pas connaître son adresse ne doit pas empêcher
-      // d'ouvrir l'application.
-      const coordonnees =
-        session.perimetre.filialeId === null
-          ? null
-          : await avecTransaction(
-              pool,
-              session.perimetre,
-              async (client) => {
-                const { rows } = await client.query<Record<string, string | null>>(
-                  `select "adresse", "code_postal", "ville", "pays", "telephone", "email",
-                          "site_web", "nom_court"
-                     from "filiales"
-                    where "id" = $1 and "id" = any (f_filiales_lecture())`,
-                  [session.perimetre.filialeId],
-                );
-                return rows[0] ?? null;
-              },
-              { lectureSeule: true },
-            ).catch(() => null);
-
-      const charte = charteSession(session, filiale);
-      return reponse.send(
-        coordonnees === null
-          ? charte
-          : {
-              ...charte,
-              filiale_active:
-                charte.filiale_active === null || charte.filiale_active === undefined
-                  ? charte.filiale_active
-                  : { ...charte.filiale_active, ...coordonnees },
-            },
-      );
+      return reponse.send(await charteSession(session, filiale));
     },
   );
 

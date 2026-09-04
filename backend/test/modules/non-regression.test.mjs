@@ -198,6 +198,18 @@ const SANS_FICHE = {
   '/settings': 'paramètres',
   '/referentiels': 'catalogue STATIQUE : les identifiants ne viennent pas de la base',
   '/journal': 'journal d’audit : registre en ajout seul, le détail s’ouvre en place',
+  // ── Vague 6 : les écrans des capacités livrées sans interface ────────────
+  //
+  // Aucun des cinq n'a de fiche à route propre, et pour des raisons différentes
+  // qu'il vaut mieux écrire que supposer :
+  '/groupe': 'consolidation Groupe : une vue, aucune fiche — le détail est la filiale',
+  '/approbations':
+    'circuit d’approbation : la fiche vit dans l’état du module, pas dans une route. ⚠️ ' +
+    'Conséquence assumée et signalée par son auteur — le bouton « Retour » du navigateur ' +
+    'quitte l’écran. Une route « /approbations/:entite/:id » le corrigerait.',
+  '/socle': 'socle de risques : édition en place',
+  '/referentiels-actifs': 'activation par filiale : une case à cocher, aucune fiche',
+  '/imports': 'import généralisé : un formulaire, aucune fiche',
 };
 
 /**
@@ -211,7 +223,12 @@ const SANS_FICHE = {
  * inscrire la route dans `FICHES` ou dans `SANS_FICHE`, sans quoi la seconde
  * assertion tombe à son tour.
  */
-const MODULES_ATTENDUS = 28;
+// 33 depuis la vague 6 : cinq écrans naissent d'un coup — « groupe » (la
+// consolidation Groupe), « approbations », « socle » (le socle de risques),
+// « referentiels_actifs » (l'activation par filiale) et « imports » (l'import
+// généralisé). Chacun rendait visible une capacité serveur qui existait SANS
+// interface, ce qui est une fonctionnalité à moitié livrée.
+const MODULES_ATTENDUS = 33;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //
