@@ -2034,3 +2034,75 @@ tour** au lieu de ne pas commencer.
 
 ⚠️ **Le contrôle 3 est celui qu'on oublie.** E6 avait le sien — « la connexion AD rend
 toujours 200 » — et c'est ce qui a permis d'affirmer que les deux moitiés tenaient ensemble.
+
+---
+
+## 33. Les contrats de la vague 5 — figés avant les agents
+
+> Écrits le 05/09/2026, avant le lancement. La passe de préparation a trouvé la même chose
+> pour les trois lots, et c'est la découverte qui vaut le plus cher : **le modèle existe
+> déjà, et aucun des trois n'a besoin de migration.** Un agent qui l'ignorerait écrirait une
+> migration inutile et réinventerait des tables de vingt colonnes.
+
+### 33.1 L7 — l'import se DÉCOUVRE, il ne se configure pas
+
+Le `PLAN_SERVEUR` §5 demande « une description déclarative des colonnes attendues par
+entité — un importeur, vingt configurations ». ⚠️ **Vingt configurations écrites à la main
+sont vingt omissions qui attendent** (§19.5), et le dépôt porte déjà la description :
+
+`Depot.decrire()` rend, pour chaque entité, `{ champ: { type, obligatoire } }` — c'est ce
+que sert `GET /api/modele`. **Les colonnes d'un modèle Excel s'en dérivent.** Un champ ajouté
+demain apparaît dans le modèle sans que personne y pense ; un champ retiré disparaît.
+
+**Ce qui ne se dérive pas et doit donc être écrit** : le **libellé humain** d'une colonne
+(« Raison sociale » plutôt que `raison_sociale`) et son ordre d'affichage. Une omission y
+est **bruyante** — la colonne s'affiche sous son nom technique —, donc c'est le bon endroit
+pour une liste (`CLAUDE.md` §3).
+
+### 33.2 L7 — l'idempotence porte sur le FICHIER, pas sur la ligne
+
+`imports.cle_idempotence` est un `empreinte_sha256`, et la table porte déjà
+`lignes_lues / creees / mises_a_jour / ignorees / en_erreur`. Le modèle a donc déjà tranché,
+et l'arbitrage est confirmé ici :
+
+> **Réimporter le même fichier dans la même filiale est sans effet**, et le dit.
+
+C'est la lettre du §5 (« réimporter le même fichier ne duplique pas ») et cela évite le
+piège : une clé naturelle **par entité** serait vingt décisions métier, chacune fausse dans
+un cas limite — deux prestataires homonymes, deux risques au même intitulé.
+
+⚠️ **Ce que cela ne couvre pas, et qu'il faut dire** (§17.5) : un fichier **modifié d'un
+octet** est un fichier neuf. L'idempotence protège du double clic et du rejeu, pas de la
+ressaisie. Le rapport d'aperçu reste la parade contre le second cas.
+
+### 33.3 L8 — tout est déjà en base, y compris l'irréversibilité
+
+`approbations` existe depuis `001_socle.sql`, avec `objet_type` (`document`, `risque`,
+`audit`), `etape`, `ordre`, `statut`, `acteur_id`, `acteur_libelle`, `date_decision`,
+`version_objet`, `empreinte_objet`, l'unicité `(filiale_id, objet_type, objet_id, etape,
+ordre)` — **et les déclencheurs `f_approbations_verrou_decision()` / `trg_approbations_verrou`
+qui rendent une décision irréversible.**
+
+**Il n'y a donc rien à migrer.** Le lot L8 est une **API et un écran**, et son premier devoir
+est de *constater* ce que la base tient déjà : un agent qui réécrirait la règle
+d'irréversibilité en TypeScript ferait un doublon silencieux de la garantie, et le jour où
+les deux divergeraient, c'est la version faible qui l'emporterait.
+
+⚠️ **`empreinte_objet` est le point à ne pas manquer** : une approbation vaut pour **une
+version** de l'objet. Approuver, puis modifier le document, doit **repartir du début** —
+c'est ce que la colonne existe pour rendre vérifiable.
+
+### 33.4 L9 — la marque est en dur dans dix fichiers, et l'écran n'est pas le sujet
+
+Le `PLAN_SERVEUR` §6 compte « 17 endroits, dont 10 vues imprimables ». Mesuré au 05/09 :
+**dix fichiers** portent la chaîne en dur. Ce sont les **impressions et les exports** qui
+comptent — « précisément les documents qu'un auditeur aura entre les mains ».
+
+Les données existent : `filiales` porte `raison_sociale`, `adresse`, `code_postal`, `ville`,
+`pays`, `telephone`, `email`, `site_web`, `logo_piece_jointe_id`.
+
+⚠️ **`logo_piece_jointe_id` n'est posé par rien** (constat **Q-146**) : L6 sait déposer un
+logo, rien ne sait le **désigner**. C'est le premier geste de L9, et il est petit.
+
+⚠️ **PNG ou JPEG exclusivement, jamais SVG** — un SVG porte du script et s'afficherait *dans*
+l'interface. La chaîne du §31 le refuse déjà ; L9 ne doit pas ouvrir de second chemin.

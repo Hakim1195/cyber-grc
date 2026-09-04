@@ -117,6 +117,7 @@ import { avecTransactionAuthentification } from '../auth/transaction.js';
 import { deciderAcces, DOMAINE_PAR_ENTITE, entitesLisibles, refuserDroit } from './droits.js';
 import { greffonJournal } from './journal.js';
 import { greffonPieces } from '../pieces/index.js';
+import { greffonImport } from '../import/index.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
 import { AuthentificationProvisoire, estAuthentificateur, PerimetreProvisoire } from './session.js';
@@ -2432,6 +2433,13 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   // bruyamment et **n'enregistre aucune route** — le produit n'a alors aucune
   // pièce jointe. Deux agents l'ont signalé indépendamment.
   await instance.register(greffonPieces, { pool, config });
+
+  /* -------------------------------------------------------------------
+   *  Import généralisé — monté, pas écrit (lot L7)
+   * -------------------------------------------------------------------
+   *  Couture publiée avant l'agent. Contrat au `CONVENTIONS.md` §33.1 et §33.2.
+   * ------------------------------------------------------------------- */
+  await instance.register(greffonImport, { pool, config });
 
   const service = options.serviceAuthentification;
   if (service !== undefined) {
