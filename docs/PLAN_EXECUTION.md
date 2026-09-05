@@ -425,6 +425,42 @@ chiffrable :
 - **dix constats indépendants → deux ou trois agents groupés PAR DOMAINE**, jamais un par
   constat : dix agents paieraient dix fois la ré-acquisition pour le même dépôt.
 
+#### 2 ter. LA COUTURE SE PUBLIE AVANT LE LANCEMENT, pas après
+
+> ⚠️ **Écrit le 05/09/2026 après l'avoir enfreint, et l'utilisateur a dû me le rappeler.**
+
+La règle existait déjà, plus haut : *« le remède n'est pas de sérialiser, c'est de publier
+le contrat d'abord »*. Elle a été appliquée trois fois avec succès — `src/api/journal.ts`,
+`src/pieces/index.ts`, `src/import/index.ts`, chacun **créé vide ET enregistré** avant que
+l'agent ne parte, si bien qu'aucun n'a eu à toucher au point d'entrée.
+
+À la vague 7, j'ai écrit aux agents : *« l'enregistrement de ton greffon est à moi, dis-moi
+la ligne exacte »*. C'est la même chose en apparence, et l'inverse en pratique :
+
+| Couture publiée d'avance | Promesse d'enregistrement |
+|---|---|
+| l'agent monte, éprouve par HTTP, mesure le chemin réel | l'agent écrit un greffon **que rien ne monte** |
+| son rapport dit ce que le produit fait | son rapport dit ce que son code ferait |
+| il est **autonome** | il **dépend de l'orchestrateur** pour être éprouvé |
+
+**La règle, désormais explicite :** un agent ne se lance que s'il peut aller jusqu'à la
+mesure **sans attendre personne**. Trois questions à se poser avant chaque lancement, et si
+l'une reçoit « non », on ne lance pas — on prépare :
+
+1. **Sa couture est-elle en place ?** Le fichier existe-t-il, est-il enregistré, et son
+   contrat est-il dans l'entête ?
+2. **Peut-il mesurer le chemin réel ?** S'il ne peut pas monter sa route, il mesurera son
+   code — et un code qui a l'air juste ne dit rien du produit.
+3. **Son échec est-il distinguable de celui d'un voisin ?** Trois agents partagent `src/`
+   et `dist/` : chacun doit savoir reconnaître « la compilation a échoué chez quelqu'un
+   d'autre » et rejouer, au lieu de chercher un défaut chez lui.
+
+**Le rattrapage, quand on s'aperçoit trop tard qu'un agent est bloqué** : ne pas attendre
+son retour pour le débloquer. Lui envoyer le contrat exact — le nom d'export, la forme des
+options — **et le précédent qui lui permet de se monter lui-même**
+(`test/approbations/aide.mjs` sonde si la route est montée et l'enregistre sinon). Il
+redevient autonome dans le tour suivant, au lieu de rendre un lot invérifiable.
+
 #### 3. Un contrat écrit coûte 5 000 jetons et en économise 300 000
 
 Mesuré en vol sur cette vague : le §29.8 figeait les chemins et les filtres, **mais ni le
