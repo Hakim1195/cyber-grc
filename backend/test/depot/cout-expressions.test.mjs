@@ -284,15 +284,35 @@ function famillesHostiles(corps) {
   return familles;
 }
 
-/** Temps d'un `exec`, en millisecondes. */
+/**
+ * Temps d'un `exec`, en millisecondes — **le meilleur de trois passes**.
+ *
+ * ⚠️ Le banc joue des dizaines de processus en parallèle, et une mesure de temps
+ * prise sous cette charge est bruitée dans un seul sens : elle ne peut être que
+ * TROP GRANDE. Un bruit sur la petite taille écrase le rapport et rend l'essai
+ * vert par accident ; un bruit sur la grande le rend rouge par accident. Cet
+ * essai a d'abord échoué de cette façon-là, au banc complet, en passant seul.
+ *
+ * Le minimum de plusieurs passes approche le coût **sans contention** : c'est la
+ * seule statistique dont le bruit ne fausse pas le sens. La moyenne, elle,
+ * emporterait le bruit avec elle.
+ */
 function chronometrer(re, sujet) {
-  const debut = process.hrtime.bigint();
-  try {
-    re.exec(sujet);
-  } catch {
-    /* un motif qui refuse un sujet ne coûte rien : c'est le TEMPS qu'on lit */
+  let meilleur = Infinity;
+  for (let passe = 0; passe < 3; passe += 1) {
+    const debut = process.hrtime.bigint();
+    try {
+      re.exec(sujet);
+    } catch {
+      /* un motif qui refuse un sujet ne coûte rien : c'est le TEMPS qu'on lit */
+    }
+    const ms = Number(process.hrtime.bigint() - debut) / 1e6;
+    if (ms < meilleur) meilleur = ms;
+    // ⚠️ Une forme catastrophique ne se rejoue pas : trois passes à vingt
+    //    secondes figeraient le banc. Une seule suffit à la reconnaître.
+    if (ms > PLAFOND_MS) return ms;
   }
-  return Number(process.hrtime.bigint() - debut) / 1e6;
+  return meilleur;
 }
 
 /**
