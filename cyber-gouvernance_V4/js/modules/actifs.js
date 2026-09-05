@@ -28,15 +28,17 @@ const ActifsModule = (() => {
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (Commun à tous les clients)</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <input type="file" id="importActifsFile" accept=".xlsx, .xls, .csv" style="display: none;" />
-                        <button id="templateActifsBtn" style="background: var(--color-gray); color: white;">Télécharger le modèle</button>
-                        <button id="importActifsBtn" style="background: var(--color-info); color: white;">Importer (Excel)</button>
+                        <a href="#/imports" class="btn-secondary" data-lecture="ok" title="L'import généralisé : transactionnel (tout ou rien), idempotent par fichier, avec aperçu avant validation et rapport ligne par ligne">Importer…</a>
                         <button id="addActifBtn">Déclarer un actif</button>
                     </div>
                 </div>
 
                 <div class="synthese-message info" style="font-size: 0.9rem; padding: 10px; margin-bottom: 20px;">
-                    <strong>Format d'import :</strong> fichier Excel/CSV avec les colonnes <em>Nom, Type, Criticité, Responsable, Description</em>. Cliquez sur <strong>« Télécharger le modèle »</strong> pour partir d'un fichier prêt à remplir. Les actifs déjà présents (même nom) sont ignorés.
+                    <strong>Import :</strong> il se fait depuis l'écran <a href="#/imports">Imports</a>, qui
+                    vaut pour les 23 entités du produit. Vous y téléchargez un modèle prêt à remplir,
+                    voyez un <strong>aperçu avant validation</strong>, et obtenez un rapport
+                    <strong>ligne par ligne</strong> en cas d'erreur. Un fichier passe entièrement ou
+                    pas du tout, et le réenvoyer ne crée rien.
                 </div>
 
                 <table class="data-table">
@@ -59,44 +61,20 @@ const ActifsModule = (() => {
         if (addBtn) addBtn.onclick = renderCreate;
 
         // Téléchargement du modèle d'import
-        const templateBtn = document.getElementById("templateActifsBtn");
-        if (templateBtn) {
-            templateBtn.onclick = () => {
-                if (typeof ImportExcelService !== "undefined") ImportExcelService.downloadActifsTemplate();
-                else alert("Le service d'importation n'est pas chargé.");
-            };
-        }
+        // ── L'IMPORT A DÉMÉNAGÉ, ET CE N'ÉTAIT PAS UN DÉPLACEMENT COSMÉTIQUE ──
+        //
+        // Cet écran portait son propre import Excel, qui écrivait DIRECTEMENT
+        // dans le `DataStore` : aucune transaction serveur, aucun aperçu, aucune
+        // idempotence, et un dédoublonnage approximatif par comparaison de
+        // textes. Le lot L7 a livré un moteur qui fait l'inverse sur les 23
+        // entités — tout ou rien, idempotent par le fichier, avec un rapport
+        // ligne par ligne — et laisser les deux chemins coexister aurait offert
+        // à l'utilisateur deux comportements contradictoires derrière le même
+        // mot (constat Q-179).
+        //
+        // Le bouton renvoie donc vers `#/imports`. `js/services/importExcel.js`
+        // n'est plus appelé par cet écran.
 
-        // Gestion de l'import Excel
-        const importBtn = document.getElementById("importActifsBtn");
-        const importFile = document.getElementById("importActifsFile");
-
-        if (importBtn && importFile) {
-            importBtn.onclick = () => importFile.click();
-            importFile.onchange = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                if (typeof ImportExcelService === "undefined") {
-                    alert("Le service d'importation n'est pas chargé.");
-                    importFile.value = '';
-                    return;
-                }
-
-                ImportExcelService.importActifs(file, (imported, skipped) => {
-                    let msg = `${imported} actif(s) importé(s) avec succès.`;
-                    if (skipped > 0) msg += `\n${skipped} actif(s) ignoré(s) car le nom existait déjà.`;
-
-                    alert(msg);
-                    if (window.showToast) window.showToast("Import des actifs terminé", "success");
-
-                    renderList(); // Recharger la vue
-                });
-
-                // Réinitialiser l'input pour permettre de réimporter le même fichier si besoin
-                importFile.value = '';
-            };
-        }
 
         document.querySelectorAll(".clickable-row").forEach(row => {
             row.onclick = () => Router.navigateTo(`/actifs/${row.dataset.id}`);

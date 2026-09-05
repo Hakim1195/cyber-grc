@@ -2313,3 +2313,77 @@ serveur : le lot L12 lit les mêmes dates, avec les mêmes règles, ou il diverg
 
 ⚠️ **Un envoi est un acte tracé** — action `administration` au journal, avec le nombre de
 destinataires, jamais leur liste.
+
+---
+
+## §37 — Contrat du lot L10 : internationalisation de l'interface
+
+> **FR + EN sont obligatoires au cadrage**, ES souhaitable. Ce lot traite l'**interface** ;
+> les catalogues métier (1 500 textes) sont le lot L11, et les messages du serveur ne sont
+> **pas** dans ce lot — voir §37.5, qui dit pourquoi et ce qu'il faudra en faire.
+
+### §37.1 — Aucune étape de compilation, et ce n'est pas négociable
+
+La SPA se charge par des `<script>` séquentiels, **sans build**. Un dictionnaire est donc un
+fichier JavaScript ordinaire (`js/i18n/fr.js`, `js/i18n/en.js`) qui pose son objet sur
+`window`, chargé **avant** les modules. Toute solution qui exigerait un empaquetage est hors
+sujet : elle ferait entrer dans le produit une chaîne d'outillage que le client n'a pas.
+
+### §37.2 — Une clé manquante doit être BRUYANTE
+
+C'est la seule règle qui décide de la forme du lot. Deux façons de se tromper :
+
+| Ce que fait la traduction absente | Verdict |
+|---|---|
+| rend la chaîne vide, ou le texte français | ❌ **le défaut passe en production** — un écran anglais à moitié français a l'air fini |
+| rend **la clé elle-même** (`risques.titre`) | ✅ voyant, laid, et impossible à ignorer |
+
+⚠️ **Et un contrôle mécanique**, sans quoi la règle est une intention : un essai qui
+**découvre** les clés employées par les modules et les confronte aux deux dictionnaires,
+dans les **deux sens** — une clé sans traduction, et une traduction que plus personne
+n'emploie. Les deux sens comptent : le second est ce qui fait pourrir un dictionnaire.
+
+### §37.3 — Ce qui se traduit, et ce qui ne se traduit pas
+
+- **Se traduit** : les libellés, les titres, les messages d'aide (`Help.tip`), les boutons,
+  les en-têtes de colonne, les états d'écran (chargement, vide, refus).
+- **Ne se traduit PAS** : les **valeurs de statut** (`conforme`, `à faire`, `élevé`…). Elles
+  sont **stockées en base** et contraintes par des `check` : les traduire à l'écriture
+  casserait le schéma, et les traduire à l'affichage seulement demande une table de
+  correspondance par langue — c'est un **affichage**, et il se fait au même endroit que les
+  autres libellés, à partir de la valeur stockée qui, elle, ne bouge jamais.
+- **Ne se traduit pas non plus** : les identifiants, les codes de clause, les noms de
+  référentiels (« ISO 27001 » se dit ISO 27001 partout).
+
+### §37.4 — La langue vient de la filiale, et l'utilisateur peut la changer
+
+`filiales.langue_defaut` **existe déjà** en base et n'est lue par personne : c'est la valeur
+par défaut, et elle arrive dans `filiale_active` de la charte de session.
+
+L'utilisateur peut la changer pour lui-même. ⚠️ **Cette préférence va dans `localStorage`**,
+et il faut dire pourquoi cela ne contredit pas la purge du lot L2 : ce qui a été retiré du
+poste, ce sont **les données** — le coffre, le miroir, les points de restauration. Une
+langue d'affichage n'est pas une donnée du produit ; elle ne vaut que pour ce poste, elle
+ne se synchronise pas, et sa perte ne coûte rien. La clé se nomme `cyber-langue`.
+
+### §37.5 — Les messages du SERVEUR restent en français, et c'est déclaré
+
+`src/erreurs/` rédige des phrases françaises soignées — « cette étape d'approbation est
+franchie : la décision est irréversible ». Les traduire demanderait que le serveur connaisse
+une langue, donc un en-tête `Accept-Language` honoré sur **toutes** les routes, et une
+seconde rédaction de chaque message.
+
+**Ce lot ne le fait pas**, et l'écrit plutôt que de le laisser découvrir : un utilisateur
+anglophone verra l'interface en anglais et **les refus du serveur en français**. Le
+vocabulaire des codes (`droit_insuffisant`, `conflit_version`…) est en revanche **stable et
+traduisible côté client** : un écran qui reconnaît le code peut rédiger sa propre phrase, et
+c'est ce que les écrans neufs font déjà pour les cas qu'ils connaissent. La couverture
+complète est un candidat **V1.1**, et elle appartient au même lot que L11.
+
+### §37.6 — Dates, nombres, et le piège qui les accompagne
+
+`Intl.DateTimeFormat` et `Intl.NumberFormat`, avec la locale courante. ⚠️ **Ce qui ne change
+jamais** : les dates **stockées** et **transmises** restent ISO (`AAAA-MM-JJ`). Formater à
+l'affichage est un affichage ; formater à l'écriture serait un changement de schéma qui ne
+dit pas son nom, et un `01/02` qui vaut février à Paris et janvier à New York est
+exactement le genre de défaut qu'un audit ne pardonne pas.

@@ -44,8 +44,7 @@ const ExigencesModule = (() => {
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
-                        <input type="file" id="importExcelInput" accept=".xlsx, .xls, .csv" style="display: none;" />
-                        <button id="importBtn" style="background-color: var(--color-success);">Importer Excel</button>
+                        <a href="#/imports" class="btn-secondary" data-lecture="ok" title="L'import généralisé : transactionnel (tout ou rien), idempotent par fichier, avec aperçu avant validation et rapport ligne par ligne">Importer…</a>
                         <button id="addExigenceBtn" style="background-color: var(--primary);">Saisie Manuelle</button>
                     </div>
                 </div>
@@ -71,32 +70,20 @@ const ExigencesModule = (() => {
         const addBtn = document.getElementById("addExigenceBtn");
         if (addBtn) addBtn.onclick = renderCreate;
 
-        const importInput = document.getElementById("importExcelInput");
-        const importBtn = document.getElementById("importBtn");
+        // ── L'IMPORT A DÉMÉNAGÉ, ET CE N'ÉTAIT PAS UN DÉPLACEMENT COSMÉTIQUE ──
+        //
+        // Cet écran portait son propre import Excel, qui écrivait DIRECTEMENT
+        // dans le `DataStore` : aucune transaction serveur, aucun aperçu, aucune
+        // idempotence, et un dédoublonnage approximatif par comparaison de
+        // textes. Le lot L7 a livré un moteur qui fait l'inverse sur les 23
+        // entités — tout ou rien, idempotent par le fichier, avec un rapport
+        // ligne par ligne — et laisser les deux chemins coexister aurait offert
+        // à l'utilisateur deux comportements contradictoires derrière le même
+        // mot (constat Q-179).
+        //
+        // Le bouton renvoie donc vers `#/imports`. `js/services/importExcel.js`
+        // n'est plus appelé par cet écran.
 
-        if (importBtn && importInput) {
-            importBtn.onclick = () => importInput.click();
-
-            importInput.onchange = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                if (window.showToast) window.showToast("Lecture du fichier en cours...", "info");
-
-                if (typeof ImportExcelService !== "undefined") {
-                    ImportExcelService.importExigences(file, currentClient, (imported, skipped) => {
-                        let msg = `Import terminé : ${imported} ajoutées.`;
-                        if (skipped > 0) msg += ` (${skipped} doublons ignorés).`;
-
-                        alert(msg);
-                        Router.navigateTo("/exigences");
-                    });
-                } else {
-                    alert("Le service d'importation n'est pas chargé.");
-                }
-                importInput.value = "";
-            };
-        }
 
         // Sélection multiple + suppression groupée (helper partagé, cf. js/core/ui.js).
         // La case à cocher (et le lien courriel) ne doivent pas ouvrir la fiche :
