@@ -217,7 +217,38 @@ describe('Le deuxième axe — le profil, et ce qu’il NE donne PAS', () => {
       assert.equal(valeur, 'lecture', 'La direction ne contribue nulle part.');
     }
     assert.equal(niveau(r, 'tableau_de_bord'), 'lecture');
-    assert.equal(niveau(r, 'incidents'), 'aucun');
+
+    /* ⚠️ CETTE LIGNE DISAIT `aucun`, ET ELLE A ROUGI — c'est ce qu'elle doit faire.
+       Constat **Q-181**, tranché le 05/09/2026 par la migration `016`.
+
+       Le lot L4 a livré la vision Groupe consolidée, **bâtie pour la Direction**
+       (`PLAN_SERVEUR` §3.1). L'écran agrège sept familles ; le profil `DIRECTION`
+       n'en portait aucune hors la conformité, si bien que l'écran lui affichait
+       « — » sur les risques, les incidents, le plan d'actions, les documents, les
+       actifs et les audits — presque tout ce qu'examine une revue de direction.
+
+       La règle posée : **le profil couvre exactement ce que l'écran qui lui est
+       destiné agrège.** En deçà, l'écran ment avec un tiret ; au-delà, c'est un
+       sur-octroi. `test/api/direction-voit-le-groupe.test.mjs` tient les deux
+       bords, et il DÉCOUVRE les familles dans la route plutôt que de les recopier.
+
+       ⚠️ `incidents` porte des données personnelles. La Direction les reçoit en
+       LECTURE — la situation d'une revue de direction, qui doit connaître les
+       incidents majeurs. Le DPO reste seul à les instruire (`contribution`),
+       comme l'affirme l'essai `dpo` ci-dessous. */
+    assert.equal(
+      niveau(r, 'incidents'),
+      'lecture',
+      'La Direction consulte les incidents ; elle ne les instruit pas.',
+    );
+    assert.equal(niveau(r, 'risques'), 'lecture', 'Sans quoi la vision Groupe affiche « — ».');
+    assert.equal(
+      niveau(r, 'rgpd'),
+      'aucun',
+      'La borne de l’élargissement : le registre RGPD appartient au DPO, et une vision ' +
+        'consolidée n’en a pas besoin.',
+    );
+    assert.equal(niveau(r, 'journal'), 'aucun', 'Le journal appartient à l’ADMIN, seul.');
   });
 
   test('dpo : le RGPD en validation, la cartographie fermée', async () => {

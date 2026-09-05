@@ -131,6 +131,14 @@ export class ErreurTableur extends Error {
  * qui dit quoi faire (enregistrer en CSV, ou découper), et non le nom d'une
  * partie interne du conteneur. **Le CSV, lui, va jusqu'à 5 000 lignes** : il ne
  * traverse pas de conteneur.
+ *
+ * ⚠️ **Cette borne borne le TRAVAIL, et il a fallu la corriger pour que ce soit
+ * vrai.** Elle ne tombait qu'à l'assemblage — après que le découpage avait
+ * construit les deux millions de lignes du fichier et que la grille les avait
+ * recopiées : 3,81 Mio d'entrée faisaient **+936 Mio de tas pour un fichier
+ * refusé** (constat **Q-198**). Elle mord désormais **pendant** le découpage
+ * (`lireCsv`) et **pendant** la lecture de la feuille (`lireFeuille`) ; l'
+ * assemblage la reprononce, en filet.
  */
 export const LIGNES_MAX = 5000;
 
@@ -225,41 +233,115 @@ export function lireCsv(contenu: Buffer): Tableur {
     finPremiereLigne < 0 ? texte : texte.slice(0, finPremiereLigne),
   );
 
-  const lignesBrutes: string[][] = [];
+  /* ── Pourquoi ce découpage BORNE au fil de l'eau ─────────────────────
+   *
+   *  Constat **Q-198**. Ce découpage construisait *toutes* les lignes, puis
+   *  l'assemblage les recopiait *toutes*, et la borne des 5 000 ne tombait
+   *  qu'après. Elle était donc **déclarée et non appliquée** : elle bornait le
+   *  résultat, jamais le travail.
+   *
+   *  ══ MESURÉ, avant correction ═════════════════════════════════════════
+   *
+   *      « a\n » × 2 000 000 — 3,81 Mio, moins d'un tiers du plafond de corps —
+   *        → refus en 1 445 ms, mais le tas passe de 144 à 1 080 Mio : +936 Mio,
+   *          soit **×243 l'entrée, pour un fichier REFUSÉ** ;
+   *      « \n » × 2 000 000 (que des sauts avant l'en-tête) → +710 Mio.
+   *
+   *  `deploy/systemd/cyber-grc.service` pose `MemoryHigh=1G`/`MemoryMax=2G` :
+   *  au plafond de corps, une **seule** requête franchit le plafond du cgroup et
+   *  `Restart=on-failure` relance le service — pour les vingt filiales.
+   *
+   *  La parade tient en une distinction : on cesse de **construire** dès la
+   *  borne franchie, on continue de **compter**. Le refus garde donc son chiffre
+   *  exact — c'est lui qui dit à l'utilisateur de combien il déborde —, et la
+   *  mémoire n'a jamais porté que 5 002 lignes.
+   * ------------------------------------------------------------------- */
+
+  const grille: { numero: number; cellules: Cellule[] }[] = [];
   let champ = '';
-  let ligne: string[] = [];
+  /** Vrai tant qu'aucun caractère n'est entré dans le champ courant. */
+  let champVide = true;
+  /** Vrai dès qu'un caractère de la ligne courante a été consommé. */
+  let ligneEnCours = false;
+  let ligne: Cellule[] = [];
   let cite = false;
+  /** Lignes VUES depuis le début, y compris celles qu'on ne garde pas. */
+  let vues = 0;
+  /** Numéro de la ligne d'en-têtes ; 0 tant qu'aucune ligne non vide n'est passée. */
+  let numeroEnTetes = 0;
+  /** Faux dès la borne franchie : on ne construit plus, on compte encore. */
+  let construire = true;
+
+  // ⚠️ `champVide` et `ligneEnCours` sont tenus dans les DEUX modes. L'automate
+  // de guillemets consulte « le champ est-il vide ? » pour décider si un `"`
+  // ouvre une citation : le déduire de `champ`, qui cesse d'être alimenté,
+  // ferait avaler des fins de ligne en mode comptage — et le chiffre du refus
+  // ne serait plus celui du fichier.
+  const ajouter = (signe: string): void => {
+    champVide = false;
+    ligneEnCours = true;
+    if (construire && champ.length <= CARACTERES_MAX_CELLULE) champ += signe;
+  };
 
   const finirChamp = (): void => {
-    ligne.push(champ.length > CARACTERES_MAX_CELLULE ? champ.slice(0, CARACTERES_MAX_CELLULE) : champ);
+    // La borne de colonnes s'applique ICI plutôt qu'à l'assemblage, pour la même
+    // raison : une ligne de deux millions de champs se construisait entièrement
+    // avant d'être tronquée à 256.
+    if (construire && ligne.length < COLONNES_MAX) {
+      ligne.push(
+        champ === ''
+          ? null
+          : champ.length > CARACTERES_MAX_CELLULE
+            ? champ.slice(0, CARACTERES_MAX_CELLULE)
+            : champ,
+      );
+    }
     champ = '';
+    champVide = true;
   };
+
   const finirLigne = (): void => {
     finirChamp();
-    lignesBrutes.push(ligne);
+    vues += 1;
+    ligneEnCours = false;
+    const cellules = ligne;
     ligne = [];
+    if (!construire) return;
+    if (numeroEnTetes === 0) {
+      // Avant les en-têtes, un saut de ligne n'est qu'un saut : le retenir
+      // coûterait un tableau par saut — 710 Mio pour 3,8 Mio de sauts — sans
+      // rien apporter, le numéro conservé de l'en-tête suffisant à recaler le
+      // repère de l'utilisateur.
+      if (ligneVide(cellules)) return;
+      numeroEnTetes = vues;
+    }
+    grille.push({ numero: vues, cellules });
+    // En-têtes comprises : LIGNES_MAX lignes de données en font LIGNES_MAX + 1.
+    if (grille.length > LIGNES_MAX + 1) construire = false;
   };
 
   for (let index = 0; index < texte.length; index += 1) {
     const signe = texte[index] ?? '';
     if (cite) {
       if (signe !== '"') {
-        champ += signe;
+        ajouter(signe);
         continue;
       }
       if (texte[index + 1] === '"') {
-        champ += '"';
+        ajouter('"');
         index += 1;
         continue;
       }
       cite = false;
       continue;
     }
-    if (signe === '"' && champ === '') {
+    if (signe === '"' && champVide) {
+      ligneEnCours = true;
       cite = true;
       continue;
     }
     if (signe === separateur) {
+      ligneEnCours = true;
       finirChamp();
       continue;
     }
@@ -272,13 +354,17 @@ export function lireCsv(contenu: Buffer): Tableur {
       finirLigne();
       continue;
     }
-    champ += signe;
+    ajouter(signe);
   }
   // Un fichier qui ne finit pas par une fin de ligne a quand même une dernière
   // ligne. Ne pas la prendre perdrait un enregistrement, en silence.
-  if (champ !== '' || ligne.length > 0) finirLigne();
+  if (ligneEnCours) finirLigne();
 
-  return assembler(lignesBrutes.map((cellules) => cellules.map((valeur) => valeur)));
+  // Le refus se prononce sur ce qui a été COMPTÉ, pas sur ce qui a été construit.
+  if (numeroEnTetes > 0 && vues - numeroEnTetes > LIGNES_MAX) {
+    throw refusTropDeLignes(vues - numeroEnTetes);
+  }
+  return assemblerNumerotees(grille);
 }
 
 /* =====================================================================
@@ -346,15 +432,105 @@ function attribut(attributs: string, nom: string): string | null {
   return trouve?.[1] === undefined ? null : decoderXml(trouve[1]);
 }
 
+/**
+ * Élément XML rencontré : ses attributs bruts, et son corps s'il en a un.
+ *
+ * `corps === null` désigne la forme vide `<x …/>`. Elle **compte** — un `<si/>`
+ * occupe une position dans la table des chaînes, et la sauter décalerait toutes
+ * les suivantes, c'est-à-dire écrirait en base la valeur de la cellule d'à côté.
+ */
+interface ElementXml {
+  readonly attributs: string;
+  readonly corps: string | null;
+}
+
+/**
+ * Parcourt les `<nom …>…</nom>` d'un fragment, **en une seule passe**.
+ *
+ * ══ Pourquoi ce n'est pas une expression rationnelle ═════════════════════
+ *
+ * La forme évidente — `<nom …>([\s\S]*?)</nom>` répétée par `exec` — est
+ * **quadratique dès qu'une balise n'est pas refermée**, et c'est le constat
+ * **Q-197** : l'alternative appariée fait balayer *tout le reste de la partie*
+ * avant d'échouer, puis `exec` reprend à la balise ouvrante suivante et rebalaie
+ * la même chose. Une passe complète par balise ouvrante.
+ *
+ * ══ MESURÉ, avant correction, sur `<row r="1">` répété ══════════════════
+ *
+ *     10 000 →   451 ms      20 000 → 1 638 ms      40 000 → 6 408 ms
+ *
+ * soit 3,6× et 3,9× pour 2× d'entrée — et 40 000 balises tiennent en **1 084
+ * octets** une fois comprimées, sous toutes les bornes du produit. Node est
+ * mono-fil et cette lecture est synchrone : pendant ces secondes-là, ni le point
+ * de santé, ni la connexion à l'annuaire, ni les dix-neuf autres filiales ne
+ * sont servis. Et `LIGNES_MAX` ne mord pas : elle compte les lignes **closes**,
+ * et il n'y en a aucune.
+ *
+ * Ici, tout se cherche par `indexOf` **depuis un curseur qui n'avance jamais à
+ * reculons** : les portions examinées sont disjointes, donc le coût total est
+ * celui du fragment, une fois. Aucune expression rationnelle non plus pour les
+ * attributs — `<nom[^>]*>` rebalaie et rebrousse le reste de la chaîne à chaque
+ * position candidate, ce qui rétablirait exactement le défaut qu'on ferme.
+ *
+ * ⚠️ **Une ouverture sans fermeture fait REFUSER le classeur**, elle n'est plus
+ * ignorée. L'échec est en outre définitif : si `</nom>` est absent au-delà du
+ * curseur, il l'est au-delà de toute position ultérieure — chercher plus loin
+ * serait la boucle quadratique, écrite autrement. Aucun producteur OOXML n'émet
+ * de balise ouverte ; en ignorer une ferait perdre des lignes **en silence**,
+ * ce que le `CLAUDE.md` §3 range dans le premier cas — *quelque chose réussit
+ * alors que c'est faux*.
+ */
+function* elementsXml(fragment: string, nom: string): Generator<ElementXml> {
+  const ouverture = `<${nom}`;
+  const fermeture = `</${nom}>`;
+  let curseur = 0;
+  for (;;) {
+    const debut = fragment.indexOf(ouverture, curseur);
+    if (debut < 0) return;
+    const apresNom = debut + ouverture.length;
+    const suivant = fragment[apresNom] ?? '';
+    // Ce qui suit le nom termine la balise ou ouvre ses attributs : sans cette
+    // condition, `<row` apparierait `<rowBreaks`.
+    if (suivant !== '>' && suivant !== '/' && !/\s/u.test(suivant)) {
+      curseur = apresNom;
+      continue;
+    }
+    const finOuverture = fragment.indexOf('>', apresNom);
+    if (finOuverture < 0) throw balisePasRefermee(nom);
+    const attributs = fragment.slice(apresNom, finOuverture);
+    curseur = finOuverture + 1;
+    if (attributs.endsWith('/')) {
+      // `<x …/>` : la barre appartient à la syntaxe, pas aux attributs.
+      yield { attributs: attributs.slice(0, -1), corps: null };
+      continue;
+    }
+    const fin = fragment.indexOf(fermeture, curseur);
+    if (fin < 0) throw balisePasRefermee(nom);
+    yield { attributs, corps: fragment.slice(curseur, fin) };
+    curseur = fin + fermeture.length;
+  }
+}
+
+/** Refus d'un classeur tronqué. Il dit quoi faire, pas quelle balise manque où. */
+function balisePasRefermee(nom: string): ErreurTableur {
+  return new ErreurTableur(
+    `Ce classeur est incomplet : une balise « ${nom} » n’est jamais refermée. ` +
+      'Réenregistrez-le depuis votre tableur, puis recommencez.',
+  );
+}
+
+/** Corps du **premier** `<nom>` d'un fragment ; `null` s'il est vide ou absent. */
+function corpsDuPremier(fragment: string, nom: string): string | null {
+  for (const element of elementsXml(fragment, nom)) return element.corps;
+  return null;
+}
+
 /** Contenu concaténé de tous les `<t>` d'un fragment (les runs `<r>` compris). */
 function textesDe(fragment: string): string {
   let texte = '';
-  const balises = /<t\b[^>]*?\/>|<t\b[^>]*>([\s\S]*?)<\/t>/gu;
-  let trouve: RegExpExecArray | null = balises.exec(fragment);
-  while (trouve !== null) {
-    texte += decoderXml(trouve[1] ?? '');
+  for (const element of elementsXml(fragment, 't')) {
+    texte += decoderXml(element.corps ?? '');
     if (texte.length > CARACTERES_MAX_CELLULE) return texte.slice(0, CARACTERES_MAX_CELLULE);
-    trouve = balises.exec(fragment);
   }
   return texte;
 }
@@ -363,14 +539,8 @@ function textesDe(fragment: string): string {
 function lireChainesPartagees(xml: string | null): readonly string[] {
   if (xml === null) return [];
   const chaines: string[] = [];
-  const items = /<si\b[^>]*?\/>|<si\b[^>]*>([\s\S]*?)<\/si>/gu;
-  let trouve: RegExpExecArray | null = items.exec(xml);
-  while (trouve !== null) {
-    // ⚠️ La branche auto-fermante compte AUSSI : `<si/>` occupe une position.
-    // La sauter décalerait toutes les chaînes suivantes — c'est-à-dire écrirait
-    // en base la valeur de la cellule d'à côté, sans un mot.
-    chaines.push(trouve[1] === undefined ? '' : textesDe(trouve[1]));
-    trouve = items.exec(xml);
+  for (const element of elementsXml(xml, 'si')) {
+    chaines.push(element.corps === null ? '' : textesDe(element.corps));
   }
   return chaines;
 }
@@ -419,48 +589,48 @@ function numeroLigne(reference: string | null): number | null {
 /** Lit une feuille et rend ses lignes brutes, indexées par position de colonne. */
 function lireFeuille(xml: string, chaines: readonly string[]): Map<number, Cellule[]> {
   const parLigne = new Map<number, Cellule[]>();
-  const lignes = /<row\b([^>]*?)\/>|<row\b([^>]*)>([\s\S]*?)<\/row>/gu;
-
-  let trouveLigne: RegExpExecArray | null = lignes.exec(xml);
   let position = 0;
-  while (trouveLigne !== null) {
+
+  for (const element of elementsXml(xml, 'row')) {
     position += 1;
-    if (parLigne.size > LIGNES_MAX + 1) {
+    // ⚠️ La borne compte les lignes **LUES**, et non les lignes retenues. Elle
+    // regardait `parLigne.size`, c'est-à-dire le nombre de numéros DISTINCTS :
+    // une feuille répétant `<row r="1">` cent mille fois la laissait au repos et
+    // faisait tout le travail quand même. Ce qu'on borne est le travail.
+    if (position > LIGNES_MAX + 1) {
       throw new ErreurTableur(
         `Ce fichier porte plus de ${String(LIGNES_MAX)} lignes de données. ` +
           'Découpez-le en plusieurs imports.',
       );
     }
-    const attributs = trouveLigne[1] ?? trouveLigne[2] ?? '';
-    const corps = trouveLigne[3] ?? '';
     // `r` est facultatif dans la norme : à défaut, la ligne est à sa position.
-    const numero = numeroLigne(`A${attribut(attributs, 'r') ?? ''}`) ?? position;
+    const numero = numeroLigne(`A${attribut(element.attributs, 'r') ?? ''}`) ?? position;
 
     const cellules: Cellule[] = [];
-    const balises = /<c\b([^>]*?)\/>|<c\b([^>]*)>([\s\S]*?)<\/c>/gu;
-    let trouveCellule: RegExpExecArray | null = balises.exec(corps);
     let colonneSuivante = 0;
-    while (trouveCellule !== null) {
-      const attributsCellule = trouveCellule[1] ?? trouveCellule[2] ?? '';
-      const contenu = trouveCellule[3] ?? '';
-      const colonne = indiceColonne(attribut(attributsCellule, 'r')) ?? colonneSuivante;
+    for (const cellule of elementsXml(element.corps ?? '', 'c')) {
+      const contenu = cellule.corps ?? '';
+      const colonne = indiceColonne(attribut(cellule.attributs, 'r')) ?? colonneSuivante;
       colonneSuivante = colonne + 1;
       if (colonne < COLONNES_MAX) {
         while (cellules.length < colonne) cellules.push(null);
-        cellules[colonne] = valeurCellule(attribut(attributsCellule, 't'), contenu, chaines);
+        cellules[colonne] = valeurCellule(attribut(cellule.attributs, 't'), contenu, chaines);
       }
-      trouveCellule = balises.exec(corps);
     }
     parLigne.set(numero, cellules);
-    trouveLigne = lignes.exec(xml);
   }
   return parLigne;
 }
 
 /** Interprète le contenu d'une cellule d'après son attribut de type. */
 function valeurCellule(type: string | null, contenu: string, chaines: readonly string[]): Cellule {
-  const brut = /<v\b[^>]*?\/>|<v\b[^>]*>([\s\S]*?)<\/v>/u.exec(contenu)?.[1];
-  const texteV = brut === undefined ? null : decoderXml(brut);
+  // ⚠️ Un `exec` non global n'est PAS à l'abri du défaut Q-197 : sur `<v>`
+  // répété sans fermeture, le moteur réessaie à chaque position candidate et
+  // rebalaie le reste de la cellule — quadratique dans un seul `<c>`. Mesuré à
+  // 1 677 ms pour 40 000 `<v>`, alors que l'audit n'avait nommé que les quatre
+  // expressions globales. Même parcours que les autres, donc.
+  const brut = corpsDuPremier(contenu, 'v');
+  const texteV = brut === null ? null : decoderXml(brut);
 
   switch (type) {
     case 's': {
@@ -566,13 +736,17 @@ export function ligneVide(cellules: readonly Cellule[]): boolean {
   );
 }
 
-/** Assemble des lignes non numérotées (CSV) : la position fait le numéro. */
-function assembler(grille: readonly (readonly string[])[]): Tableur {
-  return assemblerNumerotees(
-    grille.map((cellules, index) => ({
-      numero: index + 1,
-      cellules: cellules.map((valeur) => (valeur === '' ? null : valeur)),
-    })),
+/**
+ * Le refus chiffré des lignes en trop — **écrit à un seul endroit**.
+ *
+ * Deux couches le prononcent : le découpage CSV, qui l'atteint AVANT d'avoir
+ * tout construit (constat Q-198), et l'assemblage, qui reste le filet du XLSX.
+ * Deux rédactions du même refus finiraient par ne plus dire le même chiffre.
+ */
+function refusTropDeLignes(lignes: number): ErreurTableur {
+  return new ErreurTableur(
+    `Ce fichier porte ${String(lignes)} lignes de données, au-delà des ` +
+      `${String(LIGNES_MAX)} qu'un import accepte. Découpez-le en plusieurs fichiers.`,
   );
 }
 
@@ -603,12 +777,7 @@ function assemblerNumerotees(
     .slice(premiere + 1)
     .map((ligne) => ({ numero: ligne.numero, cellules: ligne.cellules.slice(0, COLONNES_MAX) }));
 
-  if (lignes.length > LIGNES_MAX) {
-    throw new ErreurTableur(
-      `Ce fichier porte ${String(lignes.length)} lignes de données, au-delà des ` +
-        `${String(LIGNES_MAX)} qu'un import accepte. Découpez-le en plusieurs fichiers.`,
-    );
-  }
+  if (lignes.length > LIGNES_MAX) throw refusTropDeLignes(lignes.length);
 
   return { enTetes, ligneEnTetes: enTete.numero, lignes };
 }

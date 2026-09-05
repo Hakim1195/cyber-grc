@@ -470,6 +470,46 @@ export function analyserFichier(modele: ModeleEntite, contenu: Buffer): Analyse 
       });
     }
 
+    /* ── LA LIGNE DONT AUCUN CHAMP N'A ÉTÉ RECONNU ─────────────────────
+     *
+     *  ⚠️ **Constat Q-202.** `revues` est aujourd'hui la seule entité
+     *  importable dont **aucune** colonne n'est obligatoire
+     *  (`003_metier_operations.sql` §9 : `date_revue`, `participants`,
+     *  `donnees_entree` et `donnees_sortie` sont toutes nullables). Le refus
+     *  d'en-tête ci-dessus ne pouvait donc rien : il n'y a pas d'obligatoire à
+     *  déclarer manquante. Un export d'annuaire déposé sur l'écran des revues
+     *  de direction laissait `champs` vide, `inserer()` écrivait
+     *  `insert into "revues" ("id","filiale_id")`, et la réponse était **200,
+     *  « 3 enregistrement(s) ont été créés »** — pour trois revues entièrement
+     *  nulles, dans le registre qui fait preuve en audit ISO 27001.
+     *
+     *  Le refus se dit **par ligne**, et non une fois sur l'en-tête, parce que
+     *  le fait est celui de la ligne : un fichier peut mêler des lignes que le
+     *  modèle reconnaît et des lignes qui n'ont rien à y faire. Il est
+     *  **découvert** — `champs` est vide ou il ne l'est pas — et non déduit
+     *  d'une liste des entités sans colonne obligatoire : une telle liste, le
+     *  jour où elle oublierait une entité, ferait *réussir en silence* ce qui
+     *  est faux, c'est-à-dire exactement le défaut qu'on ferme
+     *  (`CLAUDE.md` §3, premier cas).
+     *
+     *  ⚠️ Le garde est posé **en dernier**, et seulement si rien d'autre n'a
+     *  déjà disqualifié la ligne : sur une entité qui, elle, porte des
+     *  obligatoires, le constat d'en-tête suffit et se dit **une** fois — le
+     *  répéter sur chacune des 250 lignes noierait le rapport.
+     * ------------------------------------------------------------------- */
+    if (!ligneFautive && Object.keys(champs).length === 0) {
+      ligneFautive = true;
+      erreurs.push({
+        ligne: ligne.numero,
+        colonne: null,
+        valeur: null,
+        message:
+          'Aucune colonne de cette ligne ne correspond à une donnée attendue : ' +
+          'vérifiez que ce fichier est bien celui de cette rubrique, ou repartez ' +
+          'du modèle téléchargeable.',
+      });
+    }
+
     if (!ligneFautive) aConstruire.push({ numero: ligne.numero, champs });
   }
 

@@ -33,10 +33,26 @@
  */
 
 import assert from 'node:assert/strict';
-import { describe, test } from 'node:test';
+import { join } from 'node:path';
+import { before, describe, test } from 'node:test';
 import { deflateRawSync } from 'node:zlib';
 
-import { ErreurZip, lireEntree, lireEntrees } from '../../dist/pieces/zip.js';
+import { compilerSiNecessaire, RACINE_BACKEND } from '../aide/serveur.mjs';
+
+// ⚠️ Import DYNAMIQUE par URL `file://`, et c'est l'idiome du dépôt : `dist/`
+// n'est pas suivi en Git, et le garde-fou du constat Q-52 refuse tout import
+// relatif STATIQUE vers un fichier absent du commit. Un essai qui l'enfreindrait
+// serait vert chez son auteur et rouge sur une machine neuve.
+let ErreurZip;
+let lireEntree;
+let lireEntrees;
+
+before(async () => {
+  await compilerSiNecessaire();
+  ({ ErreurZip, lireEntree, lireEntrees } = await import(
+    `file://${join(RACINE_BACKEND, 'dist', 'pieces', 'zip.js')}`
+  ));
+});
 
 /** CRC-32, table calculée une fois — le format l'exige, le contrôle ne le lit pas. */
 const TABLE = (() => {

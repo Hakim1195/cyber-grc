@@ -736,6 +736,10 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
 .ref-toggle { background: transparent; color: var(--accent); border: 1px solid var(--border); padding: 4px 10px; font-size: 0.8rem; border-radius: var(--radius-sm); }
 .ref-toggle:hover { background: var(--primary-tint); border-color: var(--primary); color: var(--primary-dark); }
 .ref-badge-count { display: inline-block; min-width: 16px; padding: 0 5px; background: var(--accent); color: #fff; border-radius: 10px; font-size: 0.7rem; text-align: center; }
+/* Rappel du numéro officiel d'une mesure quand il diffère de celui du catalogue
+   (constat Q-192). Discret par construction : c'est une note de bas de page, pas
+   un avertissement — il ne doit pas concurrencer le code lui-même. */
+.ref-code-officiel { margin-left: 4px; font-size: 0.72rem; font-weight: 400; color: var(--text-muted); white-space: nowrap; }
 
 /* --- Panneau de détail d'une mesure --- */
 .ref-detail-row > td { background: #f7fafd; padding: 0 !important; }

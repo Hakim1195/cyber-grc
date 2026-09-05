@@ -513,6 +513,37 @@ const ReferentielsModule = (() => {
     }
 
     // Ligne d'une mesure (2 <tr> : la ligne principale + une ligne de détail repliable).
+    /**
+     * Rappel du numéro de la mesure DANS LE GUIDE OFFICIEL, quand il diffère.
+     *
+     * ── Constat Q-192 de la porte S6, tranché le 05/09/2026 ─────────────────
+     *
+     * Treize codes du catalogue ANSSI sur quarante-deux désignent autre chose
+     * que ce que le guide désigne sous le même numéro (le détail et sa source
+     * sont en tête de `js/data/ref_anssi.js`). Les deux numérotations se lisent
+     * parfaitement : un RSSI qui rapproche l'écran du guide ne retrouve pas ses
+     * mesures, **et rien ne le lui dit**.
+     *
+     * On ne renumérote pas — les auto-évaluations sont enregistrées par
+     * `(ref_id, code)`, et les renuméroter les réattribuerait en silence à
+     * d'autres mesures, dans un outil produit en audit. On rend l'écart visible.
+     *
+     * ⚠️ Rien ne s'affiche quand le numéro officiel est le même : un rappel
+     * partout serait un bruit qu'on apprend à ne plus lire, et le jour où il
+     * signale un vrai écart personne ne le verrait (constat Q-123).
+     */
+    function renvoiOfficiel(ref, ex) {
+        const table = ref && ref.codesOfficiels;
+        if (!table || !Object.prototype.hasOwnProperty.call(table, ex.code)) return "";
+        const officiel = table[ex.code];
+        if (officiel === ex.code) return "";
+        const texte = officiel === null
+            ? "propre à cet outil"
+            : "guide ANSSI n\u00b0 " + officiel;
+        return ' <span class="ref-code-officiel" title="' + escapeHtml(texte) + '">('
+            + escapeHtml(officiel === null ? "hors guide" : "guide : " + officiel) + ")</span>";
+    }
+
     function rowHtml(ref, ex) {
         const isQ = isQuestionnaire(ref);
         const ev = DataStore.getEvaluation(ref.id, ex.code);
@@ -538,7 +569,7 @@ const ReferentielsModule = (() => {
 
         return `
             <tr class="ref-row" data-code="${ex.code}" data-niveau="${escapeHtml(ex.niveau || "")}" data-cl="${escapeHtml(ex.cl || "")}">
-                <td><strong>${escapeHtml(ex.code)}</strong></td>
+                <td><strong>${escapeHtml(ex.code)}</strong>${renvoiOfficiel(ref, ex)}</td>
                 <td>${escapeHtml(ex.titre)} ${ex.aide ? Help.tip(ex.aide) : ""}${badgesHtml}</td>
                 <td><select class="ref-statut sel-${meta.cls}" data-code="${ex.code}" aria-label="${isQ ? "Réponse à la question" : "Statut de la mesure"} ${escapeHtml(ex.code)}">${statutOpts}</select></td>
                 ${isQ ? "" : `<td style="text-align:center;"><select class="ref-mat" data-code="${ex.code}" aria-label="Maturité de la mesure ${escapeHtml(ex.code)}">${matOpts}</select></td>`}

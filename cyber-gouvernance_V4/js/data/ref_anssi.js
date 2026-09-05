@@ -11,8 +11,58 @@
 (function () {
     if (typeof Referentiels === "undefined") return;
 
+    /* ════════════════════════════════════════════════════════════════════════
+       LA NUMÉROTATION DE CE CATALOGUE N'EST PAS CELLE DU GUIDE — constat Q-192
+
+       Mesuré, pas supposé (source : ANSSI, « Guideline for a healthy information
+       system in 42 measures », v2, outil de suivi p. 60-65, croisé avec l'édition
+       française) : TREIZE codes sur quarante-deux désignent autre chose que ce
+       que le guide désigne sous le même numéro.
+
+         · le code 30 (« Réserver les comptes d'admin aux seules tâches d'admin »)
+           est INSÉRÉ : le guide n'a pas de 30ᵉ mesure d'administration — sa
+           mesure 30 est « sécuriser physiquement les terminaux nomades », et le
+           propos du code 30 vit chez lui dans la mesure 8 et le corps de la 29 ;
+         · les codes 31 à 41 sont donc DÉCALÉS DE +1 ;
+         · le code 42 FUSIONNE deux mesures distinctes du guide — l'analyse de
+           risque formelle (41) et les produits qualifiés (42). C'est cette
+           fusion qui ramène le total à 42 et MASQUE le décalage.
+
+       ── L'arbitrage, tranché le 05/09/2026 ──────────────────────────────────
+
+       On NE RENUMÉROTE PAS, et le motif est décisif : les auto-évaluations sont
+       stockées par `(ref_id, code)`. Renuméroter en place réattribuerait des
+       évaluations existantes à d'autres mesures, EN SILENCE, dans un outil qui
+       sert de preuve en audit ISO 27001. Le remède serait pire que le mal.
+
+       On rend l'écart VISIBLE au lieu de le taire : chaque mesure porte le
+       numéro du guide officiel, et l'écran l'affiche là où il diffère. Un RSSI
+       qui rapproche l'écran du guide retrouve ses mesures — ce qu'il ne pouvait
+       pas faire, puisque les deux numérotations se lisent parfaitement.
+
+       ⚠️ La correspondance est DÉRIVÉE d'une règle, pas recopiée en liste de
+       treize entrées : une liste manquerait une entrée en silence, et c'est
+       exactement le premier cas du tableau du `CLAUDE.md` §3. La règle, elle,
+       se relit et se conteste.
+       ════════════════════════════════════════════════════════════════════════ */
+    var CODES_OFFICIELS = (function () {
+        var m = {};
+        for (var n = 1; n <= 29; n += 1) m[String(n)] = String(n);   // identiques
+        m["30"] = null;                                               // sans équivalent
+        for (var d = 31; d <= 41; d += 1) m[String(d)] = String(d - 1); // décalés de +1
+        m["42"] = "41 et 42";                                         // deux mesures fondues
+        return m;
+    })();
+
     Referentiels.register({
         id: "anssi-hygiene",
+        /**
+         * Numéro de la mesure DANS LE GUIDE OFFICIEL, par code du catalogue.
+         * `null` = la mesure est propre à ce catalogue. Une valeur égale au code
+         * n'est pas affichée : seul l'écart mérite d'être dit.
+         */
+        codesOfficiels: CODES_OFFICIELS,
+        noteNumerotation: "La numérotation de ce catalogue diffère de celle du guide de l'ANSSI à partir de la mesure 30. Le numéro officiel est rappelé sur chaque mesure concernée. Les codes ne sont pas réalignés : vos auto-évaluations sont enregistrées par code, et les renuméroter les réattribuerait à d'autres mesures.",
         nom: "Hygiène informatique (ANSSI)",
         editeur: "ANSSI",
         version: "42 mesures",
