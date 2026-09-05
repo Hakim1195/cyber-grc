@@ -546,7 +546,7 @@ const ENVELOPPES_SURES = ['escapeHtml', 'esc', 'UI.badge', 'UI.mappedBadge'];
  * ajoutée à `js/i18n/index.js` sans être nommée ici ferait **rougir** l'essai
  * de garde ci-dessous, qui compte les fonctions à repli brut du fichier.
  */
-const SOEURS_A_REPLI_BRUT = ['valeur', 'date', 'nombre', 'pourcentage'];
+const SOEURS_A_REPLI_BRUT = ['valeur', 'date', 'dateLongue', 'dateHeure', 'nombre', 'pourcentage'];
 
 /**
  * Fonctions qui rendent `String(...)` sans que ce soit un repli brut.
@@ -706,44 +706,75 @@ describe('§37.3 — la valeur STOCKÉE qui traverse le dictionnaire (constat Q-
     );
   });
 
-  test('AUCUNE QUATRIÈME SŒUR À REPLI BRUT n’a été ajoutée sans être nommée', () => {
-    /* La liste `SOEURS_A_REPLI_BRUT` est écrite à la main. Elle n'est le bon
-       outil qu'à une condition : qu'une omission fasse ROUGIR quelque chose.
-       Ce contrôle est cette condition. Il cherche dans `js/i18n/index.js` les
-       fonctions qui rendent `String(...)` en repli — la forme exacte du
-       passe-plat — et exige qu'elles soient toutes nommées. */
-    const source = readFileSync(join(RACINE_I18N, 'index.js'), 'utf8');
-    const declarees = [];
-    let courante = null;
-    for (const ligne of source.split('\n')) {
-      const entete = /^\s{0,8}function\s+([A-Za-z_$][\w$]*)\s*\(/u.exec(ligne);
-      if (entete !== null) courante = entete[1];
-      if (courante !== null && /return\s+String\(/u.test(ligne) && !declarees.includes(courante)) {
-        declarees.push(courante);
+  test('AUCUNE SŒUR À REPLI BRUT n’échappe à la liste — MESURÉ, pas relu', () => {
+    /* ⚠️ CE CONTRÔLE LISAIT UNE ORTHOGRAPHE — constat **Q-221**, quatrième
+       passage de la porte S8. Il cherchait « return String( » dans le source.
+       L'auditeur a écrit la même sœur, même défaut, **sur deux lignes** :
+
+           const brut = String(valeur);
+           return brut;
+
+       et le garde n'a rien vu. C'est la faute de Q-220 dans le fichier d'à
+       côté : reconnaître une forme d'écriture au lieu de mesurer un
+       comportement.
+
+       On CHARGE donc le module et l'on fait passer, dans chaque fonction
+       exportée, une valeur que le dictionnaire ne connaît pas. Celle qui la rend
+       TELLE QUELLE est un passe-plat — quelle que soit la façon dont elle est
+       écrite : sur une ligne, sur deux, ou par un détour de dix. */
+    const contexte = createContext({ window: {}, document: undefined, navigator: {} });
+    runInContext(readFileSync(join(RACINE_I18N, 'index.js'), 'utf8'), contexte);
+    const I18n = contexte.window.I18n;
+    assert.ok(I18n, 'js/i18n/index.js doit s’enregistrer sur `window`, sinon rien n’est mesuré.');
+
+    // ⚠️ Un TÉMOIN reconnaissable, qui porte des chevrons : c'est ce qui rend le
+    //    repli dangereux, puisque la valeur part dans un `innerHTML` (Q-203).
+    /* `t` et `tHtml` rendent aussi leur entrée telle quelle — `brut()` rend la
+       CLÉ quand le dictionnaire ne la connaît pas, et c'est voulu : un repli
+       bruyant vaut mieux qu'un `undefined`. Mais leur argument est une **clé
+       écrite dans le code**, jamais une valeur stockée : ce n'est pas la classe
+       que ce contrôle traque, et les y ranger ferait exiger un échappement sur
+       des centaines de sites qui n'en ont pas besoin. La distinction est celle
+       que fait déjà le contrôle d'échappement : un littéral est inerte. */
+    const CLES_NON_DONNEES = ['t', 'tHtml'];
+    const TEMOIN = '<img src=x onerror=alert(1)>';
+    const passePlats = [];
+    let examinees = 0;
+    for (const [nom, fonction] of Object.entries(I18n)) {
+      if (typeof fonction !== 'function') continue;
+      // Celles-ci ne TRADUISENT pas : elles règlent l'état du module.
+      if (['definir', 'abonner', 'appliquerAuDocument', 'enregistrer'].includes(nom)) continue;
+      if (CLES_NON_DONNEES.includes(nom)) continue;
+      examinees += 1;
+      let rendu;
+      try {
+        rendu = fonction(TEMOIN);
+      } catch {
+        continue; // une fonction qui REFUSE n'est pas un passe-plat
       }
+      if (typeof rendu === 'string' && rendu.includes(TEMOIN)) passePlats.push(nom);
     }
+
+    // LA MATIÈRE : sans fonctions à examiner, tout ce qui suit serait creux.
     assert.ok(
-      declarees.length >= 3,
-      `Seulement ${String(declarees.length)} fonction(s) à repli brut trouvée(s) : le ` +
-        'balayage ne reconnaît plus la forme, et tout ce qui précède serait vert pour rien.',
-    );
-    // ⚠️ Une exemption qui ne correspond plus à rien est aussi une dérive : on
-    //    la signale, sinon la liste se remplit de noms morts qui rassurent.
-    assert.deepEqual(
-      Object.keys(SANS_REPLI_BRUT).filter((n) => !declarees.includes(n)),
-      [],
-      'Ces fonctions sont exemptées et ne rendent plus de `String(...)` : l’exemption ne ' +
-        'protège plus rien et doit disparaître.',
+      examinees >= 10,
+      `Seulement ${String(examinees)} fonction(s) examinée(s) : le module ne s’est pas ` +
+        'chargé comme prévu, et le contrôle ne mesure rien.',
     );
     assert.deepEqual(
-      declarees.filter(
-        (n) => !SOEURS_A_REPLI_BRUT.includes(n) && !Object.hasOwn(SANS_REPLI_BRUT, n),
-      ),
+      passePlats.filter((n) => !SOEURS_A_REPLI_BRUT.includes(n)).sort(),
       [],
-      'Ces fonctions de `js/i18n/index.js` rendent leur entrée TELLE QUELLE en repli, et ne ' +
-        'sont pas dans `SOEURS_A_REPLI_BRUT` : le contrôle d’échappement ne les regarde donc ' +
-        'pas. C’est ainsi que Q-203 a été corrigé au symptôme pendant que la cause restait ' +
-        'ouverte dans deux fonctions voisines (Q-212).',
+      'Ces fonctions de `js/i18n/` rendent leur entrée TELLE QUELLE et ne sont pas dans ' +
+        '`SOEURS_A_REPLI_BRUT` : le contrôle d’échappement des sites de rendu ne les regarde ' +
+        'donc pas. C’est ainsi que Q-203 a été corrigé au symptôme pendant que la cause ' +
+        'restait ouverte dans deux fonctions voisines (Q-212), puis dans une troisième ' +
+        'écrite sur deux lignes (Q-221).',
+    );
+    assert.deepEqual(
+      SOEURS_A_REPLI_BRUT.filter((n) => typeof I18n[n] === 'function' && !passePlats.includes(n)),
+      [],
+      'Ces fonctions sont déclarées « à repli brut » et n’en rendent plus : la liste décrit ' +
+        'un produit qui n’existe plus, et une exemption morte rassure sans protéger.',
     );
   });
 });

@@ -74,23 +74,97 @@ function fichiersTs(repertoire, resultat = []) {
   return resultat;
 }
 
+/**
+ * Retire les commentaires — **prudemment**, constat **Q-220 (b)**.
+ *
+ * ⚠️ La rédaction précédente effaçait tout ce qui suit `//` sur une ligne. Un
+ * `'//'` **dans un littéral de chaîne** — la chose la plus banale du monde dès
+ * qu'on manipule une URL — effaçait donc la fin de la ligne, **expression
+ * comprise**. L'auditeur a posé un motif à 12 242 ms derrière un `split('//')`
+ * et le contrôle n'a rien vu.
+ *
+ * La parade est de ne pas trancher quand on n'est pas sûr : si un guillemet
+ * précède le `//` sur la ligne, on **garde la ligne entière**. Le prix est
+ * qu'une expression mise en commentaire derrière une chaîne pourra être
+ * examinée — un faux positif BRUYANT, que son auteur lève en supprimant le
+ * commentaire. Le prix inverse était un défaut silencieux.
+ */
 function sansCommentaires(source) {
   return source
     .replace(/\/\*[\s\S]*?\*\//gu, (bloc) => '\n'.repeat((bloc.match(/\n/gu) ?? []).length))
-    .replace(/(^|[^:])\/\/[^\n]*/gu, '$1')
+    .split('\n')
+    .map((ligne) => {
+      const commentaire = ligne.indexOf('//');
+      if (commentaire < 0) return ligne;
+      const amont = ligne.slice(0, commentaire);
+      if (amont.endsWith(':')) return ligne;
+      if (/['"`]/u.test(amont)) return ligne;
+      return amont;
+    })
+    .join('\n')
     .replace(/^\s*\*.*$/gmu, '');
+}
+
+/**
+ * Neutralise le CONTENU des chaînes simples et doubles — constat **Q-220 (b)**.
+ *
+ * ⚠️ Sans cela, un `'//'` dans une chaîne — une URL, un séparateur de chemin —
+ * fait s'accrocher l'extracteur au **second** `/`, qui avale alors tout jusqu'au
+ * `/` suivant : **la vraie expression de la ligne**. Mesuré sur la ligne que
+ * l'auditeur a posée, l'extracteur rendait « `)[1] ?? v; const _motif =` » au
+ * lieu du motif à 10 582 ms qui la suivait.
+ *
+ * Les guillemets et la longueur sont conservés : ce qui est examiné garde ses
+ * colonnes, et un message d'erreur désigne toujours la bonne place. Les gabarits
+ * (accent grave) sont laissés tels quels — une expression peut vivre dans un
+ * `${…}`, et les aveugler créerait le trou qu'on vient de fermer.
+ */
+function sansChaines(source) {
+  let dehors = '';
+  let delimiteur = null;
+  for (let i = 0; i < source.length; i += 1) {
+    const c = source[i];
+    if (delimiteur === null) {
+      if (c === "'" || c === '"') delimiteur = c;
+      dehors += c;
+      continue;
+    }
+    if (c === '\\') {
+      dehors += '  ';
+      i += 1;
+      continue;
+    }
+    if (c === delimiteur) {
+      delimiteur = null;
+      dehors += c;
+      continue;
+    }
+    // Une fin de ligne referme une chaîne mal formée : on ne l'emporte pas.
+    dehors += c === '\n' ? ((delimiteur = null), '\n') : ' ';
+  }
+  return dehors;
 }
 
 /** Une expression littérale, précédée de rien qui ferait d'elle une division. */
 const MOTIF_LITTERAL =
-  /(?<![\w)\]$])\/(?![/*\s])((?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\\\n\[])+)\/([gimsuyd]*)/gu;
+  /(?<![\w)\]$/])\/(?![/*\s])((?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\\\n\[])+)\/([gimsuyd]*)/gu;
 
 /** Toutes les expressions de `src/` qui portent un quantificateur non borné. */
 function expressionsDeSrc() {
   const trouvees = [];
   for (const chemin of fichiersTs(RACINE_SRC)) {
     const relatif = relative(RACINE_SRC, chemin).split('\\').join('/');
-    sansCommentaires(readFileSync(chemin, 'utf8'))
+    sansChaines(sansCommentaires(readFileSync(chemin, 'utf8')))
+      /* ⚠️ `return/^…$/` — sans espace — n'était pas extrait : la sentinelle
+         arrière prenait le « n » de `return` pour un identifiant, donc le `/`
+         pour une division (constat Q-220 b). Un mot-clé ne peut pas être suivi
+         d'une division ; on insère l'espace qui manque, plutôt que de compliquer
+         la sentinelle — un motif de plus à tenir juste est un motif de plus à
+         se tromper. */
+      .replace(
+        /\b(return|typeof|case|do|else|void|delete|instanceof|throw|yield|await|in|of)\//gu,
+        '$1 /',
+      )
       .split('\n')
       .forEach((ligne, index) => {
         for (const m of ligne.matchAll(MOTIF_LITTERAL)) {
@@ -122,6 +196,22 @@ function expressionsDeSrc() {
  * Chaque famille porte donc le couple de tailles où SA forme se manifeste, et
  * l'on lit le rapport à l'intérieur d'une famille, jamais entre familles.
  */
+/**
+ * Les suites de signes ORDINAIRES d'un motif — son préfixe littéral, et ce qu'il
+ * cherche à refermer.
+ *
+ * ⚠️ C'est de là que doivent venir les sujets hostiles. Un sujet écrit en dur ne
+ * vaut que pour le motif qu'on avait sous les yeux en l'écrivant : c'est le
+ * constat Q-220, et c'est la quatrième fois que cette famille passe sous un
+ * garde-fou.
+ */
+function morceauxLitteraux(corps) {
+  return corps
+    .split(/[[\](){}|?*+^$\\]/u)
+    .filter((morceau) => morceau.length >= 2)
+    .slice(0, 4);
+}
+
 function famillesHostiles(corps) {
   const signes = new Set([' ', 'a', '0', '<', ':', '"']);
   for (const c of corps.replace(/\\./gu, '').match(/[A-Za-z0-9<>:;"'@/&.,=_-]/gu) ?? []) {
@@ -134,20 +224,47 @@ function famillesHostiles(corps) {
   for (const c of signes) {
     familles.push({ tailles: [1000, 3000], faire: (n) => c.repeat(n) });
   }
-  familles.push({ tailles: [1000, 3000], faire: (n) => `a: ${' '.repeat(n)}x` });
-  familles.push({ tailles: [1000, 3000], faire: (n) => `<x ${'a'.repeat(n)}` });
-  familles.push({ tailles: [1000, 3000], faire: (n) => `https://${'a'.repeat(n)}` });
+
+  /* ⚠️ LE PRÉFIXE SE DÉRIVE DU MOTIF, IL NE S'INVENTE PAS — constat **Q-220**.
+     Cette liste portait des sujets ÉCRITS EN DUR : `a: <espaces>x`, `<x <a…>`,
+     `https://<a…>`. Ils ne valaient que pour les trois motifs déjà trouvés.
+     L'auditeur du quatrième passage a réécrit la ligne de `clamav.ts` de la
+     façon la plus naturelle qui soit — avec son VRAI préfixe,
+     `/^stream:\s*(.+?)\s+FOUND$/u` — et elle coûtait **9 130 ms pour 3 000
+     signes** pendant que ce contrôle rendait quatre essais, quatre passés.
+     Mesuré côte à côte : le même motif, avec le préfixe `a: ` que je fabriquais,
+     coûte **0,005 ms**. Le sujet ne l'atteignait tout simplement pas.
+
+     C'est la QUATRIÈME fois que cette famille passe sous un garde-fou censé
+     l'arrêter, et toujours pour le même motif de fond : quelque chose de
+     PARTICULIER là où il fallait quelque chose de GÉNÉRAL. */
+  for (const morceau of morceauxLitteraux(corps)) {
+    // Le préfixe suivi d'espaces : c'est la forme qui met en concurrence deux
+    // quantificateurs voisins (`\s*` et `(.+?)\s+`) sur les mêmes signes.
+    familles.push({ tailles: [1000, 3000], faire: (n) => `${morceau}${' '.repeat(n)}x` });
+    // Et le préfixe suivi de remplissage : la forme qui balaie sans trouver.
+    familles.push({ tailles: [1000, 3000], faire: (n) => `${morceau}${'a'.repeat(n)}` });
+  }
+
+  /* ⚠️ ET LE MÊME, SUR UN SEUL SIGNE. Un motif comme « ^\s*[^;]*;\s*(.+?)\s+fin$ »
+     n'a aucune suite littérale de deux signes avant son ambiguïté : ce qu'il faut
+     pour l'atteindre est **un point-virgule, puis des espaces**. Les morceaux ne
+     le produisent pas, et l'auditeur du quatrième passage a posé exactement cette
+     forme — 12 242 ms — sans que le contrôle bouge.
+
+     La recette générale vaut d'être dite : *franchir le premier ancrage, puis
+     nourrir l'ambiguïté*. Le premier ancrage se franchit avec UN signe du motif ;
+     l'ambiguïté se nourrit d'espaces. */
+  for (const c of signes) {
+    familles.push({ tailles: [1000, 3000], faire: (n) => `${c}${' '.repeat(n)}x` });
+  }
 
   /* ── 2. Les morceaux LITTÉRAUX du motif, répétés — et c'est la moitié sans
      laquelle ce contrôle ne verrait pas Q-197. `<x>([\s\S]*?)</x>` n'est lent
      que sur une suite de `<x>` QUE RIEN NE REFERME : chaque ouverture lance un
      balayage jusqu'au bout, en vain. Aucune répétition d'un signe isolé ne
      produit cette forme ; le sujet doit être bâti à partir du motif lui-même. */
-  const morceaux = corps
-    .split(/[[\](){}|?*+^$\\]/u)
-    .filter((morceau) => morceau.length >= 2)
-    .slice(0, 3);
-  for (const morceau of morceaux) {
+  for (const morceau of morceauxLitteraux(corps)) {
     familles.push({
       tailles: [1000, 3000],
       faire: (n) => morceau.repeat(Math.max(1, Math.floor(n / morceau.length))),
@@ -255,6 +372,53 @@ describe('Q-216 — aucune expression de `src/` ne coûte plus qu’un temps bor
         'passe. N’ancrez pas « pour corriger » — l’ancre ne retient pas l’ambiguïté entre ' +
         'deux quantificateurs voisins, et c’est précisément ce qui a masqué Q-216.',
     );
+  });
+
+  /**
+   * Les `new RegExp` de `src/` qui sont admis, **avec leur mesure**.
+   *
+   * ⚠️ Cet interdit balayait tout `src/` jusqu'au correctif de Q-216, qui l'a
+   * **rétréci à un seul fichier** en affirmant que « les deux contrôles couvrent
+   * deux moitiés disjointes ». C'était faux : la moitié « expression construite »
+   * ne faisait plus qu'un fichier de large, et la MESURE ne peut rien pour elle —
+   * le motif d'une expression construite n'existe qu'à l'exécution, il n'y a rien
+   * à extraire ni à chronométrer. Constat **Q-220 (c)**.
+   *
+   * Chaque exemption porte un chiffre, pas une opinion.
+   */
+  const CONSTRUCTIONS_ADMISES = Object.freeze({
+    'pieces/multipart.ts':
+      'nom de parametre LITTERAL aux deux sites d appel (name, filename) et sujet borne a ' +
+      '8 Kio par MAX_ENTETES_OCTETS — mesure 0,2 ms a la borne, 0,4 ms a huit fois',
+  });
+
+  test('AUCUN `new RegExp` dans `src/` qui ne soit mesuré et admis', () => {
+    const inattendus = [];
+    for (const chemin of fichiersTs(RACINE_SRC)) {
+      const relatif = relative(RACINE_SRC, chemin).split('\\').join('/');
+      const source = sansChaines(sansCommentaires(readFileSync(chemin, 'utf8')));
+      const lignes = source
+        .split('\n')
+        .map((ligne, i) => [i + 1, ligne])
+        .filter(([, ligne]) => ligne.includes('new RegExp'));
+      if (lignes.length > 0 && !Object.hasOwn(CONSTRUCTIONS_ADMISES, relatif)) {
+        inattendus.push(`${relatif}:${String(lignes[0][0])}  ${lignes[0][1].trim().slice(0, 90)}`);
+      }
+    }
+    assert.deepEqual(
+      inattendus,
+      [],
+      'Une expression CONSTRUITE laisse un octet d entree devenir un motif. Le controle de ' +
+        'cout ne peut RIEN pour elle : son motif n existe qu a l execution, donc il n y a ni ' +
+        'a extraire ni a chronometrer. Remplacez par un balayage, ou MESUREZ la borne du ' +
+        'sujet et inscrivez le chiffre dans CONSTRUCTIONS_ADMISES :\n' +
+        inattendus.map((f) => `    · ${f}`).join('\n'),
+    );
+
+    const mortes = Object.keys(CONSTRUCTIONS_ADMISES).filter(
+      (f) => !readFileSync(join(RACINE_SRC, f), 'utf8').includes('new RegExp'),
+    );
+    assert.deepEqual(mortes, [], 'Ces exemptions ne protegent plus rien : retirez-les.');
   });
 
   test('LE CONTRÔLE MORD — sur les QUATRE formes trouvées par les portes successives', () => {

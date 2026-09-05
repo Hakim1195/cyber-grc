@@ -884,8 +884,8 @@ select * from f_verifier_schema()                → 0 ligne (14 garde-fous déc
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **49 tables** en
 **16 migrations**, **196 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
-**73 clés étrangères** (44 `restrict`, 27 `cascade`, 2 `set null`), **43 tables portant
-`cree_par` et 43 déclencheurs de création**, **11 clés étrangères composites** visant
+**73 clés étrangères** (44 `restrict`, 27 `cascade`, 2 `set null`), **44 tables portant
+`cree_par` et 44 déclencheurs de création**, **11 clés étrangères composites** visant
 `(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **14 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201).

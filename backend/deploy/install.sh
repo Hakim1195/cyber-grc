@@ -75,7 +75,9 @@ set -Eeuo pipefail
 #
 #  Blocs : « frontend » (liste blanche de publication, constat Q-31),
 #          « proxytimeout » (dérive du délai, constat Q-19),
-#          « configtest » (Apache comprend-il sa configuration).
+#          « configtest » (Apache comprend-il sa configuration),
+#          « desinstaller » (le retrait, et l'ORDRE de ses gestes),
+#          « sauvegarde » (le cliché qui précède toute migration).
 # =============================================================================
 
 # ------------------------------------------------------------------ réglages ----
@@ -102,6 +104,9 @@ SUPERUTILISATEUR="${PGSUPERUTILISATEUR:-postgres}"
 
 MAJ_SEULE=0
 SEULEMENT_BASE=0
+DESINSTALLER=0
+AVEC_LES_DONNEES=0
+EXPORT_VERIFIE=""
 REPRENDRE_PROPRIETE=0
 REINITIALISER_MDP=0
 VERIFIER_PUBLICATION=0
@@ -150,6 +155,18 @@ Installe ou met à jour Cyber GRC Groupe sur Debian 13 (sans conteneur).
   --verifier-publication         NE MODIFIE RIEN : compare ce que la racine web
                                  SERT à ce que le dépôt porte, et rend 5 si un
                                  fichier diverge (constat Q-103)
+  --desinstaller                 retire le LOGICIEL — unités systemd, code, frontend
+                                 publié, vhost — et CONSERVE les données : base,
+                                 pièces jointes, configuration. Une réinstallation
+                                 par-dessus les retrouve
+  --avec-les-donnees             avec --desinstaller : détruit AUSSI la base, les rôles,
+                                 les pièces jointes, la configuration et les secrets.
+                                 IRRÉVERSIBLE, et exige --export-verifie
+  --export-verifie=<fichier>     l'export « grc-backup » qui subsistera de ce que l'on
+                                 détruit. Le fichier est OUVERT et son enveloppe
+                                 vérifiée — le journal d'audit a une rétention de trois
+                                 ans et fait preuve en audit. Pour assumer la perte :
+                                 --export-verifie=AUCUN-JE-CONFIRME-LA-PERTE
   --aide                         ce message
 
 Variables d'environnement reconnues :
@@ -183,6 +200,9 @@ while [[ $# -gt 0 ]]; do
     --reprendre-propriete)          REPRENDRE_PROPRIETE=1; shift ;;
     --reinitialiser-mots-de-passe)  REINITIALISER_MDP=1; shift ;;
     --verifier-publication)         VERIFIER_PUBLICATION=1; shift ;;
+    --desinstaller)                 DESINSTALLER=1; shift ;;
+    --avec-les-donnees)             AVEC_LES_DONNEES=1; shift ;;
+    --export-verifie=*)             EXPORT_VERIFIE="${1#*=}"; shift ;;
     --aide|-h|--help)               aide; exit 0 ;;
     *) echec "Option inconnue : $1 (voir --aide)." ;;
   esac
@@ -793,6 +813,184 @@ fi
 #  5. Configuration
 # =============================================================================
 
+# =============================================================================
+#  --desinstaller — retirer le produit, et savoir ce qu'on détruit
+# =============================================================================
+#
+# ⚠️ **CE MODE N'EXISTAIT PAS**, et son absence était un manque : un produit
+# installé chez un client doit savoir s'en aller. Sans procédure, un exploitant
+# improvise — il `rm -rf` un répertoire, laisse trois unités systemd qui
+# redémarrent en boucle, une base de dix gigaoctets que personne ne réclame, et
+# des secrets en clair dans `/etc`.
+#
+# ── LA DÉCISION QUI STRUCTURE TOUT : deux gestes, pas un ─────────────────────
+#
+# **Retirer le logiciel** et **détruire les données** ne sont pas la même
+# opération, et les confondre est ce qui rend une désinstallation dangereuse.
+# Par défaut, ce mode retire le LOGICIEL et **ne touche à rien de ce qui porte
+# du contenu** : ni la base, ni les pièces jointes, ni la configuration. Le
+# client peut réinstaller par-dessus et retrouver son produit.
+#
+# La destruction des données demande `--avec-les-donnees`, et elle demande
+# davantage — voir ci-dessous.
+#
+# ── POURQUOI LE JOURNAL D'AUDIT INTERDIT LA DESTRUCTION DÉSINVOLTE ───────────
+#
+# Le journal a une **rétention de trois ans** (`PLAN_SERVEUR` §1.7) et il fait
+# **preuve en audit ISO 27001**. Un `drop database` détruit une pièce que le
+# client peut être légalement tenu de conserver, et qu'aucune sauvegarde
+# n'accompagne si personne n'y a pensé. Ce script refuse donc de détruire sans
+# qu'un export EXISTE — et il ne se contente pas d'une case cochée : il ouvre le
+# fichier qu'on lui nomme et vérifie que c'est bien une enveloppe du produit.
+#
+# C'est le même raisonnement que `POST /api/cycle/sortie-filiale`, qui rend
+# l'export AVANT de faire basculer le statut : une opération irréversible
+# s'accompagne de ce qui subsiste d'elle.
+#
+# ── CE QUE CE SCRIPT NE PEUT PAS RETIRER, ET QU'IL FAUT DIRE ─────────────────
+#
+# Les **groupes `GRC-*` de l'Active Directory du client** ne sont pas sur cette
+# machine. Le produit les a fait créer (`deploy/groupes-ad.sh`), il ne peut pas
+# les défaire — un compte de service qui pourrait supprimer des groupes
+# d'annuaire serait un compte bien trop puissant pour ce qu'il a à faire. Ils
+# sont donc **listés** en fin de parcours, pour que l'administrateur de
+# l'annuaire les retire lui-même. Les taire laisserait vingt-trois groupes
+# orphelins dans un AD d'entreprise, et personne ne saurait plus pourquoi.
+# =============================================================================
+
+# >>> banc: desinstaller <<<
+desinstaller() {
+  local avec_donnees="$1" export_verifie="$2"
+
+  # ── 1. Ce qui va être fait, DIT AVANT DE LE FAIRE ─────────────────────────
+  #
+  # Pas de question interactive : ce script s'exécute aussi sans terminal, et
+  # une invite qu'on ne voit pas devient un `yes |` dans un script d'exploitant.
+  # Le consentement se donne par les OPTIONS, qui sont explicites et tracées
+  # dans l'historique du shell.
+  info "Désinstallation de Cyber GRC"
+  alerte "Le LOGICIEL va être retiré : unités systemd, code, frontend publié, vhost."
+  if [[ "$avec_donnees" -eq 1 ]]; then
+    alerte "ET LES DONNÉES : base « $BASE_NOM », rôles PostgreSQL, pièces jointes,"
+    alerte "configuration et secrets. C'est IRRÉVERSIBLE."
+  else
+    succes "les DONNÉES sont conservées : base, pièces jointes, configuration, secrets"
+    alerte "Pour les détruire aussi : --desinstaller --avec-les-donnees --export-verifie=<fichier>"
+  fi
+
+  # ── 2. L'export, vérifié plutôt que promis ────────────────────────────────
+  if [[ "$avec_donnees" -eq 1 ]]; then
+    [[ -n "$export_verifie" ]] || echec "Détruire les données exige --export-verifie=<fichier>.
+      Le journal d'audit a une rétention de TROIS ANS et fait preuve en audit ISO 27001 :
+      il ne se détruit pas sans que ce qu'il portait subsiste quelque part.
+      Produisez l'export par l'application (« Exporter » — droit GRC-EXPORT), puis
+      nommez-le ici. Si vous assumez la perte en connaissance de cause :
+        --export-verifie=AUCUN-JE-CONFIRME-LA-PERTE"
+    if [[ "$export_verifie" == "AUCUN-JE-CONFIRME-LA-PERTE" ]]; then
+      alerte "AUCUN EXPORT n'a été fourni, et la perte est assumée explicitement."
+    else
+      [[ -r "$export_verifie" ]] || echec "Export illisible : $export_verifie"
+      # ⚠️ On OUVRE le fichier. Un contrôle d'existence accepterait un fichier
+      #    vide créé pour passer le contrôle — ce serait une case à cocher, pas
+      #    une garantie. On cherche la signature de l'enveloppe du produit.
+      grep -q '"format"[[:space:]]*:[[:space:]]*"grc-backup"' "$export_verifie" \
+        || echec "« $export_verifie » n'est pas un export du produit : l'enveloppe
+      « grc-backup » (PLAN_SERVEUR §2.6) ne s'y trouve pas. Un fichier qui existe n'est pas
+      un export ; c'est ce que ce contrôle vérifie."
+      succes "export vérifié : $export_verifie ($(du -h "$export_verifie" | cut -f1))"
+    fi
+  fi
+
+  # ── 3. Arrêter AVANT de retirer ───────────────────────────────────────────
+  #
+  # L'ordre n'est pas indifférent : un service encore vivant pendant qu'on retire
+  # sa configuration écrit dans le vide, et `Restart=on-failure` le relance en
+  # boucle sur une arborescence à moitié effacée.
+  info "Arrêt des services"
+  for unite in cyber-grc-notifications.timer cyber-grc-reanalyse.timer \
+               cyber-grc-notifications.service cyber-grc-reanalyse.service cyber-grc; do
+    systemctl disable --now "$unite" >/dev/null 2>&1 || true
+  done
+  succes "unités arrêtées et désactivées"
+
+  info "Retrait des unités systemd"
+  rm -f /etc/systemd/system/cyber-grc.service \
+        /etc/systemd/system/cyber-grc-reanalyse.service \
+        /etc/systemd/system/cyber-grc-reanalyse.timer \
+        /etc/systemd/system/cyber-grc-notifications.service \
+        /etc/systemd/system/cyber-grc-notifications.timer
+  systemctl daemon-reload
+  succes "unités retirées"
+
+  # ── 4. Le frontal ─────────────────────────────────────────────────────────
+  info "Frontal Apache"
+  if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
+    a2dissite cyber-grc >/dev/null 2>&1 || true
+  fi
+  rm -f /etc/apache2/sites-available/cyber-grc.conf
+  if apache2ctl configtest >/dev/null 2>&1; then
+    systemctl reload apache2 >/dev/null 2>&1 || true
+    succes "vhost retiré, Apache rechargé"
+  else
+    # ⚠️ On ne recharge PAS un Apache qui refuse sa configuration : on couperait
+    #    les autres sites de la machine en croyant faire le ménage.
+    reserve "Apache refuse sa configuration APRÈS le retrait du vhost : il n'a PAS été"
+    alerte "rechargé, et l'ancienne configuration reste active en mémoire. La cause est"
+    alerte "ailleurs que dans ce produit — vérifiez : apache2ctl configtest"
+  fi
+
+  # ── 5. Le code et le frontend publié ──────────────────────────────────────
+  info "Code et frontend"
+  rm -rf "$RACINE"
+  succes "$RACINE retiré (code, node_modules, frontend publié)"
+
+  # ── 6. Les données, seulement si on l'a demandé ───────────────────────────
+  if [[ "$avec_donnees" -eq 1 ]]; then
+    info "Données"
+    # La base d'abord : tant qu'elle existe, les rôles ne se suppriment pas.
+    su - "$SUPERUTILISATEUR" -c "psql -v ON_ERROR_STOP=1 -q" <<SQL >/dev/null 2>&1 || \
+      alerte "La base ou les rôles n'ont pas pu être supprimés — à faire à la main."
+drop database if exists $BASE_NOM;
+drop role if exists $ROLE_APP;
+drop role if exists $ROLE_LECTURE;
+drop role if exists $ROLE_PROPRIETAIRE;
+SQL
+    succes "base « $BASE_NOM » et rôles supprimés"
+
+    rm -rf "$DONNEES" "$JOURNAUX" "$CONFIG"
+    succes "pièces jointes, journaux, configuration et secrets supprimés"
+    # ⚠️ Les CLICHÉS de $SAUVEGARDES ne sont pas touchés, et c'est délibéré :
+    #    ce sont les seuls exemplaires de ce qu'on vient de détruire. Les
+    #    effacer dans le même geste ferait de « désinstaller » une perte
+    #    définitive et silencieuse. L'exploitant les retire quand il a décidé.
+    alerte "Les clichés de $SAUVEGARDES sont CONSERVÉS — ce sont les seuls exemplaires"
+    alerte "de ce qui vient d'être détruit. À vous de décider quand les retirer."
+
+    if id -u "$UTILISATEUR" >/dev/null 2>&1; then
+      userdel "$UTILISATEUR" >/dev/null 2>&1 || true
+      succes "compte système « $UTILISATEUR » supprimé"
+    fi
+  else
+    succes "base « $BASE_NOM », pièces jointes et configuration CONSERVÉES"
+    alerte "Une réinstallation par-dessus retrouvera les données et la configuration."
+  fi
+
+  # ── 7. Ce que ce script NE PEUT PAS retirer ───────────────────────────────
+  info "Ce qui reste, hors de cette machine"
+  local prefixe; prefixe="$(lire_variable LDAP_PREFIXE_GROUPES 2>/dev/null || true)"
+  alerte "Les groupes « ${prefixe:-GRC-}* » de l'Active Directory du client ne sont PAS"
+  alerte "retirés : ils ne sont pas sur cette machine, et le compte de service du produit"
+  alerte "n'a pas — délibérément — le droit de supprimer des groupes d'annuaire."
+  alerte "Faites-les retirer par l'administrateur de l'annuaire. La liste s'engendre :"
+  alerte "  bash deploy/groupes-ad.sh --csv     (depuis une copie du dépôt)"
+  if [[ "$avec_donnees" -eq 0 ]]; then
+    alerte "⚠️ Ne les retirez PAS si vous comptez réinstaller : les droits en dépendent."
+  fi
+
+  succes "Désinstallation terminée."
+}
+# <<< banc: desinstaller >>>
+
 info "Configuration"
 
 # Reprise du nom historique : /etc/cyber-grc/serveur.env n'est lu ni par
@@ -804,7 +1002,10 @@ if [[ ! -f "$FICHIER_CONFIG" && -f "$ANCIEN_FICHIER_CONFIG" ]]; then
 fi
 
 PREMIERE_INSTALLATION=0
-if [[ ! -f "$FICHIER_CONFIG" ]]; then
+# ⚠️ On ne FABRIQUE pas une configuration pour la détruire aussitôt : en mode
+#    désinstallation, son absence signifie simplement qu'il n'y a rien à lire, et
+#    les valeurs par défaut suffisent à nommer la base et les rôles.
+if [[ ! -f "$FICHIER_CONFIG" && $DESINSTALLER -eq 0 ]]; then
   install -m 0600 "$SOURCE/.env.example" "$FICHIER_CONFIG"
   PREMIERE_INSTALLATION=1
 fi
@@ -841,6 +1042,18 @@ ROLE_PROPRIETAIRE="${ROLE_PROPRIETAIRE:-grc_proprietaire}"
 # Le défaut du §14 des CONVENTIONS sert de filet si la clé manque au fichier de
 # configuration (installations antérieures à son ajout à .env.example).
 ROLE_LECTURE="$(lire_variable BASE_UTILISATEUR_LECTURE)";        ROLE_LECTURE="${ROLE_LECTURE:-grc_lecture}"
+
+# ── LA DÉSINSTALLATION S'ARRÊTE ICI ──────────────────────────────────────────
+# Elle a besoin du nom de la base et des rôles — résolus juste au-dessus — et de
+# rien d'autre. Tout ce qui suit installe ; il n'y a pas à le traverser.
+if [[ $DESINSTALLER -eq 1 ]]; then
+  desinstaller "$AVEC_LES_DONNEES" "$EXPORT_VERIFIE"
+  exit 0
+fi
+[[ $AVEC_LES_DONNEES -eq 0 && -z "$EXPORT_VERIFIE" ]] || \
+  echec "--avec-les-donnees et --export-verifie ne valent qu'avec --desinstaller.
+      Les accepter en silence pendant une INSTALLATION donnerait à croire qu'ils ont
+      agi — c'est la forme la plus discrète du défaut (voir --aide)." 
 
 valider_identifiant BASE_NOM "$BASE_NOM"
 valider_identifiant BASE_UTILISATEUR "$ROLE_APP"
@@ -1275,6 +1488,75 @@ if [[ $SEULEMENT_BASE -eq 1 ]]; then RACINE_MIGRATIONS="$SOURCE"; fi
 # Le code de sortie est RECUEILLI plutôt que laissé à « set -e » : celui-ci abandonnerait
 # sur la ligne de commande brute, et l'exploitant lirait un piège à la place d'un
 # diagnostic. Les codes sont ceux de db/migrate.mjs (--aide en donne la liste).
+# >>> banc: sauvegarde <<<
+# ══ UNE SAUVEGARDE AVANT TOUTE MIGRATION ════════════════════════════════════
+#
+# ⚠️ **Les migrations vont dans un seul sens.** Chaque fichier porte un bloc
+# « ANNULATION (documentaire) » — un COMMENTAIRE, que rien n'exécute et que
+# personne ne garantit. Le seul retour arrière réel est la restauration d'un
+# cliché, et jusqu'ici le script n'en prenait aucun : il créait
+# `/var/backups/cyber-grc` et n'y écrivait jamais rien. Un répertoire de
+# sauvegarde vide est pire qu'absent — il donne à croire qu'il y en a une.
+#
+# ── Trois décisions, et chacune se paierait dans l'autre sens ────────────────
+#
+# **1. Seulement s'il y a quelque chose à appliquer.** `migrate.mjs --verifier`
+# n'applique rien et sort en **10** quand des migrations sont en attente. Sans
+# ce test, chaque `--maj` — y compris les dizaines qui ne changent que du code —
+# déposerait un cliché de plus, et le répertoire deviendrait un bruit qu'on purge
+# sans regarder. Ce qu'on veut conserver, c'est l'état d'AVANT un changement de
+# schéma, pas une collection.
+#
+# **2. Un échec du cliché ARRÊTE l'installation.** C'est le point qui compte :
+# migrer sans retour possible est exactement ce que ce bloc existe pour empêcher.
+# Continuer « puisque la migration, elle, marchera » serait reconduire le défaut
+# sous une autre forme.
+#
+# **3. Le cliché est complet et lisible par root seul.** Il porte le journal
+# d'audit, les pièces jointes référencées, les identités — `0600`, propriétaire
+# `root`, dans un répertoire déjà en `0700`. ⚠️ Il ne contient PAS les fichiers
+# de pièces jointes eux-mêmes, qui vivent sous `/var/lib/cyber-grc` : une
+# restauration de base seule rend des documents introuvables (`README.md` §6).
+if [[ $SEULEMENT_BASE -eq 0 || $SEULEMENT_BASE -eq 1 ]]; then
+  MIGRATIONS_EN_ATTENTE=0
+  BASE_HOTE="$BASE_HOTE" BASE_PORT="$BASE_PORT" BASE_NOM="$BASE_NOM" \
+  BASE_UTILISATEUR="$ROLE_APP" \
+  BASE_UTILISATEUR_PROPRIETAIRE="$ROLE_PROPRIETAIRE" \
+  BASE_MOT_DE_PASSE_PROPRIETAIRE="$(lire_variable BASE_MOT_DE_PASSE_PROPRIETAIRE)" \
+  BASE_SSL="$(lire_variable BASE_SSL)" BASE_SSL_CA="$(lire_variable BASE_SSL_CA)" \
+    node "$RACINE_MIGRATIONS/db/migrate.mjs" --verifier >/dev/null 2>&1 \
+    || MIGRATIONS_EN_ATTENTE=$?
+
+  if [[ "$MIGRATIONS_EN_ATTENTE" -eq 10 ]]; then
+    CLICHE="$SAUVEGARDES/avant-migration-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+    info "Migrations en attente : cliché de la base avant application"
+    if ! PGPASSWORD="$(lire_variable BASE_MOT_DE_PASSE_PROPRIETAIRE)" \
+         pg_dump --host="$BASE_HOTE" --port="$BASE_PORT" \
+                 --username="$ROLE_PROPRIETAIRE" --dbname="$BASE_NOM" \
+                 --no-password --format=plain --encoding=UTF8 2>/dev/null \
+         | gzip -9 > "$CLICHE"; then
+      rm -f "$CLICHE"
+      echec "Le cliché de sauvegarde a ÉCHOUÉ, et l'installation s'arrête ici.
+      Des migrations sont en attente : les appliquer sans cliché reviendrait à changer le
+      schéma SANS retour arrière — les blocs « ANNULATION » des migrations sont des
+      commentaires, que rien n'exécute.
+      Vérifiez que « pg_dump » est installé (paquet postgresql-client-17) et que
+      $SAUVEGARDES est accessible en écriture, puis relancez."
+    fi
+    chmod 0600 "$CLICHE"
+    succes "cliché pris : $CLICHE ($(du -h "$CLICHE" | cut -f1))"
+
+    # Rétention : les cinq derniers. Assez pour remonter plusieurs mises à jour,
+    # assez peu pour qu'un disque plein ne devienne pas le prochain incident.
+    # `ls -t` puis `tail -n +6` : on garde les cinq plus récents, on retire le reste.
+    while IFS= read -r ancien; do
+      [[ -n "$ancien" ]] && rm -f "$SAUVEGARDES/$ancien"
+    done < <(ls -t "$SAUVEGARDES" 2>/dev/null | grep '^avant-migration-' | tail -n +6)
+  fi
+fi
+
+# <<< banc: sauvegarde >>>
+
 CODE_MIGRATIONS=0
 BASE_HOTE="$BASE_HOTE" \
 BASE_PORT="$BASE_PORT" \

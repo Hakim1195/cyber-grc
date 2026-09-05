@@ -179,7 +179,9 @@ const ConformiteModule = (() => {
         /* §37.6 — la date d'édition de la déclaration d'applicabilité suit la
            langue de l'interface. Elle n'est ni stockée ni transmise : c'est
            l'entête d'un document imprimé, donc un pur affichage. */
-        const dateJour = I18n.dateLongue(new Date());
+        // Échappé comme ses sœurs : `I18n.dateLongue` a le même repli brut
+        // (constat Q-221, trouvé en MESURANT plutôt qu'en relisant le source).
+        const dateJour = escapeHtml(I18n.dateLongue(new Date()));
 
         app.innerHTML = `
             <section class="page soa-page">
