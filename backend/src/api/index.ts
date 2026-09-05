@@ -2059,9 +2059,63 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         throw entreeInvalide("Le paramètre « depuis » n'est pas un horodatage valide.");
       }
 
-      const resultat = await enLecture(requete, async (client, instanceDepot, perimetre) =>
-        instanceDepot.rafraichir(client, perimetre, depuis, entitesLisibles(sessionDe(requete).droits)),
-      );
+      /* ══ QUAND UN SONDAGE EST EN FAIT UNE EXTRACTION — constat **Q-242** ══
+       *
+       * Mesuré par la porte S8 (6ᵉ passage), sur la recette, avec un compte
+       * d'annuaire réel dont la session déclare `export: false` :
+       *
+       *     GET /api/export                        → 403
+       *     GET /api/rafraichir?depuis=1970-01-01   → 200, le jeu COMPLET
+       *
+       * `depuis` est fourni par l'appelant : à 1970, « ce qui a changé depuis »
+       * est **tout**. Et rien n'était tracé — trois extractions, zéro entrée au
+       * journal, quand `/api/donnees` en laissait une.
+       *
+       * ⚠️ **C'est le constat Q-209, à un mot près, et je l'avais fermé sur
+       * `/api/donnees` en oubliant cette route.** Cinquième fois sur ce chantier
+       * qu'un correctif traite l'instance et laisse la classe. La leçon est
+       * écrite ici pour la prochaine route qui rendra le jeu de données :
+       * **toute sortie du jeu se journalise, quel que soit son nom.**
+       *
+       * ── Ce qu'on ne fait PAS, et pourquoi ────────────────────────────────
+       *
+       * On ne trace pas chaque sondage : la SPA en émet un toutes les vingt
+       * secondes, et vingt filiales noieraient la seule question à laquelle le
+       * journal doit répondre vite. On **discrimine** : un sondage ordinaire
+       * demande ce qui a changé depuis quelques secondes ; une extraction
+       * remonte au-delà de l'ouverture de la session. C'est cette borne-là qui
+       * sépare les deux, et elle ne se contourne pas en avançant `depuis` — un
+       * appelant qui pagine émet alors des sondages ordinaires, qui ne rendent
+       * chacun que ce qui a changé dans leur fenêtre. */
+      const session = sessionDe(requete);
+      const instanceDepot = await assurerDepot();
+      const resultat = await avecTransaction(pool, session.perimetre, async (client) => {
+        const charge = await instanceDepot.rafraichir(
+          client,
+          session.perimetre,
+          depuis,
+          entitesLisibles(session.droits),
+        );
+        const lignes = Object.values(charge.volumes).reduce((n, v) => n + v, 0);
+        const ageMs = Date.now() - depuis.getTime();
+        if (ageMs > config.session.dureeMaximaleHeures * 3_600_000) {
+          await journaliser(client, {
+            action: 'consultation_sensible',
+            resume: 'Extraction du jeu de données par le sondage (« depuis » antérieur à la session)',
+            filialeId: session.perimetre.filialeId,
+            utilisateurLibelle: session.perimetre.utilisateurId,
+            adresseIp: requete.ip,
+            entiteId: null,
+            valeursApres: {
+              depuis: depuis.toISOString(),
+              collections: Object.keys(charge.modifications).length,
+              lignes,
+              export_autorise: session.droits.export,
+            },
+          });
+        }
+        return charge;
+      });
       return reponse.send(resultat);
     },
   );
