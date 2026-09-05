@@ -172,24 +172,25 @@ const Vault = (() => {
 
     function renderConnexion() {
         overlayShell(`
-            <h2 class="lock-title">Connexion au serveur</h2>
-            <p class="lock-sub">Chargement des données de votre filiale…</p>`);
+            <h2 class="lock-title">${t("etat.connexionServeur")}</h2>
+            <p class="lock-sub">${t("etat.chargementFiliale")}</p>`);
     }
 
     function renderEchec(erreur) {
         // Seul le message destiné à l'utilisateur est affiché : ni pile d'appel,
         // ni détail technique (contrôle S12 de la grille de sécurité).
+        // ⚠️ `erreur.message` vient du SERVEUR, qui rédige en français (§37.5).
+        // On l'affiche tel quel ; seule la phrase d'accompagnement suit la langue.
         const message = (erreur && erreur.message)
             ? erreur.message
-            : "Le serveur est injoignable.";
+            : t("etat.serveurInjoignable");
         overlayShell(`
-            <h2 class="lock-title">Serveur indisponible</h2>
+            <h2 class="lock-title">${t("etat.serveurIndisponible")}</h2>
             <p class="lock-sub">${esc(message)}</p>
-            <p class="lock-sub">Vérifiez votre connexion (VPN), puis réessayez. Si le problème
-            persiste, contactez votre exploitant.</p>
-            <button type="button" id="reconnect-btn" class="lock-btn">Réessayer</button>`);
+            <p class="lock-sub">${t("etat.verifierVpn")}</p>
+            <button type="button" id="reconnect-btn" class="lock-btn">${t("etat.reessayer")}</button>`);
         const b = document.getElementById("reconnect-btn");
-        if (b) b.onclick = () => { b.disabled = true; b.textContent = "Connexion…"; connecter(); };
+        if (b) b.onclick = () => { b.disabled = true; b.textContent = t("etat.connexionEnCours"); connecter(); };
     }
 
     /* =====================================================================
@@ -225,17 +226,17 @@ const Vault = (() => {
      */
     function renderFormulaireConnexion(message, identifiantSaisi) {
         overlayShell(`
-            <h2 class="lock-title">Connexion</h2>
-            <p class="lock-sub">Identifiez-vous avec votre compte d'entreprise.</p>
+            <h2 class="lock-title">${t("etat.connexion")}</h2>
+            <p class="lock-sub">${t("etat.identifiezVous")}</p>
             ${message ? `<p class="lock-error" id="login-erreur" role="alert">${esc(message)}</p>` : ""}
             <form id="login-form" autocomplete="off">
-                <label class="lock-sub" style="margin-bottom:4px; display:block; text-align:left;" for="login-identifiant">Identifiant</label>
+                <label class="lock-sub" style="margin-bottom:4px; display:block; text-align:left;" for="login-identifiant">${t("etat.identifiant")}</label>
                 <input type="text" id="login-identifiant" class="lock-input" autocomplete="username"
                        value="${esc(identifiantSaisi || "")}" required />
-                <label class="lock-sub" style="margin-bottom:4px; display:block; text-align:left;" for="login-motdepasse">Mot de passe</label>
+                <label class="lock-sub" style="margin-bottom:4px; display:block; text-align:left;" for="login-motdepasse">${t("etat.motDePasse")}</label>
                 <input type="password" id="login-motdepasse" class="lock-input"
                        autocomplete="current-password" required />
-                <button type="submit" id="login-btn" class="lock-btn">Se connecter</button>
+                <button type="submit" id="login-btn" class="lock-btn">${t("etat.seConnecter")}</button>
             </form>`);
         brancherFormulaire("login-form", "login-identifiant", "login-motdepasse", "login-btn",
             async (identifiant, motDePasse, bouton) => {
@@ -248,7 +249,7 @@ const Vault = (() => {
                     await connecter();
                 } catch (e) {
                     bouton.disabled = false;
-                    bouton.textContent = "Se connecter";
+                    bouton.textContent = t("etat.seConnecter");
                     renderFormulaireConnexion(phraseDeRefus(e), identifiant);
                 }
             });
@@ -280,18 +281,16 @@ const Vault = (() => {
     function renderAucunAcces(erreur) {
         const message = (erreur && erreur.message)
             ? erreur.message
-            : "Vous n'avez pas les droits nécessaires pour cette application.";
+            : t("etat.aucunDroit");
         overlayShell(`
-            <h2 class="lock-title">Accès refusé</h2>
+            <h2 class="lock-title">${t("etat.accesRefuse")}</h2>
             <p class="lock-error" role="alert">${esc(message)}</p>
-            <p class="lock-sub">Vous êtes bien connecté : c'est votre profil qui n'ouvre aucun
-            accès ici. Se reconnecter n'y changerait rien. Demandez à votre exploitant de vous
-            rattacher au groupe correspondant à votre filiale et à votre profil.</p>
-            <button type="button" id="logout-btn" class="lock-btn">Fermer ma session</button>`);
+            <p class="lock-sub">${t("etat.aucunDroitExplication")}</p>
+            <button type="button" id="logout-btn" class="lock-btn">${t("etat.fermerSession")}</button>`);
         const b = document.getElementById("logout-btn");
         if (b) b.addEventListener("click", async () => {
             b.disabled = true;
-            b.textContent = "Fermeture…";
+            b.textContent = t("etat.fermetureEnCours");
             await fermerSession();
             renderFormulaireConnexion(null, "");
         });
@@ -340,26 +339,21 @@ const Vault = (() => {
     function renderVoileReconnexion(message, identifiantSaisi) {
         const enAttente = compterEnAttente();
         overlayShell(`
-            <h2 class="lock-title">Session expirée</h2>
-            <p class="lock-sub">Votre session sur le serveur s'est terminée. Reconnectez-vous
-            pour continuer.</p>
-            <p class="lock-sub"><b>Ce que vous avez saisi est conservé</b> : rien n'a été effacé,
-            et l'écran que vous aviez sous les yeux vous sera rendu tel quel${
-                enAttente > 0
-                    ? `. ${enAttente} modification(s) attendent d'être enregistrées et partiront dès la reconnexion`
-                    : ""
+            <h2 class="lock-title">${t("etat.sessionExpiree")}</h2>
+            <p class="lock-sub">${t("etat.sessionExpireeTexte")}</p>
+            <p class="lock-sub"><b>${t("etat.saisieConservee")}</b>${t("etat.saisieConserveeSuite")}${
+                enAttente > 0 ? t("etat.enAttenteSuite", { n: enAttente }) : ""
             }.</p>
-            <p class="lock-sub">N'actualisez pas le navigateur (F5) : votre saisie n'existe que
-            sur cet écran, et elle serait perdue.</p>
+            <p class="lock-sub">${t("etat.pasDeF5")}</p>
             ${message ? `<p class="lock-error" id="login-erreur" role="alert">${esc(message)}</p>` : ""}
             <form id="login-form" autocomplete="off">
-                <label class="lock-sub" style="margin-bottom:4px; display:block; text-align:left;" for="login-identifiant">Identifiant</label>
+                <label class="lock-sub" style="margin-bottom:4px; display:block; text-align:left;" for="login-identifiant">${t("etat.identifiant")}</label>
                 <input type="text" id="login-identifiant" class="lock-input" autocomplete="username"
                        value="${esc(identifiantSaisi || "")}" required />
-                <label class="lock-sub" style="margin-bottom:4px; display:block; text-align:left;" for="login-motdepasse">Mot de passe</label>
+                <label class="lock-sub" style="margin-bottom:4px; display:block; text-align:left;" for="login-motdepasse">${t("etat.motDePasse")}</label>
                 <input type="password" id="login-motdepasse" class="lock-input"
                        autocomplete="current-password" required />
-                <button type="submit" id="login-btn" class="lock-btn">Reprendre ma session</button>
+                <button type="submit" id="login-btn" class="lock-btn">${t("etat.reprendreSession")}</button>
             </form>`);
         brancherFormulaire("login-form", "login-identifiant", "login-motdepasse", "login-btn",
             async (identifiant, motDePasse, bouton) => {
@@ -374,10 +368,10 @@ const Vault = (() => {
                     if (typeof Sync !== "undefined" && Sync.reprendreApresAuthentification) {
                         Sync.reprendreApresAuthentification();
                     }
-                    if (window.showToast) window.showToast("Session rouverte. Vos saisies repartent.", "success");
+                    if (window.showToast) window.showToast(t("etat.sessionRouverte"), "success");
                 } catch (e) {
                     bouton.disabled = false;
-                    bouton.textContent = "Reprendre ma session";
+                    bouton.textContent = t("etat.reprendreSession");
                     renderVoileReconnexion(phraseDeRefus(e), identifiant);
                 }
             });
@@ -405,9 +399,9 @@ const Vault = (() => {
     function phraseDeRefus(erreur) {
         if (erreur && erreur.message) return erreur.message;
         if (erreur && typeof erreur.estRythmeLimite === "function" && erreur.estRythmeLimite()) {
-            return "Trop de tentatives. Patientez avant de réessayer.";
+            return t("etat.tropDeTentatives");
         }
-        return "Identifiant ou mot de passe refusé.";
+        return t("etat.identifiantRefuse");
     }
 
     /**
@@ -429,7 +423,7 @@ const Vault = (() => {
             const motDePasse = champMotDePasse ? champMotDePasse.value : "";
             if (!identifiant || !motDePasse) return;
             bouton.disabled = true;
-            bouton.textContent = "Connexion…";
+            bouton.textContent = t("etat.connexionEnCours");
             envoyer(identifiant, motDePasse, bouton);
         });
     }
@@ -458,10 +452,8 @@ const Vault = (() => {
     async function deconnecter() {
         const enAttente = compterEnAttente();
         if (enAttente > 0) {
-            const suite = window.confirm(
-                enAttente + " modification(s) ne sont pas encore enregistrées sur le serveur. " +
-                "Se déconnecter maintenant les perdra définitivement.\n\n" +
-                "Voulez-vous vraiment vous déconnecter ?");
+            // `confirm()` est un contexte TEXTE : `t`, pas `tHtml`.
+            const suite = window.confirm(t("etat.deconnexionPerte", { n: enAttente }));
             if (!suite) return false;
         }
         await fermerSession();

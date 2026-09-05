@@ -105,6 +105,24 @@ const Session = (() => {
             filialeId: filiale.id || "",
             filialeCode: filiale.code || "",
             filialeNom: filiale.raison_sociale || "",
+            /* ── LA LANGUE PAR DÉFAUT DE LA FILIALE — lot L10, §37.4 ─────────
+             *
+             * `filiales.langue_defaut` existe en base depuis `001_socle.sql` et
+             * n'est lue par personne. Le §37.4 la désigne comme la valeur par
+             * défaut de l'interface, « et elle arrive dans `filiale_active` de
+             * la charte de session ».
+             *
+             * ⚠️ **Elle n'y est PAS ENCORE** : mesuré le 05/09/2026, le bloc que
+             * construit `backend/src/api/index.ts` porte `id`, `code` et
+             * `raison_sociale`, plus les coordonnées du lot L9 — pas la langue.
+             * `backend/src/` appartient à un autre agent : la lecture ci-dessous
+             * est donc **défensive et sans effet aujourd'hui**, et `js/i18n/`
+             * retombe sur `fr`.
+             *
+             * C'est écrit plutôt que tu : une source silencieusement morte est
+             * une source qu'on croit vivante. Le jour où le serveur joint le
+             * champ, rien n'est à changer ici. */
+            filialeLangue: filiale.langue_defaut || "",
             perimetreLecture: Object.freeze((source.perimetre_lecture || []).slice()),
             perimetreGroupe: !!source.perimetre_groupe,
             administrationGroupe: !!source.administration_groupe,
@@ -345,10 +363,8 @@ const Droits = (() => {
     function exigerExport() {
         if (peutExporter()) return true;
         if (window.showToast) {
-            window.showToast(
-                "L'extraction de données n'est pas autorisée pour votre profil. " +
-                "Le droit d'export est accordé séparément de la lecture.",
-                "error");
+            // Contexte texte (bandeau `showToast`) : `t`, jamais `tHtml`.
+            window.showToast(t("bandeau.exportRefuse"), "error");
         }
         return false;
     }

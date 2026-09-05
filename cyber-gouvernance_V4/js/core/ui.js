@@ -12,6 +12,21 @@
 window.UI = (function () {
     "use strict";
 
+    /* Traduction (lot L10). Repli sur la CLÉ si le moteur n'est pas chargé :
+       rendre du français ici masquerait précisément ce que le §37.2 veut voir.
+
+       ⚠️ **Elle s'appelle `t`, comme partout ailleurs, et ce n'est pas un
+       hasard.** Elle a d'abord porté un autre nom — et le contrôle mécanique du
+       §37.2, qui découvre les clés en cherchant `t("…")`, a compté **zéro clé**
+       dans ce fichier. Un helper renommé « pour éviter la collision » sort du
+       balayage sans rien dire : la collision, ici, est voulue — la fonction
+       locale masque `window.t` dans cette portée, et fait la même chose en
+       plus prudent. */
+    function t(cle, valeurs) {
+        if (window.I18n) return window.I18n.t(cle, valeurs);
+        return cle;
+    }
+
     // Repli défensif si escapeHtml n'est pas (encore) disponible.
     function esc(value) {
         if (window.escapeHtml) return window.escapeHtml(value);
@@ -83,13 +98,13 @@ window.UI = (function () {
                 if (!ids.length) return;
                 const message = typeof opts.confirm === "function"
                     ? opts.confirm(ids.length)
-                    : `Confirmer la suppression de ${ids.length} élément(s) ?`;
+                    : t("commun.confirmerSuppressionMultiple", { n: ids.length });
                 if (!confirm(message)) return;
                 if (typeof opts.remove === "function") ids.forEach((id) => opts.remove(id));
                 if (window.showToast) {
                     const msg = typeof opts.toast === "function"
                         ? opts.toast(ids.length)
-                        : `${ids.length} élément(s) supprimé(s).`;
+                        : t("commun.elementsSupprimes", { n: ids.length });
                     if (msg) window.showToast(msg, "success");
                 }
                 if (typeof opts.onDone === "function") opts.onDone(ids);
@@ -120,7 +135,7 @@ window.UI = (function () {
         btn.addEventListener("click", () => {
             const message = typeof opts.confirm === "function"
                 ? opts.confirm()
-                : (opts.confirm || "Confirmer la suppression ?");
+                : (opts.confirm || t("commun.confirmerSuppression"));
             if (!confirm(message)) return;
             if (typeof opts.remove === "function") opts.remove();
             if (opts.toast && window.showToast) {
@@ -324,15 +339,16 @@ window.UI = (function () {
     }
     function personChipHtml(nom) {
         return '<span class="mp-chip"><span class="mp-label">' + esc(nom) + '</span>' +
-            '<button type="button" class="mp-remove" aria-label="Retirer">&times;</button></span>';
+            '<button type="button" class="mp-remove" aria-label="' + esc(t("commun.retirer")) + '">&times;</button></span>';
     }
     function multiPersonHtml(fieldId, valueString) {
         var chips = parsePersons(valueString).map(personChipHtml).join("");
         return '<div class="mp-field" id="' + fieldId + '">' +
             '<div class="mp-chips">' + chips + '</div>' +
             '<div class="mp-add">' +
-                '<input type="text" class="mp-input" list="personnes-list" placeholder="Ajouter une personne…">' +
-                '<button type="button" class="mp-addbtn">Ajouter</button>' +
+                '<input type="text" class="mp-input" list="personnes-list" placeholder="' +
+                    esc(t("commun.ajouterPersonne")) + '">' +
+                '<button type="button" class="mp-addbtn">' + esc(t("commun.ajouter")) + '</button>' +
             '</div></div>';
     }
     function wireMultiPerson(fieldId) {

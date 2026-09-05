@@ -1923,10 +1923,22 @@ install -m 0644 "$SOURCE/deploy/systemd/cyber-grc.service" /etc/systemd/system/
 # section [Install] — seul le minuteur est armé.
 install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-reanalyse.service" /etc/systemd/system/
 install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-reanalyse.timer" /etc/systemd/system/
+  # ── Lot L12 : les relances par courriel ────────────────────────────────────
+  #
+  # ⚠️ CETTE UNITÉ EST LA SEULE DES TROIS QUI SORTE DE LA MACHINE. Elle porte
+  # « IPAddressDeny=any » comme les autres, et il faut y AJOUTER le sous-réseau
+  # du relais SMTP — et celui du résolveur DNS s'il n'est pas en 127.x.
+  #
+  # L'oubli est la figure exacte du constat Q-65 : le NOYAU refuse la connexion,
+  # pas le relais, et le journal dira « Relais injoignable ». On cherchera alors
+  # le pare-feu du client pendant une heure, alors que la cause est dans l'unité.
+  install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-notifications.service" /etc/systemd/system/
+  install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-notifications.timer"   /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable cyber-grc
 systemctl restart cyber-grc
 systemctl enable --now cyber-grc-reanalyse.timer
+  systemctl enable --now cyber-grc-notifications.timer
 
 if [[ ! -f /etc/apache2/sites-available/cyber-grc.conf ]]; then
   install -m 0644 "$SOURCE/deploy/apache/cyber-grc.conf" /etc/apache2/sites-available/

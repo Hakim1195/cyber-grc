@@ -1,0 +1,150 @@
+# Emplacement cible : /etc/systemd/system/cyber-grc-notifications.service
+#
+# Relance des échéances par courriel — lot L12, PLAN_SERVEUR §1.11,
+# CONVENTIONS.md §36 — Cyber GRC Groupe, Debian 13, SANS conteneur.
+#
+# « Une échéance qui passe sans que personne ne le sache. » Cette unité ne
+# tourne PAS en continu : c'est un `oneshot` qui lance
+# `dist/notifications/relances.js`, passe en revue les filiales actives, expédie
+# une relance à chaque personne de l'annuaire qui porte une obligation due dans
+# les sept jours, et s'arrête. Le minutage vient de
+# `cyber-grc-notifications.timer`, jamais d'ici : cette unité n'a pas de section
+# [Install] — elle n'a pas vocation à être activée seule.
+#
+# Durcissement : repris de `cyber-grc-reanalyse.service`, lui-même repris de
+# `cyber-grc.service` — même compte de service, mêmes chemins, mêmes raisons.
+# Voir ces fichiers pour le détail de chaque directive ; seules les DIFFÉRENCES
+# sont commentées ici, et il n'y en a qu'une qui compte : le réseau.
+#
+# Installation : voir `deploy/install.sh`, section « Service et frontal ».
+# Vérification du durcissement, à joindre au dossier de recette :
+#   systemd-analyze security cyber-grc-notifications.service
+#   systemd-analyze verify   deploy/systemd/cyber-grc-notifications.service
+
+[Unit]
+Description=Cyber GRC Groupe — relance des échéances par courriel
+Documentation=file:/opt/cyber-grc/backend/README.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+# Vingt filiales, un dialogue SMTP par destinataire, un relais qui peut être
+# lent : borne dure au-delà de laquelle systemd tue le processus. `relances.ts`
+# borne aussi chaque dialogue (20 s par défaut) ; les deux limites sont
+# indépendantes et se recouvrent délibérément.
+TimeoutStartSec=900
+
+# ---- Identité : le même compte que le service applicatif ----
+User=cyber-grc
+Group=cyber-grc
+
+# ---- Application ----
+WorkingDirectory=/opt/cyber-grc/backend
+ExecStart=/usr/bin/node /opt/cyber-grc/backend/dist/notifications/relances.js
+EnvironmentFile=/etc/cyber-grc/env
+UMask=0077
+
+# ---- Durcissement : système de fichiers ----
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateMounts=true
+# Ce passage n'écrit RIEN sur le disque : il lit la base, parle au relais, et
+# écrit sa marque anti-doublon dans `parametres`. `/var/lib/cyber-grc` reste
+# inscriptible pour ne pas diverger des deux autres unités — pas parce que
+# quelque chose s'y écrit.
+ReadWritePaths=/var/lib/cyber-grc /var/log/cyber-grc
+ReadOnlyPaths=/opt/cyber-grc
+NoExecPaths=/var/lib/cyber-grc
+InaccessiblePaths=-/var/backups/cyber-grc
+InaccessiblePaths=-/etc/ssl/cyber-grc
+
+# ---- Durcissement : privilèges ----
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RemoveIPC=true
+KeyringMode=private
+# V8 (le même moteur que le service principal) a besoin de pages à la fois
+# inscriptibles et exécutables pour compiler le JavaScript à la volée.
+MemoryDenyWriteExecute=false
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# ---- Durcissement : réseau ----
+#
+# ⚠️ **C'EST LA SEULE DIFFÉRENCE QUI COMPTE AVEC LES DEUX AUTRES UNITÉS, ET ELLE
+# SE PAIE SI ON NE LA LIT PAS.** `cyber-grc-reanalyse.service` peut se contenter
+# de `IPAddressAllow=localhost` : il ne parle qu'à PostgreSQL et à la socket
+# ClamAV. Celui-ci doit **sortir de la machine** — un relais SMTP n'est jamais
+# sur la boucle locale chez ce client (Office 365, PLAN_SERVEUR §1.11).
+#
+# AF_NETLINK est nécessaire : `getaddrinfo` interroge les interfaces par netlink
+# (AI_ADDRCONFIG). Sans lui, la résolution du relais devient aléatoire.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+# ⚠️ À COMPLÉTER À L'INSTALLATION — deux lignes, et le lot ne marche pas sans :
+#
+#   IPAddressAllow=<sous-réseau du relais SMTP, ex. 10.0.0.0/8>
+#   IPAddressAllow=<sous-réseau du résolveur DNS, s'il n'est pas en 127.x>
+#
+# ⚠️ **CE QUE L'OUBLI PRODUIT, et pourquoi il faut le dire ici** : c'est la
+# figure exacte du constat Q-65 sur `cyber-grc.service`. Le noyau refuse la
+# connexion sortante, **pas le relais** — le passage se termine, `systemctl
+# status` montre un échec, et le journal dit « Relais injoignable ». On cherche
+# alors le pare-feu du client, la configuration Office 365, l'autorisation SPF…
+# et la cause est cette liste blanche. Le message ne le dira pas.
+#
+# ⚠️ **Office 365 n'a pas d'adresse fixe.** Deux voies, et il faut choisir :
+#   · un relais interne (« smart host ») dans le réseau du client, dont
+#     l'adresse est stable — la voie recommandée, et la seule qui garde cette
+#     liste blanche étroite ;
+#   · les plages publiées par Microsoft pour « Exchange Online » — larges, et
+#     elles changent ; il faut alors les tenir à jour.
+#
+# ⚠️ NE PAS ÉCRIRE « IPAddressAllow=any » : la section entière deviendrait
+# décorative. Nommer les sous-réseaux, même larges.
+#
+# ⚠️ Le RÉSOLVEUR DNS compte autant que le relais. Sous Debian,
+# `systemd-resolved` écoute sur 127.0.0.53, couvert par « localhost » : la
+# question ne se pose alors pas. Un résolveur d'entreprise en 10.x, si.
+
+# ---- Durcissement : appels système ----
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @obsolete @mount @debug @cpu-emulation @swap @reboot @raw-io @module @clock
+SystemCallErrorNumber=EPERM
+
+# ---- Secrets : aucune image mémoire sur le disque (S8) ----
+# Ce processus tient en mémoire SMTP_MOT_DE_PASSE, lu de /etc/cyber-grc/env.
+LimitCORE=0
+CoredumpFilter=0x00
+
+# ---- Journalisation ----
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cyber-grc-notifications
+
+# ---- Limites : dénis de service (S13) ----
+MemoryAccounting=true
+MemoryMax=1G
+LimitNOFILE=4096
+TasksMax=128
+
+# Pas de section [Install] : cette unité est déclenchée par
+# cyber-grc-notifications.timer, jamais activée pour elle-même.

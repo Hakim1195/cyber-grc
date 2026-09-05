@@ -2,6 +2,14 @@
 // Nom du fichier : app.js
 
 document.addEventListener("DOMContentLoaded", () => {
+    /* LANGUE — premier geste, avant même la porte de démarrage.
+       L'écran de connexion et l'écran « serveur indisponible » sont rendus par
+       `js/core/vault.js` AVANT que la session existe : sans cet appel, ils
+       s'afficheraient dans la langue par défaut alors que l'utilisateur en a
+       choisi une autre sur ce poste. La langue de la filiale, elle, n'est
+       connue qu'après la session — `startApp()` rejoue donc `resoudre()`. */
+    if (window.I18n) { I18n.resoudre(); I18n.appliquerAuDocument(); }
+
     // Coffre optionnel : si une protection par mot de passe est active, l'app ne
     // démarre qu'après déverrouillage. Sinon, démarrage immédiat (clé nulle).
     Vault.boot(async (dek) => {
@@ -12,6 +20,17 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 async function startApp() {
+
+    /* =========================
+       LANGUE DE L'INTERFACE (lot L10, `CONVENTIONS.md` §37.4)
+       Résolue ICI, et pas plus tôt : la session est chargée, donc la langue par
+       défaut de la filiale est enfin connue. Un choix explicite de
+       l'utilisateur, lui, a déjà eu son effet sur l'écran de connexion — il
+       prime, et `resoudre()` ne l'écrase pas.
+       `appliquerAuDocument()` traduit le balisage statique d'`index.html`
+       (barre latérale) : sans cet appel, le menu resterait en français.
+    ========================== */
+    if (window.I18n) { I18n.resoudre(); I18n.appliquerAuDocument(); }
 
     /* =========================
        IDENTITÉ VISUELLE DE LA FILIALE ACTIVE (lot L9)
@@ -208,9 +227,9 @@ function showQuotaBanner() {
     host.innerHTML = `
         <div class="quota-banner" role="alert">
             <span class="quota-ico">!</span>
-            <span class="quota-text"><b>Stockage saturé.</b> Vos dernières modifications ne peuvent pas être enregistrées durablement. Exportez une sauvegarde, puis libérez de l'espace (supprimez d'anciens points de restauration dans Paramètres&nbsp;→&nbsp;Sauvegardes).</span>
-            <button id="quota-settings" class="reminder-btn">Ouvrir les paramètres</button>
-            <button id="quota-dismiss" class="reminder-close" title="Masquer" aria-label="Masquer">&times;</button>
+            <span class="quota-text"><b>${t("bandeau.stockageSature")}</b> ${t("bandeau.stockageSatureTexte")}</span>
+            <button id="quota-settings" class="reminder-btn">${t("bandeau.ouvrirParametres")}</button>
+            <button id="quota-dismiss" class="reminder-close" title="${t("bandeau.masquer")}" aria-label="${t("bandeau.masquer")}">&times;</button>
         </div>`;
     const s = document.getElementById("quota-settings");
     if (s) s.onclick = () => Router.navigateTo("/settings");
@@ -221,34 +240,39 @@ function showQuotaBanner() {
 /* =========================
    FIL D'ARIANE
 ========================= */
+/* ⚠️ Cette table ne porte plus de LIBELLÉS, mais des CLÉS de dictionnaire
+   (lot L10, `CONVENTIONS.md` §37). Le champ `s` nomme la section, `t` le titre.
+   Les sections du fil d'Ariane ne sont pas celles du menu — « Pilotage » y
+   regroupe ce que la barre latérale range sous « Gouvernance & Risques » — et
+   c'est pourquoi elles ont leurs propres clés plutôt qu'un renvoi vers `nav.*`. */
 const ROUTE_META = {
-    "/dashboard":    { s: "Pilotage",   t: "Tableau de bord" },
-    "/synthese":     { s: "Pilotage",   t: "Synthèse Direction" },
-    "/echeances":    { s: "Pilotage",   t: "Échéancier" },
-    "/actions":      { s: "Pilotage",   t: "Plan d'actions" },
-    "/incidents":    { s: "Risques",    t: "Incidents" },
-    "/documents":    { s: "Conformité", t: "Gestion documentaire" },
-    "/rgpd":         { s: "Conformité", t: "Registre RGPD" },
-    "/risques":      { s: "Risques",    t: "Risques (EBIOS)" },
-    "/matrice":      { s: "Risques",    t: "Matrice des risques" },
-    "/actifs":       { s: "Risques",    t: "Actifs critiques" },
-    "/exigences":    { s: "Conformité", t: "Exigences (ISO/NIS2)" },
-    "/referentiels": { s: "Conformité", t: "Référentiels" },
-    "/mesures":      { s: "Conformité", t: "Mesures de sécurité" },
-    "/couverture":   { s: "Conformité", t: "Couverture croisée" },
-    "/mapping":      { s: "Conformité", t: "Correspondances inter-référentiels" },
-    "/soa":          { s: "Conformité", t: "Déclaration d'applicabilité" },
-    "/clients":      { s: "Conformité", t: "Donneurs d'ordre" },
-    "/personnel":    { s: "Conformité", t: "Personnel" },
-    "/audits":       { s: "Conformité", t: "Contrôles & Audits" },
-    "/bia":          { s: "Continuité", t: "BIA (Impact Métier)" },
-    "/crise":        { s: "Continuité", t: "Cellule de Crise" },
-    "/crise-fiches": { s: "Continuité", t: "Fiches réflexes de crise" },
-    "/pra":          { s: "Continuité", t: "Scénarios PCA/PRA" },
-    "/mco":          { s: "Continuité", t: "Actions Préalables (MCO)" },
-    "/tests":        { s: "Continuité", t: "Historique des Tests" },
-    "/prestataires": { s: "Continuité", t: "Prestataires & Tiers" },
-    "/settings":     { s: "Administration", t: "Paramètres & données" }
+    "/dashboard":    { s: "fil.section.pilotage",   t: "fil.dashboard" },
+    "/synthese":     { s: "fil.section.pilotage",   t: "fil.synthese" },
+    "/echeances":    { s: "fil.section.pilotage",   t: "fil.echeances" },
+    "/actions":      { s: "fil.section.pilotage",   t: "fil.actions" },
+    "/incidents":    { s: "fil.section.risques",    t: "fil.incidents" },
+    "/documents":    { s: "fil.section.conformite", t: "fil.documents" },
+    "/rgpd":         { s: "fil.section.conformite", t: "fil.rgpd" },
+    "/risques":      { s: "fil.section.risques",    t: "fil.risques" },
+    "/matrice":      { s: "fil.section.risques",    t: "fil.matrice" },
+    "/actifs":       { s: "fil.section.risques",    t: "fil.actifs" },
+    "/exigences":    { s: "fil.section.conformite", t: "fil.exigences" },
+    "/referentiels": { s: "fil.section.conformite", t: "fil.referentiels" },
+    "/mesures":      { s: "fil.section.conformite", t: "fil.mesures" },
+    "/couverture":   { s: "fil.section.conformite", t: "fil.couverture" },
+    "/mapping":      { s: "fil.section.conformite", t: "fil.mapping" },
+    "/soa":          { s: "fil.section.conformite", t: "fil.soa" },
+    "/clients":      { s: "fil.section.conformite", t: "fil.clients" },
+    "/personnel":    { s: "fil.section.conformite", t: "fil.personnel" },
+    "/audits":       { s: "fil.section.conformite", t: "fil.audits" },
+    "/bia":          { s: "fil.section.continuite", t: "fil.bia" },
+    "/crise":        { s: "fil.section.continuite", t: "fil.crise" },
+    "/crise-fiches": { s: "fil.section.continuite", t: "fil.criseFiches" },
+    "/pra":          { s: "fil.section.continuite", t: "fil.pra" },
+    "/mco":          { s: "fil.section.continuite", t: "fil.mco" },
+    "/tests":        { s: "fil.section.continuite", t: "fil.tests" },
+    "/prestataires": { s: "fil.section.continuite", t: "fil.prestataires" },
+    "/settings":     { s: "fil.section.administration", t: "fil.settings" }
 };
 
 window.renderBreadcrumb = function(route) {
@@ -258,8 +282,8 @@ window.renderBreadcrumb = function(route) {
     const base = "/" + (segs[0] || "dashboard");
     const meta = ROUTE_META[base];
     if (!meta) { el.innerHTML = ""; return; }
-    const detail = segs.length > 1 ? " / <b>Fiche</b>" : "";
-    el.innerHTML = `${meta.s} / <b>${meta.t}</b>${detail}`;
+    const detail = segs.length > 1 ? ` / <b>${t("fil.fiche")}</b>` : "";
+    el.innerHTML = `${t(meta.s)} / <b>${t(meta.t)}</b>${detail}`;
 };
 
 /* =========================
@@ -311,19 +335,20 @@ window.renderContextSelector = function() {
     const container = document.createElement("div");
     container.id = "context-selector-container";
 
-    let optionsHtml = `<option value="global" style="color: #333; background: #fff;" ${currentContext === "global" ? "selected" : ""}>Tous les donneurs d'ordre (+ interne)</option>`;
+    let optionsHtml = `<option value="global" style="color: #333; background: #fff;" ${currentContext === "global" ? "selected" : ""}>${t("perimetre.tousDonneursOrdre")}</option>`;
     clients.forEach(c => {
         optionsHtml += `<option value="${esc(c.id)}" style="color: #333; background: #fff;" ${currentContext === c.id ? "selected" : ""}>${esc(c.nom)}</option>`;
     });
 
     container.innerHTML = `
-        <div class="sidebar-divider">Périmètre</div>
-        <div id="perimetre-filiale" title="Périmètre résolu par le serveur — il ne se choisit pas depuis le navigateur"
+        <div class="sidebar-divider">${t("perimetre.titre")}</div>
+        <div id="perimetre-filiale" title="${t("perimetre.aide")}"
              style="width: 100%; padding: 6px 8px; background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; font-size: 0.85rem; font-weight: 600;">
-            ${filiale ? esc(filiale) : `<span style="font-weight:400; opacity:0.75;">Périmètre non résolu</span>`}
+            ${filiale ? esc(filiale) : `<span style="font-weight:400; opacity:0.75;">${t("perimetre.nonResolu")}</span>`}
         </div>
         ${selecteurFilialeHtml()}
-        <div class="sidebar-divider">Filtre donneur d'ordre</div>
+        ${selecteurLangueHtml()}
+        <div class="sidebar-divider">${t("perimetre.filtreDonneurOrdre")}</div>
         <select id="context-selector" style="width: 100%; padding: 6px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; font-size: 0.85rem; cursor: pointer; outline: none;">
             ${optionsHtml}
         </select>
@@ -333,11 +358,77 @@ window.renderContextSelector = function() {
 
     document.getElementById("context-selector").addEventListener("change", (e) => {
         FiltreDonneurOrdre.set(e.target.value);
-        if (window.showToast) window.showToast("Filtre « donneur d'ordre » mis à jour.", "info");
+        if (window.showToast) window.showToast(t("perimetre.filtreMisAJour"), "info");
         Router.navigateTo(location.hash.replace(/^#/, ""), false);
     });
 
     brancherSelecteurFiliale();
+    brancherSelecteurLangue();
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  LE SÉLECTEUR DE LANGUE — lot L10, `CONVENTIONS.md` §37.4
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ *  ⚠️ **Il n'a rien d'un sélecteur de périmètre, et c'est pourquoi il vit ici
+ *  sans passer par le serveur.** Le périmètre décide de ce qu'on voit ; la
+ *  langue décide de la façon dont c'est écrit. Le premier ne se choisit jamais
+ *  depuis le navigateur (contrôle S2) ; la seconde ne se choisit QUE là, parce
+ *  qu'elle n'engage rien d'autre que l'œil de la personne assise devant.
+ *
+ *  La préférence va dans `localStorage` sous `cyber-langue` (§37.4). Ce n'est
+ *  pas une donnée du produit : elle ne se synchronise pas, elle ne vaut que
+ *  pour ce poste, et sa perte ne coûte rien. La purge du lot L2 vise les
+ *  données — coffre, miroir, points de restauration —, pas cela.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+function selecteurLangueHtml() {
+    if (typeof I18n === "undefined") return "";
+    const esc = window.escapeHtml || (v => String(v == null ? "" : v));
+    const courante = I18n.langue();
+    const options = I18n.langues().map(l =>
+        '<option value="' + esc(l.code) + '" style="color:#333; background:#fff;"' +
+        (l.code === courante ? " selected" : "") + ">" + esc(l.libelle) + "</option>").join("");
+    return '<div class="sidebar-divider">' + esc(t("langue.titre")) +
+        (typeof Help !== "undefined" ? Help.tip(t("langue.aide")) : "") + "</div>" +
+        '<select id="langue-selector" aria-label="' + esc(t("langue.titre")) + '"' +
+        ' style="width:100%; padding:6px; background:rgba(255,255,255,0.15); color:white;' +
+        ' border:1px solid rgba(255,255,255,0.2); border-radius:4px; font-size:0.85rem;' +
+        ' cursor:pointer; outline:none;">' + options + "</select>";
+}
+
+/**
+ * Branche le sélecteur. **Aucun gestionnaire en ligne** : la politique de
+ * sécurité de contenu du vhost les rend inertes, en silence (constat M-6).
+ *
+ * ⚠️ Le code de langue est **lu dans le DOM au moment du geste**, jamais
+ * capturé dans une fermeture (`CLAUDE.md` §3).
+ */
+function brancherSelecteurLangue() {
+    const select = document.getElementById("langue-selector");
+    if (!select || typeof I18n === "undefined") return;
+    select.addEventListener("change", () => { window.changerLangue(select.value); });
+}
+
+/**
+ * Applique une langue à TOUT ce qui est déjà à l'écran.
+ *
+ * ⚠️ Trois surfaces, et en oublier une laisse un écran à moitié traduit — le
+ * défaut exact que le §37.2 cherche à rendre impossible :
+ *
+ *   · le **balisage statique** d'`index.html` (barre latérale) — `data-i18n` ;
+ *   · les **blocs de la barre latérale** reconstruits en JavaScript ;
+ *   · la **vue courante**, qu'on redessine en renavigant sans toucher à
+ *     l'adresse (`navigateTo(route, false)`), donc sans rien perdre.
+ */
+window.changerLangue = function (code) {
+    if (typeof I18n === "undefined") return;
+    I18n.definir(code);
+    I18n.appliquerAuDocument();
+    if (window.renderContextSelector) window.renderContextSelector();
+    if (window.renderBlocUtilisateur) window.renderBlocUtilisateur();
+    const route = location.hash.replace(/^#/, "") || "/dashboard";
+    Router.navigateTo(route, false);
+    if (window.showToast) window.showToast(t("langue.changee"), "info");
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -476,12 +567,8 @@ function selecteurFilialeHtml() {
         esc(libelleFilialeCatalogue(f)) + "</option>").join("");
 
     return '<label for="filiale-selector" style="display:block; margin-top:8px; font-size:0.72rem; opacity:0.85; color:#fff;">' +
-        "Filiale d'écriture" +
-        (typeof Help !== "undefined" ? Help.tip(
-            "La filiale dans laquelle vos saisies seront enregistrées. Le choix est " +
-            "envoyé au serveur, qui vérifie qu'elle fait partie de votre périmètre : " +
-            "l'affichage ne change qu'une fois sa réponse reçue. Basculer ne vous " +
-            "donne aucun droit supplémentaire et ne change pas ce que vous pouvez lire.") : "") +
+        t("perimetre.filialeEcriture") +
+        (typeof Help !== "undefined" ? Help.tip(t("perimetre.filialeEcritureAide")) : "") +
         "</label>" +
         '<select id="filiale-selector" style="width:100%; padding:6px; background:rgba(255,255,255,0.15); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:4px; font-size:0.85rem; cursor:pointer; outline:none;">' +
         options + "</select>";
@@ -536,18 +623,14 @@ window.changerFilialeActive = async function (filialeChoisie) {
             }
             if (etat.enAttente || etat.enCours) {
                 if (window.showToast) {
-                    window.showToast(
-                        "Des modifications ne sont pas encore enregistrées sur le serveur. " +
-                        "Elles appartiennent à la filiale actuelle : la bascule est refusée " +
-                        "tant qu'elles n'ont pas abouti.", "error");
+                    window.showToast(t("bandeau.bascule.enAttente"), "error");
                 }
                 if (window.renderContextSelector) window.renderContextSelector();
                 return false;
             }
         } catch (e) {
             if (window.showToast) {
-                window.showToast("Impossible de mettre les modifications à l'abri avant de " +
-                    "changer de filiale. La bascule est refusée.", "error");
+                window.showToast(t("bandeau.bascule.echecMiseAbri"), "error");
             }
             if (window.renderContextSelector) window.renderContextSelector();
             return false;
@@ -625,7 +708,7 @@ window.changerFilialeActive = async function (filialeChoisie) {
             if (window.showToast) {
                 // Le libellé vient de la SESSION, pas du choix : c'est la même
                 // règle, jusque dans le message.
-                window.showToast("Filiale d'écriture : " + Session.libelleFiliale() + ".", "success");
+                window.showToast(t("bandeau.filialeEcriture", { filiale: Session.libelleFiliale() }), "success");
             }
         }
         return change;
@@ -656,18 +739,19 @@ window.changerFilialeActive = async function (filialeChoisie) {
  * n'a rien saisi, il n'y a rien à perdre, et l'écran est resté au même endroit.
  */
 function messageRefusFiliale(e) {
-    if (!e) return "Le changement de filiale a échoué.";
+    if (!e) return t("bandeau.bascule.echec");
     if (e.statut === 403) {
-        return "Cette filiale ne fait pas partie de votre périmètre. Rien n'a changé : " +
-            "vous écrivez toujours dans « " + Session.libelleFiliale() + " ». " +
-            "Le périmètre vient de vos groupes Active Directory, et le serveur seul le décide.";
+        return t("bandeau.bascule.horsPerimetre", { filiale: Session.libelleFiliale() });
     }
     if (e.estNonAuthentifie && e.estNonAuthentifie()) {
-        return "Votre session n'est plus ouverte sur le serveur. Reconnectez-vous : la filiale " +
-            "d'écriture n'a pas changé.";
+        return t("bandeau.bascule.sessionFermee");
     }
-    return (e.message || String(e)) + " Rien n'a changé : vous écrivez toujours dans « " +
-        Session.libelleFiliale() + " ».";
+    // ⚠️ `message` vient du SERVEUR, et le serveur rédige en français (§37.5).
+    // On ne le traduit pas — on l'encadre d'une phrase qui, elle, suit la langue.
+    return t("bandeau.bascule.riensChange", {
+        message: (e.message || String(e)),
+        filiale: Session.libelleFiliale()
+    });
 }
 
 /* =========================
@@ -709,7 +793,7 @@ window.refreshEcheancesBadge = function() {
     if (n > 0) {
         el.textContent = n;
         el.hidden = false;
-        el.setAttribute("title", n + " échéance(s) en retard");
+        el.setAttribute("title", t("bandeau.echeancesEnRetard", { n: n }));
     } else {
         el.hidden = true;
     }
@@ -725,7 +809,25 @@ window.showToast = function(message, type = "success") {
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
 
-    toast.innerHTML = `<span>${message}</span>`;
+    /* ⚠️ **UN BANDEAU EST UN CONTEXTE TEXTE, ET IL NE L'ÉTAIT PAS.**
+     *
+     * Cette ligne écrivait `innerHTML = "<span>" + message + "</span>"`. Or les
+     * quatre-vingt-quatorze appels du produit y font passer des données : un nom
+     * de filiale venu de l'annuaire, un message rédigé par le serveur, un
+     * intitulé saisi par l'utilisateur. Aucun n'échappait quoi que ce soit, et
+     * aucun ne passait de balisage volontaire — vérifié sur les 94 sites.
+     *
+     * Le lot L10 l'aurait aggravé sans le fermer : une phrase traduite qui
+     * interpole une valeur (« Filiale d'écriture : {filiale}. ») rend la donnée
+     * invisible à l'œil du relecteur. On ferme donc la classe ici plutôt que de
+     * rapiécer les appelants — `textContent` ne peut rien interpréter, et le
+     * `<span>` que le style attend est créé, pas concaténé.
+     *
+     * Conséquence pour les appelants : **`showToast` prend du TEXTE**. On y
+     * emploie `t()`, jamais `tHtml()`, qui échapperait une seconde fois. */
+    const corps = document.createElement("span");
+    corps.textContent = String(message == null ? "" : message);
+    toast.appendChild(corps);
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -899,10 +1001,9 @@ function signalerCouvertureIncomplete(manques) {
     host.innerHTML =
         '<div class="quota-banner" role="alert">' +
         '<span class="quota-ico">!</span>' +
-        '<span class="quota-text"><b>Écrans non rattachés à un domaine de droits</b> : ' +
+        '<span class="quota-text"><b>' + esc(t("bandeau.ecransNonRattaches")) + '</b> : ' +
         esc(manques.join(" ; ")) +
-        '. Ces écrans restent accessibles — l\'interface ne masque pas ce que personne n\'a ' +
-        'décidé de masquer — mais le serveur, lui, décide seul. Signalez-le à votre exploitant.</span>' +
+        '. ' + esc(t("bandeau.ecransNonRattachesTexte")) + '</span>' +
         '</div>';
 }
 
@@ -1013,7 +1114,7 @@ function neutraliserEcritures(route) {
 
         if (estExport && !extraction) {
             bouton.disabled = true;
-            bouton.title = "Le droit d'export n'est pas accordé à votre profil.";
+            bouton.title = t("bandeau.exportNonAccorde");
             return;
         }
         if (estExport) return;               // export autorisé : on n'y touche pas
@@ -1021,7 +1122,7 @@ function neutraliserEcritures(route) {
         if (estBoutonDeConsultation(bouton)) return;
 
         bouton.disabled = true;
-        bouton.title = "Votre profil est en lecture seule sur cet écran.";
+        bouton.title = t("bandeau.lectureSeule");
     });
 }
 
@@ -1089,19 +1190,18 @@ window.renderBlocUtilisateur = function () {
     const profil = (typeof Droits !== "undefined" && Droits.connus())
         ? Droits.niveau() : "";
     bloc.innerHTML =
-        '<div class="sidebar-divider">Compte</div>' +
+        '<div class="sidebar-divider">' + esc(t("compte.titre")) + '</div>' +
         '<div style="font-size:0.85rem; font-weight:600; color:#fff;">' +
         esc(Session.libelleUtilisateur()) + '</div>' +
-        (profil ? '<div style="font-size:0.78rem; opacity:0.75; color:#fff;">Accès : ' +
-            esc(profil) +
-            (typeof Help !== "undefined" ? Help.tip(
-                "Votre niveau d'accès. « Lecture » consulte sans modifier ; « contribution » " +
-                "saisit et met à jour ; « validation » approuve ; « administration » gère " +
-                "filiales, droits et paramètres. Le droit d'export est accordé à part : " +
-                "extraire un jeu de données complet est une opération journalisée.") : "") +
-            (Droits.peutExporter() ? ' · export autorisé' : '') + '</div>' : '') +
+        // ⚠️ `profil` est une valeur venue du serveur : elle passe par `tHtml`,
+        // qui l'échappe avant de la coudre dans la phrase traduite.
+        (profil ? '<div style="font-size:0.78rem; opacity:0.75; color:#fff;">' +
+            tHtml("compte.acces", { niveau: profil }) +
+            (typeof Help !== "undefined" ? Help.tip(t("compte.accesAide")) : "") +
+            (Droits.peutExporter() ? esc(t("compte.exportAutorise")) : '') + '</div>' : '') +
         '<button type="button" id="deconnexion-btn" class="reminder-btn" ' +
-        'style="margin-top:8px; width:100%; justify-content:center;">Se déconnecter</button>';
+        'style="margin-top:8px; width:100%; justify-content:center;">' +
+        esc(t("compte.seDeconnecter")) + '</button>';
     entete.appendChild(bloc);
 
     const bouton = document.getElementById("deconnexion-btn");

@@ -365,7 +365,11 @@ const DashboardModule = (() => {
 
         /* ---- Couverture du dispositif ---- */
         const processusCritiques = processus.filter(p => norm(p.criticite) === "critique").length;
-        const testsSorted = [...tests].filter(t => t.date).sort((a, b) => new Date(b.date) - new Date(a.date));
+        // ⚠️ Le paramètre s'appelait `t` — le nom de la fonction de traduction
+        // (lot L10). Rien ne cassait ici : cette fermeture n'appelle aucune
+        // traduction. Mais c'était un piège posé pour le prochain qui écrira une
+        // ligne de plus dedans, et il aurait échoué à l'exécution seulement.
+        const testsSorted = [...tests].filter(essai => essai.date).sort((a, b) => new Date(b.date) - new Date(a.date));
         const lastTest = testsSorted[0] || null;
         // Actions MCO en retard : date programmée dépassée sans réalisation (source unique dans PraMcoModule).
         const mcoRetardFn = (typeof PraMcoModule !== "undefined" && PraMcoModule.isEnRetard) ? PraMcoModule.isEnRetard : () => false;
@@ -608,7 +612,7 @@ const DashboardModule = (() => {
 
         // -- Carte large : Cartographie (heatmap) + Top 5 risques --
         const topRisquesHtml = topRisques.length === 0
-            ? `<p class="chart-empty">Aucun risque à afficher.</p>`
+            ? `<p class="chart-empty">${t("dashboard.aucunRisqueAfficher")}</p>`
             : `<ul style="list-style:none; padding:0; margin:0.6rem 0 0;">
                 ${topRisques.map(r => {
                     const score = r.score_residuel || 0;
@@ -621,16 +625,16 @@ const DashboardModule = (() => {
         const cartoCard = `
             <div class="dashboard-card wide-card split-card">
                 <div class="split-col">
-                    <h3 style="margin-top:0;">Cartographie des risques ${Help.tip("Matrice Fréquence × Gravité (méthode EBIOS). La couleur traduit la criticité brute F×G ; le nombre indique combien de risques occupent la case.")}</h3>
+                    <h3 style="margin-top:0;">${t("dashboard.cartographieRisques")} ${Help.tip(t("dashboard.cartographieAide"))}</h3>
                     ${risques.length === 0
-                        ? `<p class="chart-empty">Aucun risque à cartographier.</p>`
+                        ? `<p class="chart-empty">${t("dashboard.aucunRisqueCartographier")}</p>`
                         : `<div class="heat-wrap dash-nav" data-route="/matrice" title="Ouvrir la matrice des risques">
                             ${heatmapSvg(risques)}
                             <div class="heat-cap">Couleur = criticité brute (F×G) · bulle = nombre de risques. Cliquez pour la matrice détaillée.</div>
                            </div>`}
                 </div>
                 <div class="split-col">
-                    <h3 style="margin-top:0;">Top 5 des risques résiduels ${Help.tip("Les cinq scénarios au plus fort risque résiduel — à traiter en priorité.")}</h3>
+                    <h3 style="margin-top:0;">${t("dashboard.topRisques")} ${Help.tip(t("dashboard.topRisquesAide"))}</h3>
                     ${topRisquesHtml}
                 </div>
             </div>`;
@@ -642,14 +646,14 @@ const DashboardModule = (() => {
                 ${watch.map(a => {
                     const late = a._days < 0;
                     const badge = late
-                        ? `<span class="wi-badge late">Retard ${Math.abs(a._days)} j</span>`
-                        : `<span class="wi-badge soon">${a._days === 0 ? "Aujourd'hui" : "J-" + a._days}</span>`;
-                    const ech = a.echeance ? new Date(a.echeance).toLocaleDateString("fr-FR") : "—";
+                        ? `<span class="wi-badge late">${tHtml("dashboard.retardJours", { n: Math.abs(a._days) })}</span>`
+                        : `<span class="wi-badge soon">${a._days === 0 ? tHtml("dashboard.aujourdhui") : tHtml("dashboard.jMoins", { n: a._days })}</span>`;
+                    const ech = a.echeance ? I18n.date(a.echeance) : "—";
                     return `<li class="watch-item dash-action-item" data-id="${escapeHtml(a.id)}">
                         <span class="wi-prio" style="background:${prioColor(a.priorite || "Moyenne")};" title="Priorité ${escapeHtml(a.priorite || "Moyenne")}"></span>
                         <span class="wi-body">
-                            <span class="wi-title" title="${escapeHtml(a.titre || "")}">${escapeHtml(a.titre || "(sans titre)")}</span>
-                            <span class="wi-meta">Échéance ${ech}${a.responsable ? " · " + escapeHtml(a.responsable) : ""}</span>
+                            <span class="wi-title" title="${escapeHtml(a.titre || "")}">${escapeHtml(a.titre || t("dashboard.sansTitre"))}</span>
+                            <span class="wi-meta">${tHtml("dashboard.echeanceLe", { date: ech })}${a.responsable ? " · " + escapeHtml(a.responsable) : ""}</span>
                         </span>
                         ${badge}
                     </li>`;
@@ -657,7 +661,7 @@ const DashboardModule = (() => {
               </ul>`;
         const actifsMax = Math.max(1, critByLevel.critique, critByLevel["élevée"], critByLevel["modérée"], critByLevel.faible);
         const actifsBars = actifs.length === 0
-            ? `<p class="chart-empty">Aucun actif inventorié.</p>`
+            ? `<p class="chart-empty">${t("dashboard.aucunActif")}</p>`
             : hbar("Critique", critByLevel.critique, actifsMax, "var(--color-danger)")
               + hbar("Élevée", critByLevel["élevée"], actifsMax, "var(--color-warning)")
               + hbar("Modérée", critByLevel["modérée"], actifsMax, "var(--color-info)")
@@ -665,13 +669,13 @@ const DashboardModule = (() => {
         const watchCard = `
             <div class="dashboard-card wide-card split-card">
                 <div class="split-col">
-                    <h3 style="margin-top:0;">Actions à surveiller ${Help.tip("Actions non terminées en retard (échéance dépassée) ou arrivant à échéance sous 30 jours, triées par urgence.")}</h3>
+                    <h3 style="margin-top:0;">${t("dashboard.actionsASurveiller")} ${Help.tip(t("dashboard.actionsASurveillerAide"))}</h3>
                     ${watchHtml}
                 </div>
                 <div class="split-col">
-                    <h3 style="margin-top:0;">Actifs par criticité ${Help.tip("Répartition de l'inventaire des actifs (SI & OT) selon leur criticité pour l'organisation.")}</h3>
+                    <h3 style="margin-top:0;">${t("dashboard.actifsParCriticite")} ${Help.tip(t("dashboard.actifsParCriticiteAide"))}</h3>
                     ${actifsBars}
-                    <button type="button" class="dash-nav" data-route="/actifs" style="width:100%; margin-top:1rem; justify-content:center; background:#fff; color:var(--primary); border:1px solid var(--border);">Gérer les actifs</button>
+                    <button type="button" class="dash-nav" data-route="/actifs" style="width:100%; margin-top:1rem; justify-content:center; background:#fff; color:var(--primary); border:1px solid var(--border);">${t("dashboard.gererActifs")}</button>
                 </div>
             </div>`;
 
@@ -719,17 +723,17 @@ const DashboardModule = (() => {
         // -- Carte large : Incidents récents + Documents à réviser --
         const gravColor = g => { g = norm(g); return g === "critique" ? "var(--color-danger)" : g === "élevée" ? "var(--color-warning)" : g === "moyenne" ? "var(--color-info)" : "var(--color-gray)"; };
         const incidentsRecentsHtml = incidentsRecents.length === 0
-            ? `<p class="chart-empty">Aucun incident enregistré.</p>`
+            ? `<p class="chart-empty">${t("dashboard.aucunIncident")}</p>`
             : `<ul class="watch-list">${incidentsRecents.map(i => {
                 const decl = norm(i.declaration_anssi) === "à déclarer" || norm(i.declaration_cnil) === "à déclarer";
-                const date = i.date_detection ? new Date(i.date_detection).toLocaleDateString("fr-FR") : "—";
+                const date = i.date_detection ? I18n.date(i.date_detection) : "—";
                 return `<li class="watch-item dash-incident-item" data-id="${escapeHtml(i.id)}">
                     <span class="wi-prio" style="background:${gravColor(i.gravite)};" title="Gravité ${escapeHtml(i.gravite || "")}"></span>
                     <span class="wi-body">
-                        <span class="wi-title" title="${escapeHtml(i.titre || "")}">${escapeHtml(i.titre || "(sans titre)")}</span>
-                        <span class="wi-meta">${escapeHtml(i.type || "incident")} · détecté le ${date} · ${escapeHtml(i.statut || "")}</span>
+                        <span class="wi-title" title="${escapeHtml(i.titre || "")}">${escapeHtml(i.titre || t("dashboard.sansTitre"))}</span>
+                        <span class="wi-meta">${escapeHtml(i.type ? I18n.valeur(i.type) : "incident")} · ${escapeHtml(t("dashboard.detecteLe"))} ${escapeHtml(date)} · ${escapeHtml(I18n.valeur(i.statut || ""))}</span>
                     </span>
-                    ${decl ? `<span class="wi-badge late">À déclarer</span>` : ""}
+                    ${decl ? `<span class="wi-badge late">${tHtml("dashboard.aDeclarer")}</span>` : ""}
                 </li>`;
             }).join("")}</ul>`;
         const docsRevisionHtml = docsRevision.length === 0
@@ -739,15 +743,15 @@ const DashboardModule = (() => {
                 const soon = d._days !== null && d._days >= 0 && d._days <= 30;
                 const dotColor = late ? "var(--color-danger)" : soon ? "var(--color-warning)" : "var(--color-info)";
                 let badge = "";
-                if (late) badge = `<span class="wi-badge late">Retard ${Math.abs(d._days)} j</span>`;
-                else if (soon) badge = `<span class="wi-badge soon">${d._days === 0 ? "Aujourd'hui" : "J-" + d._days}</span>`;
+                if (late) badge = `<span class="wi-badge late">${tHtml("dashboard.retardJours", { n: Math.abs(d._days) })}</span>`;
+                else if (soon) badge = `<span class="wi-badge soon">${d._days === 0 ? tHtml("dashboard.aujourdhui") : tHtml("dashboard.jMoins", { n: d._days })}</span>`;
                 else if (norm(d.statut) === "à réviser" || norm(d.statut) === "obsolète") badge = `<span class="wi-badge late">${escapeHtml(d.statut)}</span>`;
-                const rev = d.date_revue ? new Date(d.date_revue).toLocaleDateString("fr-FR") : "—";
+                const rev = d.date_revue ? I18n.date(d.date_revue) : "—";
                 return `<li class="watch-item dash-doc-item" data-id="${escapeHtml(d.id)}">
                     <span class="wi-prio" style="background:${dotColor};" title="${escapeHtml(d.statut || "")}"></span>
                     <span class="wi-body">
-                        <span class="wi-title" title="${escapeHtml(d.titre || "")}">${escapeHtml(d.titre || "(sans titre)")}</span>
-                        <span class="wi-meta">${escapeHtml(d.type || "document")}${d.version ? " · v" + escapeHtml(d.version) : ""} · revue ${rev}</span>
+                        <span class="wi-title" title="${escapeHtml(d.titre || "")}">${escapeHtml(d.titre || t("dashboard.sansTitre"))}</span>
+                        <span class="wi-meta">${escapeHtml(d.type || "document")}${d.version ? " · v" + escapeHtml(d.version) : ""} · ${escapeHtml(t("dashboard.revue"))} ${escapeHtml(rev)}</span>
                     </span>
                     ${badge}
                 </li>`;
@@ -755,11 +759,11 @@ const DashboardModule = (() => {
         const suiviCard = `
             <div class="dashboard-card wide-card split-card">
                 <div class="split-col">
-                    <h3 style="margin-top:0;">Incidents récents ${Help.tip("Les derniers incidents de sécurité déclarés, du plus récent au plus ancien. « À déclarer » signale une obligation réglementaire en attente (NIS2/RGPD).")}</h3>
+                    <h3 style="margin-top:0;">${t("dashboard.incidentsRecents")} ${Help.tip(t("dashboard.incidentsRecentsAide"))}</h3>
                     ${incidentsRecentsHtml}
                 </div>
                 <div class="split-col">
-                    <h3 style="margin-top:0;">Documents à réviser ${Help.tip("Politiques et documents dont la revue est échue ou proche (≤ 30 jours), ou marqués « à réviser » / « obsolète ».")}${docsAlertCount ? ` <span class="badge" style="background:var(--color-danger); color:#fff;">${docsAlertCount}</span>` : ""}</h3>
+                    <h3 style="margin-top:0;">${t("dashboard.documentsAReviser")} ${Help.tip(t("dashboard.documentsAReviserAide"))}${docsAlertCount ? ` <span class="badge" style="background:var(--color-danger); color:#fff;">${docsAlertCount}</span>` : ""}</h3>
                     ${docsRevisionHtml}
                 </div>
             </div>`;
@@ -773,14 +777,14 @@ const DashboardModule = (() => {
             : `<ul class="watch-list">${echTop.map(it => {
                 const late = it.jours < 0, soon = it.jours >= 0 && it.jours <= 7;
                 const dot = late ? "var(--color-danger)" : soon ? "var(--color-warning)" : "var(--color-info)";
-                const badge = late ? `<span class="wi-badge late">Retard ${-it.jours} j</span>`
-                    : it.jours === 0 ? `<span class="wi-badge late">Aujourd'hui</span>`
-                    : `<span class="wi-badge soon">J-${it.jours}</span>`;
-                const dstr = it.date ? new Date(it.date + "T00:00:00").toLocaleDateString("fr-FR") : "—";
+                const badge = late ? `<span class="wi-badge late">${tHtml("dashboard.retardJours", { n: -it.jours })}</span>`
+                    : it.jours === 0 ? `<span class="wi-badge late">${tHtml("dashboard.aujourdhui")}</span>`
+                    : `<span class="wi-badge soon">${tHtml("dashboard.jMoins", { n: it.jours })}</span>`;
+                const dstr = it.date ? I18n.date(it.date) : "—";
                 return `<li class="watch-item dash-ech-item" data-route="${escapeHtml(it.route.replace(/^#/, ""))}">
                     <span class="wi-prio" style="background:${dot};"></span>
                     <span class="wi-body">
-                        <span class="wi-title" title="${escapeHtml(it.titre || "")}">${escapeHtml(it.titre || "(sans intitulé)")}</span>
+                        <span class="wi-title" title="${escapeHtml(it.titre || "")}">${escapeHtml(it.titre || t("dashboard.sansIntitule"))}</span>
                         <span class="wi-meta">${escapeHtml(it.typeLabel)} · ${dstr}</span>
                     </span>
                     ${badge}
@@ -788,9 +792,9 @@ const DashboardModule = (() => {
             }).join("")}</ul>`;
         const echeancierCard = `
             <div class="dashboard-card wide-card">
-                <h3 style="margin-top:0;">Prochaines échéances ${Help.tip("Les obligations datées les plus urgentes, tous modules confondus (plan d'actions, MCO, revues documentaires, incidents à déclarer, audits, revues de direction). Ouvrez l'Échéancier pour la vue complète et le calendrier.")}${echCounts.retard ? ` <span class="badge" style="background:var(--color-danger); color:#fff;">${echCounts.retard} en retard</span>` : ""}</h3>
+                <h3 style="margin-top:0;">${t("dashboard.prochainesEcheances")} ${Help.tip(t("dashboard.prochainesEcheancesAide"))}${echCounts.retard ? ` <span class="badge" style="background:var(--color-danger); color:#fff;">${tHtml("dashboard.enRetardBadge", { n: echCounts.retard })}</span>` : ""}</h3>
                 ${echHtml}
-                <button type="button" class="dash-nav" data-route="/echeances" style="width:100%; margin-top:1rem; justify-content:center; background:#fff; color:var(--primary); border:1px solid var(--border);">Voir tout l'échéancier</button>
+                <button type="button" class="dash-nav" data-route="/echeances" style="width:100%; margin-top:1rem; justify-content:center; background:#fff; color:var(--primary); border:1px solid var(--border);">${t("dashboard.voirEcheancier")}</button>
             </div>`;
 
         // -- État vide (onboarding) --
@@ -813,8 +817,8 @@ const DashboardModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>Tableau de bord</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">Périmètre d'analyse : <strong>${escapeHtml(contextName)}</strong></p>
+                        <h1>${t("dashboard.titre")}</h1>
+                        <p style="color:var(--text-muted); margin-top:5px;">${t("dashboard.perimetreAnalyse")} <strong>${escapeHtml(contextName)}</strong></p>
                     </div>
                     <div class="dashboard-actions no-print">
                         <button id="exportExcelBtn" style="margin-right:10px;">Export Data (Excel)</button>

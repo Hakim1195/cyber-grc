@@ -12,10 +12,12 @@ const ExigencesModule = (() => {
         const clients = DataStore.getClients();
         const app = document.getElementById("app");
 
-        let contextName = "Globales et Tous Clients";
+        // ⚠️ Injecté en `innerHTML`, et le nom du client vient de l'utilisateur :
+        // `tHtml`, qui échappe la valeur substituée (§37, injection).
+        let contextName = tHtml("exigences.globalesEtClients");
         if (currentClient !== "global") {
             const c = clients.find(cl => cl.id === currentClient);
-            if (c) contextName = `Spécifiques à : ${c.nom}`;
+            if (c) contextName = tHtml("exigences.specifiques", { client: c.nom });
         }
 
         const rows = exigences.map(e => `
@@ -27,11 +29,11 @@ const ExigencesModule = (() => {
                 <td>${escapeHtml(e.intitule)}</td>
                 <td>
                     <span class="status status-${(e.statut_conformite || '').replace(/\s+/g, "-")}">
-                        ${escapeHtml(e.statut_conformite)}
+                        ${escapeHtml(I18n.valeur(e.statut_conformite))}
                     </span>
                 </td>
                 <td>${escapeHtml(e.responsable) || "-"}</td>
-                ${currentClient === "global" ? `<td style="font-size:0.8rem; color:var(--text-muted);">${e.client_id ? escapeHtml(clients.find(c => c.id === e.client_id)?.nom || "Inconnu") : "Interne"}</td>` : ""}
+                ${currentClient === "global" ? `<td style="font-size:0.8rem; color:var(--text-muted);">${e.client_id ? escapeHtml(clients.find(c => c.id === e.client_id)?.nom || t("commun.inconnu")) : escapeHtml(t("commun.interne"))}</td>` : ""}
             </tr>
         `).join("");
 
@@ -39,13 +41,13 @@ const ExigencesModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>Exigences de sécurité</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Périmètre affiché : <strong>${contextName}</strong></p>
+                        <h1>${t("exigences.titre")}</h1>
+                        <p style="color: var(--text-muted); margin-top: 5px;">${t("exigences.perimetreAffiche")} <strong>${contextName}</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
-                        <a href="#/imports" class="btn-secondary" data-lecture="ok" title="L'import généralisé : transactionnel (tout ou rien), idempotent par fichier, avec aperçu avant validation et rapport ligne par ligne">Importer…</a>
-                        <button id="addExigenceBtn" style="background-color: var(--primary);">Saisie Manuelle</button>
+                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">${t("commun.supprimerSelection")} (<span id="selectedCount">0</span>)</button>
+                        <a href="#/imports" class="btn-secondary" data-lecture="ok" title="${t("commun.importerAide")}">${t("commun.importer")}</a>
+                        <button id="addExigenceBtn" style="background-color: var(--primary);">${t("exigences.saisieManuelle")}</button>
                     </div>
                 </div>
 
@@ -53,15 +55,15 @@ const ExigencesModule = (() => {
                     <thead>
                         <tr>
                             <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllCb"></th>
-                            <th>Code</th>
-                            <th>Intitulé</th>
-                            <th>Statut</th>
-                            <th>Responsable</th>
-                            ${currentClient === "global" ? `<th>Origine (Client)</th>` : ""}
+                            <th>${t("exigences.colCode")}</th>
+                            <th>${t("exigences.colIntitule")}</th>
+                            <th>${t("commun.statut")}</th>
+                            <th>${t("commun.responsable")}</th>
+                            ${currentClient === "global" ? `<th>${t("exigences.colOrigine")}</th>` : ""}
                         </tr>
                     </thead>
                     <tbody>
-                        ${rows || "<tr><td colspan='6' style='text-align:center;'>Aucune exigence pour ce périmètre.</td></tr>"}
+                        ${rows || `<tr><td colspan='6' style='text-align:center;'>${t("exigences.aucune")}</td></tr>`}
                     </tbody>
                 </table>
             </section>
@@ -94,8 +96,8 @@ const ExigencesModule = (() => {
 
         UI.wireBulkDelete({
             remove: (id) => DataStore.deleteExigence(id),
-            confirm: (n) => `Confirmer la suppression de ${n} exigence(s) ? Les actions associées seront également supprimées.`,
-            toast: (n) => `${n} exigence(s) supprimée(s).`,
+            confirm: (n) => t("exigences.confirmerSuppressionMultiple", { n: n }),
+            toast: (n) => t("exigences.supprimees", { n: n }),
             onDone: () => renderList()
         });
 
@@ -112,53 +114,53 @@ const ExigencesModule = (() => {
         const currentClient = window.FiltreDonneurOrdre ? FiltreDonneurOrdre.get() : "global";   // filtre en mémoire (app.js), plus dans le localStorage
         const clients = DataStore.getClients();
 
-        let contextInfo = "Cette exigence sera <strong>globale (Interne)</strong>.";
+        let contextInfo = tHtml("exigences.contexteGlobal");
         if (currentClient !== "global") {
             const c = clients.find(cl => cl.id === currentClient);
-            if (c) contextInfo = `Cette exigence sera rattachée au client : <strong>${c.nom}</strong>.`;
+            if (c) contextInfo = tHtml("exigences.contexteClient", { client: c.nom });
         }
 
         app.innerHTML = `
             <section class="page">
-                <h1>Nouvelle exigence</h1>
+                <h1>${t("exigences.nouvelle")}</h1>
                 <div class="synthese-message info" style="margin-bottom: 20px; padding: 10px;">
                     ${contextInfo}
                 </div>
 
                 <div class="dashboard-card">
                     <div class="form-group">
-                        <label>Code (ex: ISO-A.5.1) <span style="color:red">*</span></label>
-                        <input id="code" placeholder="Référence de l'exigence" required />
+                        <label>${t("exigences.codeLabel")} <span style="color:red">*</span></label>
+                        <input id="code" placeholder="${t("exigences.codePlaceholder")}" required />
                     </div>
 
                     <div class="form-group">
-                        <label>Intitulé <span style="color:red">*</span></label>
-                        <input id="intitule" placeholder="Description courte de l'exigence" required />
+                        <label>${t("exigences.colIntitule")} <span style="color:red">*</span></label>
+                        <input id="intitule" placeholder="${t("exigences.intitulePlaceholder")}" required />
                     </div>
 
                     <div class="form-group">
-                        <label>Statut de conformité ${Help.tip("Niveau de respect de l'exigence : Conforme, Partiellement conforme, Non conforme ou Non applicable. Il alimente le taux de conformité et la déclaration d'applicabilité (SoA).")}</label>
+                        <label>${t("exigences.statutConformite")} ${Help.tip(t("exigences.statutConformiteAide"))}</label>
                         <select id="statut">
-                            <option value="non conforme">Non conforme</option>
-                            <option value="partiellement conforme">Partiellement conforme</option>
-                            <option value="conforme">Conforme</option>
-                            <option value="non applicable">Non applicable</option>
+                            <option value="non conforme">${I18n.valeur("non conforme")}</option>
+                            <option value="partiellement conforme">${I18n.valeur("partiellement conforme")}</option>
+                            <option value="conforme">${I18n.valeur("conforme")}</option>
+                            <option value="non applicable">${I18n.valeur("non applicable")}</option>
                         </select>
                     </div>
 
                     <div class="form-group">
-                        <label>Responsable</label>
-                        <input id="responsable" list="personnes-list" placeholder="Nom ou fonction" />
+                        <label>${t("commun.responsable")}</label>
+                        <input id="responsable" list="personnes-list" placeholder="${t("exigences.responsablePlaceholder")}" />
                     </div>
 
                     <div class="form-group">
-                        <label>Commentaire / Justification</label>
-                        <textarea id="commentaire" placeholder="Détails sur l'état de conformité..."></textarea>
+                        <label>${t("exigences.commentaireJustification")}</label>
+                        <textarea id="commentaire" placeholder="${t("exigences.commentairePlaceholder")}"></textarea>
                     </div>
 
                     <div style="margin-top: 20px;">
-                        <button id="save">Enregistrer</button>
-                        <button id="cancel" style="margin-left: 10px;">Annuler</button>
+                        <button id="save">${t("commun.enregistrer")}</button>
+                        <button id="cancel" style="margin-left: 10px;">${t("commun.annuler")}</button>
                     </div>
                 </div>
             </section>
@@ -169,7 +171,7 @@ const ExigencesModule = (() => {
             const intitule = document.getElementById("intitule").value.trim();
 
             if (!code || !intitule) {
-                alert("Veuillez remplir les champs obligatoires (Code et Intitulé).");
+                alert(t("exigences.champsObligatoires"));
                 return;
             }
 
@@ -183,7 +185,7 @@ const ExigencesModule = (() => {
                 commentaire: document.getElementById("commentaire").value.trim()
             });
 
-            if (window.showToast) window.showToast("Exigence créée avec succès.", "success");
+            if (window.showToast) window.showToast(t("exigences.creee"), "success");
             Router.navigateTo("/exigences");
         };
 
@@ -201,25 +203,25 @@ const ExigencesModule = (() => {
         const app = document.getElementById("app");
 
         if (!exigence) {
-            app.innerHTML = `<section class="page"><h1>Erreur</h1><p>Introuvable.</p><button type="button" id="backBtn">Retour</button></section>`;
+            app.innerHTML = `<section class="page"><h1>${t("commun.erreur")}</h1><p>${t("exigences.introuvable")}</p><button type="button" id="backBtn">${t("commun.retour")}</button></section>`;
             document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/exigences"));
             return;
         }
 
         const clientAssocie = exigence.client_id ? clients.find(c => c.id === exigence.client_id) : null;
-        const clientNom = clientAssocie ? clientAssocie.nom : "Globale (Interne)";
+        const clientNom = clientAssocie ? clientAssocie.nom : t("exigences.globaleInterne");
 
         const risquesHtml = risques.filter(r =>
             Array.isArray(r.exigences_liees) && r.exigences_liees.includes(exigence.id)
         ).map(r => `
             <li class="matrix-risk clickable-risk" data-id="${r.id}" style="margin-bottom: 8px;">
-                <strong>${escapeHtml(r.nom)}</strong> — Niveau: <span style="text-transform: capitalize;">${escapeHtml(r.niveau)}</span>
+                <strong>${escapeHtml(r.nom)}</strong> — ${t("exigences.niveau")} <span style="text-transform: capitalize;">${escapeHtml(I18n.valeur(r.niveau))}</span>
             </li>
         `).join("");
 
         const actionsHtml = actions.map(a => `
             <li class="clickable-action" data-id="${a.id}" style="padding: 8px; background: #f9f9f9; border-radius: 4px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid var(--accent);">
-                <strong>${escapeHtml(a.titre)}</strong> — Statut: <em>${escapeHtml(a.statut)}</em>
+                <strong>${escapeHtml(a.titre)}</strong> — ${t("commun.statut")} : <em>${escapeHtml(I18n.valeur(a.statut))}</em>
             </li>
         `).join("");
 
@@ -228,46 +230,46 @@ const ExigencesModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>${escapeHtml(exigence.code)}</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Origine : <strong>${escapeHtml(clientNom)}</strong></p>
+                        <p style="color: var(--text-muted); margin-top: 5px;">${t("exigences.origine")} <strong>${escapeHtml(clientNom)}</strong></p>
                     </div>
-                    <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
+                    <button id="deleteBtn" style="background-color: var(--color-danger);">${t("commun.supprimer")}</button>
                 </div>
 
                 <div class="dashboard-grid">
                     <div class="dashboard-card" style="grid-column: span 2;">
-                        <h3>Détails de l'exigence</h3>
+                        <h3>${t("exigences.details")}</h3>
 
                         <div class="form-group">
-                            <label>Intitulé <span style="color:red">*</span></label>
+                            <label>${t("exigences.colIntitule")} <span style="color:red">*</span></label>
                             <input id="intitule" value="${escapeHtml(exigence.intitule)}" required />
                         </div>
 
                         <div class="form-group">
-                            <label>Statut de conformité ${Help.tip("Niveau de respect de l'exigence : Conforme, Partiellement conforme, Non conforme ou Non applicable. Il alimente le taux de conformité et la déclaration d'applicabilité (SoA).")}</label>
+                            <label>${t("exigences.statutConformite")} ${Help.tip(t("exigences.statutConformiteAide"))}</label>
                             <select id="statut">
-                                <option value="non conforme" ${exigence.statut_conformite === "non conforme" ? "selected" : ""}>Non conforme</option>
-                                <option value="partiellement conforme" ${exigence.statut_conformite === "partiellement conforme" ? "selected" : ""}>Partiellement conforme</option>
-                                <option value="conforme" ${exigence.statut_conformite === "conforme" ? "selected" : ""}>Conforme</option>
-                                <option value="non applicable" ${exigence.statut_conformite === "non applicable" ? "selected" : ""}>Non applicable</option>
+                                <option value="non conforme" ${exigence.statut_conformite === "non conforme" ? "selected" : ""}>${I18n.valeur("non conforme")}</option>
+                                <option value="partiellement conforme" ${exigence.statut_conformite === "partiellement conforme" ? "selected" : ""}>${I18n.valeur("partiellement conforme")}</option>
+                                <option value="conforme" ${exigence.statut_conformite === "conforme" ? "selected" : ""}>${I18n.valeur("conforme")}</option>
+                                <option value="non applicable" ${exigence.statut_conformite === "non applicable" ? "selected" : ""}>${I18n.valeur("non applicable")}</option>
                             </select>
                         </div>
 
-                        <div class="form-group"><label>Responsable</label><input id="responsable" list="personnes-list" value="${escapeHtml(exigence.responsable || "")}" /></div>
-                        <div class="form-group"><label>Commentaire</label><textarea id="commentaire">${escapeHtml(exigence.commentaire || "")}</textarea></div>
-                        <button id="saveBtn">Mettre à jour</button>
+                        <div class="form-group"><label>${t("commun.responsable")}</label><input id="responsable" list="personnes-list" value="${escapeHtml(exigence.responsable || "")}" /></div>
+                        <div class="form-group"><label>${t("commun.commentaire")}</label><textarea id="commentaire">${escapeHtml(exigence.commentaire || "")}</textarea></div>
+                        <button id="saveBtn">${t("commun.mettreAJour")}</button>
                     </div>
 
                     <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                         <div class="dashboard-card">
-                            <h3>Actions liées</h3>
-                            <ul style="margin-bottom: 15px;">${actionsHtml || "<li><span style='color: var(--text-muted);'>Aucune action planifiée</span></li>"}</ul>
-                            <button id="addActionBtn" style="font-size: 0.85rem;">Planifier une action</button>
+                            <h3>${t("exigences.actionsLiees")}</h3>
+                            <ul style="margin-bottom: 15px;">${actionsHtml || `<li><span style='color: var(--text-muted);'>${t("exigences.aucuneActionPlanifiee")}</span></li>`}</ul>
+                            <button id="addActionBtn" style="font-size: 0.85rem;">${t("exigences.planifierAction")}</button>
                         </div>
 
                         <div class="dashboard-card">
-                            <h3>Risques liés (Mitigation)</h3>
-                            <ul>${risquesHtml || "<li><span style='color: var(--text-muted);'>Aucun risque associé</span></li>"}</ul>
-                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 10px;"><em>L'association se fait depuis la fiche du risque.</em></p>
+                            <h3>${t("exigences.risquesLies")}</h3>
+                            <ul>${risquesHtml || `<li><span style='color: var(--text-muted);'>${t("exigences.aucunRisqueAssocie")}</span></li>`}</ul>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 10px;"><em>${t("exigences.associationDepuisRisque")}</em></p>
                         </div>
                     </div>
                 </div>
@@ -276,7 +278,7 @@ const ExigencesModule = (() => {
 
         document.getElementById("saveBtn").onclick = () => {
             const intitule = document.getElementById("intitule").value.trim();
-            if (!intitule) return alert("L'intitulé est obligatoire.");
+            if (!intitule) return alert(t("exigences.intituleObligatoire"));
 
             exigence.intitule = intitule;
             exigence.statut_conformite = document.getElementById("statut").value;
@@ -284,12 +286,12 @@ const ExigencesModule = (() => {
             exigence.commentaire = document.getElementById("commentaire").value.trim();
 
             DataStore.updateExigence(exigence);
-            if (window.showToast) window.showToast("Exigence mise à jour.", "success");
+            if (window.showToast) window.showToast(t("exigences.miseAJour"), "success");
             Router.navigateTo("/exigences");
         };
 
         UI.wireDelete({
-            confirm: "Êtes-vous sûr de vouloir supprimer cette exigence ? Les actions associées seront également supprimées.",
+            confirm: () => t("exigences.confirmerSuppression"),
             remove: () => DataStore.deleteExigence(exigence.id),
             redirect: "/exigences"
         });
@@ -306,41 +308,41 @@ const ExigencesModule = (() => {
         const app = document.getElementById("app");
         app.innerHTML = `
             <section class="page">
-                <h1>Nouvelle action</h1>
-                <div class="synthese-message info" style="margin-bottom: 20px; padding: 10px;"><strong>Liée à l'exigence :</strong> ${escapeHtml(exigence.code)}</div>
+                <h1>${t("exigences.nouvelleAction")}</h1>
+                <div class="synthese-message info" style="margin-bottom: 20px; padding: 10px;">${tHtml("exigences.lieeExigence", { code: exigence.code })}</div>
                 <div class="dashboard-card">
-                    <div class="form-group"><label>Titre de l'action <span style="color:red">*</span></label><input id="titre" required /></div>
+                    <div class="form-group"><label>${t("actions.titreAction")} <span style="color:red">*</span></label><input id="titre" required /></div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
                         <div class="form-group">
-                            <label>Priorité</label>
+                            <label>${t("commun.priorite")}</label>
                             <select id="priorite">
-                                <option value="Basse">Basse</option>
-                                <option value="Moyenne" selected>Moyenne</option>
-                                <option value="Haute">Haute</option>
-                                <option value="Critique">Critique</option>
+                                <option value="Basse">${I18n.valeur("Basse")}</option>
+                                <option value="Moyenne" selected>${I18n.valeur("Moyenne")}</option>
+                                <option value="Haute">${I18n.valeur("Haute")}</option>
+                                <option value="Critique">${I18n.valeur("Critique")}</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Statut</label>
+                            <label>${t("commun.statut")}</label>
                             <select id="statut">
-                                <option value="à faire" selected>À faire</option>
-                                <option value="en cours">En cours</option>
-                                <option value="terminée">Terminée</option>
+                                <option value="à faire" selected>${I18n.valeur("à faire")}</option>
+                                <option value="en cours">${I18n.valeur("en cours")}</option>
+                                <option value="terminée">${I18n.valeur("terminée")}</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Échéance</label>
+                            <label>${t("commun.echeance")}</label>
                             <input type="date" id="echeance" />
                         </div>
                     </div>
 
-                    <div class="form-group"><label>Responsable</label><input id="responsable" list="personnes-list" /></div>
-                    <div class="form-group"><label>Commentaire</label><textarea id="commentaire"></textarea></div>
+                    <div class="form-group"><label>${t("commun.responsable")}</label><input id="responsable" list="personnes-list" /></div>
+                    <div class="form-group"><label>${t("commun.commentaire")}</label><textarea id="commentaire"></textarea></div>
 
                     <div style="margin-top: 20px;">
-                        <button id="saveAction">Créer l'action</button>
-                        <button id="cancelAction" style="margin-left: 10px;">Annuler</button>
+                        <button id="saveAction">${t("risques.creerAction")}</button>
+                        <button id="cancelAction" style="margin-left: 10px;">${t("commun.annuler")}</button>
                     </div>
                 </div>
             </section>
@@ -348,7 +350,7 @@ const ExigencesModule = (() => {
 
         document.getElementById("saveAction").onclick = () => {
             const titre = document.getElementById("titre").value.trim();
-            if (!titre) return alert("Le titre de l'action est obligatoire.");
+            if (!titre) return alert(t("actions.titreObligatoire"));
 
             DataStore.addAction({
                 id: UI.genId("ACT"),

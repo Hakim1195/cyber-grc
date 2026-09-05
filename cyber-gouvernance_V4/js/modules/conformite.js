@@ -15,14 +15,24 @@ const ConformiteModule = (() => {
         }[ch]));
     }
 
-    const STATUTS = {
-        "": { label: "Non évalué", cls: "status-non-evaluee" },
-        "conforme": { label: "Conforme", cls: "status-conforme" },
-        "partiellement conforme": { label: "Partiellement conforme", cls: "status-partiellement-conforme" },
-        "non conforme": { label: "Non conforme", cls: "status-non-conforme" },
-        "non applicable": { label: "Non applicable", cls: "status-non-applicable" }
+    /* ⚠️ La table ne porte plus que la CLASSE : le libellé vient de
+       `I18n.valeur()`, c'est-à-dire de la valeur STOCKÉE traduite à l'affichage
+       (§37.3). Garder les deux ici aurait fait un second dictionnaire, invisible
+       du contrôle mécanique. */
+    const CLASSES_STATUT = {
+        "": "status-non-evaluee",
+        "conforme": "status-conforme",
+        "partiellement conforme": "status-partiellement-conforme",
+        "non conforme": "status-non-conforme",
+        "non applicable": "status-non-applicable"
     };
-    function statutMeta(v) { return STATUTS[v || ""] || STATUTS[""]; }
+    function statutMeta(v) {
+        const brute = v || "";
+        return {
+            label: brute === "" ? t("conformite.nonEvalue") : I18n.valeur(brute),
+            cls: CLASSES_STATUT[brute] || CLASSES_STATUT[""]
+        };
+    }
 
     function refs() { return (typeof Referentiels !== "undefined") ? Referentiels.all() : []; }
 
@@ -46,7 +56,7 @@ const ConformiteModule = (() => {
             <div style="margin-bottom:12px;">
                 <div style="display:flex; justify-content:space-between; font-size:0.9rem; margin-bottom:4px;">
                     <span><strong>${escapeHtml(p.ref.nom)}</strong> <span style="color:var(--text-muted);">(${escapeHtml(p.ref.editeur)})</span></span>
-                    <span style="color:var(--text-muted);">${p.couvertes}/${p.total} exigences adossées · ${p.pct}%</span>
+                    <span style="color:var(--text-muted);">${tHtml("conformite.exigencesAdossees", { couvertes: p.couvertes, total: p.total, pct: p.pct })}</span>
                 </div>
                 <div class="progress-bar small"><div class="progress-fill" style="width:${p.pct}%; background:var(--accent);"></div></div>
             </div>`).join("");
@@ -54,7 +64,7 @@ const ConformiteModule = (() => {
         // Matrice mesures × référentiels (nombre d'exigences couvertes).
         let matrixHtml;
         if (mesures.length === 0) {
-            matrixHtml = `<div class="empty-state"><h3>Aucune mesure de sécurité</h3><p>Créez des <a href="#/mesures" style="color:var(--accent);">mesures de sécurité</a> et reliez-les aux exigences des référentiels pour visualiser leur couverture croisée.</p></div>`;
+            matrixHtml = `<div class="empty-state"><h3>${t("conformite.aucuneMesure")}</h3><p>Créez des <a href="#/mesures" style="color:var(--accent);">mesures de sécurité</a> et reliez-les aux exigences des référentiels pour visualiser leur couverture croisée.</p></div>`;
         } else {
             const headRefs = allRefs.map(r => `<th style="text-align:center;" title="${escapeHtml(r.nom)}">${escapeHtml(r.editeur)}</th>`).join("");
             const rows = mesures.map(m => {
@@ -71,23 +81,23 @@ const ConformiteModule = (() => {
                     <td><strong>${escapeHtml(m.nom)}</strong></td>
                     <td><span class="status ${meta.cls}">${meta.label}</span></td>
                     ${cells}
-                    <td style="text-align:center; font-weight:600;">${nbRefs > 1 ? `<span class="cov-cell cov-cell--multi">${nbRefs} réf.</span>` : (evs.length ? "1 réf." : "—")}</td>
+                    <td style="text-align:center; font-weight:600;">${nbRefs > 1 ? `<span class="cov-cell cov-cell--multi">${tHtml("conformite.nbRefs", { n: nbRefs })}</span>` : (evs.length ? t("conformite.uneRef") : "—")}</td>
                 </tr>`;
             }).join("");
             matrixHtml = `
                 <table class="data-table cov-matrix">
-                    <thead><tr><th>Mesure de sécurité</th><th style="width:150px;">Statut</th>${headRefs}<th style="text-align:center;">Transverse</th></tr></thead>
+                    <thead><tr><th>${t("conformite.colMesure")}</th><th style="width:150px;">${t("commun.statut")}</th>${headRefs}<th style="text-align:center;">${t("conformite.colTransverse")}</th></tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
-                <p style="font-size:0.82rem; color:var(--text-muted); margin-top:8px;">Chaque cellule indique le nombre d'exigences du référentiel couvertes par la mesure. Une mesure « transverse » (plusieurs référentiels) illustre le principe « évaluer une fois, appliquer partout ».</p>`;
+                <p style="font-size:0.82rem; color:var(--text-muted); margin-top:8px;">${t("conformite.noteMatrice")}</p>`;
         }
 
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>Couverture croisée</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">Comment vos mesures de sécurité couvrent les différents référentiels. ${Help.tip("Une mesure de sécurité bien conçue satisfait des exigences de plusieurs cadres à la fois (ANSSI, ISO, NIS2…). Cette vue met en évidence ces recouvrements et les zones encore non couvertes.")}</p>
+                        <h1>${t("conformite.couvertureTitre")}</h1>
+                        <p style="color:var(--text-muted); margin-top:5px;">${t("conformite.couvertureSousTitre")} ${Help.tip(t("conformite.couvertureAide"))}</p>
                     </div>
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                         <a href="#/mapping" class="btn-secondary">Correspondances →</a>
@@ -153,7 +163,10 @@ const ConformiteModule = (() => {
             return `<tr class="soa-domain-row"><td colspan="${nbCols}"><strong>${escapeHtml(d.nom)}</strong></td></tr>${rows}`;
         }).join("");
 
-        const dateJour = new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
+        /* §37.6 — la date d'édition de la déclaration d'applicabilité suit la
+           langue de l'interface. Elle n'est ni stockée ni transmise : c'est
+           l'entête d'un document imprimé, donc un pur affichage. */
+        const dateJour = I18n.dateLongue(new Date());
 
         app.innerHTML = `
             <section class="page soa-page">

@@ -13,9 +13,9 @@ const RisquesModule = (() => {
     }
 
     function getLabel(score) {
-        if (score < 3) return "Non critique";
-        if (score < 8) return "Critique";
-        return "Très critique";
+        if (score < 3) return t("risques.nonCritique");
+        if (score < 8) return t("risques.critique");
+        return t("risques.tresCritique");
     }
 
     function evaluerNiveau(score) {
@@ -38,14 +38,14 @@ const RisquesModule = (() => {
                 <td class="stop-row-click" style="text-align: center; width: 40px;">
                     <input type="checkbox" class="row-cb" data-id="${r.id}">
                 </td>
-                <td><strong>${escapeHtml(r.nom) || "Sans nom"}</strong></td>
+                <td><strong>${escapeHtml(r.nom) || t("risques.sansNom")}</strong></td>
                 <td>
                     <span class="status" style="background: ${getRiskColor(scoreRes)}; color: white;">
                         ${getLabel(scoreRes)}
                     </span>
                 </td>
-                <td><span class="badge" style="background: #eee; color: #333;">Brut: ${r.score_brut || "-"}</span></td>
-                <td><span class="badge" style="background: #e3f2fd; color: #0d47a1; font-weight: bold;">Résiduel: ${scoreRes.toFixed(2)}</span></td>
+                <td><span class="badge" style="background: #eee; color: #333;">${t("risques.brut")} ${r.score_brut || "-"}</span></td>
+                <td><span class="badge" style="background: #e3f2fd; color: #0d47a1; font-weight: bold;">${t("risques.residuel")} ${I18n.nombre(scoreRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></td>
                 <td>${r.description ? escapeHtml(String(r.description).substring(0, 50)) + "..." : "-"}</td>
             </tr>
         `}).join("");
@@ -54,13 +54,13 @@ const RisquesModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>Registre des Risques (Méthode FxGxM) ${Help.tip("Méthode d'appréciation du risque : Score brut = Fréquence × Gravité (risque inhérent), puis Score résiduel = Score brut × Niveau de maîtrise (risque réel après vos mesures).")}</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (SI global)</strong></p>
+                        <h1>${t("risques.titre")} ${Help.tip(t("risques.titreAide"))}</h1>
+                        <p style="color: var(--text-muted); margin-top: 5px;">${t("risques.perimetre")} <strong>${t("risques.perimetreInterne")}</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
-                        <a href="#/imports" class="btn-secondary" data-lecture="ok" title="L'import généralisé : transactionnel (tout ou rien), idempotent par fichier, avec aperçu avant validation et rapport ligne par ligne">Importer…</a>
-                        <button id="addRisqueBtn">Déclarer un risque</button>
+                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">${t("commun.supprimerSelection")} (<span id="selectedCount">0</span>)</button>
+                        <a href="#/imports" class="btn-secondary" data-lecture="ok" title="${t("commun.importerAide")}">${t("commun.importer")}</a>
+                        <button id="addRisqueBtn">${t("risques.declarer")}</button>
                     </div>
                 </div>
 
@@ -68,15 +68,15 @@ const RisquesModule = (() => {
                     <thead>
                         <tr>
                             <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllCb"></th>
-                            <th>Nom du risque</th>
-                            <th>Niveau Résiduel</th>
-                            <th>Score Brut</th>
-                            <th>Score Résiduel</th>
-                            <th>Description</th>
+                            <th>${t("risques.colNom")}</th>
+                            <th>${t("risques.colNiveauResiduel")}</th>
+                            <th>${t("risques.colScoreBrut")}</th>
+                            <th>${t("risques.colScoreResiduel")}</th>
+                            <th>${t("commun.description")}</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${rows || "<tr><td colspan='6' style='text-align:center;'>Aucun risque identifié.</td></tr>"}
+                        ${rows || `<tr><td colspan='6' style='text-align:center;'>${t("risques.aucun")}</td></tr>`}
                     </tbody>
                 </table>
             </section>
@@ -108,8 +108,8 @@ const RisquesModule = (() => {
 
         UI.wireBulkDelete({
             remove: (id) => DataStore.deleteRisque(id),
-            confirm: (n) => `Confirmer la suppression définitive de ${n} risque(s) ?`,
-            toast: (n) => `${n} risque(s) supprimé(s).`,
+            confirm: (n) => t("risques.confirmerSuppressionMultiple", { n: n }),
+            toast: (n) => t("risques.supprimes", { n: n }),
             onDone: () => renderList()
         });
 
@@ -127,62 +127,62 @@ const RisquesModule = (() => {
 
         app.innerHTML = `
             <section class="page">
-                <h1>Nouveau scénario de risque</h1>
+                <h1>${t("risques.nouveau")}</h1>
 
                 <div class="synthese-message info" style="margin-bottom: 20px; font-size: 0.9rem;">
-                    <strong>Guide de cotation EBIOS (F x G x M) :</strong><br>
+                    <strong>${t("risques.guideCotation")}</strong><br>
                     <ul style="margin-top: 5px; padding-left: 20px; margin-bottom: 0;">
-                        <li><strong>Score Brut</strong> = Fréquence (1 à 4) × Gravité (1 à 4). <em>C'est le risque inhérent (impact théorique).</em></li>
-                        <li><strong>Score Résiduel</strong> = Score Brut × Niveau de maîtrise. <em>C'est le risque réel après application de vos mesures.</em></li>
-                        <li><strong>Niveaux de maîtrise :</strong> 0.05 (Excellent) / 0.3 (Bon) / 0.7 (Faible) / 1 (Inexistant).</li>
+                        <li>${t("risques.guideBrut")} <em>${t("risques.guideBrutNote")}</em></li>
+                        <li>${t("risques.guideResiduel")} <em>${t("risques.guideResiduelNote")}</em></li>
+                        <li><strong>${t("risques.guideMaitrise")}</strong> ${t("risques.guideMaitriseValeurs")}</li>
                     </ul>
                 </div>
 
                 <div class="dashboard-card" style="max-width: 800px;">
-                    <div class="form-group"><label>Nom du risque <span style="color:red">*</span></label><input id="nom" required /></div>
+                    <div class="form-group"><label>${t("risques.colNom")} <span style="color:red">*</span></label><input id="nom" required /></div>
 
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                         <div class="form-group">
-                            <label>Fréquence (F) ${Help.tip("Vraisemblance de l'événement redouté, de 1 (rare/improbable) à 4 (très fréquent). Dans EBIOS, c'est la probabilité que le scénario survienne.")}</label>
+                            <label>${t("risques.frequence")} ${Help.tip(t("risques.frequenceAide"))}</label>
                             <select id="f">
-                                <option value="1">1 - Rare/improbable</option>
-                                <option value="2">2 - Peu fréquent</option>
-                                <option value="3">3 - Fréquent</option>
-                                <option value="4">4 - Très fréquent</option>
+                                <option value="1">${t("risques.f1")}</option>
+                                <option value="2">${t("risques.f2")}</option>
+                                <option value="3">${t("risques.f3")}</option>
+                                <option value="4">${t("risques.f4")}</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Gravité (G) ${Help.tip("Ampleur des conséquences si le risque se réalise, de 1 (très faible) à 4 (très grave) : impacts financier, juridique, image, ou sur la sécurité des personnes.")}</label>
+                            <label>${t("risques.gravite")} ${Help.tip(t("risques.graviteAide"))}</label>
                             <select id="g">
-                                <option value="1">1 - Très faible</option>
-                                <option value="2">2 - Modéré</option>
-                                <option value="3">3 - Grave</option>
-                                <option value="4">4 - Très grave</option>
+                                <option value="1">${t("risques.g1")}</option>
+                                <option value="2">${t("risques.g2")}</option>
+                                <option value="3">${t("risques.g3")}</option>
+                                <option value="4">${t("risques.g4")}</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Niveau de maîtrise (M) ${Help.tip("Coefficient reflétant l'efficacité de vos mesures de sécurité : de 0,05 (risque globalement maîtrisé) à 1 (aucune maîtrise). Il réduit le score brut pour obtenir le score résiduel.")}</label>
+                            <label>${t("risques.maitrise")} ${Help.tip(t("risques.maitriseAide"))}</label>
                             <select id="m">
-                                <option value="0.05">0.05 - Globalement maîtrisé</option>
-                                <option value="0.3">0.30 - Assez maîtrisé</option>
-                                <option value="0.7">0.70 - Peu maîtrisé</option>
-                                <option value="1">1.00 - Pas maîtrisé</option>
+                                <option value="0.05">${t("risques.m005")}</option>
+                                <option value="0.3">${t("risques.m03")}</option>
+                                <option value="0.7">${t("risques.m07")}</option>
+                                <option value="1">${t("risques.m1")}</option>
                             </select>
                         </div>
                     </div>
 
                     <div style="background: var(--bg-body); padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; border: 1px solid var(--border);">
-                        <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 5px;">Aperçu du calcul :</div>
+                        <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 5px;">${t("risques.apercuCalcul")}</div>
                         <div id="calc-preview" style="font-size: 1.1rem;">
-                            Score Brut: <strong>1</strong> | Score Résiduel: <strong style="color: var(--color-success);">0.05 (Non critique)</strong>
+                            ${tHtml("risques.calcul", { brut: 1 })} <strong style="color: var(--color-success);">${I18n.nombre(0.05, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${t("risques.nonCritique")})</strong>
                         </div>
                     </div>
 
-                    <div class="form-group"><label>Description / Détails</label><textarea id="description"></textarea></div>
+                    <div class="form-group"><label>${t("risques.descriptionDetails")}</label><textarea id="description"></textarea></div>
 
                     <div style="margin-top: 20px;">
-                        <button id="save">Créer le risque</button>
-                        <button id="cancel" style="margin-left: 10px;">Annuler</button>
+                        <button id="save">${t("risques.creer")}</button>
+                        <button id="cancel" style="margin-left: 10px;">${t("commun.annuler")}</button>
                     </div>
                 </div>
             </section>
@@ -195,7 +195,7 @@ const RisquesModule = (() => {
             const sBrut = f * g;
             const sRes = sBrut * m;
             document.getElementById("calc-preview").innerHTML = `
-                Score Brut: <strong>${sBrut}</strong> | Score Résiduel: <strong style="color: ${getRiskColor(sRes)};">${sRes.toFixed(2)} (${getLabel(sRes)})</strong>
+                ${tHtml("risques.calcul", { brut: sBrut })} <strong style="color: ${getRiskColor(sRes)};">${I18n.nombre(sRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${getLabel(sRes)})</strong>
             `;
         };
 
@@ -203,7 +203,7 @@ const RisquesModule = (() => {
 
         document.getElementById("save").onclick = () => {
             const nom = document.getElementById("nom").value.trim();
-            if (!nom) return alert("Le nom du risque est obligatoire.");
+            if (!nom) return alert(t("risques.nomObligatoire"));
 
             const f = parseInt(document.getElementById("f").value);
             const g = parseInt(document.getElementById("g").value);
@@ -250,7 +250,7 @@ const RisquesModule = (() => {
         risque.exigences_liees = Array.isArray(risque.exigences_liees) ? risque.exigences_liees : [];
 
         const exigencesHtml = toutesExigences.map(e => {
-            const clientNom = e.client_id ? (clients.find(c => c.id === e.client_id)?.nom || "Client") : "Interne";
+            const clientNom = e.client_id ? (clients.find(c => c.id === e.client_id)?.nom || t("commun.client")) : t("commun.interne");
             return `
             <label class="checkbox-line" style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
@@ -263,7 +263,7 @@ const RisquesModule = (() => {
 
         const actionsHtml = actions.map(a => `
             <li class="clickable-action" data-id="${a.id}" style="padding: 8px; background: #f9f9f9; border-radius: 4px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid var(--accent);">
-                <strong>${escapeHtml(a.titre)}</strong> — Statut: <em>${escapeHtml(a.statut)}</em>
+                <strong>${escapeHtml(a.titre)}</strong> — ${t("risques.actionStatut")} <em>${escapeHtml(I18n.valeur(a.statut))}</em>
             </li>
         `).join("");
 
@@ -271,70 +271,70 @@ const RisquesModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <h1>${escapeHtml(risque.nom)}</h1>
-                    <button id="deleteBtn" style="background-color: var(--color-danger);">Supprimer</button>
+                    <button id="deleteBtn" style="background-color: var(--color-danger);">${t("commun.supprimer")}</button>
                 </div>
 
                 <div class="dashboard-grid">
                     <div class="dashboard-card" style="grid-column: span 2;">
-                        <h3>Évaluation du risque (F x G x M)</h3>
+                        <h3>${t("risques.evaluation")}</h3>
 
                         <div class="synthese-message info" style="margin-bottom: 20px; font-size: 0.9rem;">
-                            <strong>Rappel de cotation :</strong> Brut = (F × G). Résiduel = Brut × M.<br>
-                            <em>Maîtrise (M) : 0.05 (Excellent) / 0.3 (Bon) / 0.7 (Faible) / 1 (Inexistant).</em>
+                            <strong>${t("risques.rappelCotation")}</strong> ${t("risques.rappelCotationTexte")}<br>
+                            <em>${t("risques.rappelMaitrise")}</em>
                         </div>
 
-                        <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${escapeHtml(risque.nom)}" required /></div>
+                        <div class="form-group"><label>${t("commun.nom")} <span style="color:red">*</span></label><input id="nom" value="${escapeHtml(risque.nom)}" required /></div>
 
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                             <div class="form-group">
-                                <label>Fréquence (F) ${Help.tip("Vraisemblance de l'événement redouté, de 1 (rare/improbable) à 4 (très fréquent). Dans EBIOS, c'est la probabilité que le scénario survienne.")}</label>
+                                <label>${t("risques.frequence")} ${Help.tip(t("risques.frequenceAide"))}</label>
                                 <select id="f">
-                                    <option value="1" ${currentF == 1 ? "selected" : ""}>1 - Rare/improbable</option>
-                                    <option value="2" ${currentF == 2 ? "selected" : ""}>2 - Peu fréquent</option>
-                                    <option value="3" ${currentF == 3 ? "selected" : ""}>3 - Fréquent</option>
-                                    <option value="4" ${currentF == 4 ? "selected" : ""}>4 - Très fréquent</option>
+                                    <option value="1" ${currentF == 1 ? "selected" : ""}>${t("risques.f1")}</option>
+                                    <option value="2" ${currentF == 2 ? "selected" : ""}>${t("risques.f2")}</option>
+                                    <option value="3" ${currentF == 3 ? "selected" : ""}>${t("risques.f3")}</option>
+                                    <option value="4" ${currentF == 4 ? "selected" : ""}>${t("risques.f4")}</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>Gravité (G) ${Help.tip("Ampleur des conséquences si le risque se réalise, de 1 (très faible) à 4 (très grave) : impacts financier, juridique, image, ou sur la sécurité des personnes.")}</label>
+                                <label>${t("risques.gravite")} ${Help.tip(t("risques.graviteAide"))}</label>
                                 <select id="g">
-                                    <option value="1" ${currentG == 1 ? "selected" : ""}>1 - Très faible</option>
-                                    <option value="2" ${currentG == 2 ? "selected" : ""}>2 - Modéré</option>
-                                    <option value="3" ${currentG == 3 ? "selected" : ""}>3 - Grave</option>
-                                    <option value="4" ${currentG == 4 ? "selected" : ""}>4 - Très grave</option>
+                                    <option value="1" ${currentG == 1 ? "selected" : ""}>${t("risques.g1")}</option>
+                                    <option value="2" ${currentG == 2 ? "selected" : ""}>${t("risques.g2")}</option>
+                                    <option value="3" ${currentG == 3 ? "selected" : ""}>${t("risques.g3")}</option>
+                                    <option value="4" ${currentG == 4 ? "selected" : ""}>${t("risques.g4")}</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>Niveau de maîtrise (M) ${Help.tip("Coefficient reflétant l'efficacité de vos mesures de sécurité : de 0,05 (risque globalement maîtrisé) à 1 (aucune maîtrise). Il réduit le score brut pour obtenir le score résiduel.")}</label>
+                                <label>${t("risques.maitrise")} ${Help.tip(t("risques.maitriseAide"))}</label>
                                 <select id="m">
-                                    <option value="0.05" ${currentM == 0.05 ? "selected" : ""}>0.05 - Globalement maîtrisé</option>
-                                    <option value="0.3" ${currentM == 0.3 ? "selected" : ""}>0.30 - Assez maîtrisé</option>
-                                    <option value="0.7" ${currentM == 0.7 ? "selected" : ""}>0.70 - Peu maîtrisé</option>
-                                    <option value="1" ${currentM == 1 ? "selected" : ""}>1.00 - Pas maîtrisé</option>
+                                    <option value="0.05" ${currentM == 0.05 ? "selected" : ""}>${t("risques.m005")}</option>
+                                    <option value="0.3" ${currentM == 0.3 ? "selected" : ""}>${t("risques.m03")}</option>
+                                    <option value="0.7" ${currentM == 0.7 ? "selected" : ""}>${t("risques.m07")}</option>
+                                    <option value="1" ${currentM == 1 ? "selected" : ""}>${t("risques.m1")}</option>
                                 </select>
                             </div>
                         </div>
 
                         <div style="background: var(--bg-body); padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; border: 1px solid var(--border);">
                             <div id="calc-preview" style="font-size: 1.1rem;">
-                                Score Brut: <strong>${currentF * currentG}</strong> | Score Résiduel: <strong style="color: ${getRiskColor(currentRes)};">${currentRes.toFixed(2)} (${getLabel(currentRes)})</strong>
+                                ${tHtml("risques.calcul", { brut: currentF * currentG })} <strong style="color: ${getRiskColor(currentRes)};">${I18n.nombre(currentRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${getLabel(currentRes)})</strong>
                             </div>
                         </div>
 
-                        <div class="form-group"><label>Description</label><textarea id="description">${escapeHtml(risque.description || "")}</textarea></div>
-                        <button id="saveBtn">Mettre à jour</button>
+                        <div class="form-group"><label>${t("commun.description")}</label><textarea id="description">${escapeHtml(risque.description || "")}</textarea></div>
+                        <button id="saveBtn">${t("commun.mettreAJour")}</button>
                     </div>
 
                     <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                         <div class="dashboard-card">
-                            <h3>Plan de traitement (Actions)</h3>
-                            <ul style="margin-bottom: 15px;">${actionsHtml || "<li><span style='color: var(--text-muted);'>Aucune action</span></li>"}</ul>
-                            <button id="addActionBtn" style="font-size: 0.85rem;">Planifier une action interne</button>
+                            <h3>${t("risques.planTraitement")}</h3>
+                            <ul style="margin-bottom: 15px;">${actionsHtml || `<li><span style='color: var(--text-muted);'>${t("risques.aucuneAction")}</span></li>`}</ul>
+                            <button id="addActionBtn" style="font-size: 0.85rem;">${t("risques.planifierAction")}</button>
                         </div>
                         <div class="dashboard-card">
-                            <h3>Exigences applicables (Mitigation)</h3>
+                            <h3>${t("risques.exigencesApplicables")}</h3>
                             <div class="checkbox-group" style="max-height: 250px; overflow-y: auto;">
-                                ${exigencesHtml || "<p style='color: var(--text-muted);'>Aucune exigence disponible.</p>"}
+                                ${exigencesHtml || `<p style='color: var(--text-muted);'>${t("risques.aucuneExigence")}</p>`}
                             </div>
                         </div>
                     </div>
@@ -349,7 +349,7 @@ const RisquesModule = (() => {
             const sBrut = f * g;
             const sRes = sBrut * m;
             document.getElementById("calc-preview").innerHTML = `
-                Score Brut: <strong>${sBrut}</strong> | Score Résiduel: <strong style="color: ${getRiskColor(sRes)};">${sRes.toFixed(2)} (${getLabel(sRes)})</strong>
+                ${tHtml("risques.calcul", { brut: sBrut })} <strong style="color: ${getRiskColor(sRes)};">${I18n.nombre(sRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${getLabel(sRes)})</strong>
             `;
         };
 
@@ -357,7 +357,7 @@ const RisquesModule = (() => {
 
         document.getElementById("saveBtn").onclick = () => {
             const nom = document.getElementById("nom").value.trim();
-            if (!nom) return alert("Le nom est obligatoire.");
+            if (!nom) return alert(t("risques.nomObligatoireCourt"));
 
             const f = parseInt(document.getElementById("f").value);
             const g = parseInt(document.getElementById("g").value);
@@ -376,12 +376,12 @@ const RisquesModule = (() => {
             risque.exigences_liees = Array.from(document.querySelectorAll(".exigence-cb:checked")).map(cb => cb.value);
 
             DataStore.updateRisque(risque);
-            if(window.showToast) window.showToast("Risque mis à jour.", "success");
+            if(window.showToast) window.showToast(t("risques.misAJour"), "success");
             Router.navigateTo("/risques");
         };
 
         UI.wireDelete({
-            confirm: "Confirmer la suppression ?",
+            confirm: () => t("commun.confirmerSuppression"),
             remove: () => DataStore.deleteRisque(risque.id),
             redirect: "/risques"
         });
@@ -397,21 +397,21 @@ const RisquesModule = (() => {
         const app = document.getElementById("app");
         app.innerHTML = `
             <section class="page">
-                <h1>Nouvelle action de remédiation</h1>
+                <h1>${t("risques.nouvelleAction")}</h1>
                 <div class="synthese-message warning" style="margin-bottom: 20px; padding: 10px;">
-                    <strong>Pour traiter le risque :</strong> ${escapeHtml(risque.nom)}
+                    ${tHtml("risques.pourTraiter", { nom: risque.nom })}
                 </div>
                 <div class="dashboard-card">
-                    <div class="form-group"><label>Titre <span style="color:red">*</span></label><input id="titre" required /></div>
-                    <div class="form-group"><label>Responsable</label><input id="responsable" list="personnes-list" /></div>
+                    <div class="form-group"><label>${t("commun.titre")} <span style="color:red">*</span></label><input id="titre" required /></div>
+                    <div class="form-group"><label>${t("commun.responsable")}</label><input id="responsable" list="personnes-list" /></div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
-                        <div class="form-group"><label>Statut</label><select id="statut"><option value="à faire" selected>À faire</option><option value="en cours">En cours</option><option value="terminée">Terminée</option></select></div>
-                        <div class="form-group"><label>Échéance</label><input type="date" id="echeance" /></div>
+                        <div class="form-group"><label>${t("commun.statut")}</label><select id="statut"><option value="à faire" selected>${I18n.valeur("à faire")}</option><option value="en cours">${I18n.valeur("en cours")}</option><option value="terminée">${I18n.valeur("terminée")}</option></select></div>
+                        <div class="form-group"><label>${t("commun.echeance")}</label><input type="date" id="echeance" /></div>
                     </div>
-                    <div class="form-group"><label>Commentaire</label><textarea id="commentaire"></textarea></div>
+                    <div class="form-group"><label>${t("commun.commentaire")}</label><textarea id="commentaire"></textarea></div>
                     <div style="margin-top: 20px;">
-                        <button id="saveAction">Créer l'action</button>
-                        <button id="cancelAction" style="margin-left: 10px;">Annuler</button>
+                        <button id="saveAction">${t("risques.creerAction")}</button>
+                        <button id="cancelAction" style="margin-left: 10px;">${t("commun.annuler")}</button>
                     </div>
                 </div>
             </section>
@@ -419,7 +419,7 @@ const RisquesModule = (() => {
 
         document.getElementById("saveAction").onclick = () => {
             const titre = document.getElementById("titre").value.trim();
-            if (!titre) return alert("Le titre est obligatoire.");
+            if (!titre) return alert(t("risques.titreObligatoire"));
 
             DataStore.addAction({
                 id: UI.genId("ACT"),

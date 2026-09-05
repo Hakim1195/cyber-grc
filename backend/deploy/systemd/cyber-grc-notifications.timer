@@ -1,0 +1,69 @@
+# Emplacement cible : /etc/systemd/system/cyber-grc-notifications.timer
+#
+# Planification de la relance des échéances (lot L12, PLAN_SERVEUR §1.11,
+# CONVENTIONS.md §36) — déclenche cyber-grc-notifications.service.
+#
+# ── Deux cadences, et elles ne se confondent pas ─────────────────────────
+#
+#  · CE fichier décide QUAND le passage a lieu — une fois par jour ouvré, en
+#    début de matinée ;
+#  · `relances.ts` décide s'il y a QUELQUE CHOSE À FAIRE : une fenêtre
+#    anti-doublon de 20 heures, réclamée en base filiale par filiale
+#    (`parametres`, clé `notifications.derniere_relance`), et un horizon de
+#    7 jours au-delà duquel une échéance n'est pas relancée.
+#
+# ⚠️ **LES DEUX SONT NÉCESSAIRES, ET LA SECONDE SEULE EST SÛRE.** Un minuteur
+# n'est pas une garantie d'unicité : `Persistent=true` rattrape un passage
+# manqué au redémarrage, un exploitant peut jouer `systemctl start` à la main, et
+# une VM restaurée depuis une sauvegarde rejoue son minuteur. La fenêtre en base
+# est ce qui empêche réellement le doublon — elle est **réclamée avant l'envoi**,
+# par un `update … where`, donc atomique même si deux passages démarrent à la
+# même seconde. Le raisonnement complet est dans l'entête de `relances.ts`
+# (décision 2), et il est mesuré par `test/notifications/relances.test.mjs`.
+#
+# ── Pourquoi le matin, et pourquoi les jours ouvrés ─────────────────────
+#
+# Une relance reçue à 3 h du matin est lue avec le reste du courrier de la
+# journée : elle n'apporte rien de plus qu'à 7 h, et elle réveille les
+# astreintes qui surveillent la messagerie. Le samedi et le dimanche, elle
+# arrive devant une équipe absente — et une échéance de vendredi encore en
+# retard le lundi sera relancée le lundi, la fenêtre s'étant rouverte depuis
+# longtemps. Rien n'est perdu ; du bruit est évité.
+#
+# ⚠️ **Ceci est une valeur par défaut de PRODUIT, pas un arbitrage du client.**
+# Un groupe dont des filiales travaillent le week-end (production continue) doit
+# la changer, ici et nulle part ailleurs. `OnCalendar=Mon..Fri *-*-* 07:00:00`
+# est en heure LOCALE de la VM ; vingt filiales sur plusieurs fuseaux reçoivent
+# donc toutes à l'heure du siège. Le rendre juste par filiale demanderait un
+# fuseau par filiale — le modèle n'en porte pas —, et c'est écrit au rapport de
+# lot comme candidat V1.1.
+#
+# Installation : voir `deploy/install.sh`, section « Service et frontal ».
+# Vérification que le minuteur est armé — ENVOYÉE à systemd, jamais lue d'un
+# fichier (corollaire des portes S1/S2 : un contrôle se mesure, il ne se déclare
+# pas) :
+#   systemctl is-enabled cyber-grc-notifications.timer
+#   systemctl is-active  cyber-grc-notifications.timer
+#   systemctl list-timers cyber-grc-notifications.timer
+
+[Unit]
+Description=Planification de la relance des échéances par courriel (Cyber GRC Groupe)
+Documentation=file:/opt/cyber-grc/backend/README.md
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 07:00:00
+# Étale le déclenchement réel sur un quart d'heure : vingt VM installées le même
+# jour ne frapperaient pas le relais à la même seconde. Volontairement PLUS
+# COURT que les 1800 s de la ré-analyse — au-delà, la relance de 7 h arriverait
+# à 7 h 30, ce qui décale l'intention sans rien apporter.
+RandomizedDelaySec=900
+# Un arrêt de la VM ne doit pas faire sauter un cycle : au redémarrage, si
+# l'échéance est passée, le minuteur rattrape immédiatement.
+#
+# ⚠️ C'est précisément ce rattrapage qui rendrait un doublon possible si la
+# fenêtre en base n'existait pas — voir l'encadré ci-dessus.
+Persistent=true
+Unit=cyber-grc-notifications.service
+
+[Install]
+WantedBy=timers.target

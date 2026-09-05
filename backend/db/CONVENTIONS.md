@@ -2357,8 +2357,15 @@ n'emploie. Les deux sens comptent : le second est ce qui fait pourrir un diction
 
 ### §37.4 — La langue vient de la filiale, et l'utilisateur peut la changer
 
-`filiales.langue_defaut` **existe déjà** en base et n'est lue par personne : c'est la valeur
-par défaut, et elle arrive dans `filiale_active` de la charte de session.
+`filiales.langue_defaut` **existe déjà** en base et n'était lue par personne.
+
+⚠️ **Ce paragraphe a affirmé du faux, et l'agent du lot l'a mesuré.** Il disait « elle arrive
+dans `filiale_active` de la charte de session » — elle n'y arrivait **pas**. La charte
+portait `id`, `code`, `raison_sociale` et les coordonnées, rien de plus ; le sélecteur de
+langue retombait donc sur le français quelle que soit la filiale, **sans qu'aucune erreur ne
+le dise**. Corrigé le 05/09/2026 : la charte la porte, et le contrat dit désormais ce qui
+est plutôt que ce que je croyais. *Un contrat qui décrit une supposition fait renoncer à
+vérifier* — c'est la famille du constat Q-168, ici dans le document qui sert à l'éviter.
 
 L'utilisateur peut la changer pour lui-même. ⚠️ **Cette préférence va dans `localStorage`**,
 et il faut dire pourquoi cela ne contredit pas la purge du lot L2 : ce qui a été retiré du

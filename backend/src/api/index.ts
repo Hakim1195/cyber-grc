@@ -121,6 +121,7 @@ import { greffonImport } from '../import/index.js';
 import { greffonConsolidation } from '../consolidation/index.js';
 import { greffonFiliales } from '../filiales/index.js';
 import { greffonApprobations } from '../approbations/index.js';
+import { greffonNotifications } from '../notifications/index.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
 import { AuthentificationProvisoire, estAuthentificateur, PerimetreProvisoire } from './session.js';
@@ -1351,9 +1352,17 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
             pool,
             perimetre,
             async (client) => {
+              // ⚠️ `langue_defaut` a été AJOUTÉE le 05/09/2026 : le
+              // `CONVENTIONS.md` §37.4 affirmait qu'elle arrivait déjà dans la
+              // charte, et c'était FAUX — je l'avais supposé sans le mesurer.
+              // L'agent du lot L10 l'a constaté en lisant la réponse réelle : son
+              // sélecteur de langue retombait sur le français quelle que soit la
+              // filiale. Un contrat qui décrit ce qu'il CROIT plutôt que ce qui EST
+              // fait renoncer à vérifier — c'est la famille Q-168, dans le fichier
+              // même qui sert à l'éviter.
               const { rows } = await client.query<Record<string, string | null>>(
                 `select "adresse", "code_postal", "ville", "pays", "telephone", "email",
-                        "site_web", "nom_court"
+                        "site_web", "nom_court", "langue_defaut"
                    from "filiales"
                   where "id" = $1 and "id" = any (f_filiales_lecture())`,
                 [perimetre.filialeId],
@@ -2582,6 +2591,27 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  l'exécution vaut moins qu'un qui ne compile pas.
    * ------------------------------------------------------------------- */
   await instance.register(greffonApprobations, { pool });
+
+  /* -------------------------------------------------------------------
+   *  Notifications — lot L12
+   * -------------------------------------------------------------------
+   *  ⚠️ **La seule surface du produit qui SORTE de la machine.** Trois règles
+   *  du `CONVENTIONS.md` §36 y sont non négociables, et la première l'est parce
+   *  qu'un courriel traverse des serveurs que le client ne maîtrise pas :
+   *
+   *   1. **aucune donnée métier dans un message** — le produit est cloisonné par
+   *      filiale, et écrire un titre de risque dans un courriel annulerait ce
+   *      cloisonnement par le canal le plus banal ;
+   *   2. **l'envoi ne bloque jamais l'écriture** — un « rollback » de courriel
+   *      n'existe pas ;
+   *   3. **un destinataire vient de l'annuaire**, jamais d'une saisie libre.
+   *
+   *  ⚠️ Sans configuration SMTP, le lot est **inerte et le dit** : aucun envoi,
+   *  un avertissement au journal technique, et rien de rendu à l'utilisateur.
+   *  La VM du client n'ayant pas été vérifiée (`PLAN_SERVEUR` §9), c'est l'état
+   *  dans lequel il démarrera peut-être.
+   * ------------------------------------------------------------------- */
+  await instance.register(greffonNotifications, { pool, config });
 
   const service = options.serviceAuthentification;
   if (service !== undefined) {
