@@ -344,17 +344,38 @@ describe('§30.2 — une seule route nomme une filiale, et c’est la route déd
     );
   });
 
-  test('les SEULES routes dont le chemin parle de filiales sont les deux qui le doivent', () => {
+  test('les SEULES routes dont le chemin parle de filiales sont les TROIS qui le doivent', () => {
     // La seconde moitié : un chemin qui parle de filiales sans en recevoir reste
     // une surface à surveiller. Une troisième qui apparaîtrait ferait rougir
     // cette ligne, et quelqu'un devrait dire ce qu'elle fait — c'est le bon
     // usage d'une liste écrite à la main (`CLAUDE.md` §3, cas (b)).
+    // ── LA TROISIÈME EST ARRIVÉE, ET ELLE EST JUSTIFIÉE ─────────────────
+    //
+    // `/api/cycle/sortie-filiale` (lot L13) a fait rougir cette ligne, et c'est
+    // **exactement ce qu'elle devait faire**. Voici ce qui la distingue, et
+    // pourquoi elle n'affaiblit pas la règle :
+    //
+    //  · son chemin **nomme l'opération**, pas un identifiant : il n'y a aucun
+    //    segment `:filiale`, et le §1 de ce fichier le vérifie séparément ;
+    //  · elle **reçoit** un `filiale_id` dans son corps — comme la route dédiée
+    //    du sélecteur, et pour la même raison : *le client envoie un CHOIX, le
+    //    serveur résout un PÉRIMÈTRE*. Faire sortir une filiale du groupe est
+    //    précisément un acte où l'on désigne **une autre** filiale que celle où
+    //    l'on travaille ;
+    //  · elle exige l'**administration Groupe** — quatre termes dans sa
+    //    déclaration d'accès —, et la RLS borne ce qu'elle peut écrire.
+    //
+    // ⚠️ Ce qui serait interdit et ne l'est pas par hasard : qu'une route de
+    // LECTURE accepte un nom de filiale. C'est ce que `/api/donnees`,
+    // `/api/journal` et `/api/consolidation` refusent par la forme — elles n'ont
+    // aucun paramètre de filiale, et leur absence est mesurée.
     const parlantes = [...new Set(routes.filter((r) => /filiale/i.test(r.url)).map((r) => r.url))];
     assert.deepEqual(
       parlantes.sort(),
-      ['/api/filiales', ROUTE_DEDIEE].sort(),
+      ['/api/filiales', ROUTE_DEDIEE, '/api/cycle/sortie-filiale'].sort(),
       '/api/filiales RÉPOND (le périmètre de lecture, nommé) ; ' +
-        `${ROUTE_DEDIEE} REÇOIT (le choix). Toute autre est à justifier.`,
+        `${ROUTE_DEDIEE} REÇOIT (le choix) ; /api/cycle/sortie-filiale REÇOIT aussi, ` +
+        'sous administration Groupe. Toute autre est à justifier.',
     );
   });
 

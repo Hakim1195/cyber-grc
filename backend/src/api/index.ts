@@ -122,6 +122,7 @@ import { greffonConsolidation } from '../consolidation/index.js';
 import { greffonFiliales } from '../filiales/index.js';
 import { greffonApprobations } from '../approbations/index.js';
 import { greffonNotifications } from '../notifications/index.js';
+import { greffonCycle } from '../cycle/index.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
 import { AuthentificationProvisoire, estAuthentificateur, PerimetreProvisoire } from './session.js';
@@ -2612,6 +2613,26 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  dans lequel il démarrera peut-être.
    * ------------------------------------------------------------------- */
   await instance.register(greffonNotifications, { pool, config });
+
+  /* -------------------------------------------------------------------
+   *  Cycle de vie — lot L13
+   * -------------------------------------------------------------------
+   *  Sortie d'une filiale, et purge RGPD d'une personne.
+   *
+   *  ⚠️ **La sortie déclare `exporter`, PAS `administrer`**, et l'agent qui l'a
+   *  écrite a trouvé pourquoi : `deciderAcces` ne vérifie `droits.export` que
+   *  si l'action déclarée est `exporter`. Sous `administrer`, la route aurait
+   *  remis **l'export complet d'une filiale** à un profil Administration
+   *  **dépourvu de `GRC-EXPORT`** — c'est-à-dire la moitié exacte du constat
+   *  **Q-89**, par la porte de derrière. Elle porte donc quatre exigences et
+   *  aucune garde locale.
+   *
+   *  **Coût assumé** : le crochet `onResponse`, qui trace `administration` pour
+   *  toute route déclarée `administrer`, ne la voit pas. Elle écrit `archivage`
+   *  **dans sa transaction**, ce qui est plus fort — la trace ne peut pas
+   *  survivre à un `rollback` de l'acte.
+   * ------------------------------------------------------------------- */
+  await instance.register(greffonCycle, { pool });
 
   const service = options.serviceAuthentification;
   if (service !== undefined) {

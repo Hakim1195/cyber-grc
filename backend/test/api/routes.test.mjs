@@ -814,6 +814,16 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // laisserait n'importe qui inscrire une société dans le groupe — et créer,
     // au passage, ses groupes d'annuaire.
     ['POST', '/api/filiales', { code: 'ZZFERM', raison_sociale: 'Créée sans identité' }],
+    // Les deux routes du cycle de vie (lot L13, CONVENTIONS.md §35). Servie sans
+    // identité, la première remettrait l'export complet d'une filiale à n'importe
+    // qui ET la ferait sortir du groupe ; la seconde effacerait définitivement une
+    // personne de vingt tables au nom de personne.
+    ['POST', '/api/cycle/sortie-filiale', { filiale_id: 'FIL-TENTATIVE' }],
+    ['POST', '/api/cycle/purge-rgpd', { personne_id: 'PERS-A' }],
+    // Les deux routes des notifications (lot L12). La seconde ENVOIE : servie sans
+    // identité, elle ferait du produit un relais de courriel pour qui passe.
+    ['GET', '/api/notifications/etat', undefined],
+    ['POST', '/api/notifications/test', undefined],
     // La consolidation Groupe (lot L4, la part que le lot avait laissée ouverte).
     // Elle est ici pour une raison qui lui est propre : c'est la SEULE route du
     // produit qui lit délibérément plusieurs filiales à la fois. Servie sans

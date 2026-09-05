@@ -8,6 +8,61 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur — vague 7 : L13 cycle de vie, L12 notifications, L10 internationalisation
+
+**Trois lots, et chacun a trouvé dans son sujet un défaut que le contrat n'avait pas prévu.**
+
+#### L13 — sortie de filiale, purge RGPD, rétention du journal
+
+Le schéma portait déjà tout : `statut`, `date_sortie`, la contrainte qui exige la date, et
+`f_filiales_actives()` qui exclut d'office une filiale non active de tout périmètre. **Aucune
+migration.**
+
+⚠️ **Le constat le plus grave a été trouvé AVANT la livraison** (**Q-187**) : déclarer la
+sortie en `administrer` aurait remis **l'export complet d'une filiale** à un profil
+Administration **dépourvu de `GRC-EXPORT`** — `deciderAcces` ne vérifie le droit d'export que
+si l'action déclarée est `exporter`. C'est la moitié exacte du constat **Q-89** — *lire n'est
+pas exporter* — un an après, par un autre chemin.
+
+Trois autres qui touchent la promesse centrale du produit :
+
+- **Q-188** — archiver **tout** le journal produirait une genèse *parfaitement cohérente* :
+  `numero` repart à 1, `empreinte_precedente` nulle. La chaîne serait coupée de son passé
+  **sans aucune anomalie** — le contrôle serait vert et la preuve de trois ans aurait disparu.
+- **Q-189** — `alter table … enable trigger` remet en « origin », pas en « always » : la
+  couche 3 de l'ajout seul serait perdue **par le geste censé la préserver**.
+- **Q-191** — la trace d'une sortie **ne s'attribue pas à la filiale qui part** : la preuve
+  disparaîtrait avec la filiale qu'elle documente.
+
+Et une contrainte devenue propriété (**Q-190**) : `has_column_privilege()` dans la
+découverte — **une purge ne peut plus atteindre une colonne qu'elle n'a pas le droit de lire,
+par construction**.
+
+#### L12 — notifications
+
+Client SMTP écrit à la main, **STARTTLS exigé sans aucun repli en clair**, destinataires
+venant de l'annuaire, tâche `systemd` durcie.
+
+**Le contrôle central a de la matière** : neuf chaînes reconnaissables semées dans les six
+sources d'échéances, la chaîne jouée **jusqu'aux octets remis à un vrai serveur SMTP**, puis
+recherchées dans ce que le relais a reçu. Zéro occurrence — et la matière est vérifiée
+**d'abord**.
+
+⚠️ **Q-186** : `IPAddressDeny=any` doit recevoir le sous-réseau du relais. L'oubli produit un
+symptôme **qui ment sur sa cause**. Écrit à **trois** endroits, parce qu'un seul se rate.
+
+#### L10 — internationalisation de l'interface
+
+357 clés, 12 fichiers sur 39, **et la couverture partielle est délibérée** : une clé manquante
+rend **la clé elle-même** (**Q-185**).
+
+⚠️ **L'internationalisation s'est révélée être un instrument de sécurité** (**Q-183**) : elle
+fait passer sous les yeux chaque chaîne du produit, une par une. Elle a trouvé **deux
+injections préexistantes** — `showToast` en `innerHTML` sur **94 sites d'appel**, et six
+données utilisateur non échappées dans `actions.js`.
+
+**Banc** : 1652 essais.
+
 ### Interface — vague 6 : cinq écrans pour cinq capacités livrées sans interface
 
 **Une fonctionnalité sans écran n'est pas livrée.** Le produit portait cinq capacités
