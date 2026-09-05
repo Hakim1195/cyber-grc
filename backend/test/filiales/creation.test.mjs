@@ -138,6 +138,89 @@ describe('§1 — créer une filiale crée aussi de quoi y entrer', () => {
     assert.equal(await compter('select count(*)::text as n from filiales'), avant + 1);
   });
 
+  test('SI LE JOURNAL REFUSE, LA FILIALE N’EXISTE PAS (constat Q-218)', async () => {
+    /* ══════════════════════════════════════════════════════════════════════
+       Le constat Q-213 a mis la trace DANS la transaction, et l'essai qui suit
+       vérifie qu'elle est écrite. Le troisième passage de la porte S8 a montré
+       que **rien ne vérifiait l'autre moitié** : un mutant qui enveloppait
+       `journaliser` d'un `try { … } catch {}` laissait le banc **entièrement
+       vert**. La propriété qui compte — *une filiale ne peut pas exister sans
+       son entrée au journal* — n'était affirmée par personne.
+
+       C'est la règle 2 du §29.3, et elle n'a de valeur que mordue : un journal
+       qu'on peut faire taire en le saturant n'est pas inaltérable.
+
+       ⚠️ La panne est fabriquée par un déclencheur qui REFUSE l'insertion au
+       journal — c'est ce que produirait un disque plein, une contrainte violée
+       ou une chaîne rompue. Il est posé sous le compte PROPRIÉTAIRE, sur une
+       base d'essai jetable, et retiré dans le `finally` : sans cela il ferait
+       échouer tout ce qui suit dans ce fichier, et l'on chercherait longtemps.
+       ══════════════════════════════════════════════════════════════════════ */
+    const avecPanne = async (travail) => {
+      await base.avecPerimetre(
+        proprietaire,
+        perimetre('poseur-de-panne', FILIALE_A, [FILIALE_A, FILIALE_B], true),
+        async (c) => {
+          await c.query(`create or replace function f_essai_journal_en_panne()
+                         returns trigger language plpgsql as $$
+                         begin raise exception 'journal indisponible (essai Q-218)'; end; $$`);
+          await c.query(`create trigger trg_essai_journal_en_panne
+                         before insert on journal_audit
+                         for each row execute function f_essai_journal_en_panne()`);
+        },
+        // ⚠️ `annuler: false`. Sans cela `avecPerimetre` ANNULE sa transaction,
+        //    le déclencheur disparaît avant l'appel, et l'essai passe au vert en
+        //    n'ayant rien éprouvé — la classe de défaut que ce fichier traque.
+        { annuler: false },
+      );
+      try {
+        return await travail();
+      } finally {
+        await base.avecPerimetre(
+          proprietaire,
+          perimetre('poseur-de-panne', FILIALE_A, [FILIALE_A, FILIALE_B], true),
+          async (c) => {
+            await c.query('drop trigger if exists trg_essai_journal_en_panne on journal_audit');
+            await c.query('drop function if exists f_essai_journal_en_panne()');
+          },
+          { annuler: false },
+        );
+      }
+    };
+
+    const avant = await compter('select count(*)::text as n from filiales');
+    const reponse = await avecPanne(async () =>
+      administration.appeler('POST', '/api/filiales', {
+        corps: { code: 'ZZZ', raison_sociale: 'Filiale qui ne doit pas naître', pays: 'FR' },
+      }),
+    );
+
+    assert.notEqual(
+      reponse.statut,
+      201,
+      'La création a RÉUSSI alors que le journal refusait. Une filiale existerait sans ' +
+        'aucune entrée au registre qui fait preuve en audit ISO 27001 — pour l’acte le plus ' +
+        `structurant du produit. Réponse : ${JSON.stringify(reponse.corps)}`,
+    );
+    assert.equal(
+      await compter('select count(*)::text as n from filiales'),
+      avant,
+      'La transaction doit être ANNULÉE en entier : ni filiale, ni groupes d’annuaire. ' +
+        'Un demi-acte est la forme la plus discrète du défaut.',
+    );
+
+    // LA MATIÈRE : la panne était bien levée, et la création remarche après.
+    const apres = await administration.appeler('POST', '/api/filiales', {
+      corps: { code: 'ZZY', raison_sociale: 'Filiale témoin', pays: 'FR' },
+    });
+    assert.equal(
+      apres.statut,
+      201,
+      'Sans ce contrôle, un déclencheur resté en place ferait passer l’essai précédent ' +
+        `pour la mauvaise raison : ${JSON.stringify(apres.corps)}`,
+    );
+  });
+
   test('LA CRÉATION LAISSE UNE TRACE QUI NOMME LA FILIALE (constat Q-213)', async () => {
     /* ══════════════════════════════════════════════════════════════════════
        Ce fichier n'appelait **jamais** `journaliser`. La création validait sa

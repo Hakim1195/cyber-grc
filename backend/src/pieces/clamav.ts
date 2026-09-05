@@ -115,9 +115,36 @@ export function interpreter(reponse: string): VerdictAntivirus {
   if (/\bOK$/u.test(ligne)) {
     return { etat: 'saine', resultat: ligne };
   }
-  const trouve = /^\s*[^:]*:\s*(.+?)\s+FOUND$/u.exec(ligne);
-  if (trouve?.[1] !== undefined) {
-    return { etat: 'infectee', signature: trouve[1], resultat: ligne };
+  /* ⚠️ LU PAR DÉCOUPAGE, ET NON PAR UNE EXPRESSION — constat **Q-216** de la
+     porte S8 (troisième passage).
+
+     Cette ligne portait `/^\s*[^:]*:\s*(.+?)\s+FOUND$/u`, et c'était **la plus
+     coûteuse de tout `src/`** : mesurée à **3 204 octets → 13 346 ms**, ×8 de
+     temps pour ×2 d'entrée. Le `^` ancre `\s*`, mais il n'ancre **ni**
+     l'ambiguïté entre `\s*` et `[^:]*` — qui peuvent tous deux consommer les
+     mêmes espaces, d'où un nombre exponentiel de découpages à essayer — **ni**
+     le `(.+?)\s+` qui suit.
+
+     ⚠️ **Il n'y a pas de chemin d'attaque, et c'est justement le point.**
+     `interpreter()` n'a aucun appelant hors de ce fichier, et son sujet est la
+     réponse du démon LOCAL (`stream: <signature> FOUND\0`) : ni le nom du
+     fichier déposé ni son contenu n'y entrent. Ce qui était en défaut n'était
+     pas le produit, c'était **le garde-fou** qui prétendait couvrir cette
+     classe et exonérait cette ligne — parce qu'il cherchait une ORTHOGRAPHE
+     (`[^x]*`) au lieu de MESURER un coût. Le contrôle mesure désormais, et
+     cette ligne est la seule qu'il ait trouvée.
+
+     Le format de clamd est fixe : `<nom du flux>: <signature> FOUND`. Trois
+     `indexOf` le lisent, chacun en une passe. */
+  const SUFFIXE = ' FOUND';
+  if (ligne.endsWith(SUFFIXE)) {
+    const deuxPoints = ligne.indexOf(':');
+    if (deuxPoints >= 0) {
+      const signature = ligne.slice(deuxPoints + 1, ligne.length - SUFFIXE.length).trim();
+      if (signature !== '') {
+        return { etat: 'infectee', signature, resultat: ligne };
+      }
+    }
   }
   throw new ErreurClamav(`réponse de clamd incomprise : ${JSON.stringify(ligne.slice(0, 200))}`);
 }

@@ -44,9 +44,11 @@
 >
 > ⚠️ Si vous lisez ailleurs « ouvrir la vague 3 », « L3 reste à faire », « aucun essai
 > navigateur n'existe », « la couverture du journal est de 4 actions sur 20 » ou « la lecture
-> du journal n'est pas cloisonnée », c'est **périmé**. Le banc rend **1143 essais, 1143
-> passés**, et la recette tourne en permanence sur cette machine, Active Directory réel
-> compris.
+> du journal n'est pas cloisonnée », c'est **périmé**. Le banc rend **le compte que le
+> `backend/README.md` §8 relève à sa révision citée** — il ne se recopie pas ici, sous peine
+> de porter trois chiffres différents dans un seul fichier, ce qui était le cas jusqu'au
+> constat **Q-219**. Le banc est **entièrement vert**, et la recette tourne en permanence
+> sur cette machine, Active Directory réel compris.
 >
 > **La recette sert la vague 5** depuis le 04/09 au soir : `install.sh --maj` puis
 > `--verifier-publication` → **67 fichiers servis identiques au dépôt** (constat Q-117, fermé).
@@ -786,7 +788,8 @@ constat perdu.**
 > lisent au **§7**, seule source.
 
 **Ce qui est livré, et qu'il ne faut pas refaire : les seize lots, L0 à L15.** Le banc
-rend **1 705 essais, 1 705 passés**, `npm run verifier-types` est propre, et la recette
+est **entièrement vert** — le compte exact se relève en le jouant, il n'est pas recopié
+ici (constat **Q-219**) —, `npm run verifier-types` est propre, et la recette
 sert la révision courante (`install.sh --verifier-publication` → **81 fichiers servis
 identiques au dépôt**).
 
@@ -997,7 +1000,7 @@ du §25, et elle vaut d'être retenue avant d'écrire la prochaine.
 Chromium ne sont installés »*. Mesuré le 04/09/2026 :
 
 - **Playwright et Chromium sont installés** (`/opt/pw-browsers/chromium-1234`), et les
-  familles `test/navigateur/` et `test/modules/` tournent — elles font partie des 1143
+  familles `test/navigateur/` et `test/modules/` tournent — elles font partie des
   essais du banc ;
 - **la sortie SMTP fonctionne** : port 587 vers `smtp.office365.com` rend la bannière
   `220 … Microsoft ESMTP MAIL Service ready` ;

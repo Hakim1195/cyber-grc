@@ -104,10 +104,25 @@ function blocDeMesure() {
   assert.notEqual(ligne, null,
     'Le bloc de mesure « npm test → tests N · pass N · fail 0 » a disparu du README §8 : ' +
     'ce contrôle n’a plus de sujet, et le chiffre n’a plus de point de mesure.');
-  // Les comptes par famille suivent, sur les lignes du même bloc.
-  const apres = texte.slice(ligne.index, ligne.index + 900);
+  /* Les comptes par famille suivent, sur les lignes du même bloc.
+   *
+   * ⚠️ **LES NOMS SE DÉCOUVRENT, ILS NE SE RÉCITENT PAS** — et ce lecteur en
+   * portait une liste écrite à la main de ONZE noms. C'est une des raisons pour
+   * lesquelles le constat **Q-219** est resté invisible : huit familles ajoutées
+   * depuis étaient **ignorées par le lecteur lui-même**, si bien que le contrôle
+   * comparait un sous-ensemble à un sous-ensemble et concluait à l'égalité.
+   *
+   * Un garde-fou qui récite ce qu'il devrait découvrir est le premier cas du
+   * tableau du `CLAUDE.md` §3 : l'omission fait **réussir en silence**. Le
+   * balayage prend donc tout couple « mot minuscule + nombre » du bloc, et
+   * écarte les trois mots de l'en-tête, qui n'ont jamais été des familles. */
+  // La fenêtre s'arrête à la ligne suivante du bloc : au-delà vivent « found 0
+  // vulnerabilities » et « code 0 », qui ne sont pas des familles.
+  const apres = texte.slice(ligne.index, texte.indexOf('npm audit', ligne.index));
+  const ENTETE = new Set(['tests', 'pass', 'fail']);
   const familles = {};
-  for (const trouve of apres.matchAll(/\b(base|api|reprise|navigateur|deploiement|depot|documentation|annuaire|modules|auth|droits)\s+(\d+)\b/g)) {
+  for (const trouve of apres.matchAll(/\b([a-z][a-z-]{2,})\s+(\d+)\b/g)) {
+    if (ENTETE.has(trouve[1])) continue;
     familles[trouve[1]] = Number(trouve[2]);
   }
   const revision = /Révision mesurée \| \*\*`([0-9a-f]{7,40})`\*\*/.exec(texte);
@@ -278,13 +293,88 @@ function famillesDecritesAuSection5() {
   const fin = bornes.length === 0 ? texte.length : Math.min(...bornes);
   const section = texte.slice(debut, fin);
   const trouvees = new Set();
-  for (const trouve of section.matchAll(/`test\/([a-z]+)\/`/g)) {
+  // ⚠️ Le trait d'union compte : `test/journal-lecture/` est une famille, et un
+  //    motif `[a-z]+` la lisait « journal » — c'est-à-dire le NOM D'UNE AUTRE
+  //    famille, déjà présente. Deux répertoires se confondaient donc en un, et
+  //    l'un des deux disparaissait du contrôle sans que rien ne le dise.
+  for (const trouve of section.matchAll(/`test\/([a-z][a-z-]*)\/`/g)) {
     // `test/aide/` n'est pas une famille : le §5 le dit lui-même, juste après le
     // tableau — et `famillesA()` l'exclut pour la même raison (montages partagés).
     if (trouve[1] !== 'aide') trouvees.add(trouve[1]);
   }
   return [...trouvees].sort();
 }
+
+describe('Le relevé ne peut pas VIEILLIR indéfiniment (constat Q-219)', () => {
+  /* ══════════════════════════════════════════════════════════════════════
+     CE CONTRÔLE MANQUAIT, ET SON ABSENCE A UN NOM.
+
+     Le dispositif juge le README contre **la révision que le README nomme**.
+     C'est une décision juste, et elle est expliquée en tête de ce fichier :
+     jugé contre l'arbre de travail, il serait resté rouge toute une vague
+     pendant que quatre agents écrivaient des essais, et *un banc qui échoue
+     quatre fois sur cinq apprend à être ignoré* (constat Q-64).
+
+     Mais cette décision a un revers que personne ne gardait : **rien
+     n'obligeait à réancrer le relevé à la clôture**. Le README l'écrivait —
+     « la remise à jour de la documentation est une étape de la fermeture de
+     porte » — et trois portes successives ne l'ont pas fait. Résultat mesuré
+     par le troisième passage de S8 : le relevé désignait une révision
+     **cinquante-six commits en arrière** et annonçait **1 030 essais quand le
+     banc en jouait 1 723**, 11 familles au lieu de 19, 7 migrations au lieu de
+     16 — et le garde-fou était **vert par construction**.
+
+     ⚠️ **Une consigne écrite n'est pas un contrôle.** C'est la leçon la plus
+     répétée de ce chantier, et elle s'appliquait ici au dispositif même qui
+     existe pour empêcher la documentation de mentir.
+
+     Le seuil est large à dessein : quarante commits laissent passer une vague
+     entière de travail sans rougir, et arrêtent la dérive avant qu'elle
+     n'atteigne l'ordre de grandeur observé.
+     ══════════════════════════════════════════════════════════════════════ */
+  const SEUIL_COMMITS = 40;
+
+  test('LA RÉVISION MESURÉE n’est pas distancée de plus de quarante commits', async () => {
+    const mesure = blocDeMesure();
+    const distance = Number(
+      execFileSync('git', ['rev-list', '--count', `${mesure.revision}..HEAD`], {
+        cwd: RACINE_DEPOT,
+        encoding: 'utf8',
+      }).trim(),
+    );
+    assert.ok(
+      distance <= SEUIL_COMMITS,
+      `Le relevé du §8 désigne \`${mesure.revision}\`, ${String(distance)} commits en ` +
+        `arrière (seuil ${String(SEUIL_COMMITS)}). Les chiffres qu'il annonce décrivent un ` +
+        'produit qui n’existe plus, et le lecteur qui les compare au réel cesse de se servir ' +
+        'du document comme d’un contrôle.\n' +
+        'Réancrez : rejouez `npm test` famille par famille, relevez le schéma dans ' +
+        '`pg_catalog`, et faites pointer « Révision mesurée » sur HEAD.',
+    );
+  });
+
+  test('LE CONTRÔLE MORD — une révision distancée est bien vue', () => {
+    // La distance se lit par `git rev-list --count`, pas par une date : une
+    // branche peut être ancienne et à jour, ou récente et distancée.
+    const premier = execFileSync('git', ['rev-list', '--max-parents=0', 'HEAD'], {
+      cwd: RACINE_DEPOT,
+      encoding: 'utf8',
+    })
+      .trim()
+      .split('\n')[0];
+    const distance = Number(
+      execFileSync('git', ['rev-list', '--count', `${premier}..HEAD`], {
+        cwd: RACINE_DEPOT,
+        encoding: 'utf8',
+      }).trim(),
+    );
+    assert.ok(
+      distance > SEUIL_COMMITS,
+      'Le premier commit du dépôt devrait être distancé de plus de quarante commits ; ' +
+        `il l'est de ${String(distance)}. Si ce n'est plus vrai, le seuil ne mesure rien.`,
+    );
+  });
+});
 
 describe('Les FAMILLES DÉCRITES au §5 sont celles de la RÉVISION MESURÉE (constat Q-90)', () => {
   test('NI FAMILLE FANTÔME NI FAMILLE TUE : le §5 nomme exactement les répertoires de la révision que le §8 cite', async () => {

@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 1030 essais, onze familles (voir plus bas)
+npm test                           # 1725 essais, dix-neuf familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -609,9 +609,17 @@ que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non re
 | `test/droits/` | le modèle de droits à trois axes : vocabulaire des domaines confronté au catalogue PostgreSQL, projection des niveaux par domaine, écriture conditionnée du substrat de session (E1) |
 | `test/annuaire/` | l'annuaire LDAP **simulé** lui-même, contre son propre contrat (`CONVENTIONS.md` §25.2), et un **oracle tiers** (`mod_authnz_ldap` d'Apache, qui ne partage aucune ligne avec ce dépôt) pour ne pas se croire deux fois de la même façon |
 | `test/modules/` | le filet **comportemental** des modules métier du frontend (constat Q-16) : afficher, renommer, cliquer, exiger que la navigation atteigne le nouvel identifiant |
+| `test/import/` | le moteur d'import généralisé (L7) : lecture CSV et XLSX, transactionnalité tout-ou-rien, idempotence par le fichier, cloisonnement — **et le COÛT des analyseurs sur des fichiers hostiles**, après trois dénis de service trouvés par trois portes successives (Q-197, Q-208, Q-215) |
+| `test/pieces/` | les huit contrôles de la chaîne des pièces jointes (L6) dans leur ordre figé, ClamAV réel, quarantaine, ré-analyse — et les **bornes de décompression**, qui doivent mordre sur le réel et non sur ce que l'archive déclare (Q-205 c) |
+| `test/cycle/` | le cycle de vie (L13) : purge RGPD et son rapport, rétention, **sortie de filiale** — opération irréversible dont l'enveloppe remise à l'acquéreur est l'unique trace |
+| `test/notifications/` | les relances par courriel (L12) : client SMTP écrit à la main, fenêtre anti-doublon, cloisonnement des destinataires — **et le départage d'un homonyme**, qui décide vers quelle adresse part un courriel (Q-195, Q-196) |
+| `test/approbations/` | le circuit d'approbation (L8) : documents, acceptation des risques résiduels, rapports d'audit, et l'irréversibilité **cherchée dans la base** plutôt que réécrite en TypeScript |
+| `test/filiales/` | la création de filiale et le sélecteur de filiale active (L4) : synchronisation des groupes d'annuaire dans la même transaction, et **la trace au journal sans laquelle une filiale existerait sans preuve** (Q-213, Q-218) |
+| `test/journal/` | la **couverture** du journal d'audit, mesurée en exerçant le produit puis en comptant ce qui est arrivé en base — jamais en relisant `src/` |
+| `test/journal-lecture/` | la lecture cloisonnée du journal (condition E6) et les constats de la porte S4 |
 
 *(`test/aide/` n'est pas une famille : ce sont les montages partagés — base, serveur,
-navigateur, outillage — que les onze autres appellent.)*
+navigateur, outillage — que les dix-neuf autres appellent.)*
 
 **Deux de ces familles sont nées d'un défaut, et c'est ce qui leur donne leur valeur.**
 
@@ -853,30 +861,34 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`d217fbb`** — « Q-75, Q-76, Q-58 : un contrôle non joué ne se confond plus avec un contrôle réussi » (04/09/2026), rejouée **sur la machine réelle** (Debian 13, `SRV-Infra`) et non plus sur un conteneur Ubuntu. ⚠️ **Le compte est passé de 969 à 1030 pendant la vague 3**, cinquante-neuf essais ayant été ajoutés par les agents B1 et B2 après le passage de l'agent de documentation, puis deux de plus au fil des correctifs suivants — et le garde-fou de l'époque ne pouvait pas le voir seul : il confronte le document à **lui-même**, jamais au compte réellement joué (constat **Q-87**, resté **ouvert** — c'est ce qui a laissé passer, jusqu'à la porte S3, les cinq chiffres faux du constat **Q-90**, celui-ci compris) |
+| Révision mesurée | **`df2ddb0`** — « Q-215 : le troisième déni de service du même analyseur, et l'interdit recalibré » (05/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a été RÉANCRÉ après le constat Q-219** : il désignait `d217fbb`, **cinquante-six commits en arrière**, et annonçait 1 030 essais quand le banc en jouait 1 725 — 11 familles au lieu de 19, 48 tables au lieu de 49, 7 migrations au lieu de 16. Le garde-fou ne pouvait pas le voir : il juge le document contre **la révision que le document nomme**, ce qui est juste pendant une vague et aveugle à sa clôture. La péremption est désormais **bornée** (§ ci-dessous), au lieu d'être une consigne écrite que trois portes ont laissée non tenue. |
 | État de l'arbre | **propre** (`git status --porcelain` vide) |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 1030 · pass 1030 · fail 0 (131,0 s)
-                                                   base 272 · api 241 · reprise 77
-                                                   navigateur 74 · deploiement 65
-                                                   depot 5 · documentation 17
-                                                   auth 115 · droits 83 · annuaire 48
-                                                   modules 33
+npm test                                         → tests 1725 · pass 1725 · fail 0
+                                                   base 274 · api 272 · navigateur 167
+                                                   auth 115 · import 97 · pieces 89
+                                                   droits 84 · reprise 79 · cycle 72
+                                                   deploiement 70 · journal-lecture 70
+                                                   notifications 69 · approbations 60
+                                                   annuaire 48 · depot 42 · modules 39
+                                                   filiales 34 · documentation 25
+                                                   journal 19
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (9 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (14 garde-fous découverts, joués, consignés)
 ```
 
-Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **48 tables** en
-**7 migrations**, **192 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
-**71 clés étrangères** (43 `restrict`, 27 `cascade`, 1 `set null`), **43 tables portant
+Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **49 tables** en
+**16 migrations**, **196 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**73 clés étrangères** (44 `restrict`, 27 `cascade`, 2 `set null`), **43 tables portant
 `cree_par` et 43 déclencheurs de création**, **11 clés étrangères composites** visant
-`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **9 contrôles consignés**
-dans `controles_schema` (la migration `007_authentification.sql` en a ajouté un neuvième).
+`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **14 contrôles consignés**
+dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
+la migration `015` (constat Q-201).
 
 Frontend, mesuré en **évaluant le module** et non en dépouillant son texte : façade
 `DataStore` à **131 membres**, identique avant et après la vague 2 ; **118 méthodes
