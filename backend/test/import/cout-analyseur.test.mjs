@@ -34,8 +34,8 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { before, describe, test } from 'node:test';
 import { deflateRawSync } from 'node:zlib';
 
@@ -208,44 +208,154 @@ describe('Q-208 — le coût d’un fichier hostile reste borné', () => {
   });
 });
 
-describe('Q-208 — la règle qui remplace la vigilance', () => {
-  test('AUCUN `new RegExp` dans l’analyseur — l’interdit est absolu, donc relisible', () => {
-    /* Deux portes ont cru la famille fermée et ont laissé un motif derrière.
-       Une règle qui demande de JUGER chaque site échoue au troisième passage ;
-       un interdit absolu se vérifie sans jugement.
+describe('Q-215 — la règle qui remplace la vigilance, corrigée', () => {
+  /* ══════════════════════════════════════════════════════════════════════
+     L'INTERDIT POSÉ AU PASSAGE PRÉCÉDENT VISAIT LA MAUVAISE CIBLE.
 
-       Ce qui reste permis : les littéraux d'expression écrits dans le source
-       (`/^([A-Z]+)/u`), qui ne peuvent rien recevoir du fichier. Ce qui ne l'est
-       plus : `new RegExp(...)`, la seule forme par laquelle des octets
-       d'attaquant peuvent DEVENIR un motif. */
-    const source = readFileSync(join(RACINE_BACKEND, 'src', 'import', 'tableur.ts'), 'utf8');
+     Il bannissait la CONSTRUCTION d'expression (`new RegExp`) en affirmant
+     que c'était « la seule forme par laquelle des octets d'attaquant
+     deviennent un motif ». **C'est faux**, et le deuxième passage de la
+     porte S8 l'a démontré : `/<sheet\b([^>]*)\/?>/u`, expression
+     **littérale** appliquée à `workbook.xml`, était quadratique. **931
+     octets bloquaient la boucle 5 994 ms**, et 20,15 s à travers Apache —
+     mesuré avec `/api/sante` comme témoin.
+
+     Ce qui est dangereux n'est pas l'ORIGINE du motif, c'est **sa FORME** :
+     une classe négative non bornée (`[^x]*`) que rien n'ancre. Sur une
+     entrée où le caractère de fin ne vient jamais, le moteur consomme tout,
+     échoue, rebrousse, et recommence à la position suivante.
+
+     ⚠️ Trois passages de porte ont trouvé trois motifs dans ce fichier, et
+     chaque correctif a laissé le suivant derrière. Le troisième vivait à
+     vingt lignes d'un commentaire qui décrit **exactement** cette forme
+     comme celle qui « rétablirait le défaut qu'on ferme ». Écrire la règle
+     dans un commentaire ne suffit pas : il faut qu'une machine la vérifie.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /** Lignes de code (commentaires retirés) portant une forme à risque. */
+  function formesARisque(source) {
     const sansCommentaires = source
       .replace(/\/\*[\s\S]*?\*\//gu, '')
-      .replace(/(^|[^:])\/\/[^\n]*/gu, '$1');
-    const fautes = sansCommentaires
+      .replace(/(^|[^:])\/\/[^\n]*/gu, '$1')
+      // ⚠️ Et les lignes de CONTINUATION d'un bloc, prises isolément. Le
+      //    commentaire d'`elementsXml` décrit la forme interdite en toutes
+      //    lettres : l'accuser ferait rougir le fichier pour un texte, et un
+      //    contrôle qui accuse à tort finit désarmé.
+      .replace(/^\s*\*.*$/gmu, '');
+    return sansCommentaires
       .split('\n')
       .map((ligne, i) => [i + 1, ligne])
-      .filter(([, ligne]) => ligne.includes('new RegExp'));
+      .filter(([, ligne]) => {
+        if (ligne.includes('new RegExp')) return true;
+        // Une classe négative suivie d'un quantificateur non borné, sans ancre
+        // de début sur la même expression : c'est la forme de Q-215.
+        return /\[\^[^\]]*\][*+]/u.test(ligne) && !/\/\^/u.test(ligne);
+      })
+      .map(([n, l]) => `${String(n)}: ${l.trim()}`);
+  }
+
+  test('AUCUNE forme à risque dans l’analyseur — construite OU littérale', () => {
+    const source = readFileSync(join(RACINE_BACKEND, 'src', 'import', 'tableur.ts'), 'utf8');
     assert.deepEqual(
-      fautes.map(([n, l]) => `${String(n)}: ${l.trim()}`),
+      formesARisque(source),
       [],
-      'Une expression rationnelle CONSTRUITE est la seule façon dont un octet du fichier ' +
-        'devient un motif. Deux portes ont laissé passer ce cas ; l’analyseur s’en passe ' +
-        'entièrement — `elementsXml` et `indexOf` font le même travail en temps linéaire.',
+      'Ces lignes portent une expression rationnelle dont le coût n’est pas borné sur une ' +
+        'entrée hostile : soit elle est CONSTRUITE (`new RegExp`, donc un octet du fichier ' +
+        'peut devenir un motif), soit elle porte une classe négative non bornée sans ancre ' +
+        '(`[^x]*`, donc elle rebrousse à chaque position). `elementsXml` et `indexOf` font ' +
+        'le même travail en temps linéaire.',
     );
   });
 
-  test('LE CONTRÔLE MORD — une construction fabriquée est bien vue', () => {
-    const fautif = "const r = new RegExp(`<Rel Id=\"${identifiant}\">`, 'u');";
-    const vus = fautif.split('\n').filter((l) => l.includes('new RegExp'));
-    assert.equal(vus.length, 1, 'Le détecteur doit voir une construction d’expression.');
-    const commentaire = ' * Cette fonction bâtissait un `new RegExp` depuis `nom`.';
-    const sans = commentaire.replace(/\/\*[\s\S]*?\*\//gu, '');
-    assert.ok(
-      sans.includes('new RegExp'),
-      'Un commentaire de bloc SUR PLUSIEURS lignes est retiré par le nettoyage ; celui-ci ' +
-        'est une ligne isolée et resterait — c’est pourquoi le balayage s’applique au ' +
-        'fichier entier, où les blocs sont complets.',
+  /**
+   * Les formes à risque de `src/` ENTIER qui sont admises, et pourquoi.
+   *
+   * ⚠️ Trois passages de porte ont trouvé trois fois la même forme, toujours
+   * dans `tableur.ts`. Ne regarder que ce fichier serait refaire l'erreur d'un
+   * cran plus haut : la prochaine occurrence naîtra ailleurs. Le balayage porte
+   * donc sur tout `src/`.
+   *
+   * Chaque exemption porte **une mesure**, pas une opinion. Le discriminant
+   * n'est pas la forme du motif — elles sont toutes de la même famille — c'est
+   * **si le sujet est borné**, ce qu'aucune analyse statique ne peut décider.
+   * Une liste est donc le bon outil ici : une forme nouvelle fait ROUGIR cet
+   * essai, et quelqu'un doit mesurer avant de l'y ajouter.
+   */
+  const FORMES_ADMISES = Object.freeze({
+    'import/modele.ts': 'remplacement global sans suffixe qui échoue — 200 000 signes en 0,4 ms',
+    'pieces/multipart.ts':
+      'sujet borné à 8 Kio (MAX_ENTETES_OCTETS) et nom de paramètre LITTÉRAL — mesuré 0,2 ms ' +
+      'à la borne, 0,4 ms à huit fois la borne',
+  });
+
+  test('AUCUNE forme à risque AILLEURS dans `src/` qui ne soit mesurée et admise', () => {
+    const fichiers = [];
+    const parcourir = (repertoire) => {
+      for (const entree of readdirSync(repertoire, { withFileTypes: true })) {
+        const chemin = join(repertoire, entree.name);
+        if (entree.isDirectory()) parcourir(chemin);
+        else if (entree.name.endsWith('.ts')) fichiers.push(chemin);
+      }
+    };
+    const racine = join(RACINE_BACKEND, 'src');
+    parcourir(racine);
+    assert.ok(fichiers.length >= 20, `Balayage suspect : ${String(fichiers.length)} fichier(s).`);
+
+    const inattendues = [];
+    for (const chemin of fichiers) {
+      const relatif = relative(racine, chemin).split('\\').join('/');
+      if (relatif === 'import/tableur.ts') continue; // couvert par l'essai précédent, à zéro
+      const trouvees = formesARisque(readFileSync(chemin, 'utf8'));
+      if (trouvees.length > 0 && !Object.hasOwn(FORMES_ADMISES, relatif)) {
+        inattendues.push(`${relatif}  ${trouvees[0]}`);
+      }
+    }
+    assert.deepEqual(
+      inattendues,
+      [],
+      'Ces expressions portent une classe négative non bornée sans ancre, ou sont ' +
+        'construites. Ce n’est un défaut QUE si leur sujet n’est pas borné — MESUREZ-LE, ' +
+        'puis corrigez, ou inscrivez le chiffre dans FORMES_ADMISES :\n' +
+        inattendues.map((f) => `    · ${f}`).join('\n'),
+    );
+
+    // Une exemption qui ne correspond plus à rien rassure sans protéger.
+    const mortes = Object.keys(FORMES_ADMISES).filter(
+      (f) => formesARisque(readFileSync(join(racine, f), 'utf8')).length === 0,
+    );
+    assert.deepEqual(mortes, [], 'Ces exemptions ne protègent plus rien et doivent disparaître.');
+  });
+
+  test('LE CONTRÔLE MORD — sur les TROIS formes trouvées par les portes S8 et S8 bis', () => {
+    // (1) la construction depuis les données — Q-208 b
+    assert.equal(
+      formesARisque("const r = new RegExp(`<Rel Id=\"${identifiant}\">`, 'u');").length,
+      1,
+      'la forme de Q-208 b',
+    );
+    // (2) la classe négative non ancrée — Q-215, le cas exact
+    assert.equal(
+      formesARisque('const feuille = /<sheet\\b([^>]*)\\/?>/u.exec(classeur);').length,
+      1,
+      'la forme de Q-215 : c’est celle que l’interdit précédent NE voyait pas.',
+    );
+    // (3) et ce qui doit rester accepté, sans quoi le contrôle serait désarmé
+    assert.equal(
+      formesARisque("const lettres = /^([A-Z]+)/u.exec(reference);").length,
+      0,
+      'Une expression ANCRÉE ne rebrousse pas : l’accuser ferait rougir le fichier pour rien.',
+    );
+    assert.equal(
+      formesARisque("return texte.replace(/&(#x[0-9a-f]+|#\\d+|[a-z]+);/giu, f);").length,
+      0,
+      'Une alternation de classes simples, sans classe négative, est linéaire.',
+    );
+    assert.equal(
+      formesARisque(' * dit qu’une forme <nom[^>]*> rebalaie tout — commentaire, pas code.').length,
+      0,
+      'Un COMMENTAIRE qui décrit la forme interdite ne doit pas être accusé : c’est ' +
+        'précisément le commentaire d’`elementsXml`, et le faire rougir apprendrait à ' +
+        'désarmer le contrôle.',
     );
   });
 });

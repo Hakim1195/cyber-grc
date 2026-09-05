@@ -875,9 +875,24 @@ quatre points de durcissement groupés sous **Q-214 b, c, d, f**.
 
 **Deux règles neuves issues de S8, à ne pas défaire :**
 
-3. **Aucune expression rationnelle ne se CONSTRUIT dans `src/import/tableur.ts`.** C'est la
-   seule forme par laquelle un octet de fichier devient un motif. L'interdit est absolu
-   parce qu'un interdit absolu se relit sans jugement.
+3. **Aucune expression rationnelle à coût non borné dans `src/`** — ni construite
+   (`new RegExp`), ni littérale portant une classe négative non bornée (`[^x]*`) qu'aucune
+   ancre ne retient. ⚠️ **La première rédaction de cette règle ne bannissait que la
+   CONSTRUCTION**, au motif que c'était « la seule forme par laquelle un octet de fichier
+   devient un motif » : **c'était faux**, et le deuxième passage de S8 l'a démontré avec une
+   expression *littérale* quadratique (**Q-215** : 931 octets → 5 994 ms, 20 s à travers
+   Apache). Ce qui est dangereux n'est pas l'origine du motif, c'est **sa forme**. Le
+   contrôle balaie **tout `src/`** et non le seul analyseur : trois passages ont trouvé trois
+   fois la même forme au même endroit, ne regarder que là serait refaire l'erreur d'un cran
+   plus haut. Les quatre autres occurrences de `src/` sont **mesurées** (0,1 à 0,4 ms, sujets
+   bornés) et inscrites avec leur chiffre — le discriminant n'est pas la forme, c'est **si le
+   sujet est borné**, et aucune analyse statique ne le décide.
+
+   ⚠️ **Et la leçon de méthode, qui vaut au-delà de ce fichier** : le commentaire
+   d'`elementsXml` décrivait cette forme, en toutes lettres, comme celle qui « rétablirait le
+   défaut qu'on ferme » — vingt lignes au-dessus de la ligne fautive, qui a survécu au
+   correctif portant ce commentaire. **Écrire la règle dans un commentaire ne suffit pas :
+   il faut qu'une machine la vérifie.**
 4. **Un identifiant ne peut porter ni guillemet, ni chevron, ni esperluette**
    (`verifierIdentifiant`). La reprise conserve les identifiants du fichier à l'octet près ;
    fermer la source coûte une ligne, échapper les 48 sites d'attribut du frontend serait une
@@ -888,7 +903,7 @@ quatre points de durcissement groupés sous **Q-214 b, c, d, f**.
 
 | | Contenu | Pourquoi |
 |---|---|---|
-| **a** | **Rejouer la porte S8** | Six constats ont été fermés depuis son verdict ; un banc vert ne vaut pas un passage de porte, et *les constats fermés depuis un passage précédent ont déjà fait échouer le suivant* |
+| **a** | **Rejouer la porte S8 — TROISIÈME passage** | Le deuxième a refusé sur **Q-215**, corrigé depuis. Deux passages ont rouvert Q-208 deux fois : *un banc vert ne vaut pas un passage de porte*, et *les constats fermés depuis un passage précédent ont déjà fait échouer le suivant* |
 | **b** | **Q-214 b, c, d, f** | Promotion de pièce jointe avant `commit` sans réconciliation disque↔base ; quota lu puis consommé dans deux transactions ; trois collections non bornées ; trois valeurs pour la borne de corps |
 | **c** | **Q-205 b, Q-206** | Un aperçu d'import ne laisse aucune trace ; deux erreurs de fond dans le catalogue ANSSI **français**, dont la source est un CSV du client |
 | **d** | **Q-186** | Propriétaire : **exploitant** |

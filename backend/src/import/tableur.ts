@@ -451,10 +451,19 @@ function estEspace(caractere: string): boolean {
  * (constat **Q-208**), à quelques lignes de la note où la porte S6 disait avoir
  * fermé la famille. Deux passages, deux oublis.
  *
- * La règle qui remplace la vigilance : **il n'y a plus aucun `new RegExp` dans
- * ce fichier**, et un contrôle mécanique le vérifie. Un interdit absolu se
- * relit d'un coup d'œil ; « n'interpolez que des littéraux » demande de juger
- * chaque site, et c'est ce jugement qui a manqué deux fois.
+ * La règle qui remplace la vigilance — ⚠️ **ÉLARGIE APRÈS LE CONSTAT Q-215**,
+ * parce que sa première rédaction visait la mauvaise cible. Elle disait : « il
+ * n'y a plus aucun `new RegExp` dans ce fichier », au motif que la construction
+ * était *la seule forme par laquelle des octets d'attaquant deviennent un
+ * motif*. **C'était faux** : une expression **littérale** appliquée à un
+ * fragment du document est tout aussi catastrophique, et le deuxième passage
+ * de la porte S8 en a trouvé une — quadratique, 931 octets pour 5 994 ms.
+ *
+ * Ce qui est dangereux n'est pas l'ORIGINE du motif, c'est **sa FORME**. Le
+ * contrôle mécanique bannit donc les deux : `new RegExp`, **et** toute classe
+ * négative non bornée (`[^x]*`) qu'aucune ancre ne retient. Un interdit absolu
+ * se relit d'un coup d'œil ; « n'écrivez pas de motif catastrophique » demande
+ * de juger chaque site, et ce jugement a manqué **trois fois**.
  *
  * Le balayage reproduit l'ancien comportement, bord de mot compris — y compris
  * le fait que chercher « id » trouve « r:id », le deux-points étant une borne de
@@ -602,11 +611,45 @@ function lireChainesPartagees(xml: string | null): readonly string[] {
  */
 function cheminPremiereFeuille(classeur: string | null, relations: string | null): string {
   if (classeur === null || relations === null) return PARTIE_FEUILLE_PAR_DEFAUT;
-  const feuille = /<sheet\b([^>]*)\/?>/u.exec(classeur);
+  /* ⚠️ CETTE LIGNE ÉTAIT LE TROISIÈME DÉNI DE SERVICE — constat **Q-215**,
+     deuxième passage de la porte S8, et **Q-208 rouvert pour la seconde fois**.
+
+     Elle lisait `/<sheet\b([^>]*)\/?>/u.exec(classeur)`, où `classeur` est le
+     contenu de `xl/workbook.xml` — des octets d'attaquant. `[^>]*` n'est pas
+     ancré : sur une suite de `<sheet` **sans aucun `>`**, le moteur consomme
+     tout le reste, échoue sur `\/?>`, rebrousse, et recommence à la position
+     suivante. Une passe complète par caractère, soit un coût **quadratique**.
+     Mesuré : **931 octets → 5 994 ms**, ×3,8 pour ×2 d'entrée, et **20,15 s de
+     boucle bloquée à travers Apache** — `/api/sante` a mis 20,15 s au lieu de
+     15 ms pendant l'import.
+
+     ⚠️ **Ce que cela apprend, et c'est plus utile que le correctif** : le
+     commentaire d'`elementsXml`, VINGT LIGNES PLUS HAUT, écrit en toutes
+     lettres qu'une forme `<nom[^>]*>` « rebalaie et rebrousse le reste de la
+     chaîne à chaque position candidate, ce qui rétablirait exactement le défaut
+     qu'on ferme ». Cette ligne ÉTAIT ce défaut, et elle a survécu au correctif
+     qui portait ce commentaire.
+
+     ⚠️ **Et l'interdit posé au passage précédent visait la mauvaise cible.** Il
+     bannissait la CONSTRUCTION d'expression (`new RegExp`) en affirmant que
+     c'était « la seule forme par laquelle des octets d'attaquant deviennent un
+     motif ». C'est faux : une expression **littérale** appliquée à un fragment
+     du document est tout aussi catastrophique. Ce qui est dangereux n'est pas
+     l'origine du motif, c'est **sa forme** — une classe négative non bornée
+     qu'aucune ancre ne retient. L'interdit a été corrigé en conséquence, et le
+     contrôle mécanique porte désormais sur la forme.
+
+     Le correctif : `elementsXml`, le générateur linéaire déjà présent, qui
+     cherche par `indexOf` depuis un curseur qui n'avance jamais à reculons. */
+  let attributsFeuille: string | null = null;
+  for (const element of elementsXml(classeur, 'sheet')) {
+    attributsFeuille = element.attributs;
+    break;
+  }
   const identifiant =
-    feuille?.[1] === undefined
+    attributsFeuille === null
       ? null
-      : (attribut(feuille[1], 'r:id') ?? attribut(feuille[1], 'id'));
+      : (attribut(attributsFeuille, 'r:id') ?? attribut(attributsFeuille, 'id'));
   if (identifiant === null) return PARTIE_FEUILLE_PAR_DEFAUT;
 
   /* ⚠️ CETTE LIGNE CONSTRUISAIT UNE EXPRESSION RATIONNELLE DEPUIS LE FICHIER —
