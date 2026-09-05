@@ -138,6 +138,70 @@ describe('§1 — créer une filiale crée aussi de quoi y entrer', () => {
     assert.equal(await compter('select count(*)::text as n from filiales'), avant + 1);
   });
 
+  test('LA CRÉATION LAISSE UNE TRACE QUI NOMME LA FILIALE (constat Q-213)', async () => {
+    /* ══════════════════════════════════════════════════════════════════════
+       Ce fichier n'appelait **jamais** `journaliser`. La création validait sa
+       transaction, répondait 201, et sa seule trace venait du crochet
+       `onResponse` — qui ouvre SA PROPRE transaction, APRÈS la réponse, et
+       AVALE son échec.
+
+       Deux conséquences, et la première est la plus grave : si cette trace
+       échouait, **une filiale existait sans aucune entrée au journal**, dans le
+       registre qui fait preuve en audit ISO 27001, pour l'acte le plus
+       structurant du produit. Et même réussie, elle ne portait que la route et
+       le statut : on savait qu'une filiale avait été créée, **jamais
+       laquelle**.
+
+       ⚠️ La trace est désormais écrite DANS la transaction de la création : si
+       le journal refuse, la filiale n'est pas créée. Même raisonnement que la
+       synchronisation des groupes d'annuaire — laisser derrière soi une moitié
+       de création est la forme la plus discrète du défaut.
+       ══════════════════════════════════════════════════════════════════════ */
+    const entrees = async () =>
+      await base.avecPerimetre(
+        proprietaire,
+        perimetre('temoin-journal', FILIALE_A, [FILIALE_A, FILIALE_B], true),
+        async (c) =>
+          (
+            await c.query(
+              `select "entite_id", "valeurs_apres", "utilisateur_libelle"
+                 from "journal_audit"
+                where "action" = 'creation' and "entite_type" = 'filiales'
+                order by "numero"`,
+            )
+          ).rows,
+      );
+
+    const avant = await entrees();
+    const { statut, corps } = await administration.appeler('POST', '/api/filiales', {
+      corps: { code: 'OSL', raison_sociale: 'Dedienne Nordics AS', pays: 'NO' },
+    });
+    assert.equal(statut, 201, JSON.stringify(corps));
+
+    const apres = await entrees();
+    assert.equal(
+      apres.length,
+      avant.length + 1,
+      'Une création de filiale doit laisser UNE entrée au journal, écrite par la route ' +
+        'elle-même — pas par un crochet qui s’exécute après la réponse et avale ses échecs.',
+    );
+
+    const derniere = apres[apres.length - 1];
+    assert.equal(
+      derniere.entite_id,
+      corps.filiale.id,
+      'La trace doit nommer LA filiale créée : « une filiale a été créée » sans dire ' +
+        'laquelle ne répond à aucune question d’audit.',
+    );
+    assert.equal(derniere.valeurs_apres.code, 'OSL');
+    assert.equal(derniere.valeurs_apres.raison_sociale, 'Dedienne Nordics AS');
+    assert.equal(
+      derniere.valeurs_apres.statut,
+      'active',
+      'le statut est ce qui fait basculer f_perimetre_groupe : il doit être au journal',
+    );
+  });
+
   test('les groupes d’annuaire de la filiale existent, et sont RENDUS à créer', async () => {
     const { statut, corps } = await administration.appeler('POST', '/api/filiales', {
       corps: { code: 'LIS', raison_sociale: 'Dedienne Portugal Lda', pays: 'PT' },

@@ -364,6 +364,52 @@ describe('Le produit est exercé, puis le journal est compté', () => {
       const extraction = await greffon.appeler('GET', '/api/export');
       assert.equal(extraction.statut, 403, JSON.stringify(extraction.corps));
       exerce.routes.add('refus de droit');
+
+      /* ══ CONSTAT **Q-209** DE LA PORTE S8 — l'autre moitié de la question ══
+       *
+       * Cet essai vérifiait que le REFUS d'export est tracé. Il ne demandait
+       * jamais ce que fait le **succès** de l'autre route qui rend le même
+       * contenu : `GET /api/donnees` appelle la même fonction avec les mêmes
+       * arguments, ne demande pas le droit d'export — c'est la route de
+       * chargement de l'application, l'exiger empêcherait tout lecteur
+       * d'ouvrir le produit — et ne laissait **aucune trace**.
+       *
+       * Mesuré par l'auditeur, par la route réelle : `/api/export` → 403
+       * journalisé ; `/api/donnees` → 200 avec 25 collections, et le journal
+       * muet. Un `curl` suivi d'un `jq` produisait un `grc-backup` valide.
+       * La lettre du contrôle S7 passait ; son intention non.
+       *
+       * Ce qui est éprouvé ici est donc la trace, pas la barrière : la
+       * question « qui a extrait le jeu de données complet ? » doit avoir une
+       * réponse **pour les deux chemins**. */
+      const avantChargement = await entreesDuScenario(
+        "and action = 'consultation_sensible' and resume like 'Chargement du jeu%'",
+      );
+      const chargement = await greffon.appeler('GET', '/api/donnees');
+      assert.equal(
+        chargement.statut,
+        200,
+        'La route de chargement doit rester ouverte à un lecteur : c’est par elle que ' +
+          `l’application s’ouvre. ${JSON.stringify(chargement.corps)}`,
+      );
+      // LA MATIÈRE : elle rend bien le jeu complet, sinon tracer ne prouve rien.
+      assert.ok(
+        Object.keys(chargement.corps.data ?? {}).length >= 5,
+        `Le chargement rend ${String(Object.keys(chargement.corps.data ?? {}).length)} ` +
+          'collection(s) : trop peu pour que la trace ait un objet.',
+      );
+      const apresChargement = await entreesDuScenario(
+        "and action = 'consultation_sensible' and resume like 'Chargement du jeu%'",
+      );
+      assert.equal(
+        apresChargement.length,
+        avantChargement.length + 1,
+        'Une extraction complète du jeu de données doit laisser UNE trace, même quand elle ' +
+          'passe par la route de chargement plutôt que par `/api/export`. Sans elle, le ' +
+          'droit d’export ne protège pas ce qu’il prétend protéger, et un auditeur ' +
+          'ISO 27001 n’a pas de réponse à sa première question.',
+      );
+      exerce.routes.add('chargement du jeu de données');
     } finally {
       await greffon.fermer();
     }
@@ -586,7 +632,13 @@ describe('La couverture, mesurée en base', () => {
     assert.ok(exerce.creations >= 14, `créations exercées : ${String(exerce.creations)}`);
     assert.ok(exerce.modifications >= 12, `modifications exercées : ${String(exerce.modifications)}`);
     assert.ok(exerce.suppressions >= 14, `suppressions exercées : ${String(exerce.suppressions)}`);
-    assert.equal(exerce.routes.size, 4, `routes exercées : ${[...exerce.routes].join(', ')}`);
+    /* ⚠️ Ce compte est ÉPINGLÉ, et il a rougi en passant de 4 à 5 — c'est ce
+       qu'il doit faire. La cinquième route est `GET /api/donnees` (constat
+       Q-209 de la porte S8) : elle rend le même contenu que `/api/export` et
+       ne laissait aucune trace. Une route de plus doit être reconnue ici en
+       connaissance de cause ; une route qui disparaîtrait ne doit pas
+       s'effacer en silence. */
+    assert.equal(exerce.routes.size, 5, `routes exercées : ${[...exerce.routes].join(', ')}`);
 
     // Et le journal doit avoir vu passer AU MOINS autant d'écritures que le
     // scénario en a réussi. C'est le lien entre « j'ai exercé » et « c'est

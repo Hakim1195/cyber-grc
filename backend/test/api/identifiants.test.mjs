@@ -504,3 +504,75 @@ describe('La couture d’essai n’est pas une porte dérobée', () => {
     );
   });
 });
+
+/* =====================================================================
+ *  Q-211 — un identifiant ne peut pas porter de balise
+ * =====================================================================
+ *
+ * `verifierIdentifiant` acceptait `"`, `<`, `>` et `&`. La création par
+ * `POST /api/entites/*` referme le canal — le serveur réattribue
+ * l'identifiant —, mais **la reprise conserve ceux du fichier à l'octet
+ * près**, parce que le round-trip exact est une exigence du cadrage. Un
+ * identifiant hostile entrait donc en base par `POST /api/reprise`, et
+ * **quarante-huit sites d'attribut du frontend** l'interpolent sans
+ * échappement (`data-id` ×33, `href` ×9, `value` ×6).
+ *
+ * ⚠️ **Le correctif ferme la SOURCE, pas les quarante-huit sorties**, et le
+ * motif est celui de tout ce chantier : une liste de quarante-huit
+ * corrections est une omission qui attend, et le quarante-neuvième site
+ * s'écrira demain sans que rien ne le dise.
+ *
+ * ⚠️ La CSP du vhost empêche l'exécution ; elle n'empêche pas l'habillage.
+ * C'est la leçon de Q-203, mesurée : l'élément entre dans le DOM et
+ * `position:fixed` s'applique.
+ */
+
+describe('Q-211 — les quatre signes du balisage sont refusés à la source', () => {
+  const verifier = async () =>
+    (await moduleCompile('entites/index.js')).verifierIdentifiant;
+
+  test('les quatre signes sont refusés, un par un', async () => {
+    const verifierIdentifiant = await verifier();
+    for (const signe of ['"', '<', '>', '&']) {
+      assert.throws(
+        () => verifierIdentifiant(`RISK-1700000000000-abc${signe}def`),
+        (erreur) => {
+          assert.match(String(erreur.message), /guillemet|chevron|esperluette/u);
+          return true;
+        },
+        `Le signe « ${signe} » doit être refusé : il ouvre 48 attributs du frontend.`,
+      );
+    }
+  });
+
+  test('LE CAS EXACT DU CONSTAT : un identifiant qui casse un attribut', async () => {
+    const verifierIdentifiant = await verifier();
+    assert.throws(() => verifierIdentifiant('X" onmouseover="alert(1)'), /guillemet/u);
+    assert.throws(() => verifierIdentifiant('<img src=x onerror=alert(1)>'), /chevron/u);
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE — les identifiants QUE LE PRODUIT FABRIQUE passent tous', async () => {
+    /* La seule question qui vaille : le round-trip tient-il ? Le produit
+       fabrique ses identifiants à cinq endroits (`CONVENTIONS.md` §2), tous de
+       la forme `<PRÉFIXE>-<horodatage>-<aléa>`. Aucun n'a jamais pu produire
+       l'un de ces quatre signes — y compris ceux des sauvegardes de l'ère
+       navigateur, que `/api/reprise` doit savoir relire. Refuser ces signes ne
+       refuse donc pas « un identifiant ancien » : il n'y a pas d'autre façon
+       d'en obtenir un qu'à la main. */
+    const verifierIdentifiant = await verifier();
+    for (const bon of [
+      'RISK-1788586173636-5ckijfmsssqq4tk06g3rmsu6c',
+      'ACT-1700000000000-abc123',
+      'DOC-G',
+      'PERS-PURGE',
+      'iso-27002-2022',
+      'A.5.1',
+      'anssi-hygiene/30',
+    ]) {
+      assert.doesNotThrow(
+        () => verifierIdentifiant(bon),
+        `« ${bon} » est une forme que le produit fabrique : la refuser casserait la reprise.`,
+      );
+    }
+  });
+});

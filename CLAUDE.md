@@ -777,61 +777,121 @@ il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écriv
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
 constat perdu.**
 
-### ▶ REPRENDRE ICI — **la vague 5 est close. La suite est la vague 6.**
+### ▶ REPRENDRE ICI — **les seize lots sont livrés ; la porte S8 a été jouée.**
 
-> ⚠️ **Réécrit le 04/09/2026 au soir, à la clôture de la vague 5.** Si vous lisez ailleurs
-> « le travail immédiat est la vague 4 », « L7 → L15 à faire », « le contrôle S15 n'est pas
-> rejoué » ou « aucun compte ne porte `GRC-EXPORT` », c'est **périmé**. L'état des lots se
-> lit au `PLAN_EXECUTION` §7, seule source des verdicts, et la table des lots du §8 est
-> confrontée aux livrables réels par `test/documentation/etat-des-lots.test.mjs`.
+> ⚠️ **Réécrit le 05/09/2026.** Si vous lisez ailleurs « la vague 4 est le travail
+> immédiat », « L5 reste à faire », « la couverture du journal est de 4 actions sur 20 »
+> ou « aucun essai navigateur n'existe », c'est **périmé**. L'arbitrage de curseur vit au
+> `docs/PLAN_EXECUTION.md` **§0 bis** et il prime ; l'état des lots et les verdicts se
+> lisent au **§7**, seule source.
 
-**Livré dans la vague 5, et qu'il ne faut pas refaire :**
+**Ce qui est livré, et qu'il ne faut pas refaire : les seize lots, L0 à L15.** Le banc
+rend **1 705 essais, 1 705 passés**, `npm run verifier-types` est propre, et la recette
+sert la révision courante (`install.sh --verifier-publication` → **81 fichiers servis
+identiques au dépôt**).
 
-| Lot | Ce qui est en place |
-|---|---|
-| **L7 — import généralisé** | Un moteur, vingt configurations dérivées de `decrire()`. Transactionnel (morsure : la ligne 201 heurte une clé posée par la ligne 6 — 199 lignes étaient là, zéro subsiste), idempotent **par le fichier**, cloisonné, journalisé. CSV **et** XLSX, format reconnu à la signature binaire. **L'import crée ; il ne met pas à jour et ne supprime pas** — trois motifs écrits dans `moteur.ts`. |
-| **L8 — circuit d'approbation** | Documents, acceptation des risques résiduels, rapports d'audit. `empreinte_objet` fait périmer une approbation quand l'objet change, pas quand on le réenregistre sans le modifier. **L'irréversibilité n'est pas réécrite en TypeScript** : elle vit dans la base, et la morsure va la chercher là — y compris sous le compte propriétaire, et par une course réelle à travers l'API. |
-| **L9 — identité par filiale** | Raison sociale et logo de la filiale active, aux écrans, aux impressions et aux exports. Zéro occurrence de la marque en dur. PNG/JPEG seulement, jamais SVG. ⚠️ **Les coordonnées ne sont pas livrées** — aucune route ne les rend (constat **Q-160**). |
-| **L4 — le reliquat** | La **consolidation Groupe** (`GET /api/consolidation`) et la **création de filiale** (`POST /api/filiales`) : deux contenus du lot que la vague 4 avait laissés dehors. |
+**La porte S6 a été jouée le 05/09 et refusée** — douze constats, **Q-194 → Q-205**. Sous
+le tri du §0 bis, **onze sont fermés et mordus** ; restent **Q-205 b** (un aperçu d'import
+ne laisse aucune trace alors qu'il exécute jusqu'à 5 000 `INSERT` réels) et **Q-206** (deux
+erreurs de fond dans le catalogue ANSSI **français**, dont la source est un CSV du client).
 
-**Quatre acquis d'environnement, mesurés, qui changent ce qu'on peut tenter :**
+**Quatre de ces constats méritent d'être lus, parce qu'ils enseignent plus qu'ils ne coûtent :**
 
-1. ✅ **Le contrôle S15 passe** — `npm audit --omit=dev` rend `found 0 vulnerabilities`. La
-   réserve « non rejoué » de la porte S4 est levée : c'était passager, et il a suffi de
-   rejouer (**Q-156**).
-2. ✅ **Le banc navigateur transporte les cookies** — il ne le faisait pas, et personne ne
-   l'avait su faute d'essayer. La classe « navigateur réel + authentification AD réelle »
-   est désormais praticable (**Q-159**).
-3. ✅ **Les compilations du banc sont sérialisées** par un verrou de fichier — trois agents
-   jouant `npm test` laissaient un `dist/` **composite** (**Q-148**).
-4. ✅ **`rssi.groupe` porte bien `GRC-EXPORT`** — l'affirmation contraire venait d'un rapport
-   d'agent recopié sans vérification (**Q-129**).
+- **Q-194** — le produit ne savait pas relire sa propre sauvegarde. `GET /api/export` puis
+  `POST /api/reprise` en mode « remplacer » rendait **409, zéro ligne restaurée**, sur une
+  base vierge portant *un seul* risque saisi à la main. La cause tenait en un mot : la
+  migration `012` avait écrit `catalogue_id text` au lieu du domaine `id_metier`, que porte
+  **toute** colonne d'identifiant du schéma et **par lequel la couche d'écriture découvre**
+  qu'il faut convertir le « non renseigné » du navigateur en `NULL`. ⚠️ Le défaut vivait
+  **entre trois fichiers dont aucun n'avait tort seul**, et ce qui l'a rendu invisible n'est
+  pas sa subtilité : **aucun essai ne faisait passer la sortie d'une route dans l'entrée
+  d'une autre**. Chaque moitié était éprouvée ; la jointure ne l'était pas.
+- **Q-199** — le lot L12 était livré dans une configuration où il **ne peut pas envoyer**
+  (`IPAddressDeny=any` sans le sous-réseau du relais), et le banc était **vert sur cette
+  configuration-là**. L'unité disait pourtant, en toutes lettres, ce que l'oubli
+  produirait : *une réserve écrite n'est pas une réserve traitée*, pour la énième fois.
+- **Q-200** — j'avais écrit un essai qui **verrouillait l'absence de trace** sur
+  `/api/consolidation`, en citant une règle que `src/pieces/index.ts` contredit depuis L6.
+  **Cinquième occurrence** du motif « un essai qui mesure un défaut et le consacre comme une
+  propriété désirable ».
+- **Q-201 / Q-207** — le produit annonçait « champs non enregistrés » après un
+  enregistrement **réussi**, puis « 1 champ sans destination » après une restauration
+  **saine**. Un message qui annonce une perte qui n'a pas eu lieu apprend à ne plus croire
+  les bandeaux, **y compris le jour où ils disent vrai**.
 
-**Le travail de la vague 6, par ordre de valeur :**
+**Deux arbitrages qui vous étaient réservés ont été tranchés le 05/09**, et le motif compte
+plus que la décision :
 
-| | Contenu | Pourquoi maintenant |
+- **Q-181** — le profil `DIRECTION` ne portait **aucun** des sept domaines que la vision
+  Groupe agrège : l'écran bâti pour elle lui affichait « — » sur presque tout ce qu'examine
+  une revue de direction. Migration `016` : les six domaines manquants, **en lecture seule**,
+  et rien d'autre. La règle posée est *le profil couvre exactement ce que l'écran qui lui est
+  destiné agrège* — en deçà l'écran ment, au-delà c'est un sur-octroi.
+- **Q-192** — treize codes ANSSI sur quarante-deux désignent autre chose que ce que le guide
+  désigne sous le même numéro. **On ne renumérote pas** : les auto-évaluations sont stockées
+  par `(ref_id, code)`, et les renuméroter les réattribuerait **en silence** dans un outil
+  produit en audit. L'écart est **affiché** — chaque mesure porte son numéro officiel,
+  rappelé là où il diffère seulement.
+
+**Deux règles neuves, à ne pas défaire :**
+
+1. **Le souligné initial est réservé aux champs que le serveur ajoute** (`_version`,
+   `_versionMiseEnOeuvre`, `_porteeGroupe`). `js/core/sync.js` et `src/entites/index.ts` les
+   écartent **par le préfixe**, jamais par la liste des trois noms ; et la migration `015`
+   pose `f_verifier_champs_structurels()`, qui refuse toute colonne ainsi nommée — sans quoi
+   une saisie disparaîtrait en silence.
+2. **`I18n.valeur()` est un passe-plat** : une valeur absente du dictionnaire repart telle
+   quelle, et cette valeur vient de la base. Tout appel non littéral doit être échappé ; un
+   contrôle mécanique l'exige, **mesure** que chaque enveloppe échappe vraiment, et ferme le
+   contournement par alias.
+
+**La porte S8 — la dernière, celle qui conditionne la mise en service — a été jouée le
+05/09 et refusée** : sept constats, **Q-208 → Q-214**, dont **un seul bloquant** et
+**aucun de la classe « fuite ou perte de données »**. Six sont fermés et mordus ; restent
+quatre points de durcissement groupés sous **Q-214 b, c, d, f**.
+
+**Trois d'entre eux enseignent plus qu'ils ne coûtent, et il faut les lire :**
+
+- **Q-208 — Q-197 était ROUVERT.** Le correctif de la porte S6 avait réécrit les cinq
+  expressions qu'il nommait et **en avait laissé deux derrière**, à quelques lignes de sa
+  propre note déclarant la famille fermée. **322 octets bloquaient le serveur 2 secondes à
+  travers Apache** ; 468 octets, 35 secondes. ⚠️ **Deux passages, deux oublis** : ce n'est
+  pas un défaut d'attention, c'est qu'une règle demandant de *juger chaque site* échoue au
+  troisième passage. Elle est remplacée par **un interdit absolu** — plus aucun
+  `new RegExp` dans l'analyseur, vérifié mécaniquement — et par **une mesure du rapport de
+  coût**, car un seuil seul serait satisfait par un code deux fois moins lent mais toujours
+  quadratique.
+- **Q-210 — notre propre leçon, retournée contre nous.** Les deux correctifs de « fuite de
+  données » de S6 étaient justes dans le code ; l'auditeur les a cassés un par un et **le
+  banc est resté 30/30 vert**. Ils étaient fermés **dans le code, pas dans le banc**. Ce
+  qui rendait l'essai existant creux : ses fiches de contrôle portaient un e-mail nul et un
+  e-mail d'espaces, tous deux déjà écartés par un filtre antérieur — la clause corrigée n'y
+  était **jamais le filtre discriminant**. *Un essai qui couvre une règle sans jamais la
+  faire décider ne la couvre pas.*
+- **Q-212 — corriger un symptôme laisse la cause.** Q-203 avait été réparé dans un module ;
+  la cause vivait dans **plusieurs fonctions sœurs** de `js/i18n/index.js`. En généralisant
+  le contrôle, il a trouvé **une quatrième sœur que l'audit n'avait pas nommée** et **sept**
+  sites non échappés là où le rapport en citait deux.
+
+**Deux règles neuves issues de S8, à ne pas défaire :**
+
+3. **Aucune expression rationnelle ne se CONSTRUIT dans `src/import/tableur.ts`.** C'est la
+   seule forme par laquelle un octet de fichier devient un motif. L'interdit est absolu
+   parce qu'un interdit absolu se relit sans jugement.
+4. **Un identifiant ne peut porter ni guillemet, ni chevron, ni esperluette**
+   (`verifierIdentifiant`). La reprise conserve les identifiants du fichier à l'octet près ;
+   fermer la source coûte une ligne, échapper les 48 sites d'attribut du frontend serait une
+   omission qui attend. Aucun des cinq générateurs du produit n'a jamais pu produire ces
+   signes — le round-trip est intact.
+
+**Le travail qui reste, par ordre de valeur :**
+
+| | Contenu | Pourquoi |
 |---|---|---|
-| **a** | **Le reste de L4** : `referentiels_actifs` n'est **écrit ni lu par personne** (**Q-150**) — toutes les filiales voient les cinq référentiels, NIS2 et DORA comprises, et leur taux de conformité se calcule sur des exigences qui ne les concernent pas. Plus les **coordonnées de filiale** (**Q-160**). | C'est du contenu du **chemin critique** resté dehors, et le second point débloque la moitié de L9 |
-| **b** | **L'écran de la consolidation Groupe** | La route existe et **aucun écran ne l'appelle** : une fonctionnalité à moitié livrée |
-| **c** | **L10 — internationalisation de l'interface** | FR + EN sont **obligatoires** au cadrage ; L11 en dépend, et L11 est le seul lot dont le volume menace le 21/09 |
-| **d** | **L13 — cycle de vie** : archivage, sortie de filiale, purges RGPD, rétention | `filiales` porte déjà `statut` et `date_sortie` ; rien ne les fait vivre |
-
-**Ce qui reste hors d'atteinte, et pourquoi** : **L12** (notifications) demande un relais SMTP
-que la VM du client doit fournir — la sortie de *ce* VPS vers Microsoft 365 fonctionne, celle
-de la VM cliente reste à vérifier (`PLAN_SERVEUR` §9). **L14** (documentation) se fait en
-dernier et **ne se délègue pas** : le §2 bis le mesure — l'agent de documentation de la
-vague 3 a coûté 412 041 jetons et son travail a été invalidé le jour même.
-
-**Deux décisions qui appartiennent au client, et qu'aucune session ne peut prendre :**
-
-- **Q-153** — une politique de portée Groupe se valide-t-elle **une fois au Groupe**, ou
-  **filiale par filiale** ? Aujourd'hui `approbations.filiale_id` est `not null`, donc c'est
-  la seconde ; les deux se défendent, et fermer l'autre demande une migration.
-- **Risque P5** — la **validation formelle du découpage Groupe/Filiale par le RSSI groupe**
-  n'a **aucune trace dans le dépôt**. Elle était attendue avant L1 ; L1 a été écrit sur
-  l'arbitrage interne du `CONVENTIONS.md` §16.4. À faire confirmer **avant la mise en
-  service pilote** : changer le niveau d'une table après coup se paie en migration de
-  données.
+| **a** | **Rejouer la porte S8** | Six constats ont été fermés depuis son verdict ; un banc vert ne vaut pas un passage de porte, et *les constats fermés depuis un passage précédent ont déjà fait échouer le suivant* |
+| **b** | **Q-214 b, c, d, f** | Promotion de pièce jointe avant `commit` sans réconciliation disque↔base ; quota lu puis consommé dans deux transactions ; trois collections non bornées ; trois valeurs pour la borne de corps |
+| **c** | **Q-205 b, Q-206** | Un aperçu d'import ne laisse aucune trace ; deux erreurs de fond dans le catalogue ANSSI **français**, dont la source est un CSV du client |
+| **d** | **Q-186** | Propriétaire : **exploitant** |
 
 ### La vague 3 — L3 authentification AD et droits, puis L5 journal
 

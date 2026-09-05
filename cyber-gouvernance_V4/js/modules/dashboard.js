@@ -648,7 +648,7 @@ const DashboardModule = (() => {
                     const badge = late
                         ? `<span class="wi-badge late">${tHtml("dashboard.retardJours", { n: Math.abs(a._days) })}</span>`
                         : `<span class="wi-badge soon">${a._days === 0 ? tHtml("dashboard.aujourdhui") : tHtml("dashboard.jMoins", { n: a._days })}</span>`;
-                    const ech = a.echeance ? I18n.date(a.echeance) : "—";
+                    const ech = a.echeance ? escapeHtml(I18n.date(a.echeance)) : "—";
                     return `<li class="watch-item dash-action-item" data-id="${escapeHtml(a.id)}">
                         <span class="wi-prio" style="background:${prioColor(a.priorite || "Moyenne")};" title="Priorité ${escapeHtml(a.priorite || "Moyenne")}"></span>
                         <span class="wi-body">
@@ -726,7 +726,7 @@ const DashboardModule = (() => {
             ? `<p class="chart-empty">${t("dashboard.aucunIncident")}</p>`
             : `<ul class="watch-list">${incidentsRecents.map(i => {
                 const decl = norm(i.declaration_anssi) === "à déclarer" || norm(i.declaration_cnil) === "à déclarer";
-                const date = i.date_detection ? I18n.date(i.date_detection) : "—";
+                const date = i.date_detection ? escapeHtml(I18n.date(i.date_detection)) : "—";
                 return `<li class="watch-item dash-incident-item" data-id="${escapeHtml(i.id)}">
                     <span class="wi-prio" style="background:${gravColor(i.gravite)};" title="Gravité ${escapeHtml(i.gravite || "")}"></span>
                     <span class="wi-body">
@@ -746,7 +746,7 @@ const DashboardModule = (() => {
                 if (late) badge = `<span class="wi-badge late">${tHtml("dashboard.retardJours", { n: Math.abs(d._days) })}</span>`;
                 else if (soon) badge = `<span class="wi-badge soon">${d._days === 0 ? tHtml("dashboard.aujourdhui") : tHtml("dashboard.jMoins", { n: d._days })}</span>`;
                 else if (norm(d.statut) === "à réviser" || norm(d.statut) === "obsolète") badge = `<span class="wi-badge late">${escapeHtml(d.statut)}</span>`;
-                const rev = d.date_revue ? I18n.date(d.date_revue) : "—";
+                const rev = d.date_revue ? escapeHtml(I18n.date(d.date_revue)) : "—";
                 return `<li class="watch-item dash-doc-item" data-id="${escapeHtml(d.id)}">
                     <span class="wi-prio" style="background:${dotColor};" title="${escapeHtml(d.statut || "")}"></span>
                     <span class="wi-body">
@@ -780,7 +780,8 @@ const DashboardModule = (() => {
                 const badge = late ? `<span class="wi-badge late">${tHtml("dashboard.retardJours", { n: -it.jours })}</span>`
                     : it.jours === 0 ? `<span class="wi-badge late">${tHtml("dashboard.aujourdhui")}</span>`
                     : `<span class="wi-badge soon">${tHtml("dashboard.jMoins", { n: it.jours })}</span>`;
-                const dstr = it.date ? I18n.date(it.date) : "—";
+                // Échappé : `I18n.date()` a un repli brut (constat Q-212).
+                const dstr = it.date ? escapeHtml(I18n.date(it.date)) : "—";
                 return `<li class="watch-item dash-ech-item" data-route="${escapeHtml(it.route.replace(/^#/, ""))}">
                     <span class="wi-prio" style="background:${dot};"></span>
                     <span class="wi-body">

@@ -426,10 +426,61 @@ export function decoderXml(texte: string): string {
   });
 }
 
-/** Valeur d'un attribut dans un bloc d'attributs, ou `null`. */
+/** Vrai si le caractère n'est ni lettre, ni chiffre, ni souligné (bord de mot). */
+function borneDeMot(code: number): boolean {
+  return !(
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    code === 95
+  );
+}
+
+/** Vrai si le caractère est une espace au sens XML. */
+function estEspace(caractere: string): boolean {
+  return caractere === ' ' || caractere === '\t' || caractere === '\n' || caractere === '\r';
+}
+
+/**
+ * Valeur d'un attribut dans un bloc d'attributs, ou `null`.
+ *
+ * ⚠️ **Lu par un balayage, et non par une expression rationnelle construite.**
+ * Cette fonction bâtissait un `new RegExp` depuis `nom`. Le nom vient toujours
+ * d'un littéral du code — ce n'était donc pas exploitable —, mais la porte S8 a
+ * trouvé DEUX autres constructions d'expression alimentées par les DONNÉES
+ * (constat **Q-208**), à quelques lignes de la note où la porte S6 disait avoir
+ * fermé la famille. Deux passages, deux oublis.
+ *
+ * La règle qui remplace la vigilance : **il n'y a plus aucun `new RegExp` dans
+ * ce fichier**, et un contrôle mécanique le vérifie. Un interdit absolu se
+ * relit d'un coup d'œil ; « n'interpolez que des littéraux » demande de juger
+ * chaque site, et c'est ce jugement qui a manqué deux fois.
+ *
+ * Le balayage reproduit l'ancien comportement, bord de mot compris — y compris
+ * le fait que chercher « id » trouve « r:id », le deux-points étant une borne de
+ * mot. `cheminPremiereFeuille` s'appuie sur cette tolérance par son ordre
+ * d'essai, et la changer ici modifierait un comportement qu'aucun essai ne
+ * décrit.
+ */
 function attribut(attributs: string, nom: string): string | null {
-  const trouve = new RegExp(`\\b${nom}\\s*=\\s*"([^"]*)"`, 'u').exec(attributs);
-  return trouve?.[1] === undefined ? null : decoderXml(trouve[1]);
+  let curseur = 0;
+  for (;;) {
+    const debut = attributs.indexOf(nom, curseur);
+    if (debut < 0) return null;
+    curseur = debut + 1;
+    if (debut > 0 && !borneDeMot(attributs.charCodeAt(debut - 1))) continue;
+
+    let i = debut + nom.length;
+    while (i < attributs.length && estEspace(attributs.charAt(i))) i += 1;
+    if (attributs.charAt(i) !== '=') continue;
+    i += 1;
+    while (i < attributs.length && estEspace(attributs.charAt(i))) i += 1;
+    if (attributs.charAt(i) !== '"') continue;
+    const ouvrant = i + 1;
+    const fermant = attributs.indexOf('"', ouvrant);
+    if (fermant < 0) continue;
+    return decoderXml(attributs.slice(ouvrant, fermant));
+  }
 }
 
 /**
@@ -558,10 +609,28 @@ function cheminPremiereFeuille(classeur: string | null, relations: string | null
       : (attribut(feuille[1], 'r:id') ?? attribut(feuille[1], 'id'));
   if (identifiant === null) return PARTIE_FEUILLE_PAR_DEFAUT;
 
-  const relation = new RegExp(`<Relationship\\b[^>]*\\bId="${identifiant}"[^>]*>`, 'u').exec(
-    relations,
-  );
-  const cible = relation === null ? null : attribut(relation[0], 'Target');
+  /* ⚠️ CETTE LIGNE CONSTRUISAIT UNE EXPRESSION RATIONNELLE DEPUIS LE FICHIER —
+     constat **Q-208 b** de la porte S8, et c'est un déni de service EXPONENTIEL.
+
+     `identifiant` est l'attribut `r:id` de `workbook.xml`, c'est-à-dire des
+     octets d'attaquant, et il était interpolé TEL QUEL dans un `new RegExp`
+     appliqué à `workbook.xml.rels` — lui aussi fourni par le même fichier.
+     Les deux moitiés voyagent dans la même archive : un motif catastrophique
+     (`(a+)+$`) et un sujet qui le fait rétro-agir. Mesuré : **635 octets, 2 040
+     ms de boucle bloquée**, et ×2 par caractère ajouté au sujet.
+
+     ⚠️ **Le correctif n'est pas d'échapper l'identifiant.** Échapper marcherait,
+     et laisserait la prochaine interpolation revenir sans que rien ne le dise.
+     On retire la construction d'expression : le générateur `elementsXml` parcourt
+     déjà les éléments en temps linéaire, et la comparaison d'un identifiant est
+     une **égalité de chaînes**, pas une recherche de motif. */
+  let cible: string | null = null;
+  for (const element of elementsXml(relations, 'Relationship')) {
+    if (attribut(element.attributs, 'Id') === identifiant) {
+      cible = attribut(element.attributs, 'Target');
+      break;
+    }
+  }
   if (cible === null || cible === '') return PARTIE_FEUILLE_PAR_DEFAUT;
   // Une cible absolue commence par `/` et se lit depuis la racine du conteneur ;
   // une cible relative se lit depuis `xl/`.
@@ -578,11 +647,36 @@ export function indiceColonne(reference: string | null): number | null {
   return indice - 1;
 }
 
-/** Numéro de ligne d'une référence `A12`. Rend `null` si absent. */
+/**
+ * Numéro de ligne d'une référence `A12`. Rend `null` si absent.
+ *
+ * ⚠️ **Lu par un balayage, pas par une expression rationnelle** — constat
+ * **Q-208 a** de la porte S8. `/(\d+)$/` n'est pas ancrée à gauche : sur une
+ * suite de chiffres suivie d'un non-chiffre, le moteur réessaie à CHAQUE
+ * position, soit une passe complète par caractère. L'attribut `r` d'un `<row>`
+ * est fourni par le fichier, et la borne `LIGNES_MAX` compte les `<row>`, pas
+ * la longueur de `r` : **un seul suffisait**. Mesuré : 322 octets → 2 059 ms,
+ * 468 octets → 35 472 ms, et de l'ordre d'heures au plafond de décompression.
+ *
+ * Le balayage part de la fin et s'arrête au premier non-chiffre : chaque
+ * caractère est vu une fois, il n'y a rien à réessayer.
+ */
 function numeroLigne(reference: string | null): number | null {
-  const chiffres = reference === null ? undefined : /(\d+)$/u.exec(reference)?.[1];
-  if (chiffres === undefined) return null;
-  const numero = Number.parseInt(chiffres, 10);
+  if (reference === null) return null;
+  const fin = reference.length;
+  let debut = fin;
+  while (debut > 0) {
+    const code = reference.charCodeAt(debut - 1);
+    if (code < 48 || code > 57) break;
+    debut -= 1;
+  }
+  if (debut === fin) return null;
+  // Une feuille de calcul ne dépasse pas 1 048 576 lignes : au-delà de sept
+  // chiffres, ce n'est pas un numéro de ligne, et il est inutile de convertir
+  // deux cent mille chiffres pour le découvrir. L'ancienne rédaction rendait
+  // déjà `null` dans ce cas — par `Number.isSafeInteger`, mais après le travail.
+  if (fin - debut > 7) return null;
+  const numero = Number.parseInt(reference.slice(debut, fin), 10);
   return Number.isSafeInteger(numero) && numero > 0 ? numero : null;
 }
 

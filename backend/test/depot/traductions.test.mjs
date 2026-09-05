@@ -528,7 +528,43 @@ describe('§37 — la couverture par écran ne redescend pas', () => {
 /** Enveloppes qui échappent leur premier argument. Vérifiées, pas supposées. */
 const ENVELOPPES_SURES = ['escapeHtml', 'esc', 'UI.badge', 'UI.mappedBadge'];
 
-/** Appels à `I18n.valeur(x)` où `x` n'est PAS un littéral et rien n'échappe. */
+/**
+ * Les TROIS fonctions à repli brut de `js/i18n/index.js` — constat **Q-212**.
+ *
+ * ⚠️ Ce contrôle ne regardait que `valeur()`. La porte S8 a montré que la cause
+ * de Q-203 n'était pas fermée : `date()` (`:343`) rend `String(iso)` et
+ * `nombre()` (`:392`) rend `String(valeur)` quand l'entrée n'est pas
+ * analysable — **le même passe-plat, sur des valeurs qui viennent aussi de la
+ * base**. Corriger un symptôme dans un module laisse la cause en place ; c'est
+ * la différence entre réparer et fermer.
+ *
+ * ⚠️ Le typage `date` de PostgreSQL masque aujourd'hui le cas de `date()`. Un
+ * défaut masqué par une contrainte voisine n'est pas un défaut fermé : il
+ * attend que la contrainte bouge.
+ *
+ * La liste est écrite à la main, et c'est ici le BON outil : une quatrième sœur
+ * ajoutée à `js/i18n/index.js` sans être nommée ici ferait **rougir** l'essai
+ * de garde ci-dessous, qui compte les fonctions à repli brut du fichier.
+ */
+const SOEURS_A_REPLI_BRUT = ['valeur', 'date', 'nombre', 'pourcentage'];
+
+/**
+ * Fonctions qui rendent `String(...)` sans que ce soit un repli brut.
+ *
+ * ⚠️ Chacune doit dire POURQUOI. Une exemption sans motif est la façon dont un
+ * contrôle cesse de contrôler : on y range ce qui gêne, et le jour où une vraie
+ * sœur y atterrit personne ne s'en aperçoit.
+ */
+const SANS_REPLI_BRUT = Object.freeze({
+  // C'est l'échappeur lui-même : son `String()` est la conversion d'entrée,
+  // suivie du remplacement des cinq signes. Il ne rend jamais rien de brut.
+  esc: 'l’échappeur',
+  // `String(modele)` est le GABARIT, qui vient du dictionnaire — pas une valeur
+  // d'utilisateur. Les valeurs substituées, elles, passent par `esc` en `tHtml`.
+  remplir: 'le gabarit, pas la valeur',
+});
+
+/** Appels à `I18n.<sœur>(x)` où `x` n'est PAS un littéral et rien n'échappe. */
 function valeursNonEchappees(source) {
   const fautes = [];
   const lignes = source.split('\n');
@@ -538,7 +574,9 @@ function valeursNonEchappees(source) {
     // une fonction locale homonyme (`js/modules/groupe.js:458`). Un contrôle qui
     // accuse à tort finit désarmé. Le trou que cela ouvre — un module qui
     // aliaserait la fonction — est fermé par l'essai suivant.
-    for (const m of ligne.matchAll(/\bI18n\s*\.\s*valeur\(/g)) {
+    for (const m of ligne.matchAll(
+      new RegExp(`\\bI18n\\s*\\.\\s*(?:${SOEURS_A_REPLI_BRUT.join('|')})\\(`, 'g'),
+    )) {
       // Un littéral en argument est une constante du dépôt : inerte, et déjà
       // couvert par « aucune valeur ne porte de balise ».
       if (['"', "'", '`'].includes(ligne[m.index + m[0].length])) continue;
@@ -580,7 +618,11 @@ describe('§37.3 — la valeur STOCKÉE qui traverse le dictionnaire (constat Q-
     for (const chemin of fichiersDInterface()) {
       if (extname(chemin) !== '.js') continue;
       const source = sansCommentaires(readFileSync(chemin, 'utf8'));
-      appelsVus += (source.match(/\bI18n\s*\.\s*valeur\(/g) ?? []).length;
+      appelsVus += (
+        source.match(
+          new RegExp(`\\bI18n\\s*\\.\\s*(?:${SOEURS_A_REPLI_BRUT.join('|')})\\(`, 'g'),
+        ) ?? []
+      ).length;
       const relatif = relative(RACINE_FRONTEND, chemin).split('\\').join('/');
       for (const f of valeursNonEchappees(source)) {
         fautes.push(`${relatif}:${String(f.ligne)}  ${f.extrait}`);
@@ -644,7 +686,11 @@ describe('§37.3 — la valeur STOCKÉE qui traverse le dictionnaire (constat Q-
       examines++;
       const relatif = relative(RACINE_FRONTEND, chemin).split('\\').join('/');
       // `const {…valeur…} = I18n`, `const x = I18n.valeur` sans appel.
-      const motifs = [/\{[^}]*\bvaleur\b[^}]*\}\s*=\s*I18n\b/g, /=\s*I18n\s*\.\s*valeur\s*(?!\()/g];
+      const soeurs = SOEURS_A_REPLI_BRUT.join('|');
+      const motifs = [
+        new RegExp(`\\{[^}]*\\b(?:${soeurs})\\b[^}]*\\}\\s*=\\s*I18n\\b`, 'g'),
+        new RegExp(`=\\s*I18n\\s*\\.\\s*(?:${soeurs})\\b\\s*(?!\\()`, 'g'),
+      ];
       for (const motif of motifs) {
         for (const m of source.matchAll(motif)) {
           alias.push(`${relatif}  ${m[0].replace(/\s+/g, ' ').slice(0, 80)}`);
@@ -657,6 +703,47 @@ describe('§37.3 — la valeur STOCKÉE qui traverse le dictionnaire (constat Q-
       [],
       'Ces écritures détachent `valeur` de `I18n` et rendent le contrôle précédent aveugle. ' +
         'Appelez `I18n.valeur(...)` en toutes lettres :\n' + alias.map((a) => `    · ${a}`).join('\n'),
+    );
+  });
+
+  test('AUCUNE QUATRIÈME SŒUR À REPLI BRUT n’a été ajoutée sans être nommée', () => {
+    /* La liste `SOEURS_A_REPLI_BRUT` est écrite à la main. Elle n'est le bon
+       outil qu'à une condition : qu'une omission fasse ROUGIR quelque chose.
+       Ce contrôle est cette condition. Il cherche dans `js/i18n/index.js` les
+       fonctions qui rendent `String(...)` en repli — la forme exacte du
+       passe-plat — et exige qu'elles soient toutes nommées. */
+    const source = readFileSync(join(RACINE_I18N, 'index.js'), 'utf8');
+    const declarees = [];
+    let courante = null;
+    for (const ligne of source.split('\n')) {
+      const entete = /^\s{0,8}function\s+([A-Za-z_$][\w$]*)\s*\(/u.exec(ligne);
+      if (entete !== null) courante = entete[1];
+      if (courante !== null && /return\s+String\(/u.test(ligne) && !declarees.includes(courante)) {
+        declarees.push(courante);
+      }
+    }
+    assert.ok(
+      declarees.length >= 3,
+      `Seulement ${String(declarees.length)} fonction(s) à repli brut trouvée(s) : le ` +
+        'balayage ne reconnaît plus la forme, et tout ce qui précède serait vert pour rien.',
+    );
+    // ⚠️ Une exemption qui ne correspond plus à rien est aussi une dérive : on
+    //    la signale, sinon la liste se remplit de noms morts qui rassurent.
+    assert.deepEqual(
+      Object.keys(SANS_REPLI_BRUT).filter((n) => !declarees.includes(n)),
+      [],
+      'Ces fonctions sont exemptées et ne rendent plus de `String(...)` : l’exemption ne ' +
+        'protège plus rien et doit disparaître.',
+    );
+    assert.deepEqual(
+      declarees.filter(
+        (n) => !SOEURS_A_REPLI_BRUT.includes(n) && !Object.hasOwn(SANS_REPLI_BRUT, n),
+      ),
+      [],
+      'Ces fonctions de `js/i18n/index.js` rendent leur entrée TELLE QUELLE en repli, et ne ' +
+        'sont pas dans `SOEURS_A_REPLI_BRUT` : le contrôle d’échappement ne les regarde donc ' +
+        'pas. C’est ainsi que Q-203 a été corrigé au symptôme pendant que la cause restait ' +
+        'ouverte dans deux fonctions voisines (Q-212).',
     );
   });
 });

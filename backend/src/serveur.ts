@@ -68,6 +68,27 @@ export function construireServeur(config: Configuration, pool: Pool): FastifyIns
     // Elle sera tracée dans le journal des connexions réussies et échouées (§1.7).
     trustProxy: config.serveur.proxyDeConfiance,
     bodyLimit: config.serveur.tailleMaxCorpsOctets,
+
+    /* ══ DEUX DÉLAIS QUI N'EXISTAIENT PAS — constat Q-214 a (porte S8) ══════
+     *
+     * Fastify n'en pose **aucun** par défaut. Le seul délai du produit était
+     * `ProxyTimeout 60` d'Apache — or ce fichier défend explicitement ailleurs
+     * le chemin « sans passer par Apache » (recette, laboratoire, boucle
+     * locale), et sur ce chemin un client lent tenait une connexion **sans
+     * borne**. Un garde-fou qui vit dans le frontal ne protège pas ce qui ne
+     * passe pas par le frontal.
+     *
+     * `connectionTimeout` borne l'établissement et l'inactivité de la prise ;
+     * `requestTimeout` borne le temps d'arrivée d'une requête complète — c'est
+     * lui qui coupe l'envoi goutte-à-goutte d'un corps de douze mégaoctets.
+     *
+     * Les valeurs sont plus LARGES que le `ProxyTimeout 60` d'Apache, et c'est
+     * délibéré : derrière le frontal, c'est Apache qui doit trancher le premier
+     * — sans quoi le serveur couperait une requête qu'Apache croit encore en
+     * cours, et l'appelant recevrait un 502 au lieu du 504 qui dit la vérité.
+     * Ces deux bornes ne servent donc que le chemin direct. */
+    connectionTimeout: 120_000,
+    requestTimeout: 90_000,
     // ══ Q-39 : LA RÉFÉRENCE D'UN INCIDENT NE SE CHOISIT PAS ═════════════
     //
     // `requestIdHeader` valait « x-request-id ». Fastify lisait donc cet

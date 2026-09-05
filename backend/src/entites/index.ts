@@ -5447,6 +5447,42 @@ export function verifierIdentifiant(identifiant: string): void {
   if (/[\u0000-\u001f\u007f]/.test(identifiant)) {
     throw invalide("L'identifiant contient un caractère de contrôle.");
   }
+
+  /* ══ LES QUATRE SIGNES DU BALISAGE — constat **Q-211** de la porte S8 ══
+   *
+   * Cette fonction acceptait `"`, `<`, `>` et `&`. La création par
+   * `POST /api/entites/*` referme le canal — le serveur réattribue
+   * l'identifiant, et en proposer un rend 400 —, mais **la reprise conserve
+   * les identifiants du fichier à l'octet près**, parce que le round-trip
+   * exact est une exigence du cadrage. Un identifiant hostile entrait donc en
+   * base par `POST /api/reprise`, et **48 sites d'attribut du frontend**
+   * l'interpolent sans échappement (`data-id` ×33, `href` ×9, `value` ×6),
+   * alors que le même produit l'échappe correctement à 18 autres endroits.
+   *
+   * ⚠️ **Le correctif n'est pas d'échapper les 48 sites**, et le motif est
+   * celui de tout ce chantier : une liste de 48 corrections est une omission
+   * qui attend, et le 49ᵉ site s'écrira demain sans que rien ne le dise. On
+   * ferme **la source** — un seul endroit, qu'on ne peut pas oublier.
+   *
+   * ⚠️ **Et cela ne casse aucun round-trip**, ce qui est la seule question qui
+   * vaille ici : le produit fabrique ses identifiants à cinq endroits
+   * (`CONVENTIONS.md` §2), tous de la forme `"<PRÉFIXE>-<horodatage>-<aléa>"`
+   * — lettres, chiffres et traits d'union. **Aucun n'a jamais pu produire un
+   * de ces quatre signes**, y compris ceux des sauvegardes de l'ère navigateur
+   * que `/api/reprise` doit savoir relire. Ce qui est refusé ici n'est donc
+   * pas « un identifiant ancien » : c'est un identifiant **fabriqué à la
+   * main**, et il n'y a pas d'autre façon d'en obtenir un.
+   *
+   * La CSP du vhost empêche l'exécution ; elle n'empêche pas l'habillage —
+   * c'est la leçon de Q-203, et un attribut cassé suffit à superposer un cadre
+   * qui trompe. */
+  if (/["<>&]/u.test(identifiant)) {
+    throw invalide(
+      "L'identifiant ne peut pas contenir de guillemet, de chevron ni d'esperluette. " +
+        'Les identifiants du produit n’en portent jamais : un identifiant qui en porte a été ' +
+        'fabriqué à la main.',
+    );
+  }
 }
 
 /* =====================================================================

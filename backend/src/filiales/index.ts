@@ -60,6 +60,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 
+import type { PerimetreSession } from '../db/pool.js';
+
+import { journaliser } from '../auth/journal.js';
 import { avecTransaction } from '../db/pool.js';
 import {
   groupesAttendus,
@@ -219,6 +222,12 @@ export async function creerFiliale(
   client: PoolClient,
   corps: CorpsFiliale,
   prefixeGroupes: string,
+  /**
+   * Le périmètre de la session, pour la trace (constat Q-213). Il est passé
+   * plutôt que relu par `current_setting` : ce que le journal nomme doit être
+   * ce que le serveur a résolu, pas ce que la transaction se trouve porter.
+   */
+  perimetre: PerimetreSession,
 ): Promise<ResultatCreation> {
   const identifiant = engendrerIdentifiant('FIL');
 
@@ -301,6 +310,48 @@ export async function creerFiliale(
   const profils = await lireProfilsActifs(client);
   const bilan = await synchroniserGroupesAd(client, groupesAttendus(prefixeGroupes, filiales, profils));
 
+  /* ══ LA TRACE, PAR SON OBJET — constat **Q-213** de la porte S8 ══════════
+   *
+   * Ce fichier n'appelait **jamais** `journaliser`. La création d'une filiale
+   * validait sa transaction, répondait 201, et sa seule trace venait du crochet
+   * `onResponse` (`api/index.ts`) — qui ouvre **sa propre** transaction, **après**
+   * la réponse, et **avale son échec**. Deux conséquences, et la première est
+   * la plus grave :
+   *
+   *  1. si cette trace échouait, **une filiale existait sans aucune entrée au
+   *     journal** — dans le registre qui fait preuve en audit ISO 27001, pour
+   *     l'acte le plus structurant du produit ;
+   *  2. même réussie, elle ne porte que `{ methode, route, domaine, statut }` :
+   *     ni l'identifiant, ni le code, ni la raison sociale. On savait qu'une
+   *     filiale avait été créée, jamais laquelle.
+   *
+   * ⚠️ Elle est écrite **dans la transaction de la création**, comme le veut la
+   * règle 2 du §29.3 : si le journal refuse, la filiale n'est pas créée. C'est
+   * le même raisonnement que la synchronisation des groupes juste au-dessus —
+   * laisser derrière soi une moitié de création est la forme la plus discrète
+   * du défaut.
+   *
+   * Ce que la trace porte : l'identité de la filiale — code et raison sociale
+   * sont sa désignation officielle, pas une donnée personnelle — et le nombre
+   * de groupes d'annuaire à créer. Jamais le contenu d'un enregistrement. */
+  await journaliser(client, {
+    action: 'creation',
+    resume: 'Création d’une filiale',
+    // ⚠️ `filialeId` est celui de la SESSION, pas de la filiale créée : le
+    //    journal est cloisonné, et rattacher l'entrée à une filiale qui vient
+    //    de naître la rendrait invisible à l'administrateur qui l'a créée.
+    filialeId: perimetre.filialeId,
+    utilisateurLibelle: perimetre.utilisateurId,
+    entiteType: 'filiales',
+    entiteId: ligne.id,
+    valeursApres: {
+      code: ligne.code,
+      raison_sociale: ligne.raison_sociale,
+      statut: ligne.statut,
+      groupes_ad_a_creer: bilan.crees.length,
+    },
+  });
+
   // Ne rendre que ce qui concerne la filiale créée : le bilan porte sur tout le
   // groupe, et l'administrateur n'a pas à trier vingt filiales pour trouver la
   // sienne. `inattendus` fait exception — c'est un signalement, pas une consigne.
@@ -377,7 +428,7 @@ export async function greffonFiliales(
       const corps = lireCorps(requete.body);
 
       const resultat = await avecTransaction(pool, session.perimetre, async (client) =>
-        creerFiliale(client, corps, prefixeGroupes),
+        creerFiliale(client, corps, prefixeGroupes, session.perimetre),
       );
 
       return await reponse.status(201).send(resultat);

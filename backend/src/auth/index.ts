@@ -209,8 +209,25 @@ export class ServiceAuthentification implements Authentificateur {
   private readonly limiteur: LimiteurTentatives;
   private readonly intervalleRevalidationMs: number;
   private readonly horloge: () => number;
-  /** Dernière relecture de l'annuaire, par session. Mémoire seule, jamais probante. */
+  /**
+   * Dernière relecture de l'annuaire, par session. Mémoire seule, jamais probante.
+   *
+   * ⚠️ **Bornée — constat Q-214 e de la porte S8.** Elle n'était purgée qu'à la
+   * déconnexion **explicite** : une session qui EXPIRE laissait son entrée, et
+   * la table croissait sans borne sur un service qui tourne des mois. Les deux
+   * autres registres mémoire du produit sont bornés *et* commentés sur ce
+   * point ; celui-ci ne l'était pas.
+   *
+   * L'éviction est la plus ancienne d'abord, ce que l'ordre d'insertion d'une
+   * `Map` donne gratuitement. Perdre une entrée est **sans conséquence** : la
+   * revalidation se refait, c'est-à-dire qu'on interroge l'annuaire une fois de
+   * plus. Le pire cas d'une éviction est un appel LDAP ; le pire cas de
+   * l'absence de borne est le processus.
+   */
   private readonly derniereRevalidation = new Map<string, number>();
+
+  /** Au-delà, on évince la plus ancienne. Vingt filiales × sessions simultanées. */
+  private static readonly MAX_REVALIDATIONS = 10_000;
 
   constructor(
     pool: Pool,
@@ -560,6 +577,13 @@ export class ServiceAuthentification implements Authentificateur {
     const maintenant = this.horloge();
     const derniere = this.derniereRevalidation.get(etat.sessionId) ?? 0;
     if (maintenant - derniere < this.intervalleRevalidationMs) return;
+    // Éviction de la plus ancienne : l'ordre d'insertion d'une `Map` la donne
+    // gratuitement (Q-214 e). Perdre une entrée coûte un appel à l'annuaire ;
+    // ne pas borner coûte le processus.
+    if (this.derniereRevalidation.size >= ServiceAuthentification.MAX_REVALIDATIONS) {
+      const plusAncienne = this.derniereRevalidation.keys().next();
+      if (plusAncienne.done !== true) this.derniereRevalidation.delete(plusAncienne.value);
+    }
     this.derniereRevalidation.set(etat.sessionId, maintenant);
 
     let identite: IdentiteAnnuaire | null;

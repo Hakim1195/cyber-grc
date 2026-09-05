@@ -45,7 +45,7 @@ const RisquesModule = (() => {
                     </span>
                 </td>
                 <td><span class="badge" style="background: #eee; color: #333;">${t("risques.brut")} ${r.score_brut || "-"}</span></td>
-                <td><span class="badge" style="background: #e3f2fd; color: #0d47a1; font-weight: bold;">${t("risques.residuel")} ${I18n.nombre(scoreRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></td>
+                <td><span class="badge" style="background: #e3f2fd; color: #0d47a1; font-weight: bold;">${t("risques.residuel")} ${escapeHtml(I18n.nombre(scoreRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}</span></td>
                 <td>${r.description ? escapeHtml(String(r.description).substring(0, 50)) + "..." : "-"}</td>
             </tr>
         `}).join("");
@@ -174,7 +174,7 @@ const RisquesModule = (() => {
                     <div style="background: var(--bg-body); padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; border: 1px solid var(--border);">
                         <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 5px;">${t("risques.apercuCalcul")}</div>
                         <div id="calc-preview" style="font-size: 1.1rem;">
-                            ${tHtml("risques.calcul", { brut: 1 })} <strong style="color: var(--color-success);">${I18n.nombre(0.05, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${t("risques.nonCritique")})</strong>
+                            ${tHtml("risques.calcul", { brut: 1 })} <strong style="color: var(--color-success);">${escapeHtml(I18n.nombre(0.05, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))} (${t("risques.nonCritique")})</strong>
                         </div>
                     </div>
 
@@ -195,7 +195,7 @@ const RisquesModule = (() => {
             const sBrut = f * g;
             const sRes = sBrut * m;
             document.getElementById("calc-preview").innerHTML = `
-                ${tHtml("risques.calcul", { brut: sBrut })} <strong style="color: ${getRiskColor(sRes)};">${I18n.nombre(sRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${getLabel(sRes)})</strong>
+                ${tHtml("risques.calcul", { brut: sBrut })} <strong style="color: ${getRiskColor(sRes)};">${escapeHtml(I18n.nombre(sRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))} (${getLabel(sRes)})</strong>
             `;
         };
 
@@ -317,7 +317,7 @@ const RisquesModule = (() => {
 
                         <div style="background: var(--bg-body); padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; border: 1px solid var(--border);">
                             <div id="calc-preview" style="font-size: 1.1rem;">
-                                ${tHtml("risques.calcul", { brut: currentF * currentG })} <strong style="color: ${getRiskColor(currentRes)};">${I18n.nombre(currentRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${getLabel(currentRes)})</strong>
+                                ${tHtml("risques.calcul", { brut: currentF * currentG })} <strong style="color: ${getRiskColor(currentRes)};">${escapeHtml(I18n.nombre(currentRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))} (${getLabel(currentRes)})</strong>
                             </div>
                         </div>
 
@@ -349,7 +349,7 @@ const RisquesModule = (() => {
             const sBrut = f * g;
             const sRes = sBrut * m;
             document.getElementById("calc-preview").innerHTML = `
-                ${tHtml("risques.calcul", { brut: sBrut })} <strong style="color: ${getRiskColor(sRes)};">${I18n.nombre(sRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${getLabel(sRes)})</strong>
+                ${tHtml("risques.calcul", { brut: sBrut })} <strong style="color: ${getRiskColor(sRes)};">${escapeHtml(I18n.nombre(sRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))} (${getLabel(sRes)})</strong>
             `;
         };
 

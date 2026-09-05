@@ -52,7 +52,14 @@ const IncidentsModule = (() => {
         return UI.badge(I18n.valeur(brute), classePour(brute, { "déclarée": "decl-ok", "à déclarer": "decl-todo", "non requise": "decl-na" }, "decl-na"));
     }
     /* §37.6 — l'AFFICHAGE suit la langue ; la valeur stockée reste ISO. */
-    function fmtDate(d) { return d ? I18n.date(d) : "—"; }
+    /* ⚠️ ÉCHAPPÉ — constat Q-212 de la porte S8. `I18n.date()` a le même repli
+       brut que `I18n.valeur()` : une entrée qu'il ne sait pas analyser repart
+       en `String(iso)`, telle quelle, et cette valeur vient de la base. Le
+       typage `date` de PostgreSQL la masque aujourd'hui ; il ne la masquera
+       plus le jour où un champ de date deviendra du texte, ou qu'un import
+       posera une valeur libre. Q-203 avait été corrigé au symptôme dans un seul
+       module ; la cause vit dans TROIS fonctions sœurs, pas une. */
+    function fmtDate(d) { return d ? escapeHtml(I18n.date(d)) : "—"; }
 
     function selectHtml(id, options, selected, withEmpty) {
         const opts = (withEmpty ? `<option value="">${escapeHtml(withEmpty)}</option>` : "") +

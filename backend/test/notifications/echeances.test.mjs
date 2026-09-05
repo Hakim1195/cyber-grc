@@ -261,4 +261,96 @@ describe('L12 — un destinataire vient de l’annuaire, et de nulle part ailleu
     // pas d'adresse, et c'est la règle 3 du §36.2 tenue par la forme.
     assert.equal(par.has('nobody@exemple.interne'), false);
   });
+
+  /* ══════════════════════════════════════════════════════════════════════
+     LES DEUX MORSURES QUI MANQUAIENT — constat **Q-210** de la porte S8
+
+     Les corrections des deux fuites de la porte S6 étaient justes dans le
+     code, et **rien ne les protégeait**. L'auditeur les a cassées une par
+     une : le banc est resté **30/30 vert**, et sous chaque mutant la fuite
+     revenait — `exfiltration@attaquant.example` résolu, le siège recevant
+     les retards d'une filiale.
+
+     ⚠️ **Elles avaient été fermées dans le code, pas dans le banc.** C'est
+     la leçon la plus répétée de ce chantier — *la seule preuve qu'un
+     correctif tient est la mutation* — et je ne l'avais pas appliquée à mes
+     propres correctifs.
+
+     ⚠️ Ce qui rend l'essai ci-dessus INSUFFISANT mérite d'être lu : ses deux
+     fiches à `utilisateur_id` nul portent une adresse **nulle** et une
+     adresse **d'espaces**, toutes deux déjà écartées par le filtre
+     `btrim(email) <> ''` qui existait AVANT le correctif. La clause
+     `utilisateur_id is not null` n'y est donc **jamais le filtre
+     discriminant** : l'essai serait vert avec ou sans elle. Un essai qui
+     couvre une règle sans jamais la faire décider ne la couvre pas.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  test('MORSURE Q-196 — une fiche SAISIE À LA MAIN, adresse valide, n’est pas destinataire', async () => {
+    const par = await base.avecPerimetre(
+      applicatif,
+      perimetre('essai-q210', FILIALE_A, [FILIALE_A]),
+      async (c) => {
+        // ⚠️ LE CAS DISCRIMINANT, et il n'existait nulle part : une adresse
+        //    parfaitement valide, sur une fiche que l'annuaire ne résout pas.
+        //    Un contributeur peut créer cette fiche — c'est tout le constat
+        //    Q-196 : il pouvait repointer les relances vers l'extérieur.
+        await c.query(
+          `insert into personnes (id, filiale_id, nom, email, utilisateur_id) values
+               ('P-Q210-A', $1, 'Fiche Manuelle', 'exfiltration@attaquant.example', null)`,
+          [FILIALE_A],
+        );
+        return await resoudreDestinataires(c, ['Fiche Manuelle']);
+      },
+    );
+    assert.equal(
+      par.size,
+      0,
+      'Une fiche sans compte d’annuaire ne reçoit RIEN, même avec une adresse valide. ' +
+        `Résolu : ${JSON.stringify([...par.values()].map((d) => d.email))} — c’est la fuite ` +
+        'Q-196 revenue : un courriel portant les retards d’une filiale part vers une adresse ' +
+        'que n’importe quel contributeur a pu écrire.',
+    );
+  });
+
+  test('MORSURE Q-195 — entre un homonyme GROUPE et la fiche locale, la LOCALE gagne', async () => {
+    const par = await base.avecPerimetre(
+      applicatif,
+      perimetre('essai-q210', FILIALE_A, [FILIALE_A]),
+      async (c) => {
+        await c.query("select set_config('grc.administration_groupe', 'oui', true)");
+        await c.query(
+          `insert into utilisateurs (id, identifiant, nom_affichage) values
+               ('USER-Q210-L', 'marie.locale', 'Marie Homonyme'),
+               ('USER-Q210-G', 'marie.siege',  'Marie Homonyme')
+             on conflict (id) do nothing`,
+        );
+        // ⚠️ La fiche de PORTÉE GROUPE — `filiale_id` nul. Elle ne s'écrit que
+        //    sous l'administration Groupe, et c'est exactement pourquoi aucun
+        //    essai ne la semait : elle demande deux périmètres dans le même
+        //    scénario. C'est pourtant le SEUL cas où le départage s'exerce.
+        await c.query(
+          `insert into personnes (id, filiale_id, nom, email, utilisateur_id) values
+               ('P-Q210-G', null, 'Marie Homonyme', 'marie.siege@groupe.interne', 'USER-Q210-G')`,
+        );
+        await c.query("select set_config('grc.administration_groupe', '', true)");
+        await c.query(
+          `insert into personnes (id, filiale_id, nom, email, utilisateur_id) values
+               ('P-Q210-L', $1, 'Marie Homonyme', 'marie.locale@filiale-a.fr', 'USER-Q210-L')`,
+          [FILIALE_A],
+        );
+        return await resoudreDestinataires(c, ['Marie Homonyme']);
+      },
+    );
+
+    // LA MATIÈRE : les deux fiches doivent être VISIBLES, sinon il n'y a pas de
+    // départage à faire et l'essai serait vert sans rien mesurer.
+    assert.equal(par.size, 1, 'un nom donne un destinataire, pas deux');
+    assert.equal(
+      par.get('marie homonyme').email,
+      'marie.locale@filiale-a.fr',
+      'Le départage doit retenir la fiche DE LA FILIALE. Retenir celle du socle Groupe ' +
+        'envoie les retards d’une filiale à l’homonyme du siège — c’est la fuite Q-195, et ' +
+        'elle était départagée par l’ordre PHYSIQUE des lignes avant le correctif.',
+    );
+  });
 });

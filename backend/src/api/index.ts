@@ -1849,9 +1849,55 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     { config: { acces: { action: 'lire', domaine: null } } },
     async (requete: FastifyRequest, reponse: FastifyReply) => {
     const session = sessionDe(requete);
-    const jeu = await enLecture(requete, async (client, instanceDepot, perimetre) =>
-      instanceDepot.chargerJeuDeDonnees(client, perimetre, entitesLisibles(session.droits)),
-    );
+    const instanceDepot = await assurerDepot();
+    const jeu = await avecTransaction(pool, session.perimetre, async (client) => {
+      const charge = await instanceDepot.chargerJeuDeDonnees(
+        client,
+        session.perimetre,
+        entitesLisibles(session.droits),
+      );
+
+      /* ══ LA TRACE, ET POURQUOI ELLE EST ICI — constat Q-209 (porte S8) ══
+       *
+       * `GET /api/donnees` et `GET /api/export` appellent **la même fonction,
+       * avec les mêmes arguments**. La seule différence est l'emballage. Or
+       * `/api/export` exige le droit d'export et **journalise son refus**,
+       * pendant que celle-ci rendait le même volume **sans laisser aucune
+       * trace** : un `curl` suivi d'un `jq` produisait un `grc-backup` valide,
+       * et le journal restait muet. La lettre du contrôle S7 passait ; son
+       * intention non, et le commentaire de `/api/export` affirmait même que
+       * le droit rendait l'extraction « silencieuse » impossible.
+       *
+       * ⚠️ **On ne met PAS `GRC-EXPORT` sur cette route, et c'est délibéré.**
+       * Elle est le chargement du jeu de données de l'application : l'exiger
+       * empêcherait tout lecteur d'ouvrir le produit. Ce qui manquait n'était
+       * pas une barrière — la lecture rend ce que la lecture doit rendre, et le
+       * périmètre borne toujours — c'était la **trace**. « Qui a extrait le jeu
+       * de données complet ? » est la première question d'un auditeur
+       * ISO 27001 ; elle a désormais une réponse pour les deux routes.
+       *
+       * Le volume est celui d'une ouverture de session : la SPA appelle cette
+       * route **au démarrage**, et le sondage périodique passe par les
+       * modifications, pas par ici. Ce n'est pas une trace par clic.
+       *
+       * Ce que la trace porte : des NOMBRES. Ni titre, ni nom, ni responsable —
+       * le journal est lisible par un profil qui n'a pas forcément le droit de
+       * lire les enregistrements (leçon de Q-118). */
+      await journaliser(client, {
+        action: 'consultation_sensible',
+        resume: 'Chargement du jeu de données complet de la filiale active',
+        filialeId: session.perimetre.filialeId,
+        utilisateurLibelle: session.perimetre.utilisateurId,
+        adresseIp: requete.ip,
+        entiteId: null,
+        valeursApres: {
+          collections: Object.keys(charge.collections).length,
+          lignes: Object.values(charge.volumes).reduce((n, v) => n + v, 0),
+          export_autorise: session.droits.export,
+        },
+      });
+      return charge;
+    });
 
     // La charge utile est rendue dans la forme EXACTE de l'objet `data` du
     // frontend : `DataStore` peut l'adopter telle quelle (PLAN_SERVEUR §1.3).
@@ -1890,12 +1936,34 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  d'échange, celui qu'une filiale sortante emporte et que `/api/reprise`
    *  sait relire.
    *
-   *  ⚠️ **Ce qu'elle ne ferme pas, et il faut le dire** : quelqu'un qui a le
-   *  droit de lire peut toujours recopier ce que son écran affiche. Le droit
-   *  d'export ne rend pas l'extraction impossible ; il rend l'extraction *en
-   *  un clic, complète et silencieuse* impossible, et il la rend traçable. Le
-   *  §17.5 s'applique — un garde-fou ne se voit pas prêter plus de portée qu'il
-   *  n'en a.
+   *  ⚠️ **Ce qu'elle ne ferme pas, et il faut le dire** — CE PARAGRAPHE A ÉTÉ
+   *  RÉÉCRIT PAR LE CONSTAT **Q-209** DE LA PORTE S8, parce qu'il affirmait
+   *  quelque chose de faux. Il disait que le droit d'export « rend l'extraction
+   *  *en un clic, complète et silencieuse* impossible ». Or `GET /api/donnees`
+   *  appelle **la même fonction avec les mêmes arguments**, rend le même
+   *  volume, et ne demande pas ce droit : l'extraction en un clic et complète
+   *  restait possible pour tout compte qui peut ouvrir le produit — et elle
+   *  était **silencieuse**, le journal ne portant rien.
+   *
+   *  Ce qui a été corrigé, et ce qui ne l'a pas été :
+   *
+   *  · **le silence, oui** — `/api/donnees` journalise désormais son
+   *    chargement sous `consultation_sensible`, comme cette route. La question
+   *    « qui a extrait le jeu de données complet ? » a une réponse pour les
+   *    deux chemins ;
+   *  · **le « en un clic », non, et délibérément** — exiger `GRC-EXPORT` sur
+   *    `/api/donnees` empêcherait tout lecteur d'ouvrir l'application, dont
+   *    c'est la route de chargement. Le périmètre borne toujours ce qu'elle
+   *    rend : ce n'est pas une fuite, c'est une lecture qui rend ce que la
+   *    lecture doit rendre.
+   *
+   *  Ce que le droit d'export protège, exactement : il fait du geste
+   *  « produire un fichier `grc-backup` » un acte **autorisé séparément et
+   *  refusable**, dont le refus est tracé. Il ne protège pas contre quelqu'un
+   *  qui a déjà le droit de lire et sait se servir de `curl` — et quelqu'un
+   *  qui a le droit de lire peut de toute façon recopier son écran. Le §17.5
+   *  s'applique : un garde-fou ne se voit pas prêter plus de portée qu'il n'en
+   *  a, et c'est en lui en prêtant trop que ce commentaire s'est trompé.
    * ------------------------------------------------------------------- */
   instance.get(
     '/api/export',
