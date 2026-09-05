@@ -89,6 +89,20 @@ const Referentiels = (() => {
         });
         return Object.assign({}, ref, {
             nom: pris(dico.nom, ref.nom),
+            // `version` est de la PROSE — « 42 mesures », « 5 piliers »,
+            // « Chap. 4-10 · SMSI » —, et elle s'affiche sur la fiche du
+            // référentiel. Elle était traduisible nulle part : quatre chaînes
+            // restaient en français sur l'écran anglais, ET l'instrument de
+            // mesure ne les voyait pas. C'est exactement la forme de défaut que
+            // ce lot existe pour empêcher, et c'est mon mécanisme qui la portait.
+            version: pris(dico.version, ref.version),
+            // `editeur` est traduisible mais N'ENTRE PAS dans la couverture, et
+            // la distinction n'est pas un détail : « ANSSI », « ISO/IEC »,
+            // « BoostAerospace » sont des NOMS PROPRES qui se lisent à
+            // l'identique dans toutes les langues. Les compter ferait réclamer
+            // par l'instrument une traduction qui ne doit pas exister — et un
+            // instrument qui réclame du faux finit par être ignoré.
+            editeur: pris(dico.editeur, ref.editeur),
             description: pris(dico.description, ref.description),
             aide: pris(dico.aide, ref.aide),
             domaines: domaines
@@ -107,10 +121,13 @@ const Referentiels = (() => {
         return order.map(id => {
             const ref = registry[id];
             const dico = (traductions[id] && traductions[id][cible]) || null;
-            let total = 3;                 // nom, description, aide
+            // nom, version, description, aide. `editeur` en est exclu : un nom
+            // propre se lit à l'identique partout, et le compter ferait réclamer
+            // une traduction qui ne doit pas exister.
+            let total = 4;
             let faits = 0;
             const compte = (traduit) => { if (typeof traduit === "string" && traduit !== "") faits += 1; };
-            if (dico) { compte(dico.nom); compte(dico.description); compte(dico.aide); }
+            if (dico) { compte(dico.nom); compte(dico.version); compte(dico.description); compte(dico.aide); }
             (ref.domaines || []).forEach(d => {
                 total += 3;
                 const td = (dico && dico.domaines && dico.domaines[d.id]) || null;
