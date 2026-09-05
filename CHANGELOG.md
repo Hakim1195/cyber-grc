@@ -610,7 +610,7 @@ sous-arbre depuis la racine du domaine — aucune connexion n'aboutissait) et **
 
 **État mesuré à la clôture de cette entrée**, révision `d217fbb`, sur cette même machine
 réelle (**Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**, **rsync
-3.4.1**, Debian GNU/Linux 13 trixie) : `npm test` → **1742 essais, 1742 passés, 0 échec**
+3.4.1**, Debian GNU/Linux 13 trixie) : `npm test` → **1747 essais, 1747 passés, 0 échec**
 (130,6 s ; onze familles, détail au `backend/README.md` §8 — le compte est passé de 969 à
 1030 pendant la vague, cinquante-neuf essais ayant été ajoutés par les agents B1 et B2
 après le passage de l'agent de documentation, constat **Q-87**), `npm run verifier-types`
