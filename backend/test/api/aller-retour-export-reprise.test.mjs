@@ -158,6 +158,51 @@ describe('Le produit sait relire sa propre sauvegarde — par les ROUTES', () =>
     );
   });
 
+  test('LA RESTAURATION D’UNE SAUVEGARDE SAINE N’AVERTIT DE RIEN', async () => {
+    /* ── Mesuré sur la RECETTE, à travers Apache, le 05/09/2026 ────────────
+     *
+     * `POST /api/reprise` sur un export du produit rendait
+     * `champsIgnores: ["personnes._porteeGroupe"]`, dont `src/api/index.ts`
+     * fait la phrase « 1 champ(s) sans destination » dans le rapport remis à
+     * l'utilisateur. Restaurer une sauvegarde parfaitement saine affichait
+     * donc un avertissement.
+     *
+     * `_porteeGroupe` est un champ que LE SERVEUR AJOUTE (constat Q-176) : il
+     * n'est la colonne de rien, la reprise a raison de ne pas l'écrire, et
+     * tort de le nommer. Même famille que Q-201 et Q-134 — un message qui
+     * annonce un problème qui n'existe pas apprend à ne plus lire les
+     * messages, y compris le jour où ils disent vrai.
+     *
+     * ⚠️ Le filtre porte sur le PRÉFIXE, jamais sur les trois noms connus.
+     */
+    const exporte = await serveur.appeler('GET', '/api/export');
+    assert.equal(exporte.statut, 200);
+
+    // LA MATIÈRE : l'export doit RÉELLEMENT porter un champ structurel, sinon
+    // l'assertion suivante serait verte sur un export qui n'en a jamais eu.
+    const personnes = exporte.corps.payload.personnes ?? [];
+    assert.ok(
+      personnes.some((p) => Object.keys(p).some((c) => c.startsWith('_'))),
+      'Aucun champ a souligne initial dans l export : cet essai ne mesure rien. ' +
+        `(cles vues : ${JSON.stringify(Object.keys(personnes[0] ?? {}))})`,
+    );
+
+    const reprise = await serveur.appeler('POST', '/api/reprise', {
+      corps: {
+        mode: 'fusionner',
+        fichier: { nom: 'export.json', contenu: JSON.stringify(exporte.corps) },
+      },
+    });
+    assert.equal(reprise.statut, 200, JSON.stringify(reprise.corps));
+    assert.deepEqual(
+      reprise.corps.bilan.champsIgnores,
+      [],
+      'Une sauvegarde produite par le produit lui-meme ne doit rien lui faire signaler. ' +
+        'Les champs a souligne initial sont structurels : les taire est juste, les nommer ' +
+        'fabrique une inquietude sans objet.',
+    );
+  });
+
   test('CONTRÔLE SYMÉTRIQUE : un risque RELIÉ au socle survit avec son lien', async () => {
     // Sans lui, « la référence est nulle » serait aussi vrai d'un aller-retour
     // qui jetterait la colonne entière.

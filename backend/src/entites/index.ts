@@ -2782,6 +2782,30 @@ export class Depot {
       liaisons: Enregistrement;
     }[] = [];
     const signaler = (champ: string): void => {
+      // ── LE SOULIGNÉ INITIAL EST STRUCTUREL, PAS « SANS DESTINATION » ────
+      //
+      // Même règle que `js/core/sync.js` et le garde-fou `f_verifier_champs_
+      // structurels()` (migration `015`, constat Q-201) : un champ à souligné
+      // initial est un champ que LE SERVEUR AJOUTE à l'enregistrement qu'il
+      // rend — `_version`, `_versionMiseEnOeuvre`, `_porteeGroupe`. Il n'est
+      // la colonne de rien, et la reprise a raison de ne pas l'écrire.
+      //
+      // Ce qu'elle avait tort de faire, c'est de le NOMMER. Mesuré sur la
+      // recette, à travers Apache : la reprise d'un export du produit rendait
+      // `champsIgnores: ["personnes._porteeGroupe"]`, et `src/api/index.ts`
+      // en fait la phrase « 1 champ(s) sans destination » dans le rapport
+      // remis à l'utilisateur. Restaurer une sauvegarde parfaitement saine
+      // affichait donc un avertissement — c'est la famille de Q-201 et de
+      // Q-134 : *un message qui annonce un problème qui n'existe pas apprend à
+      // ne plus lire les messages*, y compris le jour où ils disent vrai.
+      //
+      // ⚠️ On filtre par le PRÉFIXE, jamais par la liste des trois noms : le
+      // quatrième champ structurel arriverait sans que personne y pense, et le
+      // défaut reviendrait à l'identique.
+      // Le nom arrive sous la forme `entite.champ` — un nom d'entité ne porte
+      // jamais de point, donc ce qui suit le premier est le champ.
+      const point = champ.indexOf('.');
+      if (point >= 0 && champ.charAt(point + 1) === '_') return;
       champsIgnores.add(champ);
     };
 
