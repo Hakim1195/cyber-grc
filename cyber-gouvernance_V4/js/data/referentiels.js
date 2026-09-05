@@ -24,8 +24,117 @@ const Referentiels = (() => {
         registry[ref.id] = ref;
     }
 
-    function get(id) { return registry[id] || null; }
-    function all() { return order.map(id => registry[id]); }
+    /* =====================================================================
+       TRADUCTIONS DES CATALOGUES — lot L11
+       =====================================================================
+
+       ⚠️ LE REPLI N'EST PAS CELUI DE L'INTERFACE, ET C'EST DÉLIBÉRÉ.
+
+       Pour l'interface (`js/i18n/`), une clé manquante rend LA CLÉ elle-même :
+       un écran anglais à moitié français aurait l'air fini, et le défaut
+       passerait en production. C'est le §37.2, et il a raison — pour un LIBELLÉ.
+
+       Ici, la même règle rendrait le produit INUTILISABLE. Une exigence de
+       référentiel dont le titre s'afficherait « iso-27002-2022/5.1.titre » ne
+       serait plus une exigence : le RSSI ne pourrait ni la lire, ni l'évaluer,
+       ni la produire en audit. Une exigence non traduite, elle, reste
+       parfaitement utilisable — dégradée, pas perdue.
+
+       Le repli est donc le FRANÇAIS, chaîne par chaîne. Ce qui rend ce choix
+       tenable, et sans quoi il deviendrait une excuse : la couverture est
+       MESURÉE (`couverture()`), et ce que le produit ne sait pas dire en anglais
+       se compte au lieu de se deviner.
+
+       ── La forme d'une traduction, et pourquoi elle est plate ──────────────
+
+       Les exigences sont indexées « <domaineId>/<code> » et non par leur seul
+       code : rien n'interdit à deux domaines de porter le même code, et une
+       traduction mal alignée mettrait le texte d'une exigence sous une autre —
+       un défaut qui se lit parfaitement et qui est entièrement faux.
+    */
+    const traductions = {};
+
+    function registerTraduction(refId, langue, dictionnaire) {
+        if (!refId || !langue || !dictionnaire) return;
+        if (!traductions[refId]) traductions[refId] = {};
+        traductions[refId][langue] = dictionnaire;
+    }
+
+    /** Langue active, lue au moment de l'appel — jamais figée au chargement. */
+    function langueActive() {
+        if (typeof window !== "undefined" && window.I18n && typeof window.I18n.langue === "function") {
+            return window.I18n.langue();
+        }
+        return "fr";
+    }
+
+    /** Applique une traduction à un référentiel, chaîne par chaîne. */
+    function traduire(ref, dico) {
+        if (!ref || !dico) return ref;
+        const pris = (traduit, origine) => (typeof traduit === "string" && traduit !== "" ? traduit : origine);
+        const domaines = (ref.domaines || []).map(d => {
+            const td = (dico.domaines && dico.domaines[d.id]) || {};
+            return Object.assign({}, d, {
+                nom: pris(td.nom, d.nom),
+                court: pris(td.court, d.court),
+                aide: pris(td.aide, d.aide),
+                exigences: (d.exigences || []).map(e => {
+                    const te = (dico.exigences && dico.exigences[d.id + "/" + e.code]) || {};
+                    return Object.assign({}, e, {
+                        titre: pris(te.titre, e.titre),
+                        aide: pris(te.aide, e.aide)
+                    });
+                })
+            });
+        });
+        return Object.assign({}, ref, {
+            nom: pris(dico.nom, ref.nom),
+            description: pris(dico.description, ref.description),
+            aide: pris(dico.aide, ref.aide),
+            domaines: domaines
+        });
+    }
+
+    /**
+     * Couverture de traduction d'une langue, référentiel par référentiel.
+     *
+     * ⚠️ Elle compte les chaînes RÉELLEMENT traduites, pas les clés déclarées :
+     * une entrée présente mais vide ne compte pas. Sans quoi un dictionnaire
+     * squelette annoncerait 100 %.
+     */
+    function couverture(langue) {
+        const cible = langue || langueActive();
+        return order.map(id => {
+            const ref = registry[id];
+            const dico = (traductions[id] && traductions[id][cible]) || null;
+            let total = 3;                 // nom, description, aide
+            let faits = 0;
+            const compte = (traduit) => { if (typeof traduit === "string" && traduit !== "") faits += 1; };
+            if (dico) { compte(dico.nom); compte(dico.description); compte(dico.aide); }
+            (ref.domaines || []).forEach(d => {
+                total += 3;
+                const td = (dico && dico.domaines && dico.domaines[d.id]) || null;
+                if (td) { compte(td.nom); compte(td.court); compte(td.aide); }
+                (d.exigences || []).forEach(e => {
+                    total += 2;
+                    const te = (dico && dico.exigences && dico.exigences[d.id + "/" + e.code]) || null;
+                    if (te) { compte(te.titre); compte(te.aide); }
+                });
+            });
+            return { id: id, nom: ref.nom, total: total, traduits: faits };
+        });
+    }
+
+    function get(id) {
+        const ref = registry[id] || null;
+        if (!ref) return null;
+        const langue = langueActive();
+        if (langue === "fr") return ref;
+        const dico = traductions[id] && traductions[id][langue];
+        return dico ? traduire(ref, dico) : ref;
+    }
+
+    function all() { return order.map(id => get(id)); }
 
     // Nombre total d'exigences (toutes familles confondues) d'un référentiel.
     function countExigences(ref) {
@@ -54,5 +163,5 @@ const Referentiels = (() => {
         return flatExigences(ref).find(e => e.code === code) || null;
     }
 
-    return { register, get, all, countExigences, flatExigences, findExigence };
+    return { register, registerTraduction, couverture, get, all, countExigences, flatExigences, findExigence };
 })();
