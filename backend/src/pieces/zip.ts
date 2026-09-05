@@ -172,15 +172,59 @@ export function lireEntree(
   if (fin > donnees.length) throw new ErreurZip(`données tronquées pour « ${nom} »`);
 
   const brut = donnees.subarray(debut, fin);
-  if (entree.methode === 0) return Buffer.from(brut);
+
+  if (entree.methode === 0) {
+    // ── LA BRANCHE « STOCKÉE », QUI N'ÉTAIT BORNÉE PAR RIEN ─────────────
+    //
+    // Constat **Q-205 c** de la porte S6. L'en-tête de ce fichier écrit qu'*« un
+    // en-tête ZIP ment »* — et la leçon n'était appliquée qu'à une branche sur
+    // deux. Le contrôle du haut compare `tailleDecompressee`, c'est-à-dire une
+    // DÉCLARATION du répertoire central. Pour la méthode 8, `inflateRawSync`
+    // recoupe cette déclaration avec le réel, et une bombe est arrêtée par le
+    // réel. Pour la méthode 0, rien ne les recoupait : une entrée déclarant
+    // « 1 octet décompressé » et portant 50 Mio de données stockées rendait
+    // 50 Mio, parce que le tranchage suit `tailleCompressee`.
+    //
+    // ⚠️ Composé avec l'analyseur quadratique (Q-197), il faisait sauter le
+    // facteur limitant : ce n'est pas la taille du fichier envoyé qui borne le
+    // travail, c'est ce que le décompresseur consent à produire.
+    if (brut.length > MAX_DECOMPRESSE) {
+      throw new ErreurZip(
+        `entrée « ${nom} » stockée : ${String(brut.length)} octets réels au-delà de la borne`,
+      );
+    }
+    // Et la déclaration doit dire vrai. Un écart n'est pas une négligence de
+    // producteur : les outils qui écrivent de l'OOXML renseignent exactement ce
+    // champ. C'est le signe qu'on lit un fichier fabriqué pour tromper le
+    // contrôle du haut — on le dit, plutôt que de choisir en silence laquelle
+    // des deux valeurs croire.
+    if (brut.length !== entree.tailleDecompressee) {
+      throw new ErreurZip(
+        `entrée « ${nom} » : le répertoire annonce ${String(entree.tailleDecompressee)} octets ` +
+          `décompressés et en porte ${String(brut.length)}`,
+      );
+    }
+    return Buffer.from(brut);
+  }
+
   if (entree.methode !== 8) {
     throw new ErreurZip(`méthode de compression ${String(entree.methode)} non gérée`);
   }
   try {
     // `maxOutputLength` : c'est le garde-fou contre la bombe de décompression.
-    // Sans lui, une entrée annonçant 4 Mio pourrait en produire mille.
-    return inflateRawSync(brut, { maxOutputLength: MAX_DECOMPRESSE });
+    // Sans lui, une entrée annonçant 4 Mio pourrait en produire mille. Il mord
+    // sur le RÉSULTAT, pas sur la déclaration — c'est ce qui manquait à la
+    // branche « stockée » ci-dessus.
+    const produit = inflateRawSync(brut, { maxOutputLength: MAX_DECOMPRESSE });
+    if (produit.length !== entree.tailleDecompressee) {
+      throw new ErreurZip(
+        `entrée « ${nom} » : le répertoire annonce ${String(entree.tailleDecompressee)} octets ` +
+          `décompressés et en produit ${String(produit.length)}`,
+      );
+    }
+    return produit;
   } catch (erreur) {
+    if (erreur instanceof ErreurZip) throw erreur;
     throw new ErreurZip(
       `décompression refusée pour « ${nom} » : ${erreur instanceof Error ? erreur.message : String(erreur)}`,
     );

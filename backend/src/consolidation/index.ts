@@ -240,19 +240,47 @@ interface LigneRepartition {
 }
 
 /**
+ * Les sept répartitions que cette route sait faire. **Rien d'autre n'est
+ * interpolable dans le SQL de `repartition()`.**
+ *
+ * ⚠️ Écrite à la main, et c'est ici le BON outil (`CLAUDE.md` §3, second cas) :
+ * une omission fait **échouer la compilation**, bruyamment, et oblige quelqu'un
+ * à ajouter le couple table/colonne en connaissance de cause. Une liste dont
+ * l'omission ferait *réussir quelque chose en silence* serait le mauvais outil —
+ * ce n'est pas le cas ici, `tsc` refuse tout couple absent.
+ *
+ * ── Ce que cela remplace, et pourquoi ───────────────────────────────────
+ *
+ * La porte S6 (§5, « à durcir sans que ce soit un constat ») a relevé que
+ * `table` et `colonne` étaient interpolés en `string`. L'auditeur a vérifié que
+ * ce n'était **pas exploitable** — sept sites d'appel, tous littéraux, fonction
+ * non exportée, route qui ne lit ni `query`, ni `params`, ni `body`. Sa remarque
+ * porte ailleurs, et elle est juste : *« la sûreté est une propriété des
+ * appelants, pas de la fonction »*. Une propriété tenue par les appelants se
+ * perd le jour où l'un d'eux change ; une propriété tenue par le TYPE ne se perd
+ * pas sans que la compilation le dise.
+ */
+type SourceRepartition =
+  | readonly ['risques', 'niveau']
+  | readonly ['actions', 'statut']
+  | readonly ['incidents', 'statut']
+  | readonly ['incidents', 'gravite']
+  | readonly ['documents', 'statut']
+  | readonly ['actifs', 'criticite']
+  | readonly ['audits', 'statut'];
+
+/**
  * Répartition d'une table par une colonne, groupée par filiale.
  *
- * ⚠️ `table` et `colonne` sont **interpolés**, ce qui serait une injection si
- * l'un ou l'autre venait d'une requête HTTP. Ils n'en viennent jamais : les
- * seuls appels sont ceux de ce module, avec des littéraux du code. La condition
- * E1 du `CONVENTIONS.md` §22 impose des requêtes intégralement paramétrées **sur
- * les valeurs** ; un nom d'objet ne se paramètre pas en SQL, et le garde-fou est
- * que la fonction n'est pas exportée.
+ * `table` et `colonne` sont interpolés — un nom d'objet ne se paramètre pas en
+ * SQL. Ce qui les rend sûrs n'est plus la discipline des appelants mais le type
+ * `SourceRepartition` : seuls sept couples existent, tous écrits dans ce
+ * fichier, et `tsc` refuse le huitième. La condition E1 du `CONVENTIONS.md` §22
+ * porte sur les **valeurs**, qui restent intégralement paramétrées.
  */
 const repartition = async (
   client: PoolClient,
-  table: string,
-  colonne: string,
+  ...[table, colonne]: SourceRepartition
 ): Promise<Map<string, Repartition>> => {
   const { rows } = await client.query<LigneRepartition>(
     `select filiale_id, ${colonne}::text as valeur, count(*)::text as n

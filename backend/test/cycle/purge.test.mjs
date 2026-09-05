@@ -654,3 +654,133 @@ describe('§6 — la déclaration d’accès de la purge', () => {
     });
   });
 });
+
+/* =====================================================================
+ *  §6 — UNE OCCURRENCE, UNE LIGNE — constat **Q-205 a** de la porte S6
+ * =====================================================================
+ *
+ * Ce que l'auditeur a mesuré : une purge **nominale** — `dans_la_filiale: 0`,
+ * donc la purge a fait exactement son travail — rapportait `anomalies: 1`.
+ *
+ * La cause n'était pas la classification, c'était la **fusion**. `chercherPartout`
+ * émettait UNE ligne par `table.colonne`, portant les trois comptes, et
+ * `classer()` en décidait la classe sur la première branche non nulle. Une
+ * colonne portant à la fois une occurrence de portée Groupe et une chez une
+ * filiale sœur — le cas d'un homonyme, qui n'a rien d'exceptionnel dans un
+ * groupe de vingt filiales — rendait une seule ligne, dont le verdict taisait
+ * l'une des deux.
+ *
+ * ⚠️ C'est la régression exacte que l'en-tête de `src/cycle/index.ts` dit avoir
+ * corrigée : « la première rédaction appelait *anomalie* ce qui n'en était pas
+ * une ». Elle est revenue par une autre porte — non par la classification, mais
+ * par la structure qui l'alimente. Et le §1 de ce fichier ne pouvait pas la
+ * voir : sa `parClasse` est indexée par `table.colonne`, si bien que deux lignes
+ * de même clé s'écrasent en silence.
+ *
+ * ⚠️ **Pourquoi un garde-fou qui crie sur le cas nominal est grave** : c'est le
+ * constat Q-123, et il se paie deux fois. On apprend à ignorer le rapport ; puis
+ * le jour où il annonce une vraie anomalie, personne ne le lit.
+ */
+
+describe('§6 — deux situations sur une colonne font DEUX lignes (Q-205 a)', () => {
+  const HOMONYME = 'Homonyme Partagé';
+  let restes;
+
+  before(async () => {
+    // ── LA MATIÈRE : le même nom à trois endroits de significations différentes,
+    //    sur UNE SEULE colonne — c'est la configuration qui fusionnait.
+    await semer(async (c) => {
+      // La fiche que l'on purgera : c'est elle qui porte le nom cherché.
+      await c.query('insert into personnes (id, filiale_id, nom, fonction) values ($1, $2, $3, $4)', [
+        'PERS-HOMONYME',
+        FILIALE_A,
+        HOMONYME,
+        'Responsable qualité',
+      ]);
+      // (1) dans la filiale purgée — la purge doit l'effacer ;
+      await c.query('update actifs set responsable = $1 where id = $2', [HOMONYME, 'ACTIF-A']);
+      // (2) DE PORTÉE GROUPE, sur la PSSI du socle commun. C'est la moitié qui
+      //     manquait : `documents` est une table MIXTE, donc `documents.proprietaire`
+      //     peut porter en même temps une occurrence Groupe et une chez une sœur —
+      //     la configuration exacte que la fusion écrasait.
+      await c.query(
+        'insert into personnes (id, filiale_id, nom, fonction) values ($1, null, $2, $3)',
+        ['PERS-HOMONYME-G', HOMONYME, 'Responsable groupe'],
+      );
+    });
+    // (3) chez la filiale sœur, SUR LA MÊME COLONNE — hors du périmètre
+    //     d'écriture, jamais un défaut ici.
+    await semer(
+      async (c) => {
+        await c.query('update actifs set responsable = $1 where id = $2', [HOMONYME, 'ACTIF-B']);
+        await c.query('insert into personnes (id, filiale_id, nom, fonction) values ($1, $2, $3, $4)', [
+          'PERS-HOMONYME-B',
+          FILIALE_B,
+          HOMONYME,
+          'Responsable site',
+        ]);
+      },
+      { filialeId: FILIALE_B },
+    );
+
+    const reponse = await serveur.appeler('POST', chemins.purge, {
+      corps: { personne_id: 'PERS-HOMONYME' },
+    });
+    assert.equal(reponse.statut, 200, JSON.stringify(reponse.corps));
+    restes = reponse.corps.restes;
+  });
+
+  test('LA MATIÈRE : « personnes.nom » porte bien DEUX situations', () => {
+    // Sans cette moitié, tout ce qui suit serait vert sur une base où rien n'a
+    // été semé — et c'est très exactement le vert qui a laissé passer Q-108.
+    // La configuration éprouvée est PRÉCISE : une occurrence de portée Groupe ET
+    // une chez une filiale sœur, sur la MÊME colonne. Une seule des deux ne
+    // reproduirait pas la fusion.
+    const surDocs = restes.filter((r) => r.table === 'personnes' && r.colonne === 'nom');
+    assert.ok(
+      surDocs.some((r) => r.portee_groupe > 0),
+      'Aucune occurrence de portée Groupe : la fusion ne peut pas se produire, l’essai ne ' +
+        'mesure rien. (la fiche « PERS-HOMONYME-G » a-t-elle encore filiale_id nul ?)',
+    );
+    assert.ok(
+      surDocs.some((r) => r.autres_filiales > 0),
+      'Aucune occurrence chez la filiale sœur : même remarque.',
+    );
+  });
+
+  test('UNE LIGNE PAR SITUATION, jamais une ligne fondue', () => {
+    for (const ligne of restes) {
+      const nonNuls = [ligne.dans_la_filiale, ligne.portee_groupe, ligne.autres_filiales].filter(
+        (n) => n > 0,
+      );
+      assert.equal(
+        nonNuls.length,
+        1,
+        'Une ligne ne décrit qu’UNE situation. Deux comptes non nuls sur la même ligne, ' +
+          'c’est la fusion de Q-205 a : son verdict tait l’une des deux. Ligne : ' +
+          JSON.stringify(ligne),
+      );
+      assert.equal(ligne.lignes, nonNuls[0], '`lignes` est le compte de CETTE situation.');
+    }
+    assert.equal(
+      restes.some(
+        (r) => r.table === 'personnes' && r.classe === 'autre_filiale' && r.autres_filiales > 0,
+      ),
+      true,
+      'L’occurrence chez la filiale sœur doit apparaître AVEC SON PROPRE VERDICT : c’est une ' +
+        'purge de plus à faire là-bas, jamais un défaut ici.',
+    );
+  });
+
+  test('LE CAS NOMINAL NE CRIE PAS : rien d’effaçable ne reste, donc aucune anomalie', () => {
+    // La question que l'essai du §1 ne posait pas : ce qui reste est-il, oui ou
+    // non, quelque chose que la purge aurait DÛ effacer ?
+    const anomalies = restes.filter((r) => r.classe === 'anomalie');
+    assert.deepEqual(
+      anomalies.filter((r) => r.dans_la_filiale > 0),
+      [],
+      'La purge a laissé le nom dans SA filiale : c’est le seul défaut vrai.\n  ' +
+        anomalies.map((r) => `${r.table}.${r.colonne} (${String(r.lignes)})`).join('\n  '),
+    );
+  });
+});

@@ -479,7 +479,12 @@ export interface Reste {
   readonly portee_groupe: number;
   /** Occurrences dans les autres filiales du périmètre de lecture. */
   readonly autres_filiales: number;
-  /** Somme des trois. */
+  /**
+   * Occurrences de CETTE ligne — c'est-à-dire de la seule situation qu'elle
+   * décrit. Depuis le constat Q-205 a, une colonne qui porte des occurrences
+   * dans deux situations produit **deux lignes** : `lignes` vaut donc toujours
+   * le seul compte non nul des trois ci-dessus, jamais leur somme.
+   */
   readonly lignes: number;
   /**
    * · `incidents` — signalé, jamais purgé automatiquement (§35.3) ;
@@ -514,7 +519,12 @@ export interface ResultatPurge {
    *
    * ⚠️ Le champ `classe` n'a de sens **qu'après** la purge : ici, seuls les trois
    * comptes comptent. Une occurrence dans la filiale avant la purge n'est pas une
-   * anomalie, c'est son objet.
+   * anomalie, c'est son objet — et pourtant elle porte `classe: 'anomalie'`,
+   * parce que la même fonction sert les deux listes. **C'est un piège de lecture,
+   * relevé par la porte S6 (Q-205 a) et assumé** : donner à `avant` une classe
+   * neutre demanderait une valeur de plus à l'énumération, que les appelants
+   * devraient traiter, pour un champ dont ce commentaire dit déjà qu'il ne se lit
+   * pas ici. Ce qui se lit dans `avant`, ce sont les comptes.
    */
   readonly avant: readonly Reste[];
   /** Lignes réécrites, par `table.colonne`. */
@@ -625,7 +635,7 @@ async function colonnesTextuelles(client: PoolClient): Promise<readonly ColonneT
 function classer(
   table: string,
   colonne: string,
-  comptes: { dansLaFiliale: number; porteeGroupe: number },
+  ou: 'dans_la_filiale' | 'portee_groupe' | 'autre_filiale',
   // ⚠️ Le paramètre ne s'appelle PAS `administrationGroupe`, et ce n'est pas une
   // coquetterie : `test/api/routes.test.mjs` balaie `src/` à la recherche de
   // « administrationGroupe » suivi de « : » ou « = », pour attraper la route qui
@@ -638,8 +648,25 @@ function classer(
   if (table === 'incidents') return 'incidents';
   if (COLONNES_TRACABILITE.includes(colonne)) return 'tracabilite';
   if (table === 'utilisateurs') return 'compte_annuaire';
-  if (comptes.dansLaFiliale > 0) return 'anomalie';
-  if (comptes.porteeGroupe > 0) return peutEcrireEnPorteeGroupe ? 'anomalie' : 'portee_groupe';
+  // ⚠️ **UNE OCCURRENCE, UNE CLASSE** — constat Q-205 a de la porte S6.
+  //
+  // Cette fonction recevait les TROIS comptes d'une colonne et rendait UNE
+  // classe. Une colonne portant à la fois une occurrence de portée Groupe et
+  // une chez une filiale sœur rendait donc une seule ligne, dont la classe
+  // était décidée par la branche Groupe seule — et l'occurrence de la filiale
+  // sœur, parfaitement légitime, disparaissait du verdict.
+  //
+  // Mesuré par l'auditeur : une purge NOMINALE (« dans_la_filiale: 0 », donc la
+  // purge a fait son travail) rapportait « anomalies: 1 ». C'est la régression
+  // exacte que l'en-tête de ce fichier dit avoir corrigée — « la première
+  // rédaction appelait *anomalie* ce qui n'en était pas une ». Elle est revenue
+  // par la fusion, pas par la classification.
+  //
+  // La forme qui l'empêche de revenir : l'appelant émet une ligne PAR compte non
+  // nul, et cette fonction ne voit qu'une situation à la fois. Il n'existe plus
+  // d'endroit où deux significations puissent se rencontrer.
+  if (ou === 'dans_la_filiale') return 'anomalie';
+  if (ou === 'portee_groupe') return peutEcrireEnPorteeGroupe ? 'anomalie' : 'portee_groupe';
   return 'autre_filiale';
 }
 
@@ -722,17 +749,26 @@ async function chercherPartout(
       const dansLaFiliale = Number(ligne[`a${String(i)}`] ?? '0');
       const porteeGroupe = Number(ligne[`g${String(i)}`] ?? '0');
       const autresFiliales = Number(ligne[`o${String(i)}`] ?? '0');
-      const lignes = dansLaFiliale + porteeGroupe + autresFiliales;
-      if (lignes === 0) return;
-      trouves.push({
-        table,
-        colonne: c.colonne,
-        dans_la_filiale: dansLaFiliale,
-        portee_groupe: porteeGroupe,
-        autres_filiales: autresFiliales,
-        lignes,
-        classe: classer(table, c.colonne, { dansLaFiliale, porteeGroupe }, perimetre.administrationGroupe),
-      });
+      // UNE LIGNE PAR SIGNIFICATION (Q-205 a). Une colonne qui porte des
+      // occurrences dans deux situations en produit deux : leurs verdicts
+      // diffèrent, et les fondre en une seule ligne revient à en taire un.
+      const situations = [
+        ['dans_la_filiale', dansLaFiliale],
+        ['portee_groupe', porteeGroupe],
+        ['autre_filiale', autresFiliales],
+      ] as const;
+      for (const [ou, combien] of situations) {
+        if (combien === 0) continue;
+        trouves.push({
+          table,
+          colonne: c.colonne,
+          dans_la_filiale: ou === 'dans_la_filiale' ? combien : 0,
+          portee_groupe: ou === 'portee_groupe' ? combien : 0,
+          autres_filiales: ou === 'autre_filiale' ? combien : 0,
+          lignes: combien,
+          classe: classer(table, c.colonne, ou, perimetre.administrationGroupe),
+        });
+      }
     });
   }
   return trouves;
