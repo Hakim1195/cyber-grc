@@ -501,3 +501,162 @@ describe('§37 — la couverture par écran ne redescend pas', () => {
     assert.deepEqual(absents, [], `Fichiers nommés dans PLANCHERS et introuvables : ${absents.join(', ')}`);
   });
 });
+
+/* =====================================================================
+   §37.3 — `I18n.valeur()` EST UN PASSE-PLAT, ET IL PART DANS `innerHTML`
+
+   Constat **Q-203** de la porte S6, mesuré SOUS LA CSP RÉELLE : l'élément
+   entre dans le DOM, `position:fixed` s'applique, seul le gestionnaire est
+   bloqué. La CSP arrête l'exécution, pas l'habillage — un cadre superposé
+   suffit à tromper.
+
+   Le chemin est celui-ci, et il n'existait pas avant l'internationalisation :
+   `valeur()` cherche `"valeur." + v` au dictionnaire et, **si la clé manque,
+   rend `v` tel quel**. Or `v` est une valeur STOCKÉE. Les modules employaient
+   auparavant une table fermée (`STATUTS.find(...) || STATUTS[0]`) qui rendait
+   toujours une constante du dépôt ; le passe-plat a ouvert la base jusqu'au
+   gabarit. C'est le pendant exact de Q-183 : l'i18n révèle des injections, et
+   elle en introduit.
+
+   ⚠️ La liste des enveloppes réputées sûres est écrite à la main — c'est ici
+   le BON outil, parce qu'une omission fait **rougir** ce contrôle et oblige
+   quelqu'un à trancher (`CLAUDE.md` §3, second cas). Mais on ne croit pas son
+   nom : l'essai suivant **fait passer une chaîne hostile dans chacune** et
+   vérifie qu'elle en ressort inerte.
+   ===================================================================== */
+
+/** Enveloppes qui échappent leur premier argument. Vérifiées, pas supposées. */
+const ENVELOPPES_SURES = ['escapeHtml', 'esc', 'UI.badge', 'UI.mappedBadge'];
+
+/** Appels à `I18n.valeur(x)` où `x` n'est PAS un littéral et rien n'échappe. */
+function valeursNonEchappees(source) {
+  const fautes = [];
+  const lignes = source.split('\n');
+  lignes.forEach((ligne, index) => {
+    // ⚠️ Le qualifiant `I18n.` est EXIGÉ, et ce n'est pas de la prudence : sans
+    // lui le détecteur attrape le mot « valeur(s) » dans une phrase française et
+    // une fonction locale homonyme (`js/modules/groupe.js:458`). Un contrôle qui
+    // accuse à tort finit désarmé. Le trou que cela ouvre — un module qui
+    // aliaserait la fonction — est fermé par l'essai suivant.
+    for (const m of ligne.matchAll(/\bI18n\s*\.\s*valeur\(/g)) {
+      // Un littéral en argument est une constante du dépôt : inerte, et déjà
+      // couvert par « aucune valeur ne porte de balise ».
+      if (['"', "'", '`'].includes(ligne[m.index + m[0].length])) continue;
+      const amont = ligne.slice(0, m.index);
+      if (ENVELOPPES_SURES.some((e) => amont.includes(`${e}(`))) continue;
+      fautes.push({ ligne: index + 1, extrait: ligne.trim().slice(0, 120) });
+    }
+  });
+  return fautes;
+}
+
+describe('§37.3 — la valeur STOCKÉE qui traverse le dictionnaire (constat Q-203)', () => {
+  test('CHAQUE ENVELOPPE RÉPUTÉE SÛRE ÉCHAPPE VRAIMENT — mesuré, pas cru sur parole', () => {
+    // ⚠️ C'est la moitié qui empêche la liste ci-dessus de devenir une
+    // superstition. Une enveloppe qu'on y ajoute sans qu'elle échappe
+    // désarmerait le contrôle en silence — précisément ce qu'on veut éviter.
+    const contexte = createContext({ window: {}, document: undefined });
+    runInContext(readFileSync(join(RACINE_FRONTEND, 'js', 'core', 'ui.js'), 'utf8'), contexte);
+    const UI = contexte.window.UI;
+    assert.ok(UI && typeof UI.badge === 'function', '`UI.badge` doit être chargeable hors navigateur.');
+
+    const hostile = '<img src=x onerror=alert(1)>';
+    const sorties = {
+      'UI.badge': UI.badge(hostile, 'status-conforme'),
+      'UI.mappedBadge': UI.mappedBadge(hostile, {}, 'status-conforme'),
+    };
+    for (const [nom, rendu] of Object.entries(sorties)) {
+      assert.ok(
+        !rendu.includes('<img'),
+        `« ${nom} » est réputée sûre et laisse passer une balise : ${rendu}`,
+      );
+      assert.ok(rendu.includes('&lt;img'), `« ${nom} » doit ÉCHAPPER, pas supprimer : ${rendu}`);
+    }
+  });
+
+  test('AUCUN APPEL À `valeur()` SUR UNE DONNÉE N’ATTEINT UN GABARIT SANS ÉCHAPPEMENT', () => {
+    const fautes = [];
+    let appelsVus = 0;
+    for (const chemin of fichiersDInterface()) {
+      if (extname(chemin) !== '.js') continue;
+      const source = sansCommentaires(readFileSync(chemin, 'utf8'));
+      appelsVus += (source.match(/\bI18n\s*\.\s*valeur\(/g) ?? []).length;
+      const relatif = relative(RACINE_FRONTEND, chemin).split('\\').join('/');
+      for (const f of valeursNonEchappees(source)) {
+        fautes.push(`${relatif}:${String(f.ligne)}  ${f.extrait}`);
+      }
+    }
+    // LA MATIÈRE : sans appel à compter, l'assertion suivante serait verte
+    // pour rien — et le jour où l'i18n serait retirée, on ne le saurait pas.
+    assert.ok(appelsVus >= 20, `Balayage suspect : ${String(appelsVus)} appel(s) à valeur() vu(s).`);
+    assert.deepEqual(
+      fautes,
+      [],
+      '`I18n.valeur()` rend la valeur STOCKÉE telle quelle quand le dictionnaire ne la ' +
+        'connaît pas. Ces appels la portent jusqu’à un gabarit sans l’échapper :\n' +
+        fautes.map((f) => `    · ${f}`).join('\n') +
+        '\nEnveloppez d’`escapeHtml(...)`, ou passez par `UI.badge`.',
+    );
+  });
+
+  test('LE CONTRÔLE MORD — la faute exacte de Q-203 est bien vue', () => {
+    const fautif = 'label: brute === "" ? t("x") : I18n.valeur(brute),';
+    assert.equal(
+      valeursNonEchappees('function valeur(bloc, extraire) { return bloc; }').length,
+      0,
+      'Une fonction LOCALE homonyme n’est pas le passe-plat du dictionnaire : l’accuser ' +
+        'ferait rougir douze sites de `groupe.js` pour rien.',
+    );
+    assert.equal(
+      valeursNonEchappees("morceaux.push(n + ' valeur(s) rendue(s) deux fois');").length,
+      0,
+      'Le mot « valeur(s) » dans une phrase française n’est pas un appel.',
+    );
+    assert.equal(valeursNonEchappees(fautif).length, 1, 'La forme exacte du constat Q-203.');
+    assert.equal(
+      valeursNonEchappees('label: escapeHtml(I18n.valeur(brute)),').length,
+      0,
+      'Le correctif retenu doit être accepté.',
+    );
+    assert.equal(
+      valeursNonEchappees('return UI.badge(I18n.valeur(g), classePour(g, {}));').length,
+      0,
+      '`UI.badge` échappe — l’essai précédent le MESURE —, l’accuser ferait désarmer le contrôle.',
+    );
+    assert.equal(
+      valeursNonEchappees('<option>${I18n.valeur("Basse")}</option>').length,
+      0,
+      'Un littéral est une constante du dépôt, couverte ailleurs : l’accuser ferait rougir ' +
+        'trente-deux sites pour rien, et un contrôle qui accuse à tort finit désarmé.',
+    );
+  });
+
+  test('LE QUALIFIANT `I18n.` NE PEUT PAS ÊTRE CONTOURNÉ PAR UN ALIAS', () => {
+    // Le détecteur n'accepte que la forme qualifiée. Un module qui écrirait
+    // `const { valeur } = I18n` — ou `const v = I18n.valeur` — le rendrait
+    // aveugle SANS RIEN CASSER : c'est très exactement la façon dont un
+    // contrôle cesse de contrôler. On interdit donc l'alias, bruyamment.
+    const alias = [];
+    let examines = 0;
+    for (const chemin of fichiersDInterface()) {
+      if (extname(chemin) !== '.js') continue;
+      const source = sansCommentaires(readFileSync(chemin, 'utf8'));
+      examines++;
+      const relatif = relative(RACINE_FRONTEND, chemin).split('\\').join('/');
+      // `const {…valeur…} = I18n`, `const x = I18n.valeur` sans appel.
+      const motifs = [/\{[^}]*\bvaleur\b[^}]*\}\s*=\s*I18n\b/g, /=\s*I18n\s*\.\s*valeur\s*(?!\()/g];
+      for (const motif of motifs) {
+        for (const m of source.matchAll(motif)) {
+          alias.push(`${relatif}  ${m[0].replace(/\s+/g, ' ').slice(0, 80)}`);
+        }
+      }
+    }
+    assert.ok(examines >= 40, `Balayage suspect : ${String(examines)} fichier(s).`);
+    assert.deepEqual(
+      alias,
+      [],
+      'Ces écritures détachent `valeur` de `I18n` et rendent le contrôle précédent aveugle. ' +
+        'Appelez `I18n.valeur(...)` en toutes lettres :\n' + alias.map((a) => `    · ${a}`).join('\n'),
+    );
+  });
+});

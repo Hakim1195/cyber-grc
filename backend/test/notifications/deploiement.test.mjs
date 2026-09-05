@@ -111,6 +111,80 @@ describe('L12 — l’unité systemd et son minuteur', () => {
     assert.ok(lignes.includes('LimitCORE=0'));
   });
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     LA MOITIÉ QUI MANQUAIT — constat **Q-199** de la porte S6
+
+     L'essai ci-dessus n'était pas faux : `IPAddressDeny=any` +
+     `IPAddressAllow=localhost` est bien le durcissement voulu. Il ne posait
+     simplement jamais la seconde question — **et le lot peut-il envoyer ?**
+     Réponse mesurée par l'auditeur : non. Avec `SMTP_ACTIF=oui` et un relais
+     Office 365 — c'est-à-dire la configuration du cadrage —, chaque envoi est
+     refusé par le NOYAU, et le journal dit « Relais injoignable ».
+
+     `install.sh` posait l'unité telle quelle puis armait le minuteur. Le seul
+     contrôle de couverture du dépôt interrogeait `systemctl show … cyber-grc`,
+     **l'unité applicative**, jamais celle-ci — et il vivait dans le bloc
+     « AUTH_LDAP_ACTIF », donc disparaissait chez un client sans annuaire.
+
+     ⚠️ Le banc était VERT sur la configuration qui empêche le lot de marcher.
+     C'est la forme la plus coûteuse de « un essai vert qui n'a rien eu à
+     mesurer » : celui-ci mesurait, mais il mesurait l'autre moitié.
+     ═══════════════════════════════════════════════════════════════════════ */
+  describe('Q-199 — l’installateur refuse d’armer un minuteur qui ne peut pas envoyer', () => {
+    const installateur = readFileSync(join(RACINE_BACKEND, 'deploy', 'install.sh'), 'utf8');
+
+    test('il INTERROGE l’unité de notification, pas seulement l’unité applicative', () => {
+      assert.match(
+        installateur,
+        /systemctl show -p IPAddressAllow --value cyber-grc-notifications/u,
+        'Le contrôle de couverture doit lire l’unité DES NOTIFICATIONS. Lire ' +
+          '« cyber-grc » à sa place est le défaut exact de Q-199 : deux unités, ' +
+          'deux listes blanches, et celle qui doit sortir n’était jamais regardée.',
+      );
+    });
+
+    test('le refus est DUR, et il tombe AVANT l’armement du minuteur', () => {
+      const posEchec = installateur.indexOf('SMTP_ACTIF=oui, mais cyber-grc-notifications.service INTERDIT');
+      const posArmement = installateur.indexOf('systemctl enable --now cyber-grc-notifications.timer');
+      assert.ok(posEchec > 0, 'Aucun refus dur ne nomme le cas « le relais n’est pas couvert ».');
+      assert.ok(posArmement > 0, 'L’armement du minuteur a disparu.');
+      assert.ok(
+        posEchec < posArmement,
+        'Le contrôle doit tomber AVANT l’armement : un minuteur armé qui échoue tous les ' +
+          'jours coûte plus cher qu’une installation qui refuse de s’achever en disant pourquoi.',
+      );
+      assert.match(
+        installateur.slice(posEchec, posEchec + 900),
+        /SMTP_ACTIF=non/u,
+        'Le message doit dire comment installer SANS les relances, sinon le contrôle ' +
+          'devient un mur qu’on contourne en écrivant « IPAddressAllow=any ».',
+      );
+    });
+
+    test('les fonctions de couverture ne dépendent PLUS du bloc de l’annuaire', () => {
+      // Un client qui pose AUTH_LDAP_ACTIF=non aurait perdu le contrôle SMTP
+      // avec le bloc qui le portait — sans que rien ne le dise.
+      const posFonction = installateur.indexOf('\ncouverte_par()');
+      const posBlocLdap = installateur.indexOf('if [[ "$(lire_variable AUTH_LDAP_ACTIF)" == "non" ]]');
+      assert.ok(posFonction > 0, '`couverte_par` a disparu.');
+      assert.ok(posBlocLdap > 0, 'Le bloc de l’annuaire a disparu.');
+      assert.ok(
+        posFonction < posBlocLdap,
+        '`couverte_par` doit être définie AVANT — et donc hors — du bloc de l’annuaire : ' +
+          'le relais SMTP ne dépend pas de l’activation de l’annuaire.',
+      );
+    });
+
+    test('L’UNITÉ DIT ENCORE, EN TOUTES LETTRES, CE QUE L’OUBLI PRODUIT', () => {
+      // Le commentaire de l'unité était juste et complet. Il ne suffisait pas —
+      // « une réserve écrite n'est pas une réserve traitée » — mais le retirer
+      // maintenant que le contrôle existe priverait l'exploitant du mode d'emploi.
+      const service = lire(SERVICE);
+      assert.match(service, /IPAddressAllow=<sous-réseau du relais SMTP/u);
+      assert.match(service, /Relais injoignable/u);
+    });
+  });
+
   test('le service est un « oneshot » sans [Install] : seul le minuteur l’arme', () => {
     const texte = lire(SERVICE);
     assert.match(texte, /^Type=oneshot$/mu);

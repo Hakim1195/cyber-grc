@@ -410,11 +410,39 @@ const Sync = (() => {
         return creation ? undefined : null;
     }
 
+    /**
+     * Un champ que LE SERVEUR AJOUTE pour le navigateur, et qui ne correspond à
+     * aucune colonne — constat **Q-201** de la porte S6.
+     *
+     * ⚠️ Le défaut, et sa forme est plus intéressante que sa gravité : après un
+     * enregistrement **qui a réussi**, le produit affichait « Champs non reconnus
+     * par le serveur, donc NON ENREGISTRÉS : risques._porteeGroupe ». Un message
+     * qui annonce une perte de données là où il n'y en a pas — même famille que
+     * le constat Q-134, et pire qu'un silence : il apprend à l'utilisateur à ne
+     * plus croire les bandeaux, y compris le jour où ils disent vrai.
+     *
+     * La cause : `_porteeGroupe` a été ajouté aux entités mixtes (constat Q-176)
+     * et repart dans l'enregistrement, mais `champsAcceptes()` est bâti sur le
+     * MODÈLE, c'est-à-dire sur les colonnes. Il n'y en a pas.
+     *
+     * ⚠️ **Le souligné initial est la règle, pas la liste des trois noms.** Une
+     * liste manquerait le quatrième champ structurel du jour où il sera ajouté,
+     * et le produit annoncerait de nouveau une perte imaginaire — omission qui
+     * « réussit en silence alors que c'est faux », donc mauvais outil
+     * (`CLAUDE.md` §3). Le préfixe est vérifié DES DEUX CÔTÉS : le garde-fou de
+     * schéma `f_verifier_champs_structurels()` (migration `015`) refuse toute
+     * colonne dont le nom commence par un souligné, ce qui garantit qu'aucun
+     * champ métier ne sera jamais écarté par cette règle.
+     */
+    function estChampStructurel(champ) {
+        return typeof champ === "string" && champ.charAt(0) === "_";
+    }
+
     function corpsDe(collection, enregistrement, creation) {
         const acceptes = champsAcceptes(collection);
         const champs = {};
         Object.keys(enregistrement).forEach(k => {
-            if (k === "id" || k === "updatedAt" || k === "_version" || k === "_versionMiseEnOeuvre") return;
+            if (k === "id" || k === "updatedAt" || estChampStructurel(k)) return;
             if (enregistrement[k] === undefined) return;
             if (acceptes && !acceptes.has(k)) { champsRefuses.add(collection + "." + k); return; }
             const valeur = valeurPourLeServeur(collection, k, enregistrement[k], creation === true);

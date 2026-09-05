@@ -136,3 +136,95 @@ describe('Les catalogues traduits : la couverture se COMPTE', () => {
     console.log(`  (${verifiees} clé(s) d’exigence vérifiée(s))`);
   });
 });
+
+/* =====================================================================
+   LA BARRIÈRE ANTI-BALISE, QUI NE REGARDAIT PAS ICI — constat **Q-204**
+
+   `traductions.test.mjs` refuse depuis L11 tout `<` ou `>` dans une valeur
+   de `js/i18n/` : la moitié STATIQUE des chaînes est ainsi inerte, et les
+   `innerHTML` du produit peuvent l'interpoler sans l'échapper.
+
+   Rien n'équivalait pour `js/data/en/` — c'est-à-dire pour **le double des
+   chaînes**, écrites au fil de l'eau par plusieurs agents, et qui partent
+   dans les mêmes gabarits. Le contrôle existait ; il ne regardait pas au bon
+   endroit. C'est la même figure que le contrôle de couverture d'allow-list
+   qui interrogeait la mauvaise unité systemd (Q-199).
+
+   ⚠️ On balaie **les deux langues**. Le français est la source : une balise
+   qui y entrerait s'afficherait aussi, et un contrôle qui ne regarde que la
+   traduction laisse la porte ouverte du côté par lequel on entre.
+   ===================================================================== */
+
+describe('Aucune chaîne de catalogue ne porte de balise (constat Q-204)', () => {
+  test('les valeurs des catalogues et de leurs traductions sont INERTES', () => {
+    const fautives = [];
+    let valeursVues = 0;
+
+    /** Parcourt une valeur quelconque et rend ses chaînes, chemin compris. */
+    const parcourir = (valeur, chemin, sortie) => {
+      if (typeof valeur === 'string') sortie.push([chemin, valeur]);
+      else if (Array.isArray(valeur)) valeur.forEach((v, i) => parcourir(v, `${chemin}[${i}]`, sortie));
+      else if (valeur && typeof valeur === 'object') {
+        for (const [c, v] of Object.entries(valeur)) parcourir(v, `${chemin}.${c}`, sortie);
+      }
+      return sortie;
+    };
+
+    // ⚠️ On DÉCOUVRE les chaînes en parcourant l'objet, plutôt que de nommer
+    // les champs traduisibles. Une liste de champs manquerait celui qu'on
+    // ajoutera, et la balise passerait EN SILENCE (`CLAUDE.md` §3, cas 1).
+    const Referentiels = chargerCatalogues();
+    for (const ref of Referentiels.all()) {
+      for (const [chemin, texte] of parcourir(ref, ref.id, [])) {
+        valeursVues += 1;
+        if (/[<>]/u.test(texte)) fautives.push(`${chemin} = ${texte.slice(0, 90)}`);
+      }
+    }
+
+    // Les traductions, lues à la source : `all()` ne rend que la langue active.
+    for (const nom of CATALOGUES) {
+      const fichier = join(RACINE_FRONTEND, 'js', 'data', 'en', `${nom}.js`);
+      if (!existsSync(fichier)) continue;
+      const source = readFileSync(fichier, 'utf8');
+      for (const [, texte] of source.matchAll(/:\s*"((?:[^"\\]|\\.)*)"/gu)) {
+        valeursVues += 1;
+        if (/[<>]/u.test(texte)) fautives.push(`en/${nom}.js : ${texte.slice(0, 90)}`);
+      }
+    }
+
+    // LA MATIÈRE : un balayage qui ne trouve rien à examiner passerait aussi.
+    assert.ok(
+      valeursVues >= 1500,
+      `Balayage suspect : ${String(valeursVues)} valeur(s) examinée(s). Les catalogues en ` +
+        'portent des milliers ; un compte aussi bas signale que le chargement a échoué ' +
+        'silencieusement, et tout ce qui suit serait vert pour rien.',
+    );
+    assert.deepEqual(
+      fautives,
+      [],
+      'Ces chaînes de catalogue portent une balise. Elles sont interpolées dans des gabarits ' +
+        '`innerHTML` par les modules Référentiels, Conformité et Correspondances :\n' +
+        fautives.map((f) => `    · ${f}`).join('\n'),
+    );
+    console.log(`  (${valeursVues} valeur(s) de catalogue balayée(s))`);
+  });
+
+  test('LE CONTRÔLE MORD — une balise glissée dans un catalogue est vue', () => {
+    // Le détecteur est une expression simple ; ce qui pourrait le désarmer est
+    // le PARCOURS, s'il cessait de descendre dans les exigences.
+    const objet = { id: 'x', nom: 'sain', domaines: [{ nom: 'ok', exigences: [{ titre: '<b>ici</b>' }] }] };
+    const trouvees = [];
+    const parcourir = (v, chemin) => {
+      if (typeof v === 'string') { if (/[<>]/u.test(v)) trouvees.push(chemin); }
+      else if (Array.isArray(v)) v.forEach((x, i) => parcourir(x, `${chemin}[${i}]`));
+      else if (v && typeof v === 'object') for (const [c, x] of Object.entries(v)) parcourir(x, `${chemin}.${c}`);
+    };
+    parcourir(objet, 'essai');
+    assert.deepEqual(
+      trouvees,
+      ['essai.domaines[0].exigences[0].titre'],
+      'Le parcours doit atteindre le titre d’une exigence — c’est là que vivent les 234 ' +
+        'chaînes d’AirCyber, et une balise s’y cacherait très bien.',
+    );
+  });
+});

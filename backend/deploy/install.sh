@@ -1669,6 +1669,38 @@ fi
 # Ce bloc confronte donc la configuration au RÉEL : il résout, il se connecte, il
 # vérifie une chaîne de certification, et il compare une liste d'adresses à ce que
 # l'unité autorise. Ce qu'il ne peut pas faire est dit à l'endroit où il s'arrête.
+# ══ COUVERTURE D'UNE LISTE BLANCHE « IPAddressAllow » ═══════════════════════
+#
+# ⚠️ DEUX APPELANTS, ET C'EST POURQUOI CES FONCTIONS VIVENT ICI plutôt que dans
+# le bloc de l'annuaire : l'unité applicative doit joindre le contrôleur de
+# domaine, l'unité des NOTIFICATIONS doit joindre le relais SMTP — et la seconde
+# ne dépend pas de la première. Tant que ces fonctions étaient définies dans le
+# bloc « AUTH_LDAP_ACTIF », le contrôle du relais aurait disparu chez un client
+# qui n'active pas l'annuaire (constat Q-199).
+# Couverture IPv4 exacte ; IPv6 déclarée indécidable plutôt que devinée. Un
+# contrôle qui répondrait « couvert » sans savoir serait pire que pas de
+# contrôle : c'est celui-là qu'on croirait.
+entier_ipv4() {
+  local a b c d; IFS=. read -r a b c d <<< "$1"
+  printf '%s' "$(( (a << 24) | (b << 16) | (c << 8) | d ))"
+}
+couverte_par() {   # <adresse> <entrée IPAddressAllow> -> 0 si couverte
+  local adresse="$1" regle="$2" prefixe longueur masque
+  case "$regle" in
+    any) return 0 ;;
+    localhost) [[ "$adresse" == 127.* || "$adresse" == "::1" ]] && return 0 || return 1 ;;
+    link-local|multicast) return 1 ;;
+  esac
+  [[ "$adresse" == *:* || "$regle" == *:* ]] && return 2      # IPv6 : indécidable ici
+  prefixe="${regle%%/*}"
+  if [[ "$regle" == */* ]]; then longueur="${regle##*/}"; else longueur=32; fi
+  [[ "$prefixe" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 2
+  [[ "$longueur" =~ ^[0-9]+$ ]] && [[ "$longueur" -le 32 ]] || return 2
+  if [[ "$longueur" -eq 0 ]]; then return 0; fi
+  masque=$(( 0xFFFFFFFF << (32 - longueur) & 0xFFFFFFFF ))
+  [[ $(( $(entier_ipv4 "$adresse") & masque )) -eq $(( $(entier_ipv4 "$prefixe") & masque )) ]]
+}
+
 if [[ "$(lire_variable AUTH_LDAP_ACTIF)" == "non" ]]; then
   alerte "AUTH_LDAP_ACTIF = non : l'authentification par l'annuaire est DÉSACTIVÉE."
   alerte "Seul le compte de secours (AUTH_COMPTE_SECOURS_*) pourra ouvrir une session."
@@ -1806,29 +1838,6 @@ else
     UNITE_SOURCE="systemctl show (unité en vigueur)"
   fi
 
-  # Couverture IPv4 exacte ; IPv6 déclarée indécidable plutôt que devinée. Un
-  # contrôle qui répondrait « couvert » sans savoir serait pire que pas de
-  # contrôle : c'est celui-là qu'on croirait.
-  entier_ipv4() {
-    local a b c d; IFS=. read -r a b c d <<< "$1"
-    printf '%s' "$(( (a << 24) | (b << 16) | (c << 8) | d ))"
-  }
-  couverte_par() {   # <adresse> <entrée IPAddressAllow> -> 0 si couverte
-    local adresse="$1" regle="$2" prefixe longueur masque
-    case "$regle" in
-      any) return 0 ;;
-      localhost) [[ "$adresse" == 127.* || "$adresse" == "::1" ]] && return 0 || return 1 ;;
-      link-local|multicast) return 1 ;;
-    esac
-    [[ "$adresse" == *:* || "$regle" == *:* ]] && return 2      # IPv6 : indécidable ici
-    prefixe="${regle%%/*}"
-    if [[ "$regle" == */* ]]; then longueur="${regle##*/}"; else longueur=32; fi
-    [[ "$prefixe" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 2
-    [[ "$longueur" =~ ^[0-9]+$ ]] && [[ "$longueur" -le 32 ]] || return 2
-    if [[ "$longueur" -eq 0 ]]; then return 0; fi
-    masque=$(( 0xFFFFFFFF << (32 - longueur) & 0xFFFFFFFF ))
-    [[ $(( $(entier_ipv4 "$adresse") & masque )) -eq $(( $(entier_ipv4 "$prefixe") & masque )) ]]
-  }
 
   # Les résolveurs comptent — mais PAS TOUJOURS, et la nuance décide de la
   # sévérité. Si LDAP_URL nomme un hôte, le service doit le résoudre : un
@@ -1934,6 +1943,107 @@ install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-reanalyse.timer" /etc/systemd/
   # le pare-feu du client pendant une heure, alors que la cause est dans l'unité.
   install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-notifications.service" /etc/systemd/system/
   install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-notifications.timer"   /etc/systemd/system/
+
+  # ══ ET ON VÉRIFIE QUE LE RELAIS EST JOIGNABLE DEPUIS LE CGROUP (constat Q-199)
+  #
+  # ⚠️ Ce qui précède ce contrôle n'était qu'un COMMENTAIRE. L'unité disait, en
+  # toutes lettres, ce que l'oubli produirait — et l'installateur armait le
+  # minuteur sans rien vérifier. C'est « une réserve écrite n'est pas une réserve
+  # traitée », la leçon la plus chère de ce chantier, appliquée à la lettre à L12 :
+  # le lot était livré dans une configuration où il NE PEUT PAS envoyer, et le
+  # banc était vert sur cette configuration-là.
+  #
+  # Le contrôle est DUR, pas une alerte. Un minuteur qui échoue tous les jours à
+  # 7 h en disant « Relais injoignable » coûte plus cher qu'une installation qui
+  # refuse de s'achever en disant pourquoi : dans le premier cas on cherche le
+  # pare-feu du client, l'enregistrement SPF et la configuration Office 365 avant
+  # de penser au cgroup.
+  if [[ "$(lire_variable SMTP_ACTIF)" == "oui" ]]; then
+    SMTP_HOTE_V="$(lire_variable SMTP_HOTE)"
+    UNITE_NOTIF="fichier $SOURCE/deploy/systemd/cyber-grc-notifications.service"
+    AUTORISES_NOTIF="$(sed -n 's/^[[:space:]]*IPAddressAllow=[[:space:]]*//p' \
+                 "$SOURCE/deploy/systemd/cyber-grc-notifications.service" 2>/dev/null \
+                 | tr ' ' '\n' | sed '/^$/d')"
+    if VU_N="$(systemctl show -p IPAddressAllow --value cyber-grc-notifications 2>/dev/null)" \
+       && [[ -n "$VU_N" ]]; then
+      AUTORISES_NOTIF="$(printf '%s' "$VU_N" | tr ' ' '\n' | sed '/^$/d')"
+      UNITE_NOTIF="systemctl show (unité en vigueur)"
+    fi
+
+    # Le relais, et le résolveur qui le résout — même nuance que pour l'annuaire :
+    # si SMTP_HOTE porte une adresse littérale, le DNS n'est pas sur le chemin.
+    ADRESSES_SMTP=""
+    if [[ "$SMTP_HOTE_V" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ || "$SMTP_HOTE_V" == *:* ]]; then
+      ADRESSES_SMTP="$SMTP_HOTE_V"
+      SMTP_DNS_SUR_LE_CHEMIN=0
+    else
+      ADRESSES_SMTP="$(getent ahosts "$SMTP_HOTE_V" 2>/dev/null | awk '{print $1}' | sort -u || true)"
+      SMTP_DNS_SUR_LE_CHEMIN=1
+    fi
+
+    if [[ -z "${ADRESSES_SMTP//[[:space:]]/}" ]]; then
+      # ⚠️ On ne conclut PAS. Un nom qui ne se résout pas ici peut se résoudre
+      # chez le client ; refuser l'installation pour cela serait un faux positif,
+      # et dire « couvert » serait un mensonge. On le dit, et on le laisse ouvert.
+      reserve "« $SMTP_HOTE_V » ne se résout pas depuis cette machine : la couverture de"
+      alerte "IPAddressAllow pour le relais SMTP N'A PAS été vérifiée. Vérifiez à la main que"
+      alerte "cyber-grc-notifications.service autorise le sous-réseau du relais, sinon le"
+      alerte "NOYAU refusera chaque envoi et le journal dira « Relais injoignable »."
+    else
+      A_VERIFIER_N=""
+      while IFS= read -r a; do
+        [[ -n "$a" ]] && A_VERIFIER_N+="$a relais SMTP ($SMTP_HOTE_V)"$'\n'
+      done <<< "$ADRESSES_SMTP"
+      if [[ $SMTP_DNS_SUR_LE_CHEMIN -eq 1 ]]; then
+        while IFS= read -r a; do
+          [[ -n "$a" ]] && A_VERIFIER_N+="$a résolveur DNS (sans lui, « $SMTP_HOTE_V » ne se résout pas DANS l'unité)"$'\n'
+        done <<< "$(sed -n 's/^[[:space:]]*nameserver[[:space:]]\{1,\}//p' /etc/resolv.conf 2>/dev/null | awk '{print $1}' || true)"
+      fi
+
+      BLOQUEES_N=""; INDECIDABLES_N=""
+      while IFS= read -r ligne; do
+        [[ -n "$ligne" ]] || continue
+        adresse="${ligne%% *}"; quoi="${ligne#* }"
+        verdict=1
+        while IFS= read -r regle; do
+          [[ -n "$regle" ]] || continue
+          # Appel en condition : sous « set -e », un `couverte_par …; issue=$?`
+          # avorte le script dès la première règle qui ne couvre pas.
+          if couverte_par "$adresse" "$regle"; then issue=0; else issue=$?; fi
+          if [[ $issue -eq 0 ]]; then verdict=0; break; fi
+          if [[ $issue -eq 2 ]]; then verdict=2; fi
+        done <<< "$AUTORISES_NOTIF"
+        case $verdict in
+          0) : ;;
+          2) INDECIDABLES_N+="$adresse — $quoi"$'\n' ;;
+          *) BLOQUEES_N+="$adresse — $quoi"$'\n' ;;
+        esac
+      done <<< "$A_VERIFIER_N"
+
+      if [[ -n "${BLOQUEES_N//[[:space:]]/}" ]]; then
+        while IFS= read -r l; do [[ -n "$l" ]] && alerte "refusée par l'unité de notification : $l"; done <<< "$BLOQUEES_N"
+        alerte "IPAddressAllow en vigueur ($UNITE_NOTIF) : $(printf '%s' "$AUTORISES_NOTIF" | tr '\n' ' ')"
+        echec "SMTP_ACTIF=oui, mais cyber-grc-notifications.service INTERDIT au minuteur de
+      joindre le relais (IPAddressDeny=any). Le minuteur s'armerait, échouerait tous les
+      jours, et le journal dirait « Relais injoignable » — en désignant le réseau du client
+      alors que la cause est cette liste blanche. Ajoutez à
+      deploy/systemd/cyber-grc-notifications.service, à côté de « IPAddressAllow=localhost » :
+        IPAddressAllow=<sous-réseau du relais SMTP, ex. 10.0.0.0/8>
+        IPAddressAllow=<sous-réseau du résolveur DNS, s'il n'est pas en 127.x>
+      puis : systemctl daemon-reload && systemctl restart cyber-grc-notifications.timer
+      N'écrivez PAS « IPAddressAllow=any » : cela rendrait toute la section inutile.
+      Pour installer sans les relances, posez SMTP_ACTIF=non."
+      fi
+      if [[ -n "${INDECIDABLES_N//[[:space:]]/}" ]]; then
+        while IFS= read -r l; do [[ -n "$l" ]] && alerte "couverture NON vérifiée (IPv6) : $l"; done <<< "$INDECIDABLES_N"
+        alerte "Ce contrôle ne décide que de l'IPv4 : il refuse de conclure plutôt que de dire"
+        alerte "« couvert » sans le savoir. Vérifiez à la main que l'unité autorise ces adresses."
+      fi
+      if [[ -z "${BLOQUEES_N//[[:space:]]/}" && -z "${INDECIDABLES_N//[[:space:]]/}" ]]; then
+        succes "unité de notification : relais SMTP et résolveurs couverts par IPAddressAllow ($UNITE_NOTIF)"
+      fi
+    fi
+  fi
 systemctl daemon-reload
 systemctl enable cyber-grc
 systemctl restart cyber-grc

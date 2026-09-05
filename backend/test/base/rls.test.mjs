@@ -3930,12 +3930,20 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
         order by 1`,
     );
     // Quatre au cinquième correctif, sept au sixième, huit depuis le troisième passage de
-    // la porte S2 (entropie_identifiants), neuf avec L3, DIX depuis L5 (lecture_journal). Chacun s'est branché SANS qu'un fichier de
+    // la porte S2 (entropie_identifiants), neuf avec L3, DIX depuis L5 (lecture_journal), QUINZE depuis la porte S6 (champs_structurels). Chacun s'est branché SANS qu'un fichier de
     // déploiement change : c'est la propriété du §19.4, constatée plutôt qu'affirmée.
     // Cette liste est délibérément ÉPINGLÉE : un garde-fou qui apparaît doit être
     // reconnu ici, un garde-fou qui disparaît ne doit pas s'effacer en silence.
     assert.deepEqual(controles.map((l) => l.controle), [
       'armement',
+      // QUINZIÈME, apporté par `015_champs_structurels.sql` (constat Q-201) : aucune
+      // colonne du schéma ne doit commencer par un souligné. C'est la SECONDE MOITIÉ
+      // d'une règle dont la première vit dans `js/core/sync.js`, qui écarte du corps
+      // renvoyé au serveur tout champ à souligné initial — parce que le serveur en
+      // ajoute qui ne sont pas des colonnes (`_version`, `_porteeGroupe`). Sans ce
+      // garde-fou, une colonne métier ainsi nommée serait écartée de toute écriture EN
+      // SILENCE, et la saisie de l'utilisateur disparaîtrait sans un mot.
+      'champs_structurels',
       'chemin_recherche',
       'couverture_rls',
       'entropie_identifiants',

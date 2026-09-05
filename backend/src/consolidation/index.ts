@@ -70,13 +70,20 @@
  *  Ce qui n'est PAS fait ici, et pourquoi
  * ════════════════════════════════════════════════════════════════════════
  *
- * - **Aucune trace au journal.** Le §29 réserve `consultation_sensible` à *« la
- *   lecture du journal lui-même »*, et le chantier a tranché que les lectures
- *   ordinaires ne sont pas tracées — `/api/donnees` ne l'est pas davantage.
- *   Tracer chaque rafraîchissement d'un tableau de bord noierait la seule
- *   question à laquelle le journal doit répondre vite. La transaction est donc
- *   ouverte **en lecture seule** : la base refuse alors toute écriture, ce qui
- *   vaut mieux qu'une discipline.
+ * - ~~**Aucune trace au journal.**~~ ⚠️ **RETOURNÉ par le constat Q-200 de la
+ *   porte S6**, et le motif de l'erreur vaut d'être gardé. Ce paragraphe
+ *   affirmait que le §29 réserve `consultation_sensible` à « la lecture du
+ *   journal lui-même » et que les lectures ordinaires ne sont pas tracées. La
+ *   seconde moitié est vraie ; la première ne l'est pas — `src/pieces/index.ts`
+ *   trace un téléchargement de pièce jointe sous cette même action depuis le
+ *   lot L6. J'avais écrit une règle que le dépôt contredisait, et j'avais
+ *   ensuite écrit un essai qui **verrouillait l'absence de trace** au lieu de
+ *   l'éprouver : cinquième occurrence du motif « un essai qui MESURE un défaut
+ *   et le CONSACRE comme une propriété désirable ».
+ *
+ *   Cette route n'est pas une lecture ordinaire : c'est **le seul endroit du
+ *   produit où une session lit les vingt filiales d'un coup**. Elle est donc
+ *   tracée, dans la transaction qui l'a servie.
  * - **Aucune écriture, aucune migration.** Tout ce qui est agrégé ici existe
  *   depuis les migrations `002` et `003`.
  * - **Aucun contenu d'enregistrement.** La réponse ne porte ni titre, ni nom, ni
@@ -89,6 +96,7 @@ import type { Pool, PoolClient } from 'pg';
 
 import { entitesLisibles } from '../api/droits.js';
 import type { SessionAppliquee } from '../api/session.js';
+import { journaliser } from '../auth/journal.js';
 import { avecTransaction } from '../db/pool.js';
 import { ErreurApplicative } from '../erreurs/index.js';
 
@@ -733,12 +741,45 @@ export async function greffonConsolidation(
     { config: { acces: { action: 'lire', domaine: 'pilotage' } } },
     async (requete: FastifyRequest, reponse: FastifyReply) => {
       const session = sessionDe(requete);
-      const consolidation = await avecTransaction(
-        pool,
-        session.perimetre,
-        async (client) => construireConsolidation(client, session),
-        { lectureSeule: true },
-      );
+      const consolidation = await avecTransaction(pool, session.perimetre, async (client) => {
+        const resultat = await construireConsolidation(client, session);
+        // ── LA TRACE, DANS LA TRANSACTION QUI A SERVI LA LECTURE (§29.3) ──
+        //
+        // Constat **Q-200** de la porte S6. Ce fichier écrivait que « les
+        // lectures ordinaires ne sont pas tracées » — vrai — et en déduisait
+        // que celle-ci ne l'était pas. Mais elle n'est PAS ordinaire : c'est le
+        // seul endroit du produit où une session lit les vingt filiales d'un
+        // coup. `src/pieces/index.ts:745` trace déjà un téléchargement de pièce
+        // jointe sous `consultation_sensible` — le dépôt faisait donc l'inverse
+        // de ce que ce commentaire affirmait comme règle.
+        //
+        // Ce que le client y gagne : la question « qui a consulté les chiffres
+        // consolidés du groupe, et quand ? » a une réponse. Elle sera posée en
+        // audit ISO 27001, et le volume est celui d'un tableau de bord de
+        // direction — pas de quoi noyer le journal.
+        //
+        // ⚠️ Le `lectureSeule: true` a été retiré, et c'est un vrai troc : la
+        // transaction n'est plus refusée en écriture par la base. Ce que cela
+        // coûte est une ceinture (aucun chemin d'écriture n'existe dans ce
+        // fichier) ; ce que cela rapporte est une trace. Pour un produit qui
+        // sert de preuve en audit, l'échange est dans le bon sens.
+        await journaliser(client, {
+          action: 'consultation_sensible',
+          resume: 'Consultation de la synthèse consolidée du groupe',
+          filialeId: session.perimetre.filialeId,
+          utilisateurLibelle: session.perimetre.utilisateurId,
+          adresseIp: requete.ip,
+          entiteId: null,
+          valeursApres: {
+            // Des NOMBRES et des identifiants de filiales que la session lit
+            // déjà : rien que le journal n'ait le droit de porter. Aucun nom
+            // d'enregistrement, aucun contenu.
+            filiales_lues: resultat.filiales.length,
+            perimetre_groupe: resultat.perimetre.groupe,
+          },
+        });
+        return resultat;
+      });
       return await reponse.send(consolidation);
     },
   );

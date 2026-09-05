@@ -478,7 +478,7 @@ describe('§3 — ce qui se calcule est calculé, et ce qui se découvre est dé
 });
 
 /* =====================================================================
- *  §4 — La route : aucun paramètre de filiale, aucune trace, aucune écriture
+ *  §4 — La route : aucun paramètre de filiale, et une trace au journal
  * ===================================================================== */
 
 describe('§4 — GET /api/consolidation', () => {
@@ -512,20 +512,86 @@ describe('§4 — GET /api/consolidation', () => {
     );
   });
 
-  test('consulter la consolidation n’écrit rien, journal compris', async () => {
-    const compter = async () => {
-      const { rows } = await applicatif.query('select count(*)::text as n from journal_audit');
-      return Number(rows[0].n);
-    };
+  /* ═══════════════════════════════════════════════════════════════════
+     ⚠️ CET ESSAI DISAIT L'INVERSE, ET IL AVAIT TORT — constat **Q-200**
 
-    const avant = await compter();
-    const { statut } = await vueGroupe.appeler('GET', '/api/consolidation');
+     Il vérifiait que le journal ne bougeait PAS, en citant une règle que
+     `src/pieces/index.ts:745` contredit depuis le lot L6 : le dépôt trace
+     déjà un téléchargement de pièce jointe sous `consultation_sensible`.
+
+     C'est la cinquième occurrence sur ce chantier du motif « un essai qui
+     MESURE un défaut et le CONSACRE comme une propriété désirable ». Il
+     n'était pas faux au sens où il mentait sur ce que fait le code — il
+     l'était au sens où il **ne posait jamais la question** : *et le jour où
+     l'on demandera qui a consulté les chiffres du groupe, saura-t-on
+     répondre ?*
+     ═══════════════════════════════════════════════════════════════════ */
+  test('consulter la consolidation LAISSE UNE TRACE, et une seule', async () => {
+    // ⚠️ SOUS PÉRIMÈTRE. Le journal ne se lit pas nu depuis la fermeture de la
+    //    condition E6 : une connexion sans périmètre rend zéro ligne — pas une
+    //    erreur. Un essai qui interroge la table sans périmètre lit donc « 0 »
+    //    et conclut « rien n'a été écrit », alors qu'il n'a rien eu le droit de
+    //    voir. C'est le piège exact de Q-108, sous un autre habit.
+    const entrees = async () =>
+      await base.avecPerimetre(
+        applicatif,
+        perimetre('lecteur-journal', FILIALE_A, [FILIALE_A, FILIALE_B], true),
+        async (client) =>
+          (
+            await client.query(
+              `select "action", "resume", "valeurs_apres", "utilisateur_libelle"
+                 from "journal_audit" where "action" = 'consultation_sensible'
+                order by "numero"`,
+            )
+          ).rows,
+      );
+
+    const avant = await entrees();
+    const { statut, corps } = await vueGroupe.appeler('GET', '/api/consolidation');
     assert.equal(statut, 200);
+    const apres = await entrees();
+
     assert.equal(
-      await compter(),
-      avant,
-      'la transaction est ouverte en lecture seule : une trace ici la ferait échouer, et le ' +
-        '§29 réserve « consultation_sensible » à la lecture du journal lui-même',
+      apres.length,
+      avant.length + 1,
+      'UNE lecture du groupe entier doit laisser UNE entrée : ni zéro — la question « qui a ' +
+        'consulté les chiffres consolidés ? » serait sans réponse en audit —, ni deux, qui ' +
+        'signalerait une trace posée deux fois sur le même geste.',
+    );
+
+    const derniere = apres[apres.length - 1];
+    assert.match(derniere.resume, /consolidée du groupe/u);
+    assert.equal(derniere.utilisateur_libelle, 'direction', 'la trace doit nommer l’acteur — pas le rôle SQL, la session');
+
+    // ── Ce que la trace a le droit de porter, et rien de plus. Le journal est
+    //    lisible par un profil qui n'a pas forcément le droit de lire les
+    //    enregistrements eux-mêmes : y déverser des noms d'actifs ou de risques
+    //    en ferait un canal de fuite (c'est la leçon de Q-118).
+    const details = derniere.valeurs_apres;
+    assert.deepEqual(
+      Object.keys(details).sort(),
+      ['filiales_lues', 'perimetre_groupe'],
+      'La trace ne porte que des NOMBRES et un booléen. Tout champ supplémentaire doit être ' +
+        'justifié ici : un nom d’enregistrement dans le journal est une fuite par la trace.',
+    );
+    assert.equal(details.filiales_lues, corps.filiales.length);
+    assert.equal(details.perimetre_groupe, corps.perimetre.groupe);
+  });
+
+  test('LA MATIÈRE : le journal n’était pas vide avant, sinon tout ce qui précède est creux', async () => {
+    // Sans cette moitié, l'essai précédent passerait aussi sur une base où le
+    // journal ne s'écrit jamais — et c'est précisément le genre de vert qui a
+    // laissé passer Q-108, où l'on comparait 0 à 0 en concluant au succès.
+    const rows = await base.avecPerimetre(
+      applicatif,
+      perimetre('lecteur-journal', FILIALE_A, [FILIALE_A, FILIALE_B], true),
+      async (client) =>
+        (await client.query('select count(*)::text as n from journal_audit')).rows,
+    );
+    assert.ok(
+      Number(rows[0].n) >= 2,
+      `Le journal porte ${rows[0].n} entrée(s) : trop peu pour que le compte ci-dessus mesure ` +
+        'quoi que ce soit.',
     );
   });
 });

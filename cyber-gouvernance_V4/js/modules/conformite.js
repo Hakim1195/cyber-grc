@@ -26,10 +26,23 @@ const ConformiteModule = (() => {
         "non conforme": "status-non-conforme",
         "non applicable": "status-non-applicable"
     };
+    /* ⚠️ `labelHtml`, et le nom est le contrat — constat Q-203 de la porte S6.
+       `I18n.valeur()` est un PASSE-PLAT : une valeur absente du dictionnaire
+       repart telle quelle, et cette valeur vient de la BASE. La table fermée
+       d'avant (`STATUTS.find(...) || STATUTS[0]`) rendait toujours une constante
+       du dépôt ; en la remplaçant par le dictionnaire, l'internationalisation a
+       ouvert un chemin de la base jusqu'à `innerHTML`.
+
+       L'auditeur l'a mesuré SOUS LA CSP RÉELLE : l'élément entre dans le DOM et
+       `position:fixed` s'applique — seul le gestionnaire est bloqué. La CSP
+       arrête l'exécution, pas l'habillage, et un cadre superposé suffit à
+       tromper. Échapper ici, une fois, plutôt qu'à chaque site de rendu : le
+       suffixe `Html` dit que la valeur est déjà échappée et qu'on ne la
+       ré-échappe pas. */
     function statutMeta(v) {
         const brute = v || "";
         return {
-            label: brute === "" ? t("conformite.nonEvalue") : I18n.valeur(brute),
+            labelHtml: escapeHtml(brute === "" ? t("conformite.nonEvalue") : I18n.valeur(brute)),
             cls: CLASSES_STATUT[brute] || CLASSES_STATUT[""]
         };
     }
@@ -79,7 +92,7 @@ const ConformiteModule = (() => {
                 const meta = statutMeta(m.statut);
                 return `<tr class="clickable-row" data-id="${m.id}">
                     <td><strong>${escapeHtml(m.nom)}</strong></td>
-                    <td><span class="status ${meta.cls}">${meta.label}</span></td>
+                    <td><span class="status ${meta.cls}">${meta.labelHtml}</span></td>
                     ${cells}
                     <td style="text-align:center; font-weight:600;">${nbRefs > 1 ? `<span class="cov-cell cov-cell--multi">${tHtml("conformite.nbRefs", { n: nbRefs })}</span>` : (evs.length ? t("conformite.uneRef") : "—")}</td>
                 </tr>`;
@@ -154,7 +167,7 @@ const ConformiteModule = (() => {
                     <td><strong>${escapeHtml(ex.code)}</strong></td>
                     <td>${escapeHtml(ex.titre)}</td>
                     <td style="text-align:center;">${applicable ? "Oui" : "<span style='color:var(--text-muted);'>Non</span>"}</td>
-                    <td><span class="status ${meta.cls}">${meta.label}</span></td>
+                    <td><span class="status ${meta.cls}">${meta.labelHtml}</span></td>
                     ${showMat ? `<td style="text-align:center;">${mat}/5</td>` : ""}
                     <td>${mesureNoms ? escapeHtml(mesureNoms) : "<span style='color:var(--text-muted);'>—</span>"}</td>
                     <td style="font-size:0.85rem;">${escapeHtml(justif) || "<span style='color:var(--text-muted);'>—</span>"}</td>
