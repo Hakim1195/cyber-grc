@@ -268,6 +268,24 @@ const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>> = {
     champs: [
       'id', 'nom', 'description', 'f_frequence', 'g_gravite', 'm_maitrise',
       'score_brut', 'score_residuel', 'niveau', 'exigences_liees',
+      // ⚠️ `catalogue_id` MANQUAIT ICI, et le produit ne savait plus relire sa
+      // propre sauvegarde — constat de la porte S6, classe « perte de données ».
+      //
+      // La migration `012` a ajouté cette clé étrangère nullable sur `risques`.
+      // `versLeFrontend` rend un texte nul sous la forme d'une CHAÎNE VIDE ; à la
+      // reprise, `""` n'est pas une référence valide, et l'insertion heurte
+      // `fk_risques_catalogue`. Mesuré sur une base vierge portant **un seul
+      // risque saisi à la main** : `GET /api/export` puis `POST /api/reprise`
+      // en mode « remplacer » rendait **409, zéro ligne restaurée**.
+      //
+      // ⚠️ Et le même défaut portait sur l'enveloppe de
+      // `POST /api/cycle/sortie-filiale` — une opération IRRÉVERSIBLE, dont
+      // l'export est la seule chose qui subsiste de la filiale.
+      //
+      // Déclaré ici ET dans `references` ci-dessous : c'est la déclaration de
+      // référence qui fait normaliser la chaîne vide en `null`. La déclarer dans
+      // `champs` seulement ferait voyager la valeur sans la normaliser.
+      'catalogue_id',
     ],
     enumerations: [{ champ: 'niveau', valeurs: ['faible', 'élevé', 'critique'], videAdmis: true }],
     bornes: [
@@ -276,7 +294,7 @@ const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>> = {
       { champ: 'm_maitrise', min: 0, max: 1 },
     ],
     dates: [],
-    references: [],
+    references: [{ champ: 'catalogue_id', cible: 'risque_catalogue' }],
     referencesMultiples: [{ champ: 'exigences_liees', cible: 'exigences' }],
     cleMetier: null,
   },

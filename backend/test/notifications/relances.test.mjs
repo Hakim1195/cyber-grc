@@ -374,13 +374,28 @@ describe('L12 — réessayer ou non : ce que la fenêtre fait d’un échec', ()
   const MAL_FORMEE = 'pas du tout une adresse';
 
   before(async () => {
+    // ⚠️ Le compte d'annuaire est INDISPENSABLE depuis la porte S6 : une relance
+    // ne s'adresse qu'à une fiche que l'annuaire résout. `utilisateurs` est de
+    // niveau Groupe, d'où la transaction déclarée à part.
+    await base.avecPerimetre(
+      applicatif,
+      perimetre('semeur-l12', FILIALE_A, [FILIALE_A], true),
+      async (c) => {
+        await c.query(
+          `insert into utilisateurs (id, identifiant, nom_affichage)
+                values ('USER-MALFORMEE', 'compte.malformee', 'Adresse Cassee')
+             on conflict (id) do nothing`,
+        );
+      },
+      { annuler: false },
+    );
     await base.avecPerimetre(
       applicatif,
       perimetre('semeur-l12', FILIALE_A, [FILIALE_A]),
       async (c) => {
         await c.query(
-          `insert into personnes (id, filiale_id, nom, email)
-               values ('PERS-MALFORMEE', $1, 'Adresse Cassee', $2)`,
+          `insert into personnes (id, filiale_id, nom, email, utilisateur_id)
+               values ('PERS-MALFORMEE', $1, 'Adresse Cassee', $2, 'USER-MALFORMEE')`,
           [FILIALE_A, MAL_FORMEE],
         );
         await c.query(

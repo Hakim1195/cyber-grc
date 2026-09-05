@@ -227,11 +227,22 @@ describe('L12 — un destinataire vient de l’annuaire, et de nulle part ailleu
       applicatif,
       perimetre('essai-l12', FILIALE_A, [FILIALE_A]),
       async (c) => {
+        // ⚠️ `utilisateur_id` est obligatoire pour RECEVOIR depuis la porte S6 :
+        // une relance ne s'adresse qu'à une fiche que l'annuaire résout. Le
+        // compte est écrit en portée Groupe — `utilisateurs` est une table de
+        // configuration, et la RLS refuse son écriture depuis une filiale.
+        await c.query("select set_config('grc.administration_groupe', 'oui', true)");
         await c.query(
-          `insert into personnes (id, filiale_id, nom, email) values
-               ('P-1', $1, 'Avec Adresse',  'avec@exemple.interne'),
-               ('P-2', $1, 'Sans Adresse',  null),
-               ('P-3', $1, 'Adresse Vide',  '   ')`,
+          `insert into utilisateurs (id, identifiant, nom_affichage)
+                values ('USER-P1', 'compte.p1', 'Avec Adresse')
+             on conflict (id) do nothing`,
+        );
+        await c.query("select set_config('grc.administration_groupe', '', true)");
+        await c.query(
+          `insert into personnes (id, filiale_id, nom, email, utilisateur_id) values
+               ('P-1', $1, 'Avec Adresse',  'avec@exemple.interne', 'USER-P1'),
+               ('P-2', $1, 'Sans Adresse',  null,                   null),
+               ('P-3', $1, 'Adresse Vide',  '   ',                  null)`,
           [FILIALE_A],
         );
         return await resoudreDestinataires(c, [

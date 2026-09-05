@@ -55,13 +55,39 @@ before(async () => {
 
   // Filiale A : l'homonyme, plus une action confiée à quelqu'un qui n'existe
   // que chez la voisine.
+  // ── Les comptes d'annuaire, en portée GROUPE ────────────────────────────
+  //
+  // ⚠️ `utilisateurs` est une table de configuration de niveau Groupe : son
+  // écriture exige `administration_groupe`, et un semis de filiale reçoit
+  // « new row violates row-level security policy ». C'est la RLS qui fait son
+  // travail — la corriger en semant sous un périmètre de filiale aurait été
+  // demander au banc ce que le produit refuse.
+  //
+  // Ces comptes existent parce qu'une relance ne s'adresse qu'à une fiche que
+  // l'ANNUAIRE résout (porte S6) : une adresse tapée à la main ne reçoit rien.
+  await base.avecPerimetre(
+    applicatif,
+    perimetre('semeur-l12', FILIALE_A, [FILIALE_A, FILIALE_B], true),
+    async (c) => {
+      await c.query(
+        `insert into utilisateurs (id, identifiant, nom_affichage) values
+             ('USER-HOMO-A', 'compte.homo.a', 'Fiche d’essai A'),
+             ('USER-HOMO-B', 'compte.homo.b', 'Fiche d’essai B'),
+             ('USER-SEUL-B', 'compte.seul.b', 'Fiche d’essai B bis')
+         on conflict (id) do nothing`,
+      );
+    },
+    { annuler: false },
+  );
+
   await base.avecPerimetre(
     applicatif,
     perimetre('semeur-l12', FILIALE_A, [FILIALE_A]),
     async (c) => {
       await c.query(
-        `insert into personnes (id, filiale_id, nom, email) values ($1, $2, $3, $4)`,
-        ['PERS-HOMO-A', FILIALE_A, HOMONYME, ADRESSE_A],
+        `insert into personnes (id, filiale_id, nom, email, utilisateur_id)
+              values ($1, $2, $3, $4, $5)`,
+        ['PERS-HOMO-A', FILIALE_A, HOMONYME, ADRESSE_A, 'USER-HOMO-A'],
       );
       await c.query(
         `insert into actions (id, filiale_id, titre, statut, responsable, echeance)
@@ -83,12 +109,14 @@ before(async () => {
     perimetre('semeur-l12', FILIALE_B, [FILIALE_B]),
     async (c) => {
       await c.query(
-        `insert into personnes (id, filiale_id, nom, email) values ($1, $2, $3, $4)`,
-        ['PERS-HOMO-B', FILIALE_B, HOMONYME, ADRESSE_B],
+        `insert into personnes (id, filiale_id, nom, email, utilisateur_id)
+              values ($1, $2, $3, $4, $5)`,
+        ['PERS-HOMO-B', FILIALE_B, HOMONYME, ADRESSE_B, 'USER-HOMO-B'],
       );
       await c.query(
-        `insert into personnes (id, filiale_id, nom, email) values ($1, $2, $3, $4)`,
-        ['PERS-SEUL-B', FILIALE_B, SEULEMENT_CHEZ_B, ADRESSE_SEULE_B],
+        `insert into personnes (id, filiale_id, nom, email, utilisateur_id)
+              values ($1, $2, $3, $4, $5)`,
+        ['PERS-SEUL-B', FILIALE_B, SEULEMENT_CHEZ_B, ADRESSE_SEULE_B, 'USER-SEUL-B'],
       );
       await c.query(
         `insert into actions (id, filiale_id, titre, statut, responsable, echeance)

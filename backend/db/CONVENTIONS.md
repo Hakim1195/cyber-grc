@@ -2300,9 +2300,33 @@ avant de rendre la main.
 2. **L'envoi ne bloque jamais l'écriture.** Une échéance se crée même si le relais est
    injoignable. La file d'envoi est distincte de la transaction métier ; un `rollback` de
    courriel n'existe pas.
-3. **Un destinataire vient de l'annuaire, jamais d'une saisie libre.** `personnes.email` est
-   alimenté par l'AD ; accepter une adresse tapée à la main ferait du produit un relais de
-   courriel arbitraire.
+3. **Un destinataire vient de l'annuaire, jamais d'une saisie libre.**
+
+   ⚠️ **Cette règle a été ÉCRITE AVANT D'ÊTRE VRAIE, et la porte S6 l'a relevé.** Le texte
+   disait : *« `personnes.email` est alimenté par l'AD »*. Il ne l'est pas — `email` est un
+   champ ordinaire de `personnes`, et le niveau minimal d'écriture y est `contribution`.
+   Mesuré : une session de contribution a repointé une fiche vers une adresse externe, 200,
+   persisté. Et `utilisateur_id` y étant nul, la resynchronisation depuis l'AD **ne repasse
+   jamais** sur cette fiche.
+
+   Ce que le client aurait perdu : à partir du lendemain matin, un produit installé sur
+   site, accessible par VPN seulement, postant chaque jour vers l'extérieur le détail des
+   obligations en retard d'une filiale.
+
+   **La règle est désormais tenue au point qu'elle nomme** : une relance ne s'adresse qu'à
+   une fiche dont `utilisateur_id` **n'est pas nul**, c'est-à-dire qui résout un compte de
+   l'annuaire. C'est plus sûr que de réserver la colonne en écriture — l'annuaire se remplit
+   aussi à la main, pour des prestataires qui ne se connectent pas, et leur interdire une
+   adresse casserait l'autocomplétion sans rien protéger.
+
+   ⚠️ **Ce qui reste, et qui est assumé** : une adresse saisie à la main s'affiche toujours
+   dans le produit, et ne reçoit **rien**. Une relance qui n'atteint personne se voit ; une
+   relance qui atteint un inconnu, non.
+
+   ⚠️ **Et le départage entre homonymes est NORMATIF** : la fiche de la filiale d'abord, le
+   socle Groupe en repli, l'identifiant à égalité. Sans ordre déclaré, l'ordre **physique**
+   des lignes décidait — mesuré, le destinataire d'une relance basculait après un simple
+   `update` sur un champ de notes.
 
 ### §36.3 — Ce qui déclenche un envoi
 

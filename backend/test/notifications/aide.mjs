@@ -73,15 +73,45 @@ export async function semerEcheances(base, client, filiale, reference, options =
   const responsable = options.responsable ?? SECRETS_SEMES[6];
   const email = options.email === undefined ? ADRESSE_MARIE : options.email;
 
+  // ⚠️ `utilisateurs` est de niveau GROUPE : son écriture exige
+  // `administration_groupe`, et un semis de filiale reçoit « new row violates
+  // row-level security policy ». La RLS fait son travail — le compte va donc
+  // dans sa propre transaction, déclarée.
+  //
+  // Il existe parce qu'une relance ne s'adresse qu'à une fiche que l'ANNUAIRE
+  // résout (porte S6) : une adresse tapée à la main ne reçoit rien.
+  if (email !== null) {
+    await base.avecPerimetre(
+      client,
+      perimetre('semeur-l12', filiale, [filiale], true),
+      async (c) => {
+        await c.query(
+          `insert into utilisateurs (id, identifiant, nom_affichage) values ($1, $2, $3)
+             on conflict (id) do nothing`,
+          [`USER-L12-${s}`, `compte.l12.${String(s).toLowerCase()}`, responsable],
+        );
+      },
+      { annuler: false },
+    );
+  }
+
   await base.avecPerimetre(
     client,
     perimetre('semeur-l12', filiale, [filiale]),
     async (c) => {
       // L'annuaire : la SEULE source de destinataires admise (§36.2 règle 3).
+      // ⚠️ `utilisateur_id` EST OBLIGATOIRE POUR RECEVOIR, depuis la porte S6.
+      // Une relance ne s'adresse qu'à une fiche que l'ANNUAIRE résout : une
+      // adresse tapée à la main ferait du produit un relais de courriel
+      // arbitraire, et c'est ce que le §36.2 promettait déjà sans que le code le
+      // tienne. Ces essais semaient des fiches SANS rattachement — ils
+      // s'appuyaient sur la fuite sans le savoir, et ils sont devenus rouges le
+      // jour où elle a été fermée. C'est ce qu'un banc doit faire.
       if (email !== null) {
         await c.query(
-          `insert into personnes (id, filiale_id, nom, email) values ($1, $2, $3, $4)`,
-          [`PERS-L12-${s}`, filiale, responsable, email],
+          `insert into personnes (id, filiale_id, nom, email, utilisateur_id)
+                values ($1, $2, $3, $4, $5)`,
+          [`PERS-L12-${s}`, filiale, responsable, email, `USER-L12-${s}`],
         );
       }
 

@@ -329,19 +329,71 @@ export async function resoudreDestinataires(
   const par = new Map<string, Destinataire>();
   if (cherches.length === 0) return par;
 
+  // ── UNE RELANCE NE S'ADRESSE QU'À UNE FICHE QUE L'ANNUAIRE RÉSOUT ──────
+  //
+  // Constat de la porte S6, classe « fuite de données ». Le `CONVENTIONS.md`
+  // §36.2 justifie tout le dessin de ce lot ainsi : *« personnes.email est
+  // alimenté par l'AD ; accepter une adresse tapée à la main ferait du produit
+  // un relais de courriel arbitraire »*. **C'était faux dans le produit livré** :
+  // `email` est un champ ordinaire de `personnes`, et le niveau minimal
+  // d'écriture y est `contribution`.
+  //
+  // Mesuré : une session de contribution a repointé une fiche vers
+  // `exfiltration@attaquant.example` — 200, persisté. Et comme `utilisateur_id`
+  // y est nul, la resynchronisation depuis l'AD **ne repasse jamais** sur cette
+  // fiche : elle ne corrige que celles qui résolvent un compte réel. À partir du
+  // lendemain matin, un produit installé sur site, accessible par VPN seulement,
+  // aurait posté chaque jour vers l'extérieur le détail des obligations en
+  // retard d'une filiale.
+  //
+  // `utilisateur_id is not null` referme la fuite **au point que le contrat
+  // nomme** : seule une fiche rattachée à un compte de l'annuaire reçoit du
+  // courrier. C'est plus sûr que de réserver la colonne en écriture — l'annuaire
+  // se remplit aussi à la main, pour des prestataires qui ne se connectent pas,
+  // et leur interdire une adresse casserait l'autocomplétion sans rien protéger.
+  //
+  // ⚠️ **Ce qui reste, et qui est assumé** : une adresse saisie à la main
+  // s'affiche toujours dans le produit. Elle ne reçoit simplement **rien**, et
+  // le bilan compte la personne comme « sans destinataire joignable ». Une
+  // relance qui n'atteint personne se voit ; une relance qui atteint un
+  // inconnu, non.
+  //
+  // ── L'ORDRE EST NORMATIF, ET SON ABSENCE ÉTAIT UNE FUITE ────────────────
+  //
+  // Constat de la porte S6, classe « fuite de données ». Cette requête n'avait
+  // **aucun `ORDER BY`**, et le code retenait « la première adresse trouvée ».
+  // Or `personnes` est une table **mixte** : une fiche de portée Groupe et la
+  // fiche locale d'un homonyme sont **toutes deux visibles** depuis une filiale.
+  // Rien ne les départageait, et l'ordre physique décidait.
+  //
+  // Mesuré : le destinataire d'une relance a basculé d'une fiche Groupe vers la
+  // fiche locale **après un simple `update` sur un champ de notes** — c'est-à-dire
+  // qu'une modification sans rapport changeait à qui partent les retards d'une
+  // filiale. Un courriel sort de la machine ; se tromper de destinataire n'est
+  // pas une gêne d'affichage.
+  //
+  // ⚠️ **La LOCALE gagne, et ce n'est pas arbitraire.** Une relance porte les
+  // échéances d'UNE filiale : sa destinataire est la personne que cette filiale
+  // a inscrite à son annuaire, pas l'homonyme du siège. Le socle Groupe est un
+  // repli — il sert quand la filiale n'a pas sa propre fiche.
+  //
+  // ⚠️ Et le départage est **total** : `filiale_id` d'abord, puis `id` — sans le
+  // second, deux fiches locales homonymes rouvriraient exactement le même
+  // défaut, une lettre plus loin.
   const { rows } = await client.query<{ nom: string; email: string }>(
     `select "nom", "email"
        from "personnes"
       where lower(btrim("nom")) = any ($1::text[])
-        and "email" is not null and btrim("email") <> ''`,
+        and "email" is not null and btrim("email") <> ''
+        and "utilisateur_id" is not null
+      order by ("filiale_id" is null) asc, "filiale_id" asc, "id" asc`,
     [cherches],
   );
 
   for (const ligne of rows) {
     const cle = ligne.nom.trim().toLowerCase();
-    // Homonymes : la première adresse trouvée gagne, et le bilan le signale.
-    // Départager demanderait une clé étrangère que le modèle refuse
-    // délibérément — arbitrage du chantier Personnel, pas de ce lot.
+    // L'ordre ci-dessus rend ce « premier arrivé » DÉTERMINISTE : la fiche de la
+    // filiale, à défaut celle du Groupe, et à égalité le plus petit identifiant.
     if (!par.has(cle)) par.set(cle, { nom: ligne.nom.trim(), email: ligne.email.trim() });
   }
   return par;
