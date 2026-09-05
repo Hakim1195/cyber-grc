@@ -60,6 +60,21 @@ const RACINE_SRC = join(RACINE_BACKEND, 'src');
  * au-delà. Le plancher de temps évite d'accuser le bruit de mesure.
  */
 const RAPPORT_MAX = 5;
+/** Les deux tailles du balayage quotidien : ×3 d'entrée, et il doit rester rapide. */
+const TAILLES_BALAYAGE = Object.freeze([1000, 3000]);
+/**
+ * Les deux tailles de la MORSURE : **×9 d'entrée**.
+ *
+ * ⚠️ Ce n'est pas de la commodité. La courbe réelle de `<sheet\b([^>]*)\/?>` est
+ * ×9,1 pour ×3 — franchement quadratique, mesurée. Mais à l'échelle du balayage
+ * elle coûte 1,5 ms, et sous la charge du banc le bruit gonfle la PETITE mesure :
+ * le rapport tombait à ×4, sous le seuil, un tirage sur cinq. À ×9 d'entrée le
+ * rapport attendu passe à **×70**, et aucun bruit ne cache cela.
+ *
+ * Le plancher du balayage, lui, ne bouge pas : c'est lui qui l'empêche d'accuser
+ * au hasard tous les jours.
+ */
+const TAILLES_MORSURE = Object.freeze([3000, 27000]);
 /** En deçà, c'est du bruit : on ne conclut pas d'un rapport entre deux poussières. */
 const PLANCHER_MS = 1;
 /** Et un garde-fou brutal, pour les formes qui explosent dès la petite taille. */
@@ -125,8 +140,24 @@ function sansChaines(source) {
   for (let i = 0; i < source.length; i += 1) {
     const c = source[i];
     if (delimiteur === null) {
-      if (c === "'" || c === '"') delimiteur = c;
+      if (c === "'" || c === '"' || c === '`') delimiteur = c;
       dehors += c;
+      continue;
+    }
+    /* ⚠️ Un gabarit peut contenir du CODE dans un `${…}` — et une expression
+       peut y vivre. On neutralise le texte du gabarit, jamais ses interpolations :
+       les aveugler créerait le trou qu'on vient de fermer. */
+    if (delimiteur === '`' && c === '$' && source[i + 1] === '{') {
+      let profondeur = 1;
+      dehors += '${';
+      i += 2;
+      while (i < source.length && profondeur > 0) {
+        if (source[i] === '{') profondeur += 1;
+        if (source[i] === '}') profondeur -= 1;
+        dehors += source[i];
+        i += 1;
+      }
+      i -= 1;
       continue;
     }
     if (c === '\\') {
@@ -154,7 +185,7 @@ function expressionsDeSrc() {
   const trouvees = [];
   for (const chemin of fichiersTs(RACINE_SRC)) {
     const relatif = relative(RACINE_SRC, chemin).split('\\').join('/');
-    sansChaines(sansCommentaires(readFileSync(chemin, 'utf8')))
+    sansCommentaires(sansChaines(readFileSync(chemin, 'utf8')))
       /* ⚠️ `return/^…$/` — sans espace — n'était pas extrait : la sentinelle
          arrière prenait le « n » de `return` pour un identifiant, donc le `/`
          pour une division (constat Q-220 b). Un mot-clé ne peut pas être suivi
@@ -212,7 +243,7 @@ function morceauxLitteraux(corps) {
     .slice(0, 4);
 }
 
-function famillesHostiles(corps) {
+function famillesHostiles(corps, [petit, grand] = TAILLES_BALAYAGE) {
   const signes = new Set([' ', 'a', '0', '<', ':', '"']);
   for (const c of corps.replace(/\\./gu, '').match(/[A-Za-z0-9<>:;"'@/&.,=_-]/gu) ?? []) {
     signes.add(c);
@@ -222,7 +253,7 @@ function famillesHostiles(corps) {
 
   // ── 1. Répétitions simples : la forme quadratique, qui balaie et rebrousse.
   for (const c of signes) {
-    familles.push({ tailles: [1000, 3000], faire: (n) => c.repeat(n) });
+    familles.push({ tailles: [petit, grand], faire: (n) => c.repeat(n) });
   }
 
   /* ⚠️ LE PRÉFIXE SE DÉRIVE DU MOTIF, IL NE S'INVENTE PAS — constat **Q-220**.
@@ -241,9 +272,9 @@ function famillesHostiles(corps) {
   for (const morceau of morceauxLitteraux(corps)) {
     // Le préfixe suivi d'espaces : c'est la forme qui met en concurrence deux
     // quantificateurs voisins (`\s*` et `(.+?)\s+`) sur les mêmes signes.
-    familles.push({ tailles: [1000, 3000], faire: (n) => `${morceau}${' '.repeat(n)}x` });
+    familles.push({ tailles: [petit, grand], faire: (n) => `${morceau}${' '.repeat(n)}x` });
     // Et le préfixe suivi de remplissage : la forme qui balaie sans trouver.
-    familles.push({ tailles: [1000, 3000], faire: (n) => `${morceau}${'a'.repeat(n)}` });
+    familles.push({ tailles: [petit, grand], faire: (n) => `${morceau}${'a'.repeat(n)}` });
   }
 
   /* ⚠️ ET LE MÊME, SUR UN SEUL SIGNE. Un motif comme « ^\s*[^;]*;\s*(.+?)\s+fin$ »
@@ -256,7 +287,7 @@ function famillesHostiles(corps) {
      nourrir l'ambiguïté*. Le premier ancrage se franchit avec UN signe du motif ;
      l'ambiguïté se nourrit d'espaces. */
   for (const c of signes) {
-    familles.push({ tailles: [1000, 3000], faire: (n) => `${c}${' '.repeat(n)}x` });
+    familles.push({ tailles: [petit, grand], faire: (n) => `${c}${' '.repeat(n)}x` });
   }
 
   /* ── 2. Les morceaux LITTÉRAUX du motif, répétés — et c'est la moitié sans
@@ -266,7 +297,7 @@ function famillesHostiles(corps) {
      produit cette forme ; le sujet doit être bâti à partir du motif lui-même. */
   for (const morceau of morceauxLitteraux(corps)) {
     familles.push({
-      tailles: [1000, 3000],
+      tailles: [petit, grand],
       faire: (n) => morceau.repeat(Math.max(1, Math.floor(n / morceau.length))),
     });
   }
@@ -281,11 +312,23 @@ function famillesHostiles(corps) {
     familles.push({ tailles: [18, 23], faire: (n) => `${c.repeat(n)}!` });
   }
 
+  /* ⚠️ ET L'EXPONENTIELLE **DERRIÈRE UN PRÉFIXE**. `/^stream:([a-z]+)+$/u` ne
+     s'atteint pas par une répétition nue : il faut d'abord franchir `stream:`.
+     Mesuré par la porte S8 (5ᵉ passage) : **9 560 ms pour 38 signes**, pendant
+     que ce contrôle rendait 5/5 avec un rapport de ×1,0. C'est la combinaison
+     des deux recettes — le préfixe du motif ET la répétition qui échoue — et
+     aucune des deux seule ne l'atteint. */
+  for (const morceau of morceauxLitteraux(corps)) {
+    for (const c of ['a', ' ', '0']) {
+      familles.push({ tailles: [18, 23], faire: (n) => `${morceau}${c.repeat(n)}!` });
+    }
+  }
+
   return familles;
 }
 
 /**
- * Temps d'un `exec`, en millisecondes — **le meilleur de trois passes**.
+ * Temps d'un `exec`, en millisecondes — **le meilleur de cinq passes**.
  *
  * ⚠️ Le banc joue des dizaines de processus en parallèle, et une mesure de temps
  * prise sous cette charge est bruitée dans un seul sens : elle ne peut être que
@@ -299,7 +342,7 @@ function famillesHostiles(corps) {
  */
 function chronometrer(re, sujet) {
   let meilleur = Infinity;
-  for (let passe = 0; passe < 3; passe += 1) {
+  for (let passe = 0; passe < 5; passe += 1) {
     const debut = process.hrtime.bigint();
     try {
       re.exec(sujet);
@@ -324,7 +367,7 @@ function chronometrer(re, sujet) {
  * faire rougir, et un essai qui se fige est un essai qu'on finit par retirer.
  * Dès que la petite taille dépasse le plafond, on conclut sans aller plus loin.
  */
-function pireCroissance({ corps, drapeaux }) {
+function pireCroissance({ corps, drapeaux }, tailles = TAILLES_BALAYAGE) {
   let re;
   try {
     re = new RegExp(corps, drapeaux);
@@ -332,9 +375,9 @@ function pireCroissance({ corps, drapeaux }) {
     return { rapport: 1, grand: 0, sujet: '(motif non compilable isolément)' };
   }
   let pire = { rapport: 1, grand: 0, sujet: '' };
-  for (const { tailles, faire } of famillesHostiles(corps)) {
-    const sujetPetit = faire(tailles[0]);
-    const sujetGrand = faire(tailles[1]);
+  for (const { tailles: paire, faire } of famillesHostiles(corps, tailles)) {
+    const sujetPetit = faire(paire[0]);
+    const sujetGrand = faire(paire[1]);
     const petit = chronometrer(re, sujetPetit);
     // Elle explose déjà à la petite taille : conclure sans aller plus loin.
     if (petit > PLAFOND_MS) {
@@ -416,11 +459,11 @@ describe('Q-216 — aucune expression de `src/` ne coûte plus qu’un temps bor
     const inattendus = [];
     for (const chemin of fichiersTs(RACINE_SRC)) {
       const relatif = relative(RACINE_SRC, chemin).split('\\').join('/');
-      const source = sansChaines(sansCommentaires(readFileSync(chemin, 'utf8')));
+      const source = sansCommentaires(sansChaines(readFileSync(chemin, 'utf8')));
       const lignes = source
         .split('\n')
         .map((ligne, i) => [i + 1, ligne])
-        .filter(([, ligne]) => ligne.includes('new RegExp'));
+        .filter(([, ligne]) => /\bRegExp\s*\(/u.test(ligne));
       if (lignes.length > 0 && !Object.hasOwn(CONSTRUCTIONS_ADMISES, relatif)) {
         inattendus.push(`${relatif}:${String(lignes[0][0])}  ${lignes[0][1].trim().slice(0, 90)}`);
       }
@@ -436,7 +479,7 @@ describe('Q-216 — aucune expression de `src/` ne coûte plus qu’un temps bor
     );
 
     const mortes = Object.keys(CONSTRUCTIONS_ADMISES).filter(
-      (f) => !readFileSync(join(RACINE_SRC, f), 'utf8').includes('new RegExp'),
+      (f) => !/\bRegExp\s*\(/u.test(readFileSync(join(RACINE_SRC, f), 'utf8')),
     );
     assert.deepEqual(mortes, [], 'Ces exemptions ne protegent plus rien : retirez-les.');
   });
@@ -450,8 +493,15 @@ describe('Q-216 — aucune expression de `src/` ne coûte plus qu’un temps bor
       { corps: '^\\s*[^:]*:\\s*(.+?)\\s+FOUND$', quoi: 'Q-216 — l’ambiguïté SOUS une ancre' },
       { corps: '(a+)+$', quoi: 'la forme d’école, pour le témoin' },
     ];
+    /* ⚠️ ÉCHELLE ×3 pour la morsure, et ce n'est pas de la commodité. Le
+       balayage écarte les mesures sous une milliseconde — sans ce plancher, il
+       lirait du bruit et accuserait au hasard. Mais deux de ces formes coûtent
+       justement **autour** d'une milliseconde à l'échelle du balayage : la
+       morsure devenait instable, un tirage sur cinq. Les jouer trois fois plus
+       grand les met franchement au-dessus du bruit, sans toucher au plancher —
+       qui protège, lui, le balayage de tous les jours. */
     for (const { corps, quoi } of formes) {
-      const { rapport } = pireCroissance({ corps, drapeaux: 'u' });
+      const { rapport } = pireCroissance({ corps, drapeaux: 'u' }, TAILLES_MORSURE);
       assert.ok(
         rapport > RAPPORT_MAX,
         `${quoi} : croissance ×${rapport.toFixed(1)} pour ×3 d’entrée, sous le rapport de ` +

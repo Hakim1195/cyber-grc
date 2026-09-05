@@ -50,18 +50,29 @@ after(async () => {
   await base?.fermer();
 });
 
-/** Un nombre annoncé par le README, désigné par ce qui le suit. */
-function annonce(motif, quoi) {
+/**
+ * **TOUS** les nombres annoncés par le README sous une forme donnée.
+ *
+ * ⚠️ Cette fonction employait `motif.exec(texte)` : **une seule occurrence, la
+ * première** — constat **Q-228**. Or le §8 porte DEUX blocs de chiffres du
+ * schéma, dans la même section, et le second était faux de **neuf** nombres
+ * pendant que le contrôle regardait le premier et concluait au vert.
+ *
+ * C'est la forme la plus discrète du défaut que ce fichier existe pour fermer :
+ * un garde-fou qui ne lit qu'une partie de son sujet **rassure sur le reste**.
+ */
+function annonces(motif, quoi) {
   const texte = readFileSync(README, 'utf8');
-  const trouve = motif.exec(texte);
+  const global = new RegExp(motif.source, `${motif.flags.replace(/g/gu, '')}g`);
+  const valeurs = [...texte.matchAll(global)].map((m) => Number(m[1].replace(/\s/gu, '')));
   assert.notEqual(
-    trouve,
-    null,
+    valeurs.length,
+    0,
     `Le README n’annonce plus « ${quoi} » sous la forme attendue. Ce contrôle n’a plus de ` +
       'sujet : soit la phrase a changé et il faut l’y suivre, soit le chiffre a disparu — ' +
       'et un chiffre disparu ne vaut pas un chiffre juste.',
   );
-  return Number(trouve[1].replace(/\s/gu, ''));
+  return valeurs;
 }
 
 async function compter(sql) {
@@ -83,7 +94,7 @@ describe('Q-222 — les nombres du schéma disent le catalogue', () => {
     const mesures = [
       [
         'tables',
-        annonce(/\*\*(\d[\d\s]*) tables\*\* en/u, 'N tables'),
+        annonces(/\*\*(\d[\d\s]*) tables\*\* en/u, 'N tables'),
         await compter(
           `select count(*)::int as n from pg_class c join pg_namespace n on n.oid = c.relnamespace
             where n.nspname = 'public' and c.relkind = 'r'`,
@@ -91,22 +102,27 @@ describe('Q-222 — les nombres du schéma disent le catalogue', () => {
       ],
       [
         'migrations',
-        annonce(/\*\*(\d[\d\s]*) migrations\*\*/u, 'N migrations'),
+        annonces(/\*\*(\d[\d\s]*) migrations\*\*/u, 'N migrations'),
         await compter(`select count(*)::int as n from migrations_schema`),
       ],
       [
         'politiques',
-        annonce(/\*\*(\d[\d\s]*) politiques\*\*/u, 'N politiques'),
+        annonces(/\*\*(\d[\d\s]*) politiques\*\*/u, 'N politiques'),
         await compter(`select count(*)::int as n from pg_policy`),
       ],
       [
         'clés étrangères',
-        annonce(/\*\*(\d[\d\s]*) clés étrangères\*\*/u, 'N clés étrangères'),
+        // ⚠️ La MÊME formulation sert au total et aux composites (« **11 clés
+        //    étrangères** dont la seconde colonne… »). On distingue par ce qui
+        //    suit : le total est suivi d'une parenthèse ou d'une virgule, jamais
+        //    d'un « dont ». Sans cela le contrôle comparait 11 à 73 et rougissait
+        //    sur un chiffre juste — et un contrôle qui accuse à tort finit désarmé.
+        annonces(/\*\*(\d[\d\s]*) clés étrangères\*\*(?=[ ]*[(,])/u, 'N clés étrangères'),
         await compter(`select count(*)::int as n from pg_constraint where contype = 'f'`),
       ],
       [
         'tables portant cree_par',
-        annonce(/\*\*(\d[\d\s]*) tables portant/u, 'N tables portant cree_par'),
+        annonces(/\*\*(\d[\d\s]*) tables portant/u, 'N tables portant cree_par'),
         await compter(
           `select count(*)::int as n from pg_attribute a
              join pg_class c on c.oid = a.attrelid
@@ -116,15 +132,26 @@ describe('Q-222 — les nombres du schéma disent le catalogue', () => {
         ),
       ],
       [
+        'clés étrangères composites',
+        annonces(/\*\*(\d[\d\s]*) clés étrangères\*\*(?=[ ]*(?:composites|dont))/u, 'N composites'),
+        await compter(
+          `select count(*)::int as n from pg_constraint
+            where contype = 'f' and array_length(conkey, 1) = 2`,
+        ),
+      ],
+      [
         'contrôles consignés',
-        annonce(/\*\*(\d[\d\s]*) contrôles consignés\*\*/u, 'N contrôles consignés'),
+        annonces(/\*\*(\d[\d\s]*) contrôles consignés\*\*/u, 'N contrôles consignés'),
         await compter(`select count(*)::int as n from controles_schema`),
       ],
     ];
 
     const faux = mesures
-      .filter(([, annonce_, reel]) => annonce_ !== reel)
-      .map(([quoi, annonce_, reel]) => `${quoi} : le README dit ${String(annonce_)}, le catalogue en porte ${String(reel)}`);
+      .filter(([, annoncees, reel]) => annoncees.some((v) => v !== reel))
+      .map(
+        ([quoi, annoncees, reel]) =>
+          `${quoi} : le README dit ${annoncees.join(' puis ')}, le catalogue en porte ${String(reel)}`,
+      );
 
     assert.deepEqual(
       faux,

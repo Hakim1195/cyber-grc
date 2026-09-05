@@ -868,6 +868,10 @@ desinstaller() {
   # une invite qu'on ne voit pas devient un `yes |` dans un script d'exploitant.
   # Le consentement se donne par les OPTIONS, qui sont explicites et tracées
   # dans l'historique du shell.
+  # Lu MAINTENANT : en mode destructif, la configuration qui le porte aura
+  # disparu avant qu'on ait à l'afficher (constat Q-231 b).
+  local PREFIXE_GROUPES; PREFIXE_GROUPES="$(lire_variable LDAP_PREFIXE_GROUPES 2>/dev/null || true)"
+
   info "Désinstallation de Cyber GRC"
   alerte "Le LOGICIEL va être retiré : unités systemd, code, frontend publié, vhost."
   if [[ "$avec_donnees" -eq 1 ]]; then
@@ -928,9 +932,26 @@ desinstaller() {
     a2dissite cyber-grc >/dev/null 2>&1 || true
   fi
   rm -f /etc/apache2/sites-available/cyber-grc.conf
+
+  # ── LE DURCISSEMENT DE PORTÉE SERVEUR — constat **Q-231 (a)** ─────────────
+  #
+  # L'installation pose et ACTIVE `conf-available/cyber-grc-durcissement.conf`,
+  # qui s'applique à **tous les sites de la machine** : ServerTokens, Timeout,
+  # RequestReadTimeout, LimitRequestFields… La désinstallation ne le mentionnait
+  # pas, et Apache continuait donc de l'appliquer après le départ du produit.
+  #
+  # ⚠️ Un réglage de portée serveur posé par un logiciel qui n'est plus là est
+  # pire qu'un fichier oublié : il change le comportement des AUTRES sites, et
+  # plus personne ne sait pourquoi. C'est la définition d'une désinstallation qui
+  # n'en est pas une.
+  if [[ -e /etc/apache2/conf-enabled/cyber-grc-durcissement.conf ]]; then
+    a2disconf -q cyber-grc-durcissement >/dev/null 2>&1 || true
+  fi
+  rm -f /etc/apache2/conf-available/cyber-grc-durcissement.conf
+
   if apache2ctl configtest >/dev/null 2>&1; then
     systemctl reload apache2 >/dev/null 2>&1 || true
-    succes "vhost retiré, Apache rechargé"
+    succes "vhost ET durcissement de portée serveur retirés, Apache rechargé"
   else
     # ⚠️ On ne recharge PAS un Apache qui refuse sa configuration : on couperait
     #    les autres sites de la machine en croyant faire le ménage.
@@ -977,8 +998,14 @@ SQL
 
   # ── 7. Ce que ce script NE PEUT PAS retirer ───────────────────────────────
   info "Ce qui reste, hors de cette machine"
-  local prefixe; prefixe="$(lire_variable LDAP_PREFIXE_GROUPES 2>/dev/null || true)"
-  alerte "Les groupes « ${prefixe:-GRC-}* » de l'Active Directory du client ne sont PAS"
+  # ⚠️ Le préfixe est lu AVANT que la configuration ne disparaisse — constat
+  #    **Q-231 (b)**. En mode `--avec-les-donnees`, `/etc/cyber-grc` a été effacé
+  #    quelques lignes plus haut : `lire_variable` ne rend plus rien, et le
+  #    message annonçait « GRC-* » à un client dont les groupes s'appellent
+  #    « ACME-* ». C'est le SEUL mode où l'information est irrécupérable — la
+  #    configuration qui la portait n'existe plus — et c'est celui où le message
+  #    se trompait.
+  alerte "Les groupes « ${PREFIXE_GROUPES:-GRC-}* » de l'Active Directory du client ne sont PAS"
   alerte "retirés : ils ne sont pas sur cette machine, et le compte de service du produit"
   alerte "n'a pas — délibérément — le droit de supprimer des groupes d'annuaire."
   alerte "Faites-les retirer par l'administrateur de l'annuaire. La liste s'engendre :"

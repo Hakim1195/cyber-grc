@@ -342,7 +342,7 @@ const Vault = (() => {
             <h2 class="lock-title">${t("etat.sessionExpiree")}</h2>
             <p class="lock-sub">${t("etat.sessionExpireeTexte")}</p>
             <p class="lock-sub"><b>${t("etat.saisieConservee")}</b>${t("etat.saisieConserveeSuite")}${
-                enAttente > 0 ? t("etat.enAttenteSuite", { n: enAttente }) : ""
+                enAttente > 0 ? tHtml("etat.enAttenteSuite", { n: enAttente }) : ""
             }.</p>
             <p class="lock-sub">${t("etat.pasDeF5")}</p>
             ${message ? `<p class="lock-error" id="login-erreur" role="alert">${esc(message)}</p>` : ""}

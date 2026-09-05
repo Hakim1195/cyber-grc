@@ -69,13 +69,14 @@ echec()  { printf 'ECHEC %s\\n'  "$*" >> "$JOURNAL"; exit 1; }
 # ── Les commandes destructrices, doublées ─────────────────────────────────
 systemctl()  { printf 'systemctl %s\\n' "$*" >> "$JOURNAL"; return 0; }
 a2dissite()  { printf 'a2dissite %s\\n' "$*" >> "$JOURNAL"; return 0; }
+a2disconf()  { printf 'a2disconf %s\\n' "$*" >> "$JOURNAL"; return 0; }
 apache2ctl() { printf 'apache2ctl %s\\n' "$*" >> "$JOURNAL"; return ${config.apacheOk === false ? 1 : 0}; }
 rm()         { printf 'rm %s\\n' "$*" >> "$JOURNAL"; return 0; }
 userdel()    { printf 'userdel %s\\n' "$*" >> "$JOURNAL"; return 0; }
 id()         { return 0; }
 du()         { printf '4,0K\\tfichier\\n'; }
 su()         { printf 'su %s\\n' "$*" >> "$JOURNAL"; cat > /dev/null; return 0; }
-lire_variable() { printf ''; }
+lire_variable() { printf '${config.prefixe ?? ""}'; }
 
 # ── Les constantes que la fonction lit ────────────────────────────────────
 RACINE='/opt/cyber-grc'; DONNEES='/var/lib/cyber-grc'
@@ -151,6 +152,50 @@ describe('La désinstallation retire le LOGICIEL et conserve les données', () =
       'Apache a été rechargé alors que « configtest » échouait.',
     );
     assert.ok(indexDe(lignes, /^RESERVE /u) >= 0, 'et le refus doit être DIT, pas tu');
+  });
+
+  test('LE DURCISSEMENT DE PORTÉE SERVEUR PART AUSSI (constat Q-231 a)', () => {
+    /* L'installation pose et ACTIVE `conf-available/cyber-grc-durcissement.conf`,
+       qui s'applique à TOUS les sites de la machine : ServerTokens, Timeout,
+       RequestReadTimeout, LimitRequestFields…
+
+       ⚠️ Un réglage de portée serveur laissé par un logiciel qui n'est plus là
+       est pire qu'un fichier oublié : il change le comportement des AUTRES
+       sites, et plus personne ne sait pourquoi. */
+    const { lignes } = jouerDesinstallation({ avecDonnees: false });
+    assert.ok(
+      indexDe(lignes, /^a2disconf .*cyber-grc-durcissement/u) >= 0,
+      'La configuration de portée serveur n’a pas été désactivée.',
+    );
+    assert.ok(
+      indexDe(lignes, /^rm .*conf-available\/cyber-grc-durcissement\.conf/u) >= 0,
+      'Le fichier de durcissement reste dans conf-available.',
+    );
+  });
+
+  test('LE PRÉFIXE DES GROUPES AD EST CELUI DU CLIENT, pas un défaut (Q-231 b)', () => {
+    /* ⚠️ En mode `--avec-les-donnees`, `/etc/cyber-grc` est effacé AVANT ce
+       message : `lire_variable` ne rend plus rien, et le script annonçait
+       « GRC-* » à un client dont les groupes s'appellent « ACME-* ». C'est le
+       SEUL mode où l'information est irrécupérable — la configuration qui la
+       portait n'existe plus — et c'est celui où le message se trompait. */
+    const vrai = join(atelier, 'export-prefixe.json');
+    writeFileSync(vrai, '{"format":"grc-backup","version":13,"payload":{}}');
+    const { lignes } = jouerDesinstallation({
+      avecDonnees: true,
+      exportVerifie: vrai,
+      config: { prefixe: 'ACME-' },
+    });
+    assert.ok(
+      lignes.some((l) => /ACME-\*/u.test(l)),
+      'Le message annonce le mauvais préfixe : l’administrateur de l’annuaire ira chercher ' +
+        `des groupes qui n’existent pas. Journal : ${lignes.filter((l) => /Active Directory|\*/u.test(l)).join(' | ')}`,
+    );
+    assert.equal(
+      lignes.some((l) => /« GRC-\*/u.test(l)),
+      false,
+      'et il ne doit pas retomber sur le défaut alors que la configuration le disait',
+    );
   });
 
   test('LES GROUPES AD SONT NOMMÉS — ils ne sont pas sur cette machine', () => {

@@ -194,8 +194,53 @@ function clesCitees() {
  */
 function interpolationsNonEchappees(source) {
   const fautes = [];
-  const ancre = /\$\{\s*t\(/g;
+  /* ⚠️ ANCRÉ SUR L'APPEL, pas sur les deux signes qui le précèdent — constat
+     **Q-229**, cinquième passage de la porte S8.
+
+     L'ancre était `/\$\{\s*t\(/g` : elle exigeait que `t(` suive IMMÉDIATEMENT
+     l'ouverture d'une interpolation. Trois écritures du même défaut lui
+     échappaient, et l'auditeur les a posées une par une dans un module :
+
+       · `${I18n.t("clé", { nom })}`        — la forme QUALIFIÉE, que
+         `js/core/ui.js:26` emploie déjà ;
+       · `${x ? t("clé", { nom }) : ""}`    — derrière une conditionnelle ;
+       · `el.innerHTML = t("clé", { nom });` — hors de tout gabarit.
+
+     Les trois substituent une valeur d'utilisateur SANS l'échapper — `t` rend ses
+     valeurs telles quelles, c'est la différence même d'avec `tHtml`, et elle est
+     une propriété de sécurité et non une préférence d'écriture.
+
+     On cherche donc `t(` **où qu'il soit**, qualifié ou non, et l'on ne retient
+     que ceux qui portent un SECOND argument — un `t("clé")` seul est inerte, la
+     valeur de dictionnaire étant garantie sans balise par un autre contrôle. */
+  const ancre = /(?<![\w$.])(?:I18n\s*\.\s*)?t\(/g;
+
+  /* Les zones où un `t(` atteint du HTML : l'intérieur d'une interpolation de
+     gabarit, et une affectation à `innerHTML`. Ailleurs — `confirm(t(…))`, un
+     `textContent` —, échapper serait un DÉFAUT : l'utilisateur lirait « &lt; ».
+     C'est pourquoi on ne peut pas simplement accuser tout `t(` à valeurs. */
+  const zonesHtml = [];
+  for (let i = 0; i < source.length - 1; i += 1) {
+    if (source[i] === '$' && source[i + 1] === '{') {
+      let profondeur = 1;
+      let j = i + 2;
+      for (; j < source.length && profondeur > 0; j += 1) {
+        if (source[j] === '{') profondeur += 1;
+        else if (source[j] === '}') profondeur -= 1;
+      }
+      zonesHtml.push([i, j]);
+      i = j - 1;
+    }
+  }
+  for (const m of source.matchAll(/innerHTML\s*=|insertAdjacentHTML\s*\(/gu)) {
+    const fin = source.indexOf('\n', m.index);
+    zonesHtml.push([m.index, fin < 0 ? source.length : fin]);
+  }
+  const dansUneZoneHtml = (position) =>
+    zonesHtml.some(([debut, fin]) => position >= debut && position < fin);
+
   for (const m of source.matchAll(ancre)) {
+    if (!dansUneZoneHtml(m.index)) continue;
     const ouvrante = source.indexOf('(', m.index);
     let profondeur = 0;
     let guillemet = null;
@@ -548,21 +593,6 @@ const ENVELOPPES_SURES = ['escapeHtml', 'esc', 'UI.badge', 'UI.mappedBadge'];
  */
 const SOEURS_A_REPLI_BRUT = ['valeur', 'date', 'dateLongue', 'dateHeure', 'nombre', 'pourcentage'];
 
-/**
- * Fonctions qui rendent `String(...)` sans que ce soit un repli brut.
- *
- * ⚠️ Chacune doit dire POURQUOI. Une exemption sans motif est la façon dont un
- * contrôle cesse de contrôler : on y range ce qui gêne, et le jour où une vraie
- * sœur y atterrit personne ne s'en aperçoit.
- */
-const SANS_REPLI_BRUT = Object.freeze({
-  // C'est l'échappeur lui-même : son `String()` est la conversion d'entrée,
-  // suivie du remplacement des cinq signes. Il ne rend jamais rien de brut.
-  esc: 'l’échappeur',
-  // `String(modele)` est le GABARIT, qui vient du dictionnaire — pas une valeur
-  // d'utilisateur. Les valeurs substituées, elles, passent par `esc` en `tHtml`.
-  remplir: 'le gabarit, pas la valeur',
-});
 
 /** Appels à `I18n.<sœur>(x)` où `x` n'est PAS un littéral et rien n'échappe. */
 function valeursNonEchappees(source) {
@@ -729,13 +759,20 @@ describe('§37.3 — la valeur STOCKÉE qui traverse le dictionnaire (constat Q-
 
     // ⚠️ Un TÉMOIN reconnaissable, qui porte des chevrons : c'est ce qui rend le
     //    repli dangereux, puisque la valeur part dans un `innerHTML` (Q-203).
-    /* `t` et `tHtml` rendent aussi leur entrée telle quelle — `brut()` rend la
-       CLÉ quand le dictionnaire ne la connaît pas, et c'est voulu : un repli
-       bruyant vaut mieux qu'un `undefined`. Mais leur argument est une **clé
-       écrite dans le code**, jamais une valeur stockée : ce n'est pas la classe
-       que ce contrôle traque, et les y ranger ferait exiger un échappement sur
-       des centaines de sites qui n'en ont pas besoin. La distinction est celle
-       que fait déjà le contrôle d'échappement : un littéral est inerte. */
+    /* ⚠️ **LE MOTIF DE CETTE EXEMPTION ÉTAIT FAUX** — constat Q-229.
+       Il disait : « leur argument est une clé écrite dans le code, jamais une
+       valeur stockée ». Deux choses le démentent, toutes deux mesurées :
+         · `t` a un **second** argument, substitué **tel quel** — c'est la
+           différence même d'avec `tHtml`, et elle est une propriété de sécurité ;
+         · rien n'impose que le PREMIER soit un littéral : `js/app.js:286` appelle
+           déjà `t(meta.s)` avec une variable.
+
+       Ce qui est vrai, et qui suffit : ces deux-là ont **leur propre contrôle**,
+       `interpolationsNonEchappees`, qui exige `tHtml` partout où la valeur
+       atteint du HTML. Les ranger ici EN PLUS ferait exiger un `escapeHtml(t(…))`
+       sur des centaines de sites de texte — un `confirm()`, un `textContent` —
+       où l'utilisateur lirait alors « &lt; ». Ce ne serait pas plus sûr, ce
+       serait faux. */
     const CLES_NON_DONNEES = ['t', 'tHtml'];
     const TEMOIN = '<img src=x onerror=alert(1)>';
     const passePlats = [];

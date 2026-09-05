@@ -117,6 +117,7 @@ import { avecTransactionAuthentification } from '../auth/transaction.js';
 import { deciderAcces, DOMAINE_PAR_ENTITE, entitesLisibles, refuserDroit } from './droits.js';
 import { greffonJournal } from './journal.js';
 import { greffonPieces } from '../pieces/index.js';
+import { retirerDuMagasin } from '../pieces/magasin.js';
 import { greffonImport } from '../import/index.js';
 import { greffonConsolidation } from '../consolidation/index.js';
 import { greffonFiliales } from '../filiales/index.js';
@@ -2156,19 +2157,82 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     ) => {
       const entite = entiteDe(requete.params.entite);
 
-      await enEcriture(requete, async (client, instanceDepot, perimetre) => {
-        await instanceDepot.supprimer(
-          client,
-          perimetre,
-          entite,
-          requete.params.identifiant,
-          requete.query.version,
-        );
-      });
+      /* ══ LES PIÈCES JOINTES SUIVENT L'ENREGISTREMENT — constat **Q-230** ══
+       *
+       * Mesuré par la porte S8 (5ᵉ passage), à travers Apache : un risque
+       * supprimé laissait sa pièce jointe **en base**, **sur le disque**, **dans
+       * le quota de la filiale**, et `GET /api/pieces/risques/<supprimé>/<pj>`
+       * rendait **200 avec le contenu du document**.
+       *
+       * La cause est structurelle : `pieces_jointes` porte un lien
+       * **polymorphe** (`entite_type`, `entite_id`) et **aucune clé étrangère**
+       * vers l'entité — la seule de la table vise `filiales`. Le schéma ne peut
+       * donc pas cascader, et `src/entites/` ne mentionnait jamais la table.
+       *
+       * ⚠️ **« Supprimer » qui ne supprime pas est une promesse rompue**, et
+       * elle l'est deux fois ici : dans un outil qui sert de preuve en audit, et
+       * dans un produit qui porte un registre RGPD — le droit à l'effacement de
+       * l'article 17 ne s'arrête pas à la ligne métier.
+       *
+       * L'ORDRE est celui que `magasin.ts` défend déjà : la ligne d'abord, le
+       * fichier **après le commit**. L'inverse laisserait une ligne pointant
+       * dans le vide, c'est-à-dire une preuve d'audit perdue ; celui-ci laisse
+       * au pire un fichier que rien ne délivre et qui ne coûte que de la place.
+       *
+       * ⚠️ On ne retire du disque que ce que **plus aucune ligne** ne réclame.
+       * Aujourd'hui cette précaution ne sert à rien — `engendrerCheminStockage`
+       * tire 256 bits au hasard par pièce, donc deux lignes ne partagent jamais
+       * un fichier, et je l'ai d'abord écrit en croyant le contraire. Elle coûte
+       * une requête et reste juste si la convention change : la contrainte de la
+       * base (`^([0-9a-f]{2}/)*[0-9a-f]{64}$`) admet parfaitement une adresse
+       * dérivée du contenu, et ce jour-là supprimer un risque effacerait la
+       * pièce jointe d'un incident. */
+      const cheminsARetirer = await enEcriture(
+        requete,
+        async (client, instanceDepot, perimetre) => {
+          const orphelines = await client.query<{ chemin_stockage: string }>(
+            `delete from "pieces_jointes"
+              where "entite_type" = $1::type_entite and "entite_id" = $2::text
+           returning "chemin_stockage"`,
+            [entite, requete.params.identifiant],
+          );
+          await instanceDepot.supprimer(
+            client,
+            perimetre,
+            entite,
+            requete.params.identifiant,
+            requete.query.version,
+          );
+          if (orphelines.rowCount === 0) return [];
+          // Ce que plus personne ne réclame, dans la MÊME transaction : une
+          // lecture d'après-coup verrait un dépôt concurrent et se tromperait.
+          const restants = await client.query<{ chemin_stockage: string }>(
+            `select distinct "chemin_stockage" from "pieces_jointes"
+              where "chemin_stockage" = any ($1::text[])`,
+            [orphelines.rows.map((l) => l.chemin_stockage)],
+          );
+          const encoreReclames = new Set(restants.rows.map((l) => l.chemin_stockage));
+          return [...new Set(orphelines.rows.map((l) => l.chemin_stockage))].filter(
+            (chemin) => !encoreReclames.has(chemin),
+          );
+        },
+      );
+
+      for (const chemin of cheminsARetirer) {
+        await retirerDuMagasin(config, chemin).catch(() => {
+          /* Le fichier a déjà disparu, ou le magasin est en lecture seule : la
+             LIGNE, elle, n'existe plus — c'est ce qui décide de la délivrance. */
+        });
+      }
 
       requete.log.info(
-        { entite, identifiant: requete.params.identifiant },
-        'Enregistrement supprimé (cascades portées par le schéma, CONVENTIONS.md §8)',
+        {
+          entite,
+          identifiant: requete.params.identifiant,
+          piecesRetirees: cheminsARetirer.length,
+        },
+        'Enregistrement supprimé (cascades portées par le schéma, CONVENTIONS.md §8 ; ' +
+          'pièces jointes retirées ici, faute de clé étrangère polymorphe — constat Q-230)',
       );
       return reponse.send({ supprime: true });
     },

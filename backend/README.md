@@ -885,7 +885,7 @@ select * from f_verifier_schema()                → 0 ligne (14 garde-fous déc
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **49 tables** en
 **16 migrations**, **196 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **73 clés étrangères** (44 `restrict`, 27 `cascade`, 2 `set null`), **44 tables portant
-`cree_par` et 44 déclencheurs de création**, **11 clés étrangères composites** visant
+`cree_par` et 44 déclencheurs de création**, **12 clés étrangères composites** visant
 `(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **14 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201).
@@ -1156,7 +1156,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **48 tables**, obtenues aujourd'hui en **7 migrations** appliquées de bout en bout par
+- **49 tables**, obtenues aujourd'hui en **16 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1166,11 +1166,11 @@ Ce que la reprise fait, quand on la rejoue :
   conditionnée, neuvième garde-fou de schéma — sans nouvelle table) est du lot **L3**.
   Les trois dernières sont arrivées avec des **fermetures de constats**, après le
   franchissement du 4ᵉ passage de S2 pour `005`/`006`, à l'ouverture de L3 pour `007`.
-- **192 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
+- **196 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
-- **71 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
-  migrations : **43 en `restrict`, 27 en `cascade`, une seule en `set null`**
+- **73 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
+  migrations : **44 en `restrict`, 27 en `cascade`, deux en `set null`**
   (`incidents.risque_id` — l'incident survit au risque).
 
   | Clé | Action | Pourquoi |
@@ -1193,15 +1193,15 @@ Ce que la reprise fait, quand on la rejoue :
   `archive_le`), reste lisible et reste rattaché à tout ce qui le référence.
 - **Clés étrangères et unicités composites** : quand l'enfant et le parent sont tous
   deux cloisonnés, la clé porte `(référence, filiale_id)` et vise une unicité
-  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **11 clés étrangères** dont la
+  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **12 clés étrangères** dont la
   seconde colonne visée est le `filiale_id` du parent, et **9 unicités** de cette forme.
   Une douzième clé composite vise `(id, portee_groupe)` — la colonne engendrée de
   `documents`. Une clé simple aurait été satisfaite par une ligne **invisible** de la
   filiale voisine : les contrôles d'intégrité de PostgreSQL contournent délibérément la
   RLS (`CONVENTIONS.md` §17.1, étendu aux unicités par le §19.1).
-- **Traçabilité imposée à la création** : les **43 tables** portant `cree_par` portent
-  chacune un déclencheur `before insert` nommé `trg_<table>_creation` — **43 relevés**,
-  répartis selon la forme de la table entre `f_init_tracabilite` (31), `f_init_creation`
+- **Traçabilité imposée à la création** : les **44 tables** portant `cree_par` portent
+  chacune un déclencheur `before insert` nommé `trg_<table>_creation` — **44 relevés**,
+  répartis selon la forme de la table entre `f_init_tracabilite` (32), `f_init_creation`
   (10) et `f_init_horodatage` (2). Ce que le client envoie dans `version`, `cree_le` et
   `cree_par` est **ignoré** (`CONVENTIONS.md` §18.1). La couverture n'est pas affirmée
   ici, elle est **vérifiée** : `f_verifier_tracabilite()` balaie les tables à `cree_par`,
@@ -1210,7 +1210,7 @@ Ce que la reprise fait, quand on la rejoue :
   Sur base neuve : 0 anomalie.
 - **Garde-fous du schéma branchés et découverts** : `f_verifier_schema()` est
   appelée par `db/migrate.mjs` **et** par `deploy/install.sh`, et fait échouer les
-  deux. Elle **découvre** ses contrôles dans le catalogue — **9** aujourd'hui : armement
+  deux. Elle **découvre** ses contrôles dans le catalogue — **14** aujourd'hui : armement
   des déclencheurs, chemin de recherche, couverture RLS, entropie du générateur
   d'identifiants, portée figée, privilèges, traçabilité, unicités cloisonnées, et
   l'écriture du substrat de session (`f_verifier_substrat_session()`, migration `007`,
@@ -1437,8 +1437,8 @@ sur l'arbre, où les deux fichiers coexistent.
 - ✅ **Ce qui était une réserve — « vérifié sur 16.13, la cible est 17 » — est
   maintenant une mesure.** `db/migrate.mjs` a fait passer les 7 migrations sur
   **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, le paquet réellement livré par le
-  dépôt PGDG sur la VM cible, et non plus seulement sur 16.13 : 48 tables, RLS activée
-  et forcée 48/48, 192 politiques, `f_verifier_schema()` → 0 anomalie. Aucune
+  dépôt PGDG sur la VM cible, et non plus seulement sur 16.13 : 49 tables, RLS activée
+  et forcée 49/49, 196 politiques, `f_verifier_schema()` → 0 anomalie. Aucune
   fonctionnalité postérieure à 16 n'était employée non plus ; l'écart est désormais
   éprouvé, pas seulement présumé sans conséquence.
 
