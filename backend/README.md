@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 1725 essais, dix-neuf familles (voir plus bas)
+npm test                           # 1738 essais, dix-neuf familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -861,21 +861,21 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`cec6203`** — « Porte S8, troisième passage : quatre constats, tous sur les garde-fous » (05/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a été RÉANCRÉ après le constat Q-219** : il désignait `d217fbb`, **cinquante-six commits en arrière**, et annonçait 1 030 essais quand le banc en jouait 1 725 — 11 familles au lieu de 19, 48 tables au lieu de 49, 7 migrations au lieu de 16. Le garde-fou ne pouvait pas le voir : il juge le document contre **la révision que le document nomme**, ce qui est juste pendant une vague et aveugle à sa clôture. La péremption est désormais **bornée** (§ ci-dessous), au lieu d'être une consigne écrite que trois portes ont laissée non tenue. |
+| Révision mesurée | **`295cf17`** — « Porte S8, quatrième passage : les garde-fous cessent de reconnaître, ils mesurent » (05/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a été RÉANCRÉ après le constat Q-219** : il désignait `d217fbb`, **cinquante-six commits en arrière**, et annonçait 1 030 essais quand le banc en jouait 1 738 — 11 familles au lieu de 19, 48 tables au lieu de 49, 7 migrations au lieu de 16. Le garde-fou ne pouvait pas le voir : il juge le document contre **la révision que le document nomme**, ce qui est juste pendant une vague et aveugle à sa clôture. La péremption est désormais **bornée** (§ ci-dessous), au lieu d'être une consigne écrite que trois portes ont laissée non tenue. |
 | État de l'arbre | **propre** (`git status --porcelain` vide) |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 1725 · pass 1725 · fail 0
+npm test                                         → tests 1738 · pass 1738 · fail 0
                                                    base 274 · api 272 · navigateur 167
                                                    auth 115 · import 97 · pieces 89
                                                    droits 84 · reprise 79 · cycle 72
-                                                   deploiement 70 · journal-lecture 70
+                                                   deploiement 79 · journal-lecture 70
                                                    notifications 69 · approbations 60
-                                                   annuaire 48 · depot 42 · modules 39
-                                                   filiales 34 · documentation 25
+                                                   annuaire 48 · depot 43 · modules 39
+                                                   filiales 34 · documentation 28
                                                    journal 19
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
