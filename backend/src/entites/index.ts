@@ -291,6 +291,30 @@ const COLONNES_TRACABILITE: ReadonlySet<string> = new Set([
 /** Champs structurels de l'enveloppe, jamais des données. */
 const CHAMP_VERSION = '_version';
 const CHAMP_VERSION_SECONDE = '_versionMiseEnOeuvre';
+/**
+ * Portée d'une ligne d'entité **mixte** : `true` = socle du Groupe, `false` =
+ * ligne propre à une filiale. Absent des entités qui ne sont pas mixtes.
+ *
+ * ── Pourquoi ce champ existe, et pourquoi il est STRUCTUREL ──────────────
+ *
+ * `filiale_id` est **retiré de tout ce que l'API expose**, par construction : le
+ * périmètre vient du serveur, et une charge utile qui nommerait des filiales
+ * inviterait un client à en choisir une. La règle est juste, et elle a un effet
+ * de bord mesuré le 04/09/2026 : **aucun écran ne pouvait distinguer une entrée
+ * du socle d'un ajout local**. Les deux se lisent, les deux s'affichent, et
+ * seule leur portée les sépare — c'est très exactement la confusion sur
+ * laquelle j'ai moi-même failli déclarer le socle de risques fonctionnel.
+ *
+ * ⚠️ Ce champ ne dit **pas quelle** filiale, seulement **s'il y en a une**. Il
+ * n'ouvre donc aucun oracle : une session ne lit déjà que ce que la RLS lui
+ * laisse voir, et savoir qu'une ligne qu'elle voit est commune ne lui apprend
+ * rien sur les autres filiales.
+ *
+ * Il vit avec `_version` plutôt que dans les champs métier pour la même raison
+ * que lui : ce n'est pas une donnée saisie, c'est un fait sur la ligne, et un
+ * module qui reconstruit un objet ne doit pas pouvoir le perdre au passage.
+ */
+const CHAMP_PORTEE_GROUPE = '_porteeGroupe';
 const CHAMPS_STRUCTURELS: ReadonlySet<string> = new Set([CHAMP_VERSION, CHAMP_VERSION_SECONDE]);
 
 /* =====================================================================
@@ -3526,6 +3550,12 @@ export class Depot {
       }
 
       enregistrement[CHAMP_VERSION] = Number(ligne['v_principale']);
+      // Seulement pour les entités MIXTES : sur une table dont `filiale_id` ne
+      // peut pas être nul, le champ vaudrait `false` partout et ferait croire à
+      // une distinction qui n'existe pas.
+      if (table.cloisonnee && table.filialeNullable) {
+        enregistrement[CHAMP_PORTEE_GROUPE] = ligne['f_principale'] === null;
+      }
       let maj = enMillisecondes(ligne['maj_principale']);
       if (d.seconde !== undefined) {
         const versionSeconde = ligne['v_seconde'];

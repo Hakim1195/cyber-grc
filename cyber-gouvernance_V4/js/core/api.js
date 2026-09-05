@@ -476,10 +476,61 @@ const Api = (() => {
         return appeler("/rafraichir?depuis=" + encodeURIComponent(depuisIso));
     }
 
-    function creer(entite, identifiant, champs) {
+    /**
+     * Crée un enregistrement.
+     *
+     * `portee` vaut "filiale" par défaut, et "groupe" écrit dans le SOCLE COMMUN
+     * des entités mixtes — le catalogue de mesures, le socle de risques, les
+     * politiques du Groupe. Le serveur **refuse** la portée Groupe à une session
+     * qui ne porte pas l'administration Groupe (403 « hors_perimetre ») : ce
+     * paramètre demande un droit, il ne l'accorde pas.
+     *
+     * ⚠️ Il a été ajouté le 04/09/2026 parce que son absence avait fait ouvrir
+     * DEUX portes réseau parallèles — dans `js/modules/socle.js` et dans
+     * `js/modules/groupe.js` —, chacune réécrivant les garanties de `appeler()`
+     * (`same-origin`, `no-store`, `redirect: error`, délai de garde). Trois
+     * lignes ici valaient mieux que deux copies là-bas : une garantie recopiée
+     * est une garantie qui divergera.
+     */
+    function creer(entite, identifiant, champs, portee) {
         const corps = { champs: champs };
         if (identifiant) corps.id = identifiant;
+        if (portee === "groupe") corps.portee = "groupe";
         return appeler("/entites/" + encodeURIComponent(entite), { methode: "POST", corps: corps });
+    }
+
+    /**
+     * Consolidation Groupe — les indicateurs de CHAQUE filiale du périmètre.
+     *
+     * ⚠️ Aucun paramètre, et c'est la propriété : la route ne nomme aucune
+     * filiale et n'en accepte aucune. Ce qu'elle rend est borné par la RLS, pas
+     * par ce que le navigateur demanderait.
+     *
+     * ⚠️ **Un bloc à `null` signifie « vous n'avez pas le droit de le savoir »,
+     * jamais « il n'y en a pas ».** Un écran qui afficherait 0 dirait « aucun
+     * risque dans ce groupe » à qui n'a pas le domaine — faux, dans un outil qui
+     * sert de preuve en audit.
+     */
+    function consolidation() {
+        return appeler("/consolidation");
+    }
+
+    /** Circuit d'approbation d'un objet — documents, risques ou audits. */
+    function approbations(entite, identifiant) {
+        return appeler("/approbations/" + encodeURIComponent(entite) + "/" +
+            encodeURIComponent(identifiant));
+    }
+
+    /**
+     * Prononce une décision d'approbation.
+     *
+     * ⚠️ Exige le niveau `validation`, refusé par le crochet `onRequest` du
+     * serveur AVANT l'analyse du corps : un corps illisible envoyé par un profil
+     * de contribution rend 403, pas 400.
+     */
+    function deciderApprobation(entite, identifiant, decision) {
+        return appeler("/approbations/" + encodeURIComponent(entite) + "/" +
+            encodeURIComponent(identifiant), { methode: "POST", corps: decision });
     }
 
     // `version` est STRUCTURELLE : elle voyage dans l'enveloppe, jamais dans
@@ -880,7 +931,9 @@ const Api = (() => {
         journal, journalVerification, journalExport,
         filiales, choisirFilialeActive,
         pieces, deposerPiece, telechargerPiece, adressePiece, supprimerPiece,
-        logoFiliale, telechargerLogoFiliale
+        logoFiliale, telechargerLogoFiliale,
+        // Vague 6 : ce que les écrans devaient sinon appeler par une porte à eux.
+        consolidation, approbations, deciderApprobation
     };
 })();
 

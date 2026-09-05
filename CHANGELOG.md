@@ -8,6 +8,59 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Interface — vague 6 : cinq écrans pour cinq capacités livrées sans interface
+
+**Une fonctionnalité sans écran n'est pas livrée.** Le produit portait cinq capacités
+serveur qu'aucune interface n'appelait : la **consolidation Groupe**, le **circuit
+d'approbation**, le **socle de risques**, l'**activation des référentiels par filiale** et
+l'**import généralisé**. Elles ont maintenant leur écran, leur entrée de menu et leur
+domaine de droits.
+
+**Ce que chaque écran garantit**, éprouvé en Chromium réel contre un Fastify réel avec
+authentification LDAP :
+
+- **Vision Groupe** — une ligne par filiale du périmètre, plus le total. Un bloc à `null`
+  affiche « — », **jamais 0** : dire « aucun risque dans ce groupe » à qui n'a pas le
+  domaine serait faux. Sans le domaine `pilotage`, l'écran **explique le refus** et ne
+  rend aucun tableau — « le groupe n'a rien » serait le pire mensonge qu'il puisse faire.
+- **Approbations** — l'avertissement « l'objet a changé depuis cette décision » passe
+  **avant** le tableau. L'interface n'est pas la barrière : l'essai constate l'absence du
+  bouton **puis envoie quand même la requête**, et vérifie le 403 du serveur.
+- **Socle de risques** — la démonstration est **différentielle** : une entrée du socle est
+  vue par une filiale qui n'est pas celle de son auteur, une entrée locale ne l'est pas.
+- **Référentiels applicables** — l'écran écrit noir sur blanc la distinction que le
+  cadrage range parmi les pièges : l'activation dit *quels référentiels s'appliquent ici*,
+  le « non applicable » écarte *un point dans un référentiel pratiqué*.
+- **Imports** — aperçu avant validation, rapport ligne par ligne, et les trois propriétés
+  du moteur affichées : tout ou rien, idempotent par le fichier, il **crée** sans mettre à
+  jour ni supprimer.
+
+**Six constats, dont quatre sur mon propre travail** :
+
+- **Q-175 — la classe `card` de ma couture n'existe pas**, et trois modules l'ont recopiée.
+  ⚠️ **Rien ne rougissait** : du CSS mort ne lève aucune erreur et passe tous les essais
+  comportementaux. Trouvé par un agent qui a **regardé une capture d'écran** — le seul
+  instrument qui pouvait le voir.
+- **Q-176 — la portée d'une entrée n'était pas dérivable côté client.** `filiale_id` est
+  retiré de tout ce que l'API expose, à juste titre — mais aucun écran ne pouvait donc
+  distinguer le socle d'un ajout local. `_porteeGroupe` dit **s'il y a** une filiale,
+  jamais **laquelle**.
+- **Q-177 — trois écrans ont dû ouvrir chacun leur porte réseau**, faute de méthode dans
+  `api.js`. Les trois ont disparu. ⚠️ **Et le retrait m'a coûté deux fois la même erreur** :
+  en supprimant un bloc j'ai emporté les fonctions voisines ; `node --check` passait, et le
+  module levait une `ReferenceError` au chargement. *Un contrôle de syntaxe ne dit rien
+  d'un identifiant manquant.*
+- **Q-178** — le relais du banc perdait `content-disposition`, deuxième trou du même relais
+  en deux jours après les cookies.
+- **Q-180 — un taux de conformité pouvait dépasser 100 %** : le serveur cumule les
+  référentiels des vingt filiales, le catalogue en dénombre 42 **par filiale**. Son auteur
+  avait écrit le correctif — **et son essai ne l'assertait nulle part**. C'est la mutation
+  qui le lui a appris.
+- **Q-179, ouvert** : deux chemins d'import coexistent désormais, et l'ancien contredit les
+  trois propriétés que L7 existe pour garantir.
+
+**Banc** : 1502 essais, 1502 passés, code de retour 0.
+
 ### Base — migration 013, et le socle de risques réellement éprouvé
 
 **Trois erreurs de ma part, toutes attrapées, et chacune vaut sa leçon.**

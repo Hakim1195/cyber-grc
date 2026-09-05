@@ -282,12 +282,26 @@ interface CumulReferentiel {
   somme: number;
 }
 
+/**
+ * ⚠️ **« non applicable » est EXCLU de la maturité**, et c'est un écart corrigé le
+ * 04/09/2026. Le serveur cumulait toutes les évaluations cotées en CMMI, y
+ * compris celles marquées « non applicable » — que `js/modules/synthese.js`
+ * écarte depuis toujours. Les deux écrans auraient donc affiché **deux moyennes
+ * différentes pour la même filiale**, et le désaccord ne se serait vu qu'en les
+ * ouvrant côte à côte. Trouvé par l'agent qui a écrit l'écran de consolidation,
+ * en comparant son calcul à celui de la synthèse.
+ *
+ * ⚠️ Et une leçon de forme : le commentaire ci-dessus vivait d'abord **dans** la
+ * requête SQL, où ses accents graves ont fermé le gabarit de chaîne. Un
+ * commentaire n'a rien à faire dans un littéral de gabarit.
+ */
 const lireConformite = async (client: PoolClient): Promise<Map<string, BlocConformite>> => {
   const { rows } = await client.query<LigneConformite>(
     `select filiale_id, ref_id, statut,
             count(*)::text                  as n,
-            count(maturite)::text           as mat_n,
-            coalesce(sum(maturite), 0)::text as mat_somme
+            count(maturite) filter (where statut <> 'non applicable')::text as mat_n,
+            coalesce(sum(maturite) filter (where statut <> 'non applicable'), 0)::text
+              as mat_somme
        from evaluations
       group by filiale_id, ref_id, statut`,
   );

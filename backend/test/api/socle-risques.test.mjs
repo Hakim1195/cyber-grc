@@ -170,6 +170,40 @@ describe('§1 — ce qui distingue le socle d’un ajout local', () => {
         'pas l’ajout » serait vrai d’une session qui ne voit rien.',
     );
   });
+
+  test('LA PORTÉE EST LISIBLE PAR L’ÉCRAN, sans que la filiale soit nommée', async () => {
+    // ── Le constat qui a fait ajouter ce champ ──────────────────────────
+    //
+    // `filiale_id` est retiré de tout ce que l'API expose — le périmètre vient
+    // du serveur, et une charge utile qui nommerait des filiales inviterait un
+    // client à en choisir une. Conséquence mesurée le 04/09/2026 : **aucun écran
+    // ne pouvait distinguer une entrée du socle d'un ajout local**. Les deux se
+    // lisent, les deux s'affichent, et seule leur portée les sépare.
+    //
+    // `_porteeGroupe` dit S'IL Y A une filiale, jamais LAQUELLE : il n'ouvre
+    // donc aucun oracle.
+    const { corps } = await siteA.appeler('GET', '/api/donnees');
+    const catalogue = (corps.data ?? corps).risque_catalogue;
+
+    const socle = catalogue.filter((r) => r._porteeGroupe === true);
+    const locales = catalogue.filter((r) => r._porteeGroupe === false);
+
+    // ── Matière, dans les deux sens : sans les deux familles, « le champ
+    //    distingue » serait vrai d'un champ constant.
+    assert.ok(socle.length > 0, 'aucune entrée de socle : le champ ne distingue rien.');
+    assert.ok(locales.length > 0, 'aucun ajout local : le champ ne distingue rien.');
+    assert.equal(socle.length + locales.length, catalogue.length, 'une ligne sans portée');
+
+    // Et il ne nomme AUCUNE filiale.
+    for (const ligne of catalogue) {
+      assert.equal(ligne.filiale_id, undefined, 'la charge utile ne doit nommer aucune filiale');
+    }
+
+    // Le champ dit la vérité : on la confronte à la base.
+    for (const ligne of socle) {
+      assert.equal(await porteeEnBase(ligne.nom), 'groupe', `« ${ligne.nom} » annoncé au socle`);
+    }
+  });
 });
 
 /* =====================================================================

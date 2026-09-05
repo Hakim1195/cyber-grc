@@ -1127,3 +1127,465 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
 .mp-add .mp-input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.9rem; }
 .mp-add .mp-addbtn { background: transparent; color: var(--accent); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
 .mp-add .mp-addbtn:hover { border-color: var(--accent); }
+
+/* =========================================================================
+   VISION GROUPE (/groupe) — consolidation multi-filiales, lot L4
+   Ajouté en fin de fichier, sans toucher à l'existant. Tokens seuls
+   (css/tokens.css) : aucune couleur écrite en dur, sémantique stricte des
+   statuts — vert = conforme, orange = partiel, rouge = critique, gris = NA.
+========================================================================= */
+.grp-carte { margin-bottom: var(--space-5); }
+.grp-h3 { margin: 0 0 var(--space-3); font-size: 1rem; color: var(--text-main); }
+
+/* Bandeau de périmètre : ce que la session ouvre, dit avant tout chiffre. */
+.grp-perimetre {
+    display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+    margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4);
+    background: var(--bg-card); border-radius: var(--radius);
+    border-left: 4px solid var(--primary); box-shadow: var(--shadow);
+    font-size: 0.9rem; color: var(--text-main);
+}
+
+/* ── LE TIRET QUI N'EST PAS UN ZÉRO ──────────────────────────────────────
+   Un bloc à `null` veut dire « vous n'avez pas le droit de le savoir », jamais
+   « il n'y en a pas ». Le pointillé et le curseur d'aide le signalent : ce
+   n'est pas une case vide, c'est une case fermée.                          */
+.grp-nd {
+    color: var(--color-gray); font-weight: 600; cursor: help;
+    border-bottom: 1px dotted var(--color-gray);
+}
+.grp-nd-bloc {
+    margin: 0; padding: var(--space-3) var(--space-4);
+    background: var(--tint-na); color: var(--text-muted);
+    border-left: 3px solid var(--color-gray); border-radius: var(--radius-sm);
+    font-size: 0.88rem;
+}
+/* Une donnée simplement absente — pas de droit en cause. */
+.grp-vide { color: var(--text-muted); }
+
+/* Tableau comparatif. Il déborde volontiers : on le fait défiler plutôt que
+   de rogner des colonnes qui portent chacune un indicateur distinct. */
+.grp-defilement { overflow-x: auto; }
+.grp-table th[scope="row"] { text-align: left; background: var(--bg-card); font-weight: 600; }
+.grp-table td, .grp-table th { white-space: nowrap; }
+.grp-table tbody tr { cursor: pointer; }
+.grp-table tbody tr:hover { background: var(--primary-tint); }
+.grp-table tbody tr.grp-ligne--active th[scope="row"] { border-left: 3px solid var(--primary); }
+.grp-table tbody tr.grp-ligne--vue { background: var(--primary-tint); }
+.grp-table tfoot td, .grp-table tfoot th {
+    border-top: 2px solid var(--border); font-weight: 700; background: #f8f9fa;
+}
+.grp-nom { font-weight: 600; color: var(--text-main); }
+.grp-sous { font-size: 0.76rem; color: var(--text-muted); font-weight: 400; }
+.grp-active {
+    display: inline-block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px;
+    background: var(--primary-tint); color: var(--primary-dark);
+    border: 1px solid var(--primary); border-radius: 10px; padding: 0 6px; vertical-align: middle;
+}
+
+/* Barres comparatives de conformité — HTML/CSS, sans dépendance. */
+.grp-barres { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-4); }
+.grp-barre-tete { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); font-size: 0.86rem; }
+.grp-barre-tete span:last-child { font-weight: 700; font-variant-numeric: tabular-nums; }
+.grp-barre-piste { background: var(--tint-na); height: 9px; border-radius: 5px; overflow: hidden; margin-top: var(--space-1); }
+.grp-barre-part { height: 100%; border-radius: 5px; }
+.grp-barre-note { font-size: 0.74rem; color: var(--text-muted); margin-top: 3px; }
+
+/* Répartitions découvertes : le vocabulaire vient du serveur, pas d'ici. */
+.grp-reps { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--space-4); }
+.grp-rep h4 {
+    margin: 0 0 var(--space-2); font-size: 0.74rem; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--text-muted);
+}
+.grp-puces { display: flex; flex-wrap: wrap; gap: 6px; }
+.grp-puce { display: inline-flex; align-items: center; gap: 4px; }
+.grp-puce b { font-variant-numeric: tabular-nums; color: var(--text-main); }
+.grp-puce .status { text-transform: none; }
+
+/* Coordonnées de la filiale active (constat Q-160). Une coordonnée absente
+   ne laisse pas de libellé orphelin : la ligne entière disparaît. */
+.grp-coord { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-3); margin: 0; }
+.grp-coord-l dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+.grp-coord-l dd { margin: 2px 0 0; color: var(--text-main); font-size: 0.92rem; word-break: break-word; }
+.grp-coord-l dd a { color: var(--accent); }
+
+.grp-tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-3); }
+
+.grp-erreur {
+    margin: var(--space-3) 0; padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm); background: var(--tint-warn); color: #856404;
+    border-left: 4px solid var(--color-warning); font-size: 0.9rem;
+}
+.grp-erreur-geste { margin-top: var(--space-3); }
+
+@media print {
+    .grp-table tbody tr { cursor: auto; }
+    .grp-defilement { overflow-x: visible; }
+}
+
+/* =====================================================================
+   APPROBATIONS — circuit de validation (lot L8, js/modules/approbations.js)
+   ---------------------------------------------------------------------
+   Uniquement des tokens de css/tokens.css, et la sémantique stricte des
+   statuts : vert = franchi, orange = en attente, rouge = refusé ou périmé,
+   gris = neutre. Aucune couleur nouvelle n'est introduite.
+===================================================================== */
+
+/* ── L'avertissement de péremption ────────────────────────────────────
+   Il est rouge parce qu'il dit qu'une preuve d'audit ne vaut plus, ce qui
+   est le seul message vraiment grave de cet écran. Rien d'autre ici ne
+   porte cette teinte, pour qu'elle continue de vouloir dire quelque chose. */
+.apr-peremption {
+    margin: var(--space-4) 0;
+    padding: var(--space-3) var(--space-4);
+    background: var(--tint-crit);
+    border-left: 4px solid var(--color-danger);
+    border-radius: var(--radius-sm);
+    color: var(--text-main);
+}
+.apr-peremption p { margin: var(--space-2) 0 0; font-size: 0.9rem; }
+.apr-peremption-liste { margin: var(--space-2) 0 0; padding-left: var(--space-5); font-size: 0.88rem; }
+.apr-peremption-liste li { margin-bottom: var(--space-1); }
+
+/* ── Note d'information : un droit manquant N'EST PAS une panne ───────
+   Neutre à dessein. Un profil qui ne valide pas n'est pas en faute, et un
+   bandeau rouge le lui reprocherait. */
+.apr-note {
+    margin: var(--space-4) 0;
+    padding: var(--space-3) var(--space-4);
+    background: var(--tint-na);
+    border-left: 4px solid var(--color-info);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    color: var(--text-main);
+}
+.apr-note p { margin: var(--space-2) 0 0; }
+
+/* ── Résumé de l'état du circuit ─────────────────────────────────────── */
+.apr-resume {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-5);
+    margin: var(--space-4) 0;
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.apr-resume-bloc { display: flex; flex-direction: column; gap: var(--space-1); }
+.apr-etiquette {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+}
+.apr-valeur { font-size: 0.95rem; font-weight: 600; color: var(--text-main); }
+
+/* ── Le tableau des étapes ────────────────────────────────────────────
+   `.status` porte `text-transform: capitalize`, ce qui défigure « En
+   attente » en « En Attente ». Les COULEURS sémantiques sont conservées
+   telles quelles — seule la capitalisation est neutralisée, et seulement
+   dans les tableaux de cet écran. Même arbitrage que le journal d'audit. */
+.apr-table td { vertical-align: top; font-size: 0.88rem; }
+.apr-table .status { text-transform: none; }
+.apr-rang { width: 2.5rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.apr-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+}
+.apr-vide { color: var(--text-muted); }
+
+.apr-etape--attendue { background: var(--primary-tint); }
+/* Une étape périmée est barrée : elle a été prise, et elle ne vaut plus. */
+.apr-etape--perimee { background: var(--tint-crit); }
+.apr-etape--perimee td:nth-child(2) strong { text-decoration: line-through; }
+
+.apr-marque {
+    display: inline-block;
+    margin-left: var(--space-2);
+    padding: 1px var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--primary-tint);
+    color: var(--primary-dark);
+}
+.apr-marque--alerte { background: var(--tint-crit); color: var(--color-danger); }
+
+/* ── Le formulaire de décision ────────────────────────────────────────── */
+.apr-decision {
+    margin: var(--space-5) 0;
+    padding: var(--space-4);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary);
+    border-radius: var(--radius);
+}
+.apr-decision h3 { margin: 0 0 var(--space-2); font-size: 1rem; }
+.apr-cycle-attendu { margin: 0 0 var(--space-3); color: var(--text-muted); font-size: 0.85rem; }
+.apr-decision label { display: block; margin-bottom: var(--space-1); font-size: 0.85rem; font-weight: 600; }
+.apr-facultatif { font-weight: 400; color: var(--text-muted); }
+.apr-decision textarea {
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+    resize: vertical;
+}
+.apr-boutons { display: flex; gap: var(--space-3); margin-top: var(--space-3); flex-wrap: wrap; }
+
+/* ── Messages d'issue ─────────────────────────────────────────────────── */
+.apr-message {
+    margin: var(--space-4) 0;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    border-left: 4px solid var(--color-gray);
+    background: var(--tint-na);
+    font-size: 0.9rem;
+}
+.apr-message--succes { border-left-color: var(--color-success); background: var(--tint-ok); }
+.apr-message--erreur { border-left-color: var(--color-danger); background: var(--tint-crit); }
+.apr-message--info   { border-left-color: var(--color-info);   background: var(--tint-na); }
+.apr-recharger { margin-left: var(--space-2); }
+
+/* ── Tours précédents et étapes hors circuit ──────────────────────────── */
+.apr-historique { margin-top: var(--space-6); }
+.apr-historique h3 { font-size: 1rem; margin-bottom: var(--space-3); }
+.apr-cycle { margin-bottom: var(--space-5); }
+.apr-cycle h4 {
+    margin: 0 0 var(--space-2);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+}
+.apr-hors-circuit {
+    margin: var(--space-5) 0;
+    padding: var(--space-3) var(--space-4);
+    background: var(--tint-warn);
+    border-left: 4px solid var(--color-warning);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+}
+.apr-lien-objet { margin-top: var(--space-5); }
+.apr-lien-objet a { color: var(--accent); font-weight: 600; }
+
+/* ── La liste : ce qui attend une décision ────────────────────────────── */
+.apr-groupe { margin-bottom: var(--space-6); }
+.apr-groupe h2 { font-size: 1.05rem; margin-bottom: var(--space-1); }
+.apr-compte {
+    display: inline-block;
+    min-width: 1.6rem;
+    padding: 1px var(--space-2);
+    border-radius: 999px;
+    background: var(--tint-na);
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    text-align: center;
+}
+.apr-explication { margin: 0 0 var(--space-3); color: var(--text-muted); font-size: 0.85rem; }
+.apr-groupe--alerte h2 { color: var(--color-danger); }
+.apr-groupe--alerte .apr-compte { background: var(--tint-crit); color: var(--color-danger); }
+.apr-groupe--action .apr-compte { background: var(--primary-tint); color: var(--primary-dark); }
+
+.apr-ligne { cursor: pointer; }
+.apr-ligne:hover { background: var(--primary-tint); }
+.apr-ligne:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+/* ── L'encart intégré aux fiches Document / Risque / Audit ────────────── */
+.apr-encart { margin-top: var(--space-5); }
+.apr-encart h2 { font-size: 1.05rem; margin-bottom: var(--space-3); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SOCLE DE RISQUES DU GROUPE (/socle) et RÉFÉRENTIELS APPLICABLES
+   (/referentiels-actifs) — chantier Groupe, schéma v13.
+
+   Ajouté EN FIN DE FICHIER, sans toucher une seule règle existante : trois
+   autres agents écrivent en parallèle, et une retouche au milieu du fichier
+   serait un conflit garanti.
+
+   Seuls les tokens de `css/tokens.css` sont employés — aucune couleur littérale
+   n'est introduite ici, et la sémantique des statuts (vert = conforme,
+   orange = partiel, rouge = critique, gris = non applicable) n'est pas
+   détournée : ces deux écrans ne portent pas de statut de conformité.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Bandeaux d'explication communs aux deux écrans ────────────────────────
+   Ils ne sont pas décoratifs : chacun porte une distinction que le cadrage
+   range parmi les « pièges à ne pas rouvrir », et qu'un RSSI qui ouvre l'écran
+   pour la première fois n'a aucune raison de connaître. */
+.grp-note {
+    margin: 0 0 var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    box-shadow: var(--shadow);
+    font-size: 0.88rem;
+    color: var(--text-main);
+    line-height: 1.5;
+}
+.grp-note strong { color: var(--accent); }
+.grp-note--reserve { border-left-color: var(--color-warning); }
+.grp-note--reserve strong { color: var(--color-warning); }
+.grp-note p { margin: 0 0 var(--space-2); }
+.grp-note p:last-child { margin-bottom: 0; }
+
+/* Message de résultat d'une action (succès, refus du serveur, conflit). */
+.grp-message {
+    margin: 0 0 var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    border-left: 4px solid var(--color-gray);
+    background: var(--tint-na);
+    color: var(--text-main);
+}
+.grp-message--ok     { border-left-color: var(--color-success); background: var(--tint-ok); }
+.grp-message--refus  { border-left-color: var(--color-danger);  background: var(--tint-crit); }
+.grp-message--alerte { border-left-color: var(--color-warning); background: var(--tint-warn); }
+
+.grp-barre {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    align-items: flex-end;
+    margin: 0 0 var(--space-4);
+}
+.grp-barre label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+.grp-barre input, .grp-barre select {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-family: var(--font-sans);
+}
+
+/* Panneau de saisie replié dans la liste : ces deux routes n'ont pas de vue
+   « détail » (`js/app.js` ne câble que `renderList`), la saisie vit donc DANS
+   la liste plutôt que dans un écran que le routeur n'atteindrait pas. */
+.grp-panneau {
+    margin: 0 0 var(--space-5);
+    padding: var(--space-4);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--primary);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+}
+.grp-panneau h2 { font-size: 1.05rem; margin: 0 0 var(--space-3); }
+.grp-panneau--groupe { border-top-color: var(--accent); }
+.grp-panneau--groupe h2 { color: var(--accent); }
+.grp-grille-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+}
+.grp-actions { display: flex; gap: var(--space-3); margin-top: var(--space-4); flex-wrap: wrap; }
+
+@media (max-width: 768px) {
+    .grp-grille-2 { grid-template-columns: 1fr; }
+}
+
+/* ── /socle — le catalogue ─────────────────────────────────────────────── */
+.soc-table td { vertical-align: top; font-size: 0.88rem; }
+.soc-nom { font-weight: 600; }
+.soc-desc { display: block; color: var(--text-muted); font-size: 0.82rem; margin-top: 2px; }
+.soc-ref {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+.soc-vide { color: var(--text-muted); }
+.soc-outils { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.soc-outils button {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+.soc-outils button:hover { background: var(--primary-tint); border-color: var(--primary); color: var(--primary-dark); }
+.soc-outils button.soc-danger { color: var(--color-danger); }
+.soc-outils button.soc-danger:hover { background: var(--tint-crit); border-color: var(--color-danger); color: var(--color-danger); }
+
+/* ── /referentiels-actifs — une carte par référentiel du catalogue ──────── */
+.rfa-grille {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: var(--space-4);
+}
+.rfa-carte {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--color-gray);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+.rfa-carte--actif { border-left-color: var(--color-success); }
+.rfa-carte--inconnu { border-left-color: var(--color-warning); }
+.rfa-titre { font-size: 1rem; font-weight: 600; margin: 0; }
+.rfa-editeur { color: var(--text-muted); font-size: 0.8rem; }
+.rfa-lignes { list-style: none; margin: var(--space-2) 0 0; padding: 0; font-size: 0.84rem; }
+.rfa-lignes li { display: flex; justify-content: space-between; gap: var(--space-3); padding: 2px 0; }
+.rfa-lignes span:first-child { color: var(--text-muted); }
+.rfa-motif { font-size: 0.82rem; color: var(--text-muted); font-style: italic; }
+.rfa-verrou { font-size: 0.82rem; color: var(--color-warning); }
+.rfa-pied { margin-top: auto; padding-top: var(--space-3); display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.rfa-pied button { padding: 6px 12px; font-size: 0.85rem; }
+.rfa-pied button[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* ===== Import généralisé (js/modules/imports.js) ===== */
+.imp-proprietes { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-3) 0 var(--space-5);
+    padding: var(--space-4); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    font-size: 0.88rem; color: var(--text-main); }
+.imp-proprietes li { margin-left: 1.1em; }
+.imp-bloc-entite, .imp-bloc-fichier { margin-bottom: var(--space-4); }
+.imp-select-entite { max-width: 480px; width: 100%; margin: var(--space-2) 0 var(--space-3); }
+.imp-details { margin-top: var(--space-2); }
+.imp-details summary { cursor: pointer; font-weight: 600; padding: var(--space-1) 0; }
+.imp-table-scroll { overflow-x: auto; }
+.imp-colonnes-table td, .imp-colonnes-table th { font-size: 0.82rem; }
+.imp-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; }
+.imp-vide { color: var(--text-muted); }
+.imp-gabarit-actions { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-3); }
+.imp-depot { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; margin-top: var(--space-2); }
+.imp-etat { margin-top: var(--space-2); font-size: 0.85rem; color: var(--text-muted); min-height: 1.2em; }
+.imp-etat-pret { color: var(--color-success); }
+.imp-etat-refus { color: var(--color-danger); }
+.imp-etat-apercu { color: var(--color-warning); }
+.imp-etat-info { color: var(--color-info); }
+h3.imp-etat-pret, h3.imp-etat-refus, h3.imp-etat-apercu, h3.imp-etat-info { margin: 0 0 var(--space-2); font-size: 1rem; }
+.imp-rapport { margin-top: var(--space-4); padding: var(--space-4); border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--bg-card); }
+.imp-rapport-refus { border-left: 4px solid var(--color-danger); }
+.imp-resume { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: var(--space-2) 0 var(--space-3); font-size: 0.9rem; }
+.imp-resume strong { font-variant-numeric: tabular-nums; }
+.imp-erreurs-table td, .imp-erreurs-table th { font-size: 0.8rem; vertical-align: top; }
+.imp-erreurs-table .imp-valeur { max-width: 240px; word-break: break-word; color: var(--text-muted); font-style: italic; }
+.imp-erreur-bandeau { margin: var(--space-3) 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm);
+    background: var(--tint-warn); color: var(--color-warning); border-left: 4px solid var(--color-warning);
+    font-size: 0.9rem; }
+.imp-note { font-size: 0.78rem; color: var(--text-muted); margin-top: var(--space-2); line-height: 1.5; }
+
+/* ── `.status` porte `text-transform: capitalize` ─────────────────────────
+   Ce qui convient à un statut d'un mot (« active », « conforme ») défigure une
+   locution : « Hors périmètre » s'affichait « Hors Périmètre ». Même défaut, même
+   remède que `js/modules/journal.js` (« Refus De Droit ») — on neutralise la
+   CAPITALISATION, et elle seule : les couleurs sémantiques du design system
+   restent celles des tokens. Vu sur capture d'écran, pas déduit. */
+.rfa-carte .status { text-transform: none; }

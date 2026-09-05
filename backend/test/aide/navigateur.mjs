@@ -309,6 +309,17 @@ export async function servirApplication(serveur, options = {}) {
             // et `writeHead` sait le rendre tel quel.
             const poses = reponseApi.headers['set-cookie'];
             if (poses !== undefined) entetesApi['set-cookie'] = poses;
+            // ── `content-disposition`, et pourquoi il manquait ────────────────
+            //
+            // Le relais ne recopiait que le type de contenu. Conséquence mesurée
+            // par l'agent qui a écrit l'écran d'import : Chromium rendait
+            // `modele.xlsx` là où le serveur annonce
+            // `modele-import-actifs.xlsx`. Il a d'abord cru à un défaut de son
+            // code, puis du serveur — vérifié correct par `inject()` —, avant de
+            // trouver le trou ICI. Un banc qui perd un en-tête fait chercher un
+            // défaut là où il n'y en a pas.
+            const nomFichier = reponseApi.headers['content-disposition'];
+            if (nomFichier !== undefined) entetesApi['content-disposition'] = nomFichier;
             reponse.writeHead(reponseApi.statusCode, entetesApi);
             reponse.end(reponseApi.body);
           })
