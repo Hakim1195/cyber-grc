@@ -760,6 +760,7 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 | **L13 — Cycle de vie** | ✅ **livré** (vague 6, 05/09/2026) |
 | **L14 — Documentation** | ✅ **livré** (vague 7, 05/09/2026) — `docs/GUIDE_EXPLOITATION.md` et `docs/GUIDE_UTILISATEUR.md` |
 | **L15 — Durcissement final** | 🟡 **EN COURS — c'est l'état présent du chantier** (vague 8). Revue de sécurité sur l'ensemble du produit. **Porte S8 jouée six fois, refusée à chaque passage** ; au 6ᵉ : **0 bloquant, 4 majeurs, 8 mineurs, 0 fuite entre filiales**, banc **1747/1747**. C'est la **condition de mise en service** : elle n'est pas remplie |
+| **L16 — Système documentaire** | ⬜ **à faire** (vague 9, décidée le 07/09/2026). ⚠️ **Le coffre existe déjà** : L6 livre le dépôt et ses huit contrôles, `documents` porte le modèle Groupe/filiale (`filiale_id` nul = PSSI de portée Groupe) et le panneau est **monté sur la fiche** — la recette le sert. Ce qui manque est la **gestion** : version en vigueur, zéro orphelin (Q-232/Q-233), recherche, source de vérité unique, approbation. Voir `../docs/PLAN_EXECUTION.md` §3, vague 9 |
 
 ### Les verdicts, tels que le journal des portes les formule
 

@@ -839,6 +839,47 @@ sur l'ensemble du produit, pas seulement sur la dernière vague.
 
 **Porte S8** : condition de mise en service.
 
+### Vague 9 — L16 : le système documentaire
+
+> **Décidé le 07/09/2026** avec l'utilisateur, après une mesure du besoin réel : le lot L6
+> livre déjà le **coffre** (dépôt, huit contrôles, ClamAV, quarantaine, délivrance par l'API)
+> et la table `documents` porte déjà le bon modèle — `filiale_id` nul = politique de portée
+> **Groupe** (PSSI, charte), renseigné = procédure locale. Le panneau « Pièces jointes » est
+> **monté sur la fiche** (`documents.js:151`, `PiecesModule.monter("documents", doc.id)`) et
+> **la recette le sert**. Rien de tout cela n'est à refaire.
+>
+> ⚠️ **Ce qui manque n'est pas le stockage, c'est la GESTION documentaire** : savoir laquelle
+> des pièces déposées fait foi, retrouver un texte, et ne pas laisser d'orphelins.
+
+**Règle d'ordonnancement, et elle prime sur l'envie d'avancer.** Le chantier est en **L15,
+durcissement final**, porte S8 refusée. Donc :
+
+- **D2 rapproche de la porte** (il ferme Q-232/Q-233, deux constats déjà ouverts) : il peut
+  être joué immédiatement, et il devrait l'être en premier.
+- **D1, D4, D5 sont de petites additions à faible surface** : jouables avant la porte, chacune
+  refermée par ses essais.
+- **D3 ouvre de la surface neuve à auditer.** Il ne se joue **pas** avant que S8 soit franchie,
+  sauf arbitrage écrit de l'utilisateur.
+
+| Réf | Objet | Périmètre exclusif | Critère d'acceptation — mesurable |
+|---|---|---|---|
+| **D1** | **Version en vigueur.** Une pièce jointe d'une fiche document porte « en vigueur » ; les autres deviennent l'historique. `documents.version_document` est alimenté depuis elle, au lieu d'être une saisie libre qui ment | `backend/db/migrations/017_*.sql`, `backend/src/pieces/**`, `cyber-gouvernance_V4/js/modules/pieces.js` | Deux dépôts sur une même fiche : **une seule** pièce « en vigueur », l'autre en historique. Un essai **par la route** le vérifie, et une mutation qui retirerait l'unicité fait rougir le banc |
+| **D2** | **Fermer Q-232 / Q-233 à la CLASSE, pas à l'instance.** Un déclencheur en base retire les pièces d'un porteur supprimé, quel que soit le chemin — suppression directe, cascade d'un parent, reprise « remplacer » | `backend/db/migrations/017_*.sql` (ou `018`), `backend/src/api/index.ts`, `backend/src/reprise/**` | **Les six chemins de suppression** sont éprouvés, pas deux. Après chacun : 0 ligne `pieces_jointes` orpheline **et** 0 fichier résiduel dans le magasin. `GET /api/pieces/…` rend **404**, pas 200 |
+| **D3** | **Recherche.** `tsvector` natif sur `titre`, `type`, `notes` d'abord — aucune dépendance neuve. L'extraction du **contenu** des PDF est un second temps, et elle doit passer par la même chaîne contrôlée que ClamAV | `backend/db/migrations/*`, `backend/src/entites/**` | Une recherche rend les documents attendus **dans le périmètre de la session seulement** : un essai vérifie qu'un terme présent dans une autre filiale ne remonte **jamais**. ⚠️ Une recherche est un **oracle** : c'est la surface la plus propice à une fuite entre filiales |
+| **D4** | **Une seule source de vérité.** Trancher le sort de `documents.emplacement` : soit l'assumer et l'étiqueter « document resté ailleurs », soit le retirer | `cyber-gouvernance_V4/js/modules/documents.js`, migration si retrait | Le champ ne peut plus être confondu avec une pièce détenue par l'application. Si retrait : la reprise d'un export **antérieur** ne perd pas la valeur — un essai de round-trip le prouve |
+| **D5** | **Approbation des documents.** Brancher le circuit L8, déjà livré, sur les fiches document : une PSSI v3 passe par une validation formelle | `backend/src/approbations/**`, `cyber-gouvernance_V4/js/modules/documents.js` | Un document au statut « en validation » ne peut pas être marqué « en vigueur » sans passage par le circuit. Le refus est **journalisé** avec sa route |
+
+**Porte S9** : cloisonnement de la recherche, unicité de la version en vigueur, et **zéro
+orphelin sur les six chemins**. Elle rejoue la grille §4 sur le domaine `documents` et sur
+`pieces_jointes`, pas sur l'ensemble du produit.
+
+**Ce qui est déjà acquis et ne doit pas être re-livré** — le vérifier avant d'écrire une ligne :
+le coffre et ses huit contrôles (L6), la délivrance hors racine web, la journalisation de
+chaque téléchargement, le droit d'export distinct de la lecture, `document_referentiels`,
+l'indicateur `revue_echue` de la consolidation, et la surveillance des dates de revue par les
+notifications (L12).
+
+
 ---
 
 ## 4. La grille de sécurité

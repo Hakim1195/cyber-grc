@@ -612,6 +612,12 @@ Ordonnés par dépendance. Le chemin critique est signalé 🔴.
 | **L13** | **Cycle de vie** | Archivage, sortie de filiale, purges RGPD, rétention | L4, L6 |
 | **L14** | **Documentation** | Guide utilisateur (par profil, FR/EN), guide d'exploitation, liste des groupes AD | tous |
 | **L15** | **Durcissement final** | Revue de sécurité, test d'intrusion, corrections | tous |
+| **L16** | **Système documentaire** | Version en vigueur, zéro orphelin, recherche, source de vérité unique, approbation | documents, pieces_jointes |
+
+> ⚠️ **L16 est une extension du cadrage, décidée avec l'utilisateur le 07/09/2026** — elle ne
+> figurait pas au périmètre validé d'origine. Le besoin est réel (stocker et tenir à jour la
+> PSSI et les procédures) et le socle est déjà là : L6 livre le coffre, `documents` porte le
+> modèle Groupe/filiale. Le détail vit au `PLAN_EXECUTION.md` §3, vague 9.
 
 **Chemin critique** : L0 → L1 → L2 → L3 → L4. Tant que ces cinq lots ne sont pas livrés, rien
 d'autre ne peut être mis en service. Les lots L5 à L13 sont largement parallélisables ensuite.

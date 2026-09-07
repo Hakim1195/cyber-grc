@@ -51,6 +51,12 @@
 > refusé*. L'arbitrage du `docs/PLAN_EXECUTION.md` §0 bis fait qu'une porte refusée
 > **n'arrête plus la vague : elle trie** en trois classes.
 >
+> **Un lot neuf attend, hors chemin de mise en service :** **L16, le système documentaire**
+> (vague 9, décidée le 07/09/2026). ⚠️ **Le coffre existe déjà** — L6 livre le dépôt, ses huit
+> contrôles et le panneau monté sur la fiche document ; `documents.filiale_id` nul porte déjà la
+> PSSI de portée Groupe. **Ne pas le refaire.** Ce qui manque est la gestion : version en
+> vigueur, zéro orphelin, recherche, source de vérité unique, approbation.
+>
 > **Ce qui reste avant la mise en service :**
 >
 > - **jouer la porte S7**, jamais jouée (relecture métier, paraphrase des catalogues) ;
@@ -716,6 +722,7 @@ sur l'**Active Directory** du groupe.
 | **L13 — Cycle de vie** | ✅ **livré** (05/09/2026, vague 6) |
 | **L14 — Documentation** | ✅ **livré** (05/09/2026, vague 7) |
 | **L15 — Durcissement final** | 🟡 **en cours** (vague 8) — **porte S8 refusée six fois**, c'est la condition de mise en service |
+| **L16 — Système documentaire** | ⬜ **à faire** (vague 9, décidée le 07/09/2026) — le coffre est livré avec L6 ; il manque la **gestion** documentaire. `docs/PLAN_EXECUTION.md` §3 |
 
 Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 `grc-backup`** (`backend/src/reprise/**`, portage serveur des migrations v1 → v12,
