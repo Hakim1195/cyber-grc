@@ -31,3 +31,10 @@ design-system/
 # Divers systèmes
 .DS_Store
 Thumbs.db
+
+# Mémoire et secrets locaux de Claude — JAMAIS dans le dépôt public.
+# Chargés automatiquement par Claude Code, hors versionnement.
+CLAUDE.local.md
+MEMORY.md
+SECRETS.local.md
+*.local.md
