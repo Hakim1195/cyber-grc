@@ -481,6 +481,25 @@ export function traduireErreurPostgres(
         codeGrc: 'GRC02',
       });
 
+    case 'GRC05':
+      // Une pièce jointe du porteur qu'on supprime appartient à une AUTRE
+      // filiale, et la Row Level Security refuse de la retirer d'ici. Le cas se
+      // rencontre sur une politique de PORTÉE GROUPE (`documents.filiale_id`
+      // nul), qui peut porter les pièces de plusieurs filiales.
+      //
+      // ⚠️ **La base refuse la suppression plutôt que de laisser une
+      // orpheline**, et c'est délibéré : laisser passer rouvrirait Q-232 d'un
+      // cran plus haut. Le message de la base est écrit POUR l'utilisateur et
+      // dit quoi faire — il est donc rendu tel quel, comme ceux des
+      // déclencheurs métier du socle (`CONVENTIONS.md` §15).
+      return new ErreurApplicative({
+        code: 'contrainte_base',
+        statut: 409,
+        message: erreur.message,
+        detailJournal,
+        codeGrc: 'GRC05',
+      });
+
     case 'GRC04':
       // Le périmètre de session n'a pas été positionné, ou il est incohérent.
       // Ce n'est jamais une faute de l'utilisateur : c'est un défaut de

@@ -380,6 +380,50 @@ service.
 
 ---
 
+### 8.1 Le lien POLYMORPHE ne cascade pas — c'est un déclencheur qui prend le relais
+
+`pieces_jointes` (et `approbations`) désignent leur objet par un couple
+(`entite_type`, `entite_id`) **sans clé étrangère** : la cible peut appartenir à n'importe
+quelle entité, et le schéma ne *peut* donc pas cascader. Ce n'est pas un oubli — c'est la
+contrepartie assumée du rattachement polymorphe (`001_socle.sql` §10).
+
+**Ce que le chantier a payé pour l'apprendre** : le correctif du constat **Q-230** a pris le
+relais **dans une route**, celle que l'URL désigne. Le passage suivant de la porte S8 a mesuré
+ce qu'elle ne couvrait pas (**Q-232**) — la cascade du schéma détruit des enfants que la route
+ne nomme jamais, et *leurs* pièces restaient : `GET` rendait **200 avec le contenu du
+document** sur un enregistrement supprimé. Puis **Q-233** : la reprise « remplacer » vidait
+seize collections sans retirer une seule pièce. **Sixième fois sur ce chantier qu'un correctif
+traite l'instance au lieu de la classe.**
+
+**La règle qui en découle, et elle vaut pour tout lien polymorphe à venir :**
+
+> Le relais d'une cascade que le schéma ne peut pas exprimer se prend **dans la base**, sur
+> chaque table porteuse, par un déclencheur — jamais dans les routes. Une route ne voit que
+> son chemin ; il y en a toujours un de plus.
+
+En pratique (migration `017`) :
+
+- `f_pieces_suivent_leur_porteur()` est posée `after delete` sur chaque table porteuse,
+  **découverte dans le catalogue** : admise par `type_entite`, portant `id`, et dont la
+  politique de suppression est cloisonnée. Aucune liste n'est écrite ;
+- le déclencheur ne touche **pas** au disque — il inscrit le chemin dans `pieces_a_purger`,
+  que l'application vide **après le commit**. L'ordre inverse laisserait, sur une transaction
+  annulée, une ligne pointant dans le vide, c'est-à-dire une preuve d'audit perdue ;
+- ce que la RLS refuse de retirer **fait échouer la suppression** (`GRC05`) plutôt que de
+  laisser une orpheline ;
+- `f_verifier_declencheurs_pieces()` le vérifie **dans les deux sens** : toute table porteuse
+  porte son déclencheur, et toute valeur de `type_entite` qui ne désigne aucune table est
+  portée en alias par l'un d'eux (cas de « mesures » → `mesure_catalogue`).
+
+⚠️ **Ce qu'un déclencheur ne peut PAS garantir, et qu'il faut savoir** : il s'exécute sous la
+RLS de la transaction, comme tout le reste. Mesuré avant d'écrire — une politique appelant
+`f_filiale_ecriture()` **lève `GRC04` même quand aucune ligne n'est candidate**, la fonction
+étant évaluée par le scan et non par la ligne. C'est pourquoi les tables du **substrat**
+(`sessions`) n'en portent pas : elles se suppriment sans filiale active, et aucune route n'y
+attache de pièce.
+
+---
+
 ## 9. Nommage des objets
 
 | Objet | Modèle | Exemple |
@@ -615,6 +659,7 @@ poste de développement.
 | `GRC02` | Étape d'approbation franchie : décision irréversible | Base |
 | `GRC03` | Conflit de version (verrouillage optimiste) — « modifié entre-temps » | API (`0 ligne` sur `update … and version = $2`) |
 | `GRC04` | Périmètre non positionné : `grc.filiale_id` absent alors que la RLS l'exige | Base (`004_rls.sql`) |
+| `GRC05` | Une pièce jointe du porteur supprimé appartient à une autre filiale : la suppression est **refusée** plutôt que de laisser une orpheline | Base (`017_pieces_suivent_leur_porteur.sql`) |
 
 Deux refus d'intégrité empruntent le `23514` standard plutôt qu'un code propre, **à dessein** :
 viser la mesure locale d'une autre filiale, et changer la portée d'une ligne mixte. L'API les

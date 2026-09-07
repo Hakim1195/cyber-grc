@@ -8,6 +8,101 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Serveur — vague 9, action **D2** : une pièce jointe suit son porteur, quel que soit le chemin
+
+**Constats `Q-232` et `Q-233` fermés — à la CLASSE, pas à l'instance.**
+
+`pieces_jointes` désigne l'enregistrement qu'elle documente par un couple
+(`entite_type`, `entite_id`) **sans clé étrangère** : le schéma ne *peut* pas cascader. Le
+correctif du constat précédent (`Q-230`) avait pris le relais **dans une route** — celle que
+l'URL nomme. Cinq chemins sur six lui échappaient, et la porte S8 les a mesurés : supprimer un
+scénario PRA emportait son test et **laissait la pièce du test**, `GET` rendant *200 avec le
+contenu du document* ; la reprise « remplacer » vidait **seize collections sans en retirer
+une seule**.
+
+⚠️ **Sixième fois sur ce chantier qu'un correctif traite l'instance au lieu de la classe.**
+Le remède demandé était explicite — *« un seul endroit que tous les chemins traversent, pas
+six correctifs »*. Il y en a deux, de part et d'autre du `commit`, et c'est nécessaire :
+
+- **la base, pour la ligne** — migration `017`, `f_pieces_suivent_leur_porteur()` posée
+  `after delete` sur **32 tables porteuses DÉCOUVERTES dans le catalogue**, jamais récitées.
+  Elle voit la suppression directe, la cascade du schéma, la purge de la reprise, la purge
+  RGPD, et jusqu'à un `delete` tapé dans `psql` ;
+- **l'application, pour le fichier** — le déclencheur ne peut pas toucher au disque, et
+  l'ordre n'est pas indifférent : *la ligne d'abord, le fichier après le commit*, sans quoi
+  une transaction annulée laisserait une ligne pointant dans le vide, c'est-à-dire une preuve
+  d'audit perdue. Il inscrit donc le chemin dans `pieces_a_purger`, que le crochet `onSend`
+  vide pour **toutes** les routes à la fois, et que le minuteur quotidien rattrape après une
+  panne.
+
+**Ce qui est éprouvé, et comment.** Les six chemins ne sont pas écrits à la main : ils sont
+**dérivés de `pg_constraint`** — tout `on delete cascade` entre deux tables porteuses —, si
+bien qu'une septième cascade entrerait seule dans le balayage. Après chacun : **0 ligne
+orpheline, 0 fichier résiduel, `GET /api/pieces/…` → 404**, file de purge vide. Les deux
+moitiés sont **mordues** : déclencheur désarmé → la pièce survit ; balayeur neutralisé →
+quatre essais rougissent. Le garde-fou `f_verifier_declencheurs_pieces()` vérifie **dans les
+deux sens** (toute table porteuse porte son déclencheur ; toute valeur de `type_entite` sans
+table est portée en alias) et il est joué par le point d'appel unique.
+
+> ⚠️ **CE QUI CHANGE POUR L'EXPLOITANT.** Reprendre un export `grc-backup` en mode
+> **« remplacer »** détruit désormais les pièces jointes des enregistrements remplacés,
+> fichiers compris — le fichier `grc-backup` ne les transporte pas et ne les rendra pas.
+> **Sauvegardez le répertoire des pièces jointes avant toute reprise « remplacer ».**
+> `docs/GUIDE_EXPLOITATION.md` §4 bis. Le mode « fusionner » n'est pas concerné.
+
+Deux règles nouvelles, écrites au `backend/db/CONVENTIONS.md` :
+
+- **§8.1** — *le relais d'une cascade que le schéma ne peut pas exprimer se prend dans la
+  base, sur chaque table porteuse, jamais dans les routes. Une route ne voit que son chemin ;
+  il y en a toujours un de plus.*
+- **§15** — code d'erreur **`GRC05`** : quand une pièce du porteur supprimé appartient à une
+  autre filiale, la base **refuse la suppression** plutôt que de laisser une orpheline.
+
+⚠️ **Ce que D2 ne fait PAS, et il faut le dire** : il **arrête l'hémorragie, il ne ramasse
+pas ce qui est déjà par terre.** Une installation qui a vécu avec le défaut peut porter des
+lignes `pieces_jointes` sans porteur et des fichiers sans ligne ; les recenser demande une
+**réconciliation disque ↔ base**, qui est la réserve **R5** de la porte S8 et reste ouverte.
+La file `pieces_a_purger` en est la moitié facile — elle recense ce qui est **su** — et rien
+de plus.
+
+⚠️ **Mesuré avant d'écrire, et cela a changé la conception** : une politique de suppression
+qui appelle `f_filiale_ecriture()` lève `GRC04` **même quand aucune ligne n'est candidate** —
+la fonction est évaluée par le scan, pas par la ligne. Un déclencheur posé sur `sessions`
+aurait donc fait échouer la purge des sessions expirées. Les tables du **substrat** n'en
+portent pas, et le banc compare l'énumération que la route de dépôt accepte aux tables
+équipées : c'est la couture entre les deux moitiés de la règle.
+
+#### Et un défaut trouvé **en publiant** — `Q-245`
+
+`install.sh --maj` **s'arrêtait en code 2** au moment de prendre le cliché d'avant-migration :
+`pg_dump` s'y connectait comme `grc_proprietaire`, la RLS est **forcée propriétaire compris**,
+ce rôle ne porte pas `BYPASSRLS`, et `pg_dump` pose `row_security = off`. Il s'arrêtait donc
+net sur la première table cloisonnée.
+
+⚠️ **Ce bloc ne s'exécute que lorsqu'une migration est en attente** — c'est-à-dire au seul
+moment où il sert, et presque jamais autrement. Aucune migration n'en avait été en attente
+depuis que la RLS est forcée : *un contrôle qui ne s'exécute pas est un contrôle dont on
+ignore le verdict.* Le cliché se prend désormais sous le **superutilisateur**, comme la
+création de la base.
+
+⚠️ **Et la sortie de secours évidente était un piège** : `--enable-row-security` aurait fait
+passer `pg_dump` en lui faisant rendre un cliché **silencieusement amputé** de toutes les
+lignes cloisonnées. Une sauvegarde qui perd des lignes sans le dire est pire que pas de
+sauvegarde — on lui fait confiance. Le cliché est en outre **ouvert** et non plus seulement
+compté : sa ligne de fin est cherchée, faute de quoi il est détruit (même motif que Q-223).
+
+#### Et un essai intermittent, réparé à la classe — `Q-246`
+
+`test/import/lecture.test.mjs` mesure un **rapport** de temps en une seule passe. C'est
+exactement ce que les constats `Q-225` et `Q-227` avaient corrigé sur `cout-expressions.test.mjs`
+— **et le remède n'avait été posé que sur le fichier qui avait rougi**, pas sur son jumeau.
+*L'instance, pas la classe*, pour la septième fois. Il rougit au banc complet et passe seul.
+
+Corrigé par **le meilleur de trois passes, des deux côtés**. ⚠️ Le raisonnement compte plus
+que le correctif : sous charge, une mesure de temps ne peut être que **trop grande**, et sur
+un rapport c'est doublement traître — un bruit sur la **petite** taille écrase le rapport et
+rend l'essai **vert par accident**, c'est-à-dire qu'un quadratique passerait.
+
 ### Serveur — vague 7 : L13 cycle de vie, L12 notifications, L10 internationalisation
 
 **Trois lots, et chacun a trouvé dans son sujet un défaut que le contrat n'avait pas prévu.**

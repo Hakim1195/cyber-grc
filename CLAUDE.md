@@ -55,16 +55,29 @@
 > (vague 9, décidée le 07/09/2026). ⚠️ **Le coffre existe déjà** — L6 livre le dépôt, ses huit
 > contrôles et le panneau monté sur la fiche document ; `documents.filiale_id` nul porte déjà la
 > PSSI de portée Groupe. **Ne pas le refaire.** Ce qui manque est la gestion : version en
-> vigueur, zéro orphelin, recherche, source de vérité unique, approbation.
+> vigueur, ~~zéro orphelin~~, recherche, source de vérité unique, approbation.
+>
+> ✅ **L'action D2 — « zéro orphelin » — est LIVRÉE le 07/09/2026**, jouée en premier parce
+> qu'elle rapproche de la porte plutôt qu'elle ne l'éloigne : migration `017`, un déclencheur
+> `f_pieces_suivent_leur_porteur()` sur **32 tables porteuses découvertes dans le catalogue**,
+> et une file `pieces_a_purger` que l'application vide **après le commit**. Une pièce jointe
+> suit désormais son porteur sur **tous** les chemins — cascade et `psql` compris. ⚠️ **Et une
+> conséquence à connaître** : une reprise « remplacer » détruit désormais les pièces jointes de
+> l'état remplacé (`docs/GUIDE_EXPLOITATION.md` §4 bis).
 >
 > **Ce qui reste avant la mise en service :**
 >
 > - **jouer la porte S7**, jamais jouée (relecture métier, paraphrase des catalogues) ;
 > - **Q-243** — une troncature de **queue** du journal est indétectable : le produit répond
 >   `sain: true`. Ancrer la tête de chaîne, ou corriger la phrase du plan qui promet plus ;
-> - **Q-232 / Q-233** — pièces jointes orphelines : le correctif tient sur son chemin,
->   **pas sur la classe** (suppression d'un parent, reprise « remplacer ») ;
 > - **Q-234, Q-236, Q-238 → Q-241, Q-244** — gardes qui ne mordent pas assez.
+>
+> ~~**Q-232 / Q-233** — pièces jointes orphelines~~ : **fermés le 07/09** par l'action D2
+> ci-dessus, à la CLASSE et non à l'instance. La leçon vaut d'être retenue au-delà du cas :
+> *le relais d'une cascade que le schéma ne peut pas exprimer — un lien polymorphe n'a pas de
+> clé étrangère — se prend DANS LA BASE, sur chaque table porteuse, jamais dans les routes.
+> Une route ne voit que son chemin ; il y en a toujours un de plus.*
+> (`backend/db/CONVENTIONS.md` §8.1.)
 >
 > ⚠️ **Le banc ne se recopie pas ici** (constat **Q-219**) : il rend le compte que le
 > `backend/README.md` §8 relève **à la révision qu'il cite**. Au 07/09 il est

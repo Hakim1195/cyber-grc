@@ -117,7 +117,7 @@ import { avecTransactionAuthentification } from '../auth/transaction.js';
 import { deciderAcces, DOMAINE_PAR_ENTITE, entitesLisibles, refuserDroit } from './droits.js';
 import { greffonJournal } from './journal.js';
 import { greffonPieces } from '../pieces/index.js';
-import { retirerDuMagasin } from '../pieces/magasin.js';
+import { viderFileDePurge } from '../pieces/purge.js';
 import { greffonImport } from '../import/index.js';
 import { greffonConsolidation } from '../consolidation/index.js';
 import { greffonFiliales } from '../filiales/index.js';
@@ -933,6 +933,71 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  sur une opération réussie. On préfère un défaut de trace visible au
    *  journal technique à un défaut d'issue affiché à l'utilisateur.
    * ------------------------------------------------------------------- */
+  /* -------------------------------------------------------------------
+   *  onSend — LE BALAYAGE DU MAGASIN, après le commit et avant la réponse
+   * -------------------------------------------------------------------
+   *  ══ Le « seul endroit que tous les chemins traversent » ══════════════
+   *
+   *  La porte S8 a refusé deux fois le même défaut sous deux numéros — Q-230
+   *  puis Q-232/Q-233 — et l'auditeur a écrit le remède attendu : *« un seul
+   *  endroit que tous les chemins traversent, pas six correctifs »*. Il y en a
+   *  deux, et ils sont complémentaires parce qu'ils vivent de part et d'autre
+   *  du `commit` :
+   *
+   *   · **la base**, pour la LIGNE — `f_pieces_suivent_leur_porteur()` sur
+   *     chaque table porteuse (migration `017`). Elle voit tout, cascade et
+   *     `psql` compris ;
+   *   · **ce crochet**, pour le FICHIER — parce qu'un déclencheur ne peut pas
+   *     toucher au disque, et que le retirer AVANT le commit laisserait, sur une
+   *     transaction annulée, une ligne qui pointe dans le vide.
+   *
+   *  ⚠️ **`onSend` et non `onResponse`, et le motif est exactement l'inverse de
+   *  celui du crochet de traçage ci-dessous.** Celui-ci est en `onResponse`
+   *  parce qu'un échec de trace ne doit pas faire échouer une opération réussie.
+   *  Le balayage, lui, doit être **fini quand le client reçoit sa réponse** :
+   *  sans quoi « supprimer » rend 200 pendant que le fichier est encore là, et
+   *  la seule façon de le vérifier serait d'attendre. Le risque symétrique est
+   *  fermé autrement : **rien de ce qui se passe ici ne peut faire échouer la
+   *  réponse** — l'erreur est journalisée, la ligne reste en file, et le
+   *  balayage suivant réessaie.
+   *
+   *  Il ne s'exécute que sur les méthodes qui écrivent : une lecture ne peut
+   *  rien avoir mis en file, et la SPA sonde toutes les vingt secondes.
+   * ------------------------------------------------------------------- */
+  const METHODES_QUI_ECRIVENT = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+  instance.addHook('onSend', async (requete: FastifyRequest) => {
+    if (!METHODES_QUI_ECRIVENT.has(requete.method)) return;
+    const session = requete.sessionGrc;
+    if (session === undefined) return;
+    // ⚠️ **Le client parti ne paie pas de connexion** — constat **Q-20**, et le
+    // banc l'a repris sur ce crochet-ci dès son premier passage : « un refus qui
+    // coûte une connexion est exactement celui que Q-20 fait payer aux autres ».
+    // Ce qui reste alors en file n'est pas perdu : c'est la raison d'être de la
+    // file, et le balayage quotidien le reprend.
+    if (requete.abandonGrc?.() === true) return;
+    try {
+      const bilan = await viderFileDePurge(pool, config, session.perimetre, requete.log);
+      if (bilan.lignesRetirees > 0 || bilan.lignesLaissees > 0) {
+        requete.log.info(
+          {
+            fichiersRetires: bilan.fichiersRetires,
+            lignesRetirees: bilan.lignesRetirees,
+            lignesLaissees: bilan.lignesLaissees,
+          },
+          'Magasin : fichiers des pièces dont le porteur a disparu (migration 017)',
+        );
+      }
+    } catch (erreur) {
+      // Jamais au prix de la réponse : l'opération de l'utilisateur a réussi, et
+      // la file garde ce qui reste à faire.
+      requete.log.error(
+        { erreur: erreur instanceof Error ? erreur.message : String(erreur) },
+        'Purge du magasin : balayage impossible ; la file de purge est conservée.',
+      );
+    }
+  });
+
   instance.addHook('onResponse', async (requete: FastifyRequest, reponse: FastifyReply) => {
     const declaration = requete.routeOptions.config.acces;
     if (declaration?.action !== 'administrer') return;
@@ -2211,82 +2276,47 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     ) => {
       const entite = entiteDe(requete.params.entite);
 
-      /* ══ LES PIÈCES JOINTES SUIVENT L'ENREGISTREMENT — constat **Q-230** ══
+      /* ══ LES PIÈCES JOINTES SUIVENT L'ENREGISTREMENT ══════════════════
        *
-       * Mesuré par la porte S8 (5ᵉ passage), à travers Apache : un risque
-       * supprimé laissait sa pièce jointe **en base**, **sur le disque**, **dans
-       * le quota de la filiale**, et `GET /api/pieces/risques/<supprimé>/<pj>`
-       * rendait **200 avec le contenu du document**.
+       * ⚠️ **Cette route ne les retire plus elle-même, et c'est le correctif.**
        *
-       * La cause est structurelle : `pieces_jointes` porte un lien
-       * **polymorphe** (`entite_type`, `entite_id`) et **aucune clé étrangère**
-       * vers l'entité — la seule de la table vise `filiales`. Le schéma ne peut
-       * donc pas cascader, et `src/entites/` ne mentionnait jamais la table.
+       * Elle l'a fait, pour le constat **Q-230** — un risque supprimé laissait
+       * sa pièce en base, sur le disque, dans le quota, et
+       * `GET /api/pieces/risques/<supprimé>/<pj>` rendait **200 avec le contenu
+       * du document**. Le correctif nommait `entite_type = <l'entité de l'URL>`,
+       * et le passage suivant de la porte S8 a mesuré ce qu'il ne couvrait pas
+       * (**Q-232**) : la **cascade** du schéma emporte les enfants — les
+       * `actions` d'un risque, les `tests_pra` d'un scénario — et *leurs* pièces
+       * restaient. Cinq chemins sur six. Puis **Q-233** : la reprise
+       * « remplacer » vide seize collections et n'en retire aucune.
        *
-       * ⚠️ **« Supprimer » qui ne supprime pas est une promesse rompue**, et
-       * elle l'est deux fois ici : dans un outil qui sert de preuve en audit, et
-       * dans un produit qui porte un registre RGPD — le droit à l'effacement de
-       * l'article 17 ne s'arrête pas à la ligne métier.
+       * ⚠️ **Sixième fois sur ce chantier qu'un correctif traite l'instance au
+       * lieu de la classe.** La cause est structurelle et se lisait déjà dans le
+       * correctif : le lien est **polymorphe**, aucune clé étrangère ne peut
+       * cascader, et il faudrait que **chaque** chemin de suppression prenne le
+       * relais — six correctifs à tenir justes, dont le prochain manquerait.
        *
-       * L'ORDRE est celui que `magasin.ts` défend déjà : la ligne d'abord, le
-       * fichier **après le commit**. L'inverse laisserait une ligne pointant
-       * dans le vide, c'est-à-dire une preuve d'audit perdue ; celui-ci laisse
-       * au pire un fichier que rien ne délivre et qui ne coûte que de la place.
-       *
-       * ⚠️ On ne retire du disque que ce que **plus aucune ligne** ne réclame.
-       * Aujourd'hui cette précaution ne sert à rien — `engendrerCheminStockage`
-       * tire 256 bits au hasard par pièce, donc deux lignes ne partagent jamais
-       * un fichier, et je l'ai d'abord écrit en croyant le contraire. Elle coûte
-       * une requête et reste juste si la convention change : la contrainte de la
-       * base (`^([0-9a-f]{2}/)*[0-9a-f]{64}$`) admet parfaitement une adresse
-       * dérivée du contenu, et ce jour-là supprimer un risque effacerait la
-       * pièce jointe d'un incident. */
-      const cheminsARetirer = await enEcriture(
-        requete,
-        async (client, instanceDepot, perimetre) => {
-          const orphelines = await client.query<{ chemin_stockage: string }>(
-            `delete from "pieces_jointes"
-              where "entite_type" = $1::type_entite and "entite_id" = $2::text
-           returning "chemin_stockage"`,
-            [entite, requete.params.identifiant],
-          );
-          await instanceDepot.supprimer(
-            client,
-            perimetre,
-            entite,
-            requete.params.identifiant,
-            requete.query.version,
-          );
-          if (orphelines.rowCount === 0) return [];
-          // Ce que plus personne ne réclame, dans la MÊME transaction : une
-          // lecture d'après-coup verrait un dépôt concurrent et se tromperait.
-          const restants = await client.query<{ chemin_stockage: string }>(
-            `select distinct "chemin_stockage" from "pieces_jointes"
-              where "chemin_stockage" = any ($1::text[])`,
-            [orphelines.rows.map((l) => l.chemin_stockage)],
-          );
-          const encoreReclames = new Set(restants.rows.map((l) => l.chemin_stockage));
-          return [...new Set(orphelines.rows.map((l) => l.chemin_stockage))].filter(
-            (chemin) => !encoreReclames.has(chemin),
-          );
-        },
+       * Le relais est donc pris **une seule fois, dans la base** : la migration
+       * `017` pose `f_pieces_suivent_leur_porteur()` sur chaque table porteuse,
+       * découverte dans le catalogue. Tout chemin le traverse — celui-ci, la
+       * cascade, `purgerFiliale`, la purge RGPD d'une fiche d'annuaire, et
+       * jusqu'à un `delete` tapé dans `psql`. Le fichier, lui, se retire **après
+       * le commit** : le déclencheur inscrit son chemin dans `pieces_a_purger`,
+       * que le crochet `onSend` vide pour toutes les routes à la fois. */
+      await enEcriture(requete, async (client, instanceDepot, perimetre) =>
+        instanceDepot.supprimer(
+          client,
+          perimetre,
+          entite,
+          requete.params.identifiant,
+          requete.query.version,
+        ),
       );
 
-      for (const chemin of cheminsARetirer) {
-        await retirerDuMagasin(config, chemin).catch(() => {
-          /* Le fichier a déjà disparu, ou le magasin est en lecture seule : la
-             LIGNE, elle, n'existe plus — c'est ce qui décide de la délivrance. */
-        });
-      }
-
       requete.log.info(
-        {
-          entite,
-          identifiant: requete.params.identifiant,
-          piecesRetirees: cheminsARetirer.length,
-        },
+        { entite, identifiant: requete.params.identifiant },
         'Enregistrement supprimé (cascades portées par le schéma, CONVENTIONS.md §8 ; ' +
-          'pièces jointes retirées ici, faute de clé étrangère polymorphe — constat Q-230)',
+          'pièces jointes retirées par f_pieces_suivent_leur_porteur — migration 017)',
       );
       return reponse.send({ supprime: true });
     },

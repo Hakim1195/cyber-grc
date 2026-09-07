@@ -312,8 +312,25 @@ describe('Le coût d’un fichier hostile — ce qu’un banc vert ne regardait 
     // Un tour à blanc : la première compilation du code chaud fausserait le rapport.
     chronometrer(avaler(petit));
 
-    const msPetit = Math.max(chronometrer(avaler(petit)), 0.5);
-    const msGrand = chronometrer(avaler(grand));
+    /* ⚠️ **LE MEILLEUR DE TROIS PASSES, et non la dernière — constats Q-225 et
+       Q-227, appliqués ici parce qu'ils y manquaient.** Ce remède avait été posé
+       sur `cout-expressions.test.mjs`, et pas sur cet essai-ci, qui mesure
+       pourtant la même chose de la même façon : l'instance, pas la classe. Il a
+       rougi au banc complet le 07/09 (1751/1755) et passe seul, trois fois sur
+       trois — la signature exacte de Q-225.
+
+       Le raisonnement vaut d'être gardé : sous charge, une mesure de temps ne
+       peut être que **trop grande** — le bruit va dans un seul sens. Ici il est
+       doublement traître, parce qu'on mesure un RAPPORT : un bruit sur la petite
+       taille **écrase le rapport et rend l'essai vert par accident**, un bruit
+       sur la grande le rend rouge. Le minimum de chaque côté approche le coût
+       sans contention ; c'est la seule statistique dont le bruit ne fausse pas le
+       sens, là où une moyenne l'emporterait avec elle. */
+    const meilleurDe = (action) =>
+      Math.min(chronometrer(action), chronometrer(action), chronometrer(action));
+
+    const msPetit = Math.max(meilleurDe(avaler(petit)), 0.5);
+    const msGrand = meilleurDe(avaler(grand));
     assert.ok(
       msGrand / msPetit < 2.5,
       `2× d’entrée doit coûter ~2×, pas ~4× (${msPetit.toFixed(2)} ms → ${msGrand.toFixed(2)} ms)`,

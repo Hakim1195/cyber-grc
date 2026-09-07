@@ -137,13 +137,17 @@ async function compter(p, condition) {
  * ===================================================================== */
 
 describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, §2.4)', () => {
-  test('le catalogue est bien celui qu’on croit : 33 tables portent « filiale_id »', async () => {
+  test('le catalogue est bien celui qu’on croit : 34 tables portent « filiale_id »', async () => {
     // Ancrage du balayage. Si une migration future ajoute ou retire une table
     // cloisonnée, ce compte change — et c'est ici qu'on veut l'apprendre, pas dans une
     // liste recopiée ailleurs qui, elle, ne dirait rien.
     // 33 depuis la migration `012` : `risque_catalogue` porte un `filiale_id`
     // nullable — socle du Groupe, plus les ajouts locaux.
-    assert.equal(tablesCloisonnees.length, 33, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    // 34 depuis la migration `017` : `pieces_a_purger`, la file des fichiers dont la
+    // ligne a disparu. Elle est CLOISONNÉE à dessein — une file commune aurait été
+    // plus commode à balayer, mais elle aurait laissé une filiale constater qu'une
+    // autre vient de supprimer quelque chose.
+    assert.equal(tablesCloisonnees.length, 34, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -169,8 +173,8 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     assert.deepEqual(sansMatiere, ['groupes_ad']);
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      32,
-      'Trente-deux tables devaient contenir au moins une ligne allemande. Une table neuve '
+      33,
+      'Trente-trois tables devaient contenir au moins une ligne allemande. Une table neuve '
         + 'sans ligne dans le semis est un angle mort : le balayage y rendrait « zéro '
         + 'visible » pour la seule raison qu’il n’y a rien à voir.',
     );
@@ -283,7 +287,9 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     const nonVides = tablesCloisonnees.filter((nom) => !HORS_EGALITE_SOCLE.includes(nom) && vuDeToulouse[nom] > 0);
     // 30 depuis la migration `012` : `risque_catalogue` est semé, socle du Groupe et
     // ajout local, précisément pour que le balayage ait de la matière sur elle.
-    assert.equal(nonVides.length, 30, `Tables non vides : ${nonVides.join(', ')}`);
+    // 31 depuis la migration `017` : `pieces_a_purger`, semée elle aussi — une file
+    // vide rendrait « rien à voir » là où l'on veut « rien qui fuie ».
+    assert.equal(nonVides.length, 31, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

@@ -1557,21 +1557,56 @@ if [[ $SEULEMENT_BASE -eq 0 || $SEULEMENT_BASE -eq 1 ]]; then
   if [[ "$MIGRATIONS_EN_ATTENTE" -eq 10 ]]; then
     CLICHE="$SAUVEGARDES/avant-migration-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
     info "Migrations en attente : cliché de la base avant application"
-    if ! PGPASSWORD="$(lire_variable BASE_MOT_DE_PASSE_PROPRIETAIRE)" \
-         pg_dump --host="$BASE_HOTE" --port="$BASE_PORT" \
-                 --username="$ROLE_PROPRIETAIRE" --dbname="$BASE_NOM" \
-                 --no-password --format=plain --encoding=UTF8 2>/dev/null \
+    # ── LE CLICHÉ SE PREND SOUS LE SUPERUTILISATEUR, ET C'EST OBLIGÉ ──────────
+    #
+    # ⚠️ Ce bloc a été écrit avec `$ROLE_PROPRIETAIRE`, et il n'a JAMAIS pu
+    # fonctionner sur une base peuplée : la RLS est activée ET FORCÉE partout,
+    # propriétaire compris (`CONVENTIONS.md` §11), et `grc_proprietaire` ne porte
+    # pas BYPASSRLS — délibérément. `pg_dump` pose `row_security = off` et
+    # s'arrête net dès la première table :
+    #
+    #     ERROR: query would be affected by row-level security policy
+    #            for table "actif_dependances"
+    #
+    # Il n'a pas été vu plus tôt parce qu'il ne s'exécute QUE lorsqu'une migration
+    # est en attente — c'est-à-dire presque jamais. *Un contrôle qui ne s'exécute
+    # pas est un contrôle dont on ignore le verdict.*
+    #
+    # ⚠️ **Et la sortie de secours évidente est un piège.** `--enable-row-security`
+    # ferait passer `pg_dump` : il appliquerait les politiques et rendrait un
+    # cliché **silencieusement amputé** de toutes les lignes cloisonnées — sans
+    # périmètre de session, c'est-à-dire de presque tout. Une sauvegarde qui perd
+    # des lignes sans le dire est pire que pas de sauvegarde : on lui fait
+    # confiance. On passe donc par le superutilisateur, seul à voir la base
+    # entière, exactement comme la création de la base plus haut.
+    if ! ( cd /tmp && su "$SUPERUTILISATEUR" -s /bin/sh \
+             -c "pg_dump --format=plain --encoding=UTF8 --dbname=$BASE_NOM" ) \
          | gzip -9 > "$CLICHE"; then
       rm -f "$CLICHE"
       echec "Le cliché de sauvegarde a ÉCHOUÉ, et l'installation s'arrête ici.
       Des migrations sont en attente : les appliquer sans cliché reviendrait à changer le
       schéma SANS retour arrière — les blocs « ANNULATION » des migrations sont des
       commentaires, que rien n'exécute.
-      Vérifiez que « pg_dump » est installé (paquet postgresql-client-17) et que
+      Vérifiez que « pg_dump » est installé (paquet postgresql-client-17), que le compte
+      « $SUPERUTILISATEUR » peut lire la base « $BASE_NOM », et que
       $SAUVEGARDES est accessible en écriture, puis relancez."
     fi
+    # ── LE CLICHÉ EST OUVERT, PAS SEULEMENT COMPTÉ ───────────────────────────
+    #
+    # Même raison qu'au mode `--desinstaller` (constat Q-223) : un test
+    # d'existence — ou de taille — accepterait un fichier tronqué. `pg_dump`
+    # écrit sa dernière ligne quand, et seulement quand, il a tout écrit ; c'est
+    # elle qu'on cherche. Un cliché interrompu au milieu ne la porte pas.
+    if ! gzip -dc "$CLICHE" | tail -n 5 | grep -q 'PostgreSQL database dump complete'; then
+      rm -f "$CLICHE"
+      echec "Le cliché de sauvegarde est INCOMPLET, et l'installation s'arrête ici.
+      « pg_dump » n'a pas écrit sa ligne de fin : le fichier a été interrompu (disque plein,
+      connexion perdue, table illisible). Il a été supprimé — un cliché tronqué qu'on croit
+      bon est pire que pas de cliché du tout.
+      Vérifiez la place disponible sur $SAUVEGARDES, puis relancez."
+    fi
     chmod 0600 "$CLICHE"
-    succes "cliché pris : $CLICHE ($(du -h "$CLICHE" | cut -f1))"
+    succes "cliché pris et VÉRIFIÉ : $CLICHE ($(du -h "$CLICHE" | cut -f1))"
 
     # Rétention : les cinq derniers. Assez pour remonter plusieurs mises à jour,
     # assez peu pour qu'un disque plein ne devienne pas le prochain incident.

@@ -3930,7 +3930,9 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
         order by 1`,
     );
     // Quatre au cinquième correctif, sept au sixième, huit depuis le troisième passage de
-    // la porte S2 (entropie_identifiants), neuf avec L3, DIX depuis L5 (lecture_journal), QUINZE depuis la porte S6 (champs_structurels). Chacun s'est branché SANS qu'un fichier de
+    // la porte S2 (entropie_identifiants), neuf avec L3, DIX depuis L5 (lecture_journal),
+    // QUINZE depuis la porte S6 (champs_structurels), SEIZE depuis la fermeture de
+    // Q-232 / Q-233 (declencheurs_pieces). Chacun s'est branché SANS qu'un fichier de
     // déploiement change : c'est la propriété du §19.4, constatée plutôt qu'affirmée.
     // Cette liste est délibérément ÉPINGLÉE : un garde-fou qui apparaît doit être
     // reconnu ici, un garde-fou qui disparaît ne doit pas s'effacer en silence.
@@ -3946,6 +3948,13 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       'champs_structurels',
       'chemin_recherche',
       'couverture_rls',
+      // SEIZIÈME, apporté par `017_pieces_suivent_leur_porteur.sql` (constats Q-232 /
+      // Q-233) : toute table qu'une pièce jointe peut désigner porte le déclencheur
+      // qui retire ses pièces quand une de ses lignes disparaît. Le lien est
+      // POLYMORPHE — aucune clé étrangère ne peut cascader —, et le correctif
+      // précédent avait pris le relais dans UNE route : cinq chemins sur six lui
+      // échappaient. Cette liste a rougi en arrivant, ce qui est son office.
+      'declencheurs_pieces',
       'entropie_identifiants',
       // DIXIÈME, apporté par `008_journal_lecture.sql` : il vérifie que la politique de
       // lecture du journal est bien cloisonnée (condition E6). La liste a rougi en

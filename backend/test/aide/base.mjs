@@ -594,6 +594,19 @@ export async function semerJeuEssai(base, client, options = {}) {
           [filiale, empreinte(s), `ab/${empreinte(s)}`],
         );
         await c.query(`insert into referentiels_actifs (id, filiale_id, ref_id, origine) values ('RA-${s}', $1, 'anssi', 'ajout_local')`, f);
+        // La file de purge du magasin (migration `017`). Elle est VIDE en régime
+        // normal — c'est une file d'attente, pas un registre —, et c'est
+        // précisément pourquoi elle est semée : sans une ligne par filiale, le
+        // balayage de cloisonnement de `chargement-filiale.test.mjs` rendrait
+        // « zéro ligne visible » pour la seule raison qu'il n'y a rien à voir.
+        // Son chemin est distinct de celui de `pieces_jointes` ci-dessus :
+        // `uq_pieces_jointes_chemin` est globale, et la file porte la même forme.
+        await c.query(
+          `insert into pieces_a_purger (chemin_stockage, piece_id, filiale_id, entite_type,
+                                        entite_id, motif)
+               values ($2, 'PJ-PURGE-${s}', $1, 'risques', 'RISK-${s}', 'semis_essai')`,
+          [filiale, `cd/${(s === 'A' ? 'c' : 'd').repeat(64)}`],
+        );
 
         // Tables mixtes, versant LOCAL (le versant Groupe est semé plus haut).
         await c.query(`insert into mesure_catalogue (id, filiale_id, nom)   values ('MESURE-${s}', $1, 'Mesure locale')`, f);

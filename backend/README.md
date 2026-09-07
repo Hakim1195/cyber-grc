@@ -610,7 +610,7 @@ que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non re
 | `test/annuaire/` | l'annuaire LDAP **simulé** lui-même, contre son propre contrat (`CONVENTIONS.md` §25.2), et un **oracle tiers** (`mod_authnz_ldap` d'Apache, qui ne partage aucune ligne avec ce dépôt) pour ne pas se croire deux fois de la même façon |
 | `test/modules/` | le filet **comportemental** des modules métier du frontend (constat Q-16) : afficher, renommer, cliquer, exiger que la navigation atteigne le nouvel identifiant |
 | `test/import/` | le moteur d'import généralisé (L7) : lecture CSV et XLSX, transactionnalité tout-ou-rien, idempotence par le fichier, cloisonnement — **et le COÛT des analyseurs sur des fichiers hostiles**, après trois dénis de service trouvés par trois portes successives (Q-197, Q-208, Q-215) |
-| `test/pieces/` | les huit contrôles de la chaîne des pièces jointes (L6) dans leur ordre figé, ClamAV réel, quarantaine, ré-analyse — et les **bornes de décompression**, qui doivent mordre sur le réel et non sur ce que l'archive déclare (Q-205 c) |
+| `test/pieces/` | les huit contrôles de la chaîne des pièces jointes (L6) dans leur ordre figé, ClamAV réel, quarantaine, ré-analyse, les **bornes de décompression** qui doivent mordre sur le réel et non sur ce que l'archive déclare (Q-205 c) — et **« supprimer supprime »** : les six chemins de cascade, **dérivés de `pg_constraint`** et non récités, plus la reprise « remplacer » (Q-230, Q-232, Q-233) |
 | `test/cycle/` | le cycle de vie (L13) : purge RGPD et son rapport, rétention, **sortie de filiale** — opération irréversible dont l'enveloppe remise à l'acquéreur est l'unique trace |
 | `test/notifications/` | les relances par courriel (L12) : client SMTP écrit à la main, fenêtre anti-doublon, cloisonnement des destinataires — **et le départage d'un homonyme**, qui décide vers quelle adresse part un courriel (Q-195, Q-196) |
 | `test/approbations/` | le circuit d'approbation (L8) : documents, acceptation des risques résiduels, rapports d'audit, et l'irréversibilité **cherchée dans la base** plutôt que réécrite en TypeScript |
@@ -677,6 +677,14 @@ concernée : elle copie des fichiers, pas des lignes.
 elles**, faute de quoi des enregistrements référencent des fichiers absents.
 L'application affiche alors la pièce comme indisponible et le journalise,
 plutôt que d'échouer — mais l'incohérence reste à éviter.
+
+⚠️ **Et depuis la migration `017`, il y a une seconde raison de sauvegarder le
+magasin.** Une reprise `grc-backup` en mode **« remplacer »** vide la filiale, et
+les pièces jointes des enregistrements remplacés **partent avec eux** : elles
+suivent leur porteur sur tous les chemins de disparition, y compris celui-là
+(constats Q-232 / Q-233). Le fichier `grc-backup` **ne transporte pas les pièces
+jointes** et ne les rendra donc pas. Le mode « fusionner » ne purge rien.
+Procédure : `docs/GUIDE_EXPLOITATION.md` §4 bis.
 
 **La restauration se teste** : une fois avant la mise en service, puis
 annuellement. Sur un outil qui héberge le PCA du groupe, une sauvegarde jamais
@@ -760,7 +768,7 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 | **L13 — Cycle de vie** | ✅ **livré** (vague 6, 05/09/2026) |
 | **L14 — Documentation** | ✅ **livré** (vague 7, 05/09/2026) — `docs/GUIDE_EXPLOITATION.md` et `docs/GUIDE_UTILISATEUR.md` |
 | **L15 — Durcissement final** | 🟡 **EN COURS — c'est l'état présent du chantier** (vague 8). Revue de sécurité sur l'ensemble du produit. **Porte S8 jouée six fois, refusée à chaque passage** ; au 6ᵉ : **0 bloquant, 4 majeurs, 8 mineurs, 0 fuite entre filiales**, banc **1747/1747**. C'est la **condition de mise en service** : elle n'est pas remplie |
-| **L16 — Système documentaire** | ⬜ **à faire** (vague 9, décidée le 07/09/2026). ⚠️ **Le coffre existe déjà** : L6 livre le dépôt et ses huit contrôles, `documents` porte le modèle Groupe/filiale (`filiale_id` nul = PSSI de portée Groupe) et le panneau est **monté sur la fiche** — la recette le sert. Ce qui manque est la **gestion** : version en vigueur, zéro orphelin (Q-232/Q-233), recherche, source de vérité unique, approbation. Voir `../docs/PLAN_EXECUTION.md` §3, vague 9 |
+| **L16 — Système documentaire** | 🟡 **commencé** (vague 9, décidée le 07/09/2026) — **D2 livré le 07/09** : les pièces jointes suivent leur porteur sur les six chemins (migration `017`, constats **Q-232 / Q-233** fermés). ⚠️ **Le coffre existe déjà** : L6 livre le dépôt et ses huit contrôles, `documents` porte le modèle Groupe/filiale (`filiale_id` nul = PSSI de portée Groupe) et le panneau est **monté sur la fiche** — la recette le sert. Reste de la **gestion** : version en vigueur (D1), recherche (D3, **pas avant S8**), source de vérité unique (D4), approbation (D5). Voir `../docs/PLAN_EXECUTION.md` §3, vague 9 |
 
 ### Les verdicts, tels que le journal des portes les formule
 
@@ -903,16 +911,18 @@ npm test                                         → tests 1747 · pass 1747 · 
                                                    journal 19
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (14 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (15 garde-fous découverts, joués, consignés)
 ```
 
-Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **49 tables** en
-**16 migrations**, **196 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
-**73 clés étrangères** (44 `restrict`, 27 `cascade`, 2 `set null`), **44 tables portant
+Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **50 tables** en
+**17 migrations**, **200 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**74 clés étrangères** (45 `restrict`, 27 `cascade`, 2 `set null`), **44 tables portant
 `cree_par` et 44 déclencheurs de création**, **12 clés étrangères composites** visant
-`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **14 contrôles consignés**
+`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **15 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
-la migration `015` (constat Q-201).
+la migration `015` (constat Q-201), et le quinzième `f_verifier_declencheurs_pieces()`,
+apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
+porteur, quel que soit le chemin de disparition).
 
 Frontend, mesuré en **évaluant le module** et non en dépouillant son texte : façade
 `DataStore` à **131 membres**, identique avant et après la vague 2 ; **118 méthodes
@@ -1180,7 +1190,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **49 tables**, obtenues aujourd'hui en **16 migrations** appliquées de bout en bout par
+- **50 tables**, obtenues aujourd'hui en **17 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1190,12 +1200,13 @@ Ce que la reprise fait, quand on la rejoue :
   conditionnée, neuvième garde-fou de schéma — sans nouvelle table) est du lot **L3**.
   Les trois dernières sont arrivées avec des **fermetures de constats**, après le
   franchissement du 4ᵉ passage de S2 pour `005`/`006`, à l'ouverture de L3 pour `007`.
-- **196 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
+- **200 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
-- **73 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
-  migrations : **44 en `restrict`, 27 en `cascade`, deux en `set null`**
-  (`incidents.risque_id` — l'incident survit au risque).
+- **74 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
+  migrations : **45 en `restrict`, 27 en `cascade`, deux en `set null`**
+  (`incidents.risque_id` — l'incident survit au risque). La quarante-cinquième en
+  `restrict` est `fk_pieces_a_purger_filiale`, arrivée avec la migration `017`.
 
   | Clé | Action | Pourquoi |
   |---|---|---|
