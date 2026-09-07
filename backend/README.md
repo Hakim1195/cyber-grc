@@ -737,7 +737,7 @@ incomplète**, pas le fonctionnement attendu d'une recette (§4).
 
 ## 8. Avancement
 
-État réel des lots, **au 04/09/2026**. La **conduite** du chantier — découpage en
+État réel des lots, **au 07/09/2026**. La **conduite** du chantier — découpage en
 vagues, portes de sécurité, définition de « terminé » — vit dans
 [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) ; le **quoi** vit dans
 [`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7.
@@ -751,7 +751,15 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 | **L5 — Journal d'audit** | ✅ **livré** (04/09/2026), **porte S4 jouée et refusée** — le tri du §0 bis s'applique. Couverture portée de **4 actions émises sur 20** à **16 émissibles** (`purge` et `archivage` relèvent de l'exploitation, `approbation` du lot L8, `analyse_antivirus` du lot L6) ; **condition E6 fermée** par `008_journal_lecture.sql` — `grc_lecture` recevait 160 entrées, il reçoit « Périmètre non positionné » ; trois routes de consultation, écran `/journal`, export CSV désamorcé et éprouvé sur une entrée hostile. **Dix constats neufs** (Q-118 → Q-127), dont **Q-118, classe « fuite de données »** — un oracle sur la chronologie du groupe par `verification?depuis=N` —, corrigé et mordu |
 | **L4 — Multi-filiales** | ✅ **livré** (04/09/2026, vague 4) — sélecteur de filiale active, `GET /api/filiales`, migration `009`. Le client envoie un **choix**, le serveur résout un **périmètre** depuis `session_filiales` relu en base ; la filiale active est revérifiée **à chaque requête**. La **vision Groupe consolidée** du cadrage est livrée le 04/09 : `GET /api/consolidation` rend, pour **chaque filiale du périmètre résolu**, les indicateurs des sept domaines, plus leur somme et ce qui est de portée Groupe. ⚠️ **Aucune de ses requêtes ne nomme de filiale** — pas un paramètre, pas un `where filiale_id = $1` : c'est la RLS qui borne, et la route est insensible à tout `?filiale=`, ce qu'un essai vérifie en en envoyant un. Un domaine hors des droits de la session rend **`null`, jamais zéro** |
 | **L6 — Pièces jointes** | ✅ **livré** (04/09/2026, vague 4) — les **huit contrôles** du `PLAN_SERVEUR` §1.6 dans un ordre figé, ClamAV réel, SHA-256 sur ce qui est écrit, quarantaine, ré-analyse périodique et son timer. `zip.ts` ouvre le conteneur OOXML : un `.docm` renommé est refusé **par ce que Word y a écrit** |
-| L7 → L15 | ⬜ à faire — vagues 5 à 8, voir [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) §3 |
+| **L7 — Import généralisé** | ✅ **livré** (vague 5, 05/09/2026) — importeur transactionnel, tout-ou-rien ; son rapport compte les lignes **écrites**, jamais les lignes lues (mesuré à la porte S6) |
+| **L8 — Circuit d'approbation** | ✅ **livré** (vague 5, 05/09/2026) |
+| **L9 — Identité par filiale** | ✅ **livré** (vague 5, 05/09/2026) — clôture de la vague au banc **1449/1449** |
+| **L10 — Internationalisation** | ✅ **livré** (vague 6, 05/09/2026). ⚠️ `I18n.valeur()` est un **passe-plat** : une valeur absente du dictionnaire repart telle quelle, et elle vient de la base — tout appel non littéral doit être échappé |
+| **L11 — Traduction des catalogues** | ✅ **livré** (vague 7, 05/09/2026) — ISO 27002 à 200 chaînes sur 201. ⚠️ **Q-192** : treize codes ANSSI sur quarante-deux désignent autre chose que le guide officiel ; **on ne renumérote pas** (les auto-évaluations sont stockées par `(ref_id, code)`), l'écart est **affiché** |
+| **L12 — Notifications** | ✅ **livré** (vague 6, 05/09/2026). ⚠️ **Q-199** : il a été livré dans une configuration où il **ne peut pas envoyer** (`IPAddressDeny=any` sans le sous-réseau du relais), **et le banc était vert sur cette configuration-là** |
+| **L13 — Cycle de vie** | ✅ **livré** (vague 6, 05/09/2026) |
+| **L14 — Documentation** | ✅ **livré** (vague 7, 05/09/2026) — `docs/GUIDE_EXPLOITATION.md` et `docs/GUIDE_UTILISATEUR.md` |
+| **L15 — Durcissement final** | 🟡 **EN COURS — c'est l'état présent du chantier** (vague 8). Revue de sécurité sur l'ensemble du produit. **Porte S8 jouée six fois, refusée à chaque passage** ; au 6ᵉ : **0 bloquant, 4 majeurs, 8 mineurs, 0 fuite entre filiales**, banc **1747/1747**. C'est la **condition de mise en service** : elle n'est pas remplie |
 
 ### Les verdicts, tels que le journal des portes les formule
 
@@ -771,10 +779,25 @@ constat Q-90 a été mesuré**, alors qu'elle avait déjà été jouée :
 | **S2** (8ᵉ passage) | ❌ **refusée** — **0 bloquant**, 4 majeurs, 3 mineurs. S13 et S17 en échec. « Le lot est plus solide qu'à aucun passage : **17 fermetures rejouées par mutation, 17 morsures, zéro exception**, y compris les trois que le 7ᵉ avait trouvées vertes. » Mais `LimitRequestBody` **ne s'applique pas à `/api/`** et `install.sh` imprimait « ok » en comparant deux nombres dont l'un n'agit pas ; le banc rendait **614/628 sur machine propre**, une famille entière dépendant d'une entrée `/etc/hosts` que rien ne pose ; et **le registre lui-même avait perdu la ligne d'un bloquant** — 42 constats affichés au lieu de 43. La politique TLS livrée est mesurée pour la première fois. | [`RAPPORT_S2_OCTIES.md`](../docs/securite/RAPPORT_S2_OCTIES.md) |
 | **S2** (9ᵉ passage) | ❌ **refusée** — **0 bloquant**, 4 majeurs, 6 mineurs. **S12 et S18 en échec.** L'auditeur a fait **pour la première fois la jonction que S17 réclame, en une seule pièce** : Chromium réel → Apache réel sur le vhost du dépôt → serveur réel → PostgreSQL, 0 erreur, 0 violation de CSP. 157 sondes de périmètre sans dérive, 30 formes d'injection, journal en ajout seul refusé **au propriétaire**. Mais le bandeau nomme un geste que le correctif ne couvre pas — **troisième tour du même défaut** —, l'erreur brute de l'analyseur JSON fuit en production, et **deux garde-fous posés le jour même sont contournés**, dont celui du registre. | [`RAPPORT_S2_NONIES.md`](../docs/securite/RAPPORT_S2_NONIES.md) |
 | **S3** (1ᵉʳ passage) | ❌ **refusée** — **0 bloquant de fuite entre filiales**, mais **2 bloquants des classes dures** et **15 constats neufs** (Q-88 → Q-102). **S7 et S18 en échec.** Le cœur du lot tient et c'est mesuré : cloisonnement **48/48 en `force RLS`**, périmètre serveur inviolable, AD **réel** fonctionnel — groupes imbriqués compris —, droits à trois axes qui mordent, banc **1028/1028** rejoué deux fois. ⚠️ **Première fois sur ce chantier : les 17 constats fermés la veille ont TOUS tenu sous la mutation.** Les deux bloquants sont ailleurs, et tous deux invisibles à la lecture : **Q-88**, l'annuaire `personnes` jamais alimenté depuis l'AD — **0 ligne après sept connexions réelles** — et **Q-89**, le droit d'export contourné depuis l'interface — **38 213 octets** de « Synthèse Direction », marquée *Document confidentiel*, téléchargés par un compte AD sans droit d'export. Les deux sont corrigés et mordus le jour même | [`RAPPORT_S3.md`](../docs/securite/RAPPORT_S3.md) |
+| **S4** (1ᵉʳ passage) | ❌ **refusée** — 10 constats neufs (**Q-118 → Q-127**), dont **un de la classe « fuite de données »**. Contrôles **S1, S3, S13, S18** en échec. **Premier parcours positif de bout en bout** : Chromium réel → Apache réel → AD réel → PostgreSQL. Banc **1143/1143** | [`RAPPORT_S4.md`](../docs/securite/RAPPORT_S4.md) |
+| **S5** (1ᵉʳ passage) | ❌ **refusée** — 13 constats neufs (**Q-134 → Q-146**), dont **un qui bloque le fonctionnement** et **deux de la classe « fuite ou perte de données »**. Contrôles **S1, S3, S13, S18** en échec. L'invariant de L4 résiste à **dix formes d'attaque** ; la chaîne des huit contrôles de L6 tient contre ClamAV réel | [`RAPPORT_S5.md`](../docs/securite/RAPPORT_S5.md) |
+| **S6** (1ᵉʳ passage) | ❌ **refusée** — 12 constats neufs (**Q-194 → Q-205**). Contrôles **S13, S18, S10, S3** en échec. `/api/consolidation` **ne fuit rien**. **S15, jamais rejoué depuis quatre portes, passe** : `npm audit --omit=dev` → 0 vulnérabilité. ⚠️ **Q-194** : le produit ne savait pas relire sa propre sauvegarde | [`RAPPORT_S6.md`](../docs/securite/RAPPORT_S6.md) |
+| **S7** | ⬜ **JAMAIS JOUÉE** — relecture métier et paraphrase délibérée (droit d'auteur, `PLAN_SERVEUR` §4.2). Elle reste **due avant la mise en service** | — |
+| **S8** (6ᵉ passage) | ❌ **REFUSÉE** — **0 bloquant, 4 majeurs, 8 mineurs, 0 fuite entre filiales**. Constats **Q-232 → Q-243**. Banc **1 747 essais, 1 747 passés** en 166,8 s. Cloisonnement **49/49 en `force RLS`**, journal inaltérable jusque sous le propriétaire. ⚠️ Deux gardes **ne tiennent pas** sous la mutation, et **Q-243** reste ouvert : *une troncature de **queue** du journal est indétectable* | [`RAPPORT_S8_SEXIES.md`](../docs/securite/RAPPORT_S8_SEXIES.md) |
 
-> ## ⚠️ **La porte S2 est REFUSÉE, sur un bloquant. Le lot L2 n'est pas franchi.**
+> ## ⚠️ **La porte S8 — condition de mise en service — est REFUSÉE. Le produit n'est pas livrable en l'état.**
 >
-> C'est l'information la plus importante de ce document. Le franchissement du 4ᵉ passage
+> C'est l'information la plus importante de ce document, et elle prime sur toutes les
+> lignes vertes du tableau ci-dessus. **Les lots L0 à L14 sont construits ; L15, le
+> durcissement final, ne l'est pas.** La porte S8 a été jouée **six fois** et refusée à
+> chaque passage. Le 6ᵉ est le meilleur — 0 bloquant, 0 fuite entre filiales, banc
+> 1747/1747 — mais **refusé reste refusé**, et la porte **S7 n'a même jamais été jouée**.
+>
+> ⚠️ **Un lot « livré » n'est pas un lot validé.** La distinction a coûté assez cher sur ce
+> chantier pour être répétée ici : la fermeture d'un constat est une **hypothèse en attente
+> d'être rejouée**, pas une garantie.
+>
+> **Ce qui suit sur la porte S2 reste vrai et reste instructif.** Le franchissement du 4ᵉ passage
 > portait sur la révision **`a4116b6`** (verdict consigné en `120266e`) ; chaque fermeture
 > de constats a ensuite été soumise à la porte, et **chacune a été refusée** — 5ᵉ passage
 > sur **`f68f799`**, 6ᵉ sur **`f0b4eec`**, 7ᵉ et 8ᵉ sur les révisions qu'ils nomment

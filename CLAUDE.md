@@ -21,53 +21,63 @@
 > 1. **[`docs/PLAN_SERVEUR.md`](docs/PLAN_SERVEUR.md)** — le *quoi* (cadrage clos, fait autorité) ;
 > 2. **[`docs/PLAN_EXECUTION.md`](docs/PLAN_EXECUTION.md)** — le *comment* : vagues, périmètre
 >    exclusif de chaque agent, grille de sécurité, **journal des portes** (§7, la seule source
->    des verdicts) et **registre des constats ouverts** (§7 également, avec propriétaire et
->    échéance) ;
+>    des verdicts) et **registre des constats ouverts** (§7 également) ;
 > 3. **[`backend/README.md`](backend/README.md) §8** — l'état réel des lots et les chiffres
 >    rejoués ;
-> 4. **[`backend/db/CONVENTIONS.md`](backend/db/CONVENTIONS.md) §22** si l'on ouvre la vague 3 :
->    la liste des conditions d'entrée à épuiser.
+> 4. **[`backend/db/CONVENTIONS.md`](backend/db/CONVENTIONS.md)** pour toute écriture en base.
 >
-> Puis reprendre où le §8 de **ce** document dit de reprendre (« ▶ REPRENDRE ICI »).
-> **Au 04/09/2026 : les lots L0, L1, L2 et L3 sont livrés — ne pas les refaire.** S1 est
-> franchie ; S2 a été jouée neuf fois et refusée au 9ᵉ sans bloquant ; **S3 a été jouée une
-> fois et refusée**, avec **zéro fuite entre filiales** et deux bloquants corrigés le jour
-> même. L'arbitrage du `docs/PLAN_EXECUTION.md` §0 bis remplace le veto de la porte par un
-> **tri en trois classes** : une porte refusée n'arrête plus la vague, elle trie.
+> ---
 >
-> **Le lot L5 — le journal d'audit — est LIVRÉ, et sa porte S4 a été jouée le 04/09/2026 :
-> refusée**, dix constats (**Q-118 → Q-127**) dont **un de la classe « fuite de données »**.
-> Sous le tri du §0 bis : **la classe dure et cinq majeurs sont corrigés, mordus et
-> redéployés** ; cinq mineurs sont datés `V1.1`. Le journal émet **16 actions sur 20**
-> (les quatre autres reportées par écrit), et la condition **E6 est fermée**. Voir
-> « ▶ REPRENDRE ICI » au §8.
+> ## ▶ L'ÉTAT DU CHANTIER AU 07/09/2026
 >
-> ⚠️ Si vous lisez ailleurs « ouvrir la vague 3 », « L3 reste à faire », « aucun essai
-> navigateur n'existe », « la couverture du journal est de 4 actions sur 20 » ou « la lecture
-> du journal n'est pas cloisonnée », c'est **périmé**. Le banc rend **le compte que le
-> `backend/README.md` §8 relève à sa révision citée** — il ne se recopie pas ici, sous peine
-> de porter trois chiffres différents dans un seul fichier, ce qui était le cas jusqu'au
-> constat **Q-219**. Le banc est **entièrement vert**, et la recette tourne en permanence
-> sur cette machine, Active Directory réel compris.
+> **Les lots L0 à L14 sont CONSTRUITS. Ne pas les refaire.** Le lot **L15 — durcissement
+> final — est EN COURS** : c'est la vague 8, et c'est là que se trouve le travail.
 >
-> **La recette sert la vague 5** depuis le 04/09 au soir : `install.sh --maj` puis
-> `--verifier-publication` → **67 fichiers servis identiques au dépôt** (constat Q-117, fermé).
-> Republier passe **toujours** par `install.sh --maj`, jamais par une copie à la main : le
-> jeton de version d'`index.html` dérive du contenu.
+> ⚠️ **Construit n'est pas validé, et la nuance est le cœur de ce chantier.**
 >
-> **Éprouvé à travers Apache, avec l'AD réel** — pas par `inject()` :
-> `GET /api/consolidation` rend **200 et les deux filiales** à `rssi.groupe`
-> (`perimetre.groupe: true`) ; `GET /api/import/modeles` rend 200 ; `POST /api/filiales`
-> rend **403 `droit_insuffisant`** au même compte, et le refus est **journalisé** avec sa
-> route. Le compte `admin.grc` porte les quatorze domaines et le niveau `administration` :
-> le même `POST` avec un code invalide lui rend **400 `donnee_invalide`** — ce qui prouve
-> que **toute la chaîne d'accès est franchie** (domaine, niveau, périmètre d'administration
-> Groupe), la validation du corps ne s'exécutant qu'après le crochet.
+> | Porte | Vague | Passages | Verdict |
+> |---|---|---|---|
+> | **S1** | V1 — L1 | 6 | ✅ franchie au 5ᵉ, confirmée au 6ᵉ |
+> | **S2** | V2 — L2 | 9 | ❌ refusée (franchie au 4ᵉ, refusée ensuite ; les 8ᵉ et 9ᵉ sans bloquant) |
+> | **S3** | V3 — L3 | 1 | ❌ refusée — 0 fuite entre filiales, 2 bloquants corrigés le jour même |
+> | **S4** | V3 · L5 | 1 | ❌ refusée — 10 constats, dont un « fuite de données » |
+> | **S5** | V4 — L4, L6 | 1 | ❌ refusée — 13 constats |
+> | **S6** | V6 — L10, L12, L13 | 1 | ❌ refusée — 12 constats |
+> | **S7** | V7 — L11, L14 | **0** | ⬜ **JAMAIS JOUÉE — elle reste due** |
+> | **S8** | V8 — L15 | **6** | ❌ **refusée — condition de mise en service NON remplie** |
+>
+> **Le 6ᵉ passage de S8 est le meilleur du chantier** — 0 bloquant, 4 majeurs, 8 mineurs,
+> **0 fuite entre filiales**, banc **1 747 essais, 1 747 passés** — mais *refusé reste
+> refusé*. L'arbitrage du `docs/PLAN_EXECUTION.md` §0 bis fait qu'une porte refusée
+> **n'arrête plus la vague : elle trie** en trois classes.
+>
+> **Ce qui reste avant la mise en service :**
+>
+> - **jouer la porte S7**, jamais jouée (relecture métier, paraphrase des catalogues) ;
+> - **Q-243** — une troncature de **queue** du journal est indétectable : le produit répond
+>   `sain: true`. Ancrer la tête de chaîne, ou corriger la phrase du plan qui promet plus ;
+> - **Q-232 / Q-233** — pièces jointes orphelines : le correctif tient sur son chemin,
+>   **pas sur la classe** (suppression d'un parent, reprise « remplacer ») ;
+> - **Q-234, Q-236, Q-238 → Q-241, Q-244** — gardes qui ne mordent pas assez.
+>
+> ⚠️ **Le banc ne se recopie pas ici** (constat **Q-219**) : il rend le compte que le
+> `backend/README.md` §8 relève **à la révision qu'il cite**. Au 07/09 il est
+> **entièrement vert**, et la recette tourne en permanence sur cette machine, Active
+> Directory réel compris.
+>
+> ⚠️ Si vous lisez ailleurs « ouvrir la vague 3 », « L3 reste à faire », « L10 → L15 à
+> faire », « les seize lots sont livrés », « la couverture du journal est de 4 actions sur
+> 20 » ou « aucun essai navigateur n'existe », **c'est périmé**.
+>
+> **Republier passe TOUJOURS par `install.sh --maj`**, jamais par une copie à la main : le
+> jeton de version d'`index.html` dérive du contenu. Et **vérifiez ce qui est servi**
+> (`--verifier-publication`) — constat **Q-103** : le dépôt était vert pendant que la
+> machine servait encore l'ancien fichier.
 >
 > ⚠️ **Aucune filiale n'a été créée dans la recette**, délibérément : une filiale active de
 > plus fait basculer `f_perimetre_groupe()` à faux pour toute session Groupe jusqu'à sa
-> reconnexion (constat **Q-155**), ce qui dégraderait la recette pour prouver ce qu'un
-> corps invalide prouve sans rien écrire.
+> reconnexion (constat **Q-155**).
+>
 
 ## 0. L'ENVIRONNEMENT DE TRAVAIL — mesuré, pas supposé
 
@@ -700,7 +710,12 @@ sur l'**Active Directory** du groupe.
 | **L7 — Import généralisé** | ✅ **livré** (04/09/2026, vague 5) — un moteur, vingt configurations dérivées de `decrire()` ; transactionnel (morsure : 199 lignes écrites, zéro subsiste), idempotent **par le fichier**, cloisonné, journalisé. CSV **et** XLSX, format lu à la signature binaire. ⚠️ Il **crée** ; il ne met pas à jour et ne supprime pas — trois motifs écrits |
 | **L8 — Circuit d'approbation** | ✅ **livré** (04/09/2026, vague 5) — documents, acceptation des risques résiduels, rapports d'audit. `empreinte_objet` fait périmer une approbation quand l'objet change. **L'irréversibilité n'est pas réécrite en TypeScript** : elle vit dans la base, et la morsure va la chercher là |
 | **L9 — Identité par filiale** | ✅ **livré** (04/09/2026, vague 5) — raison sociale et logo de la filiale active, écrans, impressions et exports ; zéro marque en dur ; PNG/JPEG, jamais SVG. ⚠️ **Les coordonnées ne sont pas livrées** : aucune route ne les rend (constat **Q-160**) |
-| L10 → L15 | ⬜ à faire — vagues 6 à 8, voir `docs/PLAN_EXECUTION.md` §3 |
+| **L10 — Internationalisation** | ✅ **livré** (05/09/2026, vague 6) |
+| **L11 — Traduction des catalogues** | ✅ **livré** (05/09/2026, vague 7) — ISO 27002 à 200 chaînes sur 201 |
+| **L12 — Notifications** | ✅ **livré** (05/09/2026, vague 6) |
+| **L13 — Cycle de vie** | ✅ **livré** (05/09/2026, vague 6) |
+| **L14 — Documentation** | ✅ **livré** (05/09/2026, vague 7) |
+| **L15 — Durcissement final** | 🟡 **en cours** (vague 8) — **porte S8 refusée six fois**, c'est la condition de mise en service |
 
 Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 `grc-backup`** (`backend/src/reprise/**`, portage serveur des migrations v1 → v12,
@@ -779,7 +794,7 @@ il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écriv
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
 constat perdu.**
 
-### ▶ REPRENDRE ICI — **les seize lots sont livrés ; la porte S8 a été jouée.**
+### ▶ REPRENDRE ICI — **L0 à L14 sont construits ; L15, le durcissement final, est en cours.**
 
 > ⚠️ **Réécrit le 05/09/2026.** Si vous lisez ailleurs « la vague 4 est le travail
 > immédiat », « L5 reste à faire », « la couverture du journal est de 4 actions sur 20 »
@@ -787,7 +802,10 @@ constat perdu.**
 > `docs/PLAN_EXECUTION.md` **§0 bis** et il prime ; l'état des lots et les verdicts se
 > lisent au **§7**, seule source.
 
-**Ce qui est livré, et qu'il ne faut pas refaire : les seize lots, L0 à L15.** Le banc
+**Ce qui est construit, et qu'il ne faut pas refaire : les lots L0 à L14.** Le lot **L15 —
+durcissement final — est EN COURS** (vague 8), et sa porte **S8 a été jouée six fois et
+refusée à chaque passage** : la condition de mise en service **n'est pas remplie**. La
+porte **S7 n'a jamais été jouée** et reste due. Le banc
 est **entièrement vert** — le compte exact se relève en le jouant, il n'est pas recopié
 ici (constat **Q-219**) —, `npm run verifier-types` est propre, et la recette
 sert la révision courante (`install.sh --verifier-publication` → **81 fichiers servis
