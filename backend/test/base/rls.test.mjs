@@ -3931,14 +3931,21 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
     );
     // Quatre au cinquième correctif, sept au sixième, huit depuis le troisième passage de
     // la porte S2 (entropie_identifiants), neuf avec L3, DIX depuis L5 (lecture_journal),
-    // QUINZE depuis la porte S6 (champs_structurels), SEIZE depuis la fermeture de
-    // Q-232 / Q-233 (declencheurs_pieces). Chacun s'est branché SANS qu'un fichier de
+    // QUATORZE depuis la porte S6 (champs_structurels), QUINZE depuis la fermeture de
+    // Q-232 / Q-233 (declencheurs_pieces), DIX-SEPT depuis les actions D1 et D5 de la
+    // vague 9 (piece_en_vigueur, publication_documents).
+    //
+    // ⚠️ **Deux ordinaux étaient faux d'un rang ici**, et ils l'étaient avant ce lot :
+    // ce commentaire annonçait « QUINZE » puis « SEIZE » là où le catalogue en portait
+    // quatorze puis quinze. Corrigé en comptant la liste ci-dessous plutôt qu'en
+    // reconduisant la phrase — c'est la famille de constats Q-4, et le §5 du
+    // PLAN_EXECUTION dit qu'un chiffre faux est un constat, pas une coquille. Chacun s'est branché SANS qu'un fichier de
     // déploiement change : c'est la propriété du §19.4, constatée plutôt qu'affirmée.
     // Cette liste est délibérément ÉPINGLÉE : un garde-fou qui apparaît doit être
     // reconnu ici, un garde-fou qui disparaît ne doit pas s'effacer en silence.
     assert.deepEqual(controles.map((l) => l.controle), [
       'armement',
-      // QUINZIÈME, apporté par `015_champs_structurels.sql` (constat Q-201) : aucune
+      // QUATORZIÈME, apporté par `015_champs_structurels.sql` (constat Q-201) : aucune
       // colonne du schéma ne doit commencer par un souligné. C'est la SECONDE MOITIÉ
       // d'une règle dont la première vit dans `js/core/sync.js`, qui écarte du corps
       // renvoyé au serveur tout champ à souligné initial — parce que le serveur en
@@ -3948,7 +3955,7 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       'champs_structurels',
       'chemin_recherche',
       'couverture_rls',
-      // SEIZIÈME, apporté par `017_pieces_suivent_leur_porteur.sql` (constats Q-232 /
+      // QUINZIÈME, apporté par `017_pieces_suivent_leur_porteur.sql` (constats Q-232 /
       // Q-233) : toute table qu'une pièce jointe peut désigner porte le déclencheur
       // qui retire ses pièces quand une de ses lignes disparaît. Le lien est
       // POLYMORPHE — aucune clé étrangère ne peut cascader —, et le correctif
@@ -3965,6 +3972,15 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // definer » — sans quoi le resserrement se retourne en récursion.
       'lecture_filiales',
       'lecture_journal',
+      // SEIZIÈME, apporté par `018_version_en_vigueur.sql` (action D1 de la
+      // vague 9) : il vérifie les TROIS pièces du dispositif « version en vigueur »
+      // — l'index unique partiel existe ET porte `filiale_id`, la contrainte de
+      // délivrabilité existe, le déclencheur de démotion existe. Aucune ne suffit
+      // seule : sans l'index deux versions font foi, sans la contrainte un fichier
+      // en quarantaine peut faire foi, et sans le déclencheur c'est la RÉ-ANALYSE
+      // ANTIVIRALE qui échoue — on aurait fermé un défaut documentaire en bloquant
+      // le dispositif antimalware.
+      'piece_en_vigueur',
       'portee_figee',
       'privileges',
       // TREIZIÈME, apporté par `011_privileges_definer.sql` (constat Q-136) : aucune
@@ -3972,6 +3988,13 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // `010` avait fermé une fuite et en avait rouvert une plus petite par la fonction
       // même qui la fermait — un « grant » sans « revoke … from public » ne retire rien.
       'privileges_definer',
+      // DIX-SEPTIÈME, apporté par `019_publication_exige_approbation.sql` (action D5) :
+      // le déclencheur qui refuse la publication d'un document dont le circuit
+      // d'approbation n'est pas conclu existe, il est armé en « always », et le statut
+      // « en validation » est toujours admis par `ck_documents_statut`. Ce dernier point
+      // est le plus discret : le déclencheur resterait là, correct, et son premier cas
+      // ne pourrait simplement plus se produire.
+      'publication_documents',
       // NEUVIÈME, apporté par `007_authentification.sql` : il vérifie que le substrat
       // de session est bien refermé sur `f_authentification()`. Cette liste est écrite
       // à la main À DESSEIN (CLAUDE.md §3, cas (a)) — une migration qui la fait rougir

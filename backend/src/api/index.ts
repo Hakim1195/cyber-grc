@@ -566,6 +566,19 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   /* -------------------------------------------------------------------
    *  Traitement des erreurs — le seul chemin de sortie d'un échec
    * ------------------------------------------------------------------- */
+  /**
+   * L'identifiant que l'URL désigne, quand elle en désigne un.
+   *
+   * Lecture défensive : `params` n'est typé nulle part comme portant ce champ,
+   * et le gestionnaire d'erreurs s'exécute aussi pour des routes qui n'en ont
+   * pas — y compris quand l'échec est justement un refus de validation du
+   * schéma, donc avant que quoi que ce soit soit garanti.
+   */
+  const identifiantDeLUrl = (requete: FastifyRequest): string | null => {
+    const params = requete.params as { identifiant?: unknown } | undefined;
+    return typeof params?.identifiant === 'string' ? params.identifiant : null;
+  };
+
   instance.setErrorHandler((erreur: unknown, requete, reponse) => {
     // Un refus de validation de Fastify est une entrée malformée : il porte un
     // message qui décrit le SCHÉMA, jamais la donnée. On le reformule tout de
@@ -597,6 +610,47 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       );
     } else {
       requete.log.warn(trace, 'Requête refusée');
+    }
+
+    /* ── UN REFUS DE PUBLICATION LAISSE UNE TRACE ─────────────────────
+     *
+     *  Action D5 de la vague 9. La question d'audit d'un système documentaire
+     *  n'est pas seulement *« qui a validé cette politique ? »* — c'est aussi
+     *  *« qui a essayé de la publier sans l'avoir fait valider ? »*. Le refus
+     *  vient de la base (`GRC06`, `019_publication_exige_approbation.sql`) et
+     *  il est **journalisé avec sa route**, comme le refus de droit du crochet
+     *  `onRequest`.
+     *
+     *  ⚠️ **Seul `GRC06` est tracé ici, et pas tous les refus.** Le
+     *  `CONVENTIONS.md` §29.3 le dit : *« le refus de droit ne doit pas devenir
+     *  une arme »* — écrire une entrée par erreur donnerait de quoi faire
+     *  travailler le serveur en boucle. Celui-ci n'est atteignable qu'après
+     *  authentification ET droit d'écriture sur le domaine `documents`, et il
+     *  suppose une transaction qui a déjà tourné : le coût est celui d'une
+     *  écriture légitime.
+     *
+     *  Le `void` est délibéré et suit le `void reponse.code(...)` ci-dessous :
+     *  `tracer` avale ses propres échecs vers le journal technique, et rien de
+     *  ce qui se passe ici ne doit retarder ou empêcher la réponse. */
+    if (traduite.codeGrc === 'GRC06' && requete.sessionGrc !== undefined) {
+      void tracer(requete.log, requete.sessionGrc, {
+        action: 'refus_autorisation',
+        // Phrase FIXE (§29.5) : ce qui varie part en `jsonb`.
+        resume: 'Publication refusée : le circuit d’approbation du document n’est pas conclu.',
+        adresseIp: requete.ip,
+        entiteType: 'documents',
+        // ⚠️ L'identifiant vient du PARAMÈTRE D'URL, pas de l'erreur : la
+        // traduction de `GRC06` rend le message de la base tel quel et ne nomme
+        // aucune ligne. Une trace qui dirait « une publication a été refusée »
+        // sans dire laquelle obligerait à recouper à la main sur trois ans de
+        // rétention.
+        entiteId: identifiantDeLUrl(requete) ?? traduite.identifiant ?? null,
+        valeursApres: {
+          methode: requete.method,
+          route: requete.routeOptions.url ?? null,
+          code_grc: traduite.codeGrc,
+        },
+      });
     }
 
     void reponse.code(traduite.statut).send({ ...traduite.corps(), reference: requete.id });

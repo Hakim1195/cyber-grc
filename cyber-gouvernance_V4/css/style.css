@@ -1593,3 +1593,13 @@ h3.imp-etat-pret, h3.imp-etat-refus, h3.imp-etat-apercu, h3.imp-etat-info { marg
    CAPITALISATION, et elle seule : les couleurs sémantiques du design system
    restent celles des tokens. Vu sur capture d'écran, pas déduit. */
 .rfa-carte .status { text-transform: none; }
+
+/* ── Gestion documentaire — la version qui fait foi (action D1, vague 9) ──
+   Deux classes seulement, et la seconde compte plus qu'elle n'en a l'air :
+   `.doc-verrouille` marque un champ passé en LECTURE parce qu'une pièce jointe
+   lui donne sa valeur. Il reste envoyé par le formulaire (`readOnly`, jamais
+   `disabled` — un champ désactivé ne part pas, et l'enregistrement suivant
+   effacerait la version en silence) ; il doit donc se DISTINGUER à l'œil d'un
+   champ saisissable, sinon l'utilisateur croit à une panne de clavier. */
+.doc-note { font-size: 0.78rem; color: var(--text-muted); margin: 4px 0 0; line-height: 1.5; }
+.doc-verrouille { background: var(--bg-body); color: var(--text-muted); cursor: default; }

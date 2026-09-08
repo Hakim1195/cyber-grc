@@ -3,8 +3,15 @@
 //
 // Gestion documentaire des POLITIQUES (chantier 5). Registre des documents de
 // gouvernance (PSSI, charte, procédures…) : version, propriétaire, statut, date de
-// prochaine revue (avec alertes), emplacement (l'app NE stocke PAS les fichiers),
-// lien vers les référentiels. Canevas de plans fournis.
+// prochaine revue (avec alertes), lien vers les référentiels. Canevas de plans fournis.
+//
+// ⚠️ **La phrase « l'app NE stocke PAS les fichiers » était vraie du produit
+// navigateur, et elle est FAUSSE depuis le lot L6.** L'application détient les
+// pièces jointes de la fiche : elle les analyse, en garde l'empreinte SHA-256 et
+// les délivre elle-même. Ce qu'elle ne détient pas, c'est ce que désigne le champ
+// « Document resté ailleurs » — une référence vers une GED ou un partage réseau.
+// Les deux coexistent à dessein ; ce qui n'est pas admis, c'est de les confondre
+// (action D4 de la vague 9, `docs/PLAN_EXECUTION.md` §3).
 
 const DocumentsModule = (() => {
 
@@ -17,7 +24,11 @@ const DocumentsModule = (() => {
     const TYPES = ["Politique de sécurité (PSSI)", "Charte informatique", "Procédure",
         "Politique de sauvegarde", "Plan de continuité (PCA/PRA)", "Politique de contrôle d'accès",
         "Politique de gestion des incidents", "Registre", "Autre"];
-    const STATUTS = ["brouillon", "en vigueur", "à réviser", "obsolète"];
+    // Relevés dans `ck_documents_statut` (`003_metier_operations.sql`, étendu par la
+    // migration 019). « en validation » est l'état pendant lequel le circuit
+    // d'approbation tourne : depuis cet état, le serveur REFUSE le passage en vigueur
+    // tant que l'étape de publication n'est pas approuvée (GRC06).
+    const STATUTS = ["brouillon", "en validation", "en vigueur", "à réviser", "obsolète"];
 
     // Canevas de plans (pré-remplissent le champ « notes / plan »).
     const CANEVAS = {
@@ -29,6 +40,7 @@ const DocumentsModule = (() => {
     function fmtDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : "—"; }
     function statutBadge(s) {
         return UI.mappedBadge(s, { "en vigueur": "status-conforme", "à réviser": "status-partiellement-conforme",
+            "en validation": "status-partiellement-conforme",
             "brouillon": "status-non-applicable", "obsolète": "status-non-conforme" }, "status-non-applicable");
     }
 
@@ -67,7 +79,7 @@ const DocumentsModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>Gestion documentaire</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">Registre des politiques et documents de sécurité. ${Help.tip("Une documentation à jour (PSSI, charte, procédures) est attendue par la plupart des référentiels et par vos clients. L'application référence l'emplacement des documents mais ne stocke pas les fichiers.")}</p>
+                        <p style="color:var(--text-muted); margin-top:5px;">Registre des politiques et documents de sécurité. ${Help.tip("Une documentation à jour (PSSI, charte, procédures) est attendue par la plupart des référentiels et par vos clients. Chaque fiche peut porter ses fichiers : l'application les analyse, en garde l'empreinte et les délivre elle-même. La pièce marquée « en vigueur » est celle qui fait foi, et c'est elle qui donne le numéro de version de la fiche. Le champ « Document resté ailleurs » ne désigne, lui, qu'une référence externe.")}</p>
                     </div>
                     <button id="addBtn" style="background:var(--primary);">Nouveau document</button>
                 </div>
@@ -142,13 +154,25 @@ const DocumentsModule = (() => {
                     <div style="margin-top:20px;"><button id="saveBtn">Mettre à jour</button></div>
                 </div>
                 ${typeof PiecesModule !== "undefined" ? PiecesModule.hoteHtml() : ""}
+                ${typeof ApprobationsModule !== "undefined" ? ApprobationsModule.encartHtml("documents", doc.id) : ""}
             </section>`;
         wireCanevas();
         // Pièces jointes (lot L6) : le panneau se monte APRÈS le rendu de la
         // fiche — c'est le seul moment où son conteneur existe. Le champ
         // « Emplacement » ci-dessus désigne un fichier resté ailleurs ; celui-ci
         // désigne un fichier que l'application détient, analyse et délivre.
-        if (typeof PiecesModule !== "undefined") PiecesModule.monter("documents", doc.id);
+        if (typeof PiecesModule !== "undefined") {
+            PiecesModule.monter("documents", doc.id, { auChargement: refleterVersionEnVigueur });
+        }
+        // ── D5 : le circuit d'approbation, SUR la fiche ────────────────────
+        //
+        // Le lot L8 livrait l'encart et personne ne l'appelait : le circuit
+        // vivait sur son propre écran, et la fiche ignorait qu'il existait. C'est
+        // le chaînon que l'action D5 pose — et la barrière, elle, est dans la
+        // base (`trg_documents_publication`, code GRC06), pas ici.
+        if (typeof ApprobationsModule !== "undefined") {
+            ApprobationsModule.brancherEncart("documents", doc.id);
+        }
         document.getElementById("saveBtn").onclick = () => {
             const data = collectForm();
             if (!data) return;
@@ -163,6 +187,48 @@ const DocumentsModule = (() => {
             toast: "Document supprimé.",
             redirect: "/documents"
         });
+    }
+
+    /**
+     * Le champ « Version » cesse d'être une saisie libre dès qu'un fichier fait foi.
+     *
+     * ⚠️ **Il devient une LECTURE, il ne disparaît pas.** Le masquer laisserait
+     * croire que la fiche ne porte plus de version ; le laisser modifiable
+     * rouvrirait très exactement le défaut que l'action D1 ferme — « 2.1 » frappé
+     * ici au-dessus du PDF de la 1.4. On l'affiche, on dit d'où il vient, et on
+     * dit où le changer.
+     *
+     * ⚠️ **`readOnly`, et surtout pas `disabled`.** Un champ désactivé n'est pas
+     * envoyé par le formulaire : `collectForm()` lirait une chaîne vide et
+     * l'enregistrement suivant **effacerait la version** — une perte de donnée
+     * silencieuse, sur le geste le plus banal qui soit.
+     *
+     * Appelée par `PiecesModule` après CHAQUE lecture de la liste : le champ suit
+     * donc la désignation sans que la fiche soit redessinée.
+     */
+    function refleterVersionEnVigueur(etat) {
+        const champ = document.getElementById("version");
+        const note = document.getElementById("versionOrigine");
+        if (!champ || !note) return;
+        const piece = etat && etat.enVigueur;
+        if (!piece) {
+            champ.readOnly = false;
+            champ.classList.remove("doc-verrouille");
+            note.hidden = true;
+            note.textContent = "";
+            return;
+        }
+        champ.readOnly = true;
+        champ.classList.add("doc-verrouille");
+        champ.value = piece.version_piece || "";
+        note.hidden = false;
+        // `textContent` : le nom du fichier vient d'un déposant, et il ne
+        // construit aucun balisage ici.
+        note.textContent = piece.version_piece
+            ? "Version donnée par la pièce en vigueur (" + (piece.nom_fichier || "fichier") +
+              "). Pour la changer, déposez une nouvelle version et faites-la faire foi."
+            : "La pièce en vigueur (" + (piece.nom_fichier || "fichier") + ") ne porte aucun " +
+              "numéro de version. Déposez une nouvelle version en la numérotant.";
     }
 
     /* =========================
@@ -180,14 +246,14 @@ const DocumentsModule = (() => {
             <div class="form-group"><label>Titre <span style="color:red">*</span></label><input id="titre" value="${escapeHtml(doc.titre || "")}" placeholder="Ex : Politique de sécurité du SI (PSSI)" /></div>
             <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:15px;">
                 <div class="form-group"><label>Type</label><select id="type">${typeOpts}</select></div>
-                <div class="form-group"><label>Version</label><input id="version" value="${escapeHtml(doc.version || "")}" placeholder="1.0" /></div>
+                <div class="form-group"><label>Version ${Help.tip("Numéro de version du document. Dès qu'une pièce jointe de cette fiche est marquée « en vigueur », c'est ELLE qui donne ce numéro : le champ devient alors une lecture, et il suit le fichier qui fait foi. Tant qu'aucun fichier n'est détenu ici, il reste saisissable.")}</label><input id="version" value="${escapeHtml(doc.version || "")}" placeholder="1.0" /><p id="versionOrigine" class="doc-note" hidden></p></div>
                 <div class="form-group"><label>Statut</label><select id="statut">${statutOpts}</select></div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                 <div class="form-group"><label>Propriétaire</label><input id="proprietaire" list="personnes-list" value="${escapeHtml(doc.proprietaire || "")}" placeholder="Nom ou fonction" /></div>
                 <div class="form-group"><label>Prochaine revue ${Help.tip("Date à laquelle le document devra être revu. Une alerte apparaît à l'approche ou au dépassement de l'échéance.")}</label><input type="date" id="date_revue" value="${escapeHtml(doc.date_revue || "")}" /></div>
             </div>
-            <div class="form-group"><label>Emplacement ${Help.tip("Où trouver le document (chemin réseau, GED, URL interne…). L'application ne stocke pas le fichier lui-même.")}</label><input id="emplacement" value="${escapeHtml(doc.emplacement || "")}" placeholder="Ex : \\\\serveur\\qualite\\PSSI_v1.pdf" /></div>
+            <div class="form-group"><label>Document resté ailleurs ${Help.tip("Une RÉFÉRENCE vers un document que l'application ne détient pas : chemin réseau, GED, intranet, coffre qualité. L'application ne la lit pas, ne la vérifie pas, ne la délivre pas — et ne saura jamais si ce qui est au bout a changé. À ne pas confondre avec les pièces jointes de cette fiche, plus bas, qui sont détenues, analysées et délivrées ici.")}</label><input id="emplacement" value="${escapeHtml(doc.emplacement || "")}" placeholder="Ex : \\\\serveur\\qualite\\PSSI_v1.pdf" /><p class="doc-note">Référence externe — le fichier n'est pas détenu par l'application.</p></div>
             <div class="form-group"><label>Référentiels couverts</label>${refsHtml}</div>
             <div class="form-group">
                 <label>Plan / notes ${Help.tip("Sommaire ou notes. Utilisez un modèle pour partir d'un plan type.")}

@@ -772,7 +772,8 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // d'identités, d'adresses IP et de valeurs avant/après — et l'export en
     // livrerait le fichier. C'est la table dont l'objet est de faire preuve ;
     // elle ne peut pas être la seule à sortir de la barrière.
-    // Les huit routes des pièces jointes (lot L6). Elles sont ici pour la raison
+    // Les neuf routes des pièces jointes (lot L6, plus la désignation de la
+    // version en vigueur du lot L16). Elles sont ici pour la raison
     // qui vaut pour toutes : hors développement, une pièce servie sans identité
     // livrerait un document que son déposant croyait cloisonné. ⚠️ Cet essai
     // était vert **parce que la couture était débranchée** — il rougit dès que
@@ -782,6 +783,11 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     ['GET', '/api/pieces/risques/RISK-A', undefined],
     ['GET', '/api/pieces/risques/RISK-A/PJ-A', undefined],
     ['DELETE', '/api/pieces/risques/RISK-A/PJ-A', undefined],
+    // La désignation de la version en vigueur (lot L16, action D1). Elle est ici
+    // pour la même raison, et une de plus : c'est une ÉCRITURE — servie sans
+    // identité, elle laisserait n'importe qui décider quelle version d'une
+    // politique fait foi dans une filiale qu'il ne connaît pas.
+    ['POST', '/api/pieces/documents/DOC-A/PJ-A/en-vigueur', undefined],
     ['POST', '/api/pieces/logo', undefined],
     ['GET', '/api/pieces/logo', undefined],
     ['GET', '/api/pieces/logo/PJ-A', undefined],

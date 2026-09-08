@@ -119,6 +119,23 @@ const PiecesModule = (() => {
     /** Identifiant du conteneur que la fiche pose, et que ce module remplit. */
     const HOTE = "piecesJointes";
 
+    /**
+     * L'entité sur laquelle « faire foi » veut dire quelque chose.
+     *
+     * ── Pourquoi l'écran restreint là où la route ne restreint pas ──────────
+     *
+     * `POST /api/pieces/<entite>/<id>/<piece>/en-vigueur` accepte **toute**
+     * entité, et c'est juste : l'invariant « au plus une pièce fait foi par
+     * porteur » est général, et l'index qui le tient l'est aussi. Ce qui n'est
+     * pas général, c'est le SENS : « la version en vigueur » est le vocabulaire
+     * d'un registre documentaire. Offrir le bouton sur une fiche d'incident
+     * poserait une question à laquelle personne n'a de réponse.
+     *
+     * La restriction est donc d'ÉCRAN, et elle est dite ici — pas une barrière :
+     * le serveur reste la barrière, et il ne refuse pas ce geste ailleurs.
+     */
+    const ENTITE_DOCUMENTS = "documents";
+
     /* =====================================================================
        ÉTAT DU PANNEAU
     ===================================================================== */
@@ -129,6 +146,20 @@ const PiecesModule = (() => {
     let chargement = false;
     let erreurChargement = null;
     let depotEnCours = false;
+    /** Désignation « en vigueur » en cours : évite le double clic. */
+    let designationEnCours = false;
+    /**
+     * Ce que la fiche veut savoir quand la liste vient d'être lue.
+     *
+     * ⚠️ **Une fonction fournie par l'appelant, jamais une écriture dans SON
+     * balisage.** Le panneau pourrait aller désactiver lui-même le champ
+     * « Version » de la fiche document — il en connaît l'identifiant. Ce serait
+     * un couplage invisible : le jour où la fiche renomme son champ, le panneau
+     * cesserait de le trouver **sans un mot**, et la version redeviendrait une
+     * saisie libre sans que rien ne le dise. On rend l'information, la fiche en
+     * fait ce qu'elle veut.
+     */
+    let auChargement = null;
     /**
      * Borne de taille **annoncée par le serveur**, ou `null`.
      *
@@ -213,6 +244,32 @@ const PiecesModule = (() => {
         };
     }
 
+    /**
+     * Dit à la fiche ce qu'elle a besoin de savoir, si elle l'a demandé.
+     *
+     * Le rappel ne peut pas casser le panneau : une fiche qui lèverait laisserait
+     * la liste des pièces à l'écran, ce qui est la seule chose que ce module
+     * promet. L'échec part au journal technique — muet à l'écran serait pire,
+     * mais bruyant à l'écran ferait passer un défaut d'affichage pour un
+     * incident de sécurité.
+     */
+    function prevenirLaFiche() {
+        if (!auChargement) return;
+        try {
+            auChargement({ entiteType: entiteType, entiteId: entiteId, enVigueur: enVigueur() });
+        } catch (e) {
+            console.info("Pièces jointes — la fiche n'a pas pu être prévenue :", e);
+        }
+    }
+
+    /** La pièce qui fait foi, ou `null`. Lue dans la liste, jamais mémorisée à part. */
+    function enVigueur() {
+        for (let i = 0; i < liste.length; i += 1) {
+            if (liste[i] && liste[i].en_vigueur === true) return liste[i];
+        }
+        return null;
+    }
+
     /** Taille lisible. Aucune donnée utilisateur ici : c'est un nombre. */
     function tailleLisible(octets) {
         const n = Number(octets);
@@ -240,7 +297,8 @@ const PiecesModule = (() => {
     function ligneHtml(piece) {
         const etat = etatLisible(piece);
         const nom = esc(piece.nom_fichier || "(sans nom)");
-        const action = etat.delivrable
+        const faitFoi = piece.en_vigueur === true;
+        const telechargement = etat.delivrable
             ? '<button type="button" class="pj-telecharger btn-secondary" ' +
               'data-piece="' + esc(piece.id) + '" ' +
               'title="Télécharger — l\'extraction est journalisée">Télécharger</button>'
@@ -249,14 +307,26 @@ const PiecesModule = (() => {
             // `disabled = false` venu, et il suggère qu'un octet est à portée.
             // Une pièce non délivrable n'en offre AUCUN — on écrit pourquoi.
             : '<span class="pj-indisponible" title="' + esc(etat.explication) + '">Non délivrable</span>';
+        // Le geste n'est proposé QUE là où il veut dire quelque chose, et jamais
+        // sur celle qui fait déjà foi — un bouton qui ne changerait rien.
+        const designation = (entiteType === ENTITE_DOCUMENTS && etat.delivrable && !faitFoi)
+            ? ' <button type="button" class="pj-designer btn-secondary" ' +
+              'data-piece="' + esc(piece.id) + '"' + (designationEnCours ? " disabled" : "") + ' ' +
+              'title="Cette version devient celle qui fait foi ; l\'actuelle passe à ' +
+              'l\'historique, sans être supprimée">Faire foi</button>'
+            : "";
         return (
-            '<tr class="pj-ligne" data-piece="' + esc(piece.id) + '">' +
-            '<td class="pj-nom">' + nom + "</td>" +
+            '<tr class="pj-ligne' + (faitFoi ? " pj-en-vigueur" : "") + '" ' +
+            'data-piece="' + esc(piece.id) + '">' +
+            '<td class="pj-nom">' + nom +
+            (faitFoi ? ' <span class="status status-conforme pj-foi">En vigueur</span>' : "") +
+            "</td>" +
+            "<td>" + esc(piece.version_piece || "—") + "</td>" +
             "<td>" + esc(tailleLisible(piece.taille_octets)) + "</td>" +
             '<td><span class="status ' + etat.teinte + '">' + esc(etat.libelle) + "</span></td>" +
             "<td>" + fmtHorodatage(piece.cree_le || piece.depose_le) + "</td>" +
             "<td>" + esc(piece.cree_par || piece.depose_par || "—") + "</td>" +
-            '<td class="pj-action">' + action + "</td>" +
+            '<td class="pj-action">' + telechargement + designation + "</td>" +
             "</tr>"
         );
     }
@@ -276,7 +346,7 @@ const PiecesModule = (() => {
         }
         return (
             '<table class="data-table pj-table"><thead><tr>' +
-            "<th>Fichier</th><th>Taille</th><th>Analyse</th><th>Déposé le</th>" +
+            "<th>Fichier</th><th>Version</th><th>Taille</th><th>Analyse</th><th>Déposé le</th>" +
             "<th>Par</th><th></th>" +
             "</tr></thead><tbody>" +
             liste.map(ligneHtml).join("") +
@@ -294,6 +364,9 @@ const PiecesModule = (() => {
             ".pj-erreur { margin:10px 0; padding:12px 14px; border-radius:var(--radius-sm); background:#fff3cd; color:#856404; border-left:4px solid var(--color-warning,#e0a800); font-size:0.9rem; }" +
             ".pj-depot { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }" +
             ".pj-avertissement { margin-top:12px; font-size:0.78rem; color:var(--text-muted); line-height:1.5; }" +
+            ".pj-en-vigueur td { background:rgba(46,125,50,0.06); }" +
+            ".pj-foi { text-transform:none; margin-left:6px; }" +
+            ".pj-version { width:9rem; }" +
             "</style>";
     }
 
@@ -308,6 +381,7 @@ const PiecesModule = (() => {
         try {
             const charge = await Api.pieces(entiteType, entiteId);
             liste = normaliserListe(charge);
+            prevenirLaFiche();
             tailleMaxAnnoncee = borneAnnoncee(charge);
         } catch (e) {
             liste = [];
@@ -486,7 +560,7 @@ const PiecesModule = (() => {
      * côté serveur, dans cet ordre, sur ce que le serveur reçoit — et l'empreinte
      * est calculée sur ce qui a été **écrit**, pas sur ce qui a été **reçu**.
      */
-    async function deposer(fichier) {
+    async function deposer(fichier, version) {
         if (!fichier) return false;
         if (depotEnCours) return false;
 
@@ -507,7 +581,7 @@ const PiecesModule = (() => {
             // Le fichier part TEL QUEL, en `multipart/form-data` : c'est ce que
             // la route attend, et cela évite d'enfler un envoi de 25 Mio d'un
             // tiers en le passant par base64.
-            await Api.deposerPiece(entiteType, entiteId, fichier);
+            await Api.deposerPiece(entiteType, entiteId, fichier, undefined, version);
             if (window.showToast) {
                 window.showToast("Fichier déposé. Il sera téléchargeable une fois l'analyse " +
                     "antivirale terminée.", "success");
@@ -517,6 +591,57 @@ const PiecesModule = (() => {
             return true;
         } catch (e) {
             depotEnCours = false;
+            if (window.showToast) window.showToast(messageDErreur(e), "error");
+            rafraichir();
+            return false;
+        }
+    }
+
+    /* =====================================================================
+       LA VERSION QUI FAIT FOI (action D1)
+    ===================================================================== */
+
+    /**
+     * Désigne une pièce comme celle qui fait foi.
+     *
+     * ⚠️ **Aucune confirmation n'est demandée, et c'est délibéré** : le geste ne
+     * détruit rien. L'ancienne version passe à l'historique, reste dans la liste
+     * et reste téléchargeable — c'est même la raison d'être du lot. Une boîte de
+     * dialogue apprendrait à cliquer « oui » sans lire, ce qui coûte cher le
+     * jour où l'on en pose une devant un geste qui, lui, détruit.
+     *
+     * ⚠️ **Ce qui change AUSSI, et que l'écran doit dire** : sur une fiche
+     * document, la version de la fiche devient celle de la pièce. On le dit dans
+     * le message de succès plutôt que dans un avertissement préalable — c'est
+     * l'effet voulu, pas un risque.
+     */
+    async function designer(pieceId) {
+        if (designationEnCours) return false;
+        const piece = liste.find(p => String(p.id) === String(pieceId));
+        if (piece) {
+            const etat = etatLisible(piece);
+            if (!etat.delivrable) {
+                if (window.showToast) window.showToast(etat.explication, "error");
+                return false;
+            }
+        }
+        designationEnCours = true;
+        rafraichir();
+        try {
+            const promue = await Api.marquerPieceEnVigueur(entiteType, entiteId, pieceId);
+            designationEnCours = false;
+            if (window.showToast) {
+                const v = promue && promue.version_piece;
+                window.showToast(
+                    v ? "Cette pièce fait désormais foi ; la fiche porte la version " + v + "."
+                      : "Cette pièce fait désormais foi. Elle ne porte aucun numéro de " +
+                        "version : la fiche n'en annonce donc plus.",
+                    "success");
+            }
+            await charger();
+            return true;
+        } catch (e) {
+            designationEnCours = false;
             if (window.showToast) window.showToast(messageDErreur(e), "error");
             rafraichir();
             return false;
@@ -581,8 +706,16 @@ const PiecesModule = (() => {
             ? ' <span style="font-size:0.78rem; color:var(--text-muted);">(jusqu\'à ' +
               esc(tailleLisible(tailleMaxAnnoncee)) + ")</span>"
             : "";
+        // Le numéro de version se saisit AU MOMENT DU DÉPÔT, avec le fichier
+        // qu'il désigne. C'est tout l'objet du lot : « 2.1 » frappé dans un champ
+        // voisin pouvait surmonter le PDF de la 1.4 sans que rien ne le voie.
+        const version = (entiteType === ENTITE_DOCUMENTS)
+            ? '<input type="text" id="pjVersion" class="pj-version" maxlength="60" ' +
+              'placeholder="Version (ex. 1.0)" aria-label="Numéro de version du fichier">'
+            : "";
         return '<div class="pj-depot">' +
             '<input type="file" id="pjFichier" aria-label="Fichier à déposer">' +
+            version +
             '<button type="button" id="pjDeposerBtn"' + (depotEnCours ? " disabled" : "") + ">" +
             (depotEnCours ? "Dépôt en cours…" : "Déposer") + "</button>" + borne +
             "</div>";
@@ -612,7 +745,12 @@ const PiecesModule = (() => {
                 if (window.showToast) window.showToast("Choisissez d'abord un fichier.", "info");
                 return;
             }
-            deposer(fichier);
+            const champVersion = document.getElementById("pjVersion");
+            deposer(fichier, champVersion ? champVersion.value.trim() : undefined);
+        });
+        document.querySelectorAll(".pj-designer").forEach(bouton => {
+            // Relu dans le DOM au moment du clic, jamais capturé (`CLAUDE.md` §3).
+            bouton.addEventListener("click", () => designer(bouton.dataset.piece));
         });
         // Les droits s'appliquent au balisage qui vient d'apparaître : le panneau
         // se dessine APRÈS la navigation, donc après le passage de `js/app.js`.
@@ -628,7 +766,7 @@ const PiecesModule = (() => {
      * Monte le panneau sur un enregistrement. Appelée par la fiche, après son
      * `app.innerHTML = …`.
      */
-    function monter(type, id) {
+    function monter(type, id, options) {
         // ⚠️ **Un garde-fou que rien n'appelle est un commentaire** (`CONVENTIONS.md`
         // §18.4). `verifierVocabulaire` est donc appelée ici, une fois, plutôt que
         // laissée à la disposition de qui y penserait.
@@ -638,6 +776,9 @@ const PiecesModule = (() => {
         liste = [];
         erreurChargement = null;
         depotEnCours = false;
+        designationEnCours = false;
+        auChargement = (options && typeof options.auChargement === "function")
+            ? options.auChargement : null;
         if (!document.getElementById(HOTE)) return;
         rafraichir();
         // On ne redemande pas à un serveur qui a déjà dit qu'il n'a pas la route.
@@ -681,10 +822,15 @@ const PiecesModule = (() => {
         // Exposés pour le banc d'essai : la garde d'export se vérifie en appelant
         // la fonction, jamais en constatant qu'un bouton est grisé — c'est
         // exactement la distinction que le constat Q-89 a coûtée.
-        telecharger, deposer,
+        telecharger, deposer, designer, enVigueur,
         // Purement fonctionnels : ils n'émettent rien et se prouvent sans réseau.
         etatLisible, normaliserListe, verifierVocabulaire,
-        contrat: Object.freeze({ hote: HOTE, etats: Object.keys(ETATS) })
+        contrat: Object.freeze({
+            hote: HOTE,
+            etats: Object.keys(ETATS),
+            /** L'entité sur laquelle l'écran offre « faire foi » — voir ENTITE_DOCUMENTS. */
+            entiteVersionnee: ENTITE_DOCUMENTS
+        })
     };
 })();
 

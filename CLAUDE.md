@@ -51,11 +51,29 @@
 > refusé*. L'arbitrage du `docs/PLAN_EXECUTION.md` §0 bis fait qu'une porte refusée
 > **n'arrête plus la vague : elle trie** en trois classes.
 >
-> **Un lot neuf attend, hors chemin de mise en service :** **L16, le système documentaire**
+> **Un lot neuf avance, hors chemin de mise en service :** **L16, le système documentaire**
 > (vague 9, décidée le 07/09/2026). ⚠️ **Le coffre existe déjà** — L6 livre le dépôt, ses huit
 > contrôles et le panneau monté sur la fiche document ; `documents.filiale_id` nul porte déjà la
-> PSSI de portée Groupe. **Ne pas le refaire.** Ce qui manque est la gestion : version en
-> vigueur, ~~zéro orphelin~~, recherche, source de vérité unique, approbation.
+> PSSI de portée Groupe. **Ne pas le refaire.** Ce qui manquait était la gestion :
+> ~~version en vigueur~~, ~~zéro orphelin~~, recherche, ~~source de vérité unique~~,
+> ~~approbation~~ — **quatre actions sur cinq sont livrées** (D2 le 07/09 ; **D1, D4 et D5 le
+> 08/09**). **Reste D3, la recherche, et elle ne se joue pas avant que S8 soit franchie** : une
+> recherche est un **oracle**, c'est la surface la plus propice à une fuite entre filiales.
+>
+> ✅ **Les actions D1, D4 et D5 sont LIVRÉES le 08/09/2026** — migrations `018` et `019`.
+> **D1** : la pièce marquée « en vigueur » est celle qui fait foi (au plus une par porteur **et
+> par filiale** — l'unicité porte `filiale_id`, sans quoi une filiale recevrait un doublon causé
+> par une ligne invisible d'une autre, constat Q-2), et **c'est elle qui donne le numéro de
+> version de la fiche** au lieu d'une saisie libre. **D4** : `documents.emplacement` devient
+> « Document resté ailleurs » — une référence externe qu'on ne confond plus avec un fichier
+> détenu ici ; ⚠️ la phrase « l'application ne stocke pas les fichiers », vraie du produit
+> navigateur et **fausse depuis L6**, est retirée des trois endroits où elle traînait. **D5** :
+> un document « en validation » ne passe « en vigueur » qu'avec une **publication approuvée**
+> (code **`GRC06`**, refus journalisé avec sa route) — et la règle mord **dès qu'un circuit
+> existe**, sans quoi il suffisait de repasser par « brouillon ». ⚠️ **Ce qu'elle ne fait pas**
+> (constat **Q-247**) : elle ne vérifie pas que l'approbation porte encore sur le contenu
+> actuel — cela vit dans `empreinte_objet`, affiché par l'encart, et le refaire en SQL
+> dupliquerait une liste d'exclusion.
 >
 > ✅ **L'action D2 — « zéro orphelin » — est LIVRÉE le 07/09/2026**, jouée en premier parce
 > qu'elle rapproche de la porte plutôt qu'elle ne l'éloigne : migration `017`, un déclencheur
@@ -735,7 +753,7 @@ sur l'**Active Directory** du groupe.
 | **L13 — Cycle de vie** | ✅ **livré** (05/09/2026, vague 6) |
 | **L14 — Documentation** | ✅ **livré** (05/09/2026, vague 7) |
 | **L15 — Durcissement final** | 🟡 **en cours** (vague 8) — **porte S8 refusée six fois**, c'est la condition de mise en service |
-| **L16 — Système documentaire** | ⬜ **à faire** (vague 9, décidée le 07/09/2026) — le coffre est livré avec L6 ; il manque la **gestion** documentaire. `docs/PLAN_EXECUTION.md` §3 |
+| **L16 — Système documentaire** | 🟡 **quatre actions sur cinq livrées** (vague 9) — D2 le 07/09 (les pièces suivent leur porteur), **D1, D4 et D5 le 08/09** (version en vigueur, référence externe assumée, publication soumise au circuit). **Reste D3, la recherche, pas avant S8.** `docs/PLAN_EXECUTION.md` §3 |
 
 Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 `grc-backup`** (`backend/src/reprise/**`, portage serveur des migrations v1 → v12,

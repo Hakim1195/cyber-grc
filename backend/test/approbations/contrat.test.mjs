@@ -82,8 +82,19 @@ describe('Le vocabulaire du circuit est celui de 001_socle.sql', () => {
     // Un balayage qui rendrait toujours la même chose déclarerait vertes trois
     // listes fausses. On lui donne une contrainte dont on connaît le contenu et
     // qui n'est PAS l'une des trois.
+    // ⚠️ « en validation » est arrivé avec la migration `019` (action D5) : c'est
+    // l'état pendant lequel CE circuit-ci tourne, et le déclencheur
+    // `trg_documents_publication` refuse d'en sortir vers « en vigueur » tant que
+    // l'étape de publication n'est pas approuvée. Cette liste a rougi en
+    // l'accueillant, ce qui est très exactement son office.
     const documents = await valeursDuCheck('ck_documents_statut');
-    assert.deepEqual(documents, ['brouillon', 'en vigueur', 'obsolète', 'à réviser']);
+    assert.deepEqual(documents, [
+      'brouillon',
+      'en validation',
+      'en vigueur',
+      'obsolète',
+      'à réviser',
+    ]);
     assert.notDeepEqual(documents, [...circuit.STATUTS].sort());
   });
 

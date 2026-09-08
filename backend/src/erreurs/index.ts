@@ -500,6 +500,23 @@ export function traduireErreurPostgres(
         codeGrc: 'GRC05',
       });
 
+    case 'GRC06':
+      // Un document « en validation » — ou dont un circuit d'approbation existe — a
+      // tenté de passer « en vigueur » sans que la publication soit approuvée
+      // (`019_publication_exige_approbation.sql`, action D5 de la vague 9).
+      //
+      // ⚠️ **Le message de la base est rendu tel quel**, comme pour `GRC05` : il est
+      // écrit POUR l'utilisateur et il dit quoi faire — ouvrir le circuit depuis la
+      // fiche, faire prononcer les étapes qui manquent. Un message générique
+      // apprendrait qu'on a été refusé sans apprendre par quoi.
+      return new ErreurApplicative({
+        code: 'contrainte_base',
+        statut: 409,
+        message: erreur.message,
+        detailJournal,
+        codeGrc: 'GRC06',
+      });
+
     case 'GRC04':
       // Le périmètre de session n'a pas été positionné, ou il est incohérent.
       // Ce n'est jamais une faute de l'utilisateur : c'est un défaut de

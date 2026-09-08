@@ -112,7 +112,7 @@ async function journalDepuis(numero) {
 }
 
 describe('Le montage lui-même', () => {
-  test('les huit routes sont montées, et CHACUNE déclare sa classe d’accès', () => {
+  test('les neuf routes sont montées, et CHACUNE déclare sa classe d’accès', () => {
     // Fastify ajoute un HEAD pour chaque GET (`exposeHeadRoutes`) : il hérite de
     // la déclaration de son GET, et il est compté ici plutôt que filtré — une
     // route qui existe sans classe d'accès est refusée par le crochet, HEAD
@@ -122,7 +122,9 @@ describe('Le montage lui-même', () => {
       assert.ok(typeof route.acces.action === 'string');
     }
     const declarees = serveur.routes.filter((r) => r.methode !== 'HEAD');
-    assert.equal(declarees.length, 8, JSON.stringify(declarees, null, 2));
+    // Huit routes du lot L6, plus la désignation de la version en vigueur (L16,
+    // action D1) — `POST …/:pieceId/en-vigueur`.
+    assert.equal(declarees.length, 9, JSON.stringify(declarees, null, 2));
     assert.equal(serveur.routes.length - declarees.length, 4, 'un GET sans son HEAD');
     // Le logo ne déclare JAMAIS `selon-entite` : `filiales` n'est pas une entité
     // métier, et `domaineDe()` rendrait `null` — c'est-à-dire aucun contrôle de
@@ -172,7 +174,14 @@ describe('Le montage lui-même', () => {
     assert.equal(logos.filter((r) => r.acces.domaine === null).length, 2);
     assert.equal(logos.filter((r) => r.acces.domaine === 'administration').length, 2);
     const metier = declarees.filter((r) => !r.url.startsWith('/api/pieces/logo'));
-    assert.equal(metier.length, 4);
+    assert.equal(metier.length, 5);
+    // ⚠️ La désignation de la version en vigueur ÉCRIT : elle doit déclarer
+    // `ecrire`, jamais `lire`. Un contrôle qui ne regarderait que le domaine
+    // laisserait passer une route d'écriture ouverte aux lecteurs.
+    const enVigueur = metier.filter((r) => r.url.endsWith('/en-vigueur'));
+    assert.equal(enVigueur.length, 1, JSON.stringify(metier, null, 2));
+    assert.equal(enVigueur[0].methode, 'POST');
+    assert.equal(enVigueur[0].acces.action, 'ecrire');
     for (const route of metier) {
       assert.equal(route.acces.domaine, 'selon-entite', `${route.methode} ${route.url}`);
     }

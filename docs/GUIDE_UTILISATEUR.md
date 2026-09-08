@@ -140,6 +140,42 @@ reflète la règle, elle ne l'applique pas.
 - **Documents** : le registre des politiques, leurs dates de revue, et les alertes quand une
   revue est échue.
 
+### La version qui fait foi, et où elle se décide
+
+Ouvrez une fiche document : sous le formulaire, le panneau **Pièces jointes**. C'est là que
+vivent les fichiers — l'application les détient, les analyse, en garde l'empreinte et les
+délivre elle-même. Deux gestes, et un piège :
+
+1. **Au dépôt, numérotez le fichier.** Le champ « Version » à côté du bouton *Déposer* n'est
+   pas décoratif : c'est lui qui donnera son numéro à la fiche.
+2. **Cliquez « Faire foi » sur la version en vigueur.** Elle prend le badge *En vigueur*, les
+   autres passent à l'historique — **elles ne sont pas supprimées**, et restent
+   téléchargeables. C'est ce qu'un auditeur demande : « montrez-moi la version précédente ».
+
+Dès qu'un fichier fait foi, le champ **Version** de la fiche devient une **lecture** : il
+suit le fichier. Pour changer le numéro, on dépose une nouvelle version et on la fait faire
+foi — on ne retape pas le champ. C'est délibéré : avant, on pouvait écrire « 2.1 » au-dessus
+du PDF de la 1.4, et rien ne le voyait.
+
+⚠️ **« Document resté ailleurs » n'est pas une pièce jointe.** C'est une simple *référence* —
+un chemin réseau, un lien vers la GED. L'application ne la lit pas, ne la vérifie pas, et ne
+saura jamais si ce qui est au bout a changé. Les deux champs coexistent ; ne les confondez
+pas.
+
+### Faire valider une politique avant de la publier
+
+Sur la fiche, en bas, l'encart **Circuit d'approbation** : rédaction → revue → approbation →
+publication. Chaque décision est horodatée, attribuée, et **irréversible**.
+
+Mettez le document au statut **« en validation »** pendant que le circuit tourne. Tant que
+l'étape **publication** n'est pas approuvée, le serveur **refuse** de le passer « en
+vigueur », et vous dit pourquoi. Repasser par « brouillon » ne contourne rien : dès qu'un
+circuit est ouvert, il faut le conclure. La tentative refusée est journalisée — c'est normal,
+et c'est ce qui permet de répondre « oui, et voici la preuve » à un auditeur.
+
+Un document qui n'a **aucun** circuit ouvert, lui, se publie directement : toutes les
+procédures ne réclament pas une validation formelle.
+
 ⚠️ Vous ne voyez **pas** la cartographie des dépendances (`cartographie: aucun`, posé
 explicitement dans votre profil) : c'est une décision de découpage, pas un oubli.
 

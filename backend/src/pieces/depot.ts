@@ -47,6 +47,10 @@ export interface LignePiece {
   readonly date_analyse: Date | null;
   readonly quarantaine: boolean;
   readonly description: string | null;
+  /** LA pièce qui fait foi pour son porteur — migration 018, action D1. */
+  readonly en_vigueur: boolean;
+  /** Numéro de version que le déposant a donné À CE FICHIER. */
+  readonly version_piece: string | null;
   readonly version: number;
   readonly cree_le: Date;
   readonly cree_par: string;
@@ -78,6 +82,8 @@ const COLONNES = [
   'date_analyse',
   'quarantaine',
   'description',
+  'en_vigueur',
+  'version_piece',
   'version',
   'cree_le',
   'cree_par',
@@ -153,6 +159,15 @@ export interface PieceAInserer {
   readonly signatureVirale: string | null;
   readonly quarantaine: boolean;
   readonly description: string | null;
+  /**
+   * Numéro de version du FICHIER, tel que le déposant l'annonce.
+   *
+   * ⚠️ Il n'est **jamais** contrôlé : « 1.0 », « v2 projet », « Rév. C » sont
+   * tous légitimes selon la maison. Ce qui est garanti, c'est qu'il voyage
+   * *avec* le fichier — et que `documents.version_document` en soit alimenté
+   * plutôt que frappé à côté (migration 018).
+   */
+  readonly versionPiece: string | null;
 }
 
 /**
@@ -168,9 +183,10 @@ export async function inserer(client: PoolClient, piece: PieceAInserer): Promise
     `insert into "pieces_jointes"
             ("id", "filiale_id", "entite_type", "entite_id", "nom_fichier", "type_mime",
              "extension", "taille_octets", "sha256", "chemin_stockage", "etat_analyse",
-             "resultat_analyse", "signature_virale", "date_analyse", "quarantaine", "description")
+             "resultat_analyse", "signature_virale", "date_analyse", "quarantaine",
+             "description", "version_piece")
      values ($1, $2, $3::type_entite, $4, $5, $6, $7, $8::bigint, $9, $10, $11,
-             $12, $13, now(), $14, $15)
+             $12, $13, now(), $14, $15, $16)
      returning ${LISTE_COLONNES}`,
     [
       piece.id,
@@ -188,6 +204,7 @@ export async function inserer(client: PoolClient, piece: PieceAInserer): Promise
       piece.signatureVirale,
       piece.quarantaine,
       piece.description,
+      piece.versionPiece,
     ],
   );
   const ligne = resultat.rows[0];
@@ -211,7 +228,7 @@ export async function lister(
       where "entite_type" = $1::type_entite
         and "entite_id" = $2::text
         and ${CONDITION_DELIVRABLE}
-      order by "cree_le" desc, "id" desc`,
+      order by "en_vigueur" desc, "cree_le" desc, "id" desc`,
     [entiteType, entiteId],
   );
   return resultat.rows.map(normaliser);
@@ -269,6 +286,107 @@ export async function supprimer(
   );
   const ligne = resultat.rows[0];
   return ligne === undefined ? null : normaliser(ligne);
+}
+
+/* =====================================================================
+ *  La version en vigueur — action D1 de la vague 9
+ * ===================================================================== */
+
+/**
+ * Démet toutes les pièces « en vigueur » du porteur, et rend combien l'étaient.
+ *
+ * ⚠️ **Cette requête N'EST PAS le cloisonnement, et elle n'est pas non plus
+ * l'unicité.** Le cloisonnement est la politique d'écriture (`filiale_id =
+ * f_filiale_ecriture()`), qui fait qu'elle ne touche jamais la pièce d'une
+ * autre filiale ; l'unicité est `uq_pieces_jointes_en_vigueur`, qui refuserait
+ * la promotion suivante si celle-ci avait manqué quelqu'un. Elle est ici pour
+ * une seule raison : **rendre la promotion possible**, l'index étant partiel et
+ * strict.
+ *
+ * Elle est jouée AVANT la promotion, dans la même transaction. L'ordre inverse
+ * heurterait l'index — et un `on conflict` serait pire : il masquerait le cas
+ * où deux pièces sont déjà en vigueur, c'est-à-dire l'anomalie même que
+ * l'index existe pour rendre impossible.
+ */
+export async function demettreLesEnVigueur(
+  client: PoolClient,
+  entiteType: string,
+  entiteId: string,
+): Promise<number> {
+  const resultat = await client.query(
+    `update "pieces_jointes"
+        set "en_vigueur" = false
+      where "entite_type" = $1::type_entite
+        and "entite_id" = $2::text
+        and "en_vigueur"`,
+    [entiteType, entiteId],
+  );
+  return resultat.rowCount ?? 0;
+}
+
+/**
+ * Marque une pièce **délivrable** comme celle qui fait foi.
+ *
+ * Rend `null` quand la pièce n'existe pas dans le périmètre, n'appartient pas à
+ * ce porteur, ou n'est pas délivrable — les trois se confondent à dessein, pour
+ * la même raison que `lireDelivrable` : distinguer renseignerait sur ce qui
+ * existe ailleurs.
+ *
+ * ⚠️ La condition de délivrabilité est écrite ici **en plus** de la contrainte
+ * `ck_pieces_jointes_en_vigueur`, et ce n'est pas un doublon inutile : sans
+ * elle, désigner un fichier en quarantaine rendrait une **violation de
+ * contrainte** — un 409 qui parle de la base — au lieu d'un 404 qui parle du
+ * produit. La contrainte reste la barrière ; celle-ci est la politesse.
+ */
+export async function marquerEnVigueur(
+  client: PoolClient,
+  entiteType: string,
+  entiteId: string,
+  pieceId: string,
+): Promise<LignePiece | null> {
+  const resultat = await client.query<LignePiece>(
+    `update "pieces_jointes"
+        set "en_vigueur" = true
+      where "id" = $1::text
+        and "entite_type" = $2::type_entite
+        and "entite_id" = $3::text
+        and ${CONDITION_DELIVRABLE}
+     returning ${LISTE_COLONNES}`,
+    [pieceId, entiteType, entiteId],
+  );
+  const ligne = resultat.rows[0];
+  return ligne === undefined ? null : normaliser(ligne);
+}
+
+/**
+ * Recopie le numéro de version de la pièce en vigueur sur la fiche document.
+ *
+ * ⚠️ **Rend le nombre de lignes touchées, et l'appelant DOIT le regarder.**
+ * `documents` est une table mixte : une politique de portée Groupe n'est
+ * modifiable qu'en transaction d'administration Groupe (`004_rls.sql` §4). Une
+ * session de filiale qui promeut une pièce sur une telle fiche verrait donc
+ * `0` — et si l'appelant l'ignorait, le produit annoncerait « version en
+ * vigueur mise à jour » en n'ayant rien écrit. C'est la forme exacte du défaut
+ * que ce chantier traque depuis dix passages : **réussir en silence**.
+ *
+ * `version` (le compteur de verrouillage optimiste) n'est PAS incrémenté ici, et
+ * `modifie_le` / `modifie_par` le sont par `trg_documents_maj`. Le choix est
+ * délibéré : la version en vigueur est une propriété de la PIÈCE, dont la fiche
+ * n'est que le reflet ; incrémenter le compteur ferait échouer l'enregistrement
+ * qu'un utilisateur a peut-être ouvert à côté, sans qu'il ait touché au champ.
+ */
+export async function refleterVersionSurDocument(
+  client: PoolClient,
+  documentId: string,
+  versionPiece: string | null,
+): Promise<number> {
+  const resultat = await client.query(
+    `update "documents"
+        set "version_document" = $2::text
+      where "id" = $1::text`,
+    [documentId, versionPiece],
+  );
+  return resultat.rowCount ?? 0;
 }
 
 /**

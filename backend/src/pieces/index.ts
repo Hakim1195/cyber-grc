@@ -166,7 +166,16 @@ import { entreeInvalide, ErreurApplicative } from '../erreurs/index.js';
 import { reconnaitre } from './catalogue.js';
 import { analyser, ErreurClamav } from './clamav.js';
 import type { VerdictAntivirus } from './clamav.js';
-import { inserer, lireDelivrable, lister, supprimer, versLaVue } from './depot.js';
+import {
+  demettreLesEnVigueur,
+  inserer,
+  lireDelivrable,
+  lister,
+  marquerEnVigueur,
+  refleterVersionSurDocument,
+  supprimer,
+  versLaVue,
+} from './depot.js';
 import { verifierQuotaFiliale } from './exploitation.js';
 import type { LignePiece } from './depot.js';
 import {
@@ -209,6 +218,14 @@ const MARGE_ENVELOPPE = 64 * 1024;
 /** Nom du champ de formulaire portant le fichier. Un seul, et il est nommé. */
 const CHAMP_FICHIER = 'fichier';
 const CHAMP_DESCRIPTION = 'description';
+/**
+ * Numéro de version du fichier, annoncé au dépôt — action D1 de la vague 9.
+ *
+ * ⚠️ Il est demandé **au moment du dépôt**, et c'est tout l'objet du lot : la
+ * version d'une politique se déclare avec le fichier qui la porte, pas dans un
+ * champ voisin qui peut annoncer « 2.1 » au-dessus du PDF de la 1.4.
+ */
+const CHAMP_VERSION = 'version';
 
 /** Entités métier acceptées — **dérivées**, jamais recopiées (`CLAUDE.md` §3). */
 const ENTITES_METIER = Object.freeze(Object.keys(DOMAINE_PAR_ENTITE).sort());
@@ -218,6 +235,18 @@ const ENTITES_METIER = Object.freeze(Object.keys(DOMAINE_PAR_ENTITE).sort());
  * métier. `entite_id` vaut **la filiale active**, résolue par le serveur.
  */
 const ENTITE_FILIALE = 'filiales';
+
+/**
+ * L'entité dont la fiche porte un numéro de version — action D1 de la vague 9.
+ *
+ * ⚠️ Valeur écrite en toutes lettres **et c'est le bon outil** (`CLAUDE.md` §3) :
+ * une erreur ici est bruyante dans les deux sens — la promotion cesserait de
+ * refléter la version sur la fiche, ce que l'essai de bout en bout constate, et
+ * une valeur inconnue de `DOMAINE_PAR_ENTITE` ferait rougir le contrôle de
+ * vocabulaire. Ce qui serait le mauvais outil, ce serait une liste d'entités
+ * *exemptées* du reflet : son incomplétude, elle, réussirait en silence.
+ */
+const ENTITE_DOCUMENTS = 'documents';
 
 const SCHEMA_PARAMS_ENTITE = {
   type: 'object',
@@ -392,7 +421,7 @@ export async function greffonPieces(
     client: PoolClient,
     perimetre: PerimetreSession,
     requete: FastifyRequest,
-    action: 'creation' | 'suppression' | 'consultation_sensible' | 'analyse_antivirus',
+    action: 'creation' | 'modification' | 'suppression' | 'consultation_sensible' | 'analyse_antivirus',
     resume: string,
     pieceId: string | null,
     details: Record<string, unknown>,
@@ -455,6 +484,9 @@ export async function greffonPieces(
     }
     const description = normaliserDescription(
       parties.find((p) => p.nom === CHAMP_DESCRIPTION && p.nomFichier === null)?.contenu,
+    );
+    const versionPiece = normaliserVersionPiece(
+      parties.find((p) => p.nom === CHAMP_VERSION && p.nomFichier === null)?.contenu,
     );
 
     /* ── Contrôle n° 1 (précis) : la taille de la PIÈCE ──────────────── */
@@ -556,6 +588,7 @@ export async function greffonPieces(
         sha256,
         cheminStockage,
         description,
+        versionPiece,
       };
 
       /* ── Infectée : quarantaine, trace, et refus ─────────────────────── */
@@ -837,6 +870,92 @@ export async function greffonPieces(
   };
 
   /* ===================================================================
+   *  VERSION EN VIGUEUR (action D1)
+   * =================================================================== */
+
+  /**
+   * Désigne la pièce qui fait foi pour son porteur.
+   *
+   * ── Ce que la route garantit, et où chaque garantie vit ──────────────
+   *
+   *  · **une seule pièce en vigueur** : `uq_pieces_jointes_en_vigueur`, index
+   *    unique partiel — pas cette fonction, qui se contente de démettre avant
+   *    de promouvoir pour que la promotion soit possible ;
+   *  · **rien d'infecté ne fait foi** : `ck_pieces_jointes_en_vigueur` ; la
+   *    condition de délivrabilité de la requête n'est là que pour rendre un 404
+   *    parlant plutôt qu'une violation de contrainte ;
+   *  · **la fiche document dit la version du fichier** : `refleterVersionSurDocument`,
+   *    dans LA MÊME transaction. Si elle ne touche aucune ligne, la route
+   *    **échoue** — voir ci-dessous, c'est le point qui mérite d'être lu.
+   *
+   * ⚠️ **Le reflet qui n'écrit rien fait échouer la promotion.** `documents` est
+   * une table mixte : une politique de portée Groupe n'est modifiable qu'en
+   * transaction d'administration Groupe. Une session de filiale qui promeut une
+   * pièce sur une telle fiche verrait le reflet toucher zéro ligne. Laisser
+   * passer donnerait « version en vigueur : 2.1 » à l'écran des pièces et
+   * « version : 1.4 » sur la fiche, tous deux sans erreur — deux réponses à la
+   * même question, dans un outil produit en audit. La transaction est donc
+   * annulée **en entier**, et le message dit quoi faire.
+   */
+  const designerVersionEnVigueur = async (
+    requete: FastifyRequest,
+    reponse: FastifyReply,
+    entiteType: string,
+    entiteId: string,
+  ): Promise<FastifyReply> => {
+    const { perimetre } = sessionDe(requete);
+    filialeDEcriture(perimetre);
+    const { pieceId } = requete.params as ParamsPiece;
+    if (pieceId === undefined) throw entreeInvalide('Pièce jointe non désignée.');
+
+    const ligne = await avecTransaction(pool, perimetre, async (client) => {
+      // Démettre AVANT de promouvoir : l'index est partiel et strict, et un
+      // « on conflict » masquerait le cas — impossible, donc intéressant — où
+      // deux pièces seraient déjà en vigueur.
+      await demettreLesEnVigueur(client, entiteType, entiteId);
+      const promue = await marquerEnVigueur(client, entiteType, entiteId, pieceId);
+      if (promue === null) return null;
+
+      if (entiteType === ENTITE_DOCUMENTS) {
+        const reflets = await refleterVersionSurDocument(client, entiteId, promue.version_piece);
+        if (reflets === 0) {
+          throw new ErreurApplicative({
+            code: 'hors_perimetre',
+            statut: 403,
+            message:
+              'La version en vigueur n’a pas été enregistrée : cette fiche document n’est pas ' +
+              'modifiable depuis votre filiale active. Une politique de portée Groupe se ' +
+              'publie depuis une session d’administration Groupe.',
+            detailJournal:
+              `reflet de version sur documents/${entiteId} : 0 ligne touchée pour ` +
+              `${perimetre.utilisateurId} (filiale active ${String(perimetre.filialeId)})`,
+          });
+        }
+      }
+
+      await tracer(
+        client,
+        perimetre,
+        requete,
+        'modification',
+        'Version en vigueur désignée sur une fiche',
+        promue.id,
+        {
+          entite_type: entiteType,
+          entite_id: entiteId,
+          nom_fichier: promue.nom_fichier,
+          sha256: promue.sha256,
+          version_piece: promue.version_piece,
+        },
+      );
+      return promue;
+    });
+
+    if (ligne === null) throw pieceIntrouvable(pieceId);
+    return reponse.send(versLaVue(ligne));
+  };
+
+  /* ===================================================================
    *  Enregistrement des deux familles de routes
    * =================================================================== */
 
@@ -924,6 +1043,24 @@ export async function greffonPieces(
     async (requete: FastifyRequest, reponse: FastifyReply) => {
       const cible = cibleMetier(requete);
       return supprimerPiece(requete, reponse, cible.type, cible.id);
+    },
+  );
+
+  // ── La version en vigueur : une pièce désignée parmi celles du porteur ──
+  //
+  // Segment terminal STATIQUE : Fastify le fait passer avant tout paramètre, et
+  // aucune route de la famille 1 ne porte cinq segments. Le verbe est POST et
+  // non PUT : on ne remplace pas une ressource nommée « en-vigueur », on demande
+  // au serveur de désigner — et il démet les autres au passage.
+  instance.post(
+    '/api/pieces/:entite/:entiteId/:pieceId/en-vigueur',
+    {
+      schema: { params: SCHEMA_PARAMS_ENTITE_PIECE },
+      config: { acces: { action: 'ecrire', domaine: 'selon-entite' } },
+    },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const cible = cibleMetier(requete);
+      return designerVersionEnVigueur(requete, reponse, cible.type, cible.id);
     },
   );
 
@@ -1035,6 +1172,30 @@ export function normaliserNomFichier(brut: string): string | null {
 }
 
 /** Description libre : bornée, sans caractère de commande, ou `null`. */
+/**
+ * Numéro de version annoncé au dépôt, assaini et borné.
+ *
+ * ⚠️ **Aucune forme n'est imposée**, et c'est un arbitrage : « 1.0 », « v2.3 »,
+ * « Rév. C », « 2024-A ». Une expression rationnelle de validation aurait deux
+ * défauts, dont le second est le vrai : elle refuserait la convention d'une
+ * filiale acquise le mois dernier, et elle donnerait à croire que ce champ est
+ * *vérifié* — alors que rien ici ne peut savoir ce que le PDF porte en
+ * page de garde.
+ */
+export function normaliserVersionPiece(brut: Buffer | undefined): string | null {
+  if (brut === undefined) return null;
+  // Même assainissement que la description — les caractères de contrôle sont
+  // écartés —, mais une borne bien plus courte : un numéro de version est
+  // « 1.0 », « v2.3-projet », « Rév. C ». Soixante caractères laissent la place
+  // aux conventions maison sans laisser passer un paragraphe déguisé.
+  const texte = brut
+    .toString('utf8')
+    .replace(/[\u0000-\u001f\u007f-\u009f]+/gu, ' ')
+    .trim();
+  if (texte === '') return null;
+  return texte.length > 60 ? texte.slice(0, 60) : texte;
+}
+
 export function normaliserDescription(brut: Buffer | undefined): string | null {
   if (brut === undefined) return null;
   const texte = brut

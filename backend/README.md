@@ -768,7 +768,7 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 | **L13 — Cycle de vie** | ✅ **livré** (vague 6, 05/09/2026) |
 | **L14 — Documentation** | ✅ **livré** (vague 7, 05/09/2026) — `docs/GUIDE_EXPLOITATION.md` et `docs/GUIDE_UTILISATEUR.md` |
 | **L15 — Durcissement final** | 🟡 **EN COURS — c'est l'état présent du chantier** (vague 8). Revue de sécurité sur l'ensemble du produit. **Porte S8 jouée six fois, refusée à chaque passage** ; au 6ᵉ : **0 bloquant, 4 majeurs, 8 mineurs, 0 fuite entre filiales**, banc **1747/1747**. C'est la **condition de mise en service** : elle n'est pas remplie |
-| **L16 — Système documentaire** | 🟡 **commencé** (vague 9, décidée le 07/09/2026) — **D2 livré le 07/09** : les pièces jointes suivent leur porteur sur les six chemins (migration `017`, constats **Q-232 / Q-233** fermés). ⚠️ **Le coffre existe déjà** : L6 livre le dépôt et ses huit contrôles, `documents` porte le modèle Groupe/filiale (`filiale_id` nul = PSSI de portée Groupe) et le panneau est **monté sur la fiche** — la recette le sert. Reste de la **gestion** : version en vigueur (D1), recherche (D3, **pas avant S8**), source de vérité unique (D4), approbation (D5). Voir `../docs/PLAN_EXECUTION.md` §3, vague 9 |
+| **L16 — Système documentaire** | 🟡 **quatre actions sur cinq livrées** (vague 9, décidée le 07/09/2026). **D2 le 07/09** : les pièces jointes suivent leur porteur sur les six chemins (migration `017`, constats **Q-232 / Q-233** fermés). **D1, D4 et D5 le 08/09** (migrations `018` et `019`) : la pièce marquée « **en vigueur** » est celle qui fait foi — au plus une par porteur **et par filiale** —, et c'est elle qui donne le numéro de version de la fiche, au lieu d'une saisie libre qui pouvait annoncer « 2.1 » au-dessus du PDF de la 1.4 ; `documents.emplacement` devient « **Document resté ailleurs** », une référence externe qu'on ne confond plus avec un fichier détenu ici ; un document « en validation » ne passe « en vigueur » qu'avec une étape de **publication approuvée** (code **`GRC06`**, refus journalisé avec sa route), et l'encart du circuit d'approbation — livré par L8, que **personne n'appelait** — est monté sur la fiche. ⚠️ **Le coffre existait déjà** : L6 livre le dépôt et ses huit contrôles ; rien de cela n'a été refait. **Reste D3**, la recherche, qui **ne se joue pas avant que S8 soit franchie** — une recherche est un oracle, c'est la surface la plus propice à une fuite entre filiales. Voir `../docs/PLAN_EXECUTION.md` §3, vague 9 |
 
 ### Les verdicts, tels que le journal des portes les formule
 
@@ -915,14 +915,20 @@ select * from f_verifier_schema()                → 0 ligne (15 garde-fous déc
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **50 tables** en
-**17 migrations**, **200 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**19 migrations**, **200 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **74 clés étrangères** (45 `restrict`, 27 `cascade`, 2 `set null`), **44 tables portant
 `cree_par` et 44 déclencheurs de création**, **12 clés étrangères composites** visant
-`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **15 contrôles consignés**
+`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **17 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
-la migration `015` (constat Q-201), et le quinzième `f_verifier_declencheurs_pieces()`,
+la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
-porteur, quel que soit le chemin de disparition).
+porteur, quel que soit le chemin de disparition), le **seizième**
+`f_verifier_piece_en_vigueur()` — migration `018`, action D1 : une seule pièce fait foi par
+porteur et par filiale — et le **dix-septième** `f_verifier_publication_documents()` —
+migration `019`, action D5 : un document « en validation » ne passe « en vigueur » qu'avec
+une publication approuvée. ⚠️ Les rangs sont comptés **dans le catalogue** : le banc
+annonçait quinze et seize pour les deux précédents, un rang de trop chacun, et la phrase a
+été recomptée plutôt que reconduite.
 
 Frontend, mesuré en **évaluant le module** et non en dépouillant son texte : façade
 `DataStore` à **131 membres**, identique avant et après la vague 2 ; **118 méthodes
@@ -1190,7 +1196,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **50 tables**, obtenues aujourd'hui en **17 migrations** appliquées de bout en bout par
+- **50 tables**, obtenues aujourd'hui en **19 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1200,6 +1206,13 @@ Ce que la reprise fait, quand on la rejoue :
   conditionnée, neuvième garde-fou de schéma — sans nouvelle table) est du lot **L3**.
   Les trois dernières sont arrivées avec des **fermetures de constats**, après le
   franchissement du 4ᵉ passage de S2 pour `005`/`006`, à l'ouverture de L3 pour `007`.
+  Les deux plus récentes sont du lot **L16** : `018_version_en_vigueur.sql` (action D1 —
+  « en vigueur » sur une pièce jointe, son unicité par filiale et sa démotion automatique ;
+  action D4 — `documents.emplacement` assumé comme référence externe) et
+  `019_publication_exige_approbation.sql` (action D5 — un document « en validation » ne
+  passe « en vigueur » qu'avec une publication approuvée, code `GRC06`). **Ni l'une ni
+  l'autre n'ajoute de table** : elles ajoutent deux colonnes, un index, une contrainte,
+  deux déclencheurs et deux garde-fous.
 - **200 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.

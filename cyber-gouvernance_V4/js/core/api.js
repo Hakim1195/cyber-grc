@@ -778,6 +778,19 @@ const Api = (() => {
         /** Champ facultatif de commentaire (`CHAMP_DESCRIPTION`). */
         champDescription: "description",
         /**
+         * Champ facultatif du **numéro de version du fichier** (`CHAMP_VERSION`,
+         * migration 018). Il voyage avec le fichier plutôt qu'à côté : c'est
+         * lui qui alimente `documents.version_document` quand la pièce est
+         * désignée « en vigueur ».
+         */
+        champVersion: "version",
+        /**
+         * Segment terminal de la route de désignation
+         * (`POST /pieces/<entite>/<entiteId>/<pieceId>/en-vigueur`). RELEVÉ
+         * dans `backend/src/pieces/index.ts`, comme le reste de ce contrat.
+         */
+        suffixeEnVigueur: "/en-vigueur",
+        /**
          * États d'analyse, relevés dans `ck_pieces_jointes_etat`
          * (`db/migrations/001_socle.sql`). **Une seule est délivrable.**
          */
@@ -824,13 +837,32 @@ const Api = (() => {
      *
      * @param {File|Blob} fichier le fichier choisi par l'utilisateur
      * @param {string} [description] commentaire facultatif
+     * @param {string} [version] numéro de version DU FICHIER (« 1.0 », « Rév. C »)
      */
-    function deposerPiece(entiteType, entiteId, fichier, description) {
+    function deposerPiece(entiteType, entiteId, fichier, description, version) {
         const formulaire = new FormData();
         formulaire.append(CONTRAT_PIECES.champFichier, fichier);
         if (description) formulaire.append(CONTRAT_PIECES.champDescription, description);
+        if (version) formulaire.append(CONTRAT_PIECES.champVersion, version);
         return appeler(cheminPiece(entiteType, entiteId),
             { methode: "POST", corps: formulaire, delai: DELAI_CHARGEMENT_MS });
+    }
+
+    /**
+     * Désigne la pièce qui **fait foi** pour son porteur — action D1.
+     *
+     * Le serveur démet les autres dans la même transaction, et, sur une fiche
+     * document, recopie le numéro de version de la pièce sur la fiche. Rend la
+     * pièce promue, dans la même forme que `pieces()`.
+     *
+     * ⚠️ Un refus **403** signifie ici quelque chose de précis, et l'appelant
+     * doit le rendre tel quel : la fiche est une politique de portée Groupe, que
+     * la filiale active ne peut pas modifier. Rien n'a été écrit — ni la
+     * désignation, ni le reflet.
+     */
+    function marquerPieceEnVigueur(entiteType, entiteId, pieceId) {
+        return appeler(cheminPiece(entiteType, entiteId, pieceId) + CONTRAT_PIECES.suffixeEnVigueur,
+            { methode: "POST" });
     }
 
     /**
@@ -931,6 +963,7 @@ const Api = (() => {
         journal, journalVerification, journalExport,
         filiales, choisirFilialeActive,
         pieces, deposerPiece, telechargerPiece, adressePiece, supprimerPiece,
+        marquerPieceEnVigueur,
         logoFiliale, telechargerLogoFiliale,
         // Vague 6 : ce que les écrans devaient sinon appeler par une porte à eux.
         consolidation, approbations, deciderApprobation

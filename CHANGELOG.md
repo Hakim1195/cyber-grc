@@ -8,6 +8,100 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### Vague 9, actions **D1**, **D4** et **D5** : la gestion documentaire, et la fin d'un champ qui pouvait mentir
+
+Le lot L6 avait livré le **coffre** — dépôt, huit contrôles, ClamAV, empreinte SHA-256,
+quarantaine, délivrance par l'application seule. Ce qui manquait n'était pas le stockage,
+c'était la **gestion** : savoir laquelle des pièces déposées fait foi, ne pas confondre un
+fichier détenu ici avec une référence vers ailleurs, et ne pas publier une politique que
+personne n'a validée.
+
+#### D1 — la version en vigueur (migration `018`)
+
+`documents.version_document` était une **saisie libre**. On y tapait « 2.1 » et l'on déposait
+le PDF de la 1.4 ; rien ne rapprochait les deux. Dans un outil produit en audit ISO 27001,
+c'est la pire forme de faux : il est *plausible*.
+
+Désormais **la version d'un document est celle que porte la pièce marquée « en vigueur »**.
+Deux colonnes sur `pieces_jointes`, et pas une de plus : `en_vigueur` (laquelle fait foi) et
+`version_piece` (le numéro que le déposant donne **à ce fichier**, au moment du dépôt). Les
+autres pièces ne disparaissent pas : elles deviennent l'**historique**, toujours
+téléchargeable — c'est justement ce qu'un auditeur demande.
+
+Quatre garanties, et chacune vit à un seul endroit :
+
+- **une seule pièce fait foi** — index unique **partiel** `uq_pieces_jointes_en_vigueur`. Il
+  porte `filiale_id`, et ce n'est pas un ornement : `documents` est une table **mixte**, une
+  politique de portée Groupe peut recevoir les pièces de plusieurs filiales, et une unicité
+  globale ferait qu'une filiale reçoive un doublon **causé par une ligne invisible** d'une
+  autre — c'est le constat `Q-2` (`CONVENTIONS.md` §19.1). Conséquence assumée : sur un
+  document Groupe, chaque filiale désigne la version en vigueur parmi **ses** dépôts ;
+- **rien de non délivrable ne fait foi** — `ck_pieces_jointes_en_vigueur` : un fichier en
+  quarantaine ne peut pas être la version officielle d'une PSSI ;
+- **une pièce qui CESSE d'être délivrable est démise** — déclencheur
+  `trg_pieces_jointes_en_vigueur`. ⚠️ Sans lui, la **ré-analyse antivirale** échouerait sur la
+  pièce en vigueur qu'elle veut mettre en quarantaine : on aurait fermé un défaut documentaire
+  en bloquant le dispositif antimalware ;
+- **la fiche dit la version du fichier** — `POST /api/pieces/:entite/:entiteId/:pieceId/en-vigueur`
+  recopie `version_piece` sur la fiche dans la **même transaction**, et **échoue en entier**
+  si elle ne peut rien y écrire (politique de portée Groupe vue depuis une filiale). Laisser
+  passer donnerait « en vigueur : 2.1 » au panneau des pièces et « version : 1.4 » sur la
+  fiche, tous deux sans erreur — deux réponses à la même question.
+
+À l'écran : une colonne **Version**, un badge **En vigueur**, un bouton « **Faire foi** », un
+champ de version au dépôt, et le champ « Version » de la fiche qui passe en **lecture** dès
+qu'un fichier fait foi — `readOnly` et jamais `disabled`, un champ désactivé n'étant pas
+envoyé par le formulaire, ce qui effacerait la version au premier enregistrement.
+
+⚠️ **L'essai attaque la base en direct, et c'est le point qui compte** : la route démet avant
+de promouvoir, elle resterait donc verte **l'index retiré**. Deux `update` dans une seule
+transaction exigent le `23505` ; la mutation a été jouée, l'essai rougit.
+
+#### D4 — « emplacement » est assumé, et étiqueté pour ce qu'il est
+
+Le champ est **conservé** — le retirer ferait perdre la valeur à la reprise d'un export
+antérieur, donc exigerait une colonne de recueil : on l'aurait retiré pour le remettre sous un
+autre nom. Ce qu'exigeait D4, c'est qu'il **ne se confonde plus** avec une pièce détenue par
+l'application : il devient « **Document resté ailleurs** », avec la note « référence externe —
+le fichier n'est pas détenu par l'application », et le commentaire de colonne le dit à qui
+écrit une route.
+
+⚠️ **Et la phrase qui mentait est retirée.** « L'application ne stocke pas les fichiers »
+figurait à trois endroits de cet écran ; elle était vraie du produit navigateur et **fausse
+depuis le lot L6**. C'est elle qui empêchait de chercher le panneau des pièces jointes — ce
+qui est arrivé pour de bon. Un essai garde les deux sens.
+
+#### D5 — une politique ne se publie pas toute seule (migration `019`)
+
+Le lot L8 livrait le circuit d'approbation, et il le livrait bien. **Mais rien ne le reliait au
+document** : on pouvait laisser le circuit à mi-chemin, ouvrir la fiche, choisir « en vigueur »,
+enregistrer. À la question d'audit *« qui a validé cette PSSI ? »*, le produit répondait
+« personne, mais elle est en vigueur ».
+
+Statut neuf « **en validation** », et déclencheur `trg_documents_publication` levant **`GRC06`**.
+⚠️ **La lettre du critère laissait la porte ouverte** — il suffisait de repasser par
+« brouillon » ; la règle posée exige donc une étape `publication` approuvée **dès qu'un circuit
+existe**. Le refus est **journalisé** en `refus_autorisation`, avec le *gabarit* de route et
+l'identifiant du document : un refus muet ne se distingue pas d'une absence de tentative, et
+c'est la tentative qui intéresse un auditeur.
+
+L'**encart du circuit** — livré par L8, et que **personne n'appelait** — est enfin monté sur la
+fiche document.
+
+⚠️ **Ce que la barrière ne fait pas, et c'est écrit plutôt que passé sous silence** (constat **`Q-247`**) : elle
+ne vérifie pas que l'approbation porte encore sur le **contenu actuel**. C'est `empreinte_objet`,
+tenue par L8 et affichée par l'encart ; la refaire dans le déclencheur obligerait à recopier
+`COLONNES_HORS_EMPREINTE` en SQL — deux listes d'une même exclusion, qui finiraient par ne plus
+dire la même chose.
+
+**Deux garde-fous de schéma neufs**, branchés seuls par la découverte de `f_verifier_schema()` :
+`f_verifier_piece_en_vigueur()` et `f_verifier_publication_documents()`. Les sept mutations ont
+été jouées une par une — index retiré, index sans `filiale_id`, contrainte retirée, déclencheur
+retiré, déclencheur désarmé, statut retiré du `check`, trace débranchée — et chacune fait rougir.
+
+**Reste D3**, la recherche : elle **ne se joue pas avant que la porte S8 soit franchie**. Une
+recherche est un **oracle**, c'est la surface la plus propice à une fuite entre filiales.
+
 ### Serveur — vague 9, action **D2** : une pièce jointe suit son porteur, quel que soit le chemin
 
 **Constats `Q-232` et `Q-233` fermés — à la CLASSE, pas à l'instance.**

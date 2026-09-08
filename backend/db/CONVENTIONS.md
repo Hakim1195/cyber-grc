@@ -660,6 +660,7 @@ poste de développement.
 | `GRC03` | Conflit de version (verrouillage optimiste) — « modifié entre-temps » | API (`0 ligne` sur `update … and version = $2`) |
 | `GRC04` | Périmètre non positionné : `grc.filiale_id` absent alors que la RLS l'exige | Base (`004_rls.sql`) |
 | `GRC05` | Une pièce jointe du porteur supprimé appartient à une autre filiale : la suppression est **refusée** plutôt que de laisser une orpheline | Base (`017_pieces_suivent_leur_porteur.sql`) |
+| `GRC06` | Un document dont le circuit d'approbation n'est pas conclu a tenté de passer « en vigueur » : la publication est **refusée**, et la tentative est journalisée avec sa route | Base (`019_publication_exige_approbation.sql`) |
 
 Deux refus d'intégrité empruntent le `23514` standard plutôt qu'un code propre, **à dessein** :
 viser la mesure locale d'une autre filiale, et changer la portée d'une ligne mixte. L'API les

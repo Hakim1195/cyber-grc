@@ -550,11 +550,11 @@ actions ; `deleteRisque`/`deleteActif` nettoient les références (`risque_id`, 
 | `id` | `"DOC-..."` | |
 | `titre` | string | |
 | `type` | enum | PSSI, charte, procédure, politique de sauvegarde, PCA/PRA… |
-| `version` | string | |
+| `version` | string | ⚠️ **Dès qu'une pièce jointe de la fiche est marquée « en vigueur », c'est ELLE qui donne ce numéro** (migration `018`, action D1) : la route `POST /api/pieces/documents/<id>/<piece>/en-vigueur` recopie `pieces_jointes.version_piece` ici, dans la même transaction, et **échoue en entier** si elle ne peut pas écrire la fiche. La saisie libre ne subsiste que tant qu'aucun fichier n'est détenu ici — c'est ce qui empêchait le champ d'annoncer « 2.1 » au-dessus du PDF de la 1.4. Correspond à `documents.version_document` (la colonne `version` de la table est le compteur de verrouillage optimiste, §1.4) |
 | `proprietaire` | string | |
-| `statut` | enum | `brouillon` \| `en vigueur` \| `à réviser` \| `obsolète` |
+| `statut` | enum | `brouillon` \| `en validation` \| `en vigueur` \| `à réviser` \| `obsolète`. ⚠️ **`en validation` (migration `019`, action D5)** est l'état pendant lequel le circuit d'approbation du lot L8 tourne. Depuis cet état — **et dès qu'un circuit existe, quel que soit le statut**, sans quoi il suffirait de repasser par `brouillon` — passer à `en vigueur` exige une étape `publication` **approuvée** dans le dernier tour. La base refuse en **`GRC06`**, et le refus est journalisé avec sa route |
 | `date_revue` | date ISO | prochaine revue (pilote les alertes) |
-| `emplacement` | string | localisation du fichier (**non stocké** par l'app) |
+| `emplacement` | string | **DOCUMENT RESTÉ AILLEURS** — chemin réseau, GED, intranet. C'est une **référence** que l'application ne lit pas, ne vérifie pas et ne délivre pas ; elle ne saura jamais si ce qui est au bout a changé. ⚠️ **À ne pas confondre avec les pièces jointes de la fiche**, que l'application détient, analyse, empreinte et délivre depuis le lot L6. La note « non stocké par l'app » qui figurait ici était vraie du produit navigateur et **fausse depuis L6** (action D4) |
 | `referentiels` | string[] | ids de référentiels couverts |
 | `notes` | string | plan / sommaire (canevas disponibles) |
 
