@@ -162,6 +162,28 @@ un chemin réseau, un lien vers la GED. L'application ne la lit pas, ne la véri
 saura jamais si ce qui est au bout a changé. Les deux champs coexistent ; ne les confondez
 pas.
 
+### Vérifier qu'un fichier n'a pas été remplacé
+
+Chaque pièce porte son **empreinte SHA-256**, calculée à son dépôt sur le fichier réellement
+écrit. Elle s'affiche sous le nom du fichier, repliée ; cliquez sur **SHA-256** pour voir les
+64 caractères et les comparer à ceux de votre propre exemplaire.
+
+Le bouton **Vérifier** demande au serveur de relire le fichier et de le comparer à cette
+empreinte. Trois réponses :
+
+- *le fichier correspond* — rien n'a bougé depuis le dépôt ;
+- **Empreinte en écart** — les octets ont changé. Le fichier ne peut plus servir de preuve :
+  prévenez votre exploitant ;
+- **Fichier introuvable** — le fichier a disparu du magasin. Prévenez votre exploitant.
+
+Un balayage automatique fait ce rapprochement tous les mois ; le badge que vous voyez sur une
+ligne vient de lui. Le bouton, lui, mesure **maintenant**.
+
+⚠️ **Ce que cela prouve.** Que le fichier détenu ici n'a pas changé depuis son dépôt — ce qui
+est exactement la question d'un auditeur. Ce n'est **pas** une garantie absolue : quelqu'un
+qui aurait la main sur le serveur pourrait modifier le fichier *et* son empreinte. Aucun
+dispositif de ce genre ne prétend le contraire.
+
 ### Faire valider une politique avant de la publier
 
 Sur la fiche, en bas, l'encart **Circuit d'approbation** : rédaction → revue → approbation →

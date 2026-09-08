@@ -558,6 +558,16 @@ actions ; `deleteRisque`/`deleteActif` nettoient les références (`risque_id`, 
 | `referentiels` | string[] | ids de référentiels couverts |
 | `notes` | string | plan / sommaire (canevas disponibles) |
 
+> **Les pièces jointes d'une fiche document** (lot L6, complété par L16). Elles ne font pas
+> partie de l'objet `data` — l'application les détient à part, dans `pieces_jointes` — mais
+> elles portent trois propriétés que la fiche reflète :
+>
+> | Colonne | Rôle |
+> |---|---|
+> | `en_vigueur` | LA pièce qui fait foi. Au plus une par porteur **et par filiale** ; c'est elle qui donne `documents.version_document` (migration `018`) |
+> | `version_piece` | le numéro de version **du fichier**, annoncé au dépôt |
+> | `sha256` · `etat_integrite` · `derniere_verification` | l'empreinte calculée sur le fichier écrit, et le verdict du dernier rapprochement — `non_verifiee`, `conforme`, `ecart`, `fichier_absent` (migration `020`) |
+
 ### Traitement RGPD — `traitements` (v6, article 30)
 | Champ | Type | Notes |
 |-------|------|-------|

@@ -8,6 +8,74 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+### L'empreinte cesse d'être un commentaire : elle s'affiche, et elle est vérifiée
+
+**Une promesse à moitié tenue depuis le lot L6, mesurée le 08/09/2026.**
+
+Le contrôle n° 6 de la chaîne de dépôt calcule le SHA-256 **sur ce qui a été écrit** —
+`empreinteDe()` relit le disque plutôt que d'empreinter ce qui a été reçu. Le commentaire de
+la colonne en tire la promesse : *« c'est ce qui transforme une pièce jointe en preuve
+vérifiable — un auditeur peut s'assurer qu'un rapport n'a pas été remplacé après coup. »*
+
+Mesuré par balayage de `src/` : **`empreinteDe()` n'avait qu'UN SEUL appelant**, le dépôt.
+Deux conséquences, et la seconde est la vraie :
+
+- l'empreinte n'était **affichée nulle part**. Le panneau la chargeait en mémoire et ne la
+  montrait pas : impossible de la recopier pour la comparer ;
+- **rien ne la revérifiait.** La ré-analyse périodique est *antivirale* — elle repasse le
+  fichier à ClamAV, elle ne le compare pas à son empreinte. Le produit ne savait pas répondre
+  à « le fichier sur le disque est-il encore celui qu'on a empreinté ? », et un écart —
+  corruption, restauration partielle, substitution — **n'aurait été vu par personne**.
+
+C'est la définition d'un garde-fou qui n'est qu'un commentaire (`CONVENTIONS.md` §18.4), et
+il portait la promesse centrale du coffre documentaire.
+
+**Ce qui est livré** (migration `020`) :
+
+- **l'empreinte s'affiche**, sous le nom du fichier, repliée sur douze caractères et
+  **dépliable en place**, en texte sélectionnable. ⚠️ Pas de `navigator.clipboard` : il est
+  indisponible hors contexte sécurisé et refusable par l'utilisateur, et un bouton
+  « Copier » qui ne copie rien serait pire que pas de bouton ;
+- **un bouton « Vérifier »** par pièce délivrable → `GET …/:pieceId/integrite`. Le serveur
+  relit le fichier, le hache, et rend `conforme`, `ecart` ou `fichier_absent`, avec les deux
+  empreintes. ⚠️ Déclarée **`lire`**, jamais `ecrire` — même arbitrage que le constat Q-158 :
+  la ligne de partage est l'ACTE, et priver l'auditeur du seul contrôle qui l'intéresse
+  serait absurde. Le coût est **strictement inférieur à celui de la délivrance**, déjà
+  ouverte au même appelant : celle-ci lit le fichier *et* l'envoie sur le réseau ;
+- **un balayage périodique**, greffé sur le minuteur qui porte déjà la ré-analyse — 30 jours
+  et 2 000 pièces par passage, contre 90 et 500 pour l'antivirus : hacher ne demande ni
+  démon ni réseau. Il **inscrit** son verdict et sort en code 1 sur un écart, pour que
+  `systemctl status` le montre ;
+- **une vingt-deuxième action de journal**, `verification_integrite`. Les trois verdicts sont
+  tracés, pas seulement les mauvais : un journal qui ne garderait que les mauvaises nouvelles
+  ne dirait pas *quand* une pièce a été vérifiée pour la dernière fois.
+
+⚠️ **La route ne persiste rien, et c'est un arbitrage.** Écrire le verdict exigerait la
+politique d'écriture de `pieces_jointes` — *la filiale ACTIVE*. Une session de périmètre
+Groupe qui vérifie la pièce d'une filiale voisine, qu'elle a le droit de **lire**, verrait
+l'`update` toucher zéro ligne : le produit répondrait « vérifiée » sans avoir rien inscrit.
+La persistance appartient donc au balayage, qui s'exécute sous le périmètre de chaque filiale.
+
+⚠️ **Ce que le dispositif ne prouve pas, et il faut le dire.** Qui peut écrire dans le magasin
+peut aussi mettre le `sha256` à jour en base. Il attrape la corruption, la restauration
+partielle et la substitution faite **hors de l'application** — pas un adversaire qui tient les
+deux. L'écran ne dit donc jamais « intégrité garantie ».
+
+#### Et un défaut de la veille, trouvé en écrivant celui-ci
+
+`normaliserListe()` du panneau **filtre** : elle reconstruit chaque pièce champ par champ, et
+tout champ absent de sa liste est jeté. `en_vigueur` et `version_piece` — livrés la veille,
+servis par la route, affichés par le gabarit — **y avaient été oubliés**. Le badge « En
+vigueur » et la colonne Version seraient restés **vides sur la recette**, sans une erreur. Ni
+le banc navigateur, qui façonne ses réponses, ni les essais de module, qui vérifient qu'un
+écran se rend, ne pouvaient le voir : le défaut vit **entre la route et le panneau**.
+
+Corrigé, et fermé à la classe : `test/pieces/champs-servis.test.mjs` prend la charge **réelle**
+d'une pièce servie par la vraie route, extrait du texte du panneau **les champs qu'il lit**
+(`piece.<nom>`), et exige que l'intersection traverse la normalisation. Aucune liste n'est
+écrite ; un champ neuf servi *et* affiché est réclamé bruyamment, un champ servi et jamais lu
+ne l'est pas.
+
 ### Vague 9, actions **D1**, **D4** et **D5** : la gestion documentaire, et la fin d'un champ qui pouvait mentir
 
 Le lot L6 avait livré le **coffre** — dépôt, huit contrôles, ClamAV, empreinte SHA-256,

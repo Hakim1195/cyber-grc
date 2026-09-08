@@ -75,6 +75,26 @@
 > actuel — cela vit dans `empreinte_objet`, affiché par l'encart, et le refaire en SQL
 > dupliquerait une liste d'exclusion.
 >
+> ✅ **L'empreinte SHA-256 cesse d'être un commentaire (08/09/2026)** — migration `020`.
+> Mesuré par balayage de `src/` : `empreinteDe()` n'avait **qu'un seul appelant**, le dépôt.
+> L'empreinte était écrite, stockée, servie — et **mordue par rien** (§18.4), alors qu'elle
+> porte la promesse centrale du coffre. Elle **s'affiche** désormais sous le nom du fichier,
+> dépliable en place ; un bouton **Vérifier** (`GET …/:pieceId/integrite`, déclaré **`lire`**)
+> relit le fichier et rend `conforme` / `ecart` / `fichier_absent` ; un **balayage** sur le
+> minuteur de ré-analyse inscrit son verdict et **sort en code 1** sur un écart. ⚠️ La route
+> **ne persiste rien** : écrire exigerait la filiale ACTIVE, et une session Groupe vérifiant
+> la pièce d'une filiale voisine aurait « réussi en silence ». ⚠️ Et le dispositif **ne
+> garantit pas l'intégrité** : qui peut écrire dans le magasin peut aussi mettre le `sha256`
+> à jour. Il attrape l'écart, pas l'adversaire complet.
+>
+> ⚠️ **Un défaut de la veille trouvé en écrivant celui-là, et sa leçon vaut au-delà :**
+> `normaliserListe()` du panneau **filtre** les champs, et `en_vigueur` / `version_piece` y
+> avaient été oubliés — le badge et la colonne seraient restés **vides sur la recette, sans
+> une erreur**. Ni le banc navigateur (qui façonne ses réponses) ni les essais de module (qui
+> vérifient qu'un écran se rend) ne pouvaient le voir : *le défaut vit entre la route et le
+> panneau*. Fermé à la classe — `test/pieces/champs-servis.test.mjs` extrait du texte du
+> panneau les champs qu'il **lit** et exige qu'ils traversent la normalisation.
+>
 > ✅ **L'action D2 — « zéro orphelin » — est LIVRÉE le 07/09/2026**, jouée en premier parce
 > qu'elle rapproche de la porte plutôt qu'elle ne l'éloigne : migration `017`, un déclencheur
 > `f_pieces_suivent_leur_porteur()` sur **32 tables porteuses découvertes dans le catalogue**,

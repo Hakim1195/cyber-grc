@@ -186,6 +186,7 @@ import {
   nettoyerAttente,
   ouvrirDuMagasin,
   promouvoir,
+  resoudreDansMagasin,
   retirerDuMagasin,
   tailleDansMagasin,
 } from './magasin.js';
@@ -421,7 +422,13 @@ export async function greffonPieces(
     client: PoolClient,
     perimetre: PerimetreSession,
     requete: FastifyRequest,
-    action: 'creation' | 'modification' | 'suppression' | 'consultation_sensible' | 'analyse_antivirus',
+    action:
+      | 'creation'
+      | 'modification'
+      | 'suppression'
+      | 'consultation_sensible'
+      | 'analyse_antivirus'
+      | 'verification_integrite',
     resume: string,
     pieceId: string | null,
     details: Record<string, unknown>,
@@ -956,6 +963,128 @@ export async function greffonPieces(
   };
 
   /* ===================================================================
+   *  INTÉGRITÉ — le fichier est-il encore celui qu'on a empreinté ?
+   * =================================================================== */
+
+  /**
+   * Rapproche le fichier du magasin de l'empreinte inscrite avec sa ligne.
+   *
+   * ── Pourquoi cette route existe, et ce qu'elle vaut ─────────────────
+   *
+   * Le contrôle n° 6 du §31.2 calcule le SHA-256 **sur ce qui a été écrit** —
+   * `empreinteDe()` relit le disque plutôt que d'empreinter ce qui a été reçu.
+   * C'est ce qui fait de la pièce une **preuve vérifiable**. Mesuré le
+   * 08/09/2026 : `empreinteDe()` n'avait qu'**un seul appelant dans tout `src/`**,
+   * le dépôt. L'empreinte était écrite, stockée, servie — et mordue par rien,
+   * c'est-à-dire un commentaire (§18.4).
+   *
+   * ⚠️ **Ce que le verdict prouve, et ce qu'il ne prouve pas** (§17.5). Un écart
+   * dit que les octets ont changé : corruption de stockage, restauration
+   * partielle, substitution faite en dehors de l'application. Il ne dit rien
+   * d'un adversaire qui tiendrait les deux — qui peut écrire dans le magasin
+   * peut aussi mettre le `sha256` à jour en base. Le dire vaut mieux que de
+   * laisser croire.
+   *
+   * ── Elle NE PERSISTE RIEN, et c'est un arbitrage ────────────────────
+   *
+   * Écrire le verdict exigerait la politique d'écriture de `pieces_jointes` —
+   * *la filiale ACTIVE*. Une session de périmètre Groupe qui vérifie la pièce
+   * d'une filiale voisine, qu'elle a parfaitement le droit de **lire**, verrait
+   * l'`update` toucher zéro ligne : le produit répondrait « vérifiée » sans
+   * avoir rien inscrit. C'est la forme exacte du défaut que ce chantier traque —
+   * **réussir en silence**. La persistance appartient donc au **balayage**
+   * (`exploitation.verifierIntegriteStock`), qui s'exécute sous le périmètre de
+   * chaque filiale ; la vérification à la demande **répond**, et laisse une
+   * trace au journal.
+   *
+   * ── Le coût, puisqu'il faut le poser (Q-197, Q-215) ─────────────────
+   *
+   * Elle lit un fichier entier et le hache. C'est **strictement moins cher que
+   * la délivrance**, déjà ouverte au même appelant avec le même droit : celle-ci
+   * lit le fichier *et* l'envoie sur le réseau. Elle n'ouvre donc aucune
+   * amplification nouvelle, et la borne reste celle du dépôt (25 Mio).
+   */
+  const verifierIntegrite = async (
+    requete: FastifyRequest,
+    reponse: FastifyReply,
+    entiteType: string,
+    entiteId: string,
+  ): Promise<FastifyReply> => {
+    const { perimetre } = sessionDe(requete);
+    const { pieceId } = requete.params as ParamsPiece;
+    if (pieceId === undefined) throw entreeInvalide('Pièce jointe non désignée.');
+
+    const ligne = await avecTransaction(
+      pool,
+      perimetre,
+      (client) => lireDelivrable(client, entiteType, entiteId, pieceId),
+      { lectureSeule: true },
+    );
+    if (ligne === null) throw pieceIntrouvable(pieceId);
+
+    const constate = await empreinteDe(resoudreDansMagasin(config.chemins.piecesJointes, ligne.chemin_stockage)).then(
+      (r) => r,
+      () => null,
+    );
+
+    const verdict: 'conforme' | 'ecart' | 'fichier_absent' =
+      constate === null
+        ? 'fichier_absent'
+        : constate.sha256 === ligne.sha256 && constate.taille === ligne.taille_octets
+          ? 'conforme'
+          : 'ecart';
+
+    // ⚠️ **Tracée dans les TROIS cas, pas seulement sur l'écart.** Un journal qui
+    // ne garderait que les mauvaises nouvelles ne permettrait pas de répondre à
+    // « quand cette pièce a-t-elle été vérifiée pour la dernière fois ? », qui
+    // est la question d'un auditeur — l'autre étant déjà couverte par l'alerte.
+    await avecTransaction(pool, perimetre, async (client) => {
+      await tracer(
+        client,
+        perimetre,
+        requete,
+        'verification_integrite',
+        'Rapprochement d’une pièce jointe avec son empreinte',
+        ligne.id,
+        {
+          entite_type: entiteType,
+          entite_id: entiteId,
+          nom_fichier: ligne.nom_fichier,
+          verdict,
+          sha256_attendu: ligne.sha256,
+          sha256_constate: constate === null ? null : constate.sha256,
+          taille_attendue: ligne.taille_octets,
+          taille_constatee: constate === null ? null : constate.taille,
+        },
+      );
+    });
+
+    if (verdict === 'ecart') {
+      requete.log.error(
+        {
+          piece: ligne.id,
+          attendu: ligne.sha256,
+          constate: constate === null ? null : constate.sha256,
+        },
+        'INTÉGRITÉ : le fichier du magasin ne correspond plus à son empreinte.',
+      );
+    }
+
+    return reponse.send({
+      id: ligne.id,
+      verdict,
+      // Rendus tous les deux : l'appelant vient de prouver qu'il a le droit de
+      // LIRE cette pièce — il peut donc la télécharger et la hacher lui-même.
+      // Les cacher ne fermerait rien et l'empêcherait de recouper.
+      sha256_attendu: ligne.sha256,
+      sha256_constate: constate === null ? null : constate.sha256,
+      taille_attendue: ligne.taille_octets,
+      taille_constatee: constate === null ? null : constate.taille,
+      verifie_le: new Date().toISOString(),
+    });
+  };
+
+  /* ===================================================================
    *  Enregistrement des deux familles de routes
    * =================================================================== */
 
@@ -1061,6 +1190,24 @@ export async function greffonPieces(
     async (requete: FastifyRequest, reponse: FastifyReply) => {
       const cible = cibleMetier(requete);
       return designerVersionEnVigueur(requete, reponse, cible.type, cible.id);
+    },
+  );
+
+  // ── L'intégrité : une LECTURE, et elle le déclare ──────────────────
+  //
+  // `lire`, comme la délivrance — et pour le même motif que l'arbitrage du
+  // constat Q-89 : rapprocher une pièce de son empreinte n'extrait aucun octet
+  // du produit, et l'exiger sous un droit d'écriture priverait justement
+  // l'auditeur, qui lit et n'écrit pas, du seul contrôle qui l'intéresse.
+  instance.get(
+    '/api/pieces/:entite/:entiteId/:pieceId/integrite',
+    {
+      schema: { params: SCHEMA_PARAMS_ENTITE_PIECE },
+      config: { acces: { action: 'lire', domaine: 'selon-entite' } },
+    },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const cible = cibleMetier(requete);
+      return verifierIntegrite(requete, reponse, cible.type, cible.id);
     },
   );
 

@@ -785,6 +785,11 @@ const Api = (() => {
          */
         champVersion: "version",
         /**
+         * Segment terminal de la route de **rapprochement avec l'empreinte**
+         * (`GET /pieces/<entite>/<entiteId>/<pieceId>/integrite`, migration 020).
+         */
+        suffixeIntegrite: "/integrite",
+        /**
          * Segment terminal de la route de désignation
          * (`POST /pieces/<entite>/<entiteId>/<pieceId>/en-vigueur`). RELEVÉ
          * dans `backend/src/pieces/index.ts`, comme le reste de ce contrat.
@@ -863,6 +868,29 @@ const Api = (() => {
     function marquerPieceEnVigueur(entiteType, entiteId, pieceId) {
         return appeler(cheminPiece(entiteType, entiteId, pieceId) + CONTRAT_PIECES.suffixeEnVigueur,
             { methode: "POST" });
+    }
+
+    /**
+     * Rapproche une pièce du magasin avec l'empreinte inscrite en base.
+     *
+     * Rend `{ id, verdict, sha256_attendu, sha256_constate, taille_attendue,
+     * taille_constatee, verifie_le }`, `verdict` valant `conforme`, `ecart` ou
+     * `fichier_absent`.
+     *
+     * ⚠️ **Ce que le verdict prouve, et ce qu'il ne prouve pas.** Un écart dit
+     * que les octets ont changé — corruption de stockage, restauration
+     * partielle, substitution faite en dehors de l'application. Il ne dit rien
+     * d'un adversaire qui tiendrait les deux : qui peut écrire dans le magasin
+     * peut aussi mettre l'empreinte à jour en base. L'écran doit dire cela, et
+     * pas « intégrité garantie ».
+     *
+     * ⚠️ **Aucun octet ne sort** : le serveur lit le fichier, le hache, et rend
+     * un verdict. C'est une LECTURE, déclarée comme telle côté serveur — un
+     * auditeur, qui lit et n'écrit pas, doit pouvoir s'en servir.
+     */
+    function verifierIntegritePiece(entiteType, entiteId, pieceId) {
+        return appeler(cheminPiece(entiteType, entiteId, pieceId) + CONTRAT_PIECES.suffixeIntegrite,
+            { delai: DELAI_CHARGEMENT_MS });
     }
 
     /**
@@ -963,7 +991,7 @@ const Api = (() => {
         journal, journalVerification, journalExport,
         filiales, choisirFilialeActive,
         pieces, deposerPiece, telechargerPiece, adressePiece, supprimerPiece,
-        marquerPieceEnVigueur,
+        marquerPieceEnVigueur, verifierIntegritePiece,
         logoFiliale, telechargerLogoFiliale,
         // Vague 6 : ce que les écrans devaient sinon appeler par une porte à eux.
         consolidation, approbations, deciderApprobation

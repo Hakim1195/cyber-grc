@@ -915,7 +915,7 @@ select * from f_verifier_schema()                → 0 ligne (15 garde-fous déc
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **50 tables** en
-**19 migrations**, **200 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**20 migrations**, **200 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **74 clés étrangères** (45 `restrict`, 27 `cascade`, 2 `set null`), **44 tables portant
 `cree_par` et 44 déclencheurs de création**, **12 clés étrangères composites** visant
 `(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **17 contrôles consignés**
@@ -928,7 +928,9 @@ porteur et par filiale — et le **dix-septième** `f_verifier_publication_docum
 migration `019`, action D5 : un document « en validation » ne passe « en vigueur » qu'avec
 une publication approuvée. ⚠️ Les rangs sont comptés **dans le catalogue** : le banc
 annonçait quinze et seize pour les deux précédents, un rang de trop chacun, et la phrase a
-été recomptée plutôt que reconduite.
+été recomptée plutôt que reconduite. La migration `020` n'en ajoute **aucun** : elle
+RÉÉMET `f_verifier_vocabulaire_journal()` — deux garde-fous sur la même contrainte
+finiraient par ne plus dire la même chose (§19.5).
 
 Frontend, mesuré en **évaluant le module** et non en dépouillant son texte : façade
 `DataStore` à **131 membres**, identique avant et après la vague 2 ; **118 méthodes
@@ -1196,7 +1198,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **50 tables**, obtenues aujourd'hui en **19 migrations** appliquées de bout en bout par
+- **50 tables**, obtenues aujourd'hui en **20 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1212,7 +1214,10 @@ Ce que la reprise fait, quand on la rejoue :
   `019_publication_exige_approbation.sql` (action D5 — un document « en validation » ne
   passe « en vigueur » qu'avec une publication approuvée, code `GRC06`). **Ni l'une ni
   l'autre n'ajoute de table** : elles ajoutent deux colonnes, un index, une contrainte,
-  deux déclencheurs et deux garde-fous.
+  deux déclencheurs et deux garde-fous. `020_verification_integrite.sql` non plus : elle
+  ajoute la vingt-deuxième action du journal (`verification_integrite`), deux colonnes de
+  verdict sur `pieces_jointes`, un index de balayage — et **réémet** le garde-fou du
+  vocabulaire plutôt que d'en poser un second sur la même contrainte.
 - **200 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.

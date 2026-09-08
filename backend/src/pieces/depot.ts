@@ -51,6 +51,9 @@ export interface LignePiece {
   readonly en_vigueur: boolean;
   /** Numéro de version que le déposant a donné À CE FICHIER. */
   readonly version_piece: string | null;
+  /** Verdict du dernier rapprochement avec le sha256 — migration `020`. */
+  readonly etat_integrite: string;
+  readonly derniere_verification: Date | null;
   readonly version: number;
   readonly cree_le: Date;
   readonly cree_par: string;
@@ -84,6 +87,8 @@ const COLONNES = [
   'description',
   'en_vigueur',
   'version_piece',
+  'etat_integrite',
+  'derniere_verification',
   'version',
   'cree_le',
   'cree_par',
@@ -385,6 +390,75 @@ export async function refleterVersionSurDocument(
         set "version_document" = $2::text
       where "id" = $1::text`,
     [documentId, versionPiece],
+  );
+  return resultat.rowCount ?? 0;
+}
+
+/* =====================================================================
+ *  L'intégrité — migration 020
+ * ===================================================================== */
+
+/** Les quatre verdicts de `ck_pieces_jointes_integrite`. */
+export type VerdictIntegrite = 'non_verifiee' | 'conforme' | 'ecart' | 'fichier_absent';
+
+/**
+ * Pièces **délivrables** d'une filiale à rapprocher, les moins récemment
+ * vérifiées d'abord.
+ *
+ * ⚠️ `filiale_id = $1` est le **sujet** du balayage, pas une barrière — même
+ * motif qu'à `volumeFiliale()` : le minuteur itère sur les filiales une par une
+ * pour que chaque rapprochement s'écrive sous le périmètre de la sienne.
+ *
+ * Les pièces en quarantaine sont **exclues**, et pas par distraction : leur
+ * fichier a pu être déplacé par l'exploitation, et l'écart serait alors
+ * *attendu*. Un contrôle qui crierait sur un cas normal finit désarmé.
+ */
+export async function piecesAVerifier(
+  client: PoolClient,
+  filialeId: string,
+  seuil: Date,
+  limite: number,
+): Promise<readonly { id: string; chemin_stockage: string; sha256: string; taille_octets: number }[]> {
+  const resultat = await client.query<{
+    id: string;
+    chemin_stockage: string;
+    sha256: string;
+    taille_octets: string;
+  }>(
+    `select "id", "chemin_stockage", "sha256", "taille_octets"::text as "taille_octets"
+       from "pieces_jointes"
+      where "filiale_id" = $1::text
+        and ${CONDITION_DELIVRABLE}
+        and ("derniere_verification" is null or "derniere_verification" < $2)
+      order by "derniere_verification" nulls first, "id"
+      limit $3`,
+    [filialeId, seuil, limite],
+  );
+  return resultat.rows.map((l) => ({
+    id: l.id,
+    chemin_stockage: l.chemin_stockage,
+    sha256: l.sha256,
+    taille_octets: Number(l.taille_octets),
+  }));
+}
+
+/**
+ * Inscrit le verdict d'un rapprochement.
+ *
+ * ⚠️ **`non_verifiee` n'est pas inscriptible ici**, et c'est la contrainte
+ * `ck_pieces_jointes_integrite_datee` qui le tient : un verdict est daté ou n'a
+ * pas eu lieu. Effacer un verdict reviendrait à effacer un constat.
+ */
+export async function consignerIntegrite(
+  client: PoolClient,
+  pieceId: string,
+  verdict: Exclude<VerdictIntegrite, 'non_verifiee'>,
+): Promise<number> {
+  const resultat = await client.query(
+    `update "pieces_jointes"
+        set "etat_integrite" = $2::text, "derniere_verification" = now()
+      where "id" = $1::text`,
+    [pieceId, verdict],
   );
   return resultat.rowCount ?? 0;
 }

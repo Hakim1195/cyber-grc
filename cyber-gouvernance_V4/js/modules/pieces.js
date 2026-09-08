@@ -116,6 +116,49 @@ const PiecesModule = (() => {
         }
     });
 
+    /**
+     * Les quatre verdicts de `ck_pieces_jointes_integrite` (migration 020), et ce
+     * qu'ils veulent dire **pour l'utilisateur**.
+     *
+     * ── Une liste écrite à la main, et pourquoi c'est le bon outil ──────────
+     *
+     * Même raisonnement qu'à `ETATS` : un verdict absent de cette table est
+     * affiché **tel qu'il est en base**, en teinte neutre, et personne ne conclut
+     * à sa place. L'omission échoue du côté qui n'affirme rien.
+     */
+    const INTEGRITE = Object.freeze({
+        non_verifiee: {
+            libelle: "Non vérifiée",
+            teinte: "status-non-applicable",
+            alarmant: false,
+            explication: "Le rapprochement avec l'empreinte n'a pas encore eu lieu pour " +
+                "ce fichier. Le balayage périodique s'en charge ; vous pouvez aussi le " +
+                "demander maintenant."
+        },
+        conforme: {
+            libelle: "Empreinte vérifiée",
+            teinte: "status-conforme",
+            alarmant: false,
+            explication: "Le fichier du magasin correspond à l'empreinte enregistrée lors " +
+                "de son dépôt."
+        },
+        ecart: {
+            libelle: "Empreinte en écart",
+            teinte: "status-non-conforme",
+            alarmant: true,
+            explication: "Le fichier ne correspond plus à l'empreinte enregistrée à son " +
+                "dépôt : ses octets ont changé. Prévenez votre exploitant — ce fichier ne " +
+                "peut plus servir de preuve en l'état."
+        },
+        fichier_absent: {
+            libelle: "Fichier introuvable",
+            teinte: "status-non-conforme",
+            alarmant: true,
+            explication: "Le fichier a disparu du magasin. La preuve est perdue, et la " +
+                "fiche continue de l'annoncer. Prévenez votre exploitant."
+        }
+    });
+
     /** Identifiant du conteneur que la fiche pose, et que ce module remplit. */
     const HOTE = "piecesJointes";
 
@@ -148,6 +191,20 @@ const PiecesModule = (() => {
     let depotEnCours = false;
     /** Désignation « en vigueur » en cours : évite le double clic. */
     let designationEnCours = false;
+    /**
+     * Verdicts d'intégrité obtenus À LA DEMANDE, par identifiant de pièce.
+     *
+     * ⚠️ Ils ne sont **pas** confondus avec `piece.etat_integrite`, qui vient du
+     * balayage périodique et vit en base. Les deux répondent à des questions
+     * différentes — « qu'a vu le dernier balayage » et « qu'est-ce que je
+     * constate maintenant » —, et les mêler ferait passer un verdict de la
+     * semaine dernière pour une mesure du moment.
+     */
+    let verdictsDemandes = {};
+    /** Empreintes dépliées (l'utilisateur a demandé à voir les 64 caractères). */
+    let empreintesDepliees = {};
+    /** Vérification en cours, par identifiant de pièce. */
+    let verificationsEnCours = {};
     /**
      * Ce que la fiche veut savoir quand la liste vient d'être lue.
      *
@@ -262,6 +319,36 @@ const PiecesModule = (() => {
         }
     }
 
+    /**
+     * Ce que vaut l'intégrité d'une pièce, en trois mots.
+     *
+     * Le verdict DEMANDÉ à l'instant l'emporte sur celui du balayage : c'est le
+     * plus récent, et c'est celui que l'utilisateur vient de provoquer. L'origine
+     * est rendue avec, pour que l'écran puisse la dire — « constaté à l'instant »
+     * et « vu au dernier balayage » ne sont pas la même affirmation.
+     */
+    function integriteLisible(piece) {
+        const demande = piece && verdictsDemandes[piece.id];
+        const brut = String((demande && demande.verdict) ||
+            (piece && piece.etat_integrite) || "non_verifiee");
+        const connu = Object.prototype.hasOwnProperty.call(INTEGRITE, brut) ? INTEGRITE[brut] : null;
+        const socle = connu || {
+            libelle: brut,
+            teinte: "status-non-applicable",
+            alarmant: false,
+            explication: "Ce verdict d'intégrité n'est pas reconnu par cette version de " +
+                "l'application. Il est affiché tel quel, sans conclusion."
+        };
+        return {
+            code: brut,
+            libelle: socle.libelle,
+            teinte: socle.teinte,
+            alarmant: socle.alarmant,
+            explication: socle.explication,
+            aLInstant: Boolean(demande)
+        };
+    }
+
     /** La pièce qui fait foi, ou `null`. Lue dans la liste, jamais mémorisée à part. */
     function enVigueur() {
         for (let i = 0; i < liste.length; i += 1) {
@@ -315,20 +402,75 @@ const PiecesModule = (() => {
               'title="Cette version devient celle qui fait foi ; l\'actuelle passe à ' +
               'l\'historique, sans être supprimée">Faire foi</button>'
             : "";
+        const verification = etat.delivrable
+            ? ' <button type="button" class="pj-verifier btn-secondary" ' +
+              'data-piece="' + esc(piece.id) + '"' +
+              (verificationsEnCours[piece.id] ? " disabled" : "") + ' ' +
+              'title="Relit le fichier et le compare à l\'empreinte enregistrée à son ' +
+              'dépôt. Aucun octet ne sort du produit.">' +
+              (verificationsEnCours[piece.id] ? "Vérification…" : "Vérifier") + "</button>"
+            : "";
         return (
             '<tr class="pj-ligne' + (faitFoi ? " pj-en-vigueur" : "") + '" ' +
             'data-piece="' + esc(piece.id) + '">' +
             '<td class="pj-nom">' + nom +
             (faitFoi ? ' <span class="status status-conforme pj-foi">En vigueur</span>' : "") +
+            integriteHtml(piece) +
+            empreinteHtml(piece) +
             "</td>" +
             "<td>" + esc(piece.version_piece || "—") + "</td>" +
             "<td>" + esc(tailleLisible(piece.taille_octets)) + "</td>" +
             '<td><span class="status ' + etat.teinte + '">' + esc(etat.libelle) + "</span></td>" +
             "<td>" + fmtHorodatage(piece.cree_le || piece.depose_le) + "</td>" +
             "<td>" + esc(piece.cree_par || piece.depose_par || "—") + "</td>" +
-            '<td class="pj-action">' + telechargement + designation + "</td>" +
+            '<td class="pj-action">' + telechargement + designation + verification + "</td>" +
             "</tr>"
         );
+    }
+
+    /**
+     * Le badge d'intégrité — affiché **seulement quand il dit quelque chose**.
+     *
+     * Une pièce jamais rapprochée n'en porte pas : un badge « non vérifiée » sur
+     * chaque ligne d'une installation neuve serait une alarme quotidienne et
+     * fausse, et ce qui apprend à ignorer les alarmes (constat m-5). En revanche
+     * un ÉCART ou un FICHIER ABSENT se voient sans qu'on ait rien à demander.
+     */
+    function integriteHtml(piece) {
+        const verdict = integriteLisible(piece);
+        if (verdict.code === "non_verifiee") return "";
+        return ' <span class="status ' + esc(verdict.teinte) + ' pj-integrite" title="' +
+            esc(verdict.explication) + '">' + esc(verdict.libelle) +
+            (verdict.aLInstant ? " (à l’instant)" : "") + "</span>";
+    }
+
+    /**
+     * L'empreinte, repliée sur ses douze premiers caractères.
+     *
+     * ── Pourquoi repliée, et pourquoi dépliable SANS presse-papiers ────────
+     *
+     * Soixante-quatre caractères hexadécimaux sur chaque ligne noieraient le nom
+     * du fichier, qui est ce qu'on cherche d'abord. Mais une empreinte qu'on ne
+     * peut pas lire **en entier** ne sert à rien : c'est précisément en la
+     * comparant caractère par caractère à celle de son propre poste qu'un
+     * auditeur s'assure qu'un rapport n'a pas été remplacé.
+     *
+     * On la déplie donc en place, en texte sélectionnable. **Pas de
+     * `navigator.clipboard`** : il est indisponible hors contexte sécurisé et
+     * refusable par l'utilisateur, et un bouton « Copier » qui ne copie rien
+     * serait pire que pas de bouton — la sélection, elle, marche partout.
+     */
+    function empreinteHtml(piece) {
+        const empreinte = String((piece && piece.sha256) || "");
+        if (!empreinte) return "";
+        const depliee = empreintesDepliees[piece.id] === true;
+        return '<div class="pj-empreinte">' +
+            '<button type="button" class="pj-empreinte-bascule" data-piece="' + esc(piece.id) + '" ' +
+            'title="Empreinte SHA-256 calculée sur le fichier écrit. ' +
+            (depliee ? "Replier" : "Afficher les 64 caractères") + '">' +
+            (depliee ? "▾" : "▸") + " SHA-256</button> " +
+            '<code class="pj-hash">' +
+            esc(depliee ? empreinte : empreinte.slice(0, 12) + "…") + "</code></div>";
     }
 
     function corpsHtml() {
@@ -367,6 +509,12 @@ const PiecesModule = (() => {
             ".pj-en-vigueur td { background:rgba(46,125,50,0.06); }" +
             ".pj-foi { text-transform:none; margin-left:6px; }" +
             ".pj-version { width:9rem; }" +
+            ".pj-integrite { text-transform:none; margin-left:6px; }" +
+            ".pj-empreinte { margin-top:3px; display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; }" +
+            ".pj-empreinte-bascule { background:none; border:none; padding:0; color:var(--accent); " +
+            "font-size:0.72rem; cursor:pointer; }" +
+            ".pj-hash { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:0.72rem; " +
+            "color:var(--text-muted); word-break:break-all; user-select:all; }" +
             "</style>";
     }
 
@@ -425,6 +573,18 @@ const PiecesModule = (() => {
             etat_analyse: p.etat_analyse ?? "",
             quarantaine: p.quarantaine === true,
             sha256: p.sha256 ?? p.empreinte_sha256 ?? "",
+            // ⚠️ **Cette fonction FILTRE : un champ absent d'ici n'atteint jamais
+            // l'écran.** Les quatre lignes ci-dessous ont été oubliées une fois,
+            // et le défaut était parfaitement invisible — la liste s'affichait,
+            // sans erreur, sans badge « En vigueur », sans numéro de version et
+            // sans verdict d'intégrité. Un champ neuf servi par le serveur doit
+            // être ajouté ici, sans quoi il est jeté EN SILENCE.
+            // `test/modules/non-regression.test.mjs` compare désormais les clés
+            // rendues à celles que la route sert.
+            en_vigueur: p.en_vigueur === true,
+            version_piece: p.version_piece ?? null,
+            etat_integrite: p.etat_integrite ?? "non_verifiee",
+            derniere_verification: p.derniere_verification ?? null,
             cree_le: p.cree_le ?? p.depose_le ?? "",
             cree_par: p.cree_par ?? p.depose_par ?? ""
         }));
@@ -649,6 +809,50 @@ const PiecesModule = (() => {
     }
 
     /* =====================================================================
+       INTÉGRITÉ — le fichier est-il encore celui qu'on a empreinté ?
+    ===================================================================== */
+
+    /**
+     * Demande au serveur de relire le fichier et de le comparer à son empreinte.
+     *
+     * ⚠️ **Le message de succès ne dit pas « intégrité garantie »**, et c'est
+     * délibéré : ce que le rapprochement établit, c'est que les octets n'ont pas
+     * changé depuis le dépôt. Qui peut écrire dans le magasin peut aussi mettre
+     * l'empreinte à jour en base — le dispositif attrape la corruption, la
+     * restauration partielle et la substitution faite hors de l'application, pas
+     * un adversaire qui tient les deux. Promettre plus serait la fausse assurance
+     * que le §17.5 interdit.
+     */
+    async function verifierIntegrite(pieceId) {
+        if (verificationsEnCours[pieceId]) return false;
+        verificationsEnCours[pieceId] = true;
+        rafraichir();
+        try {
+            const verdict = await Api.verifierIntegritePiece(entiteType, entiteId, pieceId);
+            delete verificationsEnCours[pieceId];
+            verdictsDemandes[pieceId] = verdict;
+            if (window.showToast) {
+                const lu = INTEGRITE[verdict && verdict.verdict];
+                if (verdict && verdict.verdict === "conforme") {
+                    window.showToast("Le fichier correspond à l'empreinte enregistrée à son " +
+                        "dépôt.", "success");
+                } else {
+                    window.showToast(lu ? lu.explication
+                        : "Verdict d'intégrité inattendu : " + String(verdict && verdict.verdict),
+                        "error");
+                }
+            }
+            rafraichir();
+            return true;
+        } catch (e) {
+            delete verificationsEnCours[pieceId];
+            if (window.showToast) window.showToast(messageDErreur(e), "error");
+            rafraichir();
+            return false;
+        }
+    }
+
+    /* =====================================================================
        RENDU
     ===================================================================== */
 
@@ -752,6 +956,17 @@ const PiecesModule = (() => {
             // Relu dans le DOM au moment du clic, jamais capturé (`CLAUDE.md` §3).
             bouton.addEventListener("click", () => designer(bouton.dataset.piece));
         });
+        document.querySelectorAll(".pj-verifier").forEach(bouton => {
+            bouton.addEventListener("click", () => verifierIntegrite(bouton.dataset.piece));
+        });
+        document.querySelectorAll(".pj-empreinte-bascule").forEach(bouton => {
+            bouton.addEventListener("click", () => {
+                const id = bouton.dataset.piece;
+                if (empreintesDepliees[id]) delete empreintesDepliees[id];
+                else empreintesDepliees[id] = true;
+                rafraichir();
+            });
+        });
         // Les droits s'appliquent au balisage qui vient d'apparaître : le panneau
         // se dessine APRÈS la navigation, donc après le passage de `js/app.js`.
         // L'observateur de vue le rattrape, mais seulement s'il est armé — on ne
@@ -777,6 +992,9 @@ const PiecesModule = (() => {
         erreurChargement = null;
         depotEnCours = false;
         designationEnCours = false;
+        verdictsDemandes = {};
+        empreintesDepliees = {};
+        verificationsEnCours = {};
         auChargement = (options && typeof options.auChargement === "function")
             ? options.auChargement : null;
         if (!document.getElementById(HOTE)) return;
@@ -822,12 +1040,14 @@ const PiecesModule = (() => {
         // Exposés pour le banc d'essai : la garde d'export se vérifie en appelant
         // la fonction, jamais en constatant qu'un bouton est grisé — c'est
         // exactement la distinction que le constat Q-89 a coûtée.
-        telecharger, deposer, designer, enVigueur,
+        telecharger, deposer, designer, enVigueur, verifierIntegrite,
         // Purement fonctionnels : ils n'émettent rien et se prouvent sans réseau.
-        etatLisible, normaliserListe, verifierVocabulaire,
+        etatLisible, integriteLisible, normaliserListe, verifierVocabulaire,
         contrat: Object.freeze({
             hote: HOTE,
             etats: Object.keys(ETATS),
+            /** Les quatre verdicts de `ck_pieces_jointes_integrite` (migration 020). */
+            integrite: Object.keys(INTEGRITE),
             /** L'entité sur laquelle l'écran offre « faire foi » — voir ENTITE_DOCUMENTS. */
             entiteVersionnee: ENTITE_DOCUMENTS
         })

@@ -100,6 +100,20 @@ export type ActionJournal =
   | 'arret'
   | 'verification_journal'
   /**
+   * **Le rapprochement d'une pièce jointe avec son empreinte** — migration `020`.
+   *
+   * Émise par la vérification demandée depuis une fiche **et** par le balayage du
+   * minuteur. `valeursApres` porte le verdict (`conforme`, `ecart`,
+   * `fichier_absent`), l'empreinte attendue et celle constatée ; `resume` reste
+   * une phrase fixe (§29.5).
+   *
+   * ⚠️ **Ce n'est pas `analyse_antivirus`**, et la distinction se mesure : ClamAV
+   * dit la NOCIVITÉ d'un contenu, ce rapprochement dit que les octets ont changé.
+   * Les confondre ferait répondre « oui, analysé » à la question « ce fichier
+   * a-t-il été altéré ? ».
+   */
+  | 'verification_integrite'
+  /**
    * **Le changement de FILIALE ACTIVE d'une session** — lot L4, `CONVENTIONS.md`
    * §30.4. L'entrée porte la filiale **quittée** dans `valeursAvant` et la filiale
    * **rejointe** dans `valeursApres` ; `resume` reste une phrase fixe (§29.5).
