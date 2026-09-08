@@ -73,7 +73,8 @@ set -Eeuo pipefail
 #  n'éprouvant rien. Le banc doit donc REFUSER un bloc vide ou privé de son
 #  ancre — c'est la condition sans laquelle ces marqueurs sont une décoration.
 #
-#  Blocs : « frontend » (liste blanche de publication, constat Q-31),
+#  Blocs : « assistant-ecriture » (quelle variable prend quelle valeur, L18.1),
+#          « frontend » (liste blanche de publication, constat Q-31),
 #          « proxytimeout » (dérive du délai, constat Q-19),
 #          « configtest » (Apache comprend-il sa configuration),
 #          « desinstaller » (le retrait, et l'ORDRE de ses gestes),
@@ -111,6 +112,8 @@ REPRENDRE_PROPRIETE=0
 REINITIALISER_MDP=0
 VERIFIER_PUBLICATION=0
 DIAGNOSTIC=0
+ASSISTANT=0
+SECOURS_MDP=""
 
 info()   { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 succes() { printf '\033[1;32m  ok\033[0m %s\n' "$*"; }
@@ -153,6 +156,14 @@ Installe ou met à jour Cyber GRC Groupe sur Debian 13 (sans conteneur).
                                  installation antérieure les a laissés au compte du service
   --reinitialiser-mots-de-passe  réécrit le mot de passe des rôles PostgreSQL existants
                                  (à employer quand le fichier de configuration a été perdu)
+  --assistant                    POSE LES SIX QUESTIONS que le script ne peut pas
+                                 deviner, écrit la configuration et la déclaration
+                                 des filiales, puis installe. Exige un terminal.
+                                 Avec « aucun annuaire », pose un profil DÉCOUVERTE :
+                                 compte de secours, certificat auto-signé, ni AD ni
+                                 courriel — pour voir le produit en dix minutes.
+                                 ⚠️ Une installation de découverte n'est PAS une
+                                 installation de production, et le dit partout
   --verifier-publication         NE MODIFIE RIEN : compare ce que la racine web
                                  SERT à ce que le dépôt porte, et rend 5 si un
                                  fichier diverge (constat Q-103)
@@ -208,6 +219,7 @@ while [[ $# -gt 0 ]]; do
     --reinitialiser-mots-de-passe)  REINITIALISER_MDP=1; shift ;;
     --verifier-publication)         VERIFIER_PUBLICATION=1; shift ;;
     --diagnostic)                   DIAGNOSTIC=1; shift ;;
+    --assistant)                    ASSISTANT=1; shift ;;
     --desinstaller)                 DESINSTALLER=1; shift ;;
     --avec-les-donnees)             AVEC_LES_DONNEES=1; shift ;;
     --export-verifie=*)             EXPORT_VERIFIE="${1#*=}"; shift ;;
@@ -541,6 +553,299 @@ proprietaire_base() {
   printf "select pg_get_userbyid(datdba) from pg_database where datname = '%s';\n" \
     "$(litteral "$BASE_NOM")" | sql_admin
 }
+
+# =============================================================================
+#  --assistant — les six questions, et rien de plus              (lot L18.1)
+# =============================================================================
+#
+# ⚠️ **Ce que ce mode corrige, et le chiffre qui l'a mal orienté.**
+#
+# Le `PLAN_PRODUIT.md` annonçait « 74 variables d'environnement » et prescrivait
+# d'en réduire le nombre. **Mesuré le 08/09/2026 : `src/config/index.ts` en lit 68,
+# et ce script n'en réclame que SIX à l'exploitant** — toutes les autres portent un
+# défaut sûr, deux sont engendrées, quatre sont exigées par le serveur lui-même.
+#
+# L'objectif de réduction était donc **déjà atteint**, et le vrai défaut était
+# ailleurs : **rien ne dit LESQUELLES**. Un exploitant devant `.env.example` voit
+# soixante-huit lignes et ne sait pas où porter son attention ; le script, lui, le
+# sait exactement — il s'arrête en code 2 en les nommant. Ce mode ne fait que
+# retourner cette connaissance : au lieu d'attendre un fichier et de refuser, il
+# **pose les six questions**.
+#
+# ── Les six, et pourquoi ce sont celles-là ───────────────────────────────────
+#
+#   SERVEUR_URL_PUBLIQUE        le nom sous lequel VOS utilisateurs y accèdent
+#   LDAP_URL                    ┐
+#   LDAP_BASE_RECHERCHE         │ votre annuaire — le script ne peut pas le deviner,
+#   LDAP_DN_SERVICE             │ et un annuaire deviné est un annuaire faux
+#   LDAP_MOT_DE_PASSE_SERVICE   ┘
+#   SMTP_HOTE                   votre relais, si vous voulez les relances
+#
+# ── Le profil DÉCOUVERTE, et la raison pour laquelle il crie ─────────────────
+#
+# Répondre « aucun annuaire » pose une installation de découverte : pas d'AD, pas
+# de courriel, un certificat auto-signé, et un **compte de secours** — sans quoi
+# l'installation serait complète et personne ne pourrait entrer.
+#
+# ⚠️ **Elle s'annonce partout où elle peut** : `CYBER_GRC_PROFIL=decouverte` dans
+# la configuration, une ligne de réserve au `--diagnostic`, et un bandeau dans le
+# produit. Un profil dégradé qu'on ne voit pas **devient une production par
+# oubli** — c'est le défaut que ce profil existe pour empêcher, pas un risque
+# théorique qu'on accepte en échange de la commodité.
+#
+# ── Trois refus assumés ──────────────────────────────────────────────────────
+#
+#  1. **Il exige un terminal.** Sans `-t`, il échoue au lieu de lire des réponses
+#     vides sur une entrée fermée : une invite qu'on ne voit pas devient un
+#     `yes |` dans un script d'exploitant, et ce script pose des questions dont
+#     les réponses conditionnent qui entrera dans le produit.
+#  2. **Il n'écrit rien avant le récapitulatif.** On relit, on confirme, puis on
+#     écrit. Une configuration écrite au fil des réponses laisserait un fichier à
+#     moitié rempli si l'on interrompt.
+#  3. **Il ne remplace pas le mode non interactif : il l'alimente.** Ce qu'il
+#     écrit est exactement ce qu'un exploitant aurait écrit à la main, et
+#     l'installation qui suit est la même — aucun chemin de code particulier.
+
+if [[ $ASSISTANT -eq 1 ]]; then
+  [[ -t 0 && -t 1 ]] || echec "--assistant exige un terminal (entrée et sortie interactives).
+      Sans terminal, il lirait des réponses vides et poserait une configuration
+      que personne n'a validée. Sans terminal, renseignez $FICHIER_CONFIG puis
+      lancez : bash deploy/install.sh"
+
+  # ── Outils de saisie ──────────────────────────────────────────────────────
+  #
+  # `question` rend la réponse sur la sortie standard : l'appelant capture. Le
+  # dialogue, lui, va sur l'ERREUR standard — sans quoi il finirait dans la
+  # variable capturée, et l'exploitant verrait sa question devenir sa réponse.
+  question() {   # <invite> <défaut> [<motif>] [<explication du refus>]
+    local invite="$1" defaut="$2" motif="${3:-.}" refus="${4:-Valeur invalide.}" reponse
+    while true; do
+      if [[ -n "$defaut" ]]; then printf '\033[1;36m  ? \033[0m%s [%s] : ' "$invite" "$defaut" >&2
+      else                        printf '\033[1;36m  ? \033[0m%s : ' "$invite" >&2; fi
+      IFS= read -r reponse || reponse=""
+      [[ -n "$reponse" ]] || reponse="$defaut"
+      if [[ "$reponse" =~ $motif ]]; then printf '%s' "$reponse"; return 0; fi
+      printf '\033[1;33m  !! \033[0m%s\n' "$refus" >&2
+    done
+  }
+
+  question_secrete() {  # <invite> — jamais affichée, jamais dans l'historique
+    local invite="$1" reponse
+    while true; do
+      printf '\033[1;36m  ? \033[0m%s : ' "$invite" >&2
+      IFS= read -rs reponse || reponse=""
+      printf '\n' >&2
+      [[ -n "$reponse" ]] && { printf '%s' "$reponse"; return 0; }
+      printf '\033[1;33m  !! \033[0mUne valeur est attendue.\n' >&2
+    done
+  }
+
+  question_oui_non() {  # <invite> <défaut oui|non> -> 0 si oui
+    local reponse; reponse="$(question "$1" "$2" '^(oui|non|o|n|O|N|OUI|NON)$' "Répondez « oui » ou « non ».")"
+    [[ "${reponse,,}" == o* ]]
+  }
+
+  info "Assistant d'installation — Cyber GRC"
+  printf '\n' >&2
+  printf '  Six questions. Tout le reste porte un défaut sûr, et les secrets internes\n' >&2
+  printf '  sont engendrés — ils ne vous seront jamais demandés, ni jamais affichés.\n' >&2
+  printf '  Rien ne sera écrit avant que vous ayez relu le récapitulatif.\n\n' >&2
+
+  # ── 1. L'URL publique ─────────────────────────────────────────────────────
+  A_URL="$(question "Adresse à laquelle vos utilisateurs accéderont" \
+             "$(lire_variable SERVEUR_URL_PUBLIQUE 2>/dev/null || printf 'https://%s' "$(hostname -f 2>/dev/null || hostname)")" \
+             '^https://[A-Za-z0-9.-]+(:[0-9]+)?/?$' \
+             "Attendu : https://nom.de.domaine — le HTTPS est obligatoire en production.")"
+  A_URL="${A_URL%/}"
+
+  # ── 2. L'annuaire ─────────────────────────────────────────────────────────
+  printf '\n' >&2
+  A_PROFIL="production"
+  if question_oui_non "Raccorder le produit à votre Active Directory maintenant" "oui"; then
+    A_LDAP_URL="$(question "  URL LDAPS du contrôleur de domaine" \
+                    "$(lire_variable LDAP_URL 2>/dev/null)" \
+                    '^ldaps?://[A-Za-z0-9.-]+(:[0-9]+)?$' \
+                    "Attendu : ldaps://dc01.votre-domaine.interne:636")"
+    A_LDAP_BASE="$(question "  Base de recherche (DN)" \
+                    "$(lire_variable LDAP_BASE_RECHERCHE 2>/dev/null)" \
+                    '^[A-Za-z]+=.+' "Attendu un DN : DC=votre-domaine,DC=interne")"
+    A_LDAP_DN="$(question "  DN du compte de service (lecture seule)" \
+                    "$(lire_variable LDAP_DN_SERVICE 2>/dev/null)" \
+                    '^[A-Za-z]+=.+' "Attendu un DN : CN=svc-grc,OU=Services,DC=…")"
+    A_LDAP_MDP="$(question_secrete "  Mot de passe de ce compte (non affiché)")"
+    [[ "$A_LDAP_URL" == ldaps://* ]] || alerte "  LDAP en clair : les mots de passe des utilisateurs transiteront sans chiffrement."
+  else
+    # ── PROFIL DÉCOUVERTE ───────────────────────────────────────────────────
+    A_PROFIL="decouverte"
+    printf '\n' >&2
+    alerte "PROFIL DÉCOUVERTE — ceci n'est pas une installation de production."
+    alerte "Sans annuaire, la SEULE façon d'entrer est le compte de secours."
+    alerte "Il donne l'administration Groupe, et chacun de ses usages est journalisé."
+    printf '\n' >&2
+    A_SECOURS_ID="$(question "  Identifiant du compte de secours" "secours.grc" \
+                      '^[a-zA-Z0-9._-]{3,64}$' "Lettres, chiffres, point, tiret, souligné.")"
+    while true; do
+      A_SEC1="$(question_secrete "  Mot de passe (12 caractères au moins, non affiché)")"
+      if [[ ${#A_SEC1} -lt 12 ]]; then
+        alerte "  Douze caractères au minimum : ce compte donne l'administration Groupe."
+        continue
+      fi
+      A_SEC2="$(question_secrete "  Confirmez ce mot de passe")"
+      [[ "$A_SEC1" == "$A_SEC2" ]] && break
+      alerte "  Les deux saisies diffèrent."
+    done
+    SECOURS_MDP="$A_SEC1"; unset A_SEC1 A_SEC2
+  fi
+
+  # ── 3. Les relances par courriel ──────────────────────────────────────────
+  printf '\n' >&2
+  A_SMTP_HOTE=""
+  if [[ "$A_PROFIL" == "production" ]] && question_oui_non "Activer les relances par courriel (échéances, revues)" "oui"; then
+    A_SMTP_HOTE="$(question "  Relais de messagerie" "$(lire_variable SMTP_HOTE 2>/dev/null || printf 'smtp.office365.com')" \
+                     '^[A-Za-z0-9.-]+$' "Un nom d'hôte, sans schéma ni port.")"
+    A_SMTP_PORT="$(question "  Port" "$(lire_variable SMTP_PORT 2>/dev/null || printf '587')" '^[0-9]{1,5}$' "Un numéro de port.")"
+    A_SMTP_EXP="$(question "  Adresse d'expédition" "$(lire_variable SMTP_EXPEDITEUR 2>/dev/null || printf 'cyber-grc@%s' "${A_URL#https://}")" \
+                    '^[^@[:space:]]+@[^@[:space:]]+$' "Une adresse de courriel.")"
+  fi
+
+  # ── 4. Les filiales ───────────────────────────────────────────────────────
+  #
+  # Elles ne se devinent pas davantage que l'annuaire, et leur absence est
+  # SILENCIEUSE : sans filiale active, la session ne se résout pas et le produit
+  # refuse de servir — un symptôme qui ne nomme pas sa cause.
+  FICHIER_FILIALES_ASSISTANT="$CONFIG/filiales.conf"
+  A_FILIALES=()
+  DEJA_DECLAREES=0
+  if [[ -f "$FICHIER_FILIALES_ASSISTANT" ]]; then
+    DEJA_DECLAREES="$(grep -cvE '^\s*#|^\s*$' "$FICHIER_FILIALES_ASSISTANT" 2>/dev/null || printf '0')"
+  fi
+  printf '\n' >&2
+  if [[ "$DEJA_DECLAREES" -gt 0 ]]; then
+    succes "$DEJA_DECLAREES filiale(s) déjà déclarée(s) dans $FICHIER_FILIALES_ASSISTANT — inchangées."
+  else
+    printf '  Déclarez au moins une filiale. Sans filiale active, la session ne se résout\n' >&2
+    printf '  pas et le produit refuse de servir.\n\n' >&2
+    while true; do
+      A_CODE="$(question "  Code court de la filiale (2 à 10 caractères, A-Z 0-9)" "" \
+                  '^[A-Z0-9]{2,10}$' "Deux à dix caractères, majuscules et chiffres.")"
+      if [[ "$A_CODE" == "GROUPE" ]]; then
+        alerte "  « GROUPE » est réservé au périmètre Groupe entier (GRC-GROUPE-<PROFIL>)."
+        continue
+      fi
+      A_RAISON="$(question "  Raison sociale" "" '^.+$' "Une raison sociale non vide.")"
+      A_PAYS="$(question "  Pays (deux lettres)" "FR" '^[A-Z]{2}$' "Deux lettres majuscules : FR, DE, ES…")"
+      A_FILIALES+=("$A_CODE ; $A_RAISON ; $A_PAYS ; oui")
+      printf '\n' >&2
+      question_oui_non "  Déclarer une autre filiale" "non" || break
+    done
+  fi
+
+  # ── 5. Récapitulatif — on relit AVANT d'écrire ────────────────────────────
+  printf '\n' >&2
+  info "Récapitulatif"
+  printf '  URL publique      %s\n' "$A_URL" >&2
+  if [[ "$A_PROFIL" == "production" ]]; then
+    printf '  Annuaire          %s\n' "$A_LDAP_URL" >&2
+    printf '  Base de recherche %s\n' "$A_LDAP_BASE" >&2
+    printf '  Compte de service %s (mot de passe saisi, non affiché)\n' "$A_LDAP_DN" >&2
+  else
+    printf '  Annuaire          \033[1;33mAUCUN — profil DÉCOUVERTE\033[0m\n' >&2
+    printf '  Compte de secours %s (mot de passe saisi, non affiché)\n' "$A_SECOURS_ID" >&2
+  fi
+  if [[ -n "$A_SMTP_HOTE" ]]; then printf '  Relances          %s:%s, de %s\n' "$A_SMTP_HOTE" "$A_SMTP_PORT" "$A_SMTP_EXP" >&2
+  else                            printf '  Relances          aucune\n' >&2; fi
+  if [[ ${#A_FILIALES[@]} -gt 0 ]]; then
+    printf '  Filiales          %d à déclarer :\n' "${#A_FILIALES[@]}" >&2
+    for f in "${A_FILIALES[@]}"; do printf '                    %s\n' "$f" >&2; done
+  else
+    printf '  Filiales          %s déjà déclarée(s), inchangées\n' "$DEJA_DECLAREES" >&2
+  fi
+  printf '\n' >&2
+  question_oui_non "Écrire cette configuration et installer" "oui" \
+    || echec "Interrompu à votre demande. RIEN n'a été écrit."
+
+  # ── 6. Écriture ───────────────────────────────────────────────────────────
+  #
+  # ⚠️ Ce qui suit est BORNÉ POUR LE BANC. L'installation ne peut pas être jouée
+  # par un essai — elle exige root, systemd, Apache et un cluster PostgreSQL — mais
+  # **la décision « quelle variable prend quelle valeur dans quelle branche » est
+  # de la logique pure**, et c'est elle qui décide si un profil découverte se pose
+  # en production. Sans ces ancres, elle ne serait éprouvée par personne.
+  # >>> banc: assistant-ecriture <<<
+  install -d -m 0750 "$CONFIG"
+  if [[ ! -f "$FICHIER_CONFIG" ]]; then
+    install -m 0600 "$SOURCE/.env.example" "$FICHIER_CONFIG"
+  fi
+  appliquer_droits_config "$FICHIER_CONFIG"
+
+  definir_variable SERVEUR_URL_PUBLIQUE "$A_URL"
+  definir_variable CYBER_GRC_PROFIL     "$A_PROFIL"
+  if [[ "$A_PROFIL" == "production" ]]; then
+    definir_variable AUTH_LDAP_ACTIF          "oui"
+    definir_variable LDAP_URL                 "$A_LDAP_URL"
+    definir_variable LDAP_BASE_RECHERCHE      "$A_LDAP_BASE"
+    definir_variable LDAP_DN_SERVICE          "$A_LDAP_DN"
+    definir_variable LDAP_MOT_DE_PASSE_SERVICE "$A_LDAP_MDP"
+    unset A_LDAP_MDP
+  else
+    definir_variable AUTH_LDAP_ACTIF                "non"
+    definir_variable AUTH_COMPTE_SECOURS_IDENTIFIANT "$A_SECOURS_ID"
+    # ⚠️ L'EMPREINTE est posée plus bas, après la compilation (§5) : elle est
+    # calculée par `dist/auth/secours.js`, c'est-à-dire par LE code du produit.
+    # La recalculer ici en shell donnerait une seconde écriture du format
+    # « scrypt$N$r$p$sel$empreinte » — et deux écritures d'un format finissent
+    # toujours par ne plus dire la même chose. Le mot de passe reste en mémoire,
+    # jamais sur le disque, jamais en argument de commande.
+  fi
+  if [[ -n "$A_SMTP_HOTE" ]]; then
+    definir_variable SMTP_ACTIF     "oui"
+    definir_variable SMTP_HOTE      "$A_SMTP_HOTE"
+    definir_variable SMTP_PORT      "$A_SMTP_PORT"
+    definir_variable SMTP_EXPEDITEUR "$A_SMTP_EXP"
+  else
+    definir_variable SMTP_ACTIF "non"
+  fi
+
+  if [[ ${#A_FILIALES[@]} -gt 0 ]]; then
+    if [[ ! -f "$FICHIER_FILIALES_ASSISTANT" ]]; then
+      install -m 0640 "$SOURCE/deploy/filiales.conf.exemple" "$FICHIER_FILIALES_ASSISTANT"
+    fi
+    for f in "${A_FILIALES[@]}"; do printf '%s\n' "$f" >> "$FICHIER_FILIALES_ASSISTANT"; done
+    appliquer_droits_config "$FICHIER_FILIALES_ASSISTANT"
+    succes "${#A_FILIALES[@]} filiale(s) déclarée(s) dans $FICHIER_FILIALES_ASSISTANT"
+  fi
+
+  # ── 7. Certificat de découverte ───────────────────────────────────────────
+  #
+  # Le vhost livré exige un certificat, une clé ET une chaîne. En découverte, on
+  # les engendre auto-signés : sans eux Apache refuse de démarrer, et le mode
+  # « voir le produit en dix minutes » ne tiendrait pas sa promesse.
+  # ⚠️ En PRODUCTION on n'engendre RIEN : un certificat auto-signé qui apparaît
+  # tout seul dans une installation d'entreprise est un certificat que personne
+  # n'a décidé, et que les navigateurs refuseront en apprenant aux utilisateurs
+  # à passer outre les avertissements TLS.
+  if [[ "$A_PROFIL" == "decouverte" ]]; then
+    HOTE_CERT="${A_URL#https://}"; HOTE_CERT="${HOTE_CERT%%:*}"
+    if [[ ! -f /etc/ssl/cyber-grc/serveur.crt ]]; then
+      install -d -m 0755 /etc/ssl/cyber-grc
+      openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes \
+        -keyout /etc/ssl/cyber-grc/serveur.key \
+        -out    /etc/ssl/cyber-grc/serveur.crt \
+        -subj "/CN=$HOTE_CERT" \
+        -addext "subjectAltName=DNS:$HOTE_CERT" >/dev/null 2>&1 \
+        || echec "Le certificat de découverte n'a pas pu être engendré (openssl)."
+      cp /etc/ssl/cyber-grc/serveur.crt /etc/ssl/cyber-grc/chaine-pki-interne.crt
+      chmod 0600 /etc/ssl/cyber-grc/serveur.key
+      chmod 0644 /etc/ssl/cyber-grc/serveur.crt /etc/ssl/cyber-grc/chaine-pki-interne.crt
+      alerte "Certificat AUTO-SIGNÉ engendré pour « $HOTE_CERT » (365 jours)."
+      alerte "Les navigateurs l'annonceront comme non fiable : c'est exact, il l'est."
+    fi
+  fi
+  # <<< banc: assistant-ecriture >>>
+
+  succes "Configuration écrite. L'installation commence."
+  printf '\n' >&2
+fi
 
 # =============================================================================
 #  --diagnostic — l'état des DOUZE points qui cassent en vrai      (lot L18.3)
@@ -1465,6 +1770,39 @@ fi
 # Version affichée par /api/sante et tracée au journal d'audit (§0.3). Lue plus haut,
 # avant le déploiement du frontend, parce que le jeton de cache s'en sert aussi.
 if [[ -n "$VERSION_PAQUET" ]]; then definir_variable APPLICATION_VERSION "$VERSION_PAQUET"; fi
+
+# ── L'empreinte du compte de secours — calculée par LE CODE DU PRODUIT ───────
+#
+# Posée ici, et pas dans l'assistant, pour une raison de fond : le format
+# `scrypt$<N>$<r>$<p>$<sel>$<empreinte>` est écrit à UN endroit,
+# `src/auth/secours.ts`, et c'est lui qui le relira. Le recalculer en shell — ou
+# en Python, ou dans un second script — donnerait une deuxième écriture du même
+# format, et **deux écritures d'un format finissent toujours par ne plus dire la
+# même chose**. Le jour où les paramètres scrypt changent, la copie reste en
+# arrière et le compte de secours cesse de fonctionner **sans un message**.
+#
+# La compilation a eu lieu au § 4 : `dist/auth/secours.js` existe. On appelle
+# donc `engendrerEmpreinte()` elle-même.
+#
+# ⚠️ Le mot de passe arrive par l'ENTRÉE STANDARD, jamais en argument : un
+# argument de commande est lisible par `ps` de tout compte de la machine.
+if [[ -n "${SECOURS_MDP:-}" ]]; then
+  CHEMIN_SECOURS="$RACINE/backend/dist/auth/secours.js"
+  [[ -f "$CHEMIN_SECOURS" ]] \
+    || echec "Compte de secours demandé, mais $CHEMIN_SECOURS est absent.
+      Le code n'a pas été compilé : relancez sans --seulement-base."
+  EMPREINTE_SECOURS="$(printf '%s' "$SECOURS_MDP" | node --input-type=module -e "
+const m = await import('file://$CHEMIN_SECOURS');
+const morceaux = []; for await (const c of process.stdin) morceaux.push(c);
+process.stdout.write(await m.engendrerEmpreinte(Buffer.concat(morceaux).toString('utf8')));
+" 2>/dev/null)" || echec "Le calcul de l'empreinte du compte de secours a échoué."
+  [[ "$EMPREINTE_SECOURS" == scrypt\$* ]] \
+    || echec "L'empreinte engendrée n'a pas la forme attendue : le format a changé
+      dans src/auth/secours.ts sans que ce script le sache."
+  definir_variable AUTH_COMPTE_SECOURS_EMPREINTE "$EMPREINTE_SECOURS"
+  unset SECOURS_MDP EMPREINTE_SECOURS
+  succes "compte de secours : empreinte scrypt posée (mot de passe jamais écrit sur le disque)"
+fi
 
 BASE_HOTE="$(lire_variable BASE_HOTE)";  BASE_HOTE="${BASE_HOTE:-127.0.0.1}"
 BASE_PORT="$(lire_variable BASE_PORT)";  BASE_PORT="${BASE_PORT:-5432}"

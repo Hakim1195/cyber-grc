@@ -21,6 +21,79 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
 > jamais ce qu'il ne regarde pas.*
 
+### L18.1 / L18.2 a — `install.sh --assistant` : six questions, et un profil découverte qui crie
+
+**Le mode non interactif n'est pas remplacé, il est alimenté** : l'assistant écrit exactement
+ce qu'un exploitant aurait écrit à la main, et l'installation qui suit est la même — aucun
+chemin de code particulier.
+
+Il **exige un terminal** et échoue sans, plutôt que de lire des réponses vides sur une entrée
+fermée : une invite qu'on ne voit pas devient un `yes |` dans un script d'exploitant, et ces
+réponses décident de qui entrera dans le produit. Il **n'écrit rien avant le récapitulatif** —
+on relit, on confirme, puis on écrit.
+
+**Le profil découverte** (répondre « non » à l'annuaire) pose une installation sans AD, sans
+courriel, avec un **compte de secours** et un **certificat auto-signé** — sans lui, Apache
+refuse de démarrer et la promesse « voir le produit en dix minutes » ne tiendrait pas.
+⚠️ Il s'annonce partout où il peut : `CYBER_GRC_PROFIL=decouverte` dans la configuration, une
+réserve au `--diagnostic`, et un bandeau dans le produit (**18.2 b**, à venir — seul sous-lot
+de L18 qui touche `src/`). *Un profil dégradé qu'on ne voit pas devient une production par
+oubli.*
+
+**L'empreinte du compte de secours est calculée par `dist/auth/secours.js`**, c'est-à-dire par
+le code du produit, et le mot de passe y arrive par l'**entrée standard** — un argument de
+commande est lisible par `ps` de tout compte de la machine. Recalculer le format
+`scrypt$N$r$p$sel$empreinte` en shell aurait donné une seconde écriture, et **deux écritures
+d'un format finissent toujours par ne plus dire la même chose** : le jour où les paramètres
+changent, la copie reste en arrière et le compte de secours cesse de fonctionner sans un mot.
+
+**Éprouvé par pseudo-terminal**, dans les deux branches, avec des saisies invalides — URL sans
+schéma, mot de passe de moins de douze caractères, code de filiale « GROUPE » : les trois refus
+bouclent. Refus final → **aucun fichier écrit**, vérifié.
+
+`test/deploiement/assistant.test.mjs`, 4 essais, **les quatre mordus**. Le bloc d'écriture est
+borné par des ancres de banc (`# >>> banc: assistant-ecriture <<<`) : l'installation ne peut pas
+être jouée par un essai, mais **la décision « quelle variable prend quelle valeur dans quelle
+branche » est de la logique pure**, et c'est elle qui décide si un profil découverte peut passer
+pour une production.
+
+⚠️ **Le mécanisme de substitution comptée du banc a attrapé ma propre erreur** : j'avais déclaré
+7 occurrences de `/etc/ssl/cyber-grc` dans le bloc, il y en a 9, et l'essai a refusé de jouer
+contre autre chose que ce qu'il annonçait.
+
+### L18.4 — déjà livré : `groupes-ad.sh --powershell` existait, et le défaut était ailleurs
+
+Le plan prévoyait d'écrire le script PowerShell des groupes AD. **Mesuré : il existe déjà**, il
+est idempotent, il ne supprime jamais rien — joué sur la recette, 23 groupes pour 2 filiales et
+8 profils, avec un en-tête qui nomme chacune de ses sources.
+
+**Le défaut réel était de découvrabilité**, et il était de mon fait : `filiales.conf.exemple`
+documentait `--powershell` depuis toujours, mais le `docs/INSTALLER.md` que je venais d'écrire
+renvoyait vers `--csv`, moins utile. Corrigé — le guide passe de sept commandes à **cinq**.
+
+⚠️ **Troisième fois dans ce seul lot que la mesure contredit le plan** : 18.4 déjà livré, 18.5
+déjà atteint, et le chiffre de 74 variables faux. *Un plan écrit sans mesurer ne se trompe pas
+au hasard : il fait travailler sur des problèmes qui n'existent pas, et il le fait avec
+conviction.*
+
+### Q-251 — Q-246 est ROUVERT : le correctif du 07/09 n'a pas tenu
+
+`test/import/lecture.test.mjs:297` a de nouveau rougi au banc complet : *« 2× d'entrée doit
+coûter ~2×, pas ~4× (1,02 ms → 2,94 ms) »*, rapport **2,88 contre un seuil de 2,5**. Le fichier
+porte pourtant déjà le meilleur de trois passes des deux côtés, posé la veille et déclaré fermé.
+
+**Mesuré** : 10 passages isolés → 10 verts, *y compris sous une charge artificielle de quatre
+boucles concurrentes* ; **2 bancs complets → 1 rouge, 1 vert** (1793/1794 puis **1794/1794**).
+
+⚠️ **Pourquoi le remède ne pouvait pas suffire** : le meilleur de trois passes retire la
+dispersion, mais **on mesure un rapport sur des grandeurs de l'ordre de la milliseconde**, où le
+quantum de bruit est comparable à la mesure. *Le remède traitait la dispersion ; le défaut est
+l'échelle.* Et il ne faut **pas** relever le seuil : à 3,5 l'essai cesserait de distinguer le
+linéaire du quadratique — il deviendrait le décor qu'il a été écrit pour ne pas être.
+
+Inscrit au `docs/PLAN_EXECUTION.md` §7 avec ses deux issues honnêtes. **Rien de tout cela ne
+vient du lot L18** : le fichier n'a pas été touché.
+
 ### L18.3 — `install.sh --diagnostic` : douze sujets, une commande, et chaque ligne dit quoi faire
 
 **Premier livrable du `PLAN_PRODUIT.md`.** Vérifier une installation demandait de connaître

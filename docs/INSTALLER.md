@@ -32,36 +32,59 @@ l'installateur — il ne vous les demandera jamais, et ne les affichera jamais.
 
 ---
 
-## Les dix commandes
+## Les cinq commandes
 
 ```bash
 # 1 — Récupérer le produit
 git clone https://github.com/Hakim1195/cyber-grc.git
 cd cyber-grc
 
-# 2 — Déclarer vos filiales (le script ne peut pas les inventer)
-sudo install -D -m 0640 backend/deploy/filiales.conf.exemple /etc/cyber-grc/filiales.conf
-sudo $EDITOR /etc/cyber-grc/filiales.conf
+# 2 — Installer. L'assistant pose les six questions, engendre les secrets,
+#     déclare vos filiales, puis pose PostgreSQL 17, la base, le service et Apache.
+sudo bash backend/deploy/install.sh --assistant
 
-# 3 — Installer. Le script pose les six questions, engendre les secrets,
-#     pose PostgreSQL 17, la base, le service, Apache et le certificat.
-sudo bash backend/deploy/install.sh
-
-# 4 — Constater. Douze sujets contrôlés, chaque ligne dit quoi faire.
+# 3 — Constater. Douze sujets contrôlés, chaque ligne dit quoi faire.
 sudo bash backend/deploy/install.sh --diagnostic
 
-# 5 — Engendrer les groupes Active Directory à créer chez vous
-sudo bash backend/deploy/groupes-ad.sh --csv
+# 4 — Engendrer le script des groupes Active Directory, prêt à exécuter
+sudo bash backend/deploy/groupes-ad.sh --powershell \
+     --ou 'OU=Cyber GRC,OU=Groupes,DC=votre-domaine,DC=interne' > creer-groupes-grc.ps1
 
-# 6 — (chez l'administrateur du domaine) créer ces groupes, puis y mettre les personnes
-
-# 7 — Ouvrir https://votre-nom/ et se connecter avec un compte de l'annuaire
+# 5 — Faire exécuter creer-groupes-grc.ps1 par l'administrateur du domaine,
+#     puis ouvrir https://votre-nom/ et se connecter avec un compte de l'annuaire
 ```
+
+**L'étape 4 est idempotente** : relancée après une acquisition, elle ne crée que ce qui
+manque, et **elle ne supprime jamais rien** — retirer un groupe retirerait des accès sans
+que personne l'ait décidé. Régénérez-la après chaque acquisition : la liste change, le
+fichier non.
+
+*Vous préférez tout écrire à la main ?* `install.sh` sans `--assistant` fonctionne comme
+avant : il s'arrête en code 2 en nommant ce qui manque dans `/etc/cyber-grc/env`, et la
+déclaration des filiales se pose depuis `backend/deploy/filiales.conf.exemple`.
 
 ⚠️ **L'étape 4 n'est pas décorative.** Un jour, le dépôt était vert pendant que la machine
 servait encore l'ancien fichier, et une fuite restait ouverte en vol (constat **Q-103**).
 *Un banc vert sur l'arbre ne dit rien du commit, et un commit vert ne dit rien de la
 machine.*
+
+---
+
+## Juste voir le produit ? Le profil découverte
+
+À la question « raccorder le produit à votre Active Directory maintenant ? », répondez
+**non**. L'assistant pose alors une installation de **découverte** : pas d'annuaire, pas de
+courriel, un certificat auto-signé, et un **compte de secours** que vous choisissez — sans
+lui, l'installation serait complète et personne ne pourrait entrer.
+
+⚠️ **Ce n'est pas une installation de production, et elle le dit partout** : dans la
+configuration (`CYBER_GRC_PROFIL=decouverte`), en réserve au `--diagnostic`, et par un
+bandeau dans le produit. **N'y saisissez pas de données réelles.** Un profil dégradé qu'on
+ne voit pas devient une production par oubli.
+
+Le compte de secours donne l'administration Groupe et **chacun de ses usages est
+journalisé** ; son mot de passe n'est jamais écrit sur le disque — seule une empreinte
+`scrypt`, calculée par le code du produit lui-même, entre dans la configuration.
 
 ---
 
