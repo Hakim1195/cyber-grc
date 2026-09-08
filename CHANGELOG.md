@@ -8,6 +8,19 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
+> **État mesuré à la révision `23f00f7`**, sur la machine réelle (`SRV-Infra`, Debian 13,
+> **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
+> **1786 essais, 1786 passés, 0 échec** (dix-neuf familles, détail au `backend/README.md`
+> §8), `npm run verifier-types` sans erreur, `npm audit --omit=dev` → 0 vulnérabilité,
+> `db/verifier_cloisonnement.sql` → **107 contrôles, 107 réussis, 0 échoué**,
+> `f_verifier_schema()` → **0 anomalie** (17 garde-fous consignés), et la recette sert la
+> révision courante (`install.sh --verifier-publication` → 81 fichiers identiques au dépôt).
+>
+> ⚠️ **Et rien de tout cela ne vaut passage de porte.** La porte **S8 reste refusée** — six
+> passages —, la porte **S7 n'a jamais été jouée**, et les livraisons des 07 et 08/09 n'ont
+> été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
+> jamais ce qu'il ne regarde pas.*
+
 ### L'empreinte cesse d'être un commentaire : elle s'affiche, et elle est vérifiée
 
 **Une promesse à moitié tenue depuis le lot L6, mesurée le 08/09/2026.**
@@ -60,6 +73,11 @@ La persistance appartient donc au balayage, qui s'exécute sous le périmètre d
 peut aussi mettre le `sha256` à jour en base. Il attrape la corruption, la restauration
 partielle et la substitution faite **hors de l'application** — pas un adversaire qui tient les
 deux. L'écran ne dit donc jamais « intégrité garantie ».
+
+**Le contrat est écrit, pas seulement le code** : `backend/db/CONVENTIONS.md` **§31.5** —
+*« l'empreinte est rapprochée, sinon elle n'est qu'un commentaire »* — et le
+`docs/PLAN_SERVEUR.md` §1.6, dont la promesse était à moitié tenue depuis L6, porte
+désormais ce qui la tient. Les deux disent aussi ce que le dispositif **ne** prouve pas.
 
 #### Et un défaut de la veille, trouvé en écrivant celui-ci
 

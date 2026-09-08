@@ -1996,6 +1996,51 @@ profondeur, pas une promesse. Le §17.5 s'applique — un garde-fou ne se voit p
 de portée qu'il n'en a. ⚠️ Et **si ClamAV ne répond pas, la pièce n'est pas acceptée** :
 `clamavActif` désactive l'analyse en développement, jamais l'échec silencieux en production.
 
+### 31.5 L'empreinte est **rapprochée**, sinon elle n'est qu'un commentaire
+
+Le contrôle n° 6 calcule le SHA-256 **sur ce qui a été écrit**, et le `PLAN_SERVEUR` §1.6 en
+tire la promesse : *« c'est ce qui transforme une pièce jointe en preuve vérifiable — un
+auditeur peut s'assurer qu'un rapport n'a pas été remplacé après coup. »*
+
+⚠️ **Une empreinte que rien ne recalcule ne tient pas cette promesse.** Mesuré le
+08/09/2026 : `empreinteDe()` n'avait **qu'un seul appelant dans tout `src/`**, le dépôt.
+L'empreinte était écrite, stockée, servie — et mordue par rien, c'est-à-dire un commentaire
+(§18.4), sur la propriété centrale du coffre. La ré-analyse périodique ne comble pas ce
+manque : elle est **antivirale**, elle repasse le fichier à ClamAV et ne le compare pas à son
+empreinte. Les deux questions sont distinctes — *« ce fichier est-il nocif ? »* et *« ce
+fichier est-il encore celui qu'on a empreinté ? »* — et une seule était posée.
+
+Le contrat est donc en trois points, et ils sont indissociables :
+
+1. **l'empreinte s'affiche**, en entier, à qui peut lire la pièce. Une empreinte qu'on ne
+   peut pas lire ne sert à rien : c'est en la comparant caractère par caractère à celle de
+   son propre exemplaire qu'un auditeur constate qu'un rapport n'a pas changé ;
+2. **elle se rapproche à la demande** — route déclarée `lire`, jamais `ecrire` : rapprocher
+   n'extrait aucun octet, et l'exiger sous un droit d'écriture priverait l'auditeur, qui lit
+   et n'écrit pas, du seul contrôle qui l'intéresse. Le coût est **inférieur à celui de la
+   délivrance**, déjà ouverte au même appelant ;
+3. **elle se rapproche seule**, par balayage périodique, qui **inscrit** son verdict
+   (`etat_integrite`, `derniere_verification`) et sort en échec sur un écart. Un contrôle
+   qui n'existerait qu'à la demande ne verrait jamais rien : personne ne clique sur une
+   pièce déposée il y a deux ans.
+
+⚠️ **Ce que le rapprochement à la demande NE fait PAS : il ne persiste rien.** Écrire
+exigerait la politique d'écriture de `pieces_jointes` — *la filiale ACTIVE*. Une session de
+périmètre Groupe qui vérifie la pièce d'une filiale voisine, qu'elle a parfaitement le droit
+de **lire**, verrait l'`update` toucher zéro ligne : le produit répondrait « vérifiée » sans
+avoir rien inscrit. C'est la forme exacte du défaut que ce dépôt traque — **réussir en
+silence**. La persistance appartient au balayage, qui s'exécute sous le périmètre de chaque
+filiale.
+
+⚠️ **Et ce que le dispositif ne prouve pas** (§17.5, et l'écran doit le dire) : qui peut
+écrire dans le magasin peut aussi mettre le `sha256` à jour en base. Il attrape la
+corruption, la restauration partielle et la substitution faite **hors de l'application** —
+pas un adversaire qui tient les deux. Ne jamais l'appeler « garantie d'intégrité ».
+
+**Les trois verdicts sont journalisés**, pas seulement les mauvais : un journal qui ne
+garderait que les écarts ne permettrait pas de répondre à *« quand cette pièce a-t-elle été
+vérifiée pour la dernière fois ? »*, qui est l'autre question d'un auditeur.
+
 ---
 
 ## 32. Le resserrement de `filiales` — le contrat, écrit avant la migration `010`

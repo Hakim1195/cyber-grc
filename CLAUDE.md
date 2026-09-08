@@ -773,7 +773,7 @@ sur l'**Active Directory** du groupe.
 | **L13 — Cycle de vie** | ✅ **livré** (05/09/2026, vague 6) |
 | **L14 — Documentation** | ✅ **livré** (05/09/2026, vague 7) |
 | **L15 — Durcissement final** | 🟡 **en cours** (vague 8) — **porte S8 refusée six fois**, c'est la condition de mise en service |
-| **L16 — Système documentaire** | 🟡 **quatre actions sur cinq livrées** (vague 9) — D2 le 07/09 (les pièces suivent leur porteur), **D1, D4 et D5 le 08/09** (version en vigueur, référence externe assumée, publication soumise au circuit). **Reste D3, la recherche, pas avant S8.** `docs/PLAN_EXECUTION.md` §3 |
+| **L16 — Système documentaire** | 🟡 **quatre actions sur cinq livrées** (vague 9) — D2 le 07/09 (les pièces suivent leur porteur), **D1, D4 et D5 le 08/09** (version en vigueur, référence externe assumée, publication soumise au circuit), **plus la vérification d'intégrité** hors des cinq actions (migration `020` : l'empreinte s'affiche et elle est *rapprochée* du fichier, à la demande et par balayage — `db/CONVENTIONS.md` §31.5). **Reste D3, la recherche, pas avant S8.** `docs/PLAN_EXECUTION.md` §3 |
 
 Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 `grc-backup`** (`backend/src/reprise/**`, portage serveur des migrations v1 → v12,
@@ -978,14 +978,19 @@ quatre points de durcissement groupés sous **Q-214 b, c, d, f**.
    omission qui attend. Aucun des cinq générateurs du produit n'a jamais pu produire ces
    signes — le round-trip est intact.
 
-**Le travail qui reste, par ordre de valeur :**
+**Le travail qui reste, par ordre de valeur** — ⚠️ **réécrit le 08/09/2026** : cette table
+annonçait *« rejouer la porte S8 — TROISIÈME passage »* alors qu'elle en avait connu **six**.
+Un chiffre faux ici est un constat, pas une coquille (`docs/PLAN_EXECUTION.md` §5).
 
 | | Contenu | Pourquoi |
 |---|---|---|
-| **a** | **Rejouer la porte S8 — TROISIÈME passage** | Le deuxième a refusé sur **Q-215**, corrigé depuis. Deux passages ont rouvert Q-208 deux fois : *un banc vert ne vaut pas un passage de porte*, et *les constats fermés depuis un passage précédent ont déjà fait échouer le suivant* |
-| **b** | **Q-214 b, c, d, f** | Promotion de pièce jointe avant `commit` sans réconciliation disque↔base ; quota lu puis consommé dans deux transactions ; trois collections non bornées ; trois valeurs pour la borne de corps |
-| **c** | **Q-205 b, Q-206** | Un aperçu d'import ne laisse aucune trace ; deux erreurs de fond dans le catalogue ANSSI **français**, dont la source est un CSV du client |
-| **d** | **Q-186** | Propriétaire : **exploitant** |
+| **a** | **Rejouer la porte S8 — SEPTIÈME passage** | Six passages, six refus. Depuis le 6ᵉ, **sept livraisons n'ont été soumises à aucun auditeur indépendant** : D2 (migration `017`), D1 · D4 · D5 (`018`, `019`), la vérification d'intégrité (`020`), et les fermetures Q-248 / Q-250. *Un banc vert ne vaut pas un passage de porte*, et *les constats fermés depuis un passage précédent ont déjà fait échouer le suivant* — deux fois sur Q-208 |
+| **b** | **Jouer la porte S7, JAMAIS jouée** | Relecture métier et paraphrase délibérée des catalogues (droit d'auteur, `PLAN_SERVEUR` §4.2). Aucun échec ne la signale : c'est le point le plus facile à manquer |
+| **c** | **Q-243, Q-247** | Une troncature de **queue** du journal est indétectable — le produit répond `sain: true`. La barrière de publication ne vérifie pas que l'approbation porte encore sur le contenu actuel |
+| **d** | **Q-214 b, c, d, f** | Promotion de pièce jointe avant `commit` sans réconciliation disque↔base ; quota lu puis consommé dans deux transactions ; trois collections non bornées ; trois valeurs pour la borne de corps |
+| **e** | **Q-205 b, Q-206** | Un aperçu d'import ne laisse aucune trace ; deux erreurs de fond dans le catalogue ANSSI **français**, dont la source est un CSV du client |
+| **f** | **Q-234, Q-235, Q-236, Q-238 → Q-241, Q-244** | Gardes qui ne mordent pas assez, et résidus de désinstallation |
+| **g** | **Q-186** | Propriétaire : **exploitant** |
 
 ### La vague 3 — L3 authentification AD et droits, puis L5 journal
 

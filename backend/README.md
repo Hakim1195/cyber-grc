@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 1747 essais, dix-neuf familles (voir plus bas)
+npm test                           # 1786 essais, dix-neuf familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -768,7 +768,7 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 | **L13 — Cycle de vie** | ✅ **livré** (vague 6, 05/09/2026) |
 | **L14 — Documentation** | ✅ **livré** (vague 7, 05/09/2026) — `docs/GUIDE_EXPLOITATION.md` et `docs/GUIDE_UTILISATEUR.md` |
 | **L15 — Durcissement final** | 🟡 **EN COURS — c'est l'état présent du chantier** (vague 8). Revue de sécurité sur l'ensemble du produit. **Porte S8 jouée six fois, refusée à chaque passage** ; au 6ᵉ : **0 bloquant, 4 majeurs, 8 mineurs, 0 fuite entre filiales**, banc **1747/1747**. C'est la **condition de mise en service** : elle n'est pas remplie |
-| **L16 — Système documentaire** | 🟡 **quatre actions sur cinq livrées** (vague 9, décidée le 07/09/2026). **D2 le 07/09** : les pièces jointes suivent leur porteur sur les six chemins (migration `017`, constats **Q-232 / Q-233** fermés). **D1, D4 et D5 le 08/09** (migrations `018` et `019`) : la pièce marquée « **en vigueur** » est celle qui fait foi — au plus une par porteur **et par filiale** —, et c'est elle qui donne le numéro de version de la fiche, au lieu d'une saisie libre qui pouvait annoncer « 2.1 » au-dessus du PDF de la 1.4 ; `documents.emplacement` devient « **Document resté ailleurs** », une référence externe qu'on ne confond plus avec un fichier détenu ici ; un document « en validation » ne passe « en vigueur » qu'avec une étape de **publication approuvée** (code **`GRC06`**, refus journalisé avec sa route), et l'encart du circuit d'approbation — livré par L8, que **personne n'appelait** — est monté sur la fiche. ⚠️ **Le coffre existait déjà** : L6 livre le dépôt et ses huit contrôles ; rien de cela n'a été refait. **Reste D3**, la recherche, qui **ne se joue pas avant que S8 soit franchie** — une recherche est un oracle, c'est la surface la plus propice à une fuite entre filiales. Voir `../docs/PLAN_EXECUTION.md` §3, vague 9 |
+| **L16 — Système documentaire** | 🟡 **quatre actions sur cinq livrées** (vague 9, décidée le 07/09/2026). **D2 le 07/09** : les pièces jointes suivent leur porteur sur les six chemins (migration `017`, constats **Q-232 / Q-233** fermés). **D1, D4 et D5 le 08/09** (migrations `018` et `019`) : la pièce marquée « **en vigueur** » est celle qui fait foi — au plus une par porteur **et par filiale** —, et c'est elle qui donne le numéro de version de la fiche, au lieu d'une saisie libre qui pouvait annoncer « 2.1 » au-dessus du PDF de la 1.4 ; `documents.emplacement` devient « **Document resté ailleurs** », une référence externe qu'on ne confond plus avec un fichier détenu ici ; un document « en validation » ne passe « en vigueur » qu'avec une étape de **publication approuvée** (code **`GRC06`**, refus journalisé avec sa route), et l'encart du circuit d'approbation — livré par L8, que **personne n'appelait** — est monté sur la fiche. ⚠️ **Le coffre existait déjà** : L6 livre le dépôt et ses huit contrôles ; rien de cela n'a été refait. **Livré aussi le 08/09, hors des cinq actions** : la **vérification d'intégrité** (migration `020`). L'empreinte SHA-256 était calculée sur le fichier écrit, stockée, servie — et `empreinteDe()` n'avait **qu'un seul appelant dans tout `src/`**, le dépôt : mordue par rien, c'est-à-dire un commentaire (`db/CONVENTIONS.md` §18.4), sur la promesse centrale du coffre. Elle **s'affiche** désormais, un **rapprochement à la demande** (`GET …/:pieceId/integrite`, déclaré `lire`) rend `conforme` / `ecart` / `fichier_absent`, et un **balayage** sur le minuteur de ré-analyse inscrit le verdict et **sort en code 1** sur un écart ; vingt-deuxième action de journal, les trois verdicts tracés (`db/CONVENTIONS.md` §31.5). ⚠️ Ce **n'est pas** une garantie d'intégrité et l'écran ne le dit jamais : qui peut écrire dans le magasin peut aussi mettre le `sha256` à jour. **Reste D3**, la recherche, qui **ne se joue pas avant que S8 soit franchie** — une recherche est un oracle, c'est la surface la plus propice à une fuite entre filiales. Voir `../docs/PLAN_EXECUTION.md` §3, vague 9 |
 
 ### Les verdicts, tels que le journal des portes les formule
 
@@ -893,25 +893,25 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`9de7d51`** — « Porte S8, cinquième passage : un défaut du produit, et cinq gardes qui mentaient sur eux-mêmes » (05/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a été RÉANCRÉ après le constat Q-219** : il désignait `d217fbb`, **cinquante-six commits en arrière**, et annonçait 1 030 essais quand le banc en jouait 1 747 — 11 familles au lieu de 19, 48 tables au lieu de 49, 7 migrations au lieu de 16. Le garde-fou ne pouvait pas le voir : il juge le document contre **la révision que le document nomme**, ce qui est juste pendant une vague et aveugle à sa clôture. La péremption est désormais **bornée** (§ ci-dessous), au lieu d'être une consigne écrite que trois portes ont laissée non tenue. |
-| État de l'arbre | **propre** (`git status --porcelain` vide) |
+| Révision mesurée | **`23f00f7`** — « L'empreinte cesse d'être un commentaire : elle s'affiche, et elle est vérifiée » (08/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc avait déjà été RÉANCRÉ après le constat Q-219**, où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**, ce qui est juste pendant une vague et aveugle à sa clôture. La péremption est **bornée** depuis (§ ci-dessous), et ce réancrage-ci la respecte. |
+| État de l'arbre | **les essais ont été joués sur le code de `23f00f7`**, dans un arbre qui portait en plus les mises à jour de documentation du commit suivant. Le compte d'essais ne dépend pas de ces fichiers — sauf la famille `documentation`, qui LIT ce README, et qui a été rejouée **après** la mise à jour |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 1747 · pass 1747 · fail 0
+npm test                                         → tests 1786 · pass 1786 · fail 0
                                                    base 274 · api 272 · navigateur 167
-                                                   auth 115 · import 97 · pieces 92
-                                                   droits 84 · reprise 79 · cycle 72
-                                                   deploiement 85 · journal-lecture 70
-                                                   notifications 69 · approbations 60
+                                                   pieces 121 · auth 115 · import 97
+                                                   deploiement 87 · droits 84 · reprise 82
+                                                   cycle 72 · journal-lecture 70
+                                                   notifications 69 · approbations 65
                                                    annuaire 48 · depot 43 · modules 39
                                                    filiales 34 · documentation 28
                                                    journal 19
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (15 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (17 garde-fous découverts, joués, consignés)
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **50 tables** en

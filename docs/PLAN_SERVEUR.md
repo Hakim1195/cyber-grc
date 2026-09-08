@@ -200,6 +200,17 @@ morts de la précédente.
 c'est ce qui transforme une pièce jointe en **preuve vérifiable**. Un auditeur peut s'assurer
 qu'un rapport de test PRA n'a pas été remplacé après coup.
 
+> ⚠️ **Complété le 08/09/2026, parce que la promesse ci-dessus était à moitié tenue.**
+> L'empreinte était calculée, stockée et servie — et **rien ne la recalculait** : le contrôle
+> n° 7 est *antiviral*, il ne compare pas le fichier à son empreinte. Elle **s'affiche**
+> désormais à qui peut lire la pièce, un **rapprochement à la demande** (`lire`, pas
+> `ecrire` : il n'extrait aucun octet) rend `conforme` / `ecart` / `fichier_absent`, et un
+> **balayage périodique** inscrit son verdict et sort en échec sur un écart. Les trois
+> verdicts sont journalisés. ⚠️ Ce n'est **pas** une garantie d'intégrité : qui peut écrire
+> dans le magasin peut aussi mettre l'empreinte à jour en base — le dispositif attrape la
+> corruption, la restauration partielle et la substitution faite *hors de l'application*.
+> Contrat détaillé : `backend/db/CONVENTIONS.md` §31.5.
+
 **Cas particulier des logos de filiale** : même chaîne de contrôle, et **PNG ou JPEG
 exclusivement — pas de SVG**, qui peut contenir du script et deviendrait un vecteur
 d'injection directement dans l'interface.

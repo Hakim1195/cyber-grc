@@ -32,9 +32,9 @@ design-system/
 .DS_Store
 Thumbs.db
 
-# Mémoire et secrets locaux de Claude — JAMAIS dans le dépôt public.
-# Chargés automatiquement par Claude Code, hors versionnement.
-CLAUDE.local.md
-MEMORY.md
-SECRETS.local.md
+# Fichiers locaux, non partagés — notes de travail et mémoire, hors dépôt.
+# ⚠️ Les deux lignes sont nécessaires : le glob ne couvre QUE les noms en
+# « .local.md ». Une version antérieure de ce bloc l'avait réduit au seul glob,
+# et « MEMORY.md » cessait d'être ignoré sans que rien ne le dise.
 *.local.md
+MEMORY.md
