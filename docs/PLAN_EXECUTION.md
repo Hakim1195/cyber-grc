@@ -887,6 +887,26 @@ notifications (L12).
 
 ---
 
+### Vague 10 et au-delà — ce qui vient APRÈS la mise en service
+
+> **Décidé le 08/09/2026.** Le produit a été comparé au marché avec des chiffres pour la
+> première fois : [`COMPARATIF_MARCHE.md`](COMPARATIF_MARCHE.md) (86 fonctionnalités,
+> **35 ✅ · 17 🟡 · 34 ❌**, chacune mesurée dans le dépôt) et
+> [`PLAN_PRODUIT.md`](PLAN_PRODUIT.md), qui en tire **dix lots L17 → L26** et **cinq portes
+> S10 → S14**.
+>
+> ⚠️ **Le §0 bis du `PLAN_PRODUIT.md` fait autorité sur l'ordonnancement, et il dit ceci :
+> aucun lot L17+ ne se joue avant que S7 et S8 soient franchies.** La « vague 10 » de ce
+> plan-là ne contient donc **aucune fonctionnalité neuve** : elle est le travail de clôture
+> décrit ci-dessus — jouer S7, rejouer S8, fermer les constats du registre.
+>
+> **Une seule exception a été prise, et elle est bornée** : le lot **L18 (installation)**,
+> livré le 08/09/2026, ne touche **ni `src/`, ni le schéma** — il n'ouvre aucune surface
+> d'audit. Il reste son sous-lot **18.2 b** (le bandeau du profil découverte), qui en
+> touche, et qui est **à déclarer au 7ᵉ passage de S8**.
+
+---
+
 ## 4. La grille de sécurité
 
 Rejouée **intégralement** à chaque porte, par un agent qui n'a pas écrit le code. Un contrôle

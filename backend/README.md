@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 1786 essais, dix-neuf familles (voir plus bas)
+npm test                           # 1794 essais, dix-neuf familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -745,10 +745,17 @@ incomplète**, pas le fonctionnement attendu d'une recette (§4).
 
 ## 8. Avancement
 
-État réel des lots, **au 07/09/2026**. La **conduite** du chantier — découpage en
+État réel des lots, **au 08/09/2026**. La **conduite** du chantier — découpage en
 vagues, portes de sécurité, définition de « terminé » — vit dans
 [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) ; le **quoi** vit dans
-[`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7.
+[`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7 pour les lots L0 → L16, et
+dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L26**, issus de
+la comparaison au marché du 08/09/2026.
+
+**Mesuré à la révision `99ea754`** : `npm test` → **1794 essais, 1794 passés** ;
+`verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+`verifier_cloisonnement.sql` **sous `grc_app`** → **107/107** ; `f_verifier_schema()`
+→ 0 anomalie, **17 garde-fous consignés**, **20 migrations**, **50 tables**.
 
 | Lot | État |
 |---|---|
@@ -769,6 +776,10 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 | **L14 — Documentation** | ✅ **livré** (vague 7, 05/09/2026) — `docs/GUIDE_EXPLOITATION.md` et `docs/GUIDE_UTILISATEUR.md` |
 | **L15 — Durcissement final** | 🟡 **EN COURS — c'est l'état présent du chantier** (vague 8). Revue de sécurité sur l'ensemble du produit. **Porte S8 jouée six fois, refusée à chaque passage** ; au 6ᵉ : **0 bloquant, 4 majeurs, 8 mineurs, 0 fuite entre filiales**, banc **1747/1747**. C'est la **condition de mise en service** : elle n'est pas remplie |
 | **L16 — Système documentaire** | 🟡 **quatre actions sur cinq livrées** (vague 9, décidée le 07/09/2026). **D2 le 07/09** : les pièces jointes suivent leur porteur sur les six chemins (migration `017`, constats **Q-232 / Q-233** fermés). **D1, D4 et D5 le 08/09** (migrations `018` et `019`) : la pièce marquée « **en vigueur** » est celle qui fait foi — au plus une par porteur **et par filiale** —, et c'est elle qui donne le numéro de version de la fiche, au lieu d'une saisie libre qui pouvait annoncer « 2.1 » au-dessus du PDF de la 1.4 ; `documents.emplacement` devient « **Document resté ailleurs** », une référence externe qu'on ne confond plus avec un fichier détenu ici ; un document « en validation » ne passe « en vigueur » qu'avec une étape de **publication approuvée** (code **`GRC06`**, refus journalisé avec sa route), et l'encart du circuit d'approbation — livré par L8, que **personne n'appelait** — est monté sur la fiche. ⚠️ **Le coffre existait déjà** : L6 livre le dépôt et ses huit contrôles ; rien de cela n'a été refait. **Livré aussi le 08/09, hors des cinq actions** : la **vérification d'intégrité** (migration `020`). L'empreinte SHA-256 était calculée sur le fichier écrit, stockée, servie — et `empreinteDe()` n'avait **qu'un seul appelant dans tout `src/`**, le dépôt : mordue par rien, c'est-à-dire un commentaire (`db/CONVENTIONS.md` §18.4), sur la promesse centrale du coffre. Elle **s'affiche** désormais, un **rapprochement à la demande** (`GET …/:pieceId/integrite`, déclaré `lire`) rend `conforme` / `ecart` / `fichier_absent`, et un **balayage** sur le minuteur de ré-analyse inscrit le verdict et **sort en code 1** sur un écart ; vingt-deuxième action de journal, les trois verdicts tracés (`db/CONVENTIONS.md` §31.5). ⚠️ Ce **n'est pas** une garantie d'intégrité et l'écran ne le dit jamais : qui peut écrire dans le magasin peut aussi mettre le `sha256` à jour. **Reste D3**, la recherche, qui **ne se joue pas avant que S8 soit franchie** — une recherche est un oracle, c'est la surface la plus propice à une fuite entre filiales. Voir `../docs/PLAN_EXECUTION.md` §3, vague 9 |
+| **L17 — Prise en main** | ⬜ **planifié, non commencé** (`../docs/PLAN_PRODUIT.md`). Recherche globale, palette de commandes, écran de démarrage par rôle, regroupement du menu, Kanban, comparaison de deux versions. ⚠️ **Ne se joue pas avant que S7 et S8 soient franchies** — il ouvre de la surface neuve à auditer |
+| **L18 — Installation en une commande** | ✅ **livré le 08/09/2026, sauf le bandeau (18.2 b)**. `install.sh --assistant` pose les **six** valeurs que le script ne peut pas deviner et enchaîne l'installation ; `--diagnostic` rend l'état de **douze sujets** sans rien modifier, en code 0/1/2. **Profil découverte** : ni annuaire ni courriel, compte de secours dont l'empreinte `scrypt` est calculée par `dist/auth/secours.js` — jamais recopiée en shell —, certificat auto-signé. `../docs/INSTALLER.md` : cinq commandes, aucun renvoi. ⚠️ **Ce lot ne touche ni `src/` ni le schéma** : c'est ce qui l'a autorisé à se jouer avant les portes. **Reste 18.2 b** — le bandeau « installation de découverte » dans le produit, ~10 lignes touchant `GET /api/session` et la SPA, **à déclarer au 7ᵉ passage de S8**. Sans lui, le profil dégradé n'est visible que de l'exploitant, pas de l'utilisateur qui saisit |
+| **L18 bis — Jeu de découverte** | ⬜ **autorisé par arbitrage du 08/09/2026, après les portes.** Le brief interdisait les données de démonstration ; l'utilisateur a levé l'interdit sous **cinq conditions constitutives** — marque d'origine **dans la donnée** et non seulement à l'écran, geste volontaire, refus si la base porte des données réelles, purge complète par le déclencheur `017`, interdit hors profil découverte. Il écrit en base : il passe par une porte |
+| **L19 → L26** | ⬜ **planifiés** (`../docs/PLAN_PRODUIT.md`) — chaîne de preuve, conformité réglementaire opérationnelle, tiers et DORA, ouverture technique, collecte automatique de preuve et surveillance continue, campagnes descendantes, EBIOS RM, catalogues ouverts |
 
 ### Les verdicts, tels que le journal des portes les formule
 
@@ -900,10 +911,10 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 1786 · pass 1786 · fail 0
+npm test                                         → tests 1794 · pass 1794 · fail 0
                                                    base 274 · api 272 · navigateur 167
                                                    pieces 121 · auth 115 · import 97
-                                                   deploiement 87 · droits 84 · reprise 82
+                                                   deploiement 95 · droits 84 · reprise 82
                                                    cycle 72 · journal-lecture 70
                                                    notifications 69 · approbations 65
                                                    annuaire 48 · depot 43 · modules 39

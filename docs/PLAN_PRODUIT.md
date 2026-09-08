@@ -625,6 +625,44 @@ se rejoue (constat **Q-219**).
 
 ---
 
+## 9 bis. ▶ Où reprendre — état au 08/09/2026 au soir
+
+**Ce qui est fait de ce plan :**
+
+| | État |
+|---|---|
+| **L18.1** `--assistant` | ✅ livré, éprouvé par pseudo-terminal dans les deux branches |
+| **L18.2 a** profil découverte (configuration) | ✅ livré — `CYBER_GRC_PROFIL=decouverte`, compte de secours, certificat auto-signé |
+| **L18.3** `--diagnostic` | ✅ livré — douze sujets, code 0/1/2, joué sur la recette |
+| **L18.4** groupes AD | ✅ **il l'était déjà** — le défaut était de découvrabilité |
+| **L18.5** surface de configuration | ✅ **elle l'était déjà** — six valeurs, pas soixante-huit |
+| **L18.6** `docs/INSTALLER.md` | ✅ livré — cinq commandes, aucun renvoi |
+| **L18.2 b** le bandeau dans le produit | ⬜ **reste — c'est le prochain geste** |
+| **L18.7** assistant de premier démarrage | ⬜ frontend → après les portes |
+
+**Le prochain geste, et pourquoi celui-là.** Le bandeau **18.2 b** est le seul écart qui
+reste à L18, et c'est celui qui décide si le profil découverte tient sa promesse : *un
+profil dégradé qu'on ne voit pas devient une production par oubli*. Il est aujourd'hui
+visible de l'**exploitant** — configuration, `--diagnostic` — mais pas de l'**utilisateur
+qui saisit**. Environ dix lignes : un champ dans `GET /api/session`, un bandeau permanent
+dans la SPA. ⚠️ **C'est le seul sous-lot de L18 qui touche `src/` : à déclarer au 7ᵉ
+passage de S8.**
+
+Puis **Q-251** (`PLAN_EXECUTION.md` §7), court lui aussi — pour que l'auditeur trouve un
+banc stable et un lot complet plutôt qu'à 90 %.
+
+**Ensuite, et pas avant : les portes.** S7 jamais jouée, puis le 7ᵉ passage de S8, qui aura
+**dix livraisons** à examiner.
+
+⚠️ **Une leçon de ce lot, à lire avant d'ouvrir le suivant.** Trois fois sur six sous-lots,
+la mesure a contredit ce plan : 18.4 était déjà livré, 18.5 déjà atteint, et le chiffre de
+« 74 variables » était faux. *Un plan écrit sans mesurer ne se trompe pas au hasard : il
+fait travailler sur des problèmes qui n'existent pas, et il le fait avec conviction.* Avant
+d'ouvrir **L19**, mesurer chacun de ses six sous-lots dans le dépôt — comme le §0 du
+`CLAUDE.md` l'exige déjà pour l'environnement.
+
+---
+
 ## 10. Ce que ce plan ne change pas
 
 - **La façade `DataStore` synchrone reste intacte.** C'est ce qui a permis de basculer 26

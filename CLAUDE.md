@@ -37,7 +37,7 @@
 >
 > ---
 >
-> ## ▶ L'ÉTAT DU CHANTIER AU 07/09/2026
+> ## ▶ L'ÉTAT DU CHANTIER AU 08/09/2026
 >
 > **Les lots L0 à L14 sont CONSTRUITS. Ne pas les refaire.** Le lot **L15 — durcissement
 > final — est EN COURS** : c'est la vague 8, et c'est là que se trouve le travail.
@@ -59,6 +59,54 @@
 > **0 fuite entre filiales**, banc **1 747 essais, 1 747 passés** — mais *refusé reste
 > refusé*. L'arbitrage du `docs/PLAN_EXECUTION.md` §0 bis fait qu'une porte refusée
 > **n'arrête plus la vague : elle trie** en trois classes.
+>
+> ---
+>
+> ## ▶▶ REPRENDRE ICI — l'état au 08/09/2026 au soir
+>
+> **Mesuré à la révision `99ea754`** : banc **1 794 essais, 1 794 passés** ;
+> `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+> `verifier_cloisonnement.sql` **sous `grc_app`** → **107/107** ; `f_verifier_schema()`
+> → 0 anomalie (17 garde-fous, 20 migrations, 50 tables) ; publication → **81 fichiers
+> identiques au dépôt** ; `install.sh --diagnostic` → **12 conformes, 1 réserve, 0
+> bloquant**.
+>
+> **Ce qui a changé le 08/09 au soir, et qui est neuf :**
+>
+> 1. **Le produit a été comparé au marché**, avec des chiffres, pour la première fois.
+>    [`docs/COMPARATIF_MARCHE.md`](docs/COMPARATIF_MARCHE.md) — 86 fonctionnalités de
+>    l'état de l'art GRC, chacune **mesurée dans le dépôt** : **35 ✅ · 17 🟡 · 34 ❌**.
+>    [`docs/PLAN_PRODUIT.md`](docs/PLAN_PRODUIT.md) en tire **dix lots, L17 → L26**, cinq
+>    portes neuves (S10 → S14), **huit non-objectifs écrits avec leur motif**, et trois
+>    arbitrages.
+> 2. **Le lot L18 — installation — est LIVRÉ**, sauf son bandeau. `install.sh --assistant`
+>    (six questions, profil découverte), `install.sh --diagnostic` (douze sujets, code
+>    0/1/2), [`docs/INSTALLER.md`](docs/INSTALLER.md) (cinq commandes, aucun renvoi).
+> 3. **Constat Q-251 ouvert : Q-246 est ROUVERT** — un essai de rapport de temps rougit
+>    encore au banc complet, une fois sur deux, alors que son remède a été déclaré fermé
+>    la veille.
+>
+> ### ⚠️ L'ORDRE DE REPRISE, et il n'est pas négociable
+>
+> Le `docs/PLAN_PRODUIT.md` **§0 bis** fait autorité : **aucun lot L17+ ne se joue avant
+> que S7 et S8 soient franchies.** L18 a été la seule exception, et seulement parce qu'il
+> ne touche **ni `src/`, ni le schéma** — il n'ouvrait aucune surface d'audit.
+>
+> **Le travail immédiat, dans cet ordre :**
+>
+> | | Quoi | Pourquoi maintenant |
+> |---|---|---|
+> | **1** | **18.2 b — le bandeau « installation de découverte » dans le produit** | ~10 lignes (`GET /api/session` + un bandeau SPA). C'est le seul écart qui reste à L18, et sans lui un profil dégradé n'est visible que de l'exploitant, **pas de l'utilisateur qui saisit**. Seul sous-lot de L18 touchant `src/` : **à déclarer au 7ᵉ passage de S8** |
+> | **2** | **Q-251** — grossir les tailles de l'essai `test/import/lecture.test.mjs:297` | ⚠️ **NE PAS relever le seuil** : à 3,5 l'essai cesserait de distinguer le linéaire du quadratique. Le remède traitait la dispersion ; **le défaut est l'échelle** — un rapport entre deux grandeurs de ~1 ms n'est stable par aucune statistique |
+> | **3** | **Jouer la porte S7**, jamais jouée | Relecture métier, paraphrase des catalogues (droit d'auteur). **Aucun échec ne la signale** : c'est le point le plus facile à manquer |
+> | **4** | **Rejouer S8 — 7ᵉ passage** | **Dix livraisons** n'ont vu aucun auditeur indépendant depuis le 6ᵉ passage : D2, D1·D4·D5, l'intégrité, Q-248, Q-250, et les trois de L18 |
+> | **5** | Les constats ouverts : **Q-243, Q-247, Q-234 → Q-244, Q-205 b, Q-206, Q-214 b·c·d·f** | Registre au `docs/PLAN_EXECUTION.md` §7, **seule source** |
+>
+> **Après les portes seulement** : L16-D3 (la recherche), **L18 bis** (le jeu de
+> découverte, autorisé le 08/09 sous cinq conditions constitutives), **L17**, puis
+> L19 → L26.
+>
+> ---
 >
 > **Un lot neuf avance, hors chemin de mise en service :** **L16, le système documentaire**
 > (vague 9, décidée le 07/09/2026). ⚠️ **Le coffre existe déjà** — L6 livre le dépôt, ses huit
@@ -783,6 +831,10 @@ sur l'**Active Directory** du groupe.
 | **L14 — Documentation** | ✅ **livré** (05/09/2026, vague 7) |
 | **L15 — Durcissement final** | 🟡 **en cours** (vague 8) — **porte S8 refusée six fois**, c'est la condition de mise en service |
 | **L16 — Système documentaire** | 🟡 **quatre actions sur cinq livrées** (vague 9) — D2 le 07/09 (les pièces suivent leur porteur), **D1, D4 et D5 le 08/09** (version en vigueur, référence externe assumée, publication soumise au circuit), **plus la vérification d'intégrité** hors des cinq actions (migration `020` : l'empreinte s'affiche et elle est *rapprochée* du fichier, à la demande et par balayage — `db/CONVENTIONS.md` §31.5). **Reste D3, la recherche, pas avant S8.** `docs/PLAN_EXECUTION.md` §3 |
+| **L17 — Prise en main** | ⬜ **planifié** (`docs/PLAN_PRODUIT.md`) — recherche globale, palette `Ctrl+K`, écran de démarrage par rôle, regroupement du menu, Kanban. ⚠️ **Pas avant S7 et S8** : il ouvre de la surface neuve |
+| **L18 — Installation en une commande** | ✅ **livré le 08/09/2026, sauf 18.2 b.** `--assistant` (six questions, profil découverte, compte de secours dont l'empreinte est calculée par `dist/auth/secours.js`), `--diagnostic` (douze sujets, code 0/1/2, ne modifie rien), `docs/INSTALLER.md` (cinq commandes). ⚠️ **Ne touche ni `src/` ni le schéma** — c'est ce qui l'a autorisé avant les portes. **Reste le bandeau 18.2 b** |
+| **L18 bis — Jeu de découverte** | ⬜ **autorisé le 08/09/2026** sous **cinq conditions constitutives** (marque **dans la donnée**, geste volontaire, refus si données réelles, purge par le déclencheur `017`, interdit hors découverte). Il écrit en base : **après les portes** |
+| **L19 → L26** | ⬜ **planifiés** (`docs/PLAN_PRODUIT.md`) — preuve et attestation, réglementaire opérationnel, tiers et DORA, ouverture technique, collecte automatique et CCM, campagnes descendantes, EBIOS RM, catalogues ouverts |
 
 Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 `grc-backup`** (`backend/src/reprise/**`, portage serveur des migrations v1 → v12,
@@ -990,6 +1042,12 @@ quatre points de durcissement groupés sous **Q-214 b, c, d, f**.
 **Le travail qui reste, par ordre de valeur** — ⚠️ **réécrit le 08/09/2026** : cette table
 annonçait *« rejouer la porte S8 — TROISIÈME passage »* alors qu'elle en avait connu **six**.
 Un chiffre faux ici est un constat, pas une coquille (`docs/PLAN_EXECUTION.md` §5).
+
+> ⚠️ **L'ORDRE DE REPRISE FAIT AUTORITÉ EN TÊTE DE CE FICHIER** (« ▶▶ REPRENDRE ICI »), et
+> il place **18.2 b** puis **Q-251** avant les portes. La table ci-dessous en est le détail
+> pour le seul chemin de mise en service ; elle ne le contredit pas. *Deux listes des mêmes
+> travaux divergent, et la divergence est silencieuse* — si vous les trouvez en désaccord,
+> **c'est la tête de fichier qui fait foi**, et l'écart est un constat à ouvrir.
 
 | | Contenu | Pourquoi |
 |---|---|---|

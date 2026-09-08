@@ -8,17 +8,26 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
-> **État mesuré à la révision `23f00f7`**, sur la machine réelle (`SRV-Infra`, Debian 13,
-> **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **1786 essais, 1786 passés, 0 échec** (dix-neuf familles, détail au `backend/README.md`
-> §8), `npm run verifier-types` sans erreur, `npm audit --omit=dev` → 0 vulnérabilité,
+> **État mesuré à la révision `99ea754`**, le 08/09/2026, sur la machine réelle
+> (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
+> **PostgreSQL 17.11**) : `npm test` → **1794 essais, 1794 passés, 0 échec**,
+> `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` → **107 contrôles, 107 réussis, 0 échoué**,
-> `f_verifier_schema()` → **0 anomalie** (17 garde-fous consignés), et la recette sert la
-> révision courante (`install.sh --verifier-publication` → 81 fichiers identiques au dépôt).
+> `f_verifier_schema()` → **0 anomalie** (**17 garde-fous consignés**, **20 migrations**,
+> **50 tables**), `install.sh --verifier-publication` → **81 fichiers servis identiques au
+> dépôt**, et `install.sh --diagnostic` → **12 conformes, 1 réserve** (`SMTP_ACTIF=non`),
+> **0 bloquant**.
+>
+> ⚠️ **Deux pièges de mesure rencontrés en établissant ce bloc, et ils valent d'être dits.**
+> **(1)** `verifier_cloisonnement.sql` joué en **superutilisateur** rend **82/107** : un
+> superutilisateur n'est pas soumis à la RLS, et les vingt-cinq « échecs » ne mesuraient que
+> cela. Il se joue **sous `grc_app`**, comme sa propre ligne 59 le prescrit. **(2)** `npm
+> test` a rougi une fois sur deux passages complets, sur un essai de **rapport de temps**
+> étranger à ce lot — constat **Q-251**, ci-dessous.
 >
 > ⚠️ **Et rien de tout cela ne vaut passage de porte.** La porte **S8 reste refusée** — six
-> passages —, la porte **S7 n'a jamais été jouée**, et les livraisons des 07 et 08/09 n'ont
-> été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
+> passages —, la porte **S7 n'a jamais été jouée**, et **dix livraisons** des 07 et 08/09
+> n'ont été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
 > jamais ce qu'il ne regarde pas.*
 
 ### L18.1 / L18.2 a — `install.sh --assistant` : six questions, et un profil découverte qui crie
