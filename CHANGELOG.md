@@ -21,6 +21,94 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
 > jamais ce qu'il ne regarde pas.*
 
+### L18.3 — `install.sh --diagnostic` : douze sujets, une commande, et chaque ligne dit quoi faire
+
+**Premier livrable du `PLAN_PRODUIT.md`.** Vérifier une installation demandait de connaître
+et de jouer dans le bon ordre : `systemctl is-active` sur quatre unités,
+`--verifier-publication`, une requête sur `f_verifier_schema()`, une autre sur la propriété
+de la base, un `openssl x509 -checkend`, deux `df` — et de savoir que le contrôle de
+publication **n'est pas joué par l'installation** (constat **Q-103**). Autrement dit : *la
+vérification supposait de savoir déjà ce qui casse*, ce qui est le contraire d'un
+diagnostic.
+
+`--diagnostic` **ne modifie rien** — ni `apt`, ni `systemctl start`, ni DDL — et rend
+**0** (conforme), **1** (réserves) ou **2** (bloquant), pour une supervision. Mesuré sur la
+recette réelle : douze sujets, `SMTP_ACTIF=non` en unique réserve, code **1**.
+
+**Trois règles qu'il s'impose, et une seule est évidente :**
+
+- il ne modifie rien — donc il est jouable sur une production qu'on n'ose pas toucher,
+  c'est-à-dire dans la situation même où l'on en a besoin ;
+- **chaque ligne dit QUOI FAIRE** — un diagnostic qui énonce un symptôme sans sa réparation
+  déplace le travail au lieu de le faire. Un essai l'exige de **tout** verdict bloquant ;
+- **il va jusqu'au bout.** ⚠️ **Et ce n'est pas théorique : le premier jet appelait
+  `valider_identifiant` pour éprouver `BASE_NOM` — laquelle appelle `echec`, donc
+  `exit 1`.** Le diagnostic serait sorti au cinquième contrôle sur douze, en taisant les
+  sept suivants **et en rendant « réserve » sur ce qui est un bloquant**. Le défaut a été
+  trouvé en jouant le mode, pas en le relisant.
+
+**Ce qui est réutilisé plutôt que recopié**, et c'est l'essentiel de ce lot :
+
+- le contrôle de publication est **extrait en fonction** `controle_publication()` :
+  `--verifier-publication` et `--diagnostic` posent la même question, et deux copies de la
+  liste blanche des types publiables divergeraient en silence — le motif exact du constat
+  **Q-31**, où cette liste et le `<FilesMatch>` du vhost sont tenus d'aller par paire ;
+- les garde-fous du schéma passent par **le seul** `f_verifier_schema()` (§18.4) : les
+  énumérer ici rouvrirait la liste écrite à la main que ce point d'appel existe pour
+  supprimer ;
+- l'URL contrôlée est **« / »**, le chemin que l'utilisateur emprunte — constat **Q-36** :
+  la vérification prescrite interrogeait `/index.html` et est restée **au vert** pendant que
+  « / » rendait 403 ;
+- la chaîne du journal applique, au-delà de 200 000 entrées, le **contrôle rapide que le
+  §12 prescrit**, et `chaine_tronquee` n'y compte pas (constat **Q-123** : un garde-fou qui
+  crie sur le cas nominal est un garde-fou qu'on apprend à ignorer) ;
+- l'annuaire est éprouvé **joignable**, jamais authentifié : le verrouillage est à cinq
+  tentatives, et un diagnostic qui verrouille un compte réel serait pire que pas de
+  diagnostic.
+
+**Un défaut d'affichage corrigé, et il n'est pas cosmétique dans ce lot-ci** : `printf`
+compte des **octets**, et « schéma » comme « url d'entrée » portent des accents à deux
+octets — les colonnes sortaient désalignées. Dans un mode dont l'objet est de rendre l'état
+lisible **d'un coup d'œil**, c'est un défaut du mode. On compte en caractères.
+
+**`test/deploiement/diagnostic.test.mjs`, 4 essais — et les quatre ont été MORDUS** :
+option retirée de l'analyse, liste des types recopiée, `echec` glissé dans un contrôle,
+bloquant privé de sa réparation. La deuxième morsure a d'abord été **mal choisie** — elle
+créait `TYPES2=`, que le contrôle n'a aucune raison d'attraper — et l'essai est resté vert :
+rejouée avec une vraie duplication, elle rougit. *Un essai qu'on n'a pas su casser n'est pas
+un essai qu'on a prouvé.*
+
+**Banc : 1790 essais, 1790 passés** (1786 avant).
+
+⚠️ **Un diagnostic vert NE VAUT PAS passage de porte**, et le mode le dit lui-même en
+dernière ligne : il constate une machine, il n'éprouve ni le cloisonnement sous sondes
+hostiles, ni la paraphrase des catalogues. S7 et S8 restent dues.
+
+### L18.5 — le chiffre du plan était faux, et le corriger a changé le travail
+
+Le `PLAN_PRODUIT.md` annonçait « **74 variables d'environnement** » et bâtissait un sous-lot
+entier sur ce chiffre : *réduire la surface de configuration*, objectif « moins de 12 ».
+**Mesuré le 08/09/2026** : `src/config/index.ts` en lit **68**, et surtout `install.sh` n'en
+réclame que **SIX** à l'exploitant — `SERVEUR_URL_PUBLIQUE`, quatre valeurs d'annuaire si
+l'annuaire est actif, `SMTP_HOTE` si les relances le sont. Deux sont engendrées, quatre sont
+exigées par le serveur, **toutes les autres portent un défaut sûr**.
+
+L'objectif était donc **déjà atteint**, et le défaut n'était pas le nombre : c'est que
+**rien ne dit lesquelles**. 18.5 devient « documenter les six », et c'est ce que
+[`docs/INSTALLER.md`](docs/INSTALLER.md) fait en tête de page.
+
+⚠️ *Un plan bâti sur un chiffre supposé fait travailler sur le mauvais problème, et il le
+fait avec conviction.* C'est le §0 du `CLAUDE.md` appliqué à un plan plutôt qu'à un
+environnement.
+
+### L18.6 — `docs/INSTALLER.md` : installer en dix minutes, sans ouvrir un autre fichier
+
+Une page : le prérequis, les six valeurs, dix commandes, les trois pannes de démarrage avec
+leur réparation, la mise à jour, la désinstallation, et **ce que l'installateur ne fera pas
+à votre place** (il n'écrit pas dans l'Active Directory, il ne charge aucune donnée de
+démonstration, il ne bricole pas une base existante en silence). `GUIDE_EXPLOITATION.md` §1
+y renvoie et remplace ses trois commandes de vérification par `--diagnostic`.
+
 ### Le produit est comparé au marché, et la suite est planifiée — `PLAN_PRODUIT.md`
 
 **La question « où sommes-nous par rapport à ce qui se fait de mieux ? » n'avait jamais été
@@ -55,10 +143,9 @@ par-dessus ferait exactement ce que le chantier a appris à ne plus faire. Seul 
 schéma** — il n'ouvre aucune surface d'audit.
 
 **Ce que L18 corrige, mesuré** : installer exige aujourd'hui d'écrire `filiales.conf` à la
-main *avant* de lancer quoi que ce soit, de connaître **74 variables d'environnement**, de
-créer 23 groupes Active Directory, puis de lancer une seconde commande pour vérifier ce qui
-est servi. `install.sh` fait 3 294 lignes et s'arrête en code 2 sur une configuration
-incomplète — ce qui est juste, mais ne dit pas comment la compléter.
+main *avant* de lancer quoi que ce soit, de créer 23 groupes Active Directory, puis de
+lancer une seconde commande pour vérifier ce qui est servi. `install.sh` s'arrête en code 2
+sur une configuration incomplète — ce qui est juste, mais ne dit pas comment la compléter.
 
 ### L'empreinte cesse d'être un commentaire : elle s'affiche, et elle est vérifiée
 

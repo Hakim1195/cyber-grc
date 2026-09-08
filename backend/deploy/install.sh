@@ -110,6 +110,7 @@ EXPORT_VERIFIE=""
 REPRENDRE_PROPRIETE=0
 REINITIALISER_MDP=0
 VERIFIER_PUBLICATION=0
+DIAGNOSTIC=0
 
 info()   { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 succes() { printf '\033[1;32m  ok\033[0m %s\n' "$*"; }
@@ -155,6 +156,12 @@ Installe ou met à jour Cyber GRC Groupe sur Debian 13 (sans conteneur).
   --verifier-publication         NE MODIFIE RIEN : compare ce que la racine web
                                  SERT à ce que le dépôt porte, et rend 5 si un
                                  fichier diverge (constat Q-103)
+  --diagnostic                   NE MODIFIE RIEN : l'état des douze points qui cassent
+                                 en vrai — services, publication, propriété de la base,
+                                 garde-fous du schéma, chaîne du journal, annuaire,
+                                 relais de messagerie, antivirus, certificat, disque,
+                                 configuration. Chaque ligne dit QUOI FAIRE.
+                                 Rend 0 (tout conforme), 1 (réserves) ou 2 (bloquant)
   --desinstaller                 retire le LOGICIEL — unités systemd, code, frontend
                                  publié, vhost — et CONSERVE les données : base,
                                  pièces jointes, configuration. Une réinstallation
@@ -200,6 +207,7 @@ while [[ $# -gt 0 ]]; do
     --reprendre-propriete)          REPRENDRE_PROPRIETE=1; shift ;;
     --reinitialiser-mots-de-passe)  REINITIALISER_MDP=1; shift ;;
     --verifier-publication)         VERIFIER_PUBLICATION=1; shift ;;
+    --diagnostic)                   DIAGNOSTIC=1; shift ;;
     --desinstaller)                 DESINSTALLER=1; shift ;;
     --avec-les-donnees)             AVEC_LES_DONNEES=1; shift ;;
     --export-verifie=*)             EXPORT_VERIFIE="${1#*=}"; shift ;;
@@ -231,12 +239,33 @@ done
 #
 # Il compare le CONTENU, pas les dates ni les tailles : un fichier réécrit avec
 # le même nombre d'octets est le cas qu'on veut attraper.
-if [[ $VERIFIER_PUBLICATION -eq 1 ]]; then
-  info "Publication — ce qui est servi, comparé au dépôt"
-  [[ -d "$RACINE/frontend" ]] || echec "Aucune racine web en $RACINE/frontend : rien n'est publié ici."
+# ⚠️ **Extrait en FONCTION le 08/09/2026 (lot L18.3).** Le mode `--diagnostic`
+# a besoin exactement de ce contrôle-là. Le recopier aurait produit deux listes
+# de types publiables qui divergent en silence — le motif même du constat Q-31,
+# et la raison pour laquelle la liste blanche de `install.sh` et le `<FilesMatch>`
+# du vhost sont tenus d'aller par paire. Une seule écriture, deux appelants.
+#
+# La fonction n'appelle NI `echec` NI `exit` : elle rend un code, et c'est
+# l'appelant qui décide de sa gravité. Un contrôle qui sort du script ne peut pas
+# être le neuvième d'une liste de onze.
+#
+#   0  publication conforme
+#   3  écart constaté — la machine ne sert pas ce que le dépôt porte
+#   4  le contrôle N'A PAS PU être joué (rien de publié, découverte cassée)
+#
+# `PUBLICATION_RESUME` porte la phrase que le diagnostic affichera sur sa ligne.
+PUBLICATION_RESUME=""
 
-  TYPES="html|js|css|svg|png|ico|jpg|jpeg|gif|webp|woff|woff2|webmanifest"
-  DIVERGENTS=(); ABSENTS=(); INTRUS=(); COMPARES=0
+controle_publication() {
+  PUBLICATION_RESUME=""
+  if [[ ! -d "$RACINE/frontend" ]]; then
+    PUBLICATION_RESUME="aucune racine web en $RACINE/frontend : rien n'est publié ici"
+    return 4
+  fi
+
+  local TYPES="html|js|css|svg|png|ico|jpg|jpeg|gif|webp|woff|woff2|webmanifest"
+  local -a DIVERGENTS=() ABSENTS=() INTRUS=() RESTANTS=()
+  local COMPARES=0 source relatif publie f ECART=0
 
   while IFS= read -r source; do
     relatif="${source#"$DEPOT/cyber-gouvernance_V4/"}"
@@ -253,15 +282,16 @@ if [[ $VERIFIER_PUBLICATION -eq 1 ]]; then
 
   # Un contrôle qui ne compare rien passerait au vert en n'éprouvant rien : c'est
   # ce que ce dépôt appelle un décor (constat Q-37).
-  [[ $COMPARES -ge 20 ]] || echec "Seuls $COMPARES fichier(s) comparés : ce contrôle ne mord plus.
-      Soit la racine web n'est pas celle qu'on croit, soit la découverte est cassée."
+  if [[ $COMPARES -lt 20 ]]; then
+    PUBLICATION_RESUME="seuls $COMPARES fichier(s) comparés : ce contrôle ne mord plus"
+    return 4
+  fi
 
   # `index.html` porte un jeton de version injecté à la publication : il DIFFÈRE
   # du dépôt par construction, et le signaler serait un faux positif permanent —
   # dit ici plutôt que filtré en silence.
-  RESTANTS=(); for f in "${DIVERGENTS[@]:-}"; do [[ -z "$f" || "$f" == "index.html" ]] || RESTANTS+=("$f"); done
+  for f in "${DIVERGENTS[@]:-}"; do [[ -z "$f" || "$f" == "index.html" ]] || RESTANTS+=("$f"); done
 
-  ECART=0
   if [[ ${#RESTANTS[@]} -gt 0 ]]; then
     ECART=1
     alerte "${#RESTANTS[@]} fichier(s) SERVIS diffèrent du dépôt :"
@@ -279,11 +309,23 @@ if [[ $VERIFIER_PUBLICATION -eq 1 ]]; then
   fi
 
   if [[ $ECART -eq 1 ]]; then
-    alerte "La machine ne sert pas ce que le dépôt porte. Republiez : bash deploy/install.sh --maj"
-    exit 5
+    PUBLICATION_RESUME="$(( ${#RESTANTS[@]} + ${#ABSENTS[@]} + ${#INTRUS[@]} )) écart(s) entre ce qui est servi et le dépôt"
+    return 3
   fi
-  succes "publication conforme : $COMPARES fichier(s) servis identiques au dépôt"
-  exit 0
+  PUBLICATION_RESUME="$COMPARES fichier(s) servis identiques au dépôt"
+  return 0
+}
+
+if [[ $VERIFIER_PUBLICATION -eq 1 ]]; then
+  info "Publication — ce qui est servi, comparé au dépôt"
+  CODE_PUB=0; controle_publication || CODE_PUB=$?
+  case $CODE_PUB in
+    0) succes "publication conforme : $PUBLICATION_RESUME"; exit 0 ;;
+    3) alerte "La machine ne sert pas ce que le dépôt porte. Republiez : bash deploy/install.sh --maj"
+       exit 5 ;;
+    *) echec "$PUBLICATION_RESUME
+      Soit la racine web n'est pas celle qu'on croit, soit la découverte est cassée." ;;
+  esac
 fi
 
 # =============================================================================
@@ -487,6 +529,371 @@ valider_identifiant() {
   [[ "$2" =~ ^[a-z_][a-z0-9_]*$ ]] \
     || echec "$1 : « $2 » n'est pas un identifiant PostgreSQL valide."
 }
+
+# ⚠️ **Remontée ici le 08/09/2026 (lot L18.3)**, depuis le § « Rôles PostgreSQL » où
+# elle était définie : `--diagnostic` sort du script AVANT ce paragraphe, et une
+# fonction définie après son appelant n'existe pas encore quand celui-ci s'exécute.
+# Recopier la requête aurait donné deux écritures de la même question — exactement
+# ce que la note d'`imprimer_reparation_manuelle` raconte, quelques lignes plus bas
+# dans le fichier d'origine : deux recettes finissent toujours par ne plus dire la
+# même chose. Elle est déplacée, pas dupliquée.
+proprietaire_base() {
+  printf "select pg_get_userbyid(datdba) from pg_database where datname = '%s';\n" \
+    "$(litteral "$BASE_NOM")" | sql_admin
+}
+
+# =============================================================================
+#  --diagnostic — l'état des DOUZE points qui cassent en vrai      (lot L18.3)
+# =============================================================================
+#
+# ⚠️ **Pourquoi ce mode existe, et ce qu'il remplace.**
+#
+# Vérifier une installation demandait jusqu'ici de connaître, et de jouer dans le
+# bon ordre : `systemctl is-active` sur quatre unités, `--verifier-publication`,
+# une requête sur `f_verifier_schema()`, une autre sur la propriété de la base,
+# un `openssl x509 -checkend`, deux `df`, et de savoir que le contrôle de
+# publication N'EST PAS joué par l'installation (constat **Q-103** : le dépôt
+# était vert pendant que la machine servait encore l'ancien fichier).
+#
+# Autrement dit : **la vérification supposait de savoir déjà ce qui casse.** C'est
+# le contraire de ce qu'on attend d'un diagnostic. Le §0.3 du `CLAUDE.md` en donne
+# la version générale — *une réserve écrite n'est pas une réserve traitée* — et le
+# §8 sa version cinglante : six passages de porte ont reconduit « Apache n'est pas
+# éprouvé » pendant que l'installer prenait une minute.
+#
+# ── Trois règles que ce mode s'impose ────────────────────────────────────────
+#
+#  1. **Il ne modifie RIEN.** Aucun `apt`, aucun `systemctl start`, aucun DDL,
+#     aucune écriture de configuration. Il est donc jouable à tout moment, y
+#     compris sur une production que l'on n'ose pas toucher — c'est précisément
+#     la situation où l'on a besoin de lui.
+#  2. **Chaque ligne dit QUOI FAIRE.** Un diagnostic qui énonce un symptôme sans
+#     sa réparation déplace le travail, il ne le fait pas.
+#  3. **Il va jusqu'au bout.** Un contrôle en échec n'arrête pas les onze autres :
+#     découvrir ses pannes une par une, à raison d'une commande par tour, est
+#     exactement ce qui a fait durer les diagnostics de ce chantier.
+#
+# ── Ce qu'il rend ────────────────────────────────────────────────────────────
+#
+#     0   tout est conforme
+#     1   au moins une RÉSERVE — le produit fonctionne, quelque chose se dégrade
+#     2   au moins un BLOQUANT — le produit ne rend pas le service attendu
+#
+# Ces trois codes sont faits pour une supervision (`install.sh --diagnostic ||
+# alerter`). ⚠️ Ils ne se confondent pas avec le code 2 de l'installation, qui
+# signale une configuration incomplète : ici on ne configure rien.
+#
+# ── Ce que ce mode NE dit PAS, et qu'il ne faut pas lui faire dire ───────────
+#
+# Il constate l'état d'une machine. **Il ne vaut pas passage de porte** : un
+# diagnostic vert sur les douze points laisse entières les questions que S7 et S8
+# posent — paraphrase des catalogues, cloisonnement sous sondes hostiles, coût des
+# expressions rationnelles. *Un banc vert mesure ce qu'il regarde, jamais ce qu'il
+# ne regarde pas*, et cela vaut aussi pour lui.
+
+if [[ $DIAGNOSTIC -eq 1 ]]; then
+  DIAG_OK=0; DIAG_RESERVE=0; DIAG_BLOQUANT=0
+
+  # ⚠️ **La colonne du sujet ne se pose PAS avec `%-14s`, et c'est mesuré, pas
+  # supposé.** `printf` compte des OCTETS ; « schéma » et « url d'entrée » portent
+  # des accents, qui pèsent deux octets en UTF-8. Le premier jet du 08/09/2026 a
+  # rendu ceci sur la recette :
+  #
+  #     ok  url d'entrée  https://…        ← deux caractères trop à gauche
+  #     ok  publication    81 fichier(s)…
+  #
+  # Un tableau désaligné dans le mode dont l'objet est de rendre l'état LISIBLE
+  # D'UN COUP D'ŒIL est un défaut de ce mode, pas une coquette. On compte donc en
+  # CARACTÈRES — ce que `${#chaîne}` fait dès lors que la locale est UTF-8, d'où
+  # le `LC_ALL` ci-dessous, qui ne vaut que pour ce mode.
+  LC_ALL=C.UTF-8
+
+  diag_sujet() { local t="$1" n; n=$(( 14 - ${#t} )); (( n < 0 )) && n=0; printf '%s%*s' "$t" "$n" ''; }
+
+  diag_ok()       { printf '\033[1;32m  ok \033[0m %s %s\n' "$(diag_sujet "$1")" "$2"; DIAG_OK=$((DIAG_OK+1)); }
+  diag_reserve()  {
+    printf '\033[1;33m  !! \033[0m %s %s\n' "$(diag_sujet "$1")" "$2" >&2
+    if [[ -n "${3:-}" ]]; then printf '                 → %s\n' "$3" >&2; fi
+    DIAG_RESERVE=$((DIAG_RESERVE+1))
+  }
+  diag_bloquant() {
+    printf '\033[1;31m ERR \033[0m %s %s\n' "$(diag_sujet "$1")" "$2" >&2
+    if [[ -n "${3:-}" ]]; then printf '                 → %s\n' "$3" >&2; fi
+    DIAG_BLOQUANT=$((DIAG_BLOQUANT+1))
+  }
+
+  info "Diagnostic — Cyber GRC ($(hostname))"
+
+  # ⚠️ Initialisées AVANT tout contrôle. Sans cela, `set -u` fait sortir le script
+  # au premier contrôle qui les lit — c'est-à-dire sur une machine où le produit
+  # n'est pas installé, précisément le cas que ce mode existe pour décrire.
+  BASE_NOM=""; ROLE_APP=""; ROLE_PROPRIETAIRE=""; SERVEUR_URL_PUBLIQUE=""; PROP=""
+
+  # ── 1. Configuration ──────────────────────────────────────────────────────
+  #
+  # En premier, et ce n'est pas un hasard : les onze contrôles suivants lisent
+  # leurs paramètres ici. Un diagnostic qui interrogerait la mauvaise base, ou
+  # le mauvais hôte, rendrait douze verdicts sur une machine imaginaire.
+  if [[ ! -f "$FICHIER_CONFIG" ]]; then
+    diag_bloquant "config" "aucun fichier de configuration en $FICHIER_CONFIG" \
+      "Le produit n'est pas installé ici. Installez : bash deploy/install.sh --assistant"
+  else
+    BASE_NOM="$(lire_variable BASE_NOM)"
+    ROLE_APP="$(lire_variable BASE_UTILISATEUR)"
+    ROLE_PROPRIETAIRE="$(lire_variable BASE_UTILISATEUR_PROPRIETAIRE)"
+    SERVEUR_URL_PUBLIQUE="$(lire_variable SERVEUR_URL_PUBLIQUE)"
+    MANQUANTES=""
+    for v in BASE_NOM BASE_UTILISATEUR BASE_UTILISATEUR_PROPRIETAIRE BASE_MOT_DE_PASSE \
+             SESSION_SECRET SERVEUR_URL_PUBLIQUE CHEMIN_FRONTEND; do
+      [[ -n "$(lire_variable "$v")" ]] || MANQUANTES="$MANQUANTES $v"
+    done
+    if [[ -n "$MANQUANTES" ]]; then
+      diag_bloquant "config" "variable(s) requise(s) vide(s) :$MANQUANTES" \
+        "Complétez $FICHIER_CONFIG, puis : systemctl restart cyber-grc"
+    else
+      # Le mode d'installation est lu pour être DIT. Un profil « découverte » qui
+      # ne se voit nulle part devient une production par oubli (PLAN_PRODUIT L18.2).
+      MODE_INST="$(lire_variable CYBER_GRC_PROFIL)"
+      if [[ "$MODE_INST" == "decouverte" ]]; then
+        diag_reserve "config" "profil DÉCOUVERTE — cette installation n'est pas de production" \
+          "Ni annuaire, ni relais de messagerie, certificat non vérifiable. Ne pas y saisir de données réelles."
+      else
+        diag_ok "config" "$FICHIER_CONFIG complet (base « $BASE_NOM »)"
+      fi
+    fi
+  fi
+
+  # ── 2. Services ───────────────────────────────────────────────────────────
+  ARRETES=""
+  for u in cyber-grc apache2 postgresql; do
+    [[ "$(systemctl is-active "$u" 2>/dev/null || true)" == "active" ]] || ARRETES="$ARRETES $u"
+  done
+  if [[ -n "$ARRETES" ]]; then
+    diag_bloquant "services" "unité(s) arrêtée(s) :$ARRETES" \
+      "systemctl status$ARRETES  puis  systemctl start$ARRETES"
+  else
+    diag_ok "services" "cyber-grc, apache2 et postgresql actifs"
+  fi
+
+  # ── 3. L'URL D'ENTRÉE — le chemin que l'utilisateur emprunte ──────────────
+  #
+  # ⚠️ **Constat Q-36, et c'est la leçon la plus chère du chantier.** La
+  # vérification prescrite interrogeait `/index.html` : elle est restée AU VERT
+  # pendant que `/` rendait **403** et que l'application était injoignable à son
+  # adresse d'entrée. *Un contrôle doit interroger le chemin que l'utilisateur
+  # emprunte, pas celui qui est commode à tester.* On interroge donc « / ».
+  if [[ -n "$SERVEUR_URL_PUBLIQUE" ]]; then
+    HOTE_PUB="${SERVEUR_URL_PUBLIQUE#https://}"; HOTE_PUB="${HOTE_PUB#http://}"; HOTE_PUB="${HOTE_PUB%%/*}"
+    CODE_HTTP="$(curl -sS -k -o /dev/null -w '%{http_code}' --max-time 10 \
+                   --resolve "$HOTE_PUB:443:127.0.0.1" "https://$HOTE_PUB/" 2>/dev/null || true)"
+    case "$CODE_HTTP" in
+      200) diag_ok "url d'entrée" "https://$HOTE_PUB/ → 200" ;;
+      000|"") diag_bloquant "url d'entrée" "https://$HOTE_PUB/ ne répond pas" \
+                "Vérifiez apache2 et le vhost : apachectl -S ; journalctl -u apache2 -n 50" ;;
+      *)   diag_bloquant "url d'entrée" "https://$HOTE_PUB/ → $CODE_HTTP (200 attendu)" \
+             "Un 403 ici est le constat Q-36 : la liste blanche de publication ne couvre pas « / »." ;;
+    esac
+  else
+    diag_reserve "url d'entrée" "non contrôlée : SERVEUR_URL_PUBLIQUE inconnue"
+  fi
+
+  # ── 4. Publication — ce qui est SERVI est-il ce que le dépôt porte ? ──────
+  CODE_PUB=0; controle_publication || CODE_PUB=$?
+  case $CODE_PUB in
+    0) diag_ok "publication" "$PUBLICATION_RESUME" ;;
+    3) diag_bloquant "publication" "$PUBLICATION_RESUME" \
+         "Republiez : bash deploy/install.sh --maj  (JAMAIS une copie à la main — Q-103)" ;;
+    *) diag_reserve "publication" "$PUBLICATION_RESUME" ;;
+  esac
+
+  # ── 5. Base : propriété ───────────────────────────────────────────────────
+  #
+  # C'est la **quatrième couche** de l'ajout seul du journal (CONVENTIONS.md §12) :
+  # si la base appartient au compte du service, une API compromise peut désarmer
+  # les déclencheurs et réécrire le journal. La réponse à « le RSSI peut-il
+  # modifier le journal ? » devient « oui », et le journal ne prouve plus rien.
+  # ⚠️ On ne peut PAS appeler `valider_identifiant` ici : elle appelle `echec`,
+  # donc `exit 1`. Elle ferait sortir le diagnostic au cinquième contrôle sur
+  # douze — un diagnostic qui s'arrête à la première anomalie n'en est pas un
+  # (règle n° 3 de ce mode). Même expression rationnelle, verdict différent.
+  if [[ -n "$BASE_NOM" && "$BASE_NOM" =~ ^[a-z_][a-z0-9_]*$ ]]; then
+    PROP="$(proprietaire_base 2>/dev/null || true)"
+    if [[ -z "$PROP" ]]; then
+      diag_bloquant "base" "base « $BASE_NOM » injoignable ou inexistante" \
+        "systemctl status postgresql ; su postgres -c 'psql -l'"
+    elif [[ "$PROP" == "$ROLE_APP" ]]; then
+      diag_bloquant "base" "la base appartient au COMPTE DU SERVICE ($PROP)" \
+        "Couche 4 de l'ajout seul inopérante. Réparer : bash deploy/install.sh --reprendre-propriete"
+    elif [[ "$PROP" != "$ROLE_PROPRIETAIRE" ]]; then
+      diag_bloquant "base" "propriétaire « $PROP », attendu « $ROLE_PROPRIETAIRE »" \
+        "bash deploy/install.sh --reprendre-propriete"
+    else
+      diag_ok "base" "propriétaire $PROP (≠ compte du service)"
+    fi
+  else
+    diag_reserve "base" "non contrôlée : BASE_NOM absent ou invalide"
+  fi
+
+  # ── 6. Garde-fous du schéma ───────────────────────────────────────────────
+  #
+  # UN SEUL appel : `f_verifier_schema()` est le point d'entrée unique
+  # (CONVENTIONS.md §18.4). Énumérer ici les contrôles un par un rouvrirait la
+  # liste écrite à la main que ce point d'appel existe pour supprimer — et un
+  # contrôle qui cesse d'être découvert disparaît en silence.
+  if [[ -n "$BASE_NOM" ]] && [[ -n "$PROP" ]]; then
+    ANOM_SCHEMA="$(printf 'select count(*) from f_verifier_schema();\n' | sql_admin_base 2>/dev/null || true)"
+    if [[ -z "$ANOM_SCHEMA" ]]; then
+      diag_reserve "schéma" "f_verifier_schema() injouable (migrations non appliquées ?)" \
+        "bash deploy/install.sh --seulement-base"
+    elif [[ "$ANOM_SCHEMA" == "0" ]]; then
+      diag_ok "schéma" "f_verifier_schema() → 0 anomalie"
+    else
+      diag_bloquant "schéma" "f_verifier_schema() → $ANOM_SCHEMA anomalie(s)" \
+        "Détail : su postgres -c \"psql -d $BASE_NOM -c 'select * from f_verifier_schema();'\""
+    fi
+  fi
+
+  # ── 7. Journal d'audit : privilèges et chaîne ─────────────────────────────
+  if [[ -n "$BASE_NOM" ]] && [[ -n "$PROP" ]]; then
+    PRIV_JOURNAL="$(sql_admin_base 2>/dev/null <<SQL || true
+select case when has_table_privilege('$(litteral "$ROLE_APP")', 'journal_audit', 'UPDATE')
+              or has_table_privilege('$(litteral "$ROLE_APP")', 'journal_audit', 'DELETE')
+              or has_table_privilege('$(litteral "$ROLE_APP")', 'journal_audit', 'TRUNCATE')
+            then 'ECRITURE' else 'ok' end;
+SQL
+)"
+    if [[ "$PRIV_JOURNAL" == "ECRITURE" ]]; then
+      diag_bloquant "journal" "$ROLE_APP porte UPDATE, DELETE ou TRUNCATE sur journal_audit" \
+        "L'ajout seul est inopérant. Réparer : bash deploy/install.sh --maj"
+    else
+      # La chaîne : au-delà d'un certain volume, on applique le contrôle rapide
+      # que le §12 PRESCRIT (« sur les entrées récentes ») plutôt que de parcourir
+      # trois ans à chaque diagnostic. ⚠️ `chaine_tronquee` est alors ATTENDUE et
+      # ne compte pas — constat Q-123 : un garde-fou qui crie sur le cas nominal
+      # est un garde-fou qu'on apprend à ignorer.
+      NB_JOURNAL="$(printf 'select count(*) from journal_audit;\n' | sql_admin_base 2>/dev/null || true)"
+      DEPUIS="null"; PORTEE="chaîne entière ($NB_JOURNAL entrées)"
+      if [[ "$NB_JOURNAL" =~ ^[0-9]+$ && "$NB_JOURNAL" -gt 200000 ]]; then
+        DEPUIS="$(( NB_JOURNAL - 50000 ))"; PORTEE="50 000 dernières entrées sur $NB_JOURNAL"
+      fi
+      ANOM_JOURNAL="$(printf "select count(*) from f_journal_audit_verifier(%s::bigint) where anomalie <> 'chaine_tronquee';\n" "$DEPUIS" \
+                        | sql_admin_base 2>/dev/null || true)"
+      if [[ -z "$ANOM_JOURNAL" ]]; then
+        diag_reserve "journal" "chaîne non vérifiable (f_journal_audit_verifier injouable)"
+      elif [[ "$ANOM_JOURNAL" == "0" ]]; then
+        diag_ok "journal" "ajout seul, chaîne intacte — $PORTEE"
+      else
+        diag_bloquant "journal" "$ANOM_JOURNAL anomalie(s) de chaînage — $PORTEE" \
+          "Le journal fait preuve en audit. Détail : select * from f_journal_audit_verifier($DEPUIS);"
+      fi
+    fi
+  fi
+
+  # ── 8. Annuaire ───────────────────────────────────────────────────────────
+  #
+  # On éprouve la JOIGNABILITÉ, jamais une authentification : le verrouillage des
+  # comptes de l'annuaire du client est à cinq tentatives, et un diagnostic qui
+  # verrouille un compte réel serait pire que pas de diagnostic (CLAUDE.md §0.3).
+  if [[ "$(lire_variable AUTH_LDAP_ACTIF)" == "oui" ]]; then
+    URL_LDAP="$(lire_variable LDAP_URL)"
+    CIBLE="${URL_LDAP#ldaps://}"; CIBLE="${CIBLE#ldap://}"; CIBLE="${CIBLE%%/*}"
+    HOTE_LDAP="${CIBLE%%:*}"; PORT_LDAP="${CIBLE##*:}"
+    [[ "$PORT_LDAP" != "$HOTE_LDAP" ]] || PORT_LDAP=636
+    if timeout 5 bash -c "exec 3<>/dev/tcp/$HOTE_LDAP/$PORT_LDAP" 2>/dev/null; then
+      diag_ok "annuaire" "$HOTE_LDAP:$PORT_LDAP joignable"
+    else
+      diag_bloquant "annuaire" "$HOTE_LDAP:$PORT_LDAP injoignable" \
+        "Plus personne ne peut se connecter. Vérifiez le réseau, le pare-feu et LDAP_URL."
+    fi
+  else
+    diag_reserve "annuaire" "AUTH_LDAP_ACTIF=non — seul le compte de secours peut entrer" \
+      "Acceptable en découverte ; à corriger avant toute mise en service."
+  fi
+
+  # ── 9. Relais de messagerie ───────────────────────────────────────────────
+  if [[ "$(lire_variable SMTP_ACTIF)" == "oui" ]]; then
+    HOTE_SMTP="$(lire_variable SMTP_HOTE)"; PORT_SMTP="$(lire_variable SMTP_PORT)"; PORT_SMTP="${PORT_SMTP:-587}"
+    if timeout 8 bash -c "exec 3<>/dev/tcp/$HOTE_SMTP/$PORT_SMTP" 2>/dev/null; then
+      diag_ok "messagerie" "$HOTE_SMTP:$PORT_SMTP joignable"
+    else
+      # ⚠️ Constat Q-199 : le lot L12 a été livré dans une configuration où il ne
+      # POUVAIT PAS envoyer — `IPAddressDeny=any` sans le sous-réseau du relais —
+      # et le banc était vert sur cette configuration-là. Le rappel est ici parce
+      # que c'est ici qu'on le lit au bon moment.
+      diag_bloquant "messagerie" "$HOTE_SMTP:$PORT_SMTP injoignable — aucune relance ne partira" \
+        "Vérifiez IPAddressAllow= de l'unité systemd (constat Q-199), puis le pare-feu."
+    fi
+  else
+    diag_reserve "messagerie" "SMTP_ACTIF=non — aucune relance d'échéance ne part"
+  fi
+
+  # ── 10. Antivirus ─────────────────────────────────────────────────────────
+  if [[ "$(lire_variable CLAMAV_ACTIF)" != "non" ]]; then
+    if [[ "$(systemctl is-active clamav-daemon 2>/dev/null || true)" == "active" ]]; then
+      diag_ok "antivirus" "clamav-daemon actif"
+    else
+      diag_bloquant "antivirus" "clamav-daemon arrêté — aucune pièce jointe ne sera acceptée" \
+        "systemctl start clamav-daemon  (le contrôle n° 4 de la chaîne de dépôt en dépend)"
+    fi
+  else
+    diag_reserve "antivirus" "CLAMAV_ACTIF=non — les pièces jointes ne sont pas analysées"
+  fi
+
+  # ── 11. Certificat ────────────────────────────────────────────────────────
+  CERT="$(grep -hoP '^\s*SSLCertificateFile\s+\K\S+' \
+            /etc/apache2/sites-available/cyber-grc.conf 2>/dev/null | head -1 || true)"
+  if [[ -n "$CERT" && -f "$CERT" ]]; then
+    if openssl x509 -in "$CERT" -noout -checkend 0 >/dev/null 2>&1; then
+      # 30 jours : le délai qu'il faut pour obtenir un certificat d'entreprise.
+      if openssl x509 -in "$CERT" -noout -checkend 2592000 >/dev/null 2>&1; then
+        FIN="$(openssl x509 -in "$CERT" -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
+        diag_ok "certificat" "valide jusqu'au $FIN"
+      else
+        FIN="$(openssl x509 -in "$CERT" -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
+        diag_reserve "certificat" "expire dans moins de 30 jours ($FIN)" \
+          "Renouvelez maintenant : un certificat expiré rend le produit inaccessible à TOUS."
+      fi
+    else
+      diag_bloquant "certificat" "EXPIRÉ" "Le produit est inaccessible. Renouvelez $CERT."
+    fi
+  else
+    diag_reserve "certificat" "non contrôlé : aucun SSLCertificateFile lisible dans le vhost"
+  fi
+
+  # ── 12. Disque ────────────────────────────────────────────────────────────
+  #
+  # Le magasin des pièces jointes et les sauvegardes d'abord : un disque plein y
+  # produit une perte, pas un ralentissement.
+  for D in "$DONNEES" "$SAUVEGARDES"; do
+    [[ -d "$D" ]] || continue
+    PCT="$(df -P "$D" 2>/dev/null | awk 'NR==2{gsub("%","",$5); print $5}' || true)"
+    [[ "$PCT" =~ ^[0-9]+$ ]] || continue
+    if   [[ "$PCT" -ge 95 ]]; then
+      diag_bloquant "disque" "$D occupé à $PCT %" "Libérez de l'espace : dépôts et sauvegardes vont échouer."
+    elif [[ "$PCT" -ge 85 ]]; then
+      diag_reserve  "disque" "$D occupé à $PCT %" "Prévoyez de l'espace avant que cela devienne bloquant."
+    else
+      diag_ok       "disque" "$D occupé à $PCT %"
+    fi
+  done
+
+  # ── Bilan ─────────────────────────────────────────────────────────────────
+  printf '\n'
+  if   [[ $DIAG_BLOQUANT -gt 0 ]]; then
+    info "Bilan : $DIAG_OK conforme(s), $DIAG_RESERVE réserve(s), $DIAG_BLOQUANT BLOQUANT(S)"
+    alerte "Le produit ne rend pas le service attendu. Traitez les lignes ERR d'abord."
+    exit 2
+  elif [[ $DIAG_RESERVE -gt 0 ]]; then
+    info "Bilan : $DIAG_OK conforme(s), $DIAG_RESERVE réserve(s), 0 bloquant"
+    alerte "Le produit fonctionne, mais quelque chose est dégradé. Voir les lignes !!"
+    exit 1
+  fi
+  info "Bilan : $DIAG_OK conforme(s), 0 réserve, 0 bloquant"
+  succes "Installation conforme : douze sujets contrôlés, $DIAG_OK verdicts."
+  alerte "⚠️ Un diagnostic vert NE VAUT PAS passage de porte : il constate une machine,"
+  alerte "   il n'éprouve ni le cloisonnement sous sondes hostiles, ni les catalogues."
+  exit 0
+fi
 
 # =============================================================================
 #  1. Paquets système
@@ -1237,11 +1644,6 @@ preparer_role "$ROLE_LECTURE"      BASE_MOT_DE_PASSE_LECTURE      "$ATTRIBUTS_CO
 # =============================================================================
 
 info "Base de données « $BASE_NOM »"
-
-proprietaire_base() {
-  printf "select pg_get_userbyid(datdba) from pg_database where datname = '%s';\n" \
-    "$(litteral "$BASE_NOM")" | sql_admin
-}
 
 # Marche à suivre manuelle, imprimée partout où la reprise automatique ne s'applique
 # pas. Elle vit à UN SEUL endroit, et c'est délibéré : la version imprimée était une

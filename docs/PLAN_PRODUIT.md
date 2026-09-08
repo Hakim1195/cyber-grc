@@ -191,10 +191,15 @@ S8 — ce report est ici honoré, pas contourné : L17 se joue après la vague 1
 
 **Pourquoi, mesuré.** Pour installer aujourd'hui, il faut : écrire `filiales.conf` à la
 main *avant* de lancer quoi que ce soit ; renseigner à la main les secrets LDAP, SMTP et
-l'empreinte du compte de secours ; connaître **74 variables d'environnement** ; créer 23
-groupes Active Directory ; puis lancer une seconde commande pour vérifier que ce qui est
-servi correspond au dépôt. `install.sh` fait 3 294 lignes et s'arrête en code 2 sur une
-configuration incomplète — ce qui est **juste**, mais ne dit pas comment la compléter.
+l'empreinte du compte de secours ; créer 23 groupes Active Directory ; puis lancer une
+seconde commande pour vérifier que ce qui est servi correspond au dépôt. `install.sh`
+s'arrête en code 2 sur une configuration incomplète — ce qui est **juste**, mais ne dit pas
+comment la compléter.
+
+⚠️ **Ce paragraphe annonçait « 74 variables d'environnement ». Le chiffre était faux, et le
+corriger a changé le contenu du sous-lot 18.5 — voir la note qui l'accompagne.** Mesuré le
+08/09/2026 : `src/config/index.ts` en lit **68**, et *un chiffre faux dans un plan est un
+constat, pas une coquille* (`PLAN_EXECUTION.md` §5).
 
 | Réf | Action | Critère d'acceptation — mesurable |
 |---|---|---|
@@ -202,17 +207,63 @@ configuration incomplète — ce qui est **juste**, mais ne dit pas comment la c
 | **18.2** | **Profil « découverte »** — LDAP désactivé (compte de secours seul), SMTP désactivé, ClamAV facultatif, TLS auto-signé. Trois questions au lieu de vingt | Le produit démarre et sert une session en **moins de 10 minutes** sur une machine neuve. ⚠️ **Le profil découverte doit être VISIBLE dans le produit** — un bandeau permanent « installation de découverte, non conforme à un usage de production » — sinon il devient une installation de production par oubli |
 | **18.3** | **`install.sh --diagnostic`** — une commande unique qui rend l'état des dix points qui cassent en vrai : services, publication servie == dépôt, RLS forcée, propriété de la base, chaîne du journal, joignabilité LDAP, sortie SMTP, ClamAV, certificat, espace disque | Sortie en **code 0 / 1 / 2** exploitable par une supervision. Chaque ligne dit **quoi faire**, pas seulement ce qui ne va pas. `--verifier-publication` y est **intégré**, plus une commande à ne pas oublier (constat Q-103) |
 | **18.4** | **Groupes AD engendrés et prêts à jouer** — `groupes-ad.sh` rend déjà un CSV ; il rendra en plus un **script PowerShell idempotent** que l'administrateur du domaine exécute tel quel | Le script rejoué deux fois ne crée rien la seconde fois. ⚠️ **Le produit continue de ne jamais écrire dans l'annuaire** (`GUIDE_EXPLOITATION` §6) : il **engendre un script que l'exploitant lit et lance**, il ne s'y connecte pas |
-| **18.5** | **Réduire la surface de configuration** — sur 74 variables, mesurer combien ont un défaut sûr et les sortir du chemin nominal. Objectif : **moins de 12 variables à connaître** pour une installation de production | Le nombre est **mesuré et inscrit** dans `backend/README.md`, pas estimé. Les variables sorties du chemin nominal restent lisibles et documentées — on les cache, on ne les supprime pas |
+| **18.5** | ⚠️ **RÉÉCRIT le 08/09/2026 après mesure — l'objectif d'origine était déjà atteint.** Ne pas réduire le nombre de variables : **le dire**. Le chemin nominal exige **six valeurs**, pas soixante-huit | ✅ **mesuré, pas estimé** : `src/config/index.ts` lit **68** variables ; `install.sh` n'en réclame que **six** à l'exploitant (`SERVEUR_URL_PUBLIQUE`, plus `LDAP_URL`, `LDAP_BASE_RECHERCHE`, `LDAP_DN_SERVICE`, `LDAP_MOT_DE_PASSE_SERVICE` si l'annuaire est actif, plus `SMTP_HOTE` si les relances le sont) ; **deux** sont engendrées (`SESSION_SECRET`, `APPLICATION_VERSION`) ; **quatre** sont exigées par le serveur (`BASE_MOT_DE_PASSE`, `SESSION_SECRET`, `LDAP_MOT_DE_PASSE_SERVICE`, `BASE_SSL_CA` si SSL vérifié) ; **toutes les autres portent un défaut sûr**. Le travail est donc de **documenter les six** et de faire poser exactement ces questions par l'assistant |
 | **18.6** | **Guide « installer en 10 minutes »** — une page, dix commandes, zéro renvoi | Un lecteur qui n'a jamais vu le projet installe sans ouvrir un autre fichier |
 | **18.7** | **Assistant de premier démarrage dans le produit** — après l'installation : créer la première filiale, activer ses référentiels, importer l'annuaire, déposer la première politique | ⚠️ **Il ne crée aucune donnée métier.** Il conduit l'utilisateur vers les écrans qui existent. Voir l'arbitrage **A2** du §7 sur le jeu de découverte |
 
+⚠️ **La leçon de 18.5, et elle vaut au-delà de ce lot.** J'avais écrit « 74 variables »
+sans les compter, et bâti un sous-lot entier sur ce chiffre : *réduire la surface de
+configuration*. La mesure a montré que **la surface était déjà de six**, et que le défaut
+n'était pas le nombre — c'était que **rien ne dit lesquelles**. Un plan bâti sur un chiffre
+supposé fait travailler sur le mauvais problème, et il le fait avec conviction. C'est le
+§0 du `CLAUDE.md` appliqué à un plan plutôt qu'à un environnement : *avant d'écrire qu'une
+chose est difficile ici, mesurez-la.*
+
 **Périmètre exclusif** : `backend/deploy/**`, `docs/GUIDE_EXPLOITATION.md`,
-`backend/README.md`. **Aucun fichier de `src/`, aucune migration.**
+`backend/README.md`.
+
+⚠️ **Correction du 08/09/2026 — ce plan se contredisait lui-même, et le relever vaut mieux
+que le laisser courir.** Le périmètre était écrit « aucun fichier de `src/` », alors que
+**18.2 exige un bandeau visible DANS le produit** — ce qu'aucun fichier de `deploy/` ne
+peut produire. Éditer à la main l'`index.html` publié est exclu : le jeton de version en
+dérive, et une copie manuelle sert un fichier que les navigateurs gardent un mois
+(constat **Q-103**). Le périmètre réel est donc :
+
+| Sous-lot | Périmètre | Surface d'audit |
+|---|---|---|
+| **18.1, 18.3, 18.4, 18.5, 18.6** | `deploy/**` et documentation seulement | **aucune** — jouables avant les portes |
+| **18.2** (bandeau découverte) | + un champ dans `GET /api/session` et un bandeau dans la SPA | **minime, mais réelle** — à déclarer au 7ᵉ passage de S8 |
+| **18.7** (assistant de premier démarrage) | frontend | **réelle** — après les portes |
+
+**Ce que je ne fais pas pour préserver la fiction d'un lot sans surface** : renoncer au
+bandeau. Un profil « découverte » invisible depuis le produit **devient une installation de
+production par oubli**, et c'est précisément le défaut que 18.2 existe pour empêcher. On
+préfère déclarer dix lignes à auditer plutôt que livrer une configuration silencieusement
+dégradée.
 
 ⚠️ **Garde qui ne se négocie pas** : les blocs de contrôle d'`install.sh` sont extraits par
 le banc via les marqueurs `# >>> banc: <nom> <<<`. Toute réécriture du script **conserve
 les marqueurs et leurs ancres** — le banc doit refuser un bloc vide, sans quoi ces essais
 passent au vert en n'éprouvant rien.
+
+---
+
+### L18 bis — Jeu de découverte 🟢 *(après les portes — il écrit en base)*
+
+**Autorisé par arbitrage de l'utilisateur le 08/09/2026** (§7, A2), sous **cinq conditions
+constitutives**. Il ne se joue pas avec L18 : L18 est un lot de déploiement, celui-ci écrit
+des lignes métier et emprunte le déclencheur de purge — donc il passe par une porte.
+
+| Réf | Action | Critère d'acceptation |
+|---|---|---|
+| **18b.1** | **Marque d'origine dans la donnée** — une colonne `origine` valant `decouverte`, portée par les entités engendrées, reprise à l'export, à l'impression et au journal | ⚠️ La liste des entités marquées est **découverte dans le catalogue**, pas écrite à la main : une entité oubliée produirait une ligne de démonstration **indiscernable d'une ligne réelle** — exactement l'échec silencieux que la règle des listes proscrit |
+| **18b.2** | **Chargement sur geste volontaire**, depuis les réglages, jamais par l'installateur | Aucun appel depuis `install.sh`, et un essai le vérifie sur le script lui-même |
+| **18b.3** | **Refus si la base porte des données réelles** — le contrôle cherche **toute ligne non marquée**, pas un compteur | Un essai insère une seule ligne réelle et exige le refus |
+| **18b.4** | **Purge complète en un clic** — pièces jointes comprises, par le déclencheur `017` | Après purge : 0 ligne marquée, 0 fichier dans le magasin, file de purge vide — les trois mesures de D2 |
+| **18b.5** | **Interdit hors du profil découverte**, refus journalisé | Le refus porte le gabarit de route, comme `GRC06` |
+
+**Porte** : rejoue le cloisonnement sur les entités marquées, et la purge sur les six
+chemins de cascade.
 
 ---
 
@@ -447,20 +498,35 @@ travail sur la souveraineté.
 bénéfice réel des trois usages ci-dessus est inférieur à celui d'un connecteur qui
 constate.
 
-### A2 — Un jeu de découverte est-il autorisé ?
+### A2 — Un jeu de découverte ✅ **TRANCHÉ le 08/09/2026 — autorisé sous conditions**
 
 Le brief initial interdit les données de démonstration pré-chargées, et la règle a bien
-servi : un outil qui affiche « aucun risque » sur une base vide ne ment pas.
+servi : un outil qui affiche « aucun risque » sur une base vide ne ment pas. Mais elle a un
+coût mesurable sur la prise en main — à la première ouverture, **tous les écrans sont
+vides**, y compris ceux qui expliquent le mieux le produit.
 
-Mais elle a un coût mesurable sur la prise en main : à la première ouverture, **tous les
-écrans sont vides**, y compris ceux qui expliquent le mieux le produit.
+**Décision de l'utilisateur, 08/09/2026 : le jeu de découverte est AUTORISÉ, et les cinq
+conditions ci-dessous sont constitutives — un jeu qui n'en respecte que quatre n'est pas
+autorisé.**
 
-**Proposition** : un jeu de découverte **explicitement étiqueté**, chargé **sur geste
-volontaire uniquement**, **purgeable en un clic**, refusé si la base contient déjà des
-données réelles, et **interdit hors du profil « découverte »** de L18. Il ne peut pas
-devenir une base de production par oubli.
+1. **Étiqueté dans la donnée elle-même**, pas seulement à l'écran : chaque enregistrement
+   engendré porte une marque que l'export, l'impression et le journal reprennent. Un jeu
+   reconnaissable seulement par un bandeau devient indiscernable dès la première
+   exportation ;
+2. **chargé sur geste volontaire uniquement** — jamais par l'installateur, jamais au
+   premier démarrage ;
+3. **purgeable en un clic**, et la purge est **complète** : elle emprunte le déclencheur
+   `f_pieces_suivent_leur_porteur()` (migration `017`) pour que les pièces jointes du jeu
+   disparaissent avec lui, sur les six chemins ;
+4. **refusé si la base contient déjà des données réelles** — le contrôle porte sur la
+   présence de toute ligne non marquée, pas sur un compteur ;
+5. **interdit hors du profil « découverte »** de L18, et le refus est journalisé.
 
-**Cela demande votre accord**, parce que cela amende une règle du brief.
+⚠️ **Ce que ces conditions protègent** : le brief avait raison sur le fond — un outil
+produit en audit ne doit jamais laisser un doute sur l'origine d'une ligne. Les cinq
+conditions ne sont pas de la prudence décorative, elles sont **ce qui rend la décision
+compatible avec le motif du brief**. Le jeu de découverte est livré au **L18 bis**, après
+les portes, parce qu'il écrit en base.
 
 ### A3 — Un portail fournisseur exposé, oui ou non ?
 
