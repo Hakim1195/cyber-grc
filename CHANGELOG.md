@@ -99,6 +99,21 @@ dire la même chose.
 été jouées une par une — index retiré, index sans `filiale_id`, contrainte retirée, déclencheur
 retiré, déclencheur désarmé, statut retiré du `check`, trace débranchée — et chacune fait rougir.
 
+#### Un défaut trouvé en chemin, et fermé à la classe
+
+En relisant l'arborescence après coup : `src/reprise/index.ts` valide chaque champ énuméré
+d'un export `grc-backup` contre une liste **écrite à la main**, et cette liste ne connaissait
+pas « en validation ». **Rien ne l'aurait dit avant qu'un exploitant restaure un export
+parfaitement légitime et se le voie refuser** — c'est-à-dire au moment où l'on a le moins
+envie d'un défaut. Le défaut ne vivait ni dans la migration ni dans la reprise : **entre les
+deux**, motif rencontré plus de dix fois sur ce chantier.
+
+La liste est corrigée, et surtout **les vingt et une énumérations sont désormais gardées d'un
+coup** (`test/reprise/enumerations.test.mjs`) : elles sont confrontées aux `check` du schéma,
+**découverts dans `pg_constraint`** — aucune correspondance collection → table → colonne n'est
+recopiée, elle serait une troisième liste à tenir dont l'omission serait silencieuse. Le
+contrôle porte sa propre morsure : on lui pose une dérive et l'on exige qu'il la voie.
+
 **Reste D3**, la recherche : elle **ne se joue pas avant que la porte S8 soit franchie**. Une
 recherche est un **oracle**, c'est la surface la plus propice à une fuite entre filiales.
 

@@ -223,7 +223,22 @@ interface DescriptionCollection {
 /** Les quatre statuts de conformité, communs aux exigences, évaluations et mesures. */
 const STATUTS_CONFORMITE = ['conforme', 'partiellement conforme', 'non conforme', 'non applicable'];
 
-const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>> = {
+/**
+ * ⚠️ **Exporté pour être CONFRONTÉ, pas pour être lu.**
+ *
+ * Les vingt énumérations ci-dessous recopient des `check` du schéma. C'est le bon
+ * outil (`CLAUDE.md` §3) — une valeur absente fait **échouer bruyamment** une
+ * reprise, jamais réussir en silence —, mais la règle exige alors de **figer la
+ * liste à deux endroits qui la comparent au réel**. Le second endroit est
+ * `test/reprise/enumerations.test.mjs`, qui lit `pg_constraint` et refuse tout
+ * écart.
+ *
+ * Le motif a coûté ce qu'il devait coûter : la migration `019` a ajouté
+ * « en validation » à `ck_documents_statut`, et cette liste ne l'a pas su. Rien
+ * ne l'aurait dit avant qu'un exploitant restaure un export **légitime** et se le
+ * voie refuser — c'est-à-dire au pire moment.
+ */
+export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>> = {
   clients: {
     prefixe: 'CLI',
     champs: ['id', 'nom', 'secteur'],
@@ -462,7 +477,16 @@ const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>> = {
       'date_revue', 'emplacement', 'referentiels', 'notes', 'updatedAt',
     ],
     enumerations: [
-      { champ: 'statut', valeurs: ['brouillon', 'en vigueur', 'à réviser', 'obsolète'], videAdmis: true },
+      // ⚠️ « en validation » est arrivé avec la migration `019` (action D5). L'oublier
+      // ici ne se voit PAS à l'écriture : cela ferait **refuser à la reprise** un export
+      // parfaitement légitime — c'est-à-dire au pire moment, quand quelqu'un restaure.
+      // C'est le motif que le garde-fou `test/reprise/enumerations.test.mjs` ferme
+      // désormais pour les vingt énumérations à la fois, et non pour celle-ci seule.
+      {
+        champ: 'statut',
+        valeurs: ['brouillon', 'en validation', 'en vigueur', 'à réviser', 'obsolète'],
+        videAdmis: true,
+      },
     ],
     bornes: [],
     dates: ['date_revue'],
