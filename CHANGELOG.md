@@ -30,6 +30,68 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'ont été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
 > jamais ce qu'il ne regarde pas.*
 
+### Les trois arbitrages du plan produit sont tranchés — deux lots neufs, L27 et L28
+
+**A1 — l'IA : locale par défaut, externe possible et encadrée.** J'avais recommandé « un
+modèle local ou rien ». L'utilisateur a tranché plus finement, et il a eu raison : refuser
+tout appel externe, c'est décider à la place d'un client dont le DPO a peut-être déjà validé
+un contrat cadre. La possibilité est donc conservée — **et le garde-fou est mis dans la
+mécanique, pas seulement dans le texte.**
+
+⚠️ **Un panneau d'avertissement seul ne suffit pas, et il faut le dire.** Un avertissement se
+lit une fois, se coche, et se transmet à des gens qui n'étaient pas là. Ce qui sortirait ici,
+ce sont des scénarios de risque, des écarts de conformité, des constats d'audit et des
+incidents — **exactement l'inventaire qu'un attaquant voudrait**. Le lot **L27** pose donc
+**six barrières**, dont l'avertissement est la **sixième** :
+
+1. **désactivé par défaut, et impossible à activer depuis l'interface** — cela se fait dans
+   `/etc/cyber-grc/env`, en root : la décision d'exporter la gouvernance d'un groupe
+   n'appartient pas à l'utilisateur qui a la fiche sous les yeux ;
+2. **`IPAddressDeny=any` ferme la sortie réseau** tant que l'exploitant n'ajoute pas le
+   réseau du fournisseur. *Une barrière physique, pas une promesse* — et c'est le constat
+   **Q-199** retourné en protection : là il avait livré L12 incapable d'envoyer, ici il
+   empêche d'envoyer par accident ;
+3. **destination déclarée**, certificat vérifié, **aucune redirection suivie** ;
+4. **ce qui part est minimisé et MONTRÉ avant de partir** ; ne partent jamais le contenu des
+   pièces jointes, le journal d'audit, l'annuaire des personnes, ni **rien d'une autre
+   filiale que l'active** — liste appliquée **par découverte dans le catalogue**, jamais
+   énumérée : une colonne ajoutée demain doit être exclue par défaut, pas incluse par oubli ;
+5. **chaque appel journalisé** (`ia_externe`) — *une porte dérobée dont personne ne sait
+   qu'elle a servi n'est pas une porte de secours* ;
+6. **l'avertissement**, permanent tant que le mode est actif, repris en réserve au
+   `--diagnostic`.
+
+Plus : **activation par filiale, jamais pour le groupe entier** — vingt filiales dans
+plusieurs pays n'ont pas un régime unique ; et quatre champs obligatoires disant **ce que
+« de confiance » veut dire** (fournisseur, contrat, lieu d'hébergement, engagement de
+non-réentraînement, qui a validé et quand), sur lesquels le `--diagnostic` rougit s'ils sont
+vides. ⚠️ Ces champs **ne protègent rien techniquement**, et c'est assumé : ils existent pour
+qu'au jour de l'audit, la question ait une réponse écrite **avant** d'être posée.
+
+**A3 — le portail fournisseur exposé est VALIDÉ**, avec consigne de le pousser aussi loin que
+possible. Lot **L28** : accès par **lien signé, daté, révocable, sans compte** — un compte,
+c'est un mot de passe à réinitialiser, une énumération possible et une surface qui survit à
+la campagne ; un lien expire tout seul. Un lien expiré rend **404, jamais 403** : *un 403
+confirmerait que la cible existe*. Dépôt de preuve par **la** chaîne L6, ClamAV compris,
+**sans variante simplifiée** — c'est ainsi qu'on se retrouve avec deux chaînes dont une seule
+est éprouvée. Vhost, borne de corps et limiteur propres. Attestation rendue au fournisseur,
+parce que c'est ce qui le fait répondre sérieusement : il y gagne quelque chose.
+
+⚠️ **L28 est le premier composant du produit exposé hors VPN.** Il ne se joue **ni avant S8,
+ni en même temps qu'un autre lot**, et sa porte **S15 rejoue la grille §4 entière sur ce seul
+lot** — *en cas de doute sur ce lot, on ne livre pas*. L'export / réimport de L21.2 **reste
+la voie de repli permanente**, pas un état transitoire : un fournisseur qui refuse un accès
+en ligne doit pouvoir répondre quand même.
+
+**Ce que je n'ai pas fait, et qu'il faut savoir** : je n'ai **pas** élargi A1 aux « services
+tiers » en général. L'utilisateur a autorisé une **IA** externe. La notation externe de
+fournisseurs (#33) deviendrait techniquement atteignable par la même mécanique — c'est écrit
+au §6 comme une **question à reposer**, pas comme une permission acquise.
+
+**Cible de la grille marché recalculée : 76 ✅ · 2 🟡 · 8 ❌** après les douze lots, contre
+71 · 5 · 10 avant ces deux arbitrages. Les huit non-objectifs sont désormais **nommés un par
+un** au `PLAN_PRODUIT.md` §9 — sans quoi « non-objectif » n'est qu'un mot pour « oublié ».
+
 ### L18.1 / L18.2 a — `install.sh --assistant` : six questions, et un profil découverte qui crie
 
 **Le mode non interactif n'est pas remplacé, il est alimenté** : l'assistant écrit exactement

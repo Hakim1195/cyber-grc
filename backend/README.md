@@ -749,7 +749,7 @@ incomplète**, pas le fonctionnement attendu d'une recette (§4).
 vagues, portes de sécurité, définition de « terminé » — vit dans
 [`../docs/PLAN_EXECUTION.md`](../docs/PLAN_EXECUTION.md) ; le **quoi** vit dans
 [`../docs/PLAN_SERVEUR.md`](../docs/PLAN_SERVEUR.md) §7 pour les lots L0 → L16, et
-dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L26**, issus de
+dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
 **Mesuré à la révision `99ea754`** : `npm test` → **1794 essais, 1794 passés** ;
@@ -780,6 +780,8 @@ la comparaison au marché du 08/09/2026.
 | **L18 — Installation en une commande** | ✅ **livré le 08/09/2026, sauf le bandeau (18.2 b)**. `install.sh --assistant` pose les **six** valeurs que le script ne peut pas deviner et enchaîne l'installation ; `--diagnostic` rend l'état de **douze sujets** sans rien modifier, en code 0/1/2. **Profil découverte** : ni annuaire ni courriel, compte de secours dont l'empreinte `scrypt` est calculée par `dist/auth/secours.js` — jamais recopiée en shell —, certificat auto-signé. `../docs/INSTALLER.md` : cinq commandes, aucun renvoi. ⚠️ **Ce lot ne touche ni `src/` ni le schéma** : c'est ce qui l'a autorisé à se jouer avant les portes. **Reste 18.2 b** — le bandeau « installation de découverte » dans le produit, ~10 lignes touchant `GET /api/session` et la SPA, **à déclarer au 7ᵉ passage de S8**. Sans lui, le profil dégradé n'est visible que de l'exploitant, pas de l'utilisateur qui saisit |
 | **L18 bis — Jeu de découverte** | ⬜ **autorisé par arbitrage du 08/09/2026, après les portes.** Le brief interdisait les données de démonstration ; l'utilisateur a levé l'interdit sous **cinq conditions constitutives** — marque d'origine **dans la donnée** et non seulement à l'écran, geste volontaire, refus si la base porte des données réelles, purge complète par le déclencheur `017`, interdit hors profil découverte. Il écrit en base : il passe par une porte |
 | **L19 → L26** | ⬜ **planifiés** (`../docs/PLAN_PRODUIT.md`) — chaîne de preuve, conformité réglementaire opérationnelle, tiers et DORA, ouverture technique, collecte automatique de preuve et surveillance continue, campagnes descendantes, EBIOS RM, catalogues ouverts |
+| **L27 — Assistance IA** | ⬜ **arbitré le 08/09/2026** — modèle local par défaut ; fournisseur externe possible sous **six barrières**, dont la première est que `IPAddressDeny=any` ferme la sortie réseau tant que l'exploitant ne l'ouvre pas. Activation **par filiale**. Porte **S16** : en local, l'unité systemd reste **intacte** — c'est la preuve qu'aucune donnée ne sort |
+| **L28 — Portail fournisseur exposé** | ⬜ **validé le 08/09/2026** — lien signé daté et révocable **sans compte** (un lien expiré rend **404, jamais 403** : un 403 confirmerait la cible), dépôt par la chaîne L6 sans variante, vhost et limiteur propres. ⚠️ **Premier composant hors VPN**, porte **S15**, la plus exigeante du plan |
 
 ### Les verdicts, tels que le journal des portes les formule
 

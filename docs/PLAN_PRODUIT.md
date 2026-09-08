@@ -320,7 +320,7 @@ porteur ; et rien n'atteste qu'une politique a été lue.
 | Réf | Action | Critère d'acceptation |
 |---|---|---|
 | **21.1** | **Registre d'information DORA** — identifiant **LEI**, fonctions supportées, dates et nature contractuelles, criticité, **chaîne de sous-traitance** (rang 1, 2, n) | Export au format attendu par l'autorité. ⚠️ La chaîne de sous-traitance est **récursive** : un prestataire peut en porter d'autres. Contrainte anti-cycle en base, pas dans la route |
-| **21.2** | **Questionnaire fournisseur** — construit depuis un référentiel existant, envoyé, relancé, réponses reversées sur la fiche | ⚠️ **Sans portail externe au premier temps** : le questionnaire s'exporte, se remplit hors ligne, se réimporte par le moteur d'import généralisé (L7). Un portail exposé à des tiers est une surface neuve qui mérite sa propre porte — voir arbitrage **A3** |
+| **21.2** | **Questionnaire fournisseur** — construit depuis un référentiel existant, envoyé, relancé, réponses reversées sur la fiche | **Sans portail dans ce lot-ci** : le questionnaire s'exporte, se remplit hors ligne, se réimporte par le moteur d'import généralisé (L7). ⚠️ **Le portail est VALIDÉ et devient le lot L28** (arbitrage A3, 08/09/2026) — mais l'export **reste la voie de repli permanente**, et non un état transitoire : un fournisseur qui refuse un accès en ligne doit pouvoir répondre quand même |
 | **21.3** | **Suivi contractuel et plan de sortie** — clauses de sécurité, dates de revue, réversibilité, plan de sortie daté | Les échéances contractuelles alimentent l'échéancier existant |
 | **21.4** | **Scoring de risque fournisseur** — la criticité × accès existante devient un score composite intégrant la couverture des exigences et l'ancienneté de la dernière évaluation | Le score est **dérivé et recalculé**, jamais stocké figé |
 
@@ -414,6 +414,135 @@ grille.
 
 ---
 
+### L27 — Assistance par IA : locale par défaut, externe sous conditions 🟢
+
+> **Arbitré le 08/09/2026 (§7, A1).** Le modèle **local** est le chemin nominal. Un
+> fournisseur **externe de confiance** reste possible — et il est encadré par la mécanique,
+> pas par un texte.
+
+**Les cinq usages, et pas un de plus.** L'IA **propose**, un humain **décide**. Aucun de ces
+usages n'écrit en base sans validation explicite, et aucun ne porte de décision de
+conformité :
+
+| Usage | Ce que l'IA fait | Ce qu'elle ne fait jamais |
+|---|---|---|
+| Correspondances entre référentiels | propose des rapprochements | ne les applique pas — un statut de conformité propagé à tort est un faux en audit |
+| Brouillon de politique | propose un texte à partir du canevas | ne publie pas : le circuit `GRC06` reste seul maître |
+| Résumé d'incident | propose une synthèse | ne remplit ni la déclaration ANSSI ni la CNIL |
+| Réponse à un questionnaire client | propose une réponse à partir des preuves existantes | ne l'envoie pas |
+| Recherche en langage courant | reformule en filtres | **n'élargit jamais le périmètre** — la RLS borne, comme partout |
+
+#### 27.1 Le mode LOCAL — le chemin nominal
+
+Un modèle quantifié sur la VM du client, quelques Go de RAM, aucun appel sortant. C'est le
+défaut, et c'est ce qui doit être proposé d'abord à tout client.
+
+**Critère** : avec le mode local, `IPAddressDeny=any` de l'unité systemd reste **intact**.
+Un essai le vérifie : *si la fonction marche alors que rien n'est ouvert, c'est qu'elle ne
+sort pas.* C'est la seule preuve qui ne se contourne pas.
+
+#### 27.2 Le mode EXTERNE — six barrières, dont une seule est un texte
+
+⚠️ **Un panneau d'avertissement est la sixième, pas la première.** Voici l'ordre, du plus
+dur au plus souple — et chacune existe parce qu'un avertissement seul serait oublié :
+
+1. **Désactivé par défaut, et impossible à activer depuis l'interface.** Le mode externe
+   s'active dans `/etc/cyber-grc/env`, par l'exploitant, en root. Aucune case à cocher ne
+   l'ouvre : la décision d'exporter les données de gouvernance d'un groupe n'appartient pas
+   à l'utilisateur qui a la fiche sous les yeux.
+2. **La sortie réseau reste fermée tant que personne ne l'ouvre à la main.** L'unité systemd
+   porte `IPAddressDeny=any` ; joindre un fournisseur externe exige d'ajouter *son* réseau à
+   `IPAddressAllow`. **C'est une barrière physique, pas une promesse** — et c'est la leçon
+   du constat **Q-199**, où L12 a été livré incapable d'envoyer *avec un banc vert*. Ici, ce
+   défaut devient une **protection** : rien ne sort tant que l'exploitant n'a pas ouvert.
+3. **Destination déclarée et vérifiée.** Un seul hôte, en configuration, avec son certificat
+   vérifié. Aucune redirection suivie. ⚠️ Une redirection suivie ferait sortir la donnée
+   vers un hôte que personne n'a déclaré.
+4. **Ce qui part est minimisé, et MONTRÉ avant de partir.** L'utilisateur voit le texte
+   exact qui sera transmis, et peut l'annuler. ⚠️ **Ne partent jamais**, quelle que soit la
+   configuration : le contenu des pièces jointes, les entrées du journal d'audit, les fiches
+   de l'annuaire des personnes, et **toute donnée d'une autre filiale que l'active**. Cette
+   liste est appliquée par une **découverte** — les tables et colonnes concernées sont
+   dérivées du catalogue, jamais énumérées à la main : une colonne ajoutée demain doit être
+   exclue par défaut, pas incluse par oubli.
+5. **Chaque appel est journalisé** — nouvelle action `ia_externe` : qui, quand, quelle
+   destination, quel usage, combien d'octets. Le journal est en ajout seul : *une porte
+   dérobée dont personne ne sait qu'elle a servi n'est pas une porte de secours* — c'est ce
+   que dit déjà `src/auth/secours.ts`, et cela vaut ici mot pour mot.
+6. **Et alors seulement, l'avertissement** : permanent dans le produit tant que le mode est
+   actif — pas une fenêtre à fermer —, repris dans `--diagnostic` comme réserve, et rappelé
+   au moment de chaque envoi. Même mécanique que le bandeau du profil découverte (18.2 b),
+   pour la même raison : *ce qu'on ne voit pas devient une habitude*.
+
+#### 27.3 Ce que « de confiance » doit vouloir dire, écrit noir sur blanc
+
+Le produit ne peut pas juger un fournisseur ; il peut **exiger que le client l'ait jugé**.
+La configuration porte donc quatre champs obligatoires, et le `--diagnostic` **rougit s'ils
+sont vides** alors que le mode externe est actif :
+
+- le **nom du fournisseur** et la **référence du contrat** ou de l'accord de traitement ;
+- le **lieu d'hébergement** du traitement (l'UE change tout au regard du RGPD) ;
+- **l'engagement de non-réentraînement** sur les données transmises — sa référence ;
+- **qui, chez le client, a validé** — un nom, une date.
+
+⚠️ **Ces champs ne protègent rien techniquement, et c'est assumé.** Ils existent pour qu'au
+jour de l'audit, la question « pourquoi vos données de gouvernance sont-elles parties chez
+ce fournisseur ? » ait une réponse écrite **avant** d'être posée, et pas improvisée après.
+
+#### 27.4 Par filiale, jamais pour le groupe entier
+
+Le mode externe s'active **par filiale**. Un groupe de vingt filiales dans plusieurs pays
+n'a pas un régime unique : ce qui est validé en France peut ne pas l'être ailleurs, et
+l'inverse. Une activation Groupe unique ferait sortir les données de dix-neuf filiales sur
+la décision d'une seule.
+
+**Critère d'acceptation du lot** : les cinq usages fonctionnent en local sans qu'aucune
+sortie réseau ne soit ouverte ; en mode externe, un essai **coupe la destination** et
+vérifie que le produit rend « indisponible » — **jamais une réponse inventée**, jamais un
+silence. Et un essai vérifie qu'**une filiale sans activation ne peut pas déclencher un
+appel**, même en empruntant l'écran d'une filiale qui l'a.
+
+**Lignes comblées** : #36 · #68 · #69 · #70 · #72 (et #71 est déjà pris par L17, sans IA).
+
+---
+
+### L28 — Portail fournisseur exposé 🔴 *(le premier composant hors VPN)*
+
+> **Validé le 08/09/2026 (§7, A3), avec consigne de le pousser aussi loin que possible.**
+
+**Ce que le portail change.** L21.2 livre le questionnaire par export et réimport : cela
+marche, et **cela reste la voie de repli permanente** — un fournisseur qui ne veut pas d'un
+accès en ligne doit pouvoir répondre quand même. Le portail ajoute ce que l'export ne peut
+pas donner : la relance qui suit toute seule, la preuve déposée à la source, l'historique
+d'un fournisseur d'une campagne à l'autre, et la fin des classeurs qui reviennent par
+courriel dans dix versions différentes.
+
+⚠️ **Et il change la nature du produit** : jusqu'ici, tout vivait derrière un VPN. Ce lot
+ouvre une porte sur l'extérieur. Il porte donc **la porte de sécurité la plus exigeante du
+plan**, et il ne se joue **ni avant S8, ni en même temps qu'un autre lot**.
+
+| Réf | Action | Critère d'acceptation |
+|---|---|---|
+| **28.1** | **Accès sans mot de passe** — un lien signé, à usage nominatif, **daté**, révocable, portant sur **un seul questionnaire d'une seule campagne** | ⚠️ **Pas de compte fournisseur, et c'est délibéré** : un compte, c'est un mot de passe à réinitialiser, une énumération possible, et une surface qui vit après la campagne. Un lien expire tout seul. L'essai vérifie qu'un lien expiré, révoqué, ou visant une autre campagne rend **404 — jamais 403** : un 403 confirmerait que la cible existe |
+| **28.2** | **Cloisonnement du portail** — le fournisseur voit son questionnaire, et **rien d'autre** | La session du portail n'est **pas** une session du produit : elle ne traverse pas `resoudre()`, elle porte un périmètre **d'un seul objet**. ⚠️ C'est la surface la plus propice à une fuite entre filiales de tout le produit : la porte rejoue la grille §4 **entière** sur ce seul composant |
+| **28.3** | **Dépôt de preuve par le fournisseur** — mêmes **huit contrôles** que le coffre L6, ClamAV compris | ⚠️ **Aucun chemin de dépôt parallèle.** Un fichier venu de l'extérieur passe par *la* chaîne, pas par une variante « simplifiée » écrite pour le portail — c'est ainsi qu'on se retrouve avec deux chaînes dont une seule est éprouvée |
+| **28.4** | **Séparation au frontal** — vhost distinct, chemin distinct, **borne de corps et limiteur de débit propres**, en-têtes durcis | Éprouvé sur l'Apache livré, pas sur une configuration de développement (constats **Q-36**, **Q-44**) |
+| **28.5** | **Relances et suivi** — échéance, rappels par L12, avancement visible côté client comme côté fournisseur | Le fournisseur voit **où il en est**, pas seulement qu'il est en retard |
+| **28.6** | **Réponses reprises d'une campagne à l'autre** — le fournisseur reprend ses réponses précédentes et n'amende que ce qui a changé | ⚠️ Une réponse reprise porte **sa date d'origine**, visible : une réponse de 2024 présentée comme neuve serait un faux en audit |
+| **28.7** | **Attestation rendue au fournisseur** — un récapitulatif de ce qu'il a déclaré, daté et signé numériquement, qu'il peut resservir à ses autres clients | C'est ce qui fait qu'un fournisseur **accepte** de répondre sérieusement : il y gagne quelque chose. Aucune donnée du client n'y figure |
+| **28.8** | **Tout est journalisé** — ouverture du lien, réponse, dépôt, expiration | Actions neuves, tracées comme les autres |
+
+**Porte S15 — la plus exigeante du plan.** Elle rejoue la grille §4 **intégralement** sur ce
+seul composant, plus : énumération des liens, rejeu d'un lien expiré, tentative d'atteindre
+une autre campagne, un autre fournisseur, une autre filiale ; dépôt hostile ; charge. ⚠️
+**Elle est jouée par un auditeur qui n'a écrit aucune de ces lignes**, comme toutes les
+autres — mais ici le refus doit être la position par défaut : *en cas de doute sur ce lot,
+on ne livre pas.*
+
+**Lignes comblées** : #32 (porté au niveau du marché) · renforce #31 et #35.
+
+---
+
 ## 5. Ce que chaque lot doit respecter — les gardes du chantier
 
 > ⚠️ **À relire avant d'écrire la première ligne de n'importe quel lot.** Chacune de ces
@@ -467,7 +596,7 @@ grille.
 
 | Écarté | Motif |
 |---|---|
-| **Notation externe de fournisseurs** (surface d'attaque, type SecurityScorecard) | Suppose un appel à un service tiers depuis la machine du client. Contredit le principe **P3**, qui est l'argument de vente n°1 |
+| **Notation externe de fournisseurs** (surface d'attaque, type SecurityScorecard) | Suppose un appel à un service tiers depuis la machine du client. Contredit le principe **P3**. ⚠️ **À réexaminer après L27** : l'arbitrage A1 a ouvert une sortie externe encadrée par six barrières, et *la même mécanique rendrait ce service techniquement atteignable*. Je ne l'élargis pas de moi-même — **l'utilisateur a autorisé une IA externe, pas « les services tiers » en général**, et confondre les deux serait s'accorder une permission qu'on n'a pas reçue. À poser comme une question, le jour où un client le demande |
 | **Benchmarks sectoriels** | Suppose de transmettre les données du client à un agrégateur. Même motif, en plus direct |
 | **Gestion de vulnérabilités** (scan, registre CVE, remédiation) | Le produit doit **ingérer** un scanner par un connecteur L22, pas en devenir un. Le marché des scanners est mature ; y entrer diluerait le produit |
 | **Plateforme de sensibilisation / phishing simulé** | Marché saturé de spécialistes. L'intégration (taux de complétion reversé comme preuve) est en revanche un connecteur L22 légitime |
@@ -482,29 +611,38 @@ grille.
 
 > Ils ne sont pas tranchés ici parce qu'ils engagent le produit au-delà d'une session.
 
-### A1 — L'intelligence artificielle : rien, ou un modèle local ?
+### A1 — L'intelligence artificielle ✅ **TRANCHÉ le 08/09/2026 — local par défaut, externe possible et encadré**
 
-Le marché a basculé en 2025-2026 : agent de conformité, génération de politiques, réponse
-aux questionnaires, suggestion de correspondances. **Le produit est à zéro sur ces cinq
-lignes.**
+**Décision de l'utilisateur : le modèle LOCAL est la voie retenue, et la possibilité d'un
+fournisseur externe de confiance est conservée, sous avertissement.**
 
-Le principe **P3** interdit d'appeler un service en ligne. Restent deux voies :
+C'est un arbitrage plus fin que celui que j'avais proposé, et il est défendable : refuser
+tout appel externe ferme une porte que certains clients voudront ouvrir — un groupe qui a
+déjà un contrat cadre avec un fournisseur d'IA, et un DPO qui l'a validé, n'a pas à être
+privé de la fonction parce que *nous* avons décidé pour lui.
 
-- **Ne rien faire**, et l'assumer commercialement : « vos données ne partent pas, y compris
-  vers un modèle ». C'est une position **tenable et vendable**, surtout en secteur
-  souverain.
-- **Un modèle local** sur la VM du client (quantifié, quelques Go de RAM), limité à trois
-  usages où l'erreur est rattrapable par un humain : **suggérer** une correspondance,
-  **proposer** un brouillon de politique, **résumer** un incident. Jamais décider, jamais
-  écrire sans validation.
+⚠️ **Mais un panneau d'avertissement seul ne suffit pas, et il faut le dire clairement.**
+Un avertissement se lit une fois, se coche, et se transmet ensuite à des gens qui n'étaient
+pas là. Or ce qui sortirait ici, ce sont des données de gouvernance cyber d'un groupe
+industriel : scénarios de risque, écarts de conformité, constats d'audit, incidents. C'est
+**exactement l'inventaire qu'un attaquant voudrait**. La décision est donc appliquée
+intégralement — **et le garde-fou est mis dans la mécanique, pas seulement dans le texte**.
 
-⚠️ **Ce que je ne recommande pas** : un appel à une API externe, même « anonymisée ». Ce
-serait le seul endroit du produit où une donnée sort, et il annulerait sept lots de
-travail sur la souveraineté.
+Cela devient le lot **L27**, ci-dessous.
 
-**Mon avis** : voie 2, mais **après L23**, et seulement si un client la demande. Le
-bénéfice réel des trois usages ci-dessus est inférieur à celui d'un connecteur qui
-constate.
+### A3 — Le portail fournisseur ✅ **VALIDÉ le 08/09/2026 — et poussé aussi loin que possible**
+
+**Décision de l'utilisateur : le portail exposé est retenu, et il faut le faire aussi bien
+que possible.**
+
+Ce que L21.2 livre sans portail — questionnaire exporté, rempli hors ligne, réimporté —
+reste la **première étape** et la **voie de repli permanente** : un fournisseur qui refuse
+de créer un accès en ligne doit pouvoir répondre quand même. Le portail s'ajoute, il ne
+remplace pas.
+
+Cela devient le lot **L28**, ci-dessous. ⚠️ **C'est le premier composant du produit exposé
+hors du VPN** : il porte sa propre porte de sécurité, et elle est la plus exigeante du
+plan.
 
 ### A2 — Un jeu de découverte ✅ **TRANCHÉ le 08/09/2026 — autorisé sous conditions**
 
@@ -587,6 +725,15 @@ un lot à part entière, avec porte dédiée.
                                               │
                                               ▼
                                        porte S14
+                                              │
+                              ┌───────────────┴───────────────┐
+                              ▼                               ▼
+                    L27 IA (locale, puis         L28 PORTAIL FOURNISSEUR 🔴
+                    externe encadrée)            seul, jamais avec un autre lot
+                              │                               │
+                              ▼                               ▼
+                        porte S16                       porte S15 🔴🔴
+                                                   la plus exigeante du plan
 ```
 
 **Portes — ce que chacune éprouve**
@@ -598,6 +745,8 @@ un lot à part entière, avec porte dédiée.
 | **S12** 🔴 | L22 | **La porte la plus lourde du plan.** Un jeton est un sujet de droits : il ne contourne ni `resoudre()`, ni la RLS, ni le droit d'export. Sorties réseau éprouvées **depuis l'unité systemd livrée**, pas depuis un développement (constat Q-199) |
 | **S13** | L23, L24 | Une source injoignable rend **`indetermine`**, jamais `conforme`. Une campagne ne fuit pas entre filiales |
 | **S14** | L25, L26 | Les cotations F×G×M antérieures sont **intactes et lisibles** ; les codes des catalogues migrés sont identiques à l'octet près |
+| **S15** 🔴🔴 | L28 | **La plus exigeante du plan.** Premier composant exposé hors VPN : la grille §4 est rejouée **intégralement** sur ce seul lot, plus énumération de liens, rejeu d'un lien expiré, tentative d'atteindre une autre campagne / un autre fournisseur / une autre filiale, dépôt hostile, charge. ⚠️ **En cas de doute sur ce lot, on ne livre pas** |
+| **S16** | L27 | En mode local, `IPAddressDeny=any` reste **intact** — la preuve qu'aucune donnée ne sort. En mode externe : destination coupée → « indisponible », **jamais une réponse inventée** ; une filiale non activée ne peut pas déclencher d'appel, même par l'écran d'une filiale qui l'est |
 
 **Priorités** : 🔴 fait ou défait la valeur du produit · 🟠 comble un écart marché réel ·
 🟢 positionnement à moyen terme.
@@ -615,10 +764,30 @@ après chaque porte, et le chiffre s'inscrit — il ne s'estime pas.
 | après **L17 + L18** | 37 | 16 | 33 |
 | après **L19 + L20 + L21** | 49 | 9 | 28 |
 | après **L22 + L23** | 55 | 6 | 25 |
-| après **L24 + L25 + L26** | **71** | **5** | **10** |
+| après **L24 + L25 + L26** | 71 | 5 | 10 |
+| après **L27 + L28** | **76** | **2** | **8** |
 
-**Les 10 lignes finalement non couvertes sont les non-objectifs assumés du §6**, et les
-5 lignes d'intelligence artificielle restent suspendues à l'arbitrage **A1**.
+⚠️ **Recalculé le 08/09/2026 au soir**, après que les arbitrages **A1** et **A3** ont été
+tranchés : les cinq lignes d'intelligence artificielle (#36, #68, #69, #70, #72) cessent
+d'être suspendues et deviennent le lot **L27** ; le portail fournisseur (#32) passe au
+niveau du marché avec **L28**.
+
+**Les 8 lignes finalement non couvertes sont, une par une, des non-objectifs assumés du
+§6** — et il faut pouvoir les nommer, sans quoi « non-objectif » n'est qu'un mot pour
+« oublié » :
+
+| # | Ligne | Motif |
+|---|---|---|
+| 33 | notation externe de fournisseurs | service tiers ; à réexaminer après L27, comme une **question**, pas comme un acquis |
+| 51 · 53 | registre de vulnérabilités, surface d'attaque | le produit **ingère** un scanner (L22), il n'en devient pas un |
+| 61 | pilotage par la valeur / coût | demande une donnée financière que le client ne saisira pas |
+| 63 | benchmarks sectoriels | suppose de transmettre les données du client à un agrégateur |
+| 73 | plateforme de sensibilisation | marché saturé de spécialistes ; l'intégration vaut mieux que la construction |
+| 75 · 76 | Trust Center public, partage sous NDA | sans objet en déploiement VPN ; ⚠️ **à revoir si L28 change la donne** — un portail exposé existe désormais |
+
+Les 2 lignes 🟡 restantes : **#56** (découverte d'actifs, partiellement couverte par le
+connecteur AD de L22) et **#74** (complétion de sensibilisation, reversée comme preuve par
+un connecteur mais sans plateforme intégrée).
 
 ⚠️ **Ce tableau est une cible, pas un verdict.** Comme le banc, il ne se recopie pas : il
 se rejoue (constat **Q-219**).
@@ -653,6 +822,12 @@ banc stable et un lot complet plutôt qu'à 90 %.
 
 **Ensuite, et pas avant : les portes.** S7 jamais jouée, puis le 7ᵉ passage de S8, qui aura
 **dix livraisons** à examiner.
+
+**Et au bout du plan, deux lots décidés le 08/09 au soir** : **L27** (assistance IA, locale
+par défaut, externe sous six barrières) et **L28** (portail fournisseur exposé). ⚠️ **L28
+est le premier composant du produit hors VPN** : il ne se joue ni avant S8, ni en même temps
+qu'un autre lot, et sa porte **S15** est la plus exigeante de tout le plan — *en cas de
+doute sur ce lot, on ne livre pas.*
 
 ⚠️ **Une leçon de ce lot, à lire avant d'ouvrir le suivant.** Trois fois sur six sous-lots,
 la mesure a contredit ce plan : 18.4 était déjà livré, 18.5 déjà atteint, et le chiffre de

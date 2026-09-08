@@ -892,8 +892,11 @@ notifications (L12).
 > **Décidé le 08/09/2026.** Le produit a été comparé au marché avec des chiffres pour la
 > première fois : [`COMPARATIF_MARCHE.md`](COMPARATIF_MARCHE.md) (86 fonctionnalités,
 > **35 ✅ · 17 🟡 · 34 ❌**, chacune mesurée dans le dépôt) et
-> [`PLAN_PRODUIT.md`](PLAN_PRODUIT.md), qui en tire **dix lots L17 → L26** et **cinq portes
-> S10 → S14**.
+> [`PLAN_PRODUIT.md`](PLAN_PRODUIT.md), qui en tire **douze lots L17 → L28** et **sept portes
+> S10 → S16**. Ses trois arbitrages ont été **tranchés le 08/09/2026** : jeu de découverte
+> autorisé sous cinq conditions (**L18 bis**), IA **locale par défaut** avec fournisseur
+> externe encadré par six barrières (**L27**), **portail fournisseur exposé validé**
+> (**L28**, porte **S15** — la plus exigeante du plan, *en cas de doute on ne livre pas*).
 >
 > ⚠️ **Le §0 bis du `PLAN_PRODUIT.md` fait autorité sur l'ordonnancement, et il dit ceci :
 > aucun lot L17+ ne se joue avant que S7 et S8 soient franchies.** La « vague 10 » de ce

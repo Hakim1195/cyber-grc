@@ -19,7 +19,8 @@
 >    vérifié sur les occurrences réelles, pas sur un compte de fichiers.
 
 **Verdict global au 08/09/2026 : 35 ✅ · 17 🟡 · 34 ❌** — soit ~51 % en pondérant les
-partiels à moitié.
+partiels à moitié. **Cible du `PLAN_PRODUIT.md` une fois les douze lots joués : 76 ✅ · 2 🟡
+· 8 ❌**, les huit restantes étant des non-objectifs nommés un par un (§9 du plan).
 
 ⚠️ **Ce chiffre brut est trompeur, et c'est le point central.** Les 34 absences ne sont
 pas réparties : **19 d'entre elles tiennent dans quatre blocs entiers** (D intégrations,
@@ -97,11 +98,11 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
 | 31 | Registre fournisseurs criticité / accès | ✅ | `prestataires` : criticité × accès → niveau inhérent, checklist `supply_chain` NIS2/DORA | L21.4 |
-| 32 | Questionnaires et portail fournisseur | ❌ | Absent | L21.2 |
-| 33 | Notation externe / surface d'attaque | ❌ | Absent — **et non-objectif** : suppose un service tiers | **—** |
+| 32 | Questionnaires et portail fournisseur | ❌ | Absent | L21.2 (export/réimport) puis **L28** (portail exposé, ✅ **validé le 08/09/2026**) |
+| 33 | Notation externe / surface d'attaque | ❌ | Absent — **non-objectif**, suppose un service tiers. ⚠️ **À réexaminer après L27**, dont la mécanique le rendrait atteignable — mais l'utilisateur a autorisé une **IA** externe, pas « les services tiers » en général | **—** |
 | 34 | **Registre d'information DORA** | ❌ | Ni LEI, ni dates contractuelles, ni chaîne de sous-traitance. **Remise ACPR au 31/03/2026** | **L21.1** |
 | 35 | Suivi contractuel / plan de sortie | ❌ | Absent | L21.3 |
-| 36 | Réponse IA aux questionnaires reçus | ❌ | Absent — suspendu à l'arbitrage **A1** | A1 |
+| 36 | Réponse IA aux questionnaires reçus | ❌ | Absent | **L27** |
 
 ### G. Audit — 2 ✅ · 2 🟡 · 0 ❌
 
@@ -176,15 +177,17 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 
 | # | Fonctionnalité | État | Lot |
 |---|---|---|---|
-| 68 | Agent de conformité / détection d'écarts | ❌ | A1 |
-| 69 | Génération de réponses et de politiques | ❌ | A1 |
-| 70 | Suggestion automatique de mapping | ❌ | A1 / L26.4 |
-| 71 | Recherche universelle, palette, MCP | ❌ | L17.1, L17.2 (sans IA) |
-| 72 | Assistants d'évaluation fournisseur | ❌ | A1 |
+| 68 | Agent de conformité / détection d'écarts | ❌ | **L27** |
+| 69 | Génération de réponses et de politiques | ❌ | **L27** |
+| 70 | Suggestion automatique de mapping | ❌ | **L27** / L26.4 |
+| 71 | Recherche universelle, palette, MCP | ❌ | L17.1, L17.2 (**sans IA**) |
+| 72 | Assistants d'évaluation fournisseur | ❌ | **L27** |
 
-> Suspendu à l'**arbitrage A1** (`PLAN_PRODUIT.md` §7) : rien, ou un modèle **local**.
-> Un appel à une API externe est écarté — ce serait le seul endroit du produit où une
-> donnée sort.
+> ✅ **Arbitrage A1 tranché le 08/09/2026** : le modèle **local** est le chemin nominal, et
+> un fournisseur **externe de confiance** reste possible, encadré par **six barrières** dont
+> une seule est un texte (`PLAN_PRODUIT.md` §7 et lot **L27**). ⚠️ La première barrière n'est
+> pas l'avertissement : c'est que `IPAddressDeny=any` de l'unité systemd **ferme la sortie
+> réseau** tant que l'exploitant ne l'ouvre pas à la main.
 
 ### O. Sensibilisation et formation — 0 ✅ · 0 🟡 · 2 ❌
 
@@ -197,8 +200,8 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 
 | # | Fonctionnalité | État | Lot |
 |---|---|---|---|
-| 75 | Page de confiance publique | ❌ | **—** sans objet en déploiement VPN |
-| 76 | Partage de documents sous NDA | ❌ | **—** |
+| 75 | Page de confiance publique | ❌ | **—** sans objet en VPN. ⚠️ **À revoir après L28** : un composant exposé existera |
+| 76 | Partage de documents sous NDA | ❌ | **—** même remarque |
 
 ### Q. RGPD et vie privée — 1 ✅ · 2 🟡 · 0 ❌
 

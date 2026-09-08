@@ -27,8 +27,10 @@
 > 4. **[`backend/db/CONVENTIONS.md`](backend/db/CONVENTIONS.md)** pour toute écriture en base.
 >
 > **Et, pour la suite du produit — ce qui vient APRÈS la mise en service, jamais avant :**
-> **[`docs/PLAN_PRODUIT.md`](docs/PLAN_PRODUIT.md)** (le *quoi* de la suite : lots L17 à L26,
-> ordonnancement, non-objectifs assumés, trois arbitrages ouverts) et
+> **[`docs/PLAN_PRODUIT.md`](docs/PLAN_PRODUIT.md)** (le *quoi* de la suite : lots **L17 à
+> L28**, ordonnancement, non-objectifs nommés un par un, **et les trois arbitrages TRANCHÉS
+> le 08/09/2026** — jeu de découverte autorisé, IA locale par défaut avec externe encadré,
+> portail fournisseur validé) et
 > **[`docs/COMPARATIF_MARCHE.md`](docs/COMPARATIF_MARCHE.md)** (les 86 fonctionnalités de
 > l'état de l'art, mesurées dans le dépôt — **35 ✅ · 17 🟡 · 34 ❌ au 08/09/2026**).
 > ⚠️ **Le §0 bis du `PLAN_PRODUIT.md` fait autorité sur l'ordonnancement** : aucun lot L17+
@@ -76,9 +78,12 @@
 > 1. **Le produit a été comparé au marché**, avec des chiffres, pour la première fois.
 >    [`docs/COMPARATIF_MARCHE.md`](docs/COMPARATIF_MARCHE.md) — 86 fonctionnalités de
 >    l'état de l'art GRC, chacune **mesurée dans le dépôt** : **35 ✅ · 17 🟡 · 34 ❌**.
->    [`docs/PLAN_PRODUIT.md`](docs/PLAN_PRODUIT.md) en tire **dix lots, L17 → L26**, cinq
->    portes neuves (S10 → S14), **huit non-objectifs écrits avec leur motif**, et trois
->    arbitrages.
+>    [`docs/PLAN_PRODUIT.md`](docs/PLAN_PRODUIT.md) en tire **douze lots, L17 → L28**, sept
+>    portes neuves (S10 → S16) et **huit non-objectifs nommés un par un**. ⚠️ **Les trois
+>    arbitrages qui vous étaient réservés sont TRANCHÉS** (08/09/2026) : **A2** le jeu de
+>    découverte est autorisé sous cinq conditions constitutives ; **A1** l'IA est **locale
+>    par défaut**, un fournisseur externe restant possible sous **six barrières** (lot
+>    **L27**) ; **A3** le **portail fournisseur exposé est validé** (lot **L28**).
 > 2. **Le lot L18 — installation — est LIVRÉ**, sauf son bandeau. `install.sh --assistant`
 >    (six questions, profil découverte), `install.sh --diagnostic` (douze sujets, code
 >    0/1/2), [`docs/INSTALLER.md`](docs/INSTALLER.md) (cinq commandes, aucun renvoi).
@@ -835,6 +840,8 @@ sur l'**Active Directory** du groupe.
 | **L18 — Installation en une commande** | ✅ **livré le 08/09/2026, sauf 18.2 b.** `--assistant` (six questions, profil découverte, compte de secours dont l'empreinte est calculée par `dist/auth/secours.js`), `--diagnostic` (douze sujets, code 0/1/2, ne modifie rien), `docs/INSTALLER.md` (cinq commandes). ⚠️ **Ne touche ni `src/` ni le schéma** — c'est ce qui l'a autorisé avant les portes. **Reste le bandeau 18.2 b** |
 | **L18 bis — Jeu de découverte** | ⬜ **autorisé le 08/09/2026** sous **cinq conditions constitutives** (marque **dans la donnée**, geste volontaire, refus si données réelles, purge par le déclencheur `017`, interdit hors découverte). Il écrit en base : **après les portes** |
 | **L19 → L26** | ⬜ **planifiés** (`docs/PLAN_PRODUIT.md`) — preuve et attestation, réglementaire opérationnel, tiers et DORA, ouverture technique, collecte automatique et CCM, campagnes descendantes, EBIOS RM, catalogues ouverts |
+| **L27 — Assistance IA** | ⬜ **arbitré le 08/09/2026 (A1)** — modèle **local par défaut** ; un fournisseur **externe de confiance** reste possible sous **six barrières**, dont l'avertissement n'est que la sixième. ⚠️ La première est que `IPAddressDeny=any` **ferme la sortie réseau** tant que l'exploitant ne l'ouvre pas à la main : *une barrière physique, pas une promesse*. Activation **par filiale**, jamais pour le groupe entier. L'IA **propose**, un humain **décide** — aucun des cinq usages n'écrit sans validation. Porte **S16** |
+| **L28 — Portail fournisseur** | ⬜ **validé le 08/09/2026 (A3)** — accès par lien signé daté et révocable, **sans compte** ; dépôt de preuve par la chaîne L6 **sans variante simplifiée** ; vhost et limiteur propres ; attestation rendue au fournisseur. ⚠️ **Premier composant du produit exposé hors VPN** : il ne se joue **ni avant S8, ni avec un autre lot**, et sa porte **S15 est la plus exigeante du plan** — *en cas de doute, on ne livre pas*. L'export/réimport de L21.2 **reste la voie de repli permanente** |
 
 Livré aussi en vague 1, hors périmètre strict de L1 : **reprise des exports
 `grc-backup`** (`backend/src/reprise/**`, portage serveur des migrations v1 → v12,
