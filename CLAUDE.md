@@ -26,6 +26,15 @@
 >    rejoués ;
 > 4. **[`backend/db/CONVENTIONS.md`](backend/db/CONVENTIONS.md)** pour toute écriture en base.
 >
+> **Et, pour la suite du produit — ce qui vient APRÈS la mise en service, jamais avant :**
+> **[`docs/PLAN_PRODUIT.md`](docs/PLAN_PRODUIT.md)** (le *quoi* de la suite : lots L17 à L26,
+> ordonnancement, non-objectifs assumés, trois arbitrages ouverts) et
+> **[`docs/COMPARATIF_MARCHE.md`](docs/COMPARATIF_MARCHE.md)** (les 86 fonctionnalités de
+> l'état de l'art, mesurées dans le dépôt — **35 ✅ · 17 🟡 · 34 ❌ au 08/09/2026**).
+> ⚠️ **Le §0 bis du `PLAN_PRODUIT.md` fait autorité sur l'ordonnancement** : aucun lot L17+
+> ne se joue avant que S7 et S8 soient franchies. Seul **L18 (installation)** y échappe, et
+> uniquement parce qu'il ne touche ni `src/`, ni le schéma.
+>
 > ---
 >
 > ## ▶ L'ÉTAT DU CHANTIER AU 07/09/2026

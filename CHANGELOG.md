@@ -21,6 +21,45 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
 > jamais ce qu'il ne regarde pas.*
 
+### Le produit est comparé au marché, et la suite est planifiée — `PLAN_PRODUIT.md`
+
+**La question « où sommes-nous par rapport à ce qui se fait de mieux ? » n'avait jamais été
+posée avec des chiffres.** Elle l'est le 08/09/2026, contre les plateformes de référence
+(Tenacy, Egerie, CISO Assistant, Make IT Safe ; Vanta, Drata, OneTrust, ServiceNow IRM,
+Archer, MetricStream, AuditBoard, Hyperproof, LogicGate, Centraleyes).
+
+Deux documents neufs, aucune ligne de code :
+
+- **[`docs/COMPARATIF_MARCHE.md`](docs/COMPARATIF_MARCHE.md)** — les **86 fonctionnalités**
+  de l'état de l'art, chacune **mesurée dans le dépôt** et non lue dans la documentation :
+  **35 ✅ · 17 🟡 · 34 ❌**. ⚠️ Trois pièges de mesure y sont consignés, dont celui-ci : les
+  mots « MFA », « vulnérabilité » et « sensibilisation » **existent** dans le dépôt, mais
+  uniquement comme **contenu des référentiels** — des choses *à évaluer*, jamais des
+  fonctions du produit. Comptés absents.
+- **[`docs/PLAN_PRODUIT.md`](docs/PLAN_PRODUIT.md)** — dix lots (**L17 → L26**), leurs
+  critères d'acceptation mesurables, cinq portes neuves (**S10 → S14**), huit non-objectifs
+  **écrits avec leur motif**, et trois arbitrages laissés à l'utilisateur (IA locale ou
+  rien ; jeu de découverte ; portail fournisseur exposé).
+
+**Ce que le chiffre brut cache, et qui est le point central** : les 34 absences ne sont pas
+réparties — **19 tiennent dans quatre blocs entiers** (intégrations, tiers, vulnérabilités,
+IA). Hors ces quatre domaines, la couverture est de **~70 %**, et sur **sept points mesurés
+le produit dépasse le marché** — dont le cloisonnement par RLS forcée et le journal chaîné
+en ajout seul, deux garanties que la majorité des plateformes SaaS ne peuvent pas offrir.
+
+⚠️ **Et l'ordonnancement prime sur l'envie d'avancer.** Le §0 bis du plan l'écrit : **aucun
+lot L17+ ne se joue avant que S7 et S8 soient franchies**. Six passages de S8, six refus ;
+S7 jamais jouée ; sept livraisons non auditées. Un plan produit qui empilerait dix lots
+par-dessus ferait exactement ce que le chantier a appris à ne plus faire. Seul **L18
+(installation)** échappe à la règle, et uniquement parce qu'il ne touche **ni `src/`, ni le
+schéma** — il n'ouvre aucune surface d'audit.
+
+**Ce que L18 corrige, mesuré** : installer exige aujourd'hui d'écrire `filiales.conf` à la
+main *avant* de lancer quoi que ce soit, de connaître **74 variables d'environnement**, de
+créer 23 groupes Active Directory, puis de lancer une seconde commande pour vérifier ce qui
+est servi. `install.sh` fait 3 294 lignes et s'arrête en code 2 sur une configuration
+incomplète — ce qui est juste, mais ne dit pas comment la compléter.
+
 ### L'empreinte cesse d'être un commentaire : elle s'affiche, et elle est vérifiée
 
 **Une promesse à moitié tenue depuis le lot L6, mesurée le 08/09/2026.**
