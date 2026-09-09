@@ -31,6 +31,65 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'ont été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
 > jamais ce qu'il ne regarde pas.*
 
+### Les quatre bloquants des guides sont fermés — et l'un l'a été en changeant le produit
+
+Constats **Q-264 à Q-267** de la porte S7. Trois étaient des descriptions fausses ; le
+quatrième était une **promesse de sécurité** que le produit ne tenait pas, et celui-là ne
+pouvait pas se corriger en réécrivant une phrase.
+
+**Q-267 — on a rendu la phrase vraie plutôt que de l'affaiblir.** Le guide donnait à
+l'exploitant, comme réponse à faire à un RSSI : *« STARTTLS est exigé : sans lui, l'envoi est
+refusé — il n'y a aucun repli en clair »*. `SMTP_CHIFFREMENT=aucun` était pourtant une valeur
+acceptée, qui ne produisait qu'un avertissement. Les deux issues honnêtes étaient celles du
+constat Q-243 — ancrer la promesse, ou corriger le texte. **On ancre** : en production, un
+relais actif sans chiffrement **refuse le démarrage**, en nommant la variable et la
+correction. Le motif est mesuré et il est décisif : le relais du client est **Microsoft 365**,
+donc un relais **externe**. La borne est `production` — le développement et la recette gardent
+`aucun`, sans quoi on ne pourrait plus éprouver un relais local ; ce qui est refusé, c'est de
+le **livrer**.
+
+⚠️ **Le vrai enseignement de Q-267 est ailleurs, et il vaut au-delà du cas : le banc était
+vert des DEUX côtés du correctif.** Six familles d'essais éprouvaient le **protocole** SMTP
+jusqu'à l'octet — STARTTLS réellement négocié et constaté des deux bouts, `AUTH` jamais émis
+en clair, injection CVE-2011-0411 détectée — et **aucune ne demandait quelles valeurs le
+produit accepte de livrer**. La porte d'entrée n'était pas éprouvée du tout. Famille §7
+ajoutée, avec sa garde §0 ; **mordue** : l'avertissement remis à la place du refus fait
+rougir. ⚠️ Et la garde §0 a servi tout de suite — la première rédaction écrivait `SMTP_AUTH`
+au lieu de `SMTP_MODE_AUTH`, rendant l'environnement invalide pour une raison étrangère au
+sujet. C'est Q-210, attrapé cette fois par le dispositif prévu pour lui.
+
+**Q-266 — le guide donne le chemin réel, et il a été joué avant d'être écrit.** Les deux
+guides envoyaient l'administrateur sur un écran « Administration » qui n'existe pas, pour la
+seule opération que le client qualifie de décisive : intégrer une société rachetée. Un encadré
+donne désormais la procédure par l'API — session, `POST /api/filiales`, `POST
+/api/cycle/sortie-filiale`, effacement du fichier de cookies qui vaut une session
+d'administration Groupe. **Éprouvée sur la recette, à travers Apache** : connexion → 200 ;
+création avec un corps vide → 400 « *Le champ « code » est obligatoire* » ; sortie → 400 ; et
+**la même requête sans cookie → 401**, sans quoi les deux 400 n'auraient rien prouvé. Aucune
+filiale n'a été créée — la recette n'en porte volontairement aucune de plus (Q-155). ⚠️ **Ce
+qui reste n'est plus un défaut de documentation mais un manque produit** : l'écran relève de
+L17, donc d'après les portes. Le guide ne promet plus ce qui n'existe pas.
+
+**Q-265 — le groupe d'annuaire, et pourquoi ce n'était pas une faute de frappe.** Le guide
+titrait « Administrateur — `GRC-GROUPE-ADMIN` », un groupe qui n'existe nulle part ailleurs
+que dans cette ligne. `GRC-ADMIN` et `GRC-EXPORT` sont les **deux seules exceptions** à la
+règle `GRC-<PÉRIMÈTRE>-<PROFIL>` : ils sont transversaux, sans segment de périmètre. Un guide
+qui déroule les profils produit donc le nom fautif **par analogie**. Le §8 explique désormais
+l'exception et rappelle que la résolution **cherche** les noms au lieu de les décomposer — un
+groupe absent n'accorde rien **et ne se plaint de rien**.
+
+**Q-264 — le produit n'a pas été changé, et c'était le bon choix.** Le guide promettait au
+DPO que « les suppressions conservent le différentiel, pas l'enregistrement entier ». C'est
+l'inverse : une *modification* ne laisse que le différentiel, une *suppression* conserve
+l'enregistrement entier — c'est l'objet même d'un journal d'audit. Corriger le journal pour
+coller au guide aurait détruit la propriété que le lot L5 existe pour tenir. C'est donc la
+phrase qui change, et elle porte maintenant ce qu'un DPO doit savoir : *supprimer une fiche la
+retire de l'application, pas du journal*, avec la rétention de trois ans.
+
+⚠️ **Les quatre corrections disent, chacune, qu'elles disaient l'inverse jusqu'au 09/09.**
+C'est délibéré : un guide qui se corrige en silence ne donne aucune raison de le croire la
+fois suivante.
+
 ### Arbitrage du 09/09/2026 — on assume le vocabulaire normatif ISO
 
 **Tranché par l'utilisateur** après la porte S7, sur les constats Q-252 et Q-253. **Ne pas

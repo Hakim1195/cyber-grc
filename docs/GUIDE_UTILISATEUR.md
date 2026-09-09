@@ -36,8 +36,22 @@ qui sert de preuve en audit, afficher 0 à la place d'un refus serait un mensong
 ### Ce que vous saisissez est tracé
 
 Créations, modifications, suppressions, exports, imports, changements de périmètre et refus
-de droit sont écrits au **journal d'audit**, qui ne peut être ni modifié ni effacé. Les
-suppressions y conservent **le différentiel**, pas l'enregistrement entier.
+de droit sont écrits au **journal d'audit**, qui ne peut être ni modifié ni effacé.
+
+⚠️ **Ce que le journal conserve n'est pas la même chose selon le geste, et la nuance compte
+si l'on vous demande un effacement.** Une **modification** n'y laisse que le **différentiel** :
+les seuls champs changés, avant et après. Une **suppression**, elle, y conserve
+**l'enregistrement entier**, tel qu'il était au moment de sa disparition — c'est l'objet même
+d'un journal d'audit : pouvoir montrer ce qui a été détruit. La rétention est de **trois ans**.
+
+> **Pour le DPO, en une phrase** : supprimer une fiche la retire de l'application, **pas du
+> journal**. Une demande d'effacement portant sur des données personnelles doit donc être
+> traitée en connaissance de cela, et non sur la foi d'une minimisation qui n'existe pas.
+> ⚠️ **Ce paragraphe disait exactement l'inverse jusqu'au 09/09/2026** — constat **Q-264** de
+> la porte S7. Il annonçait que les suppressions ne conservaient que le différentiel ; mesuré
+> en base, une suppression de risque stocke **13 clés sur 16 colonnes**, nom et description
+> compris. Le mot « différentiel » avait été appliqué à la seule action où c'est une copie
+> complète.
 
 ### Deux personnes sur la même fiche
 
@@ -250,7 +264,20 @@ incidents, les rapports d'audit validés, et les circuits d'approbation — qui 
 
 ---
 
-## 8. Administrateur — `GRC-GROUPE-ADMIN`
+## 8. Administrateur — `GRC-ADMIN`
+
+> ⚠️ **Ce groupe est l'une des DEUX exceptions à la règle de nommage, et c'est pour cela
+> qu'il faut la lire.** Tous les autres groupes s'écrivent `GRC-<PÉRIMÈTRE>-<PROFIL>` —
+> `GRC-TLS-RSSI`, `GRC-GROUPE-DIRECTION`. **`GRC-ADMIN` et `GRC-EXPORT` n'ont pas de segment
+> de périmètre** : ils sont transversaux. Écrire `GRC-GROUPE-ADMIN` par analogie donne donc
+> un nom **plausible et inexistant**, et c'est exactement ce que ce guide faisait jusqu'au
+> 09/09/2026 (constat **Q-265** de la porte S7).
+>
+> ⚠️ **Et la conséquence est silencieuse**, ce qui la rend coûteuse : la résolution des
+> droits ne *décompose* pas les noms de groupes, elle les **cherche** en base. Un groupe
+> absent n'accorde rien et ne se plaint de rien — le compte d'administration entrerait
+> **sans aucun droit**, sans un message qui l'explique. La liste qui fait foi est celle
+> qu'engendre `backend/deploy/groupes-ad.sh --csv`, jamais celle qu'on recopie.
 
 **Votre périmètre** : tout, au niveau *administration*, **sur le groupe entier**. Il n'existe
 pas d'administrateur d'une seule filiale.
@@ -259,11 +286,63 @@ pas d'administrateur d'une seule filiale.
 
 | Geste | Où | À savoir |
 |---|---|---|
-| **Créer une filiale** | Administration | La réponse vous donne **la liste des groupes AD à créer** dans l'annuaire. Sans eux, personne n'entre — vous compris. |
+| **Créer une filiale** | ⚠️ **Aucun écran — par l'API** (voir l'encadré sous ce tableau) | La réponse vous donne **la liste des groupes AD à créer** dans l'annuaire. Sans eux, personne n'entre — vous compris. |
 | **Écrire au socle de risques** | Socle de risques | Ce que vous y mettez s'applique à **toutes** les filiales. |
 | **Activer un référentiel** | Référentiels applicables | ⚠️ À ne pas confondre avec « non applicable » par exigence : l'activation dit *quels référentiels s'appliquent à ce site*, le « non applicable » écarte *un point dans un référentiel pratiqué*. |
 | **Lire le journal d'audit** | Journal | Trois ans d'identités et d'adresses IP. C'est un domaine à part, et ce n'est pas un hasard. |
-| **Faire sortir une filiale** | Administration | ⚠️ **Exportez d'abord.** Une filiale sortie disparaît de tous les périmètres, et l'exporter après demanderait de contourner le cloisonnement. |
+| **Faire sortir une filiale** | ⚠️ **Aucun écran — par l'API** | ⚠️ **Exportez d'abord** — et faites-le faire par un compte qui porte `GRC-EXPORT`, l'export étant une permission distincte que `GRC-ADMIN` **ne donne pas** (constat Q-278). Une filiale sortie disparaît de tous les périmètres, et l'exporter après demanderait de contourner le cloisonnement. |
+
+> ### ⚠️ Il n'y a pas d'écran d'administration — et c'était la promesse la plus coûteuse de ce guide
+>
+> Ce tableau renvoyait à un écran « Administration » **qui n'existe pas** : mesuré à la porte
+> S7 (constat **Q-266**), l'application compte 31 entrées de menu et aucune ne porte ce nom.
+> Les routes, elles, existent bel et bien côté serveur ; c'est l'interface qui n'a pas été
+> construite. Un exploitant restait donc bloqué **au moment exact que ce guide devait
+> couvrir** — l'intégration d'une société rachetée.
+>
+> **En attendant l'écran, voici le chemin réel.** Les deux opérations exigent le profil
+> *Administration* **et** un périmètre Groupe, et elles sont journalisées comme telles.
+>
+> **1. Ouvrir une session et garder son cookie** (`grc_session` par défaut, réglable par
+> `SESSION_NOM_COOKIE`) :
+>
+> ```bash
+> curl -sc /tmp/grc.cookies -X POST https://grc.exemple.interne/api/connexion \
+>      -H 'content-type: application/json' \
+>      -d '{"identifiant":"admin.grc","motDePasse":"…"}'
+> ```
+>
+> **2. Créer la filiale** — la réponse porte **la liste des groupes AD à créer** :
+>
+> ```bash
+> curl -sb /tmp/grc.cookies -X POST https://grc.exemple.interne/api/filiales \
+>      -H 'content-type: application/json' \
+>      -d '{"code":"LYO","raison_sociale":"… SAS","pays":"FR"}'
+> ```
+>
+> **3. Faire sortir une filiale** — `POST /api/cycle/sortie-filiale` ; la purge RGPD est une
+> opération distincte, `POST /api/cycle/purge-rgpd`. **Exportez avant**, avec un compte qui
+> porte `GRC-EXPORT`.
+>
+> `code` et `raison_sociale` sont **obligatoires** ; `pays` est facultatif et s'écrit sur deux
+> lettres majuscules (ISO 3166-1 alpha-2 : `FR`, `DE`, `ES`).
+>
+> ⚠️ **Effacez le fichier de cookies après usage** : il vaut une session d'administration
+> Groupe. `rm -f /tmp/grc.cookies`.
+>
+> **Cette procédure a été JOUÉE sur la recette le 09/09/2026**, à travers Apache, et non
+> écrite de mémoire — c'est précisément ce qui manquait aux quatre affirmations que la porte
+> S7 a démenties. Relevé : connexion → **200** et cookie posé ; `POST /api/filiales` avec un
+> corps vide → **400**, « *Le champ « code » est obligatoire pour créer une filiale* » ;
+> `POST /api/cycle/sortie-filiale` → **400**, « *Le champ « filiale_id » est obligatoire* » ;
+> et, en témoin, la **même requête sans cookie** → **401**. Aucune filiale n'a été créée : la
+> recette n'en porte volontairement aucune de plus (constat **Q-155** — une filiale active
+> supplémentaire ferait basculer le périmètre Groupe des sessions ouvertes).
+>
+> ⚠️ **Et n'inventez pas les groupes AD à partir de la réponse** : créez exactement ceux
+> qu'elle nomme, ou engendrez-les avec `backend/deploy/groupes-ad.sh --powershell`, qui rend
+> le script prêt à jouer côté annuaire. Le §8 ci-dessus dit pourquoi un nom approchant
+> n'accorde rien.
 
 ⚠️ **Créer ou retirer une filiale change le périmètre des sessions Direction en cours.**
 Jusqu'à leur reconnexion, elles perdent les lectures de portée Groupe. Prévenez-les.

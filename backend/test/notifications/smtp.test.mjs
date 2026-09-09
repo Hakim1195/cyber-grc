@@ -241,3 +241,108 @@ describe('Client SMTP — ce qui doit être refusé', () => {
     }
   });
 });
+
+/* =====================================================================
+ *  §7 — La CONFIGURATION refuse `aucun` en production (constat Q-267)
+ * =====================================================================
+ *
+ * ── Pourquoi cette famille manquait, et ce qu'elle coûte ────────────────────
+ *
+ * Les six familles ci-dessus éprouvent le PROTOCOLE : STARTTLS est négocié,
+ * `AUTH` n'échappe pas au chiffrement, une injection CVE-2011-0411 est vue.
+ * Toutes prennent `chiffrement` comme une donnée d'entrée — **aucune ne
+ * demandait quelles valeurs le produit accepte de LIVRER.**
+ *
+ * Le `docs/GUIDE_EXPLOITATION.md` §5 donnait pendant ce temps à l'exploitant,
+ * comme réponse à faire à un RSSI qui la demande : « **STARTTLS est exigé** :
+ * sans lui, l'envoi est refusé — il n'y a **aucun repli en clair** ». C'était
+ * faux : `SMTP_CHIFFREMENT=aucun` était accepté, avec un simple avertissement
+ * au journal. **Promettre une barrière qui n'existe pas est la pire classe de
+ * défaut d'un guide, parce qu'elle fait renoncer à la vérifier** — porte S7,
+ * constat **Q-267**.
+ *
+ * ⚠️ **Le banc était vert des deux côtés du correctif**, et c'est le vrai
+ * enseignement : ni l'ancien comportement ni le neuf n'était mordu par quoi que
+ * ce soit. Le protocole était éprouvé jusqu'à l'octet, et la porte d'entrée de
+ * la configuration ne l'était pas du tout.
+ *
+ * La borne est `production`, délibérément : le développement et la recette
+ * gardent `aucun`, sans quoi on ne pourrait plus éprouver un relais local. Ce
+ * qui est refusé, c'est de le **livrer**.
+ */
+describe('§7 — ce que la configuration accepte de LIVRER', () => {
+  const base = (supplement) => ({
+    NODE_ENV: 'production',
+    SERVEUR_PORT: '3999',
+    SERVEUR_URL_PUBLIQUE: 'https://grc.exemple.interne',
+    BASE_HOTE: '127.0.0.1',
+    BASE_PORT: '5432',
+    BASE_NOM: 'inutilisee',
+    BASE_UTILISATEUR: 'grc_app',
+    BASE_MOT_DE_PASSE: 'sans-valeur-pour-cet-essai',
+    BASE_SSL: 'desactive',
+    SESSION_SECRET: 'secret-de-banc-d-essai-sans-valeur-aucune-0123456789',
+    AUTH_LDAP_ACTIF: 'oui',
+    LDAP_URL: 'ldaps://annuaire.invalide.test:636',
+    LDAP_DN_SERVICE: 'CN=inutilise,DC=invalide,DC=test',
+    LDAP_MOT_DE_PASSE_SERVICE: 'inutilise-pour-cet-essai',
+    LDAP_BASE_RECHERCHE: 'DC=invalide,DC=test',
+    SERVEUR_NIVEAU_JOURNAL: 'silent',
+    SMTP_ACTIF: 'oui',
+    SMTP_HOTE: 'relais.invalide.test',
+    // ⚠️ `SMTP_MODE_AUTH`, et non `SMTP_AUTH` : la première rédaction s'est
+    // trompée de nom, et l'environnement de base est alors devenu invalide pour
+    // une raison étrangère au chiffrement — trois variables requises manquantes.
+    // **La garde du §0 l'a attrapée immédiatement**, ce qui est exactement ce
+    // pour quoi elle est écrite (constat Q-210 : un essai qui échoue pour une
+    // autre raison que celle qu'il annonce rend le même verdict qu'un essai qui
+    // mesure).
+    SMTP_MODE_AUTH: 'aucun',
+    SMTP_EXPEDITEUR: 'grc@exemple.interne',
+    ...supplement,
+  });
+
+  test('LA GARDE : cet environnement charge, chiffrement mis à part', async () => {
+    // Sans cette moitié, l'essai suivant passerait au vert en attrapant une
+    // erreur qui ne parle pas du chiffrement — c'est le constat Q-210, rejoué
+    // une fois de trop sur ce chantier pour ne pas le prévenir ici.
+    const { chargerConfiguration } = await moduleCompile('config/index.js');
+    assert.doesNotThrow(() => chargerConfiguration(base({ SMTP_CHIFFREMENT: 'starttls' })));
+    assert.doesNotThrow(() => chargerConfiguration(base({ SMTP_CHIFFREMENT: 'tls' })));
+  });
+
+  test('en PRODUCTION, `aucun` avec un relais actif REFUSE le démarrage', async () => {
+    const { chargerConfiguration, ErreurConfiguration } = await moduleCompile('config/index.js');
+    try {
+      chargerConfiguration(base({ SMTP_CHIFFREMENT: 'aucun' }));
+      assert.fail('un relais en clair ne doit pas pouvoir être livré');
+    } catch (erreur) {
+      assert.ok(erreur instanceof ErreurConfiguration);
+      // Le message doit servir à quelqu'un qui lit un service qui refuse de
+      // démarrer : la variable, et la valeur à mettre.
+      assert.match(erreur.message, /SMTP_CHIFFREMENT/);
+      assert.match(erreur.message, /starttls/);
+      assert.equal(erreur.problemes.length, 1, `un seul problème attendu : ${erreur.message}`);
+    }
+  });
+
+  test('sans relais, `aucun` ne gêne personne : la garde vise l’ENVOI, pas la valeur', async () => {
+    const { chargerConfiguration } = await moduleCompile('config/index.js');
+    // `SMTP_ACTIF=non` est l'état par défaut d'une installation qui n'a pas
+    // encore de relais ; refuser là serait refuser de démarrer pour un réglage
+    // qui ne sert à rien.
+    assert.doesNotThrow(() =>
+      chargerConfiguration(base({ SMTP_ACTIF: 'non', SMTP_CHIFFREMENT: 'aucun' })),
+    );
+  });
+
+  test('en DÉVELOPPEMENT et en RECETTE, `aucun` reste possible', async () => {
+    const { chargerConfiguration } = await moduleCompile('config/index.js');
+    for (const env of ['developpement', 'recette']) {
+      assert.doesNotThrow(
+        () => chargerConfiguration(base({ NODE_ENV: env, SMTP_CHIFFREMENT: 'aucun' })),
+        `« ${env} » doit pouvoir éprouver un relais local en clair`,
+      );
+    }
+  });
+});

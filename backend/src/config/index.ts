@@ -796,7 +796,33 @@ export function chargerConfiguration(source: NodeJS.ProcessEnv = process.env): C
     );
   }
   if (estProduction && smtp.actif && smtp.chiffrement === 'aucun') {
-    lecteur.avertir('SMTP_CHIFFREMENT = aucun : les identifiants du relais circulent en clair.');
+    // ── Constat Q-267 de la porte S7 : ANCRER, ou corriger la phrase ────────
+    //
+    // Ceci était un simple AVERTISSEMENT, et le `docs/GUIDE_EXPLOITATION.md`
+    // §5 donnait pendant ce temps à l'exploitant, comme réponse à faire à un
+    // RSSI qui la demande : « **STARTTLS est exigé** : sans lui, l'envoi est
+    // refusé — il n'y a **aucun repli en clair** ». C'était faux, et c'est la
+    // pire classe de défaut d'un guide : *promettre une barrière qui n'existe
+    // pas fait renoncer à la vérifier*.
+    //
+    // Deux issues honnêtes, celle du constat Q-243 : ancrer la promesse, ou
+    // corriger la phrase. **On ancre**, pour une raison mesurée sur cette
+    // machine : le relais du client est **Microsoft 365** (`smtp.office365.com`,
+    // §0.2 du `CLAUDE.md`), c'est-à-dire un relais EXTERNE joignable par
+    // l'Internet. Émettre vers lui sans chiffrement n'est pas un choix
+    // d'exploitation défendable, et le produit sert de preuve en audit
+    // ISO 27001.
+    //
+    // ⚠️ **La borne est `estProduction`, et c'est délibéré** : le
+    // développement et la recette gardent `aucun`, sans quoi on ne pourrait
+    // plus éprouver un relais local. Ce qui est refusé, c'est de LIVRER cela.
+    lecteur.probleme(
+      'SMTP_CHIFFREMENT = aucun avec SMTP_ACTIF = oui en production : les identifiants du ' +
+        "relais et le contenu des messages circuleraient en clair. Le produit s'y refuse " +
+        "(constat Q-267). Mettez « starttls » — la valeur par défaut — ou « tls » ; si votre " +
+        'relais ne sait faire ni l’un ni l’autre, il ne doit pas être joint depuis un outil ' +
+        'qui sert de preuve en audit.',
+    );
   }
 
   /* ── Chemins ─────────────────────────────────────────────────────── */
