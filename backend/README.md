@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 1794 essais, dix-neuf familles (voir plus bas)
+npm test                           # 1812 essais, dix-neuf familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -752,7 +752,7 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré à la révision `99ea754`** : `npm test` → **1794 essais, 1794 passés** ;
+**Mesuré à la révision `e98dc18`** : `npm test` → **1812 essais, 1812 passés** ;
 `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **107/107** ; `f_verifier_schema()`
 → 0 anomalie, **17 garde-fous consignés**, **20 migrations**, **50 tables**.
@@ -906,15 +906,16 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`23f00f7`** — « L'empreinte cesse d'être un commentaire : elle s'affiche, et elle est vérifiée » (08/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc avait déjà été RÉANCRÉ après le constat Q-219**, où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**, ce qui est juste pendant une vague et aveugle à sa clôture. La péremption est **bornée** depuis (§ ci-dessous), et ce réancrage-ci la respecte. |
-| État de l'arbre | **les essais ont été joués sur le code de `23f00f7`**, dans un arbre qui portait en plus les mises à jour de documentation du commit suivant. Le compte d'essais ne dépend pas de ces fichiers — sauf la famille `documentation`, qui LIT ce README, et qui a été rejouée **après** la mise à jour |
+| Révision mesurée | **`e98dc18`** — « L18.2 b — le profil découverte cesse d'être une affaire d'exploitant » (09/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`), **arbre propre**. ⚠️ **Ce bloc avait déjà été RÉANCRÉ après le constat Q-219**, où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**, ce qui est juste pendant une vague et aveugle à sa clôture. La péremption est **bornée** depuis (§ ci-dessous), et ce réancrage-ci la respecte. |
+| État de l'arbre | **arbre PROPRE de `e98dc18`**, `git status` vide. Il porte en plus, à l'écriture de ces lignes, la réécriture de l'essai de rapport de temps (**Q-251**) et la documentation — ni l'une ni l'autre ne change le compte : Q-251 réécrit le CORPS d'un essai, il n'en ajoute aucun (`import` vaut 97 avant comme après). La famille `documentation`, qui LIT ce README, a été rejouée **après** la mise à jour |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
+| ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 1794 · pass 1794 · fail 0
-                                                   base 274 · api 272 · navigateur 167
+npm test                                         → tests 1812 · pass 1812 · fail 0
+                                                   api 283 · base 274 · navigateur 174
                                                    pieces 121 · auth 115 · import 97
                                                    deploiement 95 · droits 84 · reprise 82
                                                    cycle 72 · journal-lecture 70

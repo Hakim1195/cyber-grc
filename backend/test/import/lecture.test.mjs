@@ -257,6 +257,35 @@ describe('Le coût d’un fichier hostile — ce qu’un banc vert ne regardait 
   /** Un octet de plus que ceci, et le seuil ne dirait plus rien d'utile. */
   const SECONDES_MAX = 2000;
 
+  /**
+   * Durée que doit atteindre la PETITE mesure du rapport — constat **Q-251**.
+   *
+   * On ne compare pas deux grandeurs d'une milliseconde : le quantum de bruit de
+   * l'ordonnanceur y est comparable à la mesure. Le nombre de passes est calibré
+   * à l'exécution pour atteindre cet ordre de grandeur, où le bruit retombe à
+   * quelques pour cent.
+   */
+  const CIBLE_MESURE_MS = 30;
+
+  /** En deçà, on ne conclut pas : voir la garde de l'essai du rapport. */
+  const PLANCHER_MESURE_MS = 15;
+
+  /**
+   * Au-delà de ce coût pour UNE lecture, on conclut sans répéter.
+   *
+   * ⚠️ **Trouvé en cassant le lecteur, et c'est pour cela qu'on le casse.** La
+   * première rédaction du calibrage n'avait pas ce plafond : remis dans son
+   * défaut d'origine — reprendre à la balise suivante au lieu de refuser —, le
+   * lecteur coûte des secondes par passe, et l'essai jouait alors dix passes
+   * six fois. Il **se figeait au lieu de rougir**, ce qui est pire qu'un essai
+   * absent : un essai qui se fige est un essai qu'on finit par retirer. Une
+   * lecture qui coûte déjà cela n'a aucun besoin d'être rejouée — elle est
+   * condamnée par sa seule valeur absolue. C'est la leçon déjà écrite dans
+   * `test/depot/cout-expressions.test.mjs` (`PLAFOND_MS`), appliquée ici parce
+   * qu'elle y manquait.
+   */
+  const PLAFOND_UNITAIRE_MS = 100;
+
   const chronometrer = (action) => {
     const debut = process.hrtime.bigint();
     action();
@@ -295,45 +324,127 @@ describe('Le coût d’un fichier hostile — ce qu’un banc vert ne regardait 
   });
 
   test('le coût ne DOUBLE pas quand l’entrée double : il ne fait que suivre', () => {
-    // Un seuil seul ne distingue pas « corrigé » de « machine rapide ». Le
-    // rapport, lui, sépare le linéaire du quadratique : il valait 3,6 et 3,9
-    // avant correction, il vaut ~1 après. Le seuil est mis à 2,5 pour ne pas
-    // rougir sur une machine chargée — un quadratique le franchit largement.
+    /* ═══════════════════════════════════════════════════════════════════════
+       CONSTAT Q-251 — ET POURQUOI LES DEUX REMÈDES PRÉCÉDENTS NE POUVAIENT PAS
+       TENIR
+       ═══════════════════════════════════════════════════════════════════════
+
+       Cet essai a rougi par intermittence au banc complet, deux fois, en passant
+       vert seul dix fois sur dix — **y compris sous une charge artificielle de
+       quatre boucles concurrentes**. Q-246 lui a posé le meilleur de trois
+       passes des deux côtés ; il a rougi de nouveau le lendemain, à 2,88 contre
+       un seuil de 2,5.
+
+       **Le remède traitait la dispersion ; le défaut était l'ÉCHELLE.** On
+       mesurait un rapport entre deux grandeurs de l'ordre de la milliseconde,
+       où le quantum de bruit de l'ordonnanceur est comparable à la mesure
+       elle-même. Aucune statistique ne rend stable un rapport de cette taille :
+       ni le minimum de trois passes, ni un plancher au dénominateur.
+
+       ── Les deux issues, et pourquoi celle-ci ────────────────────────────────
+
+       Le registre en nommait deux : **grossir les tailles** jusqu'à ce que la
+       petite passe se mesure en dizaines de millisecondes, ou **séparer les deux
+       questions**. La première a été essayée, **et elle est mesurément
+       impossible ici** : le lecteur refuse un classeur au-delà d'environ 3,5 Mio
+       décompressés — mesuré, 300 000 balises passent, 400 000 rendent « Ce
+       classeur est trop volumineux pour être analysé ». La grande taille
+       franchirait donc le plafond, et l'essai mesurerait **un tout autre refus**
+       en croyant mesurer une croissance. La petite passe plafonne à ~6 ms : on
+       ne peut pas atteindre les dizaines de millisecondes **par la taille**.
+
+       ── Ce qui est fait à la place : grossir le TRAVAIL, pas l'entrée ─────────
+
+       Chaque côté est joué **R fois dans un seul chronométrage**, R étant
+       calibré à l'exécution pour que la petite mesure atteigne quelques dizaines
+       de millisecondes. Le bruit devient alors quelques pour cent au lieu de
+       cent. Mesuré sur cette machine, 20 000 / 40 000 balises, R = 50 :
+       **33,6 ms → 58,7 ms**, et cinq rapports d'affilée entre **1,75 et 1,96**
+       — là où la rédaction précédente balayait de 1,0 à 2,9.
+
+       ⚠️ **Le seuil ne bouge pas, et c'est le point.** Le relever à 3,5 aurait
+       fait cesser à l'essai de distinguer le linéaire du quadratique, c'est-à-dire
+       l'aurait transformé en décor. Ce qui change est la PRÉCISION de la mesure,
+       pas la sévérité du verdict : la forme avant correction — 3,6× et 3,9× —
+       reste franchement au-dessus de 2,5.
+
+       ⚠️ **Le calibrage se fait à l'exécution**, et non par une constante : une
+       machine deux fois plus rapide joue deux fois plus de passes et retrouve la
+       même précision. Une constante écrite ici serait juste aujourd'hui et
+       fausse le jour où le banc change de machine — et elle le serait **en
+       silence**, en ramenant l'essai à l'échelle qui l'a rendu intermittent.
+
+       ⚠️ Et le fichier jumeau `test/depot/cout-expressions.test.mjs` n'a PAS le
+       même défaut, ni donc le même remède : il peut, lui, élargir l'écart
+       d'entrée (×9 au lieu de ×3, pour un rapport attendu de ×70), ce qui rend
+       le bruit sans effet. Le plafond du lecteur interdit cette voie ici. *Même
+       symptôme, cause différente, remède différent* — recopier le sien aurait
+       été la treizième occurrence de « l'instance, pas la classe », par l'autre
+       bout. */
+
     const feuille = (n) => '<?xml version="1.0"?><worksheet><sheetData>' + '<row r="1">'.repeat(n);
     const petit = classeurBrut(feuille(20_000));
     const grand = classeurBrut(feuille(40_000));
-    const avaler = (octets) => () => {
-      try {
-        lireXlsx(octets);
-      } catch {
-        /* le refus est le sujet d'un autre essai */
+    const avaler = (octets, passes) => () => {
+      for (let passe = 0; passe < passes; passe += 1) {
+        try {
+          lireXlsx(octets);
+        } catch {
+          /* le refus est le sujet d'un autre essai */
+        }
       }
     };
-    // Un tour à blanc : la première compilation du code chaud fausserait le rapport.
-    chronometrer(avaler(petit));
 
-    /* ⚠️ **LE MEILLEUR DE TROIS PASSES, et non la dernière — constats Q-225 et
-       Q-227, appliqués ici parce qu'ils y manquaient.** Ce remède avait été posé
-       sur `cout-expressions.test.mjs`, et pas sur cet essai-ci, qui mesure
-       pourtant la même chose de la même façon : l'instance, pas la classe. Il a
-       rougi au banc complet le 07/09 (1751/1755) et passe seul, trois fois sur
-       trois — la signature exacte de Q-225.
+    // Un tour à blanc : la première compilation du code chaud fausserait tout.
+    chronometrer(avaler(petit, 3));
+    chronometrer(avaler(grand, 3));
 
-       Le raisonnement vaut d'être gardé : sous charge, une mesure de temps ne
-       peut être que **trop grande** — le bruit va dans un seul sens. Ici il est
-       doublement traître, parce qu'on mesure un RAPPORT : un bruit sur la petite
-       taille **écrase le rapport et rend l'essai vert par accident**, un bruit
-       sur la grande le rend rouge. Le minimum de chaque côté approche le coût
-       sans contention ; c'est la seule statistique dont le bruit ne fausse pas le
-       sens, là où une moyenne l'emporterait avec elle. */
+    /* ── Calibrage : combien de passes pour quitter le bruit ─────────────────
+       Le coût unitaire est pris au meilleur de trois — sous charge, une mesure
+       de temps ne peut être que TROP GRANDE, et le minimum approche le coût sans
+       contention. Les bornes empêchent les deux dérives : moins de dix passes
+       ramènerait à l'échelle qui a rendu l'essai intermittent, plus de deux mille
+       immobiliserait le banc si le lecteur venait à ralentir. */
     const meilleurDe = (action) =>
       Math.min(chronometrer(action), chronometrer(action), chronometrer(action));
+    const coutUnitaire = Math.max(meilleurDe(avaler(petit, 1)), 0.05);
 
-    const msPetit = Math.max(meilleurDe(avaler(petit)), 0.5);
-    const msGrand = meilleurDe(avaler(grand));
+    /* ── Une lecture déjà lente ne se répète pas : elle se dénonce ───────────
+       Voir `PLAFOND_UNITAIRE_MS`. Sans cette sortie, un lecteur redevenu
+       quadratique fige l'essai au lieu de le faire échouer — mesuré en cassant
+       le lecteur pour de bon. La valeur absolue suffit alors à conclure : le
+       parcours corrigé coûte moins d'une milliseconde sur 20 000 balises. */
+    assert.ok(
+      coutUnitaire < PLAFOND_UNITAIRE_MS,
+      `une seule lecture de 20 000 balises coûte ${coutUnitaire.toFixed(0)} ms ` +
+        `(plafond ${String(PLAFOND_UNITAIRE_MS)} ms) : le parcours n’est plus linéaire. ` +
+        `Inutile de mesurer un rapport, la valeur absolue suffit.`,
+    );
+
+    const passes = Math.min(2000, Math.max(10, Math.ceil(CIBLE_MESURE_MS / coutUnitaire)));
+
+    const msPetit = meilleurDe(avaler(petit, passes));
+    const msGrand = meilleurDe(avaler(grand, passes));
+
+    /* ── LA GARDE, sans laquelle le reste ne prouve rien ─────────────────────
+       Q-251 en une ligne : *le remède traitait la dispersion, le défaut était
+       l'échelle*. Si la mesure retombe dans le bruit — machine bien plus rapide,
+       tailles réduites, borne de passes atteinte —, l'essai doit le DIRE et
+       rougir en nommant sa cause, plutôt que de rendre un verdict sur un rapport
+       de deux poussières. Un essai intermittent est un essai qu'on cesse de
+       lire, et le jour où il rougit pour de vrai personne ne le croit. */
+    assert.ok(
+      msPetit >= PLANCHER_MESURE_MS,
+      `la mesure est retombée dans le bruit (${msPetit.toFixed(2)} ms pour ${String(passes)} ` +
+        `passes, plancher ${String(PLANCHER_MESURE_MS)} ms) : le rapport ci-dessous ne voudrait ` +
+        `rien dire. Relevez CIBLE_MESURE_MS ou la borne de passes — n’assouplissez PAS le seuil.`,
+    );
+
     assert.ok(
       msGrand / msPetit < 2.5,
-      `2× d’entrée doit coûter ~2×, pas ~4× (${msPetit.toFixed(2)} ms → ${msGrand.toFixed(2)} ms)`,
+      `2× d’entrée doit coûter ~2×, pas ~4× (${String(passes)} passes : ` +
+        `${msPetit.toFixed(1)} ms → ${msGrand.toFixed(1)} ms, rapport ` +
+        `${(msGrand / msPetit).toFixed(2)})`,
     );
   });
 

@@ -88,9 +88,12 @@
 >    `install.sh --assistant` (six questions, profil découverte), `install.sh --diagnostic`
 >    (douze sujets, code 0/1/2), [`docs/INSTALLER.md`](docs/INSTALLER.md) (cinq commandes,
 >    aucun renvoi), et **le bandeau 18.2 b livré le 09/09/2026** — voir le point 4.
-> 3. **Constat Q-251 ouvert : Q-246 est ROUVERT** — un essai de rapport de temps rougit
->    encore au banc complet, une fois sur deux, alors que son remède a été déclaré fermé
->    la veille.
+> 3. **✅ Q-251 est FERMÉ le 09/09/2026** — l'essai de rapport de temps ne mesure plus un
+>    rapport entre deux grandeurs d'une milliseconde : chaque côté est joué **R fois dans un
+>    seul chronométrage**, R calibré à l'exécution. ⚠️ **« Grossir les tailles » a été
+>    essayé et mesuré impossible** : le lecteur refuse un classeur au-delà de ~3,5 Mio
+>    décompressés. **Seuil inchangé** ; deux gardes neuves — un plancher, et un plafond
+>    unitaire sans lequel l'essai *se figeait au lieu de rougir* sur un lecteur quadratique.
 > 4. **✅ 18.2 b — LIVRÉ le 09/09/2026.** Le profil découverte n'était visible que de
 >    l'exploitant ; il l'est désormais de **l'utilisateur qui saisit**. `installation.profil`
 >    voyage dans la **charte de session** — donc dans `GET /api/session` **et**
@@ -115,10 +118,10 @@
 > | | Quoi | Pourquoi maintenant |
 > |---|---|---|
 > | ~~1~~ | ~~**18.2 b — le bandeau « installation de découverte »**~~ | ✅ **LIVRÉ le 09/09/2026.** Gardé barré, pas effacé : c'est la **onzième livraison** que le 7ᵉ passage de S8 devra examiner, et une ligne effacée est une livraison qu'on oublie de déclarer |
-> | **1** | **Q-251** — grossir les tailles de l'essai `test/import/lecture.test.mjs:297` | ⚠️ **NE PAS relever le seuil** : à 3,5 l'essai cesserait de distinguer le linéaire du quadratique. Le remède traitait la dispersion ; **le défaut est l'échelle** — un rapport entre deux grandeurs de ~1 ms n'est stable par aucune statistique |
-> | **2** | **Jouer la porte S7**, jamais jouée | Relecture métier, paraphrase des catalogues (droit d'auteur). **Aucun échec ne la signale** : c'est le point le plus facile à manquer |
-> | **3** | **Rejouer S8 — 7ᵉ passage** | **Onze livraisons** n'ont vu aucun auditeur indépendant depuis le 6ᵉ passage : D2, D1·D4·D5, l'intégrité, Q-248, Q-250, les trois de L18, **et 18.2 b** |
-> | **4** | Les constats ouverts : **Q-243, Q-247, Q-234 → Q-244, Q-205 b, Q-206, Q-214 b·c·d·f** | Registre au `docs/PLAN_EXECUTION.md` §7, **seule source** |
+> | ~~1~~ | ~~**Q-251** — l'essai de rapport de temps~~ | ✅ **FERMÉ le 09/09/2026**, et **pas** par « grossir les tailles » : le lecteur refuse un classeur au-delà de ~3,5 Mio décompressés, donc la grande taille franchirait le plafond et l'essai mesurerait un tout autre refus. C'est le **travail** qui a été grossi — R passes dans un seul chronométrage, R calibré à l'exécution. Seuil inchangé |
+> | **1** | **Jouer la porte S7**, jamais jouée | Relecture métier, paraphrase des catalogues (droit d'auteur). **Aucun échec ne la signale** : c'est le point le plus facile à manquer |
+> | **2** | **Rejouer S8 — 7ᵉ passage** | **Onze livraisons** n'ont vu aucun auditeur indépendant depuis le 6ᵉ passage : D2, D1·D4·D5, l'intégrité, Q-248, Q-250, les trois de L18, **et 18.2 b** |
+> | **3** | Les constats ouverts : **Q-243, Q-247, Q-234 → Q-244, Q-205 b, Q-206, Q-214 b·c·d·f** | Registre au `docs/PLAN_EXECUTION.md` §7, **seule source** |
 >
 > **Après les portes seulement** : L16-D3 (la recherche), **L18 bis** (le jeu de
 > découverte, autorisé le 08/09 sous cinq conditions constitutives), **L17**, puis

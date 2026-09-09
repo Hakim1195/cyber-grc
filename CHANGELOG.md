@@ -31,6 +31,68 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'ont été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
 > jamais ce qu'il ne regarde pas.*
 
+### Q-251 — un essai intermittent est un essai qu'on cesse de lire
+
+**Le symptôme.** `test/import/lecture.test.mjs` rougissait une fois sur deux au banc
+complet, en passant vert dix fois sur dix joué seul — y compris sous une charge
+artificielle. Il mesure que le coût d'une lecture **ne quadruple pas quand l'entrée
+double**, c'est-à-dire que le parcours XML est resté linéaire après la porte S6.
+
+**Pourquoi les deux remèdes précédents ne pouvaient pas tenir.** Q-246 lui avait posé « le
+meilleur de trois passes » des deux côtés, plus un plancher au dénominateur. Il a rougi le
+lendemain. *Le remède traitait la dispersion ; le défaut était l'ÉCHELLE* — on comparait
+deux grandeurs de l'ordre de la **milliseconde**, où le quantum de bruit de l'ordonnanceur
+est comparable à la mesure. Aucune statistique ne stabilise un rapport de cette taille.
+
+**La première issue proposée est mesurément impossible ici.** Le registre suggérait de
+*grossir les tailles*. Mesuré : le lecteur refuse un classeur au-delà d'environ **3,5 Mio
+décompressés** — 300 000 balises passent, **400 000 rendent « Ce classeur est trop
+volumineux pour être analysé »**. La grande taille franchirait le plafond, et l'essai
+mesurerait **un tout autre refus** en croyant mesurer une croissance.
+
+**Ce qui est fait : grossir le TRAVAIL, pas l'entrée.** Chaque côté est joué *R* fois dans
+un seul chronométrage, *R* étant **calibré à l'exécution** pour que la petite mesure
+atteigne quelques dizaines de millisecondes. Mesuré : **33,6 ms → 58,7 ms** à R = 50, et
+cinq rapports d'affilée entre **1,75 et 1,96** — là où la rédaction précédente balayait de
+**1,0 à 2,9**. ⚠️ **Le seuil de 2,5 ne bouge pas** : ce qui change est la précision de la
+mesure, pas la sévérité du verdict. Le relever à 3,5 aurait fait cesser à l'essai de
+distinguer le linéaire du quadratique — c'est-à-dire l'aurait transformé en décor. Et le
+calibrage est **calculé, pas écrit en dur** : une constante serait juste aujourd'hui et
+fausse **en silence** le jour où le banc change de machine.
+
+**Deux gardes neuves, et chacune a été trouvée en cassant quelque chose :**
+
+1. **Un plancher.** Si la petite mesure retombe sous 15 ms, l'essai rougit **en nommant sa
+   cause** au lieu de rendre un verdict sur un rapport de deux poussières.
+2. **Un plafond unitaire de 100 ms.** Remis dans son défaut d'origine, le lecteur coûte des
+   secondes par passe — et ma première rédaction **se figeait au lieu de rougir** (dix
+   passes, six chronométrages). Un essai qui se fige est un essai qu'on finit par retirer.
+   C'est la leçon déjà écrite dans `test/depot/cout-expressions.test.mjs` (`PLAFOND_MS`),
+   appliquée ici parce qu'elle y manquait.
+
+⚠️ **Le fichier jumeau n'avait pas le même défaut, ni donc le même remède.** Lui peut
+élargir l'écart d'entrée — ×9 au lieu de ×3, pour un rapport attendu de ×70 —, ce que le
+plafond du lecteur interdit ici. *Même symptôme, cause différente, remède différent* :
+recopier le sien aurait été la treizième occurrence de « l'instance, pas la classe », par
+l'autre bout.
+
+**Éprouvé** : trois passages isolés verts, **trois bancs complets**, et la morsure vérifiée
+en remettant le lecteur dans son défaut quadratique — il rougit désormais **en secondes**,
+avec un message qui nomme la cause.
+
+### ⚠️ Le commit `2818fc7` était rouge, et c'est le banc qui l'a dit
+
+Il portait le CHANGELOG à 1812 essais **sans que le banc soit rejoué derrière**. Le
+garde-fou du constat **Q-53** — *le même nombre au README §8, au bloc `npm test` du §5 et
+au CHANGELOG* — a rougi aux trois bancs complets suivants, 1811/1812, de façon parfaitement
+déterministe. Le README §8 est remis au réel, **révision mesurée `e98dc18`**, avec le compte
+par famille relevé famille par famille : **api 283** (+11), **navigateur 174** (+7), somme
+**1812**.
+
+*« Vert » qualifie une révision, jamais un répertoire de travail* — la leçon du dépôt,
+appliquée à ce dépôt par son propre banc. Le §8 le dit désormais lui-même, en dernière
+ligne de son tableau de mesure.
+
 ### L18.2 b — le profil découverte cesse d'être une affaire d'exploitant
 
 **Le défaut, en une phrase.** `install.sh --assistant` pose un profil **découverte** quand
