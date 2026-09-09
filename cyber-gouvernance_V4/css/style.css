@@ -943,6 +943,36 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
 .quota-banner .reminder-btn { background: var(--color-danger); color: #fff; padding: 7px 14px; font-size: 0.85rem; flex-shrink: 0; }
 .quota-banner .reminder-close { background: transparent; color: #7a1f18; font-size: 1.3rem; line-height: 1; padding: 2px 8px; flex-shrink: 0; }
 
+/* --- Bandeau « installation de découverte » (lot L18.2 b) ---
+   Teinte « à surveiller » et non « critique » : rien n'est cassé, l'installation
+   est incomplète. Le rouge est réservé à ce qui l'est vraiment, et un bandeau
+   permanent en rouge finit par ne plus se lire.
+   ⚠️ **Il n'a PAS de classe `no-print`, et ce n'est pas un oubli** : une pièce
+   tirée d'une installation de découverte doit porter la mention sur le papier
+   aussi — voir `js/app.js`. La version imprimée passe en noir et blanc avec un
+   filet, pour rester lisible sans aplat de couleur. */
+.decouverte-banner {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--tint-warn); border: 1px solid #e5c98a; color: #6b4a05;
+    border-radius: var(--radius); padding: 10px 14px; margin-bottom: 1.5rem; font-size: 0.9rem;
+}
+.decouverte-banner .decouverte-ico {
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--color-warning); color: #fff; font-weight: 800;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.decouverte-banner .decouverte-text { flex: 1; }
+
+@media print {
+    .decouverte-banner {
+        background: #fff; border: 2px solid #000; color: #000;
+        border-radius: 0; margin-bottom: 1rem;
+    }
+    .decouverte-banner .decouverte-ico {
+        background: #fff; color: #000; border: 1.5px solid #000;
+    }
+}
+
 /* =========================================
    TABLEAU DE BORD ENRICHI — COCKPIT GRC
    (bandeau posture, KPI strip, donut/bars/heatmap SVG,

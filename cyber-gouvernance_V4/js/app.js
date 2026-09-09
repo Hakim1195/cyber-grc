@@ -41,6 +41,13 @@ async function startApp() {
     if (window.Identite) Identite.brancherEnTete();
 
     /* =========================
+       PROFIL D'INSTALLATION (lot L18.2 b)
+       Posé AVANT la première navigation : le premier écran doit déjà le porter.
+       `updateActiveNav` le repose ensuite à chaque changement de vue.
+    ========================== */
+    if (window.afficherBandeauDecouverte) window.afficherBandeauDecouverte();
+
+    /* =========================
        SÉLECTEUR DE DONNEUR D'ORDRE
        Le périmètre de SÉCURITÉ vient du serveur (`Session` / `/api/session`) et n'est
        ni choisi ni mémorisé par le navigateur (contrôle S2). Ce sélecteur-ci n'est pas
@@ -236,6 +243,68 @@ function showQuotaBanner() {
     const d = document.getElementById("quota-dismiss");
     if (d) d.onclick = () => { host.innerHTML = ""; };
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BANDEAU « INSTALLATION DE DÉCOUVERTE » — lot L18.2 b
+   ═══════════════════════════════════════════════════════════════════════════
+
+   `install.sh --assistant` pose un profil DÉCOUVERTE quand l'exploitant répond
+   « aucun annuaire » : ni AD, ni relais de messagerie, un certificat auto-signé,
+   et un compte de secours pour toute porte d'entrée. Le profil s'annonçait déjà
+   dans la configuration et au `--diagnostic` — **deux endroits que seul
+   l'exploitant regarde**. L'utilisateur qui saisit, lui, ne voyait rien, alors
+   que c'est lui qui décide de taper une donnée réelle dans un outil qui sert de
+   preuve en audit.
+
+   ⚠️ **Trois propriétés, et chacune ferme un chemin par lequel le bandeau
+   disparaîtrait sans que personne s'en aperçoive :**
+
+    1. **Aucun bouton pour le fermer.** Les deux autres bandeaux de ce fichier
+       en ont un — ils signalent un incident qu'on traite et qui passe. Celui-ci
+       décrit ce que la machine EST, et cela ne passe pas. « Un profil dégradé
+       qu'on ne voit pas devient une production par oubli » : un bouton
+       « masquer » est précisément le geste par lequel on l'oublie.
+    2. **Il s'IMPRIME** — pas de classe `no-print`, contrairement à tous les
+       autres bandeaux. Une fiche de risque ou un registre RGPD tiré d'une
+       installation de découverte quitte l'écran et circule ; s'il ne porte pas
+       la mention, il devient une pièce d'audit qui se présente comme les
+       autres. La barrière doit suivre le papier.
+    3. **Il est redessiné à CHAQUE navigation** (`updateActiveNav`), et non posé
+       une fois. Le changement de langue renavigue : le texte suit. Et un
+       bandeau reposé à chaque écran ne peut pas être perdu par un rendu qui
+       aurait vidé son hôte.
+
+   Le profil vient du serveur (`/api/session`, champ `installation.profil`) et de
+   nulle part ailleurs : rien dans le navigateur ne peut le poser ni l'éteindre. */
+window.afficherBandeauDecouverte = function () {
+    const estDecouverte =
+        typeof Session !== "undefined" && Session.estDecouverte && Session.estDecouverte();
+    let host = document.getElementById("decouverte-banner-host");
+
+    if (!estDecouverte) {
+        // Le profil peut cesser d'être « découverte » d'une session à l'autre
+        // (une installation reprise avec un annuaire) : on retire alors le
+        // bandeau plutôt que de le laisser mentir dans l'autre sens.
+        if (host) host.remove();
+        return;
+    }
+
+    if (!host) {
+        host = document.createElement("div");
+        host.id = "decouverte-banner-host";
+        const gb = document.getElementById("global-banner");
+        if (gb && gb.parentNode) gb.parentNode.insertBefore(host, gb);
+        else { const mc = document.querySelector(".main-content"); if (mc) mc.prepend(host); }
+    }
+
+    const esc = window.escapeHtml || (v => String(v == null ? "" : v));
+    host.innerHTML =
+        '<div class="decouverte-banner" role="status">' +
+        '<span class="decouverte-ico" aria-hidden="true">!</span>' +
+        '<span class="decouverte-text"><b>' + esc(t("bandeau.decouverte")) + '</b> ' +
+        esc(t("bandeau.decouverteTexte")) + '</span>' +
+        '</div>';
+};
 
 /* =========================
    FIL D'ARIANE
@@ -773,6 +842,10 @@ window.updateActiveNav = function(route) {
     });
 
     if (window.renderBreadcrumb) window.renderBreadcrumb(route);
+    // Le profil d'installation est reposé à chaque écran : voir le commentaire
+    // de la fonction — un bandeau posé une seule fois est un bandeau qu'un
+    // rendu finit par emporter.
+    if (window.afficherBandeauDecouverte) window.afficherBandeauDecouverte();
     if (window.refreshEcheancesBadge) window.refreshEcheancesBadge();
     if (window.UI && UI.refreshPersonnesDatalist) UI.refreshPersonnesDatalist();
     // Lot L3 : le MENU seulement. La neutralisation des boutons a besoin du

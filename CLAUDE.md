@@ -84,12 +84,25 @@
 >    découverte est autorisé sous cinq conditions constitutives ; **A1** l'IA est **locale
 >    par défaut**, un fournisseur externe restant possible sous **six barrières** (lot
 >    **L27**) ; **A3** le **portail fournisseur exposé est validé** (lot **L28**).
-> 2. **Le lot L18 — installation — est LIVRÉ**, sauf son bandeau. `install.sh --assistant`
->    (six questions, profil découverte), `install.sh --diagnostic` (douze sujets, code
->    0/1/2), [`docs/INSTALLER.md`](docs/INSTALLER.md) (cinq commandes, aucun renvoi).
+> 2. **Le lot L18 — installation — est LIVRÉ**, 18.7 excepté (frontend, après les portes).
+>    `install.sh --assistant` (six questions, profil découverte), `install.sh --diagnostic`
+>    (douze sujets, code 0/1/2), [`docs/INSTALLER.md`](docs/INSTALLER.md) (cinq commandes,
+>    aucun renvoi), et **le bandeau 18.2 b livré le 09/09/2026** — voir le point 4.
 > 3. **Constat Q-251 ouvert : Q-246 est ROUVERT** — un essai de rapport de temps rougit
 >    encore au banc complet, une fois sur deux, alors que son remède a été déclaré fermé
 >    la veille.
+> 4. **✅ 18.2 b — LIVRÉ le 09/09/2026.** Le profil découverte n'était visible que de
+>    l'exploitant ; il l'est désormais de **l'utilisateur qui saisit**. `installation.profil`
+>    voyage dans la **charte de session** — donc dans `GET /api/session` **et**
+>    `POST /api/connexion`, identiques à l'octet près (§26.2) —, et la SPA en tire un
+>    bandeau **que personne ne peut fermer** et qui **s'imprime avec les fiches** (une pièce
+>    tirée d'une installation de découverte ne doit pas se présenter comme une pièce d'audit
+>    ordinaire). ⚠️ **Une valeur inconnue de `CYBER_GRC_PROFIL` REFUSE le démarrage** : la
+>    pente naturelle — retomber sur « production » — aurait laissé une faute de frappe
+>    éteindre le bandeau **en silence**, c'est-à-dire produire le défaut que ce profil existe
+>    pour empêcher. Une valeur **absente** vaut « production » : c'est tout le parc antérieur
+>    à L18. Banc **1812/1812** ; les quatre propriétés ont été **cassées une à une** et le
+>    banc a rougi à chaque fois. ⚠️ **Onzième livraison à déclarer au 7ᵉ passage de S8.**
 >
 > ### ⚠️ L'ORDRE DE REPRISE, et il n'est pas négociable
 >
@@ -101,11 +114,11 @@
 >
 > | | Quoi | Pourquoi maintenant |
 > |---|---|---|
-> | **1** | **18.2 b — le bandeau « installation de découverte » dans le produit** | ~10 lignes (`GET /api/session` + un bandeau SPA). C'est le seul écart qui reste à L18, et sans lui un profil dégradé n'est visible que de l'exploitant, **pas de l'utilisateur qui saisit**. Seul sous-lot de L18 touchant `src/` : **à déclarer au 7ᵉ passage de S8** |
-> | **2** | **Q-251** — grossir les tailles de l'essai `test/import/lecture.test.mjs:297` | ⚠️ **NE PAS relever le seuil** : à 3,5 l'essai cesserait de distinguer le linéaire du quadratique. Le remède traitait la dispersion ; **le défaut est l'échelle** — un rapport entre deux grandeurs de ~1 ms n'est stable par aucune statistique |
-> | **3** | **Jouer la porte S7**, jamais jouée | Relecture métier, paraphrase des catalogues (droit d'auteur). **Aucun échec ne la signale** : c'est le point le plus facile à manquer |
-> | **4** | **Rejouer S8 — 7ᵉ passage** | **Dix livraisons** n'ont vu aucun auditeur indépendant depuis le 6ᵉ passage : D2, D1·D4·D5, l'intégrité, Q-248, Q-250, et les trois de L18 |
-> | **5** | Les constats ouverts : **Q-243, Q-247, Q-234 → Q-244, Q-205 b, Q-206, Q-214 b·c·d·f** | Registre au `docs/PLAN_EXECUTION.md` §7, **seule source** |
+> | ~~1~~ | ~~**18.2 b — le bandeau « installation de découverte »**~~ | ✅ **LIVRÉ le 09/09/2026.** Gardé barré, pas effacé : c'est la **onzième livraison** que le 7ᵉ passage de S8 devra examiner, et une ligne effacée est une livraison qu'on oublie de déclarer |
+> | **1** | **Q-251** — grossir les tailles de l'essai `test/import/lecture.test.mjs:297` | ⚠️ **NE PAS relever le seuil** : à 3,5 l'essai cesserait de distinguer le linéaire du quadratique. Le remède traitait la dispersion ; **le défaut est l'échelle** — un rapport entre deux grandeurs de ~1 ms n'est stable par aucune statistique |
+> | **2** | **Jouer la porte S7**, jamais jouée | Relecture métier, paraphrase des catalogues (droit d'auteur). **Aucun échec ne la signale** : c'est le point le plus facile à manquer |
+> | **3** | **Rejouer S8 — 7ᵉ passage** | **Onze livraisons** n'ont vu aucun auditeur indépendant depuis le 6ᵉ passage : D2, D1·D4·D5, l'intégrité, Q-248, Q-250, les trois de L18, **et 18.2 b** |
+> | **4** | Les constats ouverts : **Q-243, Q-247, Q-234 → Q-244, Q-205 b, Q-206, Q-214 b·c·d·f** | Registre au `docs/PLAN_EXECUTION.md` §7, **seule source** |
 >
 > **Après les portes seulement** : L16-D3 (la recherche), **L18 bis** (le jeu de
 > découverte, autorisé le 08/09 sous cinq conditions constitutives), **L17**, puis
@@ -837,7 +850,7 @@ sur l'**Active Directory** du groupe.
 | **L15 — Durcissement final** | 🟡 **en cours** (vague 8) — **porte S8 refusée six fois**, c'est la condition de mise en service |
 | **L16 — Système documentaire** | 🟡 **quatre actions sur cinq livrées** (vague 9) — D2 le 07/09 (les pièces suivent leur porteur), **D1, D4 et D5 le 08/09** (version en vigueur, référence externe assumée, publication soumise au circuit), **plus la vérification d'intégrité** hors des cinq actions (migration `020` : l'empreinte s'affiche et elle est *rapprochée* du fichier, à la demande et par balayage — `db/CONVENTIONS.md` §31.5). **Reste D3, la recherche, pas avant S8.** `docs/PLAN_EXECUTION.md` §3 |
 | **L17 — Prise en main** | ⬜ **planifié** (`docs/PLAN_PRODUIT.md`) — recherche globale, palette `Ctrl+K`, écran de démarrage par rôle, regroupement du menu, Kanban. ⚠️ **Pas avant S7 et S8** : il ouvre de la surface neuve |
-| **L18 — Installation en une commande** | ✅ **livré le 08/09/2026, sauf 18.2 b.** `--assistant` (six questions, profil découverte, compte de secours dont l'empreinte est calculée par `dist/auth/secours.js`), `--diagnostic` (douze sujets, code 0/1/2, ne modifie rien), `docs/INSTALLER.md` (cinq commandes). ⚠️ **Ne touche ni `src/` ni le schéma** — c'est ce qui l'a autorisé avant les portes. **Reste le bandeau 18.2 b** |
+| **L18 — Installation en une commande** | ✅ **livré — 18.7 excepté.** `--assistant` (six questions, profil découverte, compte de secours dont l'empreinte est calculée par `dist/auth/secours.js`), `--diagnostic` (douze sujets, code 0/1/2, ne modifie rien), `docs/INSTALLER.md` (cinq commandes), **et le bandeau 18.2 b le 09/09/2026** — permanent, non masquable, imprimé avec les fiches. ⚠️ Les six premiers sous-lots ne touchaient **ni `src/` ni le schéma** — c'est ce qui les a autorisés avant les portes ; **18.2 b, lui, touche `src/` et la SPA : à déclarer au 7ᵉ passage de S8**. Reste **18.7** (assistant de premier démarrage), après les portes |
 | **L18 bis — Jeu de découverte** | ⬜ **autorisé le 08/09/2026** sous **cinq conditions constitutives** (marque **dans la donnée**, geste volontaire, refus si données réelles, purge par le déclencheur `017`, interdit hors découverte). Il écrit en base : **après les portes** |
 | **L19 → L26** | ⬜ **planifiés** (`docs/PLAN_PRODUIT.md`) — preuve et attestation, réglementaire opérationnel, tiers et DORA, ouverture technique, collecte automatique et CCM, campagnes descendantes, EBIOS RM, catalogues ouverts |
 | **L27 — Assistance IA** | ⬜ **arbitré le 08/09/2026 (A1)** — modèle **local par défaut** ; un fournisseur **externe de confiance** reste possible sous **six barrières**, dont l'avertissement n'est que la sixième. ⚠️ La première est que `IPAddressDeny=any` **ferme la sortie réseau** tant que l'exploitant ne l'ouvre pas à la main : *une barrière physique, pas une promesse*. Activation **par filiale**, jamais pour le groupe entier. L'IA **propose**, un humain **décide** — aucun des cinq usages n'écrit sans validation. Porte **S16** |

@@ -30,6 +30,75 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'ont été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
 > jamais ce qu'il ne regarde pas.*
 
+### L18.2 b — le profil découverte cesse d'être une affaire d'exploitant
+
+**Le défaut, en une phrase.** `install.sh --assistant` pose un profil **découverte** quand
+l'exploitant répond « aucun annuaire » : ni AD, ni relais de messagerie, un certificat
+auto-signé, un compte de secours pour toute porte d'entrée. Ce profil s'annonçait dans la
+configuration et au `--diagnostic` — **deux endroits que seul l'exploitant regarde**.
+L'utilisateur qui saisit ne voyait rien, alors que c'est **lui** qui décide de taper une
+donnée réelle dans un outil qui sert de preuve en audit.
+
+**Ce qui est livré.** Le serveur lit `CYBER_GRC_PROFIL` et le sert dans la **charte de
+session** — donc dans `GET /api/session` **et** dans `POST /api/connexion`, que le
+`CONVENTIONS.md` §26.2 exige identiques à l'octet près. Le champ est **toujours présent**,
+jamais omis quand il vaut « production » : un champ absent laisserait le navigateur deviner,
+et « je n'en sais rien » finirait par s'afficher comme l'un ou l'autre selon qui écrit le
+code. La SPA en tire un bandeau, et **trois propriétés le distinguent des deux autres
+bandeaux du produit** :
+
+1. **Aucun bouton ne le ferme.** Les autres signalent un incident qu'on traite et qui passe ;
+   celui-ci décrit ce que la machine **est**, et cela ne passe pas. Un bouton « masquer » est
+   le geste exact par lequel on oublie un profil dégradé.
+2. **Il s'imprime** — pas de classe `no-print`, contrairement à tous les autres. Une fiche de
+   risque ou un registre RGPD tiré d'une installation de découverte quitte l'écran et
+   circule ; sans la mention, il se présente comme une pièce d'audit ordinaire.
+3. **Il est reposé à chaque écran**, et non posé une fois : le changement de langue le
+   retraduit, et aucun rendu ne peut l'emporter.
+
+⚠️ **Une valeur inconnue de `CYBER_GRC_PROFIL` REFUSE le démarrage.** C'est le point le
+moins évident du lot et le plus important. La pente naturelle était de retomber sur
+« production » — et une faute de frappe (`decouvert`, `Découverte`) aurait alors éteint le
+bandeau **en silence**, c'est-à-dire produit le défaut exact que ce profil existe pour
+empêcher, par le chemin le plus discret qui soit. Le `CLAUDE.md` §3 nomme la règle : une
+table de valeurs n'est le bon outil que si son incomplétude **échoue bruyamment**. Une
+valeur **absente**, en revanche, vaut « production » : c'est l'état de tout le parc
+antérieur à L18, et un bandeau qui crie à tort apprend à ne plus être lu. La variable est
+désormais **documentée dans `.env.example`** — elle y manquait, alors qu'`install.sh`
+l'écrivait (le pendant du constat m-2 : une variable écrite et non documentée).
+
+⚠️ **Deux leçons de méthode payées en écrivant les essais, et la première est un rejeu de
+Q-210.** La première rédaction de `test/api/profil-installation.test.mjs` montait un
+environnement **lui-même invalide** (`AUTH_LDAP_ACTIF=non` sans compte de secours) : le §1
+« une valeur inconnue refuse le démarrage » passait **au vert en attrapant une erreur qui ne
+parlait pas du profil**. Réparé, et **gardé** : un §0 exige que l'environnement de base
+charge sans erreur, et le §1 exige qu'il n'y ait **qu'un seul problème**. La seconde : le
+premier jet rangeait `DECOUVERTE` parmi les fautes de frappe — la lecture met la valeur en
+minuscules, les capitales désignent donc bien le même profil, et c'est l'essai qui avait
+tort. Ce qui est refusé, c'est ce qui ne **désigne** pas un profil connu.
+
+**Éprouvé, et par la mutation.** 18 essais neufs — 11 côté serveur (`test/api/profil-
+installation.test.mjs`), 7 dans un Chromium réel (`test/navigateur/profil-decouverte.test.mjs`,
+qui mesure le **DOM rendu** : texte lisible, zéro bouton, survie à cinq écrans et au passage
+en anglais, visibilité sous le **média d'impression émulé**, avec le fil d'Ariane pour
+témoin — sans lui, un Chromium n'appliquant pas `@media print` rendrait l'essai vert sans
+rien mesurer, c'est Q-108). *Un correctif accepté n'est pas un correctif sûr* : les quatre
+propriétés ont été **cassées une à une** — champ retiré de la charte (9 échecs), bouton de
+fermeture ajouté (1), `no-print` posé (1), repli silencieux sur « production » (2) — et le
+banc a rougi à chaque fois.
+
+**Mesuré à cette révision** : `npm test` → **1812 essais, 1812 passés** ;
+`npm run verifier-types` propre ; `install.sh --maj` puis `--verifier-publication` →
+**81 fichiers servis identiques au dépôt** ; `--diagnostic` → **12 conformes, 1 réserve**
+(`SMTP_ACTIF=non`), **0 bloquant**. Sur la recette, le service annonce
+`"profil":"production"` au démarrage **sans que la variable existe dans
+`/etc/cyber-grc/env`** : la valeur par défaut tient sur la machine réelle, et le bandeau
+reste éteint là où il doit l'être.
+
+⚠️ **Ce n'est pas un passage de porte.** 18.2 b touche `src/` et la SPA : c'est la
+**onzième livraison** à déclarer au **7ᵉ passage de S8**, qu'aucun auditeur indépendant n'a
+encore vue.
+
 ### Les trois arbitrages du plan produit sont tranchés — deux lots neufs, L27 et L28
 
 **A1 — l'IA : locale par défaut, externe possible et encadrée.** J'avais recommandé « un

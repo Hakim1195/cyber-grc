@@ -205,7 +205,7 @@ constat, pas une coquille* (`PLAN_EXECUTION.md` §5).
 |---|---|---|
 | **18.1** ✅ **livré le 08/09/2026** | **`install.sh --assistant`** — un dialogue qui pose les six questions, propose un défaut mesuré pour chacune, écrit `/etc/cyber-grc/env` et `filiales.conf`, puis installe. Il ne remplace pas le mode non interactif : il l'**alimente** | ✅ **rempli.** Éprouvé par pseudo-terminal dans les deux branches, avec saisies invalides — URL sans schéma, mot de passe trop court, code de filiale « GROUPE » : les trois refus bouclent. **Rien n'est écrit avant le récapitulatif** (vérifié : refus final → aucun fichier). Exige un terminal, sinon il échoue. ⚠️ **Reste à mesurer sur une VM neuve** : `--assistant` → `https://<hôte>/` → 200. Ne peut pas se jouer ici sans réinstaller par-dessus la recette |
 | **18.2 a** ✅ **livré le 08/09/2026** | **Profil « découverte », côté configuration** — annuaire désactivé, **compte de secours** (identifiant + mot de passe, empreinte `scrypt` calculée par `dist/auth/secours.js` et non recopiée en shell), relances désactivées, **certificat auto-signé engendré** — sans lui Apache refuse de démarrer et la promesse « en dix minutes » ne tient pas | ✅ **rempli.** `CYBER_GRC_PROFIL=decouverte` est **écrit dans la configuration** et le `--diagnostic` le rend en réserve. Un essai exige que le certificat **n'apparaisse jamais en production** : un certificat que personne n'a décidé apprend aux utilisateurs à passer outre les avertissements TLS |
-| **18.2 b** | **Le bandeau dans le produit** — « installation de découverte, non conforme à un usage de production » | ⚠️ **Seul sous-lot de L18 qui touche `src/` et la SPA** : un champ dans `GET /api/session`, un bandeau permanent. À déclarer au 7ᵉ passage de S8. Sans lui, le profil reste visible du seul exploitant — pas de l'utilisateur qui saisit |
+| **18.2 b** ✅ **livré le 09/09/2026** | **Le bandeau dans le produit** — « installation de découverte », permanent | ✅ **rempli.** `installation.profil` dans la charte de session (donc dans `GET /api/session` **et** `POST /api/connexion`, §26.2), bandeau **sans bouton de fermeture**, **imprimé** avec les fiches, reposé à chaque écran. ⚠️ **Une valeur inconnue de `CYBER_GRC_PROFIL` REFUSE le démarrage** : une faute de frappe qui vaudrait « production » en silence éteindrait le bandeau. **Seul sous-lot de L18 touchant `src/` et la SPA : à déclarer au 7ᵉ passage de S8** |
 | **18.3** | **`install.sh --diagnostic`** — une commande unique qui rend l'état des dix points qui cassent en vrai : services, publication servie == dépôt, RLS forcée, propriété de la base, chaîne du journal, joignabilité LDAP, sortie SMTP, ClamAV, certificat, espace disque | Sortie en **code 0 / 1 / 2** exploitable par une supervision. Chaque ligne dit **quoi faire**, pas seulement ce qui ne va pas. `--verifier-publication` y est **intégré**, plus une commande à ne pas oublier (constat Q-103) |
 | **18.4** | ⚠️ **DÉJÀ LIVRÉ — mesuré le 08/09/2026, ce sous-lot n'existait pas.** `groupes-ad.sh --powershell --ou <DN>` rend depuis longtemps un script PowerShell idempotent, qui ne supprime jamais rien | ✅ **rempli avant d'être demandé.** Joué sur la recette : 23 groupes, 2 filiales actives, 8 profils, en-tête portant l'origine de chaque source. **Le défaut réel était de découvrabilité** : `filiales.conf.exemple` documentait `--powershell`, mais le guide d'installation que je venais d'écrire renvoyait vers `--csv`, moins utile. Corrigé dans `docs/INSTALLER.md` |
 | **18.5** | ⚠️ **RÉÉCRIT le 08/09/2026 après mesure — l'objectif d'origine était déjà atteint.** Ne pas réduire le nombre de variables : **le dire**. Le chemin nominal exige **six valeurs**, pas soixante-huit | ✅ **mesuré, pas estimé** : `src/config/index.ts` lit **68** variables ; `install.sh` n'en réclame que **six** à l'exploitant (`SERVEUR_URL_PUBLIQUE`, plus `LDAP_URL`, `LDAP_BASE_RECHERCHE`, `LDAP_DN_SERVICE`, `LDAP_MOT_DE_PASSE_SERVICE` si l'annuaire est actif, plus `SMTP_HOTE` si les relances le sont) ; **deux** sont engendrées (`SESSION_SECRET`, `APPLICATION_VERSION`) ; **quatre** sont exigées par le serveur (`BASE_MOT_DE_PASSE`, `SESSION_SECRET`, `LDAP_MOT_DE_PASSE_SERVICE`, `BASE_SSL_CA` si SSL vérifié) ; **toutes les autres portent un défaut sûr**. Le travail est donc de **documenter les six** et de faire poser exactement ces questions par l'assistant |
@@ -806,19 +806,26 @@ se rejoue (constat **Q-219**).
 | **L18.4** groupes AD | ✅ **il l'était déjà** — le défaut était de découvrabilité |
 | **L18.5** surface de configuration | ✅ **elle l'était déjà** — six valeurs, pas soixante-huit |
 | **L18.6** `docs/INSTALLER.md` | ✅ livré — cinq commandes, aucun renvoi |
-| **L18.2 b** le bandeau dans le produit | ⬜ **reste — c'est le prochain geste** |
+| **L18.2 b** le bandeau dans le produit | ✅ **livré le 09/09/2026** — permanent, non masquable, imprimé ; **à déclarer au 7ᵉ passage de S8** |
 | **L18.7** assistant de premier démarrage | ⬜ frontend → après les portes |
 
-**Le prochain geste, et pourquoi celui-là.** Le bandeau **18.2 b** est le seul écart qui
-reste à L18, et c'est celui qui décide si le profil découverte tient sa promesse : *un
-profil dégradé qu'on ne voit pas devient une production par oubli*. Il est aujourd'hui
-visible de l'**exploitant** — configuration, `--diagnostic` — mais pas de l'**utilisateur
-qui saisit**. Environ dix lignes : un champ dans `GET /api/session`, un bandeau permanent
-dans la SPA. ⚠️ **C'est le seul sous-lot de L18 qui touche `src/` : à déclarer au 7ᵉ
-passage de S8.**
+**18.2 b est livré le 09/09/2026, et L18 est complet à l'exception de 18.7** (frontend,
+après les portes). Le profil découverte n'était visible que de l'**exploitant** —
+configuration, `--diagnostic` — et pas de l'**utilisateur qui saisit** : il l'est
+désormais, par un bandeau que **personne ne peut fermer** et qui **s'imprime avec les
+fiches**. ⚠️ **C'est le seul sous-lot de L18 qui touche `src/` et la SPA : à déclarer au
+7ᵉ passage de S8.**
 
-Puis **Q-251** (`PLAN_EXECUTION.md` §7), court lui aussi — pour que l'auditeur trouve un
-banc stable et un lot complet plutôt qu'à 90 %.
+⚠️ **Une décision de conception mérite d'être connue avant de la rediscuter** : une valeur
+inconnue de `CYBER_GRC_PROFIL` **refuse le démarrage** au lieu de retomber sur
+« production ». La pente naturelle était l'inverse — et une faute de frappe (`decouvert`,
+`Découverte`) aurait alors éteint le bandeau **en silence**, produisant le défaut exact que
+ce profil existe pour empêcher, par le chemin le plus discret qui soit. Une valeur
+**absente**, elle, vaut bien « production » : c'est l'état de tout le parc antérieur à L18,
+et un bandeau qui crie à tort apprend à ne plus être lu.
+
+**Le prochain geste : Q-251** (`PLAN_EXECUTION.md` §7), court lui aussi — pour que
+l'auditeur trouve un banc stable et un lot complet plutôt qu'à 90 %.
 
 **Ensuite, et pas avant : les portes.** S7 jamais jouée, puis le 7ᵉ passage de S8, qui aura
 **dix livraisons** à examiner.

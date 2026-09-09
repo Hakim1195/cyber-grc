@@ -1537,6 +1537,25 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         // clé est absente, et l'interface s'en tient au niveau de la session.
         ...(droits.niveaux === undefined ? {} : { niveaux: droits.niveaux }),
       },
+      // ── Ce que vaut cette INSTALLATION — lot L18.2 b ────────────────────
+      //
+      // `install.sh --assistant` écrit `CYBER_GRC_PROFIL=decouverte` quand
+      // l'exploitant répond « aucun annuaire », et le profil s'annonce déjà dans
+      // la configuration et au `--diagnostic`. Ces deux endroits ne se voient
+      // que de l'EXPLOITANT ; **l'utilisateur qui saisit** ne voyait rien. Or
+      // c'est lui qui décide s'il tape une donnée réelle dans un outil produit
+      // en audit, sur une machine sans annuaire et sans certificat vérifiable.
+      //
+      // Le champ voyage ici, dans la charte, et non dans une route à part : la
+      // SPA appelle `/api/session` avant de s'afficher, et `POST /api/connexion`
+      // rend la même charge à l'octet près (§26.2). Une route de plus serait un
+      // second chemin à ne pas oublier d'appeler — c'est-à-dire, tôt ou tard,
+      // une session où le bandeau manque.
+      //
+      // ⚠️ Aucun secret : le profil dit ce qui MANQUE, pas comment y entrer.
+      installation: {
+        profil: config.profil,
+      },
       // Dit franchement ce que vaut cette session. Un auditeur qui interroge
       // l'API le lit sans avoir à ouvrir le code.
       authentification: {

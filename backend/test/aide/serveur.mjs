@@ -401,7 +401,13 @@ export async function monterGreffon(base, perimetre, options = {}) {
   const { creerPool } = await moduleCompile('db/pool.js');
   const { greffonApi } = await moduleCompile('api/index.js');
 
-  const config = chargerConfiguration(environnementDeTest(base, options.environnement ?? 'developpement'));
+  // `options.env` pose des variables d'environnement propres à l'essai — même
+  // rôle que dans `monterServeurReel`, qui l'accepte depuis le lot L2. Il
+  // manquait ici, et c'est ce qui empêchait d'éprouver au navigateur ce que le
+  // serveur DIT de son installation (`CYBER_GRC_PROFIL`, lot L18.2 b).
+  const config = chargerConfiguration(
+    environnementDeTest(base, options.environnement ?? 'developpement', options.env ?? {}),
+  );
   const pool = creerPool(config.base);
   // `options.resolveur` sert aux essais qui ont besoin de MAÎTRISER l'instant où le
   // périmètre se résout — celui de l'abandon avant transaction, par exemple. Le

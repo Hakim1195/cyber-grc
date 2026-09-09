@@ -490,6 +490,8 @@ window.I18n.enregistrer("fr", {
     "bandeau.masquer": "Masquer",
     "bandeau.ecransNonRattaches": "Écrans non rattachés à un domaine de droits",
     "bandeau.ecransNonRattachesTexte": "Ces écrans restent accessibles — l'interface ne masque pas ce que personne n'a décidé de masquer — mais le serveur, lui, décide seul. Signalez-le à votre exploitant.",
+    "bandeau.decouverte": "Installation de découverte.",
+    "bandeau.decouverteTexte": "Cette installation n’est pas une installation de production : aucun annuaire d’entreprise, aucun envoi de courriel, et un certificat que votre navigateur ne peut pas vérifier. N’y saisissez pas de données réelles — elles ne seraient protégées ni par vos comptes d’entreprise, ni par une sauvegarde exploitable. Votre exploitant peut compléter l’installation avec « install.sh --assistant ».",
     "bandeau.echeancesEnRetard": "{n} échéance(s) en retard",
     "bandeau.filialeEcriture": "Filiale d'écriture : {filiale}.",
     "bandeau.bascule.enAttente": "Des modifications ne sont pas encore enregistrées sur le serveur. Elles appartiennent à la filiale actuelle : la bascule est refusée tant qu'elles n'ont pas abouti.",

@@ -31,6 +31,29 @@ import { isAbsolute, normalize, sep } from 'node:path';
  * ===================================================================== */
 
 export type Environnement = 'production' | 'recette' | 'developpement';
+
+/**
+ * Profil d'installation — **ce que vaut cette machine**, et non ce qu'elle
+ * exécute.
+ *
+ * `NODE_ENV` dit comment le serveur se comporte ; ce réglage-ci dit ce que
+ * l'installation a *renoncé* à poser. `install.sh --assistant` écrit
+ * `decouverte` quand l'exploitant répond « aucun annuaire » : ni AD, ni relais
+ * de messagerie, un certificat auto-signé, et un compte de secours pour toute
+ * porte d'entrée. Les deux sont indépendants — une installation de découverte
+ * tourne bel et bien en `NODE_ENV=production`, et c'est précisément ce qui la
+ * rend dangereuse si personne ne le dit.
+ *
+ * ⚠️ **Une valeur inconnue REFUSE le démarrage, elle ne retombe pas sur
+ * `production`.** Le défaut que ce profil existe pour empêcher est *« un profil
+ * dégradé qu'on ne voit pas devient une production par oubli »* — et une faute
+ * de frappe (`decouvert`, `Découverte`) qui vaudrait silencieusement
+ * « production » éteindrait le bandeau, c'est-à-dire produirait exactement ce
+ * défaut par le chemin le plus discret qui soit. Une valeur absente, elle, vaut
+ * `production` : c'est le cas de toutes les installations antérieures à L18, et
+ * elles ne sont pas des installations de découverte.
+ */
+export type ProfilInstallation = 'production' | 'decouverte';
 export type NiveauJournal = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
 export type ModeSslBase = 'desactive' | 'requis' | 'verifie-ca';
 export type ChiffrementSmtp = 'starttls' | 'tls' | 'aucun';
@@ -168,6 +191,8 @@ export interface ConfigurationRetention {
 
 export interface Configuration {
   readonly environnement: Environnement;
+  /** Profil d'installation, tel que `install.sh` l'a écrit. Voir le type. */
+  readonly profil: ProfilInstallation;
   readonly version: string;
   readonly serveur: ConfigurationServeur;
   readonly base: ConfigurationBase;
@@ -403,6 +428,11 @@ function lireVersionApplication(source: NodeJS.ProcessEnv): string {
  *  Chargement
  * ===================================================================== */
 
+const PROFILS: Record<string, ProfilInstallation> = {
+  production: 'production',
+  decouverte: 'decouverte',
+};
+
 const ENVIRONNEMENTS: Record<string, Environnement> = {
   production: 'production',
   prod: 'production',
@@ -432,6 +462,25 @@ export function chargerConfiguration(source: NodeJS.ProcessEnv = process.env): C
   }
   const env: Environnement = environnement ?? 'production';
   const estProduction = env === 'production';
+
+  /* ── Profil d'installation ───────────────────────────────────────── */
+  //
+  // Non renseigné = `production` : les installations posées avant le lot L18
+  // n'ont pas cette variable, et aucune n'est une installation de découverte.
+  // Renseigné mais inconnu = REFUS de démarrer : voir `ProfilInstallation`.
+  const brutProfil = (source['CYBER_GRC_PROFIL'] ?? '').trim().toLowerCase();
+  const profilLu = brutProfil === '' ? 'production' : PROFILS[brutProfil];
+  if (profilLu === undefined) {
+    lecteur.probleme(
+      `CYBER_GRC_PROFIL : valeur inconnue « ${brutProfil} » (attendu : production | decouverte)`,
+    );
+  }
+  const profil: ProfilInstallation = profilLu ?? 'production';
+  if (profil === 'decouverte') {
+    lecteur.avertir(
+      "CYBER_GRC_PROFIL = decouverte : installation de DÉCOUVERTE — ni annuaire, ni relais de messagerie, certificat non vérifiable. N'y saisissez pas de données réelles.",
+    );
+  }
 
   /* ── Serveur HTTP ────────────────────────────────────────────────── */
   const hote = lecteur.texte('SERVEUR_HOTE', { defaut: '127.0.0.1' });
@@ -821,6 +870,7 @@ export function chargerConfiguration(source: NodeJS.ProcessEnv = process.env): C
 
   return {
     environnement: env,
+    profil,
     version: lireVersionApplication(source),
     serveur,
     base,
@@ -843,6 +893,7 @@ export function chargerConfiguration(source: NodeJS.ProcessEnv = process.env): C
 export function resumerConfiguration(config: Configuration): Record<string, unknown> {
   return {
     environnement: config.environnement,
+    profil: config.profil,
     version: config.version,
     ecoute: `${config.serveur.hote}:${config.serveur.port}`,
     url_publique: config.serveur.urlPublique,

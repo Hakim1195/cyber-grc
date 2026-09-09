@@ -475,6 +475,8 @@ window.I18n.enregistrer("en", {
     "bandeau.masquer": "Hide",
     "bandeau.ecransNonRattaches": "Screens not attached to a rights domain",
     "bandeau.ecransNonRattachesTexte": "These screens remain reachable — the interface does not hide what nobody decided to hide — but the server alone decides. Report this to your administrator.",
+    "bandeau.decouverte": "Trial installation.",
+    "bandeau.decouverteTexte": "This is not a production installation: no corporate directory, no e-mail delivery, and a certificate your browser cannot verify. Do not enter real data here — it would be protected neither by your corporate accounts nor by a usable backup. Your administrator can complete the installation with “install.sh --assistant”.",
     "bandeau.echeancesEnRetard": "{n} overdue deadline(s)",
     "bandeau.filialeEcriture": "Writing subsidiary: {filiale}.",
     "bandeau.bascule.enAttente": "Some changes have not been saved on the server yet. They belong to the current subsidiary: switching is refused until they have gone through.",

@@ -126,6 +126,22 @@ const Session = (() => {
             perimetreLecture: Object.freeze((source.perimetre_lecture || []).slice()),
             perimetreGroupe: !!source.perimetre_groupe,
             administrationGroupe: !!source.administration_groupe,
+            /* ── LE PROFIL D'INSTALLATION — lot L18.2 b ─────────────────────
+             *
+             * « production » ou « decouverte », tel que `CYBER_GRC_PROFIL` le
+             * dit au serveur. Ce n'est pas l'environnement d'exécution : une
+             * installation de découverte tourne en production, sans annuaire,
+             * sans relais de messagerie et derrière un certificat que personne
+             * ne peut vérifier.
+             *
+             * ⚠️ **Un serveur qui ne dit rien vaut « production », et le
+             * bandeau ne s'affiche donc pas.** C'est le bon sens de la valeur
+             * par défaut : afficher « installation de découverte » sur une vraie
+             * production — parce qu'un serveur ancien ne connaît pas le champ —
+             * apprendrait à ignorer le bandeau, y compris le jour où il dit
+             * vrai. Le serveur, lui, refuse de démarrer sur une valeur inconnue :
+             * c'est LÀ que le silence est interdit, pas ici. */
+            profil: (source.installation && source.installation.profil) || "production",
             provisoire: !!(source.authentification && source.authentification.provisoire),
             descriptionAuth: (source.authentification && source.authentification.description) || "",
             schemaVersion: source.schema_version || null,
@@ -200,8 +216,16 @@ const Session = (() => {
         return etat.utilisateur || "";
     }
 
+    /**
+     * Cette installation est-elle une installation de DÉCOUVERTE ?
+     *
+     * Rendu **faux tant que la session n'est pas chargée** : le bandeau ne doit
+     * pas clignoter au démarrage, et une absence de réponse n'est pas un aveu.
+     */
+    function estDecouverte() { return etat !== null && etat.profil === "decouverte"; }
+
     return {
-        charger, adopter, oublier, courante, chargee,
+        charger, adopter, oublier, courante, chargee, estDecouverte,
         libelleFiliale, libelleUtilisateur, purgerRestesNavigateur
     };
 })();
