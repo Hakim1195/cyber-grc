@@ -54,7 +54,7 @@
 > | **S4** | V3 · L5 | 1 | ❌ refusée — 10 constats, dont un « fuite de données » |
 > | **S5** | V4 — L4, L6 | 1 | ❌ refusée — 13 constats |
 > | **S6** | V6 — L10, L12, L13 | 1 | ❌ refusée — 12 constats |
-> | **S7** | V7 — L11, L14 | **0** | ⬜ **JAMAIS JOUÉE — elle reste due** |
+> | **S7** | V7 — L11, L14 | **1** | ❌ **refusée le 09/09/2026 — 27 constats, 7 bloquants, 0 fuite** |
 > | **S8** | V8 — L15 | **6** | ❌ **refusée — condition de mise en service NON remplie** |
 >
 > **Le 6ᵉ passage de S8 est le meilleur du chantier** — 0 bloquant, 4 majeurs, 8 mineurs,
@@ -88,6 +88,20 @@
 >    `install.sh --assistant` (six questions, profil découverte), `install.sh --diagnostic`
 >    (douze sujets, code 0/1/2), [`docs/INSTALLER.md`](docs/INSTALLER.md) (cinq commandes,
 >    aucun renvoi), et **le bandeau 18.2 b livré le 09/09/2026** — voir le point 4.
+> 5. **❌ LA PORTE S7 A ÉTÉ JOUÉE le 09/09/2026, pour la première fois, et REFUSÉE.** Deux
+>    auditeurs indépendants, périmètres exclusifs (L11 les catalogues, L14 la documentation) :
+>    **27 constats — 7 bloquants, 11 majeurs, 9 mineurs, 0 fuite de données.** ⚠️ **Elle a
+>    démontré son propre motif** : *aucun* de ces 27 constats ne faisait rougir quoi que ce
+>    soit. Côté **L11**, les 93 titres anglais de l'Annexe A **sont les intitulés officiels
+>    ISO** et le fichier l'écrit lui-même — l'exact inverse du `PLAN_SERVEUR` §4.2, cadrage
+>    clos avec le client ; et la prémisse du §4.2 (« les textes français sont des
+>    reformulations originales ») est **fausse pour AirCyber**, 55 % du volume, engendré
+>    depuis un CSV client. Côté **L14**, les guides envoient l'exploitant vers un **groupe
+>    d'annuaire qui n'existe pas** et un **écran qui n'existe pas**, et promettent au DPO une
+>    minimisation du journal que la base ne tient pas. ✅ **Ce qui tient** : couverture
+>    424/424 sans trou, **NIS2 et DORA conformes au droit de l'Union**, **ANSSI sous Licence
+>    Ouverte Etalab** — et son fichier anglais **refuse explicitement** de recopier les
+>    titres officiels : la bonne réponse existait dans le dépôt, à côté des deux fichiers ISO.
 > 3. **✅ Q-251 est FERMÉ le 09/09/2026** — l'essai de rapport de temps ne mesure plus un
 >    rapport entre deux grandeurs d'une milliseconde : chaque côté est joué **R fois dans un
 >    seul chronométrage**, R calibré à l'exécution. ⚠️ **« Grossir les tailles » a été
@@ -119,8 +133,10 @@
 > |---|---|---|
 > | ~~1~~ | ~~**18.2 b — le bandeau « installation de découverte »**~~ | ✅ **LIVRÉ le 09/09/2026.** Gardé barré, pas effacé : c'est la **onzième livraison** que le 7ᵉ passage de S8 devra examiner, et une ligne effacée est une livraison qu'on oublie de déclarer |
 > | ~~1~~ | ~~**Q-251** — l'essai de rapport de temps~~ | ✅ **FERMÉ le 09/09/2026**, et **pas** par « grossir les tailles » : le lecteur refuse un classeur au-delà de ~3,5 Mio décompressés, donc la grande taille franchirait le plafond et l'essai mesurerait un tout autre refus. C'est le **travail** qui a été grossi — R passes dans un seul chronométrage, R calibré à l'exécution. Seuil inchangé |
-> | **1** | **Jouer la porte S7**, jamais jouée | Relecture métier, paraphrase des catalogues (droit d'auteur). **Aucun échec ne la signale** : c'est le point le plus facile à manquer |
+> | ~~1~~ | ~~**Jouer la porte S7**~~ | ✅ **JOUÉE le 09/09/2026, et REFUSÉE** — 27 constats (**7 bloquants**), 0 fuite de données. ⚠️ **Elle a démontré son propre motif** : aucun des 27 ne faisait rougir quoi que ce soit. *Aucun échec ne la signalait*, et c'est vérifié |
+> | **1** | **Traiter les 7 bloquants de S7** | **Q-252 · Q-253 · Q-255** (droit d'auteur des catalogues ISO et AirCyber — **deux exigent un arbitrage de l'utilisateur**) et **Q-264 · Q-265 · Q-266 · Q-267** (les guides décrivent un produit qui n'est pas celui qui tourne). Registre au `docs/PLAN_EXECUTION.md` §7 |
 > | **2** | **Rejouer S8 — 7ᵉ passage** | **Onze livraisons** n'ont vu aucun auditeur indépendant depuis le 6ᵉ passage : D2, D1·D4·D5, l'intégrité, Q-248, Q-250, les trois de L18, **et 18.2 b** |
+> | **3** | Le reste des constats de **S7** (Q-254, Q-256 → Q-263, Q-268 → Q-278) | ⚠️ **Deux se ferment ENSEMBLE avec un constat plus ancien** : **Q-272** promet dans le guide la propriété que **Q-243** dit absente — la troncature de queue du journal. Corriger un seul des deux endroits laisserait le produit se contredire |
 > | **3** | Les constats ouverts : **Q-243, Q-247, Q-234 → Q-244, Q-205 b, Q-206, Q-214 b·c·d·f** | Registre au `docs/PLAN_EXECUTION.md` §7, **seule source** |
 >
 > **Après les portes seulement** : L16-D3 (la recherche), **L18 bis** (le jeu de

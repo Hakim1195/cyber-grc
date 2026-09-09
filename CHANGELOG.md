@@ -31,6 +31,79 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'ont été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
 > jamais ce qu'il ne regarde pas.*
 
+### ❌ La porte S7 est jouée pour la première fois, et refusée
+
+Elle restait due depuis le 05/09. Deux auditeurs indépendants, aux **périmètres exclusifs** —
+L11 les catalogues traduits, L14 la documentation —, dont aucun n'avait écrit les lignes
+qu'il examinait. **27 constats : Q-252 → Q-263 et Q-264 → Q-278. 🛑 7 bloquants · 🟠 11
+majeurs · 🔵 9 mineurs. Aucun de la classe « fuite ou perte de données ».**
+
+⚠️ **Ce que cette porte démontre avant tout, c'est qu'elle aurait dû être jouée le 05/09.**
+*Aucun* de ces 27 constats ne fait rougir quoi que ce soit : le banc était vert, et l'est
+resté pendant quatre jours pendant que le produit portait une exposition juridique et que
+ses guides envoyaient l'exploitant vers un groupe d'annuaire et un écran **qui n'existent
+pas**. Le `CLAUDE.md` l'annonçait — *« aucun échec ne la signale, c'est le point le plus
+facile à manquer »* — et c'est maintenant vérifié plutôt que craint.
+
+**L11 — le droit d'auteur.** Le `PLAN_SERVEUR` §4.2, cadrage clos avec le client, impose de
+*« traduire en paraphrasant délibérément, jamais littéralement »*, parce qu'une reformulation
+fidèle d'un intitulé de l'Annexe A converge vers le titre officiel ISO, qui est le texte
+protégé. `js/data/en/ref_iso27002.js` fait **l'inverse, et l'écrit dans son propre en-tête** :
+« les intitulés ont été vérifiés contre plusieurs sources concordantes plutôt que devinés ».
+La forme le confirme sans qu'on ait besoin du texte de la norme — 7.2 « Contrôle des accès
+physiques » devient « **Physical entry** », plus court que le français ; 8.20 devient
+« **Networks security** », pluriel agrammatical conservé tel quel. Le défaut n'est pas
+d'abord juridique : **une décision de cadrage close a été renversée par un agent
+d'implémentation, en toutes lettres, sans que rien ni personne n'arbitre.**
+
+Deux constats vont plus loin. Sur les **chapitres 4 à 10 d'ISO 27001**, L11 a *supprimé* la
+reformulation française : « Fournir les ressources nécessaires au SMSI » est devenu
+« **Resources** » — convergence vers le texte protégé, **et** une exigence réduite à un
+substantif nu dans une grille d'évaluation. Et la **prémisse même du §4.2** — « les textes
+français sont des reformulations originales, ce qui protège le produit » — est **fausse pour
+AirCyber**, 55 % du volume : `ref_aircyber.js` déclare « généré depuis l'export CSV du
+questionnaire », et la mesure le confirme (titres de 164 signes de moyenne contre 28 à 46
+ailleurs, 188 doubles espaces, une question commençant au milieu d'un mot). Le verbatim
+français est **préexistant** ; l'œuvre dérivée anglaise est **introduite par L11**.
+
+**L14 — les guides décrivent un produit qui n'est pas celui qui tourne**, à quatre endroits
+mesurables. `GRC-GROUPE-ADMIN` n'existe nulle part ailleurs que dans le guide : un
+administrateur d'annuaire qui le suit crée le groupe, y place le compte d'administration, et
+**ce compte entre sans aucun droit** — `resolution.ts` ne décompose pas les noms, il les
+cherche en base. L'écran « Administration » n'existe pas non plus, alors qu'il est le **seul
+chemin donné** pour intégrer une société rachetée — le cas d'usage que le client qualifie de
+décisif ; les routes existent côté serveur, sans interface, et le guide ne dit pas comment
+les appeler. Le guide promet au DPO que « les suppressions conservent le différentiel, pas
+l'enregistrement entier » : `CONVENTIONS.md` §29.4 dit l'inverse, et la base stocke **13
+clés sur 16 colonnes**. Enfin « STARTTLS est exigé, aucun repli en clair » est donné comme
+la réponse à faire à un RSSI, alors que `SMTP_CHIFFREMENT=aucun` est une valeur acceptée.
+
+**✅ Ce qui tient, et il faut le dire.** La couverture de traduction est irréprochable —
+424/424, zéro chaîne vide, zéro traduction orpheline. **NIS2 et DORA sont conformes au
+droit** : ce sont des actes de l'Union, à 24 versions authentiques, et l'écart avec le §4.2
+y est *assumé et motivé* — c'est le **cadrage** qui aurait dû prévoir l'exception. **ANSSI
+est sous Licence Ouverte v2.0 Etalab**, vérifié, et `en/ref_anssi.js` **refuse explicitement
+de recopier les titres officiels en argumentant pourquoi** : *le bon modèle existait déjà
+dans le dépôt, à un répertoire des deux fichiers ISO.* Côté guides, le §4 bis (la reprise
+« remplacer » détruit les pièces jointes) est écrit, complet et au bon endroit, deux fois ;
+le §4 quater sur l'intégrité est exact et a été **vu mordre** sur un écart réel ; et « les 23
+entités » est plus juste que le code, qui dit encore « vingt ».
+
+⚠️ **Les rapports nomment ce qu'ils n'ont pas pu mesurer, séparément.** L'auditeur L11 n'a
+ni le texte des normes ISO, ni le questionnaire AirCyber officiel : **aucune conclusion ne
+repose sur un diff**, seulement sur ce que le dépôt déclare de lui-même et sur la divergence
+FR→EN mesurée. L'auditeur L14 a joué **34 commandes** et refusé les destructives, en le
+disant ligne par ligne.
+
+**Vérifié par l'orchestrateur, et non repris au mot** : les sept bloquants ont été
+recontrôlés un par un — `GRC-GROUPE-ADMIN` absent du dépôt, de `groupes-ad.sh` et de
+l'annuaire ; les deux seules occurrences de `api/filiales` dans la SPA sont des
+**commentaires**, dont un qui affirme encore que la route « n'existe pas encore » ; `§29.4`
+dit bien « l'enregistrement supprimé » ; `SMTP_CHIFFREMENT` accepte bien `aucun`. Une nuance
+a été ajoutée au registre contre le rapport (**Q-257**) : l'assertion `assert.ok(faits >= 0)`
+qu'il pointe est **délibérée et commentée**, et y mettre un seuil de couverture traiterait le
+mauvais défaut — ce qui manque est un garde du **critère**, pas du volume.
+
 ### Q-251 — un essai intermittent est un essai qu'on cesse de lire
 
 **Le symptôme.** `test/import/lecture.test.mjs` rougissait une fois sur deux au banc
