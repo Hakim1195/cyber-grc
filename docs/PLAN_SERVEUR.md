@@ -538,10 +538,29 @@ traduction spécialisée, relue par quelqu'un qui connaît le domaine, parce qu'
 
 **Deux points de vigilance :**
 
-- **Droit d'auteur.** Les textes français sont des reformulations originales, ce qui protège le
-  produit. En anglais, une reformulation fidèle d'un intitulé de l'Annexe A converge très vite
-  vers le titre officiel ISO — qui est précisément le texte protégé. Traduire en **paraphrasant
-  délibérément**, jamais littéralement.
+- **Droit d'auteur.** ⚠️ **AMENDÉ LE 09/09/2026 PAR L'UTILISATEUR, après la porte S7. Ne pas
+  re-débattre : appliquer.** Le texte d'origine est conservé ci-dessous, barré, parce que la
+  porte S7 s'est appuyée sur lui et que le retirer rendrait ses constats illisibles.
+
+  ~~Les textes français sont des reformulations originales, ce qui protège le produit. En
+  anglais, une reformulation fidèle d'un intitulé de l'Annexe A converge très vite vers le titre
+  officiel ISO — qui est précisément le texte protégé. Traduire en **paraphrasant délibérément**,
+  jamais littéralement.~~
+
+  **Ce qui s'applique désormais, et il faut distinguer trois régimes que le texte d'origine
+  confondait :**
+
+  | Source | Régime | Ce qu'on fait |
+  |---|---|---|
+  | **ISO/IEC 27001 et 27002** | normes vendues sous licence | ✅ **On ASSUME l'usage du vocabulaire normatif** pour les **intitulés** — un auditeur lit « Segregation of duties », pas une périphrase, et un outil qui invente ses propres mots lui coûte du temps. ⚠️ **La limite ne bouge pas** : les **intitulés** seulement. Le **texte normatif des mesures** (l'énoncé de l'exigence, ses recommandations de mise en œuvre) **ne se reproduit pas**, en aucune langue. Le catalogue **français reste une reformulation** — il l'est, ne pas le « rattraper » |
+  | **NIS2, DORA, et tout acte de l'Union** | actes législatifs, 24 versions authentiques | ✅ **Aucune contrainte de paraphrase.** Le texte d'origine ne prévoyait pas l'exception, et la porte S7 a constaté que les catalogues concernés étaient **conformes au droit** tout en étant en écart avec ce §4.2 — c'était le **cadrage** qui avait tort |
+  | **ANSSI (Guide d'hygiène)** | Licence Ouverte v2.0 Etalab, vérifiée à la porte S7 | Réutilisation permise avec mention de la source. Le catalogue **reformule quand même**, délibérément, et son fichier anglais argumente pourquoi — c'est un choix de qualité, pas une obligation |
+  | **AirCyber / BoostAerospace** | questionnaire d'un **consortium privé** | ⚠️ **RESTE OUVERT — c'est le seul point bloquant du sujet.** Voir le constat **Q-255** : le catalogue français n'est **pas** une reformulation, c'est l'export CSV du questionnaire, et le dépôt ne porte **aucune trace de licence, de cession ou d'autorisation**. La question appartient au client, qui est la source du CSV |
+
+  ⚠️ **Une conséquence de l'amendement, à ne pas manquer** : la mention affichée en anglais
+  « *Titles are reworded* » devenait **fausse** et a été corrigée le 09/09 (constat **Q-254**).
+  La mention **française** « Intitulés reformulés », elle, **reste vraie et n'a pas été
+  touchée** — les deux catalogues ne suivent pas la même règle, et c'est désormais assumé.
 - **Économie possible** : le questionnaire AirCyber (234 questions) existe probablement déjà en
   anglais dans la filière aéronautique. **À demander au client** — cela supprimerait à soi seul
   un sixième du volume.

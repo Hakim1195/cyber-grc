@@ -31,6 +31,51 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'ont été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
 > jamais ce qu'il ne regarde pas.*
 
+### Arbitrage du 09/09/2026 — on assume le vocabulaire normatif ISO
+
+**Tranché par l'utilisateur** après la porte S7, sur les constats Q-252 et Q-253. **Ne pas
+re-débattre : appliquer.** Pour les **intitulés** des catalogues ISO, le produit emploie la
+terminologie de la norme. Le motif est bon et il est de métier : un auditeur lit
+« Segregation of duties », pas une périphrase, et un outil qui invente ses propres mots lui
+coûte du temps sur chaque ligne.
+
+**Le `PLAN_SERVEUR` §4.2 est amendé en conséquence**, le texte d'origine conservé **barré** —
+la porte S7 s'est appuyée sur lui, et le retirer rendrait ses constats illisibles. Et il
+distingue désormais **trois régimes là où il n'en voyait qu'un**, ce que la porte avait
+justement reproché au cadrage lui-même :
+
+- **ISO 27001 / 27002** — vocabulaire normatif assumé pour les **intitulés seulement**. ⚠️ La
+  limite ne bouge pas, et c'est ce qui rend l'arbitrage tenable : le **texte normatif** des
+  mesures ne se reproduit en aucune langue, et le catalogue **français reste une
+  reformulation** — il ne faut surtout pas le « rattraper » par symétrie.
+- **NIS2, DORA et tout acte de l'Union** — aucune contrainte de paraphrase. Le §4.2 ne
+  prévoyait pas l'exception ; c'était le **cadrage** qui avait tort, pas le lot.
+- **ANSSI** — Licence Ouverte Etalab. La reformulation y reste un choix de qualité, pas une
+  obligation.
+
+**Deux conséquences que l'arbitrage rend obligatoires, et non facultatives :**
+
+**Q-254 est fermé, et il ne pouvait plus rester ouvert.** Le produit affichait en anglais
+« *Titles are reworded* » : assumer le vocabulaire normatif, c'est aussi cesser de prétendre
+le contraire à l'écran. Les deux aides anglaises disent désormais que les intitulés suivent
+la terminologie de la norme et que le texte normatif n'est pas reproduit. ⚠️ **La mention
+française « Intitulés reformulés » n'a PAS été touchée : elle est vraie.** Les deux
+catalogues ne suivent plus la même règle, et le §4.2 amendé l'écrit — sans quoi la prochaine
+session corrigerait le français par symétrie.
+
+**Q-253 ne se ferme qu'à moitié**, et la moitié qui reste n'a rien de juridique. Sur huit
+chapitres d'ISO 27001, L11 a réduit l'exigence à un substantif nu : « Resources »,
+« Competence », « Awareness », « Internal audit ». **Une exigence réduite à un substantif est
+inutilisable dans une grille d'évaluation** — elle ne dit pas à l'évaluateur ce qu'on lui
+demande de coter, là où le français le dit. Le constat passe de 🛑 à 🟠 et reste ouvert : il
+faut rendre le verbe en gardant la tête normative (« Provide the resources needed for the
+ISMS »), et non revenir à une périphrase.
+
+⚠️ **AirCyber n'est pas couvert par cet arbitrage** et reste le seul point bloquant du sujet :
+voir Q-255. Ce n'est pas une question de formulation — c'est l'absence, dans le dépôt, de
+toute trace de licence sur un questionnaire de consortium privé dont le catalogue français
+est un export CSV verbatim.
+
 ### ❌ La porte S7 est jouée pour la première fois, et refusée
 
 Elle restait due depuis le 05/09. Deux auditeurs indépendants, aux **périmètres exclusifs** —

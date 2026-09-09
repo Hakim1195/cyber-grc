@@ -53,7 +53,7 @@ Referentiels.registerTraduction("iso27001-smsi", "en", {
     version: "Clauses 4-10 · ISMS",
     nom: "ISO/IEC 27001:2022 — Management system",
     description: "The requirements for the information security management system (ISMS) of ISO/IEC 27001:2022 — clauses 4 to 10: context, leadership, planning, support, operation, performance evaluation and improvement. These are the requirements a clause 9.2 audit checks, alongside the Annex A controls.",
-    aide: "Where Annex A lists security controls (from which the Statement of Applicability selects), clauses 4 to 10 are the MANDATORY management system requirements: they describe how security is steered over time (PDCA). Titles are reworded — refer to the official standard for the exact text.",
+    aide: "Where Annex A lists security controls (from which the Statement of Applicability selects), clauses 4 to 10 are the MANDATORY management system requirements: they describe how security is steered over time (PDCA). Clause titles follow the standard's own terminology; the normative text of the requirements is not reproduced — refer to ISO/IEC 27001:2022 for it.",
 
     domaines: {
         c4: {

@@ -53,7 +53,7 @@
 Referentiels.registerTraduction("iso-27002-2022", "en", {
     version: "Annex A · 93 controls",
     description: "Annex A controls of ISO/IEC 27001:2022, the certifiable standard for an information security management system (ISMS). Arranged in 4 themes (organizational, people, physical, technological).",
-    aide: "ISO/IEC 27001 is the certifiable ISMS standard. Its Annex A lists 93 controls, from which the Statement of Applicability (SoA) selects those that apply to treat the identified risks. Titles are reworded — refer to the official standard for the exact text.",
+    aide: "ISO/IEC 27001 is the certifiable ISMS standard. Its Annex A lists 93 controls, from which the Statement of Applicability (SoA) selects those that apply to treat the identified risks. Control titles follow the standard's own terminology, so that an auditor reads the words they expect; the normative text of the controls is not reproduced — refer to ISO/IEC 27001:2022 for it.",
 
     domaines: {
         org: {
