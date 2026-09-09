@@ -8,10 +8,10 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
-> **État mesuré à la révision `e98dc18`**, le 09/09/2026, sur la machine réelle
+> **État mesuré à la révision `74ddf0a`**, le 09/09/2026, sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
 > **PostgreSQL 17.11**) — **arbre propre, pas répertoire de travail** : `npm test` →
-> **1812 essais, 1812 passés, 0 échec**,
+> **1816 essais, 1816 passés, 0 échec**,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` → **107 contrôles, 107 réussis, 0 échoué**,
 > `f_verifier_schema()` → **0 anomalie** (**17 garde-fous consignés**, **20 migrations**,
