@@ -266,7 +266,7 @@ de GRC complet et efficient — pas un prototype qu'on ménage.
 | **GitHub par SSH** | ✅ clé `~/.ssh/id_ed25519` | `ssh -T git@github.com` → « Hi Hakim1195/cyber-grc! You've successfully authenticated » ; distant `git@github.com:Hakim1195/cyber-grc.git` |
 | **PostgreSQL 17** | ✅ **déjà installé**, PGDG | `psql --version` → **17.11 (Debian 17.11-1.pgdg13+2)** ; cluster `17/main` en ligne sur 5432. `deploy/install.sh` l'installe déjà (`postgresql-17 postgresql-client-17` depuis PGDG) — **rien à faire de ce côté** |
 | **Active Directory simulé** | ✅ conteneur Docker `grc-ad`, **modifiable** | `sudo docker exec grc-ad samba-tool user list` → 12 comptes ; `samba-tool group addmembers` fonctionne. **Vous pouvez y créer les comptes, groupes et unités d'organisation dont vos essais ont besoin** |
-| **Playwright + Chromium** | ✅ installés | `/opt/pw-browsers/chromium-1234` ; Playwright global sous `/opt/node22/lib/node_modules/` |
+| **Playwright + Chromium** | ✅ installés | Chromium à `/opt/pw-browsers/chromium-1234` ; **Playwright global sous `/usr/lib/node_modules/`** (`npm root -g`). ⚠️ **Ce tableau annonçait `/opt/node22/lib/node_modules/` — un chemin QUI N'EXISTE PAS sur cette machine** (constat **Q-288**, 7ᵉ passage de la porte S8). Rien n'était cassé : `test/aide/navigateur.mjs` **découvre** Playwright au lieu de le coder en dur, précisément à cause du constat Q-80. Mais **c'est le §0 de ce fichier qui interdit d'affirmer sans mesurer**, et il portait lui-même une affirmation non mesurée |
 | **ClamAV** | ✅ actif | `systemctl is-active clamav-daemon` → `active` |
 | **Sortie SMTP vers Microsoft 365** | ✅ **fonctionne** | port 587 vers `smtp.office365.com` → bannière **`220 … Microsoft ESMTP MAIL Service ready`**. Cela répond, **pour ce VPS**, à la vérification du `PLAN_SERVEUR` §9 ; la VM du client reste à vérifier séparément |
 | **La recette complète** | ✅ en ligne en permanence | `systemctl is-active cyber-grc apache2 postgresql` ; `https://grc.exemple.interne/` → 200 |
@@ -529,8 +529,12 @@ cyber-gouvernance_V4/
   serveur. Le banc d'essai monte exactement cela : `backend/test/aide/navigateur.mjs` sert
   `cyber-gouvernance_V4/` **tel quel** et relaie `/api/**` vers l'instance Fastify réelle —
   c'est le montage à reprendre plutôt qu'à réinventer.
-- **Tests headless** : Node + Playwright global à `/opt/node22/lib/node_modules/playwright`,
-  Chromium à `/opt/pw-browsers`. Les tests navigateur **vivent désormais dans le dépôt**
+- **Tests headless** : Node + Playwright global — **relevez son chemin plutôt que de le
+  recopier** : `npm root -g` (aujourd'hui `/usr/lib/node_modules`, et non
+  `/opt/node22/lib/node_modules` qu'annonçait ce paragraphe — constat **Q-288**). Chromium à
+  `/opt/pw-browsers`. ⚠️ **Le banc, lui, ne recopie aucun chemin : il DÉCOUVRE** — c'est le
+  remède du constat Q-80, et c'est pour cela que rien n'a cassé pendant que ce fichier disait
+  faux. Les tests navigateur **vivent désormais dans le dépôt**
   (`backend/test/navigateur/`, joués par `npm test`) : la porte S2 a constaté qu'il n'en
   existait aucun alors que ce paragraphe les impose depuis le début du projet, et que
   **six de ses constats, dont les trois bloquants, ne se voient que là**. Les scripts

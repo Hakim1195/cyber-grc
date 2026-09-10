@@ -3972,6 +3972,23 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // il donne à croire que le cas est couvert* — et le verdict vert de celui-ci
       // avait été cité comme preuve que D2 tenait, dans trois documents.
       'declencheurs_pieces_evenement',
+      // VINGT-DEUXIÈME, apporté par `024_le_dispositif_integrite_a_son_garde.sql` —
+      // constat **Q-289** : la migration `020` était **la seule des quatre** à n'apporter
+      // aucun garde-fou, alors que la vérification d'intégrité repose sur deux colonnes et
+      // deux contraintes de `pieces_jointes`. Si l'une disparaît, le balayage écrit dans le
+      // vide et la route rend un verdict qu'aucune colonne ne retient — **sans que personne
+      // le sache**. ⚠️ Il ne vérifie PAS le minuteur `cyber-grc-reanalyse.timer` : un
+      // garde-fou de schéma interroge `pg_catalog`, et l'état d'une unité systemd n'y est
+      // pas. C'est `install.sh --diagnostic` qui le mesure, sujet n° 14.
+      'dispositif_integrite',
+      // VINGT-TROISIÈME, apporté par `025_un_ecart_ne_fait_plus_foi.sql` — constat
+      // **Q-285** : le dispositif de la `020` CONSTATAIT qu'un fichier ne correspond plus
+      // à son empreinte, l'inscrivait, sortait en code 1 — et la pièce continuait de
+      // porter « en vigueur », c'est-à-dire de FAIRE FOI. ⚠️ La délivrance n'est pas
+      // touchée : un écart est une alerte, pas une mise sous scellés, et l'exploitant doit
+      // pouvoir aller voir ce que le fichier est devenu. ⚠️ Le garde vérifie le CONTENU de
+      // la contrainte, pas seulement son nom — leçon de Q-281.
+      'ecart_ne_fait_pas_foi',
       'entropie_identifiants',
       // DIXIÈME, apporté par `008_journal_lecture.sql` : il vérifie que la politique de
       // lecture du journal est bien cloisonnée (condition E6). La liste a rougi en

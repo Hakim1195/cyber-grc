@@ -1182,6 +1182,58 @@ SQL
     fi
   done
 
+  # ── 13. Quarantaine ───────────────────────────────────────────────────────
+  #
+  # Constat Q-290, 7ᵉ passage de la porte S8 : la quarantaine croît sans que
+  # personne n'en rende compte. Mesuré par l'auditeur : **4 fichiers sur le
+  # disque, 1 ligne en base** — les trois autres, hérités de passages
+  # précédents, n'ont plus de ligne.
+  #
+  # ⚠️ **Ce n'est pas un défaut du dispositif, et le diagnostic ne doit pas le
+  # présenter comme tel.** Un fichier de quarantaine n'est JAMAIS effacé — c'est
+  # voulu, et la migration `017` prend soin de le préserver au travers de la file
+  # de purge : on ne détruit pas une pièce à conviction parce que son
+  # enregistrement a disparu. Ce qui manquait est le **compte rendu** : *un
+  # magasin de preuves dont personne ne dit le contenu finit par n'être plus un
+  # magasin de preuves.*
+  #
+  # Le contrôle DIT, il ne juge pas — sauf sur le volume, où un magasin qui
+  # enfle sans qu'on le regarde finit par saturer le disque de la VM.
+  QUARANTAINE="$DONNEES/quarantaine"
+  if [[ -d "$QUARANTAINE" ]]; then
+    QN="$(find "$QUARANTAINE" -type f 2>/dev/null | wc -l || echo 0)"
+    QO="$(du -sh "$QUARANTAINE" 2>/dev/null | cut -f1 || echo '?')"
+    if [[ "$QN" -eq 0 ]]; then
+      diag_ok "quarantaine" "aucun fichier en quarantaine"
+    elif [[ "$QN" -ge 500 ]]; then
+      diag_reserve "quarantaine" "$QN fichier(s) en quarantaine ($QO)" \
+        "Un magasin de preuves qui enfle sans qu'on le regarde finit par saturer le disque. Rapprochez-le de la base, puis archivez hors ligne ce qui a été traité — un fichier de quarantaine ne s'efface pas à la légère."
+    else
+      diag_ok "quarantaine" "$QN fichier(s) en quarantaine ($QO) — conservés à dessein, jamais effacés"
+    fi
+  else
+    diag_ok "quarantaine" "aucune quarantaine constituée à ce jour"
+  fi
+
+  # ── 14. Ré-analyse périodique ─────────────────────────────────────────────
+  #
+  # Constat Q-289 : le garde-fou de schéma vérifie que les colonnes et les
+  # contraintes du dispositif d'intégrité existent — il ne peut PAS vérifier
+  # qu'une unité systemd tourne, `pg_catalog` ne la connaît pas. C'est ici que
+  # cela se mesure, et nulle part ailleurs.
+  if systemctl list-unit-files cyber-grc-reanalyse.timer >/dev/null 2>&1; then
+    if [[ "$(systemctl is-active cyber-grc-reanalyse.timer 2>/dev/null || true)" == "active" ]]; then
+      PROCHAINE="$(systemctl show cyber-grc-reanalyse.timer -p NextElapseUSecRealtime --value 2>/dev/null || true)"
+      diag_ok "ré-analyse" "minuteur armé${PROCHAINE:+ (prochain passage : $PROCHAINE)}"
+    else
+      diag_reserve "ré-analyse" "cyber-grc-reanalyse.timer inactif" \
+        "Ni la ré-analyse antivirale des pièces déjà déposées, ni le rapprochement d'intégrité (migration 020) ne s'exécutent : systemctl enable --now cyber-grc-reanalyse.timer"
+    fi
+  else
+    diag_reserve "ré-analyse" "cyber-grc-reanalyse.timer absent" \
+      "Rejouez install.sh : le minuteur est posé par le §6 du script."
+  fi
+
   # ── Bilan ─────────────────────────────────────────────────────────────────
   printf '\n'
   if   [[ $DIAG_BLOQUANT -gt 0 ]]; then
@@ -1194,7 +1246,7 @@ SQL
     exit 1
   fi
   info "Bilan : $DIAG_OK conforme(s), 0 réserve, 0 bloquant"
-  succes "Installation conforme : douze sujets contrôlés, $DIAG_OK verdicts."
+  succes "Installation conforme : quatorze sujets contrôlés, $DIAG_OK verdicts."
   alerte "⚠️ Un diagnostic vert NE VAUT PAS passage de porte : il constate une machine,"
   alerte "   il n'éprouve ni le cloisonnement sous sondes hostiles, ni les catalogues."
   exit 0

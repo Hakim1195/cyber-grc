@@ -755,7 +755,7 @@ la comparaison au marché du 08/09/2026.
 **Mesuré à la révision `385005d`** : `npm test` → **1834 essais, 1834 passés** ;
 `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **107/107** ; `f_verifier_schema()`
-→ 0 anomalie, **21 garde-fous consignés**, **23 migrations**, **50 tables**.
+→ 0 anomalie, **23 garde-fous consignés**, **25 migrations**, **50 tables**.
 
 | Lot | État |
 |---|---|
@@ -925,14 +925,14 @@ npm test                                         → tests 1834 · pass 1834 · 
                                                    journal 19
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (21 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (23 garde-fous découverts, joués, consignés)
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **50 tables** en
-**23 migrations**, **200 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**25 migrations**, **200 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **74 clés étrangères** (45 `restrict`, 27 `cascade`, 2 `set null`), **44 tables portant
 `cree_par` et 44 déclencheurs de création**, **12 clés étrangères composites** visant
-`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **21 contrôles consignés**
+`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **23 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1212,7 +1212,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **50 tables**, obtenues aujourd'hui en **23 migrations** appliquées de bout en bout par
+- **50 tables**, obtenues aujourd'hui en **25 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
