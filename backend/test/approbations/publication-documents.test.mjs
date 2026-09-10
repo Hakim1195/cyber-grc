@@ -208,3 +208,213 @@ describe('D5 — « en validation » ne devient pas « en vigueur » sans le cir
     assert.equal(await statutEnBase(doc.id), 'en vigueur');
   });
 });
+
+/* =====================================================================
+ *  Q-280 — les deux voies que l'auditeur a empruntées
+ * =====================================================================
+ *
+ * La migration `019` écrivait dans son propre en-tête qu'elle fermait le cas
+ * *« un circuit existe pour ce document, quel que soit son statut : **on ne le
+ * contourne pas en repassant par “brouillon”** »*. Le 7ᵉ passage de la porte S8
+ * a montré qu'on le contournait quand même.
+ *
+ * ── VOIE 1 — deux gestes, et elle était réelle ──────────────────────────────
+ *
+ * La condition était `v_dernier_tour is null AND old.statut is distinct from
+ * 'en validation'` : sa seconde moitié ne s'armait que s'il existait **au moins
+ * une ligne** dans `approbations`. Un document déclaré « en validation »
+ * **avant qu'aucune étape n'ait été prononcée** se publiait donc en repassant
+ * par « brouillon » — et le journal gardait le refus et le contournement à
+ * trois lignes d'écart. Ce qui manquait était une **mémoire** : le déclencheur
+ * ne regardait que l'état PRÉCÉDENT, et « brouillon » l'effaçait.
+ * Migration `023`, colonne `validation_engagee`, que rien ne remet à faux.
+ *
+ * ── VOIE 2 — et ici je diverge du rapport, mesure à l'appui ─────────────────
+ *
+ * Le rapport présente `POST /api/reprise` créant une PSSI « en vigueur » sans
+ * approbation comme une seconde voie de contournement, « pire » que la
+ * première. **Ce n'en est pas une**, et c'est mesurable en une requête : la
+ * route ordinaire `POST /api/entites/documents` avec `statut: "en vigueur"`
+ * rend **201** — voir le §3 ci-dessous. Le produit **n'impose pas de circuit à
+ * tout document**, c'est le cadrage de D5, et la reprise ne fait qu'user de la
+ * même liberté.
+ *
+ * ⚠️ **La barrière à l'INSERTION a néanmoins été posée, parce qu'elle ferme un
+ * cas RÉEL que le rapport n'avait pas isolé** : restaurer un document qui, lui,
+ * **avait engagé son circuit** — et le faire revenir « en vigueur » sans
+ * approbation. Le §4 le mesure.
+ *
+ * ⚠️ **Et elle est DIFFÉRÉE, ce qui n'est pas un détail** : une reprise
+ * restaure un jeu entier, et les approbations peuvent arriver **après** les
+ * documents. Immédiate, la barrière refuserait une restauration parfaitement
+ * saine — elle casserait la fonction la plus critique du produit pour fermer un
+ * contournement. Le §5 tient cette moitié.
+ */
+describe('Q-280 — la barrière de publication ferme ses deux voies', () => {
+  test('§1 VOIE 1 : « en validation » → « brouillon » → « en vigueur » est REFUSÉ', async () => {
+    const doc = await creerDocument({
+      titre: 'PSSI — essai Q-280 voie 1',
+      type: 'Politique de sécurité (PSSI)',
+      statut: 'brouillon',
+    });
+
+    // On engage le circuit SANS prononcer une seule étape : c'est le cas que la
+    // rédaction précédente laissait passer, faute de ligne dans `approbations`.
+    const enValidation = await poserStatut(doc, 'en validation');
+    assert.equal(enValidation.statut, 200, JSON.stringify(enValidation.corps));
+    doc.version = enValidation.corps.enregistrement._version;
+
+    const direct = await poserStatut(doc, 'en vigueur');
+    assert.equal(direct.statut, 409, 'la voie directe doit rester refusée');
+    assert.equal(direct.corps.code_grc, 'GRC06');
+
+    const retour = await poserStatut(doc, 'brouillon');
+    assert.equal(retour.statut, 200, 'revenir en brouillon reste légitime : on abandonne');
+    doc.version = retour.corps.enregistrement._version;
+
+    const contournement = await poserStatut(doc, 'en vigueur');
+    assert.equal(
+      contournement.statut,
+      409,
+      'LE CONTOURNEMENT : repasser par « brouillon » efface l’état précédent, mais pas la ' +
+        'mémoire du circuit engagé (constat Q-280, voie 1).',
+    );
+    assert.equal(contournement.corps.code_grc, 'GRC06');
+    assert.equal(await statutEnBase(doc.id), 'brouillon', 'et la base ne doit pas avoir bougé');
+  });
+
+  test('§2 la mémoire ne bloque pas un circuit MENÉ À SON TERME', async () => {
+    // La moitié négative : sans elle, une barrière qui refuse TOUT passerait le §1.
+    const doc = await creerDocument({
+      titre: 'PSSI — essai Q-280, circuit complet',
+      type: 'Politique de sécurité (PSSI)',
+      statut: 'brouillon',
+    });
+    const enValidation = await poserStatut(doc, 'en validation');
+    doc.version = enValidation.corps.enregistrement._version;
+    await menerLeCircuit(doc.id);
+    const publie = await poserStatut(doc, 'en vigueur');
+    assert.equal(publie.statut, 200, JSON.stringify(publie.corps));
+    assert.equal(await statutEnBase(doc.id), 'en vigueur');
+  });
+
+  test('§3 un document qui n’a JAMAIS engagé de circuit se publie librement', async () => {
+    // ⚠️ **C'est ce paragraphe qui réfute la « voie 2 » du rapport.** Le produit
+    // n'impose pas de circuit à tout document — c'est le cadrage de D5 — et la
+    // reprise ne fait qu'user de la même liberté que cette route.
+    const cree = await serveur.appeler('POST', '/api/entites/documents', {
+      corps: {
+        champs: {
+          titre: 'Procédure — publiée sans circuit, et c’est permis',
+          type: 'Procédure',
+          statut: 'en vigueur',
+        },
+      },
+    });
+    assert.equal(
+      cree.statut,
+      201,
+      'Le produit N’IMPOSE PAS de circuit à tout document. Si ce paragraphe rougit, c’est ' +
+        'que la barrière est devenue trop large — et alors « POST /api/reprise crée une PSSI ' +
+        'en vigueur » cesse d’être une comparaison valable.',
+    );
+    assert.equal(await statutEnBase(cree.corps.enregistrement.id), 'en vigueur');
+  });
+
+  test('§4 VOIE 2 réelle : restaurer un document AYANT engagé son circuit est refusé', async () => {
+    // Le cas que le rapport n'avait pas isolé, et le seul qui soit un vrai
+    // contournement à l'insertion : le document porte la mémoire de son
+    // circuit, et revient « en vigueur » sans qu'aucune publication ne soit
+    // approuvée.
+    // ⚠️ **Le `try` entoure `avecPerimetre`, PAS la requête**, et c'est la
+    // nature même d'un déclencheur différé : il ne s'exécute pas à l'`insert`,
+    // il s'exécute au **commit**. La première rédaction attrapait l'exception
+    // autour du `query` et n'en voyait aucune — l'insertion « réussissait »,
+    // puis la validation de la transaction échouait plus loin. Un essai qui
+    // regarde au mauvais instant conclut au mauvais endroit.
+    let insertion = null;
+    try {
+      await base.avecPerimetre(
+        applicatif,
+        { utilisateur: 'reprise', filialeId: FILIALE_A, filiales: [FILIALE_A] },
+        async (c) =>
+          await c.query(
+            `insert into "documents" ("id", "filiale_id", "titre", "type", "statut",
+                                      "validation_engagee", "cree_par")
+             values ($1, $2, 'PSSI restaurée sans approbation', 'Politique de sécurité (PSSI)',
+                     'en vigueur', true, $3)`,
+            [`DOC-${String(Date.now())}-q280restauration`, FILIALE_A, LOGIN],
+          ),
+        { annuler: false },
+      );
+    } catch (e) {
+      insertion = e;
+    }
+    assert.notEqual(insertion, null, 'l’insertion aurait dû être refusée AU COMMIT');
+    assert.equal(
+      insertion.code,
+      'GRC06',
+      `Le refus doit porter le code GRC06 : ${String(insertion?.message)}`,
+    );
+  });
+
+  test('§5 la barrière est DIFFÉRÉE : une reprise saine passe, approbations après documents', async () => {
+    // ⚠️ **La moitié la plus importante du lot.** Une reprise restaure un jeu
+    // entier ; selon l'ordre, les approbations arrivent APRÈS les documents.
+    // Une barrière immédiate refuserait une restauration parfaitement saine —
+    // elle casserait la fonction la plus critique du produit pour fermer un
+    // contournement. Ce paragraphe insère dans le pire ordre possible.
+    const id = `DOC-${String(Date.now())}-q280differe`;
+    const erreur = await base.avecPerimetre(
+      applicatif,
+      { utilisateur: 'reprise', filialeId: FILIALE_A, filiales: [FILIALE_A] },
+      async (c) => {
+        try {
+          await c.query(
+            `insert into "documents" ("id", "filiale_id", "titre", "type", "statut",
+                                      "validation_engagee", "cree_par")
+             values ($1, $2, 'PSSI restaurée AVEC son circuit', 'Politique de sécurité (PSSI)',
+                     'en vigueur', true, $3)`,
+            [id, FILIALE_A, LOGIN],
+          );
+          // Les approbations arrivent APRÈS — c'est tout l'objet du paragraphe.
+          for (const [ordre, etape] of [
+            [1, 'redaction'],
+            [1, 'revue'],
+            [1, 'approbation'],
+            [1, 'publication'],
+          ]) {
+            await c.query(
+              // `acteur_libelle` est exigé dès que la décision est prise
+              // (`ck_approbations_acteur`) : une approbation doit être
+              // attribuable à quelqu'un, et le schéma ne l'oublie pas.
+              `insert into "approbations" ("id", "filiale_id", "objet_type", "objet_id",
+                                           "ordre", "etape", "statut", "acteur_id",
+                                           "acteur_libelle", "date_decision", "cree_par")
+               values ($1, $2, 'document', $3, $4, $5, 'approuve', null, $6, now(), $7)`,
+              // `acteur_id` reste NUL : c'est une clé étrangère vers
+              // `utilisateurs`, et ce paragraphe éprouve l'ORDRE d'insertion,
+              // pas l'annuaire. `acteur_libelle` porte l'attribution, que
+              // `ck_approbations_acteur` exige dès qu'une décision est prise.
+              [
+                `APP-${String(Date.now())}-${etape}`,
+                FILIALE_A, id, ordre, etape, 'RSSI Toulouse', LOGIN,
+              ],
+            );
+          }
+          return null;
+        } catch (e) {
+          return e;
+        }
+      },
+      { annuler: false },
+    );
+    assert.equal(
+      erreur,
+      null,
+      'Une reprise SAINE doit passer, même quand les approbations arrivent après les ' +
+        `documents. La barrière n’est plus différée : ${String(erreur?.message)}`,
+    );
+    assert.equal(await statutEnBase(id), 'en vigueur');
+  });
+});

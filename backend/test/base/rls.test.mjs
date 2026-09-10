@@ -4020,6 +4020,13 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       'substrat_session',
       'tracabilite',
       'unicite_cloisonnee',
+      // VINGT ET UNIÈME, apporté par `023_publication_ferme_ses_deux_voies.sql` — constat
+      // **Q-280**, voie 1 : la MÉMOIRE du circuit engagé (`documents.validation_engagee`)
+      // est bien posée « BEFORE INSERT OR UPDATE OF statut … FOR EACH ROW », armée
+      // « always ». Sans elle, un document déclaré « en validation » AVANT qu'aucune étape
+      // n'ait été prononcée se publiait en repassant par « brouillon » — le déclencheur ne
+      // regardait que l'état PRÉCÉDENT, et « brouillon » l'effaçait.
+      'validation_engagee',
       // VINGTIÈME, apporté par `022_la_version_suit_la_piece.sql` — constat **Q-282**,
       // 7ᵉ passage de la porte S8 : le relais qui recalcule `documents.version_document`
       // depuis la pièce en vigueur se déclenche bien sur « AFTER INSERT OR DELETE OR
