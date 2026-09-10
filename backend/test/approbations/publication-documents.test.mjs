@@ -418,3 +418,103 @@ describe('Q-280 — la barrière de publication ferme ses deux voies', () => {
     assert.equal(await statutEnBase(id), 'en vigueur');
   });
 });
+
+/* =====================================================================
+ *  Q-284 — pourquoi le remède prescrit est REFUSÉ, et ce qui tient à sa place
+ * =====================================================================
+ *
+ * Le 7ᵉ passage de la porte S8 a mesuré **quatre approbations orphelines** et
+ * prescrit d'appliquer à `approbations` la recette de **D2** : un relais dans
+ * la base, sur chaque table porteuse, qui retire les lignes quand leur objet
+ * disparaît. `approbations` est bien le **second lien polymorphe** du schéma, et
+ * la règle du `CONVENTIONS.md` §8.1 semblait s'y appliquer mot pour mot.
+ *
+ * ── LE REMÈDE A ÉTÉ ÉCRIT, APPLIQUÉ, ET IL EST REFUSÉ PAR LA BASE ───────────
+ *
+ * Migration écrite, déployée, essai joué. La suppression a échoué :
+ *
+ *     GRC02 — « Étape d'approbation déjà tranchée (approuve) : la décision est
+ *              irréversible. »
+ *
+ * **Le relais ne peut pas retirer une approbation tranchée, parce que la base
+ * l'interdit** — `trg_approbations_verrou`, lot L8, l'une des promesses
+ * centrales du produit : *une décision d'approbation est irréversible, y compris
+ * pour un administrateur, y compris en SQL*.
+ *
+ * ⚠️ **Et le remède aurait été pire que le mal.** Un relais posé sur les
+ * porteurs aurait fait échouer **toute suppression en cascade** d'un objet
+ * portant une décision — la sortie d'une filiale, par exemple : le déclencheur
+ * aurait tenté de supprimer, le verrou aurait refusé, et la transaction entière
+ * serait tombée. On aurait cassé une opération d'exploitation pour ranger des
+ * lignes.
+ *
+ * ── CE QUI EST VRAI, ET QUI RESTE ───────────────────────────────────────────
+ *
+ * Les deux invariants sont en conflit, et **c'est l'irréversibilité qui gagne** :
+ * effacer une décision détruirait la preuve que le circuit a eu lieu, ce que le
+ * produit existe pour empêcher. Les orphelines ne sont donc pas un défaut de
+ * relais : elles sont la **conséquence assumée** d'une décision indélébile.
+ *
+ * Ce qui reste vrai du constat, et qui est plus étroit : elles sont
+ * **invisibles** — aucune route ne les nomme — et donc **hors de portée de la
+ * purge RGPD**, alors qu'elles portent le nom du décideur et sa date. Le remède
+ * n'est pas la suppression, c'est l'**anonymisation** et la **visibilité**.
+ * Inscrit au registre au constat Q-284.
+ *
+ * ⚠️ **Une erreur d'attribution, corrigée par la mesure, et elle vaut d'être
+ * dite.** J'ai d'abord cru que la route REFUSAIT déjà de supprimer un tel
+ * document : elle rendait **409 GRC02**. C'était **mon propre relais** qui
+ * produisait ce refus — le déclencheur tentait d'effacer, le verrou refusait, et
+ * la transaction tombait. Une fois la migration annulée, la route rend **200**
+ * et **laisse les orphelines** : le constat Q-284 est confirmé tel quel.
+ *
+ * ⚠️ **Ce fichier ne fige donc PAS l'orphelinage comme une propriété.** Ce
+ * serait la sixième occurrence du motif du constat **Q-200** — *un essai qui
+ * mesure un défaut et le consacre comme désirable*. Le constat reste **ouvert**
+ * au registre, avec ses deux issues candidates : anonymiser les décisions
+ * orphelines plutôt que les effacer, ou refuser la suppression d'un objet dont
+ * une décision est indélébile. **Le second change le comportement du produit :
+ * il appartient à l'utilisateur, pas à une session.**
+ *
+ * Ce qui est figé ci-dessous est la propriété VRAIE que la mesure a révélée, et
+ * qui vaut d'être gardée : l'irréversibilité mord jusque dans la base.
+ */
+describe('Q-284 — la décision est indélébile, et c’est ce qui produit les orphelines', () => {
+  test('la base refuse d’effacer une décision, EN SQL : c’est ce qui interdit le relais de D2', async () => {
+    // ⚠️ **C'est ce paragraphe qui a fait renoncer au remède prescrit**, et il
+    // mérite d'être gardé : le jour où quelqu'un relira le constat Q-284 et
+    // voudra « enfin » appliquer la recette de D2, cet essai lui dira en une
+    // ligne pourquoi elle ne s'applique pas — et lui épargnera d'avoir cassé
+    // les suppressions en cascade pour le découvrir.
+    const doc = await creerDocument({
+      titre: 'PSSI — essai Q-284, verrou en SQL',
+      type: 'Politique de sécurité (PSSI)',
+      statut: 'brouillon',
+    });
+    await menerLeCircuit(doc.id);
+
+    let refus = null;
+    try {
+      await base.avecPerimetre(
+        applicatif,
+        { utilisateur: 'menage', filialeId: FILIALE_A, filiales: [FILIALE_A] },
+        async (c) =>
+          await c.query(
+            "delete from approbations where objet_type = 'document' and objet_id = $1",
+            [doc.id],
+          ),
+        { annuler: false },
+      );
+    } catch (e) {
+      refus = e;
+    }
+    assert.notEqual(refus, null, 'la base doit refuser d’effacer une décision tranchée');
+    assert.equal(
+      refus.code,
+      'GRC02',
+      'L’irréversibilité d’une décision d’approbation est une promesse centrale du lot L8 : ' +
+        'elle vaut y compris en SQL, y compris pour l’administrateur. Si ce paragraphe ' +
+        `rougit, c’est cette promesse-là qui est tombée : ${String(refus?.message)}`,
+    );
+  });
+});

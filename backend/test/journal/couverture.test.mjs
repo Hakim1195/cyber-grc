@@ -410,6 +410,87 @@ describe('Le produit est exercé, puis le journal est compté', () => {
           'ISO 27001 n’a pas de réponse à sa première question.',
       );
       exerce.routes.add('chargement du jeu de données');
+
+      /* ══ Q-279 — LE VOLUME REND, PAS LA FENÊTRE DEMANDÉE ═══════════════
+       *
+       * Le 7ᵉ passage de la porte S8 a mesuré, à travers Apache, avec un
+       * compte dont `GET /api/export` rend **403** :
+       *
+       *     GET /api/rafraichir?depuis=<maintenant − 11 h 30>
+       *       → 200, la même charge que `/api/donnees`, **delta de journal = 0**
+       *
+       * La ligne du registre qui avait fermé **Q-242** affirmait que la borne
+       * « ne se contourne pas en avançant `depuis` ». La mesure l'a démentie :
+       * `rafraichir` n'a pas de borne SUPÉRIEURE — un `depuis` sous le seuil
+       * n'est pas une fenêtre étroite, c'est **toute la traîne**.
+       *
+       * ⚠️ **Ce paragraphe éprouve le nouveau discriminant : ce qui SORT.**
+       * La fenêtre demandée est délibérément **récente** — hors de portée de
+       * l'ancienne borne —, et c'est le volume rendu qui doit déclencher la
+       * trace. */
+      const avantSondage = await entreesDuScenario(
+        "and action = 'consultation_sensible' and resume like 'Extraction du jeu%'",
+      );
+
+      /* ⚠️ **LA MATIÈRE se sème ICI, et le seuil du produit ne se baisse pas
+         pour l'essai.** Le jeu d'essai ordinaire ne rend que six lignes à cette
+         session : le contrôle refusait de conclure — c'est ce que sa garde
+         « trop peu pour que ce contrôle ait un objet » existe pour empêcher.
+         On lui donne donc de quoi mesurer plutôt que d'abaisser
+         `LIGNES_SONDAGE_ORDINAIRE_MAX`, ce qui aurait affaibli le PRODUIT pour
+         faire passer un ESSAI — l'inverse exact de ce qu'on cherche. */
+      await base.avecPerimetre(
+        await base.connexion('app'),
+        session._perimetre,
+        async (c) => {
+          for (let i = 0; i < 30; i += 1) {
+            await c.query(
+              `insert into "mesure_catalogue" ("id", "filiale_id", "nom", "cree_par")
+               values ($1, $2, $3, $4)`,
+              [
+                `MES-${String(Date.now())}-q279${String(i).padStart(3, '0')}`,
+                FILIALE_A,
+                `Mesure de volume pour le constat Q-279 (${String(i)})`,
+                'lectrice.seule',
+              ],
+            );
+          }
+        },
+        { annuler: false },
+      );
+
+      const recent = new Date(Date.now() - 60_000).toISOString();
+      const sondage = await greffon.appeler(
+        'GET',
+        `/api/rafraichir?depuis=${encodeURIComponent(recent)}`,
+      );
+      assert.equal(sondage.statut, 200, JSON.stringify(sondage.corps));
+      // LA MATIÈRE : le jeu semé est récent, donc ce sondage « ordinaire »
+      // rend en fait tout. Sans cette moitié, la trace ne prouverait rien.
+      const rendues = Object.values(sondage.corps.volumes ?? {}).reduce((n, v) => n + v, 0);
+      assert.ok(
+        rendues >= 25,
+        `Le sondage rend ${String(rendues)} ligne(s) : trop peu pour que ce contrôle ait ` +
+          'un objet. Le jeu d’essai doit être plus fourni, ou le seuil revu — mais ' +
+          'l’essai ne doit PAS passer au vert en n’ayant rien mesuré.',
+      );
+      const apresSondage = await entreesDuScenario(
+        "and action = 'consultation_sensible' and resume like 'Extraction du jeu%'",
+      );
+      assert.equal(
+        apresSondage.length,
+        avantSondage.length + 1,
+        'Un sondage qui rend le jeu doit laisser UNE trace, même quand sa fenêtre est ' +
+          'récente. L’ancien discriminant regardait la fenêtre DEMANDÉE ; c’est le volume ' +
+          'RENDU qui distingue un sondage d’une extraction (constat Q-279).',
+      );
+      assert.equal(
+        apresSondage[apresSondage.length - 1].valeurs_apres.motif,
+        'volume_rendu',
+        'La trace doit dire CE QUI l’a déclenchée : un auditeur distingue « on a demandé ' +
+          'loin » de « on a beaucoup reçu ».',
+      );
+      exerce.routes.add('sondage de rafraîchissement');
     } finally {
       await greffon.fermer();
     }
@@ -632,13 +713,17 @@ describe('La couverture, mesurée en base', () => {
     assert.ok(exerce.creations >= 14, `créations exercées : ${String(exerce.creations)}`);
     assert.ok(exerce.modifications >= 12, `modifications exercées : ${String(exerce.modifications)}`);
     assert.ok(exerce.suppressions >= 14, `suppressions exercées : ${String(exerce.suppressions)}`);
-    /* ⚠️ Ce compte est ÉPINGLÉ, et il a rougi en passant de 4 à 5 — c'est ce
-       qu'il doit faire. La cinquième route est `GET /api/donnees` (constat
-       Q-209 de la porte S8) : elle rend le même contenu que `/api/export` et
-       ne laissait aucune trace. Une route de plus doit être reconnue ici en
-       connaissance de cause ; une route qui disparaîtrait ne doit pas
-       s'effacer en silence. */
-    assert.equal(exerce.routes.size, 5, `routes exercées : ${[...exerce.routes].join(', ')}`);
+    /* ⚠️ Ce compte est ÉPINGLÉ, et il a rougi en passant de 4 à 5, puis de 5 à
+       6 — c'est ce qu'il doit faire. La cinquième route est `GET /api/donnees`
+       (constat **Q-209**) : elle rend le même contenu que `/api/export` et ne
+       laissait aucune trace. La **sixième** est `GET /api/rafraichir` (constat
+       **Q-279**, 7ᵉ passage de la porte S8) : elle rendait le jeu **sans
+       aucune trace** dès que la fenêtre demandée restait sous le seuil de
+       session, et le cas nominal — après un import, tout porte un `updatedAt`
+       récent — l'atteignait sans le chercher.
+       Une route de plus doit être reconnue ici en connaissance de cause ; une
+       route qui disparaîtrait ne doit pas s'effacer en silence. */
+    assert.equal(exerce.routes.size, 6, `routes exercées : ${[...exerce.routes].join(', ')}`);
 
     // Et le journal doit avoir vu passer AU MOINS autant d'écritures que le
     // scénario en a réussi. C'est le lien entre « j'ai exercé » et « c'est

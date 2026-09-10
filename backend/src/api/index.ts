@@ -347,6 +347,16 @@ const SCHEMA_SUPPRESSION = {
   properties: { version: { type: 'integer', minimum: 1, maximum: 2147483647 } },
 } as const;
 
+/**
+ * Au-delà de ce nombre de lignes, un « sondage » est une extraction — constat **Q-279**.
+ *
+ * La SPA sonde toutes les vingt secondes : ce qui a changé en vingt secondes se compte
+ * sur les doigts. Le seuil est volontairement **bas** — ce qu'on risque en le baissant
+ * est une ligne de journal de trop ; ce qu'on risque en le montant est une extraction
+ * qui ne laisse aucune trace, dans un outil qui sert de preuve en audit.
+ */
+const LIGNES_SONDAGE_ORDINAIRE_MAX = 25;
+
 const SCHEMA_RAFRAICHIR = {
   type: 'object',
   required: ['depuis'],
@@ -2236,10 +2246,43 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
         );
         const lignes = Object.values(charge.volumes).reduce((n, v) => n + v, 0);
         const ageMs = Date.now() - depuis.getTime();
-        if (ageMs > config.session.dureeMaximaleHeures * 3_600_000) {
+        const fenetreProfonde = ageMs > config.session.dureeMaximaleHeures * 3_600_000;
+        /* ══ LE VOLUME REND, PAS LA FENÊTRE DEMANDÉE — constat **Q-279** ══════
+         *
+         * Le 7ᵉ passage de la porte S8 a mesuré ceci, à travers Apache, avec un
+         * compte dont `GET /api/export` rend **403** :
+         *
+         *     GET /api/rafraichir?depuis=<maintenant − 11 h 30>
+         *       → 200, la même charge que `/api/donnees`, **delta de journal = 0**
+         *
+         * Le commentaire ci-dessus affirmait que la borne « ne se contourne pas
+         * en avançant `depuis` ». **C'était faux, et le raisonnement l'était
+         * aussi** : `rafraichir` n'a pas de borne SUPÉRIEURE — il rend tout ce
+         * qui a changé *depuis* `depuis` **jusqu'à maintenant**. Un `depuis`
+         * sous le seuil n'est donc pas une fenêtre étroite, c'est toute la
+         * traîne. Et le cas où cela mord le plus fort est le cas **nominal** :
+         * après un import ou une reprise, toute la base porte un `updatedAt`
+         * récent, et le jeu entier tombe dans la fenêtre non tracée.
+         *
+         * ⚠️ **On trace donc sur ce qui SORT, pas sur ce qui est demandé.** Un
+         * sondage ordinaire — la SPA en émet un toutes les vingt secondes —
+         * rend zéro à quelques lignes ; au-delà de ce seuil, ce n'est plus un
+         * sondage, quelle que soit la fenêtre. La borne de fenêtre est
+         * **conservée** : une demande délibérément profonde mérite d'être
+         * nommée même quand elle ne rend rien.
+         *
+         * ⚠️ **CE QUI RESTE OUVERT, et il faut le dire plutôt que le laisser
+         * croire fermé** : un appelant patient qui pagine en fenêtres étroites
+         * reste sous le seuil et n'est pas tracé. Le fermer demanderait un
+         * compteur CUMULÉ par session — c'est-à-dire de l'état —, et cela n'a
+         * pas été fait ici. Le registre le porte au constat Q-279. */
+        const extractionParLeVolume = lignes >= LIGNES_SONDAGE_ORDINAIRE_MAX;
+        if (fenetreProfonde || extractionParLeVolume) {
           await journaliser(client, {
             action: 'consultation_sensible',
-            resume: 'Extraction du jeu de données par le sondage (« depuis » antérieur à la session)',
+            resume: fenetreProfonde
+              ? 'Extraction du jeu de données par le sondage (« depuis » antérieur à la session)'
+              : `Extraction du jeu de données par le sondage (${String(lignes)} lignes rendues)`,
             filialeId: session.perimetre.filialeId,
             utilisateurLibelle: session.perimetre.utilisateurId,
             adresseIp: requete.ip,
@@ -2249,6 +2292,9 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
               collections: Object.keys(charge.modifications).length,
               lignes,
               export_autorise: session.droits.export,
+              // Ce qui a déclenché la trace : un auditeur doit pouvoir
+              // distinguer « on a demandé loin » de « on a beaucoup reçu ».
+              motif: fenetreProfonde ? 'fenetre_anterieure_a_la_session' : 'volume_rendu',
             },
           });
         }
