@@ -3962,6 +3962,16 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // précédent avait pris le relais dans UNE route : cinq chemins sur six lui
       // échappaient. Cette liste a rougi en arrivant, ce qui est son office.
       'declencheurs_pieces',
+      // DIX-HUITIÈME, apporté par `021_les_gardes_mesurent_l_evenement.sql` — constat
+      // **Q-281**, 7ᵉ passage de la porte S8. Le quinzième ci-dessus vérifie QUELLES
+      // TABLES portent un déclencheur et avec quels arguments ; il ne regardait pas
+      // `tgtype`, c'est-à-dire **sur quel événement il se déclenche**. L'auditeur a
+      // déplacé les 32 déclencheurs de `after delete` à `after insert` :
+      // `f_verifier_schema()` a rendu **0 anomalie** pendant que la barrière était
+      // morte. ⚠️ *Un garde-fou qui reconnaît au lieu de mesurer est pire qu'absent :
+      // il donne à croire que le cas est couvert* — et le verdict vert de celui-ci
+      // avait été cité comme preuve que D2 tenait, dans trois documents.
+      'declencheurs_pieces_evenement',
       'entropie_identifiants',
       // DIXIÈME, apporté par `008_journal_lecture.sql` : il vérifie que la politique de
       // lecture du journal est bien cloisonnée (condition E6). La liste a rougi en
@@ -3995,6 +4005,13 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // est le plus discret : le déclencheur resterait là, correct, et son premier cas
       // ne pourrait simplement plus se produire.
       'publication_documents',
+      // DIX-NEUVIÈME, apporté par `021` — le pendant du dix-huitième pour la barrière
+      // de publication : elle doit se déclencher sur `BEFORE UPDATE … FOR EACH ROW`, et
+      // pas seulement exister et être armée. ⚠️ Le jour où le constat **Q-280** sera
+      // fermé — `POST /api/reprise` INSÈRE au lieu de mettre à jour, et passe donc sous
+      // un déclencheur d'`update` —, c'est CE contrôle qu'il faudra élargir à l'insert,
+      // sans quoi l'élargissement ne serait vérifié par rien.
+      'publication_evenement',
       // NEUVIÈME, apporté par `007_authentification.sql` : il vérifie que le substrat
       // de session est bien refermé sur `f_authentification()`. Cette liste est écrite
       // à la main À DESSEIN (CLAUDE.md §3, cas (a)) — une migration qui la fait rougir

@@ -55,7 +55,7 @@
 > | **S5** | V4 — L4, L6 | 1 | ❌ refusée — 13 constats |
 > | **S6** | V6 — L10, L12, L13 | 1 | ❌ refusée — 12 constats |
 > | **S7** | V7 — L11, L14 | **1** | ❌ **refusée le 09/09/2026 — 27 constats, 7 bloquants, 0 fuite** |
-> | **S8** | V8 — L15 | **6** | ❌ **refusée — condition de mise en service NON remplie** |
+> | **S8** | V8 — L15 | **7** | ❌ **refusée — condition de mise en service NON remplie** |
 >
 > **Le 6ᵉ passage de S8 est le meilleur du chantier** — 0 bloquant, 4 majeurs, 8 mineurs,
 > **0 fuite entre filiales**, banc **1 747 essais, 1 747 passés** — mais *refusé reste
@@ -135,7 +135,8 @@
 > | ~~1~~ | ~~**Q-251** — l'essai de rapport de temps~~ | ✅ **FERMÉ le 09/09/2026**, et **pas** par « grossir les tailles » : le lecteur refuse un classeur au-delà de ~3,5 Mio décompressés, donc la grande taille franchirait le plafond et l'essai mesurerait un tout autre refus. C'est le **travail** qui a été grossi — R passes dans un seul chronométrage, R calibré à l'exécution. Seuil inchangé |
 > | ~~1~~ | ~~**Jouer la porte S7**~~ | ✅ **JOUÉE le 09/09/2026, et REFUSÉE** — 27 constats (**7 bloquants**), 0 fuite de données. ⚠️ **Elle a démontré son propre motif** : aucun des 27 ne faisait rougir quoi que ce soit. *Aucun échec ne la signalait*, et c'est vérifié |
 > | **1** | **Traiter les 7 bloquants de S7** | **Q-252 · Q-253 · Q-255** (droit d'auteur des catalogues ISO et AirCyber — **deux exigent un arbitrage de l'utilisateur**) et **Q-264 · Q-265 · Q-266 · Q-267** (les guides décrivent un produit qui n'est pas celui qui tourne). Registre au `docs/PLAN_EXECUTION.md` §7 |
-> | **2** | **Rejouer S8 — 7ᵉ passage** | **Onze livraisons** n'ont vu aucun auditeur indépendant depuis le 6ᵉ passage : D2, D1·D4·D5, l'intégrité, Q-248, Q-250, les trois de L18, **et 18.2 b** |
+> | ~~2~~ | ~~**Rejouer S8 — 7ᵉ passage**~~ | ✅ **JOUÉ le 10/09/2026, et REFUSÉ** — 0 bloquant, 6 majeurs, 6 mineurs, **0 fuite entre filiales**, 3 contrôles sur 18 en échec. ⚠️ **Sur 12 mutations, 3 ne mordent pas — et les trois sont des gardes posés la veille.** Constats **Q-279 → Q-290** |
+> | **2** | **Les 6 majeurs de S8** | **Q-279** (`rafraichir` ne trace rien), **Q-280** (la barrière de publication se contourne par `POST /api/reprise`), ~~Q-281~~ ✅ *(migration `021`, les gardes mesurent enfin `tgtype`)*, **Q-282** (D1 : version affichée au-dessus de zéro fichier), **Q-283** (le garde de Q-257 mesure la longueur, pas l'originalité), **Q-284** (`approbations` est le second lien polymorphe, et D2 ne l'a pas vu) |
 > | **3** | Le reste des constats de **S7** (Q-254, Q-256 → Q-263, Q-268 → Q-278) | ⚠️ **Deux se ferment ENSEMBLE avec un constat plus ancien** : **Q-272** promet dans le guide la propriété que **Q-243** dit absente — la troncature de queue du journal. Corriger un seul des deux endroits laisserait le produit se contredire |
 > | **3** | Les constats ouverts : **Q-243, Q-247, Q-234 → Q-244, Q-205 b, Q-206, Q-214 b·c·d·f** | Registre au `docs/PLAN_EXECUTION.md` §7, **seule source** |
 >

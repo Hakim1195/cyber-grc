@@ -14,7 +14,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > **1822 essais, 1822 passés, 0 échec**,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` → **107 contrôles, 107 réussis, 0 échoué**,
-> `f_verifier_schema()` → **0 anomalie** (**17 garde-fous consignés**, **20 migrations**,
+> `f_verifier_schema()` → **0 anomalie** (**19 garde-fous consignés**, **21 migrations**,
 > **50 tables**), `install.sh --verifier-publication` → **81 fichiers servis identiques au
 > dépôt**, et `install.sh --diagnostic` → **12 conformes, 1 réserve** (`SMTP_ACTIF=non`),
 > **0 bloquant**.
@@ -207,6 +207,76 @@ dit bien « l'enregistrement supprimé » ; `SMTP_CHIFFREMENT` accepte bien `auc
 a été ajoutée au registre contre le rapport (**Q-257**) : l'assertion `assert.ok(faits >= 0)`
 qu'il pointe est **délibérée et commentée**, et y mettre un seuil de couverture traiterait le
 mauvais défaut — ce qui manque est un garde du **critère**, pas du volume.
+
+### ❌ Porte S8, septième passage — et cette fois le défaut est DANS le dispositif
+
+**0 bloquant, 6 majeurs, 6 mineurs, 0 fuite entre filiales.** Constats **Q-279 → Q-290**,
+révision `462a220`. **Trois contrôles en échec sur dix-huit** — S7 (droit d'export), S16
+(garde-fous branchés), S18 (le produit fait ce qu'il doit) —, et **aucun « non rejoué »**.
+
+**Sur douze mutations jouées, trois ne mordent pas — et les trois sont des gardes posés la
+veille ou l'avant-veille.** C'est le résultat le plus utile de ce passage, et il vise le
+dispositif plutôt que le produit.
+
+**Q-281 — les garde-fous reconnaissaient un déclencheur, ils ne mesuraient pas ce qu'il
+garde.** `f_verifier_declencheurs_pieces()` et `f_verifier_publication_documents()`
+interrogent `pg_trigger` sur le **nom de la fonction** appelée et sur l'armement `always` —
+**jamais sur `tgtype`**, qui encode `BEFORE`/`AFTER` et `INSERT`/`UPDATE`/`DELETE`.
+L'auditeur a déplacé les événements — les 32 déclencheurs de pièces de `after delete` à
+`after insert`, la barrière de publication de `before update` à `before insert` — et
+`f_verifier_schema()` a rendu **0 anomalie**, `migrate.mjs` et `--diagnostic` restant au vert
+**pendant que les deux barrières étaient mortes**.
+
+C'est le motif que ce chantier traque depuis le premier jour, arrivé au dispositif qui existe
+pour l'empêcher : *un garde-fou qui reconnaît au lieu de mesurer est pire qu'absent, parce
+qu'il donne à croire que le cas est couvert*. Et il coûtait cher ici : le verdict vert de ces
+deux gardes avait été cité comme **preuve que D2 et D5 tenaient**, dans trois documents.
+
+**Corrigé le 10/09 — migration `021`.** Les deux gardes mesurent `tgtype`. ⚠️ **Les bits qui
+comptent, pas l'égalité du masque** : exiger `tgtype = 9` interdirait d'ajouter un jour
+`after delete or truncate`, et *un garde-fou qui rougit à tort finit par être contourné*.
+**Mordu par la mutation exacte de l'auditeur.**
+
+⚠️ **Deux enseignements de la manœuvre elle-même, et le premier est une faute.** J'ai joué la
+mutation **sur la recette**, et ma restauration a laissé le déclencheur **non armé en
+“always”** : `f_verifier_schema()` est passé à **2 anomalies** avant que je le réarme.
+L'auditeur, lui, avait muté sur une copie du dépôt — il avait raison. Second enseignement, à
+décharge : le contrôle `declencheur_desarmable` **a rougi le premier**, ce qui montre que le
+garde de `019` n'était pas creux — il voyait l'armement, il ne voyait pas l'événement.
+
+**Q-280 — la barrière de publication se contourne en un appel.** `POST /api/reprise` crée une
+PSSI **« en vigueur » avec zéro approbation**, le déclencheur étant `before update` seul.
+C'est la classe exacte du constat que D2 avait fermée : *une barrière qui ne vit que sur un
+chemin ne voit pas le chemin d'à côté, et il y en a toujours un de plus.* **Non corrigé** —
+et il ne pouvait pas l'être avant Q-281 : élargir la barrière à l'`insert` n'aurait été
+vérifié par rien.
+
+**Q-279 — le contrôle S7 en échec, et une phrase du registre démentie.** Un compte sans droit
+d'export (`/api/export` → **403**) obtient `GET /api/rafraichir?depuis=…` en **200** avec un
+**delta de journal nul**, quand `/api/donnees` laisse une trace. La ligne qui avait fermé
+**Q-242** — « *elle ne se contourne pas en avançant `depuis`* » — est fausse.
+⚠️ **Reproduit par l'orchestrateur, avec une nuance inscrite au registre** : le delta nul est
+confirmé, mais la charge rendue était **vide** au rejeu — `rafraichir` ne rend que ce qui a
+*changé*, et l'auditeur mesurait au lendemain de sa propre campagne d'écritures. **Le
+mécanisme reste entier** : après un import ou une reprise, tout porte un `updatedAt` récent
+et le jeu entier tombe dans la fenêtre non tracée. Le défaut n'est pas *« rafraichir rend
+tout »*, c'est *« rafraichir ne trace rien »* — et la nuance devait être écrite, sans quoi la
+prochaine session aurait déclaré le constat faux en ne le reproduisant pas.
+
+**Q-283 vise le garde que j'avais posé la veille** (Q-257) : il mesure la **longueur** des
+intitulés, pas leur originalité. Mutation : les 93 intitulés français d'ISO 27002 remplacés
+par les 93 titres **officiels** ISO → **11 essais sur 11 au vert**, les titres officiels
+faisant 29 signes contre 28 aux reformulations. Le garde attrape la reprise **longue** — un
+export CSV — et laisse passer la reprise **courte**, qui est justement le risque que le §4.2
+nomme pour l'Annexe A.
+
+**✅ Ce qui tient, et c'est considérable** : banc **1822/1822 joué deux fois** (Q-251 ne
+clignote plus), cloisonnement **107/107** sous `grc_app`, **50/50 en force RLS**, **sept
+sondes inter-filiales sur les surfaces neuves → 404 sans oracle**, périmètre inforgeable sous
+cinq formes, **31 écrans sur 31** dans un Chromium réel derrière l'Apache du dépôt **sans une
+seule violation de CSP**, chaîne des pièces jointes rejouée contre ClamAV réel, `npm audit`
+0 vulnérabilité, publication 81/81. **Zéro fuite entre filiales, pour le deuxième passage
+consécutif.**
 
 ### Q-251 — un essai intermittent est un essai qu'on cesse de lire
 
