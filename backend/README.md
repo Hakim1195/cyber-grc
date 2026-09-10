@@ -755,7 +755,7 @@ la comparaison au marché du 08/09/2026.
 **Mesuré à la révision `385005d`** : `npm test` → **1834 essais, 1834 passés** ;
 `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **107/107** ; `f_verifier_schema()`
-→ 0 anomalie, **23 garde-fous consignés**, **25 migrations**, **50 tables**.
+→ 0 anomalie, **24 garde-fous consignés**, **26 migrations**, **51 tables**.
 
 | Lot | État |
 |---|---|
@@ -925,14 +925,14 @@ npm test                                         → tests 1834 · pass 1834 · 
                                                    journal 19
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 107 contrôles · 107 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (23 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (24 garde-fous découverts, joués, consignés)
 ```
 
-Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **50 tables** en
-**25 migrations**, **200 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **51 tables** en
+**26 migrations**, **204 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **74 clés étrangères** (45 `restrict`, 27 `cascade`, 2 `set null`), **44 tables portant
 `cree_par` et 44 déclencheurs de création**, **12 clés étrangères composites** visant
-`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **23 contrôles consignés**
+`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **24 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1212,7 +1212,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **50 tables**, obtenues aujourd'hui en **25 migrations** appliquées de bout en bout par
+- **51 tables**, obtenues aujourd'hui en **26 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1232,7 +1232,7 @@ Ce que la reprise fait, quand on la rejoue :
   ajoute la vingt-deuxième action du journal (`verification_integrite`), deux colonnes de
   verdict sur `pieces_jointes`, un index de balayage — et **réémet** le garde-fou du
   vocabulaire plutôt que d'en poser un second sur la même contrainte.
-- **200 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
+- **204 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
 - **74 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des

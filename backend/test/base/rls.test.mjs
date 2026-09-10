@@ -3823,6 +3823,16 @@ describe('Le garde-fou de couverture découvre son périmètre (CONVENTIONS §19
         order by 1`,
     );
     assert.deepEqual(ouvertes.map((l) => l.nom), [
+      // Arrivée avec la migration `026`, et elle a fait rougir ce test en arrivant — c'est
+      // son office. `colonnes_personnelles` est le **registre des données personnelles du
+      // produit lui-même** : quelles colonnes en portent, pourquoi, pour combien de temps,
+      // et ce qu'on en fait à l'expiration. Il décrit le SCHÉMA, pas les données — son
+      // contenu est identique dans toutes les filiales par construction — et il doit être
+      // lisible AVANT que le périmètre existe : la purge RGPD le lit pour savoir quoi
+      // anonymiser. Ce qui le protège est le PRIVILÈGE (le rôle applicatif n'a que
+      // « select »), pas un prédicat. L'arbitrage est repris à l'identique dans le contrôle
+      // C93 de `db/verifier_cloisonnement.sql`, et les deux doivent bouger ensemble.
+      'colonnes_personnelles',
       // Arrivée avec la migration 005, et elle a fait rougir ce test en arrivant —
       // c'est son office (`CONVENTIONS.md` §24). Elle décrit le SCHÉMA et non les
       // données : son contenu est identique dans toutes les filiales par
@@ -3954,6 +3964,15 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // SILENCE, et la saisie de l'utilisateur disparaîtrait sans un mot.
       'champs_structurels',
       'chemin_recherche',
+      // VINGT-QUATRIÈME, apporté par `026_registre_des_donnees_personnelles.sql` — la
+      // conformité RGPD **du produit lui-même**, demandée par l'utilisateur le 10/09/2026 :
+      // *« je ne peux pas proposer un logiciel pour gérer la cyber alors que le logiciel
+      // même n'est pas conforme, à la base, au RGPD »*. Il vérifie, dans les deux sens, que
+      // **toute colonne susceptible de porter une donnée personnelle est DÉCIDÉE** au
+      // registre — « non personnelle » est une réponse recevable, ne pas répondre ne l'est
+      // pas. ⚠️ Il a payé dès sa première application : il a rendu **huit colonnes que le
+      // semis avait manquées**, dont `crise.notes` et `utilisateurs.mot_de_passe_hash`.
+      'colonnes_personnelles',
       'couverture_rls',
       // QUINZIÈME, apporté par `017_pieces_suivent_leur_porteur.sql` (constats Q-232 /
       // Q-233) : toute table qu'une pièce jointe peut désigner porte le déclencheur

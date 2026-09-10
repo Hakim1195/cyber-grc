@@ -117,6 +117,29 @@ before(async () => {
       [FILIALE_A, NOM],
     );
 
+    /* ── LA MATIÈRE QUE L'ANCIENNE LISTE N'ATTEIGNAIT PAS — migration 026 ──
+     *
+     * Jusqu'au 10/09/2026, la purge n'anonymisait que les colonnes dont le NOM
+     * figurait dans une liste de cinq entrées — `responsable`, `proprietaire`,
+     * `auditeur`, `participants`, `suppleant` — plus `crise.nom`. Les trois
+     * emplacements ci-dessous en étaient **tous les trois hors d'atteinte**, et
+     * la purge annonçait pourtant « terminé ».
+     *
+     * ⚠️ **Ils sont semés ici, et rien de plus n'est assertionné** : l'essai
+     * exhaustif du §2 — *« il ne reste QUE l'incident et le journal »* — fait le
+     * travail, et il le fait mieux qu'une liste d'emplacements attendus. Étendre
+     * la matière d'un contrôle exhaustif étend le contrôle ; ajouter une
+     * assertion à côté aurait recréé, dans le banc, la liste écrite à la main
+     * qu'on vient de retirer du produit. */
+    await c.query('update prestataires set email = $1 where filiale_id = $2', [
+      NOM,
+      FILIALE_A,
+    ]);
+    await c.query('update imports set utilisateur_libelle = $1 where filiale_id = $2', [
+      NOM,
+      FILIALE_A,
+    ]);
+
     // ── Ce que la purge NE DOIT PAS toucher ─────────────────────────────
     await c.query('update incidents set description = $1 where id = $2', [
       `Tentative d'hameçonnage signalée par ${NOM} le 3 mars.`,
@@ -315,7 +338,24 @@ describe('§1 — la purge rend des COMPTES, et ils sont exacts', () => {
     );
     const parClasse = Object.fromEntries(restes.map((r) => [`${r.table}.${r.colonne}`, r.classe]));
     assert.equal(parClasse['incidents.description'], 'incidents');
-    assert.equal(parClasse['utilisateurs.nom'], 'compte_annuaire');
+    // ⚠️ **`utilisateurs.nom` N'EST PLUS UN RESTE, et c'est un progrès mesuré.**
+    // Cet essai exigeait auparavant qu'il figure en reste, classé « compte_annuaire » :
+    // la purge ne savait pas l'atteindre, parce que sa liste de colonnes ne portait que
+    // cinq noms — `responsable`, `proprietaire`, `auditeur`, `participants`, `suppleant`.
+    // Depuis la migration `026`, elle lit le **registre des données personnelles**, où
+    // `utilisateurs.nom` est déclaré « personnelle · anonymiser ». Le compte d'annuaire
+    // est donc anonymisé comme le reste.
+    //
+    // ⚠️ **On ne fige pas ici la LISTE de ce qui est anonymisé** — ce serait recréer,
+    // dans le banc, la liste écrite à la main qu'on vient de retirer du produit. Ce qui
+    // est figé est la PROPRIÉTÉ : ce qui reste ne doit pas être une anomalie, et le
+    // registre décide du reste.
+    assert.equal(
+      parClasse['utilisateurs.nom'],
+      undefined,
+      'Le nom du compte d’annuaire reparaît en reste : la purge a cessé de lire le registre ' +
+        '`colonnes_personnelles`, ou la déclaration de cette colonne y a changé de régime.',
+    );
     assert.equal(
       parClasse['actifs.responsable'],
       'autre_filiale',

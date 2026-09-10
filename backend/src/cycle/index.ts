@@ -412,28 +412,24 @@ export async function sortirFiliale(
 export const MENTION_NEUTRE = 'personne retirée';
 
 /**
- * Noms de champs qui portent un **nom de personne**, quelle que soit la table.
+ * ⚠️ **`CHAMPS_DE_PERSONNE` et `TABLES_NOM_DE_PERSONNE` ONT ÉTÉ RETIRÉES le 10/09/2026.**
  *
- * `nom` n'y figure pas : c'est le nom d'un actif, d'un risque, d'un processus,
- * d'un groupe d'annuaire… La seule table où `nom` désigne une personne est
- * traitée juste en dessous.
- */
-const CHAMPS_DE_PERSONNE: readonly string[] = Object.freeze([
-  'responsable',
-  'proprietaire',
-  'auditeur',
-  'participants',
-  'suppleant',
-]);
-
-/**
- * Tables dont la colonne `nom` désigne une **personne** et non un objet.
+ * C'étaient deux listes écrites à la main — cinq noms de colonnes, et la seule table où
+ * `nom` désigne une personne — et elles décidaient, à elles seules, ce que la purge RGPD
+ * savait anonymiser.
  *
- * `crise` seule : la cellule de crise nomme des gens (`nom`, `suppleant`) avec
- * leurs coordonnées. `personnes` n'y est pas — sa fiche est **supprimée**, pas
- * anonymisée.
+ * **Mesuré : le schéma porte quarante colonnes dont le nom désigne une personne, et
+ * `utilisateurs` en porte quatre de plus qu'aucun motif ne devine** (`identifiant`, `upn`,
+ * `sid_ad`, `nom_affichage`). La purge annonçait « terminé » en ayant laissé le nom en
+ * place presque partout — le premier cas du `CLAUDE.md` §3, *une omission qui fait réussir
+ * quelque chose en silence alors que c'est faux*.
+ *
+ * Elles sont remplacées par le **registre** `colonnes_personnelles` (migration `026`) : une
+ * décision par colonne, avec sa finalité, sa base légale, sa durée et son régime — et un
+ * garde-fou de schéma qui **refuse qu'une colonne candidate reste non décidée**. La
+ * différence n'est pas qu'une liste soit devenue plus longue : c'est qu'une omission
+ * **rougit** au lieu de passer.
  */
-const TABLES_NOM_DE_PERSONNE: readonly string[] = Object.freeze(['crise']);
 
 /**
  * Tables que le balayage de vérification n'ouvre **jamais**.
@@ -559,27 +555,62 @@ function guillemeter(identifiant: string): string {
 }
 
 /**
- * Découvre, **dans le catalogue**, les colonnes qui portent un nom de personne.
+ * Les colonnes à anonymiser, **lues dans le REGISTRE** — migration `026`.
  *
- * C'est ce qui rend la liste de champs vraie de toute table qui en porte un — y
- * compris celles qu'aucun agent n'a encore écrites.
+ * ══ Ce que cette fonction faisait, et pourquoi c'était insuffisant ══════════
+ *
+ * Elle découvrait dans le catalogue les colonnes dont le **nom** figurait dans
+ * une liste écrite à la main de cinq entrées — `responsable`, `proprietaire`,
+ * `auditeur`, `participants`, `suppleant` —, plus `crise.nom`. La découverte
+ * était bonne ; la liste ne l'était pas.
+ *
+ * **Mesuré dans le schéma le 10/09/2026 : quarante colonnes portent un nom qui
+ * désigne une personne, et `utilisateurs` en porte quatre de plus qu'aucun motif
+ * de nom ne devine** — `identifiant`, `upn`, `sid_ad`, `nom_affichage`. La purge
+ * annonçait donc « terminé » en ayant laissé le nom en place presque partout.
+ *
+ * C'est le premier cas du `CLAUDE.md` §3 : *une omission qui fait réussir
+ * quelque chose en silence alors que c'est faux.*
+ *
+ * ══ Ce qu'elle fait maintenant ══════════════════════════════════════════════
+ *
+ * Elle lit `colonnes_personnelles`, le registre que la migration `026` a posé :
+ * **une décision par colonne**, avec sa finalité, sa base légale, sa durée et ce
+ * qu'on en fait à l'expiration. La purge ne retient que les colonnes déclarées
+ * `personnelle` **et** dont le régime est `anonymiser`.
+ *
+ * ⚠️ **Les trois régimes ne sont pas trois nuances du même geste :**
+ *
+ *  · `anonymiser` — la ligne reste, le nom part. C'est le cas des preuves
+ *    d'audit : *le circuit a eu lieu* survit à *qui l'a mené* ;
+ *  · `supprimer`  — la ligne entière part. C'est le cas de l'annuaire : une
+ *    fiche de personne anonyme n'a aucun sens et resterait dans les
+ *    suggestions. Ce geste-là appartient à la route, pas à ce balayage ;
+ *  · `conserver`  — on n'y touche pas, et le registre DIT pourquoi. Le journal
+ *    d'audit est inaltérable par dessein ; l'anonymiser casserait la chaîne
+ *    d'empreintes et détruirait la preuve. L'article 17.3 couvre ce cas, et la
+ *    borne est la rétention de trois ans, pas une exception sans fin.
+ *
+ * ⚠️ **Ce qui rend le registre sûr n'est pas qu'il soit complet, c'est qu'une
+ * omission ROUGISSE** : `f_verifier_colonnes_personnelles()` refuse qu'une
+ * colonne candidate reste non décidée, à chaque migration et à chaque
+ * installation. Il a payé dès sa première application — huit colonnes que le
+ * semis avait manquées, dont `crise.notes` et `utilisateurs.mot_de_passe_hash`.
  */
 async function colonnesPorteusesDeNom(client: PoolClient): Promise<readonly ColonneTexte[]> {
   const { rows } = await client.query<{ table_nom: string; colonne: string; cloisonnee: boolean }>(
-    `select c.relname::text as table_nom, a.attname::text as colonne,
+    `select p.table_nom, p.colonne,
             exists (select 1 from pg_attribute f
-                     where f.attrelid = c.oid and f.attname = 'filiale_id'
+                      join pg_class c on c.oid = f.attrelid
+                      join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+                     where c.relname = p.table_nom and f.attname = 'filiale_id'
                        and f.attnum > 0 and not f.attisdropped) as cloisonnee
-       from pg_class c
-       join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
-       join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
-      where c.relkind = 'r'
-        and not (c.relname = any ($3::text[]))
-        and format_type(a.atttypid, a.atttypmod) = 'text'
-        and ( a.attname = any ($1::text[])
-              or (c.relname = any ($2::text[]) and a.attname = 'nom') )
+       from colonnes_personnelles p
+      where p.nature = 'personnelle'
+        and p.a_expiration = 'anonymiser'
+        and not (p.table_nom = any ($1::text[]))
       order by 1, 2`,
-    [CHAMPS_DE_PERSONNE, TABLES_NOM_DE_PERSONNE, HORS_BALAYAGE],
+    [HORS_BALAYAGE],
   );
   return rows.map((r) => ({ table: r.table_nom, colonne: r.colonne, cloisonnee: r.cloisonnee }));
 }
