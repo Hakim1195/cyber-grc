@@ -14,7 +14,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > **1822 essais, 1822 passés, 0 échec**,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` → **107 contrôles, 107 réussis, 0 échoué**,
-> `f_verifier_schema()` → **0 anomalie** (**19 garde-fous consignés**, **21 migrations**,
+> `f_verifier_schema()` → **0 anomalie** (**20 garde-fous consignés**, **22 migrations**,
 > **50 tables**), `install.sh --verifier-publication` → **81 fichiers servis identiques au
 > dépôt**, et `install.sh --diagnostic` → **12 conformes, 1 réserve** (`SMTP_ACTIF=non`),
 > **0 bloquant**.

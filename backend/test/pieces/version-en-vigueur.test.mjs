@@ -391,3 +391,150 @@ describe('D4 — « resté ailleurs » ne se confond plus avec « détenu ici »
     );
   });
 });
+
+/* =====================================================================
+ *  Q-282 — la version SUIT la pièce, sur tous les chemins
+ * =====================================================================
+ *
+ * ── Ce que le 7ᵉ passage de la porte S8 a trouvé ────────────────────────────
+ *
+ * L'action D1 existe pour une phrase, écrite dans `src/pieces/index.ts` : *« la
+ * version d'une politique se déclare avec le fichier qui la porte, PAS dans un
+ * champ voisin qui peut annoncer “2.1” au-dessus du PDF de la 1.4 »*.
+ *
+ * `documents.version_document` était pourtant écrit par **une route et une
+ * seule** — la promotion. Supprimée la pièce, le numéro subsistait :
+ *
+ *     dépôt v1.4 → promotion → version_document = 1.4      ← correct
+ *     DELETE de la pièce     → version_document = 1.4      ← la fiche ment
+ *                              pièces restantes = 0
+ *
+ * Ce n'était plus « 2.1 au-dessus du PDF de la 1.4 » : c'était **1.4 au-dessus
+ * de rien**, servi tel quel à la SPA par `GET /api/donnees`, dans un produit qui
+ * sert de preuve en audit ISO 27001.
+ *
+ * ── Pourquoi le remède est DANS LA BASE, et pourquoi cet essai le suit ───────
+ *
+ * C'est la leçon de **D2** (`CONVENTIONS.md` §8.1) : *le relais d'une cascade
+ * que le schéma ne peut pas exprimer se prend dans la base, sur la table
+ * porteuse, jamais dans les routes. Une route ne voit que son chemin ; il y en a
+ * toujours un de plus.* Les chemins qui retirent une pièce sont au moins quatre
+ * — la route, le déclencheur de la migration `017` quand le porteur disparaît,
+ * une cascade, `psql`. Migration `022`.
+ *
+ * ⚠️ **Cet essai n'éprouve donc PAS la route** : il éprouve que la valeur suit,
+ * quel que soit le chemin. Le §3 supprime la pièce **en SQL**, sans passer par
+ * l'API — un correctif de route y serait aveugle.
+ */
+describe('Q-282 — la version d’une fiche suit la pièce qui la porte', () => {
+  let doc;
+  let piece;
+
+  test('§1 LA MATIÈRE : une fiche, une pièce promue, un numéro qui vient d’elle', async () => {
+    doc = await creerDocument({
+      titre: 'Charte informatique — essai Q-282',
+      type: 'Charte informatique',
+      statut: 'brouillon',
+    });
+    piece = await deposerVersion(doc, 'charte-v1.4.pdf', '1.4');
+    const promotion = await serveur.appeler(
+      'POST',
+      `/api/pieces/documents/${doc}/${piece.id}/en-vigueur`,
+    );
+    assert.equal(promotion.statut, 200, JSON.stringify(promotion.corps));
+    assert.equal(await versionDeLaFiche(doc), '1.4', 'la promotion doit poser le numéro');
+  });
+
+  test('§2 la pièce retirée PAR LA ROUTE, la fiche cesse d’annoncer un numéro', async () => {
+    const suppression = await serveur.appeler(
+      'DELETE',
+      `/api/pieces/documents/${doc}/${piece.id}`,
+    );
+    assert.equal(suppression.statut, 204, JSON.stringify(suppression.corps));
+    assert.equal(
+      (await listerParLaRoute(doc)).length,
+      0,
+      'la matière du contrôle : il ne doit plus rester AUCUNE pièce',
+    );
+    assert.equal(
+      await versionDeLaFiche(doc),
+      null,
+      'La fiche annonce encore un numéro de version au-dessus de zéro fichier (constat Q-282).',
+    );
+  });
+
+  test('§3 la pièce retirée EN SQL : le relais tient hors de toute route', async () => {
+    // ⚠️ **C'est le paragraphe qui distingue ce correctif d'un correctif de
+    // route.** On dépose, on promeut, puis on supprime la pièce par un `delete`
+    // direct — le chemin qu'emprunte le déclencheur de la migration `017`
+    // lorsqu'un porteur disparaît, et celui qu'emprunte un exploitant en
+    // `psql`. Un remède écrit dans la route de suppression serait vert au §2 et
+    // rouge ici.
+    const seconde = await deposerVersion(doc, 'charte-v2.0.pdf', '2.0');
+    const promotion = await serveur.appeler(
+      'POST',
+      `/api/pieces/documents/${doc}/${seconde.id}/en-vigueur`,
+    );
+    assert.equal(promotion.statut, 200);
+    assert.equal(await versionDeLaFiche(doc), '2.0');
+
+    // ⚠️ **`{ annuler: false }`, et sans lui cet essai ne mesure RIEN.**
+    // `base.avecPerimetre()` **annule sa transaction par défaut** — c'est ce qui
+    // rend les essais indépendants les uns des autres. La première rédaction de
+    // ce paragraphe employait l'aide ordinaire : le `delete` rendait bien
+    // `rowCount = 1`, **à l'intérieur d'une transaction aussitôt annulée**, et
+    // l'essai concluait que le relais n'avait pas fonctionné. Il accusait le
+    // produit d'un défaut qui était le sien. C'est la famille du constat Q-64 —
+    // *un banc qui rougit pour une raison qui n'est pas celle qu'il annonce
+    // apprend à être ignoré*.
+    const efface = await base.avecPerimetre(
+      applicatif,
+      perimetre('essai-q282', FILIALE_A, [FILIALE_A]),
+      async (c) => (await c.query('delete from pieces_jointes where id = $1', [seconde.id])).rowCount,
+      { annuler: false },
+    );
+    assert.equal(efface, 1, 'LA MATIÈRE du §3 : le `delete` doit réellement retirer la pièce.');
+
+    assert.equal(
+      await versionDeLaFiche(doc),
+      null,
+      'Supprimée hors de la route, la pièce laisse la fiche annoncer son numéro : le relais ' +
+        'vit dans la route et non dans la base — c’est exactement ce que le constat Q-282 ' +
+        'reproche, et ce que la leçon de D2 interdit.',
+    );
+  });
+
+  test('§4 une pièce PROMUE À LA PLACE d’une autre ne fait pas disparaître le numéro', async () => {
+    // La moitié négative, sans laquelle le relais pourrait se contenter de
+    // poser `null` à chaque mouvement — ce qui passerait les §2 et §3 en
+    // n'ayant rien compris.
+    const a = await deposerVersion(doc, 'charte-v3.pdf', '3.0');
+    const b = await deposerVersion(doc, 'charte-v4.pdf', '4.0');
+    await serveur.appeler('POST', `/api/pieces/documents/${doc}/${a.id}/en-vigueur`);
+    assert.equal(await versionDeLaFiche(doc), '3.0');
+
+    // ⚠️ **La bascule se fait EN SQL, et c'est ce qui rend ce paragraphe utile.**
+    // La première rédaction promouvait par la route — et la route repose
+    // elle-même le bon numéro (`refleterVersionSurDocument`, qui porte en outre
+    // un contrôle de droits qu'il ne faut pas retirer). Elle **masquait donc
+    // l'erreur du relais** : mutation faite — le relais qui EFFACE au lieu de
+    // recalculer — l'essai restait vert 14/14. Mesuré, pas supposé. Ici, seul le
+    // déclencheur décide.
+    await base.avecPerimetre(
+      applicatif,
+      perimetre('essai-q282', FILIALE_A, [FILIALE_A]),
+      async (c) => {
+        await c.query('update pieces_jointes set en_vigueur = false where id = $1', [a.id]);
+        await c.query('update pieces_jointes set en_vigueur = true  where id = $1', [b.id]);
+      },
+      { annuler: false },
+    );
+    assert.equal(
+      await versionDeLaFiche(doc),
+      '4.0',
+      'Promouvoir une autre pièce doit RECALCULER le numéro depuis la pièce qui fait foi, ' +
+        'pas l’effacer : une fiche qui perd son numéro parce qu’une pièce a changé d’état ' +
+        'est le même défaut que Q-282, dans l’autre sens.',
+    );
+  });
+});

@@ -49,7 +49,7 @@ const CATALOGUES = ['ref_anssi', 'ref_iso27002', 'ref_iso27001_smsi', 'ref_nis2'
  * declared », le registre le déclarant en `const` de premier niveau. Évaluer
  * autrement que ne le fait le produit, c'est mesurer son propre montage.
  */
-function chargerCatalogues() {
+function chargerCatalogues(langue = 'fr') {
   const morceaux = [readFileSync(join(RACINE_FRONTEND, 'js', 'data', 'referentiels.js'), 'utf8')];
   for (const f of CATALOGUES) {
     morceaux.push(readFileSync(join(RACINE_FRONTEND, 'js', 'data', `${f}.js`), 'utf8'));
@@ -58,7 +58,10 @@ function chargerCatalogues() {
   }
   // eslint-disable-next-line no-new-func
   const fn = new Function('window', `${morceaux.join('\n;\n')}\nreturn Referentiels;`);
-  const fenetre = { I18n: { langue: () => 'fr' } };
+  // ⚠️ La langue est un PARAMÈTRE depuis le constat Q-283 : comparer le français à
+  // l'anglais exige de charger les deux, et `Referentiels.get()` rend le catalogue
+  // dans la langue active — c'est le chemin du produit, pas un accès au dictionnaire.
+  const fenetre = { I18n: { langue: () => langue } };
   fenetre.window = fenetre;
   return fn(fenetre);
 }
@@ -302,6 +305,34 @@ describe('Le texte FRANÇAIS reste une reformulation, ou il le dit (constat Q-25
     });
   }
 
+  /**
+   * Moyenne mesurée aujourd'hui, catalogue par catalogue, et la marge admise.
+   *
+   * ⚠️ **Constat Q-283, 7ᵉ passage de la porte S8 : la rédaction précédente de ce garde
+   * mesurait la longueur contre un seuil GLOBAL de 80 signes, et l'auditeur l'a mise en
+   * défaut d'un coup** — il a remplacé les 93 intitulés français d'ISO 27002 par les 93
+   * intitulés **officiels** de la norme, et les onze essais sont restés verts : les titres
+   * officiels font 29 signes de moyenne, les reformulations 28.
+   *
+   * Le seuil global attrape la reprise **longue** — un export CSV à 164 signes, ce qui a
+   * établi Q-255 — et laisse passer la reprise **courte**, qui est exactement le risque que
+   * le `PLAN_SERVEUR` §4.2 nomme pour l'Annexe A. Il fallait donc un second discriminant,
+   * et il ne pouvait pas être la taille absolue.
+   *
+   * Celui-ci est la **dérive** : une reformulation ne s'allonge pas de 30 % du jour au
+   * lendemain sans qu'on l'ait décidé. La valeur épinglée se relit en jouant l'essai.
+   */
+  const MOYENNES_MESUREES = Object.freeze({
+    'anssi-hygiene': 46,
+    'iso-27002-2022': 28,
+    'iso27001-smsi': 42,
+    'nis2-art21': 41,
+    dora: 31,
+    aircyber: 164,
+  });
+  /** Au-delà, ce n'est plus du bruit d'édition : c'est un changement de nature. */
+  const DERIVE_MAX = 1.3;
+
   test('§0 LA MATIÈRE : six catalogues, et des intitulés à mesurer', () => {
     // Sans cette moitié, tout ce qui suit passerait au vert sur une liste vide.
     const m = mesures();
@@ -328,6 +359,78 @@ describe('Le texte FRANÇAIS reste une reformulation, ou il le dit (constat Q-25
         '\nSoit on reformule, soit on inscrit le catalogue dans REPRISES_ASSUMEES **avec son ' +
         'motif** — et alors le §4.2 ne protège pas ce catalogue-là, ce qui doit être su.',
     );
+  });
+
+  test('§1 bis un intitulé FRANÇAIS identique à sa traduction ANGLAISE n’en est pas un', () => {
+    // ── Le discriminant qui attrape la mutation de l'auditeur (Q-283) ──────
+    //
+    // Si le titre français d'une exigence est, à l'espace près, celui que le
+    // produit rend pour la même exigence en anglais, ce n'est pas une
+    // reformulation française : c'est le titre officiel ANGLAIS recopié des
+    // deux côtés. C'est la signature exacte de la mutation qui a mis en défaut
+    // la rédaction précédente de ce garde.
+    //
+    // Mesuré au 10/09/2026 : **zéro cas** sur les 424 exigences des six
+    // catalogues. Le discriminant ne rougit donc sur rien d'existant — et il
+    // rougirait sur la reprise.
+    const fr = chargerCatalogues('fr');
+    const en = chargerCatalogues('en');
+    const titres = (R) => {
+      const m = new Map();
+      for (const { id } of R.couverture('fr')) {
+        for (const d of R.get(id).domaines ?? []) {
+          for (const e of d.exigences ?? []) m.set(`${id}|${d.id}/${e.code}`, String(e.titre ?? '').trim());
+        }
+      }
+      return m;
+    };
+    const tf = titres(fr);
+    const te = titres(en);
+    const fautifs = [];
+    for (const [cle, titreFr] of tf) {
+      const titreEn = te.get(cle);
+      if (titreFr !== '' && titreEn !== undefined && titreEn !== '' && titreFr === titreEn) {
+        fautifs.push(`${cle} : « ${titreFr} »`);
+      }
+    }
+    assert.deepEqual(
+      fautifs,
+      [],
+      'Ces intitulés sont IDENTIQUES en français et en anglais. Un titre qui ne change pas ' +
+        "d'une langue à l'autre n'est pas une reformulation française : c'est le titre " +
+        'officiel anglais, recopié des deux côtés. C’est la forme de reprise que le seuil de ' +
+        'longueur ne voit pas (constat Q-283) :\n  · ' + fautifs.join('\n  · '),
+    );
+  });
+
+  test('§1 ter la longueur moyenne ne DÉRIVE pas vers l’intitulé officiel', () => {
+    // Second discriminant, pour la reprise courte EN FRANÇAIS — que le §1 bis
+    // ne verrait pas, l'anglais restant différent. Les titres officiels
+    // français de l'Annexe A sont nettement plus longs que les reformulations
+    // (« Inventaire des informations et autres actifs associés » contre
+    // « Inventaire des actifs »), et une reformulation ne s'allonge pas de
+    // 30 % du jour au lendemain sans qu'on l'ait décidé.
+    const derives = mesures()
+      .filter((c) => c.id in MOYENNES_MESUREES)
+      .filter((c) => c.moyenne > MOYENNES_MESUREES[c.id] * DERIVE_MAX)
+      .map(
+        (c) =>
+          `${c.id} : ${String(c.moyenne)} signes de moyenne, contre ${String(MOYENNES_MESUREES[c.id])} ` +
+          `mesurés au 10/09/2026 (dérive maximale admise ×${String(DERIVE_MAX)})`,
+      );
+    assert.deepEqual(
+      derives,
+      [],
+      'Des intitulés se sont allongés au point de changer de nature :\n  · ' +
+        derives.join('\n  · ') +
+        "\nSi c'est délibéré — une refonte des libellés —, relevez la valeur épinglée EN LE " +
+        'DISANT. Si ce ne l’est pas, ce sont des intitulés officiels qui ont remplacé des ' +
+        'reformulations, et le `PLAN_SERVEUR` §4.2 ne protège plus ce catalogue.',
+    );
+    // Les catalogues non épinglés doivent l'être : sans quoi un catalogue neuf
+    // échapperait à ce contrôle en silence.
+    const absents = mesures().filter((c) => !(c.id in MOYENNES_MESUREES)).map((c) => c.id);
+    assert.deepEqual(absents, [], `Catalogue(s) sans moyenne épinglée : ${absents.join(', ')}`);
   });
 
   test('§2 une exception qui ne sert plus DOIT disparaître', () => {

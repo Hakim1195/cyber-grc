@@ -4020,6 +4020,13 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       'substrat_session',
       'tracabilite',
       'unicite_cloisonnee',
+      // VINGTIÈME, apporté par `022_la_version_suit_la_piece.sql` — constat **Q-282**,
+      // 7ᵉ passage de la porte S8 : le relais qui recalcule `documents.version_document`
+      // depuis la pièce en vigueur se déclenche bien sur « AFTER INSERT OR DELETE OR
+      // UPDATE … FOR EACH ROW », et il est armé « always ». ⚠️ **Il MESURE l'événement
+      // dès sa première rédaction** — c'est la leçon de la migration `021` (Q-281),
+      // appliquée avant d'en avoir besoin plutôt qu'après l'avoir payée.
+      'version_suit_piece',
       // ONZIÈME, apporté par `009_perimetre_actif.sql` (lot L4) : il vérifie que le
       // vocabulaire du journal déclare encore « changement_perimetre », l'action que le
       // sélecteur de filiale émet à chaque basculement (CONVENTIONS.md §30.4). Il a fait
