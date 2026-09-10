@@ -31,7 +31,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
@@ -225,6 +225,208 @@ describe('Aucune chaîne de catalogue ne porte de balise (constat Q-204)', () =>
       ['essai.domaines[0].exigences[0].titre'],
       'Le parcours doit atteindre le titre d’une exigence — c’est là que vivent les 234 ' +
         'chaînes d’AirCyber, et une balise s’y cacherait très bien.',
+    );
+  });
+});
+
+/* =====================================================================
+ *  Le CRITÈRE de la porte S7, enfin gardé par une machine — constat Q-257
+ * =====================================================================
+ *
+ * ── Ce que la porte S7 a reproché à ce fichier ──────────────────────────────
+ *
+ * Il compte la couverture, détecte les traductions orphelines et les balises —
+ * et **rien n'y portait sur le critère de la porte** : la nature du texte des
+ * catalogues. Un auditeur humain a dû lire 424 intitulés pour découvrir ce
+ * qu'une mesure de trois lignes dit d'un coup.
+ *
+ * ── Ce qui est gardé, et pourquoi c'est CELA ────────────────────────────────
+ *
+ * L'arbitrage du 09/09/2026 (`PLAN_SERVEUR` §4.2 amendé) a déplacé le critère :
+ * les **intitulés anglais** des catalogues ISO **suivent désormais la
+ * terminologie de la norme**, délibérément. Garder « la paraphrase » n'aurait
+ * donc plus de sens du côté anglais.
+ *
+ * Mais le §4.2 **continue d'affirmer une propriété du côté français**, et c'est
+ * elle qui protège le produit : *« les textes français sont des reformulations
+ * originales »*. Cette propriété-là **se mesure** — une reformulation est
+ * courte, un copier-coller ne l'est pas :
+ *
+ *     anssi-hygiene   46 signes de moyenne      iso-27002-2022   28
+ *     nis2-art21      41                        dora             31
+ *     iso27001-smsi   42                        aircyber        164  ← 4×
+ *
+ * C'est exactement ce chiffre qui a établi le constat **Q-255**. Le banc le
+ * relève désormais lui-même.
+ *
+ * ⚠️ **AirCyber est une exception DÉCLARÉE, et l'exception est elle-même
+ * gardée.** Son catalogue est l'export CSV du questionnaire BoostAerospace, ce
+ * que son en-tête écrit ; l'utilisateur a tranché le 09/09/2026 que cet usage
+ * est celui prévu. Mais une liste d'exceptions qui grossit en silence est ce que
+ * ce dépôt traque partout : le §2 ci-dessous **exige donc que chaque exception
+ * dépasse RÉELLEMENT le seuil**. Une exception devenue inutile fait rougir, et
+ * disparaît. C'est l'inverse d'une dérogation qui se transmet de porte en porte.
+ */
+describe('Le texte FRANÇAIS reste une reformulation, ou il le dit (constat Q-257)', () => {
+  /** Au-delà, ce n'est plus une reformulation courte : c'est de la reprise. */
+  const MOYENNE_MAX = 80;
+  /** Un intitulé isolé peut être long ; à ce point-là, c'est une phrase reprise. */
+  const PLUS_LONG_MAX = 200;
+
+  /**
+   * Catalogues dont le texte français n'est **pas** une reformulation, avec le
+   * motif. Toute entrée doit être justifiée par la mesure — voir le §2.
+   */
+  const REPRISES_ASSUMEES = Object.freeze({
+    aircyber:
+      'export CSV du questionnaire BoostAerospace (constat Q-255) ; usage tranché par ' +
+      "l'utilisateur le 09/09/2026 — le questionnaire est fait pour être utilisé et partagé " +
+      'avec les clients selon le niveau de confidentialité établi',
+  });
+
+  /** Longueur moyenne et maximale des intitulés FRANÇAIS, catalogue par catalogue. */
+  function mesures() {
+    const R = chargerCatalogues();
+    return R.couverture('fr').map(({ id }) => {
+      const ref = R.get(id);
+      const titres = (ref.domaines ?? []).flatMap((d) =>
+        (d.exigences ?? []).map((e) => String(e.titre ?? '')),
+      );
+      const total = titres.reduce((n, t) => n + t.length, 0);
+      return {
+        id,
+        nombre: titres.length,
+        moyenne: titres.length === 0 ? 0 : Math.round(total / titres.length),
+        plusLong: titres.reduce((m, t) => Math.max(m, t.length), 0),
+      };
+    });
+  }
+
+  test('§0 LA MATIÈRE : six catalogues, et des intitulés à mesurer', () => {
+    // Sans cette moitié, tout ce qui suit passerait au vert sur une liste vide.
+    const m = mesures();
+    assert.equal(m.length, 6, 'six catalogues sont attendus');
+    const exigences = m.reduce((n, c) => n + c.nombre, 0);
+    assert.ok(exigences >= 400, `seulement ${String(exigences)} intitulé(s) vus : le chargement ne lit plus rien.`);
+  });
+
+  test('§1 aucun catalogue ne dérive vers la reprise, hors exceptions déclarées', () => {
+    const fautifs = mesures()
+      .filter((c) => !(c.id in REPRISES_ASSUMEES))
+      .filter((c) => c.moyenne > MOYENNE_MAX || c.plusLong > PLUS_LONG_MAX)
+      .map(
+        (c) =>
+          `${c.id} : ${String(c.moyenne)} signes de moyenne (max ${String(MOYENNE_MAX)}), ` +
+          `plus long ${String(c.plusLong)} (max ${String(PLUS_LONG_MAX)})`,
+      );
+    assert.deepEqual(
+      fautifs,
+      [],
+      'Le `PLAN_SERVEUR` §4.2 affirme que « les textes français sont des reformulations ' +
+        'originales, ce qui protège le produit ». Ces catalogues ne le sont plus :\n  · ' +
+        fautifs.join('\n  · ') +
+        '\nSoit on reformule, soit on inscrit le catalogue dans REPRISES_ASSUMEES **avec son ' +
+        'motif** — et alors le §4.2 ne protège pas ce catalogue-là, ce qui doit être su.',
+    );
+  });
+
+  test('§2 une exception qui ne sert plus DOIT disparaître', () => {
+    // Le pendant du §1, et il est le plus important des deux : c'est lui qui
+    // empêche la liste d'exceptions de devenir un alibi qui se transmet.
+    const parId = new Map(mesures().map((c) => [c.id, c]));
+    const inutiles = Object.keys(REPRISES_ASSUMEES)
+      .map((id) => ({ id, c: parId.get(id) }))
+      .filter(({ c }) => c !== undefined && c.moyenne <= MOYENNE_MAX && c.plusLong <= PLUS_LONG_MAX)
+      .map(({ id }) => `${id} — il tient désormais le seuil : retirez-le de REPRISES_ASSUMEES`);
+    assert.deepEqual(inutiles, [], inutiles.join('\n'));
+
+    const inconnues = Object.keys(REPRISES_ASSUMEES).filter((id) => !parId.has(id));
+    assert.deepEqual(inconnues, [], `Exception portant sur un catalogue qui n'existe pas : ${inconnues.join(', ')}`);
+  });
+
+  test('§3 chaque exception porte un MOTIF, pas seulement un nom', () => {
+    for (const [id, motif] of Object.entries(REPRISES_ASSUMEES)) {
+      assert.ok(
+        typeof motif === 'string' && motif.length > 60,
+        `L'exception « ${id} » doit dire POURQUOI, et assez précisément pour qu'un lecteur ` +
+          "de la vague suivante n'ait pas à le redécouvrir.",
+      );
+    }
+  });
+});
+
+/* =====================================================================
+ *  Ce qui n'est PAS traduit doit se COMPTER — constat Q-256
+ * =====================================================================
+ *
+ * Le `PLAN_SERVEUR` §4.2 chiffre le volume à traduire : « exigences de
+ * référentiels **424** · points de contrôle d'audit **312** · groupes de
+ * correspondances **28** — de l'ordre de 1 500 textes métier ». Le lot L11 a
+ * livré **les 424**, et le dépôt annonce le lot livré.
+ *
+ * Les **312 points de contrôle d'audit** et les **28 correspondances** ne sont
+ * pas traduits — et, plus grave que non traduits : **aucun mécanisme ne les
+ * traduit**. Il n'y a pas de `js/data/en/audit_*.js`, pas d'entrée dans le
+ * registre, rien à remplir. Conséquence à l'écran : la grille d'audit d'un
+ * évaluateur anglophone sort **bilingue**, titre d'exigence en anglais et point
+ * de contrôle en français.
+ *
+ * ⚠️ **Ce fichier ne peut pas traduire 312 points de contrôle ; il peut refuser
+ * que le manque soit invisible.** C'est la doctrine du dépôt — *ce qui manque se
+ * voit ; il ne se devine pas.* Le §2 ci-dessous est le plus utile des deux : le
+ * jour où quelqu'un commence la traduction, il **rougit** et lui rappelle de
+ * brancher la couverture, au lieu de le laisser livrer une moitié de mécanisme
+ * dont l'instrument continuerait d'annoncer 100 %.
+ */
+describe('Le volume NON traduit est compté, pas oublié (constat Q-256)', () => {
+  /**
+   * Les modèles d'audit sont **découverts dans le répertoire**, pas listés.
+   *
+   * ⚠️ La première rédaction les nommait un par un — et rendait **309** au lieu
+   * de 312, en oubliant `audit_modeles.js`. C'est le travers que ce même fichier
+   * corrige deux paragraphes plus haut (constat Q-263), reproduit à trois lignes
+   * d'intervalle : *une liste écrite à la main est une omission qui attend*.
+   */
+  const REPERTOIRE = join(RACINE_FRONTEND, 'js', 'data');
+
+  function modelesDAudit() {
+    return readdirSync(REPERTOIRE).filter((f) => /^audit_.+\.js$/u.test(f));
+  }
+
+  function pointsDeControle() {
+    return modelesDAudit().reduce(
+      (n, f) => n + (readFileSync(join(REPERTOIRE, f), 'utf8').match(/\bctrl:/gu) ?? []).length,
+      0,
+    );
+  }
+
+  test('§1 le volume est celui que le cadrage annonce, et il est DIT', () => {
+    const n = pointsDeControle();
+    // Borne large : ce qui compte est que le chiffre existe et soit du bon
+    // ordre, pas qu'il soit figé — des points de contrôle peuvent être ajoutés.
+    assert.ok(n >= 300, `seulement ${String(n)} point(s) de contrôle vus : le balayage ne lit plus rien.`);
+    // eslint-disable-next-line no-console
+    console.log(
+      `\nModèles d'audit : ${String(n)} point(s) de contrôle · 0 traduit — ` +
+        'AUCUN mécanisme de traduction (constat Q-256, ouvert)\n',
+    );
+  });
+
+  test('§2 le jour où la traduction commence, la COUVERTURE doit suivre', () => {
+    // Un `en/audit_*.js` qui apparaîtrait pendant que `couverture()` ignore ces
+    // catalogues donnerait un instrument qui annonce 100 % sur la moitié du
+    // volume. C'est le motif de Q-263, appliqué avant qu'il se produise.
+    const commencees = modelesDAudit().filter((f) =>
+      existsSync(join(REPERTOIRE, 'en', f)),
+    );
+    assert.deepEqual(
+      commencees,
+      [],
+      'Des modèles d’audit sont en cours de traduction :\n  · ' +
+        commencees.join('\n  · ') +
+        "\nAvant d'aller plus loin, branchez-les sur `Referentiels.couverture()` — sans quoi " +
+        "l'instrument annoncera 100 % en ignorant 312 points de contrôle (c'est le motif du " +
+        'constat Q-263). Puis retirez ce garde-fou, qui aura fait son office.',
     );
   });
 });

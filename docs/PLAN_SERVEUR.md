@@ -226,7 +226,16 @@ ne prouve rien.
 - **Table en ajout seul** : ni mise à jour ni suppression, y compris pour un administrateur
   applicatif (droits PostgreSQL restreints, aucun point d'entrée d'écriture dans l'API).
 - **Chaînage par empreinte** : chaque entrée intègre l'empreinte de la précédente, ce qui
-  rend toute altération détectable même par accès direct à la base.
+  rend **toute altération et toute suppression intercalaire** détectables, même par accès
+  direct à la base.
+  ⚠️ **Ce que le chaînage NE détecte PAS, et il faut le dire à l'auditeur avant qu'il le
+  trouve** : une **troncature de queue**. Si l'on retire les dernières entrées — les plus
+  récentes —, chaque maillon restant pointe toujours correctement vers le précédent et la
+  vérification répond `sain: true`. Elle démontre que *ce qui reste n'a pas été altéré*,
+  **pas que rien n'a été retiré de la fin**. Constats **Q-243** et **Q-272** ; cette ligne
+  promettait « toute altération » sans réserve jusqu'au 09/09/2026. La parade est
+  d'exploitation — un journal qui rétrécit se voit au **compte d'entrées** — et l'ancrage
+  d'une tête de chaîne reste la correction de fond, inscrite au registre.
 - **Couverture** : connexions réussies **et échouées**, refus d'autorisation, création /
   modification / suppression avec valeurs avant et après, actions d'administration
   (création de filiale, changement de droits), **imports** et **exports**.

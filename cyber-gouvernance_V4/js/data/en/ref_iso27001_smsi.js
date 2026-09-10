@@ -27,6 +27,31 @@
 //    titre, et aucune ne se lirait. Le français les a nommées ; l'anglais les
 //    nomme aussi, avec les MOTS de la norme.
 //
+// 1 bis. LES INTITULÉS PORTENT UN VERBE, ET CE N'EST PAS UN CHOIX DE STYLE.
+//    ⚠️ **Corrigé le 09/09/2026 — constat Q-253 de la porte S7.** Treize
+//    intitulés avaient été réduits au substantif de la norme : « Resources »,
+//    « Competence », « Awareness », « Internal audit », « Continual
+//    improvement ». Le français, lui, portait le verbe : « Fournir les
+//    ressources nécessaires au SMSI », « Sensibiliser le personnel ».
+//
+//    Deux raisons, et la seconde est celle de ce fichier :
+//
+//    · **Un substantif nu est inutilisable dans une GRILLE D'ÉVALUATION.**
+//      « Resources » ne dit pas à l'évaluateur ce qu'on lui demande de coter.
+//      Ces lignes ne sont pas une table des matières : chacune se répond par un
+//      statut et une maturité.
+//    · **Le parti pris n° 2 ci-dessous disait déjà pourquoi**, à propos de
+//      6.1.2 / 8.2 : le français distingue par le verbe, « et l'anglais garde
+//      cette distinction — sans elle, un RSSI évaluerait deux fois la même
+//      chose ». La règle valait pour tout le fichier ; elle n'avait été
+//      appliquée qu'aux clauses où la norme se répète.
+//
+//    ⚠️ **La tête normative est CONSERVÉE** : « Provide the resources needed for
+//    the ISMS », et non une périphrase qui fuirait le mot de la norme. C'est
+//    exactement ce que l'arbitrage du 09/09/2026 autorise et borne
+//    (`PLAN_SERVEUR` §4.2 amendé) : le vocabulaire normatif est assumé pour les
+//    intitulés, le texte normatif ne se reproduit pas.
+//
 // 2. LE MÊME PIÈGE, EN PLUS SOURNOIS, AUX CLAUSES 6.1.2/8.2 ET 6.1.3/8.3. La
 //    norme y répète volontairement le même intitulé (« Information security risk
 //    assessment » en 6.1.2 et en 8.2) : au chapitre 6 on DÉFINIT le processus,
@@ -94,8 +119,8 @@ Referentiels.registerTraduction("iso27001-smsi", "en", {
         "c4/4.4": { titre: "Establishing and improving the ISMS", aide: "Establish, maintain and continually improve the ISMS and its processes, in line with the standard." },
 
         // ── 5. Leadership ───────────────────────────────────────────────────
-        "c5/5.1": { titre: "Leadership and commitment", aide: "Top management drives the policy, builds it into the business processes, provides the resources and backs the people involved." },
-        "c5/5.2": { titre: "Information security policy", aide: "A policy that fits the business, frames the objectives, and is communicated and available as documented information." },
+        "c5/5.1": { titre: "Demonstrate leadership and commitment", aide: "Top management drives the policy, builds it into the business processes, provides the resources and backs the people involved." },
+        "c5/5.2": { titre: "Establish the information security policy", aide: "A policy that fits the business, frames the objectives, and is communicated and available as documented information." },
         "c5/5.3": { titre: "Roles, responsibilities and authorities", aide: "Assign and communicate who is responsible for ISMS conformity and for reporting on its performance." },
 
         // ── 6. Planning ─────────────────────────────────────────────────────
@@ -106,11 +131,11 @@ Referentiels.registerTraduction("iso27001-smsi", "en", {
         "c6/6.3": { titre: "Planning of changes to the ISMS", aide: "Carry out any change needed to the ISMS in a planned manner (new in the 2022 edition)." },
 
         // ── 7. Support ──────────────────────────────────────────────────────
-        "c7/7.1": { titre: "Resources", aide: "Determine and allocate the resources needed to establish, implement, maintain and improve the ISMS." },
-        "c7/7.2": { titre: "Competence", aide: "Determine the competence required, acquire it (training, recruitment) and retain evidence of it." },
-        "c7/7.3": { titre: "Awareness", aide: "Everyone knows the policy, their own contribution to the effectiveness of the ISMS, and what failing to comply means." },
-        "c7/7.4": { titre: "Communication", aide: "Determine what to communicate about the ISMS, when, with whom and how." },
-        "c7/7.5.1": { titre: "Required documented information", aide: "The ISMS holds the documentation the standard requires, plus whatever is judged necessary for it to be effective." },
+        "c7/7.1": { titre: "Provide the resources needed for the ISMS", aide: "Determine and allocate the resources needed to establish, implement, maintain and improve the ISMS." },
+        "c7/7.2": { titre: "Ensure the competence of the people involved", aide: "Determine the competence required, acquire it (training, recruitment) and retain evidence of it." },
+        "c7/7.3": { titre: "Make people aware of the ISMS and their part in it", aide: "Everyone knows the policy, their own contribution to the effectiveness of the ISMS, and what failing to comply means." },
+        "c7/7.4": { titre: "Organise internal and external communication", aide: "Determine what to communicate about the ISMS, when, with whom and how." },
+        "c7/7.5.1": { titre: "Maintain the required documented information", aide: "The ISMS holds the documentation the standard requires, plus whatever is judged necessary for it to be effective." },
         "c7/7.5.2": { titre: "Creating and updating documented information", aide: "Appropriate identification, format and media; review and approval." },
         "c7/7.5.3": { titre: "Control of documented information", aide: "Availability, protection, distribution, versioning, retention and disposal; control of documents of external origin." },
 
@@ -121,14 +146,14 @@ Referentiels.registerTraduction("iso27001-smsi", "en", {
 
         // ── 9. Performance evaluation ───────────────────────────────────────
         "c9/9.1": { titre: "Monitoring, measurement, analysis and evaluation", aide: "Determine what to measure, by which methods, when and by whom, so as to evaluate the performance and effectiveness of the ISMS." },
-        "c9/9.2.1": { titre: "Internal audit", aide: "Check at planned intervals that the ISMS conforms to its own requirements and to the standard, and is effectively implemented." },
-        "c9/9.2.2": { titre: "Internal audit programme", aide: "Plan the frequency, methods and responsibilities; objective and impartial auditors; results reported and retained." },
-        "c9/9.3.1": { titre: "Management review", aide: "Top management reviews the ISMS at planned intervals to confirm its continuing suitability, adequacy and effectiveness." },
-        "c9/9.3.2": { titre: "Management review inputs", aide: "Status of earlier actions, changes in context, performance, nonconformities, audit and risk assessment results, feedback from interested parties." },
-        "c9/9.3.3": { titre: "Management review results", aide: "Produce decisions on continual improvement and on changes to the ISMS, and retain evidence of them." },
+        "c9/9.2.1": { titre: "Carry out internal audits", aide: "Check at planned intervals that the ISMS conforms to its own requirements and to the standard, and is effectively implemented." },
+        "c9/9.2.2": { titre: "Establish an internal audit programme", aide: "Plan the frequency, methods and responsibilities; objective and impartial auditors; results reported and retained." },
+        "c9/9.3.1": { titre: "Carry out management reviews", aide: "Top management reviews the ISMS at planned intervals to confirm its continuing suitability, adequacy and effectiveness." },
+        "c9/9.3.2": { titre: "Examine the required management review inputs", aide: "Status of earlier actions, changes in context, performance, nonconformities, audit and risk assessment results, feedback from interested parties." },
+        "c9/9.3.3": { titre: "Record the results of the management review", aide: "Produce decisions on continual improvement and on changes to the ISMS, and retain evidence of them." },
 
         // ── 10. Improvement ─────────────────────────────────────────────────
-        "c10/10.1": { titre: "Continual improvement", aide: "Continually improve the suitability, adequacy and effectiveness of the system." },
+        "c10/10.1": { titre: "Improve the ISMS continually", aide: "Continually improve the suitability, adequacy and effectiveness of the system." },
         "c10/10.2": { titre: "Nonconformity and corrective action", aide: "React, correct, analyse the causes, act to prevent recurrence, check that it worked and retain evidence." }
     }
 });

@@ -83,7 +83,14 @@
 //
 // 5. QUELQUES TERMES DE MÉTIER, FIXÉS UNE FOIS POUR TOUTES. « Parc
 //    informatique » → *IT estate* (et non *IT park*, qui ne veut rien dire) ;
-//    « station blanche » → *media sanitisation station* ; « banc de
+//    « station blanche » → *media scanning kiosk*. ⚠️ **Corrigé le 09/09/2026,
+//    constat Q-261 de la porte S7 : le premier choix était *media sanitisation
+//    station*, et il disait le CONTRAIRE de la fonction.** En anglais de la
+//    sécurité, *media sanitization* est le terme consacré (NIST SP 800-88) pour
+//    la DESTRUCTION des données d'un support. Une station blanche ANALYSE un
+//    support ; elle ne l'efface pas — et `Ext57`, qui parle de moteurs antivirus
+//    sur ces mêmes stations, contredisait le terme dans la phrase suivante ;
+//    « banc de
 //    production » → *production test bench* ; « charte d'utilisation » →
 //    *acceptable use policy* ; « rupture protocolaire » → *protocol break* ;
 //    « machine de rebond » → *jump server* ; « politique de bureau propre » →
@@ -375,9 +382,9 @@ Referentiels.registerTraduction("aircyber", "en", {
         "ext/Ext52": { titre: "Do you have a means of detecting foreign or unauthorised connections to the servers used by your industrial systems, so as to qualify them and block them where needed?" },
         "ext/Ext53": { titre: "Is the production Wi-Fi network dedicated and isolated from the other Wi-Fi networks?" },
         "ext/Ext54": { titre: "Do you disable Wi-Fi and wireless connections by default on your equipment (industrial production test benches)?" },
-        "ext/Ext55": { titre: "Do you provide media sanitisation stations, open to all users, to confirm that the removable media used for your customers' production carry nothing harmful?" },
+        "ext/Ext55": { titre: "Do you provide media scanning kiosks, open to all users, to confirm that the removable media used for your customers' production carry nothing harmful?" },
         "ext/Ext56": { titre: "Do you apply specific restrictions or controls governing the use of removable devices in the production environments?" },
-        "ext/Ext57": { titre: "Is one of the anti-virus engines used on the media sanitisation stations different from the one used on the workstations?" },
+        "ext/Ext57": { titre: "Is one of the anti-virus engines used on the media scanning kiosks different from the one used on the workstations?" },
         "ext/Ext58": { titre: "Do you have security controls that govern and secure BYOD use in your customers' production environments (network connection, anti-malware protection)?" },
         "ext/Ext59": { titre: "Do you have a crisis and incident handling process for incidents in your customers' production, shared with those customers (alerting the customer's security manager)?" },
         "ext/Ext6": { titre: "Are your crisis management, business continuity and disaster recovery plans designed to include your contractors and suppliers?" },

@@ -69,6 +69,46 @@ const Referentiels = (() => {
     }
 
     /** Applique une traduction à un référentiel, chaîne par chaîne. */
+    /**
+     * Champs de PROSE d'un référentiel — **découverts, jamais listés**.
+     *
+     * ⚠️ **Constat Q-263 de la porte S7.** `traduire()` recopiait six champs
+     * nommés et `couverture()` en comptait quatre, écrits à la main **à deux
+     * endroits qui devaient rester d'accord**. L'omission a eu lieu : le champ
+     * `noteNumerotation` de `ref_anssi.js` — 295 signes de prose française
+     * expliquant le décalage de numérotation du guide, ajouté APRÈS L11 —
+     * n'était ni traduit, ni compté, et l'instrument annonçait pourtant
+     * `anssi-hygiene 118/118 (100 %)`. Le défaut était **latent** parce que rien
+     * ne l'affiche encore ; le jour où on l'affiche, il sort en français sur
+     * l'écran anglais **sans qu'aucun compteur ne bouge**.
+     *
+     * C'est le premier cas du `CLAUDE.md` §3 — *une omission qui fait réussir
+     * quelque chose en silence alors que c'est faux* —, donc la liste est le
+     * mauvais outil : on **parcourt** les champs du référentiel.
+     *
+     * ⚠️ **Ce qui reste écrit à la main est l'INVERSE, et c'est ce qui le rend
+     * sûr** : la liste des champs qu'on ne traduit PAS. Si elle devient
+     * incomplète, un champ non traduisible devient traduisible — le dictionnaire
+     * n'en porte alors aucune entrée, la valeur d'origine est rendue telle
+     * quelle, et **rien ne casse**. L'omission échoue du bon côté.
+     */
+    const CHAMPS_NON_TRADUISIBLES = Object.freeze([
+        // Identifiants et réglages : jamais de la prose.
+        "id", "scoring", "domaines", "clLabels",
+        // ⚠️ `editeur` est TRADUISIBLE mais HORS COUVERTURE, et la distinction
+        // n'est pas un détail : « ANSSI », « ISO/IEC », « BoostAerospace » sont
+        // des noms propres qui se lisent à l'identique partout. Le compter
+        // ferait réclamer par l'instrument une traduction qui ne doit pas
+        // exister — et un instrument qui réclame du faux finit par être ignoré.
+        "editeur"
+    ]);
+
+    /** Les clés de prose de ce référentiel, telles qu'il les porte réellement. */
+    function champsProse(ref) {
+        return Object.keys(ref || {}).filter(cle =>
+            typeof ref[cle] === "string" && CHAMPS_NON_TRADUISIBLES.indexOf(cle) === -1);
+    }
+
     function traduire(ref, dico) {
         if (!ref || !dico) return ref;
         const pris = (traduit, origine) => (typeof traduit === "string" && traduit !== "" ? traduit : origine);
@@ -87,24 +127,12 @@ const Referentiels = (() => {
                 })
             });
         });
-        return Object.assign({}, ref, {
-            nom: pris(dico.nom, ref.nom),
-            // `version` est de la PROSE — « 42 mesures », « 5 piliers »,
-            // « Chap. 4-10 · SMSI » —, et elle s'affiche sur la fiche du
-            // référentiel. Elle était traduisible nulle part : quatre chaînes
-            // restaient en français sur l'écran anglais, ET l'instrument de
-            // mesure ne les voyait pas. C'est exactement la forme de défaut que
-            // ce lot existe pour empêcher, et c'est mon mécanisme qui la portait.
-            version: pris(dico.version, ref.version),
-            // `editeur` est traduisible mais N'ENTRE PAS dans la couverture, et
-            // la distinction n'est pas un détail : « ANSSI », « ISO/IEC »,
-            // « BoostAerospace » sont des NOMS PROPRES qui se lisent à
-            // l'identique dans toutes les langues. Les compter ferait réclamer
-            // par l'instrument une traduction qui ne doit pas exister — et un
-            // instrument qui réclame du faux finit par être ignoré.
-            editeur: pris(dico.editeur, ref.editeur),
-            description: pris(dico.description, ref.description),
-            aide: pris(dico.aide, ref.aide),
+        // Tous les champs de prose que ce référentiel porte, `editeur` compris —
+        // il est traduisible, il n'est simplement pas COMPTÉ (voir ci-dessus).
+        const traduits = {};
+        champsProse(ref).forEach(cle => { traduits[cle] = pris(dico[cle], ref[cle]); });
+        if (typeof ref.editeur === "string") traduits.editeur = pris(dico.editeur, ref.editeur);
+        return Object.assign({}, ref, traduits, {
             domaines: domaines
         });
     }
@@ -121,13 +149,15 @@ const Referentiels = (() => {
         return order.map(id => {
             const ref = registry[id];
             const dico = (traductions[id] && traductions[id][cible]) || null;
-            // nom, version, description, aide. `editeur` en est exclu : un nom
-            // propre se lit à l'identique partout, et le compter ferait réclamer
-            // une traduction qui ne doit pas exister.
-            let total = 4;
+            // ⚠️ Les champs de niveau référentiel sont DÉCOUVERTS, plus comptés
+            // en dur (constat Q-263) : un champ de prose ajouté demain entre
+            // dans le total le jour où il est ajouté, et le pourcentage baisse
+            // au lieu de rester flatteusement à 100 %.
+            const prose = champsProse(ref);
+            let total = prose.length;
             let faits = 0;
             const compte = (traduit) => { if (typeof traduit === "string" && traduit !== "") faits += 1; };
-            if (dico) { compte(dico.nom); compte(dico.version); compte(dico.description); compte(dico.aide); }
+            if (dico) prose.forEach(cle => compte(dico[cle]));
             (ref.domaines || []).forEach(d => {
                 total += 3;
                 const td = (dico && dico.domaines && dico.domaines[d.id]) || null;

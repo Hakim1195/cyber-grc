@@ -114,6 +114,12 @@ Referentiels.registerTraduction("anssi-hygiene", "en", {
     nom: "Cyber hygiene (ANSSI)",
     description: "A baseline of good practice for strengthening the security of an information system. An excellent starting point — approachable and concrete — before the more demanding frameworks (ISO 27001, NIS2, DORA).",
     aide: "Published by ANSSI, the French national cybersecurity agency, this guide gathers elementary measures which, once applied, head off the great majority of common incidents.",
+    // ⚠️ Ajouté le 09/09/2026 — constat **Q-263** de la porte S7. Ce champ a été
+    // ajouté au catalogue français APRÈS le lot L11 ; il n'était ni traduit, ni
+    // compté, et l'instrument annonçait pourtant « 118/118, 100 % ». Depuis que
+    // les champs de prose sont DÉCOUVERTS au lieu d'être listés, son absence se
+    // voyait : 118/119. La voici comblée.
+    noteNumerotation: "This catalogue is numbered differently from the ANSSI guide from measure 30 onwards. The official number is shown on each affected measure. The codes are deliberately not realigned: your self-assessments are stored by code, and renumbering them would silently reassign them to other measures.",
 
     domaines: {
         sensibiliser: {
@@ -172,7 +178,7 @@ Referentiels.registerTraduction("anssi-hygiene", "en", {
 
         // ── III. Authenticate and control accesses ──────────────────────────
         "acces/8": { titre: "Identify each user by name", aide: "Named accounts (no shared accounts) and separation of the user and administrator roles are what make actions traceable." },
-        "acces/9": { titre: "Grant rights on need alone (least privilege)", aide: "Everyone reaches only the resources their job requires: that is what limits the impact of a compromised account." },
+        "acces/9": { titre: "Grant rights on a need-to-know basis (least privilege)", aide: "Everyone reaches only the resources their job requires: that is what limits the impact of a compromised account." },
         "acces/10": { titre: "Enforce robust password rules", aide: "Sufficient length and complexity: a weak password is broken in seconds." },
         "acces/11": { titre: "Protect stored passwords", aide: "They must never be kept in the clear, only as fingerprints (salted hashing)." },
         "acces/12": { titre: "Change default credentials and secrets", aide: "Factory 'admin/admin' accounts are public knowledge: change them at installation time." },
@@ -191,7 +197,7 @@ Referentiels.registerTraduction("anssi-hygiene", "en", {
         "reseau/21": { titre: "Use secure network protocols", aide: "Prefer the encrypted versions (HTTPS, SSH, SFTP…) over legacy protocols that transmit in the clear." },
         "reseau/22": { titre: "Implement a secure Internet access gateway", aide: "Filtering, proxying and logging frame outbound access and block dangerous sites or flows." },
         "reseau/23": { titre: "Segregate Internet-facing services (DMZ)", aide: "Servers reachable from the Internet sit in a buffer zone, cut off from the heart of the information system." },
-        "reseau/24": { titre: "Protect professional email", aide: "Anti-spam, anti-phishing, attachment filtering and sender authentication (SPF, DKIM, DMARC)." },
+        "reseau/24": { titre: "Protect corporate email", aide: "Anti-spam, anti-phishing, attachment filtering and sender authentication (SPF, DKIM, DMARC)." },
         "reseau/25": { titre: "Secure the interconnections with partners", aide: "Dedicated links to third parties must be encrypted, filtered and held to the strict minimum." },
         "reseau/26": { titre: "Control physical access to technical areas", aide: "Server rooms and patch cabinets protected: physical access bypasses a great many logical protections." },
 
@@ -200,13 +206,13 @@ Referentiels.registerTraduction("anssi-hygiene", "en", {
         "administration/27": { titre: "Cut Internet access from administration tools", aide: "The workstations and servers used to administer the information system must not browse the Internet (risk of compromise)." },
         "administration/28": { titre: "Dedicate and separate the administration network", aide: "Administering over a separate network stops an attacker on the office network from reaching the admin consoles." },
         "administration/29": { titre: "Reduce administration rights to strict need", aide: "The fewer accounts that hold elevated rights, the smaller the privileged attack surface." },
-        "administration/30": { titre: "Use admin accounts for admin tasks only", aide: "An administrator uses a standard account for office work, and their privileged account only to administer." },
+        "administration/30": { titre: "Use administrator accounts for administration tasks only", aide: "An administrator uses a standard account for office work, and their privileged account only to administer." },
 
         // ── VII. Manage mobile working ──────────────────────────────────────
         "nomadisme/31": { titre: "Physically secure mobile devices", aide: "Locking, privacy screens and vigilance against the theft or loss of laptops and smartphones." },
         "nomadisme/32": { titre: "Encrypt devices and media taken off site", aide: "A lost computer must not give up its data: full-disk encryption is essential away from the office." },
         "nomadisme/33": { titre: "Secure the remote connection (VPN)", aide: "Access from outside goes through an encrypted, authenticated tunnel into the information system." },
-        "nomadisme/34": { titre: "Adopt a policy for mobile devices", aide: "A dedicated policy for smartphones and tablets (MDM, permitted applications, work/personal separation)." },
+        "nomadisme/34": { titre: "Govern the use of mobile devices", aide: "A dedicated policy for smartphones and tablets (MDM, permitted applications, work/personal separation)." },
 
         // ── VIII. Keep the information system up to date ────────────────────
         "maj/35": { titre: "Apply an update policy", aide: "Installing security patches promptly closes known holes before they are exploited." },

@@ -64,8 +64,15 @@ n° 1 de ce produit.
 
 ## 1. RSSI de filiale — `GRC-<CODE>-RSSI`
 
-**Votre périmètre** : votre filiale, **tous les domaines**, au niveau *validation* — vous
-lisez, vous écrivez, et vous **approuvez**.
+**Votre périmètre** : votre filiale, **tous les domaines métier**, au niveau *validation* —
+vous lisez, vous écrivez, et vous **approuvez**. Le **journal d'audit**, les **droits**, les
+**paramètres** et la **gestion des filiales** restent à l'administration : vingt-six domaines
+sur trente.
+
+> ⚠️ Ce paragraphe écrivait « **tous les domaines** » jusqu'au 09/09/2026, et **se
+> contredisait lui-même** au §8, où « lire le journal d'audit » figure parmi ce que
+> l'administrateur **seul** peut faire (constat **Q-269**). C'est la seconde phrase qui était
+> exacte.
 
 ### Ce que vous faites au quotidien
 
@@ -118,14 +125,20 @@ conformité.
 | **Synthèse Direction** | la vue d'une filiale, pour entrer dans le détail |
 | **Échéancier** | ce qui arrive à terme, toutes filiales confondues |
 
-⚠️ **Ce que votre profil ne montre PAS, et c'est à savoir avant de vous en étonner** : le
-profil *Direction* livré avec le produit n'ouvre **ni les risques, ni les incidents**. Sur
-l'écran Vision Groupe, ces colonnes affichent donc `—`, et non `0`.
+✅ **Votre profil ouvre bien les risques et les incidents.** Sur l'écran Vision Groupe, ces
+colonnes portent des chiffres, filiale par filiale, et non des tirets.
 
-**Ce n'est pas une panne, et ce n'est probablement pas ce que vous voulez.** Si la direction
-doit voir combien de risques critiques porte chaque filiale, il faut ajouter les domaines
-`risques` et `incidents` au profil — c'est une décision d'administration, pas un
-développement. Voir le constat **Q-181** au registre du projet.
+> ⚠️ **Ce paragraphe disait l'inverse jusqu'au 09/09/2026** — constat **Q-268** de la porte
+> S7. Il annonçait que le profil *Direction* n'ouvrait « ni les risques, ni les incidents »
+> et invitait à en demander l'ajout à l'administration. C'était vrai jusqu'au **05/09**, où
+> la migration `016` a fermé le constat **Q-181** en donnant à ce profil les six domaines qui
+> lui manquaient. Mesuré en base : `DIRECTION` porte **douze domaines en lecture**, `risques`
+> et `incidents` compris.
+>
+> ⚠️ **Un tiret garde néanmoins son sens, et c'est important** : là où une colonne affiche
+> `—`, cela veut dire *« ce domaine n'est pas dans vos droits »*, **jamais `0`**. Un outil
+> qui sert de preuve en audit ne doit pas dire « aucun risque » quand il veut dire « je n'ai
+> pas le droit de regarder ».
 
 ---
 
@@ -134,9 +147,15 @@ développement. Voir le constat **Q-181** au registre du projet.
 **Votre périmètre** : votre filiale, sur **quatre domaines** — actifs, plan d'actions,
 incidents, actions préalables (MCO) —, au niveau *contribution*.
 
-Vous **saisissez et modifiez**, vous ne **validez pas**. Concrètement : vous rédigez une
-politique, vous ne l'approuvez pas ; vous déclarez un incident, vous ne clôturez pas le
-circuit d'acceptation d'un risque.
+Vous **saisissez et modifiez**, vous ne **validez pas**. Concrètement : vous déclarez un
+incident, vous ne clôturez pas le circuit d'acceptation d'un risque ; vous mettez à jour une
+action du plan, vous ne prononcez pas son acceptation.
+
+> ⚠️ **L'exemple donné ici jusqu'au 09/09/2026 était précisément celui que vous ne pouvez
+> pas faire** — « vous rédigez une politique, vous ne l'approuvez pas » (constat **Q-270**).
+> `documents` **n'est pas** dans vos quatre domaines : vous ne voyez pas l'écran *Documents*,
+> vous n'y écrivez donc rien. Les quatre domaines annoncés ci-dessus, eux, sont exacts —
+> mesurés en base.
 
 ⚠️ Si un bouton d'approbation n'apparaît pas, c'est votre niveau — pas un défaut d'écran.
 Et si vous atteigniez la fonction autrement, **le serveur refuserait aussi** : l'interface
@@ -251,8 +270,11 @@ dans les fiches où ils ont été saisis ; vous retirez la suggestion, pas l'his
 
 ## 7. Auditeur externe — `GRC-<CODE>-AUDITEUR`
 
-**Votre périmètre** : **lecture seule**, sur presque tout — mais pas sur le journal d'audit,
-ni sur les droits, ni sur les paramètres.
+**Votre périmètre** : **lecture seule** — vingt-six domaines sur trente, avec les **mêmes
+quatre exclusions que le RSSI** : ni le journal d'audit, ni les droits, ni les paramètres,
+ni la **gestion des filiales**. ⚠️ Cette dernière manquait à l'énumération jusqu'au
+09/09/2026 (constat **Q-277**) : l'incidence pratique est nulle, mais c'est l'exhaustivité
+qui distingue un guide de droits d'une paraphrase.
 
 ⚠️ **Lire n'est pas exporter.** Extraire un jeu de données est une autorisation **distincte**
 (`GRC-EXPORT`), qu'un auditeur ne reçoit pas par défaut. Si un bouton d'export est inerte,
