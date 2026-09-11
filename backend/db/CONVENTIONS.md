@@ -2509,3 +2509,72 @@ jamais** : les dates **stockées** et **transmises** restent ISO (`AAAA-MM-JJ`).
 l'affichage est un affichage ; formater à l'écriture serait un changement de schéma qui ne
 dit pas son nom, et un `01/02` qui vaut février à Paris et janvier à New York est
 exactement le genre de défaut qu'un audit ne pardonne pas.
+
+---
+
+## §38 — Toute référence composite vers une table MIXTE porte sa clé de portée
+
+> **Posé le 11/09/2026, migration `027`.** Ce n'est pas une règle neuve : c'est le
+> constat **N-10** du second passage de la porte S1, resté sept mois à l'état de
+> vigilance dans un commentaire de `document_referentiels`. Une règle qui demande de
+> *juger chaque site* échoue au troisième passage — le §3 du `CLAUDE.md` le dit pour les
+> expressions rationnelles, et c'est la même mécanique ici.
+
+### La règle
+
+Une clé étrangère **composite** qui vise une table **mixte** (`filiale_id` nullable,
+`null` = portée Groupe) en passant par la colonne `filiale_id` de la table référençante
+**ne vérifie rien** quand ce `filiale_id` est nul. La règle de correspondance par défaut
+de SQL — *match simple* — neutralise toute clé composite dont **une** colonne est nulle.
+
+Or `filiale_id` nul est exactement le **socle Groupe** : le cas le plus partagé du
+schéma, celui que les vingt filiales lisent.
+
+Il faut donc **une seconde clé**, passant par une colonne qui n'est jamais nulle. C'est
+`portee_groupe`, engendrée (`generated always as (filiale_id is null) stored`). Les deux
+ensemble épinglent `filiale_id` dans les deux cas :
+
+| Cas | Ce qui vérifie |
+|---|---|
+| `filiale_id` renseigné | `fk_…_coherence` impose l'égalité des filiales |
+| `filiale_id` nul | `fk_…_portee` impose que la cible soit Groupe aussi |
+
+### Ce que l'omission produit
+
+Une ligne de **portée Groupe** désignant une ligne **locale** d'une filiale — et la
+suppression ordinaire de celle-ci, par sa filiale, emporte alors le socle commun des
+dix-neuf autres. Sur `documents.traitement_id`, c'est la politique du groupe qui perd son
+rattachement à l'article 30 sans que personne l'ait décidé.
+
+### Le garde-fou, et ce qu'il ne couvre PAS
+
+`f_verifier_references_portee()` (migration `027`) **découvre** la classe dans le
+catalogue : toute clé composite visant une table de `f_tables_mixtes()` par un
+`filiale_id` nullable doit avoir sa compagne sur `portee_groupe`. Une table qui **devient**
+mixte fait donc entrer d'un coup toutes ses références dans le périmètre, sans qu'aucun
+fichier change — c'est ce qui est arrivé à `traitement_mesures` le jour de sa naissance
+comme table mixte, et le garde-fou l'a réclamée avant qu'un humain y pense.
+
+⚠️ **Hors classe, à dessein : les références SIMPLES à une table mixte** —
+`risques.catalogue_id`, `actions.mesure_id`, `mesure_mise_en_oeuvre.mesure_id`,
+`traitement_mesures.mesure_id`. Elles n'ont **jamais** prétendu vérifier l'égalité des
+filiales ; leur oracle d'existence faible est arbitré par écrit au §2 de la migration
+`012`, et il est borné par 52 bits d'aléa cryptographique plus la RLS. Les faire rougir
+ici rouvrirait une décision prise — *et un garde-fou qui crie sur ce qui est arbitré cesse
+d'être lu*.
+
+### Et une limite de PostgreSQL qu'il faut connaître avant de dessiner
+
+**`on delete set null` est impossible sur une clé qui contient une colonne engendrée**,
+et la forme à liste de colonnes de PostgreSQL 15 — `on delete set null (une_colonne)` —
+**ne sauve pas** : le contrôle porte sur la présence d'une colonne engendrée dans la clé,
+pas sur les colonnes que l'action toucherait.
+
+    ERREUR : invalid ON DELETE action for foreign key constraint containing
+             generated column   (SQLSTATE 42601)
+
+Le déliage se fait donc **dans la couche applicative, à la filiale près**, la base tenant
+`restrict` comme barrière — exactement le dispositif arbitré au bloquant **B-1** de la
+porte S1 pour `mesure_catalogue` (§17.6). Fabriquer une colonne de portée **non**
+engendrée pour contourner serait ajouter un endroit de plus où se tromper : le §2 de la
+migration `012` le refuse déjà, pour la même raison.

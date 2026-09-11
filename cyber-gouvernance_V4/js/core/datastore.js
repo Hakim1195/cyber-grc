@@ -675,10 +675,20 @@ const DataStore = (() => {
     }
 
     /* =========================
-       DOCUMENTS / POLITIQUES (v5)
+       DOCUMENTS / POLITIQUES (v5, classifiés depuis la migration 027)
        { id, titre, type, version, proprietaire, statut, date_revue, emplacement,
-         referentiels[], notes, updatedAt }
-       Ne stocke PAS les fichiers : référence leur emplacement.
+         referentiels[], confidentialite, donnees_personnelles, traitement_id,
+         etiquettes[], notes, updatedAt }
+
+       ⚠️ La ligne « ne stocke PAS les fichiers » qui figurait ici était vraie du
+       produit navigateur et FAUSSE depuis le lot L6 : l'application détient les
+       pièces jointes d'une fiche, les analyse, les empreinte et les délivre.
+       `emplacement` ne désigne, lui, qu'un document resté ailleurs.
+
+       `confidentialite` vaut « interne » à défaut — jamais « public » : un
+       document dont personne n'a tranché la diffusion ne doit pas être réputé
+       diffusable. C'est aussi ce que devient un document repris d'un export
+       antérieur à `027`, et c'est le seul défaut acceptable.
     ========================== */
     function getDocuments() { return data.documents; }
     function getDocumentById(id) { return data.documents.find(d => d.id === id); }

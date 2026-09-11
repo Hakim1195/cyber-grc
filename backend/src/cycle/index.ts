@@ -190,6 +190,15 @@ export interface OptionsCycle {
 /** Les deux chemins du lot, exportés pour que le banc n'en recopie aucun. */
 export const CHEMIN_SORTIE = '/api/cycle/sortie-filiale';
 export const CHEMIN_PURGE = '/api/cycle/purge-rgpd';
+/**
+ * Le registre des données personnelles **du produit lui-même** (migration `026`).
+ *
+ * ⚠️ `/api/rgpd/…` et non `/api/cycle/…` : le chemin dit à qui la route s'adresse,
+ * et c'est au DPO — pas à l'exploitant qui fait sortir une filiale. Il est monté
+ * par ce greffon parce que c'est ici que vit le registre, pas pour que son nom
+ * s'aligne sur ses voisins.
+ */
+export const CHEMIN_REGISTRE_PRODUIT = '/api/rgpd/registre-produit';
 
 /* =====================================================================
  *  1. Sortie d'une filiale — §35.2
@@ -535,6 +544,23 @@ export interface ResultatPurge {
   readonly restes: readonly Reste[];
   /** Total des lignes réécrites, contacts de crise compris. */
   readonly total_lignes: number;
+}
+
+/**
+ * Une ligne du registre des données personnelles du produit, telle qu'elle part
+ * au navigateur. Les noms de champs sont ceux des COLONNES : le registre est une
+ * pièce d'audit, et renommer ses champs en chemin ferait de la copie affichée
+ * autre chose que la copie en base.
+ */
+interface LigneRegistreProduit {
+  readonly table_nom: string;
+  readonly colonne: string;
+  readonly nature: string;
+  readonly finalite: string | null;
+  readonly base_legale: string | null;
+  readonly duree_jours: number | null;
+  readonly a_expiration: string | null;
+  readonly justification: string;
 }
 
 interface ColonneTexte {
@@ -1235,6 +1261,55 @@ export async function greffonCycle(
       );
 
       return await reponse.status(200).send(resultat);
+    },
+  );
+
+  /* -------------------------------------------------------------------
+   *  GET /api/rgpd/registre-produit — l'article 30 appliqué à l'outil
+   * -------------------------------------------------------------------
+   *  Le produit tient le registre de ses clients depuis L6 ; il ne savait pas
+   *  dire le SIEN. Cette route le rend, tel que la migration `026` l'a décidé
+   *  colonne par colonne : quelle donnée, pour quelle finalité, sur quelle base
+   *  légale, combien de temps, et ce qu'on en fait à l'expiration.
+   *
+   *  ── Trois décisions, et chacune a un motif ────────────────────────────
+   *
+   *  1. **`lire` et non `administrer`.** Ce registre est une PIÈCE À MONTRER —
+   *     c'est ce qu'un DPO demande, et le lui refuser sans droit
+   *     d'administration reviendrait à cacher la réponse à la seule question
+   *     qu'il pose. Il ne contient aucune donnée personnelle : il décrit le
+   *     SCHÉMA, pas les gens.
+   *
+   *  2. **Aucun cloisonnement, et il n'y en a pas à avoir.** `colonnes_personnelles`
+   *     décrit le produit, identique dans les vingt filiales par construction.
+   *     C'est l'arbitrage du `CONVENTIONS.md` §24, repris à l'identique dans le
+   *     contrôle C93 et dans le banc.
+   *
+   *  3. **Rien n'est recalculé ici.** La route rend ce que la base porte, dans
+   *     l'ordre où on le lit. Dériver un résumé côté serveur — « 37 colonnes
+   *     personnelles » — ferait exister DEUX comptes de la même chose, et le
+   *     jour où ils divergent c'est le registre qu'on croira faux.
+   * ------------------------------------------------------------------- */
+  instance.get(
+    CHEMIN_REGISTRE_PRODUIT,
+    { config: { acces: { action: 'lire', domaine: 'rgpd' } } },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const { perimetre } = sessionDe(requete);
+
+      const colonnes = await avecTransaction(pool, perimetre, async (client) => {
+        const { rows } = await client.query<LigneRegistreProduit>(
+          `select table_nom, colonne, nature, finalite, base_legale,
+                  duree_jours, a_expiration, justification
+             from colonnes_personnelles
+            order by
+              -- Les données personnelles d'abord : c'est ce qu'on vient lire.
+              case when nature = 'personnelle' then 0 else 1 end,
+              table_nom, colonne`,
+        );
+        return rows;
+      });
+
+      return await reponse.send({ colonnes });
     },
   );
 }

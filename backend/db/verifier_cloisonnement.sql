@@ -215,8 +215,17 @@ insert into mesure_catalogue (id, nom) values
     ('MESURE-DEMO-G', 'Chiffrement des postes de travail (socle Groupe)');
 insert into personnes (id, nom, fonction) values
     ('PERS-DEMO-G', 'Direction groupe', 'RSSI groupe');
-insert into documents (id, titre, statut) values
-    ('DOC-DEMO-G', 'Politique de sécurité du groupe', 'en vigueur');
+insert into documents (id, titre, statut, confidentialite, donnees_personnelles) values
+    ('DOC-DEMO-G', 'Politique de sécurité du groupe', 'en vigueur', 'interne', true);
+-- Migration `027` : le registre de l'article 30 a un versant GROUPE, et la politique du
+-- groupe s'y rattache. C'est le cas qui a rendu la migration nécessaire — tant que
+-- `traitements.filiale_id` était `not null`, un document de portée Groupe ne pouvait se
+-- rattacher à AUCUN traitement, la clé de portée exigeant les deux extrémités du même
+-- côté de la frontière.
+insert into traitements (id, nom, finalite) values
+    ('TRT-DEMO-G', 'Journal d''audit de l''outil', 'Tracer les accès, trois ans');
+update documents set traitement_id = 'TRT-DEMO-G' where id = 'DOC-DEMO-G';
+insert into document_etiquettes (document_id, etiquette) values ('DOC-DEMO-G', 'Socle groupe');
 select set_config('grc.administration_groupe', '', true) \gset _rebut
 
 -- --- données de Toulouse -------------------------------------------------------------
@@ -257,6 +266,7 @@ insert into incidents (id, filiale_id, titre)            values ('INC-DEMO-B',  
 insert into mesure_catalogue (id, filiale_id, nom)       values ('MESURE-DEMO-B','FIL-DEMO-B','Mesure locale Allemagne');
 insert into personnes (id, filiale_id, nom)              values ('PERS-DEMO-B', 'FIL-DEMO-B', 'Verantwortlicher DEU');
 insert into documents (id, filiale_id, titre, statut)    values ('DOC-DEMO-B',  'FIL-DEMO-B', 'Verfahren DEU', 'en vigueur');
+insert into document_etiquettes (document_id, etiquette, filiale_id) values ('DOC-DEMO-B', 'Nur DEU', 'FIL-DEMO-B');
 insert into evaluations (id, filiale_id, ref_id, code)   values ('EVAL-DEMO-B', 'FIL-DEMO-B', 'anssi', 'M1');
 insert into scenarios_pra (id, filiale_id, nom)          values ('SCEN-DEMO-B', 'FIL-DEMO-B', 'Ausfall des Standorts');
 insert into risque_exigences (risque_id, exigence_id)    values ('RISK-DEMO-B', 'EX-DEMO-B');
@@ -404,13 +414,19 @@ begin
     select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
       into v_ligne
       from (
-        select 'C04', 'Tables mixtes : le socle de Groupe est lisible (6 mesures, personne, document)',
-               '8', v.n::text, case when v.n = 8 then 'OK' else 'ÉCHEC' end
+        select 'C04',
+               'Tables mixtes : le socle de Groupe est lisible (6 mesures, personne, document, traitement, étiquette)',
+               '10', v.n::text, case when v.n = 10 then 'OK' else 'ÉCHEC' end
           from (select (select count(*) from mesure_catalogue
                          where filiale_id is null and cree_par = 'zzdemo-demonstration')
                      + (select count(*) from personnes
                          where filiale_id is null and cree_par = 'zzdemo-demonstration')
                      + (select count(*) from documents
+                         where filiale_id is null and cree_par = 'zzdemo-demonstration')
+                     -- Migration `027` : deux tables de plus du côté mixte.
+                     + (select count(*) from traitements
+                         where filiale_id is null and cree_par = 'zzdemo-demonstration')
+                     + (select count(*) from document_etiquettes
                          where filiale_id is null and cree_par = 'zzdemo-demonstration') as n) v
       ) as x (numero, controle, attendu, obtenu, verdict);
     -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
@@ -427,11 +443,21 @@ begin
     select jsonb_build_array(x.numero, x.controle, x.attendu, x.obtenu, x.verdict)
       into v_ligne
       from (
+        -- ⚠️ CETTE LISTE DOIT SUIVRE `f_tables_mixtes()`, et la migration `027` l'a
+        -- rappelé bruyamment : `traitements` et `traitement_mesures` ont quitté le
+        -- niveau filiale pour le niveau mixte, et le balayage du §3 — qui découvre les
+        -- tables dont `filiale_id` est NOT NULL — a cessé de les voir le jour même.
+        -- Deux tables auraient donc échappé à tout, en silence, si elles n'étaient pas
+        -- reprises ici. C'est le cas (a) du `CLAUDE.md` §3 : une liste écrite à la main
+        -- dont l'incomplétude doit échouer bruyamment.
         select 'C05', 'Tables mixtes : les lignes LOCALES de l''Allemagne restent invisibles',
                '0', v.n::text, case when v.n = 0 then 'OK' else 'ÉCHEC' end
-          from (select (select count(*) from mesure_catalogue where filiale_id = 'FIL-DEMO-B')
-                     + (select count(*) from personnes        where filiale_id = 'FIL-DEMO-B')
-                     + (select count(*) from documents        where filiale_id = 'FIL-DEMO-B') as n) v
+          from (select (select count(*) from mesure_catalogue     where filiale_id = 'FIL-DEMO-B')
+                     + (select count(*) from personnes            where filiale_id = 'FIL-DEMO-B')
+                     + (select count(*) from documents            where filiale_id = 'FIL-DEMO-B')
+                     + (select count(*) from traitements          where filiale_id = 'FIL-DEMO-B')
+                     + (select count(*) from traitement_mesures   where filiale_id = 'FIL-DEMO-B')
+                     + (select count(*) from document_etiquettes  where filiale_id = 'FIL-DEMO-B') as n) v
       ) as x (numero, controle, attendu, obtenu, verdict);
     -- Aucune ligne : le contrôle ne s'applique pas (rôle absent de cette base).
     if v_ligne is not null then
@@ -1371,7 +1397,15 @@ begin
 end;
 $$;
 
--- --- N-11 : les neuf déclencheurs de cohérence et de portée sont armés en « always » ----
+-- --- N-11 : les déclencheurs de cohérence et de portée sont armés en « always » --------
+-- ⚠️ LE NOMBRE ATTENDU EST ÉCRIT À LA MAIN, et c'est délibéré : son incomplétude ÉCHOUE
+-- BRUYAMMENT — c'est ce contrôle même qui a rougi le 11/09/2026, « attendu 11 sur 11,
+-- obtenu 14 sur 14 », le jour où la migration `027` a rendu mixtes `traitements`,
+-- `traitement_mesures` et `document_etiquettes`. Le geste attendu devant ce rouge est de
+-- VÉRIFIER que les trois déclencheurs neufs sont bien ceux qu'on croit, puis de corriger
+-- le nombre en disant d'où il vient ; jamais de remplacer l'égalité par une inégalité,
+-- qui rendrait le contrôle muet dans le seul sens qui compte — celui d'un déclencheur
+-- qui DISPARAÎT. (`CLAUDE.md` §3, cas (a).)
 do $$
 declare v_ligne jsonb;
 begin
@@ -1381,9 +1415,10 @@ begin
         select 'C76',
                format('Déclencheurs de cohérence et de portée armés en « always » (%s balayés)',
                       count(*)),
-               '11 sur 11',
+               -- 14 depuis la migration `027` : 11 + les trois tables devenues mixtes.
+               '14 sur 14',
                format('%s sur %s', count(*) filter (where t.tgenabled = 'A'), count(*)),
-               case when count(*) = 11 and count(*) filter (where t.tgenabled = 'A') = 11
+               case when count(*) = 14 and count(*) filter (where t.tgenabled = 'A') = 14
                     then 'OK' else 'ÉCHEC' end
           from pg_trigger t
          where not t.tgisinternal
@@ -2241,6 +2276,60 @@ begin
                v_tires, v_ms),
         format('%s distincts', v_tires), format('%s distincts', v_distincts),
         case when v_distincts = v_tires then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- --- Migration 027 : le rattachement à l'article 30 ne franchit pas la frontière -------
+-- Le constat N-10 de la porte S1, à son rayon maximal. Une clé étrangère composite qui
+-- passe par `filiale_id` ne vérifie RIEN quand `filiale_id` est nul — la règle « match
+-- simple » la neutralise — et `filiale_id` nul est exactement la portée GROUPE. Sans la
+-- seconde clé, passant par la colonne engendrée `portee_groupe`, la politique du groupe
+-- aurait pu se rattacher au traitement LOCAL d'une filiale : celle-ci l'aurait ensuite
+-- effacé, et le socle commun des vingt filiales aurait perdu son rattachement sans que
+-- personne l'ait décidé.
+--
+-- Le contrôle TENTE, et exige le refus. Il ne compare pas deux déclarations : il envoie
+-- et constate (la leçon du 7ᵉ passage de S2).
+do $$
+declare v_verdict text;
+begin
+    perform set_config('grc.administration_groupe', 'oui', true);
+    begin
+        update documents set traitement_id = 'TRT-DEMO-B' where id = 'DOC-DEMO-G';
+        v_verdict := 'ACCEPTÉ';
+    exception when foreign_key_violation then
+        v_verdict := 'refusé (23503)';
+    when others then
+        v_verdict := format('refusé (%s)', sqlstate);
+    end;
+    perform set_config('grc.administration_groupe', '', true);
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C108',
+        'Article 30 : la politique du GROUPE ne se rattache pas au traitement LOCAL d''une filiale',
+        'refusé (23503)', v_verdict,
+        case when v_verdict = 'refusé (23503)' then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- --- Migration 027 : les étiquettes d'un document ne fuient pas entre filiales ---------
+-- La table est NEUVE, et c'est exactement le moment où une table échappe au balayage :
+-- elle porte un `filiale_id` NULLABLE, donc le §3 — qui découvre les tables à
+-- `filiale_id` NOT NULL — ne la voit pas. Elle est reprise en C05 avec les autres
+-- mixtes ; celui-ci va plus loin et nomme la valeur qui ne doit pas remonter.
+do $$
+declare v_vues text;
+begin
+    select coalesce(string_agg(etiquette, ', ' order by etiquette), '(aucune)')
+      into v_vues from document_etiquettes;
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C109',
+        'Étiquettes documentaires : depuis Toulouse, le socle Groupe OUI, l''Allemagne JAMAIS',
+        'Socle groupe', v_vues,
+        case when v_vues = 'Socle groupe' then 'OK' else 'ÉCHEC' end)))::text, true);
 end;
 $$;
 

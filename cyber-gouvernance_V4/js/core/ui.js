@@ -326,13 +326,46 @@ window.UI = (function () {
     }
 
     /* =========================================================================
-       CHAMP MULTI-PERSONNES (chips) — réutilisable (v11, Phase 2)
-       Sélecteur multiple adossé au <datalist> de l'annuaire (autocomplétion) tout en
-       acceptant la saisie libre. Stocké comme une CHAÎNE « une personne par ligne »
-       (rétrocompatible avec les champs texte existants, ex. participants d'une revue).
-         - multiPersonHtml(fieldId, valeur) → markup (conteneur d'id `fieldId`)
-         - wireMultiPerson(fieldId)         → interactions (ajout/retrait, Entrée)
-         - getMultiPerson(fieldId)          → chaîne « un nom par ligne » (à l'enregistrement)
+       ÉTIQUETTES DÉJÀ EMPLOYÉES — datalist partagé (migration 027)
+       Même dispositif que celui des personnes, et pour la même raison : proposer
+       ce qui existe déjà sans jamais interdire une valeur neuve. Une étiquette
+       libre qui ne se propose pas se ressaisit avec une faute de frappe, et deux
+       orthographes valent deux classements.
+    ========================================================================= */
+    function refreshEtiquettesDatalist() {
+        var dl = document.getElementById("etiquettes-list");
+        if (!dl || typeof DataStore === "undefined" || !DataStore.getDocuments) return;
+        var vues = {};
+        try {
+            DataStore.getDocuments().forEach(function (d) {
+                (Array.isArray(d.etiquettes) ? d.etiquettes : []).forEach(function (e) {
+                    var v = String(e == null ? "" : e).trim();
+                    if (v) vues[v.toLowerCase()] = v;
+                });
+            });
+        } catch (e) { vues = {}; }
+        dl.innerHTML = Object.keys(vues).sort().map(function (k) {
+            return '<option value="' + esc(vues[k]) + '"></option>';
+        }).join("");
+    }
+
+    /* =========================================================================
+       CHAMP À PUCES (chips) — LE COMPOSANT, dont le multi-personnes est un CAS
+       Sélecteur multiple adossé à un <datalist> (autocomplétion) tout en acceptant
+       la saisie libre.
+
+       ⚠️ **Généralisé le 11/09/2026, et ce n'est pas de l'élégance.** Le lot RGPD
+       avait besoin du même champ pour les étiquettes d'un document ; en écrire une
+       seconde copie aurait été le travers que ce dépôt a payé sept fois — corriger
+       l'instance plutôt que la classe. Le multi-personnes est donc devenu une
+       ENVELOPPE de trois lignes au-dessus du composant, exactement comme les deux
+       enveloppes de `UI.genId` (`CLAUDE.md` §3).
+
+         - chipsHtml(fieldId, valeurs, options) → markup (conteneur d'id `fieldId`)
+         - wireChips(fieldId, options)          → interactions (ajout/retrait, Entrée)
+         - getChips(fieldId)                    → TABLEAU de valeurs
+
+       `options` : { liste, placeholder, maxLongueur, normaliser, refuser }.
     ========================================================================= */
     function parsePersons(str) {
         return String(str == null ? "" : str).split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
@@ -341,17 +374,22 @@ window.UI = (function () {
         return '<span class="mp-chip"><span class="mp-label">' + esc(nom) + '</span>' +
             '<button type="button" class="mp-remove" aria-label="' + esc(t("commun.retirer")) + '">&times;</button></span>';
     }
-    function multiPersonHtml(fieldId, valueString) {
-        var chips = parsePersons(valueString).map(personChipHtml).join("");
+    function chipsHtml(fieldId, valeurs, options) {
+        var opt = options || {};
+        var liste = Array.isArray(valeurs) ? valeurs : parsePersons(valeurs);
+        var chips = liste.map(personChipHtml).join("");
         return '<div class="mp-field" id="' + fieldId + '">' +
             '<div class="mp-chips">' + chips + '</div>' +
             '<div class="mp-add">' +
-                '<input type="text" class="mp-input" list="personnes-list" placeholder="' +
-                    esc(t("commun.ajouterPersonne")) + '">' +
+                '<input type="text" class="mp-input"' +
+                    (opt.liste ? ' list="' + esc(opt.liste) + '"' : '') +
+                    (opt.maxLongueur ? ' maxlength="' + String(opt.maxLongueur) + '"' : '') +
+                    ' placeholder="' + esc(opt.placeholder || t("commun.ajouter")) + '">' +
                 '<button type="button" class="mp-addbtn">' + esc(t("commun.ajouter")) + '</button>' +
             '</div></div>';
     }
-    function wireMultiPerson(fieldId) {
+    function wireChips(fieldId, options) {
+        var opt = options || {};
         var root = document.getElementById(fieldId);
         if (!root) return;
         var chips = root.querySelector(".mp-chips");
@@ -359,7 +397,13 @@ window.UI = (function () {
         var addBtn = root.querySelector(".mp-addbtn");
         function addChip() {
             var v = (input.value || "").trim();
+            if (opt.normaliser) v = opt.normaliser(v);
             if (!v) return;
+            // `refuser` rend un MOTIF (une phrase) ou rien. Le champ ne se contente
+            // pas d'ignorer la saisie : une valeur avalée en silence est une valeur
+            // que l'utilisateur croit enregistrée.
+            var motif = opt.refuser ? opt.refuser(v) : "";
+            if (motif) { if (window.showToast) window.showToast(motif, "error"); else alert(motif); return; }
             var exists = Array.prototype.some.call(chips.querySelectorAll(".mp-label"), function (el) {
                 return el.textContent.trim().toLowerCase() === v.toLowerCase();
             });
@@ -374,16 +418,28 @@ window.UI = (function () {
             if (rm) { var chip = rm.closest(".mp-chip"); if (chip) chip.remove(); }
         });
     }
-    function getMultiPerson(fieldId) {
+    function getChips(fieldId) {
         var root = document.getElementById(fieldId);
-        if (!root) return "";
+        if (!root) return [];
         return Array.prototype.map.call(root.querySelectorAll(".mp-chips .mp-label"), function (el) {
             return el.textContent.trim();
-        }).filter(Boolean).join("\n");
+        }).filter(Boolean);
     }
+
+    /* ── Le multi-personnes : une ENVELOPPE, jamais une seconde copie ──────────
+       Il ne garde en propre que ce qui lui est propre : le datalist de l'annuaire,
+       son libellé, et le stockage « un nom par ligne » des champs texte existants. */
+    function multiPersonHtml(fieldId, valueString) {
+        return chipsHtml(fieldId, parsePersons(valueString),
+            { liste: "personnes-list", placeholder: t("commun.ajouterPersonne") });
+    }
+    function wireMultiPerson(fieldId) { return wireChips(fieldId); }
+    function getMultiPerson(fieldId) { return getChips(fieldId).join("\n"); }
 
     return {
         badge, mappedBadge, wireBulkDelete, wireDelete, genId, refreshPersonnesDatalist,
-        findPersonneByNom, multiPersonHtml, wireMultiPerson, getMultiPerson
+        refreshEtiquettesDatalist, findPersonneByNom,
+        chipsHtml, wireChips, getChips,
+        multiPersonHtml, wireMultiPerson, getMultiPerson
     };
 })();

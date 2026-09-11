@@ -127,16 +127,27 @@
 > que S7 et S8 soient franchies.** L18 a été la seule exception, et seulement parce qu'il
 > ne touche **ni `src/`, ni le schéma** — il n'ouvrait aucune surface d'audit.
 >
+> ⚠️ **UNE EXCEPTION DE PLUS A ÉTÉ ACCORDÉE, ET ELLE EST ÉCRITE.** Le **lot RGPD** des
+> 10 et 11/09/2026 touche `src/` **et** le schéma — il ne relève donc pas de la dispense
+> de L18. Il a été demandé par l'utilisateur comme une **condition de crédibilité du
+> produit**, non comme une fonctionnalité : *« je ne peux pas proposer un logiciel pour
+> gérer la cyber alors que le logiciel même n'est pas conforme, à la base, au RGPD »*.
+> Conséquence à assumer, et à déclarer : **cinq livraisons de plus au 8ᵉ passage de S8**
+> (migrations `026` et `027`, la route du registre produit, la classification de la SPA,
+> et le composant à puces généralisé).
+>
 > **Le travail immédiat, dans cet ordre :**
 >
 > | | Quoi | Pourquoi maintenant |
 > |---|---|---|
+> | ~~0~~ | ~~**Le lot RGPD — quatre pièces**~~ | ✅ **LIVRÉ les 10 et 11/09/2026.** La purge n'atteignait que **5 noms de colonnes** quand le schéma en porte **40** ; `colonnes_personnelles` (migration `026`) est désormais **le registre de l'article 30 du produit lui-même**, et les documents se classent (`027` : confidentialité, données personnelles, étiquettes, rattachement au registre). ⚠️ **Cinq défauts trouvés par les garde-fous, aucun par moi** — dont le **verrou d'approbation qui refusait la purge** (`409 GRC02`), deux moitiés correctes chacune seule. **Q-284 fermé** par l'issue *(a)*. Règle neuve : `CONVENTIONS.md` **§38** |
 > | ~~1~~ | ~~**18.2 b — le bandeau « installation de découverte »**~~ | ✅ **LIVRÉ le 09/09/2026.** Gardé barré, pas effacé : c'est la **onzième livraison** que le 7ᵉ passage de S8 devra examiner, et une ligne effacée est une livraison qu'on oublie de déclarer |
 > | ~~1~~ | ~~**Q-251** — l'essai de rapport de temps~~ | ✅ **FERMÉ le 09/09/2026**, et **pas** par « grossir les tailles » : le lecteur refuse un classeur au-delà de ~3,5 Mio décompressés, donc la grande taille franchirait le plafond et l'essai mesurerait un tout autre refus. C'est le **travail** qui a été grossi — R passes dans un seul chronométrage, R calibré à l'exécution. Seuil inchangé |
 > | ~~1~~ | ~~**Jouer la porte S7**~~ | ✅ **JOUÉE le 09/09/2026, et REFUSÉE** — 27 constats (**7 bloquants**), 0 fuite de données. ⚠️ **Elle a démontré son propre motif** : aucun des 27 ne faisait rougir quoi que ce soit. *Aucun échec ne la signalait*, et c'est vérifié |
 > | **1** | **Traiter les 7 bloquants de S7** | **Q-252 · Q-253 · Q-255** (droit d'auteur des catalogues ISO et AirCyber — **deux exigent un arbitrage de l'utilisateur**) et **Q-264 · Q-265 · Q-266 · Q-267** (les guides décrivent un produit qui n'est pas celui qui tourne). Registre au `docs/PLAN_EXECUTION.md` §7 |
 > | ~~2~~ | ~~**Rejouer S8 — 7ᵉ passage**~~ | ✅ **JOUÉ le 10/09/2026, et REFUSÉ** — 0 bloquant, 6 majeurs, 6 mineurs, **0 fuite entre filiales**, 3 contrôles sur 18 en échec. ⚠️ **Sur 12 mutations, 3 ne mordent pas — et les trois sont des gardes posés la veille.** Constats **Q-279 → Q-290** |
-> | **2** | **Les 6 majeurs de S8** | **Q-279** (`rafraichir` ne trace rien), **Q-280** (la barrière de publication se contourne par `POST /api/reprise`), ~~Q-281~~ ✅ *(migration `021`, les gardes mesurent enfin `tgtype`)*, **Q-282** (D1 : version affichée au-dessus de zéro fichier), **Q-283** (le garde de Q-257 mesure la longueur, pas l'originalité), **Q-284** (`approbations` est le second lien polymorphe, et D2 ne l'a pas vu) |
+> | ~~2~~ | ~~**Les 6 majeurs de S8**~~ | ✅ **TRAITÉS les 10 et 11/09/2026.** ~~Q-279~~ (la trace suit le volume rendu), ~~Q-280~~ (voie 1 fermée, voie 2 **réfutée** avec sa mesure), ~~Q-281~~ (migration `021`, les gardes mesurent `tgtype`), ~~Q-282~~ (`022`, le relais de version vit dans la base), ~~Q-283~~ (deux discriminants qui ne sont pas la taille), ~~**Q-284**~~ **fermé le 11/09** — pas par le remède qu'il prescrivait, **mesuré impossible**, mais en DISTINGUANT : l'indélébile est la décision, pas le nom |
+> | **2** | **Rejouer S8 — 8ᵉ passage** | Les douze constats du 7ᵉ sont traités, et **cinq livraisons neuves** n'ont été soumises à aucun auditeur indépendant. *Un banc vert ne vaut pas un passage de porte*, et *les constats fermés depuis un passage précédent ont déjà fait échouer le suivant* |
 > | **3** | Le reste des constats de **S7** (Q-254, Q-256 → Q-263, Q-268 → Q-278) | ⚠️ **Deux se ferment ENSEMBLE avec un constat plus ancien** : **Q-272** promet dans le guide la propriété que **Q-243** dit absente — la troncature de queue du journal. Corriger un seul des deux endroits laisserait le produit se contredire |
 > | **3** | Les constats ouverts : **Q-243, Q-247, Q-234 → Q-244, Q-205 b, Q-206, Q-214 b·c·d·f** | Registre au `docs/PLAN_EXECUTION.md` §7, **seule source** |
 >

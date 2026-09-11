@@ -255,6 +255,48 @@ le produit vous les signale, vous tranchez.
 ⚠️ **Le journal d'audit n'est jamais purgé**, RGPD compris. Il est en ajout seul et chaîné :
 y toucher casserait la preuve. Sa rétention est une procédure d'exploitation à trois ans.
 
+### Ce que l'outil fait de VOS données — la réponse est dans l'outil
+
+En bas de votre écran `/rgpd`, **« Le registre de l'outil lui-même »** : un bouton, et vous
+obtenez la liste **colonne par colonne** de ce que cette application détient — la finalité,
+la base légale, la durée, et ce qu'elle en fait à l'expiration. C'est l'article 30 appliqué
+au logiciel, et c'est la pièce à produire quand on vous demande *« que fait votre outil de
+nos données ? »*.
+
+⚠️ **Il ne contient aucune donnée personnelle** : il décrit la structure du produit, pas les
+gens. C'est pourquoi il est en lecture simple.
+
+Quatre devenirs à l'expiration, et le quatrième mérite d'être connu : **« signaler »**. Quand
+un nom est *au milieu d'une phrase* — la note d'une cellule de crise, la description d'un
+incident —, le remplacer détruirait la phrase. Le produit **vous désigne l'emplacement** au
+lieu d'effacer d'office. **C'est vous qui tranchez**, pas la machine.
+
+### Les documents portent enfin une classification
+
+Sur chaque fiche de `/documents`, un bloc **Classification** :
+
+| Champ | Ce qu'il sert |
+|---|---|
+| **Niveau de diffusion** | `public`, `interne`, `confidentiel`, `restreint` — obligatoire |
+| **Contient des données personnelles** | à cocher si le document **nomme** des gens, pas s'il en *parle* |
+| **Traitement RGPD dont il relève** | relie le document au registre de l'article 30 |
+| **Étiquettes** | mots de classement libres (« audit 2026 », « client X ») |
+
+Trois choses à savoir :
+
+- **Le défaut est « interne »**, jamais « public » : un document dont personne n'a tranché la
+  diffusion ne doit pas être réputé diffusable au dehors.
+- **« Public » + « données personnelles » n'est PAS interdit** — un document public nomme
+  légitimement son DPO (article 13). Mais la liste `/documents` vous le **signale** en tête,
+  avec un bouton qui filtre : c'est la combinaison qu'un contrôle regarde en premier.
+- **Une procédure qui DÉCRIT un traitement ne contient, elle, aucune donnée personnelle.**
+  Le rattachement et la case ne disent donc pas la même chose, et rien ne force l'un à
+  impliquer l'autre.
+
+L'écran `/rgpd` compte pour vous les documents **porteurs de données personnelles sans
+traitement rattaché** : ce n'est pas une faute — tout document nommant quelqu'un ne relève
+pas d'un traitement déclaré —, c'est la liste par laquelle commence une revue.
+
 ---
 
 ## 6. Ressources humaines — `GRC-<CODE>-RH`

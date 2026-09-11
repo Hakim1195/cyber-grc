@@ -675,6 +675,17 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
           colonneEnfant: 'ref_id',
           forme: 'identifiants',
         },
+        // Migration `027`. Même forme que les référentiels — et c'est voulu :
+        // une étiquette est une VALEUR dans une table de liaison, pas une
+        // colonne tableau. Le schéma n'en porte aucune, et la table donne le
+        // comptage, le filtrage et l'index qu'un `text[]` ne donne pas.
+        {
+          champ: 'etiquettes',
+          table: 'document_etiquettes',
+          colonneParent: 'document_id',
+          colonneEnfant: 'etiquette',
+          forme: 'identifiants',
+        },
       ],
     },
   ],
@@ -685,6 +696,18 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
       nom: 'traitements',
       table: 'traitements',
       prefixe: 'TRT',
+      // Migration `027` : `traitements` est devenue MIXTE, comme `documents`, et
+      // elle a hérité de la même colonne engendrée — pour la même raison, et avec
+      // la même conséquence ici. ⚠️ **Ce n'est pas moi qui l'ai vue** : le
+      // garde-fou du §6 a refusé le démarrage, en toutes lettres, à la première
+      // exécution qui a suivi la migration. C'est exactement l'office qu'on lui
+      // demande — attraper la divergence entre ce registre et le schéma.
+      colonnesReservees: {
+        portee_groupe:
+          'Colonne ENGENDRÉE (CONVENTIONS.md §18.6) : elle entre dans les clés étrangères de ' +
+          'portée de documents.traitement_id et de traitement_mesures, et PostgreSQL refuse ' +
+          "qu'on lui donne une valeur. Elle se déduit de filiale_id.",
+      },
       liaisons: [
         {
           champ: 'mesures_ids',

@@ -45,6 +45,11 @@
     --tint-warn: #fff4e0;
     --tint-crit: #fbe9e7;
     --tint-na:   #eef1f5;
+    /* Tint du bleu de STRUCTURE — et non d'un statut. Ajouté le 11/09/2026 pour
+       l'échelle de diffusion des documents (migration 027), qui ne doit surtout
+       pas emprunter les quatre couleurs sémantiques : un document « restreint »
+       n'est pas « critique ». */
+    --tint-info: #e8eff8;
 
     /* ----- Niveaux de risque (heatmap / matrice) ----- */
     --risk-low: var(--color-success);

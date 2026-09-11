@@ -830,6 +830,13 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // personne de vingt tables au nom de personne.
     ['POST', '/api/cycle/sortie-filiale', { filiale_id: 'FIL-TENTATIVE' }],
     ['POST', '/api/cycle/purge-rgpd', { personne_id: 'PERS-A' }],
+    // Le registre des données personnelles du PRODUIT (migration `026`, route montée
+    // par le greffon du cycle). Il ne contient aucune donnée personnelle — il décrit le
+    // schéma —, et c'est bien pour cela qu'il est ici : la barrière du §E4 ne se juge
+    // pas au contenu de la route mais au fait qu'AUCUNE ne sert quoi que ce soit sans
+    // identité. Une exception « celle-ci est inoffensive » est le premier pas vers la
+    // route qui ne l'était pas.
+    ['GET', '/api/rgpd/registre-produit', undefined],
     // Les deux routes des notifications (lot L12). La seconde ENVOIE : servie sans
     // identité, elle ferait du produit un relais de courriel pour qui passe.
     ['GET', '/api/notifications/etat', undefined],

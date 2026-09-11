@@ -140,6 +140,29 @@ before(async () => {
       FILIALE_A,
     ]);
 
+    /* ── LE CAS DU CONSTAT Q-284 : UNE DÉCISION ORPHELINE ──────────────────
+     *
+     * `approbations` est le second lien polymorphe du schéma : elle désigne son
+     * objet par `(objet_type, objet_id)`, **sans clé étrangère**. Quand l'objet
+     * disparaît, la décision reste — invisible de toute route, et
+     * **indestructible** : `trg_approbations_verrou` (lot L8) refuse d'effacer
+     * une décision, y compris en SQL, y compris pour l'administrateur. C'est
+     * l'une des promesses centrales du produit, et elle n'est pas négociable.
+     *
+     * Le constat Q-284 disait, à juste titre, que ces lignes portent le NOM du
+     * décideur et sa DATE, et qu'elles étaient **hors de portée de la purge**.
+     * La migration `026` a résolu le conflit en le DISTINGUANT : ce qui doit
+     * être indélébile est la décision — étape, ordre, verdict, date —, pas le
+     * nom. On sème donc ici une décision rendue sur un objet qui n'existe plus,
+     * et le §2 exige qu'il n'en reste rien de nominatif. */
+    await c.query(
+      `insert into approbations (id, filiale_id, objet_type, objet_id, etape, ordre,
+                                 statut, date_decision, acteur_libelle, commentaire)
+           values ('APPRO-ORPHELINE', $1, 'document', 'DOC-DISPARU', 'publication', 1,
+                   'approuve', now(), $2, 'Validation de la version 2.0')`,
+      [FILIALE_A, NOM],
+    );
+
     // ── Ce que la purge NE DOIT PAS toucher ─────────────────────────────
     await c.query('update incidents set description = $1 where id = $2', [
       `Tentative d'hameçonnage signalée par ${NOM} le 3 mars.`,
@@ -822,5 +845,104 @@ describe('§6 — deux situations sur une colonne font DEUX lignes (Q-205 a)', (
       'La purge a laissé le nom dans SA filiale : c’est le seul défaut vrai.\n  ' +
         anomalies.map((r) => `${r.table}.${r.colonne} (${String(r.lignes)})`).join('\n  '),
     );
+  });
+});
+
+/* =====================================================================
+ *  §7 — CONSTAT Q-284 : la DÉCISION survit, le NOM part, et personne
+ *       ne peut se substituer au décideur
+ * =====================================================================
+ *
+ * `approbations` est le second lien polymorphe du schéma. Quand son objet
+ * disparaît, la décision reste — invisible de toute route, et **indestructible**
+ * : `trg_approbations_verrou` refuse d'effacer une décision, y compris en SQL,
+ * y compris pour l'administrateur.
+ *
+ * Le constat disait, à juste titre, que ces lignes portent le NOM du décideur et
+ * qu'elles étaient hors de portée de la purge. La réponse n'a pas été de les
+ * supprimer — mesuré impossible, et pire que le mal — mais de **distinguer** :
+ * l'indélébile est la DÉCISION, pas le NOM.
+ *
+ * ⚠️ **Le §2 prouve déjà que le nom est parti** (son balayage est exhaustif et ne
+ * laisse que l'incident et le journal). Ce qui manque, et que ce §7 mesure, c'est
+ * l'autre moitié — **ce qui NE DOIT PAS avoir bougé** —, plus la barrière qui
+ * empêche de se servir de cette ouverture pour falsifier une attribution.
+ */
+
+describe('§7 — Q-284 : le nom part, la décision reste, et nul ne s’y substitue', () => {
+  test('LA DÉCISION EST INTACTE : verdict, étape, date, commentaire', async () => {
+    const [ligne] = await lireEnBase(
+      base,
+      proprietaire,
+      `select statut, etape, ordre, objet_type, objet_id, commentaire,
+              date_decision is not null as datee, coalesce(acteur_libelle, '(nul)') as acteur
+         from approbations where id = 'APPRO-ORPHELINE'`,
+      [],
+      { filiales: [FILIALE_A, FILIALE_B], filialeId: FILIALE_A },
+    );
+    assert.ok(ligne, 'La décision orpheline a DISPARU : l’irréversibilité ne tient plus.');
+    assert.equal(ligne.statut, 'approuve');
+    assert.equal(ligne.etape, 'publication');
+    assert.equal(ligne.ordre, 1);
+    assert.equal(ligne.objet_id, 'DOC-DISPARU');
+    assert.equal(ligne.commentaire, 'Validation de la version 2.0');
+    assert.equal(ligne.datee, true, 'La date de décision doit survivre : elle EST la preuve.');
+    // Et le nom, lui, a été remplacé par la mention — pas vidé. « Vide » se lirait
+    // « personne n’a validé », ce qui serait un faux ; la mention dit la vérité.
+    assert.equal(ligne.acteur, NEUTRE);
+  });
+
+  test('LA BARRIÈRE TIENT TOUJOURS : on ne SUBSTITUE pas un décideur', async () => {
+    // C'est le risque que l'ouverture du verrou aurait pu créer, et il serait pire
+    // que le défaut qu'elle ferme : remplacer « Amélie » par « Bruno » attribuerait
+    // la décision à quelqu'un qui ne l'a pas prise.
+    const refus = await base
+      .avecPerimetre(
+        proprietaire,
+        perimetre('essai-q284', FILIALE_A, [FILIALE_A]),
+        async (c) => {
+          await c.query(
+            "update approbations set acteur_libelle = 'Bruno Martin' where id = 'APPRO-ORPHELINE'",
+          );
+        },
+      )
+      .then(() => null)
+      .catch((e) => e);
+    assert.ok(refus, 'Substituer un nom à un autre a été ACCEPTÉ.');
+    assert.equal(refus.code, 'GRC02');
+
+    // Et le verdict, lui, reste hors d'atteinte dans tous les cas.
+    const refusVerdict = await base
+      .avecPerimetre(
+        proprietaire,
+        perimetre('essai-q284', FILIALE_A, [FILIALE_A]),
+        async (c) => {
+          await c.query(
+            "update approbations set statut = 'refuse' where id = 'APPRO-ORPHELINE'",
+          );
+        },
+      )
+      .then(() => null)
+      .catch((e) => e);
+    assert.ok(refusVerdict, 'Le verdict d’une décision a été réécrit.');
+    assert.equal(refusVerdict.code, 'GRC02');
+  });
+
+  test('LA MENTION EST DITE AUX DEUX ENDROITS, ET LES DEUX DISENT LA MÊME', async () => {
+    // Le verrou vit dans la base et doit RECONNAÎTRE la mention ; la purge vit dans
+    // `src/cycle/` et l'ÉCRIT. Une valeur écrite à deux endroits diverge en silence
+    // — sauf si quelque chose les compare. C'est ce que fait cette ligne, et c'est
+    // le seul prix acceptable de la duplication (`CLAUDE.md` §3, cas (a)).
+    const { MENTION_NEUTRE } = await (await import('../aide/serveur.mjs')).moduleCompile(
+      'cycle/index.js',
+    );
+    const enBase = await valeurEnBase(base, proprietaire, 'select f_mention_neutre()');
+    assert.equal(
+      enBase,
+      MENTION_NEUTRE,
+      'La base et le produit ne nomment pas la même mention : le verrou refusera la purge ' +
+        'avec GRC02, et la purge entière échouera.',
+    );
+    assert.equal(enBase, NEUTRE, 'Et le §35.3 la fixe mot pour mot.');
   });
 });

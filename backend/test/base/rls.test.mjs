@@ -183,9 +183,14 @@ describe('Lecture cloisonnée (CONVENTIONS §4, §11, §16.4)', () => {
     // 23 depuis la migration `012` : `approbations` a quitté la famille « niveau
     // filiale » pour la famille MIXTE — une décision de portée Groupe s'y écrit
     // désormais avec `filiale_id` nul (arbitrage utilisateur du 04/09/2026, Q-153).
+    // 21 depuis la migration `027` : `traitements` et `traitement_mesures` l'ont quittée
+    // à leur tour — un document de portée Groupe ne pouvait se rattacher à AUCUN
+    // traitement de l'article 30 tant que leur `filiale_id` était `not null`. Elles ne
+    // sortent pas du contrôle pour autant : la famille MIXTE est balayée plus bas, et le
+    // contrôle C05 de `db/verifier_cloisonnement.sql` les y a reprises le même jour.
     // Le plancher suit le réel ; il est là pour attraper un balayage qui ne balaierait
     // plus rien, pas pour figer un nombre.
-    assert.ok(tables.length >= 23, `Balayage suspect : ${tables.length} table(s) seulement.`);
+    assert.ok(tables.length >= 21, `Balayage suspect : ${tables.length} table(s) seulement.`);
 
     const fautives = [];
     await base.avecPerimetre(applicatif, rssiSite(A), async (c) => {
@@ -1330,7 +1335,7 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
     assert.equal(erreur.code, '23514', 'Le sens inverse est tout aussi fautif : personne n’arbitre.');
   });
 
-  test('les cinq tables mixtes portent toutes le déclencheur', async () => {
+  test('toutes les tables mixtes portent le déclencheur de portée', async () => {
     // Contrôle structurel : une table mixte ajoutée demain sans son déclencheur
     // rouvrirait le chemin. Le balayage part de la définition d'une table mixte —
     // filiale_id présent et NULLABLE — et non d'une liste recopiée.
@@ -2732,7 +2737,7 @@ describe('Portée des liens documentaires et armement des déclencheurs (N-10, N
     assert.equal(affectees, 1);
   });
 
-  test('N-11 : les neuf déclencheurs de cohérence et de portée sont armés en « always »', async () => {
+  test('N-11 : les déclencheurs de cohérence et de portée sont armés en « always »', async () => {
     // Les trois du journal d'audit le sont depuis 001 ; ces neuf-là portent désormais des
     // garanties de cloisonnement opposables — cohérence du catalogue, portée figée — et
     // n'ont pas de raison d'être armés plus faiblement. Sans effet contre le rôle
@@ -2750,7 +2755,15 @@ describe('Portée des liens documentaires et armement des déclencheurs (N-10, N
     // 11 depuis la migration `012` : `risque_catalogue` et `approbations` sont mixtes,
     // et toute table mixte porte son déclencheur de portée figée (§17.6). C'est le
     // garde-fou du schéma qui les a réclamés, un par un, pendant l'écriture de 012.
-    assert.equal(armement.length, 11, 'Quatre déclencheurs de cohérence, sept de portée.');
+    // 14 depuis la migration `027` : `traitements`, `traitement_mesures` et
+    // `document_etiquettes` sont mixtes à leur tour, et `f_poser_portee_figee()` —
+    // pilotée par `f_tables_mixtes()`, donc par le CATALOGUE — les a couvertes sans
+    // qu'une ligne les nomme. ⚠️ Ce nombre est écrit à la main À DESSEIN : son
+    // incomplétude échoue bruyamment, et le geste attendu devant un rouge est de
+    // vérifier que les déclencheurs neufs sont ceux qu'on croit — jamais de remplacer
+    // l'égalité par une inégalité, qui rendrait le contrôle muet dans le seul sens qui
+    // compte : celui d'un déclencheur qui DISPARAÎT.
+    assert.equal(armement.length, 14, 'Quatre déclencheurs de cohérence, dix de portée.');
     assert.deepEqual(
       [...new Set(armement.map((l) => l.armement))],
       ['A'],
@@ -3972,6 +3985,14 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // registre — « non personnelle » est une réponse recevable, ne pas répondre ne l'est
       // pas. ⚠️ Il a payé dès sa première application : il a rendu **huit colonnes que le
       // semis avait manquées**, dont `crise.notes` et `utilisateurs.mot_de_passe_hash`.
+      // VINGT-CINQUIÈME, apporté par `027_les_documents_se_classent.sql` : la
+      // classification documentaire tient — les deux colonnes existent, portent leur
+      // TYPE et sont obligatoires, la contrainte de niveaux porte LES QUATRE valeurs
+      // (son CONTENU, pas son nom : leçon de Q-283), et la normalisation des étiquettes
+      // est un déclencheur ARMÉ sur l'insertion (son ÉVÉNEMENT, pas son existence :
+      // leçon de Q-281). Sans lui, « RGPD » et « rgpd » deviendraient deux étiquettes et
+      // le filtre perdrait des lignes en silence.
+      'classification_documents',
       'colonnes_personnelles',
       'couverture_rls',
       // QUINZIÈME, apporté par `017_pieces_suivent_leur_porteur.sql` (constats Q-232 /
@@ -4048,6 +4069,17 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // un déclencheur d'`update` —, c'est CE contrôle qu'il faudra élargir à l'insert,
       // sans quoi l'élargissement ne serait vérifié par rien.
       'publication_evenement',
+      // VINGT-SIXIÈME, apporté par `027_les_documents_se_classent.sql`, et c'est un
+      // garde-fou de CLASSE : il ne vérifie pas les trois références que cette migration
+      // ajoute, il vérifie **la règle dont elles sont trois instances**. Toute clé
+      // étrangère composite visant une table MIXTE par un `filiale_id` nullable doit
+      // avoir sa compagne passant par `portee_groupe` — sans quoi la règle « match
+      // simple » la neutralise pour TOUTE ligne de portée Groupe, et le socle commun des
+      // vingt filiales peut désigner une ligne locale que sa filiale effacera. C'est le
+      // constat **N-10** de la porte S1, resté sept mois à l'état de vigilance dans un
+      // commentaire. ⚠️ Il a réclamé `fk_traitement_mesures_portee` avant qu'un humain y
+      // pense — écrit avant qu'elle existe, il l'a nommée.
+      'references_portee',
       // NEUVIÈME, apporté par `007_authentification.sql` : il vérifie que le substrat
       // de session est bien refermé sur `f_authentification()`. Cette liste est écrite
       // à la main À DESSEIN (CLAUDE.md §3, cas (a)) — une migration qui la fait rougir
@@ -4860,17 +4892,21 @@ describe('Armement, portée figée, chemin de magasin (§19.4 et §19.1, Q5-4 et
   test('les tables MIXTES sont découvertes, et chacune porte son déclencheur de portée', async () => {
     const mixtes = (await base.lignes(proprietaire, 'select nom from f_tables_mixtes() order by 1'))
       .map((l) => l.nom);
-    // Sept depuis la migration `012`, et l'écart mérite d'être nommé plutôt que corrigé
-    // en silence : `approbations` est devenue mixte sur arbitrage utilisateur — *« une
-    // décision groupe se valide une fois au groupe »* (Q-153) —, et `risque_catalogue`
-    // naît mixte : socle du Groupe plus les ajouts propres à chaque filiale.
+    // Dix depuis la migration `027`, et chaque écart mérite d'être nommé plutôt que
+    // corrigé en silence : `approbations` est devenue mixte sur arbitrage utilisateur —
+    // *« une décision groupe se valide une fois au groupe »* (Q-153) —, `risque_catalogue`
+    // naît mixte (socle du Groupe plus les ajouts propres à chaque filiale), et
+    // `traitements` / `traitement_mesures` le sont devenues le 11/09/2026 parce qu'un
+    // document de portée Groupe ne pouvait se rattacher à AUCUN traitement de l'article 30.
+    // `document_etiquettes` naît mixte, comme le document qu'elle étiquette.
     //
     // Cette liste est écrite à la main FACE à une liste découverte, et c'est le bon cas
     // (`CLAUDE.md` §3) : une table qui deviendrait mixte sans qu'on l'ait voulu fait
     // rougir ici, bruyamment, et quelqu'un doit dire si c'était l'intention.
     assert.deepEqual(mixtes, [
-      'approbations', 'document_referentiels', 'documents', 'mesure_catalogue',
-      'parametres', 'personnes', 'risque_catalogue',
+      'approbations', 'document_etiquettes', 'document_referentiels', 'documents',
+      'mesure_catalogue', 'parametres', 'personnes', 'risque_catalogue',
+      'traitement_mesures', 'traitements',
     ]);
     assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_portee_figee()'), []);
   });

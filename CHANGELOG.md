@@ -8,28 +8,126 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
-> **État mesuré à la révision `385005d`**, le 09/09/2026, sur la machine réelle
-> (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
-> **PostgreSQL 17.11**) — **arbre propre, pas répertoire de travail** : `npm test` →
-> **1834 essais, 1834 passés, 0 échec**,
+> **État mesuré le 11/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
+> **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
+> **1869 essais, 1869 passés, 0 échec**,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
-> `db/verifier_cloisonnement.sql` → **107 contrôles, 107 réussis, 0 échoué**,
-> `f_verifier_schema()` → **0 anomalie** (**24 garde-fous consignés**, **26 migrations**,
-> **51 tables**), `install.sh --verifier-publication` → **81 fichiers servis identiques au
-> dépôt**, et `install.sh --diagnostic` → **12 conformes, 1 réserve** (`SMTP_ACTIF=non`),
-> **0 bloquant**.
+> `db/verifier_cloisonnement.sql` **sous `grc_app`** → **109 contrôles, 109 réussis, 0
+> échoué**, `f_verifier_schema()` → **0 anomalie** (**26 garde-fous consignés**,
+> **27 migrations**, **52 tables**, **208 politiques**),
+> `install.sh --verifier-publication` → **81 fichiers servis identiques au dépôt**, et
+> `install.sh --diagnostic` → **14 conformes, 1 réserve** (`SMTP_ACTIF=non`), **0 bloquant**.
 >
-> ⚠️ **Deux pièges de mesure rencontrés en établissant ce bloc, et ils valent d'être dits.**
+> ⚠️ **Trois pièges de mesure rencontrés, et ils valent d'être dits.**
 > **(1)** `verifier_cloisonnement.sql` joué en **superutilisateur** rend **82/107** : un
-> superutilisateur n'est pas soumis à la RLS, et les vingt-cinq « échecs » ne mesuraient que
-> cela. Il se joue **sous `grc_app`**, comme sa propre ligne 59 le prescrit. **(2)** `npm
-> test` a rougi une fois sur deux passages complets, sur un essai de **rapport de temps**
-> étranger à ce lot — constat **Q-251**, ci-dessous.
+> superutilisateur n'est pas soumis à la RLS, et les « échecs » ne mesuraient que cela. Il se
+> joue **sous `grc_app`**, comme sa propre ligne 59 le prescrit. **(2)** `npm test` a rougi
+> une fois sur deux passages complets, sur un essai de **rapport de temps** étranger à ce
+> lot — constat **Q-251**, ci-dessous. **(3)** ⚠️ **Le banc s'enlise sur cette machine si
+> l'on joue autre chose EN MÊME TEMPS** : `node --test` lance les seize familles navigateur
+> sur six cœurs, et `free -m` est descendu à **134 Mio libres sur 7 892** — cinq familles
+> bloquées **45 minutes en ayant consommé 5 secondes de processeur**. Le piège du
+> diagnostic : `test/navigateur/bascule.test.mjs` semblait fautif ; **joué seul, 44/44 en
+> 112 secondes**. *Un essai lent sous charge n'est pas un essai en défaut.*
 >
-> ⚠️ **Et rien de tout cela ne vaut passage de porte.** La porte **S8 reste refusée** — six
-> passages —, la porte **S7 n'a jamais été jouée**, et **dix livraisons** des 07 et 08/09
-> n'ont été soumises à **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde,
-> jamais ce qu'il ne regarde pas.*
+> ⚠️ **Et rien de tout cela ne vaut passage de porte.** La porte **S8 reste refusée** — sept
+> passages —, et **cinq livraisons** des 10 et 11/09 (le lot RGPD) n'ont été soumises à
+> **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde, jamais ce qu'il ne
+> regarde pas.*
+
+### RGPD — le logiciel qui gère la conformité devient lui-même conforme
+
+Demandé le 10/09/2026, et le motif vaut d'être cité : *« je ne peux pas proposer un
+logiciel pour gérer la cyber alors que le logiciel même n'est pas conforme, à la base, au
+RGPD. Il faut que les documents puissent être tagués et classifiés, c'est la base. »*
+
+Le lot compte **quatre pièces**, livrées en deux temps — migrations `026` et `027`.
+
+#### 1. Le produit sait ce qu'il détient — et il ne le savait pas
+
+**La mesure qui a tout déclenché.** La purge RGPD était bien conçue : elle **découvre** les
+colonnes dans `pg_catalog` au lieu d'en tenir une liste. Mais elle n'anonymisait que celles
+dont le **nom** figurait dans une liste écrite à la main de **cinq entrées**. Relevé dans
+le schéma : **quarante** colonnes portent un nom qui désigne une personne — et
+`utilisateurs` en porte **quatre de plus qu'aucun motif ne devine** (`identifiant`, `upn`,
+`sid_ad`, `nom_affichage`). **La purge annonçait « terminé » en laissant le nom en place
+presque partout.**
+
+`colonnes_personnelles` (migration `026`) est le registre qui manquait : **une décision par
+colonne**, avec sa finalité, sa base légale, sa durée et ce qu'on en fait à l'expiration.
+**56 colonnes décidées** — 37 personnelles (26 *anonymiser*, 8 *supprimer*, 2 *conserver*,
+1 *signaler*) et 19 non personnelles. C'est, littéralement, **le registre de l'article 30 du
+produit lui-même** : celui qu'on présente au DPO d'un client.
+
+⚠️ **Le garde-fou a payé dès sa première application** : il a rendu **huit colonnes que le
+semis avait manquées** — dont `crise.notes` et `utilisateurs.mot_de_passe_hash`. J'avais
+bâti ce semis sur un balayage par motif de nom, c'est-à-dire exactement le travers que ce
+registre existe pour corriger.
+
+⚠️ **Un quatrième régime, trouvé par un essai.** `crise.notes` était déclarée
+« anonymiser » ; le nom y a survécu à la purge, parce qu'il est **au milieu d'une phrase**
+et que le remplacer détruirait la note. Régime **« signaler »** : le produit désigne
+l'emplacement à un humain au lieu d'effacer.
+
+#### 2. Q-284 est résolu, et autrement que proposé
+
+Irréversibilité d'une approbation contre droit à l'effacement : les deux invariants
+semblaient inconciliables, et le remède de style D2 avait été **mesuré impossible**
+(`GRC02`). La bonne réponse n'était pas de supprimer, c'était de **distinguer** : ce qui
+doit être indélébile est la **décision** (étape, ordre, verdict, date), pas le **nom**. Le
+verrou compare désormais les colonnes une à une et n'admet que l'écriture qui **retire
+l'acteur** — une anonymisation ne peut pas s'en servir pour réécrire un verdict.
+
+#### 3. Les documents se classent (migration `027`)
+
+`documents` reçoit **`confidentialite`** (`public` / `interne` / `confidentiel` /
+`restreint`), **`donnees_personnelles`**, des **étiquettes libres** et le **rattachement au
+registre de l'article 30**.
+
+⚠️ **Le défaut de `confidentialite` est `interne`, jamais `public`** : un document dont
+personne n'a tranché la diffusion ne doit pas être réputé diffusable. C'est aussi ce que
+devient un document repris d'un export antérieur à `027`.
+
+⚠️ **Les étiquettes vivent dans une TABLE, pas dans une colonne tableau** : ce schéma est
+strictement relationnel, et la table donne le comptage, le filtrage et l'index qu'un
+`text[]` ne donne pas. Elles sont normalisées **dans la base** — l'import, la reprise et
+`psql` écrivent aussi dans cette table, et *une route ne voit que son chemin*.
+
+⚠️ **Aucune contrainte ne refuse « public + données personnelles ».** C'est pourtant le
+signal le plus utile du lot — mais il a des cas légitimes : un document public nomme son
+DPO, et l'article 13 l'exige. Le produit le **signale** à l'écran au lieu de l'interdire.
+*Une alerte qu'on peut lever vaut mieux qu'une barrière qu'on contourne.*
+
+#### 4. `traitements` s'ouvre à la portée Groupe — un prérequis, pas un supplément
+
+`traitements.filiale_id` était `not null` : **un document de portée Groupe — la PSSI, la
+charte informatique — n'aurait pu se rattacher à AUCUN traitement**, la clé de portée
+exigeant les deux extrémités du même côté de la frontière. La table devient donc mixte,
+comme `documents`, et `traitement_mesures` suit son parent.
+
+#### Le garde-fou de ce lot est de CLASSE, et il l'a prouvé en naissant
+
+`f_verifier_references_portee()` ne vérifie pas les trois références que la migration
+ajoute : il vérifie **la règle dont elles sont trois instances** — toute clé étrangère
+composite visant une table mixte par un `filiale_id` nullable doit avoir sa compagne sur
+`portee_groupe`, sans quoi la règle *match simple* la neutralise pour **toute ligne de
+portée Groupe** (constat **N-10**, porte S1, resté sept mois à l'état de vigilance dans un
+commentaire). **Écrit avant que `fk_traitement_mesures_portee` existe, il l'a réclamée.**
+Règle posée au `CONVENTIONS.md` **§38**.
+
+#### Trois choses trouvées en construisant, et qui valent plus que le code
+
+- **`on delete set null` est impossible sur une clé contenant une colonne engendrée**, et
+  la forme à liste de colonnes de PostgreSQL 15 **ne sauve pas** — le contrôle porte sur la
+  présence de la colonne, pas sur ce que l'action toucherait. La barrière est donc
+  `restrict`, le déliage vit dans la couche applicative à la filiale près, et c'est le
+  dispositif déjà arbitré au bloquant **B-1** de la porte S1.
+- **Le garde-fou du registre d'entités a refusé le démarrage**, en toutes lettres, parce
+  que `traitements.portee_groupe` n'était pas déclarée réservée. Ce n'est pas moi qui l'ai
+  vue : c'est exactement l'office qu'on lui demande.
+- **`C76` du script d'audit a rougi**, « attendu 11 sur 11, obtenu 14 sur 14 » : trois
+  tables devenues mixtes, trois déclencheurs de portée de plus. Une liste écrite à la main
+  dont l'incomplétude **échoue bruyamment** — le bon usage de la règle du `CLAUDE.md` §3.
 
 ### Les quatre bloquants des guides sont fermés — et l'un l'a été en changeant le produit
 

@@ -36,10 +36,14 @@
 
 import { moduleCompile, monterGreffon } from '../aide/serveur.mjs';
 
-/** Les deux chemins du lot, **lus dans le module** et jamais recopiés. */
+/** Les chemins du lot, **lus dans le module** et jamais recopiés. */
 export async function cheminsDuLot() {
   const cycle = await moduleCompile('cycle/index.js');
-  return { sortie: cycle.CHEMIN_SORTIE, purge: cycle.CHEMIN_PURGE };
+  return {
+    sortie: cycle.CHEMIN_SORTIE,
+    purge: cycle.CHEMIN_PURGE,
+    registreProduit: cycle.CHEMIN_REGISTRE_PRODUIT,
+  };
 }
 
 /**
@@ -86,7 +90,8 @@ export async function monterCycle(base, session) {
   const { default: Fastify } = await import('fastify');
   const { creerPool } = await moduleCompile('db/pool.js');
   const { greffonApi } = await moduleCompile('api/index.js');
-  const { greffonCycle, CHEMIN_SORTIE, CHEMIN_PURGE } = await moduleCompile('cycle/index.js');
+  const { greffonCycle, CHEMIN_SORTIE, CHEMIN_PURGE, CHEMIN_REGISTRE_PRODUIT } =
+    await moduleCompile('cycle/index.js');
 
   // Instance jetable : elle sert deux fois — à obtenir la configuration sans en
   // recopier la vingtaine de variables d'environnement, et à SAVOIR si la couture
@@ -112,7 +117,12 @@ export async function monterCycle(base, session) {
   instance.addHook('onRoute', (route) => {
     const vue = { methode: route.method, url: route.url, acces: route.config?.acces };
     toutesRoutes.push(vue);
-    if (typeof route.url === 'string' && route.url.startsWith('/api/cycle')) routes.push(vue);
+    if (
+      typeof route.url === 'string' &&
+      (route.url.startsWith('/api/cycle') || route.url === CHEMIN_REGISTRE_PRODUIT)
+    ) {
+      routes.push(vue);
+    }
   });
 
   await greffonApi(instance, { pool, config, resolveur: session, authentificateur: session });
@@ -125,7 +135,11 @@ export async function monterCycle(base, session) {
     pool,
     routes,
     toutesRoutes,
-    chemins: { sortie: CHEMIN_SORTIE, purge: CHEMIN_PURGE },
+    chemins: {
+      sortie: CHEMIN_SORTIE,
+      purge: CHEMIN_PURGE,
+      registreProduit: CHEMIN_REGISTRE_PRODUIT,
+    },
     /** Vrai si `src/api/index.ts` monte déjà le greffon (couture branchée). */
     coutureBranchee: dejaMonte,
 

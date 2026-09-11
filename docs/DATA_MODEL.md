@@ -240,6 +240,7 @@ vraies clés étrangères :
 | `evaluations[].mesure_ids` | `evaluation_mesures` |
 | `incidents[].actifs_touches` | `incident_actifs` |
 | `documents[].referentiels` | `document_referentiels` |
+| `documents[].etiquettes` | `document_etiquettes` |
 | `traitements[].mesures_ids` | `traitement_mesures` |
 | `mappings[].refs` | `mapping_exigences` |
 
@@ -556,6 +557,10 @@ actions ; `deleteRisque`/`deleteActif` nettoient les références (`risque_id`, 
 | `date_revue` | date ISO | prochaine revue (pilote les alertes) |
 | `emplacement` | string | **DOCUMENT RESTÉ AILLEURS** — chemin réseau, GED, intranet. C'est une **référence** que l'application ne lit pas, ne vérifie pas et ne délivre pas ; elle ne saura jamais si ce qui est au bout a changé. ⚠️ **À ne pas confondre avec les pièces jointes de la fiche**, que l'application détient, analyse, empreinte et délivre depuis le lot L6. La note « non stocké par l'app » qui figurait ici était vraie du produit navigateur et **fausse depuis L6** (action D4) |
 | `referentiels` | string[] | ids de référentiels couverts |
+| `confidentialite` | enum | **NIVEAU DE DIFFUSION** (migration `027`) : `public` \| `interne` \| `confidentiel` \| `restreint`. ⚠️ **Obligatoire, défaut `interne`** — et le défaut n'est pas `public` à dessein : un document dont personne n'a tranché la diffusion ne doit pas être réputé diffusable. C'est le champ qu'un export antérieur à `027` n'a pas, et que la reprise remplit donc par le défaut. « Non classé » est précisément le trou que l'ISO 27001 A.5.12 et le RGPD demandent de fermer |
+| `donnees_personnelles` | bool | **le document CONTIENT des données personnelles** — pas « il en parle » (migration `027`). Une procédure qui décrit un traitement n'en contient aucune ; un compte rendu qui nomme des gens, si. Sert à répondre en minutes à une demande d'exercice de droits, et à signaler la combinaison « public + données personnelles » — que la base **n'interdit pas** (un document public nomme légitimement son DPO, article 13) et que l'écran RGPD met en évidence |
+| `traitement_id` | `"TRT-..."` \| null | **rattachement au registre de l'article 30** (migration `027`). Deux registres qui cohabitaient sans se connaître. ⚠️ **Ne franchit pas la frontière Groupe/filiale** : un document de portée Groupe ne se rattache qu'à un traitement de portée Groupe — c'est ce qui a rendu `traitements` mixte. Deux clés étrangères le tiennent (`_portee` et `_coherence`, constat N-10), et la suppression d'un traitement rattaché est **refusée** (`restrict`) : la couche applicative délie d'abord, à la filiale près |
+| `etiquettes` | string[] | **mots de classement libres** (migration `027`), 48 signes au plus, ni virgule ni point-virgule. Table `document_etiquettes`, **jamais une colonne tableau** : ce schéma est strictement relationnel. Normalisées **dans la base** (espaces ramenés à un, extrémités rognées) ; la casse est conservée à l'affichage mais l'unicité par document y est insensible — « RGPD » et « rgpd » sont la même étiquette |
 | `notes` | string | plan / sommaire (canevas disponibles) |
 
 > **Les pièces jointes d'une fiche document** (lot L6, complété par L16). Elles ne font pas
@@ -580,6 +585,15 @@ actions ; `deleteRisque`/`deleteActif` nettoient les références (`risque_id`, 
 | `destinataires`, `transfert_hors_ue`, `duree_conservation` | string | |
 | `notes` | string | notes libres du responsable de traitement. Collectée par le module depuis l'origine, elle **manquait à ce tableau et au schéma serveur** : le serveur la retirait du corps avant d'enregistrer le reste, et un export existant la portant l'aurait perdue en silence à la reprise — sur le registre de l'article 30. Colonne ajoutée à `traitements` (porte S2, constat M-8) |
 | `mesures_ids` | string[] | **réutilise le pivot** `mesures` (`deleteMesure` délie) |
+
+> ⚠️ **`traitements` est une table MIXTE depuis la migration `027`** (`filiale_id`
+> nullable, `null` = portée Groupe), comme `documents`. Le registre de chaque entité
+> juridique reste le cas ordinaire — c'est ce que l'article 30 demande — mais le GROUPE
+> opère aussi des traitements pour toutes ses filiales : l'annuaire commun, le journal
+> d'audit de cet outil. Sans ce versant, un document de portée Groupe — la PSSI, la
+> charte informatique — n'aurait pu se rattacher à **aucun** traitement, la clé de portée
+> exigeant les deux extrémités du même côté de la frontière. `traitement_mesures` a suivi
+> son parent, pour que l'article 32 reste consignable sur un traitement du Groupe.
 
 ### Correspondance inter-référentiels — `mappings` (v7, surcouche)
 Le **catalogue par défaut** des correspondances (équivalences entre exigences de

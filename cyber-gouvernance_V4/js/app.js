@@ -848,6 +848,7 @@ window.updateActiveNav = function(route) {
     if (window.afficherBandeauDecouverte) window.afficherBandeauDecouverte();
     if (window.refreshEcheancesBadge) window.refreshEcheancesBadge();
     if (window.UI && UI.refreshPersonnesDatalist) UI.refreshPersonnesDatalist();
+    if (window.UI && UI.refreshEtiquettesDatalist) UI.refreshEtiquettesDatalist();
     // Lot L3 : le MENU seulement. La neutralisation des boutons a besoin du
     // balisage de la vue, qui n'est pas encore rendu à cet instant — elle est
     // appelée par `js/core/router.js` APRÈS le module (voir le commentaire là-bas).

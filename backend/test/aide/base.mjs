@@ -457,7 +457,7 @@ export const TABLES_FILIALE = Object.freeze([
   'evaluation_mesures', 'evaluations', 'exigences', 'history', 'imports',
   'incidents', 'mco_actions', 'mesure_mise_en_oeuvre', 'pieces_jointes',
   'prestataires', 'processus', 'referentiels_actifs', 'revues', 'risques',
-  'scenarios_pra', 'tests_pra', 'traitement_mesures', 'traitements',
+  'scenarios_pra', 'tests_pra',
 ]);
 
 /**
@@ -469,10 +469,18 @@ export const TABLES_FILIALE = Object.freeze([
  * un document qui n'en demande qu'une. `risque_catalogue` naît mixte : socle du Groupe,
  * plus les ajouts que chaque filiale peut faire *« si le risque n'est pas déjà présent au
  * niveau groupe »*.
+ *
+ * ⚠️ **`traitements` et `traitement_mesures` ont quitté la famille « filiale » le
+ * 11/09/2026** (migration `027`) : un document de portée Groupe — la PSSI, la charte —
+ * ne pouvait se rattacher à AUCUN traitement de l'article 30 tant que la table était
+ * `not null` sur `filiale_id`. Le registre de chaque entité juridique reste le cas
+ * ordinaire ; la portée Groupe sert les traitements que le GROUPE opère pour toutes ses
+ * filiales. `document_etiquettes` naît mixte, comme le document qu'elle étiquette.
  */
 export const TABLES_MIXTES = Object.freeze([
-  'approbations', 'document_referentiels', 'documents', 'mesure_catalogue', 'parametres',
-  'personnes', 'risque_catalogue',
+  'approbations', 'document_etiquettes', 'document_referentiels', 'documents',
+  'mesure_catalogue', 'parametres', 'personnes', 'risque_catalogue',
+  'traitement_mesures', 'traitements',
 ]);
 
 /** Liaisons et tables filles SANS `filiale_id` — l'angle mort du §7. */
@@ -536,9 +544,26 @@ export async function semerJeuEssai(base, client, options = {}) {
           "('RCAT-G', 'Rançongiciel', 'Malveillance', 'referentiel')",
       );
       await c.query("insert into personnes        (id, nom)   values ('PERS-G',   'RSSI groupe')");
-      await c.query("insert into documents        (id, titre) values ('DOC-G',    'PSSI du groupe')");
+      // Migration `027` : le registre de l'article 30 a un versant Groupe, et la PSSI
+      // du groupe s'y rattache. C'est LE cas qui a rendu la migration nécessaire —
+      // il vient donc AVANT le document, qui le référence.
+      await c.query(
+        "insert into traitements (id, nom, finalite) values " +
+          "('TRT-G', 'Journal d''audit de l''outil', 'Tracer les accès, trois ans')",
+      );
+      // ⚠️ La classification est posée DANS L'INSERTION, jamais par un « update »
+      // qui suivrait : la colonne `version` porte le verrouillage optimiste, et un
+      // semis qui la fait passer à 2 change ce que mesurent les essais d'approbation
+      // (`empreinte_objet` / `version_objet`). Mesuré en le faisant : deux essais du
+      // circuit ont rougi sur « version_objet = 2 » au lieu de 1.
+      await c.query(
+        "insert into documents (id, titre, confidentialite, donnees_personnelles, traitement_id) " +
+          "values ('DOC-G', 'PSSI du groupe', 'interne', true, 'TRT-G')",
+      );
       await c.query("insert into parametres       (id, cle)   values ('PARAM-G',  'essai.groupe')");
       await c.query("insert into document_referentiels (document_id, ref_id) values ('DOC-G', 'anssi')");
+      await c.query("insert into traitement_mesures (traitement_id, mesure_id) values ('TRT-G', 'MESURE-G')");
+      await c.query("insert into document_etiquettes (document_id, etiquette) values ('DOC-G', 'Socle groupe')");
       // Deux comptes, dont la CLÉ PRIMAIRE diffère de l'identifiant de connexion : le
       // §18.3 exige qu'un test provisionne ce cas, sans quoi il valide une coïncidence
       // plutôt qu'une propriété.
@@ -611,9 +636,15 @@ export async function semerJeuEssai(base, client, options = {}) {
         // Tables mixtes, versant LOCAL (le versant Groupe est semé plus haut).
         await c.query(`insert into mesure_catalogue (id, filiale_id, nom)   values ('MESURE-${s}', $1, 'Mesure locale')`, f);
         await c.query(`insert into personnes        (id, filiale_id, nom)   values ('PERS-${s}',   $1, 'Responsable de site')`, f);
-        await c.query(`insert into documents        (id, filiale_id, titre) values ('DOC-${s}',    $1, 'Procédure locale')`, f);
+        await c.query(
+          `insert into documents (id, filiale_id, titre, confidentialite, donnees_personnelles,
+                                  traitement_id)
+               values ('DOC-${s}', $1, 'Procédure locale', 'confidentiel', true, 'TRT-${s}')`,
+          f,
+        );
         await c.query(`insert into parametres       (id, filiale_id, cle)   values ('PARAM-${s}',  $1, 'essai.local')`, f);
         await c.query(`insert into document_referentiels (document_id, ref_id, filiale_id) values ('DOC-${s}', 'anssi', $1)`, f);
+        await c.query(`insert into document_etiquettes (document_id, etiquette, filiale_id) values ('DOC-${s}', 'Site ${s}', $1)`, f);
 
         // Le pivot « mesure », des deux côtés du §16.2 : la mise en œuvre est locale,
         // le catalogue est le socle.

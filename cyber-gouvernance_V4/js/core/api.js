@@ -978,6 +978,17 @@ const Api = (() => {
     // Opération composite : la propagation « au plus défavorable » s'exécute en
     // UNE transaction côté serveur (contrôle S14), et rend les évaluations
     // relues, versions comprises.
+    /**
+     * Le registre des données personnelles **du produit lui-même** — article 30
+     * appliqué à l'outil (migration `026`, route `/api/rgpd/registre-produit`).
+     *
+     * ⚠️ Il ne contient AUCUNE donnée personnelle : il décrit le schéma — quelle
+     * colonne porte quoi, pour quelle finalité, combien de temps. C'est la pièce
+     * qu'un DPO demande, et c'est pour cela qu'elle est en lecture simple et non
+     * réservée à l'administration.
+     */
+    function registreProduit() { return appeler("/rgpd/registre-produit"); }
+
     function propagerMesure(mesureId) {
         return appeler("/operations/propager-mesure", { methode: "POST", corps: { mesureId: mesureId } });
     }
@@ -994,7 +1005,9 @@ const Api = (() => {
         marquerPieceEnVigueur, verifierIntegritePiece,
         logoFiliale, telechargerLogoFiliale,
         // Vague 6 : ce que les écrans devaient sinon appeler par une porte à eux.
-        consolidation, approbations, deciderApprobation
+        consolidation, approbations, deciderApprobation,
+        // Lot RGPD : le produit rend compte de LUI-MÊME.
+        registreProduit
     };
 })();
 
