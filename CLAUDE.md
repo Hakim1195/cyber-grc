@@ -55,7 +55,7 @@
 > | **S5** | V4 — L4, L6 | 1 | ❌ refusée — 13 constats |
 > | **S6** | V6 — L10, L12, L13 | 1 | ❌ refusée — 12 constats |
 > | **S7** | V7 — L11, L14 | **1** | ❌ **refusée le 09/09/2026 — 27 constats, 7 bloquants, 0 fuite** |
-> | **S8** | V8 — L15 | **7** | ❌ **refusée — condition de mise en service NON remplie** |
+> | **S8** | V8 — L15 | **8** | ❌ **refusée le 11/09/2026 — 1 bloquant, 11 majeurs, 7 mineurs, 0 fuite ; 5 contrôles sur 18 en échec** |
 >
 > **Le 6ᵉ passage de S8 est le meilleur du chantier** — 0 bloquant, 4 majeurs, 8 mineurs,
 > **0 fuite entre filiales**, banc **1 747 essais, 1 747 passés** — mais *refusé reste
@@ -147,7 +147,8 @@
 > | **1** | **Traiter les 7 bloquants de S7** | **Q-252 · Q-253 · Q-255** (droit d'auteur des catalogues ISO et AirCyber — **deux exigent un arbitrage de l'utilisateur**) et **Q-264 · Q-265 · Q-266 · Q-267** (les guides décrivent un produit qui n'est pas celui qui tourne). Registre au `docs/PLAN_EXECUTION.md` §7 |
 > | ~~2~~ | ~~**Rejouer S8 — 7ᵉ passage**~~ | ✅ **JOUÉ le 10/09/2026, et REFUSÉ** — 0 bloquant, 6 majeurs, 6 mineurs, **0 fuite entre filiales**, 3 contrôles sur 18 en échec. ⚠️ **Sur 12 mutations, 3 ne mordent pas — et les trois sont des gardes posés la veille.** Constats **Q-279 → Q-290** |
 > | ~~2~~ | ~~**Les 6 majeurs de S8**~~ | ✅ **TRAITÉS les 10 et 11/09/2026.** ~~Q-279~~ (la trace suit le volume rendu), ~~Q-280~~ (voie 1 fermée, voie 2 **réfutée** avec sa mesure), ~~Q-281~~ (migration `021`, les gardes mesurent `tgtype`), ~~Q-282~~ (`022`, le relais de version vit dans la base), ~~Q-283~~ (deux discriminants qui ne sont pas la taille), ~~**Q-284**~~ **fermé le 11/09** — pas par le remède qu'il prescrivait, **mesuré impossible**, mais en DISTINGUANT : l'indélébile est la décision, pas le nom |
-> | **2** | **Rejouer S8 — 8ᵉ passage** | Les douze constats du 7ᵉ sont traités, et **cinq livraisons neuves** n'ont été soumises à aucun auditeur indépendant. *Un banc vert ne vaut pas un passage de porte*, et *les constats fermés depuis un passage précédent ont déjà fait échouer le suivant* |
+> | ~~2~~ | ~~**Rejouer S8 — 8ᵉ passage**~~ | ✅ **JOUÉ le 11/09/2026, et REFUSÉ** — **deux auditeurs indépendants**, périmètres exclusifs. **1 bloquant, 11 majeurs, 7 mineurs, 0 fuite entre filiales**, constats **Q-291 → Q-309**, **cinq contrôles sur dix-huit en échec**. ⚠️ **Sur 41 mutations, 14 ne mordent pas — et treize visent des gardes posés dans les trois jours précédents.** Le bloquant **Q-301** est le correctif de Q-279, accepté au passage d'avant : il trace **l'inventaire de la filiale** au lieu de ce qui sort, et inscrit de **fausses accusations d'extraction dans le journal inaltérable** |
+> | **2** | **Le bloquant Q-301, puis les onze majeurs** | Q-301 se ferme en une ligne — compter `charge.modifications` et non `charge.volumes`. ⚠️ **Les entrées déjà écrites ne s'effacent pas** : c'est le dessein du journal, et c'est ce qui rend ce défaut bloquant. Ensuite **Q-291 · Q-292 · Q-295 · Q-297 · Q-299** ont **un seul et même remède** — cesser de reconnaître un mot pour mesurer un sens |
 > | **3** | Le reste des constats de **S7** (Q-254, Q-256 → Q-263, Q-268 → Q-278) | ⚠️ **Deux se ferment ENSEMBLE avec un constat plus ancien** : **Q-272** promet dans le guide la propriété que **Q-243** dit absente — la troncature de queue du journal. Corriger un seul des deux endroits laisserait le produit se contredire |
 > | **3** | Les constats ouverts : **Q-243, Q-247, Q-234 → Q-244, Q-205 b, Q-206, Q-214 b·c·d·f** | Registre au `docs/PLAN_EXECUTION.md` §7, **seule source** |
 >
