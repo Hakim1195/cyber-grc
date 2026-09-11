@@ -498,6 +498,233 @@ describe('Tout identifiant métier porte son domaine — Q-310', () => {
   });
 });
 
+describe('Un DOMAINE vidé est vu, comme une contrainte vidée — A-1', () => {
+  /* ⚠️ **`f_domaine_accepte()` avait été livrée, inscrite en règle au
+     `CONVENTIONS.md` §39.1 — et appelée par PERSONNE.** Deux fichiers la
+     mentionnaient : celui qui la crée, et celui qui promet qu'on s'en sert.
+     Conséquence mesurée au 9ᵉ passage de la porte S8 : la mutation sournoise de
+     Q-292 fonctionnait encore sur les domaines, et `insert into risques (id)
+     values ('')` passait sous un `f_verifier_schema()` à zéro anomalie — c'est
+     **Q-310, donc Q-194, rouverts par la migration écrite le même jour pour les
+     fermer**. *Un garde-fou que rien n'invoque est un commentaire.* */
+
+  test('le domaine « id_metier » vidé par « or true » est vu', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter domain id_metier drop constraint id_metier_check',
+      "alter domain id_metier add constraint id_metier_check check (value <> '' or true)",
+    ]);
+    assert.ok(
+      nomme(anomalies, 'domaine_laisse_passer_l_interdit'),
+      'Le domaine qui borne TOUT identifiant métier du produit se vide en gardant son nom ' +
+        `et ses mots. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('le domaine « type_entite » vidé est vu — il borne le lien polymorphe', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter domain type_entite drop constraint type_entite_check',
+      "alter domain type_entite add constraint type_entite_check check (value <> '' or true)",
+    ]);
+    assert.ok(
+      nomme(anomalies, 'domaine_laisse_passer_l_interdit'),
+      'Ce domaine borne le lien POLYMORPHE des pièces jointes : une valeur inventée ferait ' +
+        'une pièce attachée sous un nom que nul déclencheur ne porte, donc une pièce qui ne ' +
+        `suivrait JAMAIS son porteur (constats Q-232 / Q-233). Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('et le témoin se tait : les six domaines intacts ne font rien rougir', async () => {
+    const anomalies = await anomaliesPendant([]);
+    assert.equal(
+      anomalies.filter((a) => a.anomalie.startsWith('domaine_')).length,
+      0,
+      `Un garde qui crie sur la forme juste est désarmé au premier agacement : ${resume(anomalies)}`,
+    );
+  });
+});
+
+describe('La barrière document ↔ traitement est gardée — A-2', () => {
+  /* ⚠️ **Les cinq pièces de la migration `030` se retiraient une par une sous un
+     `f_verifier_schema()` à zéro anomalie**, et l'auditeur a joué les conséquences
+     jusqu'au bout : la PSSI de portée Groupe désignant le traitement LOCAL d'une
+     filiale (**N-10 rouvert**), un document de Toulouse désignant le traitement
+     allemand (**lien inter-filiales**), un `traitement_id` ne référençant plus
+     rien.
+
+     La cause : `f_verifier_references_portee()` — le garde renforcé la veille pour
+     cette classe précise (Q-297) — reconnaissait une clé à ceci que l'une de ses
+     colonnes **s'appelle** `filiale_id`. La `030` a nommé la sienne
+     `traitement_filiale_id`. *Reconnaître un NOM au lieu de mesurer ce qu'une
+     chose FAIT* — la règle que le §39 venait d'écrire, retournée contre lui. */
+
+  for (const [quoi, mutation, attendue] of [
+    ['le déclencheur qui pose la filiale visée',
+     'drop trigger trg_documents_traitement_portee on documents',
+     'declencheur_de_portee_non_arme'],
+    ['la contrainte qui ferme N-10',
+     'alter table documents drop constraint ck_documents_traitement_groupe',
+     'barriere_traitement_non_eprouvable'],
+    ['la contrainte qui ferme le lien inter-filiales',
+     'alter table documents drop constraint ck_documents_traitement_filiale',
+     'barriere_traitement_non_eprouvable'],
+    ['la clé de cohérence',
+     'alter table documents drop constraint fk_documents_traitement_coherence',
+     'cle_de_portee_absente'],
+    ['la clé de portée',
+     'alter table documents drop constraint fk_documents_traitement_portee',
+     'cle_de_portee_absente'],
+  ]) {
+    test(`retirer ${quoi} fait rougir le déploiement`, async () => {
+      const anomalies = await anomaliesPendant([mutation]);
+      assert.ok(
+        nomme(anomalies, attendue),
+        `Le retrait de cette pièce doit être NOMMÉ. Rendu : ${resume(anomalies)}`,
+      );
+    });
+  }
+
+  test('LE GARDE DE CLASSE voit désormais la paire, quel que soit le NOM local', async () => {
+    /* Le cœur du constat A-2 : la paire de la `030` était la seule dont les DEUX
+       moitiés étaient invisibles. Retirer la compagne doit désormais réveiller le
+       garde de classe — celui qui vaut pour toutes les clés, pas seulement pour
+       celles qu'on a pensé à nommer. */
+    const anomalies = await anomaliesPendant([
+      'alter table documents drop constraint fk_documents_traitement_portee',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'reference_portee_sans_compagne'),
+      'Le garde de CLASSE doit voir la clé de la migration 030, dont la colonne de ' +
+        'cloisonnement s’appelle « traitement_filiale_id » et non « filiale_id ». Il ' +
+        `regarde ce qu’elle RÉFÉRENCE, jamais son nom. Rendu : ${resume(anomalies)}`,
+    );
+  });
+});
+
+describe('Un garde n’ÉVALUE pas un prédicat qui peut agir — A-4', () => {
+  test('un prédicat qui appelle une fonction du produit n’est PAS exécuté', async () => {
+    /* ⚠️ **Mesuré par l'orchestrateur, et le mécanisme n'est pas celui que le
+       rapport annonçait** — c'est pourquoi on revérifie : `stable` bloque
+       l'écriture DIRECTE (« INSERT is not allowed in a non-volatile function »),
+       et rien de plus. Une fonction `stable` qui appelle une `volatile` écrit
+       librement, et `f_contrainte_accepte()` répondait `true` comme si de rien
+       n'était — sous l'identité du PROPRIÉTAIRE, `f_verifier_schema()` étant
+       « security definer ». */
+    await proprietaire.query('begin');
+    try {
+      await proprietaire.query(
+        `create function f_charge_essai() returns boolean language plpgsql volatile as $x$
+           begin insert into colonnes_personnelles
+                 values ('__essai__','__essai__','non_personnelle',null,null,null,null,'x');
+                 return true; end $x$`,
+      );
+      await proprietaire.query(
+        `create function f_masque_essai() returns boolean language plpgsql stable as $x$
+           begin return f_charge_essai(); end $x$`,
+      );
+      await proprietaire.query('alter table documents drop constraint ck_documents_confidentialite');
+      await proprietaire.query(
+        'alter table documents add constraint ck_documents_confidentialite check (f_masque_essai())',
+      );
+      const { rows: anomalies } = await proprietaire.query(
+        `select anomalie from f_verifier_schema() where anomalie = 'contrainte_non_eprouvable'`,
+      );
+      assert.ok(
+        anomalies.length > 0,
+        'Le garde doit REFUSER d’évaluer un prédicat qui référence une fonction non native, ' +
+          'et le DIRE — « je n’ai pas pu mesurer » ne vaut pas « c’est bon ».',
+      );
+      const { rows } = await proprietaire.query(
+        `select count(*)::int as n from colonnes_personnelles where table_nom = '__essai__'`,
+      );
+      assert.equal(
+        rows[0].n,
+        0,
+        'La charge a écrit : le garde a exécuté ce qu’il inspectait, sous l’identité du ' +
+          'propriétaire (constat A-4).',
+      );
+    } finally {
+      await proprietaire.query('rollback');
+    }
+  });
+});
+
+describe('« Éprouvée » n’est pas « validée », et le défaut est gardé — A-8, A-12', () => {
+  test('une contrainte de barrière reposée « not valid » est vue', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table documents drop constraint ck_documents_confidentialite',
+      `alter table documents add constraint ck_documents_confidentialite
+         check (confidentialite in ('public','interne','confidentiel','restreint')) not valid`,
+    ]);
+    assert.ok(
+      nomme(anomalies, 'contrainte_non_validee'),
+      'Une contrainte « not valid » garde son prédicat — les témoins la jugent donc juste — ' +
+        'et les lignes DÉJÀ EN BASE n’ont jamais été vérifiées. La propriété avait été ' +
+        `perdue en généralisant (constat A-8). Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('LA RÉSERVE DE LA MIGRATION 025 EST LEVÉE : plus aucune contrainte « not valid »', async () => {
+    const { rows } = await proprietaire.query(
+      `select c.relname || '.' || k.conname as objet
+         from pg_constraint k
+         join pg_class c on c.oid = k.conrelid
+         join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+        where k.contype = 'c' and not k.convalidated
+        order by 1`,
+    );
+    assert.deepEqual(
+      rows.map((l) => l.objet),
+      [],
+      'Une contrainte du schéma est « not valid ». La technique qui lève la réserve — un §0 ' +
+        'qui pose le périmètre du groupe entier — a été inventée aux migrations 029 et 030 ; ' +
+        'une réserve écrite n’est pas une réserve traitée (constat A-8).',
+    );
+  });
+
+  test('le défaut « interne » de la classification est gardé', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table documents alter column confidentialite drop default',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'defaut_de_diffusion_perdu'),
+      'Un document repris d’un export antérieur à la migration 027 serait alors réputé ' +
+        'PUBLIC, ou refusé. C’est le réglage le plus discret de la classification, et le ' +
+        `pire s’il bascule (constat A-12). Rendu : ${resume(anomalies)}`,
+    );
+  });
+});
+
+describe('Le registre franchit la frontière du TEXTE — A-3', () => {
+  test('une colonne « jsonb » neuve est réclamée comme une « text »', async () => {
+    const anomalies = await anomaliesPendant(['alter table actifs add column contexte jsonb']);
+    assert.ok(
+      nomme(anomalies, 'colonne_personnelle_non_decidee'),
+      'Le renversement du constat Q-295 s’arrêtait au texte : huit colonnes « jsonb » — dont ' +
+        'journal_audit.valeurs_avant et valeurs_apres, qui recopient PAR CONSTRUCTION toutes ' +
+        'les colonnes déclarées personnelles — échappaient au registre qu’on présente au ' +
+        `DPO. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('une colonne « inet » neuve aussi — c’est la jumelle qui manquait', async () => {
+    const anomalies = await anomaliesPendant(['alter table actifs add column poste inet']);
+    assert.ok(
+      nomme(anomalies, 'colonne_personnelle_non_decidee'),
+      `Une adresse IP désigne un poste, donc une personne. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('une colonne « date » ne l’est PAS : le témoin se tait', async () => {
+    const anomalies = await anomaliesPendant(['alter table actifs add column revue_le date']);
+    assert.equal(
+      anomalies.filter((a) => a.anomalie === 'colonne_personnelle_non_decidee').length,
+      0,
+      'Une date d’échéance n’est pas une personne : réclamer une décision sur chacune ferait ' +
+        `un registre illisible, donc non lu. Rendu : ${resume(anomalies)}`,
+    );
+  });
+});
+
 describe('Le registre impose la cohérence de TYPE — Q-300', () => {
   test('déclarer une colonne BOOLÉENNE « personnelle · anonymiser » fait rougir', async () => {
     /* La purge est TRANSACTIONNELLE : une seule déclaration de ce genre l'avorte

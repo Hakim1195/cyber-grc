@@ -2688,3 +2688,84 @@ juste tant que la borne est juste : contre une borne relevée d'un facteur cent 
 l'essai a tenté cent millions d'insertions et **s'est figé**. Au-delà d'un plafond de
 matière déclaré, l'essai **échoue** en disant que la borne a quitté son ordre de grandeur.
 C'est la leçon du constat Q-251, et elle a dû être payée deux fois.
+
+### 39.6 Reconnaître par ce qui est RÉFÉRENCÉ, apparier par ce qui est LOCAL
+
+> **Posé le 11/09/2026 au soir**, après le 9ᵉ passage de la porte S8 — qui a refusé le lot
+> écrit le matin même, et dont **les deux constats porteurs visaient les gardes de ce §39**.
+
+Le §39.1 disait « ne compare jamais du texte à du texte ». C'était juste et **insuffisant** :
+`f_verifier_references_portee()` ne comparait pas de texte, il lisait un **nom de colonne**
+dans le catalogue — `filiale_id`. La migration `030` a nommé la sienne
+`traitement_filiale_id`, et **les deux moitiés de sa barrière sont devenues invisibles** :
+cinq pièces se retiraient une par une sous zéro anomalie, rouvrant le constat N-10 et
+ouvrant un lien inter-filiales.
+
+**La règle, en deux temps, et il faut les deux :**
+
+| | Ce qu'on regarde | Pourquoi |
+|---|---|---|
+| **reconnaître** une clé de cloisonnement | ce qu'elle **RÉFÉRENCE** (`confkey` → `<cible>.filiale_id`) | un nom local se change sans que rien ne le dise ; la colonne visée, elle, appartient à la cible et porte la convention du §17.1 |
+| **apparier** une clé et sa compagne | leurs colonnes **LOCALES** | deux clés d'une même table vers la même cible référencent toutes deux `<cible>.id` : les comparer par la cible ferait d'une compagne posée sur une AUTRE colonne une compagne valable — le défaut exact que le constat Q-297 avait fermé |
+
+⚠️ **Chacune des deux moitiés a coûté un passage de porte**, et la seconde a failli être
+perdue en corrigeant la première : le banc l'a rattrapée en une exécution, parce qu'il portait
+déjà le témoin de Q-297. *Un essai qui garde une propriété fermée est ce qui permet d'en
+fermer une autre sans la rouvrir.*
+
+### 39.7 Un garde de CLASSE ne voit pas la disparition d'une PAIRE
+
+`f_verifier_references_portee()` réclame une compagne à toute clé composite qui en manque.
+Il ne peut rien dire quand **les deux** clés disparaissent : il n'y a alors plus de clé à
+examiner, et son silence est légitime.
+
+Une barrière nommée — les cinq pièces de la `030`, celles de la publication (`019`), celles
+de l'intégrité (`024`) — se garde donc **aussi** nommément, sur le modèle de
+`f_verifier_publication_documents()` : les objets existent, et les contraintes sont
+**éprouvées** par des témoins (§39.1). *Le garde de classe et le garde nommé ne font pas
+double emploi : ils ferment deux trous différents.*
+
+### 39.8 Un garde-fou n'exécute pas ce qu'il inspecte
+
+`f_contrainte_accepte()` évalue le prédicat réel d'une contrainte. Le prédicat vient du
+catalogue — mais **il peut agir** :
+
+- `stable` **bloque l'écriture DIRECTE** (« INSERT is not allowed in a non-volatile
+  function ») et rien de plus : une fonction `stable` qui appelle une **volatile** écrit ;
+- `pg_depend` **ne suit pas** les appels d'un corps PL/pgSQL : interroger la volatilité des
+  fonctions directement référencées ne voit pas l'appel de profondeur un ;
+- et l'évaluation se fait sous l'identité du **propriétaire** quand elle passe par
+  `f_verifier_schema()`, qui est `security definer` — `install.sh --diagnostic`, joué en
+  root, emprunte ce chemin.
+
+**La règle** : on refuse d'évaluer tout prédicat qui référence une fonction **non native** —
+non épinglée au catalogue (`pg_depend.deptype = 'p'`). Mesuré : aucune des 150 contraintes
+`check` du schéma n'en référence une, la règle ne retire donc rien. Et le refus est
+**bruyant** : l'appelant reçoit `null`, qu'il traduit en `contrainte_non_eprouvable`.
+
+⚠️ **La migration déclarait cette surface inerte sans l'avoir mesurée** — *« ce qui est
+exécuté ne vient pas d'un utilisateur »*, vrai des VALEURS, muet sur le prédicat. C'est la
+leçon du constat Q-291, **retournée contre le paragraphe qui la formule** : une migration
+avait affirmé une propriété au lieu de la poser.
+
+### 39.9 Ce que « toute colonne » veut dire, et où le balayage s'arrête
+
+Le renversement du §39.3 a été écrit pour le TEXTE, et il s'y est arrêté : huit colonnes
+`jsonb` et une `inet` échappaient au registre de l'article 30, dont
+`journal_audit.valeurs_avant`, qui recopie **par construction** toutes les colonnes déclarées
+personnelles. La preuve du défaut était dans le registre lui-même — `journal_audit.adresse_ip`
+y figurait, **inscrite à la main**, et sa jumelle `sessions.adresse_ip` n'y était pas.
+
+**Le balayage part donc de TOUTES les colonnes**, et ce qui en sort se déclare :
+
+- les **types** qui ne peuvent pas porter une personne — un booléen, un entier, une date
+  d'échéance — sont rangés dans `f_verifier_types_ranges()`, et un type neuf fait rougir ;
+- les colonnes d'un **domaine** sont écartées, et `f_verifier_domaines_textuels()` exige
+  qu'un domaine textuel neuf soit rangé ;
+- la **traçabilité** (`cree_par`, `modifie_par`) est écartée, motif écrit dans le code qui
+  l'applique.
+
+⚠️ **Et une limite est DITE plutôt que masquée** : un document figé (`jsonb`) déclaré
+`conserver` peut porter un nom que la purge ne signalera pas — elle ne sait chercher que dans
+du texte. Le registre le dit, colonne par colonne. *Une limite écrite vaut mieux qu'une
+promesse à moitié tenue.*

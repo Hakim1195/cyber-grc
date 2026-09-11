@@ -756,7 +756,7 @@ la comparaison au marché du 08/09/2026.
 **Mesuré au 11/09/2026, à la révision `30f2d84`** : `npm test` → **1907 essais,
 1907 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **30 garde-fous consignés**, **30 migrations**,
+`f_verifier_schema()` → 0 anomalie, **35 garde-fous consignés**, **31 migrations**,
 **52 tables** ; publication → **81 fichiers identiques au dépôt** ;
 `install.sh --diagnostic` → **14 conformes, 1 réserve, 0 bloquant**.
 
@@ -928,14 +928,14 @@ npm test                                         → tests 1907 · pass 1907 · 
                                                    documents 25 · journal 19
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (30 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (35 garde-fous découverts, joués, consignés)
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **52 tables** en
-**30 migrations**, **208 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**31 migrations**, **208 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **80 clés étrangères** (48 `restrict`, 30 `cascade`, 2 `set null`), **45 tables portant
 `cree_par` et 45 déclencheurs de création**, **17 clés étrangères composites** visant
-`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **30 contrôles consignés**
+`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **35 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1215,7 +1215,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **52 tables**, obtenues aujourd'hui en **30 migrations** appliquées de bout en bout par
+- **52 tables**, obtenues aujourd'hui en **31 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le

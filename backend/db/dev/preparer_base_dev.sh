@@ -65,7 +65,13 @@ Prépare une base de développement ou de recette pour Cyber GRC Groupe.
   --reinitialiser-mots-de-passe
                          réécrit le mot de passe des rôles déjà existants
   --purger-bases-essai   supprime les bases « grc_essai_% » sans connexion active,
-                         laissées par un banc d'essai interrompu, puis s'arrête
+                         laissées par un banc d'essai interrompu, puis s'arrête.
+                         ⚠️ SANS DANGER SUR UNE MACHINE DE RECETTE : cette option
+                         sort AVANT la partie qui touche aux rôles, et elle
+                         REFUSE d'être combinée à une autre. C'est le seul
+                         chemin de nettoyage du dépôt, et l'interdit qui pèse
+                         sur ce script porte sur les MOTS DE PASSE DES RÔLES,
+                         pas sur lui (constat A-10)
   --aide                 ce message
 
 Rôles créés (CONVENTIONS.md §14) : grc_proprietaire · grc_app · grc_lecture
@@ -145,6 +151,22 @@ succes "superutilisateur $SUPERUTILISATEUR"
 # et **seules celles sans aucune connexion active** sont supprimées — une base qu'un
 # banc d'essai est en train d'utiliser n'est pas orpheline.
 if [[ $PURGER_ESSAIS -eq 1 ]]; then
+  # ══ CE CHEMIN NE TOUCHE PAS AUX RÔLES, ET ON LE REND VÉRIFIABLE ══════════════
+  #
+  # Constat **A-10** (9ᵉ passage de la porte S8) : quatre-vingt-une bases d'essai
+  # orphelines s'étaient accumulées sur la grappe qui sert la recette, et le SEUL
+  # nettoyage documenté est cette option — d'un script que le `CLAUDE.md` §5 et le
+  # `CLAUDE.local.md` interdisent de jouer ici, parce qu'il ramènerait les rôles au
+  # mot de passe « dev » et casserait le service installé (constat Q-81).
+  #
+  # **L'interdit porte sur les MOTS DE PASSE, pas sur cette option** : le bloc
+  # ci-dessous sort en 0 bien avant la partie qui écrit les rôles. Pour que ce ne
+  # soit pas un raisonnement à refaire, on l'IMPOSE : combiner cette option à une
+  # autre est refusé.
+  if [[ $RECREER -eq 1 || $REINITIALISER -eq 1 || $SANS_MIGRATION -eq 1 ]]; then
+    echec "--purger-bases-essai ne se combine avec aucune autre option : elle ne doit
+      jamais ouvrir le chemin qui réécrit les rôles. Jouez-la seule."
+  fi
   info "Purge des bases d'essai orphelines"
   candidates="$(printf "%s\n" "select d.datname
                                   from pg_database d

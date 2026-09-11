@@ -55,7 +55,7 @@
 > | **S5** | V4 — L4, L6 | 1 | ❌ refusée — 13 constats |
 > | **S6** | V6 — L10, L12, L13 | 1 | ❌ refusée — 12 constats |
 > | **S7** | V7 — L11, L14 | **1** | ❌ **refusée le 09/09/2026 — 27 constats, 7 bloquants, 0 fuite** |
-> | **S8** | V8 — L15 | **8** | ❌ **refusée le 11/09/2026 — 1 bloquant, 11 majeurs, 7 mineurs, 0 fuite ; 5 contrôles sur 18 en échec.** ✅ **Les 19 constats traités le 11/09** (Q-309 clos par arbitrage) — **9ᵉ passage dû** |
+> | **S8** | V8 — L15 | **9** | ❌ **refusée le 11/09/2026 au soir — 0 bloquant, 12 majeurs, 11 mineurs, 0 fuite ; 2 contrôles sur 18 en échec (S12, S16).** ✅ **Les 23 constats traités le soir même** (migration `031`) — **10ᵉ passage dû** |
 >
 > **Le 6ᵉ passage de S8 est le meilleur du chantier** — 0 bloquant, 4 majeurs, 8 mineurs,
 > **0 fuite entre filiales**, banc **1 747 essais, 1 747 passés** — mais *refusé reste
@@ -110,7 +110,60 @@
 >    la première rédaction de l'essai des bornes fabriquait `borne + 1` éléments et, contre
 >    la mutation `1000 → 100 000 000`, **s'est figée**. Plafond de matière posé — leçon Q-251.
 >
-> **Le prochain geste : le 9ᵉ passage de la porte S8**, par des auditeurs indépendants.
+> ---
+>
+> ## ▶▶▶▶ ET LE 9ᵉ PASSAGE A ÉTÉ JOUÉ LE MÊME SOIR — REFUSÉ, PUIS TRAITÉ
+>
+> **0 bloquant, 12 majeurs, 11 mineurs, 0 fuite entre filiales.** Constats **Q-312 → Q-334**.
+> Un seul contrôle en échec de chaque côté : **S16** (périmètre A) et **S12** (périmètre B).
+>
+> ⚠️ **LE MOTIF NE CHANGE PAS, ET C'EST LA QUATRIÈME PORTE DE SUITE : les deux constats qui
+> portent le refus visent les gardes écrits pour fermer le passage d'avant.**
+>
+> - **Q-312** — `f_domaine_accepte()`, livrée le matin même et **inscrite en règle au
+>   `CONVENTIONS.md` §39.1**, n'est appelée **par personne**. Les domaines `id_metier` et
+>   `type_entite` se vidaient par « … or true » sous **0 anomalie**, et `insert into risques
+>   (id) values ('')` passait — *Q-310, donc Q-194, rouverts par la migration écrite le même
+>   jour pour les fermer*.
+> - **Q-313** — les cinq pièces de la migration `030` se retiraient **une par une** sous 0
+>   anomalie : **N-10 rouvert**, **lien inter-filiales**. Cause :
+>   `f_verifier_references_portee()`, renforcé la veille *pour cette classe précise*,
+>   reconnaissait une colonne **NOMMÉE** `filiale_id` ; la `030` a nommé la sienne
+>   `traitement_filiale_id`. *Reconnaître un NOM au lieu de mesurer ce qu'une chose FAIT* —
+>   la règle du §39, retournée contre elle-même.
+>
+> ✅ **Les vingt-trois constats sont traités** — migration `031`, **cinq garde-fous neufs**
+> (35 au total), et chaque correctif **mordu par la mutation qui l'avait révélé**. Les règles
+> qui en sortent vivent au `CONVENTIONS.md` **§39.6 à §39.9** :
+>
+> 1. **reconnaître par ce qui est RÉFÉRENCÉ, apparier par ce qui est LOCAL** — les deux
+>    moitiés sont nécessaires, et chacune a coûté un passage de porte ;
+> 2. **un garde de CLASSE ne voit pas la disparition d'une PAIRE** : une barrière nommée se
+>    garde aussi nommément ;
+> 3. **un garde-fou n'exécute pas ce qu'il inspecte** — `stable` ne bloque que l'écriture
+>    DIRECTE, et `pg_depend` ne suit pas les appels d'un corps PL/pgSQL ;
+> 4. **le balayage du registre RGPD franchit la frontière du texte** — 206 décisions.
+>
+> ⚠️ **Trois choses à retenir de ce passage, au-delà des constats :**
+>
+> - **`GRC07` n'arrivait nulle part** (Q-325) : le refus soigné de la `030` devenait un
+>   **500 avec pile d'appel**. *Il ÉTAIT éprouvé — en SQL direct, jamais par la route. L'essai
+>   prouvait que le déclencheur se déclenche ; personne ne mesurait ce que l'utilisateur
+>   reçoit.*
+> - **Le plafond de matière avait été posé à un endroit et oublié à l'autre** (Q-327), dans
+>   le fichier écrit la veille pour le poser : contre la mutation, le banc ne rendait jamais
+>   la main.
+> - **A-4 ne s'est PAS reproduit comme le rapport l'annonçait** (Q-315) — `stable` bloque
+>   l'écriture directe, et c'est un appel de profondeur un qui passe. *Six constats ont été
+>   revérifiés à la main avant d'être consignés ; celui-là a changé de mécanisme en route.*
+>
+> ✅ **Et ce qui tient** : le contrôle **S7 cesse d'être en échec pour la première fois en
+> quatre portes** — Q-301 et Q-302 mesurés fermés dans le journal de la recette, et les
+> **quatorze routes `GET`** balayées sous un compte sans droit d'export sans qu'aucune ne
+> rende le jeu sans trace. Cloisonnement **110/110**, **34 sondes hostiles** sans une percée,
+> **0 fuite entre filiales**, et le parcours complet **ne détruit rien**.
+>
+> **Le prochain geste : le 10ᵉ passage de la porte S8.**
 >
 > ---
 >
@@ -198,7 +251,8 @@
 > | ~~2~~ | ~~**Les 6 majeurs de S8**~~ | ✅ **TRAITÉS les 10 et 11/09/2026.** ~~Q-279~~ (la trace suit le volume rendu), ~~Q-280~~ (voie 1 fermée, voie 2 **réfutée** avec sa mesure), ~~Q-281~~ (migration `021`, les gardes mesurent `tgtype`), ~~Q-282~~ (`022`, le relais de version vit dans la base), ~~Q-283~~ (deux discriminants qui ne sont pas la taille), ~~**Q-284**~~ **fermé le 11/09** — pas par le remède qu'il prescrivait, **mesuré impossible**, mais en DISTINGUANT : l'indélébile est la décision, pas le nom |
 > | ~~2~~ | ~~**Rejouer S8 — 8ᵉ passage**~~ | ✅ **JOUÉ le 11/09/2026, et REFUSÉ** — **deux auditeurs indépendants**, périmètres exclusifs. **1 bloquant, 11 majeurs, 7 mineurs, 0 fuite entre filiales**, constats **Q-291 → Q-309**, **cinq contrôles sur dix-huit en échec**. ⚠️ **Sur 41 mutations, 14 ne mordent pas — et treize visent des gardes posés dans les trois jours précédents.** Le bloquant **Q-301** est le correctif de Q-279, accepté au passage d'avant : il trace **l'inventaire de la filiale** au lieu de ce qui sort, et inscrit de **fausses accusations d'extraction dans le journal inaltérable** |
 > | ~~2~~ | ~~**Le bloquant Q-301, puis les dix-huit autres constats de S8**~~ | ✅ **TRAITÉS le 11/09/2026 — les dix-neuf, sauf Q-309 qui est clos par arbitrage.** Migrations **`028`, `029`, `030`** ; quatre garde-fous neufs ; le semis du registre RGPD passe de **58 à 197 décisions** ; **trois familles d'essais neuves ou étendues**. ⚠️ **Le remède commun des cinq est écrit en règle** : `CONVENTIONS.md` **§39** — *un garde-fou ÉPROUVE, il ne reconnaît pas un mot*, et **le balayage part du CATALOGUE, jamais de la liste**. ⚠️ **Deux constats de plus trouvés en travaillant**, tous deux de la classe « on a corrigé l'instance, pas la classe » : **Q-310** (`risque_catalogue.id` en `text` nu — Q-194 rejoué sur la table que la même migration avait créée) et **Q-311** (le garde du §29.5 examinait **une ligne à la fois**, et le produit interpolait sur la suivante) |
-> | **2** | **Rejouer S8 — 9ᵉ passage** | Par des **auditeurs indépendants**, périmètres exclusifs. ⚠️ **Trois passages de suite ont trouvé leur bloquant dans un correctif accepté au passage d'avant** : Q-208 deux fois, Q-301 une fois. *Un banc vert ne vaut pas un passage de porte* |
+> | ~~2~~ | ~~**Rejouer S8 — 9ᵉ passage**~~ | ✅ **JOUÉ le 11/09/2026 au soir, et REFUSÉ** — 0 bloquant, 12 majeurs, 11 mineurs, **0 fuite entre filiales**, constats **Q-312 → Q-334**. ⚠️ **Quatrième porte de suite où les constats porteurs visent les gardes du passage d'avant.** ✅ **Les vingt-trois sont traités le soir même** (migration `031`) |
+> | **2** | **Rejouer S8 — 10ᵉ passage** | Par des **auditeurs indépendants**. ⚠️ **Quatre passages de suite** ont trouvé leur constat porteur dans un correctif accepté au passage d'avant : Q-208 deux fois, Q-301, puis Q-312 et Q-313. *Un banc vert ne vaut pas un passage de porte* |
 > | **3** | Le reste des constats de **S7** (Q-254, Q-256 → Q-263, Q-268 → Q-278) | ⚠️ **Deux se ferment ENSEMBLE avec un constat plus ancien** : **Q-272** promet dans le guide la propriété que **Q-243** dit absente — la troncature de queue du journal. Corriger un seul des deux endroits laisserait le produit se contredire |
 > | **3** | Les constats ouverts : **Q-243, Q-247, Q-234 → Q-244, Q-205 b, Q-206, Q-214 b·c·d·f** | Registre au `docs/PLAN_EXECUTION.md` §7, **seule source** |
 >

@@ -408,18 +408,55 @@ export async function greffonJournal(
       config: { acces: { action: 'lire', domaine: 'journal' } },
     },
     async (requete: FastifyRequest<{ Querystring: QuerystringJournal }>, reponse: FastifyReply) => {
-      const { perimetre } = sessionDe(requete);
+      const { perimetre, droits } = sessionDe(requete);
       const filtres = filtresDe(requete.query, LIMITE_PAGE_DEFAUT, LIMITE_PAGE_MAX);
 
+      /* ══ LE DIFFÉRENTIEL EST DE L'EXPORT — constat B-7 ═══════════════════════
+       *
+       * Cette route et `/api/journal/export` servent les **mêmes dix-sept
+       * colonnes**, `valeurs_avant` et `valeurs_apres` comprises — c'est-à-dire
+       * l'état complet de chaque enregistrement à chaque écriture. Elles ne
+       * déclaraient pas le même droit : `lire` ici, `exporter` là-bas.
+       *
+       * Mesuré au 9ᵉ passage de la porte S8 : page de 500, curseur `suivant` sans
+       * fin — **un compte portant le domaine `journal` sans `GRC-EXPORT`
+       * reconstituait le jeu de données en feuilletant**, pendant que la même
+       * matière en CSV lui était refusée en 403. Le droit d'export est une
+       * autorisation distincte de la consultation (`PLAN_SERVEUR` §3.3) ; il ne
+       * peut pas dépendre du FORMAT dans lequel on demande la même chose.
+       *
+       * ⚠️ **Ce qui n'est PAS retiré, et le motif compte** : les seize autres
+       * colonnes restent servies — qui, quand, quelle action, sur quel objet, et
+       * le chaînage d'empreintes. C'est l'objet même de l'écran du journal, et le
+       * retirer reviendrait à fermer la consultation pour fermer l'export. Ce qui
+       * part est le **contenu des enregistrements**, et lui seul.
+       *
+       * ⚠️ **Et la trace demeure** : chaque page lue est journalisée, avec ou sans
+       * le différentiel. Le contrôle S7 exige que toute sortie soit tracée — elle
+       * l'était déjà, et elle le reste. */
+      const differentielAutorise = droits.export === true;
+
       const page = await avecTransaction(pool, perimetre, async (client) => {
-        const entrees = await lirePage(client, filtres);
+        const brutes = await lirePage(client, filtres);
+        const entrees = differentielAutorise
+          ? brutes
+          : brutes.map((e): Record<string, unknown> => {
+              const { valeurs_avant: _a, valeurs_apres: _b, ...reste } = e;
+              return { ...reste, differentiel_masque: true };
+            });
         await tracer(
           client,
           perimetre,
           requete,
           'consultation_sensible',
           'Consultation du journal d’audit',
-          { ...filtresTraces(filtres), lignes: entrees.length },
+          {
+            ...filtresTraces(filtres),
+            lignes: entrees.length,
+            // Un auditeur doit pouvoir distinguer « il a lu la liste » de « il a
+            // lu le CONTENU des enregistrements » — constat B-7.
+            differentiel: differentielAutorise,
+          },
         );
         return entrees;
       });

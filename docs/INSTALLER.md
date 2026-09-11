@@ -43,7 +43,7 @@ cd cyber-grc
 #     déclare vos filiales, puis pose PostgreSQL 17, la base, le service et Apache.
 sudo bash backend/deploy/install.sh --assistant
 
-# 3 — Constater. Douze sujets contrôlés, chaque ligne dit quoi faire.
+# 3 — Constater. Quatorze sujets contrôlés, chaque ligne dit quoi faire.
 sudo bash backend/deploy/install.sh --diagnostic
 
 # 4 — Engendrer le script des groupes Active Directory, prêt à exécuter

@@ -3981,6 +3981,15 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
     // reconnu ici, un garde-fou qui disparaît ne doit pas s'effacer en silence.
     assert.deepEqual(controles.map((l) => l.controle), [
       'armement',
+      // TRENTE ET UNIÈME, apporté par `031_les_gardes_regardent_ce_qui_est_reference.sql`
+      // — constat **A-2** du 9ᵉ passage de la porte S8. Le garde de CLASSE
+      // (`references_portee`) ne peut pas voir la disparition des DEUX clés d'une
+      // paire : il n'y a alors plus de clé à examiner. Les cinq pièces de la
+      // barrière document ↔ traitement se retiraient donc une par une sous zéro
+      // anomalie — et l'auditeur a joué les conséquences : N-10 rouvert, lien
+      // inter-filiales, `traitement_id` ne référençant plus rien. Celui-ci les
+      // garde nommément, et ÉPROUVE les deux « check » par des témoins.
+      'barriere_traitement',
       // QUATORZIÈME, apporté par `015_champs_structurels.sql` (constat Q-201) : aucune
       // colonne du schéma ne doit commencer par un souligné. C'est la SECONDE MOITIÉ
       // d'une règle dont la première vit dans `js/core/sync.js`, qui écarte du corps
@@ -4044,6 +4053,11 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // le sache**. ⚠️ Il ne vérifie PAS le minuteur `cyber-grc-reanalyse.timer` : un
       // garde-fou de schéma interroge `pg_catalog`, et l'état d'une unité systemd n'y est
       // pas. C'est `install.sh --diagnostic` qui le mesure, sujet n° 14.
+      // TRENTE-CINQUIÈME, apporté par `031` — constat **A-12** : le défaut
+      // « interne » de `documents.confidentialite`. La migration 027 l'écrit, le
+      // guide l'explique, et rien ne le tenait. Un document repris d'un export
+      // antérieur serait réputé PUBLIC.
+      'defauts_de_classification',
       'dispositif_integrite',
       // VINGT-NEUVIÈME, apporté par `029_le_registre_balaie_tout.sql` — constat **Q-310**,
       // trouvé en écrivant cette vague et de la CLASSE de Q-194 : `risque_catalogue.id` et
@@ -4057,6 +4071,14 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // colonnes d'un domaine du balayage des données personnelles ; c'est juste pour les
       // six qui existent, et ce serait FAUX EN SILENCE pour un domaine neuf qui porterait
       // de la prose. C'est le renversement de Q-295 appliqué à sa propre exception.
+      // TRENTE-DEUXIÈME, apporté par `031` — constat **A-1**, et c'est le contrôle
+      // S16 appliqué à un garde livré par la migration qui le porte en titre.
+      // `f_domaine_accepte()` avait été écrite, inscrite en règle au
+      // `CONVENTIONS.md` §39.1 — et appelée par PERSONNE. Les domaines `id_metier`
+      // et `type_entite` se vidaient par « … or true » sous zéro anomalie, et
+      // `insert into risques (id) values ('')` passait : Q-310, donc Q-194,
+      // rouverts par la migration écrite le même jour pour les fermer.
+      'domaines_eprouves',
       'domaines_textuels',
       // VINGT-TROISIÈME, apporté par `025_un_ecart_ne_fait_plus_foi.sql` — constat
       // **Q-285** : le dispositif de la `020` CONSTATAIT qu'un fichier ne correspond plus
@@ -4067,6 +4089,11 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // la contrainte, pas seulement son nom — leçon de Q-281.
       'ecart_ne_fait_pas_foi',
       'entropie_identifiants',
+      // TRENTE-QUATRIÈME, apporté par `031` — constat **A-5** : dix-huit
+      // justifications du registre affirmaient « aucune saisie libre » sur une
+      // colonne `text` nue. Classe Q-291 — affirmer au lieu de poser —, appliquée
+      // au registre qu'on présente à un DPO.
+      'justifications_bornees',
       // DIXIÈME, apporté par `008_journal_lecture.sql` : il vérifie que la politique de
       // lecture du journal est bien cloisonnée (condition E6). La liste a rougi en
       // arrivant, exactement comme elle doit — voir le commentaire du neuvième.
@@ -4134,6 +4161,12 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // transforme pas en découverte automatique pour cesser de rougir.
       'substrat_session',
       'tracabilite',
+      // TRENTE-TROISIÈME, apporté par `031` — constat **A-3** : le renversement du
+      // registre s'arrêtait à la frontière du TEXTE, et huit colonnes `jsonb`
+      // échappaient. Tout type présent dans le schéma est désormais RANGÉ :
+      // « porteur possible d'une donnée personnelle » ou « jamais une personne ».
+      'types_ranges',
+
       'unicite_cloisonnee',
       // VINGT ET UNIÈME, apporté par `023_publication_ferme_ses_deux_voies.sql` — constat
       // **Q-280**, voie 1 : la MÉMOIRE du circuit engagé (`documents.validation_engagee`)

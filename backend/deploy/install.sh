@@ -167,7 +167,7 @@ Installe ou met à jour Cyber GRC Groupe sur Debian 13 (sans conteneur).
   --verifier-publication         NE MODIFIE RIEN : compare ce que la racine web
                                  SERT à ce que le dépôt porte, et rend 5 si un
                                  fichier diverge (constat Q-103)
-  --diagnostic                   NE MODIFIE RIEN : l'état des douze points qui cassent
+  --diagnostic                   NE MODIFIE RIEN : l'état des quatorze points qui cassent
                                  en vrai — services, publication, propriété de la base,
                                  garde-fous du schéma, chaîne du journal, annuaire,
                                  relais de messagerie, antivirus, certificat, disque,
@@ -891,7 +891,7 @@ fi
 # ── Ce que ce mode NE dit PAS, et qu'il ne faut pas lui faire dire ───────────
 #
 # Il constate l'état d'une machine. **Il ne vaut pas passage de porte** : un
-# diagnostic vert sur les douze points laisse entières les questions que S7 et S8
+# diagnostic vert sur les quatorze points laisse entières les questions que S7 et S8
 # posent — paraphrase des catalogues, cloisonnement sous sondes hostiles, coût des
 # expressions rationnelles. *Un banc vert mesure ce qu'il regarde, jamais ce qu'il
 # ne regarde pas*, et cela vaut aussi pour lui.
@@ -938,7 +938,7 @@ if [[ $DIAGNOSTIC -eq 1 ]]; then
   #
   # En premier, et ce n'est pas un hasard : les onze contrôles suivants lisent
   # leurs paramètres ici. Un diagnostic qui interrogerait la mauvaise base, ou
-  # le mauvais hôte, rendrait douze verdicts sur une machine imaginaire.
+  # le mauvais hôte, rendrait quatorze verdicts sur une machine imaginaire.
   if [[ ! -f "$FICHIER_CONFIG" ]]; then
     diag_bloquant "config" "aucun fichier de configuration en $FICHIER_CONFIG" \
       "Le produit n'est pas installé ici. Installez : bash deploy/install.sh --assistant"
@@ -1019,7 +1019,7 @@ if [[ $DIAGNOSTIC -eq 1 ]]; then
   # modifier le journal ? » devient « oui », et le journal ne prouve plus rien.
   # ⚠️ On ne peut PAS appeler `valider_identifiant` ici : elle appelle `echec`,
   # donc `exit 1`. Elle ferait sortir le diagnostic au cinquième contrôle sur
-  # douze — un diagnostic qui s'arrête à la première anomalie n'en est pas un
+  # quatorze — un diagnostic qui s'arrête à la première anomalie n'en est pas un
   # (règle n° 3 de ce mode). Même expression rationnelle, verdict différent.
   if [[ -n "$BASE_NOM" && "$BASE_NOM" =~ ^[a-z_][a-z0-9_]*$ ]]; then
     PROP="$(proprietaire_base 2>/dev/null || true)"

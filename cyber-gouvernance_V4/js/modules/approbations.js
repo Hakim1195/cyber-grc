@@ -1164,6 +1164,23 @@ const ApprobationsModule = (() => {
         const e = noeud.dataset.entite || entite;
         const i = noeud.dataset.id || id;
         if (!famille(e) || !i) return;
+        // ⚠️ **On n'interroge pas le serveur sur un enregistrement qu'il ne
+        // connaît pas encore** — constat B-5. À la création, l'identifiant est
+        // encore celui du navigateur : la demande partirait, rendrait 404, et
+        // laisserait une erreur de console que le contrôle S17 compte. Le
+        // recalage nous rappellera (`grc:identifiant-recale`), et c'est à ce
+        // moment-là que la fiche est demandée. L'encart dit l'attente plutôt que
+        // de mentir : un blanc silencieux ferait croire à un circuit absent.
+        if (typeof Sync !== "undefined" && typeof Sync.serveurConnait === "function"
+            && !Sync.serveurConnait(e, i)) {
+            const corps = document.getElementById(ID_ENCART + "Corps");
+            if (corps) {
+                corps.innerHTML = '<p class="chart-empty">'
+                    + esc("Enregistrement en cours d'envoi — le circuit s'affichera dès que "
+                        + "le serveur l'aura pris.") + "</p>";
+            }
+            return;
+        }
         fiche = { charge: null, encours: false, erreur: null, envoi: false, message: null };
         commentaireSaisi = "";
         chargerFiche(e, i, ID_ENCART + "Corps");

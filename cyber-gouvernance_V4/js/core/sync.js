@@ -2244,8 +2244,29 @@ const Sync = (() => {
         return pousser();
     }
 
+    /**
+     * Le serveur CONNAÎT-IL cet enregistrement ?
+     *
+     * ══ CONSTAT B-5 ═══════════════════════════════════════════════════════
+     *
+     * Un enregistrement qui vient d'être créé porte encore son identifiant LOCAL
+     * tant que le serveur n'a pas répondu. Un composant qui interroge le serveur
+     * à ce moment-là reçoit un **404** — sans conséquence sur les données, le
+     * recalage le répare et l'annonce `grc:identifiant-recale` le lui dit. Mais
+     * l'erreur de console, elle, reste, et le contrôle **S17** demande zéro
+     * erreur de console.
+     *
+     * `versions` est l'instantané de ce que le serveur nous a rendu : un
+     * identifiant qui n'y figure pas n'est pas encore le sien. C'est la seule
+     * source qui le sache, et elle vit déjà ici.
+     */
+    function serveurConnait(collection, id) {
+        const m = versions[collection];
+        return !!(m && id && m.has(id));
+    }
+
     return {
-        brancher, demarrer, jeuDeDonnees, adopterJeu,
+        brancher, demarrer, jeuDeDonnees, adopterJeu, serveurConnait,
         marquerModification, marquerPropagation, marquerDerive, pousser, cycle,
         recharger, sonder, demarrerSondage, installerFilets,
         etat, surChangementEtat, aDesModificationsEnAttente, rendreBandeau,

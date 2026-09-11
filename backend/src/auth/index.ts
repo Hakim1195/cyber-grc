@@ -199,6 +199,22 @@ export interface ResultatConnexion {
   readonly resolveur: ResolveurPerimetreSession;
 }
 
+/**
+ * Durée minimale d'un refus d'authentification, en millisecondes — constat **B-10**.
+ *
+ * Les deux chemins qui refusent **sans interroger l'annuaire** — la limitation de
+ * rythme et le verrouillage persistant — répondaient trois fois plus vite que le
+ * chemin ordinaire : 18 ms contre 55 ms, mesuré à travers Apache. Le message était
+ * pourtant identique à l'octet près. *Une indistinguabilité qui s'arrête au corps de
+ * la réponse n'en est pas une* — le chronomètre disait à l'attaquant que son
+ * martèlement avait porté, et quand la fenêtre se rouvrirait.
+ *
+ * La valeur est au-dessus de ce qu'un refus d'annuaire coûte sur cette machine
+ * (48 à 60 ms mesurés), et assez basse pour ne rien coûter à personne : l'utilisateur
+ * légitime ne passe par aucun de ces chemins.
+ */
+const DUREE_MINIMALE_REFUS_MS = 80;
+
 export class ServiceAuthentification implements Authentificateur {
   public readonly provisoire = false;
 
@@ -287,6 +303,39 @@ export class ServiceAuthentification implements Authentificateur {
     adresseIp: string | null;
     agentUtilisateur: string | null;
   }): Promise<ResultatConnexion> {
+    /* ══ LE PLANCHER DE DURÉE — constat B-10 ═════════════════════════════════
+     *
+     * Le message de refus est identique à l'octet près, quelle que soit la cause
+     * — le contrôle S11 le mesure, et c'est la propriété qu'on veut. **Le
+     * chronomètre, lui, parlait.** Mesuré au 9ᵉ passage de la porte S8, à travers
+     * Apache, sur un identifiant INEXISTANT :
+     *
+     *     0,018 s · 0,018 s · 0,018 s   ← identifiant actuellement VERROUILLÉ
+     *     0,058 s · 0,049 s · 0,060 s   ← identifiant jamais vu
+     *
+     * Un facteur **trois**, stable : les deux chemins de court-circuit — la
+     * limitation de rythme et le verrouillage en base — répondent sans avoir
+     * interrogé l'annuaire. Un attaquant distingue donc *« cet identifiant est
+     * verrouillé »* de *« il ne l'est pas »*, ce qui lui confirme que son
+     * martèlement a porté et lui dit quand la fenêtre se rouvre.
+     *
+     * ⚠️ **On ne rend donc jamais un refus plus vite que ce plancher.** Ce n'est
+     * pas une égalisation parfaite — une réponse d'annuaire lente reste plus
+     * lente —, et cela ne prétend pas l'être : c'est le PLUS COURT des chemins
+     * qui trahissait, et c'est lui qu'on aligne. Le coût est nul pour
+     * l'utilisateur légitime : il ne passe par aucun de ces chemins.
+     *
+     * ⚠️ **Et ce que la mesure de l'auditeur N'A PAS couvert est dit** : le cas
+     * négatif n'a pas été éprouvé sur un compte RÉEL de l'annuaire de recette —
+     * le verrouillage y est à cinq tentatives (`CLAUDE.md` §0.3). On ne sait donc
+     * pas si le chronomètre distingue aussi un compte existant d'un compte
+     * inexistant. *« Non rejoué » ne vaut ni « passé » ni « en échec ».* */
+    const debut = Date.now();
+    const planchez = async (): Promise<void> => {
+      const reste = DUREE_MINIMALE_REFUS_MS - (Date.now() - debut);
+      if (reste > 0) await new Promise((suite) => setTimeout(suite, reste));
+    };
+
     const login = demande.identifiant.trim();
     if (login === '' || demande.motDePasse === '') {
       throw refusAuthentification('identifiant ou mot de passe vide');
@@ -299,6 +348,7 @@ export class ServiceAuthentification implements Authentificateur {
         detail: `rythme dépassé sur ${verdict.cause}, encore ${verdict.resteS} s`,
         compter: false,
       });
+      await planchez();
       throw refusAuthentification(
         `limitation du rythme : ${verdict.cause}, ${verdict.resteS} s restantes`,
       );

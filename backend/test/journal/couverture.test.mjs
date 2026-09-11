@@ -95,6 +95,11 @@ class SessionDeBanc {
     return this._perimetre;
   }
 
+  /** Change la filiale ACTIVE entre deux appels — jamais depuis une requête. */
+  poser(perimetreSession) {
+    this._perimetre = Object.freeze({ ...perimetreSession });
+  }
+
   async authentifier() {
     return { perimetre: this._perimetre, droits: this._droits, identite: null };
   }
@@ -655,6 +660,47 @@ describe('Le produit est exercé, puis le journal est compté', () => {
           'ouverte sans un geste écrirait sinon ≈ 3 750 fausses accusations d’extraction ' +
           'par jour et par onglet, dans le registre qui sert de preuve en audit.',
       );
+      /* ══ B-6 — LE BUDGET NE SE RÉARME PAS À LA BASCULE DE FILIALE ═══════
+       *
+       * `CUMUL_SONDAGES` était indexé par *compte × filiale active* : en changer
+       * ouvrait un compteur neuf, et **vingt-quatre lignes par filiale sortaient
+       * sans trace**. Sur un produit cadré « 20+ filiales », cela fait ≈ 480
+       * lignes extractibles sans trace d'extraction par un compte de portée
+       * Groupe. *Un budget qui se réarme n'est pas un budget.*
+       *
+       * On bascule donc la filiale active — le geste réel du sélecteur — et l'on
+       * exige que le cumul CONTINUE de compter. */
+      const avantBascule = await entreesDuScenario(
+        "and action = 'consultation_sensible' and resume like 'Extraction du jeu%'",
+      );
+      const cumulAvant = avantBascule.length > 0
+        ? avantBascule[avantBascule.length - 1].valeurs_apres.cumul
+        : 0;
+      assert.ok(
+        typeof cumulAvant === 'number' && cumulAvant > 0,
+        'Ce contrôle exige qu’un cumul ait déjà été inscrit : sans cela il ne mesure rien.',
+      );
+
+      session.poser({ ...session._perimetre, filialeId: FILIALE_B });
+      const apresBascule = await greffon.appeler(
+        'GET',
+        `/api/rafraichir?depuis=${encodeURIComponent(new Date(0).toISOString())}`,
+      );
+      assert.equal(apresBascule.statut, 200, JSON.stringify(apresBascule.corps));
+      session.poser({ ...session._perimetre, filialeId: FILIALE_A });
+
+      const apresTout = await entreesDuScenario(
+        "and action = 'consultation_sensible' and resume like 'Extraction du jeu%'",
+      );
+      const cumulApres = apresTout[apresTout.length - 1].valeurs_apres.cumul;
+      assert.ok(
+        cumulApres > cumulAvant,
+        'Le cumul est reparti de zéro après un changement de filiale active : vingt-quatre ' +
+          'lignes par filiale sortiraient alors sans trace, et le produit est cadré pour ' +
+          `vingt filiales (constat B-6). Avant : ${String(cumulAvant)} — après : ` +
+          `${String(cumulApres)}`,
+      );
+
       exerce.routes.add('sondage de rafraîchissement');
     } finally {
       await greffon.fermer();

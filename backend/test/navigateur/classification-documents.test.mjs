@@ -409,6 +409,119 @@ describe('la classification documentaire, de l’écran à la base et retour', (
     );
   });
 
+  test('§8 — L’INVERSION DÉCIDE : le DOM gagne sur l’argument — Q-303, constat B-5', async () => {
+    /* ══ POURQUOI CE CONTRÔLE EXISTE ══════════════════════════════════════════
+     *
+     * Le correctif de Q-303 a deux moitiés, et son commentaire désigne la
+     * première comme la vraie : `const i = noeud.dataset.id || id` — *« la source
+     * la plus fraîche doit gagner »*. L'auditeur a remis l'ordre d'origine
+     * (`id || noeud.dataset.id`) : **sept essais verts**. La seconde moitié —
+     * l'annonce du recalage — appelle `brancherEncart(null, null)`, si bien que
+     * l'argument est `undefined` et que **l'inversion ne décide jamais**.
+     *
+     * *Un essai qui couvre une règle sans jamais la faire décider ne la couvre
+     * pas* — c'est le motif du constat Q-210. Le jour où un appelant transmettra
+     * de nouveau un identifiant capturé, Q-303 reviendrait en silence.
+     *
+     * On fait donc décider l'inversion : on appelle l'encart avec un identifiant
+     * PÉRIMÉ, comme le faisait `documents.js`, et l'on exige que ce soit le
+     * `data-id` du conteneur qui parte au serveur. */
+    await aller(session.page, `/documents/${documentId}`);
+
+    // ⚠️ On écoute les requêtes DEPUIS PLAYWRIGHT, et non en remplaçant `fetch`
+    // dans la page : un enrobage posé à l'intérieur ne mesure que ce que la page
+    // veut bien lui montrer. Ce qui compte est ce qui SORT sur le réseau.
+    const demandes = [];
+    const ecouter = (requete) => {
+      const url = requete.url();
+      if (url.includes('/api/approbations/')) demandes.push(url);
+    };
+    session.page.on('request', ecouter);
+    let vraiId;
+    try {
+      vraiId = await session.page.evaluate(async (perime) => {
+        const encart = document.getElementById('approbationsEncart');
+        // L'appelant transmet un identifiant PÉRIMÉ — la faute que l'inversion
+        // existe pour absorber.
+        ApprobationsModule.brancherEncart('documents', perime);
+        await new Promise((r) => setTimeout(r, 1000));
+        return encart.dataset.id;
+      }, 'DOC-PERIME-0000000000000-zzzz');
+    } finally {
+      session.page.off('request', ecouter);
+    }
+    const vu = { vraiId, demandes };
+
+    assert.ok(vu.demandes.length >= 1, 'L’encart n’a interrogé personne : rien n’est mesuré.');
+    assert.ok(
+      vu.demandes.every((u) => u.includes(vu.vraiId)),
+      'L’encart a interrogé le serveur avec l’identifiant PÉRIMÉ que l’appelant lui a ' +
+        'passé, au lieu du « data-id » du conteneur que le recalage tient à jour. ' +
+        `Demandes : ${JSON.stringify(vu.demandes)} — attendu : ${vu.vraiId} (constat B-5).`,
+    );
+    assert.ok(
+      vu.demandes.every((u) => !u.includes('DOC-PERIME')),
+      'L’identifiant périmé est parti au serveur.',
+    );
+  });
+
+  test('§9 — le filtre des traitements DÉCIDE, dans les deux sens — Q-294, constat B-11', async () => {
+    /* Le filtre de Q-294 n'était mordu par rien : le remettre à « tous les
+       traitements » laissait la famille verte. On le fait décider sur les DEUX
+       portées — le sens OUVERT compte autant que le sens fermé, et n'éprouver
+       que le second referait le défaut que Q-294 a corrigé. */
+    const semis = await session.page.evaluate(() => ({
+      tous: DataStore.getTraitements().map((t) => t.id),
+      groupe: DataStore.getTraitements()
+        .filter((t) => t._porteeGroupe === true)
+        .map((t) => t.id),
+      documentGroupe: (DataStore.getDocuments().find((d) => d._porteeGroupe === true) ?? {}).id,
+    }));
+    assert.ok(
+      semis.tous.length > semis.groupe.length && semis.groupe.length > 0,
+      `Le semis doit porter des traitements des DEUX portées : ${JSON.stringify(semis)}`,
+    );
+    assert.ok(semis.documentGroupe, 'Le semis doit porter un document de portée Groupe.');
+
+    // (a) sur un document LOCAL : tout est proposé — c'est le sens qu'on a ouvert.
+    await aller(session.page, `/documents/${documentId}`);
+    const surLocal = await session.page.evaluate(() =>
+      Array.from(document.querySelectorAll('#traitement_id option')).map((o) => o.value),
+    );
+    for (const id of semis.tous) {
+      assert.ok(
+        surLocal.includes(id),
+        `Le traitement « ${id} » n’est pas proposé sur un document LOCAL. Le sens ` +
+          '« local → Groupe » est celui que le constat Q-294 a OUVERT.',
+      );
+    }
+
+    // (b) sur un document de portée GROUPE : les traitements LOCAUX disparaissent.
+    await aller(session.page, `/documents/${semis.documentGroupe}`);
+    const surGroupe = await session.page.evaluate(() => ({
+      options: Array.from(document.querySelectorAll('#traitement_id option')).map((o) => o.value),
+      note: document.getElementById('app').innerText.includes('Portée Groupe'),
+    }));
+    const locaux = semis.tous.filter((id) => !semis.groupe.includes(id));
+    for (const id of locaux) {
+      assert.ok(
+        !surGroupe.options.includes(id),
+        `Le traitement LOCAL « ${id} » est proposé sur un document de portée GROUPE : ` +
+          'l’utilisateur choisirait une valeur que la base refuse, et le message lui dirait ' +
+          'que l’élément n’existe pas dans son périmètre (constats Q-294, B-11).',
+      );
+    }
+    for (const id of semis.groupe) {
+      assert.ok(surGroupe.options.includes(id), `Le traitement de Groupe « ${id} » manque.`);
+    }
+    assert.equal(
+      surGroupe.note,
+      true,
+      'L’écran doit DIRE pourquoi la liste est plus courte : une liste amputée sans un mot ' +
+        'fait chercher un traitement qu’on croit avoir perdu.',
+    );
+  });
+
   test('§5 — l’écran RGPD charge le registre de l’outil, et n’en sort aucun nom', async () => {
     await aller(session.page, '/rgpd');
     await session.page.click('#chargerRegistreProduit');

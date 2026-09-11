@@ -371,7 +371,11 @@ pas d'administrateur d'une seule filiale.
 > ### ⚠️ Il n'y a pas d'écran d'administration — et c'était la promesse la plus coûteuse de ce guide
 >
 > Ce tableau renvoyait à un écran « Administration » **qui n'existe pas** : mesuré à la porte
-> S7 (constat **Q-266**), l'application compte 31 entrées de menu et aucune ne porte ce nom.
+> S7 (constat **Q-266**), l'application compte 31 entrées de menu et **aucune n'ouvre un
+> écran de ce nom**. ⚠️ *La barre latérale porte bien l'intitulé « Administration » — c'est
+> un titre de SECTION, pas une entrée, et il ne mène nulle part. La phrase disait « aucune
+> ne porte ce nom » et se serait fait contredire par le premier exploitant qui aurait
+> regardé (constat B-9). La conclusion, elle, ne bouge pas : il n'y a pas d'écran.*
 > Les routes, elles, existent bel et bien côté serveur ; c'est l'interface qui n'a pas été
 > construite. Un exploitant restait donc bloqué **au moment exact que ce guide devait
 > couvrir** — l'intégration d'une société rachetée.

@@ -242,6 +242,54 @@ describe('Les garde-corps de S13 mordent, et ils ne mordent QUE au-delà — Q-3
       `Le sondage a rendu ${String(rendues)} lignes pour une borne de ` +
         `${String(BORNES.lignesParSondage)} : la borne n’est pas appliquée.`,
     );
+
+    /* ══ ET LA BORNE ELLE-MÊME EST TENUE — constat B-4 ═══════════════════════
+     *
+     * L'assertion ci-dessus **lit la borne qu'elle prétend garder** : le jeu
+     * d'essai rend quelques lignes, et l'inégalité est trivialement vraie quelle
+     * que soit la valeur. Elle mesure « le produit respecte la borne qu'il
+     * déclare », jamais « la borne déclarée est sûre » — et c'est précisément la
+     * mutation que le constat Q-304 existe pour voir.
+     *
+     * Ce qui rend une borne SÛRE est son ordre de grandeur : elle doit rester
+     * dans ce que le produit est fait pour contenir. `lignesParSondage` borne ce
+     * qu'un seul sondage renvoie ; au-delà de quelques milliers, ce n'est plus un
+     * sondage, c'est une extraction — et c'est exactement le constat Q-301. */
+    assert.ok(
+      BORNES.lignesParSondage >= 100 && BORNES.lignesParSondage <= 20000,
+      `La borne « lignesParSondage » vaut ${String(BORNES.lignesParSondage)} : hors de ` +
+        'l’ordre de grandeur d’un sondage. Sous 100 elle casserait le rafraîchissement ' +
+        'ordinaire ; au-delà de 20 000 elle cesserait de borner quoi que ce soit, et le ' +
+        'sondage deviendrait une extraction que rien ne retient (constats Q-304, B-4).',
+    );
+  });
+
+  test('lignesParLiaison — la borne est TENUE, et pas seulement déclarée', async () => {
+    /* ══ CONSTAT B-4 ══════════════════════════════════════════════════════════
+     *
+     * Cette borne n'apparaissait que dans le contrôle « les huit bornes existent
+     * et sont des nombres » : la relever d'un facteur mille laissait tout au vert.
+     *
+     * Elle borne le nombre de lignes de LIAISON rapportées pour une collection —
+     * les étiquettes d'un document, les mesures d'un traitement. La fabriquer
+     * coûterait cent mille insertions par exécution du banc ; on tient donc
+     * l'ordre de grandeur, comme pour `lignesParSondage`, et **on le dit** plutôt
+     * que de laisser croire la borne éprouvée. */
+    assert.ok(
+      BORNES.lignesParLiaison >= 1000 && BORNES.lignesParLiaison <= 1000000,
+      `La borne « lignesParLiaison » vaut ${String(BORNES.lignesParLiaison)} : hors de ` +
+        'l’ordre de grandeur des liaisons d’une filiale. Au-delà d’un million, elle ' +
+        'cesserait de retenir la lecture d’une collection entière (constat B-4).',
+    );
+    // LA MATIÈRE : la borne est bien CELLE QUE LE PRODUIT SERT, et non une copie
+    // que ce fichier porterait — c'est ce qui la rend sensible à la mutation.
+    const modele = await greffon.appeler('GET', '/api/modele');
+    assert.equal(modele.statut, 200);
+    assert.equal(
+      modele.corps.bornes.lignesParLiaison,
+      BORNES.lignesParLiaison,
+      'La borne servie par /api/modele diverge de celle du moteur.',
+    );
   });
 
   test('Q-308 — sur une CRÉATION bloquée, le produit ne conseille pas de RECHARGER', async () => {
@@ -280,15 +328,137 @@ describe('Les garde-corps de S13 mordent, et ils ne mordent QUE au-delà — Q-3
     );
   });
 
+  test('B-2 — un traitement invisible rend un REFUS LISIBLE, jamais un 500', async () => {
+    /* ══ LE REFUS ÉTAIT ÉCRIT, ET IL N'ARRIVAIT NULLE PART ════════════════════
+     *
+     * Le déclencheur de la migration `030` refuse un traitement que la session ne
+     * voit pas, avec un message soigné et un `hint`. `src/erreurs/index.ts` ne
+     * connaissait pas le code `GRC07` : il tombait dans le générique, et
+     * l'utilisateur recevait **500 « Le serveur n'a pas pu traiter la demande »**,
+     * avec une pile d'appel au journal technique. Une faute de saisie classée
+     * incident serveur, et reproductible à volonté.
+     *
+     * ⚠️ **Pourquoi le banc ne pouvait pas le voir** : `GRC07` ÉTAIT éprouvé,
+     * mais **en SQL direct**, jamais par la route. *L'essai prouvait que le
+     * déclencheur se déclenche ; personne ne mesurait ce que l'utilisateur
+     * reçoit.* C'est la moitié du chemin — et c'est la classe Q-194. */
+    const refus = await greffon.appeler('POST', '/api/entites/documents', {
+      corps: {
+        champs: { titre: 'Vers un traitement absent',
+                  traitement_id: 'TRT-0000000000000-inexistant' },
+      },
+    });
+    assert.notEqual(
+      refus.statut,
+      500,
+      `Une valeur que l’utilisateur vient de saisir ne doit jamais rendre un incident ` +
+        `serveur : ${JSON.stringify(refus.corps)}`,
+    );
+    assert.equal(refus.statut, 400, JSON.stringify(refus.corps).slice(0, 300));
+    assert.match(
+      String(refus.corps.message ?? ''),
+      /n’existe pas dans votre périmètre|n'existe pas dans votre périmètre/u,
+      `Le refus doit DIRE quoi corriger : ${JSON.stringify(refus.corps)}`,
+    );
+  });
+
+  test('B-3 — un refus de portée ne nomme AUCUNE colonne que le client ignore', async () => {
+    /* L'autre sens du même correctif rendait au client « les champs (filiale_id,
+       traitement_filiale_id) » — deux colonnes dont aucune n'est servie par
+       `/api/modele`. Le message était inutilisable pour l'utilisateur légitime, et
+       il révélait à un attaquant interne qu'une valeur de portée est **dérivée et
+       stockée**. ⚠️ Le commentaire du code justifiait de les nommer par « ce sont
+       les noms que l'appelant a lui-même envoyés » : *la règle était écrite, vingt
+       lignes au-dessus de la ligne qui la viole.* */
+    const modele = await greffon.appeler('GET', '/api/modele');
+    assert.equal(modele.statut, 200);
+    const connus = new Set(
+      Object.values(modele.corps.entites).flatMap((e) => Object.keys(e.champs ?? {})),
+    );
+    // LA MATIÈRE : les deux colonnes en cause sont bien INCONNUES du client.
+    assert.equal(connus.has('filiale_id'), false);
+    assert.equal(connus.has('traitement_filiale_id'), false);
+
+    // Un document de portée GROUPE vers un traitement LOCAL : le sens N-10, fermé.
+    const traitementLocal = await greffon.appeler('POST', '/api/entites/traitements', {
+      corps: { champs: { nom: 'Paie de la filiale' } },
+    });
+    assert.equal(traitementLocal.statut, 201, JSON.stringify(traitementLocal.corps));
+
+    const refus = await greffon.appeler('POST', '/api/entites/documents', {
+      corps: {
+        champs: { titre: 'PSSI du groupe',
+                  traitement_id: traitementLocal.corps.enregistrement.id },
+        portee: 'groupe',
+      },
+    });
+    assert.ok(
+      refus.statut >= 400 && refus.statut < 500,
+      `Le sens « Groupe → local » doit être refusé : ${JSON.stringify(refus.corps)}`,
+    );
+    const message = String(refus.corps.message ?? '');
+    for (const interne of ['filiale_id', 'traitement_filiale_id', 'portee_groupe']) {
+      assert.equal(
+        message.includes(interne),
+        false,
+        `Le refus nomme « ${interne} », que le client ne connaît pas : « ${message} »`,
+      );
+    }
+    assert.match(
+      message,
+      /portée Groupe|socle commun|frontière/u,
+      `Le refus doit parler de la RÈGLE, en termes que l’utilisateur comprend : « ${message} »`,
+    );
+  });
+
+  test('B-1 — sur une MODIFICATION bloquée non plus, on ne conseille pas de recharger', async () => {
+    /* Q-308 avait été fermé sur la seule **création**. Un `PUT` en doublon
+       répondait encore *« n'a pas pu être CRÉÉ … Rechargez la liste »* : faux sur
+       le verbe, et destructeur sur le conseil — recharger jette le formulaire.
+       *Le discriminant n'est pas le verbe HTTP, c'est que l'utilisateur a une
+       saisie sous les yeux.* */
+    const doc = await greffon.appeler('POST', '/api/entites/documents', {
+      corps: { champs: { titre: 'À modifier', etiquettes: ['unique'] } },
+    });
+    assert.equal(doc.statut, 201, JSON.stringify(doc.corps).slice(0, 300));
+
+    const refus = await greffon.appeler(
+      'PUT',
+      `/api/entites/documents/${doc.corps.enregistrement.id}`,
+      {
+        corps: {
+          version: doc.corps.enregistrement._version,
+          champs: { etiquettes: ['RGPD', 'rgpd'] },
+        },
+      },
+    );
+    assert.equal(refus.statut, 409, JSON.stringify(refus.corps).slice(0, 300));
+    const message = String(refus.corps.message ?? '');
+    assert.equal(
+      /recharg/iu.test(message),
+      false,
+      `Le produit conseille de RECHARGER sur une modification bloquée : « ${message} ». ` +
+        'Recharger jette la saisie — c’est le bloquant du 6ᵉ passage de la porte S2, ' +
+        'fermé sur une moitié seulement (constats Q-308 puis B-1).',
+    );
+    assert.equal(
+      /pas pu être créé/iu.test(message),
+      false,
+      `Le message parle de CRÉATION là où l’utilisateur MODIFIE : « ${message} »`,
+    );
+  });
+
   test('S18 — ET LE PRODUIT FONCTIONNE TOUJOURS : juste en dessous, tout passe', async () => {
     /* La moitié qui empêche « corriger la sécurité en cassant la fonction ».
        Chaque charge est construite JUSTE en dessous de sa borne. */
-    const champs = { nom: 'Risque ordinaire' };
-    for (let i = 0; i < BORNES.champsParEnregistrement - 10; i += 1) {
-      champs[`champ_${String(i)}`] = 'x';
-    }
-    // ⚠️ Les champs inconnus sont refusés par le registre d'entités, pas par la
-    // borne : on éprouve donc la borne sur ce qui est REELLEMENT écrivable.
+    // ⚠️ **LE PLAFOND DE MATIÈRE VAUT ICI AUSSI — constat B-4.** La première
+    // rédaction construisait `BORNES.champsParEnregistrement - 10` champs. Contre
+    // la mutation `80 → 100 000 000`, le contrôle précédent rendait bien le bon
+    // verdict — puis CELUI-CI fabriquait cent millions de clés et **le banc ne
+    // rendait jamais la main** (tué à 100 s, code 124, pas rouge). *Le plafond a
+    // été posé à un endroit et oublié à l'autre, dans le fichier écrit pour poser
+    // le plafond.*
+    justeAuDessus('champsParEnregistrement', BORNES.champsParEnregistrement);
     const ordinaire = await creerRisque({
       nom: 'Risque ordinaire',
       description: 'y'.repeat(1000),

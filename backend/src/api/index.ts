@@ -398,18 +398,36 @@ const LIGNES_SONDAGE_ORDINAIRE_MAX = 25;
  *
  * ⚠️ **La clé n'est pas l'identifiant de session, faute de l'avoir sous la
  * main** : `SessionAppliquee` ne le porte pas (voir la demande écrite au
- * sélecteur de filiale, §« Le jeton »). La clé est le couple *compte × filiale
- * active*, ce qui **agrège** les onglets d'une même personne — plus protecteur
- * que la session, jamais moins, et cela répond mieux à la question que le journal
- * doit trancher : *qui a extrait le jeu de données ?*
+ * sélecteur de filiale, §« Le jeton »). La clé est **le compte, et lui seul** :
+ * cela **agrège** les onglets d'une même personne — plus protecteur que la
+ * session, jamais moins — et cela répond mieux à la question que le journal doit
+ * trancher : *qui a extrait le jeu de données ?*
+ *
+ * ⚠️ **LA FILIALE ACTIVE A ÉTÉ RETIRÉE DE LA CLÉ — constat B-6.** Elle y était, et
+ * le compteur **repartait de zéro à chaque bascule** : vingt-quatre lignes par
+ * filiale sortaient sans trace, soit ≈ 480 lignes pour un compte de portée Groupe
+ * sur un produit cadré « 20+ filiales ». Mesuré par l'auditeur, à travers Apache :
+ * quatre sondages sur Toulouse déclenchaient la trace au quatrième ; la bascule
+ * sur l'Allemagne rendait quatre sondages de plus avec **delta de journal = 0**.
+ *
+ * *Un budget qui se réarme n'est pas un budget.* La filiale n'est donc plus dans
+ * la clé — elle reste dans l'ENTRÉE, où elle dit d'où les lignes sont sorties.
  */
 const CUMUL_SONDAGES = new Map<string, number>();
 
 /**
  * Au-delà, on purge le compteur : c'est le motif du constat Q-214 d — *trois
- * collections non bornées* —, appliqué à notre propre état. Vingt filiales fois
- * quelques centaines de comptes tiennent très largement dessous ; au-delà, ce
- * n'est plus un usage, et perdre le cumul est moins grave que croître sans fin.
+ * collections non bornées* —, appliqué à notre propre état.
+ *
+ * ⚠️ **Le chiffre, dit juste** — constat B-6, qui a repris l'arithmétique de la
+ * première rédaction : elle écrivait « vingt filiales fois quelques centaines de
+ * comptes tiennent très largement dessous », et vingt filiales × 250 comptes font
+ * **exactement 5 000**. La clé n'étant plus que le COMPTE, la borne porte
+ * désormais sur le nombre d'utilisateurs distincts — quelques centaines pour un
+ * groupe de vingt filiales, donc un ordre de grandeur sous le plafond. Et ce que
+ * le dépassement fait doit être su : il **vide la table entière**, c'est-à-dire
+ * qu'il remet à zéro le compteur de tout le monde. La borne est saine pour S13 ;
+ * ce qui était faux était la phrase.
  */
 const CUMUL_SONDAGES_MAX_CLES = 5000;
 
@@ -429,6 +447,8 @@ const CUMUL_SONDAGES_PALIER = LIGNES_SONDAGE_ORDINAIRE_MAX * 40;
 function cumulerSondage(cle: string, lignes: number): number | null {
   if (lignes <= 0) return null;
   if (CUMUL_SONDAGES.size >= CUMUL_SONDAGES_MAX_CLES && !CUMUL_SONDAGES.has(cle)) {
+    // ⚠️ Ce n'est pas une éviction : c'est une remise à zéro de TOUT LE MONDE, et
+    // il faut le savoir plutôt que le croire borné en douceur.
     CUMUL_SONDAGES.clear();
   }
   const avant = CUMUL_SONDAGES.get(cle) ?? 0;
@@ -633,6 +653,15 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       nomsInternes: new Set(catalogue.tables.keys()),
       unicites: catalogue.unicites,
       validations: catalogue.validations,
+      // ⚠️ **Ce que le client CONNAÎT, découvert et non récité** — constat B-3.
+      // `decrire()` est exactement ce que `/api/modele` sert : un refus ne peut
+      // donc nommer que ce que l'appelant a sous les yeux. Une colonne interne —
+      // `filiale_id`, `traitement_filiale_id` — n'est plus jamais nommée.
+      champsExposes: new Set(
+        Object.values(
+          (depot.decrire().entites ?? {}) as Record<string, { champs?: object }>,
+        ).flatMap((e) => Object.keys(e.champs ?? {})),
+      ),
     };
     instance.log.info(
       { tables: catalogue.tables.size, entites: listerEntites().length },
@@ -1504,6 +1533,30 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     const instanceDepot = await assurerDepot();
     const { perimetre } = sessionDe(requete);
     return avecTransaction(pool, perimetre, (client) => travail(client, instanceDepot, perimetre));
+  };
+
+  /**
+   * `enEcriture`, en disant au traducteur d'erreurs **la situation de
+   * l'utilisateur** — constats Q-308 et B-1.
+   *
+   * Une création et une modification bloquées ont en commun ce qui compte :
+   * **rien n'a été écrit, et l'utilisateur a son formulaire sous les yeux.** Lui
+   * conseiller de « recharger » le lui ferait jeter. Le traducteur ne peut pas le
+   * deviner — il ne voit qu'un code SQL —, donc on le lui dit.
+   */
+  const enSaisie = async <T>(
+    requete: FastifyRequest,
+    situation: 'creation' | 'modification',
+    travail: (client: PoolClient, depot: Depot, perimetre: PerimetreSession) => Promise<T>,
+  ): Promise<T> => {
+    try {
+      return await enEcriture(requete, travail);
+    } catch (erreur) {
+      // Une erreur DÉJÀ traduite ne se retraduit pas : elle porte son message, et
+      // le refaire passer par le traducteur le remplacerait par un générique.
+      if (erreur instanceof ErreurApplicative) throw erreur;
+      throw traduireErreur(erreur, { ...contexteErreurs, origine: situation });
+    }
   };
 
   /** Un nom d'entité reçu n'est qu'une **clé** du registre, jamais du SQL. */
@@ -2391,10 +2444,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
          * On additionne donc ce qui SORT, appelant par appelant. Dix-huit lignes
          * rendues deux fois en franchissent le seuil ; dix-huit lignes rendues une
          * fois puis plus rien, non — et c'est le bon partage. */
-        const cumul = cumulerSondage(
-          `${session.perimetre.utilisateurId}|${session.perimetre.filialeId ?? 'groupe'}`,
-          lignes,
-        );
+        const cumul = cumulerSondage(session.perimetre.utilisateurId, lignes);
         if (fenetreProfonde || extractionParLeVolume || cumul !== null) {
           const motif = fenetreProfonde
             ? 'fenetre_anterieure_a_la_session'
@@ -2427,9 +2477,7 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
               depuis: depuis.toISOString(),
               collections: Object.keys(charge.modifications).length,
               lignes,
-              cumul: CUMUL_SONDAGES.get(
-                `${session.perimetre.utilisateurId}|${session.perimetre.filialeId ?? 'groupe'}`,
-              ),
+              cumul: CUMUL_SONDAGES.get(session.perimetre.utilisateurId),
               export_autorise: session.droits.export,
               // Ce qui a déclenché la trace : un auditeur doit pouvoir
               // distinguer « on a demandé loin », « on a beaucoup reçu d'un
@@ -2477,21 +2525,14 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
        * On dit donc au traducteur la SITUATION, comme la reprise le fait déjà.
        * Rien n'a été écrit ; le geste utile est de corriger la valeur en double,
        * jamais de recharger. */
-      const enregistrement = await (async () => {
-        try {
-          return await enEcriture(requete, async (client, instanceDepot, perimetre) =>
-            instanceDepot.creer(client, perimetre, entite, corps.champs, {
-              portee: corps.portee ?? 'filiale',
-            }),
-          );
-        } catch (erreur) {
-          // Une erreur DÉJÀ traduite ne se retraduit pas : elle porte son
-          // message, et le refaire passer par le traducteur le remplacerait par
-          // un générique.
-          if (erreur instanceof ErreurApplicative) throw erreur;
-          throw traduireErreur(erreur, { ...contexteErreurs, origine: 'creation' });
-        }
-      })();
+      const enregistrement = await enSaisie(
+        requete,
+        'creation',
+        async (client, instanceDepot, perimetre) =>
+          instanceDepot.creer(client, perimetre, entite, corps.champs, {
+            portee: corps.portee ?? 'filiale',
+          }),
+      );
 
       requete.log.info(
         { entite, identifiant: enregistrement['id'] },
@@ -2524,7 +2565,12 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       const entite = entiteDe(requete.params.entite);
       const corps = requete.body;
 
-      const enregistrement = await enEcriture(requete, async (client, instanceDepot, perimetre) =>
+      // ⚠️ **« modification » est une SITUATION, comme « création »** — constat B-1.
+      // Q-308 avait été fermé sur la seule création, et un `PUT` en doublon
+      // répondait encore « n'a pas pu être CRÉÉ … Rechargez la liste » : faux sur
+      // le verbe, destructeur sur le conseil. Le discriminant n'est pas le verbe
+      // HTTP, c'est que l'utilisateur a un formulaire sous les yeux.
+      const enregistrement = await enSaisie(requete, 'modification', async (client, instanceDepot, perimetre) =>
         instanceDepot.modifier(
           client,
           perimetre,

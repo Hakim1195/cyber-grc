@@ -241,6 +241,27 @@ export interface ContexteTraduction {
    */
   readonly unicites?: ReadonlyMap<string, { readonly porteFiliale: boolean }>;
   /**
+   * Les champs que le client CONNAÎT — ceux que `/api/modele` lui sert, toutes
+   * entités confondues.
+   *
+   * ══ CONSTAT B-3 ═══════════════════════════════════════════════════════
+   *
+   * `messageDeContrainte()` nommait les colonnes d'un « check » composite en
+   * justifiant ainsi : *« ce sont les noms que l'appelant a lui-même envoyés, et
+   * qui figurent déjà dans /api/modele »*. **La prémisse est fausse dès qu'une
+   * contrainte porte sur une colonne interne** — et la migration `030` en a posé
+   * deux : `filiale_id` et `traitement_filiale_id`, dont aucune n'est servie au
+   * client (mesuré : zéro occurrence dans tout le modèle). Le refus livrait donc
+   * deux noms de colonnes exacts, dont un qui révèle qu'une valeur de portée est
+   * **dérivée et stockée** — une information de conception, et un message
+   * inutilisable pour l'utilisateur légitime.
+   *
+   * *La règle était écrite, vingt lignes au-dessus de la ligne qui la viole.* On
+   * la fait donc **décider** : une colonne que le client ne connaît pas n'est
+   * jamais nommée.
+   */
+  readonly champsExposes?: ReadonlySet<string>;
+  /**
    * Contraintes de validation et leurs colonnes. Sert à ne **pas inventer** un
    * nom de champ quand le sujet d'un `check` n'en est pas un.
    */
@@ -286,7 +307,7 @@ export interface ContexteTraduction {
    * `origine: 'creation'` dit la situation. Il ne fait rien dire de plus au
    * message ; il l'empêche de conseiller un geste destructeur.
    */
-  readonly origine?: 'reprise' | 'creation';
+  readonly origine?: 'reprise' | 'creation' | 'modification';
 }
 
 /** Reconnaît une `ErreurEntite` sans importer sa classe (voir l'entête). */
@@ -536,6 +557,34 @@ export function traduireErreurPostgres(
         codeGrc: 'GRC06',
       });
 
+    case 'GRC07':
+      // Le déclencheur de portée de la migration `030` refuse un traitement que la
+      // session ne voit pas, et son message est **écrit POUR l'utilisateur** — il
+      // nomme l'identifiant que l'appelant vient d'envoyer, et rien d'autre.
+      //
+      // ══ CONSTAT B-2 — ET C'EST LE MOTIF QUE CE CHANTIER CONNAÎT PAR CŒUR ═══
+      //
+      // Ce code n'était pas traduit : il tombait dans le générique, et un
+      // utilisateur qui désignait un traitement supprimé entre-temps — sa liste
+      // d'écran datant de son dernier chargement — recevait **500 « Le serveur n'a
+      // pas pu traiter la demande »**, avec une pile d'appel au journal technique.
+      // Une faute de saisie classée incident serveur, et reproductible à volonté.
+      //
+      // ⚠️ **Le banc ne pouvait pas le voir** : `GRC07` était éprouvé, mais **en SQL
+      // direct**, jamais par la route. *L'essai prouvait que le déclencheur se
+      // déclenche ; personne ne mesurait ce que l'utilisateur reçoit.*
+      //
+      // `400` et non `409` : rien n'est en conflit, une valeur envoyée ne désigne
+      // rien de visible — c'est une donnée invalide, et le geste utile est d'en
+      // choisir une autre.
+      return new ErreurApplicative({
+        code: 'donnee_invalide',
+        statut: 400,
+        message: erreur.message,
+        detailJournal,
+        codeGrc: 'GRC07',
+      });
+
     case 'GRC04':
       // Le périmètre de session n'a pas été positionné, ou il est incohérent.
       // Ce n'est jamais une faute de l'utilisateur : c'est un défaut de
@@ -571,11 +620,18 @@ export function traduireErreurPostgres(
       const unicite =
         erreur.constraint === undefined ? undefined : contexte.unicites?.get(erreur.constraint);
 
-      // ⚠️ **On ne conseille JAMAIS de recharger sur une création** — constat
-      // Q-308. Rien n'a été écrit ; ce que l'utilisateur a sous les yeux est sa
-      // saisie, et recharger la détruirait. Le geste utile est de corriger la
-      // valeur en double.
-      const surUneCreation = contexte.origine === 'creation';
+      // ⚠️ **On ne conseille JAMAIS de recharger sur une SAISIE** — constats
+      // Q-308 puis B-1. Rien n'a été écrit ; ce que l'utilisateur a sous les yeux
+      // est sa saisie, et recharger la détruirait. Le geste utile est de corriger
+      // la valeur en double.
+      //
+      // ⚠️ **« création » n'était que la MOITIÉ du constat, et c'est le défaut de
+      // classe** : un `PUT` en doublon répondait encore *« n'a pas pu être CRÉÉ …
+      // Rechargez la liste »* — faux sur le verbe, et destructeur sur le conseil.
+      // Le discriminant n'est pas le verbe HTTP, c'est *« l'utilisateur a-t-il un
+      // formulaire sous les yeux ? »*
+      const surUneSaisie =
+        contexte.origine === 'creation' || contexte.origine === 'modification';
 
       if (unicite?.porteFiliale === true) {
         return new ErreurApplicative({
@@ -585,7 +641,7 @@ export function traduireErreurPostgres(
             'Un enregistrement portant la même clé existe déjà dans votre filiale — la même ' +
             "exigence de référentiel, le même point d'historique du jour, la même mise en " +
             'œuvre de contrôle. ' +
-            (surUneCreation
+            (surUneSaisie
               ? 'Corrigez la valeur en double, ou complétez l’enregistrement existant depuis ' +
                 'la liste : votre saisie est conservée tant que vous ne quittez pas l’écran.'
               : 'Rechargez la liste et complétez celui qui existe.'),
@@ -597,8 +653,12 @@ export function traduireErreurPostgres(
         code: 'contrainte_base',
         statut: 409,
         message:
-          "Cet enregistrement n'a pas pu être créé : l'une de ses clés est déjà utilisée. " +
-          (surUneCreation
+          (contexte.origine === 'modification'
+            ? "Cet enregistrement n'a pas pu être ENREGISTRÉ : l'une de ses clés est déjà " +
+              'utilisée par un autre. '
+            : "Cet enregistrement n'a pas pu être créé : l'une de ses clés est déjà " +
+              'utilisée. ') +
+          (surUneSaisie
             ? 'Corrigez la valeur en double et réessayez — rien n’a été enregistré, et votre ' +
               'saisie est conservée tant que vous ne quittez pas l’écran.'
             : 'Rechargez la liste, puis reprenez la saisie.'),
@@ -788,7 +848,14 @@ function messageDeContrainte(contrainte: string, contexte: ContexteTraduction): 
   // portée par la contrainte, on le nomme ; sinon on dit qu'une règle porte
   // sur PLUSIEURS champs, et on nomme ceux-là — ce sont les noms que
   // l'appelant a lui-même envoyés, et qui figurent déjà dans `/api/modele`.
-  const nommees = colonnes.filter((c) => /^[a-z_][a-z0-9_]{0,62}$/.test(c));
+  // ⚠️ **ET SEULEMENT CE QUE LE CLIENT CONNAÎT** — constat B-3. Une colonne
+  // interne nommée dans un refus est un renseignement donné pour rien, et un
+  // message que l'utilisateur ne peut pas suivre.
+  const nommees = colonnes.filter(
+    (c) =>
+      /^[a-z_][a-z0-9_]{0,62}$/.test(c) &&
+      (contexte.champsExposes === undefined || contexte.champsExposes.has(c)),
+  );
 
   // Le catalogue prime sur la convention de nommage : quand il donne LA
   // colonne, on la nomme elle, et pas le sujet du nom de contrainte — les deux
@@ -797,11 +864,41 @@ function messageDeContrainte(contrainte: string, contexte: ContexteTraduction): 
     return `La valeur du champ « ${String(nommees[0])} » n'est pas admise pour cet enregistrement.`;
   }
   if (nommees.length === 0) {
-    return `La valeur du champ « ${sujet} » n'est pas admise pour cet enregistrement.`;
+    // ⚠️ Le sujet du nom de contrainte n'est une COLONNE que si le catalogue le
+    // dit. Quand il ne l'est pas — et que rien de connu du client ne reste à
+    // nommer —, on rend un message qui parle de la RÈGLE (constat B-3).
+    const sujetEstUnChampConnu =
+      contexte.champsExposes === undefined || contexte.champsExposes.has(sujet);
+    return sujetEstUnChampConnu && colonnes.includes(sujet)
+      ? `La valeur du champ « ${sujet} » n'est pas admise pour cet enregistrement.`
+      : messageSansColonneConnue(sujet);
   }
   return (
     "Cet enregistrement enfreint une règle de cohérence entre plusieurs de ses champs " +
     `(${nommees.join(', ')}). Vérifiez qu'ils ne se contredisent pas.`
+  );
+}
+
+/**
+ * Le message d'un « check » dont AUCUNE colonne n'est connue du client.
+ *
+ * C'est le cas des contraintes de portée de la migration `030` : elles portent sur
+ * `filiale_id` et `traitement_filiale_id`, que le client n'envoie ni ne lit. Lui
+ * nommer ces colonnes serait lui donner deux noms d'objets internes et aucun geste
+ * utile (constat B-3).
+ */
+function messageSansColonneConnue(sujet: string): string {
+  if (sujet === 'groupe' || sujet === 'filiale') {
+    return (
+      "Ce rattachement franchit la frontière entre le socle commun du groupe et une " +
+      "filiale : un document de portée Groupe ne peut relever que d'un traitement de " +
+      'portée Groupe. Choisissez un traitement de portée Groupe, ou donnez à ce document ' +
+      'une portée de filiale.'
+    );
+  }
+  return (
+    "Cet enregistrement enfreint une règle de cohérence du modèle. Rechargez la fiche, " +
+    'puis vérifiez les éléments qu’elle désigne.'
   );
 }
 

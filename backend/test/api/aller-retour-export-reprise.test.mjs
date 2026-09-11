@@ -241,4 +241,88 @@ describe('Le produit sait relire sa propre sauvegarde — par les ROUTES', () =>
       'Le lien vers le socle doit survivre à l’aller-retour, à l’identifiant près.',
     );
   });
+
+  test('LE RATTACHEMENT À L’ARTICLE 30 survit à l’aller-retour — constat A-11', async () => {
+    /* ══ POURQUOI CE CONTRÔLE EXISTE ══════════════════════════════════════════
+     *
+     * Le constat **Q-194** est né de là : *« aucun essai ne faisait passer la
+     * sortie d'une route dans l'entrée d'une autre »*, et un champ neuf du modèle
+     * — `catalogue_id`, alors — rendait la reprise impossible en annonçant un
+     * doublon que le serveur venait de fabriquer.
+     *
+     * `documents.traitement_id` est le champ neuf de la migration `027`, et la
+     * `030` lui a ajouté **deux colonnes dérivées et deux contraintes de portée**.
+     * Rien ne le faisait traverser un export puis une reprise : c'est exactement
+     * la forme du défaut qui a coûté le plus cher à ce chantier (constat A-11).
+     *
+     * ⚠️ Le rattachement est posé sur un document LOCAL vers un traitement de
+     * portée GROUPE — **le sens que le constat Q-294 vient d'ouvrir**, donc celui
+     * dont on saura le moins vite qu'il est cassé. */
+    const proprietaire = await base.connexion('proprietaire');
+    await base.avecPerimetre(
+      proprietaire,
+      perimetre('semis-a11', FILIALE_A, [FILIALE_A, FILIALE_B], true),
+      async (c) => {
+        await c.query(
+          `insert into traitements (id, filiale_id, nom, cree_par)
+               values ('TRT-A11-GROUPE', null, 'Annuaire commun du Groupe', 'semis-a11')
+           on conflict (id) do nothing`,
+        );
+      },
+      { annuler: false },
+    );
+
+    const doc = await serveur.appeler('POST', '/api/entites/documents', {
+      corps: {
+        champs: { titre: 'Procédure locale reliée à l’article 30',
+                  traitement_id: 'TRT-A11-GROUPE' },
+      },
+    });
+    assert.equal(doc.statut, 201, JSON.stringify(doc.corps));
+    assert.equal(
+      doc.corps.enregistrement.traitement_id,
+      'TRT-A11-GROUPE',
+      'Un document LOCAL doit pouvoir relever d’un traitement de portée Groupe : c’est le ' +
+        'sens que le constat Q-294 a ouvert.',
+    );
+
+    const exporte = await serveur.appeler('GET', '/api/export');
+    assert.equal(exporte.statut, 200);
+    // LA MATIÈRE : le champ doit être DANS l'export, sans quoi la reprise ne
+    // prouverait que sa propre indifférence.
+    assert.equal(
+      JSON.stringify(exporte.corps).includes('TRT-A11-GROUPE'),
+      true,
+      'Le rattachement ne figure pas dans l’export : il serait perdu SANS RIEN DIRE.',
+    );
+
+    const reprise = await serveur.appeler('POST', '/api/reprise', {
+      corps: {
+        mode: 'remplacer',
+        fichier: { nom: 'export.json', contenu: JSON.stringify(exporte.corps) },
+      },
+    });
+    assert.equal(reprise.statut, 200, JSON.stringify(reprise.corps));
+
+    const lignes = await base.avecPerimetre(
+      proprietaire,
+      perimetre('temoin-a11', FILIALE_A, [FILIALE_A, FILIALE_B], true),
+      async (c) =>
+        (
+          await c.query(
+            `select traitement_id, traitement_filiale_id, traitement_portee_groupe
+               from documents where titre = 'Procédure locale reliée à l’article 30'`,
+          )
+        ).rows,
+    );
+    assert.equal(lignes.length, 1, 'Le document n’a pas survécu à la reprise.');
+    assert.equal(lignes[0].traitement_id, 'TRT-A11-GROUPE');
+    assert.equal(
+      lignes[0].traitement_filiale_id,
+      null,
+      'La colonne dérivée doit être REPOSÉE par le déclencheur à la reprise, et non ' +
+        'reprise du fichier : c’est une valeur dérivée d’une autre ligne (constat Q-294).',
+    );
+    assert.equal(lignes[0].traitement_portee_groupe, true);
+  });
 });

@@ -39,6 +39,91 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### Porte S8, 9ᵉ passage — vingt-trois constats, et les deux qui portent le refus visent les gardes de la veille
+
+**Deux auditeurs indépendants, périmètres exclusifs. Verdict : refusée** — 0 bloquant,
+12 majeurs, 11 mineurs, **0 fuite entre filiales**. Un seul contrôle en échec de chaque côté :
+**S16** (les garde-fous branchés) et **S12** (les erreurs ne renseignent pas l'attaquant).
+
+⚠️ **Et le motif ne change pas** — quatrième porte de suite : *les deux constats qui portent
+le refus visent les gardes écrits pour fermer le passage d'avant.*
+
+- **Q-312** — `f_domaine_accepte()`, livrée la veille par la migration `028` et inscrite en
+  règle au `CONVENTIONS.md` §39.1, **n'est appelée par personne**. Deux fichiers la
+  mentionnent : celui qui la crée, et celui qui promet qu'on s'en sert. Les domaines
+  `id_metier` et `type_entite` se vidaient donc par « … or true » sous `f_verifier_schema()`
+  à **zéro anomalie**, et `insert into risques (id) values ('')` passait — **Q-310, donc
+  Q-194, rouverts par la migration écrite le même jour pour les fermer**.
+- **Q-313** — les cinq pièces de la migration `030` se retiraient **une par une** sous zéro
+  anomalie, et l'auditeur a joué les conséquences : la PSSI de portée Groupe désignant le
+  traitement local d'une filiale (**N-10 rouvert**), un document de Toulouse désignant le
+  traitement allemand (**lien inter-filiales**). La cause :
+  `f_verifier_references_portee()` — renforcé la veille **pour cette classe précise** —
+  reconnaissait une colonne **nommée** `filiale_id`, quand la `030` a nommé la sienne
+  `traitement_filiale_id`. *Reconnaître un NOM au lieu de mesurer ce qu'une chose FAIT* — la
+  règle que le §39 venait d'écrire, retournée contre lui.
+
+Le garde regarde désormais ce qu'une colonne **RÉFÉRENCE** (`confkey`), et il **apparie par
+la colonne locale** : sans la seconde moitié, la propriété du constat Q-297 se perdait, deux
+clés d'une même table vers la même cible référençant toutes deux `<cible>.id`. *Les deux
+moitiés sont nécessaires, et chacune a coûté un passage de porte.*
+
+#### Ce que le reste corrige
+
+- **Q-325** — le refus `GRC07` de la migration `030` **n'arrivait jamais à l'utilisateur** :
+  il devenait un **500 avec pile d'appel**, parce que le traducteur d'erreurs ne connaissait
+  pas ce code. Une faute de saisie classée incident serveur. ⚠️ **Le banc ne pouvait pas le
+  voir** : `GRC07` ÉTAIT éprouvé — **en SQL direct**, jamais par la route.
+- **Q-326** — le même correctif nommait au client `filiale_id` et `traitement_filiale_id`,
+  deux colonnes que `/api/modele` ne sert pas, en justifiant par *« ce sont les noms que
+  l'appelant a lui-même envoyés »*. Les champs connus du client sont désormais **découverts**
+  de `decrire()`.
+- **Q-314** — le renversement du registre RGPD s'arrêtait à la **frontière du texte** : huit
+  colonnes `jsonb` et une `inet` n'étaient réclamées par personne, dont
+  `journal_audit.valeurs_avant`, qui recopie **par construction** toutes les colonnes
+  déclarées personnelles. La preuve du défaut était dans le registre lui-même —
+  `journal_audit.adresse_ip` y figurait, **inscrite à la main**, et sa jumelle
+  `sessions.adresse_ip` n'était pas décidée.
+- **Q-315** — un garde-fou **exécutait ce qu'il inspectait**, sous l'identité du
+  propriétaire. ⚠️ **Revérifié, et le mécanisme n'était pas celui que le rapport annonçait** :
+  `stable` bloque l'écriture *directe* ; c'est un appel de profondeur un qui passe. On refuse
+  désormais d'évaluer tout prédicat référençant une fonction **non native** — mesuré : aucune
+  des 150 contraintes du schéma n'en référence une.
+- **Q-327** — le plafond de matière annoncé la veille avait été posé **à un endroit et oublié
+  à l'autre, dans le fichier écrit pour le poser** : contre la mutation, le banc ne rendait
+  jamais la main. Il rougit maintenant en 0,7 ms.
+- **Q-329** — le compteur cumulé se **réarmait à chaque bascule de filiale** : ≈ 480 lignes
+  extractibles sans trace par un compte de portée Groupe. *Un budget qui se réarme n'est pas
+  un budget.*
+- **Q-330** — `GET /api/journal` rendait le **contenu** des enregistrements sous le droit
+  `lire`, quand la même matière en CSV exigeait `exporter` : *le droit d'export ne peut pas
+  dépendre du format dans lequel on demande la même chose.*
+- **Q-333** — le verrouillage se distinguait **au chronomètre** (18 ms contre 55 ms) quand le
+  message était identique à l'octet près. Plancher de 80 ms sur les deux chemins qui refusent
+  sans interroger l'annuaire. ⚠️ **Ce n'est pas une égalisation parfaite, et la limite de la
+  mesure est dite** : le cas négatif n'a pas été éprouvé sur un compte réel de l'annuaire.
+- **Q-331** — « douze sujets » restait faux dans **les trois documents que l'exploitant lit**,
+  et le commit de la veille n'avait touché que les documents internes. *La même faute, d'un
+  cran plus loin.*
+- **Q-332** — le guide affirmait que l'unité de notification est « la seule qui ouvre une
+  connexion vers l'extérieur ». C'est faux, et l'oubli **empêche toute connexion** : le
+  service principal doit joindre l'annuaire en LDAPS. ⚠️ *Ce qui a protégé le produit n'est
+  pas ce document, c'est un contrôle bloquant d'`install.sh`.*
+- **Q-321** — 81 bases d'essai orphelines sur la grappe qui sert la recette (1 124 Mio), et le
+  seul nettoyage documenté était sous interdit. **L'interdit portait sur les mots de passe des
+  rôles, pas sur cette option** — c'est désormais imposé plutôt que raisonné, et la grappe
+  passe à **52 Mio**.
+
+#### Ce qui tient, et qu'il faut lire
+
+**Le contrôle S7 cesse d'être en échec pour la première fois en quatre portes.** Q-301 et
+Q-302 sont mesurés fermés **dans le journal de la recette** — un sondage au repos écrit
+**zéro** entrée, contre trois en soixante-dix secondes au passage précédent — et les
+**quatorze routes `GET`** ont été balayées sous un compte sans droit d'export : aucune
+quatrième route ne rend le jeu sans trace. Cloisonnement **110/110** sous `grc_app`, **34
+sondes hostiles** sans une percée, **0 fuite entre filiales**, et le parcours complet — créer,
+classer, étiqueter, enregistrer, **recharger par F5**, filtrer, imprimer — **ne détruit rien**.
+
 ### Porte S8, 8ᵉ passage — les dix-neuf constats traités, et le dispositif refait
 
 Le 8ᵉ passage a rendu **un chiffre qui condamnait le dispositif plutôt que le produit** :
