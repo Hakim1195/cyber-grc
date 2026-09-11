@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 1869 essais, vingt familles (voir plus bas)
+npm test                           # 1907 essais, vingt familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 ```
@@ -753,10 +753,12 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 11/09/2026** : `npm test` → **1869 essais, 1869 passés** ;
-`verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
-`verifier_cloisonnement.sql` **sous `grc_app`** → **109/109** ; `f_verifier_schema()`
-→ 0 anomalie, **30 garde-fous consignés**, **30 migrations**, **52 tables**.
+**Mesuré au 11/09/2026, à la révision `30f2d84`** : `npm test` → **1907 essais,
+1907 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+`verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
+`f_verifier_schema()` → 0 anomalie, **30 garde-fous consignés**, **30 migrations**,
+**52 tables** ; publication → **81 fichiers identiques au dépôt** ;
+`install.sh --diagnostic` → **14 conformes, 1 réserve, 0 bloquant**.
 
 | Lot | État |
 |---|---|
@@ -778,7 +780,7 @@ la comparaison au marché du 08/09/2026.
 | **L15 — Durcissement final** | 🟡 **EN COURS — c'est l'état présent du chantier** (vague 8). Revue de sécurité sur l'ensemble du produit. **Porte S8 jouée six fois, refusée à chaque passage** ; au 6ᵉ : **0 bloquant, 4 majeurs, 8 mineurs, 0 fuite entre filiales**, banc **1747/1747**. C'est la **condition de mise en service** : elle n'est pas remplie |
 | **L16 — Système documentaire** | 🟡 **quatre actions sur cinq livrées** (vague 9, décidée le 07/09/2026). **D2 le 07/09** : les pièces jointes suivent leur porteur sur les six chemins (migration `017`, constats **Q-232 / Q-233** fermés). **D1, D4 et D5 le 08/09** (migrations `018` et `019`) : la pièce marquée « **en vigueur** » est celle qui fait foi — au plus une par porteur **et par filiale** —, et c'est elle qui donne le numéro de version de la fiche, au lieu d'une saisie libre qui pouvait annoncer « 2.1 » au-dessus du PDF de la 1.4 ; `documents.emplacement` devient « **Document resté ailleurs** », une référence externe qu'on ne confond plus avec un fichier détenu ici ; un document « en validation » ne passe « en vigueur » qu'avec une étape de **publication approuvée** (code **`GRC06`**, refus journalisé avec sa route), et l'encart du circuit d'approbation — livré par L8, que **personne n'appelait** — est monté sur la fiche. ⚠️ **Le coffre existait déjà** : L6 livre le dépôt et ses huit contrôles ; rien de cela n'a été refait. **Livré aussi le 08/09, hors des cinq actions** : la **vérification d'intégrité** (migration `020`). L'empreinte SHA-256 était calculée sur le fichier écrit, stockée, servie — et `empreinteDe()` n'avait **qu'un seul appelant dans tout `src/`**, le dépôt : mordue par rien, c'est-à-dire un commentaire (`db/CONVENTIONS.md` §18.4), sur la promesse centrale du coffre. Elle **s'affiche** désormais, un **rapprochement à la demande** (`GET …/:pieceId/integrite`, déclaré `lire`) rend `conforme` / `ecart` / `fichier_absent`, et un **balayage** sur le minuteur de ré-analyse inscrit le verdict et **sort en code 1** sur un écart ; vingt-deuxième action de journal, les trois verdicts tracés (`db/CONVENTIONS.md` §31.5). ⚠️ Ce **n'est pas** une garantie d'intégrité et l'écran ne le dit jamais : qui peut écrire dans le magasin peut aussi mettre le `sha256` à jour. **Reste D3**, la recherche, qui **ne se joue pas avant que S8 soit franchie** — une recherche est un oracle, c'est la surface la plus propice à une fuite entre filiales. Voir `../docs/PLAN_EXECUTION.md` §3, vague 9 |
 | **L17 — Prise en main** | ⬜ **planifié, non commencé** (`../docs/PLAN_PRODUIT.md`). Recherche globale, palette de commandes, écran de démarrage par rôle, regroupement du menu, Kanban, comparaison de deux versions. ⚠️ **Ne se joue pas avant que S7 et S8 soient franchies** — il ouvre de la surface neuve à auditer |
-| **L18 — Installation en une commande** | ✅ **livré — 18.7 excepté**. `install.sh --assistant` pose les **six** valeurs que le script ne peut pas deviner et enchaîne l'installation ; `--diagnostic` rend l'état de **douze sujets** sans rien modifier, en code 0/1/2. **Profil découverte** : ni annuaire ni courriel, compte de secours dont l'empreinte `scrypt` est calculée par `dist/auth/secours.js` — jamais recopiée en shell —, certificat auto-signé. `../docs/INSTALLER.md` : cinq commandes, aucun renvoi. ⚠️ Les six premiers sous-lots ne touchent **ni `src/` ni le schéma** : c'est ce qui les a autorisés à se jouer avant les portes. **Le bandeau 18.2 b est livré le 09/09/2026** : `installation.profil` dans la **charte de session** — donc dans `GET /api/session` **et** `POST /api/connexion`, identiques à l'octet près (§26.2) —, bandeau **sans bouton de fermeture** et **imprimé avec les fiches**, reposé à chaque écran. ⚠️ **Une valeur inconnue de `CYBER_GRC_PROFIL` refuse le démarrage** ; une valeur **absente** vaut « production » (tout le parc antérieur à L18). ⚠️ **Il touche `src/` et la SPA : à déclarer au 7ᵉ passage de S8.** Reste **18.7** (assistant de premier démarrage), après les portes |
+| **L18 — Installation en une commande** | ✅ **livré — 18.7 excepté**. `install.sh --assistant` pose les **six** valeurs que le script ne peut pas deviner et enchaîne l'installation ; `--diagnostic` rend l'état de **quatorze sujets** sans rien modifier, en code 0/1/2 — douze à l'origine, **quatorze depuis le constat Q-290** (la quarantaine et le minuteur de ré-analyse). **Profil découverte** : ni annuaire ni courriel, compte de secours dont l'empreinte `scrypt` est calculée par `dist/auth/secours.js` — jamais recopiée en shell —, certificat auto-signé. `../docs/INSTALLER.md` : cinq commandes, aucun renvoi. ⚠️ Les six premiers sous-lots ne touchent **ni `src/` ni le schéma** : c'est ce qui les a autorisés à se jouer avant les portes. **Le bandeau 18.2 b est livré le 09/09/2026** : `installation.profil` dans la **charte de session** — donc dans `GET /api/session` **et** `POST /api/connexion`, identiques à l'octet près (§26.2) —, bandeau **sans bouton de fermeture** et **imprimé avec les fiches**, reposé à chaque écran. ⚠️ **Une valeur inconnue de `CYBER_GRC_PROFIL` refuse le démarrage** ; une valeur **absente** vaut « production » (tout le parc antérieur à L18). ⚠️ **Il touche `src/` et la SPA : à déclarer au 7ᵉ passage de S8.** Reste **18.7** (assistant de premier démarrage), après les portes |
 | **L18 bis — Jeu de découverte** | ⬜ **autorisé par arbitrage du 08/09/2026, après les portes.** Le brief interdisait les données de démonstration ; l'utilisateur a levé l'interdit sous **cinq conditions constitutives** — marque d'origine **dans la donnée** et non seulement à l'écran, geste volontaire, refus si la base porte des données réelles, purge complète par le déclencheur `017`, interdit hors profil découverte. Il écrit en base : il passe par une porte |
 | **L19 → L26** | ⬜ **planifiés** (`../docs/PLAN_PRODUIT.md`) — chaîne de preuve, conformité réglementaire opérationnelle, tiers et DORA, ouverture technique, collecte automatique de preuve et surveillance continue, campagnes descendantes, EBIOS RM, catalogues ouverts |
 | **L27 — Assistance IA** | ⬜ **arbitré le 08/09/2026** — modèle local par défaut ; fournisseur externe possible sous **six barrières**, dont la première est que `IPAddressDeny=any` ferme la sortie réseau tant que l'exploitant ne l'ouvre pas. Activation **par filiale**. Porte **S16** : en local, l'unité systemd reste **intacte** — c'est la preuve qu'aucune donnée ne sort |
@@ -907,26 +909,26 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`7b11bb6`** — « RGPD — les documents se classent, et les deux registres se connaissent enfin » (11/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`), **arbre propre**. ⚠️ **Ce bloc a déjà été RÉANCRÉ deux fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**, ce qui est juste pendant une vague et aveugle à sa clôture. La péremption est **bornée** depuis (§ ci-dessous), et ce réancrage-ci la respecte. |
-| État de l'arbre | **arbre PROPRE de `7b11bb6`**, `git status` vide au moment de la mesure. Compte relevé **famille par famille** — trois bougent, et chacune par le lot RGPD : `cycle` 72 → **81** (le registre de l'outil rendu par sa route, et le constat Q-284 fermé — la décision survit, le nom part, nul ne s'y substitue), `navigateur` 174 → **179** (la classification traverse l'écran, le réseau, la base, et revient), et une famille NEUVE, `documents` **21** — la classification éprouvée là où elle vit, dans la base. ⚠️ Une famille neuve est exactement ce que le constat **Q-53** a vu passer en silence : le contrôle du §8 la réclame ici, et il a rougi tant qu'elle n'y était pas. La famille `documentation`, qui LIT ce README, est rejouée **après** cette mise à jour |
+| Révision mesurée | **`30f2d84`** — « Porte S8, 8ᵉ passage — les dix-neuf constats traités, et le dispositif refait » (11/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`), **arbre propre**. ⚠️ **Ce bloc a déjà été RÉANCRÉ deux fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**, ce qui est juste pendant une vague et aveugle à sa clôture. La péremption est **bornée** depuis (§ ci-dessous), et ce réancrage-ci la respecte. |
+| État de l'arbre | **arbre PROPRE de `30f2d84`**, `git status` vide. Compte relevé **famille par famille** — aucune famille neuve, six bougent : `base` 274 → **295** (les garde-fous ÉPROUVÉS, Q-292), `api` 283 → **292** (les sept garde-corps de `BORNES`, Q-304), `documents` 21 → **25**, `navigateur` 179 → **181**, `modules` 39 → **40**, `cycle` 81 → **82**. La famille `documentation`, qui LIT ce README, est rejouée **après** cette mise à jour |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 | ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 1869 · pass 1869 · fail 0
-                                                   api 283 · base 274 · navigateur 179
+npm test                                         → tests 1907 · pass 1907 · fail 0
+                                                   api 292 · base 295 · navigateur 181
                                                    pieces 125 · auth 115 · import 97
                                                    deploiement 95 · droits 84 · reprise 82
-                                                   cycle 81 · journal-lecture 70
+                                                   cycle 82 · journal-lecture 70
                                                    notifications 73 · approbations 71
-                                                   annuaire 48 · depot 51 · modules 39
+                                                   annuaire 48 · depot 51 · modules 40
                                                    filiales 34 · documentation 28
-                                                   documents 21 · journal 19
+                                                   documents 25 · journal 19
 npm audit --omit=dev                             → found 0 vulnerabilities
-psql -U grc_app -f db/verifier_cloisonnement.sql → 109 contrôles · 109 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (26 garde-fous découverts, joués, consignés)
+psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
+select * from f_verifier_schema()                → 0 ligne (30 garde-fous découverts, joués, consignés)
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **52 tables** en

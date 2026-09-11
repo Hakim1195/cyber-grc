@@ -802,7 +802,7 @@ se rejoue (constat **Q-219**).
 |---|---|
 | **L18.1** `--assistant` | ✅ livré, éprouvé par pseudo-terminal dans les deux branches |
 | **L18.2 a** profil découverte (configuration) | ✅ livré — `CYBER_GRC_PROFIL=decouverte`, compte de secours, certificat auto-signé |
-| **L18.3** `--diagnostic` | ✅ livré — douze sujets, code 0/1/2, joué sur la recette |
+| **L18.3** `--diagnostic` | ✅ livré — **quatorze sujets**, code 0/1/2, joué sur la recette. ⚠️ *Ce document a annoncé « douze » jusqu'au 11/09/2026 : le constat Q-290 avait porté le diagnostic de douze à quatorze sujets, et trois documents étaient restés en arrière. Un chiffre faux est un constat, pas une coquille* |
 | **L18.4** groupes AD | ✅ **il l'était déjà** — le défaut était de découvrabilité |
 | **L18.5** surface de configuration | ✅ **elle l'était déjà** — six valeurs, pas soixante-huit |
 | **L18.6** `docs/INSTALLER.md` | ✅ livré — cinq commandes, aucun renvoi |
