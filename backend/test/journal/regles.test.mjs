@@ -353,6 +353,39 @@ describe('Aucune valeur d’utilisateur n’est concaténée dans « resume » (
     return trouves;
   }
 
+  /**
+   * Les rangs (« ligne N ») où un `resume:` INTERPOLE une valeur.
+   *
+   * ⚠️ **UNE SEULE RÉDACTION, employée par le balayage ET par la morsure.** La
+   * tentation était d'écrire le motif deux fois — une pour les sources, une pour
+   * l'échantillon. C'est précisément ce que ce chantier traque : deux rédactions
+   * se ressemblent le premier jour et divergent le second, et la morsure
+   * mesurerait alors une COPIE du détecteur, jamais le détecteur.
+   */
+  function fautifsDe(lignes) {
+    const rangs = [];
+    lignes.forEach((ligne, i) => {
+      if (!/\bresume:/.test(ligne)) return;
+      // La valeur de `resume:` : cette ligne, et les suivantes tant qu'elles
+      // continuent la même expression (une ternaire, une concaténation).
+      let valeur = ligne.slice(ligne.indexOf('resume:'));
+      for (let j = i + 1; j < lignes.length; j += 1) {
+        const suite = lignes[j];
+        // La clé suivante de l'objet termine la valeur — de même qu'une
+        // accolade ou une parenthèse fermante en début de ligne.
+        if (/^\s*[}\)]/u.test(suite) || /^\s*[A-Za-zÀ-ÿ_$][\w$]*\s*:/u.test(suite)) break;
+        valeur += '\n' + suite;
+        if (/,\s*$/u.test(suite)) break;
+      }
+      // On ne juge que la valeur, jamais les commentaires qui l'entourent.
+      const sansCommentaires = valeur
+        .replace(/\/\*[\s\S]*?\*\//gu, '')
+        .replace(/(^|\n)\s*(\/\/|\*).*/gu, '');
+      if (/`[^`]*\$\{/u.test(sansCommentaires)) rangs.push(`ligne ${String(i + 1)}`);
+    });
+    return rangs;
+  }
+
   test('LA SOURCE N’EST PAS VIDE : on lit bien des fichiers, et ils portent des résumés', () => {
     const fichiers = sources();
     assert.ok(fichiers.length >= 20, `Seulement ${String(fichiers.length)} sources lues.`);
@@ -365,16 +398,31 @@ describe('Aucune valeur d’utilisateur n’est concaténée dans « resume » (
   });
 
   test('AUCUN « resume: » n’interpole une valeur', () => {
-    // Un gabarit contenant `${` est une interpolation. C'est volontairement
-    // grossier : la seule façon d'y échapper est d'écrire une phrase littérale,
-    // ce qui est précisément la règle.
+    /* Un gabarit contenant `${` est une interpolation. C'est volontairement
+     * grossier : la seule façon d'y échapper est d'écrire une phrase littérale,
+     * ce qui est précisément la règle.
+     *
+     * ⚠️ **LE DÉTECTEUR ÉTAIT PAR LIGNE, ET LE CODE PASSAIT À CÔTÉ** — constat
+     * **Q-311**, trouvé le 11/09/2026. `src/api/index.ts` écrivait :
+     *
+     *     resume: fenetreProfonde
+     *       ? '…'
+     *       : `… (${String(lignes)} lignes rendues)`,
+     *
+     * L'interpolation vit sur la ligne SUIVANT `resume:`, dans une ternaire : le
+     * motif ligne-à-ligne ne la voyait pas, et le contrôle était vert depuis le
+     * 7ᵉ passage de la porte S8. *Un garde qui se contourne par un retour à la
+     * ligne ne tient pas une règle, il tient une mise en forme.*
+     *
+     * On examine donc **la valeur entière de `resume:`**, sur autant de lignes
+     * qu'elle en occupe — jusqu'à la virgule qui la termine au niveau de
+     * l'objet. Le motif est délibérément large : il vaut mieux qu'il réclame une
+     * phrase littérale de trop qu'il n'en laisse passer une composée. */
     const fautifs = [];
     for (const [chemin, texte] of sources()) {
-      texte.split('\n').forEach((ligne, i) => {
-        if (/resume:\s*`[^`]*\$\{/.test(ligne)) {
-          fautifs.push(`${chemin.slice(chemin.indexOf('src/'))}:${String(i + 1)}`);
-        }
-      });
+      for (const rang of fautifsDe(texte.split('\n'))) {
+        fautifs.push(`${chemin.slice(chemin.indexOf('src/'))}:${rang.replace('ligne ', '')}`);
+      }
     }
     assert.deepEqual(
       fautifs,
@@ -385,15 +433,29 @@ describe('Aucune valeur d’utilisateur n’est concaténée dans « resume » (
     );
   });
 
-  test('MORSURE : le détecteur voit bien une interpolation', () => {
-    const echantillon = 'await journaliser(c, { resume: `Connexion de « ${login} ».` });';
-    assert.ok(
-      /resume:\s*`[^`]*\$\{/.test(echantillon),
-      'Le détecteur ne reconnaît plus une interpolation : il ne signalerait plus rien.',
+  test('MORSURE : le détecteur voit une interpolation, MÊME À LA LIGNE SUIVANTE', () => {
+    /* ⚠️ La seconde moitié est le constat **Q-311** : c'est exactement la forme
+       que le détecteur ligne-à-ligne laissait passer, et elle vivait dans le
+       produit depuis le 7ᵉ passage de la porte S8. */
+    const surUneLigne = ['await journaliser(c, {', '  resume: `Connexion de « ${login} ».`,', '});'];
+    const surPlusieurs = [
+      'await journaliser(c, {',
+      '  resume: profond',
+      "    ? 'Phrase littérale.'",
+      '    : `Extraction (${String(n)} lignes).`,',
+      '  filialeId: f,',
+      '});',
+    ];
+    const littéral = ['await journaliser(c, {', "  resume: 'Connexion réussie.',", '});'];
+
+    assert.deepEqual(fautifsDe(surUneLigne), ['ligne 2'], 'interpolation sur la ligne du resume');
+    assert.deepEqual(
+      fautifsDe(surPlusieurs),
+      ['ligne 2'],
+      'Le détecteur ne voit pas une interpolation portée par la ligne SUIVANTE : c’est le ' +
+        'trou exact du constat Q-311 — un garde qui se contourne par un retour à la ligne ne ' +
+        'tient pas une règle, il tient une mise en forme.',
     );
-    assert.ok(
-      !/resume:\s*`[^`]*\$\{/.test("await journaliser(c, { resume: 'Connexion réussie.' });"),
-      'Le détecteur accuse une phrase littérale : il rendrait la règle intenable.',
-    );
+    assert.deepEqual(fautifsDe(littéral), [], 'Le détecteur accuse une phrase littérale.');
   });
 });

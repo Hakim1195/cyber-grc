@@ -559,7 +559,7 @@ actions ; `deleteRisque`/`deleteActif` nettoient les références (`risque_id`, 
 | `referentiels` | string[] | ids de référentiels couverts |
 | `confidentialite` | enum | **NIVEAU DE DIFFUSION** (migration `027`) : `public` \| `interne` \| `confidentiel` \| `restreint`. ⚠️ **Obligatoire, défaut `interne`** — et le défaut n'est pas `public` à dessein : un document dont personne n'a tranché la diffusion ne doit pas être réputé diffusable. C'est le champ qu'un export antérieur à `027` n'a pas, et que la reprise remplit donc par le défaut. « Non classé » est précisément le trou que l'ISO 27001 A.5.12 et le RGPD demandent de fermer |
 | `donnees_personnelles` | bool | **le document CONTIENT des données personnelles** — pas « il en parle » (migration `027`). Une procédure qui décrit un traitement n'en contient aucune ; un compte rendu qui nomme des gens, si. Sert à répondre en minutes à une demande d'exercice de droits, et à signaler la combinaison « public + données personnelles » — que la base **n'interdit pas** (un document public nomme légitimement son DPO, article 13) et que l'écran RGPD met en évidence |
-| `traitement_id` | `"TRT-..."` \| null | **rattachement au registre de l'article 30** (migration `027`). Deux registres qui cohabitaient sans se connaître. ⚠️ **Ne franchit pas la frontière Groupe/filiale** : un document de portée Groupe ne se rattache qu'à un traitement de portée Groupe — c'est ce qui a rendu `traitements` mixte. Deux clés étrangères le tiennent (`_portee` et `_coherence`, constat N-10), et la suppression d'un traitement rattaché est **refusée** (`restrict`) : la couche applicative délie d'abord, à la filiale près |
+| `traitement_id` | `"TRT-..."` \| null | **rattachement au registre de l'article 30** (migration `027`). Deux registres qui cohabitaient sans se connaître. ⚠️ **La règle n'est PAS symétrique** (migration `030`, constat **Q-294**) : un document **local** peut relever d'un traitement **de portée Groupe** — c'est le cas le plus fréquent, et il est sans danger, un traitement de Groupe n'étant effaçable que par l'administration Groupe ; un document de **portée Groupe**, lui, ne peut relever que d'un traitement de portée Groupe (constat N-10 : le socle commun ne doit pas désigner une ligne qu'une filiale peut effacer). « Même filiale **OU** cible de portée Groupe » n'étant pas une clé étrangère mais une **disjonction**, la filiale visée est matérialisée dans `traitement_filiale_id` — **posée par un déclencheur**, jamais crue sur parole : la croire serait un oracle d'existence inter-filiales — et deux clés composites plus deux `check` font le reste. La suppression d'un traitement rattaché est **refusée** (`restrict`) : la couche applicative délie d'abord, à la filiale près |
 | `etiquettes` | string[] | **mots de classement libres** (migration `027`), 48 signes au plus, ni virgule ni point-virgule. Table `document_etiquettes`, **jamais une colonne tableau** : ce schéma est strictement relationnel. Normalisées **dans la base** (espaces ramenés à un, extrémités rognées) ; la casse est conservée à l'affichage mais l'unicité par document y est insensible — « RGPD » et « rgpd » sont la même étiquette |
 | `notes` | string | plan / sommaire (canevas disponibles) |
 
@@ -592,8 +592,12 @@ actions ; `deleteRisque`/`deleteActif` nettoient les références (`risque_id`, 
 > opère aussi des traitements pour toutes ses filiales : l'annuaire commun, le journal
 > d'audit de cet outil. Sans ce versant, un document de portée Groupe — la PSSI, la
 > charte informatique — n'aurait pu se rattacher à **aucun** traitement, la clé de portée
-> exigeant les deux extrémités du même côté de la frontière. `traitement_mesures` a suivi
-> son parent, pour que l'article 32 reste consignable sur un traitement du Groupe.
+> exigeant alors les deux extrémités du même côté de la frontière. `traitement_mesures` a
+> suivi son parent, pour que l'article 32 reste consignable sur un traitement du Groupe.
+>
+> ⚠️ **Cette exigence de symétrie est levée depuis la migration `030`** (constat Q-294) —
+> dans le seul sens qui est sans danger : *document local → traitement de Groupe*. Le sens
+> inverse reste fermé.
 
 ### Correspondance inter-référentiels — `mappings` (v7, surcouche)
 Le **catalogue par défaut** des correspondances (équivalences entre exigences de

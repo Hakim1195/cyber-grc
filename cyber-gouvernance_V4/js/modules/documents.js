@@ -280,6 +280,12 @@ const DocumentsModule = (() => {
         // le chaînon que l'action D5 pose — et la barrière, elle, est dans la
         // base (`trg_documents_publication`, code GRC06), pas ici.
         if (typeof ApprobationsModule !== "undefined") {
+            // ⚠️ **`doc.id` n'est qu'un REPLI depuis le constat Q-303** : c'est le
+            // `data-id` du conteneur qui fait foi, parce que le renommage l'a
+            // recalé quand le serveur a réattribué l'identifiant à la création.
+            // La parade vivait déjà dans `approbations.js`, et cet appel la
+            // désarmait — l'encart annonçait « introuvable… ou il appartient à une
+            // autre filiale » sur un document qu'on venait de créer.
             ApprobationsModule.brancherEncart("documents", doc.id);
         }
         document.getElementById("saveBtn").onclick = () => {
@@ -350,8 +356,36 @@ const DocumentsModule = (() => {
         const confOpts = CONFIDENTIALITES.map(c =>
             `<option value="${escapeHtml(c[0])}" ${c[0] === niveau ? "selected" : ""}>${escapeHtml(c[1])}</option>`).join("");
         const confNote = (CONFIDENTIALITES.find(c => c[0] === niveau) || [])[2] || "";
-        const traitements = (typeof DataStore !== "undefined" && DataStore.getTraitements) ? DataStore.getTraitements() : [];
+        // ══ QUELS TRAITEMENTS PROPOSER — constat Q-294 ═══════════════════════
+        //
+        // La règle de la base n'est PAS symétrique, et la liste doit dire la même
+        // chose qu'elle :
+        //
+        //  · un document LOCAL peut relever d'un traitement de sa filiale **ou
+        //    d'un traitement de portée Groupe** — c'est le cas le plus fréquent
+        //    (l'annuaire commun, le journal d'audit de cet outil), et il est sans
+        //    danger : un traitement de Groupe n'est effaçable que par
+        //    l'administration Groupe ;
+        //  · un document de portée GROUPE ne peut relever que d'un traitement de
+        //    portée Groupe. C'est le constat **N-10** : la politique que les vingt
+        //    filiales lisent ne doit pas désigner une ligne qu'UNE filiale peut
+        //    effacer.
+        //
+        // ⚠️ **Le produit servait TOUS les traitements, les offrait ici, et les
+        // refusait en 409** — en disant à l'utilisateur que l'élément « n'existe
+        // pas dans votre périmètre » alors qu'il était affiché sous ses yeux.
+        // L'arbitrage a été corrigé dans la base (migration `030`) plutôt que
+        // l'écran : filtrer la liste des deux côtés aurait rendu le produit
+        // cohérent en lui retirant la moitié de ce que le lot promettait. Ce qui
+        // reste ici est le SEUL sens qui demeure interdit.
+        const tousTraitements = (typeof DataStore !== "undefined" && DataStore.getTraitements) ? DataStore.getTraitements() : [];
+        const traitements = doc._porteeGroupe === true
+            ? tousTraitements.filter(t => t._porteeGroupe === true)
+            : tousTraitements;
         const trtVide = traitements.length === 0;
+        const trtNoteFiltre = (doc._porteeGroupe === true && tousTraitements.length > traitements.length)
+            ? `<p class="doc-note">Portée Groupe : seuls les traitements de portée Groupe sont proposés — un socle commun ne peut pas dépendre d'une ligne qu'une filiale peut effacer.</p>`
+            : "";
         const trtOpts = `<option value="">— Aucun —</option>` + traitements.map(t =>
             `<option value="${escapeHtml(t.id)}" ${t.id === doc.traitement_id ? "selected" : ""}>${escapeHtml(t.nom)}</option>`).join("");
         const typeOpts = TYPES.map(t => `<option value="${escapeHtml(t)}" ${t === doc.type ? "selected" : ""}>${escapeHtml(t)}</option>`).join("");
@@ -386,6 +420,7 @@ const DocumentsModule = (() => {
                         <label>Traitement RGPD dont ce document relève ${Help.tip("Rattache ce document au registre de l'article 30 : la politique de conservation d'un traitement, sa procédure d'exercice des droits, son analyse d'impact. Les deux registres existaient sans se connaître.")}</label>
                         <select id="traitement_id">${trtOpts}</select>
                         ${trtVide ? `<p class="doc-note">Aucun traitement au registre RGPD. Recensez-les dans <a href="#/rgpd" style="color:var(--accent);">Registre RGPD</a>.</p>` : ""}
+                        ${trtNoteFiltre}
                     </div>
                 </div>
                 <div class="form-group">

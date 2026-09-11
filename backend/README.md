@@ -598,8 +598,8 @@ que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non re
 
 | Répertoire | Ce qu'il éprouve |
 |---|---|
-| `test/base/` | socle, journal en ajout seul et chaînage, RLS, privilèges, garde-fous du schéma, consignation, vocabulaire, **et la démonstration de cloisonnement rejouée par `psql`** |
-| `test/api/` | routes montées pour de vrai, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité d'écriture, identifiants, bornes de corps, route de reprise |
+| `test/base/` | socle, journal en ajout seul et chaînage, RLS, privilèges, garde-fous du schéma, consignation, vocabulaire, **la démonstration de cloisonnement rejouée par `psql`** — et, depuis le 11/09/2026, **les garde-fous ÉPROUVÉS** : une contrainte vidée de sa substance qui garde son nom et ses littéraux doit être vue, et un témoin correct doit rester silencieux (`CONVENTIONS.md` §39) |
+| `test/api/` | routes montées pour de vrai, verrouillage optimiste, diagnostic d'`UPDATE 0`, familles d'entités, intégrité d'écriture, identifiants, bornes de corps, route de reprise — **et les sept garde-corps de `BORNES`**, que rien ne mordait avant le constat Q-304 : ils sont **lus** dans `BORNES`, jamais recopiés, et l'essai ÉCHOUE au lieu de fabriquer la matière quand une borne quitte son ordre de grandeur |
 | `test/reprise/` | paliers v1 → v12, enveloppe, scission des mesures, round-trip, entrées hostiles |
 | `test/navigateur/` | la bascule côté SPA, dans **Chromium**, contre le serveur réel et sous la CSP du vhost — droits inclus (`droits.test.mjs`) |
 | `test/deploiement/` | **le vhost livré, joué par un Apache réel** : l'URL d'entrée, la liste blanche de publication, la compression, le cache, les en-têtes, la borne de corps ; plus la copie par `rsync` et les blocs d'`install.sh` |
@@ -617,7 +617,7 @@ que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non re
 | `test/filiales/` | la création de filiale et le sélecteur de filiale active (L4) : synchronisation des groupes d'annuaire dans la même transaction, et **la trace au journal sans laquelle une filiale existerait sans preuve** (Q-213, Q-218) |
 | `test/journal/` | la **couverture** du journal d'audit, mesurée en exerçant le produit puis en comptant ce qui est arrivé en base — jamais en relisant `src/` |
 | `test/journal-lecture/` | la lecture cloisonnée du journal (condition E6) et les constats de la porte S4 |
-| `test/documents/` | la **classification documentaire** dans la base (migration `027`) : niveaux de diffusion bornés et obligatoires, étiquettes normalisées par un déclencheur, et le rattachement à l'article 30 qui **ne franchit pas la frontière Groupe/filiale** — la clé de portée y est éprouvée dans les deux sens, parce qu'une clé composite qui passe par un `filiale_id` nul ne vérifie plus rien (constat N-10) |
+| `test/documents/` | la **classification documentaire** dans la base (migrations `027` et `030`) : niveaux de diffusion bornés et obligatoires, étiquettes normalisées par un déclencheur **et par un index** (l'un donne le bon message, l'autre la garantie — constat Q-298), et le rattachement à l'article 30, dont la règle **n'est pas symétrique** : un document local relève d'un traitement de Groupe, l'inverse est refusé (constat N-10 fermé, constat Q-294 ouvert et refermé) |
 
 *(`test/aide/` n'est pas une famille : ce sont les montages partagés — base, serveur,
 navigateur, outillage — que les vingt autres appellent.)*
@@ -756,7 +756,7 @@ la comparaison au marché du 08/09/2026.
 **Mesuré au 11/09/2026** : `npm test` → **1869 essais, 1869 passés** ;
 `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **109/109** ; `f_verifier_schema()`
-→ 0 anomalie, **26 garde-fous consignés**, **27 migrations**, **52 tables**.
+→ 0 anomalie, **30 garde-fous consignés**, **30 migrations**, **52 tables**.
 
 | Lot | État |
 |---|---|
@@ -930,10 +930,10 @@ select * from f_verifier_schema()                → 0 ligne (26 garde-fous déc
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **52 tables** en
-**27 migrations**, **208 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**30 migrations**, **208 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **80 clés étrangères** (48 `restrict`, 30 `cascade`, 2 `set null`), **45 tables portant
 `cree_par` et 45 déclencheurs de création**, **17 clés étrangères composites** visant
-`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **26 contrôles consignés**
+`(id, filiale_id)`, **9 unicités** `uq_<parent>_id_filiale`, **30 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1213,7 +1213,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **52 tables**, obtenues aujourd'hui en **27 migrations** appliquées de bout en bout par
+- **52 tables**, obtenues aujourd'hui en **30 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le

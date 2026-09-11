@@ -131,6 +131,24 @@ before(async () => {
      * la matière d'un contrôle exhaustif étend le contrôle ; ajouter une
      * assertion à côté aurait recréé, dans le banc, la liste écrite à la main
      * qu'on vient de retirer du produit. */
+    /* ── LA MATIÈRE DU CONSTAT Q-293 : le régime « signaler » HORS incidents ──
+     *
+     * `crise.notes` est la SEULE colonne du produit qui portait le régime
+     * « signaler » au registre, et **rien ne le lisait** : `src/cycle/index.ts`
+     * codait en dur la table `incidents`. La colonne n'était donc ni signalée,
+     * ni reconnue — elle sortait en `classe: 'anomalie'`, que le produit
+     * documente comme *« une colonne que la purge AURAIT DÛ traiter »*.
+     *
+     * ⚠️ **Le banc ne pouvait pas le voir** : il semait le nom dans
+     * `incidents.description`, **jamais** dans `crise.notes`. C'est la classe
+     * Q-194 — *aucun essai ne fait passer la sortie du registre dans l'entrée de
+     * la purge sur ce régime-là.* Le nom est ici AU MILIEU D'UNE PHRASE, ce qui
+     * est tout l'argument du régime. */
+    await c.query('update crise set notes = $1 where id = $2', [
+      `Astreinte de nuit assurée par ${NOM} depuis mars, à reconduire au prochain exercice.`,
+      'CRISE-A',
+    ]);
+
     await c.query('update prestataires set email = $1 where filiale_id = $2', [
       NOM,
       FILIALE_A,
@@ -338,13 +356,39 @@ describe('§1 — la purge rend des COMPTES, et ils sont exacts', () => {
     assert.ok(corps.total_lignes >= 14);
   });
 
-  test('les incidents sont SIGNALÉS, avec la colonne concernée et sans son texte', () => {
-    assert.equal(reponse.corps.incidents_a_examiner.length, 1);
-    const signale = reponse.corps.incidents_a_examiner[0];
-    assert.equal(signale.id, 'INC-A');
-    assert.deepEqual(signale.colonnes, ['description']);
+  test('les colonnes de régime « signaler » sont SIGNALÉES — et pas seulement les incidents', () => {
+    /* ══ CONSTAT Q-293 — LE RÉGIME VIT AU REGISTRE, PAS DANS UN `if` ═══════
+     *
+     * Ce contrôle exigeait auparavant EXACTEMENT un signalement, sur la table
+     * `incidents`. Il était vert pendant que `crise.notes` — la seule autre
+     * colonne du produit à porter le régime — sortait en `anomalie`. Ce n'est
+     * pas une omission d'attention : le banc ne semait le nom que là où la règle
+     * codée en dur savait le chercher.
+     *
+     * Ce qui est éprouvé désormais est la RÈGLE : tout ce que le registre
+     * déclare « signaler » est signalé, et l'emplacement est nommé par sa table. */
+    const signales = reponse.corps.a_examiner;
+    const parTable = Object.fromEntries(signales.map((l) => [l.table, l]));
+
+    assert.ok(
+      parTable['incidents'] !== undefined,
+      `l’incident n’est plus signalé : ${JSON.stringify(signales)}`,
+    );
+    assert.equal(parTable['incidents'].id, 'INC-A');
+    assert.deepEqual(parTable['incidents'].colonnes, ['description']);
+
+    assert.ok(
+      parTable['crise'] !== undefined,
+      'Le nom est au milieu d’une phrase dans `crise.notes`, que le REGISTRE déclare en ' +
+        'régime « signaler » depuis la migration 026. Il n’est pas signalé : la règle est ' +
+        'donc encore codée en dur sur la table `incidents` (constat Q-293). Reçu : ' +
+        JSON.stringify(signales),
+    );
+    assert.equal(parTable['crise'].id, 'CRISE-A');
+    assert.deepEqual(parTable['crise'].colonnes, ['notes']);
+
     assert.equal(
-      JSON.stringify(signale).includes(NOM),
+      JSON.stringify(signales).includes(NOM),
       false,
       'le signalement transporte le texte : ce n’est pas à cette réponse-ci de le faire',
     );
@@ -360,7 +404,15 @@ describe('§1 — la purge rend des COMPTES, et ils sont exacts', () => {
         anomalies.map((r) => `${r.table}.${r.colonne} (${String(r.lignes)})`).join('\n  '),
     );
     const parClasse = Object.fromEntries(restes.map((r) => [`${r.table}.${r.colonne}`, r.classe]));
-    assert.equal(parClasse['incidents.description'], 'incidents');
+    assert.equal(parClasse['incidents.description'], 'signale');
+    assert.equal(
+      parClasse['crise.notes'],
+      'signale',
+      'Le nom subsiste dans `crise.notes` — c’est voulu, le registre le déclare « signaler ». ' +
+        'Mais il doit être CLASSÉ ainsi, et non en « anomalie » : le rapport se trompait dans ' +
+        'les deux sens à la fois — il accusait d’un défaut une décision délibérée, et il ' +
+        'restait muet là où le registre promet qu’un humain sera prévenu (constat Q-293).',
+    );
     // ⚠️ **`utilisateurs.nom` N'EST PLUS UN RESTE, et c'est un progrès mesuré.**
     // Cet essai exigeait auparavant qu'il figure en reste, classé « compte_annuaire » :
     // la purge ne savait pas l'atteindre, parce que sa liste de colonnes ne portait que
@@ -408,11 +460,19 @@ describe('§2 — le nom cherché PARTOUT, par l’essai et non par le produit',
     // met hors d'atteinte — le texte libre d'un incident, et le registre.
     apres = await ouEstLeNom(NOM);
     const restants = emplacements(dans(apres, FILIALE_A));
+    // ⚠️ **`crise.notes` s'ajoute ici, et ce n'est pas un relâchement** — constat
+    // Q-293. Le registre la déclare en régime « signaler » depuis la migration
+    // `026` : le nom y est au milieu d'une phrase, et le remplacer détruirait la
+    // phrase. Ce qui a changé est que le produit la SIGNALE désormais au lieu de
+    // l'accuser d'être une « anomalie ». La liste reste EXHAUSTIVE — c'est ce qui
+    // fait la valeur de ce contrôle : toute colonne qui s'y ajouterait sans avoir
+    // été décidée le ferait rougir.
     assert.deepEqual(
       restants,
-      ['incidents.description', 'journal_audit.utilisateur_libelle'],
-      'le nom subsiste dans la filiale purgée ailleurs que dans un texte libre d’incident ' +
-        'ou dans le journal — c’est-à-dire là où la purge aurait dû l’effacer',
+      ['crise.notes', 'incidents.description', 'journal_audit.utilisateur_libelle'],
+      'le nom subsiste dans la filiale purgée ailleurs que dans un texte libre DÉCLARÉ ' +
+        '« signaler » au registre, ou dans le journal — c’est-à-dire là où la purge aurait ' +
+        'dû l’effacer',
     );
   });
 
@@ -568,7 +628,19 @@ describe('§3 — le journal survit intact, chaîne comprise', () => {
     assert.equal(entree.utilisateur_libelle, 'admin.grc');
     assert.ok(entree.valeurs_apres.total_lignes >= 14);
     assert.equal(entree.valeurs_apres.fiche_supprimee, true);
-    assert.equal(entree.valeurs_apres.incidents_signales, 1);
+    assert.equal(
+      entree.valeurs_apres.lignes_signalees,
+      2,
+      'l’entrée doit compter TOUTES les lignes signalées — l’incident ET `crise.notes`, que ' +
+        'le registre déclare « signaler » (constat Q-293). Le compte s’appelait ' +
+        '« incidents_signales » et ne voyait qu’une table.',
+    );
+    assert.deepEqual(
+      entree.valeurs_apres.emplacements_signales.slice().sort(),
+      ['crise/CRISE-A', 'incidents/INC-A'],
+      'le journal doit dire OÙ un humain doit aller regarder — la table et la ligne, jamais ' +
+        'le texte',
+    );
     assert.equal(entree.valeurs_apres.anomalies, 0);
     assert.ok(entree.valeurs_apres.lignes_par_table['actifs.responsable'] >= 1);
 

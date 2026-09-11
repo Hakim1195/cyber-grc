@@ -357,6 +357,90 @@ const SCHEMA_SUPPRESSION = {
  */
 const LIGNES_SONDAGE_ORDINAIRE_MAX = 25;
 
+/**
+ * Le CUMUL, par appelant, de ce que les sondages ont fait sortir — constat **Q-302**.
+ *
+ * ══ L'ÉCHAPPÉE QUE Q-279 AVAIT NOMMÉE, ET CELLE QU'IL AVAIT MANQUÉE ══════════
+ *
+ * L'auteur du correctif Q-279 avait écrit honnêtement qu'une échappée restait :
+ * *« un appelant patient qui pagine en fenêtres étroites reste sous le seuil »*.
+ * L'auditeur du 8ᵉ passage l'a mesurée **inatteignable** — `rafraichir` n'a pas
+ * de borne supérieure, on ne peut donc pas paginer avec.
+ *
+ * **L'échappée réelle n'était nommée nulle part : il suffit que la filiale soit
+ * petite.** Mesuré à travers Apache, avec un compte dont `GET /api/export` rend
+ * 403 :
+ *
+ *     fenêtre −1 h → 18 lignes rendues → 0 entrée de journal
+ *     fenêtre −6 h → 18 lignes rendues → 0 entrée
+ *     fenêtre −11 h → 18 lignes rendues → 0 entrée
+ *
+ * Dix-huit lignes **sont** le jeu de données visible par ce compte. Et le même
+ * compte, sur `/api/donnees`, laisse une trace. *Deux routes, le même jeu, la
+ * même absence de droit d'export : l'une est tracée, l'autre non.* La condition
+ * d'échappement est « la filiale change moins de 25 lignes sur douze heures » —
+ * c'est-à-dire **toute filiale qui vient d'être acquise**, sur un produit dont le
+ * cadrage annonce « 20+ filiales, acquisitions régulières ».
+ *
+ * ══ CE QUE CE COMPTEUR FAIT, ET CE QU'IL NE FAIT PAS ═════════════════════════
+ *
+ * Il additionne, par appelant, les lignes que **chaque** sondage a fait sortir, et
+ * déclenche la trace au franchissement du seuil — puis à chaque palier suivant.
+ * Le seuil absolu cesse ainsi d'être une propriété de la TAILLE de la filiale
+ * pour redevenir une propriété de ce que fait l'appelant.
+ *
+ * ⚠️ **Il est en MÉMOIRE, et il ne prétend pas plus.** Un redémarrage du service
+ * le remet à zéro. Le porter en base exigerait d'écrire dans `sessions` à chaque
+ * sondage — or cette table est fermée depuis la migration `007` à toute
+ * transaction qui n'a pas posé `grc.authentification`, et l'ouvrir pour un
+ * compteur rouvrirait la condition **E1**. Le coût du choix est donc écrit ici
+ * plutôt que caché : *le compteur ne survit pas à un redémarrage.*
+ *
+ * ⚠️ **La clé n'est pas l'identifiant de session, faute de l'avoir sous la
+ * main** : `SessionAppliquee` ne le porte pas (voir la demande écrite au
+ * sélecteur de filiale, §« Le jeton »). La clé est le couple *compte × filiale
+ * active*, ce qui **agrège** les onglets d'une même personne — plus protecteur
+ * que la session, jamais moins, et cela répond mieux à la question que le journal
+ * doit trancher : *qui a extrait le jeu de données ?*
+ */
+const CUMUL_SONDAGES = new Map<string, number>();
+
+/**
+ * Au-delà, on purge le compteur : c'est le motif du constat Q-214 d — *trois
+ * collections non bornées* —, appliqué à notre propre état. Vingt filiales fois
+ * quelques centaines de comptes tiennent très largement dessous ; au-delà, ce
+ * n'est plus un usage, et perdre le cumul est moins grave que croître sans fin.
+ */
+const CUMUL_SONDAGES_MAX_CLES = 5000;
+
+/**
+ * Palier de re-signalement. Une fois le seuil franchi, on ne trace plus chaque
+ * ligne — le journal serait noyé, ce que le constat Q-301 vient de coûter — mais
+ * on re-trace tous les `PALIER` lignes, pour qu'une extraction longue laisse une
+ * trace PROPORTIONNÉE et non une seule ligne au début.
+ */
+const CUMUL_SONDAGES_PALIER = LIGNES_SONDAGE_ORDINAIRE_MAX * 40;
+
+/**
+ * Ajoute `lignes` au cumul de cet appelant et dit s'il faut tracer.
+ *
+ * Rend `null` quand il n'y a rien à signaler, ou le cumul atteint sinon.
+ */
+function cumulerSondage(cle: string, lignes: number): number | null {
+  if (lignes <= 0) return null;
+  if (CUMUL_SONDAGES.size >= CUMUL_SONDAGES_MAX_CLES && !CUMUL_SONDAGES.has(cle)) {
+    CUMUL_SONDAGES.clear();
+  }
+  const avant = CUMUL_SONDAGES.get(cle) ?? 0;
+  const apres = avant + lignes;
+  CUMUL_SONDAGES.set(cle, apres);
+  const palierDe = (n: number): number =>
+    n < LIGNES_SONDAGE_ORDINAIRE_MAX
+      ? 0
+      : 1 + Math.floor((n - LIGNES_SONDAGE_ORDINAIRE_MAX) / CUMUL_SONDAGES_PALIER);
+  return palierDe(apres) > palierDe(avant) ? apres : null;
+}
+
 const SCHEMA_RAFRAICHIR = {
   type: 'object',
   required: ['depuis'],
@@ -2244,7 +2328,27 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
           depuis,
           entitesLisibles(session.droits),
         );
-        const lignes = Object.values(charge.volumes).reduce((n, v) => n + v, 0);
+        /* ══ CE QUI SORT, C'EST `modifications` — constat **Q-301** ═════════
+         *
+         * Le 8ᵉ passage de la porte S8 a mesuré, dans le journal de la recette,
+         * une SPA ouverte soixante-dix secondes **sans un geste** :
+         *
+         *     3 × « Extraction du jeu de données par le sondage (30 lignes rendues) »
+         *         {"motif":"volume_rendu","lignes":30,"collections":0,…}
+         *
+         * `charge.volumes` est l'INVENTAIRE de la filiale — `compterCollection()`,
+         * indépendant de `depuis`. Ce qui part sur le réseau vit dans
+         * `charge.modifications`. Le commentaire de Q-279, vingt lignes plus
+         * bas, disait déjà « on trace sur ce qui SORT » : **la règle était
+         * écrite, c'est la variable qui était fausse** — classe Q-197/Q-208.
+         *
+         * ⚠️ L'entrée portait sa propre réfutation (`collections: 0` à côté de
+         * `lignes: 30`), et le journal est en ajout seul : les entrées déjà
+         * écrites ne s'effacent pas. */
+        const lignes = Object.values(charge.modifications).reduce(
+          (n, l) => n + (l?.length ?? 0),
+          0,
+        );
         const ageMs = Date.now() - depuis.getTime();
         const fenetreProfonde = ageMs > config.session.dureeMaximaleHeures * 3_600_000;
         /* ══ LE VOLUME REND, PAS LA FENÊTRE DEMANDÉE — constat **Q-279** ══════
@@ -2277,12 +2381,44 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
          * compteur CUMULÉ par session — c'est-à-dire de l'état —, et cela n'a
          * pas été fait ici. Le registre le porte au constat Q-279. */
         const extractionParLeVolume = lignes >= LIGNES_SONDAGE_ORDINAIRE_MAX;
-        if (fenetreProfonde || extractionParLeVolume) {
+        /* ══ LE CUMUL — constat **Q-302** ═══════════════════════════════════
+         *
+         * Le seuil absolu ne discriminait rien : toute filiale au-delà de vingt-
+         * cinq lignes traçait chaque sondage, toute filiale en deçà n'en traçait
+         * aucun, **quoi qu'il sorte**. Le discriminant était devenu une propriété
+         * de la TAILLE de la filiale, et non de ce que fait l'appelant.
+         *
+         * On additionne donc ce qui SORT, appelant par appelant. Dix-huit lignes
+         * rendues deux fois en franchissent le seuil ; dix-huit lignes rendues une
+         * fois puis plus rien, non — et c'est le bon partage. */
+        const cumul = cumulerSondage(
+          `${session.perimetre.utilisateurId}|${session.perimetre.filialeId ?? 'groupe'}`,
+          lignes,
+        );
+        if (fenetreProfonde || extractionParLeVolume || cumul !== null) {
+          const motif = fenetreProfonde
+            ? 'fenetre_anterieure_a_la_session'
+            : extractionParLeVolume
+              ? 'volume_rendu'
+              : 'cumul_par_session';
           await journaliser(client, {
             action: 'consultation_sensible',
+            /* ⚠️ **TROIS PHRASES LITTÉRALES, et c'est le §29.5** : « resume » est
+             * une phrase écrite par le développeur ; les chiffres partent dans
+             * `valeursApres`, qui est du jsonb.
+             *
+             * ⚠️ **La rédaction précédente interpolait `${lignes}` ICI**, et le
+             * garde-fou de `test/journal/regles.test.mjs` ne l'avait pas vue :
+             * son détecteur est **par ligne**, et l'interpolation vivait sur la
+             * ligne suivant `resume:`, dans une ternaire. Le garde a été élargi
+             * en même temps que ce correctif — *un garde qui se contourne par un
+             * retour à la ligne ne tient pas une règle, il tient une mise en
+             * forme* (constat Q-311). */
             resume: fenetreProfonde
-              ? 'Extraction du jeu de données par le sondage (« depuis » antérieur à la session)'
-              : `Extraction du jeu de données par le sondage (${String(lignes)} lignes rendues)`,
+              ? 'Extraction du jeu de données par le sondage (« depuis » antérieur à la session).'
+              : motif === 'volume_rendu'
+                ? 'Extraction du jeu de données par le sondage.'
+                : 'Extraction du jeu de données par sondages successifs.',
             filialeId: session.perimetre.filialeId,
             utilisateurLibelle: session.perimetre.utilisateurId,
             adresseIp: requete.ip,
@@ -2291,10 +2427,15 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
               depuis: depuis.toISOString(),
               collections: Object.keys(charge.modifications).length,
               lignes,
+              cumul: CUMUL_SONDAGES.get(
+                `${session.perimetre.utilisateurId}|${session.perimetre.filialeId ?? 'groupe'}`,
+              ),
               export_autorise: session.droits.export,
               // Ce qui a déclenché la trace : un auditeur doit pouvoir
-              // distinguer « on a demandé loin » de « on a beaucoup reçu ».
-              motif: fenetreProfonde ? 'fenetre_anterieure_a_la_session' : 'volume_rendu',
+              // distinguer « on a demandé loin », « on a beaucoup reçu d'un
+              // coup », et « on a beaucoup reçu en s'y prenant en plusieurs
+              // fois » — la troisième est le constat Q-302.
+              motif,
             },
           });
         }
@@ -2323,11 +2464,34 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
       const entite = entiteDe(requete.params.entite);
       const corps = requete.body;
 
-      const enregistrement = await enEcriture(requete, async (client, instanceDepot, perimetre) =>
-        instanceDepot.creer(client, perimetre, entite, corps.champs, {
-          portee: corps.portee ?? 'filiale',
-        }),
-      );
+      /* ══ « CRÉATION » EST UNE SITUATION, PAS UN CODE — constat **Q-308** ══
+       *
+       * Sur une création bloquée, le produit répondait « Rechargez la liste,
+       * puis reprenez la saisie » — c'est-à-dire *jetez le formulaire que vous
+       * venez de remplir*. C'est, à la formulation près, **le bloquant du 6ᵉ
+       * passage de la porte S2**, dont le `CLAUDE.md` garde la leçon :
+       *
+       *   « une même formulation servait deux couches : vraie pour la reprise
+       *   (« rechargez »), destructrice pour une création bloquée. »
+       *
+       * On dit donc au traducteur la SITUATION, comme la reprise le fait déjà.
+       * Rien n'a été écrit ; le geste utile est de corriger la valeur en double,
+       * jamais de recharger. */
+      const enregistrement = await (async () => {
+        try {
+          return await enEcriture(requete, async (client, instanceDepot, perimetre) =>
+            instanceDepot.creer(client, perimetre, entite, corps.champs, {
+              portee: corps.portee ?? 'filiale',
+            }),
+          );
+        } catch (erreur) {
+          // Une erreur DÉJÀ traduite ne se retraduit pas : elle porte son
+          // message, et le refaire passer par le traducteur le remplacerait par
+          // un générique.
+          if (erreur instanceof ErreurApplicative) throw erreur;
+          throw traduireErreur(erreur, { ...contexteErreurs, origine: 'creation' });
+        }
+      })();
 
       requete.log.info(
         { entite, identifiant: enregistrement['id'] },

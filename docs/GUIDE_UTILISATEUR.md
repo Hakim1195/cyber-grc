@@ -270,15 +270,18 @@ Quatre devenirs à l'expiration, et le quatrième mérite d'être connu : **« s
 un nom est *au milieu d'une phrase* — la note d'une cellule de crise, la description d'un
 incident —, le remplacer détruirait la phrase : c'est à vous de trancher, pas à la machine.
 
-> 🛑 **Ce que le produit fait AUJOURD'HUI n'est pas encore cela — constat Q-293, porte S8 du
-> 11/09/2026.** Le régime « signaler » est décidé **dans la base** et la purge **ne le lit
-> pas** : elle ne connaît que la description d'un incident, en dur. La note d'une cellule de
-> crise vous revient donc dans le rapport de purge classée **« anomalie »** — c'est-à-dire
-> *« une colonne que la purge aurait dû traiter »* — alors que c'est une **décision**.
->
-> **Ce que cela change pour vous, concrètement** : la ligne est bien là, le nom est bien
-> signalé, et rien n'est effacé à tort. Ce qui est faux est **le mot employé pour vous le
-> dire**. Lisez « anomalie » comme « à trancher » tant que ce constat est ouvert.
+✅ **Et c'est bien ce que le produit fait, depuis le 11/09/2026** (constat **Q-293**, fermé).
+Le rapport de purge vous rend une liste **« à examiner »** qui nomme la table et la ligne
+— jamais le texte, qui n'a pas à voyager dans cette réponse-là. Une note de cellule de
+crise, la description d'un incident, la valeur d'une cellule rejetée à l'import : tout ce
+que le registre déclare « signaler » y figure.
+
+> ⚠️ *Jusqu'au 11/09/2026, le régime existait dans la base et la purge ne le lisait pas :
+> elle ne connaissait que la description d'un incident, codée en dur. Une note de cellule de
+> crise revenait donc classée « **anomalie** » — c'est-à-dire « une colonne que la purge
+> aurait dû traiter » — alors que c'était une **décision**. Le rapport se trompait dans les
+> deux sens à la fois : il accusait d'un défaut une décision délibérée, et il restait muet
+> là où le registre promet qu'un humain sera prévenu.*
 
 ### Les documents portent enfin une classification
 

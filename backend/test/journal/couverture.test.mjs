@@ -411,6 +411,94 @@ describe('Le produit est exercé, puis le journal est compté', () => {
       );
       exerce.routes.add('chargement du jeu de données');
 
+      /* ══ Q-302 — LE JEU D'UNE PETITE FILIALE NE SORT PLUS SANS TRACE ═══
+       *
+       * L'échappée que Q-279 avait nommée — « paginer en fenêtres étroites » —
+       * a été mesurée INATTEIGNABLE par l'auditeur du 8ᵉ passage : `rafraichir`
+       * n'a pas de borne supérieure. **L'échappée réelle n'était nommée nulle
+       * part** : il suffit que la filiale soit petite. Dix-huit lignes sont le
+       * jeu entier d'une filiale qui vient d'être acquise, et dix-huit est sous
+       * le seuil de vingt-cinq — donc zéro trace, pour un compte dont
+       * `GET /api/export` rend 403.
+       *
+       * Le cumul par appelant referme cela : plusieurs sondages qui rendent
+       * chacun peu, mais BEAUCOUP en tout, finissent par être nommés.
+       *
+       * ⚠️ On sème ici moins que le seuil, et on sonde DEUX FOIS. Chaque
+       * sondage reste « ordinaire » ; leur somme ne l'est pas.
+       *
+       * ⚠️ **Ce paragraphe vient AVANT celui de Q-279, et l'ordre est
+       * normatif** : le cumul est un état qui vit dans le serveur, et le semis
+       * de trente lignes du paragraphe suivant le pousse d'emblée au-delà du
+       * premier palier. Mesurer le cumul après lui ne mesurerait plus rien. */
+      const avantCumul = await entreesDuScenario(
+        "and action = 'consultation_sensible' and resume like 'Extraction du jeu%'",
+      );
+      const marqueur = `q302-${String(Date.now())}`;
+      // La fenêtre est prise AVANT le semis : on ne fait sortir que ces douze
+      // lignes-là, sans quoi c'est le volume d'un seul appel qu'on mesurerait —
+      // l'ancien discriminant, et non le cumul.
+      const fenetre = new Date().toISOString();
+      await base.avecPerimetre(
+        await base.connexion('app'),
+        session._perimetre,
+        async (c) => {
+          for (let i = 0; i < 15; i += 1) {
+            await c.query(
+              `insert into "mesure_catalogue" ("id", "filiale_id", "nom", "cree_par")
+               values ($1, $2, $3, $4)`,
+              [`MES-${marqueur}-${String(i)}`, FILIALE_A, `Cumul Q-302 ${String(i)}`, 'lectrice.seule'],
+            );
+          }
+        },
+        { annuler: false },
+      );
+
+      const premier = await greffon.appeler(
+        'GET',
+        `/api/rafraichir?depuis=${encodeURIComponent(fenetre)}`,
+      );
+      assert.equal(premier.statut, 200, JSON.stringify(premier.corps));
+      const sortiesPremier = Object.values(premier.corps.modifications ?? {}).reduce(
+        (n, l) => n + l.length,
+        0,
+      );
+      // LA MATIÈRE : chaque sondage doit rester SOUS le seuil, sans quoi c'est
+      // l'ancien discriminant qu'on mesurerait.
+      assert.ok(
+        sortiesPremier > 0 && sortiesPremier < 25 && sortiesPremier * 2 >= 25,
+        `Ce contrôle exige un sondage « ordinaire » dont DEUX dépassent le seuil : ` +
+          `${String(sortiesPremier)} ligne(s) sorties. Au-delà du seuil, c’est le volume d’un ` +
+          'seul appel qui tracerait ; en deçà de la moitié, deux sondages ne le franchiraient ' +
+          'pas et le contrôle passerait au vert sans rien mesurer.',
+      );
+
+      const second = await greffon.appeler(
+        'GET',
+        `/api/rafraichir?depuis=${encodeURIComponent(fenetre)}`,
+      );
+      assert.equal(second.statut, 200, JSON.stringify(second.corps));
+
+      const apresCumul = await entreesDuScenario(
+        "and action = 'consultation_sensible' and resume like 'Extraction du jeu%'",
+      );
+      const cumulees = apresCumul
+        .slice(avantCumul.length)
+        .filter((e) => e.valeurs_apres.motif === 'cumul_par_session');
+      assert.equal(
+        cumulees.length,
+        1,
+        'Deux sondages « ordinaires » dont la SOMME dépasse le seuil doivent laisser UNE ' +
+          'trace de cumul. Sans elle, le jeu complet d’une petite filiale sort sans trace ' +
+          'pour un compte dont le droit d’export est refusé — et la condition d’échappement ' +
+          'est « la filiale est récente » (constat Q-302). ' +
+          `Rendu : ${JSON.stringify(apresCumul.slice(avantCumul.length).map((e) => e.valeurs_apres.motif))}`,
+      );
+      assert.ok(
+        cumulees[0].valeurs_apres.cumul >= 25,
+        'L’entrée doit porter le CUMUL, c’est-à-dire le chiffre qui justifie la trace.',
+      );
+
       /* ══ Q-279 — LE VOLUME REND, PAS LA FENÊTRE DEMANDÉE ═══════════════
        *
        * Le 7ᵉ passage de la porte S8 a mesuré, à travers Apache, avec un
@@ -484,11 +572,88 @@ describe('Le produit est exercé, puis le journal est compté', () => {
           'récente. L’ancien discriminant regardait la fenêtre DEMANDÉE ; c’est le volume ' +
           'RENDU qui distingue un sondage d’une extraction (constat Q-279).',
       );
+      const traceSondage = apresSondage[apresSondage.length - 1];
       assert.equal(
-        apresSondage[apresSondage.length - 1].valeurs_apres.motif,
+        traceSondage.valeurs_apres.motif,
         'volume_rendu',
         'La trace doit dire CE QUI l’a déclenchée : un auditeur distingue « on a demandé ' +
           'loin » de « on a beaucoup reçu ».',
+      );
+
+      /* ══ Q-301 — LE CHIFFRE INSCRIT DOIT ÊTRE CELUI QUI EST SORTI ═══════
+       *
+       * Le paragraphe ci-dessus se contentait du DÉCLENCHEMENT, et il se
+       * semait trente lignes fraîches : dans son scénario, l'inventaire et le
+       * delta valent tous deux trente. L'erreur de variable — compter
+       * `volumes` au lieu de `modifications` — lui était donc **invisible**,
+       * et elle a traversé le 7ᵉ passage de la porte S8.
+       *
+       * On exige ici que le nombre inscrit au journal **inaltérable** soit
+       * celui des lignes réellement envoyées, et non l'inventaire de la
+       * filiale. Une entrée qui affirme « 30 lignes rendues » quand zéro l'a
+       * été ne peut plus être démentie : le journal est en ajout seul. */
+      const sorties = Object.values(sondage.corps.modifications ?? {}).reduce(
+        (n, l) => n + l.length,
+        0,
+      );
+      assert.equal(
+        traceSondage.valeurs_apres.lignes,
+        sorties,
+        'Le journal inaltérable doit inscrire LE NOMBRE DE LIGNES SORTIES ' +
+          `(${String(sorties)}), pas l'inventaire de la filiale ` +
+          `(${String(Object.values(sondage.corps.volumes ?? {}).reduce((n, v) => n + v, 0))}). ` +
+          'Constat Q-301 : l’entrée portait sa propre réfutation — « 30 lignes rendues » ' +
+          'à côté de « collections: 0 ».',
+      );
+      assert.ok(
+        sorties >= 25,
+        `Ce contrôle n’a d’objet que si le sondage SORT vraiment : ${String(sorties)} ligne(s).`,
+      );
+
+      /* ══ Q-301 — ET UN SONDAGE AU REPOS N'ÉCRIT RIEN ════════════════════
+       *
+       * C'est la moitié qui mord. La filiale porte ici plus de lignes que le
+       * seuil ; un discriminant qui regarde l'INVENTAIRE tracerait donc
+       * **chaque battement** de la SPA — mesuré sur la recette : trois
+       * accusations d'extraction en soixante-dix secondes, pour un onglet que
+       * personne ne touche, soit ≈ 3 750 par jour, indélébiles trois ans.
+       *
+       * La fenêtre est ici volontairement **postérieure** au semis : le delta
+       * est vide, rien ne sort, rien ne doit être écrit. */
+      const avantRepos = await entreesDuScenario(
+        "and action = 'consultation_sensible' and resume like 'Extraction du jeu%'",
+      );
+      const repos = await greffon.appeler(
+        'GET',
+        `/api/rafraichir?depuis=${encodeURIComponent(new Date().toISOString())}`,
+      );
+      assert.equal(repos.statut, 200, JSON.stringify(repos.corps));
+      const sortiesAuRepos = Object.values(repos.corps.modifications ?? {}).reduce(
+        (n, l) => n + l.length,
+        0,
+      );
+      assert.equal(sortiesAuRepos, 0, 'Le sondage au repos ne doit rien rendre.');
+      // LA MATIÈRE : sans elle, ce contrôle passerait au vert sur une filiale
+      // vide, où l'inventaire lui-même est sous le seuil.
+      const inventaireAuRepos = Object.values(repos.corps.volumes ?? {}).reduce(
+        (n, v) => n + v,
+        0,
+      );
+      assert.ok(
+        inventaireAuRepos >= 25,
+        `L’inventaire de la filiale est de ${String(inventaireAuRepos)} ligne(s) : sous le ` +
+          'seuil, ce contrôle ne distinguerait pas les deux variables et n’aurait pas d’objet.',
+      );
+      const apresRepos = await entreesDuScenario(
+        "and action = 'consultation_sensible' and resume like 'Extraction du jeu%'",
+      );
+      assert.equal(
+        apresRepos.length,
+        avantRepos.length,
+        'Un sondage AU REPOS — delta vide — ne doit inscrire AUCUNE entrée au journal ' +
+          'inaltérable, quelle que soit la taille de la filiale (constat Q-301). Une SPA ' +
+          'ouverte sans un geste écrirait sinon ≈ 3 750 fausses accusations d’extraction ' +
+          'par jour et par onglet, dans le registre qui sert de preuve en audit.',
       );
       exerce.routes.add('sondage de rafraîchissement');
     } finally {

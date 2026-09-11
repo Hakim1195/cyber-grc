@@ -1124,19 +1124,81 @@ const ApprobationsModule = (() => {
      * Charge et branche l'encart, une fois le gabarit posé dans le DOM.
      *
      * ⚠️ L'entité et l'identifiant sont **relus dans les attributs du
-     * conteneur** quand l'appelant ne les fournit pas : c'est la convention du
+     * conteneur**, et le DOM GAGNE sur l'argument : c'est la convention du
      * `CLAUDE.md` §3, et elle protège du cas où le serveur a réattribué
      * l'identifiant entre la composition du gabarit et son affichage.
+     *
+     * ══ CONSTAT Q-303 — LA PARADE ÉTAIT JUSTE, SON UNIQUE APPELANT LA DÉSARMAIT ══
+     *
+     * Cette fonction écrivait `const i = id || noeud.dataset.id;` — l'argument
+     * d'abord. **Le seul appelant du dépôt fournit l'identifiant**, si bien que
+     * le `dataset`, que le recalage venait pourtant de mettre à jour, n'était
+     * jamais consulté. Mesuré par l'auditeur du 8ᵉ passage, dans Chromium
+     * derrière l'Apache réel, après la création d'un document :
+     *
+     *     URL après enregistrement : …#/documents/DOC-1789117457265-8jq8…
+     *     appel en échec           : 404 GET /api/approbations/documents/DOC-1789117396226-1-…
+     *     data-id du conteneur     : DOC-1789117457265-8jq8…      ← le BON
+     *     encart affiché : « Cet enregistrement est introuvable. Il a peut-être
+     *                        été supprimé, ou il appartient à une autre filiale. »
+     *
+     * Deux conséquences, et la seconde est la pire : le circuit d'approbation
+     * d'un document qu'on vient de créer était **invisible** jusqu'au
+     * rechargement — le geste nominal ne se terminait pas —, et le produit
+     * affirmait à tort, **sur le cloisonnement**, qu'un enregistrement créé dans
+     * sa propre filiale « appartient à une autre filiale ». C'est la classe
+     * Q-201 / Q-207 : *un message qui annonce une perte qui n'a pas eu lieu
+     * apprend à ne plus croire les bandeaux, y compris le jour où ils disent
+     * vrai* — et ici, à ne pas croire ceux du cloisonnement.
+     *
+     * ⚠️ **L'inversion est le vrai correctif, et corriger l'appelant ne
+     * suffisait pas.** Un appelant qui transmet un identifiant capturé est une
+     * faute qui reviendra ; le `dataset` d'un conteneur, lui, est **recalé par le
+     * renommage** (`recalerBalisage()`, `js/core/sync.js`). La source la plus
+     * fraîche doit donc gagner, et l'argument n'être qu'un repli — pour le cas où
+     * le conteneur ne porterait pas encore ses attributs.
      */
     function brancherEncart(entite, id) {
         const noeud = document.getElementById(ID_ENCART);
         if (!noeud) return;
-        const e = entite || noeud.dataset.entite;
-        const i = id || noeud.dataset.id;
+        const e = noeud.dataset.entite || entite;
+        const i = noeud.dataset.id || id;
         if (!famille(e) || !i) return;
         fiche = { charge: null, encours: false, erreur: null, envoi: false, message: null };
         commentaireSaisi = "";
         chargerFiche(e, i, ID_ENCART + "Corps");
+    }
+
+    /* ══ SE REBRANCHER QUAND LE SERVEUR A RÉATTRIBUÉ L'IDENTIFIANT — Q-303 ══
+     *
+     * `js/core/sync.js` recale les ATTRIBUTS du balisage déjà rendu quand le
+     * serveur remplace l'identifiant local d'une création. Cela ne réveille rien :
+     * cet encart a DÉJÀ interrogé le serveur, reçu son 404, et affiché
+     * « introuvable… ou il appartient à une autre filiale » — sur un document que
+     * l'utilisateur venait de créer dans sa propre filiale.
+     *
+     * On écoute donc l'annonce du recalage et l'on redemande la fiche. Le
+     * `data-id` du conteneur a déjà été réécrit à ce moment-là : `brancherEncart`
+     * sans argument le relit, et c'est pour cela qu'il préfère le DOM.
+     *
+     * ⚠️ **Le branchement se fait UNE FOIS, à la définition du module** : le
+     * poser dans `brancherEncart` en ajouterait un par affichage de fiche, et
+     * l'écouteur survivrait au nœud qu'il vise — une fuite qui grandit à chaque
+     * navigation. L'écouteur ci-dessous ne fait rien quand aucun encart n'est à
+     * l'écran, ce qui est le cas sur vingt-quatre écrans sur vingt-six. */
+    if (typeof document !== "undefined") {
+        document.addEventListener("grc:identifiant-recale", function (evenement) {
+            const noeud = document.getElementById(ID_ENCART);
+            if (!noeud) return;
+            const nouveau = evenement && evenement.detail ? evenement.detail.nouveau : null;
+            const ancien = evenement && evenement.detail ? evenement.detail.ancien : null;
+            // On ne recharge que si CET encart est concerné : son attribut porte
+            // déjà le nouvel identifiant (le recalage est passé avant nous), ou
+            // il porte encore l'ancien (le recalage ne l'a pas atteint).
+            if (noeud.dataset.id !== nouveau && noeud.dataset.id !== ancien) return;
+            if (noeud.dataset.id === ancien && nouveau) noeud.dataset.id = nouveau;
+            brancherEncart(null, null);
+        });
     }
 
     /**

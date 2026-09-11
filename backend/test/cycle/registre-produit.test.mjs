@@ -155,4 +155,66 @@ describe('le registre des données personnelles du produit', () => {
     const colonnes = await lireRegistre();
     assert.ok(colonnes.length > 0);
   });
+
+  test('§4 — LA LECTURE LAISSE UNE TRACE — constat Q-307', async () => {
+    /* ══ CE QUE L'AUDITEUR A MESURÉ ═══════════════════════════════════════
+     *
+     * `qualite.tls` — profil qualité et auditeur d'UNE seule filiale, ni
+     * administrateur, ni exportateur — obtient **200 et les 17 031 octets
+     * complets**, qui nomment table par table l'intégralité du modèle :
+     * `utilisateurs.mot_de_passe_hash`, `sessions.perimetre`,
+     * `journal_audit.adresse_ip`. Et **cinq lectures consécutives produisent un
+     * delta de journal de ZÉRO**.
+     *
+     * ⚠️ Ce n'est pas une fuite de données personnelles — la route décrit le
+     * schéma, pas les gens, et le motif de son droit d'accès reste juste. C'est
+     * un renseignement donné à un attaquant interne (contrôle S12), sur *la
+     * seule route de lecture large du produit qui ne laissait aucune trace*.
+     *
+     * ⚠️ **L'arbitrage est écrit et il est tenu** : le droit d'accès n'est PAS
+     * resserré, et le registre n'est PAS amputé de ses colonnes
+     * d'authentification — l'amputer serait le constat Q-295 rouvert, et le DPO
+     * a le droit de savoir que l'outil détient une empreinte de mot de passe. Le
+     * remède est la trace. */
+    const compter = async () => {
+      const client = await base.connexion('proprietaire');
+      const { rows } = await client.query(
+        `select count(*)::int as n from journal_audit
+          where action = 'consultation_sensible'
+            and valeurs_apres ->> 'motif' = 'registre_produit'`,
+      );
+      return rows[0].n;
+    };
+
+    const avant = await compter();
+    await lireRegistre();
+    await lireRegistre();
+    const apres = await compter();
+
+    assert.equal(
+      apres,
+      avant + 2,
+      'Deux lectures du registre du produit doivent laisser DEUX traces. La question « qui a ' +
+        'lu la carte du schéma interne ? » n’avait aucune réponse (constat Q-307).',
+    );
+
+    const client = await base.connexion('proprietaire');
+    const { rows } = await client.query(
+      `select utilisateur_libelle, resume, valeurs_apres from journal_audit
+        where action = 'consultation_sensible'
+          and valeurs_apres ->> 'motif' = 'registre_produit'
+        order by numero desc limit 1`,
+    );
+    assert.equal(rows[0].utilisateur_libelle, 'dpo.groupe', 'La trace doit nommer QUI a lu.');
+    assert.ok(
+      rows[0].valeurs_apres.colonnes >= 50,
+      'La trace doit dire COMBIEN de colonnes sont sorties.',
+    );
+    assert.equal(
+      /mot_de_passe|adresse_ip|utilisateurs\./u.test(JSON.stringify(rows[0])),
+      false,
+      'La trace ne doit pas RECOPIER la carte du schéma dans le journal : elle dit qu’on l’a ' +
+        'lue, pas ce qu’elle contient.',
+    );
+  });
 });

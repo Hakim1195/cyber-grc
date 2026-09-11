@@ -666,6 +666,20 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
         portee_groupe:
           'Colonne ENGENDRÉE (CONVENTIONS.md §18.6) : elle entre dans une clé étrangère et ' +
           "PostgreSQL refuse qu'on lui donne une valeur. Elle se déduit de filiale_id.",
+        traitement_portee_groupe:
+          'Colonne ENGENDRÉE (migration `030`, constat Q-294) : elle entre dans la clé de ' +
+          "portée vers `traitements` et PostgreSQL refuse qu'on lui donne une valeur. Elle " +
+          'se déduit de `traitement_filiale_id`, que le déclencheur pose depuis le ' +
+          'traitement désigné. ⚠️ **Ce n’est pas moi qui l’ai vue** : le garde-fou du §6 a ' +
+          'refusé le démarrage à la première exécution suivant la migration — la troisième ' +
+          'fois qu’il attrape cette même divergence, et la troisième fois qu’il fait ' +
+          'exactement son office.',
+        traitement_filiale_id:
+          'Posée PAR LE DÉCLENCHEUR `trg_documents_traitement_portee` depuis le traitement ' +
+          'désigné (migration `030`, constat Q-294) : c’est une valeur dérivée d’une AUTRE ' +
+          'ligne, et la croire sur parole rouvrirait un oracle d’existence inter-filiales — ' +
+          'il suffirait d’envoyer la filiale qui arrange pour satisfaire la clé de ' +
+          'cohérence. Le client envoie `traitement_id`, et rien d’autre.',
       },
       liaisons: [
         {

@@ -39,6 +39,154 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### Porte S8, 8ᵉ passage — les dix-neuf constats traités, et le dispositif refait
+
+Le 8ᵉ passage a rendu **un chiffre qui condamnait le dispositif plutôt que le produit** :
+*sur 41 mutations, 14 ne mordent pas — et treize visent des gardes posés dans les trois
+jours précédents.* Troisième porte de suite où ce motif domine. Ce qui suit corrige le
+produit là où il fallait, et **refait le dispositif qui le mesure** partout ailleurs.
+
+#### 🛑 Le bloquant — le journal inscrivait de fausses accusations, indélébiles trois ans
+
+**Q-301.** `GET /api/rafraichir` comptait `charge.volumes` — **l'inventaire de la
+filiale**, indépendant de `depuis` — au lieu de `charge.modifications`, ce qui sort
+réellement. Conséquence mesurée dans le journal de la recette : une SPA **ouverte sans un
+geste** inscrivait « Extraction du jeu de données par le sondage (30 lignes rendues) » à
+côté de `collections: 0` — **l'entrée portait sa propre réfutation** —, à raison de trois
+en soixante-dix secondes, soit ≈ 3 750 par jour et par onglet, dans le registre qui sert de
+preuve en audit.
+
+Le correctif tient en une variable. ⚠️ **Ce qui compte est la morsure, et l'essai existant
+ne pouvait pas la voir** : il semait trente lignes fraîches, si bien que l'inventaire et le
+delta valaient tous deux trente. Deux contrôles neufs : le journal doit inscrire **le
+nombre de lignes SORTIES**, et **un sondage au repos n'écrit RIEN** — celui-là mord, la
+filiale portant alors plus que le seuil.
+
+**Q-302**, dans la foulée : le seuil absolu était devenu une propriété de la **taille de la
+filiale**. Dix-huit lignes *sont* le jeu entier d'une filiale qui vient d'être acquise, et
+dix-huit est sous le seuil — donc zéro trace, pour un compte dont `GET /api/export` rend
+403. Un **compteur cumulé par appelant** le referme. ⚠️ Il est **en mémoire**, et le coût
+est écrit plutôt que caché : un redémarrage le remet à zéro — le porter en base exigerait
+d'ouvrir `sessions` à toute transaction, c'est-à-dire de rouvrir la condition **E1**.
+
+#### Les garde-fous ÉPROUVENT, au lieu de reconnaître un mot — migrations `028` à `030`
+
+Cinq constats — **Q-291, Q-292, Q-295, Q-297, Q-299** — étaient la même faute prise sous
+cinq angles : *un garde qui reconnaît au lieu de mesurer, ou une liste écrite à la main
+dont l'incomplétude réussit en silence*. La mesure qui condamne, jouée par l'auditeur :
+
+```sql
+check (confidentialite in ('public','interne','confidentiel','restreint') or true)
+→ f_verifier_classification_documents() : 0 anomalie
+→ f_verifier_schema()                   : 0 anomalie
+→ insert … confidentialite = 'diffusion libre'  : ACCEPTÉ
+```
+
+C'est **le constat Q-281 rouvert par les gardes écrits pour le fermer**.
+
+- **`f_contrainte_accepte()`** (`028`) **évalue le prédicat réel** — `pg_get_expr` sur une
+  ligne construite par `jsonb_populate_record` — et rend ce que la base répondrait.
+  **`f_verifier_contraintes_eprouvees()`** lui soumet **dix-neuf lignes témoins** sur six
+  contraintes qui portent une barrière. ⚠️ Les cinq gardes qui lisent le TEXTE restent :
+  ils attrapent les mutations franches et les attrapent bien. Celui-ci attrape celle qu'ils
+  laissaient tous passer. *Un garde qui envoie et constate ne peut pas être trompé par un
+  « or true ».*
+- **Q-291** — la migration `026` écrivait **deux fois** que le rôle applicatif n'avait que
+  `select` sur `colonnes_personnelles`, et ce rôle pouvait **vider le registre de l'article
+  30 du produit**, sous un `f_verifier_schema()` au vert. Le `revoke` est posé ; et le
+  remède de classe est **`f_verifier_registres_techniques()`**, qui part du **catalogue** —
+  toute table sans `filiale_id` doit être rangée « registre » ou « écrite par
+  l'application » — au lieu de la liste `v_registres` qui vieillissait sans bruit. *Une
+  migration avait AFFIRMÉ une propriété au lieu de la POSER.*
+- **Q-295** — le balayage du registre est **renversé**, comme `f_verifier_couverture_rls()`
+  l'avait été au constat Q-5 : **toute** colonne textuelle est candidate. Le semis passe de
+  **58 à 197 décisions**, en quatre familles — vocabulaire clos ; saisie libre dont le sujet
+  est un objet, régime **`signaler`** ; attribut d'une personne morale ; donnée personnelle.
+- **Q-296** — « colonne textuelle » ne se dit plus qu'à un endroit
+  (`f_colonnes_textuelles()`). ⚠️ **Et le défaut était plus large que le constat** :
+  `format_type()` rend « character varying(**120**) » pour une colonne bornée, si bien
+  qu'`in ('text','character varying')` ne voyait **aucun** `varchar(n)`. Aucune des trois
+  moitiés du dispositif ne l'aurait vu. Trouvé en **fabriquant la matière** — le banc était
+  vert des deux côtés du correctif.
+- **Q-297** — la compagne de portée doit protéger **la même colonne** ; **Q-299** — le
+  verrou d'approbation **découvre** ses colonnes (`to_jsonb(new) - <ce qui a le droit de
+  bouger>`), si bien qu'une colonne ajoutée demain est protégée d'office ; **Q-300** — le
+  registre impose la **cohérence de type**, une déclaration booléenne avortant la purge de
+  toutes les filiales.
+
+#### Un document local relève enfin du traitement que le Groupe opère pour lui
+
+**Q-294.** La règle de la `027` était **symétrique** ; le danger ne l'est pas. Le produit
+servait le traitement de Groupe, l'**offrait** dans le formulaire, et le **refusait en
+409** — en disant à l'utilisateur que l'élément « n'existe pas dans votre périmètre » alors
+qu'il était affiché sous ses yeux. **Dix-neuf filiales ne pouvaient rattacher aucune de
+leurs procédures au traitement que le Groupe opère pour elles.**
+
+C'est **l'arbitrage** qui a été corrigé, pas l'écran (migration `030`). Le sens inverse —
+document de portée Groupe vers traitement local — reste **fermé** : c'est le constat N-10.
+« Même filiale **OU** cible de portée Groupe » n'étant pas une clé étrangère mais une
+**disjonction**, la filiale visée est matérialisée dans une colonne **posée par un
+déclencheur** — jamais crue sur parole, ce serait un oracle d'existence — et deux clés
+composites plus deux `check` font le reste.
+
+#### Le circuit d'approbation d'un document qu'on vient de créer — Q-303
+
+Le serveur réattribue l'identifiant à la création ; l'encart interrogeait le serveur avec
+l'identifiant provisoire du navigateur, recevait 404, et affichait *« Cet enregistrement
+est introuvable. Il a peut-être été supprimé, ou **il appartient à une autre filiale** »*
+sur un document créé dans sa propre filiale. Le geste nominal ne se terminait pas sans
+rechargement, et le produit mentait **sur le cloisonnement**.
+
+⚠️ **Le correctif évident ne suffisait pas.** Inverser la préséance dans `brancherEncart`
+était nécessaire et insuffisant : à la création, l'attribut du conteneur est écrit depuis
+le *même* identifiant local, et l'encart a déjà reçu son 404 quand le recalage le réécrit.
+`js/core/sync.js` **annonce** désormais le recalage (`grc:identifiant-recale`), et
+`approbations.js` s'y rebranche. *Le défaut ne vivait dans aucun fichier : le recalage avait
+raison, l'encart avait raison, et personne ne les présentait l'un à l'autre.*
+
+#### Le banc rattrape ce qu'il ne regardait pas
+
+- **Q-304** — les sept bornes de `BORNES`, remède du constat Q-214 d, n'étaient mordues par
+  **aucun** essai : `elementsParLiaison` porté de 1 000 à 100 000 000 laissait **53 essais
+  verts**. `test/api/bornes.test.mjs` les éprouve, en **lisant les bornes** au lieu d'en
+  recopier les valeurs. ⚠️ **Et un plafond de matière a été posé après l'avoir payé** : la
+  première rédaction fabriquait `borne + 1` éléments et, contre cette mutation-là, **s'est
+  figée au lieu de rougir** — leçon du constat Q-251. Elle rend désormais rouge en 1,2 ms.
+- **Q-305** — l'échappement de l'étiquette n'était **jamais décidé** : la famille n'employait
+  que des valeurs inoffensives. L'essai sème désormais la valeur hostile **par la base** et
+  exige zéro exécution, zéro balise interprétée, **et la valeur affichée telle quelle**.
+- **Q-306** — le composant à puces avait été réécrit, et son **consommateur préexistant** —
+  les participants d'une revue de direction — n'était mesuré par personne.
+- **Q-293** — le régime `signaler` n'existait **que dans la base** : `crise.notes` le
+  portait, et la purge le traitait en « anomalie », c'est-à-dire en défaut. Le rapport se
+  trompait **dans les deux sens à la fois**. La règle se lit désormais au registre, et
+  `incidents` n'en est plus qu'une conséquence.
+
+#### Deux constats trouvés en travaillant, et ils sont de la même classe
+
+- **Q-310** — `risque_catalogue.id` et `filiale_id` étaient de type `text` **nu**, quand
+  toute autre colonne d'identifiant porte le domaine `id_metier` : la chaîne vide et les
+  identifiants non rognés y entraient. C'est **mot pour mot le constat Q-194**, sur la table
+  que la même migration `012` avait créée — la correction avait porté sur l'instance, pas
+  sur la classe. Un garde de classe l'empêche de revenir.
+- **Q-311** — le garde-fou du §29.5 (« aucun `resume:` n'interpole une valeur ») examinait
+  **une ligne à la fois**, et le produit écrivait son interpolation sur la ligne *suivante*,
+  dans une ternaire : le contrôle était vert depuis le 7ᵉ passage. *Un garde qui se
+  contourne par un retour à la ligne ne tient pas une règle, il tient une mise en forme.*
+
+#### Ce qui a été ARBITRÉ et NON fermé, parce que le dire vaut mieux
+
+- **Q-307** — la route du registre produit **laisse désormais une trace**, et c'est tout :
+  le droit d'accès n'est pas resserré et le registre n'est pas amputé de ses colonnes
+  d'authentification. L'amputer serait Q-295 rouvert, et un DPO a le droit de savoir que
+  l'outil détient une empreinte de mot de passe.
+- **Q-309** confirme **Q-286** au lieu de le contredire : le limiteur de rythme par session
+  se fait **en une fois pour toutes les routes coûteuses**, jamais route par route.
+- **Q-301** — ⚠️ **les entrées déjà écrites ne s'effacent pas.** C'est le dessein du journal,
+  et c'est ce qui rend ce défaut bloquant. La seule chose qu'un registre inaltérable
+  autorise est une **contre-déclaration datée** inscrite à côté : elle est proposée à
+  l'utilisateur, elle n'est pas posée d'office.
+
 ### RGPD — le logiciel qui gère la conformité devient lui-même conforme
 
 Demandé le 10/09/2026, et le motif vaut d'être cité : *« je ne peux pas proposer un

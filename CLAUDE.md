@@ -55,7 +55,7 @@
 > | **S5** | V4 — L4, L6 | 1 | ❌ refusée — 13 constats |
 > | **S6** | V6 — L10, L12, L13 | 1 | ❌ refusée — 12 constats |
 > | **S7** | V7 — L11, L14 | **1** | ❌ **refusée le 09/09/2026 — 27 constats, 7 bloquants, 0 fuite** |
-> | **S8** | V8 — L15 | **8** | ❌ **refusée le 11/09/2026 — 1 bloquant, 11 majeurs, 7 mineurs, 0 fuite ; 5 contrôles sur 18 en échec** |
+> | **S8** | V8 — L15 | **8** | ❌ **refusée le 11/09/2026 — 1 bloquant, 11 majeurs, 7 mineurs, 0 fuite ; 5 contrôles sur 18 en échec.** ✅ **Les 19 constats traités le 11/09** (Q-309 clos par arbitrage) — **9ᵉ passage dû** |
 >
 > **Le 6ᵉ passage de S8 est le meilleur du chantier** — 0 bloquant, 4 majeurs, 8 mineurs,
 > **0 fuite entre filiales**, banc **1 747 essais, 1 747 passés** — mais *refusé reste
@@ -65,6 +65,54 @@
 > ---
 >
 > ## ▶▶ REPRENDRE ICI — l'état au 08/09/2026 au soir
+>
+> ## ▶▶▶ CE QUI A ÉTÉ FAIT LE 11/09/2026 AU SOIR, ET QUI EST NEUF
+>
+> **Les dix-neuf constats du 8ᵉ passage de la porte S8 sont TRAITÉS** — Q-309 excepté, clos
+> par arbitrage (il **confirme** Q-286 : le limiteur de rythme se fait en une fois pour
+> toutes les routes coûteuses, jamais route par route). Trois migrations, **`028` à `030`**.
+>
+> ⚠️ **La leçon du passage n'était pas dans le produit, elle était dans le DISPOSITIF** —
+> *sur 41 mutations, 14 ne mordaient pas, et treize visaient des gardes posés dans les trois
+> jours précédents.* Elle est désormais une règle : **`backend/db/CONVENTIONS.md` §39**.
+>
+> 1. **🛑 Q-301 — le journal inscrivait de fausses accusations, indélébiles trois ans.**
+>    `GET /api/rafraichir` comptait l'**inventaire de la filiale** et non ce qui sort : une
+>    SPA ouverte **sans un geste** écrivait « Extraction du jeu de données (30 lignes
+>    rendues) » à côté de `collections: 0`, ≈ 3 750 fois par jour et par onglet. Une
+>    variable. ⚠️ **Et l'essai qui prétendait le couvrir ne pouvait pas le voir** : il semait
+>    trente lignes fraîches, si bien que l'inventaire et le delta valaient tous deux trente.
+>    C'est **un sondage AU REPOS qui n'écrit RIEN** qui mord.
+> 2. **Un garde-fou ÉPROUVE.** `f_contrainte_accepte()` **évalue le prédicat réel** d'une
+>    contrainte sur des lignes témoins ; `f_verifier_contraintes_eprouvees()` en soumet
+>    dix-neuf. La mutation qui faisait tomber cinq gardes — `… or true` en gardant le nom et
+>    les quatre littéraux — est vue. ⚠️ Les gardes textuels **restent** : ils nomment *quel*
+>    niveau a disparu, là où l'évaluation dit seulement « cette ligne passe ».
+> 3. **Le balayage part du CATALOGUE, jamais de la liste.** Trois gardes neufs le font :
+>    `f_verifier_registres_techniques()` (toute table sans `filiale_id` est **rangée**),
+>    `f_verifier_domaine_identifiants()`, `f_verifier_domaines_textuels()`. Et le registre
+>    RGPD est **renversé** : toute colonne textuelle est candidate, **58 → 197 décisions**.
+> 4. **Q-294 — dix-neuf filiales ne pouvaient rattacher aucune procédure au traitement que
+>    le Groupe opère pour elles.** C'est l'**arbitrage** qui a été corrigé, pas l'écran : le
+>    sens *local → Groupe* est ouvert, le sens inverse reste fermé (constat N-10).
+> 5. **Q-303 — le produit affirmait, SUR LE CLOISONNEMENT, qu'un document qu'on venait de
+>    créer « appartient à une autre filiale ».** ⚠️ **Le correctif évident ne suffisait
+>    pas** : `js/core/sync.js` **annonce** désormais le recalage d'identifiant, et l'encart
+>    d'approbation s'y rebranche. *Le défaut ne vivait dans aucun fichier.*
+> 6. **⚠️ DEUX CONSTATS TROUVÉS EN TRAVAILLANT, ET LES DEUX SONT « ON A CORRIGÉ L'INSTANCE,
+>    PAS LA CLASSE »** : **Q-310** — `risque_catalogue.id` et `filiale_id` étaient en `text`
+>    nu et acceptaient la chaîne vide, c'est **mot pour mot Q-194** sur la table que la même
+>    migration `012` avait créée ; **Q-311** — le garde du §29.5 examinait **une ligne à la
+>    fois**, et le produit interpolait sur la ligne suivante, dans une ternaire.
+> 7. **Le banc rattrape ce qu'il ne regardait pas** : les sept `BORNES` (Q-304),
+>    l'échappement d'une étiquette **décidé** par l'essai (Q-305), le consommateur
+>    préexistant du champ à puces (Q-306). ⚠️ **Un essai doit ROUGIR, jamais se figer** :
+>    la première rédaction de l'essai des bornes fabriquait `borne + 1` éléments et, contre
+>    la mutation `1000 → 100 000 000`, **s'est figée**. Plafond de matière posé — leçon Q-251.
+>
+> **Le prochain geste : le 9ᵉ passage de la porte S8**, par des auditeurs indépendants.
+>
+> ---
 >
 > **Mesuré à la révision `99ea754`** : banc **1 794 essais, 1 794 passés** ;
 > `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
@@ -148,7 +196,8 @@
 > | ~~2~~ | ~~**Rejouer S8 — 7ᵉ passage**~~ | ✅ **JOUÉ le 10/09/2026, et REFUSÉ** — 0 bloquant, 6 majeurs, 6 mineurs, **0 fuite entre filiales**, 3 contrôles sur 18 en échec. ⚠️ **Sur 12 mutations, 3 ne mordent pas — et les trois sont des gardes posés la veille.** Constats **Q-279 → Q-290** |
 > | ~~2~~ | ~~**Les 6 majeurs de S8**~~ | ✅ **TRAITÉS les 10 et 11/09/2026.** ~~Q-279~~ (la trace suit le volume rendu), ~~Q-280~~ (voie 1 fermée, voie 2 **réfutée** avec sa mesure), ~~Q-281~~ (migration `021`, les gardes mesurent `tgtype`), ~~Q-282~~ (`022`, le relais de version vit dans la base), ~~Q-283~~ (deux discriminants qui ne sont pas la taille), ~~**Q-284**~~ **fermé le 11/09** — pas par le remède qu'il prescrivait, **mesuré impossible**, mais en DISTINGUANT : l'indélébile est la décision, pas le nom |
 > | ~~2~~ | ~~**Rejouer S8 — 8ᵉ passage**~~ | ✅ **JOUÉ le 11/09/2026, et REFUSÉ** — **deux auditeurs indépendants**, périmètres exclusifs. **1 bloquant, 11 majeurs, 7 mineurs, 0 fuite entre filiales**, constats **Q-291 → Q-309**, **cinq contrôles sur dix-huit en échec**. ⚠️ **Sur 41 mutations, 14 ne mordent pas — et treize visent des gardes posés dans les trois jours précédents.** Le bloquant **Q-301** est le correctif de Q-279, accepté au passage d'avant : il trace **l'inventaire de la filiale** au lieu de ce qui sort, et inscrit de **fausses accusations d'extraction dans le journal inaltérable** |
-> | **2** | **Le bloquant Q-301, puis les onze majeurs** | Q-301 se ferme en une ligne — compter `charge.modifications` et non `charge.volumes`. ⚠️ **Les entrées déjà écrites ne s'effacent pas** : c'est le dessein du journal, et c'est ce qui rend ce défaut bloquant. Ensuite **Q-291 · Q-292 · Q-295 · Q-297 · Q-299** ont **un seul et même remède** — cesser de reconnaître un mot pour mesurer un sens |
+> | ~~2~~ | ~~**Le bloquant Q-301, puis les dix-huit autres constats de S8**~~ | ✅ **TRAITÉS le 11/09/2026 — les dix-neuf, sauf Q-309 qui est clos par arbitrage.** Migrations **`028`, `029`, `030`** ; quatre garde-fous neufs ; le semis du registre RGPD passe de **58 à 197 décisions** ; **trois familles d'essais neuves ou étendues**. ⚠️ **Le remède commun des cinq est écrit en règle** : `CONVENTIONS.md` **§39** — *un garde-fou ÉPROUVE, il ne reconnaît pas un mot*, et **le balayage part du CATALOGUE, jamais de la liste**. ⚠️ **Deux constats de plus trouvés en travaillant**, tous deux de la classe « on a corrigé l'instance, pas la classe » : **Q-310** (`risque_catalogue.id` en `text` nu — Q-194 rejoué sur la table que la même migration avait créée) et **Q-311** (le garde du §29.5 examinait **une ligne à la fois**, et le produit interpolait sur la suivante) |
+> | **2** | **Rejouer S8 — 9ᵉ passage** | Par des **auditeurs indépendants**, périmètres exclusifs. ⚠️ **Trois passages de suite ont trouvé leur bloquant dans un correctif accepté au passage d'avant** : Q-208 deux fois, Q-301 une fois. *Un banc vert ne vaut pas un passage de porte* |
 > | **3** | Le reste des constats de **S7** (Q-254, Q-256 → Q-263, Q-268 → Q-278) | ⚠️ **Deux se ferment ENSEMBLE avec un constat plus ancien** : **Q-272** promet dans le guide la propriété que **Q-243** dit absente — la troncature de queue du journal. Corriger un seul des deux endroits laisserait le produit se contredire |
 > | **3** | Les constats ouverts : **Q-243, Q-247, Q-234 → Q-244, Q-205 b, Q-206, Q-214 b·c·d·f** | Registre au `docs/PLAN_EXECUTION.md` §7, **seule source** |
 >

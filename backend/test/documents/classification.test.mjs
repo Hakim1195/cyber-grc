@@ -223,19 +223,58 @@ describe('§2 — les étiquettes', () => {
     assert.match(erreur.message, /ne classe rien/u);
   });
 
-  test('LA MORSURE : sans le déclencheur, la variante de casse passerait', async () => {
-    // Contrôle de morsure — on retire la propriété, on vérifie que l'essai tombe.
-    //
-    // ⚠️ **Dans une transaction ANNULÉE, et sur la MÊME connexion.** Le constat
-    // Q-281 a été payé par une restauration écrite à la main qui a laissé un
-    // déclencheur désarmé ; un `rollback` ne peut rien laisser derrière lui. La
-    // contrepartie est que l'écriture se fait ici sous le compte PROPRIÉTAIRE —
-    // ce qui ne change rien au sujet mesuré : la RLS est FORCÉE, propriétaire
-    // compris, et le déclencheur est armé « always » précisément pour lui.
-    const vu = await base.avecPerimetre(
-      proprietaire,
-      perimetre('essai-027-morsure', FILIALE_A, [FILIALE_A]),
-      async (c) => {
+  test('UNE MODIFICATION vers la variante de casse est refusée AUSSI — Q-298', async () => {
+    /* ══ LE CHEMIN QUE LE GARDE MESURAIT EXACTEMENT, ET QU'IL NE COUVRAIT PAS ══
+     *
+     * `trg_document_etiquettes_normalise` était `before insert` SEUL, et
+     * `f_verifier_classification_documents()` vérifiait exactement `(tgtype & 4)`
+     * — c'est-à-dire qu'il mesurait le chemin couvert et pas celui qui ne l'était
+     * pas. Mesuré par l'auditeur du 8ᵉ passage :
+     *
+     *     insérer la variante de casse   → REFUS
+     *     MODIFIER vers la variante      → « RGPD » et « rgpd » coexistent
+     *
+     * « Un filtre qui perd des lignes en silence est pire que pas de filtre » —
+     * le commentaire de la `027`, pris en défaut par le chemin qu'elle n'avait
+     * pas armé. */
+    const erreur = await erreurAttendue(
+      dansA(async (c) => {
+        await c.query(
+          `insert into document_etiquettes (document_id, etiquette, filiale_id)
+               values ('DOC-A', 'AUDIT', $1), ('DOC-A', 'revue', $1)`,
+          [FILIALE_A],
+        );
+        await c.query(
+          `update document_etiquettes set etiquette = 'audit'
+            where document_id = 'DOC-A' and etiquette = 'revue'`,
+        );
+      }),
+    );
+    assert.equal(erreur.code, '23505');
+  });
+
+  test('LA MORSURE : il faut casser LES DEUX barrières pour que la casse passe', async () => {
+    /* ══ DEUX REMÈDES, ET ILS NE FONT PAS DOUBLE EMPLOI — Q-298 ════════════════
+     *
+     * Avant la `030`, la propriété ne tenait qu'au DÉCLENCHEUR : le désarmer
+     * suffisait, et l'essai le mesurait ainsi. Elle tient désormais aussi par un
+     * INDEX UNIQUE sur `(filiale_id, document_id, lower(etiquette))`, c'est-à-dire
+     * **par la forme et non par une procédure** : un index survit à un déclencheur
+     * désarmé, à une migration, à `psql`. *Une route ne voit que son chemin ; il y
+     * en a toujours un de plus.*
+     *
+     * Ce contrôle le mesure en trois temps : le déclencheur seul retiré ne suffit
+     * plus, les deux retirés laissent entrer, et le garde-fou NOMME les deux
+     * manques.
+     *
+     * ⚠️ **Dans une transaction ANNULÉE, et sur la MÊME connexion.** Le constat
+     * Q-281 a été payé par une restauration écrite à la main qui a laissé un
+     * déclencheur désarmé ; un `rollback` ne peut rien laisser derrière lui. */
+    const perimetreMutation = perimetre('essai-027-morsure', FILIALE_A, [FILIALE_A]);
+
+    // 1. Le déclencheur seul désarmé : l'INDEX tient encore.
+    const erreur = await erreurAttendue(
+      base.avecPerimetre(proprietaire, perimetreMutation, async (c) => {
         await c.query(
           'alter table document_etiquettes disable trigger trg_document_etiquettes_normalise',
         );
@@ -244,33 +283,50 @@ describe('§2 — les étiquettes', () => {
                values ('DOC-A', 'MUTATION', $1), ('DOC-A', 'mutation', $1)`,
           [FILIALE_A],
         );
-        return {
-          passees: (
-            await c.query(
-              `select count(*)::int as n from document_etiquettes
-                where document_id = 'DOC-A' and lower(etiquette) = 'mutation'`,
-            )
-          ).rows[0].n,
-          // Et le garde-fou du schéma le DIT, au lieu de laisser la barrière
-          // morte sous un verdict vert (constat Q-281).
-          anomalies: (
-            await c.query('select objet, anomalie from f_verifier_classification_documents()')
-          ).rows,
-        };
-      },
+      }),
     );
+    assert.equal(
+      erreur.code,
+      '23505',
+      'Le déclencheur désarmé, l’index unique doit tenir seul : c’est toute la raison de ' +
+        'sa présence (constat Q-298).',
+    );
+
+    // 2. Les deux retirés : les variantes entrent, et le garde NOMME les deux manques.
+    const vu = await base.avecPerimetre(proprietaire, perimetreMutation, async (c) => {
+      await c.query(
+        'alter table document_etiquettes disable trigger trg_document_etiquettes_normalise',
+      );
+      await c.query('drop index uq_document_etiquettes_casse');
+      await c.query(
+        `insert into document_etiquettes (document_id, etiquette, filiale_id)
+             values ('DOC-A', 'MUTATION', $1), ('DOC-A', 'mutation', $1)`,
+        [FILIALE_A],
+      );
+      return {
+        passees: (
+          await c.query(
+            `select count(*)::int as n from document_etiquettes
+              where document_id = 'DOC-A' and lower(etiquette) = 'mutation'`,
+          )
+        ).rows[0].n,
+        // Et le garde-fou du schéma le DIT, au lieu de laisser les barrières
+        // mortes sous un verdict vert (constat Q-281).
+        anomalies: (
+          await c.query(
+            'select anomalie from f_verifier_classification_documents() order by 1',
+          )
+        ).rows.map((l) => l.anomalie),
+      };
+    });
 
     assert.equal(
       vu.passees,
       2,
-      'Le déclencheur désarmé, les deux variantes entrent : la propriété vient bien de lui.',
+      'Les deux barrières retirées, les deux variantes entrent : la propriété vient bien ' +
+        'd’elles.',
     );
-    assert.deepEqual(vu.anomalies, [
-      {
-        objet: 'document_etiquettes.trg_document_etiquettes_normalise',
-        anomalie: 'normalisation_non_armee',
-      },
-    ]);
+    assert.deepEqual(vu.anomalies, ['normalisation_non_armee', 'unicite_casse_absente']);
     assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_schema()'), []);
   });
 });
@@ -302,26 +358,123 @@ describe('§3 — documents.traitement_id', () => {
     // Le rayon du constat N-10, à son maximum : la filiale propriétaire du
     // traitement local pourrait ensuite l'effacer, et le socle commun des vingt
     // filiales perdrait son rattachement sans que personne l'ait décidé.
+    //
+    // ⚠️ **Depuis la migration `030`, c'est `ck_documents_traitement_groupe` (23514)
+    // qui refuse, et non plus la clé de portée (23503).** La propriété est la même ;
+    // la barrière a changé de nature parce que la règle a cessé d'être symétrique —
+    // constat **Q-294**, voir le contrôle suivant. Ce qui est éprouvé ici est le
+    // REFUS, pas le numéro de la contrainte qui le prononce.
     const erreur = await erreurAttendue(
       auGroupe(async (c) => {
         await c.query("update documents set traitement_id = 'TRT-A' where id = 'DOC-G'");
       }),
     );
-    assert.equal(erreur.code, '23503');
-    assert.match(erreur.constraint ?? '', /fk_documents_traitement_portee/u);
+    assert.equal(erreur.code, '23514');
+    assert.match(erreur.constraint ?? '', /ck_documents_traitement_groupe/u);
+  });
+
+  test('MAIS UN DOCUMENT LOCAL RELÈVE D’UN TRAITEMENT DE GROUPE — Q-294', async () => {
+    /* ══ LE SENS QU'ON OUVRE, ET POURQUOI ═══════════════════════════════════
+     *
+     * La règle de la `027` était SYMÉTRIQUE ; le danger ne l'est pas. Un
+     * traitement de portée Groupe n'est effaçable que par l'administration
+     * Groupe, jamais par la filiale qui le désigne : le rattachement d'un
+     * document LOCAL à ce traitement ne peut donc pas se vider sous les pieds
+     * de qui que ce soit.
+     *
+     * Mesuré par l'auditeur du 8ᵉ passage : le produit SERVAIT le traitement de
+     * Groupe, l'OFFRAIT dans le `<select>` de la fiche, et le REFUSAIT en 409 —
+     * en disant à l'utilisateur que l'élément « n'existe pas dans votre
+     * périmètre » alors qu'il était affiché sous ses yeux. Dix-neuf filiales ne
+     * pouvaient rattacher aucune de leurs procédures au traitement que le Groupe
+     * opère pour elles. */
+    const vu = await dansA(async (c) => {
+      await c.query("update documents set traitement_id = 'TRT-G' where id = 'DOC-A'");
+      const { rows } = await c.query(
+        `select traitement_id, traitement_filiale_id, traitement_portee_groupe
+           from documents where id = 'DOC-A'`,
+      );
+      return rows[0];
+    });
+    assert.equal(vu.traitement_id, 'TRT-G');
+    assert.equal(
+      vu.traitement_filiale_id,
+      null,
+      'Le déclencheur doit POSER la filiale du traitement visé — nulle pour un traitement ' +
+        'de portée Groupe. C’est elle qui permet aux deux clés de tenir une règle qui est ' +
+        'une DISJONCTION, et qu’aucune clé étrangère ne saurait exprimer seule.',
+    );
+    assert.equal(vu.traitement_portee_groupe, true);
   });
 
   test('UN DOCUMENT LOCAL NE POINTE PAS VERS LE TRAITEMENT D’UNE AUTRE FILIALE', async () => {
-    // Ici c'est la clé de COHÉRENCE qui parle — et elle parle parce que les deux
-    // filiale_id sont renseignés. ⚠️ Le contrôle d'intégrité référentielle de
-    // PostgreSQL contourne délibérément la RLS : la ligne allemande est invisible,
-    // et la clé la voit quand même. C'est précisément ce qu'on veut.
+    /* ⚠️ Le sens ouvert par Q-294 est « local → GROUPE », jamais « local → une
+       AUTRE filiale ». Depuis la `030`, **deux barrières le refusent, et laquelle
+       parle dépend de ce que l'appelant VOIT** :
+
+        · si le traitement allemand n'est pas dans le périmètre de LECTURE, le
+          déclencheur ne le trouve pas et rend `GRC07` — sans distinguer « il
+          n'existe pas » de « il ne vous est pas visible », ce qui est voulu : la
+          distinction serait l'oracle d'existence que le produit ferme depuis la
+          porte S2 ;
+        · s'il est lisible — c'est le cas ici, `dansA` lit les deux filiales —,
+          le déclencheur pose `traitement_filiale_id = FIL-B` et c'est
+          `ck_documents_traitement_filiale` qui refuse en `23514`.
+
+       Ce qui est éprouvé est le REFUS ; les deux chemins sont mesurés, et aucun
+       ne laisse passer. */
     const erreur = await erreurAttendue(
       dansA(async (c) => {
         await c.query("update documents set traitement_id = 'TRT-B' where id = 'DOC-A'");
       }),
     );
-    assert.equal(erreur.code, '23503');
+    assert.equal(erreur.code, '23514');
+    assert.match(erreur.constraint ?? '', /ck_documents_traitement_filiale/u);
+  });
+
+  test('… et le traitement d’une autre filiale INVISIBLE rend GRC07, sans oracle', async () => {
+    /* L'autre moitié du contrôle précédent : depuis un périmètre qui ne lit que
+       Toulouse, le traitement allemand n'est pas trouvé, et le refus ne dit pas
+       s'il existe. */
+    const erreur = await erreurAttendue(
+      base.avecPerimetre(
+        applicatif,
+        perimetre('essai-q294-aveugle', FILIALE_A, [FILIALE_A]),
+        async (c) => {
+          await c.query("update documents set traitement_id = 'TRT-B' where id = 'DOC-A'");
+        },
+      ),
+    );
+    assert.equal(erreur.code, 'GRC07');
+    assert.equal(
+      /FIL|filiale/iu.test(erreur.message.replace('votre périmètre', '')),
+      false,
+      'Le refus ne doit nommer aucune filiale : ce serait dire à Toulouse que ce ' +
+        'traitement existe ailleurs.',
+    );
+  });
+
+  test('LE DÉCLENCHEUR ÉCRASE CE QUE LE CLIENT AURAIT ENVOYÉ', async () => {
+    /* `traitement_filiale_id` est une valeur DÉRIVÉE D'UNE AUTRE LIGNE. La croire
+       sur parole rouvrirait un oracle d'existence inter-filiales : il suffirait
+       d'envoyer la filiale qui arrange pour satisfaire la clé de cohérence. */
+    const vu = await dansA(async (c) => {
+      await c.query(
+        `update documents set traitement_id = 'TRT-G', traitement_filiale_id = $1
+          where id = 'DOC-A'`,
+        [FILIALE_A],
+      );
+      const { rows } = await c.query(
+        "select traitement_filiale_id from documents where id = 'DOC-A'",
+      );
+      return rows[0];
+    });
+    assert.equal(
+      vu.traitement_filiale_id,
+      null,
+      'Le périmètre vient du serveur, et cela vaut aussi pour une valeur dérivée d’une ' +
+        'autre ligne (PLAN_SERVEUR §2.4).',
+    );
   });
 
   test('UN TRAITEMENT RATTACHÉ NE S’EFFACE PAS EN SILENCE (restrict)', async () => {

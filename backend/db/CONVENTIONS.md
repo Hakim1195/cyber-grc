@@ -2585,3 +2585,106 @@ Le déliage se fait donc **dans la couche applicative, à la filiale près**, la
 porte S1 pour `mesure_catalogue` (§17.6). Fabriquer une colonne de portée **non**
 engendrée pour contourner serait ajouter un endroit de plus où se tromper : le §2 de la
 migration `012` le refuse déjà, pour la même raison.
+
+---
+
+## §39 — Un garde-fou ÉPROUVE. Il ne reconnaît pas un mot.
+
+> **Posé le 11/09/2026**, après le 8ᵉ passage de la porte S8. Cinq constats —
+> **Q-291, Q-292, Q-295, Q-297, Q-299** — étaient la même faute sous cinq angles, et
+> **quatorze mutations sur quarante et une ne mordaient pas**, dont treize sur des gardes
+> écrits dans les trois jours précédents.
+
+### 39.1 La règle
+
+**Un garde-fou de schéma ne compare jamais du texte à du texte.** Il mesure ce que la base
+FERAIT. Deux formes, selon l'objet :
+
+| Objet | Ce qu'on ne fait plus | Ce qu'on fait |
+|---|---|---|
+| une contrainte `check` | chercher une sous-chaîne dans `pg_get_constraintdef()` | `f_contrainte_accepte(table, contrainte, valeurs)` : **évaluer le prédicat** sur une ligne témoin |
+| un domaine | extraire ses valeurs par expression régulière | `f_domaine_accepte(domaine, valeur)` : **tenter la conversion** et constater |
+| un privilège | l'affirmer dans un commentaire de migration | `has_table_privilege()`, comparé au catalogue |
+| l'ensemble des colonnes d'une table | en énumérer une liste | `to_jsonb(new) - <ce qui a le droit de bouger>`, qui couvre d'office ce qui sera ajouté demain |
+
+**La mesure qui a posé cette règle**, jouée par l'auditeur sur une base jetable :
+
+```sql
+alter table documents drop constraint ck_documents_confidentialite;
+alter table documents add  constraint ck_documents_confidentialite
+  check (confidentialite in ('public','interne','confidentiel','restreint') or true);
+select count(*) from f_verifier_schema();                    -- → 0
+update documents set confidentialite = 'diffusion libre';    -- → ACCEPTÉ
+```
+
+Le nom est le bon, les quatre littéraux sont cités, `position()` est satisfaite — et la
+barrière est morte. **C'est le constat Q-281 rouvert par les gardes écrits pour le fermer**,
+et le commentaire de l'un d'eux cite Q-283 en promettant de mesurer le contenu.
+
+⚠️ **Un garde qui reconnaît est contournable par qui le lit**, et c'est le seul cas qui
+compte pour une barrière. À décharge, et il faut le dire : les mutations **franches** —
+contrainte supprimée, colonne rendue nullable, type changé, déclencheur déplacé — étaient
+toutes attrapées. Les gardes textuels ne sont donc **pas retirés** : ils nomment
+précisément *quel* niveau a disparu, là où l'évaluation dit seulement « cette ligne passe ».
+Les deux se complètent ; c'est l'évaluation qui manquait.
+
+### 39.2 Les deux sens, toujours
+
+Un garde qui ne dit que « c'est trop ouvert » laisse passer le correctif qui **casse le
+produit pour le sécuriser** — contrôle **S18** de la grille. Toute table de témoins porte
+donc les deux :
+
+- une valeur interdite qui doit être **refusée** (`'diffusion libre'`, une pièce en `ecart`
+  marquée « en vigueur », une action hors du vocabulaire du journal) ;
+- une valeur légitime qui doit être **acceptée** (les quatre niveaux, « en validation »,
+  une pièce conforme qui fait foi).
+
+Et « je n'ai pas pu mesurer » ne vaut jamais « c'est bon » : `f_contrainte_accepte()` rend
+`null` quand la contrainte est introuvable ou son prédicat inévaluable, et l'appelant DOIT
+traiter ce cas — c'est exactement le défaut qu'on ferme.
+
+### 39.3 Une liste écrite à la main : le discriminant, une fois pour toutes
+
+Le `CLAUDE.md` §3 donne la règle ; ce qui manquait est **comment la tenir**. Une liste est
+le bon outil quand son incomplétude **échoue bruyamment** — et cela ne se décrète pas, cela
+s'obtient :
+
+> **Le balayage part du CATALOGUE, jamais de la liste.**
+
+`f_verifier_registres_techniques()` ne parcourt pas ses registres : il parcourt les tables
+**dépourvues de `filiale_id`** et exige que chacune soit rangée. `f_verifier_domaine_identifiants()`
+ne parcourt pas ses exceptions : il parcourt les colonnes nommées `id` ou `<x>_id`.
+`f_verifier_colonnes_personnelles()` ne parcourt pas le registre : il parcourt **toutes** les
+colonnes textuelles. Dans les trois cas, la liste ne sert qu'à **taire** ce qu'un humain a
+décidé de taire, et son oubli fait rougir.
+
+⚠️ **L'affirmation circulaire à ne plus écrire.** La migration `026` commentait sa propre
+liste ainsi : *« son incomplétude ÉCHOUE BRUYAMMENT ici même, puisqu'une table qui s'y
+ajoute fait apparaître ses colonnes comme non décidées »*. C'est faux : ce qui faisait
+rougir était l'ajout d'une table **à la liste**. Une table neuve **absente** de la liste ne
+produisait rien. *Écrire qu'une liste échoue bruyamment ne la fait pas échouer bruyamment.*
+
+### 39.4 Et une exclusion se déclare, elle ne se transmet pas
+
+`f_colonnes_textuelles()` écarte les colonnes portant un **domaine** — `id_metier`,
+`code_langue`, `empreinte_sha256` : des formes closes, où nul nom ne peut être saisi en
+prose. C'est juste pour les six domaines qui existent, et **faux en silence** pour un
+domaine neuf qui porterait de la saisie libre. `f_verifier_domaines_textuels()` exige donc
+qu'un domaine textuel neuf soit rangé « technique » ou « saisie libre ».
+
+C'est le renversement du §39.3 **appliqué à sa propre exception** : une exclusion qui ne se
+déclare pas se transmet sans qu'un mot le dise.
+
+### 39.5 Ce que le banc doit faire pour qu'un garde compte
+
+Un garde-fou écrit et non mordu est un commentaire (§18.4) ; un garde-fou **mordu par une
+mutation trop franche** est une fausse assurance. Chaque garde neuf est donc éprouvé par
+**la mutation sournoise**, pas seulement par la mutation évidente — et le banc porte les
+deux, plus un **témoin** qui doit rester silencieux : *un garde qui crie sur la forme juste
+est désarmé au premier agacement.*
+
+⚠️ **Et un essai doit ROUGIR, jamais se figer.** Fabriquer « la borne + 1 » éléments est
+juste tant que la borne est juste : contre une borne relevée d'un facteur cent mille,
+l'essai a tenté cent millions d'insertions et **s'est figé**. Au-delà d'un plafond de
+matière déclaré, l'essai **échoue** en disant que la borne a quitté son ordre de grandeur.
+C'est la leçon du constat Q-251, et elle a dû être payée deux fois.

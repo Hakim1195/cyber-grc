@@ -2290,26 +2290,88 @@ $$;
 --
 -- Le contrôle TENTE, et exige le refus. Il ne compare pas deux déclarations : il envoie
 -- et constate (la leçon du 7ᵉ passage de S2).
+--
+-- ⚠️ **LA BARRIÈRE A CHANGÉ DE NATURE À LA MIGRATION 030 — constat Q-294**, et ce
+-- contrôle attendait `23503`. La règle de la `027` était SYMÉTRIQUE ; le danger ne
+-- l'est pas :
+--
+--   · document GROUPE → traitement LOCAL — c'est le constat N-10, et il reste FERMÉ ;
+--   · document LOCAL → traitement de GROUPE — c'est le cas le plus fréquent, il est
+--     sans danger, et il est désormais OUVERT (voir C110).
+--
+-- Ce que le contrôle exige reste donc le REFUS ; ce qu'il ne peut plus exiger est le
+-- numéro de la contrainte qui le prononce, **parce que deux barrières le prononcent,
+-- et laquelle parle dépend de ce que l'appelant VOIT**. On éprouve donc les deux
+-- chemins, l'un après l'autre — le traitement d'une filiale VISIBLE, et celui d'une
+-- filiale invisible.
 do $$
-declare v_verdict text;
+declare v_visible text; v_invisible text;
 begin
     perform set_config('grc.administration_groupe', 'oui', true);
+
+    -- (a) Le traitement LOCAL d'une filiale que la session VOIT : le déclencheur pose
+    --     sa filiale, et `ck_documents_traitement_groupe` refuse — c'est le N-10.
+    begin
+        update documents set traitement_id = 'TRT-DEMO-M8' where id = 'DOC-DEMO-G';
+        v_visible := 'ACCEPTÉ';
+    exception when others then
+        v_visible := format('refusé (%s)', sqlstate);
+    end;
+
+    -- (b) Le traitement d'une filiale que la session NE VOIT PAS : le déclencheur ne le
+    --     trouve pas, et son refus ne dit pas s'il existe — la distinction serait
+    --     l'oracle d'existence que le produit ferme depuis la porte S2.
     begin
         update documents set traitement_id = 'TRT-DEMO-B' where id = 'DOC-DEMO-G';
-        v_verdict := 'ACCEPTÉ';
-    exception when foreign_key_violation then
-        v_verdict := 'refusé (23503)';
-    when others then
-        v_verdict := format('refusé (%s)', sqlstate);
+        v_invisible := 'ACCEPTÉ';
+    exception when others then
+        v_invisible := format('refusé (%s)', sqlstate);
     end;
+
     perform set_config('grc.administration_groupe', '', true);
 
     perform set_config('demo.resultats',
         (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
         'C108',
-        'Article 30 : la politique du GROUPE ne se rattache pas au traitement LOCAL d''une filiale',
-        'refusé (23503)', v_verdict,
-        case when v_verdict = 'refusé (23503)' then 'OK' else 'ÉCHEC' end)))::text, true);
+        'Article 30 : la politique du GROUPE ne se rattache pas à un traitement LOCAL, '
+        'visible ou non',
+        'les deux refusés',
+        format('%s / %s', v_visible, v_invisible),
+        case when v_visible like 'refusé%' and v_invisible like 'refusé%'
+             then 'OK' else 'ÉCHEC' end)))::text, true);
+end;
+$$;
+
+-- --- Migration 030 : et le sens INVERSE est ouvert, parce qu'il est sans danger -------
+-- Constat **Q-294**. Un traitement de portée Groupe n'est effaçable que par
+-- l'administration Groupe : le rattachement d'un document LOCAL à ce traitement ne peut
+-- pas se vider sous les pieds de sa filiale. Le produit SERVAIT pourtant ce traitement,
+-- l'OFFRAIT dans le formulaire, et le REFUSAIT en 409 — en disant à l'utilisateur que
+-- l'élément « n'existe pas dans votre périmètre » alors qu'il était affiché sous ses yeux.
+--
+-- Ce contrôle-ci exige donc un SUCCÈS : une barrière qui refuse ce qui est légitime est
+-- un défaut d'une autre nature, pas un correctif (contrôle S18 de la grille).
+do $$
+declare v_verdict text;
+begin
+    begin
+        -- Une procédure LOCALE de Toulouse, créée ici et retirée aussitôt : ce contrôle
+        -- ne doit rien laisser derrière lui.
+        insert into documents (id, filiale_id, titre, statut, traitement_id)
+             values ('DOC-DEMO-Q294', 'FIL-DEMO-A', 'Procédure locale de paie', 'brouillon',
+                     'TRT-DEMO-G');
+        v_verdict := 'accepté';
+        delete from documents where id = 'DOC-DEMO-Q294';
+    exception when others then
+        v_verdict := format('refusé (%s)', sqlstate);
+    end;
+
+    perform set_config('demo.resultats',
+        (current_setting('demo.resultats')::jsonb || jsonb_build_array(jsonb_build_array(
+        'C110',
+        'Article 30 : une procédure LOCALE relève du traitement que le Groupe opère pour elle',
+        'accepté', v_verdict,
+        case when v_verdict = 'accepté' then 'OK' else 'ÉCHEC' end)))::text, true);
 end;
 $$;
 

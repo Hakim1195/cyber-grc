@@ -43,12 +43,25 @@
  *
  *  §5 **Le registre du produit se charge par l'écran RGPD**, et il ne sort aucun
  *     nom de personne.
+ *
+ *  §6 **Une étiquette HOSTILE est échappée** — et l'essai le fait DÉCIDER. Constat
+ *     **Q-305** : la famille n'employait que des étiquettes inoffensives (`RH`,
+ *     `Revue 2026`, `Site A`), si bien que retirer `escapeHtml` du seul endroit
+ *     qui rend de la donnée utilisateur laissait **5 essais sur 5 au vert**.
+ *     C'est le motif du constat **Q-210** : *un essai qui couvre une règle sans
+ *     jamais la faire décider ne la couvre pas.*
+ *
+ *  §7 **Le circuit d'approbation d'un document QU'ON VIENT DE CRÉER est visible
+ *     sans recharger** — constat **Q-303**. Le serveur réattribue l'identifiant à
+ *     la création ; l'encart interrogeait le serveur avec l'identifiant provisoire
+ *     du navigateur, recevait 404, et affirmait à l'utilisateur que son propre
+ *     document « appartient à une autre filiale ».
  */
 
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
-import { ouvrirBaseEssai, semerJeuEssai } from '../aide/base.mjs';
+import { FILIALE_A, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
 import {
   attendreApplication,
   attendreQuiescence,
@@ -260,6 +273,140 @@ describe('la classification documentaire, de l’écran à la base et retour', (
     );
     assert.ok(niveaux.length > 0);
     assert.ok(niveaux.every((n) => n === 'Public'));
+  });
+
+  test('§6 — une étiquette HOSTILE est échappée, et l’essai le fait DÉCIDER', async () => {
+    /* ══ CONSTAT Q-305 ═══════════════════════════════════════════════════════
+     *
+     * La base ACCEPTE ces valeurs — mesuré par l'auditeur du 8ᵉ passage :
+     *
+     *     POST /api/entites/documents {"etiquettes":["<img src=x onerror=alert(1)>", …]}
+     *     → 201, les deux étiquettes sont STOCKÉES telles quelles
+     *
+     * C'est délibéré : une étiquette est du texte libre, et la base n'a pas à
+     * décider de ce qu'un rendu HTML en fera. La garantie est donc **entièrement**
+     * du côté de l'écran, et rien ne la mesurait : la famille n'employait que des
+     * étiquettes inoffensives. `escapeHtml` retiré de l'étiquette affichée →
+     * **5 essais sur 5 verts**.
+     *
+     * Ce contrôle sème la valeur hostile PAR LA BASE — la saisie d'écran refuse
+     * la virgule et bornerait la longueur, et ce n'est pas la saisie qu'on
+     * éprouve ici, c'est le RENDU. */
+    const HOSTILE = '<img src=x onerror=window.__xss=1>';
+
+    await base.avecPerimetre(
+      await base.connexion('app'),
+      perimetre('essai-q305', FILIALE_A, [FILIALE_A]),
+      async (c) => {
+        await c.query(
+          `insert into document_etiquettes (document_id, etiquette, filiale_id)
+               values ('DOC-A', $2, $1)
+           on conflict do nothing`,
+          [FILIALE_A, HOSTILE],
+        );
+      },
+      { annuler: false },
+    );
+
+    // On recharge tout : l'étiquette doit traverser /api/donnees puis le rendu.
+    session = await ouvrirApplication();
+    await aller(session.page, '/documents');
+
+    const vu = await session.page.evaluate((hostile) => {
+      const corps = document.getElementById('app');
+      return {
+        // L'ATTAQUE A-T-ELLE PRIS ? C'est la seule question qui compte.
+        injectee: window.__xss === 1,
+        images: corps.querySelectorAll('img[src="x"]').length,
+        // Et la valeur est-elle bien AFFICHÉE, en clair ? Un échappement qui
+        // mange la valeur serait une autre façon de perdre la donnée.
+        affichee: corps.innerText.includes(hostile),
+      };
+    }, HOSTILE);
+
+    assert.equal(vu.injectee, false, 'L’étiquette hostile s’est exécutée dans la page.');
+    assert.equal(vu.images, 0, 'Le balisage de l’étiquette a été INTERPRÉTÉ au lieu d’être rendu.');
+    assert.equal(
+      vu.affichee,
+      true,
+      'L’étiquette doit s’AFFICHER telle quelle : un échappement qui mange la valeur la ' +
+        'perd tout autant, et l’utilisateur ne saurait pas ce qu’il a en base.',
+    );
+
+    // La fiche aussi — c'est un second site de rendu, et la porte S2 a trouvé
+    // deux injections résiduelles dont une dans un `<option>`.
+    await aller(session.page, `/documents/${documentId}`);
+    const surLaFiche = await session.page.evaluate(() => ({
+      injectee: window.__xss === 1,
+      images: document.getElementById('app').querySelectorAll('img[src="x"]').length,
+    }));
+    assert.equal(surLaFiche.injectee, false);
+    assert.equal(surLaFiche.images, 0);
+  });
+
+  test('§7 — le circuit d’un document QU’ON VIENT DE CRÉER est visible sans recharger', async () => {
+    /* ══ CONSTAT Q-303 — ET IL EST BLOQUANT ═══════════════════════════════════
+     *
+     * Le serveur RÉATTRIBUE l'identifiant à la création : proposer le sien est
+     * refusé (oracle d'existence inter-filiales). L'encart d'approbation
+     * interrogeait donc le serveur avec l'identifiant provisoire du navigateur,
+     * recevait 404, et affichait :
+     *
+     *     « Cet enregistrement est introuvable. Il a peut-être été supprimé, ou
+     *       il appartient à une AUTRE FILIALE. »
+     *
+     * Deux défauts, et le second est le pire : le geste nominal — créer une
+     * politique puis engager sa validation — ne se terminait pas sans un
+     * rechargement ; et le produit affirmait à tort, SUR LE CLOISONNEMENT, qu'un
+     * enregistrement créé dans sa propre filiale appartenait à une autre. */
+    await aller(session.page, '/documents');
+    await session.page.click('#addBtn');
+    await session.page.waitForSelector('#save', { timeout: DELAI });
+    await session.page.evaluate(() => {
+      document.getElementById('titre').value = 'Politique créée par l’essai Q-303';
+    });
+    await session.page.click('#save');
+    await attendreQuiescence(session.page, { delai: DELAI });
+    // Le renommage arrive APRÈS la réponse du serveur : on attend que l'encart
+    // soit chargé, sans quoi on mesurerait le « Lecture du circuit… » initial.
+    await session.page.waitForFunction(
+      () =>
+        !(document.getElementById('approbationsEncart')?.innerText ?? '').includes(
+          'Lecture du circuit',
+        ),
+      null,
+      { timeout: DELAI },
+    );
+
+    const vu = await session.page.evaluate(() => {
+      const encart = document.getElementById('approbationsEncart');
+      return {
+        present: encart !== null,
+        idAttribut: encart?.dataset.id ?? null,
+        route: window.location.hash,
+        texte: encart?.innerText ?? '',
+      };
+    });
+
+    assert.equal(vu.present, true, 'L’encart d’approbation doit être sur la fiche.');
+    assert.equal(
+      vu.route.endsWith(vu.idAttribut ?? '—'),
+      true,
+      `Le « data-id » du conteneur (${String(vu.idAttribut)}) doit être celui de la route ` +
+        `(${vu.route}) : c’est le recalage du renommage qui le tient à jour.`,
+    );
+    assert.equal(
+      /introuvable|autre filiale/u.test(vu.texte),
+      false,
+      'Le produit annonce que l’enregistrement qu’on vient de créer est introuvable, ou ' +
+        'qu’il appartient à une AUTRE FILIALE. C’est faux, et c’est faux sur le ' +
+        `cloisonnement (constat Q-303). Encart : « ${vu.texte.slice(0, 200)} »`,
+    );
+    assert.match(
+      vu.texte,
+      /circuit|étape|rédaction/iu,
+      `Le circuit doit être LISIBLE sans rechargement. Encart : « ${vu.texte.slice(0, 200)} »`,
+    );
   });
 
   test('§5 — l’écran RGPD charge le registre de l’outil, et n’en sort aucun nom', async () => {

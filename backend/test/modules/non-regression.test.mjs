@@ -590,3 +590,138 @@ describe('Les écrans sans fiche s’affichent, avec des données et sans une er
     });
   }
 });
+
+/* =====================================================================
+ *  LE COMPOSANT PARTAGÉ À PUCES, SUR SON CONSOMMATEUR PRÉEXISTANT
+ * ===================================================================== */
+
+/**
+ * ══ CONSTAT Q-306 — 8ᵉ passage de la porte S8 ═══════════════════════════
+ *
+ * `UI.multiPersonHtml / wireMultiPerson / getMultiPerson` — le champ des
+ * participants d'une revue de direction — a été **réécrit** le 11/09/2026 : il
+ * est devenu une enveloppe de trois lignes au-dessus de `chipsHtml / wireChips /
+ * getChips`, le composant généralisé du lot RGPD.
+ *
+ * L'auditeur a mesuré que la réécriture n'avait **rien cassé**. Et il a mesuré
+ * autre chose :
+ *
+ *     grep -rln "r-participants|multiPerson|mp-label|mp-chip" test/
+ *     → test/navigateur/classification-documents.test.mjs   (et rien d'autre)
+ *
+ * Le **seul** essai du banc entier qui touchait ce composant était celui écrit le
+ * même jour, avec lui. *Le consommateur qu'il fallait protéger n'était mesuré par
+ * personne* — et le dédoublonnage insensible à la casse retiré, la famille
+ * restait 5/5 verte.
+ *
+ * ⚠️ **Ce dédoublonnage n'est pas décoratif** : sans lui, taper « RGPD » puis
+ * « rgpd » fait échouer l'enregistrement complet par un 409 de la base — et la
+ * saisie est perdue (constat Q-308, qui se lit avec celui-ci).
+ */
+describe('Le champ à puces tient sur son consommateur préexistant — Q-306', () => {
+  test('revues de direction : ajouter, dédoublonner à la casse, retirer, enregistrer', async () => {
+    // ⚠️ Les revues de direction n'ont pas de route à elles : elles vivent dans
+    // un ONGLET de l'écran « Audits ». C'est le genre de détail qui fait conclure
+    // « il n'y a rien à mesurer » quand il y a tout.
+    const vue = await ouvrirSur('/audits');
+    try {
+      await vue.page.evaluate(() => {
+        document.querySelector('.tab-btn[data-tab="revues"]')?.click();
+      });
+      await attendreQuiescence(vue.page);
+
+      // On ouvre la première revue du semis — c'est la fiche qui porte le champ.
+      const ouverte = await vue.page.evaluate(() => {
+        const ligne = document.querySelector('tbody tr[data-id]');
+        if (ligne === null) return null;
+        ligne.click();
+        return ligne.dataset.id;
+      });
+      assert.ok(ouverte, 'Aucune revue dans le semis : ce contrôle n’aurait pas d’objet.');
+      await attendreQuiescence(vue.page);
+
+      const champ = await vue.page.evaluate(() => {
+        const zone = document.getElementById('r-participants');
+        return zone === null
+          ? null
+          : {
+              datalist: zone.querySelector('input')?.getAttribute('list') ?? null,
+              options: document.querySelectorAll('#personnes-list option').length,
+            };
+      });
+      assert.ok(champ, 'Le champ « participants » a disparu de la fiche de revue.');
+      assert.equal(
+        champ.datalist,
+        'personnes-list',
+        'Le champ doit rester branché sur l’ANNUAIRE : c’est toute la valeur du composant.',
+      );
+      assert.ok(champ.options > 0, 'L’annuaire ne propose rien : l’autocomplétion est morte.');
+
+      // ── Ajout par le bouton, puis par la touche Entrée ──────────────────
+      const apresAjouts = await vue.page.evaluate(() => {
+        const zone = document.getElementById('r-participants');
+        const entree = zone.querySelector('input');
+        const bouton = zone.querySelector('button');
+        const poser = (valeur, parEntree) => {
+          entree.value = valeur;
+          if (parEntree) {
+            entree.dispatchEvent(
+              new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+            );
+          } else {
+            bouton.click();
+          }
+        };
+        poser('Jean DUPONT', false);
+        poser('Marie CURIE', false);
+        // LE DÉDOUBLONNAGE : même personne, autre casse. Elle ne doit pas entrer.
+        poser('jean dupont', false);
+        poser('Ada LOVELACE', true);
+        return Array.from(zone.querySelectorAll('.mp-label')).map((e) => e.textContent.trim());
+      });
+      assert.deepEqual(
+        apresAjouts,
+        ['Jean DUPONT', 'Marie CURIE', 'Ada LOVELACE'],
+        '« jean dupont » a été ajouté à côté de « Jean DUPONT » : le dédoublonnage insensible ' +
+          'à la casse est tombé. Sans lui, l’enregistrement échoue par un 409 de la base et ' +
+          'la saisie est perdue (constats Q-306 et Q-308).',
+      );
+
+      // ── Retrait d'une puce ─────────────────────────────────────────────
+      const apresRetrait = await vue.page.evaluate(() => {
+        const zone = document.getElementById('r-participants');
+        zone.querySelector('.mp-chip button, .mp-chip .mp-del, .mp-chip span[data-retirer]')?.click();
+        const puces = zone.querySelectorAll('.mp-chip');
+        if (puces.length === 3) {
+          // Repli : le bouton de retrait n'a pas la classe attendue — on clique
+          // le dernier élément cliquable de la première puce.
+          const cliquables = puces[0].querySelectorAll('button, [role="button"], .mp-x');
+          cliquables[cliquables.length - 1]?.click();
+        }
+        return Array.from(zone.querySelectorAll('.mp-label')).map((e) => e.textContent.trim());
+      });
+      assert.equal(
+        apresRetrait.length,
+        2,
+        `Le retrait d’une puce n’a pas eu lieu : ${JSON.stringify(apresRetrait)}`,
+      );
+
+      // ── Et l'enregistrement CONSERVE ce qui reste ───────────────────────
+      await vue.page.click('#saveBtn, #save');
+      await attendreQuiescence(vue.page);
+      const enBase = await vue.page.evaluate(
+        (id) => (DataStore.getRevues().find((r) => r.id === id) ?? {}).participants ?? '',
+        ouverte,
+      );
+      for (const nom of apresRetrait) {
+        assert.ok(
+          String(enBase).includes(nom),
+          `« ${nom} » a disparu à l’enregistrement. Contenu : « ${String(enBase)} »`,
+        );
+      }
+      assert.deepEqual(vue.erreursInattendues(), [], 'La fiche de revue a crié.');
+    } finally {
+      await vue.fermer();
+    }
+  });
+});

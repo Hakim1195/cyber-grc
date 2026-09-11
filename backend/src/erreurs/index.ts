@@ -266,8 +266,27 @@ export interface ContexteTraduction {
    *
    * Le mot « reprise » ne fait donc PAS dire au message ce qu'il taisait :
    * il énonce la même chose dans les termes du geste réellement accompli.
+   *
+   * ══ ET « CREATION », QUI EST LE CONSTAT Q-308 ═══════════════════════
+   *
+   * « Rechargez la liste, puis reprenez la saisie » est, **à la formulation
+   * près, le bloquant du 6ᵉ passage de la porte S2** — consigné au `CLAUDE.md` :
+   *
+   *   *« une même formulation servait deux couches : vraie pour la reprise
+   *   (« rechargez »), destructrice pour une création bloquée, où recharger
+   *   jette la saisie. »*
+   *
+   * Le message disait lui-même « n'a pas pu être **créé** » puis conseillait de
+   * **recharger** — c'est-à-dire de perdre le formulaire que l'utilisateur vient
+   * de remplir. La leçon du 6ᵉ passage est écrite en toutes lettres dans le
+   * fichier de mémoire du projet, et elle est revenue ici : *mutualiser un
+   * libellé n'est sûr que si les deux couches partagent la même SITUATION, pas
+   * seulement le même code d'erreur.*
+   *
+   * `origine: 'creation'` dit la situation. Il ne fait rien dire de plus au
+   * message ; il l'empêche de conseiller un geste destructeur.
    */
-  readonly origine?: 'reprise';
+  readonly origine?: 'reprise' | 'creation';
 }
 
 /** Reconnaît une `ErreurEntite` sans importer sa classe (voir l'entête). */
@@ -552,6 +571,12 @@ export function traduireErreurPostgres(
       const unicite =
         erreur.constraint === undefined ? undefined : contexte.unicites?.get(erreur.constraint);
 
+      // ⚠️ **On ne conseille JAMAIS de recharger sur une création** — constat
+      // Q-308. Rien n'a été écrit ; ce que l'utilisateur a sous les yeux est sa
+      // saisie, et recharger la détruirait. Le geste utile est de corriger la
+      // valeur en double.
+      const surUneCreation = contexte.origine === 'creation';
+
       if (unicite?.porteFiliale === true) {
         return new ErreurApplicative({
           code: 'contrainte_base',
@@ -559,7 +584,11 @@ export function traduireErreurPostgres(
           message:
             'Un enregistrement portant la même clé existe déjà dans votre filiale — la même ' +
             "exigence de référentiel, le même point d'historique du jour, la même mise en " +
-            'œuvre de contrôle. Rechargez la liste et complétez celui qui existe.',
+            'œuvre de contrôle. ' +
+            (surUneCreation
+              ? 'Corrigez la valeur en double, ou complétez l’enregistrement existant depuis ' +
+                'la liste : votre saisie est conservée tant que vous ne quittez pas l’écran.'
+              : 'Rechargez la liste et complétez celui qui existe.'),
           detailJournal,
         });
       }
@@ -569,7 +598,10 @@ export function traduireErreurPostgres(
         statut: 409,
         message:
           "Cet enregistrement n'a pas pu être créé : l'une de ses clés est déjà utilisée. " +
-          'Rechargez la liste, puis reprenez la saisie.',
+          (surUneCreation
+            ? 'Corrigez la valeur en double et réessayez — rien n’a été enregistré, et votre ' +
+              'saisie est conservée tant que vous ne quittez pas l’écran.'
+            : 'Rechargez la liste, puis reprenez la saisie.'),
         detailJournal,
       });
     }

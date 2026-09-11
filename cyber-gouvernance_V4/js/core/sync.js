@@ -696,6 +696,35 @@ const Sync = (() => {
         // Filet : s'il reste une trace de l'ancien identifiant dans la vue, on
         // réaffiche — sans jamais voler un formulaire en cours de saisie.
         if (traceResiduelle(ancien)) reafficher(false);
+
+        /* ══ ET ON LE DIT — constat Q-303 ════════════════════════════════════
+         *
+         * Recaler les ATTRIBUTS ne suffit pas : un composant qui a déjà
+         * INTERROGÉ LE SERVEUR avec l'ancien identifiant a reçu sa réponse, et
+         * il ne la redemandera pas. C'est ce qui est arrivé à l'encart
+         * d'approbation d'une fiche document tout juste créée : il affichait
+         * « Cet enregistrement est introuvable. Il a peut-être été supprimé, ou
+         * il appartient à une autre filiale » — un 404 sur un identifiant que le
+         * serveur venait de remplacer —, et le recalage corrigeait l'attribut
+         * une milliseconde trop tard, sans rien réveiller.
+         *
+         * ⚠️ **Le défaut ne vivait dans aucun fichier**, encore une fois : le
+         * recalage avait raison, l'encart avait raison, et personne ne les
+         * présentait l'un à l'autre. On émet donc l'événement, et c'est aux
+         * composants qui LISENT PAR IDENTIFIANT de s'y brancher.
+         *
+         * Émis même quand `touches` vaut zéro : un composant peut avoir capturé
+         * l'identifiant sans l'avoir écrit dans un attribut, et c'est justement
+         * le cas qu'on ne sait pas réparer autrement. */
+        try {
+            if (typeof document !== "undefined" && typeof CustomEvent === "function") {
+                document.dispatchEvent(new CustomEvent("grc:identifiant-recale", {
+                    detail: { ancien: ancien, nouveau: nouveau, touches: touches }
+                }));
+            }
+        } catch (e) {
+            console.error("Annonce du recalage impossible", e);
+        }
         return touches;
     }
 

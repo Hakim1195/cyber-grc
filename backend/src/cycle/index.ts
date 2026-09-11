@@ -118,9 +118,14 @@
  *
  * Cinq familles de restes, et **une seule accuse** :
  *
- *  · **`incidents`** — signalés, jamais touchés. §35.3 : *« une description libre
- *    peut contenir un nom comme elle peut contenir la seule preuve d'un incident.
- *    Le produit signale, un humain tranche. »*
+ *  · **`signale`** — la colonne porte le régime **« signaler »** AU REGISTRE :
+ *    signalée, jamais touchée. §35.3 : *« une description libre peut contenir un
+ *    nom comme elle peut contenir la seule preuve d'un incident. Le produit
+ *    signale, un humain tranche. »* ⚠️ Cette famille s'appelait `incidents` et la
+ *    règle était codée en dur sur cette table ; `crise.notes` portait le régime
+ *    **dans la base** sans que personne le lise, et sortait en « anomalie »
+ *    (constat **Q-293**). La table `incidents` reste couverte — comme une
+ *    conséquence du registre, plus comme une concurrente de lui.
  *  · **`tracabilite`** (`cree_par`, `modifie_par`) et **`compte_annuaire`**
  *    (`utilisateurs`) — jamais réécrits : les premiers portent un **login** posé
  *    par le serveur et les réécrire détruirait la traçabilité que le journal
@@ -492,7 +497,12 @@ export interface Reste {
    */
   readonly lignes: number;
   /**
-   * · `incidents` — signalé, jamais purgé automatiquement (§35.3) ;
+   * · `signale` — le REGISTRE déclare cette colonne en régime « signaler » : le
+   *   nom est au milieu d'une phrase, le remplacer détruirait la phrase, et le
+   *   produit montre donc l'emplacement à un humain (§35.3). ⚠️ La valeur
+   *   s'appelait `incidents` et la règle était codée en dur sur cette table ;
+   *   `crise.notes` portait le régime dans la base sans que personne le lise, et
+   *   sortait en « anomalie » (constat Q-293) ;
    * · `tracabilite` — un login posé par le serveur, jamais réécrit ;
    * · `compte_annuaire` — la fiche AD, qui se déprovisionne dans l'annuaire ;
    * · `portee_groupe` — une ligne du socle commun, hors de portée d'une session
@@ -502,7 +512,7 @@ export interface Reste {
    * · `anomalie` — une colonne que la purge aurait dû traiter. À corriger.
    */
   readonly classe:
-    | 'incidents'
+    | 'signale'
     | 'tracabilite'
     | 'compte_annuaire'
     | 'portee_groupe'
@@ -510,8 +520,34 @@ export interface Reste {
     | 'anomalie';
 }
 
-/** Un incident dont un texte libre cite le nom. **Signalé, jamais modifié.** */
-export interface IncidentSignale {
+/**
+ * Une ligne dont un texte libre cite le nom. **Signalée, jamais modifiée.**
+ *
+ * ⚠️ **Elle ne décrit plus les seuls incidents — constat Q-293.** Le régime
+ * `signaler` du registre (`colonnes_personnelles.a_expiration`) existait DANS LA
+ * BASE et n'était lu par personne : `crise.notes` le portait, et ce module codait
+ * en dur la table `incidents`. La colonne n'était donc **ni signalée, ni
+ * reconnue** — elle tombait dans `classe: 'anomalie'`, que le produit documente
+ * lui-même comme *« une colonne que la purge AURAIT DÛ traiter. À corriger. »*
+ *
+ * Le rapport se trompait ainsi **dans les deux sens à la fois** : il accusait
+ * d'un défaut une décision délibérée, et il restait muet là où le registre
+ * promet qu'un humain sera prévenu.
+ */
+export interface LigneSignalee {
+  /** La table où le nom subsiste — `incidents`, `crise`, ou toute autre. */
+  readonly table: string;
+  /**
+   * La ligne, désignée par sa **clé primaire découverte** — les valeurs jointes
+   * par « / » quand la clé est composite.
+   *
+   * ⚠️ **`"id"` avait été codé en dur ici, et c'était un piège** : la première
+   * rédaction le sélectionnait sur toute table portant une colonne signalée, et
+   * `import_erreurs` — dont la clé est composite — faisait répondre **500**.
+   * Une table sans colonne `id` n'est pas une exception à traiter : c'est la
+   * preuve qu'on regardait la mauvaise chose. Ce qui désigne une ligne est sa
+   * CLÉ PRIMAIRE, et le catalogue la dit.
+   */
   readonly id: string;
   readonly colonnes: readonly string[];
 }
@@ -538,8 +574,16 @@ export interface ResultatPurge {
   readonly contacts_vides: number;
   /** La fiche d'annuaire a-t-elle été supprimée ? */
   readonly fiche_supprimee: boolean;
-  /** Incidents dont un texte libre cite le nom : **signalés**, jamais modifiés. */
-  readonly incidents_a_examiner: readonly IncidentSignale[];
+  /**
+   * Lignes dont un texte libre cite le nom : **signalées**, jamais modifiées.
+   *
+   * ⚠️ **Renommé depuis `incidents_a_examiner` — constat Q-293.** L'ancien nom
+   * disait vrai de son contenu et faux de sa règle : le régime « signaler » est
+   * déclaré AU REGISTRE, colonne par colonne, et `incidents` n'en est qu'un
+   * porteur parmi d'autres. Un champ qui nomme un cas particulier apprend à
+   * croire que la règle est ce cas.
+   */
+  readonly a_examiner: readonly LigneSignalee[];
   /** Ce qui reste **après** la purge. Un `classe: 'anomalie'` est un défaut. */
   readonly restes: readonly Reste[];
   /** Total des lignes réécrites, contacts de crise compris. */
@@ -663,23 +707,88 @@ async function colonnesPorteusesDeNom(client: PoolClient): Promise<readonly Colo
  *    mais au privilège lui-même. Une colonne protégée demain le sera ici sans
  *    qu'une ligne change.
  */
+/*
+ * ══ Q-296 — « COLONNE TEXTUELLE » NE SE DIT PLUS QU'À UN SEUL ENDROIT ══════
+ *
+ * Le garde-fou du registre filtrait sur `text` ; cette fonction et le balayage
+ * du banc sur `text` **et** `character varying`. Les deux moitiés du dispositif
+ * ne parlaient pas du même ensemble de colonnes, et **aucune n'avait tort
+ * seule** — classe Q-194. Une colonne `varchar` portant un nom de personne
+ * aurait été (a) jamais réclamée au registre, (b) jamais anonymisée, et
+ * (c) rendue en « anomalie » à chaque purge sans que personne sache pourquoi.
+ *
+ * La définition vit désormais dans `f_colonnes_textuelles()` (migration `029`),
+ * que le garde, cette purge et le banc appellent tous les trois. Ce qui reste
+ * ici est ce qui appartient à l'APPELANT : le filtre de PRIVILÈGE, parce que lui
+ * seul sait sous quelle identité il balaie.
+ */
 async function colonnesTextuelles(client: PoolClient): Promise<readonly ColonneTexte[]> {
   const { rows } = await client.query<{ table_nom: string; colonne: string; cloisonnee: boolean }>(
-    `select c.relname::text as table_nom, a.attname::text as colonne,
-            exists (select 1 from pg_attribute f
-                     where f.attrelid = c.oid and f.attname = 'filiale_id'
-                       and f.attnum > 0 and not f.attisdropped) as cloisonnee
-       from pg_class c
+    `select t.table_nom, t.colonne, t.cloisonnee
+       from f_colonnes_textuelles() t
+       join pg_class c on c.relname = t.table_nom
        join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
-       join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
-      where c.relkind = 'r'
-        and not (c.relname = any ($1::text[]))
-        and format_type(a.atttypid, a.atttypmod) in ('text', 'character varying')
+       join pg_attribute a on a.attrelid = c.oid and a.attname = t.colonne
+                          and a.attnum > 0 and not a.attisdropped
+      where not (t.table_nom = any ($1::text[]))
         and has_column_privilege(current_user, c.oid, a.attnum, 'select')
       order by 1, 2`,
     [HORS_BALAYAGE],
   );
   return rows.map((r) => ({ table: r.table_nom, colonne: r.colonne, cloisonnee: r.cloisonnee }));
+}
+
+/**
+ * La clé primaire de chaque table, **découverte** dans le catalogue.
+ *
+ * Elle sert à DÉSIGNER la ligne d'un signalement. Coder `"id"` en dur y a fait
+ * répondre 500 sur `import_erreurs`, dont la clé est composite — et l'eût fait
+ * sur toute table de liaison portant une colonne de saisie libre.
+ */
+async function clesPrimaires(client: PoolClient): Promise<ReadonlyMap<string, string[]>> {
+  const { rows } = await client.query<{ table_nom: string; colonnes: string[] }>(
+    `select c.relname::text as table_nom,
+            array_agg(a.attname::text order by k.ord) as colonnes
+       from pg_class c
+       join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+       join pg_constraint p on p.conrelid = c.oid and p.contype = 'p'
+       cross join lateral unnest(p.conkey) with ordinality as k(attnum, ord)
+       join pg_attribute a on a.attrelid = c.oid and a.attnum = k.attnum
+      where c.relkind = 'r'
+      group by 1`,
+  );
+  return new Map(rows.map((r) => [r.table_nom, r.colonnes]));
+}
+
+/**
+ * Les colonnes que le registre déclare en régime **« signaler »** — constat
+ * **Q-293**.
+ *
+ * ⚠️ **Le régime existait dans la base et n'était lu par personne.** La migration
+ * `026` l'avait créé, longuement commenté — *« TEXTE LIBRE : le nom est au milieu
+ * d'une phrase, et le remplacer détruirait la phrase »* — et une seule colonne le
+ * portait : `crise.notes`. Ce module codait en dur la table `incidents`, si bien
+ * que `crise.notes` n'était **ni signalée, ni reconnue**, et sortait en
+ * `classe: 'anomalie'` — que le produit documente comme *« une colonne que la
+ * purge aurait dû traiter »*.
+ *
+ * ⚠️ **Le filtre porte sur `a_expiration`, pas sur `nature`**, et c'est voulu :
+ * une colonne de saisie libre dont le sujet est un OBJET — la description d'un
+ * actif, le commentaire d'une action — est déclarée `non_personnelle` avec le
+ * régime `signaler`, parce qu'un nom peut néanmoins s'y trouver au milieu d'une
+ * phrase. Filtrer sur `nature = 'personnelle'` rouvrirait le trou d'un cran plus
+ * haut.
+ */
+async function colonnesSignalees(client: PoolClient): Promise<ReadonlySet<string>> {
+  const { rows } = await client.query<{ table_nom: string; colonne: string }>(
+    `select p.table_nom, p.colonne
+       from colonnes_personnelles p
+      where p.a_expiration = 'signaler'
+        and not (p.table_nom = any ($1::text[]))
+      order by 1, 2`,
+    [HORS_BALAYAGE],
+  );
+  return new Set(rows.map((r) => `${r.table_nom}.${r.colonne}`));
 }
 
 /**
@@ -693,6 +802,14 @@ function classer(
   table: string,
   colonne: string,
   ou: 'dans_la_filiale' | 'portee_groupe' | 'autre_filiale',
+  /**
+   * Les colonnes que le REGISTRE déclare en régime « signaler », sous la forme
+   * `table.colonne` — constat **Q-293**. Ce paramètre remplace le
+   * `if (table === 'incidents')` qui vivait ici : la règle est déclarée en base,
+   * et ce module la LIT au lieu de la redire. `incidents` reste couvert, mais
+   * comme une conséquence du registre, plus comme une concurrente de lui.
+   */
+  signalees: ReadonlySet<string>,
   // ⚠️ Le paramètre ne s'appelle PAS `administrationGroupe`, et ce n'est pas une
   // coquetterie : `test/api/routes.test.mjs` balaie `src/` à la recherche de
   // « administrationGroupe » suivi de « : » ou « = », pour attraper la route qui
@@ -702,7 +819,7 @@ function classer(
   // plus à tenir juste. Le nom dit ce qu'il est : une constatation reçue.
   peutEcrireEnPorteeGroupe: boolean,
 ): Reste['classe'] {
-  if (table === 'incidents') return 'incidents';
+  if (signalees.has(`${table}.${colonne}`)) return 'signale';
   if (COLONNES_TRACABILITE.includes(colonne)) return 'tracabilite';
   if (table === 'utilisateurs') return 'compte_annuaire';
   // ⚠️ **UNE OCCURRENCE, UNE CLASSE** — constat Q-205 a de la porte S6.
@@ -758,6 +875,8 @@ async function chercherPartout(
   nom: string,
   colonnes: readonly ColonneTexte[],
   perimetre: PerimetreSession,
+  /** Les colonnes de régime « signaler », lues au registre — constat Q-293. */
+  signalees: ReadonlySet<string>,
 ): Promise<readonly Reste[]> {
   const trouves: Reste[] = [];
   for (const [table, cols] of parTable(colonnes)) {
@@ -823,7 +942,7 @@ async function chercherPartout(
           portee_groupe: ou === 'portee_groupe' ? combien : 0,
           autres_filiales: ou === 'autre_filiale' ? combien : 0,
           lignes: combien,
-          classe: classer(table, c.colonne, ou, perimetre.administrationGroupe),
+          classe: classer(table, c.colonne, ou, signalees, perimetre.administrationGroupe),
         });
       }
     });
@@ -904,6 +1023,7 @@ export async function purgerPersonne(
   }
 
   const toutesLesColonnes = await colonnesTextuelles(client);
+  const signalees = await colonnesSignalees(client);
 
   /* ── 1. L'ÉTAT DE DÉPART — sans lui, « purgé » ne veut rien dire ──────── */
   //
@@ -911,7 +1031,7 @@ export async function purgerPersonne(
   // dépôt a déjà produit trois essais de cette forme. Le produit mesure donc ce
   // qu'il y avait AVANT et le rend, pour que l'exploitant distingue « rien à
   // faire » de « rien fait ».
-  const avant = await chercherPartout(client, nom, toutesLesColonnes, perimetre);
+  const avant = await chercherPartout(client, nom, toutesLesColonnes, perimetre, signalees);
 
   /* ── 2. LES CONTACTS DE CRISE, EN PREMIER ─────────────────────────────── */
   //
@@ -956,30 +1076,47 @@ export async function purgerPersonne(
   // Ce qui est rendu : l'identifiant et les **noms de colonnes** concernés.
   // Jamais le texte — l'appelant a le droit de le lire, mais ce n'est pas à cette
   // réponse-ci de le transporter.
-  const colonnesIncidents = toutesLesColonnes.filter(
-    (c) => c.table === 'incidents' && !COLONNES_TRACABILITE.includes(c.colonne),
+  const aSignaler: LigneSignalee[] = [];
+  const cles = await clesPrimaires(client);
+  const parTableSignalee = parTable(
+    toutesLesColonnes.filter((c) => signalees.has(`${c.table}.${c.colonne}`)),
   );
-  const incidents: IncidentSignale[] = [];
-  if (colonnesIncidents.length > 0) {
-    const projections = colonnesIncidents
+  for (const [table, cols] of parTableSignalee) {
+    const cle = cles.get(table);
+    if (cle === undefined || cle.length === 0) {
+      // Une table sans clé primaire ne peut pas être DÉSIGNÉE. Le schéma n'en
+      // porte aucune, et `f_verifier_schema()` le tient ; si l'une apparaît, se
+      // taire ici serait le défaut — on le dit.
+      throw new Error(
+        `La table « ${table} » porte une colonne de régime « signaler » et n’a pas de clé ` +
+          'primaire : le signalement ne saurait pas quelle ligne montrer.',
+      );
+    }
+    const projections = cols
       .map(
         (c, i) =>
           `strpos(lower(coalesce(${guillemeter(c.colonne)}, '')), lower($1)) > 0` +
           ` as ${guillemeter(`c${String(i)}`)}`,
       )
       .join(', ');
-    const conditions = colonnesIncidents
+    const conditions = cols
       .map((c) => `strpos(lower(coalesce(${guillemeter(c.colonne)}, '')), lower($1)) > 0`)
       .join(' or ');
+    const cleProjetee = cle
+      .map((col, i) => `${guillemeter(col)}::text as ${guillemeter(`k${String(i)}`)}`)
+      .join(', ');
     const { rows } = await client.query<Record<string, unknown>>(
-      `select "id", ${projections} from "incidents" where ${conditions} order by "id"`,
+      `select ${cleProjetee}, ${projections} from ${guillemeter(table)}
+        where ${conditions} order by ${cle.map(guillemeter).join(', ')}`,
       [nom],
     );
     for (const ligne of rows) {
-      const colonnes = colonnesIncidents
-        .filter((_, i) => ligne[`c${String(i)}`] === true)
-        .map((c) => c.colonne);
-      incidents.push({ id: String(ligne['id']), colonnes });
+      const colonnes = cols.filter((_, i) => ligne[`c${String(i)}`] === true).map((c) => c.colonne);
+      aSignaler.push({
+        table,
+        id: cle.map((_, i) => String(ligne[`k${String(i)}`] ?? '')).join('/'),
+        colonnes,
+      });
     }
   }
 
@@ -1009,7 +1146,7 @@ export async function purgerPersonne(
   //
   // C'est lui qui rend l'omission bruyante : il ne consulte aucune liste de
   // champs, il ouvre toutes les colonnes textuelles du schéma.
-  const restes = await chercherPartout(client, nom, toutesLesColonnes, perimetre);
+  const restes = await chercherPartout(client, nom, toutesLesColonnes, perimetre, signalees);
 
   /* ── 7. LA TRACE — les COMPTES, jamais le contenu (§35.3) ─────────────── */
   //
@@ -1036,7 +1173,8 @@ export async function purgerPersonne(
       contacts_crise_vides: contactsVides,
       total_lignes: totalLignes,
       fiche_supprimee: ficheSupprimee,
-      incidents_signales: incidents.length,
+      lignes_signalees: aSignaler.length,
+      emplacements_signales: aSignaler.map((l) => `${l.table}/${l.id}`),
       restes: restes.map((r) => ({
         emplacement: `${r.table}.${r.colonne}`,
         lignes: r.lignes,
@@ -1052,7 +1190,7 @@ export async function purgerPersonne(
     anonymisees,
     contacts_vides: contactsVides,
     fiche_supprimee: ficheSupprimee,
-    incidents_a_examiner: incidents,
+    a_examiner: aSignaler,
     restes,
     total_lignes: totalLignes,
   };
@@ -1289,6 +1427,30 @@ export async function greffonCycle(
    *     l'ordre où on le lit. Dériver un résumé côté serveur — « 37 colonnes
    *     personnelles » — ferait exister DEUX comptes de la même chose, et le
    *     jour où ils divergent c'est le registre qu'on croira faux.
+   *
+   *  4. **ELLE LAISSE UNE TRACE — constat Q-307.** L'auditeur du 8ᵉ passage de
+   *     la porte S8 a mesuré cinq lectures consécutives par `qualite.tls` —
+   *     profil qualité et auditeur d'UNE seule filiale, ni administrateur, ni
+   *     exportateur — pour un **delta de journal de zéro**, et 17 031 octets
+   *     rendus qui nomment table par table l'intégralité du modèle :
+   *     `utilisateurs.mot_de_passe_hash`, `sessions.perimetre`,
+   *     `journal_audit.adresse_ip`…
+   *
+   *     ⚠️ **Ce n'est PAS une fuite de données personnelles** — le motif du
+   *     point 1 reste juste, cette route décrit le schéma et non les gens. C'est
+   *     un **renseignement donné à un attaquant interne** (contrôle S12) : les
+   *     noms exacts des tables d'authentification, de session et de droits, et
+   *     la confirmation que le produit stocke une empreinte de mot de passe.
+   *     C'était *« la seule route de lecture large du produit qui ne laissait
+   *     aucune trace »*.
+   *
+   *     Ce qui a été ARBITRÉ, et il faut le dire plutôt que le laisser croire
+   *     fermé : **le droit d'accès n'est pas resserré.** Retirer du registre les
+   *     colonnes d'authentification le rendrait incomplet — c'est-à-dire le
+   *     défaut même que le constat Q-295 vient de fermer, et le DPO a le droit
+   *     de savoir que l'outil détient une empreinte de mot de passe. Le remède
+   *     est donc la TRACE : la question « qui a lu la carte du schéma ? » a
+   *     désormais une réponse.
    * ------------------------------------------------------------------- */
   instance.get(
     CHEMIN_REGISTRE_PRODUIT,
@@ -1306,6 +1468,29 @@ export async function greffonCycle(
               case when nature = 'personnelle' then 0 else 1 end,
               table_nom, colonne`,
         );
+
+        // La trace du constat Q-307, DANS LA MÊME TRANSACTION que la lecture :
+        // une trace validée séparément pourrait manquer là où la lecture a eu
+        // lieu, ou l'inverse.
+        await journaliser(client, {
+          action: 'consultation_sensible',
+          // ⚠️ **Phrase LITTÉRALE** — `CONVENTIONS.md` §29.5. Le compte part dans
+          // `valeursApres`, qui est du jsonb : un résumé est une phrase écrite
+          // par le développeur, et rien d'autre n'y entre.
+          resume: 'Lecture du registre des données personnelles du produit.',
+          filialeId: perimetre.filialeId,
+          utilisateurLibelle: perimetre.utilisateurId,
+          adresseIp: requete.ip,
+          entiteId: null,
+          valeursApres: {
+            colonnes: rows.length,
+            // Le compte de ce qui EST une donnée personnelle : c'est la moitié
+            // du registre qu'un DPO vient chercher, et celle dont la lecture
+            // mérite d'être datée.
+            personnelles: rows.filter((l) => l.nature === 'personnelle').length,
+            motif: 'registre_produit',
+          },
+        });
         return rows;
       });
 

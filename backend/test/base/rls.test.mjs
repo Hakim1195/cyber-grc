@@ -3286,11 +3286,24 @@ describe('Le garde-fou de schéma est branché (CONVENTIONS §18.4)', () => {
     // 1. couverture RLS — la table neuve sans politique, le scénario exact de T-4.
     await proprietaire.query('create table essai_t4_sans_politique (id text primary key)');
     try {
+      // ⚠️ **Sept anomalies, et non quatre — la table neuve en réveille trois de plus
+      // depuis les migrations 028 et 029**, et c'est exactement ce qu'on veut : chacune
+      // ferme un chemin par lequel une table pouvait entrer dans le schéma sans que
+      // personne décide quoi que ce soit à son sujet.
+      //   · `registres_techniques/table_sans_filiale_non_rangee` — qui l'écrit ? un
+      //     registre que seul le déploiement écrit, ou l'application ? (constat Q-291) ;
+      //   · `colonnes_personnelles/colonne_personnelle_non_decidee` — sa colonne textuelle
+      //     porte-t-elle une donnée personnelle ? (constat Q-295, le balayage renversé) ;
+      //   · `domaine_identifiants/identifiant_sans_domaine` — son `id` est en « text » nu,
+      //     donc la chaîne vide y entre (constat Q-310).
       assert.deepEqual(await vues('essai_t4%'), [
+        'colonnes_personnelles/colonne_personnelle_non_decidee',
         'couverture_rls/force_absente',
         'couverture_rls/politique_ecriture_absente',
         'couverture_rls/politique_lecture_absente',
         'couverture_rls/rls_desactivee',
+        'domaine_identifiants/identifiant_sans_domaine',
+        'registres_techniques/table_sans_filiale_non_rangee',
       ]);
     } finally {
       await proprietaire.query('drop table essai_t4_sans_politique');
@@ -3994,6 +4007,17 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // le filtre perdrait des lignes en silence.
       'classification_documents',
       'colonnes_personnelles',
+      // VINGT-SEPTIÈME, apporté par `028_les_gardes_eprouvent.sql` — constat **Q-292**,
+      // 8ᵉ passage de la porte S8, et c'est un garde-fou d'une NATURE différente des
+      // vingt-six autres : il ne LIT pas le schéma, il l'ÉPROUVE. Cinq gardes cherchaient
+      // des sous-chaînes dans `pg_get_constraintdef()`, et une contrainte **vidée de sa
+      // substance** — même nom, mêmes littéraux, plus un « or true » — les satisfaisait
+      // tous. Mesuré par l'auditeur : « diffusion libre » entrait dans
+      // `documents.confidentialite`, et une pièce en ÉCART d'intégrité redevenait « en
+      // vigueur », sous un `f_verifier_schema()` à zéro anomalie. Celui-ci évalue le
+      // PRÉDICAT RÉEL sur des lignes témoins : un garde qui envoie et constate ne peut
+      // pas être trompé par qui le lit.
+      'contraintes_eprouvees',
       'couverture_rls',
       // QUINZIÈME, apporté par `017_pieces_suivent_leur_porteur.sql` (constats Q-232 /
       // Q-233) : toute table qu'une pièce jointe peut désigner porte le déclencheur
@@ -4021,6 +4045,19 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // garde-fou de schéma interroge `pg_catalog`, et l'état d'une unité systemd n'y est
       // pas. C'est `install.sh --diagnostic` qui le mesure, sujet n° 14.
       'dispositif_integrite',
+      // VINGT-NEUVIÈME, apporté par `029_le_registre_balaie_tout.sql` — constat **Q-310**,
+      // trouvé en écrivant cette vague et de la CLASSE de Q-194 : `risque_catalogue.id` et
+      // `filiale_id` étaient de type « text » nu, quand toute autre colonne d'identifiant
+      // du schéma porte le domaine `id_metier`. Mesuré : la chaîne vide et les
+      // identifiants non rognés y entraient. Le domaine n'est pas décoratif — c'est par
+      // lui que `chargerCatalogue()` DÉCOUVRE qu'un identifiant ne peut pas être vide.
+      'domaine_identifiants',
+      // TRENTIÈME, apporté par `029` : tout domaine reposant sur un type textuel est
+      // RANGÉ — « technique » ou « saisie libre ». `f_colonnes_textuelles()` écarte les
+      // colonnes d'un domaine du balayage des données personnelles ; c'est juste pour les
+      // six qui existent, et ce serait FAUX EN SILENCE pour un domaine neuf qui porterait
+      // de la prose. C'est le renversement de Q-295 appliqué à sa propre exception.
+      'domaines_textuels',
       // VINGT-TROISIÈME, apporté par `025_un_ecart_ne_fait_plus_foi.sql` — constat
       // **Q-285** : le dispositif de la `020` CONSTATAIT qu'un fichier ne correspond plus
       // à son empreinte, l'inscrivait, sortait en code 1 — et la pièce continuait de
@@ -4080,6 +4117,16 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // commentaire. ⚠️ Il a réclamé `fk_traitement_mesures_portee` avant qu'un humain y
       // pense — écrit avant qu'elle existe, il l'a nommée.
       'references_portee',
+      // VINGT-HUITIÈME, apporté par `028` — constat **Q-291** : la migration `026` avait
+      // écrit DEUX FOIS, en toutes lettres, que le rôle applicatif n'avait que « select »
+      // sur `colonnes_personnelles`. Le rôle applicatif pouvait la VIDER (`alter default
+      // privileges` du `001` §0 lui en avait donné quatre verbes), et `f_verifier_schema()`
+      // rendait zéro anomalie. ⚠️ Ce garde ne part PAS d'une liste de registres — celle de
+      // `f_verifier_privileges()` §4 était la faille : elle avait vieilli sans bruit. Il
+      // part du CATALOGUE, et exige qu'une table dépourvue de `filiale_id` soit rangée
+      // dans l'une des deux familles. *Une migration a AFFIRMÉ une propriété au lieu de la
+      // POSER, et rien ne comparait au catalogue.*
+      'registres_techniques',
       // NEUVIÈME, apporté par `007_authentification.sql` : il vérifie que le substrat
       // de session est bien refermé sur `f_authentification()`. Cette liste est écrite
       // à la main À DESSEIN (CLAUDE.md §3, cas (a)) — une migration qui la fait rougir
