@@ -2550,7 +2550,14 @@ rattachement à l'article 30 sans que personne l'ait décidé.
 
 `f_verifier_references_portee()` (migration `027`) **découvre** la classe dans le
 catalogue : toute clé composite visant une table de `f_tables_mixtes()` par un
-`filiale_id` nullable doit avoir sa compagne sur `portee_groupe`. Une table qui **devient**
+`filiale_id` nullable doit avoir sa compagne sur `portee_groupe`.
+
+> ⚠️ **Le garde-fou est PLUS FAIBLE que ce paragraphe ne le laisse croire — constat Q-297,
+> porte S8 du 11/09/2026.** Il exige qu'il **existe** une clé vers la même cible passant par
+> `portee_groupe` ; il ne vérifie **pas** qu'elle porte la **même colonne référençante**. Une
+> compagne posée sur une autre colonne le satisfait. La règle du §38 est donc juste ; sa
+> vérification mécanique est approximative, et c'est la même famille que Q-292 — *reconnaître
+> une forme au lieu de mesurer une propriété*. Une table qui **devient**
 mixte fait donc entrer d'un coup toutes ses références dans le périmètre, sans qu'aucun
 fichier change — c'est ce qui est arrivé à `traitement_mesures` le jour de sa naissance
 comme table mixte, et le garde-fou l'a réclamée avant qu'un humain y pense.

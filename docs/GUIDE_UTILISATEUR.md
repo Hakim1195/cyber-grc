@@ -268,8 +268,17 @@ gens. C'est pourquoi il est en lecture simple.
 
 Quatre devenirs à l'expiration, et le quatrième mérite d'être connu : **« signaler »**. Quand
 un nom est *au milieu d'une phrase* — la note d'une cellule de crise, la description d'un
-incident —, le remplacer détruirait la phrase. Le produit **vous désigne l'emplacement** au
-lieu d'effacer d'office. **C'est vous qui tranchez**, pas la machine.
+incident —, le remplacer détruirait la phrase : c'est à vous de trancher, pas à la machine.
+
+> 🛑 **Ce que le produit fait AUJOURD'HUI n'est pas encore cela — constat Q-293, porte S8 du
+> 11/09/2026.** Le régime « signaler » est décidé **dans la base** et la purge **ne le lit
+> pas** : elle ne connaît que la description d'un incident, en dur. La note d'une cellule de
+> crise vous revient donc dans le rapport de purge classée **« anomalie »** — c'est-à-dire
+> *« une colonne que la purge aurait dû traiter »* — alors que c'est une **décision**.
+>
+> **Ce que cela change pour vous, concrètement** : la ligne est bien là, le nom est bien
+> signalé, et rien n'est effacé à tort. Ce qui est faux est **le mot employé pour vous le
+> dire**. Lisez « anomalie » comme « à trancher » tant que ce constat est ouvert.
 
 ### Les documents portent enfin une classification
 

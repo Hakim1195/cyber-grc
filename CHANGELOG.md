@@ -30,10 +30,14 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > diagnostic : `test/navigateur/bascule.test.mjs` semblait fautif ; **joué seul, 44/44 en
 > 112 secondes**. *Un essai lent sous charge n'est pas un essai en défaut.*
 >
-> ⚠️ **Et rien de tout cela ne vaut passage de porte.** La porte **S8 reste refusée** — sept
-> passages —, et **cinq livraisons** des 10 et 11/09 (le lot RGPD) n'ont été soumises à
-> **aucun auditeur indépendant**. *Un banc vert mesure ce qu'il regarde, jamais ce qu'il ne
-> regarde pas.*
+> ⚠️ **Et rien de tout cela ne valait passage de porte — la démonstration est venue vite.**
+> La porte **S8 a été jouée une HUITIÈME fois le 11/09/2026, par deux auditeurs indépendants,
+> et REFUSÉE** : **1 bloquant, 11 majeurs, 7 mineurs, 0 fuite entre filiales**, constats
+> **Q-291 → Q-309**, **cinq contrôles sur dix-huit en échec**. Les cinq livraisons du lot RGPD
+> — celles que ce bloc annonçait « soumises à aucun auditeur » — **portent à elles seules le
+> bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
+> visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
+> regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
 ### RGPD — le logiciel qui gère la conformité devient lui-même conforme
 
