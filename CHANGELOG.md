@@ -39,6 +39,31 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### Après le 9ᵉ passage — ce que personne n'avait pu auditer (14/09/2026)
+
+**Question posée : « les docs sont à jour ? »** Le contrôle mécanique — la famille
+`test/documentation/` — rendait **79/79**. Il ne couvre pas la prose, et la prose portait deux
+fautes, dont l'une a fait sortir un défaut du **produit**.
+
+- **Q-335 — l'écran du journal faisait disparaître les deux blocs « valeurs avant / après »
+  SANS UN MOT.** Le correctif de Q-330, livré après l'audit, retire le contenu des
+  enregistrements aux comptes sans droit d'export ; `journal.js` rend une chaîne vide quand la
+  valeur est nulle, si bien que **rien ne distinguait « cette entrée n'a pas de différentiel »
+  — une connexion, un démarrage — de « on vous le cache »**. Classe Q-201 / Q-207.
+  ⚠️ **Le serveur envoyait déjà `differentiel_masque: true` : il était écrit, et lu par
+  personne** — troisième fois ce mois-ci. L'écran affiche désormais le motif.
+  ⚠️ **Et les auditeurs ne pouvaient pas le voir : le correctif qui l'introduit est postérieur
+  à leur passage.** *Un correctif accepté hors passage de porte n'a été soumis à personne.*
+- **Le guide d'exploitation annonçait « 197 colonnes décidées »** quand le registre en compte
+  **206** depuis que la migration `031` a franchi la frontière du texte. Le chiffre était juste
+  le jour où il a été écrit et faux le lendemain — et c'est **exactement la faute que le
+  constat Q-331 venait de fermer** : la correction avait porté sur les documents que l'équipe
+  relit, pas sur celui que l'exploitant lit.
+- **La règle de Q-330 n'était écrite nulle part.** Elle l'est maintenant aux trois endroits qui
+  la servent : le guide de l'utilisateur (ce qu'il voit et pourquoi), le guide d'exploitation
+  (un tableau « qui voit quoi »), et le contrat HTTP du `CONVENTIONS.md` §29.8 — *le droit
+  d'export ne peut pas dépendre du FORMAT dans lequel on demande la même chose.*
+
 ### Porte S8, 9ᵉ passage — vingt-trois constats, et les deux qui portent le refus visent les gardes de la veille
 
 **Deux auditeurs indépendants, périmètres exclusifs. Verdict : refusée** — 0 bloquant,

@@ -543,10 +543,21 @@ bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
 npm test                           # 1930 essais, vingt familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
+
+bash db/dev/preparer_base_dev.sh --purger-bases-essai   # après un banc INTERROMPU
 ```
 
 `npm test` crée et détruit une base neuve par fichier de test, en appelant le vrai
 `db/migrate.mjs` : le banc d'essai éprouve donc aussi l'outil de migration.
+
+⚠️ **La dernière commande n'est pas décorative — constat Q-321.** Un banc **interrompu** ne
+détruit pas ses bases, et elles s'accumulent. Mesuré au 9ᵉ passage de la porte S8, sur la
+grappe qui sert la recette : **quatre-vingt-une bases orphelines**, 1 124 Mio contre 17 Mio
+pour la base du produit. ⚠️ **Cette option est sans danger sur une recette**, contrairement
+au script sans argument : elle sort **avant** la partie qui écrit les rôles, et le script
+refuse désormais d'être combinée à une autre. *L'interdit du `CLAUDE.md` §5 porte sur les
+mots de passe des rôles, pas sur ce chemin-là — il avait été lu comme total pendant que la
+grappe grossissait.*
 
 #### Prérequis de la machine
 
@@ -616,7 +627,7 @@ que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non re
 | `test/approbations/` | le circuit d'approbation (L8) : documents, acceptation des risques résiduels, rapports d'audit, et l'irréversibilité **cherchée dans la base** plutôt que réécrite en TypeScript |
 | `test/filiales/` | la création de filiale et le sélecteur de filiale active (L4) : synchronisation des groupes d'annuaire dans la même transaction, et **la trace au journal sans laquelle une filiale existerait sans preuve** (Q-213, Q-218) |
 | `test/journal/` | la **couverture** du journal d'audit, mesurée en exerçant le produit puis en comptant ce qui est arrivé en base — jamais en relisant `src/` |
-| `test/journal-lecture/` | la lecture cloisonnée du journal (condition E6) et les constats de la porte S4 |
+| `test/journal-lecture/` | la lecture cloisonnée du journal (condition E6), les constats de la porte S4 — et, depuis le 9ᵉ passage de S8, que **le CONTENU des enregistrements relève du droit d'export** : les deux routes servaient la même matière, et feuilleter la consultation reconstituait le jeu que le CSV refusait (constat Q-330) |
 | `test/documents/` | la **classification documentaire** dans la base (migrations `027` et `030`) : niveaux de diffusion bornés et obligatoires, étiquettes normalisées par un déclencheur **et par un index** (l'un donne le bon message, l'autre la garantie — constat Q-298), et le rattachement à l'article 30, dont la règle **n'est pas symétrique** : un document local relève d'un traitement de Groupe, l'inverse est refusé (constat N-10 fermé, constat Q-294 ouvert et refermé) |
 
 *(`test/aide/` n'est pas une famille : ce sont les montages partagés — base, serveur,

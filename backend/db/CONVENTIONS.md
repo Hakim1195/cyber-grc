@@ -661,6 +661,16 @@ poste de développement.
 | `GRC04` | Périmètre non positionné : `grc.filiale_id` absent alors que la RLS l'exige | Base (`004_rls.sql`) |
 | `GRC05` | Une pièce jointe du porteur supprimé appartient à une autre filiale : la suppression est **refusée** plutôt que de laisser une orpheline | Base (`017_pieces_suivent_leur_porteur.sql`) |
 | `GRC06` | Un document dont le circuit d'approbation n'est pas conclu a tenté de passer « en vigueur » : la publication est **refusée**, et la tentative est journalisée avec sa route | Base (`019_publication_exige_approbation.sql`) |
+| `GRC07` | Le traitement de l'article 30 désigné par un document **n'existe pas dans le périmètre** de la session : le rattachement est refusé, et le refus **ne distingue pas** « il n'existe pas » de « il ne vous est pas visible » — la distinction serait l'oracle d'existence que le produit ferme depuis la porte S2 | Base (`030_la_portee_ouvre_le_bon_sens.sql`) |
+
+⚠️ **Un code de cette table doit être TRADUIT par `src/erreurs/index.ts`, sinon il n'existe
+pas pour l'utilisateur** — constat **Q-325**, 9ᵉ passage de la porte S8. `GRC07` a été livré
+avec un message soigné et un `hint`, et le traducteur ne le connaissait pas : il tombait dans
+le générique, et une faute de saisie rendait **500 « Le serveur n'a pas pu traiter la
+demande »**, avec une pile d'appel au journal technique. ⚠️ **Et le banc ne pouvait pas le
+voir** : `GRC07` ÉTAIT éprouvé — **en SQL direct**, jamais par la route. *L'essai prouvait que
+le déclencheur se déclenche ; personne ne mesurait ce que l'utilisateur reçoit.* Tout code
+ajouté ici se vérifie donc **par la route**.
 
 Deux refus d'intégrité empruntent le `23514` standard plutôt qu'un code propre, **à dessein** :
 viser la mesure locale d'une autre filiale, et changer la portée d'une ligne mixte. L'API les
@@ -1742,7 +1752,7 @@ existait avant le lot qui l'a remplie.
 
 | Route | Déclaration d'accès | Rend |
 |---|---|---|
-| `GET /api/journal` | `{ action: 'lire', domaine: 'journal' }` | page d'entrées, filtres `depuis`/`jusqu_a`/`action`/`utilisateur`/`entite_type`, pagination par `numero` décroissant |
+| `GET /api/journal` | `{ action: 'lire', domaine: 'journal' }` | page d'entrées, filtres `depuis`/`jusqu_a`/`action`/`utilisateur`/`entite_type`, pagination par `numero` décroissant. ⚠️ **Le CONTENU des enregistrements — `valeurs_avant` / `valeurs_apres` — n'est servi qu'au porteur du droit d'export** ; sinon la route rend `differentiel_masque: true` et l'écran dit pourquoi (constat Q-330) |
 | `GET /api/journal/export` | `{ action: 'exporter', domaine: 'journal' }` | le même jeu, en fichier — **exige le droit d'export en plus du domaine** |
 | `GET /api/journal/verification` | `{ action: 'lire', domaine: 'journal' }` | le résultat de `f_journal_audit_verifier()` : **aucune ligne = journal sain** |
 
@@ -1751,6 +1761,28 @@ existait avant le lot qui l'a remplie.
 l'application et lire trois ans d'identités ne sont pas le même droit. Aucun profil du socle n'en
 est affecté (mesuré : `ADMIN` est le seul à porter l'un des quatre domaines d'administration) —
 ce qui est fermé, c'est le **prochain** profil paramétré.
+
+#### Le droit d'export vaut À L'INTÉRIEUR de la consultation — constat Q-330
+
+Les deux premières routes servaient **les mêmes dix-sept colonnes**, `valeurs_avant` et
+`valeurs_apres` comprises, et ne déclaraient pas le même droit. Mesuré au 9ᵉ passage de la
+porte S8 : page de 500, curseur sans fin — **un compte portant le domaine `journal` sans
+`GRC-EXPORT` reconstituait le jeu de données en feuilletant**, pendant que la même matière en
+CSV lui était refusée en 403.
+
+> **La règle** : *le droit d'export ne peut pas dépendre du FORMAT dans lequel on demande la
+> même chose.* Ce qui le déclenche est la **matière**, pas le `content-type`.
+
+⚠️ **Ce qui n'est pas retiré** : les seize autres colonnes — qui, quand, quelle action, sur
+quel objet, le chaînage d'empreintes. C'est l'objet même de l'écran, et le fermer aussi
+reviendrait à fermer la consultation pour fermer l'export.
+
+⚠️ **Et le retrait se DIT** : `differentiel_masque: true` part avec l'entrée, et l'écran
+affiche la raison. Sans lui, les deux blocs disparaissaient sans un mot, et rien ne
+distinguait *« cette entrée n'a pas de différentiel »* — une connexion, un démarrage — de
+*« on vous le cache »*. C'est la classe des constats Q-201 / Q-207, et elle avait été
+réintroduite **par le correctif de Q-330 lui-même**, après l'audit qui ne pouvait donc pas la
+voir.
 
 **La pagination se fait sur `numero`, jamais sur un décalage.** `numero` est strictement
 croissant et sans trou (§12) : c'est un curseur exact, insensible aux insertions concurrentes.

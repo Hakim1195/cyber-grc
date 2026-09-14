@@ -352,3 +352,114 @@ describe('Q-121 — l’extrait n’est pas exécutable par le tableur auquel il
     }
   });
 });
+
+/* =====================================================================
+ *  Q-330 — LE CONTENU DES ENREGISTREMENTS RELÈVE DU DROIT D'EXPORT
+ * ===================================================================== */
+
+/**
+ * ══ POURQUOI CE CONTRÔLE EXISTE ═══════════════════════════════════════════
+ *
+ * `GET /api/journal` et `GET /api/journal/export` servaient **les mêmes dix-sept
+ * colonnes**, `valeurs_avant` et `valeurs_apres` comprises — c'est-à-dire l'état
+ * complet de chaque enregistrement à chaque écriture — et ne déclaraient pas le
+ * même droit : `lire` pour l'une, `exporter` pour l'autre.
+ *
+ * Mesuré au 9ᵉ passage de la porte S8 : page de 500, curseur `suivant` sans fin.
+ * **Un compte portant le domaine `journal` sans `GRC-EXPORT` reconstituait le jeu
+ * de données en feuilletant**, pendant que la même matière en CSV lui était
+ * refusée en 403. *Le droit d'export ne peut pas dépendre du FORMAT dans lequel on
+ * demande la même chose.*
+ *
+ * ⚠️ **Ce qui n'est PAS retiré, et le motif compte** : les seize autres colonnes
+ * restent servies — qui, quand, quelle action, sur quel objet, et le chaînage
+ * d'empreintes. C'est l'objet même de l'écran du journal, et le retirer
+ * reviendrait à fermer la consultation pour fermer l'export.
+ */
+describe('Q-330 — le différentiel du journal relève du droit d’export', () => {
+  test('SANS le droit d’export : les seize colonnes, et le différentiel RETIRÉ', async () => {
+    const monte = await monterJournal(base, sessionGroupe(AUDITEUR));
+    try {
+      const applicatif = await base.connexion('app');
+      await base.avecPerimetre(
+        applicatif,
+        perimetre('semis-q330', FILIALE_A, [FILIALE_A]),
+        async (c) => {
+          await c.query(
+            `insert into journal_audit
+               (action, filiale_id, resume, entite_type, entite_id, valeurs_apres)
+             values ('creation', $1, 'Création d’un enregistrement.', 'risques', 'RSK-Q330',
+                     '{"nom":"Menace confidentielle","proprietaire":"Amélie Durand"}'::jsonb)`,
+            [FILIALE_A],
+          );
+        },
+        { annuler: false },
+      );
+
+      const page = await monte.appeler('GET', '/api/journal?limite=50');
+      assert.equal(page.statut, 200, JSON.stringify(page.corps).slice(0, 200));
+      const entree = page.corps.entrees.find((e) => e.entite_id === 'RSK-Q330');
+      assert.ok(entree, 'L’entrée semée doit être servie : sans elle, rien n’est mesuré.');
+
+      // ── CE QUI PART ────────────────────────────────────────────────────
+      assert.equal(
+        'valeurs_apres' in entree,
+        false,
+        'Le CONTENU de l’enregistrement est servi à un compte sans droit d’export : en ' +
+          'feuilletant, il reconstitue le jeu de données que le CSV lui refuse (constat Q-330).',
+      );
+      assert.equal('valeurs_avant' in entree, false);
+      assert.equal(
+        JSON.stringify(entree).includes('Amélie Durand'),
+        false,
+        'Le nom saisi dans l’enregistrement ressort par la route de consultation.',
+      );
+
+      // ── CE QUI RESTE, ET C'EST L'OBJET DE L'ÉCRAN ─────────────────────
+      for (const champ of [
+        'numero', 'horodatage', 'utilisateur_libelle', 'action',
+        'entite_type', 'entite_id', 'resume', 'empreinte', 'empreinte_precedente',
+      ]) {
+        assert.ok(
+          champ in entree,
+          `« ${champ} » a disparu : on aurait fermé la consultation pour fermer l’export.`,
+        );
+      }
+
+      // ── ET L'ÉCRAN DOIT POUVOIR LE DIRE ───────────────────────────────
+      assert.equal(
+        entree.differentiel_masque,
+        true,
+        'Le serveur doit DIRE qu’il a retiré le différentiel. Sans ce drapeau, l’écran fait ' +
+          'disparaître les deux blocs sans un mot, et rien ne distingue « cette entrée n’a ' +
+          'pas de différentiel » — une connexion, un démarrage — de « on vous le cache ». ' +
+          'C’est la classe des constats Q-201 / Q-207.',
+      );
+    } finally {
+      await monte.fermer();
+    }
+  });
+
+  test('AVEC le droit d’export : le différentiel est servi, et rien n’est masqué', async () => {
+    /* La moitié qui empêche de « fermer » le sujet en retirant la matière à tout
+       le monde : un auditeur qui PORTE le droit doit continuer de voir ce que la
+       ligne contenait — c'est le contrôle S18. */
+    const monte = await monterJournal(base, sessionGroupe(AUDITEUR_EXPORTATEUR));
+    try {
+      const page = await monte.appeler('GET', '/api/journal?limite=50');
+      assert.equal(page.statut, 200, JSON.stringify(page.corps).slice(0, 200));
+      const entree = page.corps.entrees.find((e) => e.entite_id === 'RSK-Q330');
+      assert.ok(entree, 'L’entrée semée au contrôle précédent doit être là.');
+      assert.equal(
+        'valeurs_apres' in entree,
+        true,
+        'Le porteur du droit d’export doit voir le différentiel : sinon on a fermé la ' +
+          'fonction au lieu de fermer la fuite.',
+      );
+      assert.equal(entree.valeurs_apres.proprietaire, 'Amélie Durand');
+      assert.equal(entree.differentiel_masque, undefined);
+    } finally {
+      await monte.fermer();
+    }
+  });
+});

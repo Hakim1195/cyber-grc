@@ -163,6 +163,42 @@
 > rende le jeu sans trace. Cloisonnement **110/110**, **34 sondes hostiles** sans une percée,
 > **0 fuite entre filiales**, et le parcours complet **ne détruit rien**.
 >
+> ---
+>
+> ## ▶▶▶▶▶ ET LE 14/09 — CE QUE PERSONNE N'AVAIT PU AUDITER
+>
+> **La question posée était « les docs sont à jour ? ».** Le contrôle mécanique —
+> `test/documentation/` et `test/depot/` — rendait **79/79**. Il ne couvre pas la prose, et
+> la prose portait deux fautes, dont l'une a fait sortir un défaut du **PRODUIT**.
+>
+> - **Q-335 — l'écran du journal faisait disparaître les deux blocs « valeurs avant / après »
+>   SANS UN MOT.** Le correctif de Q-330 retire le contenu des enregistrements aux comptes
+>   sans droit d'export ; `journal.js` rend une chaîne vide quand la valeur est nulle. Rien ne
+>   distinguait *« cette entrée n'a pas de différentiel »* — une connexion, un démarrage — de
+>   *« on vous le cache »*. Classe **Q-201 / Q-207**.
+>   - ⚠️ **Le serveur envoyait déjà `differentiel_masque: true` : écrit, et lu par personne.**
+>     **Troisième fois ce mois-ci** qu'un signal est posé et non branché — après
+>     `f_domaine_accepte()` (Q-312) et l'empreinte SHA-256 (migration `020`).
+>   - ⚠️ **Et les auditeurs ne pouvaient PAS le voir : le correctif qui l'introduit est
+>     POSTÉRIEUR à leur passage.** C'est la contrepartie exacte de la règle *« un constat se
+>     ferme ET se rejoue »* : **un correctif accepté hors passage de porte n'a été soumis à
+>     personne.** Tout ce qui a été livré après le 9ᵉ passage est dans ce cas.
+> - **Le guide d'exploitation annonçait « 197 colonnes décidées »** quand le registre en
+>   compte **206** depuis que la `031` a franchi la frontière du texte. ⚠️ **C'est exactement
+>   la faute que le constat Q-331 venait de fermer** — *la correction avait porté sur les
+>   documents que l'équipe relit, pas sur celui que l'exploitant lit* —, refaite **trois jours
+>   après l'avoir fermée**.
+> - **La règle de Q-330 n'était écrite nulle part.** Elle l'est aux trois endroits qui la
+>   servent : `GUIDE_UTILISATEUR.md`, `GUIDE_EXPLOITATION.md` (un tableau « qui voit quoi »),
+>   et le contrat HTTP du `CONVENTIONS.md` **§29.8** — *le droit d'export ne peut pas dépendre
+>   du FORMAT dans lequel on demande la même chose.*
+>
+> ⚠️ **LA LEÇON DE MÉTHODE, ET ELLE EST NEUVE** : le banc sait dire qu'un **chiffre** du
+> document est faux ; il ne sait pas dire qu'une **phrase** est devenue fausse. Les deux
+> fautes ci-dessus étaient sous un `test/documentation/` entièrement vert. *Une passe de
+> documentation se fait en cherchant ce que le correctif du jour a rendu faux, pas en relisant
+> ce qu'on vient d'écrire.*
+>
 > **Le prochain geste : le 10ᵉ passage de la porte S8.**
 >
 > ---
@@ -672,6 +708,15 @@ cyber-gouvernance_V4/
   Sans cela, `test/auth/` échoue sur `password authentication failed for user
   "grc_app"` et les familles navigateur ne trouvent pas Chromium — deux symptômes qui
   n'ont rien à voir avec le code, et qui coûtent une demi-heure chacun (constat Q-81).
+
+  ⚠️ **UNE EXCEPTION, ET ELLE EST MESURÉE** — constat **Q-321** (9ᵉ passage de S8) :
+  `bash db/dev/preparer_base_dev.sh --purger-bases-essai` **est sans danger ici**, et
+  c'est le seul nettoyage des bases d'essai orphelines qu'offre le dépôt. Le bloc de
+  purge **sort en 0 avant** la partie qui écrit les rôles, et le script **refuse**
+  désormais de combiner cette option à une autre — c'est imposé, plus seulement
+  raisonné. *L'interdit ci-dessus porte sur les MOTS DE PASSE DES RÔLES, pas sur ce
+  chemin-là.* Il avait été lu comme total, et **81 bases d'essai** s'étaient accumulées
+  sur la grappe qui sert la recette : 1 124 Mio contre 17 Mio pour `cyber_grc`.
 - **Banc d'essai serveur** : depuis `backend/`, `npm test` (base, API, reprise, navigateur),
   `npm run verifier-types`, `npm audit --omit=dev`. Chaque fichier de test monte une base
   neuve en appelant le vrai `db/migrate.mjs`.

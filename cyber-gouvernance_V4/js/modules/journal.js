@@ -290,6 +290,14 @@ const JournalModule = (() => {
             resume: brut.resume || "",
             valeursAvant: brut.valeurs_avant ?? null,
             valeursApres: brut.valeurs_apres ?? null,
+            // ⚠️ **Le serveur DIT quand il retire le différentiel** — constat Q-330 :
+            // le contenu des enregistrements est réservé au porteur du droit
+            // d'export, parce que le feuilletage de cette route reconstituait le jeu
+            // de données que le CSV refusait. Sans ce drapeau, l'écran ferait
+            // disparaître les deux blocs **sans un mot**, et rien ne distinguerait
+            // « cette entrée n'a pas de différentiel » — une connexion, un
+            // démarrage — de « on vous le cache ». C'est la classe Q-201 / Q-207.
+            differentielMasque: brut.differentiel_masque === true,
             empreinte: brut.empreinte || "",
             empreintePrecedente: brut.empreinte_precedente || "",
             sessionId: brut.session_id || "",
@@ -410,8 +418,14 @@ const JournalModule = (() => {
                 "précédente    : " + (e.empreintePrecedente || "— (premier maillon)")
             ) +
             "</pre></div>" +
-            bloc("Valeurs avant", e.valeursAvant) +
-            bloc("Valeurs après", e.valeursApres) +
+            (e.differentielMasque
+                ? '<div class="jrn-bloc"><h4>' + esc("Valeurs avant / après") + "</h4>"
+                  + '<p class="chart-empty">'
+                  + esc("Le contenu des enregistrements n'est pas affiché : il relève du droit "
+                      + "d'export, distinct de la consultation. Vous voyez QUI a fait QUOI et "
+                      + "QUAND ; ce que la ligne contenait demande l'autorisation d'export.")
+                  + "</p></div>"
+                : bloc("Valeurs avant", e.valeursAvant) + bloc("Valeurs après", e.valeursApres)) +
             "</div></td></tr>"
         );
     }

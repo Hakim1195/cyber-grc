@@ -53,6 +53,14 @@ d'un journal d'audit : pouvoir montrer ce qui a été détruit. La rétention es
 > compris. Le mot « différentiel » avait été appliqué à la seule action où c'est une copie
 > complète.
 
+⚠️ **Et voir ce contenu demande le droit d'EXPORT** (depuis le 11/09/2026). Sur l'écran
+`/journal`, tout le monde voit **qui a fait quoi, quand, sur quel objet** — c'est l'objet de
+l'écran. Le **contenu de l'enregistrement** — le bloc « valeurs avant / après » — n'apparaît
+qu'aux comptes qui portent l'autorisation d'export, et l'écran **dit pourquoi** quand il ne
+l'affiche pas. Le motif : les deux routes servaient la même matière, et feuilleter le journal
+reconstituait le jeu de données que l'extrait CSV refusait à ce même compte. *Le droit
+d'export ne peut pas dépendre du format dans lequel on demande la même chose.*
+
 ### Deux personnes sur la même fiche
 
 Si quelqu'un a modifié la fiche depuis que vous l'avez ouverte, l'enregistrement est
