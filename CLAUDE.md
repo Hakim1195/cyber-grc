@@ -203,12 +203,18 @@
 >
 > ---
 >
-> **Mesuré à la révision `99ea754`** : banc **1 794 essais, 1 794 passés** ;
+> **Mesuré à la révision `96324ed`, le 14/09/2026** : banc **1 932 essais, 1 932 passés** ;
 > `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
-> `verifier_cloisonnement.sql` **sous `grc_app`** → **107/107** ; `f_verifier_schema()`
-> → 0 anomalie (17 garde-fous, 20 migrations, 50 tables) ; publication → **81 fichiers
-> identiques au dépôt** ; `install.sh --diagnostic` → **12 conformes, 1 réserve, 0
-> bloquant**.
+> `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** ; `f_verifier_schema()`
+> → 0 anomalie (**35 garde-fous, 31 migrations, 52 tables, 206 décisions** au registre
+> de l'article 30) ; publication → **81 fichiers identiques au dépôt** ;
+> `install.sh --diagnostic` → **14 conformes, 1 réserve, 0 bloquant**.
+>
+> ⚠️ **Ce bloc annonçait `99ea754` — 1 794 essais, 107/107, 17 garde-fous, 20 migrations —
+> c'est-à-dire l'état du 08/09.** Onze migrations et dix-huit garde-fous plus tard, il
+> était faux de bout en bout pendant que le §8 du `backend/README.md`, lui, était juste.
+> *Deux points de mesure des mêmes grandeurs divergent, et la divergence est silencieuse*
+> — c'est le constat Q-219, à l'endroit même qui prêche de ne pas recopier le banc.
 >
 > **Ce qui a changé le 08/09 au soir, et qui est neuf :**
 >

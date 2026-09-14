@@ -8,9 +8,9 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
-> **État mesuré le 11/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
+> **État mesuré le 14/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **1930 essais, 1930 passés, 0 échec** à la révision `dfbb294`,
+> **1932 essais, 1932 passés, 0 échec** à la révision `96324ed`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
 > échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**35 garde-fous consignés**,
