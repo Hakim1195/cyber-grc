@@ -841,6 +841,12 @@ window.updateActiveNav = function(route) {
         }
     });
 
+    // Le menu se replie (lot L17, A2). `wireNavSections` est idempotente — elle
+    // marque les boutons déjà branchés —, et `ouvrirSectionActive` vient APRÈS
+    // elle : la section de l'écran courant s'ouvre quoi qu'on ait replié, sans
+    // quoi on peut naviguer vers un écran dont l'entrée est cachée.
+    if (window.UI && UI.wireNavSections) { UI.wireNavSections(); UI.ouvrirSectionActive(); }
+
     if (window.renderBreadcrumb) window.renderBreadcrumb(route);
     // Le profil d'installation est reposé à chaque écran : voir le commentaire
     // de la fonction — un bandeau posé une seule fois est un bandeau qu'un
@@ -1110,7 +1116,10 @@ function appliquerDroitsAuMenu() {
     let vuDepuisSeparateur = false;
     const fermer = () => { if (separateurCourant) separateurCourant.hidden = !vuDepuisSeparateur; };
     Array.prototype.forEach.call(nav.querySelectorAll("li"), li => {
-        if (li.classList.contains("sidebar-divider")) {
+        // Les intertitres sont devenus des en-têtes de SECTION repliables (lot
+        // L17, A2). Le nom de classe a changé ; la propriété, non — un titre
+        // sans une seule entrée visible n'a plus d'objet et se retire.
+        if (li.classList.contains("sidebar-divider") || li.classList.contains("nav-section")) {
             fermer();
             separateurCourant = li;
             vuDepuisSeparateur = false;

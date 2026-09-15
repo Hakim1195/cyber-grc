@@ -41,6 +41,10 @@ window.I18n.enregistrer("en", {
     "nav.menu": "Menu",
     "nav.ouvrirMenu": "Open the menu",
     "nav.section.gouvernance": "Governance & Risk",
+    "nav.section.pilotage": "Steering",
+    "nav.section.patrimoine": "Assets & risk",
+    "nav.section.conformite": "Compliance",
+    "nav.section.operations": "Operations",
     "nav.section.continuite": "Continuity (ISO 22301)",
     "nav.section.administration": "Administration",
 

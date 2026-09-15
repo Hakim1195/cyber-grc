@@ -44,6 +44,10 @@ window.I18n.enregistrer("fr", {
     "nav.menu": "Menu",
     "nav.ouvrirMenu": "Ouvrir le menu",
     "nav.section.gouvernance": "Gouvernance & Risques",
+    "nav.section.pilotage": "Pilotage",
+    "nav.section.patrimoine": "Patrimoine & risques",
+    "nav.section.conformite": "Conformité",
+    "nav.section.operations": "Opérations",
     "nav.section.continuite": "Continuité (ISO 22301)",
     "nav.section.administration": "Administration",
 

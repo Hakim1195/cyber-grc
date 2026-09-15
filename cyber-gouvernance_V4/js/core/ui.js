@@ -436,7 +436,118 @@ window.UI = (function () {
     function wireMultiPerson(fieldId) { return wireChips(fieldId); }
     function getMultiPerson(fieldId) { return getChips(fieldId).join("\n"); }
 
+
+    /* =====================================================================
+       LE MENU SE REPLIE — lot L17, action A2
+       ---------------------------------------------------------------------
+       Trente-deux entrées à plat, dont dix-sept sous un seul intertitre : la
+       barre latérale était une LISTE, pas une navigation. On la découpe en six
+       sections repliables.
+
+       ── Trois décisions, et chacune a un motif ──────────────────────────
+
+       1. **L'appartenance d'une entrée à sa section est DÉDUITE du balisage**,
+          jamais écrite ici : chaque entrée appartient à la dernière section
+          rencontrée au-dessus d'elle. Une entrée neuve tombe donc dans la
+          bonne section le jour où on l'ajoute au menu, sans que personne ait à
+          penser à une liste — et l'oubli d'une liste, ici, ferait DISPARAÎTRE
+          une entrée au premier repli (`CLAUDE.md` §3, cas (a)).
+
+       2. **La section qui contient l'écran courant s'ouvre toujours**, quel que
+          soit ce que le visiteur avait replié. Sans cela, on peut naviguer vers
+          un écran dont l'entrée est cachée : le menu dirait que l'utilisateur
+          n'est nulle part.
+
+       3. **L'état replié vit dans `localStorage`**, et rien d'autre n'y vit.
+          C'est une commodité d'affichage propre à un poste ; la mettre sur le
+          serveur en ferait une donnée à cloisonner, à journaliser et à purger,
+          pour un chevron. ⚠️ Toute lecture est sous `try` : un navigateur qui
+          refuse le stockage doit rendre un menu ENTIÈREMENT DÉPLIÉ, jamais un
+          menu vide.
+
+       ⚠️ Aucun gestionnaire en ligne : la CSP du vhost les bloque, et
+       l'application a été livrée un temps sans fonctionner pour cette raison.
+    ===================================================================== */
+
+    const CLE_REPLI = "cyber-nav-replie";
+
+    function sectionsRepliees() {
+        try {
+            const brut = window.localStorage.getItem(CLE_REPLI);
+            return brut ? JSON.parse(brut) : {};
+        } catch (e) { return {}; }
+    }
+
+    function memoriserRepli(etat) {
+        try { window.localStorage.setItem(CLE_REPLI, JSON.stringify(etat)); } catch (e) { /* sans effet */ }
+    }
+
+    /** Les entrées d'une section : tout ce qui suit son en-tête, jusqu'au suivant. */
+    function entreesDe(entete) {
+        const entrees = [];
+        let noeud = entete.nextElementSibling;
+        while (noeud && !noeud.classList.contains("nav-section")) {
+            entrees.push(noeud);
+            noeud = noeud.nextElementSibling;
+        }
+        return entrees;
+    }
+
+    /* ⚠️ Le repli passe par une CLASSE, jamais par l'attribut « hidden » — et
+       c'est une correction, pas une préférence. `appliquerDroitsAuMenu()`
+       (`js/app.js`) ÉCRIT `element.hidden` sur chaque entrée à chaque
+       navigation, pour cacher ce que le profil n'a pas le droit de lire. Les
+       deux couches se disputaient donc le même attribut, et la dernière
+       gagnait : le menu se redépliait entièrement au premier changement
+       d'écran. Mesuré — 31 entrées visibles sur 31, alors que cinq sections
+       sur six s'annonçaient repliées.
+
+       Avec une classe, les deux se COMPOSENT : une entrée s'affiche si le
+       profil y a droit ET si sa section est ouverte. C'est la leçon du 6ᵉ
+       passage de la porte S2 — *un même mot, vrai à un endroit et faux à
+       l'autre, voyage d'autant mieux qu'on a pris soin de n'en avoir qu'un*. */
+    function appliquerRepli(entete, replie) {
+        const bouton = entete.querySelector(".nav-section-btn");
+        if (bouton) bouton.setAttribute("aria-expanded", replie ? "false" : "true");
+        entete.classList.toggle("replie", replie);
+        entreesDe(entete).forEach(function (li) { li.classList.toggle("nav-repliee", replie); });
+    }
+
+    function wireNavSections() {
+        const entetes = document.querySelectorAll(".main-nav .nav-section");
+        if (!entetes.length) return;
+        const etat = sectionsRepliees();
+
+        entetes.forEach(function (entete) {
+            const cle = entete.getAttribute("data-section");
+            appliquerRepli(entete, etat[cle] === true);
+
+            const bouton = entete.querySelector(".nav-section-btn");
+            if (!bouton || bouton.dataset.branche === "1") return;
+            bouton.dataset.branche = "1";
+            bouton.addEventListener("click", function () {
+                const courant = sectionsRepliees();
+                const replie = !(courant[cle] === true);
+                courant[cle] = replie;
+                memoriserRepli(courant);
+                appliquerRepli(entete, replie);
+            });
+        });
+    }
+
+    /** Ouvre la section de l'écran courant — décision 2 ci-dessus. */
+    function ouvrirSectionActive() {
+        const actif = document.querySelector(".main-nav a.active");
+        if (!actif) return;
+        let noeud = actif.closest("li");
+        while (noeud && !noeud.classList.contains("nav-section")) {
+            noeud = noeud.previousElementSibling;
+        }
+        if (noeud) appliquerRepli(noeud, false);
+    }
+
     return {
+        wireNavSections, ouvrirSectionActive,
         badge, mappedBadge, wireBulkDelete, wireDelete, genId, refreshPersonnesDatalist,
         refreshEtiquettesDatalist, findPersonneByNom,
         chipsHtml, wireChips, getChips,

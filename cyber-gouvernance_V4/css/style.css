@@ -1698,3 +1698,71 @@ h3.imp-etat-pret, h3.imp-etat-refus, h3.imp-etat-apercu, h3.imp-etat-info { marg
 .registre-produit .rp-colonne { font-family: ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
 .rp-nature-personnelle   { color: var(--accent); font-weight: 700; }
 .rp-nature-non_personnelle { color: var(--text-muted); }
+
+/* =====================================================================
+   MENU REPLIABLE — lot L17, action A2
+   ---------------------------------------------------------------------
+   La barre latérale portait 32 entrées à plat, dont 17 sous un seul
+   intertitre. Les en-têtes deviennent des boutons : même densité quand
+   tout est ouvert, et une navigation quand on replie.
+
+   ⚠️ Les couleurs viennent des TOKENS (`css/tokens.css`), jamais d'une
+   valeur écrite ici — c'est la règle du §2 du `CLAUDE.md`.
+   ===================================================================== */
+
+.main-nav .nav-section { margin: 1.1rem 0 0.15rem; }
+.main-nav .nav-section:first-child { margin-top: 0; }
+
+.main-nav .nav-section-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.35rem 0.75rem;
+    background: none;
+    border: 0;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.main-nav .nav-section-btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+
+/* La cible tactile fait 32 px de haut au minimum : un chevron de 8 px ne se
+   vise pas au doigt, et la barre latérale sert aussi sur tablette. */
+.main-nav .nav-section-btn { min-height: 32px; }
+
+.main-nav .nav-section-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.main-nav .nav-chevron {
+    width: 0;
+    height: 0;
+    margin-left: 0.5rem;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid currentColor;
+    transition: transform 0.15s ease;
+    flex: 0 0 auto;
+}
+
+.main-nav .nav-section.replie .nav-chevron { transform: rotate(-90deg); }
+
+@media (prefers-reduced-motion: reduce) {
+    .main-nav .nav-chevron { transition: none; }
+}
+
+/* Une entrée d'une section repliée. ⚠️ Une CLASSE, et non l'attribut
+   « hidden » : `appliquerDroitsAuMenu()` écrit `hidden` à chaque navigation
+   pour cacher ce que le profil n'a pas le droit de lire. Les deux couches se
+   disputaient l'attribut, et le menu se redépliait. Avec une classe, elles se
+   composent : visible si le droit existe ET si la section est ouverte. */
+.main-nav li.nav-repliee { display: none; }
