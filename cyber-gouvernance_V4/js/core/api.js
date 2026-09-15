@@ -994,6 +994,13 @@ const Api = (() => {
        ce qui est possible (profil de l'installation, présence de données
        réelles). Un paramètre ici serait une décision que le client propose,
        c'est-à-dire une condition constitutive qu'il pourrait contourner. */
+    /* Recherche globale — lot L17, A3. Le terme voyage en paramètre d'URL,
+       encodé : c'est le serveur qui neutralise les jokers de « like », et le
+       navigateur n'a rien à en savoir. */
+    function recherche(terme) {
+        return appeler("/recherche?q=" + encodeURIComponent(terme));
+    }
+
     function decouverteEtat()  { return appeler("/decouverte/etat"); }
     function decouverteSemer() { return appeler("/decouverte/semer",  { methode: "POST" }); }
     function decouvertePurger(){ return appeler("/decouverte/purger", { methode: "POST" }); }
@@ -1017,6 +1024,8 @@ const Api = (() => {
         consolidation, approbations, deciderApprobation,
         // Lot RGPD : le produit rend compte de LUI-MÊME.
         registreProduit,
+        // Lot L17 : la recherche globale.
+        recherche,
         // Lot L18 bis : le jeu de découverte.
         decouverteEtat, decouverteSemer, decouvertePurger
     };

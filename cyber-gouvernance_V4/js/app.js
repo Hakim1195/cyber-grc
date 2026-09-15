@@ -841,6 +841,15 @@ window.updateActiveNav = function(route) {
         }
     });
 
+    // La palette de recherche (lot L17, A3). Branchée une seule fois — le
+    // raccourci vit sur `document`, pas sur la vue.
+    if (window.Palette && !window.Palette._installee) {
+        window.Palette._installee = true;
+        window.Palette.installer();
+        const declencheur = document.getElementById("palette-ouvrir");
+        if (declencheur) declencheur.addEventListener("click", function () { window.Palette.ouvrir(); });
+    }
+
     // Le menu se replie (lot L17, A2). `wireNavSections` est idempotente — elle
     // marque les boutons déjà branchés —, et `ouvrirSectionActive` vient APRÈS
     // elle : la section de l'écran courant s'ouvre quoi qu'on ait replié, sans

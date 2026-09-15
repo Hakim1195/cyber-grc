@@ -40,7 +40,6 @@ window.I18n.enregistrer("en", {
     /* ═══════════════════════ NAVIGATION (sidebar) ═══════════════════════ */
     "nav.menu": "Menu",
     "nav.ouvrirMenu": "Open the menu",
-    "nav.section.gouvernance": "Governance & Risk",
     "nav.section.pilotage": "Steering",
     "nav.section.patrimoine": "Assets & risk",
     "nav.section.conformite": "Compliance",

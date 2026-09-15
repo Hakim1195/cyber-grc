@@ -806,6 +806,11 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // troisième en SUPPRIMERAIT, avec les pièces jointes qui les suivent. Le
     // garde de profil vit un étage plus haut, et il ne dispense pas de celui-ci :
     // c'est la couture même qui a fait passer le constat T-3.
+    // La recherche globale (lot L17, A3). Servie sans identité, elle rendrait
+    // les LIBELLÉS des enregistrements de toutes les filiales à un anonyme —
+    // c'est-à-dire l'oracle que le `PLAN_EXECUTION` §3 redoutait, ouvert sans
+    // même une session. C'est la surface la plus dangereuse de ce lot.
+    ['GET', '/api/recherche?q=ab', undefined],
     ['GET', '/api/decouverte/etat', undefined],
     ['POST', '/api/decouverte/semer', undefined],
     ['POST', '/api/decouverte/purger', undefined],

@@ -125,6 +125,7 @@ import { greffonApprobations } from '../approbations/index.js';
 import { greffonNotifications } from '../notifications/index.js';
 import { greffonCycle } from '../cycle/index.js';
 import { greffonDecouverte } from '../decouverte/index.js';
+import { greffonRecherche } from '../recherche/index.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
 import { AuthentificationProvisoire, estAuthentificateur, PerimetreProvisoire } from './session.js';
@@ -3183,6 +3184,28 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   // validée au démarrage, jamais d'une requête : c'est lui qui décide si la
   // route est praticable (condition constitutive n° 5).
   await instance.register(greffonDecouverte, { pool, profil: config.profil });
+  // Lot L17, A3 — la recherche globale.
+  //
+  // ⚠️ Elle reçoit `cumulerSondage`, **le compteur du sondage**, et non un
+  // compteur à elle. Deux compteurs pour la même personne seraient deux budgets
+  // de lignes rendues sans trace, c'est-à-dire exactement le défaut du constat
+  // B-6 du 9ᵉ passage — *un budget qui se réarme n'est pas un budget*. Et cela
+  // répond à la réserve laissée ouverte par Q-279 : « paginer en fenêtres
+  // étroites échappe encore — il faudrait un compteur cumulé par session ».
+  await instance.register(greffonRecherche, {
+    pool,
+    cumuler: cumulerSondage,
+    tracer: async (client, session, cumul, rendus) => {
+      await journaliser(client, {
+        filialeId: session.perimetre.filialeId,
+        utilisateurLibelle: session.perimetre.utilisateurId,
+        action: 'consultation_sensible',
+        // §29.5 : la phrase est du développeur, les chiffres vont en jsonb.
+        resume: 'Extraction du jeu de données par la recherche globale (cumul par session).',
+        valeursApres: { motif: 'cumul_par_session', cumul, rendus },
+      });
+    },
+  });
 
   const service = options.serviceAuthentification;
   if (service !== undefined) {

@@ -43,7 +43,6 @@ window.I18n.enregistrer("fr", {
     /* ═══════════════════════ NAVIGATION (barre latérale) ═══════════════════════ */
     "nav.menu": "Menu",
     "nav.ouvrirMenu": "Ouvrir le menu",
-    "nav.section.gouvernance": "Gouvernance & Risques",
     "nav.section.pilotage": "Pilotage",
     "nav.section.patrimoine": "Patrimoine & risques",
     "nav.section.conformite": "Conformité",

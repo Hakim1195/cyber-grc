@@ -39,6 +39,40 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### Vague A, suite — le menu et la recherche (15/09/2026)
+
+⚠️ **Arbitrage de l'utilisateur : le frontend sera REFAIT.** Le poids va donc côté serveur
+— c'est la couche que le frontend neuf consommera. Ce qui est présentation est livré
+utilisable, pas fini.
+
+**A2 — le menu se replie.** 32 entrées à plat, dont **dix-sept** sous un seul intertitre,
+deviennent **six sections repliables**. L'appartenance d'une entrée à sa section est
+**déduite du balisage** : une liste écrite dans le code aurait un jour oublié une entrée, et
+l'oubli l'aurait **fait disparaître** au premier repli, en silence.
+
+⚠️ **Le défaut qui a coûté le plus** : la première rédaction repliait par l'attribut
+`hidden` — or `appliquerDroitsAuMenu()` l'écrit sur chaque entrée à **chaque navigation**.
+Les deux couches se disputaient le même attribut, et la dernière gagnait : mesuré, **31
+entrées visibles sur 31** pendant que cinq sections sur six s'annonçaient repliées. Le repli
+passe par une **classe**, et les deux couches se composent.
+
+**A3 — la recherche globale et la palette `Ctrl+K`.** Repoussée deux vagues durant, avec un
+motif écrit : *« une recherche est un oracle, c'est la surface la plus propice à une fuite
+entre filiales »*. Quatre décisions la ferment :
+
+1. **C'est la RLS qui borne, jamais un filtre** — aucune requête ne nomme de filiale, et un
+   contrôle de forme le vérifie dans la source ;
+2. **les droits bornent aussi** : on ne cherche que dans les domaines que la session lit ;
+3. **elle ne va pas au-delà du LIBELLÉ** — balayer le texte libre ferait de l'outil un
+   moteur de recherche sur des commentaires dont le registre de l'article 30 dit qu'une
+   partie porte des personnes ;
+4. **elle consomme le MÊME budget de trace que le sondage** — ce qui ferme la réserve
+   laissée ouverte par Q-279 : *« paginer en fenêtres étroites échappe encore »*.
+
+**Quinze essais neufs**, dont les contrôles de fuite **par paires** : chaque refus a son
+témoin positif sur le même terme, sinon une recherche qui ne rend jamais rien passerait au
+vert (motif Q-210).
+
 ### Vague A — on arrête les passages, on construit (14/09/2026)
 
 **Arbitrage de l'utilisateur** : *« cette énorme quantité de passages ne fait que perdre du

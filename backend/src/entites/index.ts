@@ -859,6 +859,44 @@ export function listerEntites(): readonly NomEntite[] {
   return ORDRE_ENTITES;
 }
 
+/**
+ * La table d'une entité et la colonne qui porte son **libellé affichable**.
+ *
+ * ── Pourquoi le libellé est DÉCOUVERT, et pourquoi il s'arrête là ────────
+ *
+ * Sert à la recherche globale (lot L17, action A3). Le libellé est la première
+ * colonne présente parmi `nom`, `titre`, `societe` — c'est-à-dire **ce que le
+ * produit affiche déjà** pour désigner l'enregistrement dans une liste. Une
+ * correspondance écrite entité par entité aurait vieilli : une entité neuve
+ * serait restée introuvable **sans un mot**, et personne ne cherche ce qu'il ne
+ * sait pas manquant.
+ *
+ * ⚠️ **Et la recherche NE VA PAS AU-DELÀ du libellé, à dessein.** Balayer toutes
+ * les colonnes textuelles ferait de l'outil un moteur de recherche sur du texte
+ * libre — commentaires d'incident, notes d'audit, description de risque — dont
+ * le registre de l'article 30 dit qu'une partie porte des personnes
+ * (`colonnes_personnelles`, régimes « personnelle » et « signaler »). Un produit
+ * qui doit lui-même être conforme au RGPD ne se donne pas cette surface en
+ * passant, et sûrement pas dans le lot qui traite de la PRISE EN MAIN. La
+ * recherche plein texte est une décision à prendre pour elle-même.
+ *
+ * Rend `null` si la table ne porte aucune de ces colonnes — l'entité est alors
+ * simplement hors recherche, et le banc le compte plutôt que de le supposer.
+ */
+export function cibleDeRecherche(
+  catalogue: Catalogue,
+  entite: NomEntite,
+): { readonly table: string; readonly libelle: string } | null {
+  const d = REGISTRE.get(entite);
+  if (d === undefined) return null;
+  const table = catalogue.tables.get(d.table);
+  if (table === undefined) return null;
+  for (const candidate of ['nom', 'titre', 'societe']) {
+    if (table.colonnes.has(candidate)) return { table: d.table, libelle: candidate };
+  }
+  return null;
+}
+
 /* ---------------------------------------------------------------------
  *  Ce qu'un fichier de reprise apporte — lu, borné et compté UNE fois
  * ------------------------------------------------------------------- */

@@ -1766,3 +1766,104 @@ h3.imp-etat-pret, h3.imp-etat-refus, h3.imp-etat-apercu, h3.imp-etat-info { marg
    disputaient l'attribut, et le menu se redépliait. Avec une classe, elles se
    composent : visible si le droit existe ET si la section est ouverte. */
 .main-nav li.nav-repliee { display: none; }
+
+/* =====================================================================
+   PALETTE DE RECHERCHE — lot L17, action A3
+   ---------------------------------------------------------------------
+   ⚠️ Volontairement sobre : le frontend sera refait (arbitrage du
+   15/09/2026). On habille pour que ce soit utilisable, pas pour que ce
+   soit fini. Tokens seulement, aucune couleur écrite en dur.
+   ===================================================================== */
+
+.palette-declencheur {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: calc(100% - 1.5rem);
+    margin: 0 0.75rem 0.75rem;
+    padding: 0.5rem 0.65rem;
+    min-height: 34px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.palette-declencheur:hover { color: var(--text); background: rgba(255, 255, 255, 0.12); }
+.palette-declencheur:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.palette-declencheur kbd {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 3px;
+    white-space: nowrap;
+}
+
+.palette-fond {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 12vh;
+}
+
+.palette {
+    width: min(640px, 92vw);
+    background: var(--surface, #fff);
+    color: var(--text);
+    border-radius: 10px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+}
+
+.palette-champ {
+    width: 100%;
+    padding: 1rem 1.1rem;
+    border: 0;
+    border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.12));
+    font: inherit;
+    font-size: 1.05rem;
+    background: transparent;
+    color: inherit;
+}
+
+.palette-champ:focus { outline: none; }
+
+.palette-corps { max-height: 52vh; overflow-y: auto; }
+
+.palette-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.6rem 1.1rem;
+    cursor: pointer;
+    min-height: 34px;
+}
+
+.palette-item:hover,
+.palette-item:focus-visible { background: rgba(0, 0, 0, 0.05); outline: none; }
+
+/* Un résultat sans route connue ne se clique pas : il ne doit pas se
+   présenter comme cliquable. La dégradation reste VISIBLE. */
+.palette-item:not([data-href]) { cursor: default; opacity: 0.75; }
+
+.palette-libelle { font-weight: 500; }
+.palette-entite { color: var(--text-muted); font-size: 0.78rem; white-space: nowrap; }
+
+.palette-vide { padding: 0.9rem 1.1rem; color: var(--text-muted); font-size: 0.88rem; }
+
+.palette-pied {
+    padding: 0.5rem 1.1rem;
+    border-top: 1px solid var(--border, rgba(0, 0, 0, 0.12));
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
