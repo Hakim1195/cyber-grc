@@ -799,6 +799,16 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     ['GET', '/api/journal', undefined],
     ['GET', '/api/journal/export', undefined],
     ['GET', '/api/journal/verification', undefined],
+    // Les trois routes du jeu de découverte (lot L18 bis). Servies sans
+    // identité, la première dirait à un anonyme combien de lignes RÉELLES porte
+    // la base — c'est-à-dire si l'installation est en service ; la deuxième
+    // écrirait une trentaine de lignes fictives dans une filiale ; et la
+    // troisième en SUPPRIMERAIT, avec les pièces jointes qui les suivent. Le
+    // garde de profil vit un étage plus haut, et il ne dispense pas de celui-ci :
+    // c'est la couture même qui a fait passer le constat T-3.
+    ['GET', '/api/decouverte/etat', undefined],
+    ['POST', '/api/decouverte/semer', undefined],
+    ['POST', '/api/decouverte/purger', undefined],
     // Le sélecteur de filiale du lot L4 (`CONVENTIONS.md` §30.2). Il est ici pour
     // la raison qui vaut pour tous les autres, et une de plus : c'est la seule
     // route du produit qui reçoit un identifiant de filiale, et une route qui

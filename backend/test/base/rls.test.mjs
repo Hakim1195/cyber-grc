@@ -4103,6 +4103,16 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // definer » — sans quoi le resserrement se retourne en récursion.
       'lecture_filiales',
       'lecture_journal',
+      // TRENTE-SIXIÈME, apporté par `032_la_marque_de_provenance.sql` : toute entité
+      // MÉTIER — découverte au catalogue par « porte `filiale_id` ET porte `cree_par` » —
+      // dit d'où vient chacune de ses lignes (`saisie`, `decouverte`, `reprise`). C'est la
+      // condition constitutive n° 1 du jeu de découverte (arbitrage A2 du 08/09/2026) :
+      // sans elle, une ligne de démonstration devient INDISCERNABLE d'une ligne réelle dès
+      // le premier export. ⚠️ Le garde balaie dans TROIS sens, et c'est le troisième — une
+      // colonne `provenance` hors du domaine — qui a trouvé, à sa première exécution, que
+      // le nom `origine` que le plan prescrivait était DÉJÀ PRIS, avec deux sens différents
+      // (`referentiels_actifs`, `risque_catalogue`). Le nom a cédé, la propriété non.
+      'marque_provenance',
       // SEIZIÈME, apporté par `018_version_en_vigueur.sql` (action D1 de la
       // vague 9) : il vérifie les TROIS pièces du dispositif « version en vigueur »
       // — l'index unique partiel existe ET porte `filiale_id`, la contrainte de

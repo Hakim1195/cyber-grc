@@ -124,6 +124,7 @@ import { greffonFiliales } from '../filiales/index.js';
 import { greffonApprobations } from '../approbations/index.js';
 import { greffonNotifications } from '../notifications/index.js';
 import { greffonCycle } from '../cycle/index.js';
+import { greffonDecouverte } from '../decouverte/index.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
 import { AuthentificationProvisoire, estAuthentificateur, PerimetreProvisoire } from './session.js';
@@ -3178,6 +3179,10 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  survivre à un `rollback` de l'acte.
    * ------------------------------------------------------------------- */
   await instance.register(greffonCycle, { pool });
+  // Lot L18 bis — le jeu de découverte. Le profil vient de la CONFIGURATION
+  // validée au démarrage, jamais d'une requête : c'est lui qui décide si la
+  // route est praticable (condition constitutive n° 5).
+  await instance.register(greffonDecouverte, { pool, profil: config.profil });
 
   const service = options.serviceAuthentification;
   if (service !== undefined) {

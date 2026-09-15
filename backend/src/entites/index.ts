@@ -315,6 +315,37 @@ const CHAMP_VERSION_SECONDE = '_versionMiseEnOeuvre';
  * module qui reconstruit un objet ne doit pas pouvoir le perdre au passage.
  */
 const CHAMP_PORTEE_GROUPE = '_porteeGroupe';
+/**
+ * D'où vient la ligne — `saisie`, `decouverte` ou `reprise` (migration `032`,
+ * domaine `provenance_ligne`).
+ *
+ * ── Pourquoi elle est STRUCTURELLE, et non une donnée comme une autre ────
+ *
+ * C'est la **condition constitutive n° 1** du jeu de découverte (arbitrage A2 du
+ * 08/09/2026) : *« chaque enregistrement engendré porte une marque que l'export,
+ * l'impression et le journal reprennent »*. Deux exigences en tension, et il faut
+ * les deux :
+ *
+ *  · elle doit **sortir** — sinon un export du jeu de découverte est
+ *    indiscernable d'un export de données réelles, ce qui est précisément le
+ *    défaut que la marque existe pour empêcher ;
+ *  · elle ne doit **jamais entrer depuis le client** — sinon n'importe quel
+ *    appelant déclare `saisie` sur une ligne de démonstration, ou l'inverse, et
+ *    la marque ne prouve plus rien. Le contrôle « la base porte-t-elle des
+ *    données réelles ? » (condition 3) s'appuie dessus : forgeable, il devient
+ *    une politesse.
+ *
+ * Le souligné initial est exactement la forme prévue pour cela — celle de
+ * `_version`, `_versionMiseEnOeuvre` et `_porteeGroupe` : le serveur l'ajoute à
+ * ce qu'il rend, la reprise l'ignore **par le préfixe** (jamais par une liste de
+ * noms — le commentaire de `signaler()` annonçait « le quatrième champ
+ * structurel arriverait sans que personne y pense » ; c'est lui), et le
+ * garde-fou `f_verifier_champs_structurels()` interdit qu'une COLONNE porte ce
+ * nom.
+ */
+const CHAMP_PROVENANCE = '_provenance';
+/** Nom de la colonne qui porte la marque, côté base (migration `032`). */
+const COLONNE_PROVENANCE = 'provenance';
 const CHAMPS_STRUCTURELS: ReadonlySet<string> = new Set([CHAMP_VERSION, CHAMP_VERSION_SECONDE]);
 
 /* =====================================================================
@@ -1537,6 +1568,10 @@ function cibleDuChamp(
   // Traçabilité, cloisonnement, identité : structurels, jamais des données.
   if (COLONNES_TRACABILITE.has(nomColonne)) return null;
   if (nomColonne === 'filiale_id' || nomColonne === 'id') return null;
+  // La marque de provenance sort sous `_provenance` et n'entre jamais : la
+  // laisser ici en ferait un champ que le client écrit, donc une marque qu'il
+  // forge (migration `032`).
+  if (nomColonne === COLONNE_PROVENANCE) return null;
   if (colonne.engendree) return null;
 
   return { table: d.table, colonne };
@@ -1551,6 +1586,7 @@ function champsExposes(catalogue: Catalogue, d: DescriptionEntite): Map<string, 
     for (const colonne of table.colonnes.values()) {
       if (COLONNES_TRACABILITE.has(colonne.nom)) continue;
       if (colonne.nom === 'filiale_id' || colonne.nom === 'id') continue;
+      if (colonne.nom === COLONNE_PROVENANCE) continue;
       if (colonne.engendree) continue;
       if ((d.colonnesReservees ?? {})[colonne.nom] !== undefined && nomTable === d.table) continue;
       if (
@@ -3514,6 +3550,13 @@ export class Depot {
         ` as ${ident('maj_principale')}`,
     );
     if (table.cloisonnee) selections.push(`p.${ident('filiale_id')} as ${ident('f_principale')}`);
+    // La marque de provenance, quand la table la porte. Découverte au catalogue :
+    // les trois écarts déclarés par la migration `032` ne l'ont pas, et une table
+    // antérieure à cette migration ne l'aurait pas non plus.
+    const porteProvenance = table.colonnes.has(COLONNE_PROVENANCE);
+    if (porteProvenance) {
+      selections.push(`p.${ident(COLONNE_PROVENANCE)} as ${ident('prov_principale')}`);
+    }
 
     const conditions: string[] = [];
     const parametres: unknown[] = [];
@@ -3611,6 +3654,9 @@ export class Depot {
       }
 
       enregistrement[CHAMP_VERSION] = Number(ligne['v_principale']);
+      if (porteProvenance) {
+        enregistrement[CHAMP_PROVENANCE] = String(ligne['prov_principale']);
+      }
       // Seulement pour les entités MIXTES : sur une table dont `filiale_id` ne
       // peut pas être nul, le champ vaudrait `false` partout et ferait croire à
       // une distinction qui n'existe pas.

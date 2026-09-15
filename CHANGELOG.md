@@ -39,6 +39,46 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### Vague A — on arrête les passages, on construit (14/09/2026)
+
+**Arbitrage de l'utilisateur** : *« cette énorme quantité de passages ne fait que perdre du
+temps […] il me faut le logiciel fonctionnel et complet »*. Mesuré avant d'en décider :
+**zéro nouvel écran dans la SPA en dix jours**, 80 % du travail hors SPA, 34 rapports de
+porte pour **28 690 lignes** — presque toute la SPA —, et **rien en classe 1 ou 2** aux
+trois derniers passages. Le plan est au [`docs/PLAN_ACHEVEMENT.md`](docs/PLAN_ACHEVEMENT.md).
+
+**A1 — le jeu de découverte (lot L18 bis) est LIVRÉ**, avec ses **cinq conditions
+constitutives** éprouvées une par une.
+
+- **Migration `032` — la marque de provenance.** Toute entité métier — **découverte au
+  catalogue** par « porte `filiale_id` ET porte `cree_par` », 29 tables, trois écarts
+  déclarés avec leur motif — porte `provenance` : `saisie`, `decouverte` ou `reprise`,
+  domaine clos.
+- ⚠️ **La marque est posée PAR LA BASE**, depuis le réglage de transaction
+  `grc.provenance`, exactement comme `cree_par`. La valeur de l'appelant est **écrasée** :
+  *une marque que le client choisit ne prouve rien*, et le contrôle « la base porte-t-elle
+  des données réelles ? » s'appuie dessus. Mesuré : un `insert` déclarant `decouverte`
+  ressort en `saisie`.
+- ⚠️ **Le nom `origine` que le plan prescrivait était DÉJÀ PRIS**, avec deux sens
+  différents (`referentiels_actifs`, `risque_catalogue`). C'est le garde-fou neuf qui l'a
+  trouvé, à sa première exécution — et le `add column if not exists` aurait silencieusement
+  ne rien fait sur ces deux tables, y laissant des lignes de démonstration indiscernables
+  des réelles. *Le nom cède, la propriété non.*
+- ⚠️ **Et le domaine ne porte pas `not null`** : il faisait rougir quinze anomalies sur
+  trois tables sans rapport, parce que `f_contrainte_accepte()` construit sa ligne témoin
+  par `jsonb_populate_record(null::<table>, …)`. *Une colonne ajoutée ailleurs aurait rendu
+  aveugle le garde le plus récent du dépôt.*
+- ✅ **Fermé à la CLASSE, pas à l'instance** : `f_verifier_domaines_eprouves()` **découvre
+  désormais les domaines dans le catalogue** et rend `domaine_sans_temoin` pour tout domaine
+  que personne n'éprouve. Trouvé en mutant la migration qu'on venait d'écrire —
+  `provenance_ligne` se vidait par « … or true » sous **zéro anomalie**, faute d'un témoin.
+  C'est le constat A-2 du 10ᵉ passage, fermé pour de bon.
+- **`GET /api/decouverte/etat`, `POST …/semer`, `POST …/purger`**, et le panneau des
+  Paramètres. Le semis est refusé hors profil découverte (**403, journalisé**), refusé si la
+  base porte **la moindre ligne non marquée**, et la purge emprunte le déclencheur `017`
+  pour que les pièces jointes suivent.
+- **Huit essais neufs**, un par condition et par refus.
+
 ### Après le 9ᵉ passage — ce que personne n'avait pu auditer (14/09/2026)
 
 **Question posée : « les docs sont à jour ? »** Le contrôle mécanique — la famille

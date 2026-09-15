@@ -989,6 +989,15 @@ const Api = (() => {
      */
     function registreProduit() { return appeler("/rgpd/registre-produit"); }
 
+    /* ── Le jeu de découverte — lot L18 bis ────────────────────────────────
+       Trois appels, et aucun ne prend d'argument : le serveur décide seul de
+       ce qui est possible (profil de l'installation, présence de données
+       réelles). Un paramètre ici serait une décision que le client propose,
+       c'est-à-dire une condition constitutive qu'il pourrait contourner. */
+    function decouverteEtat()  { return appeler("/decouverte/etat"); }
+    function decouverteSemer() { return appeler("/decouverte/semer",  { methode: "POST" }); }
+    function decouvertePurger(){ return appeler("/decouverte/purger", { methode: "POST" }); }
+
     function propagerMesure(mesureId) {
         return appeler("/operations/propager-mesure", { methode: "POST", corps: { mesureId: mesureId } });
     }
@@ -1007,7 +1016,9 @@ const Api = (() => {
         // Vague 6 : ce que les écrans devaient sinon appeler par une porte à eux.
         consolidation, approbations, deciderApprobation,
         // Lot RGPD : le produit rend compte de LUI-MÊME.
-        registreProduit
+        registreProduit,
+        // Lot L18 bis : le jeu de découverte.
+        decouverteEtat, decouverteSemer, decouvertePurger
     };
 })();
 

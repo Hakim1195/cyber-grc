@@ -63,6 +63,16 @@ const SettingsModule = (() => {
                     </div>
                 </div>
 
+                <!-- JEU DE DÉCOUVERTE — lot L18 bis.
+                     Placé HAUT, juste sous l'état de la liaison : c'est l'écran
+                     qu'ouvre quelqu'un qui vient d'installer le produit et se
+                     demande pourquoi tout est vide. Le mettre en bas de page
+                     reviendrait à le cacher à celui qui en a besoin. -->
+                <div class="dashboard-card" id="decouverte-carte" style="border-top: 4px solid var(--accent); margin-bottom: 1.5rem; display: none;">
+                    <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Jeu de découverte ${typeof Help !== "undefined" ? Help.tip("Un groupe industriel fictif — filiales, risques, actifs, incidents, documents — pour voir le produit rempli au lieu de l'imaginer. Chaque ligne porte une marque « découverte » DANS la base : elle reste reconnaissable à l'export et à l'impression, et se retire d'un geste.") : ""}</h3>
+                    <div id="decouverte-corps"><div style="color: var(--text-muted);">Chargement…</div></div>
+                </div>
+
                 <!-- SÉCURITÉ & CHIFFREMENT -->
                 <div class="dashboard-card" style="border-top: 4px solid var(--primary); margin-bottom: 1.5rem;">
                     <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Sécurité</h3>
@@ -129,6 +139,7 @@ const SettingsModule = (() => {
         wireImport();
         loadStorageInfo();
         renderSecurity();
+        chargerDecouverte();
 
         // La tuile « Modifications en attente » était une PHOTO prise au rendu :
         // elle pouvait annoncer « non enregistrées » une demi-seconde avant que
@@ -142,6 +153,118 @@ const SettingsModule = (() => {
                 if (document.getElementById("storage-stats")) loadStorageInfo();
             });
         }
+    }
+
+    /* ===== Jeu de découverte (lot L18 bis) =====
+
+       ⚠️ **Cet écran ne décide rien.** Il affiche ce que le serveur dit, et il
+       le dit en toutes lettres — y compris quand le semis est refusé. Un bouton
+       grisé sans explication est la classe des constats Q-201 / Q-207 :
+       *l'utilisateur apprend que l'écran lui cache des choses, y compris le jour
+       où il n'en cache aucune*. Le serveur rend donc TOUJOURS un `motif`.
+
+       ⚠️ **Aucun gestionnaire en ligne** : la politique de sécurité de contenu du
+       vhost les bloque, et l'application a été livrée un temps sans fonctionner
+       dans sa configuration de déploiement pour cette raison exacte. On branche
+       après rendu. */
+    function chargerDecouverte() {
+        const carte = document.getElementById("decouverte-carte");
+        const corps = document.getElementById("decouverte-corps");
+        if (!carte || !corps) return;
+
+        Api.decouverteEtat().then(function (etat) {
+            // La carte ne s'affiche QUE sur une installation de découverte :
+            // proposer un jeu fictif sur une installation de production, même
+            // en le refusant, serait suggérer qu'il existe une manière de le
+            // charger. Il n'y en a pas — c'est la condition constitutive n° 5.
+            if (!etat || etat.profil !== "decouverte") { carte.style.display = "none"; return; }
+            carte.style.display = "";
+            rendreDecouverte(etat);
+        }).catch(function () {
+            // Une route absente (serveur antérieur à L18 bis) n'est pas une
+            // erreur à afficher : la carte reste simplement cachée.
+            carte.style.display = "none";
+        });
+    }
+
+    function rendreDecouverte(etat) {
+        const corps = document.getElementById("decouverte-corps");
+        if (!corps) return;
+
+        const esc = window.escapeHtml || function (v) { return String(v == null ? "" : v); };
+        const chiffres =
+            '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1rem;">' +
+            tuile("Lignes de découverte", etat.lignesDecouverte) +
+            tuile("Lignes réelles", etat.lignesReelles) +
+            tuile("Tables examinées", etat.tablesExaminees) +
+            "</div>";
+
+        const boutons =
+            '<div style="display:flex;gap:.75rem;flex-wrap:wrap;">' +
+            (etat.semable
+                ? '<button class="btn btn-primary" id="decouverte-semer">Charger le jeu de découverte</button>'
+                : "") +
+            (etat.present
+                ? '<button class="btn btn-secondary" id="decouverte-purger">Tout retirer</button>'
+                : "") +
+            "</div>";
+
+        corps.innerHTML =
+            chiffres +
+            '<div class="help-note" style="margin-bottom:1rem;">' + esc(etat.motif) + "</div>" +
+            boutons +
+            '<div id="decouverte-message" style="margin-top:.75rem;"></div>';
+
+        const semer = document.getElementById("decouverte-semer");
+        if (semer) semer.addEventListener("click", function () { agir(semer, Api.decouverteSemer, "chargé"); });
+        const purger = document.getElementById("decouverte-purger");
+        if (purger) {
+            purger.addEventListener("click", function () {
+                if (!window.confirm(
+                    "Retirer toutes les lignes du jeu de découverte ?\n\n" +
+                    "Les pièces jointes qui y sont rattachées partent avec elles. " +
+                    "Les lignes que vous avez saisies vous-même ne sont pas touchées."
+                )) return;
+                agir(purger, Api.decouvertePurger, "retiré");
+            });
+        }
+    }
+
+    function tuile(libelle, valeur) {
+        const esc = window.escapeHtml || String;
+        return '<div><div style="font-size:1.6rem;font-weight:600;">' + esc(String(valeur)) +
+               '</div><div style="color:var(--text-muted);font-size:.85rem;">' + esc(libelle) + "</div></div>";
+    }
+
+    function agir(bouton, appel, verbe) {
+        const message = document.getElementById("decouverte-message");
+        bouton.disabled = true;
+        const libelleInitial = bouton.textContent;
+        bouton.textContent = "En cours…";
+        appel().then(function (resultat) {
+            if (message) {
+                message.innerHTML = '<div class="help-note">Jeu de découverte ' + verbe + " — " +
+                    String(resultat.semees != null ? resultat.semees : resultat.supprimees) +
+                    " enregistrements. Les écrans sont rafraîchis.</div>";
+            }
+            // Le jeu vient de changer la base : on RECHARGE plutôt que de
+            // rafistoler l'état en mémoire. `DataStore` est la source de vérité
+            // des 26 modules, et la laisser diverger de la base est la famille
+            // du constat Q-303.
+            if (typeof Sync !== "undefined" && Sync.recharger) {
+                Sync.recharger().then(function () { render(); }).catch(function () { render(); });
+            } else {
+                window.location.reload();
+            }
+        }).catch(function (e) {
+            bouton.disabled = false;
+            bouton.textContent = libelleInitial;
+            if (message) {
+                const esc = window.escapeHtml || String;
+                message.innerHTML = '<div class="help-note" style="border-left-color: var(--color-danger);">' +
+                    esc(e && e.message ? e.message : "L’opération n’a pas abouti.") + "</div>";
+            }
+        });
     }
 
     /* ===== Sécurité =====
