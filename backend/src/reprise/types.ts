@@ -37,7 +37,7 @@ export type Enregistrement = ObjetJson;
  * ===================================================================== */
 
 /**
- * Les 21 collections du schéma v12, dans l'ordre exact de `ARRAY_FIELDS`
+ * Les collections de l'instantané, dans l'ordre exact de `ARRAY_FIELDS`
  * (`cyber-gouvernance_V4/js/core/datastore.js`). L'ordre compte : il est celui
  * du rapport de volumes, et il place les entités référencées avant celles qui
  * les référencent, ce dont la couche d'insertion du lot L2 tirera parti.
@@ -65,7 +65,9 @@ export type NomCollection =
   | 'history'
   | 'risque_catalogue'
   | 'referentiels_actifs'
-  | 'personnes';
+  | 'personnes'
+  // v14 — les dérogations datées (action 19.2).
+  | 'derogations';
 
 /**
  * Charge utile normalisée en v12.

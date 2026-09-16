@@ -270,11 +270,18 @@ export interface JournalMinimalReprise {
  * ⚠️ **Elle doit rester égale à `SCHEMA_VERSION` de `js/core/datastore.js`.** Le
  * navigateur adopte cet objet TEL QUEL comme son `data` : deux versions qui
  * divergeraient feraient reprendre un export sous une forme que le produit ne
- * connaît pas. La montée v12 → v13 n'est qu'un AJOUT — aucune donnée n'est
- * transformée, `normalize` crée les deux tableaux vides, et un export v12 se
- * reprend à l'identique.
+ * connaît pas. Les montées v12 → v13 puis v13 → v14 ne sont que des AJOUTS —
+ * aucune donnée n'est transformée, `normalize` crée les tableaux vides, et un
+ * export antérieur se reprend à l'identique.
+ *
+ * ⚠️ **Et c'est la TROISIÈME copie du même nombre** : celle-ci, celle du
+ * navigateur, et celle de `src/reprise/index.ts` — la version la plus haute que
+ * la chaîne de paliers sait relire. En monter deux et oublier la troisième donne
+ * un produit qui **exporte un fichier qu'il refuse de relire** ; c'est arrivé au
+ * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
+ * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 13;
+export const VERSION_SCHEMA = 14;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -849,6 +856,24 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
     'referentiels_actifs',
     { nom: 'referentiels_actifs', table: 'referentiels_actifs', prefixe: 'REFA' },
   ],
+
+  // ── Les dérogations datées (migration 035, action 19.2) ────────────────────
+  //
+  // Un écart de conformité ASSUMÉ : un propriétaire, un motif, une échéance, et
+  // une décision du circuit L8. Elle entre ici — dans la couche générique — et
+  // non dans un greffon à elle, parce qu'elle n'a besoin de RIEN de particulier :
+  // verrouillage optimiste, journal, cloisonnement, import et round-trip
+  // `grc-backup` lui viennent tels quels. Un greffon propre aurait refait les
+  // six, moins bien.
+  //
+  // ⚠️ **Ce que cette entité n'expose PAS, et qui est le cœur de l'action 19.2 :
+  // son ÉTAT.** « En vigueur », « échue », « en attente » ne sont pas des
+  // colonnes — ils se DÉRIVENT de l'échéance et de la décision du circuit, à un
+  // seul endroit (`f_etat_derogation()`). Les stocker obligerait quelque chose à
+  // repasser pour les remettre, et le jour où ce quelque chose ne repasse pas, le
+  // produit affirme une conformité qui n'existe plus, en silence. C'est
+  // `GET /api/derogations/etat` qui les rend, et lui seul.
+  ['derogations', { nom: 'derogations', table: 'derogations', prefixe: 'DER' }],
 ]);
 
 /** Ordre de chargement : celui d'`ARRAY_FIELDS` du frontend. */

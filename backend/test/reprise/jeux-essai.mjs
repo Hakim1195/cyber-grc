@@ -71,6 +71,8 @@ const NOUVELLES_PAR_VERSION = {
   12: [],
   // v13 — socle de risques du Groupe, et activation des référentiels par filiale.
   13: ['risque_catalogue', 'referentiels_actifs'],
+  // v14 — les dérogations datées (action 19.2).
+  14: ['derogations'],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -492,6 +494,35 @@ export function instantaneV12Complet() {
  * Les deux collections portent une ligne, pas un tableau vide : un round-trip
  * qui ne transporte rien ne prouve pas qu'il transporte bien.
  */
+/**
+ * Le même instantané, **en version courante (v14)**.
+ *
+ * ⚠️ `instantaneV13Complet()` reste, et il ne faut pas le « rattraper » : il
+ * porte la question *« un v13 traverse-t-il exactement un palier et y gagne-t-il
+ * sa collection ? »*, qui est celle d'un fichier RÉEL produit par un poste. Celui-ci
+ * porte la question inverse — *« un export à la version courante ne traverse AUCUN
+ * palier et ne subit AUCUNE modification »* —, et c'est elle qui dérive en silence
+ * au premier ajout de collection. C'est arrivé le 04/09/2026, puis de nouveau à la
+ * v14 : d'où deux jeux, et non un seul qu'on renumérote.
+ */
+export function instantaneV14Complet() {
+  return {
+    ...instantaneV13Complet(),
+    schemaVersion: 14,
+    derogations: [
+      {
+        id: 'DER-1720000000000-203',
+        exigence_id: 'EX-1720000000000-102',
+        proprietaire: 'Claire Vasseur',
+        motif: 'Automate du fournisseur incompatible avant le renouvellement de la ligne.',
+        accordee_le: '2026-01-15',
+        echeance: '2026-12-31',
+        compensation: 'Surveillance renforcée des connexions de ce compte.',
+      },
+    ],
+  };
+}
+
 export function instantaneV13Complet() {
   return {
     ...instantaneV12Complet(),

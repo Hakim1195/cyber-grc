@@ -263,6 +263,7 @@ const DocumentsModule = (() => {
                 </div>
                 ${typeof PiecesModule !== "undefined" ? PiecesModule.hoteHtml() : ""}
                 ${typeof ApprobationsModule !== "undefined" ? ApprobationsModule.encartHtml("documents", doc.id) : ""}
+                ${typeof AttestationsModule !== "undefined" ? AttestationsModule.encartHtml(doc.id) : ""}
             </section>`;
         wireCanevas();
         wireClassification();
@@ -287,6 +288,16 @@ const DocumentsModule = (() => {
             // désarmait — l'encart annonçait « introuvable… ou il appartient à une
             // autre filiale » sur un document qu'on venait de créer.
             ApprobationsModule.brancherEncart("documents", doc.id);
+        }
+        // ── 19.1 : qui a lu cette politique, SUR la fiche ───────────────────
+        //
+        // Même couture que l'encart d'approbation, et pour la même raison : la
+        // preuve se lit à côté de ce qu'elle prouve. `brancherEncart` relit
+        // l'identifiant dans le `data-id` du conteneur — l'argument n'est qu'un
+        // repli, parce que le serveur réattribue l'identifiant à la création
+        // (constat Q-303).
+        if (typeof AttestationsModule !== "undefined") {
+            AttestationsModule.brancherEncart(doc.id);
         }
         document.getElementById("saveBtn").onclick = () => {
             const data = collectForm();
@@ -430,6 +441,13 @@ const DocumentsModule = (() => {
                     </label>
                 </div>
                 <div class="form-group">
+                    <label class="inc-checkbox" style="border:none; background:none; padding:0;">
+                        <input type="checkbox" id="attestation_requise" ${doc.attestation_requise ? "checked" : ""}>
+                        Ce document exige une attestation de lecture ${Help.tip("Le personnel de la filiale devra déclarer avoir lu ce document, et cette déclaration sera datée et conservée. C'est la preuve que demande un auditeur au chapitre A.5.1 de l'ISO 27001. L'attestation ne vaut que pour la version en vigueur : réviser le document la périme, et la demande repart.")}
+                    </label>
+                    <p class="doc-note">Une attestation ne peut être posée que par la personne elle-même, depuis cette fiche : personne ne peut attester au nom d'un autre.</p>
+                </div>
+                <div class="form-group">
                     <label>Étiquettes ${Help.tip("Mots de classement libres, pour retrouver un document par autre chose que son type : « audit 2026 », « client Airbus », « confidentiel RH ». La casse est conservée à l'affichage, mais deux étiquettes qui ne diffèrent que par la casse sont la même.")}</label>
                     ${UI.chipsHtml("etiquettes", etiquettesDe(doc), {
                         liste: "etiquettes-list",
@@ -496,6 +514,11 @@ const DocumentsModule = (() => {
             referentiels: Array.from(document.querySelectorAll(".doc-ref:checked")).map(cb => cb.value),
             confidentialite: document.getElementById("confidentialite").value,
             donnees_personnelles: document.getElementById("donnees_personnelles").checked,
+            // Lot L19, action 19.1. ⚠️ Ce drapeau est la seule chose qui active
+            // la demande d'attestation : le lot l'avait livré en base et dans
+            // l'API sans qu'AUCUN écran ne puisse le poser — une capacité qu'on
+            // ne peut pas allumer est une capacité absente.
+            attestation_requise: document.getElementById("attestation_requise").checked,
             // Chaîne vide et non `null` : le serveur convertit le « non renseigné »
             // du navigateur en NULL parce que la colonne porte le domaine `id_metier`
             // (constat Q-194). Envoyer `null` d'ici court-circuiterait cette

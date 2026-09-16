@@ -60,7 +60,8 @@ export type NomEntite =
   | 'history'
   | 'personnes'
   | 'risque_catalogue'
-  | 'referentiels_actifs';
+  | 'referentiels_actifs'
+  | 'derogations';
 
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;

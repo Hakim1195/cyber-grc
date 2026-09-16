@@ -989,6 +989,89 @@ const Api = (() => {
      */
     function registreProduit() { return appeler("/rgpd/registre-produit"); }
 
+    /* ═══════════════════════════════════════════════════════════════════════
+       L'ATTESTATION DE LECTURE — lot L19, action 19.1
+       ═══════════════════════════════════════════════════════════════════════
+
+       Trois appels, et **aucun ne transporte l'identité de qui atteste**.
+
+       C'est la décision centrale de `backend/src/attestations/index.ts`, et
+       elle se voit d'ici : `attester()` ne prend qu'un document et, au plus,
+       un commentaire. La personne est déduite de la session côté serveur, et
+       la version lue est celle qui fait foi **au moment du geste** — elle non
+       plus n'est pas proposée par le navigateur.
+
+       ⚠️ **Une porte qui accepterait `personneId` suffirait à vider la preuve
+       de son sens** : une attestation qu'un tiers peut fabriquer ne prouve
+       rien. Le contrat est tenu par la FORME de ces fonctions, comme le
+       périmètre de session l'est par celle de `resoudre()` — ne pas ajouter de
+       paramètre ici sans lire l'en-tête du module serveur. */
+
+    /** Les politiques que la personne connectée doit encore lire (ou relire). */
+    function attestationsAFaire() { return appeler("/attestations/a-faire"); }
+
+    /** Qui a attesté ce document, dans quelle version, et le taux de couverture. */
+    function attestationsDocument(documentId) {
+        return appeler("/attestations/documents/" + encodeURIComponent(documentId));
+    }
+
+    /**
+     * J'atteste avoir lu ce document.
+     *
+     * Le commentaire est facultatif : il permet de porter une réserve. Il est
+     * borné à 2 000 signes **par le serveur** — la borne n'est pas recopiée
+     * ici, sans quoi deux plafonds de la même saisie divergeraient.
+     */
+    function attester(documentId, commentaire) {
+        const corps = {};
+        if (commentaire) corps.commentaire = commentaire;
+        return appeler("/attestations/documents/" + encodeURIComponent(documentId),
+            { methode: "POST", corps: corps });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       L'HORLOGE RÉGLEMENTAIRE — lot L20, action 20.1
+       ═══════════════════════════════════════════════════════════════════════
+
+       ⚠️ **Le produit ne transmet RIEN à une autorité**, et ces deux fonctions
+       le disent par ce qu'elles ne font pas : on LIT des échéances, on CONSIGNE
+       une déclaration déjà faite. Il n'existe aucun appel « envoyer à l'ANSSI »,
+       et il ne doit pas en apparaître — ce serait une prise de responsabilité
+       que le logiciel ne peut pas porter (critère 20.2).
+
+       ⚠️ **Et le calcul ne se refait jamais ici.** Les quatre délais vivent
+       dans `f_echeances_reglementaires()` (migration `034`), à un seul endroit.
+       Recalculer « détection + 24 h » dans le navigateur donnerait deux comptes
+       de la même obligation réglementaire, et c'est la pire chose qu'un outil
+       produit en audit puisse afficher. */
+
+    /** Ce qui est dû, pour quand, et depuis quelle détection. */
+    function echeancesReglementaires() { return appeler("/reglementaire/echeances"); }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       LES DÉROGATIONS DATÉES — lot L19, action 19.2
+       ═══════════════════════════════════════════════════════════════════════
+
+       **Une seule fonction, et elle LIT.** Les dérogations s'écrivent par la
+       façade `DataStore` comme n'importe quelle entité — elles héritent ainsi du
+       verrouillage optimiste, du journal et du cloisonnement sans une ligne de
+       plus. Leur approbation passe par `Api.deciderApprobation`, inchangée.
+
+       ⚠️ **Ce que cette route rend et que rien d'autre ne peut rendre, c'est
+       l'ÉTAT** : cette dérogation couvre-t-elle encore l'écart ? Il n'est pas
+       stocké, il se dérive — de l'échéance et de la décision du circuit. Le
+       recalculer ici serait une seconde rédaction de la règle, qui dériverait
+       dès que l'horloge du poste diffère de celle du serveur. */
+
+    /** Les dérogations du périmètre, avec leur état DÉRIVÉ et celui de leur circuit. */
+    function derogationsEtat() { return appeler("/derogations/etat"); }
+
+    /** Consigner une déclaration DÉJÀ FAITE à une autorité, avec son accusé. */
+    function consignerDeclaration(incidentId, declaration) {
+        return appeler("/reglementaire/incidents/" + encodeURIComponent(incidentId)
+            + "/declarations", { methode: "POST", corps: declaration });
+    }
+
     /* ── Le jeu de découverte — lot L18 bis ────────────────────────────────
        Trois appels, et aucun ne prend d'argument : le serveur décide seul de
        ce qui est possible (profil de l'installation, présence de données
@@ -1026,6 +1109,12 @@ const Api = (() => {
         registreProduit,
         // Lot L17 : la recherche globale.
         recherche,
+        // Lot L19, action 19.1 : l'attestation de lecture.
+        attestationsAFaire, attestationsDocument, attester,
+        // Lot L20, action 20.1 : l'horloge réglementaire.
+        echeancesReglementaires, consignerDeclaration,
+        // Lot L19, action 19.2 : l'état DÉRIVÉ des dérogations.
+        derogationsEtat,
         // Lot L18 bis : le jeu de découverte.
         decouverteEtat, decouverteSemer, decouvertePurger
     };

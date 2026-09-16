@@ -268,13 +268,19 @@ export async function greffonApprobations(
       case 'audits':
         texte = `select t.filiale_id, t.version, ${empreinte} from audits t where t.id = $1`;
         break;
+      // Action 19.2. ⚠️ `derogations.filiale_id` est `not null` : cette entité n'a
+      // pas de versant Groupe, contrairement aux documents. Le reste du greffon
+      // n'a pas à le savoir — il lit `filialeId` et applique la même règle.
+      case 'derogations':
+        texte = `select t.filiale_id, t.version, ${empreinte} from derogations t where t.id = $1`;
+        break;
       default:
         // Inatteignable : le schéma de la route borne `entite` à ces trois
         // valeurs. Refusé plutôt que servi — un `default` permissif serait la
         // porte dérobée que le schéma prétend fermer.
         throw entreeInvalide(
           'Cette entité ne relève pas du circuit d’approbation. Le circuit couvre les ' +
-            'politiques, les risques et les rapports d’audit.',
+            'politiques, les risques, les rapports d’audit et les dérogations.',
         );
     }
 

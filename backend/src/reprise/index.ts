@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 13;
+export const VERSION_SCHEMA = 14;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -118,7 +118,8 @@ export const FORMAT_SAUVEGARDE = 'grc-backup';
 export const APPLICATION_ATTENDUE = 'cyber-grc-dedienne';
 
 /**
- * Les 21 collections, dans l'ordre exact de `ARRAY_FIELDS` (`datastore.js`).
+ * Les collections de l'instantané, dans l'ordre exact de `ARRAY_FIELDS`
+ * (`datastore.js`). Leur NOMBRE n'est pas recopié ici : il a déjà menti deux fois.
  * L'ordre est significatif : c'est celui du rapport de volumes.
  */
 export const COLLECTIONS = [
@@ -152,6 +153,10 @@ export const COLLECTIONS = [
   // 04/09/2026, et l'essai qui l'a vu comptait les anomalies d'INFORMATION.
   'risque_catalogue',
   'referentiels_actifs',
+  // v14 — les dérogations datées (action 19.2). Même avertissement que ci-dessus :
+  // l'oublier ici ne fait pas échouer la compilation, cela en fait une « clé de
+  // premier niveau inconnue du modèle », conservée et **jamais insérée**.
+  'derogations',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -573,6 +578,31 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     references: [],
     referencesMultiples: [],
     cleMetier: ['ref_id'],
+  },
+  // ── v14 : les écarts de conformité ASSUMÉS, bornés dans le temps ─────────
+  //
+  // ⚠️ **Aucun champ d'état.** « En vigueur », « échue », « en attente » se
+  // dérivent de l'échéance et de la décision du circuit L8 : les faire voyager
+  // dans le fichier les figerait au jour de l'export, et une reprise faite six
+  // mois plus tard réimporterait des dérogations « en vigueur » qui ne le sont
+  // plus. Le fichier porte les FAITS — qui, pourquoi, jusqu'à quand —, et l'état
+  // se recalcule à la lecture, chez celui qui lit.
+  derogations: {
+    prefixe: 'DER',
+    // ⚠️ Les deux dates entrent dans `champs` **aussi** : `dates` dit comment les
+    // VALIDER, pas qu'elles sont admises. Les y oublier fait rendre « champ absent
+    // du modèle documenté — conservé, mais sans colonne où l'écrire » sur un
+    // fichier parfaitement sain, ce qui apprend à ignorer le rapport de reprise.
+    champs: [
+      'id', 'exigence_id', 'proprietaire', 'motif', 'compensation',
+      'accordee_le', 'echeance',
+    ],
+    enumerations: [],
+    bornes: [],
+    dates: ['accordee_le', 'echeance'],
+    references: [{ champ: 'exigence_id', cible: 'exigences' }],
+    referencesMultiples: [],
+    cleMetier: null,
   },
 };
 
@@ -1601,6 +1631,18 @@ const PALIERS: readonly EtapePalier[] = [
     // lien `risques[].catalogue_id` est facultatif : un export v12 n'en porte
     // aucun, et se reprend donc à l'identique.
     appliquer: paliersCollections(['risque_catalogue', 'referentiels_actifs']),
+  },
+  {
+    de: 13,
+    vers: 14,
+    libelle:
+      'Lot L19, action 19.2 : l’instantané gagne « derogations » — les écarts de conformité ' +
+      'assumés, avec leur propriétaire, leur motif et leur échéance.',
+    // Un palier qui n'a RIEN À TRANSFORMER, la forme la plus sûre : la collection
+    // arrive vide sur un fichier v13, `paliersCollections` la réclame et la crée,
+    // et aucune donnée existante n'est touchée. Un export v13 se reprend donc à
+    // l'identique.
+    appliquer: paliersCollections(['derogations']),
   },
 ];
 

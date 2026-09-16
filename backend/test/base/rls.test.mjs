@@ -4065,6 +4065,16 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // guide l'explique, et rien ne le tenait. Un document repris d'un export
       // antérieur serait réputé PUBLIC.
       'defauts_de_classification',
+      // TRENTE-SIXIÈME, apporté par `035_les_derogations_datees.sql` — action 19.2.
+      // ⚠️ Il ÉPROUVE la dérivation de l'état sur quatre cas témoins (§39.1) au lieu de
+      // lire le texte de `f_etat_derogation()` : un garde qui vérifierait que la
+      // fonction « existe » passerait au vert sur une version qui rend « en vigueur »
+      // pour tout le monde — c'est-à-dire sur celle qui transforme le produit en
+      // distributeur de blancs-seings. Il refuse aussi tout déclencheur de
+      // `derogations` qui écrirait dans `exigences` : l'état se DÉRIVE, il ne se pose
+      // pas, et c'est ce qui fait qu'une dérogation échue redevient une non-conformité
+      // sans qu'aucun traitement n'ait à repasser.
+      'derogations',
       'dispositif_integrite',
       // VINGT-NEUVIÈME, apporté par `029_le_registre_balaie_tout.sql` — constat **Q-310**,
       // trouvé en écrivant cette vague et de la CLASSE de Q-194 : `risque_catalogue.id` et

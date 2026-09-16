@@ -2801,3 +2801,68 @@ y figurait, **inscrite à la main**, et sa jumelle `sessions.adresse_ip` n'y ét
 `conserver` peut porter un nom que la purge ne signalera pas — elle ne sait chercher que dans
 du texte. Le registre le dit, colonne par colonne. *Une limite écrite vaut mieux qu'une
 promesse à moitié tenue.*
+
+---
+
+## §40 — Une table neuve entre dans TROIS mécanismes, et deux d'entre eux ne se voient pas
+
+> **Posé le 16/09/2026**, en livrant `derogations` (migration `035`, action 19.2). Trois
+> défauts sont sortis de la même livraison, aucun trouvé par moi, tous par des garde-fous
+> déjà en place. Ils n'ont rien coûté — un déploiement refusé, deux fois — précisément
+> parce que les gardes existaient. C'est ce qu'on veut ; ce paragraphe existe pour que le
+> prochain n'ait pas à les découvrir un par un.
+
+### 40.1 La règle
+
+**Créer une table métier ne se termine pas à `create table`.** Trois mécanismes la
+réclament, et l'ordre compte :
+
+| | Ce qu'on fait | Ce que l'oubli produit |
+|---|---|---|
+| 1 | la déclarer au domaine **`type_entite`** (§3 bis d'une migration récente) | la table est **INCRÉABLE** : toute création écrit au journal, et `journal_audit.entite_type` porte ce domaine. Le refus arrive en `400 « Une valeur de l'enregistrement n'est pas admise »`, qui ne désigne rien |
+| 2 | poser ses **politiques RLS**, dont celle de suppression | la table n'est pas reconnue comme porteuse à l'étape 3 — voir §40.2 |
+| 3 | appeler **`f_poser_declencheurs_pieces()`** | supprimer une ligne laisse sa pièce jointe **en base, sur le disque et dans le quota**, et `GET /api/pieces/…` continue de la délivrer (constats Q-232 / Q-233) |
+
+Plus les deux installateurs déjà connus : `f_poser_tracabilite_insertion()` (§3) et le
+`before update` de `f_maj_tracabilite()` (§18.1).
+
+### 40.2 ⚠️ L'ordre n'est pas un style, c'est une contrainte
+
+`f_poser_declencheurs_pieces()` découvre les tables porteuses par un prédicat, et l'une de
+ses trois conditions est *« la politique de SUPPRESSION de la table est cloisonnée »*.
+Appelée **avant** que les politiques existent, elle ne voit pas la table neuve : elle
+équipe toutes les autres, rend un compte plausible, et **laisse la table démunie sans une
+erreur**.
+
+C'est exactement la forme de défaut que ce document proscrit ailleurs — *quelque chose
+réussit en silence alors que c'est faux* —, et elle se présente ici sous un déguisement
+particulièrement traître : **la fonction ne ment pas, elle répond à la question qu'on lui a
+posée trop tôt.**
+
+### 40.3 Un installateur s'APPELLE ; un bloc anonyme ne se rejoue pas
+
+La migration `017` posait ces déclencheurs dans un `do $$` anonyme. Elle balayait le
+catalogue **une fois, à son heure**, et rien ne la rejouait : toute table porteuse née
+après elle devait y penser. C'est une liste écrite à la main déguisée en découverte — la
+découverte était juste, mais elle n'avait lieu qu'une fois.
+
+Elle est devenue **`f_poser_declencheurs_pieces()`**, sur le modèle de
+`f_poser_tracabilite_insertion()`. La règle qui en sort vaut au-delà du cas :
+
+> **Tout balayage du catalogue qu'une migration future devra refaire est une FONCTION, pas
+> un bloc anonyme.** Un bloc anonyme ne s'appelle pas ; il se recopie — et une copie
+> diverge.
+
+⚠️ **Et le prédicat de découverte ne se « corrige » pas au passage.** C'est lui que
+`f_verifier_declencheurs_pieces()` confronte au schéma : deux prédicats qui divergeraient
+feraient rougir le garde à chaque démarrage, ou — pire — le feraient **taire** sur une
+table réellement démunie.
+
+### 40.4 Ce que cette livraison confirme du §39
+
+Aucun des trois défauts n'a été trouvé en relisant du code. Tous trois ont été trouvés par
+des garde-fous qui **éprouvent** : le balayage de création (`test/api/entites-familles.test.mjs`,
+« chaque entité se CRÉE par sa route ») pour le premier, `f_verifier_declencheurs_pieces()`
+pour les deux autres. *Un garde-fou qui mesure ce que la base FERAIT attrape les défauts
+d'un lot qu'il n'a pas vu naître* — et c'est là toute la différence avec un garde qui
+reconnaît un mot.

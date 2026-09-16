@@ -137,7 +137,7 @@ async function compter(p, condition) {
  * ===================================================================== */
 
 describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, §2.4)', () => {
-  test('le catalogue est bien celui qu’on croit : 35 tables portent « filiale_id »', async () => {
+  test('le catalogue est bien celui qu’on croit : le compte de tables cloisonnées', async () => {
     // Ancrage du balayage. Si une migration future ajoute ou retire une table
     // cloisonnée, ce compte change — et c'est ici qu'on veut l'apprendre, pas dans une
     // liste recopiée ailleurs qui, elle, ne dirait rien.
@@ -153,7 +153,12 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // locale ne l'est que chez elle. ⚠️ `traitements` et `traitement_mesures`, elles,
     // n'entrent PAS ici : elles y étaient déjà, et la `027` n'a fait que rendre leur
     // `filiale_id` nullable — le balayage les prend toujours.
-    assert.equal(tablesCloisonnees.length, 37, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    // 38 depuis la migration `035` : `derogations`, l'écart de conformité assumé.
+    // Elle est de niveau FILIALE — `filiale_id not null` — parce qu'une dérogation
+    // de portée Groupe voudrait dire « le Groupe accepte que ses vingt filiales
+    // soient en écart », ce qui n'est pas une dérogation mais un changement de
+    // politique.
+    assert.equal(tablesCloisonnees.length, 38, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -177,10 +182,12 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // n'a par construction aucune ligne locale. Le jour où une ligne de filiale y
     // apparaît, ce test le dira, et le jeu d'essai devra la couvrir.
     assert.deepEqual(sansMatiere, ['groupes_ad']);
+    // 37 depuis la migration `035` : `derogations`, semée des deux côtés pour la
+    // même raison que les précédentes.
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      36,
-      'Trente-six tables devaient contenir au moins une ligne allemande. Une table neuve '
+      37,
+      'Trente-sept tables devaient contenir au moins une ligne allemande. Une table neuve '
         + 'sans ligne dans le semis est un angle mort : le balayage y rendrait « zéro '
         + 'visible » pour la seule raison qu’il n’y a rien à voir.',
     );
@@ -302,7 +309,8 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     // trois précédentes, et cette raison mérite d'être répétée — une table neuve
     // sans ligne rendrait « zéro visible » PARCE QU'IL N'Y A RIEN À VOIR, et se
     // présenterait comme une preuve de cloisonnement.
-    assert.equal(nonVides.length, 34, `Tables non vides : ${nonVides.join(', ')}`);
+    // 35 depuis la migration `035` : `derogations`, l'écart de conformité assumé.
+    assert.equal(nonVides.length, 35, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

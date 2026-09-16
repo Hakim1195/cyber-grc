@@ -242,6 +242,11 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   // écran, la même personne, la même question : « ce référentiel s'applique-t-il
   // à ce site ? ».
   referentiels_actifs: 'conformite',
+  // Une dérogation est un acte de conformité : c'est la même personne, le même
+  // écran et la même question — « cet écart, qui en répond, et jusqu'à quand ? ».
+  // La rattacher à « administration » l'aurait retirée aux RSSI, qui sont
+  // précisément ceux qui la portent (motif du constat Q-158 sur le logo).
+  derogations: 'conformite',
 });
 
 /**

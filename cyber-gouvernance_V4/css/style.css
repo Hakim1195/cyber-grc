@@ -2020,3 +2020,300 @@ input, select, textarea {
     body { background: #fff; color: #000; }
     a[href^="#"]::after { content: ""; }
 }
+
+/* =====================================================================
+   ATTESTATION DE LECTURE (L19 · 19.1) et HORLOGE RÉGLEMENTAIRE (L20 · 20.1)
+   ---------------------------------------------------------------------
+   Deux panneaux, un seul jeu de règles : ils vivent côte à côte sur le
+   tableau de bord et se ressemblent assez pour qu'un écart se voie.
+
+   ⚠️ **Aucune couleur nouvelle.** Les tons viennent de `css/tokens.css`, et
+   les badges réutilisent les quatre classes `.status-*` du produit : vert =
+   conforme, orange = partiel, rouge = critique, gris = non applicable. Un
+   cinquième jeu de teintes affaiblirait les quatre qui existent.
+
+   ⚠️ **Aucune police chargée depuis un réseau** : `--font-sans` et
+   `--font-mono` sont des piles système, et cette règle ne se rediscute pas.
+===================================================================== */
+
+.att-encart, .reg-encart { margin-top: var(--space-5); }
+.att-encart h2, .reg-encart h2 { font-size: var(--text-lg); margin-bottom: var(--space-3); }
+
+/* ── Le taux de couverture : un chiffre qu'on lit de loin ─────────────
+   Il répond à une question d'auditeur (« combien de personnes ont lu ? »),
+   et il doit se lire sans être cherché. La jauge n'est pas décorative : un
+   pourcentage seul ne dit pas si 90 % vaut 18 sur 20 ou 900 sur 1 000. */
+.att-couverture {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+    flex-wrap: wrap;
+}
+.att-taux {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    line-height: var(--leading-tight);
+    font-variant-numeric: tabular-nums;
+    min-width: 4.5ch;
+}
+.att-taux--ok   { color: var(--color-success); }
+.att-taux--warn { color: var(--color-warning); }
+.att-taux--crit { color: var(--color-danger); }
+.att-taux--na   { color: var(--color-gray); }
+
+.att-jauge-zone { flex: 1 1 220px; min-width: 200px; }
+.att-jauge {
+    height: 8px;
+    border-radius: var(--radius-sm);
+    background: var(--tint-na);
+    overflow: hidden;
+}
+.att-jauge-part { display: block; height: 100%; border-radius: var(--radius-sm); }
+.att-jauge-part--ok   { background: var(--color-success); }
+.att-jauge-part--warn { background: var(--color-warning); }
+.att-jauge-part--crit { background: var(--color-danger); }
+.att-jauge-part--na   { background: var(--color-gray); }
+.att-jauge-legende {
+    margin: var(--space-2) 0 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+
+/* ── Le geste qui engage ───────────────────────────────────────────────
+   Il se distingue du reste de la fiche par un fond, parce qu'il inscrit une
+   déclaration au journal inaltérable. Ce n'est pas un champ de plus. */
+.att-action {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    padding: var(--space-3) var(--space-4);
+    background: var(--primary-tint);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+.att-reserve-label {
+    flex: 0 0 100%;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--text-muted);
+}
+.att-reserve { flex: 1 1 260px; min-width: 200px; }
+.att-version-note {
+    margin: var(--space-2) 0 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    max-width: var(--mesure-texte);
+}
+.att-mention, .reg-mention {
+    margin: var(--space-2) 0 var(--space-3);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    max-width: var(--mesure-texte);
+}
+.reg-mention--alerte { color: var(--color-danger); font-weight: 600; }
+
+.att-table .status, .reg-table .status { text-transform: none; }
+
+/* ── Les listes du tableau de bord ─────────────────────────────────────
+   Deux niveaux : l'intitulé, puis la raison. La raison est ce qui distingue
+   « jamais lue » de « révisée depuis » — deux situations qui n'appellent pas
+   la même réaction, et qu'un simple compteur confondrait. */
+.dash-list { list-style: none; margin: 0; padding: 0; }
+.att-a-faire-item, .reg-bloc-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-2);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+}
+.att-a-faire-item:last-child, .reg-bloc-item:last-child { border-bottom: none; }
+.att-a-faire-item:hover, .reg-bloc-item:hover { background: var(--tint-info); }
+.att-a-faire-titre, .reg-bloc-titre {
+    font-weight: 600;
+    font-size: var(--text-base);
+    line-height: var(--leading-tight);
+}
+.att-a-faire-meta, .reg-bloc-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    flex-wrap: wrap;
+}
+
+/* ── L'origine de l'horloge ────────────────────────────────────────────
+   Elle est écrite AU-DESSUS du tableau, et non en note de bas de panneau :
+   une horloge dont on ignore l'origine ne se défend pas devant l'ANSSI, et
+   une mention qu'on lit après les chiffres arrive trop tard. */
+.reg-origine {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    max-width: var(--mesure-texte);
+}
+.reg-origine--approx {
+    color: var(--color-warning);
+    font-weight: 600;
+}
+
+/* Une échéance dépassée se voit sur la LIGNE, pas seulement dans son badge :
+   sur quatre paliers, l'œil balaie la colonne de gauche et manque le badge. */
+.reg-ligne--crit td:first-child { box-shadow: inset 3px 0 0 var(--color-danger); }
+.reg-ligne--warn td:first-child { box-shadow: inset 3px 0 0 var(--color-warning); }
+.reg-ligne--ok   td:first-child { box-shadow: inset 3px 0 0 var(--color-success); }
+.reg-fait-le { display: block; font-size: var(--text-xs); color: var(--text-muted); }
+
+.reg-consigner {
+    margin-top: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-body);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.reg-consigner-titre {
+    display: block;
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-2);
+}
+.reg-consigner-ligne {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    align-items: center;
+}
+.reg-consigner-ligne select { flex: 0 1 260px; }
+.reg-consigner-ligne input  { flex: 1 1 200px; min-width: 160px; }
+
+/* Une étiquette lue par les lecteurs d'écran et par eux seuls. Le champ
+   qu'elle désigne porte déjà un « placeholder », mais un placeholder n'est
+   PAS une étiquette : il disparaît à la saisie, et il n'est pas annoncé. */
+.sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* =====================================================================
+   DÉROGATIONS — écarts de conformité assumés (L19 · 19.2)
+   ---------------------------------------------------------------------
+   ⚠️ Aucune couleur nouvelle : les badges réutilisent les quatre classes
+   `.status-*` du produit, et les bandeaux les teintes `--tint-*` qui leur
+   correspondent. Un cinquième jeu affaiblirait les quatre qui existent.
+===================================================================== */
+
+.der-encart { margin-top: var(--space-5); }
+.der-encart h2 { font-size: var(--text-lg); margin-bottom: var(--space-3); }
+
+/* ── Le bandeau : la réponse à la seule question qui compte ───────────
+   « Cet écart est-il couvert, oui ou non ? » Elle se lit avant le tableau,
+   parce qu'un tableau de quatre lignes ne répond pas à une question binaire. */
+.der-bandeau {
+    margin: 0 0 var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius);
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
+    border-left: 4px solid transparent;
+}
+.der-bandeau--couvert {
+    background: var(--tint-ok);
+    border-left-color: var(--color-success);
+}
+.der-bandeau--decouvert {
+    background: var(--tint-crit);
+    border-left-color: var(--color-danger);
+}
+
+.der-table .status { text-transform: none; }
+.der-motif { max-width: 34ch; }
+.der-compensation {
+    display: block;
+    margin-top: var(--space-1);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+
+/* Une ligne se désigne par son bord, pas seulement par son badge : sur cinq
+   colonnes, l'œil balaie la gauche et manque le badge. */
+.der-ligne--crit td:first-child { box-shadow: inset 3px 0 0 var(--color-danger); }
+.der-ligne--warn td:first-child { box-shadow: inset 3px 0 0 var(--color-warning); }
+.der-ligne--ok   td:first-child { box-shadow: inset 3px 0 0 var(--color-success); }
+
+.der-circuit-hote { padding: var(--space-2) 0; }
+.der-circuit-btn { font-size: var(--text-xs); padding: 4px 10px; }
+
+/* La légende ne liste que les états PRÉSENTS : un glossaire complet se lirait
+   comme un avertissement général, et un avertissement général n'est pas lu. */
+.der-legende {
+    margin: var(--space-3) 0 0;
+    padding-left: var(--space-5);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    max-width: var(--mesure-texte);
+}
+.der-legende li { margin-bottom: var(--space-1); }
+
+/* ── La demande ───────────────────────────────────────────────────────
+   Étiquette au-dessus du champ, en grille : les quatre saisies n'ont pas la
+   même hauteur, et un alignement à gauche les ferait danser. */
+.der-demande {
+    margin-top: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-body);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.der-demande-titre { display: block; font-size: var(--text-sm); margin-bottom: var(--space-3); }
+.der-demande-grille {
+    display: grid;
+    grid-template-columns: minmax(10rem, 14rem) 1fr;
+    gap: var(--space-2) var(--space-4);
+    align-items: start;
+}
+.der-demande-grille label {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--text-muted);
+    padding-top: 0.55rem;
+}
+.der-demande-grille textarea { resize: vertical; }
+.der-facultatif { font-weight: 400; }
+.der-demande button { margin-top: var(--space-3); }
+.der-mention {
+    margin: var(--space-2) 0 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    max-width: var(--mesure-texte);
+}
+
+/* Sur un écran étroit, l'étiquette passe au-dessus de son champ plutôt que de
+   comprimer les deux colonnes jusqu'à l'illisible. */
+@media (max-width: 720px) {
+    .der-demande-grille { grid-template-columns: 1fr; }
+    .der-demande-grille label { padding-top: 0; }
+}
+
+/* ── Le badge de la liste des exigences ───────────────────────────────
+   Il s'ajoute à côté du code, jamais à la place : le code est ce qu'on cherche
+   dans cette colonne, et un badge qui le pousse hors de vue le cacherait. */
+.der-badge {
+    display: inline-block;
+    margin-left: var(--space-2);
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: var(--tint-warn);
+    color: var(--color-warning);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+    vertical-align: middle;
+}

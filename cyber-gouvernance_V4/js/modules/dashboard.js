@@ -868,6 +868,10 @@ const DashboardModule = (() => {
                     ${echeancierCard}
                 </div>
                 <div class="dashboard-grid">
+                    ${typeof ReglementaireModule !== "undefined" ? ReglementaireModule.blocHtml() : ""}
+                    ${typeof AttestationsModule !== "undefined" ? AttestationsModule.blocHtml() : ""}
+                </div>
+                <div class="dashboard-grid">
                     ${suiviCard}
                 </div>
 
@@ -881,6 +885,20 @@ const DashboardModule = (() => {
         /* =========================
            INTERACTIONS
         ========================== */
+        /* ── Les deux blocs servis par le serveur, montés APRÈS le rendu ────
+         *
+         *  ⚠️ Ils sont **asynchrones** là où tout le reste de cet écran est
+         *  synchrone : ils interrogent le serveur, tandis que le tableau de bord
+         *  dérive tout le reste du jeu déjà chargé. C'est délibéré et c'est le
+         *  seul choix honnête — le taux de lecture d'une politique et l'horloge
+         *  réglementaire d'un incident ne sont PAS dans `data` : les dériver du
+         *  navigateur serait recopier un calcul qui vit dans la base.
+         *
+         *  Chacun écrit d'abord « Lecture… », puis son contenu ou son motif. Un
+         *  blanc silencieux ferait croire à l'absence d'obligation. */
+        if (typeof ReglementaireModule !== "undefined") ReglementaireModule.monterBloc();
+        if (typeof AttestationsModule !== "undefined") AttestationsModule.monterBloc();
+
         app.querySelectorAll(".clickable-risk").forEach(li => {
             li.onclick = () => Router.navigateTo(`/risques/${li.dataset.id}`);
         });

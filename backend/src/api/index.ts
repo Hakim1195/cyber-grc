@@ -127,6 +127,7 @@ import { greffonCycle } from '../cycle/index.js';
 import { greffonDecouverte } from '../decouverte/index.js';
 import { greffonRecherche } from '../recherche/index.js';
 import { greffonAttestations } from '../attestations/index.js';
+import { greffonDerogations } from '../derogations/index.js';
 import { greffonReglementaire } from '../reglementaire/index.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
@@ -3190,6 +3191,9 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   await instance.register(greffonAttestations, { pool });
   // Lot L20, action 20.1 — l'horloge réglementaire NIS2 et RGPD.
   await instance.register(greffonReglementaire, { pool });
+  // Lot L19, action 19.2 — l'ÉTAT d'une dérogation, dérivé. L'écriture, elle,
+  // passe par les routes génériques : une dérogation est une entité ordinaire.
+  await instance.register(greffonDerogations, { pool });
   // Lot L17, A3 — la recherche globale.
   //
   // ⚠️ Elle reçoit `cumulerSondage`, **le compteur du sondage**, et non un

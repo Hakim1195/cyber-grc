@@ -39,6 +39,75 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### Vague B, suite — les dérogations datées, et deux capacités qui cessent d'être injoignables (16/09/2026)
+
+**Les dérogations datées (L19, action 19.2) — migration `035`.** Toute organisation réelle
+porte des écarts assumés : un serveur qu'on ne peut pas mettre à jour avant le
+renouvellement de la ligne, un compte partagé que l'automate du fournisseur exige. L'ISO
+27001 ne l'interdit pas — elle demande que l'écart soit **décidé, motivé, porté par
+quelqu'un et borné dans le temps**.
+
+- ⚠️ **On n'écrit JAMAIS dans `exigences`, et c'est toute la conception.** La pente
+  naturelle était de poser « non applicable » pendant la dérogation et de le remettre à
+  l'échéance. Elle est refusée : *il faudrait que quelque chose repasse*, et le jour où ce
+  quelque chose ne repasse pas, le produit affirme **en silence** une conformité qui
+  n'existe plus. L'état est **dérivé à la lecture** (`f_etat_derogation()`) : une dérogation
+  échue cesse de couvrir à l'instant où le jour change, sans qu'aucun code ne s'exécute —
+  donc sans qu'aucun code ne puisse l'oublier. *L'absence de traitement n'est pas une
+  économie : c'est la garantie.*
+- ⚠️ **Une dérogation SAISIE ne couvre rien.** Elle passe par le circuit d'approbation du
+  lot **L8**, inchangé : un quatrième `objet_type`, et rien d'autre. Ses deux étapes sont
+  celles du risque résiduel — *accepter une dérogation EST accepter un risque résiduel,
+  nommément et pour une durée*.
+- ⚠️ **La rallonger sans la faire réapprouver ne la rallonge pas** : modifier l'échéance
+  périme l'empreinte figée par la décision, et l'état retombe à « non accordée ». C'est la
+  propriété qui empêche l'écart assumé de devenir l'écart oublié, et elle vient
+  **gratuitement** du lot L8.
+- Elle entre dans la **couche générique** plutôt que dans un greffon à elle : verrouillage
+  optimiste, journal, cloisonnement, import et round-trip `grc-backup` lui viennent tels
+  quels. Schéma **v13 → v14**, un palier de reprise qui ne transforme rien.
+- **Trois défauts trouvés par les garde-fous, aucun par moi.** *(1)* Le domaine
+  `type_entite` n'admettait pas « derogations » : toute création écrivant au journal, la
+  table était **incréable** — c'est le piège que la migration `013` documente en toutes
+  lettres, retendu vingt-deux migrations plus tard. *(2)* Une fois le domaine élargi, la
+  table devenait **porteuse de pièces jointes** et n'avait pas son déclencheur : le garde de
+  la `017` a refusé le déploiement. *(3)* Et la pose, placée avant les politiques, ne voyait
+  pas la table — le prédicat de découverte exige une politique de suppression cloisonnée.
+  La `017` faisait cette pose dans un bloc anonyme que **rien ne rejouait** ; elle devient
+  `f_poser_declencheurs_pieces()`, qu'une migration APPELLE comme elle appelle déjà
+  `f_poser_tracabilite_insertion()`.
+- Le garde-fou **ÉPROUVE** la dérivation sur quatre cas témoins, et refuse tout déclencheur
+  de `derogations` qui écrirait dans `exigences`.
+
+**Les deux capacités du 16/09 cessent d'être injoignables.** L'attestation de lecture et
+l'horloge réglementaire étaient livrées, éprouvées, vertes — et **aucun écran ne les
+appelait**. Pire : `documents.attestation_requise`, seule chose qui déclenche toute la
+chaîne de l'action 19.1, **n'était posable par aucun formulaire**. C'est la faute que la
+vague 6 avait fermée, refaite un lot plus tard.
+
+- **Panneau « Attestation de lecture » sur la fiche Document** — taux de couverture, qui a
+  attesté dans quelle version, et le geste lui-même. ⚠️ Le corps de la requête ne porte
+  **que le commentaire** : ni la personne, ni la version. L'essai le mesure **sur le corps
+  HTTP réellement émis**, pas sur le code source.
+- **Bloc « Politiques à lire » sur le tableau de bord**, qui distingue *jamais lue* de
+  *révisée depuis* — deux situations qui n'appellent pas la même réaction.
+- **Panneau « Horloge réglementaire » sur la fiche Incident**, avec les **quatre** paliers,
+  leur référence au texte, et l'**origine** du compte. ⚠️ Il **REMPLACE** un bandeau qui
+  recopiait les délais dans le navigateur (« alerte 24 h · notification 72 h », depuis le
+  dictionnaire i18n) et comptait les heures avec l'horloge du poste : deux rédactions de la
+  même obligation réglementaire, dont la seconde ignorait le rapport final à un mois.
+- **Panneau « Dérogations » sur la fiche Exigence**, avec le bandeau qui répond à la seule
+  question qui compte — *cet écart est-il couvert, et jusqu'à quand ?* —, le circuit
+  d'approbation déplié en place, et un badge sur la liste des exigences.
+
+⚠️ **« Non accordée » s'affiche en ROUGE**, ce qui surprend et qui est le seul ton juste :
+une dérogation saisie mais non approuvée laisse l'écart **entièrement** découvert. L'orange
+laisserait croire à une couverture partielle — c'est ce malentendu qui fait qu'un écart
+traîne un an.
+
+**Dix-sept essais neufs**, dont deux familles navigateur qui mesurent **ce que l'écran
+dit**, pas ce que le serveur rend. Quatre mutations jouées, quatre morsures.
+
 ### Vague B — la chaîne de preuve et l'horloge réglementaire (15–16/09/2026)
 
 **L'attestation de lecture (L19, action 19.1) — migration `033`.** Le produit savait dire

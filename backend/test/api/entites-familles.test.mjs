@@ -25,7 +25,7 @@
  *
  * ── La couverture est RÉCLAMÉE, pas supposée ─────────────────────────────────
  *
- * Un dernier test balaie les **23 entités du registre** et vérifie que chacune se lit,
+ * Un dernier test balaie les **24 entités du registre** et vérifie que chacune se lit,
  * se décrit, et porte un préfixe d'identifiant. Sans lui, ce fichier resterait un
  * échantillon dont personne ne saurait dire ce qu'il laisse de côté — le reproche
  * exact que la porte a formulé.
@@ -315,7 +315,7 @@ describe('Une entité par famille de différence', () => {
  *  §2 — La couverture, réclamée
  * ===================================================================== */
 
-describe('Les 23 entités du registre, sans échantillonnage', () => {
+describe('Les 24 entités du registre, sans échantillonnage', () => {
   test('chaque entité du modèle est décrite, chargée, et porte un préfixe', async () => {
     const modele = (await serveur.appeler('GET', '/api/modele')).corps;
     const jeu = await donnees();
@@ -324,7 +324,11 @@ describe('Les 23 entités du registre, sans échantillonnage', () => {
     // `referentiels_actifs` (l'activation par filiale, constat Q-150) entrent dans le
     // registre. Une table exposée par la couche générique gagne d'un coup son CRUD,
     // sa place dans le chargement initial et son modèle d'import.
-    assert.equal(noms.length, 23);
+    // 24 depuis la migration `035` : `derogations`. Elle entre dans la couche
+    // générique plutôt que dans un greffon à elle — elle n'a besoin de rien de
+    // particulier, et y entrer lui donne d'un coup le verrouillage optimiste, le
+    // journal, le cloisonnement, l'import et le round-trip `grc-backup`.
+    assert.equal(noms.length, 24);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -354,6 +358,10 @@ describe('Les 23 entités du registre, sans échantillonnage', () => {
       // `origine` porte un vocabulaire fermé : la valeur générique « Balayage … »
       // heurte le check, ce qui est le comportement voulu, pas un défaut.
       risque_catalogue: { origine: 'interne', statut: 'active' },
+      // Une dérogation vise une exigence RÉELLE, et sa clé étrangère est composite
+      // (id, filiale_id) : une valeur inventée rend 409, ce qui est le comportement
+      // voulu — on ne déroge pas à une exigence qui n'existe pas.
+      derogations: { exigence_id: 'EX-A' },
     };
 
     const echecs = [];

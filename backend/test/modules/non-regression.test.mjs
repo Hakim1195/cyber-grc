@@ -228,7 +228,25 @@ const SANS_FICHE = {
 // « referentiels_actifs » (l'activation par filiale) et « imports » (l'import
 // généralisé). Chacun rendait visible une capacité serveur qui existait SANS
 // interface, ce qui est une fonctionnalité à moitié livrée.
-const MODULES_ATTENDUS = 33;
+//
+// 35 depuis les lots L19 et L20 : « attestations » (la preuve de lecture d'une
+// politique) et « reglementaire » (l'horloge NIS2 / RGPD). ⚠️ **Aucun des deux
+// n'a de route**, et ils n'entrent donc ni dans `FICHES` ni dans `SANS_FICHE` :
+// ce sont des PANNEAUX, comme `pieces`, qui se montent sur la fiche de ce qu'ils
+// documentent — un document, un incident — plus un bloc de tableau de bord. Le
+// même motif que `pieces` : une preuve se lit à côté de ce qu'elle prouve.
+//
+// ⚠️ Et c'est la même faute que la vague 6 avait fermée, refaite un lot plus
+// tard : les deux capacités étaient livrées côté serveur, éprouvées, vertes —
+// et **aucun écran ne les appelait**. Pire, le drapeau
+// `documents.attestation_requise`, seule chose qui déclenche toute la chaîne,
+// n'était posable par aucun formulaire.
+//
+// 36 depuis l'action 19.2 : « derogations » — l'écart de conformité assumé. Même
+// forme que les deux précédents : un PANNEAU sur la fiche de l'exigence qu'il
+// couvre, plus une décoration de la liste. Pas de route, donc ni `FICHES` ni
+// `SANS_FICHE`.
+const MODULES_ATTENDUS = 36;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //

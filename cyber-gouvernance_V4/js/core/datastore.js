@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 13;
+    const SCHEMA_VERSION = 14;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -64,7 +64,13 @@ const DataStore = (() => {
         //    ⚠️ À ne pas confondre avec le « non applicable » par exigence, qui écarte un
         //    point précis À L'INTÉRIEUR d'un référentiel pratiqué : s'en servir pour écarter
         //    un référentiel entier obligerait à cocher 234 cases pour AirCyber.
-        "risque_catalogue", "referentiels_actifs"
+        "risque_catalogue", "referentiels_actifs",
+        // v14 — Lot L19, action 19.2 : les écarts de conformité ASSUMÉS. Un
+        // propriétaire, un motif, une échéance, et une décision du circuit
+        // d'approbation. ⚠️ Aucune de ces lignes ne porte d'ÉTAT : « en vigueur »,
+        // « échue » ou « en attente » se dérivent côté serveur de l'échéance et de
+        // la décision. Les stocker ici les figerait au jour de l'export.
+        "derogations"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
@@ -700,6 +706,32 @@ const DataStore = (() => {
     function deleteDocument(id) { data.documents = data.documents.filter(d => d.id !== id); save(); }
 
     /* =========================
+       DÉROGATIONS — écarts de conformité assumés (v14, action 19.2)
+       { id, exigence_id, proprietaire, motif, accordee_le, echeance,
+         compensation, updatedAt }
+
+       ⚠️ **Aucun champ d'état, et c'est le cœur de l'action.** « En vigueur »,
+       « échue », « en attente » ne se stockent pas : ils se dérivent, côté
+       serveur, de l'échéance et de la décision du circuit d'approbation
+       (`GET /api/derogations/etat`). Les poser ici obligerait quelque chose à
+       repasser pour les remettre à jour — et le jour où ce quelque chose ne
+       repasse pas, le produit affirme une conformité qui n'existe plus.
+    ========================== */
+    function getDerogations() { return data.derogations; }
+    function getDerogationById(id) { return data.derogations.find(d => d.id === id); }
+    function getDerogationsByExigence(exigenceId) {
+        return data.derogations.filter(d => d.exigence_id === exigenceId);
+    }
+    function addDerogation(d) { data.derogations.push(d); save(); }
+    function updateDerogation(d) {
+        const idx = data.derogations.findIndex(x => x.id === d.id);
+        if (idx !== -1) { data.derogations[idx] = d; save(); }
+    }
+    function deleteDerogation(id) {
+        data.derogations = data.derogations.filter(d => d.id !== id); save();
+    }
+
+    /* =========================
        TRAITEMENTS RGPD — Registre article 30 (v6)
        { id, nom, finalite, base_legale, responsable, personnes_concernees,
          categories_donnees, donnees_sensibles, destinataires, transfert_hors_ue,
@@ -866,7 +898,11 @@ const DataStore = (() => {
         //           filiale) → normalize crée les tableaux vides. AUCUNE transformation de
         //           donnée : le lien `risques[].catalogue_id` est facultatif, et une base
         //           héritée n'en porte aucun. Un export v12 se reprend donc à l'identique.
-        // (Ajouter ici les futures migrations : if (v < 14) { ... })
+        // v13 → v14 : ajout de `derogations` (écarts de conformité assumés, action 19.2)
+        //           → normalize crée le tableau vide. AUCUNE transformation : le lien
+        //           `derogations[].exigence_id` n'existe pas dans une base héritée, et un
+        //           export v13 se reprend donc à l'identique.
+        // (Ajouter ici les futures migrations : if (v < 15) { ... })
         return p;
     }
 
@@ -1122,6 +1158,8 @@ const DataStore = (() => {
 
         // Documents / politiques
         getDocuments, getDocumentById, addDocument, updateDocument, deleteDocument,
+        getDerogations, getDerogationById, getDerogationsByExigence,
+        addDerogation, updateDerogation, deleteDerogation,
 
         // Traitements RGPD (registre art. 30)
         getTraitements, getTraitementById, addTraitement, updateTraitement, deleteTraitement,

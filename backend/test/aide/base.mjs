@@ -24,7 +24,7 @@
  *     base, et l'ouverture elle-même supprime ce qu'elle vient de créer si les
  *     migrations échouent — sans quoi une base orpheline resterait derrière.
  *  6. Fournit un **jeu d'essai partagé** (`semerJeuEssai`) — deux filiales, un socle de
- *     Groupe, et au moins une ligne dans chacune des 35 tables cloisonnées — et de quoi
+ *     Groupe, et au moins une ligne dans chacune des tables cloisonnées — et de quoi
  *     éprouver la **concurrence réelle** (`pidSession`, `suivre`, `attendreBlocage`),
  *     ajoutés pour le lot L2 et son risque projet P1 (écrasement silencieux).
  *
@@ -454,6 +454,11 @@ export const FILIALE_B = 'FIL-ESSAI-B';
  */
 export const TABLES_FILIALE = Object.freeze([
   'actifs', 'actions', 'audits', 'clients', 'crise',
+  // `derogations` (migration `035`) : l'écart de conformité assumé est TOUJOURS
+  // local, `filiale_id not null`. Une dérogation de portée Groupe voudrait dire
+  // « le Groupe accepte que ses vingt filiales soient en écart », ce qui n'est
+  // pas une dérogation mais un changement de politique.
+  'derogations',
   'evaluation_mesures', 'evaluations', 'exigences', 'history', 'imports',
   'incidents', 'mco_actions', 'mesure_mise_en_oeuvre', 'pieces_jointes',
   'prestataires', 'processus', 'referentiels_actifs', 'revues', 'risques',
@@ -498,8 +503,18 @@ const empreinte = (suffixe) => (suffixe === 'A' ? 'a' : 'b').repeat(64);
 
 /**
  * Sème un jeu d'essai complet et **le valide** : deux filiales, un socle de Groupe, et
- * au moins une ligne dans **chacune** des 35 tables cloisonnées (24 de niveau filiale,
- * 5 mixtes, 6 liaisons) — plus deux entrées de journal d'audit.
+ * au moins une ligne dans **chacune** des tables cloisonnées — celles de
+ * `TABLES_FILIALE`, `TABLES_MIXTES` et `TABLES_LIAISON` ci-dessus —, plus deux entrées
+ * de journal d'audit.
+ *
+ * ⚠️ **Le NOMBRE n'est plus écrit ici, et c'est une correction.** Cette phrase annonçait
+ * « 35 tables cloisonnées (24 de niveau filiale, 5 mixtes, 6 liaisons) » : 24 + 5 + 6
+ * font 35, mais les trois listes portaient alors 21, 10 et 6 entrées. Le total était
+ * juste et sa décomposition fausse, depuis assez longtemps pour que personne ne s'en
+ * souvienne. C'est le constat Q-219 dans sa forme la plus banale — *deux points de
+ * mesure des mêmes grandeurs divergent, et la divergence est silencieuse*. Le compte
+ * qui fait autorité est relevé DANS LE CATALOGUE par
+ * `test/api/chargement-filiale.test.mjs`, qui rougit si le schéma bouge.
  *
  * Trois choix, et chacun a une raison :
  *
@@ -645,6 +660,21 @@ export async function semerJeuEssai(base, client, options = {}) {
         await c.query(
           `insert into declarations_reglementaires (filiale_id, incident_id, regime, palier, reference)
                values ($1, 'INC-${s}', 'nis2', 'notification', 'ANSSI-ESSAI-${s}')`,
+          f,
+        );
+        // Et l'écart assumé (migration `035`, action 19.2). Même motif que les deux
+        // lignes ci-dessus : une table neuve sans ligne rendrait « zéro visible » au
+        // balayage de cloisonnement pour la seule raison qu'il n'y a rien à voir.
+        //
+        // ⚠️ Son échéance est LOINTAINE et FIXE. Une date relative — « dans un an » —
+        // ferait dépendre du jour de l'exécution ce que le semis représente, et un
+        // essai qui change de sens au fil du calendrier est un essai qui rougira un
+        // matin sans que rien n'ait bougé.
+        await c.query(
+          `insert into derogations (id, filiale_id, exigence_id, proprietaire, motif, echeance)
+               values ('DER-${s}', $1, 'EX-${s}', 'Responsable de site',
+                       'Automate du fournisseur incompatible avant le renouvellement.',
+                       date '2099-12-31')`,
           f,
         );
         // La file de purge du magasin (migration `017`). Elle est VIDE en régime

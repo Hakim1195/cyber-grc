@@ -25,7 +25,7 @@ const ExigencesModule = (() => {
                 <td class="stop-row-click" style="text-align: center; width: 40px;">
                     <input type="checkbox" class="row-cb" data-id="${e.id}">
                 </td>
-                <td><strong>${escapeHtml(e.code)}</strong></td>
+                <td data-badges="1"><strong>${escapeHtml(e.code)}</strong></td>
                 <td>${escapeHtml(e.intitule)}</td>
                 <td>
                     <span class="status status-${(e.statut_conformite || '').replace(/\s+/g, "-")}">
@@ -104,6 +104,16 @@ const ExigencesModule = (() => {
         document.querySelectorAll(".clickable-row").forEach(row => {
             row.onclick = () => Router.navigateTo(`/exigences/${row.dataset.id}`);
         });
+
+        // ── 19.2 : quelles exigences portent un écart ASSUMÉ ─────────────────
+        //
+        // ⚠️ La décoration vient APRÈS, et l'écran ne l'attend pas. Cette liste
+        // se rend depuis `data`, en synchrone ; l'état d'une dérogation vient du
+        // serveur, parce qu'il se dérive d'une échéance ET de l'état d'un circuit
+        // d'approbation. Suspendre l'affichage à cette lecture ferait attendre
+        // tout l'écran pour une information marginale. Si elle échoue, la liste
+        // reste exactement ce qu'elle était : un ajout, jamais une condition.
+        if (typeof DerogationsModule !== "undefined") DerogationsModule.decorerListe();
     }
 
     /* =========================
@@ -273,8 +283,19 @@ const ExigencesModule = (() => {
                         </div>
                     </div>
                 </div>
+
+                ${typeof DerogationsModule !== "undefined" ? DerogationsModule.encartHtml(exigence.id) : ""}
             </section>
         `;
+
+        // ── 19.2 : les écarts ASSUMÉS, sur la fiche de ce qu'ils couvrent ────
+        //
+        // Monté APRÈS le rendu — seul moment où son conteneur existe — et il
+        // relit l'identifiant dans le `data-id` du conteneur : le serveur
+        // réattribue l'identifiant à la création (constat Q-303).
+        if (typeof DerogationsModule !== "undefined") {
+            DerogationsModule.brancherEncart(exigence.id);
+        }
 
         document.getElementById("saveBtn").onclick = () => {
             const intitule = document.getElementById("intitule").value.trim();

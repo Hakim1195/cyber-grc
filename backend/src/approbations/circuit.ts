@@ -87,7 +87,7 @@
  * ===================================================================== */
 
 /** `ck_approbations_objet` — le rattachement polymorphe de la table. */
-export type ObjetApprouvable = 'document' | 'risque' | 'audit';
+export type ObjetApprouvable = 'document' | 'risque' | 'audit' | 'derogation';
 
 /** `ck_approbations_etape` — les sept étapes des trois circuits réunies. */
 export type EtapeApprobation =
@@ -102,7 +102,12 @@ export type EtapeApprobation =
 /** `ck_approbations_statut`. */
 export type StatutApprobation = 'en_attente' | 'en_cours' | 'approuve' | 'refuse' | 'annule';
 
-export const OBJETS: readonly ObjetApprouvable[] = Object.freeze(['document', 'risque', 'audit']);
+export const OBJETS: readonly ObjetApprouvable[] = Object.freeze([
+  'document',
+  'risque',
+  'audit',
+  'derogation',
+]);
 
 export const ETAPES: readonly EtapeApprobation[] = Object.freeze([
   'redaction',
@@ -150,6 +155,18 @@ export const CIRCUITS: Readonly<Record<ObjetApprouvable, readonly EtapeApprobati
     risque: Object.freeze(['proposition', 'acceptation'] as const),
     /** Rapport d'audit interne : fige le rapport **et son auteur**. */
     audit: Object.freeze(['redaction', 'validation'] as const),
+    /**
+     * Dérogation datée (action 19.2) — **les deux étapes du risque**, et c'est
+     * délibéré : accepter une dérogation EST accepter un risque résiduel,
+     * nommément et pour une durée. Deux étapes de plus auraient donné deux noms
+     * à un seul geste, et le vocabulaire `ck_approbations_etape` les admet déjà.
+     *
+     * ⚠️ Conséquence à connaître : tant que `acceptation` n'est pas franchie, la
+     * dérogation **ne couvre rien** (`f_etat_derogation` rend « en_attente »).
+     * Une dérogation saisie n'est pas une dérogation accordée — sans quoi la
+     * simple saisie serait un blanc-seing.
+     */
+    derogation: Object.freeze(['proposition', 'acceptation'] as const),
   });
 
 /**
@@ -169,6 +186,7 @@ export const OBJET_PAR_ENTITE: Readonly<Record<string, ObjetApprouvable>> = Obje
   documents: 'document',
   risques: 'risque',
   audits: 'audit',
+  derogations: 'derogation',
 });
 
 /** Entités approuvables, pour l'énumération d'un schéma de route. */

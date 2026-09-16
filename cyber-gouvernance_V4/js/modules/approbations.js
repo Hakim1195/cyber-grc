@@ -168,11 +168,57 @@ const ApprobationsModule = (() => {
             singulier: "Rapport d'audit", pluriel: "Rapports d'audit",
             domaine: "audits", lecteur: "getAudits",
             champ: "ref", route: "#/audits/"
+        }),
+        // ── Lot L19, action 19.2 : l'écart de conformité ASSUMÉ ─────────────
+        //
+        // ⚠️ **Sa route ne mène pas à une fiche à elle** : une dérogation n'a pas
+        // d'écran propre, elle vit sur la fiche de l'exigence qu'elle vise. On y
+        // renvoie donc — `#/exigences/…` —, et c'est `exigence_id` qui sert de
+        // cible, pas l'identifiant de la dérogation. Le champ `cible` existe pour
+        // cela : sans lui, l'écran des approbations enverrait vers une adresse
+        // qui n'existe pas, ce qui est pire qu'un lien absent.
+        Object.freeze({
+            entite: "derogations", objet: "derogation",
+            singulier: "Dérogation", pluriel: "Dérogations",
+            domaine: "conformite", lecteur: "getDerogations",
+            champ: "motif", route: "#/exigences/", cible: "exigence_id"
         })
     ]);
 
     function famille(entite) {
         return FAMILLES.find(f => f.entite === entite) || null;
+    }
+
+    /**
+     * L'adresse de la fiche à ouvrir depuis un circuit.
+     *
+     * ── Pourquoi ce n'est pas toujours `route + id` ────────────────────────
+     *
+     * Trois des quatre familles ont une fiche à elles : un document, un risque,
+     * un rapport d'audit s'ouvrent à leur propre identifiant. **La dérogation,
+     * non** : elle n'a pas d'écran propre, elle vit sur la fiche de l'exigence
+     * qu'elle vise. Sa famille déclare donc `cible: "exigence_id"`, et c'est ce
+     * champ-là qui donne l'adresse.
+     *
+     * ⚠️ **Rend `null` plutôt qu'une adresse fausse.** Si l'enregistrement n'est
+     * pas dans le jeu chargé — une dérogation d'une filiale qu'on ne lit pas, ou
+     * un objet supprimé —, le lien n'est PAS rendu. Un lien qui mène à
+     * « introuvable » apprend à ne plus cliquer, y compris le jour où il mène
+     * quelque part.
+     */
+    function adresseObjet(f, id) {
+        if (!f || !id) return null;
+        if (!f.cible) return f.route + id;
+        const lecteur = (typeof DataStore !== "undefined") ? DataStore[f.lecteur] : undefined;
+        if (typeof lecteur !== "function") return null;
+        const enr = (lecteur() || []).find(l => l.id === id);
+        const vise = enr ? enr[f.cible] : null;
+        return vise ? f.route + vise : null;
+    }
+
+    /** Ce que le lien annonce ouvrir — la fiche VISÉE, pas l'objet du circuit. */
+    function libelleCible(f) {
+        return f.cible === "exigence_id" ? "exigence" : f.singulier.toLowerCase();
     }
 
     /**
@@ -675,9 +721,9 @@ const ApprobationsModule = (() => {
             decisionHtml(charge) +
             horsCircuitHtml(circuit.horsCircuit) +
             historiqueHtml(circuit.historique) +
-            (opts.avecLienObjet !== false && f !== null
-                ? '<p class="apr-lien-objet"><a href="' + esc(f.route + charge.objet.id) + '">' +
-                  "Ouvrir la fiche " + esc(f.singulier.toLowerCase()) + " →</a></p>"
+            (opts.avecLienObjet !== false && f !== null && adresseObjet(f, charge.objet.id) !== null
+                ? '<p class="apr-lien-objet"><a href="' + esc(adresseObjet(f, charge.objet.id)) + '">' +
+                  "Ouvrir la fiche " + esc(libelleCible(f)) + " →</a></p>"
                 : "")
         );
     }

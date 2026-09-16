@@ -102,11 +102,11 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
     assert.match(corps.authentification.lot_attendu, /L3/);
   });
 
-  test('GET /api/modele — décrit les 23 entités, et ne fuit aucun nom de table', async () => {
+  test('GET /api/modele — décrit les 24 entités, et ne fuit aucun nom de table', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/modele');
     assert.equal(statut, 200);
-    assert.equal(Object.keys(corps.entites).length, 23);
-    assert.equal(corps.schemaVersion, 13);
+    assert.equal(Object.keys(corps.entites).length, 24);
+    assert.equal(corps.schemaVersion, 14);
 
     const texte = JSON.stringify(corps);
     for (const interdit of ['mesure_catalogue', 'mesure_mise_en_oeuvre', 'evaluation_mesures', base.nom]) {
@@ -120,7 +120,7 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
   test('GET /api/donnees — rend le jeu de la filiale, dans la forme de « data »', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/donnees');
     assert.equal(statut, 200);
-    assert.equal(corps.data.schemaVersion, 13);
+    assert.equal(corps.data.schemaVersion, 14);
     assert.ok(corps.data.risques.some((r) => r.id === 'RISK-A'));
     assert.ok(corps.data.documents.some((d) => d.id === 'DOC-G'), 'Le socle Groupe fait partie du chargement.');
 
@@ -825,6 +825,11 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // les LIBELLÉS des enregistrements de toutes les filiales à un anonyme —
     // c'est-à-dire l'oracle que le `PLAN_EXECUTION` §3 redoutait, ouvert sans
     // même une session. C'est la surface la plus dangereuse de ce lot.
+    // L'état des dérogations (lot L19, action 19.2). Servie sans identité, elle
+    // rendrait la carte des ÉCARTS DE CONFORMITÉ ASSUMÉS de toutes les filiales,
+    // avec leur échéance et le nom de qui en répond — c'est-à-dire la liste des
+    // faiblesses connues du groupe, et la date à laquelle chacune expire.
+    ['GET', '/api/derogations/etat', undefined],
     ['GET', '/api/recherche?q=ab', undefined],
     ['GET', '/api/decouverte/etat', undefined],
     ['POST', '/api/decouverte/semer', undefined],

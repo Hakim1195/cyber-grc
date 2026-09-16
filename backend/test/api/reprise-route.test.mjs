@@ -844,11 +844,11 @@ describe('Le dernier chemin non éprouvé : un vieil export réel, de bout en bo
       `Un export v6 réel doit être reprisable : ${JSON.stringify(reponse.corps).slice(0, 400)}`,
     );
 
-    // Les sept paliers ont bien été traversés — sinon on aurait éprouvé un fichier
-    // déjà à jour, déguisé en vieil export. Sept depuis la montée v13 : 6→7 … 12→13.
+    // Les paliers ont bien été traversés — sinon on aurait éprouvé un fichier déjà à
+    // jour, déguisé en vieil export. HUIT depuis la montée v14 : 6→7 … 13→14.
     assert.equal(reponse.corps.rapport.version_origine, 6);
-    assert.equal(reponse.corps.rapport.version_cible, 13);
-    assert.equal(reponse.corps.rapport.paliers.length, 7, 'v6 → v12, c’est six paliers.');
+    assert.equal(reponse.corps.rapport.version_cible, 14);
+    assert.equal(reponse.corps.rapport.paliers.length, 8, 'v6 → v14, c’est huit paliers.');
 
     // Et tout est arrivé : le compte des créations doit égaler celui du fichier.
     const crees = Object.values(reponse.corps.bilan.crees).reduce((s, n) => s + n, 0);

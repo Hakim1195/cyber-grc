@@ -182,7 +182,7 @@ const IncidentsModule = (() => {
                     <button id="deleteBtn" style="background:var(--color-danger);">${t("commun.supprimer")}</button>
                 </div>
 
-                ${deadlineBannerHtml(inc)}
+                ${typeof ReglementaireModule !== "undefined" ? ReglementaireModule.encartHtml(inc.id) : deadlineBannerHtml(inc)}
 
                 <div class="dashboard-card" style="max-width:900px;">
                     ${formFieldsHtml(inc)}
@@ -212,6 +212,23 @@ const IncidentsModule = (() => {
         // Pièces jointes (lot L6) : preuves d'un incident — captures, journaux,
         // courriels. Monté APRÈS le rendu, seul moment où le conteneur existe.
         if (typeof PiecesModule !== "undefined") PiecesModule.monter("incidents", inc.id);
+
+        // ── 20.1 : l'horloge réglementaire, SUR la fiche ────────────────────
+        //
+        // ⚠️ Elle REMPLACE `deadlineBannerHtml()`, qui recopiait les délais dans
+        // le navigateur (« alerte 24 h · notification 72 h », depuis le
+        // dictionnaire i18n) et comptait les heures avec l'horloge du poste.
+        // C'étaient deux rédactions de la même obligation réglementaire, et la
+        // seconde était incomplète : elle ignorait le rapport final à un mois.
+        // Le calcul vit désormais à un seul endroit — `f_echeances_reglementaires()`,
+        // migration `034` —, et cet écran l'AFFICHE au lieu de le refaire.
+        //
+        // Le bandeau reste en repli pour le seul cas où le module ne serait pas
+        // chargé : un incident sans aucun rappel de délai serait pire qu'un
+        // rappel approximatif.
+        if (typeof ReglementaireModule !== "undefined") {
+            ReglementaireModule.brancherEncart(inc.id);
+        }
 
         document.getElementById("saveBtn").onclick = () => {
             const data = collectForm();
