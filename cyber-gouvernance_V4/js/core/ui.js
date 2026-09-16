@@ -546,7 +546,39 @@ window.UI = (function () {
         if (noeud) appliquerRepli(noeud, false);
     }
 
+
+    /* =====================================================================
+       UN TABLEAU LARGE DÉFILE DANS SON CADRE — passe de style du 16/09/2026
+       ---------------------------------------------------------------------
+       La règle « Table Handling » de la skill `ui-ux-pro-max` : un tableau
+       qui déborde ne doit pas casser la page, il doit défiler dans son
+       propre cadre. La feuille de style porte `.table-scroll` ; encore
+       faut-il que quelque chose l'emploie.
+
+       ⚠️ **On enveloppe APRÈS RENDU, pour les vingt-six modules à la fois.**
+       L'alternative était d'ajouter un `<div>` dans chacun — vingt-six
+       fichiers à modifier, et le vingt-septième module l'oublierait. Ici, un
+       tableau neuf est couvert le jour où il est rendu, sans que personne y
+       pense : c'est la même raison qui fait poser les déclencheurs sur les
+       tables plutôt que dans les routes.
+
+       ⚠️ Et c'est IDEMPOTENT : un tableau déjà enveloppé est laissé tel quel,
+       sans quoi chaque navigation ajouterait une couche. */
+    function envelopperTableaux(racine) {
+        const hote = racine || document.getElementById("app");
+        if (!hote) return;
+        hote.querySelectorAll("table.data-table").forEach(function (table) {
+            const parent = table.parentElement;
+            if (parent && parent.classList.contains("table-scroll")) return;
+            const cadre = document.createElement("div");
+            cadre.className = "table-scroll";
+            parent.insertBefore(cadre, table);
+            cadre.appendChild(table);
+        });
+    }
+
     return {
+        envelopperTableaux,
         wireNavSections, ouvrirSectionActive,
         badge, mappedBadge, wireBulkDelete, wireDelete, genId, refreshPersonnesDatalist,
         refreshEtiquettesDatalist, findPersonneByNom,

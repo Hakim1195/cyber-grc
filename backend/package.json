@@ -17,7 +17,9 @@
     "verifier-types": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --test-reporter=spec \"test/**/*.test.mjs\"",
     "test:base": "node --test --test-reporter=spec \"test/base/**/*.test.mjs\"",
-    "nettoyer": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+    "nettoyer": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "banc": "bash db/dev/banc.sh",
+    "banc:rapide": "bash db/dev/banc.sh rapide"
   },
   "dependencies": {
     "fastify": "^5.12.1",

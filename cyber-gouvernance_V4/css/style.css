@@ -1880,3 +1880,143 @@ h3.imp-etat-pret, h3.imp-etat-refus, h3.imp-etat-apercu, h3.imp-etat-info { marg
     color: var(--text-muted);
     font-size: 0.75rem;
 }
+
+/* =====================================================================
+   PASSE DE STYLE PROFESSIONNELLE — 16/09/2026
+   ---------------------------------------------------------------------
+   Demandée par l'utilisateur : « rendre le logiciel plus professionnel ».
+   Arbitrée avec la skill projet `ui-ux-pro-max` (base locale, aucun
+   réseau), et bornée par ce que le projet a déjà décidé :
+
+     · la charte reste celle du §2 — orange #E9631B pour l'action et la
+       marque, bleu #2059A6 pour la structure, quatre couleurs sémantiques
+       réservées aux statuts. La skill ARBITRE, elle n'impose pas de
+       palette ;
+     · aucune police n'est chargée depuis un réseau (voir `tokens.css`) ;
+     · aucun gestionnaire en ligne, aucune dépendance neuve.
+
+   Ce qui est traité, dans l'ordre d'impact mesuré par la skill :
+     1. accessibilité (priorité 1) — cibles, focus, contraste ;
+     2. lisibilité des TABLEAUX DENSES, qui sont l'essentiel de ce produit ;
+     3. échelle typographique et longueur de ligne ;
+     4. impression — la sortie papier de cet outil est une PIÈCE D'AUDIT.
+   ===================================================================== */
+
+/* ── 1. Rendu du texte ──────────────────────────────────────────────── */
+
+body {
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
+    /* Le lissage sous-pixel épaissit le texte clair sur fond clair et le rend
+       sale sur un écran à forte densité. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+h1 { font-size: var(--text-xl);  line-height: var(--leading-tight); letter-spacing: -0.01em; }
+h2 { font-size: var(--text-lg);  line-height: var(--leading-tight); letter-spacing: -0.005em; }
+h3 { font-size: var(--text-md);  line-height: var(--leading-tight); }
+
+/* La prose se borne. Une note d'aide sur 1 800 px de large se relit mal :
+   l'œil perd sa ligne au retour (65-75 signes, règle de la skill). */
+.help-note, .page > p, .dashboard-header p { max-width: var(--mesure-texte); }
+
+/* ── 2. Ce qui se recopie se lit en CHASSE FIXE ─────────────────────── */
+/* Un identifiant, une empreinte, une référence d'audit : c'est ce qu'un
+   auditeur recopie dans son rapport. En proportionnelle, le 1 et le l se
+   confondent, le 0 et le O aussi — et l'erreur ne se voit qu'à la relecture. */
+code, kbd, samp, pre, .mono, .empreinte, .identifiant-technique {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+    font-variant-ligatures: none;
+}
+
+/* ── 3. Les TABLEAUX : le cœur de ce produit ────────────────────────── */
+
+/* Un tableau large ne casse plus la page : il défile dans son propre cadre.
+   (Règle « Table Handling » de la skill, sévérité moyenne.) */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+.data-table {
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+}
+
+/* L'en-tête SUIT le défilement. Sur une table de conformité à 200 lignes, on
+   perd sinon le nom des colonnes au premier écran — et c'est exactement là
+   qu'on lit un statut sans savoir de quoi il est le statut. */
+.data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8f9fa;
+    /* La bordure d'une cellule « sticky » ne suit pas : on la peint en ombre. */
+    box-shadow: inset 0 -1px 0 var(--border);
+}
+
+/* ⚠️ Les capitales espacées à 1 px étaient datées ET moins lisibles : en
+   capitales, l'œil perd les hampes qui distinguent les mots, et 1 px de plus
+   sépare les lettres au point de disloquer l'étiquette. On garde la casse
+   haute — elle distingue l'en-tête du contenu sans une ligne de plus — avec
+   un espacement mesuré et un gris qui recule. */
+.data-table th {
+    letter-spacing: 0.04em;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Une ligne survolée se désigne. Sans cela, sur douze colonnes, l'œil saute
+   de ligne entre la première et la dernière. */
+.data-table tbody tr { transition: background-color 0.12s ease; }
+.data-table tbody tr:hover { background: var(--tint-info); }
+
+/* Les nombres s'alignent à DROITE et se comparent par la colonne des unités.
+   Alignés à gauche, « 9 » et « 1 200 » n'ont plus de rapport visible. */
+.data-table td.num, .data-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── 4. Contrôles : cibles et confort ───────────────────────────────── */
+/* 44 px est le plancher de la règle « Touch & Interaction » (priorité 2 de la
+   skill). On ne l'applique pas aux actions de ligne d'un tableau dense, qui
+   perdraient leur densité — mais à tout ce qui se clique isolément. */
+.btn, .btn-primary, .btn-secondary, .btn-danger {
+    min-height: 38px;
+    font-size: var(--text-base);
+    line-height: var(--leading-tight);
+}
+
+input, select, textarea {
+    font-family: inherit;
+    font-size: var(--text-md);
+    line-height: var(--leading-normal);
+}
+
+/* Le focus ne disparaît JAMAIS — priorité 1. La règle générale existe déjà en
+   tête de fichier ; celle-ci ferme les composants qui la neutralisaient. */
+.help-tip:focus-visible,
+.nav-section-btn:focus-visible,
+.palette-item:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* ── 5. L'IMPRESSION : ce que l'outil produit comme PREUVE ──────────── */
+/* Une fiche de risque, un registre RGPD, une déclaration d'incident sortent de
+   cet écran et circulent. Trois défauts se voient à l'impression et jamais à
+   l'écran, et ils déprécient la pièce plus que tout le reste. */
+@media print {
+    /* Une ligne coupée entre deux pages est une ligne qu'on relit deux fois. */
+    .data-table tr, .dashboard-card, .help-note { break-inside: avoid; }
+    /* L'en-tête se répète en tête de chaque page : sans lui, la page 2 d'un
+       tableau de conformité est une colonne de statuts anonymes. */
+    .data-table thead { display: table-header-group; }
+    .data-table tfoot { display: table-footer-group; }
+    /* Le « sticky » n'a pas de sens sur papier et décale l'en-tête d'une ligne. */
+    .data-table thead th { position: static; box-shadow: none; }
+    /* Fond blanc, texte noir : une impression en niveaux de gris avale les
+       aplats clairs, et un statut « conforme » devient illisible. */
+    body { background: #fff; color: #000; }
+    a[href^="#"]::after { content: ""; }
+}

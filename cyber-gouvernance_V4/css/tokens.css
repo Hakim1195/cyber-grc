@@ -74,8 +74,43 @@
     --shadow: 0 1px 3px rgba(16,32,60,0.08);
     --shadow-md: 0 4px 12px rgba(16,32,60,0.10);
 
-    /* ----- Typographie ----- */
-    --font-sans: 'Segoe UI', system-ui, Roboto, Helvetica, Arial, sans-serif;
+    /* ----- Typographie -----
+       ⚠️ AUCUNE police n'est chargée depuis un réseau. La règle du projet est
+       nette — « aucun CDN runtime ni service tiers » —, et un outil déployé sur
+       site derrière un VPN ne doit rien attendre de l'extérieur pour s'afficher.
+       On emploie donc la pile SYSTÈME, ordonnée du plus moderne au plus sûr :
+       chaque système rend sa police d'interface native, ce qui est ce qu'un
+       logiciel professionnel fait de mieux sans rien télécharger. */
+    --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+                 Arial, 'Noto Sans', sans-serif;
+    /* Pour ce qui doit se LIRE CARACTÈRE PAR CARACTÈRE : identifiants métier,
+       empreintes SHA-256, références d'audit, numéros de récépissé. En
+       proportionnelle, « RSK-1788477623975-5208b3 » se relit mal et se recopie
+       plus mal encore — or c'est ce qu'un auditeur recopie. */
+    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono',
+                 'Roboto Mono', Menlo, Consolas, monospace;
+
+    /* Échelle typographique MODULAIRE. Les tailles étaient posées au cas par cas
+       (0.72, 0.78, 0.8, 0.85, 0.88, 0.9, 1.05, 1.15 rem…) : douze valeurs pour
+       cinq intentions, ce qui se voit à l'œil comme un défaut d'alignement sans
+       qu'on sache le nommer. Sept marches, et rien entre elles. */
+    --text-xs:   0.75rem;   /* 12 px — étiquettes, mentions légales */
+    --text-sm:   0.8125rem; /* 13 px — tableaux denses */
+    --text-base: 0.9375rem; /* 15 px — corps */
+    --text-md:   1rem;      /* 16 px — corps confortable, formulaires */
+    --text-lg:   1.125rem;  /* 18 px — titres de carte */
+    --text-xl:   1.375rem;  /* 22 px — titres d'écran */
+    --text-2xl:  1.75rem;   /* 28 px — chiffres clés */
+
+    /* Interlignes. 1.5 au corps est le plancher de lisibilité ; les titres se
+       resserrent, sans quoi ils flottent. */
+    --leading-tight:   1.25;
+    --leading-normal:  1.5;
+    --leading-relaxed: 1.65;
+
+    /* Largeur de lecture confortable : 65 à 75 signes. Au-delà, l'œil perd sa
+       ligne au retour — et les notes d'aide de ce produit sont de la prose. */
+    --mesure-texte: 68ch;
 
     /* ----- Mouvement ----- */
     --transition: all 0.25s ease;

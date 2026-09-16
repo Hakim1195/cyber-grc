@@ -68,6 +68,10 @@ const Router = (() => {
          * il ne dépend d'aucun rendu.
          */
         if (typeof window.appliquerDroits === "function") window.appliquerDroits(path);
+        // Passe de style : un tableau large défile dans son cadre plutôt que de
+        // casser la page. Posé ICI, après le rendu du module et pour tous les
+        // modules — voir `UI.envelopperTableaux`.
+        if (window.UI && UI.envelopperTableaux) UI.envelopperTableaux();
     }
 
     /** Appelle le module de la route, ou l'écran « introuvable ». */
