@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2004 essais, vingt-six familles (voir plus bas)
+npm test                           # 2011 essais, vingt-cinq familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -769,8 +769,8 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 16/09/2026, à la révision `54383a4`** : `npm test` → **2004 essais,
-2004 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**Mesuré au 16/09/2026, à la révision `8e0b149`** : `npm test` → **2011 essais,
+2011 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **41 garde-fous consignés**, **37 migrations**,
 **56 tables**, **274 décisions** au registre de l'article 30 ; publication → **86
@@ -926,25 +926,26 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`54383a4`** — « Vague B — les dérogations datées » (16/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`), **arbre propre**. ⚠️ **Ce bloc a déjà été RÉANCRÉ trois fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**, ce qui est juste pendant une vague et aveugle à sa clôture. |
-| État de l'arbre | **arbre PROPRE de `54383a4`**, `git status` vide. Compte relevé **famille par famille**, chaque répertoire joué séparément — jamais estimé. ⚠️ **CINQ familles neuves depuis le réancrage du 14/09** que le document ne nommait pas : `recherche` (13), `attestations` (8), `decouverte` (8), `reglementaire` (7), `derogations` (6). Les quatre premières sont **antérieures à ce lot** : le garde-fou ne pouvait pas le dire, puisqu'il juge le document contre la révision que le document nomme. *Motif du constat Q-219 ; la parade est de réancrer à la CLÔTURE d'une vague, pas seulement quand un chiffre saute.* `navigateur` 183 → **199**, `depot` 51 → **54**. La famille `documentation`, qui LIT ce README, est rejouée **après** cette mise à jour |
+| Révision mesurée | **`8e0b149`** — « 19.5 / 19.6, et la passe de documentation » (16/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`), **arbre propre**. ⚠️ **Ce bloc a déjà été RÉANCRÉ quatre fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**. |
+| État de l'arbre | **arbre PROPRE de `8e0b149`**, `git status` vide. Compte relevé **famille par famille**, chaque répertoire joué séparément. ⚠️ **`documentation` est relevée à 30 essais dont UN EN ÉCHEC** — celui qui juge ce bloc-ci, et qui ne peut pas être vert avant que le bloc soit écrit. C'est la seule circularité du dispositif, et elle se dit plutôt qu'elle ne se cache : la famille est rejouée APRÈS cette mise à jour, et c'est elle qui valide le réancrage. Trois familles bougent depuis `54383a4` : `documents` 25 → **35** (les deux familles neuves de 19.3 et 19.5/19.6), `navigateur` 199 → **203**, `modules` 40 → **42**. |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 | ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 1993 · pass 1993 · fail 0
-                                                   base 311 · api 297 · navigateur 199
+npm test                                         → tests 2011 · pass 2011 · fail 0
+                                                   base 311 · api 297 · navigateur 203
                                                    pieces 125 · auth 115 · import 97
                                                    deploiement 95 · droits 84 · cycle 82
                                                    reprise 82 · notifications 73
                                                    journal-lecture 72 · approbations 71
-                                                   depot 54 · annuaire 48 · modules 40
-                                                   filiales 34 · documentation 28
-                                                   documents 25 · journal 19 · recherche 13
-                                                   attestations 8 · decouverte 8
-                                                   reglementaire 7 · derogations 6
+                                                   depot 54 · annuaire 48 · modules 42
+                                                   documents 35 · filiales 34
+                                                   documentation 30 · journal 19
+                                                   recherche 13 · attestations 8
+                                                   decouverte 8 · reglementaire 7
+                                                   derogations 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
 select * from f_verifier_schema()                → 0 ligne (41 garde-fous découverts, joués, consignés)
