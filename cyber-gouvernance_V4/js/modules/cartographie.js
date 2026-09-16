@@ -355,7 +355,7 @@ const CartographieModule = (() => {
                     <div class="box"><div class="n">${outs.length + inDeps.length}</div><div class="c">liens directs</div></div>
                 </div>
             </div>
-            ${isSpof ? `<div class="carto-spofbox"><strong>⚠ Point de défaillance unique (SPOF)</strong> ${Help.tip("Single Point Of Failure : au moins deux processus critiques dépendent de cet actif sans alternative. Sa panne interrompt plusieurs activités vitales à la fois.")}<br>Au moins ${SPOF_MIN_CRIT_PROC} processus critiques en dépendent. Priorité : redondance / plan de bascule.</div>` : ""}
+            ${isSpof ? `<div class="carto-spofbox"><strong>Point de défaillance unique (SPOF)</strong> ${Help.tip("Single Point Of Failure : au moins deux processus critiques dépendent de cet actif sans alternative. Sa panne interrompt plusieurs activités vitales à la fois.")}<br>Au moins ${SPOF_MIN_CRIT_PROC} processus critiques en dépendent. Priorité : redondance / plan de bascule.</div>` : ""}
             <div class="carto-sect">
                 <div class="carto-lbl">Processus métier impactés</div>
                 <ul class="carto-list">${impProcList}</ul>

@@ -280,12 +280,12 @@ const MatriceModule = (() => {
                     <div class="dashboard-card" style="overflow-x: auto; padding: 1.5rem;">
 
                         <div style="display: flex; justify-content: center; margin-bottom: 15px; font-weight: bold; font-size: 1.1rem; color: var(--primary); text-transform: uppercase; letter-spacing: 1px;">
-                            Fréquence d'exposition ➔
+                            Fréquence d'exposition →
                         </div>
 
                         <div style="display: flex;">
                             <div style="writing-mode: vertical-rl; transform: rotate(180deg); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; padding-right: 15px;">
-                                Gravité (Impact) ➔
+                                Gravité (Impact) →
                             </div>
 
                             <table class="risk-matrix" style="flex: 1; border-collapse: collapse;">

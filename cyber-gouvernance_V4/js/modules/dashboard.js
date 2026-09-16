@@ -641,7 +641,7 @@ const DashboardModule = (() => {
 
         // -- Carte large : Actions à surveiller + Inventaire/criticité actifs --
         const watchHtml = watch.length === 0
-            ? `<p class="chart-empty">Aucune action en retard ni échéance proche. 👍</p>`
+            ? `<p class="chart-empty">Aucune action en retard ni échéance proche.</p>`
             : `<ul class="watch-list">
                 ${watch.map(a => {
                     const late = a._days < 0;
@@ -737,7 +737,7 @@ const DashboardModule = (() => {
                 </li>`;
             }).join("")}</ul>`;
         const docsRevisionHtml = docsRevision.length === 0
-            ? `<p class="chart-empty">Aucune revue documentaire en attente. 👍</p>`
+            ? `<p class="chart-empty">Aucune revue documentaire en attente.</p>`
             : `<ul class="watch-list">${docsRevision.map(d => {
                 const late = d._days !== null && d._days < 0;
                 const soon = d._days !== null && d._days >= 0 && d._days <= 30;
@@ -773,7 +773,7 @@ const DashboardModule = (() => {
         const echCounts = (typeof Echeances !== "undefined") ? Echeances.counts(echAll) : { retard: 0, total: 0 };
         const echTop = echAll.filter(it => it.jours !== null).slice(0, 7);
         const echHtml = echTop.length === 0
-            ? `<p class="chart-empty">Aucune échéance datée à venir. 👍</p>`
+            ? `<p class="chart-empty">Aucune échéance datée à venir.</p>`
             : `<ul class="watch-list">${echTop.map(it => {
                 const late = it.jours < 0, soon = it.jours >= 0 && it.jours <= 7;
                 const dot = late ? "var(--color-danger)" : soon ? "var(--color-warning)" : "var(--color-info)";
