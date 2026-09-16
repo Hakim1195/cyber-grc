@@ -809,6 +809,13 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
         utilisateur_id:
           "Rattachement au compte applicatif, alimenté par le provisionnement depuis l'Active " +
           'Directory (PLAN_SERVEUR §1.5) — lot L3, jamais par la saisie.',
+        portee_groupe:
+          'Colonne ENGENDRÉE (migration `033`, CONVENTIONS.md §18.6) : elle entre dans la clé ' +
+          "de portée d'`attestations_lecture` et PostgreSQL refuse qu'on lui donne une " +
+          'valeur. Elle se déduit de `filiale_id`. ⚠️ **Ce n’est pas moi qui l’ai vue** : le ' +
+          'garde-fou du registre a refusé le démarrage en la trouvant engendrée et non ' +
+          'déclarée — exactement comme pour `traitements.portee_groupe` au lot RGPD. *La ' +
+          'même faute, trouvée par le même garde, deux lots plus tard.*',
       },
     },
   ],

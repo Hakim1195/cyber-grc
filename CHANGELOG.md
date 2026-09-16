@@ -39,6 +39,46 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### Vague B — la chaîne de preuve et l'horloge réglementaire (15–16/09/2026)
+
+**L'attestation de lecture (L19, action 19.1) — migration `033`.** Le produit savait dire
+qu'une politique existe, qu'elle est en vigueur, et qui l'a approuvée. Il ne savait pas dire
+**qui l'a lue** — la seule chose qu'un auditeur demande au chapitre **ISO 27001 A.5.1**.
+
+- ⚠️ **On n'atteste que pour soi** : la personne est déduite de la session, jamais reçue du
+  client. *Une preuve d'audit qu'un tiers peut fabriquer ne prouve rien.* Et la **version**
+  vient du serveur — sans quoi on attesterait d'une version qu'on a choisie.
+- ⚠️ **Une politique révisée redevient « à lire »**, et le produit dit **pourquoi** :
+  `version_perimee` et non `jamais_atteste`. Ne compter que « jamais attesté » ferait dire
+  « tout le monde est à jour » le lendemain d'une refonte de la PSSI.
+- La **barrière de portée** reprend à l'identique le dispositif audité de la `030` : une
+  personne de Toulouse atteste la PSSI du Groupe ou une procédure locale, **jamais** le
+  document local de l'Allemagne. Symétrique pour la personne — sans son miroir, un RSSI de
+  portée Groupe n'aurait **jamais** pu attester.
+- Le taux de couverture compte la **version en vigueur** et se calcule sur le personnel de
+  **la filiale active** : une PSSI lue par dix-huit Toulousains ne dit rien de l'Allemagne.
+
+**L'horloge réglementaire (L20, action 20.1) — migration `034`.** Trois paliers NIS2 — alerte
+précoce **24 h**, notification **72 h**, rapport final **1 mois** — et le **72 h** du RGPD,
+chacun rendu **avec sa référence au texte**.
+
+- ⚠️ **Un défaut du produit trouvé en l'écrivant** : `incidents.date_detection` est une date
+  **nue**. Une horloge de 24 h qui en part peut se tromper de 24 h — *le premier palier tout
+  entier*. `detecte_le` est ajouté, **facultatif**, et son absence est un fait que la route
+  **DIT** (`origine: 'date_seule'`). *Une imprécision affichée vaut mieux qu'une précision
+  inventée.* `date_detection` n'est pas touchée : elle entre dans le round-trip `grc-backup`.
+- **Aucune échéance n'est stockée** : elles sont dérivées par `f_echeances_reglementaires()`,
+  à un seul endroit. Stockées, une date de détection corrigée aurait laissé derrière elle
+  des échéances calculées sur l'ancienne, sans que personne le sache.
+- La table ne retient que **ce qui a été fait**, avec le **récépissé de l'autorité** — la
+  pièce qu'un auditeur demande en premier. ⚠️ **Le produit ne transmet rien** : il prépare
+  et consigne, l'humain envoie.
+- Le garde-fou **ÉPROUVE** les quatre délais sur un instant témoin au lieu de lire le texte
+  de la fonction : un délai changé par mégarde est visible là, et nulle part ailleurs.
+
+**Quinze essais neufs**, tous par la route — leçon du constat **Q-325**, où un refus soigné
+en base arrivait à l'utilisateur en 500 avec pile d'appel.
+
 ### Vague A, suite — le menu et la recherche (15/09/2026)
 
 ⚠️ **Arbitrage de l'utilisateur : le frontend sera REFAIT.** Le poids va donc côté serveur

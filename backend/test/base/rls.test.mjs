@@ -3989,6 +3989,13 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // anomalie — et l'auditeur a joué les conséquences : N-10 rouvert, lien
       // inter-filiales, `traitement_id` ne référençant plus rien. Celui-ci les
       // garde nommément, et ÉPROUVE les deux « check » par des témoins.
+      // TRENTE-SEPTIÈME, apporté par `033_l_attestation_de_lecture.sql` : les CINQ pièces
+      // NOMMÉES de la barrière de portée des attestations, plus le déclencheur qui pose
+      // les deux miroirs — mesuré par `tgtype` et `tgenabled`, jamais par le seul nom.
+      // ⚠️ Il est nommément pièce par pièce parce qu'un garde de CLASSE ne voit pas la
+      // disparition d'une PAIRE : c'est le constat Q-313, où les cinq pièces de la
+      // migration 030 se retiraient une par une sous zéro anomalie.
+      'barriere_attestation',
       'barriere_traitement',
       // QUATORZIÈME, apporté par `015_champs_structurels.sql` (constat Q-201) : aucune
       // colonne du schéma ne doit commencer par un souligné. C'est la SECONDE MOITIÉ
@@ -4089,6 +4096,13 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // la contrainte, pas seulement son nom — leçon de Q-281.
       'ecart_ne_fait_pas_foi',
       'entropie_identifiants',
+      // TRENTE-HUITIÈME, apporté par `034_l_horloge_reglementaire.sql` : les quatre
+      // paliers réglementaires — 24 h, 72 h et 1 mois pour NIS2, 72 h pour le RGPD —
+      // sont armés et leurs délais EXACTS. ⚠️ Le garde ÉPROUVE le calcul sur un
+      // instant témoin ; il ne lit pas le texte de la fonction. Un délai changé par
+      // mégarde est visible là, et nulle part ailleurs — et un délai réglementaire
+      // faux se découvre devant l'ANSSI.
+      'horloge_reglementaire',
       // TRENTE-QUATRIÈME, apporté par `031` — constat **A-5** : dix-huit
       // justifications du registre affirmaient « aucune saisie libre » sur une
       // colonne `text` nue. Classe Q-291 — affirmer au lieu de poser —, appliquée

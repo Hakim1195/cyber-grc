@@ -153,7 +153,7 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // locale ne l'est que chez elle. ⚠️ `traitements` et `traitement_mesures`, elles,
     // n'entrent PAS ici : elles y étaient déjà, et la `027` n'a fait que rendre leur
     // `filiale_id` nullable — le balayage les prend toujours.
-    assert.equal(tablesCloisonnees.length, 35, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    assert.equal(tablesCloisonnees.length, 37, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -179,8 +179,8 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     assert.deepEqual(sansMatiere, ['groupes_ad']);
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      34,
-      'Trente-quatre tables devaient contenir au moins une ligne allemande. Une table neuve '
+      36,
+      'Trente-six tables devaient contenir au moins une ligne allemande. Une table neuve '
         + 'sans ligne dans le semis est un angle mort : le balayage y rendrait « zéro '
         + 'visible » pour la seule raison qu’il n’y a rien à voir.',
     );
@@ -297,7 +297,12 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     // vide rendrait « rien à voir » là où l'on veut « rien qui fuie ».
     // 32 depuis la migration `027` : `document_etiquettes`, semée des deux côtés —
     // une étiquette Groupe et une étiquette par filiale.
-    assert.equal(nonVides.length, 32, `Tables non vides : ${nonVides.join(', ')}`);
+    // 34 depuis les migrations `033` et `034` : `attestations_lecture` et
+    // `declarations_reglementaires`. Elles sont semées pour la même raison que les
+    // trois précédentes, et cette raison mérite d'être répétée — une table neuve
+    // sans ligne rendrait « zéro visible » PARCE QU'IL N'Y A RIEN À VOIR, et se
+    // présenterait comme une preuve de cloisonnement.
+    assert.equal(nonVides.length, 34, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

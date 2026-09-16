@@ -112,10 +112,20 @@ describe('La palette de recherche, dans un vrai navigateur', () => {
       await page.click('.palette-item[data-href]');
       await attendreQuiescence(page);
 
-      const apres = await page.evaluate(() => ({
-        hash: window.location.hash,
-        paletteOuverte: !document.querySelector('.palette-fond')?.hidden,
-      }));
+      // ⚠️ **On mesure la VISIBILITÉ RÉELLE, jamais la propriété `hidden`.** La
+      // première rédaction écrivait `!document.querySelector('.palette-fond').hidden`
+      // — et elle est passée au vert sur une palette qui ne se fermait PAS : la
+      // propriété valait bien `true`, pendant que le `display: flex` de la règle
+      // de classe écrasait le `[hidden] { display: none }` du navigateur.
+      // L'utilisateur l'a signalé ; le banc, non. *Un essai qui mesure le drapeau
+      // au lieu de l'écran ne mesure pas l'écran* (classe Q-201 / Q-207).
+      const apres = await page.evaluate(() => {
+        const fond = document.querySelector('.palette-fond');
+        return {
+          hash: window.location.hash,
+          paletteOuverte: fond !== null && fond.getBoundingClientRect().height > 0,
+        };
+      });
       assert.equal(
         apres.hash.startsWith('#/risques/'),
         true,
@@ -130,8 +140,18 @@ describe('La palette de recherche, dans un vrai navigateur', () => {
       await page.waitForSelector('#palette-champ', { state: 'visible', timeout: DELAI });
       await page.keyboard.press('Escape');
       await attendreQuiescence(page);
-      const fermee = await page.evaluate(() => document.querySelector('.palette-fond').hidden);
-      assert.equal(fermee, true, 'Échap doit refermer la palette.');
+      const fermee = await page.evaluate(() => {
+        const fond = document.querySelector('.palette-fond');
+        return { drapeau: fond.hidden, hauteur: fond.getBoundingClientRect().height };
+      });
+      assert.equal(fermee.drapeau, true, 'Échap doit poser le drapeau.');
+      assert.equal(
+        fermee.hauteur,
+        0,
+        'La palette porte le drapeau « hidden » et reste À L’ÉCRAN : c’est exactement le ' +
+          'défaut que l’utilisateur a signalé le 16/09, et qu’un essai mesurant la seule ' +
+          'propriété ne voyait pas.',
+      );
 
       assert.deepEqual(erreurs, [], 'La palette a levé une erreur de page.');
     } finally {

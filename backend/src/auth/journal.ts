@@ -114,6 +114,14 @@ export type ActionJournal =
    */
   | 'verification_integrite'
   /**
+   * Une personne déclare avoir lu une version d'un document (lot L19, action 19.1).
+   * Preuve d'audit **ISO 27001 A.5.1**.
+   *
+   * ⚠️ Ce n'est ni une approbation — le circuit L8 s'en charge, et sa décision est
+   * irréversible — ni une signature électronique.
+   */
+  | 'attestation'
+  /**
    * **Le changement de FILIALE ACTIVE d'une session** — lot L4, `CONVENTIONS.md`
    * §30.4. L'entrée porte la filiale **quittée** dans `valeursAvant` et la filiale
    * **rejointe** dans `valeursApres` ; `resume` reste une phrase fixe (§29.5).

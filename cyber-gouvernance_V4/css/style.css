@@ -1815,6 +1815,19 @@ h3.imp-etat-pret, h3.imp-etat-refus, h3.imp-etat-apercu, h3.imp-etat-info { marg
     padding-top: 12vh;
 }
 
+/* ⚠️ SANS CETTE RÈGLE, LA PALETTE NE SE FERME JAMAIS. Le `display: flex`
+   ci-dessus est une règle de CLASSE ; `[hidden] { display: none }` vient de la
+   feuille du navigateur, et une règle d'auteur l'emporte toujours sur elle.
+   `racine.hidden = true` passait donc bien à `true` — et l'overlay restait à
+   l'écran.
+
+   ⚠️ **Et l'essai ne pouvait pas le voir** : il vérifiait
+   `document.querySelector('.palette-fond').hidden === true`, c'est-à-dire la
+   PROPRIÉTÉ, qui était exacte. Il mesurait le drapeau, pas ce que l'utilisateur
+   voit — la classe même des constats Q-201 / Q-207. Il mesure désormais la
+   visibilité réelle. Signalé par l'utilisateur, pas par le banc. */
+.palette-fond[hidden] { display: none; }
+
 .palette {
     width: min(640px, 92vw);
     background: var(--surface, #fff);

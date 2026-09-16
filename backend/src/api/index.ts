@@ -126,6 +126,8 @@ import { greffonNotifications } from '../notifications/index.js';
 import { greffonCycle } from '../cycle/index.js';
 import { greffonDecouverte } from '../decouverte/index.js';
 import { greffonRecherche } from '../recherche/index.js';
+import { greffonAttestations } from '../attestations/index.js';
+import { greffonReglementaire } from '../reglementaire/index.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
 import { AuthentificationProvisoire, estAuthentificateur, PerimetreProvisoire } from './session.js';
@@ -3184,6 +3186,10 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   // validée au démarrage, jamais d'une requête : c'est lui qui décide si la
   // route est praticable (condition constitutive n° 5).
   await instance.register(greffonDecouverte, { pool, profil: config.profil });
+  // Lot L19, action 19.1 — l'attestation de lecture (preuve ISO 27001 A.5.1).
+  await instance.register(greffonAttestations, { pool });
+  // Lot L20, action 20.1 — l'horloge réglementaire NIS2 et RGPD.
+  await instance.register(greffonReglementaire, { pool });
   // Lot L17, A3 — la recherche globale.
   //
   // ⚠️ Elle reçoit `cumulerSondage`, **le compteur du sondage**, et non un

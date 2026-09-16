@@ -806,6 +806,21 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // troisième en SUPPRIMERAIT, avec les pièces jointes qui les suivent. Le
     // garde de profil vit un étage plus haut, et il ne dispense pas de celui-ci :
     // c'est la couture même qui a fait passer le constat T-3.
+    // Les deux routes réglementaires (lot L20, action 20.1). Servie sans identité,
+    // la première dirait quels incidents une filiale doit déclarer à son autorité —
+    // c'est-à-dire la liste de ses incidents GRAVES, avec leur retard ; la seconde
+    // inscrirait une déclaration au nom de personne, dans le registre qu'on
+    // présente à l'ANSSI.
+    ['GET', '/api/reglementaire/echeances', undefined],
+    ['POST', '/api/reglementaire/incidents/INC-A/declarations', { regime: 'nis2', palier: 'notification' }],
+    // Les trois routes de l'attestation de lecture (lot L19, action 19.1). Servies
+    // sans identité, les deux premières diraient QUI a lu QUOI — c'est-à-dire un
+    // annuaire nominatif du personnel, et la troisième FABRIQUERAIT une preuve
+    // d'audit au nom de personne, dans le mécanisme dont tout l'objet est
+    // d'attribuer un geste à quelqu'un.
+    ['GET', '/api/attestations/a-faire', undefined],
+    ['GET', '/api/attestations/documents/DOC-A', undefined],
+    ['POST', '/api/attestations/documents/DOC-A', {}],
     // La recherche globale (lot L17, A3). Servie sans identité, elle rendrait
     // les LIBELLÉS des enregistrements de toutes les filiales à un anonyme —
     // c'est-à-dire l'oracle que le `PLAN_EXECUTION` §3 redoutait, ouvert sans

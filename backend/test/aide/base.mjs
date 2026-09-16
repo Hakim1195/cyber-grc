@@ -619,6 +619,34 @@ export async function semerJeuEssai(base, client, options = {}) {
           [filiale, empreinte(s), `ab/${empreinte(s)}`],
         );
         await c.query(`insert into referentiels_actifs (id, filiale_id, ref_id, origine) values ('RA-${s}', $1, 'anssi', 'ajout_local')`, f);
+        // Tables mixtes, versant LOCAL (le versant Groupe est semé plus haut).
+        await c.query(`insert into mesure_catalogue (id, filiale_id, nom)   values ('MESURE-${s}', $1, 'Mesure locale')`, f);
+        await c.query(`insert into personnes        (id, filiale_id, nom)   values ('PERS-${s}',   $1, 'Responsable de site')`, f);
+        await c.query(
+          `insert into documents (id, filiale_id, titre, confidentialite, donnees_personnelles,
+                                  traitement_id)
+               values ('DOC-${s}', $1, 'Procédure locale', 'confidentiel', true, 'TRT-${s}')`,
+          f,
+        );
+        await c.query(`insert into parametres       (id, filiale_id, cle)   values ('PARAM-${s}',  $1, 'essai.local')`, f);
+        await c.query(`insert into document_referentiels (document_id, ref_id, filiale_id) values ('DOC-${s}', 'anssi', $1)`, f);
+        await c.query(`insert into document_etiquettes (document_id, etiquette, filiale_id) values ('DOC-${s}', 'Site ${s}', $1)`, f);
+
+        // ⚠️ Les deux tables du lot L19/L20 sont semées ICI, et ce n'est pas une
+        // formalité : `chargement-filiale.test.mjs` exige que le balayage de
+        // cloisonnement ait DE LA MATIÈRE table par table. Une table neuve sans
+        // ligne y rendrait « zéro visible » pour la seule raison qu'il n'y a rien
+        // à voir — c'est-à-dire un angle mort qui se présente comme une preuve.
+        await c.query(
+          `insert into attestations_lecture (filiale_id, document_id, personne_id, version_document)
+               values ($1, 'DOC-${s}', 'PERS-${s}', '1.0')`,
+          f,
+        );
+        await c.query(
+          `insert into declarations_reglementaires (filiale_id, incident_id, regime, palier, reference)
+               values ($1, 'INC-${s}', 'nis2', 'notification', 'ANSSI-ESSAI-${s}')`,
+          f,
+        );
         // La file de purge du magasin (migration `017`). Elle est VIDE en régime
         // normal — c'est une file d'attente, pas un registre —, et c'est
         // précisément pourquoi elle est semée : sans une ligne par filiale, le
@@ -633,18 +661,6 @@ export async function semerJeuEssai(base, client, options = {}) {
           [filiale, `cd/${(s === 'A' ? 'c' : 'd').repeat(64)}`],
         );
 
-        // Tables mixtes, versant LOCAL (le versant Groupe est semé plus haut).
-        await c.query(`insert into mesure_catalogue (id, filiale_id, nom)   values ('MESURE-${s}', $1, 'Mesure locale')`, f);
-        await c.query(`insert into personnes        (id, filiale_id, nom)   values ('PERS-${s}',   $1, 'Responsable de site')`, f);
-        await c.query(
-          `insert into documents (id, filiale_id, titre, confidentialite, donnees_personnelles,
-                                  traitement_id)
-               values ('DOC-${s}', $1, 'Procédure locale', 'confidentiel', true, 'TRT-${s}')`,
-          f,
-        );
-        await c.query(`insert into parametres       (id, filiale_id, cle)   values ('PARAM-${s}',  $1, 'essai.local')`, f);
-        await c.query(`insert into document_referentiels (document_id, ref_id, filiale_id) values ('DOC-${s}', 'anssi', $1)`, f);
-        await c.query(`insert into document_etiquettes (document_id, etiquette, filiale_id) values ('DOC-${s}', 'Site ${s}', $1)`, f);
 
         // Le pivot « mesure », des deux côtés du §16.2 : la mise en œuvre est locale,
         // le catalogue est le socle.
