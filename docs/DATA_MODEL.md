@@ -597,6 +597,24 @@ actions ; `deleteRisque`/`deleteActif` nettoient les références (`risque_id`, 
 > | `en_vigueur` | LA pièce qui fait foi. Au plus une par porteur **et par filiale** ; c'est elle qui donne `documents.version_document` (migration `018`) |
 > | `version_piece` | le numéro de version **du fichier**, annoncé au dépôt |
 > | `sha256` · `etat_integrite` · `derniere_verification` | l'empreinte calculée sur le fichier écrit, et le verdict du dernier rapprochement — `non_verifiee`, `conforme`, `ecart`, `fichier_absent` (migration `020`) |
+>
+> ⚠️ **Depuis la migration `038` (action 19.4), une pièce sert PLUSIEURS porteurs.** Le
+> couple `(entite_type, entite_id)` de `pieces_jointes` reste l'**adresse de délivrance** —
+> celle que porte l'URL, celle que vise l'unicité « une seule pièce en vigueur par
+> porteur », celle que lit le relais de version du document. L'ensemble des porteurs
+> servis vit dans **`piece_rattachements`**, et une clé étrangère différée
+> (`fk_pieces_jointes_adresse`) impose que l'adresse soit **toujours l'un d'eux**.
+>
+> Trois conséquences, et la dernière est celle qui se voit à l'écran :
+>
+> · une procédure déposée **une fois** prouve cinq contrôles — une ligne, un fichier, une
+>   empreinte, un quota, et **une seule chose à mettre à jour** le jour où elle change ;
+> · supprimer un porteur ne libère le fichier **qu'au dernier** : tant qu'un rattachement
+>   subsiste, la pièce **change d'adresse** (et perd son « en vigueur », qui est une
+>   propriété du couple pièce-porteur, pas de la pièce) ;
+> · `DELETE /api/pieces/<entite>/<id>/<piece>` **détache** au lieu de détruire quand la
+>   preuve sert ailleurs. L'écran le dit avant le clic — la liste sert `autres_porteurs`
+>   pour cela — et le journal distingue « détachement » de « suppression ».
 
 ### Traitement RGPD — `traitements` (v6, article 30)
 | Champ | Type | Notes |

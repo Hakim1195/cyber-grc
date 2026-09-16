@@ -74,7 +74,8 @@
  * | `POST   /api/pieces/:entite/:entiteId` | `{ ecrire, selon-entite }` |
  * | `GET    /api/pieces/:entite/:entiteId` | `{ lire, selon-entite }` |
  * | `GET    /api/pieces/:entite/:entiteId/:pieceId` | `{ lire, selon-entite }` |
- * | `DELETE /api/pieces/:entite/:entiteId/:pieceId` | `{ ecrire, selon-entite }` |
+ * | `DELETE /api/pieces/:entite/:entiteId/:pieceId` | `{ ecrire, selon-entite }` — **détache**, et ne libère le fichier qu'au dernier rattachement (19.4) |
+ * | `POST   /api/pieces/:entite/:entiteId/rattachements` | `{ ecrire, selon-entite }` — réutilise une preuve déjà déposée (19.4) |
  * | `POST   /api/pieces/logo` | `{ administrer, administration }` |
  * | `GET    /api/pieces/logo` | `{ lire, administration }` |
  * | `GET    /api/pieces/logo/:pieceId` | `{ lire, administration }` |
@@ -156,7 +157,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 
 import { journaliser } from '../auth/journal.js';
-import { DOMAINE_PAR_ENTITE } from '../api/droits.js';
+import { deciderAcces, DOMAINE_PAR_ENTITE, refuserDroit } from '../api/droits.js';
 import type { SessionAppliquee } from '../api/session.js';
 import type { Configuration } from '../config/index.js';
 import { avecTransaction } from '../db/pool.js';
@@ -168,12 +169,13 @@ import { analyser, ErreurClamav } from './clamav.js';
 import type { VerdictAntivirus } from './clamav.js';
 import {
   demettreLesEnVigueur,
+  detacher,
   inserer,
   lireDelivrable,
   lister,
   marquerEnVigueur,
+  rattacher,
   refleterVersionSurDocument,
-  supprimer,
   versLaVue,
 } from './depot.js';
 import { verifierQuotaFiliale } from './exploitation.js';
@@ -824,9 +826,112 @@ export async function greffonPieces(
   };
 
   /* ===================================================================
-   *  SUPPRESSION
+   *  RÉUTILISATION — action 19.4
    * =================================================================== */
 
+  /**
+   * Rattache une preuve **déjà déposée** à un porteur de plus.
+   *
+   * ── LES TROIS BARRIÈRES, ET AUCUNE N'EST DE TROP ─────────────────────
+   *
+   *  1. **le porteur de destination** : la route déclare `{ ecrire,
+   *     selon-entite }`, et le crochet d'accès l'a déjà tranché sur `:entite` ;
+   *  2. **le porteur d'ORIGINE** : `depuis` est une seconde entité, qui relève
+   *     d'un autre domaine fonctionnel. Sans ce contrôle, un profil qui n'a pas
+   *     le domaine « documents » réutiliserait la PSSI depuis l'écran d'un
+   *     contrôle, c'est-à-dire lirait par la bande ce qu'on lui a fermé de
+   *     face. Le crochet ne sait pas le faire — il ne lit qu'un paramètre —,
+   *     donc la route le fait, et l'essai le mesure ;
+   *  3. **la pièce est DÉLIVRABLE depuis ce porteur d'origine** : on ne rattache
+   *     que ce qu'on pourrait déjà télécharger. Un identifiant deviné ne suffit
+   *     pas, et une pièce en quarantaine ne se propage pas.
+   *
+   * ⚠️ **Le cloisonnement, lui, n'est dans aucune de ces trois lignes** : c'est
+   * `pol_piece_rattachements_ajout` qui refuse la pièce d'une filiale voisine,
+   * et `filiale_id` est relu sur la pièce plutôt que reçu (voir `rattacher`).
+   */
+  const rattacherPiece = async (
+    requete: FastifyRequest,
+    reponse: FastifyReply,
+    entiteType: string,
+    entiteId: string,
+  ): Promise<FastifyReply> => {
+    const { perimetre, droits } = sessionDe(requete);
+    filialeDEcriture(perimetre);
+
+    const corps = (requete.body ?? {}) as Record<string, unknown>;
+    const pieceId = typeof corps.piece_id === 'string' ? corps.piece_id : '';
+    const depuisType = typeof corps.depuis_entite === 'string' ? corps.depuis_entite : '';
+    const depuisId = typeof corps.depuis_entite_id === 'string' ? corps.depuis_entite_id : '';
+    if (pieceId === '' || depuisType === '' || depuisId === '') {
+      throw entreeInvalide(
+        'Désignez la pièce à réutiliser et le porteur d’où elle vient : ' +
+          '{ piece_id, depuis_entite, depuis_entite_id }.',
+      );
+    }
+    if (depuisType === entiteType && depuisId === entiteId) {
+      throw entreeInvalide('Cette pièce est déjà attachée à cette fiche.');
+    }
+
+    const domaineOrigine = DOMAINE_PAR_ENTITE[depuisType as keyof typeof DOMAINE_PAR_ENTITE];
+    if (domaineOrigine === undefined) {
+      throw entreeInvalide('Le porteur d’origine n’est pas une fiche connue.');
+    }
+    const refus = deciderAcces(droits, 'lire', domaineOrigine);
+    if (refus !== null) throw refuserDroit(refus);
+
+    const rattachee = await avecTransaction(pool, perimetre, async (client) => {
+      const source = await lireDelivrable(client, depuisType, depuisId, pieceId);
+      if (source === null) return null;
+      const neuf = await rattacher(client, pieceId, entiteType, entiteId);
+      if (neuf) {
+        await tracer(
+          client,
+          perimetre,
+          requete,
+          'modification',
+          'Réutilisation d’une pièce jointe',
+          source.id,
+          {
+            entite_type: entiteType,
+            entite_id: entiteId,
+            depuis_entite: depuisType,
+            depuis_entite_id: depuisId,
+            nom_fichier: source.nom_fichier,
+            sha256: source.sha256,
+          },
+        );
+      }
+      return { piece: source, neuf };
+    });
+
+    if (rattachee === null) throw pieceIntrouvable(pieceId);
+    return reponse.code(rattachee.neuf ? 201 : 200).send({
+      rattache: true,
+      deja_rattache: !rattachee.neuf,
+      piece: versLaVue(rattachee.piece),
+    });
+  };
+
+  /* ===================================================================
+   *  DÉTACHEMENT — et le fichier ne part qu'au DERNIER (action 19.4)
+   * =================================================================== */
+
+  /**
+   * ⚠️ **Cette route s'appelle `DELETE`, et elle ne détruit pas toujours.**
+   *
+   * Depuis la migration `038`, une preuve sert plusieurs contrôles. Retirer la
+   * procédure de l'écran d'un contrôle ne peut pas effacer ce que quatre autres
+   * invoquent : le geste **détache**, et le fichier n'est libéré qu'au dernier
+   * rattachement. Le corps de la réponse le dit (`libere`), et l'écran le dit à
+   * l'utilisateur **avant** qu'il clique — c'est `autres_porteurs`, servi avec
+   * la liste.
+   *
+   * Le journal distingue les deux : « Suppression d'une pièce jointe » quand le
+   * fichier part, « Détachement » quand il reste. Inscrire « suppression » sur
+   * un détachement serait une fausse accusation de plus dans un registre qui ne
+   * s'efface pas — c'est la classe du constat Q-301.
+   */
   const supprimerPiece = async (
     requete: FastifyRequest,
     reponse: FastifyReply,
@@ -838,36 +943,44 @@ export async function greffonPieces(
     const { pieceId } = requete.params as ParamsPiece;
     if (pieceId === undefined) throw entreeInvalide('Pièce jointe non désignée.');
 
-    const ligne = await avecTransaction(pool, perimetre, async (client) => {
-      const effacee = await supprimer(client, entiteType, entiteId, pieceId);
-      if (effacee === null) return null;
+    const resultat = await avecTransaction(pool, perimetre, async (client) => {
+      const geste = await detacher(client, entiteType, entiteId, pieceId);
+      if (geste === null) return null;
       await tracer(
         client,
         perimetre,
         requete,
-        'suppression',
-        'Suppression d’une pièce jointe',
-        effacee.id,
+        geste.libere ? 'suppression' : 'modification',
+        geste.libere
+          ? 'Suppression d’une pièce jointe'
+          : 'Détachement d’une pièce jointe (elle sert encore ailleurs)',
+        geste.ligne.id,
         {
           entite_type: entiteType,
           entite_id: entiteId,
-          nom_fichier: effacee.nom_fichier,
-          sha256: effacee.sha256,
-          taille_octets: effacee.taille_octets,
+          nom_fichier: geste.ligne.nom_fichier,
+          sha256: geste.ligne.sha256,
+          taille_octets: geste.ligne.taille_octets,
+          porteurs_restants: (geste.ligne.autres_porteurs ?? []).length,
         },
       );
-      return effacee;
+      return geste;
     });
 
-    if (ligne === null) throw pieceIntrouvable(pieceId);
+    if (resultat === null) throw pieceIntrouvable(pieceId);
 
-    // APRÈS le commit (voir `magasin.retirerDuMagasin`). Et **jamais** pour une
-    // pièce en quarantaine : ce fichier-là est la matière de l'équipe sécurité,
-    // pas un encombrement à balayer depuis une route d'application.
-    if (!ligne.quarantaine) {
-      await retirerDuMagasin(config, ligne.chemin_stockage).catch((erreur: unknown) => {
+    // APRÈS le commit (voir `magasin.retirerDuMagasin`), et **seulement si la
+    // ligne est partie** : une pièce qui sert encore un autre porteur garde son
+    // fichier, faute de quoi quatre écrans délivreraient un octet manquant.
+    // Et **jamais** pour une pièce en quarantaine : ce fichier-là est la matière
+    // de l'équipe sécurité, pas un encombrement à balayer depuis une route.
+    if (resultat.libere && !resultat.ligne.quarantaine) {
+      await retirerDuMagasin(config, resultat.ligne.chemin_stockage).catch((erreur: unknown) => {
         requete.log.error(
-          { piece: ligne.id, detail: erreur instanceof Error ? erreur.message : String(erreur) },
+          {
+            piece: resultat.ligne.id,
+            detail: erreur instanceof Error ? erreur.message : String(erreur),
+          },
           'Pièce supprimée en base, fichier non retiré du magasin',
         );
       });
@@ -1172,6 +1285,28 @@ export async function greffonPieces(
     async (requete: FastifyRequest, reponse: FastifyReply) => {
       const cible = cibleMetier(requete);
       return supprimerPiece(requete, reponse, cible.type, cible.id);
+    },
+  );
+
+  // ── La réutilisation : une preuve déjà déposée sert un porteur de plus ──
+  //
+  // Segment terminal STATIQUE : Fastify le fait passer avant `:pieceId`, comme
+  // `/api/pieces/logo` passe avant `:entite`. Le verbe est POST et non PUT : on
+  // ajoute un rattachement à un ensemble, on ne remplace pas une ressource.
+  //
+  // ⚠️ **Le corps porte le porteur d'ORIGINE, et la route en vérifie le droit**
+  // (voir `rattacherPiece`) : c'est le seul endroit du produit où une requête
+  // met en jeu DEUX domaines fonctionnels, et le crochet d'accès n'en tranche
+  // qu'un.
+  instance.post(
+    '/api/pieces/:entite/:entiteId/rattachements',
+    {
+      schema: { params: SCHEMA_PARAMS_ENTITE },
+      config: { acces: { action: 'ecrire', domaine: 'selon-entite' } },
+    },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const cible = cibleMetier(requete);
+      return rattacherPiece(requete, reponse, cible.type, cible.id);
     },
   );
 

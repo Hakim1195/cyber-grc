@@ -2866,3 +2866,60 @@ des garde-fous qui **éprouvent** : le balayage de création (`test/api/entites-
 pour les deux autres. *Un garde-fou qui mesure ce que la base FERAIT attrape les défauts
 d'un lot qu'il n'a pas vu naître* — et c'est là toute la différence avec un garde qui
 reconnaît un mot.
+
+---
+
+## §41 — Un garde-fou de schéma ne lit **aucune ligne** d'une table cloisonnée
+
+> **Posé le 16/09/2026**, en livrant `piece_rattachements` (migration `038`, action 19.4).
+> Le défaut a vécu une heure et n'a rien coûté, parce que le banc l'a dit tout de suite.
+> Ce paragraphe existe pour que le prochain ne le réinvente pas — il est **tentant**, et
+> il se présente comme la bonne façon de faire.
+
+### 41.1 La règle
+
+**Tout ce qu'un `f_verifier_*()` interroge doit vivre dans `pg_catalog`.** Le catalogue,
+les contraintes, les politiques, `tgtype`, les domaines, les privilèges : oui. Les lignes
+d'une table métier : **non**.
+
+Le motif n'est pas esthétique. `f_verifier_schema()` est appelé par `db/migrate.mjs` **et
+par `deploy/install.sh`** (§18.4), c'est-à-dire dans des transactions qui n'ont **aucun
+périmètre** — il n'y a pas de session utilisateur au moment où l'on installe. Lire une
+table cloisonnée y lève `GRC04` (« périmètre non positionné »), et le contrôle ne rend
+alors ni « sain » ni « en défaut » : **il fait échouer le déploiement pour une raison qui
+n'est pas celle qu'il mesure.**
+
+### 41.2 Ce qu'on fait à la place : POSER plutôt que SURVEILLER
+
+La première rédaction du garde de la `038` comptait les pièces dont l'adresse de
+délivrance ne figurait pas parmi leurs rattachements. Elle mesurait juste, et elle mesurait
+**après coup** : une ligne fautive existait déjà quand le garde la nommait.
+
+La bonne réponse n'était pas d'assouplir le garde. C'était de faire de la propriété une
+**contrainte du schéma** — `fk_pieces_jointes_adresse`, différée —, après quoi le garde n'a
+plus qu'à vérifier, dans `pg_catalog`, que la contrainte est là et qu'elle a la bonne
+forme.
+
+> **Un garde-fou qui doit lire des lignes pour rendre son verdict est souvent le signe
+> qu'une contrainte manque.** Cherchez la contrainte d'abord ; le garde ensuite, pour
+> qu'elle ne disparaisse pas en silence (§19.4).
+
+### 41.3 L'exception, et elle est nommée
+
+`f_verifier_contraintes_eprouvees()` (migration `028`, §39.1) **écrit** des lignes témoins
+dans une sous-transaction annulée, pour éprouver un prédicat. Elle ne fait pas exception à
+la règle : ce qu'elle lit est ce qu'elle vient d'écrire, jamais la donnée du client — et
+les tables qu'elle éprouve sont choisies pour ne pas exiger de périmètre. Si une table
+cloisonnée devait y entrer, c'est **le garde** qui devrait poser son propre périmètre
+d'essai, explicitement, et le dire.
+
+### 41.4 Où se mesure la donnée, alors ?
+
+Dans le **banc**, qui a un périmètre parce qu'il a une session — et qui peut donc faire
+ce qu'un garde de schéma ne peut pas : créer la situation, la mesurer, et **muter** pour
+vérifier que la mesure décide. C'est la répartition ordinaire :
+
+| | Ce qui est vérifié | Où |
+|---|---|---|
+| la **forme** du schéma, à chaque démarrage | contraintes, politiques, déclencheurs, domaines | `f_verifier_*()`, sans périmètre |
+| le **comportement** sur des lignes réelles | ce que la base fait d'un geste | `test/`, sous périmètre, avec mutation |

@@ -408,10 +408,24 @@ const MesuresModule = (() => {
                 </div>
 
                 ${typeof PreuvesModule !== "undefined" ? PreuvesModule.encartMesureHtml(m.id) : ""}
+
+                <!-- 19.4 — LE PANNEAU DES PIÈCES ARRIVE SUR LA FICHE DU CONTRÔLE.
+                     Il ne vivait que sur les documents et les incidents ; c'est la
+                     première question d'un auditeur — « montrez-moi la preuve de
+                     CE contrôle » — et elle n'avait aucun écran. Une capacité
+                     qu'aucun écran n'appelle est une capacité absente. -->
+                ${typeof PiecesModule !== "undefined" ? PiecesModule.hoteHtml() : ""}
             </section>`;
 
         // ── 19.3 : le même lien, lu par l'autre bout ────────────────────────
         if (typeof PreuvesModule !== "undefined") PreuvesModule.brancherMesure(m.id);
+        // ── 19.4 : les preuves du contrôle, déposées ou RÉUTILISÉES ─────────
+        //
+        // ⚠️ « mesures » est le nom que l'API donne à `mesure_catalogue` : la
+        // route de dépôt l'admet sous cet alias, et le déclencheur de la
+        // migration `017` le porte parmi ses arguments. Écrire
+        // « mesure_catalogue » ici serait refusé par le schéma de la route.
+        if (typeof PiecesModule !== "undefined") PiecesModule.monter("mesures", m.id);
 
         document.getElementById("saveBtn").onclick = () => {
             const nom = document.getElementById("nom").value.trim();

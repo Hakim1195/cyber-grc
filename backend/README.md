@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2011 essais, vingt-cinq familles (voir plus bas)
+npm test                           # 2031 essais, vingt-cinq familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -769,11 +769,11 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 16/09/2026, à la révision `8e0b149`** : `npm test` → **2011 essais,
-2011 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**Mesuré au 16/09/2026, à la révision `RÉVISION`** : `npm test` → **2031 essais,
+2031 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **41 garde-fous consignés**, **37 migrations**,
-**56 tables**, **274 décisions** au registre de l'article 30 ; publication → **86
+`f_verifier_schema()` → 0 anomalie, **42 garde-fous consignés**, **38 migrations**,
+**57 tables**, **279 décisions** au registre de l'article 30 ; publication → **86
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **14 conformes,
 1 réserve, 0 bloquant**.
 
@@ -927,16 +927,16 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 | | |
 |---|---|
 | Révision mesurée | **`8e0b149`** — « 19.5 / 19.6, et la passe de documentation » (16/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`), **arbre propre**. ⚠️ **Ce bloc a déjà été RÉANCRÉ quatre fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**. |
-| État de l'arbre | **arbre PROPRE de `8e0b149`**, `git status` vide. Compte relevé **famille par famille**, chaque répertoire joué séparément. ⚠️ **`documentation` est relevée à 30 essais dont UN EN ÉCHEC** — celui qui juge ce bloc-ci, et qui ne peut pas être vert avant que le bloc soit écrit. C'est la seule circularité du dispositif, et elle se dit plutôt qu'elle ne se cache : la famille est rejouée APRÈS cette mise à jour, et c'est elle qui valide le réancrage. Trois familles bougent depuis `54383a4` : `documents` 25 → **35** (les deux familles neuves de 19.3 et 19.5/19.6), `navigateur` 199 → **203**, `modules` 40 → **42**. |
+| État de l'arbre | **arbre PROPRE de `RÉVISION`**, `git status` vide. Compte relevé **famille par famille**, chaque répertoire joué séparément. ⚠️ **`documentation` est relevée à 30 essais dont UN EN ÉCHEC** — celui qui juge ce bloc-ci, et qui ne peut pas être vert avant que le bloc soit écrit. C'est la seule circularité du dispositif, et elle se dit plutôt qu'elle ne se cache : la famille est rejouée APRÈS cette mise à jour. Deux familles bougent depuis `8e0b149`, et ce sont les deux moitiés de 19.4 : `pieces` 125 → **141**, `navigateur` 203 → **207**. |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 | ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2011 · pass 2011 · fail 0
-                                                   base 311 · api 297 · navigateur 203
-                                                   pieces 125 · auth 115 · import 97
+npm test                                         → tests 2031 · pass 2031 · fail 0
+                                                   base 311 · api 297 · navigateur 207
+                                                   pieces 141 · auth 115 · import 97
                                                    deploiement 95 · droits 84 · cycle 82
                                                    reprise 82 · notifications 73
                                                    journal-lecture 72 · approbations 71
@@ -948,14 +948,15 @@ npm test                                         → tests 2011 · pass 2011 · 
                                                    derogations 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (41 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (42 garde-fous découverts, joués, consignés)
 ```
 
-Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **56 tables** en
-**37 migrations**, **224 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
-**94 clés étrangères** (54 `restrict`, 38 `cascade`, 2 `set null`), **49 tables portant
-`cree_par` et 49 déclencheurs de création**, **27 clés étrangères composites** visant
-`(id, filiale_id)`, **13 unicités** `uq_<parent>_id_filiale`, **41 contrôles consignés**
+Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **57 tables** en
+**38 migrations**, **228 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**97 clés étrangères** (55 `restrict`, 39 `cascade`, 2 `set null`, 1 `no action`),
+**50 tables portant `cree_par` et 50 déclencheurs de création**, **28 clés étrangères
+composites** visant
+`(id, filiale_id)`, **13 unicités** `uq_<parent>_id_filiale`, **42 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1235,7 +1236,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **56 tables**, obtenues aujourd'hui en **37 migrations** appliquées de bout en bout par
+- **57 tables**, obtenues aujourd'hui en **38 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1255,10 +1256,10 @@ Ce que la reprise fait, quand on la rejoue :
   ajoute la vingt-deuxième action du journal (`verification_integrite`), deux colonnes de
   verdict sur `pieces_jointes`, un index de balayage — et **réémet** le garde-fou du
   vocabulaire plutôt que d'en poser un second sur la même contrainte.
-- **224 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
+- **228 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
-- **94 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
+- **97 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
   migrations : **54 en `restrict`, 38 en `cascade`, deux en `set null`**
   (`incidents.risque_id` — l'incident survit au risque). ⚠️ **Les deux `set null` sont
   restés deux**, et ce n'est pas faute d'avoir essayé : `documents.traitement_id` visait
@@ -1287,7 +1288,7 @@ Ce que la reprise fait, quand on la rejoue :
   `archive_le`), reste lisible et reste rattaché à tout ce qui le référence.
 - **Clés étrangères et unicités composites** : quand l'enfant et le parent sont tous
   deux cloisonnés, la clé porte `(référence, filiale_id)` et vise une unicité
-  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **27 clés étrangères** dont la
+  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **28 clés étrangères** dont la
   seconde colonne visée est le `filiale_id` du parent ou sa portée, et **13 unicités** de
   cette forme. ⚠️ **Elles vont par PAIRES depuis la migration `027`**, et c'est mécanisé :
   toute clé composite visant une table MIXTE par un `filiale_id` nullable doit avoir sa
@@ -1296,10 +1297,10 @@ Ce que la reprise fait, quand on la rejoue :
   le réclame (constat N-10, `CONVENTIONS.md` §38). Une clé simple aurait été satisfaite par une ligne **invisible** de la
   filiale voisine : les contrôles d'intégrité de PostgreSQL contournent délibérément la
   RLS (`CONVENTIONS.md` §17.1, étendu aux unicités par le §19.1).
-- **Traçabilité imposée à la création** : les **44 tables** portant `cree_par` portent
-  chacune un déclencheur `before insert` nommé `trg_<table>_creation` — **44 relevés**,
-  répartis selon la forme de la table entre `f_init_tracabilite` (32), `f_init_creation`
-  (10) et `f_init_horodatage` (2). Ce que le client envoie dans `version`, `cree_le` et
+- **Traçabilité imposée à la création** : les **50 tables** portant `cree_par` portent
+  chacune un déclencheur `before insert` nommé `trg_<table>_creation` — **50 relevés**,
+  répartis selon la forme de la table entre `f_init_tracabilite` (35), `f_init_creation`
+  (13) et `f_init_horodatage` (2). Ce que le client envoie dans `version`, `cree_le` et
   `cree_par` est **ignoré** (`CONVENTIONS.md` §18.1). La couverture n'est pas affirmée
   ici, elle est **vérifiée** : `f_verifier_tracabilite()` balaie les tables à `cree_par`,
   exige le déclencheur, exige la **bonne** fonction pour la forme, exige l'armement

@@ -112,7 +112,7 @@ async function journalDepuis(numero) {
 }
 
 describe('Le montage lui-même', () => {
-  test('les dix routes sont montées, et CHACUNE déclare sa classe d’accès', () => {
+  test('les onze routes sont montées, et CHACUNE déclare sa classe d’accès', () => {
     // Fastify ajoute un HEAD pour chaque GET (`exposeHeadRoutes`) : il hérite de
     // la déclaration de son GET, et il est compté ici plutôt que filtré — une
     // route qui existe sans classe d'accès est refusée par le crochet, HEAD
@@ -122,10 +122,11 @@ describe('Le montage lui-même', () => {
       assert.ok(typeof route.acces.action === 'string');
     }
     const declarees = serveur.routes.filter((r) => r.methode !== 'HEAD');
-    // Huit routes du lot L6, plus les deux du lot L16 : la désignation de la
+    // Huit routes du lot L6, plus les deux du lot L16 — la désignation de la
     // version en vigueur (action D1) et le rapprochement avec l'empreinte
-    // (migration 020).
-    assert.equal(declarees.length, 10, JSON.stringify(declarees, null, 2));
+    // (migration 020) —, plus la réutilisation d'une preuve (action 19.4,
+    // migration 038).
+    assert.equal(declarees.length, 11, JSON.stringify(declarees, null, 2));
     // Fastify ajoute un HEAD par GET : quatre pour le lot L6, un cinquième pour la
     // vérification d'intégrité (migration 020). Le compte est DÉRIVÉ plutôt que
     // recopié — sans quoi il faudrait le corriger à chaque route neuve, et la
@@ -181,7 +182,8 @@ describe('Le montage lui-même', () => {
     assert.equal(logos.filter((r) => r.acces.domaine === null).length, 2);
     assert.equal(logos.filter((r) => r.acces.domaine === 'administration').length, 2);
     const metier = declarees.filter((r) => !r.url.startsWith('/api/pieces/logo'));
-    assert.equal(metier.length, 6);
+    // Sept depuis la migration `038` : la réutilisation d'une preuve (action 19.4).
+    assert.equal(metier.length, 7);
     // ⚠️ La vérification d'intégrité déclare `lire`, jamais `ecrire` — même
     // arbitrage que le constat Q-158 sur le logo : la ligne de partage est
     // l'ACTE, pas l'entité. Rapprocher une pièce de son empreinte n'extrait

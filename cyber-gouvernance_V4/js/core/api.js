@@ -796,6 +796,12 @@ const Api = (() => {
          */
         suffixeEnVigueur: "/en-vigueur",
         /**
+         * Segment terminal de la **réutilisation d'une preuve**
+         * (`POST /pieces/<entite>/<entiteId>/rattachements`, migration `038`,
+         * action 19.4). RELEVÉ dans `backend/src/pieces/index.ts`.
+         */
+        suffixeRattachements: "/rattachements",
+        /**
          * États d'analyse, relevés dans `ck_pieces_jointes_etat`
          * (`db/migrations/001_socle.sql`). **Une seule est délivrable.**
          */
@@ -945,6 +951,44 @@ const Api = (() => {
     }
 
     /** Supprime une pièce. Le fichier quitte le magasin, sauf s'il est en quarantaine. */
+    /**
+     * **Réutilise** une preuve déjà déposée : la rattache à un porteur de plus.
+     *
+     * Rien n'est envoyé — ni fichier, ni empreinte. La pièce reste en **un seul
+     * exemplaire**, avec son empreinte, son quota et son verdict d'analyse ; ce
+     * qui s'ajoute est le fait qu'elle serve aussi cette fiche-ci.
+     *
+     * ⚠️ **Le porteur d'ORIGINE est obligatoire, et ce n'est pas une commodité**
+     * (`src/pieces/index.ts`) : le serveur y vérifie deux choses que l'URL seule
+     * ne dit pas — que la session a le droit de LIRE le domaine d'où vient la
+     * preuve, et que la pièce y est réellement délivrable. Un identifiant deviné
+     * ne suffit donc pas.
+     *
+     * Rend `{ rattache: true, deja_rattache, piece }`. Un second appel identique
+     * rend **200** et `deja_rattache: true` — ce n'est pas une erreur.
+     */
+    function rattacherPiece(entiteType, entiteId, pieceId, depuisEntite, depuisEntiteId) {
+        return appeler(cheminPiece(entiteType, entiteId) + CONTRAT_PIECES.suffixeRattachements, {
+            methode: "POST",
+            corps: {
+                piece_id: pieceId,
+                depuis_entite: depuisEntite,
+                depuis_entite_id: depuisEntiteId
+            }
+        });
+    }
+
+    /**
+     * **Détache** une pièce de ce porteur — et ne la détruit qu'au dernier.
+     *
+     * ⚠️ **Le nom de la route dit `DELETE` ; le geste, lui, dépend de l'état.**
+     * Depuis la migration `038`, une preuve peut servir plusieurs contrôles :
+     * ce que cet appel retire est **le rattachement à ce porteur-ci**. Le fichier
+     * n'est libéré que si c'était le dernier. L'écran doit le dire AVANT le clic
+     * — `piece.autres_porteurs` est servi avec la liste précisément pour cela —,
+     * sans quoi il annoncerait une destruction qui n'a pas lieu, ou tairait
+     * celle qui a lieu (classe des constats Q-201 / Q-207).
+     */
     function supprimerPiece(entiteType, entiteId, pieceId) {
         return appeler(cheminPiece(entiteType, entiteId, pieceId), { methode: "DELETE" });
     }
@@ -1100,7 +1144,7 @@ const Api = (() => {
         creer, modifier, supprimer, propagerMesure, reprendre,
         journal, journalVerification, journalExport,
         filiales, choisirFilialeActive,
-        pieces, deposerPiece, telechargerPiece, adressePiece, supprimerPiece,
+        pieces, deposerPiece, telechargerPiece, adressePiece, supprimerPiece, rattacherPiece,
         marquerPieceEnVigueur, verifierIntegritePiece,
         logoFiliale, telechargerLogoFiliale,
         // Vague 6 : ce que les écrans devaient sinon appeler par une porte à eux.

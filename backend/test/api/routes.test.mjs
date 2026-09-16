@@ -792,6 +792,11 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // Servie sans identité, elle dirait à un anonyme si tel fichier existe encore
     // dans le magasin — et son empreinte avec.
     ['GET', '/api/pieces/risques/RISK-A/PJ-A/integrite', undefined],
+    // La réutilisation d'une preuve (action 19.4, migration `038`). C'est une
+    // ÉCRITURE, et elle met en jeu DEUX porteurs : servie sans identité, elle
+    // rattacherait la pièce d'une filiale à la fiche d'une autre — et le refus du
+    // porteur d'origine, que la route vérifie elle-même, n'aurait plus de sujet.
+    ['POST', '/api/pieces/mesures/MESURE-A/rattachements', undefined],
     ['POST', '/api/pieces/logo', undefined],
     ['GET', '/api/pieces/logo', undefined],
     ['GET', '/api/pieces/logo/PJ-A', undefined],

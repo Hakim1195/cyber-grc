@@ -57,6 +57,12 @@ export interface LignePiece {
   readonly version: number;
   readonly cree_le: Date;
   readonly cree_par: string;
+  /**
+   * Les AUTRES porteurs que sert cette pièce — migration `038`, action 19.4.
+   * Vide dans le cas ordinaire ; non vide, il dit que « Supprimer » détachera au
+   * lieu de détruire.
+   */
+  readonly autres_porteurs?: readonly { entite_type: string; entite_id: string }[];
 }
 
 /**
@@ -97,6 +103,36 @@ const COLONNES = [
 const LISTE_COLONNES = COLONNES.map((c) => `"${c}"`).join(', ');
 
 /**
+ * Les mêmes colonnes, **préfixées par la table** : la liste et la délivrance
+ * joignent désormais `piece_rattachements`, et deux tables portent
+ * `entite_type`, `entite_id`, `filiale_id` et `cree_le`. Une colonne nue y
+ * serait ambiguë — PostgreSQL le dirait, et c'est tant mieux, mais autant ne
+ * pas écrire deux fois la liste : elle est **dérivée**, pas recopiée.
+ */
+const LISTE_COLONNES_PIECE = COLONNES.map((c) => `pj."${c}"`).join(', ');
+
+/**
+ * Les **autres** porteurs que sert la même pièce.
+ *
+ * ⚠️ C'est ce qui empêche l'écran de mentir au moment le plus coûteux. Depuis la
+ * migration `038`, « Supprimer » sur une pièce réutilisée ne supprime pas : elle
+ * la **détache** de ce porteur-ci, et ne libère le fichier qu'au dernier. Une
+ * interface qui ne le montrerait pas ferait croire à une destruction qui n'a pas
+ * lieu — ou, pire, laisserait croire qu'elle n'a pas lieu le jour où elle a
+ * lieu. Le décompte vient donc avec la liste, jamais d'un second appel que
+ * l'écran pourrait oublier.
+ */
+const AUTRES_PORTEURS = `coalesce((
+      select json_agg(json_build_object(
+                 'entite_type', r2."entite_type",
+                 'entite_id',   r2."entite_id") order by r2."entite_type", r2."entite_id")
+        from "piece_rattachements" r2
+       where r2."piece_id"   = pj."id"
+         and r2."filiale_id" = pj."filiale_id"
+         and not (r2."entite_type" = r."entite_type" and r2."entite_id" = r."entite_id")
+    ), '[]'::json)`;
+
+/**
  * Ce que la base rend est **délivrable** — contrôle n° 8 du §31.2.
  *
  * *« La ligne n'est visible de l'application qu'après [l'analyse] : une pièce en
@@ -112,7 +148,13 @@ const LISTE_COLONNES = COLONNES.map((c) => `"${c}"`).join(', ');
  * pièce mise en quarantaine par l'exploitation sans changer d'état resterait
  * délivrable si l'on ne regardait que l'état.
  */
-const CONDITION_DELIVRABLE = `"etat_analyse" = 'saine' and not "quarantaine"`;
+const conditionDelivrable = (alias = ''): string => {
+  const prefixe = alias === '' ? '' : `${alias}.`;
+  return `${prefixe}"etat_analyse" = 'saine' and not ${prefixe}"quarantaine"`;
+};
+
+/** La forme sans alias — les requêtes qui n'interrogent que `pieces_jointes`. */
+const CONDITION_DELIVRABLE = conditionDelivrable();
 
 /* =====================================================================
  *  Contrôle n° 2 — le quota de la filiale
@@ -221,19 +263,33 @@ export async function inserer(client: PoolClient, piece: PieceAInserer): Promise
  *  Lecture
  * ===================================================================== */
 
-/** Pièces **délivrables** attachées à une entité. */
+/**
+ * Pièces **délivrables** attachées à une entité.
+ *
+ * ⚠️ **La liste se lit dans `piece_rattachements`, plus dans l'adresse de la
+ * pièce** — migration `038`, action 19.4. Une procédure déposée une fois sur la
+ * PSSI et réutilisée par cinq contrôles apparaît sur les six écrans ; elle
+ * n'existe qu'en un exemplaire, avec une empreinte et un quota.
+ *
+ * L'adresse `pieces_jointes.(entite_type, entite_id)` reste ce que porte l'URL
+ * de délivrance, et l'invariant de la base garantit qu'elle est **l'un** des
+ * rattachements : la jointure ne peut donc pas faire disparaître une pièce de
+ * l'écran de son porteur d'origine.
+ */
 export async function lister(
   client: PoolClient,
   entiteType: string,
   entiteId: string,
 ): Promise<LignePiece[]> {
   const resultat = await client.query<LignePiece>(
-    `select ${LISTE_COLONNES}
-       from "pieces_jointes"
-      where "entite_type" = $1::type_entite
-        and "entite_id" = $2::text
-        and ${CONDITION_DELIVRABLE}
-      order by "en_vigueur" desc, "cree_le" desc, "id" desc`,
+    `select ${LISTE_COLONNES_PIECE}, ${AUTRES_PORTEURS} as "autres_porteurs"
+       from "piece_rattachements" r
+       join "pieces_jointes" pj
+         on pj."id" = r."piece_id" and pj."filiale_id" = r."filiale_id"
+      where r."entite_type" = $1::type_entite
+        and r."entite_id" = $2::text
+        and ${conditionDelivrable('pj')}
+      order by pj."en_vigueur" desc, pj."cree_le" desc, pj."id" desc`,
     [entiteType, entiteId],
   );
   return resultat.rows.map(normaliser);
@@ -254,43 +310,135 @@ export async function lireDelivrable(
   pieceId: string,
 ): Promise<LignePiece | null> {
   const resultat = await client.query<LignePiece>(
-    `select ${LISTE_COLONNES}
-       from "pieces_jointes"
-      where "id" = $1::text
-        and "entite_type" = $2::type_entite
-        and "entite_id" = $3::text
-        and ${CONDITION_DELIVRABLE}`,
+    `select ${LISTE_COLONNES_PIECE}, ${AUTRES_PORTEURS} as "autres_porteurs"
+       from "piece_rattachements" r
+       join "pieces_jointes" pj
+         on pj."id" = r."piece_id" and pj."filiale_id" = r."filiale_id"
+      where pj."id" = $1::text
+        and r."entite_type" = $2::type_entite
+        and r."entite_id" = $3::text
+        and ${conditionDelivrable('pj')}`,
     [pieceId, entiteType, entiteId],
   );
   const ligne = resultat.rows[0];
   return ligne === undefined ? null : normaliser(ligne);
 }
 
+/* =====================================================================
+ *  La réutilisation d'une preuve — action 19.4, migration `038`
+ * ===================================================================== */
+
 /**
- * Supprime une pièce et rend la ligne effacée, ou `null`.
+ * Rattache une pièce **déjà déposée** à un porteur de plus.
  *
- * ⚠️ **`returning` sert à savoir quel fichier retirer du disque**, et le retrait
- * a lieu **après** le `commit` (voir `magasin.retirerDuMagasin`). Le `delete`
- * n'exclut pas les pièces en quarantaine : une pièce infectée doit pouvoir être
- * retirée, sans quoi le quota d'une filiale se remplirait de choses que
- * personne ne peut effacer.
+ * Rend `true` si le rattachement est neuf, `false` s'il existait déjà — un
+ * second clic sur « Réutiliser » n'est pas une erreur, et le dire en 409 ferait
+ * chercher un problème là où il n'y en a pas.
+ *
+ * ⚠️ **Le cloisonnement n'est pas dans cette requête.** C'est
+ * `pol_piece_rattachements_ajout` (`filiale_id = f_filiale_ecriture()`) qui
+ * refuse de réutiliser la pièce d'une filiale voisine — et `filiale_id` n'est
+ * pas reçu du client : il est **relu sur la pièce**, dans la même requête. Le
+ * recevoir aurait rendu la clé composite satisfiable par une valeur choisie,
+ * c'est-à-dire un oracle d'existence inter-filiales (motif du constat Q-2).
  */
-export async function supprimer(
+export async function rattacher(
+  client: PoolClient,
+  pieceId: string,
+  entiteType: string,
+  entiteId: string,
+): Promise<boolean> {
+  const resultat = await client.query(
+    `insert into "piece_rattachements" ("piece_id", "filiale_id", "entite_type", "entite_id")
+     select pj."id", pj."filiale_id", $2::type_entite, $3::text
+       from "pieces_jointes" pj
+      where pj."id" = $1::text
+     on conflict do nothing`,
+    [pieceId, entiteType, entiteId],
+  );
+  return (resultat.rowCount ?? 0) > 0;
+}
+
+/** Ce qu'un détachement a produit. */
+export interface Detachement {
+  /** La pièce, telle qu'elle était avant le geste. */
+  readonly ligne: LignePiece;
+  /**
+   * Le fichier du magasin est-il libéré ?
+   *
+   * Vrai quand le rattachement retiré était **le dernier** : la ligne est alors
+   * supprimée, et l'appelant retire le fichier après le commit. Faux quand la
+   * pièce sert encore ailleurs — elle reste entière, et rien ne doit être
+   * touché sur le disque.
+   */
+  readonly libere: boolean;
+}
+
+/**
+ * Détache une pièce d'un porteur, et ne libère le fichier **qu'au dernier**.
+ *
+ * ── ⚠️ CE QUI A CHANGÉ, ET POURQUOI LE NOM AUSSI ────────────────────────
+ *
+ * Cette fonction s'appelait `supprimer()`, et elle supprimait. Depuis la
+ * migration `038`, une même preuve sert plusieurs contrôles : retirer la pièce
+ * de l'écran d'un contrôle **ne doit pas** effacer la procédure que quatre
+ * autres invoquent. Le nom suit la chose — un `supprimer()` qui ne supprime pas
+ * toujours est exactement le genre de mot qui voyage bien et qui ment.
+ *
+ * L'ordre compte, et il est mesuré : on lit la ligne **avant** de retirer le
+ * rattachement, parce que le déclencheur `trg_piece_rattachements_retrait`
+ * réadresse la pièce au passage — la relire ensuite rendrait l'adresse du
+ * porteur suivant, et le journal nommerait le mauvais.
+ *
+ * ⚠️ **Le `delete` final n'exclut pas les pièces en quarantaine** : une pièce
+ * infectée doit pouvoir être retirée, sans quoi le quota d'une filiale se
+ * remplirait de choses que personne ne peut effacer. C'est l'appelant qui
+ * s'abstient de toucher au **fichier** de quarantaine.
+ */
+export async function detacher(
   client: PoolClient,
   entiteType: string,
   entiteId: string,
   pieceId: string,
-): Promise<LignePiece | null> {
-  const resultat = await client.query<LignePiece>(
-    `delete from "pieces_jointes"
-      where "id" = $1::text
-        and "entite_type" = $2::type_entite
-        and "entite_id" = $3::text
-     returning ${LISTE_COLONNES}`,
+): Promise<Detachement | null> {
+  const avant = await client.query<LignePiece>(
+    `select ${LISTE_COLONNES_PIECE}, ${AUTRES_PORTEURS} as "autres_porteurs"
+       from "piece_rattachements" r
+       join "pieces_jointes" pj
+         on pj."id" = r."piece_id" and pj."filiale_id" = r."filiale_id"
+      where pj."id" = $1::text
+        and r."entite_type" = $2::type_entite
+        and r."entite_id" = $3::text`,
     [pieceId, entiteType, entiteId],
   );
-  const ligne = resultat.rows[0];
-  return ligne === undefined ? null : normaliser(ligne);
+  const ligne = avant.rows[0];
+  if (ligne === undefined) return null;
+
+  const retrait = await client.query(
+    `delete from "piece_rattachements"
+      where "piece_id" = $1::text
+        and "entite_type" = $2::type_entite
+        and "entite_id" = $3::text`,
+    [pieceId, entiteType, entiteId],
+  );
+  // La RLS a pu refuser : la pièce est lisible sur tout le périmètre, elle n'est
+  // retirable que depuis sa filiale. Un « réussi » silencieux ferait croire au
+  // détachement, et l'écran suivant montrerait la pièce toujours là.
+  if ((retrait.rowCount ?? 0) === 0) return null;
+
+  const reste = await client.query<{ nombre: string }>(
+    `select count(*)::text as nombre from "piece_rattachements" where "piece_id" = $1::text`,
+    [pieceId],
+  );
+  const encoreServie = Number(reste.rows[0]?.nombre ?? '0') > 0;
+  if (encoreServie) return { ligne: normaliser(ligne), libere: false };
+
+  const efface = await client.query(
+    `delete from "pieces_jointes" where "id" = $1::text`,
+    [pieceId],
+  );
+  if ((efface.rowCount ?? 0) === 0) return null;
+  return { ligne: normaliser(ligne), libere: true };
 }
 
 /* =====================================================================

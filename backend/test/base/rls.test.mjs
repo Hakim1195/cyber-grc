@@ -4200,6 +4200,18 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // constat **N-10** de la porte S1, resté sept mois à l'état de vigilance dans un
       // commentaire. ⚠️ Il a réclamé `fk_traitement_mesures_portee` avant qu'un humain y
       // pense — écrit avant qu'elle existe, il l'a nommée.
+      // QUARANTIÈME, apporté par `038_une_preuve_sert_plusieurs_controles.sql` —
+      // action 19.4. ⚠️ **Il ne lit AUCUNE ligne, et c'est une correction payée le
+      // jour même** : sa première rédaction comptait les pièces délivrées à une
+      // adresse qu'elles ne servaient plus. Elle mesurait juste — et levait `GRC04`
+      // chez `install.sh`, qui appelle `f_verifier_schema()` SANS périmètre. *Un
+      // garde-fou qui exige un contexte d'application ne peut pas garder un
+      // déploiement.* La propriété a donc été POSÉE dans le schéma
+      // (`fk_pieces_jointes_adresse`, différée), et ce contrôle vérifie que les trois
+      // pièces du dispositif tiennent : la clé, les deux déclencheurs — mesurés sur
+      // `tgtype`, leçon Q-281 —, et la cascade qui empêche un rattachement de
+      // survivre à sa pièce.
+      'rattachements_pieces',
       'references_portee',
       // VINGT-HUITIÈME, apporté par `028` — constat **Q-291** : la migration `026` avait
       // écrit DEUX FOIS, en toutes lettres, que le rôle applicatif n'avait que « select »

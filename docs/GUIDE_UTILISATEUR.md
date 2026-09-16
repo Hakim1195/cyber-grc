@@ -203,6 +203,34 @@ un chemin réseau, un lien vers la GED. L'application ne la lit pas, ne la véri
 saura jamais si ce qui est au bout a changé. Les deux champs coexistent ; ne les confondez
 pas.
 
+### La même procédure devant cinq contrôles — sans la déposer cinq fois
+
+Un auditeur pose la même question devant plusieurs contrôles : *« montrez-moi la
+procédure »*. Vous n'avez pas à redéposer le fichier à chaque fois.
+
+Le panneau **Pièces jointes** est désormais aussi sur la **fiche d'un contrôle**
+(*Référentiels → Mesures de sécurité*, puis une mesure). Sous le bouton *Déposer*, dépliez
+**« Réutiliser une preuve existante »** : choisissez la fiche documentaire d'où vient la
+procédure, puis le fichier, et cliquez **Rattacher**.
+
+**Rien n'est déposé.** Le fichier reste en **un seul exemplaire**, avec son empreinte, son
+analyse antivirale et sa place dans le quota de votre filiale. C'est le point : le jour où
+la procédure change, il y a **une** chose à mettre à jour, pas cinq.
+
+⚠️ **Le bouton de retrait change de mot, et il dit la vérité.**
+
+| Ce que vous lisez | Ce qui se passe |
+|---|---|
+| **Détacher** | la preuve est retirée de **cette fiche seulement**. Le fichier est conservé : il sert d'autres fiches, nommées dans l'infobulle de la mention *Sert aussi N fiches* |
+| **Supprimer** | cette fiche est le **dernier** porteur : le fichier est retiré définitivement |
+
+La même règle vaut quand vous supprimez la fiche elle-même : tant qu'un autre contrôle
+invoque la preuve, elle lui reste attachée. Elle ne disparaît qu'avec son dernier porteur.
+
+ℹ️ **On ne réutilise que les preuves de sa propre filiale**, et c'est voulu : une preuve
+empruntée à une filiale voisine dépendrait, pour être retirée, d'un geste que vous ne
+pouvez pas faire.
+
 ### Vérifier qu'un fichier n'a pas été remplacé
 
 Chaque pièce porte son **empreinte SHA-256**, calculée à son dépôt sur le fichier réellement

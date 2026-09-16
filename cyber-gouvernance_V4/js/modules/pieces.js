@@ -205,6 +205,22 @@ const PiecesModule = (() => {
     let empreintesDepliees = {};
     /** Vérification en cours, par identifiant de pièce. */
     let verificationsEnCours = {};
+    /** Détachement en cours, par identifiant de pièce (action 19.4). */
+    let detachementsEnCours = {};
+    /**
+     * L'encart « réutiliser une preuve » est-il ouvert ? — action 19.4.
+     *
+     * Replié par défaut : la réutilisation est un geste d'audit, pas le geste
+     * courant. L'ouvrir d'office mettrait deux listes déroulantes devant le
+     * bouton « Déposer », qui est ce que l'on cherche neuf fois sur dix.
+     */
+    let reutilisationOuverte = false;
+    /** Identifiant du document SOURCE choisi, et ses pièces une fois lues. */
+    let sourceDocumentId = "";
+    let sourcePieces = [];
+    let sourceChargement = false;
+    let sourceErreur = null;
+    let rattachementEnCours = false;
     /**
      * Ce que la fiche veut savoir quand la liste vient d'être lue.
      *
@@ -410,11 +426,27 @@ const PiecesModule = (() => {
               'dépôt. Aucun octet ne sort du produit.">' +
               (verificationsEnCours[piece.id] ? "Vérification…" : "Vérifier") + "</button>"
             : "";
+        const partagee = porteursPartages(piece);
+        // ⚠️ **Le libellé du bouton DIT ce qui va se passer**, et il change avec
+        // l'état. « Supprimer » sur une preuve que quatre contrôles invoquent
+        // annoncerait une destruction qui n'a pas lieu ; « Détacher » sur la
+        // dernière tairait celle qui a lieu. Les deux sont la même faute — un
+        // écran qui apprend à ne pas croire ce qu'il annonce (Q-201 / Q-207).
+        const retrait = ' <button type="button" class="pj-detacher btn-secondary" ' +
+            'data-piece="' + esc(piece.id) + '"' +
+            (detachementsEnCours[piece.id] ? " disabled" : "") + ' ' +
+            'title="' + (partagee.length
+                ? "Retire cette preuve de CETTE fiche seulement. Le fichier reste : il sert " +
+                  esc(partagee.length) + " autre(s) fiche(s)."
+                : "Cette fiche est le dernier porteur de la preuve : le fichier sera retiré " +
+                  "du magasin.") + '">' +
+            (partagee.length ? "Détacher" : "Supprimer") + "</button>";
         return (
             '<tr class="pj-ligne' + (faitFoi ? " pj-en-vigueur" : "") + '" ' +
             'data-piece="' + esc(piece.id) + '">' +
             '<td class="pj-nom">' + nom +
             (faitFoi ? ' <span class="status status-conforme pj-foi">En vigueur</span>' : "") +
+            partageHtml(partagee) +
             integriteHtml(piece) +
             empreinteHtml(piece) +
             "</td>" +
@@ -423,9 +455,74 @@ const PiecesModule = (() => {
             '<td><span class="status ' + etat.teinte + '">' + esc(etat.libelle) + "</span></td>" +
             "<td>" + fmtHorodatage(piece.cree_le || piece.depose_le) + "</td>" +
             "<td>" + esc(piece.cree_par || piece.depose_par || "—") + "</td>" +
-            '<td class="pj-action">' + telechargement + designation + verification + "</td>" +
+            '<td class="pj-action">' + telechargement + designation + verification + retrait + "</td>" +
             "</tr>"
         );
+    }
+
+    /**
+     * Les AUTRES porteurs que sert la même preuve — action 19.4.
+     *
+     * Le serveur les rend déjà **sans celui qu'on regarde** : cette fonction ne
+     * refait pas le tri, elle se contente de rendre une liste sûre quand un
+     * serveur antérieur à la migration `038` ne sert pas le champ. Un panneau
+     * qui planterait sur un champ absent transformerait une mise à jour du
+     * serveur en écran blanc.
+     */
+    function porteursPartages(piece) {
+        return (piece && Array.isArray(piece.autres_porteurs)) ? piece.autres_porteurs : [];
+    }
+
+    /**
+     * « Sert aussi N fiche(s) » — la mention qui rend le bouton honnête.
+     *
+     * ⚠️ Elle n'est affichée **que lorsqu'elle dit quelque chose**, comme le
+     * badge d'intégrité juste dessous : une mention « sert 1 fiche » sur chaque
+     * ligne d'une installation ordinaire serait du bruit, et le bruit est ce qui
+     * apprend à ne plus lire (constat m-5).
+     *
+     * Les fiches servies sont **nommées**, pas comptées seulement : « sert aussi
+     * 3 fiches » ne dit pas si l'on peut détacher sans conséquence. Le titre
+     * porte la liste ; le texte porte le nombre, qui est ce qu'on lit d'un coup
+     * d'œil.
+     */
+    function partageHtml(porteurs) {
+        if (!porteurs.length) return "";
+        const noms = porteurs.map(r => libellePorteur(r)).join(" · ");
+        return ' <span class="status status-na pj-partage" title="' +
+            esc("Cette preuve sert aussi : " + noms +
+                ". La détacher d'ici ne la retire pas de ces fiches, et ne supprime pas le fichier.") +
+            '">Sert aussi ' + esc(String(porteurs.length)) + ' fiche' +
+            (porteurs.length > 1 ? "s" : "") + "</span>";
+    }
+
+    /**
+     * Le nom d'un porteur, en français quand on le connaît.
+     *
+     * ── ⚠️ AUCUNE TABLE DE CORRESPONDANCE N'EST ÉCRITE ICI ─────────────────
+     *
+     * Une liste `{ documents: getDocuments, mesures: getMesures, … }` serait une
+     * omission qui attend : le jour où une entité neuve porte des pièces, son
+     * nom manquerait **en silence**. On DÉRIVE l'accesseur du nom de l'entité —
+     * `documents` → `getDocuments` —, ce qui est la convention effective du
+     * `DataStore`, et l'on retombe sur l'identifiant quand elle ne s'applique
+     * pas. Un libellé dégradé est lisible et vrai ; une liste incomplète, non.
+     */
+    function libellePorteur(porteur) {
+        const type = String(porteur && porteur.entite_type || "");
+        const id = String(porteur && porteur.entite_id || "");
+        let nom = "";
+        try {
+            const accesseur = "get" + type.charAt(0).toUpperCase() + type.slice(1);
+            if (window.DataStore && typeof DataStore[accesseur] === "function") {
+                const collection = DataStore[accesseur]();
+                if (Array.isArray(collection)) {
+                    const fiche = collection.find(e => e && e.id === id);
+                    if (fiche) nom = String(fiche.titre || fiche.nom || fiche.libelle || "");
+                }
+            }
+        } catch (e) { /* un libellé d'agrément ne casse pas le panneau */ }
+        return nom ? nom + " (" + id + ")" : type + " " + id;
     }
 
     /**
@@ -515,6 +612,17 @@ const PiecesModule = (() => {
             "font-size: var(--text-xs); cursor:pointer; }" +
             ".pj-hash { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size: var(--text-xs); " +
             "color:var(--text-muted); word-break:break-all; user-select:all; }" +
+            // ── Action 19.4 — la réutilisation d'une preuve ─────────────────
+            // Teinte NEUTRE et non sémantique : « sert aussi trois fiches » n'est
+            // ni un succès ni une alerte, c'est un fait. Les quatre couleurs
+            // sémantiques restent réservées aux statuts (charte, §2).
+            ".pj-partage { text-transform:none; margin-left:6px; cursor:help; }" +
+            ".pj-reutilisation { margin-top:14px; padding-top:12px; border-top:1px solid var(--border, #e3e6ea); }" +
+            ".pj-reutilisation-note { margin:8px 0 10px; font-size: var(--text-xs); " +
+            "color:var(--text-muted); line-height:1.5; max-width:62ch; }" +
+            ".pj-reutilisation-choix { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }" +
+            ".pj-reutilisation-choix select { max-width:22rem; }" +
+            ".pj-source-etat { font-size: var(--text-sm); color:var(--text-muted); }" +
             "</style>";
     }
 
@@ -586,7 +694,20 @@ const PiecesModule = (() => {
             etat_integrite: p.etat_integrite ?? "non_verifiee",
             derniere_verification: p.derniere_verification ?? null,
             cree_le: p.cree_le ?? p.depose_le ?? "",
-            cree_par: p.cree_par ?? p.depose_par ?? ""
+            cree_par: p.cree_par ?? p.depose_par ?? "",
+            // ⚠️ Action 19.4 : les AUTRES porteurs que sert la même preuve. Sans
+            // cette ligne, le champ serait jeté ici EN SILENCE — et l'écran
+            // annoncerait « Supprimer » là où le serveur détache, c'est-à-dire
+            // une destruction qui n'a pas lieu (classe Q-201 / Q-207). C'est
+            // exactement l'oubli qui avait vidé le badge « En vigueur ».
+            autres_porteurs: Array.isArray(p.autres_porteurs)
+                ? p.autres_porteurs
+                    .filter(r => r && typeof r === "object")
+                    .map(r => ({
+                        entite_type: String(r.entite_type ?? ""),
+                        entite_id: String(r.entite_id ?? "")
+                    }))
+                : []
         }));
     }
 
@@ -809,6 +930,188 @@ const PiecesModule = (() => {
     }
 
     /* =====================================================================
+       RÉUTILISATION ET DÉTACHEMENT — action 19.4
+    ===================================================================== */
+
+    /**
+     * Les fiches d'où l'on peut aller chercher une preuve.
+     *
+     * ── ⚠️ POURQUOI LE REGISTRE DOCUMENTAIRE, ET RIEN D'AUTRE ────────────
+     *
+     * Une liste de TOUTES les pièces de la filiale, tous porteurs confondus,
+     * aurait été plus commode — et c'eût été un **oracle** : elle ferait
+     * traverser les domaines fonctionnels d'un coup, et montrerait à qui n'a pas
+     * le domaine « incidents » qu'une preuve y est attachée. C'est la même
+     * raison qui fait attendre la recherche globale (action D3) après la porte
+     * S8.
+     *
+     * On part donc de ce que l'utilisateur voit déjà : **son registre
+     * documentaire**, celui des politiques et procédures. C'est aussi l'histoire
+     * réelle — « montrez-moi la procédure » —, et le serveur vérifie de toute
+     * façon le droit sur le porteur d'origine.
+     */
+    function sourcesReutilisables() {
+        let documents = [];
+        try {
+            if (window.DataStore && typeof DataStore.getDocuments === "function") {
+                documents = DataStore.getDocuments() || [];
+            }
+        } catch (e) { documents = []; }
+        return documents
+            .filter(d => d && d.id && !(entiteType === ENTITE_DOCUMENTS && d.id === entiteId))
+            .map(d => ({ id: String(d.id), titre: String(d.titre || d.nom || d.id) }))
+            .sort((a, b) => a.titre.localeCompare(b.titre, "fr"));
+    }
+
+    /** Lit les pièces du document source choisi. */
+    async function chargerSource(documentId) {
+        sourceDocumentId = String(documentId || "");
+        sourcePieces = [];
+        sourceErreur = null;
+        if (!sourceDocumentId) { rafraichir(); return; }
+        sourceChargement = true;
+        rafraichir();
+        try {
+            const charge = await Api.pieces(ENTITE_DOCUMENTS, sourceDocumentId);
+            sourceChargement = false;
+            // Seules les pièces DÉLIVRABLES sont proposées : rattacher une pièce
+            // en quarantaine la ferait apparaître sur une seconde fiche sans
+            // qu'aucun octet ne puisse en sortir — une preuve qui n'en est pas.
+            sourcePieces = normaliserListe(charge).filter(p => etatLisible(p).delivrable);
+        } catch (e) {
+            sourceChargement = false;
+            sourceErreur = messageDErreur(e);
+        }
+        rafraichir();
+    }
+
+    /**
+     * Rattache une preuve existante à cette fiche — **sans rien déposer**.
+     *
+     * Le fichier n'est pas renvoyé : il n'en existe toujours qu'un exemplaire,
+     * avec une empreinte, un quota et un verdict d'analyse. C'est tout l'objet
+     * de l'action 19.4 — cinq exemplaires de la même procédure, ce sont quatre
+     * chances d'en oublier une le jour où elle change.
+     */
+    async function reutiliser(pieceId) {
+        if (rattachementEnCours) return false;
+        if (!sourceDocumentId || !pieceId) {
+            if (window.showToast) window.showToast("Choisissez la fiche d'origine et la pièce.", "info");
+            return false;
+        }
+        rattachementEnCours = true;
+        rafraichir();
+        try {
+            const issue = await Api.rattacherPiece(
+                entiteType, entiteId, pieceId, ENTITE_DOCUMENTS, sourceDocumentId);
+            rattachementEnCours = false;
+            if (window.showToast) {
+                window.showToast(
+                    issue && issue.deja_rattache
+                        ? "Cette preuve était déjà rattachée à cette fiche."
+                        : "Preuve rattachée. Elle reste en un seul exemplaire, avec son empreinte.",
+                    issue && issue.deja_rattache ? "info" : "success");
+            }
+            await charger();
+            return true;
+        } catch (e) {
+            rattachementEnCours = false;
+            if (window.showToast) window.showToast(messageDErreur(e), "error");
+            rafraichir();
+            return false;
+        }
+    }
+
+    /**
+     * Retire la preuve de CETTE fiche — et ne libère le fichier qu'au dernier.
+     *
+     * ⚠️ **La confirmation dit laquelle des deux choses va se produire**, parce
+     * que ce n'est pas la même. Un « Êtes-vous sûr ? » générique laisserait
+     * l'utilisateur détruire une preuve en croyant ranger un écran, ou hésiter à
+     * ranger un écran en croyant détruire une preuve.
+     */
+    async function detacher(pieceId) {
+        if (detachementsEnCours[pieceId]) return false;
+        const piece = liste.find(p => String(p.id) === String(pieceId));
+        const partagee = porteursPartages(piece);
+        const nom = (piece && piece.nom_fichier) || pieceId;
+        const question = partagee.length
+            ? "Retirer « " + nom + " » de cette fiche ?\n\nLe fichier est CONSERVÉ : il sert " +
+              partagee.length + " autre(s) fiche(s)."
+            : "Supprimer « " + nom + " » ?\n\nCette fiche en est le dernier porteur : le " +
+              "fichier sera retiré définitivement du magasin.";
+        if (!window.confirm(question)) return false;
+        detachementsEnCours[pieceId] = true;
+        rafraichir();
+        try {
+            await Api.supprimerPiece(entiteType, entiteId, pieceId);
+            delete detachementsEnCours[pieceId];
+            if (window.showToast) {
+                window.showToast(partagee.length
+                    ? "Preuve retirée de cette fiche. Le fichier est conservé."
+                    : "Pièce supprimée, fichier retiré du magasin.", "success");
+            }
+            await charger();
+            return true;
+        } catch (e) {
+            delete detachementsEnCours[pieceId];
+            if (window.showToast) window.showToast(messageDErreur(e), "error");
+            rafraichir();
+            return false;
+        }
+    }
+
+    /** L'encart « réutiliser une preuve », replié par défaut. */
+    function reutilisationHtml() {
+        if (erreurChargement) return "";
+        if (!reutilisationOuverte) {
+            return '<div class="pj-reutilisation"><button type="button" id="pjReutiliserBascule" ' +
+                'class="btn-secondary" title="Rattacher à cette fiche une procédure déjà ' +
+                'déposée ailleurs, sans la déposer une seconde fois">▸ Réutiliser une preuve ' +
+                "existante</button></div>";
+        }
+        const sources = sourcesReutilisables();
+        const options = sources.map(d =>
+            '<option value="' + esc(d.id) + '"' + (d.id === sourceDocumentId ? " selected" : "") +
+            ">" + esc(d.titre) + "</option>").join("");
+        let secondeColonne;
+        if (sourceChargement) {
+            secondeColonne = '<span class="pj-source-etat">Lecture des pièces…</span>';
+        } else if (sourceErreur) {
+            secondeColonne = '<span class="pj-source-etat" role="alert">' + esc(sourceErreur) + "</span>";
+        } else if (!sourceDocumentId) {
+            secondeColonne = '<span class="pj-source-etat">Choisissez d’abord une fiche.</span>';
+        } else if (!sourcePieces.length) {
+            secondeColonne = '<span class="pj-source-etat">Cette fiche ne porte aucune pièce ' +
+                "délivrable.</span>";
+        } else {
+            secondeColonne =
+                '<select id="pjSourcePiece" aria-label="Pièce à rattacher">' +
+                sourcePieces.map(p => '<option value="' + esc(p.id) + '">' +
+                    esc(p.nom_fichier || p.id) +
+                    (p.version_piece ? " — " + esc(p.version_piece) : "") + "</option>").join("") +
+                "</select> " +
+                '<button type="button" id="pjRattacherBtn"' +
+                (rattachementEnCours ? " disabled" : "") + ">" +
+                (rattachementEnCours ? "Rattachement…" : "Rattacher") + "</button>";
+        }
+        return '<div class="pj-reutilisation pj-reutilisation-ouverte">' +
+            '<button type="button" id="pjReutiliserBascule" class="btn-secondary">▾ Réutiliser ' +
+            "une preuve existante</button>" +
+            '<p class="pj-reutilisation-note">La preuve reste en <strong>un seul exemplaire</strong> : ' +
+            "une empreinte, un quota, une analyse. La modifier plus tard la modifie partout — " +
+            "c’est précisément ce qu’un audit attend d’une procédure unique.</p>" +
+            (sources.length
+                ? '<div class="pj-reutilisation-choix">' +
+                  '<select id="pjSourceFiche" aria-label="Fiche d’où vient la preuve">' +
+                  '<option value="">— Fiche d’origine —</option>' + options + "</select> " +
+                  secondeColonne + "</div>"
+                : '<p class="pj-source-etat">Aucune fiche documentaire à proposer : déposez ' +
+                  "d’abord vos procédures dans le registre documentaire.</p>") +
+            "</div>";
+    }
+
+    /* =====================================================================
        INTÉGRITÉ — le fichier est-il encore celui qu'on a empreinté ?
     ===================================================================== */
 
@@ -893,6 +1196,7 @@ const PiecesModule = (() => {
             "</div>" +
             corpsHtml() +
             depotHtml() +
+            reutilisationHtml() +
             // ⚠️ `PLAN_SERVEUR` §1.6, et le §17.5 : un garde-fou ne se voit pas
             // prêter plus de portée qu'il n'en a. La phrase est dans l'interface
             // parce que c'est là qu'on croit à la promesse.
@@ -959,6 +1263,23 @@ const PiecesModule = (() => {
         document.querySelectorAll(".pj-verifier").forEach(bouton => {
             bouton.addEventListener("click", () => verifierIntegrite(bouton.dataset.piece));
         });
+        document.querySelectorAll(".pj-detacher").forEach(bouton => {
+            // Relu dans le DOM au moment du clic, jamais capturé (`CLAUDE.md` §3).
+            bouton.addEventListener("click", () => detacher(bouton.dataset.piece));
+        });
+        const bascule = document.getElementById("pjReutiliserBascule");
+        if (bascule) bascule.addEventListener("click", () => {
+            reutilisationOuverte = !reutilisationOuverte;
+            if (!reutilisationOuverte) { sourceDocumentId = ""; sourcePieces = []; sourceErreur = null; }
+            rafraichir();
+        });
+        const sourceFiche = document.getElementById("pjSourceFiche");
+        if (sourceFiche) sourceFiche.addEventListener("change", () => chargerSource(sourceFiche.value));
+        const rattacherBtn = document.getElementById("pjRattacherBtn");
+        if (rattacherBtn) rattacherBtn.addEventListener("click", () => {
+            const choix = document.getElementById("pjSourcePiece");
+            reutiliser(choix ? choix.value : "");
+        });
         document.querySelectorAll(".pj-empreinte-bascule").forEach(bouton => {
             bouton.addEventListener("click", () => {
                 const id = bouton.dataset.piece;
@@ -995,6 +1316,13 @@ const PiecesModule = (() => {
         verdictsDemandes = {};
         empreintesDepliees = {};
         verificationsEnCours = {};
+        detachementsEnCours = {};
+        reutilisationOuverte = false;
+        sourceDocumentId = "";
+        sourcePieces = [];
+        sourceChargement = false;
+        sourceErreur = null;
+        rattachementEnCours = false;
         auChargement = (options && typeof options.auChargement === "function")
             ? options.auChargement : null;
         if (!document.getElementById(HOTE)) return;
@@ -1041,8 +1369,11 @@ const PiecesModule = (() => {
         // la fonction, jamais en constatant qu'un bouton est grisé — c'est
         // exactement la distinction que le constat Q-89 a coûtée.
         telecharger, deposer, designer, enVigueur, verifierIntegrite,
+        // Action 19.4 — la réutilisation d'une preuve et son retrait.
+        reutiliser, detacher, chargerSource,
         // Purement fonctionnels : ils n'émettent rien et se prouvent sans réseau.
         etatLisible, integriteLisible, normaliserListe, verifierVocabulaire,
+        porteursPartages, sourcesReutilisables,
         contrat: Object.freeze({
             hote: HOTE,
             etats: Object.keys(ETATS),

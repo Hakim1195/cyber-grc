@@ -88,6 +88,40 @@ export class SessionDEssai {
   }
 }
 
+/**
+ * Les cascades du schéma **entre deux tables qui peuvent porter une pièce**.
+ *
+ * ⚠️ **Ce texte vit ici, et à un seul endroit, DÉLIBÉRÉMENT.** Deux familles
+ * l'interrogent — `orphelines.test.mjs` (une pièce ne survit pas à son porteur)
+ * et `reutilisation.test.mjs` (une preuve partagée survit à l'un de ses
+ * porteurs) —, et les deux doivent balayer **exactement les mêmes chemins**.
+ * Deux copies d'un même prédicat finissent par ne plus dire la même chose, et
+ * l'une des deux garderait alors une propriété sur un sous-ensemble en croyant
+ * la garder sur tout le schéma.
+ *
+ * La colonne rendue est celle par laquelle l'enfant nomme son parent —
+ * `filiale_id` écarté, la clé étant composite.
+ */
+export const REQUETE_CASCADES = `
+        select cl.relname as enfant, cp.relname as parent,
+               (select a.attname
+                  from unnest(c.conkey) with ordinality k(att, ord)
+                  join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.att
+                 where a.attname <> 'filiale_id'
+                 order by k.ord limit 1) as colonne
+          from pg_constraint c
+          join pg_class cl on cl.oid = c.conrelid
+          join pg_class cp on cp.oid = c.confrelid
+          join pg_namespace n on n.oid = cl.relnamespace
+         where c.contype = 'f' and c.confdeltype = 'c' and n.nspname = 'public'
+           and exists (select 1 from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+                        where t.tgrelid = cl.oid and not t.tgisinternal
+                          and p.proname = 'f_pieces_suivent_leur_porteur')
+           and exists (select 1 from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+                        where t.tgrelid = cp.oid and not t.tgisinternal
+                          and p.proname = 'f_pieces_suivent_leur_porteur')
+         order by cp.relname, cl.relname`;
+
 /** Périmètre d'une session mono-filiale. */
 export function perimetreDe(utilisateurId, filialeId, filiales = [filialeId]) {
   return {

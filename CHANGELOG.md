@@ -10,11 +10,11 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 16/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2011 essais, 2011 passés, 0 échec** à la révision `8e0b149`,
+> **2031 essais, 2031 passés, 0 échec** à la révision `RÉVISION`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
-> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**39 garde-fous consignés**,
-> **35 migrations**, **55 tables**, **220 politiques**, **263 décisions** au registre),
+> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**42 garde-fous consignés**,
+> **38 migrations**, **57 tables**, **228 politiques**, **279 décisions** au registre),
 > `install.sh --verifier-publication` → **85 fichiers servis identiques au dépôt**, et
 > `install.sh --diagnostic` → **14 conformes, 1 réserve** (`SMTP_ACTIF=non`), **0 bloquant**.
 >
@@ -45,6 +45,80 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### 19.4 — une preuve sert plusieurs contrôles, et le fichier ne part qu'au dernier (16/09/2026)
+
+**Le point dur du lot L19, et il l'était pour une raison précise.** Un auditeur ISO 27001
+demande la même procédure devant cinq contrôles. Le produit obligeait à la **déposer cinq
+fois** : cinq lignes, cinq fichiers, cinq empreintes du même contenu, cinq quotas — et,
+le jour où la procédure change, **quatre chances d'en oublier une**.
+
+Or la migration `017` avait fermé les constats **Q-232 / Q-233** en supprimant la pièce
+**avec** son porteur, sur tous les chemins de disparition. Réutiliser met cette garantie en
+tension avec elle-même : si la pièce suit son porteur et qu'elle en a cinq, le premier
+porteur supprimé emporte la preuve des quatre autres. **« Zéro orpheline » ne bouge pas —
+c'est la définition d'être orpheline qui change.**
+
+**Migration `038`**, table `piece_rattachements`, et **l'invariant est POSÉ, pas
+surveillé** :
+
+- `pieces_jointes.(entite_type, entite_id)` reste **l'adresse de délivrance** — celle de
+  l'URL, celle de l'unicité « une seule pièce en vigueur par porteur », celle du relais de
+  version du document. La casser aurait touché six mécanismes livrés ;
+- `piece_rattachements` porte **l'ensemble des porteurs servis**, et une clé étrangère
+  **différée** (`fk_pieces_jointes_adresse`) impose que l'adresse soit toujours l'un
+  d'eux — y compris depuis `psql` ;
+- deux déclencheurs rendent cet invariant tenable : le rattachement d'origine se pose
+  **tout seul** à l'insertion (une route ne voit que son chemin, `CONVENTIONS.md` §8.1), et
+  le retrait de celui qui sert d'adresse **réadresse** la pièce vers un survivant — en lui
+  retirant son « en vigueur », qui est une propriété du **couple** pièce-porteur ;
+- `f_pieces_suivent_leur_porteur()` est réécrite : elle retire les **rattachements** du
+  porteur, et ne supprime que les pièces qui n'en ont plus aucun. La ceinture `GRC05` est
+  intacte.
+
+**La route `DELETE` détache au lieu de détruire** quand la preuve sert ailleurs, et le
+journal l'inscrit **pour ce que c'est** — écrire « suppression » sur un détachement serait
+une fausse accusation de plus dans un registre qui ne s'efface pas (classe **Q-301**).
+`POST /api/pieces/<entite>/<id>/rattachements` réutilise une preuve, et c'est **la seule
+route du produit qui met en jeu deux domaines fonctionnels** : le crochet d'accès tranche
+celui de l'URL, la route vérifie elle-même le droit de LIRE le porteur d'origine — sans
+quoi un profil privé du domaine « documents » lirait la PSSI par la bande.
+
+**Côté écran** — et c'est la moitié que trois lots d'affilée avaient oubliée : le panneau
+des pièces jointes **arrive sur la fiche d'un contrôle**. Il ne vivait que sur les
+documents et les incidents, si bien que *« montrez-moi la preuve de CE contrôle »*, la
+première question d'un auditeur, n'avait aucun écran. L'encart « Réutiliser une preuve
+existante » part du **registre documentaire** — et non d'une liste de toutes les pièces de
+la filiale, qui aurait traversé les domaines d'un coup, c'est-à-dire un oracle. La ligne
+dit « **Sert aussi N fiches** », les fiches sont **nommées** dans l'infobulle, et le bouton
+dit **« Détacher »** tant que la preuve sert ailleurs, **« Supprimer »** sur la dernière.
+
+⚠️ **Trois choses trouvées en travaillant, et aucune par relecture :**
+
+1. **Une mutation qui ne mord pas, mesurée avant d'être crue.** La clause
+   `not exists (… piece_rattachements …)` du déclencheur a été retirée : **banc vert**.
+   Elle n'est jamais le filtre discriminant, la réadresse sortant la pièce du champ avant
+   qu'on y arrive — motif exact du constat **Q-210**. Elle n'est pas morte pour autant :
+   c'est la barrière **fail-closed**, celle qui fait *refuser* la suppression le jour où la
+   réadresse manque, au lieu de laisser détruire une preuve que quatre contrôles invoquent.
+   Un essai la fait désormais **décider**, en retirant la première barrière.
+2. **Un garde-fou de schéma ne lit aucune ligne d'une table cloisonnée.** La première
+   rédaction du garde comptait les pièces mal adressées. Elle mesurait juste — et levait
+   `GRC04` chez `install.sh`, qui appelle `f_verifier_schema()` **sans périmètre**. *Un
+   garde-fou qui exige un contexte d'application ne peut pas garder un déploiement.* La
+   propriété a été déplacée dans le schéma, et la règle est écrite :
+   `backend/db/CONVENTIONS.md` **§41** — *un garde qui doit lire des lignes est souvent le
+   signe qu'une contrainte manque.*
+3. **Un essai qui laisse un état partagé derrière lui accuse le suivant.** Le contrôle du
+   cloisonnement changeait la filiale active de la session d'essai et échouait avant de la
+   remettre : deux essais sans rapport rougissaient ensuite, pour une raison qui n'était pas
+   la leur. `try` / `finally`, et le motif inscrit dans le fichier.
+
+**Les six chemins de cascade sont éprouvés un par un**, et **découverts dans
+`pg_constraint`** — le prédicat est partagé avec `orphelines.test.mjs` pour que les deux
+familles balaient exactement les mêmes : une preuve réutilisée **change d'adresse** au lieu
+de mourir, puis le **dernier** porteur libère la ligne, le fichier et la file de purge.
+Quatre mutations jouées, **quatre morsures**.
 
 ### 19.5 / 19.6 et la passe de documentation — « les docs sont à jour ? » (16/09/2026)
 
