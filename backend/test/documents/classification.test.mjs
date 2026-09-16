@@ -503,6 +503,10 @@ describe('§3 — documents.traitement_id', () => {
       await c.query("delete from analyse_mesures where analyse_id in "
         + "(select id from analyses_impact where traitement_id = 'TRT-A')");
       await c.query("delete from analyses_impact where traitement_id = 'TRT-A'");
+      // La demande d'exercice de droits (migration `040`) vise elle aussi le
+      // traitement en « restrict », et pour un motif propre : effacer le traitement
+      // effacerait le CONTEXTE de la réponse qu'on a faite à quelqu'un.
+      await c.query("update demandes_droits set traitement_id = null where traitement_id = 'TRT-A'");
       await c.query("delete from traitements where id = 'TRT-A'");
       const { rows } = await c.query("select traitement_id from documents where id = 'DOC-A'");
       return rows[0];

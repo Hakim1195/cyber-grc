@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 17;
+export const VERSION_SCHEMA = 18;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -161,6 +161,10 @@ export const COLLECTIONS = [
   // ne fait pas échouer la compilation, cela en fait une « clé de premier niveau
   // inconnue du modèle », conservée et **jamais insérée**.
   'analyses_impact',
+  // v18 — les demandes d'exercice de droits (action 20.4). Même avertissement :
+  // l'oublier ici ne fait pas échouer la compilation, cela en fait une « clé de
+  // premier niveau inconnue du modèle », conservée et **jamais insérée**.
+  'demandes_droits',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -661,6 +665,54 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     dates: ['date_analyse', 'avis_dpo_le', 'consultation_cnil_le', 'revoir_le'],
     references: [{ champ: 'traitement_id', cible: 'traitements' }],
     referencesMultiples: [{ champ: 'mesures_ids', cible: 'mesures' }],
+    cleMetier: null,
+  },
+  // ── v18 : la demande d'exercice de droits (RGPD art. 15 à 22) ────────────
+  //
+  // ⚠️ **Aucune échéance**, pour le motif exact des dérogations et des analyses
+  // d'impact : le mois de l'article 12 §3 se dérive de la date de réception. Le
+  // faire voyager dans le fichier le figerait au jour de l'export, et une reprise
+  // faite six mois plus tard rendrait « dans les temps » une demande en retard
+  // depuis longtemps.
+  //
+  // ⚠️ Et elle emporte les **données personnelles d'un tiers** — le demandeur.
+  // C'est délibéré et c'est nécessaire : un export `grc-backup` qui perdrait le
+  // nom perdrait la preuve d'avoir répondu à quelqu'un. Le registre de l'article
+  // 30 du produit les range, et la purge RGPD les traite selon leur régime.
+  demandes_droits: {
+    prefixe: 'DSAR',
+    champs: [
+      'id', 'type_demande', 'recue_le', 'canal', 'demandeur', 'contact',
+      'identite_verifiee', 'identite_verifiee_le', 'prorogee', 'prorogee_le',
+      'prorogation_motif', 'statut', 'repondue_le', 'reponse_resume', 'motif_refus',
+      'traitement_id',
+    ],
+    enumerations: [
+      {
+        champ: 'type_demande',
+        valeurs: [
+          'acces', 'rectification', 'effacement', 'limitation', 'opposition',
+          'portabilite', 'retrait_consentement',
+        ],
+        videAdmis: false,
+      },
+      {
+        champ: 'canal',
+        valeurs: ['courriel', 'courrier', 'formulaire', 'telephone', 'guichet', 'autre'],
+        videAdmis: false,
+      },
+      {
+        champ: 'statut',
+        valeurs: ['recue', 'en_cours', 'repondue', 'refusee'],
+        videAdmis: false,
+      },
+    ],
+    bornes: [],
+    // Les quatre dates entrent AUSSI dans `champs` : `dates` dit comment les
+    // VALIDER, pas qu'elles sont admises (leçon de la v14).
+    dates: ['recue_le', 'identite_verifiee_le', 'prorogee_le', 'repondue_le'],
+    references: [{ champ: 'traitement_id', cible: 'traitements' }],
+    referencesMultiples: [],
     cleMetier: null,
   },
 };
@@ -1753,6 +1805,21 @@ const PALIERS: readonly EtapePalier[] = [
     // constatée, et remplir le registre de l'article 35 de lignes vides apprendrait
     // à l'ignorer. La présomption s'affiche à l'écran ; elle ne s'écrit pas.
     appliquer: paliersCollections(['analyses_impact']),
+  },
+  {
+    de: 17,
+    vers: 18,
+    libelle:
+      'Lot L20, action 20.4 : l’instantané gagne « demandes_droits » — le registre des ' +
+      'demandes d’exercice de droits (RGPD art. 15 à 22), dont l’échéance d’un mois se ' +
+      'DÉRIVE de la date de réception.',
+    // Un palier qui n'a RIEN À TRANSFORMER : la collection arrive vide sur un
+    // fichier v17, `paliersCollections` la réclame et la crée. ⚠️ Et rien à
+    // DEVINER non plus : on ne fabrique pas de demandes à partir du journal
+    // d'audit. Une demande d'exercice de droits est un fait reçu, pas une
+    // déduction — l'inventer serait consigner qu'une personne a écrit alors que
+    // personne n'en sait rien.
+    appliquer: paliersCollections(['demandes_droits']),
   },
 ];
 

@@ -25,7 +25,7 @@
  *
  * ── La couverture est RÉCLAMÉE, pas supposée ─────────────────────────────────
  *
- * Un dernier test balaie les **25 entités du registre** et vérifie que chacune se lit,
+ * Un dernier test balaie les **26 entités du registre** et vérifie que chacune se lit,
  * se décrit, et porte un préfixe d'identifiant. Sans lui, ce fichier resterait un
  * échantillon dont personne ne saurait dire ce qu'il laisse de côté — le reproche
  * exact que la porte a formulé.
@@ -315,7 +315,7 @@ describe('Une entité par famille de différence', () => {
  *  §2 — La couverture, réclamée
  * ===================================================================== */
 
-describe('Les 25 entités du registre, sans échantillonnage', () => {
+describe('Les 26 entités du registre, sans échantillonnage', () => {
   test('chaque entité du modèle est décrite, chargée, et porte un préfixe', async () => {
     const modele = (await serveur.appeler('GET', '/api/modele')).corps;
     const jeu = await donnees();
@@ -328,7 +328,7 @@ describe('Les 25 entités du registre, sans échantillonnage', () => {
     // générique plutôt que dans un greffon à elle — elle n'a besoin de rien de
     // particulier, et y entrer lui donne d'un coup le verrouillage optimiste, le
     // journal, le cloisonnement, l'import et le round-trip `grc-backup`.
-    assert.equal(noms.length, 25);
+    assert.equal(noms.length, 26);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -369,6 +369,10 @@ describe('Les 25 entités du registre, sans échantillonnage', () => {
       // défaut : une AIPD sans traitement recopierait le registre de l'article
       // 30 au lieu de le désigner.
       analyses_impact: { traitement_id: 'TRT-A' },
+      // Une demande d'exercice de droits porte un vocabulaire fermé sur trois
+      // champs — le droit invoqué, le canal, le statut — et la valeur générique
+      // « Balayage … » les heurte. C'est le comportement voulu, pas un défaut.
+      demandes_droits: { type_demande: 'acces', canal: 'courriel', statut: 'recue' },
     };
 
     const echecs = [];

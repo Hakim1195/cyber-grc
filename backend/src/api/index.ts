@@ -129,6 +129,7 @@ import { greffonRecherche } from '../recherche/index.js';
 import { greffonAttestations } from '../attestations/index.js';
 import { greffonAipd } from '../aipd/index.js';
 import { greffonDerogations } from '../derogations/index.js';
+import { greffonDroitsPersonnes } from '../droits-personnes/index.js';
 import { greffonReglementaire } from '../reglementaire/index.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
 import { LimiteurRythme, messageRefusRythme } from './limiteur.js';
@@ -3200,6 +3201,11 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   // registre des AIPD qui ne montrerait que les AIPD existantes serait un
   // registre rassurant, et la question d'un contrôle est l'inverse.
   await instance.register(greffonAipd, { pool });
+  // Lot L20, action 20.4 — l'ÉCHÉANCE d'une demande d'exercice de droits, et
+  // l'état qui en découle. Le mois de l'article 12 §3 se DÉRIVE de la date de
+  // réception : le ranger en colonne laisserait, après correction de cette date,
+  // une échéance calculée sur l'ancienne.
+  await instance.register(greffonDroitsPersonnes, { pool });
   // Lot L17, A3 — la recherche globale.
   //
   // ⚠️ Elle reçoit `cumulerSondage`, **le compteur du sondage**, et non un

@@ -281,7 +281,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 17;
+export const VERSION_SCHEMA = 18;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -960,6 +960,40 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
           forme: 'identifiants',
         },
       ],
+    },
+  ],
+
+  // ── LA DEMANDE D'EXERCICE DE DROITS — migration `040`, action 20.4 ──────
+  //
+  // ⚠️ **Ce que cette entité n'expose PAS : son ÉCHÉANCE.** Le mois de
+  // l'article 12 §3 du RGPD n'est pas une colonne — il se DÉRIVE de la date de
+  // réception (`f_echeance_droits()`), à un seul endroit. Le ranger laisserait,
+  // après correction de cette date, une échéance calculée sur l'ancienne, sans
+  // que personne le sache. C'est l'arbitrage de l'action 20.1, et il vaut ici
+  // mot pour mot : `GET /api/demandes-droits/etat` rend l'échéance et l'état,
+  // et cette route seule.
+  //
+  // ⚠️ Elle porte les données personnelles d'une personne qui **n'est pas un
+  // utilisateur** — le demandeur. Elles sont rangées au registre de l'article 30
+  // du produit (`colonnes_personnelles`), avec leur sort à l'expiration : le NOM
+  // se conserve (sans lui, la preuve d'avoir répondu n'a plus de sujet), le
+  // CONTACT s'anonymise.
+  [
+    'demandes_droits',
+    {
+      nom: 'demandes_droits',
+      table: 'demandes_droits',
+      prefixe: 'DSAR',
+      colonnesReservees: {
+        traitement_portee_groupe:
+          'Colonne ENGENDRÉE (CONVENTIONS.md §18.6) : elle entre dans la clé de portée ' +
+          "vers `traitements` et PostgreSQL refuse qu'on lui donne une valeur.",
+        traitement_filiale_id:
+          'Posée PAR LE DÉCLENCHEUR `trg_demandes_droits_portee` depuis le traitement ' +
+          'désigné : c’est une valeur dérivée d’une AUTRE ligne, et la croire sur parole ' +
+          'rouvrirait un oracle d’existence inter-filiales. Le client envoie ' +
+          '`traitement_id`, et rien d’autre.',
+      },
     },
   ],
 ]);

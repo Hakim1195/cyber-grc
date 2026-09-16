@@ -65,10 +65,10 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 17`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 18`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
-côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v17**. Elle est
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v18**. Elle est
 indépendante du numéro des migrations SQL.
 
 > ⚠️ **Ce paragraphe a annoncé « v12 » pendant quatre montées de version**, du 04/09 au
@@ -120,6 +120,17 @@ indépendante du numéro des migrations SQL.
 >     portant des données sensibles. Ce serait inventer une obligation que personne n'a
 >     constatée, et remplir le registre de l'article 35 de lignes vides apprendrait à
 >     l'ignorer. La présomption s'affiche à l'écran ; elle ne s'écrit pas.
+> v18 (lot L20, action 20.4) : ajout de `demandes_droits` — le **registre des demandes
+>     d'exercice de droits** (RGPD articles 15 à 22, et retrait du consentement art. 7 §3).
+>     ⚠️ **Aucune échéance** : le délai d'un mois de l'article 12 §3 se dérive de la date de
+>     réception (`f_echeance_droits`), prorogeable de deux mois — le mécanisme de l'action
+>     20.1, repris et non réinventé. Le faire voyager dans le fichier le figerait au jour de
+>     l'export, et une reprise faite six mois plus tard rendrait « dans les temps » une
+>     demande en retard depuis longtemps. ⚠️ **Et ces lignes emportent les données
+>     personnelles d'un TIERS** — la personne qui exerce ses droits, et qui n'est pas un
+>     utilisateur du produit. C'est délibéré : un export qui perdrait le nom perdrait la
+>     preuve d'avoir répondu à quelqu'un. Le registre de l'article 30 du produit les range,
+>     avec leur sort à l'expiration — le nom se **conserve**, le contact s'**anonymise**.
 > Migrations transparentes — `normalize` crée les tableaux vides à la volée (et garantit
 >     `dependances`, la conversion des anciennes actions MCO, de `mesure_id`→`mesure_ids[]`, et le
 >     tableau `mesures_ids` des documents).
@@ -167,7 +178,7 @@ Inchangé — c'est aussi la charge utile d'un fichier `grc-backup` :
 
 ```jsonc
 {
-  "schemaVersion": 17,   // = SCHEMA_VERSION courant
+  "schemaVersion": 18,   // = SCHEMA_VERSION courant
   "updatedAt": 1730000000000,
   "clients": [],        "exigences": [],   "actions": [],
   "risques": [],        "actifs": [],      "processus": [],
@@ -227,7 +238,7 @@ Conséquences pratiques :
 
 ### 1.5 Correspondance entre l'objet `data` et le schéma serveur
 
-**25 collections, 25 entités.** Les noms coïncident partout sauf pour `mesures` :
+**26 collections, 26 entités.** Les noms coïncident partout sauf pour `mesures` :
 
 | Collection `data` | Table(s) PostgreSQL | Préfixe d'identifiant |
 |---|---|---|
@@ -256,6 +267,7 @@ Conséquences pratiques :
 | `referentiels_actifs` | `referentiels_actifs` | `RA` |
 | `derogations` | `derogations` | `DER` |
 | **`analyses_impact`** | **`analyses_impact`** (l'analyse) **+ `analyse_mesures`** (les contrôles qu'elle PRÉVOIT) | `AIPD` |
+| `demandes_droits` | `demandes_droits` | `DSAR` |
 
 **La scission des mesures**, en une phrase : l'entité unique du modèle navigateur
 portait deux choses de nature différente — la **définition** du contrôle (la même

@@ -10,11 +10,11 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 16/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2052 essais, 2052 passés, 0 échec** à la révision `c39d32f`,
+> **2064 essais, 2064 passés, 0 échec** à la révision `RÉVISION`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
-> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**43 garde-fous consignés**,
-> **39 migrations**, **59 tables**, **236 politiques**, **299 décisions** au registre),
+> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**44 garde-fous consignés**,
+> **40 migrations**, **60 tables**, **240 politiques**, **319 décisions** au registre),
 > `install.sh --verifier-publication` → **85 fichiers servis identiques au dépôt**, et
 > `install.sh --diagnostic` → **14 conformes, 1 réserve** (`SMTP_ACTIF=non`), **0 bloquant**.
 >
@@ -45,6 +45,56 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### 20.4 — la demande d'exercice de droits, et l'horloge d'un mois (16/09/2026)
+
+**Les articles 15 à 22 du RGPD donnent à toute personne un droit d'accès, de rectification,
+d'effacement, de limitation, d'opposition et de portabilité. L'article 12 §3 laisse UN MOIS
+pour répondre.** Le produit n'en savait rien : une demande reçue par courriel vivait dans
+une boîte aux lettres, et le délai dans la tête de quelqu'un.
+
+**Migration `040`**, schéma **v18**, table `demandes_droits` et deux fonctions dérivées :
+
+- `f_echeance_droits()` — un mois (art. 12 §3), trois mois quand la prorogation de deux mois
+  a été notifiée. **Le mécanisme de 20.1, repris et non réinventé** : l'échéance ne se
+  stocke pas, elle se calcule à partir de son origine, à un seul endroit, **avec sa
+  référence au texte** ;
+- `f_etat_demande_droits()` — quatre états. Le troisième porte l'action : une demande dont
+  le mois est écoulé passe **« en retard » toute seule**, au changement de jour.
+
+⚠️ **TROIS RÈGLES DU TEXTE SONT POSÉES DANS LE SCHÉMA, pas laissées à la vigilance :**
+
+| Ce que la base refuse | Pourquoi |
+|---|---|
+| un **refus** sans motif **ni date** | l'article 12 §4 impose d'informer la personne *dans le même délai*, avec les voies de recours. Une fin de non-recevoir silencieuse est ce que le texte proscrit |
+| une **prorogation** non notifiée ou non motivée | l'article 12 §3 second alinéa exige les deux. Une prorogation qu'on s'accorde après coup fabrique un délai qu'on croit avoir et qu'on n'a pas |
+| une demande **« répondue »** sans date | la preuve du respect du délai disparaîtrait avec elle |
+
+⚠️ **Ce que le produit NE FAIT PAS.** Il ne répond pas à la personne, n'extrait pas ses
+données et ne juge pas si la demande est fondée. Il **tient le registre** et **arme
+l'horloge**. Toute autre lecture serait une prise de responsabilité qu'un logiciel ne peut
+pas porter — c'est l'arbitrage rendu en 20.2 pour les notifications aux autorités.
+
+⚠️ **ET UNE DIFFICULTÉ PROPRE À CETTE TABLE : elle contient les données personnelles d'une
+personne qui n'est PAS un utilisateur.** Le registre de l'article 30 du produit lui-même les
+range, et **les deux colonnes n'ont pas le même sort** : le **nom se conserve** — l'anonymiser
+détruirait la preuve d'avoir répondu à quelqu'un, c'est-à-dire la seule pièce qui protège le
+responsable de traitement — et le **contact s'anonymise**, le canal ne servant plus la
+finalité une fois la réponse faite et le délai de réclamation écoulé.
+
+**Côté écran** : un quatrième onglet du registre RGPD (`/rgpd-demandes`). Le retard s'y dit
+**en jours** — « en retard de douze jours » se défend devant une autorité, « bientôt » ne se
+défend pas — et la date de réception est modifiable, parce que c'est la date d'**arrivée**
+et non celle de la saisie.
+
+⚠️ **Un défaut latent trouvé en chemin, et il touchait un lot livré la veille.** Le pilote
+`pg` rend un objet `Date` pour une colonne `date` : `String(unDate)` donnait
+« Sun Feb 15 2026 00:00:00 GMT+0000 (…) » sur le fil — une chaîne dépendante de la locale,
+du fuseau et de la version de Node. `GET /api/derogations/etat` la servait ainsi depuis
+19.2, sur la valeur qui dit **jusqu'à quand un écart de conformité est couvert**. Notre
+propre écran la reparsait sans broncher ; un export, un tableur ou un autre outil ne
+l'auraient pas fait. Les dates sortent désormais en **ISO `AAAA-MM-JJ`**, castées par la
+BASE, et l'essai des dérogations le garde.
 
 ### L'écran affichait « aucune analyse » juste après en avoir créé une (16/09/2026)
 

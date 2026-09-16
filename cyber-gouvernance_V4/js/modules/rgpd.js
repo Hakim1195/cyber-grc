@@ -384,5 +384,32 @@ const RgpdModule = (() => {
         if (typeof AipdModule !== "undefined") AipdModule.monterVue("aipdVue");
     }
 
-    return { renderList, renderCreate, renderDetail, renderDocuments, renderOutil, renderAipd };
+    /**
+     * Vue « Demandes de droits » — RGPD articles 15 à 22, action 20.4.
+     *
+     * ⚠️ Le tableau se charge depuis le serveur, et non depuis le `DataStore` :
+     * l'**échéance** d'une demande n'est pas une donnée de l'instantané, elle se
+     * dérive de la date de réception (`f_echeance_droits`). La recalculer ici
+     * serait une seconde rédaction de la règle, qui dériverait dès que l'horloge
+     * du poste diffère de celle du serveur.
+     */
+    function renderDemandes() {
+        const app = document.getElementById("app");
+        app.innerHTML = `
+            <section class="page rgpd-page">
+                ${UI.enteteHtml({
+                    titre: "Registre RGPD",
+                    aide: Help.tip("Les articles 15 à 22 du RGPD donnent à toute personne un droit d'accès, de rectification, d'effacement, de limitation, d'opposition et de portabilité. L'article 12 §3 laisse UN MOIS pour répondre, prorogeable de deux mois si la demande est complexe — à condition d'en avoir informé la personne. Ce registre tient la trace, et le serveur tient l'horloge."),
+                    contexte: "Ce qui a été demandé, par qui, pour quand — et ce qui est en retard.",
+                    onglets: UI.ongletsDe("/rgpd-demandes")
+                })}
+                <div id="droitsVue"></div>
+            </section>`;
+        if (typeof DroitsModule !== "undefined") DroitsModule.monterVue("droitsVue");
+    }
+
+    return {
+        renderList, renderCreate, renderDetail, renderDocuments, renderOutil,
+        renderAipd, renderDemandes
+    };
 })();

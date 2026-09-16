@@ -82,6 +82,8 @@ const NOUVELLES_PAR_VERSION = {
   // le registre de l'article 30 : la collection ne porte aucun champ de
   // `traitements`, seulement `traitement_id`.
   17: ['analyses_impact'],
+  // v18 — les demandes d'exercice de droits (action 20.4).
+  18: ['demandes_droits'],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -538,6 +540,40 @@ export function instantaneV12Complet() {
  * et un identifiant inventé ne mesurerait rien. Elle ne recopie AUCUN champ du
  * registre de l'article 30 — c'est le critère d'acceptation de l'action 20.3.
  */
+/**
+ * Instantané COMPLET à la version courante — v18.
+ *
+ * ⚠️ La demande d'exercice de droits emporte les données personnelles d'un TIERS
+ * — la personne qui exerce ses droits. C'est délibéré et nécessaire : un export
+ * qui perdrait le nom perdrait la preuve d'avoir répondu à quelqu'un.
+ */
+export function instantaneV18Complet() {
+  return {
+    ...instantaneV17Complet(),
+    schemaVersion: 18,
+    demandes_droits: [
+      {
+        id: 'DSAR-1720000000000-205',
+        type_demande: 'acces',
+        recue_le: '2026-02-03',
+        canal: 'courriel',
+        demandeur: 'Mme Aline Ferrand',
+        contact: 'aline.ferrand@exemple.test',
+        identite_verifiee: true,
+        identite_verifiee_le: '2026-02-04',
+        prorogee: false,
+        prorogee_le: null,
+        prorogation_motif: null,
+        statut: 'repondue',
+        repondue_le: '2026-02-20',
+        reponse_resume: 'Copie des données de paie adressée par courrier recommandé.',
+        motif_refus: null,
+        traitement_id: 'TRT-1720000000000-118',
+      },
+    ],
+  };
+}
+
 export function instantaneV17Complet() {
   return {
     ...instantaneV16Complet(),

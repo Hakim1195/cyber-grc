@@ -281,6 +281,8 @@ explicitement dans votre profil) : c'est une décision de découpage, pas un oub
   imprimable tel quel pour un contrôle.
 - **Analyses d'impact** (article 35) : l'onglet voisin dit où en est chaque analyse — et
   quels traitements n'en ont aucune. Voir plus bas.
+- **Demandes de droits** (articles 15 à 22) : le registre de ce qu'on vous a demandé, avec
+  le délai d'un mois **calculé par le produit**. Voir plus bas.
 - **Incidents** : vous suivez les déclarations CNIL — le produit calcule le **délai de 72 h**
   à partir de la date de détection et le fait remonter dans l'Échéancier.
 
@@ -326,6 +328,46 @@ reste « validée » — c'est un fait, il ne s'efface pas —, mais l'**état**
 ℹ️ **Retirer un traitement du registre suppose d'avoir retiré son analyse.** Le lien est
 volontairement rigide : effacer un traitement dont l'analyse existe encore effacerait la
 preuve qu'on l'avait analysé.
+
+### Quand quelqu'un exerce ses droits — l'horloge d'un mois
+
+Sur votre écran **Registre RGPD**, l'onglet **« Demandes de droits »**. Vous y enregistrez
+ce qui arrive — un courriel, un courrier, un appel — et le produit tient le délai.
+
+| Ce que vous saisissez | Ce que le produit en fait |
+|---|---|
+| **la date de RÉCEPTION** | l'origine du délai. ⚠️ C'est la date d'arrivée, **pas celle de la saisie** : un courriel qui a dormi trois jours dans une boîte partagée a déjà consommé trois jours |
+| le droit invoqué, le canal | le classement du registre |
+| **le nom du demandeur** | sans lui, vous ne saurez pas à qui vous avez répondu — c'est la pièce qui vous protège |
+
+**L'échéance, elle, n'est pas saisie : elle est calculée.** Un mois à compter de la
+réception (RGPD **article 12 §3**), et l'écran l'affiche avec sa référence. Corrigez la date
+de réception, et l'échéance suit — il n'y a pas deux endroits où elle vit.
+
+⚠️ **Une demande dont le mois est écoulé passe « En retard » toute seule**, au changement de
+jour, sans qu'aucun traitement ait à s'exécuter. Et le retard est **chiffré** : « en retard
+de douze jours ». C'est délibéré — « en retard de douze jours » se défend devant une
+autorité, « bientôt » ne se défend pas.
+
+**La prorogation de deux mois existe** (article 12 §3, second alinéa), mais elle ne
+s'invoque pas après coup : le texte impose d'**informer la personne dans le premier mois**,
+en motivant. Le produit exige donc les deux — la date de notification et le motif — avant
+d'accepter qu'une demande soit prorogée. Une prorogation non notifiée ne proroge rien ; elle
+fabriquerait un délai que vous croyez avoir.
+
+**Un refus se motive et se date.** L'article 12 §4 vous oblige à informer la personne *dans
+le même délai*, avec les voies de recours : le produit refuse d'enregistrer un refus sans
+motif ni date de réponse. Une fin de non-recevoir silencieuse est exactement ce que le texte
+proscrit.
+
+⚠️ **Ce que le produit ne fait pas** : il ne répond pas à la personne, n'extrait pas ses
+données et ne juge pas si la demande est fondée. Il **tient le registre** et **arme
+l'horloge**. Le reste vous appartient.
+
+ℹ️ **Ce registre contient des données personnelles de gens qui ne sont pas vos
+utilisateurs.** C'est nécessaire, et c'est déclaré : l'onglet « L'outil lui-même » les
+range, avec leur sort à l'expiration — le nom se **conserve** (sans lui, la preuve d'avoir
+répondu n'a plus de sujet), le contact s'**anonymise**.
 
 ### Ce que l'outil fait de VOS données — la réponse est dans l'outil
 

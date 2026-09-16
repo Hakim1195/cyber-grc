@@ -251,6 +251,9 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   // et le responsable de traitement —, même registre. La rattacher à
   // « conformite » l'aurait mêlée aux référentiels, qui ne sont pas son sujet.
   analyses_impact: 'rgpd',
+  // Une demande d'exercice de droits est un acte RGPD, et c'est le DPO qui la
+  // tient. Même écran, même personne, même registre.
+  demandes_droits: 'rgpd',
 });
 
 /**

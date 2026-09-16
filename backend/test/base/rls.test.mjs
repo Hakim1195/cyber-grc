@@ -4102,6 +4102,16 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // guide l'explique, et rien ne le tenait. Un document repris d'un export
       // antérieur serait réputé PUBLIC.
       'defauts_de_classification',
+      // QUARANTE-DEUXIÈME, apporté par `040_les_demandes_d_exercice_de_droits.sql` —
+      // action 20.4. ⚠️ Il ÉPROUVE les DEUX dérivations sur dix cas témoins, dont
+      // le 31 janvier : un « mois » compté en trente jours donnerait le 2 mars,
+      // c'est-à-dire deux jours de retard que personne ne verrait, sur tout le parc
+      // — et qui ne se verraient que devant une autorité. Il garde aussi les trois
+      // règles que le RGPD impose et que le schéma porte : un refus se motive ET se
+      // date (art. 12 §4 — une fin de non-recevoir silencieuse est ce que le texte
+      // proscrit), une prorogation se notifie (art. 12 §3), une réponse est datée.
+      // Et il refuse toute colonne qui RANGERAIT l'échéance.
+      'demandes_droits',
       // TRENTE-SIXIÈME, apporté par `035_les_derogations_datees.sql` — action 19.2.
       // ⚠️ Il ÉPROUVE la dérivation de l'état sur quatre cas témoins (§39.1) au lieu de
       // lire le texte de `f_etat_derogation()` : un garde qui vérifierait que la

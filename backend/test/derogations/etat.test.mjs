@@ -125,6 +125,20 @@ describe('Les dérogations datées, par la route', () => {
       );
       // Elle dit ce qu'elle vise, et l'état de l'exigence : sans cela, l'écran ne
       // pourrait pas expliquer ce qui est couvert.
+      // ⚠️ **LES DATES SORTENT EN ISO, ET C'EST UNE CORRECTION.** Le pilote `pg`
+      // rend un objet `Date` pour une colonne `date` : `String(unDate)` donnait
+      // « Sun Feb 15 2026 00:00:00 GMT+0000 (…) », une chaîne dépendante de la
+      // locale, du fuseau et de la version de Node — sur la valeur qui dit
+      // jusqu'à quand un écart de conformité est couvert. Trouvé en écrivant
+      // l'action 20.4, qui posait la même question.
+      assert.match(
+        saisie.echeance,
+        /^\d{4}-\d{2}-\d{2}$/u,
+        `L’échéance ne sort pas en ISO : « ${saisie.echeance} ». Un consommateur autre que ` +
+          'notre propre écran — un export, un tableur, un autre outil — la lirait de travers, ' +
+          'ou pas du tout.',
+      );
+      assert.match(saisie.accordeeLe, /^\d{4}-\d{2}-\d{2}$/u);
       assert.equal(saisie.exigenceId, 'EX-A');
       assert.equal(saisie.exigenceCode, 'A.5.1');
       assert.equal(saisie.statutConformite, 'non conforme');

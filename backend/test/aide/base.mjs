@@ -738,6 +738,23 @@ export async function semerJeuEssai(base, client, options = {}) {
         await c.query(
           `insert into analyse_mesures (analyse_id, mesure_id) values ('AIPD-${s}', 'MESURE-${s}')`,
         );
+        // La demande d'exercice de droits (migration `040`, action 20.4). Même motif
+        // que les blocs ci-dessus : une table neuve sans ligne rendrait « zéro
+        // visible » au balayage de cloisonnement pour la seule raison qu'il n'y a
+        // rien à voir.
+        //
+        // ⚠️ La date de réception est FIXE et ancienne, et l'état DÉRIVÉ qui en
+        // découle est donc « en_retard » — délibérément : le semis doit porter le
+        // cas qui compte, pas le cas commode. Une date relative ferait changer de
+        // sens à l'état au fil du calendrier.
+        await c.query(
+          `insert into demandes_droits (id, filiale_id, type_demande, recue_le, canal,
+                                        demandeur, contact, statut, traitement_id)
+               values ('DSAR-${s}', $1, 'acces', date '2026-01-15', 'courriel',
+                       'Personne concernée ${s}', 'contact-${s}@exemple.test', 'en_cours',
+                       'TRT-${s}')`,
+          f,
+        );
         // La file de purge du magasin (migration `017`). Elle est VIDE en régime
         // normal — c'est une file d'attente, pas un registre —, et c'est
         // précisément pourquoi elle est semée : sans une ligne par filiale, le

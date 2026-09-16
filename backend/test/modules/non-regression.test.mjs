@@ -209,6 +209,9 @@ const SANS_FICHE = {
   // une vue du sujet « RGPD », pas un sujet de plus. L'ajouter au menu rendrait à
   // celui-ci ce qu'on vient de lui retirer.
   '/rgpd-aipd': 'vue du registre : où en est chaque analyse d’impact, et ce qui n’en a aucune',
+  // Action 20.4 — le quatrième onglet du registre. Le délai de l'article 12 §3 y
+  // est CALCULÉ PAR LE SERVEUR : l'écran ne fait que le montrer.
+  '/rgpd-demandes': 'vue du registre : ce qui a été demandé, pour quand, et ce qui est en retard',
   '/rgpd-documents': 'vue du registre : les documents porteurs de données personnelles',
   '/rgpd-outil': 'vue du registre : l’article 30 du PRODUIT lui-même, chargé à la demande',
   // ── Vague 6 : les écrans des capacités livrées sans interface ────────────
@@ -271,7 +274,11 @@ const SANS_FICHE = {
 // plus une VUE montée dans un onglet du registre RGPD (`/rgpd-aipd`). Pas de
 // route à elle, donc ni `FICHES` ni `SANS_FICHE` — l'onglet est une route du
 // module `rgpd`, qui est déjà nommé ici.
-const MODULES_ATTENDUS = 38;
+//
+// 39 depuis l'action 20.4 : « droits » — les demandes d'exercice de droits.
+// Une VUE montée dans un onglet du registre RGPD (`/rgpd-demandes`), sans route
+// à elle ni entrée de menu : l'onglet est une route du module `rgpd`, déjà nommé.
+const MODULES_ATTENDUS = 39;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //

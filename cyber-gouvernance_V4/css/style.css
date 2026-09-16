@@ -2619,3 +2619,35 @@ input, select, textarea {
     border-left: 3px solid var(--color-warning, #e0a800);
     padding-left: .75rem;
 }
+
+/* =====================================================================
+   DEMANDES D'EXERCICE DE DROITS — RGPD art. 15 à 22 (action 20.4)
+   ===================================================================== */
+.dro-note {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    line-height: 1.55;
+    max-width: 82ch;
+    margin: .25rem 0 1rem;
+}
+.dro-proroge { text-transform: none; margin-left: .35rem; cursor: help; }
+.dro-form {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border, #e3e6ea);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: .75rem 1rem;
+    align-items: end;
+}
+.dro-form-ligne { display: flex; flex-direction: column; gap: .25rem; }
+.dro-form-ligne label { font-size: var(--text-xs); color: var(--text-muted); }
+.dro-avertissement {
+    grid-column: 1 / -1;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    line-height: 1.55;
+    max-width: 82ch;
+    margin: 0;
+}
+.dro-form button { grid-column: 1 / -1; justify-self: start; }

@@ -117,6 +117,7 @@ async function startApp() {
         // pas s'écrire « /rgpd/outil » : le routeur y verrait l'identifiant d'un
         // traitement, et l'écran dirait « Traitement introuvable ».
         "/rgpd-aipd": () => { if (typeof RgpdModule !== "undefined") RgpdModule.renderAipd(); },
+        "/rgpd-demandes": () => { if (typeof RgpdModule !== "undefined") RgpdModule.renderDemandes(); },
         "/rgpd-documents": () => { if (typeof RgpdModule !== "undefined") RgpdModule.renderDocuments(); },
         "/rgpd-outil": () => { if (typeof RgpdModule !== "undefined") RgpdModule.renderOutil(); },
 
@@ -1110,6 +1111,7 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/documents":    "documents",
     "/rgpd":         "rgpd",
     "/rgpd-aipd":    "rgpd",
+    "/rgpd-demandes": "rgpd",
     "/rgpd-documents": "rgpd",
     "/rgpd-outil":   "rgpd",
     "/actions":      "actions",

@@ -101,11 +101,11 @@ describe('La couture — les routes que le point d’entrée monte', () => {
 });
 
 describe('Le modèle est DÉRIVÉ, il n’est pas écrit', () => {
-  test('les 25 entités du registre ont un modèle, sans exception ni liste', () => {
+  test('les 26 entités du registre ont un modèle, sans exception ni liste', () => {
     const attendues = [...listerEntites()].sort();
     const rendues = modeles.entites.map((e) => e.entite).sort();
     assert.deepEqual(rendues, attendues);
-    assert.equal(rendues.length, 25);
+    assert.equal(rendues.length, 26);
   });
 
   test('les colonnes coïncident champ pour champ avec `GET /api/modele`', async () => {

@@ -165,7 +165,10 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // filiale qui l'a déposée, y compris quand son porteur est de portée Groupe.
     // 42 depuis la migration `039` : `analyses_impact` et `analyse_mesures`
     // (action 20.3). Toutes deux MIXTES, comme `traitements`.
-    assert.equal(tablesCloisonnees.length, 42, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    // 43 depuis la migration `040` : `demandes_droits` (action 20.4). Elle est de
+    // niveau FILIALE — une demande s'adresse à un responsable de traitement, qui est
+    // une personne morale, donc une filiale.
+    assert.equal(tablesCloisonnees.length, 43, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -196,7 +199,7 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // 41 depuis la `039` : les deux tables de l'analyse d'impact, semées des deux côtés.
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      41,
+      42,
       'Trente-huit tables devaient contenir au moins une ligne allemande. Une table neuve '
         + 'sans ligne dans le semis est un angle mort : le balayage y rendrait « zéro '
         + 'visible » pour la seule raison qu’il n’y a rien à voir.',
@@ -322,7 +325,8 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     // 36 depuis la migration `036` : `document_mesures`.
     // 37 depuis la migration `038` : `piece_rattachements`.
     // 39 depuis la migration `039` : `analyses_impact` et `analyse_mesures`.
-    assert.equal(nonVides.length, 39, `Tables non vides : ${nonVides.join(', ')}`);
+    // 40 depuis la migration `040` : `demandes_droits`.
+    assert.equal(nonVides.length, 40, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

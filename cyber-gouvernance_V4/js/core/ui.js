@@ -652,6 +652,9 @@ window.UI = (function () {
                 // d'impact est une vue du registre, pas un sujet à part. L'ajouter
                 // au menu rendrait à celui-ci ce qu'on vient de lui retirer.
                 Object.freeze({ route: "/rgpd-aipd", libelle: "Analyses d\u2019impact" }),
+                // Action 20.4 — un onglet encore, et pour le même motif : les
+                // demandes d'exercice de droits sont une vue du registre RGPD.
+                Object.freeze({ route: "/rgpd-demandes", libelle: "Demandes de droits" }),
                 Object.freeze({ route: "/rgpd-documents", libelle: "Documents" }),
                 Object.freeze({ route: "/rgpd-outil", libelle: "L\u2019outil lui-m\u00eame" })
             ])

@@ -1130,6 +1130,28 @@ const Api = (() => {
      */
     function aipdEtat() { return appeler("/aipd/etat"); }
 
+    /**
+     * Les demandes d'exercice de droits du périmètre, avec leur **échéance
+     * DÉRIVÉE** et leur état (action 20.4).
+     *
+     * Rend `{ demandes: [...], tronque }`. Chaque entrée porte `echeance`
+     * (ISO `AAAA-MM-JJ`), `etat` — `a_traiter`, `en_retard`, `repondue`,
+     * `refusee` —, `joursRestants` (**négatif** sur une demande en retard) et
+     * `reference`, la source du délai dans le texte.
+     *
+     * ⚠️ **L'échéance n'est pas stockée** : le mois de l'article 12 §3 du RGPD se
+     * dérive de la date de réception, côté serveur. La recalculer ici serait une
+     * seconde rédaction de la règle, qui dériverait dès que l'horloge du poste
+     * diffère de celle du serveur — et deux comptes de la même échéance
+     * réglementaire est la pire chose qu'un outil produit en audit puisse
+     * afficher.
+     *
+     * ⚠️ **Ce que le produit ne fait pas** : il ne répond pas à la personne,
+     * n'extrait pas ses données et ne juge pas si la demande est fondée. Il tient
+     * le registre et arme l'horloge.
+     */
+    function demandesDroitsEtat() { return appeler("/demandes-droits/etat"); }
+
     /** Consigner une déclaration DÉJÀ FAITE à une autorité, avec son accusé. */
     function consignerDeclaration(incidentId, declaration) {
         return appeler("/reglementaire/incidents/" + encodeURIComponent(incidentId)
@@ -1178,7 +1200,7 @@ const Api = (() => {
         // Lot L20, action 20.1 : l'horloge réglementaire.
         echeancesReglementaires, consignerDeclaration,
         // Lot L19, action 19.2 : l'état DÉRIVÉ des dérogations.
-        derogationsEtat, aipdEtat,
+        derogationsEtat, aipdEtat, demandesDroitsEtat,
         // Lot L18 bis : le jeu de découverte.
         decouverteEtat, decouverteSemer, decouvertePurger
     };

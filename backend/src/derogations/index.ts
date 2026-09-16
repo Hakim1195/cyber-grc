@@ -128,8 +128,16 @@ export async function greffonDerogations(
         await client.query("set local timezone to 'UTC'");
 
         const lignes = await client.query(
+          // ⚠️ **Les deux dates sortent en `::text`, donc en ISO `AAAA-MM-JJ`.** Le
+          // pilote `pg` rend un objet `Date` pour une colonne `date`, et
+          // `String(unDate)` donnait « Sun Feb 15 2026 00:00:00 GMT+0000 (…) » —
+          // une chaîne dépendante de la locale, du fuseau et de la version de Node,
+          // sur la valeur qui dit jusqu'à quand un écart de conformité est couvert.
+          // Trouvé en écrivant l'action 20.4, qui pose la même question : le cast
+          // appartient à la BASE, une fois, pas à chaque lecteur.
           `select d.id, d.filiale_id, d.exigence_id, d.proprietaire, d.motif,
-                  d.accordee_le, d.echeance, d.compensation, d.version,
+                  d.accordee_le::text as accordee_le, d.echeance::text as echeance,
+                  d.compensation, d.version,
                   e.code     as exigence_code,
                   e.intitule as exigence_intitule,
                   e.statut_conformite,

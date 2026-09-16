@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 17;
+    const SCHEMA_VERSION = 18;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -77,7 +77,14 @@ const DataStore = (() => {
         // produit en audit, c'est une de trop. ⚠️ Et aucune ne porte d'ÉTAT —
         // « à revoir » se dérive de la date de revue, côté serveur
         // (`GET /api/aipd/etat`). Le stocker ici le figerait au jour de l'export.
-        "analyses_impact"
+        "analyses_impact",
+        // v18 — Lot L20, action 20.4 : les demandes d'exercice de droits (RGPD
+        // art. 15 à 22). ⚠️ Aucune n'porte d'ÉCHÉANCE : le mois de l'article 12 §3
+        // se dérive de la date de réception, côté serveur
+        // (`GET /api/demandes-droits/etat`). Le stocker ici le figerait au jour de
+        // l'export — et une reprise faite six mois plus tard rendrait « dans les
+        // temps » une demande en retard depuis longtemps.
+        "demandes_droits"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
@@ -783,6 +790,35 @@ const DataStore = (() => {
     }
 
     /* =========================
+       DEMANDES D'EXERCICE DE DROITS — RGPD art. 15 à 22 (v18, action 20.4)
+       { id, type_demande, recue_le, canal, demandeur, contact,
+         identite_verifiee, identite_verifiee_le, prorogee, prorogee_le,
+         prorogation_motif, statut, repondue_le, reponse_resume, motif_refus,
+         traitement_id }
+
+       ⚠️ **Aucune échéance.** Le mois de l'article 12 §3 se dérive de la date de
+       réception, côté serveur (`GET /api/demandes-droits/etat`). Le poser ici
+       laisserait, après correction de cette date, un délai calculé sur
+       l'ancienne — sans que personne le sache.
+
+       ⚠️ **Ces lignes portent les données personnelles d'un TIERS** — la personne
+       qui exerce ses droits, et qui n'est pas un utilisateur du produit. Elles
+       sont rangées au registre de l'article 30 du produit lui-même, avec leur
+       sort à l'expiration : le NOM se conserve (sans lui, la preuve d'avoir
+       répondu n'a plus de sujet), le CONTACT s'anonymise.
+    ========================== */
+    function getDemandesDroits() { return data.demandes_droits; }
+    function getDemandeDroitsById(id) { return data.demandes_droits.find(d => d.id === id); }
+    function addDemandeDroits(d) { data.demandes_droits.push(d); save(); }
+    function updateDemandeDroits(d) {
+        const idx = data.demandes_droits.findIndex(x => x.id === d.id);
+        if (idx !== -1) { data.demandes_droits[idx] = d; save(); }
+    }
+    function deleteDemandeDroits(id) {
+        data.demandes_droits = data.demandes_droits.filter(d => d.id !== id); save();
+    }
+
+    /* =========================
        TRAITEMENTS RGPD — Registre article 30 (v6)
        { id, nom, finalite, base_legale, responsable, personnes_concernees,
          categories_donnees, donnees_sensibles, destinataires, transfert_hors_ue,
@@ -968,7 +1004,13 @@ const DataStore = (() => {
         //           personne n'a constatée, et remplir le registre de l'article 35
         //           de lignes vides apprendrait à l'ignorer. La présomption
         //           s'affiche à l'écran ; elle ne s'écrit pas.
-        // (Ajouter ici les futures migrations : if (v < 18) { ... })
+        // v17 → v18 : ajout de `demandes_droits` (demandes d'exercice de droits, RGPD
+        //           art. 15 à 22, action 20.4) → normalize crée le tableau vide. AUCUNE
+        //           transformation, et rien à DEVINER : on ne fabrique pas de demandes à
+        //           partir du journal d'audit. Une demande est un fait REÇU, pas une
+        //           déduction — l'inventer serait consigner qu'une personne a écrit alors
+        //           que personne n'en sait rien.
+        // (Ajouter ici les futures migrations : if (v < 19) { ... })
         return p;
     }
 
@@ -1228,6 +1270,8 @@ const DataStore = (() => {
         addDerogation, updateDerogation, deleteDerogation,
         getAnalysesImpact, getAnalyseImpactById, getAnalysesImpactByTraitement,
         addAnalyseImpact, updateAnalyseImpact, deleteAnalyseImpact,
+        getDemandesDroits, getDemandeDroitsById,
+        addDemandeDroits, updateDemandeDroits, deleteDemandeDroits,
 
         // Traitements RGPD (registre art. 30)
         getTraitements, getTraitementById, addTraitement, updateTraitement, deleteTraitement,
