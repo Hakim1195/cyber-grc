@@ -147,7 +147,7 @@ const EcheancesModule = (() => {
         }
 
         const dows = DOW.map(d => `<div class="ech-cal-dow">${d}</div>`).join("");
-        const note = sansDate > 0 ? `<p style="font-size:0.8rem; color:var(--text-muted); margin-top:10px;">${sansDate} échéance(s) sans date ne figurent pas au calendrier (visibles en vue liste).</p>` : "";
+        const note = sansDate > 0 ? `<p style="font-size: var(--text-sm); color:var(--text-muted); margin-top:10px;">${sansDate} échéance(s) sans date ne figurent pas au calendrier (visibles en vue liste).</p>` : "";
 
         return `
             <div class="ech-cal-head no-print">
@@ -303,10 +303,10 @@ const EcheancesModule = (() => {
                         <button class="ech-vbtn${viewMode === "calendar" ? " active" : ""}" data-view="calendar">Calendrier</button>
                     </span>
                     ${typeButtons}
-                    <label style="display:inline-flex; align-items:center; gap:6px; margin-left:auto; font-size:0.85rem; color:var(--text-muted); cursor:pointer;">
+                    <label style="display:inline-flex; align-items:center; gap:6px; margin-left:auto; font-size: var(--text-sm); color:var(--text-muted); cursor:pointer;">
                         <input type="checkbox" id="ech-urgent"> Urgents seulement (≤ 7 j)
                     </label>
-                    <input type="search" id="ech-search" placeholder="Rechercher..." style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:0.85rem;">
+                    <input type="search" id="ech-search" placeholder="Rechercher..." style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size: var(--text-sm);">
                 </div>
 
                 <div id="ech-body"></div>

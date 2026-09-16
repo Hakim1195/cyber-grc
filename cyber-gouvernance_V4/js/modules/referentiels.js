@@ -359,11 +359,11 @@ const ReferentielsModule = (() => {
                     <div class="ref-card__head">
                         <div>
                             <h3 style="margin:0;">${escapeHtml(ref.nom)}</h3>
-                            <p style="color:var(--text-muted); font-size:0.85rem; margin:4px 0 0;">${escapeHtml(ref.editeur)} · ${escapeHtml(ref.version)}</p>
+                            <p style="color:var(--text-muted); font-size: var(--text-sm); margin:4px 0 0;">${escapeHtml(ref.editeur)} · ${escapeHtml(ref.version)}</p>
                         </div>
                         <span class="badge">${sc.global.total} ${isQ ? "questions" : "mesures"}</span>
                     </div>
-                    <p style="color:var(--text-muted); font-size:0.9rem; margin:10px 0 14px;">${escapeHtml(ref.description)}</p>
+                    <p style="color:var(--text-muted); font-size: var(--text-base); margin:10px 0 14px;">${escapeHtml(ref.description)}</p>
 
                     <div class="ref-kpis">${kpis}</div>
                     <div class="progress-bar small" style="margin:6px 0 16px;"><div class="progress-fill" style="width:${pctEval}%; background:var(--accent);"></div></div>
@@ -376,16 +376,15 @@ const ReferentielsModule = (() => {
 
         app.innerHTML = `
             <section class="page">
-                <div class="dashboard-header">
-                    <div>
-                        <h1>Référentiels de sécurité</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">Auto-évaluez votre conformité et suivez votre maturité par domaine. ${Help.tip("Un référentiel est un ensemble structuré de bonnes pratiques (ANSSI, ISO 27001, NIS2…). L'auto-évaluation situe votre organisation et alimente le plan d'actions.")}</p>
-                    </div>
-                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                        <a href="#/mapping" class="btn-secondary">Correspondances →</a>
-                        <a href="#/couverture" class="btn-secondary">Couverture croisée →</a>
-                    </div>
-                </div>
+                ${UI.enteteHtml({
+                    titre: "Référentiels de sécurité",
+                    aide: Help.tip("Un référentiel est un ensemble structuré de bonnes pratiques (ANSSI, ISO 27001, NIS2…). L'auto-évaluation situe votre organisation et alimente le plan d'actions."),
+                    contexte: "Auto-évaluez votre conformité et suivez votre maturité par domaine.",
+                    onglets: UI.ongletsDe("/referentiels"),
+                    // Le lien « Couverture croisée → » a disparu : c'est un onglet
+                    // désormais, et il n'a pas à exister deux fois sur le même écran.
+                    actions: `<a href="#/mapping" class="btn-secondary">Correspondances →</a>`
+                })}
 
                 ${refs.length === 0
                     ? `<div class="empty-state"><h3>Aucun référentiel chargé</h3><p>Le catalogue de référentiels n'a pas pu être chargé.</p></div>`
@@ -393,7 +392,7 @@ const ReferentielsModule = (() => {
 
                 <div class="dashboard-card" style="margin-top:1.5rem;">
                     <h3 style="margin-top:0;">Éviter la double saisie : le pivot « Mesure de sécurité »</h3>
-                    <p style="color:var(--text-muted); font-size:0.9rem;">Une même <strong>mesure de sécurité</strong> (MFA, sauvegardes, cloisonnement…) couvre souvent des exigences de <em>plusieurs</em> référentiels. Reliez vos exigences à une <a href="#/mesures" style="color:var(--accent);">mesure de sécurité</a>, évaluez-la une fois puis <strong>propagez</strong> : le statut s'applique partout. Voyez les recouvrements dans la <a href="#/couverture" style="color:var(--accent);">couverture croisée</a> et gagnez du temps avec les <a href="#/mapping" style="color:var(--accent);">correspondances inter-référentiels</a> (relier tout un thème à une mesure d'un clic).</p>
+                    <p style="color:var(--text-muted); font-size: var(--text-base);">Une même <strong>mesure de sécurité</strong> (MFA, sauvegardes, cloisonnement…) couvre souvent des exigences de <em>plusieurs</em> référentiels. Reliez vos exigences à une <a href="#/mesures" style="color:var(--accent);">mesure de sécurité</a>, évaluez-la une fois puis <strong>propagez</strong> : le statut s'applique partout. Voyez les recouvrements dans la <a href="#/couverture" style="color:var(--accent);">couverture croisée</a> et gagnez du temps avec les <a href="#/mapping" style="color:var(--accent);">correspondances inter-référentiels</a> (relier tout un thème à une mesure d'un clic).</p>
                 </div>
             </section>`;
 
@@ -464,14 +463,14 @@ const ReferentielsModule = (() => {
                     </div>
                 </div>
 
-                <div class="synthese-message info" style="padding:10px; font-size:0.9rem;">${escapeHtml(ref.aide)}</div>
+                <div class="synthese-message info" style="padding:10px; font-size: var(--text-base);">${escapeHtml(ref.aide)}</div>
 
                 <div class="dashboard-grid ref-detail-grid">
                     <div class="dashboard-card ref-scorecard">
                         <h3 style="margin-top:0;">${isQ ? "Profil de conformité par domaine" : "Profil de maturité par domaine"}</h3>
                         ${showNiv && ref.clLabels ? radarLevelsHtml() : ""}
                         <div class="ref-radar" id="ref-radar">${radarSvg(radarAxesFor(ref, sc, radarNiveau), radarColor(), isQ ? "Radar de conformité par domaine" : "")}</div>
-                        ${ref.clLabels ? `<p style="font-size:0.78rem; color:var(--text-muted); margin:10px 0 0;">Axes : domaines de classification (${escapeHtml(Object.keys(ref.clLabels).sort().join(", "))}) — <span id="ref-radar-note">${escapeHtml(radarNoteText(ref))}</span> ${Help.tip(isQ ? "Chaque axe agrège toutes les questions du domaine de classification (CL), indépendamment du chapitre du questionnaire. Valeur de l'axe : part de réponses « Oui » parmi les questions applicables (N/A exclues ; une question non répondue compte comme « Non »). Les questions sans domaine CL connu ne sont pas représentées dans le radar mais restent comptées dans la synthèse et les scores par chapitre." : "Chaque axe agrège toutes les questions du domaine de classification (CL), indépendamment du chapitre du questionnaire. Les questions sans domaine CL connu ne sont pas représentées dans le radar mais restent comptées dans la synthèse et les scores par chapitre.")}</p>` : ""}
+                        ${ref.clLabels ? `<p style="font-size: var(--text-xs); color:var(--text-muted); margin:10px 0 0;">Axes : domaines de classification (${escapeHtml(Object.keys(ref.clLabels).sort().join(", "))}) — <span id="ref-radar-note">${escapeHtml(radarNoteText(ref))}</span> ${Help.tip(isQ ? "Chaque axe agrège toutes les questions du domaine de classification (CL), indépendamment du chapitre du questionnaire. Valeur de l'axe : part de réponses « Oui » parmi les questions applicables (N/A exclues ; une question non répondue compte comme « Non »). Les questions sans domaine CL connu ne sont pas représentées dans le radar mais restent comptées dans la synthèse et les scores par chapitre." : "Chaque axe agrège toutes les questions du domaine de classification (CL), indépendamment du chapitre du questionnaire. Les questions sans domaine CL connu ne sont pas représentées dans le radar mais restent comptées dans la synthèse et les scores par chapitre.")}</p>` : ""}
                     </div>
                     <div class="dashboard-card">
                         <h3 style="margin-top:0;">Synthèse</h3>
@@ -498,7 +497,7 @@ const ReferentielsModule = (() => {
                                 <div class="ref-kpi__lbl">${isQ ? "Questions évaluées" : "Mesures évaluées"}</div>
                             </div>
                         </div>
-                        <p style="font-size:0.82rem; color:var(--text-muted); margin-top:14px;">${isQ
+                        <p style="font-size: var(--text-sm); color:var(--text-muted); margin-top:14px;">${isQ
                             ? `Répondez <strong>Oui / Non / N-A</strong> à chaque question ci-dessous : le score et le radar se mettent à jour en temps réel. Ouvrez le <strong>Détail</strong> d'une question pour ajouter un commentaire, des preuves et des actions correctives.`
                             : `Renseignez chaque mesure ci-dessous : le statut et la maturité mettent à jour le radar en temps réel. Ouvrez le <strong>Détail</strong> d'une mesure pour ajouter un commentaire, des preuves et des actions correctives.`}</p>
                         <div id="ref-readiness-box">${readinessHtml}</div>
@@ -591,7 +590,7 @@ const ReferentielsModule = (() => {
             available.map(m => `<option value="${m.id}">${escapeHtml(m.nom)}</option>`).join("");
         const chipsHtml = linkedMesures.length
             ? linkedMesures.map(m => `<span class="mp-chip"><a href="#/mesures/${m.id}" style="color:var(--accent); text-decoration:none;">${escapeHtml(m.nom)}</a><button type="button" class="ref-mesure-remove mp-remove" data-code="${ex.code}" data-mid="${m.id}" aria-label="Retirer">&times;</button></span>`).join("")
-            : `<span style="color:var(--text-muted); font-size:0.85rem;">Aucune mesure liée pour l'instant.</span>`;
+            : `<span style="color:var(--text-muted); font-size: var(--text-sm);">Aucune mesure liée pour l'instant.</span>`;
 
         // Plan d'action porté par CHAQUE mesure liée (lecture seule ici : géré depuis la fiche mesure).
         // Rend la chaîne exigence→mesures→actions visible.
@@ -603,8 +602,8 @@ const ReferentielsModule = (() => {
                         const acts = DataStore.getActionsByMesure(m.id);
                         const list = acts.length
                             ? `<ul class="ref-actions-list">${acts.map(a => `<li><a href="#/actions/${a.id}" style="color:var(--accent);">${escapeHtml(a.titre)}</a> <span class="status ${statutClassForAction(a.statut)}" style="margin-left:6px;">${escapeHtml(a.statut)}</span></li>`).join("")}</ul>`
-                            : `<p style="color:var(--text-muted); font-size:0.85rem; margin:2px 0;">Aucune action. <a href="#/mesures/${m.id}" style="color:var(--accent);">Planifier →</a></p>`;
-                        return `<div style="margin-bottom:8px;"><strong style="font-size:0.85rem;">Plan d'action — ${escapeHtml(m.nom)}</strong>${list}</div>`;
+                            : `<p style="color:var(--text-muted); font-size: var(--text-sm); margin:2px 0;">Aucune action. <a href="#/mesures/${m.id}" style="color:var(--accent);">Planifier →</a></p>`;
+                        return `<div style="margin-bottom:8px;"><strong style="font-size: var(--text-sm);">Plan d'action — ${escapeHtml(m.nom)}</strong>${list}</div>`;
                     }).join("")}
                 </div>`;
         }
@@ -658,12 +657,12 @@ const ReferentielsModule = (() => {
                         <a href="#/actions/${a.id}" style="color:var(--accent);">${escapeHtml(a.titre)}</a>
                         <span class="status ${statutClassForAction(a.statut)}" style="margin-left:8px;">${escapeHtml(a.statut)}</span>
                     </li>`).join("")}</ul>`
-            : `<p style="color:var(--text-muted); font-size:0.85rem; margin:4px 0;">Aucune action corrective planifiée.</p>`;
+            : `<p style="color:var(--text-muted); font-size: var(--text-sm); margin:4px 0;">Aucune action corrective planifiée.</p>`;
 
         return `
             <div class="ref-actions-head">
                 <strong>Actions correctives ${Help.tip("Planifiez une action pour combler un écart. Elle apparaît dans le plan d'actions global, tracée jusqu'à cette mesure du référentiel.")}</strong>
-                <button class="ref-add-action" data-code="${code}" style="font-size:0.8rem; padding:4px 10px;">Planifier une action</button>
+                <button class="ref-add-action" data-code="${code}" style="font-size: var(--text-sm); padding:4px 10px;">Planifier une action</button>
             </div>
             ${list}
             <form class="ref-action-form" data-code="${code}" hidden>

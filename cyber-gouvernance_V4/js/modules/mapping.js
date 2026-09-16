@@ -326,10 +326,10 @@ const MappingModule = (() => {
                     </div>
                 </div>
 
-                <div class="synthese-message info" style="padding:10px; font-size:0.9rem;">
+                <div class="synthese-message info" style="padding:10px; font-size: var(--text-base);">
                     Correspondances <strong>indicatives</strong> (reformulations maison) : elles n'engagent pas les éditeurs des normes. Utilisez-les pour <strong>accélérer la saisie</strong> et repérer les recouvrements, puis affinez selon votre contexte.${editable ? " Vous pouvez tout modifier." : ""}
                 </div>
-                ${editable ? "" : `<div class="synthese-message warning no-print" style="padding:10px; font-size:0.9rem;">
+                ${editable ? "" : `<div class="synthese-message warning no-print" style="padding:10px; font-size: var(--text-base);">
                     <strong>Catalogue commun au Groupe — consultation.</strong> Ces correspondances sont le socle partagé par toutes les filiales : elles sont définies une fois pour toutes, et leur modification relève de l'<strong>administration Groupe</strong>. Vous pouvez les consulter et vous en servir pour propager une mesure ou un statut sur vos propres exigences ; leur création, leur modification et leur masquage se demandent au RSSI Groupe.
                 </div>`}
 

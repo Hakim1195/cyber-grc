@@ -96,11 +96,11 @@ const AuditsModule = (() => {
             const style = document.createElement("style");
             style.id = "audits-style";
             style.innerHTML = `
-                .tab-btn { background: none; color: var(--text-muted); border: none; padding: 10px 20px; cursor: pointer; border-radius: 0; font-weight: normal; font-size: 1rem; }
+                .tab-btn { background: none; color: var(--text-muted); border: none; padding: 10px 20px; cursor: pointer; border-radius: 0; font-weight: normal; font-size: var(--text-md); }
                 .tab-btn:hover { background: rgba(0,0,0,0.05); }
                 .active-tab { color: var(--accent); border-bottom: 3px solid var(--accent); font-weight: bold; }
 
-                .badge-constat { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; }
+                .badge-constat { padding: 4px 8px; border-radius: 4px; font-size: var(--text-xs); font-weight: bold; color: white; }
                 .c-conforme { background: #2e7d32; }
                 .c-fort { background: #2e7d32; }
                 .c-pa { background: #1565c0; }
@@ -109,18 +109,18 @@ const AuditsModule = (() => {
                 .c-na { background: #757575; }
 
                 /* Grille de points de contrôle (audit sur référentiel) */
-                .audit-dom-head { background: var(--accent, #2059A6); color:#fff; padding:8px 12px; border-radius:4px; margin:18px 0 8px; font-weight:bold; font-size:0.9rem; }
+                .audit-dom-head { background: var(--accent, #2059A6); color:#fff; padding:8px 12px; border-radius:4px; margin:18px 0 8px; font-weight:bold; font-size: var(--text-base); }
                 .item-row { display:flex; gap:15px; padding:14px; border:1px solid #eee; border-left:3px solid #ccc; margin-bottom:8px; background:#fbfbfb; border-radius:4px; }
                 .item-main { flex:1.4; min-width:0; }
                 .item-title { font-weight:bold; margin-bottom:6px; }
-                .item-code { display:inline-block; background:var(--accent, #2059A6); color:#fff; border-radius:3px; padding:1px 6px; font-size:0.75rem; margin-right:6px; }
-                .item-ctrl { font-size:0.9rem; color:#333; }
-                .item-preuve { font-size:0.82rem; color:var(--text-muted, #666); margin-top:6px; }
+                .item-code { display:inline-block; background:var(--accent, #2059A6); color:#fff; border-radius:3px; padding:1px 6px; font-size: var(--text-xs); margin-right:6px; }
+                .item-ctrl { font-size: var(--text-base); color:#333; }
+                .item-preuve { font-size: var(--text-sm); color:var(--text-muted, #666); margin-top:6px; }
                 .item-eval { flex:1; display:flex; flex-direction:column; gap:8px; }
                 .item-eval .it-type { padding:8px; border-radius:4px; border:1px solid #ccc; font-weight:bold; }
                 .item-eval .it-constat { min-height:70px; padding:8px; border-radius:4px; border:1px solid #ccc; resize:vertical; font-family:inherit; }
                 @media (max-width: 720px) { .item-row { flex-direction:column; } }
-                .audit-kpi-row { display:flex; gap:16px; flex-wrap:wrap; align-items:center; font-size:0.9rem; padding:10px; background:#f8f9fa; border-radius:4px; }
+                .audit-kpi-row { display:flex; gap:16px; flex-wrap:wrap; align-items:center; font-size: var(--text-base); padding:10px; background:#f8f9fa; border-radius:4px; }
                 .audit-kpi-row .k-ok { color:#2e7d32; font-weight:bold; }
                 .audit-kpi-row .k-nc { color:#d32f2f; font-weight:bold; }
                 .audit-kpi-row .k-na { color:#757575; }
@@ -170,7 +170,7 @@ const AuditsModule = (() => {
     function renderTabContent(audits, revues) {
         if (currentTab === "audits") {
             return `
-                <div class="synthese-message info" style="font-size:0.9rem; padding:10px;">
+                <div class="synthese-message info" style="font-size: var(--text-base); padding:10px;">
                     <strong>ISO 27001 - Clause 9.2 :</strong> Planifiez et réalisez vos audits internes pour vérifier que le SMSI est conforme aux exigences de l'entreprise et à la norme.
                 </div>
                 <table class="data-table">
@@ -185,7 +185,7 @@ const AuditsModule = (() => {
                                 <td><strong>${escapeHtml(a.ref)}</strong></td>
                                 <td>${a.date ? new Date(a.date).toLocaleDateString('fr-FR') : "-"}</td>
                                 <td>${escapeHtml(a.perimetre) || "-"}</td>
-                                <td>${escapeHtml(cov.ref)}${cov.txt ? `<br><span style="color:var(--text-muted); font-size:0.8rem;">${escapeHtml(cov.txt)}</span>` : ""}</td>
+                                <td>${escapeHtml(cov.ref)}${cov.txt ? `<br><span style="color:var(--text-muted); font-size: var(--text-sm);">${escapeHtml(cov.txt)}</span>` : ""}</td>
                                 <td>${escapeHtml(a.auditeur) || "-"}</td>
                                 <td><span class="status ${a.statut === 'Réalisé' ? 'status-conforme' : 'status-non-conforme'}">${escapeHtml(a.statut)}</span></td>
                             </tr>
@@ -197,7 +197,7 @@ const AuditsModule = (() => {
 
         if (currentTab === "revues") {
             return `
-                <div class="synthese-message info" style="font-size:0.9rem; padding:10px;">
+                <div class="synthese-message info" style="font-size: var(--text-base); padding:10px;">
                     <strong>ISO 27001 - Clause 9.3 :</strong> La direction doit revoir le SMSI à des intervalles planifiés pour s'assurer qu'il demeure pertinent, adéquat et efficace.
                 </div>
                 <table class="data-table">
@@ -283,10 +283,10 @@ const AuditsModule = (() => {
                         <h3 style="margin:0; color:var(--primary, #E9631B);">Grille d'audit sur référentiel ${Help.tip("Génère une grille de points de contrôle détaillés (ce qu'il faut vérifier + les preuves à demander) couvrant les exigences du référentiel choisi. Évaluez chaque point : conforme, point fort, piste d'amélioration ou non-conformité (mineure / majeure). La couverture et le taux de conformité se calculent automatiquement.")}</h3>
                         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                             <select id="a-refmodel" style="padding:8px; border-radius:4px; border:1px solid #ccc;">${modelOpts}</select>
-                            <button id="genGridBtn" style="background:var(--primary, #E9631B); font-size:0.85rem; padding:8px 12px;">Générer la grille</button>
+                            <button id="genGridBtn" style="background:var(--primary, #E9631B); font-size: var(--text-sm); padding:8px 12px;">Générer la grille</button>
                         </div>
                     </div>
-                    <p style="font-size:0.82rem; color:var(--text-muted); margin:0 0 12px;">Choisissez un référentiel puis générez une grille de contrôles prête à l'emploi. Vous pouvez compléter par des constats libres ci-dessous.</p>
+                    <p style="font-size: var(--text-sm); color:var(--text-muted); margin:0 0 12px;">Choisissez un référentiel puis générez une grille de contrôles prête à l'emploi. Vous pouvez compléter par des constats libres ci-dessous.</p>
                     <div id="audit-kpi"></div>
                     <div id="items-container" style="margin-top:10px;"></div>
                 </div>
@@ -294,7 +294,7 @@ const AuditsModule = (() => {
                 <div class="dashboard-card no-print" style="margin-top: 20px; border-top: 4px solid #784bd1;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                         <h3 style="margin:0; color:#784bd1;">Constats libres (hors grille) ${Help.tip("Résultats d'audit non rattachés à un point de la grille, classés par gravité : Point fort (bonne pratique), Piste d'amélioration, Non-conformité Mineure (écart isolé) et Non-conformité Majeure (défaillance systémique exigeant une action corrective).")}</h3>
-                        <button id="addConstatBtn" style="background:#784bd1; font-size:0.8rem; padding:5px 10px;">Ajouter un constat</button>
+                        <button id="addConstatBtn" style="background:#784bd1; font-size: var(--text-sm); padding:5px 10px;">Ajouter un constat</button>
                     </div>
                     <div id="constats-container"></div>
                 </div>
@@ -399,7 +399,7 @@ const AuditsModule = (() => {
                     </div>
                     <textarea class="c-desc" placeholder="Description du constat / Preuve d'audit..." style="min-height:60px;">${escapeHtml(c.desc||'')}</textarea>
                 </div>
-                <button type="button" class="constat-del" style="background:none; color:red; border:none; font-size:1.5rem; cursor:pointer;" title="Supprimer" aria-label="Supprimer ce constat"></button>
+                <button type="button" class="constat-del" style="background:none; color:red; border:none; font-size: var(--text-xl); cursor:pointer;" title="Supprimer" aria-label="Supprimer ce constat"></button>
             </div>
         `).join("") || `<p style="text-align:center; color:gray; padding:20px;">Aucun constat saisi.</p>`;
 
@@ -516,13 +516,13 @@ const AuditsModule = (() => {
 
                     <div class="form-group" style="margin-top:20px;">
                         <label style="color:#1565c0; font-weight:bold;">Données d'entrée (Sujets abordés / ISO 27001 - 9.3.2)</label>
-                        <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0;">Résumez les éléments présentés à la direction.</p>
+                        <p style="font-size: var(--text-sm); color:var(--text-muted); margin-top:0;">Résumez les éléments présentés à la direction.</p>
                         <textarea id="r-inputs" style="min-height:150px;">${escapeHtml(editingItem.inputs)}</textarea>
                     </div>
 
                     <div class="form-group" style="margin-top:20px;">
                         <label style="color:#2e7d32; font-weight:bold;">Données de sortie (Décisions & Budgets / ISO 27001 - 9.3.3)</label>
-                        <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0;">Décisions relatives à l'amélioration continue, modifications du SMSI et besoins en ressources.</p>
+                        <p style="font-size: var(--text-sm); color:var(--text-muted); margin-top:0;">Décisions relatives à l'amélioration continue, modifications du SMSI et besoins en ressources.</p>
                         <textarea id="r-outputs" style="min-height:150px;">${escapeHtml(editingItem.outputs)}</textarea>
                     </div>
                 </div>
@@ -587,7 +587,7 @@ const AuditsModule = (() => {
 
         const summary = `
             <h3 style="color:#0073ea; border-bottom:1px solid #eee; padding-bottom:5px;">Grille d'audit${refName ? " — " + escapeHtml(refName) : ""}</h3>
-            <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:0.85rem;">
+            <table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size: var(--text-sm);">
                 <tr>
                     <td style="padding:8px; border:1px solid #ddd; background:#f8f9fa;"><strong>${s.evalues}/${s.total}</strong> points évalués</td>
                     <td style="padding:8px; border:1px solid #ddd;">Conformes : <strong>${s.conformes}</strong></td>
@@ -610,7 +610,7 @@ const AuditsModule = (() => {
                 <tr>
                     <td style="padding:8px; border:1px solid #ddd; vertical-align:top; width:40%;">
                         <strong>${escapeHtml(it.code)} — ${escapeHtml(it.intitule)}</strong>
-                        <div style="color:#555; font-size:0.82rem; margin-top:4px;">${escapeHtml(it.ctrl)}</div>
+                        <div style="color:#555; font-size: var(--text-sm); margin-top:4px;">${escapeHtml(it.ctrl)}</div>
                     </td>
                     <td style="padding:8px; border:1px solid #ddd; vertical-align:top; width:15%;">${badge}</td>
                     <td style="padding:8px; border:1px solid #ddd; vertical-align:top; width:45%;">${escapeHtml(it.constat || "").replace(/\n/g, "<br>") || "<span style='color:#999;'>—</span>"}</td>
@@ -618,7 +618,7 @@ const AuditsModule = (() => {
         });
 
         return summary + `
-            <table style="width:100%; border-collapse:collapse; font-size:0.85rem; margin-bottom:30px;">
+            <table style="width:100%; border-collapse:collapse; font-size: var(--text-sm); margin-bottom:30px;">
                 <thead><tr style="background:#f8f9fa;">
                     <th style="padding:8px; border:1px solid #ddd; text-align:left;">Point de contrôle</th>
                     <th style="padding:8px; border:1px solid #ddd; text-align:left;">Constat</th>
@@ -655,10 +655,10 @@ const AuditsModule = (() => {
         content.innerHTML = `
             <div style="border-bottom: 2px solid #0073ea; padding-bottom: 15px; margin-bottom: 30px; display:flex; justify-content:space-between; align-items:flex-end;">
                 <div>
-                    <h1 style="margin:0; color:#333; font-size:2rem;">RAPPORT D'AUDIT INTERNE</h1>
+                    <h1 style="margin:0; color:#333; font-size: var(--text-3xl);">RAPPORT D'AUDIT INTERNE</h1>
                     <h3 style="margin:5px 0 0 0; color:#666;">Réf : ${escapeHtml(editingItem.ref)}</h3>
                 </div>
-                <div style="text-align:right; font-size:0.9rem; color:#666;">
+                <div style="text-align:right; font-size: var(--text-base); color:#666;">
                     Date : ${editingItem.date ? new Date(editingItem.date).toLocaleDateString('fr-FR') : "Non définie"}<br>
                     Statut : <strong>${escapeHtml(editingItem.statut)}</strong>
                 </div>
@@ -686,7 +686,7 @@ const AuditsModule = (() => {
 
             ${editingItem.constats && editingItem.constats.length ? `
             <h3 style="color:#784bd1; border-bottom:1px solid #eee; padding-bottom:5px;">Constats libres (hors grille)</h3>
-            <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+            <table style="width:100%; border-collapse:collapse; font-size: var(--text-base);">
                 <thead>
                     <tr style="background:#f8f9fa;">
                         <th style="padding:10px; border:1px solid #ddd; text-align:left;">Typologie</th>
@@ -718,10 +718,10 @@ const AuditsModule = (() => {
         content.innerHTML = `
             <div style="border-bottom: 2px solid #784bd1; padding-bottom: 15px; margin-bottom: 30px; display:flex; justify-content:space-between; align-items:flex-end;">
                 <div>
-                    <h1 style="margin:0; color:#333; font-size:2rem;">PROCÈS-VERBAL</h1>
+                    <h1 style="margin:0; color:#333; font-size: var(--text-3xl);">PROCÈS-VERBAL</h1>
                     <h2 style="margin:5px 0 0 0; color:#666;">Revue de Direction du SMSI</h2>
                 </div>
-                <div style="text-align:right; font-size:0.9rem; color:#666;">
+                <div style="text-align:right; font-size: var(--text-base); color:#666;">
                     Date de la réunion : <strong>${editingItem.date ? new Date(editingItem.date).toLocaleDateString('fr-FR') : "Non définie"}</strong>
                 </div>
             </div>

@@ -226,16 +226,15 @@ const MatriceModule = (() => {
 
         app.innerHTML = `
             <section class="page">
-                <div class="dashboard-header no-print">
-                    <div>
-                        <h1>Matrice de Criticité (Bulle de compte) ${Help.tip("Cartographie EBIOS croisant la Fréquence (probabilité) et la Gravité (impact) des risques. Chaque bulle compte les scénarios d'une case ; le coin en haut à droite (fréquent × grave) concentre les risques prioritaires.")}</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (SI global)</strong> - Méthode Brute (FxG)</p>
-                    </div>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <button type="button" id="matrixExportPngBtn" title="Télécharger la matrice au format image PNG">Exporter en PNG</button>
-                        <button type="button" id="matrixExportSvgBtn" style="background: var(--bg-body); color: var(--text-main); border: 1px solid var(--border);" title="Télécharger la matrice au format vectoriel SVG">Exporter en SVG</button>
-                    </div>
-                </div>
+                ${UI.enteteHtml({
+                    titre: "Matrice F×G",
+                    aide: Help.tip("Cartographie EBIOS croisant la Fréquence (probabilité) et la Gravité (impact) des risques. Chaque bulle compte les scénarios d'une case ; le coin en haut à droite (fréquent × grave) concentre les risques prioritaires."),
+                    contexte: "Périmètre interne (SI global) — cotation brute, fréquence × gravité.",
+                    onglets: UI.ongletsDe("/matrice"),
+                    actions:
+                        `<button type="button" id="matrixExportPngBtn" title="Télécharger la matrice au format image PNG">Exporter en PNG</button>` +
+                        `<button type="button" id="matrixExportSvgBtn" class="btn-secondary" title="Télécharger la matrice au format vectoriel SVG">Exporter en SVG</button>`
+                })}
 
                 ${incoherents.length ? `
                 <div class="synthese-message warning no-print" role="alert" style="padding: 1rem 1.25rem;">
@@ -249,13 +248,13 @@ const MatriceModule = (() => {
                     </ul>
                 </div>` : ""}
 
-                <details class="synthese-message info no-print" style="font-size: 0.9rem; padding: 10px; cursor: pointer; outline: none; transition: all 0.3s ease;">
+                <details class="synthese-message info no-print" style="font-size: var(--text-base); padding: 10px; cursor: pointer; outline: none; transition: all 0.3s ease;">
                     <summary style="font-weight: bold; outline: none;">
                         Cette matrice cartographie <strong>${risques.length} scénario(s)</strong>. Cliquez sur une case pour le détail, ou déroulez ici pour voir le <strong>Guide de Cotation EBIOS</strong>.
                     </summary>
                     <div style="margin-top: 15px; border-top: 1px dashed var(--border); padding-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; cursor: default;">
                         <div>
-                            <strong style="color: var(--text-main); font-size: 1rem;">Fréquence d'exposition (Probabilité) :</strong>
+                            <strong style="color: var(--text-main); font-size: var(--text-md);">Fréquence d'exposition (Probabilité) :</strong>
                             <ul style="margin: 8px 0 0 20px; padding: 0; color: var(--text-muted); line-height: 1.5;">
                                 <li><strong>1 - Rare :</strong> Incident très peu probable (~1 fois tous les 3 à 5 ans).</li>
                                 <li><strong>2 - Peu fréquent :</strong> Incident possible (~1 fois par an).</li>
@@ -264,7 +263,7 @@ const MatriceModule = (() => {
                             </ul>
                         </div>
                         <div>
-                            <strong style="color: var(--text-main); font-size: 1rem;">Gravité (Impact sur l'entreprise) :</strong>
+                            <strong style="color: var(--text-main); font-size: var(--text-md);">Gravité (Impact sur l'entreprise) :</strong>
                             <ul style="margin: 8px 0 0 20px; padding: 0; color: var(--text-muted); line-height: 1.5;">
                                 <li><strong>1 - Très faible :</strong> Impact négligeable, gérable rapidement en interne.</li>
                                 <li><strong>2 - Modéré :</strong> Perturbation limitée des activités, surmontable.</li>
@@ -279,12 +278,12 @@ const MatriceModule = (() => {
 
                     <div class="dashboard-card" style="overflow-x: auto; padding: 1.5rem;">
 
-                        <div style="display: flex; justify-content: center; margin-bottom: 15px; font-weight: bold; font-size: 1.1rem; color: var(--primary); text-transform: uppercase; letter-spacing: 1px;">
+                        <div style="display: flex; justify-content: center; margin-bottom: 15px; font-weight: bold; font-size: var(--text-lg); color: var(--primary); text-transform: uppercase; letter-spacing: 1px;">
                             Fréquence d'exposition →
                         </div>
 
                         <div style="display: flex;">
-                            <div style="writing-mode: vertical-rl; transform: rotate(180deg); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; padding-right: 15px;">
+                            <div style="writing-mode: vertical-rl; transform: rotate(180deg); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: var(--text-lg); color: var(--primary); text-transform: uppercase; letter-spacing: 1px; padding-right: 15px;">
                                 Gravité (Impact) →
                             </div>
 
@@ -305,7 +304,7 @@ const MatriceModule = (() => {
                     <div id="matrix-detail-panel" class="dashboard-card detail-panel" style="display: none;">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--primary); padding-bottom: 10px; margin-bottom: 15px;">
                             <h3 id="detail-title" style="margin:0;">Liste des risques</h3>
-                            <button type="button" id="matrixCloseDetailBtn" style="padding: 2px 8px; font-size: 0.8rem; background: var(--bg-body); color: #333; border: 1px solid var(--border);">Fermer X</button>
+                            <button type="button" id="matrixCloseDetailBtn" style="padding: 2px 8px; font-size: var(--text-sm); background: var(--bg-body); color: #333; border: 1px solid var(--border);">Fermer X</button>
                         </div>
                         <ul id="detail-list" class="detail-risk-list">
                             </ul>
@@ -335,7 +334,7 @@ const MatriceModule = (() => {
                     color: #000;
                     border-radius: 50%;
                     display: flex; align-items: center; justify-content: center;
-                    font-size: 1.8rem; font-weight: bold;
+                    font-size: var(--text-2xl); font-weight: bold;
                     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
                     border: 2px solid #fff;
                     transition: transform 0.1s;
@@ -347,7 +346,7 @@ const MatriceModule = (() => {
                 .detail-risk-item { padding: 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
                 .detail-risk-item:hover { background-color: #f8f9fa; }
                 .detail-risk-item strong { display: block; margin-bottom: 3px; color: var(--text-main); }
-                .detail-risk-item span { font-size: 0.8rem; color: var(--text-muted); }
+                .detail-risk-item span { font-size: var(--text-sm); color: var(--text-muted); }
 
                 .matrix-axis { color: white; }
                 .axis-x { background: #555; }
@@ -388,7 +387,7 @@ const MatriceModule = (() => {
         const title = document.getElementById("detail-title");
         const list = document.getElementById("detail-list");
 
-        title.innerHTML = `Risques pour Gravité ${g} / Fréquence ${f} <span style="font-weight: normal; color: #666; font-size: 0.9rem;">(${cellRisks.length} scénarios)</span>`;
+        title.innerHTML = `Risques pour Gravité ${g} / Fréquence ${f} <span style="font-weight: normal; color: #666; font-size: var(--text-base);">(${cellRisks.length} scénarios)</span>`;
 
         const esc = window.escapeHtml || (v => String(v == null ? "" : v));
         list.innerHTML = cellRisks.map(r => `

@@ -85,7 +85,7 @@ const MesuresModule = (() => {
                     <button id="addMesureBtn" style="background:var(--primary);">Nouvelle mesure</button>
                 </div>
 
-                <div class="synthese-message info" style="padding:10px; font-size:0.9rem;">
+                <div class="synthese-message info" style="padding:10px; font-size: var(--text-base);">
                     <strong>Principe du pivot :</strong> évaluez une mesure une seule fois, puis <em>propagez</em> son statut à toutes les exigences de référentiels qu'elle couvre. La liaison se crée depuis le <strong>Détail</strong> d'une exigence, dans un référentiel.
                 </div>
 
@@ -171,15 +171,15 @@ const MesuresModule = (() => {
             ? `<ul class="ref-actions-list">${actions.map(a => `
                     <li>
                         <a href="#/actions/${a.id}" style="color:var(--accent);">${escapeHtml(a.titre)}</a>
-                        ${a.priorite ? `<span style="color:var(--text-muted); font-size:0.8rem; margin-left:6px;">${escapeHtml(a.priorite)}</span>` : ""}
+                        ${a.priorite ? `<span style="color:var(--text-muted); font-size: var(--text-sm); margin-left:6px;">${escapeHtml(a.priorite)}</span>` : ""}
                         <span class="status ${statutClassForAction(a.statut)}" style="margin-left:8px;">${escapeHtml(a.statut)}</span>
-                        ${a.echeance ? `<span style="color:var(--text-muted); font-size:0.8rem; margin-left:6px;">échéance ${new Date(a.echeance + "T00:00:00").toLocaleDateString('fr-FR')}</span>` : ""}
+                        ${a.echeance ? `<span style="color:var(--text-muted); font-size: var(--text-sm); margin-left:6px;">échéance ${new Date(a.echeance + "T00:00:00").toLocaleDateString('fr-FR')}</span>` : ""}
                     </li>`).join("")}</ul>`
-            : `<p style="color:var(--text-muted); font-size:0.9rem; margin:4px 0;">Aucune action de remédiation planifiée pour cette mesure.</p>`;
+            : `<p style="color:var(--text-muted); font-size: var(--text-base); margin:4px 0;">Aucune action de remédiation planifiée pour cette mesure.</p>`;
         return `
             <div class="ref-actions-head">
                 <strong>Plan d'action ${Help.tip("Planifiez ici les actions de remédiation de cette mesure. Elles apparaissent dans le plan d'actions global, tracées jusqu'à cette mesure — et couvrent d'un coup toutes les exigences qu'elle porte.")}</strong>
-                <button id="mesAddAction" style="font-size:0.85rem;">Planifier une action</button>
+                <button id="mesAddAction" style="font-size: var(--text-sm);">Planifier une action</button>
             </div>
             ${list}
             <form id="mesActionForm" hidden style="margin-top:10px;">
@@ -287,7 +287,7 @@ const MesuresModule = (() => {
 
                     <div class="dashboard-card">
                         <h3 style="margin-top:0;">Propagation ${Help.tip("Recalcule le statut et la maturité des exigences couvertes, au plus défavorable de TOUTES leurs mesures (une exigence n'est conforme que si toutes ses mesures le sont). Cœur du « zéro double saisie ».")}</h3>
-                        <p style="font-size:0.85rem; color:var(--text-muted);">Recalcule les <strong>${cov.length}</strong> exigence(s) couverte(s) « au plus défavorable » de leurs mesures (une exigence peut être couverte par plusieurs mesures).</p>
+                        <p style="font-size: var(--text-sm); color:var(--text-muted);">Recalcule les <strong>${cov.length}</strong> exigence(s) couverte(s) « au plus défavorable » de leurs mesures (une exigence peut être couverte par plusieurs mesures).</p>
                         <button id="propagateBtn" style="width:100%; justify-content:center; background:var(--accent);" ${cov.length === 0 ? "disabled title='Aucune exigence liée'" : ""}>Propager aux exigences liées</button>
                     </div>
                 </div>

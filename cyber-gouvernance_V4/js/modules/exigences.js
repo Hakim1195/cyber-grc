@@ -33,7 +33,7 @@ const ExigencesModule = (() => {
                     </span>
                 </td>
                 <td>${escapeHtml(e.responsable) || "-"}</td>
-                ${currentClient === "global" ? `<td style="font-size:0.8rem; color:var(--text-muted);">${e.client_id ? escapeHtml(clients.find(c => c.id === e.client_id)?.nom || t("commun.inconnu")) : escapeHtml(t("commun.interne"))}</td>` : ""}
+                ${currentClient === "global" ? `<td style="font-size: var(--text-sm); color:var(--text-muted);">${e.client_id ? escapeHtml(clients.find(c => c.id === e.client_id)?.nom || t("commun.inconnu")) : escapeHtml(t("commun.interne"))}</td>` : ""}
             </tr>
         `).join("");
 
@@ -273,13 +273,13 @@ const ExigencesModule = (() => {
                         <div class="dashboard-card">
                             <h3>${t("exigences.actionsLiees")}</h3>
                             <ul style="margin-bottom: 15px;">${actionsHtml || `<li><span style='color: var(--text-muted);'>${t("exigences.aucuneActionPlanifiee")}</span></li>`}</ul>
-                            <button id="addActionBtn" style="font-size: 0.85rem;">${t("exigences.planifierAction")}</button>
+                            <button id="addActionBtn" style="font-size: var(--text-sm);">${t("exigences.planifierAction")}</button>
                         </div>
 
                         <div class="dashboard-card">
                             <h3>${t("exigences.risquesLies")}</h3>
                             <ul>${risquesHtml || `<li><span style='color: var(--text-muted);'>${t("exigences.aucunRisqueAssocie")}</span></li>`}</ul>
-                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 10px;"><em>${t("exigences.associationDepuisRisque")}</em></p>
+                            <p style="font-size: var(--text-sm); color: var(--text-muted); margin-top: 10px;"><em>${t("exigences.associationDepuisRisque")}</em></p>
                         </div>
                     </div>
                 </div>

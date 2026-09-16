@@ -33,8 +33,8 @@ const PraScenariosModule = (() => {
                         return `
                         <div class="dashboard-card clickable-row" data-id="${s.id}" style="cursor:pointer; border-left: 4px solid var(--primary);">
                             <h3>${escapeHtml(s.nom)}</h3>
-                            <p style="font-size:0.85rem; color:var(--text-muted); margin: 10px 0;">${escapeHtml(s.description) || 'Pas de description'}</p>
-                            <div style="font-size:0.8rem; background:#f8f9fa; padding:10px; border-radius:4px;">
+                            <p style="font-size: var(--text-sm); color:var(--text-muted); margin: 10px 0;">${escapeHtml(s.description) || 'Pas de description'}</p>
+                            <div style="font-size: var(--text-sm); background:#f8f9fa; padding:10px; border-radius:4px;">
                                 <div style="margin-bottom:5px;"><strong>PCA :</strong> ${s.etapes_pca?.length || 0} étapes</div>
                                 <div><strong>PRA :</strong> ${s.etapes_pra?.length || 0} étapes
                                 <span style="float:right; color:var(--primary); font-weight:bold;">${rtoAffiche}</span></div>
@@ -56,7 +56,7 @@ const PraScenariosModule = (() => {
                     display: inline-block;
                     width: 28px; height: 28px; line-height: 28px;
                     border-radius: 4px; color: white; font-weight: bold;
-                    font-size: 0.8rem; text-align: center;
+                    font-size: var(--text-sm); text-align: center;
                 }
                 .raci-r { background-color: #0073ea; } /* Blue Monday */
                 .raci-a { background-color: #784bd1; } /* Purple Monday */
@@ -64,7 +64,7 @@ const PraScenariosModule = (() => {
                 .raci-i { background-color: #00ca72; } /* Green Monday */
 
                 .raci-table { width: 100%; border-collapse: separate; border-spacing: 0 4px; }
-                .raci-table th { padding: 12px; text-transform: uppercase; font-size: 0.75rem; color: #676879; letter-spacing: 1px; border-bottom: 2px solid #e6e9ef; }
+                .raci-table th { padding: 12px; text-transform: uppercase; font-size: var(--text-xs); color: #676879; letter-spacing: 1px; border-bottom: 2px solid #e6e9ef; }
                 .raci-table td { padding: 12px; background: white; border-bottom: 1px solid #e6e9ef; }
                 .raci-table tr:hover td { background: #f5f6f8; }
 
@@ -139,7 +139,7 @@ const PraScenariosModule = (() => {
                     <div class="dashboard-card" style="border-top:4px solid var(--color-success);">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                             <h3 style="margin:0; color:var(--color-success);">Continuité (PCA) ${Help.tip("Plan de Continuité d'Activité : mesures pour MAINTENIR les activités essentielles pendant un sinistre (solutions de repli, modes dégradés), afin de ne pas tout arrêter.")}</h3>
-                            <button id="addStepPca" style="background:var(--color-success); font-size:0.8rem; padding:5px 10px;">Étape</button>
+                            <button id="addStepPca" style="background:var(--color-success); font-size: var(--text-sm); padding:5px 10px;">Étape</button>
                         </div>
                         <div id="pca-list-container"></div>
                     </div>
@@ -147,7 +147,7 @@ const PraScenariosModule = (() => {
                     <div class="dashboard-card" style="border-top:4px solid var(--color-info);">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                             <h3 style="margin:0; color:var(--color-info);">Reprise (PRA) ${Help.tip("Plan de Reprise d'Activité : procédures pour REDÉMARRER le système d'information après un sinistre (restauration, bascule), en respectant les objectifs RTO/RPO.")}</h3>
-                            <button id="addStepPra" style="background:var(--color-info); font-size:0.8rem; padding:5px 10px;">Étape</button>
+                            <button id="addStepPra" style="background:var(--color-info); font-size: var(--text-sm); padding:5px 10px;">Étape</button>
                         </div>
                         <div id="rto-banner" style="background:white; padding:10px; border-radius:4px; margin-bottom:15px; text-align:center; font-weight:bold; border: 1px dashed var(--color-info); color:var(--color-info);">
                             RTO Estimé : <span id="rto-total">0h 0min</span>
@@ -174,8 +174,8 @@ const PraScenariosModule = (() => {
 
                 <div id="raci-modal" class="raci-modal-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:white; z-index:2000; overflow-y:auto; padding:40px;">
                     <div class="no-print" style="display:flex; justify-content:space-between; margin-bottom:30px; max-width: 1300px; margin: 0 auto 30px auto; border-bottom: 2px solid #e6e9ef; padding-bottom: 15px;">
-                        <button id="closeRaciBtn" style="background:#676879; padding:10px 20px; font-size:1rem;">Retour au Scénario</button>
-                        <button type="button" id="printRaciBtn" style="background:#0073ea; padding:10px 20px; font-size:1rem;">Imprimer la Matrice RACI</button>
+                        <button id="closeRaciBtn" style="background:#676879; padding:10px 20px; font-size: var(--text-md);">Retour au Scénario</button>
+                        <button type="button" id="printRaciBtn" style="background:#0073ea; padding:10px 20px; font-size: var(--text-md);">Imprimer la Matrice RACI</button>
                     </div>
                     <div id="raci-content" style="max-width: 1300px; margin: 0 auto;"></div>
                 </div>
@@ -254,8 +254,8 @@ const PraScenariosModule = (() => {
 
         raciContent.innerHTML = `
             <div style="text-align:left; margin-bottom: 40px; border-left: 5px solid #784bd1; padding-left: 20px;">
-                <h1 style="font-size:2.5rem; margin-bottom:5px; color:#333;">Matrice des Responsabilités (RACI)</h1>
-                <p style="font-size:1.1rem; color:#676879;">Scénario : <strong>${escapeHtml(editingScenario.nom)}</strong></p>
+                <h1 style="font-size: var(--text-3xl); margin-bottom:5px; color:#333;">Matrice des Responsabilités (RACI)</h1>
+                <p style="font-size: var(--text-lg); color:#676879;">Scénario : <strong>${escapeHtml(editingScenario.nom)}</strong></p>
             </div>
 
             <table class="raci-table">
@@ -298,15 +298,15 @@ const PraScenariosModule = (() => {
             return steps.map((s, idx) => `
                 <div class="step-row" style="display:flex; align-items:center; justify-content:space-between; padding:12px; border:1px solid #eee; margin-bottom:8px; border-radius:4px; background:#fff; cursor:pointer;" data-step-idx="${idx}" data-step-type="${escapeHtml(type)}">
                     <div style="flex:1;">
-                        <div style="font-weight:bold; font-size:0.95rem;">${escapeHtml(s.titre) || 'Nouvelle étape'}</div>
-                        <div style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">R: ${escapeHtml(s.realisateur) || '-'} | A: ${escapeHtml(s.responsable) || '-'} | ${escapeHtml(s.duree || 0)} min</div>
+                        <div style="font-weight:bold; font-size: var(--text-base);">${escapeHtml(s.titre) || 'Nouvelle étape'}</div>
+                        <div style="font-size: var(--text-sm); color:var(--text-muted); margin-top:4px;">R: ${escapeHtml(s.realisateur) || '-'} | A: ${escapeHtml(s.responsable) || '-'} | ${escapeHtml(s.duree || 0)} min</div>
                     </div>
                     <div style="display:flex; gap:12px; align-items:center;">
-                         <span class="status" style="font-size:0.7rem; padding:3px 8px; background:#f1f3f5;">${escapeHtml(s.statut)}</span>
-                         <button type="button" class="step-del" style="background:none; color:var(--color-danger); border:none; font-size:1.1rem; padding:5px;" title="Supprimer l'étape" aria-label="Supprimer l'étape"></button>
+                         <span class="status" style="font-size: var(--text-xs); padding:3px 8px; background:#f1f3f5;">${escapeHtml(s.statut)}</span>
+                         <button type="button" class="step-del" style="background:none; color:var(--color-danger); border:none; font-size: var(--text-lg); padding:5px;" title="Supprimer l'étape" aria-label="Supprimer l'étape"></button>
                     </div>
                 </div>
-            `).join("") || `<p style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:15px; background:#f9f9f9;">Aucune étape.</p>`;
+            `).join("") || `<p style="color:var(--text-muted); font-size: var(--text-sm); text-align:center; padding:15px; background:#f9f9f9;">Aucune étape.</p>`;
         };
 
         pcaCont.innerHTML = renderItems(editingScenario.etapes_pca, 'pca');
@@ -346,10 +346,10 @@ const PraScenariosModule = (() => {
             <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 15px;">
                 <h4 style="margin-top:0; margin-bottom: 15px; color: #784bd1;">Matrice RACI</h4>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
-                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-r" style="width:18px;height:18px;line-height:18px;font-size:0.6rem;margin-right:5px;">R</span> Réalisateur</label><input id="m-real" value="${escapeHtml(step.realisateur||'')}" /></div>
-                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-a" style="width:18px;height:18px;line-height:18px;font-size:0.6rem;margin-right:5px;">A</span> Approbateur</label><input id="m-resp" value="${escapeHtml(step.responsable||'')}" /></div>
-                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-c" style="width:18px;height:18px;line-height:18px;font-size:0.6rem;margin-right:5px;color:#333;">C</span> Consulté</label><input id="m-consulte" value="${escapeHtml(step.consulte||'')}" /></div>
-                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-i" style="width:18px;height:18px;line-height:18px;font-size:0.6rem;margin-right:5px;">I</span> Informé</label><input id="m-informe" value="${escapeHtml(step.informe||'')}" /></div>
+                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-r" style="width:18px;height:18px;line-height:18px;font-size: var(--text-xs);margin-right:5px;">R</span> Réalisateur</label><input id="m-real" value="${escapeHtml(step.realisateur||'')}" /></div>
+                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-a" style="width:18px;height:18px;line-height:18px;font-size: var(--text-xs);margin-right:5px;">A</span> Approbateur</label><input id="m-resp" value="${escapeHtml(step.responsable||'')}" /></div>
+                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-c" style="width:18px;height:18px;line-height:18px;font-size: var(--text-xs);margin-right:5px;color:#333;">C</span> Consulté</label><input id="m-consulte" value="${escapeHtml(step.consulte||'')}" /></div>
+                    <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-i" style="width:18px;height:18px;line-height:18px;font-size: var(--text-xs);margin-right:5px;">I</span> Informé</label><input id="m-informe" value="${escapeHtml(step.informe||'')}" /></div>
                 </div>
             </div>
 

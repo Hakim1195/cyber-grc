@@ -101,6 +101,15 @@
     --text-lg:   1.125rem;  /* 18 px — titres de carte */
     --text-xl:   1.375rem;  /* 22 px — titres d'écran */
     --text-2xl:  1.75rem;   /* 28 px — chiffres clés */
+    /* ── Les deux tailles d'AFFICHAGE, posées le 16/09 ────────────────────
+       Elles ne servent pas au corps de texte mais aux nombres qu'on lit de
+       loin : la tuile d'un tableau de bord, le taux d'une synthèse. Elles
+       existent parce que les modules en portaient CINQ valeurs différentes —
+       2, 2.2, 2.4, 2.5 et 4 rem — pour ce qui est le même geste de lecture,
+       et qu'un tableau de bord dont les chiffres n'ont pas la même taille se
+       lit comme un brouillon. */
+    --text-3xl:  2.25rem;   /* 36 px — chiffre clé d'une tuile */
+    --text-4xl:  3rem;      /* 48 px — chiffre unique d'un écran de synthèse */
 
     /* Interlignes. 1.5 au corps est le plancher de lisibilité ; les titres se
        resserrent, sans quoi ils flottent. */

@@ -128,7 +128,7 @@ const DocumentsModule = (() => {
             const r = revueState(d.date_revue);
             return `<tr class="clickable-row" data-id="${d.id}">
                 <td><strong>${escapeHtml(d.titre)}</strong>${etiquettesHtml(d)}</td>
-                <td style="font-size:0.85rem;">${escapeHtml(d.type || "—")}</td>
+                <td style="font-size: var(--text-sm);">${escapeHtml(d.type || "—")}</td>
                 <td style="text-align:center;">${escapeHtml(d.version || "—")}</td>
                 <td>${diffusionBadge(d)}${d.donnees_personnelles
                     ? ` <span class="marqueur-dp" title="Ce document contient des données personnelles.">DP</span>` : ""}</td>
@@ -141,14 +141,14 @@ const DocumentsModule = (() => {
         const barreFiltres = `
             <div class="filtres-ligne no-print" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:1rem; flex-wrap:wrap;">
                 <div class="form-group" style="margin:0;">
-                    <label style="font-size:0.8rem;">Diffusion</label>
+                    <label style="font-size: var(--text-sm);">Diffusion</label>
                     <select id="filtreDiffusion">
                         <option value="">Tous les niveaux</option>
                         ${CONFIDENTIALITES.map(c => `<option value="${escapeHtml(c[0])}" ${c[0] === filtreDiffusion ? "selected" : ""}>${escapeHtml(c[1])}</option>`).join("")}
                     </select>
                 </div>
                 <div class="form-group" style="margin:0;">
-                    <label style="font-size:0.8rem;">Étiquette</label>
+                    <label style="font-size: var(--text-sm);">Étiquette</label>
                     <select id="filtreEtiquette">
                         <option value="">Toutes</option>
                         ${etiquettesConnues.map(e => `<option value="${escapeHtml(e)}" ${e === filtreEtiquette ? "selected" : ""}>${escapeHtml(e)}</option>`).join("")}
@@ -178,9 +178,9 @@ const DocumentsModule = (() => {
                 </div>
 
                 <div class="dashboard-grid" style="grid-template-columns:repeat(3,1fr); margin-bottom:1.5rem;">
-                    <div class="dashboard-card" style="text-align:center;"><h3 style="font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">Documents</h3><div class="big-kpi" style="font-size:2.4rem;">${docs.length}</div></div>
-                    <div class="dashboard-card" style="text-align:center; border-top:4px solid var(--color-success);"><h3 style="font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">En vigueur</h3><div class="big-kpi" style="font-size:2.4rem; color:var(--color-success);">${enVigueur}</div></div>
-                    <div class="dashboard-card" style="text-align:center; border-top:4px solid var(--color-warning);"><h3 style="font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">Revue à prévoir</h3><div class="big-kpi" style="font-size:2.4rem; color:var(--color-warning);">${aReviser}</div></div>
+                    <div class="dashboard-card" style="text-align:center;"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Documents</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${docs.length}</div></div>
+                    <div class="dashboard-card" style="text-align:center; border-top:4px solid var(--color-success);"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">En vigueur</h3><div class="big-kpi" style="font-size: var(--text-3xl); color:var(--color-success);">${enVigueur}</div></div>
+                    <div class="dashboard-card" style="text-align:center; border-top:4px solid var(--color-warning);"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Revue à prévoir</h3><div class="big-kpi" style="font-size: var(--text-3xl); color:var(--color-warning);">${aReviser}</div></div>
                 </div>
 
                 ${alerteExposition}
@@ -403,7 +403,7 @@ const DocumentsModule = (() => {
         const statutOpts = STATUTS.map(s => `<option value="${s}" ${s === (doc.statut || "brouillon") ? "selected" : ""}>${s.charAt(0).toUpperCase() + s.slice(1)}</option>`).join("");
         const refsHtml = refs.length
             ? `<div class="inc-actifs">${refs.map(rf => `<label class="inc-checkbox"><input type="checkbox" class="doc-ref" value="${escapeHtml(rf.id)}" ${linked.includes(rf.id) ? "checked" : ""}> ${escapeHtml(rf.editeur)}</label>`).join("")}</div>`
-            : `<p style="color:var(--text-muted); font-size:0.85rem;">Aucun référentiel chargé.</p>`;
+            : `<p style="color:var(--text-muted); font-size: var(--text-sm);">Aucun référentiel chargé.</p>`;
         return `
             <div class="form-group"><label>Titre <span style="color:red">*</span></label><input id="titre" value="${escapeHtml(doc.titre || "")}" placeholder="Ex : Politique de sécurité du SI (PSSI)" /></div>
             <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:15px;">
@@ -458,7 +458,7 @@ const DocumentsModule = (() => {
             </fieldset>
             <div class="form-group">
                 <label>Plan / notes ${Help.tip("Sommaire ou notes. Utilisez un modèle pour partir d'un plan type.")}
-                    <select id="canevas" style="margin-left:8px; font-size:0.8rem; padding:2px 6px;"><option value="">— Modèle de plan —</option>${Object.keys(CANEVAS).map(k => `<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`).join("")}</select>
+                    <select id="canevas" style="margin-left:8px; font-size: var(--text-sm); padding:2px 6px;"><option value="">— Modèle de plan —</option>${Object.keys(CANEVAS).map(k => `<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`).join("")}</select>
                 </label>
                 <textarea id="notes" style="min-height:120px;">${escapeHtml(doc.notes || "")}</textarea>
             </div>`;

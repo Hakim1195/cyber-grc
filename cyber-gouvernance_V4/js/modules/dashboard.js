@@ -559,7 +559,7 @@ const DashboardModule = (() => {
             <div class="dashboard-card chart-card clickable-card dash-nav" data-route="/referentiels" style="cursor:pointer;" title="Aller aux référentiels">
                 <h3>Maturité par référentiel ${Help.tip("Niveau de maîtrise moyen (échelle CMMI 0-5) par référentiel de sécurité, calculé sur les mesures applicables auto-évaluées. Le questionnaire AirCyber, répondu en Oui/Non, affiche son score de conformité (%) et n'entre pas dans la moyenne CMMI.")}</h3>
                 <div style="display:flex; align-items:baseline; gap:8px; margin:2px 0 14px;">
-                    <span style="font-size:2rem; font-weight:bold; color:${maturiteColor(ref.global.maturite)};">${ref.global.maturite.toFixed(1)}</span>
+                    <span style="font-size: var(--text-3xl); font-weight:bold; color:${maturiteColor(ref.global.maturite)};">${ref.global.maturite.toFixed(1)}</span>
                     <span style="color:var(--text-muted);">/5 — maturité globale</span>
                 </div>
                 ${refBars}
@@ -585,7 +585,7 @@ const DashboardModule = (() => {
                         ])}
                     </div>
                     <div style="margin-top:1rem; text-align:center; padding-top:0.9rem; border-top:1px solid var(--border);">
-                        <span style="font-size:0.9rem; color:var(--text-muted);">Score d'exposition globale : <strong style="font-size:1.1rem; color:var(--text-main);">${expo.toFixed(2)}</strong></span>
+                        <span style="font-size: var(--text-base); color:var(--text-muted);">Score d'exposition globale : <strong style="font-size: var(--text-lg); color:var(--text-main);">${expo.toFixed(2)}</strong></span>
                     </div>`}
             </div>`;
 
@@ -600,11 +600,11 @@ const DashboardModule = (() => {
                     <div><strong>${actionsEnCours}</strong><span>En cours</span></div>
                     <div><strong>${actionsTerminees}</strong><span>Terminées</span></div>
                 </div>
-                <div style="margin-top:1rem; padding-top:0.9rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-size:0.85rem;">
+                <div style="margin-top:1rem; padding-top:0.9rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-size: var(--text-sm);">
                     <span style="color:var(--text-muted);">En retard</span>
                     <strong style="color:${actionsEnRetard > 0 ? "var(--color-danger)" : "var(--color-success)"};">${actionsEnRetard}</strong>
                 </div>
-                <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-top:4px;">
+                <div style="display:flex; justify-content:space-between; font-size: var(--text-sm); margin-top:4px;">
                     <span style="color:var(--text-muted);">Échéance ≤ 30 j</span>
                     <strong style="color:${soon.length > 0 ? "var(--color-warning)" : "var(--text-main)"};">${soon.length}</strong>
                 </div>
@@ -618,7 +618,7 @@ const DashboardModule = (() => {
                     const score = r.score_residuel || 0;
                     return `<li class="clickable-risk" data-id="${escapeHtml(r.id)}" style="padding:10px 4px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:10px; cursor:pointer;">
                         <strong style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;" title="${escapeHtml(r.nom)}">${escapeHtml(r.nom)}</strong>
-                        <span class="status" style="background:${getRiskColor(score)}; color:#fff; font-size:0.75rem;">${score.toFixed(2)}</span>
+                        <span class="status" style="background:${getRiskColor(score)}; color:#fff; font-size: var(--text-xs);">${score.toFixed(2)}</span>
                     </li>`;
                 }).join("")}
               </ul>`;
@@ -695,12 +695,12 @@ const DashboardModule = (() => {
                 <div class="cov-grid">
                     ${covTile(processus.length, "Processus (BIA)", `${processusCritiques} critique(s)`, "/bia", "var(--primary)")}
                     ${covTile(mesures.length, "Mesures de sécurité", `${mesuresConformes} conforme(s)`, "/mesures", "var(--primary)")}
-                    ${covTile(`${ref.global.evaluated}<small style="font-size:1rem; color:var(--text-muted);">/${ref.global.total}</small>`, "Exigences évaluées", `${ref.global.maturite.toFixed(1)}/5 maturité`, "/referentiels", "var(--accent)")}
+                    ${covTile(`${ref.global.evaluated}<small style="font-size: var(--text-md); color:var(--text-muted);">/${ref.global.total}</small>`, "Exigences évaluées", `${ref.global.maturite.toFixed(1)}/5 maturité`, "/referentiels", "var(--accent)")}
                     ${covTile(scenarios.length, "Scénarios PCA/PRA", scenarios.length ? "Plans définis" : "À définir", "/pra", "var(--accent)")}
                     ${covTile(tests.length, "Tests PRA", lastTestSub, "/tests", "var(--accent)")}
                     ${covTile(mco.length, "Actions MCO", mcoEnRetard > 0 ? `<span style="color:var(--color-danger); font-weight:600;">${mcoEnRetard} en retard</span>` : (mco.length ? "Planning tenu" : "À définir"), "/mco", mcoEnRetard > 0 ? "var(--color-danger)" : (mco.length ? "var(--color-success)" : "var(--accent)"))}
                     ${covTile(crise.length, "Cellule de crise", crise.length ? "Opérationnelle" : "À constituer", "/crise", crise.length ? "var(--color-success)" : "var(--color-warning)")}
-                    ${covTile(`${auditsRealises}<small style="font-size:1rem; color:var(--text-muted);">/${audits.length}</small>`, "Audits réalisés", constatsNC > 0 ? `<span style="color:var(--color-danger); font-weight:600;">${constatsNC} NC ouverte(s)</span>` : "Aucune NC", "/audits", "var(--primary)")}
+                    ${covTile(`${auditsRealises}<small style="font-size: var(--text-md); color:var(--text-muted);">/${audits.length}</small>`, "Audits réalisés", constatsNC > 0 ? `<span style="color:var(--color-danger); font-weight:600;">${constatsNC} NC ouverte(s)</span>` : "Aucune NC", "/audits", "var(--primary)")}
                     ${covTile(prestataires.length, "Prestataires & tiers", "Chaîne de sous-traitance", "/prestataires", "var(--accent)")}
                     ${covTile(risques.length, "Risques cartographiés", `exposition ${expo.toFixed(1)}`, "/risques", "var(--color-danger)")}
                     ${covTile(incidents.length, "Incidents", incidentsSub, "/incidents", incidentsTone)}

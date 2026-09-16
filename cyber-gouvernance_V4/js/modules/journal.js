@@ -514,9 +514,9 @@ const JournalModule = (() => {
     function styles() {
         return "<style>" +
             ".jrn-filtres { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin:14px 0 8px; }" +
-            ".jrn-filtres label { display:flex; flex-direction:column; gap:4px; font-size:0.8rem; color:var(--text-muted); }" +
-            ".jrn-filtres input, .jrn-filtres select { padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:0.85rem; }" +
-            ".jrn-table td { vertical-align:top; font-size:0.85rem; }" +
+            ".jrn-filtres label { display:flex; flex-direction:column; gap:4px; font-size: var(--text-sm); color:var(--text-muted); }" +
+            ".jrn-filtres input, .jrn-filtres select { padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size: var(--text-sm); }" +
+            ".jrn-table td { vertical-align:top; font-size: var(--text-sm); }" +
             // `.status` porte `text-transform: capitalize`, ce qui convient à des
             // statuts d'un ou deux mots (« conforme », « en retard ») et défigure
             // les libellés d'action de cette table : « Refus De Droit »,
@@ -526,19 +526,19 @@ const JournalModule = (() => {
             ".jrn-table .status, .jrn-anomalies .status { text-transform:none; }" +
             ".jrn-ligne { cursor:pointer; }" +
             ".jrn-ligne:hover { background:var(--primary-tint, #eef3fb); }" +
-            ".jrn-mono { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:0.8rem; }" +
+            ".jrn-mono { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size: var(--text-sm); }" +
             ".jrn-vide { color:var(--text-muted); }" +
             ".jrn-detail > td { background:#f8f9fa; }" +
             ".jrn-detail-grille { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }" +
-            ".jrn-bloc h4 { margin:0 0 4px; font-size:0.78rem; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); }" +
-            ".jrn-bloc pre { margin:0; padding:8px 10px; background:#fff; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:0.78rem; white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; }" +
-            ".jrn-verdict { margin:14px 0; padding:12px 14px; border-radius:var(--radius-sm); border-left:4px solid var(--text-muted); background:#f8f9fa; font-size:0.9rem; }" +
+            ".jrn-bloc h4 { margin:0 0 4px; font-size: var(--text-xs); text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); }" +
+            ".jrn-bloc pre { margin:0; padding:8px 10px; background:#fff; border:1px solid var(--border); border-radius:var(--radius-sm); font-size: var(--text-xs); white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; }" +
+            ".jrn-verdict { margin:14px 0; padding:12px 14px; border-radius:var(--radius-sm); border-left:4px solid var(--text-muted); background:#f8f9fa; font-size: var(--text-base); }" +
             ".jrn-verdict--sain { border-left-color:var(--color-success,#1e7e34); background:#d4edda; color:#155724; }" +
             ".jrn-verdict--rompu { border-left-color:var(--color-danger,#a5281b); background:#f8d7da; color:#721c24; }" +
             ".jrn-verdict--erreur { border-left-color:var(--color-warning,#e0a800); background:#fff3cd; color:#856404; }" +
-            ".jrn-erreur { margin:14px 0; padding:12px 14px; border-radius:var(--radius-sm); background:#fff3cd; color:#856404; border-left:4px solid var(--color-warning,#e0a800); font-size:0.9rem; }" +
+            ".jrn-erreur { margin:14px 0; padding:12px 14px; border-radius:var(--radius-sm); background:#fff3cd; color:#856404; border-left:4px solid var(--color-warning,#e0a800); font-size: var(--text-base); }" +
             ".jrn-pager { display:flex; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap; }" +
-            ".jrn-pager-etat { color:var(--text-muted); font-size:0.82rem; }" +
+            ".jrn-pager-etat { color:var(--text-muted); font-size: var(--text-sm); }" +
             ".jrn-anomalies { margin-top:10px; background:#fff; }" +
             "</style>";
     }

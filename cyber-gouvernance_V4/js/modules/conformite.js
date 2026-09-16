@@ -67,7 +67,7 @@ const ConformiteModule = (() => {
 
         const barsHtml = perRef.map(p => `
             <div style="margin-bottom:12px;">
-                <div style="display:flex; justify-content:space-between; font-size:0.9rem; margin-bottom:4px;">
+                <div style="display:flex; justify-content:space-between; font-size: var(--text-base); margin-bottom:4px;">
                     <span><strong>${escapeHtml(p.ref.nom)}</strong> <span style="color:var(--text-muted);">(${escapeHtml(p.ref.editeur)})</span></span>
                     <span style="color:var(--text-muted);">${tHtml("conformite.exigencesAdossees", { couvertes: p.couvertes, total: p.total, pct: p.pct })}</span>
                 </div>
@@ -102,21 +102,22 @@ const ConformiteModule = (() => {
                     <thead><tr><th>${t("conformite.colMesure")}</th><th style="width:150px;">${t("commun.statut")}</th>${headRefs}<th style="text-align:center;">${t("conformite.colTransverse")}</th></tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
-                <p style="font-size:0.82rem; color:var(--text-muted); margin-top:8px;">${t("conformite.noteMatrice")}</p>`;
+                <p style="font-size: var(--text-sm); color:var(--text-muted); margin-top:8px;">${t("conformite.noteMatrice")}</p>`;
         }
 
         app.innerHTML = `
             <section class="page">
-                <div class="dashboard-header">
-                    <div>
-                        <h1>${t("conformite.couvertureTitre")}</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">${t("conformite.couvertureSousTitre")} ${Help.tip(t("conformite.couvertureAide"))}</p>
-                    </div>
-                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                        <a href="#/mapping" class="btn-secondary">Correspondances →</a>
-                        <a href="#/referentiels" class="btn-secondary">← Référentiels</a>
-                    </div>
-                </div>
+                ${UI.enteteHtml({
+                    titre: t("conformite.couvertureTitre"),
+                    aide: Help.tip(t("conformite.couvertureAide")),
+                    contexte: t("conformite.couvertureSousTitre"),
+                    onglets: UI.ongletsDe("/couverture"),
+                    // ⚠️ Les deux liens « ← Référentiels » et « Correspondances → »
+                    // ont disparu : la barre d'onglets DIT désormais où l'on est et
+                    // ce qu'il y a à côté. Les garder aurait fait deux chemins pour
+                    // un seul geste, à deux centimètres l'un de l'autre.
+                    actions: `<a href="#/mapping" class="btn-secondary">Correspondances →</a>`
+                })}
 
                 <div class="dashboard-card">
                     <h3 style="margin-top:0;">Part de chaque référentiel adossée à une mesure</h3>
@@ -170,7 +171,7 @@ const ConformiteModule = (() => {
                     <td><span class="status ${meta.cls}">${meta.labelHtml}</span></td>
                     ${showMat ? `<td style="text-align:center;">${mat}/5</td>` : ""}
                     <td>${mesureNoms ? escapeHtml(mesureNoms) : "<span style='color:var(--text-muted);'>—</span>"}</td>
-                    <td style="font-size:0.85rem;">${escapeHtml(justif) || "<span style='color:var(--text-muted);'>—</span>"}</td>
+                    <td style="font-size: var(--text-sm);">${escapeHtml(justif) || "<span style='color:var(--text-muted);'>—</span>"}</td>
                 </tr>`;
             }).join("");
             return `<tr class="soa-domain-row"><td colspan="${nbCols}"><strong>${escapeHtml(d.nom)}</strong></td></tr>${rows}`;
@@ -215,7 +216,7 @@ const ConformiteModule = (() => {
                     <tbody>${sections}</tbody>
                 </table>
 
-                <p class="soa-foot" style="margin-top:20px; color:var(--text-muted); font-size:0.8rem;">Document généré depuis ${Identite.NOM_PRODUIT} — ${escapeHtml(Identite.raisonSocialeOuRepli(Identite.NOM_PRODUIT))}. Les intitulés sont des reformulations ; se référer au référentiel officiel pour le texte exact.</p>
+                <p class="soa-foot" style="margin-top:20px; color:var(--text-muted); font-size: var(--text-sm);">Document généré depuis ${Identite.NOM_PRODUIT} — ${escapeHtml(Identite.raisonSocialeOuRepli(Identite.NOM_PRODUIT))}. Les intitulés sont des reformulations ; se référer au référentiel officiel pour le texte exact.</p>
             </section>`;
 
         document.getElementById("printSoaBtn").addEventListener("click", () => window.print());

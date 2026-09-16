@@ -85,7 +85,7 @@ const IncidentsModule = (() => {
                 <td>${graviteBadge(i.gravite)}</td>
                 <td>${statutBadge(i.statut)}</td>
                 <td>${fmtDate(i.date_detection)}</td>
-                <td style="font-size:0.8rem;">
+                <td style="font-size: var(--text-sm);">
                     <span title="${t("incidents.declarationAnssi")}">A: ${declarationBadge(i.declaration_anssi)}</span>
                     <span title="${t("incidents.declarationCnil")}" style="margin-left:4px;">C: ${declarationBadge(i.declaration_cnil)}</span>
                 </td>
@@ -103,16 +103,16 @@ const IncidentsModule = (() => {
 
                 <div class="dashboard-grid" style="grid-template-columns:repeat(3,1fr); margin-bottom:1.5rem;">
                     <div class="dashboard-card" style="text-align:center;">
-                        <h3 style="font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">${t("incidents.total")}</h3>
-                        <div class="big-kpi" style="font-size:2.4rem;">${incidents.length}</div>
+                        <h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">${t("incidents.total")}</h3>
+                        <div class="big-kpi" style="font-size: var(--text-3xl);">${incidents.length}</div>
                     </div>
                     <div class="dashboard-card" style="text-align:center; border-top:4px solid var(--color-warning);">
-                        <h3 style="font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">${t("incidents.enTraitement")}</h3>
-                        <div class="big-kpi" style="font-size:2.4rem; color:var(--color-warning);">${enCours}</div>
+                        <h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">${t("incidents.enTraitement")}</h3>
+                        <div class="big-kpi" style="font-size: var(--text-3xl); color:var(--color-warning);">${enCours}</div>
                     </div>
                     <div class="dashboard-card" style="text-align:center; border-top:4px solid var(--color-danger);">
-                        <h3 style="font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">${t("incidents.aDeclarer")}</h3>
-                        <div class="big-kpi" style="font-size:2.4rem; color:var(--color-danger);">${aDeclarer}</div>
+                        <h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">${t("incidents.aDeclarer")}</h3>
+                        <div class="big-kpi" style="font-size: var(--text-3xl); color:var(--color-danger);">${aDeclarer}</div>
                     </div>
                 </div>
 
@@ -192,7 +192,7 @@ const IncidentsModule = (() => {
                 <div class="dashboard-card" style="max-width:900px; margin-top:1.5rem;">
                     <div class="ref-actions-head">
                         <strong>${t("incidents.actionsCorrectives")} ${Help.tip(t("incidents.actionsCorrectivesAide"))}</strong>
-                        <button id="addActionBtn" style="font-size:0.8rem; padding:4px 10px;">${t("incidents.planifierAction")}</button>
+                        <button id="addActionBtn" style="font-size: var(--text-sm); padding:4px 10px;">${t("incidents.planifierAction")}</button>
                     </div>
                     <div id="actionsList">${actionsListHtml(inc.id)}</div>
                     <form id="actionForm" class="ref-action-form" hidden>
@@ -265,7 +265,7 @@ const IncidentsModule = (() => {
 
     function actionsListHtml(incidentId) {
         const actions = DataStore.getActionsByIncident(incidentId);
-        if (actions.length === 0) return `<p style="color:var(--text-muted); font-size:0.85rem;">${t("incidents.aucuneActionCorrective")}</p>`;
+        if (actions.length === 0) return `<p style="color:var(--text-muted); font-size: var(--text-sm);">${t("incidents.aucuneActionCorrective")}</p>`;
         return `<ul class="ref-actions-list">${actions.map(a => {
             const cls = String(a.statut).toLowerCase() === "terminée" ? "status-conforme" : (String(a.statut).toLowerCase() === "en cours" ? "status-partiellement-conforme" : "status-non-conforme");
             return `<li><a href="#/actions/${escapeHtml(a.id)}" style="color:var(--accent);">${escapeHtml(a.titre)}</a><span class="status ${cls}" style="margin-left:8px;">${escapeHtml(I18n.valeur(a.statut))}</span></li>`;
@@ -280,7 +280,7 @@ const IncidentsModule = (() => {
         const risques = DataStore.getRisques();
         const touches = Array.isArray(inc.actifs_touches) ? inc.actifs_touches : [];
         const actifsHtml = actifs.length === 0
-            ? `<p style="color:var(--text-muted); font-size:0.85rem;">${t("incidents.aucunActif")}</p>`
+            ? `<p style="color:var(--text-muted); font-size: var(--text-sm);">${t("incidents.aucunActif")}</p>`
             : `<div class="inc-actifs">${actifs.map(a => `<label class="inc-checkbox"><input type="checkbox" class="inc-actif" value="${a.id}" ${touches.includes(a.id) ? "checked" : ""}> ${escapeHtml(a.nom)}</label>`).join("")}</div>`;
         const risquesOpts = `<option value="">${t("incidents.aucunOption")}</option>` + risques.map(r => `<option value="${r.id}" ${inc.risque_id === r.id ? "selected" : ""}>${escapeHtml(r.nom)}</option>`).join("");
 

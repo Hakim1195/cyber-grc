@@ -577,7 +577,148 @@ window.UI = (function () {
         });
     }
 
+    /* =====================================================================
+       LE GABARIT D'ÉCRAN — un seul en-tête pour tout le produit
+       =====================================================================
+
+       ── Ce que ce composant répare ──────────────────────────────────────
+
+       **Trente modules recomposaient `dashboard-header` à la main**, chacun avec
+       sa propre idée du sous-titre, de la place des boutons et de l'espacement.
+       Mesuré le 16/09/2026 : **278 déclarations `font-size` en dur portant 42
+       valeurs distinctes**, dont huit entre 0,70 et 0,78 rem — c'est-à-dire huit
+       tailles pour ce qui est visuellement la même —, et **aucun module
+       n'employait l'échelle typographique** de `css/tokens.css`.
+
+       Ce n'est pas un défaut de soin : c'est ce que produit un gabarit recopié.
+       *Ce qui se recopie trente fois diverge trente fois.*
+
+       ── Ce qu'il apporte, et qu'aucun module n'a plus à décider ──────────
+
+         · le TITRE et le SOUS-TITRE, à la même taille partout ;
+         · la barre d'ONGLETS, quand un objet se regarde de plusieurs façons —
+           un onglet est un `<a href="#/route">`, donc une vraie navigation :
+           il se partage, il revient avec le bouton « Précédent », et il est
+           atteignable au clavier sans une ligne de script ;
+         · la place des ACTIONS, à droite, hors impression ;
+         · un point d'accroche unique pour tout ce qui viendra ensuite.
+
+       ⚠️ **Il rend une CHAÎNE, il n'écrit pas dans le DOM.** C'est la convention
+       du produit (`ApprobationsModule.encartHtml`, `PiecesModule.hoteHtml`) : le
+       module compose son gabarit entier, l'affecte en une fois, puis branche.
+       Un composant qui écrirait lui-même obligerait chaque appelant à connaître
+       l'ordre des opérations.
+
+       ⚠️ **Tout ce qui vient de la donnée passe par `esc`**, y compris le titre :
+       une fiche s'intitule du nom que l'utilisateur a saisi.
+    ===================================================================== */
+
+    /**
+     * Les écrans qui regardent UN MÊME SUJET sous plusieurs angles.
+     *
+     * ── Une liste écrite à la main, et c'est le bon outil ────────────────────
+     *
+     * `CLAUDE.md` §3 tranche par le résultat de l'omission. Ici, un écran oublié
+     * **garde sa route, son entrée de menu et son contenu** : il perd seulement
+     * sa barre d'onglets, ce qui se voit du premier coup d'œil. L'omission
+     * échoue donc bruyamment, et le regroupement est précisément une **décision
+     * humaine** — « la matrice est une vue des risques » n'est écrit nulle part
+     * dans le schéma, et aucun catalogue ne le déduira.
+     *
+     * La règle exige alors de **figer la liste à un endroit qui la compare au
+     * réel** : `test/navigateur/onglets.test.mjs` vérifie que chaque route
+     * nommée ici est une route RÉELLEMENT enregistrée par le routeur, et que
+     * l'onglet actif est bien celui de l'écran affiché.
+     *
+     * ⚠️ **Les libellés sont ceux de la VUE, pas ceux du menu.** Le menu nomme
+     * une porte — « Registre des risques » —, un onglet nomme un angle :
+     * « Registre », « Matrice F×G », « Socle du Groupe ». Les confondre ferait
+     * lire deux fois le même mot à deux centimètres d'écart.
+     */
+    const GROUPES_ONGLETS = [
+        Object.freeze({
+            sujet: "risques",
+            vues: Object.freeze([
+                Object.freeze({ route: "/risques", libelle: "Registre" }),
+                Object.freeze({ route: "/matrice", libelle: "Matrice F\u00d7G" }),
+                Object.freeze({ route: "/socle", libelle: "Socle du Groupe" })
+            ])
+        }),
+        Object.freeze({
+            sujet: "referentiels",
+            vues: Object.freeze([
+                Object.freeze({ route: "/referentiels", libelle: "Catalogue" }),
+                Object.freeze({ route: "/referentiels-actifs", libelle: "Applicables ici" }),
+                Object.freeze({ route: "/couverture", libelle: "Couverture crois\u00e9e" })
+            ])
+        })
+    ];
+
+    /**
+     * La barre d'onglets de l'écran `route`, ou `null` s'il n'appartient à aucun
+     * groupe. L'onglet de `route` est marqué actif.
+     */
+    function ongletsDe(route) {
+        const groupe = GROUPES_ONGLETS.find(function (g) {
+            return g.vues.some(function (v) { return v.route === route; });
+        });
+        if (!groupe) return null;
+        return groupe.vues.map(function (v) {
+            return { route: v.route, libelle: v.libelle, actif: v.route === route };
+        });
+    }
+
+    /**
+     * L'en-tête d'un écran. Rend une chaîne à insérer en tête de `<section class="page">`.
+     *
+     * @param {{titre: string, contexte?: string, aide?: string,
+     *          onglets?: Array<{route: string, libelle: string, actif?: boolean}>,
+     *          actions?: string}} opts
+     */
+    function enteteHtml(opts) {
+        const o = opts || {};
+        const actions = o.actions
+            ? '<div class="page-actions no-print">' + o.actions + "</div>"
+            : "";
+        // ⚠️ `aide` est une NOTE PÉDAGOGIQUE déjà composée (`Help.tip(...)`), donc
+        // du balisage produit par le code : elle n'est pas échappée, et elle ne
+        // doit jamais recevoir de valeur venue de la donnée.
+        const aide = o.aide || "";
+        const contexte = o.contexte
+            ? '<p class="page-contexte">' + esc(o.contexte) + "</p>"
+            : "";
+        return ''
+            + '<div class="page-entete">'
+            +   "<div><h1>" + esc(o.titre || "") + aide + "</h1>" + contexte + "</div>"
+            +   actions
+            + "</div>"
+            + ongletsHtml(o.onglets);
+    }
+
+    /**
+     * La barre d'onglets d'un écran, ou une chaîne vide s'il n'y en a pas.
+     *
+     * ⚠️ **Un onglet est un LIEN, pas un bouton.** Les trois écrans qui en
+     * gagnent — Risques, Référentiels, Registre RGPD — regardent le même sujet
+     * sous plusieurs angles, et chaque angle a déjà sa route. En faire un état
+     * interne au module coûterait le partage d'un lien, le retour arrière du
+     * navigateur, et l'accès au clavier — trois choses gratuites autrement.
+     */
+    function ongletsHtml(onglets) {
+        if (!Array.isArray(onglets) || onglets.length === 0) return "";
+        let html = '<nav class="page-onglets no-print" aria-label="Vues de cet écran"><ul>';
+        onglets.forEach(function (o) {
+            const actif = o.actif === true;
+            html += '<li><a href="#' + esc(o.route) + '" data-route="' + esc(o.route) + '"'
+                 +  (actif ? ' class="page-onglet--actif" aria-current="page"' : "")
+                 +  ">" + esc(o.libelle) + "</a></li>";
+        });
+        return html + "</ul></nav>";
+    }
+
     return {
+        enteteHtml, ongletsHtml, ongletsDe,
+        contratOnglets: Object.freeze(GROUPES_ONGLETS),
         envelopperTableaux,
         wireNavSections, ouvrirSectionActive,
         badge, mappedBadge, wireBulkDelete, wireDelete, genId, refreshPersonnesDatalist,

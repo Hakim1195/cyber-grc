@@ -79,7 +79,7 @@ const PersonnelModule = (() => {
                     </div>
                 </div>
 
-                <div class="synthese-message info" style="padding:10px; font-size:0.9rem;">
+                <div class="synthese-message info" style="padding:10px; font-size: var(--text-base);">
                     <strong>Astuce :</strong> les personnes enregistrées ici apparaissent en <strong>suggestions</strong> dans tous les champs « Responsable ». Ouvrez une fiche pour voir <strong>tout ce qui lui est affecté</strong>.
                 </div>
 
@@ -193,7 +193,7 @@ const PersonnelModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>${escapeHtml(p.nom)}</h1>
-                        <p style="color:var(--text-muted); margin:0; font-size:0.9rem;">${escapeHtml([p.fonction, p.service].filter(Boolean).join(" · ") || "Personnel")}</p>
+                        <p style="color:var(--text-muted); margin:0; font-size: var(--text-base);">${escapeHtml([p.fonction, p.service].filter(Boolean).join(" · ") || "Personnel")}</p>
                     </div>
                     <button id="deleteBtn" style="background:var(--color-danger);">Supprimer</button>
                 </div>

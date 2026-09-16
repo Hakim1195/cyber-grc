@@ -361,13 +361,13 @@ var ReferentielsActifsModule = (function () {
 
     function vueHtml() {
         return '<section class="page">' +
-            '<div class="dashboard-header no-print"><div>' +
-              "<h1>Référentiels applicables " +
-              Help.tip("Quels référentiels sont dans le périmètre de CE site. Un référentiel hors périmètre ne doit ni s'afficher ni peser dans le taux de conformité de la filiale.") +
-              "</h1>" +
-              '<p style="color:var(--text-muted); margin-top:5px;">Le périmètre normatif de votre ' +
-              "filiale — ce qui s'applique ici, et ce qui ne s'applique pas</p>" +
-            "</div></div>" +
+            UI.enteteHtml({
+              titre: "Applicables ici",
+              aide: Help.tip("Quels référentiels sont dans le périmètre de CE site. Un référentiel hors périmètre ne doit ni s'afficher ni peser dans le taux de conformité de la filiale."),
+              contexte: "Le périmètre normatif de votre filiale — ce qui s'applique ici, "
+                        + "et ce qui ne s'applique pas.",
+              onglets: UI.ongletsDe("/referentiels-actifs")
+            }) +
 
             '<div class="grp-note">' +
               "<p><strong>Activer un référentiel n'est pas la même chose que déclarer une " +

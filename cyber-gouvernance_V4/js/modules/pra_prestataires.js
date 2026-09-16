@@ -64,7 +64,7 @@ const PraPrestatairesModule = (() => {
             return `
             <label class="checkbox-line" style="display:flex; align-items:flex-start; gap:8px; padding:6px 0; border-bottom:1px dashed var(--border);">
                 <input type="checkbox" class="sc-cb" data-id="${r.id}" ${checked} style="margin-top:3px;">
-                <span>${esc(r.label)} <span class="badge" style="background:#eef; color:#334; font-size:0.7rem;">${esc(r.ref)}</span></span>
+                <span>${esc(r.label)} <span class="badge" style="background:#eef; color:#334; font-size: var(--text-xs);">${esc(r.ref)}</span></span>
             </label>`;
         }).join("");
         return `
@@ -84,7 +84,7 @@ const PraPrestatairesModule = (() => {
                     Niveau de risque inhérent : <span id="riskPreview">${riskBadge(p)}</span>
                 </div>
                 <label style="font-weight:700;">Exigences de sécurité de la chaîne d'approvisionnement</label>
-                <p style="color:var(--text-muted); font-size:0.85rem; margin:2px 0 8px;">Points de vigilance contractuels et opérationnels attendus (NIS2 / DORA).</p>
+                <p style="color:var(--text-muted); font-size: var(--text-sm); margin:2px 0 8px;">Points de vigilance contractuels et opérationnels attendus (NIS2 / DORA).</p>
                 ${reqs}
             </div>`;
     }
@@ -135,7 +135,7 @@ const PraPrestatairesModule = (() => {
                 <td><span class="badge" style="background:#eee; color:#333;">${esc(p.type)}</span></td>
                 <td>${riskBadge(p)}<div style="margin-top:4px;">${coverageBadge(p)}</div></td>
                 <td>${esc(p.phone) || "-"}<br>${esc(p.email) || "-"}</td>
-                <td style="font-size:0.85rem; color:var(--text-muted);">${p.notes ? esc(String(p.notes).substring(0, 60)) + "…" : "-"}</td>
+                <td style="font-size: var(--text-sm); color:var(--text-muted);">${p.notes ? esc(String(p.notes).substring(0, 60)) + "…" : "-"}</td>
             </tr>
         `).join("");
 
@@ -166,7 +166,7 @@ const PraPrestatairesModule = (() => {
                     </div>
                 </div>
 
-                <div class="synthese-message info no-print" style="font-size:0.9rem; padding:10px;">
+                <div class="synthese-message info no-print" style="font-size: var(--text-base); padding:10px;">
                     <strong>Annuaire de crise &amp; risque tiers :</strong> Enregistrez les contacts vitaux (Hébergeur Cloud, Assureur Cyber, Fournisseur réseau, ANSSI, CNIL…) et évaluez le risque que chaque fournisseur fait porter à votre chaîne d'approvisionnement ${Help.tip("NIS2 (art. 21) impose de gérer la sécurité de sa chaîne d'approvisionnement ; DORA encadre le risque lié aux prestataires TIC.")}. Pensez à l'imprimer !
                 </div>
 

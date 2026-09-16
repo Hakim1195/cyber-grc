@@ -47,12 +47,12 @@ const PraTestsModule = (() => {
                     </div>
                 </div>
 
-                <div class="synthese-message info" style="font-size:0.9rem; padding:10px;">
+                <div class="synthese-message info" style="font-size: var(--text-base); padding:10px;">
                     <strong>Amélioration continue :</strong> Un PRA qui n'est pas testé régulièrement est un PRA qui ne fonctionnera pas le jour J. Historisez ici vos exercices sur table ou vos simulations techniques réelles.
                 </div>
 
                 ${orphans.length ? `
-                <div class="synthese-message warning no-print" role="alert" style="font-size:0.9rem; padding:12px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div class="synthese-message warning no-print" role="alert" style="font-size: var(--text-base); padding:12px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
                     <span><strong>${orphans.length} test(s) orphelin(s)</strong> — le scénario associé a été supprimé. Ces enregistrements ne sont plus rattachés à un playbook.</span>
                     <button id="cleanOrphansBtn" style="background:var(--color-warning); white-space:nowrap;">Supprimer les tests orphelins</button>
                 </div>` : ""}

@@ -311,9 +311,25 @@ window.afficherBandeauDecouverte = function () {
 ========================= */
 /* ⚠️ Cette table ne porte plus de LIBELLÉS, mais des CLÉS de dictionnaire
    (lot L10, `CONVENTIONS.md` §37). Le champ `s` nomme la section, `t` le titre.
-   Les sections du fil d'Ariane ne sont pas celles du menu — « Pilotage » y
-   regroupe ce que la barre latérale range sous « Gouvernance & Risques » — et
-   c'est pourquoi elles ont leurs propres clés plutôt qu'un renvoi vers `nav.*`. */
+
+   ══ LE CHAMP `s` N'EST PLUS LU, ET C'EST UNE CORRECTION ═══════════════════
+
+   Cette table portait sa PROPRE taxonomie de sections, différente de celle du
+   menu, et son commentaire l'assumait : « les sections du fil d'Ariane ne sont
+   pas celles du menu ». Deux taxonomies pour un seul produit, et l'écart se
+   lisait à l'écran : le menu rangeait « Donneurs d'ordre » sous *Tiers &
+   personnes* pendant que le fil d'Ariane, deux centimètres plus haut, annonçait
+   *Conformité*. L'utilisateur qui suit le fil ne retrouve pas l'entrée.
+
+   Pire, la table était INCOMPLÈTE — sept écrans n'y figuraient pas (`/groupe`,
+   `/approbations`, `/socle`, `/referentiels-actifs`, `/imports`, `/journal`,
+   `/cartographie`) — et `renderBreadcrumb` rendait alors une chaîne VIDE : le fil
+   disparaissait sans un mot. C'est une liste écrite à la main dont l'omission
+   fait *réussir quelque chose en silence* — le cas (a) du `CLAUDE.md` §3.
+
+   La section se DÉCOUVRE désormais dans le menu (`sectionDuMenu`), qui est le
+   seul endroit où le rangement est décidé. `s` reste pour les deux écrans qui
+   n'ont pas d'entrée de menu — `/soa` et `/crise-fiches` —, et pour eux seuls. */
 const ROUTE_META = {
     "/dashboard":    { s: "fil.section.pilotage",   t: "fil.dashboard" },
     "/synthese":     { s: "fil.section.pilotage",   t: "fil.synthese" },
@@ -344,15 +360,51 @@ const ROUTE_META = {
     "/settings":     { s: "fil.section.administration", t: "fil.settings" }
 };
 
+/**
+ * La section À LAQUELLE LE MENU range une route, lue dans le balisage.
+ *
+ * ⚠️ **On remonte le DOM, on ne récite rien.** L'entrée de menu est un `<li>` ;
+ * sa section est le `<li class="nav-section">` qui la précède. Un écran déplacé
+ * d'une section à l'autre change donc de fil d'Ariane **par le seul fait d'avoir
+ * été déplacé** — il n'y a pas de seconde table à mettre à jour, donc pas de
+ * seconde table à oublier.
+ *
+ * Rend `null` pour une route sans entrée de menu : l'appelant retombe alors sur
+ * `ROUTE_META`, qui couvre les deux écrans concernés.
+ */
+function sectionDuMenu(base) {
+    const lien = document.querySelector('.main-nav a[data-route="' + base + '"]');
+    if (!lien) return null;
+    let noeud = lien.closest("li");
+    while (noeud !== null) {
+        noeud = noeud.previousElementSibling;
+        if (noeud === null) return null;
+        if (noeud.classList.contains("nav-section")) {
+            const etiquette = noeud.querySelector("[data-i18n]");
+            return etiquette === null ? null : etiquette.getAttribute("data-i18n");
+        }
+    }
+    return null;
+}
+
 window.renderBreadcrumb = function(route) {
     const el = document.getElementById("breadcrumb");
     if (!el) return;
     const segs = route.split("/").filter(Boolean);
     const base = "/" + (segs[0] || "dashboard");
     const meta = ROUTE_META[base];
-    if (!meta) { el.innerHTML = ""; return; }
+    // La section vient du MENU quand l'écran y a une entrée ; de la table sinon.
+    const cleSection = sectionDuMenu(base) || (meta ? meta.s : null);
+    if (!meta && cleSection === null) { el.innerHTML = ""; return; }
+    // ⚠️ Le titre, lui, reste dans `ROUTE_META` : le fil d'Ariane nomme l'écran,
+    // le menu nomme l'ENTRÉE, et les deux ne disent pas toujours la même chose —
+    // « Registre des risques » au menu, « Risques » dans le fil. À défaut, on
+    // reprend le libellé du menu plutôt que de ne rien rendre.
+    const lien = document.querySelector('.main-nav a[data-route="' + base + '"] [data-i18n]');
+    const cleTitre = meta ? meta.t : (lien ? lien.getAttribute("data-i18n") : null);
+    if (cleTitre === null) { el.innerHTML = ""; return; }
     const detail = segs.length > 1 ? ` / <b>${t("fil.fiche")}</b>` : "";
-    el.innerHTML = `${t(meta.s)} / <b>${t(meta.t)}</b>${detail}`;
+    el.innerHTML = `${t(cleSection)} / <b>${t(cleTitre)}</b>${detail}`;
 };
 
 /* =========================

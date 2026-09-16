@@ -33,7 +33,7 @@ const ActifsModule = (() => {
                     </div>
                 </div>
 
-                <div class="synthese-message info" style="font-size: 0.9rem; padding: 10px; margin-bottom: 20px;">
+                <div class="synthese-message info" style="font-size: var(--text-base); padding: 10px; margin-bottom: 20px;">
                     <strong>Import :</strong> il se fait depuis l'écran <a href="#/imports">Imports</a>, qui
                     vaut pour les 23 entités du produit. Vous y téléchargez un modèle prêt à remplir,
                     voyez un <strong>aperçu avant validation</strong>, et obtenez un rapport
@@ -188,7 +188,7 @@ const ActifsModule = (() => {
         const risquesHtml = tousRisques.map(r => `
             <label class="checkbox-line">
                 <input type="checkbox" class="risque-cb" value="${r.id}" ${actif.risques_lies.includes(r.id) ? "checked" : ""}>
-                <strong>${escapeHtml(r.nom)}</strong> <span style="font-size:0.8rem; color:var(--text-muted);">(${escapeHtml(r.niveau)})</span>
+                <strong>${escapeHtml(r.nom)}</strong> <span style="font-size: var(--text-sm); color:var(--text-muted);">(${escapeHtml(r.niveau)})</span>
             </label>
         `).join("");
 
@@ -233,7 +233,7 @@ const ActifsModule = (() => {
 
                     <div class="dashboard-card">
                         <h3>Menaces & Risques applicables</h3>
-                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">Cochez les scénarios de risques qui pèsent sur cet actif :</p>
+                        <p style="font-size: var(--text-sm); color: var(--text-muted); margin-bottom: 10px;">Cochez les scénarios de risques qui pèsent sur cet actif :</p>
                         <div class="checkbox-group">
                             ${risquesHtml || "<p style='color: var(--text-muted);'>Aucun risque défini dans le registre.</p>"}
                         </div>
@@ -243,19 +243,19 @@ const ActifsModule = (() => {
                 <div class="dashboard-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                         <h3 style="margin:0;">Dépendances de cartographie ${Help.tip("Liens typés vers d'autres actifs : « dépend de », « hébergé sur », « alimenté par » (flux de données) ou « sauvegardé par ». Ils alimentent la Cartographie du SI et l'analyse d'impact (propagation, points de défaillance unique). La sauvegarde ne propage pas une panne de disponibilité.")}</h3>
-                        <a href="#/cartographie" style="font-size:0.85rem; color:var(--accent); font-weight:600; text-decoration:none;">Voir la cartographie →</a>
+                        <a href="#/cartographie" style="font-size: var(--text-sm); color:var(--accent); font-weight:600; text-decoration:none;">Voir la cartographie →</a>
                     </div>
-                    <p style="font-size:0.82rem; color:var(--text-muted); margin:8px 0 14px;">Déclarez ce dont <strong>${escapeHtml(actif.nom)}</strong> a besoin pour fonctionner.</p>
+                    <p style="font-size: var(--text-sm); color:var(--text-muted); margin:8px 0 14px;">Déclarez ce dont <strong>${escapeHtml(actif.nom)}</strong> a besoin pour fonctionner.</p>
 
                     <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-bottom:16px;">
                         <div class="form-group" style="margin:0;">
-                            <label style="font-size:0.8rem;">Cet actif…</label>
+                            <label style="font-size: var(--text-sm);">Cet actif…</label>
                             <select id="depType">
                                 ${DORDER.map(t => `<option value="${t}">${escapeHtml(DT[t] ? (DT[t].label || DT[t].short) : t)}</option>`).join("")}
                             </select>
                         </div>
                         <div class="form-group" style="margin:0; flex:1; min-width:180px;">
-                            <label style="font-size:0.8rem;">…de l'actif</label>
+                            <label style="font-size: var(--text-sm);">…de l'actif</label>
                             <select id="depTarget">
                                 ${autresActifs.length ? autresActifs.map(a => `<option value="${a.id}">${escapeHtml(a.nom)}</option>`).join("") : `<option value="">(aucun autre actif déclaré)</option>`}
                             </select>
@@ -265,13 +265,13 @@ const ActifsModule = (() => {
 
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
                         <div>
-                            <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); font-weight:700; margin-bottom:8px;">Dépendances déclarées</div>
+                            <div style="font-size: var(--text-xs); text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); font-weight:700; margin-bottom:8px;">Dépendances déclarées</div>
                             <ul id="deps-list" style="list-style:none; padding:0; margin:0;"></ul>
                         </div>
                         <div>
-                            <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); font-weight:700; margin-bottom:8px;">En dépendent (entrant)</div>
-                            <ul style="list-style:none; padding:0; margin:0; font-size:0.86rem;">
-                                ${reverseDeps.length ? reverseDeps.map(r => `<li style="padding:4px 0;"><strong>${escapeHtml(r.from)}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">${escapeHtml(depLabel(r.type))}</span></li>`).join("") : `<li style="color:var(--text-muted); font-style:italic;">Aucun actif ne dépend de celui-ci.</li>`}
+                            <div style="font-size: var(--text-xs); text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); font-weight:700; margin-bottom:8px;">En dépendent (entrant)</div>
+                            <ul style="list-style:none; padding:0; margin:0; font-size: var(--text-sm);">
+                                ${reverseDeps.length ? reverseDeps.map(r => `<li style="padding:4px 0;"><strong>${escapeHtml(r.from)}</strong> <span style="color:var(--text-muted); font-size: var(--text-sm);">${escapeHtml(depLabel(r.type))}</span></li>`).join("") : `<li style="color:var(--text-muted); font-style:italic;">Aucun actif ne dépend de celui-ci.</li>`}
                             </ul>
                         </div>
                     </div>
@@ -302,9 +302,9 @@ const ActifsModule = (() => {
             if (!ul) return;
             ul.innerHTML = deps.length ? deps.map((d, i) => `
                 <li style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid var(--border);">
-                    <span style="font-size:0.86rem;"><span style="color:var(--text-muted); font-size:0.8rem;">${escapeHtml(depLabel(d.type))}</span> <strong>${escapeHtml(nomActif(d.to))}</strong></span>
-                    <button type="button" class="rm-dep" data-i="${i}" title="Retirer ce lien" style="background:none; border:none; color:var(--color-danger); cursor:pointer; font-size:1.2rem; line-height:1; padding:0 4px;">&times;</button>
-                </li>`).join("") : `<li style="color:var(--text-muted); font-style:italic; font-size:0.86rem;">Aucune dépendance déclarée.</li>`;
+                    <span style="font-size: var(--text-sm);"><span style="color:var(--text-muted); font-size: var(--text-sm);">${escapeHtml(depLabel(d.type))}</span> <strong>${escapeHtml(nomActif(d.to))}</strong></span>
+                    <button type="button" class="rm-dep" data-i="${i}" title="Retirer ce lien" style="background:none; border:none; color:var(--color-danger); cursor:pointer; font-size: var(--text-lg); line-height:1; padding:0 4px;">&times;</button>
+                </li>`).join("") : `<li style="color:var(--text-muted); font-style:italic; font-size: var(--text-sm);">Aucune dépendance déclarée.</li>`;
             ul.querySelectorAll(".rm-dep").forEach(btn => btn.onclick = () => { deps.splice(parseInt(btn.dataset.i, 10), 1); renderDepsList(); });
         }
         renderDepsList();

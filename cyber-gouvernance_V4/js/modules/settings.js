@@ -57,7 +57,7 @@ const SettingsModule = (() => {
 
                 <!-- ÉTAT DU STOCKAGE -->
                 <div class="dashboard-card" style="border-top: 4px solid var(--accent); margin-bottom: 1.5rem;">
-                    <h3 style="font-size: 1.15rem; margin-bottom: 15px;">État de la liaison au serveur</h3>
+                    <h3 style="font-size: var(--text-lg); margin-bottom: 15px;">État de la liaison au serveur</h3>
                     <div id="storage-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 1rem;">
                         <div style="color: var(--text-muted);">Chargement…</div>
                     </div>
@@ -69,25 +69,25 @@ const SettingsModule = (() => {
                      demande pourquoi tout est vide. Le mettre en bas de page
                      reviendrait à le cacher à celui qui en a besoin. -->
                 <div class="dashboard-card" id="decouverte-carte" style="border-top: 4px solid var(--accent); margin-bottom: 1.5rem; display: none;">
-                    <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Jeu de découverte ${typeof Help !== "undefined" ? Help.tip("Un groupe industriel fictif — filiales, risques, actifs, incidents, documents — pour voir le produit rempli au lieu de l'imaginer. Chaque ligne porte une marque « découverte » DANS la base : elle reste reconnaissable à l'export et à l'impression, et se retire d'un geste.") : ""}</h3>
+                    <h3 style="font-size: var(--text-lg); margin-bottom: 15px;">Jeu de découverte ${typeof Help !== "undefined" ? Help.tip("Un groupe industriel fictif — filiales, risques, actifs, incidents, documents — pour voir le produit rempli au lieu de l'imaginer. Chaque ligne porte une marque « découverte » DANS la base : elle reste reconnaissable à l'export et à l'impression, et se retire d'un geste.") : ""}</h3>
                     <div id="decouverte-corps"><div style="color: var(--text-muted);">Chargement…</div></div>
                 </div>
 
                 <!-- SÉCURITÉ & CHIFFREMENT -->
                 <div class="dashboard-card" style="border-top: 4px solid var(--primary); margin-bottom: 1.5rem;">
-                    <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Sécurité</h3>
+                    <h3 style="font-size: var(--text-lg); margin-bottom: 15px;">Sécurité</h3>
                     <div id="security-body"><div style="color: var(--text-muted);">Chargement…</div></div>
                 </div>
 
                 <div class="dashboard-grid" style="margin-bottom: 1.5rem;">
                     <!-- EXPORT -->
                     <div class="dashboard-card" style="border-top: 4px solid var(--color-success);">
-                        <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Exporter un fichier d'échange</h3>
+                        <h3 style="font-size: var(--text-lg); margin-bottom: 15px;">Exporter un fichier d'échange</h3>
                         <div class="help-note" style="margin-bottom: 15px;">
                             Le fichier contient des données sensibles (risques, vulnérabilités, plans de continuité).
                             <strong>Chiffrez-le</strong> : posé sur un partage réseau ou une clé USB, un export en clair est directement exploitable par un attaquant.
                         </div>
-                        <div style="background: var(--bg-body); padding: 12px 15px; border-radius: var(--radius); margin-bottom: 18px; font-size: 0.85rem;">
+                        <div style="background: var(--bg-body); padding: 12px 15px; border-radius: var(--radius); margin-bottom: 18px; font-size: var(--text-sm);">
                             <strong>Dernier export :</strong> <span id="lastExportDisplay">${escapeHtml(BackupService.getLastExportDisplay())}</span>
                         </div>
                         <button id="exportEncBtn" style="background-color: var(--color-success); width: 100%; justify-content: center;" ${cryptoOk ? "" : "disabled title='Chiffrement indisponible (contexte non sécurisé)'"}>
@@ -96,7 +96,7 @@ const SettingsModule = (() => {
                         <button id="exportPlainBtn" style="background: transparent; color: var(--text-muted); border: 1px solid var(--border); width: 100%; justify-content: center; margin-top: 10px;">
                             Exporter en clair (non chiffré)
                         </button>
-                        <div style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted);">
+                        <div style="margin-top: 15px; font-size: var(--text-sm); color: var(--text-muted);">
                             Un export est une extraction complète de la filiale : il sort de la machine.
                             Ne le produisez que pour un échange identifié.
                         </div>
@@ -104,8 +104,8 @@ const SettingsModule = (() => {
 
                     <!-- IMPORT -->
                     <div class="dashboard-card" style="border-top: 4px solid var(--color-danger);">
-                        <h3 style="font-size: 1.15rem; margin-bottom: 15px;">Importer un fichier d'échange</h3>
-                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px;">
+                        <h3 style="font-size: var(--text-lg); margin-bottom: 15px;">Importer un fichier d'échange</h3>
+                        <p style="color: var(--text-muted); font-size: var(--text-base); margin-bottom: 15px;">
                             Chargez un fichier .json (chiffré ou non) — reprise d'une filiale déjà équipée de l'ancienne version, ou données remises par une filiale. Le contenu est validé, puis appliqué <strong>en une seule transaction</strong> sur le serveur : il réussit entièrement, ou rien n'est modifié.
                         </p>
                         <div style="text-align: center; margin-bottom: 10px;">
@@ -122,7 +122,7 @@ const SettingsModule = (() => {
                      Les points de restauration NAVIGATEUR ont disparu avec la bascule ;
                      ce panneau en listait qui n'existent plus (constat m-7). -->
                 <div class="dashboard-card" style="border-top: 4px solid var(--primary);">
-                    <h3 style="font-size: 1.15rem; margin: 0 0 15px;">Sauvegarde et restauration</h3>
+                    <h3 style="font-size: var(--text-lg); margin: 0 0 15px;">Sauvegarde et restauration</h3>
                     <div class="help-note">
                         Elles sont assurées par le serveur, sans action de votre part : les journaux de
                         transactions sont archivés en continu (perte maximale de quelques minutes) et la
@@ -232,8 +232,8 @@ const SettingsModule = (() => {
 
     function tuile(libelle, valeur) {
         const esc = window.escapeHtml || String;
-        return '<div><div style="font-size:1.6rem;font-weight:600;">' + esc(String(valeur)) +
-               '</div><div style="color:var(--text-muted);font-size:.85rem;">' + esc(libelle) + "</div></div>";
+        return '<div><div style="font-size: var(--text-2xl);font-weight:600;">' + esc(String(valeur)) +
+               '</div><div style="color:var(--text-muted);font-size: var(--text-sm);">' + esc(libelle) + "</div></div>";
     }
 
     function agir(bouton, appel, verbe) {
@@ -364,7 +364,7 @@ const SettingsModule = (() => {
 
         recap.innerHTML = `
             <div style="background: var(--bg-body); border-radius: var(--radius); padding: 12px; margin-top: 5px;">
-                <div style="font-size: 0.85rem; margin-bottom: 8px;">
+                <div style="font-size: var(--text-sm); margin-bottom: 8px;">
                     <strong>${escapeHtml(filename)}</strong>
                     ${res.encrypted ? '<span class="status" style="background:#e6f4ea;color:var(--color-success);margin-left:6px;">déchiffré</span>' : ''}
                     ${res.meta && res.meta.createdAt ? `<span style="color:var(--text-muted);margin-left:6px;">${formatDate(Date.parse(res.meta.createdAt))}</span>` : ''}
@@ -375,7 +375,7 @@ const SettingsModule = (() => {
                     <button id="imp-replace" style="background: var(--color-danger); flex:1; justify-content:center;">Remplacer tout</button>
                     <button id="imp-cancel" style="background: var(--color-gray); justify-content:center;">Annuler</button>
                 </div>
-                <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 8px;">
+                <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 8px;">
                     <strong>Fusionner</strong> ajoute les éléments absents et ne supprime rien.
                     <strong>Remplacer</strong> substitue le contenu du fichier à celui de la filiale
                     <strong>pour tous ses utilisateurs</strong> : c'est irréversible, et il n'existe pas
@@ -437,7 +437,7 @@ const SettingsModule = (() => {
     }
 
     function errorBox(msg) {
-        return `<div style="background:#fdecea;color:var(--color-danger);border-radius:var(--radius);padding:12px;margin-top:5px;font-size:0.9rem;">${escapeHtml(msg)}</div>`;
+        return `<div style="background:#fdecea;color:var(--color-danger);border-radius:var(--radius);padding:12px;margin-top:5px;font-size: var(--text-base);">${escapeHtml(msg)}</div>`;
     }
 
     /* ===== État du stockage ===== */
@@ -483,8 +483,8 @@ const SettingsModule = (() => {
     function statBox(label, value) {
         return `
             <div style="background: var(--bg-body); padding: 12px 14px; border-radius: var(--radius);">
-                <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">${label}</div>
-                <div style="font-size: 1.05rem; font-weight: 700; margin-top: 4px;">${value}</div>
+                <div style="font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">${label}</div>
+                <div style="font-size: var(--text-md); font-weight: 700; margin-top: 4px;">${value}</div>
             </div>`;
     }
 

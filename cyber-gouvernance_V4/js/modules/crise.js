@@ -91,10 +91,10 @@ const CriseModule = (() => {
             .fiches-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 1.2rem; }
             .fiche-span { grid-column: 1 / -1; }
             .fiche-reflexe { border-top: 4px solid var(--primary); }
-            .fiche-role { font-size: 1.05rem; font-weight: 700; color: var(--primary); margin-bottom: 8px; }
-            .fiche-label { text-transform: uppercase; font-size: 0.72rem; letter-spacing: 1px; color: var(--text-muted); font-weight: 700; margin: 12px 0 4px; }
+            .fiche-role { font-size: var(--text-md); font-weight: 700; color: var(--primary); margin-bottom: 8px; }
+            .fiche-label { text-transform: uppercase; font-size: var(--text-xs); letter-spacing: 1px; color: var(--text-muted); font-weight: 700; margin: 12px 0 4px; }
             .fiche-holder { padding: 3px 0; }
-            .fiche-supp { font-size: 0.85rem; color: var(--text-muted); }
+            .fiche-supp { font-size: var(--text-sm); color: var(--text-muted); }
             .fiche-empty { color: var(--text-muted); font-style: italic; }
             .fiche-actions { margin: 4px 0 0; padding-left: 20px; line-height: 1.5; }
             .fiche-actions li { margin-bottom: 6px; }
@@ -102,7 +102,7 @@ const CriseModule = (() => {
             .fiche-commun .fiche-role { color: #e65100; }
             .fiche-contacts { border-top-color: var(--color-danger); }
             .fiche-contacts .fiche-role { color: var(--color-danger); }
-            .fiche-contacts table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 6px; }
+            .fiche-contacts table { width: 100%; border-collapse: collapse; font-size: var(--text-base); margin-top: 6px; }
             .fiche-contacts td { padding: 6px 4px; border-bottom: 1px dashed var(--border); }
             .fiche-contacts td:first-child { font-weight: 600; width: 55%; }
             @media print {
@@ -164,7 +164,7 @@ const CriseModule = (() => {
                     </div>
                 </div>
 
-                <div class="synthese-message warning no-print" style="font-size: 0.9rem; padding: 10px; margin-bottom: 20px;">
+                <div class="synthese-message warning no-print" style="font-size: var(--text-base); padding: 10px; margin-bottom: 20px;">
                     <strong>À imprimer et conserver hors ligne :</strong> en cas de crise majeure (rançongiciel, incendie), le SI et cette application peuvent être indisponibles. Gardez une copie papier à jour dans un lieu sécurisé.
                 </div>
 
@@ -180,7 +180,7 @@ const CriseModule = (() => {
                     </div>
                     ${roleCards}
                     <div class="dashboard-card fiche-reflexe fiche-contacts fiche-span">
-                        <div class="fiche-role">Contacts d'urgence <span style="font-weight:400; font-size:0.85rem; color:var(--text-muted);">(à compléter et vérifier régulièrement)</span></div>
+                        <div class="fiche-role">Contacts d'urgence <span style="font-weight:400; font-size: var(--text-sm); color:var(--text-muted);">(à compléter et vérifier régulièrement)</span></div>
                         <table><tbody>${contactsRows}</tbody></table>
                     </div>
                 </div>
@@ -225,7 +225,7 @@ const CriseModule = (() => {
                 <td><strong>${esc(m.nom)}</strong></td>
                 <td>${esc(m.telephone) || "-"}</td>
                 <td>${m.email ? `<a href="mailto:${esc(m.email)}" class="stop-row-click">${esc(m.email)}</a>` : "-"}</td>
-                <td style="font-size: 0.85rem; color: var(--text-muted);">${esc(m.suppleant) || "Aucun"}</td>
+                <td style="font-size: var(--text-sm); color: var(--text-muted);">${esc(m.suppleant) || "Aucun"}</td>
             </tr>
         `).join("");
 
@@ -250,7 +250,7 @@ const CriseModule = (() => {
                     </div>
                 </div>
 
-                <div class="synthese-message warning no-print" style="font-size: 0.9rem; padding: 10px; margin-bottom: 20px;">
+                <div class="synthese-message warning no-print" style="font-size: var(--text-base); padding: 10px; margin-bottom: 20px;">
                     <strong>En cas de crise majeure (Ransomware, Incendie) :</strong> Le SI peut être indisponible. Pensez à imprimer régulièrement cet annuaire et à le conserver dans un lieu sécurisé (ex: Coffre-fort, ou au domicile du Directeur de crise).
                 </div>
 

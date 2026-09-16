@@ -498,22 +498,22 @@ const PiecesModule = (() => {
 
     function styles() {
         return "<style>" +
-            ".pj-table td { vertical-align:middle; font-size:0.85rem; }" +
+            ".pj-table td { vertical-align:middle; font-size: var(--text-sm); }" +
             ".pj-table .status { text-transform:none; }" +
             ".pj-nom { word-break:break-word; max-width:280px; }" +
             ".pj-action { text-align:right; white-space:nowrap; }" +
-            ".pj-indisponible { color:var(--text-muted); font-size:0.82rem; font-style:italic; cursor:help; }" +
-            ".pj-erreur { margin:10px 0; padding:12px 14px; border-radius:var(--radius-sm); background:#fff3cd; color:#856404; border-left:4px solid var(--color-warning,#e0a800); font-size:0.9rem; }" +
+            ".pj-indisponible { color:var(--text-muted); font-size: var(--text-sm); font-style:italic; cursor:help; }" +
+            ".pj-erreur { margin:10px 0; padding:12px 14px; border-radius:var(--radius-sm); background:#fff3cd; color:#856404; border-left:4px solid var(--color-warning,#e0a800); font-size: var(--text-base); }" +
             ".pj-depot { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }" +
-            ".pj-avertissement { margin-top:12px; font-size:0.78rem; color:var(--text-muted); line-height:1.5; }" +
+            ".pj-avertissement { margin-top:12px; font-size: var(--text-xs); color:var(--text-muted); line-height:1.5; }" +
             ".pj-en-vigueur td { background:rgba(46,125,50,0.06); }" +
             ".pj-foi { text-transform:none; margin-left:6px; }" +
             ".pj-version { width:9rem; }" +
             ".pj-integrite { text-transform:none; margin-left:6px; }" +
             ".pj-empreinte { margin-top:3px; display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; }" +
             ".pj-empreinte-bascule { background:none; border:none; padding:0; color:var(--accent); " +
-            "font-size:0.72rem; cursor:pointer; }" +
-            ".pj-hash { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:0.72rem; " +
+            "font-size: var(--text-xs); cursor:pointer; }" +
+            ".pj-hash { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size: var(--text-xs); " +
             "color:var(--text-muted); word-break:break-all; user-select:all; }" +
             "</style>";
     }
@@ -888,7 +888,7 @@ const PiecesModule = (() => {
                 "servis directement par le serveur web : ils ne sortent que par " +
                 "l'application, et chaque extraction est journalisée.") : "") +
             "</strong>" +
-            '<span style="font-size:0.8rem; color:var(--text-muted);">' +
+            '<span style="font-size: var(--text-sm); color:var(--text-muted);">' +
             (liste.length ? esc(liste.length) + " fichier(s)" : "") + "</span>" +
             "</div>" +
             corpsHtml() +
@@ -907,7 +907,7 @@ const PiecesModule = (() => {
     function depotHtml() {
         if (erreurChargement) return "";     // rien à déposer sur une liste qu'on n'a pas lue
         const borne = tailleMaxAnnoncee !== null
-            ? ' <span style="font-size:0.78rem; color:var(--text-muted);">(jusqu\'à ' +
+            ? ' <span style="font-size: var(--text-xs); color:var(--text-muted);">(jusqu\'à ' +
               esc(tailleLisible(tailleMaxAnnoncee)) + ")</span>"
             : "";
         // Le numéro de version se saisit AU MOMENT DU DÉPÔT, avec le fichier

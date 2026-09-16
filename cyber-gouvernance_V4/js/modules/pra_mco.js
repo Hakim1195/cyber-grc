@@ -86,7 +86,7 @@ const PraMcoModule = (() => {
                     </td>
                     <td>
                         <strong>${escapeHtml(m.titre)}</strong>
-                        ${m.frequence && m.frequence !== "Ponctuelle" ? `<div style="font-size:0.78rem; color:var(--text-muted);">Récurrence : ${escapeHtml(m.frequence)}</div>` : ""}
+                        ${m.frequence && m.frequence !== "Ponctuelle" ? `<div style="font-size: var(--text-xs); color:var(--text-muted);">Récurrence : ${escapeHtml(m.frequence)}</div>` : ""}
                     </td>
                     <td>${m.responsable ? escapeHtml(m.responsable) : "<span style='color:var(--text-muted);'>Non assigné</span>"}</td>
                     <td><strong style="color:${prioColor(prio)};">${escapeHtml(prio)}</strong></td>
@@ -98,7 +98,7 @@ const PraMcoModule = (() => {
                     <td style="min-width:130px;">
                         <div style="display:flex; align-items:center; gap:8px;">
                             <div class="progress-bar small" style="flex:1; margin:0; height:8px;"><div class="progress-fill" style="width:${av}%; background:${avColor};"></div></div>
-                            <span style="font-size:0.8rem; color:var(--text-muted); min-width:34px; text-align:right;">${av}%</span>
+                            <span style="font-size: var(--text-sm); color:var(--text-muted); min-width:34px; text-align:right;">${av}%</span>
                         </div>
                     </td>
                 </tr>
@@ -119,10 +119,10 @@ const PraMcoModule = (() => {
                 </div>
 
                 ${enRetard > 0 ? `
-                <div class="synthese-message" style="background:#f8d7da; border-left:4px solid var(--color-danger); color:#721c24; font-size:0.9rem; padding:10px; margin-bottom:12px;">
+                <div class="synthese-message" style="background:#f8d7da; border-left:4px solid var(--color-danger); color:#721c24; font-size: var(--text-base); padding:10px; margin-bottom:12px;">
                     <strong>${enRetard} action(s) en retard :</strong> leur date programmée est dépassée et elles ne sont ni réalisées ni annulées.
                 </div>` : `
-                <div class="synthese-message info" style="font-size:0.9rem; padding:10px;">
+                <div class="synthese-message info" style="font-size: var(--text-base); padding:10px;">
                     <strong>Astuce :</strong> Planifiez ici les actions récurrentes qui garantissent que le plan fonctionne le jour J (vérification des générateurs, tests de restauration des sauvegardes, mises à jour des annuaires...). Assignez un responsable, une échéance et suivez l'avancement.
                 </div>`}
 
@@ -325,8 +325,8 @@ const PraMcoModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1 style="margin-bottom:4px;">${escapeHtml(m.titre)} ${retard ? `<span class="status status-non-conforme" style="font-size:0.8rem; vertical-align:middle;">En retard</span>` : ""}</h1>
-                        <p style="color: var(--text-muted); margin:0; font-size:0.85rem;">Action préalable (MCO) · <code>${escapeHtml(m.id)}</code></p>
+                        <h1 style="margin-bottom:4px;">${escapeHtml(m.titre)} ${retard ? `<span class="status status-non-conforme" style="font-size: var(--text-sm); vertical-align:middle;">En retard</span>` : ""}</h1>
+                        <p style="color: var(--text-muted); margin:0; font-size: var(--text-sm);">Action préalable (MCO) · <code>${escapeHtml(m.id)}</code></p>
                     </div>
                     <button id="delBtn" style="background:var(--color-danger);">Supprimer</button>
                 </div>

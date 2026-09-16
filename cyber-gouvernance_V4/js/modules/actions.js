@@ -89,8 +89,8 @@ const ActionsModule = (() => {
                     <td><span class="status ${statusClass}">${escapeHtml(I18n.valeur(a.statut))}</span></td>
                     <td>${escapeHtml(a.responsable) || "-"}</td>
                     <td>${escapeHtml(I18n.date(a.echeance)) || "-"}</td>
-                    <td style="font-size: 0.85rem; color: var(--text-muted);">${liaison}</td>
-                    ${currentClient === "global" ? `<td style="font-size:0.8rem; color:var(--text-muted);">${origineClient}</td>` : ""}
+                    <td style="font-size: var(--text-sm); color: var(--text-muted);">${liaison}</td>
+                    ${currentClient === "global" ? `<td style="font-size: var(--text-sm); color:var(--text-muted);">${origineClient}</td>` : ""}
                 </tr>
             `;
         }).join("");
@@ -107,7 +107,7 @@ const ActionsModule = (() => {
                     </div>
                 </div>
 
-                <div class="synthese-message info" style="font-size: 0.9rem; padding: 10px;">
+                <div class="synthese-message info" style="font-size: var(--text-base); padding: 10px;">
                     ${t("actions.tracabiliteNote")}
                 </div>
 

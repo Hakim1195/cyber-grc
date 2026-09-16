@@ -201,7 +201,11 @@ describe('§1 — la bascule de langue atteint réellement l’écran', () => {
       assert.match(avant['/actions'].vue, /Plan d’actions|Plan d'actions/u, 'Écran Plan d’actions, en français.');
       assert.match(avant['/incidents'].vue, /Registre des incidents/u, 'Écran Incidents, en français.');
       assert.match(avant['/incidents'].menu, /Tableau de bord/u, 'Menu en français.');
-      assert.match(avant['/incidents'].fil, /Risques/u, 'Fil d’Ariane en français.');
+      // ⚠️ « Opérations », et non plus « Risques » : le fil d'Ariane DÉDUIT sa
+      // section du menu depuis le 16/09, au lieu de porter sa propre taxonomie.
+      // Les deux divergeaient à l'écran — le menu rangeait « Donneurs d'ordre »
+      // sous *Tiers & personnes* pendant que le fil annonçait *Conformité*.
+      assert.match(avant['/incidents'].fil, /Opérations/u, 'Fil d’Ariane en français.');
 
       await changerLangue(page, 'en');
 
@@ -215,7 +219,7 @@ describe('§1 — la bascule de langue atteint réellement l’écran', () => {
       assert.match(apres['/actions'].vue, /Action plan/u, 'Écran Plan d’actions, en anglais.');
       assert.match(apres['/incidents'].vue, /Incident register/u, 'Écran Incidents, en anglais.');
       assert.match(apres['/incidents'].menu, /Dashboard/u, 'Le MENU aussi — c’est le balisage statique d’index.html.');
-      assert.match(apres['/incidents'].fil, /Risk/u, 'Le fil d’Ariane aussi.');
+      assert.match(apres['/incidents'].fil, /Operations/u, 'Le fil d’Ariane aussi.');
 
       // ── Et le français a réellement disparu de ces écrans ────────────────
       //

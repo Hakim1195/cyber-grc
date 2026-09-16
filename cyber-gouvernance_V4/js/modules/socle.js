@@ -420,21 +420,20 @@ var SocleModule = (function () {
         const admin = administrationGroupe();
         const ecriture = peutEcrire();
         return '<section class="page">' +
-            '<div class="dashboard-header no-print"><div>' +
-              "<h1>Socle de risques " +
-              Help.tip("Le catalogue des risques du Groupe, plus les risques propres à votre filiale. Il porte la DÉFINITION d'un risque — son nom, sa famille — jamais son évaluation.") +
-              "</h1>" +
-              '<p style="color:var(--text-muted); margin-top:5px;">La définition commune des menaces ' +
-              "— l'évaluation reste dans « Risques », au niveau de votre filiale</p>" +
-            "</div>" +
-            '<div style="display:flex; gap:10px; flex-wrap:wrap;">' +
+            UI.enteteHtml({
+              titre: "Socle du Groupe",
+              aide: Help.tip("Le catalogue des risques du Groupe, plus les risques propres à votre filiale. Il porte la DÉFINITION d'un risque — son nom, sa famille — jamais son évaluation."),
+              contexte: "La définition commune des menaces — l'évaluation, elle, reste dans "
+                        + "le registre, au niveau de votre filiale.",
+              onglets: UI.ongletsDe("/socle"),
+              actions:
               (ecriture
-                ? '<button type="button" id="socleAjouterFiliale" style="background:var(--primary);">Ajouter à ma filiale</button>'
+                ? '<button type="button" id="socleAjouterFiliale">Ajouter à ma filiale</button>'
                 : "") +
               (ecriture && admin
-                ? '<button type="button" id="socleAjouterGroupe" style="background:var(--accent);">Ajouter au socle du Groupe</button>'
-                : "") +
-            "</div></div>" +
+                ? '<button type="button" id="socleAjouterGroupe" class="btn-accent">Ajouter au socle du Groupe</button>'
+                : "")
+            }) +
 
             '<div class="grp-note">' +
               "<p><strong>Une définition, pas une cotation.</strong> Une entrée décrit " +

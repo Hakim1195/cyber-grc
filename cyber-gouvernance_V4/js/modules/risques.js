@@ -52,17 +52,16 @@ const RisquesModule = (() => {
 
         app.innerHTML = `
             <section class="page">
-                <div class="dashboard-header">
-                    <div>
-                        <h1>${t("risques.titre")} ${Help.tip(t("risques.titreAide"))}</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">${t("risques.perimetre")} <strong>${t("risques.perimetreInterne")}</strong></p>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">${t("commun.supprimerSelection")} (<span id="selectedCount">0</span>)</button>
-                        <a href="#/imports" class="btn-secondary" data-lecture="ok" title="${t("commun.importerAide")}">${t("commun.importer")}</a>
-                        <button id="addRisqueBtn">${t("risques.declarer")}</button>
-                    </div>
-                </div>
+                ${UI.enteteHtml({
+                    titre: t("risques.titre"),
+                    aide: Help.tip(t("risques.titreAide")),
+                    contexte: t("risques.perimetre") + " " + t("risques.perimetreInterne"),
+                    onglets: UI.ongletsDe("/risques"),
+                    actions:
+                        `<button id="bulkDeleteBtn" class="btn-danger" style="display:none;">${t("commun.supprimerSelection")} (<span id="selectedCount">0</span>)</button>` +
+                        `<a href="#/imports" class="btn-secondary" data-lecture="ok" title="${t("commun.importerAide")}">${t("commun.importer")}</a>` +
+                        `<button id="addRisqueBtn">${t("risques.declarer")}</button>`
+                })}
 
                 <table class="data-table">
                     <thead>
@@ -129,7 +128,7 @@ const RisquesModule = (() => {
             <section class="page">
                 <h1>${t("risques.nouveau")}</h1>
 
-                <div class="synthese-message info" style="margin-bottom: 20px; font-size: 0.9rem;">
+                <div class="synthese-message info" style="margin-bottom: 20px; font-size: var(--text-base);">
                     <strong>${t("risques.guideCotation")}</strong><br>
                     <ul style="margin-top: 5px; padding-left: 20px; margin-bottom: 0;">
                         <li>${t("risques.guideBrut")} <em>${t("risques.guideBrutNote")}</em></li>
@@ -172,8 +171,8 @@ const RisquesModule = (() => {
                     </div>
 
                     <div style="background: var(--bg-body); padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; border: 1px solid var(--border);">
-                        <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 5px;">${t("risques.apercuCalcul")}</div>
-                        <div id="calc-preview" style="font-size: 1.1rem;">
+                        <div style="font-size: var(--text-base); color: var(--text-muted); margin-bottom: 5px;">${t("risques.apercuCalcul")}</div>
+                        <div id="calc-preview" style="font-size: var(--text-lg);">
                             ${tHtml("risques.calcul", { brut: 1 })} <strong style="color: var(--color-success);">${escapeHtml(I18n.nombre(0.05, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))} (${t("risques.nonCritique")})</strong>
                         </div>
                     </div>
@@ -257,7 +256,7 @@ const RisquesModule = (() => {
                     <input type="checkbox" class="exigence-cb" value="${e.id}" ${risque.exigences_liees.includes(e.id) ? "checked" : ""}>
                     <strong>${escapeHtml(e.code)}</strong> — ${escapeHtml(String(e.intitule || "").substring(0, 40))}...
                 </div>
-                <span class="badge" style="font-size: 0.7rem; background: #eee; color: #666;">${escapeHtml(clientNom)}</span>
+                <span class="badge" style="font-size: var(--text-xs); background: #eee; color: #666;">${escapeHtml(clientNom)}</span>
             </label>
         `}).join("");
 
@@ -278,7 +277,7 @@ const RisquesModule = (() => {
                     <div class="dashboard-card" style="grid-column: span 2;">
                         <h3>${t("risques.evaluation")}</h3>
 
-                        <div class="synthese-message info" style="margin-bottom: 20px; font-size: 0.9rem;">
+                        <div class="synthese-message info" style="margin-bottom: 20px; font-size: var(--text-base);">
                             <strong>${t("risques.rappelCotation")}</strong> ${t("risques.rappelCotationTexte")}<br>
                             <em>${t("risques.rappelMaitrise")}</em>
                         </div>
@@ -316,7 +315,7 @@ const RisquesModule = (() => {
                         </div>
 
                         <div style="background: var(--bg-body); padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; border: 1px solid var(--border);">
-                            <div id="calc-preview" style="font-size: 1.1rem;">
+                            <div id="calc-preview" style="font-size: var(--text-lg);">
                                 ${tHtml("risques.calcul", { brut: currentF * currentG })} <strong style="color: ${getRiskColor(currentRes)};">${escapeHtml(I18n.nombre(currentRes, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))} (${getLabel(currentRes)})</strong>
                             </div>
                         </div>
@@ -329,7 +328,7 @@ const RisquesModule = (() => {
                         <div class="dashboard-card">
                             <h3>${t("risques.planTraitement")}</h3>
                             <ul style="margin-bottom: 15px;">${actionsHtml || `<li><span style='color: var(--text-muted);'>${t("risques.aucuneAction")}</span></li>`}</ul>
-                            <button id="addActionBtn" style="font-size: 0.85rem;">${t("risques.planifierAction")}</button>
+                            <button id="addActionBtn" style="font-size: var(--text-sm);">${t("risques.planifierAction")}</button>
                         </div>
                         <div class="dashboard-card">
                             <h3>${t("risques.exigencesApplicables")}</h3>

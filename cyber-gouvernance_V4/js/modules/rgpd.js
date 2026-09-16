@@ -35,10 +35,10 @@ const RgpdModule = (() => {
         const rows = trs.map(t => `
             <tr class="clickable-row" data-id="${t.id}">
                 <td><strong>${escapeHtml(t.nom)}</strong></td>
-                <td style="font-size:0.9rem;">${escapeHtml(t.finalite || "—")}</td>
+                <td style="font-size: var(--text-base);">${escapeHtml(t.finalite || "—")}</td>
                 <td>${escapeHtml(t.base_legale || "—")}</td>
                 <td style="text-align:center;">${t.donnees_sensibles ? `<span class="status status-non-conforme">Sensibles</span>` : "—"}</td>
-                <td style="font-size:0.9rem;">${escapeHtml(t.duree_conservation || "—")}</td>
+                <td style="font-size: var(--text-base);">${escapeHtml(t.duree_conservation || "—")}</td>
             </tr>`).join("");
 
         app.innerHTML = `
@@ -61,8 +61,8 @@ const RgpdModule = (() => {
                 </div>
 
                 <div class="dashboard-grid no-print" style="grid-template-columns:repeat(2,1fr); margin-bottom:1.5rem;">
-                    <div class="dashboard-card" style="text-align:center;"><h3 style="font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">Traitements</h3><div class="big-kpi" style="font-size:2.4rem;">${trs.length}</div></div>
-                    <div class="dashboard-card" style="text-align:center; border-top:4px solid var(--color-danger);"><h3 style="font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">Données sensibles</h3><div class="big-kpi" style="font-size:2.4rem; color:var(--color-danger);">${sensibles}</div></div>
+                    <div class="dashboard-card" style="text-align:center;"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Traitements</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${trs.length}</div></div>
+                    <div class="dashboard-card" style="text-align:center; border-top:4px solid var(--color-danger);"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Données sensibles</h3><div class="big-kpi" style="font-size: var(--text-3xl); color:var(--color-danger);">${sensibles}</div></div>
                 </div>
 
                 ${trs.length === 0
@@ -78,7 +78,7 @@ const RgpdModule = (() => {
                      Le produit tenait le registre de ses clients et ne savait pas
                      dire le sien. Il le dit ici, colonne par colonne. -->
                 <div class="dash-section-title" style="margin-top:2.5rem;">Le registre de l'outil lui-même</div>
-                <p style="color:var(--text-muted); font-size:0.9rem; max-width:70ch;">
+                <p style="color:var(--text-muted); font-size: var(--text-base); max-width:70ch;">
                     Ce logiciel traite lui aussi des données personnelles — des noms de responsables, des
                     contacts de crise, un journal d'accès. ${Help.tip("L'article 30 s'applique à tout traitement, y compris à l'outil qui sert à gérer les autres. Ce tableau est la réponse toute prête à la question qu'un DPO, un client ou un auditeur pose : que fait ce logiciel de nos données ? Il décrit le SCHÉMA du produit et ne contient aucune donnée personnelle.")}
                     Le tableau ci-dessous est tenu <strong>dans la base</strong>, colonne par colonne : un
@@ -115,12 +115,12 @@ const RgpdModule = (() => {
         return `
             <div class="dash-section-title" style="margin-top:2.5rem;">Documents et données personnelles</div>
             <div class="dashboard-grid no-print" style="grid-template-columns:repeat(3,1fr); margin-bottom:1rem;">
-                <div class="dashboard-card" style="text-align:center;"><h3 style="font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">Documents porteurs de données personnelles</h3><div class="big-kpi" style="font-size:2.2rem;">${porteurs.length}</div></div>
-                <div class="dashboard-card" style="text-align:center;"><h3 style="font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">Rattachés à un traitement</h3><div class="big-kpi" style="font-size:2.2rem;">${rattaches.length}</div></div>
-                <div class="dashboard-card" style="text-align:center;"><h3 style="font-size:0.9rem; color:var(--text-muted); text-transform:uppercase;">Porteurs sans traitement</h3><div class="big-kpi" style="font-size:2.2rem;">${orphelins.length}</div></div>
+                <div class="dashboard-card" style="text-align:center;"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Documents porteurs de données personnelles</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${porteurs.length}</div></div>
+                <div class="dashboard-card" style="text-align:center;"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Rattachés à un traitement</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${rattaches.length}</div></div>
+                <div class="dashboard-card" style="text-align:center;"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Porteurs sans traitement</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${orphelins.length}</div></div>
             </div>
             ${orphelins.length
-                ? `<p style="color:var(--text-muted); font-size:0.88rem; max-width:70ch;">
+                ? `<p style="color:var(--text-muted); font-size: var(--text-base); max-width:70ch;">
                        ${orphelins.length} document${orphelins.length > 1 ? "s portent" : " porte"} des données
                        personnelles sans être rattaché${orphelins.length > 1 ? "s" : ""} à un traitement du registre.
                        Ce n'est pas une faute — tout document nommant quelqu'un ne relève pas d'un traitement
@@ -146,7 +146,7 @@ const RgpdModule = (() => {
             const colonnes = Array.isArray(reponse && reponse.colonnes) ? reponse.colonnes : [];
             const perso = colonnes.filter(c => c.nature === "personnelle");
             hote.innerHTML = `
-                <p style="color:var(--text-muted); font-size:0.88rem;">
+                <p style="color:var(--text-muted); font-size: var(--text-base);">
                     ${colonnes.length} colonne${colonnes.length > 1 ? "s" : ""} décidée${colonnes.length > 1 ? "s" : ""},
                     dont <strong>${perso.length}</strong> portant des données personnelles.
                 </p>
@@ -161,7 +161,7 @@ const RgpdModule = (() => {
             // panne. Le reste se dit aussi : un écran muet ferait croire que le
             // registre est vide, ce qui est l'inverse de la vérité.
             const refus = err && (err.statut === 403 || err.code === "droit_insuffisant");
-            hote.innerHTML = `<p style="color:var(--text-muted); font-size:0.9rem;">${
+            hote.innerHTML = `<p style="color:var(--text-muted); font-size: var(--text-base);">${
                 refus
                     ? "Votre profil ne donne pas accès au domaine RGPD : le registre de l'outil ne vous est pas montré. Il existe, et un profil qui porte ce domaine le lira."
                     : "Le registre de l'outil n'a pas pu être chargé. Réessayez ; s'il ne revient pas, c'est le serveur qu'il faut regarder, pas ce tableau."
@@ -263,7 +263,7 @@ const RgpdModule = (() => {
         const baseOpts = `<option value="">— À déterminer —</option>` + BASES.map(b => `<option value="${escapeHtml(b)}" ${b === t.base_legale ? "selected" : ""}>${escapeHtml(b)}</option>`).join("");
         const mesuresHtml = mesures.length
             ? `<div class="inc-actifs">${mesures.map(m => `<label class="inc-checkbox"><input type="checkbox" class="trt-mesure" value="${escapeHtml(m.id)}" ${linked.includes(m.id) ? "checked" : ""}> ${escapeHtml(m.nom)}</label>`).join("")}</div>`
-            : `<p style="color:var(--text-muted); font-size:0.85rem;">Aucune mesure de sécurité définie. Créez-en dans <a href="#/mesures" style="color:var(--accent);">Mesures de sécurité</a>.</p>`;
+            : `<p style="color:var(--text-muted); font-size: var(--text-sm);">Aucune mesure de sécurité définie. Créez-en dans <a href="#/mesures" style="color:var(--accent);">Mesures de sécurité</a>.</p>`;
         return `
             <div class="form-group"><label>Nom du traitement <span style="color:red">*</span></label><input id="nom" value="${escapeHtml(t.nom || "")}" placeholder="Ex : Gestion de la paie" /></div>
             <div class="form-group"><label>Finalité ${Help.tip("À quoi sert le traitement, l'objectif poursuivi (ex : verser les salaires).")}</label><textarea id="finalite" placeholder="Objectif du traitement">${escapeHtml(t.finalite || "")}</textarea></div>

@@ -83,7 +83,7 @@ const SyntheseModule = (() => {
     function sparklineSvg(values, color) {
         const W = 200, H = 40, pad = 4;
         const n = values.length;
-        if (n < 2) return `<span style="font-size:0.72rem; color:#94a3b8;">Courbe dès le 2ᵉ jour</span>`;
+        if (n < 2) return `<span style="font-size: var(--text-xs); color:#94a3b8;">Courbe dès le 2ᵉ jour</span>`;
         let min = Math.min.apply(null, values), max = Math.max.apply(null, values);
         if (min === max) { min -= 1; max += 1; }
         const x = i => pad + i * (W - 2 * pad) / (n - 1);
@@ -102,11 +102,11 @@ const SyntheseModule = (() => {
         const pct = max > 0 ? clampPct(Math.round((value / max) * 100)) : 0;
         return `<div style="margin-bottom:12px;">
             <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">
-                <span style="font-size:0.86rem; color:#1f2d3d;">${esc(label)}</span>
-                <span style="font-size:0.86rem; font-weight:700; color:#1f2d3d; font-variant-numeric:tabular-nums;">${esc(valueLabel != null ? valueLabel : String(value))}</span>
+                <span style="font-size: var(--text-sm); color:#1f2d3d;">${esc(label)}</span>
+                <span style="font-size: var(--text-sm); font-weight:700; color:#1f2d3d; font-variant-numeric:tabular-nums;">${esc(valueLabel != null ? valueLabel : String(value))}</span>
             </div>
             <div style="background:#eef1f5; height:9px; border-radius:5px; overflow:hidden;"><div style="width:${pct}%; height:100%; background:${color}; border-radius:5px;"></div></div>
-            ${caption ? `<div style="font-size:0.74rem; color:#6b7a8d; margin-top:3px;">${esc(caption)}</div>` : ""}
+            ${caption ? `<div style="font-size: var(--text-xs); color:#6b7a8d; margin-top:3px;">${esc(caption)}</div>` : ""}
         </div>`;
     }
 
@@ -538,7 +538,7 @@ const SyntheseModule = (() => {
             </div>
             <div class="sd-posture__detail">
                 <h3 style="margin:0 0 4px;">Indice de posture cyber ${Help.tip("Note composite 0-100 = moyenne pondérée des composantes disponibles (conformité 30 %, maturité 20 %, maîtrise du risque 25 %, avancement 10 %, couverture 15 %), renormalisée, moins des pénalités pour risques très critiques et obligations réglementaires en attente. Aide à la décision, non normative.")}</h3>
-                <p style="margin:0 0 12px; color:${COL.muted}; font-size:0.85rem;">Lecture unique de la posture pour l'arbitrage. ${pen.length ? "Pénalités appliquées : " + esc(pen.join(" ; ")) + "." : "Aucune pénalité réglementaire appliquée."}</p>
+                <p style="margin:0 0 12px; color:${COL.muted}; font-size: var(--text-sm);">Lecture unique de la posture pour l'arbitrage. ${pen.length ? "Pénalités appliquées : " + esc(pen.join(" ; ")) + "." : "Aucune pénalité réglementaire appliquée."}</p>
                 ${list}
             </div>
         </div>`;
@@ -797,31 +797,31 @@ const SyntheseModule = (() => {
         return `<style>
         .syndir { --sd-brand:#E9631B; --sd-ink:#1f2d3d; --sd-mut:#6b7a8d; --sd-line:#e2e6ea; --sd-card:#fff; }
         .syndir .sd-head { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; border-bottom:3px solid var(--sd-brand); padding-bottom:12px; margin-bottom:22px; flex-wrap:wrap; }
-        .syndir .sd-head h1 { margin:0 0 4px; color:var(--sd-brand); font-size:1.7rem; }
-        .syndir .sd-head p { margin:0; color:var(--sd-mut); font-size:0.9rem; }
-        .syndir .sd-head__meta { text-align:right; font-size:0.85rem; color:var(--sd-mut); }
+        .syndir .sd-head h1 { margin:0 0 4px; color:var(--sd-brand); font-size: var(--text-2xl); }
+        .syndir .sd-head p { margin:0; color:var(--sd-mut); font-size: var(--text-base); }
+        .syndir .sd-head__meta { text-align:right; font-size: var(--text-sm); color:var(--sd-mut); }
         .syndir .sd-actions { display:flex; gap:8px; margin-top:8px; justify-content:flex-end; }
-        .syndir .sd-actions button { padding:7px 14px; font-size:0.85rem; border:none; border-radius:6px; cursor:pointer; color:#fff; font-weight:600; }
+        .syndir .sd-actions button { padding:7px 14px; font-size: var(--text-sm); border:none; border-radius:6px; cursor:pointer; color:#fff; font-weight:600; }
         .syndir .sd-btn-print { background:var(--sd-brand); }
         .syndir .sd-btn-dl { background:#2059A6; }
 
         .syndir .sd-orient { display:flex; gap:14px; align-items:flex-start; background:#fff; border:1px solid var(--sd-line); border-left:5px solid var(--sd-brand); border-radius:8px; box-shadow:0 1px 3px rgba(16,32,60,0.08); padding:16px 18px; margin-bottom:20px; }
         .syndir .sd-orient__dot { width:12px; height:12px; border-radius:50%; margin-top:6px; flex-shrink:0; }
-        .syndir .sd-orient h2 { font-size:1.1rem; margin:0 0 4px; color:var(--sd-ink); }
-        .syndir .sd-orient p { margin:0; color:var(--sd-mut); font-size:0.9rem; line-height:1.5; }
+        .syndir .sd-orient h2 { font-size: var(--text-lg); margin:0 0 4px; color:var(--sd-ink); }
+        .syndir .sd-orient p { margin:0; color:var(--sd-mut); font-size: var(--text-base); line-height:1.5; }
 
         .syndir .sd-card { background:var(--sd-card); border:1px solid var(--sd-line); border-radius:8px; box-shadow:0 1px 3px rgba(16,32,60,0.08); padding:18px; margin-bottom:18px; }
-        .syndir .sd-empty { color:var(--sd-mut); text-align:center; padding:14px; font-size:0.9rem; }
-        .syndir .sd-hint { color:var(--sd-mut); font-size:0.78rem; margin:10px 0 0; }
+        .syndir .sd-empty { color:var(--sd-mut); text-align:center; padding:14px; font-size: var(--text-base); }
+        .syndir .sd-hint { color:var(--sd-mut); font-size: var(--text-xs); margin:10px 0 0; }
 
-        .syndir .sd-sec-title { display:flex; align-items:center; gap:12px; font-size:0.82rem; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--sd-brand); margin:26px 0 14px; }
+        .syndir .sd-sec-title { display:flex; align-items:center; gap:12px; font-size: var(--text-sm); font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--sd-brand); margin:26px 0 14px; }
         .syndir .sd-sec-title::after { content:""; flex:1; height:2px; background:linear-gradient(90deg,var(--sd-line),transparent); }
 
         .syndir .sd-posture { display:grid; grid-template-columns:230px 1fr; gap:22px; align-items:center; }
         .syndir .sd-posture__gauge { text-align:center; }
-        .syndir .sd-posture__band { font-size:1.15rem; font-weight:800; margin-top:2px; }
-        .syndir .sd-posture__lbl { font-size:0.8rem; color:var(--sd-mut); }
-        .syndir .sd-comp { display:grid; grid-template-columns:1fr 120px 62px; align-items:center; gap:10px; margin-bottom:8px; font-size:0.86rem; }
+        .syndir .sd-posture__band { font-size: var(--text-lg); font-weight:800; margin-top:2px; }
+        .syndir .sd-posture__lbl { font-size: var(--text-sm); color:var(--sd-mut); }
+        .syndir .sd-comp { display:grid; grid-template-columns:1fr 120px 62px; align-items:center; gap:10px; margin-bottom:8px; font-size: var(--text-sm); }
         .syndir .sd-comp--off { opacity:0.5; }
         .syndir .sd-comp__lbl { color:var(--sd-ink); }
         .syndir .sd-comp__bar { background:#eef1f5; height:8px; border-radius:5px; overflow:hidden; }
@@ -832,73 +832,73 @@ const SyntheseModule = (() => {
         .syndir .sd-grid--kpi { grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); }
         .syndir .sd-grid--kri { grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); }
         .syndir .sd-tile { background:#fff; border:1px solid var(--sd-line); border-top:3px solid var(--sd-mut); border-radius:8px; box-shadow:0 1px 3px rgba(16,32,60,0.08); padding:13px 15px; }
-        .syndir .sd-tile__lbl { font-size:0.74rem; color:var(--sd-mut); text-transform:uppercase; letter-spacing:0.4px; }
-        .syndir .sd-tile__val { font-size:1.85rem; font-weight:800; line-height:1.15; margin-top:3px; font-variant-numeric:tabular-nums; }
-        .syndir .sd-tile__val small { font-size:0.95rem; font-weight:600; color:var(--sd-mut); }
-        .syndir .sd-tile__val .sd-delta { font-size:0.8rem; font-weight:700; margin-left:6px; }
-        .syndir .sd-tile__sub { font-size:0.78rem; color:var(--sd-mut); margin-top:4px; }
+        .syndir .sd-tile__lbl { font-size: var(--text-xs); color:var(--sd-mut); text-transform:uppercase; letter-spacing:0.4px; }
+        .syndir .sd-tile__val { font-size: var(--text-2xl); font-weight:800; line-height:1.15; margin-top:3px; font-variant-numeric:tabular-nums; }
+        .syndir .sd-tile__val small { font-size: var(--text-base); font-weight:600; color:var(--sd-mut); }
+        .syndir .sd-tile__val .sd-delta { font-size: var(--text-sm); font-weight:700; margin-left:6px; }
+        .syndir .sd-tile__sub { font-size: var(--text-xs); color:var(--sd-mut); margin-top:4px; }
 
         .syndir .sd-kri { background:#fff; border:1px solid var(--sd-line); border-left:4px solid var(--sd-mut); border-radius:8px; box-shadow:0 1px 3px rgba(16,32,60,0.08); padding:12px 14px; }
         .syndir .sd-kri__top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-        .syndir .sd-kri__lbl { font-size:0.74rem; color:var(--sd-mut); text-transform:uppercase; letter-spacing:0.4px; }
+        .syndir .sd-kri__lbl { font-size: var(--text-xs); color:var(--sd-mut); text-transform:uppercase; letter-spacing:0.4px; }
         .syndir .sd-kri__dot { width:11px; height:11px; border-radius:50%; flex-shrink:0; }
-        .syndir .sd-kri__val { font-size:1.75rem; font-weight:800; line-height:1.15; margin:3px 0; font-variant-numeric:tabular-nums; }
-        .syndir .sd-kri__val small { font-size:0.9rem; font-weight:600; color:var(--sd-mut); }
-        .syndir .sd-kri__sub { font-size:0.75rem; color:var(--sd-mut); }
+        .syndir .sd-kri__val { font-size: var(--text-2xl); font-weight:800; line-height:1.15; margin:3px 0; font-variant-numeric:tabular-nums; }
+        .syndir .sd-kri__val small { font-size: var(--text-base); font-weight:600; color:var(--sd-mut); }
+        .syndir .sd-kri__sub { font-size: var(--text-xs); color:var(--sd-mut); }
 
         .syndir .sd-trend-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
-        .syndir .sd-trend__top { display:flex; justify-content:space-between; align-items:baseline; font-size:0.82rem; color:var(--sd-mut); margin-bottom:2px; }
-        .syndir .sd-trend__top strong { color:var(--sd-ink); font-size:1.05rem; font-variant-numeric:tabular-nums; }
-        .syndir .sd-trend__delta { font-size:0.78rem; font-weight:700; margin-top:2px; }
+        .syndir .sd-trend__top { display:flex; justify-content:space-between; align-items:baseline; font-size: var(--text-sm); color:var(--sd-mut); margin-bottom:2px; }
+        .syndir .sd-trend__top strong { color:var(--sd-ink); font-size: var(--text-md); font-variant-numeric:tabular-nums; }
+        .syndir .sd-trend__delta { font-size: var(--text-xs); font-weight:700; margin-top:2px; }
 
-        .syndir .sd-reg-table { width:100%; border-collapse:collapse; font-size:0.88rem; }
-        .syndir .sd-reg-table th { text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.4px; color:var(--sd-mut); padding:6px 8px; border-bottom:2px solid var(--sd-line); }
+        .syndir .sd-reg-table { width:100%; border-collapse:collapse; font-size: var(--text-base); }
+        .syndir .sd-reg-table th { text-align:left; font-size: var(--text-xs); text-transform:uppercase; letter-spacing:0.4px; color:var(--sd-mut); padding:6px 8px; border-bottom:2px solid var(--sd-line); }
         .syndir .sd-reg-table td { padding:9px 8px; border-bottom:1px solid var(--sd-line); vertical-align:middle; }
-        .syndir .sd-reg-ed { font-size:0.72rem; color:var(--sd-mut); }
+        .syndir .sd-reg-ed { font-size: var(--text-xs); color:var(--sd-mut); }
         .syndir .sd-reg-cov { font-variant-numeric:tabular-nums; color:var(--sd-mut); white-space:nowrap; }
         .syndir .sd-reg-bar { min-width:150px; }
         .syndir .sd-reg-track { display:inline-block; width:90px; height:8px; background:#eef1f5; border-radius:5px; overflow:hidden; vertical-align:middle; margin-right:8px; }
         .syndir .sd-reg-track > span { display:block; height:100%; border-radius:5px; }
         .syndir .sd-reg-pct { font-weight:700; font-variant-numeric:tabular-nums; }
-        .syndir .sd-reg-sec { font-size:0.8rem; color:var(--sd-mut); }
-        .syndir .sd-pill { display:inline-block; padding:3px 10px; border-radius:12px; color:#fff; font-size:0.74rem; font-weight:700; white-space:nowrap; }
+        .syndir .sd-reg-sec { font-size: var(--text-sm); color:var(--sd-mut); }
+        .syndir .sd-pill { display:inline-block; padding:3px 10px; border-radius:12px; color:#fff; font-size: var(--text-xs); font-weight:700; white-space:nowrap; }
 
         .syndir .sd-split { display:grid; grid-template-columns:230px 1fr; gap:22px; align-items:start; }
         .syndir .sd-split__side { text-align:center; }
         .syndir .sd-split--2 { grid-template-columns:1fr 1fr; }
         .syndir .sd-split__col { min-width:0; }
-        .syndir .sd-legend { margin-top:12px; font-size:0.82rem; text-align:left; display:inline-block; }
+        .syndir .sd-legend { margin-top:12px; font-size: var(--text-sm); text-align:left; display:inline-block; }
         .syndir .sd-legend > div { display:flex; align-items:center; gap:7px; margin-bottom:4px; }
         .syndir .sd-legend b { margin-left:auto; }
         .syndir .sd-dot { width:11px; height:11px; border-radius:3px; display:inline-block; }
-        .syndir .sd-expo { margin-top:12px; padding-top:10px; border-top:1px solid var(--sd-line); font-size:0.85rem; color:var(--sd-mut); }
+        .syndir .sd-expo { margin-top:12px; padding-top:10px; border-top:1px solid var(--sd-line); font-size: var(--text-sm); color:var(--sd-mut); }
         .syndir .sd-risk-list { list-style:none; margin:0; padding:0; }
         .syndir .sd-risk-item { display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:12px; padding:10px 4px; border-bottom:1px solid var(--sd-line); cursor:pointer; }
         .syndir .sd-risk-item:last-child { border-bottom:none; }
         .syndir .sd-risk-name { font-weight:600; color:var(--sd-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .syndir .sd-risk-treat { font-size:0.78rem; font-weight:600; white-space:nowrap; }
-        .syndir .sd-risk-score { color:#fff; font-weight:700; font-size:0.78rem; padding:2px 9px; border-radius:12px; font-variant-numeric:tabular-nums; }
+        .syndir .sd-risk-treat { font-size: var(--text-xs); font-weight:600; white-space:nowrap; }
+        .syndir .sd-risk-score { color:#fff; font-weight:700; font-size: var(--text-xs); padding:2px 9px; border-radius:12px; font-variant-numeric:tabular-nums; }
 
         .syndir .sd-decision-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; }
         .syndir .sd-decision { background:#fff; border:1px solid var(--sd-line); border-left:4px solid var(--sd-mut); border-radius:8px; box-shadow:0 1px 3px rgba(16,32,60,0.08); padding:13px 16px; cursor:pointer; transition:transform .15s ease, box-shadow .15s ease; }
         .syndir .sd-decision:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(16,32,60,0.10); }
         .syndir .sd-decision__head { display:flex; align-items:baseline; gap:10px; margin-bottom:5px; }
-        .syndir .sd-decision__pr { font-size:0.68rem; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap; }
-        .syndir .sd-decision__head strong { color:var(--sd-ink); font-size:0.95rem; }
-        .syndir .sd-decision p { margin:0; color:var(--sd-mut); font-size:0.85rem; line-height:1.45; }
+        .syndir .sd-decision__pr { font-size: var(--text-xs); font-weight:800; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap; }
+        .syndir .sd-decision__head strong { color:var(--sd-ink); font-size: var(--text-base); }
+        .syndir .sd-decision p { margin:0; color:var(--sd-mut); font-size: var(--text-sm); line-height:1.45; }
 
         .syndir .sd-watch { list-style:none; margin:0; padding:0; }
         .syndir .sd-watch-item { display:flex; align-items:center; gap:10px; padding:9px 4px; border-bottom:1px solid var(--sd-line); cursor:pointer; }
         .syndir .sd-watch-item:last-child { border-bottom:none; }
         .syndir .sd-wi-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
         .syndir .sd-watch-body { flex:1; min-width:0; display:flex; flex-direction:column; }
-        .syndir .sd-watch-title { font-weight:600; color:var(--sd-ink); font-size:0.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .syndir .sd-watch-meta { font-size:0.75rem; color:var(--sd-mut); }
-        .syndir .sd-badge { font-size:0.7rem; font-weight:700; padding:2px 9px; border-radius:12px; white-space:nowrap; }
+        .syndir .sd-watch-title { font-weight:600; color:var(--sd-ink); font-size: var(--text-base); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .syndir .sd-watch-meta { font-size: var(--text-xs); color:var(--sd-mut); }
+        .syndir .sd-badge { font-size: var(--text-xs); font-weight:700; padding:2px 9px; border-radius:12px; white-space:nowrap; }
         .syndir .sd-badge--late { background:#fbe9e7; color:#c0392b; }
         .syndir .sd-badge--soon { background:#fff4e0; color:#e08a00; }
 
-        .syndir .sd-footer { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:26px; padding-top:14px; border-top:1px dashed var(--sd-line); color:var(--sd-mut); font-size:0.78rem; }
+        .syndir .sd-footer { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:26px; padding-top:14px; border-top:1px dashed var(--sd-line); color:var(--sd-mut); font-size: var(--text-xs); }
 
         @media (max-width:760px) {
             .syndir .sd-posture, .syndir .sd-split, .syndir .sd-split--2 { grid-template-columns:1fr; }
@@ -941,7 +941,7 @@ const SyntheseModule = (() => {
         // texte, comme partout ailleurs (lot L9, `CONVENTIONS.md` §33.4).
         const head = `<div class="sd-head">
             <div>
-                <div style="font-size:0.8rem; font-weight:800; letter-spacing:1px; color:#2059A6; text-transform:uppercase;">${esc(Identite.raisonSocialeOuRepli(Identite.NOM_PRODUIT))}</div>
+                <div style="font-size: var(--text-sm); font-weight:800; letter-spacing:1px; color:#2059A6; text-transform:uppercase;">${esc(Identite.raisonSocialeOuRepli(Identite.NOM_PRODUIT))}</div>
                 <h1>Synthèse Direction — Posture Cyber</h1>
                 <p>Périmètre : <strong>${esc(m.contextName)}</strong> · Édité le ${esc(dateJour)}</p>
             </div>

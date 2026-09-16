@@ -43,7 +43,7 @@ const BiaModule = (() => {
                     </div>
                 </div>
 
-                <details class="synthese-message info" style="font-size: 0.9rem; padding: 10px; cursor: pointer; outline: none; margin-bottom: 20px;">
+                <details class="synthese-message info" style="font-size: var(--text-base); padding: 10px; cursor: pointer; outline: none; margin-bottom: 20px;">
                     <summary style="font-weight: bold; outline: none;">
                         <strong>Guide BIA :</strong> Identifiez les processus vitaux de l'entreprise et fixez les objectifs de reprise (Cliquez pour lire).
                     </summary>
@@ -203,7 +203,7 @@ const BiaModule = (() => {
             <label class="checkbox-line" style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <input type="checkbox" class="actif-cb" value="${a.id}" ${processus.actifs_lies.includes(a.id) ? "checked" : ""}>
-                    <strong>${escapeHtml(a.nom)}</strong> — <span style="font-size: 0.8rem; color: var(--text-muted);">${escapeHtml(a.type)}</span>
+                    <strong>${escapeHtml(a.nom)}</strong> — <span style="font-size: var(--text-sm); color: var(--text-muted);">${escapeHtml(a.type)}</span>
                 </div>
                 <span class="badge" style="background: ${a.criticite === 'critique' ? 'var(--color-danger)' : '#eee'}; color: ${a.criticite === 'critique' ? 'white' : '#333'};">
                     Criticité IT: ${escapeHtml(a.criticite)}
@@ -262,7 +262,7 @@ const BiaModule = (() => {
 
                     <div class="dashboard-card">
                         <h3>Cartographie IT (Dépendances)</h3>
-                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Cochez les actifs informatiques nécessaires au fonctionnement de ce processus. <em>(Pour respecter le RTO de ce processus métier, le RTO de ces actifs IT devra être inférieur ou égal).</em></p>
+                        <p style="font-size: var(--text-sm); color: var(--text-muted); margin-bottom: 15px;">Cochez les actifs informatiques nécessaires au fonctionnement de ce processus. <em>(Pour respecter le RTO de ce processus métier, le RTO de ces actifs IT devra être inférieur ou égal).</em></p>
                         <div class="checkbox-group" style="max-height: 400px;">
                             ${actifsHtml || "<p style='color: var(--text-muted);'>Aucun actif inventorié dans le SI.</p>"}
                         </div>

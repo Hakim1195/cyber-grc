@@ -2317,3 +2317,156 @@ input, select, textarea {
     white-space: nowrap;
     vertical-align: middle;
 }
+
+/* =====================================================================
+   LE GABARIT D'ÉCRAN — `UI.enteteHtml()`
+   ---------------------------------------------------------------------
+   Un seul en-tête pour les trente écrans, là où chacun recomposait le sien.
+   ⚠️ Toutes les tailles viennent de l'échelle de `css/tokens.css` : c'est le
+   but du composant, et le mesurer était le diagnostic — 278 `font-size` en
+   dur portant 42 valeurs distinctes, dont huit entre 0,70 et 0,78 rem.
+===================================================================== */
+
+.page-entete {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-5);
+}
+.page-entete h1 { margin: 0; }
+
+/* Le sous-titre dit DE QUOI on parle — le périmètre, le filtre, le compte.
+   Il se borne en largeur : une ligne de 1 800 px se relit mal (règle de
+   mesure de la skill, 65-75 signes). */
+.page-contexte {
+    margin: var(--space-2) 0 0;
+    color: var(--text-muted);
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
+    max-width: var(--mesure-texte);
+}
+
+.page-actions {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* ── Les onglets ──────────────────────────────────────────────────────
+   Ce sont des LIENS : ils se partagent, ils reviennent avec le bouton
+   « Précédent », et ils sont au clavier sans une ligne de script. L'onglet
+   courant porte `aria-current="page"` — la couleur seule ne dit rien à qui
+   ne la voit pas (règle « Color Only », sévérité haute). */
+.page-onglets {
+    margin: 0 0 var(--space-5);
+    border-bottom: 1px solid var(--border);
+}
+.page-onglets ul {
+    display: flex;
+    gap: var(--space-1);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-x: auto;
+}
+.page-onglets a {
+    display: block;
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-decoration: none;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    /* Le trait ne doit pas faire sauter la ligne quand il apparaît. */
+    margin-bottom: -1px;
+    transition: color 0.12s ease, border-color 0.12s ease;
+}
+.page-onglets a:hover { color: var(--text-main); border-bottom-color: var(--border); }
+.page-onglets a.page-onglet--actif {
+    color: var(--primary-dark);
+    border-bottom-color: var(--primary);
+}
+.page-onglets a:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+
+/* À l'impression, l'onglet courant se lit comme un intertitre : la pièce
+   doit dire QUELLE vue elle porte, et les autres onglets n'ont rien à y faire. */
+@media print {
+    .page-entete { margin-bottom: var(--space-4); }
+}
+
+/* ── Les deux classes de bouton qui manquaient ────────────────────────
+   `.btn-secondary` existait ; `.btn-danger` et `.btn-accent` étaient posés
+   trente fois en style EN LIGNE — `style="background:var(--color-danger)"` —,
+   ce qui explique qu'ils n'aient jamais eu ni survol, ni focus, ni taille de
+   cible cohérente. Les nommer, c'est pouvoir les corriger une fois. */
+.btn-danger { background: var(--color-danger); }
+.btn-danger:hover { background: #a5281b; }
+.btn-accent { background: var(--accent); }
+.btn-accent:hover { background: var(--accent-hover); }
+
+/* Un bouton d'en-tête et un lien d'en-tête doivent avoir la MÊME hauteur :
+   sinon la barre d'actions dandine, et c'est le premier détail qui fait
+   « amateur » sur un écran par ailleurs soigné. */
+.page-actions .btn-secondary,
+.page-actions button {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    font-size: var(--text-base);
+    line-height: var(--leading-tight);
+}
+
+/* ── L'ANCIEN EN-TÊTE ADOPTE LES RÈGLES DU NOUVEAU ────────────────────
+   Quarante-sept `dashboard-header` subsistent dans vingt-sept modules, et les
+   convertir un par un prendrait plus de temps que ce que l'incohérence mérite.
+   On fait donc d'abord ce qui coûte trois règles : **les deux en-têtes suivent
+   les mêmes**. La conversion vers `UI.enteteHtml()` reste souhaitable — elle
+   apporte les onglets et supprime le balisage recopié —, mais elle n'est plus
+   un préalable à la cohérence visuelle.
+
+   ⚠️ `justify-content` et `align-items` étaient déjà là ; ce qui manquait est
+   l'ESPACEMENT (posé en `rem` arbitraires), le retour à la ligne sur écran
+   étroit, et le fait qu'un sous-titre d'en-tête ne ressemblait à rien de
+   précis — chaque module posait sa couleur et sa marge à la main. */
+.dashboard-header {
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    align-items: flex-start;
+    margin-bottom: var(--space-5);
+}
+.dashboard-header > div:first-child > h1 { margin: 0; }
+/* Le sous-titre : même taille, même gris, même mesure que `.page-contexte`,
+   quelles que soient les valeurs posées en ligne — celles-ci restent, mais
+   elles portent sur la couleur et la marge, que l'on reprend ici. */
+.dashboard-header > div:first-child > p {
+    margin: var(--space-2) 0 0;
+    color: var(--text-muted);
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
+    max-width: var(--mesure-texte);
+}
+/* La barre d'actions : deuxième bloc de l'en-tête quand il y en a deux. Les
+   modules y posaient `display:flex; gap:10px` en ligne, trente fois, avec
+   trois valeurs d'espacement différentes. */
+.dashboard-header > div + div {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    align-items: center;
+}
+.dashboard-header > div + div > button,
+.dashboard-header > div + div > .btn-secondary,
+.dashboard-header > div + div > a {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    font-size: var(--text-base);
+    line-height: var(--leading-tight);
+}

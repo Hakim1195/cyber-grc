@@ -30,7 +30,7 @@ const ClientsModule = (() => {
                     <button id="addClientBtn">Ajouter un client</button>
                 </div>
 
-                <div class="synthese-message info" style="font-size: 0.9rem; padding: 10px;">
+                <div class="synthese-message info" style="font-size: var(--text-base); padding: 10px;">
                     Gérez ici vos différents donneurs d'ordre ou périmètres. Vous pourrez ensuite importer et rattacher des exigences spécifiques à chacun d'eux.
                 </div>
 

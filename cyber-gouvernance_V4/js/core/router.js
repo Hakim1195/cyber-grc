@@ -105,7 +105,6 @@ const Router = (() => {
         // deviennent alors inertes en silence — constat M-6 de la porte S2.
         app.innerHTML = `
             <section class="page" style="text-align: center; margin-top: 10vh;">
-                <div style="font-size: 4rem; margin-bottom: 20px;"></div>
                 <h1>Page introuvable</h1>
                 <p style="color: var(--text-muted); margin-bottom: 20px;">La page que vous recherchez n'existe pas ou a été déplacée.</p>
                 <button id="retour-tableau-de-bord" style="background-color: var(--primary);">

@@ -5,7 +5,8 @@
  *
  * La barre latérale portait **32 entrées à plat**, dont dix-sept sous un seul
  * intertitre : c'était une liste, pas une navigation. Elle est désormais
- * découpée en **six sections repliables**.
+ * découpée en **sept sections repliables** (six à sa naissance ; « Tiers &
+ * personnes » est venue de la passe d'architecture du 16/09).
  *
  * Trois propriétés, et chacune vient d'une manière précise de se tromper :
  *
@@ -94,7 +95,13 @@ describe('Le menu se replie — lot L17, action A2', () => {
       await attendreQuiescence(page);
 
       const depart = await inventaire(page);
-      assert.equal(depart.sections, 6, 'Six sections sont attendues dans la barre latérale.');
+      // SEPT depuis la passe d'architecture du 16/09 : « Tiers & personnes » naît
+      // de deux entrées mal rangées — un prestataire était sous *Continuité* parce
+      // qu'il avait été écrit en même temps que le PRA, un donneur d'ordre sous
+      // *Conformité*. ⚠️ Ce nombre est censé BOUGER, et c'est pourquoi il est ici :
+      // un regroupement qui change sans que personne l'écrive est un regroupement
+      // que personne n'a décidé.
+      assert.equal(depart.sections, 7, 'Sept sections sont attendues dans la barre latérale.');
       assert.equal(
         depart.entreesVisibles,
         depart.entreesTotales,
