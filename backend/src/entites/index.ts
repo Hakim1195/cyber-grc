@@ -281,7 +281,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 14;
+export const VERSION_SCHEMA = 15;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -661,6 +661,13 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
         archive_le: "Date d'archivage, posée avec le statut de cycle de vie (lot L4).",
         reference: 'Référence du socle Groupe — administration Groupe, lot L4.',
         domaine: 'Domaine du socle Groupe — administration Groupe, lot L4.',
+        portee_groupe:
+          'Colonne ENGENDRÉE (migration `036`, CONVENTIONS.md §18.6) : elle entre dans la ' +
+          "clé de portée de `document_mesures` et PostgreSQL refuse qu'on lui donne une " +
+          'valeur. Elle se déduit de `filiale_id`. ⚠️ **Troisième table à s’y prendre** — ' +
+          'après `traitements` au lot RGPD et `personnes` au lot L19 —, et à chaque fois ' +
+          'c’est le garde-fou du registre qui l’a dit en refusant le démarrage, jamais une ' +
+          'relecture. *Le même garde, la même faute, trois lots de suite.*',
       },
       seconde: {
         table: 'mesure_mise_en_oeuvre',
@@ -725,6 +732,21 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
           table: 'document_referentiels',
           colonneParent: 'document_id',
           colonneEnfant: 'ref_id',
+          forme: 'identifiants',
+        },
+        // Migration `036`, action 19.3 — le chaînon qui manquait entre la
+        // gouvernance et la preuve. Même forme que les référentiels, et ce
+        // n'est pas un hasard : un document COUVRE des référentiels et PROUVE
+        // des contrôles ; deux listes d'identifiants, deux questions distinctes.
+        //
+        // ⚠️ `mesures_ids` et non `mesures` : le nom est celui que `traitements`
+        // emploie déjà pour la même chose (la liaison vers le pivot). Deux noms
+        // pour un même lien obligeraient chaque écran à savoir lequel il regarde.
+        {
+          champ: 'mesures_ids',
+          table: 'document_mesures',
+          colonneParent: 'document_id',
+          colonneEnfant: 'mesure_id',
           forme: 'identifiants',
         },
         // Migration `027`. Même forme que les référentiels — et c'est voulu :

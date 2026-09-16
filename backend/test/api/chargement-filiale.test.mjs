@@ -158,7 +158,9 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // de portée Groupe voudrait dire « le Groupe accepte que ses vingt filiales
     // soient en écart », ce qui n'est pas une dérogation mais un changement de
     // politique.
-    assert.equal(tablesCloisonnees.length, 38, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    // 39 depuis la migration `036` : `document_mesures`, le lien qui dit quels
+    // contrôles un document prouve. Elle est MIXTE, comme le document lui-même.
+    assert.equal(tablesCloisonnees.length, 39, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -182,12 +184,11 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // n'a par construction aucune ligne locale. Le jour où une ligne de filiale y
     // apparaît, ce test le dira, et le jeu d'essai devra la couvrir.
     assert.deepEqual(sansMatiere, ['groupes_ad']);
-    // 37 depuis la migration `035` : `derogations`, semée des deux côtés pour la
-    // même raison que les précédentes.
+    // 38 depuis la migration `036` : `document_mesures`, semée des deux côtés.
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      37,
-      'Trente-sept tables devaient contenir au moins une ligne allemande. Une table neuve '
+      38,
+      'Trente-huit tables devaient contenir au moins une ligne allemande. Une table neuve '
         + 'sans ligne dans le semis est un angle mort : le balayage y rendrait « zéro '
         + 'visible » pour la seule raison qu’il n’y a rien à voir.',
     );
@@ -309,8 +310,8 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     // trois précédentes, et cette raison mérite d'être répétée — une table neuve
     // sans ligne rendrait « zéro visible » PARCE QU'IL N'Y A RIEN À VOIR, et se
     // présenterait comme une preuve de cloisonnement.
-    // 35 depuis la migration `035` : `derogations`, l'écart de conformité assumé.
-    assert.equal(nonVides.length, 35, `Tables non vides : ${nonVides.join(', ')}`);
+    // 36 depuis la migration `036` : `document_mesures`.
+    assert.equal(nonVides.length, 36, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

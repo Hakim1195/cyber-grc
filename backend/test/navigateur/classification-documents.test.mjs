@@ -523,7 +523,11 @@ describe('la classification documentaire, de l’écran à la base et retour', (
   });
 
   test('§5 — l’écran RGPD charge le registre de l’outil, et n’en sort aucun nom', async () => {
-    await aller(session.page, '/rgpd');
+    // ⚠️ La vue a sa propre adresse depuis le 16/09 : le registre du PRODUIT
+    // n'est plus empilé sous celui des traitements, c'est un ONGLET. Trois
+    // sujets sur une page — l'article 30, les documents, l'outil — obligeaient
+    // à faire défiler pour trouver le sien, et les trois ont trois lecteurs.
+    await aller(session.page, '/rgpd-outil');
     await session.page.click('#chargerRegistreProduit');
     await session.page.waitForFunction(
       () => (document.querySelectorAll('#registreProduit tbody tr').length ?? 0) > 0,

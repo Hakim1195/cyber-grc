@@ -112,6 +112,12 @@ async function startApp() {
 
         "/rgpd": () => { if (typeof RgpdModule !== "undefined") RgpdModule.renderList(); },
         "/rgpd/:id": (id) => { if (typeof RgpdModule !== "undefined") RgpdModule.renderDetail(id); },
+        // Les deux autres VUES du registre — des onglets, pas des entrées de
+        // menu : trois lecteurs différents, un seul sujet. ⚠️ Elles ne peuvent
+        // pas s'écrire « /rgpd/outil » : le routeur y verrait l'identifiant d'un
+        // traitement, et l'écran dirait « Traitement introuvable ».
+        "/rgpd-documents": () => { if (typeof RgpdModule !== "undefined") RgpdModule.renderDocuments(); },
+        "/rgpd-outil": () => { if (typeof RgpdModule !== "undefined") RgpdModule.renderOutil(); },
 
         "/actions": () => ActionsModule.renderList(),
         "/actions/:id": (id) => ActionsModule.renderDetail(id),
@@ -1102,6 +1108,8 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/incidents":    "incidents",
     "/documents":    "documents",
     "/rgpd":         "rgpd",
+    "/rgpd-documents": "rgpd",
+    "/rgpd-outil":   "rgpd",
     "/actions":      "actions",
     "/mco":          "actions",
     "/crise":        "continuite",

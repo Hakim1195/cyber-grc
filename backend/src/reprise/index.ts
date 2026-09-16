@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 14;
+export const VERSION_SCHEMA = 15;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -479,7 +479,8 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     prefixe: 'DOC',
     champs: [
       'id', 'titre', 'type', 'version', 'proprietaire', 'statut',
-      'date_revue', 'emplacement', 'referentiels', 'notes', 'updatedAt',
+      // v15 — `mesures_ids` : quels contrôles ce document prouve (action 19.3).
+      'date_revue', 'emplacement', 'referentiels', 'mesures_ids', 'notes', 'updatedAt',
     ],
     enumerations: [
       // ⚠️ « en validation » est arrivé avec la migration `019` (action D5). L'oublier
@@ -497,8 +498,9 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     dates: ['date_revue'],
     references: [],
     // `referentiels[]` vise le catalogue statique : liaison sans clé étrangère
-    // (`CONVENTIONS.md` §7), donc rien à contrôler ici.
-    referencesMultiples: [],
+    // (`CONVENTIONS.md` §7), donc rien à contrôler ici. `mesures_ids[]`, lui, vise
+    // le pivot — qui est une entité de l'instantané, donc contrôlable.
+    referencesMultiples: [{ champ: 'mesures_ids', cible: 'mesures' }],
     cleMetier: null,
   },
   traitements: {
@@ -1643,6 +1645,29 @@ const PALIERS: readonly EtapePalier[] = [
     // et aucune donnée existante n'est touchée. Un export v13 se reprend donc à
     // l'identique.
     appliquer: paliersCollections(['derogations']),
+  },
+  {
+    de: 14,
+    vers: 15,
+    libelle:
+      'Lot L19, action 19.3 : un document dit quels CONTRÔLES il prouve (« mesures_ids »), ' +
+      'et non plus seulement quels référentiels il couvre.',
+    // ⚠️ Ce palier n'ajoute pas une COLLECTION mais un CHAMP, et il ne transforme
+    // rien : `normalize()` garantit le tableau sur chaque document, et un export v14
+    // n'en porte aucun. Il se reprend donc à l'identique — le rapport dit seulement
+    // que le champ est apparu, pour qu'une reprise silencieuse ne le soit pas.
+    appliquer: (ctx) => {
+      let poses = 0;
+      for (const document of ctx.charge.documents) {
+        if (!Array.isArray(document.mesures_ids)) {
+          document.mesures_ids = [];
+          poses += 1;
+        }
+      }
+      return poses > 0
+        ? [`${poses} document(s) dotés d’un tableau « mesures_ids » vide`]
+        : [];
+    },
   },
 ];
 

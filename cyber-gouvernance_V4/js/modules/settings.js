@@ -48,12 +48,12 @@ const SettingsModule = (() => {
 
         app.innerHTML = `
             <section class="page">
-                <div class="dashboard-header">
-                    <div>
-                        <h1>Échange de données</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Vos données sont enregistrées sur le serveur de votre filiale, qui les sauvegarde. Cet écran sert aux échanges de fichier.</p>
-                    </div>
-                </div>
+                ${UI.enteteHtml({
+                    titre: "Échange de données",
+                    contexte: "Vos données sont enregistrées sur le serveur de votre filiale, "
+                              + "qui les sauvegarde. Cet écran sert aux échanges de fichier — "
+                              + "reprendre une filiale déjà équipée, ou lui remettre les siennes."
+                })}
 
                 <!-- ÉTAT DU STOCKAGE -->
                 <div class="dashboard-card" style="border-top: 4px solid var(--accent); margin-bottom: 1.5rem;">

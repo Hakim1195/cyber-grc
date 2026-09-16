@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 1993 essais, vingt-cinq familles (voir plus bas)
+npm test                           # 2004 essais, vingt-six familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -769,11 +769,11 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 16/09/2026, à la révision `54383a4`** : `npm test` → **1993 essais,
-1993 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**Mesuré au 16/09/2026, à la révision `54383a4`** : `npm test` → **2004 essais,
+2004 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **39 garde-fous consignés**, **35 migrations**,
-**55 tables**, **263 décisions** au registre de l'article 30 ; publication → **85
+`f_verifier_schema()` → 0 anomalie, **40 garde-fous consignés**, **36 migrations**,
+**56 tables**, **269 décisions** au registre de l'article 30 ; publication → **85
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **14 conformes,
 1 réserve, 0 bloquant**.
 
@@ -947,14 +947,14 @@ npm test                                         → tests 1993 · pass 1993 · 
                                                    reglementaire 7 · derogations 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (39 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (40 garde-fous découverts, joués, consignés)
 ```
 
-Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **55 tables** en
-**35 migrations**, **220 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
-**89 clés étrangères** (51 `restrict`, 36 `cascade`, 2 `set null`), **48 tables portant
-`cree_par` et 48 déclencheurs de création**, **23 clés étrangères composites** visant
-`(id, filiale_id)`, **11 unicités** `uq_<parent>_id_filiale`, **39 contrôles consignés**
+Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **56 tables** en
+**36 migrations**, **224 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**94 clés étrangères** (54 `restrict`, 38 `cascade`, 2 `set null`), **49 tables portant
+`cree_par` et 49 déclencheurs de création**, **27 clés étrangères composites** visant
+`(id, filiale_id)`, **13 unicités** `uq_<parent>_id_filiale`, **40 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1234,7 +1234,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **55 tables**, obtenues aujourd'hui en **35 migrations** appliquées de bout en bout par
+- **56 tables**, obtenues aujourd'hui en **36 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1254,11 +1254,11 @@ Ce que la reprise fait, quand on la rejoue :
   ajoute la vingt-deuxième action du journal (`verification_integrite`), deux colonnes de
   verdict sur `pieces_jointes`, un index de balayage — et **réémet** le garde-fou du
   vocabulaire plutôt que d'en poser un second sur la même contrainte.
-- **220 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
+- **224 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
-- **89 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
-  migrations : **51 en `restrict`, 36 en `cascade`, deux en `set null`**
+- **94 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
+  migrations : **54 en `restrict`, 38 en `cascade`, deux en `set null`**
   (`incidents.risque_id` — l'incident survit au risque). ⚠️ **Les deux `set null` sont
   restés deux**, et ce n'est pas faute d'avoir essayé : `documents.traitement_id` visait
   cette forme, et **PostgreSQL 17 la refuse sur une clé contenant une colonne engendrée**,
@@ -1286,8 +1286,8 @@ Ce que la reprise fait, quand on la rejoue :
   `archive_le`), reste lisible et reste rattaché à tout ce qui le référence.
 - **Clés étrangères et unicités composites** : quand l'enfant et le parent sont tous
   deux cloisonnés, la clé porte `(référence, filiale_id)` et vise une unicité
-  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **23 clés étrangères** dont la
-  seconde colonne visée est le `filiale_id` du parent ou sa portée, et **11 unicités** de
+  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **27 clés étrangères** dont la
+  seconde colonne visée est le `filiale_id` du parent ou sa portée, et **13 unicités** de
   cette forme. ⚠️ **Elles vont par PAIRES depuis la migration `027`**, et c'est mécanisé :
   toute clé composite visant une table MIXTE par un `filiale_id` nullable doit avoir sa
   compagne passant par `portee_groupe`, la colonne engendrée — sans quoi la règle « match

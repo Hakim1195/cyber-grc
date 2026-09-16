@@ -73,6 +73,9 @@ const NOUVELLES_PAR_VERSION = {
   13: ['risque_catalogue', 'referentiels_actifs'],
   // v14 — les dérogations datées (action 19.2).
   14: ['derogations'],
+  // ⚠️ v15 n'ajoute AUCUNE collection : elle ajoute un CHAMP (`documents[].mesures_ids`).
+  // La table dit quelles collections apparaissent, et zéro est une réponse.
+  15: [],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -505,6 +508,25 @@ export function instantaneV12Complet() {
  * au premier ajout de collection. C'est arrivé le 04/09/2026, puis de nouveau à la
  * v14 : d'où deux jeux, et non un seul qu'on renumérote.
  */
+/**
+ * Le même instantané, **en version courante (v15)**.
+ *
+ * ⚠️ Il ne gagne pas une collection mais un CHAMP : `documents[].mesures_ids`, la liste
+ * des contrôles qu'un document prouve (action 19.3). Le jeu lui en donne un **non vide** —
+ * un round-trip qui ne transporte rien ne prouve pas qu'il transporte bien.
+ */
+export function instantaneV15Complet() {
+  const base = instantaneV14Complet();
+  return {
+    ...base,
+    schemaVersion: 15,
+    documents: base.documents.map((d, i) => ({
+      ...d,
+      mesures_ids: i === 0 ? ['MESURE-1720000000000-115'] : [],
+    })),
+  };
+}
+
 export function instantaneV14Complet() {
   return {
     ...instantaneV13Complet(),

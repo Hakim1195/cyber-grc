@@ -2470,3 +2470,74 @@ input, select, textarea {
     font-size: var(--text-base);
     line-height: var(--leading-tight);
 }
+
+/* La note qui accompagne le registre de l'outil : de la prose, donc bornée. */
+.rgpd-note {
+    margin: 0 0 var(--space-4);
+    color: var(--text-muted);
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    max-width: var(--mesure-texte);
+}
+
+/* =====================================================================
+   DOCUMENTS ↔ CONTRÔLES (L19 · 19.3) — `js/modules/preuves.js`
+   ---------------------------------------------------------------------
+   Le même panneau des deux côtés du lien : une liste, une portée, un geste.
+   Rien de neuf en couleur — un rattachement n'est pas un statut, et lui en
+   donner un ferait croire qu'il vaut évaluation.
+===================================================================== */
+
+.prv-encart { margin-top: var(--space-5); }
+.prv-encart h2 { font-size: var(--text-lg); margin-bottom: var(--space-3); }
+
+.prv-liste { list-style: none; margin: 0 0 var(--space-3); padding: 0; }
+.prv-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border);
+}
+.prv-item:last-child { border-bottom: none; }
+.prv-nom { font-weight: 600; font-size: var(--text-base); color: var(--accent); text-decoration: none; }
+.prv-nom:hover { text-decoration: underline; }
+/* Un identifiant qu'on ne sait pas résoudre se LIT, il ne disparaît pas : une
+   ligne effacée ferait croire au lien absent. */
+.prv-inconnu { color: var(--text-muted); font-family: var(--font-mono); font-weight: 400; }
+.prv-portee {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    background: var(--tint-na);
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+.prv-retirer {
+    margin-left: auto;
+    font-size: var(--text-xs);
+    padding: 4px 10px;
+    background: transparent;
+    color: var(--color-danger);
+    border: 1px solid var(--border);
+}
+.prv-retirer:hover { background: var(--tint-crit); border-color: var(--color-danger); }
+
+.prv-ajout {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    flex-wrap: wrap;
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-body);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.prv-ajout select { flex: 1 1 260px; min-width: 200px; }
+
+.prv-mention {
+    margin: var(--space-2) 0 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    max-width: var(--mesure-texte);
+}

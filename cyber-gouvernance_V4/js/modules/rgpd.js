@@ -43,16 +43,15 @@ const RgpdModule = (() => {
 
         app.innerHTML = `
             <section class="page rgpd-page">
-                <div class="dashboard-header no-print">
-                    <div>
-                        <h1>Registre RGPD (traitements)</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">Registre des activités de traitement de données personnelles. ${Help.tip("L'article 30 du RGPD impose de tenir un registre des traitements de données personnelles : finalité, base légale, données, durées, destinataires et mesures de sécurité.")}</p>
-                    </div>
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        ${trs.length ? `<button id="printBtn" class="btn-secondary">Imprimer le registre</button>` : ""}
-                        <button id="addBtn" style="background:var(--primary);">Nouveau traitement</button>
-                    </div>
-                </div>
+                ${UI.enteteHtml({
+                    titre: "Registre RGPD",
+                    aide: Help.tip("L'article 30 du RGPD impose de tenir un registre des traitements de données personnelles : finalité, base légale, données, durées, destinataires et mesures de sécurité."),
+                    contexte: "Les activités de traitement de données personnelles de cette filiale.",
+                    onglets: UI.ongletsDe("/rgpd"),
+                    actions:
+                        (trs.length ? `<button id="printBtn" class="btn-secondary">Imprimer le registre</button>` : "") +
+                        `<button id="addBtn">Nouveau traitement</button>`
+                })}
 
                 <div class="soa-print-head" style="display:none;">
                     <h1 style="margin-bottom:4px;">Registre des activités de traitement — Article 30 RGPD</h1>
@@ -72,23 +71,6 @@ const RgpdModule = (() => {
                         <tbody>${rows}</tbody>
                     </table>`}
 
-                ${documentsRattachesHtml()}
-
-                <!-- ── L'OUTIL DANS SON PROPRE REGISTRE ────────────────────────
-                     Le produit tenait le registre de ses clients et ne savait pas
-                     dire le sien. Il le dit ici, colonne par colonne. -->
-                <div class="dash-section-title" style="margin-top:2.5rem;">Le registre de l'outil lui-même</div>
-                <p style="color:var(--text-muted); font-size: var(--text-base); max-width:70ch;">
-                    Ce logiciel traite lui aussi des données personnelles — des noms de responsables, des
-                    contacts de crise, un journal d'accès. ${Help.tip("L'article 30 s'applique à tout traitement, y compris à l'outil qui sert à gérer les autres. Ce tableau est la réponse toute prête à la question qu'un DPO, un client ou un auditeur pose : que fait ce logiciel de nos données ? Il décrit le SCHÉMA du produit et ne contient aucune donnée personnelle.")}
-                    Le tableau ci-dessous est tenu <strong>dans la base</strong>, colonne par colonne : un
-                    garde-fou refuse qu'une colonne susceptible de porter une donnée personnelle reste
-                    sans décision.
-                </p>
-                <div class="no-print" style="margin:10px 0 14px;">
-                    <button type="button" id="chargerRegistreProduit" class="btn-secondary">Afficher le registre de l'outil</button>
-                </div>
-                <div id="registreProduit" class="registre-produit"></div>
             </section>`;
 
         const add = () => renderCreate();
@@ -99,6 +81,73 @@ const RgpdModule = (() => {
         const cr = document.getElementById("chargerRegistreProduit");
         if (cr) cr.addEventListener("click", () => chargerRegistreProduit(cr));
         if (window.Identite) Identite.brancherLogos();
+    }
+
+    /* =====================================================================
+       LES DEUX AUTRES VUES DU REGISTRE — lot Interface, 16/09/2026
+       =====================================================================
+
+       ── Pourquoi trois vues et non trois écrans ─────────────────────────
+
+       `/rgpd` empilait trois sujets sur une seule page : le registre de
+       l'article 30, les documents porteurs de données personnelles, et le
+       registre du PRODUIT lui-même. Trois questions différentes, trois
+       lecteurs différents — le responsable du traitement, le documentaliste,
+       le DPO — et une seule page qu'il fallait faire défiler pour trouver la
+       sienne.
+
+       ⚠️ **Elles ne deviennent pas trois entrées de menu pour autant.** Ce
+       serait rendre au menu ce qu'on vient de lui retirer ailleurs : ce sont
+       trois VUES d'un même sujet, donc trois onglets. Et c'est là que les
+       actions 20.3 (AIPD) et 20.4 (demandes d'exercice de droits) entreront
+       — deux onglets de plus, pas deux entrées de plus.
+    ===================================================================== */
+
+    /** Vue « Documents » : ce que la classification documentaire dit du RGPD. */
+    function renderDocuments() {
+        const app = document.getElementById("app");
+        app.innerHTML = `
+            <section class="page rgpd-page">
+                ${UI.enteteHtml({
+                    titre: "Registre RGPD",
+                    aide: Help.tip("Quels documents portent des données personnelles, et lesquels sont rattachés à un traitement du registre. La classification vit sur la fiche de chaque document (migration 027)."),
+                    contexte: "Les documents porteurs de données personnelles, et leur rattachement "
+                              + "au registre de l'article 30.",
+                    onglets: UI.ongletsDe("/rgpd-documents")
+                })}
+                ${documentsRattachesHtml() || `<p class="chart-empty">Aucun document n'est enregistré : il n'y a rien à rattacher au registre. Les documents se recensent dans <a href="#/documents">Gestion documentaire</a>.</p>`}
+            </section>`;
+    }
+
+    /**
+     * Vue « L'outil lui-même » : le registre de l'article 30 DU PRODUIT.
+     *
+     * ⚠️ Le tableau se charge **à la demande**, et c'est délibéré : c'est une
+     * pièce qu'on va chercher, pas un chiffre de pilotage. Le charger d'office
+     * ferait un appel réseau à chaque visite pour une information que personne
+     * ne regarde tous les jours. Le bouton dit donc ce qu'il fait.
+     */
+    function renderOutil() {
+        const app = document.getElementById("app");
+        app.innerHTML = `
+            <section class="page rgpd-page">
+                ${UI.enteteHtml({
+                    titre: "Registre RGPD",
+                    aide: Help.tip("L'article 30 s'applique à tout traitement, y compris à l'outil qui sert à gérer les autres. Ce tableau est la réponse toute prête à la question qu'un DPO, un client ou un auditeur pose : que fait ce logiciel de nos données ? Il décrit le SCHÉMA du produit et ne contient aucune donnée personnelle."),
+                    contexte: "Ce logiciel traite lui aussi des données personnelles — des noms de "
+                              + "responsables, des contacts de crise, un journal d'accès.",
+                    onglets: UI.ongletsDe("/rgpd-outil"),
+                    actions: `<button type="button" id="chargerRegistreProduit" class="btn-secondary">Afficher le registre</button>`
+                })}
+                <p class="rgpd-note">
+                    Le tableau est tenu <strong>dans la base</strong>, colonne par colonne : un garde-fou
+                    refuse qu'une colonne susceptible de porter une donnée personnelle reste sans décision.
+                    Ce n'est donc pas une liste qu'on entretient à la main — c'est le schéma qui répond.
+                </p>
+                <div id="registreProduit" class="registre-produit"></div>
+            </section>`;
+        const cr = document.getElementById("chargerRegistreProduit");
+        if (cr) cr.addEventListener("click", () => chargerRegistreProduit(cr));
     }
 
     /* =========================
@@ -304,5 +353,5 @@ const RgpdModule = (() => {
         };
     }
 
-    return { renderList, renderCreate, renderDetail };
+    return { renderList, renderCreate, renderDetail, renderDocuments, renderOutil };
 })();

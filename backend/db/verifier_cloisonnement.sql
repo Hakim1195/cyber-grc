@@ -1416,9 +1416,13 @@ begin
                format('Déclencheurs de cohérence et de portée armés en « always » (%s balayés)',
                       count(*)),
                -- 14 depuis la migration `027` : 11 + les trois tables devenues mixtes.
-               '14 sur 14',
+               -- 15 depuis la `036` : `document_mesures` naît MIXTE — un document du
+               -- socle Groupe prouve un contrôle du socle, et se lit partout. Vérifié :
+               -- le déclencheur neuf est bien « trg_document_mesures_portee_figee »,
+               -- armé « always » par f_armer_declencheurs().
+               '15 sur 15',
                format('%s sur %s', count(*) filter (where t.tgenabled = 'A'), count(*)),
-               case when count(*) = 14 and count(*) filter (where t.tgenabled = 'A') = 14
+               case when count(*) = 15 and count(*) filter (where t.tgenabled = 'A') = 15
                     then 'OK' else 'ÉCHEC' end
           from pg_trigger t
          where not t.tgisinternal

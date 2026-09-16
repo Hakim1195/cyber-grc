@@ -483,7 +483,12 @@ export const TABLES_FILIALE = Object.freeze([
  * filiales. `document_etiquettes` naît mixte, comme le document qu'elle étiquette.
  */
 export const TABLES_MIXTES = Object.freeze([
-  'approbations', 'document_etiquettes', 'document_referentiels', 'documents',
+  'approbations', 'document_etiquettes',
+  // `document_mesures` (migration `036`) : quels contrôles un document prouve.
+  // MIXTE comme le document lui-même — la PSSI du Groupe prouve un contrôle du
+  // socle, et se lit partout.
+  'document_mesures',
+  'document_referentiels', 'documents',
   'mesure_catalogue', 'parametres', 'personnes', 'risque_catalogue',
   'traitement_mesures', 'traitements',
 ]);
@@ -579,6 +584,10 @@ export async function semerJeuEssai(base, client, options = {}) {
       await c.query("insert into document_referentiels (document_id, ref_id) values ('DOC-G', 'anssi')");
       await c.query("insert into traitement_mesures (traitement_id, mesure_id) values ('TRT-G', 'MESURE-G')");
       await c.query("insert into document_etiquettes (document_id, etiquette) values ('DOC-G', 'Socle groupe')");
+      // Le versant GROUPE de `document_mesures` (migration `036`) : la PSSI du Groupe
+      // prouve un contrôle du socle commun. ⚠️ C'est le seul sens ouvert — un document
+      // de portée Groupe ne peut PAS s'appuyer sur un contrôle local (constat N-10).
+      await c.query("insert into document_mesures (document_id, mesure_id) values ('DOC-G', 'MESURE-G')");
       // Deux comptes, dont la CLÉ PRIMAIRE diffère de l'identifiant de connexion : le
       // §18.3 exige qu'un test provisionne ce cas, sans quoi il valide une coïncidence
       // plutôt qu'une propriété.
@@ -645,6 +654,12 @@ export async function semerJeuEssai(base, client, options = {}) {
         );
         await c.query(`insert into parametres       (id, filiale_id, cle)   values ('PARAM-${s}',  $1, 'essai.local')`, f);
         await c.query(`insert into document_referentiels (document_id, ref_id, filiale_id) values ('DOC-${s}', 'anssi', $1)`, f);
+        // Le lien document ↔ contrôle (migration `036`). ⚠️ `filiale_id` n'est PAS
+        // fourni : le déclencheur de portée le pose depuis le DOCUMENT. Le donner
+        // ici mesurerait le semis au lieu de mesurer le déclencheur.
+        await c.query(
+          `insert into document_mesures (document_id, mesure_id) values ('DOC-${s}', 'MESURE-${s}')`,
+        );
         await c.query(`insert into document_etiquettes (document_id, etiquette, filiale_id) values ('DOC-${s}', 'Site ${s}', $1)`, f);
 
         // ⚠️ Les deux tables du lot L19/L20 sont semées ICI, et ce n'est pas une

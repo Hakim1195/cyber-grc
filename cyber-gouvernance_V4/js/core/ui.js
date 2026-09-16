@@ -645,6 +645,14 @@ window.UI = (function () {
             ])
         }),
         Object.freeze({
+            sujet: "rgpd",
+            vues: Object.freeze([
+                Object.freeze({ route: "/rgpd", libelle: "Traitements" }),
+                Object.freeze({ route: "/rgpd-documents", libelle: "Documents" }),
+                Object.freeze({ route: "/rgpd-outil", libelle: "L\u2019outil lui-m\u00eame" })
+            ])
+        }),
+        Object.freeze({
             sujet: "referentiels",
             vues: Object.freeze([
                 Object.freeze({ route: "/referentiels", libelle: "Catalogue" }),

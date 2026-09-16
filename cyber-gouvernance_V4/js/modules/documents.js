@@ -263,6 +263,7 @@ const DocumentsModule = (() => {
                 </div>
                 ${typeof PiecesModule !== "undefined" ? PiecesModule.hoteHtml() : ""}
                 ${typeof ApprobationsModule !== "undefined" ? ApprobationsModule.encartHtml("documents", doc.id) : ""}
+                ${typeof PreuvesModule !== "undefined" ? PreuvesModule.encartDocumentHtml(doc) : ""}
                 ${typeof AttestationsModule !== "undefined" ? AttestationsModule.encartHtml(doc.id) : ""}
             </section>`;
         wireCanevas();
@@ -298,6 +299,15 @@ const DocumentsModule = (() => {
         // (constat Q-303).
         if (typeof AttestationsModule !== "undefined") {
             AttestationsModule.brancherEncart(doc.id);
+        }
+        // ── 19.3 : ce que ce document PROUVE ────────────────────────────────
+        //
+        // Le panneau vit au-dessus des pièces jointes, et la distance est un
+        // propos : un rattachement dit « ce texte décrit ce contrôle », une pièce
+        // jointe dit « voici le fichier ». Les deux répondent à un auditeur, mais
+        // pas à la même question.
+        if (typeof PreuvesModule !== "undefined") {
+            PreuvesModule.brancherDocument(doc.id);
         }
         document.getElementById("saveBtn").onclick = () => {
             const data = collectForm();

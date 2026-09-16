@@ -1485,8 +1485,15 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
        order by 1`;
 
     const references = await base.lignes(proprietaire, requete);
+    // SIX depuis la migration `036` : le lien document ↔ contrôle en ajoute deux —
+    // la clé de cohérence et celle de portée. ⚠️ Toutes deux en « restrict », comme
+    // les quatre précédentes : une cascade rendrait un contrôle supprimable dès
+    // lors qu'il n'est plus lié QU'À des documents, et ferait disparaître la preuve
+    // avec lui. Le §17.6 est clair — un contrôle s'archive, il ne se supprime pas.
     assert.deepEqual(references, [
       { nom: 'fk_actions_mesure', suppression: 'restrict' },
+      { nom: 'fk_document_mesures_mesure_coherence', suppression: 'restrict' },
+      { nom: 'fk_document_mesures_mesure_portee', suppression: 'restrict' },
       { nom: 'fk_evaluation_mesures_mesure', suppression: 'restrict' },
       { nom: 'fk_mesure_mise_en_oeuvre_mesure', suppression: 'restrict' },
       { nom: 'fk_traitement_mesures_mesure', suppression: 'restrict' },
@@ -1513,7 +1520,7 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
       );
     }
     assert.deepEqual((await base.lignes(proprietaire, requete)).map((l) => l.suppression),
-      ['restrict', 'restrict', 'restrict', 'restrict']);
+      ['restrict', 'restrict', 'restrict', 'restrict', 'restrict', 'restrict']);
   });
 
   test('CAS 1 du §17.6 : une mesure LOCALE se supprime après déliage, même transaction', async () => {
@@ -2763,7 +2770,10 @@ describe('Portée des liens documentaires et armement des déclencheurs (N-10, N
     // vérifier que les déclencheurs neufs sont ceux qu'on croit — jamais de remplacer
     // l'égalité par une inégalité, qui rendrait le contrôle muet dans le seul sens qui
     // compte : celui d'un déclencheur qui DISPARAÎT.
-    assert.equal(armement.length, 14, 'Quatre déclencheurs de cohérence, dix de portée.');
+    // 15 depuis la migration `036` : `document_mesures` est MIXTE, elle reçoit donc
+    // elle aussi son déclencheur de portée figée — sans lui, une ligne du socle
+    // Groupe pourrait basculer dans une filiale sans que la RLS voie la transition.
+    assert.equal(armement.length, 15, 'Quatre déclencheurs de cohérence, onze de portée.');
     assert.deepEqual(
       [...new Set(armement.map((l) => l.armement))],
       ['A'],
@@ -4127,6 +4137,12 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // definer » — sans quoi le resserrement se retourne en récursion.
       'lecture_filiales',
       'lecture_journal',
+      // TRENTE-SEPTIÈME, apporté par `036_le_document_prouve_la_mesure.sql` — action
+      // 19.3. Il nomme ses NEUF pièces une par une (§39.7) : quatre clés étrangères,
+      // deux miroirs de portée, la barrière N-10 et les deux unicités qui rendent la
+      // référence exprimable. Un ensemble pareil se retire morceau par morceau sous
+      // zéro anomalie si personne ne le nomme.
+      'lien_document_mesure',
       // TRENTE-SIXIÈME, apporté par `032_la_marque_de_provenance.sql` : toute entité
       // MÉTIER — découverte au catalogue par « porte `filiale_id` ET porte `cree_par` » —
       // dit d'où vient chacune de ses lignes (`saisie`, `decouverte`, `reprise`). C'est la
@@ -5018,7 +5034,10 @@ describe('Armement, portée figée, chemin de magasin (§19.4 et §19.1, Q5-4 et
     // (`CLAUDE.md` §3) : une table qui deviendrait mixte sans qu'on l'ait voulu fait
     // rougir ici, bruyamment, et quelqu'un doit dire si c'était l'intention.
     assert.deepEqual(mixtes, [
-      'approbations', 'document_etiquettes', 'document_referentiels', 'documents',
+      // `document_mesures` (migration `036`) : MIXTE comme le document qu'elle
+      // rattache — la PSSI du Groupe prouve un contrôle du socle, et se lit partout.
+      'approbations', 'document_etiquettes', 'document_mesures',
+      'document_referentiels', 'documents',
       'mesure_catalogue', 'parametres', 'personnes', 'risque_catalogue',
       'traitement_mesures', 'traitements',
     ]);

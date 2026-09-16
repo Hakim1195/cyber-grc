@@ -198,6 +198,15 @@ const SANS_FICHE = {
   '/settings': 'paramètres',
   '/referentiels': 'catalogue STATIQUE : les identifiants ne viennent pas de la base',
   '/journal': 'journal d’audit : registre en ajout seul, le détail s’ouvre en place',
+  // ── Lot Interface, 16/09 : les deux autres VUES du registre RGPD ────────
+  //
+  // Elles n'ont pas de fiche à elles — la fiche d'un traitement vit sous
+  // « /rgpd/:id » —, et elles ne sont pas non plus des entrées de menu : ce sont
+  // les onglets « Documents » et « L'outil lui-même ». ⚠️ Leur adresse ne peut
+  // PAS s'écrire « /rgpd/outil » : le routeur y verrait l'identifiant d'un
+  // traitement, et l'écran dirait « Traitement introuvable ».
+  '/rgpd-documents': 'vue du registre : les documents porteurs de données personnelles',
+  '/rgpd-outil': 'vue du registre : l’article 30 du PRODUIT lui-même, chargé à la demande',
   // ── Vague 6 : les écrans des capacités livrées sans interface ────────────
   //
   // Aucun des cinq n'a de fiche à route propre, et pour des raisons différentes
@@ -246,7 +255,13 @@ const SANS_FICHE = {
 // forme que les deux précédents : un PANNEAU sur la fiche de l'exigence qu'il
 // couvre, plus une décoration de la liste. Pas de route, donc ni `FICHES` ni
 // `SANS_FICHE`.
-const MODULES_ATTENDUS = 36;
+//
+// 37 depuis l'action 19.3 : « preuves » — le lien document ↔ contrôle. Même
+// forme que les précédents : un PANNEAU, monté sur les DEUX fiches que le lien
+// relie, sans route ni entrée de menu. C'est le même panneau des deux côtés, et
+// c'est délibéré : deux composants auraient divergé, et un lien doit dire la
+// même chose par ses deux bouts.
+const MODULES_ATTENDUS = 37;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //

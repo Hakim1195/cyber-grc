@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 14;
+    const SCHEMA_VERSION = 15;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -160,6 +160,13 @@ const DataStore = (() => {
                 e.mesure_ids = (e.mesure_id != null && e.mesure_id !== "") ? [e.mesure_id] : [];
             }
             delete e.mesure_id;
+        });
+        // v15 — Gouvernance documentaire : un document dit quels CONTRÔLES il prouve
+        // (`mesures_ids[]`, action 19.3), et non plus seulement quels référentiels il
+        // couvre. On garantit le tableau, comme pour `referentiels[]` : un export
+        // antérieur n'en porte aucun, et se reprend à l'identique.
+        out.documents.forEach(d => {
+            if (d && !Array.isArray(d.mesures_ids)) d.mesures_ids = [];
         });
         out.schemaVersion = SCHEMA_VERSION;
         return out;
@@ -683,7 +690,7 @@ const DataStore = (() => {
     /* =========================
        DOCUMENTS / POLITIQUES (v5, classifiés depuis la migration 027)
        { id, titre, type, version, proprietaire, statut, date_revue, emplacement,
-         referentiels[], confidentialite, donnees_personnelles, traitement_id,
+         referentiels[], mesures_ids[], confidentialite, donnees_personnelles, traitement_id,
          etiquettes[], notes, updatedAt }
 
        ⚠️ La ligne « ne stocke PAS les fichiers » qui figurait ici était vraie du
@@ -898,11 +905,14 @@ const DataStore = (() => {
         //           filiale) → normalize crée les tableaux vides. AUCUNE transformation de
         //           donnée : le lien `risques[].catalogue_id` est facultatif, et une base
         //           héritée n'en porte aucun. Un export v12 se reprend donc à l'identique.
+        // v14 → v15 : `documents[].mesures_ids[]` — quels CONTRÔLES un document prouve
+        //           (action 19.3). `normalize` garantit le tableau ; aucune donnée n'est
+        //           transformée, et un export v14 se reprend à l'identique.
         // v13 → v14 : ajout de `derogations` (écarts de conformité assumés, action 19.2)
         //           → normalize crée le tableau vide. AUCUNE transformation : le lien
         //           `derogations[].exigence_id` n'existe pas dans une base héritée, et un
         //           export v13 se reprend donc à l'identique.
-        // (Ajouter ici les futures migrations : if (v < 15) { ... })
+        // (Ajouter ici les futures migrations : if (v < 16) { ... })
         return p;
     }
 

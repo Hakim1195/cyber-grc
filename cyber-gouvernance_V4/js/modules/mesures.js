@@ -300,7 +300,12 @@ const MesuresModule = (() => {
                     <h3 style="margin-top:0;">Exigences couvertes ${Help.tip("Les exigences de référentiels reliées à cette mesure. La liaison se fait depuis le détail d'une exigence.")}</h3>
                     ${coverageHtml}
                 </div>
+
+                ${typeof PreuvesModule !== "undefined" ? PreuvesModule.encartMesureHtml(m.id) : ""}
             </section>`;
+
+        // ── 19.3 : le même lien, lu par l'autre bout ────────────────────────
+        if (typeof PreuvesModule !== "undefined") PreuvesModule.brancherMesure(m.id);
 
         document.getElementById("saveBtn").onclick = () => {
             const nom = document.getElementById("nom").value.trim();

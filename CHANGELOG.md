@@ -10,7 +10,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 16/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **1993 essais, 1993 passés, 0 échec** à la révision `54383a4`,
+> **2004 essais, 2004 passés, 0 échec** à la révision `54383a4`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
 > échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**39 garde-fous consignés**,
@@ -45,6 +45,56 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### Interface et preuve — sept sections, et le document qui prouve la mesure (16/09/2026)
+
+**L'ARCHITECTURE DES SECTIONS**, sur demande de l'utilisateur : *« elles étaient prévues
+pour une utilisation sans conservation de données et maintenant sont prévues pour une
+conformité RGPD […] éviter les redondances et les répétitions, rendre l'interface
+professionnelle, comme dans les grands logiciels de GRC »*. Diagnostic mesuré au
+`docs/PLAN_INTERFACE.md`.
+
+- **278 `font-size` en dur, 42 valeurs distinctes**, et l'échelle typographique employée
+  par **zéro** module sur 36. Il en reste **zéro en dur**, dans les modules comme dans la
+  feuille de style. Mesuré à l'écran : le tableau de bord rendait **21 tailles**, il en
+  rend **9** — huit pas d'échelle plus une correction optique sur la chasse fixe.
+- **Sept sections** au lieu de six : un prestataire était rangé sous *Continuité* parce
+  qu'il avait été écrit en même temps que le PRA.
+- **Les vues deviennent des onglets** — Risques (registre, matrice, socle) et Référentiels
+  (catalogue, applicables, couverture). 32 entrées → 28, et **plus aucun écran sans
+  porte** : la couverture croisée n'en avait aucune.
+- **Le fil d'Ariane déduit sa section du menu**. Il portait sa propre taxonomie, et elle
+  était **incomplète** — sept écrans n'y figuraient pas, et le fil disparaissait alors sans
+  un mot.
+- **Un écran, un nom** : sur le registre des risques, l'utilisateur lisait *trois* noms à
+  quelques centimètres les uns des autres.
+- **Le registre RGPD se lit en trois vues** — Traitements · Documents · L'outil lui-même —
+  au lieu d'empiler trois sujets sur une page qu'il fallait faire défiler. ⚠️ Trois
+  **onglets**, pas trois entrées : c'est là que l'AIPD (20.3) et les demandes de droits
+  (20.4) entreront.
+
+**LE DOCUMENT PROUVE LA MESURE (L19, action 19.3) — migration `036`.** Un auditeur ouvre
+un contrôle et pose une seule question : *« montrez-moi la procédure »*. Le produit reliait
+une mesure à une exigence, une mesure à une action, un document à un référentiel — et
+**pas** un document à une mesure. Le chaînon manquant était celui qui transforme une
+déclaration en preuve, et il manquait **dans les deux sens**.
+
+- La barrière de portée est **asymétrique**, et l'asymétrie est le sujet : un document
+  local prouve un contrôle du socle Groupe (le cas fréquent) ; une politique de **portée
+  Groupe** ne peut pas s'appuyer sur un contrôle **local** — elle dépendrait d'une ligne
+  qu'une seule filiale peut effacer (constat N-10).
+- `restrict` du côté du CONTRÔLE, `cascade` du côté du DOCUMENT : supprimer un document
+  emporte ses liens, supprimer un contrôle est **refusé**. Le §17.6 le dit — *un contrôle
+  s'archive, il ne se supprime pas* —, et une cascade aurait fait disparaître la preuve.
+- ⚠️ **Trois défauts trouvés par les garde-fous, aucun par relecture** : la table MIXTE
+  sans déclencheur de portée figée, la traçabilité d'insertion que j'avais déclarée
+  inutile *par raisonnement* (le critère n'est pas « se modifie-t-elle » mais « porte-t-elle
+  `cree_par` »), et le déclencheur posé sans être **armé** — `f_poser_portee_figee()` ne
+  l'arme pas, son propre commentaire le dit.
+- Le garde-fou nomme ses **neuf** pièces une par une : quatre clés étrangères, deux miroirs
+  de portée, la barrière, et les deux unicités qui rendent la référence exprimable.
+
+Schéma **v14 → v15** : `documents[].mesures_ids[]`, un champ et non une collection.
 
 ### Vague B, suite — les dérogations datées, et deux capacités qui cessent d'être injoignables (16/09/2026)
 
