@@ -35,6 +35,81 @@ const MesuresModule = (() => {
         return `<select id="${id}">${o}</select>`;
     }
 
+    /* =====================================================================
+       19.6 — L'EFFICACITÉ, ET 19.5 — LE CONTRÔLE PÉRIODIQUE
+       =====================================================================
+
+       ⚠️ **Les deux vocabulaires sont ceux de la BASE**, et leur omission
+       échoue BRUYAMMENT : une valeur absente ici ne se propose pas à l'écran,
+       une valeur absente de la contrainte fait échouer l'écriture en 23514. Rien
+       ne réussit en silence — c'est le cas (b) du `CLAUDE.md` §3, celui où la
+       liste écrite à la main est le bon outil.
+
+       ⚠️ Et **l'efficacité n'est PAS un barème**. Trois verdicts, pas une note
+       de 0 à 5 : un second barème du même format inviterait à le moyenner avec
+       la maturité, et le tableau de bord afficherait un chiffre qui mélange « à
+       quel point c'est institutionnalisé » avec « est-ce que ça marche ». */
+
+    const EFFICACITES = [
+        { v: "", label: "— non constatée —" },
+        { v: "efficace", label: "Efficace — le contrôle protège" },
+        { v: "partiellement", label: "Partiellement — il protège en partie" },
+        { v: "inefficace", label: "Inefficace — il ne protège pas" }
+    ];
+
+    /** Les six rythmes de `mco_actions`, repris tels quels (critère 19.5). */
+    const FREQUENCES = ["", "Ponctuelle", "Hebdomadaire", "Mensuelle",
+                        "Trimestrielle", "Semestrielle", "Annuelle"];
+
+    function efficaciteSelect(selected) {
+        return '<select id="efficacite">' + EFFICACITES.map(e =>
+            `<option value="${escapeHtml(e.v)}" ${e.v === (selected || "") ? "selected" : ""}>${escapeHtml(e.label)}</option>`
+        ).join("") + "</select>";
+    }
+
+    function frequenceSelect(selected) {
+        return '<select id="frequence_controle">' + FREQUENCES.map(f =>
+            `<option value="${escapeHtml(f)}" ${f === (selected || "") ? "selected" : ""}>${escapeHtml(f || "— aucune —")}</option>`
+        ).join("") + "</select>";
+    }
+
+    /**
+     * La prochaine échéance, en LECTURE SEULE.
+     *
+     * ⚠️ **Elle est calculée ici pour être AFFICHÉE, jamais pour être écrite.**
+     * Le calcul qui fait foi vit dans `f_prochain_controle()` (migration `037`),
+     * et c'est lui que l'échéancier et les relances emploieront. Celui-ci est
+     * une courtoisie d'écran : il évite d'attendre un aller-retour pour montrer
+     * une date que l'utilisateur vient de rendre calculable en choisissant une
+     * fréquence.
+     *
+     * ⚠️ Et il DIT qu'il n'y a pas d'échéance plutôt que d'en inventer une : un
+     * contrôle jamais joué n'en a pas, un contrôle ponctuel non plus. Zéro n'est
+     * pas une réponse (même motif que le taux rendu `null` de l'action 19.1).
+     */
+    const MOIS_PAR_FREQUENCE = { Mensuelle: 1, Trimestrielle: 3, Semestrielle: 6, Annuelle: 12 };
+
+    function echeanceHtml(m) {
+        const dernier = m.dernier_controle;
+        const freq = m.frequence_controle;
+        if (!dernier || !freq || freq === "Ponctuelle") {
+            return '<p class="doc-note">'
+                + escapeHtml(!dernier
+                    ? "Aucune échéance : ce contrôle n'a jamais été joué. La date se calcule à partir du dernier passage."
+                    : "Aucune échéance : un contrôle ponctuel ne se rejoue pas à date fixe.")
+                + "</p>";
+        }
+        const d = new Date(dernier + "T00:00:00");
+        if (isNaN(d.getTime())) return "";
+        if (freq === "Hebdomadaire") d.setDate(d.getDate() + 7);
+        else d.setMonth(d.getMonth() + MOIS_PAR_FREQUENCE[freq]);
+        const enRetard = d.getTime() < Date.now();
+        return '<p class="mes-echeance' + (enRetard ? " mes-echeance--retard" : "") + '">'
+            + escapeHtml((enRetard ? "En retard depuis le " : "Prochain contrôle attendu le ")
+                + d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }))
+            + "</p>";
+    }
+
     // Résout la couverture d'une mesure : les évaluations qui la référencent,
     // enrichies du nom de référentiel et du titre d'exigence.
     function coverageOf(mesureId) {
@@ -282,6 +357,37 @@ const MesuresModule = (() => {
                             <div class="form-group"><label>Maturité (0-5) ${Help.tip(MATURITE_AIDE)}</label>${maturiteSelect("maturite", m.maturite)}</div>
                         </div>
                         <div class="form-group"><label>Responsable</label><input id="responsable" list="personnes-list" value="${escapeHtml(m.responsable || "")}" /></div>
+
+                        <!-- ── 19.6 : EST-CE QUE ÇA MARCHE ────────────────────────
+                             Séparé du bloc ci-dessus par un intertitre, et pas d'un
+                             champ de plus dans la même grille : la maturité dit à quel
+                             point le contrôle est INSTITUTIONNALISÉ, l'efficacité s'il
+                             PROTÈGE. Les mettre côte à côte sans le dire invite à les
+                             lire comme deux notes de la même chose — c'est le défaut
+                             classique des tableaux de bord GRC. -->
+                        <fieldset class="mes-efficacite">
+                            <legend>Efficacité constatée ${Help.tip("Une sauvegarde peut être documentée, planifiée et supervisée — maturité 4 — et ne pas se restaurer. Cette question-là est distincte, et c'est elle qu'un auditeur vient vérifier. « Non constatée » n'est pas « inefficace » : laissez vide tant que personne n'a regardé.")}</legend>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                                <div class="form-group"><label>Verdict</label>${efficaciteSelect(m.efficacite)}</div>
+                                <div class="form-group"><label>Constatée le</label><input type="date" id="efficacite_constatee_le" value="${escapeHtml(m.efficacite_constatee_le || "")}" /></div>
+                            </div>
+                            <div class="form-group">
+                                <label>Sur quoi la constatation s'appuie</label>
+                                <input id="efficacite_preuve" maxlength="2000" value="${escapeHtml(m.efficacite_preuve || "")}" placeholder="Ex. : test de restauration du 12/03, ticket #4471" />
+                                <p class="doc-note">Du texte, pas un fichier : la pièce, elle, s'attache au document qui prouve ce contrôle.</p>
+                            </div>
+                        </fieldset>
+
+                        <!-- ── 19.5 : un contrôle qui ne se rejoue pas n'en est pas un ── -->
+                        <fieldset class="mes-controle">
+                            <legend>Contrôle périodique ${Help.tip("À quel rythme ce contrôle se rejoue, et quand il a été rejoué pour la dernière fois. Sans ces deux dates, un statut de 2024 s'affiche exactement comme un statut d'hier. La prochaine échéance est CALCULÉE — elle ne se saisit pas.")}</legend>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                                <div class="form-group"><label>Fréquence</label>${frequenceSelect(m.frequence_controle)}</div>
+                                <div class="form-group"><label>Dernier passage</label><input type="date" id="dernier_controle" value="${escapeHtml(m.dernier_controle || "")}" /></div>
+                            </div>
+                            ${echeanceHtml(m)}
+                        </fieldset>
+
                         <button id="saveBtn">Mettre à jour</button>
                     </div>
 
@@ -315,6 +421,14 @@ const MesuresModule = (() => {
             m.statut = document.getElementById("statut").value;
             m.maturite = Number(document.getElementById("maturite").value) || 0;
             m.responsable = document.getElementById("responsable").value.trim();
+            // ⚠️ La chaîne vide et non `null` : le serveur convertit le « non
+            // renseigné » du navigateur, et c'est cette conversion qui est éprouvée
+            // (constat Q-194). Envoyer `null` la court-circuiterait.
+            m.efficacite = document.getElementById("efficacite").value;
+            m.efficacite_constatee_le = document.getElementById("efficacite_constatee_le").value;
+            m.efficacite_preuve = document.getElementById("efficacite_preuve").value.trim();
+            m.frequence_controle = document.getElementById("frequence_controle").value;
+            m.dernier_controle = document.getElementById("dernier_controle").value;
             m.updatedAt = Date.now();
             DataStore.updateMesure(m);
             if (window.showToast) window.showToast("Mesure mise à jour.", "success");

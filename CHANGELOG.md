@@ -46,6 +46,52 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### 19.5 / 19.6 et la passe de documentation — « les docs sont à jour ? » (16/09/2026)
+
+**UN CONTRÔLE SE REJOUE, ET SON EFFICACITÉ N'EST PAS SA MATURITÉ — migration `037`.**
+
+- **19.6** : une sauvegarde peut être documentée, planifiée, supervisée — maturité 4 — et
+  **ne pas se restaurer**. Le produit ne savait pas représenter cette ligne ; il la
+  représente. ⚠️ **Trois verdicts, pas une note de 0 à 5** : un second barème du même
+  format inviterait à le moyenner avec la maturité, et le tableau de bord afficherait un
+  chiffre qui mélange « à quel point c'est institutionnalisé » avec « est-ce que ça
+  marche ». C'est le défaut classique des tableaux de bord GRC, et le garde-fou mesure
+  l'efficacité **sur son type** pour l'empêcher de revenir.
+- **19.5** : fréquence et dernier passage. Sans eux, un statut de 2024 s'affichait
+  exactement comme un statut d'hier. ⚠️ La **prochaine échéance est dérivée**
+  (`f_prochain_controle`), motif de l'action 19.2 ; et elle sait **ne rien rendre** — un
+  contrôle jamais joué n'a pas d'échéance, un contrôle ponctuel non plus.
+- Le vocabulaire des fréquences est **lu dans la contrainte appliquée** de `mco_actions`,
+  jamais recopié. ⚠️ La première rédaction cherchait la forme telle qu'elle est ÉCRITE
+  (`in (…)`) ; PostgreSQL la normalise en `= ANY (ARRAY[…])`, et la migration a **refusé
+  de s'appliquer** plutôt que d'agir de travers. C'est son office.
+
+**ET LA PASSE DE DOCUMENTATION, déclenchée par une question de l'utilisateur** — *« les
+docs sont à jour ? »*. Réponse mesurée : **non**, et le banc ne pouvait pas le dire.
+
+| | Faute | Classe |
+|---|---|---|
+| 1 | `DATA_MODEL.md` annonçait `SCHEMA_VERSION = 12` — **quatre versions de retard**, du 04/09 au 16/09 | Q-219 |
+| 2-4 | Le guide envoyait vers « le bas de l'écran `/rgpd` », « Socle de risques », « Référentiels applicables » — trois portes **déplacées le matin même** | **Q-265** |
+| 5-6 | Il nommait « Risques (EBIOS) » et « Conformité », qui ne sont plus des entrées | **Q-265** |
+| 7 | Il annonçait « 31 entrées de menu » ; il y en a **28** | Q-4 |
+| 8 | **`index.html` portait les anciens libellés en repli** : si l'i18n n'a pas pris, l'utilisateur voit les noms d'hier | — |
+| 9 | ⚠️ `docs/PLAN_INTERFACE.md`, écrit le jour même, annonçait « 32 → 26 » quand c'est **28** | Q-4 |
+
+⚠️ **DEUX CLASSES SONT FERMÉES MÉCANIQUEMENT, pas deux instances :**
+
+- `test/reprise/versions-concordantes.test.mjs` confronte un **quatrième** endroit —
+  `DATA_MODEL.md`. La faute n° 1 ne peut plus durer douze jours.
+- `test/documentation/guides-nomment-le-reel.test.mjs` est **neuf** : il lit les libellés
+  dans `index.html` et dans le contrat d'onglets — jamais dans une liste recopiée — et
+  exige que **chaque destination citée par un guide existe**. C'est la classe des constats
+  **Q-265 / Q-266**, deux bloquants de la porte S7, et elle s'est rouverte **en une
+  journée** dès qu'on a rangé le menu. ⚠️ Il a trouvé **trois fautes que je n'avais pas
+  vues**, dont celle du repli `index.html`, qui n'était écrite dans aucun document.
+
+*Il reste une limite, et elle se dit : le banc sait désormais qu'un guide nomme une porte
+inexistante ; il ne sait toujours pas qu'une EXPLICATION est devenue fausse.*
+
 ### Interface et preuve — sept sections, et le document qui prouve la mesure (16/09/2026)
 
 **L'ARCHITECTURE DES SECTIONS**, sur demande de l'utilisateur : *« elles étaient prévues

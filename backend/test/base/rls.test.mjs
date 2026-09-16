@@ -4044,6 +4044,13 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // PRÉDICAT RÉEL sur des lignes témoins : un garde qui envoie et constate ne peut
       // pas être trompé par qui le lit.
       'contraintes_eprouvees',
+      // TRENTE-HUITIÈME, apporté par `037_le_controle_se_rejoue_et_se_mesure.sql` —
+      // actions 19.5 et 19.6. Il ÉPROUVE les cinq rythmes sur une date témoin ET les
+      // deux cas qui doivent rendre NULL — sans cette seconde moitié, une fonction qui
+      // inventerait une échéance pour un contrôle JAMAIS joué passerait au vert. Il
+      // mesure aussi l'efficacité SUR SON TYPE : un entier la rendrait moyennable avec
+      // la maturité, et le tableau de bord mélangerait deux questions distinctes.
+      'controle_periodique',
       'couverture_rls',
       // QUINZIÈME, apporté par `017_pieces_suivent_leur_porteur.sql` (constats Q-232 /
       // Q-233) : toute table qu'une pièce jointe peut désigner porte le déclencheur

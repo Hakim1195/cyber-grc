@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 15;
+    const SCHEMA_VERSION = 16;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -905,6 +905,10 @@ const DataStore = (() => {
         //           filiale) → normalize crée les tableaux vides. AUCUNE transformation de
         //           donnée : le lien `risques[].catalogue_id` est facultatif, et une base
         //           héritée n'en porte aucun. Un export v12 se reprend donc à l'identique.
+        // v15 → v16 : les mesures portent leur EFFICACITÉ (19.6) et leur rythme de rejeu
+        //           (19.5). ⚠️ Rien n'est converti : la maturité ne se traduit PAS en
+        //           efficacité — « documenté, planifié, supervisé » ne dit rien de
+        //           « est-ce que ça marche ». Les champs arrivent vides, et c'est juste.
         // v14 → v15 : `documents[].mesures_ids[]` — quels CONTRÔLES un document prouve
         //           (action 19.3). `normalize` garantit le tableau ; aucune donnée n'est
         //           transformée, et un export v14 se reprend à l'identique.
@@ -912,7 +916,7 @@ const DataStore = (() => {
         //           → normalize crée le tableau vide. AUCUNE transformation : le lien
         //           `derogations[].exigence_id` n'existe pas dans une base héritée, et un
         //           export v13 se reprend donc à l'identique.
-        // (Ajouter ici les futures migrations : if (v < 16) { ... })
+        // (Ajouter ici les futures migrations : if (v < 17) { ... })
         return p;
     }
 

@@ -61,6 +61,9 @@ les 19 qui lancent Chromium prennent **520 s** et doivent rester **en série**.
 |---|---|
 | **Jeu de découverte** (L18 bis) | Un groupe industriel fictif complet. Marque de provenance posée **par la base**, inforgeable. Migration `032` |
 | **Menu repliable** (L17, A2) | 32 entrées à plat → six sections |
+| **Architecture des sections** (16/09) | **Sept** sections, **28** entrées : quatre vues redondantes deviennent des **onglets** (matrice, socle, référentiels applicables, couverture croisée), et la couverture — qui n'avait AUCUNE porte — en gagne une. Le fil d'Ariane déduit sa section du menu. `docs/PLAN_INTERFACE.md` |
+| **Lien document ↔ mesure** (L19, 19.3) | « Montrez-moi la procédure » : le chaînon qui manquait entre la gouvernance et la preuve. Migration `036`, schéma **v15** |
+| **Contrôle périodique et efficacité** (L19, 19.5 / 19.6) | Un contrôle se rejoue (fréquence, dernier passage, **échéance dérivée**) et son efficacité se constate **séparément de sa maturité**. Migration `037`, schéma **v16** |
 | **Recherche globale + `Ctrl+K`** (L17, A3) | Cloisonnée par la RLS, bornée par les droits, budget de trace partagé avec le sondage |
 | **Attestation de lecture** (L19, 19.1) | Preuve ISO 27001 A.5.1. Migration `033` |
 | **Horloge réglementaire** (L20, 20.1) | Trois paliers NIS2 + 72 h RGPD, dérivés. Migration `034` |
@@ -79,11 +82,11 @@ modules du produit.
 **Vague B, à finir :**
 
 - ~~**19.2** dérogations datées~~ — ✅ **livré le 16/09** (migration `035`) ;
-- **19.3** lien document ↔ mesure — clé étrangère **composite** ;
+- ~~**19.3** lien document ↔ mesure~~ — ✅ **livré le 16/09** (migration `036`) ;
 - **19.4** réutilisation d'une preuve — ⚠️ **le point dur** : le déclencheur
   `f_pieces_suivent_leur_porteur()` (migration `017`) supprime une pièce avec son porteur.
   Seule la suppression du **dernier** rattachement doit libérer le fichier ;
-- **19.5** contrôles périodiques sur les mesures ; **19.6** efficacité ≠ maturité ;
+- ~~**19.5** contrôles périodiques ; **19.6** efficacité ≠ maturité~~ — ✅ **livrés le 16/09** (migration `037`) ;
 - **20.3** AIPD ; **20.4** demandes d'exercice de droits ; **20.5** main courante de crise
   (**en ajout seul**, comme le journal — elle réutilise les quatre couches du §12).
 

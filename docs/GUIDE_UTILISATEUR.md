@@ -88,8 +88,8 @@ sur trente.
 |---|---|
 | **Tableau de bord** | l'état de votre filiale en un coup d'œil, avec les tendances |
 | **Échéancier** | tout ce qui est daté et qui approche — plan d'actions, revues, déclarations |
-| **Risques (EBIOS)** | l'analyse : fréquence × gravité × maîtrise, brut et résiduel |
-| **Conformité** | l'évaluation des référentiels applicables, et la déclaration d'applicabilité |
+| **Registre des risques** | l'analyse : fréquence × gravité × maîtrise, brut et résiduel |
+| **Référentiels** | l'évaluation des référentiels applicables, et la déclaration d'applicabilité |
 | **Approbations** | ce qui attend votre décision |
 
 ### Trois choses qui surprennent la première fois
@@ -265,7 +265,7 @@ y toucher casserait la preuve. Sa rétention est une procédure d'exploitation �
 
 ### Ce que l'outil fait de VOS données — la réponse est dans l'outil
 
-En bas de votre écran `/rgpd`, **« Le registre de l'outil lui-même »** : un bouton, et vous
+Sur votre écran **Registre RGPD**, l'onglet **« L'outil lui-même »** : un bouton, et vous
 obtenez la liste **colonne par colonne** de ce que cette application détient — la finalité,
 la base légale, la durée, et ce qu'elle en fait à l'expiration. C'est l'article 30 appliqué
 au logiciel, et c'est la pièce à produire quand on vous demande *« que fait votre outil de
@@ -368,18 +368,26 @@ pas d'administrateur d'une seule filiale.
 
 ### Ce que vous seul pouvez faire
 
+> ⚠️ **Deux de ces écrans ont changé de chemin le 16/09/2026**, et le guide le dit plutôt
+> que de vous laisser chercher. Le socle de risques et l'activation des référentiels
+> n'étaient pas des objets mais des **points de vue** — sur les risques pour l'un, sur les
+> référentiels pour l'autre. Ils ont quitté le menu pour devenir des **onglets** de l'écran
+> dont ils sont une vue : le menu passe de 32 entrées à 28, et plus aucun écran n'est sans
+> porte. Le contenu, lui, n'a pas bougé d'une ligne.
+
+
 | Geste | Où | À savoir |
 |---|---|---|
 | **Créer une filiale** | ⚠️ **Aucun écran — par l'API** (voir l'encadré sous ce tableau) | La réponse vous donne **la liste des groupes AD à créer** dans l'annuaire. Sans eux, personne n'entre — vous compris. |
-| **Écrire au socle de risques** | Socle de risques | Ce que vous y mettez s'applique à **toutes** les filiales. |
-| **Activer un référentiel** | Référentiels applicables | ⚠️ À ne pas confondre avec « non applicable » par exigence : l'activation dit *quels référentiels s'appliquent à ce site*, le « non applicable » écarte *un point dans un référentiel pratiqué*. |
-| **Lire le journal d'audit** | Journal | Trois ans d'identités et d'adresses IP. C'est un domaine à part, et ce n'est pas un hasard. |
+| **Écrire au socle de risques** | Registre des risques → onglet **Socle du Groupe** | Ce que vous y mettez s'applique à **toutes** les filiales. |
+| **Activer un référentiel** | Référentiels → onglet **Applicables ici** | ⚠️ À ne pas confondre avec « non applicable » par exigence : l'activation dit *quels référentiels s'appliquent à ce site*, le « non applicable » écarte *un point dans un référentiel pratiqué*. |
+| **Lire le journal d'audit** | Journal d'audit | Trois ans d'identités et d'adresses IP. C'est un domaine à part, et ce n'est pas un hasard. |
 | **Faire sortir une filiale** | ⚠️ **Aucun écran — par l'API** | ⚠️ **Exportez d'abord** — et faites-le faire par un compte qui porte `GRC-EXPORT`, l'export étant une permission distincte que `GRC-ADMIN` **ne donne pas** (constat Q-278). Une filiale sortie disparaît de tous les périmètres, et l'exporter après demanderait de contourner le cloisonnement. |
 
 > ### ⚠️ Il n'y a pas d'écran d'administration — et c'était la promesse la plus coûteuse de ce guide
 >
 > Ce tableau renvoyait à un écran « Administration » **qui n'existe pas** : mesuré à la porte
-> S7 (constat **Q-266**), l'application compte 31 entrées de menu et **aucune n'ouvre un
+> S7 (constat **Q-266**), l'application compte 28 entrées de menu et **aucune n'ouvre un
 > écran de ce nom**. ⚠️ *La barre latérale porte bien l'intitulé « Administration » — c'est
 > un titre de SECTION, pas une entrée, et il ne mène nulle part. La phrase disait « aucune
 > ne porte ce nom » et se serait fait contredire par le premier exploitant qui aurait

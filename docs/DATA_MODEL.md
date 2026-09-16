@@ -65,11 +65,20 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 12`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 16`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
-côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v12**. Elle est
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v16**. Elle est
 indépendante du numéro des migrations SQL.
+
+> ⚠️ **Ce paragraphe a annoncé « v12 » pendant quatre montées de version**, du 04/09 au
+> 16/09/2026, pendant que les trois endroits qui portent réellement le nombre —
+> `js/core/datastore.js`, `backend/src/entites/index.ts` et `backend/src/reprise/index.ts` —
+> disaient juste et concordaient (un essai les y oblige,
+> `test/reprise/versions-concordantes.test.mjs`). *Le banc sait dire qu'un chiffre du CODE
+> est faux ; il ne sait pas dire qu'une phrase d'un document l'est devenue.* C'est le
+> constat **Q-219** sous sa forme la plus discrète, et il a été trouvé parce que
+> l'utilisateur a demandé « les docs sont à jour ? » — pas par un contrôle.
 > v3 (chantier Référentiels) : ajout des tableaux `evaluations` et `mesures`.
 > v4 (chantier Incidents) : ajout du tableau `incidents`.
 > v5 (chantier Documentaire) : ajout du tableau `documents`.
@@ -85,8 +94,24 @@ indépendante du numéro des migrations SQL.
 > v12 (chantier Référentiels n-n) : une exigence peut être couverte par PLUSIEURS mesures — le lien
 >     `evaluations[].mesure_id` (unique) devient `evaluations[].mesure_ids[]` ; normalize convertit
 >     l'ancienne valeur en tableau à 1 élément. Propagation « au plus défavorable ».
+> v13 (chantier Groupe) : ajout de `risque_catalogue` (socle de risques du Groupe, plus les ajouts
+>     propres à chaque filiale) et de `referentiels_actifs` (quels référentiels sont dans le périmètre
+>     de ce site). Les deux arrivent VIDES sur une base héritée, et c'est correct.
+> v14 (lot L19, action 19.2) : ajout de `derogations` — les écarts de conformité ASSUMÉS, avec leur
+>     propriétaire, leur motif et leur échéance. ⚠️ **Aucun champ d'ÉTAT** : « en vigueur », « échue »,
+>     « en attente » se DÉRIVENT côté serveur de l'échéance et de la décision du circuit d'approbation
+>     (`f_etat_derogation`). Les faire voyager dans le fichier les figerait au jour de l'export, et une
+>     reprise faite six mois plus tard réimporterait des dérogations « en vigueur » qui ne le sont plus.
+> v15 (lot L19, action 19.3) : ajout de `documents[].mesures_ids[]` — quels CONTRÔLES un document
+>     prouve, et non plus seulement quels référentiels il couvre. Un CHAMP, pas une collection.
+> v16 (lot L19, actions 19.5 et 19.6) : les mesures portent leur **efficacité** (`efficacite`,
+>     `efficacite_constatee_le`, `efficacite_preuve`) et leur **rythme de rejeu**
+>     (`frequence_controle`, `dernier_controle`). ⚠️ **Rien n'est converti** : la maturité ne se
+>     traduit PAS en efficacité — « documenté, planifié, supervisé » ne dit rien de « est-ce que ça
+>     marche ». Et la prochaine échéance n'est pas un champ : elle se dérive (`f_prochain_controle`).
 > Migrations transparentes — `normalize` crée les tableaux vides à la volée (et garantit
->     `dependances`, la conversion des anciennes actions MCO et de `mesure_id`→`mesure_ids[]`).
+>     `dependances`, la conversion des anciennes actions MCO, de `mesure_id`→`mesure_ids[]`, et le
+>     tableau `mesures_ids` des documents).
 
 ---
 
@@ -131,7 +156,7 @@ Inchangé — c'est aussi la charge utile d'un fichier `grc-backup` :
 
 ```jsonc
 {
-  "schemaVersion": 12,   // = SCHEMA_VERSION courant
+  "schemaVersion": 16,   // = SCHEMA_VERSION courant
   "updatedAt": 1730000000000,
   "clients": [],        "exigences": [],   "actions": [],
   "risques": [],        "actifs": [],      "processus": [],

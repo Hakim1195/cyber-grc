@@ -115,7 +115,13 @@ dictionnaires `js/i18n/`, et la table des domaines de `js/app.js`.
 | **Tiers** | Donneurs d'ordre · Prestataires · Personnel |
 | **Administration** | Imports · Journal d'audit · Paramètres |
 
-**32 entrées → 26**, et **zéro écran sans porte**.
+**32 entrées → 28**, et **zéro écran sans porte**.
+
+⚠️ **Ce paragraphe annonçait « 26 »**, et c'était faux de deux : le compte avait été posé
+au moment où le plan rangeait BIA avec la continuité et n'avait pas encore décidé du sort
+de `/couverture`. *Un chiffre faux dans un document est un constat, pas une coquille*
+(`PLAN_EXECUTION.md` §5) — et celui-ci était dans le document qui sert à mesurer les
+autres.
 
 ⚠️ **`BIA` reste avec les risques et non avec la continuité**, à contre-courant de l'ISO
 22301 : un bilan d'impact métier est ce qui *justifie* les RTO/RPO, et l'utilisateur le

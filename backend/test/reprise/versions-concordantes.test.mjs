@@ -35,7 +35,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
-import { moduleCompile, RACINE_FRONTEND } from '../aide/serveur.mjs';
+import { moduleCompile, RACINE_BACKEND, RACINE_FRONTEND } from '../aide/serveur.mjs';
 
 /** Lit `const SCHEMA_VERSION = <n>;` dans le fichier du frontend. */
 function versionDuNavigateur() {
@@ -50,7 +50,33 @@ function versionDuNavigateur() {
   return Number(trouve[1]);
 }
 
-describe('La version du schéma dit la même chose aux trois endroits où elle est écrite', () => {
+/**
+ * La version annoncée par `docs/DATA_MODEL.md` — QUATRIÈME endroit.
+ *
+ * ⚠️ **Il a annoncé « v12 » pendant quatre montées de version**, du 04/09 au 16/09/2026,
+ * pendant que les trois copies du CODE disaient juste et concordaient. Cet essai les
+ * confrontait entre elles ; il ne regardait pas le document qui les explique — et ce
+ * document est celui que `CLAUDE.md` §4 désigne comme la référence du modèle de données.
+ *
+ * *Le banc savait dire qu'un chiffre du code est faux ; il ne savait pas dire qu'une
+ * phrase d'un document l'était devenue.* C'est le constat Q-219 sous sa forme la plus
+ * discrète, et il a été trouvé parce que l'utilisateur a demandé « les docs sont à
+ * jour ? » — pas par un contrôle. Il l'est maintenant.
+ */
+function versionDuDataModel() {
+  const source = readFileSync(join(RACINE_BACKEND, '..', 'docs', 'DATA_MODEL.md'), 'utf8');
+  const trouve = /`SCHEMA_VERSION\s*=\s*(\d+)`/u.exec(source);
+  assert.notEqual(
+    trouve,
+    null,
+    'La phrase « Version de schéma courante : `SCHEMA_VERSION = N` » a disparu de ' +
+      'docs/DATA_MODEL.md : ce contrôle ne mesure plus rien. Si elle a été reformulée, ' +
+      'corriger ICI plutôt que de supprimer le contrôle.',
+  );
+  return Number(trouve[1]);
+}
+
+describe('La version du schéma dit la même chose aux quatre endroits où elle est écrite', () => {
   test('navigateur, API et reprise annoncent le MÊME numéro', async () => {
     const navigateur = versionDuNavigateur();
     const { VERSION_SCHEMA: api } = await moduleCompile('entites/index.js');
@@ -72,6 +98,18 @@ describe('La version du schéma dit la même chose aux trois endroits où elle e
         'en retard : l’API annonce une forme que le navigateur ne connaît pas, ou bien le ' +
         'produit EXPORTE un fichier qu’il REFUSE DE RELIRE — c’est ce qui est arrivé le ' +
         '04/09/2026 en montant v12 → v13.',
+    );
+
+    // ── ET LE DOCUMENT QUI LES EXPLIQUE ────────────────────────────────
+    const document = versionDuDataModel();
+    assert.equal(
+      document,
+      navigateur,
+      `docs/DATA_MODEL.md annonce la version ${String(document)} quand le produit porte la ` +
+        `${String(navigateur)}. Ce document est la RÉFÉRENCE du modèle de données ` +
+        '(CLAUDE.md §4) : un lecteur y apprend une forme de « data » qui n’existe plus, et ' +
+        'il n’a aucun moyen de s’en apercevoir. ⚠️ Corriger AUSSI la liste des paliers juste ' +
+        'en dessous — un numéro monté sans son palier documenté laisse la montée sans motif.',
     );
   });
 

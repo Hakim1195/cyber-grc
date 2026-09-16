@@ -772,8 +772,8 @@ la comparaison au marché du 08/09/2026.
 **Mesuré au 16/09/2026, à la révision `54383a4`** : `npm test` → **2004 essais,
 2004 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **40 garde-fous consignés**, **36 migrations**,
-**56 tables**, **269 décisions** au registre de l'article 30 ; publication → **85
+`f_verifier_schema()` → 0 anomalie, **41 garde-fous consignés**, **37 migrations**,
+**56 tables**, **274 décisions** au registre de l'article 30 ; publication → **86
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **14 conformes,
 1 réserve, 0 bloquant**.
 
@@ -947,14 +947,14 @@ npm test                                         → tests 1993 · pass 1993 · 
                                                    reglementaire 7 · derogations 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (40 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (41 garde-fous découverts, joués, consignés)
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **56 tables** en
-**36 migrations**, **224 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**37 migrations**, **224 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **94 clés étrangères** (54 `restrict`, 38 `cascade`, 2 `set null`), **49 tables portant
 `cree_par` et 49 déclencheurs de création**, **27 clés étrangères composites** visant
-`(id, filiale_id)`, **13 unicités** `uq_<parent>_id_filiale`, **40 contrôles consignés**
+`(id, filiale_id)`, **13 unicités** `uq_<parent>_id_filiale`, **41 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1234,7 +1234,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **56 tables**, obtenues aujourd'hui en **36 migrations** appliquées de bout en bout par
+- **56 tables**, obtenues aujourd'hui en **37 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le

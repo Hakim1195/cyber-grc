@@ -281,7 +281,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 15;
+export const VERSION_SCHEMA = 16;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -671,7 +671,20 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
       },
       seconde: {
         table: 'mesure_mise_en_oeuvre',
-        champs: ['statut', 'maturite', 'responsable', 'commentaire'],
+        // ⚠️ Les cinq champs neufs (migration `037`) sont EXPOSÉS, et c'est le
+        // point : sans eux, l'efficacité et le rythme de contrôle vivraient en
+        // base sans qu'aucun écran ne puisse les poser — c'est-à-dire une
+        // capacité absente. Trois lots de suite s'y sont pris (19.1, 19.2, 20.1),
+        // et la leçon est au `docs/REPRISE.md` §4.
+        champs: [
+          'statut', 'maturite', 'responsable', 'commentaire',
+          // 19.6 — EST-CE QUE ÇA MARCHE, distinct de « à quel point c'est
+          // institutionnalisé ». Les deux ne se moyennent pas ensemble.
+          'efficacite', 'efficacite_constatee_le', 'efficacite_preuve',
+          // 19.5 — un contrôle se rejoue. La prochaine échéance, elle, n'est PAS
+          // un champ : elle se dérive (`f_prochain_controle`), à un seul endroit.
+          'frequence_controle', 'dernier_controle',
+        ],
       },
     },
   ],

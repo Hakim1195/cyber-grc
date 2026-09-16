@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 15;
+export const VERSION_SCHEMA = 16;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -448,10 +448,33 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
   },
   mesures: {
     prefixe: 'MESURE',
-    champs: ['id', 'nom', 'description', 'statut', 'maturite', 'responsable', 'updatedAt'],
-    enumerations: [{ champ: 'statut', valeurs: STATUTS_CONFORMITE, videAdmis: true }],
+    champs: [
+      'id', 'nom', 'description', 'statut', 'maturite', 'responsable', 'updatedAt',
+      // v16 — l'efficacité (19.6) et le contrôle périodique (19.5).
+      'efficacite', 'efficacite_constatee_le', 'efficacite_preuve',
+      'frequence_controle', 'dernier_controle',
+    ],
+    enumerations: [
+      { champ: 'statut', valeurs: STATUTS_CONFORMITE, videAdmis: true },
+      // ⚠️ Trois valeurs, jamais un barème : un second niveau de 0 à 5 inviterait
+      // à le moyenner avec la maturité, et le tableau de bord mélangerait « à quel
+      // point c'est institutionnalisé » avec « est-ce que ça marche ».
+      {
+        champ: 'efficacite',
+        valeurs: ['efficace', 'partiellement', 'inefficace'],
+        videAdmis: true,
+      },
+      {
+        champ: 'frequence_controle',
+        valeurs: [
+          'Ponctuelle', 'Hebdomadaire', 'Mensuelle',
+          'Trimestrielle', 'Semestrielle', 'Annuelle',
+        ],
+        videAdmis: true,
+      },
+    ],
     bornes: [{ champ: 'maturite', min: 0, max: 5 }],
-    dates: [],
+    dates: ['efficacite_constatee_le', 'dernier_controle'],
     references: [],
     referencesMultiples: [],
     cleMetier: null,
@@ -1668,6 +1691,18 @@ const PALIERS: readonly EtapePalier[] = [
         ? [`${poses} document(s) dotés d’un tableau « mesures_ids » vide`]
         : [];
     },
+  },
+  {
+    de: 15,
+    vers: 16,
+    libelle:
+      'Lot L19, actions 19.5 et 19.6 : un contrôle porte son EFFICACITÉ (distincte de sa ' +
+      'maturité) et son rythme de rejeu — fréquence et date du dernier passage.',
+    // ⚠️ Rien à transformer, et surtout rien à DEVINER : la maturité ne se convertit
+    // PAS en efficacité. « Documenté, planifié, supervisé » ne dit rien de « est-ce
+    // que ça marche », et une conversion inventerait des constatations que personne
+    // n'a faites — dans un outil produit en audit. Les champs arrivent vides.
+    appliquer: () => [],
   },
 ];
 

@@ -2541,3 +2541,28 @@ input, select, textarea {
     color: var(--text-muted);
     max-width: var(--mesure-texte);
 }
+
+/* ── Efficacité et contrôle périodique (L19 · 19.5 et 19.6) ───────────
+   Deux blocs encadrés, et l'encadrement est le propos : la maturité dit à quel
+   point un contrôle est institutionnalisé, l'efficacité s'il protège. Les
+   poser côte à côte dans la même grille inviterait à les lire comme deux notes
+   de la même chose — c'est le défaut classique des tableaux de bord GRC. */
+.mes-efficacite, .mes-controle {
+    margin: var(--space-4) 0 0;
+    padding: var(--space-3) var(--space-4) var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.mes-efficacite legend, .mes-controle legend {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 0 var(--space-2);
+}
+.mes-echeance {
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-success);
+}
+.mes-echeance--retard { color: var(--color-danger); }

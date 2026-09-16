@@ -76,6 +76,8 @@ const NOUVELLES_PAR_VERSION = {
   // ⚠️ v15 n'ajoute AUCUNE collection : elle ajoute un CHAMP (`documents[].mesures_ids`).
   // La table dit quelles collections apparaissent, et zéro est une réponse.
   15: [],
+  // v16 non plus : cinq CHAMPS sur les mesures (efficacité, rythme de rejeu).
+  16: [],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -515,6 +517,35 @@ export function instantaneV12Complet() {
  * des contrôles qu'un document prouve (action 19.3). Le jeu lui en donne un **non vide** —
  * un round-trip qui ne transporte rien ne prouve pas qu'il transporte bien.
  */
+/**
+ * Le même instantané, **en version courante (v16)**.
+ *
+ * ⚠️ Cinq CHAMPS de plus sur les mesures — l'efficacité (19.6) et le rythme de rejeu
+ * (19.5) —, et le jeu leur donne des valeurs NON VIDES : un round-trip qui ne transporte
+ * rien ne prouve pas qu'il transporte bien. La ligne choisie est celle qui fait tout
+ * l'intérêt de l'action 19.6 : **maturité 4 et efficacité « inefficace »** — documenté,
+ * planifié, supervisé… et la restauration échoue.
+ */
+export function instantaneV16Complet() {
+  const base = instantaneV15Complet();
+  return {
+    ...base,
+    schemaVersion: 16,
+    mesures: base.mesures.map((m, i) =>
+      i === 0
+        ? {
+            ...m,
+            efficacite: 'inefficace',
+            efficacite_constatee_le: '2026-03-12',
+            efficacite_preuve: 'Test de restauration du 12/03 : échec sur la base 3.',
+            frequence_controle: 'Trimestrielle',
+            dernier_controle: '2026-03-12',
+          }
+        : m,
+    ),
+  };
+}
+
 export function instantaneV15Complet() {
   const base = instantaneV14Complet();
   return {
