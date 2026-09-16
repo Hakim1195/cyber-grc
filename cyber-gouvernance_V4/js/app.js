@@ -420,19 +420,33 @@ window.renderBreadcrumb = function(route) {
     const lien = document.querySelector('.main-nav a[data-route="' + base + '"] [data-i18n]');
     const cleTitre = meta ? meta.t : (lien ? lien.getAttribute("data-i18n") : null);
     if (cleTitre === null) { el.innerHTML = ""; return; }
-    // ⚠️ Pour une VUE, le fil porte le libellé de l'ONGLET, pas celui de la
-    // table : celle-ci gardait les anciens noms (« Matrice des risques » quand
-    // l'onglet et le titre de l'écran disent « Matrice F×G »). Trois mots pour
-    // un seul écran, à quelques centimètres les uns des autres.
+    // ⚠️ **Une vue se lit SOUS son sujet, jamais à sa place.** Le fil d'une vue
+    // porte trois niveaux — « Conformité / Référentiels / Couverture croisée » —
+    // parce que c'est la seule façon de dire à la fois *où l'on est* et *de quoi
+    // c'est une vue*. La première rédaction remplaçait le sujet par le libellé de
+    // l'onglet, et l'écran d'accueil du groupe affichait « Conformité /
+    // Catalogue » sous un titre « Référentiels de sécurité » : trois mots pour un
+    // seul écran, à quelques centimètres les uns des autres.
+    //
+    // La PORTE d'un groupe — son premier onglet — n'ajoute rien : elle EST le
+    // sujet, et « Référentiels / Catalogue » serait une redite.
+    const echapper = window.escapeHtml || (v => String(v == null ? "" : v));
     let titre = t(cleTitre);
-    if (typeof UI !== "undefined" && typeof UI.ongletsDe === "function") {
-        const onglets = UI.ongletsDe(base);
-        const vue = onglets === null ? null : onglets.find(function (o) { return o.actif; });
-        if (vue) titre = vue.libelle;
+    let vue = "";
+    if (typeof UI !== "undefined" && typeof UI.contratOnglets !== "undefined") {
+        const groupe = UI.contratOnglets.find(function (g) {
+            return g.vues.some(function (v) { return v.route === base; });
+        });
+        if (groupe && groupe.vues[0].route !== base) {
+            const porte = ROUTE_META[groupe.vues[0].route];
+            if (porte) titre = t(porte.t);
+            const active = groupe.vues.find(function (v) { return v.route === base; });
+            if (active) vue = ` / <b>${echapper(active.libelle)}</b>`;
+        }
     }
     const detail = segs.length > 1 ? ` / <b>${t("fil.fiche")}</b>` : "";
-    const echapper = window.escapeHtml || (v => String(v == null ? "" : v));
-    el.innerHTML = `${t(cleSection)} / <b>${echapper(titre)}</b>${detail}`;
+    const sujet = vue === "" ? `<b>${echapper(titre)}</b>` : echapper(titre);
+    el.innerHTML = `${t(cleSection)} / ${sujet}${vue}${detail}`;
 };
 
 /* =========================
