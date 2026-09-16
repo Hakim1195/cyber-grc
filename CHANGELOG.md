@@ -8,15 +8,22 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
-> **État mesuré le 14/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
+> **État mesuré le 16/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **1932 essais, 1932 passés, 0 échec** à la révision `96324ed`,
+> **1993 essais, 1993 passés, 0 échec** à la révision `54383a4`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
-> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**35 garde-fous consignés**,
-> **31 migrations**, **52 tables**, **208 politiques**, **206 décisions** au registre),
+> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**39 garde-fous consignés**,
+> **35 migrations**, **55 tables**, **220 politiques**, **263 décisions** au registre),
 > `install.sh --verifier-publication` → **81 fichiers servis identiques au dépôt**, et
 > `install.sh --diagnostic` → **14 conformes, 1 réserve** (`SMTP_ACTIF=non`), **0 bloquant**.
+>
+> ⚠️ **Les chiffres de ce bloc étaient faux de quatre migrations et de quatre garde-fous**
+> — il annonçait « 35 garde-fous, 31 migrations, 52 tables, 208 politiques, 206 décisions »,
+> c'est-à-dire l'état du **08/09**, pendant que le `backend/README.md` §8, lui, disait le
+> réel. *Deux points de mesure des mêmes grandeurs divergent, et la divergence est
+> silencieuse* : c'est le constat **Q-219**, et il vit ici parce qu'aucun garde-fou ne lit
+> CETTE phrase-ci — le contrôle de Q-53 ne confronte que le **nombre d'essais**.
 >
 > ⚠️ **Trois pièges de mesure rencontrés, et ils valent d'être dits.**
 > **(1)** `verifier_cloisonnement.sql` joué en **superutilisateur** rend **82/107** : un

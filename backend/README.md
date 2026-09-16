@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 1932 essais, vingt familles (voir plus bas)
+npm test                           # 1993 essais, vingt-cinq familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -629,9 +629,14 @@ que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non re
 | `test/journal/` | la **couverture** du journal d'audit, mesurée en exerçant le produit puis en comptant ce qui est arrivé en base — jamais en relisant `src/` |
 | `test/journal-lecture/` | la lecture cloisonnée du journal (condition E6), les constats de la porte S4 — et, depuis le 9ᵉ passage de S8, que **le CONTENU des enregistrements relève du droit d'export** : les deux routes servaient la même matière, et feuilleter la consultation reconstituait le jeu que le CSV refusait (constat Q-330) |
 | `test/documents/` | la **classification documentaire** dans la base (migrations `027` et `030`) : niveaux de diffusion bornés et obligatoires, étiquettes normalisées par un déclencheur **et par un index** (l'un donne le bon message, l'autre la garantie — constat Q-298), et le rattachement à l'article 30, dont la règle **n'est pas symétrique** : un document local relève d'un traitement de Groupe, l'inverse est refusé (constat N-10 fermé, constat Q-294 ouvert et refermé) |
+| `test/attestations/` | l'**attestation de lecture** (L19, 19.1) : on n'atteste que pour soi — la personne vient de la session, la version vient du serveur —, la barrière de portée reprise de la `030`, et le taux de couverture qui rend `null` plutôt que `0` sur un effectif nul |
+| `test/reglementaire/` | l'**horloge NIS2 et RGPD** (L20, 20.1) : les quatre paliers dérivés d'un instant de détection, chacun avec sa référence au texte, et l'origine du compte — *une horloge dont on ignore l'origine ne se défend pas devant l'ANSSI* |
+| `test/derogations/` | les **écarts de conformité assumés** (L19, 19.2) : une dérogation saisie ne couvre rien, une dérogation échue ne couvre plus, et la RALLONGER sans la faire réapprouver ne la rallonge pas. ⚠️ Le §3 mesure ce qui **n'a pas bougé** — `exigences.statut_conformite` et sa `version` —, parce que « redevient une non-conformité sans intervention » est vrai *précisément parce que rien n'est jamais écrit* |
+| `test/recherche/` | la **recherche globale** (L17, A3) : une barre qui trouve un risque, un actif, une exigence ou une personne, bornée par la RLS côté serveur et par les droits — jamais par un filtre côté client. C'est la surface la plus propice à un oracle d'existence |
+| `test/decouverte/` | le **jeu de découverte** (L18 bis) et ses cinq conditions constitutives : marque de provenance posée PAR LA BASE et inforgeable, refus s'il existe la moindre ligne réelle, purge d'un geste, et interdiction hors du profil « découverte » |
 
 *(`test/aide/` n'est pas une famille : ce sont les montages partagés — base, serveur,
-navigateur, outillage — que les vingt autres appellent.)*
+navigateur, outillage — que les vingt-cinq autres appellent.)*
 
 **Deux de ces familles sont nées d'un défaut, et c'est ce qui leur donne leur valeur.**
 
@@ -764,8 +769,8 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 14/09/2026, à la révision `96324ed`** : `npm test` → **1932 essais,
-1932 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**Mesuré au 16/09/2026, à la révision `54383a4`** : `npm test` → **1993 essais,
+1993 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **39 garde-fous consignés**, **35 migrations**,
 **55 tables**, **263 décisions** au registre de l'article 30 ; publication → **81
@@ -921,23 +926,25 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`96324ed`** — « Q-335 — l'écran du journal DIT pourquoi il ne montre pas le différentiel » (14/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`), **arbre propre**. ⚠️ **Ce bloc a déjà été RÉANCRÉ deux fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**, ce qui est juste pendant une vague et aveugle à sa clôture. La péremption est **bornée** depuis (§ ci-dessous), et ce réancrage-ci la respecte. |
-| État de l'arbre | **arbre PROPRE de `96324ed`**, `git status` vide. Compte relevé **famille par famille** — aucune famille neuve, **une seule bouge** : `journal-lecture` 70 → **72**, les deux contrôles qui font DÉCIDER le droit d'export à l'intérieur de la consultation (Q-330), et le drapeau que l'écran emploie désormais (Q-335). Le total le confirme : 1930 → 1932, et rien d'autre n'a été touché — le reste de la livraison du 14/09 est de la prose. ⚠️ **Ces deux essais n'existaient pas au 9ᵉ passage** : le correctif de Q-330 avait été accepté **hors porte**, donc mordu par personne. La famille `documentation`, qui LIT ce README, est rejouée **après** cette mise à jour |
+| Révision mesurée | **`54383a4`** — « Vague B — les dérogations datées » (16/09/2026), relevée **sur la machine réelle** (Debian 13, `SRV-Infra`), **arbre propre**. ⚠️ **Ce bloc a déjà été RÉANCRÉ trois fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**, ce qui est juste pendant une vague et aveugle à sa clôture. |
+| État de l'arbre | **arbre PROPRE de `54383a4`**, `git status` vide. Compte relevé **famille par famille**, chaque répertoire joué séparément — jamais estimé. ⚠️ **CINQ familles neuves depuis le réancrage du 14/09** que le document ne nommait pas : `recherche` (13), `attestations` (8), `decouverte` (8), `reglementaire` (7), `derogations` (6). Les quatre premières sont **antérieures à ce lot** : le garde-fou ne pouvait pas le dire, puisqu'il juge le document contre la révision que le document nomme. *Motif du constat Q-219 ; la parade est de réancrer à la CLÔTURE d'une vague, pas seulement quand un chiffre saute.* `navigateur` 183 → **199**, `depot` 51 → **54**. La famille `documentation`, qui LIT ce README, est rejouée **après** cette mise à jour |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 | ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 1932 · pass 1932 · fail 0
-                                                   api 297 · base 311 · navigateur 183
+npm test                                         → tests 1993 · pass 1993 · fail 0
+                                                   base 311 · api 297 · navigateur 199
                                                    pieces 125 · auth 115 · import 97
-                                                   deploiement 95 · droits 84 · reprise 82
-                                                   cycle 82 · journal-lecture 72
-                                                   notifications 73 · approbations 71
-                                                   annuaire 48 · depot 51 · modules 40
+                                                   deploiement 95 · droits 84 · cycle 82
+                                                   reprise 82 · notifications 73
+                                                   journal-lecture 72 · approbations 71
+                                                   depot 54 · annuaire 48 · modules 40
                                                    filiales 34 · documentation 28
-                                                   documents 25 · journal 19
+                                                   documents 25 · journal 19 · recherche 13
+                                                   attestations 8 · decouverte 8
+                                                   reglementaire 7 · derogations 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
 select * from f_verifier_schema()                → 0 ligne (39 garde-fous découverts, joués, consignés)

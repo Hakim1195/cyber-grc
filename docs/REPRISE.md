@@ -64,13 +64,21 @@ les 19 qui lancent Chromium prennent **520 s** et doivent rester **en série**.
 | **Recherche globale + `Ctrl+K`** (L17, A3) | Cloisonnée par la RLS, bornée par les droits, budget de trace partagé avec le sondage |
 | **Attestation de lecture** (L19, 19.1) | Preuve ISO 27001 A.5.1. Migration `033` |
 | **Horloge réglementaire** (L20, 20.1) | Trois paliers NIS2 + 72 h RGPD, dérivés. Migration `034` |
+| **Dérogations datées** (L19, 19.2) | L'état est **dérivé**, jamais stocké : une dérogation échue redevient une non-conformité sans qu'aucun traitement n'ait à repasser. Approbation par le circuit L8, inchangé. Migration `035`, schéma **v14** |
+| **Les trois écrans qui manquaient** (16/09) | 19.1, 19.2 et 20.1 étaient livrées côté serveur et **aucun écran ne les appelait** — `documents.attestation_requise` n'était même posable par aucun formulaire |
 | **Passe de style** | Échelle typographique, chasse fixe pour ce qui se recopie, tableaux (en-tête collant, nombres alignés), impression |
+
+⚠️ **La leçon du 16/09, et elle vaut pour toute la suite** : *une capacité qu'aucun écran
+n'appelle est une capacité absente.* Trois lots de suite ont été livrés, éprouvés et verts
+sans que personne puisse s'en servir. Un lot n'est fini que lorsqu'un utilisateur peut
+l'atteindre — et c'est `test/modules/non-regression.test.mjs` qui le dit, en comptant les
+modules du produit.
 
 ### Ce qui reste — dans cet ordre
 
 **Vague B, à finir :**
 
-- **19.2** dérogations datées — l'échéance est **dérivée**, jamais recopiée ;
+- ~~**19.2** dérogations datées~~ — ✅ **livré le 16/09** (migration `035`) ;
 - **19.3** lien document ↔ mesure — clé étrangère **composite** ;
 - **19.4** réutilisation d'une preuve — ⚠️ **le point dur** : le déclencheur
   `f_pieces_suivent_leur_porteur()` (migration `017`) supprime une pièce avec son porteur.
@@ -118,6 +126,12 @@ cible **76**. Il se **rejoue**, il ne s'estime pas.
     doit être **commité dans le même commit**.
 11. **Un garde-fou ÉPROUVE, il ne reconnaît pas un mot** (`CONVENTIONS.md` §39). Et **le
     balayage part du CATALOGUE, jamais d'une liste**.
+12. **Une table neuve entre dans TROIS mécanismes** (`CONVENTIONS.md` §40, posé le 16/09) :
+    le domaine **`type_entite`** (sans quoi elle est **incréable**, toute création écrivant
+    au journal), ses **politiques RLS**, puis **`f_poser_declencheurs_pieces()`** — *dans
+    cet ordre*, parce que la découverte des tables porteuses exige que la politique de
+    suppression existe déjà. Les trois défauts ont été trouvés par des garde-fous, aucun
+    par relecture.
 
 ---
 
