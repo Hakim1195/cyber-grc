@@ -2923,3 +2923,64 @@ vérifier que la mesure décide. C'est la répartition ordinaire :
 |---|---|---|
 | la **forme** du schéma, à chaque démarrage | contraintes, politiques, déclencheurs, domaines | `f_verifier_*()`, sans périmètre |
 | le **comportement** sur des lignes réelles | ce que la base fait d'un geste | `test/`, sous périmètre, avec mutation |
+
+---
+
+## §42 — Une migration qui REPREND des données se joue **sur des données**
+
+> **Posé le 16/09/2026**, une heure après le §41 et pour la même livraison. Celui-ci a
+> coûté un **déploiement refusé sur la recette**, après un banc de **2 031 essais
+> entièrement vert**. C'est la démonstration la plus nette qu'ait produite ce chantier de
+> *« un banc vert mesure ce qu'il regarde, jamais ce qu'il ne regarde pas »*.
+
+### 42.1 Ce qui s'est passé
+
+La migration `038` porte un §2 de **reprise** : un rattachement par pièce jointe déjà
+déposée. Son §0 posait le périmètre de lecture par `set_config('grc.filiales_lecture', …)`
+— **un réglage qui n'existe pas** ; le nom est `grc.filiales`. Le banc n'a rien dit ;
+`install.sh --maj` a refusé la migration en `GRC04` dans la minute.
+
+Et une seconde faute, plus profonde, se cachait derrière la première : la reprise insérait
+**pour toutes les filiales d'un seul `insert`**, alors que la politique d'ajout n'admet que
+la filiale **active**, et qu'il n'y en a qu'une à la fois.
+
+### 42.2 Pourquoi le banc ne pouvait pas le voir
+
+`test/aide/base.mjs` applique **toutes** les migrations sur une base **vide**, puis sème.
+Une migration de reprise n'y rencontre donc **jamais** de données :
+
+- les politiques RLS sont évaluées **par le scan** ; sans ligne à scanner, elles ne
+  décident de rien ;
+- `add constraint` valide les lignes existantes — il n'y en a aucune ;
+- une boucle sur `filiales` ne tourne pas, la table étant vide à cette étape.
+
+**Tout le §2 d'une migration de reprise échappait au banc.** Ce n'est pas un oubli
+d'auteur : c'est une propriété du montage, et elle valait pour les trente-huit migrations.
+
+### 42.3 La règle
+
+> **Toute migration qui LIT ou ÉCRIT des lignes existantes s'accompagne d'un essai qui la
+> rejoue sur une base DÉJÀ PEUPLÉE, dans au moins deux filiales.**
+
+Le montage est fourni : `ouvrirBaseEssai(url, { jusquA: '<précédente>' })`, puis
+`semerJeuEssai(...)`, puis **`base.migrer()`** — le vrai `db/migrate.mjs`, le binaire
+qu'invoque `deploy/install.sh`. Le modèle est
+`test/base/migrations-sur-donnees.test.mjs`, et il est écrit pour qu'on y **ajoute un
+`describe`** plutôt qu'on le rende automatique : choisir la migration précédente est une
+décision, pas une découverte.
+
+### 42.4 Et les deux règles d'écriture qui en découlent
+
+1. **Le périmètre de LECTURE se pose pour le groupe entier** — `grc.filiales`, la liste
+   complète lue dans `filiales` (motif du §0 de la `012`). Un périmètre partiel valide sur
+   un sous-ensemble et croit avoir vérifié.
+2. **Le périmètre d'ÉCRITURE ne peut PAS être « tout le groupe »** — `grc.filiale_id` en
+   désigne **une**. Une reprise qui écrit dans des tables cloisonnées **boucle sur les
+   filiales**, et passe donc par la même porte que le produit. ⚠️ Retirer
+   `force row level security` le temps de la reprise est refusé : une migration qui désarme
+   le cloisonnement pour se simplifier la vie est exactement ce qu'un auditeur cherche, et
+   elle laisse la porte ouverte si elle échoue au milieu.
+3. **Une reprise compte ce qu'elle a repris, et refuse d'être partielle.** La `038` compare
+   son total au nombre de pièces et lève un message qui nomme l'écart — sans quoi la
+   contrainte posée trois lignes plus bas échouerait avec un message que personne ne
+   saurait relier à la reprise.

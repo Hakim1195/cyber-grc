@@ -55,18 +55,25 @@
 begin;
 
 -- =====================================================================================
--- §0 — LE PÉRIMÈTRE DE LA MIGRATION
+-- §0 — LE PÉRIMÈTRE DE LECTURE DE LA MIGRATION
 -- -------------------------------------------------------------------------------------
 -- ⚠️ Motif du §0 de la `012`, redit par la leçon du 11/09 : `add constraint` VALIDE les
 -- lignes existantes, et `force row level security` vaut pour le propriétaire. Une
--- migration qui touche une table cloisonnée doit donc poser le périmètre du groupe
--- entier, sans quoi elle valide sur un sous-ensemble vide et croit avoir vérifié.
+-- migration qui LIT une table cloisonnée doit donc poser le périmètre du groupe entier,
+-- sans quoi elle valide sur un sous-ensemble et croit avoir vérifié.
+--
+-- ⚠️⚠️ **CE BLOC A ÉTÉ ÉCRIT FAUX, ET LE BANC NE POUVAIT PAS LE VOIR.** Il posait
+-- `grc.filiales_lecture` — un réglage QUI N'EXISTE PAS ; le nom est `grc.filiales`. Le
+-- déploiement a refusé la migration en `GRC04`, sur la recette, après un banc de
+-- 2 031 essais entièrement vert. La raison tient en une phrase, et elle vaut au-delà de
+-- ce fichier : **le banc migre des bases VIDES, puis les sème.** Une migration qui
+-- reprend des données existantes n'y rencontre jamais de données — les politiques ne sont
+-- pas évaluées, faute de ligne à évaluer. `test/base/migrations-sur-donnees.test.mjs`
+-- ferme cette classe : il rejoue la `038` sur une base DÉJÀ PEUPLÉE, dans deux filiales.
 -- =====================================================================================
 
-select set_config('grc.authentification', 'oui', true);
-select set_config('grc.utilisateur',      'migration:038', true);
-select set_config('grc.administration_groupe', 'oui', true);
-select set_config('grc.filiales_lecture',
+select set_config('grc.utilisateur', 'migration-038', true);
+select set_config('grc.filiales',
                   (select coalesce(string_agg(id, ','), '') from filiales), true);
 
 -- =====================================================================================
@@ -181,10 +188,51 @@ select f_poser_tracabilite_insertion();
 -- ce qui, du reste, est ce qu'il doit faire.
 -- =====================================================================================
 
-insert into piece_rattachements (piece_id, filiale_id, entite_type, entite_id, cree_le, cree_par)
-select p.id, p.filiale_id, p.entite_type, p.entite_id, p.cree_le, p.cree_par
-  from pieces_jointes p
-on conflict do nothing;
+-- ⚠️ **FILIALE PAR FILIALE, ET CE N'EST PAS UN DÉTAIL DE STYLE.** La politique d'ajout de
+-- `piece_rattachements` est `filiale_id = f_filiale_ecriture()` : elle n'admet que la
+-- filiale ACTIVE, et il n'y en a qu'une à la fois. Une insertion massive couvrant vingt
+-- filiales est donc refusée — non pas parce qu'elle est massive, mais parce qu'elle
+-- prétend écrire chez les voisins. On pose la filiale active tour à tour, ce qui fait
+-- passer la reprise par la même porte que le produit.
+--
+-- L'alternative — retirer `force row level security` le temps du §2 — a été écartée :
+-- une migration qui désarme le cloisonnement pour se simplifier la vie est exactement ce
+-- qu'un auditeur cherche, et elle laisserait la porte ouverte si elle échouait au milieu.
+do $$
+declare
+    f          record;
+    v_reprises integer := 0;
+    v_total    integer := 0;
+begin
+    for f in select id from filiales order by id loop
+        perform set_config('grc.filiale_id', f.id, true);
+        insert into piece_rattachements (piece_id, filiale_id, entite_type, entite_id,
+                                         cree_le, cree_par)
+        select p.id, p.filiale_id, p.entite_type, p.entite_id, p.cree_le, p.cree_par
+          from pieces_jointes p
+         where p.filiale_id = f.id
+        on conflict do nothing;
+        get diagnostics v_reprises = row_count;
+        v_total := v_total + v_reprises;
+    end loop;
+    perform set_config('grc.filiale_id', '', true);
+
+    -- ── LA CONTREPARTIE, ET ELLE EST LA MOITIÉ QUI COMPTE ───────────────────────────
+    -- Le §2 bis pose une clé étrangère qui EXIGE le rattachement de chaque pièce. Une
+    -- reprise partielle ferait donc échouer la migration une ligne plus bas, avec un
+    -- message de contrainte que personne ne saurait relier à ce bloc-ci. On compare
+    -- plutôt ici, et l'on dit ce qui manque.
+    if v_total <> (select count(*) from pieces_jointes) then
+        raise exception
+            'Reprise incomplète : % rattachement(s) posé(s) pour % pièce(s). Une pièce dont '
+            'la filiale ne figure pas dans « filiales » est restée sans rattachement, et la '
+            'clé fk_pieces_jointes_adresse va la refuser.',
+            v_total, (select count(*) from pieces_jointes);
+    end if;
+    raise notice 'Reprise des rattachements : % pièce(s) rattachée(s) à leur porteur d''origine.',
+                 v_total;
+end;
+$$;
 
 -- ── ⚠️ L'INVARIANT N'EST PAS SURVEILLÉ, IL EST IMPOSÉ ───────────────────────────────
 --

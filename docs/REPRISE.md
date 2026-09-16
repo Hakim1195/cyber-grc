@@ -91,9 +91,11 @@ modules du produit.
   que les pièces qui n'ont **plus aucun** rattachement. Les six chemins de cascade sont
   éprouvés un par un, découverts dans `pg_constraint`. **Deux règles neuves en sont
   sorties** : `CONVENTIONS.md` **§41** (un garde-fou de schéma ne lit aucune ligne d'une
-  table cloisonnée — `install.sh` l'appelle sans périmètre), et la mesure qui a servi à le
-  trouver : *une mutation qui ne mord pas dit que l'essai ne fait pas décider la règle*
-  (Q-210) ;
+  table cloisonnée — `install.sh` l'appelle sans périmètre), et **§42** (une migration qui
+  reprend des données se joue SUR des données : le banc migre des bases vides, et le §2 de
+  reprise des trente-huit migrations lui échappait — c'est un **déploiement refusé** qui
+  l'a dit, après 2 031 essais verts). Plus la mesure qui a servi à trouver la première :
+  *une mutation qui ne mord pas dit que l'essai ne fait pas décider la règle* (Q-210) ;
 - ~~**19.5** contrôles périodiques ; **19.6** efficacité ≠ maturité~~ — ✅ **livrés le 16/09** (migration `037`) ;
 - **20.3** AIPD ; **20.4** demandes d'exercice de droits ; **20.5** main courante de crise
   (**en ajout seul**, comme le journal — elle réutilise les quatre couches du §12).

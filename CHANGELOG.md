@@ -10,7 +10,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 16/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2031 essais, 2031 passés, 0 échec** à la révision `396cd86`,
+> **2035 essais, 2035 passés, 0 échec** à la révision `RÉVISION`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
 > échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**42 garde-fous consignés**,
@@ -45,6 +45,38 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### Le banc migre des bases VIDES — et c'est le déploiement qui l'a dit (16/09/2026)
+
+**Un déploiement refusé sur la recette, après un banc de 2 031 essais entièrement vert.**
+C'est la démonstration la plus nette qu'ait produite ce chantier de *« un banc vert mesure
+ce qu'il regarde, jamais ce qu'il ne regarde pas »*.
+
+La migration `038` porte un §2 de **reprise** — un rattachement par pièce déjà déposée. Son
+§0 posait le périmètre de lecture par `set_config('grc.filiales_lecture', …)`, **un réglage
+qui n'existe pas** : le nom est `grc.filiales`. `install.sh --maj` a rendu `GRC04` dans la
+minute. Et une seconde faute se cachait derrière : la reprise insérait **pour toutes les
+filiales d'un seul `insert`**, alors que la politique d'ajout n'admet que la filiale
+**active**, et qu'il n'y en a qu'une à la fois.
+
+⚠️ **Le banc ne pouvait voir ni l'une ni l'autre, et ce n'est pas un oubli d'auteur : c'est
+une propriété du montage.** `test/aide/base.mjs` applique toutes les migrations sur une base
+**vide**, puis sème. Une migration de reprise n'y rencontre donc jamais de données — les
+politiques RLS sont évaluées **par le scan**, `add constraint` valide zéro ligne, et une
+boucle sur `filiales` ne tourne pas. **Tout le §2 d'une migration de reprise échappait au
+banc, et cela valait pour les trente-huit.**
+
+La classe est fermée : `base.migrer()` applique les migrations **restantes** sur une base
+déjà ouverte, et `test/base/migrations-sur-donnees.test.mjs` monte une base **arrêtée à la
+`037`**, la sème — donc des pièces dans **deux filiales** —, puis joue la `038` par le vrai
+`db/migrate.mjs`. **Les deux fautes d'origine ont été remises une par une : l'essai rougit
+trois fois sur quatre à chaque coup.**
+
+La règle vit au `backend/db/CONVENTIONS.md` **§42** : *le périmètre de LECTURE se pose pour
+le groupe entier ; le périmètre d'ÉCRITURE ne peut PAS l'être — une reprise boucle sur les
+filiales, et passe par la même porte que le produit.* Retirer `force row level security` le
+temps de la reprise est **refusé** : une migration qui désarme le cloisonnement pour se
+simplifier la vie est exactement ce qu'un auditeur cherche.
 
 ### 19.4 — une preuve sert plusieurs contrôles, et le fichier ne part qu'au dernier (16/09/2026)
 

@@ -402,6 +402,26 @@ export async function ouvrirBaseEssai(urlFichierTest, options = {}) {
      * Idempotent : un `after()` rejoué, ou un `fermer()` appelé aussi dans le corps
      * d'un test, ne doit pas transformer un nettoyage en échec de test.
      */
+    /**
+     * Applique les migrations **restantes** — le geste exact du déploiement.
+     *
+     * ⚠️ **Elle existe pour une classe de défaut que le reste du banc ne peut pas
+     * voir.** `ouvrirBaseEssai()` migre une base VIDE puis la sème : une migration
+     * qui reprend des données existantes n'en rencontre jamais, et les politiques
+     * RLS — évaluées par le scan — ne décident de rien quand il n'y a rien à
+     * scanner. Le 16/09/2026, la migration `038` est passée sur 2 031 essais verts
+     * avec un réglage de session inexistant dans son §0, et le **déploiement** l'a
+     * refusée en `GRC04`.
+     *
+     * L'usage est donc : ouvrir la base avec `{ jusquA: '<précédente>' }`, semer,
+     * puis appeler ceci. Voir `test/base/migrations-sur-donnees.test.mjs`.
+     *
+     * @param {string} [jusquA] s'arrêter après cette migration (défaut : toutes)
+     */
+    async migrer(jusquA) {
+      await appliquerMigrations(conf, nom, jusquA);
+    },
+
     async fermer() {
       if (ferme) return;
       ferme = true;
