@@ -38,7 +38,7 @@ const PraTestsModule = (() => {
             <section class="page">
                 <div class="dashboard-header no-print">
                     <div>
-                        <h1>Historique des Tests</h1>
+                        <h1>Tests PCA/PRA</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Suivi des exercices et entraînements de crise</p>
                     </div>
                     <div style="display: flex; gap: 10px;">

@@ -232,7 +232,7 @@ window.I18n.enregistrer("en", {
     "compte.seDeconnecter": "Sign out",
 
     /* ═══════════════════════ RISKS (EBIOS) ═══════════════════════ */
-    "risques.titre": "Risk register (FxGxM method)",
+    "risques.titre": "Risk register",
     "risques.titreAide": "Risk assessment method: gross score = Likelihood × Severity (inherent risk), then residual score = gross score × control level (actual risk after your measures).",
     "risques.perimetre": "Scope:",
     "risques.perimetreInterne": "Internal (whole IS)",

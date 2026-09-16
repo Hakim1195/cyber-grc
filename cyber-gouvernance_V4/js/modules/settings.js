@@ -50,7 +50,7 @@ const SettingsModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>Paramètres & données</h1>
+                        <h1>Échange de données</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Vos données sont enregistrées sur le serveur de votre filiale, qui les sauvegarde. Cet écran sert aux échanges de fichier.</p>
                     </div>
                 </div>

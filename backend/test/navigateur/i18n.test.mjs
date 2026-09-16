@@ -197,7 +197,7 @@ describe('§1 — la bascule de langue atteint réellement l’écran', () => {
         );
       }
       assert.equal(avant['/risques'].langue, 'fr', 'Sans préférence enregistrée, la langue est le français.');
-      assert.match(avant['/risques'].vue, /Registre des Risques/u, 'Écran Risques, en français.');
+      assert.match(avant['/risques'].vue, /Registre des risques/u, 'Écran Risques, en français.');
       assert.match(avant['/actions'].vue, /Plan d’actions|Plan d'actions/u, 'Écran Plan d’actions, en français.');
       assert.match(avant['/incidents'].vue, /Registre des incidents/u, 'Écran Incidents, en français.');
       assert.match(avant['/incidents'].menu, /Tableau de bord/u, 'Menu en français.');
@@ -225,7 +225,7 @@ describe('§1 — la bascule de langue atteint réellement l’écran', () => {
       //
       // C'est l'assertion qui interdit le pire résultat possible du lot : un
       // écran anglais À MOITIÉ français, qui a l'air fini (§37.2).
-      assert.doesNotMatch(apres['/risques'].vue, /Registre des Risques/u);
+      assert.doesNotMatch(apres['/risques'].vue, /Registre des risques/u);
       assert.doesNotMatch(apres['/incidents'].vue, /Registre des incidents/u);
       assert.doesNotMatch(apres['/incidents'].menu, /Tableau de bord/u);
 
@@ -317,7 +317,7 @@ describe('§2 — le repli est BRUYANT : une clé manquante s’affiche en clair
       // autre raison, on le saurait ici plutôt que de conclure au repli.
       await aller(page, '/risques');
       const fr = await page.evaluate(() => document.getElementById('app').innerText);
-      assert.match(fr, /Registre des Risques/u, 'Témoin français : le titre s’affiche.');
+      assert.match(fr, /Registre des risques/u, 'Témoin français : le titre s’affiche.');
 
       await changerLangue(page, 'en');
       await aller(page, '/risques');
@@ -331,7 +331,7 @@ describe('§2 — le repli est BRUYANT : une clé manquante s’affiche en clair
       );
       assert.doesNotMatch(
         en,
-        /Registre des Risques/u,
+        /Registre des risques/u,
         'Et surtout PAS le texte français : un écran anglais à moitié français a l’air ' +
           'fini, et le défaut part en production (§37.2).',
       );
@@ -518,7 +518,7 @@ describe('§4 — §37.4 : la langue choisie est celle de ce poste, et elle tien
         await aller(neuve.page, '/risques');
         const vierge = await surfaces(neuve.page);
         assert.equal(vierge.langue, 'fr', 'Un contexte neuf n’hérite de rien.');
-        assert.match(vierge.vue, /Registre des Risques/u);
+        assert.match(vierge.vue, /Registre des risques/u);
         assert.deepEqual(neuve.erreursInattendues(), []);
       } finally {
         await neuve.fermer();

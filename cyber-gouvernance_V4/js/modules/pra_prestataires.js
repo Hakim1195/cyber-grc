@@ -149,7 +149,7 @@ const PraPrestatairesModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <div class="print-head">
-                    <h1>Prestataires &amp; Tiers — Annuaire d'urgence</h1>
+                    <h1>Prestataires</h1>
                     <img class="print-brand-logo" data-brand-logo hidden alt="" />
                     <p>${esc(Identite.piedImpression("Contacts d'escalade et risque fournisseur"))} · Édité le ${esc(dateJour)}</p>
                 </div>

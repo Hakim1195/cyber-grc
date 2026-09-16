@@ -24,7 +24,7 @@ const ActifsModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>Actifs du Système d'Information</h1>
+                        <h1>Actifs</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (Commun à tous les clients)</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">

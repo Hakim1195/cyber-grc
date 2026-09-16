@@ -34,7 +34,7 @@ const BiaModule = (() => {
             <section class="page">
                 <div class="dashboard-header">
                     <div>
-                        <h1>Business Impact Analysis (BIA)</h1>
+                        <h1>Bilans d'impact</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (Continuité d'activité)</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">

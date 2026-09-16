@@ -247,7 +247,7 @@ window.I18n.enregistrer("fr", {
     "compte.seDeconnecter": "Se déconnecter",
 
     /* ═══════════════════════ RISQUES (EBIOS) ═══════════════════════ */
-    "risques.titre": "Registre des Risques (Méthode FxGxM)",
+    "risques.titre": "Registre des risques",
     "risques.titreAide": "Méthode d'appréciation du risque : Score brut = Fréquence × Gravité (risque inhérent), puis Score résiduel = Score brut × Niveau de maîtrise (risque réel après vos mesures).",
     "risques.perimetre": "Périmètre :",
     "risques.perimetreInterne": "Interne (SI global)",

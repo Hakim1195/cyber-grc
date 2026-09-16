@@ -417,8 +417,15 @@ window.renderBreadcrumb = function(route) {
     // le menu nomme l'ENTRÉE, et les deux ne disent pas toujours la même chose —
     // « Registre des risques » au menu, « Risques » dans le fil. À défaut, on
     // reprend le libellé du menu plutôt que de ne rien rendre.
+    // ⚠️ **LE TITRE VIENT DU MENU QUAND L'ÉCRAN Y A UNE ENTRÉE.** La table
+    // gardait ses propres noms, et le commentaire d'origine l'assumait : « le fil
+    // d'Ariane nomme l'écran, le menu nomme l'ENTRÉE, et les deux ne disent pas
+    // toujours la même chose ». En pratique cela donnait, sur un seul écran :
+    // menu « Registre des risques », fil « Risques (EBIOS) », titre « Registre
+    // des Risques (Méthode FxGxM) ». *Trois noms pour une chose n'en nomment
+    // aucune.* La table ne sert donc plus qu'aux écrans SANS entrée de menu.
     const lien = document.querySelector('.main-nav a[data-route="' + base + '"] [data-i18n]');
-    const cleTitre = meta ? meta.t : (lien ? lien.getAttribute("data-i18n") : null);
+    const cleTitre = lien ? lien.getAttribute("data-i18n") : (meta ? meta.t : null);
     if (cleTitre === null) { el.innerHTML = ""; return; }
     // ⚠️ **Une vue se lit SOUS son sujet, jamais à sa place.** Le fil d'une vue
     // porte trois niveaux — « Conformité / Référentiels / Couverture croisée » —
@@ -438,8 +445,11 @@ window.renderBreadcrumb = function(route) {
             return g.vues.some(function (v) { return v.route === base; });
         });
         if (groupe && groupe.vues[0].route !== base) {
+            const lienPorte = document.querySelector(
+                '.main-nav a[data-route="' + groupe.vues[0].route + '"] [data-i18n]');
             const porte = ROUTE_META[groupe.vues[0].route];
-            if (porte) titre = t(porte.t);
+            if (lienPorte) titre = t(lienPorte.getAttribute("data-i18n"));
+            else if (porte) titre = t(porte.t);
             const active = groupe.vues.find(function (v) { return v.route === base; });
             if (active) vue = ` / <b>${echapper(active.libelle)}</b>`;
         }

@@ -73,7 +73,7 @@ const AuditsModule = (() => {
             <section class="page">
                 <div class="dashboard-header no-print">
                     <div>
-                        <h1>Contrôles & Audits (Amélioration continue)</h1>
+                        <h1>Audits internes</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Pilotage stratégique et vérification de la conformité</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
