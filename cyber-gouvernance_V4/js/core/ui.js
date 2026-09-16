@@ -648,6 +648,10 @@ window.UI = (function () {
             sujet: "rgpd",
             vues: Object.freeze([
                 Object.freeze({ route: "/rgpd", libelle: "Traitements" }),
+                // Action 20.3 — un ONGLET, pas une entrée de menu : l'analyse
+                // d'impact est une vue du registre, pas un sujet à part. L'ajouter
+                // au menu rendrait à celui-ci ce qu'on vient de lui retirer.
+                Object.freeze({ route: "/rgpd-aipd", libelle: "Analyses d\u2019impact" }),
                 Object.freeze({ route: "/rgpd-documents", libelle: "Documents" }),
                 Object.freeze({ route: "/rgpd-outil", libelle: "L\u2019outil lui-m\u00eame" })
             ])

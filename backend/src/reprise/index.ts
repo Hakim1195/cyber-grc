@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 16;
+export const VERSION_SCHEMA = 17;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -157,6 +157,10 @@ export const COLLECTIONS = [
   // l'oublier ici ne fait pas échouer la compilation, cela en fait une « clé de
   // premier niveau inconnue du modèle », conservée et **jamais insérée**.
   'derogations',
+  // v17 — les analyses d'impact (action 20.3). Même avertissement : l'oublier ici
+  // ne fait pas échouer la compilation, cela en fait une « clé de premier niveau
+  // inconnue du modèle », conservée et **jamais insérée**.
+  'analyses_impact',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -627,6 +631,36 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     dates: ['accordee_le', 'echeance'],
     references: [{ champ: 'exigence_id', cible: 'exigences' }],
     referencesMultiples: [],
+    cleMetier: null,
+  },
+  // ── v17 : l'analyse d'impact RGPD (art. 35) ──────────────────────────────
+  //
+  // ⚠️ **Aucun champ d'état**, pour le motif exact des dérogations ci-dessus :
+  // « à revoir » se dérive de la date de revue, et le faire voyager dans le
+  // fichier le figerait au jour de l'export. Un instantané repris six mois plus
+  // tard rendrait « valide » une analyse dont la revue est échue depuis.
+  //
+  // ⚠️ Et **aucun champ du registre de l'article 30** : l'analyse POINTE le
+  // traitement (`traitement_id`), elle ne recopie ni sa finalité, ni ses
+  // catégories de données. C'est le critère d'acceptation de l'action 20.3, et
+  // il vaut aussi pour le format d'échange — une copie dans le fichier
+  // ressortirait périmée à la reprise.
+  analyses_impact: {
+    prefixe: 'AIPD',
+    champs: [
+      'id', 'traitement_id', 'statut', 'necessite_motif', 'date_analyse',
+      'risques_identifies', 'mesures_prevues', 'avis_dpo', 'avis_dpo_le',
+      'consultation_cnil', 'consultation_cnil_le', 'revoir_le', 'mesures_ids',
+    ],
+    enumerations: [
+      { champ: 'statut', valeurs: ['requise', 'en_cours', 'validee', 'non_requise'], videAdmis: false },
+    ],
+    bornes: [],
+    // Les trois dates entrent AUSSI dans `champs` : `dates` dit comment les
+    // VALIDER, pas qu'elles sont admises (leçon de la v14).
+    dates: ['date_analyse', 'avis_dpo_le', 'consultation_cnil_le', 'revoir_le'],
+    references: [{ champ: 'traitement_id', cible: 'traitements' }],
+    referencesMultiples: [{ champ: 'mesures_ids', cible: 'mesures' }],
     cleMetier: null,
   },
 };
@@ -1703,6 +1737,22 @@ const PALIERS: readonly EtapePalier[] = [
     // que ça marche », et une conversion inventerait des constatations que personne
     // n'a faites — dans un outil produit en audit. Les champs arrivent vides.
     appliquer: () => [],
+  },
+  {
+    de: 16,
+    vers: 17,
+    libelle:
+      'Lot L20, action 20.3 : l’instantané gagne « analyses_impact » — les analyses ' +
+      'd’impact RGPD (article 35), qui POINTENT le registre de l’article 30 au lieu de le ' +
+      'recopier.',
+    // Un palier qui n'a RIEN À TRANSFORMER, la forme la plus sûre : la collection
+    // arrive vide sur un fichier v16, `paliersCollections` la réclame et la crée,
+    // et aucune donnée existante n'est touchée. ⚠️ **Et surtout rien à DEVINER** :
+    // on ne fabrique pas une AIPD « requise » pour chaque traitement portant des
+    // données sensibles. Ce serait inventer une obligation que personne n'a
+    // constatée, et remplir le registre de l'article 35 de lignes vides apprendrait
+    // à l'ignorer. La présomption s'affiche à l'écran ; elle ne s'écrit pas.
+    appliquer: paliersCollections(['analyses_impact']),
   },
 ];
 

@@ -10,11 +10,11 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 16/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2035 essais, 2035 passés, 0 échec** à la révision `0af4344`,
+> **2048 essais, 2048 passés, 0 échec** à la révision `RÉVISION`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
-> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**42 garde-fous consignés**,
-> **38 migrations**, **57 tables**, **228 politiques**, **279 décisions** au registre),
+> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**43 garde-fous consignés**,
+> **39 migrations**, **59 tables**, **236 politiques**, **299 décisions** au registre),
 > `install.sh --verifier-publication` → **85 fichiers servis identiques au dépôt**, et
 > `install.sh --diagnostic` → **14 conformes, 1 réserve** (`SMTP_ACTIF=non`), **0 bloquant**.
 >
@@ -45,6 +45,71 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### 20.3 — l'analyse d'impact POINTE le registre, elle ne le recopie pas (16/09/2026)
+
+**L'article 35 du RGPD impose une analyse d'impact dès qu'un traitement est susceptible
+d'engendrer un risque élevé.** Le produit tenait le registre de l'article 30 depuis le lot
+RGPD ; il ne savait rien dire de l'article 35 — ni qu'une AIPD est due, ni où elle en est,
+ni quand la revoir.
+
+**Migration `039`**, schéma **v17**, deux tables et deux fonctions dérivées :
+
+- `analyses_impact` — MIXTE comme `traitements`, avec la barrière de portée N-10 (une AIPD
+  locale analyse un traitement du Groupe ; l'inverse est fermé) ;
+- `analyse_mesures` — les contrôles du pivot que l'analyse **prévoit**. ⚠️ Distincte de
+  `traitement_mesures`, et délibérément : celle-ci dit ce qui est PRÉVU, l'autre ce qui
+  protège le traitement AUJOURD'HUI. Les confondre effacerait l'écart entre le prévu et le
+  fait — ce qu'un contrôle vient précisément mesurer ;
+- `f_etat_aipd()` — cinq états, **dérivés**. Le quatrième porte l'action : une analyse
+  **validée** dont la date de revue est passée redevient « à revoir » **toute seule**,
+  sans qu'aucun traitement ait à repasser. Même arbitrage qu'aux dérogations (19.2) ;
+- `f_aipd_presumee_requise()` — une **présomption**, et le mot est dans le nom.
+
+⚠️ **LE CRITÈRE D'ACCEPTATION EST NÉGATIF, et c'est lui qui a piloté la conception** :
+*« le registre art. 30 n'est pas dupliqué : l'AIPD POINTE le traitement. »* `traitement_id`
+est donc `not null` — une AIPD sans son traitement n'est pas une AIPD, c'est le doublon
+qu'on refuse —, et **aucune** colonne de `traitements` n'a de jumelle dans
+`analyses_impact`. Un essai le mesure **dans le catalogue** plutôt que de le relire : il
+compare les deux listes de colonnes et n'en admet aucune en commun hors traçabilité.
+
+⚠️ **CE QUE LE PRODUIT REFUSE DE FAIRE, et le dire est la moitié du travail.** Il ne décide
+pas qu'une AIPD est requise. Les trois cas de l'article 35 §3 — profilage systématique,
+catégories particulières à grande échelle, surveillance systématique d'un lieu public — ne
+sont pas tous représentables avec ce que le registre porte. Le produit rend donc une
+présomption sur le seul critère qu'il sait mesurer, l'écran écrit le mot, et **la liste
+n'est pas filtrée** : un traitement non présumé requis reste affiché. Un logiciel qui
+trancherait « AIPD non requise » sur une donnée qu'il ne détient pas rendrait un service
+pire que rien.
+
+**`GET /api/aipd/etat` rend DEUX listes, et la seconde est celle qui compte** : les
+analyses avec leur état dérivé, **et les traitements qui n'en ont aucune**. Un registre des
+AIPD qui ne montrerait que les analyses faites serait un registre rassurant ; la question
+d'un contrôle CNIL est l'inverse.
+
+**Côté écran** — un encart sur la fiche du traitement, et un **onglet** du registre RGPD
+(`/rgpd-aipd`), pas une entrée de menu : c'est une vue du sujet, et l'ajouter au menu
+rendrait à celui-ci ce qu'on venait de lui retirer.
+
+⚠️ **Et l'essai navigateur a fait apparaître une nuance d'écran que personne n'avait vue.**
+Sur une analyse à revoir, le sélecteur du formulaire affiche « Validée » — c'est la
+DÉCISION enregistrée, et elle ne s'efface pas — pendant que le badge affiche « À revoir » —
+c'est l'ÉTAT dérivé. Les deux sont justes ; côte à côte et sans un mot, ils apprennent au
+lecteur que l'un des deux ment. L'écran **réconcilie** désormais les deux en une phrase,
+et l'essai l'exige. Classe des constats **Q-201 / Q-207**.
+
+**Deux défauts trouvés par des essais existants, aucun par relecture :**
+
+1. **Renommer une contrainte casse la mutation qui l'éprouve.** La première rédaction du
+   §1 recréait `type_entite_check` sous le nom `ck_type_entite` ; le contrôle de morsure de
+   `gardes-eprouves.test.mjs` — qui **vide** le domaine pour vérifier que le garde le voit —
+   ne la trouvait plus, et la mutation ne mutait plus rien. *Un essai qui ne peut plus
+   casser ce qu'il éprouve passe au vert sans rien mesurer* (motif **Q-210**).
+2. **Un essai de migration-sur-données ne doit PAS employer le semis partagé.** Celui-ci
+   écrit dans toutes les tables du schéma, y compris celles qu'une migration postérieure
+   n'a pas encore créées : `migrations-sur-donnees.test.mjs`, écrit le matin même, a rougi
+   à l'arrivée de la `039` pour cette raison — et pas pour celle qu'il mesure. Son semis
+   est désormais **minimal**, et le fichier dit pourquoi.
 
 ### Le banc migre des bases VIDES — et c'est le déploiement qui l'a dit (16/09/2026)
 

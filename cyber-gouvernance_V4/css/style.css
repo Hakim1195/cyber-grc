@@ -2566,3 +2566,56 @@ input, select, textarea {
     color: var(--color-success);
 }
 .mes-echeance--retard { color: var(--color-danger); }
+
+/* =====================================================================
+   ANALYSE D'IMPACT — RGPD article 35 (action 20.3)
+   ---------------------------------------------------------------------
+   Sobriété : aucune couleur qui ne soit un statut. « Présumée requise » est
+   un statut — une non-conformité qui s'ignore —, « non présumée » n'en est
+   pas un, et il se rend en texte atténué.
+   ===================================================================== */
+.aipd-encart { margin-top: 1.5rem; max-width: 900px; }
+.aipd-table td { vertical-align: middle; font-size: var(--text-sm); }
+.aipd-table .status { text-transform: none; }
+.aipd-motif td {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    background: var(--surface-alt, rgba(0, 0, 0, 0.02));
+}
+.aipd-vide { font-size: var(--text-base); margin: 0 0 .5rem; }
+.aipd-presomption {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    line-height: 1.55;
+    max-width: 78ch;
+    margin: .25rem 0 1rem;
+}
+.aipd-neant { color: var(--text-muted); font-style: italic; }
+.aipd-form {
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border, #e3e6ea);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(9rem, 1fr));
+    gap: .75rem 1rem;
+    align-items: end;
+}
+.aipd-form-ligne { display: flex; flex-direction: column; gap: .25rem; }
+.aipd-form-ligne label { font-size: var(--text-xs); color: var(--text-muted); }
+.aipd-form-large { grid-column: 1 / -1; }
+.aipd-avertissement {
+    grid-column: 1 / -1;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    line-height: 1.55;
+    max-width: 78ch;
+    margin: 0;
+}
+.aipd-vue-ligne, .aipd-manque { cursor: pointer; }
+.aipd-form-actions { grid-column: 1 / -1; display: flex; gap: .5rem; align-items: center; }
+/* La décision enregistrée et l'état dérivé se contredisent en apparence : la
+   phrase qui les réconcilie doit se distinguer de l'avertissement ordinaire. */
+.aipd-contradiction {
+    border-left: 3px solid var(--color-warning, #e0a800);
+    padding-left: .75rem;
+}

@@ -67,7 +67,8 @@ export type NomCollection =
   | 'referentiels_actifs'
   | 'personnes'
   // v14 — les dérogations datées (action 19.2).
-  | 'derogations';
+  | 'derogations'
+  | 'analyses_impact';
 
 /**
  * Charge utile normalisée en v12.

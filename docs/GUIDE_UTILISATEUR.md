@@ -279,6 +279,8 @@ explicitement dans votre profil) : c'est une décision de découpage, pas un oub
 
 - **Registre des traitements** (article 30) : c'est votre écran principal, et il est
   imprimable tel quel pour un contrôle.
+- **Analyses d'impact** (article 35) : l'onglet voisin dit où en est chaque analyse — et
+  quels traitements n'en ont aucune. Voir plus bas.
 - **Incidents** : vous suivez les déclarations CNIL — le produit calcule le **délai de 72 h**
   à partir de la date de détection et le fait remonter dans l'Échéancier.
 
@@ -290,6 +292,40 @@ le produit vous les signale, vous tranchez.
 
 ⚠️ **Le journal d'audit n'est jamais purgé**, RGPD compris. Il est en ajout seul et chaîné :
 y toucher casserait la preuve. Sa rétention est une procédure d'exploitation à trois ans.
+
+### L'analyse d'impact (article 35) — et surtout : ce qui n'en a aucune
+
+Sur votre écran **Registre RGPD**, l'onglet **« Analyses d'impact »** répond à deux
+questions, et la seconde est celle qu'un contrôle pose en premier.
+
+| Ce que la vue montre | Pourquoi |
+|---|---|
+| **les analyses enregistrées**, avec leur état | *où en est-on ?* |
+| **les traitements qui n'ont AUCUNE analyse** | *lesquels auraient dû en avoir une ?* |
+
+L'analyse elle-même se saisit **sur la fiche du traitement**, dans l'encart « Analyse
+d'impact (AIPD) ». Elle ne vous redemande **rien** de ce que le registre porte déjà — ni la
+finalité, ni les catégories de données, ni les destinataires : ils sont dans le formulaire
+au-dessus. L'analyse **désigne** le traitement, elle ne le recopie pas.
+
+⚠️ **« Présumée requise » n'est pas « requise », et la nuance est à vous.** L'article 35 §3
+vise trois cas : le profilage systématique, le traitement à grande échelle de catégories
+particulières, et la surveillance systématique d'un lieu public. **Le registre ne permet
+d'en mesurer qu'un** — celui des catégories particulières. Le produit signale donc une
+présomption sur ce seul critère, **et il n'écarte personne** : les traitements non
+présumés restent dans la liste. C'est vous qui décidez, et c'est le champ « Motif » qui
+garde la trace de votre décision — y compris celle de **ne pas** mener d'analyse. C'est
+cette trace-là qu'un contrôle demande en premier.
+
+⚠️ **Une analyse validée dont la date de revue est passée cesse de valoir — toute seule.**
+Elle repasse en **« À revoir »** au changement de jour, sans qu'un traitement ait eu à
+s'exécuter, donc sans que personne puisse oublier de le lancer. L'écran affiche alors deux
+choses qui semblent se contredire, et il vous dit pourquoi : la **décision** enregistrée
+reste « validée » — c'est un fait, il ne s'efface pas —, mais l'**état** ne l'est plus.
+
+ℹ️ **Retirer un traitement du registre suppose d'avoir retiré son analyse.** Le lien est
+volontairement rigide : effacer un traitement dont l'analyse existe encore effacerait la
+preuve qu'on l'avait analysé.
 
 ### Ce que l'outil fait de VOS données — la réponse est dans l'outil
 

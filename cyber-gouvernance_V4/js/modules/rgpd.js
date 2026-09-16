@@ -287,7 +287,13 @@ const RgpdModule = (() => {
                     ${formFieldsHtml(t)}
                     <div style="margin-top:20px;"><button id="saveBtn">Mettre à jour</button></div>
                 </div>
+
+                <!-- Action 20.3 — l'analyse d'impact de CE traitement. Elle POINTE
+                     la fiche au-dessus : aucun champ du registre n'est redemandé. -->
+                ${typeof AipdModule !== "undefined" ? AipdModule.encartHtml(t.id) : ""}
             </section>`;
+        // ── 20.3 : l'analyse d'impact, chargée après le rendu de la fiche ────
+        if (typeof AipdModule !== "undefined") AipdModule.brancherEncart(t.id);
         document.getElementById("saveBtn").onclick = () => {
             const data = collectForm(); if (!data) return;
             Object.assign(t, data, { updatedAt: Date.now() });
@@ -353,5 +359,30 @@ const RgpdModule = (() => {
         };
     }
 
-    return { renderList, renderCreate, renderDetail, renderDocuments, renderOutil };
+    /**
+     * Vue « Analyses d'impact » — RGPD article 35, action 20.3.
+     *
+     * ⚠️ Le tableau se charge depuis le serveur, et non depuis le `DataStore` :
+     * l'**état** d'une analyse n'est pas une donnée de l'instantané, il se dérive
+     * de la date de revue (`f_etat_aipd`). Le recalculer ici serait une seconde
+     * rédaction de la règle, qui dériverait dès que l'horloge du poste diffère de
+     * celle du serveur.
+     */
+    function renderAipd() {
+        const app = document.getElementById("app");
+        app.innerHTML = `
+            <section class="page rgpd-page">
+                ${UI.enteteHtml({
+                    titre: "Registre RGPD",
+                    aide: Help.tip("RGPD article 35 : quand un traitement est susceptible d'engendrer un risque élevé pour les personnes, le responsable de traitement mène une analyse d'impact AVANT de le mettre en œuvre. Cet écran dit où en est chaque analyse — et, surtout, quels traitements n'en ont aucune."),
+                    contexte: "Où en est chaque analyse d'impact, et quels traitements en "
+                              + "réclament une.",
+                    onglets: UI.ongletsDe("/rgpd-aipd")
+                })}
+                <div id="aipdVue"></div>
+            </section>`;
+        if (typeof AipdModule !== "undefined") AipdModule.monterVue("aipdVue");
+    }
+
+    return { renderList, renderCreate, renderDetail, renderDocuments, renderOutil, renderAipd };
 })();

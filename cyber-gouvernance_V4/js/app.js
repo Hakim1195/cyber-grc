@@ -116,6 +116,7 @@ async function startApp() {
         // menu : trois lecteurs différents, un seul sujet. ⚠️ Elles ne peuvent
         // pas s'écrire « /rgpd/outil » : le routeur y verrait l'identifiant d'un
         // traitement, et l'écran dirait « Traitement introuvable ».
+        "/rgpd-aipd": () => { if (typeof RgpdModule !== "undefined") RgpdModule.renderAipd(); },
         "/rgpd-documents": () => { if (typeof RgpdModule !== "undefined") RgpdModule.renderDocuments(); },
         "/rgpd-outil": () => { if (typeof RgpdModule !== "undefined") RgpdModule.renderOutil(); },
 
@@ -1108,6 +1109,7 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/incidents":    "incidents",
     "/documents":    "documents",
     "/rgpd":         "rgpd",
+    "/rgpd-aipd":    "rgpd",
     "/rgpd-documents": "rgpd",
     "/rgpd-outil":   "rgpd",
     "/actions":      "actions",

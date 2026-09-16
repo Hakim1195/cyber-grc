@@ -65,10 +65,10 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 16`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 17`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
-côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v16**. Elle est
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v17**. Elle est
 indépendante du numéro des migrations SQL.
 
 > ⚠️ **Ce paragraphe a annoncé « v12 » pendant quatre montées de version**, du 04/09 au
@@ -109,6 +109,17 @@ indépendante du numéro des migrations SQL.
 >     (`frequence_controle`, `dernier_controle`). ⚠️ **Rien n'est converti** : la maturité ne se
 >     traduit PAS en efficacité — « documenté, planifié, supervisé » ne dit rien de « est-ce que ça
 >     marche ». Et la prochaine échéance n'est pas un champ : elle se dérive (`f_prochain_controle`).
+> v17 (lot L20, action 20.3) : ajout de `analyses_impact` — les **analyses d'impact RGPD**
+>     (article 35). ⚠️ **Elles POINTENT le registre de l'article 30** (`traitement_id`) et
+>     n'en recopient AUCUN champ : ni la finalité, ni les catégories de données, ni les
+>     destinataires. Deux réponses à la même question dans un outil produit en audit, c'est
+>     une de trop — et la seconde vieillirait sans que personne le sache. ⚠️ **Aucun champ
+>     d'état** non plus : « à revoir » se dérive de la date de revue (`f_etat_aipd`), et le
+>     faire voyager dans le fichier le figerait au jour de l'export. ⚠️ Et **rien n'est
+>     deviné** au palier : on ne fabrique pas une analyse « requise » pour chaque traitement
+>     portant des données sensibles. Ce serait inventer une obligation que personne n'a
+>     constatée, et remplir le registre de l'article 35 de lignes vides apprendrait à
+>     l'ignorer. La présomption s'affiche à l'écran ; elle ne s'écrit pas.
 > Migrations transparentes — `normalize` crée les tableaux vides à la volée (et garantit
 >     `dependances`, la conversion des anciennes actions MCO, de `mesure_id`→`mesure_ids[]`, et le
 >     tableau `mesures_ids` des documents).
@@ -156,7 +167,7 @@ Inchangé — c'est aussi la charge utile d'un fichier `grc-backup` :
 
 ```jsonc
 {
-  "schemaVersion": 16,   // = SCHEMA_VERSION courant
+  "schemaVersion": 17,   // = SCHEMA_VERSION courant
   "updatedAt": 1730000000000,
   "clients": [],        "exigences": [],   "actions": [],
   "risques": [],        "actifs": [],      "processus": [],
@@ -216,7 +227,7 @@ Conséquences pratiques :
 
 ### 1.5 Correspondance entre l'objet `data` et le schéma serveur
 
-**21 collections, 21 entités.** Les noms coïncident partout sauf pour `mesures` :
+**25 collections, 25 entités.** Les noms coïncident partout sauf pour `mesures` :
 
 | Collection `data` | Table(s) PostgreSQL | Préfixe d'identifiant |
 |---|---|---|
@@ -241,6 +252,10 @@ Conséquences pratiques :
 | `traitements` | `traitements` | `TRT` |
 | `mappings` | `mappings` | `MAP` |
 | `history` | `history` | `HIST` |
+| `risque_catalogue` | `risque_catalogue` | `RCAT` |
+| `referentiels_actifs` | `referentiels_actifs` | `RA` |
+| `derogations` | `derogations` | `DER` |
+| **`analyses_impact`** | **`analyses_impact`** (l'analyse) **+ `analyse_mesures`** (les contrôles qu'elle PRÉVOIT) | `AIPD` |
 
 **La scission des mesures**, en une phrase : l'entité unique du modèle navigateur
 portait deux choses de nature différente — la **définition** du contrôle (la même
@@ -253,7 +268,7 @@ conformité de l'autre. Le `statut` que voit le frontend est celui de la **mise 
 œuvre**. `MMO` est le seul identifiant du modèle qui n'existe dans aucun export
 `grc-backup` : il est engendré à la reprise, jamais lu depuis un fichier.
 
-**Les tableaux d'identifiants deviennent des tables de liaison** — neuf, avec de
+**Les tableaux d'identifiants deviennent des tables de liaison** — onze, avec de
 vraies clés étrangères :
 
 | Champ de l'objet `data` | Table de liaison |
@@ -267,6 +282,7 @@ vraies clés étrangères :
 | `documents[].referentiels` | `document_referentiels` |
 | `documents[].etiquettes` | `document_etiquettes` |
 | `traitements[].mesures_ids` | `traitement_mesures` |
+| `analyses_impact[].mesures_ids` | `analyse_mesures` |
 | `mappings[].refs` | `mapping_exigences` |
 
 Quelques champs changent de nom de colonne (`tests_pra.date` → `date_test`, par

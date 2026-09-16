@@ -281,7 +281,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 16;
+export const VERSION_SCHEMA = 17;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -909,6 +909,59 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
   // produit affirme une conformité qui n'existe plus, en silence. C'est
   // `GET /api/derogations/etat` qui les rend, et lui seul.
   ['derogations', { nom: 'derogations', table: 'derogations', prefixe: 'DER' }],
+
+  // ── L'ANALYSE D'IMPACT (RGPD art. 35) — migration `039`, action 20.3 ────
+  //
+  // ⚠️ **Elle POINTE le registre de l'article 30, elle ne le recopie pas.**
+  // `traitement_id` est `not null` en base, et aucun champ de `traitements` —
+  // finalité, catégories de données, destinataires — n'est dupliqué ici. Deux
+  // réponses à la même question dans un outil produit en audit, c'est une de
+  // trop, et la seconde vieillit sans que personne le sache.
+  //
+  // ⚠️ **Ce que cette entité n'expose PAS : son ÉTAT.** « À revoir » n'est pas
+  // une colonne — il se DÉRIVE de la date de revue (`f_etat_aipd()`), à un seul
+  // endroit. Le stocker obligerait quelque chose à repasser, et le jour où ce
+  // quelque chose ne repasse pas, le produit affirme une conformité RGPD qui
+  // n'existe plus. C'est `GET /api/aipd/etat` qui le rend, et lui seul — même
+  // arbitrage qu'aux dérogations (19.2).
+  [
+    'analyses_impact',
+    {
+      nom: 'analyses_impact',
+      table: 'analyses_impact',
+      prefixe: 'AIPD',
+      colonnesReservees: {
+        portee_groupe:
+          'Colonne ENGENDRÉE (CONVENTIONS.md §18.6) : elle entre dans les clés de portée ' +
+          "d'analyse_mesures et PostgreSQL refuse qu'on lui donne une valeur. Elle se " +
+          'déduit de filiale_id.',
+        traitement_portee_groupe:
+          'Colonne ENGENDRÉE (migration `039`) : elle entre dans la clé de portée vers ' +
+          "`traitements` et PostgreSQL refuse qu'on lui donne une valeur. Elle se déduit " +
+          'de `traitement_filiale_id`.',
+        traitement_filiale_id:
+          'Posée PAR LE DÉCLENCHEUR `trg_analyses_impact_portee` depuis le traitement ' +
+          'désigné : c’est une valeur dérivée d’une AUTRE ligne, et la croire sur parole ' +
+          'rouvrirait un oracle d’existence inter-filiales — il suffirait d’envoyer la ' +
+          'filiale qui arrange pour satisfaire la clé de cohérence. Le client envoie ' +
+          '`traitement_id`, et rien d’autre.',
+      },
+      liaisons: [
+        // ⚠️ `mesures_ids`, comme `traitements` et `documents` : le même nom pour
+        // le même lien vers le pivot. Deux noms obligeraient chaque écran à
+        // savoir lequel il regarde. Ce que la table dit de plus est écrit dans
+        // son commentaire : ici ce sont les contrôles PRÉVUS par l'analyse, là
+        // ceux qui protègent le traitement aujourd'hui.
+        {
+          champ: 'mesures_ids',
+          table: 'analyse_mesures',
+          colonneParent: 'analyse_id',
+          colonneEnfant: 'mesure_id',
+          forme: 'identifiants',
+        },
+      ],
+    },
+  ],
 ]);
 
 /** Ordre de chargement : celui d'`ARRAY_FIELDS` du frontend. */

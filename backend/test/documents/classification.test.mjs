@@ -490,9 +490,19 @@ describe('§3 — documents.traitement_id', () => {
     assert.equal(erreur.code, '23503');
 
     // Délié d'abord, il s'efface — et le document survit, sans son rattachement.
+    //
+    // ⚠️ **La liste des déliages s'allonge à chaque référence neuve, et c'est
+    // voulu.** L'analyse d'impact (migration `039`) vise le traitement en
+    // « restrict » pour le motif exact des deux autres : effacer un traitement dont
+    // l'AIPD existe encore effacerait la preuve qu'on l'avait analysé. Le déliage
+    // vit dans la couche applicative, à la filiale près — et cet essai rougit le
+    // jour où une référence neuve l'oublie, ce qui est son office.
     const restant = await dansA(async (c) => {
       await c.query("update documents set traitement_id = null where traitement_id = 'TRT-A'");
       await c.query("delete from traitement_mesures where traitement_id = 'TRT-A'");
+      await c.query("delete from analyse_mesures where analyse_id in "
+        + "(select id from analyses_impact where traitement_id = 'TRT-A')");
+      await c.query("delete from analyses_impact where traitement_id = 'TRT-A'");
       await c.query("delete from traitements where id = 'TRT-A'");
       const { rows } = await c.query("select traitement_id from documents where id = 'DOC-A'");
       return rows[0];

@@ -508,6 +508,10 @@ export const TABLES_MIXTES = Object.freeze([
   // MIXTE comme le document lui-même — la PSSI du Groupe prouve un contrôle du
   // socle, et se lit partout.
   'document_mesures',
+  // `analyses_impact` et `analyse_mesures` (migration `039`, action 20.3) : MIXTES
+  // comme `traitements`, et pour le même motif — le GROUPE opère des traitements
+  // pour toutes ses filiales, et l'analyse de l'annuaire commun se fait une fois.
+  'analyses_impact', 'analyse_mesures',
   'document_referentiels', 'documents',
   'mesure_catalogue', 'parametres', 'personnes', 'risque_catalogue',
   'traitement_mesures', 'traitements',
@@ -711,6 +715,28 @@ export async function semerJeuEssai(base, client, options = {}) {
                        'Automate du fournisseur incompatible avant le renouvellement.',
                        date '2099-12-31')`,
           f,
+        );
+        // L'analyse d'impact RGPD (migration `039`, action 20.3), et le lien vers le
+        // contrôle qu'elle prévoit. Même motif que les trois blocs ci-dessus.
+        //
+        // ⚠️ `filiale_id` n'est PAS fourni à `analyse_mesures` : le déclencheur de
+        // portée le pose depuis l'ANALYSE. Le donner ici mesurerait le semis au lieu
+        // de mesurer le déclencheur.
+        //
+        // ⚠️ Et la date de revue est LOINTAINE et FIXE, comme l'échéance de la
+        // dérogation ci-dessus : une date relative ferait changer de sens à l'état
+        // DÉRIVÉ au fil du calendrier, et l'essai rougirait un matin sans que rien
+        // n'ait bougé.
+        await c.query(
+          `insert into analyses_impact (id, filiale_id, traitement_id, statut, date_analyse,
+                                        revoir_le, necessite_motif)
+               values ('AIPD-${s}', $1, 'TRT-${s}', 'validee', date '2026-02-10',
+                       date '2099-12-31',
+                       'Traitement de données de santé des salariés (art. 35 §3 b).')`,
+          f,
+        );
+        await c.query(
+          `insert into analyse_mesures (analyse_id, mesure_id) values ('AIPD-${s}', 'MESURE-${s}')`,
         );
         // La file de purge du magasin (migration `017`). Elle est VIDE en régime
         // normal — c'est une file d'attente, pas un registre —, et c'est

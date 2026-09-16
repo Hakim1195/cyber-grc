@@ -64,6 +64,7 @@ les 19 qui lancent Chromium prennent **520 s** et doivent rester **en série**.
 | **Architecture des sections** (16/09) | **Sept** sections, **28** entrées : quatre vues redondantes deviennent des **onglets** (matrice, socle, référentiels applicables, couverture croisée), et la couverture — qui n'avait AUCUNE porte — en gagne une. Le fil d'Ariane déduit sa section du menu. `docs/PLAN_INTERFACE.md` |
 | **Lien document ↔ mesure** (L19, 19.3) | « Montrez-moi la procédure » : le chaînon qui manquait entre la gouvernance et la preuve. Migration `036`, schéma **v15** |
 | **Contrôle périodique et efficacité** (L19, 19.5 / 19.6) | Un contrôle se rejoue (fréquence, dernier passage, **échéance dérivée**) et son efficacité se constate **séparément de sa maturité**. Migration `037`, schéma **v16** |
+| **Analyse d'impact RGPD** (L20, 20.3) | Article 35. Elle **POINTE** le registre de l'article 30 au lieu de le recopier, son état se **dérive** de la date de revue, et le produit rend une **présomption** — jamais une décision : deux des trois cas de l'article 35 §3 ne sont pas mesurables avec ce que le registre porte. Migration `039`, schéma **v17** |
 | **Réutilisation d'une preuve** (L19, 19.4) | Une procédure déposée **une fois** prouve cinq contrôles : une empreinte, un quota, une chose à mettre à jour. Le fichier n'est libéré qu'au **dernier** détachement, et l'écran dit « Détacher » tant qu'il reste un porteur. Migration `038` — schéma `data` **inchangé**, les pièces ne font pas partie de l'instantané |
 | **Recherche globale + `Ctrl+K`** (L17, A3) | Cloisonnée par la RLS, bornée par les droits, budget de trace partagé avec le sondage |
 | **Attestation de lecture** (L19, 19.1) | Preuve ISO 27001 A.5.1. Migration `033` |
@@ -97,7 +98,15 @@ modules du produit.
   l'a dit, après 2 031 essais verts). Plus la mesure qui a servi à trouver la première :
   *une mutation qui ne mord pas dit que l'essai ne fait pas décider la règle* (Q-210) ;
 - ~~**19.5** contrôles périodiques ; **19.6** efficacité ≠ maturité~~ — ✅ **livrés le 16/09** (migration `037`) ;
-- **20.3** AIPD ; **20.4** demandes d'exercice de droits ; **20.5** main courante de crise
+- ~~**20.3** AIPD~~ — ✅ **livré le 16/09** (migration `039`, schéma **v17**). ⚠️ Le critère
+  d'acceptation est **négatif** — *« le registre art. 30 n'est pas dupliqué : l'AIPD POINTE
+  le traitement »* —, et c'est lui qui a piloté la conception : `traitement_id` est
+  `not null`, aucune colonne de `traitements` n'a de jumelle, et **un essai le mesure dans
+  le catalogue** plutôt que de le relire. L'état se dérive (`f_etat_aipd`) : une analyse
+  validée dont la revue est échue redevient « à revoir » toute seule. Et le produit
+  **refuse de décider** qu'une AIPD est requise — il rend une PRÉSOMPTION sur le seul des
+  trois cas de l'article 35 §3 que le registre permette de mesurer, sans filtrer la liste ;
+- **20.4** demandes d'exercice de droits ; **20.5** main courante de crise
   (**en ajout seul**, comme le journal — elle réutilise les quatre couches du §12).
 
 **Puis** : vague C (L21 tiers et DORA, L24 campagnes), vague D (L25 EBIOS RM, L26 catalogues

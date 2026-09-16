@@ -247,6 +247,10 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   // La rattacher à « administration » l'aurait retirée aux RSSI, qui sont
   // précisément ceux qui la portent (motif du constat Q-158 sur le logo).
   derogations: 'conformite',
+  // Une analyse d'impact est un acte RGPD : même écran, même personne — le DPO
+  // et le responsable de traitement —, même registre. La rattacher à
+  // « conformite » l'aurait mêlée aux référentiels, qui ne sont pas son sujet.
+  analyses_impact: 'rgpd',
 });
 
 /**

@@ -1486,12 +1486,16 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
 
     const references = await base.lignes(proprietaire, requete);
     // SIX depuis la migration `036` : le lien document ↔ contrôle en ajoute deux —
-    // la clé de cohérence et celle de portée. ⚠️ Toutes deux en « restrict », comme
-    // les quatre précédentes : une cascade rendrait un contrôle supprimable dès
-    // lors qu'il n'est plus lié QU'À des documents, et ferait disparaître la preuve
-    // avec lui. Le §17.6 est clair — un contrôle s'archive, il ne se supprime pas.
+    // la clé de cohérence et celle de portée. HUIT depuis la `039` : le lien
+    // analyse d'impact ↔ contrôle en ajoute deux de plus, de la même forme.
+    // ⚠️ Toutes en « restrict », comme les quatre d'origine : une cascade rendrait
+    // un contrôle supprimable dès lors qu'il n'est plus lié QU'À des documents ou
+    // QU'À des analyses, et ferait disparaître la preuve avec lui. Le §17.6 est
+    // clair — un contrôle s'archive, il ne se supprime pas.
     assert.deepEqual(references, [
       { nom: 'fk_actions_mesure', suppression: 'restrict' },
+      { nom: 'fk_analyse_mesures_mesure_coherence', suppression: 'restrict' },
+      { nom: 'fk_analyse_mesures_mesure_portee', suppression: 'restrict' },
       { nom: 'fk_document_mesures_mesure_coherence', suppression: 'restrict' },
       { nom: 'fk_document_mesures_mesure_portee', suppression: 'restrict' },
       { nom: 'fk_evaluation_mesures_mesure', suppression: 'restrict' },
@@ -1520,7 +1524,8 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
       );
     }
     assert.deepEqual((await base.lignes(proprietaire, requete)).map((l) => l.suppression),
-      ['restrict', 'restrict', 'restrict', 'restrict', 'restrict', 'restrict']);
+      ['restrict', 'restrict', 'restrict', 'restrict',
+       'restrict', 'restrict', 'restrict', 'restrict']);
   });
 
   test('CAS 1 du §17.6 : une mesure LOCALE se supprime après déliage, même transaction', async () => {
@@ -2773,7 +2778,12 @@ describe('Portée des liens documentaires et armement des déclencheurs (N-10, N
     // 15 depuis la migration `036` : `document_mesures` est MIXTE, elle reçoit donc
     // elle aussi son déclencheur de portée figée — sans lui, une ligne du socle
     // Groupe pourrait basculer dans une filiale sans que la RLS voie la transition.
-    assert.equal(armement.length, 15, 'Quatre déclencheurs de cohérence, onze de portée.');
+    // 17 depuis la migration `039` : `analyses_impact` et `analyse_mesures` naissent
+    // MIXTES, comme `traitements` — le GROUPE opère des traitements pour toutes ses
+    // filiales, et l'analyse de l'annuaire commun se fait une fois. Vérifié un par un :
+    // les deux déclencheurs neufs sont bien « trg_analyses_impact_portee_figee » et
+    // « trg_analyse_mesures_portee_figee ».
+    assert.equal(armement.length, 17, 'Quatre déclencheurs de cohérence, treize de portée.');
     assert.deepEqual(
       [...new Set(armement.map((l) => l.armement))],
       ['A'],
@@ -3990,6 +4000,16 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
     // Cette liste est délibérément ÉPINGLÉE : un garde-fou qui apparaît doit être
     // reconnu ici, un garde-fou qui disparaît ne doit pas s'effacer en silence.
     assert.deepEqual(controles.map((l) => l.controle), [
+      // QUARANTE ET UNIÈME, apporté par `039_l_analyse_d_impact.sql` — action 20.3.
+      // ⚠️ Il ÉPROUVE la dérivation de l'état sur SIX cas témoins (§39.1) au lieu de
+      // lire le texte de `f_etat_aipd()` : un garde qui vérifierait que la fonction
+      // « existe » passerait au vert sur une version qui rend « valide » pour tout le
+      // monde — c'est-à-dire sur celle qui transforme le produit en distributeur de
+      // quitus RGPD. Il garde aussi le critère d'acceptation de l'action, qui vit dans
+      // un « not null » : sans lui, une analyse d'impact pourrait exister sans le
+      // traitement qu'elle analyse, et recopierait alors le registre de l'article 30
+      // au lieu de le désigner.
+      'analyses_impact',
       'armement',
       // TRENTE ET UNIÈME, apporté par `031_les_gardes_regardent_ce_qui_est_reference.sql`
       // — constat **A-2** du 9ᵉ passage de la porte S8. Le garde de CLASSE
@@ -5053,6 +5073,10 @@ describe('Armement, portée figée, chemin de magasin (§19.4 et §19.1, Q5-4 et
     // (`CLAUDE.md` §3) : une table qui deviendrait mixte sans qu'on l'ait voulu fait
     // rougir ici, bruyamment, et quelqu'un doit dire si c'était l'intention.
     assert.deepEqual(mixtes, [
+      // `analyses_impact` et `analyse_mesures` (migration `039`) : MIXTES comme le
+      // TRAITEMENT qu'elles analysent — le Groupe opère la paie pour vingt filiales,
+      // et l'analyse d'impact de l'annuaire commun se fait une fois.
+      'analyse_mesures', 'analyses_impact',
       // `document_mesures` (migration `036`) : MIXTE comme le document qu'elle
       // rattache — la PSSI du Groupe prouve un contrôle du socle, et se lit partout.
       'approbations', 'document_etiquettes', 'document_mesures',

@@ -1110,6 +1110,26 @@ const Api = (() => {
     /** Les dérogations du périmètre, avec leur état DÉRIVÉ et celui de leur circuit. */
     function derogationsEtat() { return appeler("/derogations/etat"); }
 
+    /**
+     * Les analyses d'impact du périmètre — **et les traitements qui n'en ont
+     * aucune** (action 20.3).
+     *
+     * Rend `{ analyses: [...], sansAnalyse: [...], tronque }`.
+     *
+     * ⚠️ **La seconde liste est celle qui compte.** Un registre des AIPD qui ne
+     * montrerait que les analyses faites serait un registre rassurant ; la
+     * question d'un contrôle CNIL est l'inverse — *quels traitements auraient dû
+     * en avoir une ?* Chaque entrée porte `presumeeRequise`, et le mot est dans
+     * le nom : c'est une PRÉSOMPTION sur le seul critère de l'article 35 §3 que
+     * le registre permette de mesurer, pas une décision. L'écran doit l'écrire.
+     *
+     * ⚠️ Comme pour les dérogations, l'**état** (`a_revoir`) n'est pas stocké :
+     * il se dérive côté serveur de la date de revue. Le recalculer ici serait une
+     * seconde rédaction de la règle, qui dériverait dès que l'horloge du poste
+     * diffère de celle du serveur.
+     */
+    function aipdEtat() { return appeler("/aipd/etat"); }
+
     /** Consigner une déclaration DÉJÀ FAITE à une autorité, avec son accusé. */
     function consignerDeclaration(incidentId, declaration) {
         return appeler("/reglementaire/incidents/" + encodeURIComponent(incidentId)
@@ -1158,7 +1178,7 @@ const Api = (() => {
         // Lot L20, action 20.1 : l'horloge réglementaire.
         echeancesReglementaires, consignerDeclaration,
         // Lot L19, action 19.2 : l'état DÉRIVÉ des dérogations.
-        derogationsEtat,
+        derogationsEtat, aipdEtat,
         // Lot L18 bis : le jeu de découverte.
         decouverteEtat, decouverteSemer, decouvertePurger
     };

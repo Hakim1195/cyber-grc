@@ -127,6 +127,7 @@ import { greffonCycle } from '../cycle/index.js';
 import { greffonDecouverte } from '../decouverte/index.js';
 import { greffonRecherche } from '../recherche/index.js';
 import { greffonAttestations } from '../attestations/index.js';
+import { greffonAipd } from '../aipd/index.js';
 import { greffonDerogations } from '../derogations/index.js';
 import { greffonReglementaire } from '../reglementaire/index.js';
 import type { DeclarationAcces, DomaineFonctionnel } from './droits.js';
@@ -3194,6 +3195,11 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   // Lot L19, action 19.2 — l'ÉTAT d'une dérogation, dérivé. L'écriture, elle,
   // passe par les routes génériques : une dérogation est une entité ordinaire.
   await instance.register(greffonDerogations, { pool });
+  // Lot L20, action 20.3 — l'ÉTAT d'une analyse d'impact, dérivé, ET les
+  // traitements qui n'en ont AUCUNE. La seconde liste est celle qui compte : un
+  // registre des AIPD qui ne montrerait que les AIPD existantes serait un
+  // registre rassurant, et la question d'un contrôle est l'inverse.
+  await instance.register(greffonAipd, { pool });
   // Lot L17, A3 — la recherche globale.
   //
   // ⚠️ Elle reçoit `cumulerSondage`, **le compteur du sondage**, et non un

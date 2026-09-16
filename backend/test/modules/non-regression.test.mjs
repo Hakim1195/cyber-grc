@@ -205,6 +205,10 @@ const SANS_FICHE = {
   // les onglets « Documents » et « L'outil lui-même ». ⚠️ Leur adresse ne peut
   // PAS s'écrire « /rgpd/outil » : le routeur y verrait l'identifiant d'un
   // traitement, et l'écran dirait « Traitement introuvable ».
+  // Action 20.3 — un TROISIÈME onglet du registre, et pour le même motif : c'est
+  // une vue du sujet « RGPD », pas un sujet de plus. L'ajouter au menu rendrait à
+  // celui-ci ce qu'on vient de lui retirer.
+  '/rgpd-aipd': 'vue du registre : où en est chaque analyse d’impact, et ce qui n’en a aucune',
   '/rgpd-documents': 'vue du registre : les documents porteurs de données personnelles',
   '/rgpd-outil': 'vue du registre : l’article 30 du PRODUIT lui-même, chargé à la demande',
   // ── Vague 6 : les écrans des capacités livrées sans interface ────────────
@@ -261,7 +265,13 @@ const SANS_FICHE = {
 // relie, sans route ni entrée de menu. C'est le même panneau des deux côtés, et
 // c'est délibéré : deux composants auraient divergé, et un lien doit dire la
 // même chose par ses deux bouts.
-const MODULES_ATTENDUS = 37;
+//
+// 38 depuis l'action 20.3 : « aipd » — l'analyse d'impact RGPD (article 35).
+// Même forme encore : un PANNEAU sur la fiche du traitement qu'elle analyse,
+// plus une VUE montée dans un onglet du registre RGPD (`/rgpd-aipd`). Pas de
+// route à elle, donc ni `FICHES` ni `SANS_FICHE` — l'onglet est une route du
+// module `rgpd`, qui est déjà nommé ici.
+const MODULES_ATTENDUS = 38;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //

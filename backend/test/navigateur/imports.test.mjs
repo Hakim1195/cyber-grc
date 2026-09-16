@@ -209,7 +209,7 @@ describe('Le catalogue des modèles se lit à l’écran', () => {
       const options = await session.page.$$eval('#impEntiteSelect option', (els) => els.length);
       assert.ok(
         options > 5,
-        `Seules ${String(options)} option(s) dans le sélecteur : le catalogue des 24 entités ` +
+        `Seules ${String(options)} option(s) dans le sélecteur : le catalogue des 25 entités ` +
           'n’est probablement pas celui rendu par le serveur.',
       );
 

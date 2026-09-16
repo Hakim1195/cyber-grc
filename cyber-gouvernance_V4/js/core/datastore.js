@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 16;
+    const SCHEMA_VERSION = 17;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -70,7 +70,14 @@ const DataStore = (() => {
         // d'approbation. ⚠️ Aucune de ces lignes ne porte d'ÉTAT : « en vigueur »,
         // « échue » ou « en attente » se dérivent côté serveur de l'échéance et de
         // la décision. Les stocker ici les figerait au jour de l'export.
-        "derogations"
+        "derogations",
+        // v17 — Lot L20, action 20.3 : les analyses d'impact RGPD (article 35).
+        // ⚠️ Elles POINTENT le registre de l'article 30 (`traitement_id`) et n'en
+        // recopient aucun champ : deux réponses à la même question dans un outil
+        // produit en audit, c'est une de trop. ⚠️ Et aucune ne porte d'ÉTAT —
+        // « à revoir » se dérive de la date de revue, côté serveur
+        // (`GET /api/aipd/etat`). Le stocker ici le figerait au jour de l'export.
+        "analyses_impact"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
@@ -167,6 +174,13 @@ const DataStore = (() => {
         // antérieur n'en porte aucun, et se reprend à l'identique.
         out.documents.forEach(d => {
             if (d && !Array.isArray(d.mesures_ids)) d.mesures_ids = [];
+        // v17 — une analyse d'impact désigne les CONTRÔLES qu'elle prévoit pour
+        // traiter les risques (`mesures_ids[]`, action 20.3). Même garantie, et
+        // pour la même raison : un tableau absent ferait planter la première
+        // itération d'un écran, sur une reprise parfaitement saine.
+        (data.analyses_impact || []).forEach(a => {
+            if (a && !Array.isArray(a.mesures_ids)) a.mesures_ids = [];
+        });
         });
         out.schemaVersion = SCHEMA_VERSION;
         return out;
@@ -739,6 +753,36 @@ const DataStore = (() => {
     }
 
     /* =========================
+       ANALYSES D'IMPACT — RGPD article 35 (v17, action 20.3)
+       { id, traitement_id, statut, necessite_motif, date_analyse,
+         risques_identifies, mesures_prevues, avis_dpo, avis_dpo_le,
+         consultation_cnil, consultation_cnil_le, revoir_le, mesures_ids[] }
+
+       ⚠️ **Elle POINTE le traitement, elle ne le recopie pas.** Ni la finalité,
+       ni les catégories de données, ni les destinataires ne figurent ici : le
+       registre de l'article 30 en est la seule source, et une copie vieillirait
+       sans que personne le sache. C'est le critère d'acceptation de 20.3.
+
+       ⚠️ **Aucun champ d'état.** « À revoir » se dérive de la date de revue,
+       côté serveur (`GET /api/aipd/etat`). Le poser ici obligerait quelque chose
+       à repasser — et le jour où ce quelque chose ne repasse pas, le produit
+       affirme une conformité RGPD que personne n'a constatée.
+    ========================== */
+    function getAnalysesImpact() { return data.analyses_impact; }
+    function getAnalyseImpactById(id) { return data.analyses_impact.find(a => a.id === id); }
+    function getAnalysesImpactByTraitement(traitementId) {
+        return data.analyses_impact.filter(a => a.traitement_id === traitementId);
+    }
+    function addAnalyseImpact(a) { data.analyses_impact.push(a); save(); }
+    function updateAnalyseImpact(a) {
+        const idx = data.analyses_impact.findIndex(x => x.id === a.id);
+        if (idx !== -1) { data.analyses_impact[idx] = a; save(); }
+    }
+    function deleteAnalyseImpact(id) {
+        data.analyses_impact = data.analyses_impact.filter(a => a.id !== id); save();
+    }
+
+    /* =========================
        TRAITEMENTS RGPD — Registre article 30 (v6)
        { id, nom, finalite, base_legale, responsable, personnes_concernees,
          categories_donnees, donnees_sensibles, destinataires, transfert_hors_ue,
@@ -916,7 +960,15 @@ const DataStore = (() => {
         //           → normalize crée le tableau vide. AUCUNE transformation : le lien
         //           `derogations[].exigence_id` n'existe pas dans une base héritée, et un
         //           export v13 se reprend donc à l'identique.
-        // (Ajouter ici les futures migrations : if (v < 17) { ... })
+        // v16 → v17 : ajout de `analyses_impact` (analyses d'impact RGPD art. 35,
+        //           action 20.3) → normalize crée le tableau vide. AUCUNE
+        //           transformation, et surtout rien à DEVINER : on ne fabrique pas
+        //           une analyse « requise » pour chaque traitement portant des
+        //           données sensibles. Ce serait inventer une obligation que
+        //           personne n'a constatée, et remplir le registre de l'article 35
+        //           de lignes vides apprendrait à l'ignorer. La présomption
+        //           s'affiche à l'écran ; elle ne s'écrit pas.
+        // (Ajouter ici les futures migrations : if (v < 18) { ... })
         return p;
     }
 
@@ -1174,6 +1226,8 @@ const DataStore = (() => {
         getDocuments, getDocumentById, addDocument, updateDocument, deleteDocument,
         getDerogations, getDerogationById, getDerogationsByExigence,
         addDerogation, updateDerogation, deleteDerogation,
+        getAnalysesImpact, getAnalyseImpactById, getAnalysesImpactByTraitement,
+        addAnalyseImpact, updateAnalyseImpact, deleteAnalyseImpact,
 
         // Traitements RGPD (registre art. 30)
         getTraitements, getTraitementById, addTraitement, updateTraitement, deleteTraitement,

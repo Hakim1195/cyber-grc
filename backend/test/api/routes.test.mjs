@@ -102,11 +102,11 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
     assert.match(corps.authentification.lot_attendu, /L3/);
   });
 
-  test('GET /api/modele — décrit les 24 entités, et ne fuit aucun nom de table', async () => {
+  test('GET /api/modele — décrit les 25 entités, et ne fuit aucun nom de table', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/modele');
     assert.equal(statut, 200);
-    assert.equal(Object.keys(corps.entites).length, 24);
-    assert.equal(corps.schemaVersion, 16);
+    assert.equal(Object.keys(corps.entites).length, 25);
+    assert.equal(corps.schemaVersion, 17);
 
     const texte = JSON.stringify(corps);
     for (const interdit of ['mesure_catalogue', 'mesure_mise_en_oeuvre', 'evaluation_mesures', base.nom]) {
@@ -120,7 +120,7 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
   test('GET /api/donnees — rend le jeu de la filiale, dans la forme de « data »', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/donnees');
     assert.equal(statut, 200);
-    assert.equal(corps.data.schemaVersion, 16);
+    assert.equal(corps.data.schemaVersion, 17);
     assert.ok(corps.data.risques.some((r) => r.id === 'RISK-A'));
     assert.ok(corps.data.documents.some((d) => d.id === 'DOC-G'), 'Le socle Groupe fait partie du chargement.');
 
@@ -797,6 +797,10 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // rattacherait la pièce d'une filiale à la fiche d'une autre — et le refus du
     // porteur d'origine, que la route vérifie elle-même, n'aurait plus de sujet.
     ['POST', '/api/pieces/mesures/MESURE-A/rattachements', undefined],
+    // L'état des analyses d'impact (action 20.3). Servie sans identité, elle
+    // rendrait la cartographie des traitements de données personnelles du
+    // périmètre — et, pour une session de portée Groupe, celle de vingt filiales.
+    ['GET', '/api/aipd/etat', undefined],
     ['POST', '/api/pieces/logo', undefined],
     ['GET', '/api/pieces/logo', undefined],
     ['GET', '/api/pieces/logo/PJ-A', undefined],

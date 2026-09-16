@@ -78,6 +78,10 @@ const NOUVELLES_PAR_VERSION = {
   15: [],
   // v16 non plus : cinq CHAMPS sur les mesures (efficacité, rythme de rejeu).
   16: [],
+  // v17 — les analyses d'impact RGPD (article 35, action 20.3). ⚠️ Elles POINTENT
+  // le registre de l'article 30 : la collection ne porte aucun champ de
+  // `traitements`, seulement `traitement_id`.
+  17: ['analyses_impact'],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -526,6 +530,41 @@ export function instantaneV12Complet() {
  * l'intérêt de l'action 19.6 : **maturité 4 et efficacité « inefficace »** — documenté,
  * planifié, supervisé… et la restauration échoue.
  */
+/**
+ * Instantané COMPLET à la version courante — v17.
+ *
+ * ⚠️ L'analyse d'impact POINTE un traitement du même instantané
+ * (`TRT-1720000000000-118`) : c'est ce lien-là qui doit survivre au round-trip,
+ * et un identifiant inventé ne mesurerait rien. Elle ne recopie AUCUN champ du
+ * registre de l'article 30 — c'est le critère d'acceptation de l'action 20.3.
+ */
+export function instantaneV17Complet() {
+  return {
+    ...instantaneV16Complet(),
+    schemaVersion: 17,
+    analyses_impact: [
+      {
+        id: 'AIPD-1720000000000-204',
+        traitement_id: 'TRT-1720000000000-118',
+        statut: 'validee',
+        necessite_motif:
+          'Traitement à grande échelle de données de santé des salariés (art. 35 §3 b).',
+        date_analyse: '2026-02-10',
+        risques_identifies:
+          'Accès non autorisé aux arrêts de travail ; conservation au-delà du nécessaire.',
+        mesures_prevues:
+          'Chiffrement au repos, restriction du profil « RH-santé », purge automatique à 3 ans.',
+        avis_dpo: 'Favorable sous réserve de la purge automatique.',
+        avis_dpo_le: '2026-02-12',
+        consultation_cnil: false,
+        consultation_cnil_le: null,
+        revoir_le: '2028-02-10',
+        mesures_ids: ['MESURE-1720000000000-115'],
+      },
+    ],
+  };
+}
+
 export function instantaneV16Complet() {
   const base = instantaneV15Complet();
   return {

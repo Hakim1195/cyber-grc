@@ -1420,9 +1420,15 @@ begin
                -- socle Groupe prouve un contrôle du socle, et se lit partout. Vérifié :
                -- le déclencheur neuf est bien « trg_document_mesures_portee_figee »,
                -- armé « always » par f_armer_declencheurs().
-               '15 sur 15',
+               -- 17 depuis la `039` : `analyses_impact` et `analyse_mesures` naissent
+               -- MIXTES, comme `traitements` — le GROUPE opère des traitements pour
+               -- toutes ses filiales, et l'analyse de l'annuaire commun se fait une
+               -- fois. Vérifié un par un : les deux déclencheurs neufs sont bien
+               -- « trg_analyses_impact_portee_figee » et « trg_analyse_mesures_portee_figee »,
+               -- armés « always » par f_armer_declencheurs().
+               '17 sur 17',
                format('%s sur %s', count(*) filter (where t.tgenabled = 'A'), count(*)),
-               case when count(*) = 15 and count(*) filter (where t.tgenabled = 'A') = 15
+               case when count(*) = 17 and count(*) filter (where t.tgenabled = 'A') = 17
                     then 'OK' else 'ÉCHEC' end
           from pg_trigger t
          where not t.tgisinternal

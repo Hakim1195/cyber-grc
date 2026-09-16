@@ -40,7 +40,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
-import { FILIALE_A, FILIALE_B, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
+import { FILIALE_A, FILIALE_B, ouvrirBaseEssai, perimetre } from '../aide/base.mjs';
 
 /**
  * La migration éprouvée, et celle où l'on s'arrête d'abord.
@@ -53,6 +53,67 @@ import { FILIALE_A, FILIALE_B, ouvrirBaseEssai, perimetre, semerJeuEssai } from 
  */
 const AVANT = '037';
 
+/**
+ * Les deux filiales et les quelques lignes que la reprise doit rencontrer.
+ *
+ * ⚠️ **On N'EMPLOIE PAS `semerJeuEssai()` ici, et c'est structurel.** Le semis
+ * partagé écrit dans TOUTES les tables du schéma — y compris celles qu'une
+ * migration postérieure à `AVANT` n'a pas encore créées. Le jour où une `039`
+ * est arrivée, ce fichier a rougi pour cette raison exacte, et pas pour celle
+ * qu'il mesure. Un essai qui se périme à chaque migration suivante est un essai
+ * qu'on finit par ajuster sans le lire.
+ *
+ * Le semis est donc MINIMAL : ce que la `038` reprend, et rien d'autre — des
+ * pièces jointes, dans deux filiales.
+ */
+async function semerLeStrictNecessaire() {
+  const client = await base.connexion('app');
+  // ⚠️ `avecPerimetre(..., true)` — le quatrième argument est
+  // `administrationGroupe`, et sans lui l'écriture dans `filiales` est refusée en
+  // 42501 : sa politique est réservée à l'administration Groupe (migration `007`,
+  // constat M-2 de la porte S1). Le fonctionnement courant n'écrit pas là.
+  await base.avecPerimetre(
+    client,
+    perimetre('semeur', FILIALE_A, [FILIALE_A, FILIALE_B], true),
+    async (c) => {
+      await c.query(
+        `insert into filiales (id, code, raison_sociale, pays) values
+             ($1, 'TLS', 'Filiale de Toulouse', 'FR'),
+             ($2, 'DEU', 'Filiale allemande',   'DE')`,
+        [FILIALE_A, FILIALE_B],
+      );
+    },
+    { annuler: false },
+  );
+
+  // ⚠️ Une filiale à la fois, comme la reprise elle-même : la politique d'écriture
+  // n'admet que la filiale ACTIVE, et c'est précisément la contrainte que la `038`
+  // a dû apprendre. Un semis qui l'ignorerait n'éprouverait pas ce qu'il prétend.
+  for (const [filiale, suffixe] of [
+    [FILIALE_A, 'A'],
+    [FILIALE_B, 'B'],
+  ]) {
+    await base.avecPerimetre(
+      client,
+      perimetre('semeur', filiale, [filiale]),
+      async (c) => {
+        await c.query(
+          `insert into risques (id, filiale_id, nom) values ($1, $2, 'Rançongiciel')`,
+          [`RISK-${suffixe}`, filiale],
+        );
+        const empreinte = suffixe.toLowerCase().repeat(64).slice(0, 64);
+        await c.query(
+          `insert into pieces_jointes (id, filiale_id, entite_type, entite_id, nom_fichier,
+                                       type_mime, taille_octets, sha256, chemin_stockage)
+               values ($1, $2, 'risques', $3, 'analyse.pdf', 'application/pdf', 4096, $4, $5)`,
+          [`PJ-${suffixe}`, filiale, `RISK-${suffixe}`, empreinte, `ab/${empreinte}`],
+        );
+      },
+      { annuler: false },
+    );
+  }
+}
+
 let base;
 let proprietaire;
 let applicatif;
@@ -64,7 +125,7 @@ before(async () => {
   base = await ouvrirBaseEssai(import.meta.url, { jusquA: AVANT });
   proprietaire = await base.connexion('proprietaire');
   applicatif = await base.connexion('app');
-  await semerJeuEssai(base, applicatif);
+  await semerLeStrictNecessaire();
 });
 
 after(async () => {
