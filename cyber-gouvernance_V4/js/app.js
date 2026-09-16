@@ -373,6 +373,23 @@ const ROUTE_META = {
  * `ROUTE_META`, qui couvre les deux écrans concernés.
  */
 function sectionDuMenu(base) {
+    // ⚠️ **Une VUE n'a plus d'entrée de menu, et elle a pourtant une section.**
+    // Depuis la passe d'architecture du 16/09, « /matrice », « /socle »,
+    // « /referentiels-actifs » et « /couverture » sont des onglets : ils ont
+    // quitté le menu pour ne pas offrir deux chemins au même écran. Sans ce
+    // renvoi, leur fil d'Ariane retombait sur l'ancienne table — mesuré dans
+    // Chromium sur la recette : « Risques / Matrice des risques » sous le menu
+    // « Risques & patrimoine », c'est-à-dire l'incohérence que la passe ferme,
+    // rouverte par la passe elle-même.
+    //
+    // La vue hérite donc de la section de SA PORTE — le premier onglet du
+    // groupe, celui qui est resté au menu.
+    if (typeof UI !== "undefined" && typeof UI.contratOnglets !== "undefined") {
+        const groupe = UI.contratOnglets.find(function (g) {
+            return g.vues.some(function (v) { return v.route === base; });
+        });
+        if (groupe && groupe.vues[0].route !== base) return sectionDuMenu(groupe.vues[0].route);
+    }
     const lien = document.querySelector('.main-nav a[data-route="' + base + '"]');
     if (!lien) return null;
     let noeud = lien.closest("li");
@@ -403,8 +420,19 @@ window.renderBreadcrumb = function(route) {
     const lien = document.querySelector('.main-nav a[data-route="' + base + '"] [data-i18n]');
     const cleTitre = meta ? meta.t : (lien ? lien.getAttribute("data-i18n") : null);
     if (cleTitre === null) { el.innerHTML = ""; return; }
+    // ⚠️ Pour une VUE, le fil porte le libellé de l'ONGLET, pas celui de la
+    // table : celle-ci gardait les anciens noms (« Matrice des risques » quand
+    // l'onglet et le titre de l'écran disent « Matrice F×G »). Trois mots pour
+    // un seul écran, à quelques centimètres les uns des autres.
+    let titre = t(cleTitre);
+    if (typeof UI !== "undefined" && typeof UI.ongletsDe === "function") {
+        const onglets = UI.ongletsDe(base);
+        const vue = onglets === null ? null : onglets.find(function (o) { return o.actif; });
+        if (vue) titre = vue.libelle;
+    }
     const detail = segs.length > 1 ? ` / <b>${t("fil.fiche")}</b>` : "";
-    el.innerHTML = `${t(cleSection)} / <b>${t(cleTitre)}</b>${detail}`;
+    const echapper = window.escapeHtml || (v => String(v == null ? "" : v));
+    el.innerHTML = `${t(cleSection)} / <b>${echapper(titre)}</b>${detail}`;
 };
 
 /* =========================
