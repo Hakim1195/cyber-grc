@@ -340,7 +340,11 @@ const AipdModule = (() => {
                     { id: UI.genId("AIPD"), mesures_ids: [] }, champs));
             }
             if (window.showToast) window.showToast("Analyse d’impact enregistrée.", "success");
-            charger(tid);
+            // ⚠️ On attend que le SERVEUR sache, puis on le relit. Relire tout de
+            // suite interroge un serveur qui n'a encore rien reçu, et le panneau
+            // affiche « aucune analyse » juste après en avoir créé une — mesuré
+            // sur la recette, invisible au banc (voir `UI.apresEcriture`).
+            UI.apresEcriture(() => charger(tid));
         });
 
         const supprimer = document.getElementById("aipdSupprimer");
@@ -355,7 +359,7 @@ const AipdModule = (() => {
                 + "la constater.")) return;
             DataStore.deleteAnalyseImpact(aid);
             if (window.showToast) window.showToast("Analyse d’impact retirée.", "success");
-            charger(tid);
+            UI.apresEcriture(() => charger(tid));
         });
     }
 

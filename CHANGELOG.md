@@ -10,7 +10,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 16/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2048 essais, 2048 passés, 0 échec** à la révision `bd64212`,
+> **2052 essais, 2052 passés, 0 échec** à la révision `RÉVISION`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
 > échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**43 garde-fous consignés**,
@@ -45,6 +45,52 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### L'écran affichait « aucune analyse » juste après en avoir créé une (16/09/2026)
+
+**Trouvé sur la recette, en vérifiant 20.3 dans un vrai navigateur.** Le banc était vert —
+2 048 essais —, et le produit déployé affichait, à travers Apache et TLS, l'inverse de ce
+qui venait de se passer.
+
+La cause tient en deux phrases. Les panneaux dont l'état vient du **serveur** — les
+dérogations (19.2), les analyses d'impact (20.3) — le relisent après chaque écriture, et
+ils ont raison : l'état s'y **dérive**, et le recomposer depuis `data` afficherait une
+ligne sans état. Mais `DataStore.addX()` n'écrit qu'**en mémoire** ; la poussée vers le
+serveur est asynchrone, et relire tout de suite interroge un serveur qui n'a encore rien
+reçu.
+
+⚠️ **Le banc ne pouvait pas le voir, et ce n'est pas un oubli d'essai** : il monte le
+serveur dans le même processus, où la poussée aboutit dans la même milliseconde. La course
+n'a pas le temps de se produire. C'est la classe du constat **Q-325** prise par l'autre
+bout — *l'essai prouve que le mécanisme fonctionne ; personne ne mesure ce que
+l'utilisateur reçoit* — et c'est la deuxième fois en deux jours qu'une vérification au
+navigateur sur l'instance déployée trouve ce que 2 000 essais ne voyaient pas.
+
+⚠️ **Et le défaut n'était pas dans le lot du jour** : `derogations.js`, livré la veille,
+l'avait à l'identique. Fermé à la CLASSE :
+
+- **`UI.apresEcriture()`** attend `Sync.pousser()` puis rappelle. Un échec de poussée ne
+  bloque PAS le rappel : c'est le bandeau de `sync.js` qui porte l'incident, et un écran
+  figé par-dessus n'ajouterait qu'une seconde panne ;
+- **`test/depot/relecture-apres-ecriture.test.mjs`** — tout module qui écrit par
+  `DataStore` *et* **appelle** `Api` doit y passer. La découverte est mécanique ; la
+  dispense est écrite à la main **avec son motif**, et se fige aux deux bouts — une
+  dispense qui ne correspond plus à aucun module rougit, faute de quoi elle excuserait le
+  prochain sans que personne ait rien décidé ;
+- **le §6** de l'essai navigateur mesure l'**ORDRE**, pas un délai : il tient la poussée à
+  la main et compte les lectures. Un essai qui courserait une horloge se figerait un matin
+  sur une machine chargée — et il se figerait **au vert** (leçon Q-251).
+
+⚠️ **`Api.` APPELÉ, jamais `Api.` LU.** La première rédaction du garde réclamait une
+attente à `preuves.js`, qui ne référence qu'une **constante** (`Api.CONTRAT_AUTH.niveaux`)
+et n'émet rien. La pente naturelle aurait été de l'ajouter aux dispenses — c'est-à-dire
+d'user la liste jusqu'à ce qu'elle ne dise plus rien. Le discriminant est une **forme**,
+pas un nom : une parenthèse derrière le membre.
+
+⚠️ **Et l'essai a d'abord passé POUR LA MAUVAISE RAISON.** Son compteur cherchait
+`/api/aipd/etat` alors que `js/core/api.js` construit ses adresses en **relatif**
+(`api/aipd/etat`) : il ne comptait rien, et l'assertion « aucune lecture n'est partie »
+était vraie par vacuité. Trois mutations jouées ensuite, trois morsures.
 
 ### 20.3 — l'analyse d'impact POINTE le registre, elle ne le recopie pas (16/09/2026)
 

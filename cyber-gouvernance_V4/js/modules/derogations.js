@@ -382,7 +382,14 @@ const DerogationsModule = (() => {
             // On relit le serveur : l'état est le sien, et il vient d'y en avoir
             // un de plus. Recomposer l'écran depuis `data` afficherait une
             // dérogation SANS état, c'est-à-dire l'inverse de ce que le panneau dit.
-            charger(exigenceId);
+            //
+            // ⚠️ **Mais on attend d'abord que le serveur SACHE.** `addDerogation()`
+            // n'écrit qu'en mémoire ; relire immédiatement interroge un serveur qui
+            // n'a encore rien reçu, et le panneau affiche « aucune dérogation »
+            // juste après en avoir créé une. Invisible au banc — le serveur y
+            // répond dans la même milliseconde —, mesuré sur la recette à travers
+            // Apache et TLS (voir `UI.apresEcriture`).
+            UI.apresEcriture(() => charger(exigenceId));
         });
     }
 

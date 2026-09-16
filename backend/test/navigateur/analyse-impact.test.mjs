@@ -18,6 +18,21 @@
  * | 3 | L'onglet du registre montre l'état — et **ce qui n'a aucune analyse** |
  * | 4 | Une revue ÉCHUE se voit comme « À revoir », sans qu'on ait rien fait |
  * | 5 | Un nom de traitement HOSTILE ressort échappé, et l'essai le fait DÉCIDER |
+ * | 6 | L'écran **attend que le serveur sache** avant de le relire |
+ *
+ * ── ⚠️ LE §6 EST NÉ D'UN DÉFAUT DE LA RECETTE ─────────────────────────────
+ *
+ * Le panneau relit le SERVEUR après chaque écriture — il le doit, l'état s'y
+ * dérive. Mais `DataStore.addAnalyseImpact()` n'écrit qu'en mémoire : la poussée
+ * est asynchrone, et relire tout de suite interroge un serveur qui n'a encore
+ * rien reçu. **L'écran affichait « aucune analyse » juste après en avoir créé
+ * une**, à travers Apache et TLS.
+ *
+ * ⚠️ **Le banc ne pouvait pas le voir, et les §1 à §5 non plus** : le serveur y
+ * répond dans la même milliseconde, et l'essai attend de toute façon. Le §6 ne
+ * mesure donc PAS un délai — un essai qui course une horloge se fige un matin —,
+ * il mesure **l'ORDRE** : la lecture du serveur ne part pas avant que la poussée
+ * ait rendu la main. Le contrôle tient la poussée à la main, et compte.
  *
  * ── ⚠️ LE §4 EST LE CŒUR ──────────────────────────────────────────────────
  *
@@ -79,6 +94,15 @@ before(async () => {
                                       revoir_le)
              values ('AIPD-ECRAN-ECHUE', $1, 'TRT-AIPD-ECHUE', 'validee', date '2024-01-10',
                      current_date - 1)`,
+        [FILIALE_A],
+      );
+      // Un troisième traitement, VIERGE, réservé au §6 : celui-ci mesure l'ORDRE
+      // d'une CRÉATION, et une création n'a lieu qu'une fois par traitement. Le
+      // faire sur l'un des deux précédents mesurerait une mise à jour — c'est-à-dire
+      // un autre chemin que celui où le défaut a mordu.
+      await c.query(
+        `insert into traitements (id, filiale_id, nom, donnees_sensibles)
+             values ('TRT-AIPD-ORDRE', $1, 'Badgeuse', false)`,
         [FILIALE_A],
       );
     },
@@ -295,6 +319,73 @@ describe('l’analyse d’impact, jusqu’à l’écran', () => {
     );
     assert.equal(enBase.statut, 'validee');
     assert.equal(Number(enBase.version), 1, 'L’affichage a ÉCRIT : le compteur de version a bougé.');
+  });
+
+  test('§6 — l’écran ATTEND que le serveur sache avant de le relire', async () => {
+    const { page } = session;
+    await aller(page, '/rgpd/TRT-AIPD-ORDRE');
+    await attendrePanneau(page, 'aipdEncartCorps');
+
+    // ── Le montage : on tient la poussée à la main, et on compte les lectures ──
+    //
+    // ⚠️ Aucune horloge n'entre ici. On remplace `Sync.pousser` par une promesse
+    // qu'on résout quand on veut, et l'on regarde SI la route a été appelée avant.
+    // Un essai qui mesurerait « moins de N millisecondes » se figerait un matin
+    // sur une machine chargée, et il se figerait au vert (leçon Q-251).
+    await page.evaluate(() => {
+      window.__lectures = 0;
+      const fetchOriginal = window.fetch;
+      window.fetch = function (...arguments_) {
+        // ⚠️ **Le motif n'a PAS de barre oblique de tête**, et l'essai a mordu
+        // là-dessus avant de mordre sur le produit : `js/core/api.js` construit
+        // ses adresses sur une base RELATIVE (`BASE = "api"`), donc la chaîne
+        // passée à `fetch` est « api/aipd/etat ». Un motif « /api/… » ne comptait
+        // rien, et l'assertion « aucune lecture n'est partie » était vraie pour la
+        // mauvaise raison — c'est-à-dire fausse (motif Q-210).
+        if (String(arguments_[0]).includes('aipd/etat')) window.__lectures += 1;
+        return fetchOriginal.apply(this, arguments_);
+      };
+      window.__pousseeOriginale = window.Sync.pousser;
+      window.__libererPoussee = null;
+      window.Sync.pousser = function () {
+        const promesse = window.__pousseeOriginale.apply(window.Sync, arguments);
+        return new Promise((resoudre) => {
+          window.__libererPoussee = () => promesse.then(resoudre, resoudre);
+        });
+      };
+    });
+
+    try {
+      await page.evaluate(() => {
+        document.getElementById('aipdStatut').value = 'en_cours';
+        document.getElementById('aipdForm').dispatchEvent(
+          new Event('submit', { cancelable: true, bubbles: true }),
+        );
+      });
+      // La poussée est retenue : la route ne doit PAS avoir été appelée.
+      await page.waitForFunction(() => window.__libererPoussee !== null, null, { timeout: DELAI });
+      assert.equal(
+        await page.evaluate(() => window.__lectures),
+        0,
+        'L’écran a relu le serveur AVANT que la poussée ait rendu la main : il interroge un ' +
+          'serveur qui n’a pas encore reçu l’écriture, et affiche « aucune analyse » juste ' +
+          'après en avoir créé une. Mesuré sur la recette, à travers Apache et TLS — la ' +
+          'classe du constat Q-325, prise par l’autre bout.',
+      );
+
+      // On libère : la lecture part, et l'écran se met à jour.
+      await page.evaluate(() => window.__libererPoussee());
+      await page.waitForFunction(() => window.__lectures > 0, null, { timeout: DELAI });
+      await page.waitForFunction(
+        () => /En cours/u.test(document.getElementById('aipdEncartCorps')?.textContent ?? ''),
+        null,
+        { timeout: DELAI },
+      );
+    } finally {
+      await page.evaluate(() => {
+        if (window.__pousseeOriginale) window.Sync.pousser = window.__pousseeOriginale;
+      });
+    }
   });
 
   test('§5 — un nom de traitement HOSTILE ressort ÉCHAPPÉ', async () => {

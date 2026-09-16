@@ -728,7 +728,43 @@ window.UI = (function () {
         return html + "</ul></nav>";
     }
 
+    /**
+     * Attend que le serveur SACHE, puis exécute le rappel.
+     *
+     * ── ⚠️ POURQUOI CETTE FONCTION EXISTE, ET CE QU'ELLE A COÛTÉ ────────────
+     *
+     * Un panneau dont l'état vient du SERVEUR — les dérogations (19.2), les
+     * analyses d'impact (20.3) — le relit après chaque écriture. C'est juste :
+     * l'état se dérive, et le recomposer depuis `data` afficherait une ligne
+     * SANS état. Mais `DataStore.addX()` n'écrit qu'en mémoire : la poussée vers
+     * le serveur est asynchrone, et relire immédiatement interroge un serveur qui
+     * n'a encore rien reçu.
+     *
+     * **Le panneau affiche alors « aucune analyse » juste après en avoir créé
+     * une.** Mesuré le 16/09/2026 sur la recette, à travers Apache et TLS — et
+     * INVISIBLE au banc, où le serveur répond dans la même milliseconde. C'est
+     * exactement la classe du constat **Q-325** : *l'essai prouve que le
+     * mécanisme fonctionne ; personne ne mesure ce que l'utilisateur reçoit.*
+     *
+     * `Sync.pousser()` rend la promesse du cycle d'écriture, et la file est
+     * séquentielle : l'attendre attend aussi ce qui était déjà en attente.
+     *
+     * ⚠️ **Un échec de poussée ne bloque PAS le rappel.** Le panneau doit se
+     * redessiner même quand l'envoi a échoué : c'est le bandeau de `sync.js` qui
+     * porte l'incident, et un écran figé par-dessus n'ajouterait rien qu'une
+     * seconde panne.
+     */
+    function apresEcriture(rappel) {
+        if (typeof rappel !== "function") return Promise.resolve();
+        const pousse = (window.Sync && typeof Sync.pousser === "function")
+            ? Sync.pousser()
+            : null;
+        return Promise.resolve(pousse).catch(function () { /* voir ci-dessus */ })
+            .then(function () { return rappel(); });
+    }
+
     return {
+        apresEcriture,
         enteteHtml, ongletsHtml, ongletsDe,
         contratOnglets: Object.freeze(GROUPES_ONGLETS),
         envelopperTableaux,
