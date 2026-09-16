@@ -773,7 +773,7 @@ la comparaison au marché du 08/09/2026.
 1993 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **39 garde-fous consignés**, **35 migrations**,
-**55 tables**, **263 décisions** au registre de l'article 30 ; publication → **81
+**55 tables**, **263 décisions** au registre de l'article 30 ; publication → **85
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **14 conformes,
 1 réserve, 0 bloquant**.
 

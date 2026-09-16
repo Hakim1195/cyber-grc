@@ -175,6 +175,8 @@ const DerogationsModule = (() => {
         if (!noeud) return;
         const id = noeud.dataset.id || exigenceId;
         if (!id) return;
+        // Une autre fiche : le circuit déplié sur la précédente n'a plus de sens.
+        circuitDeplie = null;
         if (typeof Sync !== "undefined" && typeof Sync.serveurConnait === "function"
             && !Sync.serveurConnait("exigences", id)) {
             ecrireCorps('<p class="chart-empty">'
@@ -190,11 +192,25 @@ const DerogationsModule = (() => {
         if (corps) corps.innerHTML = html;
     }
 
+    /**
+     * Le circuit actuellement déplié, s'il y en a un.
+     *
+     * ⚠️ **Il survit au rechargement du panneau, et c'est une correction.** Une
+     * décision d'approbation redemande l'état au serveur — elle le doit, puisque
+     * l'état se dérive —, ce qui réécrit le tableau et referme le circuit qu'on
+     * venait d'ouvrir. Un circuit de dérogation en compte DEUX : l'utilisateur
+     * approuvait « proposition », l'écran se refermait sous ses doigts, et il
+     * fallait rouvrir pour « acceptation ». *Une action juste qui défait le
+     * contexte de celui qui l'a faite se paie en clics et en doutes.*
+     */
+    let circuitDeplie = null;
+
     function charger(exigenceId) {
         return Api.derogationsEtat().then(charge => {
             ecrireCorps(corpsHtml(charge, exigenceId));
             brancherFormulaire(exigenceId);
             brancherCircuits();
+            rouvrirCircuit();
         }).catch(e => {
             const message = (e && e.estDroitInsuffisant && e.estDroitInsuffisant())
                 ? "Votre profil ne permet pas de consulter les dérogations."
@@ -370,6 +386,29 @@ const DerogationsModule = (() => {
         });
     }
 
+    /** La ligne dépliable d'un circuit, désignée par l'identifiant de sa dérogation. */
+    function ligneCircuit(id) {
+        if (!id) return null;
+        return document.querySelector('.der-circuit-ligne[data-pour="'
+            + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    }
+
+    /** Déplie le circuit d'une dérogation et y monte l'encart d'approbation. */
+    function deplier(id) {
+        const ligne = ligneCircuit(id);
+        if (!ligne) return;
+        // ⚠️ `el.hidden`, jamais `style.display` : une règle de classe écrase le
+        // `[hidden]` du navigateur, et c'est le défaut qui a fait qu'une palette
+        // « ne se fermait pas » alors que l'essai mesurait la propriété au lieu
+        // de la visibilité (16/09/2026).
+        ligne.hidden = false;
+        circuitDeplie = id;
+        const hote = document.getElementById("derCircuit-" + id);
+        if (hote && typeof ApprobationsModule !== "undefined") {
+            ApprobationsModule.monterDans(hote, "derogations", id);
+        }
+    }
+
     /** Le circuit d'approbation d'une dérogation, déplié en place. */
     function brancherCircuits() {
         document.querySelectorAll(".der-circuit-btn").forEach(bouton => {
@@ -377,21 +416,25 @@ const DerogationsModule = (() => {
                 // L'identifiant se lit dans l'attribut AU MOMENT DU CLIC
                 // (`CLAUDE.md` §3), jamais capturé en fermeture.
                 const id = bouton.dataset.id;
-                const ligne = document.querySelector('.der-circuit-ligne[data-pour="'
-                    + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+                const ligne = ligneCircuit(id);
                 if (!ligne) return;
-                // ⚠️ `el.hidden`, jamais `style.display` : une règle de classe
-                // écrase le `[hidden]` du navigateur, et c'est le défaut qui a
-                // fait qu'une palette « ne se fermait pas » alors que l'essai
-                // mesurait la propriété au lieu de la visibilité (16/09/2026).
-                if (!ligne.hidden) { ligne.hidden = true; return; }
-                ligne.hidden = false;
-                const hote = document.getElementById("derCircuit-" + id);
-                if (hote && typeof ApprobationsModule !== "undefined") {
-                    ApprobationsModule.monterDans(hote, "derogations", id);
-                }
+                if (!ligne.hidden) { ligne.hidden = true; circuitDeplie = null; return; }
+                deplier(id);
             });
         });
+    }
+
+    /**
+     * Rouvre, après un rechargement, le circuit que l'utilisateur avait déplié.
+     *
+     * Sans effet si la dérogation a disparu de la liste — auquel cas on oublie :
+     * rouvrir un circuit sur une ligne absente n'aurait aucun sens, et laisser
+     * l'identifiant traîner ferait resurgir le panneau à la fiche suivante.
+     */
+    function rouvrirCircuit() {
+        if (circuitDeplie === null) return;
+        if (ligneCircuit(circuitDeplie) === null) { circuitDeplie = null; return; }
+        deplier(circuitDeplie);
     }
 
     /* =====================================================================
@@ -449,6 +492,31 @@ const DerogationsModule = (() => {
             cellule.appendChild(badge);
         });
     }
+
+    /* ══ SE RELIRE QUAND UNE DÉCISION VIENT D'ÊTRE PRISE ICI MÊME ══════════
+     *
+     * ⚠️ **Sans cela, le panneau ment juste après le geste.** L'encart
+     * d'approbation, monté à l'intérieur d'une de ces lignes, se redessine
+     * lui-même sur ce que le serveur vient de rendre — mais le bandeau et la
+     * colonne « État », eux, datent de la lecture précédente. Mesuré dans
+     * Chromium sur la recette : la dérogation venait d'être ACCEPTÉE, et le
+     * bandeau disait encore « Écart NON couvert ».
+     *
+     * L'état d'une dérogation ne se déduit pas de la décision seule — il se
+     * DÉRIVE, côté serveur, de l'échéance ET de l'empreinte figée. On ne le
+     * recalcule donc pas ici : on redemande.
+     *
+     * L'écoute est posée UNE FOIS, au chargement du module, et jamais dans
+     * `brancherEncart` — un écouteur par affichage de fiche en empilerait un à
+     * chaque navigation (même motif que `approbations.js` pour le recalage
+     * d'identifiant). */
+    document.addEventListener("grc:approbation-decidee", function (evenement) {
+        const detail = (evenement && evenement.detail) || {};
+        if (detail.entite !== "derogations") return;
+        const noeud = document.getElementById(ID_ENCART);
+        if (!noeud || !noeud.dataset.id) return;
+        charger(noeud.dataset.id);
+    });
 
     return {
         encartHtml: encartHtml,

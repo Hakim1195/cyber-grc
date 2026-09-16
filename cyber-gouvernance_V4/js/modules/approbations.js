@@ -843,6 +843,29 @@ const ApprobationsModule = (() => {
             };
             // La liste, si elle a été composée, ne reflète plus la réalité.
             liste.objets = [];
+            // ══ ET CE QUI ENTOURE L'ENCART NON PLUS ═══════════════════════════
+            //
+            // ⚠️ **Trouvé dans un vrai navigateur, sur la recette, et invisible au
+            // banc.** L'encart se redessine lui-même sur ce que le serveur vient
+            // de rendre — c'est juste, et c'est insuffisant dès qu'il est monté À
+            // L'INTÉRIEUR d'un autre panneau. Mesuré sur la fiche Exigence : la
+            // dérogation venait d'être ACCEPTÉE, le circuit l'affichait, et le
+            // bandeau deux lignes plus haut disait encore « Écart NON couvert »,
+            // la ligne « Non accordée ». Le badge de la liste, lui, disait vrai —
+            // c'est lui qui a trahi l'écart.
+            //
+            // C'est la classe des constats Q-201 / Q-207 par son pire bout : *un
+            // écran qui affirme le contraire de ce qui vient de se produire, juste
+            // après le geste qui l'a produit.*
+            //
+            // L'annonce est un ÉVÉNEMENT plutôt qu'un appel : cet encart ne doit
+            // rien savoir de qui l'héberge — il est monté par la fiche Document,
+            // la fiche Risque, la fiche Audit et, depuis l'action 19.2, par le
+            // panneau des dérogations. Une liste d'hôtes ici serait une omission
+            // qui attend (`CLAUDE.md` §3).
+            document.dispatchEvent(new CustomEvent("grc:approbation-decidee", {
+                detail: { entite: entite, id: id, etape: etape, decision: decision }
+            }));
         } catch (e) {
             fiche.message = messageDErreur(e);
         } finally {

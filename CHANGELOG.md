@@ -15,7 +15,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
 > échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**39 garde-fous consignés**,
 > **35 migrations**, **55 tables**, **220 politiques**, **263 décisions** au registre),
-> `install.sh --verifier-publication` → **81 fichiers servis identiques au dépôt**, et
+> `install.sh --verifier-publication` → **85 fichiers servis identiques au dépôt**, et
 > `install.sh --diagnostic` → **14 conformes, 1 réserve** (`SMTP_ACTIF=non`), **0 bloquant**.
 >
 > ⚠️ **Les chiffres de ce bloc étaient faux de quatre migrations et de quatre garde-fous**

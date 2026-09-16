@@ -275,7 +275,32 @@ describe('les dérogations datées, jusqu’à l’écran', () => {
       await attendreQuiescence(page, { delai: DELAI });
     }
 
-    // On rouvre la fiche : le panneau relit le serveur, et l'état a basculé.
+    // ══ SANS RIEN ROUVRIR : le panneau doit s'être relu tout seul ══════════
+    //
+    // ⚠️ **C'est le défaut trouvé dans un vrai navigateur, sur la recette, et
+    // que ce banc ne voyait pas** : l'encart d'approbation se redessinait sur ce
+    // que le serveur venait de rendre, et le bandeau deux lignes plus haut disait
+    // encore « Écart NON couvert » sur une dérogation qui venait d'être ACCEPTÉE.
+    // Classe Q-201 / Q-207 par son pire bout — *l'écran affirme le contraire de ce
+    // qui vient de se produire, juste après le geste qui l'a produit.*
+    //
+    // L'ancienne rédaction de ce §, elle, RENAVIGUAIT avant de mesurer : elle
+    // aurait été verte sur le produit défectueux. Un essai qui se replace dans un
+    // état propre avant de regarder ne mesure pas ce que l'utilisateur voit.
+    await page.waitForFunction(
+      () => /Écart couvert/u.test(document.querySelector('.der-bandeau')?.textContent ?? ''),
+      null,
+      { timeout: DELAI },
+    );
+    const surPlace = await vue(page);
+    assert.equal(
+      surPlace.lignes[0].etat,
+      'En vigueur',
+      'La ligne n’a pas suivi la décision : le tableau garde l’état de la lecture précédente.',
+    );
+
+    // Et le rechargement complet dit la même chose — sans quoi on aurait pu
+    // rafraîchir l'écran sur une valeur que la base ne porte pas.
     await aller(page, '/exigences/EX-DER');
     await attendrePanneau(page, 'derogationsEncartCorps');
     const v = await vue(page);
