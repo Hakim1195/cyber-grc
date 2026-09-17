@@ -122,6 +122,39 @@ entier, c'est la reprise d'une sauvegarde, dans *Paramètres*.
 
 ---
 
+### Pendant une crise — la main courante
+
+Ouvrez la fiche de l'**incident** : sous les pièces jointes, l'encart **Main courante de
+crise**. On y note ce qui se passe, au fur et à mesure : ce qu'on constate, ce qu'on
+décide, qui on prévient, ce qu'on escalade.
+
+| Ce que vous saisissez | Ce que le produit pose |
+|---|---|
+| la **nature** et le **texte** | rien d'autre n'est demandé |
+| — | l'**heure**, à l'instant de l'écriture, par le serveur |
+| — | l'**auteur**, depuis votre session |
+| — | le **numéro** dans la chaîne, et l'empreinte qui la scelle |
+
+⚠️ **Une entrée ajoutée ne se modifie plus, et ne se supprime pas.** Ce n'est pas une
+limitation de l'écran : la base elle-même les refuse, par quatre mécanismes distincts. Pour
+corriger, **ajoutez une entrée qui le dit** — « rectification de l'entrée n° 7 : il
+s'agissait du serveur de secours, pas du serveur principal ». C'est ce que fait une main
+courante depuis toujours, et c'est ce qui lui donne sa valeur : un récit qu'on peut relire à
+froid et réécrire est un récit rédigé **après**.
+
+⚠️ **L'heure ne se saisit pas non plus.** Elle est posée par le serveur au moment de
+l'écriture. Notez au fil de l'eau, même brièvement : une entrée de dix mots écrite à 3 h 12
+vaut mieux qu'un paragraphe reconstitué le lendemain.
+
+**Le bandeau « Chaîne intacte »** est affiché en permanence, et pas seulement en cas de
+problème. Chaque entrée porte l'empreinte de la précédente : retirer ou retoucher une ligne
+se verrait. ⚠️ Il dit aussi ce qu'il **ne** prouve pas — l'administrateur de la base peut
+agir, et le mécanisme ne l'en empêche pas : il rend son passage **détectable**.
+
+ℹ️ **La main courante n'est pas dans la sauvegarde `grc-backup`**, pas plus que le journal
+d'audit. Faire voyager une chaîne d'empreintes par un fichier qu'on peut éditer, puis la
+reconstituer à la relecture, lui ôterait exactement ce qui fait sa valeur.
+
 ## 2. Direction — `GRC-GROUPE-DIRECTION`
 
 **Votre périmètre** : toutes les filiales actives, en **lecture**, sur le pilotage et la

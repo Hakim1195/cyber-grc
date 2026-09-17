@@ -278,7 +278,12 @@ const SANS_FICHE = {
 // 39 depuis l'action 20.4 : « droits » — les demandes d'exercice de droits.
 // Une VUE montée dans un onglet du registre RGPD (`/rgpd-demandes`), sans route
 // à elle ni entrée de menu : l'onglet est une route du module `rgpd`, déjà nommé.
-const MODULES_ATTENDUS = 39;
+//
+// 40 depuis l'action 20.5 : « maincourante » — le récit horodaté d'une crise,
+// EN AJOUT SEUL. Un PANNEAU sur la fiche de l'incident, sans route ni entrée de
+// menu : une crise EST un incident escaladé, et la détection, les déclarations
+// et le récit se lisent ensemble.
+const MODULES_ATTENDUS = 40;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //

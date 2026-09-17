@@ -805,6 +805,12 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // identité, elle rendrait le NOM et les COORDONNÉES des personnes qui ont
     // écrit au groupe — c'est-à-dire des données personnelles de tiers.
     ['GET', '/api/demandes-droits/etat', undefined],
+    // La main courante de crise (action 20.5). Servie sans identité, elle
+    // rendrait le récit heure par heure d'une crise en cours — la pièce la plus
+    // sensible qu'un attaquant puisse lire pendant qu'il agit. Et son POST
+    // laisserait écrire dans un registre qui, lui, ne s'efface pas.
+    ['GET', '/api/main-courante/INC-A', undefined],
+    ['POST', '/api/main-courante/INC-A', { texte: 'balayage', categorie: 'constat' }],
     ['POST', '/api/pieces/logo', undefined],
     ['GET', '/api/pieces/logo', undefined],
     ['GET', '/api/pieces/logo/PJ-A', undefined],

@@ -206,12 +206,20 @@ const IncidentsModule = (() => {
                     </form>
                 </div>
 
+                <!-- 20.5 — la main courante de crise, EN AJOUT SEUL. Elle vit sur la
+                     fiche de l'incident parce qu'une crise EST un incident escaladé :
+                     la détection, les déclarations et le récit se lisent ensemble. -->
+                ${typeof MainCouranteModule !== "undefined" ? MainCouranteModule.encartHtml(inc.id) : ""}
+
                 ${typeof PiecesModule !== "undefined" ? PiecesModule.hoteHtml() : ""}
             </section>`;
 
         // Pièces jointes (lot L6) : preuves d'un incident — captures, journaux,
         // courriels. Monté APRÈS le rendu, seul moment où le conteneur existe.
         if (typeof PiecesModule !== "undefined") PiecesModule.monter("incidents", inc.id);
+
+        // ── 20.5 : la main courante, chargée après le rendu de la fiche ─────
+        if (typeof MainCouranteModule !== "undefined") MainCouranteModule.brancherEncart(inc.id);
 
         // ── 20.1 : l'horloge réglementaire, SUR la fiche ────────────────────
         //

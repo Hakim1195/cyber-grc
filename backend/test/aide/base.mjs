@@ -755,6 +755,16 @@ export async function semerJeuEssai(base, client, options = {}) {
                        'TRT-${s}')`,
           f,
         );
+        // La main courante de crise (migration `041`, action 20.5). ⚠️ Ni `numero`,
+        // ni `horodatage`, ni `auteur`, ni les empreintes ne sont fournis : le
+        // déclencheur de chaînage les pose tous. Les donner ici mesurerait le semis
+        // au lieu de mesurer le déclencheur — et c'est précisément ce déclencheur
+        // qui fait qu'une entrée ne se forge pas.
+        await c.query(
+          `insert into main_courante (filiale_id, incident_id, categorie, texte)
+               values ($1, 'INC-${s}', 'constat', 'Alerte reçue, cellule de crise réunie.')`,
+          f,
+        );
         // La file de purge du magasin (migration `017`). Elle est VIDE en régime
         // normal — c'est une file d'attente, pas un registre —, et c'est
         // précisément pourquoi elle est semée : sans une ligne par filiale, le

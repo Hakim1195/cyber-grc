@@ -1152,6 +1152,51 @@ const Api = (() => {
      */
     function demandesDroitsEtat() { return appeler("/demandes-droits/etat"); }
 
+    /* =====================================================================
+       MAIN COURANTE DE CRISE — lot L20, action 20.5
+       ---------------------------------------------------------------------
+       ⚠️ **Deux fonctions, et il n'y en aura jamais de troisième.** Ni
+       modification, ni suppression : une main courante rééditable ne prouve
+       rien. La garantie n'est pas ici — elle vit dans la base, par les quatre
+       couches du `CONVENTIONS.md` §12 —, mais l'absence de ces fonctions dit
+       qu'aucun chemin du frontend ne les cherche.
+
+       ⚠️ Et elle **ne passe pas par `DataStore`** : la main courante ne fait pas
+       partie de l'instantané, comme le journal d'audit. La faire voyager dans un
+       `grc-backup` ferait passer une chaîne d'empreintes par un fichier que
+       l'utilisateur peut éditer, et la réimporter la RECONSTITUERAIT — c'est-à-dire
+       la referait, ce qui lui ôterait sa valeur probante.
+    ===================================================================== */
+
+    /** `/main-courante/<incident>`, segment encodé. */
+    function cheminMainCourante(incidentId) {
+        return "/main-courante/" + encodeURIComponent(incidentId);
+    }
+
+    /**
+     * Le récit d'une crise, et l'état de sa chaîne.
+     *
+     * Rend `{ entrees: [...], sain, anomalies: [...], tronque }`.
+     *
+     * ⚠️ `sain` signifie « rien de ce qui se détecte n'a eu lieu », **pas**
+     * « personne n'a rien touché » : l'administrateur de la base peut désactiver
+     * un déclencheur. Le chaînage ne l'en empêche pas — il rend son passage
+     * détectable. L'écran doit porter cette nuance, pas la gommer.
+     */
+    function mainCourante(incidentId) { return appeler(cheminMainCourante(incidentId)); }
+
+    /**
+     * Ajoute une entrée. Rend `{ id, numero }`.
+     *
+     * ⚠️ **Ni l'heure, ni l'auteur, ni le numéro ne voyagent d'ici** : le serveur
+     * les pose. Les envoyer permettrait d'antidater une décision — ce contre quoi
+     * une main courante existe (constat N-5, `CONVENTIONS.md` §17.8).
+     */
+    function ajouterMainCourante(incidentId, texte, categorie) {
+        return appeler(cheminMainCourante(incidentId),
+            { methode: "POST", corps: { texte, categorie } });
+    }
+
     /** Consigner une déclaration DÉJÀ FAITE à une autorité, avec son accusé. */
     function consignerDeclaration(incidentId, declaration) {
         return appeler("/reglementaire/incidents/" + encodeURIComponent(incidentId)
@@ -1201,6 +1246,7 @@ const Api = (() => {
         echeancesReglementaires, consignerDeclaration,
         // Lot L19, action 19.2 : l'état DÉRIVÉ des dérogations.
         derogationsEtat, aipdEtat, demandesDroitsEtat,
+        mainCourante, ajouterMainCourante,
         // Lot L18 bis : le jeu de découverte.
         decouverteEtat, decouverteSemer, decouvertePurger
     };

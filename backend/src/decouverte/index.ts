@@ -411,10 +411,24 @@ export async function purgerJeu(client: PoolClient): Promise<number> {
      rangs as (
          -- Profondeur = nombre de parents porteurs. On supprime les plus
          -- profonds d'abord : un enfant part avant son parent.
-         select p.nom, (select count(*) from liens l where l.enfant = p.oid) as profondeur
+         select p.nom, p.oid, (select count(*) from liens l where l.enfant = p.oid) as profondeur
            from porteuses p
      )
-     select nom as table_nom from rangs order by profondeur desc, nom`,
+     -- ⚠️ **ET SEULEMENT CELLES OÙ L'ON PEUT SUPPRIMER.** Une table EN AJOUT SEUL
+     -- (journal d'audit, main courante de crise — CONVENTIONS.md §12) refuse le
+     -- « delete » **même quand il ne toucherait aucune ligne** : son déclencheur
+     -- est posé « for each statement », précisément pour cela. Une seule table de
+     -- ce genre portant « provenance » rendrait la purge du jeu de découverte
+     -- IMPOSSIBLE, et sa cinquième condition constitutive tomberait.
+     --
+     -- Le filtre est une PROPRIÉTÉ mesurée — le privilège réel du rôle courant —,
+     -- jamais une liste de noms : une table en ajout seul créée demain sort du
+     -- balayage toute seule, au lieu de le casser. Et elle n'a de toute façon rien
+     -- à y faire : une ligne qu'on ne peut pas supprimer n'est pas une ligne de
+     -- démonstration.
+     select nom as table_nom from rangs
+      where has_table_privilege(current_user, oid, 'DELETE')
+      order by profondeur desc, nom`,
   );
 
   let total = 0;

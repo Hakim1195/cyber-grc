@@ -4180,6 +4180,15 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // référence exprimable. Un ensemble pareil se retire morceau par morceau sous
       // zéro anomalie si personne ne le nomme.
       'lien_document_mesure',
+      // QUARANTE-TROISIÈME, apporté par `041_la_main_courante_de_crise.sql` —
+      // action 20.5. ⚠️ Il MESURE les QUATRE couches d'ajout seul du §12 dans le
+      // catalogue : le privilège réel du rôle applicatif (has_table_privilege),
+      // le `tgtype` ET le `tgenabled` des trois déclencheurs de refus — « for each
+      // STATEMENT », sans quoi un update qui ne touche aucune ligne passerait —,
+      // et le propriétaire de la table. Il refuse aussi l'apparition de `version`,
+      // `modifie_le` ou `modifie_par` : leur présence donnerait à croire que la
+      // table se modifie, et le prochain lecteur le croirait.
+      'main_courante',
       // TRENTE-SIXIÈME, apporté par `032_la_marque_de_provenance.sql` : toute entité
       // MÉTIER — découverte au catalogue par « porte `filiale_id` ET porte `cree_par` » —
       // dit d'où vient chacune de ses lignes (`saisie`, `decouverte`, `reprise`). C'est la

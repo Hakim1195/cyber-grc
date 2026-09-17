@@ -168,7 +168,12 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // 43 depuis la migration `040` : `demandes_droits` (action 20.4). Elle est de
     // niveau FILIALE — une demande s'adresse à un responsable de traitement, qui est
     // une personne morale, donc une filiale.
-    assert.equal(tablesCloisonnees.length, 43, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    // 44 depuis la migration `041` : `main_courante` (action 20.5). EN AJOUT SEUL,
+    // et pourtant porteuse des QUATRE politiques — celles de modification et de
+    // suppression existent pour que le garde-fou de couverture RLS trouve une
+    // écriture cloisonnée sur les quatre commandes ; sans elles, la table serait
+    // rangée parmi les registres techniques, donc SORTIE de ce balayage.
+    assert.equal(tablesCloisonnees.length, 44, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -199,7 +204,7 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // 41 depuis la `039` : les deux tables de l'analyse d'impact, semées des deux côtés.
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      42,
+      43,
       'Trente-huit tables devaient contenir au moins une ligne allemande. Une table neuve '
         + 'sans ligne dans le semis est un angle mort : le balayage y rendrait « zéro '
         + 'visible » pour la seule raison qu’il n’y a rien à voir.',
@@ -326,7 +331,8 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     // 37 depuis la migration `038` : `piece_rattachements`.
     // 39 depuis la migration `039` : `analyses_impact` et `analyse_mesures`.
     // 40 depuis la migration `040` : `demandes_droits`.
-    assert.equal(nonVides.length, 40, `Tables non vides : ${nonVides.join(', ')}`);
+    // 41 depuis la migration `041` : `main_courante`.
+    assert.equal(nonVides.length, 41, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

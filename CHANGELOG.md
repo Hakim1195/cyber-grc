@@ -10,11 +10,11 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 16/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2064 essais, 2064 passés, 0 échec** à la révision `4976fd9`,
+> **2076 essais, 2076 passés, 0 échec** à la révision `RÉVISION`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
-> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**44 garde-fous consignés**,
-> **40 migrations**, **60 tables**, **240 politiques**, **319 décisions** au registre),
+> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**45 garde-fous consignés**,
+> **41 migrations**, **61 tables**, **244 politiques**, **331 décisions** au registre),
 > `install.sh --verifier-publication` → **85 fichiers servis identiques au dépôt**, et
 > `install.sh --diagnostic` → **14 conformes, 1 réserve** (`SMTP_ACTIF=non`), **0 bloquant**.
 >
@@ -45,6 +45,83 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### 20.5 — la main courante de crise, en ajout seul (16/09/2026)
+
+**Pendant une crise, on note.** Qui a été prévenu, à quelle heure, ce qui a été décidé, ce
+qu'on a constaté. Cette main courante est la pièce centrale du retour d'expérience, et
+celle qu'un assureur, un client ou l'ANSSI demandent après.
+
+**Migration `041`**, table `main_courante`. Le critère de l'action est **négatif** :
+*« ajout seul comme le journal d'audit ; elle réutilise les quatre couches du §12, elle ne
+les réinvente pas »*. Une main courante qu'on peut relire à froid et corriger « pour que ce
+soit plus clair » est un document rédigé **après** — donc sans valeur probante.
+
+Ce qui est **réutilisé tel quel** : `f_interdit_modification()` (migration `001`), les
+quatre couches d'ajout seul, la discipline de chaînage par empreinte, et la règle du §17.8
+— *tout ce qui fait la valeur probante d'une trace vient du serveur, jamais de l'appelant*.
+
+Ce qui est **propre, et c'est une décision** : la chaîne est **par incident**. Ce qu'on
+produit en fin de crise est la main courante d'UNE crise ; une chaîne globale obligerait, pour
+prouver qu'il ne manque rien, à exporter les entrées de toutes les crises de la filiale — y
+compris celles qui ne regardent pas le destinataire.
+
+⚠️ **LE BANC A REFUSÉ LA PREMIÈRE RÉDACTION DANS L'HEURE, ET IL AVAIT RAISON.** Elle posait
+une clé étrangère composite vers `incidents`, en `restrict` — « supprimer un incident dont
+la main courante existe effacerait le récit de la crise ». Juste en soi, et **incompatible
+avec le reste** : l'ajout seul interdit de supprimer une entrée, si bien que
+`POST /api/reprise` en mode « remplacer » ne pouvait plus purger une filiale ayant connu une
+crise. **Restaurer une sauvegarde y devenait impossible, définitivement.** C'est la forme
+exacte du constat **Q-284**, où l'irréversibilité d'une décision d'approbation rendait toute
+suppression en cascade impossible.
+
+Le §12 portait la réponse depuis le premier jour, point 3 : *« aucune clé étrangère vers la
+cible — le journal doit survivre à la suppression de ce qu'il décrit »*. La main courante
+**désigne** l'incident, elle ne le référence pas. Le prix est une main courante qui peut
+devenir orpheline ; c'est le prix que le journal paie déjà, et c'est le bon. Un garde-fou
+refuse désormais qu'une telle clé réapparaisse, **avec le motif écrit dans son message**.
+
+⚠️ **ET UNE SECONDE LEÇON, D'ESSAI CETTE FOIS.** Le §4 de la famille exigeait d'un seul
+geste les DEUX anomalies que le §12 distingue — `empreinte_invalide` et `chainage_rompu`. Il
+a rougi : retoucher un texte sans toucher à l'empreinte ne rompt aucun chaînage, puisque
+l'empreinte stockée de l'entrée précédente n'a pas bougé. **L'essai affirmait une propriété
+que le mécanisme ne promet pas**, et la pente naturelle était de « corriger » le mécanisme
+pour qu'il la tienne. C'est le geste qu'on ne fait pas. Le §4 joue désormais les **deux
+adversaires** : celui qui retouche, et celui qui a lu le schéma et **recalcule l'empreinte**
+— trahi, lui, par l'entrée suivante.
+
+⚠️ **ET UNE TROISIÈME FOIS, DANS LA MÊME LIVRAISON.** La table portait une colonne
+`provenance`, comme toute table métier depuis la `032`. Or `purgerJeu()` — le jeu de
+découverte, L18 bis — balaie **toute table qui en porte une** et y fait un `delete`. Sur une
+table en ajout seul, ce `delete` est refusé **même quand il ne toucherait aucune ligne**,
+puisque le déclencheur est posé « for each statement » : c'est précisément ce que cette
+forme garantit. **La purge du jeu de découverte devenait impossible**, et sa cinquième
+condition constitutive tombait.
+
+Deux remèdes, l'un pour l'instance et l'autre pour la classe : la colonne n'est pas là — la
+provenance d'une entrée de main courante est dite par sa nature, comme pour le journal
+d'audit — et **`purgerJeu()` ne balaie plus que les tables où le rôle applicatif PEUT
+supprimer**, mesuré par `has_table_privilege`, jamais par une liste de noms. Une table en
+ajout seul créée demain sort du balayage toute seule, au lieu de le casser. Un garde-fou
+refuse par ailleurs que `provenance` réapparaisse sur celle-ci, **avec le motif écrit**.
+
+*Trois conflits entre un invariant d'ajout seul et un balayage qui supprime, dans une seule
+migration.* Ce n'est pas un défaut de conception : c'est ce que coûte une table qui refuse
+d'oublier, dans un produit qui sait purger. Les trois ont été trouvés par le banc, aucun par
+relecture.
+
+**Côté écran** : un encart sur la fiche de l'incident, parce qu'une crise EST un incident
+escaladé — la détection, les déclarations réglementaires (20.1) et le récit se lisent
+ensemble. **Aucun bouton « modifier » ni « supprimer »**, et un essai l'exige : un bouton
+qui mènerait à un refus technique apprendrait à l'utilisateur que le produit se contredit.
+L'heure ne se saisit pas non plus — elle vient du serveur, ce qui est précisément ce qui
+empêche d'antidater une décision.
+
+**Le bandeau « Chaîne intacte » est affiché en permanence**, pas seulement en cas de
+problème : un indicateur qui n'apparaît qu'au moment du défaut n'apprend à personne qu'il
+existe, et le jour où il parle, personne ne sait s'il est fiable. ⚠️ Et il dit ce qu'il **ne**
+prouve pas — l'administrateur de la base peut agir, le chaînage ne l'en empêche pas, il rend
+son passage **détectable**.
 
 ### 20.4 — la demande d'exercice de droits, et l'horloge d'un mois (16/09/2026)
 
