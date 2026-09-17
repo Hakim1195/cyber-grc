@@ -131,7 +131,10 @@ locale, L28 portail fournisseur — en dernier, seules surfaces externes).
 
 **Et le frontend**, en parallèle : voir §6.
 
-**L'indicateur** : `docs/COMPARATIF_MARCHE.md` — 86 fonctionnalités, **35 ✅ au 08/09**,
+**L'indicateur** : `docs/COMPARATIF_MARCHE.md` — 86 fonctionnalités, **44 ✅ · 12 🟡 ·
+30 ❌ au rejeu du 16/09** (35 ✅ au 08/09 ; ⚠️ **rejeu partiel — onze lignes remesurées,
+les soixante-quinze autres gardent leur verdict d'origine, et un rejeu intégral est dû à
+la clôture de la vague C**),
 cible **76**. Il se **rejoue**, il ne s'estime pas.
 
 ---

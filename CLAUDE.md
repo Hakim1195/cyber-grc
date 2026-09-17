@@ -32,7 +32,9 @@
 > le 08/09/2026** — jeu de découverte autorisé, IA locale par défaut avec externe encadré,
 > portail fournisseur validé) et
 > **[`docs/COMPARATIF_MARCHE.md`](docs/COMPARATIF_MARCHE.md)** (les 86 fonctionnalités de
-> l'état de l'art, mesurées dans le dépôt — **35 ✅ · 17 🟡 · 34 ❌ au 08/09/2026**).
+> l'état de l'art, mesurées dans le dépôt — **44 ✅ · 12 🟡 · 30 ❌ au 16/09/2026**,
+> rejoué à la clôture de la vague B ; ⚠️ **rejeu PARTIEL, et le document le dit** :
+> seules les onze lignes que les vagues A et B pouvaient déplacer ont été remesurées).
 > ⚠️ **Le §0 bis du `PLAN_PRODUIT.md` fait autorité sur l'ordonnancement** : aucun lot L17+
 > ne se joue avant que S7 et S8 soient franchies. Seul **L18 (installation)** y échappe, et
 > uniquement parce qu'il ne touche ni `src/`, ni le schéma.
@@ -199,16 +201,42 @@
 > documentation se fait en cherchant ce que le correctif du jour a rendu faux, pas en relisant
 > ce qu'on vient d'écrire.*
 >
-> **Le prochain geste : le 10ᵉ passage de la porte S8.**
+> ## ⚠️ LES PASSAGES DE PORTE SONT ARRÊTÉS — arbitrage utilisateur du 14/09/2026
+>
+> **Ce fichier disait ici « le prochain geste : le 10ᵉ passage de la porte S8 ». C'est
+> PÉRIMÉ, et le rectifier n'est pas un détail de forme** : un lecteur qui reprend le
+> chantier y consacrerait sa journée.
+>
+> L'utilisateur a tranché le 14/09/2026 : **on n'arrête plus pour rejouer une porte de
+> sécurité. On construit.** Les constats ouverts du `docs/PLAN_EXECUTION.md` §7 seront
+> traités **avec le retour de l'ultrareview**, pas avant — et l'ultrareview vient à la
+> FIN, sur le logiciel complet.
+>
+> Le plan qui fait autorité est désormais **[`docs/PLAN_ACHEVEMENT.md`](docs/PLAN_ACHEVEMENT.md)**
+> — six vagues, ordonnées par **ce qui SE VOIT**, sans porte entre elles —, et la
+> passation vit dans **[`docs/REPRISE.md`](docs/REPRISE.md)**. Les deux priment sur les
+> tables de travail ci-dessous, qui décrivent le chemin de mise en service tel qu'il
+> était conçu avant cet arbitrage.
+>
+> **⇒ Au 16/09/2026 : les vagues A et B sont CLOSES** (L17 partiellement, L18 bis, L19
+> entier, L20 sauf 20.2). Le geste suivant est la **vague C — L21 tiers et DORA, L24
+> campagnes descendantes**.
 >
 > ---
 >
-> **Mesuré à la révision `96324ed`, le 14/09/2026** : banc **1 932 essais, 1 932 passés** ;
+> **Mesuré à la révision `402f98c`, le 16/09/2026** : banc **2 076 essais, 2 076 passés** ;
 > `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 > `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** ; `f_verifier_schema()`
-> → 0 anomalie (**35 garde-fous, 31 migrations, 52 tables, 206 décisions** au registre
-> de l'article 30) ; publication → **81 fichiers identiques au dépôt** ;
+> → 0 anomalie (**45 garde-fous, 41 migrations, 61 tables, 329 décisions** au registre
+> de l'article 30) ; publication → **89 fichiers identiques au dépôt** ;
 > `install.sh --diagnostic` → **14 conformes, 1 réserve, 0 bloquant**.
+>
+> ⚠️ **CE BLOC A ÉTÉ FAUX TROIS FOIS, ET LE COMPTE EXACT VIT AILLEURS.** Il annonçait
+> successivement l'état du 08/09 puis celui du 14/09, pendant que le `backend/README.md` §8,
+> lui, disait le réel. Le §8 est **gardé mécaniquement** — sept grandeurs confrontées au
+> catalogue à chaque banc (`test/documentation/chiffres-du-schema.test.mjs`) ; ce bloc-ci ne
+> l'est pas, et **c'est pour cela qu'il vieillit**. *En cas de doute, c'est le §8 qui fait
+> foi* (constat **Q-219**).
 >
 > ⚠️ **Ce bloc annonçait `99ea754` — 1 794 essais, 107/107, 17 garde-fous, 20 migrations —
 > c'est-à-dire l'état du 08/09.** Onze migrations et dix-huit garde-fous plus tard, il
@@ -220,7 +248,8 @@
 >
 > 1. **Le produit a été comparé au marché**, avec des chiffres, pour la première fois.
 >    [`docs/COMPARATIF_MARCHE.md`](docs/COMPARATIF_MARCHE.md) — 86 fonctionnalités de
->    l'état de l'art GRC, chacune **mesurée dans le dépôt** : **35 ✅ · 17 🟡 · 34 ❌**.
+>    l'état de l'art GRC, chacune **mesurée dans le dépôt** : **35 ✅ · 17 🟡 · 34 ❌**
+>    à l'établissement, **44 ✅ · 12 🟡 · 30 ❌** au rejeu du 16/09/2026.
 >    [`docs/PLAN_PRODUIT.md`](docs/PLAN_PRODUIT.md) en tire **douze lots, L17 → L28**, sept
 >    portes neuves (S10 → S16) et **huit non-objectifs nommés un par un**. ⚠️ **Les trois
 >    arbitrages qui vous étaient réservés sont TRANCHÉS** (08/09/2026) : **A2** le jeu de
@@ -298,9 +327,16 @@
 > | **3** | Le reste des constats de **S7** (Q-254, Q-256 → Q-263, Q-268 → Q-278) | ⚠️ **Deux se ferment ENSEMBLE avec un constat plus ancien** : **Q-272** promet dans le guide la propriété que **Q-243** dit absente — la troncature de queue du journal. Corriger un seul des deux endroits laisserait le produit se contredire |
 > | **3** | Les constats ouverts : **Q-243, Q-247, Q-234 → Q-244, Q-205 b, Q-206, Q-214 b·c·d·f** | Registre au `docs/PLAN_EXECUTION.md` §7, **seule source** |
 >
-> **Après les portes seulement** : L16-D3 (la recherche), **L18 bis** (le jeu de
-> découverte, autorisé le 08/09 sous cinq conditions constitutives), **L17**, puis
-> L19 → L26.
+> ⚠️ **CE PARAGRAPHE EST PÉRIMÉ — voir l'arbitrage du 14/09/2026 en tête de fichier.** Il
+> disait : *« après les portes seulement : L16-D3 (la recherche), L18 bis (le jeu de
+> découverte), L17, puis L19 → L26 »*. Les portes ne commandent plus l'ordre : **L18 bis,
+> L17 (partiellement), L19 et L20 ont été joués** les 14, 15 et 16/09, et l'ultrareview
+> vient à la fin. **L16-D3 reste dû** — une recherche documentaire est un *oracle*, et
+> c'est la surface la plus propice à une fuite entre filiales ; c'est la seule raison pour
+> laquelle elle attend encore, et elle n'a plus rien à voir avec une porte.
+>
+> Le chemin qui fait autorité est celui du **`docs/PLAN_ACHEVEMENT.md`** : vagues A et B
+> closes, **vague C** (L21 tiers et DORA, L24 campagnes) ensuite.
 >
 > ---
 >
@@ -632,10 +668,15 @@ cyber-gouvernance_V4/
 > pour que `data` garde la forme décrite ici et qu'un module qui reconstruit un objet ne
 > puisse pas perdre la version au passage (`docs/DATA_MODEL.md` §1.4).
 
-- `SCHEMA_VERSION = 12` dans `datastore.js` — elle numérote la forme de `data` et du fichier
+- `SCHEMA_VERSION = 18` dans `datastore.js` — elle numérote la forme de `data` et du fichier
   `grc-backup`, pas les migrations SQL. Migrations à l'import via `migratePayload` côté
-  navigateur, et **paliers v1 → v12 rejoués côté serveur** (`backend/src/reprise/`).
-- Entités (tableaux) : clients, exigences, actions, risques, actifs, processus, crise,
+  navigateur, et **paliers v1 → v18 rejoués côté serveur** (`backend/src/reprise/`).
+  ⚠️ **Elle est écrite à QUATRE endroits** — `js/core/datastore.js`, `src/entites/index.ts`,
+  `src/reprise/index.ts` et `docs/DATA_MODEL.md` — et un garde-fou les confronte
+  (`test/reprise/versions-concordantes.test.mjs`) : le document y est entré le 16/09 parce
+  qu'il avait annoncé « v12 » pendant quatre montées de version.
+- Entités (tableaux) — **vingt-six depuis la v18**, et le détail fait foi dans
+  `docs/DATA_MODEL.md` §1.5, jamais ici : clients, exigences, actions, risques, actifs, processus, crise,
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
   **evaluations** (auto-évaluations de référentiels), **mesures** (pivot « Mesure de sécurité »),
   **incidents** (registre des incidents), **documents** (registre des politiques),
@@ -644,6 +685,11 @@ cyber-gouvernance_V4/
   **history** (v8, indicateurs historisés — un point par jour pour les courbes de tendance)
   et **personnes** (v11, annuaire — autocomplétion des champs « Responsable » ; le nom reste stocké en
   texte dans les entités, saisie libre conservée).
+  **Depuis, cinq collections de plus** : `risque_catalogue` et `referentiels_actifs` (v13),
+  `derogations` (v14), `analyses_impact` (v17) et `demandes_droits` (v18). ⚠️ **Ni la main
+  courante de crise, ni les pièces jointes, ni le journal d'audit n'en font partie** : ce
+  sont des registres que l'application détient à part, et les faire voyager dans un fichier
+  éditable leur ôterait leur valeur probante.
   Les **actifs** portent en plus un champ **`dependances[]`** (v9, liens typés actif→actif :
   `dep`/`hosted`/`flux`/`backup` — module Cartographie & analyse d'impact).
   Les **`mco_actions`** suivent (v10) un modèle de **suivi d'action planifiée** :
@@ -1043,7 +1089,9 @@ sur l'**Active Directory** du groupe.
 | **L17 — Prise en main** | ⬜ **planifié** (`docs/PLAN_PRODUIT.md`) — recherche globale, palette `Ctrl+K`, écran de démarrage par rôle, regroupement du menu, Kanban. ⚠️ **Pas avant S7 et S8** : il ouvre de la surface neuve |
 | **L18 — Installation en une commande** | ✅ **livré — 18.7 excepté.** `--assistant` (six questions, profil découverte, compte de secours dont l'empreinte est calculée par `dist/auth/secours.js`), `--diagnostic` (**quatorze** sujets, code 0/1/2, ne modifie rien — douze à l'origine, quatorze depuis Q-290), `docs/INSTALLER.md` (cinq commandes), **et le bandeau 18.2 b le 09/09/2026** — permanent, non masquable, imprimé avec les fiches. ⚠️ Les six premiers sous-lots ne touchaient **ni `src/` ni le schéma** — c'est ce qui les a autorisés avant les portes ; **18.2 b, lui, touche `src/` et la SPA : à déclarer au 7ᵉ passage de S8**. Reste **18.7** (assistant de premier démarrage), après les portes |
 | **L18 bis — Jeu de découverte** | ⬜ **autorisé le 08/09/2026** sous **cinq conditions constitutives** (marque **dans la donnée**, geste volontaire, refus si données réelles, purge par le déclencheur `017`, interdit hors découverte). Il écrit en base : **après les portes** |
-| **L19 → L26** | ⬜ **planifiés** (`docs/PLAN_PRODUIT.md`) — preuve et attestation, réglementaire opérationnel, tiers et DORA, ouverture technique, collecte automatique et CCM, campagnes descendantes, EBIOS RM, catalogues ouverts |
+| **L19 — Chaîne de preuve** | ✅ **LIVRÉ EN ENTIER** les 15 et 16/09/2026 — attestation de lecture (`033`), dérogations datées (`035`), lien document ↔ contrôle (`036`), contrôle périodique et efficacité (`037`), **réutilisation d'une preuve** (`038`). ⚠️ Chacune porte son écran ET son garde-fou : *une capacité qu'aucun écran n'appelle est une capacité absente* (`docs/REPRISE.md` §4) |
+| **L20 — Réglementaire opérationnel** | ✅ **LIVRÉ**, 20.2 exceptée — horloge NIS2/RGPD (`034`), AIPD (`039`), demandes d'exercice de droits (`040`), main courante de crise en ajout seul (`041`). ⚠️ **Reste 20.2** : la génération des formulaires ANSSI et CNIL. Le produit NE TRANSMET RIEN à une autorité — il prépare, l'humain envoie |
+| **L21 → L26** | ⬜ **planifiés** (`docs/PLAN_PRODUIT.md`) — tiers et DORA, ouverture technique, collecte automatique et CCM, campagnes descendantes, EBIOS RM, catalogues ouverts |
 | **L27 — Assistance IA** | ⬜ **arbitré le 08/09/2026 (A1)** — modèle **local par défaut** ; un fournisseur **externe de confiance** reste possible sous **six barrières**, dont l'avertissement n'est que la sixième. ⚠️ La première est que `IPAddressDeny=any` **ferme la sortie réseau** tant que l'exploitant ne l'ouvre pas à la main : *une barrière physique, pas une promesse*. Activation **par filiale**, jamais pour le groupe entier. L'IA **propose**, un humain **décide** — aucun des cinq usages n'écrit sans validation. Porte **S16** |
 | **L28 — Portail fournisseur** | ⬜ **validé le 08/09/2026 (A3)** — accès par lien signé daté et révocable, **sans compte** ; dépôt de preuve par la chaîne L6 **sans variante simplifiée** ; vhost et limiteur propres ; attestation rendue au fournisseur. ⚠️ **Premier composant du produit exposé hors VPN** : il ne se joue **ni avant S8, ni avec un autre lot**, et sa porte **S15 est la plus exigeante du plan** — *en cas de doute, on ne livre pas*. L'export/réimport de L21.2 **reste la voie de repli permanente** |
 

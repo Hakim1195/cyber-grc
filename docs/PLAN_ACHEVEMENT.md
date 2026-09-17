@@ -101,5 +101,11 @@ humain **décide**. Le portail est le premier composant hors VPN.
 
 ## 4. L'indicateur
 
-`docs/COMPARATIF_MARCHE.md` — **86 fonctionnalités, 35 ✅ au 08/09/2026**, cible **76 ✅**.
-Il se rejoue à la clôture de chaque vague ; il ne s'estime pas.
+`docs/COMPARATIF_MARCHE.md` — **86 fonctionnalités**. **35 ✅ à l'établissement du
+08/09/2026 ; 44 ✅ · 12 🟡 · 30 ❌ au rejeu du 16/09/2026**, clôture de la vague B. Cible
+**76 ✅**. Il se rejoue à la clôture de chaque vague ; il ne s'estime pas.
+
+⚠️ **Le rejeu du 16/09 est PARTIEL, et le document le dit** : seules les onze lignes que
+les vagues A et B pouvaient déplacer ont été remesurées ; les soixante-quinze autres
+gardent leur verdict du 08/09. **Un rejeu intégral est dû à la clôture de la vague C.**
+*Un indicateur qui tairait sa propre incomplétude serait pire qu'un indicateur en retard.*

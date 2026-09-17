@@ -144,6 +144,22 @@ describe('Q-222 — les nombres du schéma disent le catalogue', () => {
         annonces(/\*\*(\d[\d\s]*) contrôles consignés\*\*/u, 'N contrôles consignés'),
         await compter(`select count(*)::int as n from controles_schema`),
       ],
+      // ── ⚠️ DEUX MESURES AJOUTÉES LE 16/09/2026, ET LES DEUX ÉTAIENT FAUSSES ──
+      //
+      // L'utilisateur a demandé « les docs sont à jour ? ». Le contrôle mécanique
+      // rendait **87/87** — et le §8 annonçait, sur UNE SEULE LIGNE, « 331
+      // décisions » pour 329 et « 86 fichiers » pour 89. Les deux chiffres
+      // n'étaient surveillés par PERSONNE : ce contrôle couvrait le schéma, pas
+      // le registre de l'article 30 ni la publication.
+      //
+      // ⚠️ **L'un des deux avait été écrit deux heures plus tôt, par moi, sans
+      // être mesuré.** C'est la forme la plus discrète du constat Q-219 : un
+      // chiffre qu'aucun garde ne regarde vieillit au rythme où on l'écrit.
+      [
+        "décisions au registre de l'article 30",
+        annonces(/\*\*(\d[\d\s]*) décisions\*\*/u, 'N décisions'),
+        await compter(`select count(*)::int as n from colonnes_personnelles`),
+      ],
     ];
 
     const faux = mesures

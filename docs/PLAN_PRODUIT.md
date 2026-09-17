@@ -275,7 +275,21 @@ chemins de cascade.
 
 ---
 
-### L19 — La chaîne de preuve : attester, déroger, relier 🟠
+### L19 — La chaîne de preuve : attester, déroger, relier ✅
+
+> ## ✅ LOT LIVRÉ EN ENTIER — les 15 et 16/09/2026
+>
+> **Les six actions sont livrées, déployées et vérifiées dans un vrai navigateur sur la
+> recette.** Migrations `033`, `035`, `036`, `037` et `038`.
+>
+> ⚠️ **Ce que ce lot a enseigné, au-delà de son contenu** : trois de ses actions ont
+> d'abord été livrées **côté serveur, sans qu'aucun écran ne les appelle** — le drapeau
+> `documents.attestation_requise` n'était même posable par aucun formulaire. La règle est
+> inscrite au `docs/REPRISE.md` §4 : *une capacité qu'aucun écran n'appelle est une
+> capacité absente.* Chaque action porte désormais son écran ET son garde-fou.
+>
+> **Les six lignes du comparatif sont comblées** — #16, #18, #19, #22, #27, #29 — et le
+> rejeu du 16/09 les a **remesurées dans le dépôt**, pas lues dans ce plan.
 
 **Pourquoi.** Le pivot « Mesure de sécurité » est le meilleur atout fonctionnel du produit,
 et la chaîne qui va de la politique à la preuve s'interrompt trois fois : un document n'est
@@ -284,29 +298,51 @@ porteur ; et rien n'atteste qu'une politique a été lue.
 
 | Réf | Action | Critère d'acceptation |
 |---|---|---|
-| **19.1** | **Attestation de lecture d'une politique** — un document en vigueur peut exiger une attestation ; l'écran de démarrage la réclame ; le taux de couverture est un indicateur | Preuve d'audit **ISO 27001 A.5.1**. Table neuve avec `filiale_id`, RLS **activée et forcée**, unicité **composite** `(document_id, personne_id, filiale_id)`. Action `attestation` au journal |
-| **19.2** | **Dérogations datées** — propriétaire, motif, échéance, approbation par le circuit L8 existant. Une dérogation échue **redevient une non-conformité**, sans intervention | L'échéance est **dérivée**, jamais recopiée : le calcul vit à un seul endroit, comme `PraMcoModule.isEnRetard` |
-| **19.3** | **Lien document ↔ mesure** — la table `document_referentiels` relie au référentiel ; il manque le lien au pivot | La fiche Mesure affiche ses politiques ; la fiche Document affiche ses mesures. Clé étrangère **composite** |
-| **19.4** | **Réutilisation d'une preuve** — une pièce jointe peut servir N contrôles sans être déposée N fois | ⚠️ **Le point dur** : le déclencheur `f_pieces_suivent_leur_porteur()` (migration `017`) supprime une pièce avec son porteur. Un partage naïf ferait disparaître une preuve encore utilisée ailleurs — **la suppression du dernier rattachement seule libère le fichier**, et l'essai le vérifie sur les six chemins de cascade, découverts dans `pg_constraint` |
-| **19.5** | **Contrôles périodiques sur les mesures** — fréquence, prochaine échéance, preuve d'exécution, relance par L12 | Le modèle de `mco_actions` est **réutilisé, pas recopié** |
-| **19.6** | **Efficacité distincte de la maturité** — deux dimensions, deux colonnes | La moyenne CMMI du tableau de bord n'est pas modifiée par cette addition |
+| **19.1** ✅ | **Attestation de lecture d'une politique** — un document en vigueur peut exiger une attestation ; l'écran de démarrage la réclame ; le taux de couverture est un indicateur | Preuve d'audit **ISO 27001 A.5.1**. Table neuve avec `filiale_id`, RLS **activée et forcée**, unicité **composite** `(document_id, personne_id, filiale_id)`. Action `attestation` au journal |
+| **19.2** ✅ | **Dérogations datées** — propriétaire, motif, échéance, approbation par le circuit L8 existant. Une dérogation échue **redevient une non-conformité**, sans intervention | L'échéance est **dérivée**, jamais recopiée : le calcul vit à un seul endroit, comme `PraMcoModule.isEnRetard` |
+| **19.3** ✅ | **Lien document ↔ mesure** — la table `document_referentiels` relie au référentiel ; il manque le lien au pivot | La fiche Mesure affiche ses politiques ; la fiche Document affiche ses mesures. Clé étrangère **composite** |
+| **19.4** ✅ | **Réutilisation d'une preuve** — une pièce jointe peut servir N contrôles sans être déposée N fois | ⚠️ **Le point dur** : le déclencheur `f_pieces_suivent_leur_porteur()` (migration `017`) supprime une pièce avec son porteur. Un partage naïf ferait disparaître une preuve encore utilisée ailleurs — **la suppression du dernier rattachement seule libère le fichier**, et l'essai le vérifie sur les six chemins de cascade, découverts dans `pg_constraint` |
+| **19.5** ✅ | **Contrôles périodiques sur les mesures** — fréquence, prochaine échéance, preuve d'exécution, relance par L12 | Le modèle de `mco_actions` est **réutilisé, pas recopié** |
+| **19.6** ✅ | **Efficacité distincte de la maturité** — deux dimensions, deux colonnes | La moyenne CMMI du tableau de bord n'est pas modifiée par cette addition |
 
 **Lignes comblées** : #16 · #18 · #19 · #22 · #27 · #29.
 
 ---
 
-### L20 — Conformité réglementaire opérationnelle 🟠
+### L20 — Conformité réglementaire opérationnelle 🟡
+
+> ## ✅ QUATRE ACTIONS SUR CINQ LIVRÉES — 20.2 RESTE DUE
+>
+> Livrées les 15 et 16/09/2026 : **20.1** l'horloge NIS2/RGPD (`034`), **20.3** l'AIPD
+> (`039`), **20.4** les demandes d'exercice de droits (`040`), **20.5** la main courante de
+> crise en ajout seul (`041`). Toutes déployées et vérifiées au navigateur.
+>
+> ⚠️ **Reste 20.2 — la génération des formulaires ANSSI et CNIL.** Elle n'a pas été jouée,
+> et son critère est celui qui compte : *le produit NE TRANSMET RIEN à une autorité ; il
+> prépare, l'humain envoie.* C'est l'arbitrage que 20.3 et 20.4 ont repris mot pour mot.
+>
+> ⚠️ **Le fil conducteur des quatre actions livrées est UNE seule idée** : *une échéance
+> réglementaire ne se stocke pas, elle se dérive.* 20.1 l'a posée, 20.3 et 20.4 l'ont
+> reprise sans la réinventer. Une échéance rangée en colonne resterait calculée sur
+> l'ancienne date le jour où la date d'origine est corrigée — sans que personne le sache,
+> dans le domaine où le silence coûte le plus cher.
+>
+> **Lignes comblées, remesurées le 16/09** : #41 et #43 passent à ✅, #77 aussi. ⚠️ **#78
+> reste PARTIELLE alors qu'elle aurait pu passer** : le DSAR est livré, mais *les
+> consentements sont absents* — ni recueil, ni preuve, ni retrait tracé. Compter une
+> couverture qui n'existe pas rendrait l'indicateur inutile. Et **#42 reste ❌** : c'est
+> 20.2.
 
 **Pourquoi.** Le produit sait dire qu'un incident est « à déclarer ». Il ne sait pas
 **quand**, ni **avec quoi**. NIS2 impose trois paliers ; le produit n'en arme aucun.
 
 | Réf | Action | Critère d'acceptation |
 |---|---|---|
-| **20.1** | **Horloge réglementaire à trois paliers NIS2** — alerte précoce **24 h**, notification **72 h**, rapport final **1 mois** ; plus le **72 h** RGPD | Les trois paliers apparaissent dans l'échéancier existant, avec leur reste-à-courir. ⚠️ Le calcul part de la **date de détection**, et l'écran dit **laquelle** — une horloge dont on ignore l'origine ne se défend pas devant l'ANSSI |
+| **20.1** ✅ | **Horloge réglementaire à trois paliers NIS2** — alerte précoce **24 h**, notification **72 h**, rapport final **1 mois** ; plus le **72 h** RGPD | Les trois paliers apparaissent dans l'échéancier existant, avec leur reste-à-courir. ⚠️ Le calcul part de la **date de détection**, et l'écran dit **laquelle** — une horloge dont on ignore l'origine ne se défend pas devant l'ANSSI |
 | **20.2** | **Génération des formulaires de notification** — ANSSI et CNIL pré-remplis depuis la fiche incident, en PDF, à relire et à envoyer par l'exploitant | ⚠️ **Le produit ne transmet rien à une autorité.** Il prépare ; l'humain envoie. Toute autre lecture serait une prise de responsabilité que le logiciel ne peut pas porter |
-| **20.3** | **AIPD / PIA** — analyse d'impact RGPD reliée au traitement et aux mesures du pivot | Le registre art. 30 existant n'est pas dupliqué : l'AIPD **pointe** le traitement |
-| **20.4** | **Demandes d'exercice de droits (DSAR)** — registre, délai d'un mois armé, traçabilité | Le délai emprunte le même mécanisme que 20.1 |
-| **20.5** | **Main courante de crise** — horodatée, en ajout seul, exportable en fin de crise | ⚠️ **Ajout seul comme le journal d'audit** : une main courante rééditable ne prouve rien. Elle réutilise les quatre couches du §12 des conventions, elle ne les réinvente pas |
+| **20.3** ✅ | **AIPD / PIA** — analyse d'impact RGPD reliée au traitement et aux mesures du pivot | Le registre art. 30 existant n'est pas dupliqué : l'AIPD **pointe** le traitement |
+| **20.4** ✅ | **Demandes d'exercice de droits (DSAR)** — registre, délai d'un mois armé, traçabilité | Le délai emprunte le même mécanisme que 20.1 |
+| **20.5** ✅ | **Main courante de crise** — horodatée, en ajout seul, exportable en fin de crise | ⚠️ **Ajout seul comme le journal d'audit** : une main courante rééditable ne prouve rien. Elle réutilise les quatre couches du §12 des conventions, elle ne les réinvente pas |
 
 **Lignes comblées** : #41 · #42 · #43 · #77 · #78.
 

@@ -10,7 +10,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 16/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2076 essais, 2076 passés, 0 échec** à la révision `8aa1c2d`,
+> **2078 essais, 2078 passés, 0 échec** à la révision `RÉVISION`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
 > échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**45 garde-fous consignés**,
@@ -45,6 +45,56 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### « Les docs sont à jour ? » — la deuxième fois, et deux chiffres que personne ne gardait (16/09/2026)
+
+**Le contrôle mécanique rendait 87/87.** Il ne couvre pas la prose, et la prose portait
+**huit fautes** — dont deux chiffres qu'**aucun garde-fou ne regardait**, et dont l'un avait
+été écrit deux heures plus tôt, par moi, sans être mesuré.
+
+| Ce qui était faux | Le réel | Où |
+|---|---|---|
+| « **331 décisions** au registre » | **329** | `backend/README.md` §8 |
+| « publication → **86 fichiers** » | **89** | `backend/README.md` §8, même ligne |
+| « **L19 → L26** ⬜ planifiés » | **L19 entier, L20 sauf 20.2** | `CLAUDE.md` §8 |
+| « le prochain geste : le **10ᵉ passage de la porte S8** » | les passages sont **arrêtés** depuis le 14/09 | `CLAUDE.md` |
+| « 35 garde-fous, 31 migrations, 52 tables, 206 décisions » | 45 · 41 · 61 · 329 | `CLAUDE.md`, bloc « mesuré » |
+| « `SCHEMA_VERSION = 12` », 21 entités | **18**, 26 collections | `CLAUDE.md` §4 |
+| l'indicateur à « 35 ✅ » | **44 ✅ · 12 🟡 · 30 ❌** | `PLAN_ACHEVEMENT`, `REPRISE`, `PLAN_EXECUTION` |
+| « **206 colonnes décidées** » | **329** | `GUIDE_EXPLOITATION.md` |
+
+⚠️ **LA PLUS GRAVE N'EST PAS UN CHIFFRE.** `CLAUDE.md` annonçait *« L19 → L26 : planifiés »*
+et *« le prochain geste : le 10ᵉ passage de la porte S8 »*. Un lecteur qui reprend le
+chantier sur ce fichier aurait refait 19.1 à 20.5, ou consacré sa journée à une porte que
+l'utilisateur a arrêtée le 14/09. **Une phrase périmée coûte plus cher qu'un chiffre
+périmé** : le chiffre se vérifie en une commande, la phrase se croit.
+
+⚠️ **ET LE MOTIF DES DEUX CHIFFRES, QUI EST LE CŒUR DE CETTE PASSE.** Le garde
+`chiffres-du-schema` couvre sept grandeurs — tables, politiques, migrations, clés,
+déclencheurs, contrôles, traçabilité. Il ne couvrait **ni le registre de l'article 30, ni le
+compte de fichiers publiés**. Ces deux-là vieillissaient donc **au rythme où on les
+écrivait**, et c'est la forme la plus discrète du constat **Q-219** : *un chiffre qu'aucun
+garde ne regarde n'est pas un chiffre mesuré, c'est un chiffre souvenu.*
+
+Les deux entrent dans le dispositif :
+
+- le **registre de l'article 30** rejoint les sept grandeurs de `chiffres-du-schema` ;
+- **`test/documentation/fichiers-publies.test.mjs`** confronte le compte annoncé au dépôt,
+  en **lisant la liste des types publiables dans `deploy/install.sh`** — jamais en la
+  recopiant : c'est la règle du constat **Q-31**, celle qui fait que la liste blanche de
+  l'installateur et le `<FilesMatch>` du vhost vont par paire.
+
+⚠️ **Le second garde a lui-même accusé à tort à sa première rédaction**, et la leçon vaut :
+son motif exigeait une espace entre le chiffre et le mot « fichiers », alors que le §8 est
+**enrobé à 90 colonnes** et que le saut de ligne tombe précisément là. Il rendait « ce
+contrôle n'a plus de sujet » sur un document parfaitement lisible. *Un contrôle qui accuse à
+tort finit désarmé* — c'est pour cela qu'il est corrigé et que le motif est écrit dans le
+fichier.
+
+ℹ️ **Le guide d'exploitation portait « 206 colonnes décidées » depuis six jours** — dans le
+document que l'exploitant lit, et c'est exactement la faute que le constat **Q-331** avait
+fermée ailleurs le 14/09. Elle n'a pas été refaite : elle n'avait simplement jamais été
+suivie. Le garde neuf la suit désormais.
 
 ### La vague B est close — l'indicateur REJOUÉ, pas estimé (16/09/2026)
 

@@ -891,7 +891,8 @@ notifications (L12).
 
 > **Décidé le 08/09/2026.** Le produit a été comparé au marché avec des chiffres pour la
 > première fois : [`COMPARATIF_MARCHE.md`](COMPARATIF_MARCHE.md) (86 fonctionnalités,
-> **35 ✅ · 17 🟡 · 34 ❌**, chacune mesurée dans le dépôt) et
+> **35 ✅ · 17 🟡 · 34 ❌** à l'établissement, **44 ✅ · 12 🟡 · 30 ❌** au rejeu du
+> 16/09/2026 — chacune mesurée dans le dépôt) et
 > [`PLAN_PRODUIT.md`](PLAN_PRODUIT.md), qui en tire **douze lots L17 → L28** et **sept portes
 > S10 → S16**. Ses trois arbitrages ont été **tranchés le 08/09/2026** : jeu de découverte
 > autorisé sous cinq conditions (**L18 bis**), IA **locale par défaut** avec fournisseur
