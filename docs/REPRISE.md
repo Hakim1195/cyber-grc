@@ -64,6 +64,8 @@ les 19 qui lancent Chromium prennent **520 s** et doivent rester **en série**.
 | **Architecture des sections** (16/09) | **Sept** sections, **28** entrées : quatre vues redondantes deviennent des **onglets** (matrice, socle, référentiels applicables, couverture croisée), et la couverture — qui n'avait AUCUNE porte — en gagne une. Le fil d'Ariane déduit sa section du menu. `docs/PLAN_INTERFACE.md` |
 | **Lien document ↔ mesure** (L19, 19.3) | « Montrez-moi la procédure » : le chaînon qui manquait entre la gouvernance et la preuve. Migration `036`, schéma **v15** |
 | **Contrôle périodique et efficacité** (L19, 19.5 / 19.6) | Un contrôle se rejoue (fréquence, dernier passage, **échéance dérivée**) et son efficacité se constate **séparément de sa maturité**. Migration `037`, schéma **v16** |
+| **Main courante de crise** (L20, 20.5) | **En ajout seul**, quatre couches du §12 réutilisées, chaîne **par incident** — ce qu'on produit en fin de crise est la main courante d'UNE crise. Aucun bouton « modifier » ni « supprimer », et un essai l'exige. Migration `041` |
+| **Demandes d'exercice de droits** (L20, 20.4) | RGPD art. 15 à 22. L'échéance d'un mois se **dérive** de la réception ; un refus non motivé, une prorogation non notifiée et une réponse sans date sont **refusés par le schéma**. Migration `040`, schéma **v18** |
 | **Analyse d'impact RGPD** (L20, 20.3) | Article 35. Elle **POINTE** le registre de l'article 30 au lieu de le recopier, son état se **dérive** de la date de revue, et le produit rend une **présomption** — jamais une décision : deux des trois cas de l'article 35 §3 ne sont pas mesurables avec ce que le registre porte. Migration `039`, schéma **v17** |
 | **Réutilisation d'une preuve** (L19, 19.4) | Une procédure déposée **une fois** prouve cinq contrôles : une empreinte, un quota, une chose à mettre à jour. Le fichier n'est libéré qu'au **dernier** détachement, et l'écran dit « Détacher » tant qu'il reste un porteur. Migration `038` — schéma `data` **inchangé**, les pièces ne font pas partie de l'instantané |
 | **Recherche globale + `Ctrl+K`** (L17, A3) | Cloisonnée par la RLS, bornée par les droits, budget de trace partagé avec le sondage |
@@ -106,8 +108,22 @@ modules du produit.
   validée dont la revue est échue redevient « à revoir » toute seule. Et le produit
   **refuse de décider** qu'une AIPD est requise — il rend une PRÉSOMPTION sur le seul des
   trois cas de l'article 35 §3 que le registre permette de mesurer, sans filtrer la liste ;
-- **20.4** demandes d'exercice de droits ; **20.5** main courante de crise
-  (**en ajout seul**, comme le journal — elle réutilise les quatre couches du §12).
+- ~~**20.4** demandes d'exercice de droits~~ — ✅ **livré le 16/09** (migration `040`,
+  schéma **v18**). L'échéance d'un mois de l'article 12 §3 se **dérive** de la date de
+  réception — le mécanisme de 20.1, repris et non réinventé — et **trois règles du texte
+  sont posées dans le schéma** : un refus se motive ET se date (art. 12 §4), une
+  prorogation se **notifie**, une réponse est datée ;
+- ~~**20.5** main courante de crise~~ — ✅ **livré le 16/09** (migration `041`), **en ajout
+  seul**, par les quatre couches du §12 **réutilisées**. ⚠️ **Trois conflits entre cet
+  invariant et un balayage qui supprime, dans une seule migration** — la clé étrangère vers
+  `incidents` (qui rendait la reprise « remplacer » impossible, classe **Q-284**), la
+  colonne `provenance` (qui rendait la purge du jeu de découverte impossible), et l'essai
+  lui-même, qui affirmait une propriété que le mécanisme ne promet pas. **Les trois trouvés
+  par le banc, aucun par relecture.**
+
+**⇒ LA VAGUE B EST CLOSE.** Les lots **L19 et L20 sont entiers**. Le `docs/PLAN_ACHEVEMENT.md`
+§4 impose de rejouer l'indicateur à la clôture d'une vague : *« il se rejoue, il ne s'estime
+pas »*.
 
 **Puis** : vague C (L21 tiers et DORA, L24 campagnes), vague D (L25 EBIOS RM, L26 catalogues
 ouverts), vague E (L22 ouverture technique, L23 collecte automatique), vague F (L27 IA

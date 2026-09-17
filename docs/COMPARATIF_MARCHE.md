@@ -1,6 +1,7 @@
 # Comparatif marché — les 86 fonctionnalités de l'état de l'art GRC
 
-> **Établi le 08/09/2026.** C'est l'**instrument de mesure** du
+> **Établi le 08/09/2026, rejoué le 16/09/2026** à la clôture de la vague B. C'est
+> l'**instrument de mesure** du
 > [`PLAN_PRODUIT.md`](PLAN_PRODUIT.md) : la grille se rejoue après chaque porte, et le
 > chiffre s'inscrit. Elle ne se recopie pas de mémoire (constat **Q-219**).
 >
@@ -18,14 +19,38 @@
 >    (`FAIR` → « faire », `LEI` → « client »). Chaque verdict ❌ de cette grille a été
 >    vérifié sur les occurrences réelles, pas sur un compte de fichiers.
 
-**Verdict global au 08/09/2026 : 35 ✅ · 17 🟡 · 34 ❌** — soit ~51 % en pondérant les
+**Verdict global au 16/09/2026 : 44 ✅ · 12 🟡 · 30 ❌** — soit ~58 % en pondérant les
 partiels à moitié. **Cible du `PLAN_PRODUIT.md` une fois les douze lots joués : 76 ✅ · 2 🟡
 · 8 ❌**, les huit restantes étant des non-objectifs nommés un par un (§9 du plan).
 
-⚠️ **Ce chiffre brut est trompeur, et c'est le point central.** Les 34 absences ne sont
+> ### ▶ Rejeu du 16/09/2026 — clôture de la vague B
+>
+> **35 ✅ · 17 🟡 · 34 ❌ au 08/09 → 44 ✅ · 12 🟡 · 30 ❌.** Le chiffre est **recompté sur
+> la grille**, ligne par ligne, jamais additionné de tête : c'est le constat **Q-219**
+> appliqué à l'indicateur qui sert à mesurer le reste.
+>
+> **Onze lignes ont bougé, et chacune a été REMESURÉE dans le dépôt** — schéma, routes,
+> écrans — et non lue dans le journal des livraisons :
+>
+> | | Ligne | Ce qui l'a fait bouger |
+> |---|---|---|
+> | ❌ → ✅ | **18** dérogations datées, **27** attestation de lecture | L19, actions 19.2 et 19.1 |
+> | 🟡 → ✅ | **16** contrôles périodiques, **19** maturité ≠ efficacité | L19, actions 19.5 et 19.6 |
+> | 🟡 → ✅ | **22** réutilisation d'une preuve, **29** politique ↔ contrôle | L19, actions 19.4 et 19.3 |
+> | 🟡 → ✅ | **41** délais réglementaires, **43** main courante, **77** AIPD | L20, actions 20.1, 20.5 et 20.3 |
+> | ❌ → 🟡 | **30** recherche, **71** palette | L17, action A3 — la palette est là, l'index plein texte non |
+> | 🟡 → 🟡 | **78** DSAR | 20.4 livrée ; **les consentements restent absents**, et la ligne le dit |
+>
+> ⚠️ **Ce rejeu n'est PAS complet, et le dire fait partie de la mesure.** Seules les lignes
+> que les vagues A et B pouvaient déplacer ont été remesurées. Les **soixante-quinze
+> autres gardent leur verdict du 08/09** — elles n'ont pas été revérifiées, et une d'elles
+> pourrait avoir bougé sans qu'on le sache. Un rejeu intégral est dû à la clôture de la
+> vague C.
+
+⚠️ **Ce chiffre brut est trompeur, et c'est le point central.** Les 30 absences ne sont
 pas réparties : **19 d'entre elles tiennent dans quatre blocs entiers** (D intégrations,
 F tiers, J vulnérabilités, N intelligence artificielle). Hors ces quatre domaines, la
-couverture est de **~70 %**, avec un niveau d'exigence technique qui dépasse le marché sur
+couverture est de **~76 %**, avec un niveau d'exigence technique qui dépasse le marché sur
 plusieurs points (§2).
 
 ---
@@ -65,10 +90,10 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
 | 15 | **Bibliothèque de contrôles unique** | ✅✅ | Pivot « Mesure », scindé `mesure_catalogue` (Groupe) / `mesure_mise_en_oeuvre` (Filiale), n-n vers les exigences. **Séparation plus propre que la plupart des produits** | — |
-| 16 | Contrôles périodiques planifiés | 🟡 | `mco_actions` porte fréquence et dates, mais c'est le MCO du PRA — pas un contrôle périodique sur les mesures | L19.5 |
+| 16 | Contrôles périodiques planifiés | ✅ | `mesure_mise_en_oeuvre` porte `frequence_controle` et `dernier_controle` (migration `037`) ; **l'échéance se DÉRIVE** — `f_prochain_controle()`, cinq rythmes éprouvés sur date témoin. Un contrôle jamais joué rend NULL plutôt qu'une échéance inventée | — |
 | 17 | **Continuous Control Monitoring** | ❌ | Aucun test automatisé, aucune donnée système. **Fracture n°1 du marché 2026** | **L23** |
-| 18 | Exceptions / dérogations datées | ❌ | `non applicable` existe ; la dérogation avec propriétaire, motif et expiration n'existe pas | L19.2 |
-| 19 | Maturité et efficacité distinctes | 🟡 | Maturité 0–5 ✅, statut ✅ ; l'efficacité n'est pas une dimension séparée | L19.6 |
+| 18 | Exceptions / dérogations datées | ✅ | Table `derogations` (migration `035`) : propriétaire, motif, compensation, **échéance**, et approbation par le circuit L8. ⚠️ **L'état se DÉRIVE** (`f_etat_derogation`) — une dérogation échue redevient une non-conformité sans qu'aucun traitement ait à repasser, et la **rallonger sans la faire réapprouver ne la rallonge pas** | — |
+| 19 | Maturité et efficacité distinctes | ✅ | `efficacite` (trois valeurs), `efficacite_constatee_le`, `efficacite_preuve` — **distinctes de la maturité** et non convertibles : « documenté, planifié, supervisé » ne dit rien de « est-ce que ça marche ». Le garde-fou mesure l'efficacité **sur son type** : un entier la rendrait moyennable avec la maturité (migration `037`) | — |
 
 ### D. Preuve et intégrations — 1 ✅ · 2 🟡 · 2 ❌
 
@@ -76,7 +101,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 |---|---|---|---|---|
 | 20 | Connecteurs natifs | ❌ | **Zéro.** Face à 375 (Vanta), 200 (Drata), ~25 (Tenacy) | **L22.5** |
 | 21 | Collecte automatique de preuves | ❌ | Dépôt manuel uniquement | **L23.1** |
-| 22 | Registre d'artefacts, réutilisation | 🟡 | Coffre excellent (32 tables porteuses, SHA-256 vérifié, ClamAV, quarantaine, version en vigueur) ; **une pièce appartient à un seul porteur** | L19.4 |
+| 22 | Registre d'artefacts, réutilisation | ✅ | **Une preuve sert N contrôles sans être déposée N fois** (migration `038`) : `piece_rattachements`, et une clé différée impose que l'adresse de délivrance soit l'un des rattachements. Le fichier n'est libéré qu'au **dernier** détachement — éprouvé sur les six chemins de cascade, découverts dans `pg_constraint` | — |
 | 23 | API REST / CLI / webhooks / ITSM | 🟡 | 31 routes, mais **internes** : session par cookie, pas de jeton, pas de webhook | **L22** |
 | 24 | Import / export / réversibilité | ✅✅ | Import **20 entités** CSV+XLSX (format lu à la signature binaire), transactionnel, idempotent, cloisonné, journalisé ; export complet ; reprise v1→v12. **Meilleur que la plupart des SaaS** | — |
 
@@ -86,10 +111,10 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 |---|---|---|---|---|
 | 25 | Cycle de vie complet | ✅ | `brouillon → en vigueur → à réviser → obsolète` ; publication soumise au circuit (**`GRC06`**) | — |
 | 26 | Versionnage / version en vigueur | ✅ | Migration `018` : au plus une par porteur **et par filiale**. Comparaison de deux versions ❌ | L17.6 |
-| 27 | **Attestation de lecture** | ❌ | Absent. Preuve d'audit **ISO 27001 A.5.1** ; standard chez Vanta/Drata | **L19.1** |
+| 27 | **Attestation de lecture** | ✅ | `attestations_lecture` (migration `033`) : on n'atteste que pour soi — la personne vient de la session, la version vient du serveur —, et le taux de couverture rend **`null` plutôt que `0`** sur un effectif nul | — |
 | 28 | Canevas de politiques | ✅ | Livrés au chantier 5 | — |
-| 29 | Politique ↔ contrôle ↔ exigence | 🟡 | `document_referentiels` relie au référentiel ; **pas de lien au pivot mesure** | L19.3 |
-| 30 | Recherche plein texte | ❌ | Action **D3**, reportée après S8 par arbitrage écrit | **L17.1** |
+| 29 | Politique ↔ contrôle ↔ exigence | ✅ | `document_mesures` (migration `036`) : quels CONTRÔLES un document prouve, en plus des référentiels qu'il couvre. Le panneau est **le même des deux bouts** du lien — deux composants auraient divergé | — |
+| 30 | Recherche plein texte | 🟡 | Palette `Ctrl+K` et route `GET /api/recherche` (L17, A3) : **quatre entités**, bornées par la RLS côté serveur et par les droits — jamais par un filtre côté client. ⚠️ C'est un `ilike` sur les libellés, **pas un index plein texte** : ni pertinence, ni contenu des pièces jointes. La recherche DOCUMENTAIRE (D3) reste due | L16.D3 |
 
 ### F. Tiers et chaîne d'approvisionnement — 1 ✅ · 0 🟡 · 5 ❌
 
@@ -117,9 +142,9 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
-| 41 | Registre et délais réglementaires | 🟡 | `declaration_anssi` / `declaration_cnil` en 3 états, aide 24 h/72 h, échéance +72 h. **Pas d'horloge armée sur les 3 paliers NIS2** | **L20.1** |
+| 41 | Registre et délais réglementaires | ✅ | `f_echeances_reglementaires()` (migration `034`) : les **trois paliers NIS2** (24 h, 72 h, 1 mois) et le **72 h RGPD**, chacun avec sa **référence au texte**, DÉRIVÉS de l'instant de détection — et l'écran dit l'**origine** du compte. `declarations_reglementaires` retient le geste et son accusé de réception | — |
 | 42 | Génération des formulaires de notification | ❌ | Absent | **L20.2** |
-| 43 | CIRM (runbooks, main courante) | 🟡 | Fiches réflexes par rôle, contacts, cellule de crise reliée à l'annuaire. **Main courante horodatée ❌** | L20.5 |
+| 43 | CIRM (runbooks, main courante) | ✅ | Fiches réflexes par rôle, cellule de crise reliée à l'annuaire, et **main courante EN AJOUT SEUL** (migration `041`) : chaînée par empreinte, une entrée par incident, refusée en modification par les quatre couches du §12. ⚠️ Pas de runbook exécutable — ce n'est pas le même objet | — |
 | 44 | BIA / RTO / RPO | ✅ | Module dédié | — |
 | 45 | **PCA/PRA scénarios et exercices** | ✅✅ | **Quatre modules dédiés**, étapes RACI, exercices. Au-dessus de tout GRC généraliste | — |
 | 46 | Gestion de crise | ✅ | Module crise + fiches réflexes imprimables | — |
@@ -180,7 +205,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 68 | Agent de conformité / détection d'écarts | ❌ | **L27** |
 | 69 | Génération de réponses et de politiques | ❌ | **L27** |
 | 70 | Suggestion automatique de mapping | ❌ | **L27** / L26.4 |
-| 71 | Recherche universelle, palette, MCP | ❌ | L17.1, L17.2 (**sans IA**) |
+| 71 | Recherche universelle, palette, MCP | 🟡 | **Palette `Ctrl+K` livrée** (L17, A3), sans IA ni MCP. Reste L17.1, L17.2 |
 | 72 | Assistants d'évaluation fournisseur | ❌ | **L27** |
 
 > ✅ **Arbitrage A1 tranché le 08/09/2026** : le modèle **local** est le chemin nominal, et
@@ -207,8 +232,8 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
-| 77 | Registre art. 30 et AIPD | 🟡 | Registre art. 30 **complet** (base légale contrainte à 6 valeurs, transferts, durées). **AIPD ❌** | L20.3 |
-| 78 | DSAR, consentements, violations | 🟡 | Violations couvertes via incidents + `declaration_cnil`. **DSAR ❌** | L20.4 |
+| 77 | Registre art. 30 et AIPD | ✅ | Registre de l'article 30 (`traitements`, mixte depuis la `027`) **et AIPD de l'article 35** (`analyses_impact`, migration `039`). ⚠️ L'AIPD **POINTE** le registre, elle ne le recopie pas — aucune colonne commune, mesuré dans le catalogue. Et la route rend **aussi les traitements SANS analyse**, avec une **présomption** qui ne décide pas | — |
+| 78 | DSAR, consentements, violations | 🟡 | **DSAR livré** (migration `040`) : registre des articles 15 à 22, **délai d'un mois DÉRIVÉ** de la réception (art. 12 §3), prorogation qui exige d'avoir été notifiée, refus qui exige d'être motivé ET daté (art. 12 §4). Les **violations** passent par `incidents` et l'horloge 20.1. ⚠️ **Les consentements restent absents** : ni recueil, ni preuve, ni retrait tracé — seul le retrait ARRIVANT par une demande est enregistré | L20 |
 | 79 | Convergence privacy + sécurité | ✅ | `traitement_mesures` relie les traitements **au pivot mesure** — l'argument OneTrust, en plus modeste | — |
 | — | *Hors grille* — purge RGPD outillée | ✅ | `POST /api/cycle/purge-rgpd` : suppression de fiche **et anonymisation dans les entités**. Très peu de GRC l'outillent | — |
 

@@ -46,6 +46,35 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### La vague B est close — l'indicateur REJOUÉ, pas estimé (16/09/2026)
+
+**Les lots L19 et L20 sont entiers.** Le `docs/PLAN_ACHEVEMENT.md` §4 impose de rejouer
+l'indicateur à la clôture d'une vague : *« il se rejoue, il ne s'estime pas »*.
+
+**35 ✅ · 17 🟡 · 34 ❌ au 08/09 → 44 ✅ · 12 🟡 · 30 ❌.** Le chiffre est **recompté sur la
+grille**, ligne par ligne, jamais additionné de tête — c'est le constat **Q-219** appliqué
+à l'instrument qui sert à mesurer le reste.
+
+Onze lignes ont bougé, et chacune a été **remesurée dans le dépôt** — schéma, routes,
+écrans — plutôt que lue dans le journal des livraisons : les dérogations datées et
+l'attestation de lecture passent de **absentes** à couvertes ; les contrôles périodiques,
+l'efficacité distincte de la maturité, la réutilisation d'une preuve, le lien politique ↔
+contrôle, les délais réglementaires, la main courante et l'AIPD passent de **partiels** à
+couverts ; la recherche et la palette passent d'absentes à **partielles** — la palette est
+là, l'index plein texte non.
+
+⚠️ **Et le rejeu n'est PAS complet, ce qui fait partie de la mesure.** Seules les lignes
+que les vagues A et B pouvaient déplacer ont été remesurées ; les **soixante-quinze autres
+gardent leur verdict du 08/09**, et l'une d'elles pourrait avoir bougé sans qu'on le sache.
+Un rejeu intégral est dû à la clôture de la vague C. *Un indicateur qui tairait sa propre
+incomplétude serait pire qu'un indicateur en retard.*
+
+⚠️ **Une ligne reste PARTIELLE alors qu'elle aurait pu passer, et c'est délibéré** : la
+**78 — DSAR, consentements, violations**. Le DSAR est livré, les violations passent par les
+incidents et l'horloge 20.1, mais **les consentements sont absents** — ni recueil, ni
+preuve, ni retrait tracé. Seul le retrait qui *arrive par une demande* est enregistré. La
+ligne le dit, plutôt que de compter une couverture qui n'existe pas.
+
 ### 20.5 — la main courante de crise, en ajout seul (16/09/2026)
 
 **Pendant une crise, on note.** Qui a été prévenu, à quelle heure, ce qui a été décidé, ce
