@@ -224,7 +224,7 @@
 >
 > ---
 >
-> **Mesuré à la révision `402f98c`, le 16/09/2026** : banc **2 076 essais, 2 076 passés** ;
+> **Mesuré à la révision `32af4f6`, le 16/09/2026** : banc **2 076 essais, 2 076 passés** ;
 > `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 > `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** ; `f_verifier_schema()`
 > → 0 anomalie (**45 garde-fous, 41 migrations, 61 tables, 329 décisions** au registre
