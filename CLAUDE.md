@@ -227,12 +227,18 @@
 >
 > ---
 >
-> **Mesuré à la révision `32af4f6`, le 16/09/2026** : banc **2 076 essais, 2 076 passés** ;
+> **Mesuré à la révision `43965a1`, le 18/09/2026** : banc **2 133 essais, 2 133 passés** ;
 > `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 > `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** ; `f_verifier_schema()`
-> → 0 anomalie (**45 garde-fous, 41 migrations, 61 tables, 329 décisions** au registre
+> → 0 anomalie (**47 garde-fous, 43 migrations, 64 tables, 369 décisions** au registre
 > de l'article 30) ; publication → **89 fichiers identiques au dépôt** ;
-> `install.sh --diagnostic` → **14 conformes, 1 réserve, 0 bloquant**.
+> `install.sh --diagnostic` → **13 conformes, 2 réserves, 0 bloquant** — la seconde étant
+> le **profil DÉCOUVERTE de cette machine**, posé le 15/09/2026.
+>
+> ⚠️ **QUATRIÈME FOIS, et cette fois-ci le chiffre annoncé ici n'était PAS celui du §8** :
+> ce bloc disait « 2 076 essais » quand le `README` §8 disait 2 078. *Deux points de mesure
+> des mêmes grandeurs divergent, et la divergence est silencieuse* — le constat Q-219, à
+> deux unités près, dans le fichier qui prêche de ne pas recopier le banc.
 >
 > ⚠️ **CE BLOC A ÉTÉ FAUX TROIS FOIS, ET LE COMPTE EXACT VIT AILLEURS.** Il annonçait
 > successivement l'état du 08/09 puis celui du 14/09, pendant que le `backend/README.md` §8,

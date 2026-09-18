@@ -8,15 +8,24 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
-> **État mesuré le 16/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
+> **État mesuré le 18/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2078 essais, 2078 passés, 0 échec** à la révision `32af4f6`,
+> **2133 essais, 2133 passés, 0 échec** à la révision `43965a1`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
-> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**45 garde-fous consignés**,
-> **41 migrations**, **61 tables**, **244 politiques**, **331 décisions** au registre),
-> `install.sh --verifier-publication` → **85 fichiers servis identiques au dépôt**, et
-> `install.sh --diagnostic` → **14 conformes, 1 réserve** (`SMTP_ACTIF=non`), **0 bloquant**.
+> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**47 garde-fous consignés**,
+> **43 migrations**, **64 tables**, **256 politiques**, **369 décisions** au registre),
+> `install.sh --verifier-publication` → **89 fichiers servis identiques au dépôt**, et
+> `install.sh --diagnostic` → **13 conformes, 2 réserves** (`SMTP_ACTIF=non` **et le profil
+> DÉCOUVERTE de cette machine**, posé le 15/09/2026), **0 bloquant**.
+>
+> ⚠️ **Ce bloc annonçait l'état du 16/09 — 2078 essais, 41 migrations, 61 tables, 244
+> politiques, 331 décisions, 85 fichiers publiés — et le bilan « 14 conformes, 1 réserve »
+> était faux DÈS SON ÉCRITURE** : la recette était en profil découverte depuis la veille.
+> Les grandeurs du schéma, elles, sont désormais **gardées jusque dans leur répartition**
+> (`test/documentation/chiffres-du-schema.test.mjs`, trois grandeurs de plus le 18/09) ; le
+> bilan du `--diagnostic`, lui, ne l'est pas et ne peut pas l'être — il exige `sudo` et
+> l'état d'une machine. *C'est la famille Q-219, et ce qui change est qu'on le dit.*
 >
 > ⚠️ **Les chiffres de ce bloc étaient faux de quatre migrations et de quatre garde-fous**
 > — il annonçait « 35 garde-fous, 31 migrations, 52 tables, 208 politiques, 206 décisions »,

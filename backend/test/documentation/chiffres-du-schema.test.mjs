@@ -144,6 +144,49 @@ describe('Q-222 — les nombres du schéma disent le catalogue', () => {
         annonces(/\*\*(\d[\d\s]*) contrôles consignés\*\*/u, 'N contrôles consignés'),
         await compter(`select count(*)::int as n from controles_schema`),
       ],
+      // ── ⚠️ TROIS MESURES AJOUTÉES LE 18/09/2026, ET LES DEUX PREMIÈRES ÉTAIENT
+      //    FAUSSES, CHACUNE D'UNE UNITÉ ──────────────────────────────────────
+      //
+      // Le §8 annonçait « 67 `restrict`, 46 `cascade` » quand la base en portait
+      // **68 et 45** — et un second passage, plus bas, disait encore « 54 en
+      // `restrict`, 38 en `cascade` », c'est-à-dire l'état d'une quinzaine de
+      // migrations plus tôt. Les sept grandeurs ci-dessus étaient justes : la
+      // RÉPARTITION, elle, n'était regardée par personne.
+      //
+      // C'est la forme la plus discrète du constat **Q-219** — et la troisième
+      // fois qu'on la rencontre sur ce même document. La parade n'est pas de
+      // corriger : c'est de faire regarder par une machine (`CONVENTIONS.md`
+      // §19.5).
+      //
+      // ⚠️ Le motif accepte les DEUX écritures du document — « 68 `restrict` »
+      // dans le bloc de mesure, « 68 en `restrict` » dans le récit du lot L1 —
+      // parce qu'`annonces()` exige que TOUTES les occurrences disent le même
+      // nombre. Un motif qui n'en verrait qu'une laisserait l'autre vieillir,
+      // ce qui est exactement ce qui vient de se produire.
+      [
+        'clés étrangères en restrict',
+        annonces(/(\d[\d\s]*) (?:en )?`restrict`/u, 'N clés en restrict'),
+        await compter(
+          `select count(*)::int as n from pg_constraint
+            where contype = 'f' and confdeltype = 'r'`,
+        ),
+      ],
+      [
+        'clés étrangères en cascade',
+        annonces(/(\d[\d\s]*) (?:en )?`cascade`/u, 'N clés en cascade'),
+        await compter(
+          `select count(*)::int as n from pg_constraint
+            where contype = 'f' and confdeltype = 'c'`,
+        ),
+      ],
+      [
+        'clés étrangères en set null',
+        annonces(/(\d[\d\s]*) (?:en )?`set null`/u, 'N clés en set null'),
+        await compter(
+          `select count(*)::int as n from pg_constraint
+            where contype = 'f' and confdeltype = 'n'`,
+        ),
+      ],
       // ── ⚠️ DEUX MESURES AJOUTÉES LE 16/09/2026, ET LES DEUX ÉTAIENT FAUSSES ──
       //
       // L'utilisateur a demandé « les docs sont à jour ? ». Le contrôle mécanique
