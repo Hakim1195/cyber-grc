@@ -387,4 +387,57 @@ describe('le registre DORA et la chaîne, jusqu’à l’écran', () => {
     assert.ok(boutons.includes('questionnaire'), boutons.join(' · '));
     assert.ok(boutons.includes('contrat'), boutons.join(' · '));
   });
+
+  test('§8 — supprimer le tiers n’en laisse AUCUNE échéance fantôme à l’écran', async () => {
+    // ⚠️ **Ce défaut a été trouvé AU NAVIGATEUR SUR LA RECETTE, et le banc ne
+    // pouvait pas le voir** (18/09/2026). Les trois tables de L21 pendent au
+    // prestataire par une clé `on delete cascade` : la base les emporte, et
+    // `test/tiers/questionnaire-fournisseur.test.mjs` §8 le mesure. Mais la façade
+    // EN MÉMOIRE les gardait — si bien qu'après suppression d'un tiers,
+    // l'échéancier annonçait encore l'échéance de son questionnaire, et le badge de
+    // la barre latérale la comptait.
+    //
+    // *Le défaut ne vivait ni dans la base, ni dans la route : il vivait dans
+    // l'écart entre les deux cascades.* Classe Q-201 / Q-207 — le produit affirme
+    // une chose qui n'est pas.
+    const { page } = session;
+    await aller(page, '/prestataires');
+
+    const avant = await page.evaluate(() => {
+      const id = 'DORA-CASCADE';
+      window.DataStore.addPrestataire({ id, societe: 'Tiers à supprimer' });
+      window.DataStore.addQuestionnaire({
+        id: 'QUES-CASCADE', prestataire_id: id, ref_id: 'anssi-hygiene',
+        intitule: 'Questionnaire fantôme',
+        // Envoyé et en retard : sans cela l'échéance n'entrerait pas, et l'essai
+        // mesurerait son propre semis au lieu de la cascade.
+        envoye_le: '2026-01-05', echeance: '2026-02-05', relance_le: '', recu_le: '',
+      });
+      window.DataStore.addReponse({
+        id: 'QREP-CASCADE', questionnaire_id: 'QUES-CASCADE', code: 'A1', reponse: 'non',
+      });
+      window.DataStore.addSousTraitance({
+        id: 'SOUS-CASCADE', prestataire_id: id, sous_traitant_id: 'DORA-LACUNE',
+        service: 'Sauvegarde', dans_fonction_critique: false,
+      });
+      const compte = window.Echeances.collect().filter((e) => e.type === 'questionnaire').length;
+      return { compte, reponses: window.DataStore.getReponsesDe('QUES-CASCADE').length };
+    });
+    assert.equal(avant.compte >= 1, true, 'le semis doit produire une échéance, sinon rien n’est mesuré');
+
+    const apres = await page.evaluate(() => {
+      window.DataStore.deletePrestataire('DORA-CASCADE');
+      return {
+        echeances: window.Echeances.collect().filter((e) => e.titre === 'Questionnaire fantôme').length,
+        questionnaires: window.DataStore.getQuestionnaires().filter((q) => q.id === 'QUES-CASCADE').length,
+        reponses: window.DataStore.getReponsesDe('QUES-CASCADE').length,
+        aretes: window.DataStore.getSousTraitances().filter((a) => a.id === 'SOUS-CASCADE').length,
+      };
+    });
+
+    assert.equal(apres.echeances, 0, 'une échéance survit au tiers qui la portait');
+    assert.equal(apres.questionnaires, 0);
+    assert.equal(apres.reponses, 0, 'les réponses restent, invisibles et hors de portée');
+    assert.equal(apres.aretes, 0, 'l’arête de sous-traitance pointe dans le vide');
+  });
 });

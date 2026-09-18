@@ -87,7 +87,7 @@ sur trente.
 | Écran | Ce qu'il sert |
 |---|---|
 | **Tableau de bord** | l'état de votre filiale en un coup d'œil, avec les tendances |
-| **Échéancier** | tout ce qui est daté et qui approche — plan d'actions, revues, déclarations |
+| **Échéancier** | tout ce qui est daté et qui approche — plan d'actions, revues, déclarations, **questionnaires fournisseurs et échéances contractuelles des tiers** |
 | **Registre des risques** | l'analyse : fréquence × gravité × maîtrise, brut et résiduel |
 | **Référentiels** | l'évaluation des référentiels applicables, et la déclaration d'applicabilité |
 | **Approbations** | ce qui attend votre décision |

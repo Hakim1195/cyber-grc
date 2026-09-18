@@ -493,7 +493,33 @@ const DataStore = (() => {
         const i = data.prestataires.findIndex(x => x.id === p.id);
         if (i !== -1) { data.prestataires[i] = p; save(); }
     }
-    function deletePrestataire(id) { data.prestataires = data.prestataires.filter(x => x.id !== id); save(); }
+    /**
+     * ⚠️ **La cascade du serveur doit se REFAIRE ici, sinon l'écran affirme le
+     * contraire de ce qui est en base.** Les trois tables de L21 pendent au
+     * prestataire par une clé `on delete cascade` : la base les emporte, la façade
+     * en mémoire les gardait. Mesuré au navigateur sur la recette le 18/09/2026 —
+     * après suppression du tiers, l'échéancier annonçait encore l'échéance de son
+     * questionnaire, et le badge de la barre latérale la comptait. Le banc ne
+     * pouvait pas le voir : il éprouve la cascade EN BASE, où elle est juste.
+     *
+     * C'est la classe du constat **Q-201 / Q-207** — le produit affirme une chose
+     * qui n'est pas —, et la parade est celle de `deleteActif` et
+     * `deleteScenarioPra` : purger les dépendants dans le même geste.
+     */
+    function deletePrestataire(id) {
+        data.prestataires = data.prestataires.filter(x => x.id !== id);
+        // Les arêtes de sous-traitance, des DEUX côtés : le tiers supprimé pouvait
+        // être donneur d'ordre comme sous-traitant (migration `042`).
+        data.prestataire_sous_traitance = data.prestataire_sous_traitance.filter(
+            a => a.prestataire_id !== id && a.sous_traitant_id !== id);
+        // Les questionnaires, puis leurs réponses — l'ordre importe pour retrouver
+        // les identifiants avant de perdre leurs porteurs.
+        const emportes = data.questionnaires_tiers.filter(q => q.prestataire_id === id).map(q => q.id);
+        data.questionnaires_tiers = data.questionnaires_tiers.filter(q => q.prestataire_id !== id);
+        data.questionnaire_reponses = data.questionnaire_reponses.filter(
+            r => !emportes.includes(r.questionnaire_id));
+        save();
+    }
 
     /* =========================
        MCO / ACTIONS PRÉALABLES

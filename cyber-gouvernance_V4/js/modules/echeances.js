@@ -289,7 +289,7 @@ const EcheancesModule = (() => {
                 </div>
                 <div class="dashboard-header no-print">
                     <div>
-                        <h1>Échéancier ${Help.tip("Vue transversale de toutes les obligations datées du logiciel : échéances du plan d'actions, actions MCO, revues documentaires, déclarations d'incidents (NIS2/RGPD), audits et revues de direction. Chaque ligne renvoie vers sa fiche d'origine.")}</h1>
+                        <h1>Échéancier ${Help.tip("Vue transversale de toutes les obligations datées du logiciel : échéances du plan d'actions, actions MCO, revues documentaires, déclarations d'incidents (NIS2/RGPD), audits, revues de direction, questionnaires fournisseurs et échéances contractuelles des tiers. Chaque ligne renvoie vers sa fiche d'origine.")}</h1>
                         <p style="color: var(--text-muted); margin-top: 5px;">Toutes les échéances du dispositif, regroupées par urgence</p>
                     </div>
                     <div style="display:flex; gap:10px; flex-wrap:wrap;">
