@@ -1253,6 +1253,12 @@ const Api = (() => {
      * pas » : sans cela, la route deviendrait un oracle d'existence de filiales.
      */
     function campagnesEtat() { return appeler("/campagnes/etat"); }
+    function campagnesDeconvoquer(campagneId, filialeIds) {
+        return appeler("/campagnes/" + encodeURIComponent(campagneId) + "/deconvoquer", {
+            methode: "POST",
+            corps: { filiales: filialeIds }
+        });
+    }
     function campagnesConvoquer(campagneId, filialeIds) {
         return appeler("/campagnes/" + encodeURIComponent(campagneId) + "/convoquer", {
             methode: "POST",
@@ -1289,7 +1295,7 @@ const Api = (() => {
         derogationsEtat, aipdEtat, demandesDroitsEtat,
         // Lot L21 : le registre DORA, la chaîne DÉRIVÉE et le score composite.
         tiersBareme, tiersEtat, tiersChaine, tiersRegistreDora, tiersQuestionnaires,
-        campagnesEtat, campagnesConvoquer,
+        campagnesEtat, campagnesConvoquer, campagnesDeconvoquer,
         mainCourante, ajouterMainCourante,
         // Lot L18 bis : le jeu de découverte.
         decouverteEtat, decouverteSemer, decouvertePurger

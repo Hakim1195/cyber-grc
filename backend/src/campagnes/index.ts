@@ -7,8 +7,23 @@
  *
  * Deux routes, et seulement deux, parce que le reste existe déjà :
  *
- *  · `GET  /api/campagnes/etat`            — l'avancement, qui se CALCULE ;
- *  · `POST /api/campagnes/:id/convoquer`   — la convocation, qui NOMME des filiales.
+ *  · `GET  /api/campagnes/etat`              — l'avancement, qui se CALCULE ;
+ *  · `POST /api/campagnes/:id/convoquer`     — la convocation, qui NOMME des filiales ;
+ *  · `POST /api/campagnes/:id/deconvoquer`   — son inverse, et il est INDISPENSABLE.
+ *
+ * ── ⚠️ POURQUOI LA DÉCONVOCATION EXISTE, ET CE QU'ELLE A COÛTÉ D'APPRENDRE ─────
+ *
+ * Elle a été ajoutée après coup, et le défaut qui l'a imposée mérite d'être écrit :
+ * **sans elle, une campagne convoquée ne pouvait plus être supprimée.** La clé
+ * `fk_campagne_filiales_campagne` est en `restrict` (§18.2 : une clé d'une table
+ * cloisonnée vers une table de niveau Groupe ne détruit pas la donnée des filiales),
+ * donc retirer la campagne exige de retirer ses parts d'abord. Or la couche d'entités
+ * ne sert à une session QUE les lignes de sa filiale active : les parts des AUTRES
+ * filiales n'étaient dans aucune mémoire, et aucun écran ne pouvait les nommer.
+ *
+ * Mesuré au navigateur sur la recette le 18/09/2026 : trois `409` — « l'enregistrement
+ * est encore référencé ailleurs » — sur un geste parfaitement légitime, et une campagne
+ * indestructible. *Le message disait la vérité sans dire QUI tenait encore une part.*
  *
  * Tout le reste passe par la couche d'entités générique, et c'est délibéré : créer une
  * campagne, l'ouvrir, la clore, consigner sa prise de connaissance ou son achèvement sont
@@ -58,6 +73,7 @@ import { ErreurApplicative } from '../erreurs/index.js';
 
 export const CHEMIN_ETAT = '/api/campagnes/etat';
 export const CHEMIN_CONVOQUER = '/api/campagnes/:id/convoquer';
+export const CHEMIN_DECONVOQUER = '/api/campagnes/:id/deconvoquer';
 
 /**
  * Plafond de campagnes examinées en une fois.
@@ -197,6 +213,19 @@ export async function greffonCampagnes(
               etat: String(c.etat),
               parts: miennes.map((p) => ({
                 id: String(p.id),
+                // ⚠️ L'IDENTIFIANT DE LA FILIALE EST RENDU, et cela demande un mot parce que
+                //    le principe directeur du chantier dit l'inverse : `filiale_id` est
+                //    retiré de tout ce que la couche d'entités expose. La règle porte sur
+                //    ce qu'un client ENVOIE — « une charge utile qui nommerait des filiales
+                //    inviterait un client à en choisir une » — et sur ce qu'il apprendrait
+                //    d'un périmètre qu'il n'a pas.
+                //
+                //    Ici, ni l'un ni l'autre : la ligne est déjà visible de cette session
+                //    (c'est la RLS qui l'a laissée passer), et l'identifiant est ce qui
+                //    permet de la DÉCONVOQUER. Sans lui, l'écran ne pourrait nommer que ce
+                //    qu'il charge dans `data` — c'est-à-dire la seule filiale active —, et
+                //    une campagne convoquée resterait indestructible. Mesuré le 18/09/2026.
+                filialeId: String(p.filiale_id),
                 filiale: String(p.filiale),
                 filialeCode: String(p.filiale_code),
                 repondant: p.repondant === null ? null : String(p.repondant),
@@ -351,4 +380,94 @@ export async function greffonCampagnes(
       return await reponse.status(201).send(resultat);
     },
   );
+
+  /* -------------------------------------------------------------------
+   *  POST /api/campagnes/:id/deconvoquer
+   * -------------------------------------------------------------------
+   *  Retire la part de filiales nommées. C'est l'inverse exact de
+   *  `convoquer`, et il est **indispensable** : sans lui, une campagne
+   *  convoquée ne peut plus être supprimée (voir l'entête).
+   *
+   *  ⚠️ **Ce que ce geste DÉTRUIT, et ce qu'il ne détruit pas.** Il retire la
+   *  demande, pas le travail : l'avancement d'une filiale vit dans
+   *  `evaluations`, que la part ne porte pas. Déconvoquer n'efface donc
+   *  AUCUNE réponse — c'est la même propriété qui rend l'arbitrage du §5 de la
+   *  migration `044` tenable.
+   *
+   *  ⚠️ Et les trois barrières de `convoquer` valent ici **à l'identique** : le
+   *  droit `administrer`, le périmètre de la session (dont le refus est
+   *  indistinguable de « n'existe pas »), et la politique de la base. Une
+   *  filiale ne se déconvoque pas elle-même — non par un interdit, qui casserait
+   *  la reprise, mais parce qu'elle n'a pas ce droit sur cette route.
+   * ------------------------------------------------------------------- */
+  instance.post(
+    CHEMIN_DECONVOQUER,
+    {
+      schema: {
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', minLength: 1, maxLength: 200 } },
+        },
+        body: {
+          type: 'object',
+          required: ['filiales'],
+          additionalProperties: false,
+          properties: {
+            filiales: {
+              type: 'array',
+              minItems: 1,
+              maxItems: CONVOCATION_MAX,
+              items: { type: 'string', minLength: 1, maxLength: 200 },
+            },
+          },
+        },
+      },
+      config: { acces: { action: 'administrer', domaine: 'administration' } },
+    },
+    async (
+      requete: FastifyRequest<{ Params: { id: string }; Body: { filiales: string[] } }>,
+      reponse: FastifyReply,
+    ) => {
+      const session = sessionDe(requete);
+      const campagneId = requete.params.id;
+      const demandees = [...new Set(requete.body.filiales)];
+
+      const autorisees = new Set(session.perimetre.filiales);
+      const hors = demandees.filter((f) => !autorisees.has(f));
+      if (hors.length > 0) {
+        throw new ErreurApplicative({
+          code: 'hors_perimetre',
+          statut: 403,
+          message:
+            'Une des filiales désignées n’est pas dans votre périmètre. Vous ne pouvez ' +
+            'convoquer que les filiales que vous administrez.',
+          detailJournal: `déconvocation refusée : ${String(hors.length)} filiale(s) hors périmètre`,
+        });
+      }
+
+      const resultat = await avecTransaction(pool, session.perimetre, async (client) => {
+        // `delete … returning` : ce qui est rendu est ce qui a été RETIRÉ, jamais ce qui
+        // était demandé. Une filiale déjà déconvoquée n'est pas une faute — c'est un geste
+        // répété, comme à la convocation.
+        const retirees = await client.query<{ filiale_id: string }>(
+          `delete from campagne_filiales
+                 where campagne_id = $2 and filiale_id = any($1::text[])
+             returning filiale_id`,
+          [demandees, campagneId],
+        );
+        return {
+          campagneId,
+          deconvoquees: retirees.rowCount ?? 0,
+          // ⚠️ Ce que la route NE dit PAS : combien de parts restent. Le nombre de
+          //    filiales convoquées est une information de Groupe, et la rendre ici
+          //    la donnerait à qui ne lit pas `/api/campagnes/etat` sous la politique.
+          demandees: demandees.length,
+        };
+      });
+
+      return await reponse.status(200).send(resultat);
+    },
+  );
+
 }

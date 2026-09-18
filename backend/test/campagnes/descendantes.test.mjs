@@ -10,7 +10,7 @@
  * | 1 | Les deux états sont DÉRIVÉS, et les deux ordres qui comptent tiennent |
  * | 2 | L'avancement se COMPTE dans les évaluations — et le serveur ne rend AUCUN taux |
  * | 3 | ⚠️ Une filiale ne voit QUE sa part, et n'apprend pas combien d'autres sont convoquées |
- * | 4 | La convocation : les trois barrières, et le refus qui n'est pas un oracle |
+ * | 4 | La convocation ET la déconvocation : les trois barrières, et le refus qui n'est pas un oracle |
  * | 5 | La filiale RÉPOND dans sa part ; elle ne convoque pas, et ne convoque pas autrui |
  * | 6 | La chronologie du schéma mord |
  * | 7 | ⚠️ Supprimer sa part RESTE possible — sans quoi la reprise « remplacer » serait morte |
@@ -414,6 +414,67 @@ describe('§4 — la convocation : les trois barrières', () => {
     assert.equal(second.statut, 201);
     assert.equal(second.corps.convoquees, 0);
     assert.equal(second.corps.deja, 1);
+  });
+
+  test('⚠️ LA DÉCONVOCATION existe, et sans elle une campagne convoquée serait INDESTRUCTIBLE', async () => {
+    // ⚠️ **CE POINT A ÉTÉ AJOUTÉ APRÈS COUP**, et le défaut qui l'a imposé se mesure sur la
+    // recette : la clé `fk_campagne_filiales_campagne` est en `restrict` (§18.2), donc
+    // retirer une campagne exige de retirer ses parts d'abord. Or la couche d'entités ne
+    // sert à une session QUE les lignes de sa filiale active : les parts des autres
+    // filiales n'étaient dans aucune mémoire, et aucun écran ne pouvait les nommer. Trois
+    // `409` « encore référencé ailleurs », et une campagne qu'on ne pouvait plus supprimer.
+    const retiree = await groupe.appeler('POST', '/api/campagnes/CAMP-SANS-DATE/deconvoquer', {
+      corps: { filiales: [FILIALE_B] },
+    });
+    assert.equal(retiree.statut, 200, JSON.stringify(retiree.corps));
+    assert.equal(retiree.corps.deconvoquees, 1);
+
+    // Rejouer n'est pas une faute : c'est un geste répété, comme la convocation.
+    const rejeu = await groupe.appeler('POST', '/api/campagnes/CAMP-SANS-DATE/deconvoquer', {
+      corps: { filiales: [FILIALE_B] },
+    });
+    assert.equal(rejeu.statut, 200);
+    assert.equal(rejeu.corps.deconvoquees, 0);
+
+    // ⚠️ ET CE QU'ELLE NE DÉTRUIT PAS : le travail. L'avancement vit dans `evaluations`,
+    //    que la part ne porte pas — c'est ce qui rend l'arbitrage du §5 de la `044`
+    //    tenable, et c'est mesuré plutôt que promis.
+    // ⚠️ DANS UN PÉRIMÈTRE : `evaluations` est cloisonnée, et la lire sans périmètre
+    //    déclaré lève « Périmètre non positionné » — la base refuse, et elle a raison.
+    //    La première rédaction interrogeait la connexion nue et rendait `undefined`.
+    const evaluations = await base.avecPerimetre(
+      applicatif,
+      perimetre('verif', FILIALE_A, [FILIALE_A]),
+      async (c) =>
+        (
+          await c.query(
+            `select count(*)::int as n from evaluations
+              where filiale_id = $1 and ref_id = 'anssi'`,
+            [FILIALE_A],
+          )
+        ).rows[0].n,
+    );
+    assert.ok(Number(evaluations) > 0, 'les évaluations ne doivent pas bouger');
+  });
+
+  test('la déconvocation exige le droit, et son refus n’est pas un ORACLE', async () => {
+    const sansDroit = await filiale.appeler('POST', '/api/campagnes/CAMP-RETARD/deconvoquer', {
+      corps: { filiales: [FILIALE_A] },
+    });
+    assert.equal(sansDroit.statut, 403, JSON.stringify(sansDroit.corps));
+
+    // Le même refus, mot pour mot, qu'une filiale hors périmètre — sinon la route
+    // deviendrait un oracle d'existence de filiales.
+    const horsPerimetre = await groupe.appeler('POST', '/api/campagnes/CAMP-RETARD/deconvoquer', {
+      corps: { filiales: ['FIL-QUI-N-EXISTE-PAS'] },
+    });
+    assert.equal(horsPerimetre.statut, 403);
+    const reelleHors = await groupe.appeler('POST', '/api/campagnes/CAMP-RETARD/deconvoquer', {
+      corps: { filiales: ['FIL-TIERCE'] },
+    });
+    assert.equal(reelleHors.statut, 403);
+    assert.equal(reelleHors.corps.message, horsPerimetre.corps.message,
+      'les deux refus doivent être indistinguables à l’octet près');
   });
 
   test('une campagne inconnue rend 404, pas une part orpheline', async () => {

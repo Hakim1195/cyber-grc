@@ -194,6 +194,7 @@ window.CampagnesModule = (function () {
                             ? `<span class="muted">Déclarée terminée le ${escapeHtml(p.termineLe)}</span>`
                             : `<button type="button" class="part-vue" data-id="${escapeHtml(p.id)}">J'en prends connaissance</button>
                                <button type="button" class="part-fin" data-id="${escapeHtml(p.id)}" style="margin-left:6px;">Déclarer terminée</button>`}
+                        ${admin ? `<button type="button" class="part-retirer" data-campagne="${escapeHtml(c.id)}" data-filiale="${escapeHtml(p.filialeId)}" data-libelle="${escapeHtml(p.filiale)}" style="margin-left:6px;">Déconvoquer</button>` : ""}
                     </td>
                 </tr>`).join("");
 
@@ -243,6 +244,9 @@ window.CampagnesModule = (function () {
         });
         document.querySelectorAll(".camp-convoquer").forEach(b => {
             b.addEventListener("click", () => convoquer(b.dataset.id));
+        });
+        document.querySelectorAll(".part-retirer").forEach(b => {
+            b.addEventListener("click", () => deconvoquer(b.dataset.campagne, b.dataset.filiale, b.dataset.libelle));
         });
     }
 
@@ -321,6 +325,44 @@ window.CampagnesModule = (function () {
         DataStore.updatePartCampagne(part);
         if (window.showToast) showToast("Consigné.", "success");
         UI.apresEcriture(() => rafraichir());
+    }
+
+    /**
+     * Retire la part d'une filiale — l'inverse de « convoquer ».
+     *
+     * ⚠️ **Sans ce geste, une campagne convoquée était INDESTRUCTIBLE**, et le défaut s'est
+     * vu au navigateur sur la recette : la clé du schéma est en `restrict` (le §18.2 refuse
+     * qu'une suppression de niveau Groupe détruise la donnée des filiales), donc retirer la
+     * campagne exige de retirer ses parts d'abord — et les parts des AUTRES filiales ne sont
+     * dans aucune mémoire de cette session, la charge utile ne servant que la filiale
+     * active. Trois `409` « encore référencé ailleurs », sans que rien ne dise QUI tenait
+     * encore une part.
+     *
+     * ⚠️ Et ce que ce geste ne détruit PAS : le travail. L'avancement vit dans les
+     * évaluations, que la part ne porte pas — déconvoquer retire la demande, pas les
+     * réponses.
+     */
+    function deconvoquer(campagneId, filialeId, libelle) {
+        if (!window.Api || typeof Api.campagnesDeconvoquer !== "function") return;
+        const nom = libelle || filialeId;
+        if (!confirm("Retirer « " + nom + " » de cette campagne ?\n\n"
+                   + "La demande disparaît de son échéancier. Ses réponses au référentiel, "
+                   + "elles, sont conservées : elles vivent dans ses évaluations.")) return;
+        Api.campagnesDeconvoquer(campagneId, [filialeId]).then(r => {
+            const n = (r && r.deconvoquees) || 0;
+            if (window.showToast) {
+                showToast(n > 0 ? "Filiale déconvoquée." : "Cette filiale n'était plus convoquée.",
+                          n > 0 ? "success" : "warning");
+            }
+            // La ligne retirée peut appartenir à une filiale que cette session ne charge
+            // pas : on recharge le jeu plutôt que de deviner ce qui a changé.
+            if (window.Sync && typeof Sync.recharger === "function") {
+                return Sync.recharger().then(() => rafraichir());
+            }
+            return rafraichir();
+        }).catch(() => {
+            if (window.showToast) showToast("La déconvocation a échoué.", "danger");
+        });
     }
 
     function convoquer(campagneId) {

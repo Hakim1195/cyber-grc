@@ -79,6 +79,9 @@ const ROUTE_DEDIEE = '/api/session/filiale-active';
  * périmètre d'écriture. Elle en désigne les destinataires d'une demande, et rien d'autre.
  */
 const ROUTE_CONVOCATION = '/api/campagnes/:id/convoquer';
+/** Son inverse, et pour les mêmes motifs : sans elle, une campagne convoquée serait
+ *  indestructible (la clé du schéma est en `restrict`, §18.2). */
+const ROUTE_DECONVOCATION = '/api/campagnes/:id/deconvoquer';
 
 const TEMOIN_DEU = 'TEMOIN-DEU-ne-doit-jamais-sortir-de-sa-filiale';
 const TEMOIN_TLS = 'TEMOIN-TLS-doit-etre-lisible-de-Toulouse';
@@ -424,7 +427,8 @@ describe('§30.2 — une seule route nomme une filiale, et c’est la route déd
     // qui envoie et constate.
     const fautifs = [];
     for (const r of routes) {
-      if (r.url === ROUTE_DEDIEE || r.url === ROUTE_CONVOCATION) continue;
+      if (r.url === ROUTE_DEDIEE || r.url === ROUTE_CONVOCATION
+          || r.url === ROUTE_DECONVOCATION) continue;
       if (r.schema === null) continue;
       const noms = nomsDeProprietes(r.schema);
       if (noms.some((n) => /filiale/i.test(n))) {
@@ -449,13 +453,15 @@ describe('§30.2 — une seule route nomme une filiale, et c’est la route déd
     // ⚠️ Épinglé : une exception qui s'élargit en silence est pire qu'une règle absente.
     // Si cette route se mettait à accepter autre chose — un périmètre de lecture, un
     // identifiant d'utilisateur —, ce contrôle rougirait, et quelqu'un devrait trancher.
-    const convocation = routes.find((r) => r.url === ROUTE_CONVOCATION);
-    assert.ok(convocation !== undefined, 'la route de convocation doit être montée');
-    assert.equal(convocation.methode, 'POST');
-    assert.deepEqual(Object.keys(convocation.schema.body.properties), ['filiales']);
-    assert.equal(convocation.schema.body.additionalProperties, false);
-    // Un plafond : convoquer n'est pas un moyen d'écrire mille lignes en un appel.
-    assert.ok(convocation.schema.body.properties.filiales.maxItems <= 100);
+    for (const chemin of [ROUTE_CONVOCATION, ROUTE_DECONVOCATION]) {
+      const route = routes.find((r) => r.url === chemin);
+      assert.ok(route !== undefined, `la route ${chemin} doit être montée`);
+      assert.equal(route.methode, 'POST');
+      assert.deepEqual(Object.keys(route.schema.body.properties), ['filiales'], chemin);
+      assert.equal(route.schema.body.additionalProperties, false, chemin);
+      // Un plafond : ce n'est pas un moyen d'écrire mille lignes en un appel.
+      assert.ok(route.schema.body.properties.filiales.maxItems <= 100, chemin);
+    }
   });
 
   test('la route dédiée, elle, n’accepte QUE cela', () => {

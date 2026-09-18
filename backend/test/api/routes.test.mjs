@@ -867,6 +867,7 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // filiales en écriture : servie sans identité, elle écrirait chez n'importe qui.
     ['GET', '/api/campagnes/etat', undefined],
     ['POST', '/api/campagnes/CAMP-G/convoquer', { filiales: ['FIL-ESSAI-A'] }],
+    ['POST', '/api/campagnes/CAMP-G/deconvoquer', { filiales: ['FIL-ESSAI-A'] }],
     ['GET', '/api/recherche?q=ab', undefined],
     ['GET', '/api/decouverte/etat', undefined],
     ['POST', '/api/decouverte/semer', undefined],

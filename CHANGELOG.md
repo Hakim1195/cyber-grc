@@ -55,6 +55,54 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### Sans déconvocation, une campagne convoquée était INDESTRUCTIBLE (18/09/2026)
+
+**Sixième défaut en cinq jours trouvé au navigateur sur la recette**, et le plus profond des
+six : il ne vivait dans aucune couche, mais dans la rencontre de trois décisions justes.
+
+1. La clé `fk_campagne_filiales_campagne` est en **`restrict`** — le §18.2 refuse qu'une
+   suppression de niveau Groupe détruise la donnée des filiales. **Juste.**
+2. La couche d'entités ne sert à une session **que les lignes de sa filiale active** — c'est
+   le cloisonnement du chargement initial. **Juste.**
+3. L'écran des campagnes savait **convoquer**. Il ne savait pas **déconvoquer**.
+
+**Conséquence, mesurée** : supprimer une campagne rendait **trois `409` « l'enregistrement
+est encore référencé ailleurs »**, et la campagne restait en base alors que l'écran l'avait
+retirée. La part qui bloquait appartenait à *Dedienne Aerospace Deutschland* — une filiale
+que la session ne charge pas —, si bien qu'aucun écran ne pouvait la nommer. *Le message du
+refus disait la vérité sans dire QUI tenait encore une part.*
+
+⚠️ **ET MON PREMIER CORRECTIF ÉTAIT FAUX, CE QUI VAUT D'ÊTRE ÉCRIT.** J'ai cru à un défaut
+d'ordre et ajouté `suppressions.reverse()` dans `calculerDifferentiel()` — sans voir que
+`appliquer()` inversait **déjà** les suppressions vingt lignes plus loin. Les deux
+inversions se sont annulées, remettant l'ordre fautif : mon correctif **introduisait** le
+défaut qu'il prétendait fermer. Retiré. *On ne corrige pas un ordre sans avoir lu les deux
+endroits qui l'établissent.*
+
+**Ce qui ferme vraiment le sujet** : `POST /api/campagnes/:id/deconvoquer`, symétrique de
+`convoquer` — mêmes trois barrières, même refus indistinguable de « n'existe pas » —, et un
+bouton **« Déconvoquer »** par part, offert à l'administration Groupe. ⚠️ La réponse de
+`/api/campagnes/etat` porte désormais l'**identifiant de filiale** de chaque part : sans lui,
+l'écran ne pourrait nommer que ce qu'il charge, c'est-à-dire la seule filiale active. Le
+motif est écrit dans la route, parce que la règle générale dit l'inverse.
+
+⚠️ **Et ce que déconvoquer NE détruit pas** : le travail. L'avancement vit dans
+`evaluations`, que la part ne porte pas — un essai le mesure plutôt que de le promettre.
+
+**Deux essais neufs, et le second a demandé trois rédactions :**
+
+- `test/campagnes/` couvre la déconvocation, son idempotence, son droit et son oracle ;
+- `test/navigateur/campagnes.test.mjs` §3 bis joue le **cycle de vie complet** — déconvoquer
+  par le bouton, puis supprimer — et vérifie **dans la base**, pas en mémoire.
+  ⚠️ Sa première rédaction ne regardait que l'état final : elle passait **aussi** sans le
+  correctif, parce qu'un repassage finit par réussir. Elle écoute désormais ce que le
+  navigateur **reçoit** et exige **zéro 409** : la mutation qui retire l'inversion de
+  `appliquer()` la fait rougir, ce qui veut dire qu'elle garde enfin une propriété que
+  personne ne mesurait.
+
+**Le nettoyage de la recette a été fait PAR LE PRODUIT** — déconvoquer, puis supprimer, sans
+un refus. C'est la meilleure preuve que la capacité existe : elle a servi.
+
 ### Le bloc de création était invisible pour le seul compte qui en a le droit (18/09/2026)
 
 **Cinquième défaut en cinq jours trouvé AU NAVIGATEUR SUR LA RECETTE**, et celui-ci est le
