@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2165 essais, trente familles (voir plus bas)
+npm test                           # 2166 essais, trente familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -774,8 +774,8 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 18/09/2026, à la révision `bd81cbc`** (lot L24) : `npm test` → **2165 essais,
-2165 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**Mesuré au 18/09/2026, à la révision `1308926`** (lot L24) : `npm test` → **2166 essais,
+2166 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **49 garde-fous consignés**, **45 migrations**,
 **66 tables**, **385 décisions** au registre de l'article 30 ; publication → **90
@@ -940,16 +940,16 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`bd81cbc`** — lot **L24** (campagnes descendantes, profil répondant), 18/09/2026, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ quatre fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**. |
-| État de l'arbre | **arbre de `bd81cbc`** plus les seules modifications de documentation du commit qui suit. Compte **relevé famille par famille**, chaque répertoire joué séparément — jamais déduit. ⚠️ Et la famille `campagnes` n'entre au §5 qu'AVEC ce bloc : le contrôle de Q-90 compare le §5 à la révision que le §8 nomme, et l'y écrire plus tôt aurait décrit une famille qui n'existait pas encore. ⚠️ **`documentation` est relevée à 30 essais dont UN EN ÉCHEC** — celui qui juge ce bloc-ci, et qui ne peut pas être vert avant que le bloc soit écrit. C'est la seule circularité du dispositif, et elle se dit plutôt qu'elle ne se cache : la famille est rejouée APRÈS cette mise à jour. Une seule famille bouge depuis `8aa1c2d` : `documentation` 30 → **32**, par les deux grandeurs que personne ne gardait — le registre de l'article 30 et le compte de fichiers publiés. ⚠️ Le compte est RELEVÉ, jamais déduit : une estimation précédente en annonçait 2 051 pour 2 048 réels. |
+| Révision mesurée | **`1308926`** — lot **L24** (campagnes, profil répondant), 18/09/2026, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ quatre fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**. |
+| État de l'arbre | **arbre de `1308926`** plus le correctif d'écran, son essai et la documentation du commit qui suit. Compte **relevé famille par famille** — jamais déduit. ⚠️ **`documentation` est relevée à 30 essais dont UN EN ÉCHEC** — celui qui juge ce bloc-ci, et qui ne peut pas être vert avant que le bloc soit écrit. C'est la seule circularité du dispositif, et elle se dit plutôt qu'elle ne se cache : la famille est rejouée APRÈS cette mise à jour. Une seule famille bouge depuis `8aa1c2d` : `documentation` 30 → **32**, par les deux grandeurs que personne ne gardait — le registre de l'article 30 et le compte de fichiers publiés. ⚠️ Le compte est RELEVÉ, jamais déduit : une estimation précédente en annonçait 2 051 pour 2 048 réels. |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 | ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2165 · pass 2165 · fail 0
-                                                   base 326 · api 297 · navigateur 235
+npm test                                         → tests 2166 · pass 2166 · fail 0
+                                                   base 326 · api 297 · navigateur 236
                                                    pieces 141 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73

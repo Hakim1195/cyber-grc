@@ -10,7 +10,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 18/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2165 essais, 2165 passés, 0 échec** à la révision `bd81cbc`,
+> **2166 essais, 2166 passés, 0 échec** à la révision `1308926`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
 > échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**49 garde-fous consignés**,
@@ -54,6 +54,39 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### Le bloc de création était invisible pour le seul compte qui en a le droit (18/09/2026)
+
+**Cinquième défaut en cinq jours trouvé AU NAVIGATEUR SUR LA RECETTE**, et celui-ci est le
+plus net de la série. L'écran des campagnes décidait d'afficher son bloc « Ouvrir une
+campagne » en lisant `Session.perimetre` — **qui n'existe pas**. La forme juste est
+`Session.courante()`, celle qu'emploient `socle.js` et `mapping.js` depuis des semaines.
+
+Conséquence mesurée en se connectant comme `admin.grc` : **le bloc de création n'apparaissait
+pas pour le seul compte qui en a le droit.** L'écran s'affichait parfaitement, la console ne
+disait rien, et la capacité était injoignable. *Une capacité qu'aucun écran n'appelle est une
+capacité absente* — `docs/REPRISE.md` §4, cinquième occurrence.
+
+⚠️ **L'ESSAI QUI LE FERME A DEMANDÉ TROIS TENTATIVES, ET LES DEUX ÉCHECS SONT LA LEÇON :**
+
+| Tentative | Pourquoi elle ne mesurait rien |
+|---|---|
+| remplacer `Session.courante` **dans la page** | mesure la branche, pas le produit |
+| basculer `API_ADMINISTRATION_GROUPE_PROVISOIRE` puis **recharger** | ⚠️ **essayé et mesuré FAUX** : le résolveur provisoire met son périmètre en cache **soixante secondes**, si bien que la seconde mesure rendait la première. L'essai aurait mesuré deux fois le même cas en croyant en mesurer deux |
+| **deux montages, deux résolveurs** | ✅ chacun dit ce qu'il est, et le cache de l'un n'atteint pas l'autre |
+
+Et **les deux moitiés sont nécessaires** : sans la positive, l'essai consacrerait l'absence
+du bloc comme une propriété désirable — le défaut même qu'il vient de trouver ; sans la
+négative, il serait vrai d'un écran qui proposerait la création à tout le monde. La mutation
+le prouve : remettre `Session.perimetre` fait rougir cet essai, et lui seul.
+
+⚠️ **ET LE GARDE-FOU AMÉLIORÉ CE MATIN M'A RATTRAPÉ SUR LA MÊME FAUTE.** En réancrant les
+chiffres, j'ai rallongé les deux premières lignes du tableau d'environnement du §8 — et les
+cinq contrôles d'environnement ont rougi. Cette fois, le message disait la vraie cause :
+*« la ligne existe encore, mais elle est REPOUSSÉE hors de la fenêtre de 2 000 caractères ;
+raccourcissez-les, le récit va au CHANGELOG. »* Il a fallu dix minutes ce matin pour
+comprendre, dix secondes cet après-midi. *Un contrôle qui nomme la cause fait gagner le temps
+qu'un contrôle qui accuse à tort fait perdre.*
 
 ### L24 — les campagnes descendantes : le Groupe demande, la filiale répond (18/09/2026)
 

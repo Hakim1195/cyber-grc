@@ -13,6 +13,7 @@
  * | § | Propriété |
  * |---|---|
  * | 1 | L'onglet « Campagnes du Groupe » existe, et il mène à l'écran |
+ * | 1 bis | ⚠️ Le bloc « Ouvrir une campagne » est proposé à qui en a le DROIT, et à lui seul |
  * | 2 | L'écran DIVISE : il rend un taux là où le serveur ne rend qu'un compte |
  * | 3 | ⚠️ Une campagne OUVERTE arrive dans l'échéancier ; un BROUILLON n'y arrive pas |
  * | 4 | Un intitulé hostile est affiché, jamais exécuté |
@@ -29,7 +30,7 @@ import {
   ouvrirPage,
   servirApplication,
 } from '../aide/navigateur.mjs';
-import { monterServeurReel } from '../aide/serveur.mjs';
+import { monterGreffon, monterServeurReel } from '../aide/serveur.mjs';
 
 const DELAI = 60_000;
 
@@ -41,6 +42,44 @@ let navigateur;
 let serveur;
 let application;
 let session;
+/** Le même produit, servi par une session qui porte l'administration Groupe (§1 bis). */
+let serveurAdmin;
+let applicationAdmin;
+
+const TOUS_DOMAINES = Object.freeze([
+  'pilotage', 'conformite', 'risques', 'actifs', 'actions', 'incidents',
+  'continuite', 'documents', 'audits', 'tiers', 'rgpd', 'personnel', 'administration',
+]);
+
+/**
+ * Une session dont on CHOISIT le périmètre et les droits.
+ *
+ * ⚠️ Elle existe pour une raison précise, et il faut la lire avant de la remplacer par
+ * l'échappatoire `API_ADMINISTRATION_GROUPE_PROVISOIRE` : ce drapeau est lu par le
+ * résolveur provisoire, qui **met son périmètre en cache soixante secondes**. Deux mesures
+ * successives dans un même essai renvoient donc la même réponse, et l'essai croirait
+ * mesurer deux cas là où il n'en mesure qu'un. Deux serveurs, deux résolveurs : chacun dit
+ * ce qu'il est, et le cache de l'un n'atteint pas l'autre.
+ */
+class SessionDeBanc {
+  constructor(perimetre_, droits) {
+    this.provisoire = true;
+    this._perimetre = Object.freeze({ ...perimetre_ });
+    this._droits = Object.freeze({ ...droits });
+  }
+
+  async resoudre() {
+    return this._perimetre;
+  }
+
+  async authentifier() {
+    return { perimetre: this._perimetre, droits: this._droits, identite: null, sessionOuverte: false };
+  }
+
+  decrire() {
+    return 'session du banc d’essai (test/navigateur/campagnes.test.mjs)';
+  }
+}
 
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
@@ -86,6 +125,22 @@ before(async () => {
 
   serveur = await monterServeurReel(base, { authentification: 'provisoire' });
   application = await servirApplication(serveur);
+
+  // ── Le SECOND montage : une session qui porte l'administration Groupe ──────
+  const perimetreAdmin = {
+    utilisateurId: 'USER-A',
+    filialeId: FILIALE_A,
+    filiales: [FILIALE_A],
+    perimetreGroupe: false,
+    administrationGroupe: true,
+  };
+  serveurAdmin = await monterGreffon(base, perimetreAdmin, {
+    resolveur: new SessionDeBanc(perimetreAdmin, {
+      niveau: 'administration', domaines: TOUS_DOMAINES, export: true,
+    }),
+  });
+  applicationAdmin = await servirApplication(serveurAdmin);
+
   navigateur = await lancerNavigateur();
   session = await ouvrirApplication();
 });
@@ -93,13 +148,15 @@ before(async () => {
 after(async () => {
   await navigateur?.close().catch(() => {});
   await application?.fermer();
+  await applicationAdmin?.fermer();
   await serveur?.fermer();
+  await serveurAdmin?.fermer();
   await base?.fermer();
 });
 
-async function ouvrirApplication() {
+async function ouvrirApplication(cible = null) {
   const s = await ouvrirPage(navigateur);
-  await s.page.goto(`${application.url}/index.html`, { waitUntil: 'domcontentloaded' });
+  await s.page.goto(`${(cible ?? application).url}/index.html`, { waitUntil: 'domcontentloaded' });
   assert.equal(await attendreApplication(s.page, { delai: DELAI }), 'chargee');
   await attendreQuiescence(s.page, { delai: DELAI });
   return s;
@@ -142,6 +199,49 @@ describe('les campagnes descendantes, jusqu’à l’écran', () => {
     assert.match(texte, /anssi-hygiene/u);
     // L'état vient du SERVEUR : la campagne est ouverte, son échéance est à venir.
     assert.match(texte, /En cours/u);
+  });
+
+  test('§1 bis — ⚠️ le bloc « Ouvrir une campagne » est proposé à qui en a le DROIT', async () => {
+    // ⚠️ **CE §1 BIS EXISTE PARCE QUE LE DÉFAUT S'EST PRODUIT**, et qu'aucun essai ne le
+    // voyait : la première rédaction de l'écran lisait `Session.perimetre`, qui n'existe
+    // pas. Résultat mesuré AU NAVIGATEUR SUR LA RECETTE : le bloc de création était
+    // invisible pour `admin.grc` — le seul compte qui en a le droit —, l'écran s'affichait
+    // parfaitement, et la console ne disait rien. *Une capacité qu'aucun écran n'appelle
+    // est une capacité absente* (`docs/REPRISE.md` §4).
+    //
+    // ── Comment les DEUX moitiés se mesurent, et pourquoi ainsi ────────────────
+    //
+    // Le drapeau vient du RÉSOLVEUR, et deux montages le disent différemment. ⚠️ La voie
+    // qui paraissait plus simple — basculer `API_ADMINISTRATION_GROUPE_PROVISOIRE` et
+    // recharger — a été ESSAYÉE et MESURÉE FAUSSE : le résolveur provisoire met son
+    // périmètre en cache **soixante secondes**, si bien que la seconde mesure rendait la
+    // première. L'essai aurait mesuré deux fois le même cas en croyant en mesurer deux.
+    //
+    // Les deux moitiés sont nécessaires : sans la positive, l'essai consacrerait l'absence
+    // du bloc comme une propriété désirable — le défaut même qu'il vient de trouver ; sans
+    // la négative, il serait vrai d'un écran qui proposerait la création à tout le monde.
+    const mesurer = async (cible) => {
+      const s = await ouvrirApplication(cible);
+      await aller(s.page, '/campagnes');
+      const vu = await s.page.evaluate(() => ({
+        admin: window.Session.courante().administrationGroupe,
+        bloc: document.getElementById('campCreer') !== null,
+      }));
+      await s.page.close();
+      return vu;
+    };
+
+    const avecDroit = await mesurer(applicationAdmin);
+    const sansDroit = await mesurer(application);
+
+    assert.equal(avecDroit.admin, true, 'ce montage doit porter l’administration Groupe');
+    assert.equal(avecDroit.bloc, true, 'le bloc de création doit être proposé à qui en a le droit');
+    assert.equal(sansDroit.admin, false, 'la session provisoire ordinaire n’administre pas');
+    assert.equal(sansDroit.bloc, false, 'sans l’administration Groupe, le bloc ne doit pas être proposé');
+
+    // ⚠️ Et ce que l'écran cache ne PROTÈGE rien : la barrière est la politique RLS de la
+    // `044`, plus le droit `administrer` de la route de convocation. `test/campagnes/`
+    // §4 les éprouve contre le vrai serveur ; ici on mesure la courtoisie, pas la barrière.
   });
 
   test('§2 — l’écran DIVISE : un taux là où le serveur ne rend qu’un compte', async () => {

@@ -41,9 +41,30 @@ window.CampagnesModule = (function () {
         terminee: "ok", non_faite: "danger"
     };
 
+    /**
+     * L'administration Groupe, telle que la SESSION RÉSOLUE la dit.
+     *
+     * ⚠️ **La première rédaction lisait `Session.perimetre`, qui n'existe pas** — et le
+     * défaut ne s'est vu qu'AU NAVIGATEUR SUR LA RECETTE : le bloc « Ouvrir une
+     * campagne » était invisible pour `admin.grc`, c'est-à-dire pour le seul compte qui
+     * en a le droit. L'écran s'affichait parfaitement, sans une erreur de console, et la
+     * capacité était injoignable. *C'est la classe de la leçon du `docs/REPRISE.md` §4, et
+     * c'est la cinquième fois en cinq jours que la vérification au navigateur trouve ce
+     * que le banc ne voit pas.*
+     *
+     * La forme juste est celle de `socle.js` et de `mapping.js` : `Session.courante()`.
+     *
+     * ⚠️ Et ce qui suit **ne protège rien** : la barrière est le serveur — la politique
+     * RLS de la `044` exige le drapeau d'administration Groupe, et la route de convocation
+     * exige le droit `administrer`. Ne pas proposer un geste qui sera refusé est une
+     * courtoisie ; le refus est traité proprement de toute façon, parce que les groupes
+     * d'annuaire d'un utilisateur peuvent bouger entre l'affichage et le clic.
+     */
     function estAdministrationGroupe() {
         try {
-            return !!(window.Session && Session.perimetre && Session.perimetre.administrationGroupe);
+            if (typeof Session === "undefined" || !Session.courante) return false;
+            const etat = Session.courante();
+            return !!(etat && etat.administrationGroupe);
         } catch (e) { return false; }
     }
 

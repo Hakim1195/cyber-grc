@@ -398,7 +398,7 @@ d'un **registre de ce que l'on déclare** en un **système qui constate**.
 
 ---
 
-### L24 — Campagnes et gouvernance descendante 🟢
+### L24 — Campagnes et gouvernance descendante ✅ **LIVRÉ le 18/09/2026**
 
 **Pourquoi.** Le socle Groupe/Filiale est le meilleur atout architectural du produit, et
 **rien ne permet au Groupe de lancer quoi que ce soit vers ses filiales**. La consolidation
@@ -412,6 +412,33 @@ regarde ; elle ne demande pas.
 | **24.4** | **Accès contributeur restreint** — répondre à une campagne sans accéder au reste du produit | Le modèle de droits à 3 axes suffit : c'est un **profil**, pas un mécanisme neuf |
 
 **Lignes comblées** : #5 · #66 · partiellement #39.
+
+> ### ▶ Ce que la livraison a appris, et qui n'était pas dans le plan (18/09/2026)
+>
+> Migrations **`044`** (les deux tables, les deux états dérivés) et **`045`** (le profil).
+> Les quatre critères sont tenus, et trois d'entre eux ont demandé une correction que le
+> plan ne pouvait pas prévoir :
+>
+> - **24.1** — le critère exigeait qu'« un essai rougisse si la clause tombe ». ⚠️ La
+>   mutation a été jouée et elle dit **autre chose** : retirer la clause empêche la
+>   **migration de s'appliquer**, parce que `f_verifier_couverture_rls()` refuse une lecture
+>   non cloisonnée. Le cloisonnement est donc tenu par DEUX filets, et l'essai du §3 mesure
+>   celui que le garde-fou ne peut pas voir : ce que l'utilisateur REÇOIT.
+> - **24.2** — « par répondant, par exigence » n'est **pas** livré : l'écran agrège par
+>   filiale, le répondant est affiché mais pas agrégé. Dit plutôt qu'arrondi, et la ligne
+>   #5 de l'indicateur reste donc **🟡**.
+> - **24.4** — le critère disait « c'est un profil, pas un mécanisme neuf », et il avait
+>   raison. ⚠️ Mais la mesure a démenti l'hypothèse implicite : le profil `CONTRIB` porte
+>   `actifs, actions, incidents, mco`, et **aucun** ne se projette sur `conformite`. Un
+>   contributeur ne pouvait donc pas répondre. Le profil neuf ouvre **trois** domaines et
+>   ferme les vingt-sept autres NOMMÉMENT — « aucun » se relit en revue de droits, une
+>   absence ne se relit pas.
+>
+> ⚠️ **Et un conflit tranché contre le plan** : l'interdit « une filiale ne se retire pas
+> d'une campagne » a été écrit, puis **RETIRÉ** — il rendait la reprise « remplacer »
+> impossible. C'est la classe des trois conflits de la migration `041`, tranchée pareil :
+> *restaurer une sauvegarde gagne*. Ce qui protège le Groupe est le journal, la
+> reconvocation qui coûte un geste, et le fait que l'avancement vive dans `evaluations`.
 
 ---
 
