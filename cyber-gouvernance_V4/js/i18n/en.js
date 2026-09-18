@@ -111,6 +111,7 @@ window.I18n.enregistrer("en", {
     "fil.mco": "Preparatory actions (MCO)",
     "fil.tests": "Test history",
     "fil.prestataires": "Suppliers & third parties",
+    "fil.tiersDora": "DORA register",
     "fil.settings": "Settings & data",
 
     /* ═══════════════════════ SHARED LABELS ═══════════════════════ */

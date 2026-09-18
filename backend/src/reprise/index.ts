@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 18;
+export const VERSION_SCHEMA = 20;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -165,6 +165,14 @@ export const COLLECTIONS = [
   // l'oublier ici ne fait pas échouer la compilation, cela en fait une « clé de
   // premier niveau inconnue du modèle », conservée et **jamais insérée**.
   'demandes_droits',
+  // v19 — la chaîne de sous-traitance des tiers (action 21.1). Même avertissement :
+  // l'oublier ici ne fait pas échouer la compilation, cela en fait une « clé de
+  // premier niveau inconnue du modèle », conservée et **jamais insérée**.
+  'prestataire_sous_traitance',
+  // v20 — le questionnaire fournisseur (action 21.2). ⚠️ L'ordre compte : les
+  // réponses référencent l'envoi, et l'envoi doit exister d'abord.
+  'questionnaires_tiers',
+  'questionnaire_reponses',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -381,15 +389,50 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     referencesMultiples: [],
     cleMetier: null,
   },
+  // ⚠️ **v19 — les champs du registre d'information DORA (action 21.1) et du
+  // suivi contractuel (21.3).** Ils sont TOUS facultatifs : un parc de deux cents
+  // tiers ne se remplit pas d'un coup, et un fichier v18 se reprend inchangé.
+  //
+  // ⚠️ **Ce qui ne voyage PAS : le SCORE de risque.** « Faible / modéré / élevé /
+  // critique » se dérive côté serveur (`f_score_prestataire`) de quatre facteurs
+  // dont deux bougent tout seuls — la couverture des exigences de chaîne et
+  // l'ancienneté de l'évaluation. Le figer au jour de l'export rendrait « faible »,
+  // six mois plus tard, un tiers que personne n'a réévalué depuis deux ans. C'est
+  // l'arbitrage des dérogations (19.2), et il vaut ici mot pour mot.
   prestataires: {
     prefixe: 'PREST',
-    champs: ['id', 'societe', 'type', 'phone', 'email', 'notes', 'criticite', 'acces', 'supplyChain'],
+    champs: [
+      'id', 'societe', 'type', 'phone', 'email', 'notes', 'criticite', 'acces', 'supplyChain',
+      // v19 — registre DORA (21.1)
+      'lei', 'pays', 'fonction_supportee', 'fonction_critique', 'type_service',
+      'pays_donnees', 'substituabilite',
+      // v19 — suivi contractuel et plan de sortie (21.3)
+      'contrat_reference', 'contrat_debut', 'contrat_fin', 'contrat_revue_le',
+      'plan_sortie', 'plan_sortie_le',
+      // v19 — ancienneté de l'évaluation, qui entre dans le score dérivé (21.4)
+      'evalue_le',
+    ],
     enumerations: [
       { champ: 'criticite', valeurs: ['faible', 'moyenne', 'forte', 'vitale'], videAdmis: true },
       { champ: 'acces', valeurs: ['aucun', 'limite', 'etendu'], videAdmis: true },
+      {
+        champ: 'type_service',
+        valeurs: [
+          'hebergement', 'cloud_iaas', 'cloud_paas', 'cloud_saas',
+          'reseau', 'infogerance', 'developpement', 'securite', 'autre',
+        ],
+        videAdmis: true,
+      },
+      {
+        champ: 'substituabilite',
+        valeurs: ['facile', 'difficile', 'impossible'],
+        videAdmis: true,
+      },
     ],
     bornes: [],
-    dates: [],
+    // Les cinq dates entrent AUSSI dans `champs` : `dates` dit comment les VALIDER,
+    // pas qu'elles sont admises (leçon de la v14).
+    dates: ['contrat_debut', 'contrat_fin', 'contrat_revue_le', 'plan_sortie_le', 'evalue_le'],
     references: [],
     referencesMultiples: [],
     cleMetier: null,
@@ -712,6 +755,68 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     // VALIDER, pas qu'elles sont admises (leçon de la v14).
     dates: ['recue_le', 'identite_verifiee_le', 'prorogee_le', 'repondue_le'],
     references: [{ champ: 'traitement_id', cible: 'traitements' }],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  // ── v19 : la chaîne de sous-traitance des tiers (DORA art. 29) ───────────
+  //
+  // ⚠️ **Aucun champ de RANG**, pour le motif exact des dérogations, des analyses
+  // d'impact et des demandes de droits : « rang 1, rang 2, rang n » se dérivent du
+  // parcours du graphe. Les faire voyager les figerait au jour de l'export — et une
+  // reprise faite après qu'un maillon a été intercalé rendrait des rangs faux dans
+  // la pièce que l'autorité réclame.
+  //
+  // ⚠️ **Les deux références pointent la MÊME collection**, et c'est le cœur de
+  // l'affaire : un sous-traitant est un `prestataires` comme un autre. C'est ce qui
+  // permet à un sous-traitant de rang 2 de devenir un contractant direct sans qu'on
+  // ait à le recopier — donc sans fabriquer deux vérités sur la même société.
+  // ── v20 : le questionnaire fournisseur (action 21.2) ─────────────────────
+  //
+  // ⚠️ **Aucun champ d'ÉTAT**, pour le motif de toutes les collections livrées
+  // depuis la v14 : « en retard » se dérive des dates, et le faire voyager dans
+  // le fichier le figerait au jour de l'export — une reprise faite six mois plus
+  // tard rendrait « dans les temps » un questionnaire jamais revenu.
+  //
+  // ⚠️ **Et aucun texte de question** : `code` fait la jointure avec le catalogue
+  // du référentiel. Les recopier dans le fichier d'échange en ferait une seconde
+  // source, qui vieillirait sans que personne le sache.
+  questionnaires_tiers: {
+    prefixe: 'QUES',
+    champs: [
+      'id', 'prestataire_id', 'ref_id', 'intitule',
+      'envoye_le', 'echeance', 'relance_le', 'recu_le', 'notes',
+    ],
+    enumerations: [],
+    bornes: [],
+    dates: ['envoye_le', 'echeance', 'relance_le', 'recu_le'],
+    references: [{ champ: 'prestataire_id', cible: 'prestataires' }],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  questionnaire_reponses: {
+    prefixe: 'QREP',
+    champs: ['id', 'questionnaire_id', 'code', 'reponse', 'commentaire', 'preuve'],
+    enumerations: [
+      { champ: 'reponse', valeurs: ['oui', 'non', 'partiel', 'na'], videAdmis: false },
+    ],
+    bornes: [],
+    dates: [],
+    references: [{ champ: 'questionnaire_id', cible: 'questionnaires_tiers' }],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  prestataire_sous_traitance: {
+    prefixe: 'SOUS',
+    champs: [
+      'id', 'prestataire_id', 'sous_traitant_id', 'service', 'dans_fonction_critique',
+    ],
+    enumerations: [],
+    bornes: [],
+    dates: [],
+    references: [
+      { champ: 'prestataire_id', cible: 'prestataires' },
+      { champ: 'sous_traitant_id', cible: 'prestataires' },
+    ],
     referencesMultiples: [],
     cleMetier: null,
   },
@@ -1820,6 +1925,32 @@ const PALIERS: readonly EtapePalier[] = [
     // déduction — l'inventer serait consigner qu'une personne a écrit alors que
     // personne n'en sait rien.
     appliquer: paliersCollections(['demandes_droits']),
+  },
+  {
+    de: 18,
+    vers: 19,
+    libelle:
+      'Lot L21, action 21.1 : l’instantané gagne « prestataire_sous_traitance » — la ' +
+      'chaîne de sous-traitance des tiers, dont le RANG se dérive au lieu d’être rangé.',
+    // Un palier qui n'a RIEN À TRANSFORMER : la collection arrive vide sur un
+    // fichier v18, `paliersCollections` la réclame et la crée. ⚠️ Et rien à
+    // DEVINER non plus : on ne fabrique pas une arête de sous-traitance depuis le
+    // champ libre `notes` d'un prestataire. Une chaîne de sous-traitance est un
+    // fait CONSTATÉ au contrat ; l'inventer remplirait le registre remis à
+    // l'autorité de liens que personne n'a vérifiés.
+    appliquer: paliersCollections(['prestataire_sous_traitance']),
+  },
+  {
+    de: 19,
+    vers: 20,
+    libelle:
+      'Lot L21, action 21.2 : l’instantané gagne « questionnaires_tiers » et ' +
+      '« questionnaire_reponses » — l’envoi d’un questionnaire à un tiers et ce qu’il a ' +
+      'répondu. Les QUESTIONS, elles, restent au catalogue du référentiel.',
+    // Rien à transformer, et rien à DEVINER : on ne fabrique pas un questionnaire
+    // envoyé à partir du champ `notes` d'un prestataire. Un envoi est un fait
+    // consigné par un humain, et l'inventer ferait croire qu'on a demandé.
+    appliquer: paliersCollections(['questionnaires_tiers', 'questionnaire_reponses']),
   },
 ];
 

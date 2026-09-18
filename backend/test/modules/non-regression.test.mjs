@@ -214,6 +214,15 @@ const SANS_FICHE = {
   '/rgpd-demandes': 'vue du registre : ce qui a été demandé, pour quand, et ce qui est en retard',
   '/rgpd-documents': 'vue du registre : les documents porteurs de données personnelles',
   '/rgpd-outil': 'vue du registre : l’article 30 du PRODUIT lui-même, chargé à la demande',
+  // Lot L21, action 21.1 — le registre d'information DORA est un ONGLET de
+  // « Prestataires », pas une entrée de menu : c'est une vue des mêmes tiers.
+  // ⚠️ Son adresse ne peut PAS s'écrire « /prestataires/dora » — le routeur y
+  // verrait l'identifiant d'un prestataire, et l'écran dirait « Prestataire
+  // introuvable ». Même piège que « /rgpd-aipd », et c'est pour cela qu'il est
+  // écrit ici plutôt que redécouvert.
+  '/tiers-dora':
+    'vue des tiers : le registre de l’article 28 de DORA, avec ce qui manque à chaque ligne. ' +
+    'Aucune fiche à lui — la fiche d’un tiers vit sous « /prestataires/:id ».',
   // ── Vague 6 : les écrans des capacités livrées sans interface ────────────
   //
   // Aucun des cinq n'a de fiche à route propre, et pour des raisons différentes

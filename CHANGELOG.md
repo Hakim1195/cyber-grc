@@ -46,6 +46,68 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### L21 — le registre DORA, la chaîne de sous-traitance et le questionnaire fournisseur (17–18/09/2026)
+
+**Vague C, premier lot.** C'était le domaine le plus faible du produit — *une fonctionnalité
+sur six* au `docs/COMPARATIF_MARCHE.md` — et le besoin le plus tendu du marché français :
+DORA s'applique depuis le 17 janvier 2025, et le **registre d'information** est la pièce que
+l'autorité réclame en premier. Quatre actions sur quatre, deux migrations.
+
+| Action | Migration | Ce qui la porte |
+|---|---|---|
+| **21.1** registre d'information DORA | `042` | LEI, pays, fonction supportée et son caractère critique, contrat, substituabilité — et la **chaîne de sous-traitance** comme une **arête**, jamais comme un rang stocké : le rang se **dérive**, l'anti-cycle est **en base** (critère d'acceptation), et la route rend le **chemin** et non un rang à croire |
+| **21.2** questionnaire fournisseur | `043` | l'**envoi** et les **réponses**, sans le texte des questions : `(ref_id, code)` fait la jointure avec les catalogues, comme `evaluations` depuis le premier chantier. Le produit **n'envoie rien** — `envoye_le` est un fait consigné, pas un ordre ; le questionnaire s'exporte en XLSX, se remplit hors ligne, se réimporte |
+| **21.3** suivi contractuel et plan de sortie | `042` | fin de contrat, revue des clauses, réversibilité, plan de sortie daté — **et ils alimentent l'échéancier existant**, ce qui est le critère d'acceptation lui-même |
+| **21.4** score de risque fournisseur | `042` | composite et **dérivé** : criticité × accès × substituabilité × ancienneté de la dernière évaluation. Le **barème est SERVI** (`GET /api/tiers/bareme`), il n'est plus recopié dans le navigateur |
+
+⚠️ **CE QUE LE 18/09 A AJOUTÉ, ET POURQUOI C'ÉTAIT LE PLUS UTILE DE LA JOURNÉE.** La `043`
+avait été livrée avec ses tables, son état dérivé, ses politiques et son garde-fou — et
+**mordue par rien**. Les balayages génériques la voyaient comme *une table de plus* : ils
+vérifiaient qu'elle est cloisonnée, qu'elle entre dans le modèle, que ses pièces suivent leur
+porteur. Aucun ne mesurait ce qu'elle **promet**. C'est la classe du constat **Q-69** —
+*« écrit, lu, et mordu par rien »*.
+
+`test/tiers/questionnaire-fournisseur.test.mjs` (23 essais) la mord en huit points, et
+**cinq mutations ont été jouées pour le démontrer** :
+
+| Mutation | Ce qui rougit |
+|---|---|
+| « reçu » cesse d'être la **première** branche de `f_etat_questionnaire()` | le garde-fou de la `043` refuse la migration — il **éprouve** la dérivation sur dix cas témoins, il ne lit pas son texte (§39.1) |
+| la règle « on ne relance pas ce qu'on n'a pas envoyé » devient `check (true)` | deux essais |
+| `reponse in (…) **or true**` — la forme exacte du 8ᵉ passage de la porte S8 | un essai. ⚠️ **Et aucun garde-fou ne la voit** : les `check` de la `043` ne sont pas au registre des contraintes éprouvées de la migration `029`. L'essai est le seul filet, et c'est consigné plutôt que tu |
+| l'unicité qui rend le réimport idempotent s'élargit d'une colonne | un essai |
+| la **route** passe les dates dans le mauvais ordre, la base restant juste | un essai — et **rien d'autre**. C'est la leçon du constat **Q-325** : un garde en base ne voit pas une faute de route |
+
+⚠️ **ET LE CRITÈRE DE 21.3 N'ÉTAIT PAS TENU : l'échéancier ne connaissait ni les contrats,
+ni les questionnaires.** La migration `043` l'écrivait pourtant dans le commentaire de sa
+propre colonne `echeance` — *« elle alimente l'échéancier existant »* —, et ce n'était vrai
+nulle part. Deux sources sont donc ajoutées à `js/services/echeances.js`, **et les deux
+exclusions portent tout le sens** : un questionnaire **reçu** n'est plus une obligation (même
+reçu en retard — relancer qui a déjà répondu est le plus sûr moyen de faire ignorer les
+relances), et un **brouillon** n'en est pas encore une. `evalue_le`, lui, **n'y entre pas** :
+c'est la date de la dernière évaluation, un fait passé, et la ranger là inverserait son sens.
+
+⚠️ **Trois conséquences que le banc a trouvées, et pas moi :**
+
+1. **Le garde-fou des notifications a rougi aussitôt.** `test/notifications/echeances.test.mjs`
+   **découvre** les sources dans `js/services/echeances.js` et exige que le serveur les
+   connaisse : deux sources de plus à l'écran et le courriel de relance ne les aurait pas
+   comptées. Les huit sources sont désormais des deux côtés — *c'est exactement ce qu'un
+   garde-fou découvert, plutôt que recopié, existe pour faire.*
+2. **Aucune de ces échéances n'a de destinataire résoluble, et c'est une décision.**
+   `prestataires.email` est l'adresse du **fournisseur** : s'en servir enverrait le bilan
+   interne du groupe à l'extérieur. Elles sont donc comptées dans `sansDestinataire`, comme
+   les déclarations d'incident — *comptées à part plutôt que tues.*
+3. **La liste des types de l'échéancier était écrite à la main**, et deux sources de plus
+   l'auraient laissée incomplète **sans rien faire échouer** : les lignes s'affichaient, mais
+   aucun bouton ne permettait de les isoler. Les types se **découvrent** désormais dans ce que
+   l'agrégateur rend (règle du `CLAUDE.md` §3, colonne « réussit en silence »).
+
+**Reste de la vague C** : **L24**, les campagnes descendantes — le Groupe ouvre une campagne
+d'évaluation vers N filiales et en suit l'avancement. Et à la clôture de la vague,
+`docs/COMPARATIF_MARCHE.md` se rejoue **en entier** : le rejeu du 16/09 était partiel, onze
+lignes sur quatre-vingt-six.
+
 ### « Les docs sont à jour ? » — la deuxième fois, et deux chiffres que personne ne gardait (16/09/2026)
 
 **Le contrôle mécanique rendait 87/87.** Il ne couvre pas la prose, et la prose portait

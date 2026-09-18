@@ -118,6 +118,7 @@ window.I18n.enregistrer("fr", {
     "fil.mco": "Actions Préalables (MCO)",
     "fil.tests": "Historique des Tests",
     "fil.prestataires": "Prestataires & Tiers",
+    "fil.tiersDora": "Registre DORA",
     "fil.settings": "Paramètres & données",
 
     /* ═══════════════════════ LIBELLÉS PARTAGÉS ═══════════════════════ */

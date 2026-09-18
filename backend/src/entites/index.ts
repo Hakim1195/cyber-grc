@@ -281,7 +281,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 18;
+export const VERSION_SCHEMA = 20;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -996,6 +996,63 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
       },
     },
   ],
+
+  // ── LA CHAÎNE DE SOUS-TRAITANCE — migration `042`, action 21.1 ──────────
+  //
+  // Une ARÊTE : « ce prestataire sous-traite CECI à celui-là ». Elle entre dans
+  // la couche générique et non dans un greffon à elle, pour le motif exact des
+  // dérogations : verrouillage optimiste, journal, cloisonnement, import
+  // généralisé et round-trip `grc-backup` lui viennent tels quels, et un greffon
+  // propre aurait refait les cinq, moins bien.
+  //
+  // ⚠️ **Ce que cette entité n'expose PAS : le RANG.** « Rang 1, rang 2, rang n »
+  // ne sont pas des colonnes — ils se DÉRIVENT du parcours du graphe
+  // (`f_chaine_sous_traitance`), à un seul endroit. Les ranger obligerait
+  // quelque chose à les décaler à chaque intercalation, et le jour où ce quelque
+  // chose ne repasse pas, le registre d'information remis à l'autorité annonce
+  // des rangs faux — en silence. C'est `GET /api/tiers/chaine/:id` qui les rend,
+  // et cette route seule. Même arbitrage qu'aux dérogations (19.2), à l'horloge
+  // réglementaire (20.1) et aux demandes de droits (20.4).
+  //
+  // ⚠️ **Et le nom de l'entité est celui de la TABLE**, si long soit-il : c'est
+  // lui qui part dans `journal_audit.entite_type`, porté par le domaine
+  // `type_entite`. Un nom plus court la rendrait INCRÉABLE, et le refus
+  // arriverait en `400 « Une valeur de l'enregistrement n'est pas admise »`, qui
+  // ne désigne rien (CONVENTIONS.md §40.1).
+  [
+    'prestataire_sous_traitance',
+    {
+      nom: 'prestataire_sous_traitance',
+      table: 'prestataire_sous_traitance',
+      prefixe: 'SOUS',
+    },
+  ],
+
+  // ── LE QUESTIONNAIRE FOURNISSEUR — migration `043`, action 21.2 ─────────
+  //
+  // Deux entités ordinaires, et c'est ce qui rend l'action réalisable sans rien
+  // écrire de neuf : le **réimport des réponses** passe par le moteur d'import
+  // généralisé (L7), qui est piloté par ce registre. Un greffon d'écriture
+  // propre aurait dû refaire l'analyse du classeur, la transaction, le
+  // cloisonnement et le journal — moins bien, et pour le même résultat.
+  //
+  // ⚠️ **Ce que ces entités n'exposent PAS : l'ÉTAT de l'envoi.** « En retard »
+  // se DÉRIVE des dates (`f_etat_questionnaire`), à un seul endroit. Le ranger
+  // obligerait quelque chose à repasser chaque nuit, et le jour où ce quelque
+  // chose ne repasse pas, aucun retard n'apparaît — dans le dossier même qui
+  // sert à démontrer la maîtrise de sa chaîne d'approvisionnement.
+  //
+  // ⚠️ **Et elles ne portent PAS les questions.** Le texte des référentiels vit
+  // dans les catalogues du frontend ; ici, `code` fait la jointure, exactement
+  // comme `evaluations(ref_id, code)` depuis le premier chantier.
+  [
+    'questionnaires_tiers',
+    { nom: 'questionnaires_tiers', table: 'questionnaires_tiers', prefixe: 'QUES' },
+  ],
+  [
+    'questionnaire_reponses',
+    { nom: 'questionnaire_reponses', table: 'questionnaire_reponses', prefixe: 'QREP' },
+  ],
 ]);
 
 /** Ordre de chargement : celui d'`ARRAY_FIELDS` du frontend. */
@@ -1377,10 +1434,36 @@ async function decouvrirClesEtrangeres(
  * `evaluations.statut` et `mesure_mise_en_oeuvre.statut` admettent `''::text`
  * dans leur liste — c'est leur « non évalué », et il compte.
  *
- * ⚠️ Portée exacte, à ne pas surestimer : cette découverte lit le **texte** de
- * la contrainte. Un `check` qui refuserait la chaîne vide par un autre moyen —
- * une expression régulière, une fonction — lui échappe. Le filet, là, est le
- * message d'erreur : le refus reste bruyant et nomme le champ.
+ * ── ⚠️ CETTE LIMITE ÉTAIT ÉCRITE, ET ELLE A ÉTÉ FRANCHIE ──────────────
+ *
+ * Ce paragraphe disait, jusqu'au 17/09/2026 : *« cette découverte lit le TEXTE
+ * de la contrainte. Un `check` qui refuserait la chaîne vide par un autre moyen
+ * — une expression régulière, une fonction — lui échappe. Le filet, là, est le
+ * message d'erreur : le refus reste bruyant et nomme le champ. »*
+ *
+ * Le lot **L21** a posé exactement cela : `ck_prestataires_lei`, une expression
+ * régulière ancrée qui ne peut pas accepter la chaîne vide. Et le filet annoncé
+ * **n'a pas suffi** — le refus était bruyant, mais il arrivait au milieu d'une
+ * **reprise de sauvegarde**, où il ne nomme pas un champ à corriger : il fait
+ * échouer la restauration entière. *Le produit produisait de nouveau un export
+ * qu'il refusait de relire*, c'est-à-dire le constat **Q-194** mot pour mot, par
+ * un chemin que son propre correctif avait laissé ouvert et documenté.
+ *
+ * C'est le motif *« on a corrigé l'instance, pas la classe »*, retourné une fois
+ * de plus — et il a été trouvé par le banc, pas par une relecture.
+ *
+ * ── CE QUI REMPLACE LA LECTURE DU TEXTE : UNE ÉPREUVE ────────────────
+ *
+ * `f_contrainte_accepte()` (migration `028`) **évalue le prédicat réel** d'une
+ * contrainte sur une ligne témoin. On lui demande donc, pour chaque colonne
+ * texte portée par un `check` : *accepterais-tu la chaîne vide ici ?* C'est le
+ * `CONVENTIONS.md` §39.1 — *un garde-fou ÉPROUVE, il ne reconnaît pas un mot* —
+ * appliqué à la couche d'écriture au lieu d'un garde-fou.
+ *
+ * ⚠️ La lecture du texte n'est PAS retirée pour autant, et ce n'est pas de la
+ * prudence : elle sert **aussi** à recenser les colonnes de chaque `check`, ce
+ * dont la traduction d'un `23514` a besoin pour ne pas inventer un nom de champ.
+ * L'épreuve la COMPLÈTE ; elle ne la remplace pas.
  */
 async function decouvrirVidesInterdits(
   client: PoolClient,
@@ -1459,6 +1542,39 @@ async function decouvrirVidesInterdits(
       interdits.add(`${ligne.table}.${ligne.colonne}`);
     }
   }
+
+  // ── L'ÉPREUVE, qui rattrape ce que le texte ne dit pas ────────────────
+  //
+  // Une seule requête : pour chaque colonne TEXTE portée par un `check`, on
+  // demande à la base d'évaluer son prédicat avec la chaîne vide. `is false`
+  // et non `= false` — `f_contrainte_accepte()` rend `null` quand elle n'a pas
+  // pu mesurer (valeur témoin du mauvais type, fonction absente), et « je ne
+  // sais pas » ne doit pas se lire « refusé » : on ne convertit que ce qu'on a
+  // mesuré refusé.
+  //
+  // ⚠️ Le coût est borné et payé UNE FOIS, au chargement du catalogue : une
+  // évaluation d'expression par couple (contrainte, colonne texte), soit
+  // quelques centaines au démarrage du serveur.
+  const eprouvees = await client.query<{ table: string; colonne: string }>(`
+    select c.relname::text as table, a.attname::text as colonne
+      from pg_constraint k
+      join pg_class c      on c.oid = k.conrelid and c.relkind in ('r', 'p')
+      join pg_namespace n  on n.oid = c.relnamespace
+      join pg_attribute a  on a.attrelid = c.oid
+                          and a.attnum = any (k.conkey)
+                          and a.attnum > 0 and not a.attisdropped
+      join pg_type t       on t.oid = a.atttypid
+      left join pg_type bt on bt.oid = t.typbasetype
+     where n.nspname = 'public'
+       and k.contype = 'c'
+       and coalesce(bt.typname, t.typname) = 'text'
+       and f_contrainte_accepte(c.relname::text, k.conname::text,
+                                jsonb_build_object(a.attname::text, '')) is false
+  `);
+  for (const ligne of eprouvees.rows) {
+    interdits.add(`${ligne.table}.${ligne.colonne}`);
+  }
+
   return interdits;
 }
 

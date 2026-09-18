@@ -25,7 +25,7 @@
  *
  * ── La couverture est RÉCLAMÉE, pas supposée ─────────────────────────────────
  *
- * Un dernier test balaie les **26 entités du registre** et vérifie que chacune se lit,
+ * Un dernier test balaie les **29 entités du registre** et vérifie que chacune se lit,
  * se décrit, et porte un préfixe d'identifiant. Sans lui, ce fichier resterait un
  * échantillon dont personne ne saurait dire ce qu'il laisse de côté — le reproche
  * exact que la porte a formulé.
@@ -315,7 +315,7 @@ describe('Une entité par famille de différence', () => {
  *  §2 — La couverture, réclamée
  * ===================================================================== */
 
-describe('Les 26 entités du registre, sans échantillonnage', () => {
+describe('Les 29 entités du registre, sans échantillonnage', () => {
   test('chaque entité du modèle est décrite, chargée, et porte un préfixe', async () => {
     const modele = (await serveur.appeler('GET', '/api/modele')).corps;
     const jeu = await donnees();
@@ -328,7 +328,7 @@ describe('Les 26 entités du registre, sans échantillonnage', () => {
     // générique plutôt que dans un greffon à elle — elle n'a besoin de rien de
     // particulier, et y entrer lui donne d'un coup le verrouillage optimiste, le
     // journal, le cloisonnement, l'import et le round-trip `grc-backup`.
-    assert.equal(noms.length, 26);
+    assert.equal(noms.length, 29);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -373,11 +373,41 @@ describe('Les 26 entités du registre, sans échantillonnage', () => {
       // champs — le droit invoqué, le canal, le statut — et la valeur générique
       // « Balayage … » les heurte. C'est le comportement voulu, pas un défaut.
       demandes_droits: { type_demande: 'acces', canal: 'courriel', statut: 'recue' },
+      // ⚠️ **Une arête de sous-traitance a besoin de DEUX bouts, et ils doivent
+      // DIFFÉRER** : la contrainte `ck_prestataire_sous_traitance_boucle` refuse
+      // qu'un tiers se sous-traite à lui-même, ce qui est le comportement voulu
+      // — c'est la boucle de longueur un, celle que le déclencheur anti-cycle ne
+      // voit pas puisqu'elle n'a pas de chemin.
+      //
+      // Le second bout est celui que le balayage vient de créer lui-même : une
+      // fonction plutôt qu'un objet figé, parce que l'identifiant est attribué
+      // PAR LE SERVEUR à la création (`CLAUDE.md` §3) et qu'aucune valeur écrite
+      // ici ne pourrait le connaître.
+      prestataire_sous_traitance: (crees) => ({
+        prestataire_id: 'PRES-A',
+        sous_traitant_id: crees.prestataires,
+      }),
+      // Un questionnaire s'adresse à un tiers RÉEL, et sa clé étrangère est
+      // composite (id, filiale_id) : une valeur inventée rend 409, ce qui est le
+      // comportement voulu — on n'interroge pas un fournisseur qui n'existe pas.
+      questionnaires_tiers: { prestataire_id: 'PRES-A' },
+      // Une réponse porte un vocabulaire fermé, et se rattache à un envoi RÉEL —
+      // celui que le balayage vient de créer. L'identifiant est attribué PAR LE
+      // SERVEUR, d'où la fonction plutôt qu'un objet figé.
+      questionnaire_reponses: (crees) => ({
+        questionnaire_id: crees.questionnaires_tiers,
+        reponse: 'oui',
+      }),
     };
 
     const echecs = [];
+    /** Identifiants attribués par le serveur au fil du balayage, pour les arêtes. */
+    const crees = {};
     for (const [nom, description] of Object.entries(modele.entites)) {
-      const champs = { ...(references[nom] ?? {}) };
+      const reference = references[nom];
+      const champs = {
+        ...(typeof reference === 'function' ? reference(crees) : (reference ?? {})),
+      };
       for (const [champ, forme] of Object.entries(description.champs)) {
         if (!forme.obligatoire || champs[champ] !== undefined) continue;
         champs[champ] =
@@ -399,6 +429,8 @@ describe('Les 26 entités du registre, sans échantillonnage', () => {
       const reponse = await appelant.appeler('POST', `/api/entites/${nom}`, { corps: { champs } });
       if (reponse.statut !== 201) {
         echecs.push(`${nom} → ${reponse.statut} ${JSON.stringify(reponse.corps.message ?? reponse.corps)}`);
+      } else {
+        crees[nom] = reponse.corps?.enregistrement?.id ?? reponse.corps?.id;
       }
     }
     assert.deepEqual(echecs, [], 'Chaque entité doit être créable par la route générique.');

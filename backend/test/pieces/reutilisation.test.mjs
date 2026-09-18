@@ -44,7 +44,10 @@ import {
   pdfValide,
   perimetreDe,
   REQUETE_CASCADES,
+  colonnesVersLeMemeParent,
+  parentsRequis,
   SessionDEssai,
+  vocabulairesClos,
 } from './aide.mjs';
 
 const { TOUS_LES_DOMAINES } = await moduleCompile('api/droits.js');
@@ -144,15 +147,28 @@ async function cascadesDuSchema() {
 
 /** Le modèle rendu par l'API : c'est lui qui dit les champs obligatoires. */
 let modeleEntites;
+/** Les valeurs admises, par « table.colonne » — chargées une fois. */
+let vocabulaires;
 
 /** Crée un enregistrement en remplissant ses seuls champs obligatoires. */
 async function creer(entite, champs = {}) {
   modeleEntites ??= (await serveur.appeler('GET', '/api/modele')).corps.entites;
+  // ⚠️ Le vocabulaire clos ne vient PAS du modèle : `/api/modele` rend le type
+  // et l'obligation d'un champ, jamais ses valeurs admises. Il se lit dans le
+  // catalogue, sans quoi une colonne à la fois obligatoire ET énumérée — la
+  // première est `questionnaire_reponses.reponse`, migration `043` — recevrait
+  // la valeur générique ci-dessous et rendrait `400`.
+  vocabulaires ??= await base.avecPerimetre(
+    applicatif,
+    perimetre('temoin', FILIALE_A, [FILIALE_A]),
+    async (c) => await vocabulairesClos(c),
+  );
   const description = modeleEntites[entite];
   assert.ok(description, `« ${entite} » n’est pas une entité du modèle.`);
   const corps = { ...champs };
   for (const [champ, forme] of Object.entries(description.champs)) {
     if (!forme.obligatoire || corps[champ] !== undefined) continue;
+    const admises = vocabulaires[`${entite}.${champ}`];
     corps[champ] =
       forme.type === 'entier' || forme.type === 'nombre'
         ? 1
@@ -160,13 +176,39 @@ async function creer(entite, champs = {}) {
           ? false
           : forme.type === 'date'
             ? '2026-12-24'
-            : forme.valeurs !== undefined && forme.valeurs.length > 0
-              ? forme.valeurs[0]
+            : admises !== undefined
+              ? admises[0]
               : `19.4 ${entite} ${champ}`;
   }
   const reponse = await serveur.appeler('POST', `/api/entites/${entite}`, { corps: { champs: corps } });
   assert.equal(reponse.statut, 201, `${entite} : ${JSON.stringify(reponse.corps)}`);
   return reponse.corps.enregistrement.id;
+}
+
+/**
+ * Crée un enregistrement EN CRÉANT D'ABORD les parents qu'il doit nommer.
+ *
+ * ⚠️ `questionnaires_tiers` (migration `043`) est à la fois **parent** de
+ * `questionnaire_reponses` et **enfant** de `prestataires` : le créer sans
+ * nommer son tiers rend `409`, et le balayage échouait sur une entité
+ * parfaitement saine. Les parents sont DÉCOUVERTS dans les mêmes cascades que
+ * le reste — aucune liste à tenir.
+ *
+ * La profondeur est bornée : le graphe des cascades est acyclique aujourd'hui,
+ * mais un essai qui BOUCLERAIT au lieu de rougir ne signalerait jamais rien
+ * (constat Q-251).
+ */
+async function creerAvecParents(entite, cascades, champs = {}, profondeur = 0) {
+  if (profondeur > 5) {
+    throw new Error(`Chaîne de parents trop profonde à partir de « ${entite} » : ` +
+      'le graphe des cascades est-il devenu cyclique ?');
+  }
+  const complet = { ...champs };
+  for (const parent of parentsRequis(cascades, entite)) {
+    if (complet[parent.colonne] !== undefined) continue;
+    complet[parent.colonne] = await creerAvecParents(parent.parent, cascades, {}, profondeur + 1);
+  }
+  return await creer(entite, complet);
 }
 
 /** Dépose une pièce et rend `{ id, chemin, disque }`. */
@@ -406,8 +448,14 @@ describe('19.4 — sur CHAQUE chemin de cascade, la preuve partagée survit puis
       // ne l'emporte pas elle aussi — sinon l'essai mesurerait « tout a disparu »
       // et passerait pour la mauvaise raison.
       const secondType = enfant === 'documents' || parent === 'documents' ? 'risques' : 'documents';
-      const idParent = await creer(parent);
-      const idEnfant = await creer(enfant, { [colonne]: idParent });
+      const idParent = await creerAvecParents(parent, cascades);
+      // ⚠️ Un enfant peut nommer le même parent par PLUSIEURS colonnes — voir
+      // `colonnesVersLeMemeParent`. Chacune reçoit un parent DISTINCT.
+      const rattachements = { [colonne]: idParent };
+      for (const autre of colonnesVersLeMemeParent(cascades, parent, enfant)) {
+        if (autre !== colonne) rattachements[autre] = await creerAvecParents(parent, cascades);
+      }
+      const idEnfant = await creerAvecParents(enfant, cascades, rattachements);
       const idSecond = await creer(secondType);
       const piece = await deposerSur(enfant, idEnfant, `partagee-${enfant}.pdf`);
 

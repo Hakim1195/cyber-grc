@@ -23,6 +23,8 @@
  * | 4 | déclarations d'incidents | `déclaration_anssi` ou `_cnil` = « à déclarer » ; échéance = **détection + 72 h** ; détection inconnue → **immédiat** | `date_detection + 3` ; `null` → 0 jour |
  * | 5 | audits | `a.date` non vide et statut ≠ « réalisé » | `date_audit is not null and statut <> 'Réalisé'` |
  * | 6 | revues de direction | `r.date` non vide **et à venir** (`jours ≥ 0`) | `date_revue is not null and (date_revue - ref) >= 0` |
+ * | 7 | questionnaires fournisseurs | `q.echeance` non vide, **envoyé** et **non reçu** | `echeance is not null and envoye_le is not null and recu_le is null` |
+ * | 8 | échéances contractuelles des tiers | les trois dates de `prestataires` : fin de contrat, revue de clauses, plan de sortie | une ligne par date non nulle |
  *
  * ⚠️ **Deux écarts assumés, et ils sont écrits parce qu'ils sont des écarts :**
  *
@@ -77,7 +79,7 @@ import type { PoolClient } from 'pg';
  * ===================================================================== */
 
 /**
- * Les six sources, avec le libellé **écrit par le développeur** qui les nomme
+ * Les huit sources, avec le libellé **écrit par le développeur** qui les nomme
  * dans un courriel, et la route de l'écran qui les montre.
  *
  * ⚠️ Ces libellés sont la seule chose que le message dit du *quoi*, et c'est
@@ -97,6 +99,8 @@ export const SOURCES = Object.freeze({
   incident: { libelle: "Déclarations d'incident", route: '#/incidents' },
   audit: { libelle: 'Audits', route: '#/audits' },
   revue: { libelle: 'Revues de direction', route: '#/audits' },
+  questionnaire: { libelle: 'Questionnaires fournisseurs', route: '#/prestataires' },
+  contrat: { libelle: 'Échéances contractuelles', route: '#/prestataires' },
 } as const);
 
 export type TypeEcheance = keyof typeof SOURCES;
@@ -290,6 +294,67 @@ export async function recolterEcheances(
       )
     ).rows,
     nomsDe,
+  );
+
+
+  /* 7. Questionnaires fournisseurs (lot L21, action 21.2) — la date de retour d'un
+        questionnaire ENVOYÉ et non encore reçu.
+
+        ⚠️ Les deux exclusions sont celles de `f_etat_questionnaire()` et de
+        `js/services/echeances.js`, dans le même ordre : un questionnaire REÇU
+        n'est plus une obligation (même reçu en retard — relancer quelqu'un qui a
+        déjà répondu est le plus sûr moyen de faire ignorer les relances), et un
+        BROUILLON n'en est pas encore une.
+
+        ⚠️ **Aucun destinataire résoluble**, et c'est le même manque de modèle que
+        pour les incidents : `questionnaires_tiers` ne porte pas de responsable
+        interne. L'adresse de `prestataires.email` est celle du FOURNISSEUR — s'en
+        servir enverrait le bilan interne du groupe à l'extérieur. Ces lignes
+        partent donc dans `sansDestinataire` du bilan de `relances.ts`. */
+  verser(
+    'questionnaire',
+    (
+      await client.query<LigneDatee>(
+        `select "id", ("echeance" - $1::date) as "jours", null::text as "qui"
+           from "questionnaires_tiers"
+          where "echeance" is not null
+            and "envoye_le" is not null
+            and "recu_le" is null`,
+        [jour],
+      )
+    ).rows,
+    unNom,
+  );
+
+  /* 8. Échéances contractuelles des tiers (lot L21, action 21.3) — fin de contrat,
+        revue des clauses de sécurité, plan de sortie.
+
+        ⚠️ `evalue_le` n'y est PAS : c'est la date de la dernière évaluation, un
+        fait passé. La ranger ici inverserait son sens.
+
+        ⚠️ **L'identifiant est composite** (`<tiers>:<date>`), parce qu'un même
+        tiers porte jusqu'à trois obligations distinctes. Rendre trois lignes de
+        même identifiant ferait dire au bilan « trois échéances » là où le seul
+        moyen de les distinguer aurait disparu ; n'en rendre qu'une ferait
+        diverger le compte du courriel de celui de l'écran. Rien d'autre ne lit
+        cet identifiant : `message.ts` ne se sert que du libellé et de la route. */
+  verser(
+    'contrat',
+    (
+      await client.query<LigneDatee>(
+        `select p."id" || ':' || d."quoi" as "id",
+                (d."date" - $1::date)    as "jours",
+                null::text               as "qui"
+           from "prestataires" p
+           cross join lateral (values ('contrat_fin',      p."contrat_fin"),
+                                      ('contrat_revue_le', p."contrat_revue_le"),
+                                      ('plan_sortie_le',   p."plan_sortie_le"))
+                as d("quoi", "date")
+          where d."date" is not null`,
+        [jour],
+      )
+    ).rows,
+    unNom,
   );
 
   return { echeances, sansDate };

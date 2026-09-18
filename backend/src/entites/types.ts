@@ -63,7 +63,18 @@ export type NomEntite =
   | 'referentiels_actifs'
   | 'derogations'
   | 'analyses_impact'
-  | 'demandes_droits';
+  | 'demandes_droits'
+  // v19 — la chaîne de sous-traitance des tiers (action 21.1). ⚠️ Le nom est
+  // celui de la TABLE : c'est lui qui part dans `journal_audit.entite_type`,
+  // porté par le domaine `type_entite`, et un nom plus court rendrait l'entité
+  // INCRÉABLE (CONVENTIONS.md §40.1).
+  | 'prestataire_sous_traitance'
+  // v20 — le questionnaire fournisseur (action 21.2) : l'ENVOI et les RÉPONSES.
+  // ⚠️ Les QUESTIONS ne sont ni l'un ni l'autre : elles vivent dans les catalogues
+  // de référentiels, et « code » fait la jointure — comme « evaluations » depuis
+  // le premier chantier.
+  | 'questionnaires_tiers'
+  | 'questionnaire_reponses';
 
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;

@@ -45,6 +45,8 @@ export const SECRETS_SEMES = Object.freeze([
   `${MARQUE}-Marie Dupont`,
   `${MARQUE}-Jean Martin`,
   `${MARQUE}-commentaire confidentiel de l'action`,
+  `${MARQUE}-Hébergeur de l'ERP de Hambourg`,
+  `${MARQUE}-Questionnaire annuel du fournisseur critique`,
 ]);
 
 /** Adresses de l'annuaire semé. Elles PEUVENT figurer dans l'enveloppe, jamais dans le corps. */
@@ -57,7 +59,7 @@ const ISO = (jours, reference) => {
 };
 
 /**
- * Sème, dans **une** filiale, un jeu d'échéances couvrant les six sources.
+ * Sème, dans **une** filiale, un jeu d'échéances couvrant les huit sources.
  *
  * @param base            base ouverte par `ouvrirBaseEssai`
  * @param client          connexion du compte applicatif
@@ -169,6 +171,47 @@ export async function semerEcheances(base, client, filiale, reference, options =
           `${responsable}\n${SECRETS_SEMES[7]}`,
           SECRETS_SEMES[5],
         ],
+      );
+
+      // 7 et 8. Les tiers (lot L21) — un prestataire dont la SOCIÉTÉ est un secret
+      //    semé, portant ses trois dates contractuelles, et un questionnaire envoyé
+      //    non reçu dont l'INTITULÉ en est un autre.
+      //
+      //    ⚠️ Ni l'un ni l'autre ne porte de responsable interne : ces échéances
+      //    sont dues et n'ont PAS de destinataire, comme les incidents. Le bilan
+      //    doit les compter — et le contrôle de fuite doit vérifier que ces deux
+      //    chaînes ne franchissent pas le courriel.
+      await c.query(
+        `insert into prestataires
+             (id, filiale_id, societe, criticite, acces,
+              contrat_fin, contrat_revue_le, plan_sortie_le, evalue_le)
+         values ($1, $2, $3, 'vitale', 'etendu', $4, $5, $6, $7)`,
+        [
+          `PRES-L12-${s}`,
+          filiale,
+          SECRETS_SEMES[9],
+          ISO(6, reference),
+          ISO(1, reference),
+          ISO(-4, reference),
+          // ⚠️ `evalue_le` est un fait PASSÉ : il ne doit produire AUCUNE
+          // échéance. Le semer ici est ce qui donne du sens au décompte.
+          ISO(-90, reference),
+        ],
+      );
+      await c.query(
+        `insert into questionnaires_tiers
+             (id, filiale_id, prestataire_id, ref_id, intitule, envoye_le, echeance)
+         values ($1, $2, $3, 'aircyber', $4, $5, $6)`,
+        [`QUES-L12-${s}`, filiale, `PRES-L12-${s}`, SECRETS_SEMES[10], ISO(-20, reference), ISO(3, reference)],
+      );
+      // Un questionnaire DÉJÀ REÇU, à la même échéance : il ne doit PAS être
+      // relancé — relancer qui a répondu est le plus sûr moyen de faire ignorer
+      // les relances.
+      await c.query(
+        `insert into questionnaires_tiers
+             (id, filiale_id, prestataire_id, ref_id, intitule, envoye_le, echeance, recu_le)
+         values ($1, $2, $3, 'aircyber', 'Questionnaire reçu, hors relance', $4, $5, $6)`,
+        [`QUES-CLOS-${s}`, filiale, `PRES-L12-${s}`, ISO(-20, reference), ISO(3, reference), ISO(-1, reference)],
       );
 
       // Hors horizon : dans 60 jours. Ne doit pas être relancé.

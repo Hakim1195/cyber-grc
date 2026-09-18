@@ -65,10 +65,10 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 18`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 20`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
-côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v18**. Elle est
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v20**. Elle est
 indépendante du numéro des migrations SQL.
 
 > ⚠️ **Ce paragraphe a annoncé « v12 » pendant quatre montées de version**, du 04/09 au
@@ -134,6 +134,33 @@ indépendante du numéro des migrations SQL.
 > Migrations transparentes — `normalize` crée les tableaux vides à la volée (et garantit
 >     `dependances`, la conversion des anciennes actions MCO, de `mesure_id`→`mesure_ids[]`, et le
 >     tableau `mesures_ids` des documents).
+> v19 (lot L21, action 21.1) : ajout de `prestataire_sous_traitance` — la **chaîne de
+>     sous-traitance** des tiers, exigée par l'article 29 de DORA. On y range l'**arête**
+>     (« ce prestataire sous-traite CECI à celui-là »), jamais le **rang**. ⚠️ « Rang 1,
+>     rang 2, rang n » se DÉRIVENT du parcours du graphe (`f_chaine_sous_traitance`) : les
+>     ranger obligerait quelque chose à les décaler à chaque intercalation, et le jour où ce
+>     quelque chose ne repasse pas, le registre d'information remis à l'autorité annonce des
+>     rangs faux, en silence. ⚠️ **L'anti-cycle est EN BASE**, pas dans la route : il y a
+>     quatre chemins d'écriture (route générique, import généralisé, reprise d'un export,
+>     `psql`), et une route ne voit que le sien. ⚠️ Le palier ne **devine** rien : on ne
+>     fabrique pas une arête depuis le champ libre `notes` d'un prestataire. La v19 ajoute
+>     aussi à `prestataires` les champs du **registre DORA** (LEI, pays, fonction supportée
+>     et son caractère critique, type de service, dates et référence contractuelles, pays de
+>     traitement des données, substituabilité, plan de sortie daté, date de dernière
+>     évaluation) — des colonnes, pas une collection.
+> v20 (lot L21, action 21.2) : ajout de `questionnaires_tiers` — l'**envoi** d'un
+>     questionnaire de sécurité à un tiers — et de `questionnaire_reponses` — ce qu'il a
+>     répondu, question par question. ⚠️ **Aucune de ces deux collections ne porte les
+>     QUESTIONS** : le texte des référentiels vit dans les catalogues
+>     (`js/data/ref_*.js`), et `code` fait la jointure — exactement comme
+>     `evaluations(ref_id, code)` depuis le premier chantier. Les recopier en ferait une
+>     seconde source, et la seconde vieillirait : BoostAerospace **révise** son
+>     questionnaire. ⚠️ **Aucun champ d'état** non plus : « en retard » se dérive des
+>     dates (`f_etat_questionnaire`), et le figer dans le fichier rendrait « dans les
+>     temps », six mois après l'export, un questionnaire jamais revenu. ⚠️ Et le produit
+>     **n'envoie rien** : `envoye_le` et `relance_le` sont des **faits consignés**. Le
+>     portail qui changerait cela est le lot **L28** ; l'export/réimport reste la voie de
+>     repli **permanente**, pas un état transitoire.
 
 ---
 
@@ -178,7 +205,7 @@ Inchangé — c'est aussi la charge utile d'un fichier `grc-backup` :
 
 ```jsonc
 {
-  "schemaVersion": 18,   // = SCHEMA_VERSION courant
+  "schemaVersion": 20,   // = SCHEMA_VERSION courant
   "updatedAt": 1730000000000,
   "clients": [],        "exigences": [],   "actions": [],
   "risques": [],        "actifs": [],      "processus": [],
@@ -238,7 +265,7 @@ Conséquences pratiques :
 
 ### 1.5 Correspondance entre l'objet `data` et le schéma serveur
 
-**26 collections, 26 entités.** Les noms coïncident partout sauf pour `mesures` :
+**29 collections, 29 entités.** Les noms coïncident partout sauf pour `mesures` :
 
 | Collection `data` | Table(s) PostgreSQL | Préfixe d'identifiant |
 |---|---|---|
@@ -268,6 +295,9 @@ Conséquences pratiques :
 | `derogations` | `derogations` | `DER` |
 | **`analyses_impact`** | **`analyses_impact`** (l'analyse) **+ `analyse_mesures`** (les contrôles qu'elle PRÉVOIT) | `AIPD` |
 | `demandes_droits` | `demandes_droits` | `DSAR` |
+| `prestataire_sous_traitance` | `prestataire_sous_traitance` | `SOUS` |
+| `questionnaires_tiers` | `questionnaires_tiers` | `QUES` |
+| `questionnaire_reponses` | `questionnaire_reponses` | `QREP` |
 
 **La scission des mesures**, en une phrase : l'entité unique du modèle navigateur
 portait deux choses de nature différente — la **définition** du contrôle (la même

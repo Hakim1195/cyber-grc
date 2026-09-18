@@ -5,7 +5,7 @@
  * serveur : le lot L12 lit les mêmes dates, avec les mêmes règles, ou il
  * divergera. »* Cette famille éprouve les deux moitiés :
  *
- *  1. **Les six sources sont les mêmes**, et la liste est **découverte** dans
+ *  1. **Les huit sources sont les mêmes**, et la liste est **découverte** dans
  *     `cyber-gouvernance_V4/js/services/echeances.js` plutôt que recopiée. Une
  *     septième source ajoutée à l'écran fera rougir cet essai — ce qui est
  *     précisément ce qu'on veut d'une liste qui vit à deux endroits.
@@ -52,7 +52,7 @@ async function recolter(travailDeSemis = async () => {}) {
   );
 }
 
-describe('L12 — les six sources sont celles de l’écran', () => {
+describe('L12 — les huit sources sont celles de l’écran', () => {
   test('la liste est DÉCOUVERTE dans js/services/echeances.js, jamais recopiée', () => {
     const source = readFileSync(join(RACINE_FRONTEND, 'js', 'services', 'echeances.js'), 'utf8');
     const trouves = [...source.matchAll(/type:\s*"([a-z_]+)"/gu)].map((m) => m[1]);

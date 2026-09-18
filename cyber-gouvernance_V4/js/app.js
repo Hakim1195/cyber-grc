@@ -143,6 +143,13 @@ async function startApp() {
 
         "/prestataires": () => { if (typeof PraPrestatairesModule !== "undefined") PraPrestatairesModule.renderList(); },
         "/prestataires/:id": (id) => { if (typeof PraPrestatairesModule !== "undefined") PraPrestatairesModule.renderDetail(id); },
+        // Le registre d'information DORA (lot L21, action 21.1) : une VUE de
+        // plus sur les mêmes tiers, donc un onglet et non une entrée de menu —
+        // c'est l'architecture posée le 16/09 (`docs/PLAN_INTERFACE.md`).
+        // ⚠️ Il ne peut pas s'écrire « /prestataires/dora » : le routeur y
+        // verrait l'identifiant d'un prestataire, et l'écran dirait
+        // « Prestataire introuvable » (même piège que /rgpd-aipd).
+        "/tiers-dora": () => { if (typeof PraPrestatairesModule !== "undefined") PraPrestatairesModule.renderRegistreDora(); },
 
 	"/audits": () => { if (typeof AuditsModule !== "undefined") AuditsModule.renderList(); },
 	"/audits/:id": (id) => { if (typeof AuditsModule !== "undefined") AuditsModule.renderAuditDetail(id); },
@@ -365,6 +372,7 @@ const ROUTE_META = {
     "/mco":          { s: "fil.section.continuite", t: "fil.mco" },
     "/tests":        { s: "fil.section.continuite", t: "fil.tests" },
     "/prestataires": { s: "fil.section.continuite", t: "fil.prestataires" },
+    "/tiers-dora": { s: "fil.section.tiers", t: "fil.tiersDora" },
     "/settings":     { s: "fil.section.administration", t: "fil.settings" }
 };
 
@@ -1092,6 +1100,7 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/echeances":    "pilotage",
     "/clients":      "tiers",
     "/prestataires": "tiers",
+    "/tiers-dora": "tiers",
     "/personnel":    "personnel",
     "/actifs":       "actifs",
     "/cartographie": "actifs",

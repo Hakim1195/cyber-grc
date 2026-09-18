@@ -154,7 +154,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
 | 47 | Plan d'action unique multi-sources | ✅ | Actions reliées à exigence, **mesure**, risque, incident, audit | — |
-| 48 | Kanban / échéancier | 🟡 | Échéancier consolidé excellent (6 sources, calendrier, ICS, Excel). **Kanban ❌** | L17.5 |
+| 48 | Kanban / échéancier | 🟡 | Échéancier consolidé excellent (**8 sources** depuis L21, calendrier, ICS, Excel). **Kanban ❌** | L17.5 |
 | 49 | Notifications / escalade | ✅ | L12 : relances SMTP sur 6 types d'échéances | — |
 | 50 | Renvoi vers Jira / ServiceNow | ❌ | Absent | L22.6 |
 

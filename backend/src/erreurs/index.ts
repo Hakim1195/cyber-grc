@@ -585,6 +585,36 @@ export function traduireErreurPostgres(
         codeGrc: 'GRC07',
       });
 
+    case 'GRC08':
+      // Le déclencheur anti-cycle de la migration `042` refuse une arête de
+      // sous-traitance qui refermerait une boucle. Son message est **écrit POUR
+      // l'utilisateur** — il nomme les deux tiers et le chemin qui referme, et
+      // rien d'autre : ni nom de fonction, ni requête.
+      //
+      // ══ LA MÊME FAUTE QUE B-2, ÉVITÉE PARCE QU'ON L'A CHERCHÉE ═══════════
+      //
+      // `GRC07` n'était pas traduit et tombait dans le générique : un utilisateur
+      // recevait **500 avec une pile d'appel** pour une faute de saisie ordinaire,
+      // et *le banc ne pouvait pas le voir parce que le code était éprouvé en SQL
+      // direct, jamais par la route*. L'essai de ce lot-ci
+      // (`test/base/tiers-anticycle.test.mjs` §3) mesure donc **ce que la route
+      // rend**, et c'est lui qui a fait apparaître ce `case` : sans lui, `GRC08`
+      // serait sorti en 500, exactement comme `GRC07`.
+      //
+      // `409` et non `400`, et la nuance porte le geste utile : la valeur envoyée
+      // est parfaitement valide en elle-même — ces deux tiers existent, et
+      // l'utilisateur les voit tous les deux. Ce qui s'y oppose est l'ÉTAT du
+      // graphe, c'est-à-dire d'autres lignes. Le geste n'est pas « choisissez une
+      // autre valeur » mais « retirez d'abord le maillon qui referme », et c'est
+      // ce que dit le message de la base.
+      return new ErreurApplicative({
+        code: 'contrainte_base',
+        statut: 409,
+        message: erreur.message,
+        detailJournal,
+        codeGrc: 'GRC08',
+      });
+
     case 'GRC04':
       // Le périmètre de session n'a pas été positionné, ou il est incohérent.
       // Ce n'est jamais une faute de l'utilisateur : c'est un défaut de

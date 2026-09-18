@@ -16,14 +16,23 @@ const EcheancesModule = (() => {
     let viewMode = "list";              // "list" | "calendar"
     let calYear = null, calMonth = null; // mois affiché en vue calendrier
 
-    const TYPES = [
-        { key: "action", label: "Plan d'actions" },
-        { key: "mco", label: "Actions MCO" },
-        { key: "document", label: "Revues documentaires" },
-        { key: "incident", label: "Déclarations incident" },
-        { key: "audit", label: "Audits" },
-        { key: "revue", label: "Revues de direction" }
-    ];
+    /* Les types de filtre se DÉCOUVRENT dans ce que l'agrégateur rend — ils ne sont pas
+       écrits à la main. Motif (règle du `CLAUDE.md` §3) : une liste écrite ici devient
+       incomplète le jour où une source s'ajoute à `js/services/echeances.js`, et ce
+       qu'elle produit alors est silencieux — les échéances neuves s'affichent, mais
+       aucun bouton ne permet de les isoler. C'est arrivé au lot L21 : deux sources de
+       plus (questionnaires fournisseurs, échéances contractuelles) sans un mot de cette
+       liste. L'étiquette vient de `typeLabel`, seule source. */
+    function typesDe(list) {
+        const vus = [];
+        const connus = {};
+        (list || []).forEach(it => {
+            if (!it || !it.type || connus[it.type]) return;
+            connus[it.type] = true;
+            vus.push({ key: it.type, label: it.typeLabel || it.type });
+        });
+        return vus;
+    }
 
     const BUCKETS = [
         { key: "retard", label: "En retard", color: "var(--color-danger)" },
@@ -267,7 +276,7 @@ const EcheancesModule = (() => {
         if (calYear === null) { const d = new Date(); calYear = d.getFullYear(); calMonth = d.getMonth(); }
 
         const typeButtons = [`<button class="ech-fbtn${filterType === "all" ? " active" : ""}" data-type="all">Tous</button>`]
-            .concat(TYPES.map(t => `<button class="ech-fbtn${filterType === t.key ? " active" : ""}" data-type="${t.key}">${t.label}</button>`))
+            .concat(typesDe(Echeances.collect()).map(t => `<button class="ech-fbtn${filterType === t.key ? " active" : ""}" data-type="${escapeHtml(t.key)}">${escapeHtml(t.label)}</button>`))
             .join("");
 
         const todayStr = new Date().toLocaleDateString('fr-FR');

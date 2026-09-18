@@ -69,7 +69,16 @@ export type NomCollection =
   // v14 — les dérogations datées (action 19.2).
   | 'derogations'
   | 'analyses_impact'
-  | 'demandes_droits';
+  | 'demandes_droits'
+  // v19 — la chaîne de sous-traitance des tiers (action 21.1). ⚠️ Le nom de la
+  // collection est celui de la TABLE, et ce n'est pas un détail de style : c'est
+  // lui qui part dans `journal_audit.entite_type`, porté par le domaine
+  // `type_entite` — un nom plus court ici rendrait la collection INCRÉABLE
+  // (CONVENTIONS.md §40.1).
+  | 'prestataire_sous_traitance'
+  // v20 — le questionnaire fournisseur (action 21.2).
+  | 'questionnaires_tiers'
+  | 'questionnaire_reponses';
 
 /**
  * Charge utile normalisée en v12.

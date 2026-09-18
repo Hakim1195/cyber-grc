@@ -129,6 +129,7 @@ import { greffonRecherche } from '../recherche/index.js';
 import { greffonAttestations } from '../attestations/index.js';
 import { greffonAipd } from '../aipd/index.js';
 import { greffonDerogations } from '../derogations/index.js';
+import { greffonTiers } from '../tiers/index.js';
 import { greffonCrise } from '../crise/index.js';
 import { greffonDroitsPersonnes } from '../droits-personnes/index.js';
 import { greffonReglementaire } from '../reglementaire/index.js';
@@ -3211,6 +3212,12 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   // DELETE, et ce n'est pas un oubli : une main courante rééditable ne prouve
   // rien. La base le tient par les quatre couches du CONVENTIONS.md §12.
   await instance.register(greffonCrise, { pool });
+  // Lot L21, actions 21.1, 21.3 et 21.4 — le registre d'information DORA, la
+  // chaîne de sous-traitance (dont le RANG se dérive) et le score composite d'un
+  // tiers. Aucune écriture : les prestataires et leurs arêtes sont des entités
+  // ordinaires, qui héritent du verrouillage optimiste, du journal, du
+  // cloisonnement et de l'import généralisé sans qu'une ligne soit écrite là-bas.
+  await instance.register(greffonTiers, { pool });
   // Lot L17, A3 — la recherche globale.
   //
   // ⚠️ Elle reçoit `cumulerSondage`, **le compteur du sondage**, et non un

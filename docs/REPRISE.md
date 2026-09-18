@@ -59,6 +59,7 @@ les 19 qui lancent Chromium prennent **520 s** et doivent rester **en série**.
 
 | | |
 |---|---|
+| **Tiers, chaîne de sous-traitance et DORA** (L21, ses quatre actions) | Registre d'information DORA, **chaîne de sous-traitance** (l'arête est stockée, le **rang se dérive**, l'anti-cycle est **en base**), questionnaire fournisseur qui **s'exporte et se réimporte** — le produit n'envoie rien —, suivi contractuel, et **score composite dérivé** dont le barème est SERVI. Migrations `042` et `043`, schéma **v20**. ⚠️ **Deux leçons** : la `043` avait été livrée *mordue par rien* (23 essais et cinq mutations l'ont fermée), et le critère de 21.3 — « les échéances contractuelles alimentent l'échéancier existant » — **n'était tenu nulle part**, alors que la migration l'écrivait dans le commentaire de sa propre colonne |
 | **Jeu de découverte** (L18 bis) | Un groupe industriel fictif complet. Marque de provenance posée **par la base**, inforgeable. Migration `032` |
 | **Menu repliable** (L17, A2) | 32 entrées à plat → six sections |
 | **Architecture des sections** (16/09) | **Sept** sections, **28** entrées : quatre vues redondantes deviennent des **onglets** (matrice, socle, référentiels applicables, couverture croisée), et la couverture — qui n'avait AUCUNE porte — en gagne une. Le fil d'Ariane déduit sa section du menu. `docs/PLAN_INTERFACE.md` |
@@ -125,7 +126,8 @@ modules du produit.
 §4 impose de rejouer l'indicateur à la clôture d'une vague : *« il se rejoue, il ne s'estime
 pas »*.
 
-**Puis** : vague C (L21 tiers et DORA, L24 campagnes), vague D (L25 EBIOS RM, L26 catalogues
+**Puis** : ~~L21 tiers et DORA~~ ✅ **livré les 17 et 18/09** — reste **L24 campagnes**
+pour clore la vague C ; vague D (L25 EBIOS RM, L26 catalogues
 ouverts), vague E (L22 ouverture technique, L23 collecte automatique), vague F (L27 IA
 locale, L28 portail fournisseur — en dernier, seules surfaces externes).
 

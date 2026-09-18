@@ -1219,6 +1219,27 @@ const Api = (() => {
     function decouverteSemer() { return appeler("/decouverte/semer",  { methode: "POST" }); }
     function decouvertePurger(){ return appeler("/decouverte/purger", { methode: "POST" }); }
 
+    /* ── Les tiers et le registre DORA — lot L21 ──────────────────────────
+       Quatre lectures, aucune écriture : les prestataires et leurs arêtes de
+       sous-traitance sont des entités ORDINAIRES, créées et modifiées par les
+       routes génériques. Ce qui vit ici est ce qu'aucune entité ne peut rendre :
+       un score DÉRIVÉ, un rang DÉRIVÉ, et un registre assemblé.
+
+       ⚠️ `tiersRegistreDora` exige le droit d'EXPORT côté serveur, et non la
+       simple lecture — un registre d'information complet est la carte des
+       dépendances critiques du groupe. L'écran doit donc savoir traiter un 403
+       sans le présenter comme une panne. */
+    function tiersBareme()  { return appeler("/tiers/bareme"); }
+    function tiersEtat()    { return appeler("/tiers/etat"); }
+    function tiersChaine(prestataireId) {
+        return appeler("/tiers/chaine/" + encodeURIComponent(prestataireId));
+    }
+    function tiersRegistreDora() { return appeler("/tiers/registre-dora"); }
+    /* L'état DÉRIVÉ des questionnaires fournisseurs (action 21.2). ⚠️ Le compte
+       de QUESTIONS n'y est pas : le serveur ne connaît pas les catalogues de
+       référentiels, qui vivent ici. C'est l'écran qui fait la division. */
+    function tiersQuestionnaires() { return appeler("/tiers/questionnaires"); }
+
     function propagerMesure(mesureId) {
         return appeler("/operations/propager-mesure", { methode: "POST", corps: { mesureId: mesureId } });
     }
@@ -1246,6 +1267,8 @@ const Api = (() => {
         echeancesReglementaires, consignerDeclaration,
         // Lot L19, action 19.2 : l'état DÉRIVÉ des dérogations.
         derogationsEtat, aipdEtat, demandesDroitsEtat,
+        // Lot L21 : le registre DORA, la chaîne DÉRIVÉE et le score composite.
+        tiersBareme, tiersEtat, tiersChaine, tiersRegistreDora, tiersQuestionnaires,
         mainCourante, ajouterMainCourante,
         // Lot L18 bis : le jeu de découverte.
         decouverteEtat, decouverteSemer, decouvertePurger

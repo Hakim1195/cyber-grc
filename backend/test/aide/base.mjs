@@ -653,6 +653,37 @@ export async function semerJeuEssai(base, client, options = {}) {
         await c.query(`insert into history      (id, filiale_id, date_point, metrics) values ('HIST-${s}', $1, date '2026-01-15', '{"conformite": 42}'::jsonb)`, f);
         await c.query(`insert into mco_actions  (id, filiale_id, titre) values ('MCO-${s}', $1, 'Tester les sauvegardes')`, f);
         await c.query(`insert into prestataires (id, filiale_id, societe) values ('PRES-${s}', $1, 'Infogérance SA')`, f);
+        // ⚠️ **Un SECOND prestataire, et il n'est pas décoratif** : une arête de
+        // sous-traitance a besoin de deux bouts, et la contrainte
+        // `ck_prestataire_sous_traitance_boucle` refuse qu'un tiers se sous-traite à
+        // lui-même. Sans ce second tiers, la table de la migration `042` resterait
+        // vide dans le semis — c'est-à-dire un angle mort du balayage de
+        // cloisonnement, qui rendrait « zéro ligne visible » pour la seule raison
+        // qu'il n'y a rien à voir (`test/api/chargement-filiale.test.mjs`).
+        await c.query(`insert into prestataires (id, filiale_id, societe) values ('PRES2-${s}', $1, 'Sauvegardes Atlantique')`, f);
+        await c.query(
+          `insert into prestataire_sous_traitance
+               (id, filiale_id, prestataire_id, sous_traitant_id, service)
+           values ('SOUS-${s}', $1, 'PRES-${s}', 'PRES2-${s}', 'Sauvegarde externalisée')`, f);
+        // ⚠️ **Le questionnaire de la migration `043`, des DEUX côtés du semis.** Même
+        // motif que l'arête ci-dessus : sans lui, `questionnaires_tiers` et
+        // `questionnaire_reponses` resteraient vides, et le balayage de cloisonnement
+        // rendrait « zéro ligne visible » pour la seule raison qu'il n'y a rien à voir.
+        //
+        // ⚠️ Les dates respectent les trois règles de chronologie posées par la `043` :
+        // on ne relance ni ne reçoit ce qu'on n'a pas envoyé, et une échéance
+        // antérieure à l'envoi n'a jamais laissé le temps de répondre. Un semis qui les
+        // enfreindrait ferait échouer TOUTES les familles à l'ouverture de leur base,
+        // pour une raison étrangère à ce qu'elles mesurent.
+        await c.query(
+          `insert into questionnaires_tiers
+               (id, filiale_id, prestataire_id, ref_id, intitule, envoye_le, echeance)
+           values ('QUES-${s}', $1, 'PRES-${s}', 'aircyber',
+                   'Questionnaire annuel de sécurité', date '2026-02-01', date '2026-03-15')`, f);
+        await c.query(
+          `insert into questionnaire_reponses
+               (id, filiale_id, questionnaire_id, code, reponse, commentaire)
+           values ('QREP-${s}', $1, 'QUES-${s}', 'Q1', 'oui', 'Chiffrement en place depuis 2025.')`, f);
         await c.query(`insert into revues       (id, filiale_id, date_revue) values ('REV-${s}', $1, date '2026-03-01')`, f);
         await c.query(`insert into imports      (id, filiale_id, entite, source, nom_fichier) values ('IMP-${s}', $1, 'risques', 'excel', 'r.xlsx')`, f);
         await c.query(`insert into import_erreurs (import_id, ligne, message) values ('IMP-${s}', 12, 'colonne absente')`);

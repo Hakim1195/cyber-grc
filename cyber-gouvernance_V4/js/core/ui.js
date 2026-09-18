@@ -660,6 +660,17 @@ window.UI = (function () {
             ])
         }),
         Object.freeze({
+            // Lot L21 — le registre d'information DORA est une VUE des mêmes
+            // tiers, pas un sujet à part : un onglet, donc, et non une entrée de
+            // menu. L'ajouter au menu rendrait à celui-ci les entrées qu'on
+            // vient de lui retirer (`docs/PLAN_INTERFACE.md`).
+            sujet: "prestataires",
+            vues: Object.freeze([
+                Object.freeze({ route: "/prestataires", libelle: "Annuaire" }),
+                Object.freeze({ route: "/tiers-dora", libelle: "Registre DORA" })
+            ])
+        }),
+        Object.freeze({
             sujet: "referentiels",
             vues: Object.freeze([
                 Object.freeze({ route: "/referentiels", libelle: "Catalogue" }),

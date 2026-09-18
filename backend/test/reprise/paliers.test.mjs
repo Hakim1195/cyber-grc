@@ -30,13 +30,14 @@ test('v1 → v2 : audits et revues rejoignent l’instantané unifié', () => {
   ]);
   assert.deepEqual(charge.audits, []);
   assert.deepEqual(charge.revues, []);
-  // Une v1 traverse les SEIZE paliers — le quatorzième (v14 → v15) ajoute le champ
+  // Une v1 traverse les DIX-HUIT paliers — le quatorzième (v14 → v15) ajoute le champ
   // « mesures_ids » des documents (19.3), le quinzième (v15 → v16) l'efficacité et le
   // rythme de rejeu des contrôles (19.5 / 19.6), le seizième (v16 → v17) la collection
-  // « analyses_impact » (20.3).
-  assert.equal(rapport.paliers.length, 17);
+  // « analyses_impact » (20.3), le dix-septième (v17 → v18) « demandes_droits » (20.4),
+  // et le dix-huitième (v18 → v19) « prestataire_sous_traitance » (21.1).
+  assert.equal(rapport.paliers.length, 19);
   assert.equal(rapport.versionOrigine, 1);
-  assert.equal(rapport.versionCible, 18);
+  assert.equal(rapport.versionCible, 20);
 });
 
 test('v2 → v3 : évaluations de référentiels et pivot « Mesure de sécurité »', () => {
@@ -49,7 +50,7 @@ test('v2 → v3 : évaluations de référentiels et pivot « Mesure de sécurit�
   ]);
   assert.deepEqual(charge.evaluations, []);
   assert.deepEqual(charge.mesures, []);
-  assert.equal(rapport.paliers.length, 16);
+  assert.equal(rapport.paliers.length, 18);
 });
 
 test('v3 → v4 : registre des incidents', () => {
@@ -209,13 +210,13 @@ test('v11 → v12 : « mesure_id » unique devient « mesure_ids[] »', () => {
   }
 });
 
-test('reprise d’un bout en bout : une v1 arrive en v18 avec ses 26 collections', () => {
+test('reprise d’un bout en bout : une v1 arrive en v20 avec ses 29 collections', () => {
   const { rapport, charge } = reprendre(1);
 
-  assert.equal(charge.schemaVersion, 18);
-  assert.equal(rapport.paliers.length, 17);
-  assert.equal(Object.keys(rapport.volumes).length, 26);
-  // Les dix-sept paliers se suivent sans trou : 1→2, 2→3, … 17→18.
+  assert.equal(charge.schemaVersion, 20);
+  assert.equal(rapport.paliers.length, 19);
+  assert.equal(Object.keys(rapport.volumes).length, 29);
+  // Les dix-huit paliers se suivent sans trou : 1→2, 2→3, … 18→19.
   rapport.paliers.forEach((etape, rang) => {
     assert.equal(etape.de, rang + 1);
     assert.equal(etape.vers, rang + 2);
@@ -228,7 +229,7 @@ test('un fichier qui ment sur sa version est rattrapé, et le mensonge est signa
   // l'ancien lien unique : le mensonge est rattrapé par la normalisation, pas
   // par les paliers — c'est tout l'objet de cet essai, et il exige donc un
   // fichier qui n'en traverse aucun.
-  const charge = instantane(18, {
+  const charge = instantane(20, {
     mesures: [{ id: 'MESURE-1720000000000-1', nom: 'Chiffrement', statut: 'conforme', maturite: 4 }],
     mco_actions: [{ id: 'MCO-1720000000000-1', titre: 'Test', etat: 'OK', date: '2025-11-02', notes: 'RAS' }],
     evaluations: [
@@ -236,10 +237,10 @@ test('un fichier qui ment sur sa version est rattrapé, et le mensonge est signa
     ],
     actifs: [{ id: 'ACTIF-1720000000000-1', nom: 'Serveur', type: 'Matériel', criticite: 'élevée' }],
   });
-  const resultat = reprendreExport(fichier(18, charge), OPTIONS_FIGEES);
+  const resultat = reprendreExport(fichier(20, charge), OPTIONS_FIGEES);
 
   assert.equal(resultat.statut, 'reprise');
-  assert.equal(resultat.rapport.paliers.length, 0, 'une v18 déclarée ne traverse aucun palier');
+  assert.equal(resultat.rapport.paliers.length, 0, 'une v20 déclarée ne traverse aucun palier');
   assert.equal(resultat.rapport.normalisation.length, 3);
   assert.equal(resultat.charge.mco_actions[0].statut, 'Réalisée');
   assert.deepEqual(resultat.charge.evaluations[0].mesure_ids, ['MESURE-1720000000000-1']);

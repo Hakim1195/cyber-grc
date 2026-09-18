@@ -3,8 +3,9 @@
  *
  * But : recenser en UN seul endroit toutes les obligations datées éparpillées dans les
  * modules (plan d'actions, MCO, revues documentaires, déclarations d'incidents, audits,
- * revues de direction), pour alimenter le module « Échéancier » et le badge de la barre
- * latérale. Ne modifie AUCUNE donnée ; ne fait que lire le DataStore (API synchrone).
+ * revues de direction, questionnaires fournisseurs et échéances contractuelles des
+ * tiers), pour alimenter le module « Échéancier » et le badge de la barre latérale.
+ * Ne modifie AUCUNE donnée ; ne fait que lire le DataStore (API synchrone).
  *
  * Exposé sous `window.Echeances`. Dépendance : `window.DataStore` (chargé avant).
  * Les règles « en retard / proche » reproduisent celles déjà utilisées ailleurs
@@ -162,6 +163,76 @@ window.Echeances = (function () {
             if (b.jours === null) return -1;
             return a.jours - b.jours;
         });
+
+        /* 7. Questionnaires fournisseurs (lot L21, action 21.2) — la date de retour
+              attendue d'un questionnaire ENVOYÉ et non encore reçu.
+
+              ⚠️ Deux exclusions, et ce sont elles qui portent le sens :
+
+               · un questionnaire REÇU n'est plus une obligation, même reçu en retard —
+                 l'afficher enverrait relancer quelqu'un qui a déjà répondu ;
+               · un BROUILLON (jamais envoyé) n'en est pas une non plus, même s'il porte
+                 une échéance déjà passée : ce serait une alerte que l'utilisateur s'est
+                 infligée à lui-même, et la première chose qu'on fait d'une alerte sans
+                 objet est de cesser de la lire.
+
+              C'est le même arbitrage que `f_etat_questionnaire()` côté serveur, dans le
+              même ordre — et il n'est pas recopié : la fonction rend un ÉTAT, on ne lit
+              ici que des DATES, comme les six sources ci-dessus. */
+        // Une `Map` et non un objet nu : un identifiant vient de la base, et un tiers
+        // nommé `__proto__` ne doit pas pouvoir toucher la chaîne de prototypes.
+        // ⚠️ Et l'appel est DIRECT, comme les six sources ci-dessus : un garde
+        // `typeof … === "function"` ferait de l'absence du getter un silence.
+        const prestataires = DataStore.getPrestataires() || [];
+        const societeDe = new Map(prestataires.filter(p => p && p.id).map(p => [p.id, p.societe || ""]));
+
+        (DataStore.getQuestionnaires() || []).forEach(q => {
+            if (!q || !q.echeance) return;
+            if (q.recu_le) return;          // reçu : l'affaire est close
+            if (!q.envoye_le) return;       // brouillon : pas encore une obligation
+            const societe = societeDe.get(q.prestataire_id) || "";
+            push({
+                type: "questionnaire", typeLabel: "Questionnaire fournisseur",
+                titre: q.intitule || ("Questionnaire " + (q.ref_id || "")),
+                sousTitre: societe + (q.relance_le ? " · relancé le " + String(q.relance_le).slice(0, 10) : ""),
+                date: q.echeance, jours: daysFromToday(q.echeance),
+                statut: q.relance_le ? "Relancé" : "En attente de retour",
+                route: "#/prestataires/" + q.prestataire_id
+            });
+        });
+
+        /* 8. Échéances contractuelles des tiers (lot L21, action 21.3) — fin de contrat,
+              revue de clauses, plan de sortie. Le critère d'acceptation de 21.3 dit
+              exactement cela : « les échéances contractuelles alimentent l'échéancier
+              existant », et non un écran à part — une obligation datée rangée ailleurs
+              est invisible à qui consulte ses échéances.
+
+              ⚠️ `evalue_le` N'EST PAS ici, et l'omission est délibérée : c'est la date de
+              la DERNIÈRE évaluation, un fait passé. La ranger parmi les échéances
+              inverserait son sens — « fait le 12 mars » deviendrait « à faire le
+              12 mars ». Son vieillissement est déjà mesuré, et il pèse dans le score
+              composite servi par `GET /api/tiers/etat`. */
+        const DATES_CONTRAT = [
+            { champ: "contrat_fin",      label: "Fin de contrat",   quoi: "Fin du contrat" },
+            { champ: "contrat_revue_le", label: "Revue de contrat", quoi: "Revue des clauses de sécurité" },
+            { champ: "plan_sortie_le",   label: "Plan de sortie",   quoi: "Plan de sortie à éprouver" }
+        ];
+        prestataires.forEach(p => {
+            if (!p) return;
+            DATES_CONTRAT.forEach(d => {
+                const iso = p[d.champ];
+                if (!iso) return;
+                push({
+                    type: "contrat", typeLabel: "Échéance contractuelle",
+                    titre: d.quoi + " — " + (p.societe || ""),
+                    sousTitre: d.label + (p.fonction_critique ? " · fonction critique" : ""),
+                    date: iso, jours: daysFromToday(iso),
+                    statut: p.criticite || "",
+                    route: "#/prestataires/" + p.id
+                });
+            });
+        });
+
         return items;
     }
 

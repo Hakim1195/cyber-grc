@@ -4250,6 +4250,18 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // pièces du dispositif tiennent : la clé, les deux déclencheurs — mesurés sur
       // `tgtype`, leçon Q-281 —, et la cascade qui empêche un rattachement de
       // survivre à sa pièce.
+      // QUARANTE-SEPTIÈME, apporté par `043_le_questionnaire_fournisseur.sql` — lot L21,
+      // action 21.2. ⚠️ Il ÉPROUVE la dérivation de l'état sur CINQ cas témoins (§39.1),
+      // dont les deux qui fabriquent des alertes fausses quand ils tombent : « reçu en
+      // retard reste REÇU » — sans quoi l'on relance un fournisseur qui a répondu — et
+      // « un brouillon n'est PAS un retard » — sans quoi le produit reproche à son
+      // utilisateur ce qu'il ne s'est pas encore envoyé à lui-même.
+      //
+      // ⚠️ Et il garde nommément `uq_questionnaire_reponses_question`, dont la
+      // disparition ne casserait RIEN de visible : le moteur d'import CRÉE sans mettre à
+      // jour, et un second passage du même classeur doublerait les réponses **en
+      // silence**, rendant faux tous les comptes de la fiche fournisseur.
+      'questionnaires_tiers',
       'rattachements_pieces',
       'references_portee',
       // VINGT-HUITIÈME, apporté par `028` — constat **Q-291** : la migration `026` avait
@@ -4268,6 +4280,23 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // en arrivant fait exactement son office. Elle s'allonge d'une ligne ; elle ne se
       // transforme pas en découverte automatique pour cesser de rougir.
       'substrat_session',
+      // QUARANTE-SIXIÈME, apporté par `042_le_registre_dora_et_la_chaine.sql` — lot L21,
+      // actions 21.1, 21.3 et 21.4. ⚠️ Il ÉPROUVE le score composite d'un tiers sur
+      // QUATRE cas témoins (§39.1) au lieu de lire le texte de `f_score_prestataire()` :
+      // un garde qui vérifierait que la fonction « existe » passerait au vert sur une
+      // version qui rend toujours zéro — c'est-à-dire sur celle qui déclare tout le parc
+      // de fournisseurs sans risque. Il vérifie aussi que « non_evalue » reste DISTINCT
+      // de « faible » : un écran qui peindrait l'ignorance comme un risque faible ferait
+      // passer le fait de ne rien savoir pour de la sécurité.
+      //
+      // ⚠️ **Ce qu'il NE fait PAS, et c'est écrit dans son corps** : il n'éprouve pas la
+      // MORSURE de l'anti-cycle, parce que §41 — `install.sh` appelle
+      // `f_verifier_schema()` sans périmètre, et un garde qui écrirait ses lignes
+      // témoins y échouerait pour une raison étrangère au défaut cherché. Il en tient la
+      // moitié catalographique (le déclencheur est présent, et armé sur ses DEUX
+      // événements, mesuré par `tgtype` — leçon Q-281) ; la morsure est mesurée par
+      // `test/base/tiers-anticycle.test.mjs`.
+      'tiers',
       'tracabilite',
       // TRENTE-TROISIÈME, apporté par `031` — constat **A-3** : le renversement du
       // registre s'arrêtait à la frontière du TEXTE, et huit colonnes `jsonb`

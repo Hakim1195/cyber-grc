@@ -173,7 +173,19 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // suppression existent pour que le garde-fou de couverture RLS trouve une
     // écriture cloisonnée sur les quatre commandes ; sans elles, la table serait
     // rangée parmi les registres techniques, donc SORTIE de ce balayage.
-    assert.equal(tablesCloisonnees.length, 44, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    // 45 depuis la migration `042` : `prestataire_sous_traitance` (action 21.1).
+    // Elle est de niveau FILIALE — une arête de sous-traitance appartient à la
+    // filiale qui a contracté, et deux filiales peuvent connaître deux chaînes
+    // différentes pour le même couple de sociétés, l'une ayant négocié une clause
+    // que l'autre n'a pas.
+    // 47 depuis la migration `043` : `questionnaires_tiers` et `questionnaire_reponses`
+    // (action 21.2). Toutes deux de niveau FILIALE — une campagne de questionnaires
+    // appartient à la filiale qui CONTRACTE, c'est elle qui décide ce qu'elle exige de
+    // son fournisseur, et deux filiales peuvent légitimement interroger la même société
+    // sur deux référentiels différents. Une portée Groupe ferait de l'exigence de l'une
+    // celle de toutes. ⚠️ À ne pas confondre avec la campagne DESCENDANTE du lot L24,
+    // qui va dans l'autre sens.
+    assert.equal(tablesCloisonnees.length, 47, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -202,10 +214,17 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // pièce du semis — sans une ligne de semis de plus, et c'est le dispositif qui le
     // veut ainsi.
     // 41 depuis la `039` : les deux tables de l'analyse d'impact, semées des deux côtés.
+    // 44 depuis la `042` : `prestataire_sous_traitance`, qui a exigé un SECOND
+    // prestataire dans le semis — une arête a deux bouts, et la contrainte de boucle
+    // refuse qu'un tiers se sous-traite à lui-même.
+    // 46 depuis la `043` : `questionnaires_tiers` et sa réponse, semées des deux côtés.
+    // ⚠️ Le semis pose des dates COHÉRENTES (envoi, puis échéance) : les trois règles
+    // de chronologie de la `043` vivent dans le schéma, et un semis qui les enfreindrait
+    // ferait échouer toutes les familles à l'ouverture de leur base.
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      43,
-      'Trente-huit tables devaient contenir au moins une ligne allemande. Une table neuve '
+      46,
+      'Quarante-six tables devaient contenir au moins une ligne allemande. Une table neuve '
         + 'sans ligne dans le semis est un angle mort : le balayage y rendrait « zéro '
         + 'visible » pour la seule raison qu’il n’y a rien à voir.',
     );
@@ -332,7 +351,12 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     // 39 depuis la migration `039` : `analyses_impact` et `analyse_mesures`.
     // 40 depuis la migration `040` : `demandes_droits`.
     // 41 depuis la migration `041` : `main_courante`.
-    assert.equal(nonVides.length, 41, `Tables non vides : ${nonVides.join(', ')}`);
+    // 42 depuis la migration `042` : `prestataire_sous_traitance`.
+    // 44 depuis la migration `043` : `questionnaires_tiers` et sa réponse, semées
+    // dans les deux filiales — un envoi sans réponse aurait laissé la seconde vide,
+    // c'est-à-dire exactement l'angle mort que ce contrôle de matière existe pour
+    // refuser.
+    assert.equal(nonVides.length, 44, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

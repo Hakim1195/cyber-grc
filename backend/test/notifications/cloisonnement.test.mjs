@@ -167,10 +167,17 @@ describe('L12 — cloisonnement des destinataires', () => {
     );
 
     // …et l'échéance est comptée « sans destinataire » plutôt que tue.
+    //
+    // ⚠️ TROIS obligations retenues, et la troisième est arrivée avec le lot L21 :
+    // le semis commun porte un questionnaire fournisseur envoyé le 01/02/2026 pour
+    // le 15/03, jamais reçu — en retard à la date de référence de cet essai.
+    // Comme les incidents, il n'a **aucun responsable interne** : `prestataires`
+    // ne porte que l'adresse du FOURNISSEUR, et s'en servir enverrait le bilan
+    // interne du groupe à l'extérieur. Il est donc compté sans destinataire.
     const a = bilan.filiales.find((f) => f.filialeId === FILIALE_A);
-    assert.equal(a.echeancesRetenues, 2);
+    assert.equal(a.echeancesRetenues, 3);
     assert.equal(a.destinataires, 1);
-    assert.equal(a.sansDestinataire, 1);
+    assert.equal(a.sansDestinataire, 2);
   });
 
   test('aucun nom de responsable ne circule dans les messages', () => {

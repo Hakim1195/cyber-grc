@@ -775,8 +775,8 @@ la comparaison au marché du 08/09/2026.
 **Mesuré au 16/09/2026, à la révision `32af4f6`** : `npm test` → **2078 essais,
 2078 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **45 garde-fous consignés**, **41 migrations**,
-**61 tables**, **329 décisions** au registre de l'article 30 ; publication → **89
+`f_verifier_schema()` → 0 anomalie, **47 garde-fous consignés**, **43 migrations**,
+**64 tables**, **369 décisions** au registre de l'article 30 ; publication → **89
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **14 conformes,
 1 réserve, 0 bloquant**.
 
@@ -952,15 +952,15 @@ npm test                                         → tests 2078 · pass 2078 · 
                                                    derogations 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (45 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (47 garde-fous découverts, joués, consignés)
 ```
 
-Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **61 tables** en
-**41 migrations**, **244 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
-**109 clés étrangères** (65 `restrict`, 41 `cascade`, 2 `set null`, 1 `no action`),
-**53 tables portant `cree_par` et 53 déclencheurs de création**, **36 clés étrangères
+Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **64 tables** en
+**43 migrations**, **256 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**116 clés étrangères** (67 `restrict`, 46 `cascade`, 2 `set null`, 1 `no action`),
+**56 tables portant `cree_par` et 56 déclencheurs de création**, **40 clés étrangères
 composites** visant
-`(id, filiale_id)`, **13 unicités** `uq_<parent>_id_filiale`, **45 contrôles consignés**
+`(id, filiale_id)`, **16 unicités** `uq_<parent>_id_filiale`, **47 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1240,7 +1240,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **61 tables**, obtenues aujourd'hui en **41 migrations** appliquées de bout en bout par
+- **64 tables**, obtenues aujourd'hui en **43 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1260,10 +1260,10 @@ Ce que la reprise fait, quand on la rejoue :
   ajoute la vingt-deuxième action du journal (`verification_integrite`), deux colonnes de
   verdict sur `pieces_jointes`, un index de balayage — et **réémet** le garde-fou du
   vocabulaire plutôt que d'en poser un second sur la même contrainte.
-- **244 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
+- **256 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
-- **109 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
+- **116 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
   migrations : **54 en `restrict`, 38 en `cascade`, deux en `set null`**
   (`incidents.risque_id` — l'incident survit au risque). ⚠️ **Les deux `set null` sont
   restés deux**, et ce n'est pas faute d'avoir essayé : `documents.traitement_id` visait
@@ -1292,7 +1292,7 @@ Ce que la reprise fait, quand on la rejoue :
   `archive_le`), reste lisible et reste rattaché à tout ce qui le référence.
 - **Clés étrangères et unicités composites** : quand l'enfant et le parent sont tous
   deux cloisonnés, la clé porte `(référence, filiale_id)` et vise une unicité
-  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **36 clés étrangères** dont la
+  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **40 clés étrangères** dont la
   seconde colonne visée est le `filiale_id` du parent ou sa portée, et **13 unicités** de
   cette forme. ⚠️ **Elles vont par PAIRES depuis la migration `027`**, et c'est mécanisé :
   toute clé composite visant une table MIXTE par un `filiale_id` nullable doit avoir sa
@@ -1301,8 +1301,8 @@ Ce que la reprise fait, quand on la rejoue :
   le réclame (constat N-10, `CONVENTIONS.md` §38). Une clé simple aurait été satisfaite par une ligne **invisible** de la
   filiale voisine : les contrôles d'intégrité de PostgreSQL contournent délibérément la
   RLS (`CONVENTIONS.md` §17.1, étendu aux unicités par le §19.1).
-- **Traçabilité imposée à la création** : les **53 tables** portant `cree_par` portent
-  chacune un déclencheur `before insert` nommé `trg_<table>_creation` — **53 relevés**,
+- **Traçabilité imposée à la création** : les **56 tables** portant `cree_par` portent
+  chacune un déclencheur `before insert` nommé `trg_<table>_creation` — **56 relevés**,
   répartis selon la forme de la table entre `f_init_tracabilite` (37), `f_init_creation`
   (14) et `f_init_horodatage` (2). Ce que le client envoie dans `version`, `cree_le` et
   `cree_par` est **ignoré** (`CONVENTIONS.md` §18.1). La couverture n'est pas affirmée

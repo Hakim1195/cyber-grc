@@ -101,18 +101,29 @@ export class SessionDEssai {
  *
  * La colonne rendue est celle par laquelle l'enfant nomme son parent —
  * `filiale_id` écarté, la clé étant composite.
+ *
+ * ⚠️ **`obligatoire` est rendu avec elle, et ce n'est pas un ornement.** Une
+ * cascade dit qu'un enfant SUIT son parent ; elle ne dit pas qu'il DOIT en
+ * avoir un. `actions` en est l'exemple : elle cascade vers cinq tables —
+ * exigence, risque, évaluation, incident, mesure — dont elle ne nomme **qu'une
+ * seule à la fois**, et une contrainte de cohérence refuse qu'elle en nomme
+ * deux. Sans ce drapeau, un balayage qui remplit « les parents découverts »
+ * les remplirait tous les cinq et recevrait un `400` — c'est-à-dire qu'il
+ * échouerait sur une entité parfaitement saine.
  */
 export const REQUETE_CASCADES = `
         select cl.relname as enfant, cp.relname as parent,
-               (select a.attname
-                  from unnest(c.conkey) with ordinality k(att, ord)
-                  join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.att
-                 where a.attname <> 'filiale_id'
-                 order by k.ord limit 1) as colonne
+               col.attname as colonne, col.attnotnull as obligatoire
           from pg_constraint c
           join pg_class cl on cl.oid = c.conrelid
           join pg_class cp on cp.oid = c.confrelid
           join pg_namespace n on n.oid = cl.relnamespace
+          cross join lateral (
+                select a.attname, a.attnotnull
+                  from unnest(c.conkey) with ordinality k(att, ord)
+                  join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.att
+                 where a.attname <> 'filiale_id'
+                 order by k.ord limit 1) col
          where c.contype = 'f' and c.confdeltype = 'c' and n.nspname = 'public'
            and exists (select 1 from pg_trigger t join pg_proc p on p.oid = t.tgfoid
                         where t.tgrelid = cl.oid and not t.tgisinternal
@@ -121,6 +132,122 @@ export const REQUETE_CASCADES = `
                         where t.tgrelid = cp.oid and not t.tgisinternal
                           and p.proname = 'f_pieces_suivent_leur_porteur')
          order by cp.relname, cl.relname`;
+
+/**
+ * Les colonnes par lesquelles UN MÊME enfant nomme UN MÊME parent.
+ *
+ * ── ⚠️ POURQUOI CE N'EST PAS TOUJOURS UNE SEULE COLONNE ────────────────
+ *
+ * `prestataire_sous_traitance` (migration `042`) en porte **deux** vers
+ * `prestataires` — le donneur d'ordre et le sous-traitant —, toutes deux
+ * `not null` et toutes deux en `on delete cascade`. Un essai qui n'en
+ * renseignerait qu'une recevrait un `409` : l'autre resterait remplie par la
+ * valeur générique du balayage, qui ne désigne aucun prestataire.
+ *
+ * ⚠️ Et les deux doivent pointer des lignes DIFFÉRENTES : la contrainte
+ * `ck_prestataire_sous_traitance_boucle` refuse qu'un tiers se sous-traite à
+ * lui-même. C'est pour cela que l'appelant crée un parent par colonne au lieu
+ * de réutiliser le même.
+ *
+ * Cette fonction vit ici, et non dans l'un des deux fichiers qui l'emploient,
+ * pour le motif exact de `REQUETE_CASCADES` : deux copies d'une même règle
+ * finissent par ne plus dire la même chose.
+ */
+export function colonnesVersLeMemeParent(cascades, parent, enfant) {
+  // ⚠️ Les colonnes FACULTATIVES sont écartées : ce qu'on cherche ici est ce
+  // que l'enfant doit remplir POUR EXISTER, et remplir une référence qu'il n'a
+  // pas demandée est la façon la plus sûre de heurter une règle de cohérence
+  // entre champs — `actions` en porte une sur ses cinq origines possibles.
+  return cascades
+    .filter((c) => c.parent === parent && c.enfant === enfant && c.obligatoire)
+    .map((c) => c.colonne);
+}
+
+/**
+ * Les cascades dont `enfant` est l'enfant — c'est-à-dire les parents qu'il
+ * DOIT nommer pour exister.
+ *
+ * ── ⚠️ POURQUOI CECI N'EST PAS UNE LISTE ÉCRITE À LA MAIN ──────────────
+ *
+ * Les deux balayages de cascade créent le parent, puis l'enfant. Tant qu'un
+ * parent n'avait lui-même aucune référence obligatoire, un `creer(parent)` nu
+ * suffisait. `questionnaires_tiers` (migration `043`) rompt cela : il est
+ * **parent** de `questionnaire_reponses` ET **enfant** de `prestataires`, et le
+ * créer sans nommer son tiers rend `409`.
+ *
+ * Une table de prérequis écrite à la main aurait marché — et aurait été à
+ * compléter à chaque table de ce genre, en silence jusqu'au prochain `409`. Les
+ * parents se DÉCOUVRENT donc dans le même `REQUETE_CASCADES` que le reste
+ * (`CLAUDE.md` §3, premier cas).
+ *
+ * ── ⚠️ « REQUIS » VEUT DIRE `NOT NULL`, ET LE DISTINGUO A COÛTÉ QUATRE ESSAIS ─
+ *
+ * Une cascade dit qu'un enfant **suit** son parent ; elle ne dit pas qu'il en a
+ * un. La première rédaction de cette fonction rendait toutes les cascades de
+ * l'enfant, et le balayage créait donc une `actions` nommant **à la fois** une
+ * exigence, un risque, une évaluation, un incident et une mesure — cinq
+ * origines pour une action qui n'en a qu'une. La base refusait, à raison, et
+ * deux familles échouaient sur une entité que rien n'avait cassée.
+ *
+ * Le drapeau est lu dans le catalogue (`attnotnull`), jamais déduit d'un nom.
+ */
+export function parentsRequis(cascades, enfant) {
+  return cascades.filter((c) => c.enfant === enfant && c.obligatoire);
+}
+
+/**
+ * Les vocabulaires CLOS du schéma, lus dans `pg_constraint`.
+ *
+ * Rend `{ "<table>.<colonne>": ["oui", "non", …] }` pour toute colonne dont une
+ * contrainte `check` énumère les valeurs admises.
+ *
+ * ── ⚠️ POURQUOI LES BALAYAGES EN ONT BESOIN ────────────────────────────
+ *
+ * Les deux familles de cascade créent un enregistrement en remplissant ses
+ * champs **obligatoires** d'une valeur générique — « 19.4 risques nom ». Tant
+ * qu'aucune colonne n'était à la fois `not null` ET à vocabulaire clos, cela
+ * suffisait. `questionnaire_reponses.reponse` (migration `043`) est la
+ * première : elle est obligatoire, et n'admet que `oui / non / partiel / na`.
+ * Le balayage y recevait un `400` — c'est-à-dire qu'il échouait sur une table
+ * parfaitement saine.
+ *
+ * ⚠️ **Et `/api/modele` ne peut pas répondre à sa place** : sa description d'un
+ * champ porte `type` et `obligatoire`, rien de plus. Le seul endroit du dépôt
+ * qui recopie ces vocabulaires est `DESCRIPTIONS.enumerations`
+ * (`src/reprise/index.ts`), et il est marqué « exporté pour être confronté, pas
+ * pour être lu ». On lit donc le catalogue — *une liste écrite à la main serait
+ * à compléter à chaque colonne de ce genre* (`CLAUDE.md` §3, premier cas).
+ *
+ * Le motif reconnu est celui que PostgreSQL rend, `in (…)` normalisé compris :
+ * `CHECK ((col = ANY (ARRAY['a'::text, 'b'::text])))`. Une contrainte d'une
+ * autre forme est simplement ignorée : elle ne promet rien ici.
+ */
+export async function vocabulairesClos(client) {
+  const lignes = await client.query(`
+        select cl.relname as table_nom, pg_get_constraintdef(c.oid) as definition
+          from pg_constraint c
+          join pg_class cl on cl.oid = c.conrelid
+          join pg_namespace n on n.oid = cl.relnamespace
+         where c.contype = 'c' and n.nspname = 'public'
+           and array_length(c.conkey, 1) = 1`);
+
+  /** @type {Record<string, string[]>} */
+  const vocabulaires = {};
+  for (const ligne of lignes.rows) {
+    // Bornes explicites des deux côtés : un motif à coût non borné sur une
+    // chaîne du catalogue serait le défaut Q-215, dans l'outil qui le mesure.
+    const forme = /^CHECK \(\(([a-z_]{1,64}) = ANY \(ARRAY\[(.{1,4000}?)\]\)\)\)$/.exec(
+      String(ligne.definition),
+    );
+    if (forme === null) continue;
+    const valeurs = forme[2]
+      .split(', ')
+      .map((brut) => /^'(.{0,200}?)'::[a-z_ ]{1,40}$/.exec(brut)?.[1])
+      .filter((v) => v !== undefined);
+    if (valeurs.length > 0) vocabulaires[`${ligne.table_nom}.${forme[1]}`] = valeurs;
+  }
+  return vocabulaires;
+}
 
 /** Périmètre d'une session mono-filiale. */
 export function perimetreDe(utilisateurId, filialeId, filiales = [filialeId]) {

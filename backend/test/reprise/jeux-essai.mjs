@@ -84,6 +84,12 @@ const NOUVELLES_PAR_VERSION = {
   17: ['analyses_impact'],
   // v18 — les demandes d'exercice de droits (action 20.4).
   18: ['demandes_droits'],
+  // v19 — la chaîne de sous-traitance des tiers (action 21.1). ⚠️ La v19 ajoute
+  // AUSSI quatorze champs à `prestataires` (registre DORA, suivi contractuel) :
+  // la table ne dit que les COLLECTIONS, et des champs n'en font pas une.
+  19: ['prestataire_sous_traitance'],
+  // v20 — le questionnaire fournisseur (action 21.2) : l'envoi et les réponses.
+  20: ['questionnaires_tiers', 'questionnaire_reponses'],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -569,6 +575,121 @@ export function instantaneV18Complet() {
         reponse_resume: 'Copie des données de paie adressée par courrier recommandé.',
         motif_refus: null,
         traitement_id: 'TRT-1720000000000-118',
+      },
+    ],
+  };
+}
+
+/**
+ * Instantané COMPLET à la version courante — v19.
+ *
+ * ⚠️ **La chaîne de sous-traitance relie DEUX prestataires du même instantané**, et
+ * c'est ce lien-là qui doit survivre au round-trip : un identifiant inventé ne
+ * mesurerait rien. Il a donc fallu un SECOND prestataire — l'instantané n'en portait
+ * qu'un depuis la v1, et une arête a besoin de deux bouts.
+ *
+ * ⚠️ Et le tiers porte ses champs du registre DORA (21.1) et de son suivi contractuel
+ * (21.3). Le SCORE, lui, n'y est pas : il se dérive côté serveur, et le figer dans un
+ * fichier rendrait « faible », six mois plus tard, un tiers que personne n'a réévalué.
+ */
+export function instantaneV19Complet() {
+  const base = instantaneV18Complet();
+  return {
+    ...base,
+    schemaVersion: 19,
+    prestataires: [
+      {
+        ...base.prestataires[0],
+        lei: '969500HX7PZQ1L2M3N45',
+        pays: 'FR',
+        fonction_supportee: 'Hébergement de l’ERP de production',
+        fonction_critique: true,
+        type_service: 'cloud_iaas',
+        pays_donnees: 'IE',
+        substituabilite: 'difficile',
+        contrat_reference: 'CTR-2024-018',
+        contrat_debut: '2024-01-01',
+        contrat_fin: '2027-12-31',
+        contrat_revue_le: '2026-11-30',
+        plan_sortie: 'Réversibilité par export mensuel chiffré ; bascule vers le socle interne.',
+        plan_sortie_le: '2026-06-30',
+        evalue_le: '2026-01-15',
+      },
+      {
+        id: 'PREST-1720000000000-206',
+        societe: 'Sauvegardes Atlantique',
+        type: 'Prestataire IT / Cloud',
+        phone: null,
+        email: null,
+        notes: null,
+        criticite: 'forte',
+        acces: 'limite',
+        supplyChain: {},
+        lei: null,
+        pays: 'FR',
+        fonction_supportee: 'Sauvegarde externalisée de l’ERP',
+        fonction_critique: true,
+        type_service: 'hebergement',
+        pays_donnees: 'FR',
+        substituabilite: 'facile',
+        contrat_reference: null,
+        contrat_debut: null,
+        contrat_fin: null,
+        contrat_revue_le: null,
+        plan_sortie: null,
+        plan_sortie_le: null,
+        evalue_le: null,
+      },
+    ],
+    prestataire_sous_traitance: [
+      {
+        id: 'SOUS-1720000000000-207',
+        prestataire_id: 'PREST-1720000000000-111',
+        sous_traitant_id: 'PREST-1720000000000-206',
+        service: 'Sauvegarde et restauration des volumes de l’ERP',
+        dans_fonction_critique: true,
+      },
+    ],
+  };
+}
+
+/**
+ * Instantané COMPLET à la version courante — v20.
+ *
+ * ⚠️ **Les réponses pointent l'envoi, et l'envoi pointe un prestataire du même
+ * instantané** : c'est cette double jointure qui doit survivre au round-trip. Un
+ * identifiant inventé ne mesurerait rien.
+ *
+ * ⚠️ Et le questionnaire ne porte AUCUN texte de question : `code` fait la
+ * jointure avec le catalogue du référentiel. C'est le critère d'acceptation de
+ * l'action 21.2, et il vaut aussi pour le format d'échange.
+ */
+export function instantaneV20Complet() {
+  const base = instantaneV19Complet();
+  return {
+    ...base,
+    schemaVersion: 20,
+    questionnaires_tiers: [
+      {
+        id: 'QUES-1720000000000-208',
+        prestataire_id: 'PREST-1720000000000-111',
+        ref_id: 'aircyber',
+        intitule: 'AirCyber — niveau Bronze',
+        envoye_le: '2026-02-01',
+        echeance: '2026-03-01',
+        relance_le: '2026-02-20',
+        recu_le: '2026-02-27',
+        notes: 'Envoyé par courriel au RSSI du fournisseur.',
+      },
+    ],
+    questionnaire_reponses: [
+      {
+        id: 'QREP-1720000000000-209',
+        questionnaire_id: 'QUES-1720000000000-208',
+        code: 'CL1.1',
+        reponse: 'partiel',
+        commentaire: 'Chiffrement en place sur les portables, pas sur les postes fixes.',
+        preuve: 'Politique de chiffrement v3, §4',
       },
     ],
   };

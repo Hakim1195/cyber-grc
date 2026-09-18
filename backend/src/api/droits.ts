@@ -254,6 +254,20 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   // Une demande d'exercice de droits est un acte RGPD, et c'est le DPO qui la
   // tient. Même écran, même personne, même registre.
   demandes_droits: 'rgpd',
+  // La chaîne de sous-traitance relève du domaine « tiers », comme les
+  // prestataires qu'elle relie — et non de « conformite », bien qu'elle serve le
+  // registre DORA. Le discriminant est *qui saisit* : c'est l'acheteur ou le
+  // responsable du contrat qui sait que son hébergeur sous-traite sa sauvegarde.
+  // Le ranger sous « conformite » aurait obligé à donner à cette personne un
+  // accès en écriture sur les exigences.
+  prestataire_sous_traitance: 'tiers',
+  // Le questionnaire fournisseur relève de « tiers » et non de « conformite »,
+  // bien qu'il porte un référentiel : le discriminant est *qui s'en sert*, et
+  // c'est l'acheteur ou le responsable du contrat qui relance son fournisseur.
+  // Le ranger sous « conformite » aurait obligé à lui donner un accès en
+  // écriture sur les exigences de sa propre organisation.
+  questionnaires_tiers: 'tiers',
+  questionnaire_reponses: 'tiers',
 });
 
 /**

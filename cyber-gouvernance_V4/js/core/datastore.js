@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 18;
+    const SCHEMA_VERSION = 20;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -71,6 +71,15 @@ const DataStore = (() => {
         // « échue » ou « en attente » se dérivent côté serveur de l'échéance et de
         // la décision. Les stocker ici les figerait au jour de l'export.
         "derogations",
+        // v19 — la chaîne de sous-traitance des tiers (action 21.1). Le nom est
+        // celui de la table côté serveur : c'est lui qui voyage dans
+        // `journal_audit.entite_type`, et un nom plus court rendrait la
+        // collection incréable (backend/db/CONVENTIONS.md §40.1).
+        "prestataire_sous_traitance",
+        // v20 — le questionnaire fournisseur (action 21.2) : l'ENVOI, puis les
+        // RÉPONSES. L'ordre compte — les réponses référencent l'envoi.
+        "questionnaires_tiers",
+        "questionnaire_reponses",
         // v17 — Lot L20, action 20.3 : les analyses d'impact RGPD (article 35).
         // ⚠️ Elles POINTENT le registre de l'article 30 (`traitement_id`) et n'en
         // recopient aucun champ : deux réponses à la même question dans un outil
@@ -760,6 +769,81 @@ const DataStore = (() => {
     }
 
     /* =========================
+       CHAÎNE DE SOUS-TRAITANCE DES TIERS (v19, action 21.1)
+       { id, prestataire_id, sous_traitant_id, service,
+         dans_fonction_critique, updatedAt }
+
+       ⚠️ **Aucun champ de RANG, et c'est le cœur de l'action.** « Rang 1,
+       rang 2, rang n » ne se stockent pas : ils se DÉRIVENT du parcours du
+       graphe, côté serveur (`GET /api/tiers/chaine/:id`). Les poser ici
+       obligerait quelque chose à les décaler à chaque intercalation d'un
+       maillon — et le jour où ce quelque chose ne repasse pas, le registre
+       d'information remis à l'autorité annonce des rangs faux, en silence.
+
+       ⚠️ **L'anti-cycle n'est pas ici non plus.** Une arête qui refermerait une
+       boucle est refusée PAR LA BASE (code `GRC08`) : il y a quatre chemins
+       d'écriture — cette façade, l'import généralisé, la reprise d'un export et
+       `psql` —, et un contrôle posé ici n'en verrait qu'un.
+    ========================== */
+    function getSousTraitances() { return data.prestataire_sous_traitance; }
+    function getSousTraitancesDe(prestataireId) {
+        return data.prestataire_sous_traitance.filter(a => a.prestataire_id === prestataireId);
+    }
+    function addSousTraitance(a) { data.prestataire_sous_traitance.push(a); save(); }
+    function deleteSousTraitance(id) {
+        data.prestataire_sous_traitance =
+            data.prestataire_sous_traitance.filter(a => a.id !== id);
+        save();
+    }
+
+    /* =========================
+       QUESTIONNAIRES FOURNISSEURS (v20, action 21.2)
+       questionnaires_tiers  : { id, prestataire_id, ref_id, intitule,
+                                 envoye_le, echeance, relance_le, recu_le, notes }
+       questionnaire_reponses: { id, questionnaire_id, code, reponse,
+                                 commentaire, preuve }
+
+       ⚠️ **Aucun champ d'état.** « En retard » se DÉRIVE des dates, côté
+       serveur (`f_etat_questionnaire`). Le poser ici obligerait quelque chose à
+       repasser — et le jour où ce quelque chose ne repasse pas, aucun retard
+       n'apparaît, dans le dossier même qui sert à démontrer la maîtrise de sa
+       chaîne d'approvisionnement.
+
+       ⚠️ **Et aucun texte de question** : `code` fait la jointure avec le
+       catalogue du référentiel (`js/data/ref_*.js`), exactement comme
+       `evaluations(ref_id, code)` depuis le premier chantier.
+    ========================== */
+    function getQuestionnaires() { return data.questionnaires_tiers; }
+    function getQuestionnaireById(id) {
+        return data.questionnaires_tiers.find(q => q.id === id);
+    }
+    function getQuestionnairesDe(prestataireId) {
+        return data.questionnaires_tiers.filter(q => q.prestataire_id === prestataireId);
+    }
+    function addQuestionnaire(q) { data.questionnaires_tiers.push(q); save(); }
+    function updateQuestionnaire(q) {
+        const idx = data.questionnaires_tiers.findIndex(x => x.id === q.id);
+        if (idx !== -1) { data.questionnaires_tiers[idx] = q; save(); }
+    }
+    function deleteQuestionnaire(id) {
+        data.questionnaires_tiers = data.questionnaires_tiers.filter(q => q.id !== id);
+        // La cascade de la base emporte les réponses ; on la reflète en mémoire
+        // pour que l'écran ne montre pas des réponses sans envoi entre la
+        // suppression et le prochain chargement.
+        data.questionnaire_reponses =
+            data.questionnaire_reponses.filter(r => r.questionnaire_id !== id);
+        save();
+    }
+    function getReponsesDe(questionnaireId) {
+        return data.questionnaire_reponses.filter(r => r.questionnaire_id === questionnaireId);
+    }
+    function addReponse(r) { data.questionnaire_reponses.push(r); save(); }
+    function updateReponse(r) {
+        const idx = data.questionnaire_reponses.findIndex(x => x.id === r.id);
+        if (idx !== -1) { data.questionnaire_reponses[idx] = r; save(); }
+    }
+
+    /* =========================
        ANALYSES D'IMPACT — RGPD article 35 (v17, action 20.3)
        { id, traitement_id, statut, necessite_motif, date_analyse,
          risques_identifies, mesures_prevues, avis_dpo, avis_dpo_le,
@@ -1010,7 +1094,20 @@ const DataStore = (() => {
         //           partir du journal d'audit. Une demande est un fait REÇU, pas une
         //           déduction — l'inventer serait consigner qu'une personne a écrit alors
         //           que personne n'en sait rien.
-        // (Ajouter ici les futures migrations : if (v < 19) { ... })
+        // v18 → v19 : ajout de `prestataire_sous_traitance` (chaîne de sous-traitance
+        //           des tiers, action 21.1) → normalize crée le tableau vide. AUCUNE
+        //           transformation, et rien à DEVINER : on ne fabrique pas une arête de
+        //           sous-traitance depuis le champ libre `notes` d'un prestataire. Une
+        //           chaîne de sous-traitance est un fait CONSTATÉ au contrat, et
+        //           l'inventer remplirait de liens non vérifiés le registre que
+        //           l'autorité réclame.
+        // v19 → v20 : ajout de `questionnaires_tiers` et `questionnaire_reponses`
+        //           (questionnaire fournisseur, action 21.2) → normalize crée les
+        //           tableaux vides. AUCUNE transformation, et rien à DEVINER : on ne
+        //           fabrique pas un envoi à partir du champ `notes` d'un prestataire.
+        //           Un envoi est un fait CONSIGNÉ par un humain, et l'inventer ferait
+        //           croire qu'on a demandé quelque chose qu'on n'a jamais demandé.
+        // (Ajouter ici les futures migrations : if (v < 21) { ... })
         return p;
     }
 
@@ -1268,6 +1365,10 @@ const DataStore = (() => {
         getDocuments, getDocumentById, addDocument, updateDocument, deleteDocument,
         getDerogations, getDerogationById, getDerogationsByExigence,
         addDerogation, updateDerogation, deleteDerogation,
+        getSousTraitances, getSousTraitancesDe, addSousTraitance, deleteSousTraitance,
+        getQuestionnaires, getQuestionnaireById, getQuestionnairesDe,
+        addQuestionnaire, updateQuestionnaire, deleteQuestionnaire,
+        getReponsesDe, addReponse, updateReponse,
         getAnalysesImpact, getAnalyseImpactById, getAnalysesImpactByTraitement,
         addAnalyseImpact, updateAnalyseImpact, deleteAnalyseImpact,
         getDemandesDroits, getDemandeDroitsById,
