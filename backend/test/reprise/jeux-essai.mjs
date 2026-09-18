@@ -90,6 +90,11 @@ const NOUVELLES_PAR_VERSION = {
   19: ['prestataire_sous_traitance'],
   // v20 — le questionnaire fournisseur (action 21.2) : l'envoi et les réponses.
   20: ['questionnaires_tiers', 'questionnaire_reponses'],
+  // v21 — les campagnes descendantes (L24, actions 24.1 et 24.2) : la DEMANDE du Groupe,
+  // puis la PART de chaque filiale. ⚠️ L'ordre compte : la part référence la campagne, et
+  // la clé est en `restrict` (§18.2) — une reprise qui les inverserait échouerait sur la
+  // clé étrangère, pas en silence.
+  21: ['campagnes', 'campagne_filiales'],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -663,6 +668,46 @@ export function instantaneV19Complet() {
  * ⚠️ Et le questionnaire ne porte AUCUN texte de question : `code` fait la
  * jointure avec le catalogue du référentiel. C'est le critère d'acceptation de
  * l'action 21.2, et il vaut aussi pour le format d'échange.
+ */
+export function instantaneV21Complet() {
+  const base = instantaneV20Complet();
+  return {
+    ...base,
+    schemaVersion: 21,
+    campagnes: [
+      {
+        id: 'CAMP-1720000000000-210',
+        ref_id: 'anssi-hygiene',
+        intitule: 'Hygiène ANSSI — campagne annuelle du Groupe',
+        ouverte_le: '2026-01-15',
+        echeance: '2026-06-30',
+        close_le: null,
+        notes: 'Décidée en comité de direction du 12 janvier.',
+      },
+    ],
+    campagne_filiales: [
+      {
+        id: 'CAMPF-1720000000000-211',
+        campagne_id: 'CAMP-1720000000000-210',
+        repondant: 'Marie Dupont',
+        accuse_le: '2026-01-20',
+        termine_le: null,
+        notes: 'Deux chapitres restent à évaluer.',
+      },
+    ],
+  };
+}
+
+/**
+ * Instantané COMPLET à la version courante — v21.
+ *
+ * ⚠️ **La part pointe la campagne du MÊME instantané** : c'est cette jointure qui doit
+ * survivre au round-trip, et un identifiant inventé ne mesurerait rien.
+ *
+ * ⚠️ Et ni la campagne ni la part ne portent d'AVANCEMENT : il se compte dans
+ * « evaluations » sur le référentiel demandé. Le faire voyager dans le fichier le figerait
+ * au jour de l'export — une reprise faite six mois plus tard rendrait « à 60 % » une
+ * campagne depuis longtemps terminée.
  */
 export function instantaneV20Complet() {
   const base = instantaneV19Complet();

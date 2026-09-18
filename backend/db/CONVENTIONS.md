@@ -1367,6 +1367,37 @@ Corollaire pour la suite du chantier : une migration qui ajoute une table sans `
 casse ces deux contrôles, et c'est **normal**. Le geste attendu est d'écrire pourquoi ici, puis
 d'ajouter la table aux deux listes — dans cet ordre.
 
+### 24.1 `campagnes` — la DEMANDE est commune, la RÉPONSE est propre à chacune (migration `044`)
+
+**Elle a fait rougir TROIS garde-fous en arrivant** — `lecture_non_cloisonnee`,
+`ecriture_non_cloisonnee`, `table_sans_filiale_non_rangee` —, et c'est exactement l'office
+décrit ci-dessus. La réponse, écrite ici avant que les listes ne bougent :
+
+Une campagne descendante porte **la même chose pour tout le groupe** : son intitulé, le
+référentiel demandé, l'échéance. Vue de Toulouse ou vue de Hambourg, c'est la même demande.
+Ce qui diffère d'une filiale à l'autre — qui répond, où elle en est, quand elle a pris
+connaissance — vit dans **`campagne_filiales`**, qui porte un `filiale_id` et reste
+cloisonnée comme n'importe quelle donnée de travail.
+
+**Deux régimes, donc, et la frontière est celle du sens :**
+
+| | `campagnes` | `campagne_filiales` |
+|---|---|---|
+| Niveau | Groupe (aucun `filiale_id`) | Filiale |
+| Lecture | **ouverte** — une filiale doit voir la campagne qui la convoque | cloisonnée : sa part, et rien d'autre |
+| Écriture | `f_administration_groupe()`, comme `utilisateurs` | la filiale met à jour SA part ; convoquer est un geste de Groupe |
+
+⚠️ **Ce que la lecture ouverte n'apprend PAS** : qui d'autre est convoqué. Le nombre de
+filiales convoquées et leur avancement respectif sont des informations de Groupe, et elles
+vivent dans la table cloisonnée. Un essai le mesure par la route
+(`test/campagnes/descendantes.test.mjs` §3).
+
+⚠️ **Et une clé de `campagne_filiales` vers `campagnes` ne porte NI `cascade` NI `set null`**
+— c'est le §18.2, et le contrôle **C82** a refusé la première rédaction qui l'avait écrite en
+`cascade`. Supprimer une campagne détruirait sinon le travail de vingt filiales, dont
+celles que l'auteur du geste ne peut pas lire. Déconvoquer d'abord est un **geste explicite**,
+et c'est ce qu'on veut d'une demande à laquelle des filiales ont répondu.
+
 ---
 
 ## 25. Le contrat de l'annuaire simulé — figé avant la vague 3

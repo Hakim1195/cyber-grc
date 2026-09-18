@@ -219,8 +219,8 @@ describe('Le vocabulaire du modèle de droits est le même en base et dans le co
   });
 });
 
-describe('Le socle des huit profils est complet et conforme au PLAN_SERVEUR §3.2', () => {
-  test('les huit profils de socle existent', async () => {
+describe('Le socle des NEUF profils est complet et conforme au PLAN_SERVEUR §3.2', () => {
+  test('les neuf profils de socle existent', async () => {
     const codes = await base.lignes(
       proprietaire,
       `select code from profils where socle order by code`,
@@ -232,9 +232,59 @@ describe('Le socle des huit profils est complet et conforme au PLAN_SERVEUR §3.
       'DIRECTION',
       'DPO',
       'QUALITE',
+      // ⚠️ NEUVIÈME, apporté par `045_le_profil_repondant.sql` — action 24.4. Il a fait
+      //    rougir cet essai en arrivant, et c'était l'intention : le déclarer « hors
+      //    socle » l'aurait évité, c'est-à-dire aurait contourné la question au lieu de
+      //    la poser. Il existe parce que le contributeur ne porte AUCUN domaine projeté
+      //    sur `conformite` (mesuré) : répondre à une campagne aurait exigé les droits
+      //    d'un RSSI de filiale, et élargir CONTRIB aurait accordé la conformité entière
+      //    à tous les contributeurs de toutes les filiales.
+      'REPONDANT',
       'RH',
       'RSSI',
     ]);
+  });
+
+  test('le RÉPONDANT est borné à TROIS domaines, et tout le reste lui est fermé NOMMÉMENT', async () => {
+    const lignes = await base.lignes(
+      proprietaire,
+      `select d.domaine, d.niveau from profil_domaines d
+         join profils p on p.id = d.profil_id
+        where p.code = 'REPONDANT' order by d.domaine`,
+    );
+    const ouverts = lignes.filter((l) => l.niveau !== 'aucun');
+    assert.deepEqual(
+      ouverts.map((l) => `${l.domaine}=${l.niveau}`),
+      ['echeances=lecture', 'exigences=contribution', 'referentiels=contribution'],
+    );
+
+    // ⚠️ ET LA SECONDE MOITIÉ, qui est celle qui compte : tout le vocabulaire est
+    //    DÉCLARÉ, pas seulement les trois ouverts. « Aucun » plutôt que l'absence — un
+    //    domaine fermé se relit en revue de droits, une absence ne se relit pas
+    //    (`001_socle.sql` §4). Le compte se compare à celui du profil ADMIN, qui porte le
+    //    vocabulaire entier par construction : une comparaison à un nombre écrit ici se
+    //    périmerait au premier domaine ajouté.
+    const vocabulaire = await base.valeur(
+      proprietaire,
+      `select count(*)::int from profil_domaines d
+         join profils p on p.id = d.profil_id where p.code = 'ADMIN'`,
+    );
+    assert.equal(lignes.length, Number(vocabulaire));
+  });
+
+  test('et il ne peut PAS rattacher une mesure : `mesures` et `correspondances` sont fermés', async () => {
+    // Les quatre domaines qui se projettent sur `conformite` ne sont pas équivalents :
+    // évaluer une exigence EST répondre à une campagne ; rattacher une mesure de sécurité
+    // est un geste de RSSI. La projection prenant le niveau le plus élevé, ouvrir les deux
+    // premiers suffit — et fermer les deux autres ne retire donc rien au répondant.
+    const fermes = await base.lignes(
+      proprietaire,
+      `select d.domaine from profil_domaines d
+         join profils p on p.id = d.profil_id
+        where p.code = 'REPONDANT' and d.domaine in ('mesures', 'correspondances')
+          and d.niveau = 'aucun' order by d.domaine`,
+    );
+    assert.deepEqual(fermes.map((l) => l.domaine), ['correspondances', 'mesures']);
   });
 
   test('le contributeur est borné à QUATRE domaines — ni plus, ni moins', async () => {

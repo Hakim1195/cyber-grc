@@ -112,6 +112,7 @@ window.I18n.enregistrer("en", {
     "fil.tests": "Test history",
     "fil.prestataires": "Suppliers & third parties",
     "fil.tiersDora": "DORA register",
+    "fil.campagnes": "Group campaigns",
     "fil.settings": "Settings & data",
 
     /* ═══════════════════════ SHARED LABELS ═══════════════════════ */

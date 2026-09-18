@@ -25,7 +25,7 @@
  *
  * ── La couverture est RÉCLAMÉE, pas supposée ─────────────────────────────────
  *
- * Un dernier test balaie les **29 entités du registre** et vérifie que chacune se lit,
+ * Un dernier test balaie les **31 entités du registre** et vérifie que chacune se lit,
  * se décrit, et porte un préfixe d'identifiant. Sans lui, ce fichier resterait un
  * échantillon dont personne ne saurait dire ce qu'il laisse de côté — le reproche
  * exact que la porte a formulé.
@@ -315,7 +315,7 @@ describe('Une entité par famille de différence', () => {
  *  §2 — La couverture, réclamée
  * ===================================================================== */
 
-describe('Les 29 entités du registre, sans échantillonnage', () => {
+describe('Les 31 entités du registre, sans échantillonnage', () => {
   test('chaque entité du modèle est décrite, chargée, et porte un préfixe', async () => {
     const modele = (await serveur.appeler('GET', '/api/modele')).corps;
     const jeu = await donnees();
@@ -328,7 +328,12 @@ describe('Les 29 entités du registre, sans échantillonnage', () => {
     // générique plutôt que dans un greffon à elle — elle n'a besoin de rien de
     // particulier, et y entrer lui donne d'un coup le verrouillage optimiste, le
     // journal, le cloisonnement, l'import et le round-trip `grc-backup`.
-    assert.equal(noms.length, 29);
+    // 31 depuis la migration `044` : `campagnes` et `campagne_filiales` (lot L24). ⚠️ La
+    // première est de niveau GROUPE et ne porte AUCUN filiale_id — comme `mappings` —, et
+    // y entrer lui donne le round-trip et l'import sans qu'un greffon ait à les réécrire.
+    // Ce que le greffon `src/campagnes/` ajoute est ce que la couche générique ne peut pas
+    // faire : compter l'avancement, et convoquer une AUTRE filiale que la sienne.
+    assert.equal(noms.length, 31);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -398,6 +403,11 @@ describe('Les 29 entités du registre, sans échantillonnage', () => {
         questionnaire_id: crees.questionnaires_tiers,
         reponse: 'oui',
       }),
+      // La part d'une campagne se rattache à une campagne RÉELLE — celle que le
+      // balayage vient de créer. ⚠️ Et sa clé est en `restrict` (§18.2) : une valeur
+      // inventée rend 409, ce qui est le comportement voulu — on ne convoque pas une
+      // filiale à une campagne qui n'existe pas.
+      campagne_filiales: (crees) => ({ campagne_id: crees.campagnes }),
     };
 
     const echecs = [];
@@ -425,7 +435,17 @@ describe('Les 29 entités du registre, sans échantillonnage', () => {
       // réservée à une administration Groupe depuis le correctif du constat M-4 de
       // la porte S2. Le balayage passe donc par la session qui en a le droit — et le
       // test suivant réclame que la session de filiale, elle, soit refusée.
-      const appelant = nom === 'mappings' ? administration : serveur;
+      // ⚠️ `campagnes` rejoint `mappings` ici (migration `044`) : une campagne
+      //    descendante est ouverte par le GROUPE, et son écriture exige le drapeau
+      //    d'administration. Et `campagne_filiales` aussi, mais pour une raison
+      //    DIFFÉRENTE qu'il faut garder en tête : la part est cloisonnée, seulement
+      //    CONVOQUER — créer la part d'une filiale — est un geste de Groupe. Une
+      //    filiale MET À JOUR sa part, elle ne la crée pas : c'est ce que mesure
+      //    l'essai « la filiale répond, elle ne se convoque pas » plus bas.
+      const appelant =
+        nom === 'mappings' || nom === 'campagnes' || nom === 'campagne_filiales'
+          ? administration
+          : serveur;
       const reponse = await appelant.appeler('POST', `/api/entites/${nom}`, { corps: { champs } });
       if (reponse.statut !== 201) {
         echecs.push(`${nom} → ${reponse.statut} ${JSON.stringify(reponse.corps.message ?? reponse.corps)}`);

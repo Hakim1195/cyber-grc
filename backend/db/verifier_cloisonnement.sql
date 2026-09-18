@@ -1878,14 +1878,14 @@ begin
                           and not exists (select 1 from pg_attribute a where a.attrelid = c.oid
                                            and a.attname = 'filiale_id' and a.attnum > 0
                                            and not a.attisdropped))),
-               'colonnes_personnelles, controles_schema, mapping_exigences, mappings, '
-               'migrations_schema, profil_domaines, profils, session_domaines, sessions, '
-               'utilisateurs',
+               'campagnes, colonnes_personnelles, controles_schema, mapping_exigences, '
+               'mappings, migrations_schema, profil_domaines, profils, session_domaines, '
+               'sessions, utilisateurs',
                coalesce(string_agg(t.nom, ', ' order by t.nom), '(aucune)'),
                case when coalesce(string_agg(t.nom, ', ' order by t.nom), '') =
-                         'colonnes_personnelles, controles_schema, mapping_exigences, '
-                         'mappings, migrations_schema, profil_domaines, profils, '
-                         'session_domaines, sessions, utilisateurs'
+                         'campagnes, colonnes_personnelles, controles_schema, '
+                         'mapping_exigences, mappings, migrations_schema, profil_domaines, '
+                         'profils, session_domaines, sessions, utilisateurs'
                     then 'OK' else 'ÉCHEC' end)
       into v_ligne
       from (

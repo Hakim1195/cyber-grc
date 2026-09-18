@@ -281,7 +281,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 20;
+export const VERSION_SCHEMA = 21;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -1052,6 +1052,25 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
   [
     'questionnaire_reponses',
     { nom: 'questionnaire_reponses', table: 'questionnaire_reponses', prefixe: 'QREP' },
+  ],
+
+  // ── v21 : LES CAMPAGNES DESCENDANTES (L24, actions 24.1 et 24.2) ─────────────
+  //
+  // ⚠️ **`campagnes` est de niveau GROUPE et ne porte AUCUN `filiale_id`** — comme
+  // `mappings`, et pour le même motif (`CONVENTIONS.md` §24) : son intitulé, son
+  // référentiel et son échéance sont les mêmes vus de Toulouse et vus de Hambourg. Sa
+  // création est donc réservée à une administration Groupe, par la politique RLS de la
+  // migration `044`, exactement comme celle de `mappings` depuis le constat M-4.
+  //
+  // ⚠️ Et une filiale ne CONVOQUE pas : créer la part d'une AUTRE filiale est
+  // impossible par cette couche, qui écrit toujours `filiale_id = filiale active` —
+  // c'est le principe même du périmètre serveur, et on ne l'affaiblit pas. La
+  // convocation passe par `POST /api/campagnes/:id/convoquer`, route d'administration
+  // qui nomme les filiales et les VÉRIFIE dans le périmètre de la session.
+  ['campagnes', { nom: 'campagnes', table: 'campagnes', prefixe: 'CAMP' }],
+  [
+    'campagne_filiales',
+    { nom: 'campagne_filiales', table: 'campagne_filiales', prefixe: 'CAMPF' },
   ],
 ]);
 

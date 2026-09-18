@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 20;
+export const VERSION_SCHEMA = 21;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -173,6 +173,12 @@ export const COLLECTIONS = [
   // réponses référencent l'envoi, et l'envoi doit exister d'abord.
   'questionnaires_tiers',
   'questionnaire_reponses',
+  // v21 — les campagnes descendantes (L24). ⚠️ L'ordre compte ici AUSSI, et pour une
+  // raison de plus que d'habitude : la clé de « campagne_filiales » vers « campagnes »
+  // est en `restrict` (§18.2), donc la part ne peut pas être écrite avant la campagne —
+  // et une reprise qui les inverserait échouerait sur la clé étrangère, pas en silence.
+  'campagnes',
+  'campagne_filiales',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -817,6 +823,33 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
       { champ: 'prestataire_id', cible: 'prestataires' },
       { champ: 'sous_traitant_id', cible: 'prestataires' },
     ],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+
+  // ── v21 : les campagnes descendantes (L24, actions 24.1 et 24.2) ──────────
+  //
+  // ⚠️ **Aucun champ d'ÉTAT ni d'AVANCEMENT**, et le second mérite d'être dit : une
+  // campagne à 60 % exportée aujourd'hui serait encore à 60 % dans le fichier six mois
+  // plus tard, alors que la filiale aurait tout terminé. L'avancement se COMPTE dans
+  // « evaluations » sur le référentiel demandé.
+  campagnes: {
+    prefixe: 'CAMP',
+    champs: ['id', 'ref_id', 'intitule', 'ouverte_le', 'echeance', 'close_le', 'notes'],
+    enumerations: [],
+    bornes: [],
+    dates: ['ouverte_le', 'echeance', 'close_le'],
+    references: [],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  campagne_filiales: {
+    prefixe: 'CAMPF',
+    champs: ['id', 'campagne_id', 'repondant', 'accuse_le', 'termine_le', 'notes'],
+    enumerations: [],
+    bornes: [],
+    dates: ['accuse_le', 'termine_le'],
+    references: [{ champ: 'campagne_id', cible: 'campagnes' }],
     referencesMultiples: [],
     cleMetier: null,
   },
@@ -1951,6 +1984,20 @@ const PALIERS: readonly EtapePalier[] = [
     // envoyé à partir du champ `notes` d'un prestataire. Un envoi est un fait
     // consigné par un humain, et l'inventer ferait croire qu'on a demandé.
     appliquer: paliersCollections(['questionnaires_tiers', 'questionnaire_reponses']),
+  },
+  {
+    de: 20,
+    vers: 21,
+    libelle:
+      'Lot L24, actions 24.1 et 24.2 : l’instantané gagne « campagnes » et ' +
+      '« campagne_filiales » — ce que le GROUPE demande à ses filiales, et la part de ' +
+      'chacune. ⚠️ L’AVANCEMENT n’y est pas : il se compte dans « evaluations » sur le ' +
+      'référentiel demandé, à l’instant où on regarde.',
+    // Rien à transformer, et rien à DEVINER : on ne fabrique pas une campagne à partir
+    // des évaluations existantes. Une campagne est une DEMANDE, datée et signée ; la
+    // déduire d'un référentiel déjà évalué ferait croire que le Groupe a demandé ce
+    // qu'une filiale avait fait de son propre chef — et l'inverse aussi.
+    appliquer: paliersCollections(['campagnes', 'campagne_filiales']),
   },
 ];
 

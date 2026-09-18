@@ -32,9 +32,9 @@
 > le 08/09/2026** — jeu de découverte autorisé, IA locale par défaut avec externe encadré,
 > portail fournisseur validé) et
 > **[`docs/COMPARATIF_MARCHE.md`](docs/COMPARATIF_MARCHE.md)** (les 86 fonctionnalités de
-> l'état de l'art, mesurées dans le dépôt — **44 ✅ · 12 🟡 · 30 ❌ au 16/09/2026**,
-> rejoué à la clôture de la vague B ; ⚠️ **rejeu PARTIEL, et le document le dit** :
-> seules les onze lignes que les vagues A et B pouvaient déplacer ont été remesurées).
+> l'état de l'art, mesurées dans le dépôt — **46 ✅ · 15 🟡 · 25 ❌ au 18/09/2026**,
+> **rejeu INTÉGRAL** à la clôture de la vague C : les 86 lignes en trois balayages, et la
+> méthode est écrite pour qu'on puisse la refaire).
 > ⚠️ **Le §0 bis du `PLAN_PRODUIT.md` fait autorité sur l'ordonnancement** : aucun lot L17+
 > ne se joue avant que S7 et S8 soient franchies. Seul **L18 (installation)** y échappe, et
 > uniquement parce qu'il ne touche ni `src/`, ni le schéma.
@@ -222,8 +222,11 @@
 > entier, L20 sauf 20.2). **La vague C est ENTAMÉE : le lot L21 — tiers, chaîne de
 > sous-traitance et DORA — est livré les 17 et 18/09/2026** (migrations `042` et `043`,
 > ses quatre actions, ses écrans, et l'échéancier qui connaît enfin les contrats). Le
-> geste suivant est **L24 — les campagnes descendantes**, puis le rejeu INTÉGRAL de
-> `docs/COMPARATIF_MARCHE.md` qui clôt la vague.
+> **la vague C est CLOSE le 18/09/2026** : L21 (tiers, chaîne de sous-traitance, DORA,
+> questionnaire fournisseur) et **L24** (campagnes descendantes) sont livrés. Le geste
+> suivant est le **rejeu INTÉGRAL de `docs/COMPARATIF_MARCHE.md`** — que le
+> `docs/PLAN_ACHEVEMENT.md` §4 impose à la clôture d'une vague, et qui n'a été que partiel
+> le 16/09 —, puis la **vague D** (L25 EBIOS RM, L26 catalogues ouverts).
 >
 > ---
 >
@@ -258,7 +261,9 @@
 > 1. **Le produit a été comparé au marché**, avec des chiffres, pour la première fois.
 >    [`docs/COMPARATIF_MARCHE.md`](docs/COMPARATIF_MARCHE.md) — 86 fonctionnalités de
 >    l'état de l'art GRC, chacune **mesurée dans le dépôt** : **35 ✅ · 17 🟡 · 34 ❌**
->    à l'établissement, **44 ✅ · 12 🟡 · 30 ❌** au rejeu du 16/09/2026.
+>    à l'établissement, **44 ✅ · 12 🟡 · 30 ❌** au rejeu partiel du 16/09/2026, et
+>    **46 ✅ · 15 🟡 · 25 ❌ (~62 %) au rejeu INTÉGRAL du 18/09/2026**, à la clôture de la
+>    vague C — les 86 lignes passées en trois balayages, dont la méthode est écrite.
 >    [`docs/PLAN_PRODUIT.md`](docs/PLAN_PRODUIT.md) en tire **douze lots, L17 → L28**, sept
 >    portes neuves (S10 → S16) et **huit non-objectifs nommés un par un**. ⚠️ **Les trois
 >    arbitrages qui vous étaient réservés sont TRANCHÉS** (08/09/2026) : **A2** le jeu de
@@ -677,14 +682,14 @@ cyber-gouvernance_V4/
 > pour que `data` garde la forme décrite ici et qu'un module qui reconstruit un objet ne
 > puisse pas perdre la version au passage (`docs/DATA_MODEL.md` §1.4).
 
-- `SCHEMA_VERSION = 20` dans `datastore.js` — elle numérote la forme de `data` et du fichier
+- `SCHEMA_VERSION = 21` dans `datastore.js` — elle numérote la forme de `data` et du fichier
   `grc-backup`, pas les migrations SQL. Migrations à l'import via `migratePayload` côté
-  navigateur, et **paliers v1 → v20 rejoués côté serveur** (`backend/src/reprise/`).
+  navigateur, et **paliers v1 → v21 rejoués côté serveur** (`backend/src/reprise/`).
   ⚠️ **Elle est écrite à QUATRE endroits** — `js/core/datastore.js`, `src/entites/index.ts`,
   `src/reprise/index.ts` et `docs/DATA_MODEL.md` — et un garde-fou les confronte
   (`test/reprise/versions-concordantes.test.mjs`) : le document y est entré le 16/09 parce
   qu'il avait annoncé « v12 » pendant quatre montées de version.
-- Entités (tableaux) — **vingt-neuf depuis la v20**, et le détail fait foi dans
+- Entités (tableaux) — **trente et une depuis la v21**, et le détail fait foi dans
   `docs/DATA_MODEL.md` §1.5, jamais ici : clients, exigences, actions, risques, actifs, processus, crise,
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
   **evaluations** (auto-évaluations de référentiels), **mesures** (pivot « Mesure de sécurité »),
@@ -1101,7 +1106,8 @@ sur l'**Active Directory** du groupe.
 | **L19 — Chaîne de preuve** | ✅ **LIVRÉ EN ENTIER** les 15 et 16/09/2026 — attestation de lecture (`033`), dérogations datées (`035`), lien document ↔ contrôle (`036`), contrôle périodique et efficacité (`037`), **réutilisation d'une preuve** (`038`). ⚠️ Chacune porte son écran ET son garde-fou : *une capacité qu'aucun écran n'appelle est une capacité absente* (`docs/REPRISE.md` §4) |
 | **L20 — Réglementaire opérationnel** | ✅ **LIVRÉ**, 20.2 exceptée — horloge NIS2/RGPD (`034`), AIPD (`039`), demandes d'exercice de droits (`040`), main courante de crise en ajout seul (`041`). ⚠️ **Reste 20.2** : la génération des formulaires ANSSI et CNIL. Le produit NE TRANSMET RIEN à une autorité — il prépare, l'humain envoie |
 | **L21 — Tiers, chaîne d'approvisionnement et DORA** | ✅ **LIVRÉ** les 17 et 18/09/2026, ses **quatre actions** — registre d'information DORA et chaîne de sous-traitance (`042`), questionnaire fournisseur (`043`), suivi contractuel et plan de sortie, score composite **dérivé**. ⚠️ Le rang de sous-traitance se **dérive** et l'anti-cycle est **en base** ; le produit **n'envoie rien** (le questionnaire s'exporte et se réimporte) ; et les échéances contractuelles **alimentent l'échéancier existant** — ce qui n'était vrai nulle part avant le 18/09, alors que la `043` l'écrivait dans le commentaire de sa propre colonne |
-| **L22 → L26** | ⬜ **planifiés** (`docs/PLAN_PRODUIT.md`) — ouverture technique, collecte automatique et CCM, campagnes descendantes, EBIOS RM, catalogues ouverts |
+| **L24 — Campagnes et gouvernance descendante** | ✅ **LIVRÉ le 18/09/2026** (migration `044`, schéma `data` **v21**) — le Groupe ouvre une campagne sur un référentiel vers N filiales, et suit l'avancement de chacune. ⚠️ **Une filiale ne voit QUE sa part**, ni celle de la voisine ni leur nombre ; l'avancement se **COMPTE** dans les évaluations au lieu d'être stocké ; les relances passent par **L12 réutilisé** (9ᵉ source de l'échéancier, aucune route d'envoi neuve). ⚠️ **Deux enseignements** : trois garde-fous ont refusé la migration (table sans `filiale_id` — `CONVENTIONS.md` §24.1) et le contrôle C82 a refusé une clé en `cascade` (§18.2) ; et **l'interdit de déconvocation a dû être RETIRÉ** parce qu'il rendait la reprise « remplacer » impossible — classe des trois conflits de la `041` |
+| **L22, L23, L25, L26** | ⬜ **planifiés** (`docs/PLAN_PRODUIT.md`) — ouverture technique, collecte automatique et CCM, EBIOS RM, catalogues ouverts |
 | **L27 — Assistance IA** | ⬜ **arbitré le 08/09/2026 (A1)** — modèle **local par défaut** ; un fournisseur **externe de confiance** reste possible sous **six barrières**, dont l'avertissement n'est que la sixième. ⚠️ La première est que `IPAddressDeny=any` **ferme la sortie réseau** tant que l'exploitant ne l'ouvre pas à la main : *une barrière physique, pas une promesse*. Activation **par filiale**, jamais pour le groupe entier. L'IA **propose**, un humain **décide** — aucun des cinq usages n'écrit sans validation. Porte **S16** |
 | **L28 — Portail fournisseur** | ⬜ **validé le 08/09/2026 (A3)** — accès par lien signé daté et révocable, **sans compte** ; dépôt de preuve par la chaîne L6 **sans variante simplifiée** ; vhost et limiteur propres ; attestation rendue au fournisseur. ⚠️ **Premier composant du produit exposé hors VPN** : il ne se joue **ni avant S8, ni avec un autre lot**, et sa porte **S15 est la plus exigeante du plan** — *en cas de doute, on ne livre pas*. L'export/réimport de L21.2 **reste la voie de repli permanente** |
 

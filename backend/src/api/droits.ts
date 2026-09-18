@@ -268,6 +268,20 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   // écriture sur les exigences de sa propre organisation.
   questionnaires_tiers: 'tiers',
   questionnaire_reponses: 'tiers',
+  // ── L24 : les campagnes descendantes ──────────────────────────────────────
+  //
+  // `conformite`, et non `administration` : ce qu'une campagne met en jeu est
+  // l'évaluation d'un référentiel, et c'est le domaine de qui répond. Le ranger en
+  // administration aurait fermé la réponse à ceux-là mêmes qu'on convoque — et
+  // ouvert la convocation à qui administre sans rien connaître de la conformité.
+  //
+  // ⚠️ Ce qui reste réservé au Groupe ne l'est pas par le DOMAINE mais par la
+  // politique RLS de la `044` et par le drapeau d'administration : créer une
+  // campagne, convoquer, déconvoquer. Le domaine dit de QUOI on parle ; le
+  // périmètre et le niveau disent qui peut agir. Confondre les deux axes est
+  // exactement ce que le modèle à trois axes existe pour éviter.
+  campagnes: 'conformite',
+  campagne_filiales: 'conformite',
 });
 
 /**

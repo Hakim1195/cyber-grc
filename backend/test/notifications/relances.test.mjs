@@ -6,7 +6,7 @@
  * ════════════════════════════════════════════════════════════════════════
  *
  * L'essai sème neuf chaînes reconnaissables — titres, noms, commentaires,
- * synthèses, toutes préfixées `ZZFUITE` — dans les huit sources d'échéances, puis
+ * synthèses, toutes préfixées `ZZFUITE` — dans les neuf sources d'échéances, puis
  * joue la chaîne **entière** : récolte, résolution de l'annuaire, rédaction,
  * dialogue SMTP réel. Il cherche ensuite ces chaînes dans **les octets que le
  * relais a reçus** : pas dans le retour d'une fonction, pas dans ce que le code
@@ -184,24 +184,32 @@ describe('L12 — aucune donnée métier ne sort par courriel', () => {
     assert.equal(entree.utilisateur_libelle, 'systeme-relances');
     assert.equal(entree.valeurs_apres.destinataires, 1);
     assert.equal(entree.valeurs_apres.messages_expedies, 1);
-    // 11 et non 5, et l'écart EST le point : `echeances` compte les obligations
-    // DUES dans l'horizon (onze), `Total` du courriel compte celles de Marie
-    // (cinq). Les six autres n'ont **aucun responsable interne** et sont comptées
+    // 12 et non 5, et l'écart EST le point : `echeances` compte les obligations
+    // DUES dans l'horizon (douze), `Total` du courriel compte celles de Marie
+    // (cinq). Les sept autres n'ont **aucun responsable interne** et sont comptées
     // à part plutôt que tues — sans quoi un exploitant ne verrait jamais qu'une
     // obligation n'est relancée à personne.
     //
-    // Les six, une par une, pour que le chiffre reste vérifiable :
+    // Les sept, une par une, pour que le chiffre reste vérifiable :
     //  · la déclaration d'incident — `incidents` ne porte pas de responsable ;
     //  · les TROIS dates contractuelles du tiers semé (fin, revue, plan de sortie)
     //    — lot L21, action 21.3 ;
     //  · les DEUX questionnaires envoyés non reçus : celui de ce semis et celui du
-    //    semis commun — action 21.2.
+    //    semis commun — action 21.2 ;
+    //  · la part de campagne du Groupe — lot L24 : elle porte un répondant, mais ce
+    //    nom n'a AUCUNE fiche d'annuaire rattachée à un compte, et le §36.2 ne
+    //    résout un destinataire que par l'annuaire. Un nom tapé à la main ne reçoit
+    //    rien, et c'est la porte S6 qui l'a imposé.
+    //
+    // ⚠️ La campagne CLOSE du même semis, à la même échéance, n'est PAS comptée : ce
+    // qui n'a pas été fait sur une demande fermée est un manque qu'on constate, pas
+    // un retard qu'on relance. Si elle l'était, le chiffre serait 13.
     //
     // ⚠️ Pour les tiers, l'absence de destinataire n'est pas un manque du modèle :
     // `prestataires.email` est l'adresse du FOURNISSEUR, et s'en servir enverrait
     // le bilan interne du groupe à l'extérieur.
-    assert.equal(entree.valeurs_apres.echeances, 11);
-    assert.equal(entree.valeurs_apres.sans_destinataire, 6);
+    assert.equal(entree.valeurs_apres.echeances, 12);
+    assert.equal(entree.valeurs_apres.sans_destinataire, 7);
 
     const serialisee = JSON.stringify(entree);
     assert.ok(!serialisee.includes(ADRESSE_MARIE), 'aucune adresse au journal');

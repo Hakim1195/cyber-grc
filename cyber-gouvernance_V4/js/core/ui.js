@@ -675,7 +675,12 @@ window.UI = (function () {
             vues: Object.freeze([
                 Object.freeze({ route: "/referentiels", libelle: "Catalogue" }),
                 Object.freeze({ route: "/referentiels-actifs", libelle: "Applicables ici" }),
-                Object.freeze({ route: "/couverture", libelle: "Couverture crois\u00e9e" })
+                Object.freeze({ route: "/couverture", libelle: "Couverture crois\u00e9e" }),
+                // Lot L24 — une campagne descendante demande UN RÉFÉRENTIEL à des
+                // filiales : c'est une vue de la conformité, pas un sujet à part. Un
+                // onglet, donc, et non une entrée de menu — sans quoi on rendrait au
+                // menu les entrées qu'on vient de lui retirer (`docs/PLAN_INTERFACE.md`).
+                Object.freeze({ route: "/campagnes", libelle: "Campagnes du Groupe" })
             ])
         })
     ];

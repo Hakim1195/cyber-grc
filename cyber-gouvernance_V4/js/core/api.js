@@ -1240,6 +1240,26 @@ const Api = (() => {
        référentiels, qui vivent ici. C'est l'écran qui fait la division. */
     function tiersQuestionnaires() { return appeler("/tiers/questionnaires"); }
 
+    /* ── Lot L24 : les campagnes descendantes ──────────────────────────────────
+     *
+     * ⚠️ `campagnesEtat` rend les campagnes ET les parts que la POLITIQUE DE
+     * CLOISONNEMENT laisse voir : pour une filiale, sa part et rien d'autre. Le
+     * navigateur ne filtre donc rien — un filtre côté client serait une barrière
+     * que le client peut retirer.
+     *
+     * ⚠️ `campagnesConvoquer` est le SEUL appel du produit qui nomme des filiales
+     * en écriture. Le serveur vérifie qu'elles sont dans le périmètre de la
+     * session, et son refus ne distingue pas « hors périmètre » de « n'existe
+     * pas » : sans cela, la route deviendrait un oracle d'existence de filiales.
+     */
+    function campagnesEtat() { return appeler("/campagnes/etat"); }
+    function campagnesConvoquer(campagneId, filialeIds) {
+        return appeler("/campagnes/" + encodeURIComponent(campagneId) + "/convoquer", {
+            methode: "POST",
+            corps: { filiales: filialeIds }
+        });
+    }
+
     function propagerMesure(mesureId) {
         return appeler("/operations/propager-mesure", { methode: "POST", corps: { mesureId: mesureId } });
     }
@@ -1269,6 +1289,7 @@ const Api = (() => {
         derogationsEtat, aipdEtat, demandesDroitsEtat,
         // Lot L21 : le registre DORA, la chaîne DÉRIVÉE et le score composite.
         tiersBareme, tiersEtat, tiersChaine, tiersRegistreDora, tiersQuestionnaires,
+        campagnesEtat, campagnesConvoquer,
         mainCourante, ajouterMainCourante,
         // Lot L18 bis : le jeu de découverte.
         decouverteEtat, decouverteSemer, decouvertePurger

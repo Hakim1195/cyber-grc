@@ -126,8 +126,16 @@ describe('L’engendrement des groupes AD suit la convention du PLAN_SERVEUR §3
       'Administrer une seule filiale n’a pas de sens : le groupe n’est pas engendré.',
     );
 
-    // 2 filiales × 7 profils (ADMIN exclu) + 7 groupes « GROUPE » + 2 transversaux.
-    assert.equal(liste.length, 2 * 7 + 7 + 2);
+    // 2 filiales × 8 profils (ADMIN exclu) + 8 groupes « GROUPE » + 2 transversaux.
+    //
+    // ⚠️ SEPT profils de site sont devenus HUIT avec la migration `045` (le répondant de
+    //    campagne, action 24.4), et ce contrôle a rougi en l'apprenant — c'est son office.
+    //    La formule est écrite en FACTEURS et non en total : un profil de plus déplace le
+    //    nombre attendu sans qu'on ait à le recalculer à la main, et la lecture dit
+    //    POURQUOI il vaut ce qu'il vaut. C'est aussi ce qui rend visible la règle
+    //    d'`ADMIN` — administrer une seule filiale n'a pas de sens, donc pas de groupe
+    //    par filiale pour lui.
+    assert.equal(liste.length, 2 * 8 + 8 + 2);
   });
 
   test('la synchronisation est idempotente et ne supprime jamais rien', async () => {
@@ -144,7 +152,9 @@ describe('L’engendrement des groupes AD suit la convention du PLAN_SERVEUR §3
       },
     );
     assert.deepEqual(bilan.crees, [], 'Rien à créer la seconde fois.');
-    assert.equal(bilan.presents.length, 23);
+    // Le même compte que ci-dessus, et par la même formule : 2 filiales × 8 profils de
+    // site + 8 groupes de portée Groupe + 2 transversaux.
+    assert.equal(bilan.presents.length, 2 * 8 + 8 + 2);
   });
 });
 

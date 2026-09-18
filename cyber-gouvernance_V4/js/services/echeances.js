@@ -3,8 +3,9 @@
  *
  * But : recenser en UN seul endroit toutes les obligations datées éparpillées dans les
  * modules (plan d'actions, MCO, revues documentaires, déclarations d'incidents, audits,
- * revues de direction, questionnaires fournisseurs et échéances contractuelles des
- * tiers), pour alimenter le module « Échéancier » et le badge de la barre latérale.
+ * revues de direction, questionnaires fournisseurs, échéances contractuelles des tiers
+ * et campagnes descendantes du Groupe), pour alimenter le module « Échéancier » et le
+ * badge de la barre latérale.
  * Ne modifie AUCUNE donnée ; ne fait que lire le DataStore (API synchrone).
  *
  * Exposé sous `window.Echeances`. Dépendance : `window.DataStore` (chargé avant).
@@ -230,6 +231,48 @@ window.Echeances = (function () {
                     statut: p.criticite || "",
                     route: "#/prestataires/" + p.id
                 });
+            });
+        });
+
+
+        /* 9. Campagnes descendantes (lot L24, actions 24.1 et 24.3) — la date de retour
+              attendue par le Groupe, pour MA part.
+
+              ⚠️ Trois exclusions, et elles portent tout le sens :
+
+               · une campagne jamais OUVERTE est un brouillon du Groupe : rien n'est
+                 demandé à personne ;
+               · une campagne CLOSE ne se relance plus — ce qui n'a pas été fait est un
+                 manque qu'on constate, pas un retard qu'on rattrape ;
+               · une part TERMINÉE n'est plus une obligation, même si la campagne traîne.
+
+              C'est le même arbitrage que `f_etat_part_campagne()` côté serveur, dans le
+              même ordre — et il n'est pas recopié : la fonction rend un ÉTAT, on ne lit
+              ici que des DATES, comme les huit sources ci-dessus.
+
+              ⚠️ La part d'une AUTRE filiale n'arrive jamais ici : le serveur ne sert que
+              celles que la politique de cloisonnement laisse voir. L'échéancier n'a donc
+              aucun filtre à faire — et c'est voulu : un filtre côté client serait une
+              barrière que le client peut retirer. */
+        const campagneDe = new Map((DataStore.getCampagnes() || [])
+            .filter(c => c && c.id).map(c => [c.id, c]));
+
+        (DataStore.getPartsCampagneVisibles() || []).forEach(part => {
+            if (!part) return;
+            const campagne = campagneDe.get(part.campagne_id);
+            if (!campagne || !campagne.echeance) return;
+            if (!campagne.ouverte_le) return;   // brouillon du Groupe
+            if (campagne.close_le) return;      // close : on constate, on ne relance plus
+            if (part.termine_le) return;        // ma part est faite
+            push({
+                type: "campagne", typeLabel: "Campagne du Groupe",
+                titre: campagne.intitule || ("Campagne " + (campagne.ref_id || "")),
+                sousTitre: (campagne.ref_id || "")
+                    + (part.repondant ? " · " + part.repondant : "")
+                    + (part.accuse_le ? " · vue le " + String(part.accuse_le).slice(0, 10) : ""),
+                date: campagne.echeance, jours: daysFromToday(campagne.echeance),
+                statut: part.accuse_le ? "Prise en compte" : "Non ouverte",
+                route: "#/campagnes/" + campagne.id
             });
         });
 

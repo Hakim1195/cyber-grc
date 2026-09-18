@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 20;
+    const SCHEMA_VERSION = 21;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -80,6 +80,20 @@ const DataStore = (() => {
         // RÉPONSES. L'ordre compte — les réponses référencent l'envoi.
         "questionnaires_tiers",
         "questionnaire_reponses",
+        // v21 — les campagnes descendantes (L24, actions 24.1 et 24.2) : ce que le
+        // GROUPE demande à ses filiales, et la part de chacune.
+        //
+        // ⚠️ `campagnes` est de niveau GROUPE et ne porte AUCUN identifiant de filiale :
+        // son intitulé, son référentiel et son échéance sont les mêmes vus de toutes les
+        // filiales. Ce qui diffère — qui répond, où elle en est — est dans
+        // `campagne_filiales`, que la base cloisonne. Une filiale ne reçoit donc QUE sa
+        // part, et n'apprend pas combien d'autres sont convoquées.
+        //
+        // ⚠️ Et aucune des deux ne porte l'AVANCEMENT : il se compte dans les
+        // évaluations du référentiel demandé, côté serveur (`GET /api/campagnes/etat`).
+        // Le stocker ici le figerait au jour de l'export.
+        "campagnes",
+        "campagne_filiales",
         // v17 — Lot L20, action 20.3 : les analyses d'impact RGPD (article 35).
         // ⚠️ Elles POINTENT le registre de l'article 30 (`traitement_id`) et n'en
         // recopient aucun champ : deux réponses à la même question dans un outil
@@ -860,6 +874,57 @@ const DataStore = (() => {
             data.questionnaire_reponses.filter(r => r.questionnaire_id !== id);
         save();
     }
+    /* =========================
+       CAMPAGNES DESCENDANTES (v21, actions 24.1 et 24.2)
+       campagnes         : { id, ref_id, intitule, ouverte_le, echeance, close_le, notes }
+       campagne_filiales : { id, campagne_id, repondant, accuse_le, termine_le, notes }
+
+       ⚠️ **Aucun champ d'état, aucun avancement.** « En retard » et « terminé » se
+       DÉRIVENT des dates côté serveur (`f_etat_campagne`, `f_etat_part_campagne`), et
+       l'avancement se COMPTE dans les évaluations. Les poser ici obligerait quelque
+       chose à les remettre — et le jour où ce quelque chose ne repasse pas, le produit
+       affirmerait qu'une filiale a répondu quand elle n'a rien fait.
+
+       ⚠️ **`campagne_filiales` ne porte pas de nom de filiale**, et ce n'est pas un
+       oubli : une filiale ne voit que sa part, et le serveur retire `filiale_id` de tout
+       ce qu'il expose. L'écran de suivi consolidé lit `GET /api/campagnes/etat`, qui
+       nomme les filiales SOUS la politique de cloisonnement.
+    ========================== */
+    function getCampagnes() { return data.campagnes; }
+    function getCampagneById(id) { return data.campagnes.find(c => c.id === id); }
+    function addCampagne(c) { data.campagnes.push(c); save(); }
+    function updateCampagne(c) {
+        const i = data.campagnes.findIndex(x => x.id === c.id);
+        if (i !== -1) { data.campagnes[i] = c; save(); }
+    }
+    /**
+     * ⚠️ La cascade du serveur est en `restrict`, pas en `cascade` (§18.2 : une clé
+     * d'une table cloisonnée vers une table de niveau Groupe ne détruit pas la donnée
+     * des filiales). Supprimer une campagne exige donc de DÉCONVOQUER d'abord, et cette
+     * fonction refait le même ordre en mémoire pour que l'écran ne montre pas des parts
+     * sans campagne — la classe du défaut trouvé au navigateur le 18/09/2026.
+     */
+    function deleteCampagne(id) {
+        data.campagne_filiales = data.campagne_filiales.filter(p => p.campagne_id !== id);
+        data.campagnes = data.campagnes.filter(c => c.id !== id);
+        save();
+    }
+    /**
+     * Toutes les parts VISIBLES, c'est-à-dire celles que la politique de cloisonnement
+     * du serveur a laissées passer. ⚠️ Le nom dit « visibles » et non « toutes » à
+     * dessein : pour une filiale, la collection ne contient QUE la sienne, et un appelant
+     * qui croirait y lire la liste des convoquées se tromperait sur ce qu'il compte.
+     */
+    function getPartsCampagneVisibles() { return data.campagne_filiales; }
+    function getPartsCampagne(campagneId) {
+        return data.campagne_filiales.filter(p => p.campagne_id === campagneId);
+    }
+    function getPartCampagneById(id) { return data.campagne_filiales.find(p => p.id === id); }
+    function updatePartCampagne(p) {
+        const i = data.campagne_filiales.findIndex(x => x.id === p.id);
+        if (i !== -1) { data.campagne_filiales[i] = p; save(); }
+    }
+
     function getReponsesDe(questionnaireId) {
         return data.questionnaire_reponses.filter(r => r.questionnaire_id === questionnaireId);
     }
@@ -1133,7 +1198,13 @@ const DataStore = (() => {
         //           fabrique pas un envoi à partir du champ `notes` d'un prestataire.
         //           Un envoi est un fait CONSIGNÉ par un humain, et l'inventer ferait
         //           croire qu'on a demandé quelque chose qu'on n'a jamais demandé.
-        // (Ajouter ici les futures migrations : if (v < 21) { ... })
+        // v20 → v21 : ajout de `campagnes` et `campagne_filiales` (campagnes
+        //           descendantes, actions 24.1 et 24.2) → normalize crée les tableaux
+        //           vides. AUCUNE transformation, et rien à DEVINER : on ne fabrique pas
+        //           une campagne à partir des évaluations déjà faites. Une campagne est
+        //           une DEMANDE, datée ; la déduire ferait croire que le Groupe a demandé
+        //           ce qu'une filiale avait fait de son propre chef.
+        // (Ajouter ici les futures migrations : if (v < 22) { ... })
         return p;
     }
 
@@ -1392,6 +1463,9 @@ const DataStore = (() => {
         getDerogations, getDerogationById, getDerogationsByExigence,
         addDerogation, updateDerogation, deleteDerogation,
         getSousTraitances, getSousTraitancesDe, addSousTraitance, deleteSousTraitance,
+        getCampagnes, getCampagneById, addCampagne, updateCampagne, deleteCampagne,
+        getPartsCampagneVisibles, getPartsCampagne, getPartCampagneById,
+        updatePartCampagne,
         getQuestionnaires, getQuestionnaireById, getQuestionnairesDe,
         addQuestionnaire, updateQuestionnaire, deleteQuestionnaire,
         getReponsesDe, addReponse, updateReponse,

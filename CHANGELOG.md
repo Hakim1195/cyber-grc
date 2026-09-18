@@ -55,6 +55,76 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### L24 — les campagnes descendantes : le Groupe demande, la filiale répond (18/09/2026)
+
+**Vague C, second lot — et la vague est close.** Migrations `044` et `045`. Le motif était écrit au `PLAN_PRODUIT` :
+*« le socle Groupe/Filiale est le meilleur atout architectural du produit, et rien ne permet
+au Groupe de lancer quoi que ce soit vers ses filiales. La consolidation regarde ; elle ne
+demande pas. »* Migration `044`, schéma `data` en **v21**.
+
+| Action | Ce qui la porte |
+|---|---|
+| **24.1** campagne d'évaluation | Le Groupe ouvre une campagne sur un référentiel, vers N filiales, avec échéance. ⚠️ **Une filiale ne voit QUE sa part** — ni celle de la voisine, ni leur nombre : la liste des convoquées est une information de Groupe |
+| **24.2** suivi d'avancement consolidé | Par filiale, par répondant. L'avancement se **COMPTE** dans `evaluations` sur le référentiel demandé, à l'instant où on regarde |
+| **24.3** relances | **L12 réutilisé, pas réécrit** : l'échéance d'une campagne devient la **9ᵉ source** de l'échéancier, et la tâche de relance l'y trouve comme les huit autres. **Aucune route d'envoi neuve** |
+| **24.4** accès contributeur restreint | **Migration `045`** : un neuvième profil de socle, « répondant de campagne », **trois domaines ouverts et vingt-sept fermés NOMMÉMENT**. ⚠️ Il existe parce que la mesure a démenti l'hypothèse : le contributeur porte quatre domaines — `actifs`, `actions`, `incidents`, `mco` — et **aucun** ne se projette sur `conformite`. Un contributeur ne pouvait donc pas répondre à la campagne qu'on lui adresse, et élargir `CONTRIB` aurait accordé la conformité entière à tous les contributeurs de toutes les filiales |
+
+⚠️ **ET 24.4 A FAILLI ÊTRE ANNONCÉE SANS ÊTRE FAITE.** La première rédaction de cette
+entrée écrivait *« le modèle à trois axes suffit : les deux entités relèvent du domaine
+conformite »* — ce qui décrit un **rangement**, pas un accès restreint. Ranger le domaine ne
+crée aucun profil, et le critère de l'action dit « c'est un PROFIL ». La mesure a tranché :
+`CONTRIB` porte `actifs, actions, incidents, mco`, et la table de projection
+(`src/droits/passerelle-api.ts`) n'envoie **aucun** de ces quatre sur `conformite`. Un
+contributeur ne pouvait pas répondre. **La migration `045` existe pour cela**, et le socle
+des profils passe de huit à neuf — ce qui a fait rougir le garde-fou qui les épingle, comme
+il devait.
+
+⚠️ **DEUX TABLES, DEUX RÉGIMES, ET LA FRONTIÈRE EST CELLE DU SENS.** `campagnes` ne porte
+**aucun `filiale_id`** : l'intitulé, le référentiel et l'échéance sont les mêmes vus de
+Toulouse et vus de Hambourg. `campagne_filiales` porte la part — qui répond, où elle en est —
+et reste cloisonnée. L'arbitrage est écrit au `CONVENTIONS.md` **§24.1**, et la table est
+déclarée aux **deux listes** que ce paragraphe impose.
+
+⚠️ **TROIS GARDE-FOUS ONT REFUSÉ LA MIGRATION, ET C'ÉTAIT LEUR OFFICE.** Le §24 l'annonce en
+toutes lettres — *« une migration qui ajoute une table sans `filiale_id` casse ces deux
+contrôles, et c'est NORMAL »*. Ils ont dit, mot pour mot : « toutes les filiales se lisent
+entre elles », « une filiale peut écrire chez une autre », « rien ne dit QUI l'écrit ». Les
+trois questions sont justes ; les réponses sont écrites, et aucune n'est contournée.
+
+⚠️ **ET LE CONTRÔLE C82 A REFUSÉ UNE CLÉ EN `cascade`.** La première rédaction faisait
+disparaître les parts avec la campagne — commode, et faux : le §18.2 interdit qu'une clé
+d'une table cloisonnée vers une table de niveau Groupe porte `cascade` ou `set null`, parce
+que supprimer **une** ligne de Groupe détruirait alors le travail de vingt filiales, dont
+celles que l'auteur du geste ne peut pas lire. La clé est en `restrict` : **déconvoquer
+d'abord est un geste explicite.**
+
+⚠️ **ET L'INTERDIT QUE J'AI ÉCRIT A DÛ ÊTRE RETIRÉ — c'est la leçon du jour.** « La
+déconvocation est un geste de Groupe ; une filiale ne se retire pas elle-même d'une
+campagne » : un déclencheur le tenait, avec son message et son SQLSTATE. **Le banc a montré
+qu'il rendait la reprise « remplacer » impossible** — `purgerFiliale()` vide les tables
+cloisonnées de la filiale active, sans élever de drapeau d'administration, et c'est ainsi
+qu'on restaure une sauvegarde. C'est **mot pour mot la classe des trois conflits de la
+migration `041`** (l'ajout seul contre un balayage qui supprime), et l'arbitrage est le
+même : *la capacité de restaurer une sauvegarde gagne.*
+
+Ce qui protège le Groupe à la place, dit sans enjolivure : le **journal** (une suppression
+est tracée, inaltérable, trois ans), la **reconvocation** qui coûte un geste, et le fait que
+l'avancement vit dans `evaluations` — retirer sa part n'efface **aucune réponse**. Reste vrai
+et écrit : *une filiale peut se retirer d'une campagne, et le Groupe ne le verra qu'au
+journal.* Le garde-fou `f_verifier_campagnes()` garde désormais **l'inverse de ce qu'on
+croirait** : que la suppression reste ouverte à la filiale.
+
+**Six mutations jouées, six morsures**, et elles ne mordent pas au même endroit :
+
+| Mutation | Ce qui rougit |
+|---|---|
+| `pol_campagne_filiales_lecture` ramenée à `using (true)` | **la migration ne s'applique plus** : `f_verifier_couverture_rls()` refuse une lecture non cloisonnée. La famille entière s'arrête à l'ouverture de sa base — un refus plus net qu'un échec |
+| « close » cesse d'être la première branche de l'état | le garde-fou de la `044`, qui **éprouve** les deux dérivations sur neuf cas témoins |
+| la **route** inverse l'ordre des arguments de `f_etat_part_campagne()` | **un** essai, et un seul — la base reste juste, le schéma vert : c'est la leçon du constat **Q-325** |
+| le compte d'avancement cesse d'exclure les évaluations VIDES | un essai : une exigence ouverte n'est pas une exigence répondue |
+| l'échéancier cesse d'exclure les **brouillons** du Groupe | l'essai navigateur : un brouillon ne demande rien à personne |
+| l'écran cesse de **diviser** | l'essai navigateur : le serveur rend un compte, l'écran rend un taux, et c'est l'écran qui a le catalogue |
+
 ### Le navigateur trouve ce que le banc ne voit pas — la cascade des tiers (18/09/2026)
 
 **Parcours joué à la main sur la recette**, connecté comme `admin.grc` : créer un tiers,

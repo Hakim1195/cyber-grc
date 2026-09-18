@@ -25,6 +25,7 @@
  * | 6 | revues de direction | `r.date` non vide **et à venir** (`jours ≥ 0`) | `date_revue is not null and (date_revue - ref) >= 0` |
  * | 7 | questionnaires fournisseurs | `q.echeance` non vide, **envoyé** et **non reçu** | `echeance is not null and envoye_le is not null and recu_le is null` |
  * | 8 | échéances contractuelles des tiers | les trois dates de `prestataires` : fin de contrat, revue de clauses, plan de sortie | une ligne par date non nulle |
+ * | 9 | campagnes descendantes du Groupe | la part d'une filiale dans une campagne **ouverte**, **non close**, qu'elle n'a **pas terminée** | jointure `campagne_filiales` × `campagnes` |
  *
  * ⚠️ **Deux écarts assumés, et ils sont écrits parce qu'ils sont des écarts :**
  *
@@ -79,7 +80,7 @@ import type { PoolClient } from 'pg';
  * ===================================================================== */
 
 /**
- * Les huit sources, avec le libellé **écrit par le développeur** qui les nomme
+ * Les neuf sources, avec le libellé **écrit par le développeur** qui les nomme
  * dans un courriel, et la route de l'écran qui les montre.
  *
  * ⚠️ Ces libellés sont la seule chose que le message dit du *quoi*, et c'est
@@ -101,6 +102,7 @@ export const SOURCES = Object.freeze({
   revue: { libelle: 'Revues de direction', route: '#/audits' },
   questionnaire: { libelle: 'Questionnaires fournisseurs', route: '#/prestataires' },
   contrat: { libelle: 'Échéances contractuelles', route: '#/prestataires' },
+  campagne: { libelle: 'Campagnes du Groupe', route: '#/campagnes' },
 } as const);
 
 export type TypeEcheance = keyof typeof SOURCES;
@@ -351,6 +353,42 @@ export async function recolterEcheances(
                                       ('plan_sortie_le',   p."plan_sortie_le"))
                 as d("quoi", "date")
           where d."date" is not null`,
+        [jour],
+      )
+    ).rows,
+    unNom,
+  );
+
+
+  /* 9. Campagnes descendantes (lot L24, actions 24.1 et 24.3) — la part d'une filiale
+        dans une campagne que le Groupe a OUVERTE, qui n'est pas CLOSE, et qu'elle n'a
+        pas TERMINÉE.
+
+        ⚠️ Les trois exclusions sont celles de `f_etat_part_campagne()` et de
+        `js/services/echeances.js`, dans le même ordre. La troisième mérite un mot : une
+        campagne CLOSE qu'une filiale n'a pas faite n'est plus un retard qu'on relance,
+        c'est un manque qu'on constate — et relancer sur une demande fermée entretient
+        une liste que personne ne peut vider.
+
+        ⚠️ **Et le destinataire, lui, existe ici** : `campagne_filiales.repondant` est le
+        nom de la personne qui répond pour cette filiale. C'est la première des neuf
+        sources à nommer un répondant hors des entités métier, et c'est exactement ce que
+        le Groupe attend d'une relance de campagne — qu'elle arrive à qui doit répondre,
+        pas à une boîte générique.
+
+        `filiale_id is not null` n'a pas à être écrit : la table en porte un, et la
+        récolte tourne dans le périmètre d'une filiale à la fois. */
+  verser(
+    'campagne',
+    (
+      await client.query<LigneDatee>(
+        `select p."id", (c."echeance" - $1::date) as "jours", p."repondant" as "qui"
+           from "campagne_filiales" p
+           join "campagnes" c on c."id" = p."campagne_id"
+          where c."echeance" is not null
+            and c."ouverte_le" is not null
+            and c."close_le" is null
+            and p."termine_le" is null`,
         [jour],
       )
     ).rows,

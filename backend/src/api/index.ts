@@ -129,6 +129,7 @@ import { greffonRecherche } from '../recherche/index.js';
 import { greffonAttestations } from '../attestations/index.js';
 import { greffonAipd } from '../aipd/index.js';
 import { greffonDerogations } from '../derogations/index.js';
+import { greffonCampagnes } from '../campagnes/index.js';
 import { greffonTiers } from '../tiers/index.js';
 import { greffonCrise } from '../crise/index.js';
 import { greffonDroitsPersonnes } from '../droits-personnes/index.js';
@@ -3218,6 +3219,19 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   // ordinaires, qui héritent du verrouillage optimiste, du journal, du
   // cloisonnement et de l'import généralisé sans qu'une ligne soit écrite là-bas.
   await instance.register(greffonTiers, { pool });
+
+  // Lot L24, actions 24.1 et 24.2 — les campagnes descendantes.
+  //
+  // ⚠️ **Deux routes, et l'une d'elles est la SEULE du produit qui nomme des
+  // filiales en écriture** : convoquer consiste littéralement à désigner d'autres
+  // filiales que la sienne. Trois barrières la tiennent — le droit
+  // d'administration, le périmètre de la session, et la politique RLS de la base —
+  // et le refus « hors de votre périmètre » est indistinguable de « n'existe
+  // pas », pour ne pas rouvrir un oracle d'existence de filiales.
+  //
+  // Le reste est de l'écriture d'entité ordinaire : ouvrir, clore, consigner sa
+  // part. Rien n'est réécrit ici de ce que la couche générique tient déjà.
+  await instance.register(greffonCampagnes, { pool });
   // Lot L17, A3 — la recherche globale.
   //
   // ⚠️ Elle reçoit `cumulerSondage`, **le compteur du sondage**, et non un

@@ -1,6 +1,7 @@
 # Guide utilisateur — Cyber GRC Édition Groupe
 
-> **Pour qui** : les huit profils du produit. Chacun a sa section — lisez la vôtre, le reste
+> **Pour qui** : les **neuf** profils du produit — le neuvième, « répondant de campagne »,
+> est arrivé avec le lot L24 (action 24.4). Chacun a sa section — lisez la vôtre, le reste
 > décrit des écrans que vous ne verrez pas.
 >
 > **Ce que ce guide ne fait pas** : vous apprendre la gouvernance cyber. Il dit ce que le

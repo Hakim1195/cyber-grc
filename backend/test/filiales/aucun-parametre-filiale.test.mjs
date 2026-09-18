@@ -52,6 +52,34 @@ const DEU = 'FIL-S2P-DEU';
 /** La route dédiée du §30.2 — **la seule** qui a le droit de nommer une filiale. */
 const ROUTE_DEDIEE = '/api/session/filiale-active';
 
+/**
+ * ⚠️ **LA SECONDE EXCEPTION, ET ELLE EST ARBITRÉE — lot L24, action 24.1.**
+ *
+ * `POST /api/campagnes/:id/convoquer` nomme des filiales dans son corps, et il n'y a pas
+ * de façon de l'éviter : **convoquer consiste littéralement à désigner d'autres filiales
+ * que la sienne**. Le Groupe ouvre une campagne « vers N filiales » — c'est le critère
+ * d'acceptation de l'action —, et la couche d'entités générique ne peut pas le faire :
+ * elle écrit toujours `filiale_id = filiale active`, ce qui est le principe même du
+ * périmètre serveur et ne s'affaiblit pas.
+ *
+ * ── Ce qui rend l'exception tenable, et ce n'est pas la bonne volonté ──────────
+ *
+ *  1. **le droit** : la route exige `administrer` sur le domaine `administration`, refusé
+ *     par le crochet `onRequest` avant que son code ne s'exécute ;
+ *  2. **le périmètre** : chaque filiale nommée doit appartenir à `perimetre.filiales` —
+ *     relu en base pour cette session, jamais transmis par le navigateur. Une session qui
+ *     couvre deux filiales ne peut pas convoquer la troisième ;
+ *  3. **la base** : la politique d'insertion de `campagne_filiales` exige le drapeau
+ *     d'administration Groupe, et la clé étrangère exige une filiale réelle. Si les deux
+ *     premières barrières étaient contournées, celle-ci refuserait encore ;
+ *  4. **le refus n'est pas un oracle** : « hors de votre périmètre » et « n'existe pas »
+ *     rendent le MÊME message, à l'octet près, et un essai de `test/campagnes/` le mesure.
+ *
+ * Ce que cette exception NE fait pas : accepter une filiale pour LIRE, ou pour déplacer un
+ * périmètre d'écriture. Elle en désigne les destinataires d'une demande, et rien d'autre.
+ */
+const ROUTE_CONVOCATION = '/api/campagnes/:id/convoquer';
+
 const TEMOIN_DEU = 'TEMOIN-DEU-ne-doit-jamais-sortir-de-sa-filiale';
 const TEMOIN_TLS = 'TEMOIN-TLS-doit-etre-lisible-de-Toulouse';
 
@@ -396,7 +424,7 @@ describe('§30.2 — une seule route nomme une filiale, et c’est la route déd
     // qui envoie et constate.
     const fautifs = [];
     for (const r of routes) {
-      if (r.url === ROUTE_DEDIEE) continue;
+      if (r.url === ROUTE_DEDIEE || r.url === ROUTE_CONVOCATION) continue;
       if (r.schema === null) continue;
       const noms = nomsDeProprietes(r.schema);
       if (noms.some((n) => /filiale/i.test(n))) {
@@ -415,6 +443,19 @@ describe('§30.2 — une seule route nomme une filiale, et c’est la route déd
     assert.ok(creation !== undefined);
     assert.deepEqual(creation.schema.body.properties.portee.enum, ['filiale', 'groupe']);
     assert.ok(!nomsDeProprietes(creation.schema).some((n) => /filiale/i.test(n)));
+  });
+
+  test('la SECONDE exception n’accepte QUE des destinataires, et rien de plus', () => {
+    // ⚠️ Épinglé : une exception qui s'élargit en silence est pire qu'une règle absente.
+    // Si cette route se mettait à accepter autre chose — un périmètre de lecture, un
+    // identifiant d'utilisateur —, ce contrôle rougirait, et quelqu'un devrait trancher.
+    const convocation = routes.find((r) => r.url === ROUTE_CONVOCATION);
+    assert.ok(convocation !== undefined, 'la route de convocation doit être montée');
+    assert.equal(convocation.methode, 'POST');
+    assert.deepEqual(Object.keys(convocation.schema.body.properties), ['filiales']);
+    assert.equal(convocation.schema.body.additionalProperties, false);
+    // Un plafond : convoquer n'est pas un moyen d'écrire mille lignes en un appel.
+    assert.ok(convocation.schema.body.properties.filiales.maxItems <= 100);
   });
 
   test('la route dédiée, elle, n’accepte QUE cela', () => {

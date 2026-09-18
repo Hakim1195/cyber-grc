@@ -47,6 +47,8 @@ export const SECRETS_SEMES = Object.freeze([
   `${MARQUE}-commentaire confidentiel de l'action`,
   `${MARQUE}-Hébergeur de l'ERP de Hambourg`,
   `${MARQUE}-Questionnaire annuel du fournisseur critique`,
+  `${MARQUE}-Campagne Hygiène ANSSI du Groupe`,
+  `${MARQUE}-Sophie Berger`,
 ]);
 
 /** Adresses de l'annuaire semé. Elles PEUVENT figurer dans l'enveloppe, jamais dans le corps. */
@@ -59,7 +61,7 @@ const ISO = (jours, reference) => {
 };
 
 /**
- * Sème, dans **une** filiale, un jeu d'échéances couvrant les huit sources.
+ * Sème, dans **une** filiale, un jeu d'échéances couvrant les neuf sources.
  *
  * @param base            base ouverte par `ouvrirBaseEssai`
  * @param client          connexion du compte applicatif
@@ -214,11 +216,59 @@ export async function semerEcheances(base, client, filiale, reference, options =
         [`QUES-CLOS-${s}`, filiale, `PRES-L12-${s}`, ISO(-20, reference), ISO(3, reference), ISO(-1, reference)],
       );
 
+      // 9. La campagne descendante (lot L24) — ouverte, non close, non terminée, à +2 j.
+      //
+      //    ⚠️ **Elle exige le drapeau d'administration Groupe en écriture**, que ce semis
+      //    ne pose pas : la campagne et sa part sont donc écrites dans leur propre
+      //    transaction déclarée, comme `utilisateurs` plus haut. C'est la RLS qui fait
+      //    son travail, pas un obstacle à contourner.
+      //
+      //    ⚠️ Et c'est la SEULE des neuf sources dont le destinataire n'est pas dans une
+      //    entité métier : `repondant` nomme la personne qui répond pour la filiale. Le
+      //    contrôle de fuite doit donc vérifier que ce nom-là non plus ne franchit pas le
+      //    courriel.
       // Hors horizon : dans 60 jours. Ne doit pas être relancé.
       await c.query(
         `insert into actions (id, filiale_id, titre, statut, responsable, echeance)
          values ($1, $2, 'Action lointaine, hors horizon', 'à faire', $3, $4)`,
         [`ACT-LOIN-${s}`, filiale, responsable, ISO(60, reference)],
+      );
+    },
+    { annuler: false },
+  );
+
+  // ── La campagne descendante, dans sa propre transaction d'administration ──────
+  //
+  // ⚠️ Écrire une campagne ou convoquer une filiale exige `f_administration_groupe()` :
+  // c'est la politique de la migration `044`, et la transaction de filiale ci-dessus
+  // efface ce drapeau à dessein. On ouvre donc une transaction DÉCLARÉE, exactement comme
+  // pour `utilisateurs` en tête de cette fonction. La RLS fait son travail ; ce n'est pas
+  // un obstacle à contourner.
+  await base.avecPerimetre(
+    client,
+    perimetre('semeur-l12', filiale, [filiale], true),
+    async (c) => {
+      await c.query(
+        `insert into campagnes (id, ref_id, intitule, ouverte_le, echeance)
+         values ($1, 'anssi', $2, $3, $4)`,
+        [`CAMP-L12-${s}`, SECRETS_SEMES[11], ISO(-30, reference), ISO(2, reference)],
+      );
+      await c.query(
+        `insert into campagne_filiales (id, filiale_id, campagne_id, repondant, accuse_le)
+         values ($1, $2, $3, $4, $5)`,
+        [`CAMPF-L12-${s}`, filiale, `CAMP-L12-${s}`, SECRETS_SEMES[12], ISO(-25, reference)],
+      );
+      // Une campagne CLOSE, à la même échéance : elle ne doit PAS être relancée — ce qui
+      // n'a pas été fait est un manque qu'on constate, pas un retard qu'on rattrape.
+      await c.query(
+        `insert into campagnes (id, ref_id, intitule, ouverte_le, echeance, close_le)
+         values ($1, 'anssi', 'Campagne close, hors relance', $2, $3, $4)`,
+        [`CAMP-CLOS-${s}`, ISO(-60, reference), ISO(2, reference), ISO(-1, reference)],
+      );
+      await c.query(
+        `insert into campagne_filiales (id, filiale_id, campagne_id)
+         values ($1, $2, $3)`,
+        [`CAMPF-CLOS-${s}`, filiale, `CAMP-CLOS-${s}`],
       );
     },
     { annuler: false },

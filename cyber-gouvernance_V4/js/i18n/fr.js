@@ -119,6 +119,7 @@ window.I18n.enregistrer("fr", {
     "fil.tests": "Historique des Tests",
     "fil.prestataires": "Prestataires & Tiers",
     "fil.tiersDora": "Registre DORA",
+    "fil.campagnes": "Campagnes du Groupe",
     "fil.settings": "Paramètres & données",
 
     /* ═══════════════════════ LIBELLÉS PARTAGÉS ═══════════════════════ */

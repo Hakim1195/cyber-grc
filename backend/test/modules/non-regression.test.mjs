@@ -223,6 +223,17 @@ const SANS_FICHE = {
   '/tiers-dora':
     'vue des tiers : le registre de l’article 28 de DORA, avec ce qui manque à chaque ligne. ' +
     'Aucune fiche à lui — la fiche d’un tiers vit sous « /prestataires/:id ».',
+  // Lot L24, actions 24.1 et 24.2 — les campagnes descendantes sont un ONGLET de
+  // « Référentiels », pas une entrée de menu : une campagne demande un référentiel,
+  // et le `docs/PLAN_INTERFACE.md` refuse de rendre au menu les entrées qu'on vient
+  // de lui retirer.
+  //
+  // ⚠️ Aucune fiche à route propre, et c'est une DÉCISION : une campagne se lit dans
+  // la liste, avec ses parts dépliées sous elle. Une fiche par campagne aurait séparé
+  // la demande de son suivi — or c'est le suivi qui fait la valeur de l'écran.
+  '/campagnes':
+    'vue de la conformité : ce que le Groupe demande à ses filiales, et où chacune en est. ' +
+    'Une filiale n’y voit QUE sa part — c’est la RLS qui borne, pas un filtre d’écran.',
   // ── Vague 6 : les écrans des capacités livrées sans interface ────────────
   //
   // Aucun des cinq n'a de fiche à route propre, et pour des raisons différentes
@@ -292,7 +303,10 @@ const SANS_FICHE = {
 // EN AJOUT SEUL. Un PANNEAU sur la fiche de l'incident, sans route ni entrée de
 // menu : une crise EST un incident escaladé, et la détection, les déclarations
 // et le récit se lisent ensemble.
-const MODULES_ATTENDUS = 40;
+// 41 depuis le lot L24 (écran des campagnes descendantes, action 24.1). ⚠️ Ce nombre est
+// ÉPINGLÉ à dessein : un module qui naît doit entrer dans ce filet, un module qui meurt
+// doit en sortir — et le chiffre force la décision plutôt que de la laisser passer.
+const MODULES_ATTENDUS = 41;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //

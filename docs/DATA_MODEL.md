@@ -65,10 +65,10 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 20`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 21`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
-côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v20**. Elle est
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v21**. Elle est
 indépendante du numéro des migrations SQL.
 
 > ⚠️ **Ce paragraphe a annoncé « v12 » pendant quatre montées de version**, du 04/09 au
@@ -161,6 +161,30 @@ indépendante du numéro des migrations SQL.
 >     **n'envoie rien** : `envoye_le` et `relance_le` sont des **faits consignés**. Le
 >     portail qui changerait cela est le lot **L28** ; l'export/réimport reste la voie de
 >     repli **permanente**, pas un état transitoire.
+>
+> v21 (lot L24, actions 24.1 et 24.2) : ajout de `campagnes` — ce que le **Groupe**
+>     demande à ses filiales : un référentiel, une échéance — et de `campagne_filiales` —
+>     la **part** de chaque filiale : qui répond, et les deux faits qu'elle consigne
+>     (prise de connaissance, achèvement).
+>
+>     ⚠️ **`campagnes` est de niveau GROUPE et ne porte AUCUN identifiant de filiale.**
+>     Son intitulé, son référentiel et son échéance sont les mêmes vus de Toulouse et vus
+>     de Hambourg — c'est le critère du `backend/db/CONVENTIONS.md` §24, et la table est
+>     déclarée aux deux listes arbitrées que ce §24 impose. Sa LECTURE est ouverte, parce
+>     qu'une filiale doit voir la campagne qui la convoque ; son ÉCRITURE exige
+>     l'administration Groupe, comme `utilisateurs`.
+>
+>     ⚠️ **Une filiale ne voit QUE sa part**, et n'apprend pas combien d'autres sont
+>     convoquées : `campagne_filiales` est cloisonnée, et le nombre de destinataires est
+>     une information de Groupe.
+>
+>     ⚠️ **Aucune des deux ne porte l'AVANCEMENT.** Il se compte dans `evaluations` sur le
+>     référentiel demandé, à l'instant où on regarde — une colonne d'avancement devrait
+>     être remise à jour, et le jour où le traitement ne tourne pas, le produit affirmerait
+>     qu'une filiale a répondu quand elle n'a rien fait. Et **aucun pourcentage** n'est
+>     rendu par le serveur : le nombre de questions d'un référentiel vit dans les
+>     catalogues du frontend, donc c'est l'écran qui divise (décision de l'action 21.2,
+>     reprise ici sans être rejugée).
 
 ---
 
@@ -265,7 +289,7 @@ Conséquences pratiques :
 
 ### 1.5 Correspondance entre l'objet `data` et le schéma serveur
 
-**29 collections, 29 entités.** Les noms coïncident partout sauf pour `mesures` :
+**31 collections, 31 entités.** Les noms coïncident partout sauf pour `mesures` :
 
 | Collection `data` | Table(s) PostgreSQL | Préfixe d'identifiant |
 |---|---|---|
@@ -298,6 +322,8 @@ Conséquences pratiques :
 | `prestataire_sous_traitance` | `prestataire_sous_traitance` | `SOUS` |
 | `questionnaires_tiers` | `questionnaires_tiers` | `QUES` |
 | `questionnaire_reponses` | `questionnaire_reponses` | `QREP` |
+| **`campagnes`** | **`campagnes`** — ⚠️ de niveau **Groupe**, sans `filiale_id` | `CAMP` |
+| `campagne_filiales` | `campagne_filiales` | `CAMPF` |
 
 **La scission des mesures**, en une phrase : l'entité unique du modèle navigateur
 portait deux choses de nature différente — la **définition** du contrôle (la même

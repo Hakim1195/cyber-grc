@@ -63,7 +63,7 @@ const groupe = perimetre('rssi-groupe', FILIALE_A, [FILIALE_A, FILIALE_B]);
 // `const DEROGATION_JOURNAL = 'journal_audit'` vivait ici, avec ce commentaire :
 // *« le jour où L5 la referme, ce test tombera et l'exclusion devra disparaître
 // avec lui. »* C'est arrivé le 04/09/2026. `journal_audit` n'est donc plus exclu
-// du balayage de fuite : il y est **soumis comme les 47 autres tables**, ce qui
+// du balayage de fuite : il y est **soumis comme les 48 autres tables**, ce qui
 // est plus fort que n'importe quelle assertion écrite à la main pour lui.
 //
 // L'essai qui réclamait la dérogation n'a pas été supprimé pour autant — il a
@@ -185,7 +185,15 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // sur deux référentiels différents. Une portée Groupe ferait de l'exigence de l'une
     // celle de toutes. ⚠️ À ne pas confondre avec la campagne DESCENDANTE du lot L24,
     // qui va dans l'autre sens.
-    assert.equal(tablesCloisonnees.length, 47, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    // 48 depuis la migration `044` : `campagne_filiales` (lot L24, action 24.1) — la PART
+    // d'une filiale dans une campagne que le Groupe a ouverte. Elle est cloisonnée, et
+    // c'est tout le sujet : une filiale voit sa part et n'apprend pas combien d'autres
+    // sont convoquées. ⚠️ **Et `campagnes`, elle, n'est PAS dans ce balayage** : elle ne
+    // porte aucun filiale_id, elle est de niveau Groupe, et sa lecture est ouverte à
+    // dessein — l'arbitrage est écrit au `CONVENTIONS.md` §24 et déclaré aux deux listes
+    // que ce paragraphe impose. C'est exactement la frontière du lot : la DEMANDE est
+    // commune, la RÉPONSE est propre à chacune.
+    assert.equal(tablesCloisonnees.length, 48, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -221,10 +229,14 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // ⚠️ Le semis pose des dates COHÉRENTES (envoi, puis échéance) : les trois règles
     // de chronologie de la `043` vivent dans le schéma, et un semis qui les enfreindrait
     // ferait échouer toutes les familles à l'ouverture de leur base.
+    // 47 depuis la `044` : `campagne_filiales`, semée POUR LES DEUX filiales. ⚠️ Le semis
+    // l'écrit dans la section de niveau GROUPE, pas dans la boucle par filiale : convoquer
+    // exige le drapeau d'administration, et la boucle l'efface à dessein. Semer la part
+    // là-bas se ferait refuser — ce qui est le comportement voulu.
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      46,
-      'Quarante-six tables devaient contenir au moins une ligne allemande. Une table neuve '
+      47,
+      'Quarante-sept tables devaient contenir au moins une ligne allemande. Une table neuve '
         + 'sans ligne dans le semis est un angle mort : le balayage y rendrait « zéro '
         + 'visible » pour la seule raison qu’il n’y a rien à voir.',
     );
@@ -356,7 +368,8 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     // dans les deux filiales — un envoi sans réponse aurait laissé la seconde vide,
     // c'est-à-dire exactement l'angle mort que ce contrôle de matière existe pour
     // refuser.
-    assert.equal(nonVides.length, 44, `Tables non vides : ${nonVides.join(', ')}`);
+    // 45 depuis la migration `044` : `campagne_filiales`, semée pour les deux filiales.
+    assert.equal(nonVides.length, 45, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

@@ -776,8 +776,8 @@ la comparaison au marché du 08/09/2026.
 **Mesuré au 18/09/2026, à la révision `5d098ff`** (lot L21) : `npm test` → **2134 essais,
 2134 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **47 garde-fous consignés**, **43 migrations**,
-**64 tables**, **369 décisions** au registre de l'article 30 ; publication → **89
+`f_verifier_schema()` → 0 anomalie, **49 garde-fous consignés**, **45 migrations**,
+**66 tables**, **385 décisions** au registre de l'article 30 ; publication → **90
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **13 conformes,
 2 réserves, 0 bloquant**.
 
@@ -962,15 +962,15 @@ npm test                                         → tests 2134 · pass 2134 · 
                                                    derogations 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (47 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (49 garde-fous découverts, joués, consignés)
 ```
 
-Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **64 tables** en
-**43 migrations**, **256 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
-**116 clés étrangères** (68 `restrict`, 45 `cascade`, 2 `set null`, 1 `no action`),
-**56 tables portant `cree_par` et 56 déclencheurs de création**, **40 clés étrangères
+Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **66 tables** en
+**45 migrations**, **264 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**118 clés étrangères** (70 `restrict`, 45 `cascade`, 2 `set null`, 1 `no action`),
+**58 tables portant `cree_par` et 58 déclencheurs de création**, **40 clés étrangères
 composites** visant
-`(id, filiale_id)`, **16 unicités** `uq_<parent>_id_filiale`, **47 contrôles consignés**
+`(id, filiale_id)`, **19 unicités** `uq_<parent>_id_filiale`, **49 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1250,7 +1250,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **64 tables**, obtenues aujourd'hui en **43 migrations** appliquées de bout en bout par
+- **66 tables**, obtenues aujourd'hui en **45 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1270,11 +1270,11 @@ Ce que la reprise fait, quand on la rejoue :
   ajoute la vingt-deuxième action du journal (`verification_integrite`), deux colonnes de
   verdict sur `pieces_jointes`, un index de balayage — et **réémet** le garde-fou du
   vocabulaire plutôt que d'en poser un second sur la même contrainte.
-- **256 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
+- **264 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
-- **116 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
-  migrations : **68 en `restrict`, 45 en `cascade`, 2 en `set null`**
+- **118 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
+  migrations : **70 en `restrict`, 45 en `cascade`, 2 en `set null`**
   (`incidents.risque_id` — l'incident survit au risque). ⚠️ **Les deux `set null` sont
   restés deux**, et ce n'est pas faute d'avoir essayé : `documents.traitement_id` visait
   cette forme, et **PostgreSQL 17 la refuse sur une clé contenant une colonne engendrée**,
@@ -1583,6 +1583,8 @@ sur l'arbre, où les deux fichiers coexistent.
   rend **`systemd-analyze security` → 1,3 OK** ; la chaîne TLS livrée (PKI à deux niveaux)
   vérifie **propre** (`openssl s_client` : `Verify return code: 0`) ; `clamd` est actif.
   Un **Active Directory Samba réel** a par ailleurs été monté pour la recette (23 groupes
+  à l'époque de la mesure — **26 depuis la migration `045`**, qui ajoute le neuvième
+  profil : le compte se DÉDUIT des profils et des filiales, il ne se recopie pas —
   `GRC-*`, un groupe imbriqué — constats **Q-83**/**Q-84**) — ce n'est pas celui du
   client, mais ce n'est plus la doublure JavaScript seule.
 - ⚠️ **Ce qui reste hors de portée sur cette machine** : le **relais SMTP** et

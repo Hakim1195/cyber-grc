@@ -2331,7 +2331,7 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
     assert.equal(affectees, 1);
   });
 
-  test('LE BALAYAGE : les SEPT tables de configuration ont une écriture conditionnée', async () => {
+  test('LE BALAYAGE : les HUIT tables de configuration ont une écriture conditionnée', async () => {
     // Structurel plutôt qu'anecdotique : c'est le motif que l'auditeur a réclamé — « toute
     // table de niveau Groupe dont l'écriture est ouverte est-elle dans une liste
     // explicitement arbitrée ? ». La liste ci-dessous EST cette liste, et toute table qui
@@ -2347,8 +2347,15 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
     );
     assert.deepEqual(
       conditionnees.map((l) => l.nom),
-      ['filiales', 'groupes_ad', 'mapping_exigences', 'mappings', 'profil_domaines',
-       'profils', 'utilisateurs'],
+      // ⚠️ `campagnes` est entrée avec la migration `044`, et elle a fait rougir ce
+      //    balayage en arrivant — c'est son office. Elle est de niveau GROUPE : une
+      //    campagne descendante est ouverte par le Groupe, et son intitulé comme son
+      //    échéance sont les mêmes pour toutes les filiales. Ce qui diffère par filiale
+      //    — qui répond, où elle en est — vit dans `campagne_filiales`, qui porte un
+      //    filiale_id et dont l'écriture consulte `f_filiale_ecriture()` : elle n'apparaît
+      //    donc pas ici, et c'est exactement la frontière qu'on veut voir.
+      ['campagnes', 'filiales', 'groupes_ad', 'mapping_exigences', 'mappings',
+       'profil_domaines', 'profils', 'utilisateurs'],
     );
   });
 
@@ -3869,6 +3876,21 @@ describe('Le garde-fou de couverture découvre son périmètre (CONVENTIONS §19
         order by 1`,
     );
     assert.deepEqual(ouvertes.map((l) => l.nom), [
+      // ── ARRIVÉE AVEC LA MIGRATION `044`, ET ELLE A FAIT ROUGIR TROIS GARDE-FOUS EN
+      //    ARRIVANT — c'est son office (`CONVENTIONS.md` §24). `campagnes` porte LA MÊME
+      //    CHOSE POUR TOUT LE GROUPE : l'intitulé d'une demande, son référentiel, son
+      //    échéance. Ce qui diffère d'une filiale à l'autre — qui répond, où elle en est —
+      //    vit dans `campagne_filiales`, qui porte un filiale_id et reste cloisonnée.
+      //
+      //    ⚠️ Sa lecture est ouverte À DESSEIN : une filiale doit voir la campagne qui la
+      //    convoque. Elle n'apprend pas pour autant QUI D'AUTRE est convoqué — cette
+      //    information est dans `campagne_filiales`, sous politique cloisonnante, et un
+      //    essai de `test/campagnes/` le mesure en rougissant si la clause tombe. Son
+      //    écriture exige `f_administration_groupe()`, comme `utilisateurs`.
+      //
+      //    L'arbitrage est repris à l'identique dans le contrôle C93 de
+      //    `db/verifier_cloisonnement.sql`, et les deux doivent bouger ensemble.
+      'campagnes',
       // Arrivée avec la migration `026`, et elle a fait rougir ce test en arrivant — c'est
       // son office. `colonnes_personnelles` est le **registre des données personnelles du
       // produit lui-même** : quelles colonnes en portent, pourquoi, pour combien de temps,
@@ -4027,6 +4049,21 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // migration 030 se retiraient une par une sous zéro anomalie.
       'barriere_attestation',
       'barriere_traitement',
+      // QUARANTE-SEPTIÈME, apporté par `044_les_campagnes_descendantes.sql` — lot L24,
+      // actions 24.1 et 24.2. Il ÉPROUVE les DEUX dérivations sur neuf cas témoins
+      // (§39.1) : celle de la campagne et celle de la part d'une filiale. Les deux ordres
+      // qui comptent y sont — « close » testé avant l'échéance (sans quoi on relancerait
+      // vingt filiales pour une campagne terminée), et « non_faite » plutôt que
+      // « en retard » quand la demande est fermée (sans quoi on entretiendrait une liste
+      // que personne ne peut plus vider).
+      //
+      // ⚠️ Il garde aussi NOMMÉMENT les deux moitiés de la politique de mise à jour — un
+      // garde de CLASSE ne voit pas la disparition d'une PAIRE (constat Q-313) : la
+      // déconvocation réservée au Groupe, par un DÉCLENCHEUR dont il mesure le `tgtype`
+      // (leçon de la `021`, constat Q-281), et la réponse laissée à la filiale, sans
+      // laquelle une filiale ne pourrait plus consigner son achèvement — un défaut que
+      // rien ne signalerait, puisque le produit se contenterait de ne rien enregistrer.
+      'campagnes',
       // QUATORZIÈME, apporté par `015_champs_structurels.sql` (constat Q-201) : aucune
       // colonne du schéma ne doit commencer par un souligné. C'est la SECONDE MOITIÉ
       // d'une règle dont la première vit dans `js/core/sync.js`, qui écarte du corps
@@ -4215,6 +4252,13 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // `010` avait fermé une fuite et en avait rouvert une plus petite par la fonction
       // même qui la fermait — un « grant » sans « revoke … from public » ne retire rien.
       'privileges_definer',
+      // QUARANTE-NEUVIÈME, apporté par `045_le_profil_repondant.sql` — action 24.4. Il
+      // tient DEUX propriétés du profil « répondant de campagne » : qu'il couvre TOUT le
+      // vocabulaire des domaines — une absence n'est pas un refus, et elle ne se relit pas
+      // en revue de droits (`001_socle.sql` §4) —, et qu'il n'ouvre QUE les trois décidés.
+      // ⚠️ La seconde est celle qui compte : un quatrième domaine ouvert sans décision
+      // retirerait au profil sa raison d'être, et le ferait SILENCIEUSEMENT.
+      'profil_repondant',
       // DIX-SEPTIÈME, apporté par `019_publication_exige_approbation.sql` (action D5) :
       // le déclencheur qui refuse la publication d'un document dont le circuit
       // d'approbation n'est pas conclu existe, il est armé en « always », et le statut

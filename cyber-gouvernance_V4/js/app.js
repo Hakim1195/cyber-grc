@@ -150,6 +150,7 @@ async function startApp() {
         // verrait l'identifiant d'un prestataire, et l'écran dirait
         // « Prestataire introuvable » (même piège que /rgpd-aipd).
         "/tiers-dora": () => { if (typeof PraPrestatairesModule !== "undefined") PraPrestatairesModule.renderRegistreDora(); },
+        "/campagnes": () => { if (typeof CampagnesModule !== "undefined") CampagnesModule.renderList(); },
 
 	"/audits": () => { if (typeof AuditsModule !== "undefined") AuditsModule.renderList(); },
 	"/audits/:id": (id) => { if (typeof AuditsModule !== "undefined") AuditsModule.renderAuditDetail(id); },
@@ -373,6 +374,7 @@ const ROUTE_META = {
     "/tests":        { s: "fil.section.continuite", t: "fil.tests" },
     "/prestataires": { s: "fil.section.continuite", t: "fil.prestataires" },
     "/tiers-dora": { s: "fil.section.tiers", t: "fil.tiersDora" },
+    "/campagnes": { s: "fil.section.conformite", t: "fil.campagnes" },
     "/settings":     { s: "fil.section.administration", t: "fil.settings" }
 };
 
@@ -1101,6 +1103,7 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/clients":      "tiers",
     "/prestataires": "tiers",
     "/tiers-dora": "tiers",
+    "/campagnes": "conformite",
     "/personnel":    "personnel",
     "/actifs":       "actifs",
     "/cartographie": "actifs",

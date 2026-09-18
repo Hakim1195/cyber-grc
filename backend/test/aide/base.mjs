@@ -612,6 +612,29 @@ export async function semerJeuEssai(base, client, options = {}) {
       // prouve un contrôle du socle commun. ⚠️ C'est le seul sens ouvert — un document
       // de portée Groupe ne peut PAS s'appuyer sur un contrôle local (constat N-10).
       await c.query("insert into document_mesures (document_id, mesure_id) values ('DOC-G', 'MESURE-G')");
+      // ── LA CAMPAGNE DESCENDANTE (migration `044`), ET SES DEUX PARTS ──────────────
+      //
+      // ⚠️ **Elle est semée ICI, dans la section de niveau GROUPE, et pas dans la boucle
+      // par filiale** — ce n'est pas un rangement esthétique : `campagnes` exige
+      // `f_administration_groupe()` en écriture, et la convocation d'une filiale aussi
+      // (déclencheur `trg_campagne_filiales_deconvocation` pour le retrait, politique
+      // pour l'ajout). La boucle par filiale, elle, EFFACE ce drapeau à dessein. Semer
+      // les parts là-bas se ferait refuser — ce qui est exactement le comportement voulu.
+      //
+      // Les deux filiales reçoivent leur part : sans cela, `campagne_filiales` resterait
+      // vide d'un côté, et le balayage de cloisonnement rendrait « zéro ligne visible »
+      // pour la seule raison qu'il n'y a rien à voir.
+      await c.query(
+        "insert into campagnes (id, ref_id, intitule, ouverte_le, echeance) values " +
+          "('CAMP-G', 'anssi', 'Hygiène ANSSI — campagne annuelle du Groupe', " +
+          "date '2026-01-15', date '2026-06-30')",
+      );
+      await c.query(
+        `insert into campagne_filiales (id, filiale_id, campagne_id, repondant, accuse_le)
+         values ('CAMPF-A', $1, 'CAMP-G', 'RSSI Toulouse', date '2026-01-20'),
+                ('CAMPF-B', $2, 'CAMP-G', 'RSSI Allemagne', null)`,
+        [a, b],
+      );
       // Deux comptes, dont la CLÉ PRIMAIRE diffère de l'identifiant de connexion : le
       // §18.3 exige qu'un test provisionne ce cas, sans quoi il valide une coïncidence
       // plutôt qu'une propriété.

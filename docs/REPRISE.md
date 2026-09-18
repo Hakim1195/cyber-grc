@@ -59,6 +59,8 @@ les 19 qui lancent Chromium prennent **520 s** et doivent rester **en série**.
 
 | | |
 |---|---|
+| **Profil « répondant de campagne »** (L24, action 24.4) | Migration `045` : un **neuvième** profil de socle, trois domaines ouverts (`referentiels` et `exigences` en contribution, `echeances` en lecture) et vingt-sept **fermés nommément**. ⚠️ Il existe parce que la MESURE a démenti l'hypothèse : `CONTRIB` porte `actifs, actions, incidents, mco`, et aucun ne se projette sur `conformite` — un contributeur ne pouvait donc pas répondre à la campagne qu'on lui adresse. Élargir `CONTRIB` aurait accordé la conformité entière à tous les contributeurs de toutes les filiales. ⚠️ **Conséquence d'exploitation** : un groupe d'annuaire de plus par filiale (26 au lieu de 23 pour deux filiales) — `install.sh` aligne `groupes_ad` seul, `groupes-ad.sh --csv` rend la liste à créer dans l'AD |
+| **Campagnes descendantes** (L24, ses quatre actions) | Le Groupe ouvre une campagne sur un référentiel, vers N filiales, avec échéance — et suit l'avancement de chacune. Migration `044`, schéma **v21**. ⚠️ **Une filiale ne voit QUE sa part**, ni celle de la voisine ni leur nombre ; l'avancement se **COMPTE** dans les évaluations ; les relances réutilisent L12 (9ᵉ source de l'échéancier, **aucune route d'envoi neuve**). ⚠️ **Deux leçons** : `campagnes` n'a pas de `filiale_id` et **trois garde-fous ont refusé la migration** jusqu'à ce que l'arbitrage soit écrit (`CONVENTIONS.md` §24.1) ; et **l'interdit « une filiale ne se retire pas d'une campagne » a dû être RETIRÉ**, parce qu'il rendait la reprise « remplacer » impossible — classe des trois conflits de la `041`, tranchée pareil : *restaurer une sauvegarde gagne* |
 | **Tiers, chaîne de sous-traitance et DORA** (L21, ses quatre actions) | Registre d'information DORA, **chaîne de sous-traitance** (l'arête est stockée, le **rang se dérive**, l'anti-cycle est **en base**), questionnaire fournisseur qui **s'exporte et se réimporte** — le produit n'envoie rien —, suivi contractuel, et **score composite dérivé** dont le barème est SERVI. Migrations `042` et `043`, schéma **v20**. ⚠️ **Deux leçons** : la `043` avait été livrée *mordue par rien* (23 essais et cinq mutations l'ont fermée), et le critère de 21.3 — « les échéances contractuelles alimentent l'échéancier existant » — **n'était tenu nulle part**, alors que la migration l'écrivait dans le commentaire de sa propre colonne |
 | **Jeu de découverte** (L18 bis) | Un groupe industriel fictif complet. Marque de provenance posée **par la base**, inforgeable. Migration `032` |
 | **Menu repliable** (L17, A2) | 32 entrées à plat → six sections |
@@ -135,18 +137,23 @@ modules du produit.
 §4 impose de rejouer l'indicateur à la clôture d'une vague : *« il se rejoue, il ne s'estime
 pas »*.
 
-**Puis** : ~~L21 tiers et DORA~~ ✅ **livré les 17 et 18/09** — reste **L24 campagnes**
-pour clore la vague C ; vague D (L25 EBIOS RM, L26 catalogues
+**⇒ LA VAGUE C EST CLOSE** : ~~L21 tiers et DORA~~ ✅ livré les 17 et 18/09, ~~L24
+campagnes descendantes~~ ✅ livré le 18/09. **Le geste suivant est le rejeu INTÉGRAL de
+`docs/COMPARATIF_MARCHE.md`** — le `PLAN_ACHEVEMENT.md` §4 l'impose à la clôture d'une
+vague, *« il se rejoue, il ne s'estime pas »*, et celui du 16/09 n'avait remesuré que onze
+lignes sur quatre-vingt-six. Puis vague D (L25 EBIOS RM, L26 catalogues
 ouverts), vague E (L22 ouverture technique, L23 collecte automatique), vague F (L27 IA
 locale, L28 portail fournisseur — en dernier, seules surfaces externes).
 
 **Et le frontend**, en parallèle : voir §6.
 
-**L'indicateur** : `docs/COMPARATIF_MARCHE.md` — 86 fonctionnalités, **44 ✅ · 12 🟡 ·
-30 ❌ au rejeu du 16/09** (35 ✅ au 08/09 ; ⚠️ **rejeu partiel — onze lignes remesurées,
-les soixante-quinze autres gardent leur verdict d'origine, et un rejeu intégral est dû à
-la clôture de la vague C**),
-cible **76**. Il se **rejoue**, il ne s'estime pas.
+**L'indicateur** : `docs/COMPARATIF_MARCHE.md` — 86 fonctionnalités, **46 ✅ · 15 🟡 ·
+25 ❌ (~62 %) au rejeu INTÉGRAL du 18/09**, à la clôture de la vague C (35 ✅ au 08/09,
+44 ✅ au rejeu partiel du 16/09), cible **76**. Il se **rejoue**, il ne s'estime pas — et
+celui-ci est le premier intégral : les 86 lignes en trois balayages, dont la méthode est
+écrite dans le document pour qu'on puisse la refaire. ⚠️ Ce que le troisième balayage ne
+prouve pas est dit aussi : *qu'un écran existe ne dit pas qu'il fonctionne* — il confirme
+des verdicts antérieurs, il n'en établit pas.
 
 ---
 

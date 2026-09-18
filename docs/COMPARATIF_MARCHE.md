@@ -19,9 +19,56 @@
 >    (`FAIR` → « faire », `LEI` → « client »). Chaque verdict ❌ de cette grille a été
 >    vérifié sur les occurrences réelles, pas sur un compte de fichiers.
 
-**Verdict global au 16/09/2026 : 44 ✅ · 12 🟡 · 30 ❌** — soit ~58 % en pondérant les
+**Verdict global au 18/09/2026 : 46 ✅ · 15 🟡 · 25 ❌** — soit ~62 % en pondérant les
 partiels à moitié. **Cible du `PLAN_PRODUIT.md` une fois les douze lots joués : 76 ✅ · 2 🟡
 · 8 ❌**, les huit restantes étant des non-objectifs nommés un par un (§9 du plan).
+
+> ### ▶ Rejeu INTÉGRAL du 18/09/2026 — clôture de la vague C
+>
+> **44 ✅ · 12 🟡 · 30 ❌ au 16/09 → 46 ✅ · 15 🟡 · 25 ❌.** Le compte est **recompté sur la
+> grille** par un balayage des quatre-vingt-six lignes, jamais additionné de tête — c'est le
+> constat **Q-219** appliqué à l'indicateur qui sert à mesurer le reste. Pondéré :
+> **~58 % → ~62 %**.
+>
+> ⚠️ **CELUI-CI EST INTÉGRAL, et voilà par quoi cela se vérifie** — le rejeu du 16/09 disait
+> lui-même n'avoir remesuré que onze lignes, et le `PLAN_ACHEVEMENT.md` §4 exige l'intégral à
+> la clôture d'une vague. Les quatre-vingt-six lignes ont été passées en trois balayages, et
+> la méthode est écrite parce qu'un « rejeu » qu'on ne peut pas refaire n'est pas une mesure :
+>
+>  1. **les neuf lignes que la vague C pouvait déplacer** — remesurées une par une dans le
+>     dépôt (migrations, routes, écrans, essais) : **5, 31, 32, 34, 35, 39, 48, 66, 78** ;
+>  2. **les vingt-cinq ❌** — confrontées au dépôt par recherche de leur mécanisme
+>     (`connecteur`, `webhook`, `scanner`, `vulnérabilité`, `benchmark`, `formation`,
+>     `phishing`, `page de confiance`, `EBIOS RM`, `FAIR`, surveillance continue) :
+>     **aucune ne s'est révélée présente.** ⚠️ Le balayage est *insensible à la casse et aux
+>     faux amis* — `FAIR` attrape « faire », `formation` attrape « information » : les deux
+>     touches ont été ouvertes et écartées à la main ;
+>  3. **les quarante-six ✅ et douze 🟡 antérieurs** — confirmés par l'existence de ce qui les
+>     porte : dix-neuf écrans (`js/modules/*.js`) et dix tables du catalogue
+>     (`journal_audit`, `attestations_lecture`, `derogations`, `piece_rattachements`,
+>     `analyses_impact`, `demandes_droits`, `main_courante`,
+>     `declarations_reglementaires`, `document_mesures`, `history`), plus les deux
+>     dictionnaires de langue et le répertoire de déploiement.
+>
+> ⚠️ **Ce que ce troisième balayage ne prouve PAS, et il faut le dire** : qu'un écran existe
+> ne dit pas qu'il fonctionne. Ce sont les 2 xxx essais du banc qui le disent, et c'est
+> pourquoi ce balayage confirme des verdicts **antérieurs** plutôt qu'il n'en établit de
+> nouveaux. Une ligne dont le verdict CHANGE est toujours remesurée au premier niveau.
+>
+> **Les cinq lignes qui ont bougé, et pourquoi :**
+>
+> | | Ligne | Ce qui l'a fait bouger |
+> |---|---|---|
+> | ❌ → ✅ | **35** suivi contractuel et plan de sortie | L21.3 — et les trois dates **alimentent l'échéancier**, ce qui était le critère |
+> | ❌ → ✅ | **66** campagne poussée du Groupe | L24.1 — migration `044` : la demande est commune, la part est cloisonnée |
+> | ❌ → 🟡 | **5** campagnes d'évaluation, **32** questionnaires, **34** registre DORA | L21.1, L21.2, L24 — livrés, avec ce qui manque **nommé** : le suivi par répondant, le portail (L28), les gabarits XBRL |
+> | 🟡 → 🟡 | **39** espace auditeur externe, **48** Kanban, **78** DSAR | motifs REMESURÉS : le neuvième profil n'est pas un espace d'auditeur ; l'échéancier passe à **neuf sources** ; le registre de consentements reste absent |
+> | ✅ → ✅ | **31** registre fournisseurs | motif enrichi : le score composite est **dérivé** et son barème **servi** |
+>
+> ⚠️ **Et une ligne dont le POINTEUR DE LOT était faux** : **37** (univers d'audit, plan
+> pluriannuel) renvoyait à **L24**, qui ne le couvre pas — une campagne descendante n'est pas
+> un plan d'audit pluriannuel. Aucun lot du `PLAN_PRODUIT` ne le porte aujourd'hui : la ligne
+> reste 🟡 et son pointeur le dit, plutôt que de désigner un lot qui ne le fera pas.
 
 > ### ▶ Rejeu du 16/09/2026 — clôture de la vague B
 >
@@ -69,7 +116,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 2 | Veille réglementaire intégrée | ❌ | Catalogues **statiques en fichiers JS** : une évolution de norme est une livraison de code | L26 |
 | 3 | Mapping inter-référentiels | ✅ | Module `/mapping`, 28 groupes + surcouche éditable, propagation « zéro double saisie ». Manque la suggestion automatique | L26.4 |
 | 4 | Référentiels personnalisés | ❌ | Aucun chemin utilisateur : c'est du code | L26 |
-| 5 | Campagnes d'évaluation | ❌ | Ni envoi à des contributeurs, ni relance, ni suivi par répondant | L24 |
+| 5 | Campagnes d'évaluation | 🟡 | **L24 livré le 18/09/2026** : le Groupe ouvre une campagne sur un référentiel vers N filiales, chacune ne voit QUE sa part, l'avancement se **compte** dans les évaluations, et la relance passe par l'échéancier existant (9ᵉ source). ❌ **Ce qui manque** : le suivi par RÉPONDANT nominatif (le champ existe, l'écran ne l'agrège pas) et l'envoi effectif — le produit prépare, l'humain envoie | L24 |
 | 6 | Déclaration d'applicabilité (SoA) | ✅ | Générée, avec couverture croisée | — |
 | 7 | Référentiels FR/EU spécifiques | 🟡 | ANSSI ✅ NIS2 ✅ DORA ✅ RGPD ✅ ISO ✅ AirCyber ✅ ; **EBIOS RM ❌ ReCyF ❌ HDS ❌ SecNumCloud ❌** | L25, L26 |
 
@@ -122,20 +169,20 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
-| 31 | Registre fournisseurs criticité / accès | ✅ | `prestataires` : criticité × accès → niveau inhérent, checklist `supply_chain` NIS2/DORA | L21.4 |
-| 32 | Questionnaires et portail fournisseur | ❌ | Absent | L21.2 (export/réimport) puis **L28** (portail exposé, ✅ **validé le 08/09/2026**) |
+| 31 | Registre fournisseurs criticité / accès | ✅ | `prestataires` : criticité × accès → niveau inhérent, checklist `supply_chain` NIS2/DORA — et depuis **L21.4** un **score composite DÉRIVÉ** (criticité × accès × substituabilité × ancienneté de l'évaluation) dont le barème est **servi** par le serveur, plus recopié dans le navigateur | L21.4 |
+| 32 | Questionnaires et portail fournisseur | 🟡 | **L21.2 livré le 17/09/2026** : l'envoi se consigne, se relance, s'exporte en classeur, se réimporte — l'état est DÉRIVÉ (un reçu en retard est reçu, un brouillon n'est pas un retard) et le réimport est **idempotent par la contrainte**. ❌ **Le portail exposé reste à faire** : c'est **L28**, ✅ validé le 08/09/2026, et l'export/réimport demeure la voie de repli **permanente** | L21.2 puis **L28** |
 | 33 | Notation externe / surface d'attaque | ❌ | Absent — **non-objectif**, suppose un service tiers. ⚠️ **À réexaminer après L27**, dont la mécanique le rendrait atteignable — mais l'utilisateur a autorisé une **IA** externe, pas « les services tiers » en général | **—** |
-| 34 | **Registre d'information DORA** | ❌ | Ni LEI, ni dates contractuelles, ni chaîne de sous-traitance. **Remise ACPR au 31/03/2026** | **L21.1** |
-| 35 | Suivi contractuel / plan de sortie | ❌ | Absent | L21.3 |
+| 34 | **Registre d'information DORA** | 🟡 | **L21.1 livré le 17/09/2026** : LEI, pays, fonction supportée et son caractère critique, contrat, substituabilité, et la **chaîne de sous-traitance** dont le rang se DÉRIVE (anti-cycle en base). L'écran **dit ses propres manques**, ligne par ligne, et la route exige le droit d'**export**. ❌ **Ce qui manque** : les gabarits **XBRL** des normes techniques des autorités européennes — un format de dépôt versionné par l'ESA, qui serait un lot à lui seul. *Le produit prépare, l'humain dépose* | **L21.1** |
+| 35 | Suivi contractuel / plan de sortie | ✅ | **L21.3 livré le 17/09/2026** : référence et dates de contrat, revue des clauses, réversibilité, substituabilité, plan de sortie daté — **et les trois dates alimentent l'échéancier existant**, ce qui était le critère d'acceptation. ⚠️ `evalue_le` n'y entre PAS : c'est un fait passé, l'y ranger inverserait son sens | L21.3 |
 | 36 | Réponse IA aux questionnaires reçus | ❌ | Absent | **L27** |
 
 ### G. Audit — 2 ✅ · 2 🟡 · 0 ❌
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
-| 37 | Univers d'audit / plan pluriannuel | 🟡 | Audits datés et planifiables ; ni univers, ni plan pluriannuel | L24 |
+| 37 | Univers d'audit / plan pluriannuel | 🟡 | Audits datés et planifiables ; ni univers, ni plan pluriannuel | **aucun lot** — remesuré le 18/09 : L24 ne le couvre pas, une campagne descendante n'est pas un plan d'audit pluriannuel |
 | 38 | Constats → action → clôture | ✅ | **Grille générée depuis un référentiel** (avec les preuves à demander), typologie de constats, taux calculé | — |
-| 39 | Espace auditeur externe | 🟡 | Profil `AUDITEUR` avec domaines restreints, mais **compte AD interne** — pas un accès invité | L24.4 |
+| 39 | Espace auditeur externe | 🟡 | **Remesuré le 18/09** : le profil `AUDITEUR` existe (lecture seule, 26 domaines) et **L24.4 a livré un neuvième profil restreint** — mais c'est un *répondant de campagne*, pas un espace d'auditeur externe : ni jeton d'accès sans compte, ni cloison par mission. ❌ Le vrai chemin est **L28** (accès par lien signé, sans compte) | Profil `AUDITEUR` avec domaines restreints, mais **compte AD interne** — pas un accès invité | L24.4 |
 | 40 | Rapport d'audit approuvé | ✅ | Circuit typé `audit` + génération PDF | — |
 
 ### H. Incidents et résilience — 3 ✅ · 2 🟡 · 1 ❌
@@ -154,7 +201,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
 | 47 | Plan d'action unique multi-sources | ✅ | Actions reliées à exigence, **mesure**, risque, incident, audit | — |
-| 48 | Kanban / échéancier | 🟡 | Échéancier consolidé excellent (**8 sources** depuis L21, calendrier, ICS, Excel). **Kanban ❌** | L17.5 |
+| 48 | Kanban / échéancier | 🟡 | Échéancier consolidé excellent (**9 sources** depuis L24 : actions, MCO, revues documentaires, incidents, audits, revues de direction, questionnaires fournisseurs, contrats de tiers, campagnes du Groupe — plus calendrier, ICS, Excel). **Kanban ❌** | L17.5 |
 | 49 | Notifications / escalade | ✅ | L12 : relances SMTP sur 6 types d'échéances | — |
 | 50 | Renvoi vers Jira / ServiceNow | ❌ | Absent | L22.6 |
 
@@ -195,7 +242,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 |---|---|---|---|---|
 | 64 | **Cloisonnement strict et délégation** | ✅✅✅ | RLS **activée et forcée sur 50 tables**, propriétaire compris ; FK et unicités **composites** ; périmètre résolu par le serveur, revérifié à chaque requête. **Plus rigoureux que le multi-tenant applicatif de la majorité des SaaS** | — |
 | 65 | Socle Groupe / adaptation locale | ✅✅ | `mesure_catalogue` / `mesure_mise_en_oeuvre` ; `risque_catalogue` mixte ; `documents.filiale_id` nul = portée Groupe | — |
-| 66 | Campagne poussée du Groupe | ❌ | Le socle existe ; **le mécanisme descendant n'existe pas** | **L24.1** |
+| 66 | Campagne poussée du Groupe | ✅ | **L24.1 livré le 18/09/2026** (migration `044`) : `campagnes` est de niveau **Groupe** — la demande est commune —, `campagne_filiales` porte la **part** de chacune et reste cloisonnée. Une filiale ne voit ni la part de la voisine ni leur **nombre**, et un essai le mesure par la route. La convocation est la seule écriture du produit qui nomme des filiales : trois barrières, et un refus indistinguable de « n'existe pas » | **L24.1** |
 | 67 | Comparabilité garantie | ✅ | L'écran Socle **refuse de coter**, pour que les 20 filiales restent comparables | — |
 
 ### N. Intelligence artificielle — 0 ✅ · 0 🟡 · 5 ❌
@@ -233,7 +280,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
 | 77 | Registre art. 30 et AIPD | ✅ | Registre de l'article 30 (`traitements`, mixte depuis la `027`) **et AIPD de l'article 35** (`analyses_impact`, migration `039`). ⚠️ L'AIPD **POINTE** le registre, elle ne le recopie pas — aucune colonne commune, mesuré dans le catalogue. Et la route rend **aussi les traitements SANS analyse**, avec une **présomption** qui ne décide pas | — |
-| 78 | DSAR, consentements, violations | 🟡 | **DSAR livré** (migration `040`) : registre des articles 15 à 22, **délai d'un mois DÉRIVÉ** de la réception (art. 12 §3), prorogation qui exige d'avoir été notifiée, refus qui exige d'être motivé ET daté (art. 12 §4). Les **violations** passent par `incidents` et l'horloge 20.1. ⚠️ **Les consentements restent absents** : ni recueil, ni preuve, ni retrait tracé — seul le retrait ARRIVANT par une demande est enregistré | L20 |
+| 78 | DSAR, consentements, violations | 🟡 | **Remesuré le 18/09** : DSAR ✅ (20.4 — les six droits des art. 15 à 21 **plus le retrait de consentement** de l'art. 7 §3, échéance dérivée, refus motivé ET daté) ; violations ✅ (registre d'incidents + horloge NIS2/RGPD de 20.1). ❌ **Un REGISTRE de consentements reste absent** : le produit traite la demande de retrait, il ne tient pas les consentements | **DSAR livré** (migration `040`) : registre des articles 15 à 22, **délai d'un mois DÉRIVÉ** de la réception (art. 12 §3), prorogation qui exige d'avoir été notifiée, refus qui exige d'être motivé ET daté (art. 12 §4). Les **violations** passent par `incidents` et l'horloge 20.1. ⚠️ **Les consentements restent absents** : ni recueil, ni preuve, ni retrait tracé — seul le retrait ARRIVANT par une demande est enregistré | L20 |
 | 79 | Convergence privacy + sécurité | ✅ | `traitement_mesures` relie les traitements **au pivot mesure** — l'argument OneTrust, en plus modeste | — |
 | — | *Hors grille* — purge RGPD outillée | ✅ | `POST /api/cycle/purge-rgpd` : suppression de fiche **et anonymisation dans les entités**. Très peu de GRC l'outillent | — |
 

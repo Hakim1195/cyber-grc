@@ -74,7 +74,13 @@ export type NomEntite =
   // de référentiels, et « code » fait la jointure — comme « evaluations » depuis
   // le premier chantier.
   | 'questionnaires_tiers'
-  | 'questionnaire_reponses';
+  | 'questionnaire_reponses'
+  // v21 — les campagnes descendantes (L24, actions 24.1 et 24.2). ⚠️ « campagnes » est
+  // de niveau GROUPE et ne porte AUCUN filiale_id : son intitulé, son référentiel et son
+  // échéance sont les mêmes pour tout le groupe (CONVENTIONS.md §24). Ce qui diffère par
+  // filiale — qui répond, où elle en est — vit dans « campagne_filiales ».
+  | 'campagnes'
+  | 'campagne_filiales';
 
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;
