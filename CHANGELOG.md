@@ -55,6 +55,50 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### « Les docs sont à jour ? » — la troisième fois, et le garde-fou ne voyait pas le gras (18/09/2026)
+
+**Le contrôle mécanique rendait 89/89.** La prose portait **cinq manques**, dont deux que la
+journée venait de créer — et le plus gros datait de **dix jours**.
+
+⚠️ **LA TABLE DES LOTS DU `README` DÉCRIVAIT L'ÉTAT DU 08/09**, trois vagues en arrière :
+*« L19 → L26 ⬜ planifiés »* alors que **L19 est entier**, **L20 livré sauf 20.2**, **L21 et
+L24 livrés**. Et L17 « non commencé », L18 bis « après les portes ».
+
+**Pourquoi le garde-fou ne l'a pas vu — deux raisons, et les deux sont fermées :**
+
+1. **sa liste de preuves s'arrêtait à L6.** Il surveillait six lots sur vingt-huit, et
+   rendait donc vert sur tout ce qui a été livré depuis. Elle en suit **treize** désormais,
+   chacun avec son livrable — une migration, un module — comme preuve ;
+2. ⚠️ **et son motif ne reconnaissait pas la forme EN GRAS.** Le `README` écrit
+   `| **L19 → L26** | ⬜ planifiés`, avec les deux astérisques de fermeture entre le numéro
+   et le carré ; le motif exigeait au plus une barre et des espaces. *Un contrôle qui ne
+   reconnaît qu'UNE écriture de ce qu'il cherche ne garde pas la propriété, il garde une mise
+   en forme.* Les deux formes sont maintenant éprouvées, la seconde par un cas témoin.
+
+**Les quatre autres manques :**
+
+- **le guide utilisateur annonçait neuf profils et n'en décrivait que huit** — c'est moi qui
+  ai créé l'écart cet après-midi en corrigeant l'introduction sans écrire la section. Le
+  **répondant de campagne** a la sienne, avec ce qu'il voit, ce qu'il fait, et ⚠️ **ce qu'il
+  ne voit pas** : les parts des autres filiales, ni même leur nombre ;
+- **les trois écrans de L21 et L24 n'étaient décrits nulle part** pour un utilisateur :
+  registre DORA, questionnaires de sécurité, campagnes du Groupe. Ils entrent au tableau du
+  RSSI, et l'échéancier y annonce ses **neuf** sources au lieu de deux ;
+- **`docs/PLAN_ACHEVEMENT.md`** ne marquait pas la vague C close ; **`docs/PLAN_INTERFACE.md`**
+  ignorait les deux onglets neufs ;
+- ⚠️ **et le `GUIDE_EXPLOITATION` annonçait 329 colonnes décidées quand le registre en compte
+  385.** C'est **mot pour mot la faute du constat Q-331** — *« la correction avait porté sur
+  les documents que l'équipe relit, pas sur celui que l'exploitant lit »* —, refaite trois
+  jours après. Elle est désormais **gardée** : un contrôle confronte le nombre du guide au
+  catalogue à chaque banc, comme ceux du §8 le sont.
+
+⚠️ **ET LE GARDE-FOU DES ÉCRANS CITÉS A ATTRAPÉ MA PROPRE PROSE, DEUX FOIS.** Ma première
+rédaction envoyait le lecteur vers « Prestataires → Questionnaires », puis vers
+« Prestataires, sur la fiche d'un tiers » — deux destinations qui n'existent sous aucun
+libellé : le questionnaire est un **bloc de la fiche**, pas un écran. C'est la classe des
+constats **Q-265 / Q-266**, deux bloquants de la porte S7, et elle se rouvre à chaque phrase
+qu'on écrit. *Le contrôle a fait en deux secondes ce qu'un relecteur n'aurait pas fait.*
+
 ### Sans déconvocation, une campagne convoquée était INDESTRUCTIBLE (18/09/2026)
 
 **Sixième défaut en cinq jours trouvé au navigateur sur la recette**, et le plus profond des

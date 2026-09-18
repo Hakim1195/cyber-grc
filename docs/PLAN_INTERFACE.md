@@ -27,6 +27,8 @@ ailleurs.
 | `/socle` — « Socle de risques » | le **catalogue** des risques du Groupe (`risque_catalogue`) | onglet de **Risques** |
 | `/referentiels-actifs` — « Référentiels applicables » | *quels référentiels s'appliquent ici* (`referentiels_actifs`) | onglet de **Référentiels** |
 | `/couverture` — couverture croisée | une **vue** de la conformité — ⚠️ **et elle n'a AUCUNE entrée de menu** : on n'y arrive que par trois liens en bas d'autres écrans | onglet de **Référentiels** |
+| `/campagnes` — « Campagnes du Groupe » | une **vue** de la conformité : ce que le Groupe demande à ses filiales (lot **L24**, 18/09/2026). Aucune fiche à route propre — une campagne se lit dans la liste, ses parts dépliées sous elle | onglet de **Référentiels** |
+| `/tiers-dora` — « Registre DORA » | une **vue** des mêmes tiers, avec ce qui manque à chaque ligne (lot **L21**) | onglet de **Prestataires** |
 
 ⚠️ **Quatre entités de conformité, six portes, et l'une des six manquante.** C'est le
 symptôme le plus net de l'héritage : chaque capacité livrée a reçu son écran, parce que

@@ -181,3 +181,49 @@ describe('Les guides ne nomment que des écrans qui existent (constats Q-265 / Q
     );
   });
 });
+
+/* =====================================================================
+ *  Le CHIFFRE que l'exploitant lit — constat Q-331, refait le 18/09/2026
+ * ===================================================================== */
+
+describe('Le guide d’exploitation ne porte pas un compte périmé (constat Q-331)', () => {
+  test('« N colonnes décidées » dit le registre de l’article 30 tel qu’il est', async () => {
+    // ⚠️ **CE CONTRÔLE EXISTE PARCE QUE LA FAUTE A ÉTÉ REFAITE.** Le constat **Q-331**
+    // avait fermé exactement cela : *« la correction avait porté sur les documents que
+    // l'équipe relit, pas sur celui que l'exploitant lit »*. Trois jours plus tard, le
+    // `GUIDE_EXPLOITATION` annonçait de nouveau un compte de six jours en retard — et le
+    // garde-fou des chiffres, qui ne lit que le `README`, ne pouvait pas le voir.
+    //
+    // La parade n'est pas la vigilance : c'est que le nombre du guide soit confronté au
+    // CATALOGUE, comme ceux du §8 le sont.
+    const { ouvrirBaseEssai } = await import('../aide/base.mjs');
+    const base = await ouvrirBaseEssai(import.meta.url);
+    try {
+      const client = await base.connexion('app');
+      const reel = Number(
+        (await client.query('select count(*)::int as n from colonnes_personnelles')).rows[0].n,
+      );
+
+      const texte = readFileSync(join(RACINE_BACKEND, '..', 'docs', 'GUIDE_EXPLOITATION.md'), 'utf8');
+      const annonces = [...texte.matchAll(/\*\*(\d[\d\s]*) colonnes décidées\*\*/gu)].map((m) =>
+        Number(m[1].replace(/\s/gu, '')),
+      );
+
+      assert.ok(
+        annonces.length > 0,
+        'Le guide d’exploitation n’annonce plus « N colonnes décidées » : ce contrôle n’a ' +
+          'plus de sujet, et il vaut mieux le dire que rendre vert en ne lisant rien.',
+      );
+      for (const annonce of annonces) {
+        assert.equal(
+          annonce, reel,
+          `Le guide d’exploitation annonce ${String(annonce)} colonnes décidées, le ` +
+            `catalogue en porte ${String(reel)}. C’est le document que l’EXPLOITANT lit, ` +
+            'et un chiffre faux y rassure au lieu de mesurer (constat Q-331).',
+        );
+      }
+    } finally {
+      await base.fermer();
+    }
+  });
+});

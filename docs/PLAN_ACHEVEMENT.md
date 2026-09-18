@@ -70,10 +70,20 @@ Attestation de conformité imprimable ; **dérogations** datées et approuvées 
 en ajout seul ; la preuve reliée à l'exigence qu'elle sert. Échéances réglementaires NIS2 /
 DORA / RGPD **opérationnelles** — ce qui est dû, par qui, pour quand.
 
-### V-C — Tiers et campagnes *(L21, L24)*
+### V-C — Tiers et campagnes *(L21, L24)* — ✅ **CLOSE le 18/09/2026**
 
 Questionnaires fournisseurs et leur relance ; registre DORA des prestataires critiques ;
 **campagnes descendantes** — le Groupe envoie une exigence à ses filiales et suit l'avancement.
+
+> **Livré** : migrations `042` à `045`, schéma `data` en **v21**, banc 2169/2169. L'indicateur
+> a été **rejoué EN ENTIER** comme le §4 l'impose — premier rejeu intégral : **46 ✅ · 15 🟡 ·
+> 25 ❌**.
+>
+> ⚠️ **Ce qui reste nommé plutôt que tu** : les gabarits **XBRL** de DORA (format de dépôt
+> versionné par l'ESA), l'agrégation **par répondant** de 24.2, et le **portail fournisseur**
+> qui est le lot L28. ⚠️ **Six défauts ont été trouvés AU NAVIGATEUR sur la recette pendant
+> cette vague, aucun par le banc** — dont une campagne convoquée *indestructible* et un bloc
+> de création invisible pour le seul compte qui en avait le droit.
 
 ### V-D — Méthode et catalogues *(L25, L26)*
 

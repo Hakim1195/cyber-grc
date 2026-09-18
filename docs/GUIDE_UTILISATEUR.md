@@ -88,10 +88,13 @@ sur trente.
 | Écran | Ce qu'il sert |
 |---|---|
 | **Tableau de bord** | l'état de votre filiale en un coup d'œil, avec les tendances |
-| **Échéancier** | tout ce qui est daté et qui approche — plan d'actions, revues, déclarations, **questionnaires fournisseurs et échéances contractuelles des tiers** |
+| **Échéancier** | tout ce qui est daté et qui approche — **neuf sources** : plan d'actions, actions MCO, revues documentaires, déclarations d'incidents, audits, revues de direction, **questionnaires fournisseurs**, **échéances contractuelles des tiers** et **campagnes du Groupe** |
 | **Registre des risques** | l'analyse : fréquence × gravité × maîtrise, brut et résiduel |
 | **Référentiels** | l'évaluation des référentiels applicables, et la déclaration d'applicabilité |
 | **Approbations** | ce qui attend votre décision |
+| **Prestataires → Registre DORA** | le registre de l'article 28 de DORA, **avec ce qui manque à chaque ligne** : c'est cette liste de manques qui en fait un plan de travail, et non le tableau. ⚠️ Il exige le droit d'**export** — un registre complet est la carte des dépendances critiques du groupe |
+| **Prestataires** | sur la fiche d'un tiers, le bloc « Questionnaires de sécurité » : le questionnaire que vous adressez à ce fournisseur **s'exporte** en classeur, se remplit hors ligne, et **se réimporte**. ⚠️ Le produit **n'envoie rien** : « consigner l'envoi » enregistre ce que *vous* avez fait. ⚠️ Ce n'est pas un écran à part — un questionnaire appartient à un tiers, et le chercher ailleurs serait le chercher deux fois |
+| **Référentiels → Campagnes du Groupe** | ce que le Groupe demande à votre filiale, et où vous en êtes. Vous y prenez connaissance et déclarez terminé ; l'avancement, lui, **se compte** dans vos évaluations |
 
 ### Trois choses qui surprennent la première fois
 
@@ -202,6 +205,38 @@ action du plan, vous ne prononcez pas son acceptation.
 ⚠️ Si un bouton d'approbation n'apparaît pas, c'est votre niveau — pas un défaut d'écran.
 Et si vous atteigniez la fonction autrement, **le serveur refuserait aussi** : l'interface
 reflète la règle, elle ne l'applique pas.
+
+---
+
+## 3 bis. Répondant de campagne — `GRC-<CODE>-REPONDANT`
+
+**Votre périmètre** : votre filiale, sur **trois domaines seulement** — les référentiels et
+les exigences au niveau *contribution*, l'échéancier en *lecture*. **Tout le reste du produit
+vous est fermé**, et il l'est *nommément* : chacun des vingt-sept autres domaines porte la
+valeur « aucun » dans vos droits, pour qu'une revue de droits puisse le relire.
+
+**Ce que vous faites** : le Groupe vous adresse une **campagne d'évaluation** — « évaluez
+l'hygiène ANSSI d'ici le 30 juin » —, et vous y répondez. Votre écran est
+*Conformité → Référentiels → **Campagnes du Groupe***.
+
+1. la campagne qui vous convoque y figure, avec son **échéance** et où vous en êtes ;
+2. « **J'en prends connaissance** » consigne que vous l'avez vue — c'est un fait daté, pas
+   une formalité : le Groupe s'en sert pour savoir qui n'a pas encore ouvert la demande ;
+3. vous évaluez le référentiel comme d'habitude (écran *Référentiels*), exigence par
+   exigence. **L'avancement se compte tout seul** : il n'y a rien à mettre à jour à la main ;
+4. « **Déclarer terminée** » clôt votre part, et vous pouvez nommer le répondant.
+
+⚠️ **L'échéance de la campagne arrive dans votre Échéancier**, avec les autres obligations
+datées — et dans les relances par courriel. Vous n'avez pas à surveiller un écran à part.
+
+> ⚠️ **Ce que vous ne voyez pas, et ce n'est pas un défaut** : les parts des **autres**
+> filiales convoquées à la même campagne, ni même leur nombre. C'est une information de
+> Groupe. Vous voyez la demande — qui est la même pour tout le monde — et votre réponse.
+
+⚠️ **Ce profil existe parce que le contributeur ne pouvait pas répondre** : ses quatre
+domaines ne touchent pas la conformité, et lui en donner l'accès entier aurait accordé bien
+plus que de répondre à une campagne. Si vous portez **déjà** un profil RSSI ou Qualité, vous
+n'avez pas besoin de celui-ci : vous pouvez déjà évaluer.
 
 ---
 

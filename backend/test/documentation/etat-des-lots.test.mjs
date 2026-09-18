@@ -55,6 +55,25 @@ const PREUVE_DE_LIVRAISON = [
   { lot: 'L4', preuve: 'backend/db/migrations/009_perimetre_actif.sql' },
   { lot: 'L5', preuve: 'backend/src/api/journal.ts' },
   { lot: 'L6', preuve: 'backend/src/pieces/clamav.ts' },
+  // ── ⚠️ HUIT LOTS AJOUTÉS LE 18/09/2026, ET L'OMISSION AVAIT COÛTÉ DIX JOURS ─────
+  //
+  // La liste s'arrêtait à L6. Conséquence mesurée à la question « les docs sont à jour ? » :
+  // la table des lots du `README` annonçait **« L19 → L26 ⬜ planifiés »** alors que L19
+  // était entier, L20 livré sauf 20.2, L21 et L24 livrés — c'est-à-dire l'état du 08/09,
+  // trois vagues en arrière. Ce contrôle existe POUR CELA (famille Q-4, signalée dix fois),
+  // et il était vert : il ne surveillait que six lots sur vingt-huit.
+  //
+  // ⚠️ La leçon n'est pas « il fallait y penser » : c'est qu'un contrôle dont la MATIÈRE est
+  // écrite à la main vieillit comme le document qu'il garde. La parade tenable est
+  // l'assertion de matière plus bas — « trop peu de lots suivis pour que ceci morde » —, et
+  // elle est désormais calibrée sur ce que le dépôt porte réellement.
+  { lot: 'L16', preuve: 'backend/db/migrations/017_pieces_suivent_leur_porteur.sql' },
+  { lot: 'L17', preuve: 'backend/src/recherche/index.ts' },
+  { lot: 'L18', preuve: 'docs/INSTALLER.md' },
+  { lot: 'L19', preuve: 'backend/db/migrations/033_l_attestation_de_lecture.sql' },
+  { lot: 'L20', preuve: 'backend/db/migrations/034_l_horloge_reglementaire.sql' },
+  { lot: 'L21', preuve: 'backend/db/migrations/042_le_registre_dora_et_la_chaine.sql' },
+  { lot: 'L24', preuve: 'backend/db/migrations/044_les_campagnes_descendantes.sql' },
 ];
 
 /** Les documents qui portent une table des lots, et qui mentent tous les dix commits. */
@@ -70,7 +89,7 @@ describe('La documentation d’état ne décrit pas l’état d’AVANT (famille
         'confronte la documentation à des fichiers qui n’existent plus — et rendrait alors ' +
         'vert en n’éprouvant rien.',
     );
-    assert.ok(PREUVE_DE_LIVRAISON.length >= 5, 'Trop peu de lots suivis pour que ceci morde.');
+    assert.ok(PREUVE_DE_LIVRAISON.length >= 13, 'Trop peu de lots suivis pour que ceci morde.');
   });
 
   test('AUCUN lot dont le livrable est là n’est encore annoncé « à faire »', () => {
@@ -80,7 +99,7 @@ describe('La documentation d’état ne décrit pas l’état d’AVANT (famille
       for (const { lot } of PREUVE_DE_LIVRAISON) {
         // « L4 → L15 ⬜ à faire », « L4 → L15 | ⬜ », etc. : un intervalle qui ENGLOBE un
         // lot livré. C'est la forme exacte qu'a prise le défaut dix fois de suite.
-        for (const [, debut, fin] of texte.matchAll(/L(\d+)\s*(?:→|->|à)\s*L(\d+)\s*\|?\s*⬜/gu)) {
+        for (const [, debut, fin] of texte.matchAll(/L(\d+)\s*(?:→|->|à)\s*L(\d+)\s*[*\s]*\|?\s*⬜/gu)) {
           const n = Number(lot.slice(1));
           if (n >= Number(debut) && n <= Number(fin)) {
             menteurs.push(`${document} : « L${debut} → L${fin} ⬜ à faire » englobe ${lot}, livré`);
@@ -99,9 +118,23 @@ describe('La documentation d’état ne décrit pas l’état d’AVANT (famille
   });
 
   test('MORSURE : un intervalle qui engloberait un lot livré serait vu', () => {
+    // ⚠️ **LE MOTIF NE VOYAIT PAS LA FORME EN GRAS, et c'est ce qui a laissé passer dix
+    //    jours de retard.** Le `README` écrivait « | **L19 → L26** | ⬜ planifiés », avec
+    //    les deux astérisques de fermeture entre le numéro et le carré : le motif exigeait
+    //    au plus une barre et des espaces, et ne reconnaissait donc rien. Le contrôle
+    //    rendait vert sur un document qui annonçait « à faire » quatre lots livrés.
+    //
+    //    *Un contrôle qui ne reconnaît qu'UNE écriture de ce qu'il cherche ne garde pas la
+    //    propriété, il garde une mise en forme.* Les deux formes sont désormais éprouvées.
     const faux = '| L4 → L15 | ⬜ à faire — voir le plan |';
-    const trouve = [...faux.matchAll(/L(\d+)\s*(?:→|->|à)\s*L(\d+)\s*\|?\s*⬜/gu)];
+    const trouve = [...faux.matchAll(/L(\d+)\s*(?:→|->|à)\s*L(\d+)\s*[*\s]*\|?\s*⬜/gu)];
     assert.equal(trouve.length, 1, 'Le motif ne reconnaît plus la forme qui a menti dix fois.');
     assert.deepEqual([trouve[0][1], trouve[0][2]], ['4', '15']);
+
+    // La forme EN GRAS, celle du README — elle a échappé au motif jusqu'au 18/09/2026.
+    const fauxGras = '| **L19 → L26** | ⬜ **planifiés** (`../docs/PLAN_PRODUIT.md`) |';
+    const trouveGras = [...fauxGras.matchAll(/L(\d+)\s*(?:→|->|à)\s*L(\d+)\s*[*\s]*\|?\s*⬜/gu)];
+    assert.equal(trouveGras.length, 1, 'La forme en gras doit être reconnue elle aussi.');
+    assert.deepEqual([trouveGras[0][1], trouveGras[0][2]], ['19', '26']);
   });
 });

@@ -158,6 +158,33 @@ des verdicts antérieurs, il n'en établit pas.
 
 ---
 
+### ▶ OÙ REPRENDRE — au 18/09/2026 au soir
+
+**La vague C est CLOSE.** Le geste suivant est la **vague D** du `PLAN_ACHEVEMENT.md` :
+**L25** (EBIOS RM et quantification) et **L26** (catalogues ouverts). Le cadrage est au
+`docs/PLAN_PRODUIT.md`, et deux critères d'acceptation y méritent d'être lus avant d'écrire
+une ligne :
+
+- **L25 est le lot le plus risqué du plan** : il touche la méthode, donc les données déjà
+  saisies. Les ateliers EBIOS RM se font **en ADDITION**, jamais en remplacement — une
+  migration qui réinterpréterait les cotations F×G×M existantes réattribuerait **en silence**
+  des valeurs produites en audit. C'est le motif qui a fait refuser la renumérotation ANSSI
+  (constat **Q-192**) ;
+- **L26.1 doit conserver les codes à l'octet près** : les auto-évaluations sont stockées par
+  `(ref_id, code)`, et une divergence silencieuse réattribuerait des réponses d'audit.
+
+**Ce qui reste des lots livrés, nommé plutôt que tu** : 20.2 (formulaires ANSSI/CNIL), 24.2
+en partie (agrégation par répondant), L17 A4 et A5 (écran de démarrage par rôle, Kanban),
+L16-D3 (recherche documentaire), et les gabarits XBRL de DORA.
+
+⚠️ **ET LA LEÇON DE CES DEUX JOURS, QUI VAUT PLUS QUE LES LOTS** : **six défauts ont été
+trouvés en vérifiant AU NAVIGATEUR sur la recette, aucun par le banc.** Un écran qui perd sa
+barre d'onglets, un bloc de création invisible pour le seul compte qui en a le droit, une
+campagne convoquée indestructible, une échéance fantôme après une cascade. *Aucun ne faisait
+rougir quoi que ce soit, et tous se voyaient en dix minutes de clics.* Prévoyez ce temps.
+
+---
+
 ## 5. Les pièges qui ont coûté le plus cher — à lire avant d'écrire une migration
 
 1. **Une colonne engendrée doit être déclarée `colonnesReservees`** dans
