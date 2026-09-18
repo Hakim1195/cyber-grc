@@ -230,11 +230,11 @@
 >
 > ---
 >
-> **Mesuré à la révision `5d098ff`, le 18/09/2026** : banc **2 134 essais, 2 134 passés** ;
+> **Mesuré à la révision `bd81cbc`, le 18/09/2026** : banc **2 165 essais, 2 165 passés** ;
 > `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 > `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** ; `f_verifier_schema()`
-> → 0 anomalie (**47 garde-fous, 43 migrations, 64 tables, 369 décisions** au registre
-> de l'article 30) ; publication → **89 fichiers identiques au dépôt** ;
+> → 0 anomalie (**49 garde-fous, 45 migrations, 66 tables, 385 décisions** au registre
+> de l'article 30) ; publication → **90 fichiers identiques au dépôt** ;
 > `install.sh --diagnostic` → **13 conformes, 2 réserves, 0 bloquant** — la seconde étant
 > le **profil DÉCOUVERTE de cette machine**, posé le 15/09/2026.
 >

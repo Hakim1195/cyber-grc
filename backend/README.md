@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2134 essais, vingt-neuf familles (voir plus bas)
+npm test                           # 2165 essais, trente familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -638,9 +638,10 @@ que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non re
 | `test/recherche/` | la **recherche globale** (L17, A3) : une barre qui trouve un risque, un actif, une exigence ou une personne, bornée par la RLS côté serveur et par les droits — jamais par un filtre côté client. C'est la surface la plus propice à un oracle d'existence |
 | `test/decouverte/` | le **jeu de découverte** (L18 bis) et ses cinq conditions constitutives : marque de provenance posée PAR LA BASE et inforgeable, refus s'il existe la moindre ligne réelle, purge d'un geste, et interdiction hors du profil « découverte » |
 | `test/tiers/` | les **tiers, la chaîne de sous-traitance et DORA** (L21) : le barème du score est SERVI et non recopié ; « non évalué » n'est pas « faible » ; le registre d'information **dit ses propres manques** et exige le droit d'**export**, non la simple lecture ; la chaîne rend le **chemin**, pas un rang à croire. Et le **questionnaire fournisseur** (21.2), dont la migration était livrée *mordue par rien* : l'état est DÉRIVÉ — un questionnaire reçu en retard est **reçu**, un brouillon n'est **pas** un retard —, la chronologie est posée dans le schéma, le vocabulaire des réponses est **éprouvé** plutôt que relu (§39.1), et le réimport est idempotent **par la contrainte** : rejouer le même fichier échoue bruyamment au lieu de doubler les comptes en silence |
+| `test/campagnes/` | les **campagnes descendantes** (L24) : les deux états sont DÉRIVÉS — « close » testé avant l'échéance, « non faite » plutôt qu'« en retard » sur une demande fermée —, l'avancement se **compte** dans les évaluations et le serveur ne rend **aucun taux**, et surtout ⚠️ **une filiale ne voit QUE sa part** : ni celle de la voisine, ni leur nombre. La convocation, seule écriture du produit qui nomme des filiales, est éprouvée sur ses **trois barrières**, et son refus « hors périmètre » est mesuré **indistinguable** de « n'existe pas ». ⚠️ Le §7 garde l'INVERSE de ce qu'on croirait : que supprimer sa part reste POSSIBLE — un interdit y rendrait la reprise « remplacer » morte |
 
 *(`test/aide/` n'est pas une famille : ce sont les montages partagés — base, serveur,
-navigateur, outillage — que les vingt-neuf autres appellent.)*
+navigateur, outillage — que les trente autres appellent.)*
 
 **Deux de ces familles sont nées d'un défaut, et c'est ce qui leur donne leur valeur.**
 
@@ -773,8 +774,8 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 18/09/2026, à la révision `5d098ff`** (lot L21) : `npm test` → **2134 essais,
-2134 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**Mesuré au 18/09/2026, à la révision `bd81cbc`** (lot L24) : `npm test` → **2165 essais,
+2165 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **49 garde-fous consignés**, **45 migrations**,
 **66 tables**, **385 décisions** au registre de l'article 30 ; publication → **90
@@ -939,27 +940,27 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`5d098ff`** — lot **L21** (tiers, DORA, questionnaire fournisseur), 18/09/2026, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ quatre fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**. |
-| État de l'arbre | **arbre de `5d098ff`** plus les seules modifications de documentation du commit qui suit. Compte **relevé famille par famille** : **1 903 hors navigateur, 231 au navigateur** — cette dernière REJOUÉE EN ENTIER (585 s) plutôt que déduite. ⚠️ **`documentation` est relevée à 30 essais dont UN EN ÉCHEC** — celui qui juge ce bloc-ci, et qui ne peut pas être vert avant que le bloc soit écrit. C'est la seule circularité du dispositif, et elle se dit plutôt qu'elle ne se cache : la famille est rejouée APRÈS cette mise à jour. Une seule famille bouge depuis `8aa1c2d` : `documentation` 30 → **32**, par les deux grandeurs que personne ne gardait — le registre de l'article 30 et le compte de fichiers publiés. ⚠️ Le compte est RELEVÉ, jamais déduit : une estimation précédente en annonçait 2 051 pour 2 048 réels. |
+| Révision mesurée | **`bd81cbc`** — lot **L24** (campagnes descendantes, profil répondant), 18/09/2026, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ quatre fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**. |
+| État de l'arbre | **arbre de `bd81cbc`** plus les seules modifications de documentation du commit qui suit. Compte **relevé famille par famille**, chaque répertoire joué séparément — jamais déduit. ⚠️ Et la famille `campagnes` n'entre au §5 qu'AVEC ce bloc : le contrôle de Q-90 compare le §5 à la révision que le §8 nomme, et l'y écrire plus tôt aurait décrit une famille qui n'existait pas encore. ⚠️ **`documentation` est relevée à 30 essais dont UN EN ÉCHEC** — celui qui juge ce bloc-ci, et qui ne peut pas être vert avant que le bloc soit écrit. C'est la seule circularité du dispositif, et elle se dit plutôt qu'elle ne se cache : la famille est rejouée APRÈS cette mise à jour. Une seule famille bouge depuis `8aa1c2d` : `documentation` 30 → **32**, par les deux grandeurs que personne ne gardait — le registre de l'article 30 et le compte de fichiers publiés. ⚠️ Le compte est RELEVÉ, jamais déduit : une estimation précédente en annonçait 2 051 pour 2 048 réels. |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 | ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2134 · pass 2134 · fail 0
-                                                   base 326 · api 297 · navigateur 231
+npm test                                         → tests 2165 · pass 2165 · fail 0
+                                                   base 326 · api 297 · navigateur 235
                                                    pieces 141 · auth 115 · import 97
-                                                   deploiement 95 · droits 84 · cycle 82
+                                                   deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73
                                                    journal-lecture 72 · approbations 71
-                                                   depot 57 · annuaire 48 · modules 45
-                                                   tiers 36 · documents 35 · filiales 34
-                                                   documentation 32 · journal 19
-                                                   recherche 13 · attestations 8 · aipd 7
-                                                   droits-personnes 6 · crise 7
-                                                   decouverte 8 · reglementaire 7
-                                                   derogations 6
+                                                   depot 57 · annuaire 48 · modules 46
+                                                   tiers 36 · documents 35 · filiales 35
+                                                   documentation 32 · campagnes 23
+                                                   journal 19 · recherche 13
+                                                   attestations 8 · decouverte 8
+                                                   aipd 7 · crise 7 · reglementaire 7
+                                                   derogations 6 · droits-personnes 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
 select * from f_verifier_schema()                → 0 ligne (49 garde-fous découverts, joués, consignés)
