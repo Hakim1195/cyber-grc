@@ -76,6 +76,15 @@ les 19 qui lancent Chromium prennent **520 s** et doivent rester **en série**.
 | **Les trois écrans qui manquaient** (16/09) | 19.1, 19.2 et 20.1 étaient livrées côté serveur et **aucun écran ne les appelait** — `documents.attestation_requise` n'était même posable par aucun formulaire |
 | **Passe de style** | Échelle typographique, chasse fixe pour ce qui se recopie, tableaux (en-tête collant, nombres alignés), impression |
 
+⚠️ **La leçon du 18/09, et c'est la QUATRIÈME fois en quatre jours** : *vérifier au
+navigateur sur la recette trouve ce que deux mille essais ne voient pas.* Le parcours complet
+de L21 — créer un tiers, ses dates de contrat, un questionnaire, consigner l'envoi, regarder
+l'échéancier, supprimer le tiers — tenait partout **sauf à la dernière étape** : l'échéancier
+gardait l'échéance d'un questionnaire dont le porteur venait d'être supprimé. La base
+cascade ; la façade en mémoire ne le refaisait pas. *Un défaut peut ne vivre ni dans la base,
+ni dans la route, mais dans l'écart entre deux cascades* — et aucune des deux moitiés n'a
+tort seule, ce qui est exactement pourquoi le banc ne le voyait pas.
+
 ⚠️ **La leçon du 16/09, et elle vaut pour toute la suite** : *une capacité qu'aucun écran
 n'appelle est une capacité absente.* Trois lots de suite ont été livrés, éprouvés et verts
 sans que personne puisse s'en servir. Un lot n'est fini que lorsqu'un utilisateur peut

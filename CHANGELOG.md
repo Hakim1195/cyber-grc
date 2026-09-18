@@ -10,7 +10,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 18/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2133 essais, 2133 passés, 0 échec** à la révision `43965a1`,
+> **2134 essais, 2134 passés, 0 échec** à la révision `5d098ff`,
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
 > échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**47 garde-fous consignés**,
@@ -54,6 +54,43 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### Le navigateur trouve ce que le banc ne voit pas — la cascade des tiers (18/09/2026)
+
+**Parcours joué à la main sur la recette**, connecté comme `admin.grc` : créer un tiers,
+saisir ses trois dates contractuelles, préparer un questionnaire, consigner son envoi,
+regarder l'échéancier, supprimer le tiers. Tout tenait — sauf la dernière étape.
+
+⚠️ **Après suppression du tiers, l'échéancier annonçait encore l'échéance de son
+questionnaire**, et le badge de la barre latérale la comptait. Les trois tables de L21
+pendent au prestataire par une clé `on delete cascade` : la base les emporte — un essai le
+mesure —, mais `DataStore.deletePrestataire()` ne retirait que le prestataire. *Le défaut ne
+vivait ni dans la base, ni dans la route : il vivait dans l'écart entre les deux cascades.*
+Classe **Q-201 / Q-207**, et **quatrième fois en trois jours** que la vérification au
+navigateur trouve ce que deux mille essais ne voient pas.
+
+Ce qui a été vérifié dans le même parcours, et qui tient : les trois dates contractuelles
+arrivent à l'échéancier avec les bons décomptes (**+25 j, +4 j, −6 j**) ; `evalue_le`
+(−120 j) **n'en produit aucune** ; un questionnaire créé est **Brouillon** et n'entre pas,
+puis passe **En retard** dès que l'envoi est consigné ; les boutons de filtre de
+l'échéancier **apparaissent d'eux-mêmes** ; et zéro erreur de console ou de page.
+
+⚠️ **Et deux textes étaient devenus faux le matin même** : la note pédagogique de
+l'échéancier énumérait **six** sources, le `GUIDE_UTILISATEUR` décrivait l'échéancier sans
+les questionnaires ni les contrats. *Une passe de documentation se fait en cherchant ce que
+le correctif du jour a rendu faux, pas en relisant ce qu'on vient d'écrire.*
+
+⚠️ **UN PIÈGE PAYÉ SUR SON PROPRE AVERTISSEMENT, ET C'EST LE PLUS INSTRUCTIF.** Le §8 du
+`README` prévient, en toutes lettres, que le contrôle d'environnement **borne sa lecture à
+une fenêtre courte** sous « Révision mesurée », et qu'allonger les lignes du haut repousse
+« Base » et « Node » hors de sa portée. En réancrant les chiffres, j'ai rallongé ces deux
+lignes — et les **cinq** contrôles d'environnement ont rougi. Deux corrections, pas une :
+
+- le bloc de mesure redevient **terse** (le récit vit ici, pas là-bas) ;
+- **le message du garde-fou nommait mal la cause** : il annonçait *« la ligne Base a
+  disparu »* alors qu'elle était seulement repoussée. Il distingue désormais les deux cas et
+  dit lequel s'applique. *Un contrôle qui nomme mal la cause fait chercher au mauvais
+  endroit* — celui-là venait d'y envoyer sa propre session.
 
 ### L21 — le registre DORA, la chaîne de sous-traitance et le questionnaire fournisseur (17–18/09/2026)
 

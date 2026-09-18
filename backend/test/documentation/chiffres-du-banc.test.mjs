@@ -467,12 +467,23 @@ function lignesEnvironnement() {
   const fenetre = texte.slice(ancre, ancre + 2000);
   const base = /\| Base \|([^\n]*)\|/.exec(fenetre);
   const outils = /\| Node · Apache · rsync · OS \|([^\n]*)\|/.exec(fenetre);
-  assert.notEqual(base, null,
-    'La ligne « Base » du tableau d’environnement (README §8) a disparu : plus rien n’y ' +
-    'porte la version de PostgreSQL.');
-  assert.notEqual(outils, null,
-    'La ligne « Node · Apache · rsync · OS » du tableau d’environnement (README §8) a ' +
-    'disparu, changé de libellé, ou changé d’ordre de colonnes.');
+  // ⚠️ DEUX CAUSES POSSIBLES, ET LE MESSAGE DOIT LES DISTINGUER. La ligne peut avoir
+  //    disparu — ou, bien plus souvent, être simplement REPOUSSÉE hors de la fenêtre
+  //    parce qu'on a rallongé « Révision mesurée » ou « État de l'arbre » juste
+  //    au-dessus. Le §8 prévient de ce piège en toutes lettres ; il a tout de même été
+  //    payé le 18/09/2026, et le message d'alors — « la ligne a disparu » — faisait
+  //    chercher une suppression qui n'avait pas eu lieu. *Un contrôle qui nomme mal la
+  //    cause fait chercher au mauvais endroit.*
+  const diagnostic = (libelle, motif) =>
+    motif.test(texte)
+      ? `La ligne « ${libelle} » du tableau d’environnement (README §8) existe encore, mais ` +
+        `elle est REPOUSSÉE hors de la fenêtre de 2 000 caractères sous « Révision mesurée » : ` +
+        `les lignes du haut du tableau ont été rallongées. Le §8 prévient de ce piège — ` +
+        `raccourcissez-les, le récit va au CHANGELOG.`
+      : `La ligne « ${libelle} » du tableau d’environnement (README §8) a disparu, changé de ` +
+        `libellé, ou changé d’ordre de colonnes.`;
+  assert.notEqual(base, null, diagnostic('Base', /\| Base \|/u));
+  assert.notEqual(outils, null, diagnostic('Node · Apache · rsync · OS', /\| Node · Apache · rsync · OS \|/u));
   return { base: base[1], outils: outils[1] };
 }
 
