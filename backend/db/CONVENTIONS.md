@@ -3086,3 +3086,63 @@ Q-64). La morsure et le **non-bruit** sont éprouvés tous les deux.
 > contrôle nominatif et de noter qu'un garde de classe « restait à écrire ». C'est la forme
 > de réserve que le `CLAUDE.md` §0 proscrit — *une réserve écrite n'est pas une réserve
 > traitée* —, et elle a duré une migration.
+
+---
+
+## §44 — `insert … returning` applique la politique de LECTURE
+
+> **Posé le 19/09/2026**, en ajoutant la copie du journal d'audit vers un agrégateur de
+> logs. Mesuré, pas supposé — et trouvé par le banc, après avoir cassé la piste d'audit
+> **en silence** pendant le temps d'une rédaction.
+
+### 44.1 La règle
+
+Sur une table soumise à la RLS, **`returning` n'est pas gratuit** : PostgreSQL applique la
+politique de **`select`** aux lignes rendues. Une ligne qu'on vient d'insérer et que la
+politique de lecture ne laisse pas voir fait échouer l'insertion entière :
+
+```
+42501  new row violates row-level security policy for table "journal_audit"
+```
+
+> **Avant d'ajouter un `returning` à une écriture, demandez-vous si l'auteur de
+> l'écriture peut RELIRE ce qu'il vient d'écrire.** Sur les tables métier, oui — les
+> politiques d'ajout et de lecture y parlent du même `filiale_id`. Sur `journal_audit`,
+> **non** : la lecture y est cloisonnée (condition **E6**), et une entrée **transversale**
+> — démarrage, arrêt, refus d'autorisation, échec de connexion — n'a pas de filiale, donc
+> personne ne la relit.
+
+### 44.2 Ce que l'oubli produit, et pourquoi il ne se voit pas
+
+C'est la forme la plus traître qu'un défaut puisse prendre dans ce produit :
+
+| | |
+|---|---|
+| l'écriture | échoue en `42501`, donc **l'entrée n'est pas écrite** |
+| l'appelant | est l'un des trois que le §29.3 autorise à envelopper `journaliser()` dans un `try` — démarrage, arrêt, refus de droit — **parce que leur événement n'emporte aucune écriture métier** |
+| le résultat | l'échec est **avalé**, le service démarre normalement, et il ne trace plus son propre démarrage |
+
+Autrement dit : **un enrichissement de confort a supprimé des entrées du registre qui sert
+de preuve en audit, sans qu'aucun écran, aucun code de retour ni aucune alerte ne le dise.**
+C'est le banc qui l'a dit — `test/journal/couverture.test.mjs`, qui exerce le produit puis
+**compte ce qui est arrivé en base** au lieu de relire `src/`.
+
+### 44.3 Les trois issues, et laquelle on prend
+
+1. **Ouvrir la lecture** du journal pour rendre le `returning` possible → défait la
+   condition **E6**. Refusé.
+2. **Passer par une fonction `security definer`** → ouvre une **seconde voie d'écriture**
+   dans un registre en ajout seul, dont le §12 tient la garantie par quatre couches.
+   Refusé.
+3. **Se passer de ce que `returning` apportait.** C'est la voie retenue : la copie vers
+   l'agrégateur n'a pas besoin du numéro de chaîne, et détecter un trou ou une retouche
+   est le travail de `GET /api/journal/verification`, qui rejoue le chaînage **en base**.
+
+> *Le confort qu'on ajoute à une écriture ne vaut jamais la garantie qu'on lui retire.*
+
+### 44.4 Le garde
+
+`test/journal/sortie-agregateur.test.mjs` §6 écrit une entrée **transversale** — `filiale_id`
+nul, périmètre système — et exige qu'elle passe. Un `returning` réintroduit sur ce chemin
+la fait rougir immédiatement, au lieu d'attendre qu'un exploitant remarque, des mois plus
+tard, que son journal ne porte plus aucun démarrage.

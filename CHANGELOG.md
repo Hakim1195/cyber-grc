@@ -56,6 +56,65 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### Le journal d'audit part vers l'agrégateur de logs — sans ouvrir une sortie réseau (19/09/2026)
+
+Demandé par l'utilisateur : *« exporter les logs vers un agrégateur de logs, comme du
+Graylog, qui contient déjà les logs des autres serveurs de l'entreprise »*.
+
+Chaque entrée du journal d'audit est désormais **aussi** écrite en une ligne JSON sur la
+sortie standard, marquée `"flux":"journal_audit"`. L'unité systemd la dirige vers
+`journald` ; un `rsyslog` la pousse vers Graylog. **C'est rsyslog qui sort, jamais le
+service** : `IPAddressDeny=any` reste fermé, et le `docs/GUIDE_EXPLOITATION.md` §5 quater
+donne la recette en trois gestes, dont la vérification.
+
+#### Trois décisions, et chacune se mesure
+
+- **Ni `valeurs_avant`, ni `valeurs_apres`.** Le constat **Q-330** a rangé le contenu des
+  enregistrements sous le **droit d'export**, distinct de la lecture. Un flux continu n'a
+  ni identité ni droit, et le cloisonnement par filiale n'existe pas dans un agrégateur :
+  l'y verser serait un export permanent que personne n'a autorisé.
+- **La ligne ne part qu'APRÈS le `commit`.** `journaliser()` écrit dans la transaction de
+  l'appelant ; l'émettre tout de suite mettrait dans le SIEM un événement qu'un `rollback`
+  efface ensuite de la base — **une fausse accusation, et qui ne se corrige pas une fois
+  partie chez quelqu'un d'autre** (classe du constat Q-301). Le tampon est attaché au
+  client par `avecTransaction`, vidé au `commit`, jeté au `rollback`.
+- **La sortie ne dépend pas de `SERVEUR_NIVEAU_JOURNAL`.** Une ligne émise en `info`
+  disparaîtrait sur un serveur réglé en `warn` : un réglage d'exploitation ferait taire la
+  piste d'audit sans que personne l'ait voulu. Et **il n'y a aucun interrupteur dans le
+  produit** — couper se fait par une règle `rsyslog`, parce qu'un réglage de plus est un
+  réglage de plus à oublier.
+
+#### ⚠️ Et un défaut introduit puis retiré dans la même journée, qui vaut son paragraphe
+
+La première rédaction lisait le numéro de chaîne par `insert … returning`. **PostgreSQL
+applique la politique de LECTURE au `returning`** : une entrée transversale — démarrage,
+arrêt, refus d'autorisation — n'a pas de filiale, donc personne ne peut la relire, et
+l'insertion échouait en `42501`.
+
+Or ces appelants-là sont précisément **les trois que le §29.3 autorise à envelopper
+`journaliser()` dans un `try`**, leur événement n'emportant aucune écriture métier :
+l'échec était **avalé**, et le service démarrait en ne traçant plus son propre démarrage.
+
+*Un enrichissement de confort avait supprimé des entrées du registre qui sert de preuve en
+audit, sans qu'aucun écran ni aucun code de retour ne le dise.* C'est
+`test/journal/couverture.test.mjs` qui l'a dit — celui qui exerce le produit puis **compte
+ce qui est arrivé en base**, au lieu de relire `src/`.
+
+Trois issues étaient possibles ; les deux premières — ouvrir la lecture du journal, ou
+passer par une fonction `security definer` — coûtaient la condition **E6** ou une seconde
+voie d'écriture dans un registre en ajout seul. La troisième a été prise : **se passer de
+ce que `returning` apportait**. Détecter un trou ou une retouche est le travail de
+`GET /api/journal/verification`, qui rejoue le chaînage en base ; la copie sert à
+corréler, pas à prouver — et le guide le dit à l'endroit où on serait tenté de le croire.
+Règle écrite : `db/CONVENTIONS.md` **§44**.
+
+#### Et un garde de plus, pour que le différé reste vrai
+
+`test/depot/transactions-par-la-porte.test.mjs` refuse qu'un fichier de `src/` ouvre une
+transaction ailleurs que dans `src/db/pool.ts`. Il ne corrige rien — c'était déjà vrai —
+il **fige** : un appelant qui gérerait sa propre transaction n'aurait pas de tampon, et sa
+ligne partirait avant la validation **sans qu'aucun essai ne rougisse**.
+
 ### L25 — EBIOS RM : les ateliers 3, 4 et 5, et l'action 25.1 est complète (19/09/2026)
 
 Migration `047`, schéma `data` en **v23**. L'écosystème et ses parties prenantes évaluées,

@@ -70,6 +70,11 @@ import pg from 'pg';
 import type { Pool, PoolClient, PoolConfig } from 'pg';
 
 import type { ConfigurationBase } from '../config/index.js';
+import {
+  abandonnerTamponJournal,
+  ouvrirTamponJournal,
+  viderTamponJournal,
+} from '../auth/journal.js';
 
 /* =====================================================================
  *  Périmètre de session
@@ -338,10 +343,25 @@ export async function avecTransaction<T>(
   try {
     await client.query(options.lectureSeule === true ? 'begin read only' : 'begin');
     await appliquerPerimetre(client, perimetre);
+    // ⚠️ **LE TAMPON DU JOURNAL S'OUVRE ICI, ET IL SE VIDE APRÈS LE COMMIT.**
+    //
+    // Chaque entrée du journal d'audit produit aussi une ligne destinée à
+    // l'agrégateur de logs (`src/auth/journal.ts`). L'émettre au moment de
+    // l'écriture mettrait dans le SIEM un événement que le `rollback` efface
+    // ensuite de la base — une fausse accusation, et qui ne se corrige pas
+    // une fois partie. C'est le constat **Q-301**, déplacé d'un cran.
+    //
+    // Le tampon est donc attaché à CE client, vidé après le `commit`, jeté au
+    // `rollback`. Il est ouvert ici parce que c'est ici — et nulle part
+    // ailleurs — que les transactions commencent, ce qu'un contrôle statique
+    // du dépôt maintient vrai.
+    ouvrirTamponJournal(client);
     const resultat = await travail(client);
     await client.query('commit');
+    viderTamponJournal(client);
     return resultat;
   } catch (erreur) {
+    abandonnerTamponJournal(client);
     try {
       await client.query('rollback');
     } catch {

@@ -193,6 +193,169 @@ export function normaliserResume(texte: string): string {
   return compact.length > 2000 ? `${compact.slice(0, 1997)}...` : compact;
 }
 
+/* =====================================================================
+ *  LA SORTIE VERS UN AGRÉGATEUR DE LOGS
+ * =====================================================================
+ *
+ * Chaque entrée du journal d'audit est **aussi** écrite sur la sortie standard,
+ * en une ligne JSON. L'unité systemd dirige cette sortie vers `journald`
+ * (`StandardOutput=journal`, `SyslogIdentifier=cyber-grc`), d'où un `rsyslog`
+ * la pousse vers Graylog ou tout autre agrégateur — sans qu'une seule sortie
+ * réseau soit ouverte au service. Le `docs/GUIDE_EXPLOITATION.md` donne la
+ * recette.
+ *
+ * ── ⚠️ CE QUI PART, ET SURTOUT CE QUI NE PART PAS ──────────────────────
+ *
+ * La ligne porte QUI a fait QUOI, QUAND, sur QUEL objet. Elle **ne porte NI
+ * `valeurs_avant`, NI `valeurs_apres`**, et ce n'est pas une omission :
+ *
+ *   · le constat **Q-330** a rangé le CONTENU des enregistrements sous le
+ *     **droit d'export**, distinct de la lecture — feuilleter la consultation
+ *     reconstituait le jeu que le CSV refusait ;
+ *   · un flux continu vers un agrégateur n'a **ni identité, ni droit** : y
+ *     verser le différentiel serait un export permanent que personne n'a
+ *     autorisé, vers un système où le cloisonnement par filiale n'existe pas.
+ *
+ * Ce qui doit être exporté se demande par `GET /api/journal/export`, sous une
+ * identité, avec le droit d'export — et **cet export-là est lui-même journalisé**.
+ *
+ * ── ⚠️ ET LA COPIE NE PROUVE RIEN ──────────────────────────────────────
+ *
+ * L'inaltérabilité vient du chaînage par empreinte **dans PostgreSQL** et des
+ * quatre couches du `CONVENTIONS.md` §12. Une copie dans un agrégateur sert à
+ * CORRÉLER avec le reste du parc ; elle ne remplace pas le registre, et le
+ * guide d'exploitation le dit à l'endroit où on serait tenté de le croire.
+ *
+ * Détecter un TROU ou une retouche n'est pas le travail de cette copie : c'est
+ * celui de `GET /api/journal/verification`, qui rejoue le chaînage en base. La
+ * copie sert à corréler avec le reste du parc, en temps réel ; le registre sert
+ * de preuve.
+ *
+ * ── ⚠️ ET POURQUOI LA LIGNE NE PORTE NI `numero` NI `empreinte` ─────────
+ *
+ * Les deux sont posés par le déclencheur de chaînage, donc connus de la seule
+ * ligne écrite — et les relire exigerait `insert … returning`. **PostgreSQL
+ * applique la politique de LECTURE au `returning`** : une entrée transversale
+ * (démarrage, arrêt, refus d'autorisation, échec de connexion) n'a pas de
+ * filiale, donc personne ne peut la relire, et l'insertion échoue en `42501`
+ * « new row violates row-level security policy ».
+ *
+ * Mesuré, pas supposé — et la forme du défaut était la pire : ces appelants-là
+ * sont précisément ceux qui ont le droit d'envelopper `journaliser()` dans un
+ * `try` (leur événement n'emporte aucune écriture métier), si bien que l'échec
+ * était **avalé** et que le service démarrait en ne traçant plus son propre
+ * démarrage. C'est le banc — `test/journal/couverture.test.mjs` — qui l'a dit.
+ *
+ * Ouvrir la lecture du journal pour rendre le `returning` possible reviendrait
+ * à défaire la condition **E6** ; passer par une fonction `security definer`
+ * ouvrirait une seconde voie d'écriture dans le registre en ajout seul. Les
+ * deux coûtent plus que ce qu'ils apportent : la corrélation n'a pas besoin du
+ * numéro de chaîne. (`CONVENTIONS.md` §44.)
+ */
+
+/** Une entrée telle qu'elle part vers l'agrégateur. Jamais les différentiels. */
+export interface LigneSortieJournal {
+  /** Marqueur de flux : c'est par lui qu'un agrégateur route ces lignes. */
+  readonly flux: 'journal_audit';
+  /**
+   * Horloge du SERVEUR APPLICATIF, et non celle de la base.
+   *
+   * ⚠️ La base horodate l'entrée avec `clock_timestamp()`, et les deux valeurs
+   * peuvent différer de quelques millisecondes. Elles ne divergeront pas plus :
+   * les deux machines partagent la source NTP du `PLAN_SERVEUR` §1.7. Prendre
+   * l'horodatage de la base exigerait un `returning`, que la politique de
+   * lecture du journal refuse sur les entrées transversales — voir l'en-tête.
+   */
+  readonly heure: string;
+  readonly filiale_id: string | null;
+  readonly utilisateur: string | null;
+  readonly session_id: string | null;
+  readonly adresse_ip: string | null;
+  readonly action: string;
+  readonly entite_type: string | null;
+  readonly entite_id: string | null;
+  readonly resume: string;
+}
+
+export type SortieJournal = (ligne: LigneSortieJournal) => void;
+
+/**
+ * La sortie par défaut : une ligne JSON sur `stdout`, **indépendante du niveau
+ * de journalisation**.
+ *
+ * ⚠️ Elle n'emprunte PAS le logger du serveur, et c'est délibéré :
+ * `SERVEUR_NIVEAU_JOURNAL` peut valoir `warn`, et une entrée d'audit émise en
+ * `info` disparaîtrait alors **en silence** — un réglage d'exploitation ferait
+ * taire la piste d'audit sans que personne l'ait voulu ni le sache. C'est la
+ * classe de défaut que ce dépôt proscrit partout.
+ */
+function sortieParDefaut(ligne: LigneSortieJournal): void {
+  process.stdout.write(`${JSON.stringify(ligne)}\n`);
+}
+
+let sortieCourante: SortieJournal = sortieParDefaut;
+
+/**
+ * Remplace la sortie — pour les essais, ou pour un exploitant qui voudrait un
+ * autre transport. `null` rétablit la sortie par défaut.
+ *
+ * ⚠️ **Il n'y a pas de « désactiver ».** Couper la copie vers l'agrégateur se
+ * fait là où elle est consommée (une règle `rsyslog`), pas ici : un interrupteur
+ * dans le produit serait un réglage de plus à oublier, et son oubli ferait
+ * disparaître la piste d'audit du SIEM sans qu'aucun écran ne le dise.
+ */
+export function brancherSortieJournal(sortie: SortieJournal | null): void {
+  sortieCourante = sortie ?? sortieParDefaut;
+}
+
+/* ── Le tampon de transaction ──────────────────────────────────────────
+ *
+ * ⚠️ **UNE LIGNE NE PART QU'APRÈS LE COMMIT, et c'est la propriété centrale.**
+ *
+ * `journaliser()` écrit DANS la transaction de l'appelant. Si celle-ci échoue
+ * ensuite — une contrainte différée qui se déclenche au `commit`, une écriture
+ * métier qui casse après coup —, l'entrée disparaît de la base. Émettre la
+ * ligne tout de suite mettrait dans le SIEM un événement qui n'a jamais eu
+ * lieu : c'est exactement le constat **Q-301**, où le journal inscrivait de
+ * fausses accusations d'extraction, à ceci près que la copie, elle, ne se
+ * corrige pas.
+ *
+ * Le tampon est donc attaché au client par une `WeakMap` — ouverte par
+ * `avecTransaction`, vidée après le `commit`, jetée au `rollback`.
+ *
+ * ⚠️ Sans tampon ouvert, la ligne part **immédiatement**. C'est le meilleur
+ * effort pour un appelant qui gérerait sa propre transaction — il n'y en a
+ * aucun aujourd'hui, et `test/depot/transactions-par-la-porte.test.mjs` refuse
+ * qu'il en apparaisse un sans qu'on le décide.
+ */
+const tampons = new WeakMap<PoolClient, LigneSortieJournal[]>();
+
+export function ouvrirTamponJournal(client: PoolClient): void {
+  tampons.set(client, []);
+}
+
+/** Émet ce que la transaction a produit, puis referme le tampon. */
+export function viderTamponJournal(client: PoolClient): void {
+  const lignes = tampons.get(client);
+  tampons.delete(client);
+  if (lignes === undefined) return;
+  for (const ligne of lignes) {
+    // ⚠️ Une sortie qui échoue ne fait PAS échouer la transaction : elle est
+    // déjà validée. Le registre en base reste la source ; la copie est un
+    // confort de corrélation, et la perdre ne doit rien casser.
+    try {
+      sortieCourante(ligne);
+    } catch {
+      /* rien : la ligne est perdue, l'entrée en base ne l'est pas */
+    }
+  }
+}
+
+/** Jette ce que la transaction a produit : elle n'a pas eu lieu. */
+export function abandonnerTamponJournal(client: PoolClient): void {
+  tampons.delete(client);
+}
+
 /**
  * Écrit une entrée. La transaction appelante décide de son périmètre : c'est
  * elle qui fixe l'acteur (`grc.utilisateur`) et la filiale d'écriture.
@@ -206,6 +369,12 @@ export function normaliserResume(texte: string): string {
  * font.
  */
 export async function journaliser(client: PoolClient, entree: EntreeJournal): Promise<void> {
+  const resume = normaliserResume(entree.resume);
+  // ⚠️ **AUCUN `returning` ICI, ET C'EST UNE CONTRAINTE, PAS UN CHOIX DE STYLE.**
+  // PostgreSQL applique la politique de LECTURE au `returning` : une entrée
+  // transversale — démarrage, arrêt, refus d'autorisation — n'a pas de filiale,
+  // donc personne ne peut la relire, et l'insertion échoue en 42501. Voir
+  // l'en-tête de ce fichier et le `CONVENTIONS.md` §44.
   await client.query(
     `insert into "journal_audit"
             ("filiale_id", "utilisateur_libelle", "session_id", "adresse_ip",
@@ -220,11 +389,38 @@ export async function journaliser(client: PoolClient, entree: EntreeJournal): Pr
       entree.action,
       entree.entiteType ?? null,
       entree.entiteId ?? null,
-      normaliserResume(entree.resume),
+      resume,
       serialiser(entree.valeursAvant),
       serialiser(entree.valeursApres),
     ],
   );
+
+  const ligne: LigneSortieJournal = {
+    flux: 'journal_audit',
+    heure: new Date().toISOString(),
+    filiale_id: entree.filialeId ?? null,
+    utilisateur: entree.utilisateurLibelle ?? null,
+    session_id: entree.sessionId ?? null,
+    adresse_ip: entree.adresseIp ?? null,
+    action: entree.action,
+    entite_type: entree.entiteType ?? null,
+    entite_id: entree.entiteId ?? null,
+    resume,
+    // ⚠️ Ni `valeurs_avant`, ni `valeurs_apres` : voir l'en-tête de ce bloc.
+    //    Les y mettre serait un export permanent sans identité ni droit.
+  };
+
+  const tampon = tampons.get(client);
+  if (tampon === undefined) {
+    // Aucun tampon : l'appelant gère sa propre transaction. Meilleur effort.
+    try {
+      sortieCourante(ligne);
+    } catch {
+      /* rien */
+    }
+    return;
+  }
+  tampon.push(ligne);
 }
 
 /**

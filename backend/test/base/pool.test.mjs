@@ -42,13 +42,29 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
 import { erreurAttendue, ouvrirBaseEssai, perimetre } from '../aide/base.mjs';
-import {
-  avecTransaction,
-  creerPool,
-  ErreurPerimetre,
-  fermerPool,
-  PERIMETRE_SYSTEME,
-} from '../../src/db/pool.ts';
+import { moduleCompile } from '../aide/serveur.mjs';
+
+/* ── ⚠️ LE MODULE COMPILÉ, ET NON LE SOURCE TYPESCRIPT ────────────────────
+ *
+ * Cet essai importait `../../src/db/pool.ts` directement. C'était fidèle à son
+ * intention — *« le module réellement déployé, pas une recopie »* — et cela
+ * imposait à `src/db/pool.ts` une contrainte que rien ne disait : **ne
+ * value-importer aucun autre module de `src/`**, faute de quoi la résolution
+ * `.js` échoue sur un arbre non compilé.
+ *
+ * La contrainte s'est refermée le 19/09/2026, quand `avecTransaction` a dû
+ * ouvrir le tampon de la copie du journal vers l'agrégateur de logs : le
+ * fichier entier tombait sur `ERR_MODULE_NOT_FOUND`, et le banc l'a dit.
+ *
+ * On charge donc `dist/db/pool.js`, comme tout le reste du banc. Ce n'est pas un
+ * recul : c'est **littéralement le fichier que systemd exécute**, là où le
+ * source ne l'est jamais. L'intention du fichier est mieux servie, pas moins.
+ */
+let avecTransaction;
+let creerPool;
+let ErreurPerimetre;
+let fermerPool;
+let PERIMETRE_SYSTEME;
 
 /* =====================================================================
  *  Montage
@@ -115,6 +131,8 @@ let base;
 let pool;
 
 before(async () => {
+  ({ avecTransaction, creerPool, ErreurPerimetre, fermerPool, PERIMETRE_SYSTEME } =
+    await moduleCompile('db/pool.js'));
   base = await ouvrirBaseEssai(import.meta.url);
   pool = creerPool(configuration(base.nom));
   await semer();
