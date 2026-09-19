@@ -969,6 +969,29 @@ export async function semerJeuEssai(base, client, options = {}) {
              where id = 'ECHL-${s}'`,
         );
 
+        // ── La quantification financière d'un risque (migration `050`, action 25.4)
+        //
+        // ⚠️ **Une par filiale, et le triplet est COMPLET** : la contrainte refuse
+        // d'écrire deux valeurs sur trois, et un semis à moitié rempli ferait échouer
+        // toutes les familles qui appellent `semerJeuEssai` — avec un message de
+        // contrainte, pas avec celui du semis.
+        //
+        // ⚠️ **Les pertes secondaires sont estimées**, contrairement à ce que fait le
+        // jeu de découverte : le semis du banc ne doit pas imposer aux familles qui
+        // s'en servent un montant qui serait un PLANCHER. Celles qui mesurent le
+        // plancher le posent elles-mêmes (`test/quantification/`).
+        await c.query(
+          `insert into risque_quantification
+               (id, filiale_id, risque_id, devise,
+                frequence_min, frequence_probable, frequence_max,
+                perte_min, perte_probable, perte_max,
+                secondaire_min, secondaire_probable, secondaire_max,
+                hypotheses, evaluee_le)
+           values ('FAIR-${s}', $1, 'RISK-${s}', 'EUR', 1, 1, 1, 1000, 1000, 1000,
+                   200, 200, 200, 'Semis du banc : un événement par an.', date '2026-03-01')`,
+          f,
+        );
+
         // La file de purge du magasin (migration `017`). Elle est VIDE en régime
         // normal — c'est une file d'attente, pas un registre —, et c'est
         // précisément pourquoi elle est semée : sans une ligne par filiale, le

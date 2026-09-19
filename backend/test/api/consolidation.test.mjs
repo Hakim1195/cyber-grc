@@ -700,3 +700,135 @@ describe('Exposition consolidée : deux échelles ne s’additionnent pas (actio
     assert.notEqual(siteA.total.risques.expositionResiduelle, null);
   });
 });
+
+/* =====================================================================
+ *  La quantification FAIR — la SEULE grandeur qui s'additionne vraiment
+ * ===================================================================== */
+
+describe('Perte annualisée consolidée : elle s’additionne, sauf entre deux devises (action 25.4)', () => {
+  /**
+   * ⚠️ **C'est le pendant exact du bloc précédent, et l'inverse de sa conclusion.**
+   *
+   * Le refus d'additionner deux expositions ordinales est honnête, et il laisse sans
+   * réponse la seule question qu'un comité de direction pose : *« combien ça nous
+   * coûte ? »*. Une somme d'argent, à devise égale, veut toujours dire quelque chose —
+   * c'est la raison d'être de FAIR, et c'est ce que ce bloc mesure.
+   *
+   * Les deux moitiés sont nécessaires : si l'on ne mesurait que le refus, on aurait pu
+   * rendre `null` partout et passer au vert ; si l'on ne mesurait que la somme, on
+   * aurait pu additionner des euros et des dollars.
+   */
+  before(async () => {
+    // ⚠️ **LA MATIÈRE D'ABORD** — motif du constat **Q-210**. Sans ces deux
+    // quantifications, les essais ci-dessous passeraient au vert parce que rien n'est
+    // quantifié, c'est-à-dire pour une raison étrangère à ce qu'ils prétendent mesurer.
+    for (const [utilisateur, filiale, risque] of [
+      ['rssi-toulouse', FILIALE_A, 'RISK-SOCLE-A'],
+      ['rssi-allemagne', FILIALE_B, 'RISK-SOCLE-B'],
+    ]) {
+      await base.avecPerimetre(
+        applicatif,
+        perimetre(utilisateur, filiale, [filiale]),
+        async (c) => {
+          await c.query(
+            `insert into risque_quantification
+                 (filiale_id, risque_id, devise,
+                  frequence_min, frequence_probable, frequence_max,
+                  perte_min, perte_probable, perte_max,
+                  secondaire_min, secondaire_probable, secondaire_max,
+                  hypotheses, evaluee_le)
+             values ($1, $2, 'EUR', 1, 1, 1, 1000, 1000, 1000, 0, 0, 0,
+                     'Témoin de consolidation.', current_date)`,
+            [filiale, risque],
+          );
+        },
+        { annuler: false },
+      );
+    }
+  });
+
+  test('à devise égale, la somme est rendue — et c’est le propos du lot', async () => {
+    const groupe = await consolider(sessionDe('direction', [FILIALE_A, FILIALE_B]));
+
+    // ⚠️ **L'attendu se DÉRIVE des parts, il ne se recopie pas.** Le semis commun
+    // quantifie déjà un risque par filiale, et un chiffre écrit en dur ici mesurerait
+    // le semis plutôt que la somme — puis se mettrait à rougir le jour où le semis
+    // gagne une ligne, pour une raison étrangère à ce que cet essai annonce. C'est la
+    // propriété qui compte : *le total du Groupe EST la somme de ses filiales*.
+    const parts = groupe.filiales.map((f) => f.indicateurs);
+    const attendu = parts.reduce((somme, p) => somme + p.risques.perteAnnualisee, 0);
+
+    assert.ok(attendu > 0, 'Le semis doit porter de la matière, sans quoi l’essai est creux.');
+    assert.equal(
+      groupe.total.risques.perteAnnualisee,
+      attendu,
+      'C’est la seule grandeur du produit qui traverse les filiales sans convention ' +
+        'préalable : à devise égale, elle s’additionne.',
+    );
+    assert.equal(
+      groupe.total.risques.quantifies,
+      parts.reduce((n, p) => n + p.risques.quantifies, 0),
+    );
+    assert.deepEqual(groupe.total.risques.devises, ['EUR']);
+    // ⚠️ Les pertes secondaires sont estimées (à zéro, ce qui est une ESTIMATION et non
+    // une absence) : le total n'est pas un plancher, et l'écran n'écrit pas « ≥ ».
+    assert.equal(groupe.total.risques.perteMinoree, false);
+  });
+
+  test('⚠️ et l’exposition ORDINALE du même périmètre, elle, reste refusée', async () => {
+    // ⚠️ **Les deux cellules du tableau disent des choses différentes du même
+    // périmètre, et c'est voulu.** Elles se lisent côte à côte : « — » pour
+    // l'exposition, un montant pour la perte annualisée. Un lecteur qui verrait les
+    // deux vides croirait à une panne ; c'est le contraste qui enseigne pourquoi le
+    // lot 25.4 existe.
+    const groupe = await consolider(sessionDe('direction', [FILIALE_A, FILIALE_B]));
+    assert.equal(groupe.total.risques.expositionResiduelle, null);
+    assert.notEqual(groupe.total.risques.perteAnnualisee, null);
+  });
+
+  test('dès que DEUX devises coexistent, la somme DISPARAÎT — et se dit', async () => {
+    await base.avecPerimetre(
+      applicatif,
+      perimetre('rssi-allemagne', FILIALE_B, [FILIALE_B]),
+      async (c) => {
+        await c.query(
+          `insert into risques (id, filiale_id, nom)
+               values ('RISK-FAIR-USD', $1, 'Quantifié en dollars')`,
+          [FILIALE_B],
+        );
+        await c.query(
+          `insert into risque_quantification
+               (filiale_id, risque_id, devise,
+                frequence_min, frequence_probable, frequence_max,
+                perte_min, perte_probable, perte_max, hypotheses, evaluee_le)
+           values ($1, 'RISK-FAIR-USD', 'USD', 1, 1, 1, 500, 500, 500,
+                   'Contrat libellé en dollars.', current_date)`,
+          [FILIALE_B],
+        );
+      },
+      { annuler: false },
+    );
+
+    const groupe = await consolider(sessionDe('direction', [FILIALE_A, FILIALE_B]));
+    assert.equal(
+      groupe.total.risques.perteAnnualisee,
+      null,
+      'Additionner des euros et des dollars donne un nombre, jamais une somme.',
+    );
+    assert.deepEqual(
+      groupe.total.risques.devises,
+      ['EUR', 'USD'],
+      'La cause doit être LISIBLE — l’écran en tire sa phrase.',
+    );
+
+    // ⚠️ Et la filiale A, qui n'a qu'une devise, garde SON montant : le refus se pose
+    // là où l'incomparabilité est, pas partout par précaution.
+    const siteA = await consolider(sessionDe('rssi-toulouse', [FILIALE_A]));
+    assert.ok(
+      siteA.total.risques.perteAnnualisee > 0,
+      'Une filiale qui ne quantifie qu’en euros garde son montant : c’est la moitié ' +
+        'sans laquelle on aurait pu rendre « null » partout et passer au vert.',
+    );
+    assert.deepEqual(siteA.total.risques.devises, ['EUR']);
+  });
+});

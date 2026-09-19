@@ -4344,6 +4344,18 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // disparition ne casserait RIEN de visible : le moteur d'import CRÉE sans mettre à
       // jour, et un second passage du même classeur doublerait les réponses **en
       // silence**, rendant faux tous les comptes de la fiche fournisseur.
+      // CINQUANTE-CINQUIÈME, apporté par `050_la_quantification_financiere.sql` — lot
+      // L25, action 25.4. Il ÉPROUVE les deux dérivations sur treize cas témoins
+      // (§39.1), dont six tiennent à eux seuls le critère : un triplet incomplet ne
+      // rend RIEN — pas la moyenne de ce qui est saisi —, une perte secondaire absente
+      // ne vaut pas zéro mais fait un PLANCHER, et la pondération PERT est vérifiée sur
+      // le cas qui la distingue d'une moyenne arithmétique (1, 2, 9 → 3 et non 4).
+      //
+      // ⚠️ Il mesure aussi que les deux colonnes dérivées sont ENGENDRÉES : une colonne
+      // ordinaire du même nom serait remplie par la couche d'écriture à partir de ce que
+      // le navigateur envoie, et le montant cesserait d'être celui que les hypothèses
+      // produisent — sans que rien ne le dise, puisqu'il aurait toujours l'air calculé.
+      'quantification_fair',
       'questionnaires_tiers',
       'rattachements_pieces',
       'references_portee',

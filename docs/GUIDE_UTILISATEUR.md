@@ -193,6 +193,47 @@ Quatre choses à savoir :
    filiales continuent de coter dessus, et la vision consolidée sait que vos chiffres ont
    été produits autrement.
 
+### Chiffrer un risque en euros — la quantification FAIR
+
+Sous la cotation F × G × M, la fiche d'un risque porte un panneau **Quantification
+financière (FAIR)**. Il est **facultatif**, et il doit le rester : on ne quantifie que là
+où l'enjeu le mérite.
+
+La méthode tient en deux estimations, chacune saisie par un **triplet** — minimum, plus
+probable, maximum — parce qu'une estimation honnête est un intervalle, pas un chiffre :
+
+1. **la fréquence** : combien de fois par an l'événement survient. *Une fois tous les cinq
+   ans s'écrit 0,2.*
+2. **la perte primaire** : ce que coûte **un** événement, directement — remise en service,
+   heures perdues, matériel remplacé.
+
+Et une troisième, facultative : **la perte secondaire** — amende, litige, clients perdus.
+Pour un risque relevant du RGPD, de NIS2 ou de DORA, c'est souvent le terme le plus lourd.
+
+**Quatre choses à savoir, et elles expliquent ce que l'écran refuse de faire :**
+
+1. **Les hypothèses sont obligatoires.** Sans elles, un montant n'est pas une estimation :
+   c'est une opinion avec une virgule — et c'est celui-là qu'on cite en comité de
+   direction. Écrivez d'où viennent vos chiffres ; c'est la première chose qu'un auditeur
+   lit.
+2. **Un triplet se saisit en entier, ou pas du tout.** Deux valeurs sur trois donneraient
+   une moyenne, et ce nombre aurait l'air mesuré. L'outil refuse d'enregistrer, et il le
+   dit.
+3. **Un montant précédé de « ≥ » est un plancher.** Il signifie que les pertes secondaires
+   n'ont pas été estimées : le total ne porte que la perte primaire. Laisser ce triplet
+   vide est un choix légitime — le présenter comme un total ne le serait pas.
+4. **Le montant n'apparaît qu'après l'enregistrement.** Il est calculé par le serveur, et
+   c'est ce même calcul qui alimente la vision Groupe : il n'y a donc jamais deux chiffres
+   pour une même chose.
+
+**Ce que la vision Groupe en fait.** La colonne *Perte annualisée* additionne les montants
+du périmètre — c'est la **seule** grandeur du tableau qui s'additionne vraiment. La colonne
+*Exposition*, à sa gauche, est ordinale : l'outil refuse de la sommer dès que les filiales
+n'ont pas coté sur la même échelle.
+
+⚠️ **Et il refuse d'additionner deux devises.** Un euro et un dollar font un nombre, jamais
+une somme. La cellule affiche alors « — », et le détail dit lesquelles coexistent.
+
 ### Importer des données
 
 L'écran **Imports** couvre les 23 entités. Trois propriétés à connaître :

@@ -530,6 +530,37 @@ var GroupeModule = (function () {
                   return '<span class="grp-vide" title="' + esc(motif) + '"'
                        + ' aria-label="' + esc(motif) + '">—</span>';
               } },
+            { cel: "perte", titre: "Perte annualisée",
+              aide: "Somme des pertes annualisées FAIR (action 25.4), en monnaie. " +
+                    "C'est la SEULE grandeur de ce tableau qui s'additionne vraiment " +
+                    "entre filiales : l'exposition, à gauche, est ordinale et le produit " +
+                    "refuse de la sommer dès que les échelles diffèrent. Un montant " +
+                    "précédé de « ≥ » est un PLANCHER — au moins un risque du périmètre " +
+                    "n'a pas de pertes secondaires estimées (amende, litige), et " +
+                    "l'afficher comme un total serait rassurant à tort. « — » lorsque " +
+                    "rien n'est quantifié, ou lorsque deux devises coexistent : on " +
+                    "n'additionne pas des euros et des dollars.",
+              // ⚠️ Même règle qu'à la cellule « Exposition » : **le « — » dit sa cause**.
+              //    « personne n'a quantifié » et « deux devises dans le périmètre » sont
+              //    deux faits différents, et les confondre est la classe Q-201 / Q-207.
+              rendre: (ind) => {
+                  const b = ind && ind.risques;
+                  if (b === null || b === undefined) return cellulaireNonCommunique();
+                  const montant = UI.montantFair(b.perteAnnualisee, (b.devises || [])[0],
+                                                 b.perteMinoree === true ? false : true);
+                  // ⚠️ PAS d'`esc()` : `UI.montantFair` rend du balisage DÉJÀ échappé,
+                  // comme `UI.badge`. L'échapper deux fois afficherait « &#8805; ».
+                  if (montant !== null) return montant;
+                  const devises = Array.isArray(b.devises) ? b.devises : [];
+                  const motif = devises.length > 1
+                      ? "Les filiales de ce périmètre quantifient en " + devises.length
+                        + " devises différentes (" + devises.join(", ") + ") : additionner "
+                        + "des montants qui ne sont pas dans la même monnaie donnerait un "
+                        + "nombre, jamais une somme."
+                      : "Aucun risque quantifié : un coût inconnu n'est pas un coût nul.";
+                  return '<span class="grp-vide" title="' + esc(motif) + '"'
+                       + ' aria-label="' + esc(motif) + '">—</span>';
+              } },
             { cel: "actions", titre: "Actions",
               aide: "Plan d'actions de la filiale, toutes échéances confondues.",
               rendre: (ind) => valeur(ind.actions, (b) => nombre(b.total)) },

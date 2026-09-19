@@ -65,10 +65,10 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 24`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 25`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
-côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v24**. Elle est
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v25**. Elle est
 indépendante du numéro des migrations SQL.
 
 > ⚠️ **Ce paragraphe a annoncé « v12 » pendant quatre montées de version**, du 04/09 au
@@ -286,6 +286,47 @@ indépendante du numéro des migrations SQL.
 >     ici refuserait la reprise d'un export produit sur une graduation plus large. C'est
 >     l'arbitrage de `risques.f_frequence`, reconduit pour la même raison.
 >
+> v25 (lot L25, action 25.4) : ajout de **`risque_quantification`** — la quantification
+>     financière d'un risque, selon FAIR. **Cloisonnée**, une par risque au plus, et
+>     facultative : la plupart des risques n'en portent pas.
+>
+>     La fréquence d'un événement de perte et sa magnitude s'estiment chacune par un
+>     **triplet** `(minimum, plus probable, maximum)`, dont la moyenne PERT —
+>     `(min + 4 × probable + max) / 6` — est celle du domaine. La **perte annualisée** est
+>     le produit des deux moyennes, augmenté des **pertes secondaires** (amende, litige,
+>     clients perdus) quand elles sont estimées.
+>
+>     ⚠️ **UN TRIPLET INCOMPLET NE REND RIEN**, et le refus est posé à deux étages : une
+>     contrainte refuse d'écrire un triplet à deux valeurs, et la dérivation rend `null`
+>     sur tout argument nul. Deux valeurs sur trois donneraient un nombre qui AURAIT L'AIR
+>     mesuré — et c'est celui-là qu'on cite en comité de direction. C'est le critère 25.4
+>     mot pour mot : *pas d'estimation par défaut*.
+>
+>     ⚠️ **DES PERTES SECONDAIRES ABSENTES NE VALENT PAS ZÉRO.** Le montant ne porte alors
+>     que la perte primaire : c'est un **PLANCHER**, que `_secondaireEstimee` marque et que
+>     l'écran annonce par un « ≥ ». Écrire `coalesce(secondaire, 0)` aurait toujours abouti
+>     — et sous-estimé en silence, c'est-à-dire produit l'estimation par défaut dans le
+>     sens rassurant, le pire des deux.
+>
+>     ⚠️ **NI `perte_annualisee`, NI `secondaire_estimee` NE VOYAGENT dans le fichier
+>     d'échange.** Ce sont des colonnes **engendrées** : les faire voyager les rendrait
+>     reprenables, et un fichier bricolé porterait un montant que ses propres hypothèses ne
+>     produisent pas. Elles sont servies au navigateur sous `_perteAnnualisee` et
+>     `_secondaireEstimee` — le souligné initial, réservé à ce que le serveur ajoute, est
+>     écarté à l'entrée **par le préfixe**.
+>
+>     ⚠️ **LE PALIER NE DEVINE RIEN, et la tentation était plus grande qu'au palier
+>     précédent** : le produit connaît F, G et M de chaque risque, et une correspondance
+>     « gravité 4 → un million d'euros » aurait l'air d'un service rendu. La gravité 4
+>     d'une filiale de trois cents personnes et celle d'un groupe de vingt mille ne
+>     désignent pas la même somme — et c'est précisément pour cela que l'action 25.4
+>     existe : **la cotation ordinale ne se convertit pas en monnaie**.
+>
+>     ⚠️ **Et c'est la SEULE grandeur du produit qui s'additionne entre filiales.** La
+>     consolidation somme les pertes annualisées d'un périmètre, et rend `null` dès que
+>     **deux devises** y coexistent — même mécanique qu'aux échelles de la v24, pour la
+>     même raison.
+>
 >     ⚠️ **« Accepter » exige sa justification**, et c'est la seule des quatre décisions :
 >     les trois autres produisent un travail que quelqu'un verra, accepter ne produit rien
 >     — sans sa phrase, la décision est indistinguable d'un oubli.
@@ -438,6 +479,7 @@ Conséquences pratiques :
 | `ebios_scenarios_operationnels` | `ebios_scenarios_operationnels` | `EBSO` |
 | **`echelles`** | **`echelles`** — ⚠️ MIXTE : `filiale_id` nul = socle du **Groupe**. Une échelle publiée est **figée** : on en publie une **révision** | `ECHL` |
 | **`echelle_niveaux`** | **`echelle_niveaux`** — ⚠️ MIXTE, portée tenue par un **déclencheur** et non par une clé composite (`MATCH SIMPLE` ne contrôle rien quand `filiale_id` est nul) | `ECHN` |
+| **`risque_quantification`** | **`risque_quantification`** — ⚠️ **CLOISONNÉE**, à la différence des deux échelles : un montant de perte dépend de la filiale, et une quantification de portée Groupe serait lisible de toutes. Deux champs **dérivés** servis en lecture seule, `_perteAnnualisee` et `_secondaireEstimee` | `FAIR` |
 
 **La scission des mesures**, en une phrase : l'entité unique du modèle navigateur
 portait deux choses de nature différente — la **définition** du contrôle (la même

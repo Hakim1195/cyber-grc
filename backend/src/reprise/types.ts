@@ -113,7 +113,9 @@ export type NomCollection =
   // clé étrangère, classe du constat Q-194 (« le produit ne sait pas relire sa propre
   // sauvegarde »).
   | 'echelles'
-  | 'echelle_niveaux';
+  | 'echelle_niveaux'
+  // v25 — la quantification financière d'un risque (action 25.4).
+  | 'risque_quantification';
 
 /**
  * Charge utile normalisée en v12.

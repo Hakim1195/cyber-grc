@@ -106,7 +106,13 @@ export type NomEntite =
   // (« configurables par filiale »). ⚠️ L'ordre suit la clé étrangère : l'échelle avant
   // ses niveaux.
   | 'echelles'
-  | 'echelle_niveaux';
+  | 'echelle_niveaux'
+  // v25 — la quantification financière d'un risque (lot L25, action 25.4).
+  // ⚠️ CLOISONNÉE, à la différence des deux échelles ci-dessus : un montant de perte
+  // dépend de la filiale, et une quantification de portée Groupe serait lisible de
+  // toutes. ⚠️ Elle vient APRÈS `risques` dans l'ordre des clés étrangères, ce dont le
+  // tri par le graphe se charge — cette liste n'est pas un ordre d'insertion.
+  | 'risque_quantification';
 
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;
@@ -346,6 +352,27 @@ export interface DescriptionEntite {
   readonly seconde?: Repartition;
   /** Colonnes de la table principale que l'API n'expose pas, et pourquoi. */
   readonly colonnesReservees?: Readonly<Record<string, string>>;
+  /**
+   * Colonnes **ENGENDRÉES** servies en lecture seule, sous un nom à souligné
+   * initial (lot L25, action 25.4).
+   *
+   * ⚠️ **Pourquoi un mécanisme plutôt qu'un champ ordinaire.** Une colonne
+   * `generated always as (…) stored` est exclue de l'exposition par
+   * construction : elle n'est ni écrite ni lue par la couche générique, ce qui
+   * est juste pour l'écriture et faux pour la lecture. Sans ce mécanisme, la
+   * seule issue aurait été de **recalculer la dérivation dans le navigateur** —
+   * deux points de mesure de la même grandeur, qui divergent en silence le jour
+   * où l'un des deux change (constat **Q-219**).
+   *
+   * ⚠️ **Le souligné initial n'est pas décoratif** : c'est la forme réservée à
+   * ce que le SERVEUR ajoute (`_version`, `_porteeGroupe`, `_provenance`). La
+   * reprise l'écarte **par le préfixe**, jamais par une liste de noms, et
+   * `f_verifier_champs_structurels()` refuse qu'une colonne le porte. Un champ
+   * dérivé ne peut donc pas entrer depuis le client, même envoyé exprès.
+   *
+   * Clé : nom de la colonne. Valeur : le champ servi, et la raison.
+   */
+  readonly colonnesDerivees?: Readonly<Record<string, { readonly champ: string; readonly raison: string }>>;
 }
 
 /* =====================================================================

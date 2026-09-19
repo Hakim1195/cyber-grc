@@ -25,7 +25,7 @@
  *
  * ── La couverture est RÉCLAMÉE, pas supposée ─────────────────────────────────
  *
- * Un dernier test balaie les **41 entités du registre** et vérifie que chacune se lit,
+ * Un dernier test balaie les **42 entités du registre** et vérifie que chacune se lit,
  * se décrit, et porte un préfixe d'identifiant. Sans lui, ce fichier resterait un
  * échantillon dont personne ne saurait dire ce qu'il laisse de côté — le reproche
  * exact que la porte a formulé.
@@ -315,7 +315,7 @@ describe('Une entité par famille de différence', () => {
  *  §2 — La couverture, réclamée
  * ===================================================================== */
 
-describe('Les 41 entités du registre, sans échantillonnage', () => {
+describe('Les 42 entités du registre, sans échantillonnage', () => {
   test('chaque entité du modèle est décrite, chargée, et porte un préfixe', async () => {
     const modele = (await serveur.appeler('GET', '/api/modele')).corps;
     const jeu = await donnees();
@@ -333,7 +333,7 @@ describe('Les 41 entités du registre, sans échantillonnage', () => {
     // y entrer lui donne le round-trip et l'import sans qu'un greffon ait à les réécrire.
     // Ce que le greffon `src/campagnes/` ajoute est ce que la couche générique ne peut pas
     // faire : compter l'avancement, et convoquer une AUTRE filiale que la sienne.
-    assert.equal(noms.length, 41);
+    assert.equal(noms.length, 42);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -436,6 +436,20 @@ describe('Les 41 entités du registre, sans échantillonnage', () => {
         besoin: 'disponibilite',
       }),
       ebios_sources_risque: (crees) => ({ etude_id: crees.ebios_etudes }),
+      // ── Lot L25, action 25.4 : la quantification financière ──────────────
+      //
+      // ⚠️ **Un risque RÉEL, et un risque QUI N'EN A PAS DÉJÀ UNE.** La clé est
+      // composite `(risque_id, filiale_id)` — une valeur inventée rend 409, le
+      // comportement voulu : on ne quantifie pas un risque qui n'existe pas —, et
+      // l'unicité est « une quantification par risque », de sorte que viser le
+      // risque du semis rendrait 409 lui aussi. D'où `RISK2-…`, le second risque
+      // du jeu d'essai, que le semis laisse sans quantification exprès.
+      //
+      // ⚠️ Les triplets ne figurent PAS ici : ils ne sont pas obligatoires, et
+      // c'est le propos de l'action — une quantification peut n'être qu'un cadre
+      // d'hypothèses en attente de chiffres. Ce que le schéma exige, lui, ce sont
+      // les hypothèses et la date, que le modèle marque « obligatoire ».
+      risque_quantification: { risque_id: 'RISK2-A' },
       // ── Lot L25, ateliers 3 à 5 (migration `047`) ────────────────────────
       //
       // ⚠️ **Le couple source / objectif doit être RETENU** pour qu'un chemin

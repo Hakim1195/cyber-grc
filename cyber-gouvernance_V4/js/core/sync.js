@@ -337,6 +337,47 @@ const Sync = (() => {
     }
 
     // Aligne l'instantané de référence d'un seul enregistrement, après écriture.
+    /**
+     * Adopte les champs que **le serveur AJOUTE** et que le client ne peut pas
+     * produire — repérés **par le préfixe souligné**, jamais par une liste.
+     *
+     * ⚠️ **TROUVÉ AU NAVIGATEUR, SUR LA RECETTE, APRÈS UN BANC ENTIÈREMENT VERT.**
+     * On enregistre une quantification financière complète, et le panneau affiche
+     * « estimation incomplète : le montant n'est pas calculé ». Le montant existe
+     * pourtant : c'est une colonne ENGENDRÉE, la base l'a calculé, et le serveur
+     * l'a renvoyé dans sa réponse — mais cette réponse n'était lue que pour deux
+     * choses, l'identifiant définitif et le numéro de version. Tout le reste
+     * était **jeté**, et l'écran continuait de lire un enregistrement en mémoire
+     * qui ne portait pas le champ.
+     *
+     * Le défaut ne vivait ni dans la base, ni dans la route, ni dans l'écran :
+     * il vivait dans ce que cette couche-ci **choisissait de ne pas garder**. Et
+     * il ne pouvait apparaître qu'avec la première entité dont un champ AFFICHÉ
+     * est calculé par la base — auparavant, tout ce que l'écran montrait, il
+     * l'avait lui-même écrit.
+     *
+     * ⚠️ **Par le PRÉFIXE, et c'est ce qui ferme la classe.** Une liste de noms
+     * aurait rattrapé `_perteAnnualisee` et manqué le prochain champ dérivé, en
+     * silence — *une liste écrite à la main est une omission qui attend*
+     * (`CLAUDE.md` §3). Le souligné initial est déjà, dans tout le produit, la
+     * marque de ce que le serveur ajoute : `_version`, `_porteeGroupe`,
+     * `_provenance`. Il suffit de le lire.
+     *
+     * ⚠️ Les deux numéros de version sont **exclus** : ils ne vivent pas dans
+     * l'enregistrement mais dans `versions`, précisément pour qu'un module qui
+     * reconstruit un objet ne puisse pas perdre la version au passage
+     * (`docs/DATA_MODEL.md` §1.4). Les adopter ici les remettrait dans `data`,
+     * d'où ils repartiraient dans le fichier d'échange.
+     */
+    function adopterChampsServeur(enregistrement, rendu) {
+        if (!rendu || typeof rendu !== "object" || !enregistrement) return;
+        Object.keys(rendu).forEach(function (cle) {
+            if (cle.charAt(0) !== "_") return;
+            if (cle === "_version" || cle === "_versionMiseEnOeuvre") return;
+            enregistrement[cle] = rendu[cle];
+        });
+    }
+
     function alignerReference(collection, id, enregistrement) {
         reference[collection].set(id, canonique(enregistrement));
         valeurs[collection].set(id, copie(enregistrement));
@@ -1363,6 +1404,7 @@ const Sync = (() => {
                 v: (rendu && typeof rendu._version === "number") ? rendu._version : 1,
                 vmo: (rendu && typeof rendu._versionMiseEnOeuvre === "number") ? rendu._versionMiseEnOeuvre : null
             });
+            adopterChampsServeur(enregistrement, rendu);
             alignerReference(collection, idFinal, enregistrement);
             return true;
         } catch (e) {
@@ -1409,6 +1451,7 @@ const Sync = (() => {
                     ? (typeof rendu._versionMiseEnOeuvre === "number" ? rendu._versionMiseEnOeuvre : null)
                     : v.vmo
             });
+            adopterChampsServeur(enregistrement, rendu);
             alignerReference(collection, id, enregistrement);
             return true;
         } catch (e) {

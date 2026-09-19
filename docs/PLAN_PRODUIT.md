@@ -442,7 +442,7 @@ regarde ; elle ne demande pas.
 
 ---
 
-### L25 — Méthode de risque : EBIOS RM et quantification 🟢 — 🟡 **ENTAMÉ le 18/09/2026**
+### L25 — Méthode de risque : EBIOS RM et quantification ✅ **LIVRÉ le 19/09/2026**
 
 **Pourquoi.** Ticket d'entrée français. ⚠️ **Et le lot le plus risqué du plan** : il touche
 la méthode, donc les données déjà saisies.
@@ -496,14 +496,19 @@ la méthode, donc les données déjà saisies.
 > relire*. Classe des trois conflits de la `041` et des constats Q-194 / Q-284, tranchée
 > pareil : **restaurer une sauvegarde gagne**. Trouvé par le banc, pas par une relecture.
 >
-> **Reste** : **25.4**.
+> ✅ **LE LOT L25 EST COMPLET depuis le 19/09/2026.** L'action 25.4 — la quantification
+> financière — est la dernière, et elle répond à la limite que 25.3 venait de rendre
+> visible : la consolidation refuse d'additionner deux expositions ordinales, et une
+> somme d'argent, à devise égale, s'additionne toujours. **C'est la seule grandeur du
+> produit qui traverse les filiales sans convention préalable** — et la consolidation
+> refuse là aussi dès que deux devises coexistent.
 
 | Réf | Action | Critère d'acceptation |
 |---|---|---|
 | **25.1** | **Les cinq ateliers EBIOS RM** — socle de sécurité, sources de risque, scénarios stratégiques, scénarios opérationnels, traitement | ⚠️ **En ADDITION, jamais en remplacement.** Les risques cotés en F×G×M restent valides et lisibles. Une migration qui les réinterpréterait réattribuerait **en silence** des cotations produites en audit — c'est exactement le motif qui a fait refuser la renumérotation ANSSI (**Q-192**) |
 | **25.2** | **Écosystème et parties prenantes** — la cartographie de dépendances existante est **réemployée** comme support de l'atelier 3 | Aucun graphe neuf : le module Cartographie porte déjà les dépendances typées |
 | ~~**25.3**~~ | ~~**Échelles configurables par filiale**~~ ✅ **LIVRÉE le 19/09/2026** (migration `049`) | ⚠️ Une échelle modifiée après coup rend les cotations existantes incomparables : le changement est **versionné et daté**, et les cotations portent l'échelle qui les a produites. **Tenu** : une échelle publiée est FIGÉE (déclencheur, pas consigne) — on en publie une révision ; six colonnes portent l'échelle là où la valeur est ; et `null` se lit « non tracée », jamais « celle du Groupe » |
-| **25.4** | **Quantification financière (FAIR)** — optionnelle, par risque | Une valeur en euros n'est affichée **que** si ses hypothèses sont saisies. Pas d'estimation par défaut : un chiffre inventé en comité de direction est pire que pas de chiffre. ⚠️ **ET UN PIÈGE MESURÉ LE 19/09, À LIRE AVANT D'ÉCRIRE LA MIGRATION** : le garde-fou qui tient le « EN ADDITION » de tout le lot — `f_verifier_ebios_cadrage()`, qui refuse qu'un déclencheur écrive dans les cinq colonnes de cotation de `risques` — ne balaie que les tables dont le nom commence par `ebios_` (`where c.relname like 'ebios\_%'`). **Une table de quantification nommée autrement y échapperait**, et la garantie centrale du lot cesserait de s'appliquer **sans que rien ne le dise**. Deux issues : nommer la table `ebios_quantification`, ou élargir le garde-fou à ce qu'il MESURE plutôt qu'au nom qu'il reconnaît (`CONVENTIONS.md` §39) — la seconde est la bonne, et c'est la même leçon que les constats Q-312 et Q-313 |
+| ~~**25.4**~~ | ~~**Quantification financière (FAIR)**~~ ✅ **LIVRÉE le 19/09/2026** (migration `050`) | **Tenu**, et à deux étages : une contrainte refuse d'écrire un triplet à deux valeurs, et la dérivation rend `null` sur tout argument nul — *deux valeurs sur trois donneraient un nombre qui aurait l'air mesuré*. ⚠️ Et des pertes secondaires absentes NE VALENT PAS ZÉRO : le montant devient un **PLANCHER**, marqué par une colonne engendrée et affiché « ≥ ». ⚠️ **Le piège annoncé était RÉEL et il a été fermé par la seconde issue** : `f_verifier_ebios_cadrage()` balaie désormais le CATALOGUE ENTIER. Mesuré — la rédaction d'origine rend **0 anomalie** sur le déclencheur fautif que la rédaction élargie attrape.
 | **25.5** | **Base de connaissances menaces / vulnérabilités types** | Alimente les ateliers 2 et 4. Portée Groupe, comme `risque_catalogue` |
 
 **Lignes comblées** : #9 · #10 · #11 · #13 · partiellement #8.

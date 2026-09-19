@@ -10,7 +10,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 18/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2231 essais, 2231 passés, 0 échec**, **relevé famille par
+> **2257 essais, 2257 passés, 0 échec**, **relevé famille par
 > famille** (trente-deux familles, dont `echelles` qui naît avec l'action 25.3),
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
@@ -55,6 +55,95 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### La quantification financière d'un risque — L25, action 25.4 (19/09/2026)
+
+**Migration `050`, schéma `data` en v25**, panneau **FAIR** sur la fiche de risque, et une
+colonne de plus à la vision Groupe. *L'action qui manquait à L25, et le lot est complet.*
+
+**Le problème que l'action 25.3 venait de rendre visible.** Depuis les échelles, la
+consolidation **refuse** d'additionner deux expositions cotées sur des graduations
+différentes. C'est honnête, et cela laisse sans réponse la seule question qu'un comité de
+direction pose : *« combien ça nous coûte ? »* Une somme d'argent, à devise égale,
+s'additionne toujours — c'est la raison d'être de FAIR.
+
+**La méthode, et ce qu'elle refuse.** La fréquence d'un événement de perte et sa magnitude
+s'estiment chacune par un **triplet** `(minimum, plus probable, maximum)` ; la perte
+annualisée est le produit des deux **moyennes PERT** — `(min + 4 × probable + max) / 6`.
+
+⚠️ **Un triplet incomplet ne rend RIEN**, et le refus est posé à **deux étages** : une
+contrainte refuse d'écrire un triplet à deux valeurs, et la dérivation rend `null` sur tout
+argument nul. Deux valeurs sur trois donneraient un nombre qui *aurait l'air* mesuré — et
+c'est celui-là qu'on cite en comité de direction. C'est le critère 25.4 mot pour mot : *pas
+d'estimation par défaut*.
+
+⚠️ **Des pertes secondaires absentes NE VALENT PAS ZÉRO.** Écrire `coalesce(secondaire, 0)`
+aurait toujours abouti — et sous-estimé **en silence** toute quantification où personne n'a
+chiffré l'amende, c'est-à-dire produit l'estimation par défaut *dans le sens rassurant*, le
+pire des deux. Le montant ne porte alors que la perte primaire : c'est un **PLANCHER**, que
+`secondaire_estimee` marque et que l'écran annonce par un « ≥ ».
+
+⚠️ **Le montant est INÉCRIVABLE** : `perte_annualisee` est une colonne `generated always`,
+et le navigateur la reçoit sous `_perteAnnualisee` — un champ à souligné initial, écarté à
+l'entrée **par le préfixe**. Il n'y a donc pas d'aperçu en direct pendant la saisie : il
+faudrait une seconde implémentation de la dérivation, qui divergerait de celle que la
+consolidation du Groupe additionne (constat **Q-219**).
+
+🛑 **ET LE PLUS IMPORTANT DE CE LOT NE PARLE PAS DE QUANTIFICATION.**
+`f_verifier_ebios_cadrage()` tient depuis la migration `046` la garantie centrale de L25 —
+*aucun traitement automatique ne réinterprète la cotation F × G × M*. Son sixième contrôle
+balayait les tables dont le **nom** commence par `ebios_`. La table créée ici s'appelle
+`risque_quantification` : **elle lui échappait**.
+
+Et le mode de défaillance est le pire de tous : *un garde qui ne regarde pas rend zéro
+anomalie, c'est-à-dire exactement ce qu'il rend quand tout va bien.* **Mesuré, pas
+supposé** : la rédaction d'origine, remise en place avec un déclencheur fautif, rend
+**0 anomalie** là où la rédaction élargie en rend une. Le balayage part désormais du
+**catalogue entier**. C'est la règle du `CONVENTIONS.md` §39 retournée contre elle-même une
+fois de plus — *reconnaître un NOM au lieu de mesurer ce qu'une chose FAIT*, motif des
+constats **Q-312** et **Q-313**.
+
+🛑 **ET UN DÉFAUT TROUVÉ AU NAVIGATEUR SUR LA RECETTE, APRÈS UN BANC VERT — le sixième en
+une semaine.** On enregistre une estimation complète, et le panneau affiche « estimation
+incomplète : le montant n'est pas calculé ». Le montant existait : la base l'avait calculé,
+la route l'avait renvoyé — et **`js/core/sync.js` ne lisait de la réponse que deux choses**,
+l'identifiant définitif et le numéro de version. Tout le reste était **jeté**.
+
+*Le défaut ne vivait ni dans la base, ni dans la route, ni dans l'écran : il vivait dans ce
+qu'une couche intermédiaire choisissait de ne pas garder.* Et il ne pouvait apparaître
+qu'avec la **première entité dont un champ AFFICHÉ est calculé par la base** — jusque-là,
+tout ce que l'écran montrait, il l'avait lui-même écrit.
+
+⚠️ **Le remède ferme la CLASSE, par le PRÉFIXE et non par une liste** : `sync.js` adopte
+désormais tout champ à **souligné initial** rendu par le serveur — la marque, dans tout le
+produit, de ce que le serveur ajoute. Une liste de noms aurait rattrapé `_perteAnnualisee`
+et manqué le prochain champ dérivé, **en silence**.
+
+⚠️ **Et l'essai qui le garde a failli être creux** : sa première rédaction restait VERTE
+sous la mutation — le **sondage** finissait par rapporter la modification, et le montant
+apparaissait vingt secondes plus tard au lieu de trois. Ce qui mord est le **compte des
+rechargements** : le montant doit venir de la réponse de l'écriture, pas d'un
+`/api/rafraichir`. *Un essai qui couvre une règle sans jamais la faire décider ne la couvre
+pas* (constat **Q-210**).
+
+**Ce que le banc a trouvé, et que je n'avais pas vu :**
+
+- `I18n.nombre()` porté jusqu'à un gabarit **sans échappement** — la devise vient de la
+  base. `UI.montantFair` rend désormais du balisage **déjà échappé**, comme `UI.badge`, et
+  les deux appelants ne l'échappent plus ;
+- un **emoji** dans une chaîne affichée (`⚠️` dans l'aide d'une colonne de la vision
+  Groupe) — arbitrage E du `docs/REPRISE.md` §2 ;
+- le **semis du banc** ne couvrait pas la table neuve : *« zéro visible » est aussi ce que
+  rend une table vide* ;
+- et la migration a été refusée **trois fois** par `f_verifier_schema()` — trois colonnes
+  `jsonb` sans décision au registre de l'article 30, quatre tables sans déclencheur de
+  pièces, une unicité sans `filiale_id`. ⚠️ La troisième correction était elle-même
+  fautive : le régime « signaler » construit une comparaison **textuelle** que la base
+  refuse sur un `jsonb`, et la purge — transactionnelle — s'en serait avortée **pour toutes
+  les filiales** (constat **Q-300**).
+
+**Mesuré** : 50 migrations, 77 tables, 308 politiques, **55 garde-fous**, 432 décisions ;
+famille neuve `test/quantification/` (22 essais, dont **cinq mutations jouées et rougies**).
 
 ### Les échelles de cotation, versionnées et datées — L25, action 25.3 (19/09/2026)
 

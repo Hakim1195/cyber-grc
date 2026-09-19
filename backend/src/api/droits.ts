@@ -320,6 +320,15 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   // écrit quoi* — et les deux se cumulent.
   echelles: 'risques',
   echelle_niveaux: 'risques',
+
+  // ── v25 : la quantification financière (action 25.4) ────────────────────────
+  //
+  // Domaine « risques », et non un domaine financier neuf : quantifier un risque
+  // est le même métier que le coter — c'est la même personne, sur la même fiche,
+  // dans la même séance. Un domaine de plus aurait obligé chaque filiale à créer
+  // un groupe d'annuaire supplémentaire pour que le RSSI puisse remplir l'écran
+  // qu'on vient de lui donner.
+  risque_quantification: 'risques',
 });
 
 /**

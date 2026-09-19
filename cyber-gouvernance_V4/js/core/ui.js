@@ -811,6 +811,47 @@ window.UI = (function () {
     }
 
     /* =====================================================================
+       LE MONTANT D'UNE QUANTIFICATION FAIR (v25, action 25.4)
+
+       ⚠️ **Cette fonction MET EN FORME ; elle ne CALCULE rien.** Le montant lui
+       arrive tel que le serveur l'a servi — `_perteAnnualisee`, colonne engendrée
+       dont `f_fair_perte_annualisee()` est l'unique définition. Le recalculer ici
+       ferait deux points de mesure d'une même grandeur, et le jour où l'un des
+       deux change, l'écran d'une filiale cesse d'afficher ce que le tableau de
+       bord du Groupe additionne — sans que rien ne le dise (constat **Q-219**).
+
+       ⚠️ **Le « ≥ » n'est pas une coquetterie.** Quand les pertes secondaires ne
+       sont pas estimées, le total ne porte que la perte primaire : c'est un
+       PLANCHER. L'afficher comme un total serait une estimation par défaut dans
+       le sens rassurant — exactement ce que le critère 25.4 interdit.
+    ===================================================================== */
+
+    /**
+     * Le montant d'une perte annualisée, **déjà échappé**, prêt à être injecté.
+     *
+     * Rend `null` — jamais « 0 », jamais un tiret — quand le montant n'est pas
+     * calculable : l'appelant doit pouvoir DIRE « estimation incomplète », ce
+     * qui n'est pas la même chose que « ce risque ne coûte rien ».
+     *
+     * ⚠️ **ELLE REND DU BALISAGE ÉCHAPPÉ, comme `UI.badge`** — et l'appelant ne
+     * doit donc PAS l'échapper une seconde fois, sous peine d'afficher
+     * « &amp;#8805; ». Ce n'est pas un choix de style : le garde-fou
+     * `traductions.test.mjs` §37.3 exige qu'un appel à `I18n.nombre()` sur une
+     * donnée soit échappé **en amont, sur la même ligne** — parce que la sœur à
+     * repli brut rend `String(valeur)` telle quelle quand l'entrée n'est pas
+     * analysable, et que `devise` vient de la base. Le schéma la borne à trois
+     * capitales aujourd'hui ; *ce qui protège une chaîne n'est pas l'endroit
+     * d'où elle vient, c'est ce qu'on en fait*.
+     */
+    function montantFair(valeur, devise, secondaireEstimee) {
+        if (valeur === null || valeur === undefined || valeur === "") return null;
+        var n = Number(valeur);
+        if (!isFinite(n)) return null;
+        var texte = escapeHtml(I18n.nombre(n, { maximumFractionDigits: 0 }) + " " + (devise || "EUR"));
+        return secondaireEstimee === false ? "\u2265 " + texte : texte;
+    }
+
+    /* =====================================================================
        LES ÉCHELLES DE COTATION (v24, action 25.3)
 
        Deux helpers, et un seul endroit : les écrans de cotation sont au moins
@@ -873,6 +914,7 @@ window.UI = (function () {
 
     return {
         apresEcriture,
+        montantFair,
         enteteHtml, ongletsHtml, ongletsDe,
         contratOnglets: Object.freeze(GROUPES_ONGLETS),
         optionsEchelle, mentionEchelle,

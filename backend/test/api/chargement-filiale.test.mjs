@@ -216,7 +216,12 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // son échelle : le garde-fou de couverture RLS ne lit pas les déclencheurs, et une
     // table qui invoquerait ce raisonnement sans porter `filiale_id` échapperait au
     // balayage — la prochaine n'aurait peut-être pas le déclencheur.
-    assert.equal(tablesCloisonnees.length, 58, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    // 59 depuis la migration `050` : `risque_quantification` (action 25.4). ⚠️ Elle est
+    // CLOISONNÉE et non mixte, à la différence des deux échelles ci-dessus : un montant
+    // de perte dépend du chiffre d'affaires et du parc d'une filiale, et une
+    // quantification de portée Groupe serait lisible de toutes — qui y liraient le coût
+    // d'un incident chez la voisine.
+    assert.equal(tablesCloisonnees.length, 59, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -264,13 +269,17 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // déplacer la graduation par défaut sous les autres familles du banc.
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      57,
+      58,
+      // 58 depuis la migration `050` : `risque_quantification` est semée des deux côtés,
+      // sur le PREMIER risque de chaque filiale — le second reste sans quantification
+      // exprès, pour que le balayage des entités puisse en créer une sans heurter
+      // l'unicité « une par risque ».
       // 52 depuis la migration `046` : les cinq tables des ateliers EBIOS RM sont semées
       // des DEUX côtés, et la chaîne est complète — l'étude porte sa valeur métier, qui
       // porte son événement redouté, et le couple source / objectif pointe l'entrée
       // locale du socle de connaissances. Semer des lignes qui ne se référencent pas
       // aurait mesuré l'insertion, pas les clés composites.
-      'Cinquante-cinq tables devaient contenir au moins une ligne allemande. Une table neuve '
+      'Cinquante-huit tables devaient contenir au moins une ligne allemande. Une table neuve '
         + 'sans ligne dans le semis est un angle mort : le balayage y rendrait « zéro '
         + 'visible » pour la seule raison qu’il n’y a rien à voir.',
     );
@@ -410,7 +419,7 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     // 55 depuis la migration `049` : `echelles` et `echelle_niveaux`, au titre de leur
     // versant LOCAL — leur socle de Groupe est compté par l'égalité elle-même, comme
     // celui de `risque_catalogue` et de `ebios_connaissances`.
-    assert.equal(nonVides.length, 55, `Tables non vides : ${nonVides.join(', ')}`);
+    assert.equal(nonVides.length, 56, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

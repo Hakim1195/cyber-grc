@@ -152,6 +152,29 @@ export interface BlocRisques {
    * d'additionner quand on SAIT que c'est faux, pas quand on l'ignore.
    */
   readonly echelles: readonly string[];
+  /**
+   * Somme des pertes annualisées FAIR du périmètre, en `devises[0]` ; `null` si
+   * aucun risque n'est quantifié, **ou si deux devises y coexistent** (action 25.4).
+   *
+   * ⚠️ **C'est la grandeur qui, elle, S'ADDITIONNE.** L'exposition résiduelle
+   * ci-dessus est ordinale : la somme de deux « 12 » produits sur deux échelles ne
+   * veut rien dire, et le produit refuse de la faire. Une somme d'argent, à devise
+   * égale, veut toujours dire quelque chose — c'est la raison d'être de FAIR, et la
+   * seule réponse que le produit sache donner à la question du comité de direction.
+   */
+  readonly perteAnnualisee: number | null;
+  /** Les devises employées dans le périmètre, triées. Au-delà d'une, pas de somme. */
+  readonly devises: readonly string[];
+  /** Nombre de risques portant une perte annualisée calculable. */
+  readonly quantifies: number;
+  /**
+   * Vrai si **au moins un** des risques sommés n'a pas de pertes secondaires
+   * estimées : le total est alors un PLANCHER, et l'écran affiche « ≥ ».
+   *
+   * ⚠️ Un plancher présenté comme un total est l'estimation par défaut dans le sens
+   * rassurant — celle que le critère 25.4 interdit nommément.
+   */
+  readonly perteMinoree: boolean;
 }
 
 export interface BlocActions {
@@ -405,6 +428,10 @@ interface LigneRisques {
   readonly cotes: string;
   readonly exposition: string | null;
   readonly echelles: string[] | null;
+  readonly perte: string | null;
+  readonly devises: string[] | null;
+  readonly quantifies: string;
+  readonly minoree: boolean;
 }
 
 const lireRisques = async (client: PoolClient): Promise<Map<string, BlocRisques>> => {
@@ -420,12 +447,31 @@ const lireRisques = async (client: PoolClient): Promise<Map<string, BlocRisques>
     // `new Set(...)` la découpe en CARACTÈRES, et l'union en compte vingt et quelques :
     // l'exposition consolidée serait NULLE en permanence, sur toute installation.
     // Trouvé par l'essai, et seulement parce qu'il sème d'abord sa matière (motif Q-210).
-    `select filiale_id,
-            count(score_residuel)::text as cotes,
-            sum(score_residuel)::text   as exposition,
-            array_remove(array_agg(distinct echelle_f_id)
-                       || array_agg(distinct echelle_g_id), null)::text[] as echelles
-       from risques group by filiale_id`,
+    // ⚠️ **La jointure est un `left join`, et le sens compte** : un risque sans
+    // quantification reste compté dans `total` et dans `cotes`. Un `join` l'aurait fait
+    // disparaître du tableau de bord dès qu'une filiale commence à quantifier — le
+    // genre de défaut qui se lit comme une amélioration des chiffres.
+    //
+    // ⚠️ **`::text[]` n'est pas décoratif** : sans lui, l'agrégat d'un domaine
+    // `id_metier` revient du pilote `pg` en CHAÎNE et `new Set(...)` la découpe en
+    // caractères. Mesuré à la livraison des échelles, et reconduit ici — le même
+    // piège, sur la même forme d'agrégat.
+    `select r.filiale_id,
+            count(r.score_residuel)::text as cotes,
+            sum(r.score_residuel)::text   as exposition,
+            array_remove(array_agg(distinct r.echelle_f_id)
+                       || array_agg(distinct r.echelle_g_id), null)::text[] as echelles,
+            sum(q.perte_annualisee)::text as perte,
+            array_remove(array_agg(distinct
+                case when q.perte_annualisee is null then null else q.devise end),
+                null)::text[] as devises,
+            count(q.perte_annualisee)::text as quantifies,
+            coalesce(bool_or(q.perte_annualisee is not null
+                             and not q.secondaire_estimee), false) as minoree
+       from risques r
+       left join risque_quantification q
+              on q.risque_id = r.id and q.filiale_id = r.filiale_id
+      group by r.filiale_id`,
   );
   const rendu = new Map<string, BlocRisques>();
   for (const ligne of rows) {
@@ -437,6 +483,17 @@ const lireRisques = async (client: PoolClient): Promise<Map<string, BlocRisques>
       expositionResiduelle: ligne.exposition === null ? null : nombre(ligne.exposition),
       cotes: nombre(ligne.cotes),
       echelles: [...new Set(ligne.echelles ?? [])].sort(),
+      // ⚠️ Une filiale ne porte qu'une seule devise dans le cas nominal ; on ne somme
+      // donc rien ici. Mais rien ne l'IMPOSE en base — une filiale peut avoir saisi un
+      // contrat en dollars —, et le refus d'additionner doit donc valoir au niveau
+      // d'une filiale comme à celui du groupe. Le même code décide des deux.
+      perteAnnualisee:
+        ligne.perte === null || new Set(ligne.devises ?? []).size > 1
+          ? null
+          : nombre(ligne.perte),
+      devises: [...new Set(ligne.devises ?? [])].sort(),
+      quantifies: nombre(ligne.quantifies),
+      perteMinoree: ligne.minoree === true,
     });
   }
   return rendu;
@@ -574,6 +631,10 @@ const cumuler = (parts: readonly Indicateurs[]): Indicateurs => {
   // L'union des échelles TRACÉES de toutes les filiales du périmètre. Au-delà d'une,
   // la somme n'a plus de sens — et le produit le dit plutôt que de la rendre.
   const echellesEmployees = new Set(risques.flatMap((b) => b.echelles));
+  // Et l'union des devises. ⚠️ Une seule suffit pour sommer ; deux suffisent pour
+  // refuser. C'est le même arbitrage qu'aux échelles, et il s'écrit de la même façon.
+  const devisesEmployees = new Set(risques.flatMap((b) => b.devises));
+  const quantifiees = risques.filter((b) => b.perteAnnualisee !== null);
 
   return {
     conformite:
@@ -607,6 +668,20 @@ const cumuler = (parts: readonly Indicateurs[]): Indicateurs => {
                 : exposees.reduce((a, b) => a + (b.expositionResiduelle ?? 0), 0),
             cotes: risques.reduce((a, b) => a + b.cotes, 0),
             echelles: [...echellesEmployees].sort(),
+            // ⚠️ **ICI, ON ADDITIONNE — et c'est tout l'intérêt de l'action 25.4.**
+            // Deux lignes plus haut, le produit REFUSE de sommer des expositions
+            // ordinales cotées sur des échelles différentes. Une somme d'argent, à
+            // devise égale, se somme toujours : c'est la seule grandeur du produit
+            // qui traverse les filiales sans convention préalable.
+            perteAnnualisee:
+              quantifiees.length === 0 || devisesEmployees.size > 1
+                ? null
+                : quantifiees.reduce((a, b) => a + (b.perteAnnualisee ?? 0), 0),
+            devises: [...devisesEmployees].sort(),
+            quantifies: risques.reduce((a, b) => a + b.quantifies, 0),
+            // Un seul risque sans pertes secondaires estimées suffit à faire du total
+            // un plancher : la minoration ne se moyenne pas, elle se propage.
+            perteMinoree: risques.some((b) => b.perteMinoree),
           },
     actions:
       actions.length === 0
@@ -726,6 +801,10 @@ export async function construireConsolidation(
             expositionResiduelle: null,
             cotes: 0,
             echelles: [],
+            perteAnnualisee: null,
+            devises: [],
+            quantifies: 0,
+            perteMinoree: false,
           }),
     actions:
       actions === null

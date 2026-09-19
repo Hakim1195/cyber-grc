@@ -169,8 +169,8 @@ qu'on n'ait pas à le chercher :
 | | |
 |---|---|
 | **Livré, dans l'ordre** | EBIOS RM ateliers 1 à 5 (migrations `046`, `047`, schéma `data` **v23**), copie du journal vers un agrégateur, écran **Paramètres** en quatre onglets, puis **les échelles de cotation** (migration `049`, schéma `data` **v24**) |
-| **Le geste suivant** | **25.4** — quantification FAIR. Puis **L26**, les catalogues ouverts |
-| **Mesuré à `3ae666c`** | banc **2 231/2 231** · 49 migrations · 76 tables · 54 garde-fous · 428 décisions · cloisonnement **110/110** sous `grc_app` · publication **93 fichiers** |
+| **Le geste suivant** | **L26** — les catalogues ouverts. ✅ *L25 est CLOS depuis le 19/09/2026 : l'action 25.4, la quantification FAIR, est livrée (migration `050`, schéma `data` en v25)* |
+| **Mesuré après 25.4** | **50 migrations** · **77 tables** · **308 politiques** · **55 garde-fous** · **432 décisions** — le banc et la publication sont relevés à la révision citée dans le `CHANGELOG.md` |
 | **Déployé** | oui, sur la recette, et **parcouru au navigateur** — c'est là que trois défauts sur quatre ont été trouvés |
 
 ✅ **Livré le 18/09 au soir — EBIOS RM, ateliers 1 et 2** (actions **25.1** en partie,
@@ -290,16 +290,60 @@ cotation porte l'échelle qui l'a produite, et `null` s'y lit « non tracée »,
    contrôle) et une unicité (deux NULL sont distincts). Les deux trous s'ouvrent ensemble
    sur toute table MIXTE.
 
-**Le geste suivant** : **25.4** (quantification FAIR), puis **L26** (catalogues ouverts).
+✅ **L'ACTION 25.4 EST LIVRÉE LE 19/09/2026 — la quantification financière (FAIR).**
+Migration `050`, schéma `data` en **v25**, panneau sur la fiche de risque, et une colonne
+de plus à la vision Groupe. **Le lot L25 est COMPLET ; le geste suivant est L26.**
 
-⚠️ **UN PIÈGE MESURÉ LE 19/09, ET IL VISE 25.4 DIRECTEMENT.** Le garde-fou qui tient le
-« EN ADDITION » de tout le lot — `f_verifier_ebios_cadrage()`, qui refuse qu'un déclencheur
-écrive dans les cinq colonnes de cotation de `risques` — **ne balaie que les tables dont le
-nom commence par `ebios_`** (`where c.relname like 'ebios\_%'`). Une table de quantification
-nommée autrement y **échapperait**, et la garantie centrale du lot cesserait de s'appliquer
-sans que rien ne le dise. La bonne issue n'est pas de choisir un nom qui plaît au garde :
-c'est d'**élargir le garde à ce qu'il MESURE** plutôt qu'au nom qu'il reconnaît
-(`CONVENTIONS.md` §39, constats Q-312 et Q-313).
+⚠️ **Ce qu'il faut savoir avant d'y toucher :**
+
+1. **C'est la réponse à la limite que 25.3 venait de rendre visible.** La consolidation
+   refuse d'additionner deux expositions **ordinales** ; une somme d'argent, à devise
+   égale, s'additionne toujours. ⚠️ Et elle refuse là aussi dès que **deux devises**
+   coexistent — même mécanique, même motif.
+2. **Un triplet incomplet ne rend RIEN**, et le refus est posé à **deux étages** : la
+   contrainte refuse la donnée, la dérivation rend `null`. Deux valeurs sur trois
+   donneraient un nombre qui *aurait l'air* mesuré, et c'est celui-là qu'on cite en
+   comité de direction.
+3. **Des pertes secondaires absentes ne valent pas ZÉRO** : le montant devient un
+   **PLANCHER**, marqué par une colonne engendrée et affiché « ≥ ». `coalesce(…, 0)`
+   aurait toujours abouti et sous-estimé en silence — l'estimation par défaut *dans le
+   sens rassurant* est la plus dangereuse des deux.
+4. **Le montant est INÉCRIVABLE** — colonne `generated always`, servie sous
+   `_perteAnnualisee`. Il n'y a donc **pas d'aperçu en direct** pendant la saisie : il
+   faudrait une seconde implémentation de la dérivation, qui divergerait de celle que la
+   consolidation additionne (**Q-219**). Le montant apparaît à l'enregistrement.
+
+🛑 **ET LE PIÈGE ANNONCÉ CI-DESSOUS ÉTAIT RÉEL — il est fermé par la SECONDE issue.**
+`f_verifier_ebios_cadrage()` balaie désormais le **catalogue entier**. ⚠️ **Mesuré, pas
+supposé** : la rédaction d'origine, remise en place avec un déclencheur fautif sur
+`risque_quantification`, rend **0 anomalie** là où la rédaction élargie en rend une. *Un
+garde qui ne regarde pas rend zéro anomalie — c'est-à-dire exactement ce qu'il rend quand
+tout va bien.* L'essai garde les **deux moitiés** : sans la seconde, on saurait que le
+garde actuel mord, sans savoir si l'élargissement a servi à quelque chose.
+
+🛑 **UN DÉFAUT TROUVÉ AU NAVIGATEUR SUR LA RECETTE, APRÈS UN BANC VERT — le sixième en
+une semaine, et la leçon n° 4 de ce document vérifiée une fois de plus.** On enregistre une
+estimation complète, et le panneau affiche « estimation incomplète ». Le montant existait :
+la base l'avait calculé, la route l'avait renvoyé — et **`js/core/sync.js` ne lisait de la
+réponse que deux choses**, l'identifiant définitif et le numéro de version.
+
+*Le défaut ne vivait ni dans la base, ni dans la route, ni dans l'écran : il vivait dans ce
+qu'une couche intermédiaire choisissait de ne pas garder.* Il ne pouvait apparaître qu'avec
+la **première entité dont un champ AFFICHÉ est calculé par la base**. ⚠️ Le remède ferme la
+classe **par le PRÉFIXE** — `sync.js` adopte tout champ à souligné initial rendu par le
+serveur —, et non par une liste, qui aurait manqué le prochain en silence.
+
+⚠️ **Et l'essai qui le garde a failli être creux** : sa première rédaction restait verte
+sous la mutation, parce que le **sondage** finissait par rapporter la modification. Ce qui
+mord est le **compte des rechargements** (`test/navigateur/quantification.test.mjs`).
+
+⚠️ **Et la migration a été refusée TROIS FOIS par `f_verifier_schema()`** — trois colonnes
+`jsonb` sans décision au registre de l'article 30, quatre tables sans déclencheur de
+pièces, une unicité sans `filiale_id`. La troisième correction était elle-même fautive :
+le régime « signaler » construit une comparaison **textuelle** que la base refuse sur un
+`jsonb`, et la purge — transactionnelle — s'en serait avortée **pour toutes les filiales**
+(constat **Q-300**). *Cinquième fois qu'un installateur rattrape un lot qu'il n'a pas vu
+naître.*
 
 Deux critères d'acceptation méritent d'être lus avant d'écrire une ligne :
 

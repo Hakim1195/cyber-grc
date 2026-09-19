@@ -119,6 +119,11 @@ const NOUVELLES_PAR_VERSION = {
   // v24 — les échelles de cotation (action 25.3). ⚠️ L'échelle avant ses niveaux :
   // c'est la clé étrangère, et c'est aussi l'ordre dans lequel on gradue.
   24: ['echelles', 'echelle_niveaux'],
+  // v25 — la quantification financière des risques (action 25.4). ⚠️ Une seule
+  // collection : ni `perte_annualisee` ni `secondaire_estimee` n'en font partie, parce
+  // que ce sont des colonnes ENGENDRÉES. Les faire voyager les rendrait reprenables, et
+  // un fichier bricolé porterait un montant que ses propres hypothèses ne produisent pas.
+  25: ['risque_quantification'],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -903,6 +908,90 @@ export function instantaneV24Complet() {
       ...p,
       echelle_criteres_id: null,
     })),
+  };
+}
+
+/**
+ * Instantané COMPLET en v25 — la quantification financière (action 25.4).
+ *
+ * ⚠️ **DEUX quantifications, et la seconde est SANS pertes secondaires.** Le produit
+ * doit savoir faire voyager les deux états dans le même fichier, parce que c'est ce
+ * qu'un export réel portera : un risque dont l'amende est chiffrée, et un autre où
+ * elle ne l'est pas — et dont le montant est donc un PLANCHER. N'en mettre qu'une
+ * n'éprouverait qu'une moitié du mécanisme (motif du constat **Q-210**).
+ *
+ * ⚠️ **Ni `perte_annualisee`, ni `secondaire_estimee` n'y figurent, et c'est le
+ * point.** Ce sont des colonnes ENGENDRÉES : les faire voyager les rendrait
+ * REPRENABLES, et un fichier bricolé porterait un montant que ses propres hypothèses
+ * ne produisent pas. Le round-trip doit donc rendre l'instantané À L'IDENTIQUE **sans
+ * eux** — c'est ce que cette absence mesure.
+ */
+export function instantaneV25Complet() {
+  const base = instantaneV24Complet();
+  // ⚠️ **Un SECOND risque, ajouté ici et pas plus haut.** La quantification est unique
+  // par risque : mesurer les deux états — pertes secondaires estimées, et non estimées —
+  // demande deux risques. L'ajouter au jeu v24 aurait déplacé les comptes de toutes les
+  // familles qui s'en servent, pour une propriété qui n'appartient qu'à la v25.
+  const risques = [
+    ...base.risques,
+    {
+      id: 'RISK-1720000000000-232',
+      nom: 'Non-conformité RGPD sur les données RH',
+      description: 'Conservation au-delà de la durée déclarée.',
+      f_frequence: 2,
+      g_gravite: 3,
+      m_maitrise: 0.6,
+      score_brut: 6,
+      score_residuel: 3.6,
+      niveau: 'faible',
+      exigences_liees: [],
+      echelle_f_id: 'ECHL-1720000000000-223',
+      echelle_g_id: 'ECHL-1720000000000-222',
+    },
+  ];
+  return {
+    ...base,
+    schemaVersion: 25,
+    risques,
+    risque_quantification: [
+      {
+        id: 'FAIR-1720000000000-230',
+        risque_id: risques[0].id,
+        devise: 'EUR',
+        frequence_min: 0.2,
+        frequence_probable: 0.5,
+        frequence_max: 1.5,
+        perte_min: 80000,
+        perte_probable: 250000,
+        perte_max: 900000,
+        secondaire_min: 50000,
+        secondaire_probable: 150000,
+        secondaire_max: 600000,
+        hypotheses: 'Sinistralité du secteur relevée par le courtier, exercice 2025.',
+        source_donnees: 'Courtier — note du 12/03/2026',
+        confiance: 'moyenne',
+        evaluee_le: '2026-09-19',
+      },
+      {
+        id: 'FAIR-1720000000000-231',
+        risque_id: risques[1].id,
+        devise: 'EUR',
+        frequence_min: 0.1,
+        frequence_probable: 0.3,
+        frequence_max: 0.8,
+        perte_min: 20000,
+        perte_probable: 60000,
+        perte_max: 200000,
+        // ⚠️ Non estimées, PAS nulles : le montant qui en sort est un plancher.
+        secondaire_min: null,
+        secondaire_probable: null,
+        secondaire_max: null,
+        hypotheses: 'Amende de l’article 83 non estimée : avis juridique manquant.',
+        source_donnees: null,
+        confiance: 'faible',
+        evaluee_le: '2026-09-19',
+      },
+    ],
   };
 }
 

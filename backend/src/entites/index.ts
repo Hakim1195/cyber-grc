@@ -282,7 +282,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 24;
+export const VERSION_SCHEMA = 25;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -1174,6 +1174,48 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
   // au produit, qui écrivait jusqu'ici ses quatre niveaux en dur dans le navigateur.
   ['echelles', { nom: 'echelles', table: 'echelles', prefixe: 'ECHL' }],
   ['echelle_niveaux', { nom: 'echelle_niveaux', table: 'echelle_niveaux', prefixe: 'ECHN' }],
+
+  // ── v25 : LA QUANTIFICATION FINANCIÈRE D'UN RISQUE (L25, action 25.4) ───────
+  //
+  // ⚠️ **Cloisonnée, et non mixte** — contrairement aux deux échelles ci-dessus.
+  // Une échelle est une CONVENTION, que le Groupe peut poser pour tous ; un
+  // montant de perte dépend du chiffre d'affaires, du parc et de la clientèle
+  // d'une filiale. Une quantification de portée Groupe n'aurait pas de sens, et
+  // serait lisible de toutes les filiales — qui y liraient le coût d'un incident
+  // chez la voisine.
+  //
+  // ⚠️ **Les deux champs à souligné initial sont les seuls DÉRIVÉS du registre**,
+  // et c'est ce qui les rend impossibles à forger : `perte_annualisee` est une
+  // colonne `generated always`, donc inécrivable en base, et `_perteAnnualisee`
+  // est écarté à l'entrée par le préfixe. Le montant affiché est, par
+  // construction, celui que les hypothèses produisent.
+  [
+    'risque_quantification',
+    {
+      nom: 'risque_quantification',
+      table: 'risque_quantification',
+      prefixe: 'FAIR',
+      colonnesDerivees: {
+        perte_annualisee: {
+          champ: '_perteAnnualisee',
+          raison:
+            'Perte annualisée FAIR — fréquence moyenne × magnitude moyenne, dérivée par ' +
+            '`f_fair_perte_annualisee()`. ⚠️ La recalculer dans le navigateur ferait DEUX ' +
+            'points de mesure de la même grandeur, et le jour où l’un des deux change, ' +
+            'le montant affiché cesse d’être celui que la consolidation somme — sans que ' +
+            'rien ne le dise (constat Q-219).',
+        },
+        secondaire_estimee: {
+          champ: '_secondaireEstimee',
+          raison:
+            'Vrai si les pertes secondaires sont estimées. ⚠️ Faux, la perte annualisée ' +
+            'est un PLANCHER, et l’écran doit afficher « ≥ ». Sans ce champ, un plancher ' +
+            'se présenterait comme un total — l’estimation par défaut, dans le sens ' +
+            'rassurant, que le critère 25.4 interdit.',
+        },
+      },
+    },
+  ],
 ]);
 
 /** Ordre de chargement : celui d'`ARRAY_FIELDS` du frontend. */
@@ -1866,7 +1908,14 @@ export function verifierRegistre(catalogue: Catalogue): readonly string[] {
       //     (CONVENTIONS.md §18.6) : elle serait nommée par correspondance
       //     d'identité, et PostgreSQL refuse qu'on lui donne une valeur.
       for (const colonne of table.colonnes.values()) {
-        if (colonne.engendree && reservees[colonne.nom] === undefined) {
+        // ⚠️ Une colonne engendrée est admise de DEUX façons : déclarée réservée
+        // (elle n'est ni lue ni écrite), ou déclarée DÉRIVÉE (lot L25, action
+        // 25.4 : elle est servie en lecture sous un nom à souligné initial). Les
+        // deux sont des déclarations explicites ; ce que le garde refuse, c'est
+        // l'omission — qui ferait échouer toute insertion sans que le message le
+        // dise (`CONVENTIONS.md` §18.6).
+        const derivee = nomTable === d.table && (d.colonnesDerivees ?? {})[colonne.nom] !== undefined;
+        if (colonne.engendree && !derivee && reservees[colonne.nom] === undefined) {
           anomalies.push(
             `${entite} : ${nomTable}.${colonne.nom} est ENGENDRÉE et n'est pas déclarée ` +
               'réservée. Toute insertion la nommerait et échouerait (CONVENTIONS.md §18.6).',
@@ -4100,6 +4149,21 @@ export class Depot {
       selections.push(`p.${ident(COLONNE_PROVENANCE)} as ${ident('prov_principale')}`);
     }
 
+    // ── Les colonnes ENGENDRÉES servies en lecture seule (action 25.4) ──────
+    //
+    // ⚠️ Leur absence du catalogue n'est PAS une erreur ici : une base antérieure
+    // à la migration qui les pose n'en a aucune, et le serveur doit démarrer. Ce
+    // qui refuse un schéma incomplet est `f_verifier_schema()`, pas la couche
+    // d'accès — même arbitrage qu'à `f_echelle_porteurs()`.
+    const derivees: { alias: string; champ: string; famille: FamilleType }[] = [];
+    for (const [nomColonne, declaration] of Object.entries(d.colonnesDerivees ?? {})) {
+      const colonne = table.colonnes.get(nomColonne);
+      if (colonne === undefined) continue;
+      const alias = `der_${String(derivees.length)}`;
+      selections.push(`p.${ident(nomColonne)} as ${ident(alias)}`);
+      derivees.push({ alias, champ: declaration.champ, famille: colonne.famille });
+    }
+
     const conditions: string[] = [];
     const parametres: unknown[] = [];
 
@@ -4198,6 +4262,12 @@ export class Depot {
       enregistrement[CHAMP_VERSION] = Number(ligne['v_principale']);
       if (porteProvenance) {
         enregistrement[CHAMP_PROVENANCE] = String(ligne['prov_principale']);
+      }
+      // Les dérivées, sous leur nom à souligné initial. Elles ne repartent
+      // jamais en écriture : la reprise et la couche d'écriture les écartent
+      // par le PRÉFIXE, pas par une liste de noms.
+      for (const derivee of derivees) {
+        enregistrement[derivee.champ] = versLeFrontend(ligne[derivee.alias], derivee.famille);
       }
       // Seulement pour les entités MIXTES : sur une table dont `filiale_id` ne
       // peut pas être nul, le champ vaudrait `false` partout et ferait croire à

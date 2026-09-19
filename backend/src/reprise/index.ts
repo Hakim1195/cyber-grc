@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 24;
+export const VERSION_SCHEMA = 25;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -200,6 +200,8 @@ export const COLLECTIONS = [
   // changerait rien et laisserait croire l'inverse.
   'echelles',
   'echelle_niveaux',
+  // v25 — la quantification financière d'un risque (action 25.4).
+  'risque_quantification',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -1146,6 +1148,59 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     bornes: [],
     dates: [],
     references: [{ champ: 'echelle_id', cible: 'echelles' }],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  // ── v25 : LA QUANTIFICATION FINANCIÈRE (action 25.4) ──────────────────────
+  //
+  // ⚠️ **Ni `perte_annualisee` ni `secondaire_estimee` ne figurent dans `champs`, et
+  // c'est délibéré** : ce sont des colonnes ENGENDRÉES, servies au navigateur sous
+  // `_perteAnnualisee` et `_secondaireEstimee`. Les faire voyager dans le fichier
+  // d'échange les rendrait REPRENABLES — un fichier bricolé porterait un montant que
+  // ses propres hypothèses ne produisent pas, et la base l'accepterait. Le souligné
+  // initial est justement ce que la reprise écarte, par le PRÉFIXE.
+  //
+  // ⚠️ **Et les bornes sont celles du schéma, pas des bornes de confort** : un export
+  // produit ailleurs peut porter des ordres de grandeur que cette installation ne
+  // saisirait pas. Ce qui est refusé ici est ce que la base refuserait — ni plus (la
+  // reprise échouerait sur sa propre sauvegarde), ni moins (le refus arriverait en
+  // 23514 sans nommer le champ).
+  risque_quantification: {
+    prefixe: 'FAIR',
+    champs: [
+      'id',
+      'risque_id',
+      'devise',
+      'frequence_min',
+      'frequence_probable',
+      'frequence_max',
+      'perte_min',
+      'perte_probable',
+      'perte_max',
+      'secondaire_min',
+      'secondaire_probable',
+      'secondaire_max',
+      'hypotheses',
+      'source_donnees',
+      'confiance',
+      'evaluee_le',
+    ],
+    enumerations: [
+      { champ: 'confiance', valeurs: ['faible', 'moyenne', 'élevée'], videAdmis: true },
+    ],
+    bornes: [
+      { champ: 'frequence_min', min: 0, max: 10000 },
+      { champ: 'frequence_probable', min: 0, max: 10000 },
+      { champ: 'frequence_max', min: 0, max: 10000 },
+      { champ: 'perte_min', min: 0, max: 1000000000000 },
+      { champ: 'perte_probable', min: 0, max: 1000000000000 },
+      { champ: 'perte_max', min: 0, max: 1000000000000 },
+      { champ: 'secondaire_min', min: 0, max: 1000000000000 },
+      { champ: 'secondaire_probable', min: 0, max: 1000000000000 },
+      { champ: 'secondaire_max', min: 0, max: 1000000000000 },
+    ],
+    dates: ['evaluee_le'],
+    references: [{ champ: 'risque_id', cible: 'risques' }],
     referencesMultiples: [],
     cleMetier: null,
   },
@@ -2394,6 +2449,28 @@ const PALIERS: readonly EtapePalier[] = [
     // se voit à l'écran et se corrige en recotant ; une cotation faussement estampillée
     // est indiscernable d'une vraie, **dans l'outil qui sert de preuve en audit**.
     appliquer: paliersCollections(['echelles', 'echelle_niveaux']),
+  },
+  {
+    de: 24,
+    vers: 25,
+    libelle:
+      'Lot L25, action 25.4 : l’instantané gagne la QUANTIFICATION FINANCIÈRE des ' +
+      'risques — fréquence et magnitude estimées par triplets, en euros. ⚠️ Aucun ' +
+      'risque déjà dans le fichier n’en reçoit une : une quantification s’écrit, elle ' +
+      'ne se devine pas.',
+    // ⚠️ **RIEN N'EST DEVINÉ, et c'est le même arbitrage qu'au palier précédent.**
+    // La tentation ici serait plus grande encore : le produit connaît F, G et M de
+    // chaque risque, et une correspondance « gravité 4 → un million d'euros » aurait
+    // l'air d'un service rendu. Elle serait un FAUX — la gravité 4 d'une filiale
+    // industrielle de trois cents personnes et celle d'un groupe de vingt mille ne
+    // désignent pas la même somme, et c'est précisément pour cela que l'action 25.4
+    // existe : la cotation ordinale ne se convertit pas en monnaie.
+    //
+    // Et le coût de se tromper n'est pas symétrique, comme toujours : un risque sans
+    // quantification se voit et se remplit ; un risque portant un montant inventé est
+    // indiscernable d'un risque estimé, **dans l'outil qui sert de preuve en audit**,
+    // et c'est ce montant-là qui remonte au comité de direction.
+    appliquer: paliersCollections(['risque_quantification']),
   },
 ];
 

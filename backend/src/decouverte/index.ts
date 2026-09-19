@@ -586,6 +586,47 @@ async function semerJeu(client: PoolClient, filiale: string): Promise<number> {
     );
   }
 
+  /* ── Quantification financière de DEUX risques (action 25.4) ────────
+     ⚠️ **Deux seulement, et c'est le propos.** Un jeu de découverte où tous les
+     risques portent un montant ferait croire que la quantification est un
+     remplissage de formulaire ; elle est un travail d'estimation, qu'on ne fait
+     que là où l'enjeu le mérite. Les quatre autres restent sans montant, et
+     l'écran affiche « ce risque n'est pas quantifié » — ce qui n'est pas « ce
+     risque ne coûte rien ».
+
+     ⚠️ **Et l'un des deux n'a PAS de pertes secondaires estimées**, à dessein : le
+     produit affiche alors « ≥ », et le tableau de bord du Groupe aussi. C'est la
+     propriété la moins évidente du lot, et celle qu'une démonstration doit
+     montrer plutôt que raconter. */
+  for (const [id, risque, fMin, fProb, fMax, pMin, pProb, pMax, sMin, sProb, sMax, conf, hyp] of [
+    ['QNT-DEC-001', 'RSK-DEC-001', 0.2, 0.5, 1.5, 80000, 250000, 900000,
+     50000, 150000, 600000, 'moyenne',
+     'Fréquence : un incident bloquant tous les deux à cinq ans, d’après la sinistralité du ' +
+     'secteur relevée par le courtier en 2025 et les deux alertes traitées depuis 2023. Perte ' +
+     'primaire : quatre à quinze jours d’arrêt de la production et de l’ERP, valorisés à la ' +
+     'marge journalière moyenne. Perte secondaire : pénalités de retard des deux donneurs ' +
+     'd’ordre aéronautiques, et reprise des audits clients.'],
+    ['QNT-DEC-002', 'RSK-DEC-006', 0.1, 0.3, 0.8, 20000, 60000, 200000,
+     null, null, null, 'faible',
+     'Fréquence : estimée à partir du nombre de contrôles CNIL sectoriels publiés. Perte ' +
+     'primaire : reprise du registre, accompagnement juridique, notification des personnes. ' +
+     '⚠️ Les pertes secondaires (amende de l’article 83, jusqu’à 4 % du chiffre d’affaires ' +
+     'mondial) ne sont PAS estimées : le montant ci-contre est donc un plancher, et il est ' +
+     'affiché comme tel. Ne pas les chiffrer est un choix assumé, pas un oubli — les chiffrer ' +
+     'demanderait un avis juridique que nous n’avons pas.'],
+  ] as const) {
+    await ins(
+      'insert into risque_quantification (id, filiale_id, risque_id, devise, ' +
+        'frequence_min, frequence_probable, frequence_max, ' +
+        'perte_min, perte_probable, perte_max, ' +
+        'secondaire_min, secondaire_probable, secondaire_max, ' +
+        'confiance, hypotheses, evaluee_le) ' +
+        'values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)',
+      [id, filiale, risque, 'EUR', fMin, fProb, fMax, pMin, pProb, pMax,
+       sMin, sProb, sMax, conf, hyp, j(-45)],
+    );
+  }
+
   /* ── Plan d'actions — dont DEUX EN RETARD, à dessein ───────────────── */
   for (const [id, titre, statut, priorite, resp, echeance, risque] of [
     ['ACN-DEC-001', 'Déployer l’authentification à deux facteurs sur les comptes à privilèges',

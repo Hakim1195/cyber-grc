@@ -76,9 +76,10 @@
 > [`docs/PLAN_ACHEVEMENT.md`](docs/PLAN_ACHEVEMENT.md) ; les **chiffres** vivent au
 > [`backend/README.md`](backend/README.md) §8, seul endroit gardé mécaniquement.
 >
-> En trois lignes, pour n'avoir pas à chercher : **vague D entamée**, L25 livré sauf
-> **25.4** (quantification FAIR), qui est le geste suivant ; puis **L26**. Banc
-> **2 231/2 231** à `3ae666c`, déployé sur la recette.
+> En trois lignes, pour n'avoir pas à chercher : **vague D entamée**, **L25 livré EN
+> ENTIER** — l'action 25.4, la quantification financière FAIR, est livrée le 19/09/2026
+> (migration `050`, schéma `data` en **v25**). Le geste suivant est **L26**, les
+> catalogues ouverts. Les chiffres du schéma vivent au `backend/README.md` §8.
 >
 > Les sous-sections qui suivent sont l'HISTORIQUE, de la plus ancienne à la plus
 > récente. Elles gardent leurs leçons de méthode, qui valent ; elles ne disent pas
@@ -289,11 +290,32 @@
 > trois écrans livrés les 18 et 19/09 se rendaient **à plat**. *Une classe écrite n'est pas
 > une classe définie, et aucun essai ne le dit.*
 >
-> Le geste suivant : **25.4** (quantification FAIR), puis **L26** (catalogues ouverts).
+> **⇒ Au 19/09/2026 : l'action 25.4 — LA QUANTIFICATION FINANCIÈRE (FAIR) — est livrée**
+> (migration `050`, schéma `data` en **v25**, panneau sur la fiche de risque, colonne à la
+> vision Groupe). **Le lot L25 est COMPLET.** C'est la réponse à la limite que 25.3 venait
+> de rendre visible : la consolidation refuse d'additionner deux expositions **ordinales**,
+> et une somme d'argent, à devise égale, s'additionne toujours — elle refuse là aussi dès
+> que **deux devises** coexistent.
+> ⚠️ **Un triplet incomplet ne rend RIEN**, et le refus est posé à DEUX étages : la
+> contrainte refuse la donnée, la dérivation rend `null`. *Deux valeurs sur trois
+> donneraient un nombre qui a l'air mesuré, et c'est celui-là qu'on cite en comité de
+> direction.*
+> ⚠️ **Des pertes secondaires absentes NE VALENT PAS ZÉRO** : le montant devient un
+> **PLANCHER**, marqué par une colonne engendrée et affiché « ≥ ». `coalesce(…, 0)` aurait
+> sous-estimé **en silence** — l'estimation par défaut *dans le sens rassurant* est la plus
+> dangereuse des deux.
+> 🛑 **ET LE PLUS IMPORTANT DE CETTE ACTION NE PARLE PAS DE QUANTIFICATION.** Le garde-fou
+> qui tient le « EN ADDITION » de tout L25 balayait les tables par leur **NOM** — la table
+> neuve lui échappait, et *un garde qui ne regarde pas rend zéro anomalie, c'est-à-dire ce
+> qu'il rend quand tout va bien*. **Mesuré** : sa rédaction d'origine rend 0 anomalie sur
+> le déclencheur fautif que la rédaction élargie attrape. Il balaie désormais le catalogue
+> ENTIER (`CONVENTIONS.md` §39).
+>
+> Le geste suivant : **L26** (catalogues ouverts).
 >
 > ---
 >
-> **Mesuré à la révision `3ae666c`, le 19/09/2026** : banc **2 231 essais, 2 231 passés** ;
+> **Mesuré le 19/09/2026, après l'action 25.4** : banc **2 257 essais, 2 257 passés** ;
 > `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 > `verifier_cloisonnement.sql` **sous `grc_app`, sur la base de la recette** → **110/110** ;
 > `f_verifier_schema()`

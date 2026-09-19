@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 24;
+    const SCHEMA_VERSION = 25;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -169,7 +169,26 @@ const DataStore = (() => {
         // d'aujourd'hui. C'est le déclencheur `trg_echelles_figee` (migration `049` §6),
         // pas une consigne d'écran.
         "echelles",
-        "echelle_niveaux"
+        "echelle_niveaux",
+        // v25 — Lot L25, action 25.4 : la QUANTIFICATION FINANCIÈRE d'un risque (FAIR).
+        //
+        // ⚠️ **C'est la réponse à la limite que la v24 vient de rendre visible.** Depuis
+        // les échelles, la consolidation REFUSE d'additionner deux expositions cotées sur
+        // des graduations différentes — ce qui est honnête, et laisse sans réponse la
+        // seule question qu'un comité de direction pose : « combien ça nous coûte ? ».
+        // Une somme d'argent, à devise égale, s'additionne toujours.
+        //
+        // ⚠️ **Deux champs à souligné initial, et ils ne s'écrivent JAMAIS d'ici** :
+        // `_perteAnnualisee` et `_secondaireEstimee` sont des colonnes ENGENDRÉES de la
+        // base, servies en lecture. Les recalculer ici ferait deux points de mesure du
+        // même montant, et le jour où l'un des deux change, l'écran cesse d'afficher ce
+        // que la consolidation somme — sans que rien ne le dise (constat Q-219).
+        //
+        // ⚠️ **Une perte secondaire NON estimée ne vaut pas zéro** : elle fait du montant
+        // un PLANCHER, et `_secondaireEstimee` à faux est ce qui oblige l'écran à écrire
+        // « ≥ ». Un plancher présenté comme un total serait l'estimation par défaut dans
+        // le sens rassurant — celle que le critère 25.4 interdit nommément.
+        "risque_quantification"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
@@ -467,6 +486,21 @@ const DataStore = (() => {
         });
         data.actions = data.actions.filter(a => a.risque_id !== id);
         data.incidents.forEach(inc => { if (inc.risque_id === id) inc.risque_id = null; });   // délie les incidents
+        // v25 — la quantification suit son risque, comme la base le fait (cascade).
+        //
+        // ⚠️ **C'est la classe de défaut du 18/09**, et elle vaut d'être nommée : la base
+        // cascade, la façade en mémoire ne le refaisait pas, et l'échéancier gardait
+        // l'échéance d'un questionnaire dont le porteur venait d'être supprimé. Aucune
+        // des deux moitiés n'a tort seule — c'est exactement pourquoi le banc ne le voit
+        // pas. *Un défaut peut ne vivre ni dans la base, ni dans la route, mais dans
+        // l'écart entre deux cascades.*
+        data.risque_quantification = data.risque_quantification.filter(q => q.risque_id !== id);
+        // Et le scénario opérationnel se DÉLIE, il ne disparaît pas : la clé est en
+        // « set null (risque_id) », parce que rattacher un scénario à un risque du
+        // registre est un LIEN, pas une conversion (action 25.1).
+        data.ebios_scenarios_operationnels.forEach(sc => {
+            if (sc.risque_id === id) sc.risque_id = null;
+        });
         save();
     }
 
@@ -1083,6 +1117,41 @@ const DataStore = (() => {
         const n = data.echelle_niveaux.find(
             x => x.echelle_id === echelleId && Number(x.valeur) === Number(valeur));
         return n ? n.libelle : null;
+    }
+
+    /* =========================
+       QUANTIFICATION FINANCIÈRE — FAIR (v25, action 25.4)
+
+       risque_quantification : { id, risque_id, devise,
+                                 frequence_min|probable|max,   (événements par an)
+                                 perte_min|probable|max,        (coût d'UN événement)
+                                 secondaire_min|probable|max,   (amende, litige — FACULTATIF)
+                                 hypotheses, source_donnees, confiance, evaluee_le,
+                                 _perteAnnualisee, _secondaireEstimee }   ← servis, non écrits
+
+       ⚠️ **Le montant ne se calcule pas ici.** Il vient de la base, où il est une
+       colonne ENGENDRÉE : `f_fair_perte_annualisee()` en est la seule définition, et
+       c'est elle que la consolidation somme. Une seconde implémentation dans ce fichier
+       afficherait un jour un montant que le tableau de bord du Groupe ne reconnaîtrait
+       pas — deux points de mesure d'une même grandeur, divergence silencieuse (Q-219).
+
+       ⚠️ **Un triplet incomplet ne rend RIEN.** Ni ici, ni en base : la contrainte
+       refuse la ligne et la dérivation rend nul. Deux valeurs sur trois donneraient un
+       nombre qui AURAIT L'AIR mesuré — et c'est ce chiffre-là qui est cité en comité de
+       direction.
+    ========================== */
+    function getQuantifications() { return data.risque_quantification; }
+    function getQuantificationDuRisque(risqueId) {
+        return data.risque_quantification.find(q => q.risque_id === risqueId);
+    }
+    function addQuantification(q) { data.risque_quantification.push(q); save(); }
+    function updateQuantification(q) {
+        const i = data.risque_quantification.findIndex(x => x.id === q.id);
+        if (i !== -1) { data.risque_quantification[i] = q; save(); }
+    }
+    function deleteQuantification(id) {
+        data.risque_quantification = data.risque_quantification.filter(q => q.id !== id);
+        save();
     }
 
     /* =========================
@@ -1893,6 +1962,8 @@ const DataStore = (() => {
         getEchelles, getEchelleById, getEchelleEnVigueur, getEchellesDuSujet,
         addEchelle, updateEchelle, deleteEchelle,
         getNiveauxEchelle, getNiveauEchelleById,
+        getQuantifications, getQuantificationDuRisque,
+        addQuantification, updateQuantification, deleteQuantification,
         addNiveauEchelle, updateNiveauEchelle, deleteNiveauEchelle,
         libelleNiveau,
 

@@ -361,6 +361,7 @@ const RisquesModule = (() => {
                                 ${exigencesHtml || `<p style='color: var(--text-muted);'>${t("risques.aucuneExigence")}</p>`}
                             </div>
                         </div>
+                        <div class="dashboard-card" id="fair-card">${panneauQuantification(risque)}</div>
                     </div>
                 </div>
             </section>
@@ -412,6 +413,208 @@ const RisquesModule = (() => {
 
         document.getElementById("addActionBtn").onclick = () => renderCreateAction(risque);
         document.querySelectorAll(".clickable-action").forEach(li => li.onclick = () => Router.navigateTo(`/actions/${li.dataset.id}`));
+        brancherQuantification(risque);
+    }
+
+    /* =========================
+       QUANTIFICATION FINANCIÈRE — FAIR (v25, action 25.4)
+
+       ⚠️ **AUCUN MONTANT N'EST CALCULÉ ICI, ET C'EST DÉLIBÉRÉ.** Le chiffre affiché
+       est `_perteAnnualisee`, servi par la base où il est une colonne ENGENDRÉE.
+       L'écran ne propose donc pas d'aperçu en direct pendant la saisie : il en
+       faudrait une seconde implémentation de la dérivation, qui divergerait de celle
+       que la consolidation du Groupe additionne — et un comité de direction verrait
+       deux chiffres pour une même chose (constat Q-219). Le montant apparaît à
+       l'enregistrement, quand la base l'a rendu.
+
+       ⚠️ **Les trois refus de saisie sont posés ICI ET EN BASE.** Ce ne sont pas des
+       doublons de confort : la base refuse en 23514, un code que l'utilisateur ne sait
+       pas lire, et l'écran ne peut pas être la seule barrière puisque le moteur
+       d'import du lot L7 écrit lui aussi sans passer par aucun écran.
+    ========================== */
+
+    /** Les trois cases d'un triplet, préfixées `frequence`, `perte` ou `secondaire`. */
+    function tripletHtml(prefixe, q, pas) {
+        const v = cle => {
+            const val = q ? q[prefixe + "_" + cle] : null;
+            return (val === null || val === undefined) ? "" : escapeHtml(String(val));
+        };
+        return `
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: var(--text-xs);">${t("risques.fairMin")}</label>
+                    <input type="number" min="0" step="${pas}" id="fair-${prefixe}-min" value="${v("min")}" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: var(--text-xs);">${t("risques.fairProbable")}</label>
+                    <input type="number" min="0" step="${pas}" id="fair-${prefixe}-probable" value="${v("probable")}" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: var(--text-xs);">${t("risques.fairMax")}</label>
+                    <input type="number" min="0" step="${pas}" id="fair-${prefixe}-max" value="${v("max")}" />
+                </div>
+            </div>`;
+    }
+
+    /**
+     * Le panneau. `forcerFormulaire` sert au seul cas « on vient de cliquer sur
+     * Quantifier » : sans quantification en base, le panneau montre autrement son
+     * invitation. ⚠️ L'état n'est PAS mémorisé dans le DOM (un `hidden` témoin, par
+     * exemple) : un état d'écran caché dans le balisage survit à un redessin qui ne
+     * le prévoit pas, et personne ne sait plus qui le pose.
+     */
+    function panneauQuantification(risque, forcerFormulaire) {
+        const q = DataStore.getQuantificationDuRisque(risque.id);
+        // ⚠️ Le montant vient du SERVEUR, jamais d'un calcul local — voir l'en-tête.
+        const montant = q ? UI.montantFair(q._perteAnnualisee, q.devise, q._secondaireEstimee) : null;
+
+        const entete = `<h3>${t("risques.fair")} ${Help.tip(t("risques.fairAide"))}</h3>`;
+
+        if (!q && forcerFormulaire !== true) {
+            return `${entete}
+                <p style="color: var(--text-muted);">${t("risques.fairAucune")}</p>
+                <button id="fair-ouvrir" style="font-size: var(--text-sm);">${t("risques.fairQuantifier")}</button>`;
+        }
+
+        // Le bandeau du montant. ⚠️ Trois états distincts, et jamais deux confondus :
+        // un montant calculé, un montant PLANCHER, et « pas calculable » — qui n'est
+        // pas « zéro » (classe des constats Q-201 / Q-207).
+        const bandeau = montant !== null
+            ? `<div style="background: var(--bg-body); padding: 12px; border-radius: 8px; margin-bottom: 15px; text-align: center; border: 1px solid var(--border);">
+                   <div style="font-size: var(--text-xs); color: var(--text-muted);">${t("risques.fairAnnualisee")}</div>
+                   <div style="font-size: var(--text-lg);"><strong>${montant}</strong></div>
+                   ${q && q._secondaireEstimee === false
+                       ? `<div style="font-size: var(--text-xs); color: var(--text-muted);">${t("risques.fairPlancher")}</div>`
+                       : ""}
+               </div>`
+            : `<div class="synthese-message info" style="margin-bottom: 15px; font-size: var(--text-sm);">${t("risques.fairIncomplete")}</div>`;
+
+        return `${entete}
+            ${q ? bandeau : ""}
+            <div class="form-group">
+                <label>${t("risques.fairDevise")}</label>
+                <input id="fair-devise" maxlength="3" value="${escapeHtml(q ? (q.devise || "EUR") : "EUR")}" />
+            </div>
+            <div class="form-group">
+                <label>${t("risques.fairFrequence")} ${Help.tip(t("risques.fairFrequenceAide"))}</label>
+                ${tripletHtml("frequence", q, "0.01")}
+            </div>
+            <div class="form-group">
+                <label>${t("risques.fairPerte")} ${Help.tip(t("risques.fairPerteAide"))}</label>
+                ${tripletHtml("perte", q, "100")}
+            </div>
+            <div class="form-group">
+                <label>${t("risques.fairSecondaire")} ${Help.tip(t("risques.fairSecondaireAide"))}</label>
+                ${tripletHtml("secondaire", q, "100")}
+            </div>
+            <div class="form-group">
+                <label>${t("risques.fairHypotheses")} <span style="color:red">*</span> ${Help.tip(t("risques.fairHypothesesAide"))}</label>
+                <textarea id="fair-hypotheses" rows="3">${escapeHtml(q ? (q.hypotheses || "") : "")}</textarea>
+            </div>
+            <div class="form-group">
+                <label>${t("risques.fairSource")}</label>
+                <input id="fair-source" value="${escapeHtml(q ? (q.source_donnees || "") : "")}" />
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="form-group">
+                    <label>${t("risques.fairConfiance")}</label>
+                    <select id="fair-confiance">
+                        <option value=""></option>
+                        <option value="faible" ${q && q.confiance === "faible" ? "selected" : ""}>${escapeHtml(I18n.valeur("faible"))}</option>
+                        <option value="moyenne" ${q && q.confiance === "moyenne" ? "selected" : ""}>${escapeHtml(I18n.valeur("moyenne"))}</option>
+                        <option value="\u00e9lev\u00e9e" ${q && q.confiance === "\u00e9lev\u00e9e" ? "selected" : ""}>${escapeHtml(I18n.valeur("\u00e9lev\u00e9e"))}</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>${t("risques.fairEvalueeLe")}</label>
+                    <input type="date" id="fair-date" value="${escapeHtml(q && q.evaluee_le ? String(q.evaluee_le).substring(0, 10) : new Date().toISOString().substring(0, 10))}" />
+                </div>
+            </div>
+            <button id="fair-save">${t("commun.enregistrer")}</button>
+            ${q ? `<button id="fair-delete" style="background-color: var(--color-danger); font-size: var(--text-sm); margin-left: 8px;">${t("risques.fairSupprimer")}</button>` : ""}`;
+    }
+
+    /**
+     * Lit un triplet. Rend `null` si les trois cases sont vides, le tableau des
+     * trois nombres sinon — et `"incomplet"` si une seule manque.
+     *
+     * ⚠️ **« Incomplet » est une troisième réponse, et c'est tout le critère 25.4.**
+     * Rendre les deux valeurs saisies et laisser la base décider donnerait un refus
+     * en 23514 ; rendre `null` effacerait silencieusement une saisie à moitié faite.
+     */
+    function lireTriplet(prefixe) {
+        const brut = ["min", "probable", "max"].map(
+            c => document.getElementById(`fair-${prefixe}-${c}`).value.trim());
+        if (brut.every(v => v === "")) return null;
+        if (brut.some(v => v === "")) return "incomplet";
+        const nombres = brut.map(Number);
+        if (nombres.some(n => !isFinite(n) || n < 0)) return "incomplet";
+        if (!(nombres[0] <= nombres[1] && nombres[1] <= nombres[2])) return "ordre";
+        return nombres;
+    }
+
+    function brancherQuantification(risque) {
+        const ouvrir = document.getElementById("fair-ouvrir");
+        if (ouvrir) {
+            ouvrir.onclick = () => {
+                const carte = document.getElementById("fair-card");
+                carte.innerHTML = panneauQuantification(risque, true);
+                brancherQuantification(risque);
+            };
+            return;
+        }
+        const bouton = document.getElementById("fair-save");
+        if (!bouton) return;
+
+        bouton.onclick = () => {
+            const hypotheses = document.getElementById("fair-hypotheses").value.trim();
+            if (!hypotheses) return alert(t("risques.fairHypothesesObligatoires"));
+
+            const triplets = {};
+            for (const prefixe of ["frequence", "perte", "secondaire"]) {
+                const lu = lireTriplet(prefixe);
+                if (lu === "incomplet") return alert(t("risques.fairTripletIncomplet"));
+                if (lu === "ordre") return alert(t("risques.fairOrdre"));
+                triplets[prefixe] = lu;
+            }
+
+            const existante = DataStore.getQuantificationDuRisque(risque.id);
+            const q = existante || { id: UI.genId("FAIR"), risque_id: risque.id };
+            q.devise = (document.getElementById("fair-devise").value.trim() || "EUR").toUpperCase();
+            for (const prefixe of ["frequence", "perte", "secondaire"]) {
+                const v = triplets[prefixe];
+                q[prefixe + "_min"] = v ? v[0] : null;
+                q[prefixe + "_probable"] = v ? v[1] : null;
+                q[prefixe + "_max"] = v ? v[2] : null;
+            }
+            q.hypotheses = hypotheses;
+            q.source_donnees = document.getElementById("fair-source").value.trim() || null;
+            q.confiance = document.getElementById("fair-confiance").value || null;
+            q.evaluee_le = document.getElementById("fair-date").value || null;
+
+            if (existante) DataStore.updateQuantification(q); else DataStore.addQuantification(q);
+            if (window.showToast) window.showToast(t("risques.fairEnregistree"), "success");
+
+            // ⚠️ **On attend que le serveur ait répondu avant de redessiner.** Le
+            // montant affiché est une colonne ENGENDRÉE : il n'existe pas tant que
+            // l'écriture n'est pas partie. Redessiner tout de suite afficherait
+            // « estimation incomplète » sur une estimation qu'on vient de compléter —
+            // la classe de défaut que `UI.apresEcriture` a été écrite pour fermer, et
+            // qui ne se voit qu'au navigateur : au banc, le serveur répond dans la
+            // même milliseconde.
+            UI.apresEcriture(() => renderDetail(risque.id));
+        };
+
+        const supprimer = document.getElementById("fair-delete");
+        if (supprimer) {
+            supprimer.onclick = () => {
+                if (!confirm(t("risques.fairConfirmerSuppression"))) return;
+                const existante = DataStore.getQuantificationDuRisque(risque.id);
+                if (existante) DataStore.deleteQuantification(existante.id);
+                if (window.showToast) window.showToast(t("risques.fairSupprimee"), "success");
+                UI.apresEcriture(() => renderDetail(risque.id));
+            };
+        }
     }
 
     /* =========================

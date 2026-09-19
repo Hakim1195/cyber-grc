@@ -85,7 +85,7 @@ Questionnaires fournisseurs et leur relance ; registre DORA des prestataires cri
 > cette vague, aucun par le banc** — dont une campagne convoquée *indestructible* et un bloc
 > de création invisible pour le seul compte qui en avait le droit.
 
-### V-D — Méthode et catalogues *(L25, L26)* — 🟡 **ENTAMÉE le 18/09/2026**
+### V-D — Méthode et catalogues *(L25, L26)* — 🟡 **L25 CLOS le 19/09/2026**
 
 **EBIOS RM** (sources de risque, scénarios stratégiques et opérationnels) en préservant les
 cotations F×G×M existantes ; quantification ; **catalogues ouverts** — importer et éditer un
@@ -144,7 +144,25 @@ référentiel sans toucher au code.
 > pareil — **restaurer une sauvegarde gagne**. Trouvé par le banc. ⚠️ Et **trois défauts de
 > plus trouvés en cliquant sur la recette**, après 2 230 essais verts.
 >
-> **Reste de L25** : **25.4** (quantification FAIR). Puis **L26**, les catalogues ouverts.
+> **Livré le 19/09/2026 — l'action 25.4, la quantification financière** (migration `050`,
+> schéma `data` en **v25**, panneau FAIR sur la fiche de risque). ⚠️ C'est la réponse à la
+> limite que 25.3 venait de rendre visible : la consolidation refuse d'additionner deux
+> expositions ORDINALES, et une somme d'argent, à devise égale, s'additionne toujours.
+> Elle refuse là aussi dès que **deux devises** coexistent.
+>
+> ⚠️ **Un triplet incomplet ne rend RIEN**, et le refus est posé à deux étages : une
+> contrainte refuse la donnée, la dérivation rend `null`. Des pertes secondaires absentes
+> ne valent pas zéro : le montant devient un **PLANCHER**, marqué et affiché « ≥ » —
+> l'estimation par défaut *dans le sens rassurant* est la plus dangereuse des deux.
+>
+> 🛑 **Et le plus important de ce lot ne parle pas de quantification** : le garde-fou qui
+> tient le « EN ADDITION » de tout L25 balayait les tables par leur **NOM**
+> (`like 'ebios\_%'`), et la table de quantification lui échappait. **Mesuré** : sa
+> rédaction d'origine rend **0 anomalie** sur le déclencheur fautif que la rédaction
+> élargie attrape — *un garde qui ne regarde pas rend zéro anomalie, c'est-à-dire ce
+> qu'il rend quand tout va bien*. Il balaie désormais le catalogue entier.
+>
+> **⇒ LE LOT L25 EST COMPLET.** Reste **L26**, les catalogues ouverts.
 
 ### V-E — Ouverture et automatisation *(L22, L23)*
 
