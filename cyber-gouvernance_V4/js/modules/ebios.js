@@ -434,8 +434,16 @@ const EbiosModule = (() => {
                 .addEventListener("click", () => ajouterValeurMetier(id));
             document.getElementById("srAjouter")
                 .addEventListener("click", () => ajouterSource(id));
+            // ⚠️ **L'IDENTIFIANT, PAS L'ÉLÉMENT.** `UI.wireDelete` fait lui-même le
+            //    `getElementById`, et rend la main SANS UN MOT quand il ne trouve rien.
+            //    Passer l'élément produit donc un bouton parfaitement visible dont le
+            //    clic ne fait RIEN : ni dialogue, ni requête, ni message. Mesuré au
+            //    navigateur sur la recette, le 18/09/2026 — le banc ne pouvait pas le
+            //    voir, aucun de ses essais n'allant jusqu'à supprimer depuis la fiche.
+            //    C'est la classe que ce dépôt proscrit partout : *quelque chose réussit
+            //    en silence alors que c'est faux.*
             UI.wireDelete({
-                button: document.getElementById("ebiosSupprimer"),
+                button: "ebiosSupprimer",
                 confirm: "Supprimer cette étude ? Ses valeurs métier, ses événements redoutés et ses couples source / objectif partent avec elle. Vos risques cotés en F × G × M ne sont pas touchés.",
                 remove: () => DataStore.deleteEbiosEtude(id),
                 toast: "Étude supprimée.",
