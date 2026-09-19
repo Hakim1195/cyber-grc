@@ -25,7 +25,7 @@
  *
  * ── La couverture est RÉCLAMÉE, pas supposée ─────────────────────────────────
  *
- * Un dernier test balaie les **46 entités du registre** et vérifie que chacune se lit,
+ * Un dernier test balaie les **47 entités du registre** et vérifie que chacune se lit,
  * se décrit, et porte un préfixe d'identifiant. Sans lui, ce fichier resterait un
  * échantillon dont personne ne saurait dire ce qu'il laisse de côté — le reproche
  * exact que la porte a formulé.
@@ -315,7 +315,7 @@ describe('Une entité par famille de différence', () => {
  *  §2 — La couverture, réclamée
  * ===================================================================== */
 
-describe('Les 46 entités du registre, sans échantillonnage', () => {
+describe('Les 47 entités du registre, sans échantillonnage', () => {
   test('chaque entité du modèle est décrite, chargée, et porte un préfixe', async () => {
     const modele = (await serveur.appeler('GET', '/api/modele')).corps;
     const jeu = await donnees();
@@ -333,7 +333,7 @@ describe('Les 46 entités du registre, sans échantillonnage', () => {
     // y entrer lui donne le round-trip et l'import sans qu'un greffon ait à les réécrire.
     // Ce que le greffon `src/campagnes/` ajoute est ce que la couche générique ne peut pas
     // faire : compter l'avancement, et convoquer une AUTRE filiale que la sienne.
-    assert.equal(noms.length, 46);
+    assert.equal(noms.length, 47);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -475,6 +475,30 @@ describe('Les 46 entités du registre, sans échantillonnage', () => {
         referentiel_id: crees.referentiels,
         langue: 'en',
       }),
+      // ── Lot L22, action 22.4 : les connecteurs de collecte ───────────────
+      //
+      // ⚠️ **Trois colonnes doivent être nommées, et chacune pour un motif
+      // différent** — c'est ce qui rend cette entrée instructive :
+      //
+      //  · `genre` porte un VOCABULAIRE FERMÉ, confronté au registre des
+      //    exécuteurs de `src/connecteurs/`. La valeur générique « Balayage … »
+      //    est refusée, et c'est le comportement voulu : un connecteur dont
+      //    aucun exécuteur ne sert le genre a l'air en place et ne fait rien ;
+      //  · `configuration` est CLOSE PAR GENRE (migration `055`). Un objet vide
+      //    passe — les deux réglages de la sauvegarde ont un défaut ou ne sont
+      //    lus qu'à l'exécution —, mais une clef inventée serait refusée, et
+      //    c'est tout le motif de la barrière : `connecteurs` VOYAGE dans le
+      //    fichier d'échange, et une configuration ouverte y aurait porté un mot
+      //    de passe en clair ;
+      //  · `mesure_id` vise `mesure_catalogue`, de niveau GROUPE : une valeur
+      //    inventée rend 409, le comportement voulu là encore — on ne surveille
+      //    pas un contrôle qui n'existe pas.
+      //
+      // ⚠️ **« antivirus » et non « sauvegarde »** : l'unicité est *un connecteur par
+      // genre et par filiale*, et le semis pose déjà une sauvegarde dans chacune. Viser
+      // le même genre mesurerait le semis, pas la route — et rendrait 409, ce qui est
+      // exactement ce que l'unicité doit faire.
+      connecteurs: { genre: 'antivirus', mesure_id: 'MESURE-G', configuration: {} },
       // ── Lot L25, ateliers 3 à 5 (migration `047`) ────────────────────────
       //
       // ⚠️ **Le couple source / objectif doit être RETENU** pour qu'un chemin

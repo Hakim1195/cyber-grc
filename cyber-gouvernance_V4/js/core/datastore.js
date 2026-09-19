@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 26;
+    const SCHEMA_VERSION = 27;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -210,7 +210,15 @@ const DataStore = (() => {
         "referentiels",
         "referentiel_domaines",
         "referentiel_exigences",
-        "referentiel_traductions"
+        "referentiel_traductions",
+        // v27 — Lot L22, action 22.4 : les connecteurs de collecte automatique.
+        //
+        // ⚠️ **Les CONSTATS qu'ils produisent ne sont PAS ici, et c'est la ligne qui
+        // sépare un réglage d'une preuve.** Un connecteur se refait à l'identique après
+        // une reprise ; un constat est une preuve datée, au même titre que le journal
+        // d'audit et la main courante de crise, et un fichier éditable lui ôterait sa
+        // valeur probante. On ne restaure pas un constat — on en produit un nouveau.
+        "connecteurs"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens

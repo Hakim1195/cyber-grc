@@ -175,6 +175,12 @@ async function startApp() {
         // norme a été publiée, laquelle remplace laquelle. L'onglet « Catalogue »,
         // lui, sert à les ÉVALUER, et il n'a pas bougé.
         "/catalogues": () => { if (typeof CataloguesModule !== "undefined") CataloguesModule.renderList(); },
+        // Lot L22 — les jetons d'API et les abonnements aux événements sortants.
+        "/settings-ouverture": () => { if (typeof OuvertureModule !== "undefined") OuvertureModule.renderList(); },
+        // Lots L22 (22.4) et L23 — la collecte automatique de preuve.
+        "/collecte": () => { if (typeof CollecteModule !== "undefined") CollecteModule.renderList(); },
+        // Lot L27 — l'assistance par IA.
+        "/assistance": () => { if (typeof AssistanceModule !== "undefined") AssistanceModule.renderList(); },
 
 	"/audits": () => { if (typeof AuditsModule !== "undefined") AuditsModule.renderList(); },
 	"/audits/:id": (id) => { if (typeof AuditsModule !== "undefined") AuditsModule.renderAuditDetail(id); },
@@ -411,6 +417,9 @@ const ROUTE_META = {
     "/tiers-dora": { s: "fil.section.tiers", t: "fil.tiersDora" },
     "/campagnes": { s: "fil.section.conformite", t: "fil.campagnes" },
     "/catalogues": { s: "fil.section.conformite", t: "fil.catalogues" },
+    "/settings-ouverture": { s: "fil.section.administration", t: "fil.ouverture" },
+    "/collecte": { s: "fil.section.conformite", t: "fil.collecte" },
+    "/assistance": { s: "fil.section.administration", t: "fil.assistance" },
     "/settings":     { s: "fil.section.administration", t: "fil.settings" },
     "/settings-reglages":   { s: "fil.section.administration", t: "fil.settings" },
     "/settings-echange":    { s: "fil.section.administration", t: "fil.settings" },
@@ -1144,6 +1153,12 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/tiers-dora": "tiers",
     "/campagnes": "conformite",
     "/catalogues": "conformite",
+    "/settings-ouverture": "administration",
+    "/collecte": "conformite",
+    // ⚠️ L'ÉCRAN vit sous « administration » comme le reste des Paramètres, mais la
+    //    LECTURE de l'état est ouverte à toute session côté serveur : le mode et
+    //    l'avertissement commandent le comportement du produit pour tout le monde.
+    "/assistance": "administration",
     "/personnel":    "personnel",
     "/actifs":       "actifs",
     "/cartographie": "actifs",

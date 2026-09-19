@@ -435,7 +435,23 @@ export async function monterGreffon(base, perimetre, options = {}) {
         };
 
   const instance = Fastify({ logger: journal, bodyLimit: config.serveur.tailleMaxCorpsOctets });
-  await instance.register(greffonApi, { pool, config, resolveur });
+  // `options.authentificateur` sert aux essais qui doivent mesurer une propriété des
+  // DROITS et non du périmètre — l'intersection à l'émission d'un jeton d'API, par
+  // exemple. Sans lui, le montage passe par l'authentification provisoire, qui rend
+  // des droits COMPLETS : un essai d'intersection y serait creux, puisque rien ne
+  // serait jamais retranché (motif du constat Q-210).
+  await instance.register(greffonApi, {
+    pool,
+    config,
+    resolveur,
+    ...(options.authentificateur === undefined
+      ? {}
+      : { authentificateur: options.authentificateur }),
+    // `options.transport` remplace CE QUI PARLE AU MODÈLE (lot L27). Il sert à
+    // éprouver les chemins d'échec — source coupée, réponse illisible — que le réel
+    // ne produit pas à la demande.
+    ...(options.transport === undefined ? {} : { assistanceTransport: options.transport }),
+  });
   await instance.ready();
 
   const enveloppe = envelopper(instance, config);

@@ -1487,7 +1487,8 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
     const references = await base.lignes(proprietaire, requete);
     // SIX depuis la migration `036` : le lien document ↔ contrôle en ajoute deux —
     // la clé de cohérence et celle de portée. HUIT depuis la `039` : le lien
-    // analyse d'impact ↔ contrôle en ajoute deux de plus, de la même forme.
+    // analyse d'impact ↔ contrôle en ajoute deux de plus, de la même forme. DIX depuis
+    // les `054` et `055` : le connecteur de collecte et son constat.
     // ⚠️ Toutes en « restrict », comme les quatre d'origine : une cascade rendrait
     // un contrôle supprimable dès lors qu'il n'est plus lié QU'À des documents ou
     // QU'À des analyses, et ferait disparaître la preuve avec lui. Le §17.6 est
@@ -1496,6 +1497,14 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
       { nom: 'fk_actions_mesure', suppression: 'restrict' },
       { nom: 'fk_analyse_mesures_mesure_coherence', suppression: 'restrict' },
       { nom: 'fk_analyse_mesures_mesure_portee', suppression: 'restrict' },
+      // DIX depuis les migrations `054` et `055` : le connecteur de collecte et le
+      // constat qu'il produit visent tous deux la mesure surveillée. ⚠️ « restrict »
+      // là encore, et le motif est le même d'un cran plus loin : une cascade ferait
+      // disparaître avec le contrôle **la preuve qu'on l'a constaté tenu**, c'est-à-dire
+      // exactement ce qu'un audit vient chercher. Le §17.6 est clair — un contrôle
+      // s'archive, il ne se supprime pas.
+      { nom: 'fk_collectes_mesure', suppression: 'restrict' },
+      { nom: 'fk_connecteurs_mesure', suppression: 'restrict' },
       { nom: 'fk_document_mesures_mesure_coherence', suppression: 'restrict' },
       { nom: 'fk_document_mesures_mesure_portee', suppression: 'restrict' },
       { nom: 'fk_evaluation_mesures_mesure', suppression: 'restrict' },
@@ -1524,8 +1533,8 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
       );
     }
     assert.deepEqual((await base.lignes(proprietaire, requete)).map((l) => l.suppression),
-      ['restrict', 'restrict', 'restrict', 'restrict',
-       'restrict', 'restrict', 'restrict', 'restrict']);
+      ['restrict', 'restrict', 'restrict', 'restrict', 'restrict',
+       'restrict', 'restrict', 'restrict', 'restrict', 'restrict']);
   });
 
   test('CAS 1 du §17.6 : une mesure LOCALE se supprime après déliage, même transaction', async () => {
@@ -4063,6 +4072,15 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // ⚠️ Il est nommément pièce par pièce parce qu'un garde de CLASSE ne voit pas la
       // disparition d'une PAIRE : c'est le constat Q-313, où les cinq pièces de la
       // migration 030 se retiraient une par une sous zéro anomalie.
+      // SOIXANTE ET UNIÈME, apporté par `057_l_assistance_ia.sql` : l'assistance par
+      // IA. Il ÉPROUVE cinq contraintes dans les deux sens — destination en https,
+      // quatre champs de confiance exigés, vocabulaire clos des usages, TROISIÈME
+      // verdict « indisponible », destination nommée pour un appel externe —, et
+      // mesure que la BARRIÈRE N° 1 couvre l'insertion ET la mise à jour sur son
+      // tgtype (constat Q-281). ⚠️ Sans elle, le mode externe redeviendrait activable
+      // depuis l'application : la décision d'exporter les données de gouvernance d'un
+      // groupe n'appartient pas à l'utilisateur qui a la fiche sous les yeux.
+      'assistance_ia',
       'barriere_attestation',
       'barriere_traitement',
       // QUARANTE-SEPTIÈME, apporté par `044_les_campagnes_descendantes.sql` — lot L24,
@@ -4117,6 +4135,15 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // leçon de Q-281). Sans lui, « RGPD » et « rgpd » deviendraient deux étiquettes et
       // le filtre perdrait des lignes en silence.
       'classification_documents',
+      // CINQUANTE-SEPTIÈME, apporté par `054_les_connecteurs_et_la_collecte.sql` :
+      // la fraîcheur d'une preuve est ÉPROUVÉE sur cinq cas témoins, dont deux
+      // tiennent le critère — une mesure **jamais constatée** ne passe pas pour
+      // fraîche, et une preuve de huit jours ne passe pas sous une fraîcheur de sept.
+      // Il mesure aussi le déclencheur qui ouvre une action au passage au rouge sur
+      // son ÉVÉNEMENT et son ARMEMENT, jamais sur sa seule existence (constat Q-281).
+      // ⚠️ L'ordre est celui de la COLLATION de PostgreSQL : « collecte » précède
+      // « colonnes_personnelles », parce que « l » précède « o ».
+      'collecte',
       'colonnes_personnelles',
       // VINGT-SEPTIÈME, apporté par `028_les_gardes_eprouvent.sql` — constat **Q-292**,
       // 8ᵉ passage de la porte S8, et c'est un garde-fou d'une NATURE différente des
@@ -4128,6 +4155,13 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // vigueur », sous un `f_verifier_schema()` à zéro anomalie. Celui-ci évalue le
       // PRÉDICAT RÉEL sur des lignes témoins : un garde qui envoie et constate ne peut
       // pas être trompé par qui le lit.
+      // CINQUANTE-HUITIÈME, apporté par `055_le_vocabulaire_des_connecteurs.sql` :
+      // les réglages qu'un connecteur peut porter sont CLOS, par genre, déclarés en
+      // base et lus par le serveur. ⚠️ Le motif est le secret — `connecteurs` voyage
+      // dans le fichier d'échange, et une configuration ouverte y aurait porté un mot
+      // de passe en clair. Et la parade n'est pas d'interdire ce qui RESSEMBLE à un
+      // secret (`motdepasse_2` passerait, §39.1) : c'est la LISTE qui est close.
+      'connecteur_configuration',
       'contraintes_eprouvees',
       // TRENTE-HUITIÈME, apporté par `037_le_controle_se_rejoue_et_se_mesure.sql` —
       // actions 19.5 et 19.6. Il ÉPROUVE les cinq rythmes sur une date témoin ET les
@@ -4239,6 +4273,15 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // contraintes sur des lignes témoins (§39.1).
       'echelles',
       'entropie_identifiants',
+      // CINQUANTE-NEUVIÈME, apporté par `056_les_evenements_reellement_emis.sql` :
+      // ce qui est ADMIS n'est pas ce qui est ÉMIS. `echeance_franchie` a vécu une
+      // journée dans le vocabulaire des abonnements sans qu'aucun émetteur existe —
+      // un exploitant s'y serait abonné, l'écran aurait montré l'abonnement actif, la
+      // file serait restée vide, et rien n'aurait dit pourquoi. ⚠️ Le garde-fou de la
+      // `053` NOMMAIT ce danger dans son propre témoin : il visait le cas où la
+      // contrainte se VIDE, pas celui où elle est juste et où l'émetteur manque.
+      // *La barrière regardait dans une direction ; le trou était dans l'autre.*
+      'evenements_emis',
       // TRENTE-HUITIÈME, apporté par `034_l_horloge_reglementaire.sql` : les quatre
       // paliers réglementaires — 24 h, 72 h et 1 mois pour NIS2, 72 h pour le RGPD —
       // sont armés et leurs délais EXACTS. ⚠️ Le garde ÉPROUVE le calcul sur un
@@ -4298,8 +4341,21 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // `001` et lue par personne jusqu'au 19/09/2026 : AUCUNE surcharge de filiale
       // ne vise une clé absente du catalogue du Groupe. Un réglage que le produit ne
       // lit pas est un réglage qui ment (constat Q-91).
+      // SOIXANTIÈME, apporté par `053_les_jetons_et_les_evenements.sql` : les jetons
+      // d'API et les abonnements. Il ÉPROUVE le vocabulaire des événements et des
+      // niveaux, et mesure l'expiration OBLIGATOIRE — un jeton sans terme n'est plus
+      // un jeton, c'est un mot de passe qui ne change jamais.
+      'ouverture',
       'parametres_catalogue',
       'piece_en_vigueur',
+      // SOIXANTE-DEUXIÈME, apporté par `058_le_portail_fournisseur.sql` : le portail,
+      // SEUL composant du produit destiné à être exposé hors VPN. Il exige que
+      // l'EXPIRATION reste obligatoire — un lien sans terme est un compte sans mot de
+      // passe —, que la clé vers le questionnaire reste COMPOSITE — une clé simple
+      // ouvrirait publiquement le questionnaire de la filiale voisine —, que
+      // l'empreinte reste unique, que les trois actions de journal existent, et qu'une
+      // réponse REPRISE porte sa date d'origine.
+      'portail',
       'portee_figee',
       'privileges',
       // TREIZIÈME, apporté par `011_privileges_definer.sql` (constat Q-136) : aucune

@@ -56,6 +56,7 @@ import type { JournalMinimal, PerimetreSession } from '../db/pool.js';
 import { projeterDroits } from '../droits/passerelle-api.js';
 import { ouvreUnAcces, resoudreDroits } from '../droits/resolution.js';
 import { ResolveurPerimetreSession } from '../droits/resolveur.js';
+import { filialeDuSecret, jetonDeLEntete, noterUsage, verifierJeton } from './jetons.js';
 import type { FilialeActive } from '../droits/resolveur.js';
 import type { EtatSession } from '../droits/resolveur.js';
 import { ErreurApplicative } from '../erreurs/index.js';
@@ -494,14 +495,96 @@ export class ServiceAuthentification implements Authentificateur {
    *   analysé à ce stade (condition d'entrée E4).
    */
   public async authentifier(requete: FastifyRequest): Promise<SessionAppliquee> {
+    const adresseIp = adresseDe(requete);
+
+    // ── ⚠️ LE JETON D'API, AVANT LE COOKIE — lot L22, action 22.1 ────────
+    //
+    // L'ordre n'est pas indifférent : une intégration n'a pas de cookie, et un
+    // navigateur n'envoie pas d'en-tête `Authorization`. Les deux chemins ne se
+    // croisent donc jamais — mais si les deux étaient présents, c'est le jeton
+    // qui doit gagner : il est plus étroit (une filiale, des domaines figés, une
+    // expiration obligatoire), et le plus étroit des deux est le bon choix quand
+    // on ne sait pas lequel l'appelant voulait employer.
+    //
+    // ⚠️ **Ce chemin ne construit AUCUN droit.** Il fabrique un `EtatSession` —
+    // la même structure exactement qu'une connexion humaine — et rend la main au
+    // `ResolveurPerimetreSession` habituel. Un second calcul de droits aurait été
+    // d'accord avec le premier le jour de sa rédaction, et rien n'aurait dit
+    // qu'il avait cessé de l'être (constat Q-70).
+    const secret = jetonDeLEntete(requete.headers.authorization);
+    if (secret !== null) {
+      return await this.authentifierParJeton(secret);
+    }
+
     const jeton = lireCookie(requete.headers.cookie, this.config.session.nomCookie);
     if (jeton === null) throw sessionAbsente('aucun cookie de session sur la requête');
 
-    const adresseIp = adresseDe(requete);
     const etat = await this.etatDeLaSession(jeton, adresseIp);
     await this.revaliderSiNecessaire(etat, adresseIp);
 
     const resolveur = new ResolveurPerimetreSession(etat);
+    return this.appliquer(resolveur, null, false);
+  }
+
+  /**
+   * Authentifie un appel porteur d'un jeton d'API.
+   *
+   * ⚠️ **Le motif du refus ne sort jamais.** Les quatre cas — inconnu, révoqué,
+   * expiré, filiale désactivée — sont distincts au journal et indiscernables sur
+   * le réseau : distinguer « inconnu » de « révoqué » dirait à qui essaie des
+   * jetons au hasard lesquels ont existé. C'est l'oracle d'existence du contrôle
+   * **S12**, et c'est le même arbitrage que le 404 des liens du portail (L28).
+   *
+   * ⚠️ **L'usage est noté DANS la même transaction que la vérification.** Le
+   * faire après, dans une seconde transaction, aurait laissé un jeton servir sans
+   * laisser de trace le jour où le pool est saturé — et c'est précisément ce
+   * jour-là qu'on regarde les traces.
+   *
+   * ⚠️ **Un refus n'écrit RIEN au journal d'audit**, et c'est délibéré : un jeton
+   * périmé rejoué en boucle y écrirait une entrée par requête, dans un registre
+   * scellé de trois ans — c'est le motif pour lequel une session morte n'est
+   * journalisée qu'UNE fois, quelques lignes plus bas. Le refus laisse une trace
+   * dans le journal technique (`detailJournal`), et le limiteur de rythme du
+   * crochet `onRequest` compte les 401 : la brute force est traitée là, pas ici.
+   */
+  private async authentifierParJeton(secret: string): Promise<SessionAppliquee> {
+    /* ── ⚠️ LE PÉRIMÈTRE DE LECTURE VIENT DU SECRET, ET DE LUI SEUL ─────────
+     *
+     * 🛑 **Sans cela, tout appel par jeton rendait 401** : `jetons_api` est
+     * cloisonnée, `PERIMETRE_SYSTEME` ne déclare aucune filiale, et la ligne
+     * était invisible à la transaction qui devait la lire. Mesuré sur la
+     * recette ; le journal disait « motif inconnu ».
+     *
+     * ⚠️ **Cette filiale n'est CRUE de personne.** Elle ne sert qu'à ouvrir la
+     * bonne fenêtre de lecture : l'empreinte doit encore correspondre à une
+     * ligne de cette filiale-là. Une marque forgée fait chercher là où rien
+     * n'est, donc rend le même refus qu'un secret inventé — et le refus, lui,
+     * reste indiscernable.
+     *
+     * ⚠️ **Un secret sans marque est refusé au bord**, sans toucher la base :
+     * aucun jeton du produit n'en est dépourvu, et lui accorder un tour de
+     * lecture serait payer une requête pour une entrée qu'on sait mauvaise.
+     */
+    const filiale = filialeDuSecret(secret);
+    if (filiale === null) {
+      throw sessionAbsente("jeton d'API refusé, motif « forme »");
+    }
+    const verdict = await avecTransactionAuthentification(
+      this.pool,
+      { ...PERIMETRE_SYSTEME, filialeId: filiale, filiales: [filiale] },
+      async (client) => {
+        const resultat = await verifierJeton(client, secret);
+        if ('refus' in resultat) return resultat;
+        await noterUsage(client, resultat.jetonId);
+        return resultat;
+      },
+    );
+
+    if ('refus' in verdict) {
+      throw sessionAbsente(`jeton d'API refusé, motif « ${verdict.refus} »`);
+    }
+
+    const resolveur = new ResolveurPerimetreSession(verdict.etat);
     return this.appliquer(resolveur, null, false);
   }
 

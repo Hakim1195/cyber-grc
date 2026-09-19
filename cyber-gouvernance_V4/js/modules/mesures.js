@@ -159,6 +159,14 @@ const MesuresModule = (() => {
                     </div>
                     <button id="addMesureBtn" style="background:var(--primary);">Nouvelle mesure</button>
                 </div>
+                <!-- Lots L22 (22.4) et L23 — la barre d'onglets du sujet « mesures ».
+                     ATTENTION : elle est posee ICI parce que l'ecran de la collecte
+                     l'affichait et que celui-ci ne l'affichait pas ; le chemin n'allait
+                     que dans un sens, et depuis les mesures la collecte automatique
+                     etait INATTEIGNABLE. Une capacite qu'aucun ecran n'appelle est une
+                     capacite absente — trouve en cliquant sur la recette, apres un banc
+                     entierement vert (voir REPRISE.md section 4). -->
+                ${UI.ongletsHtml(UI.ongletsDe("/mesures"))}
 
                 <div class="synthese-message info" style="padding:10px; font-size: var(--text-base);">
                     <strong>Principe du pivot :</strong> évaluez une mesure une seule fois, puis <em>propagez</em> son statut à toutes les exigences de référentiels qu'elle couvre. La liaison se crée depuis le <strong>Détail</strong> d'une exigence, dans un référentiel.

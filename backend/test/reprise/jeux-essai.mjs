@@ -133,6 +133,12 @@ const NOUVELLES_PAR_VERSION = {
     'referentiel_exigences',
     'referentiel_traductions',
   ],
+  // v27 — les CONNECTEURS de collecte (lot L22, action 22.4). ⚠️ **Une seule
+  // collection, et l'absence de la seconde est la décision du palier** : `collectes`
+  // ne voyage PAS. Un connecteur est un RÉGLAGE, qu'on refait à l'identique après une
+  // reprise ; un constat est une PREUVE datée, au même titre que le journal d'audit et
+  // la main courante de crise, et un fichier éditable lui ôterait sa valeur probante.
+  27: ['connecteurs'],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -1079,6 +1085,43 @@ export function instantaneV26Complet() {
           nom: 'Customer framework',
           exigences: { 'gouvernance/1.1': { titre: 'Is a security policy formalised and approved?' } },
         },
+      },
+    ],
+  };
+}
+
+/**
+ * Instantané COMPLET en v27 — les CONNECTEURS de collecte (lot L22, action 22.4).
+ *
+ * ⚠️ **`collectes` n'y figure PAS, et c'est la décision du palier** : un connecteur
+ * est un RÉGLAGE, qu'on refait à l'identique après une reprise ; un constat est une
+ * PREUVE datée, au même titre que le journal d'audit et la main courante de crise.
+ * Le faire voyager dans un fichier lisible et éditable lui ôterait sa valeur
+ * probante. *On ne restaure pas un constat ; on en produit un nouveau.*
+ *
+ * ⚠️ **La configuration ne porte AUCUN secret**, et c'est ce qui rend cette
+ * collection exportable : les clefs admises sont closes en base, par genre
+ * (`f_connecteur_clefs()`, migration `055`), et aucun des trois exécuteurs n'en
+ * demande qui soit un identifiant — ceux du lien LDAP et le chemin du démon
+ * antivirus viennent de la configuration du SERVEUR.
+ *
+ * ⚠️ **`mesure_id` vise le pivot du même jeu d'essai** : un connecteur sans mesure
+ * produirait un constat que personne ne regarde, et le schéma le refuse.
+ */
+export function instantaneV27Complet() {
+  const base = instantaneV26Complet();
+  return {
+    ...base,
+    schemaVersion: 27,
+    connecteurs: [
+      {
+        id: 'CONN-1720000000000-243',
+        genre: 'sauvegarde',
+        nom: 'Dépôt de sauvegarde du site',
+        actif: true,
+        configuration: { chemin: '/var/sauvegardes', age_max_heures: 24 },
+        mesure_id: 'MESURE-1720000000000-1',
+        fraicheur_jours: 7,
       },
     ],
   };

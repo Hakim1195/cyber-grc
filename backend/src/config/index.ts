@@ -189,6 +189,51 @@ export interface ConfigurationRetention {
   readonly donneesJours: number;
 }
 
+/**
+ * L'assistance par IA (lot L27, arbitrage **A1** du 08/09/2026).
+ *
+ * ── ⚠️ DEUX RÉGLAGES, ET ILS NE FONT PAS LA MÊME CHOSE ────────────────────
+ *
+ *  · `urlLocale` dit **où joindre le modèle local**. C'est le chemin nominal, et il
+ *    n'ouvre aucune sortie : l'unité systemd atteint la boucle locale et rien d'autre,
+ *    `IPAddressDeny=any` restant **intact** (critère 27.1). Vide, l'assistance rend
+ *    « indisponible » — *jamais une réponse inventée, jamais un silence*.
+ *  · `externeAutorisee` est la **barrière n° 1** : sans elle, aucune ligne
+ *    d'activation ne peut être écrite, quelle que soit la route empruntée. Elle
+ *    n'existe que dans `/etc/cyber-grc/env`, posée par l'exploitant en root — *la
+ *    décision d'exporter les données de gouvernance d'un groupe n'appartient pas à
+ *    l'utilisateur qui a la fiche sous les yeux*.
+ *
+ * ⚠️ **Autoriser n'est pas activer.** `externeAutorisee` ouvre la possibilité ;
+ * l'activation reste **par filiale**, en base, avec ses quatre champs de confiance.
+ * Un groupe de vingt filiales n'a pas un régime unique.
+ */
+export interface ConfigurationAssistance {
+  /** Point d'accès du modèle LOCAL. Vide = pas de modèle installé. */
+  readonly urlLocale: string;
+  /** Délai de garde d'un appel, en millisecondes. */
+  readonly delaiMs: number;
+  /** Barrière n° 1 : le mode externe est-il autorisé par l'exploitant ? */
+  readonly externeAutorisee: boolean;
+}
+
+/**
+ * Le portail fournisseur (lot L28) — **le premier composant hors VPN**.
+ *
+ * ⚠️ **`actif` vaut `false` par défaut, et le défaut n'enregistre AUCUNE route.**
+ * Pas une qui rendrait 503, pas un montage à moitié : la surface n'existe pas. *Ce
+ * qui n'est pas monté ne peut pas être attaqué.*
+ *
+ * ⚠️ **La consigne du plan est écrite** : la porte S15 est la plus exigeante du
+ * chantier, et *en cas de doute sur ce lot, on ne livre pas*. L'ouvrir avant
+ * l'ultrareview serait exactement le doute qu'elle vise.
+ */
+export interface ConfigurationPortail {
+  readonly actif: boolean;
+  /** URL publique du portail, pour composer les liens remis aux fournisseurs. */
+  readonly urlPublique: string;
+}
+
 export interface Configuration {
   readonly environnement: Environnement;
   /** Profil d'installation, tel que `install.sh` l'a écrit. Voir le type. */
@@ -203,6 +248,8 @@ export interface Configuration {
   readonly chemins: ConfigurationChemins;
   readonly piecesJointes: ConfigurationPiecesJointes;
   readonly retention: ConfigurationRetention;
+  readonly assistance: ConfigurationAssistance;
+  readonly portail: ConfigurationPortail;
   /**
    * Anomalies non bloquantes : le serveur démarre, mais elles sont journalisées
    * à chaque démarrage. Typiquement une configuration de recette laissée en
@@ -886,6 +933,83 @@ export function chargerConfiguration(source: NodeJS.ProcessEnv = process.env): C
     donneesJours: lecteur.entier('RETENTION_DONNEES', { defaut: 1095, min: 30, max: 3660 }),
   };
 
+  /* ── L'ASSISTANCE PAR IA (lot L27) ───────────────────────────────── */
+  //
+  // ⚠️ **`IA_URL_LOCALE` vise la BOUCLE LOCALE, et le contrôle est ferme.** Une
+  // adresse extérieure y serait une sortie réseau déguisée en « mode local » —
+  // c'est-à-dire la barrière n° 2 contournée par le réglage qui prétend ne pas
+  // en avoir besoin. Le critère 27.1 dit : *si la fonction marche alors que rien
+  // n'est ouvert, c'est qu'elle ne sort pas.* On vérifie donc l'hôte, et un hôte
+  // non local **refuse le démarrage** — pas un avertissement : une valeur qui
+  // ouvre une sortie ne doit pas pouvoir passer par distraction.
+  const urlLocale = lecteur.texte('IA_URL_LOCALE', { defaut: '' }).trim();
+  if (urlLocale !== '') {
+    let hoteLocal = false;
+    try {
+      const analysee = new URL(urlLocale);
+      hoteLocal =
+        analysee.hostname === '127.0.0.1' ||
+        analysee.hostname === 'localhost' ||
+        analysee.hostname === '::1' ||
+        analysee.hostname === '[::1]';
+    } catch {
+      hoteLocal = false;
+    }
+    if (!hoteLocal) {
+      lecteur.probleme(
+        `IA_URL_LOCALE = ${urlLocale} : le mode LOCAL vise la boucle locale ` +
+          '(127.0.0.1, localhost ou ::1). Une adresse extérieure serait une sortie ' +
+          'réseau déguisée en mode local, c’est-à-dire la barrière n° 2 du lot L27 ' +
+          'contournée par le réglage qui prétend ne pas en avoir besoin.',
+      );
+    }
+  }
+
+  // ⚠️ **BARRIÈRE N° 1.** Elle n'ACTIVE rien : elle autorise qu'une filiale
+  // s'active, en base, avec ses quatre champs de confiance. Confondre les deux
+  // ferait sortir les données de dix-neuf filiales sur la décision d'une seule.
+  const externeAutorisee = lecteur.booleen('CYBER_GRC_IA_EXTERNE', false);
+  if (externeAutorisee) {
+    lecteur.avertir(
+      'CYBER_GRC_IA_EXTERNE = oui : le mode IA EXTERNE est AUTORISÉ sur cette ' +
+        'installation. Les données de gouvernance des filiales qui l’activeront ' +
+        'sortiront vers un fournisseur tiers. Rien ne part tant que la sortie réseau ' +
+        'de l’unité systemd n’est pas ouverte (barrière n° 2), et chaque appel est ' +
+        'journalisé (barrière n° 5).',
+    );
+  }
+
+  /* ── LE PORTAIL FOURNISSEUR (lot L28) ─────────────────────────────── */
+  //
+  // ⚠️ **Fermé par défaut.** Et quand il est ouvert, son URL publique est
+  // OBLIGATOIRE : sans elle, les liens remis aux fournisseurs ne mènent nulle
+  // part, et le produit les aurait émis quand même — c'est la classe du constat
+  // Q-199, où un lot a été livré incapable de faire ce qu'il annonçait.
+  const portailActif = lecteur.booleen('PORTAIL_ACTIF', false);
+  const portailUrl = lecteur.texte('PORTAIL_URL_PUBLIQUE', { defaut: '' }).trim();
+  if (portailActif) {
+    if (!portailUrl.startsWith('https://')) {
+      lecteur.probleme(
+        'PORTAIL_URL_PUBLIQUE : une URL https est obligatoire quand PORTAIL_ACTIF=oui. ' +
+          'Sans elle, les liens remis aux fournisseurs ne mènent nulle part — et le ' +
+          'produit les aurait émis quand même.',
+      );
+    }
+    lecteur.avertir(
+      'PORTAIL_ACTIF = oui : le portail fournisseur est monté. C’est le SEUL composant ' +
+        'de ce produit destiné à être exposé hors VPN. Vérifiez le vhost dédié, sa borne ' +
+        'de corps et son limiteur de débit avant de le publier.',
+    );
+  }
+
+  const portail: ConfigurationPortail = { actif: portailActif, urlPublique: portailUrl };
+
+  const assistance: ConfigurationAssistance = {
+    urlLocale,
+    delaiMs: lecteur.entier('IA_DELAI_MS', { defaut: 30_000, min: 1_000, max: 120_000 }),
+    externeAutorisee,
+  };
+
   if (retention.journalJours < 1095) {
     lecteur.avertir(
       `RETENTION_JOURNAL = ${retention.journalJours} jours : le cadrage retient 3 ans (1095 jours) pour le journal d'audit (§1.7).`,
@@ -907,6 +1031,8 @@ export function chargerConfiguration(source: NodeJS.ProcessEnv = process.env): C
     chemins,
     piecesJointes,
     retention,
+    assistance,
+    portail,
     avertissements: lecteur.avertissements,
   };
 }

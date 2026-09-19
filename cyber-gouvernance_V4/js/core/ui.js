@@ -695,7 +695,28 @@ window.UI = (function () {
                 Object.freeze({ route: "/settings", libelle: "Identit\u00e9" }),
                 Object.freeze({ route: "/settings-reglages", libelle: "R\u00e9glages" }),
                 Object.freeze({ route: "/settings-echange", libelle: "\u00c9change de donn\u00e9es" }),
-                Object.freeze({ route: "/settings-decouverte", libelle: "Jeu de d\u00e9couverte" })
+                Object.freeze({ route: "/settings-decouverte", libelle: "Jeu de d\u00e9couverte" }),
+                // Lot L22 — les jetons d'API et les abonnements aux événements
+                // sortants sont une CONFIGURATION D'EXPLOITATION : qui a le droit
+                // de parler à ce serveur sans compte humain, et vers où il parle.
+                // Un onglet des paramètres, donc, et non une entrée de menu de
+                // plus (`docs/PLAN_INTERFACE.md`).
+                Object.freeze({ route: "/settings-ouverture", libelle: "Ouverture technique" }),
+                // Lot L27 — l'assistance par IA. Un onglet des Paramètres, parce que
+                // ce qu'on y règle est le MODE (local ou externe) et ce qui part :
+                // c'est une question d'exploitation, pas un sujet métier.
+                Object.freeze({ route: "/assistance", libelle: "Assistance IA" })
+            ])
+        }),
+        Object.freeze({
+            // Lots L22 (action 22.4) et L23 — la collecte automatique est une VUE
+            // des mesures : un connecteur rapporte la preuve d'UNE mesure, et
+            // c'est sur la mesure qu'on va chercher cette preuve. Un onglet du
+            // même sujet, donc, et non une entrée de menu (`docs/PLAN_INTERFACE.md`).
+            sujet: "mesures",
+            vues: Object.freeze([
+                Object.freeze({ route: "/mesures", libelle: "Mesures de s\u00e9curit\u00e9" }),
+                Object.freeze({ route: "/collecte", libelle: "Collecte automatique" })
             ])
         }),
         Object.freeze({

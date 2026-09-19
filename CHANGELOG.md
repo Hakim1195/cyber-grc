@@ -8,9 +8,24 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
-> **État mesuré le 18/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
-> **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2282 essais, 2282 passés, 0 échec**, **relevé famille par
+> **État mesuré le 19/09/2026**, après les vagues E et F, sur la machine réelle
+> (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
+> **PostgreSQL 17.11**) : **58 migrations**, **89 tables**, **356 politiques**,
+> **62 garde-fous**, **494 décisions** au registre de l'article 30, publication
+> **85 fichiers**, schéma `data` en **v27**, indicateur **53 ✅ · 19 🟡 · 14 ❌ (~73 %)**.
+> Le compte d'essais exact se relève au `backend/README.md` §8 — **il ne se recopie pas
+> ici** (constat **Q-219**, et ce bloc a été faux quatre fois).
+>
+> 🛑 **LES SIX VAGUES DU `docs/PLAN_ACHEVEMENT.md` SONT CONSTRUITES.** Le geste suivant
+> n'est plus un lot : c'est l'**ultrareview**, que l'utilisateur seul peut lancer.
+> ⚠️ **Et ce qui est construit n'est pas ce qui est ouvert** — le portail fournisseur
+> n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
+> Règle : `backend/db/CONVENTIONS.md` **§47**.
+
+> `npm test` → **2356 essais, 2356 passés, 0 échec** — trente-huit familles, dont quatre
+> neuves : `ouverture`, `collecte`, `assistance`, `portail`.
+>
+> **État mesuré le 18/09/2026** : **relevé famille par
 > famille** (trente-deux familles, dont `echelles` qui naît avec l'action 25.3),
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
@@ -55,6 +70,275 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### L'assistance par IA et le portail fournisseur — L27 et L28 (19/09/2026)
+
+**La vague F est construite.** Ce sont les deux seules surfaces **externes** du produit,
+et c'est pourquoi elles viennent en dernier.
+
+🛑 **CE QUI EST CONSTRUIT N'EST PAS CE QUI EST OUVERT, et la distinction est le lot.**
+Le mode IA externe est **fermé**, le portail **n'enregistre aucune route**, et son vhost
+est livré **désactivé**. La consigne du `docs/PLAN_PRODUIT.md` prime : *« la porte S15 est
+la plus exigeante du plan […] en cas de doute sur ce lot, on ne livre pas »*.
+
+#### Ajouté — L27, l'assistance par IA (arbitrage A1)
+
+- **Les cinq usages arbitrés, et pas un de plus** : correspondances, brouillon de
+  politique, résumé d'incident, réponse à un questionnaire, recherche en langage courant.
+  ⚠️ **L'IA PROPOSE, UN HUMAIN DÉCIDE** : aucun n'écrit en base, et un essai balaie les
+  quatre tables métier avant et après les cinq appels pour le **mesurer**.
+- **Le mode LOCAL est le chemin nominal, et il ne sort pas.** ⚠️ `IA_URL_LOCALE` **refuse
+  le démarrage** sur une adresse extérieure : ce serait une sortie réseau déguisée en mode
+  local, c'est-à-dire la barrière n° 2 contournée par le réglage qui prétend ne pas en
+  avoir besoin. **Mesuré sur la machine réelle** : `IPAddressDeny=::/0 0.0.0.0/0` avec la
+  seule boucle locale autorisée, et l'assistance répond. *Si la fonction marche alors que
+  rien n'est ouvert, c'est qu'elle ne sort pas.*
+- **Les six barrières du mode externe**, et la sixième seule est un texte : *(1)* on ne
+  l'active pas depuis l'application — un déclencheur en base l'exige de l'exploitant ;
+  *(2)* la sortie réseau reste fermée ; *(3)* destination déclarée, `https`, **aucune
+  redirection suivie** ; *(4)* ce qui part est **montré avant de partir**, et la route
+  d'envoi **RECOMPOSE** au lieu de croire le client — sinon la barrière protégerait
+  l'utilisateur honnête et personne d'autre ; *(5)* chaque appel externe est journalisé
+  (`ia_externe`) ; *(6)* l'avertissement, permanent, sans bouton de fermeture.
+- 🛑 **Le troisième verdict est le cœur du lot** : source coupée, réponse illisible,
+  modèle absent rendent **« indisponible »** — *jamais une réponse inventée, jamais un
+  silence*. Et **200, non 500** : l'indisponibilité est une information, pas une panne.
+- **Activation PAR FILIALE, jamais pour le Groupe** : ce qui est validé en France peut ne
+  pas l'être ailleurs, et une activation Groupe ferait sortir les données de dix-neuf
+  filiales sur la décision d'une seule. Une filiale **sans ligne** est en mode local —
+  *le défaut n'a besoin de rien, et c'est ce qui rend son absence sûre.*
+- **Les quatre champs de « confiance » sont exigés PAR LE SCHÉMA** : fournisseur, contrat,
+  lieu d'hébergement, engagement de non-réentraînement, qui a validé. ⚠️ Ils ne protègent
+  rien techniquement, **et c'est assumé** : ils existent pour qu'au jour de l'audit la
+  question ait une réponse **écrite avant** d'être posée.
+- **L'injection d'invite se ferme à la source** : les sauts de ligne sont retirés des
+  valeurs, de sorte qu'une saisie ne peut pas fabriquer une ligne « Contrainte : … » et se
+  faire passer pour une instruction. *Pas par une consigne qui demanderait au modèle de ne
+  pas se laisser faire.*
+- **Quinzième sujet au `--diagnostic`**, et le registre de l'article 30 tranche deux
+  colonnes qui comptent : `ia_appels.invite` et `ia_appels.reponse` sont **personnelles et
+  supprimables** — un résumé d'incident nomme des gens, et un texte soumis est une pièce
+  de travail, pas une preuve d'audit.
+
+#### Ajouté — L28, le portail fournisseur (arbitrage A3)
+
+- **Pas de compte fournisseur, et c'est délibéré** : un compte, c'est un mot de passe à
+  réinitialiser, une énumération possible et une surface qui **vit après la campagne**. Un
+  lien **expire tout seul** — signé, nominatif, daté, révocable, borné à 180 jours, et
+  portant sur **un seul questionnaire**.
+- **404, jamais 403.** Lien inconnu, expiré, révoqué, ou visant un questionnaire disparu :
+  quatre motifs distincts au journal, **une seule réponse à l'octet près** sur le réseau.
+  Un 403 confirmerait que la cible existe, et la surface est **publique**.
+- **La session du portail n'est pas une session du produit** : aucun profil, aucun
+  domaine, **un périmètre d'un seul objet**. Toute lecture ajoute un
+  `where questionnaire_id` **en plus** de la RLS — deux barrières, parce que c'est ici que
+  la première coûterait le plus cher.
+- **Aucun chemin de dépôt parallèle** : le portail monte `greffonPieces` **tel quel**, et
+  les huit contrôles du lot L6 — ClamAV compris — s'exercent sur un fichier venu de
+  l'Internet public exactement comme sur un fichier déposé depuis le VPN. *C'est ainsi
+  qu'on se retrouve avec deux chaînes dont une seule est éprouvée.*
+- **Une réponse reprise porte SA DATE D'ORIGINE**, et la modifier la lui **retire** : une
+  réponse de 2024 présentée comme neuve serait un faux en audit, et du neuf présenté comme
+  ancien serait l'autre moitié du même faux.
+- **Une attestation rendue au fournisseur**, sans **aucune donnée du client** : c'est ce
+  qui fait qu'il accepte de répondre sérieusement — il y gagne quelque chose.
+- **Vhost séparé** (`deploy/apache/cyber-grc-portail.conf`), livré **désactivé** : nom
+  propre, borne de corps **plus étroite** que celle du produit (12 Mio contre 27),
+  `DocumentRoot` vide, CSP `default-src 'none'`, en-têtes de provenance effacés, journaux
+  séparés, et **un seul préfixe relayé**.
+
+#### Corrigé / appris
+
+- ⚠️ **Deux balayages du catalogue ont rencontré des tables qui ne sont pas des entités**
+  — `evenements_sortants`, `collectes`, `portail_liens` —, et la bonne réponse n'était ni
+  de rétrécir le balayage ni de lui apprendre à semer n'importe quoi : c'est de **borner,
+  puis de MESURER la borne**. Un essai de plus demande à la route de dépôt d'accepter une
+  pièce sur chaque exclu, et exige le refus. *Une exclusion dit « voici la mesure qui le
+  prouve » ; un angle mort dit « le balayage ne l'a pas vue », et les deux se ressemblent
+  dans un banc vert.* Règle : `CONVENTIONS.md` **§48**.
+- ⚠️ **Le `CONVENTIONS.md` §46 a payé le lendemain de son écriture.** `portail_liens` est
+  cloisonnée, et la recherche par empreinte précède le périmètre qu'elle produit :
+  exactement la circularité découverte le matin même au lot L22. Le lien porte sa filiale
+  en clair, et le défaut n'a **pas** été refait. *Une règle écrite la veille et appliquée
+  le lendemain est la seule preuve qu'elle valait la peine d'être écrite.*
+- 🛑 **Une mutation est passée, et c'était la plus dangereuse du lot.** Mettre
+  `perimetreGroupe` et `administrationGroupe` à `true` dans la session du portail laissait
+  **treize essais sur quatorze verts** — la RLS borne encore la filiale, donc la voisine
+  restait invisible. L'essai mesure désormais **le périmètre lui-même**. Constat **Q-210**,
+  sur la surface publique du produit.
+- **Le banc a corrigé la date d'origine d'une reprise** : `cree_le` est la date où la ligne
+  est entrée dans **ce système** — pour des réponses importées, la date de l'import. C'est
+  `recu_le` du questionnaire précédent qui est la date qu'un auditeur reconnaît.
+- **Un garde-fou a exigé un arbitrage** : `uq_portail_liens_empreinte` est une unicité
+  **sans `filiale_id`**, ce que le §19.1 interdit. Dispensée **par écrit** — l'unicité doit
+  être globale, et la conséquence que le §19.1 redoute est ici l'effet recherché.
+
+---
+
+### L'ouverture technique et la collecte automatique — L22 et L23 (19/09/2026)
+
+**La vague E est close.** Le produit sait désormais laisser un autre système lui parler
+sans compte humain, faire partir un événement quand quelque chose arrive, et **constater
+lui-même** une partie de sa propre conformité.
+
+#### Ajouté — L22, l'ouverture technique
+
+- **Jetons d'API** (migration `053`, `src/auth/jetons.ts`, `src/ouverture/`). ⚠️ **Un jeton
+  est un sujet de droits comme un autre** : il bâtit un `EtatSession` et traverse la
+  résolution de périmètre et la RLS — il ne les contourne pas, et il n'ouvre aucun chemin
+  d'autorisation parallèle (motif du constat Q-70). Sa portée est **« filiale », en dur** :
+  un jeton de portée Groupe aurait lu vingt filiales, et il aurait suffi d'en perdre un.
+- **Le secret n'existe qu'une fois.** Le serveur le fabrique, le rend, et n'en garde qu'une
+  **empreinte SHA-256**. ⚠️ **SHA-256 et non `scrypt`, délibérément** : un secret de 256 bits
+  tiré d'un générateur cryptographique n'a pas de dictionnaire à protéger, et un dérivateur
+  lent ferait payer sa latence à **chaque appel d'API**, ce qui est le contraire du but.
+- **Quatre refus indiscernables** — inconnu, révoqué, expiré, filiale inactive. Le motif va
+  au journal ; ce qui revient sur le réseau est un 401 unique. Distinguer « inconnu » de
+  « révoqué » dirait à qui essaie des jetons au hasard lesquels ont existé (contrôle **S12**).
+- **Révoquer n'est pas supprimer** : la ligne reste, datée et nominative. Savoir qu'un accès
+  a existé, qui l'a émis et qui l'a coupé est exactement ce qu'un audit vient chercher.
+- **Événements sortants** (`053`) — création d'incident, refus d'approbation, création
+  d'action, franchissement d'échéance. ⚠️ **Le service web n'appelle JAMAIS vers l'extérieur** :
+  les déclencheurs **enfilent**, et une unité systemd distincte **draine**. C'est la discipline
+  de L12 pour le courriel et du journal vers rsyslog, et elle a la même raison — une requête
+  d'utilisateur ne doit pas attendre un tiers. L'unité est livrée **non armée**, avec
+  `IPAddressDeny=any` : rien ne part tant que l'exploitant n'a pas ouvert la sortie, et
+  l'écran le dit (constat **Q-199**).
+- **La charge ne porte pas le contenu** : l'abonné reçoit de quoi **venir chercher** —
+  l'événement, l'entité, l'identifiant —, avec le jeton qui le borne. Y mettre la description
+  d'un incident de sécurité serait une extraction de données par la porte qu'on vient d'ouvrir.
+- **L'action 22.6 — renvoi vers Jira / ServiceNow — est la COMBINAISON de 22.1 et 22.3**, et
+  le dire ainsi est plus honnête que d'écrire un intégrateur : l'**aller** par l'abonnement à
+  `action_creee`, le **retour** par un jeton borné au domaine « actions » sur la route
+  générique. Ni client Jira, ni client ServiceNow, ni schéma d'authentification propre à
+  l'un d'eux — donc **rien à maintenir** le jour où leur API change, et rien à désactiver
+  puisqu'il n'y a rien. C'est mot pour mot le critère : *« sans dépendance nouvelle si inactif »*.
+
+#### Ajouté — L23, la collecte automatique de preuve
+
+- **Trois connecteurs locaux** (`054`, `055`, `src/connecteurs/`) — sauvegarde, antivirus,
+  annuaire. Chacun rend une **preuve datée rattachée à une mesure**, et `mesure_id` est
+  **obligatoire** : un connecteur sans mesure produirait un constat que personne ne regarde.
+- 🛑 **AUCUN CHEMIN D'ÉCHEC NE REND « CONFORME »** (critère 23.4, le point le plus important
+  du lot). Source injoignable, configuration incomplète, répertoire illisible, démon qui
+  répond **sans dater sa base de signatures** : tout cela rend `indetermine`, qui n'est ni
+  vert ni rouge. ⚠️ Et la distinction va dans l'autre sens aussi : un répertoire **lisible et
+  vide** est « non conforme », pas « indéterminé » — la source a répondu, et elle a répondu
+  « rien ».
+- **Une preuve périmée redevient absente**, et « périmé » n'est **pas** « non conforme » :
+  une preuve périmée ne dit pas que le contrôle a échoué, elle dit qu'on ne sait plus. La
+  fraîcheur est **dérivée** (`f_collecte_fraicheur`), jamais rangée — une colonne « valide »
+  vieillirait sans que rien n'écrive.
+- **Le PASSAGE au rouge ouvre une action** et la **rattache à la mesure** ; rester rouge n'en
+  ouvre pas. Un connecteur qui passe toutes les cinq minutes sur un contrôle rouge créerait
+  **288 actions par jour**, et le plan d'actions deviendrait illisible — y compris le jour où
+  il dit quelque chose. Et `indetermine` ne crée **rien** : accuser l'équipe sécurité d'une
+  panne de réseau n'aide personne.
+- **L'historique du contrôle** (23.3) : chaque passage écrit une ligne, et « depuis quand »
+  se **compte** au lieu d'être rangé. Un contrôle qui ne garde que son dernier état ne sait
+  pas dire « rouge depuis trois semaines » — or c'est cela qu'un auditeur demande.
+- **L'indicateur « preuves fraîches »** rejoint les courbes de tendance existantes, **sans
+  écran neuf**. ⚠️ On compte les preuves **fraîches** et non les périmées, et le choix de
+  polarité est le point délicat : un indicateur absent d'un point d'historique se lit `0`, ce
+  qui, avec « nombre de périmés », serait une **bonne nouvelle inventée**.
+- **Deux écrans** : « Ouverture technique » en onglet des Paramètres, « Collecte automatique »
+  en onglet des Mesures. *Une capacité qu'aucun écran n'appelle est une capacité absente.*
+
+#### Corrigé — quatre défauts trouvés en construisant, aucun par une relecture
+
+- 🛑 **Ce qui est ADMIS n'est pas ce qui est ÉMIS** (migration `056`). `echeance_franchie`
+  était admis par la contrainte depuis la `053` et **émis par personne** : un exploitant se
+  serait abonné, l'écran aurait montré l'abonnement actif, la file serait restée vide, et
+  rien n'aurait dit pourquoi. ⚠️ **Le garde-fou de la `053` nommait ce danger dans son propre
+  témoin** — il visait le cas où la contrainte se **vide**, pas celui où elle est juste et où
+  l'émetteur manque. *La barrière regardait dans une direction ; le trou était dans l'autre.*
+  Un franchissement d'échéance n'étant l'insertion d'**aucune** ligne, l'enfilage a été
+  extrait du déclencheur et le minuteur des relances l'émet.
+- **L'intersection des droits se faisait sur le niveau le PLUS ÉLEVÉ.** Émettre un jeton
+  exige l'administration : `droits.niveau` vaut donc toujours « administration » chez qui
+  peut émettre, et l'intersection était **décorative**. Un administrateur de l'application,
+  simple lecteur sur les risques, obtenait un jeton **administrateur sur les risques**. Le
+  niveau se rabat désormais sur le **plus faible des domaines demandés**.
+- **Un domaine hors des droits était retranché EN SILENCE.** Le jeton rendu « marchait »,
+  sans le domaine demandé, et l'intégration échouait des semaines plus tard sur un 403 que
+  personne ne rattachait à cette émission. Classe **Q-201 / Q-207** : on refuse, et on nomme
+  le domaine.
+- **Le vocabulaire des réglages d'un connecteur est CLOS** (`055`), et le motif est le
+  secret : `connecteurs` devient une **entité** (schéma `data` **v27**) et voyage donc dans le
+  fichier d'échange, qui est lisible et éditable. Une configuration ouverte y aurait tôt ou
+  tard porté un mot de passe **en clair**. ⚠️ La parade n'est **pas** d'interdire les clefs qui
+  *ressemblent* à un secret — `motdepasse_2` passerait, et reconnaître un mot au lieu de
+  mesurer un sens est ce que le `CONVENTIONS.md` §39.1 interdit. C'est la **liste** qui est
+  close, déclarée en base, et **lue** par le serveur au lieu d'être recopiée (constat Q-219).
+  Effet second, qui vaut à lui seul : un réglage mal orthographié est **refusé** au lieu
+  d'être ignoré (constat Q-91).
+
+#### Corrigé — trois défauts que seul le banc pouvait dire
+
+- **`jetons_api.domaines` est un `text[]`**, type qu'aucune entité n'expose — et le catalogue
+  de la couche d'entités, qui balaie **toutes** les tables, s'arrêtait dessus : **le serveur
+  ne démarrait plus**. La famille est nommée, et les trois conversions la **refusent
+  explicitement** : le jour où une entité exposera un tableau, il faudra décider ce qu'il
+  devient dans le fichier d'échange, et ce jour-là le produit le dira au lieu de deviner.
+- **`u.login` et `f.actif` n'existent pas** — les colonnes s'appellent `identifiant` et
+  `statut`. `42703` à **chaque vérification de jeton**, c'est-à-dire sur tout appel par jeton.
+  *Les deux requêtes se lisent bien ; c'est ce qui les rend invisibles à une relecture.*
+- **`actions.id` n'a pas de valeur par défaut** : le déclencheur qui ouvre une action au
+  passage au rouge échouait en `23502`, et comme il vit dans la transaction du constat,
+  **il empêchait d'écrire la preuve**. *Le garde qui ouvre l'action empêchait d'écrire ce
+  qu'elle documente.*
+
+#### 🛑 Corrigé — CINQ défauts trouvés EN CLIQUANT SUR LA RECETTE, aucun par le banc
+
+⚠️ **C'est la cinquième fois de la semaine, et le premier de la liste est le plus grave
+du lot** (`docs/REPRISE.md` §4).
+
+1. 🛑 **UN JETON ÉMIS RENDAIT 401 À SON PREMIER USAGE** — la fonctionnalité entière était
+   inopérante, livrée, et verte au banc. `jetons_api` est **cloisonnée**, et la recherche
+   par empreinte a lieu **avant** qu'un périmètre existe : c'est elle qui va le produire.
+   *La ligne était invisible à la seule transaction qui devait la voir.*
+   - ⚠️ **Trois remèdes ont été écartés, et chacun se heurtait à une barrière que le
+     produit avait de bonnes raisons de poser** : ouvrir la politique de lecture à
+     `f_authentification()` est **refusé par un garde-fou existant** (migration `007` §5 —
+     *un réglage de session ne doit jamais élargir une LECTURE*) ; `using (true)`, comme
+     `sessions`, aurait laissé une filiale lister les accès ouverts chez sa voisine ; et
+     une fonction `security definer` **ne contourne rien**, la RLS étant forcée y compris
+     pour le propriétaire.
+   - Le secret porte donc **sa filiale, en clair**, devant l'aléa : la couche
+     d'authentification la lit **sans interroger la base**, pose ce périmètre, puis cherche
+     l'empreinte sous la RLS ordinaire. ⚠️ **Rien n'est affaibli** — une marque forgée fait
+     chercher là où rien n'est, et rend le même refus qu'un secret inventé.
+   - ⚠️ **DIX-HUIT ESSAIS MESURAIENT LES JETONS, ET AUCUN NE L'A VU** : ils appelaient
+     `verifierJeton()` sous `base.avecPerimetre(...)`, **qui pose un périmètre**. *Le banc
+     mesurait la fonction ; personne ne mesurait ce que l'appelant reçoit.* C'est mot pour
+     mot le constat **Q-325** — « `GRC07` n'arrivait nulle part », éprouvé en SQL direct et
+     jamais par la route —, **reproduit huit jours plus tard dans un autre lot**. Une
+     famille entière naît pour cela : `test/ouverture/authentification-par-jeton.test.mjs`
+     monte le serveur réel et présente un vrai `Authorization: Bearer`. Elle a été **jouée
+     contre le défaut avant d'être gardée**, et elle rougit.
+2. **Le formulaire d'émission n'offrait NI domaine, NI niveau, NI export**, et le serveur
+   exige au moins un domaine : l'écran était **inutilisable**, et affichait un message qui
+   parlait d'un choix que rien ne proposait. Classe **Q-201 / Q-207**.
+3. **Le menu des abonnements ne proposait que trois événements sur quatre** :
+   `echeance_franchie` manquait, parce que la route découvrait les **déclencheurs** et
+   qu'aucun déclencheur ne peut voir un fait dérivé. *La correction du matin, refaite d'un
+   cran plus haut le soir même, dans l'écran écrit pour la porter.*
+4. **Depuis l'écran des mesures, la collecte automatique était INATTEIGNABLE** : la barre
+   d'onglets était posée d'un seul côté. *Une capacité qu'aucun écran n'appelle est une
+   capacité absente* — et un chemin à sens unique est un demi-chemin.
+5. **Huit classes CSS écrites et définies dans aucune feuille** — `form-grid`, `cases`,
+   `cards-grid`, `liste-detail`, `encart-alerte`, `secret-jeton`, `case-en-ligne`,
+   `btn-sm` —, plus trois noms de badges inventés là où le produit en a déjà quatre.
+   ⚠️ **C'est exactement le défaut du 19/09 au matin**, refait le soir : *une classe écrite
+   n'est pas une classe définie, et aucun essai ne le dit.*
+
+#### Leçon de méthode — un essai peut couvrir une règle sans jamais la faire décider
+
+⚠️ Le §1 de `test/collecte/`, écrit pour tenir **le critère le plus important du lot**,
+écrivait une valeur textuelle dans un réglage numérique : l'exécuteur rendait « indéterminé »
+pour *configuration incomplète*, **sans jamais interroger la source**. Contre la mutation
+« une source injoignable rend conforme », il restait **vert**. C'est le constat **Q-210**,
+et il n'a été vu que parce que la mutation a été jouée — pas parce que l'essai a été relu.
 
 ### Les catalogues de référentiels entrent en base — L26 (19/09/2026)
 

@@ -369,6 +369,23 @@ porteur ; et rien n'atteste qu'une politique a été lue.
 > **Le lot qui débloque tous les suivants.** Sans lui, ni collecte automatique de preuve,
 > ni surveillance continue, ni renvoi d'action vers l'outil des équipes.
 
+> ✅ **LIVRÉ le 19/09/2026** — migrations `053`, `055`, `056` ; `src/auth/jetons.ts`,
+> `src/ouverture/` ; écran *Paramètres → Ouverture technique*.
+>
+> 🛑 **Et il a livré son plus gros défaut à l'écran, pas au banc** : un jeton émis rendait
+> **401 à son premier usage**, parce que `jetons_api` est cloisonnée et que la recherche
+> par empreinte **précède** le périmètre qu'elle produit. Dix-huit essais mesuraient les
+> jetons ; tous appelaient la fonction sous un périmètre posé. La règle est inscrite au
+> `backend/db/CONVENTIONS.md` **§46** — *une table qui PRODUIT l'autorisation ne peut pas
+> en DÉPENDRE*, et *toute propriété qui se manifeste à travers une requête HTTP se mesure
+> PAR une requête HTTP*.
+>
+> ⚠️ **L'action 22.6 n'a pas d'intégrateur**, et c'est la bonne réponse au critère
+> *« sans dépendance nouvelle si inactif »* : l'aller passe par l'abonnement à
+> `action_creee`, le retour par un jeton borné au domaine « actions » sur la route
+> générique. Ni client Jira, ni client ServiceNow — donc rien à maintenir le jour où leur
+> API change, et rien à désactiver puisqu'il n'y a rien.
+
 | Réf | Action | Critère d'acceptation |
 |---|---|---|
 | **22.1** | **Jetons d'API** — portée, filiale, domaines, expiration, révocation, **droit d'export distinct** comme pour les sessions humaines | ⚠️ **Un jeton est un sujet de droits comme un autre** : il traverse `resoudre()` et la RLS, il ne les contourne pas. Un jeton ne peut jamais porter plus que le compte qui l'a créé, et l'essai le vérifie |
@@ -386,6 +403,18 @@ porteur ; et rien n'atteste qu'une politique a été lue.
 
 **Pourquoi.** C'est la fracture n°1 du marché. Et c'est le lot qui transforme le produit
 d'un **registre de ce que l'on déclare** en un **système qui constate**.
+
+> ✅ **LIVRÉ le 19/09/2026** — migrations `054` et `056` ; `src/connecteurs/` ; écran
+> *Mesures de sécurité → Collecte automatique*.
+>
+> ⚠️ **Le critère 23.4 est tenu par un balayage du REGISTRE**, et non d'une liste de
+> trois : un monde qui échoue sur tout est soumis à chaque exécuteur, et aucun ne doit
+> rendre « conforme ». Le jour où un quatrième connecteur arrive, il est éprouvé sans
+> qu'on y pense — et c'est ce jour-là que la règle compte.
+>
+> ⚠️ **Ce qui reste 🟡 à l'indicateur** est le **périmètre des sources** — trois
+> connecteurs locaux, face aux dizaines qu'un SaaS branche sur un parc entier. Le cadre,
+> lui, est entier : le suivant coûte un exécuteur, pas une architecture.
 
 | Réf | Action | Critère d'acceptation |
 |---|---|---|

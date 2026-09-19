@@ -182,29 +182,142 @@ référentiel sans toucher au code.
 > **⇒ LES LOTS L25 ET L26 SONT COMPLETS. La vague D est CLOSE** — reste le **rejeu
 > INTÉGRAL de l'indicateur**, que le §4 impose à chaque clôture de vague.
 
-### V-E — Ouverture et automatisation *(L22, L23)*
+### V-E — Ouverture et automatisation *(L22, L23)* — ✅ **CLOSE le 19/09/2026**
 
 Jetons d'API (sujets de droits, jamais un contournement), événements sortants, connecteurs ;
 collecte automatique de preuve et surveillance continue. Une source injoignable rend
 **`indetermine`**, jamais `conforme`.
 
-### V-F — IA locale et portail fournisseur *(L27, L28)*
+**Livré** : migrations `053` (jetons, abonnements, file d'événements), `054` (connecteurs,
+collectes, quatrième événement), `055` (vocabulaire clos des réglages), `056` (ce qui est
+admis n'est pas ce qui est émis) ; `src/auth/jetons.ts`, `src/ouverture/`,
+`src/connecteurs/` ; deux écrans — « Ouverture technique » en onglet des Paramètres, et
+« Collecte automatique » en onglet des Mesures ; schéma `data` en **v27**.
+
+⚠️ **LES QUATRE CHOSES QUE CETTE VAGUE A APPRISES, ET AUCUNE NE VENAIT D'UNE RELECTURE :**
+
+1. **Ce qui est ADMIS n'est pas ce qui est ÉMIS.** `echeance_franchie` était admis par la
+   contrainte depuis la `053` et émis par **personne** — trouvé en construisant l'écran qui
+   devait le proposer. Le garde-fou de la `053` nommait pourtant ce danger dans son propre
+   témoin : il visait le cas où la contrainte se **vide**, pas celui où elle est juste et où
+   l'émetteur manque. *La barrière regardait dans une direction ; le trou était dans l'autre.*
+   Fermé par la `056`, qui confronte la déclaration au catalogue **dans les deux sens**.
+2. **Un essai peut couvrir une règle sans jamais la faire décider** — constat **Q-210**, et
+   cette fois dans l'essai écrit pour tenir le critère le plus important du lot. Le §1 de
+   `test/collecte/` écrivait une valeur textuelle dans un réglage numérique : l'exécuteur
+   rendait « indéterminé » pour *configuration incomplète*, sans jamais interroger la
+   source. Contre la mutation « une source injoignable rend conforme », il restait **vert**.
+3. **L'intersection des droits se faisait sur le niveau le PLUS ÉLEVÉ.** Émettre un jeton
+   exige l'administration : `droits.niveau` vaut donc toujours « administration » chez qui
+   peut émettre, et l'intersection était décorative. Un administrateur de l'application,
+   simple lecteur sur les risques, obtenait un jeton **administrateur sur les risques**.
+   Le niveau se rabat désormais sur le **plus faible des domaines demandés**.
+4. **Un domaine hors des droits était retranché EN SILENCE.** Le jeton rendu « marchait »,
+   sans le domaine demandé, et l'intégration échouait des semaines plus tard sur un 403 que
+   personne ne rattachait à cette émission. Classe **Q-201 / Q-207** : on refuse, et on nomme.
+
+⚠️ **Et deux défauts que seul le banc pouvait dire** : `jetons_api.domaines` est un
+`text[]`, type qu'aucune entité n'expose — le catalogue des entités, qui balaie **toutes**
+les tables, s'arrêtait dessus et **le serveur ne démarrait plus** ; et la vérification d'un
+jeton lisait `u.login` et `f.actif`, deux colonnes qui n'existent pas (42703 à chaque appel
+par jeton). *Les deux requêtes se lisent bien ; c'est ce qui les rend invisibles.*
+
+🛑 **ET CINQ DÉFAUTS QUE SEUL LE NAVIGATEUR A DITS, dont le plus grave du lot** :
+
+1. **Un jeton émis rendait 401 à son premier usage** — la fonctionnalité entière était
+   inopérante, livrée, verte au banc. `jetons_api` est cloisonnée, et la recherche par
+   empreinte précède le périmètre qu'elle produit : *la ligne était invisible à la seule
+   transaction qui devait la voir*. Le secret porte désormais **sa filiale en clair**,
+   devant l'aléa. ⚠️ **Dix-huit essais mesuraient les jetons et aucun ne l'a vu** : ils
+   appelaient la fonction sous un périmètre posé. C'est **Q-325 reproduit**.
+2. Le formulaire d'émission **n'offrait aucun domaine**, et le serveur en exige un.
+3. Le menu des abonnements **ne proposait que trois événements sur quatre**.
+4. Depuis les mesures, **la collecte était inatteignable** — la barre d'onglets n'était
+   posée que d'un côté.
+5. **Huit classes CSS écrites et définies nulle part** — le défaut du matin, refait le soir.
+
+⚠️ **La règle qui en sort, et elle n'est pas nouvelle : un lot n'est pas livré tant que
+son écran n'a pas été CLIQUÉ.** Deux mille trois cents essais verts ne disent rien du
+chemin que l'utilisateur emprunte.
+
+### V-F — IA locale et portail fournisseur *(L27, L28)* — ✅ **CONSTRUITE le 19/09/2026**
 
 En dernier, parce que ce sont les deux seules surfaces **externes**. L'IA **propose**, un
 humain **décide**. Le portail est le premier composant hors VPN.
 
-## 3. Ce qui vient après
+**Livré** : migrations `057` (assistance) et `058` (portail) ; `src/assistance/` et
+`src/portail/` ; écran « Assistance IA » en onglet des Paramètres ; vhost
+`deploy/apache/cyber-grc-portail.conf`, **livré désactivé**.
 
-1. L'utilisateur lance un **`ultrareview`** sur le logiciel complet.
+🛑 **CE QUI EST CONSTRUIT N'EST PAS CE QUI EST OUVERT, et la distinction est le lot.**
+
+| | État livré | Ce qu'il faut pour l'ouvrir |
+|---|---|---|
+| **L27 mode local** | fonctionne, **et c'est mesuré sur la machine réelle** : `IPAddressDeny=::/0 0.0.0.0/0` avec la seule boucle locale autorisée, et l'assistance répond. *Si la fonction marche alors que rien n'est ouvert, c'est qu'elle ne sort pas* | un modèle installé sur `127.0.0.1` — le produit dit « indisponible » sans lui, il n'invente pas |
+| **L27 mode externe** | **fermé** : `CYBER_GRC_IA_EXTERNE` absent, et sans lui aucune ligne d'activation n'entre en base, quelle que soit la route | le réglage, **puis** une activation par filiale avec ses quatre champs de confiance, **puis** l'ouverture de la sortie réseau |
+| **L28 portail** | **aucune route n'est montée** — `PORTAIL_ACTIF=non` par défaut, et le défaut n'enregistre rien. Le vhost est livré **désactivé** | `a2ensite`, un certificat, un limiteur au pare-feu — **et la porte S15** |
+
+⚠️ **LA CONSIGNE DU PLAN PRODUIT PRIME, ET ELLE EST CITÉE** : *« la porte S15 est la plus
+exigeante du plan […] ici le refus doit être la position par défaut : en cas de doute sur
+ce lot, on ne livre pas »*. Le portail est **construit et éprouvé** ; il n'est **pas
+ouvert**, et il ne doit pas l'être avant l'ultrareview. Ce n'est pas une réserve qu'on
+reconduit : c'est l'ordonnancement que le plan a fixé.
+
+⚠️ **CE QUE LA VAGUE F A APPRIS :**
+
+1. **Le `CONVENTIONS.md` §46 a payé le lendemain de son écriture.** `portail_liens` est
+   cloisonnée, et la recherche par empreinte précède le périmètre qu'elle produit :
+   exactement la circularité découverte le matin même au lot L22. Le lien porte donc sa
+   filiale en clair, et le défaut n'a **pas** été refait. *Une règle écrite la veille et
+   appliquée le lendemain est la seule preuve qu'elle valait la peine d'être écrite.*
+2. **Une mutation est passée, et c'était la plus dangereuse du lot.** Mettre
+   `perimetreGroupe` et `administrationGroupe` à `true` dans la session du portail
+   laissait **treize essais sur quatorze verts** : la RLS borne encore la filiale, donc la
+   voisine restait invisible. Ce que la mutation ouvrait ne se voit pas d'un
+   questionnaire. L'essai mesure désormais **le périmètre lui-même** — constat **Q-210**,
+   sur la surface publique du produit.
+3. **Le banc a corrigé la date d'origine d'une reprise.** La première rédaction prenait
+   `cree_le` de la ligne ; c'est la date où elle est entrée dans **ce système** — pour des
+   réponses arrivées par l'import du lot L7, la date de l'import. C'est `recu_le` du
+   questionnaire précédent qui est la date qu'un auditeur reconnaît.
+4. **Un garde-fou a exigé un arbitrage, et il avait raison de le demander** :
+   `uq_portail_liens_empreinte` est une unicité **sans `filiale_id`**, ce que le §19.1
+   interdit. Elle est dispensée **par écrit** — l'unicité doit être globale, et la
+   conséquence que le §19.1 redoute est ici l'effet recherché.
+
+## 3. Ce qui vient après — ⇒ **C'EST MAINTENANT LE GESTE SUIVANT**
+
+> 🛑 **LES SIX VAGUES SONT CONSTRUITES au 19/09/2026.** Il n'y a plus de lot à jouer.
+> Ce qui suit n'est plus « après » : c'est le travail immédiat.
+
+1. **L'utilisateur lance un `ultrareview`** sur le logiciel complet
+   (`/code-review ultra`). ⚠️ **Une session ne peut pas la déclencher** : elle est
+   lancée par l'utilisateur, et facturée. C'est ici qu'elle était attendue depuis
+   l'arbitrage du 14/09, et c'est ici qu'on est.
 2. On traite son retour **et** les constats restés ouverts au `PLAN_EXECUTION.md` §7
    (≈ 30, dont Q-243 et l'oracle d'existence de compte B-1 du 10ᵉ passage).
 3. Durcissement final, puis mise en service.
+
+⚠️ **CE QUI NE DOIT PAS ÊTRE OUVERT AVANT L'ÉTAPE 1, ET C'EST ÉCRIT DEPUIS LE 08/09** :
+le **portail fournisseur** (porte S15, *en cas de doute on ne livre pas*) et le **mode IA
+externe**. Les deux sont **construits et fermés** — le portail n'enregistre aucune route,
+et aucune activation externe n'entre en base sans un réglage d'exploitant. *Construire
+n'est pas ouvrir, et la distinction est le lot.*
 
 ## 4. L'indicateur
 
 `docs/COMPARATIF_MARCHE.md` — **86 fonctionnalités**. **35 ✅ à l'établissement du
 08/09/2026 ; 44 ✅ · 12 🟡 · 30 ❌ au rejeu du 16/09/2026**, clôture de la vague B. Cible
 **76 ✅**. Il se rejoue à la clôture de chaque vague ; il ne s'estime pas.
+
+⚠️ **Rejoué à la clôture de la vague F, le 19/09/2026 : 53 ✅ · 19 🟡 · 14 ❌ (~73 %)**
+— quatre lignes déplacées par L27 et L28, et **deux laissées ❌ par ARBITRAGE** : une IA
+qui *décide* de la conformité ou de la valeur d'un tiers n'est pas dans les cinq usages,
+et le produit répond aux deux besoins **sans IA**.
+
+⚠️ **Rejoué à la clôture de la vague E, le 19/09/2026 : 53 ✅ · 17 🟡 · 16 ❌ (~72 %)** —
+cinq lignes déplacées par L22 et L23, et **deux en-têtes de section faux** de nouveau
+attrapés par le recompte mécanique. *La discipline tient parce qu'elle est mécanique.*
 
 ⚠️ **Rejoué INTÉGRALEMENT le 19/09/2026, à la clôture de la vague D : 51 ✅ · 15 🟡 ·
 20 ❌ (~68 %).** Onze lignes déplacées par L25 et L26, les vingt ❌ restants confrontés au

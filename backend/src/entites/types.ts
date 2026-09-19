@@ -121,7 +121,15 @@ export type NomEntite =
   | 'referentiels'
   | 'referentiel_domaines'
   | 'referentiel_exigences'
-  | 'referentiel_traductions';
+  | 'referentiel_traductions'
+  /**
+   * v27 — la configuration des contrôles automatiques (lot L22, action 22.4).
+   *
+   * ⚠️ `collectes` n'est **pas** ici, et c'est délibéré : un constat est une preuve
+   * datée, au même titre que le journal d'audit et la main courante de crise. Le
+   * faire voyager dans un fichier éditable lui ôterait sa valeur probante.
+   */
+  | 'connecteurs';
 
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;
@@ -163,7 +171,27 @@ export interface IdentiteAnnuaire {
  * navigateur. Un type de base inconnu fait échouer la vérification du registre,
  * bruyamment, au démarrage.
  */
-export type FamilleType = 'texte' | 'entier' | 'nombre' | 'booleen' | 'date' | 'horodatage' | 'json';
+/**
+ * ⚠️ **`tableau_texte` n'est portée par AUCUNE entité, et c'est délibéré.**
+ *
+ * Elle existe parce que le catalogue balaie **toutes** les tables du schéma, entités
+ * ou non, et qu'il refuse BRUYAMMENT un type qu'il ne sait pas nommer (§20.1) —
+ * `jetons_api.domaines` est un `text[]`, et la découverte s'est arrêtée dessus. La
+ * nommer est la réponse juste ; lui donner une conversion par défaut ne l'était pas.
+ *
+ * Les trois fonctions de conversion la traitent donc comme un **refus explicite** :
+ * le jour où une entité exposera un tableau, il faudra décider ce qu'il devient dans
+ * le fichier d'échange — et ce jour-là, le produit le dira au lieu de deviner.
+ */
+export type FamilleType =
+  | 'texte'
+  | 'entier'
+  | 'nombre'
+  | 'booleen'
+  | 'date'
+  | 'horodatage'
+  | 'json'
+  | 'tableau_texte';
 
 export interface DescriptionColonne {
   readonly nom: string;

@@ -33,6 +33,7 @@ import type { FastifyError, FastifyInstance, FastifyReply } from 'fastify';
 import type { Pool } from 'pg';
 
 import { greffonApi } from './api/index.js';
+import { greffonPortail, PREFIXE_PORTAIL } from './portail/index.js';
 import { ServiceAuthentification } from './auth/index.js';
 import { journaliser } from './auth/journal.js';
 import { engendrerIdentifiant } from './entites/index.js';
@@ -367,6 +368,41 @@ export function construireServeur(config: Configuration, pool: Pool): FastifyIns
     config,
     serviceAuthentification: authentification,
   });
+
+  /* ── LE PORTAIL FOURNISSEUR (lot L28) ─────────────────────────────────
+   *
+   * 🛑 **LE PREMIER COMPOSANT DU PRODUIT EXPOSÉ HORS VPN**, et le seul. Il est
+   * monté **à côté** de `greffonApi`, jamais dedans : sa portée Fastify a sa
+   * propre authentification — un lien signé, vérifié à chaque requête —, et le
+   * crochet d'authentification du produit ne s'y applique pas.
+   *
+   * ⚠️ **Il n'est monté QUE si l'exploitant l'a demandé.** `PORTAIL_ACTIF=non`
+   * est le défaut, et il n'enregistre **aucune route** — pas une qui rendrait
+   * 503, pas un montage à moitié : la surface n'existe pas. C'est la même
+   * discipline que le refus bruyant de `greffonPieces` sans configuration, et
+   * elle vaut davantage ici : *ce qui n'est pas monté ne peut pas être attaqué.*
+   *
+   * ⚠️ **Et la consigne du plan est écrite** : la porte S15 est la plus
+   * exigeante du chantier, et *en cas de doute sur ce lot, on ne livre pas.*
+   * L'ouvrir avant l'ultrareview serait précisément le doute qu'elle vise.
+   */
+  if (config.portail.actif) {
+    serveur.log.warn(
+      {
+        prefixe: PREFIXE_PORTAIL,
+        correctif: 'PORTAIL_ACTIF=non dans /etc/cyber-grc/env pour le refermer',
+      },
+      'PORTAIL FOURNISSEUR MONTÉ : ce composant est destiné à être exposé HORS VPN. ' +
+        'Vérifiez le vhost dédié, sa borne de corps et son limiteur de débit avant de ' +
+        'le publier.',
+    );
+    void serveur.register(
+      async (portee) => {
+        await portee.register(greffonPortail, { pool, config });
+      },
+      { prefix: PREFIXE_PORTAIL },
+    );
+  }
 
   serveur.setNotFoundHandler((requete, reponse) => {
     // Q-55 (second constat, trouvé en mesurant le périmètre) — cette réponse

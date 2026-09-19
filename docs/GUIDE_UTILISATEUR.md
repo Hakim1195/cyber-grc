@@ -782,6 +782,84 @@ Jusqu'à leur reconnexion, elles perdent les lectures de portée Groupe. Préven
 
 ---
 
+## 8 bis. Ouvrir le produit à un autre outil — et surveiller par lui-même
+
+Deux écrans, réservés à l'administration, ouvrent le produit vers l'extérieur.
+
+### Paramètres → **Ouverture technique**
+
+**Un jeton d'API** laisse un autre système — un outil de tickets, un tableau de bord, un
+script — parler à ce produit **sans compte humain**.
+
+⚠️ **Son secret ne s'affiche qu'une fois.** Copiez-le à ce moment-là : le serveur n'en
+garde qu'une empreinte et ne sait pas le retrouver. S'il est perdu, on en émet un autre et
+on révoque celui-ci.
+
+⚠️ **Un jeton ne peut jamais porter plus que vous.** Vous choisissez ses domaines et son
+niveau parmi les vôtres ; le serveur refuse le reste, et il vous dit lequel. C'est
+voulu : un accès qui survit à votre session ne doit pas pouvoir dépasser ce que vous
+pouviez faire quand vous l'avez ouvert.
+
+⚠️ **Révoquer coupe l'accès immédiatement**, et **ne supprime pas la ligne** : qui l'a
+émis, quand, et qui l'a coupé restent visibles. C'est ce qu'un auditeur vient chercher.
+
+**Un abonnement** fait partir un événement vers un outil tiers quand quelque chose arrive
+ici : un incident créé, une approbation refusée, une action ouverte, une échéance
+franchie. L'événement dit **qu'il s'est passé quelque chose et où le trouver** — il ne
+porte ni le titre, ni la description : votre outil vient les chercher avec son jeton.
+
+⚠️ **Rien ne part tant que votre exploitant n'a pas ouvert la sortie réseau du service.**
+L'écran vous le dit, et la file se remplit en attendant. Ce n'est pas une panne.
+
+### Mesures de sécurité → **Collecte automatique**
+
+Un **connecteur** va regarder une source — un dépôt de sauvegarde, le démon antivirus,
+un groupe de l'annuaire — et rapporte une **preuve datée**, rattachée à une mesure.
+
+⚠️ **« Indéterminé » n'est ni vert ni rouge**, et c'est le point important. Une source
+injoignable n'est pas un contrôle en échec : c'est un contrôle qu'on **n'a pas pu faire**.
+Le produit ne dira **jamais** « conforme » pour un test qui n'a pas tourné.
+
+⚠️ **Une preuve périmée redevient absente.** Une sauvegarde constatée réussie il y a onze
+mois n'est pas une preuve de sauvegarde : c'est la preuve qu'on sauvegardait il y a onze
+mois. La fraîcheur attendue se règle sur le connecteur.
+
+⚠️ **Le passage au rouge ouvre une action**, rattachée à la mesure — vous la retrouvez
+dans votre plan d'actions. Rester rouge n'en ouvre pas d'autre.
+
+⚠️ **Une collecte ne décide pas de votre conformité.** Elle constate un fait ; c'est vous
+qui évaluez la mesure. Un produit qui passerait une mesure au vert parce qu'un script a
+répondu « OK » remplacerait votre jugement par un test de connexion.
+
+---
+
+## 8 ter. L'assistance par IA — ce qu'elle fait, et ce qu'elle ne fera jamais
+
+*Paramètres → Assistance IA.*
+
+**Elle PROPOSE ; vous décidez.** Cinq usages, et pas un de plus : correspondances entre
+référentiels, brouillon de politique, résumé d'incident, réponse à un questionnaire
+client, recherche en langage courant.
+
+⚠️ **Aucun de ces usages n'écrit dans vos données.** L'écran compose une demande, vous
+montre le texte **exact** avant qu'il parte, l'envoie si vous le lui dites, et affiche ce
+qui revient. Ce que vous en retenez, vous le recopiez vous-même — délibérément.
+
+⚠️ **« Indisponible » n'est pas une panne.** Si la source est coupée, si aucun modèle
+n'est installé, ou si la réponse est illisible, le produit **le dit** et ne remplit pas le
+trou. Un outil qui sert de preuve en audit ne doit jamais inventer.
+
+⚠️ **Et l'assistance ne conclut jamais à votre place** : elle ne qualifie pas un incident
+au regard de NIS2 ou du RGPD, elle ne publie aucune politique — le circuit d'approbation
+reste seul maître —, et elle n'envoie aucune réponse à un client.
+
+**Si un bandeau rouge est affiché**, le mode externe est actif pour votre filiale : ce que
+vous soumettez part chez le fournisseur nommé, à l'hébergement indiqué, et **chaque envoi
+est journalisé**. Le bandeau ne se ferme pas, et c'est voulu — *ce qu'on ne voit pas
+devient une habitude.*
+
+---
+
 ## 9. Langue
 
 Le sélecteur de langue est dans l'interface. La valeur par défaut vient de votre filiale ;

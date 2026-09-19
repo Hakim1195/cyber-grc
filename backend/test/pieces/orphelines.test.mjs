@@ -460,8 +460,45 @@ describe('Q-232 — la CASCADE emporte aussi les pièces des enfants', () => {
     }
   });
 
-  test('CHAQUE cascade : la pièce de l’enfant suit — ligne, fichier, délivrance', async () => {
+  /* ── ⚠️ CE QUE LE BALAYAGE COUVRE, ET CE QU'IL NE PEUT PAS COUVRIR ────────
+   *
+   * La route de dépôt n'accepte comme porteur qu'une **entité du registre** — la
+   * liste est DÉRIVÉE de `DOMAINE_PAR_ENTITE`, jamais recopiée. Trois enfants de
+   * cascade n'en sont pas : `evenements_sortants` et `collectes` (lots L22/L23),
+   * `portail_liens` (lot L28). Ce sont des **files** et des **preuves**, et aucune
+   * pièce jointe ne peut leur être rattachée.
+   *
+   * ⚠️ **L'exclusion est MESURÉE, pas supposée** (§ juste en dessous) : on demande à
+   * la route d'accepter un dépôt sur chacun, et on exige qu'elle refuse. Sans cela,
+   * une entité oubliée du registre sortirait du filet **en silence** — c'est très
+   * exactement le défaut que Q-232 a coûté. */
+  async function porteursDePieces(cascades) {
+    modeleEntites ??= (await serveur.appeler('GET', '/api/modele')).corps.entites;
+    return cascades.filter((c) => modeleEntites[c.enfant] !== undefined);
+  }
+
+  test('LES EXCLUS le sont parce que la ROUTE les refuse, et on le lui demande', async () => {
     const cascades = await cascadesDuSchema();
+    modeleEntites ??= (await serveur.appeler('GET', '/api/modele')).corps.entites;
+    const exclus = [...new Set(
+      cascades.filter((c) => modeleEntites[c.enfant] === undefined).map((c) => c.enfant),
+    )];
+    for (const enfant of exclus) {
+      const depot = await serveur.deposer(`/api/pieces/${enfant}/PEU-IMPORTE`, {
+        nom: 'exclu.pdf',
+        type: 'application/pdf',
+        contenu: pdfValide('exclu'),
+      });
+      assert.equal(
+        depot.statut, 400,
+        `« ${enfant} » est hors du balayage ET la route accepte un dépôt dessus : ` +
+        'il sortirait du filet en silence, ce qui est le défaut que Q-232 a coûté.',
+      );
+    }
+  });
+
+  test('CHAQUE cascade : la pièce de l’enfant suit — ligne, fichier, délivrance', async () => {
+    const cascades = await porteursDePieces(await cascadesDuSchema());
     const echecs = [];
 
     for (const { parent, enfant, colonne } of cascades) {

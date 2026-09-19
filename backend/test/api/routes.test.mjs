@@ -102,11 +102,11 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
     assert.match(corps.authentification.lot_attendu, /L3/);
   });
 
-  test('GET /api/modele — décrit les 46 entités, et ne fuit aucun nom de table', async () => {
+  test('GET /api/modele — décrit les 47 entités, et ne fuit aucun nom de table', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/modele');
     assert.equal(statut, 200);
-    assert.equal(Object.keys(corps.entites).length, 46);
-    assert.equal(corps.schemaVersion, 26);
+    assert.equal(Object.keys(corps.entites).length, 47);
+    assert.equal(corps.schemaVersion, 27);
 
     const texte = JSON.stringify(corps);
     for (const interdit of ['mesure_catalogue', 'mesure_mise_en_oeuvre', 'evaluation_mesures', base.nom]) {
@@ -120,7 +120,7 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
   test('GET /api/donnees — rend le jeu de la filiale, dans la forme de « data »', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/donnees');
     assert.equal(statut, 200);
-    assert.equal(corps.data.schemaVersion, 26);
+    assert.equal(corps.data.schemaVersion, 27);
     assert.ok(corps.data.risques.some((r) => r.id === 'RISK-A'));
     assert.ok(corps.data.documents.some((d) => d.id === 'DOC-G'), 'Le socle Groupe fait partie du chargement.');
 
@@ -878,6 +878,36 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // et le texte intégral d'une grille qu'un donneur d'ordre lui a confiée sous
     // condition de confidentialité.
     ['GET', '/api/catalogues/etat', undefined],
+    /* L'ouverture technique et la collecte (lots L22, L23).
+     *
+     * ⚠️ **Servies sans identité, ces routes seraient les pires du produit.** La
+     * liste des jetons dirait quels accès existent, leur préfixe et leur date
+     * d'expiration ; l'émission en CRÉERAIT un, c'est-à-dire un accès durable
+     * ouvert par un inconnu ; la liste des abonnements dirait vers quels outils
+     * tiers cette filiale fait partir ses événements ; et la collecte EXÉCUTERAIT
+     * un contrôle, donc ferait sortir une requête du serveur. */
+    ['GET', '/api/ouverture/jetons', undefined],
+    ['POST', '/api/ouverture/jetons', { nom: 'x', domaines: ['risques'] }],
+    ['DELETE', '/api/ouverture/jetons/JET-1', undefined],
+    ['GET', '/api/ouverture/abonnements', undefined],
+    ['POST', '/api/ouverture/abonnements', {
+      nom: 'x', evenement: 'incident_cree', url: 'https://x.exemple.interne/w',
+    }],
+    ['DELETE', '/api/ouverture/abonnements/ABO-1', undefined],
+    /* L'assistance par IA (lot L27).
+     *
+     * ⚠️ **Servies sans identité, ces routes seraient un relais anonyme.** `etat`
+     * dirait vers quel fournisseur cette filiale envoie et quels usages sont
+     * ouverts ; `preparer` composerait un texte à partir de ce qu'on lui donne ;
+     * et `demander` ferait **sortir une requête du serveur** au nom de la filiale,
+     * en la journalisant sous son compte. */
+    ['GET', '/api/assistance/etat', undefined],
+    ['POST', '/api/assistance/preparer', { usage: 'recherche', matiere: [] }],
+    ['POST', '/api/assistance/demander', { usage: 'recherche', matiere: [] }],
+    ['GET', '/api/assistance/appels', undefined],
+    ['GET', '/api/connecteurs/etat', undefined],
+    ['POST', '/api/connecteurs/CONN-1/collecter', {}],
+    ['GET', '/api/connecteurs/CONN-1/historique', undefined],
     ['GET', '/api/catalogues/reprise-evaluations?de=a&vers=b', undefined],
     ['GET', '/api/catalogues/suggestions?source=a&cible=b', undefined],
     // Les réglages (19/09/2026). ⚠️ Servie sans identité, la lecture dirait quels

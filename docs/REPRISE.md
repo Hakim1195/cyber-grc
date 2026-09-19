@@ -159,7 +159,106 @@ des verdicts antérieurs, il n'en établit pas.
 
 ---
 
-### ▶ OÙ REPRENDRE — au 19/09/2026 au soir
+### ▶ OÙ REPRENDRE — au 19/09/2026, après la vague F
+
+# 🛑 **LES SIX VAGUES DU `PLAN_ACHEVEMENT.md` SONT CONSTRUITES.**
+
+**Le geste suivant n'est plus un lot : c'est l'`ultrareview`**, que le plan place à la
+fin, sur le logiciel complet — et que **l'utilisateur seul peut lancer** (`/code-review
+ultra`). Puis les constats restés ouverts du `docs/PLAN_EXECUTION.md` §7 (≈ 30, dont
+Q-243 et l'oracle d'existence B-1), puis le durcissement final et la mise en service.
+
+| | |
+|---|---|
+| **Livré ce jour** | **L27** — assistance par IA, locale par défaut, six barrières (migration `057`) ; **L28** — portail fournisseur (migration `058`, vhost dédié). Écran « Assistance IA » en onglet des Paramètres |
+| **Le geste suivant** | **L'ULTRAREVIEW.** Elle n'est pas lançable depuis une session : elle est déclenchée par l'utilisateur, et facturée |
+| **Mesuré** | **58 migrations** · **89 tables** · **356 politiques** · **62 garde-fous** · **494 décisions** · publication **85 fichiers** · indicateur **53 ✅ · 19 🟡 · 14 ❌ (~73 %)** |
+
+## 🛑 CE QUI EST CONSTRUIT N'EST PAS CE QUI EST OUVERT — À LIRE AVANT DE TOUCHER À L27 OU L28
+
+| | État réel | Ce qu'il faut pour l'ouvrir |
+|---|---|---|
+| **IA locale** | **fonctionne**, et c'est mesuré sur la machine : `IPAddressDeny=::/0 0.0.0.0/0`, seule la boucle locale autorisée, et l'assistance répond | un modèle sur `127.0.0.1`. Sans lui, le produit dit « indisponible » — il n'invente pas |
+| **IA externe** | **fermée** : `CYBER_GRC_IA_EXTERNE` absent, et sans lui **aucune** ligne d'activation n'entre en base, quelle que soit la route | le réglage, une activation par filiale avec ses quatre champs de confiance, **et** l'ouverture de la sortie réseau |
+| **Portail** | **aucune route montée** — `PORTAIL_ACTIF=non` n'enregistre rien. Vhost livré **désactivé** | `a2ensite`, un certificat, un limiteur au pare-feu — **et la porte S15** |
+
+⚠️ **LA CONSIGNE DU PLAN PRIME SUR L'ENVIE D'AVANCER** : *« la porte S15 est la plus
+exigeante du plan […] en cas de doute sur ce lot, on ne livre pas »*. Ce n'est pas une
+réserve qu'on reconduit ; c'est l'ordonnancement que le plan a fixé le 08/09.
+
+⚠️ **ET LA RECETTE PORTE UN TÉMOIN, PAS UN MODÈLE.** `IA_URL_LOCALE` y vise un petit
+service d'essai posé le 19/09 pour mesurer le chemin nominal — vingt lignes qui renvoient
+une phrase. **Ce n'est pas un modèle**, et le retirer ne casse rien : l'assistance
+répondra « indisponible », ce qu'elle doit faire.
+
+⚠️ **CE QUE LA VAGUE F A APPRIS :**
+
+1. **Le `CONVENTIONS.md` §46 a payé le lendemain de son écriture** — `portail_liens` est
+   dans la même circularité que `jetons_api`, et le défaut n'a **pas** été refait.
+2. 🛑 **Une mutation est passée, et c'était la plus dangereuse du lot** : mettre le
+   périmètre du portail en Groupe/administration laissait **treize essais sur quatorze
+   verts**. L'essai mesure désormais **le périmètre lui-même**.
+3. **Le banc a corrigé la date d'origine d'une reprise** : `cree_le` est la date où la
+   ligne est entrée dans *ce système*, pas celle où le fournisseur a répondu.
+4. **Un en-tête neuf a fait rougir le frontal**, et la bonne réponse n'était pas la
+   dérogation : `X-Grc-Lien` est **effacé** au vhost interne, où il n'a rien à faire.
+   *On ferme ce qui n'a pas à passer, au lieu d'expliquer pourquoi il peut passer.*
+5. **Un balayage du catalogue rencontre des tables qui ne sont pas des entités**, et la
+   bonne réponse n'est ni de le rétrécir ni de lui apprendre à tout semer : c'est de
+   **borner, puis de MESURER la borne**. `CONVENTIONS.md` **§48**. ⚠️ *Un filtre ajouté à
+   un balayage sans l'essai qui le justifie est une régression, même quand le banc
+   redevient vert.*
+
+---
+
+### ▶ Historique — au 19/09/2026, après la vague E
+
+**LES VAGUES C, D ET E SONT CLOSES. Il reste la vague F, et elle seule.**
+
+| | |
+|---|---|
+| **Livré ce jour** | **L22** — jetons d'API, événements sortants, cadre de connecteurs (migrations `053`, `055`, `056`) ; **L23** — collecte automatique de preuve, CCM, historique du contrôle (`054`). Schéma `data` en **v27**. Deux écrans : « Ouverture technique » en onglet des Paramètres, « Collecte automatique » en onglet des Mesures |
+| **Le geste suivant** | **Le rejeu INTÉGRAL de `docs/COMPARATIF_MARCHE.md`** (le `PLAN_ACHEVEMENT.md` §4 l'impose à chaque clôture de vague), puis la **vague F** — **L27** (IA locale par défaut, six barrières pour l'externe) et **L28** (portail fournisseur, le premier composant hors VPN). Après quoi : l'**ultrareview** sur le logiciel complet |
+| **Mesuré après L23** | **56 migrations** · **86 tables** · **344 politiques** · **60 garde-fous** · **477 décisions** |
+
+⚠️ **CE QUE LA VAGUE E A APPRIS, ET QU'IL FAUT LIRE AVANT DE TOUCHER À L22 OU L23 :**
+
+1. **Ce qui est ADMIS n'est pas ce qui est ÉMIS.** `echeance_franchie` a vécu une journée
+   entière dans le vocabulaire des abonnements sans qu'aucun émetteur existe. Le garde-fou
+   qui gardait ce vocabulaire **nommait ce danger dans son propre témoin** : il regardait le
+   cas où la contrainte se **vide**, pas celui où elle est juste et où l'émetteur manque.
+   `f_evenements_emis()` et son garde le confrontent désormais au catalogue **dans les deux
+   sens**. *Un vocabulaire clos ne dit rien de ce qui le peuple.*
+2. **Un essai peut couvrir une règle sans jamais la faire décider** (constat **Q-210**), et
+   cette fois dans l'essai écrit pour tenir le critère **le plus important du lot**. Il
+   restait vert contre la mutation. *Il n'a été vu que parce que la mutation a été jouée.*
+3. **Une intersection de droits peut être décorative.** Émettre un jeton exige
+   l'administration ; comparer au niveau **global** du compte ne retranchait donc jamais
+   rien. C'est le niveau **par domaine** qui décide, et le jeton se rabat sur le **plus
+   faible** des domaines demandés.
+4. **Un `text[]` a empêché le serveur de démarrer.** Le catalogue de la couche d'entités
+   balaie **toutes** les tables, entités ou non, et refuse bruyamment un type qu'il ne sait
+   pas nommer. `jetons_api.domaines` n'est l'affaire d'aucune entité, et il a quand même
+   tout arrêté. *Une table hors du registre n'est pas hors du catalogue.*
+5. 🛑 **UN JETON ÉMIS RENDAIT 401, ET LE BANC ÉTAIT VERT.** `jetons_api` est cloisonnée,
+   et la recherche par empreinte précède le périmètre qu'elle produit : la ligne était
+   invisible à la seule transaction qui devait la voir. **Dix-huit essais mesuraient les
+   jetons** — tous appelaient `verifierJeton()` sous un périmètre posé. *Le banc mesurait
+   la fonction ; personne ne mesurait ce que l'appelant reçoit.* C'est **Q-325 reproduit**,
+   huit jours plus tard, dans un autre lot. Le remède : le secret porte sa filiale en
+   clair, et une famille entière monte le serveur réel avec un vrai `Bearer`.
+   ⚠️ **Trois remèdes plus simples ont été écartés** parce que chacun heurtait une
+   barrière que le produit avait de bonnes raisons de poser — c'est écrit dans
+   `emettreJeton()`, et il faut le lire avant de « simplifier ».
+6. **Un lot n'est pas livré tant que son écran n'a pas été CLIQUÉ.** Cinq défauts de cette
+   vague viennent de là, et zéro du banc : le formulaire d'émission n'offrait aucun
+   domaine, le menu des abonnements en cachait un sur quatre, la collecte était
+   inatteignable depuis les mesures, et huit classes CSS étaient écrites sans être
+   définies — *le défaut du matin, refait le soir*.
+
+---
+
+### ▶ Historique — au 19/09/2026 au soir, après la vague D
 
 **La vague C est CLOSE, et la vague D est ENTAMÉE.** ⚠️ **Cette section se lit du HAUT vers
 le BAS, et elle est CHRONOLOGIQUE** : ce qui suit immédiatement est la livraison du 18/09,

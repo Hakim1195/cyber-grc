@@ -249,6 +249,13 @@ export function convertirCellule(
         return { erreur: 'ce document JSON est mal formé' };
       }
     }
+
+      // ⚠️ **Aucune entité n'expose de colonne tableau** — la famille existe parce que
+      // le catalogue balaie toutes les tables, `jetons_api.domaines` comprise. Le jour
+      // où une entité en exposera une, il faudra DÉCIDER ce qu'un tableau devient dans
+      // le fichier d'échange ; deviner ici le déciderait en silence.
+    case 'tableau_texte':
+      return { erreur: 'une colonne tableau ne s’importe pas depuis un tableur' };
   }
 }
 

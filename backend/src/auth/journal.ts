@@ -122,6 +122,29 @@ export type ActionJournal =
    */
   | 'attestation'
   /**
+   * Lot L27, barrière n° 5 : un envoi à une assistance EXTERNE.
+   *
+   * ⚠️ **Seuls les appels EXTERNES y entrent.** Un appel local ne sort pas de la
+   * machine ; le tracer ici pendant trois ans ferait du journal inaltérable un
+   * registre d'usage du produit, ce qu'il n'est pas — c'est le motif exact du
+   * constat **Q-301**, où une route écrivait 3 750 entrées par jour.
+   */
+  | 'ia_externe'
+  /* ── Lot L28 — LE PORTAIL FOURNISSEUR, le premier composant hors VPN ──
+   *
+   * ⚠️ **Trois actions, et elles sont tracées comme les autres** (action 28.8) :
+   * l'ouverture d'un lien, une réponse enregistrée, un dépôt de preuve. La surface
+   * est PUBLIQUE — c'est la seule du produit —, et le journal est ce qui permet de
+   * dire, six mois plus tard, qui est entré par où et ce qu'il a fait.
+   *
+   * ⚠️ `utilisateurLibelle` y porte « portail:<identifiant du lien> » et non un
+   * login : il n'y a **pas de compte fournisseur**, et inventer un login ferait
+   * croire à une identité que personne n'a vérifiée.
+   */
+  | 'portail_ouverture'
+  | 'portail_reponse'
+  | 'portail_depot'
+  /**
    * **Le changement de FILIALE ACTIVE d'une session** — lot L4, `CONVENTIONS.md`
    * §30.4. L'entrée porte la filiale **quittée** dans `valeursAvant` et la filiale
    * **rejointe** dans `valeursApres` ; `resume` reste une phrase fixe (§29.5).

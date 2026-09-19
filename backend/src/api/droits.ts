@@ -342,6 +342,12 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   referentiel_domaines: 'conformite',
   referentiel_exigences: 'conformite',
   referentiel_traductions: 'conformite',
+  // ⚠️ **« conformite » et non « actifs »**, alors qu'un connecteur interroge un
+  // serveur de sauvegarde ou un annuaire. Ce qu'il produit est une PREUVE rattachée
+  // à une mesure de sécurité : le lire, c'est lire l'état d'un contrôle. Le ranger
+  // sous « actifs » l'aurait ouvert à qui tient l'inventaire, et fermé à qui tient
+  // la conformité — exactement l'inverse de qui s'en sert.
+  connecteurs: 'conformite',
 });
 
 /**

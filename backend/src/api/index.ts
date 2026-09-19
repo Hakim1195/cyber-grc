@@ -131,6 +131,10 @@ import { greffonAipd } from '../aipd/index.js';
 import { greffonDerogations } from '../derogations/index.js';
 import { greffonCampagnes } from '../campagnes/index.js';
 import { greffonCatalogues } from '../catalogues/index.js';
+import { greffonAssistance } from '../assistance/index.js';
+import type { TransportAssistance } from '../assistance/fournisseur.js';
+import { greffonConnecteurs } from '../connecteurs/index.js';
+import { greffonOuverture } from '../ouverture/index.js';
 import { greffonEbios } from '../ebios/index.js';
 import { greffonParametres } from '../parametres/index.js';
 import { greffonTiers } from '../tiers/index.js';
@@ -262,6 +266,16 @@ export interface OptionsApi {
    * développement (`session.ts`).
    */
   readonly authentificateur?: Authentificateur;
+  /**
+   * Troisième point d'accroche, apporté par le lot L27 : **ce qui parle au modèle**.
+   *
+   * ⚠️ Il existe pour que le banc puisse éprouver les chemins d'échec — source
+   * coupée, réponse illisible, service qui refuse —, que le réel ne produit pas à la
+   * demande. Il ne remplace pas l'épreuve du chemin nominal, qui se mesure sur la
+   * recette avec un vrai modèle (*une doublure n'émet que ce que son auteur a prévu*,
+   * constat Q-83).
+   */
+  readonly assistanceTransport?: TransportAssistance;
   /**
    * Service d'authentification du lot L3. Fourni, il apporte deux choses d'un
    * coup :
@@ -3257,6 +3271,58 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   // ⚠️ Une correspondance appliquée sans validation propagerait un statut de
   // conformité faux : la suggestion est une proposition, jamais une écriture.
   await instance.register(greffonCatalogues, { pool });
+  // Lots L22 (action 22.4) et L23 — la COLLECTE AUTOMATIQUE DE PREUVE.
+  //
+  // ⚠️ `connecteurs` est une ENTITÉ ordinaire : elle se crée, se modifie et se
+  // supprime par les routes génériques, et rien de cela n'est réécrit là-bas. Ce
+  // greffon n'ajoute que ce qu'une route générique ne peut pas faire : **exécuter**
+  // un connecteur — c'est-à-dire sortir du produit et regarder le monde —, et
+  // **dériver** la fraîcheur d'une preuve, que la base calcule et que personne ne range.
+  //
+  // ⚠️ **Aucun chemin d'échec ne rend « conforme »** (critère 23.4) : une source
+  // injoignable, une configuration incomplète, un démon muet rendent « indeterminé »,
+  // qui n'est ni vert ni rouge. Un contrôle automatique qui n'a pas pu s'exécuter et
+  // qui rend « conforme » est une fausse assurance dans un outil produit en audit.
+  //
+  // ⚠️ **`collectes` n'est PAS une entité** : un constat est une preuve datée, au même
+  // titre que le journal d'audit et la main courante de crise. On ne le restaure pas.
+  await instance.register(greffonConnecteurs, { pool, config });
+  // Lot L27 — l'ASSISTANCE PAR IA : locale par défaut, externe sous six barrières.
+  //
+  // ⚠️ **L'IA PROPOSE, UN HUMAIN DÉCIDE.** Ce greffon n'écrit RIEN dans les données
+  // métier : il compose un texte, le soumet, et rend ce qui revient. Ce que
+  // l'utilisateur en retient repart par les routes ordinaires, avec leurs contrôles
+  // ordinaires. Les seules écritures d'ici sont la TRACE de l'appel.
+  //
+  // ⚠️ **Le mode est résolu ICI**, à partir de la filiale ACTIVE de la session, et
+  // jamais d'une valeur du client : une filiale sans activation ne peut pas déclencher
+  // un appel externe, même en empruntant l'écran d'une filiale qui l'a.
+  //
+  // ⚠️ **Deux routes là où une suffirait** : `preparer` montre le texte exact qui
+  // partira (barrière n° 4), `demander` le RECOMPOSE au lieu de croire le client —
+  // sinon la barrière protégerait l'utilisateur honnête et personne d'autre.
+  await instance.register(greffonAssistance, {
+    pool,
+    config,
+    ...(options.assistanceTransport === undefined
+      ? {}
+      : { transport: options.assistanceTransport }),
+  });
+  // Lot L22, actions 22.1 à 22.3 — l'ouverture technique : les jetons d'API et
+  // les abonnements aux événements sortants.
+  //
+  // ⚠️ SIX routes propres, là où tout le reste passe par les routes génériques,
+  // et la raison est précise : le SECRET d'un jeton n'existe qu'une fois. Il est
+  // fabriqué par le serveur, rendu à l'appelant, et n'est plus jamais
+  // retrouvable — la base n'en a que l'empreinte. Une route générique reçoit les
+  // champs du client et rend la ligne écrite : elle ne sait pas fabriquer une
+  // valeur qu'elle ne stocke pas, ni la rendre une seule fois.
+  //
+  // ⚠️ Et les trois tables ne sont PAS des entités du registre : elles ne
+  // voyagent donc pas dans le fichier d'échange. Restaurer une sauvegarde
+  // ressusciterait des jetons révoqués depuis — un accès qu'on a coupé ne doit
+  // pas revenir par la porte de la reprise.
+  await instance.register(greffonOuverture, { pool });
   // Les RÉGLAGES (19/09/2026) — `parametres`, vivante depuis la `001` et lue par
   // personne, cesse de l'être.
   //

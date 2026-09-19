@@ -32,7 +32,7 @@
 > le 08/09/2026** — jeu de découverte autorisé, IA locale par défaut avec externe encadré,
 > portail fournisseur validé) et
 > **[`docs/COMPARATIF_MARCHE.md`](docs/COMPARATIF_MARCHE.md)** (les 86 fonctionnalités de
-> l'état de l'art, mesurées dans le dépôt — **51 ✅ · 15 🟡 · 20 ❌ (~68 %) au 19/09/2026**,
+> l'état de l'art, mesurées dans le dépôt — **53 ✅ · 19 🟡 · 14 ❌ (~73 %) au 19/09/2026**,
 > **rejeu INTÉGRAL** à la clôture de la vague C : les 86 lignes en trois balayages, et la
 > méthode est écrite pour qu'on puisse la refaire).
 > ⚠️ **Le §0 bis du `PLAN_PRODUIT.md` fait autorité sur l'ordonnancement** : aucun lot L17+
@@ -76,11 +76,22 @@
 > [`docs/PLAN_ACHEVEMENT.md`](docs/PLAN_ACHEVEMENT.md) ; les **chiffres** vivent au
 > [`backend/README.md`](backend/README.md) §8, seul endroit gardé mécaniquement.
 >
-> En trois lignes, pour n'avoir pas à chercher : **la vague D est CLOSE** — **L25** (EBIOS
-> RM, échelles, quantification FAIR) et **L26** (catalogues ouverts) sont livrés en entier,
-> schéma `data` en **v26**, 52 migrations. Le geste suivant est le **rejeu INTÉGRAL de
-> `docs/COMPARATIF_MARCHE.md`**, puis la **vague E** (L22, L23). Les chiffres du schéma
-> vivent au `backend/README.md` §8.
+> En trois lignes, pour n'avoir pas à chercher : **LES SIX VAGUES DU
+> `docs/PLAN_ACHEVEMENT.md` SONT CONSTRUITES** — C, D, E et F closes le 19/09/2026.
+> Schéma `data` en **v27**, **58 migrations**, indicateur **53 ✅ · 19 🟡 · 14 ❌ (~73 %)**.
+>
+> **Le geste suivant n'est plus un lot : c'est l'`ultrareview`**, que le plan place à la
+> fin sur le logiciel complet, et que **l'utilisateur seul peut lancer** — une session ne
+> peut pas la déclencher. Puis les constats ouverts du `docs/PLAN_EXECUTION.md` §7, le
+> durcissement final, et la mise en service.
+>
+> 🛑 **ET CE QUI EST CONSTRUIT N'EST PAS CE QUI EST OUVERT.** Le mode IA externe est
+> **fermé** (aucune ligne d'activation n'entre en base sans un réglage d'exploitant), et
+> le portail fournisseur **n'enregistre aucune route** — son vhost est livré désactivé.
+> La consigne du plan prime : *la porte S15 est la plus exigeante du chantier, et en cas
+> de doute sur ce lot, on ne livre pas.* Détail au `docs/REPRISE.md` §4.
+>
+> Les chiffres du schéma vivent au `backend/README.md` §8.
 >
 > Les sous-sections qui suivent sont l'HISTORIQUE, de la plus ancienne à la plus
 > récente. Elles gardent leurs leçons de méthode, qui valent ; elles ne disent pas

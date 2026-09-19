@@ -483,7 +483,19 @@ describe('19.4 — sur CHAQUE chemin de cascade, la preuve partagée survit puis
   });
 
   test('CHAQUE cascade : la preuve réutilisée CHANGE D’ADRESSE au lieu de mourir', async () => {
-    const cascades = await cascadesDuSchema();
+    /* ⚠️ **Le balayage se borne aux enfants qui PEUVENT porter une pièce.** La
+     * route de dépôt n'accepte qu'une **entité du registre** — la liste est DÉRIVÉE
+     * de `DOMAINE_PAR_ENTITE` —, et trois enfants de cascade n'en sont pas :
+     * `evenements_sortants`, `collectes`, `portail_liens`. Ce sont des files et des
+     * preuves, auxquelles aucune pièce jointe ne se rattache.
+     *
+     * ⚠️ **L'exclusion est MESURÉE dans `test/pieces/orphelines.test.mjs`**, qui
+     * demande à la route d'accepter un dépôt sur chacune et exige le refus : une
+     * entité oubliée du registre sortirait sinon du filet **en silence**. */
+    modeleEntites ??= (await serveur.appeler('GET', '/api/modele')).corps.entites;
+    const cascades = (await cascadesDuSchema()).filter(
+      (c) => modeleEntites[c.enfant] !== undefined,
+    );
     const echecs = [];
 
     for (const { parent, enfant, colonne } of cascades) {

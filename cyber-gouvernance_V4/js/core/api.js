@@ -1298,6 +1298,67 @@ const Api = (() => {
                        "&cible=" + encodeURIComponent(cible));
     }
 
+    /* ── Lot L22 — L'OUVERTURE TECHNIQUE ──────────────────────────────────
+     *
+     * ⚠️ **`emettreJeton()` est la SEULE route du produit dont la réponse
+     * porte un secret**, et elle ne le porte qu'une fois : le serveur n'en
+     * garde qu'une empreinte. Rien ici ne le mémorise — ni cette couche, ni
+     * `localStorage` : il vit dans la variable du module qui l'affiche, et une
+     * navigation le fait disparaître. C'est ce que l'avertissement annonce, et
+     * l'écran doit se comporter comme son avertissement.
+     */
+    function jetonsApi() { return appeler("/ouverture/jetons"); }
+    function emettreJeton(corps) {
+        return appeler("/ouverture/jetons", { methode: "POST", corps: corps });
+    }
+    function revoquerJeton(id) {
+        return appeler("/ouverture/jetons/" + encodeURIComponent(id), { methode: "DELETE" });
+    }
+    function abonnementsEvenements() { return appeler("/ouverture/abonnements"); }
+    function abonnerEvenement(corps) {
+        return appeler("/ouverture/abonnements", { methode: "POST", corps: corps });
+    }
+    function retirerAbonnement(id) {
+        return appeler("/ouverture/abonnements/" + encodeURIComponent(id),
+                       { methode: "DELETE" });
+    }
+
+    /* ── Lots L22 (22.4) et L23 — LA COLLECTE AUTOMATIQUE ─────────────────
+     *
+     * ⚠️ `connecteursEtat()` rend la fraîcheur **dérivée par le serveur**
+     * (`f_collecte_fraicheur`). La recalculer dans le navigateur en ferait une
+     * seconde source, qui divergerait au premier ajustement (constat Q-219) —
+     * et une colonne « valide » vieillirait sans que rien n'écrive.
+     */
+    function connecteursEtat() { return appeler("/connecteurs/etat"); }
+    function connecteurCollecter(id) {
+        return appeler("/connecteurs/" + encodeURIComponent(id) + "/collecter",
+                       { methode: "POST", corps: {} });
+    }
+    function connecteurHistorique(id) {
+        return appeler("/connecteurs/" + encodeURIComponent(id) + "/historique");
+    }
+
+    /* ── Lot L27 — L'ASSISTANCE PAR IA ───────────────────────────────────
+     *
+     * ⚠️ **Deux routes là où une suffirait**, et c'est la barrière n° 4 :
+     * `assistancePreparer()` compose et REND le texte sans rien envoyer ;
+     * `assistanceDemander()` envoie. L'écran montre le premier, et l'envoi est
+     * un second geste — sans quoi « montré avant de partir » serait une phrase.
+     *
+     * ⚠️ Le serveur RECOMPOSE à l'envoi : ce que cette couche transmet est la
+     * matière, jamais le texte. Un client qui montrerait un texte et en
+     * soumettrait un autre ne tromperait donc personne.
+     */
+    function assistanceEtat() { return appeler("/assistance/etat"); }
+    function assistancePreparer(corps) {
+        return appeler("/assistance/preparer", { methode: "POST", corps: corps });
+    }
+    function assistanceDemander(corps) {
+        return appeler("/assistance/demander", { methode: "POST", corps: corps });
+    }
+    function assistanceAppels() { return appeler("/assistance/appels"); }
+
     /* ── Les RÉGLAGES ─────────────────────────────────────────────────────────
      *
      * ⚠️ **La lecture est ouverte à toute session**, et c'est une décision du
@@ -1364,6 +1425,13 @@ const Api = (() => {
         // Lot L26 : l'ancienneté d'un catalogue, le plan d'une reprise de
         // réponses, et des correspondances PROPOSÉES — jamais appliquées.
         cataloguesEtat, catalogueReprise, catalogueSuggestions,
+        // Lot L22 : les jetons d'API et les abonnements aux événements sortants.
+        jetonsApi, emettreJeton, revoquerJeton,
+        abonnementsEvenements, abonnerEvenement, retirerAbonnement,
+        // Lots L22 (22.4) et L23 : la collecte automatique de preuve.
+        connecteursEtat, connecteurCollecter, connecteurHistorique,
+        // Lot L27 : l'assistance par IA — locale par défaut, externe sous six barrières.
+        assistanceEtat, assistancePreparer, assistanceDemander, assistanceAppels,
         // Les réglages : le catalogue du Groupe, et ce que cette filiale en a fait.
         reglages, reglerParametre,
         // Lot L19, action 19.2 : l'état DÉRIVÉ des dérogations.

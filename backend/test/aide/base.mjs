@@ -1039,6 +1039,113 @@ export async function semerJeuEssai(base, client, options = {}) {
           f,
         );
 
+        /* ── L'OUVERTURE TECHNIQUE ET LA COLLECTE (lots L22 et L23) ─────────
+         *
+         * ⚠️ **Cinq tables neuves, et elles sont semées ICI pour une raison qui
+         * n'est pas la commodité** : `chargement-filiale.test.mjs` exige que le
+         * balayage de cloisonnement ait DE LA MATIÈRE, table par table. Une table
+         * neuve sans ligne y rendrait « zéro visible » **parce qu'il n'y a rien à
+         * voir** — c'est-à-dire un angle mort qui se présente comme une preuve.
+         *
+         * ⚠️ Le jeton porte une empreinte FACTICE mais bien formée : aucune de ces
+         * lignes ne correspond à un secret existant, et aucune famille ne peut donc
+         * s'authentifier « par accident » avec le décor. */
+        await c.query(
+          `insert into jetons_api (id, filiale_id, nom, empreinte, prefixe, emis_par,
+                                   niveau, domaines, expire_le)
+               values ('JET-${s}', $1, 'Jeton de semis ${s}', $2, 'grc_semis', 'semeur',
+                       'lecture', array['risques']::text[], now() + interval '90 days')`,
+          [filiale, (s === 'A' ? 'a' : 'b').repeat(64)],
+        );
+        await c.query(
+          `insert into abonnements_evenements (id, filiale_id, evenement, nom, url, actif)
+               values ('ABO-${s}', $1, 'incident_cree', 'Semis ${s}',
+                       'https://semis-${s.toLowerCase()}.exemple.interne/webhook', false)`,
+          f,
+        );
+        // ⚠️ L'abonnement ci-dessus est INACTIF, et celui-ci est écrit à la main :
+        // un abonnement actif ferait enfiler un événement à CHAQUE incident créé par
+        // les cent trente familles qui partagent ce décor, et la file deviendrait un
+        // compteur d'autre chose. *Le décor ne doit pas armer un mécanisme.*
+        // ⚠️ Le paramètre est passé DEUX fois plutôt qu'une : `$1` sert à la fois de
+        // `id_metier` (la colonne) et de `text` (dans le document), et PostgreSQL
+        // refuse d'en déduire deux types — `42P08`. Deux places, deux types.
+        await c.query(
+          `insert into evenements_sortants (id, filiale_id, abonnement_id, evenement, charge)
+               values ('EVT-${s}', $1, 'ABO-${s}', 'incident_cree',
+                       jsonb_build_object('evenement', 'incident_cree', 'entite', 'incidents',
+                                          'id', 'INC-${s}', 'filiale', $2::text))`,
+          [filiale, filiale],
+        );
+        await c.query(
+          `insert into connecteurs (id, filiale_id, genre, nom, mesure_id, configuration)
+               values ('CONN-${s}', $1, 'sauvegarde', 'Depot de sauvegarde ${s}', 'MESURE-${s}',
+                       '{"chemin": "/var/sauvegardes", "age_max_heures": 24}'::jsonb)`,
+          f,
+        );
+        await c.query(
+          `insert into collectes (id, filiale_id, connecteur_id, mesure_id, verdict,
+                                  fraicheur_jours, detail)
+               values ('COLL-${s}', $1, 'CONN-${s}', 'MESURE-${s}', 'conforme', 7,
+                       '{"motif": "depot_recent"}'::jsonb)`,
+          f,
+        );
+
+        /* ── LA VAGUE F : L'ASSISTANCE IA ET LE PORTAIL (lots L27, L28) ────
+         *
+         * ⚠️ **Semées ICI pour la même raison que les cinq précédentes** : le
+         * balayage de cloisonnement exige DE LA MATIÈRE, table par table. Une
+         * table neuve sans ligne y rend « zéro visible » **parce qu'il n'y a rien
+         * à voir**, c'est-à-dire un angle mort qui se présente comme une preuve.
+         *
+         * ⚠️ **L'activation IA exige le réglage de l'EXPLOITANT** (barrière n° 1 du
+         * lot L27), et le semis le pose explicitement. C'est délibéré : un décor
+         * qui contournerait la barrière la rendrait invisible au banc.
+         *
+         * ⚠️ **Le lien de portail est posé EXPIRÉ**, et c'est le point : le décor
+         * ne doit pas laisser traîner un accès public utilisable. Les familles qui
+         * mesurent un lien vivant le posent elles-mêmes. */
+        await c.query("select set_config('grc.ia_externe_autorisee', 'oui', true)");
+        await c.query(
+          // ⚠️ **INACTIVE, exactement comme l'abonnement plus haut.** Le décor doit
+          // donner de la MATIÈRE au balayage de cloisonnement, il ne doit pas ARMER
+          // un mécanisme : une activation vive ferait passer les deux filiales du
+          // banc en mode IA externe, et l'essai « une filiale sans activation reste
+          // en mode local » deviendrait intestable. Les familles qui mesurent le
+          // mode externe l'activent elles-mêmes (`test/assistance/`).
+          `insert into ia_activation
+               (id, filiale_id, destination, fournisseur, reference_contrat,
+                lieu_hebergement, engagement_non_reentrainement, valide_par, valide_le,
+                actif)
+               values ('IAACT-${s}', $1, 'https://ia-${s.toLowerCase()}.exemple.interne/v1',
+                       'Fournisseur de semis', 'CTR-SEMIS', 'Union europeenne',
+                       'Annexe du contrat', 'RSSI de semis', date '2026-09-01', false)`,
+          f,
+        );
+        await c.query(
+          `insert into ia_appels
+               (id, filiale_id, usage_ia, mode, invite, verdict, octets)
+               values ('IAAPP-${s}', $1, 'correspondances', 'local',
+                       'Invite de semis', 'indisponible', 0)`,
+          f,
+        );
+        await c.query(
+          `insert into questionnaires_tiers
+               (id, filiale_id, prestataire_id, ref_id, intitule, envoye_le)
+               values ('QT-SEMIS-${s}', $1, 'PRES-${s}', 'anssi-hygiene',
+                       'Questionnaire de semis', current_date)`,
+          f,
+        );
+        await c.query(
+          `insert into portail_liens
+               (id, filiale_id, questionnaire_id, empreinte, prefixe, destinataire,
+                expire_le)
+               values ('PLIEN-${s}', $1, 'QT-SEMIS-${s}', $2, 'grcp_semis',
+                       'contact-${s.toLowerCase()}@fournisseur.example',
+                       now() - interval '1 day')`,
+          [filiale, (s === 'A' ? 'e' : 'f').repeat(64)],
+        );
+
         // La file de purge du magasin (migration `017`). Elle est VIDE en régime
         // normal — c'est une file d'attente, pas un registre —, et c'est
         // précisément pourquoi elle est semée : sans une ligne par filiale, le

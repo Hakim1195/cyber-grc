@@ -120,7 +120,10 @@ export type NomCollection =
   | 'referentiels'
   | 'referentiel_domaines'
   | 'referentiel_exigences'
-  | 'referentiel_traductions';
+  | 'referentiel_traductions'
+  // v27 — la configuration des contrôles automatiques (lot L22, action 22.4).
+  // ⚠️ `collectes` n'y est pas : un constat est une preuve, pas un réglage.
+  | 'connecteurs';
 
 /**
  * Charge utile normalisée en v12.

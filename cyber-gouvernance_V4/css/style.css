@@ -2739,3 +2739,152 @@ input, select, textarea {
     margin: 0;
 }
 .mc-form button { grid-column: 1 / -1; justify-self: start; }
+
+
+/* =========================================================================
+   Lots L22 et L23 — l'ouverture technique et la collecte automatique
+   -------------------------------------------------------------------------
+   ⚠️ **Ces six classes sont définies PARCE QU'ELLES SONT ÉCRITES.** Les écrans
+   livrés les 18 et 19/09 se rendaient à plat : `card` et `muted` étaient
+   écrites dans le balisage et définies dans AUCUNE feuille, et rien ne le
+   disait — ni le banc, ni le rendu, qui affiche simplement une page sans
+   style. *Une classe écrite n'est pas une classe définie*, et c'est la
+   quatrième fois que le défaut revient. Le vérifier fait partie de la
+   livraison d'un écran neuf.
+   ========================================================================= */
+
+/* Un formulaire en grille : libellé au-dessus du champ, qui se replie en une
+   colonne sous 640 px — c'est la largeur d'un téléphone en portrait. */
+.form-grid {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-3, 12px);
+    margin-top: var(--space-4, 16px);
+}
+.form-grid > label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    min-width: 180px;
+    flex: 1 1 180px;
+}
+.form-grid > label > input,
+.form-grid > label > select {
+    padding: 6px 8px;
+    border: 1px solid var(--border, #d7dde5);
+    border-radius: var(--radius-sm, 4px);
+    font: inherit;
+    color: var(--text, #1c2430);
+}
+.form-grid > button { flex: 0 0 auto; }
+
+/* Le groupe de cases à cocher des domaines d'un jeton. */
+.cases {
+    flex: 1 1 100%;
+    border: 1px solid var(--border, #d7dde5);
+    border-radius: var(--radius-sm, 4px);
+    padding: var(--space-2, 8px) var(--space-3, 12px);
+    margin: 0;
+}
+.cases > legend { font-size: var(--text-sm); color: var(--text-muted); padding: 0 4px; }
+.case-en-ligne {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: 4px 14px 4px 0;
+    font-size: var(--text-sm);
+    white-space: nowrap;
+}
+
+/* Les cartes de description des genres de connecteurs. */
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--space-3, 12px);
+}
+.cards-grid > .card { margin: 0; }
+
+/* Le détail d'un constat : des couples « clé : valeur », serrés. */
+.liste-detail { margin: 0; padding-left: 1.1em; font-size: var(--text-sm); }
+.liste-detail > li { margin: 2px 0; }
+
+/* L'encart du secret d'un jeton — il n'apparaît qu'UNE fois, et il doit se
+   voir : c'est la seule occasion de le copier. */
+.encart-alerte {
+    border-left: 4px solid var(--accent, #E9631B);
+    background: var(--tint-accent, #fdf1e9);
+}
+.secret-jeton {
+    display: inline-block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--text-sm);
+    background: #fff;
+    border: 1px solid var(--border, #d7dde5);
+    border-radius: var(--radius-sm, 4px);
+    padding: 6px 10px;
+    /* ⚠️ Un secret de 43 caractères ne doit ni déborder, ni être coupé à la
+       copie : on autorise le retour à la ligne SANS césure ajoutée. */
+    word-break: break-all;
+    user-select: all;
+}
+
+/* Un bouton de tableau : la même identité, en plus petit. */
+.btn-sm { padding: 3px 8px; font-size: var(--text-sm); }
+
+/* =========================================================================
+   Lot L27 — l'assistance par IA
+   -------------------------------------------------------------------------
+   ⚠️ **Vérifié classe par classe avant la livraison**, et c'est la leçon de la
+   vague E : huit classes y avaient été écrites et définies dans aucune
+   feuille, deux fois le même jour. *Une classe écrite n'est pas une classe
+   définie, et aucun essai ne le dit.*
+   ========================================================================= */
+
+/* Le bandeau du mode externe — barrière n° 6. PERMANENT, sans bouton de
+   fermeture : même mécanique que le bandeau du profil découverte, pour la même
+   raison — ce qu'on ne voit pas devient une habitude. */
+.bandeau-alerte {
+    border-left: 4px solid var(--color-danger, #a5281b);
+    background: var(--tint-danger, #fdeceb);
+    color: var(--text, #1c2430);
+    padding: var(--space-3, 12px);
+    border-radius: var(--radius-sm, 4px);
+    margin: var(--space-3, 12px) 0;
+    font-weight: 600;
+}
+
+/* La matière d'une demande : des couples étiquette / valeur. */
+.matiere { margin-top: var(--space-3, 12px); }
+.matiere-ligne {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2, 8px);
+    margin-bottom: var(--space-2, 8px);
+}
+.matiere-ligne > input {
+    padding: 6px 8px;
+    border: 1px solid var(--border, #d7dde5);
+    border-radius: var(--radius-sm, 4px);
+    font: inherit;
+}
+.matiere-etiquette { flex: 1 1 200px; }
+.matiere-valeur { flex: 2 1 320px; }
+
+/* Le texte EXACT qui part, et celui qui revient. ⚠️ Rendu tel quel, en
+   `pre` : le reformater viderait la barrière n° 4 de son sens — l'utilisateur
+   doit voir ce qui part, pas une mise en page de ce qui part. */
+.invite {
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #fff;
+    border: 1px solid var(--border, #d7dde5);
+    border-radius: var(--radius-sm, 4px);
+    padding: var(--space-3, 12px);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--text-sm);
+    max-height: 22em;
+    overflow-y: auto;
+}

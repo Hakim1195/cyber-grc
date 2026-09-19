@@ -481,6 +481,42 @@ async function traiterFiliale(
     const fenetre = await reclamerFenetre(client, filialeId, ctx.maintenant, ctx.fenetreHeures);
     if (!fenetre.reclamee) return { rien: true as const, sansDate, dejaReclamee: true as const };
 
+    /* ── L'ÉVÉNEMENT SORTANT « echeance_franchie » (lot L22, action 22.3) ──
+     *
+     * ⚠️ **Un franchissement d'échéance n'est l'insertion d'AUCUNE ligne** :
+     * c'est un fait DÉRIVÉ de dates qui existaient déjà. Aucun déclencheur ne
+     * peut le voir — c'est pourquoi `f_emettre_evenement()` a été extraite du
+     * déclencheur par la migration `056`, et pourquoi cet événement est déclaré
+     * « service » dans `f_evenements_emis()`.
+     *
+     * ⚠️ **Il est émis ICI, après la réclamation de la fenêtre**, et pas avant :
+     * la fenêtre est ce qui garantit une relance par jour et par filiale. Émettre
+     * avant ferait partir un webhook à chaque passage du minuteur, soit toutes
+     * les quelques minutes — c'est le motif du §5 de la `054` sur les actions,
+     * et l'effet serait le même : on cesserait de lire ce qui arrive.
+     *
+     * ⚠️ **La charge porte des NOMBRES et une DATE, jamais un intitulé** : un
+     * webhook part vers un outil tiers, et le titre d'une action de remédiation
+     * dit ce qui ne va pas dans la filiale. L'abonné reçoit de quoi VENIR
+     * CHERCHER, avec le jeton d'API qui le borne.
+     */
+    const franchies = retenues.filter((e) => e.jours <= 0).length;
+    if (franchies > 0) {
+      await client.query(
+        `select f_emettre_evenement($1, $2, $3, $4, $5::jsonb)`,
+        [
+          'echeance_franchie',
+          filialeId,
+          'echeances',
+          // ⚠️ Pas d'identifiant : une échéance n'est pas une ligne. Le jour la
+          // désigne, et c'est ce qui rend l'événement idempotent du point de vue
+          // de l'abonné — deux envois du même jour visent le même fait.
+          ctx.maintenant.toISOString().slice(0, 10),
+          JSON.stringify({ franchies, dues: retenues.length }),
+        ],
+      );
+    }
+
     return {
       rien: false as const,
       sansDate,

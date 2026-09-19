@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 26;
+export const VERSION_SCHEMA = 27;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -211,6 +211,12 @@ export const COLLECTIONS = [
   'referentiel_domaines',
   'referentiel_exigences',
   'referentiel_traductions',
+  // v27 — les CONNECTEURS de collecte (lot L22, action 22.4). ⚠️ **`collectes` n'y
+  // est PAS, et l'absence est la décision** : un connecteur est un RÉGLAGE, qu'on
+  // refait à l'identique après une reprise ; un constat est une PREUVE datée, au même
+  // titre que le journal d'audit et la main courante de crise — un fichier lisible et
+  // éditable lui ôterait sa valeur probante.
+  'connecteurs',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -1301,6 +1307,42 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
       { champ: 'domaine_id', cible: 'referentiel_domaines' },
       { champ: 'referentiel_id', cible: 'referentiels' },
     ],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  // v27 — les connecteurs de collecte (lot L22, action 22.4).
+  //
+  // ⚠️ **`configuration` n'est PAS validée ici, et c'est délibéré** : ses clefs sont
+  // closes EN BASE, par genre (`f_connecteur_clefs()`, migration `055`), et une reprise
+  // écrit par la couche d'écriture — donc à travers le déclencheur. Recopier la liste
+  // ici en ferait une seconde source, qui divergerait au premier genre ajouté
+  // (constat **Q-219**). Le refus, lui, reste un refus : une configuration portant une
+  // clef intruse fait échouer la reprise bruyamment, ce qui est le comportement voulu
+  // — un réglage qu'on ne lit pas est un réglage qu'on croit avoir posé.
+  connecteurs: {
+    prefixe: 'CONN',
+    champs: [
+      'id',
+      'genre',
+      'nom',
+      'actif',
+      'configuration',
+      'mesure_id',
+      'fraicheur_jours',
+    ],
+    enumerations: [
+      {
+        champ: 'genre',
+        valeurs: ['annuaire', 'sauvegarde', 'antivirus'],
+        videAdmis: false,
+      },
+    ],
+    bornes: [{ champ: 'fraicheur_jours', min: 1, max: 3650 }],
+    dates: [],
+    // ⚠️ `mesure_id` vise `mesure_catalogue`, qui est de niveau GROUPE et ne fait pas
+    // partie des collections du fichier d'échange : la référence n'est donc pas
+    // recalée à la reprise, elle est vérifiée par la clé étrangère de la base.
+    references: [],
     referencesMultiples: [],
     cleMetier: null,
   },
@@ -2614,6 +2656,22 @@ const PALIERS: readonly EtapePalier[] = [
       'referentiel_exigences',
       'referentiel_traductions',
     ]),
+  },
+  {
+    de: 26,
+    vers: 27,
+    libelle:
+      'Lot L22, action 22.4 : l’instantané gagne les CONNECTEURS de collecte — la ' +
+      'configuration des contrôles automatiques. ⚠️ Les CONSTATS qu’ils produisent, ' +
+      'eux, ne voyagent pas : un constat est une preuve datée, au même titre que le ' +
+      'journal d’audit et la main courante de crise, et un fichier éditable lui ' +
+      'ôterait sa valeur probante.',
+    // ⚠️ **Un fichier d'avant la v27 n'en porte aucun, et il ne doit pas en inventer.**
+    // Un connecteur inventé serait un contrôle qu'on croit posé et qui ne s'exécute
+    // jamais : l'écran afficherait « jamais constaté », ce qui est exact — mais
+    // personne ne saurait que ce contrôle n'a jamais été voulu. Le palier livre donc
+    // un tableau vide, et c'est l'exploitant qui pose ses connecteurs.
+    appliquer: paliersCollections(['connecteurs']),
   },
 ];
 

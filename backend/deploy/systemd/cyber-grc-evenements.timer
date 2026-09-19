@@ -1,0 +1,44 @@
+# Emplacement cible : /etc/systemd/system/cyber-grc-evenements.timer
+#
+# Planification du drainage de la file des événements sortants (lot L22, action
+# 22.3) — déclenche cyber-grc-evenements.service.
+#
+# ── Pourquoi toutes les cinq minutes, et non une fois par jour ───────────
+#
+# Un webhook sert à RÉAGIR. Une création d'incident qui arrive dans l'outil de
+# suivi du client le lendemain matin n'a plus d'objet : l'équipe a déjà traité
+# l'incident, ou ne l'a pas traité. Cinq minutes est le compromis entre l'utilité
+# et la charge — c'est aussi l'ordre de grandeur des autres produits du marché.
+#
+# ⚠️ **La file rend ce délai sûr.** Rien n'est perdu entre deux passages : les
+# événements attendent en base, et un passage manqué est rattrapé au suivant.
+# C'est l'inverse d'un appel synchrone, où un tiers en panne fait perdre
+# l'événement — ou fait attendre l'utilisateur.
+#
+# ⚠️ **Et un passage qui ne trouve rien ne coûte presque rien** : une requête sur
+# un index partiel, et l'unité s'arrête. C'est ce qui rend acceptable de le jouer
+# deux cent quatre-vingt-huit fois par jour sur une installation sans abonnement.
+#
+# Vérification que le minuteur est armé — ENVOYÉE à systemd, jamais lue d'un
+# fichier :
+#   systemctl is-enabled cyber-grc-evenements.timer
+#   systemctl is-active  cyber-grc-evenements.timer
+#   systemctl list-timers cyber-grc-evenements.timer
+
+[Unit]
+Description=Planification du drainage des événements sortants (Cyber GRC Groupe)
+Documentation=file:/opt/cyber-grc/backend/README.md
+
+[Timer]
+OnCalendar=*:0/5
+# Étale le déclenchement réel : vingt VM installées le même jour ne frapperaient
+# pas les destinations à la même seconde. Court, parce que la cadence l'est.
+RandomizedDelaySec=30
+# Un arrêt de la VM ne doit pas faire sauter un cycle. ⚠️ Ici, le rattrapage ne
+# risque aucun doublon : la file porte un STATUT, et un événement déjà envoyé
+# n'est plus repris. C'est l'avantage d'une file sur une fenêtre de temps.
+Persistent=true
+Unit=cyber-grc-evenements.service
+
+[Install]
+WantedBy=timers.target

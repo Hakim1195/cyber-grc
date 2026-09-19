@@ -1234,6 +1234,25 @@ SQL
       "Rejouez install.sh : le minuteur est posé par le §6 du script."
   fi
 
+  # ── QUINZIÈME SUJET : l'assistance par IA (lot L27, barrière n° 6) ────────
+  #
+  # ⚠️ **L'avertissement est REPRIS ICI comme réserve**, et c'est le critère : un mode
+  # externe actif doit se voir de l'exploitant sans qu'il ait à le chercher. Même
+  # mécanique que le profil découverte, pour la même raison — *ce qu'on ne voit pas
+  # devient une habitude*.
+  IA_EXTERNE="$(lire_variable CYBER_GRC_IA_EXTERNE)"
+  IA_LOCALE="$(lire_variable IA_URL_LOCALE)"
+  if [[ "${IA_EXTERNE,,}" =~ ^(oui|true|1|on)$ ]]; then
+    diag_reserve "assistance IA" "mode EXTERNE autorisé sur cette installation" \
+      "Les données de gouvernance des filiales qui l'activent sortent vers un fournisseur tiers. Vérifiez : les quatre champs de confiance sont-ils renseignés (fournisseur, contrat, hébergement, engagement de non-réentraînement, qui a validé) ? La sortie réseau de l'unité est-elle ouverte vers ce seul hôte ? Chaque appel est journalisé sous l'action « ia_externe »."
+  elif [[ -n "$IA_LOCALE" ]]; then
+    diag_ok "assistance IA" "mode LOCAL — modèle sur la boucle locale, aucune sortie"
+  else
+    # ⚠️ Ce n'est PAS une réserve : une installation sans assistance est le cas
+    # ordinaire, et le produit le DIT à l'écran plutôt que d'inventer.
+    diag_ok "assistance IA" "aucune assistance configurée — le produit répond « indisponible »"
+  fi
+
   # ── Bilan ─────────────────────────────────────────────────────────────────
   printf '\n'
   if   [[ $DIAG_BLOQUANT -gt 0 ]]; then
@@ -1246,7 +1265,7 @@ SQL
     exit 1
   fi
   info "Bilan : $DIAG_OK conforme(s), 0 réserve, 0 bloquant"
-  succes "Installation conforme : quatorze sujets contrôlés, $DIAG_OK verdicts."
+  succes "Installation conforme : quinze sujets contrôlés, $DIAG_OK verdicts."
   alerte "⚠️ Un diagnostic vert NE VAUT PAS passage de porte : il constate une machine,"
   alerte "   il n'éprouve ni le cloisonnement sous sondes hostiles, ni les catalogues."
   exit 0
@@ -1675,8 +1694,9 @@ desinstaller() {
   # sa configuration écrit dans le vide, et `Restart=on-failure` le relance en
   # boucle sur une arborescence à moitié effacée.
   info "Arrêt des services"
-  for unite in cyber-grc-notifications.timer cyber-grc-reanalyse.timer \
-               cyber-grc-notifications.service cyber-grc-reanalyse.service cyber-grc; do
+  for unite in cyber-grc-evenements.timer cyber-grc-notifications.timer cyber-grc-reanalyse.timer \
+               cyber-grc-evenements.service cyber-grc-notifications.service \
+               cyber-grc-reanalyse.service cyber-grc; do
     systemctl disable --now "$unite" >/dev/null 2>&1 || true
   done
   succes "unités arrêtées et désactivées"
@@ -1686,7 +1706,9 @@ desinstaller() {
         /etc/systemd/system/cyber-grc-reanalyse.service \
         /etc/systemd/system/cyber-grc-reanalyse.timer \
         /etc/systemd/system/cyber-grc-notifications.service \
-        /etc/systemd/system/cyber-grc-notifications.timer
+        /etc/systemd/system/cyber-grc-notifications.timer \
+        /etc/systemd/system/cyber-grc-evenements.service \
+        /etc/systemd/system/cyber-grc-evenements.timer
   systemctl daemon-reload
   succes "unités retirées"
 
@@ -3080,6 +3102,20 @@ install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-reanalyse.timer" /etc/systemd/
   install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-notifications.service" /etc/systemd/system/
   install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-notifications.timer"   /etc/systemd/system/
 
+  # ══ L'ÉMISSION DES ÉVÉNEMENTS SORTANTS — lot L22, action 22.3 ════════════
+  #
+  # ⚠️ **Installée MAIS PAS ARMÉE, et c'est la première barrière.** Ouvrir un
+  # webhook, c'est décider que des informations de gouvernance cyber sortent de
+  # la machine — et cette décision n'appartient pas à l'utilisateur qui remplit
+  # le formulaire d'abonnement. Tant que l'exploitant n'a pas ouvert
+  # `IPAddressAllow` **et** armé le minuteur, les abonnements se créent, la file
+  # se remplit, et RIEN NE PART.
+  #
+  # C'est le bon état par défaut, et c'est la même mécanique que la première
+  # barrière du lot L27 : *une barrière physique, pas une promesse*.
+  install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-evenements.service" /etc/systemd/system/
+  install -m 0644 "$SOURCE/deploy/systemd/cyber-grc-evenements.timer"   /etc/systemd/system/
+
   # ══ ET ON VÉRIFIE QUE LE RELAIS EST JOIGNABLE DEPUIS LE CGROUP (constat Q-199)
   #
   # ⚠️ Ce qui précède ce contrôle n'était qu'un COMMENTAIRE. L'unité disait, en
@@ -3566,6 +3602,22 @@ while IFS= read -r brut; do
     fi
     continue
   fi
+  # ── LA FORME ÉMETTRICE : « headers: entetes » dans un appel sortant ─────
+  #
+  # SIXIÈME écriture, arrivée avec les événements sortants (lot L22.3) : le
+  # drainage POSE des en-têtes sur une requête qu'il émet, il n'en LIT aucun.
+  # Le contrôle a de nouveau fait ce qu'il devait — il a REFUSÉ de conclure et
+  # arrêté l'installation —, et c'est ainsi qu'on l'a vu.
+  #
+  # ⚠️ **Le discriminant est syntaxique et il est étroit** : « headers » comme
+  # CLÉ d'objet (« headers: »), et jamais comme ACCÈS (« .headers »). Une ligne
+  # qui porte les deux reste INCLASSABLE — une lecture pourrait sinon se
+  # déguiser en écriture, ce qui est exactement le déguisement que le cas
+  # « masquage » ci-dessus refuse déjà dans l'autre sens.
+  if printf '%s' "$LIGNE_TXT" | grep -qE "(^|[^.[:alnum:]_])headers[[:space:]]*:" \
+     && ! printf '%s' "$LIGNE_TXT" | grep -qE "\.headers"; then
+    continue                                   # en-têtes ÉMIS : ne lit rien
+  fi
   ENTETES_OPAQUES+="${LIGNE_FIC#"$SOURCE/"}:$LIGNE_NUM — accès à « headers » que ce contrôle ne sait pas classer"$'\n'
 done < <(grep -rnE "\bheaders\b" "$SOURCE/src" 2>/dev/null || true)
 
@@ -3622,7 +3674,16 @@ fi
 # puis DÉMENTIE par le contrôle n° 4 (signature binaire) ; `content-length` ne
 # sert qu'à refuser tôt, le compteur de flux restant seul autoritaire. Les
 # effacer casserait tout envoi de corps.
-ENTETES_DU_CLIENT=(cookie user-agent content-type content-length)
+# `authorization` rejoint la liste au lot **L22** (jetons d'API), et c'est la même
+# classe exactement que `cookie` : **le justificatif que le client présente**. L'effacer
+# au frontal couperait tout appel par jeton — c'est-à-dire la fonctionnalité même. Ce qui
+# le rend sûr n'est pas qu'il soit cru, c'est qu'il ne soit **cru de personne** : le
+# service n'en tire aucun fait, il y lit un secret et le CONFRONTE à une empreinte en
+# base. Un client qui le forge obtient un 401, comme sur un mot de passe faux.
+# ⚠️ *C'est précisément le discriminant de ce bloc* — une DÉCLARATION du client, jamais
+# un fait établi ailleurs, et jamais une valeur qui devient une clé sans être vérifiée.
+# La « référence » d'incident de Q-39 était l'inverse : crue sur parole, et devenue clé.
+ENTETES_DU_CLIENT=(cookie user-agent content-type content-length authorization)
 
 ENTETES_NUS=""
 while IFS= read -r entete; do

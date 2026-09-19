@@ -65,10 +65,10 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 26`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 27`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
-côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v26**. Elle est
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v27**. Elle est
 indépendante du numéro des migrations SQL.
 
 > ⚠️ **Ce paragraphe a annoncé « v12 » pendant quatre montées de version**, du 04/09 au
@@ -358,6 +358,30 @@ indépendante du numéro des migrations SQL.
 >     ⚠️ **« Accepter » exige sa justification**, et c'est la seule des quatre décisions :
 >     les trois autres produisent un travail que quelqu'un verra, accepter ne produit rien
 >     — sans sa phrase, la décision est indistinguable d'un oubli.
+>
+> v27 (lot L22, action 22.4) : ajout de **`connecteurs`** — la configuration des contrôles
+>     automatiques (genre, mesure surveillée, fraîcheur attendue, réglages).
+>
+>     ⚠️ **`collectes` N'EN FAIT PAS PARTIE, et c'est la décision qui compte ici.** La
+>     ligne entre les deux tables est celle qui sépare un **réglage** d'une **preuve** :
+>     un connecteur se refait à l'identique après une reprise, et le ressaisir filiale par
+>     filiale serait une perte pure ; un constat est une preuve datée, au même titre que
+>     le journal d'audit, la main courante de crise et les pièces jointes — le faire
+>     voyager dans un fichier lisible et éditable lui ôterait sa valeur probante. *On ne
+>     restaure pas un constat ; on en produit un nouveau.*
+>
+>     ⚠️ **Et c'est ce qui a rendu la migration `055` nécessaire.** `configuration` est un
+>     `jsonb` ouvert : une entité qui voyage aurait emporté **en clair, dans un fichier
+>     d'échange**, le mot de passe qu'un exploitant y aurait rangé. Les clefs admises sont
+>     donc **closes en base, par genre** (`f_connecteur_clefs()`), et aucun des trois
+>     exécuteurs n'en demande qui soit un secret — les identifiants du lien LDAP et le
+>     chemin du démon antivirus viennent de la **configuration du serveur**.
+>     ⚠️ La parade n'est **pas** d'interdire les clefs qui *ressemblent* à un secret :
+>     `motdepasse_2` passerait, et reconnaître un mot au lieu de mesurer un sens est ce
+>     que le `CONVENTIONS.md` §39.1 interdit. C'est la **liste** qui est close.
+>
+>     ⚠️ **Le palier crée un tableau VIDE**, et il ne doit rien inventer : un connecteur
+>     inventé serait un contrôle qu'on croit posé et qui ne s'exécute jamais.
 
 ---
 

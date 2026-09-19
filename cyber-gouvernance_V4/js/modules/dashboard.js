@@ -242,6 +242,37 @@ const DashboardModule = (() => {
        Toujours calculé sur le périmètre GLOBAL (indépendant du sélecteur de client)
        pour une série temporelle stable.
     ========================== */
+    /**
+     * L'indicateur des contrôles automatiques, capté auprès du serveur.
+     *
+     * ⚠️ **On compte les preuves FRAÎCHES, et non les périmées**, et le choix de
+     * polarité est le point délicat. `hSeries()` rend `0` pour un indicateur
+     * absent d'un point d'historique — ce qui est inévitable, puisque l'indicateur
+     * n'existe pas avant aujourd'hui. Avec « nombre de contrôles périmés », cette
+     * absence se lirait **zéro périmé**, c'est-à-dire une bonne nouvelle inventée :
+     * exactement la fausse assurance que le lot L23 existe pour empêcher. Avec
+     * « nombre de contrôles frais », elle se lit **aucune preuve fraîche**, qui est
+     * la lecture pessimiste — et donc la sûre.
+     *
+     * ⚠️ **Et l'échec de l'appel n'écrit RIEN**, plutôt que d'écrire zéro : un
+     * serveur qui ne répond pas ne doit pas creuser un trou dans la courbe qui se
+     * lirait « les contrôles ont cessé d'être frais ce jour-là ».
+     */
+    function capterControlesFrais() {
+        if (typeof Api === "undefined" || typeof Api.connecteursEtat !== "function") return;
+        Api.connecteursEtat()
+            .then(function (r) {
+                const connecteurs = (r && r.connecteurs) || [];
+                const frais = connecteurs.filter(function (c) {
+                    return c.fraicheur === "fraiche";
+                }).length;
+                const instantane = computeGlobalSnapshot();
+                instantane.controles_frais = frais;
+                DataStore.recordDailySnapshot(instantane);
+            })
+            .catch(function () { /* voir l'en-tête : on n'écrit rien, jamais zéro */ });
+    }
+
     function computeGlobalSnapshot() {
         const norm = s => String(s || "").toLowerCase();
 
@@ -360,6 +391,12 @@ const DashboardModule = (() => {
         /* ---- Historisation des tendances (un instantané GLOBAL par jour) ---- */
         if (typeof DataStore.recordDailySnapshot === "function") {
             DataStore.recordDailySnapshot(computeGlobalSnapshot());
+            // Lot L23, action 23.3 — l'indicateur des contrôles automatiques rejoint
+            // les courbes existantes, SANS écran neuf. Il arrive après le rendu parce
+            // que sa valeur vient du SERVEUR : la fraîcheur d'une preuve est dérivée
+            // par `f_collecte_fraicheur()`, et la recalculer ici en ferait une
+            // seconde source qui divergerait (constat Q-219).
+            capterControlesFrais();
         }
         const history = (typeof DataStore.getHistory === "function") ? DataStore.getHistory() : [];
 
@@ -497,7 +534,10 @@ const DashboardModule = (() => {
             trendTile({ label: "Exposition résiduelle", values: hSeries("expo"), higherIsBetter: false, decimals: 1, color: "var(--color-danger)", help: "Somme des scores de risque résiduel — plus c'est bas, mieux c'est." }),
             trendTile({ label: "Risques critiques", values: hSeries("risques_crit"), higherIsBetter: false, decimals: 0, color: "var(--color-warning)", help: "Nombre de risques au résiduel ≥ 3 (critiques et très critiques)." }),
             trendTile({ label: "Actions en retard", values: hSeries("actions_retard"), higherIsBetter: false, decimals: 0, color: "var(--color-danger)", help: "Actions non terminées dont l'échéance est dépassée." }),
-            trendTile({ label: "Avancement actions", values: hSeries("avancement"), higherIsBetter: true, unit: "%", decimals: 0, color: "var(--accent)", help: "Part des actions terminées sur le total." })
+            trendTile({ label: "Avancement actions", values: hSeries("avancement"), higherIsBetter: true, unit: "%", decimals: 0, color: "var(--accent)", help: "Part des actions terminées sur le total." }),
+            // Lot L23, action 23.3 — « les courbes de tendance existantes accueillent
+            // les nouveaux indicateurs sans écran neuf », mot pour mot le critère.
+            trendTile({ label: "Preuves fraîches", values: hSeries("controles_frais"), higherIsBetter: true, decimals: 0, color: "var(--primary)", help: "Nombre de contrôles automatiques dont la preuve est encore fraîche. Une preuve périmée ne compte pas : une sauvegarde constatée réussie il y a onze mois n'est pas une preuve de sauvegarde." })
         ].join("");
         const trendsHint = nDays < 2
             ? `L'historique se constitue automatiquement (un point par jour). Les courbes s'afficheront dès le 2ᵉ jour — actuellement <strong>${nDays}</strong> point${nDays > 1 ? "s" : ""}.`

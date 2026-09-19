@@ -3216,3 +3216,159 @@ contrainte qu'on croit lire.
 Le garde-fou `f_verifier_echelles()` mesure donc ce que la clé **fait** (`confdeltype`,
 et non son existence), et `test/echelles/echelles.test.mjs` §9 **tente** le rattachement
 interdit au lieu de relire la définition.
+
+---
+
+## §46 — Une table qui **produit** l'autorisation ne peut pas en **dépendre**
+
+**Constat fondateur** : lot L22, le 19/09/2026. Un jeton d'API émis par l'écran rendait
+**401 à son premier usage**, et le journal technique disait *« motif inconnu »* — c'est-à-dire
+*aucune ligne ne porte cette empreinte*. Il y en avait une.
+
+### §46.1 — La circularité, et pourquoi elle n'est pas un cas particulier
+
+`jetons_api` est **cloisonnée**, comme toute table métier. Or la recherche par empreinte a
+lieu **avant** qu'un périmètre existe : c'est elle qui va le produire. La politique
+`filiale_id = any (f_filiales_lecture())` était donc évaluée avec un périmètre vide, et la
+ligne était **invisible à la seule transaction qui devait la voir**.
+
+C'est exactement la situation de `sessions`, `session_filiales` et `session_domaines` —
+la dérogation circulaire du **§17.4**. Trois tables la portaient déjà ; une quatrième est
+arrivée sans qu'on s'en aperçoive, parce qu'elle ressemble à une table métier.
+
+⚠️ **Le signe qu'une table est dans ce cas** n'est pas ce qu'elle contient, c'est **quand
+elle est lue** : si une lecture doit avoir lieu *pour décider du périmètre*, elle ne peut
+pas être bornée par lui. Le chercher à l'écriture de la table, pas à la première panne.
+
+### §46.2 — Les trois remèdes qui ne marchent pas, et il faut savoir pourquoi
+
+| Remède | Pourquoi il est refusé |
+|---|---|
+| Mentionner `f_authentification()` dans la politique de **lecture** | **Un garde-fou existant le refuse** — anomalie `authentification_en_lecture`, migration `007` §5 : *un réglage de session ne doit jamais élargir une LECTURE*. La règle vaut pour le drapeau d'administration depuis la `004` §8, et il n'y a pas de raison que le second réglage échappe à celle du premier |
+| `using (true)`, comme `pol_sessions_lecture` | Ce serait **ajouter à la dette connue du lot L3** : une filiale listerait les accès ouverts chez sa voisine — leur nom, leur préfixe, leur expiration, et qui les a émis. Le précédent existe ; il ne se recopie pas sans y penser |
+| Une fonction `security definer` | **Elle ne contourne rien ici** : la RLS est *forcée y compris pour le propriétaire* (`PLAN_SERVEUR` §1.9). Une fonction définie par le propriétaire est soumise aux mêmes politiques que l'appelant |
+
+### §46.3 — Le remède : **le jeton porte sa filiale, en clair**
+
+`grc_<filiale en base64url>.<aléa>`. La couche d'authentification lit la filiale **sans
+interroger la base**, pose ce périmètre, puis cherche l'empreinte sous la RLS ordinaire.
+
+⚠️ **Rien n'est affaibli, et le raisonnement compte plus que le procédé** : cette filiale
+**n'est crue de personne**. Elle n'ouvre qu'une fenêtre de lecture — l'empreinte doit
+encore correspondre à une ligne *de cette filiale-là*. Une marque forgée fait chercher là
+où rien n'est, et rend **le même refus qu'un secret inventé**. Le segment en clair est un
+identifiant de filiale, que `GET /api/session` rend déjà à qui est connecté.
+
+⚠️ **Un secret sans marque est refusé au bord**, sans toucher la base, et la valeur
+décodée est **validée caractère par caractère** avant d'entrer dans un `set_config` : elle
+vient du réseau, et un réglage de session n'est pas un endroit où l'on met ce qu'on n'a
+pas regardé.
+
+### §46.4 — Et la leçon de banc, qui est la plus chère
+
+⚠️ **Dix-huit essais mesuraient les jetons, et aucun n'a vu le défaut.** Ils appelaient
+`verifierJeton()` sous `base.avecPerimetre(...)`, **qui pose un périmètre** : la ligne y
+était visible, et la fonction rendait le bon verdict.
+
+*Le banc mesurait la fonction ; personne ne mesurait ce que l'appelant reçoit.*
+
+C'est mot pour mot le constat **Q-325** — *« `GRC07` n'arrivait nulle part », éprouvé en
+SQL direct et jamais par la route* —, **reproduit huit jours plus tard dans un autre lot**.
+
+**La règle : toute propriété qui se manifeste à travers une requête HTTP se mesure PAR une
+requête HTTP.** Un essai qui appelle la fonction directement mesure la fonction, et il a
+sa place ; il ne remplace pas celui qui présente l'en-tête réel à un serveur monté.
+
+
+---
+
+## §47 — Ce qui est **construit** n'est pas ce qui est **ouvert**
+
+**Constat fondateur** : vague F, le 19/09/2026 — lots L27 (assistance par IA) et L28
+(portail fournisseur), les deux seules surfaces **externes** du produit.
+
+### §47.1 — La distinction, et pourquoi elle est une propriété du CODE
+
+Un lot peut être écrit, éprouvé, déployé, et **rester fermé**. Ce n'est ni un demi-travail
+ni une réserve qu'on reconduit : c'est l'état voulu, et il doit se lire **dans le code**,
+pas dans une note de livraison.
+
+Trois formes, de la plus forte à la plus faible :
+
+| Forme | Exemple | Ce qu'elle garantit |
+|---|---|---|
+| **La surface n'existe pas** | `PORTAIL_ACTIF=non` n'enregistre **aucune route** — pas une qui rendrait 503, pas un montage à moitié | *Ce qui n'est pas monté ne peut pas être attaqué.* Aucune erreur de configuration ultérieure ne peut l'ouvrir |
+| **Une barrière EN BASE** | sans `CYBER_GRC_IA_EXTERNE=oui`, un déclencheur refuse toute ligne d'activation, **quelle que soit la route** | Elle tient face à la route générique, à l'import du lot L7, à une reprise et à `psql` (§8.1) |
+| **Une valeur de configuration** | `IA_URL_LOCALE` vide | La plus faible : elle dit ce que le produit fait, pas ce qu'il refuse |
+
+⚠️ **Préférer toujours la première.** Un composant exposé qui « répondrait 503 » a quand
+même une surface : il analyse la requête, il journalise, il consomme. La première forme
+n'a rien de tout cela.
+
+### §47.2 — Un défaut fermé doit être SÛR, pas seulement prudent
+
+`ia_activation` n'a **aucune ligne** sur une installation ordinaire, et c'est le mode
+local. L'absence est l'état sûr : on n'a pas eu à écrire « mode = local » quelque part,
+donc personne ne peut l'effacer par mégarde.
+
+*Le bon défaut n'est pas celui qu'on a choisi ; c'est celui qui survit à l'oubli.*
+
+### §47.3 — Et ce qui est fermé se **mesure**, comme le reste
+
+⚠️ **« C'est fermé » est une affirmation** — la famille du constat **Q-199**, où un lot a
+été livré incapable d'envoyer *avec un banc vert*. On mesure donc :
+
+- que la route **n'existe pas** (404, et non 503) quand le composant est fermé ;
+- que la barrière en base **refuse** (un essai tente l'écriture sans le réglage) ;
+- et, symétriquement, que **le chemin nominal marche** — sans quoi on aurait mesuré un
+  produit inerte et appelé cela de la sécurité.
+
+⚠️ **Le critère 27.1 en donne la forme la plus nette, et elle est mesurable sur la
+machine** : *si la fonction marche alors que rien n'est ouvert, c'est qu'elle ne sort
+pas.* `systemctl show -p IPAddressAllow -p IPAddressDeny` rend
+`IPAddressDeny=::/0 0.0.0.0/0` avec la seule boucle locale autorisée, et l'assistance
+répond. **C'est la seule preuve qui ne se contourne pas** : elle ne lit aucune
+déclaration, elle constate un effet.
+
+
+---
+
+## §48 — Un balayage du catalogue rencontre des tables qui ne sont pas des entités
+
+**Constat fondateur** : vague F, le 19/09/2026. Deux balayages de `test/pieces/` — ceux qui
+tiennent le constat **Q-232** et l'action **19.4** — partent de `pg_constraint` et
+découvrent **chaque chemin de cascade**. Les lots L22, L23 et L28 en ont ajouté trois dont
+l'enfant n'est **pas une entité du registre** : `evenements_sortants`, `collectes`,
+`portail_liens`.
+
+### §48.1 — Les deux mauvaises réponses
+
+| Réponse | Pourquoi elle est mauvaise |
+|---|---|
+| **Rétrécir le balayage** à ce qu'il sait faire | L'exclusion devient **silencieuse**. Une entité oubliée du registre sortirait du filet sans que rien ne le dise — c'est très exactement le défaut que Q-232 a coûté |
+| **Apprendre au balayage à semer n'importe quelle table** | Essayé, et abandonné après trois obstacles successifs : la colonne `provenance` est un **domaine** dont le vocabulaire ne vit pas dans les contraintes de table ; `url` exige une **forme** (`like 'https://%'`) qui n'est pas une énumération ; et surtout **la route de dépôt refuse ces tables** — le balayage aurait semé des lignes pour rien |
+
+### §48.2 — La bonne réponse : **borner, puis MESURER la borne**
+
+Le balayage se restreint à ce qui **peut** porter la propriété — ici, les enfants que la
+route de dépôt accepte, liste **dérivée** de `DOMAINE_PAR_ENTITE` et jamais recopiée —, et
+**un essai de plus demande à la route d'accepter un dépôt sur chaque exclu, et exige le
+refus.**
+
+```
+test('LES EXCLUS le sont parce que la ROUTE les refuse, et on le lui demande', …)
+```
+
+⚠️ **C'est la différence entre une exclusion et un angle mort.** Une exclusion dit *« cette
+table ne porte pas cette propriété, et voici la mesure qui le prouve »* ; un angle mort dit
+*« le balayage ne l'a pas vue »*, et les deux se ressemblent dans un banc vert.
+
+### §48.3 — Le signe qu'on est dans ce cas
+
+Un balayage qui **échoue sur une table neuve** pose toujours la même question : *cette table
+doit-elle porter la propriété, ou non ?* Répondre « non » est légitime — mais la réponse
+s'écrit **en mesure**, jamais en filtre.
+
+⚠️ Corollaire : **un filtre ajouté à un balayage sans l'essai qui le justifie est une
+régression**, même quand le banc redevient vert. C'est le moment précis où l'on retire une
+table du filet sans que personne ne s'en aperçoive.

@@ -19,10 +19,60 @@
 >    (`FAIR` → « faire », `LEI` → « client »). Chaque verdict ❌ de cette grille a été
 >    vérifié sur les occurrences réelles, pas sur un compte de fichiers.
 
-**Verdict global au 19/09/2026 : 51 ✅ · 15 🟡 · 20 ❌** — soit ~68 % en pondérant les
+**Verdict global au 19/09/2026, après la vague F : 53 ✅ · 19 🟡 · 14 ❌** — soit ~73 % en pondérant les
 partiels à moitié. **Cible du `PLAN_PRODUIT.md` une fois les douze lots joués : 76 ✅ · 2 🟡
 · 8 ❌**, les huit restantes étant des non-objectifs nommés un par un (§9 du plan).
 
+> ### ▶ Rejeu du 19/09/2026 — clôture de la vague F, **la dernière du plan**
+>
+> **53 ✅ · 17 🟡 · 16 ❌ → 53 ✅ · 19 🟡 · 14 ❌.** Pondéré : **~72 % → ~73 %**. Deux
+> en-têtes de section faux, de nouveau attrapés par le recompte mécanique — **la
+> troisième fois de suite**, et c'est ce qui prouve que la mécanique vaut mieux que
+> l'attention.
+>
+> ⚠️ **LE GAIN EST FAIBLE, ET C'EST HONNÊTE.** Les lots L27 et L28 sont les plus gros de
+> la vague, et ils déplacent **quatre lignes**. La raison est écrite dans chacune : ce
+> qui est **construit** n'est pas ce qui est **ouvert**.
+>
+> | # | Avant | Après | Pourquoi pas ✅ |
+> |---|---|---|---|
+> | 32 | 🟡 | 🟡 | Le portail est **construit et éprouvé** ; `PORTAIL_ACTIF=non` n'enregistre aucune route, et son vhost est livré désactivé. *La porte S15 est la plus exigeante du chantier* |
+> | 36 | ❌ | 🟡 | Le **cadre** de l'assistance est là — cinq usages, six barrières, verdict « indisponible » plutôt qu'une invention. Le **modèle**, lui, s'installe sur la boucle locale |
+> | 69 | ❌ | 🟡 | Idem : un brouillon de politique se propose, et **ne se publie pas** — `GRC06` reste seul maître |
+> | 75 | ❌ | ❌ | **Revu, et laissé ❌ délibérément** : l'utilisateur a validé un portail fournisseur, pas « publier nos preuves sur Internet ». Confondre les deux serait s'accorder une permission qu'on n'a pas reçue |
+>
+> ⚠️ **Et DEUX lignes sont restées ❌ par arbitrage, non par manque** : **68** (agent de
+> détection d'écarts) et **72** (assistant d'évaluation fournisseur). Toutes deux
+> demandent à une IA de **décider** — de la conformité, ou de la valeur d'un tiers —, et
+> les cinq usages arbitrés **proposent** sans jamais écrire. Le produit répond aux deux
+> besoins **sans IA** : le CCM du lot L23 *constate* au lieu de deviner, et le score
+> composite de L21.3 se **dérive** de critères qu'un humain relit ligne à ligne.
+> *Un score qu'on peut refaire à la main vaut mieux qu'un avis qu'on ne peut pas contester.*
+>
+> ### ▶ Rejeu du 19/09/2026 — clôture de la vague E
+>
+> **51 ✅ · 15 🟡 · 20 ❌ → 53 ✅ · 17 🟡 · 16 ❌.** Pondéré : **~68 % → ~72 %**. Les
+> dix-huit en-têtes de section et le total sont **recomptés par programme** depuis les
+> lignes, jamais additionnés de tête (constat **Q-219**) — et le recompte a de nouveau
+> trouvé **deux en-têtes faux**, C et J, désaccordés par les lignes que ce rejeu venait de
+> déplacer. *La discipline tient parce qu'elle est mécanique, pas parce qu'on y pense.*
+>
+> **Les cinq lignes que la vague E a déplacées**, remesurées une par une dans le dépôt :
+>
+> | # | Avant | Après | Ce qui l'a déplacée |
+> |---|---|---|---|
+> | 17 | ❌ | 🟡 | Le **CCM** existe de bout en bout — test exécutable, résultat daté et historisé, passage au rouge qui ouvre une action. Ce qui reste 🟡 est le **périmètre des sources**, pas le mécanisme |
+> | 20 | ❌ | 🟡 | **Trois** connecteurs locaux, et surtout un **cadre** dont le vocabulaire est clos en base et confronté au registre des exécuteurs |
+> | 21 | ❌ | ✅ | La **collecte automatique** : constat daté, rattaché à une mesure, avec sa fraîcheur dérivée — et aucun chemin d'échec ne rend « conforme » |
+> | 23 | 🟡 | ✅ | **Jetons d'API** (sujets de droits, jamais un contournement) et **webhooks** signés, drainés hors du service web. ⚠️ Pas de CLI : la ligne passe ✅ sur ses trois autres termes |
+> | 52 | ❌ | 🟡 | Le **cadre** accueille un scanner sans architecture nouvelle ; aucun n'est branché |
+>
+> ⚠️ **CE QUI N'A PAS BOUGÉ, ET QU'IL FAUT DIRE** : les lignes **20** et **52** restent 🟡,
+> et la tentation de les passer ✅ parce que « le cadre est là » est exactement ce que cet
+> indicateur existe pour empêcher. Un cadre n'est pas un catalogue. Face à 375 connecteurs
+> chez Vanta, trois est un commencement — ce qui a changé est que le suivant coûte un
+> exécuteur et non une architecture.
+>
 > ### ▶ Rejeu INTÉGRAL du 19/09/2026 — clôture de la vague D
 >
 > **46 ✅ · 15 🟡 · 25 ❌ au 18/09 → 51 ✅ · 15 🟡 · 20 ❌.** Pondéré : **~62 % → ~68 %**.
@@ -171,24 +221,24 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 13 | Appétence / seuils | 🟡 | KRI à seuils dans la Synthèse Direction ; pas d'appétence paramétrable | L25 |
 | 14 | Agrégation multi-entités | ✅ | `GET /api/consolidation`, module `/groupe` | — |
 
-### C. Mesures et contrôles — 4 ✅ · 0 🟡 · 1 ❌
+### C. Mesures et contrôles — 4 ✅ · 1 🟡 · 0 ❌
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
 | 15 | **Bibliothèque de contrôles unique** | ✅✅ | Pivot « Mesure », scindé `mesure_catalogue` (Groupe) / `mesure_mise_en_oeuvre` (Filiale), n-n vers les exigences. **Séparation plus propre que la plupart des produits** | — |
 | 16 | Contrôles périodiques planifiés | ✅ | `mesure_mise_en_oeuvre` porte `frequence_controle` et `dernier_controle` (migration `037`) ; **l'échéance se DÉRIVE** — `f_prochain_controle()`, cinq rythmes éprouvés sur date témoin. Un contrôle jamais joué rend NULL plutôt qu'une échéance inventée | — |
-| 17 | **Continuous Control Monitoring** | ❌ | Aucun test automatisé, aucune donnée système. **Fracture n°1 du marché 2026** | **L23** |
+| 17 | **Continuous Control Monitoring** | 🟡 | **Remesuré le 19/09, après L23.** Le mécanisme est **entier** : un connecteur porte un test exécutable, le résultat est daté, historisé et rattaché à une mesure ; le **passage** de vert à rouge ouvre une action et la rattache. ⚠️ Ce qui reste 🟡 et non ✅ est le **périmètre des sources** : trois connecteurs locaux, contre les dizaines qu'un SaaS branche sur un parc entier. *Le cadre existe et il est éprouvé ; c'est le catalogue qui est jeune* | L22.5 (étendre le catalogue) |
 | 18 | Exceptions / dérogations datées | ✅ | Table `derogations` (migration `035`) : propriétaire, motif, compensation, **échéance**, et approbation par le circuit L8. ⚠️ **L'état se DÉRIVE** (`f_etat_derogation`) — une dérogation échue redevient une non-conformité sans qu'aucun traitement ait à repasser, et la **rallonger sans la faire réapprouver ne la rallonge pas** | — |
 | 19 | Maturité et efficacité distinctes | ✅ | `efficacite` (trois valeurs), `efficacite_constatee_le`, `efficacite_preuve` — **distinctes de la maturité** et non convertibles : « documenté, planifié, supervisé » ne dit rien de « est-ce que ça marche ». Le garde-fou mesure l'efficacité **sur son type** : un entier la rendrait moyennable avec la maturité (migration `037`) | — |
 
-### D. Preuve et intégrations — 2 ✅ · 1 🟡 · 2 ❌
+### D. Preuve et intégrations — 4 ✅ · 1 🟡 · 0 ❌
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
-| 20 | Connecteurs natifs | ❌ | **Zéro.** Face à 375 (Vanta), 200 (Drata), ~25 (Tenacy) | **L22.5** |
-| 21 | Collecte automatique de preuves | ❌ | Dépôt manuel uniquement | **L23.1** |
+| 20 | Connecteurs natifs | 🟡 | **Remesuré le 19/09.** **Trois**, tous locaux — sauvegarde, antivirus, annuaire — et surtout un **cadre** : vocabulaire clos en base, registre d'exécuteurs confronté au banc **dans les deux sens**, réglages déclarés et clos (aucun n'est un secret), mode dégradé. Face à 375 (Vanta), 200 (Drata), ~25 (Tenacy), c'est peu ; mais *le catalogue s'étend désormais sans nouvelle architecture*, ce qui était l'objet du lot | L22.5 (étendre) |
+| 21 | Collecte automatique de preuves | ✅ | **Livré le 19/09** (migrations `054`, `056`). Chaque passage écrit un constat **daté**, rattaché à une mesure, avec sa source et sa **fraîcheur DÉRIVÉE** — une preuve périmée **redevient absente**, et « périmé » n'est pas « non conforme ». 🛑 **Aucun chemin d'échec ne rend « conforme »** (critère 23.4) : source injoignable, configuration incomplète, démon qui répond sans dater sa base — tout rend « indéterminé », mesuré en balayant le **registre** des exécuteurs et non une liste de trois | — |
 | 22 | Registre d'artefacts, réutilisation | ✅ | **Une preuve sert N contrôles sans être déposée N fois** (migration `038`) : `piece_rattachements`, et une clé différée impose que l'adresse de délivrance soit l'un des rattachements. Le fichier n'est libéré qu'au **dernier** détachement — éprouvé sur les six chemins de cascade, découverts dans `pg_constraint` | — |
-| 23 | API REST / CLI / webhooks / ITSM | 🟡 | 31 routes, mais **internes** : session par cookie, pas de jeton, pas de webhook | **L22** |
+| 23 | API REST / CLI / webhooks / ITSM | ✅ | **Livré le 19/09** (migration `053`). **Jetons d'API** — portée, filiale, domaines, expiration obligatoire, révocation immédiate, droit d'export distinct ; ⚠️ **un jeton est un sujet de droits** : il bâtit un `EtatSession` et traverse la RLS, et son niveau se rabat sur le **plus faible des domaines demandés**. **Webhooks** sur quatre événements, `https` seul, signés HMAC, drainés par une **unité systemd distincte** — le service web n'appelle jamais vers l'extérieur. **ITSM** : l'aller par l'événement, le retour par un jeton sur la route générique, sans client Jira ni ServiceNow. ⚠️ Reste ❌ : **pas de CLI** | — |
 | 24 | Import / export / réversibilité | ✅✅ | Import **20 entités** CSV+XLSX (format lu à la signature binaire), transactionnel, idempotent, cloisonné, journalisé ; export complet ; reprise v1→v12. **Meilleur que la plupart des SaaS** | — |
 
 ### E. Gestion documentaire et politiques — 5 ✅ · 1 🟡 · 0 ❌
@@ -202,18 +252,18 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 29 | Politique ↔ contrôle ↔ exigence | ✅ | `document_mesures` (migration `036`) : quels CONTRÔLES un document prouve, en plus des référentiels qu'il couvre. Le panneau est **le même des deux bouts** du lien — deux composants auraient divergé | — |
 | 30 | Recherche plein texte | 🟡 | Palette `Ctrl+K` et route `GET /api/recherche` (L17, A3) : **quatre entités**, bornées par la RLS côté serveur et par les droits — jamais par un filtre côté client. ⚠️ C'est un `ilike` sur les libellés, **pas un index plein texte** : ni pertinence, ni contenu des pièces jointes. La recherche DOCUMENTAIRE (D3) reste due | L16.D3 |
 
-### F. Tiers et chaîne d'approvisionnement — 2 ✅ · 2 🟡 · 2 ❌
+### F. Tiers et chaîne d'approvisionnement — 2 ✅ · 3 🟡 · 1 ❌
 
 > **Domaine le plus faible du produit.**
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
 | 31 | Registre fournisseurs criticité / accès | ✅ | `prestataires` : criticité × accès → niveau inhérent, checklist `supply_chain` NIS2/DORA — et depuis **L21.4** un **score composite DÉRIVÉ** (criticité × accès × substituabilité × ancienneté de l'évaluation) dont le barème est **servi** par le serveur, plus recopié dans le navigateur | L21.4 |
-| 32 | Questionnaires et portail fournisseur | 🟡 | **L21.2 livré le 17/09/2026** : l'envoi se consigne, se relance, s'exporte en classeur, se réimporte — l'état est DÉRIVÉ (un reçu en retard est reçu, un brouillon n'est pas un retard) et le réimport est **idempotent par la contrainte**. ❌ **Le portail exposé reste à faire** : c'est **L28**, ✅ validé le 08/09/2026, et l'export/réimport demeure la voie de repli **permanente** | L21.2 puis **L28** |
+| 32 | Questionnaires et portail fournisseur | 🟡 | **L21.2 livré le 17/09**, **et L28 CONSTRUIT le 19/09** : lien signé sans compte, session d'un seul objet, dépôt par **LA** chaîne du lot L6, reprise datée, attestation rendue au fournisseur, vhost séparé. 🛑 **Il reste 🟡 et non ✅ parce que CONSTRUIT N'EST PAS OUVERT** : `PORTAIL_ACTIF=non` n'enregistre aucune route, le vhost est livré désactivé, et la consigne du plan est écrite — *la porte S15 est la plus exigeante du chantier, en cas de doute on ne livre pas*. L'export/réimport demeure la voie de repli **permanente** | **L28** (ouverture après l'ultrareview) |
 | 33 | Notation externe / surface d'attaque | ❌ | Absent — **non-objectif**, suppose un service tiers. ⚠️ **À réexaminer après L27**, dont la mécanique le rendrait atteignable — mais l'utilisateur a autorisé une **IA** externe, pas « les services tiers » en général | **—** |
 | 34 | **Registre d'information DORA** | 🟡 | **L21.1 livré le 17/09/2026** : LEI, pays, fonction supportée et son caractère critique, contrat, substituabilité, et la **chaîne de sous-traitance** dont le rang se DÉRIVE (anti-cycle en base). L'écran **dit ses propres manques**, ligne par ligne, et la route exige le droit d'**export**. ❌ **Ce qui manque** : les gabarits **XBRL** des normes techniques des autorités européennes — un format de dépôt versionné par l'ESA, qui serait un lot à lui seul. *Le produit prépare, l'humain dépose* | **L21.1** |
 | 35 | Suivi contractuel / plan de sortie | ✅ | **L21.3 livré le 17/09/2026** : référence et dates de contrat, revue des clauses, réversibilité, substituabilité, plan de sortie daté — **et les trois dates alimentent l'échéancier existant**, ce qui était le critère d'acceptation. ⚠️ `evalue_le` n'y entre PAS : c'est un fait passé, l'y ranger inverserait son sens | L21.3 |
-| 36 | Réponse IA aux questionnaires reçus | ❌ | Absent | **L27** |
+| 36 | Réponse IA aux questionnaires reçus | 🟡 | **L27 construit le 19/09** : « réponse à un questionnaire client » est l'un des cinq usages, et il **propose à partir des seules preuves fournies**. ⚠️ Il reste 🟡 : le produit apporte le **cadre** — mode local par défaut, six barrières, verdict « indisponible » plutôt qu'une invention —, pas le **modèle**, que l'exploitant installe sur la boucle locale | **L27** |
 
 ### G. Audit — 2 ✅ · 2 🟡 · 0 ❌
 
@@ -244,12 +294,12 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 49 | Notifications / escalade | ✅ | L12 : relances SMTP sur 6 types d'échéances | — |
 | 50 | Renvoi vers Jira / ServiceNow | ❌ | Absent | L22.6 |
 
-### J. Vulnérabilités et posture technique — 0 ✅ · 0 🟡 · 3 ❌
+### J. Vulnérabilités et posture technique — 0 ✅ · 1 🟡 · 2 ❌
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
 | 51 | Registre de vulnérabilités enrichi | ❌ | Absent | **—** |
-| 52 | Ingestion des scanners | ❌ | Absent | L22 (connecteur) |
+| 52 | Ingestion des scanners | 🟡 | **Remesuré le 19/09.** Le **cadre** de connecteurs existe (L22.4) et un scanner y entre sans architecture nouvelle : un genre de plus, un exécuteur, des réglages déclarés. ❌ **Aucun scanner n'est branché** — le catalogue livré est sauvegarde, antivirus, annuaire | L22.5 |
 | 53 | Posture / surface d'attaque | ❌ | Absent | **—** |
 
 > **Non-objectif assumé** : le produit doit **ingérer** un scanner par un connecteur, pas
@@ -284,15 +334,15 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 66 | Campagne poussée du Groupe | ✅ | **L24.1 livré le 18/09/2026** (migration `044`) : `campagnes` est de niveau **Groupe** — la demande est commune —, `campagne_filiales` porte la **part** de chacune et reste cloisonnée. Une filiale ne voit ni la part de la voisine ni leur **nombre**, et un essai le mesure par la route. La convocation est la seule écriture du produit qui nomme des filiales : trois barrières, et un refus indistinguable de « n'existe pas » | **L24.1** |
 | 67 | Comparabilité garantie | ✅ | L'écran Socle **refuse de coter**, pour que les 20 filiales restent comparables | — |
 
-### N. Intelligence artificielle — 1 ✅ · 1 🟡 · 3 ❌
+### N. Intelligence artificielle — 1 ✅ · 2 🟡 · 2 ❌
 
 | # | Fonctionnalité | État | Lot |
 |---|---|---|---|
-| 68 | Agent de conformité / détection d'écarts | ❌ | **L27** |
-| 69 | Génération de réponses et de politiques | ❌ | **L27** |
+| 68 | Agent de conformité / détection d'écarts | ❌ | **Délibérément hors des cinq usages arbitrés.** Un « agent » qui détecte des écarts **décide** de la conformité ; les cinq usages de L27 **proposent** et n'écrivent rien. ⚠️ La détection d'écarts, elle, est livrée **sans IA** — c'est le CCM du lot L23, qui constate au lieu de deviner | **L23**, et non L27 |
+| 69 | Génération de réponses et de politiques | 🟡 | **L27 construit le 19/09** : « brouillon de politique » et « réponse à un questionnaire » sont deux des cinq usages. ⚠️ Un brouillon **ne se publie pas** : le circuit d'approbation (`GRC06`) reste seul maître, et l'écran le dit. Reste 🟡 pour la même raison que la ligne 36 — le cadre est là, le modèle s'installe | **L27** |
 | 70 | Suggestion automatique de mapping | ✅ | **L26.4 livré le 19/09/2026, et SANS IA** — similarité de libellés (Jaccard sur les mots de quatre lettres et plus, accents retirés), score rendu, seuil affiché. ⚠️ Elle **propose** ; un humain crée. Et les exigences SANS proposition restent dans la liste : leur absence dit où la couverture manque | L26.4 |
 | 71 | Recherche universelle, palette, MCP | 🟡 | **Palette `Ctrl+K` livrée** (L17, A3), sans IA ni MCP. Reste L17.1, L17.2 |
-| 72 | Assistants d'évaluation fournisseur | ❌ | **L27** |
+| 72 | Assistants d'évaluation fournisseur | ❌ | **Hors des cinq usages, et c'est un arbitrage.** Un assistant qui « évalue » un fournisseur porte un jugement ; le produit en fait un **score composite dérivé** de critères écrits (L21.3), qu'un humain peut relire ligne à ligne. *Un score qu'on peut refaire à la main vaut mieux qu'un avis qu'on ne peut pas contester.* | **L21.3**, et non L27 |
 
 > ✅ **Arbitrage A1 tranché le 08/09/2026** : le modèle **local** est le chemin nominal, et
 > un fournisseur **externe de confiance** reste possible, encadré par **six barrières** dont
@@ -311,7 +361,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 
 | # | Fonctionnalité | État | Lot |
 |---|---|---|---|
-| 75 | Page de confiance publique | ❌ | **—** sans objet en VPN. ⚠️ **À revoir après L28** : un composant exposé existera |
+| 75 | Page de confiance publique | ❌ | **Revu après L28, et l'arbitrage est écrit.** Un composant exposé existe désormais — le portail —, et la même mécanique rendrait une page de confiance techniquement atteignable. ⚠️ **Je ne l'élargis pas de moi-même** : l'utilisateur a validé un **portail fournisseur**, pas « publier nos preuves de conformité sur Internet », et confondre les deux serait s'accorder une permission qu'on n'a pas reçue. À poser comme une question, le jour où un client le demande |
 | 76 | Partage de documents sous NDA | ❌ | **—** même remarque |
 
 ### Q. RGPD et vie privée — 2 ✅ · 1 🟡 · 0 ❌

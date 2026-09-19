@@ -282,7 +282,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 26;
+export const VERSION_SCHEMA = 27;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -1121,6 +1121,24 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
     { nom: 'ebios_sources_risque', table: 'ebios_sources_risque', prefixe: 'EBSR' },
   ],
 
+  // ── v27 : LES CONNECTEURS DE COLLECTE (L22, action 22.4) ───────────────────
+  //
+  // ⚠️ **`connecteurs` voyage ; `collectes` NON**, et la ligne entre les deux est
+  // celle qui sépare une configuration d'une preuve.
+  //
+  //  · un connecteur est un RÉGLAGE : on le refait à l'identique après une reprise,
+  //    et devoir le ressaisir filiale par filiale serait une perte pure ;
+  //  · un constat est une PREUVE datée, au même titre que le journal d'audit, la
+  //    main courante de crise et les pièces jointes. Le faire voyager dans un
+  //    fichier lisible et éditable lui ôterait sa valeur probante — on ne restaure
+  //    pas un constat, on en produit un nouveau.
+  //
+  // ⚠️ **Et c'est ce qui rend la `055` nécessaire** : `configuration` est un `jsonb`
+  // ouvert, et une entité qui voyage aurait emporté en clair, dans un fichier
+  // d'échange, le mot de passe qu'un exploitant y aurait rangé. Les clefs sont donc
+  // closes en base, par genre, et aucun exécuteur n'en demande qui soit un secret.
+  ['connecteurs', { nom: 'connecteurs', table: 'connecteurs', prefixe: 'CONN' }],
+
   // ── v23 : LES ATELIERS 3, 4 ET 5 (L25, fin de l'action 25.1) ────────────────
   //
   // ⚠️ **Ce que ces entités n'exposent PAS**, et chaque absence est une décision :
@@ -1425,6 +1443,10 @@ const FAMILLES: ReadonlyMap<string, FamilleType> = new Map<string, FamilleType>(
   ['timestamp', 'horodatage'],
   ['jsonb', 'json'],
   ['json', 'json'],
+  // ⚠️ **Portée par aucune entité** — voir l'en-tête de `FamilleType`. Elle est ici
+  // parce que le catalogue balaie TOUTES les tables : `jetons_api.domaines` est un
+  // `text[]`, et la découverte s'arrêtait dessus. Les conversions la refusent.
+  ['_text', 'tableau_texte'],
 ]);
 
 interface LigneCatalogue {
@@ -5385,6 +5407,15 @@ function versLeFrontend(valeur: unknown, famille: FamilleType): unknown {
       return enMillisecondes(valeur);
     case 'json':
       return valeur;
+      // ⚠️ **Aucune entité n'expose de colonne tableau** — la famille existe parce que
+      // le catalogue balaie toutes les tables, `jetons_api.domaines` comprise. Le jour
+      // où une entité en exposera une, il faudra DÉCIDER ce qu'un tableau devient dans
+      // le fichier d'échange ; deviner ici le déciderait en silence.
+    case 'tableau_texte':
+      throw new ErreurRegistre([
+        'Une colonne tableau est servie au frontend, et aucune entité ne devrait en ' +
+          'exposer. Déclarez ce que ce tableau devient dans le fichier d’échange.',
+      ]);
   }
 }
 
@@ -5716,6 +5747,15 @@ function convertirPourLaBase(champ: string, valeur: unknown, colonne: Descriptio
       verifierDocument(nom, valeur, 1);
       return JSON.stringify(valeur);
     }
+
+      // ⚠️ **Aucune entité n'expose de colonne tableau** — la famille existe parce que
+      // le catalogue balaie toutes les tables, `jetons_api.domaines` comprise. Le jour
+      // où une entité en exposera une, il faudra DÉCIDER ce qu'un tableau devient dans
+      // le fichier d'échange ; deviner ici le déciderait en silence.
+    case 'tableau_texte':
+      throw invalide(
+        `Le champ « ${nom} » est un tableau, et aucune entité ne devrait en exposer.`,
+      );
   }
 }
 

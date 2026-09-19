@@ -206,6 +206,17 @@ const SANS_FICHE = {
   // Cet écran-ci dit ce que les catalogues CONTIENNENT et ce qu'un changement de
   // version met en jeu ; ses trois panneaux se lisent d'un bloc.
   '/catalogues': 'gestion des catalogues : trois panneaux, aucune fiche propre',
+  // Lot L22 — l'ouverture technique : deux listes et deux formulaires, sans fiche.
+  // ⚠️ Le secret d'un jeton n'y est affiché qu'UNE fois, et n'est jamais relisible :
+  // il n'y a donc rien à ouvrir.
+  '/settings-ouverture': 'jetons et abonnements : deux listes, aucune fiche propre',
+  // Lots L22 (22.4) et L23 — la collecte : l'historique d'un connecteur se déplie
+  // dans l'écran même, parce qu'on le lit EN REGARD de la liste des contrôles.
+  '/collecte': 'collecte automatique : le détail se déplie en place, aucune fiche',
+  // Lot L27 — l'assistance par IA : composer, montrer, envoyer. Aucune fiche, et
+  // c'est le propre du lot — l'IA PROPOSE, elle n'écrit rien : il n'y a donc rien
+  // à ouvrir, ni à retrouver plus tard.
+  '/assistance': 'assistance par IA : une composition, aucune fiche et aucune écriture',
   '/mapping': 'correspondances : édition en place',
   '/couverture': 'vue croisée, aucune fiche propre',
   '/crise-fiches': 'vue d’impression',
@@ -344,7 +355,7 @@ const SANS_FICHE = {
 // l'onglet « Catalogue » sert à RÉPONDRE, celui-ci à savoir ce que les catalogues
 // contiennent, quand la norme a été publiée, et ce qu'un changement de version met en
 // jeu. Deux métiers, deux écrans — et non une entrée de menu de plus.
-const MODULES_ATTENDUS = 44;
+const MODULES_ATTENDUS = 47;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //
