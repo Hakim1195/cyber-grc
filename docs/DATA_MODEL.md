@@ -68,7 +68,7 @@
 Version de schéma courante : **`SCHEMA_VERSION = 24`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
-côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v21**. Elle est
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v24**. Elle est
 indépendante du numéro des migrations SQL.
 
 > ⚠️ **Ce paragraphe a annoncé « v12 » pendant quatre montées de version**, du 04/09 au
@@ -259,6 +259,32 @@ indépendante du numéro des migrations SQL.
 >     réduire, transférer, accepter — et, facultativement, `risque_id`. **C'est un LIEN,
 >     pas une conversion** : rien n'est écrit dans `risques`, et le garde-fou de la `046`
 >     le mesure dans le catalogue pour toutes les tables `ebios_*`.
+>
+> v24 (lot L25, action 25.3) : ajout de **`echelles`** et **`echelle_niveaux`** — ce qu'un
+>     chiffre de cotation VEUT DIRE. Toutes deux **MIXTES** : `filiale_id` nul = socle du
+>     Groupe, renseigné = échelle d'une filiale. Cinq collections gagnent en plus la
+>     colonne qui porte l'échelle de leur cotation — `risques` (deux : F et G),
+>     `ebios_evenements_redoutes`, `ebios_scenarios_operationnels`,
+>     `ebios_sources_risque` et `ebios_parties_prenantes`.
+>
+>     ⚠️ **LE PALIER NE DEVINE RIEN.** La tentation était d'estampiller les cotations déjà
+>     dans le fichier avec l'échelle du Groupe — quatre niveaux, exactement ceux que le
+>     navigateur proposait — et l'argument aurait eu l'air solide : *« elles ont forcément
+>     été produites sur cette graduation-là, puisqu'il n'y en avait pas d'autre »*. Il est
+>     faux : le fichier repris peut venir d'une société rachetée, d'un export bricolé, d'une
+>     installation où quelqu'un a saisi des 5. « Il n'y avait pas d'autre échelle » décrit ce
+>     que le PRODUIT proposait, jamais ce que l'utilisateur a fait. C'est le motif du constat
+>     **Q-192**, et le coût de se tromper n'est pas symétrique : une cotation marquée
+>     « non tracée » se voit à l'écran et se corrige en recotant ; une cotation faussement
+>     estampillée est indiscernable d'une vraie, **dans l'outil qui sert de preuve en audit**.
+>
+>     ⚠️ **`revision` n'est PAS le verrouillage optimiste.** Celui-ci s'appelle `_version` et
+>     voyage à part (champs structurels). Deux sens sous un nom est le motif du bloquant du
+>     6ᵉ passage de la porte S2 ; la migration `049` a donc nommé le second `revision`.
+>
+>     ⚠️ **Et aucune borne sur `valeur`** : l'échelle EST ce qui borne, et un maximum posé
+>     ici refuserait la reprise d'un export produit sur une graduation plus large. C'est
+>     l'arbitrage de `risques.f_frequence`, reconduit pour la même raison.
 >
 >     ⚠️ **« Accepter » exige sa justification**, et c'est la seule des quatre décisions :
 >     les trois autres produisent un travail que quelqu'un verra, accepter ne produit rien

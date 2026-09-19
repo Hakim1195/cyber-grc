@@ -126,8 +126,25 @@ référentiel sans toucher au code.
 > (`CONVENTIONS.md` §43). Il balaie le catalogue : il couvre les clés qu'aucune migration
 > n'a encore écrites.
 >
-> **Reste de L25** : **25.3** (échelles configurables et versionnées) et **25.4**
-> (quantification FAIR). Puis **L26**, les catalogues ouverts.
+> **Livré le 19/09/2026 — l'action 25.3, les échelles de cotation** (migration `049`, schéma
+> `data` en **v24**, écran `js/modules/echelles.js` en onglet du sujet « risques »). Une
+> échelle publiée est **FIGÉE** — on en publie une révision —, le socle du Groupe est
+> surchargeable par filiale, et **chaque cotation porte l'échelle qui l'a produite**.
+>
+> ⚠️ **Le conflit entre deux documents qui font autorité, tranché** : le `PLAN_SERVEUR` §2.2
+> range l'échelle au niveau Groupe *« sans quoi les risques ne s'additionnent pas »*, quand
+> le critère 25.3 la veut configurable par filiale. Le §2.2 énonce une **conséquence**, pas
+> un interdit — d'où le remède : rendre l'échelle explicite, et faire **refuser à la
+> consolidation** l'addition de ce qui n'est pas comparable plutôt que de la faire en
+> silence.
+>
+> 🛑 **Et la première rédaction du figeage cassait la reprise** : export puis reprise
+> « remplacer » rendait **409**, *le produit produisait une sauvegarde qu'il refusait de
+> relire*. Classe des trois conflits de la `041` et des constats Q-194 / Q-284, tranchée
+> pareil — **restaurer une sauvegarde gagne**. Trouvé par le banc. ⚠️ Et **trois défauts de
+> plus trouvés en cliquant sur la recette**, après 2 230 essais verts.
+>
+> **Reste de L25** : **25.4** (quantification FAIR). Puis **L26**, les catalogues ouverts.
 
 ### V-E — Ouverture et automatisation *(L22, L23)*
 

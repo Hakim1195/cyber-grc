@@ -241,15 +241,48 @@
 > **aucune gravité** (c'est celle de l'événement redouté), et rattacher un scénario à un
 > risque du registre est un **LIEN, pas une conversion**. ⚠️ Un garde de CLASSE est né de
 > la `046` : `f_verifier_set_null_composites()` (`CONVENTIONS.md` §43).
-> Le geste suivant : **25.3** (échelles versionnées), **25.4** (FAIR), puis **L26**.
+>
+> **⇒ Au 19/09/2026 : l'action 25.3 est livrée — LES ÉCHELLES DE COTATION**, versionnées
+> et datées (migration `049`, schéma `data` en **v24**, écran `js/modules/echelles.js` en
+> onglet du sujet « risques »). Ce que « 3 » veut dire cesse d'être écrit **en dur dans le
+> navigateur** : une échelle publiée est **FIGÉE** — on en publie une révision —, le socle
+> du Groupe est **surchargeable par filiale**, et **chaque cotation porte l'échelle qui l'a
+> produite** (six colonnes sur cinq tables).
+> ⚠️ **Le conflit `PLAN_SERVEUR` §2.2 ↔ critère 25.3 n'en était pas un** : le §2.2 range
+> l'échelle au niveau Groupe *« sans quoi les risques ne s'additionnent pas »* — c'est une
+> **conséquence**, pas un interdit. Le remède est de rendre l'échelle explicite, et de faire
+> **REFUSER à la consolidation** l'addition de ce qui n'est pas comparable.
+> ⚠️ **`null` veut dire « échelle NON TRACÉE »**, jamais « celle du Groupe » : le palier de
+> reprise ne devine rien (motif Q-192).
+> 🛑 **La première rédaction du figeage CASSAIT LA REPRISE** — export puis reprise
+> « remplacer » rendait 409, *le produit produisait une sauvegarde qu'il refusait de
+> relire*. Classe des trois conflits de la `041` et de Q-194 / Q-284 : **restaurer une
+> sauvegarde gagne**. ⚠️ Et le remède lui-même était faux — `xmin = pg_current_xact_id()`
+> compare à la transaction de **premier niveau**, alors que la couche d'écriture pose un
+> point de reprise à chaque insertion.
+> ⚠️ **Deux garanties déclaratives ne garantissaient rien quand `filiale_id` est nul**
+> (`CONVENTIONS.md` **§45**) : une clé étrangère composite (`MATCH SIMPLE` dispense de
+> contrôle) et une unicité (deux NULL sont distincts). Et une **quatrième provenance**,
+> `socle`, est née parce que le jeu de découverte refusait de se charger sur une base
+> neuve — **L26 en aura besoin** pour ses cinq catalogues.
+> ⚠️ **ET TROIS DÉFAUTS TROUVÉS EN CLIQUANT SUR LA RECETTE, APRÈS 2 230 ESSAIS VERTS** :
+> l'écran archivait le **socle du Groupe** (403 avalé) ; le socle et l'échelle locale sont
+> tous deux « en vigueur » et le `find()` prenait la première venue — cinq niveaux publiés,
+> quatre proposés ; le socle **disparaissait** de l'écran. ⚠️ **Et un quatrième, de STYLE** :
+> `class="card"` et `class="muted"` n'existaient **dans aucune feuille**, si bien que les
+> trois écrans livrés les 18 et 19/09 se rendaient **à plat**. *Une classe écrite n'est pas
+> une classe définie, et aucun essai ne le dit.*
+>
+> Le geste suivant : **25.4** (quantification FAIR), puis **L26** (catalogues ouverts).
 >
 > ---
 >
-> **Mesuré à la révision `941ea8b`, le 18/09/2026** : banc **2 169 essais, 2 169 passés** ;
+> **Mesuré à la révision `3ae666c`, le 19/09/2026** : banc **2 231 essais, 2 231 passés** ;
 > `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
-> `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** ; `f_verifier_schema()`
-> → 0 anomalie (**49 garde-fous, 45 migrations, 66 tables, 385 décisions** au registre
-> de l'article 30) ; publication → **90 fichiers identiques au dépôt** ;
+> `verifier_cloisonnement.sql` **sous `grc_app`, sur la base de la recette** → **110/110** ;
+> `f_verifier_schema()`
+> → 0 anomalie (**54 garde-fous, 49 migrations, 76 tables, 428 décisions** au registre
+> de l'article 30) ; publication → **93 fichiers identiques au dépôt** ;
 > `install.sh --diagnostic` → **13 conformes, 2 réserves, 0 bloquant** — la seconde étant
 > le **profil DÉCOUVERTE de cette machine**, posé le 15/09/2026.
 >
@@ -697,14 +730,14 @@ cyber-gouvernance_V4/
 > pour que `data` garde la forme décrite ici et qu'un module qui reconstruit un objet ne
 > puisse pas perdre la version au passage (`docs/DATA_MODEL.md` §1.4).
 
-- `SCHEMA_VERSION = 21` dans `datastore.js` — elle numérote la forme de `data` et du fichier
+- `SCHEMA_VERSION = 24` dans `datastore.js` — elle numérote la forme de `data` et du fichier
   `grc-backup`, pas les migrations SQL. Migrations à l'import via `migratePayload` côté
-  navigateur, et **paliers v1 → v21 rejoués côté serveur** (`backend/src/reprise/`).
+  navigateur, et **paliers v1 → v24 rejoués côté serveur** (`backend/src/reprise/`).
   ⚠️ **Elle est écrite à QUATRE endroits** — `js/core/datastore.js`, `src/entites/index.ts`,
   `src/reprise/index.ts` et `docs/DATA_MODEL.md` — et un garde-fou les confronte
   (`test/reprise/versions-concordantes.test.mjs`) : le document y est entré le 16/09 parce
   qu'il avait annoncé « v12 » pendant quatre montées de version.
-- Entités (tableaux) — **trente et une depuis la v21**, et le détail fait foi dans
+- Entités (tableaux) — **quarante et une depuis la v24**, et le détail fait foi dans
   `docs/DATA_MODEL.md` §1.5, jamais ici : clients, exigences, actions, risques, actifs, processus, crise,
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,
   **evaluations** (auto-évaluations de référentiels), **mesures** (pivot « Mesure de sécurité »),
@@ -714,8 +747,11 @@ cyber-gouvernance_V4/
   **history** (v8, indicateurs historisés — un point par jour pour les courbes de tendance)
   et **personnes** (v11, annuaire — autocomplétion des champs « Responsable » ; le nom reste stocké en
   texte dans les entités, saisie libre conservée).
-  **Depuis, cinq collections de plus** : `risque_catalogue` et `referentiels_actifs` (v13),
-  `derogations` (v14), `analyses_impact` (v17) et `demandes_droits` (v18). ⚠️ **Ni la main
+  **Depuis, dix collections de plus** : `risque_catalogue` et `referentiels_actifs` (v13),
+  `derogations` (v14), `analyses_impact` (v17), `demandes_droits` (v18) — puis les tiers, les
+  campagnes, les neuf tables d'EBIOS RM, et enfin **`echelles` et `echelle_niveaux`** (v24),
+  qui disent ce qu'un chiffre de cotation VEUT DIRE. ⚠️ **Le compte exact vit dans
+  `docs/DATA_MODEL.md` §1.5** — pas ici, et pas dans cette phrase. ⚠️ **Ni la main
   courante de crise, ni les pièces jointes, ni le journal d'audit n'en font partie** : ce
   sont des registres que l'application détient à part, et les faire voyager dans un fichier
   éditable leur ôterait leur valeur probante.
@@ -1122,7 +1158,7 @@ sur l'**Active Directory** du groupe.
 | **L20 — Réglementaire opérationnel** | ✅ **LIVRÉ**, 20.2 exceptée — horloge NIS2/RGPD (`034`), AIPD (`039`), demandes d'exercice de droits (`040`), main courante de crise en ajout seul (`041`). ⚠️ **Reste 20.2** : la génération des formulaires ANSSI et CNIL. Le produit NE TRANSMET RIEN à une autorité — il prépare, l'humain envoie |
 | **L21 — Tiers, chaîne d'approvisionnement et DORA** | ✅ **LIVRÉ** les 17 et 18/09/2026, ses **quatre actions** — registre d'information DORA et chaîne de sous-traitance (`042`), questionnaire fournisseur (`043`), suivi contractuel et plan de sortie, score composite **dérivé**. ⚠️ Le rang de sous-traitance se **dérive** et l'anti-cycle est **en base** ; le produit **n'envoie rien** (le questionnaire s'exporte et se réimporte) ; et les échéances contractuelles **alimentent l'échéancier existant** — ce qui n'était vrai nulle part avant le 18/09, alors que la `043` l'écrivait dans le commentaire de sa propre colonne |
 | **L24 — Campagnes et gouvernance descendante** | ✅ **LIVRÉ le 18/09/2026** (migrations `044` et `045`, schéma `data` **v21**) — le Groupe ouvre une campagne sur un référentiel vers N filiales, et suit l'avancement de chacune. ⚠️ **Une filiale ne voit QUE sa part**, ni celle de la voisine ni leur nombre ; l'avancement se **COMPTE** dans les évaluations au lieu d'être stocké ; les relances passent par **L12 réutilisé** (9ᵉ source de l'échéancier, aucune route d'envoi neuve). ⚠️ **Deux enseignements** : trois garde-fous ont refusé la migration (table sans `filiale_id` — `CONVENTIONS.md` §24.1) et le contrôle C82 a refusé une clé en `cascade` (§18.2) ; et **l'interdit de déconvocation a dû être RETIRÉ** parce qu'il rendait la reprise « remplacer » impossible — classe des trois conflits de la `041`. ⚠️ **Et la déconvocation, elle, a dû être AJOUTÉE** : sans elle une campagne convoquée était indestructible, parce que les parts des filiales que la session ne charge pas n'étaient nommables par aucun écran |
-| **L25 — EBIOS RM et quantification** | 🟡 **ateliers 1 et 2 livrés** le 18/09/2026 (migration `046`, schéma `data` **v22**, greffon `src/ebios/`, écran en onglet du sujet « risques »). ⚠️ **EN ADDITION** : la cotation F × G × M n'est ni touchée ni réinterprétée, et `f_verifier_ebios_cadrage()` le mesure. Reste : ateliers **3, 4 et 5**, **25.3** (échelles versionnées), **25.4** (FAIR) |
+| **L25 — EBIOS RM et quantification** | 🟡 **25.1, 25.2, 25.5 et 25.3 livrées** — les cinq ateliers les 18 et 19/09/2026 (migrations `046` et `047`, schéma `data` **v23**, greffon `src/ebios/`), puis **les échelles de cotation** le 19/09 (migration `049`, schéma `data` **v24**, écran `js/modules/echelles.js`). ⚠️ **EN ADDITION** : la cotation F × G × M n'est ni touchée ni réinterprétée, et `f_verifier_ebios_cadrage()` le mesure. ⚠️ Une échelle publiée est **FIGÉE** — on en publie une révision —, et `null` s'y lit « échelle **non tracée** », jamais « celle du Groupe ». Reste : **25.4** (quantification FAIR) |
 | **L22, L23, L26** | ⬜ **planifiés** (`docs/PLAN_PRODUIT.md`) — ouverture technique, collecte automatique et CCM, catalogues ouverts |
 | **L27 — Assistance IA** | ⬜ **arbitré le 08/09/2026 (A1)** — modèle **local par défaut** ; un fournisseur **externe de confiance** reste possible sous **six barrières**, dont l'avertissement n'est que la sixième. ⚠️ La première est que `IPAddressDeny=any` **ferme la sortie réseau** tant que l'exploitant ne l'ouvre pas à la main : *une barrière physique, pas une promesse*. Activation **par filiale**, jamais pour le groupe entier. L'IA **propose**, un humain **décide** — aucun des cinq usages n'écrit sans validation. Porte **S16** |
 | **L28 — Portail fournisseur** | ⬜ **validé le 08/09/2026 (A3)** — accès par lien signé daté et révocable, **sans compte** ; dépôt de preuve par la chaîne L6 **sans variante simplifiée** ; vhost et limiteur propres ; attestation rendue au fournisseur. ⚠️ **Premier composant du produit exposé hors VPN** : il ne se joue **ni avant S8, ni avec un autre lot**, et sa porte **S15 est la plus exigeante du plan** — *en cas de doute, on ne livre pas*. L'export/réimport de L21.2 **reste la voie de repli permanente** |

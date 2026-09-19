@@ -341,7 +341,7 @@ de cotation, le tableau de bord de la direction additionne des grandeurs incompa
 |---|---|---|
 | `mesures` (catalogue) | **Groupe** | Socle de contrôles commun — condition de la comparabilité |
 | `mappings` | **Groupe** | Correspondances inter-référentiels, définies une fois |
-| Échelle de cotation des risques | **Groupe** | Sans quoi les risques ne s'additionnent pas |
+| Échelle de cotation des risques | **Groupe + local** | ⚠️ **PRÉCISÉ LE 19/09/2026 par l'action 25.3 — voir sous le tableau.** Disait « Groupe », et le motif reste vrai |
 | Référentiels applicables | **Groupe + local** | Socle imposé, ajouts possibles par filiale |
 | `documents` | **Mixte** | Politique groupe applicable partout + procédures locales |
 | `personnes` | **Mixte** | Annuaire alimenté par l'AD, rattachement par filiale |
@@ -356,6 +356,32 @@ de cotation, le tableau de bord de la direction additionne des grandeurs incompa
 | `audits`, `revues` | Filiale | |
 | `traitements` (RGPD) | Filiale | Chaque entité juridique tient son propre registre |
 | `history` | Filiale + agrégat Groupe | |
+
+#### ⚠️ L'échelle de cotation : une CONSÉQUENCE, pas un interdit (précisé le 19/09/2026)
+
+Ce tableau rangeait « échelle de cotation des risques » au niveau **Groupe**, avec ce
+motif : *« sans quoi les risques ne s'additionnent pas »*. Le motif est exact et il ne
+bouge pas. Mais il énonce une **conséquence**, et l'action 25.3 du `docs/PLAN_PRODUIT.md`
+demandait des échelles **configurables par filiale** : lus comme un interdit, les deux
+documents se contredisaient.
+
+Ils ne se contredisent pas. Le remède à l'incomparabilité n'est pas d'interdire à une
+filiale d'avoir sa graduation — c'est de rendre l'échelle **explicite et portée par chaque
+cotation**, pour que la vision Groupe puisse **refuser d'additionner** ce qui n'est pas
+comparable au lieu de l'additionner en silence.
+
+Livré le 19/09/2026 (migration `049`) :
+
+- `echelles` et `echelle_niveaux` sont **MIXTES** — socle du Groupe, surcharge par filiale,
+  exactement comme `mesure_catalogue` et `parametres` ;
+- **six colonnes** portent, sur chaque cotation, l'échelle qui l'a produite ;
+- une échelle publiée est **figée** : on en publie une **révision**, datée ;
+- `GET /api/consolidation` rend `expositionResiduelle: null` **dès que deux échelles sont
+  employées** dans le périmètre, et publie la liste — l'écran en tire sa phrase.
+
+⚠️ **Le cas nominal ne change pas** : une filiale qui ne décide rien cote sur le socle du
+Groupe, et c'est ce qui garde les filiales comparables. Publier la sienne est un **acte**,
+et l'écran en dit le prix.
 
 #### Une conséquence importante : scinder `mesures`
 
