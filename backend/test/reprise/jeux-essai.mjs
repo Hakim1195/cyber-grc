@@ -95,6 +95,20 @@ const NOUVELLES_PAR_VERSION = {
   // la clé est en `restrict` (§18.2) — une reprise qui les inverserait échouerait sur la
   // clé étrangère, pas en silence.
   21: ['campagnes', 'campagne_filiales'],
+  // v22 — les ateliers 1 et 2 d'EBIOS RM (lot L25, actions 25.1, 25.2 et 25.5).
+  // ⚠️ L'ordre suit les clés étrangères : la base de connaissances d'abord (les couples
+  // source / objectif la référencent), puis l'étude, puis ce qui pend à elle — et les
+  // événements redoutés APRÈS les valeurs métier, qu'ils référencent.
+  //
+  // ⚠️ **La collection `risques` n'apparaît PAS ici, et c'est tout le lot** : EBIOS RM
+  // s'ajoute à la cotation F × G × M, il ne la remplace pas. Une v22 porte les deux.
+  22: [
+    'ebios_connaissances',
+    'ebios_etudes',
+    'ebios_valeurs_metier',
+    'ebios_evenements_redoutes',
+    'ebios_sources_risque',
+  ],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -699,7 +713,124 @@ export function instantaneV21Complet() {
 }
 
 /**
- * Instantané COMPLET à la version courante — v21.
+ * Instantané COMPLET à la version courante — v22.
+ *
+ * Les cinq collections des ateliers 1 et 2 d'EBIOS RM (lot L25, actions 25.1, 25.2
+ * et 25.5), chacune reliée à la précédente DANS LE MÊME INSTANTANÉ : c'est cette
+ * chaîne — étude → valeur métier → événement redouté, et étude → couple source /
+ * objectif → base de connaissances — qui doit survivre au round-trip. Un
+ * identifiant inventé ne mesurerait rien.
+ *
+ * ⚠️ **La valeur métier pointe le processus du BIA du même jeu d'essai**
+ * (`BIA-1720000000000-107`), et ce n'est pas un détail : c'est le lien que
+ * l'action 25.2 exige — *on POINTE le BIA, on ne le recopie pas*. Ni criticité,
+ * ni RTO, ni RPO ne figurent ici.
+ *
+ * ⚠️ **Et aucun couple ne porte sa PERTINENCE.** Elle se dérive de ses trois
+ * critères côté serveur (`f_ebios_pertinence`). La faire voyager la figerait au
+ * jour de l'export, alors que l'animateur révise ses critères en séance — et un
+ * fichier repris six mois plus tard classerait les couples sur des notes périmées.
+ */
+export function instantaneV22Complet() {
+  const base = instantaneV21Complet();
+  return {
+    ...base,
+    schemaVersion: 22,
+    ebios_connaissances: [
+      {
+        id: 'EBCO-1720000000000-212',
+        genre: 'source_risque',
+        reference: 'SR-01',
+        nom: 'Cybercriminel organisé',
+        objectif_vise: 'Obtenir une rançon',
+        phase: null,
+        categorie: 'Rançongiciel',
+        description: 'Groupe structuré opérant par affiliation, motivé par le gain.',
+        origine: 'sectoriel',
+        statut: 'active',
+        archive_le: null,
+      },
+      {
+        id: 'EBCO-1720000000000-213',
+        genre: 'mode_operatoire',
+        reference: 'MO-01',
+        nom: 'Hameçonnage ciblé d’un compte à privilèges',
+        objectif_vise: null,
+        phase: 'rentrer',
+        categorie: 'Accès initial',
+        description: 'Courriel façonné à partir de sources ouvertes.',
+        origine: 'interne',
+        statut: 'active',
+        archive_le: null,
+      },
+    ],
+    ebios_etudes: [
+      {
+        id: 'EBET-1720000000000-214',
+        nom: 'Atelier EBIOS RM — chaîne de production, exercice 2026',
+        perimetre: 'Le site de production et son système de supervision. Hors périmètre : la paie.',
+        cadre: 'Demandé par la direction industrielle. Animé en quatre demi-journées.',
+        responsable: 'Marie Dupont',
+        statut: 'en_cours',
+        debut_le: '2026-02-03',
+        validee_le: null,
+        notes: 'Atelier 2 terminé, atelier 3 à programmer.',
+      },
+    ],
+    ebios_valeurs_metier: [
+      {
+        id: 'EBVM-1720000000000-215',
+        etude_id: 'EBET-1720000000000-214',
+        nom: 'Ordonnancement de la production',
+        nature: 'processus',
+        // ⚠️ Le processus du BIA du même instantané : c'est le lien de l'action 25.2.
+        processus_id: 'BIA-1720000000000-107',
+        responsable: 'Marie Dupont',
+        description: 'Décide ce qui est fabriqué, dans quel ordre, sur quelle ligne.',
+      },
+    ],
+    ebios_evenements_redoutes: [
+      {
+        id: 'EBER-1720000000000-216',
+        valeur_metier_id: 'EBVM-1720000000000-215',
+        nom: 'Arrêt de l’ordonnancement pendant plus de 24 heures',
+        besoin: 'disponibilite',
+        gravite: 4,
+        impacts: 'Arrêt des lignes, pénalités de retard contractuelles, image client.',
+        description: 'Constaté lors de l’exercice de continuité de novembre.',
+      },
+    ],
+    ebios_sources_risque: [
+      {
+        id: 'EBSR-1720000000000-217',
+        etude_id: 'EBET-1720000000000-214',
+        source: 'Cybercriminel organisé',
+        objectif_vise: 'Obtenir une rançon',
+        connaissance_id: 'EBCO-1720000000000-212',
+        motivation: 4,
+        ressources: 3,
+        activite: 4,
+        retenue: true,
+        justification: 'Deux fournisseurs du secteur touchés en dix-huit mois.',
+      },
+      {
+        id: 'EBSR-1720000000000-218',
+        etude_id: 'EBET-1720000000000-214',
+        source: 'Concurrent',
+        objectif_vise: 'Obtenir le plan de fabrication',
+        connaissance_id: null,
+        motivation: 3,
+        ressources: 2,
+        activite: 1,
+        retenue: false,
+        justification: 'Aucun signal ; réexaminer à la prochaine étude.',
+      },
+    ],
+  };
+}
+
+/**
+ * Instantané COMPLET en v21.
  *
  * ⚠️ **La part pointe la campagne du MÊME instantané** : c'est cette jointure qui doit
  * survivre au round-trip, et un identifiant inventé ne mesurerait rien.

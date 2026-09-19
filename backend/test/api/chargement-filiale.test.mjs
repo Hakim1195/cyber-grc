@@ -193,7 +193,15 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // dessein — l'arbitrage est écrit au `CONVENTIONS.md` §24 et déclaré aux deux listes
     // que ce paragraphe impose. C'est exactement la frontière du lot : la DEMANDE est
     // commune, la RÉPONSE est propre à chacune.
-    assert.equal(tablesCloisonnees.length, 48, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    // 53 depuis la migration `046` : les CINQ tables des ateliers EBIOS RM (lot L25).
+    // Quatre sont de niveau FILIALE — une étude de risque de portée Groupe voudrait dire
+    // que vingt filiales partagent un périmètre et des événements redoutés, ce qui est
+    // faux par construction : c'est l'exposition qui les distingue, et c'est pour cela
+    // que le produit les cloisonne. La cinquième, `ebios_connaissances`, est MIXTE comme
+    // `risque_catalogue` — une base de connaissances de MENACES se partage, et c'est
+    // l'objet même de l'action 25.5 ; ce qui ne se partage pas, c'est l'évaluation qu'une
+    // filiale en fait.
+    assert.equal(tablesCloisonnees.length, 53, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -235,8 +243,13 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // là-bas se ferait refuser — ce qui est le comportement voulu.
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      47,
-      'Quarante-sept tables devaient contenir au moins une ligne allemande. Une table neuve '
+      52,
+      // 52 depuis la migration `046` : les cinq tables des ateliers EBIOS RM sont semées
+      // des DEUX côtés, et la chaîne est complète — l'étude porte sa valeur métier, qui
+      // porte son événement redouté, et le couple source / objectif pointe l'entrée
+      // locale du socle de connaissances. Semer des lignes qui ne se référencent pas
+      // aurait mesuré l'insertion, pas les clés composites.
+      'Cinquante-deux tables devaient contenir au moins une ligne allemande. Une table neuve '
         + 'sans ligne dans le semis est un angle mort : le balayage y rendrait « zéro '
         + 'visible » pour la seule raison qu’il n’y a rien à voir.',
     );
@@ -369,7 +382,11 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     // c'est-à-dire exactement l'angle mort que ce contrôle de matière existe pour
     // refuser.
     // 45 depuis la migration `044` : `campagne_filiales`, semée pour les deux filiales.
-    assert.equal(nonVides.length, 45, `Tables non vides : ${nonVides.join(', ')}`);
+    // 50 depuis la migration `046` : les cinq tables des ateliers EBIOS RM, semées des
+    // deux côtés. ⚠️ `ebios_connaissances` y figure au titre de son versant LOCAL —
+    // son socle de Groupe (filiale_id nul) est compté par l'égalité elle-même, comme
+    // celui de `risque_catalogue`.
+    assert.equal(nonVides.length, 50, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

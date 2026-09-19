@@ -85,11 +85,34 @@ Questionnaires fournisseurs et leur relance ; registre DORA des prestataires cri
 > cette vague, aucun par le banc** — dont une campagne convoquée *indestructible* et un bloc
 > de création invisible pour le seul compte qui en avait le droit.
 
-### V-D — Méthode et catalogues *(L25, L26)*
+### V-D — Méthode et catalogues *(L25, L26)* — 🟡 **ENTAMÉE le 18/09/2026**
 
 **EBIOS RM** (sources de risque, scénarios stratégiques et opérationnels) en préservant les
 cotations F×G×M existantes ; quantification ; **catalogues ouverts** — importer et éditer un
 référentiel sans toucher au code.
+
+> **Livré le 18/09/2026 — les ateliers 1 et 2, et la base de connaissances du Groupe**
+> (actions **25.1** en partie, **25.2** et **25.5**) : migration `046`, schéma `data` en
+> **v22**, greffon `src/ebios/`, écran `js/modules/ebios.js` en **onglet du sujet
+> « risques »**, à côté de « Matrice F×G ».
+>
+> ⚠️ **Le critère qui gouverne tout le lot est NÉGATIF, et il est désormais MÉCANIQUE.**
+> *« Les risques cotés en F × G × M restent valides et lisibles »* : le garde-fou
+> `f_verifier_ebios_cadrage()` nomme les cinq colonnes de cotation **une par une** et
+> refuse tout déclencheur d'une table EBIOS qui écrirait dans `risques`. Une propriété
+> négative ne se voit pas à l'usage — elle ne se mesure qu'en la cherchant, et une phrase
+> dans un plan ne retient personne (motif du constat **Q-192**).
+>
+> ⚠️ **Deux enseignements de la livraison**, et aucun n'est venu d'une relecture :
+> `f_verifier_portee_figee()` a **refusé le déploiement** parce que la table mixte
+> `ebios_connaissances` n'avait pas son déclencheur de portée — *troisième fois qu'un
+> installateur appelable rattrape un lot qu'il n'a pas vu naître* ; et le filet des modules
+> a refusé l'écran parce qu'il dessinait sa liste depuis le serveur au lieu de la mémoire,
+> ce qui retirait à `recalerBalisage()` ce sur quoi mordre.
+>
+> **Reste de L25** : les ateliers **3, 4 et 5** (parties prenantes, scénarios stratégiques
+> et opérationnels, traitement), **25.3** (échelles configurables et versionnées) et
+> **25.4** (quantification FAIR). Puis **L26**, les catalogues ouverts.
 
 ### V-E — Ouverture et automatisation *(L22, L23)*
 

@@ -25,7 +25,7 @@
  *
  * ── La couverture est RÉCLAMÉE, pas supposée ─────────────────────────────────
  *
- * Un dernier test balaie les **31 entités du registre** et vérifie que chacune se lit,
+ * Un dernier test balaie les **36 entités du registre** et vérifie que chacune se lit,
  * se décrit, et porte un préfixe d'identifiant. Sans lui, ce fichier resterait un
  * échantillon dont personne ne saurait dire ce qu'il laisse de côté — le reproche
  * exact que la porte a formulé.
@@ -315,7 +315,7 @@ describe('Une entité par famille de différence', () => {
  *  §2 — La couverture, réclamée
  * ===================================================================== */
 
-describe('Les 31 entités du registre, sans échantillonnage', () => {
+describe('Les 36 entités du registre, sans échantillonnage', () => {
   test('chaque entité du modèle est décrite, chargée, et porte un préfixe', async () => {
     const modele = (await serveur.appeler('GET', '/api/modele')).corps;
     const jeu = await donnees();
@@ -333,7 +333,7 @@ describe('Les 31 entités du registre, sans échantillonnage', () => {
     // y entrer lui donne le round-trip et l'import sans qu'un greffon ait à les réécrire.
     // Ce que le greffon `src/campagnes/` ajoute est ce que la couche générique ne peut pas
     // faire : compter l'avancement, et convoquer une AUTRE filiale que la sienne.
-    assert.equal(noms.length, 31);
+    assert.equal(noms.length, 36);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -408,6 +408,34 @@ describe('Les 31 entités du registre, sans échantillonnage', () => {
       // inventée rend 409, ce qui est le comportement voulu — on ne convoque pas une
       // filiale à une campagne qui n'existe pas.
       campagne_filiales: (crees) => ({ campagne_id: crees.campagnes }),
+      // ── Lot L25 : les ateliers EBIOS RM ──────────────────────────────────
+      //
+      // Quatre entités sur cinq ont besoin d'être renseignées, et pour deux
+      // motifs distincts qu'il vaut mieux garder séparés :
+      //
+      //  · un VOCABULAIRE FERMÉ que la valeur générique « Balayage … » heurte —
+      //    `genre`, `nature`, `besoin`. C'est le comportement voulu, pas un
+      //    défaut : ces trois colonnes commandent le sens de la ligne, et
+      //    `genre` commande en plus deux autres contraintes (§1 de la `046`) ;
+      //  · une RÉFÉRENCE RÉELLE, cloisonnée par une clé composite. Une valeur
+      //    inventée rend 409 — le comportement voulu, là encore : on ne rattache
+      //    pas une valeur métier à une étude qui n'existe pas.
+      //
+      // ⚠️ Les identifiants viennent du BALAYAGE lui-même, par une fonction et
+      // non un objet figé : le serveur les attribue à la création (`CLAUDE.md`
+      // §3), et aucune valeur écrite ici ne pourrait les connaître. L'ordre du
+      // registre place `ebios_etudes` avant ce qui pend à elle — c'est le même
+      // ordre que celui des clés étrangères, et il n'est pas un hasard.
+      ebios_connaissances: { genre: 'source_risque' },
+      ebios_valeurs_metier: (crees) => ({
+        etude_id: crees.ebios_etudes,
+        nature: 'information',
+      }),
+      ebios_evenements_redoutes: (crees) => ({
+        valeur_metier_id: crees.ebios_valeurs_metier,
+        besoin: 'disponibilite',
+      }),
+      ebios_sources_risque: (crees) => ({ etude_id: crees.ebios_etudes }),
     };
 
     const echecs = [];

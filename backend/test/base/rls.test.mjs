@@ -2790,7 +2790,14 @@ describe('Portée des liens documentaires et armement des déclencheurs (N-10, N
     // filiales, et l'analyse de l'annuaire commun se fait une fois. Vérifié un par un :
     // les deux déclencheurs neufs sont bien « trg_analyses_impact_portee_figee » et
     // « trg_analyse_mesures_portee_figee ».
-    assert.equal(armement.length, 17, 'Quatre déclencheurs de cohérence, treize de portée.');
+    // 18 depuis la migration `046` : `ebios_connaissances` naît MIXTE — c'est la base de
+    // connaissances de MENACES du Groupe (action 25.5), et elle se partage par
+    // construction. ⚠️ Ce déclencheur n'a PAS été écrit à la main : la première rédaction
+    // de la migration l'avait oublié, et c'est `f_verifier_portee_figee()` qui a REFUSÉ
+    // le déploiement — troisième fois qu'un installateur appelable rattrape un lot qu'il
+    // n'a pas vu naître. Vérifié : le déclencheur neuf est bien
+    // « trg_ebios_connaissances_portee_figee ».
+    assert.equal(armement.length, 18, 'Quatre déclencheurs de cohérence, quatorze de portée.');
     assert.deepEqual(
       [...new Set(armement.map((l) => l.armement))],
       ['A'],
@@ -4188,6 +4195,14 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // touchée : un écart est une alerte, pas une mise sous scellés, et l'exploitant doit
       // pouvoir aller voir ce que le fichier est devenu. ⚠️ Le garde vérifie le CONTENU de
       // la contrainte, pas seulement son nom — leçon de Q-281.
+      // CINQUANTIÈME, apporté par `046_les_ateliers_ebios_rm.sql` (lot L25, actions 25.1,
+      // 25.2 et 25.5). ⚠️ Son contrôle le plus important ne porte PAS sur les tables
+      // neuves : il mesure que la cotation F × G × M héritée est INTACTE, colonne par
+      // colonne, et qu'aucun déclencheur EBIOS n'écrit dans « risques ». C'est le critère
+      // d'acceptation de l'action 25.1 — *les cotations ont été produites en audit, et les
+      // réinterpréter les réattribuerait en silence* (motif du constat Q-192) — rendu
+      // MÉCANIQUE, parce qu'une propriété négative ne se voit pas à l'usage.
+      'ebios_cadrage',
       'ecart_ne_fait_pas_foi',
       'entropie_identifiants',
       // TRENTE-HUITIÈME, apporté par `034_l_horloge_reglementaire.sql` : les quatre
@@ -5173,6 +5188,13 @@ describe('Armement, portée figée, chemin de magasin (§19.4 et §19.1, Q5-4 et
       // rattache — la PSSI du Groupe prouve un contrôle du socle, et se lit partout.
       'approbations', 'document_etiquettes', 'document_mesures',
       'document_referentiels', 'documents',
+      // `ebios_connaissances` (migration `046`, action 25.5) : MIXTE comme
+      // `risque_catalogue`, et pour le même motif — la base de connaissances des MENACES
+      // se partage (« un cybercriminel cherche une rançon » vaut pour tout le groupe),
+      // l'ÉVALUATION qu'une filiale en fait ne se partage pas. ⚠️ Son déclencheur de
+      // portée n'a pas été écrit à la main : `f_verifier_portee_figee()` a refusé le
+      // déploiement jusqu'à ce que la migration appelle l'installateur.
+      'ebios_connaissances',
       'mesure_catalogue', 'parametres', 'personnes', 'risque_catalogue',
       'traitement_mesures', 'traitements',
     ]);

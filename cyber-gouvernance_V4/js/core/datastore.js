@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 21;
+    const SCHEMA_VERSION = 22;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -107,7 +107,31 @@ const DataStore = (() => {
         // (`GET /api/demandes-droits/etat`). Le stocker ici le figerait au jour de
         // l'export — et une reprise faite six mois plus tard rendrait « dans les
         // temps » une demande en retard depuis longtemps.
-        "demandes_droits"
+        "demandes_droits",
+        // v22 — Lot L25, actions 25.1, 25.2 et 25.5 : les ateliers 1 et 2 d'EBIOS RM.
+        //
+        // ⚠️ **EN ADDITION, jamais en remplacement.** `risques` ne bouge pas : les
+        // cotations F × G × M déjà saisies ont été produites en audit, et les
+        // réinterpréter les réattribuerait EN SILENCE — c'est le motif qui a fait
+        // refuser la renumérotation du catalogue ANSSI (constat Q-192). Le produit
+        // porte donc DEUX méthodes de cotation en même temps, et elles ne se parlent
+        // pas.
+        //
+        // ⚠️ `ebios_connaissances` est de niveau GROUPE quand son `filiale_id` est nul
+        // — comme `risque_catalogue` : une base de connaissances de menaces partagée
+        // est l'objet même de l'action 25.5. L'ordre compte, ici comme ailleurs : les
+        // couples source/objectif la référencent, et les événements redoutés
+        // référencent les valeurs métier.
+        //
+        // ⚠️ Et AUCUNE de ces lignes ne porte la PERTINENCE d'un couple : elle se
+        // dérive de ses trois critères côté serveur (`GET /api/ebios/etat`). La
+        // stocker ici la figerait au jour de l'export, alors que l'animateur révise
+        // ses critères en séance.
+        "ebios_connaissances",
+        "ebios_etudes",
+        "ebios_valeurs_metier",
+        "ebios_evenements_redoutes",
+        "ebios_sources_risque"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
@@ -935,6 +959,138 @@ const DataStore = (() => {
     }
 
     /* =========================
+       EBIOS RM — ATELIERS 1 ET 2 (v22, actions 25.1, 25.2 et 25.5)
+
+       ebios_connaissances       : { id, genre, reference, nom, objectif_vise, phase,
+                                     categorie, description, origine, statut, archive_le }
+       ebios_etudes              : { id, nom, perimetre, cadre, responsable, statut,
+                                     debut_le, validee_le, notes }
+       ebios_valeurs_metier      : { id, etude_id, nom, nature, processus_id,
+                                     responsable, description }
+       ebios_evenements_redoutes : { id, valeur_metier_id, nom, besoin, gravite,
+                                     impacts, description }
+       ebios_sources_risque      : { id, etude_id, source, objectif_vise, connaissance_id,
+                                     motivation, ressources, activite, retenue, justification }
+
+       ⚠️ **EN ADDITION, jamais en remplacement.** Aucune de ces fonctions ne touche à
+       `risques` : les cotations F × G × M déjà saisies ont été produites en audit, et un
+       code qui les réinterpréterait les réattribuerait EN SILENCE. C'est le critère
+       d'acceptation de l'action 25.1, et le motif du constat Q-192.
+
+       ⚠️ **Aucune PERTINENCE stockée.** La note d'un couple source/objectif se dérive de
+       ses trois critères côté serveur (`GET /api/ebios/etat`, `f_ebios_pertinence`). La
+       poser ici obligerait quelque chose à la remettre après chaque révision d'un critère
+       — et l'animateur en révise en séance. Elle se tait d'ailleurs dès qu'un critère
+       manque : pas d'estimation par défaut.
+
+       ⚠️ **`ebios_connaissances` est MIXTE** : une entrée à `filiale_id` nul appartient au
+       socle du Groupe (le serveur ne l'expose pas, comme pour `risque_catalogue`) ; les
+       autres sont les ajouts de la filiale. L'écran les présente ensemble, et c'est la
+       RLS qui a décidé de ce qui arrive ici.
+    ========================== */
+    function getEbiosConnaissances() { return data.ebios_connaissances; }
+    function getEbiosConnaissancesDuGenre(genre) {
+        return data.ebios_connaissances.filter(c => c.genre === genre && c.statut !== "archivee");
+    }
+    function getEbiosConnaissanceById(id) {
+        return data.ebios_connaissances.find(c => c.id === id);
+    }
+    function addEbiosConnaissance(c) { data.ebios_connaissances.push(c); save(); }
+    function updateEbiosConnaissance(c) {
+        const i = data.ebios_connaissances.findIndex(x => x.id === c.id);
+        if (i !== -1) { data.ebios_connaissances[i] = c; save(); }
+    }
+    function deleteEbiosConnaissance(id) {
+        data.ebios_connaissances = data.ebios_connaissances.filter(c => c.id !== id);
+        save();
+    }
+
+    function getEbiosEtudes() { return data.ebios_etudes; }
+    function getEbiosEtudeById(id) { return data.ebios_etudes.find(e => e.id === id); }
+    function addEbiosEtude(e) { data.ebios_etudes.push(e); save(); }
+    function updateEbiosEtude(e) {
+        const i = data.ebios_etudes.findIndex(x => x.id === e.id);
+        if (i !== -1) { data.ebios_etudes[i] = e; save(); }
+    }
+    /**
+     * ⚠️ La base cascade (`on delete cascade` des §3 et §5 de la migration 046) ; cette
+     * fonction refait le même ordre EN MÉMOIRE, et ce n'est pas une politesse.
+     *
+     * Le défaut du 18/09/2026 est exactement là : la base cascadait, la façade en mémoire
+     * ne le refaisait pas, et l'échéancier gardait l'échéance d'un questionnaire dont le
+     * porteur venait d'être supprimé. *Un défaut peut ne vivre ni dans la base, ni dans la
+     * route, mais dans l'écart entre deux cascades* — et aucune des deux moitiés n'a tort
+     * seule, ce qui est précisément pourquoi le banc ne le voyait pas.
+     */
+    function deleteEbiosEtude(id) {
+        const valeurs = data.ebios_valeurs_metier.filter(v => v.etude_id === id).map(v => v.id);
+        data.ebios_evenements_redoutes = data.ebios_evenements_redoutes.filter(
+            r => valeurs.indexOf(r.valeur_metier_id) === -1);
+        data.ebios_valeurs_metier = data.ebios_valeurs_metier.filter(v => v.etude_id !== id);
+        data.ebios_sources_risque = data.ebios_sources_risque.filter(s => s.etude_id !== id);
+        data.ebios_etudes = data.ebios_etudes.filter(e => e.id !== id);
+        save();
+    }
+
+    function getEbiosValeursMetier(etudeId) {
+        return etudeId === undefined
+            ? data.ebios_valeurs_metier
+            : data.ebios_valeurs_metier.filter(v => v.etude_id === etudeId);
+    }
+    function getEbiosValeurMetierById(id) {
+        return data.ebios_valeurs_metier.find(v => v.id === id);
+    }
+    function addEbiosValeurMetier(v) { data.ebios_valeurs_metier.push(v); save(); }
+    function updateEbiosValeurMetier(v) {
+        const i = data.ebios_valeurs_metier.findIndex(x => x.id === v.id);
+        if (i !== -1) { data.ebios_valeurs_metier[i] = v; save(); }
+    }
+    /** Même motif que `deleteEbiosEtude` : la base cascade sur les événements redoutés. */
+    function deleteEbiosValeurMetier(id) {
+        data.ebios_evenements_redoutes =
+            data.ebios_evenements_redoutes.filter(r => r.valeur_metier_id !== id);
+        data.ebios_valeurs_metier = data.ebios_valeurs_metier.filter(v => v.id !== id);
+        save();
+    }
+
+    function getEbiosEvenementsRedoutes(valeurMetierId) {
+        return valeurMetierId === undefined
+            ? data.ebios_evenements_redoutes
+            : data.ebios_evenements_redoutes.filter(r => r.valeur_metier_id === valeurMetierId);
+    }
+    function getEbiosEvenementRedouteById(id) {
+        return data.ebios_evenements_redoutes.find(r => r.id === id);
+    }
+    function addEbiosEvenementRedoute(r) { data.ebios_evenements_redoutes.push(r); save(); }
+    function updateEbiosEvenementRedoute(r) {
+        const i = data.ebios_evenements_redoutes.findIndex(x => x.id === r.id);
+        if (i !== -1) { data.ebios_evenements_redoutes[i] = r; save(); }
+    }
+    function deleteEbiosEvenementRedoute(id) {
+        data.ebios_evenements_redoutes =
+            data.ebios_evenements_redoutes.filter(r => r.id !== id);
+        save();
+    }
+
+    function getEbiosSourcesRisque(etudeId) {
+        return etudeId === undefined
+            ? data.ebios_sources_risque
+            : data.ebios_sources_risque.filter(s => s.etude_id === etudeId);
+    }
+    function getEbiosSourceRisqueById(id) {
+        return data.ebios_sources_risque.find(s => s.id === id);
+    }
+    function addEbiosSourceRisque(s) { data.ebios_sources_risque.push(s); save(); }
+    function updateEbiosSourceRisque(s) {
+        const i = data.ebios_sources_risque.findIndex(x => x.id === s.id);
+        if (i !== -1) { data.ebios_sources_risque[i] = s; save(); }
+    }
+    function deleteEbiosSourceRisque(id) {
+        data.ebios_sources_risque = data.ebios_sources_risque.filter(s => s.id !== id);
+        save();
+    }
+
+    /* =========================
        ANALYSES D'IMPACT — RGPD article 35 (v17, action 20.3)
        { id, traitement_id, statut, necessite_motif, date_analyse,
          risques_identifies, mesures_prevues, avis_dpo, avis_dpo_le,
@@ -1204,7 +1360,16 @@ const DataStore = (() => {
         //           une campagne à partir des évaluations déjà faites. Une campagne est
         //           une DEMANDE, datée ; la déduire ferait croire que le Groupe a demandé
         //           ce qu'une filiale avait fait de son propre chef.
-        // (Ajouter ici les futures migrations : if (v < 22) { ... })
+        // v21 → v22 : ajout des cinq collections des ateliers 1 et 2 d'EBIOS RM
+        //           (`ebios_connaissances`, `ebios_etudes`, `ebios_valeurs_metier`,
+        //           `ebios_evenements_redoutes`, `ebios_sources_risque`) → normalize
+        //           crée les tableaux vides. AUCUNE transformation, et surtout rien à
+        //           DEVINER : on ne fabrique pas une étude EBIOS RM à partir des
+        //           risques déjà cotés. Une cotation F × G × M ne dit ni la valeur
+        //           métier atteinte, ni la source, ni l'objectif visé — en déduire une
+        //           étude produirait une analyse que personne n'a conduite, dans un
+        //           outil qui sert de preuve en audit.
+        // (Ajouter ici les futures migrations : if (v < 23) { ... })
         return p;
     }
 
@@ -1469,6 +1634,17 @@ const DataStore = (() => {
         getQuestionnaires, getQuestionnaireById, getQuestionnairesDe,
         addQuestionnaire, updateQuestionnaire, deleteQuestionnaire,
         getReponsesDe, addReponse, updateReponse,
+        // EBIOS RM — ateliers 1 et 2 (v22, lot L25)
+        getEbiosConnaissances, getEbiosConnaissancesDuGenre, getEbiosConnaissanceById,
+        addEbiosConnaissance, updateEbiosConnaissance, deleteEbiosConnaissance,
+        getEbiosEtudes, getEbiosEtudeById, addEbiosEtude, updateEbiosEtude, deleteEbiosEtude,
+        getEbiosValeursMetier, getEbiosValeurMetierById,
+        addEbiosValeurMetier, updateEbiosValeurMetier, deleteEbiosValeurMetier,
+        getEbiosEvenementsRedoutes, getEbiosEvenementRedouteById,
+        addEbiosEvenementRedoute, updateEbiosEvenementRedoute, deleteEbiosEvenementRedoute,
+        getEbiosSourcesRisque, getEbiosSourceRisqueById,
+        addEbiosSourceRisque, updateEbiosSourceRisque, deleteEbiosSourceRisque,
+
         getAnalysesImpact, getAnalyseImpactById, getAnalysesImpactByTraitement,
         addAnalyseImpact, updateAnalyseImpact, deleteAnalyseImpact,
         getDemandesDroits, getDemandeDroitsById,

@@ -89,6 +89,11 @@ async function startApp() {
         "/risques": () => RisquesModule.renderList(),
         "/risques/:id": (id) => RisquesModule.renderDetail(id),
         "/matrice": () => MatriceModule.render(),
+        // Lot L25 — les ateliers EBIOS RM. ⚠️ `if (typeof … !== "undefined")` comme
+        // les autres écrans récents : une route qui appellerait un module absent
+        // laisserait l'application sur un écran blanc, sans un mot.
+        "/ebios": () => { if (typeof EbiosModule !== "undefined") EbiosModule.renderList(); },
+        "/ebios/:id": (id) => { if (typeof EbiosModule !== "undefined") EbiosModule.renderDetail(id); },
 
         "/exigences": () => ExigencesModule.renderList(),
         "/exigences/:id": (id) => ExigencesModule.renderDetail(id),
@@ -356,6 +361,7 @@ const ROUTE_META = {
     "/rgpd":         { s: "fil.section.conformite", t: "fil.rgpd" },
     "/risques":      { s: "fil.section.risques",    t: "fil.risques" },
     "/matrice":      { s: "fil.section.risques",    t: "fil.matrice" },
+    "/ebios":        { s: "fil.section.risques",    t: "fil.ebios" },
     "/actifs":       { s: "fil.section.risques",    t: "fil.actifs" },
     "/exigences":    { s: "fil.section.conformite", t: "fil.exigences" },
     "/referentiels": { s: "fil.section.conformite", t: "fil.referentiels" },
@@ -1113,6 +1119,10 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/bia":          "actifs",
     "/risques":      "risques",
     "/matrice":      "risques",
+    // Lot L25 : une étude EBIOS RM est une analyse de RISQUE — même métier,
+    // même personne, même écran que la cotation F × G × M. On suit la décision
+    // du serveur (`DOMAINE_PAR_ENTITE`) plutôt que d'en prendre une seconde.
+    "/ebios":        "risques",
     "/exigences":    "conformite",
     "/referentiels": "conformite",
     "/mesures":      "conformite",

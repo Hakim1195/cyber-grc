@@ -102,11 +102,11 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
     assert.match(corps.authentification.lot_attendu, /L3/);
   });
 
-  test('GET /api/modele — décrit les 31 entités, et ne fuit aucun nom de table', async () => {
+  test('GET /api/modele — décrit les 36 entités, et ne fuit aucun nom de table', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/modele');
     assert.equal(statut, 200);
-    assert.equal(Object.keys(corps.entites).length, 31);
-    assert.equal(corps.schemaVersion, 21);
+    assert.equal(Object.keys(corps.entites).length, 36);
+    assert.equal(corps.schemaVersion, 22);
 
     const texte = JSON.stringify(corps);
     for (const interdit of ['mesure_catalogue', 'mesure_mise_en_oeuvre', 'evaluation_mesures', base.nom]) {
@@ -120,7 +120,7 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
   test('GET /api/donnees — rend le jeu de la filiale, dans la forme de « data »', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/donnees');
     assert.equal(statut, 200);
-    assert.equal(corps.data.schemaVersion, 21);
+    assert.equal(corps.data.schemaVersion, 22);
     assert.ok(corps.data.risques.some((r) => r.id === 'RISK-A'));
     assert.ok(corps.data.documents.some((d) => d.id === 'DOC-G'), 'Le socle Groupe fait partie du chargement.');
 
@@ -868,6 +868,11 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     ['GET', '/api/campagnes/etat', undefined],
     ['POST', '/api/campagnes/CAMP-G/convoquer', { filiales: ['FIL-ESSAI-A'] }],
     ['POST', '/api/campagnes/CAMP-G/deconvoquer', { filiales: ['FIL-ESSAI-A'] }],
+    // L'état des ateliers EBIOS RM (lot L25, action 25.1). ⚠️ Servie sans identité,
+    // elle rendrait les analyses de risque des filiales du périmètre : leurs valeurs
+    // métier, leurs événements redoutés et les sources de risque retenues contre
+    // elles — c'est-à-dire, très exactement, ce qu'un attaquant irait lire en premier.
+    ['GET', '/api/ebios/etat', undefined],
     ['GET', '/api/recherche?q=ab', undefined],
     ['GET', '/api/decouverte/etat', undefined],
     ['POST', '/api/decouverte/semer', undefined],

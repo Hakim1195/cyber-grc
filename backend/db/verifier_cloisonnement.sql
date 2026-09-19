@@ -1426,9 +1426,16 @@ begin
                -- fois. Vérifié un par un : les deux déclencheurs neufs sont bien
                -- « trg_analyses_impact_portee_figee » et « trg_analyse_mesures_portee_figee »,
                -- armés « always » par f_armer_declencheurs().
-               '17 sur 17',
+               -- 18 depuis la `046` : `ebios_connaissances` naît MIXTE — la base de
+               -- connaissances des MENACES du Groupe se partage (action 25.5), tandis
+               -- que l'ÉVALUATION qu'une filiale en fait ne se partage pas. Vérifié :
+               -- le déclencheur neuf est bien « trg_ebios_connaissances_portee_figee ».
+               -- ⚠️ Il n'a pas été écrit à la main : `f_verifier_portee_figee()` a
+               -- REFUSÉ le déploiement jusqu'à ce que la migration appelle
+               -- l'installateur `f_poser_portee_figee()`.
+               '18 sur 18',
                format('%s sur %s', count(*) filter (where t.tgenabled = 'A'), count(*)),
-               case when count(*) = 17 and count(*) filter (where t.tgenabled = 'A') = 17
+               case when count(*) = 18 and count(*) filter (where t.tgenabled = 'A') = 18
                     then 'OK' else 'ÉCHEC' end
           from pg_trigger t
          where not t.tgisinternal

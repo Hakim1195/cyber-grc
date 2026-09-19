@@ -177,6 +177,12 @@ const FICHES = {
   // serveur refuse en 400 « Le champ reference est obligatoire ». Le banc l'a
   // trouvé ainsi, et c'est une raison de plus de le tenir.
   '/audits': { module: 'AuditsModule', lecture: 'getAudits', creer: `DataStore.addAudit({ id: ID, ref: NOM })` },
+  // Lot L25 — les ateliers EBIOS RM. La fiche d'une étude porte les ateliers 1 et
+  // 2 ; c'est donc une route à fiche, et le renommage d'identifiant doit y être
+  // éprouvé comme ailleurs. ⚠️ « nom » suffit : `statut` et `debut_le` ont un
+  // défaut en base, et les poser ici ferait de cet essai un essai de plus sur les
+  // valeurs par défaut plutôt que sur le renommage.
+  '/ebios': { module: 'EbiosModule', lecture: 'getEbiosEtudes', creer: `DataStore.addEbiosEtude({ id: ID, nom: NOM })` },
 };
 
 /**
@@ -306,7 +312,11 @@ const SANS_FICHE = {
 // 41 depuis le lot L24 (écran des campagnes descendantes, action 24.1). ⚠️ Ce nombre est
 // ÉPINGLÉ à dessein : un module qui naît doit entrer dans ce filet, un module qui meurt
 // doit en sortir — et le chiffre force la décision plutôt que de la laisser passer.
-const MODULES_ATTENDUS = 41;
+// 42 depuis le lot L25 (écran des ateliers EBIOS RM, actions 25.1, 25.2 et 25.5).
+// ⚠️ C'est un ONGLET du sujet « risques », à côté de « Matrice F×G » — et ce
+// voisinage est le message : les deux méthodes de cotation cohabitent, la seconde
+// ne remplace pas la première (critère 25.1).
+const MODULES_ATTENDUS = 42;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //

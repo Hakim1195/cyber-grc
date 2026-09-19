@@ -90,6 +90,7 @@ sur trente.
 | **Tableau de bord** | l'état de votre filiale en un coup d'œil, avec les tendances |
 | **Échéancier** | tout ce qui est daté et qui approche — **neuf sources** : plan d'actions, actions MCO, revues documentaires, déclarations d'incidents, audits, revues de direction, **questionnaires fournisseurs**, **échéances contractuelles des tiers** et **campagnes du Groupe** |
 | **Registre des risques** | l'analyse : fréquence × gravité × maîtrise, brut et résiduel |
+| **Registre des risques → Ateliers EBIOS RM** | la méthode de l'ANSSI, conduite dans l'outil. ⚠️ Elle **s'ajoute** au registre : vos risques cotés en F × G × M restent valides et lisibles, et rien ici ne les modifie |
 | **Référentiels** | l'évaluation des référentiels applicables, et la déclaration d'applicabilité |
 | **Approbations** | ce qui attend votre décision |
 | **Prestataires → Registre DORA** | le registre de l'article 28 de DORA, **avec ce qui manque à chaque ligne** : c'est cette liste de manques qui en fait un plan de travail, et non le tableau. ⚠️ Il exige le droit d'**export** — un registre complet est la carte des dépendances critiques du groupe |
@@ -109,6 +110,36 @@ sur trente.
    approbation de certifier un contenu qui a changé depuis.
 3. **Une décision franchie ne se défait pas.** Ni par l'écran, ni autrement. Pour revenir
    dessus, on produit une nouvelle version, qui repart du premier tour.
+
+### Conduire une analyse EBIOS RM
+
+L'onglet **Ateliers EBIOS RM**, à côté de la *Matrice F×G*, porte les deux premiers ateliers
+de la méthode : le **cadrage** avec ses valeurs métier et ses événements redoutés, puis les
+**sources de risque** et leurs objectifs visés.
+
+Une **étude** est un périmètre et un exercice — « chaîne de production, 2026 ». C'est elle
+qui rend l'analyse reproductible : sans elle, on ne peut ni dire de quelle analyse relève une
+valeur métier, ni comparer deux années.
+
+Quatre choses à savoir avant de commencer :
+
+1. **Rien n'est ressaisi de ce que vous tenez déjà.** Le socle de sécurité de l'atelier 1,
+   ce sont vos *Référentiels* et vos *Mesures de sécurité* ; les biens supports, ce sont vos
+   *Actifs* et leur *Cartographie*. Et une valeur métier qui est un processus **pointe** le
+   bilan d'impact correspondant : sa criticité, son RTO et son RPO restent lus là-bas, et ne
+   sont jamais recopiés dans l'étude.
+2. **La pertinence d'un couple est une SUGGESTION.** L'outil moyenne vos trois critères —
+   motivation, ressources, activité — et affiche une note. ⚠️ **Il ne décide pas** : retenir
+   un couple engage les ateliers suivants, et l'outil vous demande alors **pourquoi**. Cette
+   phrase est ce qu'un auditeur lira en premier.
+3. **La note se tait dès qu'un critère manque** — la colonne affiche « à évaluer », jamais un
+   chiffre. Une moyenne calculée sur deux critères sur trois aurait l'air mesurée sans
+   l'être, et c'est ce genre de chiffre qu'on cite ensuite en comité de direction.
+4. **Écarter un couple ne l'efface pas.** « Aucun signal cette année, à réexaminer » est
+   exactement ce qu'on vient rechercher l'exercice suivant.
+
+⚠️ **Les ateliers 3 à 5** — scénarios stratégiques, scénarios opérationnels, traitement — ne
+sont pas encore livrés. Les couples que vous retenez sont ce sur quoi ils travailleront.
 
 ### Importer des données
 

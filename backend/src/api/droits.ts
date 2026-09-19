@@ -282,6 +282,26 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   // exactement ce que le modèle à trois axes existe pour éviter.
   campagnes: 'conformite',
   campagne_filiales: 'conformite',
+  // ── L25 : les ateliers EBIOS RM ───────────────────────────────────────────
+  //
+  // `risques`, et non `conformite` : ce qu'une étude EBIOS RM met en jeu est
+  // l'analyse de risque, c'est-à-dire le même métier, le même écran et la même
+  // personne que la cotation F × G × M déjà portée par `risques`. Le ranger sous
+  // « conformite » aurait obligé à donner un accès en écriture sur les exigences
+  // à qui conduit un atelier — et l'aurait retiré aux RSSI, qui sont précisément
+  // ceux qui les animent (motif du constat Q-158 sur le logo, et de Q-181 sur le
+  // profil DIRECTION : *le profil couvre exactement ce que l'écran qui lui est
+  // destiné agrège*).
+  //
+  // ⚠️ La base de connaissances suit la même règle que `risque_catalogue` : qui
+  // définit une source de risque type au Groupe fait le même métier que qui
+  // l'évalue dans sa filiale. La rattacher à « administration » l'aurait
+  // interdite à tous les RSSI.
+  ebios_connaissances: 'risques',
+  ebios_etudes: 'risques',
+  ebios_valeurs_metier: 'risques',
+  ebios_evenements_redoutes: 'risques',
+  ebios_sources_risque: 'risques',
 });
 
 /**

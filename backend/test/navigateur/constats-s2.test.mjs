@@ -135,6 +135,12 @@ const IDENTIFIANTS = {
   '/tests/:id': 'TEST-A',
   '/prestataires/:id': 'PRES-A',
   '/audits/:id': 'AUD-A',
+  // Lot L25 — la fiche d'une étude EBIOS RM porte les ateliers 1 et 2. L'identifiant
+  // vient du semis partagé (`test/aide/base.mjs`), qui pose une étude complète par
+  // filiale : son cadrage, sa valeur métier reliée au BIA, son événement redouté et son
+  // couple source / objectif. Un semis qui ne porterait que l'étude ferait passer au vert
+  // un écran dont les deux ateliers seraient vides.
+  '/ebios/:id': 'EBET-A',
 };
 
 /** Une fiche par route à paramètre — et le refus d'en oublier une. */

@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 21;
+export const VERSION_SCHEMA = 22;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -179,6 +179,15 @@ export const COLLECTIONS = [
   // et une reprise qui les inverserait échouerait sur la clé étrangère, pas en silence.
   'campagnes',
   'campagne_filiales',
+  // v22 — EBIOS RM, ateliers 1 et 2 (lot L25). ⚠️ L'ordre suit les clés étrangères :
+  // la base de connaissances d'abord (les couples source/objectif la référencent), puis
+  // l'étude, puis ce qui pend à l'étude — et les événements redoutés APRÈS les valeurs
+  // métier, qu'ils référencent.
+  'ebios_connaissances',
+  'ebios_etudes',
+  'ebios_valeurs_metier',
+  'ebios_evenements_redoutes',
+  'ebios_sources_risque',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -850,6 +859,127 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     bornes: [],
     dates: ['accuse_le', 'termine_le'],
     references: [{ champ: 'campagne_id', cible: 'campagnes' }],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+
+  // ── v22 : EBIOS RM, ateliers 1 et 2 (lot L25, actions 25.1, 25.2 et 25.5) ──
+  //
+  // ⚠️ **Aucun champ de PERTINENCE**, et c'est la même décision qu'à l'avancement
+  // d'une campagne : la pertinence d'un couple source/objectif se DÉRIVE de ses
+  // trois critères (`f_ebios_pertinence`). L'exporter la figerait — un couple
+  // exporté aujourd'hui garderait sa note dans le fichier alors que l'animateur
+  // aurait révisé la motivation entre-temps.
+  //
+  // ⚠️ Et aucun champ d'état d'étude dérivé non plus : `statut` EST une décision
+  // humaine (quelqu'un déclare l'étude close), donc il voyage.
+  ebios_connaissances: {
+    prefixe: 'EBCO',
+    champs: [
+      'id',
+      'genre',
+      'reference',
+      'nom',
+      'objectif_vise',
+      'phase',
+      'categorie',
+      'description',
+      'origine',
+      'statut',
+      'archive_le',
+    ],
+    enumerations: [
+      { champ: 'genre', valeurs: ['source_risque', 'mode_operatoire'], videAdmis: false },
+      { champ: 'phase', valeurs: ['connaitre', 'rentrer', 'trouver', 'exploiter'], videAdmis: true },
+      { champ: 'origine', valeurs: ['interne', 'referentiel', 'sectoriel'], videAdmis: false },
+      { champ: 'statut', valeurs: ['active', 'archivee'], videAdmis: false },
+    ],
+    bornes: [],
+    dates: [],
+    references: [],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  ebios_etudes: {
+    prefixe: 'EBET',
+    champs: [
+      'id',
+      'nom',
+      'perimetre',
+      'cadre',
+      'responsable',
+      'statut',
+      'debut_le',
+      'validee_le',
+      'notes',
+    ],
+    enumerations: [
+      { champ: 'statut', valeurs: ['cadrage', 'en_cours', 'validee', 'archivee'], videAdmis: false },
+    ],
+    bornes: [],
+    dates: ['debut_le', 'validee_le'],
+    references: [],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  ebios_valeurs_metier: {
+    prefixe: 'EBVM',
+    champs: ['id', 'etude_id', 'nom', 'nature', 'processus_id', 'responsable', 'description'],
+    enumerations: [{ champ: 'nature', valeurs: ['processus', 'information'], videAdmis: false }],
+    bornes: [],
+    dates: [],
+    references: [
+      { champ: 'etude_id', cible: 'ebios_etudes' },
+      { champ: 'processus_id', cible: 'processus' },
+    ],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  ebios_evenements_redoutes: {
+    prefixe: 'EBER',
+    champs: ['id', 'valeur_metier_id', 'nom', 'besoin', 'gravite', 'impacts', 'description'],
+    enumerations: [
+      {
+        champ: 'besoin',
+        valeurs: ['disponibilite', 'integrite', 'confidentialite', 'tracabilite'],
+        videAdmis: false,
+      },
+    ],
+    // ⚠️ La borne est celle du SCHÉMA (1 à 10), pas celle de l'échelle (1 à 4) :
+    // l'action 25.3 rendra les échelles configurables et versionnées par filiale,
+    // et une borne à quatre niveaux ici refuserait la reprise d'un export produit
+    // sur une échelle à cinq. Même arbitrage qu'à `risques.f_frequence`.
+    bornes: [{ champ: 'gravite', min: 1, max: 10 }],
+    dates: [],
+    references: [{ champ: 'valeur_metier_id', cible: 'ebios_valeurs_metier' }],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  ebios_sources_risque: {
+    prefixe: 'EBSR',
+    champs: [
+      'id',
+      'etude_id',
+      'source',
+      'objectif_vise',
+      'connaissance_id',
+      'motivation',
+      'ressources',
+      'activite',
+      'retenue',
+      'justification',
+    ],
+    enumerations: [],
+    bornes: [
+      { champ: 'motivation', min: 1, max: 10 },
+      { champ: 'ressources', min: 1, max: 10 },
+      { champ: 'activite', min: 1, max: 10 },
+    ],
+    dates: [],
+    references: [
+      { champ: 'etude_id', cible: 'ebios_etudes' },
+      { champ: 'connaissance_id', cible: 'ebios_connaissances' },
+    ],
     referencesMultiples: [],
     cleMetier: null,
   },
@@ -1998,6 +2128,30 @@ const PALIERS: readonly EtapePalier[] = [
     // déduire d'un référentiel déjà évalué ferait croire que le Groupe a demandé ce
     // qu'une filiale avait fait de son propre chef — et l'inverse aussi.
     appliquer: paliersCollections(['campagnes', 'campagne_filiales']),
+  },
+  {
+    de: 21,
+    vers: 22,
+    libelle:
+      'Lot L25, actions 25.1, 25.2 et 25.5 : l’instantané gagne les ateliers 1 et 2 ' +
+      'd’EBIOS RM — la base de connaissances du Groupe, l’étude, ses valeurs métier, ' +
+      'ses événements redoutés et ses couples source de risque / objectif visé. ' +
+      '⚠️ EN ADDITION : les risques cotés en F × G × M ne sont ni touchés ni ' +
+      'réinterprétés, et la PERTINENCE d’un couple n’y est pas — elle se dérive de ses ' +
+      'trois critères, à l’instant où on regarde.',
+    // Rien à transformer, et surtout rien à DEVINER : on ne fabrique pas une étude
+    // EBIOS RM à partir des risques déjà cotés. Une cotation F × G × M n'est pas un
+    // atelier — elle ne dit ni la valeur métier atteinte, ni la source, ni l'objectif
+    // visé —, et en déduire une étude produirait une analyse que personne n'a conduite,
+    // dans un outil qui sert de preuve en audit. C'est le motif du critère 25.1, et
+    // c'est celui du constat Q-192.
+    appliquer: paliersCollections([
+      'ebios_connaissances',
+      'ebios_etudes',
+      'ebios_valeurs_metier',
+      'ebios_evenements_redoutes',
+      'ebios_sources_risque',
+    ]),
   },
 ];
 

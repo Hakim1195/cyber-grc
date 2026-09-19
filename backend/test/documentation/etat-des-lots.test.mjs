@@ -74,6 +74,12 @@ const PREUVE_DE_LIVRAISON = [
   { lot: 'L20', preuve: 'backend/db/migrations/034_l_horloge_reglementaire.sql' },
   { lot: 'L21', preuve: 'backend/db/migrations/042_le_registre_dora_et_la_chaine.sql' },
   { lot: 'L24', preuve: 'backend/db/migrations/044_les_campagnes_descendantes.sql' },
+  // Lot L25 — les ateliers EBIOS RM (18/09/2026). ⚠️ Le lot n'est livré qu'en PARTIE
+  // (ateliers 1 et 2), et il entre quand même ici : ce contrôle n'attrape qu'une
+  // chose — un livrable présent dans le dépôt et annoncé « à faire » —, et un lot
+  // partiellement livré est exactement celui qu'un intervalle « L22 → L26 ⬜ »
+  // engloberait sans que personne le voie.
+  { lot: 'L25', preuve: 'backend/db/migrations/046_les_ateliers_ebios_rm.sql' },
 ];
 
 /** Les documents qui portent une table des lots, et qui mentent tous les dix commits. */

@@ -130,6 +130,7 @@ import { greffonAttestations } from '../attestations/index.js';
 import { greffonAipd } from '../aipd/index.js';
 import { greffonDerogations } from '../derogations/index.js';
 import { greffonCampagnes } from '../campagnes/index.js';
+import { greffonEbios } from '../ebios/index.js';
 import { greffonTiers } from '../tiers/index.js';
 import { greffonCrise } from '../crise/index.js';
 import { greffonDroitsPersonnes } from '../droits-personnes/index.js';
@@ -3232,6 +3233,16 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   // Le reste est de l'écriture d'entité ordinaire : ouvrir, clore, consigner sa
   // part. Rien n'est réécrit ici de ce que la couche générique tient déjà.
   await instance.register(greffonCampagnes, { pool });
+  // Lot L25, action 25.1 — la PERTINENCE d'un couple source de risque / objectif
+  // visé, dérivée de ses trois critères. Aucune écriture : les cinq tables
+  // d'EBIOS RM sont des entités ordinaires, qui héritent du verrouillage
+  // optimiste, du journal, du cloisonnement et de l'import généralisé sans
+  // qu'une ligne soit écrite là-bas.
+  //
+  // ⚠️ La route ne DÉCIDE rien : elle rend TOUS les couples avec leur note, sans
+  // filtrer sur un seuil. Retenir un couple engage les ateliers 3 et 4, et c'est
+  // « retenue », saisie par un humain et justifiée, qui le fait.
+  await instance.register(greffonEbios, { pool });
   // Lot L17, A3 — la recherche globale.
   //
   // ⚠️ Elle reçoit `cumulerSondage`, **le compteur du sondage**, et non un

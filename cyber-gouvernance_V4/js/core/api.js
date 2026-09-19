@@ -1253,6 +1253,28 @@ const Api = (() => {
      * pas » : sans cela, la route deviendrait un oracle d'existence de filiales.
      */
     function campagnesEtat() { return appeler("/campagnes/etat"); }
+
+    /* ── Lot L25 : les ateliers EBIOS RM ───────────────────────────────────────
+     *
+     * Rend `{ etudes: [...], couples: [...], tronque }`.
+     *
+     * ⚠️ **`pertinenceSuggeree` est une SUGGESTION, et le mot est dans le nom du
+     * champ** : l'écran ne doit pas pouvoir l'afficher comme une décision par
+     * mégarde. Retenir un couple source/objectif engage les ateliers 3 et 4, et
+     * c'est `retenue` — saisie par un humain et justifiée — qui le fait. Même
+     * précaution que `presumeeRequise` de l'AIPD.
+     *
+     * ⚠️ Elle vient de la BASE (`f_ebios_pertinence`), jamais recalculée ici : une
+     * seconde moyenne dériverait au premier ajustement de la règle. Et elle vaut
+     * `null` dès qu'un critère manque — pas d'estimation par défaut, motif du
+     * critère 25.4 : *un chiffre qui a l'air mesuré sans l'être est pire que pas
+     * de chiffre, parce qu'il est cité en comité de direction.*
+     *
+     * ⚠️ Les comptes des études (valeurs métier, événements redoutés, couples)
+     * sont COMPTÉS côté serveur à l'instant où l'on regarde, jamais rangés : une
+     * colonne d'avancement serait fausse le jour où un traitement ne repasse pas.
+     */
+    function ebiosEtat() { return appeler("/ebios/etat"); }
     function campagnesDeconvoquer(campagneId, filialeIds) {
         return appeler("/campagnes/" + encodeURIComponent(campagneId) + "/deconvoquer", {
             methode: "POST",
@@ -1291,6 +1313,8 @@ const Api = (() => {
         attestationsAFaire, attestationsDocument, attester,
         // Lot L20, action 20.1 : l'horloge réglementaire.
         echeancesReglementaires, consignerDeclaration,
+        // Lot L25, action 25.1 : la pertinence DÉRIVÉE des couples EBIOS RM.
+        ebiosEtat,
         // Lot L19, action 19.2 : l'état DÉRIVÉ des dérogations.
         derogationsEtat, aipdEtat, demandesDroitsEtat,
         // Lot L21 : le registre DORA, la chaîne DÉRIVÉE et le score composite.

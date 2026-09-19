@@ -55,6 +55,86 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### L25 — EBIOS RM : les ateliers 1 et 2, EN ADDITION de la cotation F × G × M (18/09/2026)
+
+**Vague D entamée.** La méthode d'analyse de risque de l'ANSSI entre dans le produit —
+migration `046`, schéma `data` en **v22**, greffon `src/ebios/`, écran
+`js/modules/ebios.js` monté en **onglet du sujet « risques »**, à côté de « Matrice F×G ».
+Cela couvre les actions **25.2** et **25.5** en entier, et **25.1** pour ses deux premiers
+ateliers.
+
+**Cinq collections neuves** : `ebios_connaissances` (la base de connaissances du Groupe —
+sources de risque types et modes opératoires types, MIXTE comme `risque_catalogue`),
+`ebios_etudes` (le cadrage : un périmètre, un exercice), `ebios_valeurs_metier`,
+`ebios_evenements_redoutes` et `ebios_sources_risque` (les couples source de risque /
+objectif visé).
+
+#### ⚠️ Le critère qui gouverne le lot est NÉGATIF, et il est désormais MÉCANIQUE
+
+*« Les risques cotés en F × G × M restent valides et lisibles. Une migration qui les
+réinterpréterait réattribuerait **en silence** des cotations produites en audit. »* C'est
+le motif qui a fait refuser la renumérotation du catalogue ANSSI (constat **Q-192**), et
+une propriété négative ne se voit pas à l'usage : **elle ne se mesure qu'en la cherchant.**
+
+`f_verifier_ebios_cadrage()` nomme donc les cinq colonnes de cotation de `risques` **une
+par une** et refuse tout déclencheur d'une table EBIOS qui y écrirait — mesuré dans le
+catalogue, pas dans une liste. Côté banc, `test/ebios/ateliers.test.mjs` relit les cinq
+colonnes **et la `version`** de chaque risque avant et après avoir conduit un atelier
+complet : une écriture invisible se verrait là, et c'est la seule façon de distinguer
+« EBIOS RM s'ajoute » de « EBIOS RM a réinterprété ». **Le produit porte deux méthodes de
+cotation en même temps, et elles ne se parlent pas.**
+
+#### Ce que le produit NE fait pas, et pourquoi
+
+- **La pertinence d'un couple se DÉRIVE** (`f_ebios_pertinence`), à un seul endroit — la
+  ranger obligerait quelque chose à la remettre après chaque révision d'un critère, et
+  l'animateur en révise en séance. ⚠️ Et elle **se tait dès qu'un critère manque** : pas
+  d'estimation par défaut, motif du critère 25.4 — *un chiffre qui a l'air mesuré sans
+  l'être est pire que pas de chiffre, parce qu'il est cité en comité de direction.*
+- **Le produit propose, un humain décide.** Aucun « retenir tous les couples au-dessus de
+  3 » : retenir engage les ateliers 3 et 4, et le schéma exige la **justification**
+  (`ck_ebios_sources_risque_retenue`). L'écran la demande plutôt que de laisser remonter
+  un code de contrainte.
+- **Rien n'est ressaisi de ce qui existe** (action 25.2) : le socle de sécurité de
+  l'atelier 1, ce sont les référentiels applicables et le pivot « Mesure » ; les biens
+  supports, ce sont les `actifs` et leur cartographie ; et une valeur métier **POINTE** le
+  processus du BIA — ni criticité, ni RTO, ni RPO n'ont de jumelle, et un essai le mesure
+  dans le catalogue.
+- **L'échelle n'est PAS figée à quatre niveaux.** Le schéma borne 1 à 10 : l'action **25.3**
+  rendra les échelles configurables et **versionnées** par filiale, et un `check (1..4)`
+  posé aujourd'hui serait une barrière que la migration suivante devrait abattre —
+  c'est-à-dire une barrière qui n'en est pas une. C'est déjà l'arbitrage écrit en 2026 pour
+  `risques.f_frequence`.
+
+#### ⚠️ Deux refus, et aucun n'est venu d'une relecture
+
+1. **`f_verifier_portee_figee()` a refusé le déploiement.** `ebios_connaissances` est
+   MIXTE, et sans déclencheur de portée une ligne du socle Groupe peut **basculer** dans
+   une filiale — transition qu'aucune politique RLS ne voit, puisqu'elle juge la ligne
+   avant et la ligne après, chacune valide de son côté (`CONVENTIONS.md` §17.6). Le remède
+   tient en une ligne — `select f_poser_portee_figee();` — et c'est la **troisième fois**
+   qu'un installateur appelable rattrape un lot qu'il n'a pas vu naître, après
+   `f_poser_tracabilite_insertion()` et `f_poser_declencheurs_pieces()`. *L'oubli est
+   bruyant, et c'est ce qu'on veut* (§40.4).
+2. **Le filet des modules a refusé l'écran.** Sa première rédaction dessinait la liste des
+   études depuis `GET /api/ebios/etat`, par analogie avec l'écran des campagnes —
+   **analogie fausse** : une campagne n'existe que par son état dérivé, une étude est une
+   entité ordinaire tenue en mémoire. Conséquences : une étude créée n'apparaissait qu'au
+   rechargement suivant, et l'identifiant rendu dans le balisage n'était plus celui que
+   `recalerBalisage()` recale après que le serveur les a réattribués — *la convention du
+   `CLAUDE.md` §3 n'avait plus rien sur quoi mordre*. La liste vient désormais de la
+   mémoire ; seuls les **comptes** viennent du serveur, et tant qu'ils ne sont pas revenus
+   la colonne affiche « — » plutôt qu'un zéro, qui serait une affirmation fausse.
+
+#### Et un piège de banc, dans mon propre jeu d'essai
+
+L'aide de semis écrivait `champs.ressources ?? 3`. Or **`null ?? 3` vaut 3** : le couple
+« incomplet » qui devait éprouver le *« pas d'estimation par défaut »* arrivait **complet**
+en base, et l'essai mesurait autre chose que ce qu'il annonçait. Il a rougi — pour la bonne
+raison, cette fois — et l'aide distingue désormais « absent du jeu d'essai » de
+« volontairement nul ». *Un essai qui ne fait pas décider la règle ne la couvre pas*
+(constat Q-210).
+
 ### « Les docs sont à jour ? » — la troisième fois, et le garde-fou ne voyait pas le gras (18/09/2026)
 
 **Le contrôle mécanique rendait 89/89.** La prose portait **cinq manques**, dont deux que la

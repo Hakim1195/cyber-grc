@@ -65,7 +65,7 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 21`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 22`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
 côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v21**. Elle est
@@ -185,6 +185,51 @@ indépendante du numéro des migrations SQL.
 >     rendu par le serveur : le nombre de questions d'un référentiel vit dans les
 >     catalogues du frontend, donc c'est l'écran qui divise (décision de l'action 21.2,
 >     reprise ici sans être rejugée).
+>
+> v22 (lot L25, actions 25.1, 25.2 et 25.5) : ajout des cinq collections des **ateliers 1
+>     et 2 d'EBIOS RM** — `ebios_connaissances` (la base de connaissances du Groupe :
+>     sources de risque types et modes opératoires types), `ebios_etudes` (le cadrage d'une
+>     analyse : un périmètre, un exercice), `ebios_valeurs_metier`,
+>     `ebios_evenements_redoutes` et `ebios_sources_risque` (les couples source de risque /
+>     objectif visé).
+>
+>     ⚠️ **EN ADDITION, JAMAIS EN REMPLACEMENT — c'est le critère d'acceptation de
+>     l'action 25.1, et il est écrit en négatif.** La collection `risques` et ses cinq
+>     champs de cotation (`f_frequence`, `g_gravite`, `m_maitrise`, `score_brut`,
+>     `score_residuel`) ne bougent pas d'un octet. Le produit porte donc **deux méthodes de
+>     cotation en même temps**, et elles ne se parlent pas : une migration qui
+>     réinterpréterait les cotations existantes les réattribuerait **en silence**, dans un
+>     outil qui sert de preuve en audit — c'est le motif qui a fait refuser la
+>     renumérotation du catalogue ANSSI (constat **Q-192**). Le garde-fou
+>     `f_verifier_ebios_cadrage()` le mesure : les cinq colonnes sont nommées une par une,
+>     et tout déclencheur d'une table EBIOS qui écrirait dans `risques` fait rougir le
+>     démarrage.
+>
+>     ⚠️ **Une valeur métier POINTE le processus du BIA, elle ne le recopie pas** (action
+>     25.2) : ni criticité, ni RTO, ni RPO n'ont de jumelle ici, et un essai le mesure dans
+>     le catalogue. Même arbitrage qu'à l'AIPD (v17), et pour le même motif — deux réponses
+>     à la même question dans un outil produit en audit, c'est une de trop, et la seconde
+>     vieillit sans que personne le sache. Le socle de sécurité et les biens supports de
+>     l'atelier 1 ne sont pas ressaisis non plus : ce sont les référentiels applicables, le
+>     pivot « Mesure de sécurité », les `actifs` et leur cartographie.
+>
+>     ⚠️ **Aucune collection ne porte la PERTINENCE d'un couple.** Elle se dérive de ses
+>     trois critères (`f_ebios_pertinence`), à un seul endroit, et n'est qu'une
+>     **suggestion** : ce qui engage l'étude est `retenue`, saisie par un humain, dont le
+>     schéma exige la justification. La faire voyager dans le fichier la figerait au jour
+>     de l'export, alors que l'animateur révise ses critères en séance. ⚠️ Et elle **se
+>     tait** dès qu'un critère manque — pas d'estimation par défaut, motif du critère 25.4.
+>
+>     ⚠️ **`ebios_connaissances` est MIXTE** — `filiale_id` nul = socle du Groupe, comme
+>     `risque_catalogue` : une base de connaissances de menaces partagée est l'objet même
+>     de l'action 25.5. Les quatre autres sont purement locales : une étude de portée
+>     Groupe voudrait dire que vingt filiales partagent un périmètre et des événements
+>     redoutés, ce qui est faux par construction.
+>
+>     ⚠️ Le palier ne **devine** rien : on ne fabrique pas une étude EBIOS RM à partir des
+>     risques déjà cotés. Une cotation F × G × M ne dit ni la valeur métier atteinte, ni la
+>     source, ni l'objectif visé — en déduire une étude produirait une analyse que personne
+>     n'a conduite.
 
 ---
 
@@ -289,7 +334,7 @@ Conséquences pratiques :
 
 ### 1.5 Correspondance entre l'objet `data` et le schéma serveur
 
-**31 collections, 31 entités.** Les noms coïncident partout sauf pour `mesures` :
+**36 collections, 36 entités.** Les noms coïncident partout sauf pour `mesures` :
 
 | Collection `data` | Table(s) PostgreSQL | Préfixe d'identifiant |
 |---|---|---|
@@ -324,6 +369,11 @@ Conséquences pratiques :
 | `questionnaire_reponses` | `questionnaire_reponses` | `QREP` |
 | **`campagnes`** | **`campagnes`** — ⚠️ de niveau **Groupe**, sans `filiale_id` | `CAMP` |
 | `campagne_filiales` | `campagne_filiales` | `CAMPF` |
+| **`ebios_connaissances`** | **`ebios_connaissances`** — ⚠️ MIXTE : `filiale_id` nul = socle du **Groupe** | `EBCO` |
+| `ebios_etudes` | `ebios_etudes` | `EBET` |
+| `ebios_valeurs_metier` | `ebios_valeurs_metier` | `EBVM` |
+| `ebios_evenements_redoutes` | `ebios_evenements_redoutes` | `EBER` |
+| `ebios_sources_risque` | `ebios_sources_risque` | `EBSR` |
 
 **La scission des mesures**, en une phrase : l'entité unique du modèle navigateur
 portait deux choses de nature différente — la **définition** du contrôle (la même

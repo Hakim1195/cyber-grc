@@ -442,10 +442,28 @@ regarde ; elle ne demande pas.
 
 ---
 
-### L25 — Méthode de risque : EBIOS RM et quantification 🟢
+### L25 — Méthode de risque : EBIOS RM et quantification 🟢 — 🟡 **ENTAMÉ le 18/09/2026**
 
 **Pourquoi.** Ticket d'entrée français. ⚠️ **Et le lot le plus risqué du plan** : il touche
 la méthode, donc les données déjà saisies.
+
+> ✅ **Livré le 18/09/2026 — les ateliers 1 et 2, et la base de connaissances** : migration
+> `046`, schéma `data` en **v22**, greffon `src/ebios/`, écran `js/modules/ebios.js` en
+> onglet du sujet « risques ». Cela couvre **25.2** et **25.5** en entier, et **25.1** pour
+> ses deux premiers ateliers.
+>
+> ⚠️ **Le « EN ADDITION » n'est plus une phrase, c'est un garde-fou** :
+> `f_verifier_ebios_cadrage()` nomme les cinq colonnes de cotation de `risques` **une par
+> une** et refuse tout déclencheur d'une table EBIOS qui y écrirait. Une propriété négative
+> ne se voit pas à l'usage — elle ne se mesure qu'en la cherchant.
+>
+> ⚠️ **Et une décision de conception qui engage 25.3** : le schéma borne les cotations
+> entre 1 et 10, **pas entre 1 et 4**. L'application propose quatre niveaux ; figer
+> l'échelle dans un `check` aurait posé une barrière que l'action 25.3 devrait abattre —
+> c'est-à-dire une barrière qui n'en est pas une. Le SENS des niveaux appartient à
+> l'échelle, et l'échelle appartient à 25.3.
+>
+> **Reste** : les ateliers **3, 4 et 5**, puis **25.3** et **25.4**.
 
 | Réf | Action | Critère d'acceptation |
 |---|---|---|

@@ -641,6 +641,16 @@ window.UI = (function () {
             vues: Object.freeze([
                 Object.freeze({ route: "/risques", libelle: "Registre" }),
                 Object.freeze({ route: "/matrice", libelle: "Matrice F\u00d7G" }),
+                // Lot L25 — les ateliers EBIOS RM sont une VUE du même sujet, le
+                // risque, et non un sujet à part : un onglet, donc, et non une
+                // entrée de menu de plus (`docs/PLAN_INTERFACE.md`).
+                //
+                // ⚠️ Le voisinage avec « Matrice F×G » est VOULU et il est le
+                // message : les deux méthodes cohabitent, la seconde ne remplace
+                // pas la première. Ranger EBIOS ailleurs aurait laissé croire
+                // qu'il s'agit d'un autre outil, et perdre la matrice de vue est
+                // exactement ce que le critère 25.1 refuse.
+                Object.freeze({ route: "/ebios", libelle: "Ateliers EBIOS RM" }),
                 Object.freeze({ route: "/socle", libelle: "Socle du Groupe" })
             ])
         }),

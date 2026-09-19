@@ -228,6 +228,16 @@
 > `docs/PLAN_ACHEVEMENT.md` §4 impose à la clôture d'une vague, et qui n'a été que partiel
 > le 16/09 —, puis la **vague D** (L25 EBIOS RM, L26 catalogues ouverts).
 >
+> **⇒ Au 18/09/2026 au soir : la VAGUE D est ENTAMÉE.** Le rejeu intégral de l'indicateur
+> a été fait, et les **ateliers 1 et 2 d'EBIOS RM sont livrés** — migration `046`, schéma
+> `data` en **v22**, greffon `src/ebios/`, écran en **onglet du sujet « risques »**. Cela
+> couvre **25.2** et **25.5** en entier, **25.1** pour ses deux premiers ateliers.
+> ⚠️ **EN ADDITION** : `risques` et ses cinq colonnes de cotation ne bougent pas, et
+> `f_verifier_ebios_cadrage()` le MESURE — il les nomme une par une et refuse tout
+> déclencheur EBIOS qui y écrirait. *Une propriété négative ne se voit pas à l'usage.*
+> Le geste suivant : les **ateliers 3, 4 et 5**, puis **25.3** (échelles versionnées) et
+> **25.4** (FAIR), puis **L26**.
+>
 > ---
 >
 > **Mesuré à la révision `941ea8b`, le 18/09/2026** : banc **2 169 essais, 2 169 passés** ;
@@ -1107,7 +1117,8 @@ sur l'**Active Directory** du groupe.
 | **L20 — Réglementaire opérationnel** | ✅ **LIVRÉ**, 20.2 exceptée — horloge NIS2/RGPD (`034`), AIPD (`039`), demandes d'exercice de droits (`040`), main courante de crise en ajout seul (`041`). ⚠️ **Reste 20.2** : la génération des formulaires ANSSI et CNIL. Le produit NE TRANSMET RIEN à une autorité — il prépare, l'humain envoie |
 | **L21 — Tiers, chaîne d'approvisionnement et DORA** | ✅ **LIVRÉ** les 17 et 18/09/2026, ses **quatre actions** — registre d'information DORA et chaîne de sous-traitance (`042`), questionnaire fournisseur (`043`), suivi contractuel et plan de sortie, score composite **dérivé**. ⚠️ Le rang de sous-traitance se **dérive** et l'anti-cycle est **en base** ; le produit **n'envoie rien** (le questionnaire s'exporte et se réimporte) ; et les échéances contractuelles **alimentent l'échéancier existant** — ce qui n'était vrai nulle part avant le 18/09, alors que la `043` l'écrivait dans le commentaire de sa propre colonne |
 | **L24 — Campagnes et gouvernance descendante** | ✅ **LIVRÉ le 18/09/2026** (migrations `044` et `045`, schéma `data` **v21**) — le Groupe ouvre une campagne sur un référentiel vers N filiales, et suit l'avancement de chacune. ⚠️ **Une filiale ne voit QUE sa part**, ni celle de la voisine ni leur nombre ; l'avancement se **COMPTE** dans les évaluations au lieu d'être stocké ; les relances passent par **L12 réutilisé** (9ᵉ source de l'échéancier, aucune route d'envoi neuve). ⚠️ **Deux enseignements** : trois garde-fous ont refusé la migration (table sans `filiale_id` — `CONVENTIONS.md` §24.1) et le contrôle C82 a refusé une clé en `cascade` (§18.2) ; et **l'interdit de déconvocation a dû être RETIRÉ** parce qu'il rendait la reprise « remplacer » impossible — classe des trois conflits de la `041`. ⚠️ **Et la déconvocation, elle, a dû être AJOUTÉE** : sans elle une campagne convoquée était indestructible, parce que les parts des filiales que la session ne charge pas n'étaient nommables par aucun écran |
-| **L22, L23, L25, L26** | ⬜ **planifiés** (`docs/PLAN_PRODUIT.md`) — ouverture technique, collecte automatique et CCM, EBIOS RM, catalogues ouverts |
+| **L25 — EBIOS RM et quantification** | 🟡 **ateliers 1 et 2 livrés** le 18/09/2026 (migration `046`, schéma `data` **v22**, greffon `src/ebios/`, écran en onglet du sujet « risques »). ⚠️ **EN ADDITION** : la cotation F × G × M n'est ni touchée ni réinterprétée, et `f_verifier_ebios_cadrage()` le mesure. Reste : ateliers **3, 4 et 5**, **25.3** (échelles versionnées), **25.4** (FAIR) |
+| **L22, L23, L26** | ⬜ **planifiés** (`docs/PLAN_PRODUIT.md`) — ouverture technique, collecte automatique et CCM, catalogues ouverts |
 | **L27 — Assistance IA** | ⬜ **arbitré le 08/09/2026 (A1)** — modèle **local par défaut** ; un fournisseur **externe de confiance** reste possible sous **six barrières**, dont l'avertissement n'est que la sixième. ⚠️ La première est que `IPAddressDeny=any` **ferme la sortie réseau** tant que l'exploitant ne l'ouvre pas à la main : *une barrière physique, pas une promesse*. Activation **par filiale**, jamais pour le groupe entier. L'IA **propose**, un humain **décide** — aucun des cinq usages n'écrit sans validation. Porte **S16** |
 | **L28 — Portail fournisseur** | ⬜ **validé le 08/09/2026 (A3)** — accès par lien signé daté et révocable, **sans compte** ; dépôt de preuve par la chaîne L6 **sans variante simplifiée** ; vhost et limiteur propres ; attestation rendue au fournisseur. ⚠️ **Premier composant du produit exposé hors VPN** : il ne se joue **ni avant S8, ni avec un autre lot**, et sa porte **S15 est la plus exigeante du plan** — *en cas de doute, on ne livre pas*. L'export/réimport de L21.2 **reste la voie de repli permanente** |
 

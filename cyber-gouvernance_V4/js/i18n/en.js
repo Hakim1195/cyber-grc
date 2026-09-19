@@ -94,6 +94,7 @@ window.I18n.enregistrer("en", {
     "fil.rgpd": "GDPR register",
     "fil.risques": "Risks (EBIOS)",
     "fil.matrice": "Risk matrix",
+    "fil.ebios": "EBIOS RM workshops",
     "fil.actifs": "Critical assets",
     "fil.exigences": "Requirements (ISO/NIS2)",
     "fil.referentiels": "Frameworks",

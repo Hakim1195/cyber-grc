@@ -101,6 +101,7 @@ window.I18n.enregistrer("fr", {
     "fil.rgpd": "Registre RGPD",
     "fil.risques": "Risques (EBIOS)",
     "fil.matrice": "Matrice des risques",
+    "fil.ebios": "Ateliers EBIOS RM",
     "fil.actifs": "Actifs critiques",
     "fil.exigences": "Exigences (ISO/NIS2)",
     "fil.referentiels": "Référentiels",

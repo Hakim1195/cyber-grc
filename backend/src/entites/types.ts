@@ -80,7 +80,19 @@ export type NomEntite =
   // échéance sont les mêmes pour tout le groupe (CONVENTIONS.md §24). Ce qui diffère par
   // filiale — qui répond, où elle en est — vit dans « campagne_filiales ».
   | 'campagnes'
-  | 'campagne_filiales';
+  | 'campagne_filiales'
+  // v22 — les ateliers 1 et 2 d'EBIOS RM (lot L25, actions 25.1, 25.2 et 25.5).
+  // ⚠️ « ebios_connaissances » est MIXTE — `filiale_id` nul = socle du Groupe,
+  // comme `risque_catalogue` : une base de connaissances de menaces partagée est
+  // l'objet même de l'action 25.5. Les quatre autres sont purement locales, parce
+  // qu'une étude de risque de portée Groupe voudrait dire que vingt filiales
+  // partagent un périmètre et des événements redoutés — ce qui est faux par
+  // construction.
+  | 'ebios_connaissances'
+  | 'ebios_etudes'
+  | 'ebios_valeurs_metier'
+  | 'ebios_evenements_redoutes'
+  | 'ebios_sources_risque';
 
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;

@@ -281,7 +281,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 21;
+export const VERSION_SCHEMA = 22;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -1071,6 +1071,53 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
   [
     'campagne_filiales',
     { nom: 'campagne_filiales', table: 'campagne_filiales', prefixe: 'CAMPF' },
+  ],
+
+  // ── v22 : LES ATELIERS EBIOS RM (L25, actions 25.1, 25.2 et 25.5) ────────────
+  //
+  // Cinq entités ORDINAIRES, et c'est l'arbitrage rendu pour les dérogations
+  // (19.2) puis reconduit à l'AIPD (20.3) et aux demandes de droits (20.4) :
+  // verrouillage optimiste, journal, cloisonnement, import généralisé et
+  // round-trip `grc-backup` leur viennent tels quels. Un greffon d'écriture
+  // propre aurait refait ces cinq choses, moins bien.
+  //
+  // ⚠️ **Ce que ces entités n'exposent PAS : la PERTINENCE d'un couple
+  // source/objectif.** Elle se dérive de ses trois critères
+  // (`f_ebios_pertinence()`), à un seul endroit. La ranger en colonne
+  // obligerait quelque chose à la remettre après chaque révision d'un critère —
+  // et le jour où ce quelque chose ne repasse pas, l'atelier 2 classe les
+  // couples sur une note périmée. C'est `GET /api/ebios/etat` qui la rend, et
+  // cette route seule.
+  //
+  // ⚠️ Et elles n'écrivent JAMAIS dans `risques` : les cotations F × G × M
+  // existantes ont été produites en audit. EBIOS RM se joue EN ADDITION
+  // (critère 25.1), et le garde-fou `f_verifier_ebios_cadrage()` le mesure dans
+  // le catalogue au lieu de l'espérer.
+
+  // MIXTE comme `risque_catalogue` : une ligne à `filiale_id` nul appartient au
+  // socle du Groupe, une ligne renseignée est l'ajout d'une filiale. C'est la RLS
+  // qui décide de ce qui est lisible et de ce qui est écrivable, jamais ce
+  // fichier.
+  [
+    'ebios_connaissances',
+    { nom: 'ebios_connaissances', table: 'ebios_connaissances', prefixe: 'EBCO' },
+  ],
+  ['ebios_etudes', { nom: 'ebios_etudes', table: 'ebios_etudes', prefixe: 'EBET' }],
+  [
+    'ebios_valeurs_metier',
+    { nom: 'ebios_valeurs_metier', table: 'ebios_valeurs_metier', prefixe: 'EBVM' },
+  ],
+  [
+    'ebios_evenements_redoutes',
+    {
+      nom: 'ebios_evenements_redoutes',
+      table: 'ebios_evenements_redoutes',
+      prefixe: 'EBER',
+    },
+  ],
+  [
+    'ebios_sources_risque',
+    { nom: 'ebios_sources_risque', table: 'ebios_sources_risque', prefixe: 'EBSR' },
   ],
 ]);
 

@@ -819,6 +819,60 @@ export async function semerJeuEssai(base, client, options = {}) {
                values ($1, 'INC-${s}', 'constat', 'Alerte reçue, cellule de crise réunie.')`,
           f,
         );
+        // Les cinq tables des ateliers EBIOS RM (migration `046`, lot L25). Même
+        // motif que les blocs ci-dessus : une table neuve sans ligne rendrait
+        // « zéro visible » au balayage de cloisonnement pour la seule raison qu'il
+        // n'y a rien à voir — un angle mort qui se présente comme une preuve.
+        //
+        // ⚠️ La chaîne est COMPLÈTE et interne au semis : l'étude porte sa valeur
+        // métier, qui porte son événement redouté ; le couple source / objectif
+        // pointe l'entrée LOCALE du socle de connaissances. Semer des lignes qui
+        // ne se référencent pas mesurerait l'insertion, pas les clés composites.
+        //
+        // ⚠️ Et la valeur métier POINTE le processus du BIA du même semis
+        // (`BIA-${s}`) : c'est le lien que l'action 25.2 apporte, et le laisser nul
+        // ferait passer au vert un essai qui vérifie qu'il n'est pas dupliqué.
+        await c.query(
+          `insert into ebios_connaissances (id, filiale_id, genre, nom, objectif_vise, categorie)
+               values ('EBCO-${s}', $1, 'source_risque', 'Concurrent direct',
+                       'Obtenir le plan de fabrication', 'Espionnage industriel')`,
+          f,
+        );
+        await c.query(
+          `insert into ebios_etudes (id, filiale_id, nom, perimetre, responsable, statut, debut_le)
+               values ('EBET-${s}', $1, 'Analyse de risque du site ${s}',
+                       'La chaîne de production et sa supervision.',
+                       'Responsable de site', 'en_cours', date '2026-02-03')`,
+          f,
+        );
+        await c.query(
+          `insert into ebios_valeurs_metier
+               (id, filiale_id, etude_id, nom, nature, processus_id, responsable)
+               values ('EBVM-${s}', $1, 'EBET-${s}', 'Ordonnancement de la production',
+                       'processus', 'BIA-${s}', 'Responsable de site')`,
+          f,
+        );
+        await c.query(
+          `insert into ebios_evenements_redoutes
+               (id, filiale_id, valeur_metier_id, nom, besoin, gravite, impacts)
+               values ('EBER-${s}', $1, 'EBVM-${s}',
+                       'Arrêt de l''ordonnancement au-delà de 24 heures', 'disponibilite', 4,
+                       'Arrêt des lignes, pénalités de retard, image client.')`,
+          f,
+        );
+        // ⚠️ `retenue` est vrai ET la justification est fournie : la contrainte
+        // `ck_ebios_sources_risque_retenue` exige les deux ensemble, et un semis qui
+        // retiendrait sans motiver ferait échouer TOUTES les familles à l'ouverture
+        // de leur base, pour une raison étrangère à ce qu'elles mesurent.
+        await c.query(
+          `insert into ebios_sources_risque
+               (id, filiale_id, etude_id, source, objectif_vise, connaissance_id,
+                motivation, ressources, activite, retenue, justification)
+               values ('EBSR-${s}', $1, 'EBET-${s}', 'Concurrent direct',
+                       'Obtenir le plan de fabrication', 'EBCO-${s}', 3, 2, 2, true,
+                       'Deux approches de sous-traitants constatées en 2025.')`,
+          f,
+        );
         // La file de purge du magasin (migration `017`). Elle est VIDE en régime
         // normal — c'est une file d'attente, pas un registre —, et c'est
         // précisément pourquoi elle est semée : sans une ligne par filiale, le

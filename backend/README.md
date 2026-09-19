@@ -777,8 +777,8 @@ la comparaison au marché du 08/09/2026.
 **Mesuré au 18/09/2026, à la révision `941ea8b`** (lot L24) : `npm test` → **2169 essais,
 2169 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **49 garde-fous consignés**, **45 migrations**,
-**66 tables**, **385 décisions** au registre de l'article 30 ; publication → **90
+`f_verifier_schema()` → 0 anomalie, **50 garde-fous consignés**, **46 migrations**,
+**71 tables**, **411 décisions** au registre de l'article 30 ; publication → **91
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **13 conformes,
 2 réserves, 0 bloquant**.
 
@@ -817,7 +817,8 @@ constat de la famille **Q-219**, dit plutôt que caché.
 | **L20 — Réglementaire opérationnel** | ✅ **livré, 20.2 exceptée** (migrations `034`, `039`, `040`, `041`) — horloge NIS2/RGPD à quatre paliers **dérivés**, AIPD qui **POINTE** le registre de l'article 30 au lieu de le recopier, demandes d'exercice de droits (trois règles du texte posées **dans le schéma**), main courante de crise **en ajout seul**. ⚠️ **Reste 20.2** : la génération des formulaires ANSSI et CNIL. Le produit **ne transmet rien** à une autorité — il prépare, l'humain envoie |
 | **L21 — Tiers, chaîne d'approvisionnement et DORA** | ✅ **livré** les 17 et 18/09/2026 (migrations `042`, `043`) — registre d'information DORA (LEI, fonction critique, contrat, substituabilité), **chaîne de sous-traitance** dont le rang se **dérive** avec anti-cycle **en base**, questionnaire fournisseur qui **s'exporte et se réimporte** (le produit n'envoie rien), suivi contractuel dont les échéances **alimentent l'échéancier**, et score composite **dérivé** dont le barème est **servi**. ⚠️ Reste hors périmètre : les **gabarits XBRL** des autorités européennes — un format de dépôt versionné par l'ESA |
 | **L24 — Campagnes et gouvernance descendante** | ✅ **livré le 18/09/2026** (migrations `044`, `045`) — le Groupe ouvre une campagne vers N filiales et suit l'avancement ; **une filiale ne voit QUE sa part**, ni celle de la voisine ni leur nombre ; l'avancement se **COMPTE** dans les évaluations ; les relances passent par **L12 réutilisé** (9ᵉ source de l'échéancier, aucune route d'envoi neuve) ; et un **neuvième profil de socle** — « répondant de campagne », trois domaines ouverts, vingt-sept fermés nommément. ⚠️ **Reste 24.2 en partie** : l'agrégation par répondant. ⚠️ Et **déconvoquer a dû être ajouté après coup** : sans lui, une campagne convoquée était indestructible |
-| **L22, L23, L25, L26** | ⬜ **planifiés** (`../docs/PLAN_PRODUIT.md`) — ouverture technique (jetons, événements, connecteurs), collecte automatique de preuve et surveillance continue, EBIOS RM et quantification, catalogues ouverts |
+| **L25 — EBIOS RM et quantification** | 🟡 **ateliers 1 et 2 livrés** le 18/09/2026 (migration `046`, schéma `data` **v22**, greffon `src/ebios/`, écran en onglet du sujet « risques ») — actions **25.2** et **25.5** entières, **25.1** pour ses deux premiers ateliers. ⚠️ **EN ADDITION** : `risques` et ses cinq colonnes de cotation ne bougent pas, et `f_verifier_ebios_cadrage()` le MESURE — il les nomme une par une et refuse tout déclencheur EBIOS qui y écrirait. ⚠️ Et l'échelle n'est **pas** figée à quatre niveaux : le schéma borne 1 à 10, parce que l'action **25.3** la rendra configurable et versionnée. Reste : ateliers **3, 4 et 5**, **25.3**, **25.4** |
+| **L22, L23, L26** | ⬜ **planifiés** (`../docs/PLAN_PRODUIT.md`) — ouverture technique (jetons, événements, connecteurs), collecte automatique de preuve et surveillance continue, catalogues ouverts |
 | **L27 — Assistance IA** | ⬜ **arbitré le 08/09/2026** — modèle local par défaut ; fournisseur externe possible sous **six barrières**, dont la première est que `IPAddressDeny=any` ferme la sortie réseau tant que l'exploitant ne l'ouvre pas. Activation **par filiale**. Porte **S16** : en local, l'unité systemd reste **intacte** — c'est la preuve qu'aucune donnée ne sort |
 | **L28 — Portail fournisseur exposé** | ⬜ **validé le 08/09/2026** — lien signé daté et révocable **sans compte** (un lien expiré rend **404, jamais 403** : un 403 confirmerait la cible), dépôt par la chaîne L6 sans variante, vhost et limiteur propres. ⚠️ **Premier composant hors VPN**, porte **S15**, la plus exigeante du plan |
 
@@ -967,15 +968,15 @@ npm test                                         → tests 2169 · pass 2169 · 
                                                    derogations 6 · droits-personnes 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (49 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (50 garde-fous découverts, joués, consignés)
 ```
 
-Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **66 tables** en
-**45 migrations**, **264 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
-**118 clés étrangères** (70 `restrict`, 45 `cascade`, 2 `set null`, 1 `no action`),
-**58 tables portant `cree_par` et 58 déclencheurs de création**, **40 clés étrangères
+Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **71 tables** en
+**46 migrations**, **284 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**128 clés étrangères** (75 `restrict`, 48 `cascade`, 4 `set null`, 1 `no action`),
+**63 tables portant `cree_par` et 63 déclencheurs de création**, **44 clés étrangères
 composites** visant
-`(id, filiale_id)`, **19 unicités** `uq_<parent>_id_filiale`, **49 contrôles consignés**
+`(id, filiale_id)`, **24 unicités** `uq_<parent>_id_filiale`, **50 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1255,7 +1256,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **66 tables**, obtenues aujourd'hui en **45 migrations** appliquées de bout en bout par
+- **71 tables**, obtenues aujourd'hui en **46 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1275,24 +1276,28 @@ Ce que la reprise fait, quand on la rejoue :
   ajoute la vingt-deuxième action du journal (`verification_integrite`), deux colonnes de
   verdict sur `pieces_jointes`, un index de balayage — et **réémet** le garde-fou du
   vocabulaire plutôt que d'en poser un second sur la même contrainte.
-- **264 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
+- **284 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
-- **118 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
-  migrations : **70 en `restrict`, 45 en `cascade`, 2 en `set null`**
-  (`incidents.risque_id` — l'incident survit au risque). ⚠️ **Les deux `set null` sont
-  restés deux**, et ce n'est pas faute d'avoir essayé : `documents.traitement_id` visait
-  cette forme, et **PostgreSQL 17 la refuse sur une clé contenant une colonne engendrée**,
-  y compris sous la forme à liste de colonnes de la version 15. La barrière est donc
-  `restrict`, et le déliage vit dans la couche applicative à la filiale près
-  (`CONVENTIONS.md` §38).
+- **128 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
+  migrations : **75 en `restrict`, 48 en `cascade`, 4 en `set null`**. ⚠️ **Elles sont
+  passées de deux à quatre le 18/09/2026**, avec les ateliers EBIOS RM (migration `046`) :
+  `ebios_valeurs_metier.processus_id` — la valeur métier survit au processus du BIA, elle
+  perd le lien — et `ebios_sources_risque.connaissance_id` — le couple survit à l'archivage
+  d'une entrée du socle de connaissances. Ce qui reste vrai de la note d'origine :
+  `documents.traitement_id` visait cette forme, et **PostgreSQL 17 la refuse sur une clé
+  contenant une colonne engendrée**, y compris sous la forme à liste de colonnes de la
+  version 15. La barrière est donc `restrict`, et le déliage vit dans la couche applicative
+  à la filiale près (`CONVENTIONS.md` §38).
 
   | Clé | Action | Pourquoi |
   |---|---|---|
   | `actions` → `exigences`, `risques`, `evaluations`, `incidents` | `cascade` | l'action corrective disparaît avec ce qu'elle corrigeait (`CONVENTIONS.md` §8) |
   | `tests_pra` → `scenarios_pra` | `cascade` | un test n'existe pas sans son scénario |
   | `actif_dependances` → `actifs` (deux sens) | `cascade` | les liens de cartographie sont purgés des deux côtés |
-  | `incidents.risque_id` → `risques` | `set null` | **la seule** du schéma |
+  | `incidents.risque_id` → `risques` | `set null` | l'incident survit au risque |
+  | `ebios_valeurs_metier.processus_id` → `processus` | `set null` | la valeur métier garde son nom, ses événements redoutés et sa place dans l'étude ; elle perd le lien (migration `046`) |
+  | `ebios_sources_risque.connaissance_id` → `ebios_connaissances` | `set null` | le couple survit à l'archivage d'une entrée du socle de connaissances |
   | `actions.mesure_id` → `mesure_catalogue` | **`restrict`** | ⚠️ **pas `set null`** — §17.6 |
   | `evaluation_mesures`, `traitement_mesures`, `mesure_mise_en_oeuvre` → `mesure_catalogue` | **`restrict`** | idem |
   | `personnes.utilisateur_id` → `utilisateurs` | **`restrict`** | §18.2 |
@@ -1307,9 +1312,9 @@ Ce que la reprise fait, quand on la rejoue :
   `archive_le`), reste lisible et reste rattaché à tout ce qui le référence.
 - **Clés étrangères et unicités composites** : quand l'enfant et le parent sont tous
   deux cloisonnés, la clé porte `(référence, filiale_id)` et vise une unicité
-  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **40 clés étrangères** dont la
-  seconde colonne visée est le `filiale_id` du parent ou sa portée, et **13 unicités** de
-  cette forme. ⚠️ **Elles vont par PAIRES depuis la migration `027`**, et c'est mécanisé :
+  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **44 clés étrangères** dont la
+  seconde colonne visée est le `filiale_id` du parent ou sa portée, et **22 unicités**
+  visées par l'une d'elles (`count(distinct conindid)`). ⚠️ **Elles vont par PAIRES depuis la migration `027`**, et c'est mécanisé :
   toute clé composite visant une table MIXTE par un `filiale_id` nullable doit avoir sa
   compagne passant par `portee_groupe`, la colonne engendrée — sans quoi la règle « match
   simple » la neutralise pour toute ligne de portée Groupe. `f_verifier_references_portee()`

@@ -160,10 +160,46 @@ des verdicts antérieurs, il n'en établit pas.
 
 ### ▶ OÙ REPRENDRE — au 18/09/2026 au soir
 
-**La vague C est CLOSE.** Le geste suivant est la **vague D** du `PLAN_ACHEVEMENT.md` :
-**L25** (EBIOS RM et quantification) et **L26** (catalogues ouverts). Le cadrage est au
-`docs/PLAN_PRODUIT.md`, et deux critères d'acceptation y méritent d'être lus avant d'écrire
-une ligne :
+**La vague C est CLOSE, et la vague D est ENTAMÉE.**
+
+✅ **Livré le 18/09 au soir — EBIOS RM, ateliers 1 et 2** (actions **25.1** en partie,
+**25.2** et **25.5**) : migration `046`, schéma `data` en **v22**, greffon `src/ebios/`
+(une route, `GET /api/ebios/etat`), écran `js/modules/ebios.js` monté en **onglet du sujet
+« risques »**, à côté de « Matrice F×G ».
+
+Cinq collections neuves : `ebios_connaissances` (la base de connaissances du Groupe, MIXTE
+comme `risque_catalogue`), `ebios_etudes`, `ebios_valeurs_metier`,
+`ebios_evenements_redoutes`, `ebios_sources_risque`.
+
+⚠️ **Ce qu'il faut savoir avant d'y toucher :**
+
+- **EN ADDITION, jamais en remplacement.** `risques` et ses cinq colonnes de cotation ne
+  bougent pas. Le produit porte **deux méthodes de cotation en même temps**, et le garde-fou
+  `f_verifier_ebios_cadrage()` le tient : il nomme les cinq colonnes **une par une** et
+  refuse tout déclencheur EBIOS qui écrirait dans `risques`. *Une propriété négative ne se
+  voit pas à l'usage — elle ne se mesure qu'en la cherchant.*
+- **La pertinence d'un couple se DÉRIVE** (`f_ebios_pertinence`) et n'est qu'une
+  **suggestion** ; elle **se tait** dès qu'un critère manque. Ce qui engage l'étude est
+  `retenue`, dont le schéma exige la justification.
+- **Une valeur métier POINTE le processus du BIA** : ni criticité, ni RTO, ni RPO n'ont de
+  jumelle, et un essai le mesure dans le catalogue.
+- **L'échelle n'est PAS figée à quatre niveaux** : le schéma borne 1 à 10, parce que
+  l'action **25.3** rendra les échelles configurables et versionnées. Un `check (1..4)`
+  aurait été une barrière que la migration suivante devrait abattre.
+
+⚠️ **Deux enseignements, et aucun n'est venu d'une relecture** :
+`f_verifier_portee_figee()` a **refusé le déploiement** — la table mixte n'avait pas son
+déclencheur de portée figée, *troisième fois qu'un installateur appelable rattrape un lot
+qu'il n'a pas vu naître* (`CONVENTIONS.md` §40) ; et
+`test/modules/non-regression.test.mjs` a **refusé l'écran**, qui dessinait sa liste depuis
+le serveur au lieu de la mémoire — ce qui retirait à `recalerBalisage()` ce sur quoi mordre,
+et faisait qu'une étude créée n'apparaissait qu'au rechargement suivant.
+
+**Le geste suivant** : les **ateliers 3, 4 et 5** d'EBIOS RM (parties prenantes et
+écosystème — la cartographie existante est le support, action 25.2 ; scénarios
+stratégiques ; scénarios opérationnels ; traitement), puis **25.3** et **25.4**, puis
+**L26** (catalogues ouverts). Deux critères d'acceptation méritent d'être lus avant
+d'écrire une ligne :
 
 - **L25 est le lot le plus risqué du plan** : il touche la méthode, donc les données déjà
   saisies. Les ateliers EBIOS RM se font **en ADDITION**, jamais en remplacement — une
