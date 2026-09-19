@@ -172,7 +172,7 @@ Q-243 et l'oracle d'existence B-1), puis le durcissement final et la mise en ser
 |---|---|
 | **Livré ce jour** | **L27** — assistance par IA, locale par défaut, six barrières (migration `057`) ; **L28** — portail fournisseur (migration `058`, vhost dédié). Écran « Assistance IA » en onglet des Paramètres |
 | **Le geste suivant** | **L'ULTRAREVIEW.** Elle n'est pas lançable depuis une session : elle est déclenchée par l'utilisateur, et facturée |
-| **Mesuré** | **58 migrations** · **89 tables** · **356 politiques** · **62 garde-fous** · **494 décisions** · publication **85 fichiers** · indicateur **53 ✅ · 19 🟡 · 14 ❌ (~73 %)** |
+| **Mesuré** | **58 migrations** · **89 tables** · **356 politiques** · **62 garde-fous** · **494 décisions** · publication **85 fichiers** · indicateur **53 ✅ · 19 🟡 · 14 ❌ (~73 %)** · `--diagnostic` **14 conformes, 2 réserves, 0 bloquant** sur **quinze** sujets |
 
 ## 🛑 CE QUI EST CONSTRUIT N'EST PAS CE QUI EST OUVERT — À LIRE AVANT DE TOUCHER À L27 OU L28
 

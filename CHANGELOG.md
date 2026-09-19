@@ -13,6 +13,9 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > **PostgreSQL 17.11**) : **58 migrations**, **89 tables**, **356 politiques**,
 > **62 garde-fous**, **494 décisions** au registre de l'article 30, publication
 > **85 fichiers**, schéma `data` en **v27**, indicateur **53 ✅ · 19 🟡 · 14 ❌ (~73 %)**.
+> `install.sh --diagnostic` → **14 conformes, 2 réserves, 0 bloquant** sur **quinze
+> sujets** (`SMTP_ACTIF=non` et le profil DÉCOUVERTE de cette machine) — le quinzième,
+> « assistance IA », naît de L27.
 > Le compte d'essais exact se relève au `backend/README.md` §8 — **il ne se recopie pas
 > ici** (constat **Q-219**, et ce bloc a été faux quatre fois).
 >
