@@ -193,6 +193,37 @@ a { text-decoration: none; color: inherit; }
     border-top: 4px solid var(--primary);
 }
 
+/* -----------------------------------------------------------------------------
+   « card » et « muted » — deux classes EMPLOYÉES ET NON DÉFINIES
+   -----------------------------------------------------------------------------
+   Trois écrans livrés les 18 et 19/09/2026 — campagnes, ateliers EBIOS RM,
+   échelles de cotation — composent leurs blocs avec `class="card"` et leurs
+   phrases d'appoint avec `class="muted"`. Aucune des deux n'existait dans cette
+   feuille : les trois écrans se rendaient à plat, sans fond, sans ombre et sans
+   séparation, au milieu d'un produit qui en a partout.
+
+   ⚠️ **Le défaut ne se voit pas d'un essai, et il ne se voit pas non plus d'une
+   relecture du module** : le balisage est correct, la classe est écrite, et rien
+   ne dit qu'elle ne mène nulle part. Il s'est vu en REGARDANT l'écran sur la
+   recette — ce que `docs/REPRISE.md` §4 range parmi les quatre leçons de méthode
+   du chantier.
+
+   On définit donc les classes plutôt que de réécrire trois modules : c'est
+   corriger la classe et non l'instance, et le quatrième écran qui emploiera
+   `card` sera juste sans qu'on y pense. `.card` reprend `.dashboard-card` à
+   l'identique — un seul aspect de bloc dans le produit, pas deux.
+   -------------------------------------------------------------------------- */
+.card {
+    background: var(--bg-card);
+    padding: 1.5rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border-top: 4px solid var(--primary);
+    margin-bottom: 1.5rem;
+}
+
+.muted { color: var(--text-muted); font-size: var(--text-sm); }
+
 .wide-card { grid-column: 1 / -1; }
 .highlight-card { background: linear-gradient(135deg, #ffffff 0%, var(--primary-tint) 100%); }
 .alert-card { border-top-color: var(--color-danger); }

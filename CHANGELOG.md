@@ -10,7 +10,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 18/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2230 essais, 2230 passés, 0 échec**, **relevé famille par
+> **2231 essais, 2231 passés, 0 échec**, **relevé famille par
 > famille** (trente-deux familles, dont `echelles` qui naît avec l'action 25.3),
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
@@ -148,9 +148,40 @@ vingt et quelques. L'exposition consolidée serait restée nulle **en permanence
 installation. Un `::text[]` le ferme. *L'essai ne l'a vu que parce qu'il sème d'abord sa
 matière* (motif Q-210).
 
+⚠️ **ET TROIS DÉFAUTS DE PLUS, TROUVÉS EN CLIQUANT SUR LA RECETTE APRÈS 2 230 ESSAIS
+VERTS.** C'est la quatrième leçon de méthode de `docs/REPRISE.md`, vérifiée une fois de
+plus : *vérifier au navigateur trouve ce que deux mille essais ne voient pas*.
+
+1. **L'écran archivait le SOCLE DU GROUPE** quand une filiale publiait le sien. Le serveur
+   refusait — 403, écrire une ligne de portée Groupe est réservé à l'administration
+   Groupe — et **l'écran avalait le refus** : il annonçait la publication pendant que le
+   socle restait en place. Le refus était le bon comportement : archiver le socle le
+   retirerait aux dix-neuf autres filiales, pour une décision qu'une seule a prise.
+2. **Deux échelles sont « en vigueur », et une seule gouverne.** Le socle et l'échelle
+   locale le sont toutes deux ; le `find()` du `DataStore` prenait la première venue. Une
+   filiale publiait cinq niveaux et **sa fiche de risque en proposait quatre** — le serveur
+   tranchait déjà dans le bon sens, c'est l'écran qui disait autre chose que la base.
+3. **Le socle DISPARAISSAIT de l'écran** dès qu'une filiale publiait le sien : l'historique
+   filtrait sur le statut, et le socle reste « en vigueur ». La filiale ne voyait plus ce
+   qu'elle avait cessé d'employer. Classe Q-201 / Q-207.
+
+⚠️ **Et un quatrième, de style, qui ne touche pas que ce lot** : `class="card"` et
+`class="muted"` n'existaient **dans aucune feuille de style**. Les trois écrans livrés les
+18 et 19/09 — campagnes, ateliers EBIOS RM, échelles — se rendaient **à plat** au milieu
+d'un produit qui a des cartes partout. Le balisage était correct, la classe écrite, et rien
+ne disait qu'elle ne menait nulle part. Les deux classes sont définies dans `style.css` —
+**corriger la classe et non l'instance** : le quatrième écran qui les emploiera sera juste
+sans qu'on y pense.
+
 Banc : deux familles neuves — `test/echelles/` (23 essais), dont cinq **mutations** du
-garde-fou et deux du marquage, jouées et rougies ; plus deux essais de consolidation, dont
-la mutation a été jouée.
+garde-fou et deux du marquage, jouées et rougies ; `test/navigateur/echelles.test.mjs`,
+qui rejoue les trois défauts ci-dessus **dans un vrai navigateur** et dont les deux
+mutations ont été jouées et rougies ; plus deux essais de consolidation, dont la mutation a
+été jouée.
+
+⚠️ **Le premier de ces essais a failli être creux** : « le socle est intact » reste VRAI
+sous la mutation, puisque c'est le serveur qui refuse. Ce qui mord est le **refus lui-même**
+— l'essai compte les réponses `4xx` pendant la publication, et exige zéro.
 
 ### « Échange de données » devient PARAMÈTRES, en quatre onglets (19/09/2026)
 

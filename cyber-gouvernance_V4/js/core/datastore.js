@@ -1021,9 +1021,24 @@ const DataStore = (() => {
     ========================== */
     function getEchelles() { return data.echelles; }
     function getEchelleById(id) { return data.echelles.find(e => e.id === id); }
-    /** L'échelle en vigueur pour un sujet. Rend `undefined` s'il n'y en a aucune. */
+    /**
+     * L'échelle en vigueur pour un sujet, **celle de la filiale d'abord**.
+     *
+     * ⚠️ **Le `find()` nu était FAUX, et seul le navigateur l'a montré.** Le socle du
+     * Groupe et l'échelle locale sont tous deux « en vigueur » — le premier pour tout le
+     * groupe, la seconde pour cette filiale seule —, et le premier arrivé l'emportait.
+     * Mesuré sur la recette : une filiale publiait une graduation à cinq niveaux, et sa
+     * fiche de risque continuait d'en proposer quatre. Le serveur, lui, tranchait déjà
+     * dans le bon sens (`f_echelle_en_vigueur()`) : c'est l'écran qui disait autre chose
+     * que la base — et une cotation partie de là aurait été estampillée de l'échelle
+     * locale tout en affichant les libellés du socle.
+     *
+     * Rend `undefined` s'il n'y en a aucune.
+     */
     function getEchelleEnVigueur(sujet) {
-        return data.echelles.find(e => e.sujet === sujet && e.statut === "en_vigueur");
+        const candidates = data.echelles.filter(
+            e => e.sujet === sujet && e.statut === "en_vigueur");
+        return candidates.find(e => e._porteeGroupe !== true) || candidates[0];
     }
     /** Les révisions d'un sujet, de la plus récente à la plus ancienne. */
     function getEchellesDuSujet(sujet) {

@@ -266,7 +266,15 @@ cotation porte l'échelle qui l'a produite, et `null` s'y lit « non tracée »,
    cela, la réconciliation du §2.2 aurait été une phrase. ⚠️ Un défaut de plus s'y cachait,
    invisible autrement : l'agrégat `id_metier[]` revenait du pilote `pg` en **chaîne**, et
    `new Set` la découpait en caractères — l'exposition aurait été nulle **en permanence**.
-4. ⚠️ **Deux garanties déclaratives ne garantissaient rien** quand `filiale_id` est nul —
+4. ⚠️ **Trois défauts trouvés EN CLIQUANT sur la recette, après 2 230 essais verts** —
+   la leçon n° 4 de ce document, vérifiée une fois de plus. L'écran archivait le socle du
+   Groupe (refusé en 403, et **le refus était avalé**) ; le socle et l'échelle locale sont
+   tous deux « en vigueur » et le `find()` prenait la première venue ; le socle
+   disparaissait de l'écran, filtré sur son statut. ⚠️ **Et un quatrième, de style** :
+   `class="card"` et `class="muted"` n'existaient dans aucune feuille — les trois écrans
+   livrés les 18 et 19/09 se rendaient **à plat**. *Une classe écrite n'est pas une classe
+   définie, et aucun essai ne le dit.*
+5. ⚠️ **Deux garanties déclaratives ne garantissaient rien** quand `filiale_id` est nul —
    `CONVENTIONS.md` **§45** : une clé étrangère composite (`MATCH SIMPLE` dispense de
    contrôle) et une unicité (deux NULL sont distincts). Les deux trous s'ouvrent ensemble
    sur toute table MIXTE.

@@ -200,14 +200,18 @@ const EchellesModule = (() => {
 
     function carteSujetHtml(sujet, ecriture) {
         const revisions = DataStore.getEchellesDuSujet(sujet.code);
-        const enVigueur = revisions.find(e => e.statut === "en_vigueur") || null;
+        // ⚠️ **`DataStore.getEchelleEnVigueur`, et non un `find` local.** Le socle du
+        //    Groupe et l'échelle de la filiale sont tous deux « en vigueur » ; c'est la
+        //    seconde qui gouverne, et une seconde rédaction de cette règle se mettrait à
+        //    diverger de celle du serveur (constat Q-219).
+        const enVigueur = DataStore.getEchelleEnVigueur(sujet.code) || null;
 
         return `
             <div class="card" id="echCarte-${esc(sujet.code)}">
                 <h3>${esc(sujet.libelle)} ${Help.tip(sujet.dit)}</h3>
                 <p class="muted">${esc(sujet.ou)}</p>
                 ${enVigueur ? blocEnVigueurHtml(enVigueur) : blocSansEchelleHtml()}
-                ${historiqueHtml(revisions)}
+                ${historiqueHtml(revisions, enVigueur)}
                 ${ecriture && enVigueur ? `
                 <div class="no-print" style="margin-top:.75rem">
                     <button type="button" id="echRev-${esc(sujet.code)}"
@@ -232,7 +236,7 @@ const EchellesModule = (() => {
             ${echelle.description ? '<p class="muted">' + esc(echelle.description) + "</p>" : ""}
             ${niveaux.length === 0
                 ? '<p class="chart-empty">' + esc("Cette échelle ne porte aucun niveau : rien ne pourra être coté avec elle.") + "</p>"
-                : `<table class="table">
+                : `<table class="data-table">
                         <thead><tr><th style="width:5rem">Valeur</th><th>Niveau</th><th>Ce qu'il veut dire</th></tr></thead>
                         <tbody>${niveaux.map(n => `
                             <tr>
@@ -249,16 +253,30 @@ const EchellesModule = (() => {
              + "</p>";
     }
 
-    function historiqueHtml(revisions) {
-        const anciennes = revisions.filter(e => e.statut !== "en_vigueur");
-        if (anciennes.length === 0) return "";
+    /**
+     * Les autres révisions du sujet — **tout ce qui n'est pas l'échelle effective**.
+     *
+     * ⚠️ **Et non « tout ce qui n'est pas en vigueur ».** Quand une filiale publie la
+     * sienne, le socle du Groupe reste EN VIGUEUR — pour lui, et pour les dix-neuf autres
+     * filiales. Le filtrer sur son statut le faisait disparaître de l'écran : la filiale
+     * ne voyait plus ce qu'elle avait cessé d'employer, ni qu'il existait encore. C'est
+     * la classe des constats Q-201 / Q-207 — *un écran qui retire une information sans le
+     * dire* —, trouvée au navigateur sur la recette.
+     */
+    function historiqueHtml(revisions, effective) {
+        const identifiant = effective ? effective.id : null;
+        const autres = revisions.filter(e => e.id !== identifiant);
+        if (autres.length === 0) return "";
         return `
             <details style="margin-top:.5rem">
-                <summary>${esc(anciennes.length + " révision(s) précédente(s)")}</summary>
-                <ul>${anciennes.map(e => `
+                <summary>${esc(autres.length + " autre(s) r\u00e9vision(s)")}</summary>
+                <ul>${autres.map(e => `
                     <li>${badgeStatut(e.statut)} ${esc(e.nom)}
-                        <span class="muted">${esc("révision " + (e.revision || 1))}</span>
-                        ${e.archivee_le ? '<span class="muted">' + esc("archivée le " + fmtDate(e.archivee_le)) + "</span>" : ""}
+                        <span class="muted">${esc("r\u00e9vision " + (e.revision || 1))}</span>
+                        ${estDuGroupe(e)
+                            ? '<span class="muted">' + esc("socle du Groupe \u2014 vous ne cotez plus dessus") + "</span>"
+                            : ""}
+                        ${e.archivee_le ? '<span class="muted">' + esc("archiv\u00e9e le " + fmtDate(e.archivee_le)) + "</span>" : ""}
                     </li>`).join("")}</ul>
             </details>`;
     }
@@ -301,7 +319,7 @@ const EchellesModule = (() => {
                 <textarea id="echDesc-${esc(sujetCode)}" rows="2" maxlength="2000"
                           placeholder="Passage à cinq niveaux, décision du comité sécurité du …"></textarea>
             </label>
-            <table class="table" id="echNiveaux-${esc(sujetCode)}">
+            <table class="data-table" id="echNiveaux-${esc(sujetCode)}">
                 <thead><tr><th style="width:6rem">Valeur</th><th>Niveau</th><th>Ce qu'il veut dire</th></tr></thead>
                 <tbody>${niveaux.map((n, i) => ligneNiveauHtml(sujetCode, i, n.valeur, n.libelle, n.description)).join("")}</tbody>
             </table>
@@ -426,11 +444,23 @@ const EchellesModule = (() => {
                 renderList();
                 return;
             }
-            const aArchiver = Object.assign({}, ancienne, {
-                statut: "archivee",
-                archivee_le: new Date().toISOString().slice(0, 10)
-            });
-            DataStore.updateEchelle(aArchiver);
+            // ⚠️ **ON N'ARCHIVE QUE LA SIENNE, ET CE N'EST PAS UN DÉTAIL.** La première
+            //    rédaction archivait « l'ancienne » — c'est-à-dire, la première fois, le
+            //    SOCLE DU GROUPE. Le serveur l'a refusé (403 : écrire une ligne de portée
+            //    Groupe est réservé à l'administration Groupe), et l'écran **avalait le
+            //    refus** : il annonçait la publication pendant que le socle restait en
+            //    place. Trouvé au navigateur sur la recette, pas par le banc.
+            //
+            //    Et le refus était le bon comportement : archiver le socle le retirerait
+            //    aux DIX-NEUF AUTRES filiales, pour une décision qu'une seule a prise.
+            //    Publier la sienne ne retire rien à personne — c'est
+            //    `DataStore.getEchelleEnVigueur()` qui fait passer la locale devant.
+            if (!estDuGroupe(ancienne)) {
+                DataStore.updateEchelle(Object.assign({}, ancienne, {
+                    statut: "archivee",
+                    archivee_le: new Date().toISOString().slice(0, 10)
+                }));
+            }
             DataStore.updateEchelle(Object.assign({}, creee, {
                 statut: "en_vigueur",
                 en_vigueur_le: new Date().toISOString().slice(0, 10)
