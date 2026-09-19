@@ -201,7 +201,18 @@ const SANS_FICHE = {
   '/mapping': 'correspondances : édition en place',
   '/couverture': 'vue croisée, aucune fiche propre',
   '/crise-fiches': 'vue d’impression',
-  '/settings': 'paramètres',
+  '/settings': 'paramètres — la vue « Identité » : ce que le serveur sait de cette filiale',
+  // Lot « Paramètres » (19/09/2026) — les deux autres vues, en ONGLETS et non en
+  // entrées de menu. ⚠️ Leur adresse ne peut PAS s'écrire « /settings/echange » :
+  // le routeur y verrait un identifiant, et l'écran dirait « introuvable ». Même
+  // piège qu'à « /rgpd-aipd » et « /tiers-dora ».
+  '/settings-reglages':
+    'paramètres : les réglages de la filiale sur le catalogue du Groupe. ⚠️ Ensemble FERMÉ — ' +
+    'une clé n’y entre qu’avec un endroit du produit qui la lit (constat Q-91).',
+  '/settings-echange':
+    'paramètres : le fichier d’échange — reprendre une filiale déjà équipée, ou lui remettre ' +
+    'les siennes. ⚠️ Ce n’est PAS une sauvegarde, et l’écran le dit.',
+  '/settings-decouverte': 'paramètres : le jeu de découverte (L18 bis), conditionné au profil',
   '/referentiels': 'catalogue STATIQUE : les identifiants ne viennent pas de la base',
   '/journal': 'journal d’audit : registre en ajout seul, le détail s’ouvre en place',
   // ── Lot Interface, 16/09 : les deux autres VUES du registre RGPD ────────

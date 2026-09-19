@@ -1275,6 +1275,30 @@ const Api = (() => {
      * colonne d'avancement serait fausse le jour où un traitement ne repasse pas.
      */
     function ebiosEtat() { return appeler("/ebios/etat"); }
+
+    /* ── Les RÉGLAGES ─────────────────────────────────────────────────────────
+     *
+     * ⚠️ **La lecture est ouverte à toute session**, et c'est une décision du
+     * serveur : ces valeurs commandent le comportement du produit pour tout le
+     * monde — le seuil « urgent » de l'échéancier, le préavis d'une revue. Les
+     * réserver à l'administration ferait retomber l'écran d'un contributeur sur
+     * les valeurs écrites en dur, EN SILENCE, pendant que l'administrateur en
+     * voit d'autres : deux produits sous un seul nom.
+     *
+     * L'ÉCRITURE, elle, est un acte d'administration, et le serveur la refuse à
+     * qui ne l'est pas. ⚠️ Une valeur VIDE ne règle pas « rien » : elle SUPPRIME
+     * la surcharge et rend la filiale à la valeur du Groupe. La nuance compte —
+     * une filiale qui « remet à 7 » alors que le Groupe est à 7 doit pouvoir
+     * revenir à « hérité », sinon le jour où le Groupe passe à 3 elle reste à 7
+     * sans que personne se souvienne pourquoi.
+     */
+    function reglages() { return appeler("/parametres"); }
+    function reglerParametre(cle, valeur) {
+        return appeler("/parametres/" + encodeURIComponent(cle), {
+            methode: "PUT",
+            corps: { valeur: String(valeur == null ? "" : valeur) }
+        });
+    }
     function campagnesDeconvoquer(campagneId, filialeIds) {
         return appeler("/campagnes/" + encodeURIComponent(campagneId) + "/deconvoquer", {
             methode: "POST",
@@ -1315,6 +1339,8 @@ const Api = (() => {
         echeancesReglementaires, consignerDeclaration,
         // Lot L25, action 25.1 : la pertinence DÉRIVÉE des couples EBIOS RM.
         ebiosEtat,
+        // Les réglages : le catalogue du Groupe, et ce que cette filiale en a fait.
+        reglages, reglerParametre,
         // Lot L19, action 19.2 : l'état DÉRIVÉ des dérogations.
         derogationsEtat, aipdEtat, demandesDroitsEtat,
         // Lot L21 : le registre DORA, la chaîne DÉRIVÉE et le score composite.

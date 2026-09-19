@@ -681,6 +681,19 @@ window.UI = (function () {
             ])
         }),
         Object.freeze({
+            // Lot « Paramètres » (19/09/2026) — l'écran s'appelait « Échange de
+            // données » et portait déjà six blocs, dont trois sans rapport avec
+            // l'échange : l'état de la liaison, la sécurité et le jeu de
+            // découverte. Le nom mentait sur le contenu ; les onglets le disent.
+            sujet: "parametres",
+            vues: Object.freeze([
+                Object.freeze({ route: "/settings", libelle: "Identit\u00e9" }),
+                Object.freeze({ route: "/settings-reglages", libelle: "R\u00e9glages" }),
+                Object.freeze({ route: "/settings-echange", libelle: "\u00c9change de donn\u00e9es" }),
+                Object.freeze({ route: "/settings-decouverte", libelle: "Jeu de d\u00e9couverte" })
+            ])
+        }),
+        Object.freeze({
             sujet: "referentiels",
             vues: Object.freeze([
                 Object.freeze({ route: "/referentiels", libelle: "Catalogue" }),

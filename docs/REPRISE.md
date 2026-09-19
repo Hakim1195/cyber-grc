@@ -214,6 +214,32 @@ critères, les chemins d'attaque, les modes opératoires et la **décision** de 
   composite en `set null` sans liste de colonnes, ce que la `046` avait payé de dix essais
   et de toute restauration de sauvegarde (`CONVENTIONS.md` §43).
 
+✅ **Livré le 19/09 — deux demandes de l'utilisateur, hors chemin des lots :**
+
+- **les logs partent vers un agrégateur** (Graylog, SIEM) : chaque entrée du journal
+  d'audit est écrite en une ligne JSON sur la sortie standard, marquée
+  `"flux":"journal_audit"` ; `journald` la recueille, `rsyslog` la pousse. **C'est rsyslog
+  qui sort, jamais le service** — `IPAddressDeny=any` reste fermé. Recette :
+  `GUIDE_EXPLOITATION.md` §5 quater. ⚠️ **Ni `valeurs_avant`, ni `valeurs_apres`** (le
+  contenu relève du droit d'export, Q-330) et la ligne **ne part qu'après le `commit`** ;
+- **« Échange de données » devient Paramètres**, en quatre onglets — Identité, Réglages,
+  Échange, Jeu de découverte.
+
+⚠️ **Trois choses apprises en cassant, et aucune par relecture :**
+
+1. **`insert … returning` applique la politique de LECTURE.** Une entrée transversale du
+   journal — démarrage, arrêt, refus d'autorisation — n'a pas de filiale, donc personne ne
+   la relit : l'insertion échouait en `42501`, et comme ces appelants ont le droit
+   d'avaler l'erreur, **le service démarrait sans tracer son propre démarrage**.
+   `CONVENTIONS.md` **§44** ;
+2. **`src/db/pool.ts` ne pouvait value-importer aucun module de `src/`**, parce qu'un
+   essai importait son SOURCE TypeScript. Cet essai charge désormais le module compilé ;
+3. **`parametres` n'était PAS une table morte.** Deux mécanismes y écrivaient sans
+   papiers — la fenêtre anti-doublon de L12 et **l'ancrage du journal** de
+   `deploy/retention.sh`, sans lequel la chaîne ne se vérifie plus de part et d'autre
+   d'une coupure. Les deux ont été trouvés parce que mes garde-fous neufs les ont cassés.
+   *Une table qu'on croit morte mérite d'être interrogée avant d'être décrite ainsi.*
+
 **Le geste suivant** : **25.3** (échelles configurables et **versionnées** par filiale —
 le schéma borne déjà 1 à 10 et non 1 à 4, précisément pour ne pas avoir à abattre une
 barrière), **25.4** (quantification FAIR), puis **L26** (catalogues ouverts). Deux critères

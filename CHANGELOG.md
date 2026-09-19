@@ -56,6 +56,72 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### « Échange de données » devient PARAMÈTRES, en quatre onglets (19/09/2026)
+
+Demandé par l'utilisateur : *« je sens que la section Échange de données ne sert à rien…
+on peut l'effacer completement sans risques, ou bien la remplacer avec une vraie section
+Parametres ? »*.
+
+**Mesuré avant de trancher, parce que l'intuition était à moitié juste.** L'écran portait
+déjà **six blocs**, dont trois sans rapport avec l'échange — l'état de la liaison, la
+sécurité, le jeu de découverte. Le nom mentait sur le contenu. Mais l'échange, lui, garde
+deux usages qu'un serveur partagé ne supprime pas : la **sortie de filiale** (lot L13 —
+l'enveloppe remise à l'acquéreur est l'**unique trace** d'une opération irréversible) et
+la reprise d'une filiale rachetée déjà équipée. Dans un groupe qui fait des acquisitions,
+c'est le cas nominal. Effacer aurait donc coûté deux capacités ; renommer et ranger ne
+coûte rien.
+
+| Onglet | Ce qu'il apporte |
+|---|---|
+| **Identité** | ce que le serveur sait de la filiale — raison sociale, coordonnées, langue. ⚠️ **Le serveur les JOIGNAIT à la charte de session depuis le 04/09** et `js/core/session.js` **les jetait** : c'est la moitié frontend du constat **Q-160**, restée ouverte quinze jours parce que rien ne rougit quand un client ignore un champ qu'on lui sert (classe **Q-69**) |
+| **Réglages** | la table `parametres` cesse d'être invisible — deux seuils jusque-là écrits en dur : le seuil « urgent » de l'échéancier et le préavis de revue documentaire |
+| **Échange de données** | l'existant, avec son avertissement |
+| **Jeu de découverte** | l'existant, toujours conditionné au profil |
+
+#### ⚠️ « Personne ne lit cette table » était FAUX, et il a fallu casser pour le savoir
+
+Le diagnostic de départ disait : *`parametres` existe depuis la `001` et personne ne
+l'écrit ni ne la lit*. **Deux mécanismes y écrivaient déjà, sans papiers**, et ce sont les
+garde-fous neufs qui les ont révélés en les cassant :
+
+- `src/notifications/relances.ts` — `notifications.derniere_relance`, la fenêtre
+  anti-doublon du lot L12, une clé par filiale. Le déclencheur « aucune surcharge hors
+  catalogue » a refusé son écriture ;
+- `deploy/retention.sh` — `journal.ancrage_<année>`, l'empreinte du dernier maillon
+  archivé, **sans laquelle la chaîne du journal ne se vérifie plus de part et d'autre
+  d'une coupure**. La contrainte de complétude a fait échouer le script.
+
+*Une table qu'on croit morte mérite d'être interrogée avant d'être décrite ainsi* — c'est
+la règle du `CLAUDE.md` §0, appliquée à une table plutôt qu'à une machine. Les deux clés
+sont désormais **au catalogue, avec leurs papiers**, et le second cas a corrigé la règle
+elle-même : le discriminant n'est pas « niveau Groupe » mais **« modifiable »** — un
+réglage offert à l'écran doit porter de quoi s'afficher et de quoi être hérité ; un **état**
+que le produit tient pour lui-même ne doit rien.
+
+#### Un magasin FERMÉ, tenu par trois barrières
+
+Un réglage que le produit ne lit pas est un réglage qui ment : l'exploitant le modifie,
+croit avoir agi, et rien ne change (constat **Q-91**, aggravé ici — le produit propose
+lui-même la modification). Trois barrières, chacune sur un chemin différent :
+
+1. **la route** refuse une clé absente du catalogue ;
+2. **la base** refuse une surcharge orpheline — un déclencheur, pas un `if` de route : il y
+   a quatre chemins d'écriture, et une route ne voit que le sien (`CONVENTIONS.md` §8.1) ;
+3. **le dépôt** refuse qu'une clé entre au catalogue sans qu'un fichier du produit la lise
+   (`test/depot/reglages-catalogue-lus.test.mjs`).
+
+#### ⚠️ Et une règle du dépôt enfreinte, puis rétablie
+
+La première rédaction du garde-fou **lisait des lignes de `parametres`**. Le
+`CONVENTIONS.md` §41 l'interdit — *un garde-fou de schéma ne lit aucune ligne d'une table
+cloisonnée*, parce qu'`install.sh` appelle `f_verifier_schema()` sans périmètre —, et
+l'appel est tombé en `GRC04` à l'exécution suivante.
+
+Le §41 donne son propre remède, mot pour mot : *« un garde qui doit lire des lignes est
+souvent le signe qu'une contrainte manque »*. C'était le cas **deux fois** : les deux
+propriétés sont devenues une **contrainte** et un **déclencheur**, et le garde-fou ne
+regarde plus que `pg_constraint` et `pg_trigger`.
+
 ### Le journal d'audit part vers l'agrégateur de logs — sans ouvrir une sortie réseau (19/09/2026)
 
 Demandé par l'utilisateur : *« exporter les logs vers un agrégateur de logs, comme du

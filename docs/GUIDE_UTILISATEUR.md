@@ -178,7 +178,15 @@ L'écran **Imports** couvre les 23 entités. Trois propriétés à connaître :
   octet est en revanche un fichier neuf.
 
 ⚠️ **L'import CRÉE ; il ne met pas à jour et ne supprime pas.** Pour remplacer un jeu
-entier, c'est la reprise d'une sauvegarde, dans *Paramètres*.
+entier, c'est la reprise d'un fichier d'échange, dans *Paramètres* → **Échange de données**.
+
+### L'écran Paramètres, en trois onglets
+
+| Onglet | Ce qu'il sert |
+|---|---|
+| **Identité** | ce que le serveur sait de votre filiale — raison sociale, coordonnées, langue — et ce qu'il imprime sur vos fiches et vos exports. ⚠️ En **lecture seule** : une correction se demande à votre exploitant, parce qu'une filiale ne réécrit pas sa propre identité dans l'outil qui sert de preuve en audit |
+| **Échange de données** | exporter ou reprendre un **fichier d'échange**. ⚠️ Ce n'est **pas** une sauvegarde — celle-ci est faite par le serveur, sans action de votre part. Deux usages réels : reprendre une filiale rachetée déjà équipée, et **remettre ses données à une filiale qui sort du groupe** (c'est l'unique trace de cette opération, et elle est irréversible) |
+| **Jeu de découverte** | charger ou retirer un groupe industriel fictif, pour voir le produit rempli au lieu de l'imaginer. Il n'apparaît que sur une installation de découverte |
 
 ---
 

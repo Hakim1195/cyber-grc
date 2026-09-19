@@ -123,6 +123,33 @@ const Session = (() => {
              * une source qu'on croit vivante. Le jour où le serveur joint le
              * champ, rien n'est à changer ici. */
             filialeLangue: filiale.langue_defaut || "",
+            /* ── LES COORDONNÉES DE LA FILIALE — lot L9, constat Q-160 ──────
+             *
+             * ⚠️ **Le serveur les ENVOIE depuis le 04/09/2026 ; c'est ici
+             * qu'elles étaient jetées.** `backend/src/api/index.ts` joint
+             * `adresse`, `code_postal`, `ville`, `pays`, `telephone`, `email`,
+             * `site_web` et `nom_court` à `filiale_active` — et cette fonction
+             * n'en retenait que trois champs.
+             *
+             * Le constat Q-160 disait : *« un lot SERVEUR doit les exposer
+             * avant qu'un lot frontend puisse les afficher »*. Le lot serveur a
+             * été fait ; la moitié frontend est restée ouverte quinze jours,
+             * parce que rien ne rougit quand un client ignore un champ qu'on
+             * lui sert. C'est la classe du constat Q-69 — *« écrit, lu, et
+             * mordu par rien »*.
+             *
+             * L'objet est GELÉ comme le reste de l'état : un écran qui le
+             * modifierait ne modifierait qu'une copie, et croirait avoir écrit. */
+            filialeCoordonnees: Object.freeze({
+                nomCourt: filiale.nom_court || "",
+                adresse: filiale.adresse || "",
+                codePostal: filiale.code_postal || "",
+                ville: filiale.ville || "",
+                pays: filiale.pays || "",
+                telephone: filiale.telephone || "",
+                email: filiale.email || "",
+                siteWeb: filiale.site_web || ""
+            }),
             perimetreLecture: Object.freeze((source.perimetre_lecture || []).slice()),
             perimetreGroupe: !!source.perimetre_groupe,
             administrationGroupe: !!source.administration_groupe,

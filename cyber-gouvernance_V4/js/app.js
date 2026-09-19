@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
        connue qu'après la session — `startApp()` rejoue donc `resoudre()`. */
     if (window.I18n) { I18n.resoudre(); I18n.appliquerAuDocument(); }
 
+
     // Coffre optionnel : si une protection par mot de passe est active, l'app ne
     // démarre qu'après déverrouillage. Sinon, démarrage immédiat (clé nulle).
     Vault.boot(async (dek) => {
@@ -31,6 +32,16 @@ async function startApp() {
        (barre latérale) : sans cet appel, le menu resterait en français.
     ========================== */
     if (window.I18n) { I18n.resoudre(); I18n.appliquerAuDocument(); }
+
+    /* =========================
+       LES RÉGLAGES (catalogue du Groupe + surcharges de la filiale)
+       Chargés ICI, AVANT le premier rendu : un module qui lirait un seuil plus
+       tôt obtiendrait la valeur par défaut, et l'écran changerait sous les yeux
+       de l'utilisateur au rafraîchissement suivant.
+       ⚠️ `charger()` ne rejette jamais — un seuil d'affichage indisponible ne
+       doit pas empêcher l'application de démarrer (voir `js/core/reglages.js`).
+    ========================== */
+    if (window.Reglages) { await Reglages.charger(); }
 
     /* =========================
        IDENTITÉ VISUELLE DE LA FILIALE ACTIVE (lot L9)
@@ -178,7 +189,16 @@ async function startApp() {
         "/referentiels-actifs": () => { if (typeof ReferentielsActifsModule !== "undefined") ReferentielsActifsModule.renderList(); },
         "/imports": () => { if (typeof ImportsModule !== "undefined") ImportsModule.renderList(); },
 
-        "/settings": () => { if (typeof SettingsModule !== "undefined") SettingsModule.render(); }
+        // ── Paramètres, en trois vues (19/09/2026) ──────────────────────────
+        //
+        // ⚠️ Les adresses s'écrivent « /settings-… » et NON « /settings/… » : le
+        //    routeur lirait le second segment comme un identifiant, et l'écran
+        //    dirait « introuvable ». Même piège qu'à « /rgpd-aipd » et
+        //    « /tiers-dora », et c'est pour cela qu'il est écrit ici.
+        "/settings": () => { if (typeof SettingsModule !== "undefined") SettingsModule.render(); },
+        "/settings-reglages": () => { if (typeof SettingsModule !== "undefined") SettingsModule.renderReglages(); },
+        "/settings-echange": () => { if (typeof SettingsModule !== "undefined") SettingsModule.renderEchange(); },
+        "/settings-decouverte": () => { if (typeof SettingsModule !== "undefined") SettingsModule.renderDecouverte(); }
     });
 
     /* =========================
@@ -381,7 +401,10 @@ const ROUTE_META = {
     "/prestataires": { s: "fil.section.continuite", t: "fil.prestataires" },
     "/tiers-dora": { s: "fil.section.tiers", t: "fil.tiersDora" },
     "/campagnes": { s: "fil.section.conformite", t: "fil.campagnes" },
-    "/settings":     { s: "fil.section.administration", t: "fil.settings" }
+    "/settings":     { s: "fil.section.administration", t: "fil.settings" },
+    "/settings-reglages":   { s: "fil.section.administration", t: "fil.settings" },
+    "/settings-echange":    { s: "fil.section.administration", t: "fil.settings" },
+    "/settings-decouverte": { s: "fil.section.administration", t: "fil.settings" }
 };
 
 /**
@@ -1144,6 +1167,12 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/tests":        "continuite",
     "/audits":       "audits",
     "/settings":     "administration",
+    // ⚠️ La LECTURE des réglages est ouverte à toute session côté serveur, mais
+    //    l'ÉCRAN vit sous « administration » comme le reste des Paramètres : un
+    //    contributeur n'a rien à y faire, et le serveur refuserait ses écritures.
+    "/settings-reglages":   "administration",
+    "/settings-echange":    "administration",
+    "/settings-decouverte": "administration",
     // Le journal d'audit a son propre domaine : voir `backend/src/api/droits.ts`.
     "/journal":      "journal",
     // Vague 6. Le domaine décide de ce que le menu propose : une route sans

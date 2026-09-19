@@ -96,7 +96,11 @@ const DocumentsModule = (() => {
         if (!dateRevue) return { cls: "", label: "—" };
         const jours = Math.ceil((new Date(dateRevue).getTime() - Date.now()) / 864e5);
         if (jours < 0) return { cls: "decl-todo", label: `en retard (${-jours} j)`, urgent: true, overdue: true };
-        if (jours <= 30) return { cls: "decl-todo", label: `dans ${jours} j`, urgent: true };
+        // ⚠️ Le préavis vient du RÉGLAGE, et trente est la valeur du catalogue du
+        //    Groupe — même discipline qu'au seuil « urgent » de l'échéancier.
+        const preavis = (window.Reglages && Reglages.entier)
+            ? Reglages.entier("documents.preavis_revue_jours", 30) : 30;
+        if (jours <= preavis) return { cls: "decl-todo", label: `dans ${jours} j`, urgent: true };
         return { cls: "decl-ok", label: fmtDate(dateRevue) };
     }
 

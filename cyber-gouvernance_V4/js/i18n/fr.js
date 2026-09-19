@@ -78,7 +78,7 @@ window.I18n.enregistrer("fr", {
     "nav.approbations": "Approbations",
     "nav.imports": "Imports",
     "nav.journal": "Journal d'audit",
-    "nav.settings": "Échange de données",
+    "nav.settings": "Paramètres",
 
     /* ═══════════════════════ FIL D'ARIANE ═══════════════════════
        Les sections du fil d'Ariane ne sont PAS celles du menu : elles regroupent
@@ -121,7 +121,7 @@ window.I18n.enregistrer("fr", {
     "fil.prestataires": "Prestataires & Tiers",
     "fil.tiersDora": "Registre DORA",
     "fil.campagnes": "Campagnes du Groupe",
-    "fil.settings": "Paramètres & données",
+    "fil.settings": "Paramètres",
 
     /* ═══════════════════════ LIBELLÉS PARTAGÉS ═══════════════════════ */
     "commun.ajouter": "Ajouter",

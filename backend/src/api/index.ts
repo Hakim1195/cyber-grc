@@ -131,6 +131,7 @@ import { greffonAipd } from '../aipd/index.js';
 import { greffonDerogations } from '../derogations/index.js';
 import { greffonCampagnes } from '../campagnes/index.js';
 import { greffonEbios } from '../ebios/index.js';
+import { greffonParametres } from '../parametres/index.js';
 import { greffonTiers } from '../tiers/index.js';
 import { greffonCrise } from '../crise/index.js';
 import { greffonDroitsPersonnes } from '../droits-personnes/index.js';
@@ -3243,6 +3244,18 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   // filtrer sur un seuil. Retenir un couple engage les ateliers 3 et 4, et c'est
   // « retenue », saisie par un humain et justifiée, qui le fait.
   await instance.register(greffonEbios, { pool });
+  // Les RÉGLAGES (19/09/2026) — `parametres`, vivante depuis la `001` et lue par
+  // personne, cesse de l'être.
+  //
+  // ⚠️ Un magasin FERMÉ : seules les clés du catalogue de Groupe sont acceptées.
+  // Une clé libre serait un réglage que le produit ne lit pas — l'exploitant le
+  // modifie, croit avoir agi, et rien ne change (constat Q-91).
+  //
+  // ⚠️ Et la LECTURE est ouverte à toute session (`domaine: null`) : ces valeurs
+  // commandent le comportement du produit pour tout le monde. Les réserver à
+  // l'administration ferait retomber l'écran d'un contributeur sur les valeurs
+  // écrites en dur, en silence — deux produits sous un seul nom.
+  await instance.register(greffonParametres, { pool });
   // Lot L17, A3 — la recherche globale.
   //
   // ⚠️ Elle reçoit `cumulerSondage`, **le compteur du sondage**, et non un

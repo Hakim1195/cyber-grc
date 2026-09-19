@@ -604,7 +604,15 @@ export async function semerJeuEssai(base, client, options = {}) {
         "insert into documents (id, titre, confidentialite, donnees_personnelles, traitement_id) " +
           "values ('DOC-G', 'PSSI du groupe', 'interne', true, 'TRT-G')",
       );
-      await c.query("insert into parametres       (id, cle)   values ('PARAM-G',  'essai.groupe')");
+      // ⚠️ Le CATALOGUE porte son libellé et sa valeur par défaut depuis la migration
+      //    `048` (`ck_parametres_catalogue_complet`) : sans eux, l'écran des Paramètres
+      //    afficherait une clé technique, et une filiale qui n'a rien réglé n'aurait
+      //    aucune valeur. Un semis qui les omettrait ferait échouer TOUTES les familles
+      //    à l'ouverture de leur base, pour une raison étrangère à ce qu'elles mesurent.
+      await c.query(
+        `insert into parametres (id, cle, libelle, valeur_defaut, type_valeur)
+              values ('PARAM-G', 'essai.groupe', 'Réglage d''essai', '1', 'entier')`,
+      );
       await c.query("insert into document_referentiels (document_id, ref_id) values ('DOC-G', 'anssi')");
       await c.query("insert into traitement_mesures (traitement_id, mesure_id) values ('TRT-G', 'MESURE-G')");
       await c.query("insert into document_etiquettes (document_id, etiquette) values ('DOC-G', 'Socle groupe')");
@@ -730,7 +738,13 @@ export async function semerJeuEssai(base, client, options = {}) {
                values ('DOC-${s}', $1, 'Procédure locale', 'confidentiel', true, 'TRT-${s}')`,
           f,
         );
-        await c.query(`insert into parametres       (id, filiale_id, cle)   values ('PARAM-${s}',  $1, 'essai.local')`, f);
+        // ⚠️ La surcharge vise la clé DU CATALOGUE semé plus haut, et non une clé
+        //    inventée : depuis la `048`, un déclencheur refuse qu'une filiale règle une
+        //    clé que le produit ne lit nulle part — c'est la propriété qui ferme le
+        //    magasin (constat Q-91).
+        await c.query(
+          `insert into parametres (id, filiale_id, cle, valeur)
+                values ('PARAM-${s}', $1, 'essai.groupe', '2')`, f);
         await c.query(`insert into document_referentiels (document_id, ref_id, filiale_id) values ('DOC-${s}', 'anssi', $1)`, f);
         // Le lien document ↔ contrôle (migration `036`). ⚠️ `filiale_id` n'est PAS
         // fourni : le déclencheur de portée le pose depuis le DOCUMENT. Le donner

@@ -75,7 +75,7 @@ window.I18n.enregistrer("en", {
     "nav.approbations": "Approvals",
     "nav.imports": "Imports",
     "nav.journal": "Audit log",
-    "nav.settings": "Data exchange",
+    "nav.settings": "Settings",
 
     /* ═══════════════════════ BREADCRUMB ═══════════════════════ */
     "fil.section.pilotage": "Steering",
@@ -114,7 +114,7 @@ window.I18n.enregistrer("en", {
     "fil.prestataires": "Suppliers & third parties",
     "fil.tiersDora": "DORA register",
     "fil.campagnes": "Group campaigns",
-    "fil.settings": "Settings & data",
+    "fil.settings": "Settings",
 
     /* ═══════════════════════ SHARED LABELS ═══════════════════════ */
     "commun.ajouter": "Add",

@@ -873,6 +873,11 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // métier, leurs événements redoutés et les sources de risque retenues contre
     // elles — c'est-à-dire, très exactement, ce qu'un attaquant irait lire en premier.
     ['GET', '/api/ebios/etat', undefined],
+    // Les réglages (19/09/2026). ⚠️ Servie sans identité, la lecture dirait quels
+    // seuils une filiale s'est donnés — et l'écriture laisserait n'importe qui
+    // changer le comportement du produit pour tout le monde.
+    ['GET', '/api/parametres', undefined],
+    ['PUT', '/api/parametres/echeances.seuil_urgent_jours', { valeur: '3' }],
     ['GET', '/api/recherche?q=ab', undefined],
     ['GET', '/api/decouverte/etat', undefined],
     ['POST', '/api/decouverte/semer', undefined],

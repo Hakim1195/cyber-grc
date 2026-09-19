@@ -1,7 +1,25 @@
 // Emplacement : js/modules/settings.js
 // Nom du fichier : settings.js
 //
-// Données & échanges de fichier.
+// PARAMÈTRES — en trois vues, montées en onglets.
+//
+// ── Pourquoi cet écran a changé de nom (19/09/2026) ─────────────────────────
+//
+// Il s'appelait « Échange de données » et portait déjà SIX blocs, dont trois
+// sans rapport avec l'échange : l'état de la liaison, la sécurité, et le jeu de
+// découverte. Le nom mentait sur le contenu — et l'utilisateur l'a dit :
+// *« je sens que la section Échange de données ne sert à rien »*.
+//
+// Mesuré avant de trancher, parce que l'intuition était à moitié juste :
+//
+//  · la SAUVEGARDE est bien faite par le serveur, et l'écran le disait déjà ;
+//  · mais l'ÉCHANGE, lui, garde deux usages qu'un serveur partagé ne supprime
+//    pas — la **sortie de filiale** (lot L13 : l'enveloppe remise à l'acquéreur
+//    est l'UNIQUE trace d'une opération irréversible) et la reprise d'une
+//    filiale rachetée déjà équipée. Dans un groupe qui fait des acquisitions,
+//    c'est le cas nominal, pas l'exception.
+//
+// Effacer aurait donc coûté deux capacités. Renommer et ranger ne coûte rien.
 //
 // ⚠️ Cet écran a été rectifié à la porte S2 (constats B-3 et m-7) : il annonçait
 // encore le monde d'avant la bascule client/serveur — « vos données ne quittent
@@ -42,18 +60,89 @@ const SettingsModule = (() => {
         try { return new Date(ts).toLocaleString("fr-FR"); } catch (e) { return "—"; }
     }
 
+    /**
+     * L'en-tête commun aux trois vues, barre d'onglets comprise.
+     *
+     * ⚠️ `UI.enteteHtml` et NON un `<h1>` à la main : c'est lui qui pose la barre
+     * d'onglets, et `test/navigateur/onglets.test.mjs` exige que CHAQUE route
+     * d'un sujet à plusieurs vues la rende. L'écran des campagnes a appris la
+     * leçon en perdant la sienne — *un écran qui perd sa barre d'onglets ne
+     * signale rien : il se contente d'être une impasse.*
+     */
+    function enteteParametres(route, contexte) {
+        return UI.enteteHtml({
+            titre: "Paramètres",
+            contexte: contexte,
+            onglets: UI.ongletsDe(route)
+        });
+    }
+
+    /* =====================================================================
+       VUE 1 — IDENTITÉ : où suis-je, et sur quoi suis-je branché
+    ===================================================================== */
+
+    /**
+     * La fiche d'identité de la filiale active.
+     *
+     * ⚠️ **Elle est en LECTURE SEULE, et c'est dit plutôt que tu.** Les
+     * coordonnées vivent dans `filiales`, une table de CONFIGURATION dont
+     * l'écriture exige l'administration Groupe et passe par l'exploitant
+     * (`docs/GUIDE_EXPLOITATION.md` §2). Ajouter ici un formulaire supposerait
+     * une route d'écriture qui n'existe pas : la fabriquer pour remplir un écran
+     * serait exactement l'inverse de la règle — *une capacité qu'aucun écran
+     * n'appelle est une capacité absente*, mais un écran qui appelle une
+     * capacité absente est pire.
+     *
+     * ⚠️ **Ce que cette vue ferme** : le serveur JOINT ces coordonnées à la
+     * charte de session depuis le 04/09/2026 (`backend/src/api/index.ts`), et
+     * `js/core/session.js` les JETAIT. Constat **Q-160**, moitié frontend —
+     * restée ouverte quinze jours parce que rien ne rougit quand un client
+     * ignore un champ qu'on lui sert.
+     */
+    function identiteHtml() {
+        const session = (typeof Session !== "undefined") ? Session.courante() : null;
+        if (!session) {
+            return '<div class="dashboard-card"><p class="chart-empty">'
+                + escapeHtml("La session n'est pas encore résolue.") + "</p></div>";
+        }
+        const c = session.filialeCoordonnees || {};
+        const ligne = (libelle, valeur) => `
+            <div style="display:flex; gap:1rem; padding:.45rem 0; border-bottom:1px solid var(--border);">
+                <div style="min-width:190px; color:var(--text-muted);">${escapeHtml(libelle)}</div>
+                <div style="font-weight:600;">${valeur ? escapeHtml(valeur) : '<span style="font-weight:400; color:var(--text-muted);">— non renseigné</span>'}</div>
+            </div>`;
+        const postale = [c.codePostal, c.ville].filter(Boolean).join(" ");
+        return `
+            <div class="dashboard-card" style="border-top: 4px solid var(--primary); margin-bottom: 1.5rem;">
+                <h3 style="font-size: var(--text-lg); margin-bottom: 15px;">Cette filiale ${typeof Help !== "undefined" ? Help.tip("Ce que le produit imprime sur vos fiches, vos exports et vos rapports d'audit. Ces valeurs viennent du serveur : elles sont les mêmes pour tout le monde dans cette filiale, et se modifient par votre exploitant.") : ""}</h3>
+                ${ligne("Raison sociale", session.filialeNom)}
+                ${ligne("Nom court", c.nomCourt)}
+                ${ligne("Code", session.filialeCode)}
+                ${ligne("Adresse", c.adresse)}
+                ${ligne("Code postal et ville", postale)}
+                ${ligne("Pays", c.pays)}
+                ${ligne("Téléphone", c.telephone)}
+                ${ligne("Courriel", c.email)}
+                ${ligne("Site web", c.siteWeb)}
+                ${ligne("Langue par défaut", session.filialeLangue)}
+                <div class="help-note" style="margin-top: 1rem;">
+                    Ces valeurs sont en <strong>lecture seule</strong> : elles appartiennent à la
+                    configuration du serveur, et une filiale ne réécrit pas sa propre identité
+                    dans l'outil qui sert de preuve en audit. Une correction se demande à votre
+                    exploitant.
+                </div>
+            </div>`;
+    }
+
     function render() {
         const app = document.getElementById("app");
-        const cryptoOk = typeof CryptoService !== "undefined" && CryptoService.available();
 
         app.innerHTML = `
             <section class="page">
-                ${UI.enteteHtml({
-                    titre: "Échange de données",
-                    contexte: "Vos données sont enregistrées sur le serveur de votre filiale, "
-                              + "qui les sauvegarde. Cet écran sert aux échanges de fichier — "
-                              + "reprendre une filiale déjà équipée, ou lui remettre les siennes."
-                })}
+                ${enteteParametres("/settings",
+                    "Où vous êtes, sur quoi vous êtes branché, et ce que le serveur sait de cette filiale.")}
+
+                ${identiteHtml()}
 
                 <!-- ÉTAT DU STOCKAGE -->
                 <div class="dashboard-card" style="border-top: 4px solid var(--accent); margin-bottom: 1.5rem;">
@@ -63,21 +152,167 @@ const SettingsModule = (() => {
                     </div>
                 </div>
 
-                <!-- JEU DE DÉCOUVERTE — lot L18 bis.
-                     Placé HAUT, juste sous l'état de la liaison : c'est l'écran
-                     qu'ouvre quelqu'un qui vient d'installer le produit et se
-                     demande pourquoi tout est vide. Le mettre en bas de page
-                     reviendrait à le cacher à celui qui en a besoin. -->
-                <div class="dashboard-card" id="decouverte-carte" style="border-top: 4px solid var(--accent); margin-bottom: 1.5rem; display: none;">
-                    <h3 style="font-size: var(--text-lg); margin-bottom: 15px;">Jeu de découverte ${typeof Help !== "undefined" ? Help.tip("Un groupe industriel fictif — filiales, risques, actifs, incidents, documents — pour voir le produit rempli au lieu de l'imaginer. Chaque ligne porte une marque « découverte » DANS la base : elle reste reconnaissable à l'export et à l'impression, et se retire d'un geste.") : ""}</h3>
-                    <div id="decouverte-corps"><div style="color: var(--text-muted);">Chargement…</div></div>
-                </div>
-
                 <!-- SÉCURITÉ & CHIFFREMENT -->
                 <div class="dashboard-card" style="border-top: 4px solid var(--primary); margin-bottom: 1.5rem;">
                     <h3 style="font-size: var(--text-lg); margin-bottom: 15px;">Sécurité</h3>
                     <div id="security-body"><div style="color: var(--text-muted);">Chargement…</div></div>
                 </div>
+            </section>`;
+
+        loadStorageInfo();
+        renderSecurity();
+        brancherSuiviEtat();
+    }
+
+    /* =====================================================================
+       VUE 2 — RÉGLAGES
+    ===================================================================== */
+
+    /**
+     * Les réglages de la filiale, sur le catalogue du Groupe.
+     *
+     * ⚠️ **L'écran ne décide de rien.** La valeur effective, l'héritage et la
+     * modifiabilité viennent du serveur (`GET /api/parametres`) : refaire ici
+     * l'arbitrage « surcharge ou défaut » donnerait deux rédactions de la même
+     * règle, et personne ne saurait laquelle s'applique.
+     */
+    function renderReglages() {
+        const app = document.getElementById("app");
+        app.innerHTML = `
+            <section class="page">
+                ${enteteParametres("/settings-reglages",
+                    "Ce que votre filiale ajuste sur les valeurs du Groupe.")}
+                <div id="reglages-corps"><p class="muted">Chargement…</p></div>
+            </section>`;
+        dessinerReglages();
+    }
+
+    function dessinerReglages() {
+        const cible = document.getElementById("reglages-corps");
+        if (!cible) return;
+        if (!window.Reglages || !Reglages.estCharge || !Reglages.estCharge()) {
+            cible.innerHTML = '<div class="dashboard-card"><p class="synthese-message danger">'
+                + escapeHtml("Les réglages n'ont pas pu être chargés. Le produit applique les "
+                    + "valeurs du Groupe en attendant — rien n'est perdu, mais une surcharge de "
+                    + "votre filiale ne serait pas appliquée.")
+                + "</p></div>";
+            return;
+        }
+        // ⚠️ Seuls les réglages MODIFIABLES. Le catalogue porte aussi des états
+        //    techniques — l'horodatage du dernier passage des relances, par
+        //    exemple : les afficher à côté d'un seuil qu'on ajuste inviterait à
+        //    les « corriger », et une fenêtre anti-doublon remise à zéro renvoie
+        //    des courriels déjà partis.
+        const reglages = Reglages.tous().filter(r => r.modifiable);
+        if (reglages.length === 0) {
+            cible.innerHTML = '<div class="dashboard-card"><p class="chart-empty">'
+                + escapeHtml("Aucun réglage n'est ouvert à l'ajustement. Les réglages sont un "
+                    + "ensemble fermé : chacun est déclaré avec un endroit du produit qui le "
+                    + "lit, parce qu'un réglage que rien ne lit est un réglage qui ment.")
+                + "</p></div>";
+            return;
+        }
+        const admin = (typeof Session !== "undefined" && Session.courante())
+            ? Session.courante().administrationGroupe : false;
+        const lignes = reglages.map(r => `
+            <tr data-cle="${escapeHtml(r.cle)}">
+                <td>
+                    <strong>${escapeHtml(r.libelle || r.cle)}</strong>
+                    <div style="color:var(--text-muted); font-size:var(--text-sm); margin-top:.2rem;">${escapeHtml(r.description || "")}</div>
+                </td>
+                <td style="text-align:right; white-space:nowrap;">
+                    <input type="text" class="reglage-valeur" data-cle="${escapeHtml(r.cle)}"
+                           value="${escapeHtml(r.valeur == null ? "" : r.valeur)}"
+                           style="width:7rem; text-align:right;"
+                           ${r.modifiable && admin ? "" : "disabled"} />
+                </td>
+                <td style="white-space:nowrap;">${r.herite
+                    ? '<span class="status status-non-applicable" title="' + escapeHtml("Cette filiale n'a rien réglé : elle suit le Groupe. Si le Groupe change, elle suit.") + '">Hérité du Groupe</span>'
+                    : '<span class="status status-partiellement-conforme" title="' + escapeHtml("Valeur du Groupe : " + (r.valeurGroupe == null ? "—" : r.valeurGroupe)) + '">Réglé ici</span>'}</td>
+                <td class="stop-row-click" style="white-space:nowrap;">${r.modifiable && admin ? `
+                    <button type="button" class="btn-secondary reglage-appliquer" data-cle="${escapeHtml(r.cle)}">Appliquer</button>
+                    ${r.herite ? "" : '<button type="button" class="btn-secondary reglage-heriter" data-cle="' + escapeHtml(r.cle) + '">Revenir au Groupe</button>'}` : ""}</td>
+            </tr>`).join("");
+
+        cible.innerHTML = `
+            <div class="dashboard-card">
+                <table class="data-table">
+                    <thead><tr>
+                        <th>Réglage</th>
+                        <th style="text-align:right;">Valeur</th>
+                        <th>Origine ${typeof Help !== "undefined" ? Help.tip("« Hérité » veut dire que votre filiale n'a rien réglé : si le Groupe change sa valeur, vous suivez. « Réglé ici » veut dire que vous avez pris une décision, et que vous ne suivrez plus.") : ""}</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody>${lignes}</tbody>
+                </table>
+                ${admin ? "" : '<p class="help-note" style="margin-top:1rem;">'
+                    + escapeHtml("Vous voyez les valeurs appliquées à votre filiale. Les modifier est un acte d'administration Groupe.")
+                    + "</p>"}
+            </div>`;
+
+        if (!admin) return;
+        cible.querySelectorAll(".reglage-appliquer").forEach(b => {
+            b.addEventListener("click", () => {
+                const champ = cible.querySelector('.reglage-valeur[data-cle="' + b.dataset.cle + '"]');
+                appliquerReglage(b.dataset.cle, champ ? champ.value : "");
+            });
+        });
+        cible.querySelectorAll(".reglage-heriter").forEach(b => {
+            // ⚠️ Une valeur VIDE ne règle pas « rien » : elle SUPPRIME la surcharge.
+            b.addEventListener("click", () => appliquerReglage(b.dataset.cle, ""));
+        });
+    }
+
+    function appliquerReglage(cle, valeur) {
+        if (!window.Api || typeof Api.reglerParametre !== "function") return;
+        Api.reglerParametre(cle, valeur).then(() => {
+            if (window.showToast) {
+                showToast(String(valeur).trim() === ""
+                    ? "Réglage remis à la valeur du Groupe."
+                    : "Réglage appliqué à cette filiale.", "success");
+            }
+            // ⚠️ On RECHARGE au lieu de croire ce qu'on vient d'envoyer : c'est le
+            //    serveur qui arbitre l'héritage, et l'écran doit afficher ce qui
+            //    s'applique, pas ce qu'on a demandé.
+            return Reglages.charger().then(() => dessinerReglages());
+        }).catch(e => {
+            if (window.showToast) {
+                showToast((e && e.message) ? e.message : "Le réglage n'a pas pu être appliqué.", "error");
+            }
+        });
+    }
+
+    /* =====================================================================
+       VUE 3 — JEU DE DÉCOUVERTE
+    ===================================================================== */
+
+    function renderDecouverte() {
+        const app = document.getElementById("app");
+        app.innerHTML = `
+            <section class="page">
+                ${enteteParametres("/settings-decouverte",
+                    "Un groupe industriel fictif, pour voir le produit rempli au lieu de l'imaginer.")}
+                <div class="dashboard-card" id="decouverte-carte" style="border-top: 4px solid var(--accent); margin-bottom: 1.5rem;">
+                    <h3 style="font-size: var(--text-lg); margin-bottom: 15px;">Jeu de découverte ${typeof Help !== "undefined" ? Help.tip("Un groupe industriel fictif — filiales, risques, actifs, incidents, documents — pour voir le produit rempli au lieu de l'imaginer. Chaque ligne porte une marque « découverte » DANS la base : elle reste reconnaissable à l'export et à l'impression, et se retire d'un geste.") : ""}</h3>
+                    <div id="decouverte-corps"><div style="color: var(--text-muted);">Chargement…</div></div>
+                </div>
+            </section>`;
+        chargerDecouverte();
+    }
+
+    /* =====================================================================
+       VUE 4 — ÉCHANGE DE DONNÉES
+    ===================================================================== */
+
+    function renderEchange() {
+        const app = document.getElementById("app");
+        const cryptoOk = typeof CryptoService !== "undefined" && CryptoService.available();
+
+        app.innerHTML = `
+            <section class="page">
+                ${enteteParametres("/settings-echange",
+                    "Reprendre une filiale déjà équipée, ou lui remettre les siennes. "
+                    + "Ce n'est PAS une sauvegarde : celle-ci est faite par le serveur.")}
 
                 <div class="dashboard-grid" style="margin-bottom: 1.5rem;">
                     <!-- EXPORT -->
@@ -137,9 +372,16 @@ const SettingsModule = (() => {
 
         wireExport();
         wireImport();
-        loadStorageInfo();
-        renderSecurity();
-        chargerDecouverte();
+    }
+
+    /**
+     * L'abonnement au cycle d'écriture, posé UNE fois.
+     *
+     * La tuile « Modifications en attente » était une PHOTO prise au rendu : elle
+     * pouvait annoncer « non enregistrées » une demi-seconde avant que le cycle
+     * n'aboutisse, ou l'inverse.
+     */
+    function brancherSuiviEtat() {
 
         // La tuile « Modifications en attente » était une PHOTO prise au rendu :
         // elle pouvait annoncer « non enregistrées » une demi-seconde avant que
@@ -488,5 +730,5 @@ const SettingsModule = (() => {
             </div>`;
     }
 
-    return { render };
+    return { render, renderReglages, renderEchange, renderDecouverte };
 })();

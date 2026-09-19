@@ -51,7 +51,14 @@ window.Echeances = (function () {
         if (jours === null || jours === undefined) return "indetermine";
         if (jours < 0) return "retard";
         if (jours === 0) return "aujourdhui";
-        if (jours <= 7) return "semaine";
+        // ⚠️ Le seuil vient du RÉGLAGE, et sept est la valeur du catalogue du
+        //    Groupe — recopiée ici comme repli, et confrontée au catalogue par
+        //    `test/depot/reglages-catalogue-lus.test.mjs`. Une divergence ferait
+        //    qu'un produit dont les réglages n'ont pas chargé se comporte
+        //    autrement qu'un produit connecté, sans le dire.
+        const seuil = (window.Reglages && Reglages.entier)
+            ? Reglages.entier("echeances.seuil_urgent_jours", 7) : 7;
+        if (jours <= seuil) return "semaine";
         if (jours <= 31) return "mois";
         return "avenir";
     }

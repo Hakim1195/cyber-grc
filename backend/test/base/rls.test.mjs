@@ -4264,6 +4264,12 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // en quarantaine peut faire foi, et sans le déclencheur c'est la RÉ-ANALYSE
       // ANTIVIRALE qui échoue — on aurait fermé un défaut documentaire en bloquant
       // le dispositif antimalware.
+      // CINQUANTE-TROISIÈME, apporté par `048` : le catalogue des réglages. Il tient
+      // la propriété qui fait toute la valeur de « parametres » — vivante depuis la
+      // `001` et lue par personne jusqu'au 19/09/2026 : AUCUNE surcharge de filiale
+      // ne vise une clé absente du catalogue du Groupe. Un réglage que le produit ne
+      // lit pas est un réglage qui ment (constat Q-91).
+      'parametres_catalogue',
       'piece_en_vigueur',
       'portee_figee',
       'privileges',
