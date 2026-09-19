@@ -66,7 +66,23 @@
 >
 > ---
 >
-> ## ▶▶ REPRENDRE ICI — l'état au 08/09/2026 au soir
+> ## ▶▶ REPRENDRE ICI — l'état au 19/09/2026 au soir
+>
+> ⚠️ **NE LISEZ PAS CE FICHIER POUR SAVOIR OÙ REPRENDRE — il vous le dira en retard.**
+> Il est long, chronologique, et il a été faux quatre fois de suite sur ses propres
+> chiffres (voir plus bas). La **passation** vit dans
+> [`docs/REPRISE.md`](docs/REPRISE.md) §4, qui porte un tableau d'état en tête de sa
+> section « OÙ REPRENDRE » ; l'**ordonnancement** vit dans
+> [`docs/PLAN_ACHEVEMENT.md`](docs/PLAN_ACHEVEMENT.md) ; les **chiffres** vivent au
+> [`backend/README.md`](backend/README.md) §8, seul endroit gardé mécaniquement.
+>
+> En trois lignes, pour n'avoir pas à chercher : **vague D entamée**, L25 livré sauf
+> **25.4** (quantification FAIR), qui est le geste suivant ; puis **L26**. Banc
+> **2 231/2 231** à `3ae666c`, déployé sur la recette.
+>
+> Les sous-sections qui suivent sont l'HISTORIQUE, de la plus ancienne à la plus
+> récente. Elles gardent leurs leçons de méthode, qui valent ; elles ne disent pas
+> l'état.
 >
 > ## ▶▶▶ CE QUI A ÉTÉ FAIT LE 11/09/2026 AU SOIR, ET QUI EST NEUF
 >
@@ -1240,7 +1256,13 @@ il est ressorti deux vagues plus tard en **bloquant**, avec un import qui écriv
 lignes sur 250 *et annonçait le succès*. **Un constat chiffré et non attribué est un
 constat perdu.**
 
-### ▶ REPRENDRE ICI — **L0 à L14 sont construits ; L15, le durcissement final, est en cours.**
+### ▶ HISTORIQUE — **L0 à L14 construits ; L15, le durcissement final, en cours** (état du 05/09/2026)
+
+> ⚠️ **CE N'EST PLUS UN POINT DE REPRISE, et le titre le disait encore la veille de cette
+> ligne.** Il portait « ▶ REPRENDRE ICI », et un lecteur pouvait y consacrer sa journée :
+> les passages de porte sont **arrêtés** depuis l'arbitrage du 14/09/2026, et le chemin
+> qui fait autorité est `docs/PLAN_ACHEVEMENT.md`. Ce qui suit est conservé pour ses
+> **leçons de méthode**, qui n'ont pas vieilli — pas pour son état, qui a douze jours.
 
 > ⚠️ **Réécrit le 05/09/2026.** Si vous lisez ailleurs « la vague 4 est le travail
 > immédiat », « L5 reste à faire », « la couverture du journal est de 4 actions sur 20 »

@@ -139,10 +139,11 @@ modules du produit.
 pas »*.
 
 **⇒ LA VAGUE C EST CLOSE** : ~~L21 tiers et DORA~~ ✅ livré les 17 et 18/09, ~~L24
-campagnes descendantes~~ ✅ livré le 18/09. **Le geste suivant est le rejeu INTÉGRAL de
-`docs/COMPARATIF_MARCHE.md`** — le `PLAN_ACHEVEMENT.md` §4 l'impose à la clôture d'une
-vague, *« il se rejoue, il ne s'estime pas »*, et celui du 16/09 n'avait remesuré que onze
-lignes sur quatre-vingt-six. Puis vague D (L25 EBIOS RM, L26 catalogues
+campagnes descendantes~~ ✅ livré le 18/09. ~~**Le geste suivant est le rejeu INTÉGRAL de
+`docs/COMPARATIF_MARCHE.md`**~~ ✅ **FAIT le 18/09** — les 86 lignes en trois balayages,
+méthode écrite dans le document. ⚠️ Le `PLAN_ACHEVEMENT.md` §4 l'impose à **chaque** clôture
+de vague : il sera donc **redû à la clôture de la vague D**, qui n'est pas close.
+*Il se rejoue, il ne s'estime pas.* Puis vague D (L25 EBIOS RM, L26 catalogues
 ouverts), vague E (L22 ouverture technique, L23 collecte automatique), vague F (L27 IA
 locale, L28 portail fournisseur — en dernier, seules surfaces externes).
 
@@ -158,9 +159,19 @@ des verdicts antérieurs, il n'en établit pas.
 
 ---
 
-### ▶ OÙ REPRENDRE — au 18/09/2026 au soir
+### ▶ OÙ REPRENDRE — au 19/09/2026 au soir
 
-**La vague C est CLOSE, et la vague D est ENTAMÉE.**
+**La vague C est CLOSE, et la vague D est ENTAMÉE.** ⚠️ **Cette section se lit du HAUT vers
+le BAS, et elle est CHRONOLOGIQUE** : ce qui suit immédiatement est la livraison du 18/09,
+ce qui la suit celle du 19. **L'état le plus récent est en bas**, et il est résumé ici pour
+qu'on n'ait pas à le chercher :
+
+| | |
+|---|---|
+| **Livré, dans l'ordre** | EBIOS RM ateliers 1 à 5 (migrations `046`, `047`, schéma `data` **v23**), copie du journal vers un agrégateur, écran **Paramètres** en quatre onglets, puis **les échelles de cotation** (migration `049`, schéma `data` **v24**) |
+| **Le geste suivant** | **25.4** — quantification FAIR. Puis **L26**, les catalogues ouverts |
+| **Mesuré à `3ae666c`** | banc **2 231/2 231** · 49 migrations · 76 tables · 54 garde-fous · 428 décisions · cloisonnement **110/110** sous `grc_app` · publication **93 fichiers** |
+| **Déployé** | oui, sur la recette, et **parcouru au navigateur** — c'est là que trois défauts sur quatre ont été trouvés |
 
 ✅ **Livré le 18/09 au soir — EBIOS RM, ateliers 1 et 2** (actions **25.1** en partie,
 **25.2** et **25.5**) : migration `046`, schéma `data` en **v22**, greffon `src/ebios/`
@@ -280,6 +291,16 @@ cotation porte l'échelle qui l'a produite, et `null` s'y lit « non tracée »,
    sur toute table MIXTE.
 
 **Le geste suivant** : **25.4** (quantification FAIR), puis **L26** (catalogues ouverts).
+
+⚠️ **UN PIÈGE MESURÉ LE 19/09, ET IL VISE 25.4 DIRECTEMENT.** Le garde-fou qui tient le
+« EN ADDITION » de tout le lot — `f_verifier_ebios_cadrage()`, qui refuse qu'un déclencheur
+écrive dans les cinq colonnes de cotation de `risques` — **ne balaie que les tables dont le
+nom commence par `ebios_`** (`where c.relname like 'ebios\_%'`). Une table de quantification
+nommée autrement y **échapperait**, et la garantie centrale du lot cesserait de s'appliquer
+sans que rien ne le dise. La bonne issue n'est pas de choisir un nom qui plaît au garde :
+c'est d'**élargir le garde à ce qu'il MESURE** plutôt qu'au nom qu'il reconnaît
+(`CONVENTIONS.md` §39, constats Q-312 et Q-313).
+
 Deux critères d'acceptation méritent d'être lus avant d'écrire une ligne :
 
 - **L25 est le lot le plus risqué du plan** : il touche la méthode, donc les données déjà
