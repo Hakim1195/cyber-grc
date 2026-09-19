@@ -1,10 +1,23 @@
 // Emplacement : js/data/referentiels.js
 // Nom du fichier : referentiels.js
 //
-// Registre des RÉFÉRENTIELS de sécurité (catalogue STATIQUE, non stocké dans la
-// base utilisateur). Chaque référentiel est un fichier de données au schéma commun
-// qui s'auto-enregistre ici (voir ref_anssi.js). Les auto-évaluations de l'utilisateur
-// vivent, elles, dans DataStore (`evaluations`, clé ref_id + code).
+// Registre des RÉFÉRENTIELS de sécurité.
+//
+// ⚠️ **LE CATALOGUE N'EST PLUS STATIQUE — lot L26, action 26.1.** Il vivait dans six
+// fichiers `js/data/ref_*.js` publiés dans la racine web, qui s'auto-enregistraient
+// ici au chargement de la page. Il vit désormais EN BASE (`referentiels`,
+// `referentiel_domaines`, `referentiel_exigences`, `referentiel_traductions`) et
+// arrive au navigateur dans le jeu de données de la filiale, comme le reste.
+//
+// **Ce fichier n'a pas changé d'interface : il a changé de source.** `get()`, `all()`,
+// `flatExigences()` et `couverture()` sont intacts, et aucun des modules qui les
+// appellent n'a à le savoir — c'est le principe qui a permis de basculer vingt-six
+// modules sans en réécrire un seul au lot L2. Ce qui est neuf est `hydrater()`, en bas.
+//
+// Les fichiers source subsistent dans `backend/db/catalogues/`, hors de la racine web :
+// ils sont la SOURCE du semis de la migration `051` et l'ÉTALON que le banc compare à
+// la base, exigence par exigence. Les auto-évaluations de l'utilisateur vivent, elles,
+// dans DataStore (`evaluations`, clé ref_id + code).
 //
 // Schéma d'un référentiel :
 //   {
@@ -210,5 +223,138 @@ const Referentiels = (() => {
         return flatExigences(ref).find(e => e.code === code) || null;
     }
 
-    return { register, registerTraduction, couverture, get, all, countExigences, flatExigences, findExigence };
+
+    /* =====================================================================
+       L'HYDRATATION DEPUIS LA BASE — lot L26, action 26.1
+       =====================================================================
+
+       ⚠️ **CE REGISTRE NE CHANGE PAS D'INTERFACE ; IL CHANGE DE SOURCE.**
+
+       Jusqu'ici, six fichiers `js/data/ref_*.js` s'auto-enregistraient au
+       chargement de la page par un `<script>`. Ils vivent désormais en base —
+       `referentiels`, `referentiel_domaines`, `referentiel_exigences`,
+       `referentiel_traductions` — et arrivent au navigateur comme tout le reste,
+       dans le jeu de données de la filiale.
+
+       C'est exactement le principe qui a permis de basculer vingt-six modules
+       sans en réécrire un seul au lot L2 : **la façade est préservée, seule la
+       couche qui l'alimente bouge**. `get()`, `all()`, `flatExigences()` et
+       `couverture()` ne sont pas touchés, et aucun des huit modules qui les
+       appellent n'a à le savoir.
+
+       ── Pourquoi ce n'est pas un chargement de plus au démarrage ───────────
+
+       Les catalogues pèsent 165 Kio de JSON — moins que les six fichiers qu'ils
+       remplacent, qui portaient en plus leurs commentaires. Ils voyagent dans le
+       jeu de données déjà chargé, donc sans requête supplémentaire, et ils sont
+       compressés par le frontal comme le reste.
+
+       ── ⚠️ Ce que l'hydratation NE FILTRE PAS, et pourquoi ─────────────────
+
+       Un référentiel **archivé** (action 26.3) est hydraté comme les autres.
+       C'est délibéré : ses auto-évaluations existent toujours, et une fiche qui
+       afficherait « iso-27002-2022 » au lieu du titre de la norme serait pire
+       qu'un référentiel de trop dans une liste. C'est `all()` qui décide ce
+       qu'on PROPOSE ; `get()`, lui, doit savoir rendre ce qui a existé.
+    ===================================================================== */
+
+    /**
+     * Reconstruit le registre depuis les collections servies par le serveur.
+     *
+     * ⚠️ **Idempotente, et c'est nécessaire** : elle est rappelée après chaque
+     * rechargement du jeu de données (changement de filiale, reprise, sondage qui
+     * rapporte une modification). Une seconde exécution doit rendre le même
+     * registre, pas un registre à deux exemplaires — d'où la remise à zéro.
+     */
+    function hydrater(collections) {
+        if (!collections) return 0;
+        const refs = Array.isArray(collections.referentiels) ? collections.referentiels : [];
+        const domaines = Array.isArray(collections.referentiel_domaines)
+            ? collections.referentiel_domaines : [];
+        const exigences = Array.isArray(collections.referentiel_exigences)
+            ? collections.referentiel_exigences : [];
+        const dicos = Array.isArray(collections.referentiel_traductions)
+            ? collections.referentiel_traductions : [];
+
+        // ⚠️ **Rien n'est hydraté tant que la base ne sert rien.** Une base antérieure à
+        // la migration `051` rend des collections vides : on laisse alors le registre
+        // tel quel plutôt que de le VIDER. Un écran de conformité sans aucun
+        // référentiel n'afficherait ni erreur ni contenu — il aurait simplement l'air
+        // de dire « vous n'avez rien à évaluer », ce qui est faux et rassurant.
+        if (refs.length === 0) return 0;
+
+        order.length = 0;
+        Object.keys(registry).forEach(k => { delete registry[k]; });
+        Object.keys(traductions).forEach(k => { delete traductions[k]; });
+
+        // Les exigences, rangées sous leur domaine, dans l'ordre du catalogue.
+        const parDomaine = {};
+        exigences.slice()
+            .sort((a, b) => (Number(a.rang) || 0) - (Number(b.rang) || 0))
+            .forEach(e => {
+                if (!parDomaine[e.domaine_id]) parDomaine[e.domaine_id] = [];
+                const ex = { code: e.code, titre: e.titre };
+                // ⚠️ Les champs facultatifs ne sont posés QUE s'ils valent quelque chose.
+                // Poser « niveau: null » partout ferait croire au radar par niveau de
+                // label que toutes les questions en portent un, et le filtre Bronze /
+                // Argent / Or rendrait des listes vides sans rien dire.
+                if (e.aide) ex.aide = e.aide;
+                if (e.niveau) ex.niveau = e.niveau;
+                if (e.priorite) ex.priorite = e.priorite;
+                if (e.cl) ex.cl = e.cl;
+                parDomaine[e.domaine_id].push(ex);
+            });
+
+        // Les domaines, rangés sous leur référentiel, dans l'ordre du catalogue.
+        const parReferentiel = {};
+        domaines.slice()
+            .sort((a, b) => (Number(a.rang) || 0) - (Number(b.rang) || 0))
+            .forEach(d => {
+                if (!parReferentiel[d.referentiel_id]) parReferentiel[d.referentiel_id] = [];
+                const dom = { id: d.code, nom: d.nom, exigences: parDomaine[d.id] || [] };
+                if (d.court) dom.court = d.court;
+                if (d.aide) dom.aide = d.aide;
+                parReferentiel[d.referentiel_id].push(dom);
+            });
+
+        refs.slice()
+            .sort((a, b) => String(a.id).localeCompare(String(b.id)))
+            .forEach(r => {
+                const ref = {
+                    id: r.id,
+                    nom: r.nom,
+                    editeur: r.editeur || "",
+                    version: r.version || "",
+                    description: r.description || "",
+                    aide: r.aide || "",
+                    domaines: parReferentiel[r.id] || []
+                };
+                // `scoring` n'est posé que lorsqu'il diffère du défaut : `computeScores`
+                // teste `ref.scoring === "conformite"`, et le reste du produit teste
+                // l'absence. Poser « maturite » partout serait exact et sans effet ;
+                // le poser serait aussi une occasion de plus de diverger.
+                if (r.scoring && r.scoring !== "maturite") ref.scoring = r.scoring;
+                if (r.note_numerotation) ref.noteNumerotation = r.note_numerotation;
+                if (r.codes_officiels) ref.codesOfficiels = r.codes_officiels;
+                // ⚠️ `clLabels` ACTIVE le radar par domaine de classification
+                // (`computeClAxes`). Le poser à un objet vide changerait le dessin du
+                // radar de tous les référentiels qui n'en ont pas.
+                if (r.cl_labels && Object.keys(r.cl_labels).length > 0) ref.clLabels = r.cl_labels;
+                // Métadonnées du lot L26 : l'état de version (26.3) et la veille (26.5).
+                // Elles ne servent pas à l'affichage des exigences, et l'écran des
+                // référentiels les lit sur l'enregistrement, pas ici.
+                ref.statut = r.statut || "en_vigueur";
+                register(ref);
+            });
+
+        dicos.forEach(d => {
+            if (d && d.referentiel_id && d.langue && d.dictionnaire) {
+                registerTraduction(d.referentiel_id, d.langue, d.dictionnaire);
+            }
+        });
+
+        return order.length;
+    }
+
+    return { register, registerTraduction, hydrater, couverture, get, all, countExigences, flatExigences, findExigence };
 })();

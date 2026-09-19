@@ -65,10 +65,10 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 25`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 26`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
-côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v25**. Elle est
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v26**. Elle est
 indépendante du numéro des migrations SQL.
 
 > ⚠️ **Ce paragraphe a annoncé « v12 » pendant quatre montées de version**, du 04/09 au
@@ -327,6 +327,34 @@ indépendante du numéro des migrations SQL.
 >     **deux devises** y coexistent — même mécanique qu'aux échelles de la v24, pour la
 >     même raison.
 >
+> v26 (lot L26, action 26.1) : ajout de **`referentiels`**, **`referentiel_domaines`**,
+>     **`referentiel_exigences`** et **`referentiel_traductions`** — les catalogues de
+>     référentiels entrent en base. Ils vivaient dans six fichiers JavaScript publiés dans
+>     la racine web : une évolution de norme était une **livraison de code**, un client ne
+>     pouvait pas apporter sa grille, et rien ne **datait** les catalogues.
+>
+>     Les quatre sont **MIXTES** : `filiale_id` nul = catalogue du socle, lisible de toutes
+>     les filiales ; renseigné = grille apportée par une filiale (action 26.2).
+>
+>     ⚠️ **LES CODES SONT CONSERVÉS À L'OCTET PRÈS**, et c'est le critère du lot. Ils sont
+>     la moitié droite de la clé par laquelle toute auto-évaluation est stockée
+>     (`evaluations`, clé `ref_id` + `code`). Le semis de la migration `051` a été
+>     **engendré** depuis les fichiers source — qui vivent désormais dans
+>     `backend/db/catalogues/` — et `test/catalogues/fidelite.test.mjs` compare la base à
+>     ces mêmes fichiers, exigence par exigence, à chaque banc. *Un semis engendré une fois
+>     est juste une fois ; c'est la comparaison qui le garde juste.*
+>
+>     ⚠️ **`evaluations.ref_id` n'a PAS de clé étrangère, et n'en aura pas.** Une réponse
+>     d'audit doit survivre à l'ARCHIVAGE du catalogue qui l'a produite — c'est ce que
+>     l'action 26.3 organise —, et une clé ferait échouer la reprise d'une sauvegarde
+>     portant des évaluations d'un catalogue retiré depuis. `referentiels_actifs.ref_id`,
+>     lui, en reçoit une : activer un référentiel qui n'existe pas est sans objet.
+>
+>     ⚠️ **Le palier crée quatre tableaux VIDES**, et c'est la bonne réponse : un export
+>     d'avant la v26 n'en porte aucun, et le socle est déjà en base. Ce qui l'empêche
+>     d'être détruit n'est pas le palier — c'est que `purgerFiliale()` supprime
+>     `where filiale_id = $1`, et que le socle porte `filiale_id` nul par construction.
+>
 >     ⚠️ **« Accepter » exige sa justification**, et c'est la seule des quatre décisions :
 >     les trois autres produisent un travail que quelqu'un verra, accepter ne produit rien
 >     — sans sa phrase, la décision est indistinguable d'un oubli.
@@ -480,6 +508,10 @@ Conséquences pratiques :
 | **`echelles`** | **`echelles`** — ⚠️ MIXTE : `filiale_id` nul = socle du **Groupe**. Une échelle publiée est **figée** : on en publie une **révision** | `ECHL` |
 | **`echelle_niveaux`** | **`echelle_niveaux`** — ⚠️ MIXTE, portée tenue par un **déclencheur** et non par une clé composite (`MATCH SIMPLE` ne contrôle rien quand `filiale_id` est nul) | `ECHN` |
 | **`risque_quantification`** | **`risque_quantification`** — ⚠️ **CLOISONNÉE**, à la différence des deux échelles : un montant de perte dépend de la filiale, et une quantification de portée Groupe serait lisible de toutes. Deux champs **dérivés** servis en lecture seule, `_perteAnnualisee` et `_secondaireEstimee` | `FAIR` |
+| **`referentiels`** | **`referentiels`** — ⚠️ MIXTE. L'identifiant est celui que `evaluations.ref_id` porte DÉJÀ (« anssi-hygiene », « dora ») : lui en donner un neuf aurait été la renumérotation que le constat **Q-192** a fait refuser. `version` est un ALIAS de `version_referentiel` — la version du TEXTE, pas le verrouillage optimiste | `REFT` |
+| **`referentiel_domaines`** | **`referentiel_domaines`** — ⚠️ MIXTE | `REFD` |
+| **`referentiel_exigences`** | **`referentiel_exigences`** — ⚠️ MIXTE, et elle porte `referentiel_id` **en plus** de `domaine_id` : c'est la moitié gauche de la clé `(ref_id, code)`, et la clé étrangère **composite** l'empêche de diverger de son domaine | `REFE` |
+| **`referentiel_traductions`** | **`referentiel_traductions`** — ⚠️ MIXTE ; le dictionnaire est un **document figé** en `jsonb`, et le FRANÇAIS n'en a pas : il est la source | `REFX` |
 
 **La scission des mesures**, en une phrase : l'entité unique du modèle navigateur
 portait deux choses de nature différente — la **définition** du contrôle (la même

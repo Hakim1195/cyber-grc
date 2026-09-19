@@ -113,7 +113,8 @@ export class SessionDEssai {
  */
 export const REQUETE_CASCADES = `
         select cl.relname as enfant, cp.relname as parent,
-               col.attname as colonne, col.attnotnull as obligatoire
+               col.attname as colonne, col.attnotnull as obligatoire,
+               autres.paires as paires_complementaires
           from pg_constraint c
           join pg_class cl on cl.oid = c.conrelid
           join pg_class cp on cp.oid = c.confrelid
@@ -124,6 +125,24 @@ export const REQUETE_CASCADES = `
                   join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.att
                  where a.attname <> 'filiale_id'
                  order by k.ord limit 1) col
+          -- ⚠️ LES AUTRES COLONNES DE LA CLÉ, ET CE N'EST PAS DU LUXE. Une clé
+          -- étrangère composite peut porter, en plus de l'identifiant du parent et de
+          -- « filiale_id », une colonne MÉTIER : « referentiel_exigences » nomme son
+          -- domaine par (domaine_id, referentiel_id) — ce qui empêche une exigence de
+          -- déclarer un référentiel autre que celui de son domaine (migration 051).
+          -- Ne renseigner que la première laissait la seconde remplie par la valeur
+          -- générique du balayage, et l'insertion rendait 409 pour une raison
+          -- étrangère à ce que l'essai mesure.
+          cross join lateral (
+                select coalesce(jsonb_agg(jsonb_build_object('locale', al.attname,
+                                                             'cible',  af.attname)
+                                          order by k.ord), '[]'::jsonb) as paires
+                  from unnest(c.conkey) with ordinality k(att, ord)
+                  join unnest(c.confkey) with ordinality f(att, ord2)
+                    on f.ord2 = k.ord
+                  join pg_attribute al on al.attrelid = c.conrelid and al.attnum = k.att
+                  join pg_attribute af on af.attrelid = c.confrelid and af.attnum = f.att
+                 where al.attname <> 'filiale_id' and al.attname <> col.attname) autres
          where c.contype = 'f' and c.confdeltype = 'c' and n.nspname = 'public'
            and exists (select 1 from pg_trigger t join pg_proc p on p.oid = t.tgfoid
                         where t.tgrelid = cl.oid and not t.tgisinternal

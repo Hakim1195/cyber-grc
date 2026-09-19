@@ -123,25 +123,14 @@
     <script src="js/core/palette.js"></script>
     <script src="js/services/echeances.js"></script>
 
-    <!-- Référentiels (catalogue statique : registre + fichiers de données) -->
+    <!-- Référentiels : le REGISTRE seul. Le catalogue, lui, n'est plus ici — lot L26,
+         action 26.1. Les six fichiers de données et leurs six dictionnaires de
+         traduction, douze balises de plus à cet endroit jusqu'au 19/09/2026, vivent
+         désormais EN BASE et arrivent dans le jeu de données de la filiale ;
+         `Referentiels.hydrater()` reconstruit le registre à chaque chargement.
+         Les fichiers source subsistent hors de la racine web, dans
+         `backend/db/catalogues/`, comme source du semis et étalon du banc. -->
     <script src="js/data/referentiels.js"></script>
-    <script src="js/data/ref_anssi.js"></script>
-    <script src="js/data/ref_iso27002.js"></script>
-    <script src="js/data/ref_iso27001_smsi.js"></script>
-    <script src="js/data/ref_nis2.js"></script>
-    <script src="js/data/ref_dora.js"></script>
-    <script src="js/data/ref_aircyber.js"></script>
-    <!-- Traductions des catalogues (lot L11). Chargées APRÈS les catalogues :
-         elles n'enregistrent que des chaînes, indexées par les identifiants du
-         catalogue français, qui reste la source. Une chaîne absente retombe sur
-         le français — une exigence non traduite reste utilisable, une exigence
-         masquée ne l'est pas. -->
-    <script src="js/data/en/ref_anssi.js"></script>
-    <script src="js/data/en/ref_iso27002.js"></script>
-    <script src="js/data/en/ref_iso27001_smsi.js"></script>
-    <script src="js/data/en/ref_nis2.js"></script>
-    <script src="js/data/en/ref_dora.js"></script>
-    <script src="js/data/en/ref_aircyber.js"></script>
     <script src="js/data/mappings.js"></script>
 
     <!-- Modèles d'audit (grilles de points de contrôle générées depuis les référentiels) -->
@@ -181,6 +170,7 @@
     <script src="js/modules/pra_tests.js"></script>
     <script src="js/modules/pra_prestataires.js"></script>
     <script src="js/modules/campagnes.js"></script>
+    <script src="js/modules/catalogues.js"></script>
     <script src="js/modules/audits.js"></script>
 
     <script src="js/modules/pieces.js"></script>

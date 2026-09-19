@@ -130,6 +130,7 @@ import { greffonAttestations } from '../attestations/index.js';
 import { greffonAipd } from '../aipd/index.js';
 import { greffonDerogations } from '../derogations/index.js';
 import { greffonCampagnes } from '../campagnes/index.js';
+import { greffonCatalogues } from '../catalogues/index.js';
 import { greffonEbios } from '../ebios/index.js';
 import { greffonParametres } from '../parametres/index.js';
 import { greffonTiers } from '../tiers/index.js';
@@ -3244,6 +3245,18 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   // filtrer sur un seuil. Retenir un couple engage les ateliers 3 et 4, et c'est
   // « retenue », saisie par un humain et justifiée, qui le fait.
   await instance.register(greffonEbios, { pool });
+  // Lot L26, actions 26.3, 26.4 et 26.5 — les catalogues ouverts.
+  //
+  // ⚠️ TROIS LECTURES, ZÉRO ÉCRITURE, et c'est le cœur du lot. Les quatre tables
+  // de catalogue sont des entités ordinaires : un référentiel apporté par un
+  // client passe par le moteur d'import du lot L7, sans une ligne écrite là-bas.
+  // Ce greffon n'ajoute que ce que le produit ne doit PAS décider seul :
+  // l'ancienneté d'un catalogue (dérivée, jamais rangée), le PLAN de reprise des
+  // réponses d'une version à la suivante, et des PROPOSITIONS de correspondances.
+  //
+  // ⚠️ Une correspondance appliquée sans validation propagerait un statut de
+  // conformité faux : la suggestion est une proposition, jamais une écriture.
+  await instance.register(greffonCatalogues, { pool });
   // Les RÉGLAGES (19/09/2026) — `parametres`, vivante depuis la `001` et lue par
   // personne, cesse de l'être.
   //

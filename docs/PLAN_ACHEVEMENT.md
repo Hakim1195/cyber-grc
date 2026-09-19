@@ -85,7 +85,7 @@ Questionnaires fournisseurs et leur relance ; registre DORA des prestataires cri
 > cette vague, aucun par le banc** — dont une campagne convoquée *indestructible* et un bloc
 > de création invisible pour le seul compte qui en avait le droit.
 
-### V-D — Méthode et catalogues *(L25, L26)* — 🟡 **L25 CLOS le 19/09/2026**
+### V-D — Méthode et catalogues *(L25, L26)* — ✅ **CLOSE le 19/09/2026**
 
 **EBIOS RM** (sources de risque, scénarios stratégiques et opérationnels) en préservant les
 cotations F×G×M existantes ; quantification ; **catalogues ouverts** — importer et éditer un
@@ -162,7 +162,25 @@ référentiel sans toucher au code.
 > élargie attrape — *un garde qui ne regarde pas rend zéro anomalie, c'est-à-dire ce
 > qu'il rend quand tout va bien*. Il balaie désormais le catalogue entier.
 >
-> **⇒ LE LOT L25 EST COMPLET.** Reste **L26**, les catalogues ouverts.
+> **Livré le 19/09/2026 — le lot L26 EN ENTIER, et la vague D avec lui** (migrations
+> `051` et `052`, schéma `data` en **v26**, écran « Gestion des catalogues »). Les six
+> catalogues, leurs 40 domaines, leurs **424 exigences** et leurs six dictionnaires
+> quittent la racine web et entrent en base.
+>
+> ⚠️ **Les codes sont conservés À L'OCTET PRÈS**, et c'est le critère du lot : ils sont la
+> moitié droite de la clé par laquelle toute auto-évaluation est stockée. Le semis a été
+> **engendré** depuis les fichiers source, et le banc les compare à la base champ par
+> champ à chaque exécution.
+>
+> 🛑 **Deux défauts trouvés par le banc, et deux en cliquant sur la recette** : le balayage
+> de renommage réécrivait les **codes du catalogue ANSSI** ; une colonne `jsonb` était tenue
+> pour changée à chaque fois, de sorte qu'une filiale ne pouvait plus **relire son propre
+> export** ; l'écran perdait sa **barre d'onglets** sans une erreur ; et la **veille était
+> INERTE** — colonne, dérivation et garde-fou livrés, et aucune fenêtre de surveillance.
+> *Une capacité qu'aucune donnée n'active est une capacité absente.*
+>
+> **⇒ LES LOTS L25 ET L26 SONT COMPLETS. La vague D est CLOSE** — reste le **rejeu
+> INTÉGRAL de l'indicateur**, que le §4 impose à chaque clôture de vague.
 
 ### V-E — Ouverture et automatisation *(L22, L23)*
 
@@ -187,6 +205,14 @@ humain **décide**. Le portail est le premier composant hors VPN.
 `docs/COMPARATIF_MARCHE.md` — **86 fonctionnalités**. **35 ✅ à l'établissement du
 08/09/2026 ; 44 ✅ · 12 🟡 · 30 ❌ au rejeu du 16/09/2026**, clôture de la vague B. Cible
 **76 ✅**. Il se rejoue à la clôture de chaque vague ; il ne s'estime pas.
+
+⚠️ **Rejoué INTÉGRALEMENT le 19/09/2026, à la clôture de la vague D : 51 ✅ · 15 🟡 ·
+20 ❌ (~68 %).** Onze lignes déplacées par L25 et L26, les vingt ❌ restants confrontés au
+dépôt par recherche de leur mécanisme, trois faux amis ouverts et écartés à la main.
+🛑 **Et le rejeu a trouvé un défaut dans l'indicateur lui-même** : les dix-huit en-têtes de
+section n'avaient **jamais été recomptés**, et dix contredisaient les lignes qu'elles
+surplombent. Ils le sont désormais par programme — *le constat Q-219, dans le document qui
+sert à mesurer tout le reste.*
 
 ⚠️ **Le rejeu du 16/09 est PARTIEL, et le document le dit** : seules les onze lignes que
 les vagues A et B pouvaient déplacer ont été remesurées ; les soixante-quinze autres

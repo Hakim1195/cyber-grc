@@ -29,7 +29,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
-import { RACINE_FRONTEND } from '../aide/serveur.mjs';
+import { RACINE_BACKEND, RACINE_FRONTEND } from '../aide/serveur.mjs';
 
 /**
  * Charge le registre et le catalogue ANSSI hors navigateur.
@@ -42,9 +42,12 @@ import { RACINE_FRONTEND } from '../aide/serveur.mjs';
  * vide **sans lever**. L'essai serait vert sur un catalogue jamais chargé.
  */
 function chargerAnssi() {
-  const morceaux = [join('js', 'data', 'referentiels.js'), join('js', 'data', 'ref_anssi.js')].map(
-    (f) => readFileSync(join(RACINE_FRONTEND, f), 'utf8'),
-  );
+  // ⚠️ Le REGISTRE est resté dans la racine web ; le CATALOGUE l'a quittée au lot L26
+  // (action 26.1) — il vit en base, et `backend/db/catalogues/` en garde la SOURCE.
+  const morceaux = [
+    readFileSync(join(RACINE_FRONTEND, 'js', 'data', 'referentiels.js'), 'utf8'),
+    readFileSync(join(RACINE_BACKEND, 'db', 'catalogues', 'ref_anssi.js'), 'utf8'),
+  ];
   const fabrique = new Function('window', `${morceaux.join('\n;\n')}\nreturn Referentiels;`);
   const registre = fabrique({ I18n: { langue: () => 'fr' } });
   const ref = registre.get('anssi-hygiene');

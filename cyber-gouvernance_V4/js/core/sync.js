@@ -592,6 +592,19 @@ const Sync = (() => {
     // — la forme des exports d'avant le suffixe aléatoire — en est un.
     const ID_DISTINCTIF = /^[A-Za-z][A-Za-z0-9_]*-[A-Za-z0-9_-]{8,}$/;
 
+    /**
+     * Les collections de CATALOGUE — lot L26, action 26.1.
+     *
+     * Elles portent le texte des normes, pas des données de gestion : aucune de
+     * leurs lignes ne référence un enregistrement de l'utilisateur, et leurs
+     * « codes » sont des identifiants de mesure (« 7 », « 5.1 », « A.8.24 ») que le
+     * balayage de renommage confondrait avec des références.
+     */
+    const CATALOGUE = new Set([
+        "referentiels", "referentiel_domaines", "referentiel_exigences",
+        "referentiel_traductions"
+    ]);
+
     function renommer(collection, ancien, nouveau) {
         if (!ancien || !nouveau || ancien === nouveau) return;
         const data = donnees();
@@ -616,7 +629,32 @@ const Sync = (() => {
                 if (v && typeof v === "object") remplacer(v);
             });
         };
-        collections.forEach(c => (data[c] || []).forEach(x => {
+        collections.forEach(c => {
+            // ── ⚠️ LE CATALOGUE N'EST PAS DE LA DONNÉE DE GESTION ─────────────
+            //
+            // Le balayage ci-dessus réécrit **toute chaîne égale à l'ancien
+            // identifiant**, parce qu'il ne peut pas savoir lesquels de ces champs
+            // étaient vraiment des références : `/api/modele` rend le TYPE d'une
+            // colonne, jamais sa nature de référence (`CLAUDE.md` §3, cas c). Il
+            // réécrit donc, et il PRÉVIENT — avec le compte.
+            //
+            // ⚠️ **Depuis le lot L26, cela ne suffit plus.** Les catalogues vivent
+            // dans `data` : les codes du guide d'hygiène de l'ANSSI y sont « 1 » à
+            // « 42 », et la reprise d'un export ancien peut porter un identifiant
+            // « 7 ». Le balayage réécrirait alors le code « 7 » de l'ANSSI — qui est
+            // la moitié droite de la clé par laquelle toute auto-évaluation est
+            // stockée. La réponse d'audit donnée sur la mesure 7 désignerait un
+            // identifiant de risque.
+            //
+            // Ces quatre collections sont donc ÉCARTÉES, et le motif est net : un
+            // catalogue de norme ne référence AUCUN enregistrement de l'utilisateur.
+            // Il n'a rien à recaler — il n'a que des dégâts à subir.
+            //
+            // ⚠️ Liste écrite à la main, et assumée : son omission n'est pas
+            // silencieuse — le bandeau compte les valeurs réécrites et les annonce.
+            // C'est le second cas du tableau du `CLAUDE.md` §3.
+            if (CATALOGUE.has(c)) return;
+            (data[c] || []).forEach(x => {
             if (!x || typeof x !== "object") return;
             const avant = touchesAilleurs;
             remplacer(x);
@@ -628,7 +666,8 @@ const Sync = (() => {
             // personne l'ait demandé — et sans que rien ne les fasse partir.
             if (c === collection && x.id === nouveau) return;
             if (reference[c] && reference[c].has(x.id)) renommagesAPousser.add(cle(c, x.id));
-        }));
+            });
+        });
 
         if (touchesAilleurs > 0 && !ID_DISTINCTIF.test(ancien)) {
             renommagesLarges.add(ancien + " → " + touchesAilleurs + " valeur(s)");

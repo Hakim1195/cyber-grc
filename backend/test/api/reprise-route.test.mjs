@@ -847,8 +847,8 @@ describe('Le dernier chemin non éprouvé : un vieil export réel, de bout en bo
     // Les paliers ont bien été traversés — sinon on aurait éprouvé un fichier déjà à
     // jour, déguisé en vieil export. HUIT depuis la montée v14 : 6→7 … 13→14.
     assert.equal(reponse.corps.rapport.version_origine, 6);
-    assert.equal(reponse.corps.rapport.version_cible, 25);
-    assert.equal(reponse.corps.rapport.paliers.length, 19, 'v6 → v25, c’est dix-neuf paliers.');
+    assert.equal(reponse.corps.rapport.version_cible, 26);
+    assert.equal(reponse.corps.rapport.paliers.length, 20, 'v6 → v26, c’est vingt paliers.');
 
     // Et tout est arrivé : le compte des créations doit égaler celui du fichier.
     const crees = Object.values(reponse.corps.bilan.crees).reduce((s, n) => s + n, 0);

@@ -708,7 +708,13 @@ window.UI = (function () {
                 // filiales : c'est une vue de la conformité, pas un sujet à part. Un
                 // onglet, donc, et non une entrée de menu — sans quoi on rendrait au
                 // menu les entrées qu'on vient de lui retirer (`docs/PLAN_INTERFACE.md`).
-                Object.freeze({ route: "/campagnes", libelle: "Campagnes du Groupe" })
+                Object.freeze({ route: "/campagnes", libelle: "Campagnes du Groupe" }),
+                // Lot L26 — GÉRER les catalogues n'est pas les ÉVALUER. L'onglet
+                // « Catalogue » sert à répondre ; celui-ci sert à savoir ce que les
+                // catalogues contiennent, quand la norme a été publiée, et ce qu'un
+                // changement de version met en jeu. Un onglet du même sujet, donc,
+                // et non une entrée de menu de plus (`docs/PLAN_INTERFACE.md`).
+                Object.freeze({ route: "/catalogues", libelle: "Gestion des catalogues" })
             ])
         })
     ];

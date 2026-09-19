@@ -1440,9 +1440,19 @@ begin
                -- déclencheurs neufs sont bien « trg_echelles_portee_figee » et
                -- « trg_echelle_niveaux_portee_figee », posés par f_poser_portee_figee()
                -- et armés « always ».
-               '20 sur 20',
+               -- 24 depuis la `051` : les quatre tables de catalogue naissent MIXTES
+               -- (action 26.1). Le socle des six référentiels livrés est lisible de
+               -- toutes les filiales — c'est ce qui fait qu'une filiale évalue ISO 27001
+               -- sans rien décider —, tandis qu'une grille APPORTÉE par une filiale
+               -- (action 26.2) n'appartient qu'à elle. Vérifié un par un : les quatre
+               -- déclencheurs neufs sont « trg_referentiels_portee_figee »,
+               -- « trg_referentiel_domaines_portee_figee »,
+               -- « trg_referentiel_exigences_portee_figee » et
+               -- « trg_referentiel_traductions_portee_figee », posés par
+               -- f_poser_portee_figee() et armés « always ».
+               '24 sur 24',
                format('%s sur %s', count(*) filter (where t.tgenabled = 'A'), count(*)),
-               case when count(*) = 20 and count(*) filter (where t.tgenabled = 'A') = 20
+               case when count(*) = 24 and count(*) filter (where t.tgenabled = 'A') = 24
                     then 'OK' else 'ÉCHEC' end
           from pg_trigger t
          where not t.tgisinternal

@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 25;
+export const VERSION_SCHEMA = 26;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -202,6 +202,15 @@ export const COLLECTIONS = [
   'echelle_niveaux',
   // v25 — la quantification financière d'un risque (action 25.4).
   'risque_quantification',
+  // v26 — les catalogues de référentiels (action 26.1). ⚠️ Ils voyagent dans le
+  // fichier d'échange comme le reste : une grille apportée par une filiale est de la
+  // DONNÉE CLIENT, et une sauvegarde qui l'oublierait la perdrait. Le socle du Groupe
+  // y voyage aussi, et la reprise le réécrit — ce qui est sans effet quand il est
+  // identique, et ce qui est la bonne réponse quand il ne l'est pas.
+  'referentiels',
+  'referentiel_domaines',
+  'referentiel_exigences',
+  'referentiel_traductions',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -1201,6 +1210,107 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     ],
     dates: ['evaluee_le'],
     references: [{ champ: 'risque_id', cible: 'risques' }],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  // ── v26 : LES CATALOGUES DE RÉFÉRENTIELS (action 26.1) ────────────────────
+  //
+  // ⚠️ **`code` n'a AUCUNE borne, et c'est délibéré.** Il est la moitié droite de la
+  // clé par laquelle toute auto-évaluation est stockée : le normaliser, le tronquer ou
+  // le recadrer réattribuerait des réponses d'audit **en silence**. Ce qui le borne est
+  // la contrainte du schéma, qui refuse plutôt que de corriger.
+  //
+  // ⚠️ **`codes_officiels`, `cl_labels` et `dictionnaire` voyagent tels quels.** Ce sont
+  // des documents figés qui accompagnent le catalogue ; les décomposer en champs les
+  // rendrait partiellement reprenables, c'est-à-dire silencieusement incomplets.
+  referentiels: {
+    // ⚠️ **AUCUN PRÉFIXE ATTENDU, et c'est une décision, pas un oubli.** Les
+    // identifiants des six catalogues livrés sont ceux que `evaluations.ref_id`
+    // porte depuis la v3 du schéma — « anssi-hygiene », « iso-27002-2022 »,
+    // « dora ». Attendre « REFT- » ferait signaler SIX identifiants à chaque
+    // restauration d'une sauvegarde saine : *un message qui annonce un problème
+    // qui n'existe pas apprend à ne plus lire les messages*, y compris le jour
+    // où il dit vrai (classe des constats Q-201 et Q-207).
+    //
+    // Le précédent est `mappings`, et le motif est le même : un identifiant repris
+    // de l'existant n'a pas à ressembler à un identifiant fabriqué. Un référentiel
+    // créé PAR LE PRODUIT, lui, reçoit bien un « REFT-… » engendré par le défaut
+    // de la colonne — ce que la couche d'accès pose, et que la reprise respecte.
+    prefixe: null,
+    champs: [
+      'id',
+      'nom',
+      'editeur',
+      'version',
+      'description',
+      'aide',
+      'scoring',
+      'note_numerotation',
+      'codes_officiels',
+      'cl_labels',
+      'revision',
+      'statut',
+      'remplace_id',
+      'en_vigueur_le',
+      'archive_le',
+      'publie_le',
+      'duree_alerte_mois',
+    ],
+    enumerations: [
+      { champ: 'scoring', valeurs: ['maturite', 'conformite'], videAdmis: false },
+      { champ: 'statut', valeurs: ['en_vigueur', 'archive'], videAdmis: false },
+    ],
+    bornes: [],
+    dates: ['en_vigueur_le', 'archive_le', 'publie_le'],
+    references: [{ champ: 'remplace_id', cible: 'referentiels' }],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  referentiel_domaines: {
+    prefixe: 'REFD',
+    champs: ['id', 'referentiel_id', 'code', 'nom', 'court', 'aide', 'rang'],
+    enumerations: [],
+    bornes: [],
+    dates: [],
+    references: [{ champ: 'referentiel_id', cible: 'referentiels' }],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  referentiel_exigences: {
+    prefixe: 'REFE',
+    champs: [
+      'id',
+      'domaine_id',
+      'referentiel_id',
+      'code',
+      'titre',
+      'aide',
+      'niveau',
+      'priorite',
+      'cl',
+      'code_officiel',
+      'rang',
+    ],
+    enumerations: [
+      { champ: 'niveau', valeurs: ['bronze', 'silver', 'gold'], videAdmis: true },
+      { champ: 'priorite', valeurs: ['low', 'medium', 'high'], videAdmis: true },
+    ],
+    bornes: [],
+    dates: [],
+    references: [
+      { champ: 'domaine_id', cible: 'referentiel_domaines' },
+      { champ: 'referentiel_id', cible: 'referentiels' },
+    ],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  referentiel_traductions: {
+    prefixe: 'REFX',
+    champs: ['id', 'referentiel_id', 'langue', 'dictionnaire'],
+    enumerations: [{ champ: 'langue', valeurs: ['en', 'es'], videAdmis: false }],
+    bornes: [],
+    dates: [],
+    references: [{ champ: 'referentiel_id', cible: 'referentiels' }],
     referencesMultiples: [],
     cleMetier: null,
   },
@@ -2471,6 +2581,39 @@ const PALIERS: readonly EtapePalier[] = [
     // indiscernable d'un risque estimé, **dans l'outil qui sert de preuve en audit**,
     // et c'est ce montant-là qui remonte au comité de direction.
     appliquer: paliersCollections(['risque_quantification']),
+  },
+  {
+    de: 25,
+    vers: 26,
+    libelle:
+      'Lot L26, action 26.1 : l’instantané gagne les CATALOGUES DE RÉFÉRENTIELS — les ' +
+      'six livrés et ceux qu’une filiale apporte. ⚠️ Un fichier d’avant la v26 n’en ' +
+      'porte aucun : le socle vit en base depuis la migration `051`, et la reprise ne ' +
+      'le remplace pas par du vide.',
+    // ⚠️ **LE PALIER CRÉE DES TABLEAUX VIDES, ET C'EST EXACTEMENT CE QU'IL FAUT.**
+    //
+    // Un export d'avant la v26 ne porte aucun catalogue, parce qu'ils n'étaient pas
+    // dans `data` : ils étaient des fichiers JavaScript. Le palier ajoute donc quatre
+    // tableaux vides, et la reprise n'écrit rien dans ces quatre tables.
+    //
+    // ⚠️ **C'est la bonne réponse, et le mécanisme qui la garantit mérite d'être dit
+    // exactement, parce qu'il n'est pas celui qu'on croit.** Le socle des six catalogues
+    // est déjà en base, semé par la migration `051`. Si une reprise « remplacer » le
+    // purgeait pour ne rien remettre, **toutes les auto-évaluations de l'installation
+    // désigneraient des référentiels disparus**.
+    //
+    // Ce qui l'empêche n'est PAS que le fichier soit vide : c'est que
+    // `purgerFiliale()` supprime `where filiale_id = $1`, et que le socle porte
+    // `filiale_id` NUL **par construction**. Il est donc hors de portée de la purge,
+    // comme le socle des risques et celui des échelles avant lui. *Mesuré dans le code
+    // de la purge, pas déduit du palier* — un palier qui livrerait des tableaux vides
+    // ne protégerait rien si la purge, elle, balayait toute la table.
+    appliquer: paliersCollections([
+      'referentiels',
+      'referentiel_domaines',
+      'referentiel_exigences',
+      'referentiel_traductions',
+    ]),
   },
 ];
 

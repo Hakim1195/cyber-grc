@@ -174,6 +174,13 @@ async function creer(entite, champs = {}) {
         ? 1
         : forme.type === 'booleen'
           ? false
+          // ⚠️ Un document STRUCTURÉ, et non une chaîne : la couche d'écriture
+          // refuse « attend un document structuré » sur une colonne `jsonb`
+          // obligatoire — la première est `referentiel_traductions.dictionnaire`
+          // (migration `051`). Un objet vide suffit : ce que l'essai mesure est la
+          // cascade, pas le contenu du document.
+          : forme.type === 'json'
+            ? {}
           : forme.type === 'date'
             ? '2026-12-24'
             : admises !== undefined
@@ -198,6 +205,25 @@ async function creer(entite, champs = {}) {
  * mais un essai qui BOUCLERAIT au lieu de rougir ne signalerait jamais rien
  * (constat Q-251).
  */
+/**
+ * La valeur d'une colonne sur une ligne déjà créée.
+ *
+ * ⚠️ Le nom de table et celui de colonne viennent de `pg_constraint`, jamais d'une
+ * entrée : ils sont interpolés parce qu'un identifiant ne se paramètre pas en SQL,
+ * et leur origine est le catalogue de la base elle-même.
+ */
+async function valeurDuParent(table, identifiant, colonne) {
+  return await base.avecPerimetre(
+    applicatif,
+    perimetre('temoin', FILIALE_A, [FILIALE_A]),
+    async (c) => {
+      const { rows } = await c.query(
+        `select ${colonne} as valeur from ${table} where id = $1`, [identifiant]);
+      return rows[0]?.valeur ?? null;
+    },
+  );
+}
+
 async function creerAvecParents(entite, cascades, champs = {}, profondeur = 0) {
   if (profondeur > 5) {
     throw new Error(`Chaîne de parents trop profonde à partir de « ${entite} » : ` +
@@ -205,8 +231,25 @@ async function creerAvecParents(entite, cascades, champs = {}, profondeur = 0) {
   }
   const complet = { ...champs };
   for (const parent of parentsRequis(cascades, entite)) {
-    if (complet[parent.colonne] !== undefined) continue;
-    complet[parent.colonne] = await creerAvecParents(parent.parent, cascades, {}, profondeur + 1);
+    if (complet[parent.colonne] === undefined) {
+      complet[parent.colonne] = await creerAvecParents(parent.parent, cascades, {}, profondeur + 1);
+    }
+    // ── ⚠️ LES AUTRES COLONNES D'UNE CLÉ COMPOSITE ────────────────────────
+    //
+    // Une clé étrangère peut porter, en plus de l'identifiant du parent et de
+    // `filiale_id`, une colonne MÉTIER : `referentiel_exigences` nomme son domaine
+    // par `(domaine_id, referentiel_id)`, ce qui empêche une exigence de déclarer un
+    // référentiel autre que celui de son domaine (migration `051`). Les remplir avec
+    // la valeur générique du balayage rendait `409` — pour une raison étrangère à ce
+    // que cet essai mesure.
+    //
+    // ⚠️ Elles sont LUES SUR LE PARENT, et découvertes dans `pg_constraint` : une
+    // liste écrite ici manquerait la prochaine clé composite en silence.
+    for (const paire of parent.paires_complementaires ?? []) {
+      if (complet[paire.locale] !== undefined) continue;
+      complet[paire.locale] = await valeurDuParent(
+        parent.parent, complet[parent.colonne], paire.cible);
+    }
   }
   return await creer(entite, complet);
 }

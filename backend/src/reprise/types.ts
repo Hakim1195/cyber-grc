@@ -115,7 +115,12 @@ export type NomCollection =
   | 'echelles'
   | 'echelle_niveaux'
   // v25 — la quantification financière d'un risque (action 25.4).
-  | 'risque_quantification';
+  | 'risque_quantification'
+  // v26 — les catalogues de référentiels (lot L26, action 26.1).
+  | 'referentiels'
+  | 'referentiel_domaines'
+  | 'referentiel_exigences'
+  | 'referentiel_traductions';
 
 /**
  * Charge utile normalisée en v12.

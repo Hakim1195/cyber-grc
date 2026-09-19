@@ -149,9 +149,9 @@ locale, L28 portail fournisseur — en dernier, seules surfaces externes).
 
 **Et le frontend**, en parallèle : voir §6.
 
-**L'indicateur** : `docs/COMPARATIF_MARCHE.md` — 86 fonctionnalités, **46 ✅ · 15 🟡 ·
-25 ❌ (~62 %) au rejeu INTÉGRAL du 18/09**, à la clôture de la vague C (35 ✅ au 08/09,
-44 ✅ au rejeu partiel du 16/09), cible **76**. Il se **rejoue**, il ne s'estime pas — et
+**L'indicateur** : `docs/COMPARATIF_MARCHE.md` — 86 fonctionnalités, **51 ✅ · 15 🟡 ·
+20 ❌ (~68 %) au rejeu INTÉGRAL du 19/09**, à la clôture de la vague D (35 ✅ au 08/09,
+44 ✅ au rejeu partiel du 16/09, 46 ✅ au rejeu intégral du 18/09), cible **76**. Il se **rejoue**, il ne s'estime pas — et
 celui-ci est le premier intégral : les 86 lignes en trois balayages, dont la méthode est
 écrite dans le document pour qu'on puisse la refaire. ⚠️ Ce que le troisième balayage ne
 prouve pas est dit aussi : *qu'un écran existe ne dit pas qu'il fonctionne* — il confirme
@@ -169,8 +169,8 @@ qu'on n'ait pas à le chercher :
 | | |
 |---|---|
 | **Livré, dans l'ordre** | EBIOS RM ateliers 1 à 5 (migrations `046`, `047`, schéma `data` **v23**), copie du journal vers un agrégateur, écran **Paramètres** en quatre onglets, puis **les échelles de cotation** (migration `049`, schéma `data` **v24**) |
-| **Le geste suivant** | **L26** — les catalogues ouverts. ✅ *L25 est CLOS depuis le 19/09/2026 : l'action 25.4, la quantification FAIR, est livrée (migration `050`, schéma `data` en v25)* |
-| **Mesuré après 25.4** | **50 migrations** · **77 tables** · **308 politiques** · **55 garde-fous** · **432 décisions** — le banc et la publication sont relevés à la révision citée dans le `CHANGELOG.md` |
+| **Le geste suivant** | **Le rejeu INTÉGRAL de `docs/COMPARATIF_MARCHE.md`**, que le `PLAN_ACHEVEMENT.md` §4 impose à la clôture d'une vague. Puis la **vague E** — L22 (jetons, événements, connecteurs) et L23 (collecte automatique, CCM). ✅ *La vague D est CLOSE : L25 et L26 sont livrés en entier* |
+| **Mesuré après L26** | **52 migrations** · **81 tables** · **324 politiques** · **56 garde-fous** · **455 décisions** · publication **82 fichiers** (douze de moins : les catalogues ont quitté la racine web) |
 | **Déployé** | oui, sur la recette, et **parcouru au navigateur** — c'est là que trois défauts sur quatre ont été trouvés |
 
 ✅ **Livré le 18/09 au soir — EBIOS RM, ateliers 1 et 2** (actions **25.1** en partie,
@@ -337,7 +337,41 @@ serveur —, et non par une liste, qui aurait manqué le prochain en silence.
 sous la mutation, parce que le **sondage** finissait par rapporter la modification. Ce qui
 mord est le **compte des rechargements** (`test/navigateur/quantification.test.mjs`).
 
-⚠️ **Et la migration a été refusée TROIS FOIS par `f_verifier_schema()`** — trois colonnes
+✅ **LE LOT L26 EST LIVRÉ LE 19/09/2026 — LES CATALOGUES OUVERTS, ET LA VAGUE D EST
+CLOSE.** Migrations `051` et `052`, schéma `data` en **v26**, écran « Gestion des
+catalogues » en onglet du sujet « référentiels ».
+
+⚠️ **Ce qu'il faut savoir avant d'y toucher :**
+
+1. **Les codes sont la clé, et ils sont conservés à l'octet près.** Les auto-évaluations
+   sont stockées par `(ref_id, code)`. Le semis de la `051` a été **ENGENDRÉ** depuis
+   `backend/db/catalogues/*.js` — les fichiers qui servaient de catalogue au navigateur,
+   sortis de la racine web —, et `test/catalogues/fidelite.test.mjs` compare la base à ces
+   mêmes fichiers, champ par champ, à chaque banc. ⚠️ **Corriger une coquille dans un de
+   ces fichiers ne corrige plus rien dans le produit** : il faut une migration, et le banc
+   rougit tant que les deux ne disent pas la même chose.
+2. **Le registre du navigateur n'a pas changé d'interface — il a changé de source.**
+   `Referentiels.get()`, `all()`, `flatExigences()` sont intacts ; `hydrater()` les
+   alimente depuis `data`. C'est le principe du lot L2, reconduit.
+3. **`evaluations.ref_id` n'a PAS de clé étrangère**, et le garde-fou le vérifie
+   POSITIVEMENT. Elle a l'air d'un oubli ; le jour où quelqu'un la pose, une réponse
+   d'audit cesse de survivre à l'archivage du catalogue qui l'a produite.
+
+🛑 **DEUX DÉFAUTS TROUVÉS PAR LE BANC, ET LE PREMIER ÉTAIT GRAVE** : le balayage de
+renommage de `js/core/sync.js` réécrivait les **codes du catalogue ANSSI** (« 7 → 4
+valeur(s) » au lieu d'une) — les quatre collections de catalogue en sont désormais
+écartées ; et une colonne `jsonb` était tenue pour **changée à chaque fois**, de sorte
+qu'une filiale ne pouvait plus **relire son propre export** (403 sur le socle). ⚠️ Ce
+second défaut **dormait depuis les premières colonnes `jsonb`** : il ne s'était jamais vu
+parce qu'aucune de ces tables ne porte de ligne de portée Groupe.
+
+⚠️ **ET DEUX AUTRES EN CLIQUANT SUR LA RECETTE** — le septième et le huitième de la
+semaine : l'écran perdait sa **barre d'onglets** (`ongletsHtml` attend la liste que
+`ongletsDe` compose, pas une route, et il rendait la chaîne vide **sans une erreur**), et
+la **veille était INERTE** — colonne, dérivation et garde-fou livrés, et aucune fenêtre de
+surveillance. *Une capacité qu'aucune donnée n'active est une capacité absente.*
+
+⚠️ **Et la migration de 25.4 avait été refusée TROIS FOIS par `f_verifier_schema()`** — trois colonnes
 `jsonb` sans décision au registre de l'article 30, quatre tables sans déclencheur de
 pièces, une unicité sans `filiale_id`. La troisième correction était elle-même fautive :
 le régime « signaler » construit une comparaison **textuelle** que la base refuse sur un

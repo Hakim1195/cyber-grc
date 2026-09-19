@@ -102,11 +102,11 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
     assert.match(corps.authentification.lot_attendu, /L3/);
   });
 
-  test('GET /api/modele — décrit les 42 entités, et ne fuit aucun nom de table', async () => {
+  test('GET /api/modele — décrit les 46 entités, et ne fuit aucun nom de table', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/modele');
     assert.equal(statut, 200);
-    assert.equal(Object.keys(corps.entites).length, 42);
-    assert.equal(corps.schemaVersion, 25);
+    assert.equal(Object.keys(corps.entites).length, 46);
+    assert.equal(corps.schemaVersion, 26);
 
     const texte = JSON.stringify(corps);
     for (const interdit of ['mesure_catalogue', 'mesure_mise_en_oeuvre', 'evaluation_mesures', base.nom]) {
@@ -120,7 +120,7 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
   test('GET /api/donnees — rend le jeu de la filiale, dans la forme de « data »', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/donnees');
     assert.equal(statut, 200);
-    assert.equal(corps.data.schemaVersion, 25);
+    assert.equal(corps.data.schemaVersion, 26);
     assert.ok(corps.data.risques.some((r) => r.id === 'RISK-A'));
     assert.ok(corps.data.documents.some((d) => d.id === 'DOC-G'), 'Le socle Groupe fait partie du chargement.');
 
@@ -873,6 +873,13 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // métier, leurs événements redoutés et les sources de risque retenues contre
     // elles — c'est-à-dire, très exactement, ce qu'un attaquant irait lire en premier.
     ['GET', '/api/ebios/etat', undefined],
+    // Les catalogues ouverts (lot L26). ⚠️ Servies sans identité, les trois diraient
+    // quels référentiels une filiale évalue, combien de réponses elle a déjà données,
+    // et le texte intégral d'une grille qu'un donneur d'ordre lui a confiée sous
+    // condition de confidentialité.
+    ['GET', '/api/catalogues/etat', undefined],
+    ['GET', '/api/catalogues/reprise-evaluations?de=a&vers=b', undefined],
+    ['GET', '/api/catalogues/suggestions?source=a&cible=b', undefined],
     // Les réglages (19/09/2026). ⚠️ Servie sans identité, la lecture dirait quels
     // seuils une filiale s'est donnés — et l'écriture laisserait n'importe qui
     // changer le comportement du produit pour tout le monde.

@@ -171,6 +171,10 @@ async function startApp() {
         // « Prestataire introuvable » (même piège que /rgpd-aipd).
         "/tiers-dora": () => { if (typeof PraPrestatairesModule !== "undefined") PraPrestatairesModule.renderRegistreDora(); },
         "/campagnes": () => { if (typeof CampagnesModule !== "undefined") CampagnesModule.renderList(); },
+        // Lot L26 — la GESTION des catalogues : ce qu'ils contiennent, quand la
+        // norme a été publiée, laquelle remplace laquelle. L'onglet « Catalogue »,
+        // lui, sert à les ÉVALUER, et il n'a pas bougé.
+        "/catalogues": () => { if (typeof CataloguesModule !== "undefined") CataloguesModule.renderList(); },
 
 	"/audits": () => { if (typeof AuditsModule !== "undefined") AuditsModule.renderList(); },
 	"/audits/:id": (id) => { if (typeof AuditsModule !== "undefined") AuditsModule.renderAuditDetail(id); },
@@ -406,6 +410,7 @@ const ROUTE_META = {
     "/prestataires": { s: "fil.section.continuite", t: "fil.prestataires" },
     "/tiers-dora": { s: "fil.section.tiers", t: "fil.tiersDora" },
     "/campagnes": { s: "fil.section.conformite", t: "fil.campagnes" },
+    "/catalogues": { s: "fil.section.conformite", t: "fil.catalogues" },
     "/settings":     { s: "fil.section.administration", t: "fil.settings" },
     "/settings-reglages":   { s: "fil.section.administration", t: "fil.settings" },
     "/settings-echange":    { s: "fil.section.administration", t: "fil.settings" },
@@ -1138,6 +1143,7 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/prestataires": "tiers",
     "/tiers-dora": "tiers",
     "/campagnes": "conformite",
+    "/catalogues": "conformite",
     "/personnel":    "personnel",
     "/actifs":       "actifs",
     "/cartographie": "actifs",

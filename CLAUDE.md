@@ -32,7 +32,7 @@
 > le 08/09/2026** — jeu de découverte autorisé, IA locale par défaut avec externe encadré,
 > portail fournisseur validé) et
 > **[`docs/COMPARATIF_MARCHE.md`](docs/COMPARATIF_MARCHE.md)** (les 86 fonctionnalités de
-> l'état de l'art, mesurées dans le dépôt — **46 ✅ · 15 🟡 · 25 ❌ au 18/09/2026**,
+> l'état de l'art, mesurées dans le dépôt — **51 ✅ · 15 🟡 · 20 ❌ (~68 %) au 19/09/2026**,
 > **rejeu INTÉGRAL** à la clôture de la vague C : les 86 lignes en trois balayages, et la
 > méthode est écrite pour qu'on puisse la refaire).
 > ⚠️ **Le §0 bis du `PLAN_PRODUIT.md` fait autorité sur l'ordonnancement** : aucun lot L17+
@@ -76,10 +76,11 @@
 > [`docs/PLAN_ACHEVEMENT.md`](docs/PLAN_ACHEVEMENT.md) ; les **chiffres** vivent au
 > [`backend/README.md`](backend/README.md) §8, seul endroit gardé mécaniquement.
 >
-> En trois lignes, pour n'avoir pas à chercher : **vague D entamée**, **L25 livré EN
-> ENTIER** — l'action 25.4, la quantification financière FAIR, est livrée le 19/09/2026
-> (migration `050`, schéma `data` en **v25**). Le geste suivant est **L26**, les
-> catalogues ouverts. Les chiffres du schéma vivent au `backend/README.md` §8.
+> En trois lignes, pour n'avoir pas à chercher : **la vague D est CLOSE** — **L25** (EBIOS
+> RM, échelles, quantification FAIR) et **L26** (catalogues ouverts) sont livrés en entier,
+> schéma `data` en **v26**, 52 migrations. Le geste suivant est le **rejeu INTÉGRAL de
+> `docs/COMPARATIF_MARCHE.md`**, puis la **vague E** (L22, L23). Les chiffres du schéma
+> vivent au `backend/README.md` §8.
 >
 > Les sous-sections qui suivent sont l'HISTORIQUE, de la plus ancienne à la plus
 > récente. Elles gardent leurs leçons de méthode, qui valent ; elles ne disent pas
@@ -311,16 +312,35 @@
 > le déclencheur fautif que la rédaction élargie attrape. Il balaie désormais le catalogue
 > ENTIER (`CONVENTIONS.md` §39).
 >
-> Le geste suivant : **L26** (catalogues ouverts).
+> **⇒ Au 19/09/2026 : LE LOT L26 EST LIVRÉ — LES CATALOGUES OUVERTS.** Migrations `051`
+> et `052`, schéma `data` en **v26**, écran « Gestion des catalogues » en onglet du sujet
+> « référentiels ». Les six catalogues, leurs 40 domaines, leurs **424 exigences** et
+> leurs six dictionnaires quittent la racine web et entrent en base : une évolution de
+> norme cesse d'être une livraison de code, un client peut apporter sa grille, et le
+> produit DATE ses catalogues.
+> ⚠️ **Les codes sont conservés à l'octet près** — ils sont la moitié droite de la clé
+> `(ref_id, code)` par laquelle toute auto-évaluation est stockée. Le semis a été
+> **ENGENDRÉ** depuis `backend/db/catalogues/*.js`, et le banc compare la base à ces
+> fichiers champ par champ à chaque exécution.
+> 🛑 **Deux défauts trouvés par le banc** : le balayage de renommage réécrivait les
+> **codes du catalogue ANSSI**, et une colonne `jsonb` était tenue pour changée à chaque
+> fois — une filiale ne pouvait plus **relire son propre export**. ⚠️ **Et deux en
+> cliquant sur la recette** : l'écran perdait sa barre d'onglets *sans une erreur*, et la
+> **veille était inerte** faute de fenêtre de surveillance.
+>
+> **⇒ LA VAGUE D EST CLOSE.** Le geste suivant : le **rejeu INTÉGRAL de
+> `docs/COMPARATIF_MARCHE.md`** (le `PLAN_ACHEVEMENT.md` §4 l'impose à chaque clôture de
+> vague), puis la **vague E** — L22 (jetons, événements, connecteurs) et L23 (collecte
+> automatique de preuve, surveillance continue).
 >
 > ---
 >
-> **Mesuré le 19/09/2026, après l'action 25.4** : banc **2 257 essais, 2 257 passés** ;
+> **Mesuré le 19/09/2026, après le lot L26** : banc **2 282 essais, 2 282 passés** ;
 > `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 > `verifier_cloisonnement.sql` **sous `grc_app`, sur la base de la recette** → **110/110** ;
 > `f_verifier_schema()`
 > → 0 anomalie (**54 garde-fous, 49 migrations, 76 tables, 428 décisions** au registre
-> de l'article 30) ; publication → **93 fichiers identiques au dépôt** ;
+> de l'article 30) ; publication → **82 fichiers identiques au dépôt** ;
 > `install.sh --diagnostic` → **13 conformes, 2 réserves, 0 bloquant** — la seconde étant
 > le **profil DÉCOUVERTE de cette machine**, posé le 15/09/2026.
 >
@@ -348,7 +368,7 @@
 >    [`docs/COMPARATIF_MARCHE.md`](docs/COMPARATIF_MARCHE.md) — 86 fonctionnalités de
 >    l'état de l'art GRC, chacune **mesurée dans le dépôt** : **35 ✅ · 17 🟡 · 34 ❌**
 >    à l'établissement, **44 ✅ · 12 🟡 · 30 ❌** au rejeu partiel du 16/09/2026, et
->    **46 ✅ · 15 🟡 · 25 ❌ (~62 %) au rejeu INTÉGRAL du 18/09/2026**, à la clôture de la
+>    **51 ✅ · 15 🟡 · 20 ❌ (~68 %) au rejeu INTÉGRAL du 19/09/2026**, à la clôture de la
 >    vague C — les 86 lignes passées en trois balayages, dont la méthode est écrite.
 >    [`docs/PLAN_PRODUIT.md`](docs/PLAN_PRODUIT.md) en tire **douze lots, L17 → L28**, sept
 >    portes neuves (S10 → S16) et **huit non-objectifs nommés un par un**. ⚠️ **Les trois

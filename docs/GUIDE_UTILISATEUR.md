@@ -234,6 +234,36 @@ n'ont pas coté sur la même échelle.
 ⚠️ **Et il refuse d'additionner deux devises.** Un euro et un dollar font un nombre, jamais
 une somme. La cellule affiche alors « — », et le détail dit lesquelles coexistent.
 
+### Gérer les catalogues de référentiels
+
+L'onglet **Gestion des catalogues**, à côté de *Catalogue*, ne sert pas à évaluer : il sert
+à savoir **ce que vos catalogues contiennent**, quand la norme a été publiée, laquelle
+remplace laquelle, et ce qu'un changement de version met en jeu.
+
+**Quatre choses qu'il vous dit :**
+
+1. **L'ancienneté.** Chaque catalogue porte la date de parution de son texte, et l'outil
+   signale « à vérifier » au-delà de cinq ans. ⚠️ Il **ne va pas chercher la norme sur
+   Internet** — il n'a pas d'accès sortant, et c'est voulu. Il date, et il signale.
+   « Date inconnue » veut dire ce qu'il dit : le questionnaire AirCyber ne porte pas de
+   date de parution publique, et l'outil n'en invente pas.
+2. **Ce qu'un changement de version met en jeu.** La colonne *Réponses* compte les
+   auto-évaluations déjà données sur chaque catalogue.
+3. **Le plan de reprise**, quand un catalogue en remplace un autre : ce qui se reporte, ce
+   qui est abandonné, ce qui reste à évaluer. ⚠️ **Un code identique ne garantit pas un
+   sens identique** — ISO 27002:2022 a renuméroté les 114 mesures de 2013 en 93 —, et
+   l'écran **signale les intitulés qui ont changé sous le même code**. Rien n'est reporté
+   sans votre geste, et chaque réponse reportée garde la mention de son origine.
+4. **Des correspondances proposées** entre deux référentiels, par similarité de libellés,
+   avec un score. ⚠️ **Rien n'est créé tant que vous ne cliquez pas.** Une correspondance
+   appliquée sans lecture propagerait un statut de conformité faux d'un référentiel à
+   l'autre, dans un outil produit en audit.
+
+**Pour apporter votre propre grille**, passez par l'écran *Imports* : le référentiel
+d'abord, puis ses domaines, puis ses exigences. Elle se comporte ensuite comme un
+référentiel livré — radar, déclaration d'applicabilité, correspondances, audits — et elle
+n'est visible que de votre filiale.
+
 ### Importer des données
 
 L'écran **Imports** couvre les 23 entités. Trois propriétés à connaître :

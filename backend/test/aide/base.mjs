@@ -728,7 +728,13 @@ export async function semerJeuEssai(base, client, options = {}) {
           // (« text versus empreinte_sha256 », 42P08).
           [filiale, empreinte(s), `ab/${empreinte(s)}`],
         );
-        await c.query(`insert into referentiels_actifs (id, filiale_id, ref_id, origine) values ('RA-${s}', $1, 'anssi', 'ajout_local')`, f);
+        // ⚠️ **« anssi » N'EXISTE PAS, et la clé étrangère de la migration `051` l'a
+        // dit.** Le semis activait un référentiel dont l'identifiant réel est
+        // « anssi-hygiene » : la ligne restait là, invisible de tout écran, comptée
+        // pour rien par la couverture — le constat **Q-150** sous une autre forme, et
+        // dans le jeu d'essai partagé qui sert de décor à cent trente familles.
+        // *Une valeur inventée dans un semis finit par être prise pour la réalité.*
+        await c.query(`insert into referentiels_actifs (id, filiale_id, ref_id, origine) values ('RA-${s}', $1, 'anssi-hygiene', 'ajout_local')`, f);
         // Tables mixtes, versant LOCAL (le versant Groupe est semé plus haut).
         await c.query(`insert into mesure_catalogue (id, filiale_id, nom)   values ('MESURE-${s}', $1, 'Mesure locale')`, f);
         await c.query(`insert into personnes        (id, filiale_id, nom)   values ('PERS-${s}',   $1, 'Responsable de site')`, f);
@@ -967,6 +973,47 @@ export async function semerJeuEssai(base, client, options = {}) {
         await c.query(
           `update echelles set statut = 'archivee', archivee_le = date '2026-04-01'
              where id = 'ECHL-${s}'`,
+        );
+
+        // ── Un catalogue LOCAL par filiale (migration `051`, action 26.2) ──────
+        //
+        // ⚠️ **Le socle ne suffit pas.** Les quatre tables de catalogue sont MIXTES :
+        // le semis de la migration y met six catalogues de portée GROUPE, et le
+        // balayage de cloisonnement y rendrait « zéro visible » pour la seule raison
+        // qu'aucune ligne n'appartient à une filiale — *« zéro visible » est aussi ce
+        // que rend une table vide*, et c'est la moitié du contrôle qui manque le plus
+        // souvent.
+        //
+        // ⚠️ La chaîne est COMPLÈTE — référentiel, domaine, exigence, traduction — et
+        // l'exigence porte `referentiel_id` EN PLUS de `domaine_id` : la clé étrangère
+        // est composite, et semer des lignes qui ne se référencent pas mesurerait
+        // l'insertion, pas les clés.
+        await c.query(
+          `insert into referentiels (id, filiale_id, nom, editeur, version_referentiel,
+                                     description, scoring, revision, statut, en_vigueur_le,
+                                     publie_le, duree_alerte_mois)
+               values ('REFT-${s}', $1, 'Grille du donneur d''ordre ${s}', 'Client ${s}',
+                       '2 questions', 'Grille apportée par la filiale.', 'conformite',
+                       1, 'en_vigueur', date '2026-02-01', date '2025-06-15', 36)`,
+          f,
+        );
+        await c.query(
+          `insert into referentiel_domaines (id, filiale_id, referentiel_id, code, nom, court, rang)
+               values ('REFD-${s}', $1, 'REFT-${s}', 'gouvernance', 'Gouvernance', 'Gouv.', 1)`,
+          f,
+        );
+        await c.query(
+          `insert into referentiel_exigences
+               (id, filiale_id, domaine_id, referentiel_id, code, titre, niveau, priorite, cl, rang)
+               values ('REFE-${s}', $1, 'REFD-${s}', 'REFT-${s}', '1.1',
+                       'Une politique de sécurité est-elle formalisée ?', 'bronze', 'high', 'CL0', 1)`,
+          f,
+        );
+        await c.query(
+          `insert into referentiel_traductions (id, filiale_id, referentiel_id, langue, dictionnaire)
+               values ('REFX-${s}', $1, 'REFT-${s}', 'en',
+                       '{"nom": "Customer framework"}'::jsonb)`,
+          f,
         );
 
         // ── La quantification financière d'un risque (migration `050`, action 25.4)

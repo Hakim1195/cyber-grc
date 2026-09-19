@@ -2802,7 +2802,11 @@ describe('Portée des liens documentaires et armement des déclencheurs (N-10, N
     // qu'aucune ne décide autrement. Vérifié un par un : les deux déclencheurs neufs
     // sont bien « trg_echelles_portee_figee » et « trg_echelle_niveaux_portee_figee »,
     // et ils ont été posés par `f_poser_portee_figee()` — pas à la main.
-    assert.equal(armement.length, 20, 'Quatre déclencheurs de cohérence, seize de portée.');
+    // 24 depuis la migration `051` : les quatre tables de catalogue sont MIXTES, et
+    // `f_poser_portee_figee()` les découvre comme les autres — vingt de portée, quatre
+    // de cohérence. ⚠️ Le compte est ÉPINGLÉ : un déclencheur de portée qui disparaît
+    // ne doit pas s'effacer en silence d'une table dont `filiale_id` peut être nul.
+    assert.equal(armement.length, 24, 'Quatre déclencheurs de cohérence, vingt de portée.');
     assert.deepEqual(
       [...new Set(armement.map((l) => l.armement))],
       ['A'],
@@ -4076,6 +4080,18 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // laquelle une filiale ne pourrait plus consigner son achèvement — un défaut que
       // rien ne signalerait, puisque le produit se contenterait de ne rien enregistrer.
       'campagnes',
+      // CINQUANTE-SIXIÈME, apporté par `051_les_catalogues_entrent_en_base.sql` — lot
+      // L26. Il mesure l'invariant dont dépend le stockage des auto-évaluations :
+      // l'unicité des codes d'exigence porte le RÉFÉRENTIEL et non le domaine, relevée
+      // sur les COLONNES de l'index et non sur son nom — un index qui porterait le bon
+      // nom sur les mauvaises colonnes passerait tout contrôle textuel.
+      //
+      // ⚠️ Et il vérifie POSITIVEMENT une ABSENCE, ce qui est rare : `evaluations.ref_id`
+      // n'a PAS de clé étrangère, et n'en aura pas. Elle a l'air d'un oubli ; le jour où
+      // quelqu'un la pose, une réponse d'audit cesse de survivre à l'archivage du
+      // catalogue qui l'a produite, et la reprise d'une sauvegarde tombe en 23503 sans
+      // nommer sa cause.
+      'catalogues',
       // QUATORZIÈME, apporté par `015_champs_structurels.sql` (constat Q-201) : aucune
       // colonne du schéma ne doit commencer par un souligné. C'est la SECONDE MOITIÉ
       // d'une règle dont la première vit dans `js/core/sync.js`, qui écarte du corps
@@ -5246,7 +5262,13 @@ describe('Armement, portée figée, chemin de magasin (§19.4 et §19.1, Q5-4 et
       // composite ne peut pas la dire, `MATCH SIMPLE` dispensant de contrôle dès qu'une
       // colonne est nulle — et `filiale_id` l'est pour tout le socle (CONVENTIONS §45).
       'echelle_niveaux', 'echelles',
-      'mesure_catalogue', 'parametres', 'personnes', 'risque_catalogue',
+      'mesure_catalogue', 'parametres', 'personnes',
+      // Lot L26 — les quatre tables de catalogue sont MIXTES : le socle des six
+      // référentiels livrés est lisible de toutes les filiales, une grille importée
+      // par une filiale (action 26.2) n'appartient qu'à elle.
+      'referentiel_domaines', 'referentiel_exigences', 'referentiel_traductions',
+      'referentiels',
+      'risque_catalogue',
       'traitement_mesures', 'traitements',
     ]);
     assert.deepEqual(await base.lignes(proprietaire, 'select * from f_verifier_portee_figee()'), []);

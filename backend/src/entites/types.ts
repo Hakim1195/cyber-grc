@@ -112,7 +112,16 @@ export type NomEntite =
   // dépend de la filiale, et une quantification de portée Groupe serait lisible de
   // toutes. ⚠️ Elle vient APRÈS `risques` dans l'ordre des clés étrangères, ce dont le
   // tri par le graphe se charge — cette liste n'est pas un ordre d'insertion.
-  | 'risque_quantification';
+  | 'risque_quantification'
+  // v26 — les CATALOGUES DE RÉFÉRENTIELS (lot L26, action 26.1). ⚠️ Les quatre sont
+  // MIXTES : `filiale_id` nul = catalogue du socle, lisible de toutes les filiales ;
+  // renseigné = grille apportée par une filiale (action 26.2). ⚠️ L'ordre suit les clés
+  // étrangères — le référentiel, ses domaines, puis ses exigences —, ce dont le tri par
+  // le graphe se charge de toute façon.
+  | 'referentiels'
+  | 'referentiel_domaines'
+  | 'referentiel_exigences'
+  | 'referentiel_traductions';
 
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;

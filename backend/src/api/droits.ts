@@ -329,6 +329,19 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   // un groupe d'annuaire supplémentaire pour que le RSSI puisse remplir l'écran
   // qu'on vient de lui donner.
   risque_quantification: 'risques',
+
+  // ── v26 : les catalogues de référentiels (action 26.1) ─────────────────────
+  //
+  // Domaine « conformite », comme `referentiels_actifs` : le catalogue EST le
+  // sujet de ce domaine — « référentiels, exigences, évaluations, mesures,
+  // correspondances », dit sa définition. ⚠️ Cela n'ouvre PAS le socle du Groupe
+  // à un RSSI de filiale : la portée Groupe reste réservée à
+  // `f_administration_groupe()` par la politique RLS de la migration `051` §8.
+  // Le domaine dit *de quoi on parle*, la RLS dit *qui écrit quoi*.
+  referentiels: 'conformite',
+  referentiel_domaines: 'conformite',
+  referentiel_exigences: 'conformite',
+  referentiel_traductions: 'conformite',
 });
 
 /**

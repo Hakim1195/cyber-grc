@@ -10,7 +10,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 18/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2257 essais, 2257 passés, 0 échec**, **relevé famille par
+> **2282 essais, 2282 passés, 0 échec**, **relevé famille par
 > famille** (trente-deux familles, dont `echelles` qui naît avec l'action 25.3),
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
@@ -55,6 +55,88 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### Les catalogues de référentiels entrent en base — L26 (19/09/2026)
+
+**Migrations `051` et `052`, schéma `data` en v26**, écran **Gestion des catalogues** en
+onglet du sujet « référentiels », et trois lectures neuves sous `/api/catalogues/`.
+
+**Ce que c'était.** Six fichiers JavaScript publiés dans la racine web, chargés par douze
+balises `<script>`. Trois conséquences, et aucune n'était théorique : une évolution de
+norme était une **livraison de code** ; un client **ne pouvait pas apporter sa grille**,
+alors que chaque donneur d'ordre de la filière aéronautique a la sienne ; et rien ne
+**datait** les catalogues — personne ne savait, en ouvrant le produit, que le guide
+d'hygiène de l'ANSSI qu'il évalue a été publié en 2017.
+
+**Le critère qui a gouverné tout le lot est étroit** : *les auto-évaluations sont stockées
+par `(ref_id, code)`, la migration conserve les codes **à l'octet près**, et un essai
+compare le catalogue migré au catalogue source, exigence par exigence.*
+
+⚠️ **Les 470 lignes du semis n'ont pas été tapées : elles ont été ENGENDRÉES** depuis les
+fichiers source, par un programme qui les charge et les recopie. Un semis recopié à la main
+aurait introduit, sur 424 exigences, au moins une différence — un accent, une espace
+insécable, un « 5.1 » devenu « 5.10 » — et cette différence aurait **réattribué une réponse
+d'audit en silence**. ⚠️ Et l'engendrement ne suffit pas : `test/catalogues/fidelite.test.mjs`
+recharge les mêmes fichiers à chaque banc et compare la base, champ par champ. *Un semis
+engendré une fois est juste une fois ; c'est la comparaison qui le garde juste.*
+
+**Le registre du navigateur n'a pas changé d'interface — il a changé de source.** `get()`,
+`all()`, `flatExigences()` et `couverture()` sont intacts, et aucun des modules qui les
+appellent n'a à le savoir : c'est le principe qui a permis de basculer vingt-six modules
+sans en réécrire un seul au lot L2.
+
+**Ce que le lot apporte, action par action :**
+
+- **26.1** — quatre tables MIXTES, les six catalogues et leurs six dictionnaires ;
+- **26.2** — une grille apportée par une filiale passe par le **moteur d'import du lot L7**,
+  sans une ligne écrite pour elle, et se comporte comme un catalogue livré ;
+- **26.3** — une révision de norme est un **autre référentiel** qui `remplace_id` le
+  précédent ; la route rend le **PLAN** de reprise des réponses — ce qui se reporte, ce qui
+  est abandonné, ce qui reste à évaluer — et **signale les intitulés qui ont changé sous le
+  même code** ;
+- **26.4** — des correspondances **proposées** par similarité de libellés, avec leur score.
+  Rien n'est créé tant qu'un humain ne clique pas ;
+- **26.5** — l'ancienneté est **dérivée**, et « date inconnue » n'est **jamais** « à jour ».
+
+🛑 **DEUX DÉFAUTS TROUVÉS PAR LE BANC, ET LE PREMIER ÉTAIT GRAVE.**
+
+1. **Le balayage de renommage réécrivait les CODES du catalogue.** Quand le serveur
+   réattribue l'identifiant d'un enregistrement créé, `js/core/sync.js` réécrit toute
+   chaîne égale à l'ancien — il ne peut pas savoir lesquels de ces champs étaient des
+   références (`CLAUDE.md` §3, cas c), alors il réécrit et **prévient**. Depuis que les
+   catalogues vivent dans `data`, les codes du guide d'hygiène de l'ANSSI y sont « 1 » à
+   « 42 » : la reprise d'un export ancien portant l'identifiant « 7 » **réécrivait le code
+   7 de l'ANSSI**. Or ce code est la moitié droite de la clé par laquelle toute
+   auto-évaluation est stockée. Mesuré : *« 7 → 4 valeur(s) »* au lieu d'une. Les quatre
+   collections de catalogue sont désormais écartées du balayage — *un catalogue de norme
+   ne référence aucun enregistrement de l'utilisateur ; il n'a rien à recaler, il n'a que
+   des dégâts à subir.*
+
+2. **Une colonne `jsonb` était tenue pour CHANGÉE à chaque fois.** `valeursEquivalentes()`
+   rendait `false` sans regarder : une filiale exportait son jeu de données, le
+   réimportait, et recevait **403 « cet élément appartient au socle commun du Groupe »** —
+   parce que les documents figés du socle étaient réputés modifiés. *Le produit produisait
+   une sauvegarde qu'il refusait de relire*, classe des constats **Q-194** et **Q-284**,
+   tranchée pareil : **restaurer une sauvegarde gagne.**
+   ⚠️ **Le défaut ne datait pas de ce lot** : il dormait depuis les premières colonnes
+   `jsonb` — la grille d'un audit, les étapes RACI d'un scénario PRA. Il ne s'était jamais
+   VU parce qu'aucune de ces tables ne porte de ligne de portée Groupe.
+   ⚠️ Et **la première rédaction du correctif n'a rien changé** : elle comparait un objet
+   analysé (ce que `pg` rend) à une CHAÎNE (ce que la couche d'écriture produit).
+
+⚠️ **ET DEUX DÉFAUTS TROUVÉS EN CLIQUANT SUR LA RECETTE**, le septième et le huitième de
+la semaine : l'écran perdait sa **barre d'onglets** — `ongletsHtml` attend la liste que
+`ongletsDe` compose, pas une route, et il rendait la chaîne vide **sans une erreur** —, et
+la **veille était INERTE**. La migration `051` posait la colonne, la dérivation et le
+garde-fou, et **aucune fenêtre de surveillance** : les six catalogues rendaient « non
+surveillé », et le produit ne signalait rien. Jamais. *Une capacité qu'aucune donnée
+n'active est une capacité absente.* La migration `052` pose la fenêtre à soixante mois —
+et le guide de l'ANSSI, publié en 2017, bascule immédiatement en **« à vérifier »**. C'est
+vrai, et c'est ce que l'action 26.5 doit dire.
+
+**Mesuré** : 52 migrations, 81 tables, 324 politiques, **56 garde-fous**, 455 décisions ;
+familles neuves `test/catalogues/` (24 essais) ; publication **82 fichiers** — douze de
+moins, les catalogues ayant quitté la racine web.
 
 ### La quantification financière d'un risque — L25, action 25.4 (19/09/2026)
 

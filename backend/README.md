@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2257 essais, trente-quatre familles (voir plus bas)
+npm test                           # 2282 essais, trente-cinq familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -639,6 +639,7 @@ que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non re
 | `test/ebios/` | les **ateliers 1 et 2 d'EBIOS RM** (L25) : la pertinence d'un couple source / objectif est DÉRIVÉE et **se tait dès qu'un critère manque** — pas d'estimation par défaut —, retenir un couple **sans justification** est refusé par la base, et la valeur métier POINTE le processus du BIA sans recopier sa criticité. ⚠️ **Le §1 mesure ce qui n'a PAS bougé** : les cinq colonnes de cotation F × G × M d'un risque **et sa `version`**, avant et après un atelier complet — *« en addition, jamais en remplacement » est une propriété NÉGATIVE, et elle ne se mesure qu'en la cherchant*. ⚠️ Et le §10 éprouve ce qu'aucune relecture n'avait vu : un `on delete set null` sans liste de colonnes nullifie `filiale_id` avec le lien, et fait tomber **toute restauration de sauvegarde** |
 | `test/echelles/` | les **échelles de cotation** (L25, action 25.3) : le socle du Groupe est semé, gradué et **daté** ; une valeur hors graduation et une échelle **d'un autre sujet** sont refusées par la base ; une échelle publiée ne se modifie plus et l'un de ses niveaux ne se **retire** pas — le refus venant **au commit**, parce qu'un « before delete » ne distingue pas un retrait de la disparition de l'échelle entière. ⚠️ Le §11 est le cœur : le dépôt **estampille** la cotation qui part, **n'écrase pas** un « pas d'échelle » explicite — le chemin de la reprise —, et ne réestampille RIEN quand on ré-enregistre une fiche sans rien changer. ⚠️ Et le §12 casse le garde-fou de cinq façons, dont une contrainte vidée par « … or true » que seule l'**évaluation** sur une ligne témoin voit |
 | `test/quantification/` | la **quantification financière** d'un risque (L25, action 25.4) : un triplet **incomplet** est refusé par la base, un triplet **désordonné** aussi, et un montant **sans hypothèses** ne s'écrit pas — la règle vit dans le SCHÉMA et non dans l'écran, parce que le moteur d'import du lot L7 écrit sans passer par aucun écran. ⚠️ Le §5 mesure le **PLANCHER** : sans pertes secondaires estimées, le montant ne porte que la perte primaire, et la marque qui le dit doit suivre — *un plancher présenté comme un total est l'estimation par défaut dans le sens rassurant*. ⚠️ Le §6 éprouve que le montant est **INÉCRIVABLE** (colonne engendrée, refus en 428C9), et le §11 mesure les DEUX moitiés de l'élargissement du garde du lot : la rédaction élargie voit le déclencheur fautif, et la rédaction d'ORIGINE ne le voyait pas |
+| `test/catalogues/` | les **catalogues ouverts** (L26). Le §1 de `fidelite.test.mjs` compare la base aux fichiers source **exigence par exigence** — 424 codes, puis titre, aide, niveau, priorité, CL et numéro officiel — et le §3 les dictionnaires, par comparaison PROFONDE du document : *un semis engendré une fois est juste une fois ; c'est la comparaison qui le garde juste*. ⚠️ Le §4 casse le garde-fou quatre fois, dont la plus subtile — **l'unicité déplacée du RÉFÉRENTIEL vers le domaine** : l'index porte encore son nom, il est encore unique, et il n'interdit plus l'ambiguïté de `(ref_id, code)`. Et `ouverture.test.mjs` mesure que le signal d'ancienneté **S'ALLUME** sur le parc livré : *un voyant qui ne s'allume sur rien est un voyant dont personne ne saura, le jour venu, s'il marche* |
 | `test/decouverte/` | le **jeu de découverte** (L18 bis) et ses cinq conditions constitutives : marque de provenance posée PAR LA BASE et inforgeable, refus s'il existe la moindre ligne réelle, purge d'un geste, et interdiction hors du profil « découverte » |
 | `test/tiers/` | les **tiers, la chaîne de sous-traitance et DORA** (L21) : le barème du score est SERVI et non recopié ; « non évalué » n'est pas « faible » ; le registre d'information **dit ses propres manques** et exige le droit d'**export**, non la simple lecture ; la chaîne rend le **chemin**, pas un rang à croire. Et le **questionnaire fournisseur** (21.2), dont la migration était livrée *mordue par rien* : l'état est DÉRIVÉ — un questionnaire reçu en retard est **reçu**, un brouillon n'est **pas** un retard —, la chronologie est posée dans le schéma, le vocabulaire des réponses est **éprouvé** plutôt que relu (§39.1), et le réimport est idempotent **par la contrainte** : rejouer le même fichier échoue bruyamment au lieu de doubler les comptes en silence |
 | `test/campagnes/` | les **campagnes descendantes** (L24) : les deux états sont DÉRIVÉS — « close » testé avant l'échéance, « non faite » plutôt qu'« en retard » sur une demande fermée —, l'avancement se **compte** dans les évaluations et le serveur ne rend **aucun taux**, et surtout ⚠️ **une filiale ne voit QUE sa part** : ni celle de la voisine, ni leur nombre. La convocation, seule écriture du produit qui nomme des filiales, est éprouvée sur ses **trois barrières**, et son refus « hors périmètre » est mesuré **indistinguable** de « n'existe pas ». ⚠️ Le §7 garde l'INVERSE de ce qu'on croirait : que supprimer sa part reste POSSIBLE — un interdit y rendrait la reprise « remplacer » morte |
@@ -778,10 +779,10 @@ dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, 
 la comparaison au marché du 08/09/2026.
 
 **Mesuré au 19/09/2026, à la révision `3ae666c`** (L25 : action 25.3 — les échelles de
-cotation, versionnées et datées ; `050` la quantification financière) : `npm test` → **2257 essais, 2257 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+cotation, versionnées et datées ; `050` la quantification financière ; `051` et `052` les catalogues ouverts) : `npm test` → **2282 essais, 2282 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **55 garde-fous consignés**, **50 migrations**,
-**77 tables**, **432 décisions** au registre de l'article 30 ; publication → **93
+`f_verifier_schema()` → 0 anomalie, **56 garde-fous consignés**, **52 migrations**,
+**81 tables**, **455 décisions** au registre de l'article 30 ; publication → **82
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **13 conformes,
 2 réserves, 0 bloquant**.
 
@@ -821,7 +822,8 @@ constat de la famille **Q-219**, dit plutôt que caché.
 | **L21 — Tiers, chaîne d'approvisionnement et DORA** | ✅ **livré** les 17 et 18/09/2026 (migrations `042`, `043`) — registre d'information DORA (LEI, fonction critique, contrat, substituabilité), **chaîne de sous-traitance** dont le rang se **dérive** avec anti-cycle **en base**, questionnaire fournisseur qui **s'exporte et se réimporte** (le produit n'envoie rien), suivi contractuel dont les échéances **alimentent l'échéancier**, et score composite **dérivé** dont le barème est **servi**. ⚠️ Reste hors périmètre : les **gabarits XBRL** des autorités européennes — un format de dépôt versionné par l'ESA |
 | **L24 — Campagnes et gouvernance descendante** | ✅ **livré le 18/09/2026** (migrations `044`, `045`) — le Groupe ouvre une campagne vers N filiales et suit l'avancement ; **une filiale ne voit QUE sa part**, ni celle de la voisine ni leur nombre ; l'avancement se **COMPTE** dans les évaluations ; les relances passent par **L12 réutilisé** (9ᵉ source de l'échéancier, aucune route d'envoi neuve) ; et un **neuvième profil de socle** — « répondant de campagne », trois domaines ouverts, vingt-sept fermés nommément. ⚠️ **Reste 24.2 en partie** : l'agrégation par répondant. ⚠️ Et **déconvoquer a dû être ajouté après coup** : sans lui, une campagne convoquée était indestructible |
 | **L25 — EBIOS RM et quantification** | ✅ **LIVRÉ EN ENTIER** — ateliers 1 et 2 le 18/09/2026 : ateliers 1 et 2 le 18/09/2026 (migration `046`, schéma `data` **v22**, greffon `src/ebios/`, écran en onglet du sujet « risques ») — actions **25.2** et **25.5** entières, **25.1** pour ses deux premiers ateliers. ⚠️ **EN ADDITION** : `risques` et ses cinq colonnes de cotation ne bougent pas, et `f_verifier_ebios_cadrage()` le MESURE — il les nomme une par une et refuse tout déclencheur EBIOS qui y écrirait. ⚠️ Et l'échelle n'est **pas** figée à quatre niveaux : le schéma borne 1 à 10, et c'est ce qui a permis à l'action **25.3** de la rendre configurable et versionnée **sans abattre une barrière** — livrée le 19/09/2026 (migration `049`, schéma `data` en **v24**, écran en onglet du sujet « risques »). Une échelle publiée est FIGÉE — on en publie une révision —, le socle du Groupe est surchargeable par filiale, et chaque cotation porte l'échelle qui l'a produite. ⚠️ `null` s'y lit « échelle **non tracée** », jamais « celle du Groupe » : réattribuer d'office inventerait un fait (motif Q-192). 🛑 La première rédaction du figeage **cassait la reprise** — le produit ne savait plus relire sa propre sauvegarde (409) —, trouvé par le banc et non par une relecture : classe des trois conflits de la `041`, *restaurer une sauvegarde gagne*. ✅ **L'action 25.4 — la quantification financière (FAIR) — est livrée le 19/09/2026** (migration `050`, schéma `data` en **v25**, panneau sur la fiche de risque, colonne à la vision Groupe) : **LE LOT L25 EST COMPLET**. C'est la réponse à la limite que 25.3 venait de rendre visible — la consolidation refuse d'additionner deux expositions ORDINALES, et une somme d'argent, à devise égale, s'additionne toujours (elle refuse là aussi dès que deux devises coexistent). ⚠️ **Un triplet incomplet ne rend RIEN**, et le refus est posé à DEUX étages : la contrainte refuse la donnée, la dérivation rend `null`. ⚠️ **Des pertes secondaires absentes ne valent pas zéro** : le montant devient un PLANCHER, marqué par une colonne engendrée et affiché « ≥ » — `coalesce(…, 0)` aurait sous-estimé EN SILENCE, c'est-à-dire produit l'estimation par défaut dans le sens rassurant. 🛑 **Et le plus important de cette action ne parle pas de quantification** : `f_verifier_ebios_cadrage()` balayait les tables par leur NOM (`like 'ebios\_%'`) et la table neuve lui échappait — mesuré, sa rédaction d'origine rend **0 anomalie** sur le déclencheur fautif que la rédaction élargie attrape. Elle balaie désormais le CATALOGUE ENTIER (`CONVENTIONS.md` §39, constats Q-312 et Q-313) |
-| **L22, L23, L26** | ⬜ **planifiés** (`../docs/PLAN_PRODUIT.md`) — ouverture technique (jetons, événements, connecteurs), collecte automatique de preuve et surveillance continue, catalogues ouverts |
+| **L26 — Catalogues ouverts** | ✅ **LIVRÉ le 19/09/2026** — migrations `051` et `052`, schéma `data` en **v26**, écran « Gestion des catalogues » en onglet du sujet « référentiels ». Les six catalogues, leurs 40 domaines, leurs **424 exigences** et leurs six dictionnaires quittent la racine web et entrent en base : une évolution de norme cesse d'être une LIVRAISON DE CODE, un client peut apporter sa grille (26.2, par le moteur du lot L7 et sans une ligne écrite pour lui), une révision est un AUTRE référentiel dont la route rend le PLAN de reprise des réponses (26.3), les correspondances se PROPOSENT par similarité de libellés sans jamais s'appliquer (26.4), et l'ancienneté est DÉRIVÉE (26.5). ⚠️ **Les codes sont conservés à l'octet près** — moitié droite de la clé `(ref_id, code)` : le semis a été ENGENDRÉ depuis `db/catalogues/*.js`, et le banc compare la base à ces fichiers champ par champ. ⚠️ **`evaluations.ref_id` n'a PAS de clé étrangère**, et le garde-fou le vérifie POSITIVEMENT : une réponse d'audit doit survivre à l'archivage du catalogue qui l'a produite. 🛑 **Deux défauts trouvés par le banc** : le balayage de renommage réécrivait les codes du catalogue ANSSI, et une colonne `jsonb` était tenue pour changée à chaque fois — une filiale ne pouvait plus relire son propre export |
+| **L22, L23** | ⬜ **planifiés** (`../docs/PLAN_PRODUIT.md`) — ouverture technique (jetons, événements, connecteurs), collecte automatique de preuve et surveillance continue |
 | **L27 — Assistance IA** | ⬜ **arbitré le 08/09/2026** — modèle local par défaut ; fournisseur externe possible sous **six barrières**, dont la première est que `IPAddressDeny=any` ferme la sortie réseau tant que l'exploitant ne l'ouvre pas. Activation **par filiale**. Porte **S16** : en local, l'unité systemd reste **intacte** — c'est la preuve qu'aucune donnée ne sort |
 | **L28 — Portail fournisseur exposé** | ⬜ **validé le 08/09/2026** — lien signé daté et révocable **sans compte** (un lien expiré rend **404, jamais 403** : un 403 confirmerait la cible), dépôt par la chaîne L6 sans variante, vhost et limiteur propres. ⚠️ **Premier composant hors VPN**, porte **S15**, la plus exigeante du plan |
 
@@ -956,32 +958,33 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2257 · pass 2257 · fail 0
+npm test                                         → tests 2282 · pass 2282 · fail 0
                                                    base 326 · api 302 · navigateur 239
                                                    pieces 141 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73
                                                    journal-lecture 72 · approbations 71
-                                                   depot 66 · modules 51 · annuaire 48
+                                                   depot 66 · modules 52 · annuaire 48
                                                    tiers 36 · documents 35 · filiales 35
                                                    documentation 33 · journal 25
-                                                   campagnes 25 · echelles 23
-                                                   quantification 22 · ebios 15
+                                                   campagnes 25 · catalogues 24
+                                                   echelles 23 · quantification 22
+                                                   ebios 15
                                                    recherche 13 · attestations 8
                                                    decouverte 8 · aipd 7 · crise 7
                                                    reglementaire 7 · derogations 6
                                                    droits-personnes 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (55 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (56 garde-fous découverts, joués, consignés)
 ```
 
-Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **77 tables** en
-**50 migrations**, **308 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
-**153 clés étrangères** (88 `restrict`, 55 `cascade`, 9 `set null`, 1 `no action`),
-**69 tables portant `cree_par` et 69 déclencheurs de création**, **54 clés étrangères
+Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **81 tables** en
+**52 migrations**, **324 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**162 clés étrangères** (94 `restrict`, 58 `cascade`, 9 `set null`, 1 `no action`),
+**73 tables portant `cree_par` et 73 déclencheurs de création**, **55 clés étrangères
 composites** visant
-`(id, filiale_id)`, **28 unicités** `uq_<parent>_id_filiale`, **55 contrôles consignés**
+`(id, filiale_id)`, **28 unicités** `uq_<parent>_id_filiale`, **56 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1261,7 +1264,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **77 tables**, obtenues aujourd'hui en **50 migrations** appliquées de bout en bout par
+- **81 tables**, obtenues aujourd'hui en **52 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1281,11 +1284,11 @@ Ce que la reprise fait, quand on la rejoue :
   ajoute la vingt-deuxième action du journal (`verification_integrite`), deux colonnes de
   verdict sur `pieces_jointes`, un index de balayage — et **réémet** le garde-fou du
   vocabulaire plutôt que d'en poser un second sur la même contrainte.
-- **308 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
+- **324 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
-- **153 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
-  migrations : **88 en `restrict`, 55 en `cascade`, 9 en `set null`**. ⚠️ **Elles sont
+- **162 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
+  migrations : **94 en `restrict`, 58 en `cascade`, 9 en `set null`**. ⚠️ **Elles sont
   passées de deux à neuf les 18 et 19/09/2026**, avec les ateliers EBIOS RM (migrations
   `046` et `047`) — et **toutes les composites nomment leur colonne**, ce que
   `f_verifier_set_null_composites()` impose désormais à l'échelle du schéma entier
@@ -1320,7 +1323,7 @@ Ce que la reprise fait, quand on la rejoue :
   `archive_le`), reste lisible et reste rattaché à tout ce qui le référence.
 - **Clés étrangères et unicités composites** : quand l'enfant et le parent sont tous
   deux cloisonnés, la clé porte `(référence, filiale_id)` et vise une unicité
-  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **54 clés étrangères** dont la
+  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **55 clés étrangères** dont la
   seconde colonne visée est le `filiale_id` du parent ou sa portée, et **27 unicités**
   visées par l'une d'elles (`count(distinct conindid)`). ⚠️ **Elles vont par PAIRES depuis la migration `027`**, et c'est mécanisé :
   toute clé composite visant une table MIXTE par un `filiale_id` nullable doit avoir sa

@@ -282,7 +282,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 25;
+export const VERSION_SCHEMA = 26;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -1215,6 +1215,46 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
         },
       },
     },
+  ],
+
+  // ── v26 : LES CATALOGUES DE RÉFÉRENTIELS (L26, action 26.1) ────────────────
+  //
+  // ⚠️ **Ces quatre entités ne portent pas des données de gestion : elles portent
+  // le CATALOGUE lui-même**, qui vivait jusqu'ici dans six fichiers JavaScript
+  // publiés dans la racine web. Trois conséquences motivaient le déménagement —
+  // une évolution de norme était une livraison de code, un client ne pouvait pas
+  // apporter sa grille, et rien ne DATAIT les catalogues.
+  //
+  // ⚠️ **L'identifiant d'un référentiel est celui que `evaluations.ref_id` porte
+  // DÉJÀ** — « anssi-hygiene », « dora ». Il ne suit donc pas la forme
+  // `<PRÉFIXE>-<horodatage>-<aléa>` du `CONVENTIONS.md` §2, et c'est licite : le
+  // §2 borne ce que le produit FABRIQUE, et ceux-ci sont repris de l'existant.
+  // Un référentiel créé par le produit, lui, reçoit bien un `REFT-…` engendré.
+  //
+  // ⚠️ **`version` est un ALIAS**, et le motif est celui de `documents` : le champ
+  // « version » du modèle navigateur est la version du TEXTE de la norme (« 42
+  // mesures »), pas le compteur de verrouillage optimiste. Deux sens sous un nom
+  // était le bloquant du 6ᵉ passage de la porte S2.
+  [
+    'referentiels',
+    {
+      nom: 'referentiels',
+      table: 'referentiels',
+      prefixe: 'REFT',
+      alias: { version: 'version_referentiel' },
+    },
+  ],
+  [
+    'referentiel_domaines',
+    { nom: 'referentiel_domaines', table: 'referentiel_domaines', prefixe: 'REFD' },
+  ],
+  [
+    'referentiel_exigences',
+    { nom: 'referentiel_exigences', table: 'referentiel_exigences', prefixe: 'REFE' },
+  ],
+  [
+    'referentiel_traductions',
+    { nom: 'referentiel_traductions', table: 'referentiel_traductions', prefixe: 'REFX' },
   ],
 ]);
 
@@ -5425,8 +5465,89 @@ function trierParDependances<T>(
   return ordre;
 }
 
+/**
+ * Deux documents JSON portent-ils la même chose ?
+ *
+ * ⚠️ **Comparaison PROFONDE et insensible à l'ordre des clés**, parce que c'est ce
+ * que `jsonb` garantit : PostgreSQL normalise l'ordre à l'écriture, et le document
+ * relu ne sort pas dans l'ordre où il est entré. Un `JSON.stringify` des deux côtés
+ * déclarerait donc différents deux documents identiques — et l'on retomberait sur le
+ * défaut que cette fonction existe pour fermer.
+ *
+ * ⚠️ **La profondeur est BORNÉE**, et au-delà on répond « différents ». Ce n'est pas
+ * une approximation commode : un document reçu d'un fichier de reprise vient de
+ * l'extérieur, et une structure profonde ferait ici une descente récursive non bornée
+ * — un déni de service applicatif sur le chemin qui restaure une sauvegarde
+ * (contrôle S13). Répondre « différents » est le côté sûr : on réécrit une valeur
+ * qu'on aurait pu garder, ce qui ne perd rien.
+ */
+/**
+ * Ramène à une valeur analysée ce qui peut arriver sous forme de texte.
+ *
+ * ⚠️ **Un texte qui n'est pas du JSON est rendu TEL QUEL**, et non `null` : rendre
+ * `null` ferait comparer égaux deux documents illisibles différents, et l'on
+ * n'écrirait pas là où il faut écrire. En cas de doute, on veut « différents ».
+ */
+function analyserDocument(valeur: unknown): unknown {
+  if (typeof valeur !== 'string') return valeur;
+  try {
+    return JSON.parse(valeur);
+  } catch {
+    return valeur;
+  }
+}
+
+function documentsEquivalents(a: unknown, b: unknown, profondeur = 0): boolean {
+  if (profondeur > 12) return false;
+  if (a === b) return true;
+  if (a === null || b === null || a === undefined || b === undefined) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    // ⚠️ L'ordre d'un TABLEAU, lui, est signifiant : `jsonb` le conserve, et deux
+    // listes d'étapes dans un ordre différent ne sont pas le même document.
+    return a.every((element, rang) => documentsEquivalents(element, b[rang], profondeur + 1));
+  }
+  if (typeof a !== 'object' || typeof b !== 'object') return false;
+  const ca = a as Record<string, unknown>;
+  const cb = b as Record<string, unknown>;
+  const clesA = Object.keys(ca);
+  if (clesA.length !== Object.keys(cb).length) return false;
+  return clesA.every(
+    (cle) =>
+      Object.prototype.hasOwnProperty.call(cb, cle) &&
+      documentsEquivalents(ca[cle], cb[cle], profondeur + 1),
+  );
+}
+
 function valeursEquivalentes(famille: FamilleType, stockee: unknown, proposee: unknown): boolean {
-  if (famille === 'json') return false;
+  // ── ⚠️ UNE COLONNE `jsonb` ÉTAIT TENUE POUR CHANGÉE À CHAQUE FOIS ──────────
+  //
+  // Cette ligne rendait `false` sans regarder. Conséquence, mesurée au lot L26 :
+  // une filiale exportait son jeu de données, le réimportait, et recevait **403
+  // « cet élément appartient au socle commun du Groupe »** — parce que les
+  // documents figés du socle (les numéros officiels d'un catalogue, les
+  // étiquettes CL d'AirCyber, un dictionnaire de traduction) étaient réputés
+  // modifiés, et qu'une filiale n'a pas le droit de réécrire le socle.
+  //
+  // *Le produit produisait une sauvegarde qu'il refusait de relire* — classe des
+  // trois conflits de la migration `041`, du constat **Q-194** et du 409 de la
+  // `049`, tranchée pareil : **restaurer une sauvegarde gagne.**
+  //
+  // ⚠️ **Et le défaut ne datait pas de ce lot** : il dormait depuis que les
+  // premières colonnes `jsonb` existent — la grille d'un audit, les étapes RACI
+  // d'un scénario PRA, la chaîne d'approvisionnement d'un prestataire. Il ne
+  // s'était jamais VU parce qu'aucune de ces tables ne porte de ligne de portée
+  // Groupe : la réécriture inutile passait, silencieuse et sans conséquence. La
+  // première table MIXTE à porter un `jsonb` l'a révélé.
+  //
+  // ⚠️ **ET LES DEUX CÔTÉS N'ONT PAS LA MÊME FORME**, ce qui était la moitié
+  // cachée du défaut : `pg` rend un `jsonb` DÉJÀ ANALYSÉ, tandis que
+  // `convertirPourLaBase` rend la valeur proposée en TEXTE — `JSON.stringify`,
+  // parce que c'est ce que le pilote attend en paramètre. Comparer un objet à une
+  // chaîne répond « différents » à tous les coups, et la première rédaction de ce
+  // correctif comparait exactement cela : elle n'a rien changé, et c'est l'essai
+  // qui l'a dit.
+  if (famille === 'json') return documentsEquivalents(analyserDocument(stockee), analyserDocument(proposee));
 
   // ── N-4, puis T-7 : `NULL` et `''` désignent la MÊME absence ─────────
   //

@@ -221,7 +221,11 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // de perte dépend du chiffre d'affaires et du parc d'une filiale, et une
     // quantification de portée Groupe serait lisible de toutes — qui y liraient le coût
     // d'un incident chez la voisine.
-    assert.equal(tablesCloisonnees.length, 59, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    // 63 depuis la migration `051` : les quatre tables de catalogue naissent MIXTES
+    // (action 26.1). Le socle des six référentiels livrés est lisible de toutes les
+    // filiales — c'est ce qui fait qu'une filiale évalue ISO 27001 sans rien décider —,
+    // tandis qu'une grille APPORTÉE par une filiale (action 26.2) n'appartient qu'à elle.
+    assert.equal(tablesCloisonnees.length, 63, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -269,7 +273,7 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // déplacer la graduation par défaut sous les autres familles du banc.
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      58,
+      62,
       // 58 depuis la migration `050` : `risque_quantification` est semée des deux côtés,
       // sur le PREMIER risque de chaque filiale — le second reste sans quantification
       // exprès, pour que le balayage des entités puisse en créer une sans heurter
@@ -279,7 +283,7 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
       // porte son événement redouté, et le couple source / objectif pointe l'entrée
       // locale du socle de connaissances. Semer des lignes qui ne se référencent pas
       // aurait mesuré l'insertion, pas les clés composites.
-      'Cinquante-huit tables devaient contenir au moins une ligne allemande. Une table neuve '
+      'Soixante-deux tables devaient contenir au moins une ligne allemande. Une table neuve '
         + 'sans ligne dans le semis est un angle mort : le balayage y rendrait « zéro '
         + 'visible » pour la seule raison qu’il n’y a rien à voir.',
     );
@@ -419,7 +423,7 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     // 55 depuis la migration `049` : `echelles` et `echelle_niveaux`, au titre de leur
     // versant LOCAL — leur socle de Groupe est compté par l'égalité elle-même, comme
     // celui de `risque_catalogue` et de `ebios_connaissances`.
-    assert.equal(nonVides.length, 56, `Tables non vides : ${nonVides.join(', ')}`);
+    assert.equal(nonVides.length, 60, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

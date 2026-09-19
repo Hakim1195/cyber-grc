@@ -201,6 +201,11 @@ const SANS_FICHE = {
   // Action 25.3 — les échelles se lisent PAR SUJET, quatre cartes, et un sujet n'a pas
   // de fiche : ce qui a une identité est l'échelle, et on l'atteint par sa carte.
   '/echelles': 'échelles de cotation : une carte par sujet, aucune fiche propre',
+  // Lot L26 — la GESTION des catalogues n'a pas de fiche : ce qui a une identité est
+  // le référentiel, et on l'atteint par l'onglet « Catalogue », qui sert à l'évaluer.
+  // Cet écran-ci dit ce que les catalogues CONTIENNENT et ce qu'un changement de
+  // version met en jeu ; ses trois panneaux se lisent d'un bloc.
+  '/catalogues': 'gestion des catalogues : trois panneaux, aucune fiche propre',
   '/mapping': 'correspondances : édition en place',
   '/couverture': 'vue croisée, aucune fiche propre',
   '/crise-fiches': 'vue d’impression',
@@ -334,7 +339,12 @@ const SANS_FICHE = {
 // « risques », à côté des ateliers EBIOS RM : une échelle dit ce qu'une cotation VEUT
 // DIRE, on ne la lit qu'en cotant, et une entrée de menu de plus rendrait au menu ce
 // qu'on vient de lui retirer (`docs/PLAN_INTERFACE.md`).
-const MODULES_ATTENDUS = 43;
+// 44 depuis le lot L26 (écran de GESTION des catalogues, actions 26.2 à 26.5). ⚠️ C'est
+// un ONGLET du sujet « référentiels », et la distinction qu'il porte est le message :
+// l'onglet « Catalogue » sert à RÉPONDRE, celui-ci à savoir ce que les catalogues
+// contiennent, quand la norme a été publiée, et ce qu'un changement de version met en
+// jeu. Deux métiers, deux écrans — et non une entrée de menu de plus.
+const MODULES_ATTENDUS = 44;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //

@@ -1255,7 +1255,22 @@ describe('Le renommage large s’annonce, et lui seul (constat Q-11)', () => {
       const apres = await session.page.evaluate(([valeur, titre, nom]) => {
         const action = window.DataStore.getActions().find((a) => a.titre === titre);
         const risque = window.DataStore.getRisques().find((r) => r.nom === nom);
-        return { responsable: action.responsable, idRisque: risque.id, valeurInitiale: valeur };
+        // ⚠️ **Le CODE d'une exigence de catalogue, relevé APRÈS le renommage.**
+        // Depuis le lot L26, les catalogues vivent dans `data` : les codes du guide
+        // d'hygiène de l'ANSSI y sont « 1 » à « 42 », et le balayage de renommage —
+        // qui réécrit toute chaîne égale à l'ancien identifiant — réécrirait le code
+        // « 7 ». Or ce code est la moitié droite de la clé par laquelle toute
+        // auto-évaluation est stockée : la réponse donnée sur la mesure 7
+        // désignerait un identifiant de risque.
+        const catalogue = (window.DataStore.getReferentielExigences
+          ? window.DataStore.getReferentielExigences()
+          : []).filter((e) => e.code === valeur).length;
+        return {
+          responsable: action.responsable,
+          idRisque: risque.id,
+          valeurInitiale: valeur,
+          codesCatalogueIntacts: catalogue,
+        };
       }, [identifiant, titreAction, nomRisque]);
 
       return { texte: await bandeau(session.page), apres, erreurs: session.erreursScript };
@@ -1290,6 +1305,16 @@ describe('Le renommage large s’annonce, et lui seul (constat Q-11)', () => {
       issue.texte,
       /7 → 1 valeur\(s\)/,
       `Il doit nommer la chaîne et COMPTER ce qu’elle a touché : ${issue.texte}`,
+    );
+    // ⚠️ **ET LE CATALOGUE EST INTACT** — la moitié que le lot L26 a rendue
+    // nécessaire. Sans l'exclusion des quatre collections de catalogue, le balayage
+    // réécrit le code « 7 » du guide d'hygiène de l'ANSSI : mesuré, il comptait
+    // « 7 → 4 valeur(s) » au lieu d'une. Une auto-évaluation stockée par
+    // `(ref_id, code)` désignerait alors un identifiant de risque.
+    assert.ok(
+      issue.apres.codesCatalogueIntacts >= 1,
+      'Le code « 7 » du catalogue ANSSI a été réécrit par le renommage : les ' +
+        'auto-évaluations données sur cette mesure ne la désignent plus.',
     );
     assert.deepEqual(issue.erreurs, []);
   });

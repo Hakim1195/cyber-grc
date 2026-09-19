@@ -124,6 +124,15 @@ const NOUVELLES_PAR_VERSION = {
   // que ce sont des colonnes ENGENDRÉES. Les faire voyager les rendrait reprenables, et
   // un fichier bricolé porterait un montant que ses propres hypothèses ne produisent pas.
   25: ['risque_quantification'],
+  // v26 — les catalogues de référentiels (action 26.1). ⚠️ L'ordre suit les clés
+  // étrangères : le référentiel, ses domaines, puis ses exigences — dont la clé est
+  // COMPOSITE et va chercher (id, referentiel_id) dans les domaines.
+  26: [
+    'referentiels',
+    'referentiel_domaines',
+    'referentiel_exigences',
+    'referentiel_traductions',
+  ],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -990,6 +999,86 @@ export function instantaneV25Complet() {
         source_donnees: null,
         confiance: 'faible',
         evaluee_le: '2026-09-19',
+      },
+    ],
+  };
+}
+
+/**
+ * Instantané COMPLET en v26 — les catalogues de référentiels (action 26.1).
+ *
+ * ⚠️ **Un catalogue MINUSCULE, et c'est délibéré.** Les six catalogues livrés portent
+ * 424 exigences : les faire voyager ici alourdirait de 165 Kio un jeu d'essai que
+ * quatorze familles chargent, pour ne rien mesurer de plus. Ce qui doit survivre au
+ * round-trip, c'est la FORME — un référentiel, ses domaines, ses exigences reliées par
+ * une clé composite, et un dictionnaire de traduction.
+ *
+ * ⚠️ **L'exigence porte `referentiel_id` EN PLUS de `domaine_id`**, et ce n'est pas une
+ * redondance : c'est la moitié gauche de la clé par laquelle toute auto-évaluation est
+ * stockée, et la clé étrangère composite de la migration `051` l'empêche de diverger du
+ * domaine.
+ */
+export function instantaneV26Complet() {
+  const base = instantaneV25Complet();
+  return {
+    ...base,
+    schemaVersion: 26,
+    referentiels: [
+      {
+        id: 'grille-client-essai',
+        nom: 'Grille du donneur d’ordre',
+        editeur: 'Donneur d’ordre fictif',
+        version: '12 questions',
+        description: 'Grille apportée par un client, éprouvée au round-trip.',
+        aide: null,
+        scoring: 'conformite',
+        note_numerotation: null,
+        codes_officiels: null,
+        cl_labels: null,
+        revision: 1,
+        statut: 'en_vigueur',
+        remplace_id: null,
+        en_vigueur_le: '2026-09-19',
+        archive_le: null,
+        publie_le: '2026-01-15',
+        duree_alerte_mois: 36,
+      },
+    ],
+    referentiel_domaines: [
+      {
+        id: 'REFD-1720000000000-240',
+        referentiel_id: 'grille-client-essai',
+        code: 'gouvernance',
+        nom: 'Gouvernance',
+        court: 'Gouv.',
+        aide: null,
+        rang: 1,
+      },
+    ],
+    referentiel_exigences: [
+      {
+        id: 'REFE-1720000000000-241',
+        domaine_id: 'REFD-1720000000000-240',
+        referentiel_id: 'grille-client-essai',
+        code: '1.1',
+        titre: 'Une politique de sécurité est-elle formalisée et approuvée ?',
+        aide: null,
+        niveau: 'bronze',
+        priorite: 'high',
+        cl: 'CL0',
+        code_officiel: null,
+        rang: 1,
+      },
+    ],
+    referentiel_traductions: [
+      {
+        id: 'REFX-1720000000000-242',
+        referentiel_id: 'grille-client-essai',
+        langue: 'en',
+        dictionnaire: {
+          nom: 'Customer framework',
+          exigences: { 'gouvernance/1.1': { titre: 'Is a security policy formalised and approved?' } },
+        },
       },
     ],
   };

@@ -515,7 +515,7 @@ la méthode, donc les données déjà saisies.
 
 ---
 
-### L26 — Catalogues ouverts 🟢
+### L26 — Catalogues ouverts ✅ **LIVRÉ le 19/09/2026**
 
 **Pourquoi.** Les référentiels sont aujourd'hui des **fichiers JavaScript versionnés** : une
 évolution de norme est une livraison de code, et un client ne peut pas apporter sa propre
@@ -523,11 +523,33 @@ grille.
 
 | Réf | Action | Critère d'acceptation |
 |---|---|---|
-| **26.1** | **Référentiels en base** — migration des cinq catalogues existants depuis les fichiers statiques | ⚠️ **Les auto-évaluations sont stockées par `(ref_id, code)`** : la migration **conserve les codes à l'octet près**, et un essai compare le catalogue migré au catalogue source, exigence par exigence. Une divergence silencieuse réattribuerait des réponses d'audit |
-| **26.2** | **Import d'un référentiel client** — CSV/XLSX par le moteur d'import généralisé | Un référentiel importé se comporte comme un référentiel livré : radar, SoA, mapping, audit |
-| **26.3** | **Versionnage d'un référentiel** — ISO 27002:2022 puis sa révision suivante, sans perdre les évaluations | Le passage d'une version à l'autre est **explicite et tracé** |
-| **26.4** | **Correspondances suggérées** — proposer les rapprochements par similarité de libellé, à **valider par un humain** | ⚠️ Une correspondance appliquée sans validation propagerait un statut de conformité faux. La suggestion est une **proposition**, jamais une écriture |
-| **26.5** | **Veille : signaler qu'un catalogue a vieilli** | Le produit ne va pas chercher la norme sur Internet (P3). Il **date** ses catalogues et signale l'ancienneté |
+| ~~**26.1**~~ ✅ | ~~**Référentiels en base**~~ — **SIX** catalogues, 40 domaines, **424 exigences** et six dictionnaires (migration `051`) | ⚠️ **Les auto-évaluations sont stockées par `(ref_id, code)`** : la migration **conserve les codes à l'octet près**, et un essai compare le catalogue migré au catalogue source, exigence par exigence. Une divergence silencieuse réattribuerait des réponses d'audit |
+| ~~**26.2**~~ ✅ | ~~**Import d'un référentiel client**~~ — par le moteur du lot L7, **sans une ligne écrite pour lui** : les quatre tables sont des entités ordinaires | Un référentiel importé se comporte comme un référentiel livré : radar, SoA, mapping, audit |
+| ~~**26.3**~~ ✅ | ~~**Versionnage d'un référentiel**~~ — une révision est un AUTRE référentiel qui `remplace_id` le précédent, et la route rend le **PLAN** de reprise | Le passage d'une version à l'autre est **explicite et tracé** |
+| ~~**26.4**~~ ✅ | ~~**Correspondances suggérées**~~ — par similarité de libellés, avec leur score | ⚠️ Une correspondance appliquée sans validation propagerait un statut de conformité faux. La suggestion est une **proposition**, jamais une écriture |
+| ~~**26.5**~~ ✅ | ~~**Veille**~~ — l'ancienneté est DÉRIVÉE (migrations `051` et `052`) | Le produit ne va pas chercher la norme sur Internet (P3). Il **date** ses catalogues et signale l'ancienneté |
+
+> ✅ **LIVRÉ LE 19/09/2026 — LE LOT ENTIER, ET LA VAGUE D AVEC LUI.** Migrations `051`
+> et `052`, schéma `data` en **v26**, écran **Gestion des catalogues** en onglet du sujet
+> « référentiels », trois lectures sous `/api/catalogues/`.
+>
+> ⚠️ **Les 470 lignes du semis n'ont pas été tapées : elles ont été ENGENDRÉES** depuis
+> les fichiers source, qui vivent désormais dans `backend/db/catalogues/`, hors de la
+> racine web. Un semis recopié à la main aurait introduit, sur 424 exigences, au moins une
+> différence — et cette différence aurait **réattribué une réponse d'audit en silence**.
+> `test/catalogues/fidelite.test.mjs` compare la base à ces fichiers, champ par champ, à
+> chaque banc : *un semis engendré une fois est juste une fois ; c'est la comparaison qui
+> le garde juste.*
+>
+> ⚠️ **`evaluations.ref_id` n'a PAS de clé étrangère, et n'en aura pas** — le garde-fou le
+> vérifie POSITIVEMENT, ce qui est rare. Une réponse d'audit doit survivre à l'ARCHIVAGE du
+> catalogue qui l'a produite, et une clé ferait échouer la reprise d'une sauvegarde portant
+> des évaluations d'un catalogue retiré depuis.
+>
+> 🛑 **Et le balayage de renommage réécrivait les CODES du catalogue** : les codes ANSSI
+> sont « 1 » à « 42 », et la reprise d'un export ancien portant l'identifiant « 7 »
+> réécrivait le code 7. Mesuré — *« 7 → 4 valeur(s) »* au lieu d'une. Les quatre
+> collections de catalogue sont écartées du balayage.
 
 **Lignes comblées** : #1 · #2 · #4 · #3 renforcé.
 

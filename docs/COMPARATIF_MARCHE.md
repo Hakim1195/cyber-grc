@@ -19,10 +19,49 @@
 >    (`FAIR` → « faire », `LEI` → « client »). Chaque verdict ❌ de cette grille a été
 >    vérifié sur les occurrences réelles, pas sur un compte de fichiers.
 
-**Verdict global au 18/09/2026 : 46 ✅ · 15 🟡 · 25 ❌** — soit ~62 % en pondérant les
+**Verdict global au 19/09/2026 : 51 ✅ · 15 🟡 · 20 ❌** — soit ~68 % en pondérant les
 partiels à moitié. **Cible du `PLAN_PRODUIT.md` une fois les douze lots joués : 76 ✅ · 2 🟡
 · 8 ❌**, les huit restantes étant des non-objectifs nommés un par un (§9 du plan).
 
+> ### ▶ Rejeu INTÉGRAL du 19/09/2026 — clôture de la vague D
+>
+> **46 ✅ · 15 🟡 · 25 ❌ au 18/09 → 51 ✅ · 15 🟡 · 20 ❌.** Pondéré : **~62 % → ~68 %**.
+> Le compte est **recompté sur la grille** par un balayage des quatre-vingt-six lignes,
+> jamais additionné de tête (constat **Q-219**).
+>
+> **Les onze lignes que la vague D a déplacées**, remesurées une par une dans le dépôt :
+>
+> | # | Avant | Après | Ce qui l'a déplacée |
+> |---|---|---|---|
+> | 1 | 🟡 | 🟡 | 424 exigences **en base** (`051`) — la largeur livrée ne bouge pas, mais elle cesse d'être une limite du produit |
+> | 2 | ❌ | 🟡 | La veille : les catalogues sont **datés**, l'ancienneté est dérivée (`052`) |
+> | 3 | ✅ | ✅✅ | La suggestion de correspondances, qui manquait, est livrée (26.4) |
+> | 4 | ❌ | ✅ | Un client importe sa grille par le moteur du lot L7 (26.2) |
+> | 7 | 🟡 | 🟡 | EBIOS RM passe à ✅ dans la ligne ; ReCyF, HDS et SecNumCloud restent à importer |
+> | 8 | ✅ | ✅✅ | Les échelles sont configurables, versionnées et **portées par la cotation** (25.3) |
+> | 9 | ❌ | ✅ | Les **cinq ateliers** d'EBIOS RM (`046`, `047`) |
+> | 10 | ❌ | ✅ | La quantification FAIR (`050`) |
+> | 11 | 🟡 | ✅ | `ebios_connaissances` : menaces et modes opératoires types (25.5) |
+> | 70 | ❌ | ✅ | La suggestion de mapping — **sans IA**, par similarité de libellés (26.4) |
+>
+> **Les vingt ❌ restants** ont été confrontés au dépôt par recherche de leur mécanisme —
+> `connecteur`, `webhook`, `scanner`, `benchmark`, `phishing`, `page de confiance`, `CMDB`,
+> `Jira`, `ServiceNow`, `jeton d'API`, `surface d'attaque`, `vulnérabilité` : **aucune ne
+> s'est révélée présente**. ⚠️ Trois touches sont des **faux amis**, ouvertes et écartées à
+> la main : « surface d'attaque » dans `serveur.ts` et `multipart.ts` (c'est du durcissement,
+> pas une notation externe), « phishing » dans `en.js` (la traduction d'« hameçonnage »), et
+> « vulnérabilités » dans `mappings.js` (un thème de correspondance, pas un registre).
+>
+> 🛑 **ET LE REJEU A TROUVÉ UN DÉFAUT DANS L'INDICATEUR LUI-MÊME.** Les **en-têtes de
+> section** — « A. … — 2 ✅ · 2 🟡 · 3 ❌ » — n'avaient **jamais été recomptés** : dix des
+> dix-huit contredisaient les lignes qu'elles surplombent, certaines depuis le rejeu du
+> 16/09. La section N annonçait « 0 🟡 » alors que la ligne 71 y était 🟡 depuis le lot L17.
+>
+> *Deux points de mesure de la même grandeur divergent, et la divergence est silencieuse* —
+> le constat **Q-219**, dans le document qui sert à mesurer tout le reste, et à l'endroit
+> qu'on lit en premier. Les dix-huit en-têtes sont désormais **recomptés par programme**
+> depuis les lignes, comme le verdict global.
+>
 > ### ▶ Rejeu INTÉGRAL du 18/09/2026 — clôture de la vague C
 >
 > **44 ✅ · 12 🟡 · 30 ❌ au 16/09 → 46 ✅ · 15 🟡 · 25 ❌.** Le compte est **recompté sur la
@@ -108,31 +147,31 @@ Légende : ✅ couvert · ✅✅ au-dessus du marché · 🟡 partiel · ❌ abs
 La colonne **Lot** renvoie au lot du `PLAN_PRODUIT.md` qui comble la ligne ; « — » signale
 un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 
-### A. Référentiels et conformité multi-normes — 2 ✅ · 2 🟡 · 3 ❌
+### A. Référentiels et conformité multi-normes — 3 ✅ · 4 🟡 · 0 ❌
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
-| 1 | Catalogue large et maintenu | 🟡 | **5 référentiels, 394 exigences** (ANSSI 42, ISO 27002 93, NIS2 10, DORA 15, AirCyber 234). Largeur faible face à 50 (Tenacy) et 200+ (CISO Assistant) ; profondeur réelle | L26 |
-| 2 | Veille réglementaire intégrée | ❌ | Catalogues **statiques en fichiers JS** : une évolution de norme est une livraison de code | L26 |
-| 3 | Mapping inter-référentiels | ✅ | Module `/mapping`, 28 groupes + surcouche éditable, propagation « zéro double saisie ». Manque la suggestion automatique | L26.4 |
-| 4 | Référentiels personnalisés | ❌ | Aucun chemin utilisateur : c'est du code | L26 |
+| 1 | Catalogue large et maintenu | 🟡 | **6 référentiels, 424 exigences EN BASE** (ANSSI 42, ISO 27001 SMSI 30, ISO 27002 93, NIS2 10, DORA 15, AirCyber 234) depuis la migration `051`. La largeur LIVRÉE reste faible face à 50 (Tenacy) et 200+ (CISO Assistant) — mais elle cesse d'être une limite du PRODUIT : un client importe la sienne (ligne 4) | L26 |
+| 2 | Veille réglementaire intégrée | 🟡 | **L26 livré le 19/09/2026** : chaque catalogue porte la date de parution de son TEXTE, l'ancienneté est **dérivée** (`f_referentiel_age`), et le guide d'hygiène de l'ANSSI — publié en 2017 — est signalé « à vérifier » dès la livraison. ❌ **Ce qui manque, et qui est un NON-OBJECTIF** : le produit ne va pas chercher la norme sur Internet (risque P3, et `IPAddressDeny=any` l'en empêche). Il date et il signale ; c'est un humain qui vérifie | L26.5 |
+| 3 | Mapping inter-référentiels | ✅✅ | Module `/mapping`, 28 groupes + surcouche éditable, propagation « zéro double saisie » — **et la suggestion automatique depuis le 19/09/2026** (`GET /api/catalogues/suggestions`, similarité de libellés, score rendu). ⚠️ Elle **PROPOSE** et n'écrit jamais : une correspondance appliquée sans lecture propagerait un statut de conformité faux | L26.4 |
+| 4 | Référentiels personnalisés | ✅ | **L26 livré** : les quatre tables de catalogue sont des entités ordinaires, donc importables par le moteur du lot L7 — référentiel, domaines, exigences. ⚠️ Une grille apportée par une filiale n'est lisible que d'elle, et se comporte comme un catalogue livré : radar, SoA, correspondances, audits | L26.2 |
 | 5 | Campagnes d'évaluation | 🟡 | **L24 livré le 18/09/2026** : le Groupe ouvre une campagne sur un référentiel vers N filiales, chacune ne voit QUE sa part, l'avancement se **compte** dans les évaluations, et la relance passe par l'échéancier existant (9ᵉ source). ❌ **Ce qui manque** : le suivi par RÉPONDANT nominatif (le champ existe, l'écran ne l'agrège pas) et l'envoi effectif — le produit prépare, l'humain envoie | L24 |
 | 6 | Déclaration d'applicabilité (SoA) | ✅ | Générée, avec couverture croisée | — |
-| 7 | Référentiels FR/EU spécifiques | 🟡 | ANSSI ✅ NIS2 ✅ DORA ✅ RGPD ✅ ISO ✅ AirCyber ✅ ; **EBIOS RM ❌ ReCyF ❌ HDS ❌ SecNumCloud ❌** | L25, L26 |
+| 7 | Référentiels FR/EU spécifiques | 🟡 | ANSSI ✅ NIS2 ✅ DORA ✅ RGPD ✅ ISO ✅ AirCyber ✅ **EBIOS RM ✅** (L25, cinq ateliers) ; **ReCyF ❌ HDS ❌ SecNumCloud ❌** — mais ils s'IMPORTENT désormais (ligne 4), ce qui les fait passer d'un manque de produit à un travail de contenu | L26 |
 
-### B. Gestion des risques — 3 ✅ · 2 🟡 · 2 ❌
+### B. Gestion des risques — 6 ✅ · 1 🟡 · 0 ❌
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
-| 8 | Registre, brut / résiduel | ✅ | `risques` : `f_frequence`, `g_gravite`, `m_maitrise`, scores, bornes contraintes en SQL. **Échelles non configurables** | L25.3 |
-| 9 | **EBIOS RM outillé** | ❌ | Aucun atelier, aucune source de risque, aucun chemin d'attaque. La « matrice EBIOS » est une matrice de criticité, pas la méthode | **L25** |
-| 10 | Quantification financière (FAIR) | ❌ | Absent. Cotation qualitative seule | L25.4 |
-| 11 | Bases de connaissances expertes | 🟡 | `risque_catalogue` (migration `012`) porte un socle de risques Groupe. Pas de catalogue de menaces ni de vulnérabilités types | L25.5 |
+| 8 | Registre, brut / résiduel | ✅✅ | `risques` : `f_frequence`, `g_gravite`, `m_maitrise`, scores, bornes contraintes en SQL — **et les échelles sont configurables depuis le 19/09/2026** (L25.3) : versionnées, datées, FIGÉES à la publication, socle du Groupe surchargeable par filiale, et **chaque cotation porte l'échelle qui l'a produite**. ⚠️ La consolidation REFUSE d'additionner deux échelles au lieu de le faire en silence | L25.3 |
+| 9 | **EBIOS RM outillé** | ✅ | **L25 livré les 18 et 19/09/2026** — les **cinq ateliers** (migrations `046` et `047`) : cadrage et valeurs métier, sources de risque et objectifs visés, écosystème et parties prenantes, scénarios stratégiques et opérationnels, décision de traitement. ⚠️ **EN ADDITION** : la cotation F × G × M n'est ni touchée ni réinterprétée, et `f_verifier_ebios_cadrage()` le MESURE | **L25** |
+| 10 | Quantification financière (FAIR) | ✅ | **L25.4 livré le 19/09/2026** (migration `050`) : fréquence et magnitude estimées par TRIPLETS min/probable/max, moyenne PERT, perte annualisée **dérivée** et sommée par la consolidation — la seule grandeur du produit qui traverse les filiales. ⚠️ Un triplet incomplet ne rend RIEN, et des pertes secondaires absentes font un **PLANCHER** annoncé « ≥ » | L25.4 |
+| 11 | Bases de connaissances expertes | ✅ | `risque_catalogue` (migration `012`) porte un socle de risques Groupe, **et `ebios_connaissances` (migration `046`) la base de connaissances des MENACES et modes opératoires types** — de portée Groupe, alimentant les ateliers 2 et 4. ⚠️ Un catalogue de VULNÉRABILITÉS techniques reste absent : c'est la ligne 51 | L25.5 |
 | 12 | Acceptation de risque avec workflow | ✅ | Circuit typé, et `empreinte_objet` **périme l'approbation quand l'objet change** — plus fin que la moyenne | — |
 | 13 | Appétence / seuils | 🟡 | KRI à seuils dans la Synthèse Direction ; pas d'appétence paramétrable | L25 |
 | 14 | Agrégation multi-entités | ✅ | `GET /api/consolidation`, module `/groupe` | — |
 
-### C. Mesures et contrôles — 1 ✅ · 2 🟡 · 2 ❌
+### C. Mesures et contrôles — 4 ✅ · 0 🟡 · 1 ❌
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
@@ -142,7 +181,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 18 | Exceptions / dérogations datées | ✅ | Table `derogations` (migration `035`) : propriétaire, motif, compensation, **échéance**, et approbation par le circuit L8. ⚠️ **L'état se DÉRIVE** (`f_etat_derogation`) — une dérogation échue redevient une non-conformité sans qu'aucun traitement ait à repasser, et la **rallonger sans la faire réapprouver ne la rallonge pas** | — |
 | 19 | Maturité et efficacité distinctes | ✅ | `efficacite` (trois valeurs), `efficacite_constatee_le`, `efficacite_preuve` — **distinctes de la maturité** et non convertibles : « documenté, planifié, supervisé » ne dit rien de « est-ce que ça marche ». Le garde-fou mesure l'efficacité **sur son type** : un entier la rendrait moyennable avec la maturité (migration `037`) | — |
 
-### D. Preuve et intégrations — 1 ✅ · 2 🟡 · 2 ❌
+### D. Preuve et intégrations — 2 ✅ · 1 🟡 · 2 ❌
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
@@ -152,7 +191,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 23 | API REST / CLI / webhooks / ITSM | 🟡 | 31 routes, mais **internes** : session par cookie, pas de jeton, pas de webhook | **L22** |
 | 24 | Import / export / réversibilité | ✅✅ | Import **20 entités** CSV+XLSX (format lu à la signature binaire), transactionnel, idempotent, cloisonné, journalisé ; export complet ; reprise v1→v12. **Meilleur que la plupart des SaaS** | — |
 
-### E. Gestion documentaire et politiques — 3 ✅ · 1 🟡 · 2 ❌
+### E. Gestion documentaire et politiques — 5 ✅ · 1 🟡 · 0 ❌
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
@@ -163,7 +202,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 29 | Politique ↔ contrôle ↔ exigence | ✅ | `document_mesures` (migration `036`) : quels CONTRÔLES un document prouve, en plus des référentiels qu'il couvre. Le panneau est **le même des deux bouts** du lien — deux composants auraient divergé | — |
 | 30 | Recherche plein texte | 🟡 | Palette `Ctrl+K` et route `GET /api/recherche` (L17, A3) : **quatre entités**, bornées par la RLS côté serveur et par les droits — jamais par un filtre côté client. ⚠️ C'est un `ilike` sur les libellés, **pas un index plein texte** : ni pertinence, ni contenu des pièces jointes. La recherche DOCUMENTAIRE (D3) reste due | L16.D3 |
 
-### F. Tiers et chaîne d'approvisionnement — 1 ✅ · 0 🟡 · 5 ❌
+### F. Tiers et chaîne d'approvisionnement — 2 ✅ · 2 🟡 · 2 ❌
 
 > **Domaine le plus faible du produit.**
 
@@ -185,7 +224,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 39 | Espace auditeur externe | 🟡 | **Remesuré le 18/09** : le profil `AUDITEUR` existe (lecture seule, 26 domaines) et **L24.4 a livré un neuvième profil restreint** — mais c'est un *répondant de campagne*, pas un espace d'auditeur externe : ni jeton d'accès sans compte, ni cloison par mission. ❌ Le vrai chemin est **L28** (accès par lien signé, sans compte) | Profil `AUDITEUR` avec domaines restreints, mais **compte AD interne** — pas un accès invité | L24.4 |
 | 40 | Rapport d'audit approuvé | ✅ | Circuit typé `audit` + génération PDF | — |
 
-### H. Incidents et résilience — 3 ✅ · 2 🟡 · 1 ❌
+### H. Incidents et résilience — 5 ✅ · 0 🟡 · 1 ❌
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
@@ -236,7 +275,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 62 | Comparaison inter-entités | ✅ | Un domaine hors droits rend **`null`, jamais zéro** | — |
 | 63 | Benchmarks sectoriels | ❌ | Absent — **non-objectif** : suppose de transmettre les données du client | **—** |
 
-### M. Multi-entités et gouvernance de groupe — 3 ✅ · 0 🟡 · 1 ❌
+### M. Multi-entités et gouvernance de groupe — 4 ✅ · 0 🟡 · 0 ❌
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
@@ -245,13 +284,13 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 66 | Campagne poussée du Groupe | ✅ | **L24.1 livré le 18/09/2026** (migration `044`) : `campagnes` est de niveau **Groupe** — la demande est commune —, `campagne_filiales` porte la **part** de chacune et reste cloisonnée. Une filiale ne voit ni la part de la voisine ni leur **nombre**, et un essai le mesure par la route. La convocation est la seule écriture du produit qui nomme des filiales : trois barrières, et un refus indistinguable de « n'existe pas » | **L24.1** |
 | 67 | Comparabilité garantie | ✅ | L'écran Socle **refuse de coter**, pour que les 20 filiales restent comparables | — |
 
-### N. Intelligence artificielle — 0 ✅ · 0 🟡 · 5 ❌
+### N. Intelligence artificielle — 1 ✅ · 1 🟡 · 3 ❌
 
 | # | Fonctionnalité | État | Lot |
 |---|---|---|---|
 | 68 | Agent de conformité / détection d'écarts | ❌ | **L27** |
 | 69 | Génération de réponses et de politiques | ❌ | **L27** |
-| 70 | Suggestion automatique de mapping | ❌ | **L27** / L26.4 |
+| 70 | Suggestion automatique de mapping | ✅ | **L26.4 livré le 19/09/2026, et SANS IA** — similarité de libellés (Jaccard sur les mots de quatre lettres et plus, accents retirés), score rendu, seuil affiché. ⚠️ Elle **propose** ; un humain crée. Et les exigences SANS proposition restent dans la liste : leur absence dit où la couverture manque | L26.4 |
 | 71 | Recherche universelle, palette, MCP | 🟡 | **Palette `Ctrl+K` livrée** (L17, A3), sans IA ni MCP. Reste L17.1, L17.2 |
 | 72 | Assistants d'évaluation fournisseur | ❌ | **L27** |
 
@@ -275,7 +314,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 75 | Page de confiance publique | ❌ | **—** sans objet en VPN. ⚠️ **À revoir après L28** : un composant exposé existera |
 | 76 | Partage de documents sous NDA | ❌ | **—** même remarque |
 
-### Q. RGPD et vie privée — 1 ✅ · 2 🟡 · 0 ❌
+### Q. RGPD et vie privée — 2 ✅ · 1 🟡 · 0 ❌
 
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|

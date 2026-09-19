@@ -25,7 +25,7 @@
  *
  * ── La couverture est RÉCLAMÉE, pas supposée ─────────────────────────────────
  *
- * Un dernier test balaie les **42 entités du registre** et vérifie que chacune se lit,
+ * Un dernier test balaie les **46 entités du registre** et vérifie que chacune se lit,
  * se décrit, et porte un préfixe d'identifiant. Sans lui, ce fichier resterait un
  * échantillon dont personne ne saurait dire ce qu'il laisse de côté — le reproche
  * exact que la porte a formulé.
@@ -315,7 +315,7 @@ describe('Une entité par famille de différence', () => {
  *  §2 — La couverture, réclamée
  * ===================================================================== */
 
-describe('Les 42 entités du registre, sans échantillonnage', () => {
+describe('Les 46 entités du registre, sans échantillonnage', () => {
   test('chaque entité du modèle est décrite, chargée, et porte un préfixe', async () => {
     const modele = (await serveur.appeler('GET', '/api/modele')).corps;
     const jeu = await donnees();
@@ -333,7 +333,7 @@ describe('Les 42 entités du registre, sans échantillonnage', () => {
     // y entrer lui donne le round-trip et l'import sans qu'un greffon ait à les réécrire.
     // Ce que le greffon `src/campagnes/` ajoute est ce que la couche générique ne peut pas
     // faire : compter l'avancement, et convoquer une AUTRE filiale que la sienne.
-    assert.equal(noms.length, 42);
+    assert.equal(noms.length, 46);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -357,9 +357,6 @@ describe('Les 42 entités du registre, sans échantillonnage', () => {
       evaluations: { ref_id: 'anssi', code: 'BALAYAGE-1' },
       history: { date: '2026-12-25' },
       mappings: { theme: 'Balayage' },
-      // `ref_id` distinct de celui du semis : l'unicité (filiale, référentiel) est
-      // le point de la table, et un balayage qui la heurterait mesurerait le semis.
-      referentiels_actifs: { ref_id: 'balayage-nis2', origine: 'ajout_local' },
       // `origine` porte un vocabulaire fermé : la valeur générique « Balayage … »
       // heurte le check, ce qui est le comportement voulu, pas un défaut.
       risque_catalogue: { origine: 'interne', statut: 'active' },
@@ -450,6 +447,34 @@ describe('Les 42 entités du registre, sans échantillonnage', () => {
       // d'hypothèses en attente de chiffres. Ce que le schéma exige, lui, ce sont
       // les hypothèses et la date, que le modèle marque « obligatoire ».
       risque_quantification: { risque_id: 'RISK2-A' },
+      // ── Lot L26 : les catalogues de référentiels ─────────────────────────
+      //
+      // ⚠️ **`referentiels_actifs` y entre pour la première fois avec une valeur
+      // RÉELLE.** Sa colonne `ref_id` portait jusqu'ici une chaîne inventée : la
+      // migration `051` y a posé une clé étrangère, et activer un référentiel qui
+      // n'existe pas est désormais refusé — c'est le constat **Q-150** sous une
+      // autre forme.
+      // ⚠️ « dora » et non « anssi-hygiene » : le semis active déjà ce dernier, et
+      // l'unicité (filiale, référentiel) est le point de la table — un balayage qui
+      // la heurterait mesurerait le semis. Les deux sont RÉELS, ce qui n'était pas le
+      // cas avant la clé étrangère de la migration `051`.
+      referentiels_actifs: { ref_id: 'dora', origine: 'ajout_local' },
+      // ⚠️ La clé des exigences est COMPOSITE — `(domaine_id, referentiel_id)` —, ce
+      // qui empêche une exigence de déclarer un référentiel autre que celui de son
+      // domaine. Le balayage doit donc nommer les DEUX, et le second doit être celui
+      // du domaine qu'il vient de créer.
+      referentiel_domaines: (crees) => ({ referentiel_id: crees.referentiels }),
+      referentiel_exigences: (crees) => ({
+        domaine_id: crees.referentiel_domaines,
+        referentiel_id: crees.referentiels,
+      }),
+      // ⚠️ `langue` porte un vocabulaire fermé — le FRANÇAIS n'y figure pas : il est
+      // la source, et un dictionnaire français serait une seconde source du texte
+      // français, qui divergerait du catalogue (constat Q-219).
+      referentiel_traductions: (crees) => ({
+        referentiel_id: crees.referentiels,
+        langue: 'en',
+      }),
       // ── Lot L25, ateliers 3 à 5 (migration `047`) ────────────────────────
       //
       // ⚠️ **Le couple source / objectif doit être RETENU** pour qu'un chemin

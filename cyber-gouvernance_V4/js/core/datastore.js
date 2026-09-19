@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 25;
+    const SCHEMA_VERSION = 26;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -188,7 +188,29 @@ const DataStore = (() => {
         // un PLANCHER, et `_secondaireEstimee` à faux est ce qui oblige l'écran à écrire
         // « ≥ ». Un plancher présenté comme un total serait l'estimation par défaut dans
         // le sens rassurant — celle que le critère 25.4 interdit nommément.
-        "risque_quantification"
+        "risque_quantification",
+        // v26 — Lot L26, action 26.1 : les CATALOGUES DE RÉFÉRENTIELS entrent en base.
+        //
+        // ⚠️ **Jusqu'ici, ces catalogues étaient six fichiers JavaScript publiés dans la
+        // racine web**, chargés par autant de balises `<script>` et enregistrés au
+        // démarrage dans `Referentiels`. Trois conséquences, et aucune n'était
+        // théorique : une évolution de norme était une LIVRAISON DE CODE, un client ne
+        // pouvait pas apporter sa propre grille, et rien ne DATAIT les catalogues.
+        //
+        // ⚠️ **Le registre `Referentiels` n'a pas changé d'interface — il a changé de
+        // SOURCE.** `get()`, `all()`, `flatExigences()` et `couverture()` sont intacts,
+        // et aucun des huit modules qui les appellent n'a à le savoir. C'est le principe
+        // qui a permis de basculer vingt-six modules sans en réécrire un seul au lot L2.
+        //
+        // ⚠️ **Les codes sont la moitié droite de la clé par laquelle toute
+        // auto-évaluation est stockée** (`evaluations`, clé `ref_id` + `code`). Le semis
+        // de la migration `051` les conserve à l'octet près — il est ENGENDRÉ depuis les
+        // fichiers source, qui vivent désormais dans `backend/db/catalogues/` —, et un
+        // essai du banc les compare exigence par exigence à chaque exécution.
+        "referentiels",
+        "referentiel_domaines",
+        "referentiel_exigences",
+        "referentiel_traductions"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
@@ -319,15 +341,38 @@ const DataStore = (() => {
         }
 
         data = normalize(charge.data);
+        hydraterCatalogues();
 
         Sync.brancher({
             collections: ARRAY_FIELDS,
             lire: () => data,
-            remplacer: (nouveau) => { data = normalize(nouveau); }
+            remplacer: (nouveau) => { data = normalize(nouveau); hydraterCatalogues(); }
         });
         Sync.adopterJeu(data);
         Sync.installerFilets();
         Sync.demarrerSondage();
+    }
+
+    /**
+     * Reconstruit le registre `Referentiels` depuis les collections du jeu de
+     * données (lot L26, action 26.1).
+     *
+     * ⚠️ **Appelée aux DEUX endroits où `data` est remplacé**, et pas ailleurs :
+     * le chargement initial et le rechargement (changement de filiale, reprise,
+     * sondage qui rapporte des modifications). C'est le seul point de passage de
+     * la donnée, et en placer un troisième ferait diverger les catalogues de ce
+     * que les écrans lisent — sans que rien ne le dise.
+     *
+     * ⚠️ **Elle ne lève jamais.** Une base antérieure à la migration `051` rend
+     * des collections vides, et le registre reste alors tel quel plutôt que
+     * d'être VIDÉ : un écran de conformité sans aucun référentiel n'afficherait
+     * ni erreur ni contenu — il aurait l'air de dire « vous n'avez rien à
+     * évaluer », ce qui est faux et rassurant.
+     */
+    function hydraterCatalogues() {
+        if (typeof Referentiels === "undefined") return;
+        if (typeof Referentiels.hydrater !== "function") return;
+        Referentiels.hydrater(data);
     }
 
     /* =========================
@@ -1140,6 +1185,19 @@ const DataStore = (() => {
        nombre qui AURAIT L'AIR mesuré — et c'est ce chiffre-là qui est cité en comité de
        direction.
     ========================== */
+    /* =========================
+       LES CATALOGUES DE RÉFÉRENTIELS (v26, action 26.1)
+
+       ⚠️ **Le registre `Referentiels` reste le point d'entrée des ÉCRANS** : ces
+       quatre accesseurs servent à la gestion des catalogues eux-mêmes — leur
+       ancienneté, leurs révisions, les grilles qu'une filiale apporte —, pas à
+       l'évaluation, qui passe par `Referentiels.get()` comme depuis le premier jour.
+    ========================== */
+    function getReferentiels() { return data.referentiels; }
+    function getReferentielDomaines() { return data.referentiel_domaines; }
+    function getReferentielExigences() { return data.referentiel_exigences; }
+    function getReferentielTraductions() { return data.referentiel_traductions; }
+
     function getQuantifications() { return data.risque_quantification; }
     function getQuantificationDuRisque(risqueId) {
         return data.risque_quantification.find(q => q.risque_id === risqueId);
@@ -1962,6 +2020,8 @@ const DataStore = (() => {
         getEchelles, getEchelleById, getEchelleEnVigueur, getEchellesDuSujet,
         addEchelle, updateEchelle, deleteEchelle,
         getNiveauxEchelle, getNiveauEchelleById,
+        getReferentiels, getReferentielDomaines,
+        getReferentielExigences, getReferentielTraductions,
         getQuantifications, getQuantificationDuRisque,
         addQuantification, updateQuantification, deleteQuantification,
         addNiveauEchelle, updateNiveauEchelle, deleteNiveauEchelle,

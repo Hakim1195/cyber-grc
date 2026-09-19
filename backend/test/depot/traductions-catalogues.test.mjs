@@ -35,7 +35,10 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 
-import { RACINE_FRONTEND } from '../aide/serveur.mjs';
+import { RACINE_BACKEND, RACINE_FRONTEND } from '../aide/serveur.mjs';
+
+/** Les catalogues ont quitté la racine web au lot L26 : ils sont la SOURCE du semis. */
+const RACINE_CATALOGUES = join(RACINE_BACKEND, 'db', 'catalogues');
 
 /** Les six catalogues, dans l'ordre où `index.html` les charge. */
 const CATALOGUES = ['ref_anssi', 'ref_iso27002', 'ref_iso27001_smsi', 'ref_nis2', 'ref_dora', 'ref_aircyber'];
@@ -50,10 +53,16 @@ const CATALOGUES = ['ref_anssi', 'ref_iso27002', 'ref_iso27001_smsi', 'ref_nis2'
  * autrement que ne le fait le produit, c'est mesurer son propre montage.
  */
 function chargerCatalogues(langue = 'fr') {
+  // ⚠️ **Le REGISTRE vit côté frontend, les CATALOGUES côté serveur** — lot L26,
+  // action 26.1. Les six fichiers de données et leurs traductions ont quitté la racine
+  // web le 19/09/2026 : ils y étaient publiés et chargés par douze balises `<script>`,
+  // et ils sont désormais en base. Ce qui reste dans `backend/db/catalogues/` est la
+  // SOURCE du semis et l'ÉTALON que `test/catalogues/fidelite.test.mjs` compare à la
+  // base — donc exactement ce que cette famille-ci doit lire.
   const morceaux = [readFileSync(join(RACINE_FRONTEND, 'js', 'data', 'referentiels.js'), 'utf8')];
   for (const f of CATALOGUES) {
-    morceaux.push(readFileSync(join(RACINE_FRONTEND, 'js', 'data', `${f}.js`), 'utf8'));
-    const traduction = join(RACINE_FRONTEND, 'js', 'data', 'en', `${f}.js`);
+    morceaux.push(readFileSync(join(RACINE_CATALOGUES, `${f}.js`), 'utf8'));
+    const traduction = join(RACINE_CATALOGUES, 'en', `${f}.js`);
     if (existsSync(traduction)) morceaux.push(readFileSync(traduction, 'utf8'));
   }
   // eslint-disable-next-line no-new-func
@@ -118,7 +127,7 @@ describe('Les catalogues traduits : la couverture se COMPTE', () => {
       // On relit le fichier de traduction pour voir ce qu'il DÉCLARE, et non ce
       // que le registre a bien voulu appliquer : une clé égarée est appliquée à
       // rien, donc invisible côté registre.
-      const fichier = join(RACINE_FRONTEND, 'js', 'data', 'en',
+      const fichier = join(RACINE_CATALOGUES, 'en',
         `ref_${{ 'anssi-hygiene': 'anssi', 'iso-27002-2022': 'iso27002', 'iso27001-smsi': 'iso27001_smsi', 'nis2-art21': 'nis2', dora: 'dora', aircyber: 'aircyber' }[ref.id]}.js`);
       if (!existsSync(fichier)) continue;
       const source = readFileSync(fichier, 'utf8');
@@ -186,7 +195,7 @@ describe('Aucune chaîne de catalogue ne porte de balise (constat Q-204)', () =>
 
     // Les traductions, lues à la source : `all()` ne rend que la langue active.
     for (const nom of CATALOGUES) {
-      const fichier = join(RACINE_FRONTEND, 'js', 'data', 'en', `${nom}.js`);
+      const fichier = join(RACINE_CATALOGUES, 'en', `${nom}.js`);
       if (!existsSync(fichier)) continue;
       const source = readFileSync(fichier, 'utf8');
       for (const [, texte] of source.matchAll(/:\s*"((?:[^"\\]|\\.)*)"/gu)) {

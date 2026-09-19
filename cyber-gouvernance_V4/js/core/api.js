@@ -1276,6 +1276,28 @@ const Api = (() => {
      */
     function ebiosEtat() { return appeler("/ebios/etat"); }
 
+    /* ── LES CATALOGUES OUVERTS (lot L26, actions 26.3, 26.4, 26.5) ───────────
+     *
+     * ⚠️ **Trois LECTURES, et pas une écriture.** Les quatre tables de catalogue
+     * sont des entités ordinaires : elles se créent, s'importent et se
+     * reprennent par les routes génériques ci-dessus. Ce que ces trois-là
+     * ajoutent, c'est ce que le produit ne doit PAS décider seul — l'ancienneté
+     * d'un catalogue, le PLAN d'une reprise de réponses, et des PROPOSITIONS de
+     * correspondances.
+     *
+     * ⚠️ `suggestions()` ne crée aucune correspondance : une correspondance
+     * appliquée sans validation propagerait un statut de conformité faux.
+     */
+    function cataloguesEtat() { return appeler("/catalogues/etat"); }
+    function catalogueReprise(de, vers) {
+        return appeler("/catalogues/reprise-evaluations?de=" + encodeURIComponent(de) +
+                       "&vers=" + encodeURIComponent(vers));
+    }
+    function catalogueSuggestions(source, cible) {
+        return appeler("/catalogues/suggestions?source=" + encodeURIComponent(source) +
+                       "&cible=" + encodeURIComponent(cible));
+    }
+
     /* ── Les RÉGLAGES ─────────────────────────────────────────────────────────
      *
      * ⚠️ **La lecture est ouverte à toute session**, et c'est une décision du
@@ -1339,6 +1361,9 @@ const Api = (() => {
         echeancesReglementaires, consignerDeclaration,
         // Lot L25, action 25.1 : la pertinence DÉRIVÉE des couples EBIOS RM.
         ebiosEtat,
+        // Lot L26 : l'ancienneté d'un catalogue, le plan d'une reprise de
+        // réponses, et des correspondances PROPOSÉES — jamais appliquées.
+        cataloguesEtat, catalogueReprise, catalogueSuggestions,
         // Les réglages : le catalogue du Groupe, et ce que cette filiale en a fait.
         reglages, reglerParametre,
         // Lot L19, action 19.2 : l'état DÉRIVÉ des dérogations.
