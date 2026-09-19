@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2169 essais, trente familles (voir plus bas)
+npm test                           # 2181 essais, trente et une familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -636,6 +636,7 @@ que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non re
 | `test/droits-personnes/` | les **demandes d'exercice de droits** (L20, 20.4) : l'échéance d'un mois est DÉRIVÉE de la date de réception et porte sa référence au texte ; le mois écoulé fait passer « en retard » sans qu'on ait rien fait ; une prorogation exige d'avoir été **notifiée et motivée**, et un refus d'être **motivé et daté** (art. 12 §4). ⚠️ Le §6 éprouve le cas du **31 janvier** : un « mois » compté en trente jours donnerait deux jours de retard que personne ne verrait |
 | `test/aipd/` | l'**analyse d'impact RGPD** (L20, 20.3) : elle POINTE le registre de l'article 30 — un essai le mesure **dans le catalogue**, en refusant toute colonne commune aux deux tables —, son état se DÉRIVE de la date de revue, et la route rend **aussi les traitements qui n'ont aucune analyse**. ⚠️ Le §4 mesure ce que le produit REFUSE de faire : il n'écarte pas les traitements « non présumés requis », parce que deux des trois cas de l'article 35 §3 ne sont pas mesurables avec ce que le registre porte |
 | `test/recherche/` | la **recherche globale** (L17, A3) : une barre qui trouve un risque, un actif, une exigence ou une personne, bornée par la RLS côté serveur et par les droits — jamais par un filtre côté client. C'est la surface la plus propice à un oracle d'existence |
+| `test/ebios/` | les **ateliers 1 et 2 d'EBIOS RM** (L25) : la pertinence d'un couple source / objectif est DÉRIVÉE et **se tait dès qu'un critère manque** — pas d'estimation par défaut —, retenir un couple **sans justification** est refusé par la base, et la valeur métier POINTE le processus du BIA sans recopier sa criticité. ⚠️ **Le §1 mesure ce qui n'a PAS bougé** : les cinq colonnes de cotation F × G × M d'un risque **et sa `version`**, avant et après un atelier complet — *« en addition, jamais en remplacement » est une propriété NÉGATIVE, et elle ne se mesure qu'en la cherchant*. ⚠️ Et le §10 éprouve ce qu'aucune relecture n'avait vu : un `on delete set null` sans liste de colonnes nullifie `filiale_id` avec le lien, et fait tomber **toute restauration de sauvegarde** |
 | `test/decouverte/` | le **jeu de découverte** (L18 bis) et ses cinq conditions constitutives : marque de provenance posée PAR LA BASE et inforgeable, refus s'il existe la moindre ligne réelle, purge d'un geste, et interdiction hors du profil « découverte » |
 | `test/tiers/` | les **tiers, la chaîne de sous-traitance et DORA** (L21) : le barème du score est SERVI et non recopié ; « non évalué » n'est pas « faible » ; le registre d'information **dit ses propres manques** et exige le droit d'**export**, non la simple lecture ; la chaîne rend le **chemin**, pas un rang à croire. Et le **questionnaire fournisseur** (21.2), dont la migration était livrée *mordue par rien* : l'état est DÉRIVÉ — un questionnaire reçu en retard est **reçu**, un brouillon n'est **pas** un retard —, la chronologie est posée dans le schéma, le vocabulaire des réponses est **éprouvé** plutôt que relu (§39.1), et le réimport est idempotent **par la contrainte** : rejouer le même fichier échoue bruyamment au lieu de doubler les comptes en silence |
 | `test/campagnes/` | les **campagnes descendantes** (L24) : les deux états sont DÉRIVÉS — « close » testé avant l'échéance, « non faite » plutôt qu'« en retard » sur une demande fermée —, l'avancement se **compte** dans les évaluations et le serveur ne rend **aucun taux**, et surtout ⚠️ **une filiale ne voit QUE sa part** : ni celle de la voisine, ni leur nombre. La convocation, seule écriture du produit qui nomme des filiales, est éprouvée sur ses **trois barrières**, et son refus « hors périmètre » est mesuré **indistinguable** de « n'existe pas ». ⚠️ Le §7 garde l'INVERSE de ce qu'on croirait : que supprimer sa part reste POSSIBLE — un interdit y rendrait la reprise « remplacer » morte |
@@ -774,8 +775,8 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 18/09/2026, à la révision `941ea8b`** (lot L24) : `npm test` → **2169 essais,
-2169 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**Mesuré au 18/09/2026, à la révision `93813cd`** (lot L25) : `npm test` → **2181 essais,
+2181 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **50 garde-fous consignés**, **46 migrations**,
 **71 tables**, **411 décisions** au registre de l'article 30 ; publication → **91
@@ -945,24 +946,24 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`941ea8b`** — lot **L24**, déconvocation comprise, 18/09/2026, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ quatre fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**. |
-| État de l'arbre | **arbre de `941ea8b`** plus la documentation du commit qui suit. Compte **relevé famille par famille** — jamais déduit. ⚠️ **`documentation` est relevée à 30 essais dont UN EN ÉCHEC** — celui qui juge ce bloc-ci, et qui ne peut pas être vert avant que le bloc soit écrit. C'est la seule circularité du dispositif, et elle se dit plutôt qu'elle ne se cache : la famille est rejouée APRÈS cette mise à jour. Une seule famille bouge depuis `8aa1c2d` : `documentation` 30 → **32**, par les deux grandeurs que personne ne gardait — le registre de l'article 30 et le compte de fichiers publiés. ⚠️ Le compte est RELEVÉ, jamais déduit : une estimation précédente en annonçait 2 051 pour 2 048 réels. |
+| Révision mesurée | **`93813cd`** — lot **L25**, ateliers 1 et 2 d'EBIOS RM, 18/09/2026, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ quatre fois**, dont une après le constat Q-219 où il désignait une révision **cinquante-six commits en arrière** et annonçait 1 030 essais quand le banc en jouait 1 747. Le garde-fou ne peut pas voir cela seul : il juge le document contre **la révision que le document nomme**. |
+| État de l'arbre | **arbre de `93813cd`** plus la documentation du commit qui suit. Compte **relevé famille par famille** — jamais déduit. ⚠️ **`documentation` est relevée à 33 essais, TOUS VERTS** — et il faut dire pourquoi, sans quoi le chiffre rassure à tort : au moment de la mesure, ce bloc nommait encore la révision PRÉCÉDENTE, et le contrôle qui le juge la jugeait donc, légitimement. C'est la seule circularité du dispositif, et elle se dit plutôt qu'elle ne se cache : la famille est rejouée APRÈS cette mise à jour, et c'est ce rejeu-là qui vaut. Trois familles bougent depuis `941ea8b`, et la première est NEUVE : **`ebios` 10** (lot L25), `modules` 46 → **47** (l'écran des ateliers entre dans le filet) et `documentation` 32 → **33**. ⚠️ Le compte est RELEVÉ famille par famille, jamais déduit : une estimation précédente en annonçait 2 051 pour 2 048 réels. |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 | ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2169 · pass 2169 · fail 0
+npm test                                         → tests 2181 · pass 2181 · fail 0
                                                    base 326 · api 297 · navigateur 237
                                                    pieces 141 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73
                                                    journal-lecture 72 · approbations 71
-                                                   depot 57 · annuaire 48 · modules 46
+                                                   depot 57 · annuaire 48 · modules 47
                                                    tiers 36 · documents 35 · filiales 35
-                                                   documentation 32 · campagnes 25
-                                                   journal 19 · recherche 13
+                                                   documentation 33 · campagnes 25
+                                                   journal 19 · recherche 13 · ebios 10
                                                    attestations 8 · decouverte 8
                                                    aipd 7 · crise 7 · reglementaire 7
                                                    derogations 6 · droits-personnes 6
