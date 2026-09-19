@@ -102,6 +102,7 @@ window.I18n.enregistrer("fr", {
     "fil.risques": "Risques (EBIOS)",
     "fil.matrice": "Matrice des risques",
     "fil.ebios": "Ateliers EBIOS RM",
+    "fil.echelles": "\u00c9chelles de cotation",
     "fil.actifs": "Actifs critiques",
     "fil.exigences": "Exigences (ISO/NIS2)",
     "fil.referentiels": "Référentiels",

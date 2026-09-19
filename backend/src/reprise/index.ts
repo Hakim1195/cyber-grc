@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 23;
+export const VERSION_SCHEMA = 24;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -193,6 +193,13 @@ export const COLLECTIONS = [
   'ebios_parties_prenantes',
   'ebios_scenarios_strategiques',
   'ebios_scenarios_operationnels',
+  // v24 — les échelles de cotation (action 25.3). ⚠️ Cette liste n'est PAS un ordre
+  // d'insertion : cinq collections placées plus haut référencent « echelles », et
+  // c'est le tri par le graphe des clés étrangères qui les fait passer en premier
+  // (`trierParDependances`, src/entites/). La placer avant « risques » ici ne
+  // changerait rien et laisserait croire l'inverse.
+  'echelles',
+  'echelle_niveaux',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -342,6 +349,14 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
       // référence qui fait normaliser la chaîne vide en `null`. La déclarer dans
       // `champs` seulement ferait voyager la valeur sans la normaliser.
       'catalogue_id',
+      // ⚠️ v24 : l'échelle sous laquelle chaque moitié de la cotation a été produite
+      // (action 25.3). Déclarés ici ET dans `references`, pour la raison écrite
+      // au-dessus : c'est la déclaration de référence qui normalise la chaîne vide en
+      // `null`. ⚠️ Et un export d'avant la v24 ne les porte PAS : ils restent nuls,
+      // c'est-à-dire « échelle non tracée » — le serveur ne les remplit pas à la
+      // reprise, précisément pour ne pas réattribuer en silence (motif Q-192).
+      'echelle_f_id',
+      'echelle_g_id',
     ],
     enumerations: [{ champ: 'niveau', valeurs: ['faible', 'élevé', 'critique'], videAdmis: true }],
     bornes: [
@@ -350,7 +365,11 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
       { champ: 'm_maitrise', min: 0, max: 1 },
     ],
     dates: [],
-    references: [{ champ: 'catalogue_id', cible: 'risque_catalogue' }],
+    references: [
+      { champ: 'echelle_f_id', cible: 'echelles' },
+      { champ: 'echelle_g_id', cible: 'echelles' },
+      { champ: 'catalogue_id', cible: 'risque_catalogue' },
+    ],
     referencesMultiples: [{ champ: 'exigences_liees', cible: 'exigences' }],
     cleMetier: null,
   },
@@ -942,7 +961,17 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
   },
   ebios_evenements_redoutes: {
     prefixe: 'EBER',
-    champs: ['id', 'valeur_metier_id', 'nom', 'besoin', 'gravite', 'impacts', 'description'],
+    champs: [
+      'id',
+      'valeur_metier_id',
+      'nom',
+      'besoin',
+      'gravite',
+      'impacts',
+      'description',
+      // v24 : l'échelle de gravité sous laquelle l'atelier 1 a coté (action 25.3).
+      'echelle_gravite_id',
+    ],
     enumerations: [
       {
         champ: 'besoin',
@@ -956,7 +985,10 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     // sur une échelle à cinq. Même arbitrage qu'à `risques.f_frequence`.
     bornes: [{ champ: 'gravite', min: 1, max: 10 }],
     dates: [],
-    references: [{ champ: 'valeur_metier_id', cible: 'ebios_valeurs_metier' }],
+    references: [
+      { champ: 'echelle_gravite_id', cible: 'echelles' },
+      { champ: 'valeur_metier_id', cible: 'ebios_valeurs_metier' },
+    ],
     referencesMultiples: [],
     cleMetier: null,
   },
@@ -982,6 +1014,8 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
       'maturite',
       'confiance',
       'notes',
+      // v24 : UNE échelle pour les quatre critères — ils se combinent (action 25.3).
+      'echelle_criteres_id',
     ],
     enumerations: [
       {
@@ -998,6 +1032,7 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     ],
     dates: [],
     references: [
+      { champ: 'echelle_criteres_id', cible: 'echelles' },
       { champ: 'etude_id', cible: 'ebios_etudes' },
       { champ: 'prestataire_id', cible: 'prestataires' },
     ],
@@ -1042,6 +1077,8 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
       'justification_decision',
       'risque_id',
       'notes',
+      // v24 : l'échelle de vraisemblance de l'atelier 4 (action 25.3).
+      'echelle_vraisemblance_id',
     ],
     enumerations: [
       {
@@ -1053,6 +1090,7 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     bornes: [{ champ: 'vraisemblance', min: 1, max: 10 }],
     dates: [],
     references: [
+      { champ: 'echelle_vraisemblance_id', cible: 'echelles' },
       { champ: 'scenario_strategique_id', cible: 'ebios_scenarios_strategiques' },
       { champ: 'connaissance_id', cible: 'ebios_connaissances' },
       { champ: 'actif_id', cible: 'actifs' },
@@ -1060,6 +1098,54 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
       // conserve, et n'écrit jamais dans « risques ».
       { champ: 'risque_id', cible: 'risques' },
     ],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  // ── v24 : les échelles de cotation (action 25.3) ──────────────────────────
+  //
+  // ⚠️ `revision` est un CHAMP ORDINAIRE qui voyage, et ce n'est pas le numéro de
+  // verrouillage optimiste — celui-là s'appelle `_version` et voyage à part
+  // (`CHAMPS_STRUCTURELS`, src/entites/). Deux sens sous un nom était le bloquant du
+  // 6ᵉ passage de la porte S2 ; la migration `049` a nommé le second `revision` pour
+  // que les deux puissent coexister dans le même objet JSON.
+  //
+  // ⚠️ Et aucune borne sur `valeur` : l'échelle EST ce qui borne, et poser ici un
+  // maximum refuserait la reprise d'un export produit sur une graduation plus large.
+  // C'est l'arbitrage de `risques.f_frequence`, reconduit pour la même raison.
+  echelles: {
+    prefixe: 'ECHL',
+    champs: [
+      'id',
+      'sujet',
+      'nom',
+      'revision',
+      'statut',
+      'remplace_id',
+      'description',
+      'en_vigueur_le',
+      'archivee_le',
+    ],
+    enumerations: [
+      {
+        champ: 'sujet',
+        valeurs: ['vraisemblance', 'gravite', 'criteres_source', 'criteres_partie_prenante'],
+        videAdmis: false,
+      },
+      { champ: 'statut', valeurs: ['brouillon', 'en_vigueur', 'archivee'], videAdmis: false },
+    ],
+    bornes: [],
+    dates: ['en_vigueur_le', 'archivee_le'],
+    references: [{ champ: 'remplace_id', cible: 'echelles' }],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  echelle_niveaux: {
+    prefixe: 'ECHN',
+    champs: ['id', 'echelle_id', 'valeur', 'libelle', 'description'],
+    enumerations: [],
+    bornes: [],
+    dates: [],
+    references: [{ champ: 'echelle_id', cible: 'echelles' }],
     referencesMultiples: [],
     cleMetier: null,
   },
@@ -1076,6 +1162,8 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
       'activite',
       'retenue',
       'justification',
+      // v24 : UNE échelle pour les trois critères — ils se moyennent (action 25.3).
+      'echelle_criteres_id',
     ],
     enumerations: [],
     bornes: [
@@ -1085,6 +1173,7 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     ],
     dates: [],
     references: [
+      { champ: 'echelle_criteres_id', cible: 'echelles' },
       { champ: 'etude_id', cible: 'ebios_etudes' },
       { champ: 'connaissance_id', cible: 'ebios_connaissances' },
     ],
@@ -2280,6 +2369,31 @@ const PALIERS: readonly EtapePalier[] = [
       'ebios_scenarios_strategiques',
       'ebios_scenarios_operationnels',
     ]),
+  },
+  {
+    de: 23,
+    vers: 24,
+    libelle:
+      'Lot L25, action 25.3 : l’instantané gagne les ÉCHELLES DE COTATION et leurs ' +
+      'niveaux — ce que « 3 » veut dire cesse d’être écrit en dur dans le navigateur. ' +
+      '⚠️ Les cotations déjà dans le fichier restent « échelle non tracée » : rien ne ' +
+      'leur attribue l’échelle du jour.',
+    // ⚠️ **RIEN N'EST DEVINÉ, ET C'EST TOUT LE PALIER.** La tentation était d'estampiller
+    // les cotations existantes avec l'échelle du Groupe — quatre niveaux, exactement ceux
+    // que le navigateur proposait —, et l'argument aurait eu l'air solide : *« elles ont
+    // forcément été produites sur cette graduation-là, puisqu'il n'y en avait pas
+    // d'autre »*.
+    //
+    // Il est faux, et il l'est pour la raison qui a fait refuser la renumérotation ANSSI
+    // (constat **Q-192**) : le fichier repris peut venir d'une société rachetée, d'un
+    // export bricolé, d'une installation où quelqu'un a saisi des 5 dans un champ que le
+    // schéma borne à 100. « Il n'y avait pas d'autre échelle » décrit ce que le PRODUIT
+    // proposait, jamais ce que l'utilisateur a fait.
+    //
+    // Et le coût de se tromper n'est pas symétrique : une cotation marquée « non tracée »
+    // se voit à l'écran et se corrige en recotant ; une cotation faussement estampillée
+    // est indiscernable d'une vraie, **dans l'outil qui sert de preuve en audit**.
+    appliquer: paliersCollections(['echelles', 'echelle_niveaux']),
   },
 ];
 

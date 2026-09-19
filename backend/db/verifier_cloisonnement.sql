@@ -1433,9 +1433,16 @@ begin
                -- ⚠️ Il n'a pas été écrit à la main : `f_verifier_portee_figee()` a
                -- REFUSÉ le déploiement jusqu'à ce que la migration appelle
                -- l'installateur `f_poser_portee_figee()`.
-               '18 sur 18',
+               -- 20 depuis la `049` : `echelles` et `echelle_niveaux` naissent MIXTES
+               -- (action 25.3). Le socle du Groupe est ce sur quoi toutes les filiales
+               -- cotent tant qu'aucune ne décide autrement — ce qui réconcilie le
+               -- `PLAN_SERVEUR` §2.2 avec le critère 25.3. Vérifié un par un : les deux
+               -- déclencheurs neufs sont bien « trg_echelles_portee_figee » et
+               -- « trg_echelle_niveaux_portee_figee », posés par f_poser_portee_figee()
+               -- et armés « always ».
+               '20 sur 20',
                format('%s sur %s', count(*) filter (where t.tgenabled = 'A'), count(*)),
-               case when count(*) = 18 and count(*) filter (where t.tgenabled = 'A') = 18
+               case when count(*) = 20 and count(*) filter (where t.tgenabled = 'A') = 20
                     then 'OK' else 'ÉCHEC' end
           from pg_trigger t
          where not t.tgisinternal

@@ -163,8 +163,15 @@ describe('Conditions 1 à 4 — sous le profil « découverte »', () => {
           );
           let nonMarquees = 0;
           for (const { t } of porteuses.rows) {
+            // ⚠️ `socle` est exclu, et l'exclusion est le CONSTAT plutôt qu'une
+            // commodité : une échelle de cotation du Groupe est livrée PAR UNE
+            // MIGRATION (migration `049` §0 bis). Personne ne l'a saisie, elle revient
+            // à l'identique sur toute installation, et le jeu de découverte ne la
+            // remplace pas. La compter comme non marquée reviendrait à exiger que le
+            // semis réécrive le socle du produit.
             const r = await c.query(
-              `select count(*)::int as n from ${t} where provenance <> 'decouverte'`,
+              `select count(*)::int as n from ${t}
+                where provenance <> all (array['decouverte', 'socle'])`,
             );
             nonMarquees += r.rows[0].n;
           }

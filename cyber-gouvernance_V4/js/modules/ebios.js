@@ -68,7 +68,16 @@ const EbiosModule = (() => {
         { valeur: "information", libelle: "Information" }
     ]);
 
-    /** L'échelle proposée par l'application. Le schéma, lui, borne seulement 1 à 10. */
+    /**
+     * Les quatre niveaux d'origine — désormais un REPLI, plus une échelle.
+     *
+     * ⚠️ **Depuis l'action 25.3, la graduation vient de la base.** Tant qu'elle était
+     * écrite ici, l'échelle publiée par une filiale aurait été une décoration : la base
+     * aurait accepté un « 5 », et aucun écran ne l'aurait proposé. Cette liste ne sert
+     * plus qu'au cas où aucune échelle n'est en vigueur — base antérieure à la migration
+     * `049`, ou socle archivé sans successeur. Un écran cassé par une donnée manquante
+     * est un écran cassé.
+     */
     const NIVEAUX = Object.freeze([1, 2, 3, 4]);
 
     /** Les familles de l'écosystème, au vocabulaire de l'atelier 3. */
@@ -158,11 +167,17 @@ const EbiosModule = (() => {
             + ">" + esc(o.libelle) + "</option>").join("");
     }
 
-    function niveauxHtml(choisi) {
-        return '<option value="">—</option>'
-             + NIVEAUX.map(n =>
-                 '<option value="' + n + '"' + (String(choisi) === String(n) ? " selected" : "")
-                 + ">" + n + "</option>").join("");
+    /**
+     * Les niveaux d'un SUJET de cotation, tirés de l'échelle en vigueur.
+     *
+     * ⚠️ Le sujet est un argument, et il est obligatoire : les quatre sujets n'ont
+     * aucune raison de partager une graduation, et c'est très exactement ce que l'action
+     * 25.3 permet de dissocier. Une gravité à cinq niveaux et une vraisemblance à quatre
+     * cohabitent sans qu'une ligne d'ici ait à le savoir.
+     */
+    function niveauxHtml(sujet, choisi) {
+        const replis = NIVEAUX.map(n => ({ valeur: n, libelle: String(n) }));
+        return '<option value="">—</option>' + UI.optionsEchelle(sujet, choisi, replis);
     }
 
     /* =====================================================================
@@ -442,13 +457,13 @@ const EbiosModule = (() => {
                             <input type="text" id="srObjectif" maxlength="300" placeholder="Obtenir une rançon" />
                         </label>
                         <label>Motivation ${Help.tip("À quel point cette source tient à son objectif. L'échelle proposée va de 1 à 4.")}
-                            <select id="srMotivation">${niveauxHtml("")}</select>
+                            <select id="srMotivation">${niveauxHtml("criteres_source", "")}</select>
                         </label>
                         <label>Ressources ${Help.tip("Les moyens dont elle dispose : compétences, outillage, budget, temps.")}
-                            <select id="srRessources">${niveauxHtml("")}</select>
+                            <select id="srRessources">${niveauxHtml("criteres_source", "")}</select>
                         </label>
                         <label>Activité ${Help.tip("À quel point elle est active en ce moment, dans votre secteur.")}
-                            <select id="srActivite">${niveauxHtml("")}</select>
+                            <select id="srActivite">${niveauxHtml("criteres_source", "")}</select>
                         </label>
                     </div>
                     <button type="button" id="srAjouter">Ajouter le couple</button>` : ""}
@@ -473,16 +488,16 @@ const EbiosModule = (() => {
                             <select id="ppPrestataire"></select>
                         </label>
                         <label>Dépendance ${Help.tip("À quel point votre activité dépend d'elle.")}
-                            <select id="ppDependance">${niveauxHtml("")}</select>
+                            <select id="ppDependance">${niveauxHtml("criteres_partie_prenante", "")}</select>
                         </label>
                         <label>Pénétration ${Help.tip("À quel point elle est présente dans votre système : accès, interconnexions, droits.")}
-                            <select id="ppPenetration">${niveauxHtml("")}</select>
+                            <select id="ppPenetration">${niveauxHtml("criteres_partie_prenante", "")}</select>
                         </label>
                         <label>Maturité cyber ${Help.tip("Ce que vous savez de son niveau de sécurité.")}
-                            <select id="ppMaturite">${niveauxHtml("")}</select>
+                            <select id="ppMaturite">${niveauxHtml("criteres_partie_prenante", "")}</select>
                         </label>
                         <label>Confiance ${Help.tip("Ce que vous savez de sa fiabilité : historique, contrat, transparence.")}
-                            <select id="ppConfiance">${niveauxHtml("")}</select>
+                            <select id="ppConfiance">${niveauxHtml("criteres_partie_prenante", "")}</select>
                         </label>
                     </div>
                     <button type="button" id="ppAjouter">Ajouter la partie prenante</button>` : ""}
@@ -526,7 +541,7 @@ const EbiosModule = (() => {
                             <select id="soActif"></select>
                         </label>
                         <label>Vraisemblance ${Help.tip("À quel point ce mode opératoire est plausible ici, compte tenu de ce qui est déjà en place.")}
-                            <select id="soVraisemblance">${niveauxHtml("")}</select>
+                            <select id="soVraisemblance">${niveauxHtml("vraisemblance", "")}</select>
                         </label>
                     </div>
                     <button type="button" id="soAjouter">Ajouter le mode opératoire</button>` : ""}
@@ -686,7 +701,7 @@ const EbiosModule = (() => {
                         <select class="erBesoin">${optionsHtml(BESOINS, "disponibilite")}</select>
                     </label>
                     <label>Gravité
-                        <select class="erGravite">${niveauxHtml("")}</select>
+                        <select class="erGravite">${niveauxHtml("gravite", "")}</select>
                     </label>
                     <label>Impacts
                         <input type="text" class="erImpacts" maxlength="4000" placeholder="Pénalités, image, sécurité des personnes" />

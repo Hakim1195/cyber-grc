@@ -206,7 +206,17 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // filiale — deux filiales peuvent légitimement dépendre du même fournisseur à des
     // degrés opposés, et une portée Groupe ferait de l'appréciation de l'une celle de
     // toutes.
-    assert.equal(tablesCloisonnees.length, 56, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    // 58 depuis la migration `049` : `echelles` et `echelle_niveaux` (action 25.3),
+    // toutes deux MIXTES comme `risque_catalogue`. Le socle du Groupe est ce sur quoi
+    // toutes les filiales cotent tant qu'aucune ne décide autrement — c'est ce qui
+    // réconcilie le `PLAN_SERVEUR` §2.2 (« l'échelle est de niveau Groupe ») avec le
+    // critère 25.3 (« configurables par filiale ») : le §2.2 énonçait une CONSÉQUENCE
+    // (« sans échelle commune, les risques ne s'additionnent pas »), pas un interdit.
+    // ⚠️ `echelle_niveaux` est cloisonnée bien que sa portée soit entièrement celle de
+    // son échelle : le garde-fou de couverture RLS ne lit pas les déclencheurs, et une
+    // table qui invoquerait ce raisonnement sans porter `filiale_id` échapperait au
+    // balayage — la prochaine n'aurait peut-être pas le déclencheur.
+    assert.equal(tablesCloisonnees.length, 58, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -246,9 +256,15 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // l'écrit dans la section de niveau GROUPE, pas dans la boucle par filiale : convoquer
     // exige le drapeau d'administration, et la boucle l'efface à dessein. Semer la part
     // là-bas se ferait refuser — ce qui est le comportement voulu.
+    // 57 depuis la `049` : `echelles` et `echelle_niveaux`, semées LOCALEMENT dans les
+    // deux filiales (action 25.3). ⚠️ Le socle du Groupe ne suffirait pas ici : il porte
+    // `filiale_id` nul, et le balayage rendrait « zéro ligne visible » pour la seule
+    // raison qu'il n'y a rien de LOCAL à voir — c'est exactement l'angle mort que ce
+    // contrôle de matière existe pour refuser. Le semis les pose ARCHIVÉES, pour ne pas
+    // déplacer la graduation par défaut sous les autres familles du banc.
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      55,
+      57,
       // 52 depuis la migration `046` : les cinq tables des ateliers EBIOS RM sont semées
       // des DEUX côtés, et la chaîne est complète — l'étude porte sa valeur métier, qui
       // porte son événement redouté, et le couple source / objectif pointe l'entrée
@@ -391,7 +407,10 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     // deux côtés. ⚠️ `ebios_connaissances` y figure au titre de son versant LOCAL —
     // son socle de Groupe (filiale_id nul) est compté par l'égalité elle-même, comme
     // celui de `risque_catalogue`.
-    assert.equal(nonVides.length, 53, `Tables non vides : ${nonVides.join(', ')}`);
+    // 55 depuis la migration `049` : `echelles` et `echelle_niveaux`, au titre de leur
+    // versant LOCAL — leur socle de Groupe est compté par l'égalité elle-même, comme
+    // celui de `risque_catalogue` et de `ebios_connaissances`.
+    assert.equal(nonVides.length, 55, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

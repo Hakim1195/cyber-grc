@@ -116,6 +116,9 @@ const NOUVELLES_PAR_VERSION = {
     'ebios_scenarios_strategiques',
     'ebios_scenarios_operationnels',
   ],
+  // v24 — les échelles de cotation (action 25.3). ⚠️ L'échelle avant ses niveaux :
+  // c'est la clé étrangère, et c'est aussi l'ordre dans lequel on gradue.
+  24: ['echelles', 'echelle_niveaux'],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -781,6 +784,125 @@ export function instantaneV23Complet() {
         notes: null,
       },
     ],
+  };
+}
+
+/**
+ * Instantané COMPLET en v24 — les échelles de cotation (action 25.3).
+ *
+ * ⚠️ **Les cotations de l'instantané v23 sont RÉÉCRITES pour porter leur échelle**, et
+ * c'est ce que le round-trip doit conserver : un risque coté 2 × 3 y dit désormais SOUS
+ * QUELLE graduation il l'a été. Sans cela, le jeu d'essai n'éprouverait que des colonnes
+ * nulles, c'est-à-dire rien — la classe exacte du constat **Q-210** : *un essai qui couvre
+ * une règle sans jamais la faire décider ne la couvre pas*.
+ *
+ * ⚠️ **Et `ebios_evenements_redoutes` reste SANS échelle, délibérément.** Le produit doit
+ * savoir faire voyager les deux états — « tracée » et « non tracée » — dans le même
+ * fichier, puisque c'est exactement ce qu'un export réel portera pendant des années :
+ * les cotations d'avant la v24 à côté de celles d'après.
+ */
+export function instantaneV24Complet() {
+  const base = instantaneV23Complet();
+  return {
+    ...base,
+    schemaVersion: 24,
+    echelles: [
+      {
+        id: 'ECHL-1720000000000-222',
+        sujet: 'gravite',
+        nom: 'Gravité — échelle du Groupe',
+        revision: 1,
+        statut: 'en_vigueur',
+        remplace_id: null,
+        description: 'Quatre niveaux, socle commun.',
+        en_vigueur_le: '2026-09-19',
+        archivee_le: null,
+      },
+      {
+        id: 'ECHL-1720000000000-223',
+        sujet: 'vraisemblance',
+        nom: 'Vraisemblance — échelle du Groupe',
+        revision: 1,
+        statut: 'en_vigueur',
+        remplace_id: null,
+        description: null,
+        en_vigueur_le: '2026-09-19',
+        archivee_le: null,
+      },
+      // ⚠️ Une révision qui en REMPLACE une autre : c'est la chaîne `remplace_id` qui
+      // porte l'historique, et elle doit survivre au round-trip. Sans elle, l'écran ne
+      // peut plus dire d'où vient la graduation en service.
+      {
+        id: 'ECHL-1720000000000-224',
+        sujet: 'criteres_source',
+        nom: 'Critères d’une source de risque — révision 2',
+        revision: 2,
+        statut: 'en_vigueur',
+        remplace_id: 'ECHL-1720000000000-225',
+        description: 'Passage à cinq niveaux.',
+        en_vigueur_le: '2026-09-19',
+        archivee_le: null,
+      },
+      {
+        id: 'ECHL-1720000000000-225',
+        sujet: 'criteres_source',
+        nom: 'Critères d’une source de risque — révision 1',
+        revision: 1,
+        statut: 'archivee',
+        remplace_id: null,
+        description: null,
+        en_vigueur_le: '2026-01-05',
+        archivee_le: '2026-09-19',
+      },
+    ],
+    echelle_niveaux: [
+      {
+        id: 'ECHN-1720000000000-226',
+        echelle_id: 'ECHL-1720000000000-222',
+        valeur: 3,
+        libelle: 'Grave',
+        description: 'Atteinte durable à l’activité.',
+      },
+      {
+        id: 'ECHN-1720000000000-227',
+        echelle_id: 'ECHL-1720000000000-222',
+        valeur: 4,
+        libelle: 'Critique',
+        description: null,
+      },
+      {
+        id: 'ECHN-1720000000000-228',
+        echelle_id: 'ECHL-1720000000000-223',
+        valeur: 2,
+        libelle: 'Significative',
+        description: null,
+      },
+      {
+        id: 'ECHN-1720000000000-229',
+        echelle_id: 'ECHL-1720000000000-223',
+        valeur: 3,
+        libelle: 'Forte',
+        description: null,
+      },
+    ],
+    // ── Les cotations portent désormais l'échelle qui les a produites ──────────
+    risques: base.risques.map((r) => ({
+      ...r,
+      echelle_f_id: 'ECHL-1720000000000-223',
+      echelle_g_id: 'ECHL-1720000000000-222',
+    })),
+    ebios_scenarios_operationnels: base.ebios_scenarios_operationnels.map((s) => ({
+      ...s,
+      echelle_vraisemblance_id: 'ECHL-1720000000000-223',
+    })),
+    ebios_sources_risque: base.ebios_sources_risque.map((s) => ({
+      ...s,
+      echelle_criteres_id: 'ECHL-1720000000000-224',
+    })),
+    ebios_parties_prenantes: base.ebios_parties_prenantes.map((p) => ({
+      ...p,
+      echelle_criteres_id: null,
+    })),
   };
 }
 

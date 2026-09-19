@@ -118,6 +118,7 @@ import type {
   ModeReprise,
   MotifEchec,
   NomEntite,
+  PorteurEchelle,
   Rafraichissement,
 } from './types.js';
 
@@ -281,7 +282,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 23;
+export const VERSION_SCHEMA = 24;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -1157,6 +1158,22 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
       prefixe: 'EBSO',
     },
   ],
+
+  // ── v24 : LES ÉCHELLES DE COTATION (L25, action 25.3) ───────────────────────
+  //
+  // MIXTES toutes les deux, comme `risque_catalogue` : `filiale_id` nul = socle du
+  // Groupe. C'est ce qui réconcilie le `PLAN_SERVEUR` §2.2 — *« l'échelle est de
+  // niveau Groupe, sans quoi les risques ne s'additionnent pas »* — avec le critère
+  // 25.3, qui les veut configurables par filiale. Le §2.2 n'énonçait pas un interdit
+  // mais une CONSÉQUENCE ; le remède est de rendre l'échelle explicite et portée par
+  // chaque cotation, pour que la consolidation puisse refuser d'additionner ce qui
+  // n'est pas comparable plutôt que de l'additionner en silence.
+  //
+  // ⚠️ **Ce que ces entités n'exposent PAS** : rien de dérivé. Une échelle est une
+  // décision écrite, pas un calcul — et c'est précisément ce que l'action 25.3 ajoute
+  // au produit, qui écrivait jusqu'ici ses quatre niveaux en dur dans le navigateur.
+  ['echelles', { nom: 'echelles', table: 'echelles', prefixe: 'ECHL' }],
+  ['echelle_niveaux', { nom: 'echelle_niveaux', table: 'echelle_niveaux', prefixe: 'ECHN' }],
 ]);
 
 /** Ordre de chargement : celui d'`ARRAY_FIELDS` du frontend. */
@@ -1446,7 +1463,16 @@ export async function chargerCatalogue(client: PoolClient): Promise<Catalogue> {
   }
 
   etatsRlsParCatalogue.set(tables, etatsRls);
-  return { tables, validations, unicites, clesEtrangeres, decouvertLe: new Date() };
+  const porteursEchelle = await decouvrirPorteursEchelle(client);
+
+  return {
+    tables,
+    validations,
+    unicites,
+    clesEtrangeres,
+    porteursEchelle,
+    decouvertLe: new Date(),
+  };
 }
 
 /**
@@ -1458,6 +1484,41 @@ export async function chargerCatalogue(client: PoolClient): Promise<Catalogue> {
  * vu produire quatre défauts distincts (`CONVENTIONS.md` §19.5) — d'autant que
  * ces ordres changent à chaque migration qui ajoute une entité.
  */
+/**
+ * Les porteurs d'échelle de cotation, lus dans la BASE (migration `049` §4).
+ *
+ * ⚠️ **On lit la déclaration, on ne la recopie pas.** Six lignes de TypeScript
+ * auraient suffi — et auraient fait deux sources d'une même vérité : le
+ * déclencheur `f_cotation_dans_son_echelle()` validerait d'après l'une et le
+ * marquage ci-dessous écrirait d'après l'autre. Le jour où elles divergent, une
+ * cotation est estampillée d'une échelle que le déclencheur ne contrôle pas, et
+ * **rien ne le dit**. C'est le constat **Q-219** à l'échelle d'une liste.
+ *
+ * ⚠️ Et l'absence de la fonction n'est pas une erreur : une base antérieure à la
+ * migration `049` rend une liste vide, et le marquage ne fait alors rien. Le
+ * serveur démarre ; c'est `f_verifier_schema()` qui refuse un schéma incomplet,
+ * pas la couche d'accès.
+ */
+async function decouvrirPorteursEchelle(client: PoolClient): Promise<PorteurEchelle[]> {
+  const { rows } = await client.query<{
+    porteur: string;
+    colonne_echelle: string;
+    colonnes_valeur: string[] | null;
+    sujet: string;
+  }>(`
+    select p.porteur, p.colonne_echelle, p.colonnes_valeur, p.sujet
+      from f_echelle_porteurs() p
+     where to_regprocedure('public.f_echelle_porteurs()') is not null
+  `).catch(() => ({ rows: [] as never[] }));
+
+  return rows.map((ligne) => ({
+    porteur: ligne.porteur,
+    colonneEchelle: ligne.colonne_echelle,
+    colonnesValeur: Array.isArray(ligne.colonnes_valeur) ? ligne.colonnes_valeur : [],
+    sujet: ligne.sujet,
+  }));
+}
+
 async function decouvrirClesEtrangeres(
   client: PoolClient,
 ): Promise<DescriptionCleEtrangere[]> {
@@ -2529,6 +2590,10 @@ export class Depot {
     // La table principale d'abord : c'est elle qui porte l'identité, et les
     // clés étrangères des autres tables la visent.
     const principales = valeurs.get(d.table) ?? new Map<string, unknown>();
+    // La cotation qui part porte l'échelle sous laquelle elle a été produite
+    // (action 25.3). Rien n'est écrasé : si l'appelant a nommé la colonne — ce
+    // que fait la reprise, y compris pour dire « nulle » —, on ne touche à rien.
+    await this.marquerEchelles(client, d, principales, filialeLigne);
     let identifiantRetenu = identifiant;
     const tentative = await this.avecPointDeReprise(client, 'pr_creation', () =>
       this.inserer(client, d.table, identifiant, filialeLigne, principales, entite),
@@ -2673,6 +2738,66 @@ export class Depot {
    * l'enregistrement entier, le comportement observable est le même — mais un
    * appelant qui ne connaît qu'un champ n'écrase pas le reste.
    */
+  /**
+   * Marque la cotation qui part de l'échelle EN VIGUEUR, quand l'appelant n'en
+   * a pas nommé une (action 25.3).
+   *
+   * ── Pourquoi ici, et pas dans un déclencheur ────────────────────────────
+   *
+   * ⚠️ C'est la seule couche qui distingue **« l'appelant n'a rien dit »** de
+   * **« l'appelant a dit : pas d'échelle »**. Un `before insert` voit deux fois
+   * la même chose — une colonne nulle — et, s'il remplissait, la reprise d'un
+   * export d'avant la migration `049` repartirait en base **estampillée de
+   * l'échelle du jour** : le produit affirmerait qu'une cotation de 2024 a été
+   * produite sur la graduation publiée hier. C'est le motif du constat
+   * **Q-192** — réattribuer en silence, dans l'outil qui sert de preuve en
+   * audit — et c'est exactement ce que l'action 25.3 existe pour empêcher.
+   *
+   * Ici, `principales` ne contient que les champs que la requête a nommés :
+   * `has()` répond à la question, et `null` y est une réponse, pas une absence.
+   *
+   * ── Ce qu'elle ne fait pas ──────────────────────────────────────────────
+   *
+   *  · elle **n'écrase jamais** une échelle nommée par l'appelant — c'est ce
+   *    qui laisse la reprise conserver l'échelle historique d'un export ;
+   *  · elle **ne marque pas** un enregistrement qui ne cote rien : la colonne
+   *    reste nulle, et l'écran lit « échelle non tracée » ;
+   *  · elle **ne crée rien** : sans échelle en vigueur pour ce sujet — une base
+   *    dont le socle a été archivé sans successeur —, elle se tait plutôt que
+   *    d'inventer une graduation.
+   *
+   * ⚠️ En modification, elle est appelée APRÈS `retirerLesInchangees` : re-coter
+   * à l'identique n'écrit rien, donc ne re-marque rien. Ce qui est marqué, c'est
+   * la cotation qu'on vient réellement de produire — y compris quand elle
+   * reprend une valeur qui n'avait plus le même sens.
+   */
+  private async marquerEchelles(
+    client: PoolClient,
+    d: DescriptionEntite,
+    principales: Map<string, unknown>,
+    filiale: string | null,
+  ): Promise<void> {
+    for (const porteur of this.catalogue.porteursEchelle) {
+      if (porteur.porteur !== d.table) continue;
+      if (principales.has(porteur.colonneEchelle)) continue;
+
+      const cote = porteur.colonnesValeur.some((colonne) => {
+        if (!principales.has(colonne)) return false;
+        const valeur = principales.get(colonne);
+        return valeur !== null && valeur !== undefined && valeur !== '';
+      });
+      if (!cote) continue;
+
+      const { rows } = await client.query<{ id: string | null }>(
+        'select f_echelle_en_vigueur($1, $2) as id',
+        [porteur.sujet, filiale],
+      );
+      const echelle = rows[0]?.id ?? null;
+      if (echelle === null) continue;
+      principales.set(porteur.colonneEchelle, echelle);
+    }
+  }
+
   public async modifier(
     client: PoolClient,
     perimetre: PerimetreSession,
@@ -2729,6 +2854,11 @@ export class Depot {
         avantPrincipal,
       );
     }
+
+    // ⚠️ APRÈS `retirerLesInchangees`, et c'est la raison d'être de cet
+    // emplacement : re-coter à l'identique n'écrit rien, donc ne re-marque rien.
+    // Ce qui est marqué est la cotation qu'on vient réellement de produire.
+    await this.marquerEchelles(client, d, principales, filiale);
 
     // Les liaisons suivent la même règle : réécrire à l'identique un ensemble
     // de liens, c'est un `delete` puis un `insert` — donc une écriture, donc un

@@ -305,6 +305,21 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   ebios_parties_prenantes: 'risques',
   ebios_scenarios_strategiques: 'risques',
   ebios_scenarios_operationnels: 'risques',
+
+  // ── v24 : les échelles de cotation (action 25.3) ────────────────────────────
+  //
+  // Domaine « risques », et le motif est celui de `risque_catalogue` mot pour
+  // mot : qui définit la graduation fait le même métier que qui cote. Les
+  // rattacher à « administration » les aurait retirées aux RSSI — précisément
+  // ceux qui décident qu'une gravité va de 1 à 4 ou de 1 à 5 —, ce qui est le
+  // défaut que le constat **Q-158** a coûté sur le logo.
+  //
+  // ⚠️ Cela n'ouvre PAS le socle du Groupe à un RSSI de filiale : la portée
+  // Groupe reste réservée à `f_administration_groupe()` par la politique RLS de
+  // la migration `049` §9. Le domaine dit *de quoi on parle*, la RLS dit *qui
+  // écrit quoi* — et les deux se cumulent.
+  echelles: 'risques',
+  echelle_niveaux: 'risques',
 });
 
 /**

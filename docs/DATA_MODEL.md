@@ -65,7 +65,7 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 23`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 24`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
 côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v21**. Elle est
@@ -367,7 +367,7 @@ Conséquences pratiques :
 
 ### 1.5 Correspondance entre l'objet `data` et le schéma serveur
 
-**39 collections, 39 entités.** Les noms coïncident partout sauf pour `mesures` :
+**41 collections, 41 entités.** Les noms coïncident partout sauf pour `mesures` :
 
 | Collection `data` | Table(s) PostgreSQL | Préfixe d'identifiant |
 |---|---|---|
@@ -410,6 +410,8 @@ Conséquences pratiques :
 | `ebios_parties_prenantes` | `ebios_parties_prenantes` | `EBPP` |
 | `ebios_scenarios_strategiques` | `ebios_scenarios_strategiques` — ⚠️ **sans gravité** : elle est celle de l'événement redouté réalisé | `EBSS` |
 | `ebios_scenarios_operationnels` | `ebios_scenarios_operationnels` | `EBSO` |
+| **`echelles`** | **`echelles`** — ⚠️ MIXTE : `filiale_id` nul = socle du **Groupe**. Une échelle publiée est **figée** : on en publie une **révision** | `ECHL` |
+| **`echelle_niveaux`** | **`echelle_niveaux`** — ⚠️ MIXTE, portée tenue par un **déclencheur** et non par une clé composite (`MATCH SIMPLE` ne contrôle rien quand `filiale_id` est nul) | `ECHN` |
 
 **La scission des mesures**, en une phrase : l'entité unique du modèle navigateur
 portait deux choses de nature différente — la **définition** du contrôle (la même

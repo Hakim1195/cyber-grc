@@ -130,9 +130,28 @@ export interface BlocConformite {
 export interface BlocRisques {
   readonly total: number;
   readonly parNiveau: Repartition;
-  /** Somme des scores résiduels des risques cotés ; `null` si aucun ne l'est. */
+  /**
+   * Somme des scores résiduels des risques cotés ; `null` si aucun ne l'est.
+   *
+   * ⚠️ **Et `null` aussi, au niveau agrégé, quand les filiales n'ont PAS coté sur la
+   * même échelle** — voir `echelles`. C'est la promesse de l'action 25.3 rendue
+   * mécanique : le `PLAN_SERVEUR` §2.2 rangeait l'échelle au niveau Groupe *« sans quoi
+   * les risques ne s'additionnent pas »*, et la réponse n'est pas d'interdire à une
+   * filiale d'avoir la sienne — c'est de **refuser l'addition** plutôt que de la faire
+   * en silence.
+   */
   readonly expositionResiduelle: number | null;
   readonly cotes: number;
+  /**
+   * Les échelles de cotation TRACÉES employées, tous axes confondus, triées.
+   *
+   * ⚠️ **Les cotations « non tracées » n'y figurent pas, et ne comptent pas pour une
+   * divergence.** Elles ne prouvent rien — ni que les échelles concordent, ni qu'elles
+   * divergent. Les traiter comme une divergence rendrait `expositionResiduelle` nulle
+   * sur **toute installation existante** jusqu'à ce que tout soit recoté : on refuse
+   * d'additionner quand on SAIT que c'est faux, pas quand on l'ignore.
+   */
+  readonly echelles: readonly string[];
 }
 
 export interface BlocActions {
@@ -385,14 +404,27 @@ interface LigneRisques {
   readonly filiale_id: string | null;
   readonly cotes: string;
   readonly exposition: string | null;
+  readonly echelles: string[] | null;
 }
 
 const lireRisques = async (client: PoolClient): Promise<Map<string, BlocRisques>> => {
   const parNiveau = await repartition(client, 'risques', 'niveau');
   const { rows } = await client.query<LigneRisques>(
+    // ⚠️ Les DEUX axes dans le même ensemble : une filiale qui a publié sa gravité mais
+    // pas sa vraisemblance diverge quand même, et le dire par axe demanderait au lecteur
+    // de recomposer la question. Ce qu'on veut savoir est « peut-on additionner ? ».
+    //
+    // ⚠️ **`::text[]` N'EST PAS DÉCORATIF.** Les deux colonnes portent le domaine
+    // `id_metier` ; sans la conversion, l'agrégat est un `id_metier[]`, dont le pilote
+    // `pg` ignore l'OID — il rend alors la représentation TEXTUELLE du tableau,
+    // `new Set(...)` la découpe en CARACTÈRES, et l'union en compte vingt et quelques :
+    // l'exposition consolidée serait NULLE en permanence, sur toute installation.
+    // Trouvé par l'essai, et seulement parce qu'il sème d'abord sa matière (motif Q-210).
     `select filiale_id,
             count(score_residuel)::text as cotes,
-            sum(score_residuel)::text   as exposition
+            sum(score_residuel)::text   as exposition,
+            array_remove(array_agg(distinct echelle_f_id)
+                       || array_agg(distinct echelle_g_id), null)::text[] as echelles
        from risques group by filiale_id`,
   );
   const rendu = new Map<string, BlocRisques>();
@@ -404,6 +436,7 @@ const lireRisques = async (client: PoolClient): Promise<Map<string, BlocRisques>
       parNiveau: r,
       expositionResiduelle: ligne.exposition === null ? null : nombre(ligne.exposition),
       cotes: nombre(ligne.cotes),
+      echelles: [...new Set(ligne.echelles ?? [])].sort(),
     });
   }
   return rendu;
@@ -538,6 +571,9 @@ const cumuler = (parts: readonly Indicateurs[]): Indicateurs => {
   }
 
   const exposees = risques.filter((b) => b.expositionResiduelle !== null);
+  // L'union des échelles TRACÉES de toutes les filiales du périmètre. Au-delà d'une,
+  // la somme n'a plus de sens — et le produit le dit plutôt que de la rendre.
+  const echellesEmployees = new Set(risques.flatMap((b) => b.echelles));
 
   return {
     conformite:
@@ -560,11 +596,17 @@ const cumuler = (parts: readonly Indicateurs[]): Indicateurs => {
         : {
             total: risques.reduce((a, b) => a + b.total, 0),
             parNiveau: risques.reduce<Repartition>((a, b) => sommer(a, b.parNiveau), vide),
+            // ⚠️ **ON N'ADDITIONNE PAS DEUX GRANDEURS GRADUÉES AUTREMENT.** C'est la
+            // moitié « Groupe » de l'action 25.3, et le motif est celui du
+            // `PLAN_SERVEUR` §2.2 : *« sans échelle commune, les risques ne
+            // s'additionnent pas »*. Le §2.2 n'énonçait pas un interdit — il énonçait
+            // une conséquence, et la voici, rendue visible au lieu d'être subie.
             expositionResiduelle:
-              exposees.length === 0
+              exposees.length === 0 || echellesEmployees.size > 1
                 ? null
                 : exposees.reduce((a, b) => a + (b.expositionResiduelle ?? 0), 0),
             cotes: risques.reduce((a, b) => a + b.cotes, 0),
+            echelles: [...echellesEmployees].sort(),
           },
     actions:
       actions.length === 0
@@ -683,6 +725,7 @@ export async function construireConsolidation(
             parNiveau: vide,
             expositionResiduelle: null,
             cotes: 0,
+            echelles: [],
           }),
     actions:
       actions === null

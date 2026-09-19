@@ -473,13 +473,36 @@ la méthode, donc les données déjà saisies.
 > un scénario à un risque du registre n'écrit rien dans ce risque — un essai relit ses
 > cinq colonnes de cotation **et sa `version`** de part et d'autre du geste.
 >
-> **Reste** : **25.3** et **25.4**.
+> ✅ **L'action 25.3 est livrée le 19/09/2026** (migration `049`, schéma `data` en **v24**,
+> écran `js/modules/echelles.js` en onglet du sujet « risques »). Les échelles sont
+> **versionnées, datées et figées dès leur publication** ; le socle du Groupe est
+> surchargeable par filiale ; et **chaque cotation porte l'échelle qui l'a produite** —
+> `risques` (F et G), l'événement redouté, le scénario opérationnel, le couple source /
+> objectif, la partie prenante.
+>
+> ⚠️ **Le conflit avec le `PLAN_SERVEUR` §2.2 est tranché, et il n'en était pas un.** Le
+> §2.2 range l'échelle au niveau Groupe *« sans quoi les risques ne s'additionnent pas »* :
+> c'est une CONSÉQUENCE, pas un interdit. Le remède n'est donc pas d'interdire à une
+> filiale d'avoir la sienne — c'est de rendre l'échelle **explicite et portée par chaque
+> cotation**, pour que la consolidation puisse refuser d'additionner ce qui n'est pas
+> comparable au lieu de l'additionner en silence.
+>
+> ⚠️ **Rien n'est réattribué** : `null` ne veut pas dire « échelle du Groupe », il veut
+> dire « échelle non tracée », et l'écran le dit. Le palier de reprise ne devine rien
+> (motif Q-192).
+>
+> 🛑 **Et la première rédaction cassait la reprise** — `GET /api/export` puis
+> `POST /api/reprise` rendait 409 : *le produit produisait une sauvegarde qu'il refusait de
+> relire*. Classe des trois conflits de la `041` et des constats Q-194 / Q-284, tranchée
+> pareil : **restaurer une sauvegarde gagne**. Trouvé par le banc, pas par une relecture.
+>
+> **Reste** : **25.4**.
 
 | Réf | Action | Critère d'acceptation |
 |---|---|---|
 | **25.1** | **Les cinq ateliers EBIOS RM** — socle de sécurité, sources de risque, scénarios stratégiques, scénarios opérationnels, traitement | ⚠️ **En ADDITION, jamais en remplacement.** Les risques cotés en F×G×M restent valides et lisibles. Une migration qui les réinterpréterait réattribuerait **en silence** des cotations produites en audit — c'est exactement le motif qui a fait refuser la renumérotation ANSSI (**Q-192**) |
 | **25.2** | **Écosystème et parties prenantes** — la cartographie de dépendances existante est **réemployée** comme support de l'atelier 3 | Aucun graphe neuf : le module Cartographie porte déjà les dépendances typées |
-| **25.3** | **Échelles configurables par filiale** | ⚠️ Une échelle modifiée après coup rend les cotations existantes incomparables : le changement est **versionné et daté**, et les cotations portent l'échelle qui les a produites |
+| ~~**25.3**~~ | ~~**Échelles configurables par filiale**~~ ✅ **LIVRÉE le 19/09/2026** (migration `049`) | ⚠️ Une échelle modifiée après coup rend les cotations existantes incomparables : le changement est **versionné et daté**, et les cotations portent l'échelle qui les a produites. **Tenu** : une échelle publiée est FIGÉE (déclencheur, pas consigne) — on en publie une révision ; six colonnes portent l'échelle là où la valeur est ; et `null` se lit « non tracée », jamais « celle du Groupe » |
 | **25.4** | **Quantification financière (FAIR)** — optionnelle, par risque | Une valeur en euros n'est affichée **que** si ses hypothèses sont saisies. Pas d'estimation par défaut : un chiffre inventé en comité de direction est pire que pas de chiffre |
 | **25.5** | **Base de connaissances menaces / vulnérabilités types** | Alimente les ateliers 2 et 4. Portée Groupe, comme `risque_catalogue` |
 

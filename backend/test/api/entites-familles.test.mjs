@@ -25,7 +25,7 @@
  *
  * ── La couverture est RÉCLAMÉE, pas supposée ─────────────────────────────────
  *
- * Un dernier test balaie les **39 entités du registre** et vérifie que chacune se lit,
+ * Un dernier test balaie les **41 entités du registre** et vérifie que chacune se lit,
  * se décrit, et porte un préfixe d'identifiant. Sans lui, ce fichier resterait un
  * échantillon dont personne ne saurait dire ce qu'il laisse de côté — le reproche
  * exact que la porte a formulé.
@@ -315,7 +315,7 @@ describe('Une entité par famille de différence', () => {
  *  §2 — La couverture, réclamée
  * ===================================================================== */
 
-describe('Les 39 entités du registre, sans échantillonnage', () => {
+describe('Les 41 entités du registre, sans échantillonnage', () => {
   test('chaque entité du modèle est décrite, chargée, et porte un préfixe', async () => {
     const modele = (await serveur.appeler('GET', '/api/modele')).corps;
     const jeu = await donnees();
@@ -333,7 +333,7 @@ describe('Les 39 entités du registre, sans échantillonnage', () => {
     // y entrer lui donne le round-trip et l'import sans qu'un greffon ait à les réécrire.
     // Ce que le greffon `src/campagnes/` ajoute est ce que la couche générique ne peut pas
     // faire : compter l'avancement, et convoquer une AUTRE filiale que la sienne.
-    assert.equal(noms.length, 39);
+    assert.equal(noms.length, 41);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -456,6 +456,21 @@ describe('Les 39 entités du registre, sans échantillonnage', () => {
       ebios_scenarios_operationnels: (crees) => ({
         scenario_strategique_id: crees.ebios_scenarios_strategiques,
       }),
+      // ── Lot L25, action 25.3 : les échelles de cotation (migration `049`) ─
+      //
+      // ⚠️ `sujet` porte un VOCABULAIRE FERMÉ que la valeur générique
+      // « Balayage … » heurte, et c'est le comportement voulu : une échelle dont
+      // le sujet n'est gradué par aucun porteur ne coterait jamais rien, et
+      // `f_echelle_porteurs()` la déclarerait orpheline. Le sujet retenu est
+      // celui qui n'entre en conflit avec AUCUN socle du semis — les quatre
+      // échelles du Groupe étant en révision 1, une locale de révision 1 sur le
+      // même sujet est libre, mais autant ne pas dépendre de ce détail.
+      echelles: { sujet: 'criteres_partie_prenante' },
+      // ⚠️ Un niveau naît sous une échelle RÉELLE — celle que le balayage vient
+      // de créer, et qui est encore un BROUILLON : le déclencheur du §6 refuse
+      // d'ajouter un niveau à une échelle publiée, et c'est exactement ce qu'il
+      // doit faire.
+      echelle_niveaux: (crees) => ({ echelle_id: crees.echelles }),
     };
 
     const echecs = [];

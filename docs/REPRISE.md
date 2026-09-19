@@ -185,7 +185,9 @@ comme `risque_catalogue`), `ebios_etudes`, `ebios_valeurs_metier`,
   jumelle, et un essai le mesure dans le catalogue.
 - **L'échelle n'est PAS figée à quatre niveaux** : le schéma borne 1 à 10, parce que
   l'action **25.3** rendra les échelles configurables et versionnées. Un `check (1..4)`
-  aurait été une barrière que la migration suivante devrait abattre.
+  aurait été une barrière que la migration suivante devrait abattre. ✅ **Et elle l'a
+  rendue ainsi le 19/09** (migration `049`) — sans abattre quoi que ce soit, ce qui était
+  tout l'objet de la précaution.
 
 ⚠️ **Deux enseignements, et aucun n'est venu d'une relecture** :
 `f_verifier_portee_figee()` a **refusé le déploiement** — la table mixte n'avait pas son
@@ -240,10 +242,37 @@ critères, les chemins d'attaque, les modes opératoires et la **décision** de 
    d'une coupure. Les deux ont été trouvés parce que mes garde-fous neufs les ont cassés.
    *Une table qu'on croit morte mérite d'être interrogée avant d'être décrite ainsi.*
 
-**Le geste suivant** : **25.3** (échelles configurables et **versionnées** par filiale —
-le schéma borne déjà 1 à 10 et non 1 à 4, précisément pour ne pas avoir à abattre une
-barrière), **25.4** (quantification FAIR), puis **L26** (catalogues ouverts). Deux critères
-d'acceptation méritent d'être lus avant d'écrire une ligne :
+~~**Le geste suivant** : **25.3**~~ ✅ **LIVRÉE le 19/09/2026** — migration `049`, schéma
+`data` en **v24**, écran en onglet du sujet « risques ». Échelles versionnées, datées et
+**figées dès leur publication** ; socle du Groupe surchargeable par filiale ; chaque
+cotation porte l'échelle qui l'a produite, et `null` s'y lit « non tracée », jamais
+« celle du Groupe ».
+
+⚠️ **Trois choses à en retenir, et aucune n'est venue d'une relecture :**
+
+1. 🛑 **La première rédaction du figeage cassait la reprise** — `GET /api/export` puis
+   `POST /api/reprise` rendait **409**, *le produit produisait une sauvegarde qu'il
+   refusait de relire*. Classe des trois conflits de la `041` et des constats Q-194 /
+   Q-284 : **restaurer une sauvegarde gagne**. Et le remède lui-même a été faux d'abord —
+   `xmin = pg_current_xact_id()` compare à la transaction de PREMIER NIVEAU, alors que la
+   couche d'écriture pose un **point de reprise à chaque insertion**.
+2. ⚠️ **Une quatrième provenance est née : `socle`.** Le jeu de découverte refusait de se
+   charger sur une base neuve parce que les vingt lignes du socle des échelles comptaient
+   pour des données réelles. Le domaine était **incomplet** — une ligne livrée par une
+   migration n'est ni saisie, ni de découverte, ni reprise. **L26 en aura besoin** : il
+   fera entrer les cinq catalogues en base, par milliers de lignes.
+3. ⚠️ **La consolidation refuse d'additionner** dès que deux échelles sont EMPLOYÉES dans
+   le périmètre : `expositionResiduelle` devient `null`, et l'écran dit pourquoi. Sans
+   cela, la réconciliation du §2.2 aurait été une phrase. ⚠️ Un défaut de plus s'y cachait,
+   invisible autrement : l'agrégat `id_metier[]` revenait du pilote `pg` en **chaîne**, et
+   `new Set` la découpait en caractères — l'exposition aurait été nulle **en permanence**.
+4. ⚠️ **Deux garanties déclaratives ne garantissaient rien** quand `filiale_id` est nul —
+   `CONVENTIONS.md` **§45** : une clé étrangère composite (`MATCH SIMPLE` dispense de
+   contrôle) et une unicité (deux NULL sont distincts). Les deux trous s'ouvrent ensemble
+   sur toute table MIXTE.
+
+**Le geste suivant** : **25.4** (quantification FAIR), puis **L26** (catalogues ouverts).
+Deux critères d'acceptation méritent d'être lus avant d'écrire une ligne :
 
 - **L25 est le lot le plus risqué du plan** : il touche la méthode, donc les données déjà
   saisies. Les ateliers EBIOS RM se font **en ADDITION**, jamais en remplacement — une

@@ -166,6 +166,33 @@ Trois choses à savoir :
    cotation fréquence × gravité × maîtrise reste la vôtre. Le lien sert à ce que le plan
    d'actions déjà rattaché à ce risque s'applique ici aussi.
 
+### Les échelles de cotation — ce que « 3 » veut dire
+
+L'onglet **Échelles de cotation**, à côté des *Ateliers EBIOS RM*, porte les graduations
+que l'outil emploie : la **gravité**, la **vraisemblance**, les **critères d'une source de
+risque** et ceux d'une **partie prenante**.
+
+Par défaut, votre filiale cote sur le **socle du Groupe**, et c'est le cas normal : c'est
+lui qui rend les filiales comparables. Vous pouvez publier **la vôtre**, et l'écran dit
+alors clairement, devant chaque sujet, laquelle est en service.
+
+Quatre choses à savoir :
+
+1. **Une échelle en service ne se modifie plus.** Vous en publiez une **révision**. Ce
+   n'est pas une rigidité administrative : une cotation *pointe* son échelle, et retoucher
+   la graduation changerait ce que des analyses déjà produites veulent dire — sans que rien
+   ne bouge à l'écran.
+2. **Publier une révision ne recote rien.** Les analyses déjà faites gardent la graduation
+   sous laquelle elles l'ont été, et la fiche l'affiche. Seul un humain sait si son « 3 »
+   d'hier est le « 3 » de la nouvelle échelle ; l'outil ne le devine pas à votre place.
+3. **« Échelle non tracée » veut dire ce qu'il dit.** Les cotations saisies avant cette
+   version ne portent aucune échelle, et l'outil ne leur en attribue pas une d'office :
+   ce serait affirmer un fait que personne n'a constaté. Recotez-les pour qu'elles portent
+   la graduation en vigueur.
+4. **Votre échelle ne vaut que pour vous.** Le socle du Groupe ne bouge pas, les autres
+   filiales continuent de coter dessus, et la vision consolidée sait que vos chiffres ont
+   été produits autrement.
+
 ### Importer des données
 
 L'écran **Imports** couvre les 23 entités. Trois propriétés à connaître :

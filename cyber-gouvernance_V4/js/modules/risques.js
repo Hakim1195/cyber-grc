@@ -6,6 +6,49 @@ const RisquesModule = (() => {
     /* =========================
        UTILITAIRES DE CALCUL (F x G x M)
     ========================== */
+
+    /* =====================================================================
+       LES ÉCHELLES DE COTATION (v24, action 25.3)
+
+       ⚠️ **Les quatre options ne sont plus écrites ici.** Elles viennent de
+       l'échelle EN VIGUEUR, et c'est tout l'objet de l'action 25.3 : une filiale
+       qui publie une graduation à cinq niveaux doit pouvoir coter 5. Tant que le
+       `<select>` portait quatre `<option>` en dur, l'échelle en base aurait été
+       une décoration — la base l'aurait acceptée, et aucun écran ne l'aurait
+       proposée.
+
+       Les libellés d'origine restent le REPLI : sur une base antérieure à la
+       migration `049`, ou si le socle était archivé sans successeur, l'écran doit
+       continuer de fonctionner. Un produit cassé par une donnée manquante est un
+       produit cassé.
+    ===================================================================== */
+
+    /**
+     * Les quatre niveaux d'origine, employés tant qu'aucune échelle n'existe.
+     *
+     * ⚠️ **Les clés sont écrites EN TOUTES LETTRES**, et `t("risques.f" + n)` a été
+     * essayé puis retiré : le contrôle de `test/depot/traductions.test.mjs` §37.2 lit les
+     * clés employées dans le source, et une clé construite lui apparaît comme
+     * « risques.f », absente des deux dictionnaires. Il a raison de rougir — une clé
+     * introuvable s'affiche EN CLAIR à l'écran — et la parade n'est pas de l'assouplir.
+     */
+    function replisFrequence() {
+        return [
+            { valeur: 1, libelle: t("risques.f1") },
+            { valeur: 2, libelle: t("risques.f2") },
+            { valeur: 3, libelle: t("risques.f3") },
+            { valeur: 4, libelle: t("risques.f4") }
+        ];
+    }
+    function replisGravite() {
+        return [
+            { valeur: 1, libelle: t("risques.g1") },
+            { valeur: 2, libelle: t("risques.g2") },
+            { valeur: 3, libelle: t("risques.g3") },
+            { valeur: 4, libelle: t("risques.g4") }
+        ];
+    }
+
     function getRiskColor(score) {
         if (score < 3) return "var(--color-success)"; // Vert
         if (score < 8) return "var(--color-warning)"; // Jaune/Orange
@@ -143,21 +186,11 @@ const RisquesModule = (() => {
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                         <div class="form-group">
                             <label>${t("risques.frequence")} ${Help.tip(t("risques.frequenceAide"))}</label>
-                            <select id="f">
-                                <option value="1">${t("risques.f1")}</option>
-                                <option value="2">${t("risques.f2")}</option>
-                                <option value="3">${t("risques.f3")}</option>
-                                <option value="4">${t("risques.f4")}</option>
-                            </select>
+                            <select id="f">${UI.optionsEchelle("vraisemblance", 1, replisFrequence())}</select>
                         </div>
                         <div class="form-group">
                             <label>${t("risques.gravite")} ${Help.tip(t("risques.graviteAide"))}</label>
-                            <select id="g">
-                                <option value="1">${t("risques.g1")}</option>
-                                <option value="2">${t("risques.g2")}</option>
-                                <option value="3">${t("risques.g3")}</option>
-                                <option value="4">${t("risques.g4")}</option>
-                            </select>
+                            <select id="g">${UI.optionsEchelle("gravite", 1, replisGravite())}</select>
                         </div>
                         <div class="form-group">
                             <label>${t("risques.maitrise")} ${Help.tip(t("risques.maitriseAide"))}</label>
@@ -287,21 +320,13 @@ const RisquesModule = (() => {
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                             <div class="form-group">
                                 <label>${t("risques.frequence")} ${Help.tip(t("risques.frequenceAide"))}</label>
-                                <select id="f">
-                                    <option value="1" ${currentF == 1 ? "selected" : ""}>${t("risques.f1")}</option>
-                                    <option value="2" ${currentF == 2 ? "selected" : ""}>${t("risques.f2")}</option>
-                                    <option value="3" ${currentF == 3 ? "selected" : ""}>${t("risques.f3")}</option>
-                                    <option value="4" ${currentF == 4 ? "selected" : ""}>${t("risques.f4")}</option>
-                                </select>
+                                <select id="f">${UI.optionsEchelle("vraisemblance", currentF, replisFrequence())}</select>
+                                <small>${UI.mentionEchelle(risque.echelle_f_id)}</small>
                             </div>
                             <div class="form-group">
                                 <label>${t("risques.gravite")} ${Help.tip(t("risques.graviteAide"))}</label>
-                                <select id="g">
-                                    <option value="1" ${currentG == 1 ? "selected" : ""}>${t("risques.g1")}</option>
-                                    <option value="2" ${currentG == 2 ? "selected" : ""}>${t("risques.g2")}</option>
-                                    <option value="3" ${currentG == 3 ? "selected" : ""}>${t("risques.g3")}</option>
-                                    <option value="4" ${currentG == 4 ? "selected" : ""}>${t("risques.g4")}</option>
-                                </select>
+                                <select id="g">${UI.optionsEchelle("gravite", currentG, replisGravite())}</select>
+                                <small>${UI.mentionEchelle(risque.echelle_g_id)}</small>
                             </div>
                             <div class="form-group">
                                 <label>${t("risques.maitrise")} ${Help.tip(t("risques.maitriseAide"))}</label>

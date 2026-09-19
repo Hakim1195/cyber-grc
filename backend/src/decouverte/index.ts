@@ -58,6 +58,15 @@ export const CHEMIN_PURGER = '/api/decouverte/purger';
 /** Valeur de `grc.provenance` pendant le semis. Elle doit exister au domaine. */
 const MARQUE = 'decouverte';
 
+/**
+ * Marque des lignes livrées par une MIGRATION — le socle que le produit s'apporte à
+ * lui-même (migration `049` §0 bis).
+ *
+ * ⚠️ Elle ne compte ni comme donnée de découverte, ni comme donnée réelle : le jeu doit
+ * pouvoir se charger sur une base neuve, et la purge ne doit pas emporter le socle.
+ */
+const SOCLE = 'socle';
+
 export interface OptionsDecouverte {
   readonly pool: Pool;
   /** Profil de l'installation, tel que `src/config` l'a validé au démarrage. */
@@ -126,11 +135,20 @@ async function compter(client: PoolClient): Promise<{
     // Le nom vient de `pg_catalog` — c'est une liste blanche close par
     // construction, la seule interpolation d'identifiant que le
     // `CONVENTIONS.md` §17.4 admette. Aucune valeur d'utilisateur n'entre ici.
+    // ⚠️ `SOCLE` N'EST PAS UNE DONNÉE RÉELLE, et l'oublier a coûté un échec de banc.
+    // Une échelle de cotation du Groupe est livrée PAR UNE MIGRATION : personne ne l'a
+    // saisie, elle revient à l'identique sur toute installation, et le jeu de découverte
+    // ne la remplace pas. Comptée comme réelle, elle rendait une base NEUVE non semable —
+    // « la base porte déjà 20 ligne(s) qui ne viennent pas du jeu de découverte ».
+    //
+    // ⚠️ Et ce n'est pas propre aux échelles : le lot **L26** fera entrer les cinq
+    // catalogues de référentiels en base, par milliers de lignes. La quatrième valeur du
+    // domaine (migration `049` §0 bis) est la réponse de CLASSE.
     const compte = await client.query<{ marquees: string; reelles: string }>(
       `select count(*) filter (where provenance = $1) as marquees,
-              count(*) filter (where provenance <> $1) as reelles
+              count(*) filter (where provenance <> all ($2::text[])) as reelles
          from ${nom}`,
-      [MARQUE],
+      [MARQUE, [MARQUE, SOCLE]],
     );
     marquees += Number(compte.rows[0]?.marquees ?? 0);
     reelles += Number(compte.rows[0]?.reelles ?? 0);

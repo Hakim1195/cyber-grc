@@ -198,6 +198,9 @@ const SANS_FICHE = {
   '/echeances': 'agrégateur en lecture seule',
   '/cartographie': 'graphe d’actifs : la navigation se fait par le graphe',
   '/matrice': 'vue du domaine risques',
+  // Action 25.3 — les échelles se lisent PAR SUJET, quatre cartes, et un sujet n'a pas
+  // de fiche : ce qui a une identité est l'échelle, et on l'atteint par sa carte.
+  '/echelles': 'échelles de cotation : une carte par sujet, aucune fiche propre',
   '/mapping': 'correspondances : édition en place',
   '/couverture': 'vue croisée, aucune fiche propre',
   '/crise-fiches': 'vue d’impression',
@@ -327,7 +330,11 @@ const SANS_FICHE = {
 // ⚠️ C'est un ONGLET du sujet « risques », à côté de « Matrice F×G » — et ce
 // voisinage est le message : les deux méthodes de cotation cohabitent, la seconde
 // ne remplace pas la première (critère 25.1).
-const MODULES_ATTENDUS = 42;
+// 43 depuis l'action 25.3 (écran des échelles de cotation). ⚠️ C'est un ONGLET du sujet
+// « risques », à côté des ateliers EBIOS RM : une échelle dit ce qu'une cotation VEUT
+// DIRE, on ne la lit qu'en cotant, et une entrée de menu de plus rendrait au menu ce
+// qu'on vient de lui retirer (`docs/PLAN_INTERFACE.md`).
+const MODULES_ATTENDUS = 43;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //

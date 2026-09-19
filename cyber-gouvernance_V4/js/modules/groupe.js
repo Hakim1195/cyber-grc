@@ -504,9 +504,32 @@ var GroupeModule = (function () {
               rendre: (ind) => valeur(ind.risques, (b) => nombre(b.total)) },
             { cel: "exposition", titre: "Exposition",
               aide: "Somme des scores résiduels des risques cotés. « — » lorsqu'aucun ne l'est " +
-                    "encore : une exposition inconnue n'est pas une exposition nulle.",
-              rendre: (ind) => valeur(ind.risques, (b) =>
-                  b.expositionResiduelle === null ? null : nombre(b.expositionResiduelle)) },
+                    "encore : une exposition inconnue n'est pas une exposition nulle. " +
+                    "Sur la ligne du Groupe, « — » veut dire aussi que les filiales " +
+                    "n'ont PAS coté sur la même échelle : additionner des gravités " +
+                    "graduées autrement donnerait un chiffre qui a l'air mesuré sans " +
+                    "l'être, et c'est celui-là qu'on cite en comité de direction.",
+              // ⚠️ **Le « — » DIT SA CAUSE**, et c'est la seule cellule du tableau qui en
+              //    ait deux : « personne n'a rien coté » et « les filiales n'ont pas coté
+              //    sur la même échelle » sont deux faits différents, et les rendre
+              //    indiscernables est la classe des constats Q-201 / Q-207 et Q-335 —
+              //    un écran qui retire une information sans le dire apprend à ne plus
+              //    croire ce qu'il affiche, y compris le jour où il dit vrai.
+              rendre: (ind) => {
+                  const b = ind && ind.risques;
+                  if (b === null || b === undefined) return cellulaireNonCommunique();
+                  if (b.expositionResiduelle !== null && b.expositionResiduelle !== undefined) {
+                      return esc(nombre(b.expositionResiduelle));
+                  }
+                  const echelles = Array.isArray(b.echelles) ? b.echelles : [];
+                  const motif = echelles.length > 1
+                      ? "Les filiales de ce périmètre ont coté sur " + echelles.length
+                        + " échelles différentes : additionner des gravités graduées "
+                        + "autrement donnerait un chiffre qui a l'air mesuré sans l'être."
+                      : "Aucun risque coté : une exposition inconnue n'est pas une exposition nulle.";
+                  return '<span class="grp-vide" title="' + esc(motif) + '"'
+                       + ' aria-label="' + esc(motif) + '">—</span>';
+              } },
             { cel: "actions", titre: "Actions",
               aide: "Plan d'actions de la filiale, toutes échéances confondues.",
               rendre: (ind) => valeur(ind.actions, (b) => nombre(b.total)) },

@@ -10,8 +10,8 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 18/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2204 essais, 2204 passés, 0 échec** à la révision `a0cb1d7`, **relevé famille par
-> famille** (trente et une familles, dont `ebios` qui naît avec le lot L25),
+> **2230 essais, 2230 passés, 0 échec**, **relevé famille par
+> famille** (trente-deux familles, dont `echelles` qui naît avec l'action 25.3),
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
 > échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**53 garde-fous consignés**,
@@ -55,6 +55,102 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### Les échelles de cotation, versionnées et datées — L25, action 25.3 (19/09/2026)
+
+**Ce que « 3 » veut dire cesse d'être écrit en dur dans le navigateur.** Jusqu'ici, les
+quatre niveaux d'une gravité vivaient dans `js/modules/risques.js` et
+`js/modules/ebios.js` : aucune ligne du produit ne disait *quelle* gravité est un 3, qui
+l'avait décidé, ni depuis quand. Le jour où une filiale passe à cinq niveaux, les
+cotations d'hier et celles de demain se rangent **dans la même colonne** et le tableau de
+bord les additionne — sans que rien ne le signale, puisque la donnée est du même type,
+dans la même borne, sous le même nom.
+
+Migration **`049`**, schéma `data` en **v24**, écran `js/modules/echelles.js` en **onglet
+du sujet « risques »**, à côté des ateliers EBIOS RM.
+
+| | |
+|---|---|
+| `echelles` + `echelle_niveaux` | MIXTES : `filiale_id` nul = socle du Groupe, renseigné = échelle d'une filiale |
+| Six colonnes sur cinq tables | `risques` (F et G), l'événement redouté, le scénario opérationnel, le couple source / objectif, la partie prenante |
+| `f_echelle_porteurs()` | la déclaration vit **dans la base**, et le serveur la LIT — la recopier en TypeScript en ferait une seconde source |
+| `f_cotation_dans_son_echelle()` | refuse une échelle introuvable, d'un autre sujet, en brouillon, d'une autre filiale, ou une valeur hors graduation |
+| `f_verifier_echelles()` | **54ᵉ garde-fou** : part du catalogue, se vérifie dans les deux sens, mesure le `tgtype` et l'action des clés |
+
+⚠️ **LE CONFLIT ENTRE DEUX DOCUMENTS QUI FONT AUTORITÉ, ET COMMENT IL SE TRANCHE.** Le
+`PLAN_SERVEUR` §2.2 range l'échelle au niveau **Groupe** — *« sans quoi les risques ne
+s'additionnent pas »* — quand le critère 25.3 la veut **configurable par filiale**. Le
+§2.2 n'énonce pas un interdit : il énonce une **conséquence**. Le remède n'est donc pas
+d'interdire, c'est de rendre l'échelle **explicite et portée par chaque cotation**, pour
+que la consolidation puisse refuser d'additionner ce qui n'est pas comparable au lieu de
+l'additionner en silence.
+
+⚠️ **RIEN N'EST RÉATTRIBUÉ.** Les six colonnes sont nullables, et `null` **ne veut pas
+dire « échelle du Groupe »** : il veut dire *« échelle non tracée »*, et c'est ce que
+l'écran affiche. Toute cotation antérieure est dans ce cas ; lui attribuer d'office la
+graduation du jour inventerait un fait — c'est le motif du constat **Q-192**, dans l'outil
+qui sert de preuve en audit. Le palier de reprise v23 → v24 ne devine donc **rien**.
+
+⚠️ **ET LE MARQUAGE NE VIT PAS DANS UN DÉCLENCHEUR**, pour une raison qui vaut au-delà de
+ce lot : un `before insert` ne distingue pas *« l'appelant n'a rien dit »* de *« l'appelant
+a dit : pas d'échelle »* — il voit deux fois une colonne nulle. Il vit dans
+`src/entites/`, seule couche qui connaît la différence, et il est appelé **après**
+`retirerLesInchangees` : ré-enregistrer une fiche sans rien changer ne réestampille rien.
+
+⚠️ **DEUX GARANTIES QU'ON CROYAIT POSÉES NE L'ÉTAIENT PAS, ET C'EST LE MÊME DÉFAUT DEUX
+FOIS** — `CONVENTIONS.md` **§45** :
+
+1. une **clé étrangère composite ne contrôle RIEN** quand une colonne est nulle
+   (`MATCH SIMPLE`), et `filiale_id` l'est pour tout le socle du Groupe : la portée d'un
+   niveau est donc tenue par un **déclencheur**, pas par la clé que le §17.1 prescrivait ;
+2. une **unicité traite deux NULL comme distincts** : le socle pouvait porter deux
+   révisions 1 du même sujet. `nulls not distinct` le dit en un mot — **et laisse
+   `filiale_id` parmi les colonnes de clé**, donc le garde-fou du cloisonnement continue de
+   le voir, au lieu d'être dispensé de regarder par une entrée de plus dans une liste de
+   dispenses que personne ne relit.
+
+🛑 **ET LE BANC A TROUVÉ UN DÉFAUT BLOQUANT DANS LA PREMIÈRE RÉDACTION.** Le §6 interdisait
+d'ajouter un niveau à une échelle publiée, **sans exception** — et
+`GET /api/export` puis `POST /api/reprise « remplacer »` rendait **409** : *le produit
+produisait une sauvegarde qu'il refusait de relire*. C'est la classe des trois conflits de
+la migration `041` et des constats **Q-194** et **Q-284** — *un invariant d'ajout seul
+contre un balayage qui supprime* —, et elle se tranche toujours pareil : **restaurer une
+sauvegarde gagne**.
+
+Deux discriminants ont remplacé l'interdit : *(a)* **une ligne écrite dans la même
+transaction n'est « publiée » pour personne** (`f_ligne_ecrite_ici()`), ce qui laisse
+passer la reprise sans ouvrir la retouche d'une échelle en service ; *(b)* la
+**suppression** n'est plus interdite par un déclencheur mais par les six clés
+`on delete restrict`, qui **ignorent la RLS** et protègent donc aussi la cotation d'une
+filiale invisible — plus fort que ce qu'on retire. Le retrait d'un **niveau** reste refusé,
+par un déclencheur de contrainte **différé au commit** : un `before delete` ne distingue
+pas un retrait de la disparition de l'échelle entière.
+
+⚠️ **Et le premier discriminant était faux à sa première écriture** : il comparait `xmin` à
+`pg_current_xact_id()`, qui rend la transaction de **premier niveau** — or la couche
+d'écriture pose un **point de reprise** à chaque insertion. L'exemption n'aurait joué sur
+aucun chemin réel, avec un commentaire affirmant le contraire. `pg_xact_status()` répond
+pour une sous-transaction comme pour une racine.
+
+⚠️ **ET LA CONSOLIDATION REFUSE D'ADDITIONNER CE QUI N'EST PAS COMPARABLE.** Sans cela, la
+phrase ci-dessus sur le §2.2 serait de la rhétorique : dès que deux échelles sont
+**employées** dans le périmètre d'une session Groupe, `GET /api/consolidation` rend
+`expositionResiduelle: null` et publie la liste des échelles ; l'écran en tire sa phrase,
+au lieu d'un « — » qu'on confondrait avec « personne n'a rien coté ». ⚠️ **Les cotations
+non tracées ne comptent PAS pour une divergence** : elles ne prouvent rien, et les traiter
+comme telles aurait rendu l'indicateur nul sur toute installation existante — *on refuse
+d'additionner quand on SAIT que c'est faux, pas quand on l'ignore*.
+
+⚠️ **Un défaut de plus, trouvé par l'essai et invisible autrement** : l'agrégat des
+échelles est un `id_metier[]`, dont le pilote `pg` ignore l'OID — il rend la représentation
+**textuelle** du tableau, `new Set(...)` la découpe en **caractères**, et l'union en compte
+vingt et quelques. L'exposition consolidée serait restée nulle **en permanence**, sur toute
+installation. Un `::text[]` le ferme. *L'essai ne l'a vu que parce qu'il sème d'abord sa
+matière* (motif Q-210).
+
+Banc : deux familles neuves — `test/echelles/` (23 essais), dont cinq **mutations** du
+garde-fou et deux du marquage, jouées et rougies ; plus deux essais de consolidation, dont
+la mutation a été jouée.
 
 ### « Échange de données » devient PARAMÈTRES, en quatre onglets (19/09/2026)
 

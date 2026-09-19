@@ -2797,7 +2797,12 @@ describe('Portée des liens documentaires et armement des déclencheurs (N-10, N
     // le déploiement — troisième fois qu'un installateur appelable rattrape un lot qu'il
     // n'a pas vu naître. Vérifié : le déclencheur neuf est bien
     // « trg_ebios_connaissances_portee_figee ».
-    assert.equal(armement.length, 18, 'Quatre déclencheurs de cohérence, quatorze de portée.');
+    // 20 depuis la migration `049` : `echelles` et `echelle_niveaux` naissent MIXTES
+    // (action 25.3). Le socle du Groupe est ce sur quoi toutes les filiales cotent tant
+    // qu'aucune ne décide autrement. Vérifié un par un : les deux déclencheurs neufs
+    // sont bien « trg_echelles_portee_figee » et « trg_echelle_niveaux_portee_figee »,
+    // et ils ont été posés par `f_poser_portee_figee()` — pas à la main.
+    assert.equal(armement.length, 20, 'Quatre déclencheurs de cohérence, seize de portée.');
     assert.deepEqual(
       [...new Set(armement.map((l) => l.armement))],
       ['A'],
@@ -4209,6 +4214,14 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // réalisé. Une seconde valeur vieillirait à la prochaine réévaluation de l'atelier 1.
       'ebios_scenarios',
       'ecart_ne_fait_pas_foi',
+      // CINQUANTE-QUATRIÈME, apporté par `049_les_echelles_de_cotation.sql` — action 25.3.
+      // ⚠️ Il part du CATALOGUE — toute colonne « echelle_%_id » doit être déclarée dans
+      // `f_echelle_porteurs()` — et vérifie la déclaration dans l'AUTRE SENS (§20.2). Il
+      // mesure le `tgtype` des déclencheurs (constat Q-281), l'ACTION de suppression des
+      // clés étrangères (« restrict », et non « elle existe » : un `set null` laisserait
+      // la cotation en place en effaçant ce qui la rend interprétable), et il ÉPROUVE les
+      // contraintes sur des lignes témoins (§39.1).
+      'echelles',
       'entropie_identifiants',
       // TRENTE-HUITIÈME, apporté par `034_l_horloge_reglementaire.sql` : les quatre
       // paliers réglementaires — 24 h, 72 h et 1 mois pour NIS2, 72 h pour le RGPD —
@@ -5213,6 +5226,14 @@ describe('Armement, portée figée, chemin de magasin (§19.4 et §19.1, Q5-4 et
       // portée n'a pas été écrit à la main : `f_verifier_portee_figee()` a refusé le
       // déploiement jusqu'à ce que la migration appelle l'installateur.
       'ebios_connaissances',
+      // `echelles` et `echelle_niveaux` (migration `049`, action 25.3) : MIXTES comme
+      // `risque_catalogue`. Le socle du Groupe est ce sur quoi toutes les filiales cotent
+      // tant qu'aucune ne décide autrement — c'est ce qui réconcilie le `PLAN_SERVEUR`
+      // §2.2 avec le critère 25.3. ⚠️ La portée d'un NIVEAU est en plus tenue par un
+      // déclencheur propre (`f_echelle_niveau_suit_sa_portee`) : une clé étrangère
+      // composite ne peut pas la dire, `MATCH SIMPLE` dispensant de contrôle dès qu'une
+      // colonne est nulle — et `filiale_id` l'est pour tout le socle (CONVENTIONS §45).
+      'echelle_niveaux', 'echelles',
       'mesure_catalogue', 'parametres', 'personnes', 'risque_catalogue',
       'traitement_mesures', 'traitements',
     ]);

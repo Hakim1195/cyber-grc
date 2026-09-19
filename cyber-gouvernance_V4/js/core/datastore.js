@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 23;
+    const SCHEMA_VERSION = 24;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -145,7 +145,31 @@ const DataStore = (() => {
         // de l'événement redouté qu'il réalise, lue par la jointure.
         "ebios_parties_prenantes",
         "ebios_scenarios_strategiques",
-        "ebios_scenarios_operationnels"
+        "ebios_scenarios_operationnels",
+        // v24 — Lot L25, action 25.3 : les ÉCHELLES DE COTATION, versionnées et datées.
+        //
+        // ⚠️ **C'est ici que « 3 » cesse d'être un chiffre nu.** Jusqu'à la v23, les
+        // quatre niveaux d'une gravité étaient écrits EN DUR dans `js/modules/risques.js`
+        // et `js/modules/ebios.js` : aucune ligne du produit ne disait ce que « 3 »
+        // voulait dire, ni qui l'avait décidé, ni depuis quand. Le jour où une filiale
+        // change sa graduation, les cotations d'hier et celles de demain se rangent dans
+        // la même colonne et le tableau de bord les additionne — sans que rien ne le
+        // dise, puisque la donnée est du même type, dans la même borne, sous le même nom.
+        //
+        // ⚠️ Les DEUX sont de niveau GROUPE quand leur `filiale_id` est nul, comme
+        // `risque_catalogue` : le socle est ce sur quoi toutes les filiales cotent tant
+        // qu'aucune ne décide autrement. C'est ce qui réconcilie le `PLAN_SERVEUR` §2.2
+        // — « l'échelle est de niveau Groupe, sans quoi les risques ne s'additionnent
+        // pas » — avec le critère 25.3, qui les veut configurables par filiale : le §2.2
+        // énonçait une CONSÉQUENCE, pas un interdit.
+        //
+        // ⚠️ Une échelle PUBLIÉE ne se modifie plus : on en publie une RÉVISION. Sans
+        // cela, une cotation pointerait une échelle dont les niveaux ont changé sous
+        // elle — et le produit afficherait « révision 1 » en montrant la graduation
+        // d'aujourd'hui. C'est le déclencheur `trg_echelles_figee` (migration `049` §6),
+        // pas une consigne d'écran.
+        "echelles",
+        "echelle_niveaux"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
@@ -973,6 +997,80 @@ const DataStore = (() => {
     }
 
     /* =========================
+       ÉCHELLES DE COTATION (v24, action 25.3)
+
+       echelles        : { id, sujet, nom, revision, statut, remplace_id, description,
+                           en_vigueur_le, archivee_le }
+       echelle_niveaux : { id, echelle_id, valeur, libelle, description }
+
+       ⚠️ **Le produit n'écrit JAMAIS l'échelle d'une cotation depuis ici.** C'est le
+       serveur qui l'estampille, dans `src/entites/`, au moment où la cotation part —
+       seule couche qui distingue « l'écran n'a rien dit » de « l'écran a dit : pas
+       d'échelle ». Un écran qui s'en chargerait serait une omission qui attend : le
+       moteur d'import du lot L7 écrit lui aussi des cotations, et il ne passe par aucun
+       écran.
+
+       ⚠️ **`echelle_*_id` NUL ne veut pas dire « échelle du Groupe »** : il veut dire
+       « échelle non tracée », et c'est ce que les fiches affichent. Toute cotation
+       antérieure à la v24 est dans ce cas, et lui attribuer d'office la graduation du
+       jour inventerait un fait (motif du constat Q-192).
+
+       ⚠️ Une échelle PUBLIÉE est FIGÉE — la base le tient, pas ces fonctions. Modifier
+       une graduation en service changerait ce que des cotations déjà produites veulent
+       dire, sans que rien ne bouge à l'écran : on en publie une RÉVISION.
+    ========================== */
+    function getEchelles() { return data.echelles; }
+    function getEchelleById(id) { return data.echelles.find(e => e.id === id); }
+    /** L'échelle en vigueur pour un sujet. Rend `undefined` s'il n'y en a aucune. */
+    function getEchelleEnVigueur(sujet) {
+        return data.echelles.find(e => e.sujet === sujet && e.statut === "en_vigueur");
+    }
+    /** Les révisions d'un sujet, de la plus récente à la plus ancienne. */
+    function getEchellesDuSujet(sujet) {
+        return data.echelles.filter(e => e.sujet === sujet)
+            .slice().sort((a, b) => (b.revision || 0) - (a.revision || 0));
+    }
+    function addEchelle(e) { data.echelles.push(e); save(); }
+    function updateEchelle(e) {
+        const i = data.echelles.findIndex(x => x.id === e.id);
+        if (i !== -1) { data.echelles[i] = e; save(); }
+    }
+    function deleteEchelle(id) {
+        data.echelles = data.echelles.filter(e => e.id !== id);
+        data.echelle_niveaux = data.echelle_niveaux.filter(n => n.echelle_id !== id);
+        save();
+    }
+    /** Les niveaux d'une échelle, du plus faible au plus fort. */
+    function getNiveauxEchelle(echelleId) {
+        return data.echelle_niveaux.filter(n => n.echelle_id === echelleId)
+            .slice().sort((a, b) => Number(a.valeur) - Number(b.valeur));
+    }
+    function getNiveauEchelleById(id) { return data.echelle_niveaux.find(n => n.id === id); }
+    function addNiveauEchelle(n) { data.echelle_niveaux.push(n); save(); }
+    function updateNiveauEchelle(n) {
+        const i = data.echelle_niveaux.findIndex(x => x.id === n.id);
+        if (i !== -1) { data.echelle_niveaux[i] = n; save(); }
+    }
+    function deleteNiveauEchelle(id) {
+        data.echelle_niveaux = data.echelle_niveaux.filter(n => n.id !== id);
+        save();
+    }
+    /**
+     * Ce qu'une valeur VEUT DIRE sur une échelle donnée.
+     *
+     * ⚠️ Rend `null` — jamais la valeur nue, jamais un libellé de repli — quand
+     * l'échelle n'est pas tracée ou que la valeur n'y figure pas. L'appelant doit
+     * pouvoir DIRE « non tracée » : afficher « 3 » comme si de rien n'était serait
+     * exactement le défaut que l'action 25.3 ferme.
+     */
+    function libelleNiveau(echelleId, valeur) {
+        if (!echelleId || valeur === null || valeur === undefined || valeur === "") return null;
+        const n = data.echelle_niveaux.find(
+            x => x.echelle_id === echelleId && Number(x.valeur) === Number(valeur));
+        return n ? n.libelle : null;
+    }
+
+    /* =========================
        EBIOS RM — ATELIERS 1 ET 2 (v22, actions 25.1, 25.2 et 25.5)
 
        ebios_connaissances       : { id, genre, reference, nom, objectif_vise, phase,
@@ -1776,6 +1874,12 @@ const DataStore = (() => {
         getEbiosScenariosOperationnels, getEbiosScenarioOperationnelById,
         addEbiosScenarioOperationnel, updateEbiosScenarioOperationnel,
         deleteEbiosScenarioOperationnel,
+        // Échelles de cotation (v24, action 25.3)
+        getEchelles, getEchelleById, getEchelleEnVigueur, getEchellesDuSujet,
+        addEchelle, updateEchelle, deleteEchelle,
+        getNiveauxEchelle, getNiveauEchelleById,
+        addNiveauEchelle, updateNiveauEchelle, deleteNiveauEchelle,
+        libelleNiveau,
 
         getAnalysesImpact, getAnalyseImpactById, getAnalysesImpactByTraitement,
         addAnalyseImpact, updateAnalyseImpact, deleteAnalyseImpact,

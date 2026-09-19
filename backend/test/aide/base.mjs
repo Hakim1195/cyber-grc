@@ -925,6 +925,50 @@ export async function semerJeuEssai(base, client, options = {}) {
                        'ACTIF-${s}', 3, 'reduire', 'RISK-${s}')`,
           f,
         );
+        // L'échelle de cotation LOCALE de la filiale (migration `049`, action 25.3).
+        //
+        // ⚠️ **Elle est semée pour la même raison que `pieces_a_purger` ci-dessous** :
+        // le socle du Groupe suffirait au produit — une filiale qui ne décide rien cote
+        // dessus —, mais il porte `filiale_id` nul, si bien que le balayage de
+        // cloisonnement de `chargement-filiale.test.mjs` rendrait « zéro ligne visible »
+        // pour la seule raison qu'il n'y a rien de LOCAL à voir. *« Zéro ligne visible »
+        // est aussi ce que rend une table vide*, et c'est la moitié du contrôle qui
+        // manque le plus souvent.
+        //
+        // ⚠️ L'ordre est imposé par la base : on gradue un BROUILLON, puis on publie.
+        // `trg_echelle_niveaux_figes` refuse d'ajouter un niveau à une échelle en
+        // service — c'est ce qui rend la promesse « les cotations portent l'échelle qui
+        // les a produites » autre chose qu'une phrase.
+        //
+        // ⚠️ **Et elle est ARCHIVÉE, délibérément.** Une échelle locale EN VIGUEUR
+        // changerait la graduation par défaut de toutes les familles du banc : le socle
+        // du Groupe cesserait d'être ce sur quoi le semis cote, et des essais qui n'ont
+        // rien à voir avec les échelles se mettraient à mesurer autre chose que ce
+        // qu'ils annoncent. Archivée, elle donne sa matière au balayage sans rien
+        // déplacer — et elle éprouve au passage le chemin « publier puis retirer du
+        // service », que rien d'autre ne parcourt dans le semis.
+        await c.query(
+          `insert into echelles (id, filiale_id, sujet, nom, revision, statut)
+               values ('ECHL-${s}', $1, 'gravite', 'Gravité — site ${s}', 1, 'brouillon')`,
+          f,
+        );
+        await c.query(
+          `insert into echelle_niveaux (id, filiale_id, echelle_id, valeur, libelle)
+               values ('ECHN-${s}-1', $1, 'ECHL-${s}', 1, 'Mineure'),
+                      ('ECHN-${s}-2', $1, 'ECHL-${s}', 2, 'Significative'),
+                      ('ECHN-${s}-3', $1, 'ECHL-${s}', 3, 'Grave'),
+                      ('ECHN-${s}-4', $1, 'ECHL-${s}', 4, 'Critique')`,
+          f,
+        );
+        await c.query(
+          `update echelles set statut = 'en_vigueur', en_vigueur_le = date '2026-03-01'
+             where id = 'ECHL-${s}'`,
+        );
+        await c.query(
+          `update echelles set statut = 'archivee', archivee_le = date '2026-04-01'
+             where id = 'ECHL-${s}'`,
+        );
+
         // La file de purge du magasin (migration `017`). Elle est VIDE en régime
         // normal — c'est une file d'attente, pas un registre —, et c'est
         // précisément pourquoi elle est semée : sans une ligne par filiale, le

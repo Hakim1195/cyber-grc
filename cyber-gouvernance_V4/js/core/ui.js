@@ -651,6 +651,11 @@ window.UI = (function () {
                 // qu'il s'agit d'un autre outil, et perdre la matrice de vue est
                 // exactement ce que le critère 25.1 refuse.
                 Object.freeze({ route: "/ebios", libelle: "Ateliers EBIOS RM" }),
+                // Lot L25, action 25.3 — l'échelle dit ce que « 3 » veut dire.
+                // Un onglet du même sujet : on ne la lit qu'en cotant, et une
+                // entrée de menu de plus rendrait au menu ce qu'on vient de lui
+                // retirer (`docs/PLAN_INTERFACE.md`).
+                Object.freeze({ route: "/echelles", libelle: "\u00c9chelles de cotation" }),
                 Object.freeze({ route: "/socle", libelle: "Socle du Groupe" })
             ])
         }),
@@ -805,10 +810,72 @@ window.UI = (function () {
             .then(function () { return rappel(); });
     }
 
+    /* =====================================================================
+       LES ÉCHELLES DE COTATION (v24, action 25.3)
+
+       Deux helpers, et un seul endroit : les écrans de cotation sont au moins
+       deux — le registre des risques et les ateliers EBIOS RM — et chacun
+       écrivait jusqu'ici sa propre graduation en dur. Deux rédactions de la même
+       chose se mettent à diverger au premier ajustement (constat **Q-219**).
+
+       ⚠️ **Le repli n'est pas un détail.** Tant qu'aucune échelle n'est en
+       vigueur — base antérieure à la migration `049`, ou socle archivé sans
+       successeur —, les écrans doivent continuer de fonctionner avec les quatre
+       niveaux qu'ils proposaient. Un produit qui n'afficherait plus aucun choix
+       serait cassé par une donnée manquante, ce qu'aucun écran n'a le droit
+       d'être.
+    ===================================================================== */
+
+    /**
+     * Les `<option>` d'un sujet de cotation, tirées de l'échelle en vigueur.
+     *
+     * `replis` est la liste `[{ valeur, libelle }]` employée quand aucune échelle
+     * n'existe — celle que l'écran affichait avant la v24.
+     */
+    function optionsEchelle(sujet, valeurCourante, replis) {
+        var echelle = (window.DataStore && DataStore.getEchelleEnVigueur)
+            ? DataStore.getEchelleEnVigueur(sujet) : null;
+        var niveaux = (echelle && DataStore.getNiveauxEchelle)
+            ? DataStore.getNiveauxEchelle(echelle.id) : [];
+        var source = niveaux.length > 0
+            ? niveaux.map(function (n) { return { valeur: n.valeur, libelle: n.libelle }; })
+            : (replis || []);
+        return source.map(function (n) {
+            var choisi = String(n.valeur) === String(valeurCourante) ? " selected" : "";
+            return '<option value="' + esc(n.valeur) + '"' + choisi + ">"
+                 + esc(n.valeur) + " \u2014 " + esc(n.libelle) + "</option>";
+        }).join("");
+    }
+
+    /**
+     * La mention « coté sur telle échelle », ou « échelle non tracée ».
+     *
+     * ⚠️ **Elle ne se tait JAMAIS.** Ne rien afficher quand l'échelle est absente
+     * rendrait indistinguables « cette cotation a été produite sur la graduation
+     * du Groupe » et « personne ne sait sur quoi elle a été produite » — c'est la
+     * classe des constats **Q-201 / Q-207**, où un écran faisait disparaître une
+     * information sans un mot, et **Q-335**, où il masquait un différentiel sans
+     * le dire.
+     */
+    function mentionEchelle(echelleId) {
+        var echelle = (echelleId && window.DataStore && DataStore.getEchelleById)
+            ? DataStore.getEchelleById(echelleId) : null;
+        if (!echelle) {
+            return '<span class="muted" title="'
+                 + esc("Cette cotation a été produite avant que les échelles existent, ou par un chemin qui n'en a pas nommé. Le produit ne lui en attribue pas une d'office : ce serait inventer un fait. Recotez-la pour qu'elle porte la graduation en vigueur.")
+                 + '">' + esc("\u00e9chelle non trac\u00e9e") + "</span>";
+        }
+        var portee = echelle._porteeGroupe === true ? "socle du Groupe" : "\u00e9chelle de la filiale";
+        return '<span class="muted" title="' + esc(echelle.nom + " \u2014 " + portee) + '">'
+             + esc("cot\u00e9 sur « " + echelle.nom + " », r\u00e9vision " + (echelle.revision || 1))
+             + "</span>";
+    }
+
     return {
         apresEcriture,
         enteteHtml, ongletsHtml, ongletsDe,
         contratOnglets: Object.freeze(GROUPES_ONGLETS),
+        optionsEchelle, mentionEchelle,
         envelopperTableaux,
         wireNavSections, ouvrirSectionActive,
         badge, mappedBadge, wireBulkDelete, wireDelete, genId, refreshPersonnesDatalist,

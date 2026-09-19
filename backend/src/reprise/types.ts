@@ -105,7 +105,15 @@ export type NomCollection =
   // en créerait une seconde qui vieillirait.
   | 'ebios_parties_prenantes'
   | 'ebios_scenarios_strategiques'
-  | 'ebios_scenarios_operationnels';
+  | 'ebios_scenarios_operationnels'
+  // v24 — les échelles de cotation versionnées (lot L25, action 25.3). MIXTES toutes
+  // les deux : « filiale_id » nul = socle du Groupe. ⚠️ Elles voyagent dans l'export
+  // parce que cinq collections les RÉFÉRENCENT : sans elles, reprendre une sauvegarde
+  // laisserait des cotations pointant une échelle absente — c'est-à-dire un refus de
+  // clé étrangère, classe du constat Q-194 (« le produit ne sait pas relire sa propre
+  // sauvegarde »).
+  | 'echelles'
+  | 'echelle_niveaux';
 
 /**
  * Charge utile normalisée en v12.

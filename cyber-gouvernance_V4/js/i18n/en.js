@@ -95,6 +95,7 @@ window.I18n.enregistrer("en", {
     "fil.risques": "Risks (EBIOS)",
     "fil.matrice": "Risk matrix",
     "fil.ebios": "EBIOS RM workshops",
+    "fil.echelles": "Rating scales",
     "fil.actifs": "Critical assets",
     "fil.exigences": "Requirements (ISO/NIS2)",
     "fil.referentiels": "Frameworks",

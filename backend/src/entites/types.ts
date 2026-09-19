@@ -98,7 +98,15 @@ export type NomEntite =
   // traversent, et ceux-ci avant les scénarios opérationnels qui les détaillent.
   | 'ebios_parties_prenantes'
   | 'ebios_scenarios_strategiques'
-  | 'ebios_scenarios_operationnels';
+  | 'ebios_scenarios_operationnels'
+  // v24 — les échelles de cotation versionnées (lot L25, action 25.3). ⚠️ Les DEUX sont
+  // MIXTES : le socle du Groupe (`filiale_id` nul) est ce sur quoi toutes les filiales
+  // cotent tant qu'aucune ne décide autrement — c'est ce qui réconcilie le
+  // `PLAN_SERVEUR` §2.2 (« l'échelle est de niveau Groupe ») avec le critère 25.3
+  // (« configurables par filiale »). ⚠️ L'ordre suit la clé étrangère : l'échelle avant
+  // ses niveaux.
+  | 'echelles'
+  | 'echelle_niveaux';
 
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;
@@ -229,6 +237,25 @@ export interface DescriptionValidation {
   readonly colonnes: readonly string[];
 }
 
+/**
+ * Un porteur d'échelle, tel que `f_echelle_porteurs()` le déclare (migration `049` §4).
+ *
+ * ⚠️ **La déclaration vit dans la BASE, et le serveur la lit.** La recopier ici en
+ * TypeScript en ferait une seconde source : le déclencheur validerait une chose et le
+ * marquage en écrirait une autre, et rien ne le dirait — c'est le constat **Q-219**,
+ * appliqué à une liste de six lignes.
+ */
+export interface PorteurEchelle {
+  /** Table portant la cotation (`risques`, `ebios_evenements_redoutes`…). */
+  readonly porteur: string;
+  /** Colonne qui désigne l'échelle (`echelle_g_id`…). */
+  readonly colonneEchelle: string;
+  /** Colonnes de valeur que cette échelle gradue. */
+  readonly colonnesValeur: readonly string[];
+  /** Sujet attendu (`gravite`, `vraisemblance`…). */
+  readonly sujet: string;
+}
+
 export interface Catalogue {
   readonly tables: ReadonlyMap<string, DescriptionTable>;
   /** Contraintes de validation, indexées par nom. */
@@ -237,6 +264,12 @@ export interface Catalogue {
   readonly unicites: ReadonlyMap<string, DescriptionUnicite>;
   /** Clés étrangères du schéma. */
   readonly clesEtrangeres: readonly DescriptionCleEtrangere[];
+  /**
+   * Les porteurs d'échelle de cotation, lus dans `f_echelle_porteurs()`.
+   * Vide tant que la migration `049` n'est pas appliquée — le marquage ne fait
+   * alors simplement rien, au lieu d'échouer.
+   */
+  readonly porteursEchelle: readonly PorteurEchelle[];
   /** Horodatage de la découverte, pour le journal de démarrage. */
   readonly decouvertLe: Date;
 }

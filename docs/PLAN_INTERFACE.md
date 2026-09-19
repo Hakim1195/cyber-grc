@@ -29,6 +29,7 @@ ailleurs.
 | `/couverture` — couverture croisée | une **vue** de la conformité — ⚠️ **et elle n'a AUCUNE entrée de menu** : on n'y arrive que par trois liens en bas d'autres écrans | onglet de **Référentiels** |
 | `/campagnes` — « Campagnes du Groupe » | une **vue** de la conformité : ce que le Groupe demande à ses filiales (lot **L24**, 18/09/2026). Aucune fiche à route propre — une campagne se lit dans la liste, ses parts dépliées sous elle | onglet de **Référentiels** |
 | `/tiers-dora` — « Registre DORA » | une **vue** des mêmes tiers, avec ce qui manque à chaque ligne (lot **L21**) | onglet de **Prestataires** |
+| `/echelles` — « Échelles de cotation » | ce que « 3 » veut dire : les graduations que l'outil emploie (lot **L25**, action 25.3, 19/09/2026). ⚠️ **Une vue du risque, pas un réglage d'administration** : qui définit la graduation fait le même métier que qui cote — motif de `risque_catalogue`, et la décision du serveur (`DOMAINE_PAR_ENTITE`) la range dans « risques » | onglet de **Risques** |
 
 ⚠️ **Quatre entités de conformité, six portes, et l'une des six manquante.** C'est le
 symptôme le plus net de l'héritage : chaque capacité livrée a reçu son écran, parce que
@@ -109,7 +110,7 @@ dictionnaires `js/i18n/`, et la table des domaines de `js/app.js`.
 | Section | Entrées |
 |---|---|
 | **Pilotage** | Tableau de bord · Synthèse Direction · Échéancier · **Vision Groupe** |
-| **Risques & patrimoine** | Actifs · Cartographie · **Risques** *(onglets : registre, matrice, socle)* · BIA |
+| **Risques & patrimoine** | Actifs · Cartographie · **Risques** *(onglets : registre, matrice, ateliers EBIOS RM, échelles de cotation, socle)* · BIA |
 | **Conformité** | **Référentiels** *(onglets : catalogue, applicables, couverture)* · Exigences · Mesures de sécurité · Correspondances · **Audits** |
 | **Opérations** | Plan d'actions · Incidents |
 | **Documentation & RGPD** | Documents · **Registre RGPD** · Approbations |

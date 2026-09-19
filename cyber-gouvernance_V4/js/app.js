@@ -104,6 +104,10 @@ async function startApp() {
         // les autres écrans récents : une route qui appellerait un module absent
         // laisserait l'application sur un écran blanc, sans un mot.
         "/ebios": () => { if (typeof EbiosModule !== "undefined") EbiosModule.renderList(); },
+        // Lot L25, action 25.3 — une VUE du même sujet, pas un sujet à part :
+        // l'échelle dit ce que la cotation veut dire. Pas de « /:id » — un
+        // sujet n'a pas de fiche, il a une carte dans la liste.
+        "/echelles": () => { if (typeof EchellesModule !== "undefined") EchellesModule.renderList(); },
         "/ebios/:id": (id) => { if (typeof EbiosModule !== "undefined") EbiosModule.renderDetail(id); },
 
         "/exigences": () => ExigencesModule.renderList(),
@@ -382,6 +386,7 @@ const ROUTE_META = {
     "/risques":      { s: "fil.section.risques",    t: "fil.risques" },
     "/matrice":      { s: "fil.section.risques",    t: "fil.matrice" },
     "/ebios":        { s: "fil.section.risques",    t: "fil.ebios" },
+    "/echelles":     { s: "fil.section.risques",    t: "fil.echelles" },
     "/actifs":       { s: "fil.section.risques",    t: "fil.actifs" },
     "/exigences":    { s: "fil.section.conformite", t: "fil.exigences" },
     "/referentiels": { s: "fil.section.conformite", t: "fil.referentiels" },
@@ -1146,6 +1151,10 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     // même personne, même écran que la cotation F × G × M. On suit la décision
     // du serveur (`DOMAINE_PAR_ENTITE`) plutôt que d'en prendre une seconde.
     "/ebios":        "risques",
+    // Lot L25, action 25.3 : qui définit la graduation fait le même métier
+    // que qui cote — motif de « risque_catalogue ». On suit la décision du
+    // serveur (`DOMAINE_PAR_ENTITE`) plutôt que d'en prendre une seconde.
+    "/echelles":     "risques",
     "/exigences":    "conformite",
     "/referentiels": "conformite",
     "/mesures":      "conformite",

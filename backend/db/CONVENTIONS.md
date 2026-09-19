@@ -3146,3 +3146,73 @@ C'est le banc qui l'a dit — `test/journal/couverture.test.mjs`, qui exerce le 
 nul, périmètre système — et exige qu'elle passe. Un `returning` réintroduit sur ce chemin
 la fait rougir immédiatement, au lieu d'attendre qu'un exploitant remarque, des mois plus
 tard, que son journal ne porte plus aucun démarrage.
+
+---
+
+## 45. Le NUL dispense du contrôle — deux fois, sur deux mécanismes différents
+
+*Décision issue de la migration `049` (action 25.3), 19/09/2026.*
+
+Les deux tables des échelles de cotation sont **MIXTES** : `filiale_id` nul désigne le
+socle du Groupe. C'est le patron de `risque_catalogue`, de `mesure_catalogue` et de
+`parametres`, et il n'a rien de neuf. Ce qui est neuf, c'est que **deux garanties qu'on
+croit posées ne le sont pas** dès qu'une colonne peut être nulle — et qu'aucune des deux
+ne se voit à l'usage.
+
+### 45.1 Une clé étrangère composite ne contrôle RIEN quand une colonne est nulle
+
+Le §17.1 exige `filiale_id` dans toute clé étrangère entre deux tables cloisonnées.
+Appliqué à la lettre entre deux tables **mixtes**, il donne :
+
+```sql
+foreign key (echelle_id, filiale_id) references echelles (id, filiale_id)
+```
+
+et **cette clé ne vérifie rien pour le socle du Groupe**. PostgreSQL applique `MATCH
+SIMPLE` par défaut : *une clé étrangère composite dont une colonne est nulle est
+satisfaite, sans vérification*. Or le socle porte `filiale_id` nul **par construction**.
+Une ligne de portée Groupe pouvait donc désigner un parent inexistant, et la clé la
+laissait passer.
+
+⚠️ **`MATCH FULL` ne sauve pas** : il exige que les colonnes soient toutes nulles ou
+toutes renseignées — et « toutes nulles » reste dispensé de vérification.
+
+**La réponse** : une clé **simple** (qui, elle, vérifie toujours) **plus un déclencheur**
+qui exige l'égalité des portées — `f_echelle_niveau_suit_sa_portee()`. Le déclencheur
+n'est pas une rustine : c'est la seule chose qui puisse dire *« la portée d'un enfant est
+celle de son parent »* quand le nul est une valeur signifiante.
+
+### 45.2 Une unicité traite deux NULL comme distincts — `nulls not distinct` le dit
+
+Le même nul rouvre le §19.1 par l'autre bout. `unique (filiale_id, sujet, revision)`
+laisse le socle du Groupe porter **deux** révisions 1 du même sujet : deux nuls ne sont
+pas égaux, donc les deux lignes cohabitent.
+
+La réponse **habituelle du dépôt** est un index partiel réservé au socle plus une dispense
+nommée dans `f_verifier_unicite_cloisonnee()` — c'est ce que fait
+`uq_mesure_catalogue_reference_groupe`. Elle est **écartée depuis la `049`** : elle demande
+deux index par contrainte, et surtout une entrée de plus dans une liste de dispenses que
+personne ne relit.
+
+```sql
+create unique index uq_echelles_revision
+    on echelles (filiale_id, sujet, revision) nulls not distinct;
+```
+
+`nulls not distinct` (PostgreSQL 15 et au-delà ; la base est en 17) dit la même chose en
+un mot, **et laisse `filiale_id` parmi les colonnes de clé** — donc le garde-fou du
+cloisonnement continue de le voir, au lieu d'être dispensé de regarder. *Une dispense
+qu'on n'a pas eu besoin d'écrire est une dispense qui ne se périmera pas.*
+
+### 45.3 Ce qu'il faut en retenir au-delà des échelles
+
+Les deux défauts sont de la même famille, et c'est elle qu'il faut reconnaître :
+**une garantie déclarative cesse silencieusement de garantir quand une valeur nulle entre
+dans son périmètre.** Ni l'une ni l'autre ne fait rougir quoi que ce soit ; toutes deux se
+lisent correctement dans le schéma ; et toutes deux sont exactement ce que le §39 nomme —
+*reconnaître un NOM au lieu de mesurer ce qu'une chose FAIT*, appliqué cette fois à une
+contrainte qu'on croit lire.
+
+Le garde-fou `f_verifier_echelles()` mesure donc ce que la clé **fait** (`confdeltype`,
+et non son existence), et `test/echelles/echelles.test.mjs` §9 **tente** le rattachement
+interdit au lieu de relire la définition.

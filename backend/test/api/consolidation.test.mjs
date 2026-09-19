@@ -595,3 +595,108 @@ describe('§4 — GET /api/consolidation', () => {
     );
   });
 });
+
+/* =====================================================================
+ *  Les échelles de cotation — on n'additionne pas ce qui n'est pas comparable
+ * ===================================================================== */
+
+describe('Exposition consolidée : deux échelles ne s’additionnent pas (action 25.3)', () => {
+  /**
+   * ⚠️ **C'est la moitié « Groupe » de l'action 25.3, et sans elle le reste est
+   * rhétorique.** Le `PLAN_SERVEUR` §2.2 range l'échelle au niveau Groupe *« sans quoi
+   * les risques ne s'additionnent pas »*. Ce n'est pas un interdit : c'est une
+   * conséquence. Le produit la rend donc VISIBLE — l'exposition consolidée devient
+   * `null` — au lieu de la subir en additionnant des gravités graduées autrement.
+   */
+  before(async () => {
+    // ⚠️ **LA MATIÈRE D'ABORD.** Le semis commun ne renseigne aucun `score_residuel` :
+    // sans ces deux lignes, l'exposition consolidée serait nulle DÈS LE DÉPART, et les
+    // deux essais ci-dessous passeraient au vert pour une raison étrangère aux échelles.
+    // C'est le motif du constat **Q-210** — *un essai qui couvre une règle sans jamais la
+    // faire décider ne la couvre pas*.
+    for (const [utilisateur, filiale, id] of [
+      ['rssi-toulouse', FILIALE_A, 'RISK-SOCLE-A'],
+      ['rssi-allemagne', FILIALE_B, 'RISK-SOCLE-B'],
+    ]) {
+      await base.avecPerimetre(
+        applicatif,
+        perimetre(utilisateur, filiale, [filiale]),
+        async (c) => {
+          await c.query(
+            `insert into risques (id, filiale_id, nom, g_gravite, score_residuel, echelle_g_id)
+                 values ($2, $1, 'Coté sur le socle du Groupe', 3, 6,
+                         (select id from echelles where filiale_id is null and sujet = 'gravite'))`,
+            [filiale, id],
+          );
+        },
+        { annuler: false },
+      );
+    }
+  });
+
+  test('tant que tout est coté sur le socle, la somme est rendue', async () => {
+    const groupe = await consolider(sessionDe('direction', [FILIALE_A, FILIALE_B]));
+    assert.notEqual(
+      groupe.total.risques.expositionResiduelle,
+      null,
+      'Sur le socle commun, la somme a un sens et doit être rendue : un « — » permanent ' +
+        'rendrait l’indicateur inutile et apprendrait à ne plus le lire.',
+    );
+    assert.ok(
+      groupe.total.risques.echelles.length <= 1,
+      `Le semis doit coter sur une seule échelle : ${JSON.stringify(groupe.total.risques.echelles)}`,
+    );
+  });
+
+  test('dès que DEUX échelles sont employées, la somme DISPARAÎT — et se dit', async () => {
+    // Une filiale publie la sienne, et y cote un risque. ⚠️ Les deux gestes sont
+    // nécessaires : publier une échelle que personne n'emploie ne rend rien
+    // incomparable, et c'est bien l'USAGE qui doit décider — pas la déclaration.
+    await base.avecPerimetre(
+      applicatif,
+      perimetre('rssi-allemagne', FILIALE_B, [FILIALE_B]),
+      async (c) => {
+        await c.query(
+          `insert into echelles (id, filiale_id, sujet, nom, revision, statut)
+               values ('ECHL-CONSO', $1, 'gravite', 'Gravité — site B', 2, 'brouillon')`,
+          [FILIALE_B],
+        );
+        await c.query(
+          `insert into echelle_niveaux (filiale_id, echelle_id, valeur, libelle)
+               values ($1, 'ECHL-CONSO', 1, 'Faible'), ($1, 'ECHL-CONSO', 2, 'Forte')`,
+          [FILIALE_B],
+        );
+        await c.query(
+          `update echelles set statut = 'en_vigueur', en_vigueur_le = current_date
+             where id = 'ECHL-CONSO'`,
+        );
+        await c.query(
+          `insert into risques (id, filiale_id, nom, g_gravite, score_residuel, echelle_g_id)
+               values ('RISK-CONSO-B', $1, 'Coté sur l’échelle locale', 2, 4, 'ECHL-CONSO')`,
+          [FILIALE_B],
+        );
+      },
+      { annuler: false },
+    );
+
+    // La filiale A, elle, cote toujours sur le socle (voir le `before`) : deux échelles
+    // au total dans le périmètre du Groupe.
+    const groupe = await consolider(sessionDe('direction', [FILIALE_A, FILIALE_B]));
+    assert.equal(
+      groupe.total.risques.expositionResiduelle,
+      null,
+      'Deux échelles employées : la somme n’a pas de sens et ne doit pas être rendue.',
+    );
+    assert.equal(
+      groupe.total.risques.echelles.length,
+      2,
+      `La cause doit être LISIBLE — l’écran en tire sa phrase : ${JSON.stringify(groupe.total.risques.echelles)}`,
+    );
+
+    // ⚠️ **Et chaque filiale garde la SIENNE** : à l'intérieur d'une filiale, tout est
+    // coté sur la même échelle, et le refus d'additionner n'a pas lieu d'être. Sans
+    // cette moitié, on aurait pu rendre `null` partout et passer au vert.
+    const siteA = await consolider(sessionDe('rssi-toulouse', [FILIALE_A]));
+    assert.notEqual(siteA.total.risques.expositionResiduelle, null);
+  });
+});
