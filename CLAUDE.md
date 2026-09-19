@@ -235,8 +235,13 @@
 > ⚠️ **EN ADDITION** : `risques` et ses cinq colonnes de cotation ne bougent pas, et
 > `f_verifier_ebios_cadrage()` le MESURE — il les nomme une par une et refuse tout
 > déclencheur EBIOS qui y écrirait. *Une propriété négative ne se voit pas à l'usage.*
-> Le geste suivant : les **ateliers 3, 4 et 5**, puis **25.3** (échelles versionnées) et
-> **25.4** (FAIR), puis **L26**.
+> **⇒ Au 19/09/2026 : les ateliers 3, 4 et 5 sont livrés** (migration `047`, schéma `data`
+> en **v23**) — l'écosystème, les chemins d'attaque, les modes opératoires et la décision
+> de traitement. **L'action 25.1 est complète, et 25.2 avec elle.** ⚠️ Un chemin ne porte
+> **aucune gravité** (c'est celle de l'événement redouté), et rattacher un scénario à un
+> risque du registre est un **LIEN, pas une conversion**. ⚠️ Un garde de CLASSE est né de
+> la `046` : `f_verifier_set_null_composites()` (`CONVENTIONS.md` §43).
+> Le geste suivant : **25.3** (échelles versionnées), **25.4** (FAIR), puis **L26**.
 >
 > ---
 >

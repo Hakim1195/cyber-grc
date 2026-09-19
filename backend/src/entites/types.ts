@@ -92,7 +92,13 @@ export type NomEntite =
   | 'ebios_etudes'
   | 'ebios_valeurs_metier'
   | 'ebios_evenements_redoutes'
-  | 'ebios_sources_risque';
+  | 'ebios_sources_risque'
+  // v23 — les ateliers 3, 4 et 5 (lot L25, fin de l'action 25.1). ⚠️ L'ordre suit les
+  // clés étrangères : les parties prenantes AVANT les scénarios stratégiques qui les
+  // traversent, et ceux-ci avant les scénarios opérationnels qui les détaillent.
+  | 'ebios_parties_prenantes'
+  | 'ebios_scenarios_strategiques'
+  | 'ebios_scenarios_operationnels';
 
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;

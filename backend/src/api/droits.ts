@@ -302,6 +302,9 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   ebios_valeurs_metier: 'risques',
   ebios_evenements_redoutes: 'risques',
   ebios_sources_risque: 'risques',
+  ebios_parties_prenantes: 'risques',
+  ebios_scenarios_strategiques: 'risques',
+  ebios_scenarios_operationnels: 'risques',
 });
 
 /**

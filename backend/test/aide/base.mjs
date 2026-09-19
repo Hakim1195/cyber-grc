@@ -873,6 +873,44 @@ export async function semerJeuEssai(base, client, options = {}) {
                        'Deux approches de sous-traitants constatées en 2025.')`,
           f,
         );
+        // Les trois tables des ateliers 3, 4 et 5 (migration `047`). ⚠️ La chaîne est
+        // COMPLÈTE : la partie prenante pointe le PRESTATAIRE du semis, le chemin relie
+        // le couple RETENU à l'événement redouté en passant par elle, et le mode
+        // opératoire vise l'ACTIF du semis et se rattache au RISQUE du registre.
+        //
+        // ⚠️ Ce dernier lien est celui qui compte : il éprouve que rattacher un scénario
+        // à un risque coté n'écrit RIEN dans ce risque (critère 25.1). Semer des lignes
+        // qui ne se référencent pas mesurerait l'insertion, pas les clés composites.
+        await c.query(
+          `insert into ebios_parties_prenantes
+               (id, filiale_id, etude_id, nom, categorie, prestataire_id,
+                dependance, penetration, maturite, confiance)
+               values ('EBPP-${s}', $1, 'EBET-${s}', 'Mainteneur de la supervision',
+                       'fournisseur', 'PRES-${s}', 4, 3, 2, 2)`,
+          f,
+        );
+        await c.query(
+          `insert into ebios_scenarios_strategiques
+               (id, filiale_id, etude_id, source_id, evenement_redoute_id,
+                partie_prenante_id, nom, chemin)
+               values ('EBSS-${s}', $1, 'EBET-${s}', 'EBSR-${s}', 'EBER-${s}', 'EBPP-${s}',
+                       'Le concurrent passe par le mainteneur de la supervision',
+                       'Accès distant du mainteneur, puis rebond vers l''ordonnancement.')`,
+          f,
+        );
+        // ⚠️ « accepter » exigerait sa justification (ck_..._acceptation) : le semis
+        //    choisit « reduire », qui n'en demande pas — un semis qui accepterait sans
+        //    motiver ferait échouer TOUTES les familles à l'ouverture de leur base.
+        await c.query(
+          `insert into ebios_scenarios_operationnels
+               (id, filiale_id, scenario_strategique_id, nom, mode_operatoire,
+                actif_id, vraisemblance, decision, risque_id)
+               values ('EBSO-${s}', $1, 'EBSS-${s}',
+                       'Hameçonnage ciblé du compte de maintenance',
+                       'Courriel façonné depuis des sources ouvertes, puis élévation.',
+                       'ACTIF-${s}', 3, 'reduire', 'RISK-${s}')`,
+          f,
+        );
         // La file de purge du magasin (migration `017`). Elle est VIDE en régime
         // normal — c'est une file d'attente, pas un registre —, et c'est
         // précisément pourquoi elle est semée : sans une ligne par filiale, le

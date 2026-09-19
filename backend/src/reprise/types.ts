@@ -99,7 +99,13 @@ export type NomCollection =
   | 'ebios_etudes'
   | 'ebios_valeurs_metier'
   | 'ebios_evenements_redoutes'
-  | 'ebios_sources_risque';
+  | 'ebios_sources_risque'
+  // v23 — les ateliers 3, 4 et 5 (lot L25). ⚠️ « ebios_scenarios_strategiques » ne porte
+  // AUCUNE gravité : elle est celle de l'événement redouté réalisé, et la faire voyager
+  // en créerait une seconde qui vieillirait.
+  | 'ebios_parties_prenantes'
+  | 'ebios_scenarios_strategiques'
+  | 'ebios_scenarios_operationnels';
 
 /**
  * Charge utile normalisée en v12.

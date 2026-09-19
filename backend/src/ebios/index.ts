@@ -3,7 +3,15 @@
  *
  * | Méthode | Route | Objet |
  * |---|---|---|
- * | `GET` | `/api/ebios/etat` | où en est chaque étude, et la pertinence SUGGÉRÉE de ses couples |
+ * | `GET` | `/api/ebios/etat` | où en est chaque étude, et **tout ce que la base DÉRIVE** de ses ateliers |
+ *
+ * Quatre grandeurs, et pas une n'est rangée en colonne :
+ *
+ *  · la **pertinence** d'un couple source / objectif (atelier 2) ;
+ *  · le **niveau de menace** d'une partie prenante (atelier 3) ;
+ *  · la **gravité** d'un scénario stratégique — celle de l'événement redouté
+ *    qu'il réalise, remontée par la jointure ;
+ *  · le **niveau** d'un scénario opérationnel (gravité × vraisemblance).
  *
  * ── ⚠️ UNE SEULE ROUTE, ET AUCUNE ÉCRITURE — C'EST VOULU ────────────────────
  *
@@ -80,6 +88,8 @@ export const CHEMIN_ETAT = '/api/ebios/etat';
  */
 const ETUDES_MAX = 200;
 const COUPLES_MAX = 1000;
+const PARTIES_MAX = 1000;
+const SCENARIOS_MAX = 1000;
 
 export interface OptionsEbios {
   readonly pool: Pool;
@@ -166,6 +176,61 @@ export async function greffonEbios(
             [COUPLES_MAX],
           );
 
+          // ── Atelier 3 : l'écosystème, et le niveau de menace DÉRIVÉ ──────
+          const parties = await client.query(
+            `select p.id, p.etude_id, p.nom, p.categorie, p.prestataire_id,
+                    p.dependance, p.penetration, p.maturite, p.confiance,
+                    -- ⚠️ Rendu par la BASE (f_ebios_niveau_menace), jamais recalculé ici
+                    -- ni dans le navigateur : deux rédactions divergeraient au premier
+                    -- ajustement de la règle (constat Q-219).
+                    f_ebios_niveau_menace(p.dependance, p.penetration,
+                                          p.maturite, p.confiance) as niveau_menace
+               from ebios_parties_prenantes p
+              order by f_ebios_niveau_menace(p.dependance, p.penetration,
+                                             p.maturite, p.confiance) desc nulls last,
+                       p.nom
+              limit $1`,
+            [PARTIES_MAX],
+          );
+
+          // ── Atelier 3 : les chemins, dont la GRAVITÉ vient de la jointure ──
+          //
+          // ⚠️ `join` et non `left join` : les deux clés sont `not null` et composites,
+          // et un chemin sans source ni événement redouté n'existe pas. Un `left join`
+          // laisserait croire le contraire, et rendrait des lignes qu'aucun écran ne
+          // saurait afficher.
+          const strategiques = await client.query(
+            `select s.id, s.etude_id, s.nom, s.chemin,
+                    s.source_id, r.source, r.objectif_vise,
+                    s.evenement_redoute_id, e.nom as evenement_redoute, e.gravite,
+                    s.partie_prenante_id, p.nom as partie_prenante
+               from ebios_scenarios_strategiques s
+               join ebios_sources_risque r on r.id = s.source_id
+               join ebios_evenements_redoutes e on e.id = s.evenement_redoute_id
+               left join ebios_parties_prenantes p on p.id = s.partie_prenante_id
+              order by e.gravite desc nulls last, s.nom
+              limit $1`,
+            [SCENARIOS_MAX],
+          );
+
+          // ── Atelier 4 et 5 : le mode opératoire, son niveau, sa décision ───
+          const operationnels = await client.query(
+            `select o.id, o.scenario_strategique_id, s.etude_id, o.nom, o.mode_operatoire,
+                    o.actif_id, o.vraisemblance, o.decision, o.justification_decision,
+                    o.risque_id, e.gravite,
+                    -- Gravité du chemin × vraisemblance du mode opératoire, dérivées
+                    -- toutes deux : la première par la jointure, la seconde par la
+                    -- fonction. Aucune n'est rangée.
+                    f_ebios_niveau_scenario(e.gravite, o.vraisemblance) as niveau
+               from ebios_scenarios_operationnels o
+               join ebios_scenarios_strategiques s on s.id = o.scenario_strategique_id
+               join ebios_evenements_redoutes e on e.id = s.evenement_redoute_id
+              order by f_ebios_niveau_scenario(e.gravite, o.vraisemblance) desc nulls last,
+                       o.nom
+              limit $1`,
+            [SCENARIOS_MAX],
+          );
+
           return {
             etudes: etudes.rows.map((l) => ({
               id: String(l.id),
@@ -196,7 +261,61 @@ export async function greffonEbios(
               retenue: l.retenue === true,
               justification: l.justification === null ? null : String(l.justification),
             })),
-            tronque: etudes.rows.length >= ETUDES_MAX || couples.rows.length >= COUPLES_MAX,
+            partiesPrenantes: parties.rows.map((l) => ({
+              id: String(l.id),
+              etudeId: String(l.etude_id),
+              nom: String(l.nom),
+              categorie: String(l.categorie),
+              prestataireId: l.prestataire_id === null ? null : String(l.prestataire_id),
+              dependance: l.dependance === null ? null : Number(l.dependance),
+              penetration: l.penetration === null ? null : Number(l.penetration),
+              maturite: l.maturite === null ? null : Number(l.maturite),
+              confiance: l.confiance === null ? null : Number(l.confiance),
+              // ⚠️ Rendu par la BASE. Le mot « suggéré » n'y est pas, et c'est une
+              // différence avec la pertinence d'un couple : celui-ci est un CALCUL de la
+              // méthode — exposition rapportée à la fiabilité —, pas une aide au
+              // jugement. Ce qui reste humain ici, c'est la cotation des quatre critères.
+              niveauMenace: l.niveau_menace === null ? null : Number(l.niveau_menace),
+            })),
+            scenariosStrategiques: strategiques.rows.map((l) => ({
+              id: String(l.id),
+              etudeId: String(l.etude_id),
+              nom: String(l.nom),
+              sourceId: String(l.source_id),
+              source: String(l.source),
+              objectifVise: String(l.objectif_vise),
+              evenementRedouteId: String(l.evenement_redoute_id),
+              evenementRedoute: String(l.evenement_redoute),
+              // ⚠️ La gravité vient de l'ÉVÉNEMENT REDOUTÉ, par la jointure — jamais
+              // d'une colonne du scénario. Une colonne créerait une seconde réponse à la
+              // même question, qui vieillirait à la prochaine réévaluation de l'atelier 1.
+              gravite: l.gravite === null ? null : Number(l.gravite),
+              partiePrenanteId: l.partie_prenante_id === null ? null : String(l.partie_prenante_id),
+              partiePrenante: l.partie_prenante === null ? null : String(l.partie_prenante),
+              chemin: l.chemin === null ? null : String(l.chemin),
+            })),
+            scenariosOperationnels: operationnels.rows.map((l) => ({
+              id: String(l.id),
+              scenarioStrategiqueId: String(l.scenario_strategique_id),
+              etudeId: String(l.etude_id),
+              nom: String(l.nom),
+              modeOperatoire: l.mode_operatoire === null ? null : String(l.mode_operatoire),
+              actifId: l.actif_id === null ? null : String(l.actif_id),
+              vraisemblance: l.vraisemblance === null ? null : Number(l.vraisemblance),
+              // La gravité du chemin stratégique, remontée par la jointure — même motif.
+              gravite: l.gravite === null ? null : Number(l.gravite),
+              niveau: l.niveau === null ? null : String(l.niveau),
+              decision: l.decision === null ? null : String(l.decision),
+              justificationDecision:
+                l.justification_decision === null ? null : String(l.justification_decision),
+              risqueId: l.risque_id === null ? null : String(l.risque_id),
+            })),
+            tronque:
+              etudes.rows.length >= ETUDES_MAX ||
+              couples.rows.length >= COUPLES_MAX ||
+              parties.rows.length >= PARTIES_MAX ||
+              strategiques.rows.length >= SCENARIOS_MAX ||
+              operationnels.rows.length >= SCENARIOS_MAX,
           };
         },
         { lectureSeule: true },

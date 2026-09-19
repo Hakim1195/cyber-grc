@@ -778,8 +778,8 @@ la comparaison au marché du 08/09/2026.
 **Mesuré au 19/09/2026, à la révision `9d9f32b`** (lot L25) : `npm test` → **2184 essais,
 2184 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **50 garde-fous consignés**, **46 migrations**,
-**71 tables**, **411 décisions** au registre de l'article 30 ; publication → **91
+`f_verifier_schema()` → 0 anomalie, **52 garde-fous consignés**, **47 migrations**,
+**74 tables**, **422 décisions** au registre de l'article 30 ; publication → **91
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **13 conformes,
 2 réserves, 0 bloquant**.
 
@@ -969,15 +969,15 @@ npm test                                         → tests 2184 · pass 2184 · 
                                                    derogations 6 · droits-personnes 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (50 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (52 garde-fous découverts, joués, consignés)
 ```
 
-Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **71 tables** en
-**46 migrations**, **284 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
-**128 clés étrangères** (75 `restrict`, 48 `cascade`, 4 `set null`, 1 `no action`),
-**63 tables portant `cree_par` et 63 déclencheurs de création**, **44 clés étrangères
+Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **74 tables** en
+**47 migrations**, **296 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**141 clés étrangères** (78 `restrict`, 53 `cascade`, 9 `set null`, 1 `no action`),
+**66 tables portant `cree_par` et 66 déclencheurs de création**, **53 clés étrangères
 composites** visant
-`(id, filiale_id)`, **24 unicités** `uq_<parent>_id_filiale`, **50 contrôles consignés**
+`(id, filiale_id)`, **28 unicités** `uq_<parent>_id_filiale`, **52 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1257,7 +1257,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **71 tables**, obtenues aujourd'hui en **46 migrations** appliquées de bout en bout par
+- **74 tables**, obtenues aujourd'hui en **47 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1277,12 +1277,15 @@ Ce que la reprise fait, quand on la rejoue :
   ajoute la vingt-deuxième action du journal (`verification_integrite`), deux colonnes de
   verdict sur `pieces_jointes`, un index de balayage — et **réémet** le garde-fou du
   vocabulaire plutôt que d'en poser un second sur la même contrainte.
-- **284 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
+- **296 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
-- **128 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
-  migrations : **75 en `restrict`, 48 en `cascade`, 4 en `set null`**. ⚠️ **Elles sont
-  passées de deux à quatre le 18/09/2026**, avec les ateliers EBIOS RM (migration `046`) :
+- **141 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
+  migrations : **78 en `restrict`, 53 en `cascade`, 9 en `set null`**. ⚠️ **Elles sont
+  passées de deux à neuf les 18 et 19/09/2026**, avec les ateliers EBIOS RM (migrations
+  `046` et `047`) — et **toutes les composites nomment leur colonne**, ce que
+  `f_verifier_set_null_composites()` impose désormais à l'échelle du schéma entier
+  (`db/CONVENTIONS.md` §43) :
   `ebios_valeurs_metier.processus_id` — la valeur métier survit au processus du BIA, elle
   perd le lien — et `ebios_sources_risque.connaissance_id` — le couple survit à l'archivage
   d'une entrée du socle de connaissances. Ce qui reste vrai de la note d'origine :
@@ -1313,8 +1316,8 @@ Ce que la reprise fait, quand on la rejoue :
   `archive_le`), reste lisible et reste rattaché à tout ce qui le référence.
 - **Clés étrangères et unicités composites** : quand l'enfant et le parent sont tous
   deux cloisonnés, la clé porte `(référence, filiale_id)` et vise une unicité
-  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **44 clés étrangères** dont la
-  seconde colonne visée est le `filiale_id` du parent ou sa portée, et **22 unicités**
+  `uq_<parent>_id_filiale`. Relevé dans `pg_constraint` : **53 clés étrangères** dont la
+  seconde colonne visée est le `filiale_id` du parent ou sa portée, et **27 unicités**
   visées par l'une d'elles (`count(distinct conindid)`). ⚠️ **Elles vont par PAIRES depuis la migration `027`**, et c'est mécanisé :
   toute clé composite visant une table MIXTE par un `filiale_id` nullable doit avoir sa
   compagne passant par `portee_groupe`, la colonne engendrée — sans quoi la règle « match

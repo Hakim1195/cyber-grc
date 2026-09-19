@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 22;
+export const VERSION_SCHEMA = 23;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -188,6 +188,11 @@ export const COLLECTIONS = [
   'ebios_valeurs_metier',
   'ebios_evenements_redoutes',
   'ebios_sources_risque',
+  // v23 — les ateliers 3, 4 et 5. ⚠️ L'ordre suit les clés : les parties prenantes avant
+  // les scénarios stratégiques qui les traversent, et ceux-ci avant les opérationnels.
+  'ebios_parties_prenantes',
+  'ebios_scenarios_strategiques',
+  'ebios_scenarios_operationnels',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -952,6 +957,109 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     bornes: [{ champ: 'gravite', min: 1, max: 10 }],
     dates: [],
     references: [{ champ: 'valeur_metier_id', cible: 'ebios_valeurs_metier' }],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  // ── v23 : les ateliers 3, 4 et 5 (lot L25, fin de l'action 25.1) ──────────
+  //
+  // ⚠️ **Aucun NIVEAU ne voyage** — ni celui d'une partie prenante, ni celui d'un
+  // scénario. Ils se dérivent de leurs critères, à un seul endroit. Les faire voyager
+  // les figerait au jour de l'export, alors que l'animateur révise en séance.
+  //
+  // ⚠️ Et `ebios_scenarios_strategiques` ne porte AUCUNE gravité : elle est celle de
+  // l'événement redouté réalisé. Une seconde réponse à la même question vieillirait dès
+  // la prochaine réévaluation de l'atelier 1, sans que personne le sache.
+  ebios_parties_prenantes: {
+    prefixe: 'EBPP',
+    champs: [
+      'id',
+      'etude_id',
+      'nom',
+      'categorie',
+      'prestataire_id',
+      'dependance',
+      'penetration',
+      'maturite',
+      'confiance',
+      'notes',
+    ],
+    enumerations: [
+      {
+        champ: 'categorie',
+        valeurs: ['client', 'fournisseur', 'partenaire', 'entite_interne', 'autorite'],
+        videAdmis: false,
+      },
+    ],
+    bornes: [
+      { champ: 'dependance', min: 1, max: 10 },
+      { champ: 'penetration', min: 1, max: 10 },
+      { champ: 'maturite', min: 1, max: 10 },
+      { champ: 'confiance', min: 1, max: 10 },
+    ],
+    dates: [],
+    references: [
+      { champ: 'etude_id', cible: 'ebios_etudes' },
+      { champ: 'prestataire_id', cible: 'prestataires' },
+    ],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  ebios_scenarios_strategiques: {
+    prefixe: 'EBSS',
+    champs: [
+      'id',
+      'etude_id',
+      'source_id',
+      'evenement_redoute_id',
+      'partie_prenante_id',
+      'nom',
+      'chemin',
+      'notes',
+    ],
+    enumerations: [],
+    bornes: [],
+    dates: [],
+    references: [
+      { champ: 'etude_id', cible: 'ebios_etudes' },
+      { champ: 'source_id', cible: 'ebios_sources_risque' },
+      { champ: 'evenement_redoute_id', cible: 'ebios_evenements_redoutes' },
+      { champ: 'partie_prenante_id', cible: 'ebios_parties_prenantes' },
+    ],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  ebios_scenarios_operationnels: {
+    prefixe: 'EBSO',
+    champs: [
+      'id',
+      'scenario_strategique_id',
+      'nom',
+      'mode_operatoire',
+      'connaissance_id',
+      'actif_id',
+      'vraisemblance',
+      'decision',
+      'justification_decision',
+      'risque_id',
+      'notes',
+    ],
+    enumerations: [
+      {
+        champ: 'decision',
+        valeurs: ['eviter', 'reduire', 'transferer', 'accepter'],
+        videAdmis: true,
+      },
+    ],
+    bornes: [{ champ: 'vraisemblance', min: 1, max: 10 }],
+    dates: [],
+    references: [
+      { champ: 'scenario_strategique_id', cible: 'ebios_scenarios_strategiques' },
+      { champ: 'connaissance_id', cible: 'ebios_connaissances' },
+      { champ: 'actif_id', cible: 'actifs' },
+      // ⚠️ Le rattachement au registre F × G × M. C'est un LIEN : la reprise le
+      // conserve, et n'écrit jamais dans « risques ».
+      { champ: 'risque_id', cible: 'risques' },
+    ],
     referencesMultiples: [],
     cleMetier: null,
   },
@@ -2151,6 +2259,26 @@ const PALIERS: readonly EtapePalier[] = [
       'ebios_valeurs_metier',
       'ebios_evenements_redoutes',
       'ebios_sources_risque',
+    ]),
+  },
+  {
+    de: 22,
+    vers: 23,
+    libelle:
+      'Lot L25, fin de l’action 25.1 : l’instantané gagne les ateliers 3, 4 et 5 ' +
+      'd’EBIOS RM — les parties prenantes de l’écosystème et leur évaluation, les ' +
+      'scénarios stratégiques (les chemins d’attaque) et les scénarios opérationnels ' +
+      'avec la DÉCISION de traitement. ⚠️ Aucun NIVEAU n’y voyage : ni celui d’une ' +
+      'partie prenante, ni celui d’un scénario — ils se dérivent de leurs critères.',
+    // Rien à transformer, et rien à DEVINER : on ne fabrique pas une partie prenante
+    // depuis le registre des prestataires. Un prestataire est un fait contractuel ; une
+    // partie prenante de l'écosystème est une DÉCISION d'analyse — celle de dire qu'on
+    // dépend de lui, qu'il pénètre le système, et à quel point on lui fait confiance.
+    // En déduire une produirait une évaluation que personne n'a conduite.
+    appliquer: paliersCollections([
+      'ebios_parties_prenantes',
+      'ebios_scenarios_strategiques',
+      'ebios_scenarios_operationnels',
     ]),
   },
 ];

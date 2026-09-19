@@ -109,6 +109,13 @@ const NOUVELLES_PAR_VERSION = {
     'ebios_evenements_redoutes',
     'ebios_sources_risque',
   ],
+  // v23 — les ateliers 3, 4 et 5. ⚠️ L'ordre suit les clés : les parties prenantes avant
+  // les chemins qui les traversent, et ceux-ci avant les modes opératoires.
+  23: [
+    'ebios_parties_prenantes',
+    'ebios_scenarios_strategiques',
+    'ebios_scenarios_operationnels',
+  ],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -713,7 +720,72 @@ export function instantaneV21Complet() {
 }
 
 /**
- * Instantané COMPLET à la version courante — v22.
+ * Instantané COMPLET à la version courante — v23.
+ *
+ * Les trois collections des ateliers 3, 4 et 5, chaînées **dans le même instantané** :
+ * la partie prenante appartient à l'étude, le chemin relie le couple RETENU à l'événement
+ * redouté en passant par elle, et le mode opératoire pend au chemin.
+ *
+ * ⚠️ **Le mode opératoire se rattache au RISQUE du jeu d'essai** (`RISK-…`), et c'est ce
+ * lien qui doit survivre au round-trip : il est la seule chose qui relie EBIOS RM au
+ * registre F × G × M — et c'est un LIEN, pas une conversion. La collection `risques` du
+ * même instantané n'en porte aucune trace, ce qui est exactement le critère 25.1.
+ *
+ * ⚠️ Et **aucun NIVEAU ne voyage** : ni celui de la partie prenante, ni celui du mode
+ * opératoire, ni la gravité du chemin. Les faire voyager les figerait au jour de l'export.
+ */
+export function instantaneV23Complet() {
+  const base = instantaneV22Complet();
+  return {
+    ...base,
+    schemaVersion: 23,
+    ebios_parties_prenantes: [
+      {
+        id: 'EBPP-1720000000000-219',
+        etude_id: 'EBET-1720000000000-214',
+        nom: 'Mainteneur de la supervision',
+        categorie: 'fournisseur',
+        prestataire_id: 'PREST-1720000000000-111',
+        dependance: 4,
+        penetration: 3,
+        maturite: 2,
+        confiance: 2,
+        notes: 'Accès distant permanent, contrat renouvelé en 2025.',
+      },
+    ],
+    ebios_scenarios_strategiques: [
+      {
+        id: 'EBSS-1720000000000-220',
+        etude_id: 'EBET-1720000000000-214',
+        source_id: 'EBSR-1720000000000-217',
+        evenement_redoute_id: 'EBER-1720000000000-216',
+        partie_prenante_id: 'EBPP-1720000000000-219',
+        nom: 'Le cybercriminel passe par le mainteneur de la supervision',
+        chemin: 'Accès distant du mainteneur, puis rebond vers l’ordonnancement.',
+        notes: null,
+      },
+    ],
+    ebios_scenarios_operationnels: [
+      {
+        id: 'EBSO-1720000000000-221',
+        scenario_strategique_id: 'EBSS-1720000000000-220',
+        nom: 'Hameçonnage ciblé du compte de maintenance',
+        mode_operatoire: 'Courriel façonné depuis des sources ouvertes, puis élévation.',
+        connaissance_id: 'EBCO-1720000000000-213',
+        actif_id: 'ACTIF-1720000000000-105',
+        vraisemblance: 3,
+        decision: 'reduire',
+        justification_decision: null,
+        // ⚠️ Le lien vers le registre F × G × M du MÊME instantané.
+        risque_id: 'RISK-1720000000000-104',
+        notes: null,
+      },
+    ],
+  };
+}
+
+/**
+ * Instantané COMPLET en v22.
  *
  * Les cinq collections des ateliers 1 et 2 d'EBIOS RM (lot L25, actions 25.1, 25.2
  * et 25.5), chacune reliée à la précédente DANS LE MÊME INSTANTANÉ : c'est cette

@@ -138,8 +138,33 @@ Quatre choses à savoir avant de commencer :
 4. **Écarter un couple ne l'efface pas.** « Aucun signal cette année, à réexaminer » est
    exactement ce qu'on vient rechercher l'exercice suivant.
 
-⚠️ **Les ateliers 3 à 5** — scénarios stratégiques, scénarios opérationnels, traitement — ne
-sont pas encore livrés. Les couples que vous retenez sont ce sur quoi ils travailleront.
+### Les ateliers 3, 4 et 5 — de l'écosystème à la décision
+
+La même fiche porte la suite, dans l'ordre où la méthode se conduit :
+
+- **l'écosystème** — les parties prenantes dont vous dépendez ou qui pénètrent votre
+  système, évaluées sur quatre critères. L'outil en tire un **niveau de menace** :
+  au-delà de 1, vous dépendez d'elle plus que vous ne pouvez lui faire confiance.
+  ⚠️ La cartographie de vos actifs n'est **pas** refaite ici — elle reste dans l'écran
+  *Cartographie* ;
+- **les chemins d'attaque** — par où un couple **retenu** à l'atelier 2 atteint un
+  événement redouté de l'atelier 1, et par quelle partie prenante il passe. ⚠️ La gravité
+  d'un chemin n'est pas ressaisie : c'est celle de l'événement redouté qu'il réalise ;
+- **les modes opératoires et le traitement** — comment le chemin se réalise techniquement,
+  à quel point c'est vraisemblable, et ce que vous décidez.
+
+Trois choses à savoir :
+
+1. **Seuls les couples retenus sont proposés** comme point de départ d'un chemin. C'est
+   tout le sens de la décision que vous avez prise à l'atelier 2.
+2. **« Accepter » demande pourquoi, et c'est la seule des quatre décisions.** Éviter,
+   réduire et transférer produisent un travail que quelqu'un verra — un projet, un
+   contrat, un plan d'actions. Accepter ne produit rien : sans la phrase qui dit pourquoi,
+   la décision est indistinguable d'un oubli, et c'est précisément celle qu'un auditeur
+   vient chercher.
+3. **Rattacher un mode opératoire à un risque du registre ne modifie pas ce risque.** Sa
+   cotation fréquence × gravité × maîtrise reste la vôtre. Le lien sert à ce que le plan
+   d'actions déjà rattaché à ce risque s'applique ici aussi.
 
 ### Importer des données
 

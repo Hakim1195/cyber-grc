@@ -463,7 +463,17 @@ la méthode, donc les données déjà saisies.
 > c'est-à-dire une barrière qui n'en est pas une. Le SENS des niveaux appartient à
 > l'échelle, et l'échelle appartient à 25.3.
 >
-> **Reste** : les ateliers **3, 4 et 5**, puis **25.3** et **25.4**.
+> ✅ **Les ateliers 3, 4 et 5 sont livrés le 19/09/2026** (migration `047`, schéma `data`
+> en **v23**) : l'écosystème évalué sur les quatre critères, les chemins d'attaque, les
+> modes opératoires et la décision de traitement. **L'action 25.1 est complète, et 25.2
+> avec elle** — ni la cartographie, ni le plan d'actions, ni le BIA ne sont refaits.
+>
+> ⚠️ **Deux propriétés NÉGATIVES, mesurées plutôt qu'espérées** : un chemin ne porte
+> aucune colonne de gravité (elle est celle de l'événement redouté réalisé), et rattacher
+> un scénario à un risque du registre n'écrit rien dans ce risque — un essai relit ses
+> cinq colonnes de cotation **et sa `version`** de part et d'autre du geste.
+>
+> **Reste** : **25.3** et **25.4**.
 
 | Réf | Action | Critère d'acceptation |
 |---|---|---|

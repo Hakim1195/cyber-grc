@@ -25,7 +25,7 @@
  *
  * ── La couverture est RÉCLAMÉE, pas supposée ─────────────────────────────────
  *
- * Un dernier test balaie les **36 entités du registre** et vérifie que chacune se lit,
+ * Un dernier test balaie les **39 entités du registre** et vérifie que chacune se lit,
  * se décrit, et porte un préfixe d'identifiant. Sans lui, ce fichier resterait un
  * échantillon dont personne ne saurait dire ce qu'il laisse de côté — le reproche
  * exact que la porte a formulé.
@@ -315,7 +315,7 @@ describe('Une entité par famille de différence', () => {
  *  §2 — La couverture, réclamée
  * ===================================================================== */
 
-describe('Les 36 entités du registre, sans échantillonnage', () => {
+describe('Les 39 entités du registre, sans échantillonnage', () => {
   test('chaque entité du modèle est décrite, chargée, et porte un préfixe', async () => {
     const modele = (await serveur.appeler('GET', '/api/modele')).corps;
     const jeu = await donnees();
@@ -333,7 +333,7 @@ describe('Les 36 entités du registre, sans échantillonnage', () => {
     // y entrer lui donne le round-trip et l'import sans qu'un greffon ait à les réécrire.
     // Ce que le greffon `src/campagnes/` ajoute est ce que la couche générique ne peut pas
     // faire : compter l'avancement, et convoquer une AUTRE filiale que la sienne.
-    assert.equal(noms.length, 36);
+    assert.equal(noms.length, 39);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -436,6 +436,26 @@ describe('Les 36 entités du registre, sans échantillonnage', () => {
         besoin: 'disponibilite',
       }),
       ebios_sources_risque: (crees) => ({ etude_id: crees.ebios_etudes }),
+      // ── Lot L25, ateliers 3 à 5 (migration `047`) ────────────────────────
+      //
+      // ⚠️ **Le couple source / objectif doit être RETENU** pour qu'un chemin
+      // puisse s'y rattacher au niveau du produit — mais le SCHÉMA, lui, ne
+      // l'exige pas, et c'est délibéré : la règle « on ne travaille que sur les
+      // couples retenus » est une règle de MÉTHODE que l'écran tient, pas une
+      // contrainte d'intégrité. L'imposer en base ferait échouer la reprise d'un
+      // export où l'animateur a écarté un couple APRÈS avoir tracé son chemin.
+      ebios_parties_prenantes: (crees) => ({
+        etude_id: crees.ebios_etudes,
+        categorie: 'fournisseur',
+      }),
+      ebios_scenarios_strategiques: (crees) => ({
+        etude_id: crees.ebios_etudes,
+        source_id: crees.ebios_sources_risque,
+        evenement_redoute_id: crees.ebios_evenements_redoutes,
+      }),
+      ebios_scenarios_operationnels: (crees) => ({
+        scenario_strategique_id: crees.ebios_scenarios_strategiques,
+      }),
     };
 
     const echecs = [];

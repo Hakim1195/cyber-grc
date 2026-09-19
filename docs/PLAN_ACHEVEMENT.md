@@ -110,9 +110,24 @@ référentiel sans toucher au code.
 > a refusé l'écran parce qu'il dessinait sa liste depuis le serveur au lieu de la mémoire,
 > ce qui retirait à `recalerBalisage()` ce sur quoi mordre.
 >
-> **Reste de L25** : les ateliers **3, 4 et 5** (parties prenantes, scénarios stratégiques
-> et opérationnels, traitement), **25.3** (échelles configurables et versionnées) et
-> **25.4** (quantification FAIR). Puis **L26**, les catalogues ouverts.
+> **Livré le 19/09/2026 — les ateliers 3, 4 et 5** (migration `047`, schéma `data` en
+> **v23**) : l'écosystème et ses parties prenantes évaluées, les chemins d'attaque, les
+> modes opératoires et la **décision** de traitement. L'action **25.1 est complète**.
+>
+> ⚠️ **Trois absences délibérées, et chacune est le critère d'une action** : la
+> cartographie n'est pas refaite (25.2) ; un chemin ne porte **aucune gravité** — c'est
+> celle de l'événement redouté qu'il réalise, et un essai le mesure dans le catalogue ; et
+> le plan d'actions n'est pas refait — rattacher un scénario à un risque du registre suffit
+> pour que `actions.risque_id` s'applique, et **c'est un lien, pas une conversion**.
+>
+> ⚠️ **Et un garde de CLASSE est né de la `046`** : `f_verifier_set_null_composites()`
+> refuse toute clé étrangère composite en `on delete set null` sans liste de colonnes —
+> la faute qui avait fait tomber dix essais et **toute restauration de sauvegarde**
+> (`CONVENTIONS.md` §43). Il balaie le catalogue : il couvre les clés qu'aucune migration
+> n'a encore écrites.
+>
+> **Reste de L25** : **25.3** (échelles configurables et versionnées) et **25.4**
+> (quantification FAIR). Puis **L26**, les catalogues ouverts.
 
 ### V-E — Ouverture et automatisation *(L22, L23)*
 

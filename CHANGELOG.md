@@ -56,6 +56,59 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### L25 — EBIOS RM : les ateliers 3, 4 et 5, et l'action 25.1 est complète (19/09/2026)
+
+Migration `047`, schéma `data` en **v23**. L'écosystème et ses parties prenantes évaluées,
+les **chemins d'attaque**, les **modes opératoires** et la **décision** de traitement —
+éviter, réduire, transférer, accepter.
+
+#### Trois absences délibérées, et chacune est le critère d'une action
+
+- **La cartographie n'est pas refaite** (critère 25.2). `actif_dependances` porte déjà les
+  dépendances typées ; ce que l'atelier 3 ajoute est l'**évaluation** d'une partie
+  prenante, et le lien vers le prestataire du produit quand c'en est un — qu'elle
+  **pointe** sans recopier ni raison sociale, ni criticité, ni niveau d'accès.
+- **Un chemin ne porte AUCUNE colonne de gravité.** Elle est celle de l'événement redouté
+  qu'il réalise. Une colonne ici créerait une seconde réponse à la même question, qui
+  vieillirait dès la prochaine réévaluation de l'atelier 1 — sans que personne le sache.
+  Le garde-fou le mesure **dans le catalogue** ; un essai aussi.
+- **Le plan d'actions n'est pas refait.** `actions.risque_id` existe depuis le premier
+  chantier : rattacher un scénario à un risque du registre suffit pour qu'il s'applique.
+  ⚠️ **Et c'est un LIEN, pas une conversion** — l'essai relit les cinq colonnes de
+  cotation du risque **et sa `version`** de part et d'autre du geste.
+
+#### « Accepter » exige sa justification, et c'est la seule des quatre
+
+Éviter, réduire et transférer produisent un travail que quelqu'un verra — un projet, un
+contrat, un plan d'actions. **Accepter ne produit rien** : sans la phrase qui dit pourquoi,
+la décision est indistinguable d'un oubli, et c'est exactement celle qu'un auditeur vient
+chercher. Le schéma l'impose (`ck_ebios_scenarios_operationnels_acceptation`) ; l'écran la
+**demande**, plutôt que de laisser remonter un code de contrainte.
+
+#### ⚠️ Un garde de CLASSE, né de ce que la `046` avait payé
+
+`f_verifier_set_null_composites()` refuse toute clé étrangère **composite** en
+`on delete set null` **sans liste de colonnes** — la faute qui avait fait tomber dix essais
+et, avec eux, **toute restauration de sauvegarde** (`CONVENTIONS.md` §43). Il balaie le
+**catalogue** : il couvre les clés qu'aucune migration n'a encore écrites.
+
+⚠️ **Et il ne juge pas les clés simples**, où `set null` sans liste nullifie la bonne
+colonne et rien d'autre : un garde qui crie pour rien finit ignoré (constat Q-64). La
+morsure **et** le non-bruit sont éprouvés.
+
+> Le premier réflexe avait été d'écrire le contrôle nominatif et de noter qu'un garde de
+> classe « restait à écrire ». C'est la forme de réserve que le `CLAUDE.md` §0 proscrit —
+> *une réserve écrite n'est pas une réserve traitée* — et elle aura duré une migration.
+
+#### Et le garde-fou a corrigé son auteur
+
+Le témoin du niveau d'un scénario attendait « critique » pour 3 × 3 = 9, que le prédicat
+range dans « élevé ». Le garde l'a dit **à la première application de la migration**. Il
+porte désormais **les deux bornes** du seuil — 9 est le dernier « élevé », 12 le premier
+« critique » — qui se contrediraient s'il bougeait d'un cran dans l'un ou l'autre sens.
+*Un témoin qui se trompe de valeur ne mesure pas la fonction : il mesure la mémoire de
+celui qui l'a écrit.*
+
 ### L25 — EBIOS RM : les ateliers 1 et 2, EN ADDITION de la cotation F × G × M (18/09/2026)
 
 **Vague D entamée.** La méthode d'analyse de risque de l'ANSSI entre dans le produit —

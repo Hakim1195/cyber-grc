@@ -24,6 +24,11 @@
  * | 8 | Le socle de connaissances du Groupe est partagé ; un ajout local ne l'est pas |
  * | 9 | Le garde-fou ÉPROUVE la dérivation — et il MORD |
  * | 10 | Supprimer un processus RÉFÉRENCÉ délie la valeur métier **sans casser la purge** |
+ * | 11 | Le niveau de menace d'une partie prenante se DÉRIVE, et **se tait** |
+ * | 12 | La gravité d'un chemin vient de l'événement redouté — **aucune colonne** |
+ * | 13 | **Accepter** un risque sans écrire pourquoi est refusé par la BASE |
+ * | 14 | Rattacher un scénario à un risque n'écrit **RIEN** dans ce risque |
+ * | 15 | Le garde de CLASSE des `set null` composites mord — **et ne fait pas de bruit** |
  *
  * ── ⚠️ LE §1 SE MESURE PAR CE QUI N'A PAS BOUGÉ ───────────────────────────
  *
@@ -472,6 +477,213 @@ describe('Les ateliers 1 et 2 d’EBIOS RM', () => {
     } finally {
       await proprietaire.query('rollback');
     }
+  });
+
+  test('§11 — le niveau de menace se DÉRIVE des quatre critères, et se tait', async () => {
+    await ecrire(FILIALE_A, async (c) => {
+      await c.query(
+        `insert into ebios_parties_prenantes
+             (id, filiale_id, etude_id, nom, categorie, dependance, penetration, maturite, confiance)
+             values ('EBPP-1', $1, 'EBET-1', 'Mainteneur', 'fournisseur', 4, 3, 2, 2)`,
+        [FILIALE_A],
+      );
+      // ⚠️ Une seule cotation manquante : la suggestion doit se TAIRE. C'est le
+      // critère 25.4, et il vaut pour les quatre dérivations du lot.
+      await c.query(
+        `insert into ebios_parties_prenantes
+             (id, filiale_id, etude_id, nom, categorie, dependance, penetration, maturite)
+             values ('EBPP-MUET', $1, 'EBET-1', 'Partenaire', 'partenaire', 4, 4, 4)`,
+        [FILIALE_A],
+      );
+    });
+
+    const monte = await monterPour(FILIALE_A, [FILIALE_A]);
+    try {
+      const { statut, corps } = await monte.appeler('GET', '/api/ebios/etat');
+      assert.equal(statut, 200);
+      const vue = corps.partiesPrenantes.find((p) => p.id === 'EBPP-1');
+      assert.notEqual(vue, undefined, 'La partie prenante semée n’est pas rendue.');
+      // (4 × 3) / (2 × 2) = 3.00
+      assert.equal(
+        Number(vue.niveauMenace),
+        3,
+        'Le niveau de menace n’est pas exposition ÷ fiabilité. Il vient de ' +
+          'f_ebios_niveau_menace() : si la route le recalculait, les deux rédactions ' +
+          'divergeraient au premier ajustement (constat Q-219).',
+      );
+      const muet = corps.partiesPrenantes.find((p) => p.id === 'EBPP-MUET');
+      assert.equal(
+        muet.niveauMenace,
+        null,
+        'Le produit a calculé une menace sur TROIS critères sur quatre. Un chiffre qui a ' +
+          'l’air mesuré sans l’être est pire que pas de chiffre (critère 25.4).',
+      );
+    } finally {
+      await monte.fermer();
+    }
+  });
+
+  test('§12 — la gravité d’un chemin vient de l’ÉVÉNEMENT REDOUTÉ, pas d’une colonne', async () => {
+    await ecrire(FILIALE_A, async (c) => {
+      await c.query(
+        `insert into ebios_scenarios_strategiques
+             (id, filiale_id, etude_id, source_id, evenement_redoute_id, partie_prenante_id, nom)
+             values ('EBSS-1', $1, 'EBET-1', 'EBSR-1', 'EBER-1', 'EBPP-1',
+                     'Le cybercriminel passe par le mainteneur')`,
+        [FILIALE_A],
+      );
+    });
+
+    // ⚠️ LE CRITÈRE, MESURÉ DANS LE CATALOGUE : aucune colonne de gravité ni de niveau.
+    // Une colonne créerait une seconde réponse à la même question, qui vieillirait dès la
+    // prochaine réévaluation de l'atelier 1 — motif de l'AIPD (migration 039).
+    const jumelles = await base.lignes(
+      proprietaire,
+      `select a.attname
+         from pg_attribute a
+        where a.attrelid = 'ebios_scenarios_strategiques'::regclass
+          and a.attnum > 0 and not a.attisdropped
+          and a.attname in ('gravite', 'gravite_scenario', 'niveau', 'vraisemblance')
+        order by 1`,
+    );
+    assert.deepEqual(
+      jumelles.map((l) => l.attname),
+      [],
+      'Cette table porte une colonne de gravité ou de niveau : elle recopie ce que ' +
+        'l’événement redouté porte déjà, et la copie vieillira sans que personne le sache.',
+    );
+
+    const monte = await monterPour(FILIALE_A, [FILIALE_A]);
+    try {
+      const { corps } = await monte.appeler('GET', '/api/ebios/etat');
+      const vue = corps.scenariosStrategiques.find((x) => x.id === 'EBSS-1');
+      assert.notEqual(vue, undefined);
+      assert.equal(Number(vue.gravite), 4, 'La gravité doit venir de la jointure (EBER-1 = 4).');
+      assert.equal(vue.partiePrenante, 'Mainteneur');
+    } finally {
+      await monte.fermer();
+    }
+  });
+
+  test('§13 — ACCEPTER sans écrire pourquoi est refusé par la base', async () => {
+    const erreur = await erreurAttendue(
+      ecrire(FILIALE_A, async (c) => {
+        await c.query(
+          `insert into ebios_scenarios_operationnels
+               (id, filiale_id, scenario_strategique_id, nom, decision)
+               values ('EBSO-SANS-MOTIF', $1, 'EBSS-1', 'Hameçonnage', 'accepter')`,
+          [FILIALE_A],
+        );
+      }),
+    );
+    assert.match(
+      String(erreur.constraint ?? erreur.message),
+      /ck_ebios_scenarios_operationnels_acceptation/u,
+      'Un risque a pu être ACCEPTÉ sans justification. C’est la seule des quatre décisions ' +
+        'qui ne produit aucun travail visible : sans sa phrase, elle est indistinguable ' +
+        'd’un oubli — et c’est exactement ce qu’un auditeur vient chercher.',
+    );
+
+    // CONTRÔLE SYMÉTRIQUE : « réduire » n’exige rien, et doit passer.
+    await ecrire(FILIALE_A, async (c) => {
+      await c.query(
+        `insert into ebios_scenarios_operationnels
+             (id, filiale_id, scenario_strategique_id, nom, decision, vraisemblance, risque_id)
+             values ('EBSO-1', $1, 'EBSS-1', 'Hameçonnage ciblé', 'reduire', 3,
+                     (select id from risques limit 1))`,
+        [FILIALE_A],
+      );
+    });
+  });
+
+  test('§14 — rattacher un scénario à un risque n’écrit RIEN dans ce risque', async () => {
+    // ⚠️ Le §1 mesure qu'un atelier ne touche pas au registre. Celui-ci mesure le cas
+    // LIMITE : le seul endroit du produit où une table EBIOS DÉSIGNE un risque. Si la
+    // conversion devait se produire quelque part, c'est ici.
+    const lien = await lire(
+      FILIALE_A,
+      async (c) =>
+        (
+          await c.query(
+            `select o.risque_id, r.f_frequence, r.g_gravite, r.m_maitrise,
+                    r.score_brut, r.score_residuel, r.niveau, r.version
+               from ebios_scenarios_operationnels o
+               join risques r on r.id = o.risque_id
+              where o.id = 'EBSO-1'`,
+          )
+        ).rows[0],
+    );
+    assert.notEqual(lien, undefined, 'Le scénario ne pointe aucun risque : le §14 ne mesure rien.');
+    assert.equal(
+      Number(lien.version),
+      1,
+      'Le compteur de verrouillage optimiste du risque a bougé : quelque chose y a écrit. ' +
+        'Le rattachement est un LIEN, pas une conversion — les cotations ont été produites ' +
+        'en audit (critère 25.1, motif du constat Q-192).',
+    );
+    for (const colonne of ['f_frequence', 'g_gravite', 'm_maitrise', 'score_brut']) {
+      assert.notEqual(
+        lien[colonne],
+        undefined,
+        `La colonne « ${colonne} » a disparu du risque rattaché.`,
+      );
+    }
+
+    const monte = await monterPour(FILIALE_A, [FILIALE_A]);
+    try {
+      const { corps } = await monte.appeler('GET', '/api/ebios/etat');
+      const vue = corps.scenariosOperationnels.find((x) => x.id === 'EBSO-1');
+      // Gravité 4 (de l'événement redouté) × vraisemblance 3 = 12 → critique.
+      assert.equal(vue.niveau, 'critique');
+      assert.equal(vue.decision, 'reduire');
+    } finally {
+      await monte.fermer();
+    }
+  });
+
+  test('§15 — le garde de CLASSE des « set null » composites mord, et ne fait pas de bruit', async () => {
+    const vert = await base.lignes(proprietaire, 'select * from f_verifier_set_null_composites()');
+    assert.deepEqual(vert, [], 'Le garde de classe rougit sur un schéma sain.');
+
+    await proprietaire.query('begin');
+    try {
+      // ⚠️ La validation d'une contrainte LIT la table cloisonnée : sans périmètre, elle
+      // échoue pour une raison étrangère à ce qu'on mesure (`CONVENTIONS.md` §41).
+      await proprietaire.query("select set_config('grc.utilisateur', 'mutation', true)");
+      await proprietaire.query(
+        "select set_config('grc.filiales', (select string_agg(id, ',') from filiales), true)",
+      );
+      await proprietaire.query(
+        'alter table ebios_scenarios_operationnels drop constraint fk_ebios_scenarios_operationnels_actif',
+      );
+      await proprietaire.query(
+        `alter table ebios_scenarios_operationnels add constraint fk_ebios_scenarios_operationnels_actif
+           foreign key (actif_id, filiale_id) references actifs (id, filiale_id) on delete set null`,
+      );
+      const mordu = await base.lignes(proprietaire, 'select * from f_verifier_set_null_composites()');
+      assert.ok(
+        mordu.some((l) => l.anomalie === 'set_null_sans_liste_de_colonnes'),
+        'Une clé composite en « set null » SANS liste de colonnes n’est pas vue. ' +
+          'PostgreSQL nullifie alors toute la clé, « filiale_id » comprise : supprimer un ' +
+          'parent référencé échoue en 23502, et la purge de « remplacer » avec lui — ' +
+          'c’est-à-dire toute restauration de sauvegarde.',
+      );
+    } finally {
+      await proprietaire.query('rollback');
+    }
+
+    // ⚠️ ET LE NON-BRUIT : une clé SIMPLE en « set null » n’est PAS réclamée. Un garde qui
+    // crie pour rien finit ignoré (constat Q-64), et le schéma en porte plusieurs —
+    // `incidents.risque_id` la première.
+    const simples = await base.lignes(
+      proprietaire,
+      `select count(*)::int as n from pg_constraint
+        where contype = 'f' and confdeltype = 'n' and array_length(conkey, 1) = 1`,
+    );
+    assert.ok(
+      Number(simples[0].n) > 0,
+      'Le schéma ne porte aucune clé SIMPLE en « set null » : le non-bruit ne mesure rien.',
+    );
   });
 
   test('§10 — supprimer un processus RÉFÉRENCÉ délie la valeur métier, sans casser la purge', async () => {

@@ -195,11 +195,29 @@ qu'il n'a pas vu naître* (`CONVENTIONS.md` §40) ; et
 le serveur au lieu de la mémoire — ce qui retirait à `recalerBalisage()` ce sur quoi mordre,
 et faisait qu'une étude créée n'apparaissait qu'au rechargement suivant.
 
-**Le geste suivant** : les **ateliers 3, 4 et 5** d'EBIOS RM (parties prenantes et
-écosystème — la cartographie existante est le support, action 25.2 ; scénarios
-stratégiques ; scénarios opérationnels ; traitement), puis **25.3** et **25.4**, puis
-**L26** (catalogues ouverts). Deux critères d'acceptation méritent d'être lus avant
-d'écrire une ligne :
+✅ **Livré le 19/09 — les ateliers 3, 4 et 5** (migration `047`, schéma `data` en **v23**,
+trois collections de plus) : l'écosystème et ses parties prenantes évaluées sur quatre
+critères, les chemins d'attaque, les modes opératoires et la **décision** de traitement.
+**L'action 25.1 est complète, et 25.2 avec elle.**
+
+⚠️ **Ce qu'il faut savoir avant d'y toucher :**
+
+- **un chemin ne porte AUCUNE gravité** — c'est celle de l'événement redouté qu'il
+  réalise, lue par la jointure. Le garde-fou refuse toute colonne `gravite` ou `niveau`
+  sur cette table ;
+- **rattacher un scénario à un risque du registre est un LIEN, pas une conversion** : rien
+  n'est écrit dans `risques`, et l'essai relit ses cinq colonnes de cotation **et sa
+  `version`** de part et d'autre ;
+- **« accepter » exige sa justification**, et c'est la seule des quatre décisions : les
+  trois autres produisent un travail visible, accepter ne produit rien ;
+- **un garde de CLASSE est né** — `f_verifier_set_null_composites()` refuse toute clé
+  composite en `set null` sans liste de colonnes, ce que la `046` avait payé de dix essais
+  et de toute restauration de sauvegarde (`CONVENTIONS.md` §43).
+
+**Le geste suivant** : **25.3** (échelles configurables et **versionnées** par filiale —
+le schéma borne déjà 1 à 10 et non 1 à 4, précisément pour ne pas avoir à abattre une
+barrière), **25.4** (quantification FAIR), puis **L26** (catalogues ouverts). Deux critères
+d'acceptation méritent d'être lus avant d'écrire une ligne :
 
 - **L25 est le lot le plus risqué du plan** : il touche la méthode, donc les données déjà
   saisies. Les ateliers EBIOS RM se font **en ADDITION**, jamais en remplacement — une
@@ -249,7 +267,24 @@ rougir quoi que ce soit, et tous se voyaient en dix minutes de clics.* Prévoyez
     doit être **commité dans le même commit**.
 11. **Un garde-fou ÉPROUVE, il ne reconnaît pas un mot** (`CONVENTIONS.md` §39). Et **le
     balayage part du CATALOGUE, jamais d'une liste**.
-12. **Une table neuve entre dans TROIS mécanismes** (`CONVENTIONS.md` §40, posé le 16/09) :
+12. **Un `on delete set null` sur une clé COMPOSITE nullifie TOUTE la clé**, `filiale_id`
+    comprise — et elle est `not null` partout (`CONVENTIONS.md` §43). Écrire
+    `on delete set null (<colonne>)`. ⚠️ **Rien ne le dit tant qu'aucun parent RÉFÉRENCÉ
+    n'est supprimé** : le schéma se crée, les gardes passent, les écrans marchent. Puis la
+    purge de `POST /api/reprise` en mode « remplacer » tombe en `23502`, le message accuse
+    *« le champ filiale_id est obligatoire »* sur une suppression, et il nomme `clients`
+    parce que c'est l'entité que la purge passe à `executer()`. **Toute restauration de
+    sauvegarde est alors impossible.** Dix essais sont tombés d'un coup le 18/09 ; aucune
+    relecture ne l'avait vu.
+13. **`UI.wireDelete` et `UI.wireBulkDelete` prennent un IDENTIFIANT, pas un élément.**
+    Ils font eux-mêmes le `getElementById` **à partir d'une chaîne**, et rendent la main
+    **sans un mot** quand ils ne trouvent rien — ce qui est juste là où le bouton n'existe
+    pas (lecture seule), et le pire qui soit là où il existe : un bouton visible dont le
+    clic ne produit ni dialogue, ni requête, ni message. Fermé pour tous les modules par
+    `test/depot/branchements-muets.test.mjs`. ⚠️ **Trouvé au navigateur, et d'aucune autre
+    façon** : le banc éprouve qu'un écran s'affiche et qu'un renommage le suit, jamais
+    qu'une suppression depuis la fiche aboutit.
+14. **Une table neuve entre dans TROIS mécanismes** (`CONVENTIONS.md` §40, posé le 16/09) :
     le domaine **`type_entite`** (sans quoi elle est **incréable**, toute création écrivant
     au journal), ses **politiques RLS**, puis **`f_poser_declencheurs_pieces()`** — *dans
     cet ordre*, parce que la découverte des tables porteuses exige que la politique de

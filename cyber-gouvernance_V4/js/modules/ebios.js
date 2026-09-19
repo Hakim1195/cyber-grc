@@ -71,6 +71,40 @@ const EbiosModule = (() => {
     /** L'échelle proposée par l'application. Le schéma, lui, borne seulement 1 à 10. */
     const NIVEAUX = Object.freeze([1, 2, 3, 4]);
 
+    /** Les familles de l'écosystème, au vocabulaire de l'atelier 3. */
+    const CATEGORIES = Object.freeze([
+        { valeur: "client",         libelle: "Client" },
+        { valeur: "fournisseur",    libelle: "Fournisseur" },
+        { valeur: "partenaire",     libelle: "Partenaire" },
+        { valeur: "entite_interne", libelle: "Entité interne" },
+        { valeur: "autorite",       libelle: "Autorité" }
+    ]);
+
+    /**
+     * Les quatre décisions de l'atelier 5, et ce que chacune engage.
+     *
+     * ⚠️ **« Accepter » est la seule qui exige une justification**, et ce n'est pas une
+     * politesse : les trois autres produisent un travail que quelqu'un verra — un projet,
+     * un contrat, un plan d'actions. Accepter ne produit RIEN. Sans la phrase qui dit
+     * pourquoi, la décision est indistinguable d'un oubli, et c'est exactement celle
+     * qu'un auditeur vient chercher. Le schéma l'impose ; l'écran la demande, plutôt que
+     * de laisser remonter un code de contrainte.
+     */
+    const DECISIONS = Object.freeze({
+        eviter:     { libelle: "Éviter",     ton: "status-conforme" },
+        reduire:    { libelle: "Réduire",    ton: "status-partiellement-conforme" },
+        transferer: { libelle: "Transférer", ton: "status-partiellement-conforme" },
+        accepter:   { libelle: "Accepter",   ton: "status-non-conforme" }
+    });
+
+    /** Les quatre paliers d'un scénario, rendus par le serveur. */
+    const PALIERS = Object.freeze({
+        faible:       { libelle: "Faible",       ton: "status-conforme" },
+        significatif: { libelle: "Significatif", ton: "status-partiellement-conforme" },
+        eleve:        { libelle: "Élevé",        ton: "status-partiellement-conforme" },
+        critique:     { libelle: "Critique",     ton: "status-non-conforme" }
+    });
+
     /** Le dernier état rendu par le serveur — pertinences et comptes. */
     let dernierEtat = null;
 
@@ -420,9 +454,84 @@ const EbiosModule = (() => {
                     <button type="button" id="srAjouter">Ajouter le couple</button>` : ""}
                 </div>
 
-                <div class="card no-print">
+                <div class="card">
+                    <h3>Atelier 3 — l'écosystème
+                        ${Help.tip("Une partie prenante est une organisation dont vous dépendez, qui pénètre votre système, ou les deux. On l'évalue sur quatre critères : dépendance, pénétration, maturité cyber, confiance. Le niveau de menace en découle — il est calculé par le serveur, pas saisi.")}</h3>
                     <p class="muted">
-                        ${esc("Les ateliers 3 à 5 — scénarios stratégiques, scénarios opérationnels, traitement — ne sont pas encore livrés. Les couples que vous retenez ici sont ce sur quoi ils travailleront.")}
+                        ${esc("La cartographie de vos actifs et de leurs dépendances n'est pas refaite ici : elle vit dans l'écran Cartographie. Ce que l'atelier 3 ajoute, c'est l'évaluation des parties prenantes.")}
+                    </p>
+                    <div id="edParties"></div>
+                    ${ecriture ? `
+                    <div class="form-grid" style="margin-top:1rem;">
+                        <label>Partie prenante
+                            <input type="text" id="ppNom" maxlength="300" placeholder="Mainteneur de la supervision" />
+                        </label>
+                        <label>Famille
+                            <select id="ppCategorie">${optionsHtml(CATEGORIES, "fournisseur")}</select>
+                        </label>
+                        <label>Tiers déjà enregistré ${Help.tip("Si cette partie prenante est déjà dans vos Prestataires, reliez-la : sa raison sociale, sa criticité et son niveau d'accès restent lus là-bas, et ne sont pas recopiés ici.")}
+                            <select id="ppPrestataire"></select>
+                        </label>
+                        <label>Dépendance ${Help.tip("À quel point votre activité dépend d'elle.")}
+                            <select id="ppDependance">${niveauxHtml("")}</select>
+                        </label>
+                        <label>Pénétration ${Help.tip("À quel point elle est présente dans votre système : accès, interconnexions, droits.")}
+                            <select id="ppPenetration">${niveauxHtml("")}</select>
+                        </label>
+                        <label>Maturité cyber ${Help.tip("Ce que vous savez de son niveau de sécurité.")}
+                            <select id="ppMaturite">${niveauxHtml("")}</select>
+                        </label>
+                        <label>Confiance ${Help.tip("Ce que vous savez de sa fiabilité : historique, contrat, transparence.")}
+                            <select id="ppConfiance">${niveauxHtml("")}</select>
+                        </label>
+                    </div>
+                    <button type="button" id="ppAjouter">Ajouter la partie prenante</button>` : ""}
+                </div>
+
+                <div class="card">
+                    <h3>Atelier 3 — les chemins d'attaque
+                        ${Help.tip("Un scénario stratégique dit par où une source de risque RETENUE atteint un événement redouté, et par quelle partie prenante elle passe. Sa gravité est celle de l'événement redouté : elle n'est pas ressaisie.")}</h3>
+                    <div id="edChemins"></div>
+                    ${ecriture ? `
+                    <div class="form-grid" style="margin-top:1rem;">
+                        <label>Intitulé du chemin
+                            <input type="text" id="ssNom" maxlength="300" placeholder="Le concurrent passe par le mainteneur" />
+                        </label>
+                        <label>Source retenue ${Help.tip("Seuls les couples que vous avez RETENUS à l'atelier 2 sont proposés : c'est ce que cette décision engage.")}
+                            <select id="ssSource"></select>
+                        </label>
+                        <label>Événement redouté
+                            <select id="ssEvenement"></select>
+                        </label>
+                        <label>Par quelle partie prenante
+                            <select id="ssPartie"></select>
+                        </label>
+                    </div>
+                    <button type="button" id="ssAjouter">Ajouter le chemin</button>` : ""}
+                </div>
+
+                <div class="card">
+                    <h3>Ateliers 4 et 5 — modes opératoires et traitement
+                        ${Help.tip("L'atelier 4 décrit comment le chemin se réalise techniquement, et à quel point c'est vraisemblable. L'atelier 5 décide quoi en faire : éviter, réduire, transférer ou accepter.")}</h3>
+                    <div id="edModes"></div>
+                    ${ecriture ? `
+                    <div class="form-grid" style="margin-top:1rem;">
+                        <label>Chemin concerné
+                            <select id="soChemin"></select>
+                        </label>
+                        <label>Mode opératoire
+                            <input type="text" id="soNom" maxlength="300" placeholder="Hameçonnage ciblé puis élévation de privilèges" />
+                        </label>
+                        <label>Bien support visé
+                            <select id="soActif"></select>
+                        </label>
+                        <label>Vraisemblance ${Help.tip("À quel point ce mode opératoire est plausible ici, compte tenu de ce qui est déjà en place.")}
+                            <select id="soVraisemblance">${niveauxHtml("")}</select>
+                        </label>
+                    </div>
+                    <button type="button" id="soAjouter">Ajouter le mode opératoire</button>` : ""}
+                    <p class="muted" style="margin-top:.75rem;">
+                        ${esc("Rattacher un mode opératoire à un risque du registre ne modifie PAS ce risque : sa cotation fréquence × gravité × maîtrise reste la vôtre. Le lien sert à ce que le plan d'actions déjà rattaché à ce risque s'applique ici aussi.")}
                     </p>
                 </div>
             </section>`;
@@ -442,6 +551,12 @@ const EbiosModule = (() => {
             //    voir, aucun de ses essais n'allant jusqu'à supprimer depuis la fiche.
             //    C'est la classe que ce dépôt proscrit partout : *quelque chose réussit
             //    en silence alors que c'est faux.*
+            document.getElementById("ppAjouter")
+                .addEventListener("click", () => ajouterPartiePrenante(id));
+            document.getElementById("ssAjouter")
+                .addEventListener("click", () => ajouterChemin(id));
+            document.getElementById("soAjouter")
+                .addEventListener("click", () => ajouterMode(id));
             UI.wireDelete({
                 button: "ebiosSupprimer",
                 confirm: "Supprimer cette étude ? Ses valeurs métier, ses événements redoutés et ses couples source / objectif partent avec elle. Vos risques cotés en F × G × M ne sont pas touchés.",
@@ -451,17 +566,24 @@ const EbiosModule = (() => {
             });
             peuplerProcessus();
             peuplerSourcesConnues();
+            peuplerListesAteliers(id);
         }
 
         dessinerValeurs(id, ecriture);
         dessinerSources(id, ecriture);
+        dessinerParties(id, ecriture);
+        dessinerChemins(id, ecriture);
+        dessinerModes(id, ecriture);
 
         // La pertinence vient du serveur : on la demande, puis on repeint les couples.
         if (window.Api && typeof Api.ebiosEtat === "function") {
             Api.ebiosEtat().then(r => {
                 dernierEtat = r;
                 dessinerSources(id, ecriture);
-            }).catch(() => { /* les couples restent affichés « à évaluer » */ });
+                dessinerParties(id, ecriture);
+                dessinerChemins(id, ecriture);
+                dessinerModes(id, ecriture);
+            }).catch(() => { /* les grandeurs dérivées restent « à évaluer » */ });
         }
     }
 
@@ -793,6 +915,371 @@ const EbiosModule = (() => {
         }
         DataStore.updateEbiosSourceRisque(source);
         UI.apresEcriture(() => dessinerSources(etudeId, true));
+    }
+
+    /* =====================================================================
+       ATELIERS 3, 4 ET 5
+    ===================================================================== */
+
+    /** Les listes déroulantes qui puisent dans ce que l'étude porte déjà. */
+    function peuplerListesAteliers(etudeId) {
+        const option = (v, l) => '<option value="' + esc(v) + '">' + esc(l) + "</option>";
+
+        const prestataires = DataStore.getPrestataires ? DataStore.getPrestataires() : [];
+        const selPrest = document.getElementById("ppPrestataire");
+        if (selPrest) {
+            selPrest.innerHTML = option("", "— aucun —")
+                + prestataires.map(p => option(p.id, p.societe || p.nom || p.id)).join("");
+        }
+
+        // ⚠️ **Seuls les couples RETENUS**, et c'est tout le sens de la décision de
+        //    l'atelier 2 : les ateliers suivants ne travaillent que sur eux. Proposer
+        //    les autres viderait « retenue » de sa portée.
+        const selSource = document.getElementById("ssSource");
+        if (selSource) {
+            const retenus = DataStore.getEbiosSourcesRisque(etudeId).filter(x => x.retenue);
+            selSource.innerHTML = retenus.length === 0
+                ? option("", "— aucun couple retenu à l'atelier 2 —")
+                : retenus.map(x => option(x.id, x.source + " → " + x.objectif_vise)).join("");
+        }
+
+        const selEvt = document.getElementById("ssEvenement");
+        if (selEvt) {
+            const valeurs = DataStore.getEbiosValeursMetier(etudeId).map(v => v.id);
+            const evenements = DataStore.getEbiosEvenementsRedoutes()
+                .filter(r => valeurs.indexOf(r.valeur_metier_id) !== -1);
+            selEvt.innerHTML = evenements.length === 0
+                ? option("", "— aucun événement redouté à l'atelier 1 —")
+                : evenements.map(r => option(r.id, r.nom)).join("");
+        }
+
+        const selPartie = document.getElementById("ssPartie");
+        if (selPartie) {
+            selPartie.innerHTML = option("", "— directement, sans intermédiaire —")
+                + DataStore.getEbiosPartiesPrenantes(etudeId)
+                    .map(p => option(p.id, p.nom)).join("");
+        }
+
+        const selChemin = document.getElementById("soChemin");
+        if (selChemin) {
+            const chemins = DataStore.getEbiosScenariosStrategiques(etudeId);
+            selChemin.innerHTML = chemins.length === 0
+                ? option("", "— aucun chemin d'attaque —")
+                : chemins.map(c => option(c.id, c.nom)).join("");
+        }
+
+        const selActif = document.getElementById("soActif");
+        if (selActif) {
+            const actifs = DataStore.getActifs ? DataStore.getActifs() : [];
+            selActif.innerHTML = option("", "— aucun —")
+                + actifs.map(a => option(a.id, a.nom)).join("");
+        }
+    }
+
+    /** Ce que le serveur a dérivé pour une partie prenante, ou `null`. */
+    function menaceDe(id) {
+        if (!dernierEtat || !dernierEtat.partiesPrenantes) return null;
+        const t = dernierEtat.partiesPrenantes.find(p => p.id === id);
+        return t && t.niveauMenace != null ? t.niveauMenace : null;
+    }
+
+    function cheminServeur(id) {
+        if (!dernierEtat || !dernierEtat.scenariosStrategiques) return null;
+        return dernierEtat.scenariosStrategiques.find(s => s.id === id) || null;
+    }
+
+    function modeServeur(id) {
+        if (!dernierEtat || !dernierEtat.scenariosOperationnels) return null;
+        return dernierEtat.scenariosOperationnels.find(o => o.id === id) || null;
+    }
+
+    function dessinerParties(etudeId, ecriture) {
+        const cible = document.getElementById("edParties");
+        if (!cible) return;
+        const parties = DataStore.getEbiosPartiesPrenantes(etudeId);
+        if (parties.length === 0) {
+            cible.innerHTML = '<p class="chart-empty">'
+                + esc("Aucune partie prenante évaluée. Commencez par celles dont vous dépendez le plus, ou qui ont le plus d'accès.")
+                + "</p>";
+            return;
+        }
+        const lignes = parties.map(p => {
+            const menace = menaceDe(p.id);
+            const nombre = (v) => (v == null || v === "" ? "—" : esc(String(v)));
+            return `
+            <tr data-pp="${esc(p.id)}">
+                <td><strong>${esc(p.nom)}</strong></td>
+                <td>${esc((CATEGORIES.find(c => c.valeur === p.categorie) || {}).libelle || p.categorie)}</td>
+                <td style="text-align:right;">${nombre(p.dependance)}</td>
+                <td style="text-align:right;">${nombre(p.penetration)}</td>
+                <td style="text-align:right;">${nombre(p.maturite)}</td>
+                <td style="text-align:right;">${nombre(p.confiance)}</td>
+                <td style="text-align:right;">${menace == null
+                    ? '<span class="muted" title="' + esc("Le calcul se tait tant que les quatre critères ne sont pas cotés : une menace calculée sur trois critères sur quatre aurait l'air mesurée sans l'être.") + '">à évaluer</span>'
+                    : "<strong>" + esc(String(menace)) + "</strong>"}</td>
+                <td class="stop-row-click">${ecriture
+                    ? '<button type="button" class="btn-danger ppSupprimer" data-pp="' + esc(p.id) + '">Retirer</button>'
+                    : ""}</td>
+            </tr>`;
+        }).join("");
+        cible.innerHTML = `
+            <table class="data-table">
+                <thead><tr>
+                    <th>Partie prenante</th><th>Famille</th>
+                    <th style="text-align:right;">Dép.</th><th style="text-align:right;">Pén.</th>
+                    <th style="text-align:right;">Mat.</th><th style="text-align:right;">Conf.</th>
+                    <th style="text-align:right;">Menace ${Help.tip("Dépendance × pénétration, rapportées à maturité × confiance. Au-delà de 1, vous dépendez d'elle plus que vous ne pouvez lui faire confiance. Calculé par le serveur.")}</th>
+                    <th></th>
+                </tr></thead>
+                <tbody>${lignes}</tbody>
+            </table>`;
+        if (!ecriture) return;
+        cible.querySelectorAll(".ppSupprimer").forEach(b => {
+            b.addEventListener("click", () => {
+                if (!confirm("Retirer cette partie prenante ? Les chemins qui passaient par elle la perdent, mais ne sont pas supprimés.")) return;
+                DataStore.deleteEbiosPartiePrenante(b.dataset.pp);
+                UI.apresEcriture(() => { dessinerParties(etudeId, ecriture); dessinerChemins(etudeId, ecriture); peuplerListesAteliers(etudeId); });
+            });
+        });
+    }
+
+    function ajouterPartiePrenante(etudeId) {
+        const nom = ((document.getElementById("ppNom") || {}).value || "").trim();
+        if (nom === "") {
+            if (window.showToast) showToast("Nommez la partie prenante.", "warning");
+            return;
+        }
+        const n = (id) => {
+            const v = (document.getElementById(id) || {}).value || "";
+            return v === "" ? "" : Number(v);
+        };
+        DataStore.addEbiosPartiePrenante({
+            id: UI.genId("EBPP"),
+            etude_id: etudeId,
+            nom: nom,
+            categorie: (document.getElementById("ppCategorie") || {}).value || "fournisseur",
+            prestataire_id: (document.getElementById("ppPrestataire") || {}).value || "",
+            dependance: n("ppDependance"),
+            penetration: n("ppPenetration"),
+            maturite: n("ppMaturite"),
+            confiance: n("ppConfiance"),
+            notes: ""
+        });
+        document.getElementById("ppNom").value = "";
+        UI.apresEcriture(() => rafraichirDerive(etudeId));
+    }
+
+    function dessinerChemins(etudeId, ecriture) {
+        const cible = document.getElementById("edChemins");
+        if (!cible) return;
+        const chemins = DataStore.getEbiosScenariosStrategiques(etudeId);
+        if (chemins.length === 0) {
+            cible.innerHTML = '<p class="chart-empty">'
+                + esc("Aucun chemin d'attaque. Un chemin relie un couple retenu à l'atelier 2 à un événement redouté de l'atelier 1.")
+                + "</p>";
+            return;
+        }
+        const lignes = chemins.map(c => {
+            const vu = cheminServeur(c.id);
+            return `
+            <tr data-ss="${esc(c.id)}">
+                <td><strong>${esc(c.nom)}</strong></td>
+                <td>${vu ? esc(vu.source + " → " + vu.objectifVise) : "—"}</td>
+                <td>${vu && vu.partiePrenante ? esc(vu.partiePrenante) : esc("directement")}</td>
+                <td>${vu ? esc(vu.evenementRedoute) : "—"}</td>
+                <td style="text-align:right;">${vu && vu.gravite != null
+                    ? "<strong>" + esc(String(vu.gravite)) + "</strong>"
+                    : '<span class="muted">—</span>'}</td>
+                <td class="stop-row-click">${ecriture
+                    ? '<button type="button" class="btn-danger ssSupprimer" data-ss="' + esc(c.id) + '">Retirer</button>'
+                    : ""}</td>
+            </tr>`;
+        }).join("");
+        cible.innerHTML = `
+            <table class="data-table">
+                <thead><tr>
+                    <th>Chemin</th><th>Source → objectif</th><th>Par</th>
+                    <th>Événement redouté</th>
+                    <th style="text-align:right;">Gravité ${Help.tip("Celle de l'événement redouté que ce chemin réalise. Elle n'est pas ressaisie ici : une seconde valeur vieillirait dès la prochaine réévaluation de l'atelier 1.")}</th>
+                    <th></th>
+                </tr></thead>
+                <tbody>${lignes}</tbody>
+            </table>`;
+        if (!ecriture) return;
+        cible.querySelectorAll(".ssSupprimer").forEach(b => {
+            b.addEventListener("click", () => {
+                if (!confirm("Retirer ce chemin ? Ses modes opératoires partent avec lui.")) return;
+                DataStore.deleteEbiosScenarioStrategique(b.dataset.ss);
+                UI.apresEcriture(() => rafraichirDerive(etudeId));
+            });
+        });
+    }
+
+    function ajouterChemin(etudeId) {
+        const nom = ((document.getElementById("ssNom") || {}).value || "").trim();
+        const source = (document.getElementById("ssSource") || {}).value || "";
+        const evenement = (document.getElementById("ssEvenement") || {}).value || "";
+        if (nom === "" || source === "" || evenement === "") {
+            if (window.showToast) {
+                showToast("Un chemin relie une source RETENUE à un événement redouté : les deux sont nécessaires.", "warning");
+            }
+            return;
+        }
+        DataStore.addEbiosScenarioStrategique({
+            id: UI.genId("EBSS"),
+            etude_id: etudeId,
+            source_id: source,
+            evenement_redoute_id: evenement,
+            partie_prenante_id: (document.getElementById("ssPartie") || {}).value || "",
+            nom: nom,
+            chemin: "",
+            notes: ""
+        });
+        document.getElementById("ssNom").value = "";
+        UI.apresEcriture(() => rafraichirDerive(etudeId));
+    }
+
+    function dessinerModes(etudeId, ecriture) {
+        const cible = document.getElementById("edModes");
+        if (!cible) return;
+        const chemins = DataStore.getEbiosScenariosStrategiques(etudeId).map(c => c.id);
+        const modes = DataStore.getEbiosScenariosOperationnels()
+            .filter(o => chemins.indexOf(o.scenario_strategique_id) !== -1);
+        if (modes.length === 0) {
+            cible.innerHTML = '<p class="chart-empty">'
+                + esc("Aucun mode opératoire. C'est ici que le chemin devient vérifiable — et c'est sur lui que porte la décision de traitement.")
+                + "</p>";
+            return;
+        }
+        const lignes = modes.map(o => {
+            const vu = modeServeur(o.id);
+            const palier = vu && vu.niveau ? PALIERS[vu.niveau] : null;
+            const decision = o.decision ? DECISIONS[o.decision] : null;
+            return `
+            <tr data-so="${esc(o.id)}">
+                <td><strong>${esc(o.nom)}</strong></td>
+                <td>${vu ? esc((DataStore.getEbiosScenarioStrategiqueById(o.scenario_strategique_id) || {}).nom || "—") : "—"}</td>
+                <td style="text-align:right;">${o.vraisemblance == null || o.vraisemblance === "" ? "—" : esc(String(o.vraisemblance))}</td>
+                <td>${palier
+                    ? '<span class="status ' + palier.ton + '">' + esc(palier.libelle) + "</span>"
+                    : '<span class="muted" title="' + esc("Le niveau se tait tant que la gravité du chemin ou la vraisemblance manque.") + '">à évaluer</span>'}</td>
+                <td>${decision
+                    ? '<span class="status ' + decision.ton + '">' + esc(decision.libelle) + "</span>"
+                    : '<span class="muted">non tranché</span>'}</td>
+                <td>${esc(o.justification_decision || "—")}</td>
+                <td class="stop-row-click">${ecriture ? `
+                    <button type="button" class="btn-secondary soDecider" data-so="${esc(o.id)}">Décider</button>
+                    <button type="button" class="btn-danger soSupprimer" data-so="${esc(o.id)}">Retirer</button>` : ""}</td>
+            </tr>`;
+        }).join("");
+        cible.innerHTML = `
+            <table class="data-table">
+                <thead><tr>
+                    <th>Mode opératoire</th><th>Chemin</th>
+                    <th style="text-align:right;">Vrais.</th>
+                    <th>Niveau ${Help.tip("Gravité du chemin × vraisemblance du mode opératoire, en quatre paliers. Calculé par le serveur ; il se tait si l'un des deux manque.")}</th>
+                    <th>Décision</th><th>Justification</th><th></th>
+                </tr></thead>
+                <tbody>${lignes}</tbody>
+            </table>`;
+        if (!ecriture) return;
+        cible.querySelectorAll(".soDecider").forEach(b => {
+            b.addEventListener("click", () => deciderMode(etudeId, b.dataset.so));
+        });
+        cible.querySelectorAll(".soSupprimer").forEach(b => {
+            b.addEventListener("click", () => {
+                DataStore.deleteEbiosScenarioOperationnel(b.dataset.so);
+                UI.apresEcriture(() => rafraichirDerive(etudeId));
+            });
+        });
+    }
+
+    function ajouterMode(etudeId) {
+        const chemin = (document.getElementById("soChemin") || {}).value || "";
+        const nom = ((document.getElementById("soNom") || {}).value || "").trim();
+        if (chemin === "" || nom === "") {
+            if (window.showToast) {
+                showToast("Un mode opératoire appartient à un chemin, et porte un intitulé.", "warning");
+            }
+            return;
+        }
+        const v = (document.getElementById("soVraisemblance") || {}).value || "";
+        DataStore.addEbiosScenarioOperationnel({
+            id: UI.genId("EBSO"),
+            scenario_strategique_id: chemin,
+            nom: nom,
+            mode_operatoire: "",
+            connaissance_id: "",
+            actif_id: (document.getElementById("soActif") || {}).value || "",
+            vraisemblance: v === "" ? "" : Number(v),
+            // ⚠️ Un mode opératoire naît SANS décision : trancher est un geste de
+            //    l'atelier 5, et le faire naître « à réduire » ferait porter au produit
+            //    une décision que personne n'a prise.
+            decision: "",
+            justification_decision: "",
+            risque_id: "",
+            notes: ""
+        });
+        document.getElementById("soNom").value = "";
+        UI.apresEcriture(() => rafraichirDerive(etudeId));
+    }
+
+    /**
+     * Trancher l'atelier 5.
+     *
+     * ⚠️ **« Accepter » exige sa justification, et le produit la DEMANDE** plutôt que de
+     * laisser la base refuser l'écriture : `ck_ebios_scenarios_operationnels_acceptation`
+     * rendrait un code de contrainte, qui ne dit rien à l'utilisateur.
+     */
+    function deciderMode(etudeId, modeId) {
+        const mode = DataStore.getEbiosScenarioOperationnelById(modeId);
+        if (!mode) return;
+        const saisie = prompt(
+            "Décision de traitement — éviter, réduire, transférer ou accepter.\n"
+            // Signe typographique, jamais d'emoji : c'est l'arbitrage E du
+            // `docs/REPRISE.md` §2, gardé par `test/depot/aucun-emoji.test.mjs`.
+            + "▸ « accepter » demandera pourquoi : c'est la seule des quatre qui ne produit "
+            + "aucun travail visible, et sans sa justification elle est indistinguable d'un oubli.",
+            mode.decision || "reduire");
+        if (saisie === null) return;
+        const decision = saisie.trim().toLowerCase()
+            .replace(/é/g, "e").replace(/è/g, "e").replace(/ê/g, "e");
+        if (!Object.prototype.hasOwnProperty.call(DECISIONS, decision)) {
+            alert("Décision attendue : eviter, reduire, transferer ou accepter.");
+            return;
+        }
+        if (decision === "accepter") {
+            const motif = prompt(
+                "Pourquoi acceptez-vous ce risque ? Cette phrase est la seule trace qu'une "
+                + "décision a été prise plutôt qu'oubliée.",
+                mode.justification_decision || "");
+            if (motif === null) return;
+            if (motif.trim() === "") {
+                if (window.showToast) showToast("Un risque accepté porte sa justification.", "warning");
+                return;
+            }
+            mode.justification_decision = motif.trim();
+        }
+        mode.decision = decision;
+        DataStore.updateEbiosScenarioOperationnel(mode);
+        UI.apresEcriture(() => rafraichirDerive(etudeId));
+    }
+
+    /** Redessine les trois ateliers, puis redemande au serveur ce qu'il dérive. */
+    function rafraichirDerive(etudeId) {
+        dessinerParties(etudeId, true);
+        dessinerChemins(etudeId, true);
+        dessinerModes(etudeId, true);
+        peuplerListesAteliers(etudeId);
+        if (window.Api && typeof Api.ebiosEtat === "function") {
+            Api.ebiosEtat().then(r => {
+                dernierEtat = r;
+                dessinerSources(etudeId, true);
+                dessinerParties(etudeId, true);
+                dessinerChemins(etudeId, true);
+                dessinerModes(etudeId, true);
+            }).catch(() => { /* les grandeurs dérivées restent « à évaluer » */ });
+        }
     }
 
     return { renderList, renderDetail };

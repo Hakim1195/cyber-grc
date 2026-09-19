@@ -281,7 +281,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 22;
+export const VERSION_SCHEMA = 23;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -1118,6 +1118,44 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
   [
     'ebios_sources_risque',
     { nom: 'ebios_sources_risque', table: 'ebios_sources_risque', prefixe: 'EBSR' },
+  ],
+
+  // ── v23 : LES ATELIERS 3, 4 ET 5 (L25, fin de l'action 25.1) ────────────────
+  //
+  // ⚠️ **Ce que ces entités n'exposent PAS**, et chaque absence est une décision :
+  //
+  //  · le NIVEAU DE MENACE d'une partie prenante — il se dérive de ses quatre
+  //    critères (`f_ebios_niveau_menace()`), et une colonne devrait être remise
+  //    à jour après chaque révision, en séance ;
+  //  · la GRAVITÉ d'un scénario stratégique — elle EST celle de l'événement
+  //    redouté réalisé, et la recopier créerait une seconde réponse à la même
+  //    question, qui vieillirait dès la prochaine réévaluation de l'atelier 1 ;
+  //  · le NIVEAU d'un scénario opérationnel — gravité × vraisemblance, dérivé
+  //    lui aussi (`f_ebios_niveau_scenario()`).
+  //
+  // C'est `GET /api/ebios/etat` qui rend les trois, et cette route seule.
+  [
+    'ebios_parties_prenantes',
+    { nom: 'ebios_parties_prenantes', table: 'ebios_parties_prenantes', prefixe: 'EBPP' },
+  ],
+  [
+    'ebios_scenarios_strategiques',
+    {
+      nom: 'ebios_scenarios_strategiques',
+      table: 'ebios_scenarios_strategiques',
+      prefixe: 'EBSS',
+    },
+  ],
+  // ⚠️ `risque_id` rattache un scénario au registre F × G × M. C'est un LIEN, pas
+  // une conversion : rien n'est écrit dans `risques`, et le garde-fou de la `046`
+  // le mesure dans le catalogue pour toutes les tables `ebios_*`.
+  [
+    'ebios_scenarios_operationnels',
+    {
+      nom: 'ebios_scenarios_operationnels',
+      table: 'ebios_scenarios_operationnels',
+      prefixe: 'EBSO',
+    },
   ],
 ]);
 

@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 22;
+    const SCHEMA_VERSION = 23;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -131,7 +131,21 @@ const DataStore = (() => {
         "ebios_etudes",
         "ebios_valeurs_metier",
         "ebios_evenements_redoutes",
-        "ebios_sources_risque"
+        "ebios_sources_risque",
+        // v23 — Lot L25, fin de l'action 25.1 : les ateliers 3, 4 et 5.
+        //
+        // ⚠️ L'ordre suit les clés étrangères : les parties prenantes AVANT les
+        // scénarios stratégiques qui les traversent, et ceux-ci avant les scénarios
+        // opérationnels qui les détaillent.
+        //
+        // ⚠️ **Aucun NIVEAU n'est stocké** — ni celui d'une partie prenante
+        // (dépendance × pénétration ÷ maturité × confiance), ni celui d'un scénario
+        // (gravité × vraisemblance). Ils viennent de `GET /api/ebios/etat`. Et
+        // `ebios_scenarios_strategiques` ne porte **aucune gravité** : elle est celle
+        // de l'événement redouté qu'il réalise, lue par la jointure.
+        "ebios_parties_prenantes",
+        "ebios_scenarios_strategiques",
+        "ebios_scenarios_operationnels"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
@@ -1024,6 +1038,18 @@ const DataStore = (() => {
      */
     function deleteEbiosEtude(id) {
         const valeurs = data.ebios_valeurs_metier.filter(v => v.etude_id === id).map(v => v.id);
+        // ⚠️ Les scénarios opérationnels D'ABORD : ils pendent aux stratégiques, qui
+        //    pendent à l'étude. L'ordre est celui des clés étrangères, et l'inverser
+        //    laisserait des opérationnels sans chemin — visibles nulle part, et
+        //    pourtant comptés.
+        const strategiques = data.ebios_scenarios_strategiques
+            .filter(s => s.etude_id === id).map(s => s.id);
+        data.ebios_scenarios_operationnels = data.ebios_scenarios_operationnels.filter(
+            o => strategiques.indexOf(o.scenario_strategique_id) === -1);
+        data.ebios_scenarios_strategiques =
+            data.ebios_scenarios_strategiques.filter(s => s.etude_id !== id);
+        data.ebios_parties_prenantes =
+            data.ebios_parties_prenantes.filter(p => p.etude_id !== id);
         data.ebios_evenements_redoutes = data.ebios_evenements_redoutes.filter(
             r => valeurs.indexOf(r.valeur_metier_id) === -1);
         data.ebios_valeurs_metier = data.ebios_valeurs_metier.filter(v => v.etude_id !== id);
@@ -1087,6 +1113,96 @@ const DataStore = (() => {
     }
     function deleteEbiosSourceRisque(id) {
         data.ebios_sources_risque = data.ebios_sources_risque.filter(s => s.id !== id);
+        save();
+    }
+
+    /* =========================
+       EBIOS RM — ATELIERS 3, 4 ET 5 (v23, fin de l'action 25.1)
+
+       ebios_parties_prenantes       : { id, etude_id, nom, categorie, prestataire_id,
+                                         dependance, penetration, maturite, confiance, notes }
+       ebios_scenarios_strategiques  : { id, etude_id, source_id, evenement_redoute_id,
+                                         partie_prenante_id, nom, chemin, notes }
+       ebios_scenarios_operationnels : { id, scenario_strategique_id, nom, mode_operatoire,
+                                         connaissance_id, actif_id, vraisemblance,
+                                         decision, justification_decision, risque_id, notes }
+
+       ⚠️ **Aucun NIVEAU, aucune GRAVITÉ.** Le niveau de menace d'une partie prenante et
+       le niveau d'un scénario se dérivent côté serveur ; la gravité d'un scénario
+       stratégique EST celle de l'événement redouté qu'il réalise, lue par la jointure.
+       Les stocker ici créerait autant de secondes réponses à des questions déjà posées.
+
+       ⚠️ **`risque_id` est un LIEN, pas une conversion** : rattacher un scénario à un
+       risque du registre F × G × M n'écrit RIEN dans ce risque. Les deux méthodes
+       cohabitent sans se parler, et c'est le critère d'acceptation de l'action 25.1.
+    ========================== */
+    function getEbiosPartiesPrenantes(etudeId) {
+        return etudeId === undefined
+            ? data.ebios_parties_prenantes
+            : data.ebios_parties_prenantes.filter(p => p.etude_id === etudeId);
+    }
+    function getEbiosPartiePrenanteById(id) {
+        return data.ebios_parties_prenantes.find(p => p.id === id);
+    }
+    function addEbiosPartiePrenante(p) { data.ebios_parties_prenantes.push(p); save(); }
+    function updateEbiosPartiePrenante(p) {
+        const i = data.ebios_parties_prenantes.findIndex(x => x.id === p.id);
+        if (i !== -1) { data.ebios_parties_prenantes[i] = p; save(); }
+    }
+    /**
+     * ⚠️ La base DÉLIE les scénarios qui la traversaient (`on delete set null
+     * (partie_prenante_id)`) ; cette fonction refait le même geste EN MÉMOIRE. Sans
+     * cela, l'écran afficherait un passage par une partie prenante qui n'existe plus —
+     * la classe du défaut du 18/09/2026, où l'échéancier gardait l'échéance d'un
+     * questionnaire dont le porteur venait d'être supprimé.
+     */
+    function deleteEbiosPartiePrenante(id) {
+        data.ebios_scenarios_strategiques.forEach(s => {
+            if (s.partie_prenante_id === id) s.partie_prenante_id = "";
+        });
+        data.ebios_parties_prenantes = data.ebios_parties_prenantes.filter(p => p.id !== id);
+        save();
+    }
+
+    function getEbiosScenariosStrategiques(etudeId) {
+        return etudeId === undefined
+            ? data.ebios_scenarios_strategiques
+            : data.ebios_scenarios_strategiques.filter(s => s.etude_id === etudeId);
+    }
+    function getEbiosScenarioStrategiqueById(id) {
+        return data.ebios_scenarios_strategiques.find(s => s.id === id);
+    }
+    function addEbiosScenarioStrategique(s) { data.ebios_scenarios_strategiques.push(s); save(); }
+    function updateEbiosScenarioStrategique(s) {
+        const i = data.ebios_scenarios_strategiques.findIndex(x => x.id === s.id);
+        if (i !== -1) { data.ebios_scenarios_strategiques[i] = s; save(); }
+    }
+    /** La base cascade sur les scénarios opérationnels ; on refait le même ordre. */
+    function deleteEbiosScenarioStrategique(id) {
+        data.ebios_scenarios_operationnels =
+            data.ebios_scenarios_operationnels.filter(o => o.scenario_strategique_id !== id);
+        data.ebios_scenarios_strategiques =
+            data.ebios_scenarios_strategiques.filter(s => s.id !== id);
+        save();
+    }
+
+    function getEbiosScenariosOperationnels(strategiqueId) {
+        return strategiqueId === undefined
+            ? data.ebios_scenarios_operationnels
+            : data.ebios_scenarios_operationnels.filter(
+                o => o.scenario_strategique_id === strategiqueId);
+    }
+    function getEbiosScenarioOperationnelById(id) {
+        return data.ebios_scenarios_operationnels.find(o => o.id === id);
+    }
+    function addEbiosScenarioOperationnel(o) { data.ebios_scenarios_operationnels.push(o); save(); }
+    function updateEbiosScenarioOperationnel(o) {
+        const i = data.ebios_scenarios_operationnels.findIndex(x => x.id === o.id);
+        if (i !== -1) { data.ebios_scenarios_operationnels[i] = o; save(); }
+    }
+    function deleteEbiosScenarioOperationnel(id) {
+        data.ebios_scenarios_operationnels =
+            data.ebios_scenarios_operationnels.filter(o => o.id !== id);
         save();
     }
 
@@ -1369,7 +1485,15 @@ const DataStore = (() => {
         //           métier atteinte, ni la source, ni l'objectif visé — en déduire une
         //           étude produirait une analyse que personne n'a conduite, dans un
         //           outil qui sert de preuve en audit.
-        // (Ajouter ici les futures migrations : if (v < 23) { ... })
+        // v22 → v23 : ajout des trois collections des ateliers 3, 4 et 5 d'EBIOS RM
+        //           (`ebios_parties_prenantes`, `ebios_scenarios_strategiques`,
+        //           `ebios_scenarios_operationnels`) → normalize crée les tableaux
+        //           vides. AUCUNE transformation, et rien à DEVINER : on ne fabrique
+        //           pas une partie prenante depuis le registre des prestataires. Un
+        //           prestataire est un fait contractuel ; une partie prenante de
+        //           l'écosystème est une DÉCISION d'analyse — celle de dire qu'on
+        //           dépend de lui et à quel point on lui fait confiance.
+        // (Ajouter ici les futures migrations : if (v < 24) { ... })
         return p;
     }
 
@@ -1644,6 +1768,14 @@ const DataStore = (() => {
         addEbiosEvenementRedoute, updateEbiosEvenementRedoute, deleteEbiosEvenementRedoute,
         getEbiosSourcesRisque, getEbiosSourceRisqueById,
         addEbiosSourceRisque, updateEbiosSourceRisque, deleteEbiosSourceRisque,
+        getEbiosPartiesPrenantes, getEbiosPartiePrenanteById,
+        addEbiosPartiePrenante, updateEbiosPartiePrenante, deleteEbiosPartiePrenante,
+        getEbiosScenariosStrategiques, getEbiosScenarioStrategiqueById,
+        addEbiosScenarioStrategique, updateEbiosScenarioStrategique,
+        deleteEbiosScenarioStrategique,
+        getEbiosScenariosOperationnels, getEbiosScenarioOperationnelById,
+        addEbiosScenarioOperationnel, updateEbiosScenarioOperationnel,
+        deleteEbiosScenarioOperationnel,
 
         getAnalysesImpact, getAnalyseImpactById, getAnalysesImpactByTraitement,
         addAnalyseImpact, updateAnalyseImpact, deleteAnalyseImpact,

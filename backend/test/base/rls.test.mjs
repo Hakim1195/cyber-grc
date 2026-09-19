@@ -4203,6 +4203,11 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // réinterpréter les réattribuerait en silence* (motif du constat Q-192) — rendu
       // MÉCANIQUE, parce qu'une propriété négative ne se voit pas à l'usage.
       'ebios_cadrage',
+      // CINQUANTE ET UNIÈME, apporté par `047` : les ateliers 3, 4 et 5. ⚠️ Son contrôle
+      // le plus important est NÉGATIF — la table des scénarios stratégiques ne porte
+      // AUCUNE colonne de gravité, parce que celle-ci est celle de l'événement redouté
+      // réalisé. Une seconde valeur vieillirait à la prochaine réévaluation de l'atelier 1.
+      'ebios_scenarios',
       'ecart_ne_fait_pas_foi',
       'entropie_identifiants',
       // TRENTE-HUITIÈME, apporté par `034_l_horloge_reglementaire.sql` : les quatre
@@ -4333,6 +4338,13 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // dans l'une des deux familles. *Une migration a AFFIRMÉ une propriété au lieu de la
       // POSER, et rien ne comparait au catalogue.*
       'registres_techniques',
+      // CINQUANTE-DEUXIÈME, apporté par `047` : un garde de CLASSE (CONVENTIONS.md §43).
+      // Aucune clé étrangère COMPOSITE ne porte « on delete set null » sans nommer la
+      // colonne à nullifier — sans la liste, PostgreSQL les nullifie TOUTES, « filiale_id »
+      // comprise, et toute suppression d'un parent référencé échoue en 23502, purge de
+      // « remplacer » comprise. ⚠️ Il balaie le CATALOGUE : il couvre les clés qu'aucune
+      // migration n'a encore écrites, ce que la 046 a payé de dix essais tombés d'un coup.
+      'set_null_composites',
       // NEUVIÈME, apporté par `007_authentification.sql` : il vérifie que le substrat
       // de session est bien refermé sur `f_authentification()`. Cette liste est écrite
       // à la main À DESSEIN (CLAUDE.md §3, cas (a)) — une migration qui la fait rougir

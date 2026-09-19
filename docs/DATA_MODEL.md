@@ -65,7 +65,7 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 22`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 23`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
 côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v21**. Elle est
@@ -230,6 +230,39 @@ indépendante du numéro des migrations SQL.
 >     risques déjà cotés. Une cotation F × G × M ne dit ni la valeur métier atteinte, ni la
 >     source, ni l'objectif visé — en déduire une étude produirait une analyse que personne
 >     n'a conduite.
+>
+> v23 (lot L25, fin de l'action 25.1) : ajout des trois collections des **ateliers 3, 4
+>     et 5** — `ebios_parties_prenantes` (l'écosystème et son évaluation),
+>     `ebios_scenarios_strategiques` (les chemins d'attaque) et
+>     `ebios_scenarios_operationnels` (les modes opératoires, et la **décision** de
+>     traitement).
+>
+>     ⚠️ **La cartographie n'est pas refaite** (critère 25.2) : `actif_dependances` porte
+>     déjà les dépendances typées. Ce que l'atelier 3 ajoute est l'**évaluation** d'une
+>     partie prenante — dépendance, pénétration, maturité cyber, confiance — et le lien
+>     vers le prestataire du produit quand c'en est un, qu'elle **POINTE** sans recopier
+>     ni sa raison sociale, ni sa criticité, ni son niveau d'accès.
+>
+>     ⚠️ **`ebios_scenarios_strategiques` ne porte AUCUNE gravité.** Celle d'un chemin EST
+>     celle de l'événement redouté qu'il réalise ; une colonne ici créerait une seconde
+>     réponse à la même question, et la seconde vieillirait dès la prochaine réévaluation
+>     de l'atelier 1 — sans que personne le sache. Elle se lit par la jointure, et un essai
+>     le mesure **dans le catalogue** plutôt que de le relire.
+>
+>     ⚠️ **Aucun NIVEAU ne voyage** non plus : celui d'une partie prenante
+>     (`f_ebios_niveau_menace`, exposition rapportée à la fiabilité cyber) et celui d'un
+>     scénario (`f_ebios_niveau_scenario`, gravité × vraisemblance) se dérivent à la
+>     lecture. Les figer dans le fichier les rendrait faux dès la séance suivante.
+>
+>     ⚠️ **Le plan d'actions n'est pas refait** : `actions.risque_id` existe depuis le
+>     premier chantier. Un scénario opérationnel porte donc une **décision** — éviter,
+>     réduire, transférer, accepter — et, facultativement, `risque_id`. **C'est un LIEN,
+>     pas une conversion** : rien n'est écrit dans `risques`, et le garde-fou de la `046`
+>     le mesure dans le catalogue pour toutes les tables `ebios_*`.
+>
+>     ⚠️ **« Accepter » exige sa justification**, et c'est la seule des quatre décisions :
+>     les trois autres produisent un travail que quelqu'un verra, accepter ne produit rien
+>     — sans sa phrase, la décision est indistinguable d'un oubli.
 
 ---
 
@@ -334,7 +367,7 @@ Conséquences pratiques :
 
 ### 1.5 Correspondance entre l'objet `data` et le schéma serveur
 
-**36 collections, 36 entités.** Les noms coïncident partout sauf pour `mesures` :
+**39 collections, 39 entités.** Les noms coïncident partout sauf pour `mesures` :
 
 | Collection `data` | Table(s) PostgreSQL | Préfixe d'identifiant |
 |---|---|---|
@@ -374,6 +407,9 @@ Conséquences pratiques :
 | `ebios_valeurs_metier` | `ebios_valeurs_metier` | `EBVM` |
 | `ebios_evenements_redoutes` | `ebios_evenements_redoutes` | `EBER` |
 | `ebios_sources_risque` | `ebios_sources_risque` | `EBSR` |
+| `ebios_parties_prenantes` | `ebios_parties_prenantes` | `EBPP` |
+| `ebios_scenarios_strategiques` | `ebios_scenarios_strategiques` — ⚠️ **sans gravité** : elle est celle de l'événement redouté réalisé | `EBSS` |
+| `ebios_scenarios_operationnels` | `ebios_scenarios_operationnels` | `EBSO` |
 
 **La scission des mesures**, en une phrase : l'entité unique du modèle navigateur
 portait deux choses de nature différente — la **définition** du contrôle (la même

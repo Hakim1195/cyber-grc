@@ -3015,3 +3015,74 @@ décision, pas une découverte.
    son total au nombre de pièces et lève un message qui nomme l'écart — sans quoi la
    contrainte posée trois lignes plus bas échouerait avec un message que personne ne
    saurait relier à la reprise.
+
+---
+
+## §43 — Un `on delete set null` sur une clé COMPOSITE nullifie **toute la clé**
+
+> **Posé le 18/09/2026, migration `046`.** Il a coûté **dix essais tombés d'un coup**, et
+> il n'a été trouvé par aucune relecture : le défaut ne se présente que lorsqu'un parent
+> RÉFÉRENCÉ est supprimé, ce qui n'arrive dans le banc qu'au détour de la purge de
+> `POST /api/reprise`.
+
+### 43.1 La règle
+
+Écrite sans liste de colonnes, l'action `on delete set null` met à `null` **toutes** les
+colonnes de la clé étrangère. Sur une clé composite `(x_id, filiale_id)` — c'est-à-dire
+sur la forme que le §17.1 IMPOSE à toute référence cloisonnée — elle nullifie donc
+`filiale_id`, qui est `not null` partout.
+
+> **Toute clé composite dont l'action est `set null` nomme ses colonnes :**
+> `on delete set null (x_id)`.
+
+### 43.2 Ce que l'oubli produit, et pourquoi il ne se voit pas
+
+Supprimer un parent **référencé** échoue en `23502`. La couche d'erreurs traduit ce code
+en *« Le champ « filiale_id » est obligatoire »* — une phrase qui désigne une écriture,
+alors que l'utilisateur vient de demander une **suppression**. Trois conséquences :
+
+| | |
+|---|---|
+| le message | accuse un champ que personne n'a saisi : illisible pour l'utilisateur, et trompeur pour qui débogue |
+| l'entité nommée | est celle que la purge passe à `executer()` — `'clients'` —, pas la table réellement fautive. On cherche donc au mauvais endroit |
+| la portée | `purgerFiliale()` balaie **toutes** les tables cloisonnées : une seule clé mal écrite fait tomber **toute reprise en mode « remplacer »**, c'est-à-dire toute restauration de sauvegarde |
+
+⚠️ **Et rien ne le dit tant qu'aucun parent référencé n'est supprimé.** Le schéma se crée,
+les garde-fous passent, les écrans fonctionnent. C'est la forme de défaut que ce document
+proscrit partout — *quelque chose réussit en silence alors que c'est faux* —, décalée dans
+le temps.
+
+### 43.3 Ce que cela n'est PAS : le cas du §38
+
+Le §38 dit que la forme à liste de colonnes **ne sauve pas** quand la clé contient une
+colonne **engendrée** : PostgreSQL refuse d'y écrire, liste ou pas, et la barrière doit
+alors être `restrict` avec un déliage applicatif. Les deux paragraphes disent des choses
+opposées sur la même syntaxe, et le discriminant est simple :
+
+- la colonne à nullifier est **ordinaire** → `set null (<colonne>)`, et c'est la bonne
+  réponse ;
+- la clé contient une colonne **engendrée** → `restrict`, et le déliage vit dans la couche
+  applicative (§38).
+
+*La forme à liste n'est pas inutile ; elle était inapplicable à ce cas-là.*
+
+### 43.4 Deux garde-fous, et le second est celui qui compte
+
+1. **Le nominatif** — `f_verifier_ebios_cadrage()` compare `pg_constraint.confdelsetcols`
+   à l'`attnum` de la seule colonne qui doit être nullifiée, pour la clé qui a coûté. Il
+   ne lit pas le texte de la migration : une migration ultérieure qui reposerait la clé
+   sans sa liste passerait au vert sous un contrôle textuel (§39.1).
+2. **Le garde de CLASSE** — `f_verifier_set_null_composites()` (migration `047`) balaie le
+   **catalogue** et refuse toute clé étrangère **composite** en `set null` sans liste de
+   colonnes, quelle que soit la table. Il couvre donc les clés qu'aucune migration n'a
+   encore écrites, ce qu'une liste nominative ne peut pas faire.
+
+⚠️ **Il ne juge PAS les clés simples**, et c'est délibéré : sur une clé à une colonne,
+`set null` sans liste nullifie cette colonne et rien d'autre — exiger qu'elle nomme sa
+colonne unique serait du bruit, et un garde qui crie pour rien finit ignoré (constat
+Q-64). La morsure et le **non-bruit** sont éprouvés tous les deux.
+
+> **La règle de forme, une fois de plus :** le premier réflexe avait été d'écrire le
+> contrôle nominatif et de noter qu'un garde de classe « restait à écrire ». C'est la forme
+> de réserve que le `CLAUDE.md` §0 proscrit — *une réserve écrite n'est pas une réserve
+> traitée* —, et elle a duré une migration.
