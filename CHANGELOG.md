@@ -10,13 +10,13 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 18/09/2026**, sur la machine réelle (`SRV-Infra`, Debian 13,
 > **Node v22.23.2**, **Apache/2.4.68 (Debian)**, **PostgreSQL 17.11**) : `npm test` →
-> **2189 essais, 2189 passés, 0 échec** à la révision `28c5438`, **relevé famille par
+> **2204 essais, 2204 passés, 0 échec** à la révision `a0cb1d7`, **relevé famille par
 > famille** (trente et une familles, dont `ebios` qui naît avec le lot L25),
 > `npm run verifier-types` sans erreur, `npm audit --omit=dev` → **0 vulnérabilité**,
 > `db/verifier_cloisonnement.sql` **sous `grc_app`** → **110 contrôles, 110 réussis, 0
-> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**52 garde-fous consignés**,
-> **47 migrations**, **74 tables**, **296 politiques**, **422 décisions** au registre),
-> `install.sh --verifier-publication` → **91 fichiers servis identiques au dépôt**, et
+> échoué** (code 0), `f_verifier_schema()` → **0 anomalie** (**53 garde-fous consignés**,
+> **48 migrations**, **74 tables**, **296 politiques**, **422 décisions** au registre),
+> `install.sh --verifier-publication` → **92 fichiers servis identiques au dépôt**, et
 > `install.sh --diagnostic` → **13 conformes, 2 réserves** (`SMTP_ACTIF=non` **et le profil
 > DÉCOUVERTE de cette machine**, posé le 15/09/2026), **0 bloquant**.
 >
