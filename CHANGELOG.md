@@ -74,6 +74,36 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### Le guide d'exploitation dit COMMENT lier l'API d'IA du client (20/09/2026)
+
+**Documentation seule — aucun code touché.** Le `GUIDE_EXPLOITATION.md` §5 septies
+décrivait les six barrières du mode externe sans jamais donner la marche à suivre :
+l'exploitant savait *pourquoi* c'était fermé, pas *comment* l'ouvrir. Il porte désormais
+la procédure des deux montages, mesurée dans le dépôt.
+
+- **Le discriminant est écrit** : ce n'est pas *à qui appartient l'API*, c'est **où elle
+  tourne**. Boucle locale → mode LOCAL, deux lignes d'environnement et rien en base ;
+  toute autre adresse — **y compris une API interne au groupe** — → mode EXTERNE.
+- **Les trois gestes du mode externe, dans l'ordre** : `CYBER_GRC_IA_EXTERNE=oui`, qui
+  **n'active rien** et autorise seulement ; `IPAddressAllow=` de l'unité, avec le rappel
+  que **le résolveur DNS compte autant que la destination** ; puis l'`insert` dans
+  `ia_activation`, **en `psql`**, avec `set_config('grc.ia_externe_autorisee', …)` — car
+  **aucune route du produit ne pose ce réglage**, et c'est la barrière n° 1.
+- **Le contrat HTTP attendu** est donné : `{"prompt", "stream": false}`, et les deux
+  formes de réponse lues (`response`, `choices[0].message.content`). Toute autre forme
+  vaut « indisponible ».
+- ⚠️ **La clef d'API passe par un mandataire local, et le piège est nommé** : *un
+  mandataire porte la CLEF, jamais la SORTIE*. Un mandataire sur `127.0.0.1` relayant
+  vers un tiers ferait passer l'externe pour du local — plus de destination déclarée,
+  plus d'entrée `ia_externe` au journal, plus de bandeau, plus de réserve au
+  `--diagnostic`.
+- **Refermer est documenté aussi**, et des deux façons : retirer l'autorisation fait
+  **retomber en local** sans rien casser, `actif = false` referme une filiale **sans
+  effacer** ses champs de confiance.
+- ⚠️ **La réserve est écrite** : L27 n'a pas franchi sa porte **S16**.
+
+`test/documentation/` **33/33** et `test/depot/` **66/66** après la passe.
+
 ### L'assistance par IA et le portail fournisseur — L27 et L28 (19/09/2026)
 
 **La vague F est construite.** Ce sont les deux seules surfaces **externes** du produit,
