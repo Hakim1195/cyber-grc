@@ -616,8 +616,14 @@ rougir quoi que ce soit, et tous se voyaient en dix minutes de clics.* Prévoyez
    *Une vague qu'on n'a pas déclarée close reste ouverte sans que personne le remarque :
    c'est ainsi que deux écrans sont restés dus onze jours pendant que quatre vagues
    postérieures se fermaient.*
-4. **États vides** — chaque écran doit **dire pourquoi** il est vide. Un vide sans
-   explication apprend à ne plus croire ce qu'on montre (classe Q-201 / Q-207).
+4. ~~**États vides**~~ — ✅ **MESURÉ FAIT le 21/09/2026**, et gardé barré. La règle tient :
+   *chaque écran doit dire POURQUOI il est vide, un vide sans explication apprend à ne plus
+   croire ce qu'on montre* (classe Q-201 / Q-207). Mais le travail, lui, était fait : sur
+   les **onze modules qui portent un bloc `empty-state`, les onze l'expliquent** — aucun ne
+   se contente d'un titre.
+   ⚠️ **C'est la DEUXIÈME ligne de cette liste trouvée fausse le même jour**, après la
+   densité typographique. Une liste de travaux restants se relit en MESURANT, pas en
+   reconduisant : deux sessions de suite auraient refait un travail achevé.
 5. **Impression** — la sortie papier est une **pièce d'audit** ; elle mérite une relecture
    écran par écran.
 
