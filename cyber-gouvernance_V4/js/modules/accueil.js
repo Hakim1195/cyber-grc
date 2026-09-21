@@ -96,8 +96,8 @@ window.AccueilModule = (function () {
             <td><strong>${escapeHtml(item.titre || "(sans titre)")}</strong>${
                 item.sousTitre ? `<br><span class="txt-muted-sm">${escapeHtml(item.sousTitre)}</span>` : ""
             }</td>
-            <td style="white-space:nowrap;">${escapeHtml(item.date || "—")}</td>
-            <td style="white-space:nowrap;"><span class="status ${retard ? "danger" : "warn"}">${escapeHtml(quand)}</span></td>
+            <td class="t-droite" style="white-space:nowrap;">${escapeHtml(item.date ? I18n.date(item.date) : "—")}</td>
+            <td style="white-space:nowrap;"><span class="status ${retard ? "status-non-conforme" : "status-partiellement-conforme"}">${escapeHtml(quand)}</span></td>
         </tr>`;
     }
 

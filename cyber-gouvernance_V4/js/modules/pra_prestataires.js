@@ -995,7 +995,7 @@ const PraPrestatairesModule = (() => {
                     actions:
                         `<button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>`
                         + `<button type="button" id="printBtn" class="btn-secondary">Imprimer l'annuaire</button>`
-                        + `<button id="addBtn">Nouveau Contact</button>`
+                        + `<button id="addBtn">Nouveau contact</button>`
                 })}
 
                 <div class="synthese-message info no-print" style="font-size: var(--text-base); padding:10px;">
@@ -1140,7 +1140,7 @@ const PraPrestatairesModule = (() => {
                 ${doraSectionHtml()}
 
                 <div style="max-width:600px; margin-top: 20px;">
-                    <button id="saveBtn" style="background:var(--color-success);">Enregistrer le contact</button>
+                    <button id="saveBtn" style="background:var(--primary);">Enregistrer le contact</button>
                     <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                 </div>
             </section>
@@ -1220,7 +1220,7 @@ const PraPrestatairesModule = (() => {
                 ${questionnairesPanelHtml()}
 
                 <div style="max-width:600px; margin-top: 20px;">
-                    <button id="saveBtn" style="background:var(--color-success);">Mettre à jour</button>
+                    <button id="saveBtn" style="background:var(--primary);">Mettre à jour</button>
                     <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                 </div>
             </section>

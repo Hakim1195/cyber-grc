@@ -21,7 +21,7 @@ const PraScenariosModule = (() => {
                         <p class="sous-titre">Plans de continuité et de reprise technique</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button id="addBtn" style="background-color: var(--primary);">Nouveau Scénario</button>
+                        <button id="addBtn" style="background-color: var(--primary);">Nouveau scénario</button>
                     </div>
                 </div>
 
@@ -139,7 +139,7 @@ const PraScenariosModule = (() => {
                     <div class="dashboard-card" style="border-top:4px solid var(--color-success);">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                             <h3 style="margin:0; color:var(--color-success);">Continuité (PCA) ${Help.tip("Plan de Continuité d'Activité : mesures pour MAINTENIR les activités essentielles pendant un sinistre (solutions de repli, modes dégradés), afin de ne pas tout arrêter.")}</h3>
-                            <button id="addStepPca" style="background:var(--color-success); font-size: var(--text-sm); padding:5px 10px;">Étape</button>
+                            <button id="addStepPca" style="background:var(--primary); font-size: var(--text-sm); padding:5px 10px;">Étape</button>
                         </div>
                         <div id="pca-list-container"></div>
                     </div>
@@ -158,7 +158,7 @@ const PraScenariosModule = (() => {
 
                 <div class="no-print" style="margin-top: 30px; text-align: right; background: white; padding: 15px; border-radius: 8px;">
                     <button id="cancelBtn" style="background:var(--color-gray); color:white; padding:10px 15px;">Annuler</button>
-                    <button id="saveScenarioBtn" style="padding: 10px 20px; background:var(--color-success); margin-left:10px;">Enregistrer le Scénario</button>
+                    <button id="saveScenarioBtn" style="padding: 10px 20px; background:var(--primary); margin-left:10px;">Enregistrer le scénario</button>
                 </div>
 
                 <div id="step-modal" class="no-print" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">

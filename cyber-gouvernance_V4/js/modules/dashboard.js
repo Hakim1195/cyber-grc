@@ -862,8 +862,8 @@ const DashboardModule = (() => {
                         <p class="sous-titre">${t("dashboard.perimetreAnalyse")} <strong>${escapeHtml(contextName)}</strong></p>
                     </div>
                     <div class="dashboard-actions no-print">
-                        <button id="exportExcelBtn" style="margin-right:10px;">Export Data (Excel)</button>
-                        <button id="exportPdfBtn">Imprimer Rapport (PDF)</button>
+                        <button id="exportExcelBtn" style="margin-right:10px;">Exporter en Excel</button>
+                        <button id="exportPdfBtn">Imprimer le rapport</button>
                     </div>
                 </div>
 

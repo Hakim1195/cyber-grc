@@ -625,7 +625,28 @@ rougir quoi que ce soit, et tous se voyaient en dix minutes de clics.* Prévoyez
    densité typographique. Une liste de travaux restants se relit en MESURANT, pas en
    reconduisant : deux sessions de suite auraient refait un travail achevé.
 5. **Impression** — la sortie papier est une **pièce d'audit** ; elle mérite une relecture
-   écran par écran.
+   écran par écran. *(Toujours dû au 21/09/2026.)*
+
+6. ~~**Les couleurs sémantiques employées comme couleurs d'action**~~ — ✅ **CORRIGÉ le
+   21/09/2026.** La charte réserve vert / orange / rouge / gris **aux statuts**
+   (`CLAUDE.md` §2), et le produit les employait sur des verbes : **huit boutons**
+   « Enregistrer », « Historiser » peints du vert « conforme » ; « Export Data (Excel) »
+   en `#1d6f42` **écrit en dur**, hors tokens ; « Imprimer Rapport (PDF) » en `#c0392b`,
+   le rouge « critique », sur une impression. *Le lecteur d'un rapport s'appuie sur ce
+   code couleur — le diluer sur des verbes le rend illisible.*
+
+7. ~~**`.status` défigurait le français**~~ — ✅ **CORRIGÉ le 21/09/2026**, et c'est la
+   leçon de méthode de la passe. `text-transform: capitalize` est la règle ANGLAISE : une
+   capitale à chaque mot. À l'écran, « **En Retard De 190 J** », « **Non Critique** ».
+   ⚠️ **Il avait été contourné SEPT FOIS, écran par écran** — `.apr-table .status`,
+   `.att-table .status`, `.der-table .status`, `.aipd-table .status`… *à chaque fois
+   l'instance, jamais la classe.* Corrigé à la classe par `::first-letter` — un simple
+   `none` aurait rendu « à faire », les valeurs étant stockées en minuscule — et les sept
+   contournements sont retirés.
+
+⚠️ **Et ces quatre défauts n'ont été vus qu'en CAPTURANT LES ÉCRANS.** Le banc était
+entièrement vert avant comme après : il mesure qu'un écran se rend et que son contenu est
+juste, jamais qu'il est lisible. *Prévoir ce temps, et regarder les images.*
 
 ⚠️ **Vérifier dans un vrai navigateur, et pas seulement au banc.** Le défaut du 16/09 en est
 la démonstration : la palette `Ctrl+K` **ne se fermait pas** — `display: flex` dans une règle

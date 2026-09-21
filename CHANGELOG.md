@@ -78,6 +78,71 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### Passe de style : quatre manquements à la charte, vus en capturant les écrans (21/09/2026)
+
+**Aucun n'a été trouvé en lisant le code.** Le banc était entièrement vert avant comme
+après — il mesure qu'un écran se rend et que son contenu est juste, **jamais qu'il est
+lisible**. Six écrans ont été capturés au navigateur, à 1440 × 900, avant de toucher à quoi
+que ce soit.
+
+#### 1. `.status` défigurait le français — et avait été contourné SEPT FOIS
+
+`text-transform: capitalize` est la règle **anglaise** : une capitale à chaque mot. À
+l'écran, les statuts sortaient en « **En Retard De 190 J** », « **Non Critique** », « **À
+Réviser** » — dans un produit dont les écrans servent de pièce en audit.
+
+🛑 **Il avait été contourné écran par écran, sept fois** : `.grp-puce .status`,
+`.apr-table .status`, `.rfa-carte .status`, `.att-table .status`, `.der-table .status`,
+`.aipd-table .status`, `.mc-verdict .status`. *À chaque fois l'instance, jamais la classe* —
+le travers récurrent de ce chantier, et il était sous les yeux de tous, commenté en toutes
+lettres dans la feuille de style.
+
+⚠️ **Le remède n'est PAS `text-transform: none`** : les valeurs sont stockées en minuscule
+(« à faire », « en cours »), et `none` aurait rendu « à faire », ce qui est pire. C'est
+`::first-letter` qui met la capitale — les acronymes (« RTO », « PCA ») et les noms propres
+restent intacts. `display: inline-block` est une **condition**, `::first-letter` ne
+s'appliquant qu'à un conteneur de bloc. **Les sept contournements sont retirés.**
+
+#### 2. Les couleurs SÉMANTIQUES servaient de couleurs d'ACTION
+
+La charte du produit est explicite (`CLAUDE.md` §2) : orange `#E9631B` pour l'action, et
+**vert conforme / orange partiel / rouge critique / gris non applicable réservés aux
+statuts**. Or :
+
+- **huit boutons** — « Enregistrer l'audit », « Historiser le test », « Enregistrer le
+  procès-verbal » — peints du **vert « conforme »** ;
+- « Export Data (Excel) » en **`#1d6f42` écrit en dur**, un vert de tableur hors du système
+  de tokens ;
+- « Imprimer Rapport (PDF) » en **`#c0392b`**, le rouge « critique », sur une impression.
+
+*Le lecteur d'un rapport s'appuie sur ce code couleur ; le diluer sur des verbes le rend
+illisible.* Les huit boutons prennent l'orange d'action ; les deux du tableau de bord
+deviennent des actions **secondaires**, ce qu'elles sont.
+
+#### 3. De l'anglais et des Titres Capitalisés dans l'interface
+
+« Export Data (Excel) », « Enregistrer l'Audit », « Nouveau Scénario », « Audits Internes »,
+« Déclarer un Processus »… **douze libellés** remis en français et en **casse de phrase**,
+comme la convention l'impose depuis le premier chantier.
+
+#### 4. Trois défauts introduits le matin même, invisibles au banc
+
+- **Les pastilles des trois écrans neufs employaient des classes qui n'existent pas** —
+  `danger`, `warn`, `info` au lieu de `status-non-conforme` et ses sœurs. Le texte
+  s'affichait **sans fond** : rien ne signalait que c'était un statut, et **aucun essai ne
+  rougissait puisque le texte était bien là**.
+- La barre du Kanban avait ses deux étiquettes à des hauteurs différentes — la bascule et
+  la liste n'ayant pas la même hauteur, `align-items: flex-end` alignait leurs bas.
+- Les dates de « Ma journée » sortaient en **ISO brut** (`2026-03-15`) au lieu du format
+  français.
+
+⚠️ **Ce qui n'est PAS corrigé, et qui est un choix** : chaque bloc du tableau de bord porte
+le même liseré orange pleine largeur. C'est répétitif et cela aplatit la hiérarchie — mais
+c'est une question de composition, pas un manquement à la charte, et le frontend est prévu
+pour être refait.
+
+**Mesuré** : banc **2405/2405**, six écrans recapturés et relus après correction.
+
 ### La vague A se ferme enfin, 20.2 est livrée, et le produit change de nom de domaine (21/09/2026)
 
 **Quatre chantiers, et le premier est un constat plutôt qu'une livraison.**

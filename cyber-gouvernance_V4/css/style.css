@@ -281,8 +281,20 @@ button#save, button#addExigenceBtn, button#addRisqueBtn, button#addActionBtn, bu
 }
 
 button#cancel { background-color: var(--color-gray); color: white; }
-button#exportExcelBtn { background-color: #1d6f42; color: white; }
-button#exportPdfBtn { background-color: #c0392b; color: white; }
+/* ⚠️ **Ces deux boutons portaient `#1d6f42` et `#c0392b` EN DUR** — un vert
+   de tableur et le rouge « critique » — sur deux actions qui ne sont ni
+   conformes ni critiques : exporter et imprimer. C'était deux fautes à la
+   fois : des couleurs hors du système de tokens, et l'emploi d'une couleur
+   SÉMANTIQUE pour un verbe. Le produit sert de pièce en audit, et son lecteur
+   s'appuie sur ce code couleur : vert conforme, orange partiel, rouge
+   critique, gris non applicable (`CLAUDE.md` §2).
+   Ce sont désormais deux actions secondaires, comme leur rôle le dit. */
+button#exportExcelBtn, button#exportPdfBtn {
+    background: var(--surface, #fff);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+}
+button#exportExcelBtn:hover, button#exportPdfBtn:hover { background: var(--bg); }
 
 button:hover { opacity: 0.9; transform: translateY(-1px); }
 button:active { transform: translateY(0); }
@@ -309,15 +321,38 @@ button:active { transform: translateY(0); }
 .data-table th { background: #f8f9fa; font-weight: 600; text-transform: uppercase; font-size: var(--text-sm); letter-spacing: 1px; }
 .clickable-row:hover { background-color: #f0f7ff; cursor: pointer; }
 
-/* Status Badges */
+/* ── Pastilles de statut ──────────────────────────────────────────────
+   ⚠️ **`text-transform: capitalize` a été RETIRÉ le 21/09/2026**, et il faut
+   dire ce qu'il produisait : il met une capitale à CHAQUE MOT, ce qui est la
+   règle anglaise et non la française. Les statuts sortaient donc défigurés —
+   « En Retard De 190 J », « Non Critique », « À Réviser » — dans un produit
+   dont les écrans servent de pièce en audit.
+
+   ⚠️ **Il avait été contourné SEPT FOIS, écran par écran** (`.apr-table
+   .status`, `.att-table .status`, `.der-table .status`, `.aipd-table
+   .status`…) : à chaque fois l'instance, jamais la classe. C'est le travers
+   récurrent de ce chantier, et il était ici sous les yeux de tous.
+
+   ── Pourquoi PAS simplement « none » ─────────────────────────────────
+   Les valeurs sont stockées en minuscule — « à faire », « en cours »,
+   « en retard de 12 j ». Les rendre telles quelles donnerait « à faire »,
+   ce qui est pire. On met donc une capitale à la PREMIÈRE LETTRE seulement,
+   ce que CSS sait faire sans toucher au reste : les acronymes conservés
+   (« RTO », « PCA ») et les noms propres restent intacts.
+
+   `display: inline-block` est une CONDITION : `::first-letter` ne s'applique
+   qu'à un conteneur de bloc. */
 .status {
+    display: inline-block;
     padding: 4px 10px;
     border-radius: 20px;
     font-size: var(--text-sm);
     font-weight: 600;
-    text-transform: capitalize;
+    text-transform: none;
     white-space: nowrap;
 }
+
+.status::first-letter { text-transform: uppercase; }
 
 .status-conforme { background: #d4edda; color: #155724; }
 .status-partiellement-conforme { background: #fff3cd; color: #856404; }
@@ -1265,7 +1300,7 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
 .grp-puces { display: flex; flex-wrap: wrap; gap: 6px; }
 .grp-puce { display: inline-flex; align-items: center; gap: 4px; }
 .grp-puce b { font-variant-numeric: tabular-nums; color: var(--text-main); }
-.grp-puce .status { text-transform: none; }
+
 
 /* Coordonnées de la filiale active (constat Q-160). Une coordonnée absente
    ne laisse pas de libellé orphelin : la ligne entière disparaît. */
@@ -1352,7 +1387,7 @@ select.ref-statut.sel-status-non-evaluee { color: var(--text-muted); border-colo
    telles quelles — seule la capitalisation est neutralisée, et seulement
    dans les tableaux de cet écran. Même arbitrage que le journal d'audit. */
 .apr-table td { vertical-align: top; font-size: var(--text-base); }
-.apr-table .status { text-transform: none; }
+
 .apr-rang { width: 2.5rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .apr-mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -1653,7 +1688,7 @@ h3.imp-etat-pret, h3.imp-etat-refus, h3.imp-etat-apercu, h3.imp-etat-info { marg
    remède que `js/modules/journal.js` (« Refus De Droit ») — on neutralise la
    CAPITALISATION, et elle seule : les couleurs sémantiques du design system
    restent celles des tokens. Vu sur capture d'écran, pas déduit. */
-.rfa-carte .status { text-transform: none; }
+
 
 /* ── Gestion documentaire — la version qui fait foi (action D1, vague 9) ──
    Deux classes seulement, et la seconde compte plus qu'elle n'en a l'air :
@@ -2145,7 +2180,7 @@ input, select, textarea {
 }
 .reg-mention--alerte { color: var(--color-danger); font-weight: 600; }
 
-.att-table .status, .reg-table .status { text-transform: none; }
+
 
 /* ── Les listes du tableau de bord ─────────────────────────────────────
    Deux niveaux : l'intitulé, puis la raison. La raison est ce qui distingue
@@ -2264,7 +2299,7 @@ input, select, textarea {
     border-left-color: var(--color-danger);
 }
 
-.der-table .status { text-transform: none; }
+
 .der-motif { max-width: 34ch; }
 .der-compensation {
     display: block;
@@ -2607,7 +2642,7 @@ input, select, textarea {
    ===================================================================== */
 .aipd-encart { margin-top: 1.5rem; max-width: 900px; }
 .aipd-table td { vertical-align: middle; font-size: var(--text-sm); }
-.aipd-table .status { text-transform: none; }
+
 .aipd-motif td {
     font-size: var(--text-sm);
     color: var(--text-muted);
@@ -2694,7 +2729,7 @@ input, select, textarea {
     max-width: 82ch;
     margin: 0 0 1rem;
 }
-.mc-verdict .status { text-transform: none; margin-right: .35rem; }
+.mc-verdict .status { margin-right: .35rem; }
 .mc-verdict--rompu {
     border-left: 3px solid var(--color-danger, #c62828);
     padding-left: .75rem;
@@ -2906,11 +2941,17 @@ input, select, textarea {
     overflow: hidden;
 }
 
+/* ⚠️ La hauteur est celle d'un `select` de formulaire — `0.8rem` de
+   remplissage plus la bordure. Sans cela, la bascule et la liste voisine
+   n'ont pas la même hauteur, `align-items: flex-end` aligne leurs BAS, et
+   leurs deux étiquettes se retrouvent à des hauteurs différentes. Le défaut
+   s'est vu à la capture d'écran, pas au banc. */
 .bascule-vue button {
     background: var(--surface);
     color: var(--text-main);
     border: 0;
-    padding: 7px 16px;
+    min-height: calc(0.8rem * 2 + 1.5rem + 2px);
+    padding: 0 16px;
     font-size: var(--text-sm);
     cursor: pointer;
 }

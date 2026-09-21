@@ -58,7 +58,7 @@ const ActionsModule = (() => {
                 ${escapeHtml(priorite)}${a.responsable ? " · " + escapeHtml(a.responsable) : ""}
             </p>
             ${a.echeance
-                ? `<p class="kanban-meta"><span class="status ${retard ? "danger" : "info"}">${escapeHtml((retard ? "en retard — " : "") + I18n.date(a.echeance))}</span></p>`
+                ? `<p class="kanban-meta"><span class="status ${retard ? "status-non-conforme" : "status-non-applicable"}">${escapeHtml((retard ? "en retard — " : "") + I18n.date(a.echeance))}</span></p>`
                 : ""}
             ${peutBouger
                 ? `<div class="kanban-deplacer">

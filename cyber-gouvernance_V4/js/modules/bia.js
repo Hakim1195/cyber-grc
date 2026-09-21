@@ -39,7 +39,7 @@ const BiaModule = (() => {
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
-                        <button id="addProcessusBtn">Déclarer un Processus</button>
+                        <button id="addProcessusBtn">Déclarer un processus</button>
                     </div>
                 </div>
 

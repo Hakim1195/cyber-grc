@@ -77,12 +77,12 @@ const AuditsModule = (() => {
                         <p class="sous-titre">Pilotage stratégique et vérification de la conformité</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button id="addBtn" style="background-color: var(--primary);">Nouvel Élément</button>
+                        <button id="addBtn" style="background-color: var(--primary);">Nouvel élément</button>
                     </div>
                 </div>
 
                 <div class="no-print" style="display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 2px solid var(--border);">
-                    <button class="tab-btn ${currentTab === 'audits' ? 'active-tab' : ''}" data-tab="audits">Audits Internes</button>
+                    <button class="tab-btn ${currentTab === 'audits' ? 'active-tab' : ''}" data-tab="audits">Audits internes</button>
                     <button class="tab-btn ${currentTab === 'revues' ? 'active-tab' : ''}" data-tab="revues">Revues de Direction</button>
                 </div>
 
@@ -301,7 +301,7 @@ const AuditsModule = (() => {
 
                 <div class="no-print" style="margin-top: 20px; text-align: right; background: white; padding: 15px; border-radius: 8px;">
                     <button id="cancelBtn" style="background:var(--color-gray); color:white; padding:10px 15px;">Annuler</button>
-                    <button id="saveBtn" style="padding: 10px 20px; background:var(--color-success); margin-left:10px;">Enregistrer l'Audit</button>
+                    <button id="saveBtn" style="padding: 10px 20px; background:var(--primary); margin-left:10px;">Enregistrer l'audit</button>
                 </div>
 
                 <div id="print-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#f0f2f5; z-index:2000; overflow-y:auto; padding:40px;">
@@ -529,7 +529,7 @@ const AuditsModule = (() => {
 
                 <div class="no-print" style="margin-top: 20px; text-align: right; background: white; padding: 15px; border-radius: 8px;">
                     <button id="cancelBtn" style="background:var(--color-gray); color:white; padding:10px 15px;">Annuler</button>
-                    <button id="saveBtn" style="padding: 10px 20px; background:var(--color-success); margin-left:10px;">Enregistrer le PV</button>
+                    <button id="saveBtn" style="padding: 10px 20px; background:var(--primary); margin-left:10px;">Enregistrer le procès-verbal</button>
                 </div>
 
                 <div id="print-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#f0f2f5; z-index:2000; overflow-y:auto; padding:40px;">

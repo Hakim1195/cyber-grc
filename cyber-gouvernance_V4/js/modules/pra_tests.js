@@ -43,7 +43,7 @@ const PraTestsModule = (() => {
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
-                        <button id="addBtn" style="background-color: var(--primary);">Historiser un Test</button>
+                        <button id="addBtn" style="background-color: var(--primary);">Historiser un test</button>
                     </div>
                 </div>
 
@@ -166,7 +166,7 @@ const PraTestsModule = (() => {
                         <textarea id="bilan" placeholder="Ce qui a bien fonctionné, ce qui a bloqué, les durées réelles constatées..." style="min-height:100px;"></textarea>
                     </div>
                     <div class="mt-20">
-                        <button id="saveBtn" style="background:var(--color-success);">Historiser le Test</button>
+                        <button id="saveBtn" style="background:var(--primary);">Historiser le test</button>
                         <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                     </div>
                 </div>
@@ -245,7 +245,7 @@ const PraTestsModule = (() => {
                         <textarea id="bilan" style="min-height:100px;">${escapeHtml(t.bilan || "")}</textarea>
                     </div>
                     <div class="mt-20">
-                        <button id="saveBtn" style="background:var(--color-success);">Mettre à jour</button>
+                        <button id="saveBtn" style="background:var(--primary);">Mettre à jour</button>
                         <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                     </div>
                 </div>
