@@ -39,7 +39,7 @@ const PraTestsModule = (() => {
                 <div class="dashboard-header no-print">
                     <div>
                         <h1>Tests PCA/PRA</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Suivi des exercices et entraînements de crise</p>
+                        <p class="sous-titre">Suivi des exercices et entraînements de crise</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
@@ -121,7 +121,7 @@ const PraTestsModule = (() => {
                     <div class="synthese-message warning">
                         Vous devez d'abord créer au moins un "Playbook PCA/PRA" avant de pouvoir historiser un test.
                     </div>
-                    <button type="button" id="backBtn" style="margin-top: 20px;">Retour</button>
+                    <button type="button" id="backBtn" class="mt-20">Retour</button>
                 </section>
             `;
             document.getElementById("backBtn").addEventListener("click", () => Router.navigateTo("/tests"));
@@ -135,14 +135,14 @@ const PraTestsModule = (() => {
                 </div>
                 <div class="dashboard-card" style="max-width:600px;">
                     <div class="form-group">
-                        <label>Scénario Testé / Playbook <span style="color:red">*</span></label>
+                        <label>Scénario Testé / Playbook <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <select id="scenario_id">
                             ${scenarios.map(s => `<option value="${s.id}">${escapeHtml(s.nom)}</option>`).join("")}
                         </select>
                     </div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                    <div class="grille-2">
                         <div class="form-group">
-                            <label>Date de l'exercice <span style="color:red">*</span></label>
+                            <label>Date de l'exercice <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                             <input type="date" id="date" required />
                         </div>
                         <div class="form-group">
@@ -165,7 +165,7 @@ const PraTestsModule = (() => {
                         <label>Bilan et Leçons apprises (REX)</label>
                         <textarea id="bilan" placeholder="Ce qui a bien fonctionné, ce qui a bloqué, les durées réelles constatées..." style="min-height:100px;"></textarea>
                     </div>
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="saveBtn" style="background:var(--color-success);">Historiser le Test</button>
                         <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                     </div>
@@ -213,15 +213,15 @@ const PraTestsModule = (() => {
                 </div>
                 <div class="dashboard-card" style="max-width:600px;">
                     <div class="form-group">
-                        <label>Scénario Testé / Playbook <span style="color:red">*</span></label>
+                        <label>Scénario Testé / Playbook <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <select id="scenario_id">
                             ${scenarios.map(s => `<option value="${s.id}" ${t.scenario_id === s.id ? "selected" : ""}>${escapeHtml(s.nom)}</option>`).join("")}
                             ${!scenarios.find(s => s.id === t.scenario_id) ? `<option value="${t.scenario_id}" selected>Scénario supprimé (ID: ${t.scenario_id})</option>` : ""}
                         </select>
                     </div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                    <div class="grille-2">
                         <div class="form-group">
-                            <label>Date de l'exercice <span style="color:red">*</span></label>
+                            <label>Date de l'exercice <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                             <input type="date" id="date" value="${t.date}" required />
                         </div>
                         <div class="form-group">
@@ -244,7 +244,7 @@ const PraTestsModule = (() => {
                         <label>Bilan et Leçons apprises (REX)</label>
                         <textarea id="bilan" style="min-height:100px;">${escapeHtml(t.bilan || "")}</textarea>
                     </div>
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="saveBtn" style="background:var(--color-success);">Mettre à jour</button>
                         <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                     </div>

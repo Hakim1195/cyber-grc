@@ -125,6 +125,9 @@ const IDENTIFIANTS = {
   '/mesures/:id': 'MESURE-A',
   '/soa/:id': 'anssi',
   '/incidents/:id': 'INC-A',
+  // L20, action 20.2 — le formulaire de notification prend l'identifiant d'un
+  // INCIDENT : il met en forme un incident existant, il n'a pas d'entité à lui.
+  '/notification/:id': 'INC-A',
   '/documents/:id': 'DOC-A',
   '/rgpd/:id': 'TRT-A',
   '/actions/:id': 'ACT-A',

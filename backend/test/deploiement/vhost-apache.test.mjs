@@ -81,7 +81,7 @@ import { attendrePort as attendrePortOutil, exigerOutil, portLibre } from '../ai
  * ── Constat Q-45 : un banc qui dépendait d'un /etc/hosts modifié à la main ──
  *
  * Ces essais se connectaient PAR CE NOM. Sur cette machine, quelqu'un avait
- * ajouté « 127.0.0.1 grc.exemple.interne » à `/etc/hosts` — à la main, sans
+ * ajouté « 127.0.0.1 grc-test.site » à `/etc/hosts` — à la main, sans
  * qu'aucun essai ne le pose et qu'aucun document ne le réclame. Sur une machine
  * propre, les quatorze essais de cette famille tombaient en `ENOTFOUND`, et le
  * contrôle S17 avec eux : le banc n'était pas reproductible là où cela compte.
@@ -92,7 +92,7 @@ import { attendrePort as attendrePortOutil, exigerOutil, portLibre } from '../ai
  * `install.sh` avec `--resolve`, et c'est plus juste que la résolution : l'essai
  * atteint CE serveur-ci, quoi que le DNS de la machine raconte.
  */
-const HOTE = 'grc.exemple.interne';
+const HOTE = 'grc-test.site';
 /** L'adresse réellement composée. Rien, ici, n'interroge un résolveur. */
 const ADRESSE = '127.0.0.1';
 const VHOST_SOURCE = join(RACINE_BACKEND, 'deploy', 'apache', 'cyber-grc.conf');
@@ -528,7 +528,7 @@ function demander(chemin, options = {}) {
       {
         // ── On compose l'ADRESSE, et l'on porte le NOM (constat Q-45) ──────
         // `servername` fixe le SNI ET la cible de la vérification du certificat
-        // — celle-ci reste donc entière, contre « grc.exemple.interne », alors
+        // — celle-ci reste donc entière, contre « grc-test.site », alors
         // même qu'aucun résolveur n'est interrogé. `Host` est posé plus bas.
         host: ADRESSE, port: portTls, path: chemin, method: 'GET', agent: false,
         ca: certificat, servername: HOTE,
@@ -1190,7 +1190,7 @@ describe('Un actif n’a un cache long que si son URL est versionnée (constat Q
  *  §5 bis — SERVEUR_URL_PUBLIQUE confrontée au certificat (constat Q-76)
  * ---------------------------------------------------------------------
  *  `.env.example` a réellement porté « https://grc.interne.exemple » — les
- *  mots inversés — pendant que ce vhost sert « grc.exemple.interne » : une
+ *  mots inversés — pendant que ce vhost sert « grc-test.site » : une
  *  valeur syntaxiquement valide (elle commence bien par https://) et
  *  fonctionnellement fausse. Le seul contrôle qui existait avant ce lot ne
  *  regardait que la FORME ; il n'aurait rien vu passer.
@@ -1299,7 +1299,7 @@ describe('SERVEUR_URL_PUBLIQUE est confrontée au certificat réellement servi (
     // nom de la mesure — « exemple » et « interne » — ont été inversés.
     // Aucune règle syntaxique ne la distingue de la bonne : elle commence
     // par https://, comme il se doit. Le certificat servi ici couvre
-    // « grc.exemple.interne », pas « grc.interne.exemple » : c'est
+    // « grc-test.site », pas « grc.interne.exemple » : c'est
     // exactement ce que l'interrogation doit voir, là où comparer deux
     // chaînes verrait deux valeurs non vides et pourrait s'arrêter là.
     const errone = 'https://grc.interne.exemple';

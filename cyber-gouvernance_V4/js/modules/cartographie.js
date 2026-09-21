@@ -540,7 +540,7 @@ const CartographieModule = (() => {
                 <div class="dashboard-header no-print">
                     <div>
                         <h1>Cartographie du SI &amp; dépendances ${Help.tip("Représente les actifs du système d'information et leurs dépendances typées. Cliquez sur un actif pour voir ce qui en dépend et l'impact d'une panne (propagation). Les dépendances s'éditent depuis la fiche de chaque actif.")}</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">Périmètre : <strong>Interne (SI global)</strong> — les dépendances s'ajoutent depuis la fiche de chaque actif.</p>
+                        <p class="sous-titre">Périmètre : <strong>Interne (SI global)</strong> — les dépendances s'ajoutent depuis la fiche de chaque actif.</p>
                     </div>
                     <div style="display:flex; gap:10px; align-items:center;">
                         <button type="button" id="carto-export-png" title="Télécharger la cartographie au format image PNG">Exporter en PNG</button>

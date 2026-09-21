@@ -85,7 +85,7 @@ const IncidentsModule = (() => {
                 <td>${graviteBadge(i.gravite)}</td>
                 <td>${statutBadge(i.statut)}</td>
                 <td>${fmtDate(i.date_detection)}</td>
-                <td style="font-size: var(--text-sm);">
+                <td class="txt-sm">
                     <span title="${t("incidents.declarationAnssi")}">A: ${declarationBadge(i.declaration_anssi)}</span>
                     <span title="${t("incidents.declarationCnil")}" style="margin-left:4px;">C: ${declarationBadge(i.declaration_cnil)}</span>
                 </td>
@@ -96,13 +96,13 @@ const IncidentsModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>${t("incidents.titre")}</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">${t("incidents.sousTitre")} ${Help.tip(t("incidents.sousTitreAide"))}</p>
+                        <p class="sous-titre">${t("incidents.sousTitre")} ${Help.tip(t("incidents.sousTitreAide"))}</p>
                     </div>
                     <button id="addBtn" style="background:var(--primary);">${t("incidents.declarer")}</button>
                 </div>
 
                 <div class="dashboard-grid" style="grid-template-columns:repeat(3,1fr); margin-bottom:1.5rem;">
-                    <div class="dashboard-card" style="text-align:center;">
+                    <div class="dashboard-card t-centre">
                         <h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">${t("incidents.total")}</h3>
                         <div class="big-kpi" style="font-size: var(--text-3xl);">${incidents.length}</div>
                     </div>
@@ -141,7 +141,7 @@ const IncidentsModule = (() => {
                 <h1>${t("incidents.declarer")}</h1>
                 <div class="dashboard-card" style="max-width:820px;">
                     ${formFieldsHtml({ date_detection: todayIso })}
-                    <div style="margin-top:20px;">
+                    <div class="mt-20">
                         <button id="save">${t("commun.enregistrer")}</button>
                         <button id="cancel" style="margin-left:10px; background:var(--color-gray);">${t("commun.annuler")}</button>
                     </div>
@@ -177,16 +177,26 @@ const IncidentsModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>${escapeHtml(inc.titre)}</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;"><a href="#/incidents" style="color:var(--accent);">${t("incidents.titre")}</a></p>
+                        <p class="sous-titre"><a href="#/incidents" class="lien-accent">${t("incidents.titre")}</a></p>
                     </div>
-                    <button id="deleteBtn" style="background:var(--color-danger);">${t("commun.supprimer")}</button>
+                    ${/* L20, action 20.2 — le formulaire de notification. ⚠️ Le bouton
+                          dit « PRÉPARER », et pas « déclarer » : le produit ne transmet rien
+                          à aucune autorité, et un libellé qui laisserait croire le contraire
+                          ferait porter à l'exploitant une déclaration qui n'a pas eu lieu.
+                          ⚠️ Et ce commentaire est en JAVASCRIPT, pas en HTML : un commentaire
+                          HTML dans un gabarit PART À L'ÉCRAN, et le garde-fou des emoji l'a
+                          dit en refusant la première rédaction. */ ""}
+                    <div style="display:flex; gap:8px; align-items:flex-start;">
+                        <a href="#/notification/${escapeHtml(inc.id)}" class="btn-secondary" id="preparerNotification">Préparer une notification</a>
+                        <button id="deleteBtn" style="background:var(--color-danger);">${t("commun.supprimer")}</button>
+                    </div>
                 </div>
 
                 ${typeof ReglementaireModule !== "undefined" ? ReglementaireModule.encartHtml(inc.id) : deadlineBannerHtml(inc)}
 
                 <div class="dashboard-card" style="max-width:900px;">
                     ${formFieldsHtml(inc)}
-                    <div style="margin-top:20px;"><button id="saveBtn">${t("commun.mettreAJour")}</button></div>
+                    <div class="mt-20"><button id="saveBtn">${t("commun.mettreAJour")}</button></div>
                 </div>
 
                 <div class="dashboard-card" style="max-width:900px; margin-top:1.5rem;">
@@ -273,10 +283,10 @@ const IncidentsModule = (() => {
 
     function actionsListHtml(incidentId) {
         const actions = DataStore.getActionsByIncident(incidentId);
-        if (actions.length === 0) return `<p style="color:var(--text-muted); font-size: var(--text-sm);">${t("incidents.aucuneActionCorrective")}</p>`;
+        if (actions.length === 0) return `<p class="txt-muted-sm">${t("incidents.aucuneActionCorrective")}</p>`;
         return `<ul class="ref-actions-list">${actions.map(a => {
             const cls = String(a.statut).toLowerCase() === "terminée" ? "status-conforme" : (String(a.statut).toLowerCase() === "en cours" ? "status-partiellement-conforme" : "status-non-conforme");
-            return `<li><a href="#/actions/${escapeHtml(a.id)}" style="color:var(--accent);">${escapeHtml(a.titre)}</a><span class="status ${cls}" style="margin-left:8px;">${escapeHtml(I18n.valeur(a.statut))}</span></li>`;
+            return `<li><a href="#/actions/${escapeHtml(a.id)}" class="lien-accent">${escapeHtml(a.titre)}</a><span class="status ${cls}" style="margin-left:8px;">${escapeHtml(I18n.valeur(a.statut))}</span></li>`;
         }).join("")}</ul>`;
     }
 
@@ -288,18 +298,18 @@ const IncidentsModule = (() => {
         const risques = DataStore.getRisques();
         const touches = Array.isArray(inc.actifs_touches) ? inc.actifs_touches : [];
         const actifsHtml = actifs.length === 0
-            ? `<p style="color:var(--text-muted); font-size: var(--text-sm);">${t("incidents.aucunActif")}</p>`
+            ? `<p class="txt-muted-sm">${t("incidents.aucunActif")}</p>`
             : `<div class="inc-actifs">${actifs.map(a => `<label class="inc-checkbox"><input type="checkbox" class="inc-actif" value="${a.id}" ${touches.includes(a.id) ? "checked" : ""}> ${escapeHtml(a.nom)}</label>`).join("")}</div>`;
         const risquesOpts = `<option value="">${t("incidents.aucunOption")}</option>` + risques.map(r => `<option value="${r.id}" ${inc.risque_id === r.id ? "selected" : ""}>${escapeHtml(r.nom)}</option>`).join("");
 
         return `
-            <div class="form-group"><label>${t("incidents.colIntitule")} <span style="color:red">*</span></label><input id="titre" value="${escapeHtml(inc.titre || "")}" placeholder="${t("incidents.intitulePlaceholder")}" /></div>
+            <div class="form-group"><label>${t("incidents.colIntitule")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="titre" value="${escapeHtml(inc.titre || "")}" placeholder="${t("incidents.intitulePlaceholder")}" /></div>
             <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px;">
                 <div class="form-group"><label>${t("commun.type")}</label>${selectHtml("type", TYPES, inc.type)}</div>
                 <div class="form-group"><label>${t("commun.gravite")}</label>${selectHtml("gravite", GRAVITES, inc.gravite || "moyenne")}</div>
                 <div class="form-group"><label>${t("commun.statut")}</label>${selectHtml("statut", STATUTS, inc.statut || "nouveau")}</div>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+            <div class="grille-2">
                 <div class="form-group"><label>${t("incidents.dateDetection")}</label><input type="date" id="date_detection" value="${escapeHtml(inc.date_detection || "")}" /></div>
                 <div class="form-group"><label>${t("incidents.dateResolution")}</label><input type="date" id="date_resolution" value="${escapeHtml(inc.date_resolution || "")}" /></div>
             </div>
@@ -310,7 +320,7 @@ const IncidentsModule = (() => {
             <div class="form-group"><label>${t("incidents.actifsTouches")}</label>${actifsHtml}</div>
             <div class="form-group"><label>${t("incidents.risqueAssocie")} ${Help.tip(t("incidents.risqueAssocieAide"))}</label><select id="risque_id">${risquesOpts}</select></div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+            <div class="grille-2">
                 <div class="form-group"><label>${t("incidents.declarationAnssi")} ${Help.tip(t("incidents.anssiAide"))}</label>${selectHtml("declaration_anssi", DECLARATIONS, inc.declaration_anssi || "non requise")}</div>
                 <div class="form-group"><label>${t("incidents.declarationCnil")} ${Help.tip(t("incidents.cnilAide"))}</label>${selectHtml("declaration_cnil", DECLARATIONS, inc.declaration_cnil || "non requise")}</div>
             </div>`;

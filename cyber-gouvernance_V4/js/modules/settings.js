@@ -148,14 +148,14 @@ const SettingsModule = (() => {
                 <div class="dashboard-card" style="border-top: 4px solid var(--accent); margin-bottom: 1.5rem;">
                     <h3 style="font-size: var(--text-lg); margin-bottom: 15px;">État de la liaison au serveur</h3>
                     <div id="storage-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 1rem;">
-                        <div style="color: var(--text-muted);">Chargement…</div>
+                        <div class="txt-muted">Chargement…</div>
                     </div>
                 </div>
 
                 <!-- SÉCURITÉ & CHIFFREMENT -->
                 <div class="dashboard-card" style="border-top: 4px solid var(--primary); margin-bottom: 1.5rem;">
                     <h3 style="font-size: var(--text-lg); margin-bottom: 15px;">Sécurité</h3>
-                    <div id="security-body"><div style="color: var(--text-muted);">Chargement…</div></div>
+                    <div id="security-body"><div class="txt-muted">Chargement…</div></div>
                 </div>
             </section>`;
 
@@ -239,7 +239,7 @@ const SettingsModule = (() => {
                 <table class="data-table">
                     <thead><tr>
                         <th>Réglage</th>
-                        <th style="text-align:right;">Valeur</th>
+                        <th class="t-droite">Valeur</th>
                         <th>Origine ${typeof Help !== "undefined" ? Help.tip("« Hérité » veut dire que votre filiale n'a rien réglé : si le Groupe change sa valeur, vous suivez. « Réglé ici » veut dire que vous avez pris une décision, et que vous ne suivrez plus.") : ""}</th>
                         <th></th>
                     </tr></thead>
@@ -294,7 +294,7 @@ const SettingsModule = (() => {
                     "Un groupe industriel fictif, pour voir le produit rempli au lieu de l'imaginer.")}
                 <div class="dashboard-card" id="decouverte-carte" style="border-top: 4px solid var(--accent); margin-bottom: 1.5rem;">
                     <h3 style="font-size: var(--text-lg); margin-bottom: 15px;">Jeu de découverte ${typeof Help !== "undefined" ? Help.tip("Un groupe industriel fictif — filiales, risques, actifs, incidents, documents — pour voir le produit rempli au lieu de l'imaginer. Chaque ligne porte une marque « découverte » DANS la base : elle reste reconnaissable à l'export et à l'impression, et se retire d'un geste.") : ""}</h3>
-                    <div id="decouverte-corps"><div style="color: var(--text-muted);">Chargement…</div></div>
+                    <div id="decouverte-corps"><div class="txt-muted">Chargement…</div></div>
                 </div>
             </section>`;
         chargerDecouverte();
@@ -602,7 +602,7 @@ const SettingsModule = (() => {
         const rows = Object.keys(FIELD_LABELS)
             .filter(f => (res.summary[f] || 0) > 0)
             .map(f => `<tr><td>${FIELD_LABELS[f]}</td><td style="text-align:right;font-weight:700;">${res.summary[f]}</td></tr>`)
-            .join("") || `<tr><td colspan="2" style="color:var(--text-muted);">Sauvegarde vide</td></tr>`;
+            .join("") || `<tr><td colspan="2" class="txt-muted">Sauvegarde vide</td></tr>`;
 
         recap.innerHTML = `
             <div style="background: var(--bg-body); border-radius: var(--radius); padding: 12px; margin-top: 5px;">
@@ -611,7 +611,7 @@ const SettingsModule = (() => {
                     ${res.encrypted ? '<span class="status" style="background:#e6f4ea;color:var(--color-success);margin-left:6px;">déchiffré</span>' : ''}
                     ${res.meta && res.meta.createdAt ? `<span style="color:var(--text-muted);margin-left:6px;">${formatDate(Date.parse(res.meta.createdAt))}</span>` : ''}
                 </div>
-                <table class="data-table" style="margin:0;"><tbody>${rows}</tbody></table>
+                <table class="data-table m0"><tbody>${rows}</tbody></table>
                 <div style="display:flex; gap:10px; margin-top:12px;">
                     <button id="imp-merge" style="background: var(--primary); flex:1; justify-content:center;">Fusionner dans la filiale</button>
                     <button id="imp-replace" style="background: var(--color-danger); flex:1; justify-content:center;">Remplacer tout</button>
@@ -705,7 +705,7 @@ const SettingsModule = (() => {
             } else if (info.panneReseau) {
                 attente = `<span style="color: var(--color-danger);">serveur injoignable</span>`;
             } else if (info.enCours) {
-                attente = `<span style="color: var(--text-muted);">envoi en cours</span>`;
+                attente = `<span class="txt-muted">envoi en cours</span>`;
             } else if (info.enAttente) {
                 attente = `<span style="color: var(--color-danger);">non enregistrées</span>`;
             }

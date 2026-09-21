@@ -6,6 +6,132 @@ const ActionsModule = (() => {
     /* =========================
        LISTE DES ACTIONS (FILTRÉE)
     ========================== */
+    /* =====================================================================
+       LE KANBAN  (lot L17, action A5)
+
+       ⚠️ **C'est une VUE de la même liste, pas un second écran.** La route
+       reste `/actions` : un Kanban rangé ailleurs aurait obligé l'utilisateur
+       à savoir d'avance dans laquelle des deux pages se trouve son action, et
+       aurait dédoublé le filtre « donneur d'ordre » que la liste applique déjà.
+
+       ⚠️ **Le glisser-déposer n'est PAS le seul chemin.** Chaque carte porte
+       deux boutons de déplacement, et ils ne sont pas un ornement
+       d'accessibilité : un pavé tactile, un lecteur d'écran, une main qui
+       tremble — et le glisser devient inutilisable. Une fonctionnalité qui
+       n'existe qu'à la souris est une fonctionnalité absente pour une partie
+       des utilisateurs.
+
+       ⚠️ **Les colonnes viennent du VOCABULAIRE de la base**, dans son ordre
+       de progression. Les inventer ici en ferait une seconde source : le jour
+       où le schéma admet un quatrième statut, les actions qui le portent
+       disparaîtraient du tableau — silencieusement, ce qui est le pire.
+    ===================================================================== */
+
+    /** Les trois statuts de `ck_actions_statut`, dans l'ordre où l'on progresse. */
+    const COLONNES = ["à faire", "en cours", "terminée"];
+
+    /** Vue courante — EN MÉMOIRE. Une vue persistée ferait rouvrir le produit
+        sur un écran qu'on ne se rappelle pas avoir choisi. */
+    let vue = "liste";
+    /** Filtre par responsable, en mémoire lui aussi. */
+    let filtreResponsable = "";
+
+    /** La carte d'une action. L'identifiant vit dans l'attribut, jamais en fermeture. */
+    function carteHtml(a, peutBouger) {
+        const priorite = a.priorite || "Moyenne";
+        let bord = "var(--text-muted)";
+        if (priorite === "Critique") bord = "var(--color-danger)";
+        else if (priorite === "Haute") bord = "var(--color-warning)";
+        else if (priorite === "Moyenne") bord = "var(--color-info)";
+
+        const rang = COLONNES.indexOf(String(a.statut || "").toLowerCase());
+        const retard = a.echeance && String(a.statut).toLowerCase() !== "terminée"
+            && a.echeance < new Date().toISOString().slice(0, 10);
+
+        return `<article class="kanban-carte" draggable="${peutBouger ? "true" : "false"}"
+                         data-id="${escapeHtml(a.id)}"
+                         style="border-left:4px solid ${bord};">
+            <button type="button" class="kanban-ouvrir" data-id="${escapeHtml(a.id)}">
+                ${escapeHtml(a.titre || "(sans titre)")}
+            </button>
+            <p class="kanban-meta">
+                ${escapeHtml(priorite)}${a.responsable ? " · " + escapeHtml(a.responsable) : ""}
+            </p>
+            ${a.echeance
+                ? `<p class="kanban-meta"><span class="status ${retard ? "danger" : "info"}">${escapeHtml((retard ? "en retard — " : "") + I18n.date(a.echeance))}</span></p>`
+                : ""}
+            ${peutBouger
+                ? `<div class="kanban-deplacer">
+                       <button type="button" class="kanban-gauche" data-id="${escapeHtml(a.id)}"
+                               ${rang <= 0 ? "disabled" : ""}
+                               aria-label="Reculer d'une colonne">&#9666;</button>
+                       <button type="button" class="kanban-droite" data-id="${escapeHtml(a.id)}"
+                               ${rang < 0 || rang >= COLONNES.length - 1 ? "disabled" : ""}
+                               aria-label="Avancer d'une colonne">&#9656;</button>
+                   </div>`
+                : ""}
+        </article>`;
+    }
+
+    /**
+     * Le tableau lui-même.
+     *
+     * ⚠️ Une action dont le statut n'est AUCUN des trois n'est pas jetée :
+     * elle est rassemblée dans une colonne « hors vocabulaire », qui le DIT.
+     * Les ignorer en silence serait exactement le défaut que l'entête décrit.
+     */
+    function kanbanHtml(actions, peutBouger) {
+        const parStatut = {};
+        COLONNES.forEach(c => { parStatut[c] = []; });
+        const horsVocabulaire = [];
+        actions.forEach(a => {
+            const cle = String(a.statut || "").toLowerCase();
+            if (Object.prototype.hasOwnProperty.call(parStatut, cle)) parStatut[cle].push(a);
+            else horsVocabulaire.push(a);
+        });
+
+        const colonnes = COLONNES.map(statut => `
+            <section class="kanban-colonne" data-statut="${escapeHtml(statut)}">
+                <h2 class="kanban-titre">
+                    ${escapeHtml(I18n.valeur(statut))}
+                    <span class="kanban-compte">${parStatut[statut].length}</span>
+                </h2>
+                <div class="kanban-pile" data-statut="${escapeHtml(statut)}">
+                    ${parStatut[statut].length === 0
+                        ? `<p class="kanban-vide">Aucune action à ce stade.</p>`
+                        : parStatut[statut].map(a => carteHtml(a, peutBouger)).join("")}
+                </div>
+            </section>`).join("");
+
+        const reste = horsVocabulaire.length
+            ? `<section class="kanban-colonne">
+                   <h2 class="kanban-titre">Hors vocabulaire <span class="kanban-compte">${horsVocabulaire.length}</span></h2>
+                   <div class="kanban-pile">
+                       <p class="kanban-vide">Ces actions portent un statut que le tableau ne
+                       connaît pas. Elles sont montrées ici plutôt que masquées : une action
+                       invisible est une action oubliée.</p>
+                       ${horsVocabulaire.map(a => carteHtml(a, false)).join("")}
+                   </div>
+               </section>`
+            : "";
+
+        return `<div class="kanban">${colonnes}${reste}</div>`;
+    }
+
+    /** Déplace une action d'une colonne à l'autre, et RELIT après la poussée. */
+    function deplacer(id, statut) {
+        const action = DataStore.getActions().find(a => a.id === id);
+        if (!action) return;
+        if (String(action.statut).toLowerCase() === statut) return;
+        action.statut = statut;
+        DataStore.updateAction(action);
+        // ⚠️ `UI.apresEcriture` attend la poussée : sans elle, le redessin
+        // relirait un serveur qui n'a pas encore reçu le changement, et la
+        // carte reviendrait à sa colonne de départ sous les yeux de
+        // l'utilisateur (classe du 16/09, trouvée au navigateur).
+        UI.apresEcriture(() => { renderList(); });
+    }
+
     function renderList() {
         const currentClient = window.FiltreDonneurOrdre ? FiltreDonneurOrdre.get() : "global";   // filtre en mémoire (app.js), plus dans le localStorage
         const exigencesClient = DataStore.getExigencesByClient(currentClient);
@@ -32,6 +158,30 @@ const ActionsModule = (() => {
                 if (a.exigence_id) return exIds.includes(a.exigence_id);
                 return true;
             });
+        }
+
+        // ── A5 : le filtre par responsable, commun aux deux vues ──────────
+        //
+        // ⚠️ Les responsables sont DÉCOUVERTS dans les actions affichées, et
+        // non pris dans l'annuaire : une action peut nommer quelqu'un qui n'y
+        // figure pas (saisie libre conservée, arbitrage du chantier Personnel),
+        // et cette personne disparaîtrait du filtre — donc ses actions aussi.
+        // Le droit d'écrire décide si les cartes bougent. ⚠️ On le demande à
+        // `Droits`, qui tient la réponse du SERVEUR : un écran qui déciderait
+        // lui-même laisserait croire qu'il refuse par politesse.
+        const peutBouger = typeof Droits === "undefined" || Droits.peutEcrire("actions");
+
+        const responsables = [...new Set(actions
+            .map(a => (a.responsable || "").trim())
+            .filter(r => r !== ""))].sort((x, y) => x.localeCompare(y, "fr"));
+        if (filtreResponsable && responsables.indexOf(filtreResponsable) === -1) {
+            // Le responsable filtré n'a plus d'action : on ne garde pas un
+            // filtre qui ne peut plus rien rendre, il ferait croire à un plan
+            // d'actions vide.
+            filtreResponsable = "";
+        }
+        if (filtreResponsable) {
+            actions = actions.filter(a => (a.responsable || "").trim() === filtreResponsable);
         }
 
         const rows = actions.map(a => {
@@ -90,7 +240,7 @@ const ActionsModule = (() => {
                     <td>${escapeHtml(a.responsable) || "-"}</td>
                     <td>${escapeHtml(I18n.date(a.echeance)) || "-"}</td>
                     <td style="font-size: var(--text-sm); color: var(--text-muted);">${liaison}</td>
-                    ${currentClient === "global" ? `<td style="font-size: var(--text-sm); color:var(--text-muted);">${origineClient}</td>` : ""}
+                    ${currentClient === "global" ? `<td class="txt-muted-sm">${origineClient}</td>` : ""}
                 </tr>
             `;
         }).join("");
@@ -100,17 +250,48 @@ const ActionsModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>${t("actions.titre")}</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">${t("actions.perimetreAffiche")} <strong>${contextName}</strong></p>
+                        <p class="sous-titre">${t("actions.perimetreAffiche")} <strong>${contextName}</strong></p>
                     </div>
                     <div>
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">${t("commun.supprimerSelection")} (<span id="selectedCount">0</span>)</button>
                     </div>
                 </div>
 
+                <div class="filtres-ligne no-print" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:1rem; flex-wrap:wrap;">
+                    <div class="form-group m0">
+                        <label class="txt-sm">Affichage</label>
+                        <div class="bascule-vue" role="group" aria-label="Affichage du plan d'actions">
+                            <button type="button" id="vueListe" class="${vue === "liste" ? "actif" : ""}"
+                                    aria-pressed="${vue === "liste"}">Liste</button>
+                            <button type="button" id="vueKanban" class="${vue === "kanban" ? "actif" : ""}"
+                                    aria-pressed="${vue === "kanban"}">Kanban</button>
+                        </div>
+                    </div>
+                    <div class="form-group m0">
+                        <label for="filtreResponsable" class="txt-sm">Responsable</label>
+                        <select id="filtreResponsable">
+                            <option value="">Tous</option>
+                            ${responsables.map(r => `<option value="${escapeHtml(r)}" ${r === filtreResponsable ? "selected" : ""}>${escapeHtml(r)}</option>`).join("")}
+                        </select>
+                    </div>
+                    ${filtreResponsable
+                        ? `<button type="button" id="filtreResponsableReset" class="btn-secondary">Tout afficher</button>`
+                        : ""}
+                </div>
+
                 <div class="synthese-message info" style="font-size: var(--text-base); padding: 10px;">
                     ${t("actions.tracabiliteNote")}
                 </div>
 
+                ${vue === "kanban" ? `
+                ${peutBouger
+                    ? ""
+                    : `<div class="synthese-message" style="font-size: var(--text-base); padding:10px;">
+                           Votre profil lit le plan d'actions sans pouvoir le modifier : les cartes
+                           se consultent, elles ne se déplacent pas.
+                       </div>`}
+                ${kanbanHtml(actions, peutBouger)}
+                ` : `
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -128,6 +309,7 @@ const ActionsModule = (() => {
                         ${rows || `<tr><td colspan='8' style='text-align:center;'>${t("actions.aucune")}</td></tr>`}
                     </tbody>
                 </table>
+                `}
             </section>
         `;
 
@@ -147,6 +329,61 @@ const ActionsModule = (() => {
 
         document.querySelectorAll(".clickable-row").forEach(row => {
             row.onclick = () => Router.navigateTo(`/actions/${row.dataset.id}`);
+        });
+
+        /* ── A5 : la bascule de vue et le filtre ────────────────────────── */
+        const bl = document.getElementById("vueListe");
+        if (bl) bl.addEventListener("click", () => { vue = "liste"; renderList(); });
+        const bk = document.getElementById("vueKanban");
+        if (bk) bk.addEventListener("click", () => { vue = "kanban"; renderList(); });
+
+        const fr = document.getElementById("filtreResponsable");
+        if (fr) fr.addEventListener("change", () => { filtreResponsable = fr.value; renderList(); });
+        const frr = document.getElementById("filtreResponsableReset");
+        if (frr) frr.addEventListener("click", () => { filtreResponsable = ""; renderList(); });
+
+        /* ── A5 : le Kanban ─────────────────────────────────────────────── */
+        document.querySelectorAll(".kanban-ouvrir").forEach(b =>
+            b.addEventListener("click", () => Router.navigateTo(`/actions/${b.dataset.id}`)));
+
+        if (!peutBouger) return;
+
+        // Les deux boutons de déplacement — le chemin qui ne demande PAS de
+        // souris. Ils lisent le statut de la colonne qui les contient, de
+        // sorte qu'un ajout de colonne ne leur échappe pas.
+        const voisine = (identifiant, pas) => {
+            const carte = document.querySelector(`.kanban-carte[data-id="${CSS.escape(identifiant)}"]`);
+            if (!carte) return;
+            const colonne = carte.closest(".kanban-colonne");
+            if (!colonne) return;
+            const rang = COLONNES.indexOf(colonne.dataset.statut || "");
+            const cible = COLONNES[rang + pas];
+            if (cible) deplacer(identifiant, cible);
+        };
+        document.querySelectorAll(".kanban-gauche").forEach(b =>
+            b.addEventListener("click", () => voisine(b.dataset.id, -1)));
+        document.querySelectorAll(".kanban-droite").forEach(b =>
+            b.addEventListener("click", () => voisine(b.dataset.id, +1)));
+
+        // Le glisser-déposer. ⚠️ L'identifiant voyage dans le TRANSFERT, pas
+        // dans une variable de module : deux cartes saisies coup sur coup — ce
+        // qu'un pavé tactile produit facilement — déposeraient sinon la même.
+        document.querySelectorAll(".kanban-carte[draggable='true']").forEach(carte => {
+            carte.addEventListener("dragstart", (e) => {
+                if (e.dataTransfer) e.dataTransfer.setData("text/plain", carte.dataset.id || "");
+                carte.classList.add("en-vol");
+            });
+            carte.addEventListener("dragend", () => carte.classList.remove("en-vol"));
+        });
+        document.querySelectorAll(".kanban-pile[data-statut]").forEach(pile => {
+            pile.addEventListener("dragover", (e) => { e.preventDefault(); pile.classList.add("survol"); });
+            pile.addEventListener("dragleave", () => pile.classList.remove("survol"));
+            pile.addEventListener("drop", (e) => {
+                e.preventDefault();
+                pile.classList.remove("survol");
+                const identifiant = e.dataTransfer ? e.dataTransfer.getData("text/plain") : "";
+                if (identifiant) deplacer(identifiant, pile.dataset.statut || "");
+            });
         });
     }
 
@@ -255,7 +492,7 @@ const ActionsModule = (() => {
                     </div>
 
                     <div class="form-group">
-                        <label>${t("actions.titreAction")} <span style="color:red">*</span></label>
+                        <label>${t("actions.titreAction")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="titre" value="${escapeHtml(action.titre)}" required />
                     </div>
 
@@ -295,7 +532,7 @@ const ActionsModule = (() => {
                         <textarea id="commentaire">${escapeHtml(action.commentaire || "")}</textarea>
                     </div>
 
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="saveBtn">${t("commun.mettreAJour")}</button>
                     </div>
                 </div>

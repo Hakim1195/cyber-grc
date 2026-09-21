@@ -308,10 +308,10 @@ const EbiosModule = (() => {
                 <td>${badgeStatut(e.statut)}</td>
                 <td>${esc(e.responsable || "—")}</td>
                 <td>${esc(fmtDate(e.debut_le))}</td>
-                <td style="text-align:right;">${nombre(c && c.valeursMetier)}</td>
-                <td style="text-align:right;">${nombre(c && c.evenementsRedoutes)}</td>
-                <td style="text-align:right;">${nombre(c && c.graviteMax)}</td>
-                <td style="text-align:right;">${c == null ? "—"
+                <td class="t-droite">${nombre(c && c.valeursMetier)}</td>
+                <td class="t-droite">${nombre(c && c.evenementsRedoutes)}</td>
+                <td class="t-droite">${nombre(c && c.graviteMax)}</td>
+                <td class="t-droite">${c == null ? "—"
                     : esc(String(c.sourcesRetenues)) + " / " + esc(String(c.sources))}</td>
             </tr>`;
         }).join("");
@@ -324,10 +324,10 @@ const EbiosModule = (() => {
                         <th>Statut</th>
                         <th>Responsable</th>
                         <th>Début</th>
-                        <th style="text-align:right;">Valeurs métier</th>
-                        <th style="text-align:right;">Év. redoutés</th>
-                        <th style="text-align:right;">Gravité max ${Help.tip("La gravité la plus HAUTE de ses événements redoutés, et non une moyenne : une moyenne diluerait l'événement catastrophique dans les anodins, et c'est lui qui commande l'analyse.")}</th>
-                        <th style="text-align:right;">Couples retenus</th>
+                        <th class="t-droite">Valeurs métier</th>
+                        <th class="t-droite">Év. redoutés</th>
+                        <th class="t-droite">Gravité max ${Help.tip("La gravité la plus HAUTE de ses événements redoutés, et non une moyenne : une moyenne diluerait l'événement catastrophique dans les anodins, et c'est lui qui commande l'analyse.")}</th>
+                        <th class="t-droite">Couples retenus</th>
                     </tr>
                 </thead>
                 <tbody>${lignes}</tbody>
@@ -671,7 +671,7 @@ const EbiosModule = (() => {
                 <tr data-er="${esc(r.id)}">
                     <td>${esc(r.nom)}</td>
                     <td>${esc((BESOINS.find(b => b.valeur === r.besoin) || {}).libelle || r.besoin)}</td>
-                    <td style="text-align:right;">${r.gravite == null || r.gravite === "" ? "—" : esc(String(r.gravite))}</td>
+                    <td class="t-droite">${r.gravite == null || r.gravite === "" ? "—" : esc(String(r.gravite))}</td>
                     <td>${esc(r.impacts || "—")}</td>
                     <td class="stop-row-click">${ecriture
                         ? '<button type="button" class="btn-secondary erSupprimer" data-er="' + esc(r.id) + '">Retirer</button>'
@@ -680,7 +680,7 @@ const EbiosModule = (() => {
 
             return `
             <div class="card" style="margin-bottom:.75rem;" data-vm="${esc(v.id)}">
-                <h4 style="margin-top:0;">${esc(v.nom)}
+                <h4 class="mt0">${esc(v.nom)}
                     <span class="badge">${esc((NATURES.find(n => n.valeur === v.nature) || {}).libelle || v.nature)}</span>
                     ${processus ? '<span class="badge" title="' + esc("Criticité, RTO et RPO sont lus dans le bilan d'impact, jamais recopiés ici.") + '">BIA : ' + esc(processus.nom) + "</span>" : ""}
                     ${ecriture ? '<button type="button" class="btn-danger vmSupprimer" data-vm="' + esc(v.id) + '" style="float:right;">Retirer</button>' : ""}
@@ -690,7 +690,7 @@ const EbiosModule = (() => {
                     ? '<p class="chart-empty">' + esc("Aucun événement redouté pour cette valeur métier.") + "</p>"
                     : `<table class="data-table"><thead><tr>
                         <th>Événement redouté</th><th>Besoin atteint</th>
-                        <th style="text-align:right;">Gravité</th><th>Impacts</th><th></th>
+                        <th class="t-droite">Gravité</th><th>Impacts</th><th></th>
                        </tr></thead><tbody>${lignes}</tbody></table>`}
                 ${ecriture ? `
                 <div class="form-grid" style="margin-top:.5rem;">
@@ -815,10 +815,10 @@ const EbiosModule = (() => {
             <tr data-sr="${esc(s.id)}">
                 <td><strong>${esc(s.source)}</strong></td>
                 <td>${esc(s.objectif_vise)}</td>
-                <td style="text-align:right;">${s.motivation == null || s.motivation === "" ? "—" : esc(String(s.motivation))}</td>
-                <td style="text-align:right;">${s.ressources == null || s.ressources === "" ? "—" : esc(String(s.ressources))}</td>
-                <td style="text-align:right;">${s.activite == null || s.activite === "" ? "—" : esc(String(s.activite))}</td>
-                <td style="text-align:right;">${note == null
+                <td class="t-droite">${s.motivation == null || s.motivation === "" ? "—" : esc(String(s.motivation))}</td>
+                <td class="t-droite">${s.ressources == null || s.ressources === "" ? "—" : esc(String(s.ressources))}</td>
+                <td class="t-droite">${s.activite == null || s.activite === "" ? "—" : esc(String(s.activite))}</td>
+                <td class="t-droite">${note == null
                     ? '<span class="muted" title="' + esc("La suggestion se tait dès qu'un des trois critères manque : un chiffre calculé sur deux critères sur trois aurait l'air mesuré sans l'être.") + '">à évaluer</span>'
                     : "<strong>" + esc(String(note)) + "</strong>"}</td>
                 <td>${s.retenue
@@ -836,10 +836,10 @@ const EbiosModule = (() => {
                 <thead>
                     <tr>
                         <th>Source de risque</th><th>Objectif visé</th>
-                        <th style="text-align:right;">Mot.</th>
-                        <th style="text-align:right;">Ress.</th>
-                        <th style="text-align:right;">Act.</th>
-                        <th style="text-align:right;">Pertinence ${Help.tip("Suggérée par le produit à partir des trois critères — ce n'est pas une décision. Retenir un couple engage les ateliers 3 et 4, et c'est vous qui le décidez, en disant pourquoi.")}</th>
+                        <th class="t-droite">Mot.</th>
+                        <th class="t-droite">Ress.</th>
+                        <th class="t-droite">Act.</th>
+                        <th class="t-droite">Pertinence ${Help.tip("Suggérée par le produit à partir des trois critères — ce n'est pas une décision. Retenir un couple engage les ateliers 3 et 4, et c'est vous qui le décidez, en disant pourquoi.")}</th>
                         <th>Décision</th><th>Justification</th><th></th>
                     </tr>
                 </thead>
@@ -1025,11 +1025,11 @@ const EbiosModule = (() => {
             <tr data-pp="${esc(p.id)}">
                 <td><strong>${esc(p.nom)}</strong></td>
                 <td>${esc((CATEGORIES.find(c => c.valeur === p.categorie) || {}).libelle || p.categorie)}</td>
-                <td style="text-align:right;">${nombre(p.dependance)}</td>
-                <td style="text-align:right;">${nombre(p.penetration)}</td>
-                <td style="text-align:right;">${nombre(p.maturite)}</td>
-                <td style="text-align:right;">${nombre(p.confiance)}</td>
-                <td style="text-align:right;">${menace == null
+                <td class="t-droite">${nombre(p.dependance)}</td>
+                <td class="t-droite">${nombre(p.penetration)}</td>
+                <td class="t-droite">${nombre(p.maturite)}</td>
+                <td class="t-droite">${nombre(p.confiance)}</td>
+                <td class="t-droite">${menace == null
                     ? '<span class="muted" title="' + esc("Le calcul se tait tant que les quatre critères ne sont pas cotés : une menace calculée sur trois critères sur quatre aurait l'air mesurée sans l'être.") + '">à évaluer</span>'
                     : "<strong>" + esc(String(menace)) + "</strong>"}</td>
                 <td class="stop-row-click">${ecriture
@@ -1041,9 +1041,9 @@ const EbiosModule = (() => {
             <table class="data-table">
                 <thead><tr>
                     <th>Partie prenante</th><th>Famille</th>
-                    <th style="text-align:right;">Dép.</th><th style="text-align:right;">Pén.</th>
-                    <th style="text-align:right;">Mat.</th><th style="text-align:right;">Conf.</th>
-                    <th style="text-align:right;">Menace ${Help.tip("Dépendance × pénétration, rapportées à maturité × confiance. Au-delà de 1, vous dépendez d'elle plus que vous ne pouvez lui faire confiance. Calculé par le serveur.")}</th>
+                    <th class="t-droite">Dép.</th><th class="t-droite">Pén.</th>
+                    <th class="t-droite">Mat.</th><th class="t-droite">Conf.</th>
+                    <th class="t-droite">Menace ${Help.tip("Dépendance × pénétration, rapportées à maturité × confiance. Au-delà de 1, vous dépendez d'elle plus que vous ne pouvez lui faire confiance. Calculé par le serveur.")}</th>
                     <th></th>
                 </tr></thead>
                 <tbody>${lignes}</tbody>
@@ -1102,7 +1102,7 @@ const EbiosModule = (() => {
                 <td>${vu ? esc(vu.source + " → " + vu.objectifVise) : "—"}</td>
                 <td>${vu && vu.partiePrenante ? esc(vu.partiePrenante) : esc("directement")}</td>
                 <td>${vu ? esc(vu.evenementRedoute) : "—"}</td>
-                <td style="text-align:right;">${vu && vu.gravite != null
+                <td class="t-droite">${vu && vu.gravite != null
                     ? "<strong>" + esc(String(vu.gravite)) + "</strong>"
                     : '<span class="muted">—</span>'}</td>
                 <td class="stop-row-click">${ecriture
@@ -1115,7 +1115,7 @@ const EbiosModule = (() => {
                 <thead><tr>
                     <th>Chemin</th><th>Source → objectif</th><th>Par</th>
                     <th>Événement redouté</th>
-                    <th style="text-align:right;">Gravité ${Help.tip("Celle de l'événement redouté que ce chemin réalise. Elle n'est pas ressaisie ici : une seconde valeur vieillirait dès la prochaine réévaluation de l'atelier 1.")}</th>
+                    <th class="t-droite">Gravité ${Help.tip("Celle de l'événement redouté que ce chemin réalise. Elle n'est pas ressaisie ici : une seconde valeur vieillirait dès la prochaine réévaluation de l'atelier 1.")}</th>
                     <th></th>
                 </tr></thead>
                 <tbody>${lignes}</tbody>
@@ -1174,7 +1174,7 @@ const EbiosModule = (() => {
             <tr data-so="${esc(o.id)}">
                 <td><strong>${esc(o.nom)}</strong></td>
                 <td>${vu ? esc((DataStore.getEbiosScenarioStrategiqueById(o.scenario_strategique_id) || {}).nom || "—") : "—"}</td>
-                <td style="text-align:right;">${o.vraisemblance == null || o.vraisemblance === "" ? "—" : esc(String(o.vraisemblance))}</td>
+                <td class="t-droite">${o.vraisemblance == null || o.vraisemblance === "" ? "—" : esc(String(o.vraisemblance))}</td>
                 <td>${palier
                     ? '<span class="status ' + palier.ton + '">' + esc(palier.libelle) + "</span>"
                     : '<span class="muted" title="' + esc("Le niveau se tait tant que la gravité du chemin ou la vraisemblance manque.") + '">à évaluer</span>'}</td>
@@ -1191,7 +1191,7 @@ const EbiosModule = (() => {
             <table class="data-table">
                 <thead><tr>
                     <th>Mode opératoire</th><th>Chemin</th>
-                    <th style="text-align:right;">Vrais.</th>
+                    <th class="t-droite">Vrais.</th>
                     <th>Niveau ${Help.tip("Gravité du chemin × vraisemblance du mode opératoire, en quatre paliers. Calculé par le serveur ; il se tait si l'un des deux manque.")}</th>
                     <th>Décision</th><th>Justification</th><th></th>
                 </tr></thead>

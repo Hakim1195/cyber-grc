@@ -1191,7 +1191,7 @@ const PiecesModule = (() => {
                 "servis directement par le serveur web : ils ne sortent que par " +
                 "l'application, et chaque extraction est journalisée.") : "") +
             "</strong>" +
-            '<span style="font-size: var(--text-sm); color:var(--text-muted);">' +
+            '<span class="txt-muted-sm">' +
             (liste.length ? esc(liste.length) + " fichier(s)" : "") + "</span>" +
             "</div>" +
             corpsHtml() +

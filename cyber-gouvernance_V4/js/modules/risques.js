@@ -181,7 +181,7 @@ const RisquesModule = (() => {
                 </div>
 
                 <div class="dashboard-card" style="max-width: 800px;">
-                    <div class="form-group"><label>${t("risques.colNom")} <span style="color:red">*</span></label><input id="nom" required /></div>
+                    <div class="form-group"><label>${t("risques.colNom")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="nom" required /></div>
 
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                         <div class="form-group">
@@ -212,7 +212,7 @@ const RisquesModule = (() => {
 
                     <div class="form-group"><label>${t("risques.descriptionDetails")}</label><textarea id="description"></textarea></div>
 
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="save">${t("risques.creer")}</button>
                         <button id="cancel" style="margin-left: 10px;">${t("commun.annuler")}</button>
                     </div>
@@ -315,7 +315,7 @@ const RisquesModule = (() => {
                             <em>${t("risques.rappelMaitrise")}</em>
                         </div>
 
-                        <div class="form-group"><label>${t("commun.nom")} <span style="color:red">*</span></label><input id="nom" value="${escapeHtml(risque.nom)}" required /></div>
+                        <div class="form-group"><label>${t("commun.nom")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="nom" value="${escapeHtml(risque.nom)}" required /></div>
 
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                             <div class="form-group">
@@ -353,7 +353,7 @@ const RisquesModule = (() => {
                         <div class="dashboard-card">
                             <h3>${t("risques.planTraitement")}</h3>
                             <ul style="margin-bottom: 15px;">${actionsHtml || `<li><span style='color: var(--text-muted);'>${t("risques.aucuneAction")}</span></li>`}</ul>
-                            <button id="addActionBtn" style="font-size: var(--text-sm);">${t("risques.planifierAction")}</button>
+                            <button id="addActionBtn" class="txt-sm">${t("risques.planifierAction")}</button>
                         </div>
                         <div class="dashboard-card">
                             <h3>${t("risques.exigencesApplicables")}</h3>
@@ -472,8 +472,8 @@ const RisquesModule = (() => {
 
         if (!q && forcerFormulaire !== true) {
             return `${entete}
-                <p style="color: var(--text-muted);">${t("risques.fairAucune")}</p>
-                <button id="fair-ouvrir" style="font-size: var(--text-sm);">${t("risques.fairQuantifier")}</button>`;
+                <p class="txt-muted">${t("risques.fairAucune")}</p>
+                <button id="fair-ouvrir" class="txt-sm">${t("risques.fairQuantifier")}</button>`;
         }
 
         // Le bandeau du montant. ⚠️ Trois états distincts, et jamais deux confondus :
@@ -508,7 +508,7 @@ const RisquesModule = (() => {
                 ${tripletHtml("secondaire", q, "100")}
             </div>
             <div class="form-group">
-                <label>${t("risques.fairHypotheses")} <span style="color:red">*</span> ${Help.tip(t("risques.fairHypothesesAide"))}</label>
+                <label>${t("risques.fairHypotheses")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span> ${Help.tip(t("risques.fairHypothesesAide"))}</label>
                 <textarea id="fair-hypotheses" rows="3">${escapeHtml(q ? (q.hypotheses || "") : "")}</textarea>
             </div>
             <div class="form-group">
@@ -629,14 +629,14 @@ const RisquesModule = (() => {
                     ${tHtml("risques.pourTraiter", { nom: risque.nom })}
                 </div>
                 <div class="dashboard-card">
-                    <div class="form-group"><label>${t("commun.titre")} <span style="color:red">*</span></label><input id="titre" required /></div>
+                    <div class="form-group"><label>${t("commun.titre")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="titre" required /></div>
                     <div class="form-group"><label>${t("commun.responsable")}</label><input id="responsable" list="personnes-list" /></div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                    <div class="grille-2">
                         <div class="form-group"><label>${t("commun.statut")}</label><select id="statut"><option value="à faire" selected>${I18n.valeur("à faire")}</option><option value="en cours">${I18n.valeur("en cours")}</option><option value="terminée">${I18n.valeur("terminée")}</option></select></div>
                         <div class="form-group"><label>${t("commun.echeance")}</label><input type="date" id="echeance" /></div>
                     </div>
                     <div class="form-group"><label>${t("commun.commentaire")}</label><textarea id="commentaire"></textarea></div>
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="saveAction">${t("risques.creerAction")}</button>
                         <button id="cancelAction" style="margin-left: 10px;">${t("commun.annuler")}</button>
                     </div>

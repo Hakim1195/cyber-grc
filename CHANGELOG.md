@@ -12,7 +12,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
 > **PostgreSQL 17.11**) : **59 migrations**, **89 tables**, **356 politiques**,
 > **63 garde-fous**, **495 décisions** au registre de l'article 30, publication
-> **85 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
+> **87 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
 > ⚠️ La `059` n'ajoute **aucune table** ni politique : `documents.recherche` est une
 > colonne de plus sur une table qui en portait déjà quatre-vingt-neuf politiques.
 > `install.sh --diagnostic` → **14 conformes, 2 réserves, 0 bloquant** sur **quinze
@@ -27,7 +27,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2382 essais, 2382 passés, 0 échec** — 2 081 sans navigateur et 301 avec —,
+> `npm test` → **2405 essais, 2405 passés, 0 échec** — 2 084 sans navigateur et 321 avec —,
 > trente-huit familles. ⚠️ **+26 le 21/09/2026** : la recherche documentaire (action **D3**,
 > migration `059`) apporte `test/recherche/documentaire.test.mjs` (19) et
 > `test/navigateur/recherche-documentaire.test.mjs` (7).
@@ -77,6 +77,130 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### La vague A se ferme enfin, 20.2 est livrée, et le produit change de nom de domaine (21/09/2026)
+
+**Quatre chantiers, et le premier est un constat plutôt qu'une livraison.**
+
+#### Ce que l'état des lieux a trouvé
+
+**A4 et A5 n'existaient nulle part** — ni fichier, ni fonction, ni route. C'étaient les
+deux seuls items de la vague **V-A** jamais construits, et **V-A n'avait aucune ligne de
+clôture** là où V-C à V-F en portaient une. *Une vague qu'on n'a pas déclarée close reste
+ouverte sans que personne le remarque : deux écrans sont restés dus onze jours pendant que
+quatre vagues postérieures se fermaient.*
+
+Et une phrase de `docs/REPRISE.md` §6 annonçait, en tête du travail restant, que *« les 26
+modules n'emploient pas encore »* l'échelle typographique. **Mesuré : 316 emplois de
+`var(--text-*)` contre 2 tailles en dur**, toutes deux en `pt` dans des règles
+d'impression. Le travail était fait ; la phrase envoyait le refaire.
+
+#### A4 — « Ma journée », l'écran d'ENTRÉE du produit
+
+`js/modules/accueil.js`, route `/accueil`, et c'est désormais **ce que le produit ouvre**.
+Ce qui est en retard, ce qui échoit cette semaine, ce qui m'est attribué — aucun
+indicateur, seulement des lignes sur lesquelles cliquer.
+
+⚠️ **« Par rôle » se DÉRIVE des droits, il ne se récite pas.** Le plan nommait quatre rôles ;
+la pente était d'écrire quatre écrans. Elle est refusée : le produit porte **neuf profils de
+socle** et un client peut en composer d'autres — un profil absent de la liste serait retombé
+sur un écran par défaut, c'est-à-dire aurait montré à un auditeur ce qu'on destinait à un
+contributeur. Ce qui distingue deux rôles est ce qu'ils PEUVENT VOIR, et le serveur l'a déjà
+résolu. ⚠️ Aucune correspondance « type d'échéance → domaine » n'est écrite : elle serait une
+seconde source de vérité sur les droits.
+
+⚠️ **Le bloc « qui m'est attribué » avoue sa limite** : le rapprochement se fait sur le NOM
+affiché — les entités stockent le responsable en texte, arbitrage de l'annuaire — et quand la
+session ne porte aucun nom, le bloc le DIT au lieu de paraître vide.
+
+#### A5 — le Kanban du plan d'actions
+
+Une **vue** de `/actions`, pas un second écran : un Kanban rangé ailleurs aurait obligé à
+savoir d'avance dans laquelle des deux pages se trouve son action.
+
+⚠️ **Le glisser-déposer n'est pas le seul chemin.** Chaque carte porte deux boutons de
+déplacement, et c'est **eux** que l'essai mesure — le glisser se simule mal, un essai
+fragile finirait désactivé, et *une fonctionnalité qui n'existe qu'à la souris est une
+fonctionnalité absente pour une partie des utilisateurs.* ⚠️ Les colonnes viennent du
+**vocabulaire de la base**, et une action au statut inconnu est **montrée** dans une colonne
+qui le dit : une action invisible est une action oubliée. ⚠️ L'identifiant voyage dans le
+`dataTransfer`, pas dans une variable de module — deux cartes saisies coup sur coup
+déposeraient sinon la même.
+
+#### 20.2 — les formulaires de notification ANSSI et CNIL
+
+`/notification/:id`, atteint depuis la fiche d'incident. Deux régimes : **NIS2 article 23**
+et **RGPD article 33**.
+
+⚠️ **LE PRODUIT NE TRANSMET RIEN, et le document le porte en toutes lettres.** C'est le
+critère de l'action, et le bouton dit « **préparer** », jamais « déclarer » — un essai le
+vérifie.
+
+⚠️ **Et il DIT SES MANQUES.** Un formulaire pré-rempli à moitié est plus dangereux qu'un
+formulaire vide : *vide, on le remplit ; à moitié rempli, on l'envoie.* Chaque rubrique que
+le produit ne sait pas remplir est affichée **en creux, nommée, avec ce que le texte attend
+à cet endroit** — et l'en-tête compte ce qui reste. Les coordonnées de l'entité en font
+partie : le lot L9 rend la raison sociale, pas l'adresse (constat **Q-160**), et le
+formulaire le dit plutôt que de laisser croire à un oubli de saisie.
+
+⚠️ Il ne reproduit **aucun formulaire officiel** : les téléservices changent sans préavis, et
+recopier leur maquette ferait vieillir le produit en silence. Ce qui est stable est le
+CONTENU que le texte exige.
+
+#### Le nom de domaine : `grc.exemple.interne` → `grc-test.site`
+
+**Demandé par l'utilisateur, et l'exposition publique assumée par écrit.**
+
+⚠️ **Le produit était DÉJÀ joignable depuis Internet, avant toute intervention** : Apache
+écoute sur `*:80` et `*:443`, politique `INPUT` à `ACCEPT`, aucun pare-feu — et le port 443
+servait l'application à qui s'y connectait, avec un certificat qui ne correspondait pas. Ce
+qui change n'est pas l'exposition : c'est qu'elle est **nommée et correctement certifiée**
+(Let's Encrypt, renouvellement éprouvé par `--dry-run`, crochet de rechargement d'Apache
+posé — sans lui le renouvellement réussit et le défaut persiste).
+
+⚠️ **Le vhost du dépôt reste GÉNÉRIQUE** : chez le client, le certificat vient de sa PKI
+interne. Les chemins ne nomment aucune autorité, et cette machine les fait pointer vers
+Let's Encrypt par des **liens symboliques**.
+
+⚠️ **Une exception ACME est posée dans le vhost en clair**, et elle n'est pas un confort :
+sans elle, le renouvellement échoue **soixante jours après la mise en service**, longtemps
+après que tout le monde a cessé de regarder.
+
+🛑 **ET `install.sh` NE RÉÉCRIT PAS LE VHOST DÉPLOYÉ** — il ne l'installe que s'il est
+absent. Un commentaire du modèle affirmait l'inverse ; **c'est la machine qui l'a démenti**,
+le vhost déployé restant à l'ancien nom pendant que le dépôt portait le nouveau. Le
+commentaire dit désormais la commande à passer.
+
+⚠️ **Les 16 rapports de `docs/securite/` gardent l'ancien nom**, délibérément : *on ne
+réécrit pas l'histoire pour ranger le présent* (refus déjà motivé au constat Q-256). Ils
+décrivent des mesures faites sur `grc.exemple.interne`, et elles y ont bien été faites.
+
+#### La passe de style — **1 205 → 895** attributs `style=`
+
+⚠️ **Le gain n'est pas le compte, c'est ce qu'il a sorti** : `style="color:red"` apparaissait
+**39 fois dans 17 modules**, sur les astérisques de champ obligatoire. Une couleur **brute**,
+hors du système de tokens — et qui empruntait le rouge que le produit **réserve aux statuts
+critiques**. Une pièce d'audit vit de ce code couleur ; le diluer sur une marque de saisie
+est un défaut, pas un détail. Token dédié `--marque-requis`, **non sémantique**.
+
+Onze classes utilitaires couvrent les motifs répétés plus de quinze fois : **270 attributs
+convertis, dont 24 FUSIONNÉS** dans une classe existante — remplacer sans fusionner aurait
+produit deux attributs `class`, dont le second est ignoré **en silence**. ⚠️ Les 895 restants
+ne se convertissent pas de force : sur **565 motifs distincts**, la plupart ne servent qu'un
+écran.
+
+#### Et un garde-fou qui manquait, trouvé en se trompant
+
+⚠️ **L'indicateur du chantier n'était gardé par RIEN.** Le `CHANGELOG` affirme à trois
+reprises que « le recompte mécanique » a attrapé des en-têtes faux — c'est vrai, mais **à la
+main**. J'ai déplacé une ligne dans le TEXTE sans changer son VERDICT, annoncé
+« 56 ✅ · 17 🟡 · 13 ❌ » quand le tableau en portait 55/18/13, et **rien n'aurait rougi**.
+`test/documentation/indicateur-marche.test.mjs` recompte le tableau, confronte l'en-tête et
+**recalcule le pourcentage pondéré** — celui qu'on cite en réunion, et qui dérivait d'un
+point à chaque livraison.
+
+**Indicateur** : **56 ✅ · 17 🟡 · 13 ❌** sur 86, **75 %** — trois lignes déplacées et
+nommées (n° 30 recherche, n° 42 formulaires, n° 48 Kanban).
 
 ### La recherche documentaire — L16, action D3, la dernière du lot (21/09/2026)
 

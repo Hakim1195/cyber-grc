@@ -19,12 +19,19 @@
 >    (`FAIR` → « faire », `LEI` → « client »). Chaque verdict ❌ de cette grille a été
 >    vérifié sur les occurrences réelles, pas sur un compte de fichiers.
 
-**Verdict global au 21/09/2026 : 54 ✅ · 18 🟡 · 14 ❌** — soit ~74 % en pondérant les
-partiels à moitié. ⚠️ **Une seule ligne a bougé depuis le rejeu intégral du 19/09**, et elle
-est mesurée : la n° 30, « recherche plein texte », que l'action **D3** fait passer de 🟡 à ✅
-(migration `059`, 21/09/2026). Les quatre-vingt-cinq autres gardent le verdict du 19/09 —
-*un indicateur qui tairait quelles lignes il a remesurées serait pire qu'un indicateur en
-retard.* **Cible du `PLAN_PRODUIT.md` une fois les douze lots joués : 76 ✅ · 2 🟡
+**Verdict global au 21/09/2026 : 56 ✅ · 17 🟡 · 13 ❌** sur 86 — soit **75 %** en pondérant
+les partiels à moitié. ⚠️ **TROIS lignes ont bougé depuis le rejeu intégral du 19/09**, et
+chacune est mesurée :
+
+| Ligne | Avant | Après | Ce qui l'a déplacée |
+|---|---|---|---|
+| **30** — recherche plein texte | 🟡 | ✅ | **L16-D3**, migration `059` |
+| **42** — formulaires de notification | ❌ | ✅ | **L20.2** |
+| **48** — Kanban / échéancier | 🟡 | ✅ | **L17-A5** |
+
+Les quatre-vingt-trois autres gardent le verdict du 19/09 — *un indicateur qui tairait
+quelles lignes il a remesurées serait pire qu'un indicateur en retard.* Un rejeu intégral
+est dû au prochain jalon. **Cible du `PLAN_PRODUIT.md` une fois les douze lots joués : 76 ✅ · 2 🟡
 · 8 ❌**, les huit restantes étant des non-objectifs nommés un par un (§9 du plan).
 
 > ### ▶ Rejeu du 19/09/2026 — clôture de la vague F, **la dernière du plan**
@@ -283,7 +290,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
 | 41 | Registre et délais réglementaires | ✅ | `f_echeances_reglementaires()` (migration `034`) : les **trois paliers NIS2** (24 h, 72 h, 1 mois) et le **72 h RGPD**, chacun avec sa **référence au texte**, DÉRIVÉS de l'instant de détection — et l'écran dit l'**origine** du compte. `declarations_reglementaires` retient le geste et son accusé de réception | — |
-| 42 | Génération des formulaires de notification | ❌ | Absent | **L20.2** |
+| 42 | Génération des formulaires de notification | ✅ | **Livré le 21/09/2026** (L20, action 20.2) : `/notification/:id`, atteint depuis la fiche d'incident. Deux régimes — **ANSSI/NIS2 article 23** (alerte 24 h, notification 72 h, rapport final un mois) et **CNIL/RGPD article 33** —, pré-remplis depuis l'incident, imprimables. ⚠️ **Chaque rubrique que le produit ne sait pas remplir est NOMMÉE, avec ce que l'autorité attend**, et le document annonce en tête combien il en reste : *un formulaire à moitié rempli est plus dangereux qu'un formulaire vide — vide, on le remplit ; à moitié rempli, on l'envoie.* ⚠️ **Le produit ne transmet RIEN**, et le document le porte en toutes lettres. ⚠️ Il ne reproduit **aucun formulaire officiel** : les téléservices changent sans préavis, et recopier leur maquette ferait vieillir le produit en silence — ce qui est stable est le contenu que le TEXTE exige | **L20.2** |
 | 43 | CIRM (runbooks, main courante) | ✅ | Fiches réflexes par rôle, cellule de crise reliée à l'annuaire, et **main courante EN AJOUT SEUL** (migration `041`) : chaînée par empreinte, une entrée par incident, refusée en modification par les quatre couches du §12. ⚠️ Pas de runbook exécutable — ce n'est pas le même objet | — |
 | 44 | BIA / RTO / RPO | ✅ | Module dédié | — |
 | 45 | **PCA/PRA scénarios et exercices** | ✅✅ | **Quatre modules dédiés**, étapes RACI, exercices. Au-dessus de tout GRC généraliste | — |
@@ -294,7 +301,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | # | Fonctionnalité | État | Mesure | Lot |
 |---|---|---|---|---|
 | 47 | Plan d'action unique multi-sources | ✅ | Actions reliées à exigence, **mesure**, risque, incident, audit | — |
-| 48 | Kanban / échéancier | 🟡 | Échéancier consolidé excellent (**9 sources** depuis L24 : actions, MCO, revues documentaires, incidents, audits, revues de direction, questionnaires fournisseurs, contrats de tiers, campagnes du Groupe — plus calendrier, ICS, Excel). **Kanban ❌** | L17.5 |
+| 48 | Kanban / échéancier | ✅ | Échéancier consolidé excellent (**9 sources** depuis L24 : actions, MCO, revues documentaires, incidents, audits, revues de direction, questionnaires fournisseurs, contrats de tiers, campagnes du Groupe — plus calendrier, ICS, Excel). **Kanban ✅ le 21/09/2026** (L17, action A5) : une VUE de `/actions`, colonnes par statut, glisser-déposer **et** deux boutons de déplacement par carte — *une fonctionnalité qui n'existe qu'à la souris est absente pour une partie des utilisateurs* —, filtre par responsable, et une action au statut hors vocabulaire **montrée** plutôt que masquée | L17.5 |
 | 49 | Notifications / escalade | ✅ | L12 : relances SMTP sur 6 types d'échéances | — |
 | 50 | Renvoi vers Jira / ServiceNow | ❌ | Absent | L22.6 |
 

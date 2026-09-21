@@ -740,7 +740,7 @@ pas d'administrateur d'une seule filiale.
 > `SESSION_NOM_COOKIE`) :
 >
 > ```bash
-> curl -sc /tmp/grc.cookies -X POST https://grc.exemple.interne/api/connexion \
+> curl -sc /tmp/grc.cookies -X POST https://grc-test.site/api/connexion \
 >      -H 'content-type: application/json' \
 >      -d '{"identifiant":"admin.grc","motDePasse":"…"}'
 > ```
@@ -748,7 +748,7 @@ pas d'administrateur d'une seule filiale.
 > **2. Créer la filiale** — la réponse porte **la liste des groupes AD à créer** :
 >
 > ```bash
-> curl -sb /tmp/grc.cookies -X POST https://grc.exemple.interne/api/filiales \
+> curl -sb /tmp/grc.cookies -X POST https://grc-test.site/api/filiales \
 >      -H 'content-type: application/json' \
 >      -d '{"code":"LYO","raison_sociale":"… SAS","pays":"FR"}'
 > ```

@@ -195,7 +195,7 @@ const DroitsModule = (() => {
     }
 
     function carteHtml(titre, valeur) {
-        return '<div class="dashboard-card" style="text-align:center;">'
+        return '<div class="dashboard-card t-centre">'
             + '<h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">'
             + esc(titre) + "</h3>"
             + '<div class="big-kpi" style="font-size: var(--text-3xl);">' + esc(String(valeur))

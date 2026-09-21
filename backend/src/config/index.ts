@@ -556,7 +556,7 @@ export function chargerConfiguration(source: NodeJS.ProcessEnv = process.env): C
     urlPublique: lecteur.texte('SERVEUR_URL_PUBLIQUE', {
       defaut: 'https://localhost',
       motif: /^https?:\/\/[^\s/]+/,
-      attendu: 'URL absolue, par exemple https://grc.exemple.interne',
+      attendu: 'URL absolue, par exemple https://grc-test.site',
     }),
     proxyDeConfiance,
     tailleMaxCorpsOctets: lecteur.entier('SERVEUR_TAILLE_MAX_CORPS', {

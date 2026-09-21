@@ -67,7 +67,7 @@ import { attendrePort, exigerOutil, portLibre } from '../aide/outils.mjs';
 import { RACINE_BACKEND, RACINE_FRONTEND, lancerServeurProcessus } from '../aide/serveur.mjs';
 import { attendreApplication, attendreQuiescence, lancerNavigateur, ouvrirPage } from '../aide/navigateur.mjs';
 
-const HOTE = 'grc.exemple.interne';
+const HOTE = 'grc-test.site';
 const VHOST_SOURCE = join(RACINE_BACKEND, 'deploy', 'apache', 'cyber-grc.conf');
 const DURCISSEMENT = join(RACINE_BACKEND, 'deploy', 'apache', 'durcissement-global.conf');
 

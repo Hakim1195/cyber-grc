@@ -274,7 +274,7 @@ describe('§7 — ce que la configuration accepte de LIVRER', () => {
   const base = (supplement) => ({
     NODE_ENV: 'production',
     SERVEUR_PORT: '3999',
-    SERVEUR_URL_PUBLIQUE: 'https://grc.exemple.interne',
+    SERVEUR_URL_PUBLIQUE: 'https://grc-test.site',
     BASE_HOTE: '127.0.0.1',
     BASE_PORT: '5432',
     BASE_NOM: 'inutilisee',

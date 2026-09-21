@@ -48,6 +48,7 @@ window.I18n.enregistrer("en", {
     "nav.section.tiers": "Third parties & people",
     "nav.section.administration": "Administration",
 
+    "nav.accueil": "My day",
     "nav.dashboard": "Dashboard",
     "nav.synthese": "Executive summary",
     "nav.echeances": "Deadlines",
@@ -85,6 +86,7 @@ window.I18n.enregistrer("en", {
     "fil.section.administration": "Administration",
     "fil.fiche": "Record",
 
+    "fil.accueil": "My day",
     "fil.dashboard": "Dashboard",
     "fil.synthese": "Executive summary",
     "fil.echeances": "Deadlines",
@@ -109,6 +111,7 @@ window.I18n.enregistrer("en", {
     "fil.bia": "BIA (Business impact)",
     "fil.crise": "Crisis team",
     "fil.criseFiches": "Crisis quick-reference cards",
+    "fil.notification": "Prepare a notification",
     "fil.pra": "BCP/DRP scenarios",
     "fil.mco": "Preparatory actions (MCO)",
     "fil.tests": "Test history",

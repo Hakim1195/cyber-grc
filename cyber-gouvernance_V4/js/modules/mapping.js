@@ -275,7 +275,7 @@ const MappingModule = (() => {
         }).join("");
 
         return `<div class="dashboard-card map-editor" id="map-editor">
-            <h3 style="margin-top:0;">${isNew ? "Nouvelle correspondance" : "Modifier la correspondance"}</h3>
+            <h3 class="mt0">${isNew ? "Nouvelle correspondance" : "Modifier la correspondance"}</h3>
             <div class="form-group" style="margin-bottom:0.8rem;">
                 <label>Thème *</label>
                 <input type="text" id="map-edit-theme" value="${esc(theme)}" placeholder="Ex : Authentification (mots de passe & MFA)" />
@@ -310,7 +310,7 @@ const MappingModule = (() => {
         const cards = effective.length
             ? effective.map(groupCard).join("")
             : (peutEditerCatalogue()
-                ? `<div class="empty-state"><h3>Aucune correspondance</h3><p>Le catalogue est vide. <a href="#" id="map-restore" style="color:var(--accent);">Réinitialiser</a> pour restaurer les correspondances par défaut, ou créez-en une.</p></div>`
+                ? `<div class="empty-state"><h3>Aucune correspondance</h3><p>Le catalogue est vide. <a href="#" id="map-restore" class="lien-accent">Réinitialiser</a> pour restaurer les correspondances par défaut, ou créez-en une.</p></div>`
                 : `<div class="empty-state"><h3>Aucune correspondance</h3><p>Le catalogue commun du Groupe est vide. Sa constitution relève de l'administration Groupe.</p></div>`);
 
         app.innerHTML = `
@@ -318,7 +318,7 @@ const MappingModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>Correspondances inter-référentiels</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">Les exigences équivalentes d'un référentiel à l'autre, regroupées par thème. ${Help.tip("Une même mesure (MFA, sauvegardes, cloisonnement…) satisfait souvent des exigences de plusieurs cadres (ANSSI, ISO 27001, NIS2, DORA). Reliez tout un groupe à une « mesure de sécurité » : évaluez une fois, appliquez partout.")}</p>
+                        <p class="sous-titre">Les exigences équivalentes d'un référentiel à l'autre, regroupées par thème. ${Help.tip("Une même mesure (MFA, sauvegardes, cloisonnement…) satisfait souvent des exigences de plusieurs cadres (ANSSI, ISO 27001, NIS2, DORA). Reliez tout un groupe à une « mesure de sécurité » : évaluez une fois, appliquez partout.")}</p>
                     </div>
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                         <a href="#/couverture" class="btn-secondary">Couverture croisée →</a>
@@ -335,7 +335,7 @@ const MappingModule = (() => {
 
                 <div class="dashboard-card" style="margin-bottom:1.2rem;">
                     <div class="map-cov-head">
-                        <h3 style="margin:0;">Cartographie des référentiels ${Help.tip("Part des exigences de chaque référentiel citées dans au moins une correspondance. Plus c'est haut, plus le référentiel est relié aux autres.")}</h3>
+                        <h3 class="m0">Cartographie des référentiels ${Help.tip("Part des exigences de chaque référentiel citées dans au moins une correspondance. Plus c'est haut, plus le référentiel est relié aux autres.")}</h3>
                         <div class="map-toolbar">
                             ${(userLayer.length) ? `<span class="map-hidden-note">${hidden ? hidden + " du catalogue masquée(s) · " : ""}surcouche active</span>` : ""}
                             ${editable ? `<button type="button" id="map-reset" class="btn-secondary"${userLayer.length ? "" : " disabled"} title="Restaurer le catalogue par défaut (retire vos ajouts, modifications et masquages)">Réinitialiser</button>` : ""}

@@ -35,7 +35,7 @@ const BiaModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>Bilans d'impact</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (Continuité d'activité)</strong></p>
+                        <p class="sous-titre">Périmètre : <strong>Interne (Continuité d'activité)</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
@@ -106,7 +106,7 @@ const BiaModule = (() => {
 
                 <div class="dashboard-card">
                     <div class="form-group">
-                        <label>Nom du Processus Métier <span style="color:red">*</span></label>
+                        <label>Nom du Processus Métier <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="nom" placeholder="Ex: Logistique, Paye, Production chaîne A..." required />
                     </div>
 
@@ -152,7 +152,7 @@ const BiaModule = (() => {
                         <textarea id="description" placeholder="Impacts financiers, légaux, ou d'image si ce processus s'arrête..."></textarea>
                     </div>
 
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="saveBtn">Enregistrer</button>
                         <button id="cancelBtn" style="margin-left: 10px;">Annuler</button>
                     </div>
@@ -221,7 +221,7 @@ const BiaModule = (() => {
                 <div class="dashboard-grid">
                     <div class="dashboard-card" style="grid-column: span 2;">
                         <h3>Informations BIA</h3>
-                        <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${escapeHtml(processus.nom)}" required /></div>
+                        <div class="form-group"><label>Nom <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="nom" value="${escapeHtml(processus.nom)}" required /></div>
 
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                             <div class="form-group">

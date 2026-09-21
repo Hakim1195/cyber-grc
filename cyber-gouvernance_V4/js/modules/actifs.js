@@ -25,7 +25,7 @@ const ActifsModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>Actifs</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (Commun à tous les clients)</strong></p>
+                        <p class="sous-titre">Périmètre : <strong>Interne (Commun à tous les clients)</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <a href="#/imports" class="btn-secondary" data-lecture="ok" title="L'import généralisé : transactionnel (tout ou rien), idempotent par fichier, avec aperçu avant validation et rapport ligne par ligne">Importer…</a>
@@ -94,7 +94,7 @@ const ActifsModule = (() => {
 
                 <div class="dashboard-card">
                     <div class="form-group">
-                        <label>Nom de l'actif <span style="color:red">*</span></label>
+                        <label>Nom de l'actif <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="nom" placeholder="Ex: Serveur ERP, Réseau OT..." required />
                     </div>
 
@@ -130,7 +130,7 @@ const ActifsModule = (() => {
                         <textarea id="description"></textarea>
                     </div>
 
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="save">Enregistrer</button>
                         <button id="cancel" style="margin-left: 10px;">Annuler</button>
                     </div>
@@ -188,7 +188,7 @@ const ActifsModule = (() => {
         const risquesHtml = tousRisques.map(r => `
             <label class="checkbox-line">
                 <input type="checkbox" class="risque-cb" value="${r.id}" ${actif.risques_lies.includes(r.id) ? "checked" : ""}>
-                <strong>${escapeHtml(r.nom)}</strong> <span style="font-size: var(--text-sm); color:var(--text-muted);">(${escapeHtml(r.niveau)})</span>
+                <strong>${escapeHtml(r.nom)}</strong> <span class="txt-muted-sm">(${escapeHtml(r.niveau)})</span>
             </label>
         `).join("");
 
@@ -202,7 +202,7 @@ const ActifsModule = (() => {
                 <div class="dashboard-grid">
                     <div class="dashboard-card">
                         <h3>Détails de l'actif</h3>
-                        <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${escapeHtml(actif.nom)}" required /></div>
+                        <div class="form-group"><label>Nom <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="nom" value="${escapeHtml(actif.nom)}" required /></div>
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                             <div class="form-group">
@@ -242,20 +242,20 @@ const ActifsModule = (() => {
 
                 <div class="dashboard-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                        <h3 style="margin:0;">Dépendances de cartographie ${Help.tip("Liens typés vers d'autres actifs : « dépend de », « hébergé sur », « alimenté par » (flux de données) ou « sauvegardé par ». Ils alimentent la Cartographie du SI et l'analyse d'impact (propagation, points de défaillance unique). La sauvegarde ne propage pas une panne de disponibilité.")}</h3>
+                        <h3 class="m0">Dépendances de cartographie ${Help.tip("Liens typés vers d'autres actifs : « dépend de », « hébergé sur », « alimenté par » (flux de données) ou « sauvegardé par ». Ils alimentent la Cartographie du SI et l'analyse d'impact (propagation, points de défaillance unique). La sauvegarde ne propage pas une panne de disponibilité.")}</h3>
                         <a href="#/cartographie" style="font-size: var(--text-sm); color:var(--accent); font-weight:600; text-decoration:none;">Voir la cartographie →</a>
                     </div>
                     <p style="font-size: var(--text-sm); color:var(--text-muted); margin:8px 0 14px;">Déclarez ce dont <strong>${escapeHtml(actif.nom)}</strong> a besoin pour fonctionner.</p>
 
                     <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-bottom:16px;">
-                        <div class="form-group" style="margin:0;">
-                            <label style="font-size: var(--text-sm);">Cet actif…</label>
+                        <div class="form-group m0">
+                            <label class="txt-sm">Cet actif…</label>
                             <select id="depType">
                                 ${DORDER.map(t => `<option value="${t}">${escapeHtml(DT[t] ? (DT[t].label || DT[t].short) : t)}</option>`).join("")}
                             </select>
                         </div>
                         <div class="form-group" style="margin:0; flex:1; min-width:180px;">
-                            <label style="font-size: var(--text-sm);">…de l'actif</label>
+                            <label class="txt-sm">…de l'actif</label>
                             <select id="depTarget">
                                 ${autresActifs.length ? autresActifs.map(a => `<option value="${a.id}">${escapeHtml(a.nom)}</option>`).join("") : `<option value="">(aucun autre actif déclaré)</option>`}
                             </select>
@@ -271,7 +271,7 @@ const ActifsModule = (() => {
                         <div>
                             <div style="font-size: var(--text-xs); text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); font-weight:700; margin-bottom:8px;">En dépendent (entrant)</div>
                             <ul style="list-style:none; padding:0; margin:0; font-size: var(--text-sm);">
-                                ${reverseDeps.length ? reverseDeps.map(r => `<li style="padding:4px 0;"><strong>${escapeHtml(r.from)}</strong> <span style="color:var(--text-muted); font-size: var(--text-sm);">${escapeHtml(depLabel(r.type))}</span></li>`).join("") : `<li style="color:var(--text-muted); font-style:italic;">Aucun actif ne dépend de celui-ci.</li>`}
+                                ${reverseDeps.length ? reverseDeps.map(r => `<li style="padding:4px 0;"><strong>${escapeHtml(r.from)}</strong> <span class="txt-muted-sm">${escapeHtml(depLabel(r.type))}</span></li>`).join("") : `<li style="color:var(--text-muted); font-style:italic;">Aucun actif ne dépend de celui-ci.</li>`}
                             </ul>
                         </div>
                     </div>
@@ -302,7 +302,7 @@ const ActifsModule = (() => {
             if (!ul) return;
             ul.innerHTML = deps.length ? deps.map((d, i) => `
                 <li style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid var(--border);">
-                    <span style="font-size: var(--text-sm);"><span style="color:var(--text-muted); font-size: var(--text-sm);">${escapeHtml(depLabel(d.type))}</span> <strong>${escapeHtml(nomActif(d.to))}</strong></span>
+                    <span class="txt-sm"><span class="txt-muted-sm">${escapeHtml(depLabel(d.type))}</span> <strong>${escapeHtml(nomActif(d.to))}</strong></span>
                     <button type="button" class="rm-dep" data-i="${i}" title="Retirer ce lien" style="background:none; border:none; color:var(--color-danger); cursor:pointer; font-size: var(--text-lg); line-height:1; padding:0 4px;">&times;</button>
                 </li>`).join("") : `<li style="color:var(--text-muted); font-style:italic; font-size: var(--text-sm);">Aucune dépendance déclarée.</li>`;
             ul.querySelectorAll(".rm-dep").forEach(btn => btn.onclick = () => { deps.splice(parseInt(btn.dataset.i, 10), 1); renderDepsList(); });

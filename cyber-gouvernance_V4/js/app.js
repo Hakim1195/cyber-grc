@@ -83,6 +83,7 @@ async function startApp() {
        liste des routes se relit donc AILLEURS — `Router.routesEnregistrees()`,
        qui la tient du routeur lui-même. */
     Router.init({
+        "/accueil": () => AccueilModule.render(),
         "/dashboard": () => DashboardModule.render(),
         "/synthese": () => SyntheseModule.render(),
         "/echeances": () => { if (typeof EcheancesModule !== "undefined") EcheancesModule.render(); },
@@ -150,6 +151,11 @@ async function startApp() {
 
         "/crise": () => { if (typeof CriseModule !== "undefined") CriseModule.renderList(); },
         "/crise-fiches": () => { if (typeof CriseModule !== "undefined") CriseModule.renderFiches(); },
+
+        // L20, action 20.2 — le formulaire de notification, préparé depuis un
+        // incident. ⚠️ Pas d'entrée de menu : on n'y va pas « voir », on y va
+        // DEPUIS un incident, et le bouton vit sur sa fiche.
+        "/notification/:id": (id) => { if (typeof NotificationModule !== "undefined") NotificationModule.render(id); },
         "/crise/:id": (id) => { if (typeof CriseModule !== "undefined") CriseModule.renderDetail(id); },
 
         "/pra": () => { if (typeof PraScenariosModule !== "undefined") PraScenariosModule.renderList(); },
@@ -230,7 +236,11 @@ async function startApp() {
     /* =========================
        LANCEMENT INITIAL
     ========================== */
-    const initialRoute = location.hash ? location.hash.replace(/^#/, "") : "/dashboard";
+    // ⚠️ **L'écran d'entrée est « Ma journée », pas le tableau de bord** (L17, A4).
+    // Le tableau de bord répond à « où en est le groupe ? » ; celui-ci répond à
+    // « qu'est-ce que je dois faire, moi ? ». Un produit de gouvernance qui ouvre
+    // sur des taux laisse son utilisateur chercher lui-même ce qui le concerne.
+    const initialRoute = location.hash ? location.hash.replace(/^#/, "") : "/accueil";
     Router.navigateTo(initialRoute, false);
 
     /* =========================
@@ -386,6 +396,7 @@ window.afficherBandeauDecouverte = function () {
    seul endroit où le rangement est décidé. `s` reste pour les deux écrans qui
    n'ont pas d'entrée de menu — `/soa` et `/crise-fiches` —, et pour eux seuls. */
 const ROUTE_META = {
+    "/accueil":      { s: "fil.section.pilotage",   t: "fil.accueil" },
     "/dashboard":    { s: "fil.section.pilotage",   t: "fil.dashboard" },
     "/synthese":     { s: "fil.section.pilotage",   t: "fil.synthese" },
     "/echeances":    { s: "fil.section.pilotage",   t: "fil.echeances" },
@@ -410,6 +421,7 @@ const ROUTE_META = {
     "/bia":          { s: "fil.section.continuite", t: "fil.bia" },
     "/crise":        { s: "fil.section.continuite", t: "fil.crise" },
     "/crise-fiches": { s: "fil.section.continuite", t: "fil.criseFiches" },
+    "/notification":  { s: "fil.section.operations",  t: "fil.notification" },
     "/pra":          { s: "fil.section.continuite", t: "fil.pra" },
     "/mco":          { s: "fil.section.continuite", t: "fil.mco" },
     "/tests":        { s: "fil.section.continuite", t: "fil.tests" },
@@ -474,7 +486,7 @@ window.renderBreadcrumb = function(route) {
     const el = document.getElementById("breadcrumb");
     if (!el) return;
     const segs = route.split("/").filter(Boolean);
-    const base = "/" + (segs[0] || "dashboard");
+    const base = "/" + (segs[0] || "accueil");
     const meta = ROUTE_META[base];
     // La section vient du MENU quand l'écran y a une entrée ; de la table sinon.
     const cleSection = sectionDuMenu(base) || (meta ? meta.s : null);
@@ -665,7 +677,7 @@ window.changerLangue = function (code) {
     I18n.appliquerAuDocument();
     if (window.renderContextSelector) window.renderContextSelector();
     if (window.renderBlocUtilisateur) window.renderBlocUtilisateur();
-    const route = location.hash.replace(/^#/, "") || "/dashboard";
+    const route = location.hash.replace(/^#/, "") || "/accueil";
     Router.navigateTo(route, false);
     if (window.showToast) window.showToast(t("langue.changee"), "info");
 };
@@ -934,7 +946,7 @@ window.changerFilialeActive = async function (filialeChoisie) {
              * pilotage) est valable dans les deux filiales et se contente d'un
              * nouveau rendu.
              */
-            const routeCourante = location.hash.replace(/^#/, "") || "/dashboard";
+            const routeCourante = location.hash.replace(/^#/, "") || "/accueil";
             const porteUnIdentifiant = routeCourante.split("/").filter(Boolean).length > 1;
             // ⚠️ Le second argument de `navigateTo` décide si l'ADRESSE suit. Un
             // simple redessin (`false`) laisse le hash en place — ce qui convient
@@ -942,7 +954,7 @@ window.changerFilialeActive = async function (filialeChoisie) {
             // l'écran montrerait le tableau de bord sous l'adresse d'une fiche,
             // et un rechargement ramènerait la fiche disparue.
             Router.navigateTo(
-                porteUnIdentifiant ? "/dashboard" : routeCourante,
+                porteUnIdentifiant ? "/accueil" : routeCourante,
                 porteUnIdentifiant);
             if (window.showToast) {
                 // Le libellé vient de la SESSION, pas du choix : c'est la même
@@ -998,7 +1010,7 @@ function messageRefusFiliale(e) {
 ========================= */
 window.updateActiveNav = function(route) {
     const segments = route.split("/").filter(Boolean);
-    let baseRoute = "/" + (segments[0] || "dashboard");
+    let baseRoute = "/" + (segments[0] || "accueil");
     // Les fiches réflexes sont une sous-vue de la Cellule de Crise : garder l'item actif.
     if (baseRoute === "/crise-fiches") baseRoute = "/crise";
 
@@ -1145,6 +1157,7 @@ window.showToast = function(message, type = "success") {
  * `Api.CONTRAT_AUTH.domaines`) : un domaine qui n'y figure pas est signalé.
  */
 const DOMAINE_PAR_ROUTE = Object.freeze({
+    "/accueil":      "pilotage",
     "/dashboard":    "pilotage",
     "/synthese":     "pilotage",
     "/echeances":    "pilotage",
@@ -1183,6 +1196,11 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/soa":          "conformite",
     "/mapping":      "conformite",
     "/incidents":    "incidents",
+    // L20, action 20.2 — le formulaire de notification. ⚠️ Il relève d'`incidents`,
+    // et non d'un domaine à lui : il met en forme UN incident, et qui ne peut pas lire
+    // les incidents n'a rien à y préparer. *Le produit a signalé lui-même cet oubli —
+    // « écran non rattaché à un domaine de droits » — avant qu'un essai le dise.*
+    "/notification": "incidents",
     "/documents":    "documents",
     "/rgpd":         "rgpd",
     "/rgpd-aipd":    "rgpd",
@@ -1217,7 +1235,7 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
 /** Domaine de la route affichée, ou "" si elle n'est pas rattachée. */
 window.domaineDeRoute = function (route) {
     const segments = String(route || "").split("/").filter(Boolean);
-    const base = "/" + (segments[0] || "dashboard");
+    const base = "/" + (segments[0] || "accueil");
     return DOMAINE_PAR_ROUTE[base] || "";
 };
 

@@ -159,7 +159,7 @@ describe('§1 — la surface n’existe pas tant qu’on ne l’ouvre pas', () =
         BASE_UTILISATEUR: 'grc_app',
         BASE_MOT_DE_PASSE: process.env['BASE_MOT_DE_PASSE'] ?? 'dev',
         SESSION_SECRET: 'x'.repeat(64), AUTH_LDAP_ACTIF: 'non',
-        SERVEUR_URL_PUBLIQUE: 'https://grc.exemple.interne',
+        SERVEUR_URL_PUBLIQUE: 'https://grc-test.site',
         PORTAIL_ACTIF: 'oui',
       });
     } catch (erreur) {

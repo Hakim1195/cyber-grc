@@ -33,7 +33,7 @@ const ExigencesModule = (() => {
                     </span>
                 </td>
                 <td>${escapeHtml(e.responsable) || "-"}</td>
-                ${currentClient === "global" ? `<td style="font-size: var(--text-sm); color:var(--text-muted);">${e.client_id ? escapeHtml(clients.find(c => c.id === e.client_id)?.nom || t("commun.inconnu")) : escapeHtml(t("commun.interne"))}</td>` : ""}
+                ${currentClient === "global" ? `<td class="txt-muted-sm">${e.client_id ? escapeHtml(clients.find(c => c.id === e.client_id)?.nom || t("commun.inconnu")) : escapeHtml(t("commun.interne"))}</td>` : ""}
             </tr>
         `).join("");
 
@@ -42,7 +42,7 @@ const ExigencesModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>${t("exigences.titre")}</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">${t("exigences.perimetreAffiche")} <strong>${contextName}</strong></p>
+                        <p class="sous-titre">${t("exigences.perimetreAffiche")} <strong>${contextName}</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">${t("commun.supprimerSelection")} (<span id="selectedCount">0</span>)</button>
@@ -139,12 +139,12 @@ const ExigencesModule = (() => {
 
                 <div class="dashboard-card">
                     <div class="form-group">
-                        <label>${t("exigences.codeLabel")} <span style="color:red">*</span></label>
+                        <label>${t("exigences.codeLabel")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="code" placeholder="${t("exigences.codePlaceholder")}" required />
                     </div>
 
                     <div class="form-group">
-                        <label>${t("exigences.colIntitule")} <span style="color:red">*</span></label>
+                        <label>${t("exigences.colIntitule")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="intitule" placeholder="${t("exigences.intitulePlaceholder")}" required />
                     </div>
 
@@ -168,7 +168,7 @@ const ExigencesModule = (() => {
                         <textarea id="commentaire" placeholder="${t("exigences.commentairePlaceholder")}"></textarea>
                     </div>
 
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="save">${t("commun.enregistrer")}</button>
                         <button id="cancel" style="margin-left: 10px;">${t("commun.annuler")}</button>
                     </div>
@@ -240,7 +240,7 @@ const ExigencesModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>${escapeHtml(exigence.code)}</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">${t("exigences.origine")} <strong>${escapeHtml(clientNom)}</strong></p>
+                        <p class="sous-titre">${t("exigences.origine")} <strong>${escapeHtml(clientNom)}</strong></p>
                     </div>
                     <button id="deleteBtn" style="background-color: var(--color-danger);">${t("commun.supprimer")}</button>
                 </div>
@@ -250,7 +250,7 @@ const ExigencesModule = (() => {
                         <h3>${t("exigences.details")}</h3>
 
                         <div class="form-group">
-                            <label>${t("exigences.colIntitule")} <span style="color:red">*</span></label>
+                            <label>${t("exigences.colIntitule")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                             <input id="intitule" value="${escapeHtml(exigence.intitule)}" required />
                         </div>
 
@@ -273,7 +273,7 @@ const ExigencesModule = (() => {
                         <div class="dashboard-card">
                             <h3>${t("exigences.actionsLiees")}</h3>
                             <ul style="margin-bottom: 15px;">${actionsHtml || `<li><span style='color: var(--text-muted);'>${t("exigences.aucuneActionPlanifiee")}</span></li>`}</ul>
-                            <button id="addActionBtn" style="font-size: var(--text-sm);">${t("exigences.planifierAction")}</button>
+                            <button id="addActionBtn" class="txt-sm">${t("exigences.planifierAction")}</button>
                         </div>
 
                         <div class="dashboard-card">
@@ -332,7 +332,7 @@ const ExigencesModule = (() => {
                 <h1>${t("exigences.nouvelleAction")}</h1>
                 <div class="synthese-message info" style="margin-bottom: 20px; padding: 10px;">${tHtml("exigences.lieeExigence", { code: exigence.code })}</div>
                 <div class="dashboard-card">
-                    <div class="form-group"><label>${t("actions.titreAction")} <span style="color:red">*</span></label><input id="titre" required /></div>
+                    <div class="form-group"><label>${t("actions.titreAction")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="titre" required /></div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
                         <div class="form-group">
@@ -361,7 +361,7 @@ const ExigencesModule = (() => {
                     <div class="form-group"><label>${t("commun.responsable")}</label><input id="responsable" list="personnes-list" /></div>
                     <div class="form-group"><label>${t("commun.commentaire")}</label><textarea id="commentaire"></textarea></div>
 
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="saveAction">${t("risques.creerAction")}</button>
                         <button id="cancelAction" style="margin-left: 10px;">${t("commun.annuler")}</button>
                     </div>

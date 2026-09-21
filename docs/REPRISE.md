@@ -489,9 +489,15 @@ Deux critères d'acceptation méritent d'être lus avant d'écrire une ligne :
 - **L26.1 doit conserver les codes à l'octet près** : les auto-évaluations sont stockées par
   `(ref_id, code)`, et une divergence silencieuse réattribuerait des réponses d'audit.
 
-**Ce qui reste des lots livrés, nommé plutôt que tu** : 20.2 (formulaires ANSSI/CNIL), 24.2
-en partie (agrégation par répondant), L17 A4 et A5 (écran de démarrage par rôle, Kanban), et
-les gabarits XBRL de DORA.
+**Ce qui reste des lots livrés, nommé plutôt que tu** : 24.2 en partie (agrégation par
+répondant) et les gabarits **XBRL** de DORA (format de dépôt versionné par l'ESA).
+
+⚠️ ~~20.2 (formulaires ANSSI/CNIL)~~ et ~~L17 A4 et A5~~ — ✅ **LIVRÉS le 21/09/2026**,
+gardés barrés plutôt qu'effacés. **20.2** : un formulaire pré-rempli depuis la fiche
+d'incident, pour les deux régimes, qui **dit ses propres manques** — *un formulaire à
+moitié rempli est plus dangereux qu'un formulaire vide : vide, on le remplit ; à moitié
+rempli, on l'envoie.* Le produit ne transmet rien, et le document le porte en toutes
+lettres.
 
 ⚠️ ~~L16-D3 (recherche documentaire)~~ — ✅ **LIVRÉE le 21/09/2026**, migration `059`. Gardée
 barrée plutôt qu'effacée : elle avait été reportée **cinq fois**, et une ligne effacée est un
@@ -591,16 +597,25 @@ rougir quoi que ce soit, et tous se voyaient en dix minutes de clics.* Prévoyez
    dans des règles d'impression, donc légitimes.** Le travail avait été fait ; la phrase,
    elle, envoyait la session suivante le refaire. *Une liste de travaux restants qui garde
    un travail achevé coûte plus cher qu'une liste incomplète : elle est crue.*
-2. **Les styles en ligne** — **1 173 attributs `style="`** mesurés le 21/09/2026 dans les
-   47 fichiers de `js/modules/` (audits 118, prestataires 102, settings 71, scénarios PRA
-   68, tableau de bord 62). Les remonter en classes rend l'ensemble homogène et rend le
-   prochain changement possible. ⚠️ **C'est désormais le premier poste**, la densité étant
-   close.
-3. **Écran de démarrage par rôle** (L17, A4) et **Kanban du plan d'actions** (A5).
-   ⚠️ **Mesuré le 21/09/2026 : ni l'un ni l'autre n'existe** — aucun fichier, aucune
-   fonction, aucune route dans `js/`. Ce sont les deux seuls items de la vague V-A jamais
-   construits, et V-A reste d'ailleurs la seule vague du `PLAN_ACHEVEMENT.md`, avec V-B, à
-   ne porter **aucune ligne de clôture**.
+2. **Les styles en ligne** — première passe faite le 21/09/2026 : **1 205 → 895**.
+   ⚠️ **Le gain n'est pas le compte, c'est ce qu'il a sorti** : `style="color:red"`
+   apparaissait **39 fois dans 17 modules** sur les astérisques de champ obligatoire — une
+   couleur BRUTE, hors du système de tokens, et qui empruntait le rouge que le produit
+   réserve aux statuts CRITIQUES. Une pièce d'audit vit de ce code couleur ; le diluer sur
+   une marque de saisie est un défaut, pas un détail. Elle a désormais son token,
+   `--marque-requis`, non sémantique.
+   Onze classes utilitaires couvrent les motifs répétés plus de quinze fois (270 attributs
+   convertis, dont 24 **fusionnés** dans une classe existante — remplacer sans fusionner
+   aurait produit deux attributs `class`, dont le second est ignoré en silence).
+   ⚠️ **Les 895 restants ne se convertissent PAS de force** : sur 565 motifs distincts, la
+   plupart ne servent qu'un écran, et les nommer produirait des classes à un seul usage —
+   des noms à retenir sans rien en échange.
+3. ~~**Écran de démarrage par rôle** (L17, A4) et **Kanban du plan d'actions** (A5)~~ —
+   ✅ **LIVRÉS le 21/09/2026**. Ils étaient les deux seuls items de la vague V-A jamais
+   construits, et **V-A n'avait aucune ligne de clôture** — elle en a une désormais.
+   *Une vague qu'on n'a pas déclarée close reste ouverte sans que personne le remarque :
+   c'est ainsi que deux écrans sont restés dus onze jours pendant que quatre vagues
+   postérieures se fermaient.*
 4. **États vides** — chaque écran doit **dire pourquoi** il est vide. Un vide sans
    explication apprend à ne plus croire ce qu'on montre (classe Q-201 / Q-207).
 5. **Impression** — la sortie papier est une **pièce d'audit** ; elle mérite une relecture
@@ -640,7 +655,7 @@ confronte au catalogue et rougit sinon : migrations, garde-fous, tables, politiq
 ## 8. L'environnement — mesuré, pas supposé
 
 Tout tourne **sur cette machine** : base, annuaire AD simulé (`grc-ad`), serveur, Apache.
-La recette est en ligne en permanence sur `https://grc.exemple.interne/`, en profil
+La recette est en ligne en permanence sur `https://grc-test.site/`, en profil
 **`decouverte`** depuis le 15/09.
 
 **Avant d'écrire qu'une chose est impossible ici, l'essayer.** Trois affirmations fausses sur

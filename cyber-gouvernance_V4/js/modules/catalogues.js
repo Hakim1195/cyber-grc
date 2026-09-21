@@ -94,7 +94,7 @@ const CataloguesModule = (() => {
     function blocPlan() {
         if (!plan) return "";
         const liste = (entrees, rendre) => entrees.length === 0
-            ? `<p style="color: var(--text-muted);">${t("catalogues.aucun")}</p>`
+            ? `<p class="txt-muted">${t("catalogues.aucun")}</p>`
             : `<ul style="max-height: 240px; overflow-y: auto;">${entrees.map(rendre).join("")}</ul>`;
 
         return `
@@ -157,7 +157,7 @@ const CataloguesModule = (() => {
                     <tr>
                         <td><code>${escapeHtml(s.code)}</code> ${escapeHtml(String(s.titre).substring(0, 90))}</td>
                         <td>${s.propositions.length === 0
-                            ? `<span style="color: var(--text-muted);">${t("catalogues.aucuneProposition")}</span>`
+                            ? `<span class="txt-muted">${t("catalogues.aucuneProposition")}</span>`
                             : s.propositions.map(p => `
                                 <div style="margin-bottom: 4px;">
                                     <code>${escapeHtml(p.code)}</code>
@@ -220,7 +220,7 @@ const CataloguesModule = (() => {
                 <div class="dashboard-card" style="margin-bottom: 1.5rem;">
                     <h3>${t("catalogues.listeTitre")}</h3>
                     ${etat === null
-                        ? `<p style="color: var(--text-muted);">${t("commun.chargement")}</p>`
+                        ? `<p class="txt-muted">${t("commun.chargement")}</p>`
                         : `<table class="data-table"><thead><tr>
                                 <th>${t("catalogues.colNom")}</th>
                                 <th>${t("catalogues.colEditeur")}</th>

@@ -28,7 +28,7 @@
                  libellé et l'aria-label, puis ajoute le logo s'il y en a un.
                  Le texte ne disparaît jamais au profit du logo — c'est le
                  repli visible d'une filiale sans logo propre. -->
-            <a href="#/dashboard" class="brand-link" id="brandLink" aria-label="Cyber GRC — Tableau de bord">
+            <a href="#/accueil" class="brand-link" id="brandLink" aria-label="Cyber GRC — Ma journée">
                 <img id="brandLogo" data-brand-logo hidden alt="" class="brand-logo" />
                 <span id="brandText" class="brand-text">Cyber GRC</span>
             </a>
@@ -39,6 +39,7 @@
         </button>
         <ul class="main-nav">
             <li class="nav-section" data-section="pilotage" style="margin-top:0;"><button type="button" class="nav-section-btn" data-cible="pilotage" aria-expanded="true"><span data-i18n="nav.section.pilotage">Pilotage</span><span class="nav-chevron" aria-hidden="true"></span></button></li>
+            <li><a href="#/accueil" data-route="/accueil"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span data-i18n="nav.accueil">Ma journée</span></a></li>
             <li><a href="#/dashboard" data-route="/dashboard"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span data-i18n="nav.dashboard">Tableau de bord</span></a></li>
             <li><a href="#/synthese" data-route="/synthese"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span data-i18n="nav.synthese">Synthèse Direction</span></a></li>
             <li><a href="#/echeances" data-route="/echeances"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span data-i18n="nav.echeances">Échéancier</span><span class="nav-badge" id="echeancesBadge" hidden>0</span></a></li>
@@ -144,6 +145,8 @@
 
     <script src="js/modules/clients.js"></script>
     <script src="js/modules/personnel.js"></script>
+    <script src="js/modules/accueil.js"></script>
+    <script src="js/modules/notification.js"></script>
     <script src="js/modules/dashboard.js"></script>
     <script src="js/modules/synthese.js"></script>
     <script src="js/modules/echeances.js"></script>

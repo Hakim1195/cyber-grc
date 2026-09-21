@@ -303,7 +303,7 @@ const MatriceModule = (() => {
 
                     <div id="matrix-detail-panel" class="dashboard-card detail-panel" style="display: none;">
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--primary); padding-bottom: 10px; margin-bottom: 15px;">
-                            <h3 id="detail-title" style="margin:0;">Liste des risques</h3>
+                            <h3 id="detail-title" class="m0">Liste des risques</h3>
                             <button type="button" id="matrixCloseDetailBtn" style="padding: 2px 8px; font-size: var(--text-sm); background: var(--bg-body); color: #333; border: 1px solid var(--border);">Fermer X</button>
                         </div>
                         <ul id="detail-list" class="detail-risk-list">

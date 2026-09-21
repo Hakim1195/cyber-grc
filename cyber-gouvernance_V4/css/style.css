@@ -2888,3 +2888,301 @@ input, select, textarea {
     max-height: 22em;
     overflow-y: auto;
 }
+
+/* =====================================================================
+   KANBAN DU PLAN D'ACTIONS  (lot L17, action A5)
+
+   ⚠️ Aucune couleur n'est posée en dur : tout vient de `tokens.css`, et les
+   quatre couleurs sémantiques restent réservées aux statuts (décision §2 du
+   `CLAUDE.md`). Le bord gauche d'une carte porte la PRIORITÉ, qui n'est pas
+   un statut de conformité — c'est pourquoi il emprunte `--color-info` et non
+   le vert de « conforme ».
+   ===================================================================== */
+
+.bascule-vue {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.bascule-vue button {
+    background: var(--surface);
+    color: var(--text-main);
+    border: 0;
+    padding: 7px 16px;
+    font-size: var(--text-sm);
+    cursor: pointer;
+}
+
+.bascule-vue button + button { border-left: 1px solid var(--border); }
+.bascule-vue button:hover { background: var(--surface-alt, var(--bg)); }
+
+.bascule-vue button.actif {
+    background: var(--primary);
+    color: #fff;
+}
+
+.kanban {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    align-items: start;
+}
+
+.kanban-colonne {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.kanban-titre {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0 0 10px;
+    font-size: var(--text-base);
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    color: var(--text-muted);
+}
+
+.kanban-compte {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 9px;
+    font-size: var(--text-xs);
+    color: var(--text-main);
+}
+
+/* La pile garde une hauteur minimale : une colonne vide doit rester une
+   CIBLE DE DÉPÔT, sinon on ne peut jamais y ramener la première carte. */
+.kanban-pile {
+    min-height: 90px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-radius: 6px;
+    padding: 2px;
+}
+
+.kanban-pile.survol {
+    outline: 2px dashed var(--primary);
+    outline-offset: 2px;
+}
+
+.kanban-vide {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin: 0;
+    padding: 6px 2px;
+}
+
+.kanban-carte {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+}
+
+.kanban-carte.en-vol { opacity: .45; }
+.kanban-carte[draggable="true"] { cursor: grab; }
+
+/* Le titre est un BOUTON, pas un div cliquable : il prend le focus au
+   clavier et s'annonce comme actionnable. */
+.kanban-ouvrir {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    padding: 0;
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: var(--text-main);
+    cursor: pointer;
+}
+
+.kanban-ouvrir:hover { color: var(--primary); text-decoration: underline; }
+
+.kanban-meta {
+    margin: 6px 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+}
+
+.kanban-deplacer {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.kanban-deplacer button {
+    background: var(--bg);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-size: var(--text-sm);
+    line-height: 1.6;
+    cursor: pointer;
+}
+
+.kanban-deplacer button:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+@media print {
+    .kanban { grid-template-columns: repeat(3, 1fr); }
+    .kanban-deplacer, .bascule-vue { display: none; }
+}
+
+/* =====================================================================
+   FORMULAIRE DE NOTIFICATION AUX AUTORITÉS  (lot L20, action 20.2)
+
+   ⚠️ Ce document est destiné à être IMPRIMÉ et relu sur papier : c'est
+   ainsi qu'il sera vérifié avant d'être déposé. Les rubriques en creux
+   doivent donc rester visibles à l'impression — elles ne sont pas un
+   ornement d'écran, elles sont ce qui empêche un envoi incomplet.
+   ===================================================================== */
+
+.notif-document {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 22px 26px;
+    max-width: 52rem;
+}
+
+.notif-entete h2 {
+    margin: 0 0 6px;
+    font-size: var(--text-xl);
+}
+
+.notif-delai {
+    margin: 0 0 14px;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+}
+
+.notif-avertissement {
+    border-left: 4px solid var(--color-warning);
+    background: var(--bg);
+    padding: 10px 14px;
+    margin: 0 0 14px;
+    font-size: var(--text-sm);
+}
+
+.notif-compte {
+    font-weight: 700;
+    margin: 0 0 14px;
+    color: var(--color-warning);
+}
+
+.notif-compte.notif-complet { color: var(--color-success); }
+
+.notif-table th[scope="row"] {
+    width: 34%;
+    text-align: left;
+    vertical-align: top;
+    font-weight: 700;
+}
+
+.notif-table td { vertical-align: top; }
+
+.notif-manque td em {
+    color: var(--color-danger);
+    font-style: normal;
+    font-weight: 700;
+    letter-spacing: .03em;
+}
+
+.notif-attendu {
+    margin: 4px 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+}
+
+.notif-pied {
+    margin-top: 18px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+}
+
+@media print {
+    .notif-document { border: 0; padding: 0; max-width: none; }
+    /* Une rubrique en creux doit sauter aux yeux sur le papier : c'est là
+       qu'on relit avant d'envoyer. */
+    .notif-manque td em { text-decoration: underline; }
+}
+
+/* Astérisque de champ obligatoire — voir le token dans `tokens.css`. */
+.champ-requis {
+    color: var(--marque-requis);
+    font-weight: 700;
+    margin-left: 2px;
+}
+
+/* Bouton « retirer une ligne » d'un tableau de saisie (grille d'audit).
+   ⚠️ Il portait `color:red` en dur ; il prend le rouge SÉMANTIQUE, lui,
+   parce qu'il désigne bien une destruction — la nuance avec l'astérisque
+   de champ obligatoire est le sujet même du token `--marque-requis`. */
+.bouton-retirer {
+    background: none;
+    color: var(--color-danger);
+    border: none;
+    font-size: var(--text-xl);
+    line-height: 1;
+    cursor: pointer;
+}
+
+/* =====================================================================
+   CLASSES UTILITAIRES  (passe de style du 21/09/2026)
+
+   ⚠️ **Elles ne remplacent PAS le système de composants** : chacune reprend
+   un motif de `style="…"` qui se répétait plus de quinze fois dans
+   `js/modules/`, à l'identique. Le gain n'est pas cosmétique — c'est que le
+   prochain changement de densité, de gouttière ou de couleur de lien se
+   fasse à UN endroit au lieu de vingt-sept.
+
+   ⚠️ Mesuré avant la passe : 1 205 attributs `style` pour 565 motifs
+   DISTINCTS. Les onze classes ci-dessous en couvrent environ 235 — les plus
+   répétés. Le reste est spécifique à son écran, et le convertir de force
+   produirait des classes à un seul usage, c'est-à-dire des noms à retenir
+   sans rien en échange.
+   ===================================================================== */
+
+.t-droite   { text-align: right; }
+.t-centre   { text-align: center; }
+.m0         { margin: 0; }
+.mt0        { margin-top: 0; }
+.mt-20      { margin-top: 20px; }
+.txt-sm     { font-size: var(--text-sm); }
+.txt-muted  { color: var(--text-muted); }
+.lien-accent { color: var(--accent); }
+
+/* Le sous-titre d'un entête d'écran : gris, légèrement décollé du titre. */
+.sous-titre { color: var(--text-muted); margin-top: 5px; }
+
+/* Mention secondaire : grise ET petite. */
+.txt-muted-sm { color: var(--text-muted); font-size: var(--text-sm); }
+
+/* La grille à deux colonnes des formulaires. Elle se replie d'elle-même
+   sous 640 px : sans cela, deux colonnes de 1fr sur un téléphone donnent
+   deux colonnes illisibles plutôt qu'une lisible. */
+.grille-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+@media (max-width: 640px) {
+    .grille-2 { grid-template-columns: 1fr; }
+}

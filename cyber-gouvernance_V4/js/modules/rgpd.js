@@ -37,7 +37,7 @@ const RgpdModule = (() => {
                 <td><strong>${escapeHtml(t.nom)}</strong></td>
                 <td style="font-size: var(--text-base);">${escapeHtml(t.finalite || "—")}</td>
                 <td>${escapeHtml(t.base_legale || "—")}</td>
-                <td style="text-align:center;">${t.donnees_sensibles ? `<span class="status status-non-conforme">Sensibles</span>` : "—"}</td>
+                <td class="t-centre">${t.donnees_sensibles ? `<span class="status status-non-conforme">Sensibles</span>` : "—"}</td>
                 <td style="font-size: var(--text-base);">${escapeHtml(t.duree_conservation || "—")}</td>
             </tr>`).join("");
 
@@ -56,18 +56,18 @@ const RgpdModule = (() => {
                 <div class="soa-print-head" style="display:none;">
                     <h1 style="margin-bottom:4px;">Registre des activités de traitement — Article 30 RGPD</h1>
                     <img class="print-brand-logo" data-brand-logo hidden alt="" />
-                    <p style="color:var(--text-muted);">${escapeHtml(Identite.piedImpression())} · ${dateJour}</p>
+                    <p class="txt-muted">${escapeHtml(Identite.piedImpression())} · ${dateJour}</p>
                 </div>
 
                 <div class="dashboard-grid no-print" style="grid-template-columns:repeat(2,1fr); margin-bottom:1.5rem;">
-                    <div class="dashboard-card" style="text-align:center;"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Traitements</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${trs.length}</div></div>
+                    <div class="dashboard-card t-centre"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Traitements</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${trs.length}</div></div>
                     <div class="dashboard-card" style="text-align:center; border-top:4px solid var(--color-danger);"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Données sensibles</h3><div class="big-kpi" style="font-size: var(--text-3xl); color:var(--color-danger);">${sensibles}</div></div>
                 </div>
 
                 ${trs.length === 0
                     ? `<div class="empty-state"><h3>Aucun traitement enregistré</h3><p>Recensez vos traitements de données personnelles (paie, clients, recrutement, vidéosurveillance…).</p><button id="addBtn2" style="background:var(--primary);">Ajouter un traitement</button></div>`
                     : `<table class="data-table soa-table">
-                        <thead><tr><th>Traitement</th><th>Finalité</th><th>Base légale</th><th style="text-align:center;">Catégorie</th><th>Conservation</th></tr></thead>
+                        <thead><tr><th>Traitement</th><th>Finalité</th><th>Base légale</th><th class="t-centre">Catégorie</th><th>Conservation</th></tr></thead>
                         <tbody>${rows}</tbody>
                     </table>`}
 
@@ -164,9 +164,9 @@ const RgpdModule = (() => {
         return `
             <div class="dash-section-title" style="margin-top:2.5rem;">Documents et données personnelles</div>
             <div class="dashboard-grid no-print" style="grid-template-columns:repeat(3,1fr); margin-bottom:1rem;">
-                <div class="dashboard-card" style="text-align:center;"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Documents porteurs de données personnelles</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${porteurs.length}</div></div>
-                <div class="dashboard-card" style="text-align:center;"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Rattachés à un traitement</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${rattaches.length}</div></div>
-                <div class="dashboard-card" style="text-align:center;"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Porteurs sans traitement</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${orphelins.length}</div></div>
+                <div class="dashboard-card t-centre"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Documents porteurs de données personnelles</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${porteurs.length}</div></div>
+                <div class="dashboard-card t-centre"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Rattachés à un traitement</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${rattaches.length}</div></div>
+                <div class="dashboard-card t-centre"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Porteurs sans traitement</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${orphelins.length}</div></div>
             </div>
             ${orphelins.length
                 ? `<p style="color:var(--text-muted); font-size: var(--text-base); max-width:70ch;">
@@ -174,7 +174,7 @@ const RgpdModule = (() => {
                        personnelles sans être rattaché${orphelins.length > 1 ? "s" : ""} à un traitement du registre.
                        Ce n'est pas une faute — tout document nommant quelqu'un ne relève pas d'un traitement
                        déclaré — mais c'est la liste par laquelle commence une revue de conformité :
-                       <a href="#/documents" style="color:var(--accent);">Gestion documentaire</a>.
+                       <a href="#/documents" class="lien-accent">Gestion documentaire</a>.
                    </p>`
                 : ""}`;
     }
@@ -200,7 +200,7 @@ const RgpdModule = (() => {
                     dont <strong>${perso.length}</strong> portant des données personnelles.
                 </p>
                 <table class="data-table">
-                    <thead><tr><th>Donnée</th><th>Finalité</th><th>Base légale</th><th style="text-align:center;">Durée</th><th>À l'expiration</th><th>Justification</th></tr></thead>
+                    <thead><tr><th>Donnée</th><th>Finalité</th><th>Base légale</th><th class="t-centre">Durée</th><th>À l'expiration</th><th>Justification</th></tr></thead>
                     <tbody>${colonnes.map(ligneRegistreHtml).join("")}</tbody>
                 </table>`;
             bouton.remove();
@@ -230,7 +230,7 @@ const RgpdModule = (() => {
             <td>${escapeHtml(c.base_legale || "—")}</td>
             <td style="text-align:center; white-space:nowrap;">${escapeHtml(duree)}</td>
             <td>${escapeHtml(libelleExpiration(c.a_expiration))}</td>
-            <td style="color:var(--text-muted);">${escapeHtml(c.justification || "")}</td>
+            <td class="txt-muted">${escapeHtml(c.justification || "")}</td>
         </tr>`;
     }
 
@@ -255,7 +255,7 @@ const RgpdModule = (() => {
                 <h1>Nouveau traitement</h1>
                 <div class="dashboard-card" style="max-width:860px;">
                     ${formFieldsHtml({})}
-                    <div style="margin-top:20px;"><button id="save">Enregistrer</button><button id="cancel" style="margin-left:10px; background:var(--color-gray);">Annuler</button></div>
+                    <div class="mt-20"><button id="save">Enregistrer</button><button id="cancel" style="margin-left:10px; background:var(--color-gray);">Annuler</button></div>
                 </div>
             </section>`;
         document.getElementById("save").onclick = () => {
@@ -280,12 +280,12 @@ const RgpdModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <div><h1>${escapeHtml(t.nom)}</h1><p style="color:var(--text-muted); margin-top:5px;"><a href="#/rgpd" style="color:var(--accent);">Registre RGPD</a></p></div>
+                    <div><h1>${escapeHtml(t.nom)}</h1><p class="sous-titre"><a href="#/rgpd" class="lien-accent">Registre RGPD</a></p></div>
                     <button id="deleteBtn" style="background:var(--color-danger);">Supprimer</button>
                 </div>
                 <div class="dashboard-card" style="max-width:860px;">
                     ${formFieldsHtml(t)}
-                    <div style="margin-top:20px;"><button id="saveBtn">Mettre à jour</button></div>
+                    <div class="mt-20"><button id="saveBtn">Mettre à jour</button></div>
                 </div>
 
                 <!-- Action 20.3 — l'analyse d'impact de CE traitement. Elle POINTE
@@ -318,20 +318,20 @@ const RgpdModule = (() => {
         const baseOpts = `<option value="">— À déterminer —</option>` + BASES.map(b => `<option value="${escapeHtml(b)}" ${b === t.base_legale ? "selected" : ""}>${escapeHtml(b)}</option>`).join("");
         const mesuresHtml = mesures.length
             ? `<div class="inc-actifs">${mesures.map(m => `<label class="inc-checkbox"><input type="checkbox" class="trt-mesure" value="${escapeHtml(m.id)}" ${linked.includes(m.id) ? "checked" : ""}> ${escapeHtml(m.nom)}</label>`).join("")}</div>`
-            : `<p style="color:var(--text-muted); font-size: var(--text-sm);">Aucune mesure de sécurité définie. Créez-en dans <a href="#/mesures" style="color:var(--accent);">Mesures de sécurité</a>.</p>`;
+            : `<p class="txt-muted-sm">Aucune mesure de sécurité définie. Créez-en dans <a href="#/mesures" class="lien-accent">Mesures de sécurité</a>.</p>`;
         return `
-            <div class="form-group"><label>Nom du traitement <span style="color:red">*</span></label><input id="nom" value="${escapeHtml(t.nom || "")}" placeholder="Ex : Gestion de la paie" /></div>
+            <div class="form-group"><label>Nom du traitement <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="nom" value="${escapeHtml(t.nom || "")}" placeholder="Ex : Gestion de la paie" /></div>
             <div class="form-group"><label>Finalité ${Help.tip("À quoi sert le traitement, l'objectif poursuivi (ex : verser les salaires).")}</label><textarea id="finalite" placeholder="Objectif du traitement">${escapeHtml(t.finalite || "")}</textarea></div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+            <div class="grille-2">
                 <div class="form-group"><label>Base légale ${Help.tip("Ce qui autorise le traitement au sens du RGPD : consentement, contrat, obligation légale, intérêt légitime…")}</label><select id="base_legale">${baseOpts}</select></div>
                 <div class="form-group"><label>Responsable / service</label><input id="responsable" list="personnes-list" value="${escapeHtml(t.responsable || "")}" /></div>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+            <div class="grille-2">
                 <div class="form-group"><label>Personnes concernées</label><input id="personnes_concernees" value="${escapeHtml(t.personnes_concernees || "")}" placeholder="Ex : salariés, candidats" /></div>
                 <div class="form-group"><label>Catégories de données</label><input id="categories_donnees" value="${escapeHtml(t.categories_donnees || "")}" placeholder="Ex : identité, RIB, coordonnées" /></div>
             </div>
             <div class="form-group"><label class="inc-checkbox" style="border:none; background:none; padding:0;"><input type="checkbox" id="donnees_sensibles" ${t.donnees_sensibles ? "checked" : ""}> Données sensibles ${Help.tip("Catégories particulières (article 9) : santé, opinions, biométrie, etc. Leur traitement est encadré plus strictement.")}</label></div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+            <div class="grille-2">
                 <div class="form-group"><label>Destinataires</label><input id="destinataires" value="${escapeHtml(t.destinataires || "")}" placeholder="Ex : service RH, URSSAF, prestataire paie" /></div>
                 <div class="form-group"><label>Transfert hors UE ${Help.tip("Les données sont-elles transférées hors de l'Union européenne ? Si oui, préciser le pays et les garanties.")}</label><input id="transfert_hors_ue" value="${escapeHtml(t.transfert_hors_ue || "")}" placeholder="Non / pays + garanties" /></div>
             </div>

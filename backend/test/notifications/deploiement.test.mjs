@@ -251,7 +251,7 @@ describe('L12 — la tâche planifiée, lancée comme systemd la lance', () => {
   const environnement = (smtp) => ({
     NODE_ENV: 'developpement',
     SERVEUR_PORT: '3999',
-    SERVEUR_URL_PUBLIQUE: 'https://grc.exemple.interne',
+    SERVEUR_URL_PUBLIQUE: 'https://grc-test.site',
     BASE_HOTE: process.env.BASE_HOTE ?? '127.0.0.1',
     BASE_PORT: process.env.BASE_PORT ?? '5432',
     BASE_NOM: base.nom,

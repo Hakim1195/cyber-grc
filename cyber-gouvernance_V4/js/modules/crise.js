@@ -156,7 +156,7 @@ const CriseModule = (() => {
                 <div class="dashboard-header no-print">
                     <div>
                         <h1>Fiches réflexes de crise</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Que faire dans les premières minutes, rôle par rôle. ${Help.tip("Une fiche réflexe est une carte d'action synthétique : les gestes prioritaires à effectuer immédiatement, sans avoir à réfléchir dans l'urgence.")}</p>
+                        <p class="sous-titre">Que faire dans les premières minutes, rôle par rôle. ${Help.tip("Une fiche réflexe est une carte d'action synthétique : les gestes prioritaires à effectuer immédiatement, sans avoir à réfléchir dans l'urgence.")}</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button type="button" id="backToCriseBtn" class="no-print" style="background: var(--bg-body); color: var(--text-main); border: 1px solid var(--border);">Retour à l'annuaire</button>
@@ -240,7 +240,7 @@ const CriseModule = (() => {
                 <div class="dashboard-header no-print">
                     <div>
                         <h1>Annuaire de la Cellule de Crise</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Périmètre : <strong>Interne (Continuité d'activité)</strong></p>
+                        <p class="sous-titre">Périmètre : <strong>Interne (Continuité d'activité)</strong></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
@@ -322,7 +322,7 @@ const CriseModule = (() => {
 
                 <div class="dashboard-card" style="max-width: 800px;">
                     <div class="form-group">
-                        <label>Rôle assigné en cas de crise <span style="color:red">*</span></label>
+                        <label>Rôle assigné en cas de crise <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <select id="role">
                             <option value="Directeur de crise (Décisionnel)">Directeur de crise (Pilote / Tranche les décisions)</option>
                             <option value="Responsable IT / SSI (Opérationnel)">Responsable IT / SSI (Coordination technique)</option>
@@ -334,7 +334,7 @@ const CriseModule = (() => {
                     </div>
 
                     <div class="form-group">
-                        <label>Nom & Prénom <span style="color:red">*</span></label>
+                        <label>Nom & Prénom <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="nom" list="personnes-list" placeholder="Ex: Jean DUPONT" required />
                     </div>
 
@@ -359,7 +359,7 @@ const CriseModule = (() => {
                         <textarea id="notes" placeholder="Ex: Doit appeler l'assureur cyber dans les 48h, a les clés de la salle serveur..."></textarea>
                     </div>
 
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="saveBtn">Ajouter à l'annuaire</button>
                         <button id="cancelBtn" style="margin-left: 10px;">Annuler</button>
                     </div>
@@ -412,7 +412,7 @@ const CriseModule = (() => {
 
                 <div class="dashboard-card" style="max-width: 800px;">
                     <div class="form-group">
-                        <label>Rôle assigné en cas de crise <span style="color:red">*</span></label>
+                        <label>Rôle assigné en cas de crise <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <select id="role">
                             <option value="Directeur de crise (Décisionnel)" ${membre.role === "Directeur de crise (Décisionnel)" ? "selected" : ""}>Directeur de crise (Pilote / Tranche les décisions)</option>
                             <option value="Responsable IT / SSI (Opérationnel)" ${membre.role === "Responsable IT / SSI (Opérationnel)" ? "selected" : ""}>Responsable IT / SSI (Coordination technique)</option>
@@ -424,7 +424,7 @@ const CriseModule = (() => {
                     </div>
 
                     <div class="form-group">
-                        <label>Nom & Prénom <span style="color:red">*</span></label>
+                        <label>Nom & Prénom <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="nom" list="personnes-list" value="${esc(membre.nom)}" required />
                     </div>
 
@@ -449,7 +449,7 @@ const CriseModule = (() => {
                         <textarea id="notes">${esc(membre.notes || "")}</textarea>
                     </div>
 
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="saveBtn">Mettre à jour</button>
                     </div>
                 </div>

@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2382 essais, trente-huit familles (voir plus bas)
+npm test                           # 2405 essais, quarante et une familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -783,10 +783,10 @@ dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, 
 la comparaison au marché du 08/09/2026.
 
 **Mesuré au 19/09/2026, après la vague F** (L27 : assistance par IA — `057` ; L28 :
-portail fournisseur — `058`, **construit et NON ouvert**) : `npm test` → **2382 essais, 2382 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+portail fournisseur — `058`, **construit et NON ouvert**) : `npm test` → **2405 essais, 2405 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **63 garde-fous consignés**, **59 migrations**,
-**89 tables**, **495 décisions** au registre de l'article 30 ; publication → **85
+**89 tables**, **495 décisions** au registre de l'article 30 ; publication → **87
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **14 conformes,
 2 réserves, 0 bloquant** sur **quinze sujets** — le quinzième, « assistance IA », naît de
 L27 et rend le mode en vigueur.
@@ -964,15 +964,15 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2382 · pass 2382 · fail 0
-                                                   base 326 · api 302 · navigateur 246
+npm test                                         → tests 2405 · pass 2405 · fail 0
+                                                   base 326 · api 302 · navigateur 264
                                                    pieces 142 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73
                                                    journal-lecture 72 · approbations 71
-                                                   depot 66 · modules 55 · annuaire 48
+                                                   depot 66 · modules 57 · annuaire 48
                                                    tiers 36 · documents 35 · filiales 35
-                                                   documentation 33 · campagnes 25
+                                                   documentation 36 · campagnes 25
                                                    journal 25 · catalogues 24 · ouverture 24
                                                    echelles 23 · quantification 22
                                                    assistance 16 · collecte 15 · ebios 15

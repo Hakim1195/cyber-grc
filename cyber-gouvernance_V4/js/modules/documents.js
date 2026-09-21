@@ -159,10 +159,10 @@ const DocumentsModule = (() => {
             const ou = (r.ou || []).map(o => OU[o] || o).join(" et ");
             return `<tr class="clickable-row" data-id="${escapeHtml(r.id)}">
                 <td><strong>${escapeHtml(r.titre)}</strong></td>
-                <td style="font-size: var(--text-sm);">${escapeHtml(r.type || "—")}</td>
-                <td style="text-align:center;">${escapeHtml(r.version || "—")}</td>
+                <td class="txt-sm">${escapeHtml(r.type || "—")}</td>
+                <td class="t-centre">${escapeHtml(r.version || "—")}</td>
                 <td>${statutBadge(r.statut)}</td>
-                <td style="font-size: var(--text-sm); color:var(--text-muted);">${escapeHtml(ou ? "Trouvé dans " + ou : "—")}</td>
+                <td class="txt-muted-sm">${escapeHtml(ou ? "Trouvé dans " + ou : "—")}</td>
             </tr>`;
         }).join("");
         return `<p class="no-print" style="font-size: var(--text-sm); color:var(--text-muted); margin-bottom:.5rem;">
@@ -171,7 +171,7 @@ const DocumentsModule = (() => {
                     <button type="button" id="rechercheEffacer" class="lien-bandeau">Revenir au registre</button>
                 </p>
                 <table class="data-table">
-                    <thead><tr><th>Titre</th><th>Type</th><th style="text-align:center;">Version</th><th>Statut</th><th>Correspondance</th></tr></thead>
+                    <thead><tr><th>Titre</th><th>Type</th><th class="t-centre">Version</th><th>Statut</th><th>Correspondance</th></tr></thead>
                     <tbody>${lignes}</tbody>
                 </table>`;
     }
@@ -228,8 +228,8 @@ const DocumentsModule = (() => {
             const r = revueState(d.date_revue);
             return `<tr class="clickable-row" data-id="${d.id}">
                 <td><strong>${escapeHtml(d.titre)}</strong>${etiquettesHtml(d)}</td>
-                <td style="font-size: var(--text-sm);">${escapeHtml(d.type || "—")}</td>
-                <td style="text-align:center;">${escapeHtml(d.version || "—")}</td>
+                <td class="txt-sm">${escapeHtml(d.type || "—")}</td>
+                <td class="t-centre">${escapeHtml(d.version || "—")}</td>
                 <td>${diffusionBadge(d)}${d.donnees_personnelles
                     ? ` <span class="marqueur-dp" title="Ce document contient des données personnelles.">DP</span>` : ""}</td>
                 <td>${escapeHtml(d.proprietaire || "—")}</td>
@@ -241,19 +241,19 @@ const DocumentsModule = (() => {
         const barreFiltres = `
             <div class="filtres-ligne no-print" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:1rem; flex-wrap:wrap;">
                 <div class="form-group" style="margin:0; flex:1 1 280px;">
-                    <label for="rechercheDocs" style="font-size: var(--text-sm);">Rechercher ${Help.tip("La recherche porte sur le titre, le type et les annotations, par un index plein texte : les accents et le pluriel sont ignorés, et « chiffrer » trouve « chiffrement ». Elle ne va pas encore dans le contenu des fichiers joints. Elle ne montre que les documents de votre périmètre.")}</label>
+                    <label for="rechercheDocs" class="txt-sm">Rechercher ${Help.tip("La recherche porte sur le titre, le type et les annotations, par un index plein texte : les accents et le pluriel sont ignorés, et « chiffrer » trouve « chiffrement ». Elle ne va pas encore dans le contenu des fichiers joints. Elle ne montre que les documents de votre périmètre.")}</label>
                     <input type="search" id="rechercheDocs" placeholder="chiffrement, sauvegarde, accès distants…"
                            maxlength="100" autocomplete="off" value="${escapeHtml(rechercheTerme)}">
                 </div>
-                <div class="form-group" style="margin:0;">
-                    <label style="font-size: var(--text-sm);">Diffusion</label>
+                <div class="form-group m0">
+                    <label class="txt-sm">Diffusion</label>
                     <select id="filtreDiffusion">
                         <option value="">Tous les niveaux</option>
                         ${CONFIDENTIALITES.map(c => `<option value="${escapeHtml(c[0])}" ${c[0] === filtreDiffusion ? "selected" : ""}>${escapeHtml(c[1])}</option>`).join("")}
                     </select>
                 </div>
-                <div class="form-group" style="margin:0;">
-                    <label style="font-size: var(--text-sm);">Étiquette</label>
+                <div class="form-group m0">
+                    <label class="txt-sm">Étiquette</label>
                     <select id="filtreEtiquette">
                         <option value="">Toutes</option>
                         ${etiquettesConnues.map(e => `<option value="${escapeHtml(e)}" ${e === filtreEtiquette ? "selected" : ""}>${escapeHtml(e)}</option>`).join("")}
@@ -277,13 +277,13 @@ const DocumentsModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>Gestion documentaire</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">Registre des politiques et documents de sécurité. ${Help.tip("Une documentation à jour (PSSI, charte, procédures) est attendue par la plupart des référentiels et par vos clients. Chaque fiche peut porter ses fichiers : l'application les analyse, en garde l'empreinte et les délivre elle-même. La pièce marquée « en vigueur » est celle qui fait foi, et c'est elle qui donne le numéro de version de la fiche. Le champ « Document resté ailleurs » ne désigne, lui, qu'une référence externe.")}</p>
+                        <p class="sous-titre">Registre des politiques et documents de sécurité. ${Help.tip("Une documentation à jour (PSSI, charte, procédures) est attendue par la plupart des référentiels et par vos clients. Chaque fiche peut porter ses fichiers : l'application les analyse, en garde l'empreinte et les délivre elle-même. La pièce marquée « en vigueur » est celle qui fait foi, et c'est elle qui donne le numéro de version de la fiche. Le champ « Document resté ailleurs » ne désigne, lui, qu'une référence externe.")}</p>
                     </div>
                     <button id="addBtn" style="background:var(--primary);">Nouveau document</button>
                 </div>
 
                 <div class="dashboard-grid" style="grid-template-columns:repeat(3,1fr); margin-bottom:1.5rem;">
-                    <div class="dashboard-card" style="text-align:center;"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Documents</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${docs.length}</div></div>
+                    <div class="dashboard-card t-centre"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Documents</h3><div class="big-kpi" style="font-size: var(--text-3xl);">${docs.length}</div></div>
                     <div class="dashboard-card" style="text-align:center; border-top:4px solid var(--color-success);"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">En vigueur</h3><div class="big-kpi" style="font-size: var(--text-3xl); color:var(--color-success);">${enVigueur}</div></div>
                     <div class="dashboard-card" style="text-align:center; border-top:4px solid var(--color-warning);"><h3 style="font-size: var(--text-base); color:var(--text-muted); text-transform:uppercase;">Revue à prévoir</h3><div class="big-kpi" style="font-size: var(--text-3xl); color:var(--color-warning);">${aReviser}</div></div>
                 </div>
@@ -298,7 +298,7 @@ const DocumentsModule = (() => {
                     : docs.length === 0
                     ? `<div class="empty-state"><h3>Aucun document ne correspond au filtre</h3><p>${tous.length} document${tous.length > 1 ? "s sont" : " est"} enregistré${tous.length > 1 ? "s" : ""} : c'est le filtre qui les masque, pas le registre qui est vide.</p><button type="button" id="filtreReset2" class="btn-secondary">Tout afficher</button></div>`
                     : `<table class="data-table">
-                        <thead><tr><th>Titre</th><th>Type</th><th style="text-align:center;">Version</th><th>Diffusion</th><th>Propriétaire</th><th>Statut</th><th>Prochaine revue</th></tr></thead>
+                        <thead><tr><th>Titre</th><th>Type</th><th class="t-centre">Version</th><th>Diffusion</th><th>Propriétaire</th><th>Statut</th><th>Prochaine revue</th></tr></thead>
                         <tbody>${rows}</tbody>
                     </table>`}
             </section>`;
@@ -368,7 +368,7 @@ const DocumentsModule = (() => {
                 <h1>Nouveau document</h1>
                 <div class="dashboard-card" style="max-width:820px;">
                     ${formFieldsHtml({})}
-                    <div style="margin-top:20px;"><button id="save">Enregistrer</button><button id="cancel" style="margin-left:10px; background:var(--color-gray);">Annuler</button></div>
+                    <div class="mt-20"><button id="save">Enregistrer</button><button id="cancel" style="margin-left:10px; background:var(--color-gray);">Annuler</button></div>
                 </div>
             </section>`;
         wireCanevas();
@@ -400,13 +400,13 @@ const DocumentsModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header">
-                    <div><h1>${escapeHtml(doc.titre)}</h1><p style="color:var(--text-muted); margin-top:5px;"><a href="#/documents" style="color:var(--accent);">Gestion documentaire</a></p></div>
+                    <div><h1>${escapeHtml(doc.titre)}</h1><p class="sous-titre"><a href="#/documents" class="lien-accent">Gestion documentaire</a></p></div>
                     <button id="deleteBtn" style="background:var(--color-danger);">Supprimer</button>
                 </div>
                 ${r.overdue ? `<div class="synthese-message danger" style="padding:12px; margin-bottom:1rem;"><strong>Revue en retard</strong> — la date de revue de ce document est dépassée. Pensez à le mettre à jour et à décaler la prochaine échéance.</div>` : ""}
                 <div class="dashboard-card" style="max-width:820px;">
                     ${formFieldsHtml(doc)}
-                    <div style="margin-top:20px;"><button id="saveBtn">Mettre à jour</button></div>
+                    <div class="mt-20"><button id="saveBtn">Mettre à jour</button></div>
                 </div>
                 ${typeof PiecesModule !== "undefined" ? PiecesModule.hoteHtml() : ""}
                 ${typeof ApprobationsModule !== "undefined" ? ApprobationsModule.encartHtml("documents", doc.id) : ""}
@@ -560,15 +560,15 @@ const DocumentsModule = (() => {
         const statutOpts = STATUTS.map(s => `<option value="${s}" ${s === (doc.statut || "brouillon") ? "selected" : ""}>${s.charAt(0).toUpperCase() + s.slice(1)}</option>`).join("");
         const refsHtml = refs.length
             ? `<div class="inc-actifs">${refs.map(rf => `<label class="inc-checkbox"><input type="checkbox" class="doc-ref" value="${escapeHtml(rf.id)}" ${linked.includes(rf.id) ? "checked" : ""}> ${escapeHtml(rf.editeur)}</label>`).join("")}</div>`
-            : `<p style="color:var(--text-muted); font-size: var(--text-sm);">Aucun référentiel chargé.</p>`;
+            : `<p class="txt-muted-sm">Aucun référentiel chargé.</p>`;
         return `
-            <div class="form-group"><label>Titre <span style="color:red">*</span></label><input id="titre" value="${escapeHtml(doc.titre || "")}" placeholder="Ex : Politique de sécurité du SI (PSSI)" /></div>
+            <div class="form-group"><label>Titre <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="titre" value="${escapeHtml(doc.titre || "")}" placeholder="Ex : Politique de sécurité du SI (PSSI)" /></div>
             <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:15px;">
                 <div class="form-group"><label>Type</label><select id="type">${typeOpts}</select></div>
                 <div class="form-group"><label>Version ${Help.tip("Numéro de version du document. Dès qu'une pièce jointe de cette fiche est marquée « en vigueur », c'est ELLE qui donne ce numéro : le champ devient alors une lecture, et il suit le fichier qui fait foi. Tant qu'aucun fichier n'est détenu ici, il reste saisissable.")}</label><input id="version" value="${escapeHtml(doc.version || "")}" placeholder="1.0" /><p id="versionOrigine" class="doc-note" hidden></p></div>
                 <div class="form-group"><label>Statut</label><select id="statut">${statutOpts}</select></div>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+            <div class="grille-2">
                 <div class="form-group"><label>Propriétaire</label><input id="proprietaire" list="personnes-list" value="${escapeHtml(doc.proprietaire || "")}" placeholder="Nom ou fonction" /></div>
                 <div class="form-group"><label>Prochaine revue ${Help.tip("Date à laquelle le document devra être revu. Une alerte apparaît à l'approche ou au dépassement de l'échéance.")}</label><input type="date" id="date_revue" value="${escapeHtml(doc.date_revue || "")}" /></div>
             </div>
@@ -578,16 +578,16 @@ const DocumentsModule = (() => {
             <!-- ── CLASSIFICATION (migration 027) ──────────────────────────── -->
             <fieldset class="bloc-classification">
                 <legend>Classification ${Help.tip("Deux questions que tout audit pose, et auxquelles le registre ne savait pas répondre : jusqu'où ce document peut-il circuler, et contient-il des données personnelles ? Le niveau de diffusion est obligatoire — « non classé » est précisément le trou que l'ISO 27001 (A.5.12) et le RGPD demandent de fermer.")}</legend>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <div class="grille-2">
                     <div class="form-group">
-                        <label>Niveau de diffusion <span style="color:red">*</span></label>
+                        <label>Niveau de diffusion <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <select id="confidentialite">${confOpts}</select>
                         <p class="doc-note" id="confidentialiteNote">${escapeHtml(confNote)}</p>
                     </div>
                     <div class="form-group">
                         <label>Traitement RGPD dont ce document relève ${Help.tip("Rattache ce document au registre de l'article 30 : la politique de conservation d'un traitement, sa procédure d'exercice des droits, son analyse d'impact. Les deux registres existaient sans se connaître.")}</label>
                         <select id="traitement_id">${trtOpts}</select>
-                        ${trtVide ? `<p class="doc-note">Aucun traitement au registre RGPD. Recensez-les dans <a href="#/rgpd" style="color:var(--accent);">Registre RGPD</a>.</p>` : ""}
+                        ${trtVide ? `<p class="doc-note">Aucun traitement au registre RGPD. Recensez-les dans <a href="#/rgpd" class="lien-accent">Registre RGPD</a>.</p>` : ""}
                         ${trtNoteFiltre}
                     </div>
                 </div>

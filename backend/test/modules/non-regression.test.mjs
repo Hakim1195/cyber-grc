@@ -193,6 +193,15 @@ const FICHES = {
  * éprouver, faute de ligne cliquable menant à un identifiant de la base.
  */
 const SANS_FICHE = {
+  // L17, A4 — « Ma journée ». C'est l'écran d'ENTRÉE du produit depuis le
+  // 21/09/2026 : il n'a aucune fiche à lui, il renvoie vers celles des autres.
+  '/accueil': 'écran d’entrée : il ne porte aucune fiche, il renvoie vers les autres',
+  // L20, action 20.2 — le formulaire de notification. ⚠️ Sa route PORTE un
+  // identifiant, mais ce n'est pas une fiche : elle ne crée ni ne modifie rien,
+  // elle MET EN FORME un incident qui existe déjà. Lui demander « quoi créer »
+  // n'aurait pas de réponse — l'objet du filet, le renommage d'identifiant, est
+  // couvert par la fiche de l'incident lui-même.
+
   '/dashboard': 'tableau de bord : aucune fiche',
   '/synthese': 'vue de direction : aucune fiche',
   '/echeances': 'agrégateur en lecture seule',
@@ -355,7 +364,7 @@ const SANS_FICHE = {
 // l'onglet « Catalogue » sert à RÉPONDRE, celui-ci à savoir ce que les catalogues
 // contiennent, quand la norme a été publiée, et ce qu'un changement de version met en
 // jeu. Deux métiers, deux écrans — et non une entrée de menu de plus.
-const MODULES_ATTENDUS = 47;
+const MODULES_ATTENDUS = 49;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //
@@ -363,7 +372,16 @@ const MODULES_ATTENDUS = 47;
 // pas le `ref_id` du jeu d'essai en base (« anssi »). Les confondre rend un écran
 // « Référentiel introuvable » — que seul un contrôle de contenu voit, un contrôle
 // « la page s'affiche sans erreur » restant vert.
-const FICHES_STATIQUES = { '/referentiels/:id': 'anssi-hygiene', '/soa/:id': 'anssi-hygiene' };
+// ⚠️ `/notification/:id` (L20, action 20.2) prend un identifiant d'INCIDENT, et
+// non d'une entité qui lui serait propre : l'écran met en forme un incident qui
+// existe déjà, il ne crée rien. Il entre donc ici plutôt que dans `FICHES` — et
+// il y entre, plutôt que d'être tu, parce qu'un écran qui sort du filet en sort
+// en silence (défaut Q-16). L'identifiant est celui du semis partagé.
+const FICHES_STATIQUES = {
+  '/referentiels/:id': 'anssi-hygiene',
+  '/soa/:id': 'anssi-hygiene',
+  '/notification/:id': 'INC-A',
+};
 
 /* =====================================================================
  *  Le montage

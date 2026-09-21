@@ -110,7 +110,7 @@ const PraMcoModule = (() => {
                 <div class="dashboard-header no-print">
                     <div>
                         <h1>Maintien en condition ${Help.tip("Maintien en Condition Opérationnelle : actions qui garantissent que le PCA/PRA reste efficace dans le temps (tests d'onduleurs, mise à jour des procédures, vérification des sauvegardes). Chaque action est planifiée, affectée à un responsable et suivie jusqu'à sa clôture.")}</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Planification et suivi des actions de maintien en condition opérationnelle du PCA/PRA</p>
+                        <p class="sous-titre">Planification et suivi des actions de maintien en condition opérationnelle du PCA/PRA</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="bulkDeleteBtn" style="display: none; background-color: var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
@@ -173,7 +173,7 @@ const PraMcoModule = (() => {
     function formMarkup(m) {
         return `
             <div class="form-group">
-                <label>Définition de l'action <span style="color:red">*</span> ${Help.tip("Intitulé court et actionnable de la tâche de maintien (ex : « Test de restauration des sauvegardes serveurs »).")}</label>
+                <label>Définition de l'action <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span> ${Help.tip("Intitulé court et actionnable de la tâche de maintien (ex : « Test de restauration des sauvegardes serveurs »).")}</label>
                 <input id="titre" value="${escapeHtml(m.titre)}" placeholder="Ex: Test de restauration des sauvegardes" required />
             </div>
 
@@ -182,7 +182,7 @@ const PraMcoModule = (() => {
                 <textarea id="description" placeholder="Ce qui doit être fait, périmètre concerné, critères de réussite...">${escapeHtml(m.description || "")}</textarea>
             </div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+            <div class="grille-2">
                 <div class="form-group">
                     <label>Responsable de l'action</label>
                     <input id="responsable" list="personnes-list" value="${escapeHtml(m.responsable || "")}" placeholder="Nom / fonction" />
@@ -193,7 +193,7 @@ const PraMcoModule = (() => {
                 </div>
             </div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+            <div class="grille-2">
                 <div class="form-group">
                     <label>Fréquence ${Help.tip("Cadence de répétition de l'action. « Ponctuelle » pour une action unique ; sinon la périodicité attendue du maintien.")}</label>
                     <select id="frequence">${optionsHtml(FREQUENCES, m.frequence || "Ponctuelle")}</select>
@@ -290,7 +290,7 @@ const PraMcoModule = (() => {
                 </div>
                 <div class="dashboard-card" style="max-width:720px;">
                     ${formMarkup(blankMco())}
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="saveBtn">Enregistrer l'action</button>
                         <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                     </div>
@@ -332,7 +332,7 @@ const PraMcoModule = (() => {
                 </div>
                 <div class="dashboard-card" style="max-width:720px;">
                     ${formMarkup(m)}
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="saveBtn">Mettre à jour</button>
                         <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                     </div>

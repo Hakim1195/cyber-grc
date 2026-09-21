@@ -69,7 +69,7 @@ const ClientsModule = (() => {
 
                 <div class="dashboard-card" style="max-width: 600px;">
                     <div class="form-group">
-                        <label>Nom du client / périmètre <span style="color:red">*</span></label>
+                        <label>Nom du client / périmètre <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="nom" placeholder="Ex: nom du donneur d'ordre / périmètre" required />
                     </div>
 
@@ -78,7 +78,7 @@ const ClientsModule = (() => {
                         <input id="secteur" placeholder="Ex: Aéronautique, Spatial, Défense..." />
                     </div>
 
-                    <div style="margin-top: 20px;">
+                    <div class="mt-20">
                         <button id="save">Créer le client</button>
                         <button id="cancel" style="margin-left: 10px;">Annuler</button>
                     </div>
@@ -140,7 +140,7 @@ const ClientsModule = (() => {
                         <h3>Détails du Donneur d'ordre</h3>
 
                         <div class="form-group">
-                            <label>Nom <span style="color:red">*</span></label>
+                            <label>Nom <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                             <input id="nom" value="${escapeHtml(client.nom)}" required />
                         </div>
 

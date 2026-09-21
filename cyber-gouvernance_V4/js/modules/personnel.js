@@ -61,8 +61,8 @@ const PersonnelModule = (() => {
                     <td><strong>${escapeHtml(p.nom)}</strong></td>
                     <td>${p.fonction ? escapeHtml(p.fonction) : "<span style='color:var(--text-muted);'>—</span>"}</td>
                     <td>${p.service ? escapeHtml(p.service) : "<span style='color:var(--text-muted);'>—</span>"}</td>
-                    <td>${p.email ? `<a href="mailto:${escapeHtml(p.email)}" class="stop-row-click" style="color:var(--accent);">${escapeHtml(p.email)}</a>` : "<span style='color:var(--text-muted);'>—</span>"}</td>
-                    <td style="text-align:center;">${n > 0 ? `<strong>${n}</strong> affectation${n > 1 ? "s" : ""}` : "<span style='color:var(--text-muted);'>—</span>"}</td>
+                    <td>${p.email ? `<a href="mailto:${escapeHtml(p.email)}" class="stop-row-click lien-accent">${escapeHtml(p.email)}</a>` : "<span style='color:var(--text-muted);'>—</span>"}</td>
+                    <td class="t-centre">${n > 0 ? `<strong>${n}</strong> affectation${n > 1 ? "s" : ""}` : "<span style='color:var(--text-muted);'>—</span>"}</td>
                 </tr>`;
         }).join("");
 
@@ -71,7 +71,7 @@ const PersonnelModule = (() => {
                 <div class="dashboard-header no-print">
                     <div>
                         <h1>Personnel ${Help.tip("Annuaire des personnes et rôles de l'organisation. Chaque personne enregistrée est proposée en autocomplétion partout où l'on saisit un « Responsable » (actions, mesures, exigences, actifs, BIA, MCO, documents, audits…). On peut toujours saisir un nom hors annuaire.")}</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">Annuaire réutilisé dans tous les champs « Responsable » du logiciel</p>
+                        <p class="sous-titre">Annuaire réutilisé dans tous les champs « Responsable » du logiciel</p>
                     </div>
                     <div style="display:flex; gap:10px;">
                         <button id="bulkDeleteBtn" style="display:none; background-color:var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
@@ -125,12 +125,12 @@ const PersonnelModule = (() => {
     ========================== */
     function formMarkup(p) {
         return `
-            <div class="form-group"><label>Nom <span style="color:red">*</span></label><input id="nom" value="${escapeHtml(p.nom || "")}" placeholder="Ex : Jean Dupont" /></div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+            <div class="form-group"><label>Nom <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="nom" value="${escapeHtml(p.nom || "")}" placeholder="Ex : Jean Dupont" /></div>
+            <div class="grille-2">
                 <div class="form-group"><label>Fonction / rôle</label><input id="fonction" value="${escapeHtml(p.fonction || "")}" placeholder="Ex : RSSI, DPO, Responsable IT" /></div>
                 <div class="form-group"><label>Service / équipe</label><input id="service" value="${escapeHtml(p.service || "")}" placeholder="Ex : Sécurité, Production" /></div>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+            <div class="grille-2">
                 <div class="form-group"><label>Email</label><input id="email" type="email" value="${escapeHtml(p.email || "")}" placeholder="prenom.nom@exemple.fr" /></div>
                 <div class="form-group"><label>Téléphone</label><input id="telephone" value="${escapeHtml(p.telephone || "")}" placeholder="+33 …" /></div>
             </div>
@@ -152,7 +152,7 @@ const PersonnelModule = (() => {
                 <div class="dashboard-header"><h1>Nouvelle personne</h1></div>
                 <div class="dashboard-card" style="max-width:720px;">
                     ${formMarkup({})}
-                    <div style="margin-top:20px;">
+                    <div class="mt-20">
                         <button id="saveBtn">Enregistrer</button>
                         <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                     </div>
@@ -179,12 +179,12 @@ const PersonnelModule = (() => {
         const byType = {};
         affectations.forEach(a => { (byType[a.type] = byType[a.type] || []).push(a); });
         const affectationsHtml = affectations.length === 0
-            ? `<p style="color:var(--text-muted);">Aucune affectation trouvée pour « ${escapeHtml(p.nom)} ». Sélectionnez cette personne comme responsable depuis n'importe quelle fiche.</p>`
+            ? `<p class="txt-muted">Aucune affectation trouvée pour « ${escapeHtml(p.nom)} ». Sélectionnez cette personne comme responsable depuis n'importe quelle fiche.</p>`
             : Object.keys(byType).map(type => `
                 <div style="margin-bottom:12px;">
                     <div style="font-weight:600; margin-bottom:6px;">${escapeHtml(type)} <span class="ech-count">${byType[type].length}</span></div>
                     <ul class="ref-actions-list">
-                        ${byType[type].map(a => `<li><a href="${a.route}" style="color:var(--accent);">${escapeHtml(a.label)}</a></li>`).join("")}
+                        ${byType[type].map(a => `<li><a href="${a.route}" class="lien-accent">${escapeHtml(a.label)}</a></li>`).join("")}
                     </ul>
                 </div>`).join("");
 
@@ -200,13 +200,13 @@ const PersonnelModule = (() => {
 
                 <div class="dashboard-grid" style="grid-template-columns:1fr 1fr; align-items:start;">
                     <div class="dashboard-card">
-                        <h3 style="margin-top:0;">Coordonnées</h3>
+                        <h3 class="mt0">Coordonnées</h3>
                         ${formMarkup(p)}
-                        <div style="margin-top:20px;"><button id="saveBtn">Mettre à jour</button></div>
+                        <div class="mt-20"><button id="saveBtn">Mettre à jour</button></div>
                     </div>
 
                     <div class="dashboard-card">
-                        <h3 style="margin-top:0;">Affectations ${Help.tip("Tout ce à quoi cette personne est rattachée comme responsable dans le logiciel (par correspondance de son nom). Cliquez pour ouvrir la fiche d'origine.")} ${affectations.length ? `<span class="badge" style="background:var(--primary); color:#fff;">${affectations.length}</span>` : ""}</h3>
+                        <h3 class="mt0">Affectations ${Help.tip("Tout ce à quoi cette personne est rattachée comme responsable dans le logiciel (par correspondance de son nom). Cliquez pour ouvrir la fiche d'origine.")} ${affectations.length ? `<span class="badge" style="background:var(--primary); color:#fff;">${affectations.length}</span>` : ""}</h3>
                         ${affectationsHtml}
                     </div>
                 </div>

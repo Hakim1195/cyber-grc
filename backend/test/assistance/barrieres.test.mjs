@@ -131,7 +131,7 @@ function environnementMinimal() {
     BASE_MOT_DE_PASSE: process.env['BASE_MOT_DE_PASSE'] ?? 'dev',
     SESSION_SECRET: 'x'.repeat(64),
     AUTH_LDAP_ACTIF: 'non',
-    SERVEUR_URL_PUBLIQUE: 'https://grc.exemple.interne',
+    SERVEUR_URL_PUBLIQUE: 'https://grc-test.site',
   };
 }
 

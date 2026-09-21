@@ -22,7 +22,9 @@ const Router = (() => {
     }
 
     function normalize(hash) {
-        if (!hash || hash === "#" || hash === "#/") return "/dashboard";
+        // ⚠️ L'écran d'entrée est « Ma journée » depuis L17-A4 : c'est lui que
+        // l'utilisateur voit en ouvrant le produit, et non des indicateurs.
+        if (!hash || hash === "#" || hash === "#/") return "/accueil";
         return hash.replace(/^#/, "");
     }
 
@@ -113,7 +115,7 @@ const Router = (() => {
             </section>
         `;
         const retour = document.getElementById("retour-tableau-de-bord");
-        if (retour) retour.onclick = () => navigateTo("/dashboard");
+        if (retour) retour.onclick = () => navigateTo("/accueil");
     }
 
     return {

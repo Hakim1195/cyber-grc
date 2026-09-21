@@ -358,7 +358,7 @@ const ReferentielsModule = (() => {
                 <div class="dashboard-card ref-card">
                     <div class="ref-card__head">
                         <div>
-                            <h3 style="margin:0;">${escapeHtml(ref.nom)}</h3>
+                            <h3 class="m0">${escapeHtml(ref.nom)}</h3>
                             <p style="color:var(--text-muted); font-size: var(--text-sm); margin:4px 0 0;">${escapeHtml(ref.editeur)} · ${escapeHtml(ref.version)}</p>
                         </div>
                         <span class="badge">${sc.global.total} ${isQ ? "questions" : "mesures"}</span>
@@ -391,8 +391,8 @@ const ReferentielsModule = (() => {
                     : `<div class="ref-grid">${cards}</div>`}
 
                 <div class="dashboard-card" style="margin-top:1.5rem;">
-                    <h3 style="margin-top:0;">Éviter la double saisie : le pivot « Mesure de sécurité »</h3>
-                    <p style="color:var(--text-muted); font-size: var(--text-base);">Une même <strong>mesure de sécurité</strong> (MFA, sauvegardes, cloisonnement…) couvre souvent des exigences de <em>plusieurs</em> référentiels. Reliez vos exigences à une <a href="#/mesures" style="color:var(--accent);">mesure de sécurité</a>, évaluez-la une fois puis <strong>propagez</strong> : le statut s'applique partout. Voyez les recouvrements dans la <a href="#/couverture" style="color:var(--accent);">couverture croisée</a> et gagnez du temps avec les <a href="#/mapping" style="color:var(--accent);">correspondances inter-référentiels</a> (relier tout un thème à une mesure d'un clic).</p>
+                    <h3 class="mt0">Éviter la double saisie : le pivot « Mesure de sécurité »</h3>
+                    <p style="color:var(--text-muted); font-size: var(--text-base);">Une même <strong>mesure de sécurité</strong> (MFA, sauvegardes, cloisonnement…) couvre souvent des exigences de <em>plusieurs</em> référentiels. Reliez vos exigences à une <a href="#/mesures" class="lien-accent">mesure de sécurité</a>, évaluez-la une fois puis <strong>propagez</strong> : le statut s'applique partout. Voyez les recouvrements dans la <a href="#/couverture" class="lien-accent">couverture croisée</a> et gagnez du temps avec les <a href="#/mapping" class="lien-accent">correspondances inter-référentiels</a> (relier tout un thème à une mesure d'un clic).</p>
                 </div>
             </section>`;
 
@@ -454,7 +454,7 @@ const ReferentielsModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>${escapeHtml(ref.nom)}</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">${escapeHtml(ref.editeur)} · ${escapeHtml(ref.version)} — <a href="#/referentiels" style="color:var(--accent);">tous les référentiels</a></p>
+                        <p class="sous-titre">${escapeHtml(ref.editeur)} · ${escapeHtml(ref.version)} — <a href="#/referentiels" class="lien-accent">tous les référentiels</a></p>
                     </div>
                     <div style="display:flex; gap:10px; align-items:center;">
                         ${ref.id === "aircyber" ? `<input type="file" id="aircyberCsv" accept=".csv" hidden><button id="importCsvBtn" class="btn-secondary" title="Importer vos réponses depuis l'export CSV du questionnaire AirCyber">Importer mes réponses (CSV)</button>` : ""}
@@ -467,13 +467,13 @@ const ReferentielsModule = (() => {
 
                 <div class="dashboard-grid ref-detail-grid">
                     <div class="dashboard-card ref-scorecard">
-                        <h3 style="margin-top:0;">${isQ ? "Profil de conformité par domaine" : "Profil de maturité par domaine"}</h3>
+                        <h3 class="mt0">${isQ ? "Profil de conformité par domaine" : "Profil de maturité par domaine"}</h3>
                         ${showNiv && ref.clLabels ? radarLevelsHtml() : ""}
                         <div class="ref-radar" id="ref-radar">${radarSvg(radarAxesFor(ref, sc, radarNiveau), radarColor(), isQ ? "Radar de conformité par domaine" : "")}</div>
                         ${ref.clLabels ? `<p style="font-size: var(--text-xs); color:var(--text-muted); margin:10px 0 0;">Axes : domaines de classification (${escapeHtml(Object.keys(ref.clLabels).sort().join(", "))}) — <span id="ref-radar-note">${escapeHtml(radarNoteText(ref))}</span> ${Help.tip(isQ ? "Chaque axe agrège toutes les questions du domaine de classification (CL), indépendamment du chapitre du questionnaire. Valeur de l'axe : part de réponses « Oui » parmi les questions applicables (N/A exclues ; une question non répondue compte comme « Non »). Les questions sans domaine CL connu ne sont pas représentées dans le radar mais restent comptées dans la synthèse et les scores par chapitre." : "Chaque axe agrège toutes les questions du domaine de classification (CL), indépendamment du chapitre du questionnaire. Les questions sans domaine CL connu ne sont pas représentées dans le radar mais restent comptées dans la synthèse et les scores par chapitre.")}</p>` : ""}
                     </div>
                     <div class="dashboard-card">
-                        <h3 style="margin-top:0;">Synthèse</h3>
+                        <h3 class="mt0">Synthèse</h3>
                         <div class="ref-kpis ref-kpis--stack">
                             ${isQ ? `
                             <div class="ref-kpi">
@@ -571,8 +571,8 @@ const ReferentielsModule = (() => {
                 <td><strong>${escapeHtml(ex.code)}</strong>${renvoiOfficiel(ref, ex)}</td>
                 <td>${escapeHtml(ex.titre)} ${ex.aide ? Help.tip(ex.aide) : ""}${badgesHtml}</td>
                 <td><select class="ref-statut sel-${meta.cls}" data-code="${ex.code}" aria-label="${isQ ? "Réponse à la question" : "Statut de la mesure"} ${escapeHtml(ex.code)}">${statutOpts}</select></td>
-                ${isQ ? "" : `<td style="text-align:center;"><select class="ref-mat" data-code="${ex.code}" aria-label="Maturité de la mesure ${escapeHtml(ex.code)}">${matOpts}</select></td>`}
-                <td style="text-align:center;"><button class="ref-toggle" data-toggle="${ex.code}" aria-expanded="false" title="Ouvrir le détail">Détail${actionsCount ? ` <span class="ref-badge-count">${actionsCount}</span>` : ""}</button></td>
+                ${isQ ? "" : `<td class="t-centre"><select class="ref-mat" data-code="${ex.code}" aria-label="Maturité de la mesure ${escapeHtml(ex.code)}">${matOpts}</select></td>`}
+                <td class="t-centre"><button class="ref-toggle" data-toggle="${ex.code}" aria-expanded="false" title="Ouvrir le détail">Détail${actionsCount ? ` <span class="ref-badge-count">${actionsCount}</span>` : ""}</button></td>
             </tr>
             <tr class="ref-detail-row" data-detail="${ex.code}" hidden>
                 <td colspan="${isQ ? 4 : 5}">${detailPanelHtml(ref, ex, ev)}</td>
@@ -590,7 +590,7 @@ const ReferentielsModule = (() => {
             available.map(m => `<option value="${m.id}">${escapeHtml(m.nom)}</option>`).join("");
         const chipsHtml = linkedMesures.length
             ? linkedMesures.map(m => `<span class="mp-chip"><a href="#/mesures/${m.id}" style="color:var(--accent); text-decoration:none;">${escapeHtml(m.nom)}</a><button type="button" class="ref-mesure-remove mp-remove" data-code="${ex.code}" data-mid="${m.id}" aria-label="Retirer">&times;</button></span>`).join("")
-            : `<span style="color:var(--text-muted); font-size: var(--text-sm);">Aucune mesure liée pour l'instant.</span>`;
+            : `<span class="txt-muted-sm">Aucune mesure liée pour l'instant.</span>`;
 
         // Plan d'action porté par CHAQUE mesure liée (lecture seule ici : géré depuis la fiche mesure).
         // Rend la chaîne exigence→mesures→actions visible.
@@ -601,9 +601,9 @@ const ReferentielsModule = (() => {
                     ${linkedMesures.map(m => {
                         const acts = DataStore.getActionsByMesure(m.id);
                         const list = acts.length
-                            ? `<ul class="ref-actions-list">${acts.map(a => `<li><a href="#/actions/${a.id}" style="color:var(--accent);">${escapeHtml(a.titre)}</a> <span class="status ${statutClassForAction(a.statut)}" style="margin-left:6px;">${escapeHtml(a.statut)}</span></li>`).join("")}</ul>`
-                            : `<p style="color:var(--text-muted); font-size: var(--text-sm); margin:2px 0;">Aucune action. <a href="#/mesures/${m.id}" style="color:var(--accent);">Planifier →</a></p>`;
-                        return `<div style="margin-bottom:8px;"><strong style="font-size: var(--text-sm);">Plan d'action — ${escapeHtml(m.nom)}</strong>${list}</div>`;
+                            ? `<ul class="ref-actions-list">${acts.map(a => `<li><a href="#/actions/${a.id}" class="lien-accent">${escapeHtml(a.titre)}</a> <span class="status ${statutClassForAction(a.statut)}" style="margin-left:6px;">${escapeHtml(a.statut)}</span></li>`).join("")}</ul>`
+                            : `<p style="color:var(--text-muted); font-size: var(--text-sm); margin:2px 0;">Aucune action. <a href="#/mesures/${m.id}" class="lien-accent">Planifier →</a></p>`;
+                        return `<div style="margin-bottom:8px;"><strong class="txt-sm">Plan d'action — ${escapeHtml(m.nom)}</strong>${list}</div>`;
                     }).join("")}
                 </div>`;
         }
@@ -611,11 +611,11 @@ const ReferentielsModule = (() => {
         return `
             <div class="ref-detail-panel">
                 <div class="ref-detail-grid2">
-                    <div class="form-group" style="margin:0;">
+                    <div class="form-group m0">
                         <label>Commentaire / justification</label>
                         <textarea class="ref-comment" data-code="${ex.code}" placeholder="État des lieux, écarts constatés, décisions…">${escapeHtml(commentaire)}</textarea>
                     </div>
-                    <div class="form-group" style="margin:0;">
+                    <div class="form-group m0">
                         <label>Preuves ${Help.tip("Références des éléments justifiant l'évaluation : procédure, capture, ticket, nom de document… (l'application ne stocke pas les fichiers).")}</label>
                         <textarea class="ref-preuves" data-code="${ex.code}" placeholder="Ex : PSSI §4.2, export AD du 12/03, ticket #1240…">${escapeHtml(preuves)}</textarea>
                     </div>
@@ -654,7 +654,7 @@ const ReferentielsModule = (() => {
         const list = actions.length
             ? `<ul class="ref-actions-list">${actions.map(a => `
                     <li>
-                        <a href="#/actions/${a.id}" style="color:var(--accent);">${escapeHtml(a.titre)}</a>
+                        <a href="#/actions/${a.id}" class="lien-accent">${escapeHtml(a.titre)}</a>
                         <span class="status ${statutClassForAction(a.statut)}" style="margin-left:8px;">${escapeHtml(a.statut)}</span>
                     </li>`).join("")}</ul>`
             : `<p style="color:var(--text-muted); font-size: var(--text-sm); margin:4px 0;">Aucune action corrective planifiée.</p>`;

@@ -52,7 +52,7 @@ il ne peut pas être satisfait.
 > **Règle d'ordonnancement, et elle est le remède au reproche du 14/09** : *si une vague ne
 > change rien à ce que l'utilisateur voit en ouvrant le produit, elle est mal placée.*
 
-### V-A — Prise en main *(L18 bis, L17, L16-D3)*
+### V-A — Prise en main *(L18 bis, L17, L16-D3)* — ✅ **CLOSE le 21/09/2026**
 
 Ce qui change à l'écran, dès l'ouverture :
 
@@ -63,6 +63,25 @@ Ce qui change à l'écran, dès l'ouverture :
 | **A3** | **Recherche globale + palette `Ctrl+K`** — une seule barre qui trouve un risque, un actif, une exigence, un document, une personne. Bornée par la RLS côté serveur, jamais par un filtre côté client |
 | **A4** | **Écran de démarrage par rôle** — RSSI, contributeur, auditeur, direction : ce qui m'attend aujourd'hui, pas un tableau de bord générique |
 | **A5** | **Kanban du plan d'actions** — colonnes par statut, glisser-déposer, filtre par responsable |
+
+> ✅ **A4 et A5 sont LIVRÉS le 21/09/2026**, et **L16-D3 le même jour** : la vague A est
+> CLOSE. Elle était restée ouverte onze jours avec deux items non construits, pendant que
+> les vagues C à F se fermaient — *une vague sans ligne de clôture n'est pas une vague
+> close, et personne ne l'avait remarqué* (constat de l'état des lieux du 21/09).
+>
+> **A4 — « Ma journée »**, écran d'ENTRÉE du produit (`js/modules/accueil.js`) : ce qui est
+> en retard, ce qui échoit cette semaine, ce qui m'est attribué. ⚠️ **« Par rôle » se
+> DÉRIVE des droits, il ne se récite pas** — le produit porte neuf profils de socle et un
+> client peut en composer d'autres ; quatre écrans écrits pour quatre noms auraient
+> montré à un auditeur ce qu'on destinait à un contributeur. Ce qui distingue deux rôles
+> est ce qu'ils PEUVENT VOIR, et le serveur l'a déjà résolu : `DataStore` ne contient que
+> ce que la session a le droit de lire.
+>
+> **A5 — le Kanban**, une VUE de `/actions` et non un second écran. ⚠️ **Le glisser-déposer
+> n'est pas le seul chemin** : chaque carte porte deux boutons de déplacement, et c'est
+> l'essai qui les mesure — *une fonctionnalité qui n'existe qu'à la souris est une
+> fonctionnalité absente pour une partie des utilisateurs*. ⚠️ Et une action au statut
+> hors vocabulaire est **montrée** dans une colonne qui le dit, jamais masquée.
 
 ### V-B — La chaîne de preuve et le réglementaire *(L19, L20)*
 
@@ -309,6 +328,9 @@ n'est pas ouvrir, et la distinction est le lot.*
 `docs/COMPARATIF_MARCHE.md` — **86 fonctionnalités**. **35 ✅ à l'établissement du
 08/09/2026 ; 44 ✅ · 12 🟡 · 30 ❌ au rejeu du 16/09/2026**, clôture de la vague B. Cible
 **76 ✅**. Il se rejoue à la clôture de chaque vague ; il ne s'estime pas.
+
+⚠️ **Au 21/09/2026 : 54 ✅ · 18 🟡 · 14 ❌ (~74 %)** — une seule ligne remesurée depuis le
+rejeu intégral, la n° 30 « recherche plein texte », que l'action D3 fait passer de 🟡 à ✅.
 
 ⚠️ **Rejoué à la clôture de la vague F, le 19/09/2026 : 53 ✅ · 19 🟡 · 14 ❌ (~73 %)**
 — quatre lignes déplacées par L27 et L28, et **deux laissées ❌ par ARBITRAGE** : une IA

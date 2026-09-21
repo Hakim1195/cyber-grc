@@ -3978,7 +3978,7 @@ else
       # FORME : « commence par https:// ». Une valeur syntaxiquement valide et
       # fonctionnellement fausse passait : `.env.example` a porté
       # « https://grc.interne.exemple » pendant que CE vhost sert
-      # « grc.exemple.interne » — les mots inversés — et rien ne l'a vu avant
+      # « grc-test.site » — les mots inversés — et rien ne l'a vu avant
       # qu'une installation réelle ne parte avec le mauvais nom, sans un mot.
       #
       # ⚠️ NE PAS COMPARER DEUX CHAÎNES. C'est la leçon même du 8ᵉ passage

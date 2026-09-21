@@ -18,7 +18,7 @@ const PraScenariosModule = (() => {
                 <div class="dashboard-header no-print">
                     <div>
                         <h1>Scénarios PCA/PRA ${Help.tip("PCA = maintenir les activités essentielles PENDANT le sinistre ; PRA = REDÉMARRER le système d'information après le sinistre. Chaque scénario décrit les étapes de continuité (PCA) puis de reprise (PRA).")}</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Plans de continuité et de reprise technique</p>
+                        <p class="sous-titre">Plans de continuité et de reprise technique</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="addBtn" style="background-color: var(--primary);">Nouveau Scénario</button>
@@ -126,7 +126,7 @@ const PraScenariosModule = (() => {
 
                 <div class="dashboard-card no-print" style="margin-bottom: 20px;">
                     <div class="form-group">
-                        <label>Nom du Scénario <span style="color:red">*</span></label>
+                        <label>Nom du Scénario <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="scen-nom" value="${escapeHtml(editingScenario.nom)}" placeholder="Ex: Ransomware, Incendie..." required />
                     </div>
                     <div class="form-group">
@@ -341,11 +341,11 @@ const PraScenariosModule = (() => {
         document.getElementById("modal-title").innerText = isNew ? "Ajouter une étape" : "Édition de l'étape";
 
         modalBody.innerHTML = `
-            <div class="form-group"><label>Action / Titre <span style="color:red">*</span></label><input id="m-titre" value="${escapeHtml(step.titre||'')}" required /></div>
+            <div class="form-group"><label>Action / Titre <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="m-titre" value="${escapeHtml(step.titre||'')}" required /></div>
 
             <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 15px;">
                 <h4 style="margin-top:0; margin-bottom: 15px; color: #784bd1;">Matrice RACI</h4>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <div class="grille-2">
                     <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-r" style="width:18px;height:18px;line-height:18px;font-size: var(--text-xs);margin-right:5px;">R</span> Réalisateur</label><input id="m-real" value="${escapeHtml(step.realisateur||'')}" /></div>
                     <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-a" style="width:18px;height:18px;line-height:18px;font-size: var(--text-xs);margin-right:5px;">A</span> Approbateur</label><input id="m-resp" value="${escapeHtml(step.responsable||'')}" /></div>
                     <div class="form-group" style="margin-bottom:0;"><label><span class="raci-badge raci-c" style="width:18px;height:18px;line-height:18px;font-size: var(--text-xs);margin-right:5px;color:#333;">C</span> Consulté</label><input id="m-consulte" value="${escapeHtml(step.consulte||'')}" /></div>
@@ -354,7 +354,7 @@ const PraScenariosModule = (() => {
             </div>
 
             <div class="form-group"><label>Actifs impactés</label><input id="m-actifs" value="${escapeHtml(step.actifs||'')}" /></div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+            <div class="grille-2">
                 <div class="form-group"><label>Durée (min)</label><input type="number" id="m-duree" value="${step.duree}" min="0" /></div>
                 <div class="form-group">
                     <label>Statut</label>

@@ -168,7 +168,7 @@ const DashboardModule = (() => {
         if (n >= 2) {
             const delta = cur - vals[0];
             if (Math.abs(delta) < Math.pow(10, -dec) / 2) {
-                deltaHtml = `<span class="trend-delta" style="color:var(--text-muted);">→ stable</span>`;
+                deltaHtml = `<span class="trend-delta txt-muted">→ stable</span>`;
             } else {
                 const good = cfg.higherIsBetter ? delta > 0 : delta < 0;
                 const arrow = delta > 0 ? "▲" : "▼";
@@ -545,7 +545,7 @@ const DashboardModule = (() => {
         const trendsCard = `
             <div class="dashboard-card wide-card">
                 <div class="trend-head">
-                    <h3 style="margin:0;">Tendances ${Help.tip("Évolution des indicateurs clés dans le temps. Un instantané global est capturé automatiquement une fois par jour, à l'ouverture du tableau de bord.")}</h3>
+                    <h3 class="m0">Tendances ${Help.tip("Évolution des indicateurs clés dans le temps. Un instantané global est capturé automatiquement une fois par jour, à l'ouverture du tableau de bord.")}</h3>
                     <button id="clearHistoryBtn" class="trend-clear no-print" title="Effacer l'historique des tendances (n'affecte pas vos données GRC)">Effacer l'historique</button>
                 </div>
                 <div class="trend-grid">${trendTiles}</div>
@@ -600,7 +600,7 @@ const DashboardModule = (() => {
                 <h3>Maturité par référentiel ${Help.tip("Niveau de maîtrise moyen (échelle CMMI 0-5) par référentiel de sécurité, calculé sur les mesures applicables auto-évaluées. Le questionnaire AirCyber, répondu en Oui/Non, affiche son score de conformité (%) et n'entre pas dans la moyenne CMMI.")}</h3>
                 <div style="display:flex; align-items:baseline; gap:8px; margin:2px 0 14px;">
                     <span style="font-size: var(--text-3xl); font-weight:bold; color:${maturiteColor(ref.global.maturite)};">${ref.global.maturite.toFixed(1)}</span>
-                    <span style="color:var(--text-muted);">/5 — maturité globale</span>
+                    <span class="txt-muted">/5 — maturité globale</span>
                 </div>
                 ${refBars}
             </div>`;
@@ -641,11 +641,11 @@ const DashboardModule = (() => {
                     <div><strong>${actionsTerminees}</strong><span>Terminées</span></div>
                 </div>
                 <div style="margin-top:1rem; padding-top:0.9rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-size: var(--text-sm);">
-                    <span style="color:var(--text-muted);">En retard</span>
+                    <span class="txt-muted">En retard</span>
                     <strong style="color:${actionsEnRetard > 0 ? "var(--color-danger)" : "var(--color-success)"};">${actionsEnRetard}</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; font-size: var(--text-sm); margin-top:4px;">
-                    <span style="color:var(--text-muted);">Échéance ≤ 30 j</span>
+                    <span class="txt-muted">Échéance ≤ 30 j</span>
                     <strong style="color:${soon.length > 0 ? "var(--color-warning)" : "var(--text-main)"};">${soon.length}</strong>
                 </div>
             </div>`;
@@ -665,7 +665,7 @@ const DashboardModule = (() => {
         const cartoCard = `
             <div class="dashboard-card wide-card split-card">
                 <div class="split-col">
-                    <h3 style="margin-top:0;">${t("dashboard.cartographieRisques")} ${Help.tip(t("dashboard.cartographieAide"))}</h3>
+                    <h3 class="mt0">${t("dashboard.cartographieRisques")} ${Help.tip(t("dashboard.cartographieAide"))}</h3>
                     ${risques.length === 0
                         ? `<p class="chart-empty">${t("dashboard.aucunRisqueCartographier")}</p>`
                         : `<div class="heat-wrap dash-nav" data-route="/matrice" title="Ouvrir la matrice des risques">
@@ -674,7 +674,7 @@ const DashboardModule = (() => {
                            </div>`}
                 </div>
                 <div class="split-col">
-                    <h3 style="margin-top:0;">${t("dashboard.topRisques")} ${Help.tip(t("dashboard.topRisquesAide"))}</h3>
+                    <h3 class="mt0">${t("dashboard.topRisques")} ${Help.tip(t("dashboard.topRisquesAide"))}</h3>
                     ${topRisquesHtml}
                 </div>
             </div>`;
@@ -709,11 +709,11 @@ const DashboardModule = (() => {
         const watchCard = `
             <div class="dashboard-card wide-card split-card">
                 <div class="split-col">
-                    <h3 style="margin-top:0;">${t("dashboard.actionsASurveiller")} ${Help.tip(t("dashboard.actionsASurveillerAide"))}</h3>
+                    <h3 class="mt0">${t("dashboard.actionsASurveiller")} ${Help.tip(t("dashboard.actionsASurveillerAide"))}</h3>
                     ${watchHtml}
                 </div>
                 <div class="split-col">
-                    <h3 style="margin-top:0;">${t("dashboard.actifsParCriticite")} ${Help.tip(t("dashboard.actifsParCriticiteAide"))}</h3>
+                    <h3 class="mt0">${t("dashboard.actifsParCriticite")} ${Help.tip(t("dashboard.actifsParCriticiteAide"))}</h3>
                     ${actifsBars}
                     <button type="button" class="dash-nav" data-route="/actifs" style="width:100%; margin-top:1rem; justify-content:center; background:#fff; color:var(--primary); border:1px solid var(--border);">${t("dashboard.gererActifs")}</button>
                 </div>
@@ -731,7 +731,7 @@ const DashboardModule = (() => {
         const incidentsTone = declarationsEnAttente > 0 ? "var(--color-danger)" : incidentsOuverts > 0 ? "var(--color-warning)" : "var(--color-success)";
         const coverageCard = `
             <div class="dashboard-card wide-card">
-                <h3 style="margin-top:0;">Couverture du dispositif GRC ${Help.tip("Vue d'ensemble des briques de gouvernance, gestion des risques et continuité. Cliquez une tuile pour ouvrir le module correspondant.")}</h3>
+                <h3 class="mt0">Couverture du dispositif GRC ${Help.tip("Vue d'ensemble des briques de gouvernance, gestion des risques et continuité. Cliquez une tuile pour ouvrir le module correspondant.")}</h3>
                 <div class="cov-grid">
                     ${covTile(processus.length, "Processus (BIA)", `${processusCritiques} critique(s)`, "/bia", "var(--primary)")}
                     ${covTile(mesures.length, "Mesures de sécurité", `${mesuresConformes} conforme(s)`, "/mesures", "var(--primary)")}
@@ -750,7 +750,7 @@ const DashboardModule = (() => {
         // -- Carte Conformité par donneur d'ordre (comparatif) --
         const clientConfCard = clientConfRows.length ? `
             <div class="dashboard-card wide-card">
-                <h3 style="margin-top:0;">Conformité par donneur d'ordre ${Help.tip("Comparaison du taux de conformité (exigences conformes / applicables) entre vos donneurs d'ordre et vos exigences internes. Utile pour un sous-traitant multi-clients.")}</h3>
+                <h3 class="mt0">Conformité par donneur d'ordre ${Help.tip("Comparaison du taux de conformité (exigences conformes / applicables) entre vos donneurs d'ordre et vos exigences internes. Utile pour un sous-traitant multi-clients.")}</h3>
                 ${clientConfRows.map(r => hbar(
                     r.nom,
                     r.pct == null ? 0 : r.pct, 100,
@@ -799,11 +799,11 @@ const DashboardModule = (() => {
         const suiviCard = `
             <div class="dashboard-card wide-card split-card">
                 <div class="split-col">
-                    <h3 style="margin-top:0;">${t("dashboard.incidentsRecents")} ${Help.tip(t("dashboard.incidentsRecentsAide"))}</h3>
+                    <h3 class="mt0">${t("dashboard.incidentsRecents")} ${Help.tip(t("dashboard.incidentsRecentsAide"))}</h3>
                     ${incidentsRecentsHtml}
                 </div>
                 <div class="split-col">
-                    <h3 style="margin-top:0;">${t("dashboard.documentsAReviser")} ${Help.tip(t("dashboard.documentsAReviserAide"))}${docsAlertCount ? ` <span class="badge" style="background:var(--color-danger); color:#fff;">${docsAlertCount}</span>` : ""}</h3>
+                    <h3 class="mt0">${t("dashboard.documentsAReviser")} ${Help.tip(t("dashboard.documentsAReviserAide"))}${docsAlertCount ? ` <span class="badge" style="background:var(--color-danger); color:#fff;">${docsAlertCount}</span>` : ""}</h3>
                     ${docsRevisionHtml}
                 </div>
             </div>`;
@@ -833,7 +833,7 @@ const DashboardModule = (() => {
             }).join("")}</ul>`;
         const echeancierCard = `
             <div class="dashboard-card wide-card">
-                <h3 style="margin-top:0;">${t("dashboard.prochainesEcheances")} ${Help.tip(t("dashboard.prochainesEcheancesAide"))}${echCounts.retard ? ` <span class="badge" style="background:var(--color-danger); color:#fff;">${tHtml("dashboard.enRetardBadge", { n: echCounts.retard })}</span>` : ""}</h3>
+                <h3 class="mt0">${t("dashboard.prochainesEcheances")} ${Help.tip(t("dashboard.prochainesEcheancesAide"))}${echCounts.retard ? ` <span class="badge" style="background:var(--color-danger); color:#fff;">${tHtml("dashboard.enRetardBadge", { n: echCounts.retard })}</span>` : ""}</h3>
                 ${echHtml}
                 <button type="button" class="dash-nav" data-route="/echeances" style="width:100%; margin-top:1rem; justify-content:center; background:#fff; color:var(--primary); border:1px solid var(--border);">${t("dashboard.voirEcheancier")}</button>
             </div>`;
@@ -845,9 +845,9 @@ const DashboardModule = (() => {
                 <div>
                     <h2>Démarrez votre démarche GRC</h2>
                     <p>Aucune donnée n'est encore saisie. Commencez par
-                        <a href="#/actifs" style="color:var(--accent);">cartographier vos actifs</a>,
-                        <a href="#/risques" style="color:var(--accent);">identifier vos risques</a>, puis
-                        <a href="#/referentiels" style="color:var(--accent);">auto-évaluer un référentiel</a>. Le tableau de bord s'enrichira automatiquement.</p>
+                        <a href="#/actifs" class="lien-accent">cartographier vos actifs</a>,
+                        <a href="#/risques" class="lien-accent">identifier vos risques</a>, puis
+                        <a href="#/referentiels" class="lien-accent">auto-évaluer un référentiel</a>. Le tableau de bord s'enrichira automatiquement.</p>
                 </div>
             </div>` : "";
 
@@ -859,7 +859,7 @@ const DashboardModule = (() => {
                 <div class="dashboard-header">
                     <div>
                         <h1>${t("dashboard.titre")}</h1>
-                        <p style="color:var(--text-muted); margin-top:5px;">${t("dashboard.perimetreAnalyse")} <strong>${escapeHtml(contextName)}</strong></p>
+                        <p class="sous-titre">${t("dashboard.perimetreAnalyse")} <strong>${escapeHtml(contextName)}</strong></p>
                     </div>
                     <div class="dashboard-actions no-print">
                         <button id="exportExcelBtn" style="margin-right:10px;">Export Data (Excel)</button>

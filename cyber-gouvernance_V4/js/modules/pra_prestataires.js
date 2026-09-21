@@ -127,8 +127,8 @@ const PraPrestatairesModule = (() => {
         }).join("");
         return `
             <div class="dashboard-card" style="max-width:600px; margin-top:1.2rem; border-top:3px solid var(--primary);">
-                <h3 style="margin-top:0;">Risque fournisseur &amp; chaîne d'appro ${Help.tip("Évaluez le risque que ce tiers fait porter à votre organisation. NIS2 impose de sécuriser sa chaîne d'approvisionnement ; DORA encadre les prestataires TIC critiques.")}</h3>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <h3 class="mt0">Risque fournisseur &amp; chaîne d'appro ${Help.tip("Évaluez le risque que ce tiers fait porter à votre organisation. NIS2 impose de sécuriser sa chaîne d'approvisionnement ; DORA encadre les prestataires TIC critiques.")}</h3>
+                <div class="grille-2">
                     <div class="form-group">
                         <label>Criticité pour vos activités ${Help.tip("Impact si ce fournisseur défaille ou est compromis.")}</label>
                         <select id="criticite">${optionsHtml(CRITICITE_OPTS, p.criticite || "")}</select>
@@ -233,12 +233,12 @@ const PraPrestatairesModule = (() => {
         p = p || {};
         return `
             <div class="dashboard-card" style="max-width:600px; margin-top:1.2rem; border-top:3px solid var(--primary);">
-                <h3 style="margin-top:0;">Registre d'information DORA ${Help.tip("Le règlement DORA (article 28) impose de tenir un registre de tous les arrangements contractuels portant sur des services TIC. C'est la pièce que l'autorité réclame en premier.")}</h3>
+                <h3 class="mt0">Registre d'information DORA ${Help.tip("Le règlement DORA (article 28) impose de tenir un registre de tous les arrangements contractuels portant sur des services TIC. C'est la pièce que l'autorité réclame en premier.")}</h3>
                 <p style="color:var(--text-muted); font-size: var(--text-sm); margin:2px 0 12px;">
                     Facultatif ici, exigé à la remise : l'onglet « Registre DORA » dit, tiers par tiers, ce qui manque encore.
                 </p>
 
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <div class="grille-2">
                     <div class="form-group">
                         <label>Identifiant LEI ${Help.tip("Legal Entity Identifier (ISO 17442) : 20 caractères. C'est la clé sans laquelle deux registres de deux entités ne se recoupent pas. Il se demande à un émetteur accrédité, ou se retrouve dans l'annuaire mondial GLEIF.")}</label>
                         ${champ("lei", p.lei, 'placeholder="20 caractères, ex. 969500HX7PZQ1L2M3N45" maxlength="20"')}
@@ -259,11 +259,11 @@ const PraPrestatairesModule = (() => {
                     <span>
                         <strong>Fonction critique ou importante</strong>
                         ${Help.tip("Au sens de l'article 3 (22) de DORA : une fonction dont l'interruption compromettrait la continuité de l'activité, la solidité financière, ou le respect des obligations réglementaires. C'est ce seul drapeau qui fait basculer le contrat dans le régime renforcé de l'article 30 §3.")}
-                        <br><span style="color:var(--text-muted); font-size: var(--text-sm);">Coché, ce tiers devra porter une substituabilité et un plan de sortie daté.</span>
+                        <br><span class="txt-muted-sm">Coché, ce tiers devra porter une substituabilité et un plan de sortie daté.</span>
                     </span>
                 </label>
 
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <div class="grille-2">
                     <div class="form-group">
                         <label>Type de service TIC</label>
                         <select id="type_service">${optionsHtml(SERVICE_OPTS, p.type_service || "")}</select>
@@ -294,7 +294,7 @@ const PraPrestatairesModule = (() => {
                     </div>
                 </div>
 
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                <div class="grille-2">
                     <div class="form-group">
                         <label>Substituabilité ${Help.tip("Article 28 §8 : à quel point ce prestataire est remplaçable. Un tiers irremplaçable porte un risque que ni sa criticité ni son niveau d'accès ne disent.")}</label>
                         <select id="substituabilite">${optionsHtml(SUBSTITUABILITE_OPTS, p.substituabilite || "")}</select>
@@ -310,7 +310,7 @@ const PraPrestatairesModule = (() => {
                     <textarea id="plan_sortie" style="min-height:70px;" placeholder="Ex : export mensuel chiffré, bascule vers le socle interne, délai de reprise estimé.">${esc(p.plan_sortie || "")}</textarea>
                 </div>
                 <div class="form-group" style="max-width:280px;">
-                    <label>Date du plan de sortie <span style="color:red">*</span> ${Help.tip("Obligatoire dès qu'un plan de sortie est saisi : un plan non daté est le document que personne ne relit. La base le refuse.")}</label>
+                    <label>Date du plan de sortie <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span> ${Help.tip("Obligatoire dès qu'un plan de sortie est saisi : un plan non daté est le document que personne ne relit. La base le refuse.")}</label>
                     ${champ("plan_sortie_le", p.plan_sortie_le, 'type="date"')}
                 </div>
             </div>`;
@@ -379,7 +379,7 @@ const PraPrestatairesModule = (() => {
             .concat(autres.map(x => [x.id, x.societe]));
         return `
             <div class="dashboard-card" style="max-width:600px; margin-top:1.2rem; border-top:3px solid var(--primary);">
-                <h3 style="margin-top:0;">Sous-traitance ${Help.tip("L'article 29 de DORA demande de connaître les sous-traitants qui interviennent dans une fonction critique ou importante : un prestataire qui sous-traite déplace le risque, il ne le réduit pas.")}</h3>
+                <h3 class="mt0">Sous-traitance ${Help.tip("L'article 29 de DORA demande de connaître les sous-traitants qui interviennent dans une fonction critique ou importante : un prestataire qui sous-traite déplace le risque, il ne le réduit pas.")}</h3>
 
                 <div id="chaineTiers" style="margin-bottom:14px;">
                     <span class="badge" style="background:#eee; color:#666;">Chargement de la chaîne…</span>
@@ -461,12 +461,12 @@ const PraPrestatairesModule = (() => {
                 <tr>
                     <td><span class="badge" style="background:#eef; color:#334;">Rang ${esc(String(m.rang))}</span></td>
                     <td><strong>${esc(m.societe)}</strong>${m.dansFonctionCritique ? ` <span class="badge" style="background:#ffebee; color:#b71c1c;">Fonction critique</span>` : ""}</td>
-                    <td style="font-size: var(--text-sm);">${esc(m.service || "—")}</td>
+                    <td class="txt-sm">${esc(m.service || "—")}</td>
                     <td style="font-size: var(--text-xs); color:var(--text-muted); font-family: var(--font-mono, monospace);">${esc(m.chemin.join(" → "))}</td>
                     <td class="no-print"><button type="button" class="st-retirer" data-id="${esc(m.id)}" data-rang="${esc(String(m.rang))}" style="background:var(--color-danger);">Retirer</button></td>
                 </tr>`).join("");
             cible.innerHTML = `
-                <table class="data-table" style="margin:0;">
+                <table class="data-table m0">
                     <thead><tr><th>Rang</th><th>Sous-traitant</th><th>Objet</th><th>Chemin</th><th class="no-print"></th></tr></thead>
                     <tbody>${lignes}</tbody>
                 </table>
@@ -498,7 +498,7 @@ const PraPrestatairesModule = (() => {
         }).catch(() => {
             const cible = document.getElementById("chaineTiers");
             if (cible) {
-                cible.innerHTML = `<p class="synthese-message danger" style="margin:0;">La chaîne de sous-traitance n'a pas pu être chargée. Elle est calculée par le serveur ; rien n'est affiché plutôt qu'une chaîne incomplète.</p>`;
+                cible.innerHTML = `<p class="synthese-message danger m0">La chaîne de sous-traitance n'a pas pu être chargée. Elle est calculée par le serveur ; rien n'est affiché plutôt qu'une chaîne incomplète.</p>`;
             }
         }));
     }
@@ -572,7 +572,7 @@ const PraPrestatairesModule = (() => {
         const refs = [["", "— Choisir un référentiel —"]].concat(referentielsDisponibles());
         return `
             <div class="dashboard-card" style="max-width:600px; margin-top:1.2rem; border-top:3px solid var(--primary);">
-                <h3 style="margin-top:0;">Questionnaires de sécurité ${Help.tip("Un questionnaire se construit depuis un référentiel que vous possédez déjà, s'exporte en classeur, se remplit hors ligne par le fournisseur, et se réimporte. Aucune donnée ne part d'ici vers le fournisseur : l'envoi reste un geste humain.")}</h3>
+                <h3 class="mt0">Questionnaires de sécurité ${Help.tip("Un questionnaire se construit depuis un référentiel que vous possédez déjà, s'exporte en classeur, se remplit hors ligne par le fournisseur, et se réimporte. Aucune donnée ne part d'ici vers le fournisseur : l'envoi reste un geste humain.")}</h3>
 
                 <div id="questionnairesListe" style="margin-bottom:14px;">
                     <span class="badge" style="background:#eee; color:#666;">Chargement…</span>
@@ -654,7 +654,7 @@ const PraPrestatairesModule = (() => {
                             <span style="font-size: var(--text-xs); color:var(--text-muted);">${esc(q.refId)}</span></td>
                         <td><span class="badge ${etat.classe}">${esc(etat.libelle)}</span>
                             <div style="font-size: var(--text-xs); color:var(--text-muted); margin-top:4px;">${esc(etat.dit)}</div></td>
-                        <td style="font-size: var(--text-sm);">${q.echeance ? esc(q.echeance) : "—"}</td>
+                        <td class="txt-sm">${q.echeance ? esc(q.echeance) : "—"}</td>
                         <td>${couverture}${alerte ? "<div style='margin-top:4px;'>" + alerte + "</div>" : ""}</td>
                         <td class="no-print">
                             <button type="button" class="q-exporter" data-id="${esc(q.id)}" data-ref="${esc(q.refId)}">Exporter</button>
@@ -664,7 +664,7 @@ const PraPrestatairesModule = (() => {
                     </tr>`;
             }).join("");
             cible.innerHTML = `
-                <table class="data-table" style="margin:0;">
+                <table class="data-table m0">
                     <thead><tr><th>Référentiel</th><th>État</th><th>Échéance</th><th>Réponses</th><th class="no-print"></th></tr></thead>
                     <tbody>${lignes}</tbody>
                 </table>
@@ -682,7 +682,7 @@ const PraPrestatairesModule = (() => {
         }).catch(() => {
             const cible = document.getElementById("questionnairesListe");
             if (cible) {
-                cible.innerHTML = `<p class="synthese-message danger" style="margin:0;">L'état des questionnaires n'a pas pu être chargé. Il est calculé par le serveur ; rien n'est affiché plutôt qu'un état périmé.</p>`;
+                cible.innerHTML = `<p class="synthese-message danger m0">L'état des questionnaires n'a pas pu être chargé. Il est calculé par le serveur ; rien n'est affiché plutôt qu'un état périmé.</p>`;
             }
         }));
     }
@@ -884,7 +884,7 @@ const PraPrestatairesModule = (() => {
                     actions: `<button type="button" id="printBtn" class="btn-secondary">Imprimer</button>`
                 })}
                 <div id="registreZone">
-                    <p style="color:var(--text-muted);">Chargement du registre…</p>
+                    <p class="txt-muted">Chargement du registre…</p>
                 </div>
             </section>`;
         const impression = document.getElementById("printBtn");
@@ -923,7 +923,7 @@ const PraPrestatairesModule = (() => {
                 <td style="font-family: var(--font-mono, monospace); font-size: var(--text-xs);">${esc(l.lei || "—")}</td>
                 <td>${esc(l.pays || "—")}${l.paysDonnees && l.paysDonnees !== l.pays ? ` <span class="badge" style="background:#fff3e0; color:#e65100;">données : ${esc(l.paysDonnees)}</span>` : ""}</td>
                 <td>${esc(l.fonctionSupportee || "—")}${l.fonctionCritique ? ` <span class="badge" style="background:#ffebee; color:#b71c1c;">Critique</span>` : ""}</td>
-                <td style="font-size: var(--text-sm);">${esc(l.contratReference || "—")}<br><span style="color:var(--text-muted);">${esc(l.contratDebut || "?")} → ${esc(l.contratFin || "sans terme")}</span></td>
+                <td class="txt-sm">${esc(l.contratReference || "—")}<br><span class="txt-muted">${esc(l.contratDebut || "?")} → ${esc(l.contratFin || "sans terme")}</span></td>
                 <td>${l.sousTraitants.length ? esc(String(l.sousTraitants.length)) : "—"}</td>
                 <td>${l.manques.length === 0
                     ? `<span class="badge status-conforme">Complète</span>`
@@ -964,7 +964,7 @@ const PraPrestatairesModule = (() => {
                 <td><span class="badge" style="background:#eee; color:#333;">${esc(p.type)}</span></td>
                 <td><span class="score-tiers" data-id="${p.id}">${badgeEnAttente()}</span><div style="margin-top:4px;">${coverageBadge(p)}</div></td>
                 <td>${esc(p.phone) || "-"}<br>${esc(p.email) || "-"}</td>
-                <td style="font-size: var(--text-sm); color:var(--text-muted);">${p.notes ? esc(String(p.notes).substring(0, 60)) + "…" : "-"}</td>
+                <td class="txt-muted-sm">${p.notes ? esc(String(p.notes).substring(0, 60)) + "…" : "-"}</td>
             </tr>
         `).join("");
 
@@ -1107,7 +1107,7 @@ const PraPrestatairesModule = (() => {
                 </div>
                 <div class="dashboard-card" style="max-width:600px;">
                     <div class="form-group">
-                        <label>Société / Entité <span style="color:red">*</span></label>
+                        <label>Société / Entité <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="societe" placeholder="Ex: IONOS, Assureur X, ANSSI..." required />
                     </div>
                     <div class="form-group">
@@ -1120,7 +1120,7 @@ const PraPrestatairesModule = (() => {
                             <option value="Autre">Autre</option>
                         </select>
                     </div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                    <div class="grille-2">
                         <div class="form-group">
                             <label>Téléphone d'Urgence</label>
                             <input id="phone" placeholder="Numéro 24/7 si possible" />
@@ -1185,7 +1185,7 @@ const PraPrestatairesModule = (() => {
                 </div>
                 <div class="dashboard-card" style="max-width:600px;">
                     <div class="form-group">
-                        <label>Société / Entité <span style="color:red">*</span></label>
+                        <label>Société / Entité <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="societe" value="${esc(c.societe)}" required />
                     </div>
                     <div class="form-group">
@@ -1198,7 +1198,7 @@ const PraPrestatairesModule = (() => {
                             <option value="Autre" ${c.type === "Autre" ? "selected" : ""}>Autre</option>
                         </select>
                     </div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                    <div class="grille-2">
                         <div class="form-group">
                             <label>Téléphone d'Urgence</label>
                             <input id="phone" value="${esc(c.phone || "")}" />

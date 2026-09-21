@@ -51,6 +51,7 @@ window.I18n.enregistrer("fr", {
     "nav.section.tiers": "Tiers & personnes",
     "nav.section.administration": "Administration",
 
+    "nav.accueil": "Ma journée",
     "nav.dashboard": "Tableau de bord",
     "nav.synthese": "Synthèse Direction",
     "nav.echeances": "Échéancier",
@@ -92,6 +93,7 @@ window.I18n.enregistrer("fr", {
     "fil.section.administration": "Administration",
     "fil.fiche": "Fiche",
 
+    "fil.accueil": "Ma journée",
     "fil.dashboard": "Tableau de bord",
     "fil.synthese": "Synthèse Direction",
     "fil.echeances": "Échéancier",
@@ -116,6 +118,7 @@ window.I18n.enregistrer("fr", {
     "fil.bia": "BIA (Impact Métier)",
     "fil.crise": "Cellule de Crise",
     "fil.criseFiches": "Fiches réflexes de crise",
+    "fil.notification": "Préparer une notification",
     "fil.pra": "Scénarios PCA/PRA",
     "fil.mco": "Actions Préalables (MCO)",
     "fil.tests": "Historique des Tests",

@@ -128,3 +128,21 @@
 @media (prefers-reduced-motion: reduce) {
     :root { --transition: none; }
 }
+
+/* =====================================================================
+   MARQUE DE CHAMP OBLIGATOIRE  (passe de style du 21/09/2026)
+
+   ⚠️ **Elle a SON token, et n'emprunte PAS `--color-danger`.** Le produit
+   réserve ses quatre couleurs sémantiques aux STATUTS — vert conforme,
+   orange partiel, rouge critique, gris non applicable (`CLAUDE.md` §2) —,
+   et une pièce d'audit vit de cette lecture-là. Un astérisque de saisie
+   peint du rouge « critique » dilue le seul code couleur sur lequel le
+   lecteur d'un rapport s'appuie.
+
+   ⚠️ Jusqu'au 21/09/2026, ces astérisques portaient `style="color:red"` —
+   **39 fois, dans 17 modules** : une couleur brute, hors du système de
+   tokens que ce fichier existe pour tenir.
+   ===================================================================== */
+:root {
+    --marque-requis: #9b4a3f;   /* terre brûlée : lisible, et NON sémantique */
+}

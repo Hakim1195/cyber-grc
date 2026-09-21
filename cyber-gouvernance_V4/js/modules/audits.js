@@ -74,7 +74,7 @@ const AuditsModule = (() => {
                 <div class="dashboard-header no-print">
                     <div>
                         <h1>Audits internes</h1>
-                        <p style="color: var(--text-muted); margin-top: 5px;">Pilotage stratégique et vérification de la conformité</p>
+                        <p class="sous-titre">Pilotage stratégique et vérification de la conformité</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="addBtn" style="background-color: var(--primary);">Nouvel Élément</button>
@@ -185,7 +185,7 @@ const AuditsModule = (() => {
                                 <td><strong>${escapeHtml(a.ref)}</strong></td>
                                 <td>${a.date ? new Date(a.date).toLocaleDateString('fr-FR') : "-"}</td>
                                 <td>${escapeHtml(a.perimetre) || "-"}</td>
-                                <td>${escapeHtml(cov.ref)}${cov.txt ? `<br><span style="color:var(--text-muted); font-size: var(--text-sm);">${escapeHtml(cov.txt)}</span>` : ""}</td>
+                                <td>${escapeHtml(cov.ref)}${cov.txt ? `<br><span class="txt-muted-sm">${escapeHtml(cov.txt)}</span>` : ""}</td>
                                 <td>${escapeHtml(a.auditeur) || "-"}</td>
                                 <td><span class="status ${a.statut === 'Réalisé' ? 'status-conforme' : 'status-non-conforme'}">${escapeHtml(a.statut)}</span></td>
                             </tr>
@@ -257,7 +257,7 @@ const AuditsModule = (() => {
                     <div class="dashboard-card">
                         <h3>Informations Générales</h3>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-top:15px;">
-                            <div class="form-group"><label>Référence / Titre <span style="color:red">*</span></label><input id="a-ref" value="${escapeHtml(editingItem.ref)}" required /></div>
+                            <div class="form-group"><label>Référence / Titre <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="a-ref" value="${escapeHtml(editingItem.ref)}" required /></div>
                             <div class="form-group">
                                 <label>Statut</label>
                                 <select id="a-statut">
@@ -399,7 +399,7 @@ const AuditsModule = (() => {
                     </div>
                     <textarea class="c-desc" placeholder="Description du constat / Preuve d'audit..." style="min-height:60px;">${escapeHtml(c.desc||'')}</textarea>
                 </div>
-                <button type="button" class="constat-del" style="background:none; color:red; border:none; font-size: var(--text-xl); cursor:pointer;" title="Supprimer" aria-label="Supprimer ce constat"></button>
+                <button type="button" class="constat-del bouton-retirer" title="Supprimer" aria-label="Supprimer ce constat"></button>
             </div>
         `).join("") || `<p style="text-align:center; color:gray; padding:20px;">Aucun constat saisi.</p>`;
 
@@ -509,18 +509,18 @@ const AuditsModule = (() => {
                 </div>
 
                 <div class="dashboard-card no-print">
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
-                        <div class="form-group"><label>Date de la Revue <span style="color:red">*</span></label><input type="date" id="r-date" value="${editingItem.date}" required /></div>
+                    <div class="grille-2">
+                        <div class="form-group"><label>Date de la Revue <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input type="date" id="r-date" value="${editingItem.date}" required /></div>
                         <div class="form-group"><label>Participants ${Help.tip("Personnes présentes à la revue. Choisissez-les dans l'annuaire (autocomplétion) ou saisissez un nom, puis « Ajouter ».")}</label>${UI.multiPersonHtml("r-participants", editingItem.participants)}</div>
                     </div>
 
-                    <div class="form-group" style="margin-top:20px;">
+                    <div class="form-group mt-20">
                         <label style="color:#1565c0; font-weight:bold;">Données d'entrée (Sujets abordés / ISO 27001 - 9.3.2)</label>
                         <p style="font-size: var(--text-sm); color:var(--text-muted); margin-top:0;">Résumez les éléments présentés à la direction.</p>
                         <textarea id="r-inputs" style="min-height:150px;">${escapeHtml(editingItem.inputs)}</textarea>
                     </div>
 
-                    <div class="form-group" style="margin-top:20px;">
+                    <div class="form-group mt-20">
                         <label style="color:#2e7d32; font-weight:bold;">Données de sortie (Décisions & Budgets / ISO 27001 - 9.3.3)</label>
                         <p style="font-size: var(--text-sm); color:var(--text-muted); margin-top:0;">Décisions relatives à l'amélioration continue, modifications du SMSI et besoins en ressources.</p>
                         <textarea id="r-outputs" style="min-height:150px;">${escapeHtml(editingItem.outputs)}</textarea>
