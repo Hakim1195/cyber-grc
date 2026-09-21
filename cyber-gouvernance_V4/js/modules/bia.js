@@ -110,7 +110,7 @@ const BiaModule = (() => {
                         <input id="nom" placeholder="Ex: Logistique, Paye, Production chaîne A..." required />
                     </div>
 
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                    <div class="grille-3">
                         <div class="form-group">
                             <label>Criticité Métier ${Help.tip("Importance du processus pour l'activité, de Faible à Critique (vital). Elle priorise les efforts de continuité et guide le choix des objectifs RTO/RPO.")}</label>
                             <select id="criticite">
@@ -223,7 +223,7 @@ const BiaModule = (() => {
                         <h3>Informations BIA</h3>
                         <div class="form-group"><label>Nom <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="nom" value="${escapeHtml(processus.nom)}" required /></div>
 
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                        <div class="grille-3">
                             <div class="form-group">
                                 <label>Criticité Métier ${Help.tip("Importance du processus pour l'activité, de Faible à Critique (vital). Elle priorise les efforts de continuité et guide le choix des objectifs RTO/RPO.")}</label>
                                 <select id="criticite">

@@ -204,7 +204,7 @@ const PraMcoModule = (() => {
                 </div>
             </div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px;">
+            <div class="grille-3">
                 <div class="form-group">
                     <label>Date programmée ${Help.tip("Date à laquelle l'action doit être réalisée. Une date dépassée sans réalisation signale un retard.")}</label>
                     <input type="date" id="datePrevue" value="${escapeHtml(m.datePrevue || "")}" />
@@ -288,7 +288,7 @@ const PraMcoModule = (() => {
                 <div class="dashboard-header">
                     <h1>Nouvelle Action Préalable (MCO)</h1>
                 </div>
-                <div class="dashboard-card" style="max-width:720px;">
+                <div class="dashboard-card">
                     ${formMarkup(blankMco())}
                     <div class="mt-20">
                         <button id="saveBtn">Enregistrer l'action</button>
@@ -330,7 +330,7 @@ const PraMcoModule = (() => {
                     </div>
                     <button id="delBtn" style="background:var(--color-danger);">Supprimer</button>
                 </div>
-                <div class="dashboard-card" style="max-width:720px;">
+                <div class="dashboard-card">
                     ${formMarkup(m)}
                     <div class="mt-20">
                         <button id="saveBtn">Mettre à jour</button>

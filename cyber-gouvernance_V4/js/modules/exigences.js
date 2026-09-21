@@ -334,7 +334,7 @@ const ExigencesModule = (() => {
                 <div class="dashboard-card">
                     <div class="form-group"><label>${t("actions.titreAction")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="titre" required /></div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <div class="grille-3">
                         <div class="form-group">
                             <label>${t("commun.priorite")}</label>
                             <select id="priorite">

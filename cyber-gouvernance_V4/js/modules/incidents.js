@@ -139,7 +139,7 @@ const IncidentsModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <h1>${t("incidents.declarer")}</h1>
-                <div class="dashboard-card" style="max-width:820px;">
+                <div class="dashboard-card">
                     ${formFieldsHtml({ date_detection: todayIso })}
                     <div class="mt-20">
                         <button id="save">${t("commun.enregistrer")}</button>
@@ -194,12 +194,12 @@ const IncidentsModule = (() => {
 
                 ${typeof ReglementaireModule !== "undefined" ? ReglementaireModule.encartHtml(inc.id) : deadlineBannerHtml(inc)}
 
-                <div class="dashboard-card" style="max-width:900px;">
+                <div class="dashboard-card">
                     ${formFieldsHtml(inc)}
                     <div class="mt-20"><button id="saveBtn">${t("commun.mettreAJour")}</button></div>
                 </div>
 
-                <div class="dashboard-card" style="max-width:900px; margin-top:1.5rem;">
+                <div class="dashboard-card" style="margin-top:1.5rem;">
                     <div class="ref-actions-head">
                         <strong>${t("incidents.actionsCorrectives")} ${Help.tip(t("incidents.actionsCorrectivesAide"))}</strong>
                         <button id="addActionBtn" style="font-size: var(--text-sm); padding:4px 10px;">${t("incidents.planifierAction")}</button>
@@ -304,7 +304,7 @@ const IncidentsModule = (() => {
 
         return `
             <div class="form-group"><label>${t("incidents.colIntitule")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="titre" value="${escapeHtml(inc.titre || "")}" placeholder="${t("incidents.intitulePlaceholder")}" /></div>
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px;">
+            <div class="grille-3">
                 <div class="form-group"><label>${t("commun.type")}</label>${selectHtml("type", TYPES, inc.type)}</div>
                 <div class="form-group"><label>${t("commun.gravite")}</label>${selectHtml("gravite", GRAVITES, inc.gravite || "moyenne")}</div>
                 <div class="form-group"><label>${t("commun.statut")}</label>${selectHtml("statut", STATUTS, inc.statut || "nouveau")}</div>

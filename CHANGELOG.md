@@ -27,7 +27,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2408 essais, 2408 passés, 0 échec** — 2 084 sans navigateur et 324 avec —,
+> `npm test` → **2411 essais, 2411 passés, 0 échec** — 2 084 sans navigateur et 327 avec —,
 > trente-huit familles. ⚠️ **+26 le 21/09/2026** : la recherche documentaire (action **D3**,
 > migration `059`) apporte `test/recherche/documentaire.test.mjs` (19) et
 > `test/navigateur/recherche-documentaire.test.mjs` (7).
@@ -77,6 +77,73 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### Un système de mise en page : les conteneurs cessent de choisir leur largeur (21/09/2026)
+
+**Signalé par l'utilisateur** : *« la largeur des différents conteneurs des formulaires
+change même à l'intérieur de la même section, ce qui n'est pas responsive et n'est pas beau
+à voir. »*
+
+#### Ce qui a été MESURÉ avant de corriger
+
+Sur la seule fiche d'un document : **quatre largeurs de carte** (956 · 900 · 820 · 772 px)
+et **six largeurs de champ** — dont **362, 371 et 379**, trois valeurs presque identiques.
+*L'œil attrape cet écart sans pouvoir le nommer, et c'est exactement ce qui fait qu'un
+logiciel « n'est pas beau à voir ».*
+
+Dans les 49 modules : **38 `max-width` écrits à la main**, en huit valeurs différentes, et
+**cinq seuils de repli** (`minmax` de 180 à 300 px) — donc cinq moments où la page se
+réorganise, au lieu d'un.
+
+#### Les trois règles du système
+
+1. **Un panneau ne choisit pas sa largeur** — c'est la page qui la donne. Les 24 plafonds
+   posés sur des cartes sont retirés. ⚠️ Ceux des zones d'**impression** sont gardés : une
+   page imprimée a bien une largeur fixe, et les confondre aurait cassé la sortie papier,
+   qui est une pièce d'audit.
+2. **Une seule grille, à douze colonnes.** Douze se divise par 2, 3, 4 et 6 : toutes les
+   dispositions du produit s'y expriment sans inventer de piste. Comme la grille est **la
+   même partout**, un champ « à moitié » fait la même largeur d'un écran à l'autre — ce qui
+   était tout le sujet. Vingt grilles déclarées en ligne y sont ramenées, et une grille
+   `.grille` neutre accueille les dispositions asymétriques, qui gardent leur intention
+   (« Type » plus large que « Version » et « Statut » : 6 + 3 + 3).
+3. **Un seul seuil de repli**, à 1100 px puis 820 px.
+
+#### Et un `fieldset` cesse d'être une boîte dans une boîte
+
+⚠️ **C'était la source des largeurs presque identiques.** Un `fieldset` posé DANS une carte
+ajoutait sa bordure et son retrait : trois champs de même rôle faisaient 427, 439 et 444 px.
+Une section de formulaire se marque désormais par son **intitulé et un filet**, pas par un
+cadre — son contenu reste aligné sur celui de la carte.
+
+#### Le liseré orange de 4 px est retiré
+
+Il était posé sur **chaque** carte, si bien qu'il ne distinguait plus rien : quatre panneaux
+d'un écran portaient la même barre que le panneau principal. *Une couleur qui souligne tout
+ne souligne rien.* L'orange reste la couleur d'action — boutons, entrée de menu active,
+bascules —, là où il veut dire quelque chose. Le panneau se tient par une bordure fine et
+une ombre douce.
+
+#### Le résultat
+
+| Écran | Largeurs de carte | Largeurs de champ |
+|---|---|---|
+| `/documents/:id` | 4 → **1** | 6 → **3** (212 · 443 · 906) |
+| `/incidents/:id` | 2 → **1** | 3 → **3** |
+| `/prestataires/:id` | 2 → **1** | 5 → **3** |
+
+Trois valeurs qui sont exactement **3/12, 6/12 et 12/12**.
+
+🛑 **Gardé, et la mutation a été jouée** : `test/navigateur/largeurs-coherentes.test.mjs`
+refuse qu'un écran porte deux largeurs de panneau ou plus de quatre largeurs de champ. En
+remettant le plafond d'origine, il rougit et NOMME le défaut signalé —
+`/documents/DOC-A → 820 · 956 px`.
+
+⚠️ **Le nombre quatre est MESURÉ, pas choisi** : le système à douze colonnes n'offre que
+quatre parts au formulaire. Une cinquième largeur signifie qu'un conteneur s'est remis à
+décider tout seul.
+
+**Mesuré** : banc **2411/2411**, fiche vérifiée de 1440 à 860 px sans un débordement.
 
 ### « Une table qui sort de son cadre » — signalé par l'utilisateur, trouvé partout (21/09/2026)
 

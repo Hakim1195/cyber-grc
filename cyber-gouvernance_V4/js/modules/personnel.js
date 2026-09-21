@@ -150,7 +150,7 @@ const PersonnelModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <div class="dashboard-header"><h1>Nouvelle personne</h1></div>
-                <div class="dashboard-card" style="max-width:720px;">
+                <div class="dashboard-card">
                     ${formMarkup({})}
                     <div class="mt-20">
                         <button id="saveBtn">Enregistrer</button>

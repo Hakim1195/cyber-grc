@@ -126,7 +126,7 @@ const PraPrestatairesModule = (() => {
             </label>`;
         }).join("");
         return `
-            <div class="dashboard-card" style="max-width:600px; margin-top:1.2rem; border-top:3px solid var(--primary);">
+            <div class="dashboard-card" style="margin-top:1.2rem; border-top:3px solid var(--primary);">
                 <h3 class="mt0">Risque fournisseur &amp; chaîne d'appro ${Help.tip("Évaluez le risque que ce tiers fait porter à votre organisation. NIS2 impose de sécuriser sa chaîne d'approvisionnement ; DORA encadre les prestataires TIC critiques.")}</h3>
                 <div class="grille-2">
                     <div class="form-group">
@@ -232,7 +232,7 @@ const PraPrestatairesModule = (() => {
     function doraSectionHtml(p) {
         p = p || {};
         return `
-            <div class="dashboard-card" style="max-width:600px; margin-top:1.2rem; border-top:3px solid var(--primary);">
+            <div class="dashboard-card" style="margin-top:1.2rem; border-top:3px solid var(--primary);">
                 <h3 class="mt0">Registre d'information DORA ${Help.tip("Le règlement DORA (article 28) impose de tenir un registre de tous les arrangements contractuels portant sur des services TIC. C'est la pièce que l'autorité réclame en premier.")}</h3>
                 <p style="color:var(--text-muted); font-size: var(--text-sm); margin:2px 0 12px;">
                     Facultatif ici, exigé à la remise : l'onglet « Registre DORA » dit, tiers par tiers, ce qui manque encore.
@@ -279,7 +279,7 @@ const PraPrestatairesModule = (() => {
                     <label>Référence du contrat</label>
                     ${champ("contrat_reference", p.contrat_reference, 'placeholder="Ex : CTR-2024-018"')}
                 </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px;">
+                <div class="grille-3">
                     <div class="form-group">
                         <label>Début</label>
                         ${champ("contrat_debut", p.contrat_debut, 'type="date"')}
@@ -309,7 +309,7 @@ const PraPrestatairesModule = (() => {
                     <label>Plan de sortie ${Help.tip("Comment sortir du contrat sans interrompre la fonction soutenue. DORA article 28 §8 demande une stratégie de sortie TESTÉE — donc datée.")}</label>
                     <textarea id="plan_sortie" style="min-height:70px;" placeholder="Ex : export mensuel chiffré, bascule vers le socle interne, délai de reprise estimé.">${esc(p.plan_sortie || "")}</textarea>
                 </div>
-                <div class="form-group" style="max-width:280px;">
+                <div class="form-group col-3">
                     <label>Date du plan de sortie <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span> ${Help.tip("Obligatoire dès qu'un plan de sortie est saisi : un plan non daté est le document que personne ne relit. La base le refuse.")}</label>
                     ${champ("plan_sortie_le", p.plan_sortie_le, 'type="date"')}
                 </div>
@@ -378,7 +378,7 @@ const PraPrestatairesModule = (() => {
         const options = [["", "— Choisir un tiers déjà enregistré —"]]
             .concat(autres.map(x => [x.id, x.societe]));
         return `
-            <div class="dashboard-card" style="max-width:600px; margin-top:1.2rem; border-top:3px solid var(--primary);">
+            <div class="dashboard-card" style="margin-top:1.2rem; border-top:3px solid var(--primary);">
                 <h3 class="mt0">Sous-traitance ${Help.tip("L'article 29 de DORA demande de connaître les sous-traitants qui interviennent dans une fonction critique ou importante : un prestataire qui sous-traite déplace le risque, il ne le réduit pas.")}</h3>
 
                 <div id="chaineTiers" style="margin-bottom:14px;">
@@ -390,7 +390,7 @@ const PraPrestatairesModule = (() => {
                     Le sous-traitant doit d'abord exister dans cet annuaire : c'est un tiers comme un autre,
                     et il le restera le jour où vous contracterez directement avec lui.
                 </p>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div class="grille-2">
                     <div class="form-group">
                         <label>Tiers</label>
                         <select id="stCible">${optionsHtml(options, "")}</select>
@@ -571,7 +571,7 @@ const PraPrestatairesModule = (() => {
     function questionnairesPanelHtml() {
         const refs = [["", "— Choisir un référentiel —"]].concat(referentielsDisponibles());
         return `
-            <div class="dashboard-card" style="max-width:600px; margin-top:1.2rem; border-top:3px solid var(--primary);">
+            <div class="dashboard-card" style="margin-top:1.2rem; border-top:3px solid var(--primary);">
                 <h3 class="mt0">Questionnaires de sécurité ${Help.tip("Un questionnaire se construit depuis un référentiel que vous possédez déjà, s'exporte en classeur, se remplit hors ligne par le fournisseur, et se réimporte. Aucune donnée ne part d'ici vers le fournisseur : l'envoi reste un geste humain.")}</h3>
 
                 <div id="questionnairesListe" style="margin-bottom:14px;">
@@ -579,7 +579,7 @@ const PraPrestatairesModule = (() => {
                 </div>
 
                 <label style="font-weight:700;">Préparer un questionnaire</label>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px;">
+                <div class="grille-2" style="margin-top:6px;">
                     <div class="form-group">
                         <label>Référentiel</label>
                         <select id="qRef">${optionsHtml(refs, "")}</select>
@@ -1105,7 +1105,7 @@ const PraPrestatairesModule = (() => {
                 <div class="dashboard-header">
                     <h1>Nouveau Prestataire / Tiers</h1>
                 </div>
-                <div class="dashboard-card" style="max-width:600px;">
+                <div class="dashboard-card">
                     <div class="form-group">
                         <label>Société / Entité <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="societe" placeholder="Ex: IONOS, Assureur X, ANSSI..." required />
@@ -1139,7 +1139,7 @@ const PraPrestatairesModule = (() => {
                 ${riskSectionHtml()}
                 ${doraSectionHtml()}
 
-                <div style="max-width:600px; margin-top: 20px;">
+                <div style="margin-top: 20px;">
                     <button id="saveBtn" style="background:var(--primary);">Enregistrer le contact</button>
                     <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                 </div>
@@ -1183,7 +1183,7 @@ const PraPrestatairesModule = (() => {
                     <h1>Édition : ${esc(c.societe)}</h1>
                     <button id="delBtn" style="background:var(--color-danger);">Supprimer</button>
                 </div>
-                <div class="dashboard-card" style="max-width:600px;">
+                <div class="dashboard-card">
                     <div class="form-group">
                         <label>Société / Entité <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="societe" value="${esc(c.societe)}" required />
@@ -1219,7 +1219,7 @@ const PraPrestatairesModule = (() => {
                 ${sousTraitancePanelHtml(c)}
                 ${questionnairesPanelHtml()}
 
-                <div style="max-width:600px; margin-top: 20px;">
+                <div style="margin-top: 20px;">
                     <button id="saveBtn" style="background:var(--primary);">Mettre à jour</button>
                     <button id="cancelBtn" style="margin-left:10px; background:var(--color-gray); color:white;">Annuler</button>
                 </div>

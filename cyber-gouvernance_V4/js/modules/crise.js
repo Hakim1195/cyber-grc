@@ -320,7 +320,7 @@ const CriseModule = (() => {
             <section class="page">
                 <h1>Nouveau membre de la cellule</h1>
 
-                <div class="dashboard-card" style="max-width: 800px;">
+                <div class="dashboard-card">
                     <div class="form-group">
                         <label>Rôle assigné en cas de crise <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <select id="role">
@@ -338,7 +338,7 @@ const CriseModule = (() => {
                         <input id="nom" list="personnes-list" placeholder="Ex: Jean DUPONT" required />
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="grille-2">
                         <div class="form-group">
                             <label>Téléphone (Urgence / Portable)</label>
                             <input id="telephone" type="tel" placeholder="06 XX XX XX XX" />
@@ -410,7 +410,7 @@ const CriseModule = (() => {
                     <button id="deleteBtn" style="background-color: var(--color-danger);">Retirer le membre</button>
                 </div>
 
-                <div class="dashboard-card" style="max-width: 800px;">
+                <div class="dashboard-card">
                     <div class="form-group">
                         <label>Rôle assigné en cas de crise <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <select id="role">
@@ -428,7 +428,7 @@ const CriseModule = (() => {
                         <input id="nom" list="personnes-list" value="${esc(membre.nom)}" required />
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="grille-2">
                         <div class="form-group">
                             <label>Téléphone (Urgence / Portable)</label>
                             <input id="telephone" type="tel" value="${esc(membre.telephone || "")}" />

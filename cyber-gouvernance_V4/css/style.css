@@ -3292,3 +3292,169 @@ input, select, textarea {
    que de décaler l'écran entier — le symptôme le plus déroutant, parce que
    rien de visible ne l'explique. */
 body { overflow-x: hidden; }
+
+/* =====================================================================
+   LE SYSTÈME DE MISE EN PAGE  (21/09/2026)
+
+   Signalé par l'utilisateur : *« la largeur des différents conteneurs des
+   formulaires change même à l'intérieur de la même section, ce qui n'est
+   pas responsive et n'est pas beau à voir. »*
+
+   ── Ce qui a été MESURÉ avant de corriger ────────────────────────────
+
+   Sur la seule fiche d'un document : **quatre largeurs de carte**
+   (956 · 900 · 820 · 772 px) et **six largeurs de champ** — dont 362, 371
+   et 379, trois valeurs presque identiques, ce que l'œil attrape sans
+   pouvoir le nommer. Dans les 49 modules : **38 `max-width` écrits à la
+   main**, en huit valeurs différentes, et **cinq seuils de repli**
+   distincts (`minmax` de 180 à 300 px) — donc cinq moments où la page se
+   réorganise, au lieu d'un.
+
+   ── Les trois règles du système ──────────────────────────────────────
+
+   1. **Un panneau ne choisit pas sa largeur.** C'est la page qui la donne.
+   2. **Une seule grille de formulaire**, à douze colonnes : un champ « à
+      moitié » fait la même largeur d'une carte à l'autre et d'une ligne à
+      l'autre, parce que les pistes sont les mêmes.
+   3. **Un seul seuil de repli.** La page se réorganise à un moment, pas à
+      cinq.
+   ===================================================================== */
+
+/* 1 ── LA PAGE DONNE LE RYTHME ───────────────────────────────────────
+   Le `gap` remplace les marges posées panneau par panneau : une marge
+   inférieure sur l'un et supérieure sur l'autre s'additionnent ou se
+   fondent selon le voisinage, et l'espacement devient imprévisible. */
+#app .page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* ⚠️ Un enfant direct de la page occupe TOUTE la largeur — et son
+   `max-width` propre est neutralisé. C'est la règle qui répare le
+   signalement : trente-huit largeurs écrites à la main, en huit valeurs,
+   devenaient trente-huit décisions indépendantes. */
+#app .page > * {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+/* Le texte courant, lui, GARDE une largeur de lecture : au-delà de
+   ~75 caractères, l'œil perd sa ligne en revenant à la marge. */
+#app .page > p { max-width: 75ch; }
+
+/* 2 ── LA GRILLE DE FORMULAIRE, À DOUZE COLONNES ─────────────────────
+   Douze se divise par 2, 3, 4 et 6 : toutes les dispositions du produit
+   s'y expriment sans inventer de piste. Et comme la grille est la MÊME
+   partout, un champ « à moitié » fait la même largeur d'un écran à
+   l'autre — ce qui était tout le sujet du signalement. */
+/* `.grille` ne suppose aucune part : chaque enfant dit la sienne. C'est la
+   forme à employer quand la disposition n'est PAS régulière — « Type » plus
+   large que « Version » et « Statut », par exemple. Elle partage les douze
+   mêmes pistes, donc les mêmes largeurs que partout ailleurs. */
+#app .grille,
+#app .grille-2,
+#app .grille-3,
+#app .grille-4 {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 1rem 1.25rem;
+    align-items: start;
+}
+
+#app .grille-2 > * { grid-column: span 6; }
+#app .grille-3 > * { grid-column: span 4; }
+#app .grille-4 > * { grid-column: span 3; }
+
+/* Un champ peut demander une autre part, sans quitter la grille. */
+#app .col-12 { grid-column: span 12; }
+#app .col-8  { grid-column: span 8; }
+#app .col-6  { grid-column: span 6; }
+#app .col-4  { grid-column: span 4; }
+#app .col-3  { grid-column: span 3; }
+
+/* 3 ── UN SEUL SEUIL DE REPLI ────────────────────────────────────────
+   Les cartes qui se répartissent d'elles-mêmes partagent une seule
+   largeur minimale. Cinq valeurs différentes donnaient cinq moments de
+   réorganisation, et la page semblait se recomposer au hasard. */
+#app .grille-auto,
+#app .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+}
+
+/* ── LES DEUX BASCULES, ET ELLES SONT LES SEULES ──────────────────────
+   1100 px : les quarts et les tiers deviennent des moitiés — trois champs
+   côte à côte cessent d'être lisibles bien avant de devenir étroits.
+    820 px : tout passe sur une colonne. */
+@media (max-width: 1100px) {
+    #app .grille-3 > *, #app .grille-4 > *,
+    #app .col-4, #app .col-3 { grid-column: span 6; }
+}
+
+@media (max-width: 820px) {
+    #app .grille-2 > *, #app .grille-3 > *, #app .grille-4 > *,
+    #app .col-8, #app .col-6, #app .col-4, #app .col-3 { grid-column: span 12; }
+}
+
+/* ── UNE SECTION DE FORMULAIRE N'EST PAS UNE BOÎTE DANS UNE BOÎTE ─────
+   ⚠️ Un `fieldset` posé DANS une carte ajoutait sa propre bordure et son
+   propre retrait. Conséquence mesurée sur la fiche d'un document : trois
+   champs « à moitié » de 427, 439 et 444 px — le même rôle, trois
+   largeurs. L'œil attrape cet écart sans pouvoir le nommer, et c'est ce
+   qui fait qu'un logiciel « n'est pas beau à voir ».
+
+   Une section de formulaire se marque donc par son INTITULÉ et un filet,
+   pas par un cadre : son contenu reste aligné sur celui de la carte, et
+   toutes les moitiés font la même largeur. */
+#app .dashboard-card fieldset,
+#app .card fieldset {
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    padding: 1.25rem 0 0;
+    margin: 1.5rem 0 0;
+    min-width: 0;   /* un `fieldset` refuse de se réduire sans cela */
+}
+
+#app .dashboard-card fieldset > legend,
+#app .card fieldset > legend {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--text-muted);
+    font-weight: 700;
+    padding: 0 .6rem 0 0;
+}
+
+/* ── LE PANNEAU : UN SEUL TRAITEMENT ──────────────────────────────────
+   ⚠️ **Le liseré orange de 4 px est retiré**, et le motif mérite d'être
+   écrit : il était posé sur CHAQUE carte, si bien qu'il ne distinguait
+   plus rien — quatre panneaux d'un écran portaient la même barre que le
+   panneau principal. Une couleur qui souligne tout ne souligne rien.
+
+   L'orange reste la couleur d'action du produit — boutons, entrée de menu
+   active, bascules — là où il veut dire quelque chose. Le panneau, lui,
+   se tient par une bordure fine et une ombre douce : c'est ce qui donne
+   l'aspect d'un logiciel de gestion plutôt que d'une maquette. */
+#app .dashboard-card,
+#app .card {
+    background: var(--bg-card);
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(31, 45, 61, .04);
+}
+
+/* Une carte IMBRIQUÉE ne reprend ni ombre ni fond : deux niveaux de
+   relief sur un même écran brouillent la hiérarchie au lieu de la dire. */
+#app .dashboard-card .dashboard-card,
+#app .card .card {
+    box-shadow: none;
+    background: transparent;
+    border: 1px solid var(--border);
+}

@@ -180,10 +180,10 @@ const RisquesModule = (() => {
                     </ul>
                 </div>
 
-                <div class="dashboard-card" style="max-width: 800px;">
+                <div class="dashboard-card">
                     <div class="form-group"><label>${t("risques.colNom")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="nom" required /></div>
 
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                    <div class="grille-3">
                         <div class="form-group">
                             <label>${t("risques.frequence")} ${Help.tip(t("risques.frequenceAide"))}</label>
                             <select id="f">${UI.optionsEchelle("vraisemblance", 1, replisFrequence())}</select>
@@ -317,7 +317,7 @@ const RisquesModule = (() => {
 
                         <div class="form-group"><label>${t("commun.nom")} <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="nom" value="${escapeHtml(risque.nom)}" required /></div>
 
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                        <div class="grille-3">
                             <div class="form-group">
                                 <label>${t("risques.frequence")} ${Help.tip(t("risques.frequenceAide"))}</label>
                                 <select id="f">${UI.optionsEchelle("vraisemblance", currentF, replisFrequence())}</select>
@@ -440,7 +440,7 @@ const RisquesModule = (() => {
             return (val === null || val === undefined) ? "" : escapeHtml(String(val));
         };
         return `
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+            <div class="grille-3">
                 <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: var(--text-xs);">${t("risques.fairMin")}</label>
                     <input type="number" min="0" step="${pas}" id="fair-${prefixe}-min" value="${v("min")}" />
@@ -515,7 +515,7 @@ const RisquesModule = (() => {
                 <label>${t("risques.fairSource")}</label>
                 <input id="fair-source" value="${escapeHtml(q ? (q.source_donnees || "") : "")}" />
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="grille-2">
                 <div class="form-group">
                     <label>${t("risques.fairConfiance")}</label>
                     <select id="fair-confiance">

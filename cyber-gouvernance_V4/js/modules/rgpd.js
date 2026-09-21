@@ -253,7 +253,7 @@ const RgpdModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <h1>Nouveau traitement</h1>
-                <div class="dashboard-card" style="max-width:860px;">
+                <div class="dashboard-card">
                     ${formFieldsHtml({})}
                     <div class="mt-20"><button id="save">Enregistrer</button><button id="cancel" style="margin-left:10px; background:var(--color-gray);">Annuler</button></div>
                 </div>
@@ -283,7 +283,7 @@ const RgpdModule = (() => {
                     <div><h1>${escapeHtml(t.nom)}</h1><p class="sous-titre"><a href="#/rgpd" class="lien-accent">Registre RGPD</a></p></div>
                     <button id="deleteBtn" style="background:var(--color-danger);">Supprimer</button>
                 </div>
-                <div class="dashboard-card" style="max-width:860px;">
+                <div class="dashboard-card">
                     ${formFieldsHtml(t)}
                     <div class="mt-20"><button id="saveBtn">Mettre à jour</button></div>
                 </div>

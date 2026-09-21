@@ -202,7 +202,7 @@ const MesuresModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <h1>Nouvelle mesure de sécurité</h1>
-                <div class="dashboard-card" style="max-width:720px;">
+                <div class="dashboard-card">
                     <div class="form-group"><label>Nom <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="nom" placeholder="Ex : Authentification multifacteur (MFA)" /></div>
                     <div class="form-group"><label>Description</label><textarea id="description" placeholder="Ce que couvre la mesure, son périmètre…"></textarea></div>
                     <div class="grille-2">

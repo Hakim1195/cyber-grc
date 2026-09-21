@@ -496,7 +496,7 @@ const ActionsModule = (() => {
                         <input id="titre" value="${escapeHtml(action.titre)}" required />
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="grille-2">
                         <div class="form-group">
                             <label>${t("commun.priorite")}</label>
                             <select id="priorite">
@@ -516,7 +516,7 @@ const ActionsModule = (() => {
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="grille-2">
                         <div class="form-group">
                             <label>${t("commun.responsable")}</label>
                             <input id="responsable" list="personnes-list" value="${escapeHtml(action.responsable || "")}" />

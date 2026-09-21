@@ -366,7 +366,7 @@ const DocumentsModule = (() => {
         app.innerHTML = `
             <section class="page">
                 <h1>Nouveau document</h1>
-                <div class="dashboard-card" style="max-width:820px;">
+                <div class="dashboard-card">
                     ${formFieldsHtml({})}
                     <div class="mt-20"><button id="save">Enregistrer</button><button id="cancel" style="margin-left:10px; background:var(--color-gray);">Annuler</button></div>
                 </div>
@@ -404,7 +404,7 @@ const DocumentsModule = (() => {
                     <button id="deleteBtn" style="background:var(--color-danger);">Supprimer</button>
                 </div>
                 ${r.overdue ? `<div class="synthese-message danger" style="padding:12px; margin-bottom:1rem;"><strong>Revue en retard</strong> — la date de revue de ce document est dépassée. Pensez à le mettre à jour et à décaler la prochaine échéance.</div>` : ""}
-                <div class="dashboard-card" style="max-width:820px;">
+                <div class="dashboard-card">
                     ${formFieldsHtml(doc)}
                     <div class="mt-20"><button id="saveBtn">Mettre à jour</button></div>
                 </div>
@@ -563,10 +563,10 @@ const DocumentsModule = (() => {
             : `<p class="txt-muted-sm">Aucun référentiel chargé.</p>`;
         return `
             <div class="form-group"><label>Titre <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="titre" value="${escapeHtml(doc.titre || "")}" placeholder="Ex : Politique de sécurité du SI (PSSI)" /></div>
-            <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:15px;">
-                <div class="form-group"><label>Type</label><select id="type">${typeOpts}</select></div>
-                <div class="form-group"><label>Version ${Help.tip("Numéro de version du document. Dès qu'une pièce jointe de cette fiche est marquée « en vigueur », c'est ELLE qui donne ce numéro : le champ devient alors une lecture, et il suit le fichier qui fait foi. Tant qu'aucun fichier n'est détenu ici, il reste saisissable.")}</label><input id="version" value="${escapeHtml(doc.version || "")}" placeholder="1.0" /><p id="versionOrigine" class="doc-note" hidden></p></div>
-                <div class="form-group"><label>Statut</label><select id="statut">${statutOpts}</select></div>
+            <div class="grille">
+                <div class="form-group col-6"><label>Type</label><select id="type">${typeOpts}</select></div>
+                <div class="form-group col-3"><label>Version ${Help.tip("Numéro de version du document. Dès qu'une pièce jointe de cette fiche est marquée « en vigueur », c'est ELLE qui donne ce numéro : le champ devient alors une lecture, et il suit le fichier qui fait foi. Tant qu'aucun fichier n'est détenu ici, il reste saisissable.")}</label><input id="version" value="${escapeHtml(doc.version || "")}" placeholder="1.0" /><p id="versionOrigine" class="doc-note" hidden></p></div>
+                <div class="form-group col-3"><label>Statut</label><select id="statut">${statutOpts}</select></div>
             </div>
             <div class="grille-2">
                 <div class="form-group"><label>Propriétaire</label><input id="proprietaire" list="personnes-list" value="${escapeHtml(doc.proprietaire || "")}" placeholder="Nom ou fonction" /></div>

@@ -256,7 +256,7 @@ const AuditsModule = (() => {
                 <div class="dashboard-grid no-print">
                     <div class="dashboard-card">
                         <h3>Informations Générales</h3>
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-top:15px;">
+                        <div class="grille-2" style="margin-top:15px;">
                             <div class="form-group"><label>Référence / Titre <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="a-ref" value="${escapeHtml(editingItem.ref)}" required /></div>
                             <div class="form-group">
                                 <label>Statut</label>

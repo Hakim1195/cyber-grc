@@ -1164,7 +1164,7 @@ const PiecesModule = (() => {
      * qui le remplit, après le rendu de la fiche.
      */
     function hoteHtml() {
-        return '<div class="dashboard-card" id="' + HOTE + '" style="max-width:900px; margin-top:1.5rem;"></div>';
+        return '<div class="dashboard-card" id="' + HOTE + '" style="margin-top:1.5rem;"></div>';
     }
 
     function rafraichir() {

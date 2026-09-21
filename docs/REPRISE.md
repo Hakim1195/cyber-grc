@@ -597,6 +597,17 @@ rougir quoi que ce soit, et tous se voyaient en dix minutes de clics.* Prévoyez
    dans des règles d'impression, donc légitimes.** Le travail avait été fait ; la phrase,
    elle, envoyait la session suivante le refaire. *Une liste de travaux restants qui garde
    un travail achevé coûte plus cher qu'une liste incomplète : elle est crue.*
+1 bis. ~~**Le système de mise en page**~~ — ✅ **POSÉ le 21/09/2026**, sur signalement de
+   l'utilisateur : *« la largeur des différents conteneurs des formulaires change même à
+   l'intérieur de la même section. »* ⚠️ **Mesuré** : sur la fiche d'un document, **quatre
+   largeurs de carte** et **six de champ** — dont 362, 371 et 379, trois valeurs presque
+   identiques ; dans les modules, **38 `max-width` écrits à la main** en huit valeurs, et
+   **cinq seuils de repli**. Trois règles y répondent : *un panneau ne choisit pas sa
+   largeur*, *une seule grille à douze colonnes*, *un seul seuil de repli*. Un `fieldset`
+   dans une carte cesse d'être une boîte dans une boîte — c'était la source des largeurs
+   presque identiques. Gardé par `test/navigateur/largeurs-coherentes.test.mjs`, dont la
+   **mutation a été jouée et rougie**.
+
 2. **Les styles en ligne** — première passe faite le 21/09/2026 : **1 205 → 895**.
    ⚠️ **Le gain n'est pas le compte, c'est ce qu'il a sorti** : `style="color:red"`
    apparaissait **39 fois dans 17 modules** sur les astérisques de champ obligatoire — une

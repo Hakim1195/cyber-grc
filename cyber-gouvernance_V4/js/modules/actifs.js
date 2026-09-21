@@ -98,7 +98,7 @@ const ActifsModule = (() => {
                         <input id="nom" placeholder="Ex: Serveur ERP, Réseau OT..." required />
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="grille-2">
                         <div class="form-group">
                             <label>Type</label>
                             <select id="type">
@@ -204,7 +204,7 @@ const ActifsModule = (() => {
                         <h3>Détails de l'actif</h3>
                         <div class="form-group"><label>Nom <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label><input id="nom" value="${escapeHtml(actif.nom)}" required /></div>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="grille-2">
                             <div class="form-group">
                                 <label>Type</label>
                                 <select id="type">
@@ -263,7 +263,7 @@ const ActifsModule = (() => {
                         <button id="addDepBtn" type="button" ${autresActifs.length ? "" : "disabled"}>Ajouter le lien</button>
                     </div>
 
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+                    <div class="grille-2">
                         <div>
                             <div style="font-size: var(--text-xs); text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); font-weight:700; margin-bottom:8px;">Dépendances déclarées</div>
                             <ul id="deps-list" style="list-style:none; padding:0; margin:0;"></ul>

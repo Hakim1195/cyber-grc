@@ -67,7 +67,7 @@ const ClientsModule = (() => {
             <section class="page">
                 <h1>Nouveau Donneur d'ordre</h1>
 
-                <div class="dashboard-card" style="max-width: 600px;">
+                <div class="dashboard-card">
                     <div class="form-group">
                         <label>Nom du client / périmètre <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <input id="nom" placeholder="Ex: nom du donneur d'ordre / périmètre" required />

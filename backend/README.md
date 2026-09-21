@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2408 essais, quarante-deux familles (voir plus bas)
+npm test                           # 2411 essais, quarante-trois familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -783,7 +783,7 @@ dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, 
 la comparaison au marché du 08/09/2026.
 
 **Mesuré au 19/09/2026, après la vague F** (L27 : assistance par IA — `057` ; L28 :
-portail fournisseur — `058`, **construit et NON ouvert**) : `npm test` → **2408 essais, 2408 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+portail fournisseur — `058`, **construit et NON ouvert**) : `npm test` → **2411 essais, 2411 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **63 garde-fous consignés**, **59 migrations**,
 **89 tables**, **495 décisions** au registre de l'article 30 ; publication → **87
@@ -964,8 +964,8 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2408 · pass 2408 · fail 0
-                                                   base 326 · api 302 · navigateur 267
+npm test                                         → tests 2411 · pass 2411 · fail 0
+                                                   base 326 · api 302 · navigateur 270
                                                    pieces 142 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73

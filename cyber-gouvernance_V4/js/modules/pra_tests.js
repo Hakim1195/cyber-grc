@@ -133,7 +133,7 @@ const PraTestsModule = (() => {
                 <div class="dashboard-header">
                     <h1>Nouveau Bilan de Test</h1>
                 </div>
-                <div class="dashboard-card" style="max-width:600px;">
+                <div class="dashboard-card">
                     <div class="form-group">
                         <label>Scénario Testé / Playbook <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <select id="scenario_id">
@@ -211,7 +211,7 @@ const PraTestsModule = (() => {
                     <h1>Édition du Bilan</h1>
                     <button id="delBtn" style="background:var(--color-danger);">Supprimer</button>
                 </div>
-                <div class="dashboard-card" style="max-width:600px;">
+                <div class="dashboard-card">
                     <div class="form-group">
                         <label>Scénario Testé / Playbook <span class="champ-requis" title="Champ obligatoire" aria-hidden="true">*</span></label>
                         <select id="scenario_id">
