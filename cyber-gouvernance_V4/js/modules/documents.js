@@ -113,6 +113,102 @@ const DocumentsModule = (() => {
     let filtreDiffusion = "";
     let filtreEtiquette = "";
 
+    // ── La recherche documentaire (lot L16, action D3) ────────────────────
+    //
+    // ⚠️ **Elle est SERVEUR, et il faut le savoir en lisant ce fichier** : le
+    // terme part à `/api/recherche/documents`, qui interroge un index plein
+    // texte borné par la RLS. Un filtre côté navigateur sur `DataStore` aurait
+    // été plus simple, et faux sur deux points — il ne saurait ni ignorer les
+    // accents ni raciniser (« chiffrer » ne trouverait pas « chiffrement »), et
+    // il chercherait dans ce que le navigateur détient plutôt que dans ce que
+    // la session a le droit de voir.
+    //
+    // `null` veut dire « aucune recherche en cours » et ramène la liste
+    // entière ; un tableau vide veut dire « cherché, rien trouvé » — et les
+    // deux s'affichent différemment, sans quoi un vide sans explication apprend
+    // à ne plus croire ce qu'on montre (classe Q-201 / Q-207).
+    let rechercheTerme = "";
+    let rechercheResultats = null;
+    let rechercheMotif = "";
+    let rechercheMinuteur = null;
+
+    /**
+     * Les résultats de la recherche documentaire.
+     *
+     * ⚠️ **Ils sont rendus depuis la réponse du SERVEUR, et non depuis
+     * `DataStore`.** Croiser les deux aurait été tentant — pour afficher la
+     * date de revue, par exemple — mais un identifiant que le navigateur ne
+     * détient pas disparaîtrait alors du tableau sans un mot, et l'on aurait
+     * une recherche qui trouve des documents qu'elle n'affiche pas.
+     *
+     * ⚠️ Et `ou` dit OÙ la correspondance a eu lieu, jamais QUOI : le serveur
+     * ne rend pas l'extrait, parce qu'une annotation peut nommer quelqu'un
+     * (migration `059`). Le navigateur n'a donc rien à masquer — il n'a rien
+     * reçu.
+     */
+    function resultatsRechercheHtml() {
+        if (rechercheResultats.length === 0) {
+            return `<div class="empty-state">
+                        <h3>Aucun document ne correspond</h3>
+                        <p>${escapeHtml(rechercheMotif || "Aucun document de votre périmètre ne correspond à ce terme.")}</p>
+                        <button type="button" id="rechercheEffacer2" class="btn-secondary">Revenir au registre</button>
+                    </div>`;
+        }
+        const OU = { titre: "le titre", type: "le type", notes: "les annotations" };
+        const lignes = rechercheResultats.map(r => {
+            const ou = (r.ou || []).map(o => OU[o] || o).join(" et ");
+            return `<tr class="clickable-row" data-id="${escapeHtml(r.id)}">
+                <td><strong>${escapeHtml(r.titre)}</strong></td>
+                <td style="font-size: var(--text-sm);">${escapeHtml(r.type || "—")}</td>
+                <td style="text-align:center;">${escapeHtml(r.version || "—")}</td>
+                <td>${statutBadge(r.statut)}</td>
+                <td style="font-size: var(--text-sm); color:var(--text-muted);">${escapeHtml(ou ? "Trouvé dans " + ou : "—")}</td>
+            </tr>`;
+        }).join("");
+        return `<p class="no-print" style="font-size: var(--text-sm); color:var(--text-muted); margin-bottom:.5rem;">
+                    ${rechercheResultats.length} document${rechercheResultats.length > 1 ? "s" : ""} trouvé${rechercheResultats.length > 1 ? "s" : ""}, du plus pertinent au moins pertinent.
+                    ${escapeHtml(rechercheMotif)}
+                    <button type="button" id="rechercheEffacer" class="lien-bandeau">Revenir au registre</button>
+                </p>
+                <table class="data-table">
+                    <thead><tr><th>Titre</th><th>Type</th><th style="text-align:center;">Version</th><th>Statut</th><th>Correspondance</th></tr></thead>
+                    <tbody>${lignes}</tbody>
+                </table>`;
+    }
+
+    /**
+     * Interroge le serveur, puis redessine.
+     *
+     * ⚠️ **Un échec réseau NE VIDE PAS la liste** : il le DIT. Rendre « aucun
+     * résultat » quand on n'a pas pu demander serait annoncer une absence qui
+     * n'a pas été constatée — et la première chose qu'on fait d'un écran qui
+     * ment sur ce qu'il n'a pas pu lire est de cesser de le croire.
+     */
+    async function lancerRecherche(terme) {
+        rechercheTerme = terme;
+        try {
+            // ⚠️ **`UI.apresEcriture` attend la poussée AVANT d'interroger**, et ce
+            // n'est pas une précaution de principe : la recherche est SERVEUR, et un
+            // document que l'utilisateur vient de créer n'est peut-être pas encore
+            // arrivé. Sans cette attente, chercher son propre document trois secondes
+            // après l'avoir écrit rendrait « aucun document ne correspond » — c'est-à-dire
+            // la classe Q-201 / Q-207, dans l'écran même qui sert à retrouver ses preuves.
+            //
+            // ⚠️ Et le banc navigateur ne peut PAS voir ce défaut : il monte le serveur
+            // dans le même processus, où la poussée aboutit dans la même milliseconde.
+            // C'est `test/depot/relecture-apres-ecriture.test.mjs` qui le ferme, à la
+            // CLASSE — et c'est lui qui a réclamé cette attente ici.
+            const reponse = await UI.apresEcriture(() => Api.rechercheDocuments(terme));
+            rechercheResultats = (reponse && reponse.resultats) || [];
+            rechercheMotif = (reponse && reponse.motif) || "";
+        } catch (erreur) {
+            rechercheResultats = [];
+            rechercheMotif = "La recherche n'a pas pu être faite : le serveur n'a pas répondu. "
+                + "Ce n'est pas un registre vide, c'est une question restée sans réponse.";
+        }
+        renderList();
+    }
+
     function renderList() {
         const app = document.getElementById("app");
         const tous = [...DataStore.getDocuments()].sort((a, b) => (a.date_revue || "9999").localeCompare(b.date_revue || "9999"));
@@ -144,6 +240,11 @@ const DocumentsModule = (() => {
 
         const barreFiltres = `
             <div class="filtres-ligne no-print" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:1rem; flex-wrap:wrap;">
+                <div class="form-group" style="margin:0; flex:1 1 280px;">
+                    <label for="rechercheDocs" style="font-size: var(--text-sm);">Rechercher ${Help.tip("La recherche porte sur le titre, le type et les annotations, par un index plein texte : les accents et le pluriel sont ignorés, et « chiffrer » trouve « chiffrement ». Elle ne va pas encore dans le contenu des fichiers joints. Elle ne montre que les documents de votre périmètre.")}</label>
+                    <input type="search" id="rechercheDocs" placeholder="chiffrement, sauvegarde, accès distants…"
+                           maxlength="100" autocomplete="off" value="${escapeHtml(rechercheTerme)}">
+                </div>
                 <div class="form-group" style="margin:0;">
                     <label style="font-size: var(--text-sm);">Diffusion</label>
                     <select id="filtreDiffusion">
@@ -190,7 +291,9 @@ const DocumentsModule = (() => {
                 ${alerteExposition}
                 ${tous.length ? barreFiltres : ""}
 
-                ${tous.length === 0
+                ${rechercheResultats !== null
+                    ? resultatsRechercheHtml()
+                    : tous.length === 0
                     ? `<div class="empty-state"><h3>Aucun document</h3><p>Référencez vos politiques et procédures pour suivre leurs versions et leurs dates de revue.</p><button id="addBtn2" style="background:var(--primary);">Ajouter un document</button></div>`
                     : docs.length === 0
                     ? `<div class="empty-state"><h3>Aucun document ne correspond au filtre</h3><p>${tous.length} document${tous.length > 1 ? "s sont" : " est"} enregistré${tous.length > 1 ? "s" : ""} : c'est le filtre qui les masque, pas le registre qui est vide.</p><button type="button" id="filtreReset2" class="btn-secondary">Tout afficher</button></div>`
@@ -203,6 +306,46 @@ const DocumentsModule = (() => {
         const add = () => renderCreate();
         const b1 = document.getElementById("addBtn"); if (b1) b1.onclick = add;
         const b2 = document.getElementById("addBtn2"); if (b2) b2.onclick = add;
+        // ── La recherche documentaire ────────────────────────────────────
+        //
+        // ⚠️ **Un délai de garde, et il n'est pas cosmétique** : sans lui, un
+        // appel part à CHAQUE frappe, et la recherche consomme le budget de
+        // trace du sondage — le serveur inscrirait au journal inaltérable une
+        // extraction par lettre tapée. C'est la classe du constat Q-301, prise
+        // du bon côté cette fois.
+        const champ = document.getElementById("rechercheDocs");
+        if (champ) {
+            champ.addEventListener("input", () => {
+                const terme = champ.value.trim();
+                if (rechercheMinuteur) clearTimeout(rechercheMinuteur);
+                if (terme === "") {
+                    rechercheTerme = "";
+                    rechercheResultats = null;
+                    rechercheMotif = "";
+                    renderList();
+                    return;
+                }
+                rechercheMinuteur = setTimeout(() => { lancerRecherche(terme); }, 300);
+            });
+            // Le curseur revient là où il était : `renderList()` réécrit tout
+            // le balisage, et un champ de recherche qui perd le focus à chaque
+            // résultat est un champ dans lequel on ne peut pas corriger un mot.
+            if (rechercheTerme) {
+                champ.focus();
+                champ.setSelectionRange(champ.value.length, champ.value.length);
+            }
+        }
+        const effacer = () => {
+            rechercheTerme = "";
+            rechercheResultats = null;
+            rechercheMotif = "";
+            renderList();
+        };
+        const re1 = document.getElementById("rechercheEffacer");
+        if (re1) re1.addEventListener("click", effacer);
+        const re2 = document.getElementById("rechercheEffacer2");
+        if (re2) re2.addEventListener("click", effacer);
+
         const fd = document.getElementById("filtreDiffusion");
         if (fd) fd.addEventListener("change", () => { filtreDiffusion = fd.value; renderList(); });
         const fe = document.getElementById("filtreEtiquette");

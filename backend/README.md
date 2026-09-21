@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2356 essais, trente-huit familles (voir plus bas)
+npm test                           # 2382 essais, trente-huit familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -635,7 +635,7 @@ que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non re
 | `test/crise/` | la **main courante de crise** (L20, 20.5) : EN AJOUT SEUL, par les quatre couches du §12 — et l'essai les éprouve **sous le rôle applicatif**, celui que l'API emploie, pas sous le propriétaire qui peut tout. ⚠️ Le §4 joue les DEUX adversaires que le §12 distingue : celui qui retouche une entrée (trahi par son empreinte) et celui qui **recalcule l'empreinte** (trahi par l'entrée suivante). La première rédaction exigeait les deux anomalies d'un seul geste, et elle a rougi — à juste titre |
 | `test/droits-personnes/` | les **demandes d'exercice de droits** (L20, 20.4) : l'échéance d'un mois est DÉRIVÉE de la date de réception et porte sa référence au texte ; le mois écoulé fait passer « en retard » sans qu'on ait rien fait ; une prorogation exige d'avoir été **notifiée et motivée**, et un refus d'être **motivé et daté** (art. 12 §4). ⚠️ Le §6 éprouve le cas du **31 janvier** : un « mois » compté en trente jours donnerait deux jours de retard que personne ne verrait |
 | `test/aipd/` | l'**analyse d'impact RGPD** (L20, 20.3) : elle POINTE le registre de l'article 30 — un essai le mesure **dans le catalogue**, en refusant toute colonne commune aux deux tables —, son état se DÉRIVE de la date de revue, et la route rend **aussi les traitements qui n'ont aucune analyse**. ⚠️ Le §4 mesure ce que le produit REFUSE de faire : il n'écarte pas les traitements « non présumés requis », parce que deux des trois cas de l'article 35 §3 ne sont pas mesurables avec ce que le registre porte |
-| `test/recherche/` | la **recherche globale** (L17, A3) : une barre qui trouve un risque, un actif, une exigence ou une personne, bornée par la RLS côté serveur et par les droits — jamais par un filtre côté client. C'est la surface la plus propice à un oracle d'existence |
+| `test/recherche/` | les **deux** recherches, et elles ne répondent pas à la même question. La **globale** (L17, A3) trouve un risque, un actif, une exigence ou une personne **par son libellé**. La **documentaire** (L16, **D3**) cherche dans le titre, le type et les **annotations** d'un document par un index plein texte : accents repliés, racinisation française, classement par pertinence. Les deux sont bornées par la RLS côté serveur et par les droits — **jamais par un filtre côté client** : c'est la surface la plus propice à un oracle d'existence, et chaque contrôle négatif y porte son **témoin positif** sur le même terme (constat Q-210). ⚠️ Le §4 de la documentaire mesure une ABSENCE — que la réponse ne contienne **nulle part** l'extrait qui a produit la correspondance —, parce que `documents.notes` est en régime « signaler » au registre de l'article 30 : rendre la phrase ferait du produit un moteur de recherche sur les personnes qu'elle nomme. ⚠️ Et son §7 vide la note pour vérifier que l'index la perd **dans la même instruction** : c'est ce qui justifie une colonne ENGENDRÉE plutôt qu'un index tenu par un déclencheur, qui aurait pu survivre à la donnée qu'il indexe |
 | `test/ebios/` | les **ateliers 1 et 2 d'EBIOS RM** (L25) : la pertinence d'un couple source / objectif est DÉRIVÉE et **se tait dès qu'un critère manque** — pas d'estimation par défaut —, retenir un couple **sans justification** est refusé par la base, et la valeur métier POINTE le processus du BIA sans recopier sa criticité. ⚠️ **Le §1 mesure ce qui n'a PAS bougé** : les cinq colonnes de cotation F × G × M d'un risque **et sa `version`**, avant et après un atelier complet — *« en addition, jamais en remplacement » est une propriété NÉGATIVE, et elle ne se mesure qu'en la cherchant*. ⚠️ Et le §10 éprouve ce qu'aucune relecture n'avait vu : un `on delete set null` sans liste de colonnes nullifie `filiale_id` avec le lien, et fait tomber **toute restauration de sauvegarde** |
 | `test/echelles/` | les **échelles de cotation** (L25, action 25.3) : le socle du Groupe est semé, gradué et **daté** ; une valeur hors graduation et une échelle **d'un autre sujet** sont refusées par la base ; une échelle publiée ne se modifie plus et l'un de ses niveaux ne se **retire** pas — le refus venant **au commit**, parce qu'un « before delete » ne distingue pas un retrait de la disparition de l'échelle entière. ⚠️ Le §11 est le cœur : le dépôt **estampille** la cotation qui part, **n'écrase pas** un « pas d'échelle » explicite — le chemin de la reprise —, et ne réestampille RIEN quand on ré-enregistre une fiche sans rien changer. ⚠️ Et le §12 casse le garde-fou de cinq façons, dont une contrainte vidée par « … or true » que seule l'**évaluation** sur une ligne témoin voit |
 | `test/quantification/` | la **quantification financière** d'un risque (L25, action 25.4) : un triplet **incomplet** est refusé par la base, un triplet **désordonné** aussi, et un montant **sans hypothèses** ne s'écrit pas — la règle vit dans le SCHÉMA et non dans l'écran, parce que le moteur d'import du lot L7 écrit sans passer par aucun écran. ⚠️ Le §5 mesure le **PLANCHER** : sans pertes secondaires estimées, le montant ne porte que la perte primaire, et la marque qui le dit doit suivre — *un plancher présenté comme un total est l'estimation par défaut dans le sens rassurant*. ⚠️ Le §6 éprouve que le montant est **INÉCRIVABLE** (colonne engendrée, refus en 428C9), et le §11 mesure les DEUX moitiés de l'élargissement du garde du lot : la rédaction élargie voit le déclencheur fautif, et la rédaction d'ORIGINE ne le voyait pas |
@@ -783,10 +783,10 @@ dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, 
 la comparaison au marché du 08/09/2026.
 
 **Mesuré au 19/09/2026, après la vague F** (L27 : assistance par IA — `057` ; L28 :
-portail fournisseur — `058`, **construit et NON ouvert**) : `npm test` → **2356 essais, 2356 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+portail fournisseur — `058`, **construit et NON ouvert**) : `npm test` → **2382 essais, 2382 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **62 garde-fous consignés**, **58 migrations**,
-**89 tables**, **494 décisions** au registre de l'article 30 ; publication → **85
+`f_verifier_schema()` → 0 anomalie, **63 garde-fous consignés**, **59 migrations**,
+**89 tables**, **495 décisions** au registre de l'article 30 ; publication → **85
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **14 conformes,
 2 réserves, 0 bloquant** sur **quinze sujets** — le quinzième, « assistance IA », naît de
 L27 et rend le mode en vigueur.
@@ -964,8 +964,8 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2356 · pass 2356 · fail 0
-                                                   base 326 · api 302 · navigateur 239
+npm test                                         → tests 2382 · pass 2382 · fail 0
+                                                   base 326 · api 302 · navigateur 246
                                                    pieces 142 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73
@@ -976,21 +976,21 @@ npm test                                         → tests 2356 · pass 2356 · 
                                                    journal 25 · catalogues 24 · ouverture 24
                                                    echelles 23 · quantification 22
                                                    assistance 16 · collecte 15 · ebios 15
-                                                   portail 15 · recherche 13
+                                                   portail 15 · recherche 32
                                                    attestations 8 · decouverte 8 · aipd 7
                                                    crise 7 · reglementaire 7 · derogations 6
                                                    droits-personnes 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (62 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (63 garde-fous découverts, joués, consignés)
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **89 tables** en
-**58 migrations**, **356 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**59 migrations**, **356 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **175 clés étrangères** (104 `restrict`, 61 `cascade`, 9 `set null`, 1 `no action`),
 **81 tables portant `cree_par` et 81 déclencheurs de création**, **58 clés étrangères
 composites** visant
-`(id, filiale_id)`, **28 unicités** `uq_<parent>_id_filiale`, **62 contrôles consignés**
+`(id, filiale_id)`, **28 unicités** `uq_<parent>_id_filiale`, **63 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1270,7 +1270,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **89 tables**, obtenues aujourd'hui en **58 migrations** appliquées de bout en bout par
+- **89 tables**, obtenues aujourd'hui en **59 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le

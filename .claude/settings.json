@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run verifier-types)",
+      "Bash(npm audit *)",
+      "Bash(systemctl is-active *)",
+      "Bash(journalctl -u *)"
+    ]
+  }
+}

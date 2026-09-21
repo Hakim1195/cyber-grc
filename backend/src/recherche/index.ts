@@ -56,6 +56,18 @@ import { DOMAINE_PAR_ENTITE } from '../api/droits.js';
 import type { SessionAppliquee } from '../api/session.js';
 
 export const CHEMIN_RECHERCHE = '/api/recherche';
+/**
+ * La recherche DOCUMENTAIRE — action **D3** du lot L16, la dernière de ses cinq.
+ *
+ * ⚠️ **Une seconde route, et non un élargissement de la première**, parce que
+ * les deux ne répondent pas à la même question. `/api/recherche` répond *« où
+ * est l'enregistrement qui s'appelle ainsi ? »* sur tout le produit, par le
+ * libellé. Celle-ci répond *« quelle procédure traite de ce sujet ? »* sur les
+ * seuls documents, par un index plein texte. Les fondre en une aurait obligé à
+ * arbitrer entre deux classements dans un même tableau de résultats — et le
+ * perdant aurait été le plein texte, qui est précisément ce qu'on ajoute.
+ */
+export const CHEMIN_RECHERCHE_DOCUMENTS = '/api/recherche/documents';
 
 /** Deux signes au minimum : en dessous, toute recherche rend tout. */
 export const TERME_MIN = 2;
@@ -70,6 +82,16 @@ export const TERME_MAX = 100;
 export const RESULTATS_MAX = 50;
 /** Plafond par entité, pour qu'une entité volumineuse n'avale pas la réponse. */
 const RESULTATS_PAR_ENTITE = 10;
+/**
+ * Plafond de la recherche DOCUMENTAIRE.
+ *
+ * Plus bas que celui de la recherche globale, et à dessein : celle-ci classe par
+ * pertinence, si bien qu'au-delà d'une vingtaine de résultats la liste ne
+ * répond plus à la question posée — elle l'enterre. Et c'est la même borne du
+ * contrôle S13 : une recherche sur un terme très commun ne doit pas rendre le
+ * fonds documentaire entier de la filiale.
+ */
+export const RESULTATS_DOCUMENTS_MAX = 25;
 
 export interface Resultat {
   readonly entite: NomEntite;
@@ -266,6 +288,143 @@ export async function greffonRecherche(
           resultats.length >= RESULTATS_MAX
             ? `Seuls les ${String(RESULTATS_MAX)} premiers résultats sont affichés : précisez votre recherche.`
             : '',
+      });
+    },
+  );
+
+  /* -------------------------------------------------------------------
+   *  GET /api/recherche/documents?q=…   — action D3, lot L16
+   * -------------------------------------------------------------------
+   *  ── ⚠️ CE QUE CETTE ROUTE NE REND JAMAIS : L'EXTRAIT ────────────────
+   *
+   *  Elle rend le document — identifiant, titre, type, statut, version — et
+   *  **trois drapeaux** disant OÙ la correspondance a eu lieu. Jamais la phrase
+   *  qui l'a produite.
+   *
+   *  Ce n'est pas une économie de bande passante, c'est l'arbitrage de la
+   *  migration `059`. `documents.notes` est `non_personnelle` au registre de
+   *  l'article 30 — donc licite à indexer — mais son régime est « signaler » :
+   *  *« un nom peut y figurer »*. Rendre l'extrait ferait du produit un moteur
+   *  de recherche **sur les personnes que ces notes nomment**. Rendre le
+   *  document, avec « trouvé dans les annotations », répond à la question de
+   *  l'utilisateur sans répondre à celle-là.
+   *
+   *  C'est la réponse exacte au point 3 de l'entête de ce fichier, qui refusait
+   *  le texte libre à la recherche globale.
+   *
+   *  ── Le reste des règles est celui de la route voisine ────────────────
+   *
+   *  Aucune filiale n'est nommée : la RLS borne. Le domaine `documents` est
+   *  exigé. Et le MÊME budget de trace est consommé — une recherche rend des
+   *  lignes, et répétée elle extrait.
+   * ------------------------------------------------------------------- */
+  instance.get(
+    CHEMIN_RECHERCHE_DOCUMENTS,
+    { config: { acces: { action: 'lire', domaine: 'documents' } } },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const session = requete.sessionGrc;
+      if (session === undefined) {
+        throw new ErreurApplicative({
+          code: 'erreur_interne',
+          statut: 500,
+          message: 'Le serveur ne peut pas traiter cette demande.',
+          detailJournal: 'recherche documentaire atteinte sans session appliquée',
+        });
+      }
+
+      const brut = (requete.query as { q?: unknown }).q;
+      const terme = typeof brut === 'string' ? brut.trim() : '';
+
+      if (terme.length < TERME_MIN) {
+        return await reponse.status(200).send({
+          resultats: [],
+          tronque: false,
+          motif: `Tapez au moins ${String(TERME_MIN)} caractères.`,
+        });
+      }
+      if (terme.length > TERME_MAX) {
+        throw new ErreurApplicative({
+          code: 'donnee_invalide',
+          statut: 400,
+          message: `Le terme de recherche est limité à ${String(TERME_MAX)} caractères.`,
+          detailJournal: `terme de recherche documentaire de ${String(terme.length)} caractères`,
+        });
+      }
+
+      const resultats = await avecTransaction(pool, session.perimetre, async (client) => {
+        // ⚠️ La requête est construite en SQL, pas en TypeScript : `websearch_to_tsquery`
+        // reçoit le terme en PARAMÈTRE, et le repli d'accents est celui de la base —
+        // le même que celui qui a rempli l'index. Replier côté serveur applicatif
+        // ferait deux tables de correspondance, et elles divergeraient.
+        const lignes = await client.query<{
+          id: string;
+          titre: string | null;
+          type: string | null;
+          statut: string | null;
+          version_document: string | null;
+          pertinence: number;
+          dans_titre: boolean;
+          dans_type: boolean;
+          dans_notes: boolean;
+        }>(
+          `with q as (
+                 select websearch_to_tsquery('french'::regconfig, f_sans_accent($1::text)) as tsq
+             ),
+             -- La borne est posée AVANT le calcul des drapeaux : sans cela, les trois
+             -- « to_tsvector » seraient recalculés sur toutes les correspondances, et
+             -- non sur les vingt-cinq rendues.
+             correspondants as (
+                 select d.id, d.titre, d.type, d.statut, d.version_document, d.notes,
+                        ts_rank(d.recherche, q.tsq) as pertinence
+                   from documents d cross join q
+                  where d.recherche @@ q.tsq
+                  order by ts_rank(d.recherche, q.tsq) desc, d.titre
+                  limit $2::int
+             )
+             select c.id, c.titre, c.type, c.statut, c.version_document, c.pertinence,
+                    to_tsvector('french'::regconfig, f_sans_accent(coalesce(c.titre, ''))) @@ q.tsq
+                        as dans_titre,
+                    to_tsvector('french'::regconfig, f_sans_accent(coalesce(c.type,  ''))) @@ q.tsq
+                        as dans_type,
+                    to_tsvector('french'::regconfig, f_sans_accent(coalesce(c.notes, ''))) @@ q.tsq
+                        as dans_notes
+               from correspondants c cross join q
+              order by c.pertinence desc, c.titre`,
+          [terme, RESULTATS_DOCUMENTS_MAX],
+        );
+
+        // Le MÊME budget que le sondage et que la recherche globale. Un second
+        // compteur donnerait deux budgets à la même personne (constat B-6).
+        const cumul = cumuler(session.perimetre.utilisateurId, lignes.rows.length);
+        if (cumul !== null) await tracer(client, session, cumul, lignes.rows.length);
+
+        return lignes.rows.map((l) => ({
+          id: String(l.id),
+          titre: l.titre === null ? '' : String(l.titre),
+          type: l.type === null ? '' : String(l.type),
+          statut: l.statut === null ? '' : String(l.statut),
+          version: l.version_document === null ? '' : String(l.version_document),
+          // ⚠️ `ou` dit OÙ, jamais QUOI. C'est la ligne qui sépare « trouver une
+          // procédure » de « fouiller des annotations ».
+          ou: [
+            ...(l.dans_titre ? ['titre'] : []),
+            ...(l.dans_type ? ['type'] : []),
+            ...(l.dans_notes ? ['notes'] : []),
+          ],
+        }));
+      });
+
+      return await reponse.status(200).send({
+        resultats,
+        tronque: resultats.length >= RESULTATS_DOCUMENTS_MAX,
+        motif:
+          resultats.length === 0
+            ? 'Aucun document de votre périmètre ne correspond. La recherche porte sur le ' +
+              'titre, le type et les annotations — pas encore sur le contenu des fichiers ' +
+              'joints.'
+            : resultats.length >= RESULTATS_DOCUMENTS_MAX
+              ? `Seuls les ${String(RESULTATS_DOCUMENTS_MAX)} documents les plus pertinents sont affichés : précisez votre recherche.`
+              : '',
       });
     },
   );

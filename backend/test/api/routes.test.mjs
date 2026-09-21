@@ -916,6 +916,12 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     ['GET', '/api/parametres', undefined],
     ['PUT', '/api/parametres/echeances.seuil_urgent_jours', { valeur: '3' }],
     ['GET', '/api/recherche?q=ab', undefined],
+    // La recherche DOCUMENTAIRE (action D3, migration `059`). ⚠️ Elle est ici pour
+    // le motif qui vaut pour toutes, et un de plus qui lui est propre : une
+    // recherche est un ORACLE. Servie sans identité, « zéro résultat » et « un
+    // résultat » sur un terme choisi diraient déjà ce que le fonds documentaire
+    // contient — sans qu'une seule ligne n'ait été rendue.
+    ['GET', '/api/recherche/documents?q=ab', undefined],
     ['GET', '/api/decouverte/etat', undefined],
     ['POST', '/api/decouverte/semer', undefined],
     ['POST', '/api/decouverte/purger', undefined],

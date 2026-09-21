@@ -8,11 +8,13 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
-> **État mesuré le 19/09/2026**, après les vagues E et F, sur la machine réelle
+> **État mesuré le 21/09/2026**, après l'action **D3**, sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
-> **PostgreSQL 17.11**) : **58 migrations**, **89 tables**, **356 politiques**,
-> **62 garde-fous**, **494 décisions** au registre de l'article 30, publication
-> **85 fichiers**, schéma `data` en **v27**, indicateur **53 ✅ · 19 🟡 · 14 ❌ (~73 %)**.
+> **PostgreSQL 17.11**) : **59 migrations**, **89 tables**, **356 politiques**,
+> **63 garde-fous**, **495 décisions** au registre de l'article 30, publication
+> **85 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
+> ⚠️ La `059` n'ajoute **aucune table** ni politique : `documents.recherche` est une
+> colonne de plus sur une table qui en portait déjà quatre-vingt-neuf politiques.
 > `install.sh --diagnostic` → **14 conformes, 2 réserves, 0 bloquant** sur **quinze
 > sujets** (`SMTP_ACTIF=non` et le profil DÉCOUVERTE de cette machine) — le quinzième,
 > « assistance IA », naît de L27.
@@ -25,8 +27,10 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2356 essais, 2356 passés, 0 échec** — trente-huit familles, dont quatre
-> neuves : `ouverture`, `collecte`, `assistance`, `portail`.
+> `npm test` → **2382 essais, 2382 passés, 0 échec** — 2 081 sans navigateur et 301 avec —,
+> trente-huit familles. ⚠️ **+26 le 21/09/2026** : la recherche documentaire (action **D3**,
+> migration `059`) apporte `test/recherche/documentaire.test.mjs` (19) et
+> `test/navigateur/recherche-documentaire.test.mjs` (7).
 >
 > **État mesuré le 18/09/2026** : **relevé famille par
 > famille** (trente-deux familles, dont `echelles` qui naît avec l'action 25.3),
@@ -73,6 +77,85 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### La recherche documentaire — L16, action D3, la dernière du lot (21/09/2026)
+
+**Le lot L16 est COMPLET.** L'action D3 avait été reportée **cinq fois**, et toujours pour
+le même motif écrit dès la vague 9 : *une recherche est un **oracle**, c'est la surface la
+plus propice à une fuite entre filiales.* Elle répond « zéro » ou « un » sur un terme
+choisi, et ces deux réponses disent quelque chose de ce qui existe — y compris ailleurs.
+
+**Ce qui est livré** — migration `059` :
+
+- `documents.recherche`, un `tsvector` **ENGENDRÉ** sur `titre` (poids `A`), `type` (`B`)
+  et `notes` (`C`), indexé en **GIN** ;
+- `f_sans_accent()`, immuable, **sans extension** : « securite » trouve « Sécurité », et la
+  racinisation française fait que « chiffrer » trouve « chiffrement » ;
+- `GET /api/recherche/documents?q=…`, seconde route du greffon `src/recherche/` ;
+- un champ de recherche sur l'écran « Gestion documentaire », qui dit **où** la
+  correspondance a eu lieu.
+
+⚠️ **LE MOTIF DU REPORT EST DEVENU LA FORME DE L'ESSAI.** L'index vit sur `documents`, que
+la RLS borne déjà : **aucune requête ne nomme de filiale**, et un contrôle de FORME lit la
+source pour l'exiger. Un essai cherche un terme présent **uniquement chez la voisine** — et
+il est doublé de son **témoin positif** sur le même terme, sans lequel il serait vert sur
+une route qui ne rend jamais rien (constat **Q-210**).
+
+⚠️ **ELLE NE REND JAMAIS L'EXTRAIT, ET C'EST UN ARBITRAGE, PAS UNE ÉCONOMIE.** Le point 3
+de `src/recherche/index.ts` refusait le texte libre à la recherche globale, au motif que le
+registre de l'article 30 dit qu'une partie porte des personnes. La spécification de D3,
+antérieure, demandait `notes`. **Mesuré dans le registre avant de trancher** : `titre`,
+`type` et `notes` sont toutes trois `non_personnelle` — donc licites à indexer —, mais
+`notes` est en régime **« signaler »** (*« un nom peut y figurer »*). Les trois sont donc
+indexées, et **deux garde-corps posés** : la route rend le document et **où** la
+correspondance a eu lieu, jamais la phrase ; et le poids `C` range l'annotation derrière le
+titre, si bien que l'usage normal ne la rencontre pas. Un essai navigateur vérifie le **DOM
+entier**, attributs compris — l'écran aurait pu aller chercher la note dans `DataStore`.
+
+⚠️ **LA COLONNE EST ENGENDRÉE, ET CE N'EST PAS UN DÉTAIL RGPD.** Elle se recalcule à chaque
+écriture : la purge de l'article 17 qui vide `notes` **vide l'index dans la même
+instruction**. Un index tenu par un déclencheur, ou par un traitement de fond, aurait pu
+survivre à la donnée qu'il indexe — c'est-à-dire garder une trace de ce qu'on vient
+d'effacer. Un essai le mesure en vidant la note et en cherchant le nom.
+
+🛑 **TROIS GARDE-FOUS ONT REFUSÉ LA MIGRATION, ET AUCUN N'AVAIT ÉTÉ PRÉVU :**
+
+1. le registre a refusé le régime **`signaler`** sur une colonne non textuelle — la purge y
+   construit une comparaison de texte, et elle est **transactionnelle** : une seule
+   déclaration de ce genre l'aurait avortée **pour toutes les filiales** (constat Q-300).
+   Régime **`conserver`**, et le registre dit pourquoi ;
+2. `f_verifier_types_ranges()` a refusé le type **`tsvector`**, non rangé. La réponse est
+   « **porteur** » : un `tsvector` contient les LEXÈMES du texte dont il est tiré — si la
+   note porte « relancé Mme Ollier », l'index porte « ollier ». C'est le renversement du
+   constat A-3, et il a fait exactement son office ;
+3. la couche de conversion des entités ne connaissait pas `tsvector` et a **refusé le
+   démarrage**. Il rejoint `tableau_texte` comme famille **REFUSÉE** aux trois points de
+   conversion — le servir au frontend ou le verser dans le fichier d'échange aurait rendu
+   par une porte dérobée l'extrait que la route refuse expressément de rendre.
+
+⚠️ **ET UN QUATRIÈME A RÉCLAMÉ L'ATTENTE DE LA POUSSÉE.**
+`test/depot/relecture-apres-ecriture.test.mjs` a vu que `documents.js` écrit par
+`DataStore` et lit désormais par `Api`. La dispense était possible ; elle aurait été
+fausse. **Un document créé à l'instant doit être trouvable** : la recherche passe donc par
+`UI.apresEcriture()`. *Le banc navigateur ne peut pas voir ce défaut — il monte le serveur
+dans le même processus, où la poussée aboutit dans la même milliseconde.*
+
+⚠️ **CE QUI RESTE DEHORS, ET LE MOTIF EST ÉCRIT** : le **contenu des pièces jointes**. La
+spécification le range dans un second temps parce que l'extraction doit passer par la même
+chaîne contrôlée que ClamAV (lot L6, huit contrôles dans un ordre figé). *Extraire du texte
+d'un PDF, c'est l'analyser ; l'analyser hors de cette chaîne, ce serait ouvrir une seconde
+porte d'entrée aux fichiers hostiles.*
+
+⚠️ **`unaccent` N'EST PAS EMPLOYÉ, ET C'EST MESURÉ** : l'extension est *disponible* sur la
+grappe mais *non installée*, et `create extension unaccent` exige le **superutilisateur** —
+une migration tourne sous `grc_proprietaire`. La poser aurait fait échouer l'installation
+chez le client **au milieu d'une migration**, pour une raison étrangère au produit.
+
+**Essais** : `test/recherche/documentaire.test.mjs` (19, dont la mutation RGPD et la
+morsure du garde-fou) et `test/navigateur/recherche-documentaire.test.mjs` (7).
+L'indicateur `docs/COMPARATIF_MARCHE.md` passe sa ligne 30 de 🟡 à ✅ — **54 ✅ · 18 🟡 ·
+14 ❌**, et le document dit que c'est la **seule** ligne remesurée depuis le rejeu intégral
+du 19/09.
 
 ### Le guide d'exploitation dit COMMENT lier l'API d'IA du client (20/09/2026)
 

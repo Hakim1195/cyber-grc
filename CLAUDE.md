@@ -475,10 +475,18 @@
 > (vague 9, décidée le 07/09/2026). ⚠️ **Le coffre existe déjà** — L6 livre le dépôt, ses huit
 > contrôles et le panneau monté sur la fiche document ; `documents.filiale_id` nul porte déjà la
 > PSSI de portée Groupe. **Ne pas le refaire.** Ce qui manquait était la gestion :
-> ~~version en vigueur~~, ~~zéro orphelin~~, recherche, ~~source de vérité unique~~,
-> ~~approbation~~ — **quatre actions sur cinq sont livrées** (D2 le 07/09 ; **D1, D4 et D5 le
-> 08/09**). **Reste D3, la recherche, et elle ne se joue pas avant que S8 soit franchie** : une
-> recherche est un **oracle**, c'est la surface la plus propice à une fuite entre filiales.
+> ~~version en vigueur~~, ~~zéro orphelin~~, ~~recherche~~, ~~source de vérité unique~~,
+> ~~approbation~~ — ✅ **LES CINQ ACTIONS SONT LIVRÉES** (D2 le 07/09 ; D1, D4 et D5 le
+> 08/09 ; **D3 le 21/09/2026**, migration `059`).
+>
+> ⚠️ **D3 avait été reportée CINQ FOIS, et son motif est devenu la forme de son essai.**
+> Le motif : *une recherche est un **oracle**, la surface la plus propice à une fuite entre
+> filiales* — elle répond « zéro » ou « un » sur un terme choisi, et ces deux réponses
+> disent quelque chose de ce qui existe, y compris ailleurs. L'index vit donc sur
+> `documents`, que la RLS borne déjà : **aucune requête ne nomme de filiale**, et un essai
+> cherche un terme présent UNIQUEMENT chez la voisine, doublé de son **témoin positif** sur
+> le même terme — sans lui, le contrôle serait vert sur une route qui ne rend jamais rien
+> (constat Q-210).
 >
 > ✅ **Les actions D1, D4 et D5 sont LIVRÉES le 08/09/2026** — migrations `018` et `019`.
 > **D1** : la pièce marquée « en vigueur » est celle qui fait foi (au plus une par porteur **et
@@ -1219,7 +1227,7 @@ sur l'**Active Directory** du groupe.
 | **L13 — Cycle de vie** | ✅ **livré** (05/09/2026, vague 6) |
 | **L14 — Documentation** | ✅ **livré** (05/09/2026, vague 7) |
 | **L15 — Durcissement final** | 🟡 **en cours** (vague 8) — **porte S8 refusée HUIT fois** (la dernière le 11/09/2026), c'est la condition de mise en service |
-| **L16 — Système documentaire** | 🟡 **quatre actions sur cinq livrées** (vague 9) — D2 le 07/09 (les pièces suivent leur porteur), **D1, D4 et D5 le 08/09** (version en vigueur, référence externe assumée, publication soumise au circuit), **plus la vérification d'intégrité** hors des cinq actions (migration `020` : l'empreinte s'affiche et elle est *rapprochée* du fichier, à la demande et par balayage — `db/CONVENTIONS.md` §31.5). **Reste D3, la recherche, pas avant S8.** `docs/PLAN_EXECUTION.md` §3 |
+| **L16 — Système documentaire** | ✅ **LIVRÉ EN ENTIER** — D2 le 07/09 (les pièces suivent leur porteur), **D1, D4 et D5 le 08/09** (version en vigueur, référence externe assumée, publication soumise au circuit), **plus la vérification d'intégrité** hors des cinq actions (migration `020`), **et D3 — la recherche documentaire — le 21/09/2026** (migration `059`). ⚠️ **D3 avait été reportée cinq fois pour un motif écrit** : *une recherche est un oracle, la surface la plus propice à une fuite entre filiales.* Elle est donc bornée par la **RLS et par rien d'autre** — aucune requête ne nomme de filiale —, et un essai cherche un terme qui n'existe QUE chez la voisine, avec son **témoin positif** sur le même terme. ⚠️ **Et elle ne rend JAMAIS l'extrait** : `notes` est en régime « signaler » au registre de l'article 30, et l'index est une colonne **ENGENDRÉE** — la purge de l'article 17 qui vide la note vide l'index *dans la même instruction* |
 | **L17 — Prise en main** | ⬜ **planifié** (`docs/PLAN_PRODUIT.md`) — recherche globale, palette `Ctrl+K`, écran de démarrage par rôle, regroupement du menu, Kanban. ⚠️ **Pas avant S7 et S8** : il ouvre de la surface neuve |
 | **L18 — Installation en une commande** | ✅ **livré — 18.7 excepté.** `--assistant` (six questions, profil découverte, compte de secours dont l'empreinte est calculée par `dist/auth/secours.js`), `--diagnostic` (**quatorze** sujets, code 0/1/2, ne modifie rien — douze à l'origine, quatorze depuis Q-290), `docs/INSTALLER.md` (cinq commandes), **et le bandeau 18.2 b le 09/09/2026** — permanent, non masquable, imprimé avec les fiches. ⚠️ Les six premiers sous-lots ne touchaient **ni `src/` ni le schéma** — c'est ce qui les a autorisés avant les portes ; **18.2 b, lui, touche `src/` et la SPA : à déclarer au 7ᵉ passage de S8**. Reste **18.7** (assistant de premier démarrage), après les portes |
 | **L18 bis — Jeu de découverte** | ⬜ **autorisé le 08/09/2026** sous **cinq conditions constitutives** (marque **dans la donnée**, geste volontaire, refus si données réelles, purge par le déclencheur `017`, interdit hors découverte). Il écrit en base : **après les portes** |

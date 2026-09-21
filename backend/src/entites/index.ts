@@ -739,6 +739,16 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
           'ligne, et la croire sur parole rouvrirait un oracle d’existence inter-filiales — ' +
           'il suffirait d’envoyer la filiale qui arrange pour satisfaire la clé de ' +
           'cohérence. Le client envoie `traitement_id`, et rien d’autre.',
+        recherche:
+          'Colonne ENGENDRÉE (migration `059`, action D3) : l’index plein texte du ' +
+          'document, projection de `titre`, `type` et `notes`. PostgreSQL refuse qu’on lui ' +
+          'donne une valeur, et c’est la propriété qu’on veut — elle se recalcule à chaque ' +
+          'écriture, donc la purge RGPD qui vide `notes` vide l’index DANS LA MÊME ' +
+          'INSTRUCTION. Un index tenu par un déclencheur aurait pu survivre à la donnée ' +
+          'qu’il indexe. ⚠️ **Quatrième colonne engendrée à devoir être déclarée ici**, ' +
+          'après `portee_groupe`, `traitement_portee_groupe` et celles de `traitements` : ' +
+          'le piège n° 1 du `docs/REPRISE.md` §5, écrit précisément parce que trois lots ' +
+          'de suite s’y sont pris.',
       },
       liaisons: [
         {
@@ -1447,6 +1457,11 @@ const FAMILLES: ReadonlyMap<string, FamilleType> = new Map<string, FamilleType>(
   // parce que le catalogue balaie TOUTES les tables : `jetons_api.domaines` est un
   // `text[]`, et la découverte s'arrêtait dessus. Les conversions la refusent.
   ['_text', 'tableau_texte'],
+  // ⚠️ Même motif, et une conséquence de plus : `documents.recherche` est un
+  // `tsvector` (migration `059`). Un `tsvector` porte les LEXÈMES du texte dont
+  // il est tiré — le nommer ici le fait découvrir, et les conversions le
+  // REFUSENT pour qu'il ne sorte par aucune porte dérobée.
+  ['tsvector', 'index_plein_texte'],
 ]);
 
 interface LigneCatalogue {
@@ -5416,6 +5431,16 @@ function versLeFrontend(valeur: unknown, famille: FamilleType): unknown {
         'Une colonne tableau est servie au frontend, et aucune entité ne devrait en ' +
           'exposer. Déclarez ce que ce tableau devient dans le fichier d’échange.',
       ]);
+      // ⚠️ **Un index plein texte ne se sert JAMAIS.** Il porte les lexèmes de
+      // `titre`, `type` et `notes` : le rendre au frontend livrerait, sous une
+      // autre forme, l'extrait que la route de recherche refuse expressément de
+      // rendre (migration `059`, arbitrage sur `notes`).
+    case 'index_plein_texte':
+      throw new ErreurRegistre([
+        'Un index plein texte est servi au frontend. Il porte les lexèmes du texte ' +
+          'qu’il indexe — dont des annotations dont le registre de l’article 30 dit ' +
+          'qu’un nom peut y figurer. La colonne doit rester RÉSERVÉE.',
+      ]);
   }
 }
 
@@ -5755,6 +5780,13 @@ function convertirPourLaBase(champ: string, valeur: unknown, colonne: Descriptio
     case 'tableau_texte':
       throw invalide(
         `Le champ « ${nom} » est un tableau, et aucune entité ne devrait en exposer.`,
+      );
+      // Un index plein texte est ENGENDRÉ : PostgreSQL refuse qu'on lui donne une
+      // valeur, et le produit refuse de l'accepter avant même de l'essayer.
+    case 'index_plein_texte':
+      throw invalide(
+        `Le champ « ${nom} » est un index plein texte : il est ENGENDRÉ depuis d’autres ` +
+          'colonnes et ne se saisit pas.',
       );
   }
 }

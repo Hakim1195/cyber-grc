@@ -4430,6 +4430,20 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       'quantification_fair',
       'questionnaires_tiers',
       'rattachements_pieces',
+      // SOIXANTE-TROISIÈME, apporté par `059_la_recherche_documentaire.sql` — action
+      // **D3**, la dernière du lot L16.
+      //
+      // ⚠️ Il ÉPROUVE la chaîne de recherche sur QUATRE cas témoins (§39.1) — repli
+      // d'accents, racinisation, pluriel — **dont un cas NÉGATIF**, sans lequel une
+      // expression dégénérée qui correspond à tout passerait les trois autres au vert.
+      // Puis il exige, une par une, les trois SOURCES et les trois POIDS de la colonne
+      // engendrée (§39.7) : les cas éprouvés ne peuvent pas voir qu'une colonne est
+      // sortie de l'index, ils mesurent la chaîne, pas ce qu'on y verse.
+      //
+      // ⚠️ Et il ne lit AUCUNE ligne de `documents` (§41) : `install.sh` appelle
+      // `f_verifier_schema()` sans périmètre, et un garde qui lirait une table
+      // cloisonnée conclurait au vert parce qu'il ne voit rien.
+      'recherche_documentaire',
       'references_portee',
       // VINGT-HUITIÈME, apporté par `028` — constat **Q-291** : la migration `026` avait
       // écrit DEUX FOIS, en toutes lettres, que le rôle applicatif n'avait que « select »

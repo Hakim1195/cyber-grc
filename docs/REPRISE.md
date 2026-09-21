@@ -63,6 +63,7 @@ les 19 qui lancent Chromium prennent **520 s** et doivent rester **en série**.
 | **Campagnes descendantes** (L24, ses quatre actions) | Le Groupe ouvre une campagne sur un référentiel, vers N filiales, avec échéance — et suit l'avancement de chacune. Migration `044`, schéma **v21**. ⚠️ **Une filiale ne voit QUE sa part**, ni celle de la voisine ni leur nombre ; l'avancement se **COMPTE** dans les évaluations ; les relances réutilisent L12 (9ᵉ source de l'échéancier, **aucune route d'envoi neuve**). ⚠️ **Deux leçons** : `campagnes` n'a pas de `filiale_id` et **trois garde-fous ont refusé la migration** jusqu'à ce que l'arbitrage soit écrit (`CONVENTIONS.md` §24.1) ; et **l'interdit « une filiale ne se retire pas d'une campagne » a dû être RETIRÉ**, parce qu'il rendait la reprise « remplacer » impossible — classe des trois conflits de la `041`, tranchée pareil : *restaurer une sauvegarde gagne* |
 | **Déconvoquer** (L24, trouvé au navigateur) | ⚠️ **Sans elle, une campagne convoquée était INDESTRUCTIBLE**, et le défaut ne vivait dans aucune couche : la clé en `restrict` (juste), le chargement qui ne sert que la filiale active (juste), et un écran qui savait convoquer sans savoir déconvoquer. `POST /api/campagnes/:id/deconvoquer` + un bouton par part. ⚠️ Et mon premier correctif était FAUX — j'ai ajouté une inversion des suppressions sans voir que `appliquer()` en faisait déjà une : les deux s'annulaient, et le correctif introduisait le défaut |
 | **Tiers, chaîne de sous-traitance et DORA** (L21, ses quatre actions) | Registre d'information DORA, **chaîne de sous-traitance** (l'arête est stockée, le **rang se dérive**, l'anti-cycle est **en base**), questionnaire fournisseur qui **s'exporte et se réimporte** — le produit n'envoie rien —, suivi contractuel, et **score composite dérivé** dont le barème est SERVI. Migrations `042` et `043`, schéma **v20**. ⚠️ **Deux leçons** : la `043` avait été livrée *mordue par rien* (23 essais et cinq mutations l'ont fermée), et le critère de 21.3 — « les échéances contractuelles alimentent l'échéancier existant » — **n'était tenu nulle part**, alors que la migration l'écrivait dans le commentaire de sa propre colonne |
+| **Recherche documentaire** (L16, **D3** — 21/09/2026) | Le lot L16 est COMPLET. `documents.recherche`, `tsvector` **ENGENDRÉ** sur `titre` (poids A), `type` (B), `notes` (C), index GIN, repli d'accents **sans extension** — `unaccent` exige le superutilisateur qu'une migration n'a pas. Route `GET /api/recherche/documents`, champ sur l'écran « Gestion documentaire ». Migration `059`. ⚠️ **Reportée cinq fois**, et le motif est devenu la FORME de l'essai : *une recherche est un oracle* — aucune requête ne nomme de filiale, un contrôle de forme lit la source pour l'exiger, et un terme présent UNIQUEMENT chez la voisine ne remonte jamais (avec son **témoin positif**, sans lequel le contrôle serait vert sur une route qui ne rend rien). ⚠️ **Elle ne rend JAMAIS l'extrait** : `notes` est en régime « signaler » au registre de l'article 30. ⚠️ **Cinq garde-fous l'ont refusée avant qu'elle passe**, aucun prévu — dont le registre sur un régime non textuel (la purge aurait avorté pour toutes les filiales, Q-300) et `relecture-apres-ecriture` qui a exigé l'attente de la poussée : *un document créé à l'instant doit être trouvable* |
 | **Jeu de découverte** (L18 bis) | Un groupe industriel fictif complet. Marque de provenance posée **par la base**, inforgeable. Migration `032` |
 | **Menu repliable** (L17, A2) | 32 entrées à plat → six sections |
 | **Architecture des sections** (16/09) | **Sept** sections, **28** entrées : quatre vues redondantes deviennent des **onglets** (matrice, socle, référentiels applicables, couverture croisée), et la couverture — qui n'avait AUCUNE porte — en gagne une. Le fil d'Ariane déduit sa section du menu. `docs/PLAN_INTERFACE.md` |
@@ -489,8 +490,19 @@ Deux critères d'acceptation méritent d'être lus avant d'écrire une ligne :
   `(ref_id, code)`, et une divergence silencieuse réattribuerait des réponses d'audit.
 
 **Ce qui reste des lots livrés, nommé plutôt que tu** : 20.2 (formulaires ANSSI/CNIL), 24.2
-en partie (agrégation par répondant), L17 A4 et A5 (écran de démarrage par rôle, Kanban),
-L16-D3 (recherche documentaire), et les gabarits XBRL de DORA.
+en partie (agrégation par répondant), L17 A4 et A5 (écran de démarrage par rôle, Kanban), et
+les gabarits XBRL de DORA.
+
+⚠️ ~~L16-D3 (recherche documentaire)~~ — ✅ **LIVRÉE le 21/09/2026**, migration `059`. Gardée
+barrée plutôt qu'effacée : elle avait été reportée **cinq fois**, et une ligne effacée est un
+travail qu'on oublie d'avoir fait. `documents.recherche` est un `tsvector` **engendré** sur
+`titre` (poids A), `type` (B) et `notes` (C), index GIN, repli d'accents par une fonction
+immuable — **sans extension**, `unaccent` exigeant le superutilisateur qu'une migration n'a
+pas. Route `GET /api/recherche/documents`, champ sur l'écran « Gestion documentaire ».
+**Trois garde-fous ont refusé la migration avant qu'elle passe**, et aucun n'avait été
+prévu par moi : le régime `signaler` sur une colonne non textuelle (la purge aurait avorté
+pour toutes les filiales, constat Q-300), le type `tsvector` non rangé, et la couche de
+conversion qui ne le connaissait pas.
 
 ⚠️ **ET LA LEÇON DE CES DEUX JOURS, QUI VAUT PLUS QUE LES LOTS** : **six défauts ont été
 trouvés en vérifiant AU NAVIGATEUR sur la recette, aucun par le banc.** Un écran qui perd sa
@@ -571,12 +583,24 @@ rougir quoi que ce soit, et tous se voyaient en dix minutes de clics.* Prévoyez
 
 **Ce qui reste à faire, par ordre d'effet :**
 
-1. **Cohérence de la densité** — l'échelle typographique existe désormais
-   (`--text-xs` … `--text-2xl`) ; **les 26 modules ne l'emploient pas encore** et posent
-   leurs tailles au cas par cas. C'est le plus gros gain visuel restant.
-2. **Les styles en ligne** — les modules portent beaucoup de `style="..."`. Les remonter
-   en classes rend l'ensemble homogène et rend le prochain changement possible.
+1. ~~**Cohérence de la densité**~~ — ✅ **FAITE**, et cette ligne est gardée barrée plutôt
+   qu'effacée. Elle annonçait, jusqu'au 21/09/2026, que *« les 26 modules n'emploient pas
+   encore »* l'échelle typographique et *« posent leurs tailles au cas par cas »*, en la
+   désignant comme **le plus gros gain visuel restant**. ⚠️ **Mesuré : 316 emplois de
+   `var(--text-*)` dans `js/modules/`, contre 2 tailles en dur — et les deux sont en `pt`,
+   dans des règles d'impression, donc légitimes.** Le travail avait été fait ; la phrase,
+   elle, envoyait la session suivante le refaire. *Une liste de travaux restants qui garde
+   un travail achevé coûte plus cher qu'une liste incomplète : elle est crue.*
+2. **Les styles en ligne** — **1 173 attributs `style="`** mesurés le 21/09/2026 dans les
+   47 fichiers de `js/modules/` (audits 118, prestataires 102, settings 71, scénarios PRA
+   68, tableau de bord 62). Les remonter en classes rend l'ensemble homogène et rend le
+   prochain changement possible. ⚠️ **C'est désormais le premier poste**, la densité étant
+   close.
 3. **Écran de démarrage par rôle** (L17, A4) et **Kanban du plan d'actions** (A5).
+   ⚠️ **Mesuré le 21/09/2026 : ni l'un ni l'autre n'existe** — aucun fichier, aucune
+   fonction, aucune route dans `js/`. Ce sont les deux seuls items de la vague V-A jamais
+   construits, et V-A reste d'ailleurs la seule vague du `PLAN_ACHEVEMENT.md`, avec V-B, à
+   ne porter **aucune ligne de clôture**.
 4. **États vides** — chaque écran doit **dire pourquoi** il est vide. Un vide sans
    explication apprend à ne plus croire ce qu'on montre (classe Q-201 / Q-207).
 5. **Impression** — la sortie papier est une **pièce d'audit** ; elle mérite une relecture

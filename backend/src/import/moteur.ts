@@ -256,6 +256,12 @@ export function convertirCellule(
       // le fichier d'échange ; deviner ici le déciderait en silence.
     case 'tableau_texte':
       return { erreur: 'une colonne tableau ne s’importe pas depuis un tableur' };
+    case 'index_plein_texte':
+      return {
+        erreur:
+          'un index plein texte ne s’importe pas : il est ENGENDRÉ depuis les colonnes ' +
+          'qu’il indexe, et se recalcule tout seul',
+      };
   }
 }
 

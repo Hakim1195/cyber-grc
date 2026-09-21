@@ -183,6 +183,19 @@ export interface IdentiteAnnuaire {
  * le jour où une entité exposera un tableau, il faudra décider ce qu'il devient dans
  * le fichier d'échange — et ce jour-là, le produit le dira au lieu de deviner.
  */
+/**
+ * ⚠️ **`index_plein_texte` n'est portée par aucune entité non plus**, et pour la
+ * raison exacte de `tableau_texte` ci-dessus : `documents.recherche` est un
+ * `tsvector` (migration `059`, action D3), et la découverte du catalogue s'est
+ * arrêtée dessus — bruyamment, comme le §20.1 l'exige.
+ *
+ * ⚠️ **Et ici la nommer ne suffisait pas à la rendre inoffensive, il fallait
+ * qu'elle soit REFUSÉE** : un `tsvector` contient les lexèmes du texte dont il
+ * est tiré. Le servir au frontend, ou le verser dans le fichier d'échange,
+ * rendrait par une porte dérobée l'extrait que la route de recherche refuse
+ * expressément de rendre — *« elle dit OÙ, jamais QUOI »*. Les trois fonctions
+ * de conversion la traitent donc comme un refus explicite.
+ */
 export type FamilleType =
   | 'texte'
   | 'entier'
@@ -191,7 +204,8 @@ export type FamilleType =
   | 'date'
   | 'horodatage'
   | 'json'
-  | 'tableau_texte';
+  | 'tableau_texte'
+  | 'index_plein_texte';
 
 export interface DescriptionColonne {
   readonly nom: string;

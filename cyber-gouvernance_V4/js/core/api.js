@@ -1215,6 +1215,16 @@ const Api = (() => {
         return appeler("/recherche?q=" + encodeURIComponent(terme));
     }
 
+    /* Recherche DOCUMENTAIRE — lot L16, action D3. Une seconde route, et non un
+       élargissement de la première : celle-ci cherche dans le titre, le type et
+       les ANNOTATIONS d'un document, par un index plein texte, et classe par
+       pertinence.
+       ⚠️ Elle rend le document et OÙ la correspondance a eu lieu — jamais
+       l'extrait. Le navigateur n'a donc rien à masquer : il n'a rien reçu. */
+    function rechercheDocuments(terme) {
+        return appeler("/recherche/documents?q=" + encodeURIComponent(terme));
+    }
+
     function decouverteEtat()  { return appeler("/decouverte/etat"); }
     function decouverteSemer() { return appeler("/decouverte/semer",  { methode: "POST" }); }
     function decouvertePurger(){ return appeler("/decouverte/purger", { methode: "POST" }); }
@@ -1416,6 +1426,8 @@ const Api = (() => {
         registreProduit,
         // Lot L17 : la recherche globale.
         recherche,
+        // Lot L16, D3 : la recherche documentaire, plein texte.
+        rechercheDocuments,
         // Lot L19, action 19.1 : l'attestation de lecture.
         attestationsAFaire, attestationsDocument, attester,
         // Lot L20, action 20.1 : l'horloge réglementaire.

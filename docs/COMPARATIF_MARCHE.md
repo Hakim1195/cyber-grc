@@ -19,8 +19,12 @@
 >    (`FAIR` → « faire », `LEI` → « client »). Chaque verdict ❌ de cette grille a été
 >    vérifié sur les occurrences réelles, pas sur un compte de fichiers.
 
-**Verdict global au 19/09/2026, après la vague F : 53 ✅ · 19 🟡 · 14 ❌** — soit ~73 % en pondérant les
-partiels à moitié. **Cible du `PLAN_PRODUIT.md` une fois les douze lots joués : 76 ✅ · 2 🟡
+**Verdict global au 21/09/2026 : 54 ✅ · 18 🟡 · 14 ❌** — soit ~74 % en pondérant les
+partiels à moitié. ⚠️ **Une seule ligne a bougé depuis le rejeu intégral du 19/09**, et elle
+est mesurée : la n° 30, « recherche plein texte », que l'action **D3** fait passer de 🟡 à ✅
+(migration `059`, 21/09/2026). Les quatre-vingt-cinq autres gardent le verdict du 19/09 —
+*un indicateur qui tairait quelles lignes il a remesurées serait pire qu'un indicateur en
+retard.* **Cible du `PLAN_PRODUIT.md` une fois les douze lots joués : 76 ✅ · 2 🟡
 · 8 ❌**, les huit restantes étant des non-objectifs nommés un par un (§9 du plan).
 
 > ### ▶ Rejeu du 19/09/2026 — clôture de la vague F, **la dernière du plan**
@@ -250,7 +254,7 @@ un non-objectif assumé (`PLAN_PRODUIT.md` §6).
 | 27 | **Attestation de lecture** | ✅ | `attestations_lecture` (migration `033`) : on n'atteste que pour soi — la personne vient de la session, la version vient du serveur —, et le taux de couverture rend **`null` plutôt que `0`** sur un effectif nul | — |
 | 28 | Canevas de politiques | ✅ | Livrés au chantier 5 | — |
 | 29 | Politique ↔ contrôle ↔ exigence | ✅ | `document_mesures` (migration `036`) : quels CONTRÔLES un document prouve, en plus des référentiels qu'il couvre. Le panneau est **le même des deux bouts** du lien — deux composants auraient divergé | — |
-| 30 | Recherche plein texte | 🟡 | Palette `Ctrl+K` et route `GET /api/recherche` (L17, A3) : **quatre entités**, bornées par la RLS côté serveur et par les droits — jamais par un filtre côté client. ⚠️ C'est un `ilike` sur les libellés, **pas un index plein texte** : ni pertinence, ni contenu des pièces jointes. La recherche DOCUMENTAIRE (D3) reste due | L16.D3 |
+| 30 | Recherche plein texte | ✅ | **Deux** recherches, et elles ne répondent pas à la même question. La palette `Ctrl+K` et `GET /api/recherche` (L17, A3) retrouvent un enregistrement **par son libellé**, sur quatre entités. `GET /api/recherche/documents` (L16, **D3 — migration `059`, 21/09/2026**) cherche **dans le titre, le type et les annotations** d'un document par un **index plein texte GIN** : accents repliés, racinisation française (« chiffrer » trouve « chiffrement »), classement par pertinence avec le titre en poids `A` et l'annotation en `C`. Les deux sont bornées par la RLS côté serveur et par les droits — jamais par un filtre côté client. ⚠️ **Elle ne rend JAMAIS l'extrait**, seulement OÙ la correspondance a eu lieu : `documents.notes` est en régime « signaler » au registre de l'article 30, et rendre la phrase ferait du produit un moteur de recherche sur les personnes qu'elle nomme. ⚠️ **Reste dehors** : le contenu des pièces jointes, que la spécification range dans un second temps — l'extraire, c'est l'analyser, et l'analyser hors de la chaîne ClamAV du lot L6 ouvrirait une seconde porte d'entrée aux fichiers hostiles | L16.D3 |
 
 ### F. Tiers et chaîne d'approvisionnement — 2 ✅ · 3 🟡 · 1 ❌
 
