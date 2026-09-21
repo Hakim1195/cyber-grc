@@ -567,11 +567,35 @@ button:active { transform: translateY(0); }
     background: var(--bg-card);
 }
 .help-tip:hover, .help-tip:focus-visible { border-color: var(--primary); color: var(--primary); outline: none; }
+/* ── LA BULLE D'AIDE ─────────────────────────────────────────────────
+   ⚠️ **Elle était `position: absolute` et `visibility: hidden`, et les deux
+   ensemble produisaient un défaut mesurable sur presque chaque écran.**
+
+   `visibility: hidden` MASQUE mais GARDE LA BOÎTE dans le flux. Une bulle de
+   260 px, centrée sur une icône de 16 px, déborde donc de 122 px de chaque
+   côté — invisible, mais bien là. Quand l'icône est près du bord droit, c'est
+   la PAGE ENTIÈRE qui se met à défiler latéralement, sans que rien ne soit
+   visible pour l'expliquer.
+
+   `position: absolute` la fait en outre ROGNER par tout ancêtre à
+   `overflow: hidden` — une enveloppe de tableau, une carte. La bulle est alors
+   coupée en deux, ou invisible.
+
+   ── Le remède, et pourquoi il est le bon ─────────────────────────────
+   · `display: none` au repos : la boîte disparaît du flux, et le débordement
+     avec elle. (`visibility` ne suffit PAS — c'est tout l'objet du défaut.)
+   · `position: fixed` : la bulle sort du cadre de TOUS ses ancêtres, et
+     aucun `overflow: hidden` ne la rogne plus.
+   · Les coordonnées sont posées par `js/core/help.js` à l'ouverture, et
+     BORNÉES à la fenêtre : une bulle près d'un bord se replie au lieu de
+     sortir de l'écran.
+
+   ⚠️ 46 des 49 modules appellent `Help.tip`. Le défaut était donc partout, et
+   aucun essai ne couvrait ce composant — c'est réparé par
+   `test/navigateur/bulle-aide.test.mjs`. */
 .help-tip__pop {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
+    display: none;
+    position: fixed;
     width: max-content;
     max-width: 260px;
     background: #1f2d3d;
@@ -584,23 +608,12 @@ button:active { transform: translateY(0); }
     padding: 8px 10px;
     border-radius: 6px;
     box-shadow: var(--shadow-md);
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.15s ease;
     z-index: 500;
     pointer-events: none;
 }
-.help-tip__pop::after {
-    content: "";
-    position: absolute;
-    top: 100%; left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: #1f2d3d;
-}
-.help-tip:hover .help-tip__pop,
-.help-tip:focus-visible .help-tip__pop,
-.help-tip.open .help-tip__pop { opacity: 1; visibility: visible; }
+/* L'ouverture est posée par `help.js`, qui calcule aussi les coordonnées :
+   une bulle fixe ne peut pas se placer toute seule par rapport à son ancre. */
+.help-tip__pop.visible { display: block; }
 
 /* =========================================
    BADGES SÉMANTIQUES (statuts)
@@ -3227,3 +3240,55 @@ input, select, textarea {
 @media (max-width: 640px) {
     .grille-2 { grid-template-columns: 1fr; }
 }
+
+/* =====================================================================
+   DÉBORDEMENTS HORIZONTAUX — correction de CLASSE (21/09/2026)
+
+   Signalé par l'utilisateur sur la fiche d'un document : « une table qui
+   sort de son cadre ». Reproduit à 980 px de large, puis cherché partout
+   par un balayage de tous les écrans à deux largeurs.
+
+   ── Les deux causes, et elles sont classiques ────────────────────────
+
+   1. **Un tableau n'a pas de conteneur qui défile.** Sa largeur minimale
+      de contenu dépasse celle du cadre, et il BAVE au lieu de défiler.
+      La règle du dépôt le dit depuis toujours — *« le contenu large
+      défile dans son propre conteneur, le corps de page ne défile jamais
+      latéralement »* — mais rien ne l'appliquait.
+
+   2. **Un élément de grille ou de flexbox a `min-width: auto` par
+      défaut**, ce qui l'empêche de se réduire en dessous de son contenu.
+      Un champ de saisie ou un long mot pousse alors sa colonne au-delà
+      du cadre. C'est le piège le plus courant des grilles CSS, et il ne
+      se voit qu'en rétrécissant la fenêtre.
+
+   ⚠️ **Ces deux règles ne sont sûres QUE depuis que la bulle d'aide est
+   `position: fixed`** : `overflow-x: auto` crée un contexte de
+   formatage qui aurait rogné une bulle en `absolute`. Les deux
+   correctifs du jour se tiennent — l'ordre comptait.
+   ===================================================================== */
+
+/* 1. Tout conteneur direct d'un tableau défile plutôt que de baver.
+      `:has()` évite de toucher les 49 modules un par un — et surtout
+      évite d'en oublier un, ce qu'une reprise fichier par fichier fait
+      toujours. */
+#app div:has(> table),
+#app section:has(> table),
+#app fieldset:has(> table) { overflow-x: auto; }
+
+/* 2. Un enfant de grille ou de flexbox doit POUVOIR se réduire.
+      `min-width: 0` lève le `auto` implicite ; sans lui, le plus long
+      mot d'une cellule fixe la largeur de toute la colonne. */
+#app .dashboard-grid > *,
+#app .grille-2 > *,
+#app .trend-grid > *,
+#app .sd-grid > *,
+#app .carto-stats > *,
+#app .filtres-ligne > *,
+#app .form-group { min-width: 0; }
+
+/* Et le corps de la page ne défile JAMAIS latéralement : si quelque chose
+   échappait encore aux deux règles ci-dessus, il serait contenu ici plutôt
+   que de décaler l'écran entier — le symptôme le plus déroutant, parce que
+   rien de visible ne l'explique. */
+body { overflow-x: hidden; }

@@ -27,7 +27,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2405 essais, 2405 passés, 0 échec** — 2 084 sans navigateur et 321 avec —,
+> `npm test` → **2408 essais, 2408 passés, 0 échec** — 2 084 sans navigateur et 324 avec —,
 > trente-huit familles. ⚠️ **+26 le 21/09/2026** : la recherche documentaire (action **D3**,
 > migration `059`) apporte `test/recherche/documentaire.test.mjs` (19) et
 > `test/navigateur/recherche-documentaire.test.mjs` (7).
@@ -77,6 +77,75 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### « Une table qui sort de son cadre » — signalé par l'utilisateur, trouvé partout (21/09/2026)
+
+**Le signalement était précis, et le mot exact était « son cadre ».** Reproduit à
+**980 px** de large sur la fiche d'un document : `<table class="data-table">` sort de son
+conteneur de 14 px. Puis cherché **partout**, par un balayage de toutes les routes du
+routeur à deux largeurs.
+
+⚠️ **Le banc était entièrement vert.** 2 405 essais vérifiaient qu'un écran se rend et que
+son contenu est juste ; **aucun ne vérifiait qu'il tient dans sa largeur**.
+
+#### La cause principale n'était pas le tableau : c'était la bulle d'aide
+
+`.help-tip__pop` était `position: absolute` **et** `visibility: hidden`. Or `visibility:
+hidden` **masque mais garde la boîte dans le flux** : une bulle de 260 px centrée sur une
+icône de 16 px déborde de **122 px de chaque côté**, invisible. Près du bord droit, **c'est
+la page entière qui se met à défiler latéralement** — le symptôme le plus déroutant qui
+soit, puisque rien d'apparent ne l'explique.
+
+Et `position: absolute` la faisait **rogner** par tout ancêtre à `overflow: hidden`.
+
+Elle est désormais **`position: fixed`** et **`display: none`** au repos : elle ne pèse plus
+sur la mise en page, et aucun `overflow` ne la rogne. Ses coordonnées sont posées par
+`js/core/help.js` à l'ouverture et **bornées à la fenêtre** — une bulle près d'un bord se
+replie au lieu de sortir de l'écran —, et elle suit le défilement, ce qu'une bulle fixe ne
+fait pas seule.
+
+⚠️ **46 des 49 modules appellent `Help.tip`**, et **aucun essai ne couvrait ce composant** :
+le plus employé du frontend était le moins éprouvé.
+
+#### Les deux autres causes, corrigées à la CLASSE
+
+1. **Un tableau sans conteneur qui défile.** La règle du dépôt l'impose depuis toujours —
+   *« le contenu large défile dans son propre conteneur »* — mais **rien ne l'appliquait**.
+   Une règle `:has(> table)` le fait pour les 49 modules d'un coup, plutôt qu'un passage
+   fichier par fichier qui en oublie toujours un.
+2. **`min-width: auto` sur les enfants de grille**, le piège le plus courant des grilles
+   CSS : un champ ou un mot long empêche sa colonne de se réduire et pousse le cadre.
+
+⚠️ **L'ordre comptait** : ces deux règles n'étaient sûres qu'**après** le changement de la
+bulle — `overflow-x: auto` aurait rogné une bulle en `absolute`.
+
+**Mesuré : de dizaines d'écrans en défaut à UN SEUL** — un `<text>` SVG à +3 px dans un
+graphique, contenu, sans effet sur la page.
+
+#### 🛑 ET IL A FALLU TROIS RÉDACTIONS POUR QUE LE GARDE-FOU MORDE
+
+`test/navigateur/debordements.test.mjs` balaie toutes les routes **découvertes auprès du
+routeur**. Sa mise au point est la leçon du jour :
+
+| Rédaction | Ce qu'elle mesurait | Mutation |
+|---|---|---|
+| 1ʳᵉ | 1024 px, dépassement de `#app` | **verte** |
+| 2ᵉ | 960 px, dépassement de `#app` | **verte** |
+| 3ᵉ | **980 px**, dépassement **du PARENT** | ✅ rouge |
+
+Deux erreurs distinctes, et chacune valait d'être faite. **La largeur** : le défaut ne vit
+qu'autour de 980 px — au-dessus il y a la place, en dessous une bascule de mise en page
+relâche la pression ; les deux premières valeurs avaient été *choisies*, la troisième est
+*mesurée*. **Le cadre** : je comparais l'élément à la zone applicative, quand le
+signalement disait le bon mot — *« sort de son cadre »*, et le cadre est le **parent**. Un
+tableau qui sort de sa carte reste souvent dans la zone applicative.
+
+Le garde joue donc **deux largeurs**, compare **au parent**, et exige que le balayage ait
+visité au moins quarante écrans dont dix fiches — *un balayage qui ne visiterait rien
+passerait au vert* (constat Q-210).
+
+**Mesuré** : banc **2408/2408**, mutation jouée et rougie, correctif restauré et vérifié
+identique à sa sauvegarde.
 
 ### Passe de style : quatre manquements à la charte, vus en capturant les écrans (21/09/2026)
 
