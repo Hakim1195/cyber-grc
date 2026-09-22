@@ -13,6 +13,10 @@
  * | `POST`   | `/api/habilitations/groupes/synchroniser` | engendrer les groupes manquants **dans la table** |
  * | `GET`    | `/api/habilitations/annuaire`        | déclaration ↔ annuaire réel : les quatre écarts |
  * | `POST`   | `/api/habilitations/simuler`         | « que verrait ce compte, et pourquoi ? » |
+ * | `GET`    | `/api/habilitations/revues`          | les revues des droits d'accès (A.5.18) |
+ * | `POST`   | `/api/habilitations/revues`          | en ouvrir une : FIGER l'instantané de l'annuaire |
+ * | `PUT`    | `/api/habilitations/revues/lignes/:id` | décider d'un accès, daté et signé |
+ * | `POST`   | `/api/habilitations/revues/:id/clore`  | clore, avec sa conclusion |
  *
  * ════════════════════════════════════════════════════════════════════════
  *  POURQUOI CE LOT EXISTE
@@ -76,6 +80,8 @@ import { entreeInvalide, ErreurApplicative } from '../erreurs/index.js';
 import { journaliser } from '../auth/journal.js';
 
 import { comparerAnnuaire, simuler } from './annuaire.js';
+import { cloreRevue, deciderLigne, lireRevues, ouvrirRevue } from './revue.js';
+import type { MembresParGroupe } from './revue.js';
 import type { IdentiteSimulee, LectureAnnuaire } from './annuaire.js';
 import {
   creerGroupe,
@@ -395,6 +401,156 @@ export async function greffonHabilitations(
         simuler(client, login, simulee, session.perimetre),
       );
       return await reponse.status(200).send(resultat);
+    },
+  );
+
+  /* ═══════════════════════════════════════════════════════════════════
+   *  LA REVUE DES DROITS D'ACCÈS — ISO 27001 A.5.18
+   *
+   *  🛑 **Le produit CONSIGNE, l'administrateur de l'annuaire EXÉCUTE.** La
+   *  décision « à retirer » ne retire personne : outre que le produit n'a
+   *  aucune capacité d'écriture LDAP, c'est le principe de l'exercice —
+   *  quelqu'un décide, quelqu'un d'autre applique. Une revue qui exécuterait
+   *  ses propres conclusions serait une revue sans contrôle.
+   * ═══════════════════════════════════════════════════════════════════ */
+
+  instance.get(
+    `${PREFIXE}/revues`,
+    { config: { acces: { action: 'lire', domaine: 'administration' } } },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const session = sessionDe(requete);
+      const requis = (requete.query as { revue?: unknown } | undefined)?.revue;
+      const detaille = typeof requis === 'string' && requis.trim() !== '' ? requis.trim() : null;
+      const revues = await avecTransaction(
+        pool,
+        session.perimetre,
+        async (client) => await lireRevues(client, detaille),
+        { lectureSeule: true },
+      );
+      return await reponse.status(200).send({ revues });
+    },
+  );
+
+  instance.post(
+    `${PREFIXE}/revues`,
+    { config: ACCES_ECRITURE },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const session = sessionDe(requete);
+      const corps = corpsDe(requete);
+
+      const intitule = typeof corps['intitule'] === 'string' ? corps['intitule'].trim() : '';
+      if (intitule === '') throw entreeInvalide('Donnez un intitulé à la revue.');
+      const prochaine =
+        typeof corps['prochaineLe'] === 'string' && corps['prochaineLe'].trim() !== ''
+          ? corps['prochaineLe'].trim()
+          : null;
+
+      if (auth === undefined || !auth.annuaireDisponible()) {
+        throw new ErreurApplicative({
+          code: 'indisponible',
+          statut: 503,
+          message:
+            'L’annuaire n’est pas configuré sur ce déploiement (`AUTH_LDAP_ACTIF=non`) : une ' +
+            'revue des droits d’accès lit QUI appartient à chaque groupe, et il n’y a rien ' +
+            'à lire. Une revue vide attesterait que personne n’a d’accès.',
+        });
+      }
+
+      /* Les groupes à balayer viennent de la DÉCLARATION applicative — ceux qui
+       * sont actifs —, et non de l'annuaire : ce qu'on revoit est ce que le
+       * produit reconnaît. Un groupe de l'annuaire que l'application ignore
+       * n'accorde rien, et n'a donc rien à faire dans une revue d'accès.
+       * ⚠️ Lu hors transaction : la suite sort sur le réseau, et tenir une
+       * connexion PostgreSQL pendant un aller-retour LDAP épuise le pool à la
+       * première panne d'annuaire. */
+      const declaration = await avecTransaction(
+        pool,
+        session.perimetre,
+        async (client) =>
+          await client.query<{
+            nom: string;
+            perimetre: string;
+            profil_code: string | null;
+          }>(
+            `select g."nom", g."perimetre", p."code" as profil_code
+               from "groupes_ad" g
+               left join "profils" p on p."id" = g."profil_id"
+              where g."actif"
+              order by g."nom"`,
+          ),
+        { lectureSeule: true },
+      );
+
+      const balayage: MembresParGroupe[] = [];
+      for (const groupe of declaration.rows) {
+        const lu = await auth.membresDuGroupe(groupe.nom);
+        balayage.push({
+          groupe: groupe.nom,
+          perimetre: groupe.perimetre,
+          profilCode: groupe.profil_code,
+          membres: lu?.membres ?? [],
+          absentDeLAnnuaire: lu === undefined ? false : !lu.groupeTrouve,
+          tronque: lu?.tronque === true,
+        });
+      }
+
+      const perimetreTexte =
+        `${declaration.rows.length} groupe(s) d’annuaire déclaré(s) et actif(s), préfixe ` +
+        `« ${prefixeGroupes} », imbrications comprises.` +
+        (balayage.some((g) => g.absentDeLAnnuaire)
+          ? ` ⚠️ ${balayage.filter((g) => g.absentDeLAnnuaire).length} groupe(s) déclaré(s) ` +
+            `sont INTROUVABLES dans l’annuaire et n’ont donc pas pu être revus.`
+          : '');
+
+      const resultat = await avecTransaction(pool, session.perimetre, async (client) =>
+        ouvrirRevue(client, intitule, perimetreTexte, balayage, prochaine, session.perimetre),
+      );
+      return await reponse.status(201).send({
+        ...resultat,
+        groupesIntrouvables: balayage.filter((g) => g.absentDeLAnnuaire).map((g) => g.groupe),
+      });
+    },
+  );
+
+  instance.put(
+    `${PREFIXE}/revues/lignes/:id`,
+    { config: ACCES_ECRITURE },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const session = sessionDe(requete);
+      const id = identifiantDe(requete);
+      const corps = corpsDe(requete);
+      await avecTransaction(pool, session.perimetre, async (client) =>
+        deciderLigne(
+          client,
+          id,
+          corps['decision'],
+          corps['commentaire'],
+          corps['version'],
+          session.perimetre,
+        ),
+      );
+      return await reponse.status(200).send({ id });
+    },
+  );
+
+  instance.post(
+    `${PREFIXE}/revues/:id/clore`,
+    { config: ACCES_ECRITURE },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const session = sessionDe(requete);
+      const id = identifiantDe(requete);
+      const corps = corpsDe(requete);
+      const resultat = await avecTransaction(pool, session.perimetre, async (client) =>
+        cloreRevue(
+          client,
+          id,
+          corps['conclusion'],
+          corps['prochaineLe'],
+          corps['version'],
+          session.perimetre,
+        ),
+      );
+      return await reponse.status(200).send({ id, ...resultat });
     },
   );
 }

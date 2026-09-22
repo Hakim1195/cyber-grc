@@ -667,7 +667,10 @@ window.UI = (function () {
             vues: Object.freeze([
                 Object.freeze({ route: "/habilitations", libelle: "Matrice des droits" }),
                 Object.freeze({ route: "/habilitations-groupes", libelle: "Groupes d\u2019annuaire" }),
-                Object.freeze({ route: "/habilitations-comptes", libelle: "Comptes" })
+                Object.freeze({ route: "/habilitations-comptes", libelle: "Comptes" }),
+                // La REVUE des droits d'accès : ce qui fait de cet écran une pièce
+                // de conformité (ISO 27001 A.5.18) et non un panneau d'administration.
+                Object.freeze({ route: "/habilitations-revues", libelle: "Revues des acc\u00e8s" })
             ])
         }),
         Object.freeze({

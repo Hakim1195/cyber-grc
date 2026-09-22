@@ -3722,3 +3722,70 @@ body { overflow-x: hidden; }
     .hab-fs select { max-width: none; }
     .hab-fs .hab-champ { flex-direction: column; align-items: stretch; }
 }
+
+/* ── La revue des droits d'accès (ISO 27001 A.5.18) ──────────────────── */
+.hab-revue { margin-bottom: 18px; }
+.hab-revue-tete {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.hab-revue-tete h2 { margin: 0 0 4px; }
+.hab-revue-comptes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    border-top: 1px solid var(--border, #e2e6ea);
+    border-bottom: 1px solid var(--border, #e2e6ea);
+    padding: 8px 0;
+    margin: 10px 0;
+}
+.hab-alertes { margin: 8px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.hab-ecart-pastille {
+    display: inline-block;
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--tint-info, #e8eff8);
+    color: #1b4b8f;
+}
+/* ⚠️ La teinte critique est employée ici À DESSEIN, et c'est cohérent avec la
+   charte : un compte désactivé encore membre d'un groupe d'accès, ou un
+   balayage tronqué, ne sont pas des paramétrages — ce sont les anomalies que la
+   revue existe pour trouver. */
+.hab-ecart-pastille--grave {
+    background: var(--tint-crit, #fbe9e7);
+    color: var(--color-danger, #c0392b);
+}
+.hab-conclusion {
+    margin: 10px 0 0;
+    padding: 8px 14px;
+    border-left: 3px solid var(--accent, #2059A6);
+    background: var(--bg-body, #f5f6f8);
+    font-size: var(--text-sm, 0.8125rem);
+}
+.hab-revue-table { margin-top: 14px; font-size: var(--text-sm, 0.8125rem); }
+.hab-revue-table .hab-code { display: block; }
+.hab-revue-table input[type="text"], .hab-revue-table select { width: 100%; }
+.hab-ligne-alerte { background: var(--tint-crit, #fbe9e7); }
+.hab-decision {
+    display: inline-block;
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm, 4px);
+    background: var(--tint-na, #eef1f5);
+    color: var(--text-muted, #6b7a8d);
+}
+.hab-decision--maintenu   { background: var(--tint-ok, #e6f4ea);   color: #1e7a3c; }
+.hab-decision--a_retirer  { background: var(--tint-crit, #fbe9e7); color: var(--color-danger, #c0392b); }
+.hab-decision--a_verifier { background: var(--tint-warn, #fff4e0); color: #8a5a00; }
+
+@media print {
+    /* La revue EST la pièce : les commandes disparaissent, la table reste. */
+    .hab-revue-table select, .hab-revue-table input { display: none; }
+    .hab-revue { break-inside: avoid; }
+}

@@ -286,6 +286,138 @@ export class ServiceAnnuaire {
     }
   }
 
+
+  /**
+   * Les comptes membres d'un groupe, **imbrications comprises**, en lecture
+   * seule.
+   *
+   * ── Pourquoi le sens inverse de `resoudreGroupes()` était nécessaire ──────
+   *
+   * Tout le produit interroge l'annuaire **depuis une personne** : « à quels
+   * groupes appartient-elle ? ». C'est ce dont l'authentification a besoin. Une
+   * **revue des droits d'accès** (ISO 27001 A.5.18, et le même geste attendu par
+   * NIS2) pose la question inverse : « qui appartient à ce groupe ? ». Aucune
+   * réponse ne se déduit de l'autre, et le produit n'en détenait aucune des
+   * deux — il ne garde pas les appartenances, il les résout à chaque connexion.
+   *
+   * ⚠️ **L'imbrication est suivie, et ce n'est pas un raffinement.** Une revue
+   * qui ne verrait que les membres DIRECTS oublierait précisément les personnes
+   * qu'un groupe imbriqué fait entrer — c'est le cas éprouvé à la porte S3
+   * (`equipe-secu-tls` dans `GRC-TLS-RSSI`), et une revue incomplète est pire
+   * qu'une revue absente : elle atteste que rien n'a été trouvé.
+   *
+   * Le garde est celui de `resoudreGroupes()`, à l'identique : un ensemble de
+   * noms distinctifs déjà vus, jamais une borne de profondeur — une borne de
+   * profondeur sur un cycle explore exponentiellement avant de s'arrêter.
+   *
+   * ⚠️ **Elle n'écrit rien, et le produit ne le pourra jamais** : `ClientLdap`
+   * n'implémente que `lier`, `rechercher` et `fermer`. Retirer quelqu'un d'un
+   * groupe est un geste d'administrateur d'annuaire — le produit constate et
+   * consigne, il n'exécute pas.
+   */
+  public async membresDuGroupe(
+    nomGroupe: string,
+    max = 500,
+  ): Promise<{
+    readonly membres: readonly { readonly login: string; readonly nom: string;
+                                 readonly desactive: boolean; readonly indirect: boolean }[];
+    readonly tronque: boolean;
+    readonly groupeTrouve: boolean;
+  }> {
+    const client = await this.fabrique(this.ldap);
+    try {
+      await client.lier(this.ldap.dnService, this.ldap.motDePasseService);
+
+      const groupes = await client.rechercher({
+        base: this.ldap.baseRecherche,
+        portee: 'sousArbre',
+        filtre: `(&(objectClass=*)(cn=${echapperValeur(nomGroupe)}))`,
+        attributs: ['cn', 'member'],
+        tailleMax: 2,
+      });
+      const racine = groupes[0];
+      if (racine === undefined) {
+        return { membres: [], tronque: false, groupeTrouve: false };
+      }
+
+      const vus = new Set<string>();
+      const membres = new Map<string, { login: string; nom: string; desactive: boolean;
+                                        indirect: boolean }>();
+      // File de (dn, indirect) : un membre atteint par un groupe intermédiaire
+      // est INDIRECT, et l'écran doit le dire — c'est la moitié de la revue que
+      // personne ne voit sans le nommer.
+      let file: { dn: string; indirect: boolean }[] =
+        (racine.attributs.get('member') ?? []).map((dn) => ({ dn, indirect: false }));
+      let tronque = false;
+
+      while (file.length > 0) {
+        const suivant: { dn: string; indirect: boolean }[] = [];
+        for (const { dn, indirect } of file) {
+          const cle = dn.trim().toLowerCase();
+          if (vus.has(cle)) continue;
+          if (vus.size >= max) { tronque = true; break; }
+          vus.add(cle);
+
+          const entrees = await client.rechercher({
+            base: dn,
+            portee: 'base',
+            filtre: '(objectClass=*)',
+            attributs: [
+              this.ldap.attributIdentifiant,
+              'cn',
+              'displayName',
+              'member',
+              'objectClass',
+              'userAccountControl',
+            ],
+            tailleMax: 1,
+          });
+          const entree = entrees[0];
+          if (entree === undefined) continue;
+
+          const classes = (entree.attributs.get('objectclass') ?? []).map((c) => c.toLowerCase());
+          const estGroupe =
+            classes.includes('group') ||
+            classes.includes('groupofnames') ||
+            classes.includes('posixgroup');
+
+          if (estGroupe) {
+            if (!this.ldap.groupesImbriques) continue;
+            for (const sousDn of entree.attributs.get('member') ?? []) {
+              suivant.push({ dn: sousDn, indirect: true });
+            }
+            continue;
+          }
+
+          const login = premier(entree, this.ldap.attributIdentifiant);
+          if (login === null) continue;
+          const brut = premier(entree, 'userAccountControl');
+          const desactive =
+            brut !== null && (Number.parseInt(brut, 10) & BIT_COMPTE_DESACTIVE) !== 0;
+          // Un compte atteint DEUX FOIS — directement et par un groupe imbriqué —
+          // compte comme direct : c'est ce qui décrit son accès le plus court.
+          const deja = membres.get(login.toLowerCase());
+          membres.set(login.toLowerCase(), {
+            login,
+            nom: premier(entree, 'displayName') ?? premier(entree, 'cn') ?? login,
+            desactive,
+            indirect: deja === undefined ? indirect : deja.indirect && indirect,
+          });
+        }
+        if (tronque) break;
+        file = suivant;
+      }
+
+      return {
+        membres: [...membres.values()].sort((a, b) => a.login.localeCompare(b.login, 'fr')),
+        tronque,
+        groupeTrouve: true,
+      };
+    } finally {
+      await client.fermer();
+    }
+  }
+
   /* ---- Étapes ------------------------------------------------------- */
 
   private async chercherUtilisateur(

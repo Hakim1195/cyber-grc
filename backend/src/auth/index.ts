@@ -320,6 +320,30 @@ export class ServiceAuthentification implements Authentificateur {
     return await this.annuaire.listerGroupes();
   }
 
+  /**
+   * Les comptes membres d'un groupe, imbrications comprises. **Lecture seule.**
+   *
+   * Sert à la revue périodique des droits d'accès (ISO 27001 A.5.18). Rend
+   * `undefined` si aucun annuaire n'est configuré — ce qui n'est PAS « aucun
+   * membre » : une revue vide attesterait que personne n'a d'accès.
+   */
+  public async membresDuGroupe(nom: string): Promise<
+    | {
+        readonly membres: readonly {
+          readonly login: string;
+          readonly nom: string;
+          readonly desactive: boolean;
+          readonly indirect: boolean;
+        }[];
+        readonly tronque: boolean;
+        readonly groupeTrouve: boolean;
+      }
+    | undefined
+  > {
+    if (this.annuaire === null) return undefined;
+    return await this.annuaire.membresDuGroupe(nom);
+  }
+
   /* ═══════════════════════════════════════════════════════════════════
    *  Ouverture de session
    * ═══════════════════════════════════════════════════════════════════ */

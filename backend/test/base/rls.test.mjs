@@ -2340,7 +2340,7 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
     assert.equal(affectees, 1);
   });
 
-  test('LE BALAYAGE : les HUIT tables de configuration ont une écriture conditionnée', async () => {
+  test('LE BALAYAGE : les DIX tables de configuration ont une écriture conditionnée', async () => {
     // Structurel plutôt qu'anecdotique : c'est le motif que l'auditeur a réclamé — « toute
     // table de niveau Groupe dont l'écriture est ouverte est-elle dans une liste
     // explicitement arbitrée ? ». La liste ci-dessous EST cette liste, et toute table qui
@@ -2363,8 +2363,17 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
       //    — qui répond, où elle en est — vit dans `campagne_filiales`, qui porte un
       //    filiale_id et dont l'écriture consulte `f_filiale_ecriture()` : elle n'apparaît
       //    donc pas ici, et c'est exactement la frontière qu'on veut voir.
+      // ⚠️ Les DEUX tables de la revue des habilitations (migration `060`) sont
+      //    entrées ici en faisant rougir ce balayage — c'est son office. Elles sont
+      //    de niveau GROUPE parce que leurs trois sources le sont — `groupes_ad`,
+      //    `profils`, `utilisateurs` —, et parce que le périmètre d'une personne
+      //    n'est stocké NULLE PART : il est résolu à chaque connexion. Les rattacher
+      //    à une filiale aurait supposé un rattachement que le modèle n'a pas,
+      //    c'est-à-dire l'aurait inventé — et une revue fondée sur un rattachement
+      //    inventé atteste de ce qui n'a pas été vérifié.
       ['campagnes', 'filiales', 'groupes_ad', 'mapping_exigences', 'mappings',
-       'profil_domaines', 'profils', 'utilisateurs'],
+       'profil_domaines', 'profils', 'revue_habilitation_lignes',
+       'revues_habilitations', 'utilisateurs'],
     );
   });
 
@@ -3942,6 +3951,30 @@ describe('Le garde-fou de couverture découvre son périmètre (CONVENTIONS §19
       'migrations_schema',
       'profil_domaines',
       'profils',
+      // ── ARRIVÉES AVEC LA MIGRATION `060`, et elles ont fait rougir ce test en
+      //    ARRIVANT — c'est son office (`CONVENTIONS.md` §24).
+      //
+      //    Une revue des droits d'accès (ISO 27001 A.5.18) porte sur la correspondance
+      //    entre les groupes de l'annuaire et les profils, et sur les comptes qui
+      //    appartiennent à ces groupes. Ses TROIS sources sont de niveau Groupe et
+      //    figurent déjà dans cette liste : `groupes_ad`, `profils`, `utilisateurs`.
+      //
+      //    ⚠️ Les cloisonner aurait exigé d'inventer un rattachement que le modèle n'a
+      //    pas : le périmètre d'une personne n'est stocké nulle part, il est RÉSOLU à
+      //    chaque connexion depuis ses groupes. Une revue fondée sur un rattachement
+      //    inventé atteste de ce qui n'a pas été vérifié.
+      //
+      //    🛑 Ce qui les protège n'est donc PAS la RLS mais la ROUTE : leur lecture est
+      //    ouverte au niveau des politiques — le §2 de `004_rls.sql` interdit qu'une
+      //    politique de LECTURE dépende du drapeau d'administration —, et la barrière
+      //    est la déclaration « lire / administration » des routes de
+      //    `src/habilitations/`, que le contrôle T-3 mesure. C'est exactement le régime
+      //    de `utilisateurs`, `profils` et `groupes_ad` depuis la porte S1.
+      //
+      //    L'arbitrage est repris à l'identique dans le contrôle C93 de
+      //    `db/verifier_cloisonnement.sql`, et les deux doivent bouger ensemble.
+      'revue_habilitation_lignes',
+      'revues_habilitations',
       'session_domaines',
       'sessions',
       'utilisateurs',
@@ -4455,6 +4488,23 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // dans l'une des deux familles. *Une migration a AFFIRMÉ une propriété au lieu de la
       // POSER, et rien ne comparait au catalogue.*
       'registres_techniques',
+      // SOIXANTE-QUATRIÈME, apporté par `060` — la revue des habilitations. Il éprouve
+      // les QUATRE propriétés qui font qu'une revue engage quelqu'un : une décision
+      // porte son auteur ET sa date, une NON-décision n'en porte pas, un retrait porte
+      // son motif, et une clôture porte sa conclusion. Sans elles, une revue close
+      // n'atteste que du fait d'avoir regardé.
+      //
+      // ⚠️ Il SOUMET des jeux de valeurs au prédicat RÉEL de chaque contrainte
+      // (`f_contrainte_accepte`), jamais son texte — un « check (… or true) » passerait
+      // sinon au vert sous zéro anomalie (constat Q-312). Et il mesure le cas NOMINAL :
+      // un garde qui n'éprouve que des refus est muet sur une contrainte devenue
+      // « false », c'est-à-dire sur une table où plus rien n'entre.
+      //
+      // ⚠️ Sa première rédaction INSÉRAIT ses témoins dans une sous-transaction
+      // annulée. PostgreSQL l'a refusée — « INSERT is not allowed in a non-volatile
+      // function » —, et c'est heureux : `f_verifier_schema()` doit rester « stable »,
+      // c'est ce qui l'empêche d'agir sur ce qu'il inspecte (`CONVENTIONS.md` §39.8).
+      'revue_habilitations',
       // CINQUANTE-DEUXIÈME, apporté par `047` : un garde de CLASSE (CONVENTIONS.md §43).
       // Aucune clé étrangère COMPOSITE ne porte « on delete set null » sans nommer la
       // colonne à nullifier — sans la liste, PostgreSQL les nullifie TOUTES, « filiale_id »

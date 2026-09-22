@@ -243,6 +243,16 @@ const SANS_FICHE = {
   '/habilitations-comptes':
     'comptes connus et simulation « que verrait ce compte ? ». Aucune fiche : un compte ' +
     'vient de l’annuaire, le produit ne le crée pas.',
+  // ⚠️ **C'est ce qui fait de cet écran une pièce de conformité** (ISO 27001
+  // A.5.18) et non un panneau d'administration : la matrice montre les droits,
+  // la revue prouve que quelqu'un les a regardés, quand, et ce qu'il en a
+  // conclu. Aucune fiche : une revue se lit d'un bloc, et sa table de décisions
+  // se déplie dans sa carte — on décide EN REGARD du récapitulatif, jamais en
+  // l'ayant quitté.
+  '/habilitations-revues':
+    'revues des droits d’accès : l’instantané FIGÉ de qui appartient à quel groupe, et la ' +
+    'décision prise sur chaque accès. ⚠️ Le produit CONSIGNE, l’administrateur de ' +
+    'l’annuaire EXÉCUTE.',
   '/mapping': 'correspondances : édition en place',
   '/couverture': 'vue croisée, aucune fiche propre',
   '/crise-fiches': 'vue d’impression',

@@ -904,6 +904,14 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     ['POST', '/api/habilitations/groupes/synchroniser', {}],
     ['GET', '/api/habilitations/annuaire', undefined],
     ['POST', '/api/habilitations/simuler', { identifiant: 'rssi.tls' }],
+    /* La revue des droits d'accès. ⚠️ Servies sans identité, `revues` rendrait
+     * NOMINATIVEMENT qui a accès à quoi dans tout le groupe — un annuaire du
+     * personnel trié par privilège —, et l'ouverture DÉCLENCHERAIT un balayage
+     * complet de l'Active Directory par un inconnu. */
+    ['GET', '/api/habilitations/revues', undefined],
+    ['POST', '/api/habilitations/revues', { intitule: 'Revue T3' }],
+    ['PUT', '/api/habilitations/revues/lignes/RHL-1', { decision: 'maintenu', version: 1 }],
+    ['POST', '/api/habilitations/revues/REVH-1/clore', { conclusion: 'x', version: 1 }],
     /* L'ouverture technique et la collecte (lots L22, L23).
      *
      * ⚠️ **Servies sans identité, ces routes seraient les pires du produit.** La

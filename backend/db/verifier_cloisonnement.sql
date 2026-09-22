@@ -1891,7 +1891,10 @@ $$;
 -- partout ailleurs) : on ne cherche pas à énumérer, on cherche à obliger quelqu'un à
 -- trancher quand une table apparaît. Elle est reprise à l'identique dans
 -- test/base/rls.test.mjs, « la liste des tables NON cloisonnées est exactement celle qui
--- est arbitrée ». controles_schema y est entrée avec la migration 005.
+-- est arbitrée ». controles_schema y est entrée avec la migration 005 ; les deux tables de la revue
+-- des habilitations, avec la migration 060 — leurs trois sources (groupes_ad, profils,
+-- utilisateurs) sont de niveau Groupe, et le périmètre d'une personne n'est stocké
+-- nulle part : il est RÉSOLU à chaque connexion. Ce qui les protège est la ROUTE.
 do $$
 declare v_ligne jsonb;
 begin
@@ -1903,13 +1906,15 @@ begin
                                            and a.attname = 'filiale_id' and a.attnum > 0
                                            and not a.attisdropped))),
                'campagnes, colonnes_personnelles, controles_schema, mapping_exigences, '
-               'mappings, migrations_schema, profil_domaines, profils, session_domaines, '
+               'mappings, migrations_schema, profil_domaines, profils, '
+               'revue_habilitation_lignes, revues_habilitations, session_domaines, '
                'sessions, utilisateurs',
                coalesce(string_agg(t.nom, ', ' order by t.nom), '(aucune)'),
                case when coalesce(string_agg(t.nom, ', ' order by t.nom), '') =
                          'campagnes, colonnes_personnelles, controles_schema, '
                          'mapping_exigences, mappings, migrations_schema, profil_domaines, '
-                         'profils, session_domaines, sessions, utilisateurs'
+                         'profils, revue_habilitation_lignes, revues_habilitations, '
+                         'session_domaines, sessions, utilisateurs'
                     then 'OK' else 'ÉCHEC' end)
       into v_ligne
       from (

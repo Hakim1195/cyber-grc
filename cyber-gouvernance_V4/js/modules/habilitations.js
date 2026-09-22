@@ -63,6 +63,9 @@ const HabilitationsModule = (() => {
     let coherence = null;
     /** Le résultat de la dernière simulation. */
     let simulation = null;
+    /** Les revues des droits d'accès, et celle qui est dépliée. */
+    let revues = null;
+    let revueOuverte = null;
     /** Identifiant du profil ouvert dans le panneau d'édition. */
     let profilOuvert = null;
 
@@ -863,10 +866,374 @@ const HabilitationsModule = (() => {
         });
     }
 
+    /* =====================================================================
+       VUE 4 — LA REVUE DES DROITS D'ACCÈS (ISO 27001 A.5.18)
+
+       ⚠️ **C'est ce qui fait de cet écran un outil de CONFORMITÉ et non un
+       panneau d'administration.** La matrice montre les droits ; la revue
+       prouve que quelqu'un les a regardés, quand, et ce qu'il en a conclu.
+       C'est la pièce qu'un auditeur réclame, et le produit ne savait pas la
+       produire alors qu'il détenait la donnée.
+
+       🛑 **Le produit CONSIGNE, l'administrateur de l'annuaire EXÉCUTE.** La
+       décision « à retirer » ne retire personne — outre que le produit n'a
+       aucune capacité d'écriture LDAP, c'est le principe de l'exercice :
+       quelqu'un décide, quelqu'un d'autre applique.
+    ===================================================================== */
+
+    async function renderRevues() {
+        const app = document.getElementById("app");
+        const onglets = UI.ongletsDe("/habilitations-revues");
+        try {
+            await charger();
+            const r = await Api.revuesHabilitations(revueOuverte);
+            revues = Array.isArray(r.revues) ? r.revues : [];
+        } catch (e) { return echec(app, e, onglets); }
+        if (!etat) return sansDroit(app);
+
+        app.innerHTML = '<section class="page">'
+            + UI.enteteHtml({
+                titre: "Habilitations",
+                onglets: onglets,
+                aide: Help.tip(
+                    "L’ISO 27001 (A.5.18) et NIS2 exigent que les droits d’accès soient revus "
+                  + "à intervalles réguliers. Une revue FIGE qui appartenait à quel groupe au "
+                  + "moment du balayage, et garde la décision prise sur chaque accès, avec son "
+                  + "auteur et sa date."),
+                contexte: "Qui a regardé les accès, quand, et ce qu’il en a conclu.",
+                actions: '<button type="button" id="habNouvelleRevue">Ouvrir une revue</button>'
+                       + '<button type="button" id="habImprimerRevue" class="btn-secondary">Imprimer</button>'
+            })
+            + '<div class="card encart-alerte encart-info"><p>'
+            +   "<strong>Ce logiciel ne retire personne d’un groupe.</strong> Une décision "
+            +   "« à retirer » est consignée, datée et signée — l’administrateur de l’annuaire "
+            +   "l’applique. C’est le principe de l’exercice : quelqu’un décide, quelqu’un "
+            +   "d’autre applique."
+            + "</p></div>"
+            + encartProchaineRevue()
+            + '<div id="habFormRevue"></div>'
+            + (revues.length === 0
+                ? '<div class="card"><p class="muted">Aucune revue n’a encore été faite. '
+                  + "Ouvrir une revue lit l’annuaire — sans rien y écrire — et fige la liste "
+                  + "de qui appartient à chaque groupe déclaré.</p></div>"
+                : revues.map(carteRevue).join(""))
+            + "</section>";
+
+        brancherRevues();
+    }
+
+    /**
+     * L'échéance de la prochaine revue, et le retard s'il y a lieu.
+     *
+     * ⚠️ **ELLE N'ENTRE PAS DANS L'ÉCHÉANCIER PARTAGÉ, et c'est un arbitrage.**
+     *
+     * L'échéancier du produit est une vue **par filiale et par personne**, nourrie
+     * des entités de `data` : tout ce qu'on y lit est actionnable par celui qui le
+     * lit, et c'est ce qui lui donne sa valeur. Une revue des habilitations est un
+     * acte d'administration **de niveau Groupe**, que seul le détenteur du domaine
+     * « administration » peut faire. L'y verser afficherait, à chaque contributeur
+     * de chaque filiale, une échéance qui ne le concerne pas — et une liste dont
+     * une partie ne concerne pas son lecteur est une liste qu'on cesse de lire.
+     *
+     * Le retard se dit donc ICI, là où se trouve la personne qui peut agir.
+     */
+    function encartProchaineRevue() {
+        if (!Array.isArray(revues) || revues.length === 0) return "";
+        // La plus récente échéance annoncée, toutes revues confondues.
+        const avec = revues.filter((r) => r.prochaineLe);
+        if (avec.length === 0) {
+            return '<div class="card encart-alerte encart-info"><p>'
+                + "Aucune périodicité de revue n’est fixée. <strong>Ce n’est pas « rien à "
+                + "faire »</strong> : l’ISO 27001 (A.5.18) demande des revues à intervalles "
+                + "réguliers, et un auditeur demandera lequel. Indiquez une prochaine "
+                + "échéance en clôturant une revue."
+                + "</p></div>";
+        }
+        const prochaine = avec
+            .map((r) => r.prochaineLe)
+            .sort()
+            .slice(-1)[0];
+        const jours = Math.floor(
+            (new Date(prochaine + "T00:00:00Z").getTime() - Date.now()) / 86400000);
+        if (jours >= 0) {
+            return '<div class="card encart-alerte encart-info"><p>'
+                + "Prochaine revue attendue le <strong>" + esc(I18n.date(prochaine))
+                + "</strong> — dans " + esc(jours) + " jour" + (jours > 1 ? "s" : "") + "."
+                + "</p></div>";
+        }
+        return '<div class="card encart-alerte"><p>'
+            + "<strong>La revue des droits d’accès est en retard de " + esc(-jours)
+            + " jour" + (-jours > 1 ? "s" : "") + "</strong> — elle était attendue le "
+            + esc(I18n.date(prochaine)) + ". C’est une non-conformité à l’ISO 27001 A.5.18, "
+            + "et elle se voit en audit."
+            + "</p></div>";
+    }
+
+    function carteRevue(r) {
+        const close = r.closeLe !== null && r.closeLe !== undefined;
+        const c = r.comptes;
+        const ouverte = r.id === revueOuverte;
+
+        // ⚠️ Les deux anomalies qu'une revue existe pour trouver, mises en avant :
+        //    un compte DÉSACTIVÉ encore membre, et un accès obtenu par IMBRICATION
+        //    — celui qu'une revue faite à la main ne voit pas.
+        const alertes = []
+            .concat(c.desactives > 0
+                ? ['<span class="hab-ecart-pastille hab-ecart-pastille--grave" title="'
+                   + esc("Comptes désactivés dans l’annuaire et encore membres d’un groupe "
+                       + "d’accès : c’est l’anomalie la plus fréquente d’une revue.")
+                   + '">' + esc(c.desactives) + " désactivé" + (c.desactives > 1 ? "s" : "")
+                   + "</span>"] : [])
+            .concat(c.indirects > 0
+                ? ['<span class="hab-ecart-pastille" title="'
+                   + esc("Accès obtenus par un groupe imbriqué : ils ne se voient pas dans le "
+                       + "groupe lui-même, et c’est ce qu’une revue manuelle oublie.")
+                   + '">' + esc(c.indirects) + " par imbrication</span>"] : [])
+            .concat(r.balayageTronque
+                ? ['<span class="hab-ecart-pastille hab-ecart-pastille--grave" title="'
+                   + esc("La lecture de l’annuaire a atteint sa borne : l’instantané est "
+                       + "INCOMPLET, et la revue ne peut pas être présentée comme exhaustive.")
+                   + '">balayage tronqué</span>'] : []);
+
+        return '<div class="card hab-revue" data-revue="' + esc(r.id) + '">'
+            + '<div class="hab-revue-tete">'
+            +   "<div><h2>" + esc(r.intitule) + "</h2>"
+            +     '<p class="hab-note">' + esc(r.perimetre) + "</p>"
+            +     '<p class="hab-note">Ouverte le ' + esc(I18n.date(r.ouverteLe))
+            +       " par " + esc(r.ouvertePar)
+            +       (close ? " · close le " + esc(I18n.date(r.closeLe)) + " par "
+                             + esc(r.closePar) : "")
+            +       (r.prochaineLe ? " · prochaine revue attendue le "
+                                     + esc(I18n.date(r.prochaineLe)) : "")
+            +     "</p></div>"
+            +   "<div>" + (close ? '<span class="hab-actif">close</span>'
+                                 : '<span class="hab-ecart-pastille">en cours</span>') + "</div>"
+            + "</div>"
+            + '<ul class="hab-faits hab-revue-comptes">'
+            +   "<li><strong>" + esc(c.total) + "</strong> accès revus</li>"
+            +   "<li>" + esc(c.maintenu) + " maintenus</li>"
+            +   "<li>" + esc(c.aRetirer) + " à retirer</li>"
+            +   "<li>" + esc(c.aVerifier) + " à vérifier</li>"
+            +   "<li>" + esc(c.aExaminer) + " non examinés</li>"
+            + "</ul>"
+            + (alertes.length ? '<p class="hab-alertes">' + alertes.join(" ") + "</p>" : "")
+            + (close && r.conclusion
+                ? '<blockquote class="hab-conclusion">' + esc(r.conclusion) + "</blockquote>"
+                : "")
+            + '<div class="page-actions no-print">'
+            +   '<button type="button" class="hab-revue-ouvrir btn-secondary" data-revue="'
+            +     esc(r.id) + '">' + (ouverte ? "Replier" : "Voir les accès") + "</button>"
+            +   (close ? "" : '<button type="button" class="hab-revue-clore" data-revue="'
+                              + esc(r.id) + '" data-version="' + esc(r.version)
+                              + '">Clore la revue</button>')
+            + "</div>"
+            + (ouverte ? tableauLignes(r, close) : "")
+            + "</div>";
+    }
+
+    const DECISIONS = Object.freeze([
+        { valeur: "a_examiner", libelle: "À examiner" },
+        { valeur: "maintenu", libelle: "Maintenu" },
+        { valeur: "a_retirer", libelle: "À retirer" },
+        { valeur: "a_verifier", libelle: "À vérifier" }
+    ]);
+
+    function tableauLignes(r, close) {
+        if (!Array.isArray(r.lignes) || r.lignes.length === 0) {
+            return '<p class="muted">Cette revue ne porte aucune ligne : aucun des groupes '
+                 + "déclarés n’avait de membre au moment du balayage.</p>";
+        }
+        const lignes = r.lignes.map((l) =>
+            '<tr class="' + (l.compteDesactive ? "hab-ligne-alerte" : "") + '">'
+            + "<td><strong>" + esc(l.compteLogin) + "</strong>"
+            +   '<span class="hab-code">' + esc(l.compteNom) + "</span></td>"
+            + "<td>" + esc(l.groupeNom)
+            +   (l.profilCode ? '<span class="hab-code">' + esc(l.profilCode) + "</span>" : "")
+            + "</td>"
+            + '<td class="t-centre">'
+            +   (l.compteDesactive
+                 ? '<span class="hab-ecart-pastille hab-ecart-pastille--grave">désactivé</span>'
+                 : "")
+            +   (l.indirect
+                 ? ' <span class="hab-ecart-pastille">imbriqué</span>' : "")
+            + "</td>"
+            + "<td>" + (close
+                ? '<span class="hab-decision hab-decision--' + esc(l.decision) + '">'
+                  + esc((DECISIONS.find((d) => d.valeur === l.decision) || {}).libelle
+                        || l.decision) + "</span>"
+                : '<select class="hab-decision-choix" data-ligne="' + esc(l.id)
+                  + '" data-version="' + esc(l.version) + '">'
+                  + DECISIONS.map((d) => '<option value="' + esc(d.valeur) + '"'
+                      + (d.valeur === l.decision ? " selected" : "") + ">"
+                      + esc(d.libelle) + "</option>").join("")
+                  + "</select>") + "</td>"
+            + "<td>" + (close
+                ? esc(l.commentaire || "")
+                : '<input type="text" class="hab-decision-motif" data-ligne="' + esc(l.id)
+                  + '" value="' + esc(l.commentaire || "") + '" maxlength="500"'
+                  + ' placeholder="motif (exigé pour un retrait)">') + "</td>"
+            + "<td>" + (l.decidePar
+                ? esc(l.decidePar) + '<span class="hab-code">'
+                  + esc(l.decideLe ? I18n.date(l.decideLe) : "") + "</span>"
+                : '<span class="hab-code">—</span>') + "</td>"
+            + "</tr>").join("");
+
+        return '<table class="data-table hab-revue-table"><thead><tr>'
+            + "<th>Compte</th><th>Groupe d’annuaire</th><th>Signaux</th>"
+            + "<th>Décision</th><th>Motif</th><th>Décidé par</th>"
+            + "</tr></thead><tbody>" + lignes + "</tbody></table>";
+    }
+
+    function brancherRevues() {
+        const nouvelle = document.getElementById("habNouvelleRevue");
+        if (nouvelle) nouvelle.addEventListener("click", () => {
+            const hote = document.getElementById("habFormRevue");
+            hote.innerHTML = '<div class="card hab-panneau">'
+                + "<h2>Ouvrir une revue des droits d’accès</h2>"
+                + '<p class="hab-note">Le produit va LIRE l’annuaire et figer, groupe par '
+                + "groupe, la liste de ses membres — imbrications comprises. Il n’y écrit "
+                + "rien. Le balayage peut prendre quelques instants.</p>"
+                + '<div class="form-grid">'
+                +   '<label class="hab-champ"><span>Intitulé</span>'
+                +     '<input type="text" id="habRevueIntitule" maxlength="200"'
+                +       ' placeholder="Revue des accès — 3e trimestre 2026"></label>'
+                +   '<label class="hab-champ"><span>Prochaine revue attendue le'
+                +     Help.tip("Alimente l’échéancier. Laisser vide veut dire « aucune "
+                +              "périodicité décidée », ce qui n’est pas « rien à faire ».")
+                +     "</span><input type=\"date\" id=\"habRevueProchaine\"></label>"
+                + "</div>"
+                + '<div class="page-actions no-print">'
+                +   '<button type="button" id="habRevueLancer">Lire l’annuaire et ouvrir</button>'
+                +   '<button type="button" id="habRevueAnnuler" class="btn-secondary">Annuler</button>'
+                + "</div></div>";
+
+            document.getElementById("habRevueAnnuler").addEventListener("click", () => {
+                hote.innerHTML = "";
+            });
+            document.getElementById("habRevueLancer").addEventListener("click", async () => {
+                const bouton = document.getElementById("habRevueLancer");
+                const intitule = (document.getElementById("habRevueIntitule").value || "").trim();
+                if (intitule === "") {
+                    avertir("Donnez un intitulé à la revue.", "warning"); return;
+                }
+                bouton.disabled = true;
+                bouton.textContent = "Lecture de l’annuaire…";
+                try {
+                    const r = await Api.ouvrirRevueHabilitations({
+                        intitule: intitule,
+                        prochaineLe: document.getElementById("habRevueProchaine").value || null
+                    });
+                    revueOuverte = r.id;
+                    let message = r.lignes + " accès figés.";
+                    if (r.tronque) {
+                        message += " ⚠️ Le balayage a été TRONQUÉ : la revue est incomplète.";
+                    }
+                    if (Array.isArray(r.groupesIntrouvables) && r.groupesIntrouvables.length) {
+                        message += " ⚠️ " + r.groupesIntrouvables.length
+                                 + " groupe(s) déclaré(s) sont introuvables dans l’annuaire.";
+                    }
+                    avertir(message, r.tronque ? "warning" : "success");
+                    await renderRevues();
+                } catch (e) {
+                    avertir(e && e.message ? e.message : "Ouverture refusée.", "error");
+                    bouton.disabled = false;
+                    bouton.textContent = "Lire l’annuaire et ouvrir";
+                }
+            });
+        });
+
+        const imprimer = document.getElementById("habImprimerRevue");
+        if (imprimer) imprimer.addEventListener("click", () => window.print());
+
+        document.querySelectorAll(".hab-revue-ouvrir").forEach((b) => {
+            b.addEventListener("click", () => {
+                // L'identifiant se lit dans l'attribut AU MOMENT DU CLIC.
+                revueOuverte = revueOuverte === b.dataset.revue ? null : b.dataset.revue;
+                renderRevues();
+            });
+        });
+
+        document.querySelectorAll(".hab-decision-choix").forEach((select) => {
+            select.addEventListener("change", async () => {
+                const id = select.dataset.ligne;
+                const version = Number(select.dataset.version);
+                const motif = document.querySelector(
+                    '.hab-decision-motif[data-ligne="' + id + '"]');
+                try {
+                    await Api.deciderLigneRevue(id, {
+                        decision: select.value,
+                        commentaire: motif ? motif.value : null,
+                        version: version
+                    });
+                    await renderRevues();
+                } catch (e) {
+                    // ⚠️ Le message du SERVEUR : c'est lui qui sait qu'un retrait exige
+                    //    un motif, et pourquoi. Le reformuler ici en perdrait le motif.
+                    avertir(e && e.message ? e.message : "Décision refusée.", "error");
+                    await renderRevues();
+                }
+            });
+        });
+
+        document.querySelectorAll(".hab-revue-clore").forEach((b) => {
+            b.addEventListener("click", () => {
+                const id = b.dataset.revue;
+                const version = Number(b.dataset.version);
+                const revue = (revues || []).find((r) => r.id === id);
+                const reste = revue ? revue.comptes.aExaminer : 0;
+                const hote = document.getElementById("habFormRevue");
+                hote.innerHTML = '<div class="card hab-panneau">'
+                    + "<h2>Clore la revue</h2>"
+                    + (reste > 0
+                        ? '<p class="hab-note"><strong>' + esc(reste) + " accès</strong> "
+                          + "n’ont pas été examinés. Vous pouvez clore malgré tout — le "
+                          + "produit inscrira ce chiffre dans la revue et au journal —, mais "
+                          + "la revue ne pourra pas être présentée comme exhaustive.</p>"
+                        : '<p class="hab-note">Tous les accès ont été examinés.</p>')
+                    + '<label class="hab-champ"><span>Conclusion' + Help.tip(
+                          "Exigée : une revue close sans conclusion n’atteste que du fait "
+                        + "d’avoir regardé.") + "</span>"
+                    +   '<textarea id="habClotureTexte" rows="3" maxlength="4000"></textarea>'
+                    + "</label>"
+                    + '<label class="hab-champ"><span>Prochaine revue attendue le</span>'
+                    +   '<input type="date" id="habClotureProchaine"></label>'
+                    + '<div class="page-actions no-print">'
+                    +   '<button type="button" id="habClotureValider">Clore</button>'
+                    +   '<button type="button" id="habClotureAnnuler" class="btn-secondary">Annuler</button>'
+                    + "</div></div>";
+                hote.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+                document.getElementById("habClotureAnnuler").addEventListener("click", () => {
+                    hote.innerHTML = "";
+                });
+                document.getElementById("habClotureValider").addEventListener("click", async () => {
+                    try {
+                        const r = await Api.cloreRevueHabilitations(id, {
+                            conclusion: document.getElementById("habClotureTexte").value,
+                            prochaineLe:
+                                document.getElementById("habClotureProchaine").value || null,
+                            version: version
+                        });
+                        avertir("Revue close."
+                            + (r.restantes > 0
+                                ? " " + r.restantes + " accès n’ont pas été examinés, et c’est "
+                                  + "inscrit dans la revue."
+                                : ""), "success");
+                        hote.innerHTML = "";
+                        await renderRevues();
+                    } catch (e) {
+                        avertir(e && e.message ? e.message : "Clôture refusée.", "error");
+                    }
+                });
+            });
+        });
+    }
+
     return {
         renderList: renderMatrice,
         renderGroupes,
         renderComptes,
+        renderRevues,
         /** Exposé pour le banc : la graduation n'est pas une couleur de statut. */
         niveaux: () => NIVEAUX.map((n) => n.code)
     };

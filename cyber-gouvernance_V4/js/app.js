@@ -223,6 +223,7 @@ async function startApp() {
         "/habilitations": () => { if (typeof HabilitationsModule !== "undefined") HabilitationsModule.renderList(); },
         "/habilitations-groupes": () => { if (typeof HabilitationsModule !== "undefined") HabilitationsModule.renderGroupes(); },
         "/habilitations-comptes": () => { if (typeof HabilitationsModule !== "undefined") HabilitationsModule.renderComptes(); },
+        "/habilitations-revues": () => { if (typeof HabilitationsModule !== "undefined") HabilitationsModule.renderRevues(); },
 
         // ── Paramètres, en trois vues (19/09/2026) ──────────────────────────
         //
@@ -1251,7 +1252,8 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     // prendre une seconde.
     "/habilitations":          "administration",
     "/habilitations-groupes":  "administration",
-    "/habilitations-comptes":  "administration"
+    "/habilitations-comptes":  "administration",
+    "/habilitations-revues":   "administration"
 });
 
 /** Domaine de la route affichée, ou "" si elle n'est pas rattachée. */

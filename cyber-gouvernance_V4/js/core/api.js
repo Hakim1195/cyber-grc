@@ -1363,6 +1363,30 @@ const Api = (() => {
         return appeler("/habilitations/groupes/synchroniser", { methode: "POST", corps: {} });
     }
     function coherenceAnnuaire() { return appeler("/habilitations/annuaire"); }
+    /* La revue des droits d'accès (ISO 27001 A.5.18).
+     *
+     * ⚠️ `revuesHabilitations(id)` ne demande le DÉTAIL que de la revue ouverte
+     * à l'écran : sans ce paramètre, la liste servirait le nom et le login de
+     * toutes les personnes de toutes les revues à chaque affichage.
+     *
+     * 🛑 `ouvrirRevue()` DÉCLENCHE un balayage complet de l'annuaire, en lecture.
+     * Elle ne retire personne d'un groupe et ne le pourra jamais : le produit
+     * consigne, l'administrateur de l'annuaire exécute. */
+    function revuesHabilitations(id) {
+        return appeler("/habilitations/revues"
+            + (id ? "?revue=" + encodeURIComponent(id) : ""));
+    }
+    function ouvrirRevueHabilitations(corps) {
+        return appeler("/habilitations/revues", { methode: "POST", corps: corps });
+    }
+    function deciderLigneRevue(id, corps) {
+        return appeler("/habilitations/revues/lignes/" + encodeURIComponent(id),
+                       { methode: "PUT", corps: corps });
+    }
+    function cloreRevueHabilitations(id, corps) {
+        return appeler("/habilitations/revues/" + encodeURIComponent(id) + "/clore",
+                       { methode: "POST", corps: corps });
+    }
     function simulerDroits(identifiant) {
         return appeler("/habilitations/simuler",
                        { methode: "POST", corps: { identifiant: identifiant } });
@@ -1491,6 +1515,8 @@ const Api = (() => {
         poserGrilleHabilitation, supprimerProfilHabilitation,
         creerGroupeAd, modifierGroupeAd, synchroniserGroupesAd,
         coherenceAnnuaire, simulerDroits,
+        revuesHabilitations, ouvrirRevueHabilitations, deciderLigneRevue,
+        cloreRevueHabilitations,
         // Lot L27 : l'assistance par IA — locale par défaut, externe sous six barrières.
         assistanceEtat, assistancePreparer, assistanceDemander, assistanceAppels,
         // Les réglages : le catalogue du Groupe, et ce que cette filiale en a fait.

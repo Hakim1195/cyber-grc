@@ -742,3 +742,110 @@ describe('Le registre impose la cohérence de TYPE — Q-300', () => {
     );
   });
 });
+
+/* =====================================================================
+ *  LA REVUE DES HABILITATIONS — migration `060`
+ *
+ *  ⚠️ **Une revue qui n'engage personne ne prouve rien**, et c'est la seule
+ *  chose qu'un auditeur vient chercher. Les quatre contrôles ci-dessous
+ *  CASSENT chacune des quatre propriétés et exigent que le garde la NOMME.
+ *  Constater qu'elles tiennent ne mesurerait que le schéma du jour.
+ * ===================================================================== */
+
+describe('La revue des habilitations engage quelqu’un, et c’est ÉPROUVÉ — 060', () => {
+  test('le témoin : le schéma intact ne rend AUCUNE anomalie', async () => {
+    const anomalies = await anomaliesPendant([]);
+    assert.equal(anomalies.length, 0, `Schéma d’essai déjà en défaut : ${resume(anomalies)}`);
+  });
+
+  test('une décision sans auteur ni date : la contrainte VIDÉE est vue', async () => {
+    // La mutation de référence : le nom reste, les quatre valeurs restent, et
+    // « or true » ouvre tout. C'est celle qui passait au vert avant la `028`.
+    const anomalies = await anomaliesPendant([
+      'alter table revue_habilitation_lignes drop constraint ck_revue_hab_signature',
+      `alter table revue_habilitation_lignes add constraint ck_revue_hab_signature check (
+         ((decision = 'a_examiner' and decide_par is null and decide_le is null)
+          or (decision <> 'a_examiner' and decide_par is not null and decide_le is not null))
+         or true)`,
+    ]);
+    assert.ok(
+      nomme(anomalies, 'decision_sans_auteur_admise'),
+      'Une décision de revue sans auteur ni date doit être NOMMÉE : sans elle, la revue ' +
+        `n’engage personne, et c’est le seul point sur lequel un auditeur insistera. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('« a_examiner » signée : la même contrainte vidée est vue par l’AUTRE cas', async () => {
+    /* ⚠️ Les deux cas partagent une contrainte, et c'est délibéré : un garde qui
+       n'éprouverait qu'un des deux resterait vert sur une rédaction qui n'en
+       garderait qu'une moitié. On mesure donc que la seconde moitié est nommée
+       elle aussi — un garde de CLASSE ne voit pas la disparition d'une PAIRE
+       (constat Q-313). */
+    const anomalies = await anomaliesPendant([
+      'alter table revue_habilitation_lignes drop constraint ck_revue_hab_signature',
+      `alter table revue_habilitation_lignes add constraint ck_revue_hab_signature check (
+         decision = 'a_examiner' or (decide_par is not null and decide_le is not null))`,
+    ]);
+    assert.ok(
+      nomme(anomalies, 'non_decision_signee_admise'),
+      '« a_examiner » ne peut pas porter d’auteur : sinon « non revu » et « revu » se ' +
+        `confondent, et une revue paraît faite. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('un retrait sans motif : la contrainte vidée est vue', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table revue_habilitation_lignes drop constraint ck_revue_hab_motif',
+      `alter table revue_habilitation_lignes add constraint ck_revue_hab_motif check (
+         decision not in ('a_retirer','a_verifier')
+         or (commentaire is not null and commentaire <> '') or true)`,
+    ]);
+    assert.ok(
+      nomme(anomalies, 'retrait_sans_motif_admis'),
+      `Un retrait d’accès sans motif ne se défend pas six mois plus tard. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('une clôture sans conclusion : la contrainte vidée est vue', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table revues_habilitations drop constraint ck_revues_hab_cloture',
+      `alter table revues_habilitations add constraint ck_revues_hab_cloture check (
+         ((close_le is null and close_par is null and conclusion is null)
+          or (close_le is not null and close_par is not null and conclusion is not null
+              and conclusion <> '')) or true)`,
+    ]);
+    assert.ok(
+      nomme(anomalies, 'cloture_sans_conclusion_admise'),
+      'Une revue close sans conclusion n’atteste que du fait d’avoir regardé. ' +
+        `Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('UNE CONTRAINTE QUI REFUSE TOUT est vue aussi — le contre-témoin', async () => {
+    /* ⚠️ **La moitié qui manque le plus souvent.** Un garde qui n'éprouve que des
+       REFUS rend zéro anomalie sur une contrainte devenue « false » : la table
+       devient inutilisable — plus aucune décision n'entre — et le garde se tait,
+       ce qu'il fait aussi quand tout va bien. C'est le motif du cas négatif de D3
+       et du constat Q-210. */
+    const anomalies = await anomaliesPendant([
+      'alter table revue_habilitation_lignes drop constraint ck_revue_hab_motif',
+      'alter table revue_habilitation_lignes add constraint ck_revue_hab_motif check (false)',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'cas_nominal_refuse'),
+      'Une contrainte qui refuse même une décision COMPLÈTE et motivée doit être nommée : ' +
+        `sinon la table est inutilisable et le garde muet. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('une contrainte SUPPRIMÉE se distingue d’une contrainte vidée', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table revue_habilitation_lignes drop constraint ck_revue_hab_signature',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'contrainte_non_mesurable'),
+      '« je n’ai pas pu mesurer » doit se distinguer de « j’ai mesuré et c’est bon » : ' +
+        `les confondre rendrait le garde muet sur une barrière absente. Rendu : ${resume(anomalies)}`,
+    );
+  });
+});
