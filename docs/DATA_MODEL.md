@@ -570,6 +570,45 @@ exemple) ; ces alias sont déclarés une fois dans le registre d'entités du ser
 **tout le reste — colonnes, types, contraintes, cloisonnement — est découvert dans le
 catalogue PostgreSQL**, jamais recopié.
 
+### 1.5 bis Les tables qui ne sont PAS des collections de `data`
+
+⚠️ **Toutes les tables du schéma ne sont pas des entités**, et les confondre conduit à
+chercher dans un export `grc-backup` ce qui n'y a jamais été. Trois familles vivent hors
+de `data`, délibérément :
+
+| Famille | Tables | Pourquoi elle n'est pas dans `data` |
+|---|---|---|
+| **Registres probants** | `journal_audit`, `main_courante_crise`, `collectes`, `pieces_jointes` | Les faire voyager dans un fichier éditable leur ôterait leur valeur de preuve. On ne restaure pas un journal. |
+| **Registres techniques** | `migrations_schema`, `controles_schema`, `colonnes_personnelles` | Ils décrivent le SCHÉMA, pas les données : leur contenu est identique dans toutes les filiales par construction. |
+| **Configuration de niveau Groupe** | `filiales`, `utilisateurs`, `profils`, `profil_domaines`, `groupes_ad`, `sessions`, **`revues_habilitations`**, **`revue_habilitation_lignes`** | Elles ne décrivent aucune filiale en particulier. Leur écriture est réservée à l'administration Groupe. |
+
+**Les deux tables de la revue des habilitations** (migration `060`, ISO 27001 A.5.18)
+méritent un mot, parce que leur rangement a demandé un arbitrage :
+
+- `revues_habilitations` — la campagne : intitulé, périmètre balayé, ouverture, clôture,
+  conclusion, prochaine échéance, et le drapeau `balayage_tronque` qui dit qu'un
+  instantané est **incomplet** ;
+- `revue_habilitation_lignes` — l'instantané **FIGÉ**, une ligne par
+  (groupe d'annuaire × compte membre), avec la décision prise, son auteur et sa date.
+
+⚠️ **Elles sont de niveau Groupe, et c'est une DÉCISION**, pas un oubli. Leurs trois
+sources — `groupes_ad`, `profils`, `utilisateurs` — le sont toutes, et surtout : **le
+périmètre d'une personne n'est stocké nulle part**, il est RÉSOLU à chaque connexion
+depuis ses groupes d'annuaire. Les rattacher à une filiale aurait supposé un
+rattachement que le modèle n'a pas, c'est-à-dire l'aurait inventé — et une revue fondée
+sur un rattachement inventé atteste de ce qui n'a pas été vérifié.
+
+🛑 **Ce qui les protège n'est donc pas la RLS mais la ROUTE.** Leur lecture est ouverte
+au niveau des politiques — le §2 de `004_rls.sql` interdit qu'une politique de LECTURE
+dépende d'un réglage d'administration —, et la barrière est la déclaration
+`{ action: 'lire', domaine: 'administration' }` des routes de `src/habilitations/`, que
+le contrôle **T-3** de `test/api/routes.test.mjs` mesure. C'est exactement le régime de
+`utilisateurs`, `profils` et `groupes_ad` depuis la porte S1.
+
+⚠️ **L'instantané ne se relit JAMAIS dans l'annuaire.** Une revue close cite donc des
+personnes qui ont pu quitter le groupe depuis — c'est voulu : *ce qui sert de preuve ne
+se recalcule pas*, et c'est ce qu'on a revu.
+
 ### 1.6 Convention d'identifiants
 
 `"<PRÉFIXE>-<horodatage>-<aléa>"` — la forme historique du produit, conservée.

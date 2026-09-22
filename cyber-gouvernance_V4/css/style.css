@@ -3789,3 +3789,10 @@ body { overflow-x: hidden; }
     .hab-revue-table select, .hab-revue-table input { display: none; }
     .hab-revue { break-inside: avoid; }
 }
+/* Le champ de motif que l'écran ATTEND : il ne crie pas une erreur, il montre
+   où la réponse manque. Une bordure, pas un bandeau rouge — rien n'a encore
+   échoué, le produit pose une question. */
+.hab-motif-attendu {
+    border-color: var(--primary, #E9631B) !important;
+    box-shadow: 0 0 0 2px var(--primary-tint, #FDEFE4);
+}

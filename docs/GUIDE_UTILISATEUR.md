@@ -720,12 +720,24 @@ pas d'administrateur d'une seule filiale.
 | Geste | Où | À savoir |
 |---|---|---|
 | **Créer une filiale** | ⚠️ **Aucun écran — par l'API** (voir l'encadré sous ce tableau) | La réponse vous donne **la liste des groupes AD à créer** dans l'annuaire. Sans eux, personne n'entre — vous compris. |
+| **Voir et gérer les droits** | **Administration → Habilitations** | ⚠️ **Écran neuf du 22/09/2026.** Quatre vues : la matrice, les groupes d'annuaire, les comptes, et les revues d'accès. Voir la section détaillée ci-dessous. |
 | **Écrire au socle de risques** | Registre des risques → onglet **Socle du Groupe** | Ce que vous y mettez s'applique à **toutes** les filiales. |
 | **Activer un référentiel** | Référentiels → onglet **Applicables ici** | ⚠️ À ne pas confondre avec « non applicable » par exigence : l'activation dit *quels référentiels s'appliquent à ce site*, le « non applicable » écarte *un point dans un référentiel pratiqué*. |
 | **Lire le journal d'audit** | Journal d'audit | Trois ans d'identités et d'adresses IP. C'est un domaine à part, et ce n'est pas un hasard. |
 | **Faire sortir une filiale** | ⚠️ **Aucun écran — par l'API** | ⚠️ **Exportez d'abord** — et faites-le faire par un compte qui porte `GRC-EXPORT`, l'export étant une permission distincte que `GRC-ADMIN` **ne donne pas** (constat Q-278). Une filiale sortie disparaît de tous les périmètres, et l'exporter après demanderait de contourner le cloisonnement. |
 
-> ### ⚠️ Il n'y a pas d'écran d'administration — et c'était la promesse la plus coûteuse de ce guide
+> ### ⚠️ La création d'une filiale reste sans écran — et cette phrase a déjà coûté cher une fois
+>
+> ⚠️ **Amendé le 22/09/2026, et il faut dire ce qui a changé.** Ce paragraphe affirmait
+> qu'« il n'y a pas d'écran d'administration ». C'est devenu **faux pour les droits** :
+> l'écran **Administration → Habilitations** existe depuis cette date, et il couvre les
+> profils, les groupes d'annuaire, les comptes et les revues d'accès. Il ne couvre
+> **toujours pas** la création ni la sortie d'une filiale, qui passent par l'API — et
+> c'est ce que la suite décrit.
+>
+> *Laisser la phrase telle quelle aurait été la faute du 14/09 : une phrase devenue
+> fausse sous un contrôle mécanique entièrement vert. Le banc sait dire qu'un CHIFFRE de
+> ce document est faux ; il ne sait pas dire qu'une PHRASE l'est devenue.*
 >
 > Ce tableau renvoyait à un écran « Administration » **qui n'existe pas** : mesuré à la porte
 > S7 (constat **Q-266**), l'application compte 29 entrées de menu et **aucune n'ouvre un
@@ -780,6 +792,96 @@ pas d'administrateur d'une seule filiale.
 > qu'elle nomme, ou engendrez-les avec `backend/deploy/groupes-ad.sh --powershell`, qui rend
 > le script prêt à jouer côté annuaire. Le §8 ci-dessus dit pourquoi un nom approchant
 > n'accorde rien.
+
+### L'écran Habilitations — qui a le droit de faire quoi
+
+**Administration → Habilitations**, quatre onglets. C'est le seul endroit du produit qui
+montre le modèle de droits, et c'est la pièce qu'un auditeur ISO 27001 réclame au titre
+de l'**A.5.18**.
+
+> 🛑 **Ce logiciel n'écrit JAMAIS dans l'Active Directory.** Il le lit, compare ce qu'il
+> y trouve à ce qu'il attend, et vous rend **la liste des groupes à créer**. La création,
+> comme le retrait d'une personne d'un groupe, se fait dans l'annuaire, par son
+> administrateur. Ce n'est pas une prudence de rédaction : le produit n'a **aucune**
+> capacité d'écriture LDAP.
+
+> ⚠️ **Les droits sont résolus à la connexion et figés dans la session.** Une
+> modification faite ici ne s'applique aux personnes concernées qu'à leur **prochaine
+> connexion** — leur session en cours garde les droits qu'elle a reçus. Pour un effet
+> immédiat, il faut révoquer leurs sessions. L'écran le dit en permanence, et non
+> seulement après coup : quelqu'un qui vient fermer un accès en urgence doit le savoir
+> **avant** de cliquer.
+
+**1. Matrice des droits.** Les trente domaines fonctionnels en lignes, les profils en
+colonnes, le niveau dans la case — de « aucun » à « administration ». Cliquer l'en-tête
+d'une colonne ouvre le profil correspondant et permet de le modifier, domaine par
+domaine. Elle **s'imprime** : c'est sous cette forme qu'on la remet à un auditeur.
+
+> ⚠️ **« Non ouvert » et « Aucun » ne sont pas la même chose**, et la distinction se
+> relit en revue de droits. Les deux refusent le domaine ; mais « Aucun » le ferme
+> **explicitement**, ce qui se voit, là où une absence ne se voit pas.
+
+> ⚠️ **Les couleurs de cette matrice ne sont pas celles des statuts de conformité.** Un
+> niveau de droit n'est pas un statut : « lecture » n'est pas « partiellement conforme ».
+> La graduation est une intensité de bleu, et c'est délibéré — employer le vert et le
+> rouge ferait lire un tableau d'habilitations comme un tableau de risques.
+
+**2. Groupes d'annuaire.** La correspondance entre un groupe de l'AD et ce que le
+produit en fait : périmètre, filiale, profil, droit d'export, administration.
+
+Le bouton **« Vérifier l'annuaire »** est le plus utile de l'écran. Il confronte trois
+listes — ce que la convention attend, ce que l'application déclare, ce que l'annuaire
+contient — et nomme quatre écarts. 🛑 **Le premier est celui qui coûte le plus** :
+*déclaré ici, introuvable dans l'annuaire*. Un compte de ce groupe entre dans le
+produit, n'obtient **aucun droit**, et le seul symptôme est quelqu'un qui dit « je ne
+vois rien ». Ce contrôle a trouvé trois groupes dans ce cas le jour de sa mise en
+service.
+
+**« Synchroniser la déclaration »** ajoute à l'application les groupes que la convention
+attend. ⚠️ Elle écrit **dans le produit**, pas dans l'annuaire, et elle n'efface jamais
+rien : un groupe retiré du dispositif se **désactive**, ce qui conserve la trace de ce
+qu'il accordait.
+
+**3. Comptes.** Qui s'est connecté, quand, et depuis quelle filiale par défaut. Un
+compte n'apparaît ici qu'à partir de sa **première connexion** : le produit ne recopie
+pas l'annuaire, il le lit.
+
+C'est ici que vit **« Que verrait ce compte ? »**, qui répond en cinq secondes à la
+question la plus posée à un administrateur — *« pourquoi X ne voit pas l'écran Y ? »*.
+Saisissez un login : le produit interroge l'annuaire, résout ses groupes — imbrications
+comprises —, et affiche le périmètre, les filiales, le droit d'export et les trente
+domaines qu'il obtiendrait. **Aucun mot de passe n'est demandé, et rien n'est écrit.**
+
+⚠️ Il nomme aussi les **groupes portés mais IGNORÉS** par l'application. C'est la cause
+numéro un d'un compte qui entre et ne voit rien.
+
+**4. Revues des accès.** L'exigence A.5.18, et la seule vue qui produise une pièce.
+
+« Ouvrir une revue » lit l'annuaire et **fige** la liste de qui appartient à chaque
+groupe déclaré. Chaque ligne se décide — *maintenu*, *à retirer*, *à vérifier* —, et la
+décision porte **son auteur et sa date**. Un retrait ou une vérification demande un
+**motif** : c'est lui qu'on relira dans six mois, quand personne ne se souviendra du
+contexte. À la clôture, une **conclusion** est exigée : une revue close sans conclusion
+n'atteste que du fait d'avoir regardé.
+
+> ⚠️ **Deux signaux à chercher en priorité**, et l'écran les met en avant :
+> **un compte désactivé dans l'annuaire et encore membre d'un groupe d'accès** —
+> l'anomalie la plus fréquente —, et **un accès obtenu par imbrication**, qui ne se voit
+> pas dans le groupe lui-même et qu'une revue faite à la main oublie.
+
+> ⚠️ **Vous pouvez clore une revue dont des lignes restent à examiner**, et le produit
+> les compte — dans la revue et au journal. L'interdire rendrait une revue de quatre
+> cents lignes dont douze restent en suspens impossible à clore, donc laissée ouverte
+> indéfiniment ; et une revue jamais close ne prouve rien du tout.
+
+> 🛑 **Une revue close ne se modifie plus.** C'est ce qui lui donne sa valeur : une pièce
+> qu'on peut retoucher après coup n'atteste de rien. Pour revenir sur une décision, on
+> ouvre une nouvelle revue.
+
+> ⚠️ **L'instantané ne se rafraîchit jamais.** Une revue close cite des personnes qui ont
+> pu quitter le groupe depuis — c'est voulu : c'est ce qu'on a revu.
+
+---
 
 ⚠️ **Créer ou retirer une filiale change le périmètre des sessions Direction en cours.**
 Jusqu'à leur reconnexion, elles perdent les lectures de portée Groupe. Prévenez-les.

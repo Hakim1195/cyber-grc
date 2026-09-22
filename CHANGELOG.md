@@ -10,8 +10,8 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 21/09/2026**, après l'action **D3**, sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
-> **PostgreSQL 17.11**) : **59 migrations**, **89 tables**, **356 politiques**,
-> **63 garde-fous**, **495 décisions** au registre de l'article 30, publication
+> **PostgreSQL 17.11**) : **60 migrations**, **91 tables**, **364 politiques**,
+> **64 garde-fous**, **528 décisions** au registre de l'article 30, publication
 > **87 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
 > ⚠️ La `059` n'ajoute **aucune table** ni politique : `documents.recherche` est une
 > colonne de plus sur une table qui en portait déjà quatre-vingt-neuf politiques.
@@ -77,6 +77,87 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### L'ADMINISTRATION DES HABILITATIONS — le modèle de droits cesse d'être invisible (22/09/2026)
+
+> **Demandé par l'utilisateur, en ces termes** : *« il manque quelque chose de
+> fondamental, la gestion des droits. Il n'y a aucune visibilité des droits, et surtout
+> on ne peut pas gérer les droits. »*
+
+Le modèle à trois axes — périmètre × profil × niveau — est **construit depuis le lot
+L1** : `profils`, `profil_domaines`, `groupes_ad`, les trente domaines de
+`domaine_fonctionnel`, les cinq niveaux. Il est gardé par la RLS, éprouvé par le banc,
+et il décide de **chaque requête du produit**. Mesuré le 22/09/2026 : **aucune route ne
+l'exposait**, et la section « Administration » du menu ne portait qu'Imports, Journal et
+Paramètres.
+
+Un outil qui sert de preuve en audit ISO 27001 et qui ne sait pas montrer sa propre
+matrice d'habilitations a un trou à l'endroit exact où l'auditeur regarde (**A.5.18**).
+Ce lot ne refond donc rien : il rend visible et modifiable ce qui existe.
+
+**Quatorze routes** (`src/habilitations/`), **un écran en quatre vues**
+(`js/modules/habilitations.js`, entrée de menu en tête de l'Administration) et la
+**migration `060`**.
+
+- **Matrice des droits** — trente domaines en LIGNES, profils en colonnes. Le sens
+  inverse était le premier réflexe et il est mauvais : trente colonnes ne tiennent sur
+  aucun écran ni sur aucune feuille, alors que trente lignes groupées par section se
+  lisent, défilent et **s'impriment**. C'est la vue de l'auditeur ; l'édition se fait
+  dans un panneau à côté.
+- **Groupes d'annuaire** — la correspondance, et son **contrôle de cohérence** : quatre
+  écarts nommés, dont celui qui coûte le plus. ✅ **Il a payé en cinq secondes** sur la
+  recette : trois groupes déclarés — `GRC-*-REPONDANT`, nés avec la migration `045` —
+  **n'existaient pas dans l'annuaire**. Toute personne à qui on aurait attribué ce
+  profil serait entrée **sans aucun droit**, sans un message. C'est le constat **Q-265**,
+  sur un défaut que personne ne cherchait.
+- **Comptes** — et « **que verrait ce compte ?** », qui répond en cinq secondes à la
+  question la plus posée à un administrateur. Mesuré contre l'annuaire réel : `rssi.tls`
+  → une filiale, 26 domaines, sans droit d'export ; `sans.groupe` → « aucun accès » avec
+  son motif ; un login inconnu → « compte introuvable », sans rien révéler d'autre.
+- **Revues des accès** (migration `060`) — l'exigence **A.5.18**. Un instantané **FIGÉ**
+  de qui appartient à quel groupe, une décision datée et signée par ligne, une
+  conclusion à la clôture.
+
+🛑 **LE PRODUIT N'ÉCRIT JAMAIS DANS L'ACTIVE DIRECTORY** — arbitrage utilisateur du
+22/09/2026. Ce n'est pas une promesse tenue par une revue de code : c'est une **capacité
+absente**, `ClientLdap` n'implémentant que `lier`, `rechercher` et `fermer`. Le produit
+lit, compare, et rend **la liste à créer**. Un encart permanent le dit sur l'écran —
+c'est la condition pour qu'un administrateur d'annuaire accepte le déploiement.
+
+🛑 **LE VERROU D'ADMINISTRABILITÉ, ET LE BANC A CORRIGÉ SA PREMIÈRE RÉDACTION.** Aucune
+écriture ne peut laisser le produit sans administrateur possible. ⚠️ Il **mesure la
+propriété** au lieu de reconnaître deux noms — interdire de toucher au profil « ADMIN »
+et au groupe « GRC-ADMIN » eût été la faute des constats **Q-312** et **Q-313**.
+⚠️ **Et il est DIFFÉRENTIEL** : la première rédaction refusait toute écriture dès que la
+propriété manquait *à l'arrivée*. Mesuré sur une base neuve, `groupes_ad` vide : **plus
+aucune écriture n'était possible**, y compris la déclaration du groupe d'administration
+manquant. *Le garde-fou interdisait exactement le geste qui l'aurait satisfait.*
+
+⚠️ **CINQ DÉFAUTS DE LA MIGRATION `060` TROUVÉS PAR LES GARDE-FOUS DU SCHÉMA, AUCUN PAR
+MOI** : déclencheurs armés en « origin » ; table fille sans `version` ni traçabilité ;
+nom de déclencheur abrégé donc invisible à `f_verifier_tracabilite()` ;
+`f_verifier_registres_techniques()` exigeant que les deux tables soient **rangées** ;
+`base_legale` refusant une valeur enrichie d'une parenthèse.
+
+🛑 **Et le plus instructif : mon garde-fou ÉCRIVAIT ce qu'il inspecte.** Sa première
+rédaction insérait des témoins dans une sous-transaction annulée — refusée par
+PostgreSQL, « INSERT is not allowed in a non-volatile function ». Et c'est heureux :
+`f_verifier_schema()` doit rester `stable`, c'est ce qui l'empêche d'agir sur ce qu'il
+inspecte (`CONVENTIONS.md` §39.8). Il emploie désormais `f_contrainte_accepte()`.
+
+⚠️ **TROIS DÉFAUTS D'ÉCRAN TROUVÉS EN CLIQUANT, aucun par le banc** :
+- l'écran **contredisait le produit** sur `GRC-ADMIN` — « aucun domaine ouvert » pour le
+  groupe qui ouvre tout, parce qu'il lisait la colonne `profil_id` là où la résolution
+  attribue le profil d'administration ;
+- `.data-table th { text-transform: uppercase }` défigurait **tout en-tête de LIGNE** du
+  produit — corrigé à la classe, trois écrans en souffraient ;
+- le motif d'un retrait était demandé **après** le refus du serveur : quatre gestes pour
+  un. L'écran pose maintenant la question au bon moment.
+
+⚠️ **La revue n'entre PAS dans l'échéancier partagé**, et c'est un arbitrage écrit :
+l'échéancier est une vue par filiale et par personne dont tout est actionnable par son
+lecteur ; une revue est un acte d'administration de niveau Groupe. Le retard se dit sur
+l'écran des revues, là où se trouve la personne qui peut agir.
 
 ### « Les docs sont à jour ? » — la quatrième fois, et cinq faussetés (22/09/2026)
 

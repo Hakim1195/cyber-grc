@@ -1153,26 +1153,73 @@ const HabilitationsModule = (() => {
             });
         });
 
+        /* ── DÉCIDER, ET LE MOTIF QUI VA AVEC ────────────────────────────────
+         *
+         * ⚠️ **Le motif se demande AVANT d'envoyer, jamais après avoir été
+         * refusé.** La première rédaction envoyait la décision et laissait le
+         * serveur refuser : l'utilisateur voyait un message rouge, retrouvait
+         * la liste remise à « À examiner », devait taper le motif puis
+         * re-choisir. Quatre gestes pour un. Vu en cliquant sur la recette.
+         *
+         * Le serveur refuse toujours — c'est lui la barrière, et le schéma
+         * derrière lui —, mais l'écran ne l'y conduit plus : il pose la
+         * question au bon moment, met le champ en évidence, et envoie quand la
+         * réponse est là. */
+        const envoyer = async (id, decision, motif, version) => {
+            try {
+                await Api.deciderLigneRevue(id, {
+                    decision: decision,
+                    commentaire: motif,
+                    version: version
+                });
+                await renderRevues();
+            } catch (e) {
+                // ⚠️ Le message du SERVEUR : c'est lui qui sait POURQUOI il refuse.
+                //    Le reformuler ici en perdrait la raison.
+                avertir(e && e.message ? e.message : "Décision refusée.", "error");
+                await renderRevues();
+            }
+        };
+
+        const champMotif = (id) =>
+            document.querySelector('.hab-decision-motif[data-ligne="' + id + '"]');
+
         document.querySelectorAll(".hab-decision-choix").forEach((select) => {
             select.addEventListener("change", async () => {
+                // L'identifiant se lit dans l'attribut AU MOMENT DU CLIC.
                 const id = select.dataset.ligne;
                 const version = Number(select.dataset.version);
-                const motif = document.querySelector(
-                    '.hab-decision-motif[data-ligne="' + id + '"]');
-                try {
-                    await Api.deciderLigneRevue(id, {
-                        decision: select.value,
-                        commentaire: motif ? motif.value : null,
-                        version: version
-                    });
-                    await renderRevues();
-                } catch (e) {
-                    // ⚠️ Le message du SERVEUR : c'est lui qui sait qu'un retrait exige
-                    //    un motif, et pourquoi. Le reformuler ici en perdrait le motif.
-                    avertir(e && e.message ? e.message : "Décision refusée.", "error");
-                    await renderRevues();
+                const champ = champMotif(id);
+                const motif = champ ? champ.value.trim() : "";
+                const exige = select.value === "a_retirer" || select.value === "a_verifier";
+
+                if (exige && motif === "") {
+                    if (champ) {
+                        champ.classList.add("hab-motif-attendu");
+                        champ.placeholder = "Motif requis — c’est lui qu’on relira dans six mois";
+                        champ.focus();
+                    }
+                    return;   // rien n'est envoyé : la décision reste en attente du motif
                 }
+                await envoyer(id, select.value, motif === "" ? null : motif, version);
             });
+        });
+
+        // Le motif complété envoie la décision restée en attente.
+        document.querySelectorAll(".hab-decision-motif").forEach((champ) => {
+            const valider = async () => {
+                const id = champ.dataset.ligne;
+                const select = document.querySelector(
+                    '.hab-decision-choix[data-ligne="' + id + '"]');
+                if (!select) return;
+                const motif = champ.value.trim();
+                const exige = select.value === "a_retirer" || select.value === "a_verifier";
+                if (!exige || motif === "") return;
+                champ.classList.remove("hab-motif-attendu");
+                await envoyer(id, select.value, motif, Number(select.dataset.version));
+            };
+            champ.addEventListener("blur", valider);
+            champ.addEventListener("keydown", (e) => { if (e.key === "Enter") valider(); });
         });
 
         document.querySelectorAll(".hab-revue-clore").forEach((b) => {
