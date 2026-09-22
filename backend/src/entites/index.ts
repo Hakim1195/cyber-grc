@@ -282,7 +282,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 28;
+export const VERSION_SCHEMA = 29;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -538,7 +538,33 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
           colonneParent: 'actif_id',
           colonneEnfant: 'actif_cible_id',
           forme: 'objets',
-          attributs: { to: 'actif_cible_id', type: 'type' },
+          // ⚠️ **`delai` et `degrade` (migration `062`) sont NULLABLES**, et `null` s'y
+          // lit « non renseigné » — jamais « immédiat », jamais « aucun mode dégradé ».
+          // Les dépendances saisies avant la 062 n'ont rien dit là-dessus ; leur faire
+          // dire le pire ferait paraître mesurée une chronologie que personne n'a
+          // établie (motif du constat Q-192).
+          attributs: {
+            to: 'actif_cible_id',
+            type: 'type',
+            delai: 'delai_impact',
+            degrade: 'mode_degrade',
+          },
+        },
+        {
+          // v29 (migration `062`) — QUI EXPLOITE cet actif. C'est la dépendance la plus
+          // contrôlée par NIS2 (art. 21 §2 d) et DORA (art. 28), et elle était saisie
+          // deux fois, dans deux écrans qui ne se parlaient pas.
+          //
+          // ⚠️ La NATURE fait partie de l'identité du lien, comme `type` ci-dessus : un
+          // même tiers peut HÉBERGER un actif et l'INFOGÉRER, et ce sont deux engagements
+          // contractuels différents. Les confondre rendrait le registre DORA faux d'une
+          // ligne.
+          champ: 'prestataires_lies',
+          table: 'actif_prestataires',
+          colonneParent: 'actif_id',
+          colonneEnfant: 'prestataire_id',
+          forme: 'objets',
+          attributs: { to: 'prestataire_id', nature: 'nature' },
         },
       ],
     },

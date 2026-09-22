@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 28;
+    const SCHEMA_VERSION = 29;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",

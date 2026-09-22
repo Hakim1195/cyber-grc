@@ -65,10 +65,10 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 28`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 29`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
-côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v28**. Elle est
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v29**. Elle est
 indépendante du numéro des migrations SQL.
 
 > ⚠️ **Ce paragraphe a annoncé « v12 » pendant quatre montées de version**, du 04/09 au
@@ -408,6 +408,28 @@ indépendante du numéro des migrations SQL.
 >     à `crise.role` **en texte**, comme la cellule l'est depuis la migration `003`.
 >     `fiche_id`, lui, **en est une** — le serveur réattribue les identifiants à la reprise,
 >     et un réflexe qui viserait l'ancien s'imprimerait détaché de sa fiche.
+>
+> v29 (migration `062`) : chaque actif porte un tableau **`prestataires_lies[]`** d'objets
+>     `{ to, nature }` — qui l'**exploite**, l'héberge, le maintient, l'infogère ou en
+>     édite le logiciel. C'est la dépendance la plus contrôlée par **NIS2** (art. 21 §2 d)
+>     et **DORA** (art. 28), et elle était saisie **deux fois**, dans deux écrans qui ne se
+>     parlaient pas.
+>
+>     ⚠️ **La NATURE fait partie de l'identité du lien**, comme `type` pour les
+>     dépendances : un même tiers peut **héberger** un actif ET l'**infogérer**, et ce sont
+>     deux engagements contractuels différents. Les confondre rendrait le registre
+>     d'information DORA faux d'une ligne.
+>
+>     ⚠️ **Le palier n'invente RIEN.** Rapprocher le champ `responsable` d'un nom de
+>     prestataire aurait été une correspondance par chaîne de caractères — c'est-à-dire la
+>     chose même que cette migration remplace —, et un exploitant inventé ferait entrer
+>     dans le registre DORA un tiers que personne n'a déclaré. Chaque actif reçoit un
+>     tableau **vide**.
+>
+>     La même migration enrichit `actif_dependances` : **quatre natures de lien de plus**
+>     (`authentifie_par`, `administre_par`, `transite_par`, `redonde_par`) et **deux
+>     qualificatifs** (`delai_impact`, `mode_degrade`). ⚠️ Les deux sont **nullables**, et
+>     `null` s'y lit « non renseigné » — jamais « immédiat », jamais « aucun mode dégradé ».
 
 ---
 

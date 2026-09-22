@@ -10,8 +10,8 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 21/09/2026**, après l'action **D3**, sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
-> **PostgreSQL 17.11**) : **61 migrations**, **94 tables**, **376 politiques**,
-> **65 garde-fous**, **565 décisions** au registre de l'article 30, publication
+> **PostgreSQL 17.11**) : **62 migrations**, **95 tables**, **380 politiques**,
+> **66 garde-fous**, **572 décisions** au registre de l'article 30, publication
 > **87 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
 > ⚠️ La `059` n'ajoute **aucune table** ni politique : `documents.recherche` est une
 > colonne de plus sur une table qui en portait déjà quatre-vingt-neuf politiques.
@@ -77,6 +77,98 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### LES DÉPENDANCES ENTRE ACTIFS DISENT LE TERRAIN — migration `062` (22/09/2026)
+
+> **Demandé par l'utilisateur** : *« dans le module Actifs, il faudrait enrichir les
+> relations entre actifs pour les rendre plus conformes à la réalité du terrain, et que
+> ça soit aussi cohérent avec la cartographie. »*
+
+Quatre types de lien depuis la v9 — `dep`, `hosted`, `flux`, `backup`. Ils suffisaient à
+dessiner un graphe ; pas à répondre aux deux questions qu'un RSSI pose devant ce graphe.
+
+**Quatre natures de plus**, et chacune décrit un chemin de panne ou d'attaque réel :
+`authentifie_par` (annuaire, SSO — **le point de défaillance unique le plus fréquent d'un
+groupe industriel**, jusqu'ici noyé dans « dépend de »), `administre_par` (bastion, poste
+d'admin — **le chemin que prend un attaquant**), `transite_par` (WAN, VPN, opérateur) et
+`redonde_par`.
+
+⚠️ **`redonde_par` et `backup` ne se confondent pas**, et les mélanger fausse le calcul de
+point de défaillance unique : la sauvegarde permet de **rétablir** le service après la
+panne, la redondance le **rend pendant**.
+
+**Deux qualificatifs**, et c'est eux qui rendent la propagation crédible : `delai_impact`
+(immédiat / heures / jour / semaine) et `mode_degrade` (non / partiel / oui). La
+propagation était **binaire** — B tombe, donc A tombe — ce qui ne dit rien de ce qu'il
+faut faire dans les deux premières heures.
+
+⚠️ **Les deux sont NULLABLES, et `null` veut dire « non renseigné »** — jamais
+« immédiat », jamais « aucun mode dégradé ». Les milliers de dépendances déjà saisies
+n'ont rien dit là-dessus, et leur faire dire le pire ferait paraître mesurée une
+chronologie que personne n'a établie (motif du constat **Q-192**).
+
+**Et le lien vers un tiers** (`actif_prestataires`, schéma `data` en **v29**) : qui
+exploite, héberge, maintient, infogère ou édite cet actif. C'est la dépendance la plus
+contrôlée par **NIS2** (art. 21 §2 d) et **DORA** (art. 28), et jusqu'ici elle se
+saisissait dans deux écrans qui ne se parlaient pas. ⚠️ La **nature** entre dans la clé
+primaire : héberger et infogérer sont deux engagements contractuels, et les confondre
+rendrait le registre DORA faux d'une ligne.
+
+── LA CARTOGRAPHIE : QUATRE VUES AU LIEU D'UNE ─────────────────────────────
+
+> **Demandé par l'utilisateur** : *« as-tu des propositions meilleures pour faire quelque
+> chose de plus lisible et plus professionnel ? »*
+
+⚠️ **Le diagnostic, sans détour : le graphe unique en couches ne passe pas l'échelle**, et
+c'est structurel. Au-delà d'une quarantaine d'actifs il devient un plat de spaghettis
+quel que soit le soin apporté au tracé. *Une carte qui essaie de tout montrer ne montre
+rien.*
+
+🛑 **ET UN DÉFAUT DE LISIBILITÉ IMMÉDIAT, GRATUIT À CORRIGER : huit couleurs se
+disputaient la même toile.** Quatre pour la nature du lien, quatre pour la criticité — et
+le **vert voulait dire « sauvegardé par » ET « criticité faible »** sur le même dessin. La
+couleur est désormais réservée à la criticité ; la nature du lien se dit par le **trait**.
+On passe de huit codes visuels à quatre, et rien n'est perdu.
+
+Quatre vues, chacune répondant à **une** question :
+
+- **Couches** — « à quoi ressemble le SI ? » (le graphe d'origine, inchangé) ;
+- **Focus** — « de quoi dépend CET actif, et qui dépend de lui ? ». Un actif au centre,
+  l'amont à gauche, l'aval à droite, deux sauts. **C'est la vue qu'on emploie réellement**,
+  et la seule qui reste lisible à cinq cents actifs ;
+- **Matrice** — « quelles dépendances existent ? ». Une matrice d'adjacence n'a **aucun
+  croisement de traits** : elle **s'imprime** là où un graphe devient illisible, et c'est
+  la vue qu'on met en annexe d'un rapport d'audit ;
+- **Chaîne d'impact** — « si ça tombe, qu'est-ce qui s'arrête, et **quand** ? ». Ordonnée
+  par le délai avant impact. ⚠️ **« Délai non renseigné » a sa colonne, en teinte
+  d'alerte** : le ranger avec « immédiat » ferait paraître mesurée une chronologie que
+  personne n'a établie ; le taire le ferait disparaître, et personne ne le renseignerait.
+
+⚠️ **UN DÉFAUT VU EN CLIQUANT, ET IL RENDAIT LES DEUX VUES NEUVES FAUSSES** : la recherche
+**filtrait** le modèle. Dans Focus et Chaîne, elle réduisait donc le monde au seul actif
+cherché — un sujet **sans voisins** —, et la chaîne d'impact annonçait « 0 élément touché,
+personne n'en dépend » sur un annuaire dont quatre actifs dépendent. Le chiffre était
+exact au regard du filtre, et faux au regard de la question. Dans ces deux vues, chercher
+**désigne** désormais le sujet au lieu de réduire le monde autour de lui.
+
+⚠️ **Et un texte devenu faux** : le panneau d'analyse d'impact **énumérait** les trois
+types propagateurs. Il en existe six depuis cette migration. Il les **dérive** désormais
+de `DEP_TYPES`, seule source du produit — *une phrase qui énumère se périme à la première
+addition.*
+
+⚠️ **L'export en image le DIT quand il ne peut rien produire** : les trois vues neuves
+n'ont pas de géométrie, et un bouton qui ne fait rien est pire qu'un bouton absent — c'est
+la classe fermée par `test/depot/branchements-muets.test.mjs`.
+
+**Sept mutations jouées, sept rougissements**, dont deux qui enseignent :
+`administre_par` retiré du vocabulaire — la contrainte existe encore, porte le bon nom,
+cite sept valeurs sur huit, et **un garde de classe ne voit rien** (constat Q-313) ; et le
+contre-témoin, sans lequel un vocabulaire devenu **ouvert** passerait au vert — un lien
+saisi, stocké, **invisible**, la cartographie ignorant ce qu'elle ne connaît pas.
+
+⚠️ **Une mutation s'est révélée creuse en l'écrivant** : `check (col in (…))` ne rejette
+**jamais** la valeur nulle — une contrainte CHECK n'échoue que sur FALSE, et `null in (…)`
+vaut NULL. Il a fallu `is not null and …` pour que la mutation morde vraiment.
 
 ### LES FICHES RÉFLEXES DE CRISE QUITTENT LE CODE — migration `061` (22/09/2026)
 

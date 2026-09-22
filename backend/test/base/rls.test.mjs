@@ -4250,6 +4250,21 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // proscrit), une prorogation se notifie (art. 12 §3), une réponse est datée.
       // Et il refuse toute colonne qui RANGERAIT l'échéance.
       'demandes_droits',
+      // SOIXANTE-SIXIÈME, apporté par `062` — les dépendances entre actifs. Il nomme
+      // les HUIT natures de lien UNE PAR UNE et les SOUMET au prédicat réel : un garde
+      // de CLASSE — « la contrainte existe » — ne voit pas la disparition d'une VALEUR
+      // (constat Q-313), et retirer « administre_par » en croyant simplifier ferait
+      // cesser la carte de montrer le chemin d'un attaquant sans qu'un essai rougisse.
+      //
+      // ⚠️ Et son CONTRE-TÉMOIN : un type inventé doit être refusé. Sans lui, un
+      // vocabulaire devenu ouvert passerait au vert — et un lien saisi, stocké,
+      // disparaîtrait du graphe sans un mot, la cartographie ignorant ce qu'elle ne
+      // connaît pas.
+      //
+      // ⚠️ Il mesure aussi que les deux qualificatifs acceptent « null » : sans cela,
+      // les dépendances saisies AVANT la `062` deviendraient inécrivables, et une fiche
+      // d'actif refuserait d'enregistrer sans désigner la cause.
+      'dependances_actifs',
       // TRENTE-SIXIÈME, apporté par `035_les_derogations_datees.sql` — action 19.2.
       // ⚠️ Il ÉPROUVE la dérivation de l'état sur quatre cas témoins (§39.1) au lieu de
       // lire le texte de `f_etat_derogation()` : un garde qui vérifierait que la

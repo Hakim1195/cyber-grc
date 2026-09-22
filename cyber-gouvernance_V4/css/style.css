@@ -3833,3 +3833,14 @@ body { overflow-x: hidden; }
     /* La fiche EST la pièce qu'on emporte : les commandes disparaissent. */
     .fiche-commandes, .fiche-socle { display: none !important; }
 }
+/* Les deux qualificatifs d'une dépendance (migration `062`), en second plan :
+   ils précisent le lien, ils ne doivent pas concurrencer le nom de l'actif. */
+.dep-qualif {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: var(--text-xs, 0.75rem);
+    color: var(--text-muted, #6b7a8d);
+    background: var(--tint-na, #eef1f5);
+    border-radius: 999px;
+    padding: 0 7px;
+}

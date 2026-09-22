@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 28;
+export const VERSION_SCHEMA = 29;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -398,7 +398,14 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
   },
   actifs: {
     prefixe: 'ACTIF',
-    champs: ['id', 'nom', 'type', 'criticite', 'responsable', 'description', 'risques_lies', 'dependances'],
+    champs: [
+      'id', 'nom', 'type', 'criticite', 'responsable', 'description',
+      'risques_lies', 'dependances',
+      // v29 (migration `062`) — qui EXPLOITE cet actif. ⚠️ `prestataires_lies` porte
+      // des OBJETS `{ to, nature }`, comme `dependances` : un même tiers peut héberger
+      // un actif ET l'infogérer, et ce sont deux engagements contractuels distincts.
+      'prestataires_lies',
+    ],
     enumerations: [
       { champ: 'type', valeurs: ['Matériel', 'Logiciel', 'Donnée', 'Service', 'Humain'], videAdmis: true },
       { champ: 'criticite', valeurs: ['faible', 'modérée', 'élevée', 'critique'], videAdmis: true },
@@ -2214,6 +2221,26 @@ function construireCharge(brut: ObjetJson, journal: JournalAnomalies): ChargeCon
  * ===================================================================== */
 
 /**
+ * v28 → v29 — Qui EXPLOITE cet actif : chaque actif porte un tableau
+ * `prestataires_lies[]` d'objets `{ to, nature }` (migration `062`).
+ *
+ * ⚠️ **Rien n'est deviné.** La tentation était de rapprocher le champ
+ * `responsable` d'un nom de prestataire : ce serait une correspondance par chaîne
+ * de caractères, c'est-à-dire la chose même que ce lot remplace. Un exploitant
+ * inventé ferait entrer dans le registre DORA un tiers que personne n'a déclaré.
+ */
+function garantirExploitants(charge: ChargeV12): number {
+  let corriges = 0;
+  for (const actif of charge.actifs) {
+    if (!estTableau(lire(actif, 'prestataires_lies'))) {
+      actif['prestataires_lies'] = [];
+      corriges += 1;
+    }
+  }
+  return corriges;
+}
+
+/**
  * v8 → v9 — Cartographie : chaque actif porte un tableau `dependances[]` de
  * liens typés actif → actif. Rien à convertir, seulement à garantir.
  */
@@ -2742,6 +2769,25 @@ const PALIERS: readonly EtapePalier[] = [
       'contacts_urgence',
     ]),
   },
+  {
+    de: 28,
+    vers: 29,
+    libelle:
+      'Migration `062` : chaque actif porte un tableau « prestataires_lies[] » — qui ' +
+      'l’EXPLOITE, l’héberge, le maintient ou l’infogère. C’est la dépendance la plus ' +
+      'contrôlée par NIS2 (art. 21 §2 d) et DORA (art. 28), et jusqu’ici elle se ' +
+      'saisissait dans deux écrans qui ne se parlaient pas.',
+    // ⚠️ **Un fichier d'avant la v29 n'en porte aucun, et il ne doit rien inventer** :
+    // deviner l'exploitant d'un actif depuis un nom de prestataire serait une
+    // correspondance par chaîne de caractères, c'est-à-dire la chose même que ce lot
+    // remplace. Le palier pose un tableau VIDE sur chaque actif.
+    appliquer: (ctx) => {
+      const corriges = garantirExploitants(ctx.charge);
+      return corriges > 0
+        ? [`${corriges} actif(s) doté(s) du tableau « prestataires_lies »`]
+        : [];
+    },
+  },
 ];
 
 /* =====================================================================
@@ -2763,6 +2809,14 @@ function normaliser(charge: ChargeV12, absentes: ReadonlySet<NomCollection>, rec
 
   const dependances = garantirDependances(charge);
   if (dependances > 0) effets.push(`${dependances} actif(s) doté(s) du tableau « dependances » hors palier`);
+
+  // ⚠️ Rappelée ICI AUSSI, et c'est le motif de tout ce §10 : un fichier qui MENT sur
+  // sa version — il se déclare à la version courante et porte l'ancien modèle — ne
+  // traverse aucun palier. La normalisation est la seule chose qui le rattrape.
+  const exploitants = garantirExploitants(charge);
+  if (exploitants > 0) {
+    effets.push(`${exploitants} actif(s) doté(s) du tableau « prestataires_lies » hors palier`);
+  }
 
   const mco = convertirMcoActions(charge);
   if (mco > 0) effets.push(`${mco} action(s) MCO encore à l’ancien modèle, converties hors palier`);

@@ -172,8 +172,40 @@ const ActifsModule = (() => {
         actif.risques_lies = Array.isArray(actif.risques_lies) ? actif.risques_lies : [];
         actif.dependances = Array.isArray(actif.dependances) ? actif.dependances.filter(d => d && d.to) : [];
 
-        // Dépendances de cartographie (v9) : liens typés vers d'autres actifs, édités ici.
-        const deps = actif.dependances.map(d => ({ to: d.to, type: d.type || "dep" }));
+        // Dépendances de cartographie (v9, enrichies par la migration `062`).
+        //
+        // ⚠️ **`delai` et `degrade` sont conservés tels quels, `null` compris.** `null`
+        // veut dire « non renseigné » — jamais « immédiat », jamais « aucun mode
+        // dégradé » : les dépendances saisies avant la `062` n'ont rien dit là-dessus,
+        // et leur faire dire le pire ferait paraître mesurée une chronologie que
+        // personne n'a établie (motif du constat Q-192).
+        const deps = actif.dependances.map(d => ({
+            to: d.to,
+            type: d.type || "dep",
+            delai: d.delai || null,
+            degrade: d.degrade || null
+        }));
+
+        // v29 (migration `062`) — qui EXPLOITE cet actif.
+        actif.prestataires_lies = Array.isArray(actif.prestataires_lies)
+            ? actif.prestataires_lies.filter(x => x && x.to) : [];
+        const tiers = actif.prestataires_lies.map(x => ({
+            to: x.to, nature: x.nature || "exploitation"
+        }));
+        const tousPrestataires = (DataStore.getPrestataires ? DataStore.getPrestataires() : []) || [];
+        const NATURES = (typeof CartographieModule !== "undefined" && CartographieModule.naturesTiers)
+            ? CartographieModule.naturesTiers()
+            : [{ code: "exploitation", libelle: "Exploité par" }];
+        const DELAIS = (typeof CartographieModule !== "undefined" && CartographieModule.delais)
+            ? CartographieModule.delais() : [];
+        const DEGRADES = (typeof CartographieModule !== "undefined" && CartographieModule.degrades)
+            ? CartographieModule.degrades() : [];
+        const nomPrestataire = pid => {
+            const p = tousPrestataires.find(x => x.id === pid);
+            return p ? (p.nom || p.raison_sociale || "?") : "?";
+        };
+        const libelleNature = code =>
+            (NATURES.find(n => n.code === code) || {}).libelle || code;
         const autresActifs = DataStore.getActifs().filter(a => a.id !== actif.id);
         const DT = (typeof CartographieModule !== "undefined" && CartographieModule.depTypes) ? CartographieModule.depTypes()
             : { dep: { label: "Dépend de", short: "dépend de" }, hosted: { label: "Hébergé sur", short: "hébergé sur" }, flux: { label: "Alimenté par", short: "alimenté par" }, backup: { label: "Sauvegardé par", short: "sauvegardé par" } };
@@ -242,7 +274,7 @@ const ActifsModule = (() => {
 
                 <div class="dashboard-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                        <h3 class="m0">Dépendances de cartographie ${Help.tip("Liens typés vers d'autres actifs : « dépend de », « hébergé sur », « alimenté par » (flux de données) ou « sauvegardé par ». Ils alimentent la Cartographie du SI et l'analyse d'impact (propagation, points de défaillance unique). La sauvegarde ne propage pas une panne de disponibilité.")}</h3>
+                        <h3 class="m0">Dépendances de cartographie ${Help.tip("Huit natures de lien vers d'autres actifs. Quatre méritent une mention : « authentifié par » désigne l'annuaire ou le SSO — le point de défaillance unique le plus fréquent d'un groupe ; « administré depuis » désigne le bastion ou le poste d'admin, c'est-à-dire le chemin que prend un attaquant ; « redondé par » REND LE SERVICE pendant la panne, quand « sauvegardé par » permet seulement de le rétablir après. Ces deux dernières ne propagent pas une panne de disponibilité.")}</h3>
                         <a href="#/cartographie" style="font-size: var(--text-sm); color:var(--accent); font-weight:600; text-decoration:none;">Voir la cartographie →</a>
                     </div>
                     <p style="font-size: var(--text-sm); color:var(--text-muted); margin:8px 0 14px;">Déclarez ce dont <strong>${escapeHtml(actif.nom)}</strong> a besoin pour fonctionner.</p>
@@ -258,6 +290,20 @@ const ActifsModule = (() => {
                             <label class="txt-sm">…de l'actif</label>
                             <select id="depTarget">
                                 ${autresActifs.length ? autresActifs.map(a => `<option value="${a.id}">${escapeHtml(a.nom)}</option>`).join("") : `<option value="">(aucun autre actif déclaré)</option>`}
+                            </select>
+                        </div>
+                        <div class="form-group m0">
+                            <label class="txt-sm">Délai avant impact ${Help.tip("Combien de temps cet actif tient SANS sa cible. C’est ce champ qui transforme un rayon d’impact en CHRONOLOGIE, confrontable aux RTO du bilan d’impact. Laisser « non renseigné » est une réponse : le produit ne devine pas.")}</label>
+                            <select id="depDelai">
+                                <option value="">Non renseigné</option>
+                                ${DELAIS.map(d => `<option value="${escapeHtml(d.code)}">${escapeHtml(d.libelle)}</option>`).join("")}
+                            </select>
+                        </div>
+                        <div class="form-group m0">
+                            <label class="txt-sm">Mode dégradé ${Help.tip("Un fonctionnement dégradé existe-t-il sans la cible ? C’est ce qui distingue une dépendance VITALE d’une dépendance de confort — et la distinction ne se devine pas du type de lien.")}</label>
+                            <select id="depDegrade">
+                                <option value="">Non renseigné</option>
+                                ${DEGRADES.map(d => `<option value="${escapeHtml(d.code)}">${escapeHtml(d.libelle)}</option>`).join("")}
                             </select>
                         </div>
                         <button id="addDepBtn" type="button" ${autresActifs.length ? "" : "disabled"}>Ajouter le lien</button>
@@ -276,6 +322,28 @@ const ActifsModule = (() => {
                         </div>
                     </div>
                 </div>
+
+                <div class="dashboard-card">
+                    <h3 class="m0">Qui exploite cet actif ${Help.tip("Le tiers qui l’exploite, l’héberge, le maintient, l’infogère ou en édite le logiciel. C’est la dépendance la plus contrôlée par NIS2 (art. 21) et DORA (art. 28) — et jusqu’au 22/09/2026 elle se saisissait deux fois, ici et dans la fiche du prestataire, sans que les deux se parlent.")}</h3>
+                    <p style="font-size: var(--text-sm); color:var(--text-muted); margin:8px 0 14px;">Un même tiers peut apparaître <strong>plusieurs fois</strong> : héberger un actif et l’infogérer sont deux engagements contractuels différents.</p>
+                    ${tousPrestataires.length ? `
+                    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-bottom:16px;">
+                        <div class="form-group m0">
+                            <label class="txt-sm">Cet actif est…</label>
+                            <select id="tierNature">
+                                ${NATURES.map(n => `<option value="${escapeHtml(n.code)}">${escapeHtml(n.libelle)}</option>`).join("")}
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin:0; flex:1; min-width:180px;">
+                            <label class="txt-sm">…le prestataire</label>
+                            <select id="tierTarget">
+                                ${tousPrestataires.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.nom || p.raison_sociale || p.id)}</option>`).join("")}
+                            </select>
+                        </div>
+                        <button id="addTierBtn" type="button">Ajouter</button>
+                    </div>` : `<p class="muted">Aucun prestataire n’est déclaré dans cette filiale. <a href="#/prestataires" class="lien-accent">Déclarez-en un</a> pour pouvoir rattacher cet actif.</p>`}
+                    <ul id="tiers-list" style="list-style:none; padding:0; margin:0;"></ul>
+                </div>
             </section>
         `;
 
@@ -290,6 +358,7 @@ const ActifsModule = (() => {
             actif.description = document.getElementById("description").value.trim();
             actif.risques_lies = Array.from(document.querySelectorAll(".risque-cb:checked")).map(cb => cb.value);
             actif.dependances = deps.slice();
+            actif.prestataires_lies = tiers.slice();
 
             DataStore.updateActif(actif);
             if (window.showToast) window.showToast("Actif mis à jour.", "success");
@@ -302,23 +371,68 @@ const ActifsModule = (() => {
             if (!ul) return;
             ul.innerHTML = deps.length ? deps.map((d, i) => `
                 <li style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid var(--border);">
-                    <span class="txt-sm"><span class="txt-muted-sm">${escapeHtml(depLabel(d.type))}</span> <strong>${escapeHtml(nomActif(d.to))}</strong></span>
+                    <span class="txt-sm"><span class="txt-muted-sm">${escapeHtml(depLabel(d.type))}</span> <strong>${escapeHtml(nomActif(d.to))}</strong>${
+                        d.delai || d.degrade
+                            ? ` <span class="dep-qualif">${escapeHtml([
+                                  d.delai ? "impact : " + ((DELAIS.find(x => x.code === d.delai) || {}).libelle || d.delai).toLowerCase() : "",
+                                  d.degrade ? ((DEGRADES.find(x => x.code === d.degrade) || {}).libelle || d.degrade).toLowerCase() : ""
+                              ].filter(Boolean).join(" · "))}</span>`
+                            : ""
+                    }</span>
                     <button type="button" class="rm-dep" data-i="${i}" title="Retirer ce lien" style="background:none; border:none; color:var(--color-danger); cursor:pointer; font-size: var(--text-lg); line-height:1; padding:0 4px;">&times;</button>
                 </li>`).join("") : `<li style="color:var(--text-muted); font-style:italic; font-size: var(--text-sm);">Aucune dépendance déclarée.</li>`;
             ul.querySelectorAll(".rm-dep").forEach(btn => btn.onclick = () => { deps.splice(parseInt(btn.dataset.i, 10), 1); renderDepsList(); });
         }
         renderDepsList();
 
+        /* ── QUI EXPLOITE CET ACTIF (migration `062`) ───────────────────────
+         *
+         * ⚠️ Un même tiers peut apparaître PLUSIEURS FOIS avec des natures
+         * différentes — héberger et infogérer sont deux engagements contractuels,
+         * et la clé primaire en base porte la nature pour cette raison. Le
+         * dédoublonnage porte donc sur le COUPLE, comme pour les dépendances.
+         */
+        function renderTiersList() {
+            const ul = document.getElementById("tiers-list");
+            if (!ul) return;
+            ul.innerHTML = tiers.length ? tiers.map((t, i) => `
+                <li style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid var(--border);">
+                    <span class="txt-sm"><span class="txt-muted-sm">${escapeHtml(libelleNature(t.nature))}</span> <strong>${escapeHtml(nomPrestataire(t.to))}</strong></span>
+                    <button type="button" class="rm-tier" data-i="${i}" title="Retirer ce lien" style="background:none; border:none; color:var(--color-danger); cursor:pointer; font-size: var(--text-lg); line-height:1; padding:0 4px;">&times;</button>
+                </li>`).join("")
+                : `<li style="color:var(--text-muted); font-style:italic; font-size: var(--text-sm);">Aucun tiers déclaré pour cet actif.</li>`;
+            ul.querySelectorAll(".rm-tier").forEach(btn => btn.onclick = () => {
+                tiers.splice(parseInt(btn.dataset.i, 10), 1);
+                renderTiersList();
+            });
+        }
+        renderTiersList();
+
+        const addTierBtn = document.getElementById("addTierBtn");
+        if (addTierBtn) addTierBtn.onclick = () => {
+            const nature = document.getElementById("tierNature").value;
+            const to = document.getElementById("tierTarget").value;
+            if (!to) return;
+            if (tiers.some(t => t.to === to && t.nature === nature)) {
+                if (window.showToast) window.showToast("Ce lien existe déjà.", "info");
+                return;
+            }
+            tiers.push({ to, nature });
+            renderTiersList();
+        };
+
         const addDepBtn = document.getElementById("addDepBtn");
         if (addDepBtn) addDepBtn.onclick = () => {
             const type = document.getElementById("depType").value;
             const to = document.getElementById("depTarget").value;
+            const delai = document.getElementById("depDelai").value || null;
+            const degrade = document.getElementById("depDegrade").value || null;
             if (!to) return;
             if (deps.some(d => d.to === to && d.type === type)) {
                 if (window.showToast) window.showToast("Ce lien existe déjà.", "info");
                 return;
             }
-            deps.push({ to, type });
+            deps.push({ to, type, delai, degrade });
             renderDepsList();
         };
 

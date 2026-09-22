@@ -14,13 +14,117 @@ const CartographieModule = (() => {
 
     // Types de liens (point de vue de l'actif édité). `propagates` = participe à la
     // propagation d'une panne de disponibilité (rayon d'impact / SPOF).
+    /* ═════════════════════════════════════════════════════════════════════
+       LES HUIT NATURES DE LIEN — et ce que chacune change à l'analyse
+
+       ⚠️ **C'est la SEULE source du produit sur ce point**, et deux écrans la
+       lisent (la fiche d'un actif et cette carte). La recopier — en base, dans
+       un autre module — en ferait une seconde, et deux rédactions divergent au
+       premier ajustement (constat **Q-219**). Le vocabulaire, lui, est clos EN
+       BASE (`ck_actif_dependances_type`, migration `062`) : la base dit ce qui
+       est écrivable, ce fichier dit ce que cela SIGNIFIE.
+
+       🛑 **`propagates` est la propriété qui décide de tout** — rayon d'impact
+       et point de défaillance unique. Deux natures ne propagent PAS, et pour
+       deux raisons différentes qu'il ne faut pas confondre :
+
+         · `backup`     — la sauvegarde porte la capacité de RESTAURATION. Elle
+                          n'évite pas la panne, elle la répare ;
+         · `redonde_par`— la redondance REND LE SERVICE pendant la panne. Elle
+                          n'a pas à être restaurée, elle prend le relais.
+
+       Les mélanger fausserait le calcul de point de défaillance unique, qui est
+       la seule chose que cette carte sait produire toute seule.
+
+       ⚠️ **La COULEUR ne dit plus la nature du lien** (22/09/2026). Elle disait
+       les deux : quatre couleurs de lien et quatre de criticité se disputaient
+       la même toile — le vert voulait dire « sauvegardé par » ET « criticité
+       faible » sur le même dessin. La charte réserve la couleur à la
+       SÉMANTIQUE DES STATUTS (`CLAUDE.md` §2) ; la nature du lien se dit
+       désormais par le TRAIT et par la forme de la flèche. On passe de huit
+       codes visuels à quatre, et la carte redevient lisible sans rien perdre.
+    ═════════════════════════════════════════════════════════════════════ */
     const DEP_TYPES = {
-        dep:    { label: "Dépend de",      short: "dépend de",      propagates: true,  color: "#2059A6", dash: "" },
-        hosted: { label: "Hébergé sur",    short: "hébergé sur",    propagates: true,  color: "#6a4bbd", dash: "" },
-        flux:   { label: "Alimenté par",   short: "alimenté par",   propagates: true,  color: "#0d8a8a", dash: "" },
-        backup: { label: "Sauvegardé par", short: "sauvegardé par", propagates: false, color: "#2f9e5f", dash: "6 4" }
+        dep: {
+            label: "Dépend de", short: "dépend de", propagates: true,
+            dash: "", fleche: "pleine",
+            aide: "Besoin fonctionnel, sans plus de précision."
+        },
+        hosted: {
+            label: "Hébergé sur", short: "hébergé sur", propagates: true,
+            dash: "", fleche: "creuse",
+            aide: "Le support physique ou virtuel qui le fait tourner."
+        },
+        flux: {
+            label: "Alimenté par", short: "alimenté par", propagates: true,
+            dash: "1 3", fleche: "pleine",
+            aide: "Flux de données entrant."
+        },
+        authentifie_par: {
+            label: "Authentifié par", short: "authentifié par", propagates: true,
+            dash: "8 3", fleche: "pleine",
+            aide: "Annuaire, fournisseur d’identité, SSO. C’est le point de "
+                + "défaillance unique le plus fréquent d’un groupe industriel."
+        },
+        administre_par: {
+            label: "Administré depuis", short: "administré depuis", propagates: true,
+            dash: "2 2", fleche: "creuse",
+            aide: "Bastion, poste d’administration, outil d’infogérance. C’est le "
+                + "chemin que prend un attaquant."
+        },
+        transite_par: {
+            label: "Transite par", short: "transite par", propagates: true,
+            dash: "10 2 2 2", fleche: "pleine",
+            aide: "Lien WAN, VPN, opérateur."
+        },
+        redonde_par: {
+            label: "Redondé par", short: "redondé par", propagates: false,
+            dash: "6 2 1 2", fleche: "creuse",
+            aide: "Cluster, second site. À ne pas confondre avec la sauvegarde : "
+                + "la redondance REND LE SERVICE pendant la panne, la sauvegarde "
+                + "permet de le rétablir après."
+        },
+        backup: {
+            label: "Sauvegardé par", short: "sauvegardé par", propagates: false,
+            dash: "6 4", fleche: "creuse",
+            aide: "Elle ne propage pas une panne de disponibilité : elle porte la "
+                + "capacité de restauration."
+        }
     };
-    const DEP_ORDER = ["dep", "hosted", "flux", "backup"];
+    const DEP_ORDER = ["dep", "hosted", "flux", "authentifie_par",
+                       "administre_par", "transite_par", "redonde_par", "backup"];
+
+    /* Les deux qualificatifs de la migration `062`. ⚠️ `null` s'y lit « non
+       renseigné » — jamais « immédiat », jamais « aucun mode dégradé ». Les
+       dépendances saisies avant n'ont rien dit là-dessus. */
+    const DELAIS = [
+        { code: "immediat", libelle: "Immédiat", rang: 0,
+          aide: "L’actif tombe en même temps que sa cible." },
+        { code: "heures",   libelle: "Quelques heures", rang: 1,
+          aide: "Quelques heures d’autonomie." },
+        { code: "jour",     libelle: "Une journée", rang: 2,
+          aide: "Une journée d’autonomie." },
+        { code: "semaine",  libelle: "Une semaine ou plus", rang: 3,
+          aide: "Une semaine ou plus." }
+    ];
+    const DEGRADES = [
+        { code: "non",     libelle: "Aucun mode dégradé" },
+        { code: "partiel", libelle: "Mode dégradé partiel" },
+        { code: "oui",     libelle: "Mode dégradé complet" }
+    ];
+    const DELAI_PAR_CODE = {};
+    DELAIS.forEach(function (d) { DELAI_PAR_CODE[d.code] = d; });
+    const DEGRADE_PAR_CODE = {};
+    DEGRADES.forEach(function (d) { DEGRADE_PAR_CODE[d.code] = d; });
+
+    /* Les cinq natures d'exploitation par un tiers (migration `062`). */
+    const NATURES_TIERS = [
+        { code: "exploitation", libelle: "Exploité par" },
+        { code: "hebergement",  libelle: "Hébergé chez" },
+        { code: "maintenance",  libelle: "Maintenu par" },
+        { code: "infogerance",  libelle: "Infogéré par" },
+        { code: "editeur",      libelle: "Édité par" }
+    ];
 
     // Couleurs de criticité (miroir des tokens --risk-*, sémantique stricte).
     const CRIT_COLOR = { critique: "#c0392b", "élevée": "#e67e22", "modérée": "#f1c40f", faible: "#27ae60" };
@@ -29,12 +133,56 @@ const CartographieModule = (() => {
     const ALL_CRITS = ["critique", "élevée", "modérée", "faible"];
 
     const USE_COLOR = "#9aa8b8";     // arête processus ↔ actif (usage)
+    /* ⚠️ **Une seule couleur pour TOUTES les arêtes de dépendance.** La nature se
+       dit par le trait ; la couleur reste à la criticité. Voir l'entête de
+       DEP_TYPES — huit codes visuels sur une même toile, dont deux verts qui ne
+       voulaient pas dire la même chose. */
+    const DEP_COLOR = "#5b6b7d";
     const SPOF_MIN_CRIT_PROC = 2;    // seuil SPOF : ≥ N processus critiques en aval
 
     // Géométrie du graphe (viewBox interne ; le SVG est mis à l'échelle par le conteneur).
     const NW = 158, NH = 54, VBW = 980, PAD_L = 128, PAD_R = 26,
           H_GAP = 30, V_GAP = 26, ROW_GAP = 46, BAND_TOP = 58, BAND_BOTTOM = 30;
     const NS = "http://www.w3.org/2000/svg";
+
+    /* ═════════════════════════════════════════════════════════════════════
+       QUATRE VUES, ET POURQUOI CE N'EST PAS UN CONFORT
+
+       ⚠️ **Le graphe en couches ne passe pas l'échelle**, et c'est structurel :
+       au-delà d'une quarantaine d'actifs il devient un plat de spaghettis, quel
+       que soit le soin apporté au tracé. Une carte qui essaie de tout montrer ne
+       montre rien.
+
+       Chaque vue répond donc à UNE question, et une seule :
+
+         · `couches`  — « à quoi ressemble le SI ? » (le graphe d'origine) ;
+         · `focus`    — « de quoi dépend CET actif, et qui dépend de lui ? ».
+                        C'est la vue qu'on emploie réellement, et elle reste
+                        lisible à cinq cents actifs : un actif au centre, l'amont
+                        à gauche, l'aval à droite ;
+         · `matrice`  — « quelles dépendances existent ? ». Une matrice
+                        d'adjacence n'a AUCUN croisement de traits : elle reste
+                        lisible et s'IMPRIME là où un graphe devient illisible.
+                        C'est la vue qu'on met en annexe d'un rapport d'audit ;
+         · `chaine`   — « si ça tombe, qu'est-ce qui s'arrête, et QUAND ? ».
+                        Ordonnée par le délai avant impact de la migration `062` :
+                        c'est elle qui transforme un rayon d'impact en
+                        CHRONOLOGIE, et c'est la vue qui va en comité.
+    ═════════════════════════════════════════════════════════════════════ */
+    const VUES = [
+        { code: "couches", libelle: "Couches",
+          aide: "Le SI de haut en bas : les processus métier en tête, le socle en bas." },
+        { code: "focus", libelle: "Focus",
+          aide: "Un actif au centre : ce dont il a besoin à gauche, ce qui dépend de lui "
+              + "à droite. Reste lisible quel que soit le nombre d’actifs." },
+        { code: "matrice", libelle: "Matrice",
+          aide: "Toutes les dépendances sans un seul croisement de traits. C’est la vue "
+              + "qui s’imprime, et celle qu’on met en annexe d’un rapport d’audit." },
+        { code: "chaine", libelle: "Chaîne d’impact",
+          aide: "Si cet actif tombe, qu’est-ce qui s’arrête — et QUAND. Ordonné par le "
+              + "délai avant impact déclaré sur chaque lien." }
+    ];
+    let vue = "couches";
 
     // État de la vue.
     let selected = null;
@@ -67,7 +215,13 @@ const CartographieModule = (() => {
             if (!d || !d.to || d.to === a.id) return;           // ignore auto-lien
             if (!assetIds.has(d.to)) return;                    // ignore cible disparue
             if (!DEP_TYPES[d.type]) return;                     // ignore type inconnu
-            depEdges.push({ f: a.id, t: d.to, type: d.type });
+            // ⚠️ `delai` et `degrade` (migration `062`) voyagent avec l'arête :
+            //    c'est eux qui transforment le rayon d'impact en CHRONOLOGIE, et la
+            //    vue « chaîne d'impact » n'a rien d'autre pour ordonner.
+            depEdges.push({
+                f: a.id, t: d.to, type: d.type,
+                delai: d.delai || null, degrade: d.degrade || null
+            });
         }));
         const procEdges = [];
         procs.forEach(p => p.actifs.forEach(aid => {
@@ -170,13 +324,30 @@ const CartographieModule = (() => {
     /* =========================
        FILTRAGE (visuel : n'affecte pas le calcul d'impact/SPOF, fait sur le graphe complet)
     ========================== */
+    /**
+     * Le modèle réduit aux filtres.
+     *
+     * 🛑 **LA RECHERCHE NE FILTRE PAS DANS LES VUES « FOCUS » ET « CHAÎNE », et
+     * c'est un défaut vu en cliquant.** Elle y restreignait le modèle au seul
+     * actif cherché — donc à un sujet SANS VOISINS : la chaîne d'impact
+     * annonçait « 0 élément touché, personne n'en dépend » sur un annuaire dont
+     * quatre actifs dépendent. Le chiffre était exact au regard du filtre, et
+     * faux au regard de la question posée.
+     *
+     * Dans ces deux vues, chercher **désigne** le sujet au lieu de réduire le
+     * monde autour de lui — c'est le geste que l'écran attend, et c'est celui
+     * qu'il fait désormais (voir `setSearch`).
+     */
     function visibleModel(model) {
         const f = filters;
+        const filtreParNom = vue !== "focus" && vue !== "chaine";
         const okAsset = a =>
             f.types.has(a.type) && f.crits.has(a.criticite) &&
-            (!f.search || a.nom.toLowerCase().includes(f.search));
+            (!filtreParNom || !f.search || a.nom.toLowerCase().includes(f.search));
         let assets = model.assets.filter(okAsset);
-        let procs = f.showProc ? model.procs.filter(p => !f.search || p.nom.toLowerCase().includes(f.search)) : [];
+        let procs = f.showProc
+            ? model.procs.filter(p => !filtreParNom || !f.search || p.nom.toLowerCase().includes(f.search))
+            : [];
 
         const visIds = new Set(assets.map(a => a.id).concat(procs.map(p => p.id)));
         let depEdges = model.depEdges.filter(e => visIds.has(e.f) && visIds.has(e.t));
@@ -240,7 +411,7 @@ const CartographieModule = (() => {
         const defs = el("defs", {}, svg);
         Object.keys(DEP_TYPES).forEach(tp => {
             const m = el("marker", { id: "carto-ar-" + tp, viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" }, defs);
-            el("path", { d: "M0,0 L10,5 L0,10 z", fill: DEP_TYPES[tp].color }, m);
+            el("path", { d: "M0,0 L10,5 L0,10 z", fill: DEP_COLOR }, m);
         });
         const mu = el("marker", { id: "carto-ar-use", viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "6", markerHeight: "6", orient: "auto-start-reverse" }, defs);
         el("path", { d: "M0,0 L10,5 L0,10 z", fill: USE_COLOR }, mu);
@@ -261,7 +432,7 @@ const CartographieModule = (() => {
             p.dataset.f = e.f; p.dataset.t = e.t;
         }
         vm.procEdges.forEach(e => drawEdge(e, "carto-edge carto-edge-use", USE_COLOR, "2 4", "carto-ar-use"));
-        vm.depEdges.forEach(e => drawEdge(e, "carto-edge carto-edge-dep", DEP_TYPES[e.type].color, DEP_TYPES[e.type].dash, "carto-ar-" + e.type));
+        vm.depEdges.forEach(e => drawEdge(e, "carto-edge carto-edge-dep", DEP_COLOR, DEP_TYPES[e.type].dash, "carto-ar-" + e.type));
 
         // Nœuds.
         layout.nodes.forEach(n => {
@@ -312,7 +483,11 @@ const CartographieModule = (() => {
                 <h2>Analyse d'impact</h2>
                 <p class="carto-empty">Cliquez sur un actif ou un processus pour explorer ses dépendances et mesurer le rayon d'impact d'une panne.</p>
                 <div class="carto-note">
-                    <strong>Rayon d'impact</strong> : la propagation suit les liens « dépend de », « hébergé sur » et « alimenté par » (+ l'usage des processus). Les liens de <em>sauvegarde</em> en sont exclus (ils ne provoquent pas de panne en cascade).
+                    <strong>Rayon d'impact</strong> : la propagation suit les liens
+                    ${DEP_ORDER.filter(t => DEP_TYPES[t].propagates).map(t => "« " + esc(DEP_TYPES[t].short) + " »").join(", ")}
+                    (+ l'usage des processus). Les liens
+                    ${DEP_ORDER.filter(t => !DEP_TYPES[t].propagates).map(t => "<em>" + esc(DEP_TYPES[t].short) + "</em>").join(" et ")}
+                    en sont exclus — la sauvegarde permet de RÉTABLIR le service après la panne, la redondance le REND pendant.
                 </div>`;
             return;
         }
@@ -347,7 +522,7 @@ const CartographieModule = (() => {
             <h2>Analyse d'impact — propagation</h2>
             ${head}
             <div class="carto-sect">
-                <div class="carto-lbl">Si cet actif est indisponible ${Help.tip("Propagation transitive : tous les actifs et processus qui dépendent (directement ou en cascade) de cet actif. Les liens de sauvegarde sont exclus car ils ne provoquent pas de panne de disponibilité.")}</div>
+                <div class="carto-lbl">Si cet actif est indisponible ${Help.tip("Propagation transitive : tous les actifs et processus qui dépendent, directement ou en cascade, de cet actif. Les liens de sauvegarde et de redondance en sont exclus — la première permet de RÉTABLIR le service, la seconde le REND pendant la panne. La vue « Chaîne d'impact » ajoute le QUAND.")}</div>
                 <div class="carto-impact">
                     <div class="box"><div class="n">${impAsset.length}</div><div class="c">actif(s) en aval</div></div>
                     <div class="box"><div class="n">${impProc.length}</div><div class="c">processus impacté(s)</div></div>
@@ -408,7 +583,7 @@ const CartographieModule = (() => {
         const model = currentModel();
         const spof = computeSpof(model);
         if (selected && !model.nodeById[selected]) selected = null;
-        renderGraph(model, spof);
+        dessiner(model, spof);
         renderPanel(model, spof);
         updateStats(model, spof);
     }
@@ -426,7 +601,17 @@ const CartographieModule = (() => {
     function toggleCrit(c) { filters.crits.has(c) ? filters.crits.delete(c) : filters.crits.add(c); syncFilterButtons(); refresh(); }
     function setShowProc(v) { filters.showProc = v; refresh(); }
     function setHideIsolated(v) { filters.hideIsolated = v; refresh(); }
-    function setSearch(v) { filters.search = (v || "").trim().toLowerCase(); refresh(); }
+    function setSearch(v) {
+        filters.search = (v || "").trim().toLowerCase();
+        // Dans les vues qui ont un SUJET, chercher le DÉSIGNE au lieu de réduire le
+        // monde autour de lui — voir `visibleModel`.
+        if ((vue === "focus" || vue === "chaine") && filters.search) {
+            const trouve = currentModel().assets
+                .find(a => a.nom.toLowerCase().includes(filters.search));
+            if (trouve) selected = trouve.id;
+        }
+        refresh();
+    }
 
     function syncFilterButtons() {
         document.querySelectorAll("[data-ftype]").forEach(b => b.setAttribute("aria-pressed", filters.types.has(b.dataset.ftype)));
@@ -452,7 +637,7 @@ const CartographieModule = (() => {
         function path(a, b) { return edgePath(a, b); }
         // arêtes
         vm.procEdges.forEach(e => { const a = posById[e.f], b = posById[e.t]; if (a && b) s += `<path d="${path(a, b)}" fill="none" stroke="${USE_COLOR}" stroke-width="2" stroke-dasharray="2 4"/>`; });
-        vm.depEdges.forEach(e => { const a = posById[e.f], b = posById[e.t]; if (a && b) { const dt = DEP_TYPES[e.type]; s += `<path d="${path(a, b)}" fill="none" stroke="${dt.color}" stroke-width="2"${dt.dash ? ` stroke-dasharray="${dt.dash}"` : ""}/>`; } });
+        vm.depEdges.forEach(e => { const a = posById[e.f], b = posById[e.t]; if (a && b) { const dt = DEP_TYPES[e.type]; s += `<path d="${path(a, b)}" fill="none" stroke="${DEP_COLOR}" stroke-width="2"${dt.dash ? ` stroke-dasharray="${dt.dash}"` : ""}/>`; } });
         // nœuds
         layout.nodes.forEach(n => {
             const cc = CRIT_COLOR[n.criticite] || "#94a3b8";
@@ -476,18 +661,37 @@ const CartographieModule = (() => {
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
+    /**
+     * Ce que l'export DIT quand il ne peut rien produire.
+     *
+     * ⚠️ **Un bouton qui ne fait rien est pire qu'un bouton absent** : on clique,
+     * rien ne se passe, et on conclut que le produit est cassé. C'est la classe
+     * fermée par `test/depot/branchements-muets.test.mjs` le 18/09. Les trois
+     * vues neuves n'ont pas de géométrie — la matrice s'imprime, le focus et la
+     * chaîne se lisent —, et l'écran le dit au lieu de se taire.
+     */
+    function refuserExport() {
+        if (window.showToast) {
+            showToast("L’export en image concerne la vue « Couches ». La matrice "
+                    + "s’imprime (Ctrl+P) ; le focus et la chaîne d’impact se lisent à "
+                    + "l’écran.", "info");
+        }
+    }
+
     function exportSVG() {
         // Le droit d'export est distinct de la lecture (PLAN_SERVEUR §3.3) :
         // entonnoir unique `Droits.exigerExport()` (js/core/session.js).
         if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
-        const str = buildExportSVG(); if (!str) return;
+        const str = buildExportSVG();
+        if (!str) return refuserExport();
         triggerDownload(new Blob([str], { type: "image/svg+xml;charset=utf-8" }), "cartographie-si.svg");
     }
     function exportPNG() {
         // Le droit d'export est distinct de la lecture (PLAN_SERVEUR §3.3) :
         // entonnoir unique `Droits.exigerExport()` (js/core/session.js).
         if (typeof Droits !== "undefined" && !Droits.exigerExport()) return;
-        const str = buildExportSVG(); if (!str) return;
+        const str = buildExportSVG();
+        if (!str) return refuserExport();
         const url = URL.createObjectURL(new Blob([str], { type: "image/svg+xml;charset=utf-8" }));
         const img = new Image();
         img.onload = () => {
@@ -501,6 +705,320 @@ const CartographieModule = (() => {
         };
         img.onerror = () => { URL.revokeObjectURL(url); alert("Échec de l'export PNG (rendu de l'image)."); };
         img.src = url;
+    }
+
+
+    /* =========================================================================
+       VUE « MATRICE » — toutes les dépendances, sans un seul croisement de traits
+
+       ⚠️ **C'est la vue qui s'imprime.** Un graphe de deux cents actifs ne tient
+       sur aucune feuille ; une matrice d'adjacence, si — et c'est elle qu'on met
+       en annexe d'un rapport d'audit. Elle n'a aucune géométrie à optimiser,
+       aucune arête à faire passer : la lisibilité ne dépend pas du nombre de
+       nœuds mais de la largeur de la page.
+
+       ⚠️ **Les colonnes portent un NUMÉRO, pas un nom.** Écrire les noms
+       verticalement au-dessus de chaque colonne était le premier réflexe : à
+       vingt actifs, l'en-tête occupe plus de place que la matrice. La légende
+       numérotée vit à gauche, en lignes, où elle se lit normalement.
+    ========================================================================= */
+    function renderMatrice(model, spof) {
+        const vm = visibleModel(model);
+        lastLayout = null;   // aucune géométrie : l'export PNG le dira
+        const hote = document.getElementById("carto-svg-host");
+        if (!hote) return;
+
+        const actifs = vm.assets.slice().sort((a, b) =>
+            (CRIT_ORDER[a.criticite] ?? 9) - (CRIT_ORDER[b.criticite] ?? 9)
+            || a.nom.localeCompare(b.nom, "fr"));
+
+        if (!actifs.length) {
+            hote.innerHTML = '<p class="carto-vide">Aucun actif ne correspond aux filtres.</p>';
+            return;
+        }
+
+        const rang = {};
+        actifs.forEach((a, i) => { rang[a.id] = i + 1; });
+
+        // Les liens, indexés par couple. Plusieurs natures peuvent coexister entre
+        // deux actifs : on les empile dans la même case plutôt que d'en perdre une.
+        const parCouple = {};
+        vm.depEdges.forEach(e => {
+            const cle = e.f + "→" + e.t;
+            (parCouple[cle] = parCouple[cle] || []).push(e);
+        });
+
+        const abrege = (t) => {
+            const dt = DEP_TYPES[t];
+            if (!dt) return "?";
+            return dt.short.split(" ").map(m => m[0]).join("").toUpperCase().slice(0, 3);
+        };
+
+        const entetes = actifs.map(a =>
+            `<th scope="col" class="carto-mx-num" title="${esc(a.nom)}">${rang[a.id]}</th>`).join("");
+
+        const lignes = actifs.map(source => {
+            const cases = actifs.map(cible => {
+                if (source.id === cible.id) return '<td class="carto-mx-diag"></td>';
+                const liens = parCouple[source.id + "→" + cible.id];
+                if (!liens) return '<td></td>';
+                const titre = liens.map(l => {
+                    const parts = [DEP_TYPES[l.type] ? DEP_TYPES[l.type].short : l.type];
+                    if (l.delai) parts.push("impact " + libelleDelaiInterne(l.delai).toLowerCase());
+                    if (l.degrade) parts.push(libelleDegradeInterne(l.degrade).toLowerCase());
+                    return source.nom + " " + parts.join(" · ") + " " + cible.nom;
+                }).join(" ; ");
+                const propage = liens.some(l => DEP_TYPES[l.type] && DEP_TYPES[l.type].propagates);
+                return `<td class="carto-mx-cell${propage ? "" : " carto-mx-cell--inerte"}" title="${esc(titre)}">`
+                     + liens.map(l => esc(abrege(l.type))).join("<br>") + "</td>";
+            }).join("");
+            return `<tr><th scope="row" class="carto-mx-nom">`
+                 + `<span class="carto-mx-rang">${rang[source.id]}</span>`
+                 + `<span class="carto-cdot" style="background:${CRIT_COLOR[source.criticite] || "#ccc"}"></span>`
+                 + `${esc(source.nom)}${spof.has(source.id) ? '<span class="carto-mx-spof" title="Point de défaillance unique">SPOF</span>' : ""}`
+                 + `</th>${cases}</tr>`;
+        }).join("");
+
+        hote.innerHTML = `
+            <p class="carto-mx-aide">Une ligne se lit : « cet actif <em>dépend de</em> ceux
+            dont la colonne est cochée ». Les colonnes portent le numéro de la ligne
+            correspondante. Une case grisée est un lien qui <strong>ne propage pas</strong>
+            une panne — sauvegarde ou redondance.</p>
+            <div class="table-scroll">
+                <table class="data-table carto-matrice">
+                    <thead><tr><th scope="col" class="carto-mx-nom">Actif</th>${entetes}</tr></thead>
+                    <tbody>${lignes}</tbody>
+                </table>
+            </div>`;
+    }
+
+    function libelleDelaiInterne(code) {
+        const d = DELAIS.find(x => x.code === code);
+        return d ? d.libelle : code;
+    }
+    function libelleDegradeInterne(code) {
+        const d = DEGRADES.find(x => x.code === code);
+        return d ? d.libelle : code;
+    }
+
+    /* =========================================================================
+       VUE « FOCUS » — un actif au centre, l'amont à gauche, l'aval à droite
+
+       ⚠️ **C'est la vue qu'on emploie réellement**, et la seule qui reste lisible
+       quel que soit le nombre d'actifs : elle n'en montre jamais plus que le
+       voisinage immédiat du sujet. Le graphe en couches, lui, montre tout — donc
+       rien, passé une quarantaine de nœuds.
+
+       ⚠️ **Deux sauts, pas plus.** Trois faisaient réapparaître le plat de
+       spaghettis qu'on vient de quitter ; un seul manquait l'essentiel, la
+       dépendance indirecte étant précisément ce qu'une carte apporte.
+    ========================================================================= */
+    function renderFocus(model, spof) {
+        const vm = visibleModel(model);
+        lastLayout = null;
+        const hote = document.getElementById("carto-svg-host");
+        if (!hote) return;
+
+        const centre = selected && vm.nodeById[selected] ? vm.nodeById[selected] : null;
+        if (!centre) {
+            hote.innerHTML = `
+                <p class="carto-vide">Choisissez un actif — dans la liste ci-contre, par la
+                recherche, ou depuis une autre vue — pour voir ce dont il a besoin et ce qui
+                dépend de lui.</p>
+                <ul class="carto-focus-choix">
+                    ${vm.assets.slice(0, 24).map(a =>
+                        `<li><button type="button" class="carto-focus-btn" data-id="${esc(a.id)}">`
+                        + `<span class="carto-cdot" style="background:${CRIT_COLOR[a.criticite] || "#ccc"}"></span>`
+                        + `${esc(a.nom)}</button></li>`).join("")}
+                </ul>`;
+            hote.querySelectorAll(".carto-focus-btn").forEach(b =>
+                b.addEventListener("click", () => selectNode(b.dataset.id)));
+            return;
+        }
+
+        // Amont : ce dont le centre a besoin. Aval : ce qui a besoin de lui.
+        const voisins = (id, sens, profondeur) => {
+            const vus = new Map();
+            let courant = [id];
+            for (let d = 1; d <= profondeur; d += 1) {
+                const suivant = [];
+                vm.depEdges.forEach(e => {
+                    const de = sens === "amont" ? e.f : e.t;
+                    const vers = sens === "amont" ? e.t : e.f;
+                    if (courant.indexOf(de) === -1) return;
+                    if (vers === id || vus.has(vers)) return;
+                    vus.set(vers, { noeud: vm.nodeById[vers], lien: e, saut: d });
+                    suivant.push(vers);
+                });
+                courant = suivant;
+                if (!courant.length) break;
+            }
+            return [...vus.values()].filter(x => x.noeud);
+        };
+
+        const amont = voisins(centre.id, "amont", 2);
+        const aval = voisins(centre.id, "aval", 2);
+        // Les processus qui emploient cet actif : ils ne sont pas dans `depEdges`.
+        const procs = vm.procEdges.filter(e => e.t === centre.id)
+            .map(e => vm.nodeById[e.f]).filter(Boolean);
+
+        const carte = (x, sens) => {
+            const dt = DEP_TYPES[x.lien.type];
+            const qualif = [
+                x.lien.delai ? "impact " + libelleDelaiInterne(x.lien.delai).toLowerCase() : "",
+                x.lien.degrade ? libelleDegradeInterne(x.lien.degrade).toLowerCase() : ""
+            ].filter(Boolean).join(" · ");
+            return `<li class="carto-fx-item${x.saut > 1 ? " carto-fx-indirect" : ""}">
+                <button type="button" class="carto-fx-btn" data-id="${esc(x.noeud.id)}">
+                    <span class="carto-cdot" style="background:${CRIT_COLOR[x.noeud.criticite] || "#ccc"}"></span>
+                    <span class="carto-fx-nom">${esc(x.noeud.nom)}</span>
+                </button>
+                <span class="carto-fx-lien">${esc(dt ? dt.short : x.lien.type)}${
+                    qualif ? ' <span class="dep-qualif">' + esc(qualif) + "</span>" : ""
+                }${x.saut > 1 ? ' <span class="carto-fx-saut">indirect</span>' : ""}</span>
+            </li>`;
+        };
+
+        hote.innerHTML = `
+            <div class="carto-focus">
+                <div class="carto-fx-col">
+                    <h3>Ce dont il a besoin <span>${amont.length}</span></h3>
+                    ${amont.length
+                        ? `<ul>${amont.sort((a, b) => a.saut - b.saut).map(x => carte(x, "amont")).join("")}</ul>`
+                        : '<p class="carto-vide">Aucune dépendance déclarée. Cet actif est un socle — ou personne ne l’a encore décrit.</p>'}
+                </div>
+                <div class="carto-fx-centre">
+                    <div class="carto-fx-sujet">
+                        <span class="carto-cdot" style="background:${CRIT_COLOR[centre.criticite] || "#ccc"}"></span>
+                        <strong>${esc(centre.nom)}</strong>
+                        <span class="carto-fx-type">${esc(centre.type || "")}</span>
+                        ${spof.has(centre.id) ? '<span class="carto-mx-spof" title="Au moins deux processus critiques en dépendent">SPOF</span>' : ""}
+                    </div>
+                    ${procs.length ? `<p class="carto-fx-procs">Employé par ${procs.length} processus :
+                        ${procs.map(p => esc(p.nom)).join(", ")}</p>` : ""}
+                </div>
+                <div class="carto-fx-col">
+                    <h3>Ce qui dépend de lui <span>${aval.length}</span></h3>
+                    ${aval.length
+                        ? `<ul>${aval.sort((a, b) => a.saut - b.saut).map(x => carte(x, "aval")).join("")}</ul>`
+                        : '<p class="carto-vide">Personne n’en dépend. Une panne n’en propagerait aucune autre.</p>'}
+                </div>
+            </div>`;
+        hote.querySelectorAll(".carto-fx-btn").forEach(b =>
+            b.addEventListener("click", () => selectNode(b.dataset.id)));
+    }
+
+    /* =========================================================================
+       VUE « CHAÎNE D'IMPACT » — si ça tombe, qu'est-ce qui s'arrête, et QUAND
+
+       ⚠️ **C'est la vue qui va en comité**, et elle n'existait pas : la
+       propagation était BINAIRE — B tombe, donc A tombe —, ce qui ne dit rien de
+       ce qu'on doit faire dans les deux premières heures.
+
+       Le délai retenu pour un actif est le PLUS COURT de son chemin : si A tient
+       une journée sans B, mais que B tombe immédiatement avec C, alors A tombe
+       en une journée au plus tard — jamais plus tôt que le maillon le plus lent.
+
+       ⚠️ **« Non renseigné » a sa colonne, et elle est la première à remplir.**
+       Le ranger avec « immédiat » ferait paraître mesurée une chronologie que
+       personne n'a établie (motif du constat Q-192) ; le taire le ferait
+       disparaître de l'écran, et personne ne le renseignerait jamais.
+    ========================================================================= */
+    function renderChaine(model, spof) {
+        const vm = visibleModel(model);
+        lastLayout = null;
+        const hote = document.getElementById("carto-svg-host");
+        if (!hote) return;
+
+        const centre = selected && vm.nodeById[selected] ? vm.nodeById[selected] : null;
+        if (!centre) {
+            hote.innerHTML = `
+                <p class="carto-vide">Choisissez l’actif qui tombe — dans la liste ci-contre
+                ou par la recherche — pour voir ce qui s’arrête, et quand.</p>
+                <ul class="carto-focus-choix">
+                    ${vm.assets.slice(0, 24).map(a =>
+                        `<li><button type="button" class="carto-focus-btn" data-id="${esc(a.id)}">`
+                        + `<span class="carto-cdot" style="background:${CRIT_COLOR[a.criticite] || "#ccc"}"></span>`
+                        + `${esc(a.nom)}</button></li>`).join("")}
+                </ul>`;
+            hote.querySelectorAll(".carto-focus-btn").forEach(b =>
+                b.addEventListener("click", () => selectNode(b.dataset.id)));
+            return;
+        }
+
+        // Propagation en largeur, en retenant le PIRE délai du chemin.
+        const rangDelai = (code) => {
+            const d = DELAIS.find(x => x.code === code);
+            return d ? d.rang : null;   // null = non renseigné
+        };
+        const atteints = new Map();   // id → { noeud, rang, inconnu }
+        let front = [{ id: centre.id, rang: 0, inconnu: false }];
+        const vus = new Set([centre.id]);
+        let garde = 0;
+        while (front.length && garde < 1000) {
+            const suivant = [];
+            front.forEach(courant => {
+                vm.depEdges.forEach(e => {
+                    if (e.t !== courant.id) return;
+                    const dt = DEP_TYPES[e.type];
+                    if (!dt || !dt.propagates) return;   // sauvegarde, redondance
+                    const r = rangDelai(e.delai);
+                    // Le chemin porte le délai le PLUS LONG de ses maillons : on
+                    // n'attend pas moins que le maillon le plus lent.
+                    const rang = r === null ? courant.rang : Math.max(courant.rang, r);
+                    const inconnu = courant.inconnu || r === null;
+                    const deja = atteints.get(e.f);
+                    if (deja && deja.rang <= rang) return;
+                    atteints.set(e.f, { noeud: vm.nodeById[e.f], rang, inconnu });
+                    if (!vus.has(e.f)) { vus.add(e.f); suivant.push({ id: e.f, rang, inconnu }); }
+                });
+                vm.procEdges.forEach(e => {
+                    if (e.t !== courant.id) return;
+                    const deja = atteints.get(e.f);
+                    if (deja && deja.rang <= courant.rang) return;
+                    atteints.set(e.f, {
+                        noeud: vm.nodeById[e.f], rang: courant.rang, inconnu: courant.inconnu
+                    });
+                });
+            });
+            front = suivant;
+            garde += 1;
+        }
+
+        const colonnes = DELAIS.map(d => ({
+            titre: d.libelle, aide: d.aide,
+            items: [...atteints.values()].filter(x => x.noeud && !x.inconnu && x.rang === d.rang)
+        }));
+        const incertains = [...atteints.values()].filter(x => x.noeud && x.inconnu);
+
+        const item = (x) => `<li>
+            <span class="carto-cdot" style="background:${CRIT_COLOR[x.noeud.criticite] || (x.noeud.kind === "proc" ? "#7a5cc0" : "#ccc")}"></span>
+            ${esc(x.noeud.nom)}${x.noeud.kind === "proc" ? ' <span class="carto-ch-proc">processus</span>' : ""}
+        </li>`;
+
+        hote.innerHTML = `
+            <div class="carto-chaine">
+                <p class="carto-ch-sujet">Si <strong>${esc(centre.nom)}</strong> tombe —
+                ${atteints.size} élément(s) touché(s).
+                ${atteints.size === 0 ? "Personne n’en dépend." : ""}</p>
+                <div class="carto-ch-cols">
+                    ${colonnes.map(c => `
+                        <div class="carto-ch-col">
+                            <h4 title="${esc(c.aide)}">${esc(c.titre)} <span>${c.items.length}</span></h4>
+                            ${c.items.length ? `<ul>${c.items.map(item).join("")}</ul>`
+                                             : '<p class="carto-vide">—</p>'}
+                        </div>`).join("")}
+                    <div class="carto-ch-col carto-ch-col--inconnu">
+                        <h4 title="Le délai n’a pas été déclaré sur au moins un lien du chemin. Ce n’est pas « immédiat » : c’est inconnu, et c’est la première chose à renseigner.">Délai non renseigné <span>${incertains.length}</span></h4>
+                        ${incertains.length ? `<ul>${incertains.map(item).join("")}</ul>`
+                                            : '<p class="carto-vide">—</p>'}
+                    </div>
+                </div>
+                ${incertains.length ? `<p class="carto-ch-note"><strong>${incertains.length}
+                    élément(s)</strong> ne peuvent pas être datés : au moins un lien de leur
+                    chemin ne porte pas de délai avant impact. Le produit ne le devine pas —
+                    il se renseigne sur la fiche de l’actif source.</p>` : ""}
+            </div>`;
     }
 
     /* =========================
@@ -532,7 +1050,7 @@ const CartographieModule = (() => {
         const typeBtns = ALL_TYPES.map(t => `<button type="button" class="carto-fbtn" data-ftype="${esc(t)}" aria-pressed="true">${esc(t)}</button>`).join("");
         const critBtns = ALL_CRITS.map(c => `<button type="button" class="carto-fbtn" data-fcrit="${esc(c)}" aria-pressed="true"><span class="carto-cdot" style="background:${CRIT_COLOR[c]}"></span>${esc(c)}</button>`).join("");
 
-        const legend = DEP_ORDER.map(tp => `<span class="carto-lg"><span class="carto-ln" style="border-color:${DEP_TYPES[tp].color};${DEP_TYPES[tp].dash ? "border-style:dashed" : ""}"></span>${DEP_TYPES[tp].short}</span>`).join("")
+        const legend = DEP_ORDER.map(tp => `<span class="carto-lg" title="${esc(DEP_TYPES[tp].aide || "")}"><svg class="carto-ln-svg" viewBox="0 0 34 8" aria-hidden="true"><line x1="1" y1="4" x2="33" y2="4" stroke="${DEP_COLOR}" stroke-width="2"${DEP_TYPES[tp].dash ? ` stroke-dasharray="${DEP_TYPES[tp].dash}"` : ""}/></svg>${esc(DEP_TYPES[tp].short)}${DEP_TYPES[tp].propagates ? "" : ' <span class="carto-nonprop" title="Ce lien ne propage PAS une panne de disponibilité.">ne propage pas</span>'}</span>`).join("")
             + `<span class="carto-lg"><span class="carto-ln" style="border-color:${USE_COLOR};border-style:dotted"></span>usage (processus ↔ actif)</span>`;
 
         app.innerHTML = `
@@ -553,6 +1071,10 @@ const CartographieModule = (() => {
                     <div class="carto-stat"><div class="k">Processus métier</div><div class="v" id="carto-stat-proc">${model.procs.length}</div></div>
                     <div class="carto-stat"><div class="k">Dépendances</div><div class="v" id="carto-stat-liens">${model.depEdges.length}</div></div>
                     <div class="carto-stat alert"><div class="k">SPOF détectés ${Help.tip("Points de défaillance unique : actifs dont dépendent au moins deux processus critiques. À redonder en priorité.")}</div><div class="v" id="carto-stat-spof">${spof.size}</div></div>
+                </div>
+
+                <div class="carto-vues no-print" role="group" aria-label="Vue de la cartographie">
+                    ${VUES.map(v => `<button type="button" class="carto-vue${v.code === vue ? " carto-vue--actif" : ""}" data-vue="${esc(v.code)}" title="${esc(v.aide)}"${v.code === vue ? ' aria-current="true"' : ""}>${esc(v.libelle)}</button>`).join("")}
                 </div>
 
                 <div class="carto-toolbar no-print">
@@ -579,8 +1101,42 @@ const CartographieModule = (() => {
             </section>`;
 
         wireToolbar();
-        renderGraph(model, spof);
+        wireVues();
+        dessiner(model, spof);
         renderPanel(model, spof);
+    }
+
+    /**
+     * Dessine la vue courante dans l'hôte SVG.
+     *
+     * ⚠️ **Les trois vues neuves partagent l'hôte et le panneau latéral.** Leur
+     * donner chacune son conteneur aurait fait quatre écrans qui se ressemblent,
+     * et le sélecteur n'aurait plus rien sélectionné.
+     */
+    function dessiner(model, spof) {
+        if (vue === "matrice") return renderMatrice(model, spof);
+        if (vue === "focus") return renderFocus(model, spof);
+        if (vue === "chaine") return renderChaine(model, spof);
+        return renderGraph(model, spof);
+    }
+
+    function wireVues() {
+        document.querySelectorAll(".carto-vue").forEach(b => {
+            b.addEventListener("click", () => {
+                // L'identifiant se lit dans l'attribut AU MOMENT DU CLIC.
+                vue = b.dataset.vue;
+                refresh();
+                // La barre des vues n'est pas redessinée par `refresh()` : on la
+                // remet à jour ici plutôt que de tout re-rendre, ce qui perdrait
+                // les filtres et la sélection.
+                document.querySelectorAll(".carto-vue").forEach(x => {
+                    const actif = x.dataset.vue === vue;
+                    x.classList.toggle("carto-vue--actif", actif);
+                    if (actif) x.setAttribute("aria-current", "true");
+                    else x.removeAttribute("aria-current");
+                });
+            });
+        });
     }
 
     /* Branchement de la barre d'outils (une fois par rendu de la vue). */
@@ -627,6 +1183,102 @@ const CartographieModule = (() => {
         .carto-legend{display:flex;flex-wrap:wrap;gap:12px 18px;padding:12px 8px 4px;border-top:1px solid var(--border);margin-top:8px;font-size: var(--text-xs);color:var(--text-muted)}
         .carto-lg{display:inline-flex;align-items:center;gap:7px}
         .carto-ln{width:24px;border-top:2.5px solid;border-radius:2px}
+        /* Le TRAIT dit la nature du lien depuis le 22/09/2026 : huit pointillés
+           différents, une seule couleur. Une légende de huit pastilles de la même
+           teinte n'apprendrait rien. */
+        .carto-ln-svg{width:34px;height:8px;flex:0 0 auto}
+        /* ── Le sélecteur de vue ──────────────────────────────────────── */
+        .carto-vues{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+        .carto-vue{background:var(--bg-card,#fff);color:var(--text-main,#1f2d3d);
+                   border:1px solid var(--border,#e2e6ea);border-radius:999px;
+                   padding:5px 14px;font-size:var(--text-sm,0.8125rem);font-weight:600;
+                   cursor:pointer}
+        .carto-vue:hover{background:var(--tint-info,#e8eff8)}
+        .carto-vue--actif{background:var(--accent,#2059A6);color:#fff;
+                          border-color:var(--accent,#2059A6)}
+        .carto-vue:focus-visible{outline:2px solid var(--accent,#2059A6);outline-offset:2px}
+        .carto-vide{color:var(--text-muted,#6b7a8d);font-style:italic;
+                    font-size:var(--text-sm,0.8125rem);padding:14px 4px;margin:0}
+
+        /* ── Vue MATRICE ──────────────────────────────────────────────── */
+        .carto-mx-aide{font-size:var(--text-sm,0.8125rem);color:var(--text-muted,#6b7a8d);
+                       margin:0 0 12px}
+        .carto-matrice{font-size:var(--text-xs,0.75rem)}
+        .carto-matrice th,.carto-matrice td{padding:3px 5px;text-align:center}
+        .carto-matrice th.carto-mx-nom{text-align:left;white-space:nowrap;
+                                       position:sticky;left:0;background:var(--bg-card,#fff);
+                                       z-index:1;text-transform:none;letter-spacing:normal}
+        .carto-mx-rang{display:inline-block;min-width:20px;color:var(--text-muted,#6b7a8d);
+                       font-weight:700}
+        .carto-mx-num{width:26px;color:var(--text-muted,#6b7a8d)}
+        .carto-mx-diag{background:var(--bg-body,#f5f6f8)}
+        .carto-mx-cell{background:var(--tint-info,#e8eff8);color:#1b4b8f;font-weight:700;
+                       border-radius:3px}
+        .carto-mx-cell--inerte{background:var(--tint-na,#eef1f5);
+                               color:var(--text-muted,#6b7a8d);font-weight:400}
+        .carto-mx-spof{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;
+                       font-size:var(--text-xs,0.75rem);font-weight:700;
+                       background:var(--tint-crit,#fbe9e7);color:var(--color-danger,#c0392b)}
+
+        /* ── Vue FOCUS ────────────────────────────────────────────────── */
+        .carto-focus{display:grid;grid-template-columns:1fr auto 1fr;gap:18px;
+                     align-items:start}
+        .carto-fx-col h3{font-size:var(--text-sm,0.8125rem);text-transform:uppercase;
+                         letter-spacing:0.05em;color:var(--text-muted,#6b7a8d);margin:0 0 8px}
+        .carto-fx-col h3 span{font-weight:400}
+        .carto-fx-col ul{list-style:none;padding:0;margin:0}
+        .carto-fx-item{display:flex;flex-direction:column;gap:2px;padding:6px 0;
+                       border-bottom:1px solid var(--border,#e2e6ea)}
+        .carto-fx-indirect{opacity:0.75}
+        .carto-fx-btn{display:flex;align-items:center;gap:7px;background:none;border:none;
+                      padding:0;cursor:pointer;font:inherit;font-weight:600;text-align:left;
+                      color:var(--text-main,#1f2d3d)}
+        .carto-fx-btn:hover .carto-fx-nom{text-decoration:underline}
+        .carto-fx-lien{font-size:var(--text-xs,0.75rem);color:var(--text-muted,#6b7a8d);
+                       padding-left:19px}
+        .carto-fx-saut{font-style:italic}
+        .carto-fx-centre{min-width:190px;text-align:center;padding-top:26px}
+        .carto-fx-sujet{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;
+                        justify-content:center;background:var(--tint-info,#e8eff8);
+                        border:2px solid var(--accent,#2059A6);border-radius:var(--radius,8px);
+                        padding:10px 16px}
+        .carto-fx-type{font-size:var(--text-xs,0.75rem);color:var(--text-muted,#6b7a8d)}
+        .carto-fx-procs{font-size:var(--text-xs,0.75rem);color:var(--text-muted,#6b7a8d);
+                        margin:8px 0 0}
+        .carto-focus-choix{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;
+                           gap:6px}
+        .carto-focus-btn{display:inline-flex;align-items:center;gap:6px;
+                         background:var(--bg-card,#fff);border:1px solid var(--border,#e2e6ea);
+                         border-radius:999px;padding:4px 12px;cursor:pointer;font:inherit;
+                         font-size:var(--text-sm,0.8125rem)}
+        .carto-focus-btn:hover{background:var(--tint-info,#e8eff8)}
+
+        /* ── Vue CHAÎNE D'IMPACT ──────────────────────────────────────── */
+        .carto-chaine{min-width:0}
+        .carto-ch-sujet{font-size:var(--text-base,0.9375rem);margin:0 0 12px}
+        .carto-ch-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+                       gap:12px}
+        .carto-ch-col{border:1px solid var(--border,#e2e6ea);border-radius:var(--radius,8px);
+                      padding:10px 12px;min-width:0}
+        .carto-ch-col h4{margin:0 0 8px;font-size:var(--text-xs,0.75rem);text-transform:uppercase;
+                         letter-spacing:0.05em;color:var(--text-muted,#6b7a8d)}
+        .carto-ch-col h4 span{float:right;font-weight:700;color:var(--text-main,#1f2d3d)}
+        .carto-ch-col ul{list-style:none;padding:0;margin:0;font-size:var(--text-sm,0.8125rem)}
+        .carto-ch-col li{display:flex;align-items:center;gap:7px;padding:3px 0}
+        /* ⚠️ Teinte d'ALERTE et non de statut : un impact qu'on ne sait pas dater est
+           la première chose à renseigner, et il doit se voir. */
+        .carto-ch-col--inconnu{border-color:var(--primary,#E9631B);
+                               background:var(--primary-tint,#FDEFE4)}
+        .carto-ch-proc{font-size:var(--text-xs,0.75rem);color:var(--text-muted,#6b7a8d)}
+        .carto-ch-note{margin:12px 0 0;font-size:var(--text-sm,0.8125rem);
+                       color:var(--text-muted,#6b7a8d)}
+
+        @media (max-width:900px){
+            .carto-focus{grid-template-columns:1fr}
+            .carto-fx-centre{padding-top:0}
+        }
+        .carto-nonprop{font-size:var(--text-xs,0.75rem);color:var(--text-muted,#6b7a8d);
+                       background:var(--tint-na,#eef1f5);border-radius:999px;padding:0 6px}
         .carto-panel{padding:18px;position:sticky;top:12px}
         .carto-panel h2{font-size: var(--text-xs);text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin:0 0 12px;font-weight:700}
         .carto-empty{color:var(--text-muted);font-size: var(--text-sm);line-height:1.55}
@@ -679,6 +1331,10 @@ const CartographieModule = (() => {
         render, selectNode, clearSelection, exportPNG, exportSVG,
         toggleType, toggleCrit, setShowProc, setHideIsolated, setSearch,
         // Exposés pour la fiche Actif (édition des dépendances) :
-        depTypes: () => DEP_TYPES, depOrder: () => DEP_ORDER.slice()
+        depTypes: () => DEP_TYPES, depOrder: () => DEP_ORDER.slice(),
+        delais: () => DELAIS.slice(), degrades: () => DEGRADES.slice(),
+        naturesTiers: () => NATURES_TIERS.slice(),
+        libelleDelai: (c) => (DELAI_PAR_CODE[c] || {}).libelle || "",
+        libelleDegrade: (c) => (DEGRADE_PAR_CODE[c] || {}).libelle || ""
     };
 })();

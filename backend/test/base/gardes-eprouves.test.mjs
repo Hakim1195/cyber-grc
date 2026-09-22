@@ -1007,3 +1007,113 @@ describe('Les fiches réflexes tiennent, et c’est ÉPROUVÉ — 061', () => {
     );
   });
 });
+
+/* =====================================================================
+ *  LES DÉPENDANCES ENTRE ACTIFS — migration `062`
+ *
+ *  ⚠️ **Le défaut que ces mutations ferment ne se voit PAS à l'usage** : un type
+ *  de lien retiré du vocabulaire laisse les lignes en base et les fait
+ *  disparaître du graphe — saisies, stockées, invisibles. La cartographie
+ *  ignore ce qu'elle ne connaît pas, et elle a raison de le faire.
+ * ===================================================================== */
+
+describe('Les natures de lien entre actifs tiennent, et c’est ÉPROUVÉ — 062', () => {
+  test('le témoin : le schéma intact ne rend AUCUNE anomalie', async () => {
+    const anomalies = await anomaliesPendant([]);
+    assert.equal(anomalies.length, 0, `Schéma d’essai déjà en défaut : ${resume(anomalies)}`);
+  });
+
+  test('🛑 retirer UNE nature de lien est vu, et elle est NOMMÉE', async () => {
+    /* ⚠️ La mutation du constat **Q-313** : la contrainte existe encore, elle porte
+       le bon nom, elle cite sept valeurs sur huit. Un garde de CLASSE ne voit rien.
+       Ici, `administre_par` disparaît — et avec lui la seule chose qui distingue le
+       chemin d'un attaquant d'une dépendance quelconque. */
+    const anomalies = await anomaliesPendant([
+      'alter table actif_dependances drop constraint ck_actif_dependances_type',
+      `alter table actif_dependances add constraint ck_actif_dependances_type check (
+         type in ('dep','hosted','flux','backup','authentifie_par','transite_par','redonde_par'))`,
+    ]);
+    assert.ok(
+      nomme(anomalies, 'type_de_lien_disparu'),
+      `Une nature de lien retirée doit être NOMMÉE. Rendu : ${resume(anomalies)}`,
+    );
+    const detail = anomalies.find((a) => a.anomalie === 'type_de_lien_disparu')?.detail ?? '';
+    assert.match(
+      detail,
+      /administre_par/,
+      'Le garde doit dire LAQUELLE a disparu : « une contrainte a changé » n’aide personne.',
+    );
+  });
+
+  test('un vocabulaire OUVERT est vu — le contre-témoin', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table actif_dependances drop constraint ck_actif_dependances_type',
+      "alter table actif_dependances add constraint ck_actif_dependances_type check (type <> '')",
+    ]);
+    assert.ok(
+      nomme(anomalies, 'vocabulaire_des_liens_ouvert'),
+      'Un type inventé accepté fait disparaître le lien du graphe sans un mot — saisi, ' +
+        `stocké, invisible. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('rendre un qualificatif OBLIGATOIRE est vu', async () => {
+    /* ⚠️ Le défaut le plus insidieux du lot : rendre `delai_impact` obligatoire
+       paraît rigoureux. Conséquence mesurée — les milliers de dépendances saisies
+       avant la `062` deviennent inécrivables, et la fiche d'un actif refuse
+       d'enregistrer sans désigner la cause. C'est le motif du constat Q-192. */
+    const anomalies = await anomaliesPendant([
+      'alter table actif_dependances drop constraint ck_actif_dependances_delai',
+      // ⚠️ **`is not null` est INDISPENSABLE dans cette mutation**, et l'avoir
+      //    oublié a fait passer l'essai au vert. Un `check (col in (…))` ne
+      //    rejette JAMAIS la valeur nulle : une contrainte CHECK n'échoue que sur
+      //    FALSE, et `null in (…)` vaut NULL. C'est d'ailleurs pourquoi la
+      //    contrainte d'origine s'écrit « is null or … » — les deux formes sont
+      //    équivalentes, et la seconde est seulement plus lisible.
+      `alter table actif_dependances add constraint ck_actif_dependances_delai check (
+         delai_impact is not null and delai_impact in ('immediat','heures','jour','semaine'))`,
+    ]);
+    assert.ok(
+      nomme(anomalies, 'qualificatif_obligatoire'),
+      `Une colonne neuve ne rend pas inécrivables les lignes anciennes. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('un délai INVENTÉ accepté est vu', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table actif_dependances drop constraint ck_actif_dependances_delai',
+      'alter table actif_dependances add constraint ck_actif_dependances_delai check (true)',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'delai_ouvert'),
+      `Une chronologie qui n’est plus comparable n’apporte rien. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('la NATURE retirée de la clé du lien vers un tiers est vue', async () => {
+    /* ⚠️ Sans elle, un tiers qui HÉBERGE un actif et l'INFOGÈRE ne peut déclarer
+       qu'un des deux — et le registre d'information DORA est faux d'une ligne. La
+       mesure porte sur les COLONNES de l'index, jamais sur son nom : un index qui
+       porterait le bon nom sur les mauvaises colonnes passerait tout contrôle
+       textuel. */
+    const anomalies = await anomaliesPendant([
+      'alter table actif_prestataires drop constraint pk_actif_prestataires',
+      'alter table actif_prestataires add constraint pk_actif_prestataires primary key (actif_id, prestataire_id)',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'nature_hors_cle'),
+      `Héberger et infogérer sont deux engagements contractuels. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('une politique retirée du lien vers un tiers est vue', async () => {
+    const anomalies = await anomaliesPendant([
+      'drop policy pol_actif_prestataires_maj on actif_prestataires',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'politiques_incompletes'),
+      'Une arête entre un actif et un prestataire d’une AUTRE filiale passerait, et ni la ' +
+        `clé étrangère ni un contrôle applicatif ne la verraient. Rendu : ${resume(anomalies)}`,
+    );
+  });
+});

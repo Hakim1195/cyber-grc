@@ -144,6 +144,9 @@ const NOUVELLES_PAR_VERSION = {
   // jeux de portée Groupe pour les mêmes rôles sur une base neuve, et l'unicité
   // « nulls not distinct » refuserait la reprise (motif Q-194).
   28: ['fiches_reflexes', 'fiche_reflexe_actions', 'contacts_urgence'],
+  // v29 : `prestataires_lies` est un CHAMP des actifs, pas une collection —
+  // le palier n'en crée donc aucune.
+  29: [],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -1113,11 +1116,25 @@ export function instantaneV26Complet() {
  * ⚠️ **`mesure_id` vise le pivot du même jeu d'essai** : un connecteur sans mesure
  * produirait un constat que personne ne regarde, et le schéma le refuse.
  */
-export function instantaneV28Complet() {
+export function instantaneV29Complet() {
   const base = instantaneV26Complet();
   return {
     ...base,
-    schemaVersion: 28,
+    schemaVersion: 29,
+    // ── v29 : qui EXPLOITE chaque actif (migration `062`) ───────────────────────
+    //
+    // ⚠️ **Le PREMIER actif porte un lien RÉEL vers un prestataire du même
+    // instantané** : c'est cette arête que le recalage d'identifiants doit suivre, et
+    // un lien détaché ferait entrer dans le registre DORA un tiers que personne n'a
+    // déclaré. Les autres portent un tableau vide — c'est ce qu'un fichier sain porte,
+    // et l'absence du champ ferait rougir la normalisation.
+    actifs: base.actifs.map((a, i) => ({
+      ...a,
+      prestataires_lies:
+        i === 0 && base.prestataires.length > 0
+          ? [{ to: base.prestataires[0].id, nature: 'infogerance' }]
+          : [],
+    })),
     // ── v28 : les fiches réflexes de crise (migration `061`) ────────────────────
     //
     // ⚠️ **Une fiche de FILIALE, jamais du socle**, et c'est ce que l'aller-retour
