@@ -27,10 +27,10 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2411 essais, 2411 passés, 0 échec** — 2 084 sans navigateur et 327 avec —,
-> trente-huit familles. ⚠️ **+26 le 21/09/2026** : la recherche documentaire (action **D3**,
-> migration `059`) apporte `test/recherche/documentaire.test.mjs` (19) et
-> `test/navigateur/recherche-documentaire.test.mjs` (7).
+> `npm test` → **2494 essais, 2494 passés, 0 échec** — 2 224 sans navigateur et 270 avec —,
+> **quarante** familles. ⚠️ **+83 les 21 et 22/09/2026** : les quatre vagues de la revue
+> d'usage apportent `test/habilitations/` (46) et `test/personnel/` (10), et étendent
+> `base` (326 → 349, les garde-fous des migrations `060` à `063`) et `modules` (57 → 61).
 >
 > **État mesuré le 18/09/2026** : **relevé famille par
 > famille** (trente-deux familles, dont `echelles` qui naît avec l'action 25.3),

@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2411 essais, quarante-trois familles (voir plus bas)
+npm test                           # 2494 essais, quarante familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -647,9 +647,11 @@ que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non re
 | `test/collecte/` | la **collecte automatique de preuve** et la surveillance continue (L23). ⚠️ Le §1 balaie le **REGISTRE** des exécuteurs, et non trois d'entre eux : **aucun chemin d'échec ne rend « conforme »** (critère 23.4) — source injoignable, configuration incomplète, réponse illisible. 🛑 Sa première rédaction restait **verte contre sa propre mutation** parce qu'elle écrivait une valeur textuelle dans un réglage numérique : l'exécuteur s'arrêtait avant la règle mesurée, et le §1 ne faisait jamais décider ce qu'il prétendait couvrir (constat **Q-210**). ⚠️ Et une preuve **périmée redevient absente** : « périmé » n'est pas « non conforme » |
 | `test/assistance/` | les **six barrières de l'assistance IA** (L27). L'IA **propose**, un humain **décide** : un essai mesure sur les **quatre tables métier** qu'aucun des cinq usages n'écrit une ligne. ⚠️ Source coupée ⇒ verdict **« indisponible »**, jamais une réponse inventée — et l'appel est journalisé quand même, sans quoi l'indisponibilité serait invisible. ⚠️ La barrière n°1 est **dans la base** : sans le réglage de l'exploitant, aucune activation externe n'entre, **quelle que soit la route** — une barrière d'écran se contourne par le moteur d'import du lot L7 |
 | `test/portail/` | le **portail fournisseur** (L28), premier composant prévu hors VPN. Pas de compte, un lien **qui expire tout seul**, **404 jamais 403** (un 403 confirmerait que le lien a existé), et le dépôt par **LA** chaîne du lot L6 — sans variante simplifiée. 🛑 Le §4 a laissé passer la mutation la plus dangereuse du lot — mettre le périmètre du portail en Groupe avec l'administration — en restant **vert à treize essais sur quatorze** : il mesure désormais `perimetreDuPortail()` lui-même, champ par champ. ⚠️ Et `portail_liens` est dans la circularité du §46, reconnue **avant** d'avoir coûté un défaut |
+| `test/habilitations/` | la **gestion des droits à l'écran** (vague G1, migration `060`) : la matrice des trente domaines, la déclaration des groupes d'annuaire, la **cohérence annuaire ↔ application** et la **revue périodique des accès** (ISO 27001 A.5.18). 🛑 Le **verrou d'administrabilité** y est mesuré **dans les deux sens** : il refuse la seule écriture qui retirerait le dernier chemin d'administration, et il **laisse passer** celle qui répare une base où ce chemin manque déjà — un verrou absolu piégeait l'amorçage, et c'est ce qu'un essai éprouve. ⚠️ Et la **simulation** est journalisée **avant** le verdict : savoir ce qu'un compte pourrait voir est une consultation sensible, qu'il existe ou non |
+| `test/personnel/` | le lien **personnel ↔ Active Directory** (vague G4, migration `063`), et ce qu'il refuse de faire. 🛑 **Aucune écriture LDAP n'existe** — le client n'implémente que `lier`, `rechercher`, `fermer` : la propriété est éprouvée comme une **absence**, pas comme un réglage. ⚠️ L'entrée est validée **avant** la disponibilité de l'annuaire (un filtre d'un caractère est malformé qu'un annuaire soit configuré ou non), l'absence d'annuaire **se dit** en 503 au lieu de se rendre comme une liste vide, et un **départ ne supprime rien** : il remonte en « à vérifier », fiche intacte |
 
 *(`test/aide/` n'est pas une famille : ce sont les montages partagés — base, serveur,
-navigateur, outillage — que les trente-sept autres appellent.)*
+navigateur, outillage — que les trente-neuf autres appellent.)*
 
 **Deux de ces familles sont nées d'un défaut, et c'est ce qui leur donne leur valeur.**
 
@@ -782,8 +784,9 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 19/09/2026, après la vague F** (L27 : assistance par IA — `057` ; L28 :
-portail fournisseur — `058`, **construit et NON ouvert**) : `npm test` → **2411 essais, 2411 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**Mesuré au 22/09/2026, après les quatre vagues de la revue d'usage** (G1 habilitations —
+`060` ; G2 fiches réflexes — `061` ; G3 actifs et cartographie — `062` ; G4 personnel ↔
+annuaire — `063`) : `npm test` → **2494 essais, 2494 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **67 garde-fous consignés**, **63 migrations**,
 **95 tables**, **573 décisions** au registre de l'article 30 ; publication → **88
@@ -956,27 +959,29 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`4127ce8`** — les quatre lots des vagues E et F (L22, L23, L27, L28), c'est-à-dire l'arbre qui a été relevé. 19/09/2026, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ neuf fois**, dont une où il désignait une révision cinquante-six commits en arrière (constat **Q-219**). Le garde-fou juge le document contre **la révision que le document nomme**, jamais contre l'arbre de travail. |
-| État de l'arbre | **arbre de `4127ce8`**, à l'octet près. Compte **RELEVÉ famille par famille**, jamais déduit — chacun des trente-huit répertoires de `test/` joué séparément. **QUATRE familles NEUVES** : `ouverture`, `collecte`, `assistance`, `portail`. ⚠️ **`documentation` est annoncée à 33, et elle en rendait 32 au relevé** : son unique essai en échec était « LES FAMILLES ANNONCÉES sont EXACTEMENT celles de la RÉVISION MESURÉE », qui ne pouvait pas être vert avant que les quatre familles neuves entrent dans l'histoire. **C'est ce commit-ci qui le rend vert**, et c'est la seule circularité du dispositif : le point fixe du compte n'existe qu'après le commit qu'il décrit. Elle se dit plutôt qu'elle ne se cache. |
+| Révision mesurée | **`329a072`** — les **quatre vagues de la revue d'usage** (G1 habilitations, G2 fiches réflexes, G3 actifs et cartographie, G4 personnel ↔ annuaire, migrations `060` à `063`) **et la reprise du §29.5** qui les suit, c'est-à-dire l'arbre qui a été relevé. 22/09/2026, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ neuf fois**, dont une où il désignait une révision cinquante-six commits en arrière (constat **Q-219**). Le garde-fou juge le document contre **la révision que le document nomme**, jamais contre l'arbre de travail. |
+| État de l'arbre | **arbre de `329a072`**, à l'octet près. Compte **RELEVÉ famille par famille**, jamais déduit — chacun des **quarante** répertoires de `test/` joué séparément, et la somme confrontée au total du banc complet : **2 494 des deux côtés**. **DEUX familles NEUVES** : `habilitations` (46) et `personnel` (10). ⚠️ **`documentation` est annoncée à 33, et elle en rendait 32 au relevé** : son unique essai en échec était « LES FAMILLES ANNONCÉES sont EXACTEMENT celles de la RÉVISION MESURÉE », qui ne pouvait pas être vert avant que les quatre familles neuves entrent dans l'histoire. **C'est ce commit-ci qui le rend vert**, et c'est la seule circularité du dispositif : le point fixe du compte n'existe qu'après le commit qu'il décrit. Elle se dit plutôt qu'elle ne se cache. |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 | ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2411 · pass 2411 · fail 0
-                                                   base 326 · api 302 · navigateur 270
+npm test                                         → tests 2494 · pass 2494 · fail 0
+                                                   base 349 · api 302 · navigateur 270
                                                    pieces 142 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73
                                                    journal-lecture 72 · approbations 71
-                                                   depot 66 · modules 57 · annuaire 48
-                                                   tiers 36 · documents 35 · filiales 35
+                                                   depot 66 · modules 61 · annuaire 48
+                                                   habilitations 46 · tiers 36
+                                                   documents 35 · filiales 35
                                                    documentation 36 · campagnes 25
                                                    journal 25 · catalogues 24 · ouverture 24
                                                    echelles 23 · quantification 22
                                                    assistance 16 · collecte 15 · ebios 15
                                                    portail 15 · recherche 32
+                                                   personnel 10
                                                    attestations 8 · decouverte 8 · aipd 7
                                                    crise 7 · reglementaire 7 · derogations 6
                                                    droits-personnes 6
