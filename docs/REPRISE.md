@@ -160,6 +160,86 @@ des verdicts antérieurs, il n'en établit pas.
 
 ---
 
+### ▶ OÙ REPRENDRE — au 22/09/2026, après les QUATRE VAGUES de la revue d'usage
+
+# 🛑 **LES QUATRE VAGUES DEMANDÉES PAR L'UTILISATEUR SONT LIVRÉES.**
+
+Elles ne viennent d'aucun plan : elles viennent d'une **revue section par section** du
+produit par l'utilisateur, les 21 et 22/09/2026, et de six demandes qu'il a validées en
+bloc — *« organise-toi pour exécuter l'intégralité de tes propositions et choisis l'ordre
+et la stratégie »*. L'ordre choisi va **du plus structurant au plus visible** : sans les
+habilitations, personne ne peut ouvrir correctement les écrans que les trois autres
+livrent.
+
+| | Vague | Ce qu'elle ferme | Migration |
+|---|---|---|---|
+| **G1** | **Les habilitations** | *« il manque quelque chose de fondamental : la gestion des droits. On ne peut pas juste créer un compte à toute l'AD »* — quatre vues : la **matrice** des 30 domaines × profils, les **groupes d'annuaire** avec leur contrôle de cohérence, les **comptes**, et la **revue périodique des accès** (ISO 27001 A.5.18) | `060` |
+| **G2** | **Les fiches réflexes** | *« ça serait top de pouvoir créer et modifier les fiches réflexes, car elles sont à adapter en fonction de l'existant »* — elles quittent le code et entrent en base, **socle du Groupe surchargeable par filiale** | `061` |
+| **G3** | **Actifs et cartographie** | *« enrichir les relations entre actifs pour les rendre plus conformes à la réalité du terrain »* et *« quelque chose de plus lisible et plus professionnel »* — **huit** types de lien au lieu de quatre, délai d'impact, mode dégradé, prestataires par actif, et **quatre vues** de carte | `062` |
+| **G4** | **Le personnel ↔ l'annuaire** | *« je voulais que les gens cités ici soient également les comptes AD des gens »* — import et rafraîchissement **en lecture seule** depuis l'Active Directory | `063` |
+
+**Et une réponse sans code** : la colonne « perte annualisée » de la vision Groupe, dont
+l'utilisateur demandait *« d'où ça sort »*. Elle vient de la quantification FAIR livrée par
+l'action 25.4 — fréquence × (perte primaire + pertes secondaires) —, elle ne s'additionne
+qu'à devise égale, et elle est marquée **« ≥ »** quand les pertes secondaires manquent.
+L'écran le dit désormais ; le calcul, lui, n'a pas bougé.
+
+## 🛑 LA CONTRAINTE QUI TIENT TOUTE LA VAGUE G4, ET QUI NE SE RE-DÉBAT PAS
+
+> **L'utilisateur, le 22/09/2026 :** *« Je confirme qu'on n'écrit jamais sur l'AD depuis ce
+> logiciel, c'est sûr. »*
+
+Elle n'est **pas** implémentée comme une consigne, ni comme un réglage, ni comme un droit à
+retirer : elle est une **capacité absente**. `ClientLdap` (`src/auth/annuaire.ts`)
+n'implémente que `lier`, `rechercher`, `fermer` — il n'existe aucune fonction d'écriture à
+désactiver. *Une capacité absente ne se réactive pas par une erreur de configuration.*
+
+⚠️ **Corollaire, et il court dans les quatre vagues** : le produit **rend des listes**, et
+un humain applique. Les groupes à créer, les accès « à retirer » d'une revue, les comptes
+désactivés d'un rafraîchissement — rien de cela n'est appliqué par le produit.
+
+⚠️ **CE QUE CES QUATRE VAGUES ONT APPRIS, ET QUI VAUT AU-DELÀ :**
+
+1. 🛑 **UN VERROU QUI PROTÈGE UNE PROPRIÉTÉ DOIT ÊTRE DIFFÉRENTIEL, JAMAIS ABSOLU.** Le
+   verrou d'administrabilité de G1 — *« on ne peut pas retirer le dernier chemin
+   d'administration »* — refusait, à sa première écriture, **toute** écriture dès lors que
+   la propriété était absente **à l'arrivée**. Sur une base neuve, `groupes_ad` est vide :
+   aucune écriture n'était possible, **y compris celle qui aurait réparé la situation**. Il
+   mesure désormais avant ET après, et n'interdit que de **causer** la perte.
+2. **Un garde-fou de schéma ne peut pas INSÉRER.** `stable` l'interdit — même dans une
+   sous-transaction annulée. Éprouver une contrainte passe par `f_contrainte_accepte()`,
+   jamais par une ligne témoin (`CONVENTIONS.md` §39.8, payé une troisième fois).
+3. **Le nom d'un déclencheur est NORMATIF** : `f_verifier_tracabilite()` cherche exactement
+   `trg_<table>_maj`. Un nom abrégé pour tenir dans 63 caractères le rend **invisible au
+   garde**, sans une erreur.
+4. **`f_poser_portee_figee()` arme ses déclencheurs en `origin`** : il faut `select
+   f_armer_declencheurs();` derrière. Le déploiement a été refusé **trois fois** pour cela,
+   sur trois migrations de suite.
+5. 🛑 **HUIT DÉFAUTS TROUVÉS EN CLIQUANT, ZÉRO PAR LE BANC** — dont un écran qui affirmait
+   « aucun domaine ouvert » pour le compte d'administration lui-même (un groupe transversal
+   ne porte pas de `profil_id`, il en **accorde** un à la résolution), une recherche qui
+   **filtrait** le modèle dans les vues Focus et Chaîne au lieu d'y **désigner** le sujet —
+   « 0 élément touché » sur un annuaire qui en a quatre —, un motif demandé **après** le
+   refus du serveur (quatre gestes pour un), et une fiche importée sans aucun marqueur.
+6. ⚠️ **Le sixième a demandé une migration de plus, et sa leçon est la plus réutilisable** :
+   `utilisateur_id` désigne un **compte du produit**, qui n'existe qu'à la première
+   connexion — or l'import vise précisément les gens qui ne se connectent jamais. La réponse
+   courte (créer une ligne dans `utilisateurs`) était fausse : la personne serait apparue
+   dans l'écran des habilitations comme un compte existant. *Une table qui répond à une
+   question ne doit pas se mettre à en répondre une autre.*
+7. **`.data-table th { text-transform: uppercase }` disfigurait TOUS les en-têtes de
+   ligne** — corrigé à la classe (`tbody th`), pas à l'instance : trois écrans en
+   dépendaient.
+
+✅ **Une trouvaille de production, et elle vaut le lot G1 à elle seule.** Le contrôle de
+cohérence a trouvé `GRC-TLS-REPONDANT`, `GRC-DEU-REPONDANT` et `GRC-GROUPE-REPONDANT`
+**déclarés dans l'application et absents de l'annuaire** : le profil était né avec la
+migration `044`, ses groupes n'avaient jamais été créés. Quiconque aurait reçu ce profil
+serait entré **sans aucun droit, en silence**. Ils ont été créés **en tant qu'exploitant**,
+avec `samba-tool` — jamais par le produit.
+
+---
+
 ### ▶ OÙ REPRENDRE — au 19/09/2026, après la vague F
 
 # 🛑 **LES SIX VAGUES DU `PLAN_ACHEVEMENT.md` SONT CONSTRUITES.**

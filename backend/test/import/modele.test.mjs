@@ -101,11 +101,15 @@ describe('La couture — les routes que le point d’entrée monte', () => {
 });
 
 describe('Le modèle est DÉRIVÉ, il n’est pas écrit', () => {
-  test('les 47 entités du registre ont un modèle, sans exception ni liste', () => {
+  test('les 50 entités du registre ont un modèle, sans exception ni liste', () => {
     const attendues = [...listerEntites()].sort();
     const rendues = modeles.entites.map((e) => e.entite).sort();
     assert.deepEqual(rendues, attendues);
-    assert.equal(rendues.length, 47);
+    // ⚠️ **47 → 50 le 22/09/2026** : `fiches_reflexes`, `fiche_reflexe_actions` et
+    // `contacts_urgence` (migration `061`) entrent au registre des entités. Le chiffre
+    // est écrit ici À DESSEIN — il fait rougir quand une entité apparaît, et quelqu'un
+    // doit alors dire si elle s'importe (`CLAUDE.md` §3, la liste qui échoue bruyamment).
+    assert.equal(rendues.length, 50);
   });
 
   test('les colonnes coïncident champ pour champ avec `GET /api/modele`', async () => {
@@ -169,7 +173,14 @@ describe('Le modèle est DÉRIVÉ, il n’est pas écrit', () => {
 
   test('les liaisons n-n sont nommées comme exclues, pas passées sous silence', () => {
     const actifs = modeles.entites.find((e) => e.entite === 'actifs');
-    assert.deepEqual([...actifs.liaisonsExclues].sort(), ['dependances', 'risques_lies']);
+    // ⚠️ **`prestataires_lies` est entré le 22/09/2026** (migration `062`) : QUI
+    // exploite un actif est une liaison n-n de plus, et la nature du lien fait partie
+    // de son identité. Ce contrôle est précisément là pour qu'elle ne soit pas
+    // « passée sous silence » par le gabarit d'import.
+    assert.deepEqual(
+      [...actifs.liaisonsExclues].sort(),
+      ['dependances', 'prestataires_lies', 'risques_lies'],
+    );
     assert.ok(!actifs.colonnes.some((c) => c.champ === 'dependances'));
   });
 

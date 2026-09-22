@@ -399,7 +399,11 @@ export async function greffonPersonnel(
          * ferait un second annuaire que personne n'a décidé (§29). */
         await journaliser(client, {
           action: 'import',
-          resume: `Import de ${String(identites.length)} fiche(s) depuis l’annuaire`,
+          // ⚠️ `resume` est une phrase LITTÉRALE (`CONVENTIONS.md` §29.5), et le
+          //    détecteur du banc refuse toute interpolation — y compris un NOMBRE.
+          //    C'est délibéré : la seule façon d'échapper à la règle est d'écrire
+          //    une phrase, et les comptes sont juste en dessous, en `jsonb`.
+          resume: 'Import de fiches du personnel depuis l’annuaire.',
           filialeId: filiale,
           utilisateurLibelle: session.perimetre.utilisateurId,
           entiteType: 'personnes',
@@ -537,7 +541,11 @@ export async function greffonPersonnel(
 
         await journaliser(client, {
           action: 'administration',
-          resume: `Rafraîchissement de ${String(fiches.length)} fiche(s) depuis l’annuaire`,
+          // ⚠️ `resume` est une phrase LITTÉRALE (`CONVENTIONS.md` §29.5), et le
+          //    détecteur du banc refuse toute interpolation — y compris un NOMBRE.
+          //    C'est délibéré : la seule façon d'échapper à la règle est d'écrire
+          //    une phrase, et les comptes sont juste en dessous, en `jsonb`.
+          resume: 'Rafraîchissement des fiches du personnel depuis l’annuaire.',
           filialeId: session.perimetre.filialeId,
           utilisateurLibelle: session.perimetre.utilisateurId,
           entiteType: 'personnes',

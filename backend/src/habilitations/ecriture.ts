@@ -215,7 +215,12 @@ export async function creerProfil(
 
   await journaliser(client, {
     action: 'administration',
-    resume: `Création du profil d’habilitation « ${code} »`,
+    // ⚠️ `resume` est une phrase LITTÉRALE — `CONVENTIONS.md` §29.5. Le nom, le
+    //    code et l'intitulé viennent de l'utilisateur : ils partent en `jsonb`, où
+    //    l'encodage est le problème de PostgreSQL. Un groupe d'annuaire nommé avec
+    //    un saut de ligne scinderait sinon une ligne de l'export du journal, pour
+    //    trois ans.
+    resume: 'Création d’un profil d’habilitation.',
     filialeId: perimetre.filialeId,
     utilisateurLibelle: perimetre.utilisateurId,
     entiteType: 'profils',
@@ -269,12 +274,18 @@ export async function modifierProfil(
 
   await journaliser(client, {
     action: 'administration',
-    resume: `Modification du profil d’habilitation « ${avant.code} »`,
+    // ⚠️ `resume` est une phrase LITTÉRALE — `CONVENTIONS.md` §29.5. Le nom, le
+    //    code et l'intitulé viennent de l'utilisateur : ils partent en `jsonb`, où
+    //    l'encodage est le problème de PostgreSQL. Un groupe d'annuaire nommé avec
+    //    un saut de ligne scinderait sinon une ligne de l'export du journal, pour
+    //    trois ans.
+    resume: 'Modification d’un profil d’habilitation.',
     filialeId: perimetre.filialeId,
     utilisateurLibelle: perimetre.utilisateurId,
     entiteType: 'profils',
     entiteId: id,
     valeursAvant: {
+      code: avant.code,
       nom: avant.nom,
       description: avant.description,
       niveau_defaut: avant.niveau_defaut,
@@ -335,13 +346,21 @@ export async function poserGrille(
 
   await journaliser(client, {
     action: 'administration',
-    resume: `Grille de domaines du profil « ${avant.code} »`,
+    // ⚠️ `resume` est une phrase LITTÉRALE — `CONVENTIONS.md` §29.5. Le nom, le
+    //    code et l'intitulé viennent de l'utilisateur : ils partent en `jsonb`, où
+    //    l'encodage est le problème de PostgreSQL. Un groupe d'annuaire nommé avec
+    //    un saut de ligne scinderait sinon une ligne de l'export du journal, pour
+    //    trois ans.
+    resume: 'Remplacement de la grille de domaines d’un profil.',
     filialeId: perimetre.filialeId,
     utilisateurLibelle: perimetre.utilisateurId,
     entiteType: 'profils',
     entiteId: id,
-    valeursAvant: Object.fromEntries(ancienne.rows.map((l) => [l.domaine, l.niveau])),
-    valeursApres: Object.fromEntries(grille),
+    valeursAvant: {
+      code: avant.code,
+      grille: Object.fromEntries(ancienne.rows.map((l) => [l.domaine, l.niveau])),
+    },
+    valeursApres: { code: avant.code, grille: Object.fromEntries(grille) },
   });
 
   await verifierAdministrabilite(client, administrabilite);
@@ -387,7 +406,12 @@ export async function supprimerProfil(
 
   await journaliser(client, {
     action: 'administration',
-    resume: `Suppression du profil d’habilitation « ${avant.code} »`,
+    // ⚠️ `resume` est une phrase LITTÉRALE — `CONVENTIONS.md` §29.5. Le nom, le
+    //    code et l'intitulé viennent de l'utilisateur : ils partent en `jsonb`, où
+    //    l'encodage est le problème de PostgreSQL. Un groupe d'annuaire nommé avec
+    //    un saut de ligne scinderait sinon une ligne de l'export du journal, pour
+    //    trois ans.
+    resume: 'Suppression d’un profil d’habilitation.',
     filialeId: perimetre.filialeId,
     utilisateurLibelle: perimetre.utilisateurId,
     entiteType: 'profils',
@@ -498,7 +522,12 @@ export async function creerGroupe(
 
   await journaliser(client, {
     action: 'administration',
-    resume: `Déclaration du groupe d’annuaire « ${nom} »`,
+    // ⚠️ `resume` est une phrase LITTÉRALE — `CONVENTIONS.md` §29.5. Le nom, le
+    //    code et l'intitulé viennent de l'utilisateur : ils partent en `jsonb`, où
+    //    l'encodage est le problème de PostgreSQL. Un groupe d'annuaire nommé avec
+    //    un saut de ligne scinderait sinon une ligne de l'export du journal, pour
+    //    trois ans.
+    resume: 'Déclaration d’un groupe d’annuaire.',
     filialeId: perimetre.filialeId,
     utilisateurLibelle: perimetre.utilisateurId,
     entiteType: 'groupes_ad',
@@ -610,12 +639,18 @@ export async function modifierGroupe(
 
   await journaliser(client, {
     action: 'administration',
-    resume: `Modification du groupe d’annuaire « ${avant.nom} »`,
+    // ⚠️ `resume` est une phrase LITTÉRALE — `CONVENTIONS.md` §29.5. Le nom, le
+    //    code et l'intitulé viennent de l'utilisateur : ils partent en `jsonb`, où
+    //    l'encodage est le problème de PostgreSQL. Un groupe d'annuaire nommé avec
+    //    un saut de ligne scinderait sinon une ligne de l'export du journal, pour
+    //    trois ans.
+    resume: 'Modification d’un groupe d’annuaire.',
     filialeId: perimetre.filialeId,
     utilisateurLibelle: perimetre.utilisateurId,
     entiteType: 'groupes_ad',
     entiteId: id,
     valeursAvant: {
+      nom: avant.nom,
       profil_id: avant.profil_id,
       actif: avant.actif,
       accorde_export: avant.accorde_export,

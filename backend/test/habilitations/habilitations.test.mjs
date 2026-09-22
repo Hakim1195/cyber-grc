@@ -621,7 +621,18 @@ describe('§7 — le journal d’audit', () => {
     );
     assert.equal(rows.length, 1, 'la création d’un profil doit être journalisée');
     assert.equal(rows[0].action, 'administration');
-    assert.match(rows[0].resume, /TRACE_TEST/);
+    /* ⚠️ **CET ESSAI EXIGEAIT LE DÉFAUT.** Sa première rédaction demandait que le
+     * code du profil figure DANS `resume` — c'est-à-dire exactement ce que le
+     * `CONVENTIONS.md` §29.5 interdit : *« resume est une phrase écrite par le
+     * développeur, une valeur d'utilisateur n'y entre jamais »*. Un code forgé avec
+     * un saut de ligne aurait scindé une ligne de l'export du journal, pour trois
+     * ans. C'est le motif du constat **Q-200** — *un essai qui mesure un défaut et
+     * le consacre comme une propriété désirable* —, et c'est le balayage de
+     * `test/journal/regles.test.mjs` qui l'a dit, pas une relecture.
+     *
+     * La phrase est donc littérale, et la valeur est là où elle doit être. */
+    assert.equal(rows[0].resume, 'Création d’un profil d’habilitation.');
+    assert.ok(!rows[0].resume.includes('TRACE_TEST'), '§29.5 : la valeur n’entre pas dans la phrase');
     assert.equal(rows[0].valeurs_apres.code, 'TRACE_TEST');
   });
 });

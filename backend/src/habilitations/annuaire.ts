@@ -225,7 +225,12 @@ export async function simuler(
    * Ne journaliser que les succès laisserait le balayage sans trace. */
   await journaliser(client, {
     action: 'consultation_sensible',
-    resume: `Simulation des droits du compte « ${identifiantDemande} »`,
+    // ⚠️ `resume` est une phrase LITTÉRALE — `CONVENTIONS.md` §29.5. Le nom, le
+    //    code et l'intitulé viennent de l'utilisateur : ils partent en `jsonb`, où
+    //    l'encodage est le problème de PostgreSQL. Un groupe d'annuaire nommé avec
+    //    un saut de ligne scinderait sinon une ligne de l'export du journal, pour
+    //    trois ans.
+    resume: 'Simulation des droits d’un compte d’annuaire.',
     filialeId: perimetre.filialeId,
     utilisateurLibelle: perimetre.utilisateurId,
     entiteType: 'utilisateurs',

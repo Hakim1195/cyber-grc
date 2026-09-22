@@ -192,7 +192,12 @@ export async function ouvrirRevue(
 
   await journaliser(client, {
     action: 'administration',
-    resume: `Ouverture d’une revue des habilitations : « ${intitule} »`,
+    // ⚠️ `resume` est une phrase LITTÉRALE — `CONVENTIONS.md` §29.5. Le nom, le
+    //    code et l'intitulé viennent de l'utilisateur : ils partent en `jsonb`, où
+    //    l'encodage est le problème de PostgreSQL. Un groupe d'annuaire nommé avec
+    //    un saut de ligne scinderait sinon une ligne de l'export du journal, pour
+    //    trois ans.
+    resume: 'Ouverture d’une revue des habilitations.',
     filialeId: perimetre.filialeId,
     utilisateurLibelle: perimetre.utilisateurId,
     entiteType: 'revues_habilitations',
@@ -366,12 +371,21 @@ export async function cloreRevue(
 
   await journaliser(client, {
     action: 'administration',
-    resume: `Clôture de la revue des habilitations « ${maj.rows[0]?.intitule ?? id} »`,
+    // ⚠️ `resume` est une phrase LITTÉRALE — `CONVENTIONS.md` §29.5. Le nom, le
+    //    code et l'intitulé viennent de l'utilisateur : ils partent en `jsonb`, où
+    //    l'encodage est le problème de PostgreSQL. Un groupe d'annuaire nommé avec
+    //    un saut de ligne scinderait sinon une ligne de l'export du journal, pour
+    //    trois ans.
+    resume: 'Clôture d’une revue des habilitations.',
     filialeId: perimetre.filialeId,
     utilisateurLibelle: perimetre.utilisateurId,
     entiteType: 'revues_habilitations',
     entiteId: id,
-    valeursApres: { conclusion: texte, lignes_non_examinees: reste },
+    valeursApres: {
+      intitule: maj.rows[0]?.intitule ?? null,
+      conclusion: texte,
+      lignes_non_examinees: reste,
+    },
   });
 
   return { restantes: reste };
