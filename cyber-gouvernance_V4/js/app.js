@@ -209,6 +209,21 @@ async function startApp() {
         "/referentiels-actifs": () => { if (typeof ReferentielsActifsModule !== "undefined") ReferentielsActifsModule.renderList(); },
         "/imports": () => { if (typeof ImportsModule !== "undefined") ImportsModule.renderList(); },
 
+        // ── L'ADMINISTRATION DES HABILITATIONS ──────────────────────────
+        //
+        // Le modèle de droits à trois axes était construit depuis L1 et
+        // n'avait AUCUN écran : le produit refusait des accès sans que
+        // personne puisse voir pourquoi.
+        //
+        // ⚠️ Trois routes et non trois onglets internes : ce sont trois VUES
+        //    du même sujet, chacune avec son adresse — comme « /rgpd-aipd »
+        //    et « /tiers-dora ». Et elles s'écrivent « /habilitations-… » et
+        //    NON « /habilitations/… » : le routeur lirait le second segment
+        //    comme un identifiant, et l'écran dirait « introuvable ».
+        "/habilitations": () => { if (typeof HabilitationsModule !== "undefined") HabilitationsModule.renderList(); },
+        "/habilitations-groupes": () => { if (typeof HabilitationsModule !== "undefined") HabilitationsModule.renderGroupes(); },
+        "/habilitations-comptes": () => { if (typeof HabilitationsModule !== "undefined") HabilitationsModule.renderComptes(); },
+
         // ── Paramètres, en trois vues (19/09/2026) ──────────────────────────
         //
         // ⚠️ Les adresses s'écrivent « /settings-… » et NON « /settings/… » : le
@@ -1229,7 +1244,14 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     "/approbations": "documents",
     "/socle":        "risques",
     "/referentiels-actifs": "conformite",
-    "/imports":      "administration"
+    "/imports":      "administration",
+    // Les habilitations vivent sous « administration », comme les filiales et
+    // les paramètres : `DOMAINE_API_PAR_DOMAINE_BASE` y range déjà le domaine
+    // de base « droits ». On suit la décision du serveur plutôt que d'en
+    // prendre une seconde.
+    "/habilitations":          "administration",
+    "/habilitations-groupes":  "administration",
+    "/habilitations-comptes":  "administration"
 });
 
 /** Domaine de la route affichée, ou "" si elle n'est pas rattachée. */

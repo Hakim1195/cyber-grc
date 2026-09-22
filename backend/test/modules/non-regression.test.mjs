@@ -226,6 +226,23 @@ const SANS_FICHE = {
   // c'est le propre du lot — l'IA PROPOSE, elle n'écrit rien : il n'y a donc rien
   // à ouvrir, ni à retrouver plus tard.
   '/assistance': 'assistance par IA : une composition, aucune fiche et aucune écriture',
+  // L'ADMINISTRATION DES HABILITATIONS — trois vues, aucune fiche.
+  //
+  // ⚠️ Ce qui a une identité ici est le PROFIL, et on ne l'ouvre pas par une
+  // route : il s'édite dans un panneau, à côté de la matrice qui le montre.
+  // C'est délibéré — la matrice est la pièce qu'un auditeur emporte (A.5.18), et
+  // la transformer en formulaire lui ôterait cette qualité. Une fiche à part
+  // aurait séparé ce qu'on lit de ce qu'on change, sur le seul écran du produit
+  // où l'on doit voir l'effet d'une modification sur l'ensemble.
+  '/habilitations':
+    'matrice des droits : trente domaines en lignes, les profils en colonnes. L’édition se ' +
+    'fait dans un panneau, jamais dans une fiche à part.',
+  '/habilitations-groupes':
+    'groupes d’annuaire : la correspondance et son contrôle de cohérence. ⚠️ Le produit ' +
+    'n’écrit JAMAIS dans l’Active Directory — il rend la liste à créer.',
+  '/habilitations-comptes':
+    'comptes connus et simulation « que verrait ce compte ? ». Aucune fiche : un compte ' +
+    'vient de l’annuaire, le produit ne le crée pas.',
   '/mapping': 'correspondances : édition en place',
   '/couverture': 'vue croisée, aucune fiche propre',
   '/crise-fiches': 'vue d’impression',
@@ -364,7 +381,12 @@ const SANS_FICHE = {
 // l'onglet « Catalogue » sert à RÉPONDRE, celui-ci à savoir ce que les catalogues
 // contiennent, quand la norme a été publiée, et ce qu'un changement de version met en
 // jeu. Deux métiers, deux écrans — et non une entrée de menu de plus.
-const MODULES_ATTENDUS = 49;
+// 45 : « habilitations » — l'administration du modèle de droits. ⚠️ Le modèle à
+// trois axes était construit depuis le lot L1, gardé par la RLS, éprouvé par le
+// banc, et il décidait de CHAQUE requête du produit sans qu'aucun écran ne le
+// montre. Un outil produit en audit ISO 27001 qui ne sait pas rendre sa propre
+// revue des droits (A.5.18) a un trou à l'endroit le plus regardé.
+const MODULES_ATTENDUS = 50;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //

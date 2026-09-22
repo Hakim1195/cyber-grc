@@ -786,7 +786,7 @@ la comparaison au marché du 08/09/2026.
 portail fournisseur — `058`, **construit et NON ouvert**) : `npm test` → **2411 essais, 2411 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **63 garde-fous consignés**, **59 migrations**,
-**89 tables**, **495 décisions** au registre de l'article 30 ; publication → **87
+**89 tables**, **495 décisions** au registre de l'article 30 ; publication → **88
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **14 conformes,
 2 réserves, 0 bloquant** sur **quinze sujets** — le quinzième, « assistance IA », naît de
 L27 et rend le mode en vigueur.

@@ -3458,3 +3458,247 @@ body { overflow-x: hidden; }
     background: transparent;
     border: 1px solid var(--border);
 }
+
+/* =====================================================================
+   LES HABILITATIONS — la matrice des droits, les groupes d'annuaire,
+   les comptes.
+   =====================================================================
+
+   ⚠️ **LA GRADUATION DES NIVEAUX N'EMPRUNTE PAS LA PALETTE SÉMANTIQUE.**
+
+   La charte réserve vert / orange / rouge / gris aux STATUTS de conformité
+   (`CLAUDE.md` §2). Un niveau de droit n'est pas un statut : « lecture » n'est
+   pas « partiellement conforme », et « administration » n'est pas « critique ».
+   Employer la même palette ferait lire un tableau d'habilitations comme un
+   tableau de risques — c'est-à-dire donnerait une alarme là où il n'y a qu'un
+   paramétrage.
+
+   La graduation est donc une **rampe d'intensité** du bleu de structure
+   (`--accent`), qui est déjà l'axe visuel de la hiérarchie du produit. Seul
+   « aucun » sort de la rampe : ce n'est pas un degré faible, c'est une
+   FERMETURE EXPLICITE, et c'est précisément ce que la base veut rendre lisible
+   en revue de droits (`001_socle.sql` §4).
+   ===================================================================== */
+
+.encart-info {
+    border-left-color: var(--accent, #2059A6);
+    background: var(--tint-info, #e8eff8);
+}
+
+/* ── La pastille d'un niveau ─────────────────────────────────────────── */
+.hab-niv {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 5px;
+    border-radius: var(--radius-sm, 4px);
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 700;
+    line-height: 1;
+    border: 1px solid transparent;
+}
+.hab-niv--aucun {
+    background: transparent;
+    color: var(--text-muted, #6b7a8d);
+    border-color: var(--border, #e2e6ea);
+    border-style: dashed;
+}
+.hab-niv--lecture        { background: #e8eff8; color: #1b4b8f; }
+.hab-niv--contribution   { background: #c5d8ef; color: #17457f; }
+.hab-niv--validation     { background: #6f9ad2; color: #fff; }
+.hab-niv--administration { background: var(--accent, #2059A6); color: #fff; }
+/* Domaine NON OUVERT : rien du tout, et il ne doit pas attirer l'œil — c'est
+   le cas le plus fréquent d'une matrice, et le mettre en valeur noierait ce
+   qui est réellement accordé. */
+.hab-niv--vide {
+    background: transparent;
+    color: var(--border, #e2e6ea);
+    font-weight: 400;
+}
+
+.hab-legende {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 14px;
+    font-size: var(--text-sm, 0.8125rem);
+    color: var(--text-muted, #6b7a8d);
+}
+.hab-lg { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ── La matrice ──────────────────────────────────────────────────────── */
+.hab-matrice { font-size: var(--text-sm, 0.8125rem); }
+.hab-matrice th.hab-dom {
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+}
+/* L'en-tête des lignes reste visible pendant le défilement horizontal :
+   sans lui, une matrice de trente lignes fait perdre le nom du domaine dès la
+   troisième colonne. */
+.hab-matrice tbody th.hab-dom {
+    position: sticky;
+    left: 0;
+    background: var(--bg-card, #fff);
+    z-index: 1;
+}
+.hab-matrice .hab-code {
+    display: block;
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 400;
+    color: var(--text-muted, #6b7a8d);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.hab-matrice tr.hab-section th {
+    background: var(--bg-body, #f5f6f8);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: var(--text-xs, 0.75rem);
+    color: var(--text-muted, #6b7a8d);
+    text-align: left;
+    padding-top: 10px;
+}
+.hab-col { text-align: center; vertical-align: bottom; }
+.hab-col-btn {
+    background: none;
+    border: none;
+    padding: 4px 6px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+    color: var(--accent, #2059A6);
+    border-radius: var(--radius-sm, 4px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.hab-col-btn:hover { background: var(--tint-info, #e8eff8); }
+.hab-col-btn:focus-visible { outline: 2px solid var(--accent, #2059A6); outline-offset: 2px; }
+
+.hab-socle, .hab-inactif, .hab-actif, .hab-orphelin {
+    display: inline-block;
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 999px;
+    text-transform: lowercase;
+    letter-spacing: 0;
+}
+.hab-socle    { background: var(--tint-na, #eef1f5);  color: var(--text-muted, #6b7a8d); }
+.hab-actif    { background: var(--tint-ok, #e6f4ea);  color: #1e7a3c; }
+.hab-inactif  { background: var(--tint-na, #eef1f5);  color: var(--text-muted, #6b7a8d); }
+.hab-orphelin { background: var(--tint-warn, #fff4e0); color: #8a5a00; margin-left: 6px; }
+.hab-ligne-inactive td { opacity: 0.55; }
+
+/* ── Le panneau d'édition ────────────────────────────────────────────── */
+.hab-panneau { margin-top: 18px; }
+.hab-panneau h2 { margin-top: 0; }
+.hab-note {
+    font-size: var(--text-sm, 0.8125rem);
+    color: var(--text-muted, #6b7a8d);
+    margin: 6px 0 12px;
+}
+.hab-champ { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.hab-champ > span { font-size: var(--text-sm, 0.8125rem); font-weight: 600; }
+.hab-champ--case { flex-direction: row; align-items: center; gap: 8px; }
+.hab-champ--case > span { font-weight: 400; }
+
+.hab-grille {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+}
+.hab-fs {
+    border: 1px solid var(--border, #e2e6ea);
+    border-radius: var(--radius, 8px);
+    padding: 10px 12px;
+    min-width: 0;
+}
+.hab-fs legend {
+    font-size: var(--text-xs, 0.75rem);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted, #6b7a8d);
+    font-weight: 700;
+    padding: 0 4px;
+}
+.hab-fs .hab-champ {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+.hab-fs .hab-champ > span { font-weight: 400; font-size: var(--text-sm, 0.8125rem); }
+.hab-fs select { max-width: 48%; }
+
+/* ── Les écarts de cohérence ─────────────────────────────────────────── */
+.hab-ecart {
+    border-left: 4px solid var(--border, #e2e6ea);
+    background: var(--tint-na, #eef1f5);
+    border-radius: var(--radius-sm, 4px);
+    padding: 10px 14px;
+    margin: 12px 0;
+}
+.hab-ecart h3 { margin: 0 0 4px; font-size: var(--text-base, 0.9375rem); }
+.hab-ecart h3 span { font-weight: 400; color: var(--text-muted, #6b7a8d); }
+.hab-ecart p { margin: 0 0 8px; font-size: var(--text-sm, 0.8125rem); }
+.hab-ecart ul { margin: 0; padding-left: 20px; columns: 2; column-gap: 24px; }
+.hab-ecart li { font-size: var(--text-sm, 0.8125rem); break-inside: avoid; }
+.hab-ecart code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--text-xs, 0.75rem);
+}
+/* 🛑 « grave » emprunte ICI la teinte critique, et c'est justifié : un groupe
+   déclaré qui n'existe pas dans l'annuaire produit un utilisateur SANS AUCUN
+   DROIT, sans message. Ce n'est pas un paramétrage, c'est une panne. */
+.hab-ecart--grave  { border-left-color: var(--color-danger, #c0392b); background: var(--tint-crit, #fbe9e7); }
+.hab-ecart--action { border-left-color: var(--primary, #E9631B);      background: var(--primary-tint, #FDEFE4); }
+.hab-ecart--info   { border-left-color: var(--accent, #2059A6);       background: var(--tint-info, #e8eff8); }
+.hab-ok { color: #1e7a3c; font-weight: 600; }
+
+/* ── La simulation ───────────────────────────────────────────────────── */
+.hab-simu-form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.hab-simu-form input { flex: 1 1 260px; }
+.hab-simu-res h3 { margin: 0 0 2px; }
+.hab-faits { list-style: none; padding: 0; margin: 10px 0; }
+.hab-faits li { padding: 3px 0; font-size: var(--text-sm, 0.8125rem); }
+.hab-simu-domaines {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+.hab-simu-domaines h4 {
+    margin: 0 0 4px;
+    font-size: var(--text-xs, 0.75rem);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted, #6b7a8d);
+}
+.hab-simu-domaines ul { list-style: none; padding: 0; margin: 0; }
+.hab-simu-domaines li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--text-sm, 0.8125rem);
+    padding: 2px 0;
+}
+
+/* ── L'impression : la matrice EST la pièce d'audit ──────────────────── */
+@media print {
+    .hab-matrice { font-size: 8.5pt; }
+    .hab-matrice tbody th.hab-dom { position: static; }
+    .hab-panneau, .hab-simu-form { display: none; }
+    .hab-ecart { break-inside: avoid; }
+}
+
+@media (max-width: 900px) {
+    .hab-ecart ul { columns: 1; }
+    .hab-fs select { max-width: none; }
+    .hab-fs .hab-champ { flex-direction: column; align-items: stretch; }
+}

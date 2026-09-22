@@ -77,6 +77,7 @@ window.I18n.enregistrer("fr", {
     "nav.audits": "Audits internes",
     "nav.groupe": "Vision Groupe",
     "nav.approbations": "Approbations",
+    "nav.habilitations": "Habilitations",
     "nav.imports": "Imports",
     "nav.journal": "Journal d'audit",
     "nav.settings": "Paramètres",

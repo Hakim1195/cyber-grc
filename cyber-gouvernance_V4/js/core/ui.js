@@ -660,6 +660,17 @@ window.UI = (function () {
             ])
         }),
         Object.freeze({
+            // L'administration des habilitations : trois vues d'un seul sujet —
+            // ce que les profils accordent, par quels groupes d'annuaire, et à
+            // qui. Une entrée de menu, trois onglets.
+            sujet: "habilitations",
+            vues: Object.freeze([
+                Object.freeze({ route: "/habilitations", libelle: "Matrice des droits" }),
+                Object.freeze({ route: "/habilitations-groupes", libelle: "Groupes d\u2019annuaire" }),
+                Object.freeze({ route: "/habilitations-comptes", libelle: "Comptes" })
+            ])
+        }),
+        Object.freeze({
             sujet: "rgpd",
             vues: Object.freeze([
                 Object.freeze({ route: "/rgpd", libelle: "Traitements" }),

@@ -1324,6 +1324,50 @@ const Api = (() => {
     function revoquerJeton(id) {
         return appeler("/ouverture/jetons/" + encodeURIComponent(id), { methode: "DELETE" });
     }
+    /* ── L'ADMINISTRATION DES HABILITATIONS ───────────────────────────────
+     *
+     * ⚠️ **`simuler()` est un POST, et ce n'est pas un caprice REST.** Le login
+     * d'une personne voyagerait sinon dans l'adresse, donc dans le journal
+     * d'accès d'Apache et dans l'historique du navigateur — deux endroits que
+     * personne ne purge. C'est un identifiant de personne (`CONVENTIONS.md`
+     * §29.8), et il n'a rien à y faire.
+     *
+     * 🛑 **Aucune de ces fonctions n'écrit dans l'annuaire, et aucune ne le
+     * pourra** : le serveur n'implémente aucune opération d'écriture LDAP.
+     * `synchroniserGroupes()` écrit dans la TABLE `groupes_ad`, jamais dans l'AD.
+     */
+    function habilitationsEtat() { return appeler("/habilitations/etat"); }
+    function creerProfilHabilitation(corps) {
+        return appeler("/habilitations/profils", { methode: "POST", corps: corps });
+    }
+    function modifierProfilHabilitation(id, corps) {
+        return appeler("/habilitations/profils/" + encodeURIComponent(id),
+                       { methode: "PUT", corps: corps });
+    }
+    function poserGrilleHabilitation(id, domaines) {
+        return appeler("/habilitations/profils/" + encodeURIComponent(id) + "/domaines",
+                       { methode: "PUT", corps: { domaines: domaines } });
+    }
+    function supprimerProfilHabilitation(id) {
+        return appeler("/habilitations/profils/" + encodeURIComponent(id),
+                       { methode: "DELETE" });
+    }
+    function creerGroupeAd(corps) {
+        return appeler("/habilitations/groupes", { methode: "POST", corps: corps });
+    }
+    function modifierGroupeAd(id, corps) {
+        return appeler("/habilitations/groupes/" + encodeURIComponent(id),
+                       { methode: "PUT", corps: corps });
+    }
+    function synchroniserGroupesAd() {
+        return appeler("/habilitations/groupes/synchroniser", { methode: "POST", corps: {} });
+    }
+    function coherenceAnnuaire() { return appeler("/habilitations/annuaire"); }
+    function simulerDroits(identifiant) {
+        return appeler("/habilitations/simuler",
+                       { methode: "POST", corps: { identifiant: identifiant } });
+    }
+
     function abonnementsEvenements() { return appeler("/ouverture/abonnements"); }
     function abonnerEvenement(corps) {
         return appeler("/ouverture/abonnements", { methode: "POST", corps: corps });
@@ -1442,6 +1486,11 @@ const Api = (() => {
         abonnementsEvenements, abonnerEvenement, retirerAbonnement,
         // Lots L22 (22.4) et L23 : la collecte automatique de preuve.
         connecteursEtat, connecteurCollecter, connecteurHistorique,
+        // L'administration des habilitations — le modèle de droits, enfin visible.
+        habilitationsEtat, creerProfilHabilitation, modifierProfilHabilitation,
+        poserGrilleHabilitation, supprimerProfilHabilitation,
+        creerGroupeAd, modifierGroupeAd, synchroniserGroupesAd,
+        coherenceAnnuaire, simulerDroits,
         // Lot L27 : l'assistance par IA — locale par défaut, externe sous six barrières.
         assistanceEtat, assistancePreparer, assistanceDemander, assistanceAppels,
         // Les réglages : le catalogue du Groupe, et ce que cette filiale en a fait.
