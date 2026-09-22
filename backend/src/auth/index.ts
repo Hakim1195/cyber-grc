@@ -288,6 +288,39 @@ export class ServiceAuthentification implements Authentificateur {
   }
 
   /* ═══════════════════════════════════════════════════════════════════
+   *  LECTURE DE L'ANNUAIRE — pour l'administration des habilitations
+   *
+   *  🛑 **Les deux méthodes qui suivent LISENT. Elles n'écrivent pas, et le
+   *  produit n'a aucun moyen d'écrire dans l'annuaire** : `ClientLdap`
+   *  n'implémente que `lier`, `rechercher` et `fermer`. Arbitrage de
+   *  l'utilisateur du 22/09/2026, et c'est une capacité absente plutôt
+   *  qu'une promesse — voir `ServiceAnnuaire.listerGroupes()`.
+   * ═══════════════════════════════════════════════════════════════════ */
+
+  /** L'annuaire est-il configuré et actif ? */
+  public annuaireDisponible(): boolean {
+    return this.annuaire !== null;
+  }
+
+  /**
+   * Relit une identité de l'annuaire **sans mot de passe**, sous le compte de
+   * service. Rend `null` si le compte a disparu, `undefined` si aucun annuaire
+   * n'est configuré — deux situations que l'écran ne doit pas confondre.
+   */
+  public async relireIdentite(login: string): Promise<IdentiteAnnuaire | null | undefined> {
+    if (this.annuaire === null) return undefined;
+    return await this.annuaire.relire(login);
+  }
+
+  /** Les groupes de l'annuaire portant le préfixe du dispositif. */
+  public async listerGroupesAnnuaire(): Promise<
+    { readonly noms: readonly string[]; readonly tronque: boolean } | undefined
+  > {
+    if (this.annuaire === null) return undefined;
+    return await this.annuaire.listerGroupes();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
    *  Ouverture de session
    * ═══════════════════════════════════════════════════════════════════ */
 

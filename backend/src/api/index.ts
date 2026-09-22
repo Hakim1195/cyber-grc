@@ -121,6 +121,7 @@ import { viderFileDePurge } from '../pieces/purge.js';
 import { greffonImport } from '../import/index.js';
 import { greffonConsolidation } from '../consolidation/index.js';
 import { greffonFiliales } from '../filiales/index.js';
+import { greffonHabilitations } from '../habilitations/index.js';
 import { greffonApprobations } from '../approbations/index.js';
 import { greffonNotifications } from '../notifications/index.js';
 import { greffonCycle } from '../cycle/index.js';
@@ -3149,6 +3150,35 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     ...(config.auth.ldap === null || config.auth.ldap === undefined
       ? {}
       : { prefixeGroupes: config.auth.ldap.prefixeGroupes }),
+  });
+
+  /* -------------------------------------------------------------------
+   *  L'ADMINISTRATION DES HABILITATIONS
+   * -------------------------------------------------------------------
+   *  Le modèle de droits à trois axes est construit depuis L1 et décidait de
+   *  tout SANS qu'aucune route ne l'expose : ni la matrice profils × domaines,
+   *  ni la correspondance groupe d'annuaire → périmètre, ni les comptes. Un
+   *  outil produit en audit ISO 27001 qui ne sait pas montrer sa propre revue
+   *  des droits (A.5.18) a un trou à l'endroit le plus regardé.
+   *
+   *  🛑 **Le service d'authentification est passé pour LIRE l'annuaire, et pour
+   *  rien d'autre.** Le produit n'écrit jamais dans l'AD — arbitrage du
+   *  22/09/2026 —, et c'est une capacité ABSENTE : `ClientLdap` n'implémente
+   *  aucune opération d'écriture LDAP.
+   *
+   *  ⚠️ Il est facultatif : `AUTH_LDAP_ACTIF=non` est un chemin soutenu, et
+   *  l'écran doit alors dire « annuaire non configuré » au lieu de laisser
+   *  croire que tout concorde — un verdict de cohérence rendu sans avoir lu
+   *  l'annuaire serait faux dans le sens rassurant.
+   * ------------------------------------------------------------------- */
+  await instance.register(greffonHabilitations, {
+    pool,
+    ...(config.auth.ldap === null || config.auth.ldap === undefined
+      ? {}
+      : { prefixeGroupes: config.auth.ldap.prefixeGroupes }),
+    ...(options.serviceAuthentification === undefined
+      ? {}
+      : { serviceAuthentification: options.serviceAuthentification }),
   });
 
   /* -------------------------------------------------------------------

@@ -878,6 +878,32 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // et le texte intégral d'une grille qu'un donneur d'ordre lui a confiée sous
     // condition de confidentialité.
     ['GET', '/api/catalogues/etat', undefined],
+    /* L'administration des habilitations.
+     *
+     * ⚠️ **Servies sans identité, ces routes seraient les plus graves du produit.**
+     * `etat` rendrait la MATRICE DES DROITS du groupe — qui peut quoi, sur quel
+     * domaine, à quel niveau — et la liste des COMPTES avec leur dernière
+     * connexion : c'est-à-dire la carte de qui attaquer, et par où. Les écritures,
+     * elles, permettraient à un inconnu de **s'accorder les droits qu'il veut** en
+     * déclarant un groupe d'annuaire, ce qui n'est pas une fuite mais une prise de
+     * contrôle. Et `simuler` lirait l'annuaire du groupe pour un login quelconque :
+     * un oracle d'énumération de comptes, servi sans session.
+     *
+     * C'est le motif du contrôle T-3, poussé à son extrémité : ces routes doivent
+     * être injoignables hors développement, et le banc le MESURE au lieu de s'en
+     * remettre au crochet d'authentification. */
+    ['GET', '/api/habilitations/etat', undefined],
+    ['POST', '/api/habilitations/profils', { code: 'X_ESSAI', nom: 'x' }],
+    ['PUT', '/api/habilitations/profils/PROF-1', { nom: 'x', version: 1 }],
+    ['DELETE', '/api/habilitations/profils/PROF-1', undefined],
+    ['PUT', '/api/habilitations/profils/PROF-1/domaines', { domaines: {} }],
+    ['POST', '/api/habilitations/groupes', {
+      nom: 'GRC-ESSAI-T3', perimetre: 'transversal', accordeExport: true,
+    }],
+    ['PUT', '/api/habilitations/groupes/GRAD-1', { version: 1 }],
+    ['POST', '/api/habilitations/groupes/synchroniser', {}],
+    ['GET', '/api/habilitations/annuaire', undefined],
+    ['POST', '/api/habilitations/simuler', { identifiant: 'rssi.tls' }],
     /* L'ouverture technique et la collecte (lots L22, L23).
      *
      * ⚠️ **Servies sans identité, ces routes seraient les pires du produit.** La

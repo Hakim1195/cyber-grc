@@ -49,7 +49,7 @@ import type { ConfigurationLdap } from '../config/index.js';
 
 import { ClientLdap, ErreurAnnuaire, ErreurIdentifiants } from './client-ldap.js';
 import type { Annuaire, EntreeLdap } from './client-ldap.js';
-import { filtreEgalite, substituerLogin } from './filtre-ldap.js';
+import { echapperValeur, filtreEgalite, substituerLogin } from './filtre-ldap.js';
 
 /* =====================================================================
  *  Bornes de la résolution
@@ -218,6 +218,69 @@ export class ServiceAnnuaire {
       const entree = await this.chercherUtilisateur(client, login);
       if (entree === null) return null;
       return await this.construireIdentite(client, login, entree);
+    } finally {
+      await client.fermer();
+    }
+  }
+
+
+  /**
+   * Liste les groupes de l'annuaire dont le nom commence par le préfixe du
+   * dispositif (`LDAP_PREFIXE_GROUPES`), **en lecture seule**.
+   *
+   * ── À quoi ça sert, et pourquoi ça manquait ────────────────────────────
+   *
+   * `groupes_ad` est l'autorité applicative : un groupe absent de la table
+   * n'accorde rien, **même s'il existe dans l'annuaire** (`resolution.ts`). La
+   * réciproque est tout aussi vraie et beaucoup plus coûteuse : un groupe
+   * déclaré dans la table et **absent de l'annuaire** n'accorde rien non plus,
+   * et personne ne peut le savoir — le compte entre, ne reçoit aucun droit, et
+   * le seul symptôme est un utilisateur qui affirme « je ne vois rien ». C'est
+   * le constat **Q-265** de la porte S7, où les guides envoyaient l'exploitant
+   * vers un groupe d'annuaire qui n'existait pas.
+   *
+   * Cette méthode permet de confronter les deux listes. Elle ne décide de rien.
+   *
+   * ⚠️ **Elle n'écrit RIEN, et elle ne le pourra pas** : `ClientLdap` n'expose
+   * que `lier`, `rechercher` et `fermer` — aucune opération d'écriture LDAP
+   * n'est implémentée dans ce produit. L'arbitrage de l'utilisateur du
+   * 22/09/2026 — *« on n'écrit jamais sur l'AD depuis ce logiciel »* — n'est
+   * donc pas une promesse tenue par une revue de code : c'est une **capacité
+   * absente**, et `test/habilitations/jamais-d-ecriture-ad.test.mjs` le mesure
+   * sur le client lui-même.
+   *
+   * ⚠️ La borne est un **filet** : l'atteindre veut dire qu'on ne voit pas tout,
+   * donc que la comparaison serait fausse dans le sens rassurant — « ce groupe
+   * n'existe pas dans l'AD » alors qu'il est seulement au-delà de la borne.
+   * Elle est donc SIGNALÉE à l'appelant, jamais avalée (motif Q-68).
+   */
+  public async listerGroupes(max = 2_000): Promise<{
+    readonly noms: readonly string[];
+    readonly tronque: boolean;
+  }> {
+    const client = await this.fabrique(this.ldap);
+    try {
+      await client.lier(this.ldap.dnService, this.ldap.motDePasseService);
+      const entrees = await client.rechercher({
+        base: this.ldap.baseRecherche,
+        portee: 'sousArbre',
+        // `objectClass=group` couvre Active Directory ; `groupOfNames` et
+        // `posixGroup` couvrent les annuaires qui ne sont pas AD, que le §25
+        // du `CONVENTIONS.md` n'exclut pas. Le préfixe est échappé : il vient
+        // de la configuration, mais une valeur de configuration reste une
+        // entrée, et un `*` non échappé y ferait un filtre bien plus large.
+        filtre:
+          '(&(|(objectClass=group)(objectClass=groupOfNames)(objectClass=posixGroup))' +
+          `(cn=${echapperValeur(this.ldap.prefixeGroupes)}*))`,
+        attributs: ['cn'],
+        tailleMax: max,
+        bornePleineEstTroncature: false,
+      });
+      const noms = entrees
+        .map((e) => e.attributs.get('cn')?.[0] ?? nomCourtDuDn(e.dn))
+        .filter((n) => n !== '')
+        .sort((a, b) => a.localeCompare(b, 'fr'));
+      return { noms, tronque: entrees.length >= max };
     } finally {
       await client.fermer();
     }
