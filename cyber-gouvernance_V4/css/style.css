@@ -319,6 +319,19 @@ button:active { transform: translateY(0); }
 }
 
 .data-table th { background: #f8f9fa; font-weight: 600; text-transform: uppercase; font-size: var(--text-sm); letter-spacing: 1px; }
+/* ⚠️ **UN EN-TÊTE DE LIGNE N'EST PAS UN TITRE DE COLONNE**, et la règle
+   ci-dessus les confondait. `text-transform: uppercase` convient à un intitulé
+   de colonne — trois mots, répétés en haut d'un tableau ; il défigure un
+   LIBELLÉ de donnée, qui est ce que porte un `<th scope="row">` : « Tableau de
+   bord » devenait « TABLEAU DE BORD », et le code technique qui l'accompagne
+   criait à côté. Trois écrans emploient des en-têtes de ligne — la matrice des
+   habilitations, la vision Groupe et le formulaire de notification — et les
+   trois en souffraient.
+
+   C'est la CLASSE qui est corrigée, pas l'instance : la scoper au seul tableau
+   des habilitations aurait laissé les deux autres, et aurait été le travers que
+   le retrait de `text-transform: capitalize` a déjà coûté sept fois. */
+.data-table tbody th { text-transform: none; letter-spacing: normal; }
 .clickable-row:hover { background-color: #f0f7ff; cursor: pointer; }
 
 /* ── Pastilles de statut ──────────────────────────────────────────────
@@ -3485,6 +3498,12 @@ body { overflow-x: hidden; }
     background: var(--tint-info, #e8eff8);
 }
 
+/* ⚠️ Les deux hôtes du verdict de cohérence et du formulaire de déclaration
+   sont VIDES tant qu'on ne les a pas demandés. Sans cette règle, ils laissent
+   deux blancs au milieu de l'écran — vu en cliquant sur la recette, jamais par
+   le banc : un essai qui vérifie qu'un écran « se rend » ne voit pas un vide. */
+#habCoherence:empty, #habFormGroupe:empty { display: none; }
+
 /* ── La pastille d'un niveau ─────────────────────────────────────────── */
 .hab-niv {
     display: inline-flex;
@@ -3546,6 +3565,7 @@ body { overflow-x: hidden; }
 }
 .hab-matrice .hab-code {
     display: block;
+    text-transform: lowercase;
     font-size: var(--text-xs, 0.75rem);
     font-weight: 400;
     color: var(--text-muted, #6b7a8d);

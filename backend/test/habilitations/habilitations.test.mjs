@@ -476,6 +476,28 @@ describe('§4 — les groupes d’annuaire', () => {
     assert.equal(deux.statut, 400);
   });
 
+  /* 🛑 **Trouvé en CLIQUANT sur la recette, pas par le banc.**
+   *
+   * Un groupe transversal d'administration ne porte AUCUN `profil_id` — la
+   * contrainte `ck_groupes_ad_coherence` l'interdit —, et il attribue pourtant
+   * le profil d'administration à la résolution. L'écran lisait la colonne et
+   * affichait « aucun domaine ouvert » pour le groupe qui ouvre TOUT.
+   *
+   * C'est la classe « l'écran contredit le produit », qui est pire qu'un écran
+   * absent : un administrateur y lit que `GRC-ADMIN` n'accorde rien. */
+  test('un groupe d’administration montre ce qu’il ACCORDE, pas sa colonne vide', async () => {
+    const { corps } = await admin.appeler('GET', '/api/habilitations/etat');
+    const g = corps.groupes.find((x) => x.accordeAdmin && x.actif);
+    assert.ok(g, 'contrôle de matière : un groupe d’administration doit exister');
+    assert.equal(g.profilId, null, 'la COLONNE est bien vide — c’est le schéma qui l’impose');
+    assert.equal(g.profilCode, 'ADMIN', 'et le profil EFFECTIF est celui de la résolution');
+    assert.ok(
+      g.domainesOuverts > 0,
+      'le groupe qui ouvre tout ne peut pas afficher « aucun domaine ouvert »',
+    );
+    assert.equal(g.niveauMax, 'administration');
+  });
+
   test('la synchronisation AJOUTE et n’efface jamais', async () => {
     const avant = await admin.appeler('GET', '/api/habilitations/etat');
     const { statut, corps } = await admin.appeler(

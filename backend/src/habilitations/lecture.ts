@@ -43,6 +43,7 @@ import type { PoolClient } from 'pg';
 import { DOMAINES, NIVEAUX } from '../droits/modele.js';
 import type { DomaineFonctionnelBase, NiveauDroit } from '../droits/modele.js';
 import { DOMAINE_API_PAR_DOMAINE_BASE } from '../droits/passerelle-api.js';
+import { CODE_PROFIL_ADMINISTRATION } from '../droits/resolution.js';
 
 /**
  * Plafonds. Un déploiement réel porte ~10 profils, ~200 groupes (20 filiales ×
@@ -348,7 +349,20 @@ export async function lireEtat(
       });
     }),
     groupes: lignesGroupes.map((g) => {
-      const grille = g.profil_id === null ? {} : (parProfil.get(g.profil_id) ?? {});
+      /* ⚠️ **Un groupe `accorde_admin` n'a PAS de `profil_id`** — la contrainte
+       * `ck_groupes_ad_coherence` l'interdit aux groupes transversaux — et il
+       * attribue pourtant le profil d'administration à la résolution
+       * (`resolution.ts`). Lire la seule colonne affichait donc « aucun domaine
+       * ouvert » pour le groupe qui ouvre tout.
+       *
+       * Le code du profil vient de `resolution.ts`, partagé : le recopier ici
+       * ferait diverger l'écran du produit au premier déploiement qui renomme
+       * son profil d'administration. */
+      const profilEffectif =
+        g.accorde_admin && g.profil_id === null
+          ? (lignesProfils.find((p) => p.code === CODE_PROFIL_ADMINISTRATION)?.id ?? null)
+          : g.profil_id;
+      const grille = profilEffectif === null ? {} : (parProfil.get(profilEffectif) ?? {});
       let ouverts = 0;
       let max: NiveauDroit = 'aucun';
       for (const niveau of Object.values(grille)) {
@@ -356,6 +370,10 @@ export async function lireEtat(
         ouverts += 1;
         if (RANG[niveau] > RANG[max]) max = niveau;
       }
+      const profilNomme =
+        profilEffectif === null
+          ? null
+          : (lignesProfils.find((p) => p.id === profilEffectif) ?? null);
       return Object.freeze({
         id: g.id,
         nom: g.nom,
@@ -364,8 +382,11 @@ export async function lireEtat(
         filialeCode: g.filiale_code,
         filialeRaisonSociale: g.filiale_raison,
         profilId: g.profil_id,
-        profilCode: g.profil_code,
-        profilNom: g.profil_nom,
+        // ⚠️ Le code et le nom RENDUS sont ceux du profil EFFECTIF : c'est ce que
+        //    l'utilisateur obtiendra. `profilId`, lui, reste celui de la colonne —
+        //    c'est la donnée, et l'écran d'édition la modifie.
+        profilCode: g.profil_code ?? profilNomme?.code ?? null,
+        profilNom: g.profil_nom ?? profilNomme?.nom ?? null,
         accordeExport: g.accorde_export,
         accordeAdmin: g.accorde_admin,
         description: g.description,

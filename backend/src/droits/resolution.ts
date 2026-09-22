@@ -57,8 +57,19 @@ export class ErreurSocleDroits extends Error {
   }
 }
 
-/** Code du profil de socle attribué par un groupe `accorde_admin`. */
-const CODE_PROFIL_ADMINISTRATION = 'ADMIN';
+/**
+ * Code du profil de socle attribué par un groupe `accorde_admin`.
+ *
+ * ⚠️ **Exporté**, parce que l'écran d'administration doit montrer ce que le
+ * produit FAIT, et non ce que sa table contient. Un groupe transversal
+ * d'administration ne porte aucun `profil_id` en base — la contrainte
+ * `ck_groupes_ad_coherence` l'interdit —, mais il attribue bel et bien ce
+ * profil à la résolution. L'écran qui lisait la colonne affichait donc
+ * « aucun domaine ouvert » pour le groupe qui ouvre tout : un écran
+ * d'administration qui contredit le produit, ce qui est pire qu'un écran
+ * absent (constat Q-219). Trouvé en CLIQUANT sur la recette.
+ */
+export const CODE_PROFIL_ADMINISTRATION = 'ADMIN';
 
 interface LigneGroupe {
   readonly nom: string;
