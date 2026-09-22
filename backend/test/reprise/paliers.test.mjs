@@ -42,9 +42,17 @@ test('v1 → v2 : audits et revues rejoignent l’instantané unifié', () => {
   // vingt-sixième (v26 → v27) les CONNECTEURS de collecte (22.4). ⚠️ Les CONSTATS
   // qu'ils produisent n'entrent PAS dans le fichier d'échange : un constat est une
   // preuve datée, et un fichier éditable lui ôterait sa valeur probante.
-  assert.equal(rapport.paliers.length, 26);
+  //
+  // Le vingt-septième (v27 → v28) fait entrer les FICHES RÉFLEXES de crise — les
+  // fiches, leurs réflexes et les contacts d'urgence. ⚠️ Il livre TROIS TABLEAUX
+  // VIDES et surtout pas le socle : y recopier les sept fiches donnerait, sur une
+  // base neuve, DEUX jeux de portée Groupe pour les mêmes rôles — celui que la
+  // migration `061` sème et celui que le palier inventerait —, et l'unicité
+  // « nulls not distinct » refuserait la reprise. Le produit rendrait alors une
+  // sauvegarde qu'il ne sait pas relire (motif Q-194).
+  assert.equal(rapport.paliers.length, 27);
   assert.equal(rapport.versionOrigine, 1);
-  assert.equal(rapport.versionCible, 27);
+  assert.equal(rapport.versionCible, 28);
 });
 
 test('v2 → v3 : évaluations de référentiels et pivot « Mesure de sécurité »', () => {
@@ -57,7 +65,7 @@ test('v2 → v3 : évaluations de référentiels et pivot « Mesure de sécurit�
   ]);
   assert.deepEqual(charge.evaluations, []);
   assert.deepEqual(charge.mesures, []);
-  assert.equal(rapport.paliers.length, 25);
+  assert.equal(rapport.paliers.length, 26);
 });
 
 test('v3 → v4 : registre des incidents', () => {
@@ -217,13 +225,13 @@ test('v11 → v12 : « mesure_id » unique devient « mesure_ids[] »', () => {
   }
 });
 
-test('reprise d’un bout en bout : une v1 arrive en v27 avec ses 47 collections', () => {
+test('reprise d’un bout en bout : une v1 arrive en v28 avec ses 50 collections', () => {
   const { rapport, charge } = reprendre(1);
 
-  assert.equal(charge.schemaVersion, 27);
-  assert.equal(rapport.paliers.length, 26);
-  assert.equal(Object.keys(rapport.volumes).length, 47);
-  // Les vingt-six paliers se suivent sans trou : 1→2, 2→3, … 26→27.
+  assert.equal(charge.schemaVersion, 28);
+  assert.equal(rapport.paliers.length, 27);
+  assert.equal(Object.keys(rapport.volumes).length, 50);
+  // Les vingt-sept paliers se suivent sans trou : 1→2, 2→3, … 27→28.
   rapport.paliers.forEach((etape, rang) => {
     assert.equal(etape.de, rang + 1);
     assert.equal(etape.vers, rang + 2);
@@ -236,7 +244,7 @@ test('un fichier qui ment sur sa version est rattrapé, et le mensonge est signa
   // l'ancien lien unique : le mensonge est rattrapé par la normalisation, pas
   // par les paliers — c'est tout l'objet de cet essai, et il exige donc un
   // fichier qui n'en traverse aucun.
-  const charge = instantane(27, {
+  const charge = instantane(28, {
     mesures: [{ id: 'MESURE-1720000000000-1', nom: 'Chiffrement', statut: 'conforme', maturite: 4 }],
     mco_actions: [{ id: 'MCO-1720000000000-1', titre: 'Test', etat: 'OK', date: '2025-11-02', notes: 'RAS' }],
     evaluations: [
@@ -244,7 +252,7 @@ test('un fichier qui ment sur sa version est rattrapé, et le mensonge est signa
     ],
     actifs: [{ id: 'ACTIF-1720000000000-1', nom: 'Serveur', type: 'Matériel', criticite: 'élevée' }],
   });
-  const resultat = reprendreExport(fichier(27, charge), OPTIONS_FIGEES);
+  const resultat = reprendreExport(fichier(28, charge), OPTIONS_FIGEES);
 
   assert.equal(resultat.statut, 'reprise');
   assert.equal(resultat.rapport.paliers.length, 0, 'une v27 déclarée ne traverse aucun palier');

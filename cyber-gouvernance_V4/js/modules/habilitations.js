@@ -1126,10 +1126,10 @@ const HabilitationsModule = (() => {
                     revueOuverte = r.id;
                     let message = r.lignes + " accès figés.";
                     if (r.tronque) {
-                        message += " ⚠️ Le balayage a été TRONQUÉ : la revue est incomplète.";
+                        message += " Attention : le balayage a été TRONQUÉ, la revue est incomplète.";
                     }
                     if (Array.isArray(r.groupesIntrouvables) && r.groupesIntrouvables.length) {
-                        message += " ⚠️ " + r.groupesIntrouvables.length
+                        message += " Attention : " + r.groupesIntrouvables.length
                                  + " groupe(s) déclaré(s) sont introuvables dans l’annuaire.";
                     }
                     avertir(message, r.tronque ? "warning" : "success");

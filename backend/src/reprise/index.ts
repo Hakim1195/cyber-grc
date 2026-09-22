@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 27;
+export const VERSION_SCHEMA = 28;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -217,6 +217,12 @@ export const COLLECTIONS = [
   // titre que le journal d'audit et la main courante de crise — un fichier lisible et
   // éditable lui ôterait sa valeur probante.
   'connecteurs',
+  // v28 — les fiches réflexes de crise (migration `061`). ⚠️ **L'ordre compte** : un
+  // réflexe référence sa fiche, et la clé est en `cascade` — l'écrire avant la fiche
+  // échouerait sur la clé étrangère. `contacts_urgence` ne dépend de rien.
+  'fiches_reflexes',
+  'fiche_reflexe_actions',
+  'contacts_urgence',
 ] as const satisfies readonly NomCollection[];
 
 /** Bornes de défense contre une entrée hostile. Surchargeables par `OptionsReprise`. */
@@ -1342,6 +1348,45 @@ export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>
     // ⚠️ `mesure_id` vise `mesure_catalogue`, qui est de niveau GROUPE et ne fait pas
     // partie des collections du fichier d'échange : la référence n'est donc pas
     // recalée à la reprise, elle est vérifiée par la clé étrangère de la base.
+    references: [],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  // ── v28 : les fiches réflexes de crise (migration `061`) ─────────────────
+  //
+  // ⚠️ `role` n'est PAS une référence : il est apparié à `crise.role` **en texte**,
+  // comme la cellule de crise l'est depuis la migration `003`. Le déclarer ici le
+  // ferait recaler à la reprise vers un identifiant qui n'existe pas — et la fiche
+  // perdrait son titulaire en silence.
+  fiches_reflexes: {
+    prefixe: 'FICHE',
+    champs: ['id', 'role', 'titre', 'ordre', 'commun', 'notes', 'actif'],
+    enumerations: [],
+    bornes: [{ champ: 'ordre', min: 0, max: 9999 }],
+    dates: [],
+    references: [],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  fiche_reflexe_actions: {
+    prefixe: 'FREF',
+    champs: ['id', 'fiche_id', 'ordre', 'texte'],
+    enumerations: [],
+    bornes: [{ champ: 'ordre', min: 0, max: 9999 }],
+    dates: [],
+    // ⚠️ `fiche_id` EST une référence, et elle doit être recalée : le serveur
+    //    réattribue les identifiants à la reprise, et un réflexe qui viserait
+    //    l'ancien se rattacherait à rien — la fiche s'imprimerait sans ses gestes.
+    references: [{ champ: 'fiche_id', cible: 'fiches_reflexes' }],
+    referencesMultiples: [],
+    cleMetier: null,
+  },
+  contacts_urgence: {
+    prefixe: 'CTCU',
+    champs: ['id', 'intitule', 'coordonnee', 'ordre', 'actif'],
+    enumerations: [],
+    bornes: [{ champ: 'ordre', min: 0, max: 9999 }],
+    dates: [],
     references: [],
     referencesMultiples: [],
     cleMetier: null,
@@ -2672,6 +2717,30 @@ const PALIERS: readonly EtapePalier[] = [
     // personne ne saurait que ce contrôle n'a jamais été voulu. Le palier livre donc
     // un tableau vide, et c'est l'exploitant qui pose ses connecteurs.
     appliquer: paliersCollections(['connecteurs']),
+  },
+  {
+    de: 27,
+    vers: 28,
+    libelle:
+      'Les FICHES RÉFLEXES de crise entrent dans l’instantané — six fiches, leurs ' +
+      'réflexes et les contacts d’urgence. Elles étaient écrites en dur dans le ' +
+      'navigateur, et un groupe de vingt filiales n’a pas une seule organisation de ' +
+      'crise.',
+    // ⚠️ **Un fichier d'avant la v28 n'en porte aucune, et il ne doit pas en inventer.**
+    //
+    // La tentation était d'y recopier le socle : un export repris sur une base neuve
+    // aurait alors DEUX jeux de fiches — celui que la migration `061` sème, et celui
+    // que le palier aurait inventé —, tous deux de portée Groupe, tous deux pour les
+    // mêmes six rôles. L'unicité `nulls not distinct` du §1 refuserait la reprise, et
+    // le produit rendrait une sauvegarde qu'il ne sait pas relire (motif Q-194).
+    //
+    // Le palier livre donc trois tableaux vides. Le socle vient de la migration, qui
+    // est le seul endroit où il est écrit.
+    appliquer: paliersCollections([
+      'fiches_reflexes',
+      'fiche_reflexe_actions',
+      'contacts_urgence',
+    ]),
   },
 ];
 

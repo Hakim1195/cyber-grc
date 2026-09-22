@@ -333,7 +333,13 @@ describe('Les 47 entités du registre, sans échantillonnage', () => {
     // y entrer lui donne le round-trip et l'import sans qu'un greffon ait à les réécrire.
     // Ce que le greffon `src/campagnes/` ajoute est ce que la couche générique ne peut pas
     // faire : compter l'avancement, et convoquer une AUTRE filiale que la sienne.
-    assert.equal(noms.length, 47);
+    // 50 depuis la migration `061` : `fiches_reflexes`, `fiche_reflexe_actions` et
+    // `contacts_urgence` (v28). ⚠️ Elles entrent dans la couche générique plutôt que dans
+    // un greffon : elles n'ont besoin de rien de particulier, et y entrer leur donne
+    // d'un coup le verrouillage optimiste, le journal, le cloisonnement MIXTE, l'import
+    // et le round-trip `grc-backup`. Ce qu'elles avaient avant, c'était une constante
+    // dans `js/modules/crise.js` — donc rien de tout cela.
+    assert.equal(noms.length, 50);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -534,6 +540,13 @@ describe('Les 47 entités du registre, sans échantillonnage', () => {
       // d'ajouter un niveau à une échelle publiée, et c'est exactement ce qu'il
       // doit faire.
       echelle_niveaux: (crees) => ({ echelle_id: crees.echelles }),
+      // ⚠️ Un réflexe naît sous une fiche RÉELLE, et de la MÊME PORTÉE : le
+      // déclencheur `f_action_suit_sa_fiche()` refuse qu'un réflexe de filiale se
+      // rattache à une fiche du socle, ce qu'aucune clé étrangère composite ne peut
+      // dire — `MATCH SIMPLE` dispense de contrôle dès qu'une colonne est nulle
+      // (`CONVENTIONS.md` §45). C'est le refus qu'on veut, et il faut donc semer la
+      // fiche que le balayage vient de créer.
+      fiche_reflexe_actions: (crees) => ({ fiche_id: crees.fiches_reflexes }),
     };
 
     const echecs = [];

@@ -129,7 +129,11 @@ export type NomEntite =
    * datée, au même titre que le journal d'audit et la main courante de crise. Le
    * faire voyager dans un fichier éditable lui ôterait sa valeur probante.
    */
-  | 'connecteurs';
+  | 'connecteurs'
+  // ── v28 : les fiches réflexes de crise (migration `061`) ────────────────
+  | 'fiches_reflexes'
+  | 'fiche_reflexe_actions'
+  | 'contacts_urgence';
 
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;

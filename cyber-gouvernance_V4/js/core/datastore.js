@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 27;
+    const SCHEMA_VERSION = 28;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -218,7 +218,22 @@ const DataStore = (() => {
         // une reprise ; un constat est une preuve datée, au même titre que le journal
         // d'audit et la main courante de crise, et un fichier éditable lui ôterait sa
         // valeur probante. On ne restaure pas un constat — on en produit un nouveau.
-        "connecteurs"
+        "connecteurs",
+        // v28 — les FICHES RÉFLEXES de crise (migration `061`). Elles étaient écrites
+        // EN DUR dans `js/modules/crise.js` : six rôles, vingt-cinq réflexes, sept
+        // contacts — dont quatre lignes de tirets bas que personne ne pouvait remplir.
+        //
+        // ⚠️ **Trois tables MIXTES** : le socle du Groupe est celui qui était en dur, et
+        // une filiale le SURCHARGE pour le rôle qu'elle veut adapter. Utilisateur,
+        // 22/09/2026 : « elles sont à adapter en fonction de l'existant ».
+        //
+        // ⚠️ **Elles voyagent ; la MAIN COURANTE non.** Une fiche réflexe est une
+        // PROCÉDURE, qu'on refait à l'identique après une reprise ; une main courante
+        // est une PREUVE datée. C'est la même ligne qu'entre `connecteurs` et
+        // `collectes`, un lot plus tôt.
+        "fiches_reflexes",
+        "fiche_reflexe_actions",
+        "contacts_urgence"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
@@ -1132,6 +1147,105 @@ const DataStore = (() => {
         return data.echelles.filter(e => e.sujet === sujet)
             .slice().sort((a, b) => (b.revision || 0) - (a.revision || 0));
     }
+    /* =========================
+       LES FICHES RÉFLEXES DE CRISE (v28, migration `061`)
+
+       ⚠️ **`getFichesReflexes()` résout la SURCHARGE, et ce n'est pas un `filter`
+       nu.** Le socle du Groupe et la fiche locale visent le même rôle : la seconde
+       REMPLACE la première, elle ne s'y ajoute pas. Deux cartes pour
+       « Responsable IT / SSI » au moment d'une crise, ce sont deux colonnes qui se
+       contredisent sous les yeux de quelqu'un qui n'a pas le temps de choisir.
+
+       C'est exactement le défaut mesuré sur les échelles le 19/09 — le `find()` nu
+       qui prenait la première venue —, et il est fermé ici AVANT d'avoir coûté.
+    ========================== */
+
+    /** Vrai si la ligne appartient au socle du Groupe (champ servi par le serveur). */
+    function estDuSocle(ligne) { return ligne && ligne._porteeGroupe === true; }
+
+    /**
+     * Les fiches qui s'appliquent ICI : celles de la filiale, plus celles du socle
+     * dont le rôle n'est pas déjà couvert localement. Triées par `ordre`.
+     */
+    function getFichesReflexes() {
+        const toutes = (data.fiches_reflexes || []).filter(f => f.actif !== false);
+        const cle = (f) => String(f.role || "").trim().toLowerCase();
+        const locales = toutes.filter(f => !estDuSocle(f));
+        const couverts = new Set(locales.map(cle));
+        return locales
+            .concat(toutes.filter(f => estDuSocle(f) && !couverts.has(cle(f))))
+            .sort((a, b) => (a.ordre || 0) - (b.ordre || 0)
+                          || String(a.titre || "").localeCompare(String(b.titre || ""), "fr"));
+    }
+
+    /** Toutes les fiches, socle compris et surcharges incluses — pour l'ÉDITION. */
+    function getToutesFichesReflexes() {
+        return (data.fiches_reflexes || []).slice()
+            .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+    }
+
+    function getFicheReflexeById(id) {
+        return (data.fiches_reflexes || []).find(f => f.id === id);
+    }
+
+    /** Les réflexes d'une fiche, dans l'ordre. */
+    function getReflexesDeFiche(ficheId) {
+        return (data.fiche_reflexe_actions || [])
+            .filter(a => a.fiche_id === ficheId)
+            .slice()
+            .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+    }
+
+    function addFicheReflexe(f) { data.fiches_reflexes.push(f); save(); }
+    function updateFicheReflexe(f) {
+        const i = data.fiches_reflexes.findIndex(x => x.id === f.id);
+        if (i !== -1) { data.fiches_reflexes[i] = f; save(); }
+    }
+    function deleteFicheReflexe(id) {
+        data.fiches_reflexes = data.fiches_reflexes.filter(f => f.id !== id);
+        // La cascade est tenue par la BASE (`on delete cascade`) ; on la reflète ici
+        // pour que l'écran ne montre pas des réflexes orphelins avant le prochain
+        // chargement.
+        data.fiche_reflexe_actions =
+            data.fiche_reflexe_actions.filter(a => a.fiche_id !== id);
+        save();
+    }
+    function addReflexe(a) { data.fiche_reflexe_actions.push(a); save(); }
+    function updateReflexe(a) {
+        const i = data.fiche_reflexe_actions.findIndex(x => x.id === a.id);
+        if (i !== -1) { data.fiche_reflexe_actions[i] = a; save(); }
+    }
+    function deleteReflexe(id) {
+        data.fiche_reflexe_actions =
+            data.fiche_reflexe_actions.filter(a => a.id !== id);
+        save();
+    }
+
+    /**
+     * Les contacts d'urgence applicables : ceux de la filiale, puis ceux du socle.
+     *
+     * ⚠️ **Pas de surcharge par intitulé ici**, à la différence des fiches : une
+     * filiale AJOUTE son assurance et son infogérant, elle ne remplace pas le CERT-FR.
+     * Traiter les deux de la même façon ferait disparaître une référence publique le
+     * jour où quelqu'un crée un contact au nom approchant.
+     */
+    function getContactsUrgence() {
+        return (data.contacts_urgence || [])
+            .filter(c => c.actif !== false)
+            .slice()
+            .sort((a, b) => (Number(estDuSocle(a)) - Number(estDuSocle(b)))
+                          || (a.ordre || 0) - (b.ordre || 0));
+    }
+    function addContactUrgence(c) { data.contacts_urgence.push(c); save(); }
+    function updateContactUrgence(c) {
+        const i = data.contacts_urgence.findIndex(x => x.id === c.id);
+        if (i !== -1) { data.contacts_urgence[i] = c; save(); }
+    }
+    function deleteContactUrgence(id) {
+        data.contacts_urgence = data.contacts_urgence.filter(c => c.id !== id);
+        save();
+    }
+
     function addEchelle(e) { data.echelles.push(e); save(); }
     function updateEchelle(e) {
         const i = data.echelles.findIndex(x => x.id === e.id);
@@ -2025,6 +2139,10 @@ const DataStore = (() => {
         addEbiosScenarioOperationnel, updateEbiosScenarioOperationnel,
         deleteEbiosScenarioOperationnel,
         // Échelles de cotation (v24, action 25.3)
+        getFichesReflexes, getToutesFichesReflexes, getFicheReflexeById,
+        getReflexesDeFiche, addFicheReflexe, updateFicheReflexe, deleteFicheReflexe,
+        addReflexe, updateReflexe, deleteReflexe,
+        getContactsUrgence, addContactUrgence, updateContactUrgence, deleteContactUrgence,
         getEchelles, getEchelleById, getEchelleEnVigueur, getEchellesDuSujet,
         addEchelle, updateEchelle, deleteEchelle,
         getNiveauxEchelle, getNiveauEchelleById,

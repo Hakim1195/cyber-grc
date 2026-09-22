@@ -348,6 +348,17 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   // sous « actifs » l'aurait ouvert à qui tient l'inventaire, et fermé à qui tient
   // la conformité — exactement l'inverse de qui s'en sert.
   connecteurs: 'conformite',
+  // ── v28 : les fiches réflexes de crise ────────────────────────────────────
+  //
+  // ⚠️ **« continuite », comme `crise` dont elles sont l'outillage.** La tentation
+  // était « documents » — ce sont des cartes imprimables — ou « administration »,
+  // puisque le socle se pose au niveau Groupe. Les deux auraient été fausses : qui
+  // écrit une fiche réflexe est celui qui tient la cellule de crise, et il faut qu'il
+  // la lise **là où il la lira le jour venu**. Ranger l'outillage ailleurs que
+  // l'organisation qu'il outille, c'est le fermer à la personne dont c'est le métier.
+  fiches_reflexes: 'continuite',
+  fiche_reflexe_actions: 'continuite',
+  contacts_urgence: 'continuite',
 });
 
 /**

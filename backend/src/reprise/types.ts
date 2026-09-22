@@ -123,7 +123,11 @@ export type NomCollection =
   | 'referentiel_traductions'
   // v27 — la configuration des contrôles automatiques (lot L22, action 22.4).
   // ⚠️ `collectes` n'y est pas : un constat est une preuve, pas un réglage.
-  | 'connecteurs';
+  | 'connecteurs'
+  // ── v28 : les fiches réflexes de crise (migration `061`) ────────────────
+  | 'fiches_reflexes'
+  | 'fiche_reflexe_actions'
+  | 'contacts_urgence';
 
 /**
  * Charge utile normalisée en v12.

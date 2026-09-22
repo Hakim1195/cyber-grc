@@ -105,8 +105,8 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
   test('GET /api/modele — décrit les 47 entités, et ne fuit aucun nom de table', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/modele');
     assert.equal(statut, 200);
-    assert.equal(Object.keys(corps.entites).length, 47);
-    assert.equal(corps.schemaVersion, 27);
+    assert.equal(Object.keys(corps.entites).length, 50);
+    assert.equal(corps.schemaVersion, 28);
 
     const texte = JSON.stringify(corps);
     for (const interdit of ['mesure_catalogue', 'mesure_mise_en_oeuvre', 'evaluation_mesures', base.nom]) {
@@ -120,7 +120,7 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
   test('GET /api/donnees — rend le jeu de la filiale, dans la forme de « data »', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/donnees');
     assert.equal(statut, 200);
-    assert.equal(corps.data.schemaVersion, 27);
+    assert.equal(corps.data.schemaVersion, 28);
     assert.ok(corps.data.risques.some((r) => r.id === 'RISK-A'));
     assert.ok(corps.data.documents.some((d) => d.id === 'DOC-G'), 'Le socle Groupe fait partie du chargement.');
 

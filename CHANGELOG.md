@@ -10,8 +10,8 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 21/09/2026**, après l'action **D3**, sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
-> **PostgreSQL 17.11**) : **60 migrations**, **91 tables**, **364 politiques**,
-> **64 garde-fous**, **528 décisions** au registre de l'article 30, publication
+> **PostgreSQL 17.11**) : **61 migrations**, **94 tables**, **376 politiques**,
+> **65 garde-fous**, **565 décisions** au registre de l'article 30, publication
 > **87 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
 > ⚠️ La `059` n'ajoute **aucune table** ni politique : `documents.recherche` est une
 > colonne de plus sur une table qui en portait déjà quatre-vingt-neuf politiques.
@@ -77,6 +77,77 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### LES FICHES RÉFLEXES DE CRISE QUITTENT LE CODE — migration `061` (22/09/2026)
+
+> **Demandé par l'utilisateur** : *« les fiches réflexes dans le module Cellule de crise
+> c'est très bien, mais ça serait top de pouvoir créer et modifier les fiches réflexes,
+> car elles sont à adapter en fonction de l'existant. »*
+
+Six rôles, vingt-cinq réflexes et sept contacts d'urgence étaient **écrits en dur** dans
+`js/modules/crise.js`. Quatre réflexes de plus vivaient même **dans le gabarit** de
+`renderFiches()`, au milieu du balisage — *un réflexe écrit dans un gabarit est un
+réflexe que personne ne peut adapter.*
+
+Un groupe de vingt filiales n'a pas une seule organisation de crise, et **une fiche
+réflexe qui ne décrit pas l'organisation réelle est pire qu'absente** : on la sort de
+l'armoire au pire moment, et elle envoie appeler quelqu'un qui n'existe pas.
+
+**Trois tables MIXTES** — `fiches_reflexes`, `fiche_reflexe_actions`,
+`contacts_urgence` —, le patron du socle de risques et des échelles : `filiale_id` nul =
+socle du Groupe, renseigné = version propre à une filiale. Schéma `data` en **v28**.
+
+⚠️ **Une fiche locale REMPLACE celle du socle pour le même rôle**, elle ne s'y ajoute
+pas : deux cartes pour « Responsable IT / SSI » au moment d'une crise, ce sont deux
+colonnes qui se contredisent sous les yeux de quelqu'un qui n'a pas le temps de choisir.
+C'est le défaut mesuré sur les échelles le 19/09 — le `find()` nu qui prenait la première
+venue —, fermé ici **avant** d'avoir coûté.
+
+⚠️ **Le socle a été ENGENDRÉ depuis le code**, pas retranscrit : une transcription à la
+main aurait perdu un réflexe sans que personne le voie, et c'est le réflexe perdu qu'on
+cherchera le jour venu. Le semis est **vérifié** à la fin de la migration — sept fiches,
+vingt-neuf réflexes, sept contacts — et refuse le déploiement s'il est partiel.
+
+⚠️ **LES TROIS LIGNES DE TIRETS BAS DEVIENNENT DES VIDES ASSUMÉS.**
+« ______________________ » n'est pas une coordonnée : elle **imite une donnée**, passe
+tout contrôle de présence, s'imprime — et le jour de la crise on compose un numéro qui
+n'existe pas. `null` se lit « à compléter », l'écran le dit, et un garde-fou refuse que
+la forme revienne.
+
+⚠️ **« Réflexes communs à tous » est une COLONNE, pas une position.** La déduire de
+`ordre = 0` aurait marché jusqu'au jour où quelqu'un réordonne ses fiches — et le produit
+aurait alors cherché un titulaire pour une carte qui s'adresse à tout le monde.
+
+⚠️ **Ce que la migration NE fait PAS : elle ne fige pas une fiche publiée.** Les échelles
+(`049`) sont figées parce qu'une cotation se rattache à l'échelle qui l'a produite. Rien
+ne se rattache à une fiche réflexe. Ce qu'on veut savoir d'elle — *qu'a-t-elle dit, et
+depuis quand ?* — est déjà porté par le journal d'audit. *Ajouter une machine de révision
+qui ne sert rien serait du zèle, et le zèle se paie en complexité qu'on ne sait plus
+retirer.*
+
+⚠️ **Quatre refus des garde-fous, aucun défaut trouvé par moi** : `f_poser_portee_figee()`
+pose ses déclencheurs en armement « origin » et la migration a été refusée tant qu'elle
+n'appelait pas `f_armer_declencheurs()` (constat Q-281) ; le registre de l'article 30 a
+réclamé une décision pour la colonne `commun` ; le balayage de cloisonnement a réclamé
+une fiche LOCALE par filiale — *« zéro ligne visible » est aussi ce que rend une table
+vide* ; et le contrôle C76 a compté vingt-sept déclencheurs de portée là où il en
+attendait vingt-quatre.
+
+⚠️ **Et deux pièges du banc, tous deux de la même famille.** Une mutation de DONNÉES sur
+ces tables est filtrée par la RLS : sans `f_administration_groupe()`, le `delete` affecte
+**zéro ligne sans erreur**, et l'essai conclurait que le garde-fou est muet alors qu'il
+n'avait rien à voir. Et supprimer une ligne du socle exige une **filiale active** — le
+déclencheur des pièces jointes met la purge en file dans une table cloisonnée.
+
+**Neuf mutations jouées, neuf rougissements**, dont la plus traître : `unique (filiale_id,
+lower(role))` et sa variante `nulls not distinct` se ressemblent trait pour trait. Un
+garde qui relirait le texte ne verrait rien ; on mesure donc `indnullsnotdistinct` dans
+`pg_index`, qui ne se laisse pas imiter — et un contrôle de matière vérifie que la
+mutation laisse **vraiment** entrer le doublon.
+
+Mesuré sur la recette, au navigateur : sept cartes, vingt-neuf réflexes, sept contacts
+dont trois « à compléter » ; la surcharge d'une fiche du socle par une filiale crée bien
+une copie locale qui la remplace, sans toucher les autres ; zéro erreur de page.
 
 ### L'ADMINISTRATION DES HABILITATIONS — le modèle de droits cesse d'être invisible (22/09/2026)
 

@@ -3,85 +3,26 @@
 
 const CriseModule = (() => {
 
-    /* =========================
-       FICHES RÉFLEXES DE CRISE
-       Contenu générique et pédagogique (le public inclut des non-experts) :
-       les gestes prioritaires à effectuer immédiatement, rôle par rôle.
-    ========================== */
-    const FICHES = [
-        {
-            role: "Directeur de crise (Décisionnel)",
-            short: "Directeur de crise",
-            actions: [
-                "Activer officiellement la cellule de crise et consigner l'heure de déclenchement.",
-                "Réunir les membres via un canal de secours (téléphone / SMS) si la messagerie est indisponible.",
-                "Qualifier la gravité et décider du périmètre à isoler ou à arrêter.",
-                "Arbitrer la communication (interne, clients, presse) et les déclarations réglementaires.",
-                "Décider de l'activation du PRA, du recours aux prestataires et à l'assurance cyber.",
-                "Faire tenir une main courante horodatée de toutes les décisions."
-            ]
-        },
-        {
-            role: "Responsable IT / SSI (Opérationnel)",
-            short: "Responsable IT / SSI",
-            actions: [
-                "Isoler du réseau les systèmes touchés (débrancher le câble, couper Wi-Fi / VPN) SANS les éteindre — préserver la mémoire et les preuves.",
-                "Préserver les preuves : journaux, images disque ; ne rien supprimer ni réinstaller dans l'urgence.",
-                "Identifier le point d'entrée (hameçonnage, faille, compte compromis) et stopper la propagation.",
-                "Réinitialiser les comptes à privilèges, révoquer sessions, clés et secrets exposés.",
-                "Vérifier l'intégrité et l'isolement des sauvegardes AVANT toute restauration.",
-                "Rendre compte de l'état technique au Directeur de crise à intervalles réguliers."
-            ]
-        },
-        {
-            role: "Responsable Communication",
-            short: "Responsable Communication",
-            actions: [
-                "Préparer des éléments de langage validés par la Direction et le Juridique.",
-                "Diffuser des consignes internes (ne pas parler à la presse, vigilance e-mails et pièces jointes).",
-                "Centraliser les sollicitations presse et clients via un point de contact unique.",
-                "Ne communiquer que des informations confirmées ; éviter tout détail technique exploitable."
-            ]
-        },
-        {
-            role: "Responsable Juridique / RH",
-            short: "Juridique / RH",
-            actions: [
-                "Évaluer les obligations de notification : CERT-FR / ANSSI (NIS2, alerte sous 24 h) ; CNIL (RGPD, sous 72 h si données personnelles).",
-                "Préparer l'information des personnes concernées en cas de risque élevé (RGPD).",
-                "Conserver les preuves à valeur probante et envisager le dépôt de plainte.",
-                "Mobiliser l'assurance cyber et vérifier les obligations contractuelles envers les clients."
-            ]
-        },
-        {
-            role: "Expert technique (Interne/Externe)",
-            short: "Expert technique",
-            actions: [
-                "Mener l'analyse : recherche du patient zéro et des indicateurs de compromission (IOC).",
-                "Contenir puis éradiquer la menace ; assainir avant toute remise en service.",
-                "Documenter les IOC et les partager pour renforcer la surveillance."
-            ]
-        },
-        {
-            role: "Autre",
-            short: "Logistique / Sécurité physique",
-            actions: [
-                "Sécuriser les locaux et les accès physiques si nécessaire.",
-                "Assurer la logistique de la cellule (salle de repli, moyens de secours, intendance)."
-            ]
-        }
-    ];
+    /* =========================================================================
+       FICHES RÉFLEXES DE CRISE — EN BASE DEPUIS LA MIGRATION `061`
 
-    // Contacts d'urgence : références publiques + champs à compléter par l'organisation.
-    const CONTACTS_URGENCE = [
-        ["CERT-FR / ANSSI (déclaration d'incident)", "cert.ssi.gouv.fr"],
-        ["CNIL (violation de données, sous 72 h)", "cnil.fr — notifier une violation"],
-        ["Assistance cybermalveillance", "cybermalveillance.gouv.fr"],
-        ["Forces de l'ordre / dépôt de plainte", "17 (police-secours)"],
-        ["Assurance cyber (police n° ____)", "______________________"],
-        ["Infogérant / Hébergeur", "______________________"],
-        ["Prestataire réponse à incident", "______________________"]
-    ];
+       ⚠️ **Six rôles, vingt-cinq réflexes et sept contacts vivaient ICI, en dur.**
+       Quatre réflexes de plus vivaient même dans le GABARIT de `renderFiches()`, au
+       milieu du balisage. Utilisateur, 22/09/2026 : *« elles sont à adapter en
+       fonction de l'existant »* — et un groupe de vingt filiales n'a pas une seule
+       organisation de crise.
+
+       Elles sont désormais un **socle du Groupe surchargeable par filiale**, comme
+       le socle de risques et les échelles de cotation. Le contenu n'a pas bougé
+       d'un caractère : le semis de la `061` a été ENGENDRÉ depuis ce fichier.
+
+       ⚠️ **`DataStore.getFichesReflexes()` résout la surcharge**, et ce n'est pas un
+       `filter` nu : une fiche locale REMPLACE celle du socle pour le même rôle. Deux
+       cartes pour « Responsable IT / SSI » au moment d'une crise, ce sont deux
+       colonnes qui se contredisent sous les yeux de quelqu'un qui n'a pas le temps
+       de choisir. C'est le défaut mesuré sur les échelles le 19/09, fermé ici avant
+       d'avoir coûté.
+    ========================================================================= */
 
     function injectFichesStyles() {
         if (document.getElementById("crise-fiches-styles")) return;
@@ -114,36 +55,66 @@ const CriseModule = (() => {
         document.head.appendChild(style);
     }
 
+    /** Mode d'édition de l'écran des fiches. Faux = la vue imprimable. */
+    let editionFiches = false;
+
     function renderFiches() {
         const membres = DataStore.getCriseMembres();
         const app = document.getElementById("app");
         const esc = window.escapeHtml || (s => String(s == null ? "" : s));
-        const dateJour = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+        const dateJour = new Date().toLocaleDateString("fr-FR",
+            { day: "2-digit", month: "long", year: "numeric" });
+
+        const fiches = DataStore.getFichesReflexes();
+        const contacts = DataStore.getContactsUrgence();
 
         // Rattache les titulaires de l'annuaire à chaque fiche (par rôle).
         const byRole = {};
         membres.forEach(m => { (byRole[m.role] = byRole[m.role] || []).push(m); });
 
-        const roleCards = FICHES.map(f => {
-            const titulaires = byRole[f.role] || [];
-            const holders = titulaires.length
+        const carte = (f) => {
+            const reflexes = DataStore.getReflexesDeFiche(f.id);
+            const socle = f._porteeGroupe === true;
+            // ⚠️ La fiche COMMUNE ne cherche pas de titulaire : elle s'adresse à tout
+            //    le monde. Le lui chercher afficherait « Titulaire à désigner » sous
+            //    une carte qui n'en veut pas — et quelqu'un finirait par en désigner un.
+            const titulaires = f.commun ? null : (byRole[f.role] || []);
+            const holders = f.commun ? "" : (titulaires.length
                 ? titulaires.map(m => `
                     <div class="fiche-holder">
                         <strong>${esc(m.nom) || "Sans nom"}</strong>${m.telephone ? ` — ${esc(m.telephone)}` : ""}
                         ${m.suppleant ? `<div class="fiche-supp">Suppléant : ${esc(m.suppleant)}</div>` : ""}
                     </div>`).join("")
-                : `<div class="fiche-holder fiche-empty">Titulaire à désigner</div>`;
-            return `
-            <div class="dashboard-card fiche-reflexe">
-                <div class="fiche-role">${esc(f.short)}</div>
-                <div class="fiche-label">Titulaire(s)</div>
-                ${holders}
-                <div class="fiche-label">Réflexes immédiats</div>
-                <ol class="fiche-actions">${f.actions.map(a => `<li>${esc(a)}</li>`).join("")}</ol>
-            </div>`;
-        }).join("");
+                : `<div class="fiche-holder fiche-empty">Titulaire à désigner</div>`);
 
-        const contactsRows = CONTACTS_URGENCE.map(c => `<tr><td>${esc(c[0])}</td><td>${esc(c[1])}</td></tr>`).join("");
+            return `
+            <div class="dashboard-card fiche-reflexe${f.commun ? " fiche-commun fiche-span" : ""}"
+                 data-fiche="${esc(f.id)}">
+                <div class="fiche-role">${esc(f.titre)}${
+                    socle ? '<span class="fiche-socle no-print" title="Fiche du socle du Groupe : la même pour toutes les filiales. La modifier ici en crée une PROPRE à cette filiale, qui la remplacera.">socle</span>' : ""
+                }</div>
+                ${f.commun ? "" : `<div class="fiche-label">Titulaire(s)</div>${holders}`}
+                <div class="fiche-label">Réflexes immédiats</div>
+                ${reflexes.length
+                    ? `<ol class="fiche-actions">${reflexes.map(r => `<li>${esc(r.texte)}</li>`).join("")}</ol>`
+                    : `<p class="fiche-empty">Aucun réflexe. Une fiche vide imprimée est pire qu’une fiche absente : on la sort de l’armoire et on y cherche un geste qui n’y est pas.</p>`}
+                ${f.notes ? `<div class="fiche-label">À savoir</div><p class="fiche-supp">${esc(f.notes)}</p>` : ""}
+                <div class="page-actions no-print fiche-commandes">
+                    <button type="button" class="fiche-modifier btn-secondary" data-fiche="${esc(f.id)}">Modifier</button>
+                </div>
+            </div>`;
+        };
+
+        const cartes = fiches.map(carte).join("");
+
+        const contactsRows = contacts.map(c => `
+            <tr>
+                <td>${esc(c.intitule)}${c._porteeGroupe === true
+                    ? '<span class="fiche-socle no-print">socle</span>' : ""}</td>
+                <td>${c.coordonnee
+                    ? esc(c.coordonnee)
+                    : '<span class="fiche-empty">à compléter</span>'}</td>
+            </tr>`).join("");
 
         app.innerHTML = `
             <section class="page">
@@ -153,44 +124,359 @@ const CriseModule = (() => {
                     <p>${esc(Identite.piedImpression("Gestion de crise cyber"))} · Édité le ${esc(dateJour)}</p>
                 </div>
 
-                <div class="dashboard-header no-print">
-                    <div>
-                        <h1>Fiches réflexes de crise</h1>
-                        <p class="sous-titre">Que faire dans les premières minutes, rôle par rôle. ${Help.tip("Une fiche réflexe est une carte d'action synthétique : les gestes prioritaires à effectuer immédiatement, sans avoir à réfléchir dans l'urgence.")}</p>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button type="button" id="backToCriseBtn" class="no-print" style="background: var(--bg-body); color: var(--text-main); border: 1px solid var(--border);">Retour à l'annuaire</button>
-                        <button type="button" id="printFichesBtn" class="no-print" style="background-color: var(--primary);">Imprimer les fiches</button>
-                    </div>
+                ${UI.enteteHtml({
+                    titre: "Fiches réflexes de crise",
+                    aide: Help.tip(
+                        "Une fiche réflexe est une carte d'action synthétique : les gestes "
+                      + "prioritaires à effectuer immédiatement, sans avoir à réfléchir dans "
+                      + "l'urgence. Depuis le 22/09/2026 elles sont MODIFIABLES : le Groupe "
+                      + "pose un socle, chaque site l'adapte à son organisation réelle."),
+                    contexte: "Que faire dans les premières minutes, rôle par rôle.",
+                    actions:
+                        '<button type="button" id="editerFichesBtn" class="btn-secondary">'
+                      + (editionFiches ? "Fermer l’édition" : "Adapter les fiches") + "</button>"
+                      + '<button type="button" id="backToCriseBtn" class="btn-secondary">Retour à l’annuaire</button>'
+                      + '<button type="button" id="printFichesBtn">Imprimer les fiches</button>'
+                })}
+
+                <div class="card encart-alerte no-print">
+                    <p><strong>À imprimer et conserver hors ligne :</strong> en cas de crise
+                    majeure (rançongiciel, incendie), le SI et cette application peuvent être
+                    indisponibles. Gardez une copie papier à jour dans un lieu sécurisé.</p>
                 </div>
 
-                <div class="synthese-message warning no-print" style="font-size: var(--text-base); padding: 10px; margin-bottom: 20px;">
-                    <strong>À imprimer et conserver hors ligne :</strong> en cas de crise majeure (rançongiciel, incendie), le SI et cette application peuvent être indisponibles. Gardez une copie papier à jour dans un lieu sécurisé.
-                </div>
+                <div id="fichesEdition">${editionFiches ? panneauEdition(membres) : ""}</div>
 
                 <div class="fiches-grid">
-                    <div class="dashboard-card fiche-reflexe fiche-commun fiche-span">
-                        <div class="fiche-role">Réflexes communs à tous</div>
-                        <ul class="fiche-actions">
-                            <li>Rester calme et méthodique ; ne payer aucune rançon sans décision de la cellule.</li>
-                            <li>Utiliser les canaux de secours (téléphone, hors SI compromis) ; considérer la messagerie professionnelle comme compromise.</li>
-                            <li>Tout horodater dans une main courante unique (heure, fait, décision, auteur).</li>
-                            <li>Ne rien communiquer à l'extérieur sans validation du Directeur de crise.</li>
-                        </ul>
-                    </div>
-                    ${roleCards}
+                    ${cartes || '<p class="muted">Aucune fiche réflexe. Le socle du Groupe est absent : signalez-le à votre exploitant.</p>'}
                     <div class="dashboard-card fiche-reflexe fiche-contacts fiche-span">
-                        <div class="fiche-role">Contacts d'urgence <span style="font-weight:400; font-size: var(--text-sm); color:var(--text-muted);">(à compléter et vérifier régulièrement)</span></div>
+                        <div class="fiche-role">Contacts d’urgence
+                            <span class="fiche-supp">(à compléter et vérifier régulièrement)</span>
+                            <button type="button" id="editerContactsBtn" class="btn-secondary no-print">Modifier</button>
+                        </div>
                         <table><tbody>${contactsRows}</tbody></table>
+                        <div id="contactsEdition"></div>
                     </div>
                 </div>
             </section>
         `;
 
         injectFichesStyles();
-        document.getElementById("backToCriseBtn").addEventListener("click", () => Router.navigateTo("/crise"));
+        UI.envelopperTableaux();
+        document.getElementById("backToCriseBtn").addEventListener("click",
+            () => Router.navigateTo("/crise"));
         document.getElementById("printFichesBtn").addEventListener("click", () => window.print());
+        document.getElementById("editerFichesBtn").addEventListener("click", () => {
+            editionFiches = !editionFiches;
+            renderFiches();
+        });
+        document.querySelectorAll(".fiche-modifier").forEach(b => {
+            b.addEventListener("click", () => {
+                // L'identifiant se lit dans l'attribut AU MOMENT DU CLIC.
+                ouvrirFiche(b.dataset.fiche, membres);
+            });
+        });
+        const editerContacts = document.getElementById("editerContactsBtn");
+        if (editerContacts) editerContacts.addEventListener("click",
+            () => ouvrirContacts());
+        if (editionFiches) brancherPanneauEdition(membres);
         if (window.Identite) Identite.brancherLogos();
+    }
+
+    /* =========================================================================
+       L'ÉDITION — et la règle de portée, dite plutôt que devinée
+
+       ⚠️ **Modifier une fiche du SOCLE depuis une filiale en CRÉE une copie locale**,
+       qui remplace la première pour cette filiale. C'est le seul comportement qui
+       tienne : le socle est le même pour vingt filiales, et le modifier en place
+       depuis l'une d'elles changerait les dix-neuf autres — sans que personne le
+       demande. Le serveur refuserait d'ailleurs l'écriture (403), et l'écran doit
+       **dire** ce qu'il va faire avant de le faire, pas avaler le refus.
+    ========================================================================= */
+
+    function panneauEdition(membres) {
+        const esc = window.escapeHtml || (s => String(s == null ? "" : s));
+        const roles = [...new Set(membres.map(m => m.role).filter(Boolean))];
+        return `
+        <div class="card hab-panneau">
+            <h2>Adapter les fiches à votre organisation</h2>
+            <p class="hab-note">Le Groupe pose un socle commun. Ce que vous modifiez ici
+            devient <strong>propre à votre filiale</strong> et remplace la fiche du socle
+            pour ce rôle ; les autres filiales ne sont pas touchées.</p>
+            <div class="form-grid">
+                <label class="hab-champ"><span>Rôle de la cellule de crise${Help.tip(
+                    "Il est apparié au rôle des membres de votre cellule, en texte. "
+                  + "Choisissez un rôle existant pour que le bloc « Titulaire » de la "
+                  + "fiche se remplisse tout seul.")}</span>
+                    <input type="text" id="ficheRole" list="crise-roles" maxlength="120"
+                           placeholder="Responsable IT / SSI (Opérationnel)">
+                    <datalist id="crise-roles">${
+                        roles.map(r => `<option value="${esc(r)}"></option>`).join("")
+                    }</datalist></label>
+                <label class="hab-champ"><span>Intitulé de la carte</span>
+                    <input type="text" id="ficheTitre" maxlength="120"
+                           placeholder="Responsable IT / SSI"></label>
+            </div>
+            <div class="page-actions no-print">
+                <button type="button" id="ficheCreerBtn">Créer une fiche</button>
+            </div>
+        </div>`;
+    }
+
+    function brancherPanneauEdition() {
+        const bouton = document.getElementById("ficheCreerBtn");
+        if (!bouton) return;
+        bouton.addEventListener("click", () => {
+            const role = (document.getElementById("ficheRole").value || "").trim();
+            const titre = (document.getElementById("ficheTitre").value || "").trim();
+            if (role === "" || titre === "") {
+                if (window.showToast) showToast("Indiquez un rôle et un intitulé.", "warning");
+                return;
+            }
+            const existante = DataStore.getFichesReflexes().find(
+                f => String(f.role).trim().toLowerCase() === role.toLowerCase()
+                     && f._porteeGroupe !== true);
+            if (existante) {
+                if (window.showToast) {
+                    showToast("Une fiche de votre filiale vise déjà le rôle « " + role
+                            + " » : modifiez-la plutôt que d’en créer une seconde.", "warning");
+                }
+                return;
+            }
+            DataStore.addFicheReflexe({
+                id: UI.genId("FICHE"), role: role, titre: titre,
+                ordre: 100, commun: false, actif: true, notes: ""
+            });
+            UI.apresEcriture(() => {
+                if (window.showToast) showToast("Fiche créée.", "success");
+                editionFiches = false;
+                renderFiches();
+            });
+        });
+    }
+
+    /** Ouvre une fiche en édition, en DISANT ce que la portée implique. */
+    function ouvrirFiche(id, membres) {
+        const esc = window.escapeHtml || (s => String(s == null ? "" : s));
+        const fiche = DataStore.getFicheReflexeById(id);
+        if (!fiche) return;
+        const socle = fiche._porteeGroupe === true;
+        const reflexes = DataStore.getReflexesDeFiche(id);
+        const hote = document.getElementById("fichesEdition");
+
+        hote.innerHTML = `
+        <div class="card hab-panneau" id="fichePanneau">
+            <h2>${esc(fiche.titre)}</h2>
+            ${socle ? `<div class="card encart-alerte"><p><strong>Cette fiche appartient au
+            socle du Groupe</strong> — elle est la même pour toutes les filiales. En
+            l’enregistrant, vous en créez une <strong>copie propre à votre filiale</strong>,
+            qui la remplacera ici et ne touchera aucune autre.</p></div>` : ""}
+            <div class="form-grid">
+                <label class="hab-champ"><span>Rôle visé</span>
+                    <input type="text" id="fRole" list="crise-roles-2" maxlength="120"
+                           value="${esc(fiche.role)}"${fiche.commun ? " disabled" : ""}>
+                    <datalist id="crise-roles-2">${
+                        [...new Set(membres.map(m => m.role).filter(Boolean))]
+                            .map(r => `<option value="${esc(r)}"></option>`).join("")
+                    }</datalist></label>
+                <label class="hab-champ"><span>Intitulé de la carte</span>
+                    <input type="text" id="fTitre" maxlength="120" value="${esc(fiche.titre)}"></label>
+            </div>
+            <label class="hab-champ"><span>À savoir (facultatif)</span>
+                <textarea id="fNotes" rows="2" maxlength="2000">${esc(fiche.notes || "")}</textarea></label>
+
+            <h3>Réflexes immédiats${Help.tip(
+                "Un geste par ligne, dans l’ordre où on le fait. Un réflexe qui ne tient "
+              + "pas en trois lignes n’est pas un réflexe, c’est une procédure — et on ne "
+              + "lit pas une procédure pendant les dix premières minutes d’une crise.")}</h3>
+            <ol class="fiche-edition-liste" id="fReflexes">
+                ${reflexes.map((r, i) => `
+                <li>
+                    <textarea data-reflexe="${esc(r.id)}" rows="2" maxlength="600">${esc(r.texte)}</textarea>
+                    <button type="button" class="fiche-reflexe-suppr btn-danger"
+                            data-reflexe="${esc(r.id)}" title="Retirer ce réflexe">&times;</button>
+                </li>`).join("")}
+            </ol>
+            <div class="page-actions no-print">
+                <button type="button" id="fAjouterReflexe" class="btn-secondary">Ajouter un réflexe</button>
+                <button type="button" id="fEnregistrer">${socle ? "Créer la version de ma filiale" : "Enregistrer"}</button>
+                <button type="button" id="fFermer" class="btn-secondary">Fermer</button>
+                ${socle ? "" : '<button type="button" id="fSupprimer" class="btn-danger">Supprimer cette fiche</button>'}
+            </div>
+        </div>`;
+        hote.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        brancherFiche(fiche, socle);
+    }
+
+    function brancherFiche(fiche, socle) {
+        const liste = document.getElementById("fReflexes");
+
+        document.getElementById("fAjouterReflexe").addEventListener("click", () => {
+            const li = document.createElement("li");
+            li.innerHTML = '<textarea data-reflexe="" rows="2" maxlength="600"></textarea>'
+                + '<button type="button" class="fiche-reflexe-suppr btn-danger"'
+                + ' data-reflexe="" title="Retirer ce réflexe">&times;</button>';
+            liste.appendChild(li);
+            li.querySelector(".fiche-reflexe-suppr").addEventListener("click",
+                () => li.remove());
+            li.querySelector("textarea").focus();
+        });
+        liste.querySelectorAll(".fiche-reflexe-suppr").forEach(b => {
+            b.addEventListener("click", () => b.parentElement.remove());
+        });
+
+        document.getElementById("fFermer").addEventListener("click", () => {
+            document.getElementById("fichesEdition").innerHTML = "";
+        });
+
+        const supprimer = document.getElementById("fSupprimer");
+        if (supprimer) supprimer.addEventListener("click", () => {
+            if (!window.confirm("Supprimer la fiche « " + fiche.titre + " » ? La fiche du "
+                + "socle du Groupe reprendra sa place si elle vise le même rôle.")) return;
+            DataStore.deleteFicheReflexe(fiche.id);
+            UI.apresEcriture(() => {
+                if (window.showToast) showToast("Fiche supprimée.", "success");
+                renderFiches();
+            });
+        });
+
+        document.getElementById("fEnregistrer").addEventListener("click", () => {
+            const role = (document.getElementById("fRole").value || fiche.role).trim();
+            const titre = (document.getElementById("fTitre").value || "").trim();
+            const notes = (document.getElementById("fNotes").value || "").trim();
+            if (titre === "") {
+                if (window.showToast) showToast("Donnez un intitulé à la carte.", "warning");
+                return;
+            }
+            const textes = [...liste.querySelectorAll("textarea")]
+                .map(t => ({ id: t.dataset.reflexe, texte: t.value.trim() }))
+                .filter(x => x.texte !== "");
+
+            // ⚠️ **Modifier le socle depuis une filiale CRÉE une copie locale**, elle ne
+            //    touche pas l'original : le serveur refuserait (403), et une filiale qui
+            //    changerait le socle changerait les dix-neuf autres sans le demander.
+            const cible = socle
+                ? { id: UI.genId("FICHE"), role: role, titre: titre, notes: notes,
+                    ordre: fiche.ordre, commun: fiche.commun === true, actif: true }
+                : Object.assign({}, fiche, { role: role, titre: titre, notes: notes });
+
+            if (socle) DataStore.addFicheReflexe(cible);
+            else DataStore.updateFicheReflexe(cible);
+
+            // Les réflexes : on remplace l'ensemble. Un réflexe retiré doit DISPARAÎTRE,
+            // et il ne doit pas se confondre avec un réflexe omis (motif Q-66).
+            if (!socle) {
+                DataStore.getReflexesDeFiche(fiche.id).forEach(r => {
+                    if (!textes.some(t => t.id === r.id)) DataStore.deleteReflexe(r.id);
+                });
+            }
+            textes.forEach((t, i) => {
+                if (!socle && t.id) {
+                    const existant = DataStore.getReflexesDeFiche(fiche.id)
+                        .find(r => r.id === t.id);
+                    if (existant) {
+                        DataStore.updateReflexe(Object.assign({}, existant,
+                            { texte: t.texte, ordre: (i + 1) * 10 }));
+                        return;
+                    }
+                }
+                DataStore.addReflexe({
+                    id: UI.genId("FREF"), fiche_id: cible.id,
+                    ordre: (i + 1) * 10, texte: t.texte
+                });
+            });
+
+            UI.apresEcriture(() => {
+                if (window.showToast) {
+                    showToast(socle
+                        ? "Version de votre filiale créée : elle remplace celle du socle."
+                        : "Fiche enregistrée.", "success");
+                }
+                document.getElementById("fichesEdition").innerHTML = "";
+                renderFiches();
+            });
+        });
+    }
+
+    /** Les contacts d'urgence : ajouter, modifier, retirer ceux de sa filiale. */
+    function ouvrirContacts() {
+        const esc = window.escapeHtml || (s => String(s == null ? "" : s));
+        const contacts = DataStore.getContactsUrgence();
+        const hote = document.getElementById("contactsEdition");
+        hote.innerHTML = `
+        <div class="hab-panneau no-print">
+            <p class="hab-note">Les trois premières lignes sont des <strong>références
+            publiques</strong>, posées par le Groupe : elles se lisent, elles ne se
+            modifient pas ici. Ajoutez votre assurance cyber, votre infogérant et votre
+            prestataire de réponse à incident.</p>
+            <ul class="fiche-edition-liste" id="ctcListe">
+                ${contacts.filter(c => c._porteeGroupe !== true).map(c => `
+                <li>
+                    <input type="text" data-contact="${esc(c.id)}" data-champ="intitule"
+                           value="${esc(c.intitule)}" maxlength="200" placeholder="Intitulé">
+                    <input type="text" data-contact="${esc(c.id)}" data-champ="coordonnee"
+                           value="${esc(c.coordonnee || "")}" maxlength="200"
+                           placeholder="Numéro, adresse ou site">
+                    <button type="button" class="ctc-suppr btn-danger" data-contact="${esc(c.id)}"
+                            title="Retirer ce contact">&times;</button>
+                </li>`).join("")}
+            </ul>
+            <div class="page-actions">
+                <button type="button" id="ctcAjouter" class="btn-secondary">Ajouter un contact</button>
+                <button type="button" id="ctcEnregistrer">Enregistrer</button>
+                <button type="button" id="ctcFermer" class="btn-secondary">Fermer</button>
+            </div>
+        </div>`;
+
+        const liste = document.getElementById("ctcListe");
+        const ligneVide = () => {
+            const li = document.createElement("li");
+            li.innerHTML = '<input type="text" data-contact="" data-champ="intitule" maxlength="200" placeholder="Intitulé">'
+                + '<input type="text" data-contact="" data-champ="coordonnee" maxlength="200" placeholder="Numéro, adresse ou site">'
+                + '<button type="button" class="ctc-suppr btn-danger" data-contact="" title="Retirer ce contact">&times;</button>';
+            liste.appendChild(li);
+            li.querySelector(".ctc-suppr").addEventListener("click", () => li.remove());
+            li.querySelector("input").focus();
+        };
+        document.getElementById("ctcAjouter").addEventListener("click", ligneVide);
+        liste.querySelectorAll(".ctc-suppr").forEach(b =>
+            b.addEventListener("click", () => b.parentElement.remove()));
+        document.getElementById("ctcFermer").addEventListener("click",
+            () => { hote.innerHTML = ""; });
+
+        document.getElementById("ctcEnregistrer").addEventListener("click", () => {
+            const lignes = [...liste.querySelectorAll("li")].map(li => ({
+                id: li.querySelector('[data-champ="intitule"]').dataset.contact,
+                intitule: li.querySelector('[data-champ="intitule"]').value.trim(),
+                coordonnee: li.querySelector('[data-champ="coordonnee"]').value.trim()
+            })).filter(x => x.intitule !== "");
+
+            const locaux = DataStore.getContactsUrgence().filter(c => c._porteeGroupe !== true);
+            locaux.forEach(c => {
+                if (!lignes.some(l => l.id === c.id)) DataStore.deleteContactUrgence(c.id);
+            });
+            lignes.forEach((l, i) => {
+                // ⚠️ Une coordonnée VIDE reste `null`, jamais une chaîne vide ni un trait :
+                //    « à compléter » doit se voir. Une ligne de tirets bas IMITE une
+                //    donnée — elle s'imprime, et le jour de la crise on compose un numéro
+                //    qui n'existe pas. C'est ce que le socle livrait avant la `061`.
+                const coord = l.coordonnee === "" ? null : l.coordonnee;
+                const existant = locaux.find(c => c.id === l.id);
+                if (existant) {
+                    DataStore.updateContactUrgence(Object.assign({}, existant,
+                        { intitule: l.intitule, coordonnee: coord, ordre: (i + 1) * 10 }));
+                } else {
+                    DataStore.addContactUrgence({
+                        id: UI.genId("CTCU"), intitule: l.intitule, coordonnee: coord,
+                        ordre: 1000 + (i + 1) * 10, actif: true
+                    });
+                }
+            });
+            UI.apresEcriture(() => {
+                if (window.showToast) showToast("Contacts enregistrés.", "success");
+                renderFiches();
+            });
+        });
     }
 
     /* =========================

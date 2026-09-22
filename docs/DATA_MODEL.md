@@ -65,10 +65,10 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 27`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 28`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
-côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v27**. Elle est
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v28**. Elle est
 indépendante du numéro des migrations SQL.
 
 > ⚠️ **Ce paragraphe a annoncé « v12 » pendant quatre montées de version**, du 04/09 au
@@ -382,6 +382,32 @@ indépendante du numéro des migrations SQL.
 >
 >     ⚠️ **Le palier crée un tableau VIDE**, et il ne doit rien inventer : un connecteur
 >     inventé serait un contrôle qu'on croit posé et qui ne s'exécute jamais.
+>
+> v28 (migration `061`) : ajout des **fiches réflexes de crise** — `fiches_reflexes`,
+>     `fiche_reflexe_actions` et `contacts_urgence`. Elles étaient écrites **en dur** dans
+>     `js/modules/crise.js` : six rôles, vingt-cinq réflexes, sept contacts — dont quatre
+>     lignes de tirets bas que personne ne pouvait remplir.
+>
+>     ⚠️ **Les trois tables sont MIXTES** : `filiale_id` nul = socle du Groupe, renseigné =
+>     version propre à une filiale, qui **REMPLACE** celle du socle pour le même rôle et
+>     ne s'y ajoute pas. Deux fiches pour « Responsable IT / SSI » au moment d'une crise,
+>     c'est deux colonnes qui se contredisent sous les yeux de quelqu'un qui n'a pas le
+>     temps de choisir.
+>
+>     ⚠️ **Elles VOYAGENT, contrairement à la main courante de crise** — et c'est la même
+>     ligne qu'à la v27 : une fiche réflexe est une **procédure**, qu'on refait à
+>     l'identique après une reprise ; une main courante est une **preuve datée**.
+>
+>     ⚠️ **Le palier livre trois tableaux VIDES**, et surtout pas le socle. Y recopier les
+>     six fiches aurait donné, sur une base neuve, **deux jeux de portée Groupe pour les
+>     mêmes rôles** — celui que la migration sème et celui que le palier invente ; l'unicité
+>     `nulls not distinct` refuserait alors la reprise, et le produit rendrait une
+>     sauvegarde qu'il ne sait pas relire (motif **Q-194**).
+>
+>     ⚠️ **`role` n'est pas une référence**, et il ne doit pas être recalé : il est apparié
+>     à `crise.role` **en texte**, comme la cellule l'est depuis la migration `003`.
+>     `fiche_id`, lui, **en est une** — le serveur réattribue les identifiants à la reprise,
+>     et un réflexe qui viserait l'ancien s'imprimerait détaché de sa fiche.
 
 ---
 
@@ -486,7 +512,7 @@ Conséquences pratiques :
 
 ### 1.5 Correspondance entre l'objet `data` et le schéma serveur
 
-**41 collections, 41 entités.** Les noms coïncident partout sauf pour `mesures` :
+**44 collections, 44 entités.** Les noms coïncident partout sauf pour `mesures` :
 
 | Collection `data` | Table(s) PostgreSQL | Préfixe d'identifiant |
 |---|---|---|
@@ -536,6 +562,9 @@ Conséquences pratiques :
 | **`referentiel_domaines`** | **`referentiel_domaines`** — ⚠️ MIXTE | `REFD` |
 | **`referentiel_exigences`** | **`referentiel_exigences`** — ⚠️ MIXTE, et elle porte `referentiel_id` **en plus** de `domaine_id` : c'est la moitié gauche de la clé `(ref_id, code)`, et la clé étrangère **composite** l'empêche de diverger de son domaine | `REFE` |
 | **`referentiel_traductions`** | **`referentiel_traductions`** — ⚠️ MIXTE ; le dictionnaire est un **document figé** en `jsonb`, et le FRANÇAIS n'en a pas : il est la source | `REFX` |
+| **`fiches_reflexes`** | **`fiches_reflexes`** — ⚠️ MIXTE : `filiale_id` nul = socle du Groupe. Une fiche LOCALE **remplace** celle du socle pour le même rôle, elle ne s'y ajoute pas. `role` est apparié à `crise.role` **en texte**, sans clé étrangère — l'imposer interdirait d'écrire la fiche avant de désigner son titulaire | `FICHE` |
+| **`fiche_reflexe_actions`** | **`fiche_reflexe_actions`** — ⚠️ MIXTE ; sa portée est tenue par un **déclencheur**, une clé composite ne pouvant rien dire quand `filiale_id` est nul (`CONVENTIONS.md` §45) | `FREF` |
+| **`contacts_urgence`** | **`contacts_urgence`** — ⚠️ MIXTE : les références publiques (CERT-FR, CNIL) au socle, l'assurance et l'infogérant par filiale. `coordonnee` NULLABLE = « à compléter » | `CTCU` |
 
 **La scission des mesures**, en une phrase : l'entité unique du modèle navigateur
 portait deux choses de nature différente — la **définition** du contrôle (la même

@@ -975,6 +975,42 @@ export async function semerJeuEssai(base, client, options = {}) {
              where id = 'ECHL-${s}'`,
         );
 
+        // ── Une fiche réflexe LOCALE par filiale (migration `061`) ─────────────
+        //
+        // ⚠️ **Le socle ne suffit pas**, et c'est le même motif qu'aux échelles
+        // ci-dessus : les trois tables des fiches réflexes sont MIXTES, le semis de
+        // la migration y met sept fiches de portée GROUPE, et le balayage de
+        // cloisonnement rendrait « zéro visible » pour la seule raison qu'aucune
+        // ligne n'appartient à une filiale. *« Zéro visible » est aussi ce que rend
+        // une table vide.*
+        //
+        // ⚠️ **Le rôle est délibérément DIFFÉRENT de ceux du socle** : une fiche
+        // locale qui viserait « Responsable IT / SSI (Opérationnel) » REMPLACERAIT
+        // celle du socle pour cette filiale, et les essais qui comptent les fiches
+        // — ceux du navigateur, par exemple — se mettraient à mesurer autre chose
+        // que ce qu'ils annoncent. Un rôle propre au site donne sa matière au
+        // balayage sans rien déplacer.
+        await c.query(
+          `insert into fiches_reflexes (id, filiale_id, role, titre, ordre, notes)
+               values ('FICHE-${s}', $1, 'Correspondant site ${s}',
+                       'Correspondant du site ${s}', 70,
+                       'Point de contact local pendant une crise.')`,
+          f,
+        );
+        await c.query(
+          `insert into fiche_reflexe_actions (id, filiale_id, fiche_id, ordre, texte)
+               values ('FREF-${s}-1', $1, 'FICHE-${s}', 10,
+                       'Ouvrir la salle de repli et vérifier les moyens de secours.'),
+                      ('FREF-${s}-2', $1, 'FICHE-${s}', 20,
+                       'Tenir la liste de présence du site et la transmettre à la cellule.')`,
+          f,
+        );
+        await c.query(
+          `insert into contacts_urgence (id, filiale_id, intitule, coordonnee, ordre)
+               values ('CTCU-${s}', $1, 'Astreinte du site ${s}', '01 23 45 67 89', 1010)`,
+          f,
+        );
+
         // ── Un catalogue LOCAL par filiale (migration `051`, action 26.2) ──────
         //
         // ⚠️ **Le socle ne suffit pas.** Les quatre tables de catalogue sont MIXTES :

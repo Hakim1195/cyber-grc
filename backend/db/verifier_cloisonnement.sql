@@ -1450,9 +1450,20 @@ begin
                -- « trg_referentiel_exigences_portee_figee » et
                -- « trg_referentiel_traductions_portee_figee », posés par
                -- f_poser_portee_figee() et armés « always ».
-               '24 sur 24',
+               -- 27 depuis la `061` : les TROIS tables des fiches réflexes naissent
+               -- MIXTES. Le socle du Groupe est celui qui était écrit en dur dans
+               -- `js/modules/crise.js` ; une filiale le SURCHARGE pour le rôle qu'elle
+               -- adapte, parce qu'un groupe de vingt filiales n'a pas une seule
+               -- organisation de crise. Vérifié un par un : les trois déclencheurs
+               -- neufs sont « trg_fiches_reflexes_portee_figee »,
+               -- « trg_fiche_reflexe_actions_portee_figee » et
+               -- « trg_contacts_urgence_portee_figee ». ⚠️ `f_poser_portee_figee()`
+               -- les pose en armement « origin » — le défaut de PostgreSQL —, et c'est
+               -- `f_armer_declencheurs()` qui les passe en « always » : la migration a
+               -- été REFUSÉE tant qu'elle ne l'appelait pas (constat Q-281).
+               '27 sur 27',
                format('%s sur %s', count(*) filter (where t.tgenabled = 'A'), count(*)),
-               case when count(*) = 24 and count(*) filter (where t.tgenabled = 'A') = 24
+               case when count(*) = 27 and count(*) filter (where t.tgenabled = 'A') = 27
                     then 'OK' else 'ÉCHEC' end
           from pg_trigger t
          where not t.tgisinternal

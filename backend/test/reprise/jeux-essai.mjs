@@ -139,6 +139,11 @@ const NOUVELLES_PAR_VERSION = {
   // reprise ; un constat est une PREUVE datée, au même titre que le journal d'audit et
   // la main courante de crise, et un fichier éditable lui ôterait sa valeur probante.
   27: ['connecteurs'],
+  // v28 : les fiches réflexes de crise (migration `061`). ⚠️ Le palier livre trois
+  // tableaux VIDES et jamais le socle — y recopier les sept fiches donnerait DEUX
+  // jeux de portée Groupe pour les mêmes rôles sur une base neuve, et l'unicité
+  // « nulls not distinct » refuserait la reprise (motif Q-194).
+  28: ['fiches_reflexes', 'fiche_reflexe_actions', 'contacts_urgence'],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -1108,11 +1113,50 @@ export function instantaneV26Complet() {
  * ⚠️ **`mesure_id` vise le pivot du même jeu d'essai** : un connecteur sans mesure
  * produirait un constat que personne ne regarde, et le schéma le refuse.
  */
-export function instantaneV27Complet() {
+export function instantaneV28Complet() {
   const base = instantaneV26Complet();
   return {
     ...base,
-    schemaVersion: 27,
+    schemaVersion: 28,
+    // ── v28 : les fiches réflexes de crise (migration `061`) ────────────────────
+    //
+    // ⚠️ **Une fiche de FILIALE, jamais du socle**, et c'est ce que l'aller-retour
+    // doit éprouver : le socle vient de la migration, il ne voyage pas dans un
+    // fichier d'échange. Un jeu d'essai qui porterait une fiche de portée Groupe
+    // rendrait la reprise impossible sur une base neuve — deux jeux pour le même
+    // rôle, et l'unicité « nulls not distinct » les refuse (motif Q-194).
+    //
+    // ⚠️ Le réflexe vise la fiche DU MÊME instantané : c'est cette arête que le
+    // recalage d'identifiants doit suivre, et un réflexe détaché s'imprimerait
+    // sous une carte vide.
+    fiches_reflexes: [
+      {
+        id: 'FICHE-1720000000000-1',
+        role: 'Responsable IT / SSI (Opérationnel)',
+        titre: 'Responsable IT / SSI',
+        ordre: 20,
+        commun: false,
+        actif: true,
+        notes: 'Astreinte 24/7 : voir le contact « Infogérant ».',
+      },
+    ],
+    fiche_reflexe_actions: [
+      {
+        id: 'FREF-1720000000000-1',
+        fiche_id: 'FICHE-1720000000000-1',
+        ordre: 10,
+        texte: 'Isoler du réseau les systèmes touchés SANS les éteindre.',
+      },
+    ],
+    contacts_urgence: [
+      {
+        id: 'CTCU-1720000000000-1',
+        intitule: 'Infogérant / Hébergeur',
+        coordonnee: '01 23 45 67 89',
+        ordre: 1010,
+        actif: true,
+      },
+    ],
     connecteurs: [
       {
         id: 'CONN-1720000000000-243',

@@ -3503,6 +3503,10 @@ body { overflow-x: hidden; }
    deux blancs au milieu de l'écran — vu en cliquant sur la recette, jamais par
    le banc : un essai qui vérifie qu'un écran « se rend » ne voit pas un vide. */
 #habCoherence:empty, #habFormGroupe:empty { display: none; }
+/* Même motif pour les deux hôtes d'édition des fiches réflexes : vides, ils
+   laissaient un blanc au milieu de l'écran. Vu en cliquant, jamais par le banc —
+   un essai qui vérifie qu'un écran « se rend » ne voit pas un vide. */
+#fichesEdition:empty, #contactsEdition:empty { display: none; }
 
 /* ── La pastille d'un niveau ─────────────────────────────────────────── */
 .hab-niv {
@@ -3795,4 +3799,37 @@ body { overflow-x: hidden; }
 .hab-motif-attendu {
     border-color: var(--primary, #E9631B) !important;
     box-shadow: 0 0 0 2px var(--primary-tint, #FDEFE4);
+}
+
+/* ── Les fiches réflexes MODIFIABLES (migration `061`) ───────────────── */
+.fiche-socle {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--tint-na, #eef1f5);
+    color: var(--text-muted, #6b7a8d);
+    text-transform: lowercase;
+    letter-spacing: 0;
+    vertical-align: middle;
+}
+.fiche-commandes { margin-top: 10px; }
+.fiche-edition-liste { list-style: decimal; padding-left: 22px; margin: 8px 0; }
+.fiche-edition-liste li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.fiche-edition-liste textarea,
+.fiche-edition-liste input[type="text"] { flex: 1 1 auto; min-width: 0; }
+.fiche-edition-liste .btn-danger { flex: 0 0 auto; padding: 4px 10px; line-height: 1.2; }
+.fiche-contacts .fiche-supp { font-weight: 400; }
+.fiche-contacts .btn-secondary { float: right; padding: 2px 10px; font-size: var(--text-xs, 0.75rem); }
+
+@media print {
+    /* La fiche EST la pièce qu'on emporte : les commandes disparaissent. */
+    .fiche-commandes, .fiche-socle { display: none !important; }
 }

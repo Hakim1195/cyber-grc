@@ -2824,7 +2824,13 @@ describe('Portée des liens documentaires et armement des déclencheurs (N-10, N
     // `f_poser_portee_figee()` les découvre comme les autres — vingt de portée, quatre
     // de cohérence. ⚠️ Le compte est ÉPINGLÉ : un déclencheur de portée qui disparaît
     // ne doit pas s'effacer en silence d'une table dont `filiale_id` peut être nul.
-    assert.equal(armement.length, 24, 'Quatre déclencheurs de cohérence, vingt de portée.');
+    // 27 depuis la migration `061` : les TROIS tables des fiches réflexes sont MIXTES
+    // — socle du Groupe surchargeable par filiale, comme `risque_catalogue` —, et
+    // `f_poser_portee_figee()` les découvre comme les autres. ⚠️ Elle les pose en
+    // armement « origin », le défaut de PostgreSQL : c'est `f_armer_declencheurs()`
+    // qui les passe en « always », et la `061` a été refusée tant qu'elle ne l'appelait
+    // pas (constat Q-281). Le compte reste ÉPINGLÉ.
+    assert.equal(armement.length, 27, 'Quatre déclencheurs de cohérence, vingt-trois de portée.');
     assert.deepEqual(
       [...new Set(armement.map((l) => l.armement))],
       ['A'],
@@ -4315,6 +4321,19 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // contrainte se VIDE, pas celui où elle est juste et où l'émetteur manque.
       // *La barrière regardait dans une direction ; le trou était dans l'autre.*
       'evenements_emis',
+      // SOIXANTE-CINQUIÈME, apporté par `061` — les fiches réflexes de crise. Il
+      // éprouve quatre propriétés qui se verraient LE JOUR DE LA CRISE, c'est-à-dire
+      // trop tard : le socle est complet et aucune fiche n'est vide ; l'unicité du
+      // socle est « nulls not distinct » (MESURÉE dans `pg_index`, pas relue — une
+      // unicité ordinaire lui ressemble trait pour trait) ; le déclencheur de portée
+      // est armé en « always » (`tgenabled`, leçon Q-281) ; un réflexe vide est
+      // refusé, éprouvé sur le prédicat RÉEL avec son CONTRE-TÉMOIN.
+      //
+      // ⚠️ Il refuse aussi une coordonnée faite de TIRETS BAS : c'est ce que le code
+      // d'origine livrait pour les trois contacts à remplir, et une ligne de tirets
+      // IMITE une donnée — elle s'imprime, et le jour de la crise on compose un
+      // numéro qui n'existe pas.
+      'fiches_reflexes',
       // TRENTE-HUITIÈME, apporté par `034_l_horloge_reglementaire.sql` : les quatre
       // paliers réglementaires — 24 h, 72 h et 1 mois pour NIS2, 72 h pour le RGPD —
       // sont armés et leurs délais EXACTS. ⚠️ Le garde ÉPROUVE le calcul sur un
@@ -5363,9 +5382,14 @@ describe('Armement, portée figée, chemin de magasin (§19.4 et §19.1, Q5-4 et
       // TRAITEMENT qu'elles analysent — le Groupe opère la paie pour vingt filiales,
       // et l'analyse d'impact de l'annuaire commun se fait une fois.
       'analyse_mesures', 'analyses_impact',
+      'approbations',
+      // `contacts_urgence` (migration `061`) : MIXTE. Les références publiques —
+      // CERT-FR, CNIL, cybermalveillance — sont les mêmes pour tout le groupe ;
+      // l'assurance cyber et l'infogérant sont propres à chaque filiale.
+      'contacts_urgence',
       // `document_mesures` (migration `036`) : MIXTE comme le document qu'elle
       // rattache — la PSSI du Groupe prouve un contrôle du socle, et se lit partout.
-      'approbations', 'document_etiquettes', 'document_mesures',
+      'document_etiquettes', 'document_mesures',
       'document_referentiels', 'documents',
       // `ebios_connaissances` (migration `046`, action 25.5) : MIXTE comme
       // `risque_catalogue`, et pour le même motif — la base de connaissances des MENACES
@@ -5382,6 +5406,13 @@ describe('Armement, portée figée, chemin de magasin (§19.4 et §19.1, Q5-4 et
       // composite ne peut pas la dire, `MATCH SIMPLE` dispensant de contrôle dès qu'une
       // colonne est nulle — et `filiale_id` l'est pour tout le socle (CONVENTIONS §45).
       'echelle_niveaux', 'echelles',
+      // `fiche_reflexe_actions` et `fiches_reflexes` (migration `061`) : MIXTES comme
+      // `risque_catalogue`. Le socle du Groupe est ce qui s'applique tant qu'une filiale
+      // n'adapte rien — et une fiche qui ne décrit pas l'organisation réelle est pire
+      // qu'absente. ⚠️ La portée d'un RÉFLEXE est en plus tenue par un déclencheur
+      // propre (`f_action_suit_sa_fiche`), pour la même raison qu'aux échelles : une
+      // clé composite ne dit rien quand `filiale_id` est nul (CONVENTIONS §45).
+      'fiche_reflexe_actions', 'fiches_reflexes',
       'mesure_catalogue', 'parametres', 'personnes',
       // Lot L26 — les quatre tables de catalogue sont MIXTES : le socle des six
       // référentiels livrés est lisible de toutes les filiales, une grille importée

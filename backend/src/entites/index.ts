@@ -282,7 +282,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 27;
+export const VERSION_SCHEMA = 28;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -1148,6 +1148,29 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
   // d'échange, le mot de passe qu'un exploitant y aurait rangé. Les clefs sont donc
   // closes en base, par genre, et aucun exécuteur n'en demande qui soit un secret.
   ['connecteurs', { nom: 'connecteurs', table: 'connecteurs', prefixe: 'CONN' }],
+
+  // ── v28 : LES FICHES RÉFLEXES DE CRISE (migration `061`) ───────────────────
+  //
+  // Elles étaient écrites **en dur** dans `js/modules/crise.js` jusqu'au 22/09/2026.
+  // Utilisateur : *« elles sont à adapter en fonction de l'existant »* — et un groupe
+  // de vingt filiales n'a pas une seule organisation de crise.
+  //
+  // ⚠️ **Les trois tables sont MIXTES** : `filiale_id` nul = socle du Groupe, renseigné
+  // = version propre à une filiale, qui REMPLACE celle du socle pour le même rôle. La
+  // couche générique sait déjà les traiter — c'est la RLS qui décide de ce qui est
+  // visible, et le serveur de ce qui est écrit, par la clé `portee` du corps.
+  //
+  // ⚠️ **Elles VOYAGENT dans un export `grc-backup`**, contrairement à la main courante
+  // de crise. La distinction est celle du lot L22, appliquée ici : une fiche réflexe est
+  // une PROCÉDURE — on la refait à l'identique après une reprise, et devoir la
+  // ressaisir rôle par rôle serait une perte pure ; une main courante est une PREUVE
+  // datée, qu'un fichier éditable dépouillerait de sa valeur.
+  ['fiches_reflexes', { nom: 'fiches_reflexes', table: 'fiches_reflexes', prefixe: 'FICHE' }],
+  [
+    'fiche_reflexe_actions',
+    { nom: 'fiche_reflexe_actions', table: 'fiche_reflexe_actions', prefixe: 'FREF' },
+  ],
+  ['contacts_urgence', { nom: 'contacts_urgence', table: 'contacts_urgence', prefixe: 'CTCU' }],
 
   // ── v23 : LES ATELIERS 3, 4 ET 5 (L25, fin de l'action 25.1) ────────────────
   //

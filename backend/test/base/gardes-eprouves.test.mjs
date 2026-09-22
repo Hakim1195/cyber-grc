@@ -849,3 +849,161 @@ describe('La revue des habilitations engage quelqu’un, et c’est ÉPROUVÉ �
     );
   });
 });
+
+/* =====================================================================
+ *  LES FICHES RÉFLEXES DE CRISE — migration `061`
+ *
+ *  ⚠️ **Ces quatre propriétés se vérifient le JOUR DE LA CRISE**, c'est-à-dire
+ *  trop tard. C'est la raison d'être du garde-fou, et de ces mutations : un
+ *  socle amputé, une fiche vide, une unicité laxiste ou une portée non tenue ne
+ *  produisent aucun symptôme avant le moment où l'on sort la carte de l'armoire.
+ * ===================================================================== */
+
+describe('Les fiches réflexes tiennent, et c’est ÉPROUVÉ — 061', () => {
+  test('le témoin : le schéma intact ne rend AUCUNE anomalie', async () => {
+    const anomalies = await anomaliesPendant([]);
+    assert.equal(anomalies.length, 0, `Schéma d’essai déjà en défaut : ${resume(anomalies)}`);
+  });
+
+  test('une fiche du socle VIDÉE de ses réflexes est nommée', async () => {
+    const anomalies = await anomaliesPendant([
+      "select set_config('grc.utilisateur', 'garde-fou', true)",
+      "select set_config('grc.administration_groupe', 'oui', true)",
+      // ⚠️ **Et une FILIALE ACTIVE**, alors qu'on supprime une ligne du SOCLE : le
+      //    déclencheur `f_pieces_suivent_leur_porteur()` (migration `017`) met la
+      //    purge en file dans `pieces_a_purger`, qui est CLOISONNÉE. Sans filiale
+      //    active, la suppression est refusée — « Périmètre non positionné ».
+      // ⚠️ L'ORDRE compte : `grc.filiales` d'abord, sinon la sous-requête sur
+      //    `filiales` — cloisonnée — ne verrait aucune ligne et poserait un
+      //    périmètre vide. Les identifiants sont ceux que `ouvrirBaseEssai` sème.
+      "select set_config('grc.filiales', 'FIL-ESSAI-A,FIL-ESSAI-B', true)",
+      "select set_config('grc.filiale_id', 'FIL-ESSAI-A', true)",
+      `delete from fiche_reflexe_actions
+        where fiche_id = (select id from fiches_reflexes
+                           where filiale_id is null and role = 'Responsable IT / SSI (Opérationnel)')`,
+    ]);
+    assert.ok(
+      nomme(anomalies, 'fiche_sans_reflexe'),
+      'Une fiche vide imprimée est pire qu’une fiche absente : on la sort de l’armoire et ' +
+        `on y cherche un geste qui n’y est pas. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('un socle AMPUTÉ est nommé', async () => {
+    const anomalies = await anomaliesPendant([
+      "select set_config('grc.administration_groupe', 'oui', true)",
+      "update fiches_reflexes set actif = false where filiale_id is null and role = 'Autre'",
+    ]);
+    assert.ok(
+      nomme(anomalies, 'socle_incomplet'),
+      `Une organisation de crise amputée se découvre le jour de la crise. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('🛑 l’unicité RAMENÉE À UNE UNICITÉ ORDINAIRE est vue', async () => {
+    /* ⚠️ **La mutation la plus traître du lot.** `unique (filiale_id, lower(role))`
+       et sa variante `nulls not distinct` se ressemblent trait pour trait : même
+       nom, mêmes colonnes, même `create unique index`. Un garde qui relirait le
+       texte ne verrait rien — et le socle du Groupe, dont `filiale_id` est nul PAR
+       CONSTRUCTION, pourrait porter DEUX fiches pour le même rôle. On mesure donc
+       `indnullsnotdistinct` dans le catalogue, qui ne se laisse pas imiter. */
+    const anomalies = await anomaliesPendant([
+      'drop index uq_fiches_reflexes_role',
+      'create unique index uq_fiches_reflexes_role on fiches_reflexes (filiale_id, lower(role))',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'unicite_socle_laxiste'),
+      'Deux cartes pour le même rôle, c’est deux colonnes qui se contredisent sous les ' +
+        `yeux de quelqu’un qui n’a pas le temps de choisir. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('LA MATIÈRE : l’unicité ramenée à l’ordinaire laisse VRAIMENT entrer le doublon', async () => {
+    /* Sans cette moitié, le contrôle précédent prouverait qu’une anomalie est émise,
+       jamais qu’elle correspond à un vrai trou. On mesure donc le trou. */
+    await proprietaire.query('begin');
+    try {
+      // ⚠️ Même piège que ci-dessus, du côté de l'INSERT : sans le drapeau, la
+      //    politique d'ajout refuse la ligne de portée Groupe — et on mesurerait
+      //    la RLS au lieu de l'unicité.
+      await proprietaire.query("select set_config('grc.administration_groupe', 'oui', true)");
+      await proprietaire.query('drop index uq_fiches_reflexes_role');
+      await proprietaire.query(
+        'create unique index uq_fiches_reflexes_role on fiches_reflexes (filiale_id, lower(role))',
+      );
+      await proprietaire.query(
+        `insert into fiches_reflexes (id, filiale_id, role, titre)
+              values ('FICHE-DOUBLON-1', null, 'Autre', 'Doublon du socle')`,
+      );
+      const { rows } = await proprietaire.query(
+        "select count(*)::int n from fiches_reflexes where filiale_id is null and lower(role) = 'autre'",
+      );
+      assert.equal(
+        rows[0].n,
+        2,
+        'L’unicité ordinaire devrait accepter le doublon du socle : si elle le refuse, la ' +
+          'mutation n’est pas celle qu’on croit et le contrôle précédent ne mesure rien.',
+      );
+    } finally {
+      await proprietaire.query('rollback');
+    }
+  });
+
+  test('le déclencheur de portée DÉSARMÉ est vu', async () => {
+    // ⚠️ « origin » et non « drop » : le déclencheur EXISTE encore, il est seulement
+    // neutralisable par un réglage de session. C'est le constat Q-281, et c'est ce
+    // qu'un garde qui vérifie l'EXISTENCE laisse passer.
+    const anomalies = await anomaliesPendant([
+      'alter table fiche_reflexe_actions enable replica trigger trg_fiche_reflexe_actions_portee',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'portee_non_tenue'),
+      'Un déclencheur armé en « origin » ou « replica » est neutralisé par un réglage de ' +
+        `session, et la garantie avec lui. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('un réflexe VIDE admis est vu — contrainte creuse', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table fiche_reflexe_actions drop constraint ck_fiche_reflexe_actions_texte',
+      `alter table fiche_reflexe_actions
+         add constraint ck_fiche_reflexe_actions_texte check (texte <> '' or true)`,
+    ]);
+    assert.ok(
+      nomme(anomalies, 'reflexe_vide_admis'),
+      'Une puce sans texte sur une carte imprimée : personne ne sait s’il manque un geste ' +
+        `ou s’il n’y en a pas. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('une contrainte qui REFUSE TOUT est vue aussi — le contre-témoin', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table fiche_reflexe_actions drop constraint ck_fiche_reflexe_actions_texte',
+      // ⚠️ `not valid` : PostgreSQL valide les lignes EXISTANTES à l'ajout d'une
+      //    contrainte, et « check (false) » les refuserait toutes. Non validée, la
+      //    contrainte s'applique quand même aux écritures — et c'est elle que
+      //    `f_contrainte_accepte()` évalue, donc la mutation est bien celle qu'on croit.
+      'alter table fiche_reflexe_actions add constraint ck_fiche_reflexe_actions_texte check (false) not valid',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'cas_nominal_refuse'),
+      'Un garde qui n’éprouve que des refus est muet sur une table où plus rien n’entre. ' +
+        `Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('une coordonnée faite de TIRETS BAS est vue — elle IMITE une donnée', async () => {
+    /* ⚠️ C'est ce que le code d'origine livrait pour les trois contacts à remplir.
+       Une ligne « ______________________ » passe tout contrôle de présence, elle
+       s'imprime, et le jour de la crise on compose un numéro qui n'existe pas. */
+    const anomalies = await anomaliesPendant([
+      "select set_config('grc.administration_groupe', 'oui', true)",
+      `update contacts_urgence set coordonnee = '______________________'
+        where filiale_id is null and intitule like 'Infogérant%'`,
+    ]);
+    assert.ok(
+      nomme(anomalies, 'coordonnee_imitee'),
+      `« null » se lit « à compléter » ; un trait imite une donnée. Rendu : ${resume(anomalies)}`,
+    );
+  });
+});
