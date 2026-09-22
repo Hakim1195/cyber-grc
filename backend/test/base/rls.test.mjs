@@ -4376,6 +4376,18 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // référence exprimable. Un ensemble pareil se retire morceau par morceau sous
       // zéro anomalie si personne ne le nomme.
       'lien_document_mesure',
+      // SOIXANTE-SEPTIÈME, apporté par `063` — le login d'annuaire d'une fiche du
+      // personnel. Il mesure que l'unicité est PARTIELLE et porte `filiale_id` :
+      // sans la clause partielle, toutes les fiches SAISIES À LA MAIN — qui n'en
+      // portent aucun — se disputeraient le même « rien », et la deuxième serait
+      // refusée sans que le message le dise ; sans `filiale_id`, un responsable
+      // transverse ne pourrait pas avoir de fiche dans deux filiales, ce que le
+      // modèle MIXTE autorise justement.
+      //
+      // ⚠️ Et un login VIDE est refusé, avec ses DEUX contre-témoins : le login
+      // ordinaire doit passer, et le NUL aussi — l'exiger rendrait inécrivables
+      // les fiches saisies à la main (motif Q-192).
+      'login_annuaire',
       // QUARANTE-TROISIÈME, apporté par `041_la_main_courante_de_crise.sql` —
       // action 20.5. ⚠️ Il MESURE les QUATRE couches d'ajout seul du §12 dans le
       // catalogue : le privilège réel du rôle applicatif (has_table_privilege),

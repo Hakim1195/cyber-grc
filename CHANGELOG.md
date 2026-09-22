@@ -10,8 +10,8 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 21/09/2026**, après l'action **D3**, sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
-> **PostgreSQL 17.11**) : **62 migrations**, **95 tables**, **380 politiques**,
-> **66 garde-fous**, **572 décisions** au registre de l'article 30, publication
+> **PostgreSQL 17.11**) : **63 migrations**, **95 tables**, **380 politiques**,
+> **67 garde-fous**, **573 décisions** au registre de l'article 30, publication
 > **87 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
 > ⚠️ La `059` n'ajoute **aucune table** ni politique : `documents.recherche` est une
 > colonne de plus sur une table qui en portait déjà quatre-vingt-neuf politiques.
@@ -77,6 +77,75 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### LE PERSONNEL VIENT DE L'ACTIVE DIRECTORY — migrations `063` (22/09/2026)
+
+> **Demandé par l'utilisateur** : *« je voulais que les gens cités ici soient également
+> les comptes AD des gens, car au final le personnel en vrai ce sont aussi les salariés,
+> donc ça serait logique de trouver les gens qui sont concernés et que ça soit également
+> directement depuis l'AD. »*
+
+⚠️ **LA MOITIÉ EXISTAIT DÉJÀ, ET ELLE ÉTAIT INVISIBLE.** `personnes.utilisateur_id`
+existe depuis la migration `002`, et `synchroniserAnnuaire()` aligne la fiche de quiconque
+**ouvre une session** sur ce que l'annuaire dit de lui — avec trois précautions déjà
+écrites : rattachement par compte et jamais par le nom, reprise d'une fiche manuelle une
+seule fois, et rien n'est écrasé par du vide.
+
+Trois manques, et ce lot les ferme : la synchronisation ne se déclenchait qu'à la
+**connexion** (donc jamais pour les gens qui ne se connectent pas — la plupart) ; **rien
+ne le montrait** à l'écran ; et il n'y avait **aucune re-synchronisation**.
+
+**Trois routes** (`src/personnel/`), **un écran enrichi**, et la **migration `063`**.
+
+🛑 **ON N'IMPORTE PAS L'ANNUAIRE ENTIER.** Ce serait importer les données personnelles de
+gens qui ne sont **pas** utilisateurs de l'outil — `personnes.nom`, `email` et `telephone`
+sont au registre de l'article 30 du produit lui-même. La recherche exige **deux
+caractères**, l'import porte au plus **deux cents** personnes : au-delà c'est un
+transfert, et ce bouton ne porte pas cette décision. C'est la minimisation de l'article
+5.1.c appliquée à notre propre outil.
+
+🛑 **UN DÉPART NE SUPPRIME RIEN. IL SE SIGNALE.** Une personne partie porte encore des
+actions, des documents et parfois une place dans la cellule de crise — et les entités
+stockant le nom en texte libre, le lien ne se reconstituerait pas. « Rafraîchir » rend la
+liste des comptes désactivés ou disparus ; c'est un humain qui décide.
+
+⚠️ **UNE TABLE DE CORRESPONDANCE « UNITÉ D'ORGANISATION → FILIALE » A ÉTÉ ÉCARTÉE**, et
+le motif vaut : elle aurait été une **seconde source** pour ce que la session dit déjà.
+L'écran interroge l'unité d'organisation qu'on lui donne, et écrit là où la session écrit.
+
+🛑 **ET UN DÉFAUT TROUVÉ EN CLIQUANT, QUI A DEMANDÉ UNE MIGRATION DE PLUS.** L'import
+créait bien la fiche — mesuré sur la recette, sur un compte AD créé pour l'occasion :
+« Alix Perrin, Responsable maintenance, Production » entre correctement. **Et elle n'était
+rattachée à rien** : `utilisateur_id` désigne un compte du PRODUIT, et un compte n'existe
+qu'à la première connexion — or l'import vise précisément ceux qui ne se connectent
+jamais. Conséquences invisibles : la fiche était indiscernable d'une saisie à la main, et
+**le rafraîchissement ne la voyait pas** — sur les fiches qui en ont le plus besoin.
+
+La migration `063` donne à la fiche le **login d'annuaire** qu'elle reflète. Deux liens
+coexistent désormais, et ils ne disent pas la même chose : `utilisateur_id` = « cette
+personne a un compte », `login_annuaire` = « cette fiche miroite cette entrée ». ⚠️ Créer
+une ligne dans `utilisateurs` était la réponse courte, et elle est fausse : la personne
+serait apparue dans l'écran des habilitations comme un compte existant, et un
+administrateur lui aurait cherché des droits. *Une table qui répond à une question ne doit
+pas se mettre à en répondre une autre.*
+
+⚠️ **L'unicité du login est PARTIELLE et porte `filiale_id`** : sans la clause partielle,
+les fiches saisies à la main se disputeraient toutes le même « rien » ; sans `filiale_id`,
+un DPO de Groupe ne pourrait pas avoir de fiche dans deux filiales. C'est le piège du
+`CONVENTIONS.md` §45 pris **par l'autre bout** — ici on *veut* que les nuls soient
+distincts.
+
+⚠️ **L'entrée se valide AVANT la disponibilité** : un filtre d'un caractère est malformé
+que l'annuaire soit configuré ou non, et rendre 503 enverrait l'exploitant vérifier sa
+configuration pour une faute de frappe. Mais **l'absence d'annuaire se DIT** plutôt que de
+se rendre comme une liste vide : « aucun annuaire à interroger » et « personne ne
+correspond » sont deux faits différents.
+
+Mesuré sur la recette, contre l'annuaire réel : la recherche trouve les quatre comptes du
+site avec leur fonction et leur service ; le ré-import d'une personne déjà présente la
+**reprend** au lieu de la dupliquer ; le rafraîchissement couvre **8 fiches** au lieu de
+7 ; et un compte désactivé dans l'AD remonte en « À vérifier » **sans que la fiche
+disparaisse**.
 
 ### LES DÉPENDANCES ENTRE ACTIFS DISENT LE TERRAIN — migration `062` (22/09/2026)
 

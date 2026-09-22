@@ -46,6 +46,201 @@ const PersonnelModule = (() => {
     // Nombre d'affectations d'une personne (pour la liste).
     function assignmentCount(nom) { return findAssignments(nom).length; }
 
+    /* =========================================================================
+       L'ANNUAIRE D'ENTREPRISE — chercher, importer, rafraîchir
+
+       ⚠️ **ON N'IMPORTE PAS L'ANNUAIRE ENTIER, et c'est une décision.** Ce serait
+       importer les données personnelles de gens qui ne sont PAS utilisateurs de
+       l'outil : `personnes.nom`, `email` et `telephone` figurent au registre de
+       l'article 30 du produit lui-même. La recherche exige donc un filtre — le
+       serveur la refuse en deçà de deux caractères —, et l'import porte une
+       liste de personnes CHOISIES. On importe les gens qu'on veut pouvoir
+       désigner, pas un annuaire.
+
+       🛑 **Le produit n'écrit jamais dans l'Active Directory**, et « Rafraîchir »
+       ne SUPPRIME rien : il signale les comptes désactivés ou disparus. Une
+       personne partie porte encore des actions, des documents et parfois une
+       place dans la cellule de crise — effacer sa fiche les orphelinerait en
+       silence, et les entités stockant le nom en texte libre, le lien ne se
+       reconstituerait pas.
+    ========================================================================= */
+
+    function ouvrirRechercheAnnuaire() {
+        const hote = document.getElementById("persAnnuaire");
+        if (!hote) return;
+        hote.innerHTML = `
+        <div class="card hab-panneau">
+            <h2>Importer depuis l’annuaire d’entreprise</h2>
+            <p class="hab-note">Cherchez par nom, prénom, login ou service. Les personnes
+            trouvées sont ajoutées à <strong>la filiale active</strong>, avec leur fonction
+            et leur service tels que l’annuaire les porte.</p>
+            <div class="hab-simu-form">
+                <input type="text" id="persAdTexte" placeholder="nom, prénom, login ou service…" maxlength="120">
+                <input type="text" id="persAdBase" placeholder="unité d’organisation (facultatif)" maxlength="256">
+                <button type="button" id="persAdChercher">Chercher</button>
+                <button type="button" id="persAdFermer" class="btn-secondary">Fermer</button>
+            </div>
+            <div id="persAdResultats"></div>
+        </div>`;
+        hote.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+        const chercher = async () => {
+            const texte = (document.getElementById("persAdTexte").value || "").trim();
+            const base = (document.getElementById("persAdBase").value || "").trim();
+            const zone = document.getElementById("persAdResultats");
+            zone.innerHTML = '<p class="muted">Lecture de l’annuaire…</p>';
+            try {
+                const r = await Api.chercherDansAnnuaire(texte, base || null);
+                zone.innerHTML = resultatsAnnuaire(r);
+                brancherResultats();
+            } catch (e) {
+                // Le message du SERVEUR : c'est lui qui sait pourquoi il refuse —
+                // filtre trop court, annuaire non configuré, droit manquant.
+                zone.innerHTML = '<p class="muted">'
+                    + escapeHtml(e && e.message ? e.message : "L’annuaire n’a pas répondu.")
+                    + "</p>";
+            }
+        };
+        document.getElementById("persAdChercher").addEventListener("click", chercher);
+        document.getElementById("persAdTexte").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") chercher();
+        });
+        document.getElementById("persAdFermer").addEventListener("click", () => {
+            hote.innerHTML = "";
+        });
+        document.getElementById("persAdTexte").focus();
+    }
+
+    function resultatsAnnuaire(r) {
+        const liste = Array.isArray(r.personnes) ? r.personnes : [];
+        if (!liste.length) {
+            return '<p class="muted">Aucune personne ne correspond. Essayez un nom de '
+                 + "famille, un login, ou le nom d’un service.</p>";
+        }
+        return `
+            ${r.tronque ? '<p class="hab-note">La recherche a atteint sa borne : affinez le '
+                        + "filtre plutôt que d’importer au hasard.</p>" : ""}
+            <table class="data-table">
+                <thead><tr>
+                    <th style="width:40px"></th><th>Nom</th><th>Login</th>
+                    <th>Fonction</th><th>Service</th><th>Courriel</th><th></th>
+                </tr></thead>
+                <tbody>${liste.map(p => `
+                    <tr class="${p.desactive ? "hab-ligne-inactive" : ""}">
+                        <td class="t-centre">${p.dejaRattachee
+                            ? ""
+                            : `<input type="checkbox" class="pers-ad-cb" data-login="${escapeHtml(p.login)}">`}</td>
+                        <td><strong>${escapeHtml(p.nomAffichage)}</strong></td>
+                        <td>${escapeHtml(p.login)}</td>
+                        <td>${p.fonction ? escapeHtml(p.fonction) : "—"}</td>
+                        <td>${p.service ? escapeHtml(p.service) : "—"}</td>
+                        <td>${p.email ? escapeHtml(p.email) : "—"}</td>
+                        <td>${p.dejaRattachee
+                            ? '<span class="pers-ad">déjà présente</span>'
+                            : p.desactive
+                                ? '<span class="hab-ecart-pastille hab-ecart-pastille--grave">compte désactivé</span>'
+                                : ""}</td>
+                    </tr>`).join("")}</tbody>
+            </table>
+            <div class="page-actions no-print">
+                <button type="button" id="persAdImporter">Importer les personnes cochées</button>
+            </div>`;
+    }
+
+    function brancherResultats() {
+        const bouton = document.getElementById("persAdImporter");
+        if (!bouton) return;
+        bouton.addEventListener("click", async () => {
+            const logins = [...document.querySelectorAll(".pers-ad-cb:checked")]
+                .map(cb => cb.dataset.login);
+            if (!logins.length) {
+                if (window.showToast) showToast("Cochez au moins une personne.", "warning");
+                return;
+            }
+            bouton.disabled = true;
+            try {
+                const r = await Api.importerDepuisAnnuaire(logins);
+                let message = r.creees + " fiche(s) créée(s), " + r.misesAJour + " mise(s) à jour.";
+                if (r.introuvables && r.introuvables.length) {
+                    message += " " + r.introuvables.length + " introuvable(s).";
+                }
+                if (r.desactives && r.desactives.length) {
+                    message += " " + r.desactives.length
+                             + " compte(s) désactivé(s) dans l’annuaire.";
+                }
+                if (window.showToast) showToast(message, "success");
+                /* ⚠️ **`UI.apresEcriture` PUIS `Sync.recharger`, et les deux sont
+                 * nécessaires.**
+                 *
+                 *  · `apresEcriture` pousse d'abord ce que le magasin garde en
+                 *    attente : recharger sans cela écraserait une saisie locale
+                 *    non encore partie. C'est la barrière du dépôt
+                 *    (`test/depot/relecture-apres-ecriture.test.mjs`), née d'un
+                 *    défaut vu À TRAVERS APACHE et que le banc navigateur ne peut
+                 *    pas voir — il monte le serveur dans le même processus, où la
+                 *    poussée aboutit dans la même milliseconde ;
+                 *  · `recharger` va chercher ce que l'import a écrit CÔTÉ SERVEUR,
+                 *    hors du magasin. Redessiner sans lui montrerait l'écran
+                 *    d'avant, et l'utilisateur conclurait que rien ne s'est passé
+                 *    (classe des constats Q-201 / Q-207). */
+                await UI.apresEcriture(async () => {
+                    if (window.Sync && typeof Sync.recharger === "function") {
+                        await Sync.recharger();
+                    }
+                });
+                document.getElementById("persAnnuaire").innerHTML = "";
+                renderList();
+            } catch (e) {
+                if (window.showToast) {
+                    showToast(e && e.message ? e.message : "Import refusé.", "error");
+                }
+                bouton.disabled = false;
+            }
+        });
+    }
+
+    async function rafraichirDepuisAnnuaire() {
+        const bouton = document.getElementById("rafraichirAdBtn");
+        if (bouton) { bouton.disabled = true; bouton.textContent = "Lecture de l’annuaire…"; }
+        try {
+            const r = await Api.rafraichirDepuisAnnuaire();
+            // Même raison qu'à l'import : pousser ce qui attend, puis relire.
+            await UI.apresEcriture(async () => {
+                if (window.Sync && typeof Sync.recharger === "function") await Sync.recharger();
+            });
+            renderList();
+            const hote = document.getElementById("persAnnuaire");
+            if (hote) {
+                hote.innerHTML = `
+                <div class="card hab-panneau">
+                    <h2>Rafraîchissement depuis l’annuaire</h2>
+                    <p>${escapeHtml(r.examinees)} fiche(s) examinée(s),
+                       <strong>${escapeHtml(r.misesAJour)}</strong> mise(s) à jour.</p>
+                    ${(r.partis && r.partis.length) ? `
+                        <div class="hab-ecart hab-ecart--grave">
+                            <h3>À vérifier <span>(${r.partis.length})</span></h3>
+                            <p>${escapeHtml(r.rappel)}</p>
+                            <ul>${r.partis.map(x => `<li><strong>${escapeHtml(x.nom)}</strong>
+                                <code>${escapeHtml(x.login)}</code> — ${escapeHtml(x.motif)}</li>`).join("")}</ul>
+                        </div>` : '<p class="hab-ok">Aucun compte désactivé ni disparu.</p>'}
+                    ${r.tronque ? '<p class="hab-note">La borne a été atteinte : toutes les '
+                                + "fiches rattachées n’ont pas été examinées.</p>" : ""}
+                    <div class="page-actions no-print">
+                        <button type="button" id="persRafFermer" class="btn-secondary">Fermer</button>
+                    </div>
+                </div>`;
+                document.getElementById("persRafFermer").addEventListener("click",
+                    () => { hote.innerHTML = ""; });
+                hote.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }
+        } catch (e) {
+            if (window.showToast) {
+                showToast(e && e.message ? e.message : "Rafraîchissement impossible.", "error");
+            }
+            if (bouton) { bouton.disabled = false; bouton.textContent = "Rafraîchir"; }
+        }
+    }
+
     /* =========================
        LISTE
     ========================== */
@@ -58,7 +253,15 @@ const PersonnelModule = (() => {
             return `
                 <tr class="clickable-row" data-id="${p.id}">
                     <td class="stop-row-click" style="text-align:center; width:40px;"><input type="checkbox" class="row-cb" data-id="${p.id}"></td>
-                    <td><strong>${escapeHtml(p.nom)}</strong></td>
+                    <td><strong>${escapeHtml(p.nom)}</strong>${
+                        p._loginAnnuaire
+                            ? `<span class="pers-ad" title="${escapeHtml("Cette fiche reflète l’entrée d’annuaire « " + p._loginAnnuaire + " » : son nom, sa fonction et son service viennent de là, et « Rafraîchir » les y remet à jour.")}">annuaire</span>`
+                            : ""
+                    }${
+                        p._compteAd
+                            ? '<span class="pers-ad pers-ad--compte" title="Cette personne a un COMPTE dans le produit : elle s’y est déjà connectée au moins une fois.">compte</span>'
+                            : ""
+                    }</td>
                     <td>${p.fonction ? escapeHtml(p.fonction) : "<span style='color:var(--text-muted);'>—</span>"}</td>
                     <td>${p.service ? escapeHtml(p.service) : "<span style='color:var(--text-muted);'>—</span>"}</td>
                     <td>${p.email ? `<a href="mailto:${escapeHtml(p.email)}" class="stop-row-click lien-accent">${escapeHtml(p.email)}</a>` : "<span style='color:var(--text-muted);'>—</span>"}</td>
@@ -75,12 +278,19 @@ const PersonnelModule = (() => {
                     </div>
                     <div style="display:flex; gap:10px;">
                         <button id="bulkDeleteBtn" style="display:none; background-color:var(--color-danger);">Supprimer sélection (<span id="selectedCount">0</span>)</button>
+                        <button type="button" id="importerAdBtn" class="btn-secondary">Importer depuis l’annuaire</button>
+                        <button type="button" id="rafraichirAdBtn" class="btn-secondary" title="Remet à jour les fiches rattachées à un compte, et signale les comptes désactivés ou disparus. Ne supprime rien.">Rafraîchir</button>
                         <button id="addBtn" style="background:var(--primary);">Nouvelle personne</button>
                     </div>
                 </div>
 
+                <div id="persAnnuaire"></div>
+
                 <div class="synthese-message info" style="padding:10px; font-size: var(--text-base);">
                     <strong>Astuce :</strong> les personnes enregistrées ici apparaissent en <strong>suggestions</strong> dans tous les champs « Responsable ». Ouvrez une fiche pour voir <strong>tout ce qui lui est affecté</strong>.
+                    ${personnes.length
+                        ? ` <strong>${personnes.filter(x => x._loginAnnuaire).length}</strong> fiche(s) sur ${personnes.length} reflètent une entrée de l’annuaire d’entreprise, dont <strong>${personnes.filter(x => x._compteAd).length}</strong> qui portent un compte du produit.`
+                        : ""}
                 </div>
 
                 ${personnes.length === 0
@@ -103,6 +313,11 @@ const PersonnelModule = (() => {
         const add = () => renderCreate();
         const b1 = document.getElementById("addBtn"); if (b1) b1.onclick = add;
         const b2 = document.getElementById("addBtn2"); if (b2) b2.onclick = add;
+
+        const importer = document.getElementById("importerAdBtn");
+        if (importer) importer.addEventListener("click", ouvrirRechercheAnnuaire);
+        const rafraichir = document.getElementById("rafraichirAdBtn");
+        if (rafraichir) rafraichir.addEventListener("click", rafraichirDepuisAnnuaire);
 
         // La case à cocher (et le lien courriel) ne doivent pas ouvrir la fiche :
         // conversion de l'ancien attribut `onclick="event.stopPropagation()"`, que la

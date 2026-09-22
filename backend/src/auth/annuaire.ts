@@ -91,6 +91,26 @@ export interface IdentiteAnnuaire {
   readonly groupesTraverses: number;
 }
 
+/**
+ * Ce que l'annuaire dit d'une personne qu'on CHERCHE — sans ses groupes.
+ *
+ * ⚠️ **Les appartenances n'y sont pas, et c'est délibéré** : les résoudre coûte
+ * une recherche par groupe et par personne, imbrications comprises. Pour cent
+ * résultats, c'est plusieurs milliers d'aller-retours LDAP — et l'écran qui les
+ * affiche n'en a aucun besoin : il importe des FICHES D'ANNUAIRE, pas des accès.
+ * Ce qu'une personne obtiendrait se demande une par une, par la simulation des
+ * habilitations.
+ */
+export interface IdentiteBrute {
+  readonly login: string;
+  readonly nomAffichage: string;
+  readonly email: string | null;
+  readonly telephone: string | null;
+  readonly service: string | null;
+  readonly fonction: string | null;
+  readonly desactive: boolean;
+}
+
 /** Ouvre une connexion à l'annuaire. Remplaçable par le banc d'essai. */
 export type FabriqueClient = (ldap: ConfigurationLdap) => Promise<Annuaire>;
 
@@ -413,6 +433,100 @@ export class ServiceAnnuaire {
         tronque,
         groupeTrouve: true,
       };
+    } finally {
+      await client.fermer();
+    }
+  }
+
+
+  /**
+   * Cherche des PERSONNES dans l'annuaire, **en lecture seule**.
+   *
+   * ── À quoi ça sert, et ce que ça remplace ─────────────────────────────────
+   *
+   * `synchroniserAnnuaire()` (lot L3) aligne déjà la fiche `personnes` de
+   * quiconque **ouvre une session**, depuis ce que l'annuaire dit de lui. C'est
+   * juste, et c'est insuffisant : un salarié qui ne se connecte jamais — la
+   * plupart — n'apparaît jamais dans l'annuaire du produit, et les champs
+   * « Responsable » continuent de s'écrire à la main, avec les homonymes et les
+   * fautes de frappe que cela suppose.
+   *
+   * Utilisateur, 22/09/2026 : *« je voulais que les gens cités ici soient
+   * également les comptes AD des gens, car au final le personnel en vrai ce sont
+   * aussi les salariés. »*
+   *
+   * ⚠️ **ELLE NE RAPATRIE PAS L'ANNUAIRE ENTIER, et c'est une décision.**
+   * Importer tout l'AD, c'est importer les données personnelles de gens qui ne
+   * sont **pas** utilisateurs de l'outil — `personnes.nom`, `email` et
+   * `telephone` sont au registre de l'article 30 du produit. La recherche exige
+   * donc un **filtre** et rend au plus `max` résultats : on importe les personnes
+   * DÉSIGNABLES, celles qui peuvent porter une responsabilité, pas un annuaire.
+   *
+   * ⚠️ **Elle n'écrit rien dans l'annuaire, et le produit ne le pourra jamais** :
+   * `ClientLdap` n'implémente que `lier`, `rechercher` et `fermer`.
+   *
+   * @param texte  ce que l'utilisateur cherche — nom, prénom, login, service.
+   * @param base   unité d'organisation à interroger, ou `null` pour la base
+   *               configurée. C'est ainsi qu'on cible le personnel d'un site.
+   */
+  public async rechercherPersonnes(
+    texte: string,
+    base: string | null,
+    max = 100,
+  ): Promise<{
+    readonly personnes: readonly IdentiteBrute[];
+    readonly tronque: boolean;
+  }> {
+    const motif = texte.trim();
+    if (motif === '') return { personnes: [], tronque: false };
+
+    const client = await this.fabrique(this.ldap);
+    try {
+      await client.lier(this.ldap.dnService, this.ldap.motDePasseService);
+      const echappe = echapperValeur(motif);
+      const entrees = await client.rechercher({
+        // ⚠️ Une base fournie par l'appelant est une ENTRÉE : elle est employée
+        // telle quelle par le protocole (elle ne se concatène dans aucun filtre),
+        // et l'annuaire refuse lui-même un nom distinctif qui n'existe pas.
+        base: base !== null && base.trim() !== '' ? base.trim() : this.ldap.baseRecherche,
+        portee: 'sousArbre',
+        // Les quatre champs par lesquels on cherche quelqu'un dans la vraie vie.
+        // ⚠️ `objectCategory=person` écarte les groupes et les contacts : sans
+        // lui, importer « compta » rapporterait le GROUPE « compta » comme une
+        // personne, et l'annuaire du produit se remplirait de listes de diffusion.
+        filtre:
+          '(&(objectCategory=person)(|' +
+          `(${this.ldap.attributIdentifiant}=*${echappe}*)` +
+          `(displayName=*${echappe}*)(sn=*${echappe}*)(department=*${echappe}*)))`,
+        attributs: [
+          this.ldap.attributIdentifiant,
+          ...this.ldap.attributsProfil,
+          'userAccountControl',
+        ],
+        tailleMax: max,
+        bornePleineEstTroncature: false,
+      });
+
+      const personnes: IdentiteBrute[] = [];
+      for (const entree of entrees) {
+        const login = premier(entree, this.ldap.attributIdentifiant);
+        if (login === null) continue;
+        const brut = premier(entree, 'userAccountControl');
+        personnes.push({
+          login,
+          nomAffichage:
+            premier(entree, 'displayName') ??
+            [premier(entree, 'givenName'), premier(entree, 'sn')].filter(Boolean).join(' ') ??
+            login,
+          email: premier(entree, 'mail'),
+          telephone: premier(entree, 'telephoneNumber'),
+          service: premier(entree, 'department'),
+          fonction: premier(entree, 'title'),
+          desactive: brut !== null && (Number.parseInt(brut, 10) & BIT_COMPTE_DESACTIVE) !== 0,
+        });
+      }
+      personnes.sort((a, b) => a.nomAffichage.localeCompare(b.nomAffichage, 'fr'));
+      return { personnes, tronque: entrees.length >= max };
     } finally {
       await client.fermer();
     }

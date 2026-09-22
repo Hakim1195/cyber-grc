@@ -884,7 +884,44 @@ const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, D
       nom: 'personnes',
       table: 'personnes',
       prefixe: 'PERS',
+      // ⚠️ **`utilisateur_id` est à la fois RÉSERVÉE et DÉRIVÉE**, et les deux
+      // déclarations sont nécessaires. Réservée : le navigateur ne peut pas la
+      // fixer — le rattachement vient de l'annuaire, jamais de la saisie.
+      // Dérivée : elle est SERVIE en lecture sous `_compteAd`, sans quoi l'écran
+      // « Personnel » ne peut même pas dire qu'une fiche correspond à un compte.
+      //
+      // C'était le cas jusqu'au 22/09/2026 : le rattachement existait depuis la
+      // migration `002`, il était alimenté à chaque connexion — et **rien ne le
+      // montrait**. Troisième fois dans ce dépôt qu'un signal est posé et lu par
+      // personne, après `f_domaine_accepte()` (Q-312) et l'empreinte SHA-256.
+      colonnesDerivees: {
+        // ⚠️ **Deux liens, et ils ne disent PAS la même chose.** `utilisateur_id`
+        // dit « cette personne a un COMPTE dans le produit » — il se pose à la
+        // première connexion. `login_annuaire` dit « cette fiche MIROITE cette
+        // entrée d'annuaire » — il se pose à l'import, et il vise précisément les
+        // gens qui ne se connectent jamais. Les confondre ferait disparaître le
+        // second (migration `063`).
+        login_annuaire: {
+          champ: '_loginAnnuaire',
+          raison:
+            "Identifiant de l'entrée d'annuaire que cette fiche reflète, servi en " +
+            'LECTURE seule. Posé par l’import et le rafraîchissement, jamais par la ' +
+            'saisie : un rattachement forgé par le client dirait qu’une fiche miroite ' +
+            'une personne qui n’est pas la sienne.',
+        },
+        utilisateur_id: {
+          champ: '_compteAd',
+          raison:
+            "Identifiant du compte applicatif rattaché à cette fiche, servi en LECTURE " +
+            'seule. Le souligné initial est la marque des champs que le serveur ajoute ' +
+            '(CONVENTIONS.md §15) : le navigateur les écarte par le PRÉFIXE, jamais par ' +
+            'la liste des noms.',
+        },
+      },
       colonnesReservees: {
+        login_annuaire:
+          "Rattachement à l'entrée d'annuaire que la fiche reflète, posé par l'import " +
+          '(`src/personnel/`) — jamais par la saisie.',
         utilisateur_id:
           "Rattachement au compte applicatif, alimenté par le provisionnement depuis l'Active " +
           'Directory (PLAN_SERVEUR §1.5) — lot L3, jamais par la saisie.',

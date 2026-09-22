@@ -122,6 +122,7 @@ import { greffonImport } from '../import/index.js';
 import { greffonConsolidation } from '../consolidation/index.js';
 import { greffonFiliales } from '../filiales/index.js';
 import { greffonHabilitations } from '../habilitations/index.js';
+import { greffonPersonnel } from '../personnel/index.js';
 import { greffonApprobations } from '../approbations/index.js';
 import { greffonNotifications } from '../notifications/index.js';
 import { greffonCycle } from '../cycle/index.js';
@@ -3171,6 +3172,28 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
    *  croire que tout concorde — un verdict de cohérence rendu sans avoir lu
    *  l'annuaire serait faux dans le sens rassurant.
    * ------------------------------------------------------------------- */
+  /* -------------------------------------------------------------------
+   *  L'ANNUAIRE DU PRODUIT, ALIMENTÉ DEPUIS L'ACTIVE DIRECTORY
+   * -------------------------------------------------------------------
+   *  `synchroniserAnnuaire()` aligne déjà la fiche de quiconque OUVRE UNE
+   *  SESSION. Un salarié qui ne se connecte jamais — la plupart —
+   *  n'apparaissait donc jamais, et les champs « Responsable » continuaient de
+   *  s'écrire à la main, avec les homonymes que cela suppose.
+   *
+   *  🛑 Le service d'authentification est passé pour LIRE l'annuaire, et pour
+   *  rien d'autre : le produit n'y écrit jamais, et c'est une capacité ABSENTE.
+   *
+   *  ⚠️ **On n'importe pas l'annuaire entier** : ce serait importer les données
+   *  personnelles de gens qui ne sont pas utilisateurs de l'outil. La recherche
+   *  exige un filtre, l'import une liste de logins choisis.
+   * ------------------------------------------------------------------- */
+  await instance.register(greffonPersonnel, {
+    pool,
+    ...(options.serviceAuthentification === undefined
+      ? {}
+      : { serviceAuthentification: options.serviceAuthentification }),
+  });
+
   await instance.register(greffonHabilitations, {
     pool,
     ...(config.auth.ldap === null || config.auth.ldap === undefined

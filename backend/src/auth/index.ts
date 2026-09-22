@@ -62,7 +62,7 @@ import type { EtatSession } from '../droits/resolveur.js';
 import { ErreurApplicative } from '../erreurs/index.js';
 
 import { ServiceAnnuaire } from './annuaire.js';
-import type { FabriqueClient, IdentiteAnnuaire } from './annuaire.js';
+import type { FabriqueClient, IdentiteAnnuaire, IdentiteBrute } from './annuaire.js';
 import { ErreurAnnuaire, ErreurIdentifiants } from './client-ldap.js';
 import { journaliser } from './journal.js';
 import { verifierEmpreinte } from './secours.js';
@@ -318,6 +318,21 @@ export class ServiceAuthentification implements Authentificateur {
   > {
     if (this.annuaire === null) return undefined;
     return await this.annuaire.listerGroupes();
+  }
+
+  /**
+   * Cherche des PERSONNES dans l'annuaire. **Lecture seule.**
+   *
+   * ⚠️ Rend `undefined` si aucun annuaire n'est configuré — ce qui n'est PAS
+   * « aucun résultat » : une liste vide ferait croire que l'annuaire du client
+   * ne contient personne.
+   */
+  public async rechercherPersonnesAnnuaire(
+    texte: string,
+    base: string | null,
+  ): Promise<{ readonly personnes: readonly IdentiteBrute[]; readonly tronque: boolean } | undefined> {
+    if (this.annuaire === null) return undefined;
+    return await this.annuaire.rechercherPersonnes(texte, base);
   }
 
   /**

@@ -660,6 +660,63 @@ pas d'un traitement déclaré —, c'est la liste par laquelle commence une revu
 
 ---
 
+## 5 bis. L'annuaire du personnel, alimenté depuis l'Active Directory
+
+**Tiers & personnes → Personnel.** Depuis le 22/09/2026, les fiches ne se saisissent plus
+seulement à la main : elles s'importent depuis l'annuaire d'entreprise, avec le nom, la
+fonction et le service que celui-ci porte.
+
+> ⚠️ **La moitié existait déjà, et elle était invisible.** La fiche de quiconque **ouvre
+> une session** était déjà alignée sur l'annuaire à chaque connexion. Ce qui manquait :
+> les gens qui **ne se connectent jamais** — la plupart — n'apparaissaient pas, et les
+> champs « Responsable » continuaient de s'écrire à la main, avec les homonymes et les
+> fautes de frappe que cela suppose.
+
+**Deux marqueurs, et ils ne disent pas la même chose :**
+
+| Marqueur | Ce qu'il dit |
+|---|---|
+| **annuaire** | cette fiche **reflète** une entrée de l'Active Directory. Son nom, sa fonction et son service en viennent, et « Rafraîchir » les y remet à jour. |
+| **compte** | cette personne a un **compte** dans le produit : elle s'y est déjà connectée au moins une fois. |
+
+Une personne importée porte « annuaire » sans porter « compte » — et c'est exactement qui
+l'import vise.
+
+**« Importer depuis l'annuaire »** demande un filtre : un nom, un prénom, un login, un
+service. On peut aussi préciser une **unité d'organisation** pour ne chercher que dans le
+personnel d'un site. Les personnes déjà présentes sont marquées comme telles et ne sont
+pas proposées : on ne crée pas de doublon en croyant compléter.
+
+> 🛑 **On n'importe PAS l'annuaire entier, et c'est une décision.** Ce serait importer les
+> données personnelles de gens qui ne sont **pas** utilisateurs de l'outil : le nom, le
+> courriel et le téléphone d'une fiche figurent au registre de l'article 30 du produit
+> lui-même. La recherche exige deux caractères au minimum, et un import porte au plus
+> **deux cents** personnes — au-delà, c'est un transfert d'annuaire, et un transfert
+> d'annuaire demande une décision que ce bouton ne porte pas.
+
+> ⚠️ **L'import écrit dans la filiale ACTIVE.** Changez de filiale avant d'importer le
+> personnel d'un autre site — c'est la règle de toute écriture dans ce produit, et il n'y
+> a pas d'exception à retenir ici.
+
+**« Rafraîchir »** relit l'annuaire pour toutes les fiches qui en reflètent une, remet à
+jour ce qui a changé, et **signale** les comptes désactivés ou disparus.
+
+> 🛑 **Un départ ne supprime RIEN, et ne le fera jamais.** Une personne partie porte
+> encore des actions, des documents, parfois une place dans la cellule de crise — et les
+> fiches stockent le nom en **texte libre**, donc le lien ne se reconstituerait pas. Le
+> produit vous donne la liste ; c'est vous qui décidez, en connaissance de ce qui pend à
+> son nom.
+
+> ⚠️ **Rien n'est écrasé par du vide** : un annuaire qui ne rend pas de téléphone
+> n'efface pas celui que vous avez saisi. Seule une valeur **renseignée** par l'annuaire
+> fait autorité.
+
+> 🛑 **Et ce logiciel n'écrit jamais dans l'Active Directory.** Il le lit. Désactiver un
+> compte, retirer quelqu'un d'un groupe : cela se fait dans l'annuaire, par son
+> administrateur.
+
+---
+
 ## 6. Ressources humaines — `GRC-<CODE>-RH`
 
 **Votre périmètre** : l'annuaire des personnes en *contribution*, les incidents et le RGPD

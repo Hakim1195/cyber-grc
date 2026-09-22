@@ -733,6 +733,21 @@ Suppression en cascade → supprime les `exigences` rattachées (et leurs `actio
 | `email` | string | |
 | `telephone` | string | |
 | `notes` | string | |
+| `_loginAnnuaire` | string \| null | **v29** — le login d'annuaire que cette fiche **reflète**. Servi par le serveur (`personnes.login_annuaire`), jamais écrit par le navigateur |
+| `_compteAd` | string \| null | **v29** — l'identifiant du **compte** du produit, quand la personne s'y est déjà connectée (`personnes.utilisateur_id`). Servi, jamais écrit |
+
+⚠️ **Les deux marqueurs ne disent pas la même chose, et c'est délibéré** : `_loginAnnuaire`
+dit « cette fiche miroite cette entrée de l'annuaire », `_compteAd` dit « cette personne a
+un compte ici ». Une personne **importée** porte le premier sans le second — et c'est
+exactement qui l'import vise, puisqu'un compte ne naît qu'à la première connexion. Créer une
+ligne dans `utilisateurs` pour les réunir était la réponse courte, et elle est fausse : la
+personne apparaîtrait dans l'écran des habilitations comme un compte existant, et un
+administrateur lui chercherait des droits. *Une table qui répond à une question ne doit pas
+se mettre à en répondre une autre.* Côté base, `login_annuaire` porte une unicité
+**partielle** et **cloisonnée** (`(filiale_id, lower(login_annuaire)) where login_annuaire is
+not null`) : sans la clause partielle, les fiches saisies à la main se disputeraient toutes
+le même « rien » ; sans `filiale_id`, un DPO de Groupe ne pourrait pas avoir de fiche dans
+deux filiales.
 
 Annuaire réutilisé pour l'**autocomplétion** de tous les champs « Responsable »/« Propriétaire »/
 « Auditeur » du logiciel (via le `<datalist id="personnes-list">` partagé, peuplé par

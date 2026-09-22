@@ -1336,6 +1336,31 @@ const Api = (() => {
      * pourra** : le serveur n'implémente aucune opération d'écriture LDAP.
      * `synchroniserGroupes()` écrit dans la TABLE `groupes_ad`, jamais dans l'AD.
      */
+    /* ── L'ANNUAIRE DU PERSONNEL, DEPUIS L'ACTIVE DIRECTORY ────────────────
+     *
+     * ⚠️ **`chercherDansAnnuaire` exige un filtre**, et le serveur le refuse en
+     * deçà de deux caractères : on n'aspire pas un annuaire, on y cherche les
+     * personnes qu'on veut pouvoir désigner. Importer tout l'AD reviendrait à
+     * importer les données personnelles de gens qui ne sont PAS utilisateurs de
+     * l'outil — `personnes.nom`, `email` et `telephone` sont au registre de
+     * l'article 30 du produit lui-même.
+     *
+     * 🛑 **Aucune de ces fonctions n'écrit dans l'annuaire**, et
+     * `rafraichirDepuisAnnuaire` ne SUPPRIME rien : elle signale les comptes
+     * désactivés ou disparus, et c'est un humain qui décide.
+     */
+    function chercherDansAnnuaire(texte, base) {
+        return appeler("/personnel/annuaire?recherche=" + encodeURIComponent(texte)
+            + (base ? "&base=" + encodeURIComponent(base) : ""));
+    }
+    function importerDepuisAnnuaire(logins) {
+        return appeler("/personnel/annuaire/importer",
+                       { methode: "POST", corps: { logins: logins } });
+    }
+    function rafraichirDepuisAnnuaire() {
+        return appeler("/personnel/annuaire/rafraichir", { methode: "POST", corps: {} });
+    }
+
     function habilitationsEtat() { return appeler("/habilitations/etat"); }
     function creerProfilHabilitation(corps) {
         return appeler("/habilitations/profils", { methode: "POST", corps: corps });
@@ -1515,6 +1540,8 @@ const Api = (() => {
         poserGrilleHabilitation, supprimerProfilHabilitation,
         creerGroupeAd, modifierGroupeAd, synchroniserGroupesAd,
         coherenceAnnuaire, simulerDroits,
+        // L'annuaire du personnel, alimenté depuis l'Active Directory.
+        chercherDansAnnuaire, importerDepuisAnnuaire, rafraichirDepuisAnnuaire,
         revuesHabilitations, ouvrirRevueHabilitations, deciderLigneRevue,
         cloreRevueHabilitations,
         // Lot L27 : l'assistance par IA — locale par défaut, externe sous six barrières.

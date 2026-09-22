@@ -3844,3 +3844,24 @@ body { overflow-x: hidden; }
     border-radius: 999px;
     padding: 0 7px;
 }
+
+/* ── Le marqueur « compte d'annuaire » d'une fiche du personnel ──────── */
+.pers-ad {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--tint-info, #e8eff8);
+    color: #1b4b8f;
+    text-transform: lowercase;
+    letter-spacing: 0;
+    vertical-align: middle;
+}
+#persAnnuaire:empty { display: none; }
+/* ⚠️ Deux marqueurs, deux faits DIFFÉRENTS : « annuaire » dit que la fiche
+   reflète une entrée de l'AD, « compte » qu'elle porte un compte du produit.
+   Une personne importée n'a pas de compte tant qu'elle ne s'est pas connectée,
+   et c'est précisément qui l'import vise. */
+.pers-ad--compte { background: var(--tint-ok, #e6f4ea); color: #1e7a3c; }

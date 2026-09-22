@@ -912,6 +912,16 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     ['POST', '/api/habilitations/revues', { intitule: 'Revue T3' }],
     ['PUT', '/api/habilitations/revues/lignes/RHL-1', { decision: 'maintenu', version: 1 }],
     ['POST', '/api/habilitations/revues/REVH-1/clore', { conclusion: 'x', version: 1 }],
+    /* L'annuaire du personnel alimenté depuis l'AD.
+     *
+     * ⚠️ Servie sans identité, la RECHERCHE serait un accès en lecture à
+     * l'annuaire du personnel du client — nom, courriel, téléphone, service —
+     * par une requête HTTP anonyme. C'est un transfert de données personnelles,
+     * et c'est la surface la plus sensible de ce lot. L'import, lui, ÉCRIRAIT
+     * ces données dans une filiale. */
+    ['GET', '/api/personnel/annuaire?recherche=martin', undefined],
+    ['POST', '/api/personnel/annuaire/importer', { logins: ['rssi.tls'] }],
+    ['POST', '/api/personnel/annuaire/rafraichir', {}],
     /* L'ouverture technique et la collecte (lots L22, L23).
      *
      * ⚠️ **Servies sans identité, ces routes seraient les pires du produit.** La
