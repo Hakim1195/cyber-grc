@@ -87,7 +87,8 @@ sur trente.
 
 | Écran | Ce qu'il sert |
 |---|---|
-| **Tableau de bord** | l'état de votre filiale en un coup d'œil, avec les tendances |
+| **Ma journée** | **l'écran sur lequel le produit s'ouvre.** Ce qui est en retard, ce qui échoit cette semaine, et ce qui vous est attribué — des lignes sur lesquelles cliquer, pas des indicateurs. ⚠️ Le bloc « qui m'est attribué » rapproche sur le **nom affiché** : les responsables sont saisis en texte libre, avec l'annuaire en autocomplétion. Si vos fiches portent une autre orthographe que votre nom de session, elles n'y paraîtront pas — et l'écran vous le dit plutôt que de paraître vide |
+| **Tableau de bord** | l'état de votre filiale en un coup d'œil, avec les tendances. ⚠️ Il répond à « où en est le groupe ? » ; « Ma journée » répond à « qu'est-ce que je dois faire ? ». Ce ne sont pas les mêmes questions, et c'est pourquoi ce sont deux écrans |
 | **Échéancier** | tout ce qui est daté et qui approche — **neuf sources** : plan d'actions, actions MCO, revues documentaires, déclarations d'incidents, audits, revues de direction, **questionnaires fournisseurs**, **échéances contractuelles des tiers** et **campagnes du Groupe** |
 | **Registre des risques** | l'analyse : fréquence × gravité × maîtrise, brut et résiduel |
 | **Registre des risques → Ateliers EBIOS RM** | la méthode de l'ANSSI, conduite dans l'outil. ⚠️ Elle **s'ajoute** au registre : vos risques cotés en F × G × M restent valides et lisibles, et rien ici ne les modifie |
@@ -96,6 +97,9 @@ sur trente.
 | **Prestataires → Registre DORA** | le registre de l'article 28 de DORA, **avec ce qui manque à chaque ligne** : c'est cette liste de manques qui en fait un plan de travail, et non le tableau. ⚠️ Il exige le droit d'**export** — un registre complet est la carte des dépendances critiques du groupe |
 | **Prestataires** | sur la fiche d'un tiers, le bloc « Questionnaires de sécurité » : le questionnaire que vous adressez à ce fournisseur **s'exporte** en classeur, se remplit hors ligne, et **se réimporte**. ⚠️ Le produit **n'envoie rien** : « consigner l'envoi » enregistre ce que *vous* avez fait. ⚠️ Ce n'est pas un écran à part — un questionnaire appartient à un tiers, et le chercher ailleurs serait le chercher deux fois |
 | **Référentiels → Campagnes du Groupe** | ce que le Groupe demande à votre filiale, et où vous en êtes. Vous y prenez connaissance et déclarez terminé ; l'avancement, lui, **se compte** dans vos évaluations |
+| **Plan d'actions** | ⚠️ Et sa bascule **Kanban**, en haut de l'écran : la même liste, en colonnes par statut. On y déplace une action **au glisser-déposer ou aux deux boutons de la carte** — ⚠️ les boutons ne sont pas un ornement : au pavé tactile, au clavier ou au lecteur d'écran, le glisser est inutilisable. ⚠️ Une action dont le statut n'est aucun des trois est **montrée** dans une colonne qui le dit, jamais masquée : une action invisible est une action oubliée |
+| **Documents** | ⚠️ Le champ de recherche, en tête de la liste : une recherche **plein texte** sur le titre, le type et les annotations de vos documents. Les accents et le pluriel sont ignorés, et « chiffrer » trouve « chiffrement ». ⚠️ Elle ne montre que les documents de **votre périmètre**, et elle vous dit **où** la correspondance a eu lieu — jamais la phrase elle-même. ⚠️ Elle ne va **pas encore** dans le contenu des fichiers joints |
+| **Incidents** | ⚠️ Sur la fiche d'un incident, le bouton « Préparer une notification » : un formulaire pré-rempli pour l'**ANSSI** (NIS2, article 23) ou la **CNIL** (RGPD, article 33), à imprimer. ⚠️ **Le produit ne transmet rien à aucune autorité** : vous relisez, vous complétez, vous déposez vous-même. ⚠️ Et le document **dit ce qui lui manque**, rubrique par rubrique, avec ce que le texte attend à cet endroit — *un formulaire à moitié rempli est plus dangereux qu'un formulaire vide : vide, on le remplit ; à moitié rempli, on l'envoie* |
 
 ### Trois choses qui surprennent la première fois
 
@@ -724,7 +728,7 @@ pas d'administrateur d'une seule filiale.
 > ### ⚠️ Il n'y a pas d'écran d'administration — et c'était la promesse la plus coûteuse de ce guide
 >
 > Ce tableau renvoyait à un écran « Administration » **qui n'existe pas** : mesuré à la porte
-> S7 (constat **Q-266**), l'application compte 28 entrées de menu et **aucune n'ouvre un
+> S7 (constat **Q-266**), l'application compte 29 entrées de menu et **aucune n'ouvre un
 > écran de ce nom**. ⚠️ *La barre latérale porte bien l'intitulé « Administration » — c'est
 > un titre de SECTION, pas une entrée, et il ne mène nulle part. La phrase disait « aucune
 > ne porte ce nom » et se serait fait contredire par le premier exploitant qui aurait

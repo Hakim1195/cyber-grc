@@ -78,6 +78,46 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### « Les docs sont à jour ? » — la quatrième fois, et cinq faussetés (22/09/2026)
+
+**Le contrôle mécanique rendait 102/102.** Il garde des chiffres et des structures ; il ne
+lit pas la prose. Les cinq faussetés ci-dessous étaient sous un `test/documentation/`
+entièrement vert.
+
+1. 🛑 **Le guide utilisateur ne nommait AUCUN des quatre écrans livrés la veille** —
+   « Ma journée » : 0 mention · Kanban : 0 · recherche documentaire : 0 · formulaire de
+   notification : 0. ⚠️ **Et la plus grave n'est pas le nombre** : « Ma journée » est
+   l'écran sur lequel le produit S'OUVRE. Le guide décrivait le travail quotidien en
+   commençant par le tableau de bord, c'est-à-dire en présentant le deuxième écran comme
+   s'il était le premier.
+2. **« L'application compte 28 entrées de menu »** — elle en compte **29**.
+3. **`CLAUDE.md` annonçait « 26 modules » à trois endroits** — le produit en porte **49**.
+   ⚠️ **La liste écrite à la main a été RETIRÉE, pas rallongée** : c'est elle qui a vieilli,
+   et la règle du §3 le dit — *une liste écrite à la main est une omission qui attend*. La
+   liste qui fait foi est celle du routeur, que `test/modules/non-regression.test.mjs`
+   confronte au répertoire.
+4. **Trois fichiers du noyau absents de l'arborescence** : `identite.js`, `palette.js`,
+   `reglages.js`.
+5. **`PLAN_INTERFACE.md` annonçait « 32 → 28 »** sans l'entrée neuve.
+
+#### ⚠️ Et le garde-fou a attrapé la CORRECTION elle-même
+
+J'avais écrit « Plan d'actions **→** Kanban » et « Gestion documentaire **→** Rechercher ».
+La flèche signifie « onglet » dans ce dépôt, et le contrôle des constats **Q-265 / Q-266**
+exige que toute destination citée soit une entrée de menu ou un onglet réel. Or **Kanban
+est une bascule, « Rechercher » un champ, « Préparer une notification » un bouton** — et
+les entrées s'appellent **Documents** et **Incidents**, pas « Gestion documentaire ».
+
+Reformulé : ce sont des **contrôles dans un écran**, pas des destinations. C'est plus exact,
+et cela évite d'envoyer un exploitant chercher un onglet qui n'existe pas — ce qui était
+précisément les deux bloquants de la porte S7.
+
+⚠️ **La leçon du 14/09 se vérifie une troisième fois** : *une passe de documentation se
+fait en cherchant ce que le travail du jour a rendu faux, pas en relisant ce qu'on vient
+d'écrire.*
+
+**Mesuré** : banc **2411/2411**, 102 contrôles de documentation verts après correction.
+
 ### Un système de mise en page : les conteneurs cessent de choisir leur largeur (21/09/2026)
 
 **Signalé par l'utilisateur** : *« la largeur des différents conteneurs des formulaires

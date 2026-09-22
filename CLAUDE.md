@@ -652,7 +652,7 @@ RSSI/consultants **et** non-experts à sensibiliser → chaque concept doit avoi
 **note pédagogique** (`Help.tip(...)`).
 
 - **Frontend** : `cyber-gouvernance_V4/` — SPA maison (HTML/CSS/JS, sans framework,
-  sans build), 26 modules métier. Conservée telle quelle : **seule sa couche de
+  sans build), 49 modules métier. Conservée telle quelle : **seule sa couche de
   persistance a basculé** vers le serveur (`PLAN_SERVEUR` §1.3, lot L2 livré), et la
   façade synchrone `DataStore` est intacte — aucun module métier n'a été réécrit.
 - **Backend** : `backend/` — Node.js 22 + TypeScript + PostgreSQL, Debian 13,
@@ -701,16 +701,26 @@ cyber-gouvernance_V4/
 │   ├── datastore.js           SOURCE DE VÉRITÉ EN MÉMOIRE ; API CRUD synchrone — façade préservée
 │   ├── router.js              routeur par hash (#/route, #/route/:id)
 │   ├── ui.js                  helpers partagés (UI.genId, badges, suppression, multi-personnes)
-│   └── help.js                composant tooltip pédagogique `Help.tip(text)`
+│   ├── identite.js            raison sociale et logo de la filiale active (L9)
+│   ├── palette.js             recherche globale et palette `Ctrl+K` (L17, A3)
+│   ├── reglages.js            les réglages servis par filiale (L25)
+│   └── help.js                bulle pédagogique `Help.tip(text)`. ⚠️ `position: fixed` depuis
+│                              le 21/09/2026 : en `absolute` + `visibility:hidden`, elle GARDAIT
+│                              sa boîte dans le flux et faisait défiler la page entière
 ├── js/services/
 │   ├── backup.js              export/import `grc-backup` — FORMAT D'ÉCHANGE, plus une sauvegarde
 │   ├── importExcel.js, exportExcel.js, exportPDF.js
 │   ├── echeances.js           AGRÉGATEUR d'échéances (lecture seule) `window.Echeances`
-├── js/modules/                26 modules ; 1 module = 1 domaine (IIFE `XxxModule.renderList/renderDetail`)
-│   └── dashboard, synthese, echeances, clients, personnel, actifs, cartographie, risques, matrice, exigences,
-│       referentiels, mesures, conformite, mapping, incidents, documents, rgpd,
-│       actions, bia, crise, pra_scenarios, pra_mco, pra_tests,
-│       pra_prestataires, audits, settings
+├── js/modules/                49 modules ; 1 module = 1 domaine (IIFE `XxxModule.renderList/renderDetail`)
+│                              ⚠️ **La liste n'est plus écrite ici.** Elle l'était, et elle a
+│                              annoncé « 26 modules » pendant que le produit en portait 49 —
+│                              une liste écrite à la main est une omission qui attend
+│                              (§3). La liste qui fait foi est celle du routeur,
+│                              `Router.routesEnregistrees()`, et le filet de
+│                              `test/modules/non-regression.test.mjs` la confronte au
+│                              répertoire : un module neuf y entre tout seul, et un
+│                              module absent fait rougir.
+│   └── premier écran : accueil.js — « Ma journée », L17 A4
 ├── js/lib/xlsx.full.min.js    SheetJS (embarqué)
 └── js/app.js                  bootstrap (Vault.boot = liaison serveur → init → routes → breadcrumb/menu)
 ```
@@ -721,7 +731,8 @@ cyber-gouvernance_V4/
 - **DataStore : API 100 % synchrone** pour les modules (`getX/addX/updateX/deleteX`).
   L'asynchrone — hier IndexedDB, aujourd'hui le serveur — est absorbé **sous** la façade,
   dans `js/core/sync.js` et là seulement. **Ne pas casser l'API sync** : c'est la parade au
-  risque projet P3, et c'est ce qui a permis de basculer 26 modules sans en réécrire un seul.
+  risque projet P3, et c'est ce qui a permis de basculer les modules métier vers un serveur
+  sans en réécrire un seul — ils étaient 26 à la bascule, ils sont 49 aujourd'hui.
 - **Sécurité XSS** : échapper toute donnée utilisateur injectée en DOM. `escapeHtml` est
   partagé (`window.escapeHtml`) et généralisé à tous les modules — la dette du chantier 9
   est soldée. La porte S2 a néanmoins trouvé deux injections résiduelles : l'échappement

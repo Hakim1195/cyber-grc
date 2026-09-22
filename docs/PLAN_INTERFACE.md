@@ -120,6 +120,12 @@ dictionnaires `js/i18n/`, et la table des domaines de `js/app.js`.
 
 **32 entrées → 28**, et **zéro écran sans porte**.
 
+> ⚠️ **29 depuis le 21/09/2026**, et l'entrée neuve est la première de la première
+> section : **« Ma journée »** (action A4). Elle n'ajoute pas un écran de plus à
+> parcourir — *elle est celle sur laquelle le produit s'ouvre*, et le tableau de bord
+> recule d'un rang. Les deux répondent à des questions différentes : « où en est le
+> groupe ? » pour l'un, « qu'est-ce que je dois faire ? » pour l'autre.
+
 ⚠️ **Ce paragraphe annonçait « 26 »**, et c'était faux de deux : le compte avait été posé
 au moment où le plan rangeait BIA avec la continuité et n'avait pas encore décidé du sort
 de `/couverture`. *Un chiffre faux dans un document est un constat, pas une coquille*
