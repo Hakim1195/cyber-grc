@@ -160,6 +160,102 @@ des verdicts antérieurs, il n'en établit pas.
 
 ---
 
+### ▶ OÙ REPRENDRE — au 24/09/2026, LE PÉRIMÈTRE ET LES DROITS SE PILOTENT DANS LE PRODUIT
+
+# 🛑 **SIX MIGRATIONS, `064` À `069`, ET AUCUNE NE VIENT D'UN PLAN.**
+
+Elles viennent de **trois questions de l'utilisateur** posées à la suite, chacune ouvrant la
+précédente d'un cran :
+
+| | La question | Ce qu'elle a fermé | Migrations |
+|---|---|---|---|
+| **1** | *« on ne peut pas créer de filiale depuis le logiciel […] c'est impensable de le faire uniquement [au niveau serveur] »* | **le périmètre se déclare dans le produit** : écran « Filiales », correction d'une fiche, inventaire hors périmètre, export, script PowerShell | `064` → `067` |
+| **2** | *« dans les filiales créées je ne peux pas modifier les groupes […] la touche Groupes AD ne fait que rafraîchir la page »* | **on ne configure plus seulement à la création** — la même maladie trouvée **trois fois**, et corrigée à la classe | — |
+| **3** | *« on peut faire la même chose pour les users (par exemple pour donner des droits spécifiques temporaires) ? »* | **la délégation temporaire de droits** — datée, motivée, révocable, bornée à 90 jours, et **dans la revue d'accès** | `068` |
+| **4** | *« les docs sont à jour ? »* | **six phrases devenues fausses**, dont une **à l'écran, dans le produit** | `069` |
+
+## 🛑 L'ARBITRAGE QUI RENVERSE LE §27, ET QUI NE DOIT PAS SE REPERDRE
+
+**La table `filiales` est la SOURCE. `filiales.conf` est un AMORÇAGE.** C'est l'inverse de ce
+que `CONVENTIONS.md` §27 disait pendant vingt jours — le §27 est **amendé**, l'ancien texte
+gardé **barré**.
+
+⚠️ **Le motif est mesuré, pas esthétique.** Avec deux filiales déclarées et une table
+`filiales` vide, l'annuaire recevait **26 groupes** quand `groupes_ad` n'en déclarait que
+**10** : les deux moitiés du dispositif lisaient deux sources différentes. `GRC-ADMIN` était
+parmi les dix, donc **l'administrateur entrait et tout paraissait normal**, pendant que les
+seize groupes de filiale n'accordaient rien — **en silence**.
+
+⚠️ **Et le sens fichier → table est le SEUL ouvert, par construction** : le service tourne
+sous `ProtectSystem=strict` avec `ReadWritePaths=/var/lib/cyber-grc /var/log/cyber-grc`, donc
+`/etc/cyber-grc` lui est en **lecture seule**. Un écran ne pourra jamais écrire ce fichier, et
+l'y autoriser serait une régression du bac à sable.
+
+## 🛑 CE QUE LA DÉLÉGATION NE FAIT PAS — les deux arbitrages à ne pas défaire
+
+1. **Elle n'accorde JAMAIS l'export ni l'administration.** Ces deux-là viennent de groupes
+   **transversaux** de l'annuaire et y restent. On le voit dans `resoudreDroits()` à ce que ni
+   `peutExporter` ni `administrateur` ne sont touchés par la boucle des délégations ; le profil
+   d'administration, lui, est refusé **dès l'écriture** par un déclencheur.
+2. **Pas d'auto-délégation** — `ck_delegations_pas_soi_meme`. C'est **l'invariant de
+   sécurité** du lot : sans lui, n'importe quel porteur du domaine `droits` s'accorderait
+   n'importe quoi, et toute la traçabilité ne servirait qu'à documenter sa propre inutilité.
+
+⚠️ **Corollaire à connaître avant de croire avoir fermé un accès** : une délégation active
+**n'est pas dans `groupes_ad`**. Vider la déclaration des groupes d'annuaire ne révoque pas les
+délégations en cours. C'est écrit à l'écran depuis le 24/09 — *ça ne l'était pas le jour où la
+délégation est née, et l'écran affirmait même le contraire.*
+
+⚠️ **La délégation est délibérément ABSENTE de l'échéancier**, même motif que les revues
+d'accès : l'échéancier est un outil de celui qui saisit, et une délégation est un acte
+d'administration de niveau Groupe. L'échéance s'affiche **sur l'écran des délégations**.
+
+## ⚠️ CE QUE CES SIX MIGRATIONS ONT APPRIS
+
+1. 🛑 **`f_perimetre_groupe()` est DÉRIVÉ — et créer une filiale le fait basculer à faux.**
+   Il ne vaut vrai que si le périmètre couvre **toutes** les filiales actives ;
+   `pol_filiales_lecture` retombe alors sur `id = any(f_filiales_lecture())`, et la filiale
+   qu'on vient de créer **n'y est pas**. **Le piège a été payé TROIS FOIS le même jour** : à
+   l'écran des filiales (elle n'apparaissait pas), à celui des habilitations (elle manquait de
+   la liste déroulante), puis **à l'ÉCRITURE** — `update … where version = $n` rendait zéro
+   ligne, et l'écran annonçait « modifiée entre-temps » par quelqu'un qui n'existait pas.
+   ⚠️ **PostgreSQL applique les politiques de SELECT à un `UPDATE` qui référence des
+   colonnes.** Remède : `f_filiales_inventaire()` et `f_filiale_corriger()`, `security
+   definer` — `CONVENTIONS.md` §46.
+2. 🛑 **UN GARDE QUI SE TAIT REND ZÉRO ANOMALIE, c'est-à-dire ce qu'il rend quand tout va
+   bien.** Le garde des contraintes de `delegations_droits` était **conditionné à trouver un
+   profil et une filiale en base** : sur une base d'essai neuve il n'en trouvait pas, rendait
+   zéro anomalie, et **quatre mutations sont restées vertes**. Il emploie désormais des
+   identifiants témoins **littéraux** — `f_contrainte_accepte()` n'évalue que le prédicat.
+   *§39, payé une quatrième fois.*
+3. 🛑 **« Corriger la classe, pas l'instance », REFAIT LE JOUR MÊME.** Le piège du point 1 a
+   été fermé à l'écran des filiales le matin ; l'utilisateur l'a retrouvé à l'écran des
+   habilitations l'après-midi. La deuxième fois, la correction a été faite **en balayant tout
+   `src/` à la recherche de `from "filiales"`** — et elle a trouvé la troisième instance,
+   celle de l'écriture, que personne n'avait signalée.
+4. ⚠️ **Une recopie verbatim doit partir de la version COURANTE.** `f_verifier_registres_techniques`
+   a été recopiée depuis la `060` alors que la `062` l'avait enrichie : `actif_prestataires` a
+   disparu du registre. **Le garde-fou l'a dit tout seul**, et c'est le seul motif pour lequel ça
+   n'est pas parti en production.
+5. ⚠️ **Mes propres essais n'écrivaient RIEN, en silence** : `proprietaire.query(update …)` sur
+   une table en `force row level security` rend zéro ligne — la RLS forcée vaut **aussi pour le
+   propriétaire**. Il faut `base.avecPerimetre(…, { annuler: false })`.
+6. ⚠️ **§29.5 enfreint par moi, et MON ESSAI EXIGEAIT LE DÉFAUT.** Douze `resume:` interpolaient
+   des valeurs d'utilisateur dans le journal **indélébile trois ans**. L'essai qui « couvrait » la
+   trace faisait `assert.match(rows[0].resume, /TRACE_TEST/)` : il **consacrait** la faute comme
+   une propriété désirable. C'est le motif du constat **Q-200**, sixième occurrence.
+
+**Mesuré au 24/09/2026 au soir** : banc **2546/2546**, quarante familles ; **69 migrations**,
+**69 garde-fous**, **96 tables**, **383 politiques**, **580 décisions** ; `f_verifier_schema()`
+→ **0 anomalie** ; cloisonnement **110/110** sous `grc_app` ; `verifier-types` propre.
+**Le compte exact vit au `backend/README.md` §8** — il ne se recopie pas (constat Q-219).
+
+⚠️ **État de la recette, à savoir avant d'y cliquer** : **2 filiales** (DEU, TLS), **26
+groupes** d'annuaire, cohérence **26/26**, et **une délégation de démonstration révoquée** —
+gardée exprès, parce qu'une délégation révoquée est ce qu'un auditeur vient chercher.
+
+**⇒ LE GESTE SUIVANT RESTE L'`ULTRAREVIEW`** — à l'utilisateur, `/code-review ultra`.
+
 ### ▶ OÙ REPRENDRE — au 22/09/2026, après les QUATRE VAGUES de la revue d'usage
 
 # 🛑 **LES QUATRE VAGUES DEMANDÉES PAR L'UTILISATEUR SONT LIVRÉES.**

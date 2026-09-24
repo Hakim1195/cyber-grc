@@ -78,6 +78,85 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### « LES DOCS SONT À JOUR ? » — la CINQUIÈME fois, et cette fois une fausseté était dans le PRODUIT (24/09/2026)
+
+**La question a été posée une cinquième fois. Le banc de documentation était vert — `test/documentation/`
+et `test/depot/`, 102 essais — et six phrases étaient fausses.** Ce n'est pas une surprise : c'est la
+leçon du 14/09/2026, énoncée alors et vérifiée depuis à chaque fois — *le banc sait dire qu'un
+**chiffre** d'un document est faux ; il ne sait pas dire qu'une **phrase** est devenue fausse.* La
+recherche ne consiste donc pas à relire les documents, mais à chercher **ce que le travail du jour a
+rendu faux**.
+
+🛑 **ET CELLE QUI COMPTE N'ÉTAIT PAS DANS UN DOCUMENT — elle était à l'écran, dans le produit.**
+L'écran des habilitations affirmait, quand `groupes_ad` est vide :
+
+> « Tant que cette table est vide, **personne ne peut se connecter** »
+
+C'était exact jusqu'à la migration `068` du même jour. Depuis, **une délégation temporaire active ouvre
+un accès à un login qui n'a aucun groupe `GRC-*`** — c'est sa raison d'être, le cas de l'auditeur
+externe, et `resoudreDroits()` lit les délégations **après** la boucle sur les groupes d'annuaire. Un
+administrateur qui aurait vidé cette table pour tout fermer aurait donc laissé ouvertes les délégations
+en cours, **en croyant l'écran**. La phrase dit désormais « personne n'entre **par l'annuaire** », et
+l'écran ajoute le renvoi vers l'onglet « Délégations » avec ce qu'il faut savoir : *vider la déclaration
+ne les révoque pas*.
+
+⚠️ **C'est une fausseté de la classe la plus coûteuse** — non pas « le document est en retard », mais
+« le produit affirme une garantie qu'il n'a plus ». Elle se lit dans la même famille que les constats
+**Q-201 / Q-207** : *un message qui annonce une propriété qui n'existe pas apprend à ne plus croire
+les messages, y compris le jour où ils disent vrai.*
+
+#### Les cinq autres, et ce qui les avait rendues fausses
+
+| Où | Ce qui était écrit | Pourquoi c'est faux depuis le 24/09 |
+|---|---|---|
+| `db/CONVENTIONS.md` **§27** | « la déclaration des filiales est un **fichier d'exploitation** […] et c'est **lui** qui sème la table `filiales` » | **le sens s'est inversé** : la table est la SOURCE, le fichier un AMORÇAGE (migrations `064` → `067`) |
+| `deploy/install.sh` | « c'est **LUI** la source dont la liste des groupes Active Directory est engendrée » | `groupes-ad.sh` lit la **table** depuis le même jour |
+| `deploy/groupes-ad.sh` | « les **filiales** ← `filiales.conf`, fichier d'exploitation écrit par le client » | idem — le fichier n'est plus qu'un **secours**, et le script le **dit** quand il y retombe |
+| `db/synchroniser-groupes-ad.mjs` | « le §27 dit que `filiales.conf` est la source » | il ne le dit plus, et cette ligne citait le document qu'on venait d'amender |
+| `docs/GUIDE_EXPLOITATION.md` §2 | « La source est `/etc/cyber-grc/filiales.conf` croisée avec la table `profils` » | c'est **la table `filiales`** croisée avec `profils` |
+
+⚠️ **Le §27 n'est pas réécrit : il est AMENDÉ, et l'ancien texte est gardé barré**, avec le chiffre qui
+a motivé le renversement — *26 groupes créés dans l'annuaire quand `groupes_ad` n'en déclarait que 10,
+et tous les comptes de filiale entrant sans le moindre droit, en silence*. Un arbitrage effacé est un
+arbitrage qu'on refera.
+
+#### Une migration pour une PHRASE — `069`
+
+**La migration `060` avait décrit `revue_habilitation_lignes` comme portant « une ligne par (groupe
+d'annuaire × compte membre) ».** Depuis la `068`, elle porte **aussi une ligne par délégation active** —
+c'est la propriété sans laquelle la revue d'accès A.5.18 aurait une porte dérobée. La `068` avait
+commenté la colonne `source` qu'elle ajoutait ; elle avait laissé le commentaire de la **table**
+affirmer que l'annuaire est la seule source.
+
+🛑 **Un auditeur qui joue `\d+ revue_habilitation_lignes` avant de relire une revue lisait donc, dans la
+base elle-même, que les délégations n'y figurent pas.** Un commentaire de catalogue est de la
+documentation que personne ne relit — c'est exactement pour cela qu'elle survit si longtemps à son
+objet. La `069` ne change **aucune structure** : elle corrige ce commentaire, et elle écrit pourquoi
+elle existe. ⚠️ **Et elle passe par une migration plutôt que par une correction de la `060`** —
+`CONVENTIONS.md` §23 : réécrire la `060` ne changerait rien sur les installations déjà déployées, où le
+faux commentaire resterait en base.
+
+#### Ce qui a été ajouté plutôt que corrigé
+
+- **`GUIDE_EXPLOITATION.md` §2 nomme désormais une QUATRIÈME voie d'accès** : le tableau « trois
+  familles de groupes » ne décrivait que l'annuaire. Les délégations temporaires y sont, avec leur
+  conséquence d'exploitation — *vider `groupes_ad` ne coupe pas tous les accès* — et le rappel que la
+  revue périodique balaie **les deux** sources.
+- **`src/habilitations/ecriture.ts`** : le verrou d'administrabilité explique maintenant, dans son
+  en-tête, que **la délégation n'est pas une sortie de secours** — trois barrières l'empêchent
+  (`resoudreDroits()` ne touche ni `administrateur` ni `peutExporter`, un déclencheur refuse le profil
+  d'administration, `ck_delegations_pas_soi_meme` interdit l'auto-octroi). Quelqu'un qui se serait
+  verrouillé dehors aurait pu perdre une heure à chercher cette porte-là.
+- **Le message de refus `GRC08`**, celui que lit un humain, le dit aussi : « une délégation temporaire
+  ne rattraperait pas ».
+
+⚠️ **Ce qui a été examiné et laissé tel quel, avec son motif** : la phrase « la création d'une filiale
+n'a toujours pas d'écran » du `GUIDE_EXPLOITATION.md` vit **à l'intérieur** du bloc replié
+« ⚠️ L'ANCIENNE PROCÉDURE, conservée barrée — elle ne marche plus ». Elle décrit un état révolu, dans un
+bloc qui annonce qu'il décrit un état révolu : la corriger reviendrait à réécrire l'histoire pour ranger
+le présent, ce que ce chantier a déjà refusé une fois (motif du 09/09, les 1 002 occurrences des
+rapports d'audit).
+
 ### LA DÉLÉGATION TEMPORAIRE DE DROITS — migration `068` (24/09/2026)
 
 > **Demandé par l'utilisateur** : *« on peut faire la même chose pour les users (par exemple

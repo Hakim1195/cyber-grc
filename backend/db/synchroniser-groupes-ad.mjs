@@ -32,7 +32,8 @@
  *     a ajusté dans `groupes_ad`, et ferait dépendre l'accès de tous d'un effet
  *     de bord invisible ;
  *   · **dans `deploy/install.sh` seulement** — la liste change à **chaque
- *     acquisition de filiale**, et le §27 dit que `filiales.conf` est la source :
+ *     acquisition de filiale**. ⚠️ Le §27 disait alors que `filiales.conf` était la
+ *     source ; depuis le 24/09/2026 c'est la TABLE, et le fichier n'est qu'un amorçage :
  *     un geste qui n'existerait qu'à l'installation obligerait à réinstaller.
  *
  * C'est donc une **commande d'administration explicite et idempotente** :

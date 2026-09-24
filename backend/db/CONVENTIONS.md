@@ -1548,9 +1548,28 @@ contrôle **S6** de la grille, et il se vérifie en appelant la route directemen
 > `filiales` est vide, rien dans `deploy/` ne les décrit, et leur création est le lot **L4**,
 > c'est-à-dire la vague suivante. Arbitrage rendu à l'ouverture de la vague 3.
 
-**La décision** : la déclaration des filiales est un **fichier d'exploitation**, écrit par le
-client, vivant hors de la base — et c'est **lui** qui sème la table `filiales` au lot L4, pas
-l'inverse. L4 le consomme ; il ne fabrique pas sa propre source.
+> 🛑 **AMENDÉ LE 24/09/2026 — LE SENS S'EST INVERSÉ, ET L'ANCIEN TEXTE EST GARDÉ BARRÉ.**
+> Ce paragraphe a décrit pendant vingt jours un amorçage **qui ne s'est jamais produit** :
+> personne ne portait `filiales.conf` dans la table. Les deux moitiés du dispositif lisaient
+> donc deux sources — `deploy/groupes-ad.sh` le FICHIER, `db/synchroniser-groupes-ad.mjs` la
+> TABLE — et, avec deux filiales déclarées, l'annuaire recevait **26 groupes** quand
+> `groupes_ad` n'en déclarait que **10**. Tous les comptes de filiale entraient **sans le
+> moindre droit, en silence**.
+>
+> **La décision qui vaut** : **la table `filiales` est la SOURCE ; `filiales.conf` est un
+> AMORÇAGE.** `deploy/install.sh` le porte en base au §8 pre (`db/importer-filiales.mjs`),
+> **une seule fois**, si la table ne connaît aucune filiale active. Ensuite, une acquisition
+> se déclare **à l'écran** (Administration → Filiales), et **éditer le fichier n'agit plus**.
+>
+> ⚠️ **Le motif n'est pas esthétique, il est mesurable** : le service tourne sous
+> `ProtectSystem=strict` avec `ReadWritePaths=/var/lib/cyber-grc /var/log/cyber-grc`, donc
+> `/etc/cyber-grc` lui est en **lecture seule**. Un écran ne pourra jamais écrire ce fichier,
+> et l'y autoriser serait une régression du bac à sable. Le seul sens ouvert est fichier →
+> table. Migrations `064` à `067`.
+
+> ~~**La décision** : la déclaration des filiales est un **fichier d'exploitation**, écrit par
+> le client, vivant hors de la base — et c'est **lui** qui sème la table `filiales` au lot L4,
+> pas l'inverse. L4 le consomme ; il ne fabrique pas sa propre source.~~
 
 Le motif est celui du §19.5, dans son exception : une omission ici **échoue bruyamment** — un
 groupe AD manquant, c'est un RSSI de site sans aucun accès, et quelqu'un doit trancher. La liste
@@ -1563,11 +1582,17 @@ TLS ; Dedienne Aerospace Toulouse ; FR ; oui
 DEU ; Dedienne Aerospace Deutschland ; DE ; oui
 ```
 
-| Ce qui en est engendré | Par |
-|---|---|
-| La liste des groupes `GRC-<FILIALE>-<PROFIL>` à créer dans l'AD | `deploy/` (agent A5), lot L3 |
-| Les lignes de la table `filiales` | lot **L4**, vague 4 |
-| Les groupes `GRC-GROUPE-<PROFIL>`, `GRC-EXPORT`, `GRC-ADMIN` | invariants, indépendants du fichier |
+| Ce qui en est engendré | Par | Depuis le 24/09/2026 |
+|---|---|---|
+| La liste des groupes `GRC-<FILIALE>-<PROFIL>` à créer dans l'AD | `deploy/groupes-ad.sh` | il lit **la TABLE**, et ne retombe sur le fichier que si la base est injoignable — **en le disant** |
+| Les lignes de la table `filiales` | `db/importer-filiales.mjs`, au §8 pre d'`install.sh` | **une seule fois**, si la table n'en connaît aucune. Ensuite : l'écran |
+| Les groupes `GRC-GROUPE-<PROFIL>`, `GRC-EXPORT`, `GRC-ADMIN` | invariants, indépendants du fichier | inchangé |
+
+⚠️ **Le seul analyseur du format vit dans `src/filiales/declaration.ts`.** `groupes-ad.sh`
+en portait un second, écrit en bash, qui réimplémentait à la main `ck_filiales_code`,
+`ck_filiales_pays` et l'unicité du code : deux analyseurs du même format sont deux vérités,
+et la divergence se verrait le jour où l'un accepte une ligne que l'autre refuse — c'est-à-dire
+au moment où quelqu'un ne peut pas se connecter. Le shell l'APPELLE désormais.
 
 **Le client acquiert des filiales régulièrement.** Une liste de groupes figée est donc fausse à
 la première acquisition, et fausse **en silence**. Ce que l'installateur doit produire est un

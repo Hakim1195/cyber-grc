@@ -1825,10 +1825,10 @@ fi
 appliquer_droits_config "$FICHIER_CONFIG"
 
 # La DÉCLARATION DES FILIALES (db/CONVENTIONS.md §27). Fichier d'exploitation,
-# écrit par le client, hors de la base : c'est LUI la source dont la liste des
-# groupes Active Directory est engendrée (deploy/groupes-ad.sh), et lui que le
-# §8 pre porte en base — `db/importer-filiales.mjs`, une fois, si la table
-# `filiales` ne connaît encore aucune filiale active.
+# écrit par le client, hors de la base — et c'est un AMORÇAGE, plus une source :
+# le §8 pre le porte en base (`db/importer-filiales.mjs`), UNE SEULE FOIS, si la
+# table `filiales` ne connaît encore aucune filiale active. Ensuite, c'est la
+# TABLE qui fait foi, et une acquisition se déclare à l'écran.
 #
 # ⚠️ **Ce commentaire annonçait cet amorçage AU FUTUR pendant vingt jours** (« que
 # le lot L4 consommera pour semer la table `filiales` »), et il ne s'est jamais

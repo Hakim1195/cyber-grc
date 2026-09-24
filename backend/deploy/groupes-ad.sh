@@ -27,7 +27,7 @@
 #
 # | Terme | Source | Arbitré en |
 # |---|---|---|
-# | les **filiales** | `filiales.conf`, fichier d'exploitation écrit par le client | `CONVENTIONS.md` §27 |
+# | les **filiales** | la **table `filiales`** ; `filiales.conf` seulement en secours, et c'est DIT | `CONVENTIONS.md` §27, amendé le 24/09/2026 |
 # | les **profils**  | table `profils`, semée par `007_authentification.sql` (socle) | `PLAN_SERVEUR` §3.2 |
 # | le **préfixe**   | `LDAP_PREFIXE_GROUPES` du fichier de configuration | `.env.example` §5 |
 #

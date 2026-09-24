@@ -498,9 +498,19 @@ const HabilitationsModule = (() => {
             + '<div class="card">'
             +   (etat.groupes.length === 0
                  ? '<p class="muted">Aucun groupe d’annuaire n’est déclaré. Tant que cette '
-                   + "table est vide, <strong>personne ne peut se connecter</strong> : les droits "
-                   + "viennent de l’annuaire, et c’est cette correspondance qui les traduit. "
-                   + "« Synchroniser la déclaration » engendre les groupes attendus.</p>"
+                   + "table est vide, <strong>personne n’entre par l’annuaire</strong> : les "
+                   + "droits viennent de l’annuaire, et c’est cette correspondance qui les "
+                   + "traduit. « Synchroniser la déclaration » engendre les groupes attendus.</p>"
+                   // ⚠️ Cette phrase disait « personne ne peut se connecter », et elle est
+                   //    devenue FAUSSE le jour où la délégation temporaire est née : une
+                   //    délégation active ouvre un accès à un login SANS aucun groupe
+                   //    `GRC-*`, c'est sa raison d'être (l'auditeur externe). Un
+                   //    administrateur qui croirait vider cette table pour tout fermer
+                   //    laisserait les délégations en cours ouvertes — d'où le renvoi.
+                   + '<p class="muted">Les <strong>délégations temporaires</strong> en cours, '
+                   + "elles, continuent d’ouvrir un accès : elles ne passent pas par cette "
+                   + "table. Vider la déclaration ne les révoque pas — voyez l’onglet "
+                   + "« Délégations ».</p>"
                  : '<div class="table-scroll"><table class="data-table"><thead><tr>'
                    + "<th>Groupe d’annuaire</th><th>Périmètre</th><th>Filiale</th>"
                    + "<th>Accorde</th><th>Domaines ouverts</th><th>État</th><th></th>"

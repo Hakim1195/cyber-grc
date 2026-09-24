@@ -15,10 +15,20 @@
  * Sans ce verrou, un administrateur peut se retirer l'administration en trois
  * clics — désactiver le profil ADMIN, fermer son domaine `droits`, ou
  * désactiver `GRC-ADMIN` — et **plus personne au monde ne peut rouvrir le
- * produit** : les droits viennent de l'annuaire, l'annuaire est lu à travers
- * `groupes_ad`, et `groupes_ad` n'est écrivable que par l'administration. Le
- * seul recours serait le compte de secours, quand il est configuré, et un accès
- * `psql`. C'est exactement la classe de défaut que ce projet appelle *« le
+ * produit** : les droits d'administration viennent de l'annuaire, l'annuaire est
+ * lu à travers `groupes_ad`, et `groupes_ad` n'est écrivable que par
+ * l'administration. Le seul recours serait le compte de secours, quand il est
+ * configuré, et un accès `psql`.
+ *
+ * ⚠️ **ET LA DÉLÉGATION TEMPORAIRE N'EST PAS UNE SORTIE DE SECOURS — c'est
+ * délibéré, et il faut le savoir avant d'y compter.** Depuis la migration `068`
+ * un administrateur peut accorder des droits à quelqu'un dans le produit ; trois
+ * barrières font qu'aucune de ces délégations ne peut rendre l'administration :
+ * `resoudreDroits()` ne touche ni `administrateur` ni `peutExporter`, un
+ * déclencheur refuse le profil qui porte `droits` en `administration`, et
+ * `ck_delegations_pas_soi_meme` interdit de s'en accorder une. Une délégation ne
+ * desserre donc pas ce verrou d'un cran — elle rend au contraire son maintien
+ * plus nécessaire, puisque c'est l'administration qui les accorde. C'est exactement la classe de défaut que ce projet appelle *« le
  * produit détruit le travail de son utilisateur »* — sauf qu'ici il se détruit
  * lui-même.
  *
@@ -128,9 +138,10 @@ export async function verifierAdministrabilite(
     statut: 409,
     message:
       `Cette modification est refusée : ${manque}. Le produit deviendrait impossible à ` +
-      'administrer — les droits viennent de l’annuaire, et seule l’administration peut ' +
-      'écrire la correspondance qui les résout. Gardez au moins un profil administrateur ' +
-      'actif et un groupe d’annuaire qui l’accorde.',
+      'administrer — les droits d’administration viennent de l’annuaire, et seule ' +
+      'l’administration peut écrire la correspondance qui les résout. Une délégation ' +
+      'temporaire ne rattraperait pas : elle n’accorde jamais l’administration. Gardez au ' +
+      'moins un profil administrateur actif et un groupe d’annuaire qui l’accorde.',
     detailJournal: `verrou d'administrabilité : profils=${profils}, groupes=${groupes}`,
     codeGrc: 'GRC08',
   });
