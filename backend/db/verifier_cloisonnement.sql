@@ -1916,14 +1916,32 @@ begin
                           and not exists (select 1 from pg_attribute a where a.attrelid = c.oid
                                            and a.attname = 'filiale_id' and a.attnum > 0
                                            and not a.attisdropped))),
-               'campagnes, colonnes_personnelles, controles_schema, mapping_exigences, '
-               'mappings, migrations_schema, profil_domaines, profils, '
+               -- ⚠️ `delegations_droits` AJOUTÉE PAR LA MIGRATION `068`, et sa
+               --    lecture ouverte est une CONSÉQUENCE, pas un relâchement : la
+               --    table ne porte pas de `filiale_id`, et le §2 de `004_rls`
+               --    interdit qu’une politique de lecture dépende du drapeau
+               --    d’administration.
+               -- ⚠️ AUCUNE APOSTROPHE DROITE dans ces commentaires : le banc y détecte
+               --    les littéraux SQL de la liste, et une apostrophe de commentaire les
+               --    apparie de travers. Payé une fois, le 24/09/2026. Ce qui la protège est la ROUTE, déclarée
+               --    « lire / administration », que le contrôle T-3 mesure.
+               --    🛑 Et elle PRODUIT l’autorisation : la résolution d’une session
+               --    y lit les délégations AVANT que le périmètre existe
+               --    (`CONVENTIONS.md` §46).
+               'campagnes, colonnes_personnelles, controles_schema, delegations_droits, '
+               'mapping_exigences, mappings, migrations_schema, profil_domaines, profils, '
                'revue_habilitation_lignes, revues_habilitations, session_domaines, '
                'sessions, utilisateurs',
                coalesce(string_agg(t.nom, ', ' order by t.nom), '(aucune)'),
+               -- ⚠️ **LA LISTE EST ÉCRITE DEUX FOIS DANS CE CONTRÔLE** — une pour
+               --    l’affichage, une pour le verdict — et c’est un piège dont on
+               --    paie le prix : la première correction du 24/09/2026 n’a touché
+               --    que la copie affichée, et le contrôle est resté en ÉCHEC en
+               --    montrant deux listes IDENTIQUES. Les deux se corrigent ensemble.
                case when coalesce(string_agg(t.nom, ', ' order by t.nom), '') =
                          'campagnes, colonnes_personnelles, controles_schema, '
-                         'mapping_exigences, mappings, migrations_schema, profil_domaines, '
+                         'delegations_droits, mapping_exigences, mappings, '
+                         'migrations_schema, profil_domaines, '
                          'profils, revue_habilitation_lignes, revues_habilitations, '
                          'session_domaines, sessions, utilisateurs'
                     then 'OK' else 'ÉCHEC' end)

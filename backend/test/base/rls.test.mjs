@@ -2340,7 +2340,7 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
     assert.equal(affectees, 1);
   });
 
-  test('LE BALAYAGE : les DIX tables de configuration ont une écriture conditionnée', async () => {
+  test('LE BALAYAGE : les ONZE tables de configuration ont une écriture conditionnée', async () => {
     // Structurel plutôt qu'anecdotique : c'est le motif que l'auditeur a réclamé — « toute
     // table de niveau Groupe dont l'écriture est ouverte est-elle dans une liste
     // explicitement arbitrée ? ». La liste ci-dessous EST cette liste, et toute table qui
@@ -2371,8 +2371,14 @@ describe('filiales : table de configuration (CONVENTIONS §17.4, constat N-2)', 
       //    à une filiale aurait supposé un rattachement que le modèle n'a pas,
       //    c'est-à-dire l'aurait inventé — et une revue fondée sur un rattachement
       //    inventé atteste de ce qui n'a pas été vérifié.
-      ['campagnes', 'filiales', 'groupes_ad', 'mapping_exigences', 'mappings',
-       'profil_domaines', 'profils', 'revue_habilitation_lignes',
+      // ⚠️ `delegations_droits` AJOUTÉE PAR LA MIGRATION `068` : accorder et révoquer
+      //    une délégation sont des gestes d'ADMINISTRATION GROUPE, tenus par une
+      //    politique (`f_administration_groupe`) et non par les privilèges. Comme
+      //    les deux tables de la revue, elle est de niveau Groupe — une délégation
+      //    peut viser le Groupe entier, et le registre lui-même est un objet
+      //    d'administration.
+      ['campagnes', 'delegations_droits', 'filiales', 'groupes_ad', 'mapping_exigences',
+       'mappings', 'profil_domaines', 'profils', 'revue_habilitation_lignes',
        'revues_habilitations', 'utilisateurs'],
     );
   });
@@ -3948,6 +3954,17 @@ describe('Le garde-fou de couverture découvre son périmètre (CONVENTIONS §19
       // au §24 ; il est repris à l'identique dans le contrôle C93 de
       // `db/verifier_cloisonnement.sql`, et les deux doivent bouger ensemble.
       'controles_schema',
+      // ── AJOUTÉE PAR `068` — LA DÉLÉGATION TEMPORAIRE ────────────────────────
+      //    🛑 Sa lecture est ouverte pour DEUX raisons qui se cumulent. La première
+      //    est celle des voisines : le §2 de `004_rls.sql` interdit qu'une politique
+      //    de LECTURE dépende du drapeau d'administration. La seconde lui est
+      //    propre, et elle est plus forte — cette table PRODUIT l'autorisation : la
+      //    résolution d'une session y lit les délégations AVANT que le périmètre
+      //    existe (`CONVENTIONS.md` §46). Une lecture cloisonnée y rendrait zéro
+      //    ligne, et la délégation n'accorderait rien EN SILENCE.
+      //    La barrière est donc la ROUTE, « lire / administration », et le contrôle
+      //    T-3 la mesure.
+      'delegations_droits',
       // « filiales » a QUITTÉ cette liste le 04/09/2026 : sa lecture est cloisonnée
       // depuis la migration `010` (constat Q-132). Elle y figurait parce que
       // l'authentification la lit avant d'avoir un périmètre — ce besoin passe
@@ -4249,6 +4266,20 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // date (art. 12 §4 — une fin de non-recevoir silencieuse est ce que le texte
       // proscrit), une prorogation se notifie (art. 12 §3), une réponse est datée.
       // Et il refuse toute colonne qui RANGERAIT l'échéance.
+      // SOIXANTE-NEUVIÈME, apporté par `068` — la délégation temporaire de droits.
+      // ⚠️ C'est le seul garde-fou de cette série qui protège la RÉSOLUTION DES
+      // DROITS elle-même. Il ÉPROUVE ses quatre invariants sur le prédicat réel de
+      // leur contrainte — l'AUTO-DÉLÉGATION d'abord, qui est l'invariant de
+      // sécurité du lot —, avec leurs contre-témoins ; et il mesure que la
+      // résolution reste « security definer » et fermée à PUBLIC, que le profil
+      // d'administration reste indélégable, que l'état se dérive juste, et que la
+      // revue des accès sait encore distinguer un droit d'annuaire d'une délégation.
+      //
+      // 🛑 Sa première rédaction SE TAISAIT faute de témoin en base — zéro anomalie,
+      // c'est-à-dire ce qu'il rend quand tout va bien. Quatre mutations du banc sont
+      // restées vertes contre lui. *Un garde qui ne regarde pas rend zéro anomalie*,
+      // le motif du §39, reproduit dans la migration qui le cite.
+      'delegations_droits',
       'demandes_droits',
       // SOIXANTE-SIXIÈME, apporté par `062` — les dépendances entre actifs. Il nomme
       // les HUIT natures de lien UNE PAR UNE et les SOUMET au prédicat réel : un garde
