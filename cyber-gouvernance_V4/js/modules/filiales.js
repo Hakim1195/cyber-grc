@@ -216,6 +216,16 @@ const FilialesModule = (() => {
                 + (f.statut === "active"
                     ? '<button type="button" class="fil-groupes btn-secondary" data-filiale="'
                       + esc(f.id) + '">Groupes AD</button> '
+                      /* ⚠️ LE CHEMIN VERS LA GESTION, et il manquait. Signalé par
+                       * l'utilisateur le 24/09/2026 : *« dans les filiales créées
+                       * je ne peux pas modifier les groupes »*. On PEUT — déclarer
+                       * un groupe d'annuaire hors convention, changer le profil
+                       * qu'il accorde, le désactiver — mais cela vit sur l'écran
+                       * des habilitations, et rien ici ne le disait. *Une capacité
+                       * qu'aucun écran n'indique est une capacité absente*, même
+                       * quand elle existe à deux clics. */
+                      + '<a class="btn-secondary" href="#/habilitations-groupes">'
+                      + "Gérer</a> "
                       + '<button type="button" class="fil-sortie btn-secondary" data-filiale="'
                       + esc(f.id) + '" data-code="' + esc(f.code) + '"'
                       + (f.dans_mon_perimetre ? "" : " disabled"
@@ -289,6 +299,10 @@ const FilialesModule = (() => {
                   + '<button type="button" id="filCopierPs" class="btn-secondary">'
                   + "Copier le script PowerShell</button>"
                 : "<p>Aucun groupe à créer : ils étaient déjà déclarés.</p>")
+            + '<p class="muted">Un groupe d’annuaire qui ne suit pas la convention — un groupe '
+            + "qui existe déjà chez vous, sous un autre nom — se déclare depuis "
+            + '<a href="#/habilitations-groupes">Habilitations → Groupes d’annuaire</a>, '
+            + "où l’on choisit la filiale et le profil qu’il accorde.</p>"
             + '<p class="muted"><strong>À savoir</strong> — votre session garde le périmètre résolu à votre '
             + "connexion : cette filiale ne vous sera <strong>lisible qu’à votre prochaine "
             + "connexion</strong>, et seulement une fois ses groupes créés et votre compte "

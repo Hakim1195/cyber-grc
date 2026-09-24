@@ -688,6 +688,29 @@ votre décision.
 > fiche : il nomme les groupes d'annuaire (`GRC-<CODE>-<PROFIL>`). Le changer laisserait
 > derrière lui huit groupes qui n'accordent plus rien.
 
+### Affecter à une filiale un groupe d'annuaire qui EXISTE DÉJÀ
+
+La convention `GRC-<CODE>-<PROFIL>` est ce que le produit **propose**, pas ce qu'il impose.
+Si votre annuaire porte déjà des groupes sous d'autres noms — `SEC-TLS-RSSI`,
+`Toulouse-Securite`, ce que votre équipe IT a bâti —, vous n'avez rien à recréer :
+
+**Administration → Habilitations → Groupes d'annuaire → « Déclarer un groupe d'annuaire ».**
+Vous y saisissez **le nom exact** du groupe tel qu'il existe dans l'AD, la **filiale** qu'il
+concerne et le **profil** qu'il accorde. À partir de là, ce groupe ouvre des droits comme
+n'importe lequel.
+
+Sur la même vue, pour un groupe déjà déclaré, vous pouvez changer **ce qu'il accorde** —
+profil, droit d'export, administration — ou le **désactiver**.
+
+> ⚠️ **Son NOM, lui, ne se modifie pas.** Un nom de groupe est ce par quoi l'annuaire et le
+> produit se reconnaissent : le changer d'un côté sans l'autre coupe les accès de tous ses
+> membres, en silence. Déclarez le bon nom, désactivez l'ancien.
+
+> ⚠️ **Déclarer ne crée rien dans l'annuaire.** Le produit n'y écrit jamais : il enregistre
+> que « ce groupe-là, s'il existe, accorde ceci ». Si le nom est mal orthographié, les
+> comptes entreront sans aucun droit — c'est précisément ce que « Vérifier l'annuaire »
+> détecte, et c'est le premier écart de sa liste.
+
 **« Faire sortir »** exporte d'abord toutes les données de la filiale — le fichier vous est
 remis —, puis bascule son statut. Elle quitte alors tous les périmètres ; ses données
 restent en base, hors de portée de toute session, ce qui permet de répondre à un contrôle

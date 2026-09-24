@@ -78,6 +78,51 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### « JE NE PEUX PAS MODIFIER LES GROUPES D'UNE FILIALE CRÉÉE » — le même piège, une couche plus loin (24/09/2026)
+
+> **Signalé par l'utilisateur**, une heure après la livraison de l'écran « Filiales » :
+> *« dans les filiales créées je ne peux pas modifier les groupes, ce qui rend compliqué
+> l'affectation des groupes aux filiales. C'est un problème d'affichage ? »*
+
+**Non.** Reproduit au navigateur sur la recette, et c'était un vrai défaut :
+
+| Ce qu'on voyait | Pourquoi |
+|---|---|
+| la filiale neuve **absente de la liste déroulante** du formulaire de déclaration d'un groupe | `select … from "filiales"` dans `src/habilitations/lecture.ts` |
+| ses huit groupes affichés avec une **colonne « filiale » VIDE** | la jointure `left join "filiales"` de la même fonction |
+
+Conséquence : **on ne pouvait affecter aucun groupe à la filiale qu'on venait de créer.**
+
+🛑 **C'est « corriger l'instance, pas la classe », refait LE JOUR MÊME.** La migration `065`
+avait fermé exactement ce piège pour l'écran « Filiales », deux heures plus tôt : une
+filiale active de plus fait basculer `f_perimetre_groupe()` à faux, et
+`pol_filiales_lecture` retombe alors sur les seules filiales lisibles. Je ne l'avais pas
+fermé pour l'écran des habilitations. C'est le travers le plus récurrent de ce chantier, et
+il est revenu à l'intérieur de la même journée.
+
+⚠️ **Et le commentaire du code disait FAUX** : *« la jointure porte sur `filiales`, dont la
+lecture est ouverte parce que l'authentification la précède »*. Elle ne l'est pas. Une
+affirmation dans un commentaire n'est pas une propriété mesurée — c'est le motif du §39.
+
+**Le remède est la règle** : *un écran d'ADMINISTRATION GROUPE lit le groupe entier ; tout
+le reste lit son périmètre.* Les deux lectures de `habilitations/lecture.ts` passent par
+`f_filiales_inventaire()`. ⚠️ Les onze autres lectures directes de `filiales` dans `src/`
+ont été revues une par une : toutes sont bornées au périmètre **à juste titre**, et aucune
+n'a bougé. *Le cloisonnement des données ne change pas ; c'est l'écran d'administration qui
+cesse de voir un périmètre amputé.*
+
+**L'essai garde la CLASSE** et il **mord** : joué contre la version fautive, il rend
+« Servies : ZZESSA, ZZESSB » là où la filiale hors périmètre est attendue. Il passe par la
+**route**, pas par la fonction — motif du constat **Q-325** —, et il porte son contrôle
+symétrique : une lecture ordinaire d'une seule filiale n'en lit toujours qu'une.
+
+✅ **Et la capacité que l'utilisateur cherchait existait déjà** — déclarer un groupe
+d'annuaire **hors convention** (`SECU-<X>-EXISTANT`) pour une filiale et un profil donnés.
+Elle vivait sur un autre écran sans que rien ne l'indique : *une capacité qu'aucun écran
+n'indique est une capacité absente, même quand elle existe à deux clics.* L'écran
+« Filiales » porte désormais un bouton **« Gérer »** par filiale, et l'encart de création le
+dit au moment où la question se pose. Les deux guides l'écrivent.
+
 ### LE PÉRIMÈTRE SE DÉCLARE DANS LE PRODUIT — migrations `064` et `065` (24/09/2026)
 
 > **Demandé par l'utilisateur** : *« on ne peut pas créer de filiale depuis le logiciel,

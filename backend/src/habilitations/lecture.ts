@@ -262,16 +262,32 @@ export async function lireEtat(
     profil_code: string | null;
     profil_nom: string | null;
   }>(
-    // ⚠️ `f_filiales_actives()` ne convient PAS ici : un groupe peut viser une
-    //    filiale archivée, et c'est précisément ce qu'un administrateur doit
-    //    voir. La jointure porte donc sur `filiales`, dont la lecture est
-    //    ouverte (`004_rls.sql` §6) parce que l'authentification la précède.
+    /* 🛑 `f_filiales_inventaire()` — migration `065`, et CE COMMENTAIRE DISAIT
+     * FAUX. Il affirmait que « la lecture de `filiales` est ouverte parce que
+     * l'authentification la précède » : elle ne l'est pas. `pol_filiales_lecture`
+     * retombe sur `id = any (f_filiales_lecture())` dès que `f_perimetre_groupe()`
+     * est fausse — et créer une filiale la rend fausse, puisqu'elle est DÉRIVÉE de
+     * « le périmètre couvre-t-il toutes les actives ? ».
+     *
+     * ⚠️ **Mesuré au navigateur le 24/09/2026**, sur le signalement de
+     * l'utilisateur : une filiale créée dix secondes plus tôt affichait ses huit
+     * groupes avec une **colonne « filiale » VIDE**, et elle manquait de la liste
+     * déroulante — donc *on ne pouvait affecter aucun groupe à la filiale qu'on
+     * venait de créer*. L'écran des habilitations est un écran d'ADMINISTRATION
+     * GROUPE : il doit voir le groupe entier, sans quoi il montre un périmètre
+     * amputé au seul compte qui a le droit de le corriger.
+     *
+     * ⚠️ **Et c'est « corriger l'instance, pas la classe », refait le jour même** :
+     * la migration `065` avait fermé exactement ce piège pour l'écran « Filiales »,
+     * et je ne l'avais pas fermé ici. Le motif reste juste — un groupe peut viser
+     * une filiale archivée, donc `f_filiales_actives()` ne convient pas ; c'est la
+     * conclusion qui était fausse. */
     `select g."id", g."nom", g."perimetre", g."filiale_id", g."profil_id",
             g."accorde_export", g."accorde_admin", g."description", g."actif", g."version",
             f."code" as filiale_code, f."raison_sociale" as filiale_raison,
             p."code" as profil_code, p."nom" as profil_nom
        from "groupes_ad" g
-       left join "filiales" f on f."id" = g."filiale_id"
+       left join f_filiales_inventaire() f on f."id" = g."filiale_id"
        left join "profils"  p on p."id" = g."profil_id"
       order by g."perimetre", f."code" nulls first, p."code" nulls first, g."nom"
       limit $1`,
@@ -325,9 +341,16 @@ export async function lireEtat(
   const comptesTronques = comptes.rows.length > COMPTES_MAX;
   const lignesComptes = comptes.rows.slice(0, COMPTES_MAX);
 
-  /* ── 4. Les filiales, pour les listes déroulantes ─────────────────────── */
+  /* ── 4. Les filiales, pour les listes déroulantes ───────────────────────
+   *
+   * 🛑 Même fonction, et même motif : c'est CETTE liste qui peuplait le choix
+   * « filiale » du formulaire de déclaration d'un groupe. Amputée du périmètre de
+   * session, elle rendait **impossible d'affecter un groupe à une filiale qu'on
+   * vient de créer** — signalé par l'utilisateur, reproduit au navigateur.
+   *
+   * ⚠️ Le tri vit dans la fonction ; le refaire ici en ferait un second tri. */
   const filiales = await client.query<{ id: string; code: string; raison_sociale: string }>(
-    `select "id", "code", "raison_sociale" from "filiales" order by "code"`,
+    `select "id", "code", "raison_sociale" from f_filiales_inventaire()`,
   );
 
   return Object.freeze({

@@ -636,3 +636,108 @@ describe('§7 — le journal d’audit', () => {
     assert.equal(rows[0].valeurs_apres.code, 'TRACE_TEST');
   });
 });
+
+/* =====================================================================
+ *  L'écran d'administration voit le GROUPE ENTIER, pas son périmètre
+ * ===================================================================== */
+
+describe('Une filiale hors du périmètre de session reste ADMINISTRABLE', () => {
+  test('elle est servie à l’écran, et ses groupes portent son code', async () => {
+    /* 🛑 SIGNALÉ PAR L'UTILISATEUR LE 24/09/2026, ET REPRODUIT AU NAVIGATEUR :
+     * *« dans les filiales créées je ne peux pas modifier les groupes »*. Ce
+     * n'était pas un défaut d'affichage.
+     *
+     * `pol_filiales_lecture` retombe sur `id = any (f_filiales_lecture())` dès que
+     * `f_perimetre_groupe()` est fausse — et celle-ci est DÉRIVÉE : créer une
+     * filiale active en ajoute une que le périmètre de la session ne couvre pas,
+     * donc elle bascule à faux. Conséquences mesurées, les deux à l'écran des
+     * habilitations :
+     *
+     *  · la filiale manquait de la liste déroulante du formulaire, donc **aucun
+     *    groupe ne pouvait lui être affecté** ;
+     *  · ses huit groupes s'affichaient avec une **colonne « filiale » VIDE**.
+     *
+     * ⚠️ Et c'est « corriger l'instance, pas la classe », refait le jour même : la
+     * migration `065` avait fermé ce piège pour l'écran « Filiales », et pas ici.
+     * Cet essai garde la CLASSE — il éprouve un écran d'administration Groupe
+     * contre une filiale que la session ne lit pas. */
+    const hors = 'FIL-HORS-PERIMETRE';
+    await base.avecPerimetre(
+      applicatif,
+      { ...PERIMETRE_ADMIN, filiales: [FILIALE_A, FILIALE_B] },
+      async (client) => {
+        await client.query(
+          `insert into "filiales" ("id", "code", "raison_sociale", "pays")
+               values ($1, 'ZZHORS', 'Filiale hors du périmètre de session', 'FR')`,
+          [hors],
+        );
+        await client.query(
+          `insert into "groupes_ad" ("id", "nom", "perimetre", "filiale_id", "profil_id")
+               select 'GRAD-HORS', 'GRC-ZZHORS-RSSI', 'filiale', $1, p."id"
+                 from "profils" p where p."code" = 'RSSI'`,
+          [hors],
+        );
+      },
+      { annuler: false },
+    );
+
+    try {
+      /* ⚠️ **Par la ROUTE, et non par la fonction.** `admin` porte exactement
+       * `PERIMETRE_ADMIN`, qui ne contient PAS la filiale neuve : c'est la session
+       * d'un administrateur qui vient de la créer. Mesurer la fonction sous un
+       * périmètre posé à la main aurait donné le bon résultat pour le mauvais
+       * motif — c'est le constat **Q-325**, et le `CONVENTIONS.md` §46 le dit :
+       * *le banc mesurait la fonction ; personne ne mesurait ce que l'appelant
+       * reçoit*. */
+      const reponse = await admin.appeler('GET', '/api/habilitations/etat');
+      assert.equal(reponse.statut, 200, JSON.stringify(reponse.corps).slice(0, 200));
+      const etat = reponse.corps;
+
+      assert.ok(
+        etat.filiales.some((f) => f.code === 'ZZHORS'),
+        'La filiale hors périmètre doit être SERVIE à l’écran d’administration : sans elle, ' +
+          'le formulaire de déclaration d’un groupe ne peut pas la proposer, et l’on ne peut ' +
+          'affecter aucun groupe à la filiale qu’on vient de créer. ' +
+          `Servies : ${etat.filiales.map((f) => f.code).join(', ')}`,
+      );
+
+      const groupe = etat.groupes.find((g) => g.nom === 'GRC-ZZHORS-RSSI');
+      assert.ok(groupe !== undefined, 'Le groupe doit être servi.');
+      assert.equal(
+        groupe.filialeCode,
+        'ZZHORS',
+        'La colonne « filiale » du groupe ne doit pas être VIDE : la jointure doit voir la ' +
+          'filiale, sans quoi l’administrateur lit un tableau amputé du périmètre qu’il gère.',
+      );
+    } finally {
+      await base.avecPerimetre(
+        applicatif,
+        { ...PERIMETRE_ADMIN, filialeId: hors, filiales: [FILIALE_A, FILIALE_B, hors] },
+        async (client) => {
+          await client.query(`delete from "groupes_ad" where "id" = 'GRAD-HORS'`);
+          await client.query(`delete from "filiales" where "id" = $1`, [hors]);
+        },
+        { annuler: false },
+      );
+    }
+  });
+
+  test('CONTRÔLE SYMÉTRIQUE : la LECTURE ordinaire, elle, reste bornée', async () => {
+    /* Sans cette moitié, l'essai ci-dessus serait satisfait par un produit qui
+     * aurait simplement ouvert `filiales` à tout le monde. Ce qui a changé est
+     * l'écran d'ADMINISTRATION ; le cloisonnement des données, lui, ne bouge pas.
+     * On le vérifie sur la route de session, qui ne nomme que le périmètre porté. */
+    const vues = await base.avecPerimetre(
+      applicatif,
+      { ...PERIMETRE_ADMIN, filiales: [FILIALE_A] },
+      async (client) =>
+        (await client.query(`select "id" from "filiales" where "id" = any($1::text[])`, [[FILIALE_A, FILIALE_B]])).rows,
+    );
+    assert.deepEqual(
+      vues.map((f) => f.id),
+      [FILIALE_A],
+      'Un périmètre d’une seule filiale ne doit pas en lire deux : f_filiales_inventaire() ' +
+        'est employée par l’écran d’administration, PAS par les lectures ordinaires.',
+    );
+  });
+});
