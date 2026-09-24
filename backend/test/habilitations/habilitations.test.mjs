@@ -54,6 +54,29 @@ const PERIMETRE_SIMPLE = {
   administrationGroupe: false,
 };
 
+/** Un profil de socle, par son code — l'essai ne code aucun identifiant en dur. */
+async function profilParCode(code) {
+  const etat = await admin.appeler('GET', '/api/habilitations/etat');
+  const p = etat.corps.profils.find((x) => x.code === code);
+  if (p === undefined) throw new Error(`Profil « ${code} » absent du socle.`);
+  return p;
+}
+
+/** Un groupe d'annuaire, relu par la route — jamais depuis une variable locale. */
+async function groupeParId(id) {
+  const etat = await admin.appeler('GET', '/api/habilitations/etat');
+  const g = etat.corps.groupes.find((x) => x.id === id);
+  if (g === undefined) throw new Error(`Groupe « ${id} » absent de l’état servi.`);
+  return g;
+}
+
+async function groupeParNom(nom) {
+  const etat = await admin.appeler('GET', '/api/habilitations/etat');
+  const g = etat.corps.groupes.find((x) => x.nom === nom);
+  if (g === undefined) throw new Error(`Groupe « ${nom} » absent de l’état servi.`);
+  return g;
+}
+
 before(async () => {
   base = await ouvrirBaseEssai(import.meta.url);
   applicatif = await base.connexion('app');
@@ -634,6 +657,85 @@ describe('§7 — le journal d’audit', () => {
     assert.equal(rows[0].resume, 'Création d’un profil d’habilitation.');
     assert.ok(!rows[0].resume.includes('TRACE_TEST'), '§29.5 : la valeur n’entre pas dans la phrase');
     assert.equal(rows[0].valeurs_apres.code, 'TRACE_TEST');
+  });
+});
+
+/* =====================================================================
+ *  Ce qu'un groupe ACCORDE se modifie — pas seulement son activation
+ * ===================================================================== */
+
+describe('Modifier ce qu’un groupe d’annuaire accorde', () => {
+  test('le PROFIL d’un groupe se change, et le changement est relu', async () => {
+    /* 🛑 SIGNALÉ PAR L'UTILISATEUR LE 24/09/2026 : *« on peut désactiver un groupe
+     * depuis l'onglet Groupes d'annuaire, mais on ne gère pas ses droits ; ici
+     * aussi on peut le faire uniquement quand on déclare un nouveau groupe. Ça a
+     * l'air d'être le même problème sur plusieurs parties. »*
+     *
+     * Il avait raison, et la route savait déjà le faire depuis le 22 : l'écran ne
+     * branchait qu'un bouton « Désactiver ». *Une capacité qu'aucun écran n'appelle
+     * est une capacité absente* — troisième fois dans la même journée.
+     *
+     * ⚠️ Cet essai mesure la ROUTE, pas l'écran : le filet des écrans
+     * (`test/modules/non-regression.test.mjs`) vérifie qu'ils se rendent, celui-ci
+     * que le geste aboutit ET se relit. Sans la relecture, on mesurerait qu'un
+     * `PUT` rend 200 — ce qu'il ferait même en n'écrivant rien. */
+    const creation = await admin.appeler('POST', '/api/habilitations/groupes', {
+      corps: {
+        nom: 'SECU-ESSAI-MODIF',
+        perimetre: 'filiale',
+        filialeId: FILIALE_A,
+        profilId: (await profilParCode('RSSI')).id,
+      },
+    });
+    assert.equal(creation.statut, 201, JSON.stringify(creation.corps));
+    const id = creation.corps.id;
+
+    const avant = await groupeParId(id);
+    assert.equal(avant.profilCode, 'RSSI');
+
+    const qualite = await profilParCode('QUALITE');
+    const maj = await admin.appeler('PUT', `/api/habilitations/groupes/${id}`, {
+      corps: { profilId: qualite.id, actif: true, version: avant.version },
+    });
+    assert.equal(maj.statut, 200, JSON.stringify(maj.corps));
+
+    const apres = await groupeParId(id);
+    assert.equal(
+      apres.profilCode,
+      'QUALITE',
+      'Le profil accordé doit avoir changé : sans cette relecture, l’essai serait vert sur ' +
+        'un PUT qui rend 200 sans rien écrire.',
+    );
+    assert.equal(apres.version, avant.version + 1, 'La version doit avoir avancé.');
+
+    // ⚠️ Le VERROU OPTIMISTE : rejouer avec la version périmée doit être refusé,
+    //    sans quoi deux administrateurs sur le même groupe s'écraseraient en
+    //    silence — et le second croirait avoir posé ce que le premier a défait.
+    const rejeu = await admin.appeler('PUT', `/api/habilitations/groupes/${id}`, {
+      corps: { profilId: avant.profilId, actif: true, version: avant.version },
+    });
+    assert.equal(rejeu.statut, 409, `Version périmée : attendu 409, reçu ${String(rejeu.statut)}`);
+  });
+
+  test('le NOM d’un groupe ne se modifie PAS, et c’est une propriété', async () => {
+    /* Un nom de groupe est ce par quoi l'annuaire et le produit se reconnaissent :
+     * le changer d'un seul côté couperait les accès de tous ses membres, en
+     * silence. Le serveur ne lit donc pas `nom` en modification — et l'écran
+     * affiche le champ en lecture seule pour que la règle se voie avant d'être
+     * subie. On mesure que le serveur IGNORE le champ plutôt que de s'en remettre
+     * à la seule discipline de l'écran. */
+    const cible = await groupeParNom('SECU-ESSAI-MODIF');
+    const maj = await admin.appeler('PUT', `/api/habilitations/groupes/${cible.id}`, {
+      corps: { nom: 'SECU-RENOMME', profilId: cible.profilId, actif: true, version: cible.version },
+    });
+    assert.equal(maj.statut, 200, JSON.stringify(maj.corps));
+    const apres = await groupeParId(cible.id);
+    assert.equal(
+      apres.nom,
+      'SECU-ESSAI-MODIF',
+      'Le nom ne doit pas avoir changé : le renommer ici, sans le renommer dans l’annuaire, ' +
+        'couperait les accès de tous les membres du groupe sans un message.',
+    );
   });
 });
 

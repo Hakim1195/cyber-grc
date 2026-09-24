@@ -464,6 +464,11 @@ const HabilitationsModule = (() => {
                     ? '<span class="hab-actif">actif</span>'
                     : '<span class="hab-inactif">inactif</span>') + "</td>"
                 + '<td class="t-centre stop-row-click">'
+                /* ⚠️ « Modifier » manquait, et c'est tout le constat du 24/09/2026 :
+                 * la route sait changer le profil accordé depuis le 22, et seul
+                 * « Désactiver » était branché. */
+                + '<button type="button" class="hab-modifier btn-secondary" data-groupe="'
+                + esc(g.id) + '">Modifier</button> '
                 + '<button type="button" class="hab-bascule btn-secondary" data-groupe="'
                 + esc(g.id) + '" data-version="' + esc(g.version) + '" data-actif="'
                 + (g.actif ? "1" : "0") + '">'
@@ -615,6 +620,18 @@ const HabilitationsModule = (() => {
             }
         });
 
+        document.querySelectorAll(".hab-modifier").forEach((b) => {
+            b.addEventListener("click", () => {
+                // L'identifiant se lit dans l'attribut AU MOMENT DU CLIC.
+                const groupe = etat.groupes.find((g) => g.id === b.getAttribute("data-groupe"));
+                if (!groupe) return;
+                const hote = document.getElementById("habFormGroupe");
+                hote.innerHTML = formGroupe(groupe);
+                brancherFormGroupe(groupe);
+                hote.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            });
+        });
+
         document.querySelectorAll(".hab-bascule").forEach((b) => {
             b.addEventListener("click", async () => {
                 // ⚠️ L'identifiant se lit dans l'attribut AU MOMENT DU CLIC, jamais
@@ -642,44 +659,126 @@ const HabilitationsModule = (() => {
         });
     }
 
-    function formGroupe() {
+    /**
+     * Le formulaire d'un groupe d'annuaire — **DÉCLARATION et MODIFICATION**.
+     *
+     * ════════════════════════════════════════════════════════════════════
+     *  Pourquoi UNE seule rédaction pour deux gestes
+     * ════════════════════════════════════════════════════════════════════
+     *
+     * 🛑 **Signalé par l'utilisateur le 24/09/2026** : *« on peut désactiver un
+     * groupe depuis l'onglet Groupes d'annuaire, mais on ne gère pas ses droits ;
+     * ici aussi on peut le faire uniquement quand on déclare un nouveau groupe.
+     * Ça a l'air d'être le même problème sur plusieurs parties. »*
+     *
+     * Il avait raison, et c'était bien **une seule maladie** : `PUT
+     * /api/habilitations/groupes/:id` sait changer le profil accordé, la
+     * description, l'activation, et pour un transversal l'export et
+     * l'administration — **depuis le 22/09/2026**. L'écran n'en branchait qu'un
+     * dixième : un bouton « Désactiver ». *Une capacité qu'aucun écran n'appelle
+     * est une capacité absente*, troisième fois dans la même journée.
+     *
+     * Deux formulaires auraient été deux rédactions à tenir d'accord, et la
+     * divergence se verrait le jour où l'un accepte ce que l'autre refuse. Il y en
+     * a donc **un**, et il change de mode.
+     *
+     * ⚠️ **En modification, le NOM est en lecture seule** — le serveur le refuse
+     * (`PUT` ne lit pas `nom`), et pour un motif qui n'est pas un caprice : un nom
+     * de groupe est ce par quoi l'annuaire et le produit se reconnaissent. Le
+     * changer d'un côté sans l'autre coupe les accès de tous ses membres, **en
+     * silence**. On déclare le bon nom, on désactive l'ancien.
+     *
+     * ⚠️ **Le PÉRIMÈTRE aussi est figé en modification** : il décide de la nature
+     * des autres champs, et un groupe qui passerait de « filiale » à
+     * « transversal » accorderait soudain l'administration à ses membres.
+     *
+     * @param {object|null} g       le groupe à modifier, ou `null` pour en déclarer un
+     * @param {{filialeImposee?: string}} [opts] contexte d'appel (écran « Filiales »)
+     */
+    function formGroupe(g, opts) {
+        const o = opts || {};
+        const edition = !!g;
+        const choisi = (valeur, actuel) => (valeur === actuel ? " selected" : "");
         const filiales = etat.filiales.map((f) =>
-            '<option value="' + esc(f.id) + '">' + esc(f.code) + " — " + esc(f.raisonSociale)
-            + "</option>").join("");
+            '<option value="' + esc(f.id) + '"'
+            + choisi(f.id, edition ? g.filialeId : o.filialeImposee) + ">"
+            + esc(f.code) + " — " + esc(f.raisonSociale) + "</option>").join("");
         const profils = etat.profils.filter((p) => p.actif).map((p) =>
-            '<option value="' + esc(p.id) + '">' + esc(p.code) + " — " + esc(p.nom)
-            + "</option>").join("");
+            '<option value="' + esc(p.id) + '"' + choisi(p.id, edition ? g.profilId : null) + ">"
+            + esc(p.code) + " — " + esc(p.nom) + "</option>").join("");
+        const portees = [
+            { code: "filiale", libelle: "Une filiale" },
+            { code: "groupe", libelle: "Groupe entier" },
+            { code: "transversal", libelle: "Transversal (export / administration)" }
+        ].map((x) => '<option value="' + x.code + '"'
+            + choisi(x.code, edition ? g.perimetre : "filiale") + ">"
+            + esc(x.libelle) + "</option>").join("");
+
         return '<div class="card hab-panneau">'
-            + "<h2>Déclarer un groupe d’annuaire</h2>"
-            + "<p class=\"hab-note\">À employer quand l’annuaire porte déjà des groupes qui ne "
-            + "suivent pas la convention de nommage du produit. Le groupe doit <strong>exister "
-            + "dans l’annuaire</strong> : le produit ne le crée pas.</p>"
+            + "<h2>" + (edition
+                ? "Modifier « " + esc(g.nom) + " »"
+                : "Déclarer un groupe d’annuaire") + "</h2>"
+            + (edition
+                ? '<p class="hab-note">On change ici <strong>ce que ce groupe accorde</strong>. '
+                  + "Son <strong>nom</strong> et son <strong>périmètre</strong> ne se modifient "
+                  + "pas : le nom est ce par quoi l’annuaire et le produit se reconnaissent, et "
+                  + "le changer d’un seul côté couperait les accès de tous ses membres sans un "
+                  + "message. Déclarez le bon nom, puis désactivez celui-ci.</p>"
+                : '<p class="hab-note">À employer quand l’annuaire porte déjà des groupes qui ne '
+                  + "suivent pas la convention de nommage du produit. Le groupe doit <strong>exister "
+                  + "dans l’annuaire</strong> : le produit ne le crée pas.</p>")
             + '<div class="form-grid">'
             +   '<label class="hab-champ"><span>Nom exact dans l’annuaire</span>'
-            +     '<input type="text" id="habGrNom" maxlength="256" placeholder="SEC-TOULOUSE-RSSI"></label>'
-            +   '<label class="hab-champ"><span>Périmètre</span><select id="habGrPortee">'
-            +     '<option value="filiale">Une filiale</option>'
-            +     '<option value="groupe">Groupe entier</option>'
-            +     '<option value="transversal">Transversal (export / administration)</option>'
-            +   "</select></label>"
+            +     '<input type="text" id="habGrNom" maxlength="256" placeholder="SEC-TOULOUSE-RSSI"'
+            +     (edition ? ' value="' + esc(g.nom) + '" readonly' : "") + "></label>"
+            +   '<label class="hab-champ"><span>Périmètre</span><select id="habGrPortee"'
+            +     (edition ? " disabled" : "") + ">" + portees + "</select></label>"
             +   '<label class="hab-champ" id="habGrFilialeChamp"><span>Filiale</span>'
-            +     '<select id="habGrFiliale">' + filiales + "</select></label>"
-            +   '<label class="hab-champ" id="habGrProfilChamp"><span>Profil</span>'
+            +     '<select id="habGrFiliale"' + (edition ? " disabled" : "") + ">"
+            +     filiales + "</select></label>"
+            +   '<label class="hab-champ" id="habGrProfilChamp"><span>Profil accordé</span>'
             +     '<select id="habGrProfil">' + profils + "</select></label>"
             +   '<label class="hab-champ hab-champ--case" id="habGrExportChamp" hidden>'
-            +     '<input type="checkbox" id="habGrExport"><span>Accorde le droit d’export</span></label>'
+            +     '<input type="checkbox" id="habGrExport"'
+            +     (edition && g.accordeExport ? " checked" : "")
+            +     '><span>Accorde le droit d’export</span></label>'
             +   '<label class="hab-champ hab-champ--case" id="habGrAdminChamp" hidden>'
-            +     '<input type="checkbox" id="habGrAdmin"><span>Accorde l’administration</span></label>'
+            +     '<input type="checkbox" id="habGrAdmin"'
+            +     (edition && g.accordeAdmin ? " checked" : "")
+            +     '><span>Accorde l’administration</span></label>'
+            + (edition
+                ? '<label class="hab-champ hab-champ--case"><input type="checkbox" id="habGrActif"'
+                  + (g.actif ? " checked" : "") + "><span>Groupe actif</span></label>"
+                : "")
             + "</div>"
             + '<label class="hab-champ"><span>Description</span>'
-            +   '<input type="text" id="habGrDescription" maxlength="2000"></label>'
+            +   '<input type="text" id="habGrDescription" maxlength="2000"'
+            +   (edition && g.description ? ' value="' + esc(g.description) + '"' : "")
+            +   "></label>"
             + '<div class="page-actions no-print">'
-            +   '<button type="button" id="habGrEnregistrer">Déclarer</button>'
+            +   '<button type="button" id="habGrEnregistrer">'
+            +   (edition ? "Enregistrer" : "Déclarer") + "</button>"
             +   '<button type="button" id="habGrAnnuler" class="btn-secondary">Annuler</button>'
             + "</div></div>";
     }
 
-    function brancherFormGroupe() {
+    /**
+     * Branche le formulaire ci-dessus, dans l'un ou l'autre de ses deux modes.
+     *
+     * @param {object|null} g   le groupe modifié, ou `null` pour une déclaration
+     * @param {{conteneur?: string, apres?: Function}} [opts]
+     *        `conteneur` : l'identifiant de l'hôte à vider en sortie — l'écran
+     *        « Filiales » n'a pas le même que celui des habilitations ;
+     *        `apres` : ce qu'il faut rejouer une fois l'écriture faite. Sans lui,
+     *        l'écran appelant afficherait l'état d'avant, ce qui est la classe des
+     *        faux bandeaux (constats Q-201 / Q-207).
+     */
+    function brancherFormGroupe(g, opts) {
+        const o = opts || {};
+        const hoteId = o.conteneur || "habFormGroupe";
+        const apres = o.apres || renderGroupes;
+        const edition = !!g;
+
         const portee = document.getElementById("habGrPortee");
         const majChamps = () => {
             const v = portee.value;
@@ -691,31 +790,60 @@ const HabilitationsModule = (() => {
         portee.addEventListener("change", majChamps);
         majChamps();
 
-        document.getElementById("habGrAnnuler").addEventListener("click", () => {
-            document.getElementById("habFormGroupe").innerHTML = "";
-        });
+        const fermer = () => {
+            const hote = document.getElementById(hoteId);
+            if (hote) hote.innerHTML = "";
+        };
+        document.getElementById("habGrAnnuler").addEventListener("click", fermer);
 
         document.getElementById("habGrEnregistrer").addEventListener("click", async () => {
+            const bouton = document.getElementById("habGrEnregistrer");
             const v = portee.value;
-            const corps = {
-                nom: (document.getElementById("habGrNom").value || "").trim(),
-                perimetre: v,
-                description: (document.getElementById("habGrDescription").value || "").trim()
-            };
-            if (v === "filiale") corps.filialeId = document.getElementById("habGrFiliale").value;
-            if (v !== "transversal") corps.profilId = document.getElementById("habGrProfil").value;
-            if (v === "transversal") {
-                corps.accordeExport = document.getElementById("habGrExport").checked;
-                corps.accordeAdmin = document.getElementById("habGrAdmin").checked;
-            }
-            if (corps.nom === "") { avertir("Donnez le nom exact du groupe.", "warning"); return; }
+            const description = (document.getElementById("habGrDescription").value || "").trim();
+            bouton.disabled = true;
             try {
-                const r = await Api.creerGroupeAd(corps);
-                avertir("Groupe déclaré. " + rappelDe(r), "success");
-                document.getElementById("habFormGroupe").innerHTML = "";
-                await renderGroupes();
+                let r;
+                if (edition) {
+                    /* ⚠️ Ni le nom ni le périmètre : le serveur ne les lit pas en
+                     * modification, et les envoyer laisserait croire qu'ils ont été
+                     * pris en compte. `version` porte le verrouillage optimiste —
+                     * deux administrateurs sur le même groupe, le second est refusé
+                     * plutôt que d'écraser le premier. */
+                    const corps = { description, version: g.version,
+                                    actif: document.getElementById("habGrActif").checked };
+                    if (v !== "transversal") {
+                        corps.profilId = document.getElementById("habGrProfil").value;
+                    } else {
+                        corps.accordeExport = document.getElementById("habGrExport").checked;
+                        corps.accordeAdmin = document.getElementById("habGrAdmin").checked;
+                    }
+                    r = await Api.modifierGroupeAd(g.id, corps);
+                    avertir("Groupe modifié. " + rappelDe(r), "success");
+                } else {
+                    const corps = {
+                        nom: (document.getElementById("habGrNom").value || "").trim(),
+                        perimetre: v,
+                        description
+                    };
+                    if (v === "filiale") corps.filialeId = document.getElementById("habGrFiliale").value;
+                    if (v !== "transversal") corps.profilId = document.getElementById("habGrProfil").value;
+                    if (v === "transversal") {
+                        corps.accordeExport = document.getElementById("habGrExport").checked;
+                        corps.accordeAdmin = document.getElementById("habGrAdmin").checked;
+                    }
+                    if (corps.nom === "") {
+                        avertir("Donnez le nom exact du groupe.", "warning");
+                        bouton.disabled = false;
+                        return;
+                    }
+                    r = await Api.creerGroupeAd(corps);
+                    avertir("Groupe déclaré. " + rappelDe(r), "success");
+                }
+                fermer();
+                await apres();
             } catch (e) {
-                avertir(e && e.message ? e.message : "Déclaration refusée.", "error");
+                avertir(e && e.message ? e.message : "Écriture refusée.", "error");
+                bouton.disabled = false;
             }
         });
     }
@@ -1282,7 +1410,25 @@ const HabilitationsModule = (() => {
         renderComptes,
         renderRevues,
         /** Exposé pour le banc : la graduation n'est pas une couleur de statut. */
-        niveaux: () => NIVEAUX.map((n) => n.code)
+        niveaux: () => NIVEAUX.map((n) => n.code),
+        /**
+         * Le formulaire d'un groupe d'annuaire, **partagé avec l'écran
+         * « Filiales »**.
+         *
+         * ⚠️ Partagé, et non recopié : deux rédactions du même formulaire seraient
+         * deux vérités à tenir d'accord, et la divergence se verrait le jour où
+         * l'une accepte ce que l'autre refuse. `charger()` est exposée avec, parce
+         * que le formulaire lit `etat` — profils et filiales — et qu'un appelant
+         * d'un autre écran ne l'a pas encore chargé.
+         */
+        formulaireGroupe: Object.freeze({
+            charger,
+            html: formGroupe,
+            brancher: brancherFormGroupe,
+            /** Les groupes déclarés pour une filiale, tels que le serveur les sert. */
+            deFiliale: (filialeId) =>
+                (etat ? etat.groupes : []).filter((g) => g.filialeId === filialeId)
+        })
     };
 })();
 

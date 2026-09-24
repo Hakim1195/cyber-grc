@@ -65,6 +65,8 @@ const FilialesModule = (() => {
     let candidats = null;
     /** Le bilan de la dernière création, pour afficher les groupes à créer. */
     let dernierBilan = null;
+    /** La filiale dont le panneau « Groupes d'annuaire » est déplié. */
+    let groupesOuverts = null;
 
     const esc = (v) => (window.escapeHtml || ((x) => String(x == null ? "" : x)))(v);
 
@@ -156,12 +158,20 @@ const FilialesModule = (() => {
             + encartSource()
             + (dernierBilan ? encartBilan(dernierBilan) : "")
             + '<div id="filFormulaire"></div>'
+            + '<div id="filGroupes"></div>'
             + tableau()
             + encartTransversaux()
             + "</section>";
 
         UI.envelopperTableaux(app);
         brancher();
+        // Le panneau survit au rendu : le refermer à chaque écriture obligerait à
+        // le rouvrir entre deux modifications de groupes.
+        if (groupesOuverts) {
+            const encore = inventaire.filiales.some((f) => f.id === groupesOuverts);
+            if (encore) await renderPanneauGroupes(groupesOuverts);
+            else groupesOuverts = null;
+        }
     }
 
     /**
@@ -407,19 +417,19 @@ const FilialesModule = (() => {
         });
 
         document.querySelectorAll(".fil-groupes").forEach((b) => {
-            b.addEventListener("click", () => {
+            b.addEventListener("click", async () => {
+                /* 🛑 CE BOUTON NE FAISAIT QUE RE-RENDRE LA PAGE, et l'utilisateur
+                 * l'a dit le 24/09/2026 : *« la touche Groupes AD ne fait que
+                 * rafraîchir la page, elle ne permet pas d'affecter les groupes à
+                 * la filiale »*. Il montrait une LISTE là où il faut un panneau de
+                 * gestion. Un bouton qui a l'air d'agir et qui n'agit pas est pire
+                 * qu'un bouton absent : on le reclique. */
                 // L'identifiant se lit dans l'attribut AU MOMENT DU CLIC, jamais
                 // capturé en fermeture : le serveur réattribue les identifiants.
                 const id = b.getAttribute("data-filiale");
-                const f = inventaire.filiales.find((x) => x.id === id);
-                if (!f) return;
-                dernierBilan = {
-                    filiale: { code: f.code },
-                    groupes_ad: { a_creer: f.groupes_non_declares.length
-                        ? f.groupes_non_declares
-                        : f.groupes_attendus }
-                };
-                renderList();
+                if (groupesOuverts === id) { groupesOuverts = null; await renderList(); return; }
+                groupesOuverts = id;
+                await renderPanneauGroupes(id);
             });
         });
 
@@ -454,6 +464,100 @@ const FilialesModule = (() => {
                     avertir(e && e.message ? e.message : "Sortie refusée.", "error");
                     b.disabled = false;
                 }
+            });
+        });
+    }
+
+    /* =====================================================================
+       LE PANNEAU « GROUPES D'ANNUAIRE » D'UNE FILIALE
+
+       ⚠️ **Le formulaire n'est pas recopié ici** : il vient de
+       `HabilitationsModule.formulaireGroupe`, qui est sa seule rédaction. Deux
+       formulaires du même objet seraient deux vérités à tenir d'accord, et la
+       divergence se verrait le jour où l'un accepte ce que l'autre refuse.
+    ===================================================================== */
+
+    async function renderPanneauGroupes(filialeId) {
+        const hote = document.getElementById("filGroupes");
+        if (!hote) return;
+        const f = inventaire.filiales.find((x) => x.id === filialeId);
+        if (!f) return;
+
+        if (typeof HabilitationsModule === "undefined") {
+            hote.innerHTML = '<div class="card"><p class="muted">L’écran des habilitations '
+                + "n’est pas chargé : la gestion des groupes passe par lui.</p></div>";
+            return;
+        }
+        hote.innerHTML = '<div class="card"><p class="muted">Lecture des groupes…</p></div>';
+        try {
+            // Une seule autorité pour l'état des groupes : celle de l'écran des
+            // habilitations. Le recharger ici garantit qu'on montre ce que le
+            // serveur dit MAINTENANT, et non ce qu'il disait au dernier rendu.
+            await HabilitationsModule.formulaireGroupe.charger();
+        } catch (e) {
+            hote.innerHTML = '<div class="card"><p class="muted">'
+                + esc(e && e.message ? e.message : "Lecture refusée.") + "</p></div>";
+            return;
+        }
+
+        const siens = HabilitationsModule.formulaireGroupe.deFiliale(filialeId);
+        const lignes = siens.map((g) => '<tr>'
+            + "<td><code>" + esc(g.nom) + "</code></td>"
+            + "<td>" + esc(g.profilNom || "—") + "</td>"
+            + '<td class="t-centre">' + (g.actif
+                ? '<span class="fil-statut fil-statut--active">actif</span>'
+                : '<span class="fil-statut">inactif</span>') + "</td>"
+            + '<td class="t-centre stop-row-click">'
+            + '<button type="button" class="fil-grmod btn-secondary" data-groupe="'
+            + esc(g.id) + '">Modifier</button></td></tr>').join("");
+
+        hote.innerHTML = '<div class="card fil-bilan">'
+            + "<h3>Groupes d’annuaire de « " + esc(f.code) + " »</h3>"
+            + (siens.length
+                ? '<table class="data-table"><thead><tr><th>Groupe</th><th>Profil accordé</th>'
+                  + "<th>État</th><th></th></tr></thead><tbody>" + lignes + "</tbody></table>"
+                : '<p class="muted">Aucun groupe déclaré pour cette filiale : personne ne peut '
+                  + "y entrer.</p>")
+            + (f.groupes_non_declares.length
+                ? '<p class="fil-manque">' + esc(f.groupes_non_declares.length)
+                  + " groupe(s) de la convention ne sont pas déclarés : "
+                  + f.groupes_non_declares.map((n) => "<code>" + esc(n) + "</code>").join(" ")
+                  + ". « Synchroniser la déclaration », sur l’écran des habilitations, les "
+                  + "ajoute.</p>"
+                : "")
+            + '<p class="muted">Ces groupes doivent <strong>exister dans votre Active '
+            + "Directory</strong> sous ces noms exacts. Le produit ne les y crée pas, et il ne "
+            + "le pourra jamais — il déclare ce qu’ils accordent <em>ici</em>.</p>"
+            + '<div class="fil-actions">'
+            + '<button type="button" id="filGrNouveau" class="btn-secondary">'
+            + "Déclarer un groupe pour cette filiale</button>"
+            + '<button type="button" id="filGrFermer" class="btn-secondary">Fermer</button>'
+            + "</div>"
+            + '<div id="filGrForm"></div>'
+            + "</div>";
+        hote.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+        const relire = async () => { await renderList(); await renderPanneauGroupes(filialeId); };
+
+        document.getElementById("filGrFermer").addEventListener("click", async () => {
+            groupesOuverts = null;
+            await renderList();
+        });
+        document.getElementById("filGrNouveau").addEventListener("click", () => {
+            const zone = document.getElementById("filGrForm");
+            zone.innerHTML = HabilitationsModule.formulaireGroupe.html(null,
+                { filialeImposee: filialeId });
+            HabilitationsModule.formulaireGroupe.brancher(null,
+                { conteneur: "filGrForm", apres: relire });
+        });
+        document.querySelectorAll(".fil-grmod").forEach((b) => {
+            b.addEventListener("click", () => {
+                const g = siens.find((x) => x.id === b.getAttribute("data-groupe"));
+                if (!g) return;
+                const zone = document.getElementById("filGrForm");
+                zone.innerHTML = HabilitationsModule.formulaireGroupe.html(g);
+                HabilitationsModule.formulaireGroupe.brancher(g,
+                    { conteneur: "filGrForm", apres: relire });
             });
         });
     }

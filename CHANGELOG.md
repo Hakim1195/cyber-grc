@@ -78,6 +78,60 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### ON NE CONFIGURE PLUS SEULEMENT À LA CRÉATION — la même maladie, trois fois (24/09/2026)
+
+> **Signalé par l'utilisateur**, après le correctif précédent : *« quand je clique sur une
+> filiale existante je ne peux pas lui affecter des groupes, la touche Groupes AD ne fait
+> que rafraîchir la page […] et on peut désactiver un groupe depuis l'onglet Groupes
+> d'annuaire, mais on ne gère pas ses droits, ici aussi on peut le faire uniquement quand on
+> déclare un nouveau groupe. Ça a l'air d'être le même problème sur plusieurs parties. »*
+
+**C'était bien une seule maladie, et il l'a nommée avant moi : on ne pouvait configurer
+qu'à la CRÉATION.** Le serveur, lui, savait déjà tout faire.
+
+| Ce que la route sait faire, depuis le 22/09 | Ce que l'écran branchait |
+|---|---|
+| `PUT /api/habilitations/groupes/:id` : profil accordé, description, activation, export et administration pour un transversal | **un bouton « Désactiver »**, et rien d'autre |
+| `POST /api/habilitations/groupes` : déclarer un groupe hors convention pour une filiale | un formulaire atteignable depuis un seul écran |
+
+🛑 **« Une capacité qu'aucun écran n'appelle est une capacité absente » — TROISIÈME FOIS
+DANS LA MÊME JOURNÉE.** Le matin, `POST /api/filiales` existait sans écran. À midi, la
+déclaration d'un groupe hors convention existait sans que rien ne l'indique. Le soir, la
+modification de ce qu'un groupe accorde existait avec un dixième de son formulaire branché.
+*Le produit avait les gestes ; il ne les donnait pas.*
+
+⚠️ **Et le bouton « Groupes AD » de l'écran « Filiales » était pire qu'absent** : il
+re-rendait la page en affichant une liste. Un bouton qui a l'air d'agir et qui n'agit pas se
+reclique.
+
+**Ce qui est livré :**
+
+- **UN formulaire, DEUX gestes.** `formGroupe(g)` sert la déclaration (`g` nul) et la
+  modification. ⚠️ Deux formulaires auraient été deux rédactions à tenir d'accord, et la
+  divergence se verrait le jour où l'une accepte ce que l'autre refuse.
+- **Un bouton « Modifier » par groupe**, sur l'écran des habilitations — 26 sur la recette.
+- **Le panneau « Groupes d'annuaire » d'une filiale**, déplié depuis l'écran « Filiales » :
+  ses groupes, leur profil, leur état, « Modifier » sur chacun, « Déclarer un groupe pour
+  cette filiale », et ce qui manque encore à la convention. ⚠️ Le formulaire **n'y est pas
+  recopié** : il est emprunté à `HabilitationsModule.formulaireGroupe`, sa seule rédaction.
+
+🛑 **DEUX CHAMPS RESTENT FIGÉS EN MODIFICATION, ET CE N'EST PAS UNE LIMITE TECHNIQUE.** Le
+**nom** — c'est ce par quoi l'annuaire et le produit se reconnaissent, et le changer d'un
+seul côté couperait les accès de tous les membres du groupe **sans un message** ; on déclare
+le bon nom, on désactive l'ancien. Le **périmètre** — un groupe qui passerait de « filiale »
+à « transversal » accorderait soudain l'administration. Le serveur ne lit ni l'un ni l'autre
+en modification, et **un essai mesure qu'il les IGNORE** plutôt que de s'en remettre à la
+discipline de l'écran.
+
+⚠️ Le **verrouillage optimiste** est éprouvé : rejouer avec une version périmée rend **409**.
+Sans lui, deux administrateurs sur le même groupe s'écraseraient en silence, et le second
+croirait avoir posé ce que le premier a défait.
+
+Mesuré au navigateur sur la recette : le panneau ouvre les huit groupes de « DEU », le
+changement de profil est **relu** dans la liste, le nom est en lecture seule, le périmètre
+figé, et l'écran des habilitations porte ses 26 boutons « Modifier ». La recette a été
+remise dans son état après l'essai.
+
 ### « JE NE PEUX PAS MODIFIER LES GROUPES D'UNE FILIALE CRÉÉE » — le même piège, une couche plus loin (24/09/2026)
 
 > **Signalé par l'utilisateur**, une heure après la livraison de l'écran « Filiales » :

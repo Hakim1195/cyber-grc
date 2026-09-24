@@ -699,8 +699,14 @@ Vous y saisissez **le nom exact** du groupe tel qu'il existe dans l'AD, la **fil
 concerne et le **profil** qu'il accorde. À partir de là, ce groupe ouvre des droits comme
 n'importe lequel.
 
-Sur la même vue, pour un groupe déjà déclaré, vous pouvez changer **ce qu'il accorde** —
-profil, droit d'export, administration — ou le **désactiver**.
+Pour un groupe **déjà déclaré**, « Modifier » ouvre le même panneau : vous y changez **le
+profil qu'il accorde**, sa description, son activation — et, pour un groupe transversal, le
+droit d'export et l'administration.
+
+**Le même panneau s'ouvre depuis l'écran « Filiales »** : le bouton « Groupes AD » d'une
+filiale déplie la liste de ses groupes, avec « Modifier » sur chacun et « Déclarer un groupe
+pour cette filiale ». C'est le même formulaire et les mêmes règles — simplement, vous n'avez
+pas à quitter la filiale sur laquelle vous travaillez.
 
 > ⚠️ **Son NOM, lui, ne se modifie pas.** Un nom de groupe est ce par quoi l'annuaire et le
 > produit se reconnaissent : le changer d'un côté sans l'autre coupe les accès de tous ses
