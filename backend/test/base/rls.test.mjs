@@ -1471,7 +1471,7 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
     });
   }
 
-  test('LE BALAYAGE : les quatre références au catalogue sont en « restrict »', async () => {
+  test('LE BALAYAGE : les onze références au catalogue sont en « restrict »', async () => {
     // Les tests ci-dessus prouvent l'état d'aujourd'hui ; celui-ci protège de demain. Une
     // cinquième table qui référencerait mesure_catalogue en cascade — ou un retour au
     // « set null » du §8 — le fera tomber sans que personne n'ait à y penser.
@@ -1509,6 +1509,13 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
       { nom: 'fk_document_mesures_mesure_portee', suppression: 'restrict' },
       { nom: 'fk_evaluation_mesures_mesure', suppression: 'restrict' },
       { nom: 'fk_mesure_mise_en_oeuvre_mesure', suppression: 'restrict' },
+      // ONZE depuis la migration `070` : le pivot du registre de l'article 30 §2 vise la
+      // mesure qui couvre un traitement fait pour le compte d'un donneur d'ordre.
+      // ⚠️ « restrict » comme les dix autres, et le motif se renforce d'un cran : une
+      // cascade ferait disparaître du **dossier remis au client** la mesure de sécurité
+      // qu'on lui avait déclarée, sans que personne l'ait décidé. Le §17.6 est clair —
+      // un contrôle s'archive, il ne se supprime pas.
+      { nom: 'fk_traitement_client_mesures_mesure', suppression: 'restrict' },
       { nom: 'fk_traitement_mesures_mesure', suppression: 'restrict' },
     ]);
 
@@ -1532,8 +1539,9 @@ describe('Portée figée et socle Groupe non supprimable (CONVENTIONS §17.6)', 
           + 'references mesure_catalogue(id) on delete restrict',
       );
     }
+    // ONZE depuis la migration `070` : le pivot du registre de l'article 30 §2.
     assert.deepEqual((await base.lignes(proprietaire, requete)).map((l) => l.suppression),
-      ['restrict', 'restrict', 'restrict', 'restrict', 'restrict',
+      ['restrict', 'restrict', 'restrict', 'restrict', 'restrict', 'restrict',
        'restrict', 'restrict', 'restrict', 'restrict', 'restrict']);
   });
 
@@ -4455,6 +4463,16 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // d'API et les abonnements. Il ÉPROUVE le vocabulaire des événements et des
       // niveaux, et mesure l'expiration OBLIGATOIRE — un jeton sans terme n'est plus
       // un jeton, c'est un mot de passe qui ne change jamais.
+      // SOIXANTE-DIXIÈME, apporté par `071_les_obligations_du_client_mordent_ailleurs.sql` :
+      // ce que le donneur d'ordre impose MORD ailleurs que sur sa fiche. Il éprouve
+      // l'ordre STRICT des quatre niveaux de diffusion — sans quoi un document
+      // « interne » satisferait un plancher « confidentiel », et le contrat s'afficherait
+      // comme tenu —, l'échéance contractuelle et ses DEUX silences obligatoires (pas de
+      // délai convenu, pas de détection), le fait que le palier contractuel n'a pas
+      // déteint sur la fonction des échéances LÉGALES, l'équivalence « régime contractuel
+      // ⇔ destinataire » DANS LES DEUX SENS, et que les deux déclencheurs du plancher
+      // restent DIFFÉRÉS — immédiats, ils refuseraient une reprise « remplacer » saine.
+      'obligations_client',
       'ouverture',
       'parametres_catalogue',
       'piece_en_vigueur',
@@ -4609,6 +4627,16 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // à la main À DESSEIN (CLAUDE.md §3, cas (a)) — une migration qui la fait rougir
       // en arrivant fait exactement son office. Elle s'allonge d'une ligne ; elle ne se
       // transforme pas en découverte automatique pour cesser de rougir.
+      // SOIXANTE-NEUVIÈME, apporté par `070_le_donneur_d_ordre_cesse_d_etre_un_nom.sql` :
+      // le registre de l'ARTICLE 30 §2 du RGPD — ce que nous traitons pour le compte d'un
+      // donneur d'ordre, quand nous sommes SOUS-TRAITANT. ⚠️ Sa mesure la plus utile est
+      // celle que personne ne verrait autrement : il ÉPROUVE le vocabulaire du plancher
+      // de diffusion du client ET celui de `documents.confidentialite` l'un contre
+      // l'autre, sur les mêmes valeurs — s'ils divergeaient, le plancher deviendrait
+      // INSATISFIABLE et le refus citerait un niveau qui n'existe pas. Il éprouve aussi
+      // qu'un transfert hors Union sans garantie est refusé (art. 46), et que les deux
+      // clés vers le client et vers le prestataire restent COMPOSITES.
+      'sous_traitance_rgpd',
       'substrat_session',
       // QUARANTE-SIXIÈME, apporté par `042_le_registre_dora_et_la_chaine.sql` — lot L21,
       // actions 21.1, 21.3 et 21.4. ⚠️ Il ÉPROUVE le score composite d'un tiers sur

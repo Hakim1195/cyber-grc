@@ -238,12 +238,19 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // ⚠️ `portail_liens` est la table la plus exposée du produit : c'est elle qui décide
     // d'un accès depuis l'Internet public, et son cloisonnement est ce qui empêche un
     // lien de la filiale A d'ouvrir le questionnaire de la filiale B.
+    // 77 depuis les migrations `070` et `071` : les TROIS tables du registre de
+    // l'article 30 §2 du RGPD — `traitements_pour_client`, son pivot de mesures, et la
+    // déclaration des sous-traitants ultérieurs dus au donneur d'ordre (art. 28 §2).
+    // ⚠️ Les trois sont CLOISONNÉES et jamais mixtes : deux filiales servant le même
+    // groupe client sont deux sous-traitants distincts, avec deux contrats et deux
+    // registres. Un registre de portée Groupe ferait dire à une filiale un traitement
+    // qu'elle n'opère pas.
     // 74 depuis la migration `061` : les trois tables des fiches réflexes de crise.
     // ⚠️ Elles sont MIXTES — socle du Groupe surchargeable par filiale —, et le semis
     // leur donne une fiche LOCALE par filiale : sans elle, le balayage rendrait « zéro
     // ligne visible » pour la seule raison qu'il n'y a rien de local à voir, et *« zéro
     // visible » est aussi ce que rend une table vide*.
-    assert.equal(tablesCloisonnees.length, 74, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
+    assert.equal(tablesCloisonnees.length, 77, `Tables trouvées : ${tablesCloisonnees.join(', ')}`);
     for (const derogation of DEROGATIONS) {
       assert.ok(tablesCloisonnees.includes(derogation), `${derogation} doit être dans le balayage.`);
     }
@@ -300,7 +307,7 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
     // qui mesurent un lien vivant le posent elles-mêmes (test/portail/).
     assert.equal(
       Object.values(vuDuGroupe).filter((n) => n > 0).length,
-      73,
+      76,
       // 58 depuis la migration `050` : `risque_quantification` est semée des deux côtés,
       // sur le PREMIER risque de chaque filiale — le second reste sans quantification
       // exprès, pour que le balayage des entités puisse en créer une sans heurter
@@ -310,11 +317,17 @@ describe('Chargement initial : rien de la filiale voisine (PLAN_SERVEUR §1.3, �
       // porte son événement redouté, et le couple source / objectif pointe l'entrée
       // locale du socle de connaissances. Semer des lignes qui ne se référencent pas
       // aurait mesuré l'insertion, pas les clés composites.
+      // 76 depuis les migrations `070` et `071` : les trois tables du registre de
+      // l'article 30 §2, semées des deux côtés. ⚠️ Le traitement porte son transfert
+      // hors Union AVEC sa garantie — la contrainte refuse l'inverse —, et le
+      // sous-traitant ultérieur est déclaré SANS autorisation datée, parce que c'est ce
+      // cas-là qui produit un manque bloquant au dossier client : un semis qui ne porte
+      // que des cas conformes ne mesure pas ce que le produit dit des autres.
       // 73 depuis la migration `061` : les trois tables des fiches réflexes, semées
       // des deux côtés avec un rôle PROPRE AU SITE. ⚠️ Un rôle emprunté au socle
       // l'aurait REMPLACÉ pour cette filiale, et les essais qui comptent les fiches
       // se seraient mis à mesurer autre chose que ce qu'ils annoncent.
-      'Soixante-treize tables devaient contenir au moins une ligne allemande. Une table neuve '
+      'Soixante-seize tables devaient contenir au moins une ligne allemande. Une table neuve '
         + 'sans ligne dans le semis est un angle mort : le balayage y rendrait « zéro '
         + 'visible » pour la seule raison qu’il n’y a rien à voir.',
     );
@@ -458,7 +471,9 @@ describe('Le socle de Groupe fait partie du chargement (erreur symétrique)', ()
     // sont semées dans les DEUX filiales, pour la raison écrite au contrôle de
     // matière — une table neuve sans ligne rend « rien à voir » là où l'on veut
     // « rien qui fuie ».
-    assert.equal(nonVides.length, 71, `Tables non vides : ${nonVides.join(', ')}`);
+    // 74 depuis les migrations `070` et `071` : les trois tables du registre de
+    // l'article 30 §2, semées dans les DEUX filiales — même motif que ci-dessus.
+    assert.equal(nonVides.length, 74, `Tables non vides : ${nonVides.join(', ')}`);
   });
 
   // La contrepartie de l'exclusion ci-dessus : ce qui n'est plus vérifié par

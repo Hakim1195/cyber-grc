@@ -632,6 +632,71 @@ que le registre déclare « signaler » y figure.
 > deux sens à la fois : il accusait d'un défaut une décision délibérée, et il restait muet
 > là où le registre promet qu'un humain sera prévenu.*
 
+
+### Montrer à un donneur d'ordre comment nous traitons ses données
+
+**Donneurs d'ordre → une fiche → « Préparer le dossier ».** Demande du RSSI, 24/09/2026.
+
+🛑 **Pourquoi cet écran existe, et pourquoi il ne ressemble pas à celui des prestataires.**
+Les deux sont le miroir l'un de l'autre, et le miroir n'est pas une symétrie :
+
+| | Prestataires | Donneurs d'ordre |
+|---|---|---|
+| Nous sommes | le **client** d'un tiers | le **fournisseur** d'un client |
+| Au RGPD | *responsable de traitement* | **sous-traitant** (art. 28) |
+| Le registre | article 30 **§1** (écran *Registre RGPD*) | article 30 **§2**, ici |
+| Ce qu'on documente | ce que **nous exigeons** d'eux | ce qu'**ils exigent** de nous |
+| Sous DORA | notre **registre d'information** (art. 28) | nous sommes **leur** prestataire TIC |
+
+⚠️ **Ne recopiez pas les champs d'un prestataire sur un donneur d'ordre.** « Substituabilité »
+et « plan de sortie » sont ce que **nous** exigeons d'un fournisseur ; côté client, c'est
+**lui** qui les exige de nous. Une symétrie d'écran qui n'est pas une symétrie juridique
+produit des champs qu'on remplit au hasard.
+
+#### Les quatre sections de la fiche
+
+1. **Identité et contrat** — pays, LEI, référence et dates de contrat, **et la case « entité
+   financière au sens de DORA »**. ⚠️ Laissez-la décochée pour un donneur d'ordre industriel :
+   DORA ne le concerne pas, et afficher son régime à tout le monde apprend à ignorer l'écran.
+2. **Registre de l'article 30 §2** — ce que nous traitons pour son compte. Un traitement, ses
+   catégories, ses transferts, ses mesures.
+3. **Sous-traitants ultérieurs** — lesquels de nos prestataires touchent ses données.
+4. **Le dossier** — assemblé sur demande, imprimable, et **il dit ses manques**.
+
+#### Les cinq refus que la base opposera, et pourquoi ils sont bons
+
+| Ce que vous tentez | Ce qui se passe | Le texte |
+|---|---|---|
+| déclarer un transfert hors Union **sans garantie** | **refusé** | RGPD art. 46 — un transfert sans garantie identifiée est le constat d'audit le plus fréquent |
+| classer un document **sous** le plancher du client | **refusé**, et le refus nomme le plancher | ISO 27001 5.12 |
+| **relever** le plancher alors que des documents sont dessous | **refusé**, et il dit combien | sans quoi le contrat s'afficherait comme tenu sans l'être |
+| **baisser** le plancher | **accepté** | c'est une décision contractuelle, et elle ne met aucun document en défaut |
+| déclarer un prestataire d'une **autre filiale** | **refusé** | le dossier nommerait une société que cette filiale n'a jamais contractée |
+
+> 🛑 **Le dossier DIT SES MANQUES, et « bloquant » a un sens précis** : envoyer le dossier en
+> l'état **documente une infraction**. Trois cas produisent un bloquant — aucun contact du
+> responsable de traitement (art. 30 §2 a), aucun traitement déclaré alors qu'on en opère, et
+> un sous-traitant ultérieur **sans autorisation datée** (art. 28 §2). *Un dossier à moitié
+> rempli est plus dangereux qu'un dossier vide : vide, on le remplit ; à moitié rempli, on
+> l'envoie.*
+
+> ⚠️ **Une rubrique que votre compte n'a pas le droit de lire est marquée « non rendue », pas
+> omise.** Un DPO qui porte le registre et l'export mais pas la gestion documentaire voit
+> « rubrique non rendue : domaine documents » — et non « aucun document », qui serait faux. Le
+> dossier dit qu'il est incomplet plutôt que de mentir par omission.
+
+> ⚠️ **Le produit ne transmet rien.** Il prépare, vous imprimez, vous envoyez. Même règle que
+> pour les formulaires ANSSI et CNIL, et elle ne souffre pas d'exception.
+
+> ⚠️ **Le dossier exige le droit d'extraction.** Un dossier de conformité complet est une
+> extraction : sans ce droit, l'écran vous le dit et vous propose de le faire préparer par
+> quelqu'un qui l'a. Ce n'est pas une panne.
+
+⚠️ **Deux dates entrent dans l'Échéancier** : la revue du contrat, et la revue d'un traitement
+du registre. **Le délai de notification d'incident, non** — il se compte en heures, et
+l'Échéancier est journalier ; il s'affiche **sur la fiche d'incident**, à côté de l'horloge
+NIS2 et RGPD.
+
 ### Les documents portent enfin une classification
 
 Sur chaque fiche de `/documents`, un bloc **Classification** :

@@ -90,7 +90,7 @@ import type { PoolClient } from 'pg';
  * ⚠️ Liste écrite à la main **et c'est le bon outil** (`CLAUDE.md` §3) : une
  * source oubliée ne « réussit pas en silence », elle n'est simplement pas
  * relancée — et le contrôle de `test/notifications/echeances.test.mjs` compare
- * les six clés d'ici aux six blocs de `js/services/echeances.js`, en les
+ * les clés d'ici aux blocs de `js/services/echeances.js`, en les
  * **découvrant** dans le fichier du frontend plutôt qu'en les recopiant.
  */
 export const SOURCES = Object.freeze({
@@ -103,6 +103,9 @@ export const SOURCES = Object.freeze({
   questionnaire: { libelle: 'Questionnaires fournisseurs', route: '#/prestataires' },
   contrat: { libelle: 'Échéances contractuelles', route: '#/prestataires' },
   campagne: { libelle: 'Campagnes du Groupe', route: '#/campagnes' },
+  // Migrations `070` et `071` — les obligations envers un DONNEUR D'ORDRE : la revue
+  // de son contrat, et celle du registre de l'article 30 §2 tenu pour son compte.
+  client: { libelle: 'Obligations envers un donneur d’ordre', route: '#/clients' },
 } as const);
 
 export type TypeEcheance = keyof typeof SOURCES;
@@ -389,6 +392,37 @@ export async function recolterEcheances(
             and c."ouverte_le" is not null
             and c."close_le" is null
             and p."termine_le" is null`,
+        [jour],
+      )
+    ).rows,
+    unNom,
+  );
+
+  /* 10. LES OBLIGATIONS ENVERS UN DONNEUR D'ORDRE (migrations `070` et `071`).
+
+        Demande du RSSI du client, 24/09/2026 : *« et que ça soit respecté dans le reste du
+        logiciel »*. Deux dates, et la relance porte un destinataire différent de tout ce
+        qui précède : le **contact du responsable de traitement chez le client** n'est PAS
+        qui doit être relancé — c'est nous qui devons agir. Le destinataire est donc laissé
+        au réglage général, comme pour les sept premières sources.
+
+        ⚠️ **L'échéance de notification d'un incident à un client n'est PAS ici**, et le
+        motif est le même que côté navigateur : elle se compte en HEURES et cette récolte
+        est journalière. Un délai contractuel de 24 h produirait une relance quotidienne
+        indiscernable d'un retard. Elle vit sur la fiche d'incident, dérivée par
+        `f_echeance_contractuelle()` — au même rang que les 72 h de l'article 33, qui n'ont
+        jamais été ici non plus. */
+  verser(
+    'client',
+    (
+      await client.query<LigneDatee>(
+        `select c."id", (c."contrat_revue_le" - $1::date) as "jours", null::text as "qui"
+           from "clients" c
+          where c."contrat_revue_le" is not null
+         union all
+         select t."id", (t."revue_le" - $1::date) as "jours", null::text as "qui"
+           from "traitements_pour_client" t
+          where t."revue_le" is not null`,
         [jour],
       )
     ).rows,

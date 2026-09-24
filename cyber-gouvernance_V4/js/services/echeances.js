@@ -283,6 +283,52 @@ window.Echeances = (function () {
             });
         });
 
+        /* 10. LES OBLIGATIONS ENVERS UN DONNEUR D'ORDRE (migrations `070` et `071`).
+
+              Demande du RSSI du client, 24/09/2026 : *« et que ça soit respecté dans le
+              reste du logiciel »*. Un contrat client qu'on doit revoir et un registre de
+              l'article 30 §2 qu'on doit tenir à jour sont des obligations DATÉES : les
+              ranger dans un écran à part les rendrait invisibles à qui consulte ses
+              échéances — c'est le motif exact de la source n° 8, un lot plus tôt.
+
+              ⚠️ **Ce qui N'EST PAS ici, et le motif porte tout le sens** : l'échéance de
+              notification d'un incident à un client. Elle se compte en HEURES, pas en
+              jours, et l'échéancier est journalier — un délai de 24 h y apparaîtrait
+              « aujourd'hui » pendant vingt-trois heures et « en retard » une heure. Elle
+              vit là où on la regarde : sur la fiche d'incident, dérivée par
+              `f_echeance_contractuelle()`, à côté de l'horloge NIS2 et RGPD. C'est le même
+              arbitrage que les 72 h de l'article 33, qui n'ont jamais été ici non plus. */
+        const clients = DataStore.getClients() || [];
+        const nomClient = new Map(clients.filter(c => c && c.id).map(c => [c.id, c.nom || c.id]));
+
+        clients.forEach(c => {
+            if (!c || !c.contrat_revue_le) return;
+            push({
+                type: "client", typeLabel: "Contrat client",
+                titre: "Revue du contrat — " + (c.nom || ""),
+                sousTitre: "Clauses de sécurité et de sous-traitance"
+                    + (c.entite_financiere_dora ? " · entité financière (DORA)" : ""),
+                date: c.contrat_revue_le, jours: daysFromToday(c.contrat_revue_le),
+                statut: c.confidentialite_plancher
+                    ? "Diffusion minimale : " + c.confidentialite_plancher : "",
+                route: "#/clients/" + c.id
+            });
+        });
+
+        (DataStore.getTraitementsPourClient ? DataStore.getTraitementsPourClient() : [])
+            .forEach(t => {
+                if (!t || !t.revue_le) return;
+                push({
+                    type: "client", typeLabel: "Registre article 30 §2",
+                    titre: "Revue du traitement — " + (t.intitule || ""),
+                    sousTitre: "Pour le compte de " + (nomClient.get(t.client_id) || "")
+                        + (t.transfert_hors_ue ? " · transfert hors UE" : ""),
+                    date: t.revue_le, jours: daysFromToday(t.revue_le),
+                    statut: t.donnees_sensibles ? "Données sensibles" : "",
+                    route: "#/clients/" + t.client_id
+                });
+            });
+
         return items;
     }
 

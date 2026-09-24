@@ -102,11 +102,11 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
     assert.match(corps.authentification.lot_attendu, /L3/);
   });
 
-  test('GET /api/modele — décrit les 47 entités, et ne fuit aucun nom de table', async () => {
+  test('GET /api/modele — décrit les 51 entités, et ne fuit aucun nom de table', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/modele');
     assert.equal(statut, 200);
-    assert.equal(Object.keys(corps.entites).length, 50);
-    assert.equal(corps.schemaVersion, 29);
+    assert.equal(Object.keys(corps.entites).length, 51);
+    assert.equal(corps.schemaVersion, 30);
 
     const texte = JSON.stringify(corps);
     for (const interdit of ['mesure_catalogue', 'mesure_mise_en_oeuvre', 'evaluation_mesures', base.nom]) {
@@ -120,7 +120,7 @@ describe('Les sept points d’entrée du lot L2 répondent', () => {
   test('GET /api/donnees — rend le jeu de la filiale, dans la forme de « data »', async () => {
     const { statut, corps } = await serveur.appeler('GET', '/api/donnees');
     assert.equal(statut, 200);
-    assert.equal(corps.data.schemaVersion, 29);
+    assert.equal(corps.data.schemaVersion, 30);
     assert.ok(corps.data.risques.some((r) => r.id === 'RISK-A'));
     assert.ok(corps.data.documents.some((d) => d.id === 'DOC-G'), 'Le socle Groupe fait partie du chargement.');
 
@@ -859,6 +859,10 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     ['GET', '/api/tiers/etat', undefined],
     ['GET', '/api/tiers/chaine/PRES-A', undefined],
     ['GET', '/api/tiers/registre-dora', undefined],
+    // Migrations `070` à `073` — le dossier remis au donneur d'ordre. ⚠️ Il exige le
+    //    droit d'EXPORT sur le domaine « rgpd » : un dossier de conformité complet est
+    //    une extraction (PLAN_SERVEUR §3.3).
+    ['GET', '/api/clients/:id/dossier', undefined],
     ['GET', '/api/tiers/questionnaires', undefined],
     // Les deux routes des campagnes descendantes (lot L24, actions 24.1 et 24.2).
     // ⚠️ Servie sans identité, `etat` rendrait ce que le Groupe demande à ses vingt

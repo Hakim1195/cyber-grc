@@ -822,7 +822,7 @@ describe('Un export complet, comme l’application en produit', () => {
  * ===================================================================== */
 
 describe('Le dernier chemin non éprouvé : un vieil export réel, de bout en bout', () => {
-  test('un export v6 volumineux traverse VINGT-TROIS paliers ET atterrit en base', async () => {
+  test('un export v6 volumineux traverse VINGT-QUATRE paliers ET atterrit en base', async () => {
     // Ce que `PLAN_SERVEUR` §2.6 désigne comme LE chemin de migration, et que rien
     // n'avait parcouru en entier : un fichier produit par un site resté en version
     // locale — ancien, volumineux, aux conventions de son époque — lu, monté de v6 à
@@ -847,8 +847,8 @@ describe('Le dernier chemin non éprouvé : un vieil export réel, de bout en bo
     // Les paliers ont bien été traversés — sinon on aurait éprouvé un fichier déjà à
     // jour, déguisé en vieil export. HUIT depuis la montée v14 : 6→7 … 13→14.
     assert.equal(reponse.corps.rapport.version_origine, 6);
-    assert.equal(reponse.corps.rapport.version_cible, 29);
-    assert.equal(reponse.corps.rapport.paliers.length, 23, 'v6 → v29, c’est vingt-trois paliers.');
+    assert.equal(reponse.corps.rapport.version_cible, 30);
+    assert.equal(reponse.corps.rapport.paliers.length, 24, 'v6 → v30, c’est vingt-quatre paliers.');
 
     // Et tout est arrivé : le compte des créations doit égaler celui du fichier.
     const crees = Object.values(reponse.corps.bilan.crees).reduce((s, n) => s + n, 0);

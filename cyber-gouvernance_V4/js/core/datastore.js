@@ -26,7 +26,7 @@
 //     remise des données à une filiale qui sort du groupe.
 
 const DataStore = (() => {
-    const SCHEMA_VERSION = 29;
+    const SCHEMA_VERSION = 30;
 
     const ARRAY_FIELDS = [
         "clients", "exigences", "actions", "risques", "actifs",
@@ -233,7 +233,21 @@ const DataStore = (() => {
         // `collectes`, un lot plus tôt.
         "fiches_reflexes",
         "fiche_reflexe_actions",
-        "contacts_urgence"
+        "contacts_urgence",
+        // v30 — LE REGISTRE DE L'ARTICLE 30 §2 DU RGPD (migrations `070` et `071`).
+        //
+        // 🛑 **Ce n'est PAS `traitements`**, qui est le registre de l'article 30 **§1** :
+        // les traitements dont NOUS sommes responsable, avec notre finalité et notre base
+        // légale. Ici nous sommes **SOUS-TRAITANT** d'un donneur d'ordre : la finalité est
+        // SON instruction, la base légale est LA SIENNE, et le texte exige en plus
+        // l'identité du responsable de traitement ET de son délégué à la protection des
+        // données. Deux registres juridiquement distincts, deux collections.
+        //
+        // ⚠️ La déclaration des **sous-traitants ultérieurs** (art. 28 §2) n'est pas ici :
+        // c'est un tableau `sous_traitants[]` porté par chaque client, comme
+        // `prestataires_lies[]` l'est par chaque actif. Elle DÉSIGNE des prestataires, elle
+        // ne les duplique pas.
+        "traitements_pour_client"
     ];
 
     const HISTORY_KEEP = 180;   // ~6 mois de points quotidiens
@@ -1644,6 +1658,30 @@ const DataStore = (() => {
     function deleteTraitement(id) { data.traitements = data.traitements.filter(t => t.id !== id); save(); }
 
     /* =========================
+       REGISTRE DE L'ARTICLE 30 §2 — nous SOUS-TRAITANT (v30)
+
+       Ce que nous traitons POUR LE COMPTE d'un donneur d'ordre. ⚠️ Registre distinct de
+       `traitements` (article 30 §1, nous responsable) : voir le commentaire d'ARRAY_FIELDS.
+       Les mesures de sécurité réutilisent l'entité pivot `mesures`, par `mesures_liees[]`.
+    ========================== */
+    function getTraitementsPourClient(clientId) {
+        if (clientId === undefined || clientId === null) return data.traitements_pour_client;
+        return data.traitements_pour_client.filter(t => t.client_id === clientId);
+    }
+    function getTraitementPourClientById(id) {
+        return data.traitements_pour_client.find(t => t.id === id);
+    }
+    function addTraitementPourClient(t) { data.traitements_pour_client.push(t); save(); }
+    function updateTraitementPourClient(t) {
+        const idx = data.traitements_pour_client.findIndex(x => x.id === t.id);
+        if (idx !== -1) { data.traitements_pour_client[idx] = t; save(); }
+    }
+    function deleteTraitementPourClient(id) {
+        data.traitements_pour_client = data.traitements_pour_client.filter(t => t.id !== id);
+        save();
+    }
+
+    /* =========================
        CORRESPONDANCES INTER-RÉFÉRENTIELS — surcouche utilisateur (v7)
        Le catalogue par défaut est STATIQUE (js/data/mappings.js). Ce tableau ne
        stocke QUE la surcouche : groupes ajoutés par l'utilisateur, groupes du
@@ -2160,6 +2198,9 @@ const DataStore = (() => {
 
         // Traitements RGPD (registre art. 30)
         getTraitements, getTraitementById, addTraitement, updateTraitement, deleteTraitement,
+        // v30 — le registre de l'article 30 §2 (nous sous-traitant d'un donneur d'ordre).
+        getTraitementsPourClient, getTraitementPourClientById, addTraitementPourClient,
+        updateTraitementPourClient, deleteTraitementPourClient,
 
         // Correspondances inter-référentiels (surcouche utilisateur)
         getMappings, getMappingById, upsertMapping, deleteMapping, resetMappings,

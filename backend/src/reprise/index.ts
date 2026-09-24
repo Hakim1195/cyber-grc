@@ -109,7 +109,7 @@ import type {
  * Le défaut est bruyant, mais il n'apparaît qu'au round-trip. Un essai les
  * confronte désormais toutes les trois (`test/reprise/versions-concordantes.test.mjs`).
  */
-export const VERSION_SCHEMA = 29;
+export const VERSION_SCHEMA = 30;
 
 /** Marqueur d'enveloppe (`js/services/backup.js`). */
 export const FORMAT_SAUVEGARDE = 'grc-backup';
@@ -124,6 +124,12 @@ export const APPLICATION_ATTENDUE = 'cyber-grc-dedienne';
  */
 export const COLLECTIONS = [
   'clients',
+  // v30 — le registre de l'article 30 §2 du RGPD (migrations `070` et `071`).
+  // ⚠️ **L'oublier ici n'aurait rien cassé de visible** : la collection serait passée en
+  //    « clé de premier niveau inconnue », conservée telle quelle et **non insérée**. Le
+  //    rapport l'aurait dit en « information », et une reprise aurait rendu 200 en perdant
+  //    tout le registre de sous-traitance — c'est le banc qui l'a vu, pas moi.
+  'traitements_pour_client',
   'exigences',
   'actions',
   'risques',
@@ -312,12 +318,72 @@ const STATUTS_CONFORMITE = ['conforme', 'partiellement conforme', 'non conforme'
 export const DESCRIPTIONS: Readonly<Record<NomCollection, DescriptionCollection>> = {
   clients: {
     prefixe: 'CLI',
-    champs: ['id', 'nom', 'secteur'],
-    enumerations: [],
+    champs: [
+      'id', 'nom', 'secteur',
+      // ── v30 (migration `070`) : le donneur d'ordre cesse d'être un nom ────────────
+      // Son identité, son contrat, et ce qu'il nous impose. Les deux contacts sont
+      // nommément exigés par le RGPD art. 30 §2 a) — le responsable de traitement ET
+      // son délégué à la protection des données.
+      'pays', 'entite_financiere_dora', 'lei',
+      'contact_rt_nom', 'contact_rt_email', 'contact_dpo_nom', 'contact_dpo_email',
+      'contrat_reference', 'contrat_debut', 'contrat_fin', 'contrat_revue_le',
+      'droit_audit', 'fin_de_contrat', 'confidentialite_plancher',
+      'notification_incident_h',
+      // Lesquels de NOS prestataires touchent ses données (art. 28 §2). Des OBJETS
+      // `{ to, autorise_le, role }` : « déclaré » et « autorisé » sont deux états
+      // différents, et c'est l'écart entre les deux que le dossier client doit montrer.
+      'sous_traitants',
+    ],
+    enumerations: [
+      // ⚠️ Ces trois listes recopient des `check` du schéma, et la règle du `CLAUDE.md`
+      //    §3 exige alors de les figer à DEUX endroits qui les comparent au réel : le
+      //    second est `test/reprise/enumerations.test.mjs`, qui lit `pg_constraint`.
+      //    Motif payé par la migration `019` : « en validation » ajouté au schéma, et
+      //    cette liste ne l'a pas su — une reprise LÉGITIME refusée, au pire moment.
+      {
+        champ: 'droit_audit',
+        valeurs: ['aucun', 'sur demande', 'annuel', 'certification acceptée'],
+        videAdmis: true,
+      },
+      {
+        champ: 'fin_de_contrat',
+        valeurs: ['restitution', 'suppression', 'restitution puis suppression'],
+        videAdmis: true,
+      },
+      {
+        champ: 'confidentialite_plancher',
+        valeurs: ['public', 'interne', 'confidentiel', 'restreint'],
+        videAdmis: true,
+      },
+    ],
     bornes: [],
-    dates: [],
+    dates: ['contrat_debut', 'contrat_fin', 'contrat_revue_le'],
     references: [],
     referencesMultiples: [],
+    cleMetier: null,
+  },
+
+  /**
+   * LE REGISTRE DE L'ARTICLE 30 §2 DU RGPD — v30, migration `070`.
+   *
+   * ⚠️ **Pas de `finalite` ni de `base_legale`, et ce n'est pas un oubli** : côté
+   * sous-traitant, la finalité est l'INSTRUCTION du client et la base légale est LA
+   * SIENNE. Les porter ici inviterait à les remplir, et un sous-traitant qui déclare sa
+   * propre base légale s'attribue un rôle qu'il n'a pas.
+   */
+  traitements_pour_client: {
+    prefixe: 'TPC',
+    champs: [
+      'id', 'client_id', 'intitule', 'categories_traitement', 'categories_donnees',
+      'personnes_concernees', 'donnees_sensibles', 'instruction_reference',
+      'transfert_hors_ue', 'transfert_garantie', 'duree_conservation',
+      'fin_de_traitement', 'revue_le', 'notes', 'mesures_liees', 'updatedAt',
+    ],
+    enumerations: [],
+    bornes: [],
+    dates: ['revue_le'],
+    references: [{ champ: 'client_id', cible: 'clients' }],
+    referencesMultiples: [{ champ: 'mesures_liees', cible: 'mesures' }],
     cleMetier: null,
   },
   exigences: {
@@ -2241,6 +2307,29 @@ function garantirExploitants(charge: ChargeV12): number {
 }
 
 /**
+ * v29 → v30 — Chaque donneur d'ordre porte un tableau `sous_traitants[]` : lesquels de
+ * NOS prestataires touchent ses données, donc lesquels lui sont dus au titre du RGPD
+ * art. 28 §2. Rien à convertir, seulement à garantir.
+ *
+ * ⚠️ **Et surtout rien à DEVINER.** La tentation était de déclarer d'office tous les
+ * prestataires de la filiale comme sous-traitants ultérieurs de tous ses clients : c'est
+ * faux, et faux dans le sens dangereux. Un sous-traitant ultérieur non autorisé est une
+ * **infraction** à l'article 28 §2 ; en inventer ferait afficher au dossier client des
+ * manques bloquants qui n'existent pas, et le premier réflexe serait de cesser de croire
+ * le dossier. Tableau vide, et c'est l'utilisateur qui déclare.
+ */
+function garantirSousTraitants(charge: ChargeV12): number {
+  let corriges = 0;
+  for (const client of charge.clients) {
+    if (!estTableau(lire(client, 'sous_traitants'))) {
+      client['sous_traitants'] = [];
+      corriges += 1;
+    }
+  }
+  return corriges;
+}
+
+/**
  * v8 → v9 — Cartographie : chaque actif porte un tableau `dependances[]` de
  * liens typés actif → actif. Rien à convertir, seulement à garantir.
  */
@@ -2788,6 +2877,39 @@ const PALIERS: readonly EtapePalier[] = [
         : [];
     },
   },
+  {
+    de: 29,
+    vers: 30,
+    libelle:
+      'Migrations `070` et `071` : l’instantané gagne le REGISTRE DE L’ARTICLE 30 §2 du ' +
+      'RGPD — ce que nous traitons POUR LE COMPTE d’un donneur d’ordre, quand nous ' +
+      'sommes SOUS-TRAITANT et qu’il est responsable de traitement — et la déclaration ' +
+      'des sous-traitants ULTÉRIEURS qui lui sont dus (art. 28 §2). Demande du RSSI du ' +
+      'client : « montrer au client comment on traite ses données ».',
+    // ⚠️ **Un fichier d'avant la v30 n'en porte aucun, et il ne doit RIEN inventer — c'est
+    //    la même règle que les six paliers précédents, et ici elle a une conséquence
+    //    juridique.**
+    //
+    // La tentation aurait été de dériver un registre §2 depuis le registre §1
+    // (`traitements`) : les deux ont des colonnes de noms voisins, et un fichier ancien
+    // porte déjà des traitements. Ce serait **faux**, et faux dans le sens dangereux : un
+    // traitement du §1 est un traitement dont NOUS sommes responsable, avec NOTRE finalité
+    // et NOTRE base légale. Le convertir en traitement « pour le compte d'un client »
+    // fabriquerait un registre de sous-traitance que personne n'a écrit, et le produit le
+    // présenterait au client comme une déclaration.
+    //
+    // ⚠️ Et le §2 exige l'identité du responsable de traitement : un registre engendré
+    // n'aurait aucun client à nommer. Le palier pose donc deux tableaux VIDES, et c'est
+    // l'utilisateur qui déclare — ce qui est exactement ce que le texte demande.
+    appliquer: (ctx) => {
+      const effets = paliersCollections(['traitements_pour_client'])(ctx);
+      const clients = garantirSousTraitants(ctx.charge);
+      if (clients > 0) {
+        effets.push(`${clients} donneur(s) d’ordre doté(s) du tableau « sous_traitants »`);
+      }
+      return effets;
+    },
+  },
 ];
 
 /* =====================================================================
@@ -2816,6 +2938,17 @@ function normaliser(charge: ChargeV12, absentes: ReadonlySet<NomCollection>, rec
   const exploitants = garantirExploitants(charge);
   if (exploitants > 0) {
     effets.push(`${exploitants} actif(s) doté(s) du tableau « prestataires_lies » hors palier`);
+  }
+
+  // ⚠️ Même motif : un fichier déjà en v30 mais écrit par un produit qui ne connaissait pas
+  //    encore la liaison ne traverse AUCUN palier. La normalisation est la seule chose qui
+  //    le rattrape — et sans elle le tableau serait `undefined`, ce que la couche
+  //    d'écriture ne distingue pas de « aucun sous-traitant déclaré ».
+  const sousTraitants = garantirSousTraitants(charge);
+  if (sousTraitants > 0) {
+    effets.push(
+      `${sousTraitants} donneur(s) d’ordre doté(s) du tableau « sous_traitants » hors palier`,
+    );
   }
 
   const mco = convertirMcoActions(charge);

@@ -25,7 +25,7 @@
  *
  * ── La couverture est RÉCLAMÉE, pas supposée ─────────────────────────────────
  *
- * Un dernier test balaie les **47 entités du registre** et vérifie que chacune se lit,
+ * Un dernier test balaie les **51 entités du registre** et vérifie que chacune se lit,
  * se décrit, et porte un préfixe d'identifiant. Sans lui, ce fichier resterait un
  * échantillon dont personne ne saurait dire ce qu'il laisse de côté — le reproche
  * exact que la porte a formulé.
@@ -315,7 +315,7 @@ describe('Une entité par famille de différence', () => {
  *  §2 — La couverture, réclamée
  * ===================================================================== */
 
-describe('Les 47 entités du registre, sans échantillonnage', () => {
+describe('Les 51 entités du registre, sans échantillonnage', () => {
   test('chaque entité du modèle est décrite, chargée, et porte un préfixe', async () => {
     const modele = (await serveur.appeler('GET', '/api/modele')).corps;
     const jeu = await donnees();
@@ -339,7 +339,7 @@ describe('Les 47 entités du registre, sans échantillonnage', () => {
     // d'un coup le verrouillage optimiste, le journal, le cloisonnement MIXTE, l'import
     // et le round-trip `grc-backup`. Ce qu'elles avaient avant, c'était une constante
     // dans `js/modules/crise.js` — donc rien de tout cela.
-    assert.equal(noms.length, 50);
+    assert.equal(noms.length, 51);
 
     for (const nom of noms) {
       const description = modele.entites[nom];
@@ -377,6 +377,21 @@ describe('Les 47 entités du registre, sans échantillonnage', () => {
       // défaut : une AIPD sans traitement recopierait le registre de l'article
       // 30 au lieu de le désigner.
       analyses_impact: { traitement_id: 'TRT-A' },
+      // Un traitement du registre de l'article 30 §2 se tient POUR LE COMPTE d'un
+      // donneur d'ordre RÉEL, et sa clé étrangère est composite (id, filiale_id) :
+      // une valeur inventée rend 409, ce qui est le comportement voulu. ⚠️ C'est le
+      // seul champ que le RGPD art. 30 §2 a) rende indispensable — le registre d'un
+      // sous-traitant **existe pour dire pour qui il traite** ; sans responsable de
+      // traitement nommé, ce n'est pas un registre incomplet, ce n'en est pas un.
+      // ⚠️ **Et sa GARANTIE DE TRANSFERT, parce que le balayage remplit tous les champs
+      // textuels avec « Balayage … » — y compris `transfert_hors_ue`.** La contrainte
+      // `ck_traitements_pour_client_transfert` refuse alors la ligne, et c'est le
+      // comportement VOULU : un transfert hors Union sans garantie identifiée est le
+      // constat d'audit le plus fréquent (RGPD art. 46). Le balayage doit donc fournir
+      // la paire complète, exactement comme il fournit un vocabulaire valide à
+      // `risque_catalogue.origine` — ce n'est pas un contournement, c'est la
+      // reconnaissance que les deux champs vont ENSEMBLE.
+      traitements_pour_client: { client_id: 'CLI-A' },
       // Une demande d'exercice de droits porte un vocabulaire fermé sur trois
       // champs — le droit invoqué, le canal, le statut — et la valeur générique
       // « Balayage … » les heurte. C'est le comportement voulu, pas un défaut.

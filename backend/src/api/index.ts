@@ -140,6 +140,7 @@ import { greffonOuverture } from '../ouverture/index.js';
 import { greffonEbios } from '../ebios/index.js';
 import { greffonParametres } from '../parametres/index.js';
 import { greffonTiers } from '../tiers/index.js';
+import { greffonSousTraitance } from '../sous_traitance/index.js';
 import { greffonCrise } from '../crise/index.js';
 import { greffonDroitsPersonnes } from '../droits-personnes/index.js';
 import { greffonReglementaire } from '../reglementaire/index.js';
@@ -3298,6 +3299,20 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
   // ordinaires, qui héritent du verrouillage optimiste, du journal, du
   // cloisonnement et de l'import généralisé sans qu'une ligne soit écrite là-bas.
   await instance.register(greffonTiers, { pool });
+
+  // Migrations `070` et `071` — LE DOSSIER QU'ON REMET AU DONNEUR D'ORDRE.
+  //
+  // Demande du RSSI du client (24/09/2026) : *« montrer au client comment on
+  // traite ses données »*. Une seule route, et aucune écriture — le donneur
+  // d'ordre, son registre de l'article 30 §2 et ses sous-traitants ultérieurs sont
+  // des entités ordinaires, même arbitrage que `greffonTiers` ci-dessus.
+  //
+  // ⚠️ **Chaque rubrique est gardée par SON domaine, et une rubrique que la
+  // session n'a pas le droit de lire est dite RETENUE, jamais omise** : c'est le
+  // constat Q-335 — rien ne distinguait « il n'y a rien » de « on vous le cache ».
+  // Sans cela, le dossier affirmerait « aucun document » à un client qui en a
+  // douze.
+  await instance.register(greffonSousTraitance, pool);
 
   // Lot L24, actions 24.1 et 24.2 — les campagnes descendantes.
   //

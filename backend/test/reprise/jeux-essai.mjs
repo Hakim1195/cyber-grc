@@ -147,6 +147,11 @@ const NOUVELLES_PAR_VERSION = {
   // v29 : `prestataires_lies` est un CHAMP des actifs, pas une collection —
   // le palier n'en crée donc aucune.
   29: [],
+  // v30 : LE REGISTRE DE L'ARTICLE 30 §2 du RGPD (migrations `070` et `071`).
+  // ⚠️ `sous_traitants` n'y est PAS : c'est un CHAMP des clients — les sous-traitants
+  // ultérieurs à déclarer au donneur d'ordre (art. 28 §2) —, pas une collection. Même
+  // forme que `prestataires_lies` au palier précédent.
+  30: ['traitements_pour_client'],
 };
 
 /** Collections que porte un export produit par la version `v`. */
@@ -1185,6 +1190,76 @@ export function instantaneV29Complet() {
         fraicheur_jours: 7,
       },
     ],
+  };
+}
+
+/**
+ * Instantané COMPLET en v30 — LE REGISTRE DE L'ARTICLE 30 §2 DU RGPD.
+ *
+ * Migrations `070` et `071`. Ce que nous traitons POUR LE COMPTE d'un donneur d'ordre,
+ * quand nous sommes **sous-traitant** et qu'il est responsable de traitement.
+ *
+ * ⚠️ **Le traitement pointe un client RÉEL du même instantané, et rattache une mesure
+ * RÉELLE du pivot** : ce sont ces deux arêtes que le recalage d'identifiants doit suivre.
+ * Un `client_id` détaché mettrait au registre un traitement sans responsable — c'est-à-dire
+ * la seule chose que l'article 30 §2 a) exige nommément ; une `mesures_liees` détachée
+ * ferait figurer au dossier remis au client une mesure de sécurité inexistante.
+ *
+ * ⚠️ **Le premier client porte un `sous_traitants[]` RENSEIGNÉ, les autres un tableau
+ * vide** : c'est ce qu'un fichier sain porte, et l'absence du champ ferait rougir la
+ * normalisation. ⚠️ Et il est déclaré **sans `autorise_le`** : c'est le cas qui produit un
+ * manque BLOQUANT au dossier, et un jeu d'essai qui ne porte que des cas conformes ne
+ * mesure pas ce que le produit dit des autres.
+ *
+ * ⚠️ **Le transfert hors Union porte SA GARANTIE** : la contrainte
+ * `ck_traitements_pour_client_transfert` refuse l'inverse, et un jeu d'essai qui ne se
+ * charge pas n'éprouve rien (motif du jeu de découverte refusé par le socle des échelles).
+ */
+export function instantaneV30Complet() {
+  const base = instantaneV29Complet();
+  const client = base.clients[0];
+  const mesure = base.mesures && base.mesures.length > 0 ? base.mesures[0] : null;
+  return {
+    ...base,
+    schemaVersion: 30,
+    clients: base.clients.map((c, i) => ({
+      ...c,
+      // Le plancher de diffusion du premier client : c'est lui que le déclencheur de la
+      // `071` fait respecter sur ses documents, dans les deux sens d'écriture.
+      confidentialite_plancher: i === 0 ? 'interne' : null,
+      notification_incident_h: i === 0 ? 24 : null,
+      fin_de_contrat: i === 0 ? 'suppression' : null,
+      contact_rt_nom: i === 0 ? 'Claire Vasseur' : null,
+      contact_rt_email: i === 0 ? 'claire.vasseur@exemple.test' : null,
+      contact_dpo_nom: i === 0 ? 'Yann Delorme' : null,
+      contact_dpo_email: i === 0 ? 'dpo@exemple.test' : null,
+      sous_traitants:
+        i === 0 && base.prestataires.length > 0
+          ? [{ to: base.prestataires[0].id, role: 'Hébergement des sauvegardes',
+               autorise_le: null }]
+          : [],
+    })),
+    traitements_pour_client: client
+      ? [
+          {
+            id: 'TPC-1720000000000-1',
+            client_id: client.id,
+            intitule: 'Hébergement de son portail fournisseurs',
+            categories_traitement: 'Hébergement, sauvegarde et supervision',
+            categories_donnees: 'Identité professionnelle, coordonnées',
+            personnes_concernees: 'Acheteurs et fournisseurs du donneur d’ordre',
+            donnees_sensibles: false,
+            instruction_reference: 'Annexe 3 du contrat CONV-2026-014',
+            transfert_hors_ue: 'États-Unis (sauvegarde secondaire)',
+            transfert_garantie: 'Clauses contractuelles types 2021/914',
+            duree_conservation: 'Durée du contrat, puis suppression sous 30 jours',
+            fin_de_traitement: 'Suppression certifiée',
+            revue_le: '2027-01-15',
+            notes: '',
+            mesures_liees: mesure ? [mesure.id] : [],
+          },
+        ]
+      : [],
   };
 }
 

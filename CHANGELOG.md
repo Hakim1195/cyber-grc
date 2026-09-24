@@ -87,6 +87,157 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### LE DONNEUR D'ORDRE CESSE D'ÊTRE UN NOM — le registre de l'ARTICLE 30 §2 du RGPD, migrations `070` à `073` (24/09/2026)
+
+**Demande du RSSI du client**, transmise le 24/09/2026 : dans le module « Donneurs d'ordre », *« il
+veut qu'on puisse montrer au client comment on traite ses données »*, conformément au RGPD, à DORA
+et à ISO 27001, *« et que ça soit respecté dans le reste du logiciel »*.
+
+🛑 **CE N'ÉTAIT PAS UNE DEMANDE D'ÉCRAN. C'ÉTAIT UN TROU DE CONFORMITÉ DU PRODUIT.** Mesuré dans le
+dépôt avant d'écrire une ligne :
+
+| | Champs | Écran |
+|---|---|---|
+| un **prestataire** | **22** — LEI, pays, contrat, fonction critique, pays des données, plan de sortie, chaîne | 1 265 lignes |
+| un **donneur d'ordre** | **2** — `nom`, `secteur` | 198 lignes |
+
+Et surtout : **« article 28 » apparaissait huit fois dans le dépôt, et les huit fois c'était DORA.**
+L'**article 28 du RGPD** — les obligations du **sous-traitant** — et l'**article 30 §2** — le
+registre que le sous-traitant tient **pour chaque responsable de traitement** — n'apparaissaient
+**nulle part**. Zéro occurrence.
+
+Le produit savait donc parfaitement documenter **ce que nous exigeons de nos fournisseurs**, et rien
+de **ce que nos clients exigent de nous**. Dans une filière où le groupe est fournisseur, c'est le
+second qui se présente en audit client. C'est la même classe que la demande du 10/09/2026 — *« je ne
+peux pas proposer un logiciel pour gérer la cyber alors que le logiciel même n'est pas conforme au
+RGPD »* —, vue de l'autre côté du miroir.
+
+#### Les quatre pièces
+
+| | Quoi | Où |
+|---|---|---|
+| **1** | l'**identité et le contrat** du donneur d'ordre — pays, LEI, dates, droit d'audit, sort des données en fin de contrat, **et les deux contacts que le RGPD art. 30 §2 a) NOMME** : le responsable de traitement et son DPO | `070` §1, quinze colonnes |
+| **2** | le **registre de l'article 30 §2** — ce que nous traitons pour son compte, ses catégories, ses transferts, ses mesures | `070` §2 et §3 |
+| **3** | les **sous-traitants ultérieurs** qui lui sont dus (art. 28 §2 et §4) | `070` §4 |
+| **4** | le **dossier** — « Comment nous traitons vos données », assemblé, imprimable, **et qui dit ses manques** | `src/sous_traitance/` |
+
+#### 🛑 Deux tables, pas une colonne `rôle` — et c'est l'arbitrage central
+
+Ajouter `role in ('responsable', 'sous_traitant')` à la table `traitements` était la réponse courte
+et fausse :
+
+- côté sous-traitant, **la finalité est l'INSTRUCTION du client et la base légale est LA SIENNE**.
+  La moitié des colonnes perd son sens dans chaque rôle — et un sous-traitant qui déclare sa propre
+  base légale s'attribue un rôle qu'il n'a pas ;
+- le §2 exige des champs que le §1 n'a pas (le DPO du responsable, la garantie de transfert), et
+  n'exige pas des champs que le §1 impose ;
+- **deux registres juridiquement distincts mêlés dans une table divergent en silence** le jour où
+  l'un est purgé, exporté ou consolidé.
+
+C'est mot pour mot la leçon de la migration `063` : *une table qui répond à une question ne doit pas
+se mettre à en répondre une autre.* La règle générale est écrite au `CONVENTIONS.md` **§49** — *le
+MIROIR d'un dispositif n'est pas sa SYMÉTRIE*.
+
+⚠️ **Et on n'a PAS recopié les vingt-deux champs du prestataire** : `substituabilite` et
+`plan_sortie` sont ce que **nous** exigeons d'un fournisseur ; côté client, c'est **lui** qui les
+exige de nous. Une symétrie d'écran qui n'est pas une symétrie juridique produit des champs qu'on
+remplit au hasard.
+
+#### 🛑 « Respecté dans le reste du logiciel » — la clause la plus exigeante
+
+Cinq branchements, **tous en base et non à l'écran** : le moteur d'import du lot L7 et la route de
+reprise écrivent sans passer par un écran, et *une barrière d'écran se contourne par un fichier*.
+
+1. **Le plancher de classification MORD DANS LES DEUX SENS.** Un document sous le plancher du client
+   est refusé — sens évident. 🛑 **Rien ne gardait l'autre** : un seul `update clients set
+   confidentialite_plancher = 'restreint'` aurait donné un contrat **affiché comme tenu** avec des
+   documents « interne » dessous, **et le dossier remis au client l'aurait affirmé**. Le second
+   déclencheur refuse de relever un plancher tant que des documents sont dessous, et **dit combien**.
+   Le **baisser** reste libre : c'est une décision contractuelle, et elle ne met aucun document en
+   défaut.
+2. **Les incidents** portent le donneur d'ordre dont les données sont touchées (art. 33 §2).
+3. **L'horloge** gagne une **notification contractuelle**, avec SON délai — souvent 24 h, donc plus
+   court que NIS2.
+4. **Les demandes d'exercice de droits** peuvent venir d'un client : nous ne répondons pas à la
+   personne concernée, nous **assistons** le responsable (art. 28 §3 e).
+5. **La revue du contrat et celle d'un traitement** deviennent la **10ᵉ source** de l'échéancier,
+   côté écran **et** côté relances L12.
+
+⚠️ **Les deux déclencheurs du plancher sont DIFFÉRÉS**, et c'est la leçon des constats **Q-194**,
+**Q-280** et **Q-284**, payée quatre fois : immédiats, ils refuseraient une reprise « remplacer »
+parfaitement saine dont l'ordre d'insertion place le document avant le client. ***Restaurer une
+sauvegarde gagne.***
+
+#### 🛑 Le délai contractuel n'entre PAS dans la fonction de la LOI
+
+Le garde-fou de la `034` exige que `f_echeances_reglementaires()` rende **exactement quatre
+paliers** — trois NIS2, un RGPD — et il a raison : la loi en impose quatre. Y glisser un cinquième
+palier contractuel ferait rougir le déploiement, et le forcer à se taire reviendrait à **désarmer le
+garde qui protège les délais légaux**. Une fonction **sœur** le calcule, le délai **en paramètre**.
+Et un garde neuf mesure que le contractuel **n'a pas déteint** sur le légal — parce que la seule
+façon dont cette propriété peut devenir fausse est qu'un futur bien intentionné « simplifie ».
+
+⚠️ **Le délai contractuel n'entre pas dans l'échéancier non plus** : il se compte en **heures**, et
+l'échéancier est **journalier**. Un délai de 24 h y apparaîtrait « aujourd'hui » vingt-trois heures
+puis « en retard » une heure. Il s'affiche sur la fiche d'incident — même arbitrage que les 72 h de
+l'article 33, qui n'y ont jamais été.
+
+#### DORA ne s'affiche que s'il s'applique
+
+⚠️ **DORA ne concerne que les entités financières.** Le groupe est industriel, et la plupart de ses
+donneurs d'ordre aussi. Le régime est donc **déclaré** par `clients.entite_financiere_dora`, **fausse
+par défaut**, et l'écran ne le montre que si elle est vraie. *Afficher à tout le monde un régime qui
+ne concerne presque personne apprend à ignorer l'écran, y compris le jour où il s'adresse vraiment à
+vous.*
+
+#### Le dossier dit ses manques — et dit ce qu'il RETIENT
+
+🛑 **Trois manques sont « bloquants », ce qui veut dire qu'envoyer le dossier en l'état documente une
+infraction** : aucun contact du responsable de traitement (art. 30 §2 a), aucun traitement déclaré
+alors qu'on en opère, et un **sous-traitant ultérieur sans autorisation datée** (art. 28 §2 — c'est
+une infraction, pas un retard administratif). *Un dossier à moitié rempli est plus dangereux qu'un
+dossier vide : vide, on le remplit ; à moitié rempli, on l'envoie.*
+
+⚠️ **Et une rubrique que la session n'a pas le droit de lire est dite RETENUE, jamais omise** —
+constat **Q-335** : l'écran du journal faisait disparaître deux blocs **sans un mot**, et rien ne
+distinguait « il n'y a rien » de « on vous le cache ». Un DPO qui porte l'export RGPD mais pas le
+domaine « documents » reçoit `documents: { retenue: 'documents' }` : le dossier dit qu'il est
+**incomplet**, au lieu d'affirmer « aucun document » à un client qui en a douze.
+
+⚠️ **Le produit ne transmet rien**, et le dossier porte l'avertissement **rendu par le serveur** —
+pas reconstitué par l'écran : le lot L18 a montré qu'une mention que l'écran doit reconstituer finit
+par manquer à l'impression.
+
+#### 🛑 CE QUE LES GARDE-FOUS ONT TROUVÉ, ET QUE JE N'AVAIS PAS VU
+
+**Sept défauts, dont deux qui rendaient le lot inutilisable.** Aucun n'a été trouvé en relisant.
+
+| | Ce qui n'allait pas | Qui l'a dit |
+|---|---|---|
+| **1** | `provenance` et le déclencheur de traçabilité manquaient sur les trois tables neuves | `f_verifier_schema()`, au premier déploiement d'essai |
+| **2** | les trois clés `on delete set null` **ne nommaient pas leur colonne** : PostgreSQL aurait nullifié `filiale_id`, qui est `not null` — **toute restauration de sauvegarde tombait en 23502**, et rien ne l'aurait dit tant qu'aucun donneur d'ordre référencé n'est supprimé | `f_verifier_set_null_composites()` (§43, né de la `046`) |
+| **3** | la `071` passait sur une base **vide** et échouait sur la recette : quatre `add constraint` font **valider les lignes existantes**, donc LIRE des tables cloisonnées → `GRC04`. C'est le **§42** — *le banc migre des bases vides* | le **déploiement**, pas le banc |
+| **4** | 🛑 `journal_audit.entite_type` porte un vocabulaire **CLOS** : les trois tables en étaient absentes, donc **INCRÉABLES par les routes génériques**. L'écran n'aurait rien pu enregistrer — et le refus qui remontait ne désignait **aucun champ**, parce qu'il n'y en avait aucun à corriger (`CONVENTIONS.md` §40.1, migration `072`) | `test/api/entites-familles.test.mjs`, qui crée **chaque** entité par sa route |
+| **5** | 🛑 élargir ce vocabulaire **rend la table PORTEUSE de pièces jointes** : l'installateur des déclencheurs avait tourné **avant**, et supprimer un traitement aurait laissé sa pièce **en base, sur le disque et dans le quota** — constats **Q-232 / Q-233** rouverts par un domaine élargi trois migrations plus loin (migration `073`) | `f_verifier_schema()` dans la seconde qui a suivi |
+| **6** | `demandes_droits` n'a ni `nature` ni `repondu_le` — mais `type_demande` et `repondue_le` | le banc |
+| **7** | l'essai réglait `peutExporter: false` **dans le périmètre**, où le serveur ne le lit pas : il retombait sur les droits de développement et **mesurait 200 en croyant mesurer un refus** | `test/tiers/registre-dora.test.mjs`, qui écrit ce piège en toutes lettres — *un essai qui croit régler un droit qu'il ne règle pas consacre le défaut qu'il cherche* |
+
+⚠️ **Et un huitième qu'aucun garde-fou n'a réclamé, trouvé en relisant les quatre tables que la
+`004` avait équipées** : le pivot `traitement_client_mesures` vise `mesure_catalogue`, table
+**MIXTE** dont `filiale_id` est nullable — **aucune clé composite ne peut l'exprimer** (§45). Sans
+`f_coherence_mesure_catalogue()`, une filiale aurait rattaché au registre de son client **la mesure
+locale d'une filiale voisine**, invisible à la lecture, et le dossier remis au client l'aurait
+nommée comme une mesure de sécurité qu'elle n'a jamais mise en œuvre. C'est la **cinquième** table à
+viser ce catalogue, et elle est passée à un cheveu d'être la seule sans barrière.
+
+#### Mesuré
+
+Deux garde-fous neufs — `f_verifier_sous_traitance_rgpd()` et `f_verifier_obligations_client()` —,
+**seize mutations jouées à la main sur une base jetable puis figées au banc**, et sept comportements
+vérifiés à la main (le refus du transfert sans garantie, le plancher dans les deux sens, l'ordre
+d'insertion inversé, la mesure de la voisine, la baisse du plancher, le refus 404 et l'équivalence du
+destinataire). Une famille d'essais neuve : `test/sous_traitance/` (23 essais).
+
 ### « LES DOCS SONT À JOUR ? » — la CINQUIÈME fois, et cette fois une fausseté était dans le PRODUIT (24/09/2026)
 
 **La question a été posée une cinquième fois. Le banc de documentation était vert — `test/documentation/`

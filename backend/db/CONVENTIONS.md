@@ -3399,3 +3399,125 @@ s'écrit **en mesure**, jamais en filtre.
 ⚠️ Corollaire : **un filtre ajouté à un balayage sans l'essai qui le justifie est une
 régression**, même quand le banc redevient vert. C'est le moment précis où l'on retire une
 table du filet sans que personne ne s'en aperçoive.
+
+---
+
+## §49 — Le MIROIR d'un dispositif n'est pas sa SYMÉTRIE
+
+> **Né le 24/09/2026**, des migrations `070` et `071`. Demande du RSSI du client : *« dans le
+> module Donneur d'ordre, il voudrait qu'il y ait quelque chose de similaire aux champs pour la
+> création de prestataires »*. La règle est née en refusant de faire exactement cela.
+
+### 49.1 Le constat qui a ouvert la question
+
+Le produit portait, pour un **prestataire**, vingt-deux champs : LEI, pays, contrat, fonction
+critique, pays des données, substituabilité, plan de sortie, chaîne de sous-traitance. Pour un
+**donneur d'ordre**, il en portait **deux** : `nom` et `secteur`.
+
+Et une mesure plus parlante encore : **« article 28 » apparaissait huit fois dans le dépôt, et
+les huit fois c'était DORA.** L'**article 28 du RGPD** — les obligations du **sous-traitant** —
+et l'**article 30 §2** — le registre que le sous-traitant tient pour chaque responsable de
+traitement — n'apparaissaient **nulle part**. Zéro occurrence.
+
+🛑 **Le produit savait donc parfaitement documenter ce que NOUS exigeons de nos fournisseurs, et
+rien de ce que NOS CLIENTS exigent de nous.** Dans une filière où le groupe est fournisseur,
+c'est le second qui se présente en audit client.
+
+### 49.2 La règle
+
+**Quand un dispositif existe d'un côté d'une relation, son miroir de l'autre côté est un LOT à
+part entière — pas une recopie de champs.** Ce qui se recopie est la *forme* ; ce qui compte est
+que **le régime juridique change de sens**.
+
+| | Nous sommes le CLIENT (prestataires) | Nous sommes le FOURNISSEUR (donneurs d'ordre) |
+|---|---|---|
+| Au RGPD | responsable de traitement | **sous-traitant** (art. 28) |
+| Le registre | article 30 **§1** | article 30 **§2** — *contenu différent* |
+| La finalité | la nôtre | **l'instruction du client** |
+| La base légale | la nôtre | **la sienne** |
+| Sous DORA | notre registre d'information (art. 28) | nous sommes **son** prestataire TIC |
+| La sous-traitance | ce que nous **surveillons** | ce que nous devons **déclarer** (art. 28 §2) |
+
+⚠️ **Deux corollaires, et ils ont chacun été appliqués :**
+
+1. **Une table par registre, jamais une colonne `rôle`.** Ajouter `role in ('responsable',
+   'sous_traitant')` à `traitements` était la réponse courte et fausse : la moitié des colonnes
+   perd son sens dans chaque rôle, le §2 exige des champs que le §1 n'a pas, et **deux registres
+   juridiquement distincts mêlés dans une table divergent en silence** le jour où l'un est purgé,
+   exporté ou consolidé. C'est mot pour mot le §… de la migration `063` : *une table qui répond à
+   une question ne doit pas se mettre à en répondre une autre.*
+2. **On ne recopie pas les champs qui n'ont pas de sens dans l'autre direction.**
+   `substituabilite` et `plan_sortie` sont ce que **nous** exigeons d'un fournisseur. Côté
+   client, c'est **lui** qui les exige de nous — les mettre sur sa fiche produirait des champs
+   qu'on remplit au hasard, et un champ rempli au hasard est plus dangereux qu'un champ absent.
+
+### 49.3 Un régime qui ne s'applique pas ne s'affiche pas
+
+⚠️ **DORA ne concerne que les entités financières.** Un groupe industriel n'en est pas une, et
+la plupart de ses donneurs d'ordre non plus. Le régime est donc **déclaré** par une colonne
+(`clients.entite_financiere_dora`, fausse par défaut), et l'écran ne le montre que si elle est
+vraie.
+
+🛑 **Le motif n'est pas l'encombrement, c'est la crédibilité** : *afficher à tout le monde un
+régime qui ne concerne presque personne apprend à ignorer l'écran, y compris le jour où il
+s'adresse vraiment à vous.* C'est la même règle que les deux cents alertes sans objet du
+registre DORA (migration `042`), et que le refus de réclamer la substituabilité d'un tiers non
+critique.
+
+### 49.4 Ce qui se réutilise, et ce qui doit s'ajouter
+
+⚠️ **Le miroir réutilise plus qu'il n'ajoute, et l'inventaire doit être fait AVANT d'écrire une
+ligne.** Pour les migrations `070` et `071`, quatre dispositifs existaient déjà :
+
+- les **exigences contractuelles** du client : `exigences.client_id`, depuis la `002` ;
+- la **chaîne de sous-traitance** et son rang dérivé : `prestataires`, depuis la `042` ;
+- les **mesures de sécurité** de l'article 32 : le pivot `mesure_catalogue`, depuis la `002` ;
+- la **classification** : `documents.confidentialite`, depuis la `027`.
+
+Ce qui manquait était *le registre lui-même*, *ce que le client impose*, et **ce qui le fait
+respecter ailleurs**. Le troisième est le seul qui se voie à l'usage, et c'est celui qu'on
+oublie : une exigence contractuelle que rien ne fait respecter est une exigence **affichée**.
+
+### 49.5 Le plancher se garde dans les DEUX sens d'écriture
+
+🛑 **La leçon la plus coûteuse de ce lot, et elle est générale.** Un client déclare un niveau de
+diffusion minimal pour ses données. Un déclencheur refuse qu'un document lui appartenant soit
+classé en dessous — c'est le sens évident. **Rien ne gardait l'autre** : un seul `update clients
+set confidentialite_plancher = 'restreint'` aurait donné un contrat affiché comme tenu avec des
+documents « interne » dessous, **et le dossier remis au client l'aurait affirmé**.
+
+**Une propriété qui lie deux tables se garde sur les deux écritures.** C'est la classe « on a
+corrigé un sens, pas la propriété », et elle est revenue sept fois sur ce chantier sous le nom
+*« corriger la classe, pas l'instance »*.
+
+⚠️ **Et les deux déclencheurs sont DIFFÉRÉS** (`deferrable initially deferred`) : immédiats, ils
+refuseraient une reprise « remplacer » parfaitement saine dont l'ordre d'insertion place le
+document avant le client. C'est la classe des constats **Q-194**, **Q-280** et **Q-284**,
+tranchée quatre fois de la même façon — ***restaurer une sauvegarde gagne***.
+
+### 49.6 Le garde-fou éprouve les DEUX vocabulaires l'un contre l'autre
+
+⚠️ Le plancher du client et la classification des documents sont **deux contraintes `check` dans
+deux tables**. Si leurs vocabulaires divergent, le plancher devient **insatisfiable** : aucun
+document ne peut plus être rattaché à ce client, et le refus cite un niveau qui n'existe pas.
+
+`f_verifier_sous_traitance_rgpd()` ne compare pas les deux **textes** de contrainte : il les
+**ÉPROUVE tous les deux sur les mêmes valeurs**, dans les deux sens, plus une valeur étrangère
+pour mesurer le refus. C'est la seule mesure qui survive à une réécriture de l'un des deux
+(§39.1), et elle a été **jouée contre seize mutations** avant d'être figée au banc.
+
+### 49.7 Un régime contractuel n'entre pas dans la fonction de la LOI
+
+⚠️ Le délai de notification d'un incident à un client vient d'un **contrat**, souvent 24 h —
+donc **plus court que les 72 h de NIS2**. La tentation était de l'ajouter à
+`f_echeances_reglementaires()`, là où vivent déjà les paliers.
+
+🛑 **Son garde-fou exige que cette fonction rende EXACTEMENT quatre paliers, et il a raison : la
+loi en impose quatre.** Y glisser un cinquième palier contractuel ferait rougir le déploiement,
+et le forcer à se taire reviendrait à **désarmer le garde qui protège les délais légaux**. Une
+fonction **sœur** le calcule, avec le délai **en paramètre** — ce qui la garde `immutable` et
+l'empêche de lire une table cloisonnée.
+
+**La règle : un calcul par régime, à un seul endroit par régime.** Et un garde mesure que le
+contractuel n'a pas déteint sur le légal, parce que la seule façon dont cette propriété peut
+devenir fausse est qu'un futur bien intentionné « simplifie ».

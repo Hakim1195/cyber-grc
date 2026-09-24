@@ -65,10 +65,10 @@
 > exacte au round-trip (§1.4) — et les **valeurs d'énumération** sont reprises mot pour
 > mot, casse et accents compris.
 
-Version de schéma courante : **`SCHEMA_VERSION = 29`** (défini dans `js/core/datastore.js`).
+Version de schéma courante : **`SCHEMA_VERSION = 30`** (défini dans `js/core/datastore.js`).
 Elle numérote la **forme de l'objet `data` et du fichier `grc-backup`**, et elle continue de
 vivre : c'est elle qui pilote les migrations à la relecture d'un vieil export, y compris
-côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v29**. Elle est
+côté serveur, où `backend/src/reprise/` rejoue les paliers **v1 → v30**. Elle est
 indépendante du numéro des migrations SQL.
 
 > ⚠️ **Ce paragraphe a annoncé « v12 » pendant quatre montées de version**, du 04/09 au
@@ -431,6 +431,26 @@ indépendante du numéro des migrations SQL.
 >     qualificatifs** (`delai_impact`, `mode_degrade`). ⚠️ Les deux sont **nullables**, et
 >     `null` s'y lit « non renseigné » — jamais « immédiat », jamais « aucun mode dégradé ».
 
+> v30 (migrations `070` et `071`) : deux collections neuves — **`traitements_pour_client`**,
+>     le **registre de l'article 30 §2 du RGPD** (ce que nous traitons POUR LE COMPTE d'un
+>     donneur d'ordre, quand nous sommes **sous-traitant** et qu'il est responsable de
+>     traitement), et **`client_sous_traitants`**, la déclaration des **sous-traitants
+>     ultérieurs** qui lui sont dus (art. 28 §2 et §4). La collection `clients` gagne en plus
+>     quinze champs : identité, contrat, contacts du responsable de traitement et de son
+>     **DPO** (nommément exigés par l'art. 30 §2 a), droit d'audit, sort des données en fin de
+>     contrat, plancher de classification, délai contractuel de notification d'incident.
+>
+>     ⚠️ **Ce n'est PAS le registre `traitements`, et la distinction est juridique.** Celui-là
+>     est le registre de l'article 30 **§1** : les traitements dont NOUS sommes responsable,
+>     avec notre finalité et notre base légale. Ici, la finalité est **l'instruction du
+>     client** et la base légale est **la sienne**. Les mêler dans une collection les ferait
+>     diverger en silence le jour où l'une est purgée, exportée ou consolidée.
+>
+>     ⚠️ **Le palier n'invente RIEN, et ici le refus a une conséquence juridique.** Dériver un
+>     registre §2 depuis le §1 aurait fabriqué une déclaration de sous-traitance que personne
+>     n'a écrite — et le produit l'aurait présentée au client. Deux tableaux vides, et c'est
+>     l'utilisateur qui déclare.
+
 ---
 
 ## 1. Où vivent les données, et sous quelle forme
@@ -534,11 +554,13 @@ Conséquences pratiques :
 
 ### 1.5 Correspondance entre l'objet `data` et le schéma serveur
 
-**44 collections, 44 entités.** Les noms coïncident partout sauf pour `mesures` :
+**46 collections, 46 entités.** Les noms coïncident partout sauf pour `mesures` :
 
 | Collection `data` | Table(s) PostgreSQL | Préfixe d'identifiant |
 |---|---|---|
 | `clients` | `clients` | `CLI` |
+| `traitements_pour_client` | `traitements_pour_client` (+ liaison `traitement_client_mesures`) | `TPC` |
+| `client_sous_traitants` | `client_sous_traitants` | *(aucun — table de liaison)* |
 | `personnes` | `personnes` | `PERS` |
 | `exigences` | `exigences` | `EX` |
 | `actions` | `actions` | `ACT` |

@@ -133,7 +133,28 @@ export type NomEntite =
   // ── v28 : les fiches réflexes de crise (migration `061`) ────────────────
   | 'fiches_reflexes'
   | 'fiche_reflexe_actions'
-  | 'contacts_urgence';
+  | 'contacts_urgence'
+  /**
+   * v30 — LE REGISTRE DE L'ARTICLE 30 §2 DU RGPD (migrations `070` et `071`).
+   *
+   * 🛑 **Ce n'est PAS `traitements`**, qui est le registre de l'article 30 **§1** : les
+   * traitements dont NOUS sommes responsable, avec notre finalité et notre base légale.
+   * Ici nous sommes **SOUS-TRAITANT** : la finalité est l'INSTRUCTION du donneur d'ordre,
+   * la base légale est LA SIENNE, et le texte exige en plus l'identité du responsable de
+   * traitement **et de son DPO**. Deux registres juridiquement distincts, deux entités —
+   * les mêler les ferait diverger en silence le jour où l'une est purgée, exportée ou
+   * consolidée (motif de la migration `063`).
+   *
+   * ⚠️ **CLOISONNÉE, jamais MIXTE** : deux filiales servant le même groupe client sont
+   * **deux sous-traitants distincts**, avec deux contrats et deux registres. Arbitrage de
+   * la migration `002` §1, reconfirmé par l'utilisateur le 24/09/2026.
+   *
+   * ⚠️ `client_sous_traitants` est une **liaison de `clients`** et non une entité à part :
+   * elle désigne lesquels de NOS prestataires touchent les données de ce client — donc
+   * lesquels lui sont dus au titre de l'article 28 §2. La chaîne, le pays et le rang
+   * restent dans `prestataires` (migration `042`), là où ils sont calculés.
+   */
+  | 'traitements_pour_client';
 
 /** Un enregistrement, tel que le frontend le manipule. */
 export type Enregistrement = Record<string, unknown>;

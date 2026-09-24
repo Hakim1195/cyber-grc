@@ -50,14 +50,21 @@ test('v1 → v2 : audits et revues rejoignent l’instantané unifié', () => {
   // migration `061` sème et celui que le palier inventerait —, et l'unicité
   // « nulls not distinct » refuserait la reprise. Le produit rendrait alors une
   // sauvegarde qu'il ne sait pas relire (motif Q-194).
+  // Le vingt-neuvième (v29 → v30) fait entrer le REGISTRE DE L'ARTICLE 30 §2 du RGPD —
+  // ce que nous traitons POUR LE COMPTE d'un donneur d'ordre, quand nous sommes
+  // sous-traitant — et donne à chaque client son tableau « sous_traitants[] », les
+  // sous-traitants ultérieurs qui lui sont dus (art. 28 §2). ⚠️ Il n'invente RIEN : dériver
+  // un registre §2 depuis le §1 fabriquerait une déclaration de sous-traitance que
+  // personne n'a écrite, et le produit la présenterait au client.
+  //
   // Le vingt-huitième (v28 → v29) donne à chaque actif son tableau
   // « prestataires_lies[] » : qui l'EXPLOITE, l'héberge, le maintient ou l'infogère.
   // ⚠️ Il n'invente RIEN — rapprocher `responsable` d'un nom de prestataire serait une
   // correspondance par chaîne de caractères, c'est-à-dire la chose même que la
   // migration `062` remplace.
-  assert.equal(rapport.paliers.length, 28);
+  assert.equal(rapport.paliers.length, 29);
   assert.equal(rapport.versionOrigine, 1);
-  assert.equal(rapport.versionCible, 29);
+  assert.equal(rapport.versionCible, 30);
 });
 
 test('v2 → v3 : évaluations de référentiels et pivot « Mesure de sécurité »', () => {
@@ -70,7 +77,7 @@ test('v2 → v3 : évaluations de référentiels et pivot « Mesure de sécurit�
   ]);
   assert.deepEqual(charge.evaluations, []);
   assert.deepEqual(charge.mesures, []);
-  assert.equal(rapport.paliers.length, 27);
+  assert.equal(rapport.paliers.length, 28);
 });
 
 test('v3 → v4 : registre des incidents', () => {
@@ -230,13 +237,13 @@ test('v11 → v12 : « mesure_id » unique devient « mesure_ids[] »', () => {
   }
 });
 
-test('reprise d’un bout en bout : une v1 arrive en v29 avec ses 50 collections', () => {
+test('reprise d’un bout en bout : une v1 arrive en v30 avec ses 51 collections', () => {
   const { rapport, charge } = reprendre(1);
 
-  assert.equal(charge.schemaVersion, 29);
-  assert.equal(rapport.paliers.length, 28);
-  assert.equal(Object.keys(rapport.volumes).length, 50);
-  // Les vingt-sept paliers se suivent sans trou : 1→2, 2→3, … 27→28.
+  assert.equal(charge.schemaVersion, 30);
+  assert.equal(rapport.paliers.length, 29);
+  assert.equal(Object.keys(rapport.volumes).length, 51);
+  // Les vingt-neuf paliers se suivent sans trou : 1→2, 2→3, … 29→30.
   rapport.paliers.forEach((etape, rang) => {
     assert.equal(etape.de, rang + 1);
     assert.equal(etape.vers, rang + 2);
@@ -249,7 +256,7 @@ test('un fichier qui ment sur sa version est rattrapé, et le mensonge est signa
   // l'ancien lien unique : le mensonge est rattrapé par la normalisation, pas
   // par les paliers — c'est tout l'objet de cet essai, et il exige donc un
   // fichier qui n'en traverse aucun.
-  const charge = instantane(29, {
+  const charge = instantane(30, {
     mesures: [{ id: 'MESURE-1720000000000-1', nom: 'Chiffrement', statut: 'conforme', maturite: 4 }],
     mco_actions: [{ id: 'MCO-1720000000000-1', titre: 'Test', etat: 'OK', date: '2025-11-02', notes: 'RAS' }],
     evaluations: [
@@ -257,10 +264,10 @@ test('un fichier qui ment sur sa version est rattrapé, et le mensonge est signa
     ],
     actifs: [{ id: 'ACTIF-1720000000000-1', nom: 'Serveur', type: 'Matériel', criticite: 'élevée' }],
   });
-  const resultat = reprendreExport(fichier(29, charge), OPTIONS_FIGEES);
+  const resultat = reprendreExport(fichier(30, charge), OPTIONS_FIGEES);
 
   assert.equal(resultat.statut, 'reprise');
-  assert.equal(resultat.rapport.paliers.length, 0, 'une v29 déclarée ne traverse aucun palier');
+  assert.equal(resultat.rapport.paliers.length, 0, 'une v30 déclarée ne traverse aucun palier');
   assert.equal(resultat.rapport.normalisation.length, 4);
   assert.equal(resultat.charge.mco_actions[0].statut, 'Réalisée');
   assert.deepEqual(resultat.charge.evaluations[0].mesure_ids, ['MESURE-1720000000000-1']);

@@ -282,7 +282,7 @@ export interface JournalMinimalReprise {
  * passage v12 → v13, et `test/reprise/versions-concordantes.test.mjs` existe
  * depuis pour que cela tombe en une milliseconde au lieu d'un round-trip.
  */
-export const VERSION_SCHEMA = 29;
+export const VERSION_SCHEMA = 30;
 
 /**
  * Les cinq colonnes du bloc de traçabilité (`CONVENTIONS.md` §3). Elles sont
@@ -490,7 +490,64 @@ function ident(nom: string): string {
  * ===================================================================== */
 
 const REGISTRE: ReadonlyMap<NomEntite, DescriptionEntite> = new Map<NomEntite, DescriptionEntite>([
-  ['clients', { nom: 'clients', table: 'clients', prefixe: 'CLI' }],
+  [
+    'clients',
+    {
+      nom: 'clients',
+      table: 'clients',
+      prefixe: 'CLI',
+      liaisons: [
+        {
+          // ── LES SOUS-TRAITANTS ULTÉRIEURS DÉCLARÉS AU CLIENT (migration `070` §4) ──
+          //
+          // 🛑 C'est une OBLIGATION, pas un confort : le RGPD art. 28 §2 interdit de
+          // recruter un sous-traitant ultérieur sans l'autorisation écrite du responsable
+          // de traitement, et le §4 nous rend responsable de ses manquements.
+          //
+          // ⚠️ La DATE D'AUTORISATION fait partie de l'identité du lien, comme la `nature`
+          // d'un prestataire lié : « déclaré » et « autorisé » sont deux états différents,
+          // et c'est justement l'écart entre les deux que le dossier client doit montrer.
+          // La confondre avec un simple rattachement ferait disparaître le seul manque
+          // BLOQUANT du dossier.
+          champ: 'sous_traitants',
+          table: 'client_sous_traitants',
+          colonneParent: 'client_id',
+          colonneEnfant: 'prestataire_id',
+          forme: 'objets',
+          attributs: { to: 'prestataire_id', autorise_le: 'autorise_le', role: 'role' },
+        },
+      ],
+    },
+  ],
+
+  [
+    // ── LE REGISTRE DE L'ARTICLE 30 §2 DU RGPD (migration `070` §2) ──────────────────
+    //
+    // ⚠️ **Ce n'est PAS l'entité `traitements`**, qui est le registre de l'article 30 §1 —
+    // les traitements dont NOUS sommes responsable. Ici, la finalité est l'INSTRUCTION du
+    // client et la base légale est LA SIENNE. Les mêler dans une entité les ferait diverger
+    // en silence le jour où l'une est purgée, exportée ou consolidée (motif de la migration
+    // `063` : une table qui répond à une question ne doit pas se mettre à en répondre une
+    // autre).
+    'traitements_pour_client',
+    {
+      nom: 'traitements_pour_client',
+      table: 'traitements_pour_client',
+      prefixe: 'TPC',
+      liaisons: [
+        {
+          // « Une description générale des mesures de sécurité » (art. 30 §2 d), renvoyée à
+          // l'article 32. ⚠️ On RATTACHE au pivot existant : une description figée dans un
+          // champ de texte est vraie le jour où on l'écrit et fausse la semaine suivante.
+          champ: 'mesures_liees',
+          table: 'traitement_client_mesures',
+          colonneParent: 'traitement_pour_client_id',
+          colonneEnfant: 'mesure_id',
+          forme: 'identifiants',
+        },
+      ],
+    },
+  ],
 
   ['exigences', { nom: 'exigences', table: 'exigences', prefixe: 'EX' }],
 

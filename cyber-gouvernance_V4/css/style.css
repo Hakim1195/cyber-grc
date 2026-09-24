@@ -3941,3 +3941,146 @@ body { overflow-x: hidden; }
        sens sur le papier : ce qui compte est la liste des filiales. */
     .fil-actions, .fil-source, .fil-bilan { display: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LE DONNEUR D'ORDRE — migrations `070` et `071` (24/09/2026)
+
+   Demande du RSSI du client : montrer au client comment on traite ses données.
+   ⚠️ **Chacune de ces classes est écrite ici PARCE QU'ELLE EST EMPLOYÉE dans
+      `js/modules/clients.js`** — le 19/09, huit classes écrites et définies nulle
+      part avaient fait rendre trois écrans neufs À PLAT, et aucun essai ne le
+      disait. *Une classe écrite n'est pas une classe définie.*
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.cli-intro { font-size: var(--text-base); padding: 10px 14px; }
+
+/* Les blocs du formulaire : un `fieldset` par sujet, parce qu'un donneur d'ordre
+   porte désormais quinze champs de quatre natures différentes, et qu'une colonne
+   de quinze champs n'est pas un formulaire, c'est une liste. */
+.cli-form .cli-bloc {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px 4px;
+    margin-bottom: 16px;
+    background: var(--surface, #fff);
+}
+.cli-form .cli-bloc > legend {
+    font-weight: 600;
+    color: var(--primary-dark, var(--primary));
+    padding: 0 8px;
+    font-size: var(--text-base);
+}
+.cli-duo, .cli-trio { display: grid; gap: 0 16px; }
+.cli-duo  { grid-template-columns: 1fr 1fr; }
+.cli-trio { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 760px) {
+    .cli-duo, .cli-trio { grid-template-columns: 1fr; }
+}
+
+.cli-case label { font-weight: 500; display: flex; align-items: flex-start; gap: 8px; }
+.cli-case input[type="checkbox"] { margin-top: 3px; }
+
+.cli-aide {
+    font-size: var(--text-sm);
+    color: var(--text-muted, #5f6b7a);
+    margin: 6px 0 12px;
+    line-height: 1.5;
+}
+
+.cli-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* L'étiquette « entité financière au sens de DORA ». ⚠️ Elle n'est PAS une
+   couleur de statut (vert/orange/rouge sont réservés à la conformité, charte §2) :
+   c'est un régime juridique applicable, pas un jugement de valeur. */
+.cli-dora {
+    display: inline-block;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 1px 7px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--primary);
+    color: var(--primary-dark, var(--primary));
+    background: var(--primary-tint, #eef4fb);
+    vertical-align: middle;
+}
+
+.cli-plancher {
+    display: inline-block;
+    font-size: var(--text-sm);
+    padding: 1px 7px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-subtle, #f5f6f8);
+}
+
+.cli-badge { background: var(--primary); color: #fff; }
+
+.cli-vide { text-align: center; color: var(--text-muted, #5f6b7a); padding: 14px 8px; }
+
+/* Un manque INLINE, dans un tableau : « garantie manquante », « non autorisé ».
+   Rouge assumé — ce sont les deux seuls cas où l'absence documente une infraction. */
+.cli-manque {
+    color: var(--color-danger);
+    font-weight: 600;
+    font-size: var(--text-sm);
+    white-space: nowrap;
+}
+
+/* ── Le dossier remis au client ─────────────────────────────────────────── */
+.cli-dossier .cli-avert { font-weight: 500; }
+
+.cli-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; }
+.cli-dl dt { font-weight: 600; color: var(--text-muted, #5f6b7a); }
+.cli-dl dd { margin: 0; }
+@media (max-width: 620px) {
+    .cli-dl { grid-template-columns: 1fr; gap: 2px; }
+    .cli-dl dd { margin-bottom: 8px; }
+}
+
+.cli-mlist { list-style: none; padding: 0; margin: 0; }
+.cli-m {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 8px 10px;
+    border-left: 3px solid var(--border);
+    margin-bottom: 6px;
+    background: var(--bg-subtle, #f5f6f8);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    line-height: 1.45;
+}
+.cli-m-etiq {
+    flex: 0 0 auto;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+/* ⚠️ « bloquant » veut dire qu'envoyer le dossier en l'état documente une
+   infraction : c'est la seule gravité qui mérite le rouge, et la sémantique
+   stricte de la charte l'autorise ici parce qu'il s'agit bien d'un défaut. */
+.cli-m--bloquant { border-left-color: var(--color-danger); }
+.cli-m--bloquant .cli-m-etiq { color: var(--color-danger); }
+.cli-m--majeur   { border-left-color: var(--color-partial, #e9631b); }
+.cli-m--majeur .cli-m-etiq { color: var(--color-partial, #e9631b); }
+.cli-m--mineur   { border-left-color: var(--border); }
+.cli-m--mineur .cli-m-etiq { color: var(--text-muted, #5f6b7a); }
+
+.cli-retirer {
+    background: transparent;
+    color: var(--color-danger);
+    border: 1px solid var(--border);
+    padding: 3px 9px;
+    font-size: var(--text-sm);
+    border-radius: var(--radius-sm);
+}
+.cli-retirer:hover { background: var(--tint-crit, #fdeceb); border-color: var(--color-danger); }
+
+/* ⚠️ Le dossier s'IMPRIME : c'est sa raison d'être. Ce qui ne sert qu'à l'écran
+   disparaît, et les tableaux cessent de défiler pour tenir sur la page. */
+@media print {
+    .cli-form, .cli-actions { display: none !important; }
+    .cli-dossier, .cli-manques { break-inside: avoid; }
+    .cli-m { background: none; }
+}

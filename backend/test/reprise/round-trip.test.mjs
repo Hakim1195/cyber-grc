@@ -22,7 +22,7 @@ import {
   identifiantsDe,
   instantaneV12Complet,
   instantaneV20Complet,
-  instantaneV29Complet,
+  instantaneV30Complet,
   OPTIONS_FIGEES,
 } from './jeux-essai.mjs';
 
@@ -32,8 +32,8 @@ test('un export À LA VERSION COURANTE traverse la chaîne sans être modifié',
   // titre. La question posée ici est l'inverse — « un fichier déjà à jour est-il
   // laissé intact ? » — et elle exige la version COURANTE, sans quoi elle se
   // périme à chaque montée de schéma sans que personne ne l'ait voulu.
-  const origine = instantaneV29Complet();
-  const resultat = reprendreExport(fichier(29, origine), OPTIONS_FIGEES);
+  const origine = instantaneV30Complet();
+  const resultat = reprendreExport(fichier(30, origine), OPTIONS_FIGEES);
 
   assert.equal(resultat.statut, 'reprise', resultat.message);
   assert.equal(resultat.rapport.paliers.length, 0, 'aucun palier à traverser');
@@ -44,7 +44,7 @@ test('un export À LA VERSION COURANTE traverse la chaîne sans être modifié',
 });
 
 test('un export à la version courante ne produit aucun avertissement', () => {
-  const resultat = reprendreExport(fichier(29, instantaneV29Complet()), OPTIONS_FIGEES);
+  const resultat = reprendreExport(fichier(30, instantaneV30Complet()), OPTIONS_FIGEES);
 
   const avertissements = resultat.rapport.anomalies.filter((a) => a.gravite === 'avertissement');
   assert.deepEqual(
@@ -60,8 +60,8 @@ test('les identifiants du fichier deviennent tels quels ceux de la charge repris
   // Version courante : une origine v12 gagnerait deux collections en chemin, et
   // la comparaison porterait alors sur la montée de schéma, pas sur les
   // identifiants.
-  const origine = instantaneV29Complet();
-  const resultat = reprendreExport(fichier(29, origine), OPTIONS_FIGEES);
+  const origine = instantaneV30Complet();
+  const resultat = reprendreExport(fichier(30, origine), OPTIONS_FIGEES);
 
   assert.deepEqual(identifiantsDe(chargeVersObjet(resultat.charge)), identifiantsDe(origine));
 });
@@ -70,14 +70,14 @@ test('aller-retour complet : reprise → enveloppe → reprise rend le même ins
   // Version COURANTE : l'enveloppe réémise porte forcément la version courante,
   // et la comparer à une origine v12 mesurerait la montée de schéma plutôt que
   // l'aller-retour.
-  const origine = instantaneV29Complet();
+  const origine = instantaneV30Complet();
 
-  const premier = reprendreExport(fichier(29, origine), OPTIONS_FIGEES);
+  const premier = reprendreExport(fichier(30, origine), OPTIONS_FIGEES);
   assert.equal(premier.statut, 'reprise');
 
   const renvoi = construireEnveloppe(premier.charge, OPTIONS_FIGEES);
   assert.equal(renvoi.format, 'grc-backup');
-  assert.equal(renvoi.version, 29);
+  assert.equal(renvoi.version, 30);
   assert.equal(renvoi.encrypted, false);
   assert.equal(renvoi.app, 'cyber-grc-dedienne');
   assert.equal(renvoi.createdAt, new Date(1_720_000_000_000).toISOString());
@@ -123,7 +123,7 @@ test('les clés étrangères implicites continuent de pointer après reprise', (
   assert.deepEqual(charge.traitements[0].mesures_ids, [charge.mesures[0].id]);
 });
 
-test('les volumes du rapport recensent les 29 collections', () => {
+test('les volumes du rapport recensent les 30 collections', () => {
   const resultat = reprendreExport(fichier(12, instantaneV12Complet()), OPTIONS_FIGEES);
   const { volumes } = resultat.rapport;
 

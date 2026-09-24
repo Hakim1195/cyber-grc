@@ -1245,6 +1245,22 @@ const Api = (() => {
         return appeler("/tiers/chaine/" + encodeURIComponent(prestataireId));
     }
     function tiersRegistreDora() { return appeler("/tiers/registre-dora"); }
+    /* ── LE DOSSIER QU'ON REMET AU DONNEUR D'ORDRE (migrations `070` et `071`) ──
+       « Comment nous traitons vos données » : le registre de l'article 30 §2, les
+       sous-traitants ultérieurs, les mesures, les exigences contractuelles, les
+       documents, les incidents — et LES MANQUES, qui en sont la moitié utile.
+
+       ⚠️ Il exige le droit d'EXPORT côté serveur, comme le registre DORA : un
+       dossier de conformité complet est une extraction. L'écran doit donc savoir
+       traiter un 403 sans le présenter comme une panne.
+
+       ⚠️ Et une rubrique que la session n'a pas le droit de lire revient marquée
+       `{ retenue: "<domaine>" }` plutôt qu'absente — l'écran DOIT le dire, sans
+       quoi le dossier affirmerait « aucun document » à un client qui en a douze
+       (constat Q-335). */
+    function clientDossier(clientId) {
+        return appeler("/clients/" + encodeURIComponent(clientId) + "/dossier");
+    }
     /* L'état DÉRIVÉ des questionnaires fournisseurs (action 21.2). ⚠️ Le compte
        de QUESTIONS n'y est pas : le serveur ne connaît pas les catalogues de
        référentiels, qui vivent ici. C'est l'écran qui fait la division. */
@@ -1600,6 +1616,8 @@ const Api = (() => {
         derogationsEtat, aipdEtat, demandesDroitsEtat,
         // Lot L21 : le registre DORA, la chaîne DÉRIVÉE et le score composite.
         tiersBareme, tiersEtat, tiersChaine, tiersRegistreDora, tiersQuestionnaires,
+        // Migrations `070` et `071` : le dossier remis au donneur d'ordre.
+        clientDossier,
         campagnesEtat, campagnesConvoquer, campagnesDeconvoquer,
         mainCourante, ajouterMainCourante,
         // Lot L18 bis : le jeu de découverte.

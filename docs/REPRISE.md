@@ -160,7 +160,87 @@ des verdicts antérieurs, il n'en établit pas.
 
 ---
 
-### ▶ OÙ REPRENDRE — au 24/09/2026, LE PÉRIMÈTRE ET LES DROITS SE PILOTENT DANS LE PRODUIT
+### ▶ OÙ REPRENDRE — au 24/09/2026 au soir, LA DEMANDE DU RSSI
+
+# 🛑 **LE DONNEUR D'ORDRE CESSE D'ÊTRE UN NOM — migrations `070` à `073`.**
+
+Elle ne vient d'aucun plan : le **RSSI du client** a demandé, le 24/09, *« quelque chose de
+similaire aux champs de création de prestataires »* dans le module Donneurs d'ordre, pour
+*« montrer au client comment on traite ses données »* — RGPD, DORA, ISO 27001 — *« et que ça
+soit respecté dans le reste du logiciel »*.
+
+**Ce n'était pas une demande d'écran, c'était un trou de conformité du produit** : un
+prestataire portait 22 champs, un donneur d'ordre en portait **2**. Et « article 28 »
+apparaissait huit fois dans le dépôt, **les huit fois pour DORA** : l'article 28 du RGPD et
+l'article 30 §2 — le registre du **sous-traitant** — n'y étaient **pas une seule fois**.
+
+| | Quoi | Migration |
+|---|---|---|
+| **1** | identité et contrat du client, **et les deux contacts que l'art. 30 §2 a) NOMME** | `070` §1 |
+| **2** | le **registre de l'article 30 §2** + son pivot de mesures | `070` §2-3 |
+| **3** | les **sous-traitants ultérieurs** dus au client (art. 28 §2) | `070` §4 |
+| **4** | les cinq **branchements** — plancher de diffusion, incidents, horloge, demandes de droits, échéancier | `071` |
+| **5** | le vocabulaire clos du journal, puis l'installateur des pièces | `072`, `073` |
+
+## 🛑 LES DEUX ARBITRAGES À NE PAS DÉFAIRE
+
+1. **`traitements_pour_client` n'est PAS `traitements` avec une colonne `rôle`.** Côté
+   sous-traitant, **la finalité est l'instruction du client et la base légale est la
+   sienne** ; le §2 exige des champs que le §1 n'a pas. Deux registres juridiquement
+   distincts mêlés dans une table **divergent en silence** le jour où l'un est purgé,
+   exporté ou consolidé. Règle générale : `CONVENTIONS.md` **§49**.
+2. **La portée reste la FILIALE** (arbitrage utilisateur, 24/09). Deux filiales servant le
+   même groupe client sont **deux sous-traitants distincts**, deux contrats, deux registres.
+   Conséquence assumée : l'identité du client est saisie deux fois.
+
+⚠️ **Et on n'a pas recopié les 22 champs du prestataire** : `substituabilite` et
+`plan_sortie` sont ce que **nous** exigeons d'un fournisseur — côté client, c'est **lui** qui
+les exige de nous. *Une symétrie d'écran qui n'est pas une symétrie juridique produit des
+champs qu'on remplit au hasard.*
+
+## ⚠️ SEPT DÉFAUTS TROUVÉS PAR LES GARDE-FOUS, ZÉRO PAR MOI — dont deux bloquants
+
+1. 🛑 **`journal_audit.entite_type` est un vocabulaire CLOS** : les trois tables n'y étaient
+   pas, donc **incréables par les routes génériques** — l'écran n'aurait rien pu enregistrer,
+   et le refus ne désignait **aucun champ** (il n'y en avait aucun à corriger). Trouvé par
+   `test/api/entites-familles.test.mjs`, qui crée **chaque** entité par sa route. `§40.1`,
+   migration `072`.
+2. 🛑 **Élargir ce vocabulaire rend la table PORTEUSE de pièces jointes**, et l'installateur
+   avait tourné avant : supprimer un traitement aurait laissé sa pièce **en base, sur le
+   disque et dans le quota**. Constats Q-232 / Q-233 **rouverts par un domaine élargi trois
+   migrations plus loin**. Migration `073`. ⚠️ **Règle neuve : toute migration qui ajoute une
+   valeur à `type_entite` appelle `f_poser_declencheurs_pieces()` derrière.**
+3. **Les trois `on delete set null` ne nommaient pas leur colonne** → `filiale_id` nullifiée,
+   `not null` → **toute restauration de sauvegarde tombait**. `f_verifier_set_null_composites()`
+   (§43).
+4. **La `071` passait sur une base VIDE et échouait sur la recette** : `add constraint` valide
+   les lignes existantes, donc LIT des tables cloisonnées. C'est le **§42**, et c'est le
+   déploiement qui l'a dit — pas le banc.
+5. `provenance` et le déclencheur de traçabilité manquaient sur les trois tables.
+6. `demandes_droits` porte `type_demande` et `repondue_le`, pas `nature` et `repondu_le`.
+7. **Mon essai réglait `peutExporter: false` dans le PÉRIMÈTRE**, où le serveur ne le lit
+   pas : il retombait sur les droits de développement et **mesurait 200 en croyant mesurer un
+   refus**. Le piège est écrit en toutes lettres dans `test/tiers/registre-dora.test.mjs`, et
+   je l'ai refait avant de le lire.
+
+⚠️ **Et un huitième qu'aucun garde n'a réclamé** : le pivot vers `mesure_catalogue` (table
+MIXTE, `filiale_id` nullable → **aucune clé composite possible**, §45) avait besoin de
+`f_coherence_mesure_catalogue()`. Sans lui, une filiale aurait rattaché au registre de son
+client **la mesure locale d'une voisine**, invisible — et le dossier remis au client l'aurait
+nommée. C'est la **cinquième** table à viser ce catalogue ; les quatre autres l'ont depuis la
+`004`. Trouvé en relisant ces quatre-là, pas en étant averti.
+
+## ⚠️ CE QU'IL RESTE À FAIRE SUR CE LOT
+
+🛑 **L'ÉCRAN N'A PAS ÉTÉ CLIQUÉ.** Le banc est vert, la base est éprouvée, seize mutations
+mordent — et *un lot n'est pas livré tant que son écran n'a pas été cliqué* : cinq défauts de
+la vague E venaient de là et zéro du banc. À faire sur `https://grc-test.site/#/clients` :
+créer un donneur d'ordre avec tous les champs, déclarer un traitement, y rattacher une mesure,
+déclarer un sous-traitant **sans** date d'autorisation, préparer le dossier, l'imprimer.
+
+**⇒ Puis l'`ULTRAREVIEW`** — à l'utilisateur, `/code-review ultra`.
+
+### ▶ Historique — au 24/09/2026, après-midi : LE PÉRIMÈTRE ET LES DROITS SE PILOTENT DANS LE PRODUIT
 
 # 🛑 **SIX MIGRATIONS, `064` À `069`, ET AUCUNE NE VIENT D'UN PLAN.**
 

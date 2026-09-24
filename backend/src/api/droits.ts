@@ -230,6 +230,19 @@ export const DOMAINE_PAR_ENTITE: Readonly<Record<NomEntite, DomaineFonctionnel>>
   incidents: 'incidents',
   documents: 'documents',
   traitements: 'rgpd',
+  // ── LE REGISTRE DE L'ARTICLE 30 §2 (migration `070`) ────────────────────────────
+  //
+  // ⚠️ **« rgpd » et non « tiers », et l'arbitrage mérite une ligne** : l'écran vit sur la
+  // fiche du donneur d'ordre, donc dans le sujet « tiers », et la tentation était de suivre
+  // l'écran. Mais ce que cette entité porte est un REGISTRE DE L'ARTICLE 30 — son
+  // propriétaire est le DPO, pas le responsable des comptes clients, et c'est lui qui
+  // répond à l'autorité de contrôle. Ranger un registre RGPD sous « tiers » l'aurait ouvert
+  // à qui gère les fournisseurs et fermé à qui en est comptable.
+  //
+  // ⚠️ Conséquence à assumer, et elle est voulue : un contributeur qui n'a pas le domaine
+  // « rgpd » voit la fiche du donneur d'ordre et **pas** son registre de sous-traitance. Le
+  // dossier client, lui, exige en plus le droit d'EXPORT — c'est une extraction.
+  traitements_pour_client: 'rgpd',
   mappings: 'conformite',
   history: 'pilotage',
   personnes: 'personnel',

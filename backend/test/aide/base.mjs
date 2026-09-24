@@ -1011,6 +1011,52 @@ export async function semerJeuEssai(base, client, options = {}) {
           f,
         );
 
+        /* ── LE REGISTRE DE L'ARTICLE 30 §2 DU RGPD (migrations `070` et `071`) ──
+         *
+         * ⚠️ **Trois tables cloisonnées de plus, et le balayage de cloisonnement exige
+         * de chacune AU MOINS UNE LIGNE par filiale** : sans matière, il rendrait
+         * « zéro visible » pour la seule raison qu'il n'y a rien à voir — *« zéro
+         * visible » est aussi ce que rend une table vide*, et c'est la moitié du
+         * contrôle qui manque le plus souvent.
+         *
+         * ⚠️ **Le traitement porte SON TRANSFERT AVEC SA GARANTIE** : la contrainte
+         * `ck_traitements_pour_client_transfert` refuse l'inverse, et un semis qui ne
+         * se charge pas n'éprouve rien. C'est le motif du jeu de découverte refusé par
+         * le socle des échelles, un lot plus tôt.
+         *
+         * ⚠️ **Et le sous-traitant ultérieur est déclaré SANS `autorise_le`** : c'est
+         * le cas qui produit un manque BLOQUANT au dossier client (RGPD art. 28 §2).
+         * Un semis qui ne porterait que des cas conformes ne mesurerait pas ce que le
+         * produit dit des autres. */
+        await c.query(
+          `insert into traitements_pour_client
+                  (id, filiale_id, client_id, intitule, categories_traitement,
+                   categories_donnees, personnes_concernees, instruction_reference,
+                   transfert_hors_ue, transfert_garantie, duree_conservation, revue_le)
+               values ('TPC-${s}', $1, 'CLI-${s}',
+                       'Hébergement du portail fournisseurs du site ${s}',
+                       'Hébergement, sauvegarde et supervision',
+                       'Identité professionnelle, coordonnées',
+                       'Acheteurs et fournisseurs du donneur d’ordre',
+                       'Annexe 3 du contrat', 'États-Unis (sauvegarde secondaire)',
+                       'Clauses contractuelles types 2021/914',
+                       'Durée du contrat, puis suppression sous 30 jours',
+                       current_date + 180)`,
+          f,
+        );
+        await c.query(
+          `insert into traitement_client_mesures
+                  (traitement_pour_client_id, mesure_id, filiale_id)
+               values ('TPC-${s}', 'MESURE-${s}', $1)`,
+          f,
+        );
+        await c.query(
+          `insert into client_sous_traitants (client_id, prestataire_id, filiale_id, role)
+               values ('CLI-${s}', 'PRES-${s}', $1,
+                       'Hébergement des sauvegardes du portail')`,
+          f,
+        );
+
         // ── Un catalogue LOCAL par filiale (migration `051`, action 26.2) ──────
         //
         // ⚠️ **Le socle ne suffit pas.** Les quatre tables de catalogue sont MIXTES :

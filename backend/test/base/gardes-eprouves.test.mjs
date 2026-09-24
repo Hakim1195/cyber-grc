@@ -1235,3 +1235,280 @@ describe('🛑 La délégation temporaire ne devient pas une porte, et c’est �
     );
   });
 });
+
+describe('🛑 Ce que le donneur d’ordre impose MORD, et c’est ÉPROUVÉ — 070 et 071', () => {
+  /* ⚠️ **Les seize mutations ci-dessous ont été jouées à la main sur une base jetable avant
+   * d'être figées ici, et les seize mordent.** C'est la règle du `CONVENTIONS.md` §39 : un
+   * garde-fou vert ne prouve rien tant qu'on ne l'a pas cassé. Et la moitié « non-bruit »
+   * compte autant : un garde qui refuse tout serait vert aussi, et le produit serait mort. */
+
+  test('le témoin : le schéma intact ne rend AUCUNE anomalie', async () => {
+    const anomalies = await anomaliesPendant([]);
+    assert.equal(anomalies.length, 0, `Schéma d’essai déjà en défaut : ${resume(anomalies)}`);
+  });
+
+  test('🛑 LE TRANSFERT HORS UNION cesse d’exiger sa garantie — vu (RGPD art. 46)', async () => {
+    /* Le constat d'audit le plus fréquent. La mutation garde le NOM de la contrainte ET ses
+     * littéraux, et ajoute « or true » : c'est exactement la forme qui passait au vert avant
+     * que les gardes ÉPROUVENT (constat Q-312). */
+    const anomalies = await anomaliesPendant([
+      'alter table traitements_pour_client drop constraint ck_traitements_pour_client_transfert',
+      'alter table traitements_pour_client add constraint ck_traitements_pour_client_transfert '
+        + "check (transfert_hors_ue is null or btrim(transfert_hors_ue) = '' "
+        + "or (transfert_garantie is not null and btrim(transfert_garantie) <> '') or true)",
+    ]);
+    assert.ok(
+      nomme(anomalies, 'transfert_sans_garantie_admis'),
+      'Le registre de l’article 30 §2 aurait l’air complet et documenterait une infraction '
+        + `à l’article 46. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('CONTRE-TÉMOIN : un transfert AVEC sa garantie refusé est vu aussi', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table traitements_pour_client drop constraint ck_traitements_pour_client_transfert',
+      'alter table traitements_pour_client add constraint ck_traitements_pour_client_transfert '
+        + 'check (transfert_hors_ue is null)',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'transfert_legitime_refuse'),
+      'Une contrainte qui refuse le cas nominal rend le registre impossible à tenir pour '
+        + `tout client hors Union — pire que son absence. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('🛑 LE PLANCHER perd un niveau que les documents portent — vu', async () => {
+    /* L'invariant que personne ne verrait autrement : si les deux vocabulaires divergent, le
+     * plancher devient INSATISFIABLE, et le refus cite un niveau qui n'existe pas. Le garde
+     * ne compare pas les deux TEXTES de contrainte — il les ÉPROUVE sur les mêmes valeurs. */
+    const anomalies = await anomaliesPendant([
+      'alter table clients drop constraint ck_clients_confidentialite_plancher',
+      'alter table clients add constraint ck_clients_confidentialite_plancher '
+        + "check (confidentialite_plancher is null or confidentialite_plancher in "
+        + "('public', 'interne', 'confidentiel'))",
+    ]);
+    assert.ok(
+      nomme(anomalies, 'plancher_refuse_un_niveau_de_document'),
+      `Un client ne peut plus exiger un niveau que ses documents portent. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('🛑 et L’AUTRE MOITIÉ : les documents perdent un niveau que le plancher admet — vu', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table documents drop constraint ck_documents_confidentialite',
+      'alter table documents add constraint ck_documents_confidentialite '
+        + "check (confidentialite in ('public', 'interne', 'confidentiel'))",
+    ]);
+    assert.ok(
+      nomme(anomalies, 'document_refuse_un_niveau_de_plancher'),
+      'Aucun document ne pourrait satisfaire ce plancher : le client verrait une exigence '
+        + `contractuelle que le produit rend impossible à honorer. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('le plancher ouvert à n’importe quoi est vu', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table clients drop constraint ck_clients_confidentialite_plancher',
+      'alter table clients add constraint ck_clients_confidentialite_plancher check (true)',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'plancher_hors_vocabulaire_admis'),
+      `Un plancher hors vocabulaire ne peut être comparé à rien. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('un délai de notification de ZÉRO heure est vu', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table clients drop constraint ck_clients_notification_incident',
+      'alter table clients add constraint ck_clients_notification_incident '
+        + 'check (notification_incident_h is null or notification_incident_h <= 720)',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'delai_nul_admis'),
+      'L’échéance tomberait à l’instant de la détection : l’incident serait « en retard » '
+        + `avant d’avoir été qualifié, et un indicateur toujours rouge n’est plus lu. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('la CLÉ vers le donneur d’ordre redevenue SIMPLE est vue', async () => {
+    /* Une clé simple est satisfaite par une ligne d'une filiale voisine, que la RLS rend
+     * invisible (§17.1) : le registre de l'article 30 §2 d'une filiale se rattacherait au
+     * client d'une autre, et aucun écran ne le montrerait.
+     * ⚠️ `not valid` : `add constraint` valide les lignes existantes, donc LIT une table
+     *    cloisonnée — et la RLS forcée vaut aussi pour le propriétaire. */
+    const anomalies = await anomaliesPendant([
+      'alter table traitements_pour_client drop constraint fk_traitements_pour_client_client',
+      'alter table traitements_pour_client add constraint fk_traitements_pour_client_client '
+        + 'foreign key (client_id) references clients(id) on delete cascade not valid',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'cle_vers_le_client_non_composite'),
+      `Le registre pourrait se rattacher au client d’une autre filiale. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('la CLÉ vers le prestataire redevenue SIMPLE est vue', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table client_sous_traitants drop constraint fk_client_sous_traitants_prestataire',
+      'alter table client_sous_traitants add constraint fk_client_sous_traitants_prestataire '
+        + 'foreign key (prestataire_id) references prestataires(id) on delete cascade not valid',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'cle_vers_le_prestataire_non_composite'),
+      'Le dossier remis au client nommerait une société que cette filiale n’a jamais '
+        + `contractée. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('🛑 L’ORDRE des niveaux de diffusion cesse d’être STRICT — vu', async () => {
+    /* Deux niveaux de rang égal font qu'un document « interne » satisfait un plancher
+     * « confidentiel » : le contrat s'affiche comme tenu et il ne l'est pas. */
+    const anomalies = await anomaliesPendant([
+      'create or replace function f_rang_confidentialite(p_niveau text) returns integer '
+        + 'language sql immutable set search_path = pg_catalog, public, pg_temp as $f$ '
+        + "select case p_niveau when 'public' then 1 when 'interne' then 2 "
+        + "when 'confidentiel' then 2 when 'restreint' then 4 else null end; $f$",
+    ]);
+    assert.ok(
+      nomme(anomalies, 'ordre_de_diffusion_non_strict'),
+      `Un document « interne » satisferait un plancher « confidentiel ». Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('un niveau HORS VOCABULAIRE qui reçoit un rang est vu', async () => {
+    const anomalies = await anomaliesPendant([
+      'create or replace function f_rang_confidentialite(p_niveau text) returns integer '
+        + 'language sql immutable set search_path = pg_catalog, public, pg_temp as $f$ '
+        + "select case p_niveau when 'public' then 1 when 'interne' then 2 "
+        + "when 'confidentiel' then 3 when 'restreint' then 4 else 0 end; $f$",
+    ]);
+    assert.ok(
+      nomme(anomalies, 'niveau_inconnu_range'),
+      'Toute comparaison de plancher réussirait alors au hasard, au lieu d’échouer. '
+        + `Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('le DÉLAI CONTRACTUEL qui cesse de suivre son paramètre est vu', async () => {
+    const anomalies = await anomaliesPendant([
+      'create or replace function f_echeance_contractuelle(p_detecte_le timestamptz, '
+        + 'p_date_detection date, p_delai_heures integer) returns table (regime text, '
+        + 'palier text, reference text, echeance timestamptz, origine text) language sql '
+        + 'immutable set search_path = pg_catalog, public, pg_temp as $f$ '
+        + "select 'contractuel', 'notification_client', 'C', "
+        + "coalesce(p_detecte_le, p_date_detection::timestamptz) + interval '48 hours', "
+        + "'instant' where coalesce(p_detecte_le, p_date_detection::timestamptz) is not null "
+        + 'and p_delai_heures is not null; $f$',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'delai_contractuel_faux'),
+      `Le garde ÉPROUVE le calcul sur un instant témoin. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('🛑 une échéance calculée SANS délai convenu est vue', async () => {
+    /* Une date que rien ne fonde — et c'est précisément celle qu'on ne peut pas montrer à
+     * un client. La mutation retombe sur un défaut de 72 h, ce qu'un développeur pressé
+     * écrirait en croyant bien faire. */
+    const anomalies = await anomaliesPendant([
+      'create or replace function f_echeance_contractuelle(p_detecte_le timestamptz, '
+        + 'p_date_detection date, p_delai_heures integer) returns table (regime text, '
+        + 'palier text, reference text, echeance timestamptz, origine text) language sql '
+        + 'immutable set search_path = pg_catalog, public, pg_temp as $f$ '
+        + "select 'contractuel', 'notification_client', 'C', "
+        + 'coalesce(p_detecte_le, p_date_detection::timestamptz) + '
+        + "make_interval(hours => coalesce(p_delai_heures, 72)), 'instant' "
+        + 'where coalesce(p_detecte_le, p_date_detection::timestamptz) is not null; $f$',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'echeance_sans_delai_convenu'),
+      `Le produit afficherait au client une date que rien ne fonde. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('🛑 le palier CONTRACTUEL glissé dans la fonction des échéances LÉGALES est vu', async () => {
+    /* La propriété que la migration `071` PROMET, et la seule façon qu'elle a d'être fausse
+     * est qu'un futur bien intentionné ajoute le palier client à la fonction de la loi. Le
+     * délai d'un contrat se présenterait comme une obligation légale. */
+    const anomalies = await anomaliesPendant([
+      'create or replace function f_echeances_reglementaires(p_detecte_le timestamptz, '
+        + 'p_date_detection date) returns table (regime text, palier text, reference text, '
+        + 'echeance timestamptz, origine text) language sql immutable '
+        + 'set search_path = pg_catalog, public, pg_temp as $f$ '
+        + "select 'contractuel', 'notification_client', 'X', "
+        + "coalesce(p_detecte_le, p_date_detection::timestamptz) + interval '24 hours', "
+        + "'instant' where coalesce(p_detecte_le, p_date_detection::timestamptz) is not null; $f$",
+    ]);
+    assert.ok(
+      nomme(anomalies, 'palier_contractuel_dans_la_loi'),
+      `Le garde-fou des quatre paliers légaux devrait être désarmé pour l’accepter. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('un document de portée GROUPE qui accepte un donneur d’ordre est vu', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table documents drop constraint ck_documents_client_local',
+      'alter table documents add constraint ck_documents_client_local check (true) not valid',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'document_groupe_avec_client'),
+      'Un donneur d’ordre est toujours local : la clé composite ne vérifierait alors RIEN '
+        + `(MATCH SIMPLE, §45). Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('🛑 une notification contractuelle SANS destinataire est vue', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table declarations_reglementaires drop constraint ck_declarations_reg_destinataire',
+      'alter table declarations_reglementaires add constraint ck_declarations_reg_destinataire '
+        + 'check (true) not valid',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'notification_contractuelle_sans_destinataire')
+        || nomme(anomalies, 'declaration_autorite_avec_client'),
+      'La ligne dirait « nous avons prévenu quelqu’un » sans dire qui, et le dossier '
+        + `compterait la notification comme faite. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('un « rapport final » sous le régime contractuel est vu', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table declarations_reglementaires drop constraint '
+        + 'ck_declarations_reglementaires_coherence',
+      'alter table declarations_reglementaires add constraint '
+        + 'ck_declarations_reglementaires_coherence check (true) not valid',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'palier_etranger_au_regime_contractuel'),
+      `Le tableau de conformité afficherait un palier que le contrat ne prévoit pas. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('🛑 le déclencheur du plancher devenu IMMÉDIAT est vu', async () => {
+    /* Le différé n'est pas un confort : immédiat, il refuse une reprise « remplacer »
+     * parfaitement saine dont l'ordre d'insertion place le document avant le client. C'est
+     * la classe des constats Q-194, Q-280 et Q-284 — *restaurer une sauvegarde gagne.*
+     * ⚠️ Et le garde mesure `tgtype`, pas l'existence (constat Q-281). */
+    const anomalies = await anomaliesPendant([
+      'drop trigger trg_documents_plancher_client on documents',
+      'create constraint trigger trg_documents_plancher_client after insert or update of '
+        + 'client_id, confidentialite, filiale_id on documents for each row '
+        + 'execute function f_document_respecte_le_plancher()',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'declencheur_du_plancher_absent_ou_immediat'),
+      `Une reprise « remplacer » saine serait refusée. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('le déclencheur du plancher RETIRÉ est vu aussi', async () => {
+    const anomalies = await anomaliesPendant([
+      'drop trigger trg_clients_plancher_tenu on clients',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'declencheur_du_plancher_absent_ou_immediat'),
+      'Sans lui, relever un plancher afficherait au client une exigence que le produit ne '
+        + `tient pas — et le dossier l’affirmerait. Rendu : ${resume(anomalies)}`,
+    );
+  });
+});

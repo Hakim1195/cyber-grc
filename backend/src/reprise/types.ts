@@ -44,6 +44,11 @@ export type Enregistrement = ObjetJson;
  */
 export type NomCollection =
   | 'clients'
+  // v30 — le registre de l'article 30 §2 du RGPD (migrations `070` et `071`). ⚠️ Pas
+  // « client_sous_traitants » : c'est une LIAISON portée par chaque client, comme
+  // « prestataires_lies » l'est par chaque actif — elle voyage DANS la collection
+  // « clients », pas à côté.
+  | 'traitements_pour_client'
   | 'exigences'
   | 'actions'
   | 'risques'

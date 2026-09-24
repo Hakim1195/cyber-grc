@@ -101,15 +101,18 @@ describe('La couture — les routes que le point d’entrée monte', () => {
 });
 
 describe('Le modèle est DÉRIVÉ, il n’est pas écrit', () => {
-  test('les 50 entités du registre ont un modèle, sans exception ni liste', () => {
+  test('les 51 entités du registre ont un modèle, sans exception ni liste', () => {
     const attendues = [...listerEntites()].sort();
     const rendues = modeles.entites.map((e) => e.entite).sort();
     assert.deepEqual(rendues, attendues);
+    // ⚠️ **50 → 51 le 24/09/2026** : `traitements_pour_client`, le registre de
+    //    l'article 30 §2 du RGPD (migration `070`). ⚠️ `client_sous_traitants` n'en fait
+    //    PAS partie : c'est une LIAISON portée par `clients`, comme `actif_prestataires`.
     // ⚠️ **47 → 50 le 22/09/2026** : `fiches_reflexes`, `fiche_reflexe_actions` et
     // `contacts_urgence` (migration `061`) entrent au registre des entités. Le chiffre
     // est écrit ici À DESSEIN — il fait rougir quand une entité apparaît, et quelqu'un
     // doit alors dire si elle s'importe (`CLAUDE.md` §3, la liste qui échoue bruyamment).
-    assert.equal(rendues.length, 50);
+    assert.equal(rendues.length, 51);
   });
 
   test('les colonnes coïncident champ pour champ avec `GET /api/modele`', async () => {
