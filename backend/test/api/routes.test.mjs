@@ -1003,6 +1003,11 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // renseignement.
     ['GET', '/api/filiales/inventaire', undefined],
     ['GET', '/api/filiales/candidats-annuaire', undefined],
+    // La correction de l'identité d'une filiale (24/09/2026). Servie sans
+    // identité, elle laisserait n'importe qui réécrire la raison sociale qui
+    // s'imprime sur CHAQUE pièce d'audit du groupe — et le journal attribuerait
+    // la correction à personne.
+    ['PUT', '/api/filiales/FIL-INEXISTANTE', { raison_sociale: 'Réécrite sans identité', version: 1 }],
     // Les deux routes du cycle de vie (lot L13, CONVENTIONS.md §35). Servie sans
     // identité, la première remettrait l'export complet d'une filiale à n'importe
     // qui ET la ferait sortir du groupe ; la seconde effacerait définitivement une

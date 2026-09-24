@@ -376,6 +376,211 @@ export async function creerFiliale(
 }
 
 /* =====================================================================
+ *  1 ter. La CORRECTION — ce qu'on répare après coup, et ce qu'on ne répare pas
+ * ===================================================================== */
+
+/**
+ * Champs modifiables après coup.
+ *
+ * ════════════════════════════════════════════════════════════════════════
+ *  🛑 `code` EST ABSENT, ET C'EST LA DÉCISION DE CE FICHIER
+ * ════════════════════════════════════════════════════════════════════════
+ *
+ * Le code nomme les groupes d'annuaire — `GRC-<CODE>-<PROFIL>`. Le changer ici
+ * laisserait, dans l'Active Directory du client, huit groupes qui n'accordent
+ * plus rien, et le produit **ne peut pas les renommer** : il n'écrit pas dans
+ * l'annuaire, et il ne le pourra jamais (arbitrage utilisateur du 22/09/2026).
+ * Tous les membres de ces groupes perdraient leur accès **sans un message**.
+ *
+ * Une filiale dont le code est faux se refait : on la déclare sous le bon code,
+ * on fait sortir l'ancienne — ce qui exporte ses données d'abord. C'est plus
+ * coûteux qu'un champ modifiable, et c'est le prix de ne pas couper des accès
+ * en silence.
+ *
+ * ⚠️ `statut`, `date_sortie` sont absents aussi : une sortie n'est pas une
+ * correction de fiche. Elle passe par `POST /api/cycle/sortie-filiale`, qui
+ * **exporte d'abord**.
+ *
+ * ════════════════════════════════════════════════════════════════════════
+ *  Pourquoi cette route existe — l'arbitrage du 24/09/2026
+ * ════════════════════════════════════════════════════════════════════════
+ *
+ * L'écran des paramètres affiche l'identité de la filiale en lecture seule, avec
+ * ce motif : *« une filiale ne réécrit pas sa propre identité dans l'outil qui
+ * sert de preuve en audit. Une correction se demande à votre exploitant. »* Le
+ * motif est **juste** et il ne bouge pas.
+ *
+ * 🛑 Mais l'exploitant n'avait **aucun outil** : `update filiales` n'existait
+ * nulle part dans `src/`. « Demandez à votre exploitant » voulait dire « du SQL à
+ * la main », pour corriger une faute de frappe dans une raison sociale qui
+ * s'imprime sur chaque pièce d'audit. C'est la troisième instance, trouvée en
+ * BALAYANT, de la classe que l'utilisateur a nommée le 24/09/2026 : *le produit
+ * ne savait configurer qu'à la création*.
+ *
+ * La correction est donc possible — mais **pour l'administration Groupe, jamais
+ * pour la filiale sur elle-même** : les deux moitiés de l'arbitrage tiennent
+ * ensemble.
+ */
+const CHAMPS_MODIFIABLES: readonly ChampAdmis[] = Object.freeze([
+  'raison_sociale',
+  'nom_court',
+  'adresse',
+  'code_postal',
+  'ville',
+  'pays',
+  'telephone',
+  'email',
+  'site_web',
+  'langue_defaut',
+  'date_entree',
+  'notes',
+]);
+
+/**
+ * Corrige l'identité administrative d'une filiale.
+ *
+ * ⚠️ **Verrouillage optimiste** : `version` est exigée, et une version périmée
+ * rend `409`. Deux administrateurs sur la même fiche, le second est refusé plutôt
+ * que d'écraser le premier sans que personne le sache.
+ *
+ * ⚠️ **Un champ ABSENT du corps n'est pas effacé** — il est laissé tel quel. Un
+ * écran qui n'enverrait qu'un champ ne doit pas vider les onze autres, et c'est
+ * le motif du constat Q-192 : `null` ne veut jamais dire « remets la valeur par
+ * défaut ». Pour vider un champ, on envoie la chaîne vide.
+ */
+export async function modifierFiliale(
+  client: PoolClient,
+  id: string,
+  brut: unknown,
+  perimetre: PerimetreSession,
+): Promise<{ readonly id: string; readonly version: number }> {
+  if (brut === null || typeof brut !== 'object' || Array.isArray(brut)) {
+    throw entreeInvalide('Le corps de la requête doit être un objet JSON.');
+  }
+  const corpsBrut = brut as Record<string, unknown>;
+
+  const version = Number(corpsBrut['version']);
+  if (!Number.isInteger(version)) {
+    throw entreeInvalide('La version attendue de l’enregistrement est absente ou invalide.');
+  }
+
+  const modifiables = new Set<string>(CHAMPS_MODIFIABLES);
+  const valeurs: Partial<Record<ChampAdmis, string>> = {};
+  for (const [cle, valeur] of Object.entries(corpsBrut)) {
+    if (cle === 'version') continue;
+    if (!modifiables.has(cle)) {
+      // ⚠️ REFUSÉ, jamais ignoré : ignorer laisserait croire que le changement a
+      //    été pris en compte. Le message dit POURQUOI pour le code, parce que
+      //    c'est le champ qu'on cherchera à changer.
+      throw entreeInvalide(
+        cle === 'code'
+          ? 'Le code d’une filiale ne se modifie pas : il nomme ses groupes d’annuaire ' +
+            '(GRC-<CODE>-<PROFIL>), et le changer laisserait dans votre Active Directory des ' +
+            'groupes qui n’accordent plus rien — le produit n’y écrit pas et ne peut pas les ' +
+            'renommer. Déclarez la filiale sous le bon code, puis faites sortir l’ancienne.'
+          : `Champ « ${cle} » non modifiable. Modifiables : ${CHAMPS_MODIFIABLES.join(', ')}. ` +
+            'Le statut et la date de sortie passent par la sortie de filiale, qui exporte d’abord.',
+      );
+    }
+    if (valeur === null || valeur === undefined) continue;
+    if (typeof valeur !== 'string') {
+      throw entreeInvalide(`Le champ « ${cle} » doit être une chaîne de caractères.`);
+    }
+    const nettoye = valeur.trim();
+    const forme = FORMES[cle as ChampAdmis];
+    if (nettoye !== '' && forme !== undefined && !forme.motif.test(nettoye)) {
+      throw entreeInvalide(`Champ « ${cle} » : ${forme.explication} Reçu : « ${nettoye} ».`);
+    }
+    valeurs[cle as ChampAdmis] = nettoye;
+  }
+
+  // `champs` ne sert plus à composer un `update` — la fonction de la `067` nomme ses
+  // douze colonnes — mais à refuser un corps qui ne demande RIEN : une écriture qui ne
+  // change rien et rend 200 apprend à ne plus croire les confirmations.
+  const champs = Object.keys(valeurs) as ChampAdmis[];
+  if (champs.length === 0) {
+    throw entreeInvalide('Aucun champ à modifier n’a été fourni.');
+  }
+  if (valeurs.raison_sociale !== undefined && valeurs.raison_sociale === '') {
+    throw entreeInvalide('La raison sociale ne peut pas être vide (ck_filiales_raison).');
+  }
+
+  /* ⚠️ L'état AVANT est relu par `f_filiales_inventaire()` — migration `065` :
+   * un `select` direct ne rendrait pas une filiale hors du périmètre de session,
+   * et c'est précisément celle qu'un administrateur vient de créer. */
+  const { rows: avant } = await client.query<{ code: string; raison_sociale: string; version: number }>(
+    `select "code", "raison_sociale" from f_filiales_inventaire() where "id" = $1`,
+    [id],
+  );
+  const etatAvant = avant[0];
+  if (etatAvant === undefined) {
+    throw new ErreurApplicative({
+      code: 'ressource_inconnue',
+      statut: 404,
+      message: 'Cette filiale n’existe pas.',
+    });
+  }
+
+  /* 🛑 `f_filiale_corriger()` ET NON UN `update` ORDINAIRE — migration `067`,
+   * trouvé PAR LE BANC. PostgreSQL applique **aussi les politiques de SELECT** à un
+   * `update` dès qu'il référence des colonnes — ce que fait toute clause
+   * `where "version" = $n`. `pol_filiales_lecture` retombant sur les filiales
+   * lisibles dès que `f_perimetre_groupe()` est fausse, **la filiale qu'un
+   * administrateur vient de créer était précisément celle qu'il ne pouvait pas
+   * corriger** : l'`update` rendait zéro ligne, et le code en concluait un conflit
+   * de version. Le produit accusait un tiers qui n'existait pas.
+   *
+   * ⚠️ `null` veut dire « inchangé » dans cette fonction — c'est ce qui permet à un
+   * écran partiel de ne rien effacer (motif Q-192). La chaîne vide, elle, efface :
+   * c'est un geste, pas une omission. */
+  const p = (c: ChampAdmis): string | null => valeurs[c] ?? null;
+  const maj = await client.query<{ lignes: number }>(
+    `select f_filiale_corriger($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+                               nullif($13, '')::date, $14) as "lignes"`,
+    [
+      id,
+      version,
+      p('raison_sociale'),
+      p('nom_court'),
+      p('adresse'),
+      p('code_postal'),
+      p('ville'),
+      p('pays'),
+      p('telephone'),
+      p('email'),
+      p('site_web'),
+      p('langue_defaut'),
+      p('date_entree'),
+      p('notes'),
+    ],
+  );
+  if ((maj.rows[0]?.lignes ?? 0) === 0) {
+    throw new ErreurApplicative({
+      code: 'conflit_version',
+      statut: 409,
+      message:
+        'Cette filiale a été modifiée entre-temps par quelqu’un d’autre. Rechargez l’écran : ' +
+        'écraser sa correction sans la voir serait pire que ce refus.',
+      detailJournal: `filiales ${id} : version ${String(version)} périmée`,
+    });
+  }
+
+  await journaliser(client, {
+    action: 'modification',
+    // §29.5 : phrase littérale ; le code et les valeurs partent en jsonb.
+    resume: 'Correction de l’identité d’une filiale',
+    filialeId: perimetre.filialeId,
+    utilisateurLibelle: perimetre.utilisateurId,
+    entiteType: 'filiales',
+    entiteId: id,
+    valeursAvant: { code: etatAvant.code, raison_sociale: etatAvant.raison_sociale },
+    valeursApres: { code: etatAvant.code, ...valeurs },
+  });
+
+  return { id, version: version + 1 };
+}
+
+/* =====================================================================
  *  2 bis. L'amorçage — porter `filiales.conf` EN BASE, une fois
  * ===================================================================== */
 
@@ -530,6 +735,14 @@ export interface LigneInventaire {
   readonly statut: string;
   readonly date_entree: string | null;
   readonly date_sortie: string | null;
+  /**
+   * Le numéro de version, pour le verrouillage optimiste de la correction.
+   *
+   * ⚠️ Sans lui, deux administrateurs corrigeant la même fiche s'écraseraient en
+   * silence — risque P1 du `PLAN_SERVEUR`. Il est rendu par
+   * `f_filiales_inventaire()` depuis la migration `066`.
+   */
+  readonly version: number;
   /** Les groupes d'annuaire que cette filiale exige, par la convention. */
   readonly groupes_attendus: readonly string[];
   /** Ceux d'entre eux que `groupes_ad` ne déclare pas. Devrait être vide. */
@@ -586,6 +799,7 @@ export async function lireInventaire(
     statut: string;
     date_entree: string | null;
     date_sortie: string | null;
+    version: number;
   }>(
     /* 🛑 `f_filiales_inventaire()` ET NON `select from filiales` — migration `065`,
      * trouvé EN CLIQUANT sur la recette. `pol_filiales_lecture` retombe sur
@@ -598,7 +812,7 @@ export async function lireInventaire(
      *
      * ⚠️ Le tri vit DANS la fonction : le refaire ici en ferait un second tri, et
      * deux tris finissent par diverger. */
-    `select "id", "code", "raison_sociale", "pays", "statut",
+    `select "id", "code", "raison_sociale", "pays", "statut", "version",
             to_char("date_entree", 'YYYY-MM-DD') as "date_entree",
             to_char("date_sortie", 'YYYY-MM-DD') as "date_sortie"
        from f_filiales_inventaire()`,
@@ -632,6 +846,7 @@ export async function lireInventaire(
         statut: f.statut,
         date_entree: f.date_entree,
         date_sortie: f.date_sortie,
+        version: f.version,
         groupes_attendus: siens,
         groupes_non_declares: absents(siens),
         dans_mon_perimetre: perimetre.filiales.includes(f.id),
@@ -738,6 +953,31 @@ export async function greffonFiliales(
       );
 
       return await reponse.status(201).send(resultat);
+    },
+  );
+
+  /* ── La correction — administration Groupe, jamais la filiale sur elle-même */
+  instance.put(
+    '/api/filiales/:id',
+    {
+      config: {
+        acces: {
+          action: 'administrer',
+          domaine: 'administration',
+          perimetre: 'administration-groupe',
+        },
+      },
+    },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const session = sessionDe(requete);
+      const id = (requete.params as { id?: unknown }).id;
+      if (typeof id !== 'string' || id.trim() === '') {
+        throw entreeInvalide('L’identifiant de la filiale est absent de l’adresse.');
+      }
+      const resultat = await avecTransaction(pool, session.perimetre, async (client) =>
+        modifierFiliale(client, id, requete.body, session.perimetre),
+      );
+      return await reponse.status(200).send(resultat);
     },
   );
 

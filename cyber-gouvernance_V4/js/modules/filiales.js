@@ -67,6 +67,8 @@ const FilialesModule = (() => {
     let dernierBilan = null;
     /** La filiale dont le panneau « Groupes d'annuaire » est déplié. */
     let groupesOuverts = null;
+    /** La filiale en cours de correction, s'il y en a une. */
+    let corrigee = null;
 
     const esc = (v) => (window.escapeHtml || ((x) => String(x == null ? "" : x)))(v);
 
@@ -224,7 +226,15 @@ const FilialesModule = (() => {
                 + "</td>"
                 + '<td class="t-centre stop-row-click">'
                 + (f.statut === "active"
-                    ? '<button type="button" class="fil-groupes btn-secondary" data-filiale="'
+                    /* ⚠️ « Corriger » manquait, et c'était la TROISIÈME instance de la
+                     * même maladie : l'identité d'une filiale — la raison sociale qui
+                     * s'imprime sur chaque pièce d'audit — n'était modifiable NULLE
+                     * PART. L'écran des paramètres l'affichait en lecture seule en
+                     * renvoyant vers « votre exploitant », qui n'avait aucun outil :
+                     * la mise à jour d'une filiale n'existait pas dans le serveur. */
+                    ? '<button type="button" class="fil-corriger btn-secondary" data-filiale="'
+                      + esc(f.id) + '">Corriger</button> '
+                      + '<button type="button" class="fil-groupes btn-secondary" data-filiale="'
                       + esc(f.id) + '">Groupes AD</button> '
                       /* ⚠️ LE CHEMIN VERS LA GESTION, et il manquait. Signalé par
                        * l'utilisateur le 24/09/2026 : *« dans les filiales créées
@@ -324,16 +334,44 @@ const FilialesModule = (() => {
        LE FORMULAIRE
     ===================================================================== */
 
-    function formulaire() {
+    /**
+     * Le formulaire d'une filiale — **DÉCLARATION et CORRECTION**.
+     *
+     * ⚠️ Une seule rédaction pour deux gestes, comme celui des groupes d'annuaire :
+     * deux formulaires seraient deux vérités à tenir d'accord, et la divergence se
+     * verrait le jour où l'un accepte ce que l'autre refuse.
+     *
+     * 🛑 **Le CODE est en lecture seule en correction**, et le serveur le refuse
+     * avec son motif : il nomme les groupes d'annuaire (GRC-<CODE>-<PROFIL>), et le
+     * changer laisserait dans l'Active Directory du client huit groupes qui
+     * n'accordent plus rien — que le produit ne peut pas renommer, puisqu'il n'y
+     * écrit pas. Une filiale dont le code est faux se redéclare, et l'ancienne sort
+     * (ce qui exporte ses données d'abord).
+     *
+     * @param {object|null} f la filiale corrigée, ou `null` pour en déclarer une
+     */
+    function formulaire(f) {
+        const edition = !!f;
+        const v = (champ) => (edition && f[champ] ? ' value="' + esc(f[champ]) + '"' : "");
         return '<div class="card fil-form">'
-            + "<h3>Déclarer une filiale</h3>"
+            + "<h3>" + (edition ? "Corriger « " + esc(f.code) + " »" : "Déclarer une filiale")
+            + "</h3>"
+            + (edition
+                ? '<p class="muted">On corrige ici l’identité administrative — ce que le '
+                  + "produit imprime sur vos fiches, vos exports et vos rapports d’audit. Le "
+                  + "<strong>code</strong> ne se modifie pas : il nomme les groupes d’annuaire, "
+                  + "et le changer laisserait chez vous des groupes qui n’accordent plus rien. "
+                  + "Et la <strong>sortie</strong> d’une filiale n’est pas une correction : "
+                  + "elle exporte d’abord.</p>"
+                : "")
             + '<div class="form-grid">'
             + '<div class="form-group"><label for="filCode">Code '
             + Help.tip("2 à 10 caractères, majuscules et chiffres. Il nomme les groupes "
                 + "d’annuaire : GRC-<CODE>-RSSI. « GROUPE » est interdit — il entrerait en "
                 + "collision avec la forme réservée au périmètre Groupe entier.")
             + '</label><input type="text" id="filCode" maxlength="10" '
-            + 'placeholder="TLS" autocomplete="off"></div>'
+            + 'placeholder="TLS" autocomplete="off"' + v("code")
+            + (edition ? " readonly" : "") + "></div>"
             + '<div class="form-group"><label for="filRaison">Raison sociale</label>'
             /* ⚠️ **AUCUNE MARQUE EN DUR, pas même dans un exemple d'aide à la
              * saisie.** `test/navigateur/identite.test.mjs` l'a refusé, et il a
@@ -342,16 +380,21 @@ const FilialesModule = (() => {
              * réapparaîtrait chez un autre client dans l'écran même où il déclare
              * SES sociétés. Le repère est donc la FORME attendue, pas un nom. */
             + '<input type="text" id="filRaison" '
-            + 'placeholder="Raison sociale complète, telle qu’au registre"></div>'
+            + 'placeholder="Raison sociale complète, telle qu’au registre"'
+            + v("raison_sociale") + "></div>"
             + '<div class="form-group"><label for="filPays">Pays</label>'
-            + '<input type="text" id="filPays" maxlength="2" placeholder="FR"></div>'
+            + '<input type="text" id="filPays" maxlength="2" placeholder="FR"'
+            + v("pays") + "></div>"
             + '<div class="form-group"><label for="filEntree">Date d’entrée</label>'
-            + '<input type="date" id="filEntree"></div>'
+            + '<input type="date" id="filEntree"' + v("date_entree") + "></div>"
             + "</div>"
             + '<div class="fil-actions">'
-            + '<button type="button" id="filCreer" class="btn-primary">Déclarer</button> '
-            + '<button type="button" id="filProposer" class="btn-secondary">'
-            + "Proposer depuis l’annuaire</button> "
+            + '<button type="button" id="filCreer" class="btn-primary">'
+            + (edition ? "Enregistrer" : "Déclarer") + "</button> "
+            // « Proposer depuis l'annuaire » n'a de sens qu'à la déclaration : on ne
+            // propose pas un nom à une filiale qui en porte déjà un.
+            + (edition ? "" : '<button type="button" id="filProposer" class="btn-secondary">'
+                + "Proposer depuis l’annuaire</button> ")
             + '<button type="button" id="filAnnuler" class="btn-secondary">Annuler</button>'
             + "</div>"
             + '<div id="filCandidats"></div>'
@@ -395,8 +438,9 @@ const FilialesModule = (() => {
         if (nouvelle) nouvelle.addEventListener("click", () => {
             const zone = document.getElementById("filFormulaire");
             if (!zone) return;
-            zone.innerHTML = zone.innerHTML ? "" : formulaire();
-            if (zone.innerHTML) brancherFormulaire();
+            corrigee = null;
+            zone.innerHTML = zone.innerHTML ? "" : formulaire(null);
+            if (zone.innerHTML) brancherFormulaire(null);
         });
 
         const copier = document.getElementById("filCopierPs");
@@ -414,6 +458,19 @@ const FilialesModule = (() => {
                       + "affiché dans la console du navigateur.", "error");
                 if (window.console) console.log(texte);
             }
+        });
+
+        document.querySelectorAll(".fil-corriger").forEach((b) => {
+            b.addEventListener("click", () => {
+                // L'identifiant se lit dans l'attribut AU MOMENT DU CLIC.
+                const f = inventaire.filiales.find((x) => x.id === b.getAttribute("data-filiale"));
+                if (!f) return;
+                corrigee = f.id;
+                const zone = document.getElementById("filFormulaire");
+                zone.innerHTML = formulaire(f);
+                brancherFormulaire(f);
+                zone.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            });
         });
 
         document.querySelectorAll(".fil-groupes").forEach((b) => {
@@ -596,9 +653,11 @@ const FilialesModule = (() => {
         }
     }
 
-    function brancherFormulaire() {
+    function brancherFormulaire(f) {
+        const edition = !!f;
         const annuler = document.getElementById("filAnnuler");
-        if (annuler) annuler.addEventListener("click", () => {
+        if (annuler) annuler.addEventListener("click", async () => {
+            corrigee = null;
             const zone = document.getElementById("filFormulaire");
             if (zone) zone.innerHTML = "";
         });
@@ -614,19 +673,31 @@ const FilialesModule = (() => {
             //    le serveur refuse « tls » avec le bon message, mais le faire refuser
             //    pour une casse est un geste perdu. Tout le reste part tel quel — ce
             //    n'est pas à l'écran de corriger une raison sociale.
-            if (val("filCode")) corps.code = val("filCode").toUpperCase();
+            if (!edition && val("filCode")) corps.code = val("filCode").toUpperCase();
             if (val("filRaison")) corps.raison_sociale = val("filRaison");
             if (val("filPays")) corps.pays = val("filPays").toUpperCase();
             if (val("filEntree")) corps.date_entree = val("filEntree");
 
             creer.disabled = true;
             try {
-                dernierBilan = await Api.creerFiliale(corps);
-                avertir("« " + dernierBilan.filiale.code + " » est déclarée.", "success");
+                if (edition) {
+                    /* ⚠️ `version` porte le verrouillage optimiste : deux
+                     * administrateurs sur la même fiche, le second est REFUSÉ (409)
+                     * plutôt que d'écraser la correction du premier sans que
+                     * personne le sache. Et le CODE n'est pas envoyé — le serveur le
+                     * refuserait, à juste titre. */
+                    corps.version = f.version;
+                    await Api.modifierFiliale(f.id, corps);
+                    avertir("« " + f.code + " » est corrigée.", "success");
+                    corrigee = null;
+                } else {
+                    dernierBilan = await Api.creerFiliale(corps);
+                    avertir("« " + dernierBilan.filiale.code + " » est déclarée.", "success");
+                }
                 await UI.apresEcriture(async () => { await Sync.recharger(); });
                 await renderList();
             } catch (e) {
-                avertir(e && e.message ? e.message : "Création refusée.", "error");
+                avertir(e && e.message ? e.message : "Écriture refusée.", "error");
                 creer.disabled = false;
             }
         });

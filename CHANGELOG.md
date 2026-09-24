@@ -10,7 +10,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 21/09/2026**, après l'action **D3**, sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
-> **PostgreSQL 17.11**) : **65 migrations**, **95 tables**, **380 politiques**,
+> **PostgreSQL 17.11**) : **67 migrations**, **95 tables**, **380 politiques**,
 > **67 garde-fous**, **573 décisions** au registre de l'article 30, publication
 > **87 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
 > ⚠️ La `059` n'ajoute **aucune table** ni politique : `documents.recherche` est une
@@ -77,6 +77,62 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### CORRIGER UNE FILIALE — la troisième instance, trouvée en BALAYANT (24/09/2026)
+
+L'utilisateur ayant nommé la classe — *« ça a l'air d'être le même problème sur plusieurs
+parties »* —, les deux instances qu'il désignait ne suffisaient pas : il fallait **chercher
+les autres**. Le balayage des routes d'écriture en a sorti une, et c'est la plus probable
+des prochaines questions.
+
+🛑 **L'identité d'une filiale n'était modifiable NULLE PART.** `update filiales` n'existait
+pas dans `src/`. L'écran des paramètres l'affichait en lecture seule avec ce renvoi : *« une
+correction se demande à votre exploitant »* — et l'exploitant n'avait **aucun outil**. Une
+faute de frappe dans une raison sociale, celle qui s'imprime sur chaque pièce d'audit, se
+corrigeait en SQL écrit à la main, ou pas du tout.
+
+⚠️ **Le motif de la lecture seule, lui, ne bouge pas** : une filiale ne réécrit pas sa
+propre identité dans l'outil qui sert de preuve. C'est l'**administration Groupe** qui
+corrige, depuis l'écran « Filiales ». Les deux moitiés de l'arbitrage tiennent ensemble.
+
+**Livré** : `PUT /api/filiales/:id`, un bouton « Corriger » par filiale, et le **même
+formulaire** qu'à la déclaration — un troisième formulaire à deux modes, après celui des
+groupes d'annuaire.
+
+🛑 **CE QUI EST REFUSÉ, ET CE N'EST PAS UNE LIMITE TECHNIQUE** : le **code** (il nomme les
+groupes d'annuaire ; le changer laisserait dans l'AD du client des groupes qui n'accordent
+plus rien, que le produit ne peut pas renommer), le **statut** et la **date de sortie** (une
+sortie n'est pas une correction : elle exporte d'abord), la **version** (le déclencheur en
+est l'unique auteur). Le refus du code **nomme la conséquence**, il ne dit pas « champ
+inconnu ».
+
+🛑 **ET LE BANC A TROUVÉ LA TROISIÈME COUCHE DU MÊME PIÈGE RLS — migration `067`.** La
+correction était refusée avec un message trompeur :
+
+> « Cette filiale a été modifiée entre-temps par quelqu'un d'autre. »
+
+**Elle ne l'avait pas été.** PostgreSQL applique **aussi les politiques de SELECT** à un
+`update` dès que la commande référence des colonnes — ce que fait toute clause `where
+"version" = $n`. `pol_filiales_lecture` retombant sur les filiales lisibles dès que
+`f_perimetre_groupe()` est fausse, **la filiale qu'un administrateur vient de créer était
+précisément celle qu'il ne pouvait pas corriger**, et le produit accusait un tiers
+inexistant.
+
+⚠️ **La tentation était d'ajouter `f_administration_groupe()` à la politique de lecture. Le
+produit le refuse par construction** : la migration `004_rls` pose que ce drapeau
+*« n'apparaît dans aucune politique de select »*, et un garde-fou refuse la migration qui
+l'essaierait. L'écriture passe donc par `f_filiale_corriger()`, `security definer` et
+**étroite** — douze colonnes nommées une par une, et la barrière reste la déclaration
+d'accès de la route.
+
+⚠️ Trois couches du même piège en une journée : la lecture de l'écran « Filiales »
+(`065`), la lecture de l'écran des habilitations, et cette écriture (`067`). *Le mécanisme
+était écrit dans le produit depuis le 04/09 — dans un commentaire, à propos d'un autre
+symptôme.*
+
+Mesuré au navigateur : le formulaire s'ouvre pré-rempli, le code est en lecture seule, la
+correction est relue dans la liste, le changement de code est refusé avec son motif, et une
+version périmée rend 409. Recette remise dans son état.
 
 ### ON NE CONFIGURE PLUS SEULEMENT À LA CRÉATION — la même maladie, trois fois (24/09/2026)
 

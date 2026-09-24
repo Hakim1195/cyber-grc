@@ -47,6 +47,7 @@ let administration;
 /** Session de périmètre Groupe en LECTURE seule : elle doit être refusée. */
 let direction;
 let creerFiliale;
+let modifierFiliale;
 
 const PERIMETRE_ADMIN = Object.freeze({
   utilisateurId: 'admin.grc',
@@ -68,7 +69,7 @@ before(async () => {
   applicatif = await base.connexion('app');
   proprietaire = await base.connexion('proprietaire');
   await semerJeuEssai(base, applicatif);
-  ({ creerFiliale } = await moduleCompile('filiales/index.js'));
+  ({ creerFiliale, modifierFiliale } = await moduleCompile('filiales/index.js'));
   administration = await monterGreffon(base, PERIMETRE_ADMIN);
   direction = await monterGreffon(base, PERIMETRE_DIRECTION);
 });
@@ -473,3 +474,117 @@ describe('§4 — créer une filiale est un acte tracé', () => {
     );
   });
 });
+
+/* =====================================================================
+ *  LA CORRECTION — ce qu'on répare après coup, et ce qu'on ne répare pas
+ * ===================================================================== */
+
+describe('Corriger l’identité d’une filiale', () => {
+  /* 🛑 TROISIÈME INSTANCE, trouvée en BALAYANT, de la classe que l'utilisateur a
+   * nommée le 24/09/2026 : *« ça a l'air d'être le même problème sur plusieurs
+   * parties »* — le produit ne savait configurer qu'à la CRÉATION.
+   *
+   * `update filiales` n'existait **nulle part** dans `src/`, et l'écran des
+   * paramètres affichait l'identité en lecture seule en renvoyant vers « votre
+   * exploitant »… qui n'avait aucun outil. Une faute de frappe dans une raison
+   * sociale — celle qui s'imprime sur chaque pièce d'audit — se corrigeait en SQL
+   * écrit à la main, ou pas du tout.
+   *
+   * ⚠️ Le motif de la lecture seule ne bouge pas : une filiale ne réécrit pas sa
+   * propre identité. C'est l'administration GROUPE qui corrige. */
+
+  let cible;
+
+  test('la raison sociale se corrige, et la correction est RELUE', async () => {
+    const creee = await base.avecPerimetre(applicatif, PERIMETRE_ADMIN, async (client) =>
+      creerFiliale(client, { code: 'ZZCORR', raison_sociale: 'Nom mal orthographé' },
+                   'GRC-', PERIMETRE_ADMIN),
+      { annuler: false },
+    );
+    cible = creee.filiale.id;
+
+    const avant = await inventaireDe(cible);
+    assert.equal(avant.raison_sociale, 'Nom mal orthographé');
+
+    await base.avecPerimetre(applicatif, PERIMETRE_ADMIN, async (client) =>
+      modifierFiliale(client, cible,
+        { raison_sociale: 'Nom correctement orthographé', ville: 'Toulouse',
+          version: avant.version },
+        PERIMETRE_ADMIN),
+      { annuler: false },
+    );
+
+    const apres = await inventaireDe(cible);
+    assert.equal(
+      apres.raison_sociale,
+      'Nom correctement orthographé',
+      'Sans cette relecture, l’essai serait vert sur une écriture qui n’écrit rien.',
+    );
+    assert.equal(apres.version, avant.version + 1, 'La version doit avoir avancé.');
+  });
+
+  test('🛑 le CODE est REFUSÉ, et le refus dit pourquoi', async () => {
+    /* Le code nomme les groupes d'annuaire. Le changer laisserait, dans l'Active
+     * Directory du client, huit groupes qui n'accordent plus rien — et le produit
+     * ne peut pas les renommer, puisqu'il n'y écrit pas. Tous leurs membres
+     * perdraient leur accès SANS UN MESSAGE.
+     *
+     * ⚠️ On mesure que le serveur REFUSE, et non qu'il ignore : ignorer laisserait
+     * l'administrateur croire que le code a changé. */
+    const avant = await inventaireDe(cible);
+    await assert.rejects(
+      () => base.avecPerimetre(applicatif, PERIMETRE_ADMIN, async (client) =>
+        modifierFiliale(client, cible, { code: 'ZZAUTRE', version: avant.version },
+                        PERIMETRE_ADMIN),
+        { annuler: false }),
+      /groupes d’annuaire/u,
+      'Le refus doit NOMMER la conséquence : des groupes qui n’accordent plus rien.',
+    );
+    const apres = await inventaireDe(cible);
+    assert.equal(apres.code, 'ZZCORR', 'Le code n’a pas bougé.');
+  });
+
+  test('le VERROU optimiste refuse une version périmée', async () => {
+    /* Sans lui, deux administrateurs corrigeant la même fiche s'écraseraient en
+     * silence, et le second croirait avoir posé ce que le premier a défait.
+     * C'est le risque P1 du `PLAN_SERVEUR`. */
+    const avant = await inventaireDe(cible);
+    await base.avecPerimetre(applicatif, PERIMETRE_ADMIN, async (client) =>
+      modifierFiliale(client, cible, { notes: 'première', version: avant.version },
+                      PERIMETRE_ADMIN),
+      { annuler: false },
+    );
+    await assert.rejects(
+      () => base.avecPerimetre(applicatif, PERIMETRE_ADMIN, async (client) =>
+        modifierFiliale(client, cible, { notes: 'seconde', version: avant.version },
+                        PERIMETRE_ADMIN),
+        { annuler: false }),
+      /modifiée entre-temps/u,
+    );
+    const apres = await inventaireDe(cible);
+    assert.equal(apres.notes ?? 'première', 'première', 'La seconde écriture n’a pas eu lieu.');
+  });
+
+  test('la correction LAISSE INTACTS les champs qu’elle ne nomme pas', async () => {
+    /* ⚠️ Motif du constat Q-192 : un champ absent n'est pas un champ à vider. Un
+     * écran qui n'enverrait qu'un champ ne doit pas effacer les onze autres. */
+    const avant = await inventaireDe(cible);
+    await base.avecPerimetre(applicatif, PERIMETRE_ADMIN, async (client) =>
+      modifierFiliale(client, cible, { telephone: '+33 5 00 00 00 00', version: avant.version },
+                      PERIMETRE_ADMIN),
+      { annuler: false },
+    );
+    const apres = await inventaireDe(cible);
+    assert.equal(apres.raison_sociale, avant.raison_sociale, 'La raison sociale survit.');
+    assert.equal(apres.pays, avant.pays, 'Le pays survit.');
+  });
+});
+
+/** L'état d'une filiale, relu HORS PÉRIMÈTRE — migration `065`. */
+async function inventaireDe(id) {
+  const { rows } = await proprietaire.query(
+    `select "code", "raison_sociale", "pays", "notes", "version" from "filiales" where "id" = $1`,
+    [id],
+  );
+  return rows[0];
+}

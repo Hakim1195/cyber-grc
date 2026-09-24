@@ -416,13 +416,28 @@ describe('§30.2 — une seule route nomme une filiale, et c’est la route déd
     //    elle lit les unités d'organisation de l'Active Directory pour en
     //    PROPOSER. Son paramètre est une base de recherche LDAP, pas une filiale.
     //
-    // ⚠️ Les deux exigent l'administration Groupe, et aucune ne porte de segment
+    // ── ET UNE SIXIÈME, LE 24/09/2026 AU SOIR ───────────────────────────
+    //
+    // `PUT /api/filiales/:id` corrige l'identité administrative d'une filiale —
+    // raison sociale, adresse, coordonnées. ⚠️ Son segment est `:id` et non
+    // `:filiale`, et la nuance n'est pas cosmétique : il désigne **la ressource
+    // qu'on modifie**, comme `:id` partout ailleurs dans ce produit. Ce que le
+    // §30.2 interdit est qu'une route demande **dans quel PÉRIMÈTRE travailler** ;
+    // ici, la filiale EST l'objet. Le §1 de ce fichier mesure séparément
+    // qu'aucun segment ne se nomme `filiale`.
+    //
+    // ⚠️ Elle exige l'administration Groupe, et elle REFUSE le `code` : il nomme
+    // les groupes d'annuaire, et le changer laisserait dans l'AD du client des
+    // groupes qui n'accordent plus rien — que le produit ne peut pas renommer.
+    //
+    // ⚠️ Les autres exigent l'administration Groupe, et aucune ne porte de segment
     // `:filiale` — ce que le §1 de ce fichier mesure séparément.
     const parlantes = [...new Set(routes.filter((r) => /filiale/i.test(r.url)).map((r) => r.url))];
     assert.deepEqual(
       parlantes.sort(),
       [
         '/api/filiales',
+        '/api/filiales/:id',
         '/api/filiales/inventaire',
         '/api/filiales/candidats-annuaire',
         ROUTE_DEDIEE,

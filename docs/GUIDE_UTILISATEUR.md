@@ -684,9 +684,27 @@ et vous les présente. Ce sont des **suggestions** : l'annuaire ne connaît pas 
 il connaît des unités d'organisation. Le code, le pays et la raison sociale exacte restent
 votre décision.
 
-> ⚠️ **Le code ne se modifie pas après coup**, et c'est pourquoi une filiale n'a pas de
-> fiche : il nomme les groupes d'annuaire (`GRC-<CODE>-<PROFIL>`). Le changer laisserait
-> derrière lui huit groupes qui n'accordent plus rien.
+### Corriger l'identité d'une filiale
+
+**Administration → Filiales → « Corriger ».** Raison sociale, nom court, adresse,
+coordonnées, langue par défaut, date d'entrée. C'est ce que le produit imprime sur vos
+fiches, vos exports et vos rapports d'audit — une faute de frappe s'y voit longtemps.
+
+> ⚠️ **Le CODE ne se modifie pas**, et c'est pourquoi une filiale n'a pas de fiche
+> ordinaire : il nomme les groupes d'annuaire (`GRC-<CODE>-<PROFIL>`). Le changer
+> laisserait dans votre Active Directory huit groupes qui n'accordent plus rien — le
+> produit n'y écrit pas et ne peut pas les renommer —, et tous leurs membres perdraient
+> l'accès **sans un message**. Une filiale mal codée se redéclare sous le bon code, et
+> l'ancienne sort (ce qui exporte ses données d'abord).
+
+> ⚠️ **La sortie n'est pas une correction** : elle a son propre bouton, et elle exporte.
+
+> ⚠️ **Si deux personnes corrigent la même fiche**, la seconde est refusée avec « modifiée
+> entre-temps » plutôt que d'écraser la première. Rechargez l'écran et reprenez.
+
+**Sur l'écran des Paramètres**, cette même identité reste en **lecture seule** : une
+filiale ne réécrit pas sa propre identité dans l'outil qui sert de preuve en audit. La
+correction est un acte d'administration du groupe.
 
 ### Affecter à une filiale un groupe d'annuaire qui EXISTE DÉJÀ
 

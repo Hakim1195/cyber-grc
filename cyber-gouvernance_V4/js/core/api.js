@@ -1401,6 +1401,14 @@ const Api = (() => {
     function creerFiliale(corps) {
         return appeler("/filiales", { methode: "POST", corps: corps });
     }
+    /* La CORRECTION de l'identité d'une filiale — administration Groupe.
+     *
+     * ⚠️ Le `code` n'est pas modifiable, et le serveur le refuse avec son motif :
+     * il nomme les groupes d'annuaire, et le changer laisserait dans l'AD des
+     * groupes qui n'accordent plus rien. */
+    function modifierFiliale(id, corps) {
+        return appeler("/filiales/" + encodeURIComponent(id), { methode: "PUT", corps: corps });
+    }
     function candidatsFilialesAnnuaire(base) {
         return appeler("/filiales/candidats-annuaire"
             + (base ? "?base=" + encodeURIComponent(base) : ""));
@@ -1563,7 +1571,8 @@ const Api = (() => {
         creerGroupeAd, modifierGroupeAd, synchroniserGroupesAd,
         coherenceAnnuaire, simulerDroits,
         // Le périmètre : l'inventaire, la déclaration, la proposition, la sortie.
-        inventaireFiliales, creerFiliale, candidatsFilialesAnnuaire, sortirFiliale,
+        inventaireFiliales, creerFiliale, modifierFiliale,
+        candidatsFilialesAnnuaire, sortirFiliale,
         // L'annuaire du personnel, alimenté depuis l'Active Directory.
         chercherDansAnnuaire, importerDepuisAnnuaire, rafraichirDepuisAnnuaire,
         revuesHabilitations, ouvrirRevueHabilitations, deciderLigneRevue,

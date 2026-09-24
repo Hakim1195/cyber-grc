@@ -99,6 +99,21 @@ const SettingsModule = (() => {
      * restée ouverte quinze jours parce que rien ne rougit quand un client
      * ignore un champ qu'on lui sert.
      */
+    /*
+     * L'identité de la filiale active, en lecture seule — et le CHEMIN pour la
+     * corriger.
+     *
+     * ⚠️ Cette note disait « une correction se demande à votre exploitant », et
+     * l'exploitant n'avait AUCUN OUTIL : la mise à jour d'une filiale n'existait
+     * nulle part dans le serveur. La phrase envoyait donc vers du SQL écrit à la
+     * main, pour une faute de frappe qui s'imprime sur chaque pièce d'audit.
+     *
+     * C'est la troisième instance — trouvée en BALAYANT, celle-là — de la classe
+     * que l'utilisateur a nommée le 24/09/2026 : le produit ne savait configurer
+     * qu'à la CRÉATION. Le motif de la lecture seule, lui, ne bouge pas : une
+     * filiale ne réécrit pas sa propre identité dans l'outil qui sert de preuve.
+     * C'est l'administration Groupe qui corrige, depuis l'écran « Filiales ».
+     */
     function identiteHtml() {
         const session = (typeof Session !== "undefined") ? Session.courante() : null;
         if (!session) {
@@ -126,10 +141,11 @@ const SettingsModule = (() => {
                 ${ligne("Site web", c.siteWeb)}
                 ${ligne("Langue par défaut", session.filialeLangue)}
                 <div class="help-note" style="margin-top: 1rem;">
-                    Ces valeurs sont en <strong>lecture seule</strong> : elles appartiennent à la
-                    configuration du serveur, et une filiale ne réécrit pas sa propre identité
-                    dans l'outil qui sert de preuve en audit. Une correction se demande à votre
-                    exploitant.
+                    Ces valeurs sont en <strong>lecture seule ici</strong> : une filiale ne
+                    réécrit pas sa propre identité dans l'outil qui sert de preuve en audit.
+                    Une correction se fait par l'administration du groupe —
+                    <a href="#/filiales">Administration &rarr; Filiales</a>, bouton
+                    « Corriger ».
                 </div>
             </div>`;
     }
