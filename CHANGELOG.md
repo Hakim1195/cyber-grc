@@ -10,8 +10,8 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 21/09/2026**, après l'action **D3**, sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
-> **PostgreSQL 17.11**) : **67 migrations**, **95 tables**, **380 politiques**,
-> **67 garde-fous**, **573 décisions** au registre de l'article 30, publication
+> **PostgreSQL 17.11**) : **68 migrations**, **96 tables**, **383 politiques**,
+> **67 garde-fous**, **580 décisions** au registre de l'article 30, publication
 > **87 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
 > ⚠️ La `059` n'ajoute **aucune table** ni politique : `documents.recherche` est une
 > colonne de plus sur une table qui en portait déjà quatre-vingt-neuf politiques.
@@ -77,6 +77,98 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### LA DÉLÉGATION TEMPORAIRE DE DROITS — migration `068` (24/09/2026)
+
+> **Demandé par l'utilisateur** : *« on peut faire la même chose pour les users (par exemple
+> pour donner des droits spécifiques temporaires à un user) ou c'est pas possible et ça
+> complique les choses ? »* — puis, après l'analyse : *« je souhaite un résultat extrêmement
+> propre et professionnel, et qui puisse respecter au mieux les normes de sécurité. »*
+
+**C'est possible, et bien fait, c'est PLUS SÛR que la pratique actuelle.** Un besoin
+temporaire — un auditeur externe trois semaines, un remplacement de congé, quelqu'un qu'on
+ajoute à la cellule de crise pour 48 heures — se règle aujourd'hui en ajoutant la personne
+à un groupe d'annuaire. Ce geste est **permanent par défaut**, et personne ne s'en
+souvient : c'est ce que toute revue d'accès finit par trouver.
+
+🛑 **Le danger n'est pas l'octroi, c'est l'OUBLI.** Une délégation datée qui **expire
+d'elle-même** est strictement meilleure qu'une appartenance de groupe que nul ne retire. Le
+produit avait déjà ce patron — les dérogations du lot L19, dont *« l'état se DÉRIVE, aucun
+traitement ne remet quoi que ce soit »*.
+
+**LES SIX PROPRIÉTÉS, ET ELLES SONT TOUTES POSÉES DANS LA BASE :**
+
+| | Propriété | Où elle est tenue |
+|---|---|---|
+| 1 | **Additive seulement** — elle ne retire jamais | `f_delegations_actives()`, `resoudreDroits()` |
+| 2 | **Date de fin obligatoire**, état **dérivé** | `ck_delegations_periode`, `f_etat_delegation()` |
+| 3 | **Motif substantiel** (dix caractères) | `ck_delegations_motif` |
+| 4 | 🛑 **Pas d'auto-délégation** | `ck_delegations_pas_soi_meme` |
+| 5 | **Visible dans la revue A.5.18** | `revue_habilitation_lignes.source` |
+| 6 | **90 jours au plus** | `ck_delegations_duree` |
+
+🛑 **LA QUATRIÈME EST L'INVARIANT DE SÉCURITÉ DU LOT.** Sans elle, qui détient le domaine
+« administration » s'accorde à lui-même n'importe quel profil sur n'importe quelle filiale :
+ce dispositif serait un chemin d'élévation de privilège, **et le seul qu'il ouvrirait**.
+Elle est une CONTRAINTE de la base, pas un contrôle de la route — *une route s'oublie, une
+contrainte non*. ⚠️ Et elle compare **en minuscules** : `Admin.GRC` ne contourne pas
+`admin.grc`.
+
+**DEUX ARBITRAGES QUI FERMENT LA SURFACE :**
+
+🛑 **1. Une délégation n'accorde JAMAIS l'export ni l'administration de l'application.** Ces
+deux-là viennent de groupes transversaux de l'annuaire (`GRC-EXPORT`, `GRC-ADMIN`) et y
+restent : `resoudreDroits()` ne touche ni `peutExporter` ni `administrateur` dans la boucle
+des délégations, et un essai le mesure sur ce que la RÉSOLUTION rend.
+
+🛑 **2. Le profil d'administration ne se délègue pas**, refusé par un déclencheur dès
+l'écriture. Ouvrir un second chemin vers l'administration contredirait la phrase que tout le
+dispositif répète — *les droits viennent de l'annuaire*. Un administrateur en congé se
+remplace DANS L'ANNUAIRE, là où cette décision se prend et se revoit.
+
+⚠️ **Elle est keyée sur le LOGIN, pas sur `utilisateurs`** — c'est la leçon de la migration
+`063` à un autre endroit : un compte applicatif n'existe qu'à la première connexion, et
+l'on délègue précisément à quelqu'un qui n'est jamais venu. **Conséquence voulue** : une
+délégation ouvre un accès à quelqu'un qui n'a **aucun** groupe `GRC-*` — l'auditeur externe.
+
+⚠️ **`security definer`, et c'est le §46** : cette table PRODUIT l'autorisation, donc elle ne
+peut pas en dépendre. Un `select` ordinaire rendrait zéro ligne pendant la résolution, et la
+délégation n'accorderait rien **en silence** — le défaut exact du jeton d'API qui rendait
+401 à son premier usage. Écrit avant d'être payé, cette fois.
+
+⚠️ **Aucune politique de SUPPRESSION** sur la table : une délégation se **révoque**. Effacer
+effacerait la trace d'un droit qui a EXISTÉ, et ce registre doit y répondre trois ans plus
+tard. Le banc le mesure en **essayant** de supprimer sous le rôle applicatif : zéro ligne.
+
+⚠️ **Elles n'entrent PAS dans l'échéancier**, comme les revues d'accès et pour le même motif
+écrit : l'échéancier est une vue par filiale et par personne dont tout est actionnable par
+son lecteur, alors qu'une délégation est un acte d'administration Groupe. L'échéance
+s'affiche sur l'écran, là où se trouve la personne qui peut agir.
+
+**QUATRE DÉFAUTS TROUVÉS PENDANT LA CONSTRUCTION, ET AUCUN PAR RELECTURE :**
+
+1. 🛑 **Le garde-fou SE TAISAIT** quand il ne trouvait pas de profil et de filiale en base —
+   et sur une base d'essai qui n'en porte pas, il rendait **zéro anomalie**, c'est-à-dire ce
+   qu'il rend quand tout va bien. Quatre mutations du banc sont restées vertes contre lui.
+   *Un garde qui ne regarde pas rend zéro anomalie* — le motif du §39, **reproduit dans la
+   migration qui le cite**. `f_contrainte_accepte()` n'évaluant que le prédicat, les témoins
+   portent désormais des identifiants quelconques et le contrôle vaut partout.
+2. **Ma reprise « verbatim » de `060` a EFFACÉ une entrée ajoutée depuis par `062`** —
+   `actif_prestataires` a disparu de la liste des tables rangées. C'est le garde-fou qui l'a
+   dit, en refusant le déploiement. *Recopier verbatim exige de recopier la version
+   COURANTE, pas celle qu'on a sous la main.*
+3. **Mes propres essais écrivaient dans le vide** : `force row level security` vaut jusqu'au
+   propriétaire, et les `update` de témoin passés par lui touchaient **zéro ligne sans
+   erreur**. Les essais accusaient le produit ; c'était le témoin qui n'écrivait pas.
+4. **Un greffon monté dans un `test` et jamais fermé** empêchait la suppression de la base
+   d'essai — *« permission denied to terminate process »*, et une base orpheline de plus sur
+   la grappe à chaque exécution (motif du constat Q-321).
+
+**Éprouvé** : **huit mutations** jouées et rougies — l'auto-délégation d'abord, avec son
+contre-témoin —, **17 essais** par la ROUTE sur les six propriétés, et le parcours complet
+au navigateur sur la recette : cinq onglets, le profil ADMIN absent des choix, l'auto-
+délégation refusée avec son message entier, une délégation accordée visible avec ses jours
+restants, et la revue qui la porte même sur un balayage d'annuaire **vide**.
 
 ### CORRIGER UNE FILIALE — la troisième instance, trouvée en BALAYANT (24/09/2026)
 

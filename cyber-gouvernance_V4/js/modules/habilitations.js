@@ -68,6 +68,8 @@ const HabilitationsModule = (() => {
     let revueOuverte = null;
     /** Identifiant du profil ouvert dans le panneau d'édition. */
     let profilOuvert = null;
+    /** Les délégations temporaires, et le formulaire d'octroi s'il est ouvert. */
+    let delegations = null;
 
     const esc = (v) => (window.escapeHtml || ((x) => String(x == null ? "" : x)))(v);
 
@@ -1404,8 +1406,263 @@ const HabilitationsModule = (() => {
         });
     }
 
+    /* =====================================================================
+       VUE 5 — LES DÉLÉGATIONS TEMPORAIRES (migration `068`)
+
+       🛑 **Pourquoi cet écran existe, et pourquoi il est SÛR.** Un besoin
+       temporaire — un auditeur externe trois semaines, un remplacement de congé —
+       se règle aujourd'hui en ajoutant quelqu'un à un groupe d'annuaire. Ce geste
+       est PERMANENT par défaut, et personne ne s'en souvient : c'est ce que toute
+       revue d'accès finit par trouver. Le danger n'est pas l'octroi, c'est
+       l'OUBLI — et une délégation datée qui expire d'elle-même est strictement
+       meilleure qu'une appartenance de groupe que nul ne retire.
+
+       ⚠️ **Six propriétés la tiennent, et elles sont TOUTES dans la base**, pas
+       ici : additive seulement · date de fin obligatoire, état dérivé · motif
+       substantiel · **pas d'auto-délégation** · visible en revue d'accès · durée
+       bornée à 90 jours. Cet écran ne les revérifie pas — il les EXPLIQUE, et il
+       affiche les refus du serveur tels qu'il les formule.
+    ===================================================================== */
+
+    const ETATS_DELEGATION = Object.freeze({
+        active:   { libelle: "active",   classe: "hab-actif" },
+        a_venir:  { libelle: "à venir",  classe: "hab-socle" },
+        expiree:  { libelle: "expirée",  classe: "hab-inactif" },
+        revoquee: { libelle: "révoquée", classe: "hab-orphelin" }
+    });
+
+    async function renderDelegations() {
+        const app = document.getElementById("app");
+        const onglets = UI.ongletsDe("/habilitations-delegations");
+        try {
+            await charger();
+            delegations = await Api.delegations();
+        } catch (e) { return echec(app, e, onglets); }
+        if (!etat) return sansDroit(app);
+
+        const lignes = (delegations.delegations || []).map((d) => {
+            const e = ETATS_DELEGATION[d.etat] || { libelle: d.etat, classe: "hab-inactif" };
+            return '<tr data-delegation="' + esc(d.id) + '">'
+                + "<td><strong>" + esc(d.login) + "</strong></td>"
+                + "<td>" + esc(d.profilNom || d.profilCode || "—") + "</td>"
+                + "<td>" + (d.perimetre === "groupe"
+                    ? "<em>Groupe entier</em>"
+                    : esc(d.filialeCode || "—")) + "</td>"
+                + "<td>" + esc(d.debut) + " → " + esc(d.fin)
+                + (d.joursRestants !== null && d.joursRestants !== undefined
+                    ? ' <span class="hab-code">' + esc(d.joursRestants) + " j restants</span>"
+                    : "") + "</td>"
+                + "<td>" + esc(d.motif) + "</td>"
+                + '<td class="hab-code">' + esc(d.accordePar) + "</td>"
+                + '<td class="t-centre"><span class="' + e.classe + '">'
+                + esc(e.libelle) + "</span></td>"
+                + '<td class="t-centre stop-row-click">'
+                + (d.etat === "active" || d.etat === "a_venir"
+                    ? '<button type="button" class="hab-revoquer btn-secondary" data-delegation="'
+                      + esc(d.id) + '" data-version="' + esc(d.version) + '" data-login="'
+                      + esc(d.login) + '">Révoquer</button>'
+                    : '<span class="hab-code">' + (d.motifRevocation
+                        ? esc(d.motifRevocation) : "—") + "</span>")
+                + "</td></tr>";
+        }).join("");
+
+        app.innerHTML = '<section class="page">'
+            + UI.enteteHtml({
+                titre: "Habilitations",
+                contexte: "Délégations temporaires",
+                onglets: onglets,
+                aide: Help.tip("Donner un profil à quelqu’un pour une durée bornée, avec un "
+                    + "motif et un auteur. Elle expire d’elle-même : c’est ce qui la rend plus "
+                    + "sûre qu’une appartenance de groupe que personne ne retire."),
+                actions: '<button type="button" id="habNouvelleDelegation" class="btn-secondary">'
+                       + "Accorder une délégation</button>"
+            })
+            + encartCeQueLaDelegationNeFaitPas()
+            + '<div id="habFormDelegation"></div>'
+            + '<div class="card">'
+            +   ((delegations.delegations || []).length === 0
+                 ? '<p class="muted">Aucune délégation n’a été accordée. Les droits viennent '
+                   + "alors uniquement des groupes d’annuaire, ce qui est l’état nominal.</p>"
+                 : '<div class="table-scroll"><table class="data-table"><thead><tr>'
+                   + "<th>Bénéficiaire</th><th>Profil accordé</th><th>Périmètre</th>"
+                   + "<th>Période</th><th>Motif</th><th>Accordée par</th><th>État</th><th></th>"
+                   + "</tr></thead><tbody>" + lignes + "</tbody></table></div>")
+            +   (delegations.tronque
+                 ? '<p class="hab-ecart hab-ecart--grave">La liste a été BORNÉE : toutes les '
+                   + "délégations ne sont pas affichées. Révoquez celles qui n’ont plus lieu "
+                   + "d’être.</p>"
+                 : "")
+            + "</div></section>";
+
+        UI.envelopperTableaux(app);
+        brancherDelegations();
+    }
+
+    /**
+     * Ce que l'écran doit dire AVANT qu'on s'en serve.
+     *
+     * ⚠️ Un administrateur qui découvre cette page doit savoir immédiatement ce
+     * qu'elle NE PEUT PAS faire — sans quoi il cherchera comment déléguer
+     * l'administration, et conclura que le produit est incomplet plutôt que
+     * délibérément borné.
+     */
+    function encartCeQueLaDelegationNeFaitPas() {
+        return '<div class="card encart-alerte encart-info"><p>'
+            + "<strong>Une délégation ajoute, elle ne retire jamais.</strong> Elle donne un "
+            + "profil sur un périmètre, pour 90 jours au plus, avec un motif et un auteur — et "
+            + "elle <strong>expire d’elle-même</strong>. Retirer un droit reste un geste de "
+            + "l’annuaire."
+            + "</p><p>"
+            + "Elle n’accorde <strong>ni le droit d’export, ni l’administration de "
+            + "l’application</strong> : ceux-là viennent des groupes transversaux de votre "
+            + "annuaire et y restent. Le profil d’administration ne se délègue pas — un "
+            + "administrateur en congé se remplace dans l’annuaire, là où cette décision se "
+            + "prend et se revoit."
+            + "</p><p>"
+            + "<strong>On ne se délègue pas des droits à soi-même</strong>, et la base le "
+            + "refuse. Toute délégation active entre dans la <a href=\"#/habilitations-revues\">"
+            + "revue des accès</a>&nbsp;: sans cela, une revue serait complète en apparence et "
+            + "manquerait exactement ce que le produit accorde lui-même."
+            + "</p></div>";
+    }
+
+    function formDelegation() {
+        const profils = etat.profils.filter((p) => p.actif && p.code !== "ADMIN").map((p) =>
+            '<option value="' + esc(p.id) + '">' + esc(p.code) + " — " + esc(p.nom)
+            + "</option>").join("");
+        const filiales = etat.filiales.map((f) =>
+            '<option value="' + esc(f.id) + '">' + esc(f.code) + " — " + esc(f.raisonSociale)
+            + "</option>").join("");
+        const comptes = (etat.comptes || []).map((c) =>
+            '<option value="' + esc(c.identifiant) + '"></option>').join("");
+
+        return '<div class="card hab-panneau">'
+            + "<h2>Accorder une délégation temporaire</h2>"
+            + '<p class="hab-note">Elle prendra effet à la <strong>prochaine connexion</strong> '
+            + "du bénéficiaire : les droits sont résolus à l’ouverture de session et figés.</p>"
+            + '<div class="form-grid">'
+            +   '<label class="hab-champ"><span>Bénéficiaire (login d’annuaire)</span>'
+            +     '<input type="text" id="habDelLogin" maxlength="256" list="habDelComptes" '
+            +     'autocomplete="off" placeholder="prenom.nom"></label>'
+            +     '<datalist id="habDelComptes">' + comptes + "</datalist>"
+            +   '<label class="hab-champ"><span>Profil accordé</span>'
+            +     '<select id="habDelProfil">' + profils + "</select></label>"
+            +   '<label class="hab-champ"><span>Périmètre</span><select id="habDelPortee">'
+            +     '<option value="filiale">Une filiale</option>'
+            +     '<option value="groupe">Groupe entier</option>'
+            +   "</select></label>"
+            +   '<label class="hab-champ" id="habDelFilialeChamp"><span>Filiale</span>'
+            +     '<select id="habDelFiliale">' + filiales + "</select></label>"
+            +   '<label class="hab-champ"><span>Début</span>'
+            +     '<input type="date" id="habDelDebut"></label>'
+            +   '<label class="hab-champ"><span>Fin (obligatoire, 90 jours au plus)</span>'
+            +     '<input type="date" id="habDelFin"></label>'
+            + "</div>"
+            + '<label class="hab-champ"><span>Motif — c’est la ligne qu’un auditeur lira</span>'
+            +   '<input type="text" id="habDelMotif" maxlength="2000" '
+            +   'placeholder="Audit externe du 1er au 21 octobre, mission confiée à…"></label>'
+            + '<div class="page-actions no-print">'
+            +   '<button type="button" id="habDelEnregistrer">Accorder</button>'
+            +   '<button type="button" id="habDelAnnuler" class="btn-secondary">Annuler</button>'
+            + "</div></div>";
+    }
+
+    function brancherDelegations() {
+        const nouveau = document.getElementById("habNouvelleDelegation");
+        if (nouveau) nouveau.addEventListener("click", () => {
+            const hote = document.getElementById("habFormDelegation");
+            hote.innerHTML = hote.innerHTML ? "" : formDelegation();
+            if (hote.innerHTML) {
+                brancherFormDelegation();
+                hote.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }
+        });
+
+        document.querySelectorAll(".hab-revoquer").forEach((b) => {
+            b.addEventListener("click", async () => {
+                // L'identifiant se lit dans l'attribut AU MOMENT DU CLIC.
+                const id = b.getAttribute("data-delegation");
+                const version = b.getAttribute("data-version");
+                const login = b.getAttribute("data-login");
+                /* ⚠️ LE MOTIF SE DEMANDE AVANT D'ENVOYER, pas après le refus du
+                 * serveur — c'est le défaut trouvé en cliquant le 22/09/2026, qui
+                 * faisait quatre gestes pour un. */
+                const motif = window.prompt(
+                    "Révoquer la délégation de « " + login + " ».\n\n"
+                  + "La délégation reste au registre : elle sera marquée « révoquée », avec "
+                  + "votre nom, la date et ce motif. Une trace d’un droit qui a EXISTÉ ne "
+                  + "s’efface pas.\n\n"
+                  + "Motif de la révocation :", "");
+                if (!motif) return;
+                b.disabled = true;
+                try {
+                    const r = await Api.revoquerDelegation(id, motif, Number(version));
+                    avertir("Délégation révoquée. " + rappelDe(r), "success");
+                    await renderDelegations();
+                } catch (e) {
+                    avertir(e && e.message ? e.message : "Révocation refusée.", "error");
+                    b.disabled = false;
+                }
+            });
+        });
+    }
+
+    function brancherFormDelegation() {
+        const portee = document.getElementById("habDelPortee");
+        const majChamps = () => {
+            document.getElementById("habDelFilialeChamp").hidden = portee.value !== "filiale";
+        };
+        portee.addEventListener("change", majChamps);
+        majChamps();
+
+        // Une fin par défaut à trente jours : « temporaire » a une durée, et la
+        // proposer évite qu'on tape la plus longue par réflexe.
+        const fin = document.getElementById("habDelFin");
+        if (fin && !fin.value) {
+            const d = new Date();
+            d.setDate(d.getDate() + 30);
+            fin.value = d.toISOString().slice(0, 10);
+        }
+
+        document.getElementById("habDelAnnuler").addEventListener("click", () => {
+            document.getElementById("habFormDelegation").innerHTML = "";
+        });
+
+        document.getElementById("habDelEnregistrer").addEventListener("click", async () => {
+            const bouton = document.getElementById("habDelEnregistrer");
+            const val = (id) => {
+                const e = document.getElementById(id);
+                return e && e.value ? e.value.trim() : "";
+            };
+            const corps = {
+                login: val("habDelLogin").toLowerCase(),
+                profilId: val("habDelProfil"),
+                perimetre: portee.value,
+                fin: val("habDelFin"),
+                motif: val("habDelMotif")
+            };
+            if (portee.value === "filiale") corps.filialeId = val("habDelFiliale");
+            if (val("habDelDebut")) corps.debut = val("habDelDebut");
+            if (corps.login === "") { avertir("Donnez le login du bénéficiaire.", "warning"); return; }
+
+            bouton.disabled = true;
+            try {
+                const r = await Api.accorderDelegation(corps);
+                avertir("Délégation accordée. " + rappelDe(r), "success");
+                document.getElementById("habFormDelegation").innerHTML = "";
+                await renderDelegations();
+            } catch (e) {
+                // Les refus du serveur NOMMENT leur conséquence : on les affiche mot
+                // pour mot, jamais reformulés (constat Q-219).
+                avertir(e && e.message ? e.message : "Octroi refusé.", "error");
+                bouton.disabled = false;
+            }
+        });
+    }
+
     return {
         renderList: renderMatrice,
+        renderDelegations,
         renderGroupes,
         renderComptes,
         renderRevues,

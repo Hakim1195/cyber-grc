@@ -35,7 +35,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
 import { FILIALE_A, FILIALE_B, ouvrirBaseEssai, perimetre, semerJeuEssai } from '../aide/base.mjs';
-import { monterGreffon } from '../aide/serveur.mjs';
+import { moduleCompile, monterGreffon } from '../aide/serveur.mjs';
 
 let base;
 let applicatif;
@@ -361,5 +361,107 @@ describe('§4 — le journal d’audit', () => {
       1,
       'le journal porte ce que la revue n’a PAS couvert : c’est la moitié qu’on oublie',
     );
+  });
+});
+
+/* =====================================================================
+ *  LA REVUE VOIT LES DÉLÉGATIONS — migration `068`
+ * ===================================================================== */
+
+describe('🛑 Une délégation temporaire entre dans la revue des accès', () => {
+  test('elle y figure, marquée « delegation », même avec un balayage VIDE', async () => {
+    /* 🛑 **SANS CELA, LA DÉLÉGATION SERAIT UNE PORTE DÉROBÉE.** La revue A.5.18
+     * balaie l'ANNUAIRE : un droit accordé DANS le produit n'y figurerait pas, et
+     * l'auditeur relirait une revue complète en apparence qui manquerait
+     * exactement les accès que personne n'a inscrits dans l'AD. C'est la
+     * cinquième des six propriétés qui rendent la délégation sûre.
+     *
+     * ⚠️ **Balayage VIDE, et c'est le cas qui mord** : si les délégations
+     * n'étaient inscrites qu'en marge de lignes d'annuaire, une installation sans
+     * groupe rendrait une revue vide alors que des accès existent. On mesure donc
+     * le cas où l'annuaire n'apporte RIEN.
+     *
+     * ⚠️ Par la FONCTION et non par la route : l'ouverture d'une revue lit
+     * l'annuaire, et le banc n'en a pas — la route refuse en 503, ce que le §1 de
+     * ce fichier mesure déjà. Ce qui est éprouvé ici est ce que la revue ÉCRIT. */
+    const revueModule = await moduleCompile('habilitations/revue.js');
+    const { rows: profils } = await applicatif.query(
+      `select "id" from "profils" where "code" = 'RSSI'`,
+    );
+
+    const bilan = await base.avecPerimetre(
+      applicatif,
+      PERIMETRE_ADMIN,
+      async (client) => {
+        await client.query(
+          `insert into "delegations_droits"
+                  ("id", "login", "profil_id", "perimetre", "filiale_cible_id",
+                   "debut", "fin", "motif", "accorde_par")
+           values ('DELEG-REVUE', 'auditeur.de.passage', $1, 'filiale', $2,
+                   current_date, current_date + 15,
+                   'Mission d’audit externe sur le périmètre de Toulouse', 'admin.grc')`,
+          [profils[0].id, FILIALE_A],
+        );
+        return await revueModule.ouvrirRevue(
+          client,
+          'Revue qui doit voir les délégations',
+          'Tous les groupes, et les délégations actives',
+          [], // ← balayage d'annuaire VIDE
+          null,
+          PERIMETRE_ADMIN,
+        );
+      },
+      { annuler: false },
+    );
+
+    assert.equal(
+      bilan.delegations,
+      1,
+      'L’ouverture doit COMPTER les délégations à part : un relecteur doit savoir d’un ' +
+        `coup d’œil combien d’accès viennent du produit. Rendu : ${JSON.stringify(bilan)}`,
+    );
+    assert.equal(bilan.lignes, 1, 'Une revue sans groupe mais avec une délégation n’est PAS vide.');
+
+    const { rows } = await applicatif.query(
+      `select "source", "groupe_nom", "compte_login", "compte_nom", "profil_code",
+              "delegation_id", "decision"
+         from "revue_habilitation_lignes" where "revue_id" = $1`,
+      [bilan.id],
+    );
+    assert.equal(rows.length, 1);
+    const ligne = rows[0];
+    assert.equal(ligne.source, 'delegation', 'Elle doit être MARQUÉE comme telle.');
+    assert.equal(ligne.groupe_nom, null, 'Elle ne vient d’aucun groupe d’annuaire.');
+    assert.equal(ligne.delegation_id, 'DELEG-REVUE');
+    assert.equal(ligne.compte_login, 'auditeur.de.passage');
+    assert.match(
+      ligne.compte_nom,
+      /Mission d’audit/u,
+      'L’instantané porte le MOTIF et l’échéance : c’est ce qu’un relecteur lit pour décider.',
+    );
+    assert.equal(ligne.decision, 'a_examiner', 'Elle se décide comme n’importe quel accès.');
+  });
+
+  test('une délégation EXPIRÉE n’entre PAS dans la revue', async () => {
+    /* Une revue est l'instantané de ce qui OUVRE un accès aujourd'hui. Inscrire
+     * une délégation expirée ferait décider sur du vide, et gonflerait la revue
+     * de lignes que personne n'a à regarder. */
+    const revueModule = await moduleCompile('habilitations/revue.js');
+    const bilan = await base.avecPerimetre(
+      applicatif,
+      PERIMETRE_ADMIN,
+      async (client) => {
+        await client.query(
+          `update "delegations_droits"
+              set "debut" = current_date - 30, "fin" = current_date - 1
+            where "id" = 'DELEG-REVUE'`,
+        );
+        return await revueModule.ouvrirRevue(
+          client, 'Revue après expiration', 'Tous les groupes', [], null, PERIMETRE_ADMIN,
+        );
+      },
+      { annuler: false },
+    );
+    assert.equal(bilan.delegations, 0, 'Une délégation expirée n’ouvre plus rien.');
   });
 });

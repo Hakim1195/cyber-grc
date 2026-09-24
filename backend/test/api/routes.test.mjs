@@ -1001,6 +1001,14 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // l'Active Directory du client par un anonyme : elle ne lit que des unités
     // d'organisation, mais la structure d'un annuaire d'entreprise est déjà un
     // renseignement.
+    // Les trois routes de la DÉLÉGATION TEMPORAIRE (migration `068`). Servies sans
+    // identité, la première rendrait le registre de QUI a quel droit temporaire et
+    // pourquoi ; les deux autres ACCORDERAIENT et RÉVOQUERAIENT des droits au nom
+    // de personne — dans le seul dispositif du produit qui ouvre un accès sans
+    // passer par l'annuaire.
+    ['GET', '/api/habilitations/delegations', undefined],
+    ['POST', '/api/habilitations/delegations', { login: 'x', profilId: 'P', perimetre: 'groupe', fin: '2026-12-31', motif: 'Accordée sans identité' }],
+    ['POST', '/api/habilitations/delegations/DELEG-X/revoquer', { motif: 'Révoquée sans identité', version: 1 }],
     ['GET', '/api/filiales/inventaire', undefined],
     ['GET', '/api/filiales/candidats-annuaire', undefined],
     // La correction de l'identité d'une filiale (24/09/2026). Servie sans

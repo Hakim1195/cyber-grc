@@ -468,6 +468,12 @@ export class ServiceAuthentification implements Authentificateur {
         const compte = await lireCompte(client, identite.login);
         return await resoudreDroits(client, identite.groupes, {
           filialePreferee: compte?.filialeDefautId ?? null,
+          /* ⚠️ **Le login, pour les délégations temporaires** (migration `068`) — et
+           * c'est le SEUL appel qui le passe. `simuler()` de l'écran des habilitations
+           * résout des droits à partir d'une liste de GROUPES : il ne parle de personne
+           * en particulier, et lui faire lire des délégations attribuerait à un groupe
+           * ce qui a été accordé à quelqu'un. L'écran dirait faux. */
+          login: identite.login,
         });
       },
       { lectureSeule: true },

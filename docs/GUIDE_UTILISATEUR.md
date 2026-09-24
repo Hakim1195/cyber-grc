@@ -660,6 +660,50 @@ pas d'un traitement déclaré —, c'est la liste par laquelle commence une revu
 
 ---
 
+## 5 quater. Donner des droits temporaires à quelqu'un
+
+**Administration → Habilitations → Délégations temporaires.** Un auditeur externe pour
+trois semaines, un remplacement de congé, quelqu'un qu'on ajoute à la cellule de crise le
+temps d'un incident : vous lui donnez un **profil**, sur un **périmètre**, pour une **durée
+bornée**, avec un **motif**.
+
+> 🛑 **Pourquoi c'est plus sûr que d'ajouter la personne à un groupe d'annuaire.** Ce geste-là
+> est **permanent par défaut**, et personne ne s'en souvient — c'est ce que toute revue
+> d'accès finit par trouver. Le danger n'est pas l'octroi, c'est **l'oubli**. Une délégation
+> **expire d'elle-même**, sans qu'aucun traitement ait à passer.
+
+**Ce qu'elle fait, et ce qu'elle ne fait pas :**
+
+| | |
+|---|---|
+| ✅ **Elle ajoute** un profil sur une filiale, ou sur le Groupe entier | |
+| ✅ Elle fonctionne même pour quelqu'un **sans aucun groupe `GRC-*`** — c'est le cas de l'auditeur externe | |
+| 🛑 **Elle ne retire jamais rien** | Retirer un droit reste un geste de l'annuaire. Sinon le produit deviendrait un endroit où l'on coupe des accès en silence |
+| 🛑 **Elle n'accorde ni l'export, ni l'administration** | Ceux-là viennent des groupes transversaux de votre annuaire et y restent |
+| 🛑 **Le profil d'administration ne se délègue pas** | Un administrateur en congé se remplace **dans l'annuaire**, là où cette décision se prend et se revoit |
+| 🛑 **On ne se délègue pas des droits à soi-même** | C'est le seul chemin d'élévation de privilège que ce dispositif pourrait ouvrir. La base le refuse |
+| ⚠️ **90 jours au plus** | Prolonger est une **nouvelle** délégation, donc une nouvelle décision, un nouveau motif |
+| ⚠️ **Le motif fait dix caractères au moins** | C'est la ligne qu'un auditeur lira. « RAS » n'est pas un motif |
+
+> ⚠️ **L'effet est différé à la prochaine connexion** du bénéficiaire, comme tout droit :
+> ils sont résolus à l'ouverture de session et figés. Cela vaut **aussi pour la
+> révocation** — révoquer ne ferme pas une session déjà ouverte. Pour un effet immédiat,
+> révoquez ses sessions.
+
+> ⚠️ **Une délégation se RÉVOQUE, elle ne se supprime pas.** Elle reste au registre,
+> marquée « révoquée », avec votre nom, la date et votre motif : ce registre doit pouvoir
+> répondre « qui a eu quel droit, quand et pourquoi » trois ans plus tard.
+
+**Et elle entre dans la revue des accès** (ISO 27001 A.5.18), marquée comme telle, à côté
+des appartenances de groupe. Sans cela, une revue serait complète en apparence et
+manquerait exactement les droits que personne n'a inscrits dans l'annuaire.
+
+> ℹ️ **Une différence, à l'avantage du produit** : décider « à retirer » sur une ligne
+> d'annuaire ne retire rien — c'est à l'administrateur de l'AD d'agir. Sur une délégation,
+> le produit peut agir : vous la révoquez d'un clic.
+
+---
+
 ## 5 ter. Les filiales — le périmètre du groupe
 
 **Administration → Filiales.** Depuis le 24/09/2026, déclarer une société rachetée se fait

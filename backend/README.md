@@ -788,8 +788,8 @@ la comparaison au marché du 08/09/2026.
 « Filiales », `db/importer-filiales.mjs`, migrations `064` et `065`) : `npm test` →
 **2511 essais, 2511 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **68 garde-fous consignés**, **67 migrations**,
-**95 tables**, **573 décisions** au registre de l'article 30 ; publication → **89
+`f_verifier_schema()` → 0 anomalie, **69 garde-fous consignés**, **68 migrations**,
+**96 tables**, **580 décisions** au registre de l'article 30 ; publication → **89
 fichiers identiques au dépôt** ; `install.sh --diagnostic` → **14 conformes,
 2 réserves, 0 bloquant** sur **quinze sujets** — le quinzième, « assistance IA », naît de
 L27 et rend le mode en vigueur.
@@ -987,15 +987,15 @@ npm test                                         → tests 2511 · pass 2511 · 
                                                    droits-personnes 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (68 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (69 garde-fous découverts, joués, consignés)
 ```
 
-Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **95 tables** en
-**67 migrations**, **380 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
-**182 clés étrangères** (107 `restrict`, 65 `cascade`, 9 `set null`, 1 `no action`),
-**87 tables portant `cree_par` et 81 déclencheurs de création**, **58 clés étrangères
+Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **96 tables** en
+**68 migrations**, **383 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**184 clés étrangères** (109 `restrict`, 65 `cascade`, 9 `set null`, 1 `no action`),
+**88 tables portant `cree_par` et 81 déclencheurs de création**, **58 clés étrangères
 composites** visant
-`(id, filiale_id)`, **28 unicités** `uq_<parent>_id_filiale`, **68 contrôles consignés**
+`(id, filiale_id)`, **28 unicités** `uq_<parent>_id_filiale`, **69 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1275,7 +1275,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **95 tables**, obtenues aujourd'hui en **67 migrations** appliquées de bout en bout par
+- **96 tables**, obtenues aujourd'hui en **68 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le
@@ -1295,11 +1295,11 @@ Ce que la reprise fait, quand on la rejoue :
   ajoute la vingt-deuxième action du journal (`verification_integrite`), deux colonnes de
   verdict sur `pieces_jointes`, un index de balayage — et **réémet** le garde-fou du
   vocabulaire plutôt que d'en poser un second sur la même contrainte.
-- **380 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
+- **383 politiques**, RLS **activée et forcée** sur **toutes** les tables, propriétaire
   compris : mesuré dans `pg_class`, **0 table sans `relrowsecurity`, 0 sans
   `relforcerowsecurity`**.
-- **182 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
-  migrations : **107 en `restrict`, 65 en `cascade`, 9 en `set null`**. ⚠️ **Elles sont
+- **184 clés étrangères**, relevées dans `pg_constraint` et non dans le texte des
+  migrations : **109 en `restrict`, 65 en `cascade`, 9 en `set null`**. ⚠️ **Elles sont
   passées de deux à neuf les 18 et 19/09/2026**, avec les ateliers EBIOS RM (migrations
   `046` et `047`) — et **toutes les composites nomment leur colonne**, ce que
   `f_verifier_set_null_composites()` impose désormais à l'échelle du schéma entier

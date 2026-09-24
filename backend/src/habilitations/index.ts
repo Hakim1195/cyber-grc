@@ -65,6 +65,15 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+// La délégation temporaire de droits (migration `068`). ⚠️ Elle vit dans ce
+// greffon parce qu'elle EST un droit : la réunir aux profils, aux groupes et à la
+// revue est ce qui permet à un administrateur de voir, au même endroit, tout ce
+// qui ouvre un accès. L'éparpiller aurait rouvert le défaut que cet écran ferme.
+import {
+  accorderDelegation,
+  lireDelegations,
+  revoquerDelegation,
+} from './delegations.js';
 import type { Pool } from 'pg';
 
 import type { ServiceAuthentification } from '../auth/index.js';
@@ -553,6 +562,55 @@ export async function greffonHabilitations(
       return await reponse.status(200).send({ id, ...resultat });
     },
   );
+  /* ═══ LA DÉLÉGATION TEMPORAIRE DE DROITS — migration `068` ═══════════════
+   *
+   * 🛑 Trois routes, et **aucune ne supprime** : une délégation se révoque. La
+   * table ne porte d'ailleurs aucune politique de suppression — la barrière est
+   * dans la base, pas dans le choix des verbes HTTP.
+   */
+  instance.get(
+    `${PREFIXE}/delegations`,
+    { config: { acces: { action: 'lire', domaine: 'administration' } } },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const session = sessionDe(requete);
+      const etat = await avecTransaction(pool, session.perimetre, async (client) =>
+        lireDelegations(client),
+      );
+      return await reponse.status(200).send(etat);
+    },
+  );
+
+  instance.post(
+    `${PREFIXE}/delegations`,
+    { config: ACCES_ECRITURE },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const session = sessionDe(requete);
+      const corps = corpsDe(requete);
+      const resultat = await avecTransaction(pool, session.perimetre, async (client) =>
+        accorderDelegation(client, corps, session.perimetre),
+      );
+      return await reponse.status(201).send({ ...resultat, ...RAPPEL_PROCHAINE_CONNEXION });
+    },
+  );
+
+  instance.post(
+    `${PREFIXE}/delegations/:id/revoquer`,
+    { config: ACCES_ECRITURE },
+    async (requete: FastifyRequest, reponse: FastifyReply) => {
+      const session = sessionDe(requete);
+      const id = identifiantDe(requete);
+      const corps = corpsDe(requete);
+      await avecTransaction(pool, session.perimetre, async (client) =>
+        revoquerDelegation(client, id, corps.motif, corps.version, session.perimetre),
+      );
+      /* ⚠️ Le rappel vaut ICI PLUS QU'AILLEURS, et dans le sens qui coûte : révoquer
+       * une délégation ne ferme AUCUNE session en cours. Celui à qui on retire un
+       * accès le garde jusqu'à sa prochaine connexion. Un administrateur qui croit
+       * avoir fermé une porte ouverte est dans la pire des situations. */
+      return await reponse.status(200).send({ ...RAPPEL_PROCHAINE_CONNEXION });
+    },
+  );
+
 }
 
 /**

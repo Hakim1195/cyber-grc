@@ -125,7 +125,13 @@ export async function ouvrirRevue(
   balayage: readonly MembresParGroupe[],
   prochaineLe: string | null,
   perimetre: PerimetreSession,
-): Promise<{ readonly id: string; readonly lignes: number; readonly tronque: boolean }> {
+): Promise<{
+  readonly id: string;
+  readonly lignes: number;
+  /** Combien de ces lignes viennent d'une DÉLÉGATION plutôt que de l'annuaire. */
+  readonly delegations: number;
+  readonly tronque: boolean;
+}> {
   const id = engendrerIdentifiant('REVH');
   verifierIdentifiant(id);
 
@@ -190,6 +196,66 @@ export async function ouvrirRevue(
     );
   }
 
+  /* ══ LES DÉLÉGATIONS TEMPORAIRES ENTRENT DANS LA REVUE — migration `068` ══
+   *
+   * 🛑 **SANS CE BLOC, CE PRODUIT AURAIT UNE PORTE DÉROBÉE.** La revue A.5.18
+   * balaie l'ANNUAIRE. Un droit accordé DANS le produit n'y figurerait pas :
+   * l'auditeur relirait la revue, la trouverait complète, et manquerait
+   * exactement les accès que personne n'a inscrits dans l'AD.
+   *
+   * C'est la cinquième des six propriétés qui rendent la délégation sûre, et
+   * c'est celle qui fait la différence entre une fonctionnalité contrôlée et un
+   * contournement.
+   *
+   * ⚠️ **Seules les délégations ACTIVES au moment du balayage** : une revue est un
+   * instantané de ce qui OUVRE un accès aujourd'hui. Une délégation expirée
+   * n'ouvre plus rien, et l'inscrire ferait décider sur du vide.
+   *
+   * ⚠️ **L'instantané est FIGÉ**, comme le reste : `compte_nom` porte le motif et
+   * `profil_code` le profil tels qu'ils étaient. Une revue close cite ce qui a
+   * été revu, pas ce qui existe aujourd'hui.
+   */
+  const { rows: deleguees } = await client.query<{
+    id: string;
+    login: string;
+    motif: string;
+    profil_code: string | null;
+    perimetre: string;
+    fin: string;
+  }>(
+    `select d."id", d."login", d."motif", p."code" as profil_code, d."perimetre",
+            to_char(d."fin", 'YYYY-MM-DD') as "fin"
+       from "delegations_droits" d
+       left join "profils" p on p."id" = d."profil_id"
+      where f_etat_delegation(d."debut", d."fin", d."revoquee_le") = 'active'
+      order by d."login"`,
+  );
+
+  if (deleguees.length > 0) {
+    await client.query(
+      `insert into "revue_habilitation_lignes"
+              ("id", "revue_id", "source", "delegation_id", "compte_login", "compte_nom",
+               "profil_code", "perimetre_groupe")
+       select t.id, $1, 'delegation', t.deleg, t.login, t.nom, t.profil, t.portee
+         from unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[])
+              as t(id, deleg, login, nom, profil, portee)`,
+      [
+        id,
+        deleguees.map(() => engendrerIdentifiant('RHL')),
+        deleguees.map((d) => d.id),
+        deleguees.map((d) => d.login),
+        // ⚠️ `compte_nom` porte ici le MOTIF et l'échéance : c'est ce qu'un
+        //    relecteur a besoin de voir pour décider, et la colonne existante dit
+        //    « ce qu'on sait de la personne dans cette ligne ». L'alternative —
+        //    deux colonnes de plus — aurait ajouté du schéma pour une information
+        //    que l'instantané porte déjà.
+        deleguees.map((d) => `délégation jusqu’au ${d.fin} — ${d.motif}`),
+        deleguees.map((d) => d.profil_code),
+        deleguees.map((d) => d.perimetre),
+      ],
+    );
+  }
+
   await journaliser(client, {
     action: 'administration',
     // ⚠️ `resume` est une phrase LITTÉRALE — `CONVENTIONS.md` §29.5. Le nom, le
@@ -207,11 +273,14 @@ export async function ouvrirRevue(
       perimetre: perimetreTexte,
       groupes: balayage.length,
       lignes: lignes.length,
+      // ⚠️ Comptées À PART : un relecteur doit savoir d'un coup d'œil combien
+      //    d'accès viennent du produit plutôt que de l'annuaire.
+      delegations: deleguees.length,
       balayage_tronque: tronque,
     },
   });
 
-  return { id, lignes: lignes.length, tronque };
+  return { id, lignes: lignes.length + deleguees.length, delegations: deleguees.length, tronque };
 }
 
 /* =====================================================================

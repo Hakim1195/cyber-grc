@@ -1389,6 +1389,20 @@ const Api = (() => {
     }
     function coherenceAnnuaire() { return appeler("/habilitations/annuaire"); }
 
+    /* LA DÉLÉGATION TEMPORAIRE DE DROITS (migration `068`).
+     *
+     * 🛑 Trois appels, et AUCUNE suppression : une délégation se révoque. La table
+     * ne porte d'ailleurs aucune politique de suppression — la barrière est dans la
+     * base, pas dans le choix des verbes. */
+    function delegations() { return appeler("/habilitations/delegations"); }
+    function accorderDelegation(corps) {
+        return appeler("/habilitations/delegations", { methode: "POST", corps: corps });
+    }
+    function revoquerDelegation(id, motif, version) {
+        return appeler("/habilitations/delegations/" + encodeURIComponent(id) + "/revoquer",
+                       { methode: "POST", corps: { motif: motif, version: version } });
+    }
+
     /* Les filiales — le PÉRIMÈTRE, déclaré depuis le produit (24/09/2026).
      *
      * ⚠️ `inventaireFiliales()` n'est PAS `filiales()` : celle-là est une route de
@@ -1570,6 +1584,7 @@ const Api = (() => {
         poserGrilleHabilitation, supprimerProfilHabilitation,
         creerGroupeAd, modifierGroupeAd, synchroniserGroupesAd,
         coherenceAnnuaire, simulerDroits,
+        delegations, accorderDelegation, revoquerDelegation,
         // Le périmètre : l'inventaire, la déclaration, la proposition, la sortie.
         inventaireFiliales, creerFiliale, modifierFiliale,
         candidatsFilialesAnnuaire, sortirFiliale,

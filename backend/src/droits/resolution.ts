@@ -83,6 +83,16 @@ interface LigneGroupe {
 export interface OptionsResolution {
   /** Filiale préférée de l'utilisateur (`utilisateurs.filiale_defaut_id`). */
   readonly filialePreferee?: string | null;
+  /**
+   * Le login d'annuaire, pour les **délégations temporaires** (migration `068`).
+   *
+   * ⚠️ **Absent = aucune délégation n'est lue**, et c'est délibéré : les appelants
+   * qui simulent des droits à partir d'une liste de groupes (`simuler()` de
+   * l'écran des habilitations) ne parlent d'aucune personne en particulier. Leur
+   * faire lire des délégations attribuerait à un groupe ce qui a été accordé à
+   * quelqu'un — et l'écran de simulation dirait faux.
+   */
+  readonly login?: string | null;
 }
 
 /**
@@ -135,6 +145,51 @@ export async function resoudreDroits(
     if (ligne.perimetre === 'filiale' && ligne.filiale_id !== null) filiales.add(ligne.filiale_id);
     if (ligne.perimetre === 'groupe') porteeGroupe = true;
     if (ligne.profil_id !== null) profils.add(ligne.profil_id);
+  }
+
+  /* ══ LES DÉLÉGATIONS TEMPORAIRES — migration `068` ═══════════════════════
+   *
+   * 🛑 **ADDITIVES, ET SEULEMENT ADDITIVES.** Une délégation AJOUTE un profil sur
+   * un périmètre ; elle ne retire jamais rien. Retirer doit rester dans
+   * l'annuaire — sinon le produit devient un endroit où l'on coupe des accès en
+   * silence, et la revue d'accès ment dans l'autre sens.
+   *
+   * 🛑 **ELLES N'ACCORDENT NI L'EXPORT NI L'ADMINISTRATION.** Ces deux-là viennent
+   * de groupes TRANSVERSAUX de l'annuaire (`GRC-EXPORT`, `GRC-ADMIN`) et y
+   * restent : on le voit ici à ce que ni `peutExporter` ni `administrateur` ne
+   * sont touchés par cette boucle. Le profil d'administration, lui, est refusé
+   * dès l'écriture par un déclencheur (migration `068`).
+   *
+   * ⚠️ **Elles peuvent ouvrir un accès à quelqu'un qui n'a AUCUN groupe `GRC-*`** —
+   * c'est exactement le cas de l'auditeur externe, et c'est leur raison d'être.
+   * Une délégation de portée « groupe » élargit donc `porteeGroupe`, comme le
+   * ferait un `GRC-GROUPE-<PROFIL>` : même effet, même visibilité en revue.
+   *
+   * ⚠️ **Lues APRÈS la boucle sur les groupes et AVANT `porteeGroupe`** : une
+   * délégation de portée Groupe doit pouvoir déclencher l'ouverture de toutes les
+   * filiales actives, juste en dessous. L'ordre est la propriété.
+   */
+  if (options.login !== undefined && options.login !== null && options.login.trim() !== '') {
+    const { rows: deleguees } = await client.query<{
+      perimetre: string;
+      filiale_cible_id: string | null;
+      profil_id: string;
+    }>(
+      // `f_delegations_actives()` est « security definer » : cette table PRODUIT
+      // l'autorisation et ne peut donc pas en dépendre (`CONVENTIONS.md` §46). Un
+      // select ordinaire rendrait zéro ligne ici, et la délégation n'accorderait
+      // rien EN SILENCE — le défaut exact du jeton d'API rendant 401 à son premier
+      // usage.
+      `select "perimetre", "filiale_cible_id", "profil_id" from f_delegations_actives($1)`,
+      [options.login],
+    );
+    for (const d of deleguees) {
+      if (d.perimetre === 'groupe') porteeGroupe = true;
+      if (d.perimetre === 'filiale' && d.filiale_cible_id !== null) {
+        filiales.add(d.filiale_cible_id);
+      }
+      profils.add(d.profil_id);
+    }
   }
 
   if (porteeGroupe) {

@@ -261,6 +261,15 @@ const SANS_FICHE = {
   // conclu. Aucune fiche : une revue se lit d'un bloc, et sa table de décisions
   // se déplie dans sa carte — on décide EN REGARD du récapitulatif, jamais en
   // l'ayant quitté.
+  /* ⚠️ **La délégation n'a pas de fiche non plus, et c'est le même arbitrage** :
+   * elle ne se MODIFIE pas. Changer sa durée, son profil ou son bénéficiaire après
+   * coup reviendrait à réécrire une décision datée — or c'est précisément sa date
+   * et son auteur qui la rendent revue-able. On en accorde une nouvelle, et l'on
+   * révoque l'ancienne : deux décisions, deux traces. */
+  '/habilitations-delegations':
+    'délégations temporaires : accorder un profil pour une durée bornée, avec un motif et ' +
+    'un auteur, et révoquer. Aucune fiche — une délégation est une décision datée, elle ne ' +
+    'se réécrit pas.',
   '/habilitations-revues':
     'revues des droits d’accès : l’instantané FIGÉ de qui appartient à quel groupe, et la ' +
     'décision prise sur chaque accès. ⚠️ Le produit CONSIGNE, l’administrateur de ' +

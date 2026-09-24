@@ -1117,3 +1117,121 @@ describe('Les natures de lien entre actifs tiennent, et c’est ÉPROUVÉ — 06
     );
   });
 });
+
+describe('🛑 La délégation temporaire ne devient pas une porte, et c’est ÉPROUVÉ — 068', () => {
+  /* ⚠️ **C'est le seul lot de la série qui touche la RÉSOLUTION DES DROITS.** Un
+   * garde-fou vert y vaut moins qu'ailleurs : ce qui compte est qu'il ROUGISSE
+   * quand on vide chacun de ses invariants. Les sept mutations ci-dessous ont été
+   * jouées à la main sur la recette avant d'être figées ici, et les sept mordent. */
+
+  test('le témoin : le schéma intact ne rend AUCUNE anomalie', async () => {
+    const anomalies = await anomaliesPendant([]);
+    assert.equal(anomalies.length, 0, `Schéma d’essai déjà en défaut : ${resume(anomalies)}`);
+  });
+
+  test('🛑 L’AUTO-DÉLÉGATION : la contrainte VIDÉE est vue', async () => {
+    /* L'invariant de sécurité de cette migration. Sans lui, qui détient le domaine
+     * « administration » s'accorde n'importe quel profil sur n'importe quelle
+     * filiale : c'est le seul chemin d'élévation de privilège que ce dispositif
+     * pourrait ouvrir. La mutation garde le NOM de la contrainte — c'est celle qui
+     * passait au vert avant que les gardes ÉPROUVENT (constat Q-312). */
+    const anomalies = await anomaliesPendant([
+      'alter table delegations_droits drop constraint ck_delegations_pas_soi_meme',
+      'alter table delegations_droits add constraint ck_delegations_pas_soi_meme check (true)',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'auto_delegation_acceptee'),
+      'Un compte peut s’accorder des droits à LUI-MÊME et rien ne le dit. C’est la seule ' +
+        `élévation de privilège que ce lot pourrait ouvrir. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('CONTRE-TÉMOIN : une contrainte devenue « false » est vue AUSSI', async () => {
+    /* Un garde qui n'éprouverait que le refus serait muet sur une contrainte qui
+     * refuse TOUT — y compris une délégation légitime. Plus personne ne pourrait
+     * déléguer, et le garde-fou resterait vert. */
+    const anomalies = await anomaliesPendant([
+      'alter table delegations_droits drop constraint ck_delegations_pas_soi_meme',
+      'alter table delegations_droits add constraint ck_delegations_pas_soi_meme check (false)',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'contrainte_devenue_fausse'),
+      `Une contrainte qui refuse tout doit être NOMMÉE. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('la DURÉE débornée est vue', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table delegations_droits drop constraint ck_delegations_duree',
+      'alter table delegations_droits add constraint ck_delegations_duree check (true)',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'duree_non_bornee'),
+      '« Temporaire » qui se reconduit tacitement redevient permanent : c’est exactement ' +
+        `ce que ce lot existe pour empêcher. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('le MOTIF creux admis est vu', async () => {
+    const anomalies = await anomaliesPendant([
+      'alter table delegations_droits drop constraint ck_delegations_motif',
+      'alter table delegations_droits add constraint ck_delegations_motif check (true)',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'motif_creux_accepte'),
+      `Cette ligne est celle qu’un auditeur lit. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('le déclencheur qui refuse le profil ADMIN, DÉSARMÉ, est vu', async () => {
+    /* ⚠️ « disable » et non « drop » : c'est la forme discrète, celle qui laisse le
+     * déclencheur exister. Un garde qui vérifierait seulement sa PRÉSENCE serait
+     * vert ici — c'est le constat Q-281, et il est éprouvé plutôt que supposé. */
+    const anomalies = await anomaliesPendant([
+      'alter table delegations_droits disable trigger trg_delegations_droits_profil',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'declencheur_absent_ou_desarme'),
+      'Le profil d’administration deviendrait délégable : un second chemin vers ' +
+        `l’administration, hors de l’annuaire. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('une politique de SUPPRESSION qui apparaît est vue', async () => {
+    /* Une délégation se révoque, elle ne s'efface pas : effacer effacerait la trace
+     * d'un droit qui a EXISTÉ, et ce registre doit y répondre trois ans plus tard. */
+    const anomalies = await anomaliesPendant([
+      'create policy pol_delegations_droits_suppression on delegations_droits '
+      + 'for delete using (true)',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'suppression_ouverte'),
+      `Le registre des délégations passées deviendrait effaçable. Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('la résolution ouverte à PUBLIC est vue', async () => {
+    const anomalies = await anomaliesPendant([
+      'grant execute on function f_delegations_actives(text) to public',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'definer_joignable_par_public'),
+      'Une fonction « security definer » joignable par tous annule le cloisonnement ' +
+        `qu’elle contourne légitimement (Q-136). Rendu : ${resume(anomalies)}`,
+    );
+  });
+
+  test('la revue rendue AVEUGLE aux délégations est vue', async () => {
+    /* Sans la colonne « source », la revue A.5.18 serait complète en apparence et
+     * manquerait exactement les droits que personne n'a inscrits dans l'annuaire —
+     * c'est-à-dire ceux que le produit accorde lui-même. Ce dispositif deviendrait
+     * une porte dérobée, et une porte dérobée que la revue ne montre pas. */
+    const anomalies = await anomaliesPendant([
+      'alter table revue_habilitation_lignes drop column source cascade',
+    ]);
+    assert.ok(
+      nomme(anomalies, 'revue_aveugle_aux_delegations'),
+      `La revue des accès cesserait de voir les délégations. Rendu : ${resume(anomalies)}`,
+    );
+  });
+});

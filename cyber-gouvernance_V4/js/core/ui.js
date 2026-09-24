@@ -670,7 +670,13 @@ window.UI = (function () {
                 Object.freeze({ route: "/habilitations-comptes", libelle: "Comptes" }),
                 // La REVUE des droits d'accès : ce qui fait de cet écran une pièce
                 // de conformité (ISO 27001 A.5.18) et non un panneau d'administration.
-                Object.freeze({ route: "/habilitations-revues", libelle: "Revues des acc\u00e8s" })
+                Object.freeze({ route: "/habilitations-revues", libelle: "Revues des acc\u00e8s" }),
+                // La DÉLÉGATION TEMPORAIRE (migration `068`). ⚠️ Elle vit ici, avec
+                // les profils, les groupes et la revue : un administrateur doit voir
+                // au même endroit TOUT ce qui ouvre un accès. L'éparpiller aurait
+                // rouvert le défaut que cet écran ferme.
+                Object.freeze({ route: "/habilitations-delegations",
+                                libelle: "D\u00e9l\u00e9gations temporaires" })
             ])
         }),
         Object.freeze({
