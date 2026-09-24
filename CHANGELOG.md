@@ -27,7 +27,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2494 essais, 2494 passés, 0 échec** — 2 224 sans navigateur et 270 avec —,
+> `npm test` → **2511 essais, 2511 passés, 0 échec** — 2 241 sans navigateur et 270 avec —,
 > **quarante** familles. ⚠️ **+83 les 21 et 22/09/2026** : les quatre vagues de la revue
 > d'usage apportent `test/habilitations/` (46) et `test/personnel/` (10), et étendent
 > `base` (326 → 349, les garde-fous des migrations `060` à `063`) et `modules` (57 → 61).
@@ -213,7 +213,7 @@ de la dernière commande de son corps — `--verifier` sortait en code 1 **sans 
 un accent grave dans un commentaire vivant à l'intérieur d'une chaîne à guillemets doubles
 ouvre une substitution de commande.
 
-Mesuré : banc **{BANC}**, `f_verifier_schema()` 0 anomalie, cloisonnement **110/110**,
+Mesuré : banc **2511/2511**, `f_verifier_schema()` 0 anomalie, cloisonnement **110/110**,
 publication **89 fichiers**, et le parcours complet joué au navigateur sur la recette —
 déclaration, refus d'un code trop court, refus d'un doublon, proposition depuis l'annuaire
 réel, création, script PowerShell, cohérence rejouée.
