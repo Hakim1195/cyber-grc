@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2511 essais, quarante familles (voir plus bas)
+npm test                           # 2546 essais, quarante familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -784,13 +784,19 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 24/09/2026, après la déclaration du périmètre dans le produit** (écran
-« Filiales », `db/importer-filiales.mjs`, migrations `064` et `065`) : `npm test` →
-**2511 essais, 2511 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**Mesuré au 24/09/2026 au soir, après la délégation temporaire de droits et la passe de
+documentation** (écran « Filiales », `db/importer-filiales.mjs`, migrations `064` à `069`) :
+`npm test` →
+**2546 essais, 2546 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **69 garde-fous consignés**, **68 migrations**,
+`f_verifier_schema()` → 0 anomalie, **69 garde-fous consignés**, **69 migrations**,
 **96 tables**, **580 décisions** au registre de l'article 30 ; publication → **89
-fichiers identiques au dépôt** ; `install.sh --diagnostic` → **14 conformes,
+fichiers identiques au dépôt** ;
+
+⚠️ **La migration `069` n'ajoute ni table, ni politique, ni garde-fou : elle corrige un
+`comment on table`.** C'est pour cela que seule la ligne « migrations » bouge, et c'est dit
+plutôt que laissé à deviner — un lecteur qui voit un numéro de migration monter sans qu'aucune
+autre grandeur suive a raison de se demander si le relevé a été rejoué. `install.sh --diagnostic` → **14 conformes,
 2 réserves, 0 bloquant** sur **quinze sujets** — le quinzième, « assistance IA », naît de
 L27 et rend le mode en vigueur.
 
@@ -959,29 +965,29 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`98defdf`** — le périmètre déclaré dans le produit (écran « Filiales », `064` et `065`). 24/09/2026, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ neuf fois**, dont une où il désignait une révision cinquante-six commits en arrière (constat **Q-219**). Le garde-fou juge le document contre **la révision que le document nomme**, jamais contre l'arbre de travail. |
-| État de l'arbre | **arbre de `98defdf`**, à l'octet près. Compte **RELEVÉ famille par famille** — quarante répertoires joués séparément, somme confrontée au total du banc complet : **2 511 des deux côtés**. Aucune famille neuve ; `filiales` 35 → 49, `habilitations` 46 → 48. ⚠️ **`documentation` est annoncée à 33, et elle en rendait 32 au relevé** : son unique essai en échec était « LES FAMILLES ANNONCÉES sont EXACTEMENT celles de la RÉVISION MESURÉE », qui ne pouvait pas être vert avant que les quatre familles neuves entrent dans l'histoire. **C'est ce commit-ci qui le rend vert**, et c'est la seule circularité du dispositif : le point fixe du compte n'existe qu'après le commit qu'il décrit. Elle se dit plutôt qu'elle ne se cache. |
+| Révision mesurée | **`1b899cd`** — la délégation temporaire de droits (`068`) et la passe de documentation qui a suivi (`069`). 24/09/2026 au soir, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ dix fois**, dont une où il désignait une révision cinquante-six commits en arrière (constat **Q-219**). Le garde-fou juge le document contre **la révision que le document nomme**, jamais contre l'arbre de travail. |
+| État de l'arbre | **arbre de `1b899cd`**, à l'octet près. Compte **RELEVÉ famille par famille** — quarante répertoires joués séparément, somme confrontée au total du banc complet : **2 546 des deux côtés**. Aucune famille neuve ; `habilitations` 48 → 69 (la délégation), `base` 349 → 358 (les neuf mutations du garde-fou de la `068`), `filiales` 49 → 53, `modules` 62 → 63. |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 | ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2511 · pass 2511 · fail 0
-                                                   base 349 · api 302 · navigateur 270
+npm test                                         → tests 2546 · pass 2546 · fail 0
+                                                   base 358 · api 302 · navigateur 270
                                                    pieces 142 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73
                                                    journal-lecture 72 · approbations 71
-                                                   depot 66 · modules 62 · filiales 49
-                                                   annuaire 48 · habilitations 48
-                                                   tiers 36 · documents 35
-                                                   documentation 36 · campagnes 25
-                                                   journal 25 · catalogues 24 · ouverture 24
+                                                   habilitations 69 · depot 66
+                                                   modules 63 · filiales 53 · annuaire 48
+                                                   tiers 36 · documentation 36
+                                                   documents 35 · recherche 32
+                                                   campagnes 25 · journal 25
+                                                   catalogues 24 · ouverture 24
                                                    echelles 23 · quantification 22
                                                    assistance 16 · collecte 15 · ebios 15
-                                                   portail 15 · recherche 32
-                                                   personnel 10
+                                                   portail 15 · personnel 10
                                                    attestations 8 · decouverte 8 · aipd 7
                                                    crise 7 · reglementaire 7 · derogations 6
                                                    droits-personnes 6
@@ -991,7 +997,7 @@ select * from f_verifier_schema()                → 0 ligne (69 garde-fous déc
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **96 tables** en
-**68 migrations**, **383 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**69 migrations**, **383 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **184 clés étrangères** (109 `restrict`, 65 `cascade`, 9 `set null`, 1 `no action`),
 **88 tables portant `cree_par` et 81 déclencheurs de création**, **58 clés étrangères
 composites** visant
@@ -1275,7 +1281,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **96 tables**, obtenues aujourd'hui en **68 migrations** appliquées de bout en bout par
+- **96 tables**, obtenues aujourd'hui en **69 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le

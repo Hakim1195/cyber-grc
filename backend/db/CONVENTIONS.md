@@ -1596,8 +1596,10 @@ au moment où quelqu'un ne peut pas se connecter. Le shell l'APPELLE désormais.
 
 **Le client acquiert des filiales régulièrement.** Une liste de groupes figée est donc fausse à
 la première acquisition, et fausse **en silence**. Ce que l'installateur doit produire est un
-**engendrement**, rejouable, dont la sortie change quand le fichier change — et un contrôle qui
-compare la liste engendrée à ce que l'AD porte réellement relève de l'exploitation, pas du dépôt.
+**engendrement**, rejouable, dont la sortie change quand **le périmètre** change — depuis
+l'amendement du 24/09/2026, c'est-à-dire quand la **table** change, et non plus le fichier. Le
+contrôle qui compare la liste engendrée à ce que l'AD porte réellement relève de l'exploitation,
+pas du dépôt : c'est `groupes-ad.sh --verifier`, et il est livré.
 
 ---
 

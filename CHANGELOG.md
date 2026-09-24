@@ -8,11 +8,16 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
-> **État mesuré le 21/09/2026**, après l'action **D3**, sur la machine réelle
+> **État mesuré le 24/09/2026 au soir**, après la délégation temporaire de droits et la
+> passe de documentation, sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
-> **PostgreSQL 17.11**) : **68 migrations**, **96 tables**, **383 politiques**,
-> **67 garde-fous**, **580 décisions** au registre de l'article 30, publication
-> **87 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
+> **PostgreSQL 17.11**) : **69 migrations**, **96 tables**, **383 politiques**,
+> **69 garde-fous**, **580 décisions** au registre de l'article 30, publication
+> **89 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
+> ⚠️ La `069` n'ajoute **ni table, ni politique, ni garde-fou** : elle corrige un
+> `comment on table` que la `068` avait laissé faux. Seule la ligne « migrations » bouge,
+> et c'est dit — un numéro qui monte sans qu'aucune autre grandeur suive doit pouvoir
+> s'expliquer autrement que par un relevé non rejoué.
 > ⚠️ La `059` n'ajoute **aucune table** ni politique : `documents.recherche` est une
 > colonne de plus sur une table qui en portait déjà quatre-vingt-neuf politiques.
 > `install.sh --diagnostic` → **14 conformes, 2 réserves, 0 bloquant** sur **quinze
@@ -27,9 +32,13 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2511 essais, 2511 passés, 0 échec** — 2 241 sans navigateur et 270 avec —,
-> **quarante** familles. ⚠️ **+83 les 21 et 22/09/2026** : les quatre vagues de la revue
-> d'usage apportent `test/habilitations/` (46) et `test/personnel/` (10), et étendent
+> `npm test` → **2546 essais, 2546 passés, 0 échec** — 2 276 sans navigateur et 270 avec —,
+> **quarante** familles. ⚠️ **+35 le 24/09/2026, aucune famille neuve** : la délégation
+> temporaire porte `habilitations` de 48 à **69** et `base` de 349 à **358** (les neuf
+> mutations du garde-fou de la `068`, jouées à la main sur la recette dans des transactions
+> annulées avant d'être figées), tandis que la déclaration du périmètre porte `filiales` à
+> **53** et `modules` à **63**. ⚠️ **+83 les 21 et 22/09/2026** : les quatre vagues de la
+> revue d'usage apportent `test/habilitations/` (46) et `test/personnel/` (10), et étendent
 > `base` (326 → 349, les garde-fous des migrations `060` à `063`) et `modules` (57 → 61).
 >
 > **État mesuré le 18/09/2026** : **relevé famille par
