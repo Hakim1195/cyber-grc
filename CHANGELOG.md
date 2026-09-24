@@ -10,7 +10,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 > **État mesuré le 21/09/2026**, après l'action **D3**, sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
-> **PostgreSQL 17.11**) : **63 migrations**, **95 tables**, **380 politiques**,
+> **PostgreSQL 17.11**) : **65 migrations**, **95 tables**, **380 politiques**,
 > **67 garde-fous**, **573 décisions** au registre de l'article 30, publication
 > **87 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
 > ⚠️ La `059` n'ajoute **aucune table** ni politique : `documents.recherche` est une
@@ -77,6 +77,101 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### LE PÉRIMÈTRE SE DÉCLARE DANS LE PRODUIT — migrations `064` et `065` (24/09/2026)
+
+> **Demandé par l'utilisateur** : *« on ne peut pas créer de filiale depuis le logiciel,
+> c'est un problème ça. Si on les lit depuis l'AD c'est bon, mais si on les déclare au
+> niveau serveur ce n'est pas bon du tout. Ou mieux, on peut aussi les créer directement
+> dans le serveur, mais c'est impensable de le faire uniquement comme ça. »*
+
+Il avait raison, et le défaut était **double** — la seconde moitié étant la plus grave.
+
+🛑 **PERSONNE NE PORTAIT `filiales.conf` EN BASE.** `insert into filiales` n'existait ni
+dans `deploy/` ni dans `db/`, et le commentaire d'`install.sh` l'annonçait encore **au
+futur** : *« que le lot L4 consommera pour semer la table `filiales` »*. Les deux moitiés
+du dispositif lisaient donc deux sources différentes :
+
+| Qui | Lisait | Produisait |
+|---|---|---|
+| `deploy/groupes-ad.sh` | le **FICHIER** | les groupes à créer dans l'annuaire |
+| `db/synchroniser-groupes-ad.mjs` | la **TABLE** | `groupes_ad`, l'autorité qui décide de ce qu'un groupe ACCORDE |
+
+**Mesuré sur le code compilé**, avec deux filiales déclarées et une table vide : **26
+groupes créés dans l'AD, 10 déclarés en base**. `GRC-ADMIN` ne dépendant d'aucune filiale,
+l'administrateur entrait et le produit avait l'air de marcher ; les **seize** groupes de
+filiale, eux, n'accordaient RIEN. Un RSSI de site se connectait **sans obtenir le moindre
+accès, sans message**, ni côté annuaire ni côté application. C'est le constat **Q-78** d'un
+cran plus loin, avec cette aggravation qu'il ne frappait que les comptes de filiale.
+
+⚠️ **Ce n'était pas entièrement silencieux, et il faut le dire** : `groupes-ad.sh
+--verifier` comparait dans les deux sens et sortait en code 3. Mais `install.sh` n'en
+faisait qu'une **alerte**, sur une condition qui signifie « la moitié de vos utilisateurs
+n'a aucun accès », et **le remède qu'il nommait était le mauvais** — « régénérez le script
+de création AD », alors que le côté annuaire est juste et que c'est la table qui manque.
+
+**L'ARBITRAGE : la table est la SOURCE, le fichier est un AMORÇAGE.** Ce n'est pas un choix
+de goût. Le service tourne sous `ProtectSystem=strict` avec `ReadWritePaths=/var/lib/cyber-grc
+/var/log/cyber-grc` : `/etc/cyber-grc` lui est en **lecture seule**. Un écran ne pourra
+jamais écrire `filiales.conf`, et l'y autoriser serait une régression du bac à sable. Le
+seul sens ouvert est fichier → table, **une fois**, à l'installation.
+
+**Cinq pièces :**
+
+1. **`db/importer-filiales.mjs`** — l'amorçage, appelé par `install.sh` **au §8 pre, avant**
+   la synchronisation qui lit la table. ⚠️ Il **n'écrit pas dans `filiales`** : il appelle
+   `amorcerFiliales()`, qui appelle `creerFiliale()` — le chemin normal. *Une filiale
+   amorcée est indiscernable d'une filiale créée à l'écran*, trace au journal comprise
+   (sans quoi vingt filiales importées sans une entrée auraient rouvert **Q-213**).
+2. **`deploy/groupes-ad.sh` lit la TABLE**, et ne retombe sur le fichier que si la base est
+   injoignable — **en le DISANT**. ⚠️ Son analyseur bash de `filiales.conf` est **supprimé** :
+   il réimplémentait à la main `ck_filiales_code`, `ck_filiales_pays` et l'unicité du code.
+   Le seul analyseur vit dans `src/filiales/declaration.ts`, et le shell l'APPELLE.
+3. **L'écran « Filiales »** (Administration) — déclarer, voir les groupes d'annuaire exigés,
+   copier le script PowerShell, faire sortir. 51ᵉ module.
+4. **Le garde-fou de `synchroniser-groupes-ad.mjs`** : il REFUSE d'aligner `groupes_ad` sur
+   une table vide que la déclaration contredit. C'est là que l'écart se matérialise.
+5. **`--verifier` gagne une troisième confrontation** : fichier ↔ table, pour qu'un fichier
+   devenu obsolète se voie. *Quelqu'un l'éditera dans six mois en croyant agir.*
+
+🛑 **ET UN DÉFAUT TROUVÉ EN CLIQUANT, APRÈS UN BANC VERT — migration `065`.** La filiale
+créée depuis l'écran **n'apparaissait pas dans la liste**, tandis que l'encart au-dessus
+annonçait sa création avec ses huit groupes. **L'écran se contredisait lui-même**, dans le
+sens le plus coûteux : on conclut que la création a échoué, on la refait, et l'on reçoit un
+refus de doublon sur un code qu'on ne voit nulle part.
+
+Le mécanisme était **déjà écrit dans le produit** : `f_perimetre_groupe()` est dérivée, elle
+vaut vrai quand le périmètre couvre TOUTES les filiales actives — en créer une la fait donc
+basculer à faux, et `pol_filiales_lecture` retombe sur les filiales lisibles, où la nouvelle
+n'est pas. ⚠️ **Le commentaire de `creerFiliale()` décrivait ce piège en vingt lignes**, à
+propos du `returning` de l'insertion. Il ne disait pas que la LECTURE de l'écran tomberait
+dans le même trou. *Un piège décrit à un endroit n'est pas un piège fermé.*
+
+⚠️ **Un second point d'honnêteté, trouvé au même clic** : la colonne annonçait « 8
+déclarés » pour une filiale née dix secondes plus tôt — vrai de `groupes_ad`, faux de
+l'annuaire, où il n'y en a aucun. Lu vite, cela dit « tout va bien » au moment précis où
+personne ne peut entrer. Elle dit désormais « **8 dans l'application** », et une note
+renvoie au contrôle de cohérence, qui est le seul à interroger l'AD.
+
+⚠️ **« Lire les filiales depuis l'AD » a été ÉCARTÉ**, et le motif vaut : un annuaire n'a pas
+de notion de filiale — il a des OU, des sites, des domaines et un attribut `company`, et
+chaque client encode son organisation dans l'un des quatre. Faire dépendre le
+**cloisonnement** d'une convention de nommage que personne ne contrôle le rendrait fragile
+par construction. Une filiale porte d'ailleurs ce que l'AD n'a pas (code, pays, statut,
+dates liées entre elles), et elle doit pouvoir exister **avant tout compte**. Ce qui est
+retenu : **proposer** les unités d'organisation, qu'un humain confirme. 🛑 Et `company` est
+écarté aussi — le relever exigerait de parcourir les entrées **de personnes** par milliers,
+c'est-à-dire une lecture de masse de données personnelles pour une commodité de saisie.
+
+⚠️ **Deux pièges de shell payés une fois chacun** : le statut d'une boucle `while` est celui
+de la dernière commande de son corps — `--verifier` sortait en code 1 **sans un mot** —, et
+un accent grave dans un commentaire vivant à l'intérieur d'une chaîne à guillemets doubles
+ouvre une substitution de commande.
+
+Mesuré : banc **{BANC}**, `f_verifier_schema()` 0 anomalie, cloisonnement **110/110**,
+publication **89 fichiers**, et le parcours complet joué au navigateur sur la recette —
+déclaration, refus d'un code trop court, refus d'un doublon, proposition depuis l'annuaire
+réel, création, script PowerShell, cohérence rejouée.
 
 ### LE PERSONNEL VIENT DE L'ACTIVE DIRECTORY — migrations `063` (22/09/2026)
 

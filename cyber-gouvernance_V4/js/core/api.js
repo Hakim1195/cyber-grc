@@ -1388,6 +1388,28 @@ const Api = (() => {
         return appeler("/habilitations/groupes/synchroniser", { methode: "POST", corps: {} });
     }
     function coherenceAnnuaire() { return appeler("/habilitations/annuaire"); }
+
+    /* Les filiales — le PÉRIMÈTRE, déclaré depuis le produit (24/09/2026).
+     *
+     * ⚠️ `inventaireFiliales()` n'est PAS `filiales()` : celle-là est une route de
+     * session que tout le monde appelle et qui ne nomme que le périmètre porté.
+     * L'inventaire rend TOUS les statuts, et il est réservé à l'administration —
+     * une filiale sortie a quitté tous les périmètres, et c'est précisément celle
+     * qu'un administrateur doit voir pour savoir qu'elle est sortie.
+     */
+    function inventaireFiliales() { return appeler("/filiales/inventaire"); }
+    function creerFiliale(corps) {
+        return appeler("/filiales", { methode: "POST", corps: corps });
+    }
+    function candidatsFilialesAnnuaire(base) {
+        return appeler("/filiales/candidats-annuaire"
+            + (base ? "?base=" + encodeURIComponent(base) : ""));
+    }
+    /* La sortie d'une filiale : elle EXPORTE d'abord, puis bascule le statut. */
+    function sortirFiliale(id, dateSortie) {
+        return appeler("/cycle/sortie-filiale",
+                       { methode: "POST", corps: { filiale_id: id, date_sortie: dateSortie } });
+    }
     /* La revue des droits d'accès (ISO 27001 A.5.18).
      *
      * ⚠️ `revuesHabilitations(id)` ne demande le DÉTAIL que de la revue ouverte
@@ -1540,6 +1562,8 @@ const Api = (() => {
         poserGrilleHabilitation, supprimerProfilHabilitation,
         creerGroupeAd, modifierGroupeAd, synchroniserGroupesAd,
         coherenceAnnuaire, simulerDroits,
+        // Le périmètre : l'inventaire, la déclaration, la proposition, la sortie.
+        inventaireFiliales, creerFiliale, candidatsFilialesAnnuaire, sortirFiliale,
         // L'annuaire du personnel, alimenté depuis l'Active Directory.
         chercherDansAnnuaire, importerDepuisAnnuaire, rafraichirDepuisAnnuaire,
         revuesHabilitations, ouvrirRevueHabilitations, deciderLigneRevue,

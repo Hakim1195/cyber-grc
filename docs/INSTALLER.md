@@ -54,6 +54,18 @@ sudo bash backend/deploy/groupes-ad.sh --powershell \
 #     puis ouvrir https://votre-nom/ et se connecter avec un compte de l'annuaire
 ```
 
+⚠️ **L'étape 2 porte vos filiales EN BASE** — c'est là que `filiales.conf` cesse d'être un
+fichier et devient le périmètre du produit. Elle ne le fait **qu'une fois**, si la base n'en
+connaît aucune : à partir de là, c'est la base qui fait foi, et une acquisition se déclare
+dans le produit (**Administration → Filiales**), jamais en éditant ce fichier. L'étape 4 lit
+donc la base, plus le fichier.
+
+> 🛑 **Sans cette étape, l'installation aurait l'air réussie et ne servirait qu'à vous.**
+> C'est un défaut mesuré le 24/09/2026 : votre annuaire recevait les 26 groupes, le produit
+> n'en déclarait que 10, et seul `GRC-ADMIN` — qui ne dépend d'aucune filiale — accordait
+> quelque chose. Tous les comptes de filiale entraient **sans le moindre droit, en
+> silence**. Migrations `064` et `065`.
+
 **L'étape 4 est idempotente** : relancée après une acquisition, elle ne crée que ce qui
 manque, et **elle ne supprime jamais rien** — retirer un groupe retirerait des accès sans
 que personne l'ait décidé. Régénérez-la après chaque acquisition : la liste change, le

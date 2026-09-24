@@ -3151,6 +3151,15 @@ export async function greffonApi(instance: FastifyInstance, options: OptionsApi)
     ...(config.auth.ldap === null || config.auth.ldap === undefined
       ? {}
       : { prefixeGroupes: config.auth.ldap.prefixeGroupes }),
+    /* 🛑 Le service d'authentification est passé pour LIRE l'annuaire, et pour
+     * cela seulement : l'écran propose les unités d'organisation qu'il y trouve,
+     * et un humain en tire une filiale. L'interface que le greffon déclare
+     * (`ServiceAnnuaire`) ne porte que deux méthodes, toutes deux en lecture —
+     * c'est ce qui rend visible, à la lecture, que cet écran ne peut pas toucher
+     * à l'annuaire. Absent : la proposition répond 503 et le dit. */
+    ...(options.serviceAuthentification === undefined
+      ? {}
+      : { auth: options.serviceAuthentification }),
   });
 
   /* -------------------------------------------------------------------

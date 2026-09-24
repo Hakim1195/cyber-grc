@@ -234,6 +234,18 @@ const SANS_FICHE = {
   // la transformer en formulaire lui ôterait cette qualité. Une fiche à part
   // aurait séparé ce qu'on lit de ce qu'on change, sur le seul écran du produit
   // où l'on doit voir l'effet d'une modification sur l'ensemble.
+  /* ⚠️ **Le périmètre n'a pas de fiche, et c'est un arbitrage.** Une filiale se
+   * déclare, se voit et se fait sortir depuis l'écran de liste : lui donner une
+   * fiche laisserait croire qu'on peut la MODIFIER après coup. Or son `code`
+   * nomme les groupes d'annuaire (`GRC-<CODE>-<PROFIL>`) : le changer laisserait
+   * derrière lui huit groupes qui n'accordent plus rien, dans l'annuaire du
+   * client, sans que le produit puisse les renommer — il n'écrit pas dans l'AD.
+   * La sortie, elle, est un acte daté qui exporte d'abord ; ce n'est pas une
+   * modification de fiche. */
+  '/filiales':
+    'le périmètre du groupe : déclarer une filiale, voir les groupes d’annuaire qu’elle ' +
+    'exige, la faire sortir. Aucune fiche — le code nomme les groupes d’annuaire et ne se ' +
+    'modifie donc pas après coup.',
   '/habilitations':
     'matrice des droits : trente domaines en lignes, les profils en colonnes. L’édition se ' +
     'fait dans un panneau, jamais dans une fiche à part.',
@@ -396,7 +408,13 @@ const SANS_FICHE = {
 // banc, et il décidait de CHAQUE requête du produit sans qu'aucun écran ne le
 // montre. Un outil produit en audit ISO 27001 qui ne sait pas rendre sa propre
 // revue des droits (A.5.18) a un trou à l'endroit le plus regardé.
-const MODULES_ATTENDUS = 50;
+// 46 : « filiales » — le PÉRIMÈTRE, déclaré depuis le produit. ⚠️ `POST /api/filiales`
+// existait depuis le 04/09/2026 et n'était appelable que par un `curl` : *une capacité
+// qu'aucun écran n'appelle est une capacité absente*. Utilisateur, 24/09/2026 : « on ne
+// peut pas créer de filiale depuis le logiciel, c'est un problème ça ». Et l'écran n'est
+// que la moitié visible du lot : l'autre est que personne ne portait `filiales.conf` en
+// base, si bien que l'annuaire recevait 26 groupes quand `groupes_ad` n'en déclarait 10.
+const MODULES_ATTENDUS = 51;
 
 /** Les routes à paramètre dont l’identifiant vient du catalogue statique. */
 //

@@ -1827,7 +1827,13 @@ appliquer_droits_config "$FICHIER_CONFIG"
 # La DÉCLARATION DES FILIALES (db/CONVENTIONS.md §27). Fichier d'exploitation,
 # écrit par le client, hors de la base : c'est LUI la source dont la liste des
 # groupes Active Directory est engendrée (deploy/groupes-ad.sh), et lui que le
-# lot L4 consommera pour semer la table `filiales`.
+# §8 pre porte en base — `db/importer-filiales.mjs`, une fois, si la table
+# `filiales` ne connaît encore aucune filiale active.
+#
+# ⚠️ **Ce commentaire annonçait cet amorçage AU FUTUR pendant vingt jours** (« que
+# le lot L4 consommera pour semer la table `filiales` »), et il ne s'est jamais
+# produit : c'est le défaut mesuré le 24/09/2026. Une phrase au futur dans un
+# script d'installation est une dette que personne ne relit.
 #
 # Le modèle est posé une fois et JAMAIS écrasé : le réécrire à chaque mise à jour
 # effacerait la déclaration réelle du client, c'est-à-dire son périmètre.
@@ -2478,6 +2484,61 @@ esac
 # le point d'appel unique des garde-fous de la base est joué plus bas (S16). Une section
 # de contrôles qui annonce plus qu'elle ne fait est pire que pas de section du tout :
 # elle rassure.
+
+# =============================================================================
+#  8 pre. Filiales — porter la DÉCLARATION en base (24/09/2026)
+# =============================================================================
+#
+# 🛑 **SANS CE GESTE, LA MOITIÉ DES UTILISATEURS N'A AUCUN ACCÈS.** Mesuré le
+# 24/09/2026 : rien ne portait `filiales.conf` dans la table `filiales` — le
+# commentaire du §7 de ce script l'annonçait encore au futur. Les deux moitiés du
+# dispositif lisaient donc deux sources :
+#
+#   · `deploy/groupes-ad.sh`           → le FICHIER → les groupes créés dans l'AD ;
+#   · `db/synchroniser-groupes-ad.mjs` → la TABLE   → `groupes_ad`, l'autorité qui
+#     décide de ce qu'un groupe ACCORDE.
+#
+# Avec deux filiales déclarées et une table vide : **26 groupes dans l'annuaire,
+# 10 déclarés en base**. `GRC-ADMIN` étant du lot, l'administrateur entrait — et
+# c'est ce qui rendait le défaut discret. Les seize groupes de filiale, eux,
+# n'accordaient rien : le RSSI de site se connectait sans obtenir le moindre
+# accès, sans message ni côté annuaire ni côté application.
+#
+# ⚠️ **L'ORDRE EST LA PROPRIÉTÉ** : l'amorçage passe AVANT le §8 bis, qui lit la
+# table. L'inverser rouvrirait le défaut en entier, et un contrôle qui vérifierait
+# seulement que les deux commandes existent serait vert sur l'ordre fautif —
+# `test/filiales/amorcage.test.mjs` §5 mesure donc leurs positions.
+#
+# ⚠️ **Il n'écrase JAMAIS.** Dès que la base connaît une filiale active, le fichier
+# n'est plus relu : à partir de là c'est la table qui fait foi, et une acquisition
+# se déclare à l'écran (Administration → Filiales). C'est ce qui évite la question
+# « qui a raison ? » — c'est-à-dire le défaut que cet amorçage ferme.
+info "Filiales"
+CODE_AMORCAGE=0
+CYBER_GRC_CONFIG="$CONFIG" \
+BASE_HOTE="$BASE_HOTE" \
+BASE_PORT="$BASE_PORT" \
+BASE_NOM="$BASE_NOM" \
+BASE_UTILISATEUR_PROPRIETAIRE="$ROLE_PROPRIETAIRE" \
+BASE_MOT_DE_PASSE_PROPRIETAIRE="$(lire_variable BASE_MOT_DE_PASSE_PROPRIETAIRE)" \
+BASE_SSL="$(lire_variable BASE_SSL)" \
+BASE_SSL_CA="$(lire_variable BASE_SSL_CA)" \
+LDAP_PREFIXE_GROUPES="$(lire_variable LDAP_PREFIXE_GROUPES)" \
+  node "$RACINE/backend/db/importer-filiales.mjs" || CODE_AMORCAGE=$?
+case "$CODE_AMORCAGE" in
+  0) : ;;  # le script a déjà dit ce qu'il a fait, ou pourquoi il n'a rien fait
+  3) echec "La déclaration des filiales est INVALIDE : $CONFIG/filiales.conf
+      Rien n'a été importé, et c'est voulu — une ligne mal formée produirait un code de
+      filiale faux, donc des noms de groupes faux, et un nom de groupe faux ne se voit
+      qu'au moment où quelqu'un ne peut pas se connecter. Les lignes ci-dessus nomment
+      chaque ligne fautive avec la contrainte qu'elle enfreint.
+      Format : db/CONVENTIONS.md §27 · modèle : deploy/filiales.conf.exemple" ;;
+  *) echec "L'amorçage des filiales a échoué (code $CODE_AMORCAGE).
+      Tant que la table « filiales » ne connaît pas le périmètre, « groupes_ad » ne
+      déclarera que les groupes de portée Groupe et les deux transversaux : un
+      administrateur pourra entrer, AUCUN RSSI de site n'aura d'accès. Les lignes
+      ci-dessus disent la cause." ;;
+esac
 
 # =============================================================================
 #  8 bis. Groupes AD — la table qui décide de qui a accès (constat Q-78)
@@ -3816,7 +3877,15 @@ else
        alerte "deux transversaux existent. Aucun RSSI de site n'aura d'accès tant que"
        alerte "$CONFIG/filiales.conf n'aura pas été renseigné." ;;
     3) alerte "Écart entre la liste engendrée et la table « groupes_ad » (détail ci-dessus)."
-       alerte "Régénérer le script de création AD :"
+       # ⚠️ CE MESSAGE ENVOYAIT CORRIGER LA MOITIÉ SAINE. Il disait « régénérez le
+       #    script de création AD » — or dans le cas le plus fréquent de cet écart,
+       #    le côté annuaire est JUSTE et c'est la table qui manque : la déclaration
+       #    porte des filiales que la base ne connaît pas. Les deux remèdes sont
+       #    donc nommés, dans l'ordre où il faut les essayer.
+       alerte "Le plus souvent, la TABLE est en retard sur la déclaration — amorcez-la :"
+       alerte "  node backend/db/importer-filiales.mjs        (sans effet si la base est peuplée)"
+       alerte "Si la base connaît déjà son périmètre, ce sont les groupes de l'ANNUAIRE"
+       alerte "qui manquent. Régénérer le script de création AD :"
        alerte "  bash $GROUPES_AD_SCRIPT --powershell --ou '<DN de l'unité d'organisation>'" ;;
     *) reserve "deploy/groupes-ad.sh a rendu $CODE_GROUPES : la liste des groupes AD n'a pas pu"
        alerte "être engendrée. Voir les lignes ci-dessus." ;;

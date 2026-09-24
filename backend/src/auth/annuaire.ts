@@ -532,6 +532,63 @@ export class ServiceAnnuaire {
     }
   }
 
+  /**
+   * Les **unités d'organisation** de l'annuaire, pour PROPOSER des filiales.
+   *
+   * ⚠️ **C'est une SUGGESTION, jamais un import.** L'annuaire n'a aucune notion
+   * de filiale : il a des unités d'organisation, des sites, des domaines et un
+   * attribut `company`, et chaque client encode son organisation dans l'un de ces
+   * quatre. Faire dépendre le **cloisonnement** — la propriété de sécurité
+   * centrale du produit — d'une convention de nommage que personne ne contrôle
+   * serait la rendre fragile par construction. Un humain choisit, et complète le
+   * code, le pays et la raison sociale exacte.
+   *
+   * 🛑 **`company` A ÉTÉ ÉCARTÉ, et le motif vaut d'être lu.** C'est l'attribut
+   * qui porte le plus souvent la raison sociale — mais le relever exigerait de
+   * parcourir les entrées **de personnes**, par milliers, pour en extraire une
+   * valeur distincte. Ce serait une lecture de masse de données personnelles
+   * pour une commodité de saisie, c'est-à-dire l'inverse de la minimisation que
+   * le produit s'impose à lui-même (article 5.1.c, registre de l'article 30 du
+   * produit). Une unité d'organisation, elle, n'est pas une donnée personnelle.
+   *
+   * ⚠️ **Lecture seule**, comme tout ce que ce client sait faire : il n'implémente
+   * que `lier`, `rechercher`, `fermer`.
+   */
+  public async unitesOrganisation(
+    base: string | null,
+    max = 200,
+  ): Promise<{
+    readonly unites: readonly { readonly nom: string; readonly dn: string; readonly description: string | null }[];
+    readonly tronque: boolean;
+  }> {
+    const client = await this.fabrique(this.ldap);
+    try {
+      await client.lier(this.ldap.dnService, this.ldap.motDePasseService);
+      const entrees = await client.rechercher({
+        // Une base fournie par l'appelant est une ENTRÉE : elle est employée telle
+        // quelle par le protocole — elle ne se concatène dans aucun filtre — et
+        // l'annuaire refuse lui-même un nom distinctif qui n'existe pas.
+        base: base !== null && base.trim() !== '' ? base.trim() : this.ldap.baseRecherche,
+        portee: 'sousArbre',
+        filtre: '(objectClass=organizationalUnit)',
+        attributs: ['ou', 'description'],
+        tailleMax: max,
+        bornePleineEstTroncature: false,
+      });
+      const unites = entrees
+        .map((e) => ({
+          nom: e.attributs.get('ou')?.[0] ?? nomCourtDuDn(e.dn),
+          dn: e.dn,
+          description: premier(e, 'description'),
+        }))
+        .filter((u) => u.nom !== '')
+        .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+      return { unites, tronque: entrees.length >= max };
+    } finally {
+      await client.fermer();
+    }
+  }
+
   /* ---- Étapes ------------------------------------------------------- */
 
   private async chercherUtilisateur(

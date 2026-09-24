@@ -169,116 +169,72 @@ MDP_LECTURE="$(lire_variable BASE_MOT_DE_PASSE_LECTURE)"
   || echec "BASE_NOM : « $BASE_NOM » n'est pas un identifiant PostgreSQL valide."
 
 # =============================================================================
-#  1. La déclaration des filiales — éprouvée AVANT d'engendrer quoi que ce soit
+#  1. Le périmètre — la TABLE d'abord, la déclaration en secours
 # =============================================================================
 #
-# `CONVENTIONS.md` §27 : la déclaration est un fichier d'exploitation, écrit par
-# le client, qui sèmera la table `filiales` au lot L4. Il est donc **la source**,
-# et une faute dedans se propage jusqu'à un nom de groupe faux — c'est-à-dire
-# jusqu'à un accès qui n'existe pas, sans message d'erreur nulle part.
+# ⚠️ **CE BLOC LISAIT LE FICHIER, ET C'ÉTAIT LA MOITIÉ D'UN DÉFAUT** — mesuré le
+# 24/09/2026. `db/synchroniser-groupes-ad.mjs`, qui remplit `groupes_ad` (l'autorité
+# applicative : un groupe absent de cette table n'accorde rien), lit la **table**
+# `filiales`. Ce script-ci lisait le **fichier**. Et rien, nulle part, ne portait
+# le fichier dans la table : le commentaire d'`install.sh` l'annonçait encore au
+# futur, vingt jours après.
 #
-# Chaque contrôle ci-dessous répond à une panne précise :
+# Résultat, avec deux filiales déclarées et une table vide : **26 groupes créés
+# dans l'annuaire par l'équipe IT, 10 seulement déclarés en base**. `GRC-ADMIN` ne
+# dépendant d'aucune filiale, l'administrateur entrait et le produit avait l'air
+# de marcher ; les seize groupes de filiale, eux, n'accordaient RIEN — un RSSI de
+# site se connectait sans obtenir le moindre accès, sans message d'erreur ni côté
+# annuaire ni côté application.
 #
-#  · **nombre de champs** — une ligne « TLS ; Dedienne Toulouse ; FR » (le champ
-#    « active » oublié) serait lue avec un champ vide et la filiale disparaîtrait
-#    de la liste, en silence. Le compte de champs est donc exact, pas minimal.
-#  · **forme du code** — `^[A-Z0-9]{2,10}$` est le domaine que la base imposera
-#    au lot L4 (`ck_filiales_code`, `001_socle.sql` §5). Le refuser ICI plutôt
-#    qu'à L4, c'est refuser un nom de groupe AD déjà créé chez le client.
-#  · **collision** — un code « GROUPE » produirait `<PRÉFIXE>GROUPE-RSSI`, qui EST
-#    la forme réservée au périmètre Groupe entier. Deux droits très différents
-#    porteraient le même nom, et le plus large gagnerait.
-#  · **doublon** — deux lignes de même code engendrent deux fois les mêmes noms ;
-#    à L4 la contrainte `uq_filiales_code` refusera la seconde, et l'on ne saura
-#    pas laquelle des deux raisons sociales était la bonne.
-#  · **pays** — `^[A-Z]{2}$`, comme `ck_filiales_pays`. Même motif.
-LIGNES_FILIALES=""     # code \x1f raison sociale \x1f pays
+# ── L'ARBITRAGE, ET IL N'A QU'UN SENS POSSIBLE ──────────────────────────────
+#
+# La **table est la source**, le fichier est un **amorçage**. Ce n'est pas un choix
+# de goût : le service tourne sous `ProtectSystem=strict` avec
+# `ReadWritePaths=/var/lib/cyber-grc /var/log/cyber-grc`, donc `/etc/cyber-grc` lui
+# est en LECTURE SEULE. Un écran ne pourra jamais écrire `filiales.conf`, et l'y
+# autoriser serait une régression du bac à sable. Le seul sens ouvert est donc
+# fichier → table, une fois, à l'installation (`db/importer-filiales.mjs`,
+# §8 pre d'`install.sh`) ; ensuite une acquisition se déclare **à l'écran**.
+#
+# ── CE QUE CE SCRIPT LIT, DANS CET ORDRE, ET IL LE DIT TOUJOURS ─────────────
+#
+#  1. la table `filiales` (par `f_filiales_actives()`, `security definer` : elle
+#     répond hors de tout périmètre de session) — **dès qu'elle connaît une
+#     filiale active, c'est elle qui fait foi** ;
+#  2. sinon la déclaration `filiales.conf` — pour qu'on puisse engendrer le script
+#     PowerShell **avant** la première installation, ou depuis un poste hors VM.
+#
+# ⚠️ **L'origine est imprimée dans l'en-tête de chaque sortie.** Une bascule
+# silencieuse entre deux sources serait exactement le défaut qu'on ferme ici. Et
+# `--verifier` confronte les deux, pour qu'un fichier devenu obsolète se voie.
+#
+# ── L'ANALYSEUR DU FICHIER N'EST PLUS ICI ───────────────────────────────────
+#
+# Il y en avait un, écrit en bash, qui réimplémentait à la main `ck_filiales_code`,
+# `ck_filiales_pays` et l'unicité du code. Deux analyseurs du même format, c'est
+# deux vérités, et la divergence se verrait le jour où l'un accepte une ligne que
+# l'autre refuse — c'est-à-dire au moment où quelqu'un ne peut pas se connecter.
+# Le seul analyseur vit dans `src/filiales/declaration.ts`, et ce script l'APPELLE,
+# comme il appelle déjà `groupesAttendus()`. *On ne recopie pas une règle.*
+LIGNES_FILIALES=""     # code \x1f raison sociale
 SEPARATEUR=$'\x1f'
-ANOMALIES=""
-CODES_VUS=""
+ORIGINE_FILIALES=""
 NB_LIGNES=0
 NB_INACTIVES=0
+FILIALES_DU_FICHIER=""   # renseigné dès que le fichier a pu être analysé
 
-if [[ ! -f "$FICHIER_FILIALES" ]]; then
-  echec "Déclaration des filiales introuvable : $FICHIER_FILIALES
-      C'est la SOURCE de la liste des groupes AD (CONVENTIONS.md §27), et elle est écrite
-      par le client — ce script ne peut pas l'inventer. Partez du modèle :
-        install -m 0640 $RACINE_BACKEND/deploy/filiales.conf.exemple $FICHIER_FILIALES"
-fi
+# ── L'analyseur compilé, découvert et non supposé ──────────────────────────
+ANALYSEUR="$RACINE_BACKEND/dist/filiales/declaration.js"
+command -v node >/dev/null 2>&1 || echec "« node » est introuvable : l'analyseur est du JavaScript compilé."
+[[ -f "$ANALYSEUR" ]] \
+  || echec "L'analyseur compilé est absent : $ANALYSEUR
+      Ce script ne réécrit PAS le format de filiales.conf — il appelle
+      analyserDeclaration(), pour qu'il n'y ait jamais deux vérités. Compilez d'abord :
+        cd $RACINE_BACKEND && npm run build"
 
-NUMERO=0
-while IFS= read -r ligne || [[ -n "$ligne" ]]; do
-  NUMERO=$((NUMERO + 1))
-  ligne="${ligne%$'\r'}"
-  # Commentaires et lignes vides : ignorés, et c'est tout ce qui l'est.
-  [[ "$ligne" =~ ^[[:space:]]*(#.*)?$ ]] && continue
-
-  IFS=';' read -r -a champs <<< "$ligne"
-  if [[ ${#champs[@]} -ne 4 ]]; then
-    ANOMALIES+="ligne $NUMERO : ${#champs[@]} champ(s) au lieu de 4 — « code ; raison sociale ; pays ; active »"$'\n'
-    continue
-  fi
-  code="$(printf '%s' "${champs[0]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-  raison="$(printf '%s' "${champs[1]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-  pays="$(printf '%s' "${champs[2]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-  active="$(printf '%s' "${champs[3]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-
-  if [[ ! "$code" =~ ^[A-Z0-9]{2,10}$ ]]; then
-    ANOMALIES+="ligne $NUMERO : code « $code » — attendu 2 à 10 caractères A-Z ou 0-9 (ck_filiales_code)"$'\n'
-    continue
-  fi
-  if [[ "$code" == "GROUPE" ]]; then
-    ANOMALIES+="ligne $NUMERO : le code « GROUPE » entre en collision avec la forme réservée ${PREFIXE}GROUPE-<PROFIL>"$'\n'
-    continue
-  fi
-  if [[ -z "$raison" ]]; then
-    ANOMALIES+="ligne $NUMERO : raison sociale vide (ck_filiales_raison)"$'\n'
-    continue
-  fi
-  if [[ ! "$pays" =~ ^[A-Z]{2}$ ]]; then
-    ANOMALIES+="ligne $NUMERO : pays « $pays » — attendu deux lettres majuscules, ex. FR, DE (ck_filiales_pays)"$'\n'
-    continue
-  fi
-  case "$active" in
-    oui|non) : ;;
-    *) ANOMALIES+="ligne $NUMERO : « active » vaut « $active » — attendu « oui » ou « non »"$'\n'; continue ;;
-  esac
-  if printf '%s\n' "$CODES_VUS" | grep -qx "$code"; then
-    ANOMALIES+="ligne $NUMERO : le code « $code » est déclaré deux fois (uq_filiales_code)"$'\n'
-    continue
-  fi
-  CODES_VUS+="$code"$'\n'
-  NB_LIGNES=$((NB_LIGNES + 1))
-
-  # Une filiale sortie du périmètre ne doit PLUS avoir de groupe : ses comptes
-  # perdraient l'accès par le retrait du groupe AD, ce qui est le déprovisionnement
-  # voulu (§1.5). Elle est comptée, pour que « rien n'a été engendré » ne puisse
-  # jamais être confondu avec « le fichier n'a pas été lu ».
-  if [[ "$active" == "non" ]]; then NB_INACTIVES=$((NB_INACTIVES + 1)); continue; fi
-  LIGNES_FILIALES+="$code$SEPARATEUR$raison$SEPARATEUR$pays"$'\n'
-done < "$FICHIER_FILIALES"
-
-if [[ -n "${ANOMALIES//[[:space:]]/}" ]]; then
-  while IFS= read -r l; do [[ -n "$l" ]] && alerte "$l"; done <<< "$ANOMALIES"
-  alerte "Fichier : $FICHIER_FILIALES"
-  printf '\033[1;31m ERR\033[0m %s\n' \
-    "La déclaration des filiales est invalide (CONVENTIONS.md §27). RIEN n'est engendré :
-      une ligne mal formée produirait un nom de groupe faux, et un nom de groupe faux ne se
-      voit qu'au moment où quelqu'un ne peut pas se connecter — sans message d'erreur, ni
-      côté annuaire, ni côté application." >&2
-  exit 4
-fi
-
-NB_ACTIVES="$(printf '%s' "$LIGNES_FILIALES" | grep -c . || true)"
-
-# =============================================================================
-#  2. Les profils métier — découverts, jamais récités
-# =============================================================================
-#
-# La table `profils` est semée par `007_authentification.sql` (§6, socle produit)
-# et lisible sans périmètre de session (`004_rls.sql` §6). La transaction est
-# déclarée EN LECTURE SEULE : ce script ne modifie rien, et c'est la base qui le
-# garantit plutôt qu'un commentaire (`CONVENTIONS.md` §20.1).
+# `interroger()` est défini ici parce que les DEUX sources en ont besoin : les
+# filiales comme les profils. Il était plus bas, du temps où seuls les profils
+# venaient de la base.
 interroger() {   # SQL sur stdin -> une ligne par enregistrement
   local sql
   sql="begin; set transaction read only; set local statement_timeout = '30s';
@@ -294,6 +250,110 @@ rollback;"
     return 1
   fi
 }
+
+# ── Analyser le fichier, quand il existe ───────────────────────────────────
+#
+# On l'analyse TOUJOURS s'il est lisible, même quand la table fait foi : c'est ce
+# qui permet à `--verifier` de dire « votre fichier ne décrit plus le produit ».
+# Le rendu porte une ligne par filiale : code, raison sociale, actif (« oui »/« non »).
+ANOMALIES_FICHIER=""
+if [[ -f "$FICHIER_FILIALES" ]]; then
+  if ! FILIALES_DU_FICHIER="$(
+    GRC_FICHIER="$FICHIER_FILIALES" GRC_SEP="$SEPARATEUR" node --input-type=module -e "
+      const { readFileSync } = await import('node:fs');
+      const { analyserDeclaration } = await import('file://${ANALYSEUR}');
+      const SEP = process.env.GRC_SEP;
+      const lu = analyserDeclaration(readFileSync(process.env.GRC_FICHIER, 'utf8'));
+      if (lu.anomalies.length > 0) {
+        for (const a of lu.anomalies) process.stderr.write(\`ligne \${a.ligne} : \${a.message}\n\`);
+        process.exit(9);
+      }
+      for (const f of lu.filiales) {
+        process.stdout.write([f.code, f.raisonSociale, f.active ? 'oui' : 'non'].join(SEP) + '\n');
+      }
+    " 2>/tmp/grc-anomalies-filiales.$$
+  )"; then
+    ANOMALIES_FICHIER="$(cat "/tmp/grc-anomalies-filiales.$$" 2>/dev/null || true)"
+    rm -f "/tmp/grc-anomalies-filiales.$$"
+    while IFS= read -r l; do [[ -n "$l" ]] && alerte "$l"; done <<< "$ANOMALIES_FICHIER"
+    alerte "Fichier : $FICHIER_FILIALES"
+    printf '\033[1;31m ERR\033[0m %s\n' \
+      "La déclaration des filiales est invalide (CONVENTIONS.md §27). RIEN n'est engendré :
+      une ligne mal formée produirait un nom de groupe faux, et un nom de groupe faux ne se
+      voit qu'au moment où quelqu'un ne peut pas se connecter — sans message d'erreur, ni
+      côté annuaire, ni côté application." >&2
+    exit 4
+  fi
+  rm -f "/tmp/grc-anomalies-filiales.$$"
+  FILIALES_DU_FICHIER="$(printf '%s' "$FILIALES_DU_FICHIER" | sed '/^$/d')"
+fi
+
+# ── La table, source de vérité dès qu'elle connaît une filiale ─────────────
+#
+# `f_filiales_actives()` et non `select from filiales` : la table est cloisonnée
+# (migration `010`, constat Q-132) et ce script tourne hors de tout périmètre de
+# session. Un `select` direct rendrait ZÉRO sur une base peuplée.
+FILIALES_DE_LA_BASE=""
+if FILIALES_DE_LA_BASE="$(interroger <<SQL
+select code, raison_sociale from f_filiales_actives() order by code;
+SQL
+)"; then
+  FILIALES_DE_LA_BASE="$(printf '%s' "$FILIALES_DE_LA_BASE" | sed '/^$/d')"
+else
+  # ⚠️ **UN REPLI SILENCIEUX EST LE DÉFAUT QU'ON FERME ICI, PAS UNE COMMODITÉ.**
+  #    La première rédaction de ce bloc retombait sur le fichier sans un mot : la
+  #    sortie était alors juste **par accident**, jusqu'au jour où le fichier et la
+  #    table divergent — c'est-à-dire après la première acquisition déclarée à
+  #    l'écran. Mesuré le 24/09/2026 : `grc_lecture` n'avait pas le privilège
+  #    d'exécuter `f_filiales_actives()`, la requête échouait, et la liste sortait
+  #    du fichier comme avant. La migration `064` pose le privilège ; ce repli
+  #    reste, pour le poste hors VM, et il se DIT.
+  FILIALES_DE_LA_BASE=""
+  BASE_INJOIGNABLE=1
+  alerte "La table « filiales » n'a pas pu être lue (base injoignable, ou privilège absent)."
+  alerte "La liste va être engendrée depuis $FICHIER_FILIALES, qui peut être en retard sur"
+  alerte "le produit : une filiale créée à l'écran n'y figure pas. Voir la migration 064."
+fi
+
+if [[ -n "${FILIALES_DE_LA_BASE//[[:space:]]/}" ]]; then
+  LIGNES_FILIALES="$FILIALES_DE_LA_BASE"$'\n'
+  ORIGINE_FILIALES="table « filiales » de $BASE_NOM"
+  NB_LIGNES="$(printf '%s' "$FILIALES_DE_LA_BASE" | grep -c . || true)"
+  NB_INACTIVES=0
+elif [[ -n "${FILIALES_DU_FICHIER//[[:space:]]/}" ]]; then
+  # Amorçage : la base ne connaît encore aucune filiale. On engendre depuis la
+  # déclaration pour que le script PowerShell existe AVANT la première
+  # installation — et on le DIT, parce que ce n'est pas l'état nominal.
+  while IFS="$SEPARATEUR" read -r code raison actif; do
+    [[ -n "$code" ]] || continue
+    NB_LIGNES=$((NB_LIGNES + 1))
+    # Une filiale sortie du périmètre ne doit PLUS avoir de groupe : ses comptes
+    # perdent l'accès par le retrait du groupe AD, ce qui est le déprovisionnement
+    # voulu (§1.5). Elle est comptée, pour que « rien n'a été engendré » ne puisse
+    # jamais être confondu avec « le fichier n'a pas été lu ».
+    if [[ "$actif" == "non" ]]; then NB_INACTIVES=$((NB_INACTIVES + 1)); continue; fi
+    LIGNES_FILIALES+="$code$SEPARATEUR$raison"$'\n'
+  done <<< "$FILIALES_DU_FICHIER"
+  ORIGINE_FILIALES="$FICHIER_FILIALES (la base n'en connaît encore aucune)"
+elif [[ -n "${BASE_INJOIGNABLE:-}" && ! -f "$FICHIER_FILIALES" ]]; then
+  echec "Aucune source de filiales : la base est injoignable et $FICHIER_FILIALES est absent.
+      La table « filiales » fait foi dès qu'elle connaît une filiale ; avant la première
+      installation, c'est la déclaration d'exploitation qui sert d'amorçage (§27) :
+        install -m 0640 $RACINE_BACKEND/deploy/filiales.conf.exemple $FICHIER_FILIALES"
+else
+  ORIGINE_FILIALES="aucune (ni la base ni $FICHIER_FILIALES ne déclarent de filiale active)"
+fi
+
+NB_ACTIVES="$(printf '%s' "$LIGNES_FILIALES" | grep -c . || true)"
+
+# =============================================================================
+#  2. Les profils métier — découverts, jamais récités
+# =============================================================================
+#
+# La table `profils` est semée par `007_authentification.sql` (§6, socle produit)
+# et lisible sans périmètre de session (`004_rls.sql` §6). La transaction est
+# déclarée EN LECTURE SEULE : ce script ne modifie rien, et c'est la base qui le
+# garantit plutôt qu'un commentaire (`CONVENTIONS.md` §20.1).
 
 PROFILS_BRUT=""
 if [[ -n "$PROFILS_FORCE" ]]; then
@@ -354,11 +414,18 @@ GROUPES="$(
     const lignes = (t) => t.split('\n').filter((l) => l.trim() !== '');
     const filiales = lignes(process.env.GRC_FILIALES ?? '').map((l) => {
       const [code, raisonSociale] = l.split(SEP);
-      // ⚠️ L'identifiant technique n'existe PAS encore : la table « filiales » est
-      // semée au lot L4 (CONVENTIONS §27). On passe donc le CODE à sa place, et
-      // aucune sortie de ce script n'écrit en base — la colonne « filiale » du CSV
-      // porte bien un code de filiale, pas un identifiant. Le jour où ce script
-      // écrirait en base, il faudrait aller chercher les vrais identifiants.
+      // ⚠️ On passe le CODE là où groupesAttendus() attend un identifiant, et c'est
+      // DÉLIBÉRÉ depuis le 24/09/2026 — le commentaire d'avant disait que « la
+      // table filiales est semée au lot L4 », ce qui n'était pas encore vrai. Elle
+      // l'est maintenant (db/importer-filiales.mjs), mais rien ici n'écrit en base :
+      // cet identifiant ne sert qu'à la colonne « filiale » du CSV, que des humains
+      // lisent — un identifiant technique y serait illisible. Le jour où ce script
+      // écrirait en base, il faudrait aller chercher les vrais identifiants, et ce
+      // jour-là il cesserait d'être un metteur en forme.
+      //
+      // ⚠️ AUCUN ACCENT GRAVE DANS CE COMMENTAIRE, et ce n'est pas une coquetterie :
+      // il vit dans une chaîne à guillemets doubles du shell, où un accent grave
+      // ouvre une substitution de commande. Payé une fois.
       return { id: code, code, raisonSociale };
     });
     const profils = lignes(process.env.GRC_PROFILS ?? '').map((l) => {
@@ -415,7 +482,10 @@ NB_GROUPES="$(printf '%s\n' "$GROUPES" | grep -c . || true)"
 entete() {   # <marqueur de commentaire>
   printf '%s Engendré par deploy/groupes-ad.sh — NE PAS MODIFIER À LA MAIN.\n' "$1"
   printf '%s Convention : PLAN_SERVEUR §3.4 · engendreur : src/droits/groupes-ad.ts\n' "$1"
-  printf '%s Filiales   : %s (%s active(s), %s hors périmètre)\n' "$1" "$FICHIER_FILIALES" "$NB_ACTIVES" "$NB_INACTIVES"
+  # ⚠️ L'ORIGINE, pas le fichier. Cette ligne nommait `filiales.conf` quoi qu'il
+  #    arrive — y compris quand la liste venait de la table. Une sortie qui ne dit
+  #    pas d'où elle vient est une sortie qu'on ne peut pas contredire.
+  printf '%s Filiales   : %s (%s active(s), %s hors périmètre)\n' "$1" "$ORIGINE_FILIALES" "$NB_ACTIVES" "$NB_INACTIVES"
   printf '%s Profils    : %s (%s actif(s))\n' "$1" "$ORIGINE_PROFILS" "$NB_PROFILS"
   printf '%s Préfixe    : %s · total : %s groupe(s)\n' "$1" "$PREFIXE" "$NB_GROUPES"
   printf '%s Régénérer après CHAQUE acquisition : la liste change, ce fichier non.\n' "$1"
@@ -516,13 +586,47 @@ FIN
   verifier)
     info "Groupes AD : $NB_GROUPES attendu(s) — $NB_ACTIVES filiale(s) active(s), $NB_PROFILS profil(s), préfixe « $PREFIXE »"
     if [[ "$NB_ACTIVES" -eq 0 ]]; then
-      alerte "AUCUNE filiale active dans $FICHIER_FILIALES."
+      alerte "AUCUNE filiale active — ni en base, ni dans $FICHIER_FILIALES."
       alerte "La liste se réduit aux groupes de périmètre Groupe et aux deux transversaux :"
       alerte "aucun RSSI de site, aucun contributeur, aucun qualité n'obtiendra d'accès."
-      alerte "Déclarez les filiales (CONVENTIONS.md §27), puis relancez ce script."
+      alerte "Déclarez-les (CONVENTIONS.md §27), amorcez la base, puis relancez :"
+      alerte "  node backend/db/importer-filiales.mjs"
       exit 5
     fi
-    succes "déclaration des filiales saine ($FICHIER_FILIALES, $NB_LIGNES ligne(s) dont $NB_INACTIVES hors périmètre)"
+    succes "périmètre sain ($ORIGINE_FILIALES, $NB_LIGNES ligne(s) dont $NB_INACTIVES hors périmètre)"
+
+    # ── CONFRONTATION FICHIER ↔ TABLE — la TROISIÈME de ce script ────────────
+    #
+    # ⚠️ **Un fichier devenu obsolète est un piège, pas un détail.** Depuis le
+    # 24/09/2026, la table est la source et `filiales.conf` n'est qu'un amorçage :
+    # une acquisition se déclare à l'écran, et le fichier ne bouge pas. Quelqu'un
+    # l'éditera pourtant, dans six mois, en croyant agir sur le produit — et rien
+    # ne se passera. On le DIT donc, sans en faire un échec : ce n'est pas une
+    # panne, c'est un document qui a vieilli.
+    if [[ "$ORIGINE_FILIALES" == table* && -n "${FILIALES_DU_FICHIER//[[:space:]]/}" ]]; then
+      # ⚠️ `if … fi` et non `[[ … ]] && …` : le statut d'une boucle `while` est
+      #    celui de la DERNIÈRE commande de son corps, et `LIGNES_FILIALES` finit
+      #    par un retour à la ligne — la dernière itération voit un code vide, le
+      #    test échoue, la boucle rend 1, et `set -e` tue le script. Payé une fois,
+      #    sur un `--verifier` qui sortait en code 1 sans un mot.
+      CODES_BASE="$(while IFS="$SEPARATEUR" read -r c _r; do
+        if [[ -n "$c" ]]; then printf '%s\n' "$c"; fi
+      done <<< "$LIGNES_FILIALES" | sort -u)"
+      CODES_FICHIER="$(while IFS="$SEPARATEUR" read -r c _r a; do
+        if [[ -n "$c" && "$a" == "oui" ]]; then printf '%s\n' "$c"; fi
+      done <<< "$FILIALES_DU_FICHIER" | sort -u)"
+      ABSENTS_DU_FICHIER="$(comm -23 <(printf '%s\n' "$CODES_BASE") <(printf '%s\n' "$CODES_FICHIER") | sed '/^$/d')"
+      ABSENTS_DE_LA_BASE="$(comm -13 <(printf '%s\n' "$CODES_BASE") <(printf '%s\n' "$CODES_FICHIER") | sed '/^$/d')"
+      if [[ -n "$ABSENTS_DU_FICHIER" || -n "$ABSENTS_DE_LA_BASE" ]]; then
+        while IFS= read -r c; do [[ -n "$c" ]] && alerte "en base, absente de $FICHIER_FILIALES : $c"; done <<< "$ABSENTS_DU_FICHIER"
+        while IFS= read -r c; do [[ -n "$c" ]] && alerte "déclarée dans le fichier, inconnue de la base : $c"; done <<< "$ABSENTS_DE_LA_BASE"
+        alerte "La TABLE fait foi : c'est elle qui a servi à engendrer la liste ci-dessus."
+        alerte "Le fichier n'est qu'un amorçage — éditer ce fichier n'agit PLUS sur le produit."
+        alerte "Une acquisition se déclare à l'écran : Administration → Filiales."
+      else
+        succes "fichier et table concordent ($FICHIER_FILIALES n'a pas vieilli)"
+      fi
+    fi
 
     # ── Confrontation à la table `groupes_ad`, QUAND elle est peuplée ──────
     #

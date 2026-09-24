@@ -845,6 +845,29 @@ const SITES_DE_SORTIE = [
     invoquer: () => { EcheancesModule.exportICS(); },
   },
   {
+    // L'export de SORTIE d'une filiale : l'enveloppe `grc-backup` complète d'une
+    // société du groupe, remise en clair. C'est le plus gros volume que le produit
+    // fasse sortir en un geste.
+    //
+    // ⚠️ **Exercé par la FONCTION et non par le bouton**, à dessein : le bouton
+    // « Faire sortir » déclenche la sortie RÉELLE de la filiale — export puis
+    // bascule de statut — et un filet qui la jouerait détruirait le périmètre de
+    // sa propre base d'essai. On exerce donc le seul geste qui fait sortir des
+    // octets, avec une enveloppe factice : c'est exactement ce que ce filet mesure.
+    //
+    // ⚠️ **Sans `route`, donc sans rendre l'écran** : la fonction ne dépend d'aucun
+    // élément du DOM, et l'écran « Filiales » exige l'administration Groupe — que
+    // le profil de CE parcours n'a pas, puisqu'il est construit pour n'avoir pas
+    // le droit d'export. L'exiger ici mesurerait le refus de l'écran au lieu du
+    // refus de l'entonnoir, et le filet deviendrait vert pour le mauvais motif
+    // (motif Q-210 : un essai qui couvre une règle sans jamais la faire décider).
+    nom: 'FilialesModule.telechargerExport — l’export de sortie d’une filiale',
+    fichier: 'js/modules/filiales.js',
+    invoquer: () => {
+      FilialesModule.telechargerExport('ZZFILET', { format: 'grc-backup', payload: {} });
+    },
+  },
+  {
     nom: 'JournalModule.exporter — trois ans d’identités et d’adresses IP',
     fichier: 'js/modules/journal.js',
     route: '/journal',

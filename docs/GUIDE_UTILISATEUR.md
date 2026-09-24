@@ -660,6 +660,41 @@ pas d'un traitement déclaré —, c'est la liste par laquelle commence une revu
 
 ---
 
+## 5 ter. Les filiales — le périmètre du groupe
+
+**Administration → Filiales.** Depuis le 24/09/2026, déclarer une société rachetée se fait
+**dans le produit** : code, raison sociale, pays, date d'entrée. Avant, cela demandait un
+accès au serveur.
+
+> 🛑 **Le produit ne crée aucun groupe dans l'Active Directory, et il ne le pourra
+> jamais.** Il rend la **liste** des huit groupes que la filiale exige, et le script
+> PowerShell qui les crée — à exécuter par l'administrateur de votre domaine. Tant qu'ils
+> n'existent pas, la filiale est déclarée et **personne ne peut y entrer**, y compris vous.
+
+> ⚠️ **Vous ne verrez la filiale neuve qu'à votre PROCHAINE CONNEXION**, et seulement une
+> fois membre de l'un de ses groupes. Vos droits sont résolus à la connexion et figés dans
+> votre session : ce n'est pas un échec de la création, et l'écran le dit.
+
+> ⚠️ **« Groupes déclarés ici » ne parle pas de votre annuaire.** La colonne compte ce que
+> l'application reconnaît, et la création la remplit toute seule. Pour confronter les deux,
+> passez par **Habilitations → Groupes d'annuaire → « Vérifier l'annuaire »**.
+
+**« Proposer depuis l'annuaire »** lit les **unités d'organisation** de l'Active Directory
+et vous les présente. Ce sont des **suggestions** : l'annuaire ne connaît pas vos filiales,
+il connaît des unités d'organisation. Le code, le pays et la raison sociale exacte restent
+votre décision.
+
+> ⚠️ **Le code ne se modifie pas après coup**, et c'est pourquoi une filiale n'a pas de
+> fiche : il nomme les groupes d'annuaire (`GRC-<CODE>-<PROFIL>`). Le changer laisserait
+> derrière lui huit groupes qui n'accordent plus rien.
+
+**« Faire sortir »** exporte d'abord toutes les données de la filiale — le fichier vous est
+remis —, puis bascule son statut. Elle quitte alors tous les périmètres ; ses données
+restent en base, hors de portée de toute session, ce qui permet de répondre à un contrôle
+deux ans plus tard. La **date** vous est demandée : une sortie est un fait juridique daté.
+
+---
+
 ## 5 bis. L'annuaire du personnel, alimenté depuis l'Active Directory
 
 **Tiers & personnes → Personnel.** Depuis le 22/09/2026, les fiches ne se saisissent plus

@@ -336,6 +336,29 @@ export class ServiceAuthentification implements Authentificateur {
   }
 
   /**
+   * Les unités d'organisation de l'annuaire — pour **proposer** des filiales.
+   *
+   * Rend `undefined` si aucun annuaire n'est configuré : l'écran doit distinguer
+   * « rien à proposer » de « aucun annuaire à interroger ». **Lecture seule.**
+   */
+  public async unitesOrganisationAnnuaire(
+    base: string | null,
+  ): Promise<
+    | {
+        readonly unites: readonly {
+          readonly nom: string;
+          readonly dn: string;
+          readonly description: string | null;
+        }[];
+        readonly tronque: boolean;
+      }
+    | undefined
+  > {
+    if (this.annuaire === null) return undefined;
+    return await this.annuaire.unitesOrganisation(base);
+  }
+
+  /**
    * Les comptes membres d'un groupe, imbrications comprises. **Lecture seule.**
    *
    * Sert à la revue périodique des droits d'accès (ISO 27001 A.5.18). Rend

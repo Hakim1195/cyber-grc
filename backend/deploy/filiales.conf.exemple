@@ -3,12 +3,27 @@
 #  Emplacement cible : /etc/cyber-grc/filiales.conf
 # =============================================================================
 #
-# Arbitré au `backend/db/CONVENTIONS.md` §27. Ce fichier est écrit par le CLIENT,
-# il vit hors de la base, et c'est LUI la source :
+# ⚠️ CE FICHIER EST UN AMORÇAGE, PLUS UNE SOURCE — arbitrage du 24/09/2026.
 #
-#   · le lot L3 (ce déploiement) en engendre la liste des groupes Active
-#     Directory à créer — `deploy/groupes-ad.sh` ;
-#   · le lot L4 en sèmera les lignes de la table `filiales`.
+# Il l'a été, et il a cessé de l'être le jour où le produit a su déclarer une
+# filiale depuis son écran d'administration. Ce qui fait foi désormais est la
+# table `filiales` ; ce fichier sert à la PEUPLER une fois, à la première
+# installation, pour qu'un exploitant puisse déclarer vingt filiales sans vingt
+# clics. Ensuite, **l'éditer n'agit plus sur le produit**.
+#
+#   · `deploy/install.sh` §8 pre le porte en base par `db/importer-filiales.mjs`,
+#     et seulement **si la table ne connaît aucune filiale active** ;
+#   · `deploy/groupes-ad.sh` lit la TABLE, et ne retombe sur ce fichier que si la
+#     base est injoignable — auquel cas il le DIT ;
+#   · `groupes-ad.sh --verifier` confronte les deux et signale si ce fichier a
+#     vieilli. Une acquisition se déclare à l'écran : Administration → Filiales.
+#
+# 🛑 POURQUOI CE SENS-LÀ, ET PAS L'AUTRE. Le service tourne sous
+# `ProtectSystem=strict` avec `ReadWritePaths=/var/lib/cyber-grc
+# /var/log/cyber-grc` : `/etc/cyber-grc` lui est en LECTURE SEULE. Un écran ne
+# pourra jamais écrire ici, et l'y autoriser serait une régression du bac à sable.
+#
+# Arbitré au `backend/db/CONVENTIONS.md` §27 ; migrations `064` et `065`.
 #
 # ── POURQUOI UN FICHIER, ET PAS UNE LISTE DANS UN SCRIPT ────────────────────
 #
@@ -35,6 +50,11 @@
 #                  groupe : c'est le déprovisionnement d'un site sorti du
 #                  périmètre (`PLAN_SERVEUR` §1.5). La ligne reste, pour que la
 #                  sortie soit un fait écrit et non un oubli.
+#                  ⚠️ **Une ligne à « non » n'est PAS importée en base** à
+#                  l'amorçage : le statut « sortie » exige une DATE de sortie
+#                  (`ck_filiales_sortie`) que ce fichier ne porte pas, et
+#                  l'inventer écrirait au registre une date que personne n'a
+#                  décidée. L'amorçage la nomme et dit pourquoi il l'a écartée.
 #
 # Les lignes vides et les lignes commençant par « # » sont ignorées. Tout le
 # reste doit porter exactement quatre champs : une ligne à trois champs serait
@@ -42,9 +62,14 @@
 #
 # ── APRÈS CHAQUE MODIFICATION ───────────────────────────────────────────────
 #
+#   node backend/db/importer-filiales.mjs     (sans effet si la base est peuplée)
 #   bash deploy/groupes-ad.sh --verifier
 #   bash deploy/groupes-ad.sh --powershell --ou 'OU=Cyber GRC,OU=Groupes,DC=exemple,DC=interne' \
 #        > creer-groupes-grc.ps1
+#
+# ⚠️ Après la PREMIÈRE installation, ces trois commandes ne servent plus à
+# déclarer : passez par Administration → Filiales, qui rend la même liste de
+# groupes et son script PowerShell, sans accès au serveur.
 #
 # puis faire exécuter `creer-groupes-grc.ps1` par l'équipe IT du client, sur un
 # contrôleur de domaine. Le script est idempotent : il ne crée que ce qui manque.

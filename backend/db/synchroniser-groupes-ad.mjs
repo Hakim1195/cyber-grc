@@ -58,6 +58,8 @@
  *   1  configuration illisible ou incomplète
  *   2  base injoignable
  *   3  la synchronisation a échoué (le message dit pourquoi)
+ *   5  la table « filiales » est vide alors que la déclaration porte des filiales
+ *      actives : aligner maintenant laisserait les comptes de filiale sans accès
  *   4  aucun groupe attendu — la table resterait vide, donc personne n'aurait
  *      d'accès : c'est un échec, pas un succès silencieux (constat Q-78)
  *
@@ -68,6 +70,7 @@
  */
 
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -205,6 +208,57 @@ try {
         "      Cause la plus probable : la migration 007 n'est pas appliquée.\n" +
         '        node db/migrate.mjs',
     );
+  }
+
+  /* ══ LE GARDE DU 24/09/2026 : une table vide que la DÉCLARATION contredit ══
+   *
+   * 🛑 C'est le défaut que ce garde rend impossible à manquer, et il a vécu
+   * vingt jours. Rien ne portait `filiales.conf` en base ; ce script lisait donc
+   * une table vide, n'engendrait que les huit `<PRÉFIXE>GROUPE-<PROFIL>` et les
+   * deux transversaux, et **annonçait le succès**. Pendant ce temps
+   * `deploy/groupes-ad.sh` rendait, depuis le FICHIER, les vingt-six groupes que
+   * l'équipe IT créait dans l'annuaire. Seize d'entre eux n'accordaient rien.
+   *
+   * ⚠️ `GRC-ADMIN` ne dépend d'aucune filiale : l'administrateur entrait, et le
+   * produit avait l'air de marcher. C'est très exactement le motif du constat
+   * **Q-78** — *« une installation réussie dont personne ne peut se servir »* —
+   * d'un cran plus loin, et avec cette aggravation qu'il ne frappait que les
+   * comptes de filiale.
+   *
+   * Le garde compare donc les deux sources AVANT d'écrire. Il ne lit le fichier
+   * que pour cela, et par l'analyseur du produit — jamais par un second.
+   */
+  if (filiales.length === 0) {
+    const chemin =
+      process.env.CYBER_GRC_FILIALES ??
+      join(process.env.CYBER_GRC_CONFIG ?? '/etc/cyber-grc', 'filiales.conf');
+    let declarees = [];
+    try {
+      const declaration = await import(`file://${join(RACINE, 'dist', 'filiales', 'declaration.js')}`);
+      const lu = declaration.analyserDeclaration(readFileSync(chemin, 'utf8'));
+      declarees = declaration.filialesActives(lu).map((f) => f.code);
+    } catch {
+      // Fichier absent ou illisible : ce n'est pas à ce script de le dire. Une
+      // base sans filiale ET sans déclaration est un amorçage en cours, pas un
+      // écart — et crier ici ferait crier l'installation neuve à chaque passage.
+      declarees = [];
+    }
+    if (declarees.length > 0) {
+      await client.query('rollback');
+      echec(
+        5,
+        'La table « filiales » ne connaît AUCUNE filiale active, alors que la déclaration\n' +
+          `      en porte ${String(declarees.length)} : ${declarees.join(', ')}.\n` +
+          `      Fichier : ${chemin}\n\n` +
+          '      Aligner « groupes_ad » maintenant produirait une table qui ne déclare que les\n' +
+          '      groupes de portée Groupe et les deux transversaux. Un administrateur pourrait\n' +
+          '      entrer — GRC-ADMIN ne dépend d’aucune filiale — et AUCUN compte de filiale\n' +
+          '      n’obtiendrait le moindre accès, sans message d’erreur. Portez d’abord la\n' +
+          '      déclaration en base :\n' +
+          '        node db/importer-filiales.mjs\n' +
+          '      (« deploy/install.sh » le fait de lui-même, au §8 pre, avant ce script.)',
+      );
+    }
   }
 
   if (simuler) {

@@ -4442,6 +4442,21 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // `010` avait fermé une fuite et en avait rouvert une plus petite par la fonction
       // même qui la fermait — un « grant » sans « revoke … from public » ne retire rien.
       'privileges_definer',
+      // SOIXANTE-HUITIÈME, apporté par `064` — les PRIVILÈGES dont les scripts
+      // d'exploitation ont besoin. ⚠️ Un garde-fou pour un `grant` a l'air d'un
+      // excès de zèle ; il ferme en réalité un **repli silencieux**. Sans le
+      // privilège d'exécuter `f_filiales_actives()`, `deploy/groupes-ad.sh`
+      // retombait sur `filiales.conf` et sa sortie n'était juste **que par
+      // accident** — jusqu'au jour où le fichier et la table divergent, c'est-à-
+      // dire après la première acquisition déclarée à l'écran.
+      //
+      // ⚠️ Sa liste est écrite À LA MAIN, et c'est le BON cas (`CLAUDE.md` §3,
+      // seconde ligne) : rien dans `pg_proc` ne dit qu'un script de shell appelle
+      // une fonction, et l'oubli d'un `grant` fait échouer ce script BRUYAMMENT au
+      // premier passage. Il porte son CONTRE-TÉMOIN : une fonction de la liste qui
+      // n'existerait plus est une anomalie d'un autre genre, dite plutôt que tue —
+      // sans quoi la retirer rendrait le garde muet, c'est-à-dire vert.
+      'privileges_exploitation',
       // QUARANTE-NEUVIÈME, apporté par `045_le_profil_repondant.sql` — action 24.4. Il
       // tient DEUX propriétés du profil « répondant de campagne » : qu'il couvre TOUT le
       // vocabulaire des domaines — une absence n'est pas un refus, et elle ne se relit pas

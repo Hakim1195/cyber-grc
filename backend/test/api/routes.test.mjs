@@ -994,6 +994,15 @@ describe('La session provisoire est fail-closed en production (contrôle S6)', (
     // laisserait n'importe qui inscrire une société dans le groupe — et créer,
     // au passage, ses groupes d'annuaire.
     ['POST', '/api/filiales', { code: 'ZZFERM', raison_sociale: 'Créée sans identité' }],
+    // Les deux routes de l'écran « Filiales » (24/09/2026). Servi sans identité,
+    // l'inventaire rendrait la cartographie COMPLÈTE du groupe — toutes les
+    // filiales, tous statuts confondus, sorties comprises —, ce que même une
+    // session légitime de filiale ne voit pas. Et la proposition ferait interroger
+    // l'Active Directory du client par un anonyme : elle ne lit que des unités
+    // d'organisation, mais la structure d'un annuaire d'entreprise est déjà un
+    // renseignement.
+    ['GET', '/api/filiales/inventaire', undefined],
+    ['GET', '/api/filiales/candidats-annuaire', undefined],
     // Les deux routes du cycle de vie (lot L13, CONVENTIONS.md §35). Servie sans
     // identité, la première remettrait l'export complet d'une filiale à n'importe
     // qui ET la ferait sortir du groupe ; la seconde effacerait définitivement une

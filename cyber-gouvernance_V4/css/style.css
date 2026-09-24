@@ -3865,3 +3865,79 @@ body { overflow-x: hidden; }
    Une personne importée n'a pas de compte tant qu'elle ne s'est pas connectée,
    et c'est précisément qui l'import vise. */
 .pers-ad--compte { background: var(--tint-ok, #e6f4ea); color: #1e7a3c; }
+
+/* =========================================
+   ÉCRAN « FILIALES » — le périmètre du groupe
+
+   ⚠️ **Une classe écrite n'est pas une classe définie**, et ce dépôt l'a payé
+   trois fois : des écrans livrés « verts » se rendaient À PLAT parce que leurs
+   classes n'existaient dans aucune feuille, et aucun essai ne le dit. Ce bloc
+   existe donc en même temps que `js/modules/filiales.js`, pas après.
+
+   ⚠️ Et les teintes viennent des TOKENS : `--tint-ok`, `--tint-warn`,
+   `--tint-na`. La sémantique stricte du `CLAUDE.md` §2 réserve vert / orange /
+   rouge aux STATUTS — ici, « active » et « sortie » SONT des statuts d'une
+   entité du référentiel, et « à déclarer » est bien un manquement. L'emploi est
+   donc conforme, et il est écrit pour qu'on puisse le contredire.
+   ========================================= */
+.fil-source {
+    border-left: 4px solid var(--accent, #e9631b);
+}
+.fil-source code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--text-xs, 0.75rem);
+}
+.fil-bilan {
+    border-left: 4px solid var(--primary, #2059a6);
+    background: var(--tint-na, #eef1f5);
+}
+.fil-bilan h3 { margin-top: 0; }
+
+/* Les noms de groupes : de la chasse fixe, parce qu'ils se RECOPIENT — dans une
+   console PowerShell, dans un ticket, dans un courriel à l'équipe IT. */
+.fil-noms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 0;
+}
+.fil-noms code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--text-xs, 0.75rem);
+    background: var(--surface-2, #f4f6f8);
+    border: 1px solid var(--border, #e2e6ea);
+    border-radius: var(--radius-sm, 4px);
+    padding: 2px 6px;
+    white-space: nowrap;
+}
+
+.fil-statut {
+    display: inline-block;
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 999px;
+    text-transform: lowercase;
+    background: var(--tint-na, #eef1f5);
+    color: var(--text-muted, #6b7a8d);
+}
+.fil-statut--active   { background: var(--tint-ok, #e6f4ea);   color: #1e7a3c; }
+.fil-statut--archivee { background: var(--tint-na, #eef1f5);   color: var(--text-muted, #6b7a8d); }
+.fil-statut--sortie   { background: var(--tint-warn, #fff4e0); color: #8a5a00; }
+
+.fil-ok     { color: #1e7a3c; font-weight: 600; }
+.fil-manque { color: #8a5a00; font-weight: 600; }
+
+.fil-form { margin-top: 18px; }
+.fil-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2, 8px);
+    margin-top: var(--space-3, 12px);
+}
+
+@media print {
+    /* Une pièce imprimée n'a pas de boutons, et l'encart de source n'a pas de
+       sens sur le papier : ce qui compte est la liste des filiales. */
+    .fil-actions, .fil-source, .fil-bilan { display: none; }
+}

@@ -220,6 +220,7 @@ async function startApp() {
         //    et « /tiers-dora ». Et elles s'écrivent « /habilitations-… » et
         //    NON « /habilitations/… » : le routeur lirait le second segment
         //    comme un identifiant, et l'écran dirait « introuvable ».
+        "/filiales": () => { if (typeof FilialesModule !== "undefined") FilialesModule.renderList(); },
         "/habilitations": () => { if (typeof HabilitationsModule !== "undefined") HabilitationsModule.renderList(); },
         "/habilitations-groupes": () => { if (typeof HabilitationsModule !== "undefined") HabilitationsModule.renderGroupes(); },
         "/habilitations-comptes": () => { if (typeof HabilitationsModule !== "undefined") HabilitationsModule.renderComptes(); },
@@ -1250,6 +1251,7 @@ const DOMAINE_PAR_ROUTE = Object.freeze({
     // les paramètres : `DOMAINE_API_PAR_DOMAINE_BASE` y range déjà le domaine
     // de base « droits ». On suit la décision du serveur plutôt que d'en
     // prendre une seconde.
+    "/filiales":               "administration",
     "/habilitations":          "administration",
     "/habilitations-groupes":  "administration",
     "/habilitations-comptes":  "administration",

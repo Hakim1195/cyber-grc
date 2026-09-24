@@ -400,13 +400,39 @@ describe('§30.2 — une seule route nomme une filiale, et c’est la route déd
     // LECTURE accepte un nom de filiale. C'est ce que `/api/donnees`,
     // `/api/journal` et `/api/consolidation` refusent par la forme — elles n'ont
     // aucun paramètre de filiale, et leur absence est mesurée.
+    // ── LA QUATRIÈME ET LA CINQUIÈME SONT ARRIVÉES LE 24/09/2026 ────────
+    //
+    // L'écran « Filiales » en apporte deux, et elles ne reçoivent **aucune**
+    // filiale — ce qui est justement le point :
+    //
+    //  · `/api/filiales/inventaire` **RÉPOND**, comme `/api/filiales`, mais sous
+    //    administration Groupe et pour TOUS les statuts. Elle existe précisément
+    //    pour ne pas élargir `/api/filiales`, que tout le monde appelle : une
+    //    filiale sortie a quitté tous les périmètres, et c'est celle qu'un
+    //    administrateur doit voir. Un paramètre ajouté à la route de session
+    //    aurait ouvert à tous ce que seul un administrateur doit lire — le §30.2
+    //    dit exactement cela du sélecteur.
+    //  · `/api/filiales/candidats-annuaire` ne touche pas à la base du produit :
+    //    elle lit les unités d'organisation de l'Active Directory pour en
+    //    PROPOSER. Son paramètre est une base de recherche LDAP, pas une filiale.
+    //
+    // ⚠️ Les deux exigent l'administration Groupe, et aucune ne porte de segment
+    // `:filiale` — ce que le §1 de ce fichier mesure séparément.
     const parlantes = [...new Set(routes.filter((r) => /filiale/i.test(r.url)).map((r) => r.url))];
     assert.deepEqual(
       parlantes.sort(),
-      ['/api/filiales', ROUTE_DEDIEE, '/api/cycle/sortie-filiale'].sort(),
-      '/api/filiales RÉPOND (le périmètre de lecture, nommé) ; ' +
+      [
+        '/api/filiales',
+        '/api/filiales/inventaire',
+        '/api/filiales/candidats-annuaire',
+        ROUTE_DEDIEE,
+        '/api/cycle/sortie-filiale',
+      ].sort(),
+      '/api/filiales et /api/filiales/inventaire RÉPONDENT (le périmètre, nommé — la ' +
+        'seconde sous administration Groupe et tous statuts) ; ' +
         `${ROUTE_DEDIEE} REÇOIT (le choix) ; /api/cycle/sortie-filiale REÇOIT aussi, ` +
-        'sous administration Groupe. Toute autre est à justifier.',
+        'sous administration Groupe ; /api/filiales/candidats-annuaire ne touche pas la ' +
+        'base du produit. Toute autre est à justifier.',
     );
   });
 
