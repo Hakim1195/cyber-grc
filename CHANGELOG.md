@@ -14,7 +14,18 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
 > **PostgreSQL 17.11**) : **73 migrations**, **99 tables**, **395 politiques**,
 > **71 garde-fous**, **608 décisions** au registre de l'article 30, publication
-> **89 fichiers**, schéma `data` en **v30**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
+> **89 fichiers**, schéma `data` en **v30**, indicateur **56 ✅ · 17 🟡 · 13 ❌ (~75 %)**.
+> ⚠️ **Ce chiffre était faux ici — « 54 ✅ · 18 🟡 · 14 ❌ » — pendant que le tableau de
+> `docs/COMPARATIF_MARCHE.md` portait 56/17/13**, et c'est le tableau qui fait foi : il a été
+> RECOMPTÉ ligne à ligne le 25/09/2026 (86 lignes, 56 + 17 + 13). *Deux points de mesure des
+> mêmes grandeurs divergent, et la divergence est silencieuse* — constat **Q-219**, et ce
+> document s'était déjà fait prendre exactement là-dessus.
+> 🛑 **ET IL N'A PAS ÉTÉ REJOUÉ DEPUIS LE 21/09/2026.** Quatre lots ont été livrés depuis — la
+> déclaration du périmètre (`064` à `067`), la délégation temporaire (`068`), le registre de
+> l'article 30 §2 (`070` à `073`) et la liaison AD au panneau d'administration. Plusieurs
+> touchent des lignes de l'indicateur, notamment celles des **tiers** et du **RGPD** : 75 % est
+> donc un **plancher**, pas une mesure du jour. Le `docs/PLAN_ACHEVEMENT.md` §4 impose le rejeu
+> intégral à chaque clôture de vague ; il est **dû**.
 > ⚠️ Les `072` et `073` n'ajoutent ni table ni politique : la première étend le vocabulaire
 > **clos** de `journal_audit.entite_type` — sans quoi les trois tables du lot étaient
 > **incréables par les routes** —, la seconde repose l'installateur des déclencheurs de
