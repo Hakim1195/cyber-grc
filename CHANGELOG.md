@@ -44,8 +44,9 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2598 essais, 2598 passés, 0 échec** — 2 324 sans navigateur et 274 avec —,
-> **quarante et une** familles. ⚠️ **+3 le 25/09/2026 au soir** : les trois essais qui gardent
+> `npm test` → **2599 essais, 2599 passés, 0 échec** — 2 325 sans navigateur et 274 avec —,
+> **quarante et une** familles. ⚠️ **+1 le 25/09/2026, tard** : le garde-fou du bloc
+> d'ancrage — voir l'entrée du jour. ⚠️ **+3 le 25/09/2026 au soir** : les trois essais qui gardent
 > enfin le **tableau des collections** de `docs/DATA_MODEL.md` §1.5 — il avait dérivé de
 > **quinze collections sur cinq lots** parce que rien ne le mesurait. ⚠️ **+3 le 25/09/2026** : le §12 de `habilitations` (69 → 72),
 > qui mesure que l'état de la liaison à l'annuaire ne rend **aucun secret** — sur le corps
@@ -109,6 +110,37 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### 🛑 « L'ARBRE DE `ANCRE` » — un garde-fou qui ne lisait qu'une moitié de ce qu'un geste écrit (25/09/2026)
+
+Le §8 du `backend/README.md` porte **deux** lignes d'ancrage : « Révision mesurée » et
+« État de l'arbre », qui nomme l'arbre dont le compte est relevé. Le garde-fou de Q-53 ne
+lisait **que la première**.
+
+**Conséquence, mesurée deux fois dans la même journée** : le réancrage a laissé le gabarit
+`ANCRE` sur la seconde ligne — le matin parce que le motif de substitution exigeait les deux
+astérisques collés à l'accent grave, et la ligne dit « arbre de \`ANCRE\` » ; **le soir pour
+la même raison exacte, dans le commit qui écrivait juste au-dessus que ce piège existait.**
+Le §8 a donc annoncé l'état d'un arbre nommé `ANCRE`, sous un banc entièrement vert.
+
+⚠️ **La cause n'est pas l'inattention, et c'est ce qui rend ce défaut intéressant.** Écrire
+le piège dans le tableau l'a documenté sans le fermer — *un piège décrit à un endroit n'est
+pas un piège fermé*, pour la deuxième fois ce mois-ci. Ce qui manquait est un contrôle.
+
+**Le remède ne nomme aucune ligne.** Il balaie les cellules du bloc et retient celles qui
+citent une révision **en tête** — trente caractères de marge, de quoi laisser passer
+« arbre de » et pas une proposition. Toutes doivent citer la même, et aucun gabarit en
+capitales entre accents graves ne survit. Une troisième ligne d'ancrage entrerait dans le
+contrôle sans qu'on y pense : c'est le `CONVENTIONS.md` §19.5 appliqué à un tableau de prose.
+
+⚠️ **Et la première rédaction du contrôle a rougi à juste titre** : elle exigeait
+l'unanimité de **toute** révision citée dans le bloc, or la dernière ligne raconte comment
+le commit `2818fc7` a porté le CHANGELOG sans rejouer le banc. *Une révision **racontée**
+n'est pas une révision qui **ancre**** — confondre les deux aurait obligé à réécrire
+l'histoire pour ranger le présent, ce que le dépôt a déjà refusé une fois (Q-256).
+
+**Trois mutations jouées, trois morsures** : le gabarit restauré, une autre révision en tête
+de cellule, et la cellule qui n'ancre plus rien.
 
 ### 🛑 « UNE FENÊTRE QUI SE RÉPÈTE À L'INFINI » — `JSON.stringify` n'est pas un test d'égalité (25/09/2026)
 

@@ -173,6 +173,69 @@ describe('Les chiffres du README disent le réel, ou ils rougissent (constat Q-5
     }
   });
 
+  test('TOUTE ligne du bloc qui cite une révision cite LA MÊME, et aucun gabarit ne survit', async () => {
+    /* ⚠️ **CE CONTRÔLE EST NÉ D'UN DÉFAUT REFAIT DEUX FOIS DANS LA MÊME JOURNÉE**, le
+     * 25/09/2026 : le réancrage a laissé le gabarit `ANCRE` sur la ligne « État de
+     * l'arbre » — le matin parce que le motif de substitution ne reconnaissait pas
+     * `**arbre de \`ANCRE\`**`, le soir pour la même raison exacte, DANS le commit qui
+     * écrivait au-dessus que ce piège existait.
+     *
+     * La cause n'est pas l'inattention : `blocDeMesure()` ne lit QUE la ligne
+     * « Révision mesurée ». Le §8 en porte deux, la seconde nomme l'arbre, et **rien
+     * ne la regardait**. Un garde qui n'examine qu'une moitié de ce qu'un geste écrit
+     * laisse l'autre moitié dériver — et elle a dérivé au point d'annoncer l'état d'un
+     * arbre nommé `ANCRE`.
+     *
+     * Le remède ne nomme donc PAS la seconde ligne : il balaie **toute** ligne du bloc
+     * d'environnement qui cite quelque chose entre accents graves ressemblant à une
+     * révision, et exige l'unanimité. Une troisième ligne qui citerait une révision
+     * entrerait dans le contrôle sans qu'on y pense — c'est le §19.5, appliqué à un
+     * tableau de prose. */
+    const readme = readFileSync(README, 'utf8');
+    const mesure = blocDeMesure();
+    const debut = readme.indexOf('| Révision mesurée |');
+    const bloc = readme.slice(debut, readme.indexOf('\n\n', debut));
+
+    // a) Aucun gabarit non substitué, sous aucune forme : le mot est en capitales et
+    //    entre accents graves, ce qu'aucune révision git ne peut être.
+    const gabarits = bloc.match(/`[A-Z]{3,}`/g) ?? [];
+    assert.deepEqual(gabarits, [],
+      `Le bloc d’environnement du README §8 porte un gabarit NON SUBSTITUÉ : ${gabarits.join(', ')}. ` +
+      'Le réancrage a été fait à moitié — la ligne « État de l’arbre » est celle qui s’oublie, ' +
+      'parce que son gabarit n’est pas collé aux deux astérisques.');
+
+    /* b) Toute cellule qui ANCRE cite la même révision.
+     *
+     * ⚠️ **La première rédaction exigeait l'unanimité de TOUTE révision citée dans le
+     * bloc, et elle a rougi à juste titre** : le bloc raconte, en dernière ligne,
+     * comment le commit `2818fc7` a porté le CHANGELOG sans rejouer le banc. Une
+     * révision **racontée** n'est pas une révision qui **ancre**, et confondre les deux
+     * aurait obligé à réécrire l'histoire pour ranger le présent.
+     *
+     * Le discriminant n'est donc pas « une révision est citée », c'est **où** : en TÊTE
+     * de cellule, elle dit ce qui est mesuré ; au milieu d'une phrase, elle est un
+     * récit. Trente caractères de marge laissent passer « arbre de », et pas une
+     * proposition. Aucun nom de ligne n'est écrit ici — une troisième ligne d'ancrage
+     * entrerait dans le contrôle sans qu'on y pense. */
+    const ancres = [];
+    for (const rangee of bloc.split('\n')) {
+      const cellule = rangee.split('|')[2];
+      if (cellule === undefined) continue;
+      const tete = /`([0-9a-f]{7,40})`/.exec(cellule.slice(0, 30));
+      if (tete !== null) ancres.push(tete[1]);
+    }
+    assert.ok(ancres.length >= 2,
+      `Le bloc d’environnement ne porte plus que ${String(ancres.length)} cellule(s) d’ancrage : ` +
+      'la ligne « État de l’arbre » a perdu la sienne, et plus rien ne dit de quel arbre le ' +
+      'compte est relevé.');
+    for (const revision of ancres) {
+      assert.equal(revision, mesure.revision,
+        `Une cellule d’ancrage du bloc cite \`${revision}\` et « Révision mesurée » dit ` +
+        `\`${String(mesure.revision)}\`. Deux points de mesure des mêmes grandeurs divergent, ` +
+        'et la divergence est silencieuse — c’est le constat Q-219, dans le tableau qui le raconte.');
+    }
+  });
+
   test('LA SOMME des familles fait le total annoncé', async () => {
     const mesure = blocDeMesure();
     const somme = Object.values(mesure.familles).reduce((a, b) => a + b, 0);
