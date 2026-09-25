@@ -967,12 +967,12 @@ pas d'administrateur d'une seule filiale.
 
 | Geste | Où | À savoir |
 |---|---|---|
-| **Créer une filiale** | **Administration → Filiales → « Déclarer une filiale »** | ⚠️ **Écran neuf du 24/09/2026.** L'écran vous rend aussitôt **les huit groupes AD à créer** et le script PowerShell qui les crée. Sans eux, personne n'entre dans cette filiale — vous compris. |
+| **Créer une filiale** | **Administration → Filiales** | ⚠️ **Écran neuf du 24/09/2026.** Bouton « Déclarer une filiale ». L'écran vous rend aussitôt **les huit groupes AD à créer** et le script PowerShell qui les crée. Sans eux, personne n'entre dans cette filiale — vous compris. |
 | **Voir et gérer les droits** | **Administration → Habilitations** | ⚠️ **Écran neuf du 22/09/2026.** **Cinq** vues : la matrice, les groupes d'annuaire, les comptes, les revues d'accès, et les **délégations temporaires** (24/09/2026). Voir la section détaillée ci-dessous. |
 | **Écrire au socle de risques** | Registre des risques → onglet **Socle du Groupe** | Ce que vous y mettez s'applique à **toutes** les filiales. |
 | **Activer un référentiel** | Référentiels → onglet **Applicables ici** | ⚠️ À ne pas confondre avec « non applicable » par exigence : l'activation dit *quels référentiels s'appliquent à ce site*, le « non applicable » écarte *un point dans un référentiel pratiqué*. |
 | **Lire le journal d'audit** | Journal d'audit | Trois ans d'identités et d'adresses IP. C'est un domaine à part, et ce n'est pas un hasard. |
-| **Faire sortir une filiale** | **Administration → Filiales → « Faire sortir »** | ⚠️ **Écran neuf du 24/09/2026**, et il **exporte d'abord** tout seul. ⚠️ **Exportez d'abord** — et faites-le faire par un compte qui porte `GRC-EXPORT`, l'export étant une permission distincte que `GRC-ADMIN` **ne donne pas** (constat Q-278). Une filiale sortie disparaît de tous les périmètres, et l'exporter après demanderait de contourner le cloisonnement. |
+| **Faire sortir une filiale** | **Administration → Filiales** | ⚠️ **Écran neuf du 24/09/2026**, bouton « Faire sortir », et il **exporte d'abord** tout seul. ⚠️ **Exportez d'abord** — et faites-le faire par un compte qui porte `GRC-EXPORT`, l'export étant une permission distincte que `GRC-ADMIN` **ne donne pas** (constat Q-278). Une filiale sortie disparaît de tous les périmètres, et l'exporter après demanderait de contourner le cloisonnement. |
 
 > ### ✅ La création d'une filiale A MAINTENANT SON ÉCRAN — et cette phrase a coûté cher DEUX fois
 >
