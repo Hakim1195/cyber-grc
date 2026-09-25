@@ -684,6 +684,25 @@ if [[ $ASSISTANT -eq 1 ]]; then
                     '^[A-Za-z]+=.+' "Attendu un DN : CN=svc-grc,OU=Services,DC=…")"
     A_LDAP_MDP="$(question_secrete "  Mot de passe de ce compte (non affiché)")"
     [[ "$A_LDAP_URL" == ldaps://* ]] || alerte "  LDAP en clair : les mots de passe des utilisateurs transiteront sans chiffrement."
+
+    # ── Le certificat de l'AC — la question que l'assistant NE POSAIT PAS ──────
+    # Il copiait `.env.example`, qui porte `LDAP_CA=/etc/cyber-grc/ca-active-directory.pem`,
+    # et l'installateur exigeait ensuite que CE fichier existe. L'exploitant, qui avait son
+    # certificat sous la main (« AD-CA.cer »), ne pouvait pas savoir qu'un chemin l'attendait
+    # (première installation chez un client, 25/09/2026). On demande ; on copie ; on dit.
+    printf '\n' >&2
+    alerte "  Le certificat de l'AUTORITÉ qui a émis celui du contrôleur — export public de"
+    alerte "  votre ADCS : .cer, .crt, .pem ou .p7b, l'extension n'importe pas. Laissez vide"
+    alerte "  si vous ne l'avez pas : l'installateur capturera ce que le contrôleur présente"
+    alerte "  (suffisant pour un contrôleur autosigné) et vous dira si cela suffit."
+    A_LDAP_CA_DEFAUT="$(lire_variable LDAP_CA 2>/dev/null || true)"
+    [[ -n "$A_LDAP_CA_DEFAUT" && -f "$A_LDAP_CA_DEFAUT" ]] || A_LDAP_CA_DEFAUT=""
+    A_LDAP_CA="$(question "  Chemin du certificat de l'AC (vide : capturer)" "$A_LDAP_CA_DEFAUT" \
+                  '^(|/[^[:space:]]+)$' "Un chemin absolu, ou rien.")"
+    if [[ -n "$A_LDAP_CA" && ! -f "$A_LDAP_CA" ]]; then
+      alerte "  « $A_LDAP_CA » n'existe pas : l'installateur capturera ce que le contrôleur présente."
+      A_LDAP_CA=""
+    fi
   else
     # ── PROFIL DÉCOUVERTE ───────────────────────────────────────────────────
     A_PROFIL="decouverte"
@@ -797,6 +816,16 @@ if [[ $ASSISTANT -eq 1 ]]; then
     definir_variable LDAP_DN_SERVICE          "$A_LDAP_DN"
     definir_variable LDAP_MOT_DE_PASSE_SERVICE "$A_LDAP_MDP"
     unset A_LDAP_MDP
+    # Le certificat de l'AC : copié à l'emplacement canonique, LISIBLE PAR LE SERVICE
+    # (root:cyber-grc 0640), et LDAP_CA pointée dessus. Vide → l'installateur capture ce
+    # que le contrôleur présente, et c'est Node qui dira si cela suffit.
+    if [[ -n "${A_LDAP_CA:-}" ]]; then
+      install -o root -g "$UTILISATEUR" -m 0640 "$A_LDAP_CA" "$CONFIG/ca-active-directory.pem"
+      definir_variable LDAP_CA "$CONFIG/ca-active-directory.pem"
+      succes "certificat de l'AC copié : $A_LDAP_CA → $CONFIG/ca-active-directory.pem"
+    else
+      definir_variable LDAP_CA ""
+    fi
   else
     definir_variable AUTH_LDAP_ACTIF                "non"
     definir_variable AUTH_COMPTE_SECOURS_IDENTIFIANT "$A_SECOURS_ID"
