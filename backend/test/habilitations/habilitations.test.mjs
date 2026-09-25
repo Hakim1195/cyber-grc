@@ -843,3 +843,53 @@ describe('Une filiale hors du périmètre de session reste ADMINISTRABLE', () =>
     );
   });
 });
+
+describe('§12 — L’ÉTAT DE LA LIAISON À L’ANNUAIRE, et ce qu’il ne rend PAS', () => {
+  /* Demandé par l'utilisateur le 25/09/2026 : *« il faudrait que dans le panneau Admin il y
+   * ait la liaison AD et son état. »* Un écran d'administration qui décrit la liaison est
+   * utile ; un écran qui en rendrait le SECRET serait un défaut de sécurité servi à chaque
+   * ouverture. Ce §12 garde les deux moitiés. */
+
+  test('elle décrit la liaison — URL, base, compte de service, filtre', async () => {
+    const r = await admin.appeler('GET', '/api/habilitations/etat');
+    assert.equal(r.statut, 200);
+    const a = r.corps.annuaire;
+    assert.ok(a !== undefined, 'L’état doit porter la description de la liaison.');
+    for (const champ of ['actif', 'prefixeGroupes', 'groupesImbriques', 'verifierCertificat',
+                         'autoriteDeclaree', 'compteSecoursActif', 'comptes', 'verrouilles',
+                         'derniereConnexion']) {
+      assert.ok(champ in a, `Le champ « ${champ} » doit être rendu, même à null.`);
+    }
+  });
+
+  test('🛑 elle ne rend AUCUN secret — ni mot de passe de service, ni empreinte', async () => {
+    /* La seule propriété de sécurité de ce §12, et elle se mesure sur le CORPS ENTIER
+     * sérialisé plutôt que champ par champ : une clé ajoutée demain à `decrireLiaison()`
+     * doit faire rougir cet essai, pas passer entre les mailles d'une liste de noms.
+     * ⚠️ C'est la règle du §19.5 — *on ne vérifie pas une liste, on balaie la matière.* */
+    const r = await admin.appeler('GET', '/api/habilitations/etat');
+    const brut = JSON.stringify(r.corps).toLowerCase();
+    for (const interdit of ['mot_de_passe', 'motdepasse', 'password', 'empreinte', 'secret']) {
+      assert.ok(
+        !brut.includes(interdit),
+        `L’état des habilitations contient « ${interdit} » : un écran d’administration ne `
+          + 'sert pas de secret, et celui-ci est servi à chaque ouverture.',
+      );
+    }
+  });
+
+  test('les trois chiffres viennent de la BASE, et EXCLUENT le compte de secours', async () => {
+    /* ⚠️ Un annuaire parfaitement décrit dont personne ne s'est jamais connecté n'est pas un
+     * annuaire qui marche : c'est ce que ces trois chiffres disent, et qu'aucune description
+     * de configuration ne peut dire. ⚠️ Le compte de secours est EXCLU du compte : il ne
+     * vient pas de l'annuaire, et l'y mêler ferait croire qu'une liaison sert alors que
+     * seul le filet de secours a été employé. */
+    const r = await admin.appeler('GET', '/api/habilitations/etat');
+    const a = r.corps.annuaire;
+    assert.equal(typeof a.comptes, 'number');
+    assert.equal(typeof a.verrouilles, 'number');
+    assert.ok(a.comptes >= 0 && a.verrouilles >= 0);
+    assert.ok(a.verrouilles <= a.comptes,
+      'Il ne peut pas y avoir plus de comptes verrouillés que de comptes.');
+  });
+});

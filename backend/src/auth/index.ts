@@ -131,6 +131,62 @@ function annuaireIndisponible(detailJournal: string): ErreurApplicative {
  *  Options
  * ===================================================================== */
 
+/**
+ * Ce qu'un écran d'administration peut savoir de la liaison à l'annuaire.
+ *
+ * 🛑 **UNE SEULE FORME, ET C'EST TOUT L'OBJET DE CE TYPE.** La première rédaction
+ * rendait `{ actif: false, compteSecoursActif: false }` quand le greffon
+ * d'authentification n'était pas monté, et la forme COMPLÈTE sinon : l'écran
+ * aurait dû devenir défensif sur chaque champ, et un champ manquant s'y serait lu
+ * « non configuré » au lieu de « je ne sais pas ». **C'est le banc qui l'a vu**, et
+ * la leçon est celle du constat Q-201 : *une réponse dont la forme varie est une
+ * réponse que l'appelant doit devenir.*
+ *
+ * ⚠️ **`motDePasseService` n'y figure pas, et ne doit jamais y figurer.** Un essai
+ * balaie le corps sérialisé entier plutôt qu'une liste de noms de champs : une clé
+ * ajoutée ici demain fait rougir le banc au lieu de passer entre les mailles
+ * (`test/habilitations/habilitations.test.mjs` §12).
+ */
+export interface DescriptionLiaisonAnnuaire {
+  readonly actif: boolean;
+  readonly url: string | null;
+  readonly baseRecherche: string | null;
+  readonly dnService: string | null;
+  readonly prefixeGroupes: string | null;
+  readonly groupesImbriques: boolean | null;
+  readonly verifierCertificat: boolean | null;
+  readonly autoriteDeclaree: boolean;
+  readonly filtreUtilisateur: string | null;
+  readonly attributIdentifiant: string | null;
+  readonly attributsProfil: readonly string[];
+  readonly delaiMs: number | null;
+  readonly compteSecoursActif: boolean;
+}
+
+/**
+ * La liaison telle qu'elle se décrit quand il n'y en a AUCUNE.
+ *
+ * ⚠️ Elle sert à DEUX appelants — `decrireLiaison()` quand aucun annuaire n'est
+ * configuré, et le greffon des habilitations quand l'authentification elle-même
+ * n'est pas montée (le cas du banc). Une seconde rédaction de cette forme serait
+ * une seconde vérité, et les deux divergeraient en silence.
+ */
+export const LIAISON_SANS_ANNUAIRE: DescriptionLiaisonAnnuaire = Object.freeze({
+  actif: false,
+  url: null,
+  baseRecherche: null,
+  dnService: null,
+  prefixeGroupes: null,
+  groupesImbriques: null,
+  verifierCertificat: null,
+  autoriteDeclaree: false,
+  filtreUtilisateur: null,
+  attributIdentifiant: null,
+  attributsProfil: Object.freeze([]) as readonly string[],
+  delaiMs: null,
+  compteSecoursActif: false,
+});
+
 export interface OptionsAuthentification {
   /** Fabrique de client LDAP. Le banc y branche la doublure de `test/annuaire/`. */
   readonly fabriqueClient?: FabriqueClient;
@@ -300,6 +356,52 @@ export class ServiceAuthentification implements Authentificateur {
   /** L'annuaire est-il configuré et actif ? */
   public annuaireDisponible(): boolean {
     return this.annuaire !== null;
+  }
+
+  /**
+   * Décrit la LIAISON à l'annuaire, sans appel réseau et **sans aucun secret**.
+   *
+   * ⚠️ **Deux questions que l'écran d'administration ne doit pas confondre, et
+   * c'est toute la raison de cette méthode :**
+   *
+   *   · *« à quoi sommes-nous censés être raccordés ? »* — c'est ici, et c'est
+   *     **gratuit** : la configuration lue au démarrage, rien de plus ;
+   *   · *« est-ce que ça répond MAINTENANT ? »* — c'est
+   *     `GET /api/habilitations/annuaire`, qui **sort sur le réseau**, et qui
+   *     reste donc un geste demandé.
+   *
+   * Les mélanger obligerait l'écran à faire un aller-retour LDAP à chaque
+   * ouverture — c'est-à-dire à devenir lent, puis inutilisable, le jour où le
+   * contrôleur de domaine ne répond pas. *Le produit doit rester administrable
+   * pendant une panne d'annuaire : c'est précisément là qu'on en a besoin.*
+   *
+   * 🛑 **`motDePasseService` n'est PAS rendu, et ne le sera jamais.** Le reste —
+   * URL, base de recherche, DN du compte de service — est de la **topologie**,
+   * pas un secret : c'est exactement ce qu'un administrateur doit voir pour
+   * diagnostiquer, et la route qui le sert exige le domaine `administration`.
+   * ⚠️ Le filtre est rendu **tel qu'il est configuré** : une installation dont le
+   * filtre a été adapté doit pouvoir le lire sans ouvrir un fichier sur le
+   * serveur.
+   */
+  public decrireLiaison(): DescriptionLiaisonAnnuaire {
+    const l = this.config.auth.ldap;
+    const secours = this.config.auth.compteSecours !== null;
+    if (l === null) return { ...LIAISON_SANS_ANNUAIRE, compteSecoursActif: secours };
+    return {
+      actif: true,
+      url: l.url,
+      baseRecherche: l.baseRecherche,
+      dnService: l.dnService,
+      prefixeGroupes: l.prefixeGroupes,
+      groupesImbriques: l.groupesImbriques,
+      verifierCertificat: l.verifierCertificat,
+      autoriteDeclaree: l.ca !== null,
+      filtreUtilisateur: l.filtreUtilisateur,
+      attributIdentifiant: l.attributIdentifiant,
+      attributsProfil: l.attributsProfil,
+      delaiMs: l.delaiMs,
+      compteSecoursActif: secours,
+    };
   }
 
   /**

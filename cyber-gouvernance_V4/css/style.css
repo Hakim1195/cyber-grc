@@ -4084,3 +4084,50 @@ body { overflow-x: hidden; }
     .cli-dossier, .cli-manques { break-inside: avoid; }
     .cli-m { background: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA LIAISON À L'ANNUAIRE — écran des groupes d'annuaire (25/09/2026)
+
+   Demandé par l'utilisateur : « il faudrait que dans le panneau Admin il y ait
+   la liaison AD et son état ».
+   ⚠️ Quatre classes, écrites ICI parce qu'elles sont EMPLOYÉES dans
+      `js/modules/habilitations.js` — *une classe écrite n'est pas une classe
+      définie*, et trois écrans se sont rendus À PLAT le 19/09 pour l'avoir oublié.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.hab-liaison > h3 { margin-top: 0; }
+
+/* Deux colonnes : l'étiquette au plus juste, la valeur qui prend le reste. Les
+   valeurs sont des DN et des URL — elles sont longues, et elles doivent pouvoir
+   se couper sans déborder. */
+.hab-dl {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 4px 20px;
+    margin: 0 0 4px;
+}
+.hab-dl dt {
+    font-weight: 600;
+    color: var(--text-muted, #5f6b7a);
+    white-space: nowrap;
+}
+.hab-dl dd {
+    margin: 0;
+    font-family: var(--police-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+}
+@media (max-width: 720px) {
+    .hab-dl { grid-template-columns: 1fr; gap: 0 0; }
+    .hab-dl dt { white-space: normal; margin-top: 8px; }
+}
+
+.hab-liaison-alerte { margin-top: 10px; font-size: var(--text-base); }
+
+/* Aucun annuaire : ce n'est pas une panne, c'est un PROFIL. La bordure le
+   signale sans employer le rouge, réservé aux défauts de conformité. */
+.hab-liaison--absente { border-left: 3px solid var(--color-partial, #e9631b); }
+
+@media print {
+    .hab-liaison { break-inside: avoid; }
+}

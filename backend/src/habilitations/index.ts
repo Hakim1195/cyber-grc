@@ -76,6 +76,7 @@ import {
 } from './delegations.js';
 import type { Pool } from 'pg';
 
+import { LIAISON_SANS_ANNUAIRE } from '../auth/index.js';
 import type { ServiceAuthentification } from '../auth/index.js';
 import type { SessionAppliquee } from '../api/session.js';
 import { avecTransaction } from '../db/pool.js';
@@ -171,7 +172,57 @@ export async function greffonHabilitations(
       const etat = await avecTransaction(
         pool,
         session.perimetre,
-        async (client) => await lireEtat(client, prefixeGroupes),
+        async (client) => {
+          const base = await lireEtat(client, prefixeGroupes);
+
+          /* ── L'ÉTAT DE LA LIAISON À L'ANNUAIRE ─────────────────────────────
+           *
+           * Demandé par l'utilisateur le 25/09/2026 : *« il faudrait que dans le
+           * panneau Admin il y ait la liaison AD et son état. »*
+           *
+           * 🛑 **Deux questions, et l'écran ne doit pas les confondre :**
+           *   · *à quoi sommes-nous raccordés ?* — `decrireLiaison()`, gratuit,
+           *     lu de la configuration, et rendu ICI à chaque ouverture ;
+           *   · *est-ce que ça répond maintenant ?* — `GET …/annuaire`, qui SORT
+           *     sur le réseau, et qui reste un geste demandé.
+           *
+           * ⚠️ **Les mélanger rendrait le produit inadministrable pendant une
+           * panne d'annuaire** — c'est-à-dire exactement quand on en a besoin :
+           * chaque ouverture de l'écran attendrait le délai LDAP. C'est la même
+           * raison qui fait que l'appel de `…/annuaire` est fait HORS
+           * transaction, vingt lignes plus bas.
+           *
+           * ⚠️ Les trois chiffres qui suivent viennent de la BASE, pas du réseau :
+           * ils disent si le dispositif a déjà SERVI, ce qu'aucune description de
+           * configuration ne peut dire. Un annuaire parfaitement configuré dont
+           * personne ne s'est jamais connecté n'est pas un annuaire qui marche. */
+          const { rows } = await client.query<{
+            comptes: string;
+            verrouilles: string;
+            derniere: string | null;
+          }>(
+            `select count(*)::text                                        as comptes,
+                    count(*) filter (where "verrouille_jusqu_a" > now())::text
+                                                                          as verrouilles,
+                    to_char(max("derniere_connexion"), 'YYYY-MM-DD"T"HH24:MI:SSOF')
+                                                                          as derniere
+               from "utilisateurs"
+              where not "compte_secours"`,
+          );
+          const compte = rows[0];
+
+          return {
+            ...base,
+            annuaire: {
+              // ⚠️ La forme est la MÊME dans les deux cas — voir DescriptionLiaisonAnnuaire :
+              //    une réponse dont la forme varie est une réponse que l'écran doit deviner.
+              ...(auth?.decrireLiaison() ?? LIAISON_SANS_ANNUAIRE),
+              comptes: Number(compte?.comptes ?? 0),
+              verrouilles: Number(compte?.verrouilles ?? 0),
+              derniereConnexion: compte?.derniere ?? null,
+            },
+          };
+        },
         { lectureSeule: true },
       );
       return await reponse.status(200).send(etat);

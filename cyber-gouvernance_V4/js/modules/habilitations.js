@@ -492,6 +492,7 @@ const HabilitationsModule = (() => {
                        + '<button type="button" id="habVerifierAd" class="btn-secondary">Vérifier l’annuaire</button>'
                        + '<button type="button" id="habNouveauGroupe" class="btn-secondary">Déclarer un groupe</button>'
             })
+            + encartLiaisonAd(etat.annuaire)
             + encartJamaisDEcritureAd()
             + '<div id="habCoherence">' + (coherence ? encartCoherence(coherence) : "") + "</div>"
             + '<div id="habFormGroupe"></div>'
@@ -534,6 +535,119 @@ const HabilitationsModule = (() => {
      * touchera pas à son AD. C'est la condition pour qu'il accepte le
      * déploiement, et c'est l'arbitrage de l'utilisateur du 22/09/2026.
      */
+    /* ═══════════════════════════════════════════════════════════════════════
+       LA LIAISON À L'ANNUAIRE, ET SON ÉTAT — demandé le 25/09/2026
+
+       🛑 **DEUX QUESTIONS, ET L'ÉCRAN NE LES CONFOND PAS :**
+
+         · *« à quoi sommes-nous raccordés ? »* — rendu par `…/etat`, GRATUIT, lu de
+           la configuration du serveur. C'est ce que cet encart montre à l'ouverture.
+         · *« est-ce que ça répond MAINTENANT ? »* — c'est « Vérifier l'annuaire »,
+           qui SORT sur le réseau, et qui reste un geste demandé.
+
+       ⚠️ **Les mélanger rendrait cet écran inutilisable pendant une panne
+       d'annuaire** — c'est-à-dire précisément quand on vient l'ouvrir : chaque
+       affichage attendrait le délai LDAP. L'encart dit donc ce qui EST CONFIGURÉ, et
+       il dit **qu'il ne dit pas** si ça répond.
+
+       ⚠️ **Aucun secret n'est rendu** : le mot de passe du compte de service
+       n'existe pas dans cette réponse. L'URL, la base et le DN sont de la topologie
+       — c'est ce qu'un administrateur doit voir pour diagnostiquer, et cet écran
+       exige déjà le domaine « administration ».
+       ═══════════════════════════════════════════════════════════════════════ */
+    function encartLiaisonAd(a) {
+        if (!a) return "";
+
+        if (!a.actif) {
+            /* Pas d'annuaire : ce n'est pas une panne, c'est un PROFIL. Le dire
+               comme une panne ferait chercher un câble ; le taire ferait croire à
+               une production. */
+            return '<div class="card hab-liaison hab-liaison--absente">'
+                + "<h3>Liaison Active Directory</h3>"
+                + '<div class="synthese-message warning">'
+                + "<strong>Aucun annuaire n’est configuré.</strong> Cette installation "
+                + "n’authentifie personne contre un Active Directory : la seule porte "
+                + "d’entrée est le <strong>compte de secours</strong> applicatif"
+                + (a.compteSecoursActif ? ", qui est actif." : ", qui n’est <strong>pas</strong> configuré — personne ne peut entrer.")
+                + " C’est le profil <em>découverte</em> : n’y saisissez pas de données "
+                + "réelles. Pour passer en production, rejouez l’assistant "
+                + "d’installation en donnant l’annuaire."
+                + "</div></div>";
+        }
+
+        const ligne = (etiquette, valeur, aide) =>
+            "<dt>" + esc(etiquette) + (aide ? " " + Help.tip(aide) : "") + "</dt>"
+            + "<dd>" + (valeur === null || valeur === undefined || valeur === ""
+                ? '<span class="muted">—</span>' : esc(String(valeur))) + "</dd>";
+
+        // ⚠️ Un avertissement, pas une erreur : `LDAP_VERIFIER_CERTIFICAT=non` est une
+        //    décision d'exploitant, et il arrive qu'elle soit temporaire. Mais elle ne
+        //    doit pas être invisible — une liaison non vérifiée est une liaison qu'un
+        //    intercepteur peut lire.
+        const alertes = [];
+        if (a.verifierCertificat === false) {
+            alertes.push("Le certificat du contrôleur de domaine <strong>n’est pas "
+                + "vérifié</strong> : la liaison est chiffrée mais l’interlocuteur n’est "
+                + "pas authentifié. À ne laisser que le temps d’un diagnostic.");
+        } else if (a.autoriteDeclaree === false) {
+            alertes.push("Aucune autorité de certification n’est déclarée "
+                + "(<code>LDAP_CA</code>) : la vérification repose sur le magasin du "
+                + "système, qui ne contient pas nécessairement votre PKI interne. Si les "
+                + "connexions échouent alors que le contrôleur répond, c’est la première "
+                + "chose à regarder.");
+        }
+        if (a.comptes === 0) {
+            alertes.push("<strong>Aucun compte ne s’est encore connecté.</strong> La "
+                + "liaison est configurée, et rien ne prouve encore qu’elle serve : un "
+                + "annuaire bien décrit dont personne n’est entré n’est pas un annuaire "
+                + "qui marche. Essayez une connexion, ou « Vérifier l’annuaire ».");
+        }
+        if (a.verrouilles > 0) {
+            alertes.push("<strong>" + esc(String(a.verrouilles)) + " compte(s) "
+                + "verrouillé(s)</strong> après des échecs répétés. Le verrou se lève "
+                + "tout seul ; s’il revient, c’est un mot de passe expiré ou un annuaire "
+                + "intermittent.");
+        }
+
+        return '<div class="card hab-liaison">'
+            + "<h3>Liaison Active Directory "
+            + Help.tip("Ce que la configuration du serveur déclare. Cet encart ne fait AUCUN "
+                + "appel réseau : il ne dit donc pas si l’annuaire répond en ce moment — c’est "
+                + "« Vérifier l’annuaire » qui le dit, et c’est pour cela que ce bouton existe.")
+            + "</h3>"
+            + '<dl class="hab-dl">'
+            + ligne("Contrôleur de domaine", a.url)
+            + ligne("Base de recherche", a.baseRecherche)
+            + ligne("Compte de service", a.dnService,
+                "En LECTURE SEULE. Le produit n’écrit jamais dans l’annuaire : la capacité "
+                + "n’existe pas dans son code.")
+            + ligne("Préfixe des groupes", a.prefixeGroupes)
+            + ligne("Groupes imbriqués", a.groupesImbriques ? "pris en compte" : "ignorés",
+                "Un compte membre d’un groupe lui-même membre d’un groupe « GRC-* » reçoit "
+                + "le droit. L’ignorer priverait d’accès les organisations qui délèguent par "
+                + "groupes métier.")
+            + ligne("Certificat du contrôleur",
+                a.verifierCertificat ? "vérifié" : "NON vérifié")
+            + ligne("Autorité déclarée", a.autoriteDeclaree ? "oui" : "non",
+                "LDAP_CA : l’autorité qui signe le certificat LDAPS du contrôleur. Sans elle, "
+                + "la vérification repose sur le magasin du système.")
+            + ligne("Filtre de recherche", a.filtreUtilisateur)
+            + ligne("Attribut d’identifiant", a.attributIdentifiant)
+            + ligne("Délai d’attente", a.delaiMs === null ? null : a.delaiMs + " ms")
+            + ligne("Comptes connus du produit", a.comptes,
+                "Une fiche n’est créée qu’à une connexion AUTORISÉE : un compte qui entre "
+                + "sans aucun groupe « GRC-* » reçoit 403 et n’apparaît pas ici.")
+            + ligne("Dernière connexion réussie",
+                a.derniereConnexion ? String(a.derniereConnexion).slice(0, 16).replace("T", " à ") : null)
+            + ligne("Compte de secours", a.compteSecoursActif ? "configuré" : "aucun",
+                "Filet de dernier recours, indépendant de l’annuaire. Chacun de ses usages "
+                + "est journalisé. En production ce n’est pas la porte d’entrée.")
+            + "</dl>"
+            + alertes.map(t => '<div class="synthese-message warning hab-liaison-alerte">'
+                + t + "</div>").join("")
+            + "</div>";
+    }
+
     function encartJamaisDEcritureAd() {
         return '<div class="card encart-alerte encart-info"><p>'
             + "<strong>Ce logiciel n’écrit jamais dans l’Active Directory.</strong> Il le lit, "

@@ -1,7 +1,18 @@
 # Installer Cyber GRC — en dix minutes
 
-> **Une page, dix commandes, aucun renvoi.** Si vous devez ouvrir un autre fichier pour
+> **Une page, cinq commandes, aucun renvoi.** Si vous devez ouvrir un autre fichier pour
 > finir cette page, c'est un défaut de cette page : signalez-le.
+>
+> ⚠️ *Cette ligne annonçait « dix commandes » quand la page en titrait **cinq** — et c'est
+> le constat **Q-275** lui-même, refait DANS le fichier qu'il visait. Corrigé le 25/09/2026.*
+>
+> 🛑 **PREMIÈRE MISE EN SERVICE CHEZ UN CLIENT ? Lisez d'abord
+> [`INSTALLATION_ENTREPRISE.md`](INSTALLATION_ENTREPRISE.md).** Cette page-ci décrit **le
+> chemin** ; celle-là décrit **la préparation** — ce qu'il faut obtenir, de qui, et dans quel
+> ordre. Trois choses font échouer une première installation, et **aucune des trois n'est sur
+> cette page** : le certificat TLS (en production l'installateur n'en engendre aucun), la
+> sortie réseau que l'unité systemd ferme, et le fait que **personne n'est administrateur
+> tant que personne n'est dans `GRC-ADMIN`**.
 >
 > Pour l'exploitation courante — sauvegardes, rétention, acquisitions, diagnostic des
 > pannes déjà rencontrées — voir [`GUIDE_EXPLOITATION.md`](GUIDE_EXPLOITATION.md).
@@ -43,7 +54,7 @@ cd cyber-grc
 #     déclare vos filiales, puis pose PostgreSQL 17, la base, le service et Apache.
 sudo bash backend/deploy/install.sh --assistant
 
-# 3 — Constater. Quatorze sujets contrôlés, chaque ligne dit quoi faire.
+# 3 — Constater. Quinze sujets contrôlés, chaque ligne dit quoi faire.
 sudo bash backend/deploy/install.sh --diagnostic
 
 # 4 — Engendrer le script des groupes Active Directory, prêt à exécuter
