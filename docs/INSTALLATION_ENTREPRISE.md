@@ -187,6 +187,21 @@ ce qui compte est l'**encodage**, et un `.cer` peut être l'un ou l'autre :
 `/etc/cyber-grc/ca-active-directory.pem` et repointe `LDAP_CA` dessus, parce que **Node
 n'accepte que le PEM**.
 
+**Et si vous n'avez pas le fichier, laissez `LDAP_CA` vide** (ou pointant vers un fichier
+absent) : l'installateur **capture ce que le contrôleur présente** sur LDAPS, l'épingle à cet
+emplacement, affiche son sujet, son émetteur, son **empreinte SHA-256** et la taille de sa
+clé, écrit `LDAP_CA` dans `/etc/cyber-grc/env`, puis demande à Node si cela suffit.
+
+| Votre contrôleur | Ce qui se passe |
+|---|---|
+| certificat **autosigné** (domaine sans ADCS) | il suffit à lui-même : capturé, épinglé, **accepté** — mesuré |
+| certificat émis par une AC, et le DC **présente** cette AC | la chaîne capturée suffit : accepté |
+| certificat émis par une AC que le DC **ne présente pas** | arrêt, et le message **nomme cette AC** : c'est son certificat qu'il faut obtenir, pas « la chaîne complète » en général |
+
+🛑 **La capture est une première confiance, comme celle de SSH, et elle est divulguée pour
+cette raison** : comparez l'empreinte affichée avec celle que vous donne l'équipe AD. Si
+elle diffère, quelqu'un s'est placé entre la VM et le contrôleur — arrêtez tout.
+
 🛑 **Ce n'était pas vrai avant le 25/09/2026, et le défaut était du genre le plus
 dangereux** : un `.cer` **binaire** passait le contrôle, qui affichait « LDAP_CA : PEM
 valide » — une affirmation fausse — puis **aucun utilisateur ne pouvait se connecter**. Un
@@ -203,9 +218,11 @@ contrôleur dont le certificat LDAPS porte une clé de 1024 bits fait écrire à
 
 ⚠️ **Ce message en masque un autre**, et c'est ce qui l'a rendu trompeur : `num=66` est
 signalé **avant** le contrôle de chaîne et le remplace — avec une AC étrangère, openssl rend
-le **même** code. L'installateur revérifie donc à `-auth_level 1` et c'est cette seconde
-mesure qui tranche : si la chaîne est saine, il pose une **réserve** et continue ; sinon il
-s'arrête en nommant la vraie cause.
+le **même** code. Depuis le 25/09/2026, **openssl ne décide plus rien** : il fournit le détail
+des messages, et c'est **Node — la pile TLS du produit — qui rend le verdict**, exactement
+comme le service le fera à la première connexion. Node reconnaît le contrôleur → l'installation
+continue, avec une **réserve** sur la clé ; Node le refuse → arrêt, en nommant l'**émetteur**
+lu dans le certificat, c'est-à-dire précisément ce qu'il faut demander à l'équipe AD.
 
 **L'installation va au bout, et les connexions fonctionnent** — Node ne lit pas
 `/etc/ssl/openssl.cnf` et accepte ce certificat (mesuré). 🛑 **Mais faites-le réémettre en

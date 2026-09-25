@@ -112,6 +112,42 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### 🛑 LE CERTIFICAT DE L'ANNUAIRE : L'INSTALLATEUR VA LE CHERCHER, ET C'EST NODE QUI DÉCIDE (25/09/2026, soir)
+
+Troisième arrêt de la même installation au même endroit, et la phrase de l'exploitant qui
+l'a réglé : *« s'il ne trouve pas exactement `ca-active-directory.pem` il bloque ; il faut
+permettre de travailler même avec un certificat autosigné, sinon on travaille pas. »* Il avait
+raison en pratique : `LDAP_CA` est un chemin libre, mais l'assistant y écrit la valeur de
+l'exemple, et l'installateur exigeait que **ce fichier-là** existe — sous un message qui
+parlait d'« autorité de la PKI interne », faux pour un contrôleur autosigné.
+
+**Le bloc est réécrit d'un tenant, sur trois principes, chacun mesuré :**
+
+1. **Si le fichier manque, l'installateur le CAPTURE** — ce que le contrôleur présente sur
+   LDAPS est épinglé, avec sujet, émetteur, **empreinte SHA-256** et taille de clé affichés,
+   et `LDAP_CA` écrit dans la configuration. Première confiance **divulguée**, le modèle de
+   SSH. Un DC autosigné marche ainsi tel quel : openssl « OK », Node `authorized: true`.
+2. **C'est NODE qui rend le verdict**, plus openssl — la pile TLS du produit, celle que le
+   service emploiera à la première connexion. openssl et Node avaient divergé deux fois le
+   même jour, en sens inverses ; openssl ne fournit plus que le détail des messages.
+3. **Quand la capture ne suffit pas, le message dit vrai et précis** : une feuille émise par
+   une AC, épinglée seule, est refusée par Node (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`) — mesuré.
+   L'installateur **nomme alors l'émetteur** lu dans le certificat : c'est ce certificat-là
+   qu'il faut demander, pas « la chaîne complète » en général.
+
+**Éprouvé sur cinq cas**, le bloc réel joué contre des serveurs TLS témoins : DC autosigné
+sans fichier (accepté, épinglé) ; feuille d'AC sans son AC, fichier absent (arrêt qui nomme
+l'AC) ; **AC juste et clé du DC à 1024 bits — le cas du client — accepté avec réserve** ; AC
+juste en `.cer` binaire (convertie, acceptée) ; mauvaise AC (refus nommé).
+
+⚠️ La rédaction du matin, qui faisait décider openssl à `-auth_level 1`, est **remplacée** —
+elle traitait le symptôme (deux niveaux d'openssl) sans toucher la cause (openssl n'est pas la
+pile du produit). Le §1.3 du déroulé d'installation est corrigé en conséquence.
+
+⚠️ **Et une leçon d'outillage payée deux fois ce soir** : `pkill -f "<motif>"` a tué le shell
+qui le lançait, parce que le motif figurait dans sa propre ligne de commande. On vise un
+processus par son nom exact (`pgrep -x`), jamais par une sous-chaîne de sa commande.
+
 ### 🛑 « LDAP_CA : PEM VALIDE » SUR UN FICHIER QUE LE PRODUIT NE PEUT PAS LIRE (25/09/2026)
 
 Deux défauts de l'installateur, trouvés en accompagnant la première installation chez un

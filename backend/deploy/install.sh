@@ -2963,116 +2963,163 @@ else
   fi
 
   # ---- L'autorité de certification interne ---------------------------------
-  if [[ -z "$LDAP_CA" ]]; then
-    alerte "LDAP_CA n'est pas renseignée. La validation du certificat du contrôleur de"
-    alerte "domaine reposera sur le magasin d'autorités du SYSTÈME, qui ne contient pas la"
-    alerte "PKI interne du groupe (PLAN_SERVEUR §0.3) : toute connexion LDAPS échouera."
-    alerte "Déposez la chaîne de l'AC interne au format PEM, puis renseignez LDAP_CA :"
-    alerte "  install -o root -g $UTILISATEUR -m 0640 ca-interne.pem $CONFIG/ca-active-directory.pem"
-  else
-    [[ -f "$LDAP_CA" ]] || echec "LDAP_CA : « $LDAP_CA » n'existe pas. C'est l'autorité de la PKI
-      interne, au format PEM ; sans elle aucune liaison LDAPS ne s'établira."
-    # ⚠️ LISIBLE PAR LE COMPTE DE SERVICE, pas par root : c'est TOUTE la
-    # différence, et c'est celle qu'on ne voit qu'au redémarrage suivant.
-    if ! su "$UTILISATEUR" -s /bin/sh -c "test -r '$LDAP_CA'" 2>/dev/null; then
-      alerte "droits actuels : $(stat -c '%U:%G %a' "$LDAP_CA" 2>/dev/null || echo '?')"
-      echec "LDAP_CA (« $LDAP_CA ») n'est PAS lisible par le compte de service « $UTILISATEUR ».
+  #
+  # 🛑 **RÉÉCRIT LE 25/09/2026, PENDANT LA PREMIÈRE INSTALLATION CHEZ UN CLIENT**, qui
+  # s'est arrêtée TROIS FOIS ici pour trois causes distinctes — et aucune n'était le
+  # produit. Ce que l'exploitant a dit, et qui est juste : *« s'il ne trouve pas
+  # exactement ca-active-directory.pem il bloque ; il faut permettre de travailler même
+  # avec un certificat autosigné, sinon on travaille pas. »*
+  #
+  # Trois principes remplacent l'ancien bloc :
+  #
+  #  1. **Si le fichier manque, l'installateur VA LE CHERCHER** : il capture ce que le
+  #     contrôleur présente sur LDAPS, l'épingle, affiche son empreinte, et le dit
+  #     bruyamment. C'est le modèle de SSH — première confiance, DIVULGUÉE — et c'est
+  #     infiniment mieux que « installation terminée » suivi de « personne ne se
+  #     connecte ». Un DC AUTOSIGNÉ (un domaine sans ADCS le fait tout seul) marche
+  #     ainsi tel quel : mesuré, openssl « Verification: OK », Node « authorized: true ».
+  #
+  #  2. **C'est NODE qui rend le verdict**, plus openssl. Les deux ont divergé DEUX fois
+  #     le même jour, en sens inverses : openssl refuse une clé de 1024 bits que Node
+  #     accepte (il ne lit pas /etc/ssl/openssl.cnf), et l'ancien contrôle acceptait un
+  #     DER que Node refuse. *Un contrôle doit interroger la pile que le produit
+  #     emploie.* openssl reste là pour le DÉTAIL des messages, jamais pour la décision.
+  #
+  #  3. **Ce qui a été capturé peut NE PAS SUFFIRE, et il faut le dire vrai** : une
+  #     feuille émise par une AC, épinglée seule, est refusée par Node
+  #     (UNABLE_TO_VERIFY_LEAF_SIGNATURE) — mesuré. Dans ce cas l'installateur nomme
+  #     l'ÉMETTEUR qu'il a lu dans le certificat, et c'est CE certificat-là qu'il faut
+  #     demander à l'équipe AD. Pas « la chaîne complète » en général.
+  #
+  # ⚠️ L'EXTENSION DU FICHIER N'A JAMAIS COMPTÉ (.cer, .crt, .pem sont des noms) ; ce qui
+  # compte est l'encodage, et Node n'accepte que le PEM — d'où la conversion plus bas.
+
+  LDAP_CA_CIBLE="${LDAP_CA:-$CONFIG/ca-active-directory.pem}"
+  LDAP_CA_EPINGLEE=0
+  LDAP_EMETTEUR_LU=""
+
+  if [[ -z "$LDAP_CA" || ! -f "$LDAP_CA" ]]; then
+    if [[ -z "$LDAP_CA" ]]; then
+      alerte "LDAP_CA n'est pas renseignée dans $FICHIER_CONFIG."
+    else
+      alerte "LDAP_CA désigne « $LDAP_CA », qui n'existe pas."
+    fi
+    info "Capture du certificat que présente $LDAP_HOTE:$LDAP_PORT (première confiance, divulguée)"
+    CAPTURE_TLS="$(timeout 15 openssl s_client -connect "$LDAP_HOTE:$LDAP_PORT" \
+                    -servername "$LDAP_HOTE" -showcerts </dev/null 2>/dev/null \
+                  | awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/' || true)"
+    if ! printf '%s' "$CAPTURE_TLS" | grep -q 'BEGIN CERTIFICATE'; then
+      echec "Impossible de capturer le certificat de $LDAP_HOTE:$LDAP_PORT : le contrôleur ne
+      répond pas en LDAPS depuis cette machine (port filtré ? nom qui ne se résout pas ?
+      LDAPS non activé sur le DC ?). Vérifiez à la main :
+        openssl s_client -connect $LDAP_HOTE:$LDAP_PORT -showcerts </dev/null
+      Ou déposez vous-même le certificat de l'AC (ou celui du DC s'il est autosigné) :
+        install -o root -g $UTILISATEUR -m 0640 <fichier> $LDAP_CA_CIBLE"
+    fi
+    printf '%s\n' "$CAPTURE_TLS" > "$LDAP_CA_CIBLE.tmp"
+    install -o root -g "$UTILISATEUR" -m 0640 "$LDAP_CA_CIBLE.tmp" "$LDAP_CA_CIBLE"
+    rm -f "$LDAP_CA_CIBLE.tmp"
+    NB_CAPTURES="$(grep -c 'BEGIN CERTIFICATE' "$LDAP_CA_CIBLE")"
+    # La FEUILLE — le premier certificat présenté — porte le sujet, l'émetteur et la clé
+    # que l'exploitant doit pouvoir comparer avec ce que lui dit l'équipe AD.
+    FEUILLE_TMP="$(mktemp)"
+    awk '/BEGIN CERTIFICATE/{n++} n==1' "$LDAP_CA_CIBLE" > "$FEUILLE_TMP"
+    LDAP_EMETTEUR_LU="$(openssl x509 -in "$FEUILLE_TMP" -noout -issuer 2>/dev/null | sed 's/^issuer=//')"
+    succes "$NB_CAPTURES certificat(s) capturé(s) → $LDAP_CA_CIBLE"
+    alerte "  sujet      : $(openssl x509 -in "$FEUILLE_TMP" -noout -subject 2>/dev/null | sed 's/^subject=//')"
+    alerte "  émetteur   : ${LDAP_EMETTEUR_LU:-?}"
+    alerte "  empreinte  : $(openssl x509 -in "$FEUILLE_TMP" -noout -fingerprint -sha256 2>/dev/null | sed 's/^.*=//')"
+    alerte "  clé        : $(openssl x509 -in "$FEUILLE_TMP" -noout -text 2>/dev/null | sed -n 's/.*Public-Key: (\(.*\))/\1/p' | head -n1)"
+    alerte "  expire le  : $(openssl x509 -in "$FEUILLE_TMP" -noout -enddate 2>/dev/null | cut -d= -f2)"
+    rm -f "$FEUILLE_TMP"
+    reserve "certificat de l'annuaire ÉPINGLÉ à l'installation, sans vérification indépendante"
+    alerte "🛑 Comparez l'EMPREINTE ci-dessus avec celle que vous donne l'équipe AD. Si elle"
+    alerte "diffère, quelqu'un s'est placé entre cette VM et le contrôleur : arrêtez tout."
+    if ! grep -q '^LDAP_CA=' "$FICHIER_CONFIG" 2>/dev/null; then
+      printf 'LDAP_CA=%s\n' "$LDAP_CA_CIBLE" >> "$FICHIER_CONFIG"
+    else
+      sed -i "s|^LDAP_CA=.*|LDAP_CA=$LDAP_CA_CIBLE|" "$FICHIER_CONFIG"
+    fi
+    alerte "LDAP_CA=$LDAP_CA_CIBLE écrit dans $FICHIER_CONFIG."
+    LDAP_CA="$LDAP_CA_CIBLE"
+    LDAP_CA_EPINGLEE=1
+  fi
+
+  # ⚠️ LISIBLE PAR LE COMPTE DE SERVICE, pas par root : c'est TOUTE la différence, et
+  # c'est celle qu'on ne voit qu'au redémarrage suivant.
+  if ! su "$UTILISATEUR" -s /bin/sh -c "test -r '$LDAP_CA'" 2>/dev/null; then
+    alerte "droits actuels : $(stat -c '%U:%G %a' "$LDAP_CA" 2>/dev/null || echo '?')"
+    echec "LDAP_CA (« $LDAP_CA ») n'est PAS lisible par le compte de service « $UTILISATEUR ».
       root la lit, le service non : l'installation se terminerait normalement et
       l'authentification échouerait au premier utilisateur. Corriger :
         chown root:$UTILISATEUR '$LDAP_CA' && chmod 0640 '$LDAP_CA'"
-    fi
-    # ---- L'ENCODAGE, ET NON L'EXTENSION -------------------------------------
-    #
-    # 🛑 **CE CONTRÔLE ANNONÇAIT « PEM VALIDE » SUR UN FICHIER QUE LE PRODUIT NE PEUT PAS
-    # LIRE.** Mesuré le 25/09/2026, sur les quatre formes qu'une PKI d'entreprise délivre :
-    #
-    #   fichier                  ce contrôle        openssl -CAfile      NODE (le produit)
-    #   PEM (quel que soit le nom)  ✅              ✅                   ✅ authorized
-    #   DER dans un .cer            ✅ « PEM valide » ❌ no certificate    🛑 UNABLE_TO_VERIFY
-    #   PKCS#7 (.p7b)               ❌              —                    🛑 refusé
-    #
-    # `openssl x509 -in` RENIFLE le format et accepte le DER : le contrôle passait, affichait
-    # « PEM valide » — une affirmation fausse — et **aucun utilisateur ne pouvait se
-    # connecter**. C'est la pire forme de défaut de ce dépôt : un contrôle qui rassure et un
-    # produit qui échoue. ⚠️ Et l'extension n'a JAMAIS compté : `.cer`, `.crt`, `.pem` sont
-    # des noms de fichiers. Ce qui compte est l'encodage, et **Node n'accepte que le PEM**.
-    #
-    # Plutôt que de le refuser, l'installateur CONVERTIT : l'exploitant dépose ce que son
-    # ADCS lui donne. Un installateur fait le travail ennuyeux — c'est son office.
-    LDAP_CA_ENCODAGE=""
-    if grep -q 'BEGIN CERTIFICATE' "$LDAP_CA" 2>/dev/null; then
-      LDAP_CA_ENCODAGE="PEM"
-    elif openssl x509 -inform DER -in "$LDAP_CA" -noout >/dev/null 2>&1; then
-      LDAP_CA_ENCODAGE="DER"
-    elif openssl pkcs7 -print_certs -in "$LDAP_CA" -noout >/dev/null 2>&1 \
-      || openssl pkcs7 -inform DER -print_certs -in "$LDAP_CA" -noout >/dev/null 2>&1; then
-      LDAP_CA_ENCODAGE="PKCS7"
-    else
-      echec "LDAP_CA (« $LDAP_CA ») n'est lisible par OpenSSL sous AUCUNE des trois formes
-      qu'une PKI délivre : ni PEM (texte, « -----BEGIN CERTIFICATE----- »), ni DER (binaire),
-      ni PKCS#7 (.p7b). ⚠️ L'EXTENSION NE COMPTE PAS — un .cer peut être l'un ou l'autre.
-      Vérifiez ce que vous avez :  file '$LDAP_CA'  puis
-        openssl x509 -in '$LDAP_CA' -noout -subject        # si PEM
-        openssl x509 -inform der -in '$LDAP_CA' -noout -subject   # si DER
-      Un .pfx/.p12 n'est PAS le bon fichier : il contient une clé privée. Demandez à
-      l'équipe PKI la chaîne de l'AC (racine + intermédiaires), en export public."
-    fi
-
-    if [[ "$LDAP_CA_ENCODAGE" != "PEM" ]]; then
-      # ⚠️ On ne réécrit JAMAIS le fichier de l'exploitant : on dépose la conversion à
-      # l'emplacement que la convention nomme déjà, et on repointe LDAP_CA dessus. Le sens
-      # est unique — source → forme canonique — et l'opération est idempotente.
-      LDAP_CA_PEM="$CONFIG/ca-active-directory.pem"
-      info "LDAP_CA est au format $LDAP_CA_ENCODAGE : conversion en PEM (Node n'accepte que le PEM)"
-      if [[ "$LDAP_CA_ENCODAGE" == "DER" ]]; then
-        openssl x509 -inform DER -in "$LDAP_CA" -out "$LDAP_CA_PEM.tmp" 2>/dev/null \
-          || echec "Conversion DER → PEM impossible sur « $LDAP_CA »."
-      else
-        { openssl pkcs7 -print_certs -in "$LDAP_CA" 2>/dev/null \
-          || openssl pkcs7 -inform DER -print_certs -in "$LDAP_CA" 2>/dev/null; } \
-          | grep -v '^subject=\|^issuer=\|^$' > "$LDAP_CA_PEM.tmp" \
-          || echec "Conversion PKCS#7 → PEM impossible sur « $LDAP_CA »."
-      fi
-      grep -q 'BEGIN CERTIFICATE' "$LDAP_CA_PEM.tmp" 2>/dev/null \
-        || { rm -f "$LDAP_CA_PEM.tmp"; echec "La conversion de « $LDAP_CA » n'a produit aucun
-      certificat. Le fichier contient-il vraiment une autorité, et non une clé privée ?"; }
-      install -o root -g "$UTILISATEUR" -m 0640 "$LDAP_CA_PEM.tmp" "$LDAP_CA_PEM"
-      rm -f "$LDAP_CA_PEM.tmp"
-      NB_CERTS_CA="$(grep -c 'BEGIN CERTIFICATE' "$LDAP_CA_PEM")"
-      succes "LDAP_CA convertie ($LDAP_CA_ENCODAGE → PEM, $NB_CERTS_CA certificat(s)) : $LDAP_CA_PEM"
-      # La configuration doit pointer la forme canonique, sinon le SERVICE relirait le
-      # fichier d'origine — que Node refuse — et l'authentification tomberait au premier
-      # utilisateur, après une installation annoncée « terminée ».
-      if [[ -f "$CONFIG/env" ]] && grep -q '^LDAP_CA=' "$CONFIG/env"; then
-        sed -i "s|^LDAP_CA=.*|LDAP_CA=$LDAP_CA_PEM|" "$CONFIG/env"
-        alerte "LDAP_CA a été repointée sur la forme PEM dans $CONFIG/env."
-      fi
-      LDAP_CA="$LDAP_CA_PEM"
-    fi
-    if ! openssl x509 -in "$LDAP_CA" -noout -checkend 0 >/dev/null 2>&1; then
-      echec "LDAP_CA (« $LDAP_CA ») a EXPIRÉ le $(openssl x509 -in "$LDAP_CA" -noout -enddate 2>/dev/null | cut -d= -f2).
-      Toute connexion LDAPS échouera. Demandez la chaîne à jour à l'équipe PKI du client."
-    fi
-    # Trente jours : le délai qu'il faut pour obtenir une chaîne renouvelée d'une
-    # équipe PKI interne. Averti, pas refusé — la journée d'installation n'est pas
-    # le moment de bloquer sur un certificat encore valide.
-    if ! openssl x509 -in "$LDAP_CA" -noout -checkend 2592000 >/dev/null 2>&1; then
-      alerte "LDAP_CA expire le $(openssl x509 -in "$LDAP_CA" -noout -enddate | cut -d= -f2) — moins de 30 jours."
-      alerte "À son expiration, PLUS AUCUN utilisateur ne pourra se connecter."
-    fi
-    succes "LDAP_CA : PEM valide, lisible par $UTILISATEUR ($(openssl x509 -in "$LDAP_CA" -noout -subject | sed 's/^subject=//' | cut -c1-60))"
   fi
 
-  # ---- Le contrôleur de domaine répond-il, et sa chaîne se vérifie-t-elle ? --
+  # ---- L'ENCODAGE, ET NON L'EXTENSION -------------------------------------
+  # Mesuré sur les quatre formes qu'une PKI d'entreprise délivre : un .cer BINAIRE passait
+  # l'ancien contrôle en affichant « PEM valide », et Node le refusait ensuite
+  # (UNABLE_TO_VERIFY_LEAF_SIGNATURE) — personne ne pouvait se connecter. L'installateur
+  # CONVERTIT au lieu de refuser : l'exploitant dépose ce que son ADCS lui donne.
+  LDAP_CA_ENCODAGE=""
+  if grep -q 'BEGIN CERTIFICATE' "$LDAP_CA" 2>/dev/null; then
+    LDAP_CA_ENCODAGE="PEM"
+  elif openssl x509 -inform DER -in "$LDAP_CA" -noout >/dev/null 2>&1; then
+    LDAP_CA_ENCODAGE="DER"
+  elif openssl pkcs7 -print_certs -in "$LDAP_CA" -noout >/dev/null 2>&1 \
+    || openssl pkcs7 -inform DER -print_certs -in "$LDAP_CA" -noout >/dev/null 2>&1; then
+    LDAP_CA_ENCODAGE="PKCS7"
+  else
+    echec "LDAP_CA (« $LDAP_CA ») n'est lisible par OpenSSL sous AUCUNE des trois formes
+      qu'une PKI délivre : ni PEM (texte, « -----BEGIN CERTIFICATE----- »), ni DER (binaire),
+      ni PKCS#7 (.p7b). ⚠️ L'EXTENSION NE COMPTE PAS — un .cer peut être l'un ou l'autre.
+      Vérifiez ce que vous avez :  file '$LDAP_CA'
+      Un .pfx/.p12 n'est PAS le bon fichier : il contient une clé privée. Il faut le
+      certificat de l'AC (ou celui du DC s'il est autosigné), en export PUBLIC. Ou effacez
+      LDAP_CA de $FICHIER_CONFIG et relancez : l'installateur capturera lui-même ce que le
+      contrôleur présente."
+  fi
+  if [[ "$LDAP_CA_ENCODAGE" != "PEM" ]]; then
+    LDAP_CA_PEM="$CONFIG/ca-active-directory.pem"
+    info "LDAP_CA est au format $LDAP_CA_ENCODAGE : conversion en PEM (Node n'accepte que le PEM)"
+    if [[ "$LDAP_CA_ENCODAGE" == "DER" ]]; then
+      openssl x509 -inform DER -in "$LDAP_CA" -out "$LDAP_CA_PEM.tmp" 2>/dev/null \
+        || echec "Conversion DER → PEM impossible sur « $LDAP_CA »."
+    else
+      { openssl pkcs7 -print_certs -in "$LDAP_CA" 2>/dev/null \
+        || openssl pkcs7 -inform DER -print_certs -in "$LDAP_CA" 2>/dev/null; } \
+        | grep -v '^subject=\|^issuer=\|^$' > "$LDAP_CA_PEM.tmp" \
+        || echec "Conversion PKCS#7 → PEM impossible sur « $LDAP_CA »."
+    fi
+    grep -q 'BEGIN CERTIFICATE' "$LDAP_CA_PEM.tmp" 2>/dev/null \
+      || { rm -f "$LDAP_CA_PEM.tmp"; echec "La conversion de « $LDAP_CA » n'a produit aucun
+      certificat. Le fichier contient-il vraiment un certificat, et non une clé privée ?"; }
+    install -o root -g "$UTILISATEUR" -m 0640 "$LDAP_CA_PEM.tmp" "$LDAP_CA_PEM"
+    rm -f "$LDAP_CA_PEM.tmp"
+    succes "LDAP_CA convertie ($LDAP_CA_ENCODAGE → PEM, $(grep -c 'BEGIN CERTIFICATE' "$LDAP_CA_PEM") certificat(s)) : $LDAP_CA_PEM"
+    if grep -q '^LDAP_CA=' "$FICHIER_CONFIG" 2>/dev/null; then
+      sed -i "s|^LDAP_CA=.*|LDAP_CA=$LDAP_CA_PEM|" "$FICHIER_CONFIG"
+      alerte "LDAP_CA a été repointée sur la forme PEM dans $FICHIER_CONFIG."
+    fi
+    LDAP_CA="$LDAP_CA_PEM"
+  fi
+
+  if ! openssl x509 -in "$LDAP_CA" -noout -checkend 0 >/dev/null 2>&1; then
+    echec "LDAP_CA (« $LDAP_CA ») a EXPIRÉ le $(openssl x509 -in "$LDAP_CA" -noout -enddate 2>/dev/null | cut -d= -f2).
+      Toute connexion LDAPS échouera. Demandez le certificat à jour à l'équipe qui exploite
+      l'annuaire — ou, s'il s'agit du certificat du DC lui-même, faites-le renouveler."
+  fi
+  # Trente jours : le délai qu'il faut pour obtenir un certificat renouvelé. Averti, pas
+  # refusé — la journée d'installation n'est pas le moment de bloquer sur un certificat
+  # encore valide.
+  if ! openssl x509 -in "$LDAP_CA" -noout -checkend 2592000 >/dev/null 2>&1; then
+    alerte "LDAP_CA expire dans moins de 30 jours ($(openssl x509 -in "$LDAP_CA" -noout -enddate 2>/dev/null | cut -d= -f2)) : demandez son renouvellement maintenant."
+  fi
+  succes "LDAP_CA : PEM, lisible par $UTILISATEUR ($(openssl x509 -in "$LDAP_CA" -noout -subject 2>/dev/null | sed 's/^subject=//'))"
+
+  # ---- Le contrôleur répond-il, et NODE le reconnaît-il ? -------------------
   #
-  # C'est le seul contrôle qui prouve quelque chose : le reste ne fait que lire
-  # des fichiers. `openssl s_client` est employé plutôt qu'un client LDAP parce
-  # qu'aucun n'est installé — et parce que ce qui est en jeu ici est la CHAÎNE DE
-  # CERTIFICATION, pas une liaison authentifiée. Le compte de service, lui, sera
-  # éprouvé au premier utilisateur.
-  #
-  # `timeout` est indispensable : `openssl s_client` attend indéfiniment sur un
-  # port filtré, et une installation qui se fige est pire qu'une qui refuse.
+  # L'ordre des trois questions compte : *le nom se résout-il ?* (sinon rien ne suit),
+  # *que dit openssl ?* (pour le détail), *que dit NODE ?* (pour la décision).
   if ! ADRESSES_LDAP="$(getent ahosts "$LDAP_HOTE" 2>/dev/null | awk '{print $1}' | sort -u)" \
      || [[ -z "$ADRESSES_LDAP" ]]; then
     ADRESSES_LDAP=""
@@ -3080,107 +3127,101 @@ else
     alerte "joindre le contrôleur de domaine : vérifiez /etc/resolv.conf et le DNS de la VM."
   else
     succes "$LDAP_HOTE se résout en : $(printf '%s' "$ADRESSES_LDAP" | tr '\n' ' ')"
-    SORTIE_TLS=""
-    if [[ -n "$LDAP_CA" ]]; then
-      SORTIE_TLS="$(timeout 15 openssl s_client -connect "$LDAP_HOTE:$LDAP_PORT" \
-                      -servername "$LDAP_HOTE" -CAfile "$LDAP_CA" -verify_return_error \
-                      -brief </dev/null 2>&1 || true)"
-    else
-      SORTIE_TLS="$(timeout 15 openssl s_client -connect "$LDAP_HOTE:$LDAP_PORT" \
-                      -servername "$LDAP_HOTE" -verify_return_error \
-                      -brief </dev/null 2>&1 || true)"
-    fi
-    if printf '%s' "$SORTIE_TLS" | grep -q 'Verification: OK'; then
-      succes "LDAPS : $LDAP_HOTE:$LDAP_PORT répond, et sa chaîne se vérifie contre ${LDAP_CA:-le magasin du système}"
-    elif printf '%s' "$SORTIE_TLS" | grep -qi 'verify error\|Verification error'; then
-      while IFS= read -r l; do [[ -n "$l" ]] && alerte "openssl : $l"; done \
-        <<< "$(printf '%s' "$SORTIE_TLS" | grep -i 'verif' | head -n3)"
 
-      # 🛑 **UNE CLÉ « TROP FAIBLE » MASQUE TOUTE AUTRE CAUSE, ET CE BLOC A PRIS L'UNE
-      # POUR L'AUTRE CHEZ UN CLIENT LE 25/09/2026.** Il rendait UN SEUL message pour
-      # toutes les erreurs de vérification — celui de l'émetteur introuvable — et il
-      # envoyait l'exploitant demander des AC intermédiaires dont il n'avait aucun besoin,
-      # alors qu'openssl avait écrit `verify error:num=66:EE certificate key too weak`
-      # trois lignes plus haut. *Un message qui nomme une cause que la mesure contredit
-      # coûte plus cher que pas de message du tout : il envoie chercher ailleurs.*
-      #
-      # ⚠️ **Mesuré, et c'est ce qui rend le cas retors** : `num=66` sort AVANT le
-      # contrôle de chaîne et le remplace. Avec une AC volontairement ÉTRANGÈRE, openssl
-      # rend le MÊME `num=66` — on ne peut donc pas savoir si la chaîne est saine sans
-      # revérifier plus bas. Relevé sur un certificat témoin de 1024 bits :
-      #
-      #   AC juste  + clé faible, niveau par défaut → num=66            (trompeur)
-      #   AC juste  + clé faible, -auth_level 1     → Verification: OK  → RÉSERVE
-      #   AC fausse + clé faible, niveau par défaut → num=66            (le même !)
-      #   AC fausse + clé faible, -auth_level 1     → num=20 émetteur   → BLOQUANT
-      #
-      # C'est donc la SECONDE mesure qui tranche, jamais la première.
-      if printf '%s' "$SORTIE_TLS" | grep -qi 'too weak'; then
-        if [[ -n "$LDAP_CA" ]]; then
-          SORTIE_TLS_BAS="$(timeout 15 openssl s_client -connect "$LDAP_HOTE:$LDAP_PORT" \
-                              -servername "$LDAP_HOTE" -CAfile "$LDAP_CA" \
-                              -verify_return_error -auth_level 1 -brief </dev/null 2>&1 || true)"
-        else
-          SORTIE_TLS_BAS="$(timeout 15 openssl s_client -connect "$LDAP_HOTE:$LDAP_PORT" \
-                              -servername "$LDAP_HOTE" -verify_return_error -auth_level 1 \
-                              -brief </dev/null 2>&1 || true)"
+    # openssl : pour le DÉTAIL. Sa première ligne « verify error » est ce qu'on citera.
+    SORTIE_TLS="$(timeout 15 openssl s_client -connect "$LDAP_HOTE:$LDAP_PORT" \
+                    -servername "$LDAP_HOTE" -CAfile "$LDAP_CA" -verify_return_error \
+                    -brief </dev/null 2>&1 || true)"
+    MOTIF_OPENSSL="$(printf '%s' "$SORTIE_TLS" | grep -i 'verify error' | head -n1)"
+
+    # Node : pour la DÉCISION — exactement ce que fera le service à la première connexion.
+    SONDE_NODE="$(mktemp --suffix=.cjs)"
+    cat > "$SONDE_NODE" <<'JS'
+const tls = require('node:tls'); const fs = require('node:fs');
+const [hote, port, ca] = process.argv.slice(2);
+const RESEAU = /^E[A-Z]+$/;
+const garde = setTimeout(() => { console.log('DELAI'); process.exit(4); }, 15000);
+const s = tls.connect({ host: hote, port: Number(port), servername: hote, ca: fs.readFileSync(ca) }, () => {
+  clearTimeout(garde);
+  const c = s.getPeerCertificate();
+  const emetteur = c && c.issuer ? Object.entries(c.issuer).map(([k, v]) => `${k}=${v}`).join(', ') : '?';
+  console.log(`AUTORISE|${c.bits || '?'}|${emetteur}`);
+  s.end(); process.exit(0);
+});
+s.on('error', (e) => {
+  clearTimeout(garde);
+  const code = e.code || e.message;
+  console.log((RESEAU.test(code) ? 'RESEAU|' : 'REFUSE|') + code);
+  process.exit(RESEAU.test(code) ? 4 : 2);
+});
+JS
+    VERDICT_NODE="$(timeout 20 node "$SONDE_NODE" "$LDAP_HOTE" "$LDAP_PORT" "$LDAP_CA" 2>/dev/null || true)"
+    rm -f "$SONDE_NODE"
+    ETAT_NODE="${VERDICT_NODE%%|*}"
+    RESTE_NODE="${VERDICT_NODE#*|}"
+
+    case "$ETAT_NODE" in
+      AUTORISE)
+        BITS_DC="${RESTE_NODE%%|*}"
+        succes "LDAPS : $LDAP_HOTE:$LDAP_PORT répond, et NODE le reconnaît avec $LDAP_CA (clé $BITS_DC bits)"
+        if [[ $LDAP_CA_EPINGLEE -eq 1 ]]; then
+          alerte "Rappel : ce certificat a été épinglé à l'installation. Vérifiez l'empreinte."
         fi
-
-        if printf '%s' "$SORTIE_TLS_BAS" | grep -q 'Verification: OK'; then
-          # La chaîne EST bonne. Ce qui bloque openssl est le niveau de sécurité du
-          # système (Debian : @SECLEVEL=2, donc RSA 2048 minimum), pas la PKI.
-          reserve "le certificat LDAPS de $LDAP_HOTE porte une clé SOUS le minimum du système"
-          alerte "La chaîne, elle, SE VÉRIFIE bien contre ${LDAP_CA:-le magasin du système} :"
-          alerte "revérifiée à « -auth_level 1 », openssl rend « Verification: OK ». Il n'y a"
-          alerte "donc AUCUNE AC intermédiaire à demander — c'est la TAILLE DE LA CLÉ du"
-          alerte "certificat du contrôleur qui est en cause (Debian exige RSA 2048 au moins)."
-          alerte "Relevez-la :"
-          alerte "  openssl s_client -connect $LDAP_HOTE:$LDAP_PORT -showcerts </dev/null 2>/dev/null \\"
-          alerte "    | openssl x509 -noout -text | grep -E 'Public-Key|Signature Algorithm'"
-          alerte "⚠️ L'installation CONTINUE, et les connexions d'utilisateurs fonctionneront :"
-          alerte "Node ne lit pas /etc/ssl/openssl.cnf et accepte ce certificat (mesuré)."
-          alerte "🛑 Mais ce n'est PAS un feu vert. Faites réémettre le certificat du"
-          alerte "contrôleur avec une clé de 2048 bits au moins (gabarit ADCS + réenrôlement,"
-          alerte "sans redémarrage du DC). Deux raisons, et la seconde est la plus sérieuse :"
-          alerte "  · 1024 bits est déprécié depuis 2013, sur le canal qui transporte les"
-          alerte "    mots de passe de vos utilisateurs ;"
+        if printf '%s' "$SORTIE_TLS" | grep -qi 'too weak'; then
+          # openssl refuse ce que Node accepte : le niveau de sécurité du SYSTÈME (Debian :
+          # @SECLEVEL=2, RSA 2048 minimum) est plus exigeant que celui de Node.
+          reserve "le certificat LDAPS de $LDAP_HOTE porte une clé ($BITS_DC bits) SOUS le minimum du système"
+          alerte "Les connexions fonctionneront : Node ne lit pas /etc/ssl/openssl.cnf et accepte"
+          alerte "ce certificat. 🛑 Mais faites-le réémettre avec une clé de 2048 bits au moins :"
+          alerte "  · 1024 bits est déprécié depuis 2013, sur le canal des mots de passe ;"
           alerte "  · le jour où Node relèvera son niveau par défaut, TOUTES les connexions"
           alerte "    tomberaient d'un coup, après une mise à jour sans rapport apparent."
-        else
-          # La faiblesse de clé cachait une vraie rupture de chaîne : c'est la seconde
-          # mesure qui la nomme, et c'est elle qu'on cite.
-          MOTIF_REEL="$(printf '%s' "$SORTIE_TLS_BAS" | grep -i 'verify error' | head -n1)"
-          echec "Le certificat de $LDAP_HOTE:$LDAP_PORT NE SE VÉRIFIE PAS contre ${LDAP_CA:-le
-      magasin du système}, et sa clé est EN OUTRE sous le minimum du système. Revérifié à
-      « -auth_level 1 », openssl dit : ${MOTIF_REEL:-<motif non relevé>}. Toute connexion
-      d'utilisateur échouera. Si le motif parle d'émetteur (« unable to get local issuer
-      certificate »), LDAP_CA n'est pas l'autorité qui a émis ce certificat : demandez la
-      CHAÎNE COMPLÈTE de la PKI interne (AC racine + AC intermédiaires) à l'équipe qui
-      exploite l'ADCS. Et faites réémettre le certificat du contrôleur en 2048 bits."
         fi
-      else
-        # Toute autre cause : émetteur introuvable, nom qui ne correspond pas, expiration.
-        # ⚠️ Le message CITE le motif relevé au lieu d'en supposer un — c'est tout l'objet
-        # de la correction du 25/09/2026.
-        MOTIF_TLS="$(printf '%s' "$SORTIE_TLS" | grep -i 'verify error' | head -n1)"
-        echec "Le certificat de $LDAP_HOTE:$LDAP_PORT NE SE VÉRIFIE PAS contre ${LDAP_CA:-le
-      magasin du système}. openssl dit : ${MOTIF_TLS:-<motif non relevé>}. Toute connexion
-      d'utilisateur échouera, et le message côté service ne dira pas pourquoi. Selon le
-      motif ci-dessus : « unable to get local issuer certificate » (num=20) signifie que
-      LDAP_CA n'est pas l'autorité qui a émis ce certificat — demandez la CHAÎNE COMPLÈTE
-      de la PKI interne (AC racine + AC intermédiaires) à l'équipe qui exploite l'ADCS ;
-      « Hostname mismatch » (num=62) signifie que LDAP_URL ne nomme pas le contrôleur tel
-      que son certificat le désigne ; « certificate has expired » (num=10) se règle par un
-      réenrôlement."
-      fi
-    else
-      reserve "$LDAP_HOTE:$LDAP_PORT n'a pas répondu en 15 s : la chaîne de certification LDAPS"
-      alerte "n'a donc PAS été éprouvée (constat Q-75, même figure). Le port est-il filtré, ou"
-      alerte "le contrôleur injoignable depuis cette VM ? Vérifier à la main :"
-      alerte "  openssl s_client -connect $LDAP_HOTE:$LDAP_PORT -CAfile ${LDAP_CA:-<AC interne>} -brief"
-    fi
+        ;;
+      REFUSE)
+        alerte "Node : $RESTE_NODE"
+        [[ -n "$MOTIF_OPENSSL" ]] && alerte "openssl : $MOTIF_OPENSSL"
+        case "$RESTE_NODE" in
+          UNABLE_TO_VERIFY_LEAF_SIGNATURE|UNABLE_TO_GET_ISSUER_CERT*|CERT_UNTRUSTED|SELF_SIGNED_CERT_IN_CHAIN)
+            EMETTEUR_AFFICHE="${LDAP_EMETTEUR_LU:-$(timeout 10 openssl s_client -connect "$LDAP_HOTE:$LDAP_PORT" -servername "$LDAP_HOTE" </dev/null 2>/dev/null | openssl x509 -noout -issuer 2>/dev/null | sed 's/^issuer=//')}"
+            if [[ $LDAP_CA_EPINGLEE -eq 1 ]]; then
+              echec "Ce que le contrôleur PRÉSENTE ne suffit pas à le reconnaître : son certificat
+      est émis par « ${EMETTEUR_AFFICHE:-?} », et il ne présente PAS cette autorité. Node le
+      refuse ($RESTE_NODE) — le service ferait pareil à la première connexion. Il faut le
+      certificat de CETTE autorité (export public, PEM/DER/.p7b, l'extension n'importe pas) :
+      demandez-le à l'équipe AD, déposez-le à $LDAP_CA (en remplaçant ce qui a été capturé),
+      et relancez. ⚠️ Si l'émetteur est une AC INTERMÉDIAIRE, il faut aussi sa racine :
+      concaténez les deux dans le même fichier."
+            else
+              echec "Le certificat de $LDAP_HOTE:$LDAP_PORT NE SE VÉRIFIE PAS avec $LDAP_CA : Node le
+      refuse ($RESTE_NODE), et le service ferait pareil à la première connexion. Le
+      contrôleur présente un certificat émis par « ${EMETTEUR_AFFICHE:-?} » ; le fichier
+      LDAP_CA doit contenir CETTE autorité (et sa racine si c'est une intermédiaire).
+      Demandez-la à l'équipe AD — ou effacez LDAP_CA de $FICHIER_CONFIG et relancez :
+      l'installateur capturera ce que le contrôleur présente et vous dira si ça suffit."
+            fi ;;
+          ERR_TLS_CERT_ALTNAME_INVALID)
+            echec "Le certificat de $LDAP_HOTE:$LDAP_PORT ne porte PAS ce nom : LDAP_URL nomme le
+      contrôleur autrement que son certificat ne le désigne (Node : $RESTE_NODE). Employez
+      dans LDAP_URL le nom exact du certificat (openssl s_client … | openssl x509 -noout
+      -ext subjectAltName), jamais une adresse IP." ;;
+          CERT_HAS_EXPIRED)
+            echec "Le certificat que présente $LDAP_HOTE:$LDAP_PORT a EXPIRÉ (Node : $RESTE_NODE).
+      C'est celui du CONTRÔLEUR, pas LDAP_CA : faites-le réenrôler côté AD." ;;
+          *)
+            echec "Node refuse la liaison LDAPS vers $LDAP_HOTE:$LDAP_PORT avec $LDAP_CA :
+      $RESTE_NODE${MOTIF_OPENSSL:+ (openssl : $MOTIF_OPENSSL)}. Le service ferait pareil à la
+      première connexion. Vérifiez à la main :
+        openssl s_client -connect $LDAP_HOTE:$LDAP_PORT -CAfile $LDAP_CA -brief </dev/null" ;;
+        esac ;;
+      *)
+        reserve "$LDAP_HOTE:$LDAP_PORT n'a pas répondu à la sonde (${VERDICT_NODE:-aucune réponse en 15 s})"
+        alerte "La liaison LDAPS n'a donc PAS été éprouvée (constat Q-75, même figure). Le port"
+        alerte "est-il filtré, ou le contrôleur injoignable depuis cette VM ? Vérifier à la main :"
+        alerte "  openssl s_client -connect $LDAP_HOTE:$LDAP_PORT -CAfile $LDAP_CA -brief </dev/null"
+        ;;
+    esac
   fi
-
   # ---- Ce que l'unité systemd autorise à sortir -----------------------------
   #
   # ⚠️ CE CONTRÔLE EST LA RAISON D'ÊTRE DE CE BLOC. `IPAddressDeny=any` +
