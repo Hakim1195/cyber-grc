@@ -8,7 +8,8 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
-> **État mesuré le 24/09/2026 au soir**, après le registre de l'**article 30 §2** du RGPD,
+> **État mesuré le 25/09/2026**, après la liaison Active Directory dans le panneau
+> d'administration,
 > sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
 > **PostgreSQL 17.11**) : **73 migrations**, **99 tables**, **395 politiques**,
@@ -32,8 +33,12 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2591 essais, 2591 passés, 0 échec** — 2 318 sans navigateur et 273 avec —,
-> **quarante et une** familles. ⚠️ **+45 le 24/09/2026 au soir** : le registre de l'article
+> `npm test` → **2594 essais, 2594 passés, 0 échec** — 2 321 sans navigateur et 273 avec —,
+> **quarante et une** familles. ⚠️ **+3 le 25/09/2026** : le §12 de `habilitations` (69 → 72),
+> qui mesure que l'état de la liaison à l'annuaire ne rend **aucun secret** — sur le corps
+> sérialisé **entier**, pas champ par champ, pour qu'une clé ajoutée demain fasse rougir le
+> banc au lieu de passer entre les mailles d'une liste de noms. ⚠️ **+45 le 24/09/2026 au
+> soir** : le registre de l'article
 > 30 §2 apporte `test/sous-traitance/` (**23**, la 41ᵉ famille), porte `base` de 358 à
 > **377** (les dix-neuf mutations des deux garde-fous neufs) et `navigateur` de 270 à
 > **273**. 🛑 **Ces trois essais de navigateur n'existent que parce qu'un CLIC a trouvé ce
