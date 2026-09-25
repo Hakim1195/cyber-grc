@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2597 essais, quarante et une familles (voir plus bas)
+npm test                           # 2598 essais, quarante et une familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -786,12 +786,16 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 25/09/2026 au soir, après la SIXIÈME passe de documentation** — huit faussetés
-trouvées sous un banc de documentation entièrement vert, dont `SCHEMA_VERSION = 24` dans le
-fichier que lit chaque session, et un tableau de référence qui avait dérivé de quinze
-collections sur cinq lots :
+**Mesuré au 25/09/2026 au soir, après la SIXIÈME passe de documentation et la boucle infinie
+du tableau de bord** — huit faussetés trouvées sous un banc de documentation entièrement vert
+(dont `SCHEMA_VERSION = 24` dans le fichier que lit chaque session, et un tableau de référence
+qui avait dérivé de quinze collections sur cinq lots), plus un défaut de production signalé par
+l'utilisateur : **`JSON.stringify` n'est pas un test d'égalité pour une donnée qui traverse
+`jsonb`** — PostgreSQL réécrit l'ordre des clés, la comparaison ne convergeait jamais, et le
+produit réécrivait son instantané quotidien **toutes les trois secondes**, journal d'audit
+compris :
 `npm test` →
-**2597 essais, 2597 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**2598 essais, 2598 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **71 garde-fous consignés**, **73 migrations**,
 **99 tables**, **608 décisions** au registre de l'article 30 ; publication → **89
@@ -969,16 +973,16 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`03bf1de`** — la liaison Active Directory dans le panneau d'administration, et le déroulé de première mise en service. 25/09/2026, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ douze fois**, dont une où il désignait une révision cinquante-six commits en arrière (constat **Q-219**). Le garde-fou juge le document contre **la révision que le document nomme**, jamais contre l'arbre de travail. |
-| État de l'arbre | **arbre de `03bf1de`**, à l'octet près. Compte **RELEVÉ famille par famille** — quarante et un répertoires joués séparément, somme confrontée au total du banc complet : **2 594 des deux côtés**. Aucune famille neuve ; `habilitations` 69 → 72 (le §12, qui mesure que l'état de la liaison ne rend **aucun secret** — sur le corps sérialisé ENTIER, pas champ par champ). ⚠️ **Et un résidu de compilation trouvé par un garde-fou** : `dist/sous_traitance/` survivait au renommage de la veille, 88 sources pour 89 fichiers compilés — *« `dist/` garde un fichier dont la source a disparu, auquel cas le serveur mis à l'épreuve n'est plus tout à fait celui du dépôt »*. |
+| Révision mesurée | **`ANCRE`** — la sixième passe de documentation (huit faussetés) et la **boucle infinie** du tableau de bord : `JSON.stringify` n'est pas un test d'égalité pour une donnée qui traverse `jsonb`. 25/09/2026 au soir, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ treize fois**, dont une où il désignait une révision cinquante-six commits en arrière (constat **Q-219**), et une où il gardait un gabarit **non substitué** — parce que le garde ne lit que CETTE ligne, pas celle du dessous. |
+| État de l'arbre | **arbre de `ANCRE`**, à l'octet près. Compte **RELEVÉ famille par famille** — quarante et un répertoires, somme confrontée au total : **2 598 des deux côtés**. Aucune famille neuve ; `documentation` 36 → 39 (le tableau des collections du `DATA_MODEL` §1.5 est enfin GARDÉ — il avait dérivé de quinze collections sur cinq lots), `navigateur` 273 → 274 (la boucle du tableau de bord, essai joué contre la version fautive). |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 | ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2597 · pass 2597 · fail 0
-                                                   base 377 · api 302 · navigateur 273
+npm test                                         → tests 2598 · pass 2598 · fail 0
+                                                   base 377 · api 302 · navigateur 274
                                                    pieces 142 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73

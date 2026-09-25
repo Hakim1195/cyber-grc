@@ -160,7 +160,67 @@ des verdicts antérieurs, il n'en établit pas.
 
 ---
 
-### ▶ OÙ REPRENDRE — au 25/09/2026, LA PREMIÈRE MISE EN SERVICE SE PRÉPARE
+### ▶ OÙ REPRENDRE — au 25/09/2026 au soir
+
+# 🛑 **UN DÉFAUT DE PRODUCTION, ET LA SIXIÈME PASSE DE DOCUMENTATION.**
+
+## 🛑 LA BOUCLE INFINIE — `JSON.stringify` n'est pas un test d'égalité
+
+L'utilisateur a signalé une fenêtre *« 1 modification(s) reçue(s) d'un autre utilisateur »*
+qui revenait **toutes les trois secondes**. La cause n'était **pas** dans le sondage :
+
+`recordDailySnapshot()` comparait `JSON.stringify(ancien)` à `JSON.stringify(neuf)`. Or
+`metrics` est en **`jsonb`**, et PostgreSQL **réécrit l'ordre des clés** — par longueur, puis
+par octets. `{ conformite, maturite, expo, … }` revient `{ expo, maturite, avancement,
+conformite, … }` : mêmes valeurs, **deux chaînes différentes**, comparaison qui ne converge
+JAMAIS. D'où : réécriture → le sondage voit une modification → fenêtre → observateurs
+prévenus → le tableau de bord se rend → réécriture.
+
+🛑 **Ce qui rend le défaut sérieux n'est pas la fenêtre, c'est l'écriture** : version montée à
+**54**, et **270 entrées de journal d'audit** pour une seule ligne — *en ajout seul, conservées
+trois ans, pièce d'audit*. Classe du constat **Q-301**. Elles ne s'effacent pas.
+
+⚠️ **`js/core/sync.js` connaissait le piège** : `canonique()` **trie ses clés**, et c'est pour
+cela que le verrouillage optimiste ne bouclait pas. Le défaut vivait dans le seul autre endroit
+du produit qui compare deux objets. Balayage fait : c'était le **seul**
+`JSON.stringify(…) === JSON.stringify(…)` du frontend.
+
+**Vérifié après déploiement** : version figée, trois sondages consécutifs vides. Classe fermée
+par un essai **joué contre la version fautive**.
+
+## ⚠️ HUIT FAUSSETÉS, SIXIÈME PASSE DE DOCUMENTATION
+
+La question *« les docs sont à jour ? »* a sorti, pour la sixième fois, des faussetés **sous un
+banc de documentation entièrement vert** :
+
+1. 🛑 **`CLAUDE.md` — le fichier lu au démarrage de CHAQUE session — annonçait
+   `SCHEMA_VERSION = 24`** quand la vérité est **30**. Six montées de retard, **dans le
+   paragraphe même qui explique que la valeur est gardée mécaniquement**. Ce fichier est un
+   **cinquième endroit** où le nombre est écrit, et le garde n'en connaît que quatre.
+   ⚠️ **Non fermé à dessein** : la bonne réponse est peut-être d'y **cesser d'écrire le
+   nombre** — arbitrage à trancher quand la version montera. Il annonçait aussi 49 modules
+   pour 51.
+2. `GUIDE_UTILISATEUR.md` disait qu'**aucun écran** ne crée ni ne fait sortir une filiale —
+   faux depuis le 24/09. ⚠️ Et ce bloc **avait déjà été amendé le 22/09** en y laissant cette
+   seconde affirmation : *amender une phrase sans regarder celle d'à côté, c'est déplacer la
+   fausseté d'une ligne.*
+3. `DATA_MODEL.md` §1.5 annonçait **46 collections** et n'en nommait que **37** pour **51**
+   réelles : **quinze manquaient**, sur cinq lots. ✅ **Classe fermée** — trois essais partent
+   de `ARRAY_FIELDS` et exigent la complétude, l'absence d'intrus, et le compte. Deux
+   mutations, deux morsures.
+4. le guide annonçait **quatre vues** aux Habilitations, il y en a **cinq** ; `ui.js` en
+   commentait **trois** juste au-dessus de la liste qui en porte cinq.
+5. trois de moi, des vingt-quatre heures précédentes : le gabarit `RÉANCRAGE` non substitué au
+   §8, `INSTALLER.md` promettant « aucun renvoi » deux lignes au-dessus d'un renvoi, et une
+   ligne du §1.5 qui n'est pas une collection.
+6. et une convention que je n'avais pas respectée : **la colonne « Où » d'un guide nomme un
+   ÉCRAN, pas un bouton** — le garde-fou `guides-nomment-le-reel` l'a dit.
+
+**⇒ LE GESTE SUIVANT : l'installation chez le client** (`docs/INSTALLATION_ENTREPRISE.md`,
+déroulé en main), **puis le rejeu de l'indicateur** — dû depuis le 21/09, quatre lots plus tard
+—, **puis l'`ULTRAREVIEW`**, à l'utilisateur.
+
+### ▶ Historique — au 25/09/2026 au matin : LA PREMIÈRE MISE EN SERVICE SE PRÉPARE
 
 # 🛑 **L'UTILISATEUR VA INSTALLER CHEZ LE CLIENT. Le déroulé est écrit.**
 

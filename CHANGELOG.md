@@ -44,7 +44,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2597 essais, 2597 passés, 0 échec** — 2 324 sans navigateur et 273 avec —,
+> `npm test` → **2598 essais, 2598 passés, 0 échec** — 2 324 sans navigateur et 274 avec —,
 > **quarante et une** familles. ⚠️ **+3 le 25/09/2026 au soir** : les trois essais qui gardent
 > enfin le **tableau des collections** de `docs/DATA_MODEL.md` §1.5 — il avait dérivé de
 > **quinze collections sur cinq lots** parce que rien ne le mesurait. ⚠️ **+3 le 25/09/2026** : le §12 de `habilitations` (69 → 72),
@@ -109,6 +109,70 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### 🛑 « UNE FENÊTRE QUI SE RÉPÈTE À L'INFINI » — `JSON.stringify` n'est pas un test d'égalité (25/09/2026)
+
+**Défaut de production signalé par l'utilisateur** : la fenêtre *« 1 modification(s) reçue(s)
+d'un autre utilisateur »* revenait toutes les trois secondes, sans fin.
+
+🛑 **LA CAUSE N'ÉTAIT PAS DANS LE SONDAGE, ELLE ÉTAIT DANS UNE COMPARAISON.**
+`DataStore.recordDailySnapshot()` décidait de réécrire l'instantané quotidien du tableau de bord
+en comparant `JSON.stringify(ancien)` à `JSON.stringify(neuf)`. Or `metrics` est stocké en
+**`jsonb`**, et **PostgreSQL ne conserve pas l'ordre des clés** : il le réécrit dans son ordre
+canonique — par **longueur de clé**, puis par octets.
+
+```
+le navigateur produit : { conformite, maturite, expo, risques_crit, actions_retard, … }
+la base rend          : { expo, maturite, avancement, conformite, risques_crit, … }
+```
+
+Mêmes valeurs, **deux chaînes différentes**. La comparaison ne pouvait **jamais** converger
+après un aller-retour.
+
+#### La boucle, et elle ne ressemblait pas à ce défaut-là
+
+1. le tableau de bord se rend → la comparaison échoue → il **réécrit** la ligne ;
+2. l'écriture monte la `version` → le sondage voit une modification ;
+3. il l'annonce *« reçue d'un AUTRE utilisateur »* — alors que c'est notre propre écriture —
+   puis prévient les observateurs ;
+4. le tableau de bord se rend de nouveau. **Retour au 1.**
+
+**Une fenêtre toutes les trois secondes, ET UNE ÉCRITURE toutes les trois secondes.** Mesuré
+sur la recette : la version de la ligne du jour était montée à **54**, et le journal d'audit
+porte **270 entrées** pour cette seule ligne.
+
+🛑 **C'est cette dernière mesure qui rend le défaut sérieux, pas la fenêtre.** Le journal est
+**en ajout seul, conservé trois ans, et sert de preuve en audit** : ce sont 270 entrées que
+personne n'a voulues, **indélébiles**, dans la pièce qu'on présente à un contrôle. C'est la
+classe du constat **Q-301** — *« l'entrée porte sa propre réfutation »* — sous une autre forme.
+⚠️ **Elles ne sont pas effacées et ne peuvent pas l'être** : c'est le dessein du journal. Elles
+restent comme trace du défaut.
+
+#### Ce qui rend ce défaut instructif
+
+⚠️ **`js/core/sync.js` CONNAISSAIT le piège** : sa fonction `canonique()` **trie ses clés**
+(`Object.keys(valeur).sort()`), et c'est exactement pourquoi le verrouillage optimiste, lui, ne
+bouclait pas. Le défaut vivait dans le **seul autre endroit du produit qui compare deux
+objets** — et il le faisait par sérialisation. Balayage fait : c'était le **seul**
+`JSON.stringify(...) === JSON.stringify(...)` de tout le frontend.
+
+**La leçon : `JSON.stringify` n'est pas un test d'égalité pour une donnée qui traverse
+`jsonb`.** La comparaison porte désormais sur les **valeurs**, et sur l'**union** des clés —
+comparer celles d'un seul côté laisserait passer un indicateur **neuf**, c'est-à-dire
+précisément le cas où l'on veut réécrire.
+
+#### Mesuré
+
+Vérifié sur la recette après déploiement : la version de la ligne est **figée**, `modifie_le` ne
+bouge plus, et **trois sondages consécutifs ne rendent plus rien**. La classe est fermée par un
+essai de `test/navigateur/pieges-q64.test.mjs` qui appelle deux fois l'instantané avec les mêmes
+valeurs **dans l'ordre de clés de `jsonb`** — et qui a été **joué contre la version fautive**
+avant d'être gardé : sans cette morsure, il serait vert des deux côtés.
+
+⚠️ **Et un geste que le produit ne peut pas faire pour l'utilisateur** : un onglet déjà ouvert
+tourne encore sur l'ancien `datastore.js` et continue d'écrire jusqu'au rechargement. Le jeton
+de version d'`index.html` force le rechargement des scripts à la **prochaine ouverture**, pas
+dans un onglet déjà chargé.
 
 ### LA LIAISON ACTIVE DIRECTORY DANS LE PANNEAU D'ADMINISTRATION, ET LE DÉROULÉ D'UNE PREMIÈRE MISE EN SERVICE (25/09/2026)
 
