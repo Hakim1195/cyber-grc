@@ -4682,6 +4682,25 @@ describe('Le point d’appel unique découvre ses contrôles (CONVENTIONS §19.4
       // sélecteur de filiale émet à chaque basculement (CONVENTIONS.md §30.4). Il a fait
       // rougir cette liste en arrivant, ce qui est exactement son office.
       'vocabulaire_journal',
+      // SOIXANTE-DOUZIÈME, apporté par
+      // `074_une_echeance_de_calendrier_depend_du_fuseau.sql` — et il est né d'une
+      // PREMIÈRE INSTALLATION CHEZ UN CLIENT refusée à la migration `038` :
+      // `nis2/rapport_final : delai_reglementaire_faux — 743 heures, la loi en impose
+      // 744`. Le produit n'avait rien de faux : `timestamptz + interval '1 month'`
+      // s'ajoute AU CADRAN, dans le fuseau de la session, et un mois qui traverse un
+      // changement d'heure ne fait pas 744 heures. Le garde de l'horloge exigeait un
+      // nombre d'HEURES pour une grandeur de CALENDRIER — vert en UTC, rouge à Paris.
+      // ⚠️ Celui-ci ferme la CLASSE plutôt que l'instance : aucune fonction `public`
+      // déclarée `immutable` ne laisse la SESSION choisir un fuseau. Quatre formes
+      // mesurées — un intervalle de mois sur un `timestamptz`, `date::timestamptz`
+      // (minuit local), `timestamptz::timestamp` (le cadran du lecteur),
+      // `at time zone` sans zone littérale. Le balayage part du catalogue (§19.5), et
+      // la moitié NON-BRUIT compte autant : il doit se TAIRE sur `f_echeance_droits` et
+      // `f_prochain_controle` (des mois ajoutés à une `date` — calendrier pur) et sur
+      // `f_main_courante_charge_utile` (`at time zone 'UTC'`, zone littérale), dont
+      // l'immutabilité TIENT la chaîne d'intégrité de la main courante de crise.
+      // Règle : `CONVENTIONS.md` §50.
+      'volatilite_calendrier',
     ]);
   });
 

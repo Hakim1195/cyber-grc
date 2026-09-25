@@ -2981,10 +2981,74 @@ else
       l'authentification échouerait au premier utilisateur. Corriger :
         chown root:$UTILISATEUR '$LDAP_CA' && chmod 0640 '$LDAP_CA'"
     fi
-    openssl x509 -in "$LDAP_CA" -noout >/dev/null 2>&1 \
-      || echec "LDAP_CA (« $LDAP_CA ») n'est pas un certificat PEM lisible par OpenSSL.
-      Attendu : la chaîne de l'autorité interne, au format PEM (« -----BEGIN CERTIFICATE----- »).
-      Un fichier DER se convertit : openssl x509 -inform der -in ca.cer -out ca.pem"
+    # ---- L'ENCODAGE, ET NON L'EXTENSION -------------------------------------
+    #
+    # 🛑 **CE CONTRÔLE ANNONÇAIT « PEM VALIDE » SUR UN FICHIER QUE LE PRODUIT NE PEUT PAS
+    # LIRE.** Mesuré le 25/09/2026, sur les quatre formes qu'une PKI d'entreprise délivre :
+    #
+    #   fichier                  ce contrôle        openssl -CAfile      NODE (le produit)
+    #   PEM (quel que soit le nom)  ✅              ✅                   ✅ authorized
+    #   DER dans un .cer            ✅ « PEM valide » ❌ no certificate    🛑 UNABLE_TO_VERIFY
+    #   PKCS#7 (.p7b)               ❌              —                    🛑 refusé
+    #
+    # `openssl x509 -in` RENIFLE le format et accepte le DER : le contrôle passait, affichait
+    # « PEM valide » — une affirmation fausse — et **aucun utilisateur ne pouvait se
+    # connecter**. C'est la pire forme de défaut de ce dépôt : un contrôle qui rassure et un
+    # produit qui échoue. ⚠️ Et l'extension n'a JAMAIS compté : `.cer`, `.crt`, `.pem` sont
+    # des noms de fichiers. Ce qui compte est l'encodage, et **Node n'accepte que le PEM**.
+    #
+    # Plutôt que de le refuser, l'installateur CONVERTIT : l'exploitant dépose ce que son
+    # ADCS lui donne. Un installateur fait le travail ennuyeux — c'est son office.
+    LDAP_CA_ENCODAGE=""
+    if grep -q 'BEGIN CERTIFICATE' "$LDAP_CA" 2>/dev/null; then
+      LDAP_CA_ENCODAGE="PEM"
+    elif openssl x509 -inform DER -in "$LDAP_CA" -noout >/dev/null 2>&1; then
+      LDAP_CA_ENCODAGE="DER"
+    elif openssl pkcs7 -print_certs -in "$LDAP_CA" -noout >/dev/null 2>&1 \
+      || openssl pkcs7 -inform DER -print_certs -in "$LDAP_CA" -noout >/dev/null 2>&1; then
+      LDAP_CA_ENCODAGE="PKCS7"
+    else
+      echec "LDAP_CA (« $LDAP_CA ») n'est lisible par OpenSSL sous AUCUNE des trois formes
+      qu'une PKI délivre : ni PEM (texte, « -----BEGIN CERTIFICATE----- »), ni DER (binaire),
+      ni PKCS#7 (.p7b). ⚠️ L'EXTENSION NE COMPTE PAS — un .cer peut être l'un ou l'autre.
+      Vérifiez ce que vous avez :  file '$LDAP_CA'  puis
+        openssl x509 -in '$LDAP_CA' -noout -subject        # si PEM
+        openssl x509 -inform der -in '$LDAP_CA' -noout -subject   # si DER
+      Un .pfx/.p12 n'est PAS le bon fichier : il contient une clé privée. Demandez à
+      l'équipe PKI la chaîne de l'AC (racine + intermédiaires), en export public."
+    fi
+
+    if [[ "$LDAP_CA_ENCODAGE" != "PEM" ]]; then
+      # ⚠️ On ne réécrit JAMAIS le fichier de l'exploitant : on dépose la conversion à
+      # l'emplacement que la convention nomme déjà, et on repointe LDAP_CA dessus. Le sens
+      # est unique — source → forme canonique — et l'opération est idempotente.
+      LDAP_CA_PEM="$CONFIG/ca-active-directory.pem"
+      info "LDAP_CA est au format $LDAP_CA_ENCODAGE : conversion en PEM (Node n'accepte que le PEM)"
+      if [[ "$LDAP_CA_ENCODAGE" == "DER" ]]; then
+        openssl x509 -inform DER -in "$LDAP_CA" -out "$LDAP_CA_PEM.tmp" 2>/dev/null \
+          || echec "Conversion DER → PEM impossible sur « $LDAP_CA »."
+      else
+        { openssl pkcs7 -print_certs -in "$LDAP_CA" 2>/dev/null \
+          || openssl pkcs7 -inform DER -print_certs -in "$LDAP_CA" 2>/dev/null; } \
+          | grep -v '^subject=\|^issuer=\|^$' > "$LDAP_CA_PEM.tmp" \
+          || echec "Conversion PKCS#7 → PEM impossible sur « $LDAP_CA »."
+      fi
+      grep -q 'BEGIN CERTIFICATE' "$LDAP_CA_PEM.tmp" 2>/dev/null \
+        || { rm -f "$LDAP_CA_PEM.tmp"; echec "La conversion de « $LDAP_CA » n'a produit aucun
+      certificat. Le fichier contient-il vraiment une autorité, et non une clé privée ?"; }
+      install -o root -g "$UTILISATEUR" -m 0640 "$LDAP_CA_PEM.tmp" "$LDAP_CA_PEM"
+      rm -f "$LDAP_CA_PEM.tmp"
+      NB_CERTS_CA="$(grep -c 'BEGIN CERTIFICATE' "$LDAP_CA_PEM")"
+      succes "LDAP_CA convertie ($LDAP_CA_ENCODAGE → PEM, $NB_CERTS_CA certificat(s)) : $LDAP_CA_PEM"
+      # La configuration doit pointer la forme canonique, sinon le SERVICE relirait le
+      # fichier d'origine — que Node refuse — et l'authentification tomberait au premier
+      # utilisateur, après une installation annoncée « terminée ».
+      if [[ -f "$CONFIG/env" ]] && grep -q '^LDAP_CA=' "$CONFIG/env"; then
+        sed -i "s|^LDAP_CA=.*|LDAP_CA=$LDAP_CA_PEM|" "$CONFIG/env"
+        alerte "LDAP_CA a été repointée sur la forme PEM dans $CONFIG/env."
+      fi
+      LDAP_CA="$LDAP_CA_PEM"
+    fi
     if ! openssl x509 -in "$LDAP_CA" -noout -checkend 0 >/dev/null 2>&1; then
       echec "LDAP_CA (« $LDAP_CA ») a EXPIRÉ le $(openssl x509 -in "$LDAP_CA" -noout -enddate 2>/dev/null | cut -d= -f2).
       Toute connexion LDAPS échouera. Demandez la chaîne à jour à l'équipe PKI du client."
@@ -3031,11 +3095,84 @@ else
     elif printf '%s' "$SORTIE_TLS" | grep -qi 'verify error\|Verification error'; then
       while IFS= read -r l; do [[ -n "$l" ]] && alerte "openssl : $l"; done \
         <<< "$(printf '%s' "$SORTIE_TLS" | grep -i 'verif' | head -n3)"
-      echec "Le certificat de $LDAP_HOTE:$LDAP_PORT NE SE VÉRIFIE PAS contre ${LDAP_CA:-le magasin
-      du système}. Toute connexion d'utilisateur échouera, et le message côté service ne dira
-      pas pourquoi. « unable to get local issuer certificate » signifie que LDAP_CA n'est pas
-      l'autorité qui a émis ce certificat : demandez la CHAÎNE COMPLÈTE de la PKI interne
-      (AC racine + AC intermédiaires) à l'équipe qui exploite l'ADCS du client."
+
+      # 🛑 **UNE CLÉ « TROP FAIBLE » MASQUE TOUTE AUTRE CAUSE, ET CE BLOC A PRIS L'UNE
+      # POUR L'AUTRE CHEZ UN CLIENT LE 25/09/2026.** Il rendait UN SEUL message pour
+      # toutes les erreurs de vérification — celui de l'émetteur introuvable — et il
+      # envoyait l'exploitant demander des AC intermédiaires dont il n'avait aucun besoin,
+      # alors qu'openssl avait écrit `verify error:num=66:EE certificate key too weak`
+      # trois lignes plus haut. *Un message qui nomme une cause que la mesure contredit
+      # coûte plus cher que pas de message du tout : il envoie chercher ailleurs.*
+      #
+      # ⚠️ **Mesuré, et c'est ce qui rend le cas retors** : `num=66` sort AVANT le
+      # contrôle de chaîne et le remplace. Avec une AC volontairement ÉTRANGÈRE, openssl
+      # rend le MÊME `num=66` — on ne peut donc pas savoir si la chaîne est saine sans
+      # revérifier plus bas. Relevé sur un certificat témoin de 1024 bits :
+      #
+      #   AC juste  + clé faible, niveau par défaut → num=66            (trompeur)
+      #   AC juste  + clé faible, -auth_level 1     → Verification: OK  → RÉSERVE
+      #   AC fausse + clé faible, niveau par défaut → num=66            (le même !)
+      #   AC fausse + clé faible, -auth_level 1     → num=20 émetteur   → BLOQUANT
+      #
+      # C'est donc la SECONDE mesure qui tranche, jamais la première.
+      if printf '%s' "$SORTIE_TLS" | grep -qi 'too weak'; then
+        if [[ -n "$LDAP_CA" ]]; then
+          SORTIE_TLS_BAS="$(timeout 15 openssl s_client -connect "$LDAP_HOTE:$LDAP_PORT" \
+                              -servername "$LDAP_HOTE" -CAfile "$LDAP_CA" \
+                              -verify_return_error -auth_level 1 -brief </dev/null 2>&1 || true)"
+        else
+          SORTIE_TLS_BAS="$(timeout 15 openssl s_client -connect "$LDAP_HOTE:$LDAP_PORT" \
+                              -servername "$LDAP_HOTE" -verify_return_error -auth_level 1 \
+                              -brief </dev/null 2>&1 || true)"
+        fi
+
+        if printf '%s' "$SORTIE_TLS_BAS" | grep -q 'Verification: OK'; then
+          # La chaîne EST bonne. Ce qui bloque openssl est le niveau de sécurité du
+          # système (Debian : @SECLEVEL=2, donc RSA 2048 minimum), pas la PKI.
+          reserve "le certificat LDAPS de $LDAP_HOTE porte une clé SOUS le minimum du système"
+          alerte "La chaîne, elle, SE VÉRIFIE bien contre ${LDAP_CA:-le magasin du système} :"
+          alerte "revérifiée à « -auth_level 1 », openssl rend « Verification: OK ». Il n'y a"
+          alerte "donc AUCUNE AC intermédiaire à demander — c'est la TAILLE DE LA CLÉ du"
+          alerte "certificat du contrôleur qui est en cause (Debian exige RSA 2048 au moins)."
+          alerte "Relevez-la :"
+          alerte "  openssl s_client -connect $LDAP_HOTE:$LDAP_PORT -showcerts </dev/null 2>/dev/null \\"
+          alerte "    | openssl x509 -noout -text | grep -E 'Public-Key|Signature Algorithm'"
+          alerte "⚠️ L'installation CONTINUE, et les connexions d'utilisateurs fonctionneront :"
+          alerte "Node ne lit pas /etc/ssl/openssl.cnf et accepte ce certificat (mesuré)."
+          alerte "🛑 Mais ce n'est PAS un feu vert. Faites réémettre le certificat du"
+          alerte "contrôleur avec une clé de 2048 bits au moins (gabarit ADCS + réenrôlement,"
+          alerte "sans redémarrage du DC). Deux raisons, et la seconde est la plus sérieuse :"
+          alerte "  · 1024 bits est déprécié depuis 2013, sur le canal qui transporte les"
+          alerte "    mots de passe de vos utilisateurs ;"
+          alerte "  · le jour où Node relèvera son niveau par défaut, TOUTES les connexions"
+          alerte "    tomberaient d'un coup, après une mise à jour sans rapport apparent."
+        else
+          # La faiblesse de clé cachait une vraie rupture de chaîne : c'est la seconde
+          # mesure qui la nomme, et c'est elle qu'on cite.
+          MOTIF_REEL="$(printf '%s' "$SORTIE_TLS_BAS" | grep -i 'verify error' | head -n1)"
+          echec "Le certificat de $LDAP_HOTE:$LDAP_PORT NE SE VÉRIFIE PAS contre ${LDAP_CA:-le
+      magasin du système}, et sa clé est EN OUTRE sous le minimum du système. Revérifié à
+      « -auth_level 1 », openssl dit : ${MOTIF_REEL:-<motif non relevé>}. Toute connexion
+      d'utilisateur échouera. Si le motif parle d'émetteur (« unable to get local issuer
+      certificate »), LDAP_CA n'est pas l'autorité qui a émis ce certificat : demandez la
+      CHAÎNE COMPLÈTE de la PKI interne (AC racine + AC intermédiaires) à l'équipe qui
+      exploite l'ADCS. Et faites réémettre le certificat du contrôleur en 2048 bits."
+        fi
+      else
+        # Toute autre cause : émetteur introuvable, nom qui ne correspond pas, expiration.
+        # ⚠️ Le message CITE le motif relevé au lieu d'en supposer un — c'est tout l'objet
+        # de la correction du 25/09/2026.
+        MOTIF_TLS="$(printf '%s' "$SORTIE_TLS" | grep -i 'verify error' | head -n1)"
+        echec "Le certificat de $LDAP_HOTE:$LDAP_PORT NE SE VÉRIFIE PAS contre ${LDAP_CA:-le
+      magasin du système}. openssl dit : ${MOTIF_TLS:-<motif non relevé>}. Toute connexion
+      d'utilisateur échouera, et le message côté service ne dira pas pourquoi. Selon le
+      motif ci-dessus : « unable to get local issuer certificate » (num=20) signifie que
+      LDAP_CA n'est pas l'autorité qui a émis ce certificat — demandez la CHAÎNE COMPLÈTE
+      de la PKI interne (AC racine + AC intermédiaires) à l'équipe qui exploite l'ADCS ;
+      « Hostname mismatch » (num=62) signifie que LDAP_URL ne nomme pas le contrôleur tel
+      que son certificat le désigne ; « certificate has expired » (num=10) se règle par un
+      réenrôlement."
+      fi
     else
       reserve "$LDAP_HOTE:$LDAP_PORT n'a pas répondu en 15 s : la chaîne de certification LDAPS"
       alerte "n'a donc PAS été éprouvée (constat Q-75, même figure). Le port est-il filtré, ou"

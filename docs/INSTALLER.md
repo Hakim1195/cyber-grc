@@ -57,6 +57,12 @@ l'installateur — il ne vous les demandera jamais, et ne les affichera jamais.
 git clone https://github.com/Hakim1195/cyber-grc.git
 cd cyber-grc
 
+# ⚠️ CLONEZ AVEC VOTRE COMPTE, JAMAIS « sudo git clone » : le dépôt
+#     appartiendrait à root, et un « git pull » ultérieur refuserait de
+#     l'ouvrir (« detected dubious ownership »). C'est `install.sh` qui a
+#     besoin de root, pas git. Après l'installation, `node_modules/` et
+#     `dist/` appartiendront à root — c'est normal et sans effet.
+
 # 2 — Installer. L'assistant pose les six questions, engendre les secrets,
 #     déclare vos filiales, puis pose PostgreSQL 17, la base, le service et Apache.
 sudo bash backend/deploy/install.sh --assistant
@@ -125,6 +131,8 @@ journalisé** ; son mot de passe n'est jamais écrit sur le disque — seule une
 | Ce que vous voyez | Ce que c'est | Ce qu'il faut faire |
 |---|---|---|
 | `install.sh` s'arrête en **code 2** en nommant des variables | Une valeur qui vient de **votre** SI manque — le script refuse de deviner | Complétez `/etc/cyber-grc/env`, relancez. **Les secrets déjà engendrés sont conservés** |
+| `git pull` dit « propriétaire douteux » / « dubious ownership » | le dépôt a été cloné par un **autre compte** que celui qui tire — typiquement cloné en root | `sudo chown -R "$(id -un):$(id -gn)" ~/cyber-grc`. ⚠️ `safe.directory` ne règle qu'à moitié : git se taira, puis l'écriture échouera |
+| `openssl : verify error:num=66:EE certificate key too weak` | la clé du certificat LDAPS du contrôleur est sous le minimum de Debian 13 (2048 bits) — **pas** un défaut de chaîne | c'est une **réserve**, pas un blocage : l'installation continue. Faire réémettre le certificat du DC en 2048 bits |
 | `https://votre-nom/` rend **403** | La liste blanche de publication ne couvre pas « / » (constat **Q-36**) | `sudo bash backend/deploy/install.sh --maj` |
 | Personne ne peut se connecter | L'annuaire est injoignable, ou les groupes `GRC-*` n'existent pas encore | `--diagnostic` le dit sur sa ligne « annuaire ». Puis étape 5 |
 | On entre, et **rien n'est ouvert** (403) | **Aucun groupe `GRC-*` pour ce compte.** Il n'existe **aucun** administrateur par défaut : le premier accès s'obtient en mettant un compte réel dans `GRC-ADMIN` | étape 5, seconde moitié |

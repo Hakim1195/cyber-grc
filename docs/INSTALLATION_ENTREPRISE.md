@@ -171,6 +171,48 @@ liste telle quelle :
 | À nous transmettre | l'**URL LDAPS** (`ldaps://dc01.exemple.interne:636`), la **base de recherche** (`DC=exemple,DC=interne`), le **DN complet** du compte, son mot de passe |
 | Et aussi | **le certificat de l'autorité qui signe le certificat LDAPS du contrôleur** |
 
+#### Le format du certificat de l'AC — ce qu'il faut demander, et ce qui n'a pas d'importance
+
+⚠️ **L'EXTENSION DU FICHIER N'A AUCUNE IMPORTANCE.** `.pem`, `.cer`, `.crt` sont des noms ;
+ce qui compte est l'**encodage**, et un `.cer` peut être l'un ou l'autre :
+
+| Ce que votre ADCS exporte | Encodage | Ce que fait l'installateur |
+|---|---|---|
+| « Base-64 encoded X.509 (.CER) » | **PEM** (texte, `-----BEGIN CERTIFICATE-----`) | l'emploie tel quel |
+| « DER encoded binary X.509 (.CER) » | **DER** (binaire) | **le convertit** en PEM |
+| « Cryptographic Message Syntax (.P7B) », chaîne complète | **PKCS#7** | **le convertit** en PEM |
+| un `.pfx` / `.p12` | contient une **clé privée** | **refusé** — ce n'est pas le bon fichier |
+
+**Vous déposez donc ce que votre PKI vous donne.** L'installateur normalise vers
+`/etc/cyber-grc/ca-active-directory.pem` et repointe `LDAP_CA` dessus, parce que **Node
+n'accepte que le PEM**.
+
+🛑 **Ce n'était pas vrai avant le 25/09/2026, et le défaut était du genre le plus
+dangereux** : un `.cer` **binaire** passait le contrôle, qui affichait « LDAP_CA : PEM
+valide » — une affirmation fausse — puis **aucun utilisateur ne pouvait se connecter**. Un
+contrôle qui rassure et un produit qui échoue. Si vous reprenez une installation faite avant
+cette date, vérifiez : `head -1 /etc/cyber-grc/ca-active-directory.pem` doit afficher
+`-----BEGIN CERTIFICATE-----`.
+
+#### Et la TAILLE DE LA CLÉ du certificat du contrôleur
+
+Debian 13 exige **RSA 2048 bits au minimum** au niveau de sécurité par défaut d'OpenSSL. Un
+contrôleur dont le certificat LDAPS porte une clé de 1024 bits fait écrire à l'installateur :
+
+    openssl : verify error:num=66:EE certificate key too weak
+
+⚠️ **Ce message en masque un autre**, et c'est ce qui l'a rendu trompeur : `num=66` est
+signalé **avant** le contrôle de chaîne et le remplace — avec une AC étrangère, openssl rend
+le **même** code. L'installateur revérifie donc à `-auth_level 1` et c'est cette seconde
+mesure qui tranche : si la chaîne est saine, il pose une **réserve** et continue ; sinon il
+s'arrête en nommant la vraie cause.
+
+**L'installation va au bout, et les connexions fonctionnent** — Node ne lit pas
+`/etc/ssl/openssl.cnf` et accepte ce certificat (mesuré). 🛑 **Mais faites-le réémettre en
+2048 bits** : 1024 est déprécié depuis 2013, sur le canal qui transporte les mots de passe de
+vos utilisateurs — et le jour où Node relèvera son niveau par défaut, **toutes** les
+connexions tomberaient d'un coup, après une mise à jour sans rapport apparent.
+
 ⚠️ **Ce dernier point est oublié une fois sur deux.** Sans lui, la validation TLS de la
 liaison LDAPS repose sur le magasin d'autorités du système, **qui ne contient pas la PKI
 interne** : la liaison échoue. Déposez-le et déclarez-le :
@@ -432,10 +474,12 @@ cloisonnement sous sondes hostiles, ni les droits de chaque profil.
 
 ---
 
-## 5. Les cinq pannes de première installation
+## 5. Les pannes de première installation
 
 | Symptôme | Cause | Réparation |
 |---|---|---|
+| `openssl : verify error:num=66:EE certificate key too weak` | la clé du certificat LDAPS du contrôleur est sous le minimum du système (1024 bits) — **pas** un problème de chaîne, malgré ce que disait le message avant le 25/09/2026 | rien à faire pour installer : c'est une **réserve** depuis cette date. Faire réémettre le certificat du DC en **2048 bits** (§1.3) |
+| « LDAP_CA : PEM valide » puis **aucune connexion ne passe** | le fichier était du **DER** dans un `.cer` : le contrôle le lisait, Node non | depuis le 25/09/2026 l'installateur **convertit**. Sur une installation antérieure : `head -1` le fichier, et convertir (§1.3) |
 | Apache ne démarre pas, erreur sur un fichier `.crt` | le certificat n'est pas aux trois chemins attendus | §1.2 |
 | « Installation terminée », et **personne ne se connecte** | l'unité systemd ferme la sortie : le contrôleur est injoignable **depuis le service** | §1.4, puis `--diagnostic` ligne `annuaire` |
 | La liaison LDAPS échoue alors que le DC répond | le certificat du DC est signé par une PKI interne absente du magasin système | `LDAP_CA=` (§1.3) |

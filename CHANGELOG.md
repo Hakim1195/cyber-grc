@@ -112,6 +112,65 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### 🛑 « LDAP_CA : PEM VALIDE » SUR UN FICHIER QUE LE PRODUIT NE PEUT PAS LIRE (25/09/2026)
+
+Deux défauts de l'installateur, trouvés en accompagnant la première installation chez un
+client, et **tous deux de la même famille : un contrôle qui rassure et un produit qui
+échoue**.
+
+#### 1. Une clé trop faible bloquait l'installation, et le message désignait une autre cause
+
+Le contrôle LDAPS rendait `ERR` sur `verify error:num=66:EE certificate key too weak` avec un
+message unique — celui de l'émetteur introuvable — qui envoyait l'exploitant **demander des
+AC intermédiaires dont il n'avait aucun besoin**.
+
+⚠️ **Ce qui rend le cas retors, et il a été mesuré** : `num=66` est signalé **avant** le
+contrôle de chaîne et le **remplace**. Avec une AC volontairement étrangère, openssl rend le
+**même** `num=66` — on ne peut donc pas savoir si la chaîne est saine sans revérifier plus
+bas. Relevé sur un certificat témoin de 1024 bits :
+
+| Cas | Niveau par défaut | `-auth_level 1` |
+|---|---|---|
+| AC juste + clé faible | `num=66` | `Verification: OK` → **réserve** |
+| AC fausse + clé faible | `num=66` *(le même)* | `num=20` émetteur → **bloquant** |
+
+Le contrôle revérifie donc à `-auth_level 1`, et **c'est cette seconde mesure qui tranche**.
+Une clé faible sur une chaîne saine devient une **réserve** : l'installation va au bout, et
+les connexions fonctionnent — `openssl` et Node ne sont pas d'accord, Node ne lisant pas
+`/etc/ssl/openssl.cnf`. ⚠️ La réserve dit aussi ce qu'une réserve doit dire : faire réémettre
+le certificat du contrôleur en 2048 bits, **parce que le jour où Node relèvera son niveau par
+défaut, toutes les connexions tomberaient d'un coup** après une mise à jour sans rapport.
+
+#### 2. 🛑 Un `.cer` BINAIRE passait le contrôle, qui affichait « PEM valide », et personne ne pouvait se connecter
+
+Mesuré sur les quatre formes qu'une PKI d'entreprise délivre :
+
+| Fichier | Le contrôle | `openssl -CAfile` | **Node — le produit** |
+|---|---|---|---|
+| PEM, quel que soit le nom | ✅ | ✅ | ✅ `authorized: true` |
+| **DER dans un `.cer`** | ✅ **« PEM valide »** | ❌ `no certificate found` | 🛑 `UNABLE_TO_VERIFY_LEAF_SIGNATURE` |
+| **PKCS#7 (`.p7b`)** | ❌ | — | 🛑 refusé |
+
+`openssl x509 -in` **renifle** le format et accepte le DER : le contrôle passait en
+**affirmant « PEM valide »**, et l'authentification tombait au premier utilisateur, après une
+installation annoncée « terminée ».
+
+⚠️ **Et l'extension n'a JAMAIS compté** — `.cer`, `.crt`, `.pem` sont des noms de fichiers.
+Ce qui compte est l'encodage, et **Node n'accepte que le PEM**.
+
+**Le remède n'est pas un refus mieux libellé, c'est une conversion** : l'installateur détecte
+PEM / DER / PKCS#7, normalise vers `/etc/cyber-grc/ca-active-directory.pem`, repointe
+`LDAP_CA` et le dit. L'exploitant dépose ce que son ADCS lui donne. Un `.pfx` est refusé en
+nommant les trois formes attendues — il contient une clé privée. **Éprouvé sur cinq
+fichiers**, et la boucle est fermée par la seule mesure qui compte : *Node lit-il ce que
+l'installateur a produit ?* — `authorized: true` depuis le `.cer` binaire **et** depuis le
+`.p7b`.
+
+⚠️ **La leçon commune aux deux, et elle vaut au-delà de l'installateur** : *un contrôle doit
+interroger la pile que le produit emploie.* `openssl` et Node ont divergé **deux fois le même
+jour**, en sens inverses — openssl refuse une clé faible que Node accepte, et le contrôle
+acceptait un DER que Node refuse. Le contrôle ne mesurait pas le produit.
+
 ### 🛑 « 743 HEURES AU LIEU DE 744 » — une installation refusée chez un client, et le produit n'avait rien de faux (25/09/2026)
 
 **La première installation que `docs/INSTALLATION_ENTREPRISE.md` devait couvrir s'est
