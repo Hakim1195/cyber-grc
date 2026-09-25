@@ -348,3 +348,81 @@ describe('Le registre ne peut pas être TRONQUÉ en silence (constat Q-54)', () 
     );
   });
 });
+
+describe('LE TABLEAU DES COLLECTIONS de `docs/DATA_MODEL.md` §1.5 est COMPLET', () => {
+  /* 🛑 **CE CONTRÔLE NAÎT D'UNE DÉRIVE DE CINQ LOTS.** Le 25/09/2026, le §1.5 annonçait
+   * « 46 collections » et n'en nommait que **37**, quand `ARRAY_FIELDS` en portait **51** :
+   * quinze manquaient — les échelles, la quantification FAIR, les quatre tables de catalogues,
+   * les connecteurs, les trois tables des fiches réflexes — et `mesures` lui-même, pourtant
+   * cité deux lignes plus haut comme LE cas particulier du tableau.
+   *
+   * ⚠️ **Rien ne le mesurait, et c'est tout le motif de ce fichier-ci** : les garde-fous
+   * existants confrontent la **VERSION** du schéma à quatre endroits
+   * (`test/reprise/versions-concordantes.test.mjs`) — jamais la **LISTE** des collections. *Une
+   * liste écrite à la main dont personne ne mesure la complétude est une omission qui attend*,
+   * et celle-là a attendu cinq lots.
+   *
+   * ⚠️ **Le sens de lecture part de la MATIÈRE, pas du document** (`CONVENTIONS.md` §19.5) :
+   * on découvre `ARRAY_FIELDS` dans `datastore.js` et l'on exige que chacune de ses entrées
+   * soit nommée. Une collection neuve fait donc rougir cet essai **en arrivant**, ce qui est
+   * exactement son office.
+   */
+
+  const RACINE = RACINE_DEPOT;
+
+  /** Les collections que le navigateur déclare — la matière, jamais une liste recopiée. */
+  function collectionsReelles() {
+    const source = readFileSync(
+      join(RACINE, 'cyber-gouvernance_V4', 'js', 'core', 'datastore.js'),
+      'utf8',
+    );
+    const bloc = /const ARRAY_FIELDS = \[([\s\S]*?)\n {4}\];/u.exec(source);
+    assert.ok(bloc !== null, 'ARRAY_FIELDS est introuvable dans datastore.js : le contrôle ne '
+      + 'mesure plus rien, et il le dit plutôt que de passer au vert.');
+    return [...bloc[1].matchAll(/"([a-z_]+)"/gu)].map((m) => m[1]);
+  }
+
+  /** Ce que le §1.5 nomme dans la première colonne de son tableau. */
+  function collectionsNommees() {
+    const doc = readFileSync(join(RACINE, 'docs', 'DATA_MODEL.md'), 'utf8');
+    const apres = doc.split('### 1.5 Correspondance')[1];
+    assert.ok(apres !== undefined, 'La section « 1.5 Correspondance » a disparu du document.');
+    const section = apres.split('### 1.5 bis')[0];
+    return new Set([...section.matchAll(/^\| `([a-z_]+)`/gmu)].map((m) => m[1]));
+  }
+
+  test('chaque collection de `data` est nommée dans le tableau', () => {
+    const reelles = collectionsReelles();
+    const nommees = collectionsNommees();
+    const absentes = reelles.filter((c) => !nommees.has(c));
+    assert.deepEqual(
+      absentes,
+      [],
+      'Ces collections existent dans `ARRAY_FIELDS` et ne sont PAS dans le tableau du §1.5. '
+        + 'Le document est la référence de la forme de `data` : une collection qu’il ne nomme '
+        + 'pas est une collection dont personne ne sait à quelle table elle correspond.',
+    );
+  });
+
+  test('et le tableau ne nomme RIEN qui ne soit une collection', () => {
+    /* La moitié inverse, et elle a servi le jour même : `client_sous_traitants` y avait été
+     * ajoutée alors que c'est une LIAISON portée par chaque client — comme
+     * `prestataires_lies` l'est par chaque actif. Une ligne de trop dans une référence est
+     * une invitation à écrire du code qui cherche une collection inexistante. */
+    const reelles = new Set(collectionsReelles());
+    const enTrop = [...collectionsNommees()].filter((n) => !reelles.has(n));
+    assert.deepEqual(enTrop, [],
+      'Ces noms sont nommés comme des collections de `data` et n’en sont pas.');
+  });
+
+  test('le COMPTE annoncé en tête est celui du tableau, et celui de la matière', () => {
+    const reelles = collectionsReelles();
+    const doc = readFileSync(join(RACINE, 'docs', 'DATA_MODEL.md'), 'utf8');
+    const annonce = /\*\*(\d+) collections, (\d+) entités\.\*\*/u.exec(doc);
+    assert.ok(annonce !== null, 'Le §1.5 n’annonce plus de compte : il en annonçait un, et '
+      + 'c’est ce compte qui a été faux pendant cinq lots.');
+    assert.equal(Number(annonce[1]), reelles.length,
+      `Le §1.5 annonce ${annonce[1]} collections ; « ARRAY_FIELDS » en porte `
+        + `${String(reelles.length)}. C’est exactement la faute du 25/09/2026.`);
+  });
+});

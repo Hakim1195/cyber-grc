@@ -554,13 +554,45 @@ Conséquences pratiques :
 
 ### 1.5 Correspondance entre l'objet `data` et le schéma serveur
 
-**46 collections, 46 entités.** Les noms coïncident partout sauf pour `mesures` :
+**51 collections, 51 entités.** Les noms coïncident partout sauf pour `mesures` :
+
+> 🛑 **CE TABLEAU AVAIT DÉRIVÉ, ET DE LOIN — rectifié le 25/09/2026.** Il annonçait
+> « 46 collections » et n'en nommait que **37**, alors que `ARRAY_FIELDS` en porte **51** et
+> que le registre d'entités en déclare **51**. **Quinze collections y manquaient**, accumulées
+> sur cinq lots — les échelles (19/09), la quantification FAIR, les quatre tables de
+> catalogues de L26, les connecteurs de L22, les trois tables des fiches réflexes (22/09) —
+> et `mesures` lui-même, pourtant cité deux lignes plus haut comme LE cas particulier.
+>
+> ⚠️ **Et j'y avais ajouté hier une ligne qui n'en est pas une** : `client_sous_traitants` est
+> une **liaison** portée par chaque client, comme `prestataires_lies` l'est par chaque actif —
+> pas une collection. Elle est retirée.
+>
+> ⚠️ **Aucun garde-fou ne compte ce tableau**, et c'est pour cela qu'il a vieilli : les
+> garde-fous confrontent la **version** du schéma à quatre endroits (`test/reprise/
+> versions-concordantes.test.mjs`), jamais la **liste** des collections à `ARRAY_FIELDS`.
+> *Une liste écrite à la main dont personne ne mesure la complétude est une omission qui
+> attend* — et elle a attendu cinq lots. Les préfixes ci-dessous ont été relevés sur
+> `GET /api/modele` de la recette, jamais recopiés d'un texte.
 
 | Collection `data` | Table(s) PostgreSQL | Préfixe d'identifiant |
 |---|---|---|
 | `clients` | `clients` | `CLI` |
 | `traitements_pour_client` | `traitements_pour_client` (+ liaison `traitement_client_mesures`) | `TPC` |
-| `client_sous_traitants` | `client_sous_traitants` | *(aucun — table de liaison)* |
+| `mesures` | **scindée** : `mesure_catalogue` (définition, niveau Groupe ou local) **+** `mesure_mise_en_oeuvre` (statut, maturité, responsable — niveau filiale) | `MESURE` |
+| `analyses_impact` | `analyses_impact` (+ liaison `analyse_mesures`) | `AIPD` |
+| `campagnes` | `campagnes` (niveau **Groupe**, sans `filiale_id`) | `CAMP` |
+| `risque_quantification` | `risque_quantification` | `FAIR` |
+| `ebios_connaissances` | `ebios_connaissances` (MIXTE — socle du Groupe) | `EBCO` |
+| `echelles` | `echelles` (MIXTE) | `ECHL` |
+| `echelle_niveaux` | `echelle_niveaux` (MIXTE) | `ECHN` |
+| `referentiels` | `referentiels` (MIXTE — catalogue du socle ou grille d'une filiale) | `REFT` |
+| `referentiel_domaines` | `referentiel_domaines` (MIXTE) | `REFD` |
+| `referentiel_exigences` | `referentiel_exigences` (MIXTE) | `REFE` |
+| `referentiel_traductions` | `referentiel_traductions` (MIXTE) | `REFX` |
+| `connecteurs` | `connecteurs` — ⚠️ les **constats** qu'ils produisent ne voyagent PAS : un constat est une preuve datée | `CONN` |
+| `fiches_reflexes` | `fiches_reflexes` (MIXTE — socle du Groupe surchargeable) | `FICHE` |
+| `fiche_reflexe_actions` | `fiche_reflexe_actions` (MIXTE) | `FREF` |
+| `contacts_urgence` | `contacts_urgence` (MIXTE) | `CTCU` |
 | `personnes` | `personnes` | `PERS` |
 | `exigences` | `exigences` | `EX` |
 | `actions` | `actions` | `ACT` |

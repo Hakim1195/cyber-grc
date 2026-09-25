@@ -652,7 +652,7 @@ RSSI/consultants **et** non-experts à sensibiliser → chaque concept doit avoi
 **note pédagogique** (`Help.tip(...)`).
 
 - **Frontend** : `cyber-gouvernance_V4/` — SPA maison (HTML/CSS/JS, sans framework,
-  sans build), 49 modules métier. Conservée telle quelle : **seule sa couche de
+  sans build), 51 modules métier. Conservée telle quelle : **seule sa couche de
   persistance a basculé** vers le serveur (`PLAN_SERVEUR` §1.3, lot L2 livré), et la
   façade synchrone `DataStore` est intacte — aucun module métier n'a été réécrit.
 - **Backend** : `backend/` — Node.js 22 + TypeScript + PostgreSQL, Debian 13,
@@ -711,7 +711,7 @@ cyber-gouvernance_V4/
 │   ├── backup.js              export/import `grc-backup` — FORMAT D'ÉCHANGE, plus une sauvegarde
 │   ├── importExcel.js, exportExcel.js, exportPDF.js
 │   ├── echeances.js           AGRÉGATEUR d'échéances (lecture seule) `window.Echeances`
-├── js/modules/                49 modules ; 1 module = 1 domaine (IIFE `XxxModule.renderList/renderDetail`)
+├── js/modules/                51 modules ; 1 module = 1 domaine (IIFE `XxxModule.renderList/renderDetail`)
 │                              ⚠️ **La liste n'est plus écrite ici.** Elle l'était, et elle a
 │                              annoncé « 26 modules » pendant que le produit en portait 49 —
 │                              une liste écrite à la main est une omission qui attend
@@ -818,13 +818,24 @@ cyber-gouvernance_V4/
 > pour que `data` garde la forme décrite ici et qu'un module qui reconstruit un objet ne
 > puisse pas perdre la version au passage (`docs/DATA_MODEL.md` §1.4).
 
-- `SCHEMA_VERSION = 24` dans `datastore.js` — elle numérote la forme de `data` et du fichier
+- `SCHEMA_VERSION = 30` dans `datastore.js` — elle numérote la forme de `data` et du fichier
   `grc-backup`, pas les migrations SQL. Migrations à l'import via `migratePayload` côté
   navigateur, et **paliers v1 → v24 rejoués côté serveur** (`backend/src/reprise/`).
   ⚠️ **Elle est écrite à QUATRE endroits** — `js/core/datastore.js`, `src/entites/index.ts`,
   `src/reprise/index.ts` et `docs/DATA_MODEL.md` — et un garde-fou les confronte
   (`test/reprise/versions-concordantes.test.mjs`) : le document y est entré le 16/09 parce
   qu'il avait annoncé « v12 » pendant quatre montées de version.
+
+  🛑 **ET CE FICHIER-CI EST UN CINQUIÈME ENDROIT, QUE LE GARDE-FOU NE COUVRE PAS.** Il a
+  annoncé **`SCHEMA_VERSION = 24`** jusqu'au 25/09/2026 — soit **six montées de version de
+  retard** — dans le paragraphe même qui explique que la valeur est gardée mécaniquement. Le
+  garde confronte les quatre endroits qu'il connaît ; personne ne lui a dit que `CLAUDE.md`
+  en était un, et ce fichier est **le premier que lit chaque session**. *Un garde-fou ne
+  protège que ce qu'on lui a nommé, et ce qu'on ne lui nomme pas vieillit d'autant plus
+  silencieusement que le texte à côté affirme le contraire.* ⚠️ **Ne l'y ajoutez pas sans y
+  penser** : ce fichier est de la prose, pas un registre — la bonne réponse est
+  peut-être **de cesser d'y écrire le nombre** et de renvoyer au `docs/DATA_MODEL.md`, qui
+  est gardé. À trancher la prochaine fois que la version monte.
 - Entités (tableaux) — **quarante et une depuis la v24**, et le détail fait foi dans
   `docs/DATA_MODEL.md` §1.5, jamais ici : clients, exigences, actions, risques, actifs, processus, crise,
   scenarios_pra, tests_pra, prestataires, mco_actions, audits, revues,

@@ -1,7 +1,14 @@
 # Installer Cyber GRC — en dix minutes
 
-> **Une page, cinq commandes, aucun renvoi.** Si vous devez ouvrir un autre fichier pour
-> finir cette page, c'est un défaut de cette page : signalez-le.
+> **Une page, cinq commandes.** Si vous devez ouvrir un autre fichier pour **finir
+> l'installation**, c'est un défaut de cette page : signalez-le.
+>
+> ⚠️ *Cette ligne promettait « aucun renvoi » — et le 25/09/2026 j'en ai posé un juste en
+> dessous, vers le déroulé de première mise en service. La promesse était donc devenue fausse
+> **dans le fichier qui l'énonce**. Elle est précisée plutôt que retirée : aucun renvoi n'est
+> nécessaire pour **finir l'installation**, et celui ci-dessous vise un autre besoin — se
+> PRÉPARER, avant d'avoir la machine. Une promesse qu'on ne peut plus tenir se reformule ; on
+> ne la laisse pas se contredire deux lignes plus bas.*
 >
 > ⚠️ *Cette ligne annonçait « dix commandes » quand la page en titrait **cinq** — et c'est
 > le constat **Q-275** lui-même, refait DANS le fichier qu'il visait. Corrigé le 25/09/2026.*

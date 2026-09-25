@@ -967,79 +967,43 @@ pas d'administrateur d'une seule filiale.
 
 | Geste | Où | À savoir |
 |---|---|---|
-| **Créer une filiale** | ⚠️ **Aucun écran — par l'API** (voir l'encadré sous ce tableau) | La réponse vous donne **la liste des groupes AD à créer** dans l'annuaire. Sans eux, personne n'entre — vous compris. |
-| **Voir et gérer les droits** | **Administration → Habilitations** | ⚠️ **Écran neuf du 22/09/2026.** Quatre vues : la matrice, les groupes d'annuaire, les comptes, et les revues d'accès. Voir la section détaillée ci-dessous. |
+| **Créer une filiale** | **Administration → Filiales → « Déclarer une filiale »** | ⚠️ **Écran neuf du 24/09/2026.** L'écran vous rend aussitôt **les huit groupes AD à créer** et le script PowerShell qui les crée. Sans eux, personne n'entre dans cette filiale — vous compris. |
+| **Voir et gérer les droits** | **Administration → Habilitations** | ⚠️ **Écran neuf du 22/09/2026.** **Cinq** vues : la matrice, les groupes d'annuaire, les comptes, les revues d'accès, et les **délégations temporaires** (24/09/2026). Voir la section détaillée ci-dessous. |
 | **Écrire au socle de risques** | Registre des risques → onglet **Socle du Groupe** | Ce que vous y mettez s'applique à **toutes** les filiales. |
 | **Activer un référentiel** | Référentiels → onglet **Applicables ici** | ⚠️ À ne pas confondre avec « non applicable » par exigence : l'activation dit *quels référentiels s'appliquent à ce site*, le « non applicable » écarte *un point dans un référentiel pratiqué*. |
 | **Lire le journal d'audit** | Journal d'audit | Trois ans d'identités et d'adresses IP. C'est un domaine à part, et ce n'est pas un hasard. |
-| **Faire sortir une filiale** | ⚠️ **Aucun écran — par l'API** | ⚠️ **Exportez d'abord** — et faites-le faire par un compte qui porte `GRC-EXPORT`, l'export étant une permission distincte que `GRC-ADMIN` **ne donne pas** (constat Q-278). Une filiale sortie disparaît de tous les périmètres, et l'exporter après demanderait de contourner le cloisonnement. |
+| **Faire sortir une filiale** | **Administration → Filiales → « Faire sortir »** | ⚠️ **Écran neuf du 24/09/2026**, et il **exporte d'abord** tout seul. ⚠️ **Exportez d'abord** — et faites-le faire par un compte qui porte `GRC-EXPORT`, l'export étant une permission distincte que `GRC-ADMIN` **ne donne pas** (constat Q-278). Une filiale sortie disparaît de tous les périmètres, et l'exporter après demanderait de contourner le cloisonnement. |
 
-> ### ⚠️ La création d'une filiale reste sans écran — et cette phrase a déjà coûté cher une fois
+> ### ✅ La création d'une filiale A MAINTENANT SON ÉCRAN — et cette phrase a coûté cher DEUX fois
 >
-> ⚠️ **Amendé le 22/09/2026, et il faut dire ce qui a changé.** Ce paragraphe affirmait
-> qu'« il n'y a pas d'écran d'administration ». C'est devenu **faux pour les droits** :
-> l'écran **Administration → Habilitations** existe depuis cette date, et il couvre les
-> profils, les groupes d'annuaire, les comptes et les revues d'accès. Il ne couvre
-> **toujours pas** la création ni la sortie d'une filiale, qui passent par l'API — et
-> c'est ce que la suite décrit.
+> 🛑 **AMENDÉ LE 25/09/2026, ET C'EST LA SECONDE FOIS QUE CE MÊME PARAGRAPHE EST PRIS EN
+> DÉFAUT.** Il affirmait, encore hier, qu'« aucun écran » ne crée ni ne fait sortir une
+> filiale. C'est **faux depuis le 24/09/2026** : **Administration → Filiales** existe, et il
+> couvre **les deux** — la déclaration d'une filiale, la correction de sa fiche, l'inventaire
+> du groupe entier, l'export, le script PowerShell des groupes, et la sortie (qui **exporte
+> d'abord**, toute seule).
 >
-> *Laisser la phrase telle quelle aurait été la faute du 14/09 : une phrase devenue
-> fausse sous un contrôle mécanique entièrement vert. Le banc sait dire qu'un CHIFFRE de
-> ce document est faux ; il ne sait pas dire qu'une PHRASE l'est devenue.*
+> ⚠️ **La première fois, c'était le 22/09** : le paragraphe disait « il n'y a pas d'écran
+> d'administration » et l'écran des **Habilitations** venait de naître. Il a été amendé — et
+> il a gardé, dans le même souffle, une seconde affirmation qui allait devenir fausse
+> quarante-huit heures plus tard. *Amender une phrase sans regarder celle d'à côté, c'est
+> déplacer la fausseté d'une ligne.*
 >
-> Ce tableau renvoyait à un écran « Administration » **qui n'existe pas** : mesuré à la porte
-> S7 (constat **Q-266**), l'application compte 29 entrées de menu et **aucune n'ouvre un
-> écran de ce nom**. ⚠️ *La barre latérale porte bien l'intitulé « Administration » — c'est
-> un titre de SECTION, pas une entrée, et il ne mène nulle part. La phrase disait « aucune
-> ne porte ce nom » et se serait fait contredire par le premier exploitant qui aurait
-> regardé (constat B-9). La conclusion, elle, ne bouge pas : il n'y a pas d'écran.*
-> Les routes, elles, existent bel et bien côté serveur ; c'est l'interface qui n'a pas été
-> construite. Un exploitant restait donc bloqué **au moment exact que ce guide devait
-> couvrir** — l'intégration d'une société rachetée.
+> 🛑 **Et c'est la SIXIÈME fois que la question « les docs sont à jour ? » sort une fausseté
+> sous un contrôle mécanique entièrement vert.** Le banc sait dire qu'un **chiffre** de ce
+> document est faux ; il ne sait pas dire qu'une **phrase** l'est devenue. La seule méthode qui
+> marche est de chercher **ce que le travail du jour a rendu faux** — jamais de relire ce qu'on
+> vient d'écrire.
 >
-> **En attendant l'écran, voici le chemin réel.** Les deux opérations exigent le profil
-> *Administration* **et** un périmètre Groupe, et elles sont journalisées comme telles.
+> **Ce qui reste vrai, et qui n'a pas bougé :** les routes de l'API existent toujours et
+> restent utilisables — c'est par elles que passe une déclaration en masse à l'installation
+> (`filiales.conf`, une seule fois). Et **le code d'une filiale ne se modifie plus après
+> coup** : il nomme ses groupes d'annuaire, et le changer laisserait derrière lui huit groupes
+> qui n'accordent plus rien.
 >
-> **1. Ouvrir une session et garder son cookie** (`grc_session` par défaut, réglable par
-> `SESSION_NOM_COOKIE`) :
->
-> ```bash
-> curl -sc /tmp/grc.cookies -X POST https://grc-test.site/api/connexion \
->      -H 'content-type: application/json' \
->      -d '{"identifiant":"admin.grc","motDePasse":"…"}'
-> ```
->
-> **2. Créer la filiale** — la réponse porte **la liste des groupes AD à créer** :
->
-> ```bash
-> curl -sb /tmp/grc.cookies -X POST https://grc-test.site/api/filiales \
->      -H 'content-type: application/json' \
->      -d '{"code":"LYO","raison_sociale":"… SAS","pays":"FR"}'
-> ```
->
-> **3. Faire sortir une filiale** — `POST /api/cycle/sortie-filiale` ; la purge RGPD est une
-> opération distincte, `POST /api/cycle/purge-rgpd`. **Exportez avant**, avec un compte qui
-> porte `GRC-EXPORT`.
->
-> `code` et `raison_sociale` sont **obligatoires** ; `pays` est facultatif et s'écrit sur deux
-> lettres majuscules (ISO 3166-1 alpha-2 : `FR`, `DE`, `ES`).
->
-> ⚠️ **Effacez le fichier de cookies après usage** : il vaut une session d'administration
-> Groupe. `rm -f /tmp/grc.cookies`.
->
-> **Cette procédure a été JOUÉE sur la recette le 09/09/2026**, à travers Apache, et non
-> écrite de mémoire — c'est précisément ce qui manquait aux quatre affirmations que la porte
-> S7 a démenties. Relevé : connexion → **200** et cookie posé ; `POST /api/filiales` avec un
-> corps vide → **400**, « *Le champ « code » est obligatoire pour créer une filiale* » ;
-> `POST /api/cycle/sortie-filiale` → **400**, « *Le champ « filiale_id » est obligatoire* » ;
-> et, en témoin, la **même requête sans cookie** → **401**. Aucune filiale n'a été créée : la
-> recette n'en porte volontairement aucune de plus (constat **Q-155** — une filiale active
-> supplémentaire ferait basculer le périmètre Groupe des sessions ouvertes).
->
-> ⚠️ **Et n'inventez pas les groupes AD à partir de la réponse** : créez exactement ceux
-> qu'elle nomme, ou engendrez-les avec `backend/deploy/groupes-ad.sh --powershell`, qui rend
-> le script prêt à jouer côté annuaire. Le §8 ci-dessus dit pourquoi un nom approchant
-> n'accorde rien.
+> ⚠️ **Ce qui reste SANS écran**, et il faut le dire pour ne pas refaire la faute : rien.
+> L'ancienne procédure par l'API est conservée **plus bas, barrée**, parce qu'un exploitant qui
+> l'a connue la refera.
 
 ### L'écran Habilitations — qui a le droit de faire quoi
 
@@ -1076,6 +1040,26 @@ domaine. Elle **s'imprime** : c'est sous cette forme qu'on la remet à un audite
 
 **2. Groupes d'annuaire.** La correspondance entre un groupe de l'AD et ce que le
 produit en fait : périmètre, filiale, profil, droit d'export, administration.
+
+En tête de cet écran, l'encart **« Liaison Active Directory »** dit à quoi le produit est
+raccordé : le contrôleur de domaine, la base de recherche, le compte de service, le préfixe
+des groupes, la prise en compte des groupes imbriqués, la vérification du certificat, le
+filtre de recherche — et si un **compte de secours** est configuré.
+
+> 🛑 **Il dit ce qui est CONFIGURÉ, et il dit qu'il ne dit PAS si l'annuaire répond.** Savoir
+> s'il répond exige un aller-retour réseau : c'est le bouton « Vérifier l'annuaire », et c'est
+> pour cela qu'il existe. ⚠️ Les mélanger rendrait cet écran inutilisable **pendant une panne
+> d'annuaire** — c'est-à-dire précisément quand on vient l'ouvrir : chaque affichage
+> attendrait le délai LDAP.
+
+Trois chiffres y viennent de la base, et ils disent si le dispositif a déjà **servi** :
+comptes connus du produit, comptes verrouillés, dernière connexion réussie. ⚠️ *Un annuaire
+parfaitement décrit dont personne ne s'est jamais connecté n'est pas un annuaire qui marche* —
+l'encart le dit en clair quand le compte est à zéro.
+
+> ⚠️ **Le mot de passe du compte de service n'y figure pas**, et n'y figurera jamais. Le reste
+> — URL, base, DN — est de la topologie : c'est ce qu'un administrateur doit voir pour
+> diagnostiquer, et cet écran exige déjà le domaine « administration ».
 
 Le bouton **« Vérifier l'annuaire »** est le plus utile de l'écran. Il confronte trois
 listes — ce que la convention attend, ce que l'application déclare, ce que l'annuaire
@@ -1128,6 +1112,30 @@ n'atteste que du fait d'avoir regardé.
 
 > ⚠️ **L'instantané ne se rafraîchit jamais.** Une revue close cite des personnes qui ont
 > pu quitter le groupe depuis — c'est voulu : c'est ce qu'on a revu.
+
+> ⚠️ **Et depuis le 24/09/2026 la revue balaie DEUX sources** : les groupes d'annuaire, **et
+> les délégations temporaires actives**. Sans la seconde, la revue serait complète en
+> apparence et manquerait exactement les accès que personne n'a inscrits dans l'AD — ceux que
+> le produit accorde lui-même. C'est ce qui l'empêche d'avoir une porte dérobée.
+
+**5. Délégations temporaires.** ⚠️ **Vue neuve du 24/09/2026.** Accorder à un login un profil
+sur un périmètre, **entre deux dates**, avec un motif — l'auditeur externe qui a besoin de
+regarder six semaines, le remplacement d'un congé.
+
+> 🛑 **Ce qu'une délégation NE FAIT JAMAIS**, et ce sont les deux arbitrages du dispositif :
+> elle n'accorde **ni le droit d'export ni l'administration** — ces deux-là viennent de
+> groupes transversaux de l'annuaire et y restent —, et **on ne s'en accorde pas à soi-même**.
+> Sans cette seconde règle, quiconque détient le domaine « droits » s'octroierait n'importe
+> quoi, et toute la traçabilité ne servirait qu'à documenter sa propre inutilité.
+
+> ⚠️ **Quatre-vingt-dix jours au plus, et un motif de dix caractères au moins.** Prolonger est
+> une **nouvelle** délégation : donc une nouvelle décision, un nouveau motif, un nouvel auteur.
+> *La reconduction tacite est exactement ce que la borne empêche.*
+
+> ⚠️ **Une délégation se RÉVOQUE, elle ne se supprime pas** : elle reste au registre, et c'est
+> ce qu'un auditeur vient chercher. ⚠️ Et **vider les groupes d'annuaire ne la révoque pas** —
+> une délégation active ouvre un accès à un login qui n'a aucun groupe `GRC-*`, c'est sa raison
+> d'être.
 
 ---
 

@@ -660,7 +660,10 @@ window.UI = (function () {
             ])
         }),
         Object.freeze({
-            // L'administration des habilitations : trois vues d'un seul sujet —
+            // L'administration des habilitations : CINQ vues d'un seul sujet —
+            // ⚠️ ce commentaire a dit « trois » jusqu'au 25/09/2026, puis le sujet a gagné
+            //    les revues d'accès (22/09) et les délégations temporaires (24/09). Un
+            //    commentaire qui compte des éléments juste en dessous de lui vieillit vite :
             // ce que les profils accordent, par quels groupes d'annuaire, et à
             // qui. Une entrée de menu, trois onglets.
             sujet: "habilitations",
