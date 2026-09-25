@@ -160,7 +160,49 @@ des verdicts antérieurs, il n'en établit pas.
 
 ---
 
-### ▶ OÙ REPRENDRE — au 25/09/2026 au soir
+### ▶ OÙ REPRENDRE — au 25/09/2026, tard : LA PREMIÈRE INSTALLATION CLIENT A ÉCHOUÉ
+
+# 🛑 **L'INSTALLATION CHEZ LE CLIENT EST UN ÉCHEC, ET L'EXPLOITANT QUI LA MENAIT QUITTE
+# L'ENTREPRISE. Personne n'a plus accès à la VM.**
+
+Ce n'est pas le produit qui a échoué : c'est **l'installateur**, qui n'avait jamais tourné
+ailleurs que sur `SRV-Infra`. Trois hypothèses d'environnement, vraies ici par construction,
+fausses sur la VM du client — découvertes **une par une, par l'exploitant**, à la place de
+l'installateur. *Une dépendance d'environnement non déclarée manquera chez quelqu'un
+d'autre* (`CLAUDE.md` §8, huitième corollaire) — pour la deuxième fois, et cette fois devant
+un client.
+
+| Arrêt | Cause réelle | État |
+|---|---|---|
+| migration `038`, `delai_reglementaire_faux` 743 h | fuseau `Europe/Paris` : un mois de calendrier ≠ 744 h | ✅ fermé — `074`, `migrate.mjs` et `install.sh` épinglent le fuseau, 16 essais sous sept fuseaux |
+| `verify error:num=66 EE certificate key too weak` | clé 1024 bits du DC ; le message parlait d'émetteur | ✅ fermé — réserve, et **c'est Node qui décide** |
+| « il demande encore `ca-active-directory.pem` » | l'assistant copiait `.env.example` et ne demandait jamais le certificat ; un `.cer` DER passait le contrôle et Node le refusait | ✅ fermé — question posée, copie lisible par le service, conversion DER/PKCS#7, capture si absent |
+| **dernier arrêt, sortie jamais relue** | **inconnue.** Hypothèse la plus probable, MESURÉE mais NON CONFIRMÉE : **PKI SHA-1** → Node refuse (`UNSPECIFIED`) même avec la bonne AC | ❌ **ouvert** — voir `INSTALLATION_ENTREPRISE.md` §1.3 |
+
+**Pour qui reprend, dans l'ordre :**
+
+1. Relire `docs/INSTALLATION_ENTREPRISE.md` §0 (**quatre** causes désormais) et §1.3 (les
+   formes de certificat, la clé, **la signature SHA-1**).
+2. Sur la VM, une seule commande décide de l'hypothèse ouverte :
+   `openssl s_client -connect <dc>:636 </dev/null | openssl x509 -noout -text | grep -m1 "Signature Algorithm"`.
+3. Si SHA-1 : la correction est **côté AD** (réémettre en SHA-256). L'alternative mesurée —
+   `@SECLEVEL=0` côté client, vérification conservée — **n'est pas livrée** et ne doit l'être
+   qu'avec une variable d'aveu refusée en production, et la même valeur passée à la sonde de
+   l'installateur.
+4. Le contrôle suivant est `IPAddressDeny=any` : l'autorisation du sous-réseau du DC et du
+   résolveur DNS va dans un **drop-in** `/etc/systemd/system/cyber-grc.service.d/reseau.conf`,
+   jamais dans le fichier d'unité versionné (perdu au reclonage, et il bloque `git pull`).
+5. **Rejouer l'installateur sur une VM qui n'est pas `SRV-Infra`** avant toute prochaine
+   installation client — fuseau non-UTC, PKI d'entreprise réelle (clé 1024, SHA-1, export DER
+   et .p7b), compte non-root. C'est la seule façon de trouver la cinquième hypothèse avant
+   qu'un client la trouve.
+
+**Mesuré à `040a3b9`** : banc **2615/2615**, 74 migrations, 72 garde-fous, 99 tables ;
+`f_verifier_schema()` → 0 anomalie dans **sept fuseaux** ; publication conforme.
+
+---
+
+## ▶ OÙ REPRENDRE — au 25/09/2026 au soir
 
 # 🛑 **UN DÉFAUT DE PRODUCTION, ET LA SIXIÈME PASSE DE DOCUMENTATION.**
 

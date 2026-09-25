@@ -209,6 +209,32 @@ contrôle qui rassure et un produit qui échoue. Si vous reprenez une installati
 cette date, vérifiez : `head -1 /etc/cyber-grc/ca-active-directory.pem` doit afficher
 `-----BEGIN CERTIFICATE-----`.
 
+#### 🛑 Et la SIGNATURE du certificat — SHA-1, la cause la plus probable d'un échec qui n'a pas été vu
+
+Mesuré le 25/09/2026 : **un certificat signé en SHA-1 est refusé par Node** (`UNSPECIFIED`,
+la façon d'OpenSSL 3 de dire « algorithme interdit à ce niveau de sécurité »), **même avec la
+bonne AC**. Une PKI dont les clés font 1024 bits a très probablement aussi une AC qui signe en
+SHA-1 : c'est l'hypothèse la plus probable pour la première installation client, dont la
+dernière sortie n'a jamais pu être relue. Elle n'est **pas confirmée**. Pour la vérifier :
+
+    openssl s_client -connect <dc>:636 </dev/null 2>/dev/null | openssl x509 -noout -text \
+      | grep -m1 "Signature Algorithm"        # sha1WithRSAEncryption = c'est ça
+
+**Deux issues, mesurées toutes deux :**
+
+| Issue | Ce qu'elle vaut |
+|---|---|
+| **Réémettre en SHA-256** (AC et certificat du DC) | la vraie correction — SHA-1 est interdit pour les signatures depuis 2017 partout ailleurs |
+| **Abaisser le niveau de sécurité TLS du client LDAP à 0** (`ciphers: 'DEFAULT:@SECLEVEL=0'`) | Node accepte SHA-1 **en gardant la vérification** : une mauvaise AC reste refusée (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`, mesuré). Ce n'est **pas** `LDAP_VERIFIER_CERTIFICAT=non`, qui supprime toute vérification et que la configuration refuse en production |
+
+⚠️ **La seconde issue n'est PAS livrée** : le produit n'a pas d'option pour ce niveau
+(`src/auth/annuaire.ts` passe `ca` et rien d'autre). Elle est viable — mesurée — mais elle
+n'a pas été implémentée faute d'un annuaire réel pour la valider. Si un successeur la livre :
+une variable explicite (`LDAP_NIVEAU_SECURITE_TLS=0`, défaut 1), **refusée en production sans
+une seconde variable d'aveu**, journalisée au démarrage, et le contrôle de l'installateur
+doit passer **le même** niveau à sa sonde Node — sinon la sonde et le produit divergent, la
+classe fermée ce jour-là.
+
 #### Et la TAILLE DE LA CLÉ du certificat du contrôleur
 
 Debian 13 exige **RSA 2048 bits au minimum** au niveau de sécurité par défaut d'OpenSSL. Un
