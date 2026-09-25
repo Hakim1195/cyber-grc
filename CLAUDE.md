@@ -566,6 +566,14 @@
 
 ## 0. L'ENVIRONNEMENT DE TRAVAIL — mesuré, pas supposé
 
+> 🛑 **SI VOUS N'ÊTES PAS SUR `SRV-Infra`, CE §0 NE VOUS CONCERNE PAS.** Il décrit la
+> machine de recette de l'auteur : `Etc/UTC`, annuaire simulé `grc-ad`, secrets dans
+> `~/.grc-essais.env`, recette `grc-test.site`. Sur une VM neuve — chez un client, en
+> évaluation — **rien de cela n'existe**, et le supposer a fait échouer une première
+> installation quatre fois le 25/09/2026. Mesurez d'abord (`hostname`, `timedatectl`), et
+> si ce n'est pas `SRV-Infra` : lisez **[`docs/BRIEF_AGENT_INSTALLATION.md`](docs/BRIEF_AGENT_INSTALLATION.md)**,
+> une page, puis **[`docs/INSTALLATION_ENTREPRISE.md`](docs/INSTALLATION_ENTREPRISE.md)**.
+
 > ⚠️ **Lire avant de déclarer quoi que ce soit « hors de portée ».** Cette section existe
 > parce que trois affirmations fausses sur l'environnement ont coûté du travail dans la
 > seule journée du 04/09/2026 : « la machine est hors ligne » (constat **Q-128**), « aucun
