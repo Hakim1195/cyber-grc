@@ -12,8 +12,8 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > d'administration,
 > sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
-> **PostgreSQL 17.11**) : **73 migrations**, **99 tables**, **395 politiques**,
-> **71 garde-fous**, **608 décisions** au registre de l'article 30, publication
+> **PostgreSQL 17.11**) : **74 migrations**, **99 tables**, **395 politiques**,
+> **72 garde-fous**, **608 décisions** au registre de l'article 30, publication
 > **89 fichiers**, schéma `data` en **v30**, indicateur **56 ✅ · 17 🟡 · 13 ❌ (~75 %)**.
 > ⚠️ **Ce chiffre était faux ici — « 54 ✅ · 18 🟡 · 14 ❌ » — pendant que le tableau de
 > `docs/COMPARATIF_MARCHE.md` portait 56/17/13**, et c'est le tableau qui fait foi : il a été
@@ -44,8 +44,9 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2599 essais, 2599 passés, 0 échec** — 2 325 sans navigateur et 274 avec —,
-> **quarante et une** familles. ⚠️ **+1 le 25/09/2026, tard** : le garde-fou du bloc
+> `npm test` → **2615 essais, 2615 passés, 0 échec** — 2 341 sans navigateur et 274 avec —,
+> **quarante et une** familles. ⚠️ **+16 le 25/09/2026, tard** : `test/base/fuseau-horaire`
+> — les garde-fous joués sous SEPT fuseaux, ce que personne ne faisait. ⚠️ **+1** : le garde-fou du bloc
 > d'ancrage — voir l'entrée du jour. ⚠️ **+3 le 25/09/2026 au soir** : les trois essais qui gardent
 > enfin le **tableau des collections** de `docs/DATA_MODEL.md` §1.5 — il avait dérivé de
 > **quinze collections sur cinq lots** parce que rien ne le mesurait. ⚠️ **+3 le 25/09/2026** : le §12 de `habilitations` (69 → 72),
@@ -110,6 +111,83 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### 🛑 « 743 HEURES AU LIEU DE 744 » — une installation refusée chez un client, et le produit n'avait rien de faux (25/09/2026)
+
+**La première installation que `docs/INSTALLATION_ENTREPRISE.md` devait couvrir s'est
+arrêtée à la migration `038` :**
+
+    nis2/rapport_final : delai_reglementaire_faux
+    (Le délai calculé est de 743.00 heures ; la loi en impose 744.)
+
+`f_verifier_horloge_reglementaire()` exigeait **744 heures** pour le rapport final NIS2. Or
+`timestamptz + interval '1 month'` s'ajoute **au cadran**, dans le fuseau de la session : un
+mois qui traverse un changement d'heure ne fait pas 744 heures. Mesuré sur la même base, en
+ne changeant **que** `TimeZone` :
+
+| `TimeZone` | Heures | Verdict |
+|---|---|---|
+| `Etc/UTC` — `SRV-Infra` | 744 | 0 anomalie |
+| `Europe/Paris` — la VM du client | **743** | **1 anomalie** |
+| `America/New_York` | 743 | 1 anomalie |
+| `Asia/Kolkata`, `Australia/Sydney` | 744 | 0 anomalie |
+
+⚠️ **743 heures est la BONNE réponse à Paris.** « Un mois » au sens de l'article 23 §4 d)
+est un mois de calendrier en temps civil : détecté le 1ᵉʳ mars à 10 h 00, le rapport est dû
+le 1ᵉʳ avril à 10 h 00, et il s'est écoulé 743 heures parce que la nuit du 29 mars en a perdu
+une. **Le produit avait raison ; le garde exigeait un nombre d'HEURES pour une grandeur de
+CALENDRIER**, et aucun nombre d'heures n'est juste dans tous les fuseaux à la fois.
+
+🛑 **CE QUI REND CE DÉFAUT INSTRUCTIF : il ne pouvait être trouvé ni par relecture, ni par le
+banc.** Il n'existait que dans l'écart entre deux machines, et le banc — 2 599 essais — était
+vert sur celle où il tournait. C'est le huitième corollaire du `CLAUDE.md` §8, *une dépendance
+d'environnement non déclarée manquera chez quelqu'un d'autre*, pour la deuxième fois après
+l'entrée `/etc/hosts` que rien ne posait (614 sur 628 sur une machine neuve).
+
+**⇒ Reproduit avant de corriger** : base NEUVE, `alter database … set TimeZone='Europe/Paris'`,
+`node db/migrate.mjs` → même message, même migration `038`, même code 6.
+
+### Le remède, en trois pièces — et la deuxième est celle qui compte
+
+1. **Le garde compare des INSTANTS, sur deux mois témoins de longueurs différentes** (février
+   28 j, mars 31 j) et **fixe son propre fuseau**. Il est *plus fort* qu'avant : aucune
+   constante horaire ne satisfait les deux témoins, donc la « réparation » qui vient à
+   l'esprit — `interval '744 hours'` — le fait rougir. L'ancienne rédaction l'aurait acceptée.
+2. 🛑 **`db/migrate.mjs` et `deploy/install.sh` épinglent le fuseau** (`-c TimeZone=UTC`,
+   `PGTZ=UTC`). **C'est là, et nulle part ailleurs, que se joue la reproductibilité d'une
+   installation NEUVE** : la migration `074` vient *après* la `038`, donc elle n'est **jamais
+   atteinte** sur une base fraîche. Corriger le garde ne suffisait pas.
+3. **Un garde de CLASSE** — `f_verifier_volatilite_calendrier()` — refuse toute fonction
+   `immutable` qui laisse la session choisir un fuseau. Car les deux fonctions d'échéance se
+   déclaraient `immutable` alors que leur résultat dépend de `TimeZone` : un mensonge au
+   planificateur, qui peut replier l'expression et réemployer le plan sous un autre fuseau.
+
+⚠️ **Le balayage en a trouvé une seconde que rien n'avait signalée** : `f_echeance_contractuelle`
+(migration `071`) fait `p_date_detection::timestamptz` — minuit **local**. Son arithmétique
+étant en heures exactes, aucun symptôme n'existait. *Trouvée par un balayage du catalogue, pas
+par un symptôme : une déclaration fausse ne se plaint pas.*
+
+⚠️ **Et trois fonctions voisines sont INNOCENTES**, ce qui donne le discriminant :
+`f_echeance_droits` et `f_prochain_controle` ajoutent des mois à une **`date`** (calendrier
+pur) ; `f_main_courante_charge_utile` emploie `at time zone 'UTC'`, zone **littérale** — et
+son immutabilité est **nécessaire** : une empreinte calculée dans le fuseau du lecteur
+romprait la chaîne d'intégrité de la main courante de crise.
+
+### ⚠️ Deux pièges d'écriture, tous deux trouvés par MUTATION et non par relecture
+
+Les deux faisaient rendre au garde **zéro anomalie**, c'est-à-dire ce qu'il rend quand tout
+va bien.
+
+1. **`\b` n'est pas une limite de mot en PostgreSQL** — c'est le caractère BACKSPACE. Le
+   motif `cast\s*\([^)]*\bas\s+timestamp` ne mordait donc jamais. C'est `\y`.
+2. **Une lookahead négative derrière `\s*` ne contraint rien** : `\s*` peut matcher le vide.
+   `at\s+time\s+zone\s*(?!')` acceptait `at time zone 'UTC'` et signalait une fonction
+   innocente — mon propre faux positif, vu parce que la migration a été JOUÉE.
+
+**Huit mutations jouées, huit morsures**, et zéro bruit dans sept fuseaux. Règle :
+`backend/db/CONVENTIONS.md` **§50**. Nouvelle cause d'échec au
+`docs/INSTALLATION_ENTREPRISE.md` §0 — il en annonçait trois, et la vraie n'en faisait pas
+partie.
 
 ### 🛑 « L'ARBRE DE `ANCRE` » — un garde-fou qui ne lisait qu'une moitié de ce qu'un geste écrit (25/09/2026)
 

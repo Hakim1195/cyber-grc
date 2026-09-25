@@ -3521,3 +3521,84 @@ l'empêche de lire une table cloisonnée.
 **La règle : un calcul par régime, à un seul endroit par régime.** Et un garde mesure que le
 contractuel n'a pas déteint sur le légal, parce que la seule façon dont cette propriété peut
 devenir fausse est qu'un futur bien intentionné « simplifie ».
+
+---
+
+## §50 — Un garde-fou qui dépend de l'ENVIRONNEMENT n'est pas un garde-fou
+
+**Payé le 25/09/2026, sur la PREMIÈRE INSTALLATION CHEZ UN CLIENT.** Le déroulé des
+migrations s'est arrêté à la `038` :
+
+    nis2/rapport_final : delai_reglementaire_faux
+    (Le délai calculé est de 743.00 heures ; la loi en impose 744.)
+
+Le produit n'avait rien de faux. `f_verifier_horloge_reglementaire()` exigeait **744
+heures** pour le rapport final NIS2, et `timestamptz + interval '1 month'` s'ajoute **au
+cadran**, dans le fuseau de la session : un mois qui traverse un changement d'heure ne fait
+pas 744 heures. Mesuré sur la même base, en ne changeant que `TimeZone` :
+
+| `TimeZone` | Heures | Verdict |
+|---|---|---|
+| `Etc/UTC` — la machine de recette | 744 | 0 anomalie |
+| `Europe/Paris` — la VM du client | **743** | **1 anomalie** |
+| `America/New_York` | 743 | 1 anomalie |
+| `Asia/Kolkata`, `Australia/Sydney` | 744 | 0 anomalie |
+
+🛑 **La règle : un contrôle de schéma doit rendre le même verdict sur la machine de son
+auteur et sur celle du client.** Sinon il ne mesure pas le produit — il mesure l'endroit
+d'où on le regarde, et il tombe du mauvais côté au pire moment : pas au banc, pas en
+recette, mais à la première installation, où il refuse la migration.
+
+**Trois obligations en découlent.**
+
+1. **Un garde qui touche au temps fixe SON fuseau** (`set timezone = 'UTC'` au niveau de la
+   fonction), et **compare des INSTANTS, jamais des durées dérivées**. Un nombre d'heures
+   n'est pas une propriété d'un mois de calendrier.
+2. **Le déroulé des migrations épingle le fuseau** (`db/migrate.mjs`, `deploy/install.sh`).
+   ⚠️ **C'est là que se joue la reproductibilité d'une installation NEUVE**, et nulle part
+   ailleurs : la migration qui corrige un garde vient forcément *après* lui, donc elle n'est
+   jamais atteinte sur une base fraîche. *Corriger le garde ne suffit pas ; il faut rendre
+   le déroulé déterministe.*
+3. **Le banc joue sous plusieurs fuseaux** — `test/base/fuseau-horaire.test.mjs`, sept
+   fuseaux choisis pour leurs bascules. Tant que personne ne le fait, un défaut de cette
+   classe est invisible par construction sur la machine de développement.
+
+### §50.1 — `IMMUTABLE` est une promesse, et le temps civil la rend souvent fausse
+
+Les deux fonctions d'échéance se déclaraient `immutable` alors que leur résultat dépend de
+`TimeZone`. C'est un mensonge au planificateur : il peut replier l'expression à la
+planification et **réemployer le plan dans une session dont le fuseau diffère**. Aucun index
+ni colonne engendrée ne les appelait — vérifié dans le catalogue — donc aucune donnée stockée
+n'était fausse ; la promesse restait à retirer.
+
+**Quatre formes rendent une fonction dépendante du fuseau, et `f_verifier_volatilite_calendrier()`
+les mesure** (balayage du catalogue, §19.5) :
+
+| Forme | Pourquoi |
+|---|---|
+| `timestamptz + interval '1 month'` | le mois s'ajoute au cadran local |
+| `date::timestamptz` | minuit **local** |
+| `timestamptz::timestamp`, `cast(… as timestamp)` | l'instant ramené au cadran du **lecteur** |
+| `at time zone <non littéral>` | la zone vient de la session ou d'une donnée |
+
+⚠️ **Et la moitié NON-BRUIT est aussi importante que la morsure.** Trois fonctions voisines
+doivent **rester** `immutable`, et le garde doit se taire dessus : `f_echeance_droits` et
+`f_prochain_controle` ajoutent des mois à une **`date`** — l'arithmétique de `date` est
+purement calendaire, aucun fuseau n'y entre — et `f_main_courante_charge_utile` emploie
+`at time zone 'UTC'`, une zone **littérale**. *Pour celle-là l'immutabilité n'est pas une
+optimisation : c'est ce qui tient la chaîne.* Une empreinte calculée dans le fuseau du
+lecteur romprait la chaîne d'intégrité de la main courante de crise — en ajout seul, pièce
+d'audit. La mutation qui l'a démontré est celle qui a révélé que le garde ne voyait pas le
+cast inverse.
+
+### §50.2 — Deux pièges d'écriture des expressions rationnelles, tous deux payés
+
+Les deux ont été trouvés **par mutation**, jamais par relecture, et tous deux faisaient
+rendre au garde **zéro anomalie — c'est-à-dire ce qu'il rend quand tout va bien**.
+
+1. **`\b` n'est pas une limite de mot en PostgreSQL** : dans les expressions avancées, c'est
+   le caractère **BACKSPACE**. Écrire `\bas\s+timestamp` cherche un backspace. C'est **`\y`**.
+2. **Une lookahead négative derrière `\s*` ne contraint rien** : `\s*` peut matcher le vide,
+   la lookahead regarde alors l'espace, et le motif réussit quelle que soit la suite.
+   `at\s+time\s+zone\s*(?!')` acceptait `at time zone 'UTC'`. Il faut exiger que le premier
+   caractère **non blanc** ne soit pas une apostrophe : `at\s+time\s+zone\s*[^\s']`.

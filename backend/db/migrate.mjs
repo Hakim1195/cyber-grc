@@ -808,7 +808,23 @@ export async function executer(arguments_ = process.argv.slice(2), environnement
     // Une migration ne se fait pas interrompre au milieu : les délais de garde du
     // service applicatif (BASE_DELAI_REQUETE) n'ont pas cours ici. Un `create index`
     // sur une base chargée peut légitimement durer.
-    options: '-c statement_timeout=0 -c idle_in_transaction_session_timeout=0 -c search_path=public',
+    // 🛑 **LE FUSEAU EST FIXÉ, ET CE N'EST PAS UN DÉTAIL DE CONFORT.** Une vérification
+    // de schéma ne doit pas dépendre du réglage régional de celui qui l'exécute. Le
+    // 25/09/2026, une PREMIÈRE INSTALLATION CHEZ UN CLIENT a été refusée à la migration
+    // `038` sur `nis2/rapport_final : delai_reglementaire_faux` — 743 heures au lieu de
+    // 744 — pendant que le banc était vert ici. La cause n'était pas le produit :
+    // `timestamptz + interval '1 month'` s'ajoute AU CADRAN, dans le fuseau de la session,
+    // si bien qu'un mois qui traverse un changement d'heure ne fait pas 744 heures. La VM
+    // du client est en temps civil européen ; `SRV-Infra` est en `Etc/UTC`.
+    //
+    // ⚠️ La migration `074` corrige le garde, mais **elle ne suffit pas pour une base
+    // NEUVE** : elle vient après la `038`, et le déroulé s'arrête avant de l'atteindre. Ce
+    // qui rend une installation reproductible dans tout fuseau, c'est cette ligne-ci.
+    //
+    // ⚠️ Cela ne change RIEN à ce que le produit calcule en service : le service a sa
+    // propre connexion. Seul le déroulé des migrations et les garde-fous qu'il appelle
+    // sont épinglés — c'est-à-dire exactement ce qui doit rendre le même verdict partout.
+    options: '-c statement_timeout=0 -c idle_in_transaction_session_timeout=0 -c search_path=public -c TimeZone=UTC',
   });
 
   try {

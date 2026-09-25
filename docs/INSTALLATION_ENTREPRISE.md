@@ -16,7 +16,7 @@
 
 ---
 
-## 0. Les trois choses qui font échouer une première installation
+## 0. Les quatre choses qui font échouer une première installation
 
 Elles ne sont pas techniques, et aucune ne se voit dans un message d'erreur clair. Les voici
 avant tout le reste, parce que **chacune se prépare des jours à l'avance, auprès de
@@ -27,6 +27,7 @@ quelqu'un d'autre que vous**.
 | **1** | le **certificat TLS** n'est pas en place | en production l'installateur **n'en engendre AUCUN** : Apache refuse de démarrer, et l'erreur parle d'un fichier, pas d'un certificat | l'équipe PKI / sécurité |
 | **2** | l'unité systemd **ferme la sortie réseau** (`IPAddressDeny=any`) | le service démarre, l'installation dit « terminée », et **aucune connexion n'aboutit** — le contrôleur de domaine est injoignable depuis le service, alors qu'il répond depuis le shell | l'équipe réseau (adresse du DC, du résolveur DNS, du relais SMTP) |
 | **3** | **personne n'est membre de `GRC-ADMIN`** | le produit est installé, l'annuaire répond, les comptes se connectent… et **aucun d'eux ne peut rien administrer**. Un compte sans groupe `GRC-*` reçoit **403** : authentifié, sans aucun droit | l'administrateur du domaine |
+| **4** | le **fuseau horaire de la VM** — ⚠️ **corrigé le 25/09/2026, ne concerne plus une installation faite depuis un dépôt à jour** | la migration `038` était refusée : *« nis2/rapport_final : delai_reglementaire_faux — 743 heures ; la loi en impose 744 »*. Rien à voir avec vos données : un garde-fou comparait un nombre d'**heures** à un mois de **calendrier**, et un mois qui traverse un changement d'heure n'en fait pas 744. Il était vert sur une machine en UTC et rouge sur une VM en temps civil européen | personne — `git pull`, et si vous êtes sur une copie antérieure : `sudo -u postgres psql -c "ALTER DATABASE cyber_grc SET TimeZone = 'UTC';"` puis relancer |
 
 🛑 **Le troisième est le plus vicieux, et il mérite d'être compris avant le jour J.** Le
 produit sépare **authentification** et **autorisation** : le mot de passe est vérifié par
@@ -38,6 +39,16 @@ produit est une porte que personne ne referme.
 **Conséquence pratique** : désignez **nommément**, avant le jour J, la personne qui sera le
 premier administrateur, et faites-la mettre dans `GRC-ADMIN` **dans le même geste** que la
 création des groupes.
+
+⚠️ **ET LE QUATRIÈME EST ARRIVÉ POUR DE VRAI, LE 25/09/2026, SUR LA PREMIÈRE INSTALLATION
+QUE CE DÉROULÉ DEVAIT COUVRIR.** Il est gardé dans le tableau bien que corrigé, parce que sa
+leçon vaut pour les suivantes : **ce document annonçait trois causes, et la cause réelle n'en
+faisait pas partie.** Aucune relecture ne pouvait la trouver — elle n'existait que dans
+l'écart entre deux machines, et le banc de 2 599 essais était vert sur celle où il tournait.
+*Une dépendance d'environnement non déclarée manquera chez quelqu'un d'autre.* Le remède est
+posé là où il fallait : l'installateur et le déroulé des migrations **épinglent désormais leur
+propre fuseau**, si bien qu'un contrôle de schéma rend le même verdict sur la machine de son
+auteur et sur la vôtre. Seize essais le vérifient sous sept fuseaux.
 
 ---
 

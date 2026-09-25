@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2599 essais, quarante et une familles (voir plus bas)
+npm test                           # 2615 essais, quarante et une familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -795,9 +795,9 @@ l'utilisateur : **`JSON.stringify` n'est pas un test d'égalité pour une donné
 produit réécrivait son instantané quotidien **toutes les trois secondes**, journal d'audit
 compris :
 `npm test` →
-**2599 essais, 2599 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**2615 essais, 2615 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
-`f_verifier_schema()` → 0 anomalie, **71 garde-fous consignés**, **73 migrations**,
+`f_verifier_schema()` → 0 anomalie, **72 garde-fous consignés**, **74 migrations**,
 **99 tables**, **608 décisions** au registre de l'article 30 ; publication → **89
 fichiers identiques au dépôt** ;
 
@@ -981,8 +981,8 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2599 · pass 2599 · fail 0
-                                                   base 377 · api 302 · navigateur 274
+npm test                                         → tests 2615 · pass 2615 · fail 0
+                                                   base 393 · api 302 · navigateur 274
                                                    pieces 142 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73
@@ -1002,15 +1002,15 @@ npm test                                         → tests 2599 · pass 2599 · 
                                                    droits-personnes 6
 npm audit --omit=dev                             → found 0 vulnerabilities
 psql -U grc_app -f db/verifier_cloisonnement.sql → 110 contrôles · 110 réussis · 0 échoué (code 0)
-select * from f_verifier_schema()                → 0 ligne (71 garde-fous découverts, joués, consignés)
+select * from f_verifier_schema()                → 0 ligne (72 garde-fous découverts, joués, consignés)
 ```
 
 Schéma relevé **dans le catalogue**, pas dans le texte des migrations : **99 tables** en
-**73 migrations**, **395 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
+**74 migrations**, **395 politiques**, **0 table sans RLS activée, 0 sans RLS forcée**,
 **196 clés étrangères** (114 `restrict`, 69 `cascade`, 12 `set null`, 1 `no action`),
 **91 tables portant `cree_par` et 89 déclencheurs de création**, **66 clés étrangères
 composites** visant
-`(id, filiale_id)`, **31 unicités** `uq_<parent>_id_filiale`, **71 contrôles consignés**
+`(id, filiale_id)`, **31 unicités** `uq_<parent>_id_filiale`, **72 contrôles consignés**
 dans `controles_schema` — le quatorzième est `f_verifier_champs_structurels()`, apporté par
 la migration `015` (constat Q-201), le quinzième `f_verifier_declencheurs_pieces()`,
 apporté par la migration `017` (constats Q-232 / Q-233 : une pièce jointe suit son
@@ -1290,7 +1290,7 @@ Ce que la reprise fait, quand on la rejoue :
 
 #### Lot L1 — rejoué sur base neuve
 
-- **99 tables**, obtenues aujourd'hui en **73 migrations** appliquées de bout en bout par
+- **99 tables**, obtenues aujourd'hui en **74 migrations** appliquées de bout en bout par
   `db/migrate.mjs` : `001_socle.sql` (16 tables), `002_metier_noyau.sql` (9 entités +
   5 liaisons), `003_metier_operations.sql` (13 entités + 4 liaisons), `004_rls.sql`
   (privilèges, politiques, déclencheurs, garde-fous), `005_controles_schema.sql` (le

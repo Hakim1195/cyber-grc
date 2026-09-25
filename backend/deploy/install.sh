@@ -519,17 +519,27 @@ injecter_jeton_frontend() {
 # Le SQL arrive par l'entrée standard (« -f - ») : rien ne transite par la ligne de
 # commande, donc aucun mot de passe n'apparaît dans `ps`. Le `cd /tmp` évite le
 # « could not change directory to /root » que produit `su postgres` depuis /root.
+#
+# 🛑 **PGTZ=UTC — ET C'EST UN CORRECTIF, PAS UNE PRÉFÉRENCE.** Le 25/09/2026, une première
+# installation chez un client a été refusée sur `nis2/rapport_final :
+# delai_reglementaire_faux` (743 heures au lieu de 744) parce que la VM est en temps civil
+# européen : `timestamptz + interval '1 month'` s'ajoute AU CADRAN, et un mois qui traverse
+# un changement d'heure ne fait pas 744 heures. Un contrôle de schéma doit rendre le même
+# verdict sur la machine de son auteur et sur celle du client, sinon il ne mesure pas le
+# produit — il mesure l'endroit d'où on le regarde. Même épinglage dans `db/migrate.mjs`.
+# ⚠️ Cela ne touche PAS ce que le service calcule en exploitation : il a sa propre
+# connexion. Seuls les contrôles de l'installateur sont rendus reproductibles.
 
 sql_admin() {          # SQL sur stdin, exécuté sur la base « postgres »
   ( cd /tmp && su "$SUPERUTILISATEUR" -s /bin/sh \
-      -c 'psql -X -q -A -t -v ON_ERROR_STOP=1 -d postgres -f -' )
+      -c 'PGTZ=UTC psql -X -q -A -t -v ON_ERROR_STOP=1 -d postgres -f -' )
 }
 
 sql_admin_base() {     # SQL sur stdin, exécuté sur la base applicative
   # $BASE_NOM est passé par `valider_identifiant` avant tout usage : l'interpolation
   # dans la ligne de commande est close, elle ne vient jamais d'une saisie libre.
   ( cd /tmp && su "$SUPERUTILISATEUR" -s /bin/sh \
-      -c "psql -X -q -A -t -v ON_ERROR_STOP=1 -d $BASE_NOM -f -" )
+      -c "PGTZ=UTC psql -X -q -A -t -v ON_ERROR_STOP=1 -d $BASE_NOM -f -" )
 }
 
 # Doublement des apostrophes : le mot de passe finit dans un littéral SQL.
