@@ -41,6 +41,71 @@ création des groupes.
 
 ---
 
+## 0 bis. Le PREMIER ACCÈS ADMINISTRATEUR — la question qu'il faut se poser avant
+
+> *« Comment on fait le premier accès admin au logiciel ? »* — question de l'utilisateur,
+> 25/09/2026. Elle mérite sa section, parce que la réponse surprend.
+
+🛑 **IL N'EXISTE AUCUN COMPTE ADMINISTRATEUR LIVRÉ AVEC LE PRODUIT.** Pas de `admin/admin`,
+pas de mot de passe imprimé à la fin de l'installation, pas d'assistant de premier démarrage
+qui crée un compte. *Un compte d'administration livré avec le produit est une porte que
+personne ne referme.*
+
+Le premier accès s'obtient en **mettant un vrai compte de l'annuaire dans `GRC-ADMIN`** :
+
+| | Qui | Quoi |
+|---|---|---|
+| 1 | vous | `install.sh --assistant` — le produit **déclare aussitôt** les groupes attendus, `GRC-ADMIN` compris |
+| 2 | vous | `groupes-ad.sh --powershell > creer-groupes-grc.ps1` |
+| 3 | **l'administrateur du domaine** | exécute le script **et ajoute votre compte à `GRC-ADMIN`** (plus `GRC-EXPORT` si vous devez extraire des données) |
+| 4 | vous | vous connectez avec **votre identifiant et votre mot de passe AD habituels**. « Administration » apparaît dans le menu |
+
+⚠️ **Le mot de passe n'est jamais vérifié par le produit** : il est présenté à l'annuaire, qui
+tranche (liaison LDAP sous le nom distinctif de l'utilisateur). Le produit ne stocke aucun mot
+de passe d'utilisateur — la seule empreinte qu'il détienne est celle du compte de secours
+ci-dessous, et une contrainte de base interdit à tout autre compte d'en porter une.
+
+### 🛑 Votre voie de retour si l'annuaire tombe — elle n'est PAS posée automatiquement
+
+⚠️ **En production, l'assistant ne crée AUCUN compte de secours.** Il ne le propose que si
+vous répondez « non » à la question de l'annuaire, c'est-à-dire en profil découverte. En
+l'état, donc : **si l'annuaire devient injoignable, ou si le mot de passe du compte de service
+expire, plus personne n'entre.**
+
+Les deux peuvent coexister — un annuaire actif **et** un compte de secours. Pour en poser un,
+après l'installation :
+
+```bash
+# 1 — Calculer l'empreinte. Le mot de passe n'est JAMAIS écrit sur le disque : seule
+#     cette empreinte scrypt entre dans la configuration. Douze caractères au minimum.
+printf '%s' 'VotreMotDePasseDeSecours' | node --input-type=module -e "
+const m = await import('file:///chemin/vers/cyber-grc/backend/dist/auth/secours.js');
+const b=[]; for await (const c of process.stdin) b.push(c);
+process.stdout.write(await m.engendrerEmpreinte(Buffer.concat(b).toString('utf8')));
+"
+# → scrypt$16384$8$1$…
+
+# 2 — Déclarer les deux variables dans /etc/cyber-grc/env
+#     AUTH_COMPTE_SECOURS_IDENTIFIANT=secours.grc
+#     AUTH_COMPTE_SECOURS_EMPREINTE=scrypt$16384$8$1$…
+
+sudo systemctl restart cyber-grc
+```
+
+⚠️ **C'est l'empreinte engendrée par le code du produit lui-même** qui entre dans la
+configuration — jamais une empreinte calculée à la main dans un shell, dont le format
+divergerait le jour où les paramètres `scrypt` changent.
+
+Ce compte donne l'**administration Groupe**, et **chacun de ses usages est journalisé** —
+réussi comme refusé. *Une porte dérobée dont personne ne sait qu'elle a servi n'est pas un
+filet, c'est un trou.* Ce n'est **pas** la porte d'entrée : c'est le filet.
+
+✅ **Comment savoir s'il est en place, sans ouvrir un fichier** : **Administration →
+Habilitations → Groupes d'annuaire**, encart « Liaison Active Directory ». Il dit le
+contrôleur, la base, le compte de service, et **si un compte de secours est configuré**.
+
+---
+
 ## 1. Ce qu'il faut obtenir avant de toucher la VM
 
 ### 1.1 La machine
@@ -412,6 +477,8 @@ AVANT LE JOUR J
 [ ] liste des filiales : code court + raison sociale
 [ ] LA PERSONNE qui sera le premier administrateur, nommément
 [ ] l'administrateur du domaine est joignable le jour J
+[ ] décidé : pose-t-on un COMPTE DE SECOURS ? (l'assistant n'en pose aucun
+    en production — sans lui, un annuaire qui tombe ferme le produit à tous)
 
 LE JOUR J
 [ ] 1. install.sh --assistant            → PORTE 1 : achevé, ou code 2 corrigé
@@ -420,6 +487,8 @@ LE JOUR J
 [ ] 4. l'admin du domaine exécute        → ET met la personne dans GRC-ADMIN
 [ ]    groupes-ad.sh --verifier          → PORTE 3 : les trois listes concordent
 [ ] 5. première connexion                → PORTE 4 : Administration est dans le menu
+[ ]    l'encart « Liaison Active Directory » dit ce qui est configuré
+[ ]    compte de secours posé, si décidé — et son mot de passe mis au coffre
 [ ] 6. minuteurs armés · SAUVEGARDES en place · restauration TESTÉE
 
 AVANT DE DIRE « EN SERVICE »

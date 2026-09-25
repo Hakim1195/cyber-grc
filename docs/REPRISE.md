@@ -160,7 +160,70 @@ des verdicts antérieurs, il n'en établit pas.
 
 ---
 
-### ▶ OÙ REPRENDRE — au 24/09/2026 au soir, LA DEMANDE DU RSSI
+### ▶ OÙ REPRENDRE — au 25/09/2026, LA PREMIÈRE MISE EN SERVICE SE PRÉPARE
+
+# 🛑 **L'UTILISATEUR VA INSTALLER CHEZ LE CLIENT. Le déroulé est écrit.**
+
+**[`docs/INSTALLATION_ENTREPRISE.md`](INSTALLATION_ENTREPRISE.md)** — un DÉROULÉ, pas un
+tutoriel. Deux documents d'installation existaient déjà (`INSTALLER.md`, cinq commandes ;
+`GUIDE_EXPLOITATION.md` §1) et **aucun ne disait ce qu'il faut obtenir avant de toucher la
+VM, ni de qui**.
+
+🛑 **LES TROIS CAUSES D'ÉCHEC D'UNE PREMIÈRE INSTALLATION**, chacune à préparer des jours
+à l'avance auprès de quelqu'un d'autre :
+
+1. **le certificat TLS** n'est pas aux trois chemins du vhost — *en production
+   l'installateur n'en engendre AUCUN*, et l'erreur parle d'un fichier ;
+2. **l'unité systemd ferme la sortie réseau** (`IPAddressDeny=any`) : l'installation dit
+   « terminée » et **aucune connexion n'aboutit**, parce que le contrôleur est injoignable
+   **depuis le service** alors qu'il répond depuis le shell ;
+3. **personne n'est dans `GRC-ADMIN`** : les comptes entrent, et aucun ne peut rien
+   administrer — **403**, authentifié sans aucun droit.
+
+## 🛑 LE PREMIER ACCÈS ADMINISTRATEUR — ce que personne n'avait écrit
+
+**Il n'existe AUCUN compte administrateur livré avec le produit.** Ni `admin/admin`, ni mot
+de passe imprimé à l'installation, ni assistant de premier démarrage. Le premier accès
+s'obtient en mettant un **compte réel de l'annuaire** dans `GRC-ADMIN`. *Un compte
+d'administration livré avec le produit est une porte que personne ne referme.*
+
+⚠️ **ET EN PRODUCTION L'ASSISTANT NE POSE AUCUN COMPTE DE SECOURS** — il ne le propose qu'en
+profil découverte. Trouvé en répondant à la question de l'utilisateur : **si l'annuaire tombe
+ou si le mot de passe du compte de service expire, plus personne n'entre.** Les deux peuvent
+coexister (la recette porte les deux), et la procédure manuelle est écrite au §0 bis du
+déroulé — avec la commande qui calcule l'empreinte **par le code du produit**, jamais à la
+main dans un shell.
+
+## ✅ LA LIAISON AD EST DANS LE PANNEAU D'ADMINISTRATION
+
+**Administration → Habilitations → Groupes d'annuaire**, encart en tête. Deux questions que
+l'écran ne confond pas : *« à quoi sommes-nous raccordés ? »* est **gratuit** (configuration,
+rendu à chaque ouverture) ; *« est-ce que ça répond maintenant ? »* **sort sur le réseau** et
+reste « Vérifier l'annuaire ». ⚠️ Les mélanger rendrait l'écran inutilisable **pendant une
+panne d'annuaire**, c'est-à-dire quand on vient l'ouvrir.
+
+⚠️ **Le banc a trouvé un défaut de ma première rédaction** : la réponse changeait de FORME
+selon que le greffon d'authentification est monté — deux champs, ou treize. Forme unique
+`LIAISON_SANS_ANNUAIRE`, déclarée une fois. Classe **Q-201**.
+
+## ⚠️ QUATRE FAUSSETÉS DE PLUS, DANS LES DOCUMENTS QU'ON SUIT
+
+- `INSTALLER.md` disait « **dix** commandes » quand la page en titrait **cinq** — **le
+  constat Q-275 refait dans le fichier qu'il visait** ;
+- `INSTALLER.md` et `GUIDE_EXPLOITATION.md` §1 disaient « **quatorze** sujets » au
+  `--diagnostic`, qui en rend **quinze** depuis L27, pendant que le `README` §8 disait
+  « quinze » depuis le premier jour (**Q-219**) ;
+- ni l'un ni l'autre ne disait que le premier accès exige `GRC-ADMIN` ;
+- ⚠️ et `dist/sous_traitance/` survivait au renommage de la veille — **88 sources pour 89
+  fichiers compilés**. Trouvé par `test/api/normalisation-erreurs.test.mjs`, qui dit
+  exactement : *« `dist/` garde un fichier dont la source a disparu, auquel cas le serveur
+  mis à l'épreuve n'est plus tout à fait celui du dépôt. »* Rien ne l'importait ; le garde a
+  raison quand même.
+
+**⇒ LE GESTE SUIVANT : l'installation chez le client, déroulé en main. Puis
+l'`ULTRAREVIEW`** — à l'utilisateur, `/code-review ultra`.
+
+### ▶ Historique — au 24/09/2026 au soir, LA DEMANDE DU RSSI
 
 # 🛑 **LE DONNEUR D'ORDRE CESSE D'ÊTRE UN NOM — migrations `070` à `073`.**
 

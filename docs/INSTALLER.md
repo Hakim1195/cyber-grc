@@ -62,7 +62,9 @@ sudo bash backend/deploy/groupes-ad.sh --powershell \
      --ou 'OU=Cyber GRC,OU=Groupes,DC=votre-domaine,DC=interne' > creer-groupes-grc.ps1
 
 # 5 — Faire exécuter creer-groupes-grc.ps1 par l'administrateur du domaine,
-#     puis ouvrir https://votre-nom/ et se connecter avec un compte de l'annuaire
+#     ET lui faire AJOUTER VOTRE COMPTE À « GRC-ADMIN » — sans quoi vous entrerez
+#     sans aucun droit (403). Puis ouvrir https://votre-nom/ et se connecter avec
+#     votre identifiant et votre mot de passe Active Directory habituels.
 ```
 
 ⚠️ **L'étape 2 porte vos filiales EN BASE** — c'est là que `filiales.conf` cesse d'être un
@@ -118,6 +120,7 @@ journalisé** ; son mot de passe n'est jamais écrit sur le disque — seule une
 | `install.sh` s'arrête en **code 2** en nommant des variables | Une valeur qui vient de **votre** SI manque — le script refuse de deviner | Complétez `/etc/cyber-grc/env`, relancez. **Les secrets déjà engendrés sont conservés** |
 | `https://votre-nom/` rend **403** | La liste blanche de publication ne couvre pas « / » (constat **Q-36**) | `sudo bash backend/deploy/install.sh --maj` |
 | Personne ne peut se connecter | L'annuaire est injoignable, ou les groupes `GRC-*` n'existent pas encore | `--diagnostic` le dit sur sa ligne « annuaire ». Puis étape 5 |
+| On entre, et **rien n'est ouvert** (403) | **Aucun groupe `GRC-*` pour ce compte.** Il n'existe **aucun** administrateur par défaut : le premier accès s'obtient en mettant un compte réel dans `GRC-ADMIN` | étape 5, seconde moitié |
 
 **Une installation à moitié faite est pire qu'une installation refusée** : c'est pour cela
 que le script s'arrête au lieu de continuer avec des valeurs inventées.
@@ -160,6 +163,11 @@ sudo bash backend/deploy/install.sh --desinstaller --avec-les-donnees \
 - **Il n'écrit pas dans votre Active Directory.** Il lit les appartenances et vous *rend la
   liste* des groupes à créer. Une application exposée qui écrit dans l'annuaire du client
   est ce qu'un RSSI refuse.
+- **Il ne crée aucun compte administrateur.** Il n'y a pas de « admin/admin » à changer plus
+  tard, donc pas de porte qu'on oublie de refermer — et pas de premier accès sans que
+  quelqu'un ait été mis dans `GRC-ADMIN`. ⚠️ **Et en production il ne pose aucun compte de
+  secours** : si vous en voulez un comme voie de retour en cas de panne d'annuaire, c'est un
+  geste à part — voir [`INSTALLATION_ENTREPRISE.md`](INSTALLATION_ENTREPRISE.md) §0 bis.
 - **Il ne charge aucune donnée de démonstration.** À la première ouverture les écrans sont
   vides, et c'est voulu : un outil qui affiche « aucun risque » sur une base vide ne ment
   pas.

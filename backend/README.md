@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2591 essais, quarante et une familles (voir plus bas)
+npm test                           # 2594 essais, quarante et une familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -786,11 +786,11 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 24/09/2026 au soir, après le registre de l'ARTICLE 30 §2 du RGPD** (écran
-« Donneurs d'ordre », `src/sous-traitance/`, migrations `070` à `073` — demande du RSSI du
-client) :
+**Mesuré au 25/09/2026, après la liaison Active Directory dans le panneau d'administration**
+(encart « Liaison Active Directory », `decrireLiaison()`, et le déroulé de première mise en
+service `docs/INSTALLATION_ENTREPRISE.md`) :
 `npm test` →
-**2591 essais, 2591 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**2594 essais, 2594 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **71 garde-fous consignés**, **73 migrations**,
 **99 tables**, **608 décisions** au registre de l'article 30 ; publication → **89
@@ -968,21 +968,21 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`15def8a`** — le registre de l'**article 30 §2** du RGPD et le dossier remis au donneur d'ordre (migrations `070` à `073`, demande du RSSI du client). 24/09/2026 au soir, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Elle cite le RÉANCRAGE et non le commit de travail**, et c'est la circularité assumée du dispositif : le renommage de `sous_traitance` en `sous-traitance` — exigé par le garde-fou des familles, qui n'admet aucun souligné — vit dans le réancrage. Le point fixe du compte n'existe donc qu'**après** le commit qu'il décrit ; cela se dit plutôt que de se cacher. ⚠️ **Ce bloc a déjà été RÉANCRÉ onze fois**, dont une où il désignait une révision cinquante-six commits en arrière (constat **Q-219**). Le garde-fou juge le document contre **la révision que le document nomme**, jamais contre l'arbre de travail. |
-| État de l'arbre | **arbre de `15def8a`**, à l'octet près. Compte **RELEVÉ famille par famille** — quarante et un répertoires joués séparément, somme confrontée au total du banc complet : **2 591 des deux côtés**. Une famille neuve, `sous-traitance` (23) ; `base` 358 → 377 (les dix-neuf mutations des deux garde-fous neufs), `navigateur` 270 → 273. ⚠️ **Le `dossier-donneur-ordre` de `navigateur` n'existe que parce qu'un CLIC a trouvé ce que 2 588 essais verts ne voyaient pas** : le dossier s'affichait à 250 ms et avait disparu à 5 s. |
+| Révision mesurée | **`RÉANCRAGE`** — la liaison Active Directory dans le panneau d'administration, et le déroulé de première mise en service. 25/09/2026, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ douze fois**, dont une où il désignait une révision cinquante-six commits en arrière (constat **Q-219**). Le garde-fou juge le document contre **la révision que le document nomme**, jamais contre l'arbre de travail. |
+| État de l'arbre | **arbre de `RÉANCRAGE`**, à l'octet près. Compte **RELEVÉ famille par famille** — quarante et un répertoires joués séparément, somme confrontée au total du banc complet : **2 594 des deux côtés**. Aucune famille neuve ; `habilitations` 69 → 72 (le §12, qui mesure que l'état de la liaison ne rend **aucun secret** — sur le corps sérialisé ENTIER, pas champ par champ). ⚠️ **Et un résidu de compilation trouvé par un garde-fou** : `dist/sous_traitance/` survivait au renommage de la veille, 88 sources pour 89 fichiers compilés — *« `dist/` garde un fichier dont la source a disparu, auquel cas le serveur mis à l'épreuve n'est plus tout à fait celui du dépôt »*. |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 | ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2591 · pass 2591 · fail 0
+npm test                                         → tests 2594 · pass 2594 · fail 0
                                                    base 377 · api 302 · navigateur 273
                                                    pieces 142 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73
                                                    journal-lecture 72 · approbations 71
-                                                   habilitations 69 · depot 66
+                                                   habilitations 72 · depot 66
                                                    modules 63 · filiales 53 · annuaire 48
                                                    tiers 36 · documentation 36
                                                    documents 35 · recherche 32

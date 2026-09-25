@@ -92,6 +92,99 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
 
+### LA LIAISON ACTIVE DIRECTORY DANS LE PANNEAU D'ADMINISTRATION, ET LE DÉROULÉ D'UNE PREMIÈRE MISE EN SERVICE (25/09/2026)
+
+**Deux demandes de l'utilisateur, et une question qui a rendu un manque documentaire.**
+
+#### 1. « Il faudrait que dans le panneau Admin il y ait la liaison AD et son état »
+
+**Administration → Habilitations → Groupes d'annuaire**, encart en tête. Il rend le contrôleur,
+la base de recherche, le compte de service, le préfixe des groupes, la prise en compte des
+groupes imbriqués, la vérification du certificat, l'autorité déclarée, le filtre de recherche,
+l'attribut d'identifiant, le délai d'attente, et si un compte de secours est configuré.
+
+🛑 **DEUX QUESTIONS, ET L'ÉCRAN NE LES CONFOND PAS.** *« À quoi sommes-nous raccordés ? »* est
+**gratuit** — lu de la configuration au démarrage, rendu par `GET /api/habilitations/etat` à
+chaque ouverture. *« Est-ce que ça répond MAINTENANT ? »* **sort sur le réseau**, et reste le
+geste « Vérifier l'annuaire ». ⚠️ **Les mélanger rendrait cet écran inutilisable pendant une
+panne d'annuaire** — c'est-à-dire précisément quand on vient l'ouvrir : chaque affichage
+attendrait le délai LDAP. L'encart dit donc ce qui est **configuré**, et il dit **qu'il ne dit
+pas** si ça répond.
+
+**Et trois chiffres que la BASE ajoute**, qu'aucune description de configuration ne peut
+donner : comptes connus, comptes verrouillés, dernière connexion réussie. *Un annuaire
+parfaitement décrit dont personne ne s'est jamais connecté n'est pas un annuaire qui marche* —
+l'encart le dit en clair quand le compte est à zéro. ⚠️ Le compte de secours est **exclu** du
+décompte : l'y mêler ferait croire qu'une liaison sert alors que seul le filet a servi.
+
+🛑 **AUCUN SECRET N'EST RENDU**, et l'essai le mesure sur le **corps sérialisé entier** plutôt
+que champ par champ : une clé ajoutée demain fait rougir le banc au lieu de passer entre les
+mailles d'une liste de noms (§19.5).
+
+⚠️ **ET LE BANC A TROUVÉ UN DÉFAUT DE MA PREMIÈRE RÉDACTION** : la réponse changeait de
+**forme** selon que le greffon d'authentification est monté — deux champs dans un cas, treize
+dans l'autre. L'écran aurait dû devenir défensif sur chaque champ, et un champ manquant s'y
+serait lu « non configuré » au lieu de « je ne sais pas ». Une forme unique,
+`LIAISON_SANS_ANNUAIRE`, déclarée **une seule fois** et employée par les deux appelants. Classe
+**Q-201**.
+
+#### 2. « Je vais faire la première install dans la VM de l'entreprise, comment je dois faire ? »
+
+**`docs/INSTALLATION_ENTREPRISE.md`** — un **déroulé**, pas un tutoriel. Il existait deux
+documents d'installation (`INSTALLER.md`, une page et cinq commandes ; `GUIDE_EXPLOITATION.md`
+§1, la vue de l'exploitant), et **aucun des deux ne disait ce qu'il faut obtenir avant de
+toucher la VM, ni de qui**. Le nouveau document ne recopie aucun de leurs chiffres : quand il
+a besoin d'un compte, il donne **la commande qui le rend**.
+
+🛑 **Les trois causes d'échec d'une première installation y sont en tête, parce que chacune se
+prépare des jours à l'avance auprès de quelqu'un d'autre :**
+
+| | Ce qui bloque | Pourquoi ça ne se voit pas |
+|---|---|---|
+| **1** | le **certificat TLS** n'est pas aux trois chemins attendus | en production l'installateur **n'en engendre AUCUN** — et l'erreur parle d'un fichier, pas d'un certificat |
+| **2** | l'unité systemd **ferme la sortie réseau** (`IPAddressDeny=any`) | l'installation dit « terminée » et **aucune connexion n'aboutit** : le contrôleur est injoignable **depuis le service**, alors qu'il répond depuis le shell |
+| **3** | **personne n'est membre de `GRC-ADMIN`** | les comptes se connectent, et **aucun ne peut rien administrer** — 403, authentifié sans aucun droit |
+
+Le document ajoute ce qu'aucun des deux autres ne portait : les **quatre portes go/no-go** du
+jour J, le certificat de l'autorité qui signe le LDAPS du contrôleur (`LDAP_CA` — *oublié une
+fois sur deux*), les **trois destinations** à ouvrir dans un fichier d'extension systemd, les
+cinq commandes du procès-verbal de mise en service, les cinq pannes de première installation
+avec leur cause, le retour en arrière, et une **fiche à imprimer**.
+
+#### 3. « Comment on fait le premier accès admin au logiciel ? »
+
+La question a rendu un **manque dans les trois documents** : aucun ne disait qu'**il n'existe
+aucun compte administrateur livré avec le produit**. Pas de `admin/admin`, pas de mot de passe
+imprimé à l'installation, pas d'assistant de premier démarrage. *Un compte d'administration
+livré avec le produit est une porte que personne ne referme.* Le premier accès s'obtient en
+mettant un **compte réel de l'annuaire** dans `GRC-ADMIN`, et l'intéressé se connecte avec son
+identifiant et son mot de passe habituels.
+
+🛑 **Et une lacune de sécurité d'exploitation, trouvée en répondant : en production l'assistant
+ne pose AUCUN compte de secours.** Il ne le propose qu'en profil découverte. En l'état, **si
+l'annuaire devient injoignable ou si le mot de passe du compte de service expire, plus personne
+n'entre**. Les deux peuvent coexister — la recette porte un annuaire actif **et** un compte de
+secours —, et la procédure manuelle est désormais écrite, **avec la commande qui calcule
+l'empreinte par le code du produit lui-même** plutôt qu'à la main dans un shell.
+
+#### 4. Trois chiffres faux, dans les documents qu'on suit
+
+- `INSTALLER.md` annonçait « **dix** commandes » quand la page en titrait **cinq** — c'est le
+  constat **Q-275** lui-même, refait **dans le fichier qu'il visait** ;
+- `INSTALLER.md` et `GUIDE_EXPLOITATION.md` §1 annonçaient « **quatorze** sujets » au
+  `--diagnostic`, qui en rend **quinze** depuis L27 — pendant que le `backend/README.md` §8, lui,
+  disait « quinze » depuis le premier jour. *Deux points de mesure des mêmes grandeurs
+  divergent, et la divergence est silencieuse* : constat **Q-219**, et ce n'est pas une
+  coquille — un exploitant compte les lignes qu'il voit.
+
+#### 5. Et un résidu de compilation, trouvé par un garde-fou
+
+⚠️ `dist/sous_traitance/` survivait au renommage de la veille : **88 sources pour 89 fichiers
+compilés**. Le garde de `test/api/normalisation-erreurs.test.mjs` le dit en ces termes —
+*« `dist/` garde un fichier dont la source a disparu, auquel cas le serveur mis à l'épreuve
+n'est plus tout à fait celui du dépôt »*. Rien n'importait ce fichier ; le garde a raison quand
+même, et c'est la seule raison pour laquelle il a été vu.
+
 ### LE DONNEUR D'ORDRE CESSE D'ÊTRE UN NOM — le registre de l'ARTICLE 30 §2 du RGPD, migrations `070` à `073` (24/09/2026)
 
 **Demande du RSSI du client**, transmise le 24/09/2026 : dans le module « Donneurs d'ordre », *« il
