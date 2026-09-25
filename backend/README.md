@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2594 essais, quarante et une familles (voir plus bas)
+npm test                           # 2597 essais, quarante et une familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -786,11 +786,12 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 25/09/2026, après la liaison Active Directory dans le panneau d'administration**
-(encart « Liaison Active Directory », `decrireLiaison()`, et le déroulé de première mise en
-service `docs/INSTALLATION_ENTREPRISE.md`) :
+**Mesuré au 25/09/2026 au soir, après la SIXIÈME passe de documentation** — huit faussetés
+trouvées sous un banc de documentation entièrement vert, dont `SCHEMA_VERSION = 24` dans le
+fichier que lit chaque session, et un tableau de référence qui avait dérivé de quinze
+collections sur cinq lots :
 `npm test` →
-**2594 essais, 2594 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**2597 essais, 2597 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **71 garde-fous consignés**, **73 migrations**,
 **99 tables**, **608 décisions** au registre de l'article 30 ; publication → **89
@@ -976,7 +977,7 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2594 · pass 2594 · fail 0
+npm test                                         → tests 2597 · pass 2597 · fail 0
                                                    base 377 · api 302 · navigateur 273
                                                    pieces 142 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
@@ -984,7 +985,7 @@ npm test                                         → tests 2594 · pass 2594 · 
                                                    journal-lecture 72 · approbations 71
                                                    habilitations 72 · depot 66
                                                    modules 63 · filiales 53 · annuaire 48
-                                                   tiers 36 · documentation 36
+                                                   tiers 36 · documentation 39
                                                    documents 35 · recherche 32
                                                    campagnes 25 · journal 25
                                                    catalogues 24 · ouverture 24

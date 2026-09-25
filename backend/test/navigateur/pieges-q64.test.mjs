@@ -187,3 +187,78 @@ test('VARIANTE NEUVE — le piège ciblé coupe la bonne écriture, malgré l’
     await session.fermer();
   }
 });
+
+/* 🛑 L'INSTANTANÉ DU JOUR NE SE RÉÉCRIT PAS QUAND RIEN N'A CHANGÉ
+ *
+ * **Défaut signalé par l'utilisateur le 25/09/2026 : une fenêtre « 1 modification(s)
+ * reçue(s) d'un autre utilisateur » qui se répétait à l'infini.**
+ *
+ * 🛑 **La cause n'était pas dans le sondage, elle était dans une COMPARAISON.**
+ * `recordDailySnapshot()` décidait de réécrire en comparant `JSON.stringify(ancien)` à
+ * `JSON.stringify(neuf)`. Or `metrics` est stocké en **jsonb**, et PostgreSQL ne conserve pas
+ * l'ordre des clés : il le réécrit par LONGUEUR de clé, puis par octets. Le navigateur produit
+ * `{ conformite, maturite, expo, … }`, la base rend `{ expo, maturite, avancement,
+ * conformite, … }` — mêmes valeurs, **deux chaînes différentes**.
+ *
+ * La boucle : le tableau de bord se rend → la comparaison échoue → il RÉÉCRIT → le sondage
+ * voit une modification → il l'annonce « d'un autre utilisateur » → il prévient les
+ * observateurs → le tableau de bord se rend. **Une écriture toutes les trois secondes**, et
+ * 270 entrées au journal d'audit pour une seule ligne — *inaltérables trois ans*, dans le
+ * registre qui sert de preuve en audit. C'est la classe du constat **Q-301**.
+ *
+ * ⚠️ **`js/core/sync.js` connaissait le piège** : sa fonction `canonique()` TRIE ses clés,
+ * et c'est exactement pourquoi le verrouillage optimiste ne bouclait pas. La leçon générale :
+ * *`JSON.stringify` n'est pas un test d'égalité pour une donnée qui traverse `jsonb`.*
+ *
+ * ⚠️ **Ce contrôle mesure la PROPRIÉTÉ, pas la correction** : il appelle deux fois
+ * `recordDailySnapshot` avec les mêmes valeurs dans un ORDRE DE CLÉS DIFFÉRENT — ce que la
+ * base fait de toute façon — et exige qu'aucune réécriture n'ait lieu. Une future rédaction
+ * qui recomparerait des chaînes le fera rougir.
+ */
+test('🛑 mêmes indicateurs, ordre de clés DIFFÉRENT ⇒ aucune réécriture', async () => {
+  const session = await ouvrirApplication();
+  try {
+    const bilan = await session.page.evaluate(async () => {
+      // L'ordre du navigateur, tel que `computeGlobalSnapshot()` le construit.
+      const duNavigateur = {
+        conformite: 0, maturite: 0, expo: 0.1, risques_crit: 0,
+        actions_retard: 0, avancement: 0, incidents_ouverts: 0,
+      };
+      // L'ordre CANONIQUE de jsonb — par longueur de clé, puis par octets. C'est ce que la
+      // base rend après un aller-retour, et c'est ce qui faisait échouer la comparaison.
+      const deLaBase = {
+        expo: 0.1, maturite: 0, avancement: 0, conformite: 0,
+        risques_crit: 0, actions_retard: 0, incidents_ouverts: 0,
+      };
+
+      window.DataStore.recordDailySnapshot(duNavigateur);
+      await window.Sync.pousser();
+
+      const avant = window.DataStore.getHistory().slice(-1)[0];
+      const idAvant = avant.id;
+      const tsAvant = avant.ts;
+
+      // Le SECOND appel : mêmes valeurs, ordre de la base.
+      window.DataStore.recordDailySnapshot(deLaBase);
+      await window.Sync.pousser();
+
+      const apres = window.DataStore.getHistory().slice(-1)[0];
+      return {
+        memeId: apres.id === idAvant,
+        tsInchange: apres.ts === tsAvant,
+        chainesDifferentes: JSON.stringify(duNavigateur) !== JSON.stringify(deLaBase),
+      };
+    });
+
+    assert.equal(bilan.chainesDifferentes, true,
+      'Si les deux sérialisations étaient égales, cet essai ne mesurerait rien : c’est leur '
+      + 'DIFFÉRENCE qui reproduit le défaut. Le témoin est ici, pas ailleurs.');
+    assert.equal(bilan.memeId, true, 'Aucun point du jour ne doit être créé en double.');
+    assert.equal(bilan.tsInchange, true,
+      'L’horodatage de l’instantané a bougé : la ligne a donc été RÉÉCRITE alors qu’aucun '
+      + 'indicateur n’a changé. C’est la boucle infinie du 25/09/2026 — une écriture toutes '
+      + 'les trois secondes, et autant d’entrées indélébiles au journal d’audit.');
+  } finally {
+    await session.page.context().close().catch(() => {});
+  }
+});

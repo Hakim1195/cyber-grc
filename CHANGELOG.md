@@ -44,8 +44,10 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2594 essais, 2594 passés, 0 échec** — 2 321 sans navigateur et 273 avec —,
-> **quarante et une** familles. ⚠️ **+3 le 25/09/2026** : le §12 de `habilitations` (69 → 72),
+> `npm test` → **2597 essais, 2597 passés, 0 échec** — 2 324 sans navigateur et 273 avec —,
+> **quarante et une** familles. ⚠️ **+3 le 25/09/2026 au soir** : les trois essais qui gardent
+> enfin le **tableau des collections** de `docs/DATA_MODEL.md` §1.5 — il avait dérivé de
+> **quinze collections sur cinq lots** parce que rien ne le mesurait. ⚠️ **+3 le 25/09/2026** : le §12 de `habilitations` (69 → 72),
 > qui mesure que l'état de la liaison à l'annuaire ne rend **aucun secret** — sur le corps
 > sérialisé **entier**, pas champ par champ, pour qu'une clé ajoutée demain fasse rougir le
 > banc au lieu de passer entre les mailles d'une liste de noms. ⚠️ **+45 le 24/09/2026 au

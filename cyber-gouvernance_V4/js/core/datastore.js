@@ -1721,6 +1721,45 @@ const DataStore = (() => {
     function getHistory() {
         return data.history.slice().sort((a, b) => (a.date < b.date ? -1 : (a.date > b.date ? 1 : 0)));
     }
+    /* 🛑 DEUX OBJETS IDENTIQUES N'ONT PAS LA MÊME SÉRIALISATION — et cette comparaison a
+       coûté une boucle infinie, signalée par l'utilisateur le 25/09/2026.
+
+       `metrics` est stocké en **jsonb**, et PostgreSQL ne conserve PAS l'ordre des clés :
+       il le réécrit dans son ordre canonique — par LONGUEUR de clé, puis par octets. Le
+       navigateur construit `{ conformite, maturite, expo, risques_crit, actions_retard,
+       avancement, incidents_ouverts }` ; la base rend `{ expo, maturite, avancement,
+       conformite, risques_crit, actions_retard, incidents_ouverts }`. Mêmes valeurs, et
+       `JSON.stringify` rend **deux chaînes différentes** — parce qu'il préserve l'ordre
+       d'insertion.
+
+       ⚠️ **Ce que ça produisait, et qui ne ressemblait pas à ce défaut-là :**
+
+         1. le tableau de bord se rend → la comparaison échoue → il RÉÉCRIT la ligne ;
+         2. l'écriture monte la `version` → le sondage voit une modification ;
+         3. il affiche « 1 modification(s) reçue(s) d'un autre utilisateur » — alors que
+            c'est notre propre écriture — puis prévient les observateurs ;
+         4. le tableau de bord se rend de nouveau. **Retour au 1.**
+
+       Une fenêtre toutes les trois secondes, **et une écriture toutes les trois secondes** :
+       270 entrées dans le journal d'audit pour cette seule ligne, **inaltérables trois ans**,
+       dans le registre qui sert de preuve en audit. C'est la classe du constat **Q-301**.
+
+       ⚠️ **`js/core/sync.js` connaissait le piège** : sa fonction `canonique()` trie ses
+       clés — c'est exactement pourquoi le verrouillage optimiste, lui, ne boucle pas. Le
+       remède est donc local, et la leçon générale : *`JSON.stringify` n'est pas un test
+       d'égalité pour une donnée qui traverse `jsonb`.* On compare des VALEURS.
+    */
+    function memesMetriques(a, b) {
+        if (a === b) return true;
+        if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+        // L'UNION des clés, jamais celles d'un seul côté : comparer les clés de `a`
+        // laisserait passer une clé QUI APPARAÎT dans `b` — c'est-à-dire un indicateur
+        // neuf, exactement le cas où l'on veut réécrire.
+        const cles = new Set(Object.keys(a).concat(Object.keys(b)));
+        for (const k of cles) if (a[k] !== b[k]) return false;
+        return true;
+    }
+
     // Enregistre/actualise l'instantané du jour. Ne réécrit rien si les indicateurs
     // sont inchangés (évite des sauvegardes inutiles à chaque visite du tableau de bord).
     function recordDailySnapshot(metrics) {
@@ -1728,7 +1767,7 @@ const DataStore = (() => {
         const date = dayKey();
         const existing = data.history.find(h => h.date === date);
         if (existing) {
-            if (JSON.stringify(existing.metrics) === JSON.stringify(metrics)) return existing;
+            if (memesMetriques(existing.metrics, metrics)) return existing;
             existing.metrics = metrics; existing.ts = Date.now();
             // Dérivé aussi à la MISE À JOUR : deux sessions ouvertes le même jour
             // se disputent le même point quotidien, et le perdant recevrait un
