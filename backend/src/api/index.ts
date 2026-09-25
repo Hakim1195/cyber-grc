@@ -140,7 +140,7 @@ import { greffonOuverture } from '../ouverture/index.js';
 import { greffonEbios } from '../ebios/index.js';
 import { greffonParametres } from '../parametres/index.js';
 import { greffonTiers } from '../tiers/index.js';
-import { greffonSousTraitance } from '../sous_traitance/index.js';
+import { greffonSousTraitance } from '../sous-traitance/index.js';
 import { greffonCrise } from '../crise/index.js';
 import { greffonDroitsPersonnes } from '../droits-personnes/index.js';
 import { greffonReglementaire } from '../reglementaire/index.js';

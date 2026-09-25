@@ -1,5 +1,5 @@
 /**
- * `src/sous_traitance/` — LE DOSSIER QU'ON REMET AU DONNEUR D'ORDRE
+ * `src/sous-traitance/` — LE DOSSIER QU'ON REMET AU DONNEUR D'ORDRE
  * (migrations `070` et `071`, demande du RSSI du client — 24/09/2026)
  *
  * | Méthode | Route | Objet |

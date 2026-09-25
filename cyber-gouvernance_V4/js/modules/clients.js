@@ -278,6 +278,22 @@ const ClientsModule = (() => {
         document.getElementById("cancel").addEventListener("click", () => Router.navigateTo("/clients"));
     }
 
+    /* 🛑 LE DOSSIER PRÉPARÉ SURVIT À UN RE-RENDU — ET C'EST UN DÉFAUT TROUVÉ EN CLIQUANT.
+     *
+     * Première rédaction : le dossier s'affichait à 250 ms et **avait disparu à 5 s**. Le
+     * sondage périodique de `js/core/sync.js` re-rend l'écran courant dès que la donnée
+     * bouge, `renderDetail` reconstruisait la fiche, et le dossier que l'utilisateur venait
+     * de demander était **effacé sous ses yeux** — sans une erreur, sans un message.
+     *
+     * ⚠️ **Aucun essai ne pouvait le voir** : le banc mesure qu'un écran se rend et qu'une
+     * route répond ; il ne reste pas cinq secondes devant la page. C'est la quatrième leçon
+     * du `docs/REPRISE.md`, et la cinquième fois qu'elle se vérifie.
+     *
+     * Le dossier est donc **gardé en mémoire** — pas re-demandé : il exige le droit
+     * d'extraction, et le rejouer à chaque sondage serait une extraction par seconde dans
+     * le journal d'audit. Un changement de donneur d'ordre l'oublie. */
+    let dossierPrepare = null;   // { clientId, donnees }
+
     /* =========================================================================
        FICHE — QUATRE SECTIONS EMPILÉES, ET PAS DES ONGLETS
        ⚠️ **Ce produit dit, dans `js/core/ui.js` : « un onglet est un LIEN, pas un
@@ -293,6 +309,11 @@ const ClientsModule = (() => {
     function renderDetail(id) {
         const client = DataStore.getClientById(id);
         const app = document.getElementById("app");
+
+        // ⚠️ Changer de donneur d'ordre OUBLIE le dossier de l'autre : reposer le dossier
+        //    d'un client sur la fiche d'un autre serait la pire confusion possible dans un
+        //    document destiné à être remis.
+        if (dossierPrepare && dossierPrepare.clientId !== id) dossierPrepare = null;
 
         if (!client) {
             app.innerHTML = '<section class="page"><h1>Introuvable</h1>'
@@ -340,6 +361,11 @@ const ClientsModule = (() => {
         document.getElementById("cliPreparerDossier").addEventListener("click", () => {
             panneauDossier(document.getElementById("cliDossier"), client);
         });
+
+        // Le dossier déjà préparé se REPOSE, il ne se redemande pas (voir plus haut).
+        if (dossierPrepare && dossierPrepare.clientId === client.id) {
+            rendreDossier(document.getElementById("cliDossier"), dossierPrepare.donnees);
+        }
     }
 
     function panneauIdentite(zone, client) {
@@ -642,7 +668,11 @@ const ClientsModule = (() => {
             return;
         }
 
-        Api.clientDossier(client.id).then(d => rendreDossier(zone, d)).catch(err => {
+        Api.clientDossier(client.id).then(d => {
+            dossierPrepare = { clientId: client.id, donnees: d };
+            rendreDossier(zone, d);
+        }).catch(err => {
+            dossierPrepare = null;
             // ⚠️ Un 403 n'est pas une panne : le dossier exige le droit d'EXPORT,
             //    parce qu'un dossier de conformité complet est une extraction.
             const refus = err && (err.statut === 403 || err.code === "droit_insuffisant");

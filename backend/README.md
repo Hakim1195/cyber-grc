@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2546 essais, quarante familles (voir plus bas)
+npm test                           # 2591 essais, quarante et une familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -650,8 +650,10 @@ que le §8 cite). Les noms de répertoires sont ceux du dépôt, relus et non re
 | `test/habilitations/` | la **gestion des droits à l'écran** (vague G1, migration `060`) : la matrice des trente domaines, la déclaration des groupes d'annuaire, la **cohérence annuaire ↔ application** et la **revue périodique des accès** (ISO 27001 A.5.18). 🛑 Le **verrou d'administrabilité** y est mesuré **dans les deux sens** : il refuse la seule écriture qui retirerait le dernier chemin d'administration, et il **laisse passer** celle qui répare une base où ce chemin manque déjà — un verrou absolu piégeait l'amorçage, et c'est ce qu'un essai éprouve. ⚠️ Et la **simulation** est journalisée **avant** le verdict : savoir ce qu'un compte pourrait voir est une consultation sensible, qu'il existe ou non |
 | `test/personnel/` | le lien **personnel ↔ Active Directory** (vague G4, migration `063`), et ce qu'il refuse de faire. 🛑 **Aucune écriture LDAP n'existe** — le client n'implémente que `lier`, `rechercher`, `fermer` : la propriété est éprouvée comme une **absence**, pas comme un réglage. ⚠️ L'entrée est validée **avant** la disponibilité de l'annuaire (un filtre d'un caractère est malformé qu'un annuaire soit configuré ou non), l'absence d'annuaire **se dit** en 503 au lieu de se rendre comme une liste vide, et un **départ ne supprime rien** : il remonte en « à vérifier », fiche intacte |
 
+| `test/sous-traitance/` | le **registre de l'article 30 §2 du RGPD** (migrations `070` à `073`, demande du RSSI du client) : ce que nous traitons **pour le compte** d'un donneur d'ordre, quand nous sommes **sous-traitant**. 🛑 Le §1 mesure une **ABSENCE** — le registre §2 ne porte NI `finalite` NI `base_legale`, parce que la finalité est l'instruction du client et la base légale est LA SIENNE ; les porter inviterait un sous-traitant à s'attribuer un rôle qu'il n'a pas. ⚠️ Le §3 éprouve le plancher de diffusion **dans les DEUX sens d'écriture** — sur le document qui descend dessous, ET sur le client qui relève son plancher : sans la seconde moitié, un seul `update` aurait donné un contrat affiché comme tenu. ⚠️ Le §4 vérifie qu'un document inséré **AVANT** son client ne provoque **aucun** faux refus, parce que *restaurer une sauvegarde gagne* (Q-194 / Q-280 / Q-284). ⚠️ Le §6 exige que le dossier **dise ce qu'il RETIENT** faute de droit, jamais qu'il l'omette (constat Q-335), et le §8 que l'échéance contractuelle **se taise** sans délai convenu — une date que rien ne fonde est précisément celle qu'on ne peut pas montrer à un client |
+
 *(`test/aide/` n'est pas une famille : ce sont les montages partagés — base, serveur,
-navigateur, outillage — que les trente-neuf autres appellent.)*
+navigateur, outillage — que les quarante autres appellent.)*
 
 **Deux de ces familles sont nées d'un défaut, et c'est ce qui leur donne leur valeur.**
 
@@ -784,10 +786,11 @@ vagues, portes de sécurité, définition de « terminé » — vit dans
 dans [`../docs/PLAN_PRODUIT.md`](../docs/PLAN_PRODUIT.md) pour **L17 → L28**, issus de
 la comparaison au marché du 08/09/2026.
 
-**Mesuré au 24/09/2026 au soir, après la délégation temporaire de droits et la passe de
-documentation** (écran « Filiales », `db/importer-filiales.mjs`, migrations `064` à `069`) :
+**Mesuré au 24/09/2026 au soir, après le registre de l'ARTICLE 30 §2 du RGPD** (écran
+« Donneurs d'ordre », `src/sous-traitance/`, migrations `070` à `073` — demande du RSSI du
+client) :
 `npm test` →
-**2546 essais, 2546 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**2591 essais, 2591 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **71 garde-fous consignés**, **73 migrations**,
 **99 tables**, **608 décisions** au registre de l'article 30 ; publication → **89
@@ -965,16 +968,16 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 | | |
 |---|---|
-| Révision mesurée | **`1b899cd`** — la délégation temporaire de droits (`068`) et la passe de documentation qui a suivi (`069`). 24/09/2026 au soir, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ dix fois**, dont une où il désignait une révision cinquante-six commits en arrière (constat **Q-219**). Le garde-fou juge le document contre **la révision que le document nomme**, jamais contre l'arbre de travail. |
-| État de l'arbre | **arbre de `1b899cd`**, à l'octet près. Compte **RELEVÉ famille par famille** — quarante répertoires joués séparément, somme confrontée au total du banc complet : **2 546 des deux côtés**. Aucune famille neuve ; `habilitations` 48 → 69 (la délégation), `base` 349 → 358 (les neuf mutations du garde-fou de la `068`), `filiales` 49 → 53, `modules` 62 → 63. |
+| Révision mesurée | **`fd2eeb7`** — le registre de l'**article 30 §2** du RGPD et le dossier remis au donneur d'ordre (migrations `070` à `073`, demande du RSSI du client). 24/09/2026 au soir, relevée **sur la machine réelle** (Debian 13, `SRV-Infra`). ⚠️ **Ce bloc a déjà été RÉANCRÉ onze fois**, dont une où il désignait une révision cinquante-six commits en arrière (constat **Q-219**). Le garde-fou juge le document contre **la révision que le document nomme**, jamais contre l'arbre de travail. |
+| État de l'arbre | **arbre de `fd2eeb7`**, à l'octet près. Compte **RELEVÉ famille par famille** — quarante et un répertoires joués séparément, somme confrontée au total du banc complet : **2 591 des deux côtés**. Une famille neuve, `sous-traitance` (23) ; `base` 358 → 377 (les dix-neuf mutations des deux garde-fous neufs), `navigateur` 270 → 273. ⚠️ **Le `dossier-donneur-ordre` de `navigateur` n'existe que parce qu'un CLIC a trouvé ce que 2 588 essais verts ne voyaient pas** : le dossier s'affichait à 250 ms et avait disparu à 5 s. |
 | Base | rôles PostgreSQL **réels** de la machine, engendrés par `deploy/install.sh` (secrets sourcés depuis `~/.grc-essais.env`, `CLAUDE.md` §5 — **`db/dev/preparer_base_dev.sh` non rejoué ici** : il ramènerait ces rôles à `dev` et casserait le service installé) ; chaque fichier d'essai ouvre sa propre base jetable `grc_essai_*`. **PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2)**, client `psql` du même paquet |
 | Node · Apache · rsync · OS | **v22.23.2** · **Apache/2.4.68 (Debian)** · **rsync 3.4.1** · Debian GNU/Linux 13 (trixie) |
 | ⚠️ Comment ce bloc a été trouvé faux | **par le banc lui-même.** Le commit `2818fc7` a porté le CHANGELOG à 1812 **sans rejouer le banc derrière** : le garde-fou de Q-53 — *le même nombre au §8, au §5 et au CHANGELOG* — a rougi aux trois bancs suivants. *« Vert » qualifie une révision, jamais un répertoire de travail.* ⚠️ Et cette ligne est **la dernière du tableau à dessein** : le contrôle borne sa lecture à une fenêtre courte sous « Révision mesurée », et l'allonger par le haut repousse « Base » et « Node » hors de sa portée — mesuré, pas supposé |
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2546 · pass 2546 · fail 0
-                                                   base 358 · api 302 · navigateur 270
+npm test                                         → tests 2591 · pass 2591 · fail 0
+                                                   base 377 · api 302 · navigateur 273
                                                    pieces 142 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73
@@ -985,10 +988,11 @@ npm test                                         → tests 2546 · pass 2546 · 
                                                    documents 35 · recherche 32
                                                    campagnes 25 · journal 25
                                                    catalogues 24 · ouverture 24
-                                                   echelles 23 · quantification 22
-                                                   assistance 16 · collecte 15 · ebios 15
-                                                   portail 15 · personnel 10
-                                                   attestations 8 · decouverte 8 · aipd 7
+                                                   echelles 23 · sous-traitance 23
+                                                   quantification 22 · assistance 16
+                                                   collecte 15 · ebios 15 · portail 15
+                                                   personnel 10 · attestations 8
+                                                   decouverte 8 · aipd 7
                                                    crise 7 · reglementaire 7 · derogations 6
                                                    droits-personnes 6
 npm audit --omit=dev                             → found 0 vulnerabilities

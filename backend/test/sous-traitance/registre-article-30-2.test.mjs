@@ -1,5 +1,5 @@
 /**
- * `test/sous_traitance/` — LE REGISTRE DE L'ARTICLE 30 §2 ET CE QU'IL FAIT RESPECTER
+ * `test/sous-traitance/` — LE REGISTRE DE L'ARTICLE 30 §2 ET CE QU'IL FAIT RESPECTER
  * (migrations `070` et `071`)
  *
  * Demande du RSSI du client, 24/09/2026 : *« montrer au client comment on traite ses
@@ -61,7 +61,7 @@ class SessionDeBanc {
   }
 
   decrire() {
-    return 'session du banc (test/sous_traitance/registre-article-30-2.test.mjs)';
+    return 'session du banc (test/sous-traitance/registre-article-30-2.test.mjs)';
   }
 }
 

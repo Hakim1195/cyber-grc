@@ -230,13 +230,22 @@ client **la mesure locale d'une voisine**, invisible — et le dossier remis au 
 nommée. C'est la **cinquième** table à viser ce catalogue ; les quatre autres l'ont depuis la
 `004`. Trouvé en relisant ces quatre-là, pas en étant averti.
 
-## ⚠️ CE QU'IL RESTE À FAIRE SUR CE LOT
+## ✅ L'ÉCRAN A ÉTÉ CLIQUÉ — et il a rendu UN défaut de plus
 
-🛑 **L'ÉCRAN N'A PAS ÉTÉ CLIQUÉ.** Le banc est vert, la base est éprouvée, seize mutations
-mordent — et *un lot n'est pas livré tant que son écran n'a pas été cliqué* : cinq défauts de
-la vague E venaient de là et zéro du banc. À faire sur `https://grc-test.site/#/clients` :
-créer un donneur d'ordre avec tous les champs, déclarer un traitement, y rattacher une mesure,
-déclarer un sous-traitant **sans** date d'autorisation, préparer le dossier, l'imprimer.
+🛑 **Le dossier s'affichait à 250 ms et avait DISPARU à 5 secondes.** Le sondage périodique de
+`js/core/sync.js` re-rend l'écran courant, `renderDetail` reconstruisait la fiche, et le
+dossier que l'utilisateur venait de demander était **effacé sous ses yeux, sans une erreur**.
+Le banc était à **2 588 essais verts** à ce moment-là.
+
+⚠️ **Aucune famille ne pouvait le voir** : les essais de module vérifient qu'un écran se rend,
+ceux d'API qu'une route répond — personne ne reste cinq secondes devant la page. Corrigé
+(`dossierPrepare` gardé en mémoire et reposé à chaque rendu, oublié au changement de client),
+et la classe est fermée par `test/navigateur/dossier-donneur-ordre.test.mjs`, **joué contre la
+version fautive avant d'être gardé**.
+
+⚠️ **Le reste du parcours passe** : les quinze champs sont présents dès la CRÉATION, le
+traitement se déclare, un transfert sans garantie est refusé **par l'écran**, le dossier rend
+sept manques, et la recette a été **nettoyée** de ses neuf donneurs d'ordre d'essai.
 
 **⇒ Puis l'`ULTRAREVIEW`** — à l'utilisateur, `/code-review ultra`.
 

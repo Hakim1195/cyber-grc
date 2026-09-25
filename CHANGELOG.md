@@ -8,16 +8,16 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 
 ## [Non publié]
 
-> **État mesuré le 24/09/2026 au soir**, après la délégation temporaire de droits et la
-> passe de documentation, sur la machine réelle
+> **État mesuré le 24/09/2026 au soir**, après le registre de l'**article 30 §2** du RGPD,
+> sur la machine réelle
 > (`SRV-Infra`, Debian 13, **Node v22.23.2**, **Apache/2.4.68 (Debian)**,
-> **PostgreSQL 17.11**) : **69 migrations**, **96 tables**, **383 politiques**,
-> **69 garde-fous**, **580 décisions** au registre de l'article 30, publication
-> **89 fichiers**, schéma `data` en **v27**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
-> ⚠️ La `069` n'ajoute **ni table, ni politique, ni garde-fou** : elle corrige un
-> `comment on table` que la `068` avait laissé faux. Seule la ligne « migrations » bouge,
-> et c'est dit — un numéro qui monte sans qu'aucune autre grandeur suive doit pouvoir
-> s'expliquer autrement que par un relevé non rejoué.
+> **PostgreSQL 17.11**) : **73 migrations**, **99 tables**, **395 politiques**,
+> **71 garde-fous**, **608 décisions** au registre de l'article 30, publication
+> **89 fichiers**, schéma `data` en **v30**, indicateur **54 ✅ · 18 🟡 · 14 ❌ (~74 %)**.
+> ⚠️ Les `072` et `073` n'ajoutent ni table ni politique : la première étend le vocabulaire
+> **clos** de `journal_audit.entite_type` — sans quoi les trois tables du lot étaient
+> **incréables par les routes** —, la seconde repose l'installateur des déclencheurs de
+> pièces jointes, que cet élargissement venait de rendre nécessaire.
 > ⚠️ La `059` n'ajoute **aucune table** ni politique : `documents.recherche` est une
 > colonne de plus sur une table qui en portait déjà quatre-vingt-neuf politiques.
 > `install.sh --diagnostic` → **14 conformes, 2 réserves, 0 bloquant** sur **quinze
@@ -32,8 +32,13 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2546 essais, 2546 passés, 0 échec** — 2 276 sans navigateur et 270 avec —,
-> **quarante** familles. ⚠️ **+35 le 24/09/2026, aucune famille neuve** : la délégation
+> `npm test` → **2591 essais, 2591 passés, 0 échec** — 2 318 sans navigateur et 273 avec —,
+> **quarante et une** familles. ⚠️ **+45 le 24/09/2026 au soir** : le registre de l'article
+> 30 §2 apporte `test/sous-traitance/` (**23**, la 41ᵉ famille), porte `base` de 358 à
+> **377** (les dix-neuf mutations des deux garde-fous neufs) et `navigateur` de 270 à
+> **273**. 🛑 **Ces trois essais de navigateur n'existent que parce qu'un CLIC a trouvé ce
+> que 2 588 essais verts ne voyaient pas** — le dossier s'affichait à 250 ms et avait
+> disparu à 5 s. ⚠️ **+35 le 24/09/2026 dans la journée, aucune famille neuve** : la délégation
 > temporaire porte `habilitations` de 48 à **69** et `base` de 349 à **358** (les neuf
 > mutations du garde-fou de la `068`, jouées à la main sur la recette dans des transactions
 > annulées avant d'être figées), tandis que la déclaration du périmètre porte `filiales` à
@@ -119,7 +124,7 @@ RGPD »* —, vue de l'autre côté du miroir.
 | **1** | l'**identité et le contrat** du donneur d'ordre — pays, LEI, dates, droit d'audit, sort des données en fin de contrat, **et les deux contacts que le RGPD art. 30 §2 a) NOMME** : le responsable de traitement et son DPO | `070` §1, quinze colonnes |
 | **2** | le **registre de l'article 30 §2** — ce que nous traitons pour son compte, ses catégories, ses transferts, ses mesures | `070` §2 et §3 |
 | **3** | les **sous-traitants ultérieurs** qui lui sont dus (art. 28 §2 et §4) | `070` §4 |
-| **4** | le **dossier** — « Comment nous traitons vos données », assemblé, imprimable, **et qui dit ses manques** | `src/sous_traitance/` |
+| **4** | le **dossier** — « Comment nous traitons vos données », assemblé, imprimable, **et qui dit ses manques** | `src/sous-traitance/` |
 
 #### 🛑 Deux tables, pas une colonne `rôle` — et c'est l'arbitrage central
 
@@ -230,13 +235,35 @@ locale d'une filiale voisine**, invisible à la lecture, et le dossier remis au 
 nommée comme une mesure de sécurité qu'elle n'a jamais mise en œuvre. C'est la **cinquième** table à
 viser ce catalogue, et elle est passée à un cheveu d'être la seule sans barrière.
 
+#### 🛑 ET LE DÉFAUT QUE SEUL UN CLIC POUVAIT TROUVER
+
+**Le banc était à 2 588 essais verts quand l'écran a été cliqué sur la recette.** Le dossier
+s'affichait à **250 ms** et il avait **disparu à 5 secondes** : le sondage périodique de
+`js/core/sync.js` re-rend l'écran courant dès que la donnée bouge, `renderDetail` reconstruisait
+la fiche, et le dossier que l'utilisateur venait de demander était **effacé sous ses yeux, sans
+une erreur et sans un message**.
+
+⚠️ **Aucune famille d'essais ne pouvait le voir** : les essais de module vérifient qu'un écran
+**se rend**, ceux d'API qu'une route **répond**. Personne ne restait cinq secondes devant la
+page. C'est la quatrième leçon du `docs/REPRISE.md` — *vérifier au navigateur trouve ce que deux
+mille essais ne voient pas* —, et c'est la cinquième fois qu'elle se vérifie.
+
+Le dossier est désormais **gardé en mémoire et reposé** à chaque rendu — pas redemandé : il exige
+le droit d'extraction, et le rejouer à chaque sondage écrirait une extraction par seconde dans le
+journal d'audit. Changer de donneur d'ordre l'oublie, parce que reposer le dossier d'un client sur
+la fiche d'un autre serait la pire confusion possible dans un document destiné à être remis.
+
+La classe est fermée au banc par `test/navigateur/dossier-donneur-ordre.test.mjs`, dont **le §2 a
+été joué contre la version fautive avant d'être gardé** : sans son re-rendu, l'essai serait vert
+des deux côtés — *ce qui distingue le produit correct du produit fautif est ce qui reste APRÈS.*
+
 #### Mesuré
 
 Deux garde-fous neufs — `f_verifier_sous_traitance_rgpd()` et `f_verifier_obligations_client()` —,
 **seize mutations jouées à la main sur une base jetable puis figées au banc**, et sept comportements
 vérifiés à la main (le refus du transfert sans garantie, le plancher dans les deux sens, l'ordre
 d'insertion inversé, la mesure de la voisine, la baisse du plancher, le refus 404 et l'équivalence du
-destinataire). Une famille d'essais neuve : `test/sous_traitance/` (23 essais).
+destinataire). Une famille d'essais neuve : `test/sous-traitance/` (23 essais).
 
 ### « LES DOCS SONT À JOUR ? » — la CINQUIÈME fois, et cette fois une fausseté était dans le PRODUIT (24/09/2026)
 
