@@ -3866,6 +3866,24 @@ if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
       reserve "corps de 4 096 octets par /api/ : aucune réponse (le service répond-il ?) — le"
       alerte "contrôle symétrique de la borne de corps n'a PAS été joué : on sait que le"
       alerte "frontal refuse hors borne, on ne sait pas qu'il laisse passer le reste (Q-44)."
+    elif [[ "$CODE_SOUS" =~ ^5 ]]; then
+      # ⚠️ Un 5xx n'est pas « le frontal laisse passer » : c'est le service qui ne répond
+      # pas encore — ce contrôle suit son redémarrage, et en labo (30/09/2026) un 503 est
+      # tombé dans la branche « succès ». On réessaie, puis on le DIT : jamais « éprouvé »
+      # sur un service tombé.
+      TENTATIVES_SOUS=0
+      while [[ "$CODE_SOUS" =~ ^5 && $TENTATIVES_SOUS -lt 5 ]]; do
+        sleep 2; TENTATIVES_SOUS=$((TENTATIVES_SOUS + 1)); CODE_SOUS="$(sonder_corps 4096)"
+      done
+      if [[ "$CODE_SOUS" =~ ^5 || "$CODE_SOUS" == 000 || -z "$CODE_SOUS" ]]; then
+        reserve "corps de 4 096 octets par /api/ -> ${CODE_SOUS:-000} après $TENTATIVES_SOUS relance(s) : le service ne répond pas —"
+        alerte "le contrôle symétrique de la borne de corps n'a PAS été joué (Q-44) ; un frontal qui"
+        alerte "refuserait tout satisferait le reste sans qu'on le voie. Voir : journalctl -u cyber-grc -n 30"
+      elif [[ "$CODE_SOUS" == 413 ]]; then
+        echec "le frontal refuse AUSSI un corps minuscule (constat Q-44, contrôle symétrique)."
+      else
+        succes "borne de corps éprouvée : $((SEUIL_CORPS + 1048576)) o -> 413, chunked -> 411, 4 096 o -> $CODE_SOUS (après $TENTATIVES_SOUS relance(s))"
+      fi
     elif [[ "$CODE_SOUS" == 413 ]]; then
       alerte "corps de 4 096 octets par /api/ -> $CODE_SOUS"
       echec "le frontal refuse AUSSI un corps minuscule (constat Q-44, contrôle symétrique) :
