@@ -3628,17 +3628,25 @@ if [[ -f /etc/ssl/cyber-grc/serveur.crt && -f /etc/ssl/cyber-grc/serveur.key && 
   elif [[ ! -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
     alerte "vhost cyber-grc DÉSACTIVÉ (a2dissite ?) : une mise à jour ne le réactive pas — a2ensite cyber-grc si c'est voulu."
   fi
+  # Le succès se mesure sur la PRÉSENCE du site dans sites-enabled — pas sur un reload
+  # qui réussit aussi pour un site éteint (relecture de l'agent du labo, 66599a8).
   if apache2ctl configtest >/dev/null 2>&1; then
-    if systemctl reload apache2; then succes "vhost activé et servi (a2ensite cyber-grc)"
-    else alerte "vhost activé mais « systemctl reload apache2 » a ÉCHOUÉ : journalctl -u apache2 -n 30"; fi
+    if ! systemctl reload apache2; then
+      alerte "« systemctl reload apache2 » a ÉCHOUÉ : journalctl -u apache2 -n 30"
+    elif [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
+      succes "vhost cyber-grc activé et servi"
+    else
+      alerte "Apache rechargé, mais le vhost cyber-grc reste DÉSACTIVÉ : rien n'est servi sur 443."
+    fi
   else
-    alerte "vhost activé mais Apache refuse sa configuration : apache2ctl configtest"
+    alerte "Apache refuse sa configuration : apache2ctl configtest"
   fi
 else
   alerte "Vhost posé et nommé, mais NON ACTIVÉ : il manque le certificat. En production"
   alerte "l'installateur n'en engendre aucun — déposez les trois fichiers :"
   alerte "  /etc/ssl/cyber-grc/serveur.crt  serveur.key  chaine-pki-interne.crt"
-  alerte "puis relancez « install.sh --maj » : il activera le vhost."
+  alerte "puis : a2ensite cyber-grc && apache2ctl configtest && systemctl reload apache2"
+  alerte "(ou relancez « install.sh » SANS --maj : une mise à jour n'active jamais un site)."
 fi
 
 # >>> banc: corps <<<
