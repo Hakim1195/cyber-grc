@@ -923,7 +923,13 @@ if [[ $ASSISTANT -eq 1 ]]; then
     # (root:cyber-grc 0640), et LDAP_CA pointée dessus. Vide → l'installateur capture ce
     # que le contrôleur présente, et c'est Node qui dira si cela suffit.
     if [[ -n "${A_LDAP_CA:-}" ]]; then
-      install -o root -g "$UTILISATEUR" -m 0640 "$A_LDAP_CA" "$CONFIG/ca-active-directory.pem"
+      # 🛑 SANS -o NI -g : le compte de service n'existe PAS ENCORE — il naît au §3,
+      # plus bas. « install -g cyber-grc » échouait sur une VM VIERGE (« invalid group »)
+      # juste après la dernière question, et l'installateur mourait sans rien avoir
+      # posé ; trouvé le 30/09/2026 en écrivant la procédure de rejeu, jamais joué en
+      # labo (l'agent n'avait pas de terminal). root:root 0600 ici ; le bloc LDAPS,
+      # qui court après la création du compte, pose le propriétaire définitif.
+      install -m 0600 "$A_LDAP_CA" "$CONFIG/ca-active-directory.pem"
       definir_variable LDAP_CA "$CONFIG/ca-active-directory.pem"
       succes "certificat de l'AC copié : $A_LDAP_CA → $CONFIG/ca-active-directory.pem"
     else
@@ -3250,6 +3256,18 @@ else
 
   # ⚠️ LISIBLE PAR LE COMPTE DE SERVICE, pas par root : c'est TOUTE la différence, et
   # c'est celle qu'on ne voit qu'au redémarrage suivant.
+  # >>> banc: ca-canonique <<<
+  # Le fichier canonique est celui de l'INSTALLATEUR : posé par l'assistant AVANT que
+  # le compte de service existe (root:root 0600), il reçoit ici son propriétaire
+  # définitif. Un fichier de l'exploitant, à un autre chemin, n'est pas touché — c'est
+  # le contrôle ci-dessous qui lui dit quoi faire.
+  CA_CANONIQUE="$CONFIG/ca-active-directory.pem"
+  if [[ "$LDAP_CA" == "$CA_CANONIQUE" && -f "$LDAP_CA" ]]; then
+    chown root:"$UTILISATEUR" "$LDAP_CA"
+    chmod 0640 "$LDAP_CA"
+    succes "certificat de l'AC : $LDAP_CA en root:$UTILISATEUR 0640 (fichier de l'installateur)"
+  fi
+  # <<< banc: ca-canonique >>>
   if ! su "$UTILISATEUR" -s /bin/sh -c "test -r '$LDAP_CA'" 2>/dev/null; then
     alerte "droits actuels : $(stat -c '%U:%G %a' "$LDAP_CA" 2>/dev/null || echo '?')"
     echec "LDAP_CA (« $LDAP_CA ») n'est PAS lisible par le compte de service « $UTILISATEUR ».

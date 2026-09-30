@@ -35,7 +35,7 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, test } from 'node:test';
@@ -151,6 +151,26 @@ describe('install.sh --assistant — la décision', () => {
     );
   });
 
+  test('🛑 le certificat de l’AC est copié SANS propriétaire ni groupe : le compte de service n’existe PAS ENCORE', () => {
+    // 30/09/2026, trouvé en écrivant la procédure de rejeu sur VM vierge : « install -o root
+    // -g cyber-grc » à l'heure de l'assistant, quand le compte naît au §3, plus bas —
+    // « invalid group », et l'installateur mourait après la dernière question. Le banc
+    // tourne sans root : tout -o/-g y échoue aussi, ce qui est exactement la propriété.
+    const ca = join(tmpdir(), `grc-ac-${process.pid}.cer`); jetables.push(ca);
+    writeFileSync(ca, '-----BEGIN CERTIFICATE-----\nAC-DU-LABO\n-----END CERTIFICATE-----\n');
+    const { decisions, config } = jouerEcriture({
+      A_PROFIL: 'production', A_URL: 'https://grc.essai.interne', A_LDAP_URL: 'ldaps://dc01.essai.interne:636',
+      A_LDAP_BASE: 'DC=essai,DC=interne', A_LDAP_DN: 'CN=svc-grc,DC=essai,DC=interne', A_LDAP_MDP: 'secret-du-compte-de-service',
+      A_SMTP_HOTE: 'smtp.essai.interne', A_SMTP_PORT: '587', A_SMTP_EXP: 'grc@essai.interne',
+      A_LDAP_CA: ca, UTILISATEUR: 'cyber-grc-pas-encore-cree',
+    });
+    const cible = join(config, 'ca-active-directory.pem');
+    assert.equal(decisions.LDAP_CA, cible, 'LDAP_CA pointe le chemin canonique');
+    assert.ok(existsSync(cible), 'le certificat est copié');
+    assert.equal(statSync(cible).mode & 0o777, 0o600, 'root seul le lit, jusqu’à ce que le compte existe');
+    assert.equal(readFileSync(cible, 'utf8'), readFileSync(ca, 'utf8'), 'copié tel quel — la conversion vient plus tard');
+  });
+
   test('découverte : le profil est ÉCRIT, aucune relance, certificat auto-signé', () => {
     const { decisions, ssl } = jouerEcriture({
       A_PROFIL: 'decouverte',
@@ -234,5 +254,31 @@ describe('install.sh --assistant — la décision', () => {
     );
     // Le mot de passe arrive par l'entrée standard, jamais en argument.
     assert.match(source, /printf '%s' "\$SECOURS_MDP" \| node/);
+  });
+});
+
+describe('bloc « ca-canonique » — le fichier de l’installateur reçoit son propriétaire ; celui de l’exploitant, non', () => {
+  // La seconde moitié du correctif ci-dessus : le bloc LDAPS court APRÈS la création du compte
+  // de service, et c'est lui qui pose root:cyber-grc 0640 sur le chemin canonique. Doublures de
+  // chown et chmod : on mesure les appels, le banc ne tourne pas en root.
+  function jouerCanonique(chemin) {
+    const racine = mkdtempSync(join(tmpdir(), 'grc-canonique-')); jetables.push(racine);
+    const config = join(racine, 'etc'); mkdirSync(config);
+    writeFileSync(join(config, 'ca-active-directory.pem'), 'AC'); writeFileSync(join(racine, 'ailleurs.pem'), 'AC');
+    const script = join(racine, 'bloc.sh');
+    writeFileSync(script, ['#!/bin/bash', 'set -Eeuo pipefail',
+      'chown() { printf "chown %s\\n" "$*"; }', 'chmod() { printf "chmod %s\\n" "$*"; }',
+      'succes() { :; }',
+      `CONFIG=${JSON.stringify(config)}`, 'UTILISATEUR=cyber-grc', `LDAP_CA=${JSON.stringify(chemin(racine, config))}`,
+      extraireBloc('ca-canonique'), ''].join('\n'), { mode: 0o755 });
+    return execFileSync('bash', [script], { encoding: 'utf8' });
+  }
+  test('chemin canonique : chown root:cyber-grc, puis chmod 0640', () => {
+    const sortie = jouerCanonique((_r, config) => join(config, 'ca-active-directory.pem'));
+    assert.match(sortie, /^chown root:cyber-grc \S+\/ca-active-directory\.pem$/m);
+    assert.match(sortie, /^chmod 0640 \S+\/ca-active-directory\.pem$/m);
+  });
+  test('un fichier de l’exploitant, ailleurs : rien n’est touché — le contrôle de lisibilité lui parlera', () => {
+    assert.equal(jouerCanonique((racine) => join(racine, 'ailleurs.pem')), '');
   });
 });

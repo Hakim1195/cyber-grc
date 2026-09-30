@@ -21,6 +21,9 @@
 > sortie réseau que l'unité systemd ferme, et le fait que **personne n'est administrateur
 > tant que personne n'est dans `GRC-ADMIN`**.
 >
+> ✅ **L'ANNUAIRE ET LE CERTIFICAT SONT DÉJÀ LÀ ?** La procédure de rejeu sur une VM vierge,
+> huit étapes prouvées en labo, est [`INSTALLER_AVEC_ANNUAIRE.md`](INSTALLER_AVEC_ANNUAIRE.md).
+>
 > Pour l'exploitation courante — sauvegardes, rétention, acquisitions, diagnostic des
 > pannes déjà rencontrées — voir [`GUIDE_EXPLOITATION.md`](GUIDE_EXPLOITATION.md).
 

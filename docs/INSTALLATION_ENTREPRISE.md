@@ -388,6 +388,11 @@ le jour J, quand l'administrateur du domaine est joignable.
 
 ## 3. Le jour J — dans cet ordre, avec ses portes
 
+> Quand les §1 et §2 sont faits — annuaire prêt, certificat en main —, la version condensée de
+> ce qui suit, commande par commande et avec ses sorties attendues, est
+> [`INSTALLER_AVEC_ANNUAIRE.md`](INSTALLER_AVEC_ANNUAIRE.md) : c'est elle qui se rejoue sur
+> une VM vierge.
+
 ### Étape 1 — L'assistant
 
 ```bash
