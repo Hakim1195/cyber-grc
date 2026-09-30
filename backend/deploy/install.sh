@@ -3605,19 +3605,6 @@ fi
 if [[ ! -f /etc/apache2/sites-available/cyber-grc.conf ]]; then
   install -m 0644 "$SOURCE/deploy/apache/cyber-grc.conf" /etc/apache2/sites-available/
   [[ -n "$HOTE_PUBLIC_INSTALL" ]] && poser_nom_vhost /etc/apache2/sites-available/cyber-grc.conf "$HOTE_PUBLIC_INSTALL"
-  if [[ -f /etc/ssl/cyber-grc/serveur.crt && -f /etc/ssl/cyber-grc/serveur.key && -f /etc/ssl/cyber-grc/chaine-pki-interne.crt ]]; then
-    a2ensite -q cyber-grc >/dev/null 2>&1 || true
-    if apache2ctl configtest >/dev/null 2>&1; then
-      systemctl reload apache2 && succes "vhost activé et servi (a2ensite cyber-grc)"
-    else
-      alerte "vhost installé mais Apache refuse sa configuration : apache2ctl configtest"
-    fi
-  else
-    alerte "Vhost installé et nommé, mais NON ACTIVÉ : il manque le certificat. En production"
-    alerte "l'installateur n'en engendre aucun — déposez les trois fichiers :"
-    alerte "  /etc/ssl/cyber-grc/serveur.crt  serveur.key  chaine-pki-interne.crt"
-    alerte "puis : a2ensite cyber-grc && apache2ctl configtest && systemctl reload apache2"
-  fi
 else
   NOM_VHOST_EXISTANT="$(sed -n 's/^[[:space:]]*ServerName[[:space:]]\{1,\}//p' /etc/apache2/sites-available/cyber-grc.conf | head -n1)"
   if [[ "$NOM_VHOST_EXISTANT" == "grc-test.site" && -n "$HOTE_PUBLIC_INSTALL" && "$HOTE_PUBLIC_INSTALL" != "grc-test.site" ]]; then
@@ -3627,6 +3614,23 @@ else
   else
     alerte "Vhost déjà présent — non écrasé (personnalisations préservées)."
   fi
+fi
+# ⚠️ L'activation vaut dans les DEUX cas : un passage interrompu laisse un vhost posé mais
+# jamais activé, et « déjà présent » ne voulait pas dire « servi » (relecture de l'agent
+# du labo, 30/09/2026). a2ensite est idempotent ; un reload qui échoue le DIT.
+if [[ -f /etc/ssl/cyber-grc/serveur.crt && -f /etc/ssl/cyber-grc/serveur.key && -f /etc/ssl/cyber-grc/chaine-pki-interne.crt ]]; then
+  a2ensite -q cyber-grc >/dev/null 2>&1 || true
+  if apache2ctl configtest >/dev/null 2>&1; then
+    if systemctl reload apache2; then succes "vhost activé et servi (a2ensite cyber-grc)"
+    else alerte "vhost activé mais « systemctl reload apache2 » a ÉCHOUÉ : journalctl -u apache2 -n 30"; fi
+  else
+    alerte "vhost activé mais Apache refuse sa configuration : apache2ctl configtest"
+  fi
+else
+  alerte "Vhost posé et nommé, mais NON ACTIVÉ : il manque le certificat. En production"
+  alerte "l'installateur n'en engendre aucun — déposez les trois fichiers :"
+  alerte "  /etc/ssl/cyber-grc/serveur.crt  serveur.key  chaine-pki-interne.crt"
+  alerte "puis relancez « install.sh --maj » : il activera le vhost."
 fi
 
 # >>> banc: corps <<<

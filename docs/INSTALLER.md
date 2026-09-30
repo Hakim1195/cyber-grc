@@ -133,16 +133,23 @@ AUTH_LDAP_ACTIF=non
 SMTP_ACTIF=non
 ```
 
-Le premier passage crée `env` et s'arrête en code 2 en nommant `SERVEUR_URL_PUBLIQUE` ; posez
-les quatre lignes ; le deuxième s'arrête en nommant `AUTH_COMPTE_SECOURS_EMPREINTE` **et les
+Le premier passage crée `env` et s'arrête en code 2 en nommant `SERVEUR_URL_PUBLIQUE` **et**
+`LDAP_MOT_DE_PASSE_SERVICE` (le modèle porte `AUTH_LDAP_ACTIF=oui`) ; posez les quatre lignes ; le deuxième s'arrête en nommant `AUTH_COMPTE_SECOURS_EMPREINTE` **et les
 deux issues** ; le troisième, avec le mot de passe du compte de secours **par un fichier 0600,
 jamais en argument ni dans l'environnement**, effacé une fois l'empreinte posée, va au bout —
 certificat auto-signé engendré au nom de l'URL, vhost **nommé et activé**, compte `secours.grc` :
 
 ```bash
-(umask 077; printf '%s' 'un-mot-de-passe-de-douze-au-moins' > /root/secours.txt)
+sudo bash -c 'umask 077; openssl rand -base64 18 > /root/secours.txt'   # ENGENDRÉ : aucun secret sur une ligne de commande
+sudo cat /root/secours.txt                                              # relevez-le MAINTENANT : il sera effacé
 sudo bash backend/deploy/install.sh --secours-fichier=/root/secours.txt
 ```
+
+🛑 **Ne mettez jamais le mot de passe lui-même dans une commande** — `sudo bash -c '… "MonMot" …'`
+l'écrit **en clair dans le journal système** (`journalctl _COMM=sudo`, ligne `COMMAND=`, lisible
+par le groupe `adm`) et le montre dans `ps` le temps de la commande. Mesuré le 30/09/2026 par
+l'agent du labo, sur une recette que j'avais écrite. Si vous voulez le choisir vous-même, avec un
+terminal : `sudo bash -c 'umask 077; read -rsp "Mot de passe : " m; printf "%s" "$m" > /root/secours.txt; echo'`.
 
 ⚠️ Avant le 30/09/2026 ce chemin n'existait pas : sans terminal, l'installation en découverte
 produisait un produit où **personne ne pouvait entrer**. Trouvé par un agent qui installait en
