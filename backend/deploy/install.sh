@@ -1277,7 +1277,15 @@ SQL
       # 30 jours : le délai qu'il faut pour obtenir un certificat d'entreprise.
       if openssl x509 -in "$CERT" -noout -checkend 2592000 >/dev/null 2>&1; then
         FIN="$(openssl x509 -in "$CERT" -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
-        diag_ok "certificat" "valide jusqu'au $FIN"
+        # ⚠️ La DATE ne suffit pas : après un renommage de l'URL publique, le certificat servi
+        # portait encore l'ancien nom et cette ligne disait « ok » (labo, 30/09/2026).
+        HOTE_DIAG="$(lire_variable SERVEUR_URL_PUBLIQUE)"; HOTE_DIAG="${HOTE_DIAG#https://}"; HOTE_DIAG="${HOTE_DIAG%%/*}"; HOTE_DIAG="${HOTE_DIAG%%:*}"
+        if [[ -n "$HOTE_DIAG" ]] && ! openssl x509 -in "$CERT" -noout -checkhost "$HOTE_DIAG" >/dev/null 2>&1; then
+          diag_bloquant "certificat" "ne couvre PAS « $HOTE_DIAG » (SERVEUR_URL_PUBLIQUE) — avertissement TLS garanti dans tout navigateur" \
+            "Certificat au bon nom dans $CERT (SAN DNS:$HOTE_DIAG), puis apache2ctl configtest && systemctl reload apache2"
+        else
+          diag_ok "certificat" "valide jusqu'au $FIN${HOTE_DIAG:+, couvre $HOTE_DIAG}"
+        fi
       else
         FIN="$(openssl x509 -in "$CERT" -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
         diag_reserve "certificat" "expire dans moins de 30 jours ($FIN)" \
@@ -3189,7 +3197,9 @@ else
     printf '%s\n' "$CAPTURE_TLS" > "$LDAP_CA_CIBLE.tmp"
     install -o root -g "$UTILISATEUR" -m 0640 "$LDAP_CA_CIBLE.tmp" "$LDAP_CA_CIBLE"
     rm -f "$LDAP_CA_CIBLE.tmp"
-    NB_CAPTURES="$(grep -c 'BEGIN CERTIFICATE' "$LDAP_CA_CIBLE")"
+    # ⚠️ « || true » : grep -c rend 1 quand le compte est 0, et pipefail + set -e
+    # couperaient l'affectation (classe trouvée en labo le 30/09/2026, cinquième arrêt).
+    NB_CAPTURES="$(grep -c 'BEGIN CERTIFICATE' "$LDAP_CA_CIBLE" || true)"
     # La FEUILLE — le premier certificat présenté — porte le sujet, l'émetteur et la clé
     # que l'exploitant doit pouvoir comparer avec ce que lui dit l'équipe AD.
     FEUILLE_TMP="$(mktemp)"
@@ -3302,7 +3312,13 @@ else
     SORTIE_TLS="$(timeout 15 openssl s_client -connect "$LDAP_HOTE:$LDAP_PORT" \
                     -servername "$LDAP_HOTE" -CAfile "$LDAP_CA" -verify_return_error \
                     -brief </dev/null 2>&1 || true)"
-    MOTIF_OPENSSL="$(printf '%s' "$SORTIE_TLS" | grep -i 'verify error' | head -n1)"
+    # 🛑 « || true » N'EST PAS UN DÉTAIL : sans lui, grep rend 1 quand il n'y a AUCUNE
+    # ligne « verify error » — c'est-à-dire quand la PKI est SAINE —, pipefail le propage,
+    # set -e coupe l'affectation, et l'installateur s'arrêtait précisément dans le seul cas
+    # où tout était bon, avant même d'interroger Node. Sur les machines connues il y avait
+    # toujours une ligne (la clé 1024 bits du premier client) ; sur une PKI d'entreprise
+    # exemplaire, non. Mesuré en labo le 30/09/2026, cinquième arrêt.
+    MOTIF_OPENSSL="$(printf '%s' "$SORTIE_TLS" | grep -i 'verify error' | head -n1 || true)"
 
     # Node : pour la DÉCISION — exactement ce que fera le service à la première connexion.
     SONDE_NODE="$(mktemp --suffix=.cjs)"

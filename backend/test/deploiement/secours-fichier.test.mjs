@@ -92,6 +92,33 @@ describe('Le bloc « valeurs manquantes » refuse en code 2, en NOMMANT, avant l
   });
 });
 
+describe('🛑 Aucune affectation « $( … grep … ) » d’install.sh ne s’arrête sur zéro correspondance', () => {
+  // Cinquième arrêt du labo, 30/09/2026 : sur une PKI SAINE, grep 'verify error' ne trouve
+  // rien, rend 1, pipefail le propage, set -e coupe l'affectation — l'installateur
+  // s'arrêtait précisément quand tout était bon. La classe se BALAIE, elle ne se liste pas.
+  const source = readFileSync(join(BACKEND, 'deploy', 'install.sh'), 'utf8');
+  test('chaque affectation, lignes de continuation jointes, porte « || true » (ou un repli)', () => {
+    const lignes = source.split('\n'); const nues = [];
+    for (let i = 0; i < lignes.length; i += 1) {
+      if (!/^\s*[A-Za-z_][A-Za-z0-9_]*="\$\(/.test(lignes[i])) continue;
+      let corps = lignes[i]; let j = i;
+      while (corps.trimEnd().endsWith('\\') && j + 1 < lignes.length) { j += 1; corps += '\n' + lignes[j]; }
+      if (!/\bgrep\b/.test(corps)) continue;
+      if (!/\|\|\s*(true|:|printf|echo)\b/.test(corps)) nues.push(`${i + 1}: ${lignes[i].trim().slice(0, 90)}`);
+    }
+    assert.deepEqual(nues, [], `Affectation(s) qui tomberai(en)t sous pipefail sur zéro correspondance :\n  ${nues.join('\n  ')}`);
+    assert.ok(source.split('\n').filter((l) => /^\s*[A-Za-z_]+="\$\(.*\bgrep\b/.test(l)).length >= 8, 'le balayage doit voir les affectations ; il en voit trop peu');
+  });
+  test('la ligne MOTIF_OPENSSL, jouée sous set -Eeuo pipefail avec « Verification: OK » (aucune ligne d’erreur), SURVIT', () => {
+    const ligne = source.split('\n').find((l) => l.includes('MOTIF_OPENSSL="$(printf'));
+    assert.ok(ligne, 'la ligne MOTIF_OPENSSL a disparu ou changé de forme');
+    const d = tmp();
+    const r = jouerScript(`SORTIE_TLS=$'Protocol version: TLSv1.2\\nPeer certificate: CN=AD-01.dedaero.lan\\nVerification: OK\\nDONE'\n${ligne.trim()}\nprintf 'MOTIF=[%s]\\n' "$MOTIF_OPENSSL"\n`, {}, d, 'motif');
+    assert.equal(r.code, 0, r.sortie);
+    assert.match(r.sortie, /MOTIF=\[\]/, 'aucun motif : la PKI est saine, et l’installateur continue');
+  });
+});
+
 describe('Le compteur de filiales lit le format du §27, et rien d’autre', () => {
   test('commentaires, lignes vides et « non » ne comptent pas ; « oui » compte, espaces compris', () => {
     const corps = extraireFonction('filiales_declarees_fichier');

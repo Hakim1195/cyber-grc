@@ -44,7 +44,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2634 essais, 2634 passés, 0 échec** — 2 360 sans navigateur et 274 avec —,
+> `npm test` → **2636 essais, 2636 passés, 0 échec** — 2 362 sans navigateur et 274 avec —,
 > **quarante et une** familles. ⚠️ **+16 le 25/09/2026, tard** : `test/base/fuseau-horaire`
 > — les garde-fous joués sous SEPT fuseaux, ce que personne ne faisait. ⚠️ **+1** : le garde-fou du bloc
 > d'ancrage — voir l'entrée du jour. ⚠️ **+3 le 25/09/2026 au soir** : les trois essais qui gardent
@@ -160,6 +160,24 @@ fichier 0600, puis `install.sh --maj --secours-fichier=`.
 reliés à cette session par *Remote Control* — le Debian a mesuré, s'est arrêté devant
 `sudo` **sans contourner**, et a relu mon diagnostic pour en corriger deux points. *Un pair
 qui refuse de blanchir une permission et qui relit vaut un passage de porte.*
+
+### 🛑 L'INSTALLATEUR S'ARRÊTAIT PRÉCISÉMENT QUAND LA PKI ÉTAIT SAINE (30/09/2026, labo — cinquième arrêt)
+
+Étage 2 du labo, `--maj` sur un contrôleur dont le certificat LDAPS est **exemplaire**
+(sha256RSA, 2048, chaîne vérifiée) : **code 1, ligne 3305**. Cause mesurée par l'agent :
+`MOTIF_OPENSSL="$(… | grep -i 'verify error' | head -n1)"` — quand openssl rend
+`Verification: OK`, il n'y a **aucune** ligne « verify error », `grep` rend 1, `pipefail` le
+propage, `set -e` coupe l'affectation. Sur mes machines connues il y avait toujours une
+ligne (la clé 1024 bits du premier client) ; sur une PKI d'entreprise saine, non. *Un
+installateur qui tombe dans le seul cas où tout est bon.*
+
+| | |
+|---|---|
+| les deux affectations nues (`MOTIF_OPENSSL`, `NB_CAPTURES`) | `\|\| true` |
+| **la classe** | un essai **balaie** toute affectation `$( … grep … )` d'`install.sh`, lignes de continuation jointes, et exige un repli — cinq autres en portaient déjà un, l'agent les avait relues |
+| la ligne | jouée sous `set -Eeuo pipefail` avec `Verification: OK` : elle survit, motif vide |
+| `--diagnostic`, ligne `certificat` | contrôle aussi le **nom** (`-checkhost` sur l'hôte de `SERVEUR_URL_PUBLIQUE`) : après le renommage en `grc.dedaero.lan`, le certificat servi portait l'ancien nom et la ligne disait « ok » — désormais **bloquant** |
+| `groupes-ad.sh` | lancé depuis un clone après une installation, il ne trouvait pas `dist/` (l'installateur compile dans `/opt`) : repli sur le compilé installé, annoncé |
 
 ### 🛑 SANS FILIALE, « INSTALLATION TERMINÉE » ET 403 POUR TOUT LE MONDE (30/09/2026, labo)
 

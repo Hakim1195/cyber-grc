@@ -224,7 +224,15 @@ NB_INACTIVES=0
 FILIALES_DU_FICHIER=""   # renseigné dès que le fichier a pu être analysé
 
 # ── L'analyseur compilé, découvert et non supposé ──────────────────────────
-ANALYSEUR="$RACINE_BACKEND/dist/filiales/declaration.js"
+# ⚠️ L'installateur compile dans /opt, jamais dans le dépôt : lancé depuis un clone après
+# une installation, ce script ne trouvait pas dist/ et échouait en code 2 (labo,
+# 30/09/2026). On se replie sur le compilé INSTALLÉ, en le disant.
+COMPILE_BACKEND="$RACINE_BACKEND"
+if [[ ! -f "$RACINE_BACKEND/dist/filiales/declaration.js" && -f /opt/cyber-grc/backend/dist/filiales/declaration.js ]]; then
+  COMPILE_BACKEND=/opt/cyber-grc/backend
+  printf '\033[1;33m  !!\033[0m %s\n' "dist/ absent du dépôt : emploi du compilé installé, /opt/cyber-grc/backend/dist" >&2
+fi
+ANALYSEUR="$COMPILE_BACKEND/dist/filiales/declaration.js"
 command -v node >/dev/null 2>&1 || echec "« node » est introuvable : l'analyseur est du JavaScript compilé."
 [[ -f "$ANALYSEUR" ]] \
   || echec "L'analyseur compilé est absent : $ANALYSEUR
@@ -392,7 +400,7 @@ NB_PROFILS="$(printf '%s\n' "$PROFILS_BRUT" | grep -c . || true)"
 #
 # Voir l'en-tête : deux engendreurs, c'est deux vérités, et la divergence serait
 # invisible jusqu'au jour où un compte se connecte sans obtenir aucun droit.
-ENGENDREUR="$RACINE_BACKEND/dist/droits/groupes-ad.js"
+ENGENDREUR="$COMPILE_BACKEND/dist/droits/groupes-ad.js"
 [[ -f "$ENGENDREUR" ]] \
   || echec "L'engendreur compilé est absent : $ENGENDREUR
       Ce script ne réécrit PAS la convention de nommage — il met en forme ce que
