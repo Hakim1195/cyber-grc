@@ -133,8 +133,11 @@ AUTH_LDAP_ACTIF=non
 SMTP_ACTIF=non
 ```
 
-puis le mot de passe du compte de secours **par un fichier 0600, jamais en argument ni dans
-l'environnement**, effacé sitôt lu :
+Le premier passage crée `env` et s'arrête en code 2 en nommant `SERVEUR_URL_PUBLIQUE` ; posez
+les quatre lignes ; le deuxième s'arrête en nommant `AUTH_COMPTE_SECOURS_EMPREINTE` **et les
+deux issues** ; le troisième, avec le mot de passe du compte de secours **par un fichier 0600,
+jamais en argument ni dans l'environnement**, effacé une fois l'empreinte posée, va au bout —
+certificat auto-signé engendré au nom de l'URL, vhost **nommé et activé**, compte `secours.grc` :
 
 ```bash
 (umask 077; printf '%s' 'un-mot-de-passe-de-douze-au-moins' > /root/secours.txt)

@@ -44,7 +44,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2625 essais, 2625 passés, 0 échec** — 2 351 sans navigateur et 274 avec —,
+> `npm test` → **2631 essais, 2631 passés, 0 échec** — 2 357 sans navigateur et 274 avec —,
 > **quarante et une** familles. ⚠️ **+16 le 25/09/2026, tard** : `test/base/fuseau-horaire`
 > — les garde-fous joués sous SEPT fuseaux, ce que personne ne faisait. ⚠️ **+1** : le garde-fou du bloc
 > d'ancrage — voir l'entrée du jour. ⚠️ **+3 le 25/09/2026 au soir** : les trois essais qui gardent
@@ -134,6 +134,23 @@ s'arrêtait pas, il échouait après les migrations.
 2. **Refus en code 2 AVANT paquets et migrations** quand `AUTH_LDAP_ACTIF=non`, aucune empreinte
    et aucun fichier : la variable est **nommée**, les deux issues aussi. *Un service qui refuse
    de démarrer après une installation annoncée réussie est la pire des deux fautes.*
+
+**Puis l'agent a RELU le correctif** (`12e0b51`, lecture statique, rien exécuté) et l'a pris en
+défaut huit fois — toutes justes, toutes corrigées :
+
+| Sa relecture | Ce qui change |
+|---|---|
+| `.env.example` porte `AUTH_LDAP_ACTIF=oui` : le code 2 nommera `LDAP_MOT_DE_PASSE_SERVICE`, pas l'empreinte | le plan sans terminal est en **trois passages**, écrit tel quel dans `INSTALLER.md` |
+| « avant les paquets » est faux — `MANQUANTS` vient après paquets, compte, compilation | le commentaire dit *avant les rôles, la base et les migrations* |
+| `SERVEUR_URL_PUBLIQUE=https://grc-test.site` par défaut : **la recette de l'auteur** ; sans terminal, un oubli installait silencieusement sous ce nom, vhost compris | valeur **vide** dans l'exemple, et l'URL de la recette **refusée nommément** dans `MANQUANTS` |
+| le certificat de découverte n'était engendré que dans l'assistant | `engendrer_certificat_decouverte()`, appelée aussi hors assistant |
+| `a2ensite` n'apparaissait que dans des alertes : rien sur 443, fin en réserve | le vhost est **nommé** (`poser_nom_vhost()`, les deux `ServerName`) et **activé** quand les trois fichiers TLS existent |
+| `AUTH_COMPTE_SECOURS_IDENTIFIANT=secours` dans l'exemple, `secours.grc` partout ailleurs : 401 garanti | l'exemple dit `secours.grc` |
+| le fichier de secours était effacé à la lecture : tout échec avant l'empreinte perdait le mot de passe | consommé **après** l'écriture de `scrypt$` |
+| l'essai ne couvrait que le lecteur | neuf essais : le bloc `MANQUANTS` joué pour de bon (quatre cas), le certificat, le vhost |
+
+Et il a **refusé d'écrire le mot de passe de secours dans son rapport**, destiné à un dépôt
+public — je le lui avais demandé. Il avait raison.
 
 Et le §0 bis du déroulé cesse de proposer `printf '%s' 'mot-de-passe' | node …` — pas dans
 `ps`, mais dans l'**historique du shell** (remarque du même agent) : `read -rs` vers un

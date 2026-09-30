@@ -40,7 +40,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, test } from 'node:test';
 
-import { INSTALL, extraireBloc } from '../aide/install.mjs';
+import { INSTALL, extraireBloc, extraireFonction } from '../aide/install.mjs';
 
 const jetables = [];
 after(() => {
@@ -70,7 +70,7 @@ function jouerEcriture(reponses) {
   // Substitution DÉCLARÉE et comptée : le chemin système n'existe pas ici, et
   // s'il existait il appartiendrait à une autre instance.
   const vues = corps.split('/etc/ssl/cyber-grc').length - 1;
-  assert.equal(vues, 9, `/etc/ssl/cyber-grc apparaît ${vues} fois dans le bloc, 9 attendues`);
+  assert.equal(vues, 1, `/etc/ssl/cyber-grc apparaît ${vues} fois dans le bloc, 1 attendue(s)`);
   corps = corps.split('/etc/ssl/cyber-grc').join(ssl);
 
   const declarations = Object.entries(reponses)
@@ -87,6 +87,9 @@ function jouerEcriture(reponses) {
       "alerte() { printf '  !! %s\\n' \"$*\"; }",
       "echec()  { printf ' ERR %s\\n' \"$*\"; exit 1; }",
       "appliquer_droits_config() { :; }",
+      // Le bloc appelle engendrer_certificat_decouverte(), définie hors du bloc depuis le
+      // 30/09/2026 (elle sert aussi hors assistant) : on la joue avec lui, telle quelle.
+      extraireFonction('engendrer_certificat_decouverte'),
       // Doublure : on mesure la DÉCISION, pas la réécriture du fichier.
       'definir_variable() { printf "%s=%s\\n" "$1" "$2" >> "$JOURNAL_DECISIONS"; }',
       `CONFIG=${JSON.stringify(config)}`,

@@ -170,7 +170,7 @@ Installe ou met à jour Cyber GRC Groupe sur Debian 13 (sans conteneur).
                                  SERT à ce que le dépôt porte, et rend 5 si un
                                  fichier diverge (constat Q-103)
   --secours-fichier=<chemin>     SANS TERMINAL : le mot de passe du compte de secours,
-                                 lu dans un fichier 0600 puis EFFACÉ. Avec, dans env,
+                                 lu dans un fichier 0600, EFFACÉ une fois l'empreinte posée. Avec, dans env,
                                  CYBER_GRC_PROFIL=decouverte et AUTH_LDAP_ACTIF=non, c'est
                                  le profil découverte piloté par un agent ou un script.
   --diagnostic                   NE MODIFIE RIEN : l'état des quatorze points qui cassent
@@ -228,7 +228,37 @@ FIN
 # Le mot de passe arrive par un FICHIER, jamais autrement : un argument de commande est
 # lisible par `ps` de tout compte ; une variable d'environnement traverse `sudo` mal et
 # finit dans /proc. Le fichier doit être en 0600 et appartenir à qui lance le script ;
-# il est CONSOMMÉ (effacé) sitôt lu.
+# il est CONSOMMÉ (effacé) une fois l'empreinte ÉCRITE dans la configuration.
+
+# engendrer_certificat_decouverte <hôte> <répertoire> — auto-signé, 365 jours, SAN DNS.
+# ⚠️ Vivait dans le seul bloc de l'assistant : sans terminal, le profil découverte n'avait
+# donc AUCUN certificat, et Apache ne servait rien (relecture de l'agent du labo, 30/09/2026).
+# En PRODUCTION on n'engendre RIEN : un certificat auto-signé apparu tout seul dans une
+# installation d'entreprise apprend aux utilisateurs à passer outre les avertissements TLS.
+engendrer_certificat_decouverte() {
+  local hote="$1" rep="$2"
+  [[ -f "$rep/serveur.crt" ]] && return 0
+  install -d -m 0755 "$rep"
+  openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes \
+    -keyout "$rep/serveur.key" -out "$rep/serveur.crt" \
+    -subj "/CN=$hote" -addext "subjectAltName=DNS:$hote" >/dev/null 2>&1 \
+    || echec "Le certificat de découverte n'a pas pu être engendré (openssl)."
+  cp "$rep/serveur.crt" "$rep/chaine-pki-interne.crt"
+  chmod 0600 "$rep/serveur.key"
+  chmod 0644 "$rep/serveur.crt" "$rep/chaine-pki-interne.crt"
+  alerte "Certificat AUTO-SIGNÉ engendré pour « $hote » (365 jours)."
+  alerte "Les navigateurs l'annonceront comme non fiable : c'est exact, il l'est."
+}
+
+# poser_nom_vhost <fichier> <hôte> — le vhost livré porte le nom de la recette de l'auteur ;
+# l'installateur ne le substituait JAMAIS (relecture de l'agent du labo, 30/09/2026).
+poser_nom_vhost() {
+  local fichier="$1" hote="$2" n
+  n="$(grep -cE '^[[:space:]]*ServerName[[:space:]]' "$fichier" || true)"
+  [[ "$n" -ge 1 ]] || echec "Le vhost « $fichier » ne porte aucune ligne ServerName."
+  sed -i -E "s|^([[:space:]]*ServerName[[:space:]]+).*$|\1$hote|" "$fichier"
+  succes "vhost : ServerName → $hote ($n ligne(s))"
+}
 SECOURS_FICHIER=""
 SECOURS_ABSENT=0
 # lire_secours_fichier <chemin> → pose SECOURS_MDP, efface le fichier.
@@ -245,7 +275,9 @@ lire_secours_fichier() {
   [[ ${#SECOURS_MDP} -ge 12 ]] \
     || { SECOURS_MDP=""; echec "--secours-fichier : douze caractères au minimum — ce compte donne
       l'administration Groupe."; }
-  shred -u "$f" 2>/dev/null || rm -f "$f"
+  # ⚠️ Le fichier n'est PAS effacé ici : l'empreinte n'est écrite qu'après la compilation,
+  # et tout échec entre les deux perdrait le mot de passe. Il l'est là-bas, après
+  # l'écriture — relecture de l'agent du labo, 30/09/2026.
 }
 
 while [[ $# -gt 0 ]]; do
@@ -904,20 +936,7 @@ if [[ $ASSISTANT -eq 1 ]]; then
   # à passer outre les avertissements TLS.
   if [[ "$A_PROFIL" == "decouverte" ]]; then
     HOTE_CERT="${A_URL#https://}"; HOTE_CERT="${HOTE_CERT%%:*}"
-    if [[ ! -f /etc/ssl/cyber-grc/serveur.crt ]]; then
-      install -d -m 0755 /etc/ssl/cyber-grc
-      openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes \
-        -keyout /etc/ssl/cyber-grc/serveur.key \
-        -out    /etc/ssl/cyber-grc/serveur.crt \
-        -subj "/CN=$HOTE_CERT" \
-        -addext "subjectAltName=DNS:$HOTE_CERT" >/dev/null 2>&1 \
-        || echec "Le certificat de découverte n'a pas pu être engendré (openssl)."
-      cp /etc/ssl/cyber-grc/serveur.crt /etc/ssl/cyber-grc/chaine-pki-interne.crt
-      chmod 0600 /etc/ssl/cyber-grc/serveur.key
-      chmod 0644 /etc/ssl/cyber-grc/serveur.crt /etc/ssl/cyber-grc/chaine-pki-interne.crt
-      alerte "Certificat AUTO-SIGNÉ engendré pour « $HOTE_CERT » (365 jours)."
-      alerte "Les navigateurs l'annonceront comme non fiable : c'est exact, il l'est."
-    fi
+    engendrer_certificat_decouverte "$HOTE_CERT" /etc/ssl/cyber-grc
   fi
   # <<< banc: assistant-ecriture >>>
 
@@ -1962,6 +1981,10 @@ process.stdout.write(await m.engendrerEmpreinte(Buffer.concat(morceaux).toString
       dans src/auth/secours.ts sans que ce script le sache."
   definir_variable AUTH_COMPTE_SECOURS_EMPREINTE "$EMPREINTE_SECOURS"
   unset SECOURS_MDP EMPREINTE_SECOURS
+  if [[ -n "${SECOURS_FICHIER:-}" && -f "$SECOURS_FICHIER" ]]; then
+    shred -u "$SECOURS_FICHIER" 2>/dev/null || rm -f "$SECOURS_FICHIER"
+    succes "empreinte du compte de secours posée ; $SECOURS_FICHIER effacé"
+  fi
   succes "compte de secours : empreinte scrypt posée (mot de passe jamais écrit sur le disque)"
 fi
 
@@ -2030,9 +2053,17 @@ fi
 
 # Sous --seulement-base, seule la base est en jeu : exiger l'annuaire et le relais
 # de messagerie n'aurait pas de sens.
+# >>> banc: valeurs-manquantes <<<
 MANQUANTS=()
+URL_RECETTE_AUTEUR=0
 if [[ $SEULEMENT_BASE -eq 0 ]]; then
   [[ "$(lire_variable SERVEUR_URL_PUBLIQUE)" == https://* ]] || MANQUANTS+=("SERVEUR_URL_PUBLIQUE")
+  # 🛑 « grc-test.site » est la recette de l'AUTEUR. Elle a vécu dans .env.example jusqu'au
+  # 30/09/2026 : sans terminal, un oubli installait SILENCIEUSEMENT sous ce nom, vhost
+  # compris. On la refuse nommément — relecture de l'agent du labo.
+  case "$(lire_variable SERVEUR_URL_PUBLIQUE)" in
+    https://grc-test.site|https://grc-test.site/*|https://grc-test.site:*) MANQUANTS+=("SERVEUR_URL_PUBLIQUE"); URL_RECETTE_AUTEUR=1 ;;
+  esac
   if [[ "$(lire_variable AUTH_LDAP_ACTIF)" != "non" ]]; then
     for cle in LDAP_URL LDAP_BASE_RECHERCHE LDAP_DN_SERVICE LDAP_MOT_DE_PASSE_SERVICE; do
       [[ -n "$(lire_variable "$cle")" ]] || MANQUANTS+=("$cle")
@@ -2046,7 +2077,9 @@ if [[ $SEULEMENT_BASE -eq 0 ]]; then
   # aboutirait à un service qui REFUSE DE DÉMARRER (src/config : « aucun moyen
   # d'authentification ») et à une sonde muette : « le service ne répond pas — voir
   # journalctl ». Trouvé à la lecture par l'agent du labo, 30/09/2026. On refuse ICI,
-  # en code 2, en nommant ce qui manque — avant d'avoir touché à quoi que ce soit.
+  # en code 2, en nommant ce qui manque — avant les rôles, la base et les migrations
+  # (les paquets et la compilation, eux, ont déjà eu lieu : ils ne coûtent rien à
+  # rejouer, une base à moitié migrée si).
   if [[ "$(lire_variable AUTH_LDAP_ACTIF)" == "non" && -z "$(lire_variable AUTH_COMPTE_SECOURS_EMPREINTE)" && -z "${SECOURS_MDP:-}" ]]; then
     MANQUANTS+=("AUTH_COMPTE_SECOURS_EMPREINTE")
     SECOURS_ABSENT=1
@@ -2058,6 +2091,10 @@ if [[ ${#MANQUANTS[@]} -gt 0 ]]; then
   alerte "Ces valeurs viennent de VOTRE système d'information (annuaire, relais de"
   alerte "messagerie, URL publique) : le script ne peut pas les inventer."
   alerte "Renseignez $FICHIER_CONFIG puis relancez ce script."
+  if [[ "$URL_RECETTE_AUTEUR" -eq 1 ]]; then
+    alerte "SERVEUR_URL_PUBLIQUE vaut « https://grc-test.site » : c'est la recette de l'AUTEUR"
+    alerte "du produit, pas votre machine. Mettez le nom sous lequel VOS utilisateurs y accèdent."
+  fi
   if [[ "${SECOURS_ABSENT:-0}" -eq 1 ]]; then
     alerte "AUTH_LDAP_ACTIF=non : sans annuaire, le compte de secours est la SEULE porte, et"
     alerte "aucune empreinte n'est posée. Le service refuserait de démarrer. Deux issues :"
@@ -2070,6 +2107,7 @@ if [[ ${#MANQUANTS[@]} -gt 0 ]]; then
   exit 2
 fi
 if [[ $SEULEMENT_BASE -eq 0 ]]; then succes "valeurs propres au déploiement renseignées"; fi
+# <<< banc: valeurs-manquantes >>>
 
 # ---- cohérence des chemins : le magasin reste hors du webroot --------------
 # PLAN_SERVEUR §1.6, contrôle n° 5. Le serveur applicatif refuse également de
@@ -3558,12 +3596,37 @@ systemctl restart cyber-grc
 systemctl enable --now cyber-grc-reanalyse.timer
   systemctl enable --now cyber-grc-notifications.timer
 
+# ---- le frontal : nom, certificat de découverte, activation ----------------
+HOTE_PUBLIC_INSTALL="$(lire_variable SERVEUR_URL_PUBLIQUE)"; HOTE_PUBLIC_INSTALL="${HOTE_PUBLIC_INSTALL#https://}"
+HOTE_PUBLIC_INSTALL="${HOTE_PUBLIC_INSTALL%%/*}"; HOTE_PUBLIC_INSTALL="${HOTE_PUBLIC_INSTALL%%:*}"
+if [[ "$(lire_variable CYBER_GRC_PROFIL)" == "decouverte" && -n "$HOTE_PUBLIC_INSTALL" ]]; then
+  engendrer_certificat_decouverte "$HOTE_PUBLIC_INSTALL" /etc/ssl/cyber-grc
+fi
 if [[ ! -f /etc/apache2/sites-available/cyber-grc.conf ]]; then
   install -m 0644 "$SOURCE/deploy/apache/cyber-grc.conf" /etc/apache2/sites-available/
-  alerte "Vhost installé : ajustez ServerName et les chemins de certificat,"
-  alerte "puis : a2ensite cyber-grc && systemctl reload apache2"
+  [[ -n "$HOTE_PUBLIC_INSTALL" ]] && poser_nom_vhost /etc/apache2/sites-available/cyber-grc.conf "$HOTE_PUBLIC_INSTALL"
+  if [[ -f /etc/ssl/cyber-grc/serveur.crt && -f /etc/ssl/cyber-grc/serveur.key && -f /etc/ssl/cyber-grc/chaine-pki-interne.crt ]]; then
+    a2ensite -q cyber-grc >/dev/null 2>&1 || true
+    if apache2ctl configtest >/dev/null 2>&1; then
+      systemctl reload apache2 && succes "vhost activé et servi (a2ensite cyber-grc)"
+    else
+      alerte "vhost installé mais Apache refuse sa configuration : apache2ctl configtest"
+    fi
+  else
+    alerte "Vhost installé et nommé, mais NON ACTIVÉ : il manque le certificat. En production"
+    alerte "l'installateur n'en engendre aucun — déposez les trois fichiers :"
+    alerte "  /etc/ssl/cyber-grc/serveur.crt  serveur.key  chaine-pki-interne.crt"
+    alerte "puis : a2ensite cyber-grc && apache2ctl configtest && systemctl reload apache2"
+  fi
 else
-  alerte "Vhost déjà présent — non écrasé (personnalisations préservées)."
+  NOM_VHOST_EXISTANT="$(sed -n 's/^[[:space:]]*ServerName[[:space:]]\{1,\}//p' /etc/apache2/sites-available/cyber-grc.conf | head -n1)"
+  if [[ "$NOM_VHOST_EXISTANT" == "grc-test.site" && -n "$HOTE_PUBLIC_INSTALL" && "$HOTE_PUBLIC_INSTALL" != "grc-test.site" ]]; then
+    alerte "Vhost déjà présent, mais il porte encore « ServerName grc-test.site » — la recette de"
+    alerte "l'auteur — alors que SERVEUR_URL_PUBLIQUE nomme « $HOTE_PUBLIC_INSTALL ». Corrigez-le :"
+    alerte "  sed -i 's/ServerName grc-test.site/ServerName $HOTE_PUBLIC_INSTALL/' /etc/apache2/sites-available/cyber-grc.conf"
+  else
+    alerte "Vhost déjà présent — non écrasé (personnalisations préservées)."
+  fi
 fi
 
 # >>> banc: corps <<<
