@@ -44,7 +44,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2639 essais, 2639 passés, 0 échec** — 2 365 sans navigateur et 274 avec —,
+> `npm test` → **2640 essais, 2640 passés, 0 échec** — 2 366 sans navigateur et 274 avec —,
 > **quarante et une** familles. ⚠️ **+16 le 25/09/2026, tard** : `test/base/fuseau-horaire`
 > — les garde-fous joués sous SEPT fuseaux, ce que personne ne faisait. ⚠️ **+1** : le garde-fou du bloc
 > d'ancrage — voir l'entrée du jour. ⚠️ **+3 le 25/09/2026 au soir** : les trois essais qui gardent
@@ -177,6 +177,7 @@ installateur qui tombe dans le seul cas où tout est bon.*
 | **la classe** | un essai **balaie** toute affectation `$( … grep … )` d'`install.sh`, lignes de continuation jointes, et exige un repli — cinq autres en portaient déjà un, l'agent les avait relues |
 | la ligne | jouée sous `set -Eeuo pipefail` avec `Verification: OK` : elle survit, motif vide |
 | `--diagnostic`, ligne `certificat` | contrôle aussi le **nom** (`-checkhost` sur l'hôte de `SERVEUR_URL_PUBLIQUE`) : après le renommage en `grc.dedaero.lan`, le certificat servi portait l'ancien nom et la ligne disait « ok » — désormais **bloquant** |
+| 🛑 `groupes-ad.sh` — script PowerShell **inanalysable** | la description de `GRC-ADMIN` porte « n’ayant » : PowerShell 5.1 tient l'apostrophe **typographique** (U+2018–U+201B) pour un délimiteur, l'analyse du script entier échouait, **zéro groupe créé** — l'agent Windows l'a mesuré et corrigé à la main. `ps_litteral()` double désormais les quatre, comme la droite ; un essai le tient |
 | sonde de corps | un **5xx** pendant le redémarrage du service tombait dans la branche « succès » (labo : 503 → « éprouvée ») ; désormais réessayé cinq fois, puis déclaré **non joué** s'il persiste — jamais « éprouvé » sur un service tombé |
 | 🛑 **mon compteur de filiales était FAUX** | `where active` — une colonne qui n'existe pas — et `2>/dev/null` avalait l'erreur : le compteur rendait **toujours 0**, refusait à tort un exploitant qui déclare ses filiales **à l'écran**, et le diagnostic disait « table illisible » sur toute installation saine. Relecture de l'agent. Prédicat du produit (`statut = 'active'`), **erreur distinguée du zéro** (« absente » / « erreur » / nombre), et **trois essais contre le vrai schéma** — la requête est *extraite* du script, jamais recopiée ; le prédicat fautif y est prouvé refusé. *Le banc ne l'avait pas vu parce qu'il jouait une doublure.* |
 | `groupes-ad.sh` | lancé depuis un clone après une installation, il ne trouvait pas `dist/` (l'installateur compile dans `/opt`) : repli sur le compilé installé, annoncé |

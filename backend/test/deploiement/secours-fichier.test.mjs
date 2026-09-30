@@ -119,6 +119,21 @@ describe('🛑 Aucune affectation « $( … grep … ) » d’install.sh ne s’
   });
 });
 
+describe('groupes-ad.sh — un littéral PowerShell survit aux apostrophes typographiques', () => {
+  // Labo, 30/09/2026 : la description de GRC-ADMIN porte « n’ayant » ; PowerShell 5.1 a
+  // tenu ’ (U+2019) pour un délimiteur, l'analyse du script entier a échoué, ZÉRO groupe
+  // créé. Le générateur ne doublait que l'apostrophe droite.
+  test('’ ‘ ‚ ‛ et \' sont doublées ; le reste est intact', () => {
+    const source = readFileSync(join(BACKEND, 'deploy', 'groupes-ad.sh'), 'utf8');
+    const d = source.indexOf('ps_litteral() {'); assert.ok(d > 0, 'ps_litteral() a disparu de groupes-ad.sh');
+    const corps = source.slice(d, source.indexOf('\n}', d) + 2);
+    const dir = tmp();
+    const r = jouerScript(`${corps}\nps_litteral "n’ayant pas de sens — l'export ‘a‚b‛c"\nprintf '\\n'\n`, {}, dir, 'ps');
+    assert.equal(r.code, 0, r.sortie);
+    assert.equal(r.sortie.trim(), "n’’ayant pas de sens — l''export ‘‘a‚‚b‛‛c");
+  });
+});
+
 describe('Le compteur de filiales lit le format du §27, et rien d’autre', () => {
   test('commentaires, lignes vides et « non » ne comptent pas ; « oui » compte, espaces compris', () => {
     const corps = extraireFonction('filiales_declarees_fichier');

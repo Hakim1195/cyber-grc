@@ -500,7 +500,17 @@ entete() {   # <marqueur de commentaire>
 }
 
 # Doublement des apostrophes : la valeur finit dans un littéral PowerShell.
-ps_litteral() { printf "%s" "${1//\'/\'\'}"; }
+# Un littéral PowerShell entre apostrophes. 🛑 PowerShell 5.1 tient les apostrophes
+# TYPOGRAPHIQUES (‘ ’ ‚ ‛ — U+2018 à U+201B) pour des délimiteurs, exactement comme
+# l'apostrophe droite : la description de GRC-ADMIN (« n’ayant pas de sens ») a cassé
+# l'analyse du script entier en labo le 30/09/2026 — ZÉRO groupe créé, jusqu'à ce que
+# l'agent double le caractère à la main. Chacune est donc doublée, comme la droite.
+ps_litteral() {
+  local t="$1"
+  t="${t//\'/\'\'}"
+  t="${t//‘/‘‘}"; t="${t//’/’’}"; t="${t//‚/‚‚}"; t="${t//‛/‛‛}"
+  printf "%s" "$t"
+}
 
 case "$SORTIE" in
   liste)
