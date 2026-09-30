@@ -44,7 +44,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2615 essais, 2615 passés, 0 échec** — 2 341 sans navigateur et 274 avec —,
+> `npm test` → **2622 essais, 2622 passés, 0 échec** — 2 348 sans navigateur et 274 avec —,
 > **quarante et une** familles. ⚠️ **+16 le 25/09/2026, tard** : `test/base/fuseau-horaire`
 > — les garde-fous joués sous SEPT fuseaux, ce que personne ne faisait. ⚠️ **+1** : le garde-fou du bloc
 > d'ancrage — voir l'entrée du jour. ⚠️ **+3 le 25/09/2026 au soir** : les trois essais qui gardent
@@ -111,6 +111,34 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### L'APPLIANCE PROXMOX — sceller une VM, la figer, prouver qu'elle est livrable (30/09/2026)
+
+Le besoin, dit par l'exploitant : *« pas besoin des données, juste une machine qui
+fonctionne — un logiciel vierge »*, en format Proxmox. Pas l'export d'une machine qui a vécu :
+**une VM construite propre dans Proxmox, scellée, figée par `vzdump`, restaurée pour preuve.**
+
+| Pièce | Rôle |
+|---|---|
+| `deploy/appliance/sceller.sh` | en root, une fois : embarque le dépôt à `/usr/local/src`, arme le premier démarrage, **lit puis efface** les secrets, retire clés d'hôte, `machine-id`, historiques, session Claude, clés autorisées — puis **balaie tout le disque** et **refuse** si une valeur effacée survit, en nommant le fichier |
+| `deploy/appliance/premier-demarrage.sh` + `.service` | au premier boot de chaque clone, une seule fois : identité neuve, URL, compte de secours au mot de passe **engendré** et empreinte **par le code du produit**, `install.sh --maj --reinitialiser-mots-de-passe`, puis il se désarme — **deux** barrières contre le rejeu |
+| `docs/APPLIANCE_PROXMOX.md` | construire, sceller, `vzdump`, `qmrestore` **de preuve** : deux clones doivent avoir deux empreintes d'hôte, deux `machine-id`, deux mots de passe |
+
+🛑 **Le principe qui gouverne tout** : *une image clonée dix fois avec le même `SESSION_SECRET`,
+les mêmes mots de passe de base et les mêmes clés d'hôte est un défaut de sécurité, pas un
+raccourci.* Le scellement n'engendre rien ; le premier démarrage engendre tout, et l'installateur
+lui-même pose les secrets (`SESSION_SECRET` s'il est vide, les rôles sous
+`--reinitialiser-mots-de-passe`) — rien n'est réécrit en shell.
+
+**Sept essais** (`test/deploiement/appliance.test.mjs`), les scripts joués pour de bon sur une
+racine factice : le balayage **mord** sur un secret caché dans un fichier que le script ne
+connaît pas ; le premier démarrage refuse son second passage (code 3, `install.sh` non rappelé,
+empreinte inchangée) et s'arrête **avant** toute régénération sur une URL invalide. ⚠️ Deux
+défauts de la première rédaction, tous deux dans l'essai : un lien d'unité **absolu** qui pend
+sous un préfixe (rendu relatif — meilleur en vrai aussi), et un stub qui écrivait sa trace cinq
+niveaux trop bas.
+
+Étiquette **`v1.0-labo`** posée : l'appliance nomme ce qu'elle embarque.
 
 ### 🛑 LE CERTIFICAT DE L'ANNUAIRE : L'INSTALLATEUR VA LE CHERCHER, ET C'EST NODE QUI DÉCIDE (25/09/2026, soir)
 

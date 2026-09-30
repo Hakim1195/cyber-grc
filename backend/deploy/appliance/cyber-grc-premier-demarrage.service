@@ -1,0 +1,25 @@
+# Emplacement cible : /etc/systemd/system/cyber-grc-premier-demarrage.service
+#
+# Le PREMIER démarrage d'un clone de l'appliance Cyber GRC : rend la machine
+# unique (machine-id, clés d'hôte, secrets, compte de secours), pose nom et URL,
+# relance install.sh, puis se désarme. Posé par deploy/appliance/sceller.sh.
+#
+# ⚠️ ConditionPathExists=! est la SECONDE barrière contre un rejeu (la première
+# est dans le script) : régénérer les secrets à chaque boot invaliderait toutes
+# les sessions et tous les mots de passe de base d'un coup.
+[Unit]
+Description=Cyber GRC — premier démarrage de l'appliance (une seule fois)
+After=network-online.target postgresql.service
+Wants=network-online.target
+Before=cyber-grc.service
+ConditionPathExists=!/var/lib/cyber-grc/premier-demarrage.fait
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cyber-grc-premier-demarrage
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=multi-user.target

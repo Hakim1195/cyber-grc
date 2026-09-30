@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2615 essais, quarante et une familles (voir plus bas)
+npm test                           # 2622 essais, quarante et une familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -795,7 +795,7 @@ l'utilisateur : **`JSON.stringify` n'est pas un test d'égalité pour une donné
 produit réécrivait son instantané quotidien **toutes les trois secondes**, journal d'audit
 compris :
 `npm test` →
-**2615 essais, 2615 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**2622 essais, 2622 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **72 garde-fous consignés**, **74 migrations**,
 **99 tables**, **608 décisions** au registre de l'article 30 ; publication → **89
@@ -981,7 +981,7 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2615 · pass 2615 · fail 0
+npm test                                         → tests 2622 · pass 2622 · fail 0
                                                    base 393 · api 302 · navigateur 274
                                                    pieces 142 · auth 115 · import 97
                                                    deploiement 95 · droits 86 · cycle 82
