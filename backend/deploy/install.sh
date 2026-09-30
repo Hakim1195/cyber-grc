@@ -3618,8 +3618,16 @@ fi
 # ⚠️ L'activation vaut dans les DEUX cas : un passage interrompu laisse un vhost posé mais
 # jamais activé, et « déjà présent » ne voulait pas dire « servi » (relecture de l'agent
 # du labo, 30/09/2026). a2ensite est idempotent ; un reload qui échoue le DIT.
+# ⚠️ Et une MISE À JOUR (--maj) ne réactive jamais un site qu'un exploitant a désactivé à
+# dessein (a2dissite pour une maintenance) : elle constate, elle ne décide pas. Seule une
+# installation — première ou reprise d'un passage interrompu — active (relecture de
+# l'agent du labo, 30/09/2026).
 if [[ -f /etc/ssl/cyber-grc/serveur.crt && -f /etc/ssl/cyber-grc/serveur.key && -f /etc/ssl/cyber-grc/chaine-pki-interne.crt ]]; then
-  a2ensite -q cyber-grc >/dev/null 2>&1 || true
+  if [[ $MAJ_SEULE -eq 0 ]]; then
+    a2ensite -q cyber-grc >/dev/null 2>&1 || true
+  elif [[ ! -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
+    alerte "vhost cyber-grc DÉSACTIVÉ (a2dissite ?) : une mise à jour ne le réactive pas — a2ensite cyber-grc si c'est voulu."
+  fi
   if apache2ctl configtest >/dev/null 2>&1; then
     if systemctl reload apache2; then succes "vhost activé et servi (a2ensite cyber-grc)"
     else alerte "vhost activé mais « systemctl reload apache2 » a ÉCHOUÉ : journalctl -u apache2 -n 30"; fi
