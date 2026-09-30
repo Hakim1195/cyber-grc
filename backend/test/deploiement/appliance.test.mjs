@@ -53,6 +53,13 @@ function vmFactice(options = {}) {
   writeFileSync(join(R, 'etc/machine-id'), 'abcdef0123456789abcdef0123456789\n');
   writeFileSync(join(R, 'home/grc/.bash_history'), `psql -c "alter role x password '${SECRETS.BASE_MOT_DE_PASSE}'"\n`);
   writeFileSync(join(R, 'home/grc/.claude/session.jsonl'), 'transcript');
+  // Relevé sur la VM du labo (30/09/2026) : Claude Code pose plus que ~/.claude.
+  writeFileSync(join(R, 'home/grc/.claude.json'), '{"oauthAccount":{"emailAddress":"auteur@exemple"}}');
+  mk('home/grc/.cache/claude/staging'); writeFileSync(join(R, 'home/grc/.cache/claude/staging/x'), 'cache');
+  mk('home/grc/.local/state/claude/locks'); writeFileSync(join(R, 'home/grc/.local/state/claude/locks/2.1.285.lock'), '');
+  mk('home/grc/.local/share/applications'); writeFileSync(join(R, 'home/grc/.local/share/applications/claude-code-url-handler.desktop'), '[Desktop Entry]');
+  mk('etc/sudoers.d'); writeFileSync(join(R, 'etc/sudoers.d/README'), '# Le README de Debian : NOPASSWD n’est ici qu’un mot dans un commentaire.\n');
+  if (options.sudoSansMotDePasse) writeFileSync(join(R, 'etc/sudoers.d/labo'), 'grc ALL=(ALL) NOPASSWD: ALL\n');
   writeFileSync(join(R, 'home/grc/.ssh/authorized_keys'), 'ssh-ed25519 AAAA auteur');
   writeFileSync(join(R, 'root/.ssh/authorized_keys'), 'ssh-ed25519 BBBB auteur');
   if (options.secretCache) writeFileSync(join(R, 'etc/autre-outil.conf'), `mdp=${SECRETS.SESSION_SECRET}\n`);
@@ -84,7 +91,8 @@ describe('sceller.sh — rien de secret, rien d’identifiant ne quitte la machi
     assert.equal(variable(R, 'AUTH_COMPTE_SECOURS_IDENTIFIANT'), 'secours.grc', 'l’identifiant n’est pas un secret : conservé');
     assert.ok(!existsSync(join(R, 'etc/ssh/ssh_host_ed25519_key')), 'clé d’hôte retirée');
     assert.equal(lire(R, 'etc/machine-id'), '', 'machine-id vidé');
-    for (const p of ['home/grc/.bash_history', 'home/grc/.claude', 'home/grc/.ssh/authorized_keys', 'root/.ssh/authorized_keys', 'usr/local/src/cyber-grc/SECRETS.local.md'])
+    for (const p of ['home/grc/.bash_history', 'home/grc/.claude', 'home/grc/.claude.json', 'home/grc/.cache/claude', 'home/grc/.local/state/claude',
+                     'home/grc/.local/share/applications/claude-code-url-handler.desktop', 'home/grc/.ssh/authorized_keys', 'root/.ssh/authorized_keys', 'usr/local/src/cyber-grc/SECRETS.local.md'])
       assert.ok(!existsSync(join(R, p)), `${p} doit avoir disparu`);
     assert.ok(existsSync(join(R, 'usr/local/src/cyber-grc/backend/deploy/install.sh')), 'le dépôt est embarqué à un chemin système');
     assert.ok(existsSync(join(R, 'usr/local/sbin/cyber-grc-premier-demarrage')));
@@ -102,6 +110,16 @@ describe('sceller.sh — rien de secret, rien d’identifiant ne quitte la machi
     assert.notEqual(r.code, 0, 'le scellement devait être refusé');
     assert.match(r.sortie, /etc\/autre-outil\.conf/, 'le fichier fautif est nommé');
     assert.match(r.sortie, /REFUSÉ/);
+  });
+
+  test('🛑 une règle sudo SANS MOT DE PASSE fait ÉCHOUER le scellement AVANT tout effacement — le mot dans un commentaire, non', () => {
+    // /etc/sudoers.d/labo du 30/09/2026 : posée pour l'agent, elle serait partie dans chaque clone.
+    const { R, clone } = vmFactice({ sudoSansMotDePasse: true });
+    const r = jouer(SCELLER, ['--racine', R, '--source', clone]);
+    assert.notEqual(r.code, 0, 'le scellement devait être refusé');
+    assert.match(r.sortie, /sudoers\.d\/labo/, 'le fichier fautif est nommé'); assert.match(r.sortie, /REFUSÉ/);
+    assert.ok(existsSync(join(R, 'etc/sudoers.d/labo')), 'il la nomme, il ne la retire pas : c’est une décision d’exploitant');
+    assert.ok(existsSync(join(R, 'home/grc/.bash_history')) && existsSync(join(R, 'etc/ssh/ssh_host_ed25519_key')), 'refusé AVANT d’effacer quoi que ce soit');
   });
 
   test('un chemin qui n’est pas un clone du dépôt est refusé', () => {

@@ -144,7 +144,7 @@ certificat auto-signé engendré au nom de l'URL, vhost **nommé et activé**, c
 
 ```bash
 sudo bash -c 'umask 077; openssl rand -base64 18 > /root/secours.txt'   # ENGENDRÉ : aucun secret sur une ligne de commande
-sudo cat /root/secours.txt                                              # relevez-le MAINTENANT : il sera effacé
+sudo cat /root/secours.txt                                              # VOUS le relevez MAINTENANT : il sera effacé
 sudo bash backend/deploy/install.sh --secours-fichier=/root/secours.txt
 ```
 
@@ -153,6 +153,13 @@ l'écrit **en clair dans le journal système** (`journalctl _COMM=sudo`, ligne `
 par le groupe `adm`) et le montre dans `ps` le temps de la commande. Mesuré le 30/09/2026 par
 l'agent du labo, sur une recette que j'avais écrite. Si vous voulez le choisir vous-même, avec un
 terminal : `sudo bash -c 'umask 077; read -rsp "Mot de passe : " m; printf "%s" "$m" > /root/secours.txt; echo'`.
+
+🛑 **Si un agent installe pour vous, c'est VOUS qui lisez ce fichier — jamais lui.** Tout ce
+qu'un agent affiche entre dans la transcription de sa session (`~/.claude/projects/…`), **en
+clair**, et y reste jusqu'à ce qu'elle soit effacée. Mesuré le 30/09/2026 : le mot de passe du
+compte de secours du labo y était, remis par l'agent à son utilisateur dans la conversation.
+La règle est dans `BRIEF_AGENT_INSTALLATION.md` §3, et le scellement d'une appliance efface la
+transcription — mais un mot de passe qui a été lu se **change**, il ne s'efface pas.
 
 ⚠️ Avant le 30/09/2026 ce chemin n'existait pas : sans terminal, l'installation en découverte
 produisait un produit où **personne ne pouvait entrer**. Trouvé par un agent qui installait en

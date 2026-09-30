@@ -145,6 +145,13 @@ reserve() { printf '\033[1;36m N/J\033[0m %s\n' "$*" >&2; RESERVES+=("$*"); }
 
 # `set -E` propage ce piège dans les fonctions : un échec non prévu doit dire OÙ.
 trap 'printf "\033[1;31m ERR\033[0m interruption ligne %s : %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
+# 🛑 AUCUN FICHIER TEMPORAIRE NE SURVIT À UNE SORTIE — quelle qu'elle soit. Un
+# « rm -f » en fin de bloc ne couvre ni un echec, ni une interruption, ni une
+# RELANCE : le 30/09/2026 en labo, la sonde de corps a été recréée par la
+# relance sur 5xx APRÈS son rm -f, et /tmp a gardé 4 096 octets de « a » en
+# root 0644. Chaque mktemp s'inscrit ici ; le trap efface tout au dernier moment.
+TEMPORAIRES=()
+trap 'rm -f -- ${TEMPORAIRES[@]+"${TEMPORAIRES[@]}"}' EXIT
 
 aide() {
   cat <<'FIN'
@@ -462,7 +469,7 @@ lire_variable() {
 # (donc invisible de `ps`) : tout se fait en bash pur, puis un renommage atomique.
 definir_variable() {
   local cle="$1" valeur="$2" temporaire remplace=0 ligne
-  temporaire="$(mktemp "${FICHIER_CONFIG}.XXXXXX")"
+  temporaire="$(mktemp "${FICHIER_CONFIG}.XXXXXX")"; TEMPORAIRES+=("$temporaire")
   chmod 0600 "$temporaire"
   while IFS= read -r ligne || [[ -n "$ligne" ]]; do
     if [[ $remplace -eq 0 && "$ligne" =~ ^[[:space:]]*${cle}= ]]; then
@@ -3218,7 +3225,7 @@ else
     NB_CAPTURES="$(grep -c 'BEGIN CERTIFICATE' "$LDAP_CA_CIBLE" || true)"
     # La FEUILLE — le premier certificat présenté — porte le sujet, l'émetteur et la clé
     # que l'exploitant doit pouvoir comparer avec ce que lui dit l'équipe AD.
-    FEUILLE_TMP="$(mktemp)"
+    FEUILLE_TMP="$(mktemp)"; TEMPORAIRES+=("$FEUILLE_TMP")
     awk '/BEGIN CERTIFICATE/{n++} n==1' "$LDAP_CA_CIBLE" > "$FEUILLE_TMP"
     LDAP_EMETTEUR_LU="$(openssl x509 -in "$FEUILLE_TMP" -noout -issuer 2>/dev/null | sed 's/^issuer=//')"
     succes "$NB_CAPTURES certificat(s) capturé(s) → $LDAP_CA_CIBLE"
@@ -3337,7 +3344,7 @@ else
     MOTIF_OPENSSL="$(printf '%s' "$SORTIE_TLS" | grep -i 'verify error' | head -n1 || true)"
 
     # Node : pour la DÉCISION — exactement ce que fera le service à la première connexion.
-    SONDE_NODE="$(mktemp --suffix=.cjs)"
+    SONDE_NODE="$(mktemp --suffix=.cjs)"; TEMPORAIRES+=("$SONDE_NODE")
     cat > "$SONDE_NODE" <<'JS'
 const tls = require('node:tls'); const fs = require('node:fs');
 const [hote, port, ca] = process.argv.slice(2);
@@ -3813,7 +3820,7 @@ if [[ -e /etc/apache2/sites-enabled/cyber-grc.conf ]]; then
     reserve "vhost sans ServerName : la borne de corps (Q-44) n'a pas pu être éprouvée."
     alerte "Voir deploy/apache/cyber-grc.conf."
   else
-    CORPS_TMP="$(mktemp)"
+    CORPS_TMP="$(mktemp)"; TEMPORAIRES+=("$CORPS_TMP")
     # ⚠️ UNE SEULE SONDE, paramétrée par ses en-têtes — et ce n'est pas un goût
     # de style. Une seconde fonction recopiée aurait dupliqué l'URL et le
     # `--resolve`, c'est-à-dire les deux endroits où l'essai de A4 déclare ses
@@ -4522,7 +4529,7 @@ else
         alerte "SERVEUR_URL_PUBLIQUE est vide : rien à confronter au certificat (voir §5)."
       else
         HOTE_PUBLIC="${URL_PUBLIQUE#*://}"; HOTE_PUBLIC="${HOTE_PUBLIC%%/*}"; HOTE_PUBLIC="${HOTE_PUBLIC%%:*}"
-        CERT_SERVI="$(mktemp)"
+        CERT_SERVI="$(mktemp)"; TEMPORAIRES+=("$CERT_SERVI")
         timeout 15 openssl s_client -connect "127.0.0.1:443" -servername "$NOM_SERVEUR" \
             </dev/null 2>/dev/null | openssl x509 > "$CERT_SERVI" 2>/dev/null || true
         if [[ ! -s "$CERT_SERVI" ]]; then

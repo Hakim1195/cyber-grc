@@ -540,7 +540,7 @@ d'échec des garde-fous du schéma le cite comme l'étape suivante.
 
 ```bash
 bash db/dev/preparer_base_dev.sh   # rôles + base + migrations, une seule fois
-npm test                           # 2640 essais, quarante et une familles (voir plus bas)
+npm test                           # 2644 essais, quarante et une familles (voir plus bas)
 npm run verifier-types             # TypeScript en mode strict
 npm audit --omit=dev               # dépendances (contrôle S15 de la grille)
 
@@ -795,7 +795,7 @@ l'utilisateur : **`JSON.stringify` n'est pas un test d'égalité pour une donné
 produit réécrivait son instantané quotidien **toutes les trois secondes**, journal d'audit
 compris :
 `npm test` →
-**2640 essais, 2640 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
+**2644 essais, 2644 passés** ; `verifier-types` propre ; `npm audit --omit=dev` → 0 vulnérabilité ;
 `verifier_cloisonnement.sql` **sous `grc_app`** → **110/110** (code 0) ;
 `f_verifier_schema()` → 0 anomalie, **72 garde-fous consignés**, **74 migrations**,
 **99 tables**, **608 décisions** au registre de l'article 30 ; publication → **89
@@ -981,10 +981,10 @@ rapport ni d'un message. Point de mesure, sans lequel un chiffre est invérifiab
 
 ```
 npm run verifier-types                           → aucune erreur
-npm test                                         → tests 2640 · pass 2640 · fail 0
+npm test                                         → tests 2644 · pass 2644 · fail 0
                                                    base 393 · api 302 · navigateur 274
                                                    pieces 142 · auth 115 · import 97
-                                                   deploiement 117 · droits 86 · cycle 82
+                                                   deploiement 121 · droits 86 · cycle 82
                                                    reprise 82 · notifications 73
                                                    journal-lecture 72 · approbations 71
                                                    habilitations 72 · depot 66

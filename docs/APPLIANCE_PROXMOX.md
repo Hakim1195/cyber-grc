@@ -16,6 +16,14 @@
 
 ## 1. Construire — dans Proxmox, jamais en exportant une machine qui a vécu
 
+**La machine à sceller est celle qu'on construit en REJOUANT la documentation** — une Debian
+vierge, `INSTALLER.md` (ou `INSTALLATION_ENTREPRISE.md` avec `ANNUAIRE_ACTIVE_DIRECTORY.md`
+pour un domaine réel), et rien d'autre. C'est le même geste qui **prouve** la documentation
+et **produit** le livrable : ce qui casse au rejeu est ce que la doc doit encore dire, et une
+machine bâtie sous les yeux n'a ni historique à nettoyer, ni agent à retirer, ni règle sudo
+oubliée. La VM de labo qui a servi à trouver les défauts reste la référence ; elle n'est pas
+l'image.
+
 1. **Une Debian 13 vierge** dans Proxmox : `qemu-guest-agent`, fuseau `Europe/Paris` (il
    exerce un défaut fermé le 25/09/2026), un compte local non-root (ex. `grc`, dans `sudo`).
 2. Cloner le dépôt **avec ce compte, jamais `sudo git`**, à l'étiquette de livraison :
@@ -42,12 +50,34 @@ Ce qu'il fait, dans l'ordre : arrête le service ; **embarque le dépôt** à
 répertoire personnel ni de `/opt`) ; arme `cyber-grc-premier-demarrage.service` ; **lit puis
 efface** les secrets de `/etc/cyber-grc/env` (`SESSION_SECRET`, les trois mots de passe de
 rôles, l'empreinte du compte de secours, le mot de passe du compte de service, SMTP) ; retire
-clés d'hôte SSH, `machine-id`, historiques, session Claude, clés autorisées, caches ; puis
+clés d'hôte SSH, `machine-id`, historiques, **Claude Code en entier** (`~/.claude`,
+`~/.claude.json`, binaire, caches, état, gestionnaire d'URL), clés autorisées, caches ; puis
 **balaie tout le disque à la recherche des valeurs effacées** et **refuse** s'il en retrouve
 une, en nommant le fichier. Il écrit `/etc/cyber-grc/SCELLE` avec la date et l'étiquette.
 
 ⚠️ `--compte grc` : le mot de passe de ce compte local **expirera au premier démarrage** —
 le destinataire le change à sa première connexion. Donnez-lui-en un connu avant de sceller.
+
+🛑 **Il REFUSE aussi de sceller une machine qui porte une règle sudo sans mot de passe**
+(`/etc/sudoers.d/*`, `NOPASSWD` hors commentaire) : elle partirait dans chaque clone. Il la
+nomme et s'arrête **avant d'avoir rien effacé** — la retirer est votre décision, pas la sienne.
+Le labo du 30/09/2026 en portait une, posée pour l'agent.
+
+### Avant de sceller — si un agent a travaillé sur cette machine
+
+1. **Quittez Claude Code** (`/exit`) : un agent ne peut pas s'effacer lui-même, sa
+   transcription s'écrit jusqu'à la sortie. Le scellement retire ensuite tout ce qu'il a posé
+   — relevé sur la VM du labo : `~/.local/bin/claude`, `~/.local/share/claude`,
+   `~/.local/state/claude`, `~/.cache/claude*`, `~/.claude`, `~/.claude.json`,
+   `~/.local/share/applications/claude-code-url-handler.desktop`, `/tmp/claude-*`.
+2. **Révoquez l'appareil** dans votre compte claude.ai : effacer le fichier de jeton
+   (`~/.claude/.credentials.json`) ne révoque pas le jeton.
+3. **Retirez la règle sudo** posée pour lui (`/etc/sudoers.d/…`) — sinon le scellement refuse.
+4. **Changez tout mot de passe que l'agent a lu** — en labo, celui du compte de secours, relevé
+   par `sudo cat` et remis dans la conversation. Sur une appliance, le premier démarrage
+   l'engendre à neuf ; sur une machine qui reste en service, c'est `install.sh --assistant`.
+5. **Retirez ses résidus** : sauvegardes `.avant-*`, copies `.decouverte`, clé et CSR sous un
+   nom provisoire — le brief lui demande de les lister dans son rapport.
 
 ## 3. Figer — le format natif de Proxmox
 

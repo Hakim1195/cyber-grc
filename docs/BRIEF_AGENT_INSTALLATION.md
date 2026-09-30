@@ -70,6 +70,18 @@ qui n'a pas encore été vu** : Node refuse un certificat signé en SHA-1 même 
 5. **Mesurer avant d'affirmer.** Une réserve que vous n'avez pas éprouvée n'est pas une réserve.
 6. **Une base à moitié migrée n'est pas à détruire** : une migration refusée annule sa
    transaction, et la relance reprend où elle s'est arrêtée.
+7. **Jamais lire ni afficher un secret** — ni le fichier du compte de secours, ni celui du
+   compte de service, ni un mot de passe qu'on vous dicte. Tout ce que vous lisez entre dans
+   votre transcription **en clair**, et y reste. Le 30/09/2026, un agent a fait `sudo cat` sur
+   le fichier de secours pour le remettre à son utilisateur : le mot de passe a dû être changé.
+   Le geste juste : **l'humain crée le fichier, le lit, vous dit « c'est fait »** — vous lancez
+   `--secours-fichier=` sans en connaître le contenu.
+8. **Ne laissez rien derrière vous, et dites ce que vous avez laissé.** Chaque fichier créé
+   hors de l'installateur — sauvegarde `.avant`, copie `.decouverte` d'un certificat, clé ou
+   CSR sous un nom provisoire, script dans `/tmp` — se retire avant de rendre la machine, ou
+   figure **nommément** dans le rapport avec son motif. Une clé privée en double est une clé
+   qu'on oublie. Le relevé de tout ce que vous avez changé hors `install.sh`, dans l'ordre,
+   fait partie du rapport : c'est lui qui devient la documentation.
 
 ## 4. Le rapport — `docs/securite/RAPPORT_INSTALLATION_<date>.md`
 

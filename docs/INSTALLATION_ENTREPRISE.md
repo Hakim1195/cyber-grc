@@ -157,10 +157,22 @@ que vous aurez donné — il ne se contente pas de lire un fichier.
 jour ne l'écrasera pas — mais elle ne le mettra pas à jour non plus. Le recopier à la main
 est alors votre geste, pas celui du script.
 
+#### L'obtenir de l'AC du domaine, quand le client en a une (AD CS)
+
+C'est le cas le plus courant, et le labo du 30/09/2026 l'a joué de bout en bout : la VM
+engendre **sa clé et une demande** (`openssl req … -addext "subjectAltName=DNS:<nom>"`), la
+demande part vers le contrôleur, l'administrateur la signe avec le modèle `WebServer`
+(`certreq -submit`), et le certificat revient — **déjà en Base-64, à ne pas ré-encoder**. Les
+commandes des deux côtés, et la correspondance avec les trois fichiers ci-dessus (`serveur.crt`
+= le certificat signé, `serveur.key` = la clé engendrée, `chaine-pki-interne.crt` = le
+certificat de l'AC), sont au **§9 de [`ANNUAIRE_ACTIVE_DIRECTORY.md`](ANNUAIRE_ACTIVE_DIRECTORY.md)**.
+
 ### 1.3 Le compte de service de l'annuaire
 
 Demandez à l'administrateur du domaine **un compte de service dédié**, et donnez-lui cette
-liste telle quelle :
+liste telle quelle — et, s'il veut les commandes, la page qui est la sienne :
+**[`ANNUAIRE_ACTIVE_DIRECTORY.md`](ANNUAIRE_ACTIVE_DIRECTORY.md)**, mesurée sur un domaine
+réel le 30/09/2026 (§2 pour le compte, §5 pour le certificat de l'AC) :
 
 | | |
 |---|---|
@@ -312,6 +324,26 @@ configuration-là).
 Côté **pare-feu** : `443/tcp` en entrée depuis le réseau des utilisateurs (ou le VPN), et les
 trois sorties ci-dessus. Rien d'autre.
 
+#### Et le résolveur de la VM elle-même — la quatrième chose, trouvée en labo
+
+Autoriser le résolveur ne suffit pas : **il faut que la VM résolve le nom du contrôleur**, ce
+qu'un résolveur d'entreprise ordinaire ne sait pas toujours faire pour une zone Active
+Directory. La réponse la plus simple est de faire du **contrôleur lui-même** le résolveur de
+la VM — il redirige le reste vers l'extérieur (`Get-DnsServerForwarder`). Comment, selon ce qui
+gère le réseau de la VM :
+
+| La VM est sous… | Où l'écrire | Mesuré |
+|---|---|---|
+| **dhcpcd** (labo du 30/09/2026) | `/etc/resolv.conf.head` : `nameserver <IP du DC>` — puis `dhcpcd -n <interface>`. ⚠️ **Pas** un bloc `interface … static domain_name_servers` : il renégocie le bail et la VM perd son adresse **quelques secondes** | ✅ |
+| **ifupdown + dhclient** | `supersede domain-name-servers <IP du DC>;` dans `/etc/dhcp/dhclient.conf` | non mesuré |
+| **systemd-networkd** / **NetworkManager** | `DNS=` de l'unité `.network` / `ipv4.dns` de la connexion | non mesuré |
+| **adresse statique** (le cas d'entreprise) | `nameserver <IP du DC>` dans `/etc/resolv.conf`, ou le résolveur d'entreprise s'il **connaît la zone AD** | — |
+
+Puis `getent hosts <fqdn du DC>` doit répondre **depuis la VM**, et le drop-in ci-dessus doit
+porter **le DC et le résolveur** en `/32` — dans le labo, `192.168.10.238/32` (le contrôleur,
+devenu résolveur) et `192.168.10.254/32` (la passerelle, résolveur de secours laissé par le
+DHCP). L'installateur compare les deux listes et le dit.
+
 ### 1.5 La liste des filiales
 
 Code court et raison sociale, pour chaque entité à créer. Le code **nomme les groupes
@@ -419,9 +451,17 @@ PowerShell prêt à exécuter. Relisez-le : il ne fait que des `New-ADGroup`.
 ⚠️ **Il est idempotent et ne supprime jamais rien** : relancé après une acquisition, il ne crée
 que ce qui manque. *Retirer un groupe retirerait des accès sans que personne l'ait décidé.*
 
+⚠️ **Transférez le FICHIER, pas son texte.** Il commence par une marque d'ordre d'octets UTF-8
+et double les apostrophes typographiques — les deux défauts que PowerShell 5.1 a trouvés le
+30/09/2026 (script inanalysable, puis accents en « Ã© »), corrigés dans l'engendreur. Recopié
+depuis un message, il perd la marque ; la commande pour la remettre est au §7 de
+[`ANNUAIRE_ACTIVE_DIRECTORY.md`](ANNUAIRE_ACTIVE_DIRECTORY.md).
+
 ### Étape 4 — L'administrateur du domaine exécute, ET remplit `GRC-ADMIN`
 
-Transmettez `creer-groupes-grc.ps1` à l'administrateur du domaine, avec **deux demandes** :
+Transmettez `creer-groupes-grc.ps1` à l'administrateur du domaine — avec les §7 et §8 de
+[`ANNUAIRE_ACTIVE_DIRECTORY.md`](ANNUAIRE_ACTIVE_DIRECTORY.md), qui lui donnent les commandes —
+et **deux demandes** :
 
 1. **exécuter le script** ;
 2. **ajouter la personne désignée au §0 dans `GRC-ADMIN`**, et — si elle doit aussi extraire
@@ -527,6 +567,8 @@ cloisonnement sous sondes hostiles, ni les droits de chaque profil.
 | La liaison LDAPS échoue alors que le DC répond | le certificat du DC est signé par une PKI interne absente du magasin système | `LDAP_CA=` (§1.3) |
 | On entre, et **rien n'est ouvert** (403) | aucun groupe `GRC-*` pour ce compte | étape 4, demande n° 2 |
 | `https://votre-nom/` rend **403** | la liste blanche de publication ne couvre pas « / » | `sudo bash backend/deploy/install.sh --maj` |
+| le script PowerShell des groupes **échoue à l'analyse**, ou ses descriptions affichent « Ã© » | apostrophe typographique non doublée, ou fichier sans marque UTF-8 — engendreur antérieur au 30/09/2026, ou texte recopié depuis un message | ré-engendrer avec l'installateur à jour, transférer le **fichier** ; `ANNUAIRE_ACTIVE_DIRECTORY.md` §7 et §10 |
+| le certificat signé par l'AC est **illisible** sur la VM (« unable to load certificate ») | `certutil -encode` appliqué à un fichier déjà en Base-64 | renvoyer `grc.cer` tel quel — `ANNUAIRE_ACTIVE_DIRECTORY.md` §9 |
 
 **Et une sixième, qui n'est pas une panne** : les écrans sont **vides** à la première
 ouverture. C'est voulu — aucune donnée de démonstration n'est chargée. *Un outil qui affiche
@@ -574,6 +616,7 @@ AVANT LE JOUR J
 [ ] liste des filiales : code court + raison sociale
 [ ] LA PERSONNE qui sera le premier administrateur, nommément
 [ ] l'administrateur du domaine est joignable le jour J
+[ ] ANNUAIRE_ACTIVE_DIRECTORY.md lui a été remis : OU · compte · AC · DNS · groupes · CSR
 [ ] décidé : pose-t-on un COMPTE DE SECOURS ? (l'assistant n'en pose aucun
     en production — sans lui, un annuaire qui tombe ferme le produit à tous)
 

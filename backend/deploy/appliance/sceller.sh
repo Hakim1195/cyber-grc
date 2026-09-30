@@ -56,6 +56,19 @@ vider_variable() {
 }
 lire_variable() { sed -n "s/^[[:space:]]*$1=//p" "$ENV" | head -n1; }
 
+# ── 0. Refuser AVANT de toucher quoi que ce soit ──────────────────────────────
+# 🛑 Une règle sudo SANS MOT DE PASSE dans une image clonée est une porte ouverte
+# sur chaque clone. Le labo du 30/09/2026 en portait une (/etc/sudoers.d/labo,
+# posée pour l'agent) : le scellement la NOMME et s'arrête — il ne la retire pas
+# lui-même, parce que c'est une décision d'exploitant. Les commentaires qui
+# portent le mot ne comptent pas (le README de Debian en a un).
+NOPASSWD_TROUVE="$(grep -rlsE '^[^#]*NOPASSWD' "$R/etc/sudoers.d" "$R/etc/sudoers" 2>/dev/null || true)"
+if [[ -n "$NOPASSWD_TROUVE" ]]; then
+  while IFS= read -r f; do [[ -n "$f" ]] && alerte "règle sudo sans mot de passe dans : $f"; done <<< "$NOPASSWD_TROUVE"
+  echec "Scellement REFUSÉ : une règle sudo sans mot de passe partirait dans l'image (fichiers
+      ci-dessus). Retirez-la (ou remplacez-la par une règle avec mot de passe), puis relancez."
+fi
+
 # ── 1. Arrêter ce qui écrit ───────────────────────────────────────────────────
 if [[ $ESSAI -eq 0 ]]; then
   info "Arrêt du service"
@@ -114,6 +127,11 @@ rm -f "$R"/etc/ssh/ssh_host_*                       # régénérées au premier 
 rm -f "$R/var/lib/dbus/machine-id"
 rm -f "$R"/root/.bash_history "$R"/home/*/.bash_history
 rm -rf "$R"/root/.claude "$R"/home/*/.claude "$R"/home/*/.local/share/claude "$R"/home/*/.local/bin/claude
+# Tout ce que Claude Code pose hors de ~/.claude — relevé sur la VM du labo le 30/09/2026 :
+# le fichier de compte, ses sauvegardes, les caches, l'état, le gestionnaire d'URL.
+rm -f  "$R"/root/.claude.json "$R"/home/*/.claude.json "$R"/root/.sudo_as_admin_successful "$R"/home/*/.sudo_as_admin_successful
+rm -rf "$R"/root/.cache/claude* "$R"/home/*/.cache/claude* "$R"/root/.local/state/claude "$R"/home/*/.local/state/claude
+rm -f  "$R"/home/*/.local/share/applications/claude-code-url-handler.desktop
 rm -f  "$R"/home/*/.grc-essais.env "$R"/root/.grc-essais.env
 find "$R/home" "$R/root" "$R/usr/local/src" -name '*.local.md' -type f -delete 2>/dev/null || true
 rm -f "$R"/root/.ssh/authorized_keys "$R"/home/*/.ssh/authorized_keys   # le destinataire posera les siennes

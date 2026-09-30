@@ -538,6 +538,12 @@ case "$SORTIE" in
       alerte "Aucune unité d'organisation donnée (--ou) : les groupes iront dans le conteneur"
       alerte "par défaut du domaine. Demandez le DN à l'équipe AD du client."
     fi
+    # 🛑 MARQUE D'ORDRE D'OCTETS (UTF-8 BOM) EN TÊTE. PowerShell 5.1 — celui d'un
+    # Windows Server 2022 livré — lit un .ps1 SANS marque dans la page de codes ANSI
+    # de la machine : « é » devient « Ã© », dans les descriptions ET dans l'apostrophe
+    # typographique. L'agent du labo a dû réécrire le fichier avec la marque le
+    # 30/09/2026 avant qu'il ne s'exécute. Trois octets, émis avant tout le reste.
+    printf '\xEF\xBB\xBF'
     entete '#'
     cat <<'FIN'
 #

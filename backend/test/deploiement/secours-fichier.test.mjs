@@ -134,6 +134,53 @@ describe('groupes-ad.sh — un littéral PowerShell survit aux apostrophes typog
   });
 });
 
+describe('groupes-ad.sh — le script PowerShell engendré porte la marque UTF-8 en tête', () => {
+  // Labo, 30/09/2026 : PowerShell 5.1 lit un .ps1 SANS marque d'ordre d'octets dans la page
+  // de codes ANSI de la machine — « é » devient « Ã© » — et l'agent Windows a dû réécrire le
+  // fichier avec la marque avant de pouvoir l'exécuter. Le cas `powershell)` est extrait du
+  // script et joué avec des doublures : c'est l'émetteur réel qui est mesuré.
+  test('premier caractère U+FEFF et nulle part ailleurs, apostrophes doublées, en-tête et groupes présents', () => {
+    const source = readFileSync(join(BACKEND, 'deploy', 'groupes-ad.sh'), 'utf8');
+    const debut = source.indexOf('\n  powershell)\n'); assert.ok(debut > 0, 'le cas powershell) a disparu');
+    const fin = source.indexOf('\n    ;;', debut); assert.ok(fin > debut);
+    const cas = source.slice(debut + '\n  powershell)\n'.length, fin);
+    const d = source.indexOf('ps_litteral() {'); const psl = source.slice(d, source.indexOf('\n}', d) + 2);
+    const harnais = `${psl}\nentete() { printf '%s en-tete\\n' "$1"; }\nalerte() { :; }\nSEPARATEUR=';'\nOU_AD='OU=Cyber-GRC,DC=labo,DC=lan'\n` +
+      `GROUPES=$'GRC-ADMIN;groupe;;ADMIN;Administration — n’ayant pas de sens hors du Groupe\\nGRC-TLS-RSSI;filiale;TLS;RSSI;RSSI de l\\'entité TLS'\n`;
+    const r = jouerScript(harnais + cas + '\n', {}, tmp(), 'ps1');
+    assert.equal(r.code, 0, r.sortie);
+    assert.equal(r.sortie.charCodeAt(0), 0xFEFF, 'la marque d’ordre d’octets doit être le tout premier caractère');
+    assert.equal(r.sortie.indexOf('\uFEFF', 1), -1, 'et nulle part ailleurs');
+    assert.match(r.sortie, /^\uFEFF# en-tete\n/);
+    assert.match(r.sortie, /Description = 'Administration — n’’ayant pas de sens hors du Groupe'/);
+    assert.match(r.sortie, /Description = 'RSSI de l''entité TLS'/);
+    assert.match(r.sortie, /\$UniteOrganisation = 'OU=Cyber-GRC,DC=labo,DC=lan'/);
+  });
+});
+
+describe('install.sh — aucun fichier temporaire ne survit à une sortie', () => {
+  // Labo, 30/09/2026 : /tmp/tmp.0QIaZ8tedX, 4 096 octets de « a », root 0644 — la sonde de
+  // corps RECRÉÉE par la relance sur 5xx après son rm -f. Un rm en fin de bloc ne couvre ni une
+  // relance, ni un echec, ni une interruption : c'est un trap EXIT, et chaque mktemp s'y inscrit.
+  test('chaque mktemp du script est inscrit dans TEMPORAIRES, et un trap EXIT les efface', () => {
+    const script = readFileSync(join(BACKEND, 'deploy', 'install.sh'), 'utf8');
+    const creations = (script.match(/\$\(mktemp\b/g) ?? []).length;
+    const inscriptions = (script.match(/TEMPORAIRES\+=\(/g) ?? []).length;
+    assert.ok(creations >= 5, `au moins cinq mktemp attendus, ${creations} trouvé(s)`);
+    assert.equal(inscriptions, creations, `${creations} mktemp pour ${inscriptions} inscription(s) : un fichier temporaire échappe au trap`);
+    assert.match(script, /^trap 'rm -f -- \$\{TEMPORAIRES\[@\]\+"\$\{TEMPORAIRES\[@\]\}"\}' EXIT$/m, 'le trap EXIT, tel quel');
+  });
+  test('le trap efface aussi ce qu’une relance a RECRÉÉ après un rm, et sur une sortie en erreur', () => {
+    const d = tmp();
+    const r = jouerScript(`TEMPORAIRES=()\ntrap 'rm -f -- \${TEMPORAIRES[@]+"\${TEMPORAIRES[@]}"}' EXIT\n` +
+      `F="$(mktemp -p '${d}')"; TEMPORAIRES+=("$F")\nprintf 'a' > "$F"; rm -f "$F"; printf 'a' > "$F"\nprintf '%s\\n' "$F"\nexit 3\n`, {}, d, 'trap');
+    assert.equal(r.code, 3, r.sortie);
+    const f = r.sortie.trim().split('\n').pop();
+    assert.ok(f.startsWith(d), `chemin inattendu : ${f}`);
+    assert.ok(!existsSync(f), `${f} devait être effacé par le trap`);
+  });
+});
+
 describe('Le compteur de filiales lit le format du §27, et rien d’autre', () => {
   test('commentaires, lignes vides et « non » ne comptent pas ; « oui » compte, espaces compris', () => {
     const corps = extraireFonction('filiales_declarees_fichier');
