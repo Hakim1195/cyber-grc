@@ -259,6 +259,21 @@ poser_nom_vhost() {
   sed -i -E "s|^([[:space:]]*ServerName[[:space:]]+).*$|\1$hote|" "$fichier"
   succes "vhost : ServerName → $hote ($n ligne(s))"
 }
+# filiales_declarees_fichier <fichier> — lignes « code ; raison sociale ; pays ; oui » (§27)
+filiales_declarees_fichier() {
+  local fichier="$1" utiles n
+  [[ -f "$fichier" ]] || { echo 0; return 0; }
+  # Ni les commentaires ni les lignes vides ; le quatrième champ dit « oui » ou « non ».
+  utiles="$(grep -vE '^[[:space:]]*(#|$)' "$fichier" || true)"
+  n="$(printf '%s\n' "$utiles" | awk -F';' '{ a=$4; gsub(/[[:space:]]/, "", a); if (tolower(a)=="oui") c++ } END { print c+0 }')"
+  echo "${n:-0}"
+}
+# filiales_actives_en_base — 0 si la base n'existe pas encore (première installation)
+filiales_actives_en_base() {
+  local n
+  n="$(printf 'select count(*) from filiales where active;\n' | sql_admin_base 2>/dev/null | tr -d '[:space:]')"
+  [[ "$n" =~ ^[0-9]+$ ]] && echo "$n" || echo 0
+}
 SECOURS_FICHIER=""
 SECOURS_ABSENT=0
 # lire_secours_fichier <chemin> → pose SECOURS_MDP, efface le fichier.
@@ -1152,6 +1167,19 @@ if [[ $DIAGNOSTIC -eq 1 ]]; then
     else
       diag_bloquant "schéma" "f_verifier_schema() → $ANOM_SCHEMA anomalie(s)" \
         "Détail : su postgres -c \"psql -d $BASE_NOM -c 'select * from f_verifier_schema();'\""
+    fi
+    # 🛑 SANS FILIALE ACTIVE, PERSONNE N'ENTRE — ce diagnostic disait « Le produit
+    # fonctionne » sur une base sans filiale, où le compte de secours prenait 403
+    # (labo, 30/09/2026). Une ligne BLOQUANTE, mesurée dans la table.
+    NB_FILIALES="$(printf 'select count(*) from filiales where active;\n' | sql_admin_base 2>/dev/null | tr -d '[:space:]' || true)"
+    if [[ ! "$NB_FILIALES" =~ ^[0-9]+$ ]]; then
+      diag_reserve "filiales" "table « filiales » illisible (migrations non appliquées ?)" \
+        "sudo -u postgres psql -d $BASE_NOM -c 'select code, active from filiales;'"
+    elif [[ "$NB_FILIALES" -eq 0 ]]; then
+      diag_bloquant "filiales" "AUCUNE filiale active : personne ne peut ouvrir de session, pas même le compte de secours" \
+        "Déclarez-en dans $CONFIG/filiales.conf (code ; raison sociale ; pays ; oui) puis : sudo bash backend/deploy/install.sh --maj"
+    else
+      diag_ok "filiales" "$NB_FILIALES filiale(s) active(s)"
     fi
   fi
 
@@ -2084,6 +2112,16 @@ if [[ $SEULEMENT_BASE -eq 0 ]]; then
     MANQUANTS+=("AUTH_COMPTE_SECOURS_EMPREINTE")
     SECOURS_ABSENT=1
   fi
+  # 🛑 SANS FILIALE ACTIVE, PERSONNE N'ENTRE — pas même le compte de secours : la session
+  # exige un périmètre, et un périmètre exige une filiale. Mesuré le 30/09/2026 en labo :
+  # « Installation terminée », code 0, diagnostic « 0 bloquant » — et 403 à la connexion
+  # (« aucune filiale résolue »). L'installateur AFFIRMAIT le contraire. On refuse ici,
+  # quand ni le fichier ni la base n'en portent une.
+  FILIALES_ABSENTES=0
+  if [[ "$(filiales_declarees_fichier "$FICHIER_FILIALES")" -eq 0 && "$(filiales_actives_en_base)" -eq 0 ]]; then
+    MANQUANTS+=("filiales.conf")
+    FILIALES_ABSENTES=1
+  fi
 fi
 
 if [[ ${#MANQUANTS[@]} -gt 0 ]]; then
@@ -2095,11 +2133,18 @@ if [[ ${#MANQUANTS[@]} -gt 0 ]]; then
     alerte "SERVEUR_URL_PUBLIQUE vaut « https://grc-test.site » : c'est la recette de l'AUTEUR"
     alerte "du produit, pas votre machine. Mettez le nom sous lequel VOS utilisateurs y accèdent."
   fi
+  if [[ "${FILIALES_ABSENTES:-0}" -eq 1 ]]; then
+    alerte "AUCUNE filiale active — ni dans $FICHIER_FILIALES, ni en base. Sans filiale, PERSONNE"
+    alerte "ne peut ouvrir de session, pas même le compte de secours (403 « aucune filiale"
+    alerte "résolue ») : l'installation serait annoncée réussie et inutilisable. Déclarez-en au"
+    alerte "moins une, une par ligne (db/CONVENTIONS.md §27) :"
+    alerte "  TLS ; Site de Toulouse ; FR ; oui"
+  fi
   if [[ "${SECOURS_ABSENT:-0}" -eq 1 ]]; then
     alerte "AUTH_LDAP_ACTIF=non : sans annuaire, le compte de secours est la SEULE porte, et"
     alerte "aucune empreinte n'est posée. Le service refuserait de démarrer. Deux issues :"
     alerte "  · --assistant (interactif), qui demande le mot de passe ;"
-    alerte "  · sans terminal : --secours-fichier=/root/secours.txt (fichier 0600, effacé sitôt lu)."
+    alerte "  · sans terminal : --secours-fichier=/root/secours.txt (0600, effacé une fois l'empreinte posée)."
   fi
   if [[ $PREMIERE_INSTALLATION -eq 1 ]]; then
     alerte "Les secrets internes, eux, ont déjà été engendrés."
@@ -2669,9 +2714,9 @@ case "$CODE_AMORCAGE" in
       chaque ligne fautive avec la contrainte qu'elle enfreint.
       Format : db/CONVENTIONS.md §27 · modèle : deploy/filiales.conf.exemple" ;;
   *) echec "L'amorçage des filiales a échoué (code $CODE_AMORCAGE).
-      Tant que la table « filiales » ne connaît pas le périmètre, « groupes_ad » ne
-      déclarera que les groupes de portée Groupe et les deux transversaux : un
-      administrateur pourra entrer, AUCUN RSSI de site n'aura d'accès. Les lignes
+      Tant que la table « filiales » ne connaît pas le périmètre, PERSONNE ne peut
+      ouvrir de session — pas même le compte de secours : la session exige une filiale
+      active (mesuré le 30/09/2026 : 403 « aucune filiale résolue »). Les lignes
       ci-dessus disent la cause." ;;
 esac
 
@@ -3607,10 +3652,14 @@ if [[ ! -f /etc/apache2/sites-available/cyber-grc.conf ]]; then
   [[ -n "$HOTE_PUBLIC_INSTALL" ]] && poser_nom_vhost /etc/apache2/sites-available/cyber-grc.conf "$HOTE_PUBLIC_INSTALL"
 else
   NOM_VHOST_EXISTANT="$(sed -n 's/^[[:space:]]*ServerName[[:space:]]\{1,\}//p' /etc/apache2/sites-available/cyber-grc.conf | head -n1)"
-  if [[ "$NOM_VHOST_EXISTANT" == "grc-test.site" && -n "$HOTE_PUBLIC_INSTALL" && "$HOTE_PUBLIC_INSTALL" != "grc-test.site" ]]; then
-    alerte "Vhost déjà présent, mais il porte encore « ServerName grc-test.site » — la recette de"
-    alerte "l'auteur — alors que SERVEUR_URL_PUBLIQUE nomme « $HOTE_PUBLIC_INSTALL ». Corrigez-le :"
-    alerte "  sed -i 's/ServerName grc-test.site/ServerName $HOTE_PUBLIC_INSTALL/' /etc/apache2/sites-available/cyber-grc.conf"
+  # Un nom qui diffère de l'URL publique se signale quel qu'il soit — la recette de l'auteur
+  # (grc-test.site) comme un ancien nom du client renommé depuis (labo, 30/09/2026 :
+  # Cyber-GRC.dedaero.lan → grc.dedaero.lan). Le vhost n'est jamais réécrit en silence.
+  if [[ -n "$HOTE_PUBLIC_INSTALL" && -n "$NOM_VHOST_EXISTANT" && "$NOM_VHOST_EXISTANT" != "$HOTE_PUBLIC_INSTALL" ]]; then
+    alerte "Vhost déjà présent, mais son ServerName est « $NOM_VHOST_EXISTANT » alors que"
+    alerte "SERVEUR_URL_PUBLIQUE nomme « $HOTE_PUBLIC_INSTALL ». Il n'est pas réécrit en silence ; corrigez-le :"
+    alerte "  sed -i 's/ServerName $NOM_VHOST_EXISTANT/ServerName $HOTE_PUBLIC_INSTALL/' /etc/apache2/sites-available/cyber-grc.conf"
+    alerte "  apache2ctl configtest && systemctl reload apache2"
   else
     alerte "Vhost déjà présent — non écrasé (personnalisations préservées)."
   fi

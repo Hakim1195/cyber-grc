@@ -44,7 +44,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2631 essais, 2631 passés, 0 échec** — 2 357 sans navigateur et 274 avec —,
+> `npm test` → **2634 essais, 2634 passés, 0 échec** — 2 360 sans navigateur et 274 avec —,
 > **quarante et une** familles. ⚠️ **+16 le 25/09/2026, tard** : `test/base/fuseau-horaire`
 > — les garde-fous joués sous SEPT fuseaux, ce que personne ne faisait. ⚠️ **+1** : le garde-fou du bloc
 > d'ancrage — voir l'entrée du jour. ⚠️ **+3 le 25/09/2026 au soir** : les trois essais qui gardent
@@ -160,6 +160,33 @@ fichier 0600, puis `install.sh --maj --secours-fichier=`.
 reliés à cette session par *Remote Control* — le Debian a mesuré, s'est arrêté devant
 `sudo` **sans contourner**, et a relu mon diagnostic pour en corriger deux points. *Un pair
 qui refuse de blanchir une permission et qui relit vaut un passage de porte.*
+
+### 🛑 SANS FILIALE, « INSTALLATION TERMINÉE » ET 403 POUR TOUT LE MONDE (30/09/2026, labo)
+
+Mesuré par l'agent du labo, passage 3 sans filiale : `install.sh` rend **code 0**, le
+diagnostic dit **« Le produit fonctionne »**, et le compte de secours prend **403 « aucune
+filiale résolue »** — la session exige un périmètre, un périmètre exige une filiale active.
+L'amorçage AFFIRMAIT « un administrateur pourra entrer » et proposait de créer les filiales
+*« à l'écran après la première connexion »* — inatteignable : sans filiale, pas de première
+connexion. L'assistant demande les filiales ; la procédure sans terminal n'en disait rien.
+
+| | |
+|---|---|
+| `MANQUANTS` | **code 2 nommant `filiales.conf`** quand ni le fichier ni la base ne portent une filiale active, format et exemple donnés |
+| amorçage (`install.sh`, `importer-filiales.mjs`) | le message dit la vérité : *personne* n'entre, pas même le compte de secours |
+| `--diagnostic` | une ligne **`filiales`**, **bloquante** à zéro filiale active |
+| `INSTALLER.md` « Sans terminal » | l'étape des filiales, `TLS ; Site de Toulouse ; FR ; oui` |
+| vhost existant | un `ServerName` qui diffère de l'URL publique est signalé **quel qu'il soit** (le labo a renommé `Cyber-GRC.dedaero.lan` en `grc.dedaero.lan`), jamais réécrit en silence |
+
+Trois essais : le bloc `MANQUANTS` refuse à zéro filiale et passe avec une filiale en base ;
+le compteur lit le format du §27 (commentaires, vides et « non » exclus).
+
+**Et ce que le même passage a PROUVÉ, sur une machine qui n'est pas la mienne** : passage 2 →
+code 2 nommant l'empreinte ; passage 3 → au bout, `/root/secours.txt` effacé après `scrypt$`,
+74 migrations appliquées **en `Europe/Paris`**, la `038` comprise — le défaut du 25/09 est
+fermé pour de vrai ; certificat de découverte au nom de l'URL, vhost nommé et servi ; au
+passage 4, filiales déclarées, **le compte de secours entre** (200, périmètre TLS/DEU) ; et
+**l'exploitant a ouvert le produit dans un navigateur** depuis une autre machine.
 
 ### L'APPLIANCE PROXMOX — sceller une VM, la figer, prouver qu'elle est livrable (30/09/2026)
 

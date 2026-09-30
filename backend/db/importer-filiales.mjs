@@ -206,9 +206,10 @@ try {
   } else if (bilan.statut === 'rien-a-importer') {
     process.stdout.write(
       `${jaune('  !!')} ${fichier} ne déclare AUCUNE filiale active.\n` +
-        '      Les groupes de périmètre Groupe et les deux transversaux existeront, donc un\n' +
-        '      administrateur pourra entrer — mais aucun RSSI de site n’aura d’accès. Déclarez\n' +
-        '      les filiales dans ce fichier, ou créez-les à l’écran après la première connexion.\n',
+        '      Sans filiale active, PERSONNE ne peut ouvrir de session — pas même le compte de\n' +
+        '      secours : la session exige un périmètre (mesuré le 30/09/2026 : 403 « aucune\n' +
+        '      filiale résolue »). Déclarez-en au moins une dans ce fichier, puis relancez\n' +
+        '      install.sh : « TLS ; Site de Toulouse ; FR ; oui ».\n',
     );
   } else {
     process.stdout.write(

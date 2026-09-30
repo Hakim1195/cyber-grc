@@ -134,7 +134,10 @@ SMTP_ACTIF=non
 ```
 
 Le premier passage crée `env` et s'arrête en code 2 en nommant `SERVEUR_URL_PUBLIQUE` **et**
-`LDAP_MOT_DE_PASSE_SERVICE` (le modèle porte `AUTH_LDAP_ACTIF=oui`) ; posez les quatre lignes ; le deuxième s'arrête en nommant `AUTH_COMPTE_SECOURS_EMPREINTE` **et les
+`LDAP_MOT_DE_PASSE_SERVICE` (le modèle porte `AUTH_LDAP_ACTIF=oui`) ; posez les quatre lignes **et au moins une filiale** dans
+`/etc/cyber-grc/filiales.conf` — `TLS ; Site de Toulouse ; FR ; oui` — car sans filiale active
+**personne** ne peut ouvrir de session, pas même le compte de secours, et l'installateur
+s'arrête désormais en le disant ; le deuxième s'arrête en nommant `AUTH_COMPTE_SECOURS_EMPREINTE` **et les
 deux issues** ; le troisième, avec le mot de passe du compte de secours **par un fichier 0600,
 jamais en argument ni dans l'environnement**, effacé une fois l'empreinte posée, va au bout —
 certificat auto-signé engendré au nom de l'URL, vhost **nommé et activé**, compte `secours.grc` :

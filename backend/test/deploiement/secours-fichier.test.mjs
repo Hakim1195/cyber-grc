@@ -56,7 +56,9 @@ describe('Le bloc « valeurs manquantes » refuse en code 2, en NOMMANT, avant l
       // expandre $8 par bash — mesuré : « unbound variable », et la doublure rendait vide.
       Object.entries(config).map(([k, v]) => `${k}) printf '%s' '${String(v).replaceAll("'", `'\\''`)}' ;;`).join(' ') +
       ' *) printf "" ;; esac; }\n';
-    return jouerScript(doublure + bloc, { SEULEMENT_BASE: '0', PREMIERE_INSTALLATION: '1', FICHIER_CONFIG: '/x/env', SECOURS_MDP: '', ...variables }, d, 'manquantes');
+    const filiales = `filiales_declarees_fichier() { echo ${variables.FICHIER_N ?? 2}; }\nfiliales_actives_en_base() { echo ${variables.BASE_N ?? 0}; }\n`;
+    const { FICHIER_N, BASE_N, ...vars } = variables;
+    return jouerScript(doublure + filiales + bloc, { SEULEMENT_BASE: '0', PREMIERE_INSTALLATION: '1', FICHIER_CONFIG: '/x/env', FICHIER_FILIALES: '/x/filiales.conf', SECOURS_MDP: '', ...vars }, d, 'manquantes');
   }
   const decouverte = { SERVEUR_URL_PUBLIQUE: 'https://grc.labo.interne', AUTH_LDAP_ACTIF: 'non', SMTP_ACTIF: 'non' };
 
@@ -74,10 +76,30 @@ describe('Le bloc « valeurs manquantes » refuse en code 2, en NOMMANT, avant l
     const r = jouer({ ...decouverte, AUTH_COMPTE_SECOURS_EMPREINTE: 'scrypt$16384$8$1$sel$x' });
     assert.equal(r.code, 0, r.sortie);
   });
+  test('🛑 AUCUNE filiale, ni dans le fichier ni en base : code 2, filiales.conf nommée, l’exemple donné — mesuré en labo : 403 pour le compte de secours', () => {
+    const r = jouer({ ...decouverte, AUTH_COMPTE_SECOURS_EMPREINTE: 'scrypt$x' }, { FICHIER_N: '0', BASE_N: '0' });
+    assert.equal(r.code, 2, r.sortie);
+    assert.match(r.sortie, /filiales\.conf/); assert.match(r.sortie, /PERSONNE/); assert.match(r.sortie, /TLS ; Site de Toulouse ; FR ; oui/);
+  });
+  test('fichier vide mais une filiale déjà en base (mise à jour) : passe', () => {
+    const r = jouer({ ...decouverte, AUTH_COMPTE_SECOURS_EMPREINTE: 'scrypt$x' }, { FICHIER_N: '0', BASE_N: '1' });
+    assert.equal(r.code, 0, r.sortie);
+  });
   test('🛑 l’URL de la recette de l’AUTEUR (grc-test.site) est REFUSÉE nommément — plus jamais une installation silencieuse sous ce nom', () => {
     const r = jouer({ ...decouverte, SERVEUR_URL_PUBLIQUE: 'https://grc-test.site', AUTH_COMPTE_SECOURS_EMPREINTE: 'scrypt$x' });
     assert.equal(r.code, 2, r.sortie);
     assert.match(r.sortie, /SERVEUR_URL_PUBLIQUE/); assert.match(r.sortie, /recette de l'AUTEUR/);
+  });
+});
+
+describe('Le compteur de filiales lit le format du §27, et rien d’autre', () => {
+  test('commentaires, lignes vides et « non » ne comptent pas ; « oui » compte, espaces compris', () => {
+    const corps = extraireFonction('filiales_declarees_fichier');
+    const d = tmp(); const f = join(d, 'filiales.conf');
+    writeFileSync(f, '# modèle\n\nTLS ; Site de Toulouse ; FR ; oui\nDEU ; Filiale allemande ; DE ;  OUI \nOLD ; Ancienne ; FR ; non\n');
+    const r = jouerScript(`${corps}\nfiliales_declarees_fichier "${f}"\nfiliales_declarees_fichier "${d}/absent.conf"\n`, {}, d, 'compte');
+    assert.equal(r.code, 0, r.sortie);
+    assert.deepEqual(r.sortie.trim().split('\n'), ['2', '0']);
   });
 });
 
