@@ -3747,6 +3747,19 @@ if [[ -f /etc/ssl/cyber-grc/serveur.crt && -f /etc/ssl/cyber-grc/serveur.key && 
   else
     alerte "Apache refuse sa configuration : apache2ctl configtest"
   fi
+  # >>> banc: journaux-vhost <<<
+  # 🛑 Les journaux du vhost naissent en 0644 root:root — Apache les crée à son premier
+  # démarrage avec son umask, et la règle logrotate de Debian (« create 640 root adm »)
+  # ne joue qu'à la PREMIÈRE ROTATION. Entre les deux, tout compte local lit les adresses,
+  # navigateurs et URL de chaque utilisateur. Mesuré sur la VM du labo le 30/09/2026 par
+  # l'agent qui l'inventoriait avant remise. Même règle que logrotate, tout de suite.
+  : "${APACHE_LOG_DIR:=/var/log/apache2}"
+  for JOURNAL_VHOST in "$APACHE_LOG_DIR/cyber-grc-acces.log" "$APACHE_LOG_DIR/cyber-grc-erreurs.log"; do
+    [[ -e "$JOURNAL_VHOST" ]] || continue
+    chown root:adm "$JOURNAL_VHOST"
+    chmod 0640 "$JOURNAL_VHOST"
+  done
+  # <<< banc: journaux-vhost >>>
 else
   alerte "Vhost posé et nommé, mais NON ACTIVÉ : il manque le certificat. En production"
   alerte "l'installateur n'en engendre aucun — déposez les trois fichiers :"

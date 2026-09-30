@@ -67,6 +67,12 @@ function vmFactice(options = {}) {
   const clone = join(R, 'home/grc/cyber-grc'); mkdirSync(join(clone, 'backend/deploy'), { recursive: true });
   writeFileSync(join(clone, 'backend/deploy/install.sh'), `#!/usr/bin/env bash\necho "install factice $*" >> "${R}/install.appels"\n`);
   writeFileSync(join(clone, 'SECRETS.local.md'), `sudo ${SECRETS.BASE_MOT_DE_PASSE_PROPRIETAIRE}`);
+  // Ce que le clone d'un auteur porte et que l'image d'un tiers n'a pas à embarquer.
+  mkdirSync(join(clone, '.git')); writeFileSync(join(clone, '.git/config'), '[remote "origin"]\n\turl = https://github.com/auteur/cyber-grc.git\n');
+  mkdirSync(join(clone, '.claude')); writeFileSync(join(clone, '.claude/settings.json'), '{}');
+  writeFileSync(join(clone, 'CLAUDE.md'), '# mémoire de session');
+  mkdirSync(join(clone, 'docs/securite'), { recursive: true }); writeFileSync(join(clone, 'docs/securite/RAPPORT_INSTALLATION_2026-09-30.md'), 'rapport d’un agent');
+  writeFileSync(join(clone, 'docs/securite/RAPPORT_S1.md'), 'rapport de porte');
   return { R, clone };
 }
 
@@ -95,6 +101,9 @@ describe('sceller.sh — rien de secret, rien d’identifiant ne quitte la machi
                      'home/grc/.local/share/applications/claude-code-url-handler.desktop', 'home/grc/.ssh/authorized_keys', 'root/.ssh/authorized_keys', 'usr/local/src/cyber-grc/SECRETS.local.md'])
       assert.ok(!existsSync(join(R, p)), `${p} doit avoir disparu`);
     assert.ok(existsSync(join(R, 'usr/local/src/cyber-grc/backend/deploy/install.sh')), 'le dépôt est embarqué à un chemin système');
+    for (const p of ['.git', '.claude', 'CLAUDE.md', 'docs/securite/RAPPORT_INSTALLATION_2026-09-30.md'])
+      assert.ok(!existsSync(join(R, 'usr/local/src/cyber-grc', p)), `${p} ne doit pas être embarqué dans l’image`);
+    assert.ok(existsSync(join(R, 'usr/local/src/cyber-grc/docs/securite/RAPPORT_S1.md')), 'les rapports de porte, eux, font partie du dépôt');
     assert.ok(existsSync(join(R, 'usr/local/sbin/cyber-grc-premier-demarrage')));
     const lien = join(R, 'etc/systemd/system/multi-user.target.wants/cyber-grc-premier-demarrage.service');
     assert.ok(lstatSync(lien).isSymbolicLink(), 'unité armée (lien dans multi-user.target.wants)');

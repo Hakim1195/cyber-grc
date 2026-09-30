@@ -84,9 +84,14 @@ info "Copie du dépôt vers /usr/local/src/cyber-grc"
 install -d -m 0755 "$R/usr/local/src"
 rsync -a --delete \
   --exclude 'node_modules' --exclude 'dist' --exclude '*.local.md' \
-  --exclude '.grc-essais.env' --exclude '.claude' \
+  --exclude '.grc-essais.env' --exclude '.claude' --exclude 'CLAUDE.md' \
+  --exclude '.git' --exclude 'docs/securite/RAPPORT_INSTALLATION_*' \
   "$SOURCE/" "$R/usr/local/src/cyber-grc/"
 ETIQUETTE="$(git -C "$SOURCE" describe --tags --always 2>/dev/null || echo 'sans-etiquette')"
+# 🛑 SANS `.git` : l'historique du dépôt porte l'adresse du dépôt d'origine et
+# l'identité de chaque auteur — l'image d'un tiers n'a pas à les embarquer (mesuré sur la
+# VM du labo le 30/09/2026 : 495 commits, un « remote » nominatif). L'étiquette ci-dessus
+# est relevée AVANT, sur la source ; c'est elle qui nomme la révision embarquée.
 succes "dépôt embarqué ($ETIQUETTE)"
 
 # ── 3. Armer le premier démarrage ────────────────────────────────────────────

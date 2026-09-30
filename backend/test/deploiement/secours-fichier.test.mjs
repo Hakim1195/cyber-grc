@@ -181,6 +181,26 @@ describe('install.sh — aucun fichier temporaire ne survit à une sortie', () =
   });
 });
 
+describe('bloc « journaux-vhost » — les journaux du vhost ne restent pas lisibles par tout compte local', () => {
+  // Mesuré sur la VM du labo (30/09/2026) : cyber-grc-acces.log en 0644 root:root — adresses,
+  // navigateurs et URL de chaque utilisateur lisibles par n'importe quel compte, jusqu'à la
+  // première rotation. Doublures de chown et chmod : on mesure les appels, pas en root.
+  function jouerJournaux(fichiers) {
+    const d = tmp(); for (const f of fichiers) writeFileSync(join(d, f), '');
+    const r = jouerScript(`chown() { printf 'chown %s\\n' "$*"; }\nchmod() { printf 'chmod %s\\n' "$*"; }\nAPACHE_LOG_DIR=${JSON.stringify(d)}\n${extraireBloc('journaux-vhost')}\n`, {}, d, 'journaux');
+    return { ...r, d };
+  }
+  test('le journal présent passe en root:adm 0640 ; l’absent n’est pas touché', () => {
+    const { code, sortie, d } = jouerJournaux(['cyber-grc-acces.log']);
+    assert.equal(code, 0, sortie);
+    assert.deepEqual(sortie.trim().split('\n'), [`chown root:adm ${d}/cyber-grc-acces.log`, `chmod 0640 ${d}/cyber-grc-acces.log`]);
+  });
+  test('aucun journal : rien n’est fait, et le bloc ne tombe pas', () => {
+    const { code, sortie } = jouerJournaux([]);
+    assert.equal(code, 0, sortie); assert.equal(sortie.trim(), '');
+  });
+});
+
 describe('Le compteur de filiales lit le format du §27, et rien d’autre', () => {
   test('commentaires, lignes vides et « non » ne comptent pas ; « oui » compte, espaces compris', () => {
     const corps = extraireFonction('filiales_declarees_fichier');
