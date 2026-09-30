@@ -268,11 +268,21 @@ filiales_declarees_fichier() {
   n="$(printf '%s\n' "$utiles" | awk -F';' '{ a=$4; gsub(/[[:space:]]/, "", a); if (tolower(a)=="oui") c++ } END { print c+0 }')"
   echo "${n:-0}"
 }
-# filiales_actives_en_base — 0 si la base n'existe pas encore (première installation)
+# filiales_actives_en_base — le nombre de filiales « statut = 'active' » (la définition du
+# produit : index partiel de 001, politiques de 010, f_filiales_actives()). Rend :
+#   · un nombre  — la base répond ;
+#   · « absente » — la base n'existe pas encore (première installation) ;
+#   · « erreur »  — la base répond mais la requête ÉCHOUE : c'est un défaut de CE script.
+# 🛑 La première rédaction écrivait « where active » — une colonne qui n'existe pas — et
+# « 2>/dev/null » avalait l'erreur : le compteur rendait TOUJOURS 0, donc refusait à tort
+# un exploitant qui déclare ses filiales à l'écran, et le diagnostic disait « table
+# illisible » sur toute installation saine. Relecture de l'agent du labo, 30/09/2026.
+# Un silence n'est pas un zéro : l'erreur est distinguée, jamais masquée.
 filiales_actives_en_base() {
   local n
-  n="$(printf 'select count(*) from filiales where active;\n' | sql_admin_base 2>/dev/null | tr -d '[:space:]')"
-  [[ "$n" =~ ^[0-9]+$ ]] && echo "$n" || echo 0
+  if ! printf 'select 1;\n' | sql_admin_base >/dev/null 2>&1; then echo "absente"; return 0; fi
+  n="$(printf "select count(*) from filiales where statut = 'active';\n" | sql_admin_base 2>/dev/null | tr -d '[:space:]' || true)"
+  [[ "$n" =~ ^[0-9]+$ ]] && echo "$n" || echo "erreur"
 }
 SECOURS_FICHIER=""
 SECOURS_ABSENT=0
@@ -1171,10 +1181,11 @@ if [[ $DIAGNOSTIC -eq 1 ]]; then
     # 🛑 SANS FILIALE ACTIVE, PERSONNE N'ENTRE — ce diagnostic disait « Le produit
     # fonctionne » sur une base sans filiale, où le compte de secours prenait 403
     # (labo, 30/09/2026). Une ligne BLOQUANTE, mesurée dans la table.
-    NB_FILIALES="$(printf 'select count(*) from filiales where active;\n' | sql_admin_base 2>/dev/null | tr -d '[:space:]' || true)"
+    NB_FILIALES="$(filiales_actives_en_base)"
     if [[ ! "$NB_FILIALES" =~ ^[0-9]+$ ]]; then
-      diag_reserve "filiales" "table « filiales » illisible (migrations non appliquées ?)" \
-        "sudo -u postgres psql -d $BASE_NOM -c 'select code, active from filiales;'"
+      ERREUR_FILIALES="$(printf "select count(*) from filiales where statut = 'active';\n" | sql_admin_base 2>&1 | head -n1 || true)"
+      diag_reserve "filiales" "compte impossible ($NB_FILIALES) : ${ERREUR_FILIALES:-base injoignable}" \
+        "sudo -u postgres psql -d $BASE_NOM -c \"select code, statut from filiales;\""
     elif [[ "$NB_FILIALES" -eq 0 ]]; then
       diag_bloquant "filiales" "AUCUNE filiale active : personne ne peut ouvrir de session, pas même le compte de secours" \
         "Déclarez-en dans $CONFIG/filiales.conf (code ; raison sociale ; pays ; oui) puis : sudo bash backend/deploy/install.sh --maj"
@@ -2126,7 +2137,12 @@ if [[ $SEULEMENT_BASE -eq 0 ]]; then
   # (« aucune filiale résolue »). L'installateur AFFIRMAIT le contraire. On refuse ici,
   # quand ni le fichier ni la base n'en portent une.
   FILIALES_ABSENTES=0
-  if [[ "$(filiales_declarees_fichier "$FICHIER_FILIALES")" -eq 0 && "$(filiales_actives_en_base)" -eq 0 ]]; then
+  FILIALES_EN_BASE="$(filiales_actives_en_base)"
+  if [[ "$FILIALES_EN_BASE" == "erreur" ]]; then
+    # Un défaut de ce script ne doit pas se faire passer pour un défaut du client.
+    alerte "Le compte des filiales en base a ÉCHOUÉ (requête refusée) : c'est un défaut de l'installateur,"
+    alerte "pas de votre configuration — signalez-le. Le contrôle des filiales est passé, sans conclure."
+  elif [[ "$(filiales_declarees_fichier "$FICHIER_FILIALES")" -eq 0 && ( "$FILIALES_EN_BASE" == "absente" || "$FILIALES_EN_BASE" -eq 0 ) ]]; then
     MANQUANTS+=("filiales.conf")
     FILIALES_ABSENTES=1
   fi
