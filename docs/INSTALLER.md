@@ -120,6 +120,31 @@ configuration (`CYBER_GRC_PROFIL=decouverte`), en réserve au `--diagnostic`, et
 bandeau dans le produit. **N'y saisissez pas de données réelles.** Un profil dégradé qu'on
 ne voit pas devient une production par oubli.
 
+### Sans terminal — un agent, un script
+
+L'assistant exige un terminal. Sans terminal, le profil découverte se pose en **quatre
+lignes dans `/etc/cyber-grc/env`** (créé depuis `backend/.env.example` au premier passage,
+qui s'arrête alors en code 2 en nommant ce qui manque) :
+
+```
+SERVEUR_URL_PUBLIQUE=https://<nom-de-la-machine>
+CYBER_GRC_PROFIL=decouverte
+AUTH_LDAP_ACTIF=non
+SMTP_ACTIF=non
+```
+
+puis le mot de passe du compte de secours **par un fichier 0600, jamais en argument ni dans
+l'environnement**, effacé sitôt lu :
+
+```bash
+(umask 077; printf '%s' 'un-mot-de-passe-de-douze-au-moins' > /root/secours.txt)
+sudo bash backend/deploy/install.sh --secours-fichier=/root/secours.txt
+```
+
+⚠️ Avant le 30/09/2026 ce chemin n'existait pas : sans terminal, l'installation en découverte
+produisait un produit où **personne ne pouvait entrer**. Trouvé par un agent qui installait en
+labo, pas par une relecture.
+
 Le compte de secours donne l'administration Groupe et **chacun de ses usages est
 journalisé** ; son mot de passe n'est jamais écrit sur le disque — seule une empreinte
 `scrypt`, calculée par le code du produit lui-même, entre dans la configuration.

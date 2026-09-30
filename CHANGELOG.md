@@ -44,7 +44,7 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > n'enregistre aucune route, le mode IA externe est fermé par un déclencheur en base.
 > Règle : `backend/db/CONVENTIONS.md` **§47**.
 
-> `npm test` → **2622 essais, 2622 passés, 0 échec** — 2 348 sans navigateur et 274 avec —,
+> `npm test` → **2625 essais, 2625 passés, 0 échec** — 2 351 sans navigateur et 274 avec —,
 > **quarante et une** familles. ⚠️ **+16 le 25/09/2026, tard** : `test/base/fuseau-horaire`
 > — les garde-fous joués sous SEPT fuseaux, ce que personne ne faisait. ⚠️ **+1** : le garde-fou du bloc
 > d'ancrage — voir l'entrée du jour. ⚠️ **+3 le 25/09/2026 au soir** : les trois essais qui gardent
@@ -111,6 +111,38 @@ conduite du chantier : `docs/PLAN_EXECUTION.md`.
 > bloquant et huit des onze majeurs**. ⚠️ **Sur 41 mutations, 14 ne mordent pas**, et treize
 > visent des gardes posés dans les trois jours précédents. *Un banc vert mesure ce qu'il
 > regarde, jamais ce qu'il ne regarde pas* — et ce passage-ci l'a mesuré sur ce document même.
+
+### 🛑 SANS TERMINAL, LE PROFIL DÉCOUVERTE INSTALLAIT UN SERVICE QUI REFUSE DE DÉMARRER (30/09/2026)
+
+Trouvé par **l'agent Claude qui installait le produit dans le labo de l'exploitant** — pas par
+une relecture, et pas par moi : `install.sh` ligne 116 fait `SECOURS_MDP=""`, et la seule
+affectation est celle de l'assistant interactif (ligne 726), qui exige un terminal. Sans
+terminal, le mode non interactif ne réclamait rien (`MANQUANTS` n'exige aucune variable
+d'authentification quand `AUTH_LDAP_ACTIF=non`), appliquait les migrations, redémarrait le
+service — qui **refusait de démarrer** (`src/config` : « aucun moyen d'authentification ») —
+et la sonde finale disait seulement « le service ne répond pas, voir journalctl ». ⚠️ Et
+l'en-tête du script promettait *« le script s'arrête pour le lui demander »* : il ne
+s'arrêtait pas, il échouait après les migrations.
+
+**Deux corrections, la seconde suggérée par l'agent :**
+
+1. **`--secours-fichier=<chemin>`** : le mot de passe du compte de secours lu dans un fichier
+   **0600 appartenant à qui lance**, douze caractères au moins, **effacé sitôt lu**. Jamais en
+   argument (lisible par `ps`), jamais dans l'environnement (écrasé ligne 116, et `sudo` le
+   filtre). Trois essais : lu sans son retour à la ligne puis consommé ; 0644 refusé **et non
+   consommé** ; trop court refusé.
+2. **Refus en code 2 AVANT paquets et migrations** quand `AUTH_LDAP_ACTIF=non`, aucune empreinte
+   et aucun fichier : la variable est **nommée**, les deux issues aussi. *Un service qui refuse
+   de démarrer après une installation annoncée réussie est la pire des deux fautes.*
+
+Et le §0 bis du déroulé cesse de proposer `printf '%s' 'mot-de-passe' | node …` — pas dans
+`ps`, mais dans l'**historique du shell** (remarque du même agent) : `read -rs` vers un
+fichier 0600, puis `install.sh --maj --secours-fichier=`.
+
+⚠️ **Ce que le labo apprend dès sa première heure** : deux agents Claude, un par machine,
+reliés à cette session par *Remote Control* — le Debian a mesuré, s'est arrêté devant
+`sudo` **sans contourner**, et a relu mon diagnostic pour en corriger deux points. *Un pair
+qui refuse de blanchir une permission et qui relit vaut un passage de porte.*
 
 ### L'APPLIANCE PROXMOX — sceller une VM, la figer, prouver qu'elle est livrable (30/09/2026)
 

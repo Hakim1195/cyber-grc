@@ -87,21 +87,20 @@ Les deux peuvent coexister — un annuaire actif **et** un compte de secours. Po
 après l'installation :
 
 ```bash
-# 1 — Calculer l'empreinte. Le mot de passe n'est JAMAIS écrit sur le disque : seule
-#     cette empreinte scrypt entre dans la configuration. Douze caractères au minimum.
-printf '%s' 'VotreMotDePasseDeSecours' | node --input-type=module -e "
-const m = await import('file:///chemin/vers/cyber-grc/backend/dist/auth/secours.js');
-const b=[]; for await (const c of process.stdin) b.push(c);
-process.stdout.write(await m.engendrerEmpreinte(Buffer.concat(b).toString('utf8')));
-"
-# → scrypt$16384$8$1$…
+# 1 — Le mot de passe dans un fichier 0600, SANS passer par la ligne de commande ni par
+#     l'historique du shell (read -s ne l'affiche pas et ne l'enregistre pas).
+#     Douze caractères au minimum.
+sudo bash -c 'umask 077; read -rsp "Mot de passe du compte de secours : " m; printf "%s" "$m" > /root/secours.txt; echo'
 
-# 2 — Déclarer les deux variables dans /etc/cyber-grc/env
-#     AUTH_COMPTE_SECOURS_IDENTIFIANT=secours.grc
-#     AUTH_COMPTE_SECOURS_EMPREINTE=scrypt$16384$8$1$…
-
-sudo systemctl restart cyber-grc
+# 2 — L'installateur calcule l'empreinte PAR LE CODE DU PRODUIT, la pose dans
+#     /etc/cyber-grc/env (AUTH_COMPTE_SECOURS_IDENTIFIANT=secours.grc par défaut),
+#     EFFACE le fichier sitôt lu, et republie le service.
+sudo bash backend/deploy/install.sh --maj --secours-fichier=/root/secours.txt
 ```
+
+⚠️ *Cette recette disait, jusqu'au 30/09/2026 : `printf '%s' 'VotreMotDePasse' | node …`. Le
+mot de passe n'apparaissait pas dans `ps` (printf est interne au shell) — mais il entrait
+dans l'**historique du shell**. Remarque d'un agent qui installait en labo.*
 
 ⚠️ **C'est l'empreinte engendrée par le code du produit lui-même** qui entre dans la
 configuration — jamais une empreinte calculée à la main dans un shell, dont le format

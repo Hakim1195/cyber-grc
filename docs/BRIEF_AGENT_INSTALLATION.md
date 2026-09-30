@@ -26,7 +26,7 @@ pourquoi** ça s'arrête, sur cette machine-ci.
 
 | | Quoi | Ce que ça prouve |
 |---|---|---|
-| **1** | `sudo bash backend/deploy/install.sh --assistant`, répondre **non** au raccordement à l'annuaire → **profil découverte** (certificat autosigné, compte de secours) | l'installateur va-t-il **au bout** sur cette VM — migrations comprises — sans aucune dépendance au SI du client ? |
+| **1** | **Vous n'avez pas de terminal : n'employez pas `--assistant`.** Posez les quatre lignes du profil découverte dans `/etc/cyber-grc/env` et le mot de passe du compte de secours par `--secours-fichier=` (voir `INSTALLER.md`, « Sans terminal ») — jamais en argument, jamais dans l'environnement | l'installateur va-t-il **au bout** sur cette VM — migrations comprises — sans aucune dépendance au SI du client ? |
 | **2** | relancer `--assistant` en répondant **oui**, avec l'URL LDAPS, la base, le compte de service et le **certificat de l'AC** du client (n'importe quel encodage : l'installateur convertit) | où l'environnement **réel** diverge de celui de l'auteur |
 
 Puis `sudo bash backend/deploy/install.sh --diagnostic`, et **ouvrir l'application dans un

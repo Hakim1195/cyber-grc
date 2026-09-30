@@ -40,7 +40,9 @@
 #
 # Il n'engendre AUCUN secret venu d'un autre système — mot de passe du compte de
 # service LDAP, relais SMTP, empreinte du compte de secours : ceux-là sont
-# renseignés à la main par l'exploitant, et le script s'arrête pour le lui demander.
+# renseignés par l'exploitant — l'assistant les demande ; sans terminal, le script
+# s'arrête en code 2 en NOMMANT ce qui manque (et prend le mot de passe du compte de
+# secours par --secours-fichier=, jamais autrement).
 #
 # Aucun secret n'est affiché, journalisé, ni passé en argument de commande : un
 # mot de passe sur la ligne de commande de `psql` est lisible par `ps` de tout
@@ -167,6 +169,10 @@ Installe ou met à jour Cyber GRC Groupe sur Debian 13 (sans conteneur).
   --verifier-publication         NE MODIFIE RIEN : compare ce que la racine web
                                  SERT à ce que le dépôt porte, et rend 5 si un
                                  fichier diverge (constat Q-103)
+  --secours-fichier=<chemin>     SANS TERMINAL : le mot de passe du compte de secours,
+                                 lu dans un fichier 0600 puis EFFACÉ. Avec, dans env,
+                                 CYBER_GRC_PROFIL=decouverte et AUTH_LDAP_ACTIF=non, c'est
+                                 le profil découverte piloté par un agent ou un script.
   --diagnostic                   NE MODIFIE RIEN : l'état des quatorze points qui cassent
                                  en vrai — services, publication, propriété de la base,
                                  garde-fous du schéma, chaîne du journal, annuaire,
@@ -211,6 +217,37 @@ Codes de sortie (constat Q-75 : un « 0 » n'a plus qu'un seul sens) :
 FIN
 }
 
+# --secours-fichier=<chemin> — le mot de passe du compte de secours SANS terminal.
+#
+# 🛑 TROUVÉ LE 30/09/2026 PAR L'AGENT QUI INSTALLAIT EN LABO : `SECOURS_MDP=""` plus haut
+# fait que ce mot de passe ne pouvait venir QUE de l'assistant interactif. Sans terminal
+# — un agent, une automatisation — le profil découverte n'avait donc aucun chemin : soit
+# l'assistant refuse (pas de tty), soit le mode non interactif installe un produit où
+# PERSONNE ne peut entrer (AUTH_LDAP_ACTIF=non et aucune empreinte).
+#
+# Le mot de passe arrive par un FICHIER, jamais autrement : un argument de commande est
+# lisible par `ps` de tout compte ; une variable d'environnement traverse `sudo` mal et
+# finit dans /proc. Le fichier doit être en 0600 et appartenir à qui lance le script ;
+# il est CONSOMMÉ (effacé) sitôt lu.
+SECOURS_FICHIER=""
+SECOURS_ABSENT=0
+# lire_secours_fichier <chemin> → pose SECOURS_MDP, efface le fichier.
+lire_secours_fichier() {
+  local f="$1" mode proprio
+  [[ -f "$f" ]] || echec "--secours-fichier : « $f » n'existe pas."
+  mode="$(stat -c %a "$f")"; proprio="$(stat -c %u "$f")"
+  [[ "$mode" == "600" || "$mode" == "400" ]] \
+    || echec "--secours-fichier : « $f » doit être en mode 0600 (il est en $mode) — un mot de
+      passe lisible par d'autres n'est pas un secret."
+  [[ "$proprio" == "$EUID" ]] \
+    || echec "--secours-fichier : « $f » doit appartenir à l'utilisateur qui lance l'installation."
+  SECOURS_MDP="$(head -c 4096 "$f" | tr -d '\r\n')"
+  [[ ${#SECOURS_MDP} -ge 12 ]] \
+    || { SECOURS_MDP=""; echec "--secours-fichier : douze caractères au minimum — ce compte donne
+      l'administration Groupe."; }
+  shred -u "$f" 2>/dev/null || rm -f "$f"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --maj)                          MAJ_SEULE=1; shift ;;
@@ -223,12 +260,14 @@ while [[ $# -gt 0 ]]; do
     --desinstaller)                 DESINSTALLER=1; shift ;;
     --avec-les-donnees)             AVEC_LES_DONNEES=1; shift ;;
     --export-verifie=*)             EXPORT_VERIFIE="${1#*=}"; shift ;;
+    --secours-fichier=*)            SECOURS_FICHIER="${1#*=}"; shift ;;
     --aide|-h|--help)               aide; exit 0 ;;
     *) echec "Option inconnue : $1 (voir --aide)." ;;
   esac
 done
 
 [[ $EUID -eq 0 ]] || echec "À lancer en root."
+[[ -z "$SECOURS_FICHIER" ]] || lire_secours_fichier "$SECOURS_FICHIER"
 
 # =============================================================================
 #  --verifier-publication — ce qui est SERVI, comparé à ce que le dépôt porte
@@ -1906,6 +1945,9 @@ if [[ -n "$VERSION_PAQUET" ]]; then definir_variable APPLICATION_VERSION "$VERSI
 # ⚠️ Le mot de passe arrive par l'ENTRÉE STANDARD, jamais en argument : un
 # argument de commande est lisible par `ps` de tout compte de la machine.
 if [[ -n "${SECOURS_MDP:-}" ]]; then
+  # Hors assistant, l'identifiant peut manquer : « secours.grc », comme l'assistant le propose.
+  [[ -n "$(lire_variable AUTH_COMPTE_SECOURS_IDENTIFIANT)" ]] \
+    || definir_variable AUTH_COMPTE_SECOURS_IDENTIFIANT "secours.grc"
   CHEMIN_SECOURS="$RACINE/backend/dist/auth/secours.js"
   [[ -f "$CHEMIN_SECOURS" ]] \
     || echec "Compte de secours demandé, mais $CHEMIN_SECOURS est absent.
@@ -1999,6 +2041,16 @@ if [[ $SEULEMENT_BASE -eq 0 ]]; then
   if [[ "$(lire_variable SMTP_ACTIF)" == "oui" ]]; then
     [[ -n "$(lire_variable SMTP_HOTE)" ]] || MANQUANTS+=("SMTP_HOTE")
   fi
+  # 🛑 Sans annuaire, le compte de secours est LA SEULE porte. Sans empreinte et sans
+  # fichier de mot de passe, tout ce qui suit — paquets, migrations, publication —
+  # aboutirait à un service qui REFUSE DE DÉMARRER (src/config : « aucun moyen
+  # d'authentification ») et à une sonde muette : « le service ne répond pas — voir
+  # journalctl ». Trouvé à la lecture par l'agent du labo, 30/09/2026. On refuse ICI,
+  # en code 2, en nommant ce qui manque — avant d'avoir touché à quoi que ce soit.
+  if [[ "$(lire_variable AUTH_LDAP_ACTIF)" == "non" && -z "$(lire_variable AUTH_COMPTE_SECOURS_EMPREINTE)" && -z "${SECOURS_MDP:-}" ]]; then
+    MANQUANTS+=("AUTH_COMPTE_SECOURS_EMPREINTE")
+    SECOURS_ABSENT=1
+  fi
 fi
 
 if [[ ${#MANQUANTS[@]} -gt 0 ]]; then
@@ -2006,6 +2058,12 @@ if [[ ${#MANQUANTS[@]} -gt 0 ]]; then
   alerte "Ces valeurs viennent de VOTRE système d'information (annuaire, relais de"
   alerte "messagerie, URL publique) : le script ne peut pas les inventer."
   alerte "Renseignez $FICHIER_CONFIG puis relancez ce script."
+  if [[ "${SECOURS_ABSENT:-0}" -eq 1 ]]; then
+    alerte "AUTH_LDAP_ACTIF=non : sans annuaire, le compte de secours est la SEULE porte, et"
+    alerte "aucune empreinte n'est posée. Le service refuserait de démarrer. Deux issues :"
+    alerte "  · --assistant (interactif), qui demande le mot de passe ;"
+    alerte "  · sans terminal : --secours-fichier=/root/secours.txt (fichier 0600, effacé sitôt lu)."
+  fi
   if [[ $PREMIERE_INSTALLATION -eq 1 ]]; then
     alerte "Les secrets internes, eux, ont déjà été engendrés."
   fi
